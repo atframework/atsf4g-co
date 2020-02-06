@@ -317,6 +317,83 @@ namespace atframe {
                 }
             }
 
+            // SSL configure
+            {
+                bool v = true;
+                cfg.dump_to("atapp.etcd.ssl.enable_alpn", v, false);
+                etcd_ctx_.set_conf_ssl_enable_alpn(v);
+            }
+
+            {
+                bool v = false;
+                cfg.dump_to("atapp.etcd.ssl.verify_peer", v, false);
+                etcd_ctx_.set_conf_ssl_verify_peer(v);
+            }
+
+            {
+                std::string ssl_version;
+                cfg.dump_to("atapp.etcd.ssl.ssl_min_version", ssl_version, false);
+                if (0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv1.3", 7) || 0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv13", 6)) {
+                    etcd_ctx_.set_conf_ssl_min_version(etcd_cluster::ssl_version_t::TLS_V13);
+                } else if (0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv1.2", 7) ||
+                           0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv12", 6)) {
+                    etcd_ctx_.set_conf_ssl_min_version(etcd_cluster::ssl_version_t::TLS_V12);
+                } else if (0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv1.1", 7) ||
+                           0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv11", 6)) {
+                    etcd_ctx_.set_conf_ssl_min_version(etcd_cluster::ssl_version_t::TLS_V11);
+                } else if (0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv1", 5) ||
+                           0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv1.0", 7) ||
+                           0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv10", 6)) {
+                    etcd_ctx_.set_conf_ssl_min_version(etcd_cluster::ssl_version_t::TLS_V10);
+                } else if (0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "SSLv3", 5)) {
+                    etcd_ctx_.set_conf_ssl_min_version(etcd_cluster::ssl_version_t::SSL3);
+                } else {
+                    etcd_ctx_.set_conf_ssl_min_version(etcd_cluster::ssl_version_t::DISABLED);
+                }
+            }
+
+            {
+                std::string v;
+                cfg.dump_to("atapp.etcd.ssl.ssl_client_cert", v, false);
+                etcd_ctx_.set_conf_ssl_client_cert(v);
+            }
+
+            {
+                std::string v;
+                cfg.dump_to("atapp.etcd.ssl.ssl_client_cert_type", v, false);
+                etcd_ctx_.set_conf_ssl_client_cert_type(v);
+            }
+
+            {
+                std::string v;
+                cfg.dump_to("atapp.etcd.ssl.ssl_client_key", v, false);
+                etcd_ctx_.set_conf_ssl_client_key(v);
+            }
+
+            {
+                std::string v;
+                cfg.dump_to("atapp.etcd.ssl.ssl_client_key_passwd", v, false);
+                etcd_ctx_.set_conf_ssl_client_key_passwd(v);
+            }
+
+            {
+                std::string v;
+                cfg.dump_to("atapp.etcd.ssl.ssl_ca_cert", v, false);
+                etcd_ctx_.set_conf_ssl_ca_cert(v);
+            }
+
+            {
+                std::string v;
+                cfg.dump_to("atapp.etcd.ssl.ssl_cipher_list", v, false);
+                etcd_ctx_.set_conf_ssl_cipher_list(v);
+            }
+
+            {
+                std::string v;
+                cfg.dump_to("atapp.etcd.ssl.ssl_cipher_list_tls13", v, false);
+                etcd_ctx_.set_conf_ssl_cipher_list_tls13(v);
+            }
+
             {
                 util::config::duration_value dur;
                 cfg.dump_to("atapp.etcd.init.timeout", dur, true);

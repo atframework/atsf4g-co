@@ -40,6 +40,17 @@ namespace atframe {
                 };
             };
 
+            struct ssl_version_t {
+                enum type {
+                    DISABLED = 0,
+                    SSL3,    // default for curl version < 7.34.0
+                    TLS_V10, // TLSv1.0
+                    TLS_V11, // TLSv1.1
+                    TLS_V12, // TLSv1.2, default for curl version >= 7.34.0
+                    TLS_V13, // TLSv1.3
+                };
+            };
+
             struct conf_t {
                 std::vector<std::string>            conf_hosts;
                 std::vector<std::string>            hosts;
@@ -58,6 +69,24 @@ namespace atframe {
                 std::chrono::system_clock::time_point keepalive_next_update_time;
                 std::chrono::system_clock::duration   keepalive_timeout;
                 std::chrono::system_clock::duration   keepalive_interval;
+
+                // SSL configure
+                // @see https://github.com/etcd-io/etcd/blob/master/Documentation/op-guide/security.md for detail
+                bool ssl_enable_alpn; // curl 7.36.0 CURLOPT_SSL_ENABLE_ALPN
+                bool ssl_verify_peer; // CURLOPT_SSL_VERIFYPEER
+
+                ssl_version_t::type ssl_min_version;       // CURLOPT_SSLVERSION @see ssl_version_t, SSLv3/TLSv1/TLSv1.1/TLSv1.2/TLSv1.3
+                std::string         ssl_client_cert;       // CURLOPT_SSLCERT
+                std::string         ssl_client_cert_type;  // curl 7.9.3 CURLOPT_SSLCERTTYPE , PEM for default
+                std::string         ssl_client_key;        // CURLOPT_SSLKEY
+                std::string         ssl_client_key_passwd; // curl 7.16.4 CURLOPT_SSLKEYPASSWD , curl 7.9.2 CURLOPT_SSLCERTPASSWD
+                std::string         ssl_ca_cert;           // CURLOPT_CAINFO
+                std::string
+                    ssl_cipher_list; // CURLOPT_SSL_CIPHER_LIST, default:
+                                     // ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384
+                                     // ,@see https://curl.haxx.se/docs/ssl-ciphers.html
+                std::string ssl_cipher_list_tls13; // curl 7.61.0, openssl 1.1.1 CURLOPT_TLS13_CIPHERS, default:
+                                                   //   TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256
             };
 
             struct stats_t {
@@ -116,6 +145,36 @@ namespace atframe {
             inline void set_conf_keepalive_interval(std::chrono::system_clock::duration v) { conf_.keepalive_interval = v; }
             inline void set_conf_keepalive_interval_sec(time_t v) { set_conf_keepalive_interval(std::chrono::seconds(v)); }
             inline const std::chrono::system_clock::duration &get_conf_keepalive_interval() const { return conf_.keepalive_interval; }
+
+            inline void set_conf_ssl_enable_alpn(bool v) { conf_.ssl_enable_alpn = v; }
+            inline bool get_conf_ssl_enable_alpn() const { return conf_.ssl_enable_alpn; }
+
+            inline void set_conf_ssl_verify_peer(bool v) { conf_.ssl_verify_peer = v; }
+            inline bool get_conf_ssl_verify_peer() const { return conf_.ssl_verify_peer; }
+
+            inline void                set_conf_ssl_min_version(ssl_version_t::type v) { conf_.ssl_min_version = v; }
+            inline ssl_version_t::type get_conf_ssl_min_version() const { return conf_.ssl_min_version; }
+
+            inline void               set_conf_ssl_client_cert(const std::string &v) { conf_.ssl_client_cert = v; }
+            inline const std::string &get_conf_ssl_client_cert() const { return conf_.ssl_client_cert; }
+
+            inline void               set_conf_ssl_client_cert_type(const std::string &v) { conf_.ssl_client_cert_type = v; }
+            inline const std::string &get_conf_ssl_client_cert_type() const { return conf_.ssl_client_cert_type; }
+
+            inline void               set_conf_ssl_client_key(const std::string &v) { conf_.ssl_client_key = v; }
+            inline const std::string &get_conf_ssl_client_key() const { return conf_.ssl_client_key; }
+
+            inline void               set_conf_ssl_client_key_passwd(const std::string &v) { conf_.ssl_client_key_passwd = v; }
+            inline const std::string &get_conf_ssl_client_key_passwd() const { return conf_.ssl_client_key_passwd; }
+
+            inline void               set_conf_ssl_ca_cert(const std::string &v) { conf_.ssl_ca_cert = v; }
+            inline const std::string &get_conf_ssl_ca_cert() const { return conf_.ssl_ca_cert; }
+
+            inline void               set_conf_ssl_cipher_list(const std::string &v) { conf_.ssl_cipher_list = v; }
+            inline const std::string &get_conf_ssl_cipher_list() const { return conf_.ssl_cipher_list; }
+
+            inline void               set_conf_ssl_cipher_list_tls13(const std::string &v) { conf_.ssl_cipher_list_tls13 = v; }
+            inline const std::string &get_conf_ssl_cipher_list_tls13() const { return conf_.ssl_cipher_list_tls13; }
 
             // ================== apis for sub-services ==================
             bool add_keepalive(const std::shared_ptr<etcd_keepalive> &keepalive);
@@ -200,7 +259,7 @@ namespace atframe {
         public:
             void check_authorization_expired(int http_code, const std::string &content);
 
-            static void setup_http_request(util::network::http_request::ptr_t &req, rapidjson::Document &doc, time_t timeout, const std::string &authorization);
+            void setup_http_request(util::network::http_request::ptr_t &req, rapidjson::Document &doc, time_t timeout);
 
         private:
             uint32_t                                       flags_;

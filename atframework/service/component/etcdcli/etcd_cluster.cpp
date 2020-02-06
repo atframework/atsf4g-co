@@ -177,6 +177,18 @@ namespace atframe {
             conf_.keepalive_timeout          = std::chrono::seconds(16);
             conf_.keepalive_interval         = std::chrono::seconds(5);
 
+            conf_.ssl_enable_alpn = true;
+            conf_.ssl_verify_peer = false;
+
+            conf_.ssl_min_version = ssl_version_t::DISABLED;
+            conf_.ssl_client_cert.clear();      
+            conf_.ssl_client_cert_type.clear(); 
+            conf_.ssl_client_key.clear();       
+            conf_.ssl_client_key_passwd.clear();
+            conf_.ssl_ca_cert.clear();          
+            conf_.ssl_cipher_list.clear();
+            conf_.ssl_cipher_list_tls13.clear();
+
             memset(&stats_, 0, sizeof(stats_));
         }
 
@@ -264,6 +276,18 @@ namespace atframe {
             conf_.keepalive_next_update_time = std::chrono::system_clock::from_time_t(0);
             conf_.keepalive_timeout          = std::chrono::seconds(16);
             conf_.keepalive_interval         = std::chrono::seconds(5);
+
+            conf_.ssl_enable_alpn = true;
+            conf_.ssl_verify_peer = false;
+
+            conf_.ssl_min_version = ssl_version_t::DISABLED;
+            conf_.ssl_client_cert.clear();      
+            conf_.ssl_client_cert_type.clear(); 
+            conf_.ssl_client_key.clear();       
+            conf_.ssl_client_key_passwd.clear();
+            conf_.ssl_ca_cert.clear();          
+            conf_.ssl_cipher_list.clear();
+            conf_.ssl_cipher_list_tls13.clear();
         }
 
         int etcd_cluster::tick() {
@@ -514,7 +538,7 @@ namespace atframe {
                 doc.AddMember("name", rapidjson::StringRef(username.c_str(), username.size()), doc.GetAllocator());
                 doc.AddMember("password", rapidjson::StringRef(password.c_str(), password.size()), doc.GetAllocator());
 
-                setup_http_request(req, doc, get_http_timeout_ms(), conf_.authorization_header);
+                setup_http_request(req, doc, get_http_timeout_ms());
                 req->set_priv_data(this);
                 req->set_on_complete(libcurl_callback_on_auth_authenticate);
 
@@ -643,7 +667,7 @@ namespace atframe {
                 rapidjson::Document doc;
                 doc.SetObject();
 
-                setup_http_request(req, doc, get_http_timeout_ms(), conf_.authorization_header);
+                setup_http_request(req, doc, get_http_timeout_ms());
                 req->set_priv_data(this);
                 req->set_on_complete(libcurl_callback_on_member_update);
 
@@ -787,7 +811,7 @@ namespace atframe {
                 doc.AddMember("TTL", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(conf_.keepalive_timeout).count()),
                               doc.GetAllocator());
 
-                setup_http_request(req, doc, get_http_timeout_ms(), conf_.authorization_header);
+                setup_http_request(req, doc, get_http_timeout_ms());
                 req->set_priv_data(this);
                 req->set_on_complete(libcurl_callback_on_lease_keepalive);
 
@@ -844,7 +868,7 @@ namespace atframe {
                 doc.SetObject();
                 doc.AddMember("ID", get_lease(), doc.GetAllocator());
 
-                setup_http_request(req, doc, get_http_timeout_ms(), conf_.authorization_header);
+                setup_http_request(req, doc, get_http_timeout_ms());
                 req->set_priv_data(this);
                 req->set_on_complete(libcurl_callback_on_lease_keepalive);
 
@@ -964,7 +988,7 @@ namespace atframe {
                 doc.SetObject();
                 doc.AddMember("ID", get_lease(), doc.GetAllocator());
 
-                setup_http_request(ret, doc, get_http_timeout_ms(), conf_.authorization_header);
+                setup_http_request(ret, doc, get_http_timeout_ms());
             } else {
                 add_stats_error_request();
             }
@@ -992,7 +1016,7 @@ namespace atframe {
                 doc.AddMember("limit", limit, doc.GetAllocator());
                 doc.AddMember("revision", revision, doc.GetAllocator());
 
-                setup_http_request(ret, doc, get_http_timeout_ms(), conf_.authorization_header);
+                setup_http_request(ret, doc, get_http_timeout_ms());
             } else {
                 add_stats_error_request();
             }
@@ -1030,7 +1054,7 @@ namespace atframe {
                 doc.AddMember("ignore_value", ignore_value, doc.GetAllocator());
                 doc.AddMember("ignore_lease", ignore_lease, doc.GetAllocator());
 
-                setup_http_request(ret, doc, get_http_timeout_ms(), conf_.authorization_header);
+                setup_http_request(ret, doc, get_http_timeout_ms());
             } else {
                 add_stats_error_request();
             }
@@ -1056,7 +1080,7 @@ namespace atframe {
                 etcd_packer::pack_key_range(root, key, range_end, doc);
                 doc.AddMember("prev_kv", prev_kv, doc.GetAllocator());
 
-                setup_http_request(ret, doc, get_http_timeout_ms(), conf_.authorization_header);
+                setup_http_request(ret, doc, get_http_timeout_ms());
             } else {
                 add_stats_error_request();
             }
@@ -1098,7 +1122,7 @@ namespace atframe {
 
                 root.AddMember("create_request", create_request, doc.GetAllocator());
 
-                setup_http_request(ret, doc, get_http_timeout_ms(), conf_.authorization_header);
+                setup_http_request(ret, doc, get_http_timeout_ms());
                 ret->set_opt_keepalive(75, 150);
                 // 不能共享socket
                 ret->set_opt_reuse_connection(false);
@@ -1158,14 +1182,17 @@ namespace atframe {
             }
         }
 
-        void etcd_cluster::setup_http_request(util::network::http_request::ptr_t &req, rapidjson::Document &doc, time_t timeout,
-                                              const std::string &authorization) {
+        void etcd_cluster::setup_http_request(util::network::http_request::ptr_t &req, rapidjson::Document &doc, time_t timeout) {
             if (!req) {
                 return;
             }
 
+            if (timeout <= 0) {
+                timeout = get_http_timeout_ms();
+            }
+
             req->set_opt_follow_location(true);
-            req->set_opt_ssl_verify_peer(false);
+            req->set_opt_ssl_verify_peer(conf_.ssl_verify_peer);
             req->set_opt_accept_encoding("");
             req->set_opt_http_content_decoding(true);
             req->set_opt_timeout(timeout);
@@ -1173,8 +1200,85 @@ namespace atframe {
             // req->set_opt_reuse_connection(false); // just enable connection reuse for all but watch request
             req->set_opt_long(CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
             req->set_opt_no_signal(true);
-            if (!authorization.empty()) {
-                req->append_http_header(authorization.c_str());
+            if (!conf_.authorization_header.empty()) {
+                req->append_http_header(conf_.authorization_header.c_str());
+            }
+
+            // Setup ssl
+            if (ssl_version_t::DISABLED != conf_.ssl_min_version) {
+#if LIBCURL_VERSION_NUM >= 0x072400
+                req->set_opt_bool(CURLOPT_SSL_ENABLE_ALPN, conf_.ssl_enable_alpn);
+#endif
+                switch (conf_.ssl_min_version) {
+#if LIBCURL_VERSION_NUM >= 0x073400
+                case ssl_version_t::TLS_V13:
+                    req->set_opt_long(CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_3);
+                    break;
+#endif
+#if LIBCURL_VERSION_NUM >= 0x072200
+                case ssl_version_t::TLS_V12:
+                    req->set_opt_long(CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
+                    break;
+                case ssl_version_t::TLS_V11:
+                    req->set_opt_long(CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_1);
+                    break;
+                case ssl_version_t::TLS_V10:
+                    req->set_opt_long(CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1);
+                    break;
+#endif
+                case ssl_version_t::SSL3:
+                    req->set_opt_long(CURLOPT_SSLVERSION, CURL_SSLVERSION_SSLv3);
+                    break;
+                default:
+#if LIBCURL_VERSION_NUM >= 0x072200
+                    conf_.ssl_min_version = ssl_version_t::TLS_V12;
+                    req->set_opt_long(CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
+#else
+                    conf_.ssl_min_version = ssl_version_t::SSL3;
+                    req->set_opt_long(CURLOPT_SSLVERSION, CURL_SSLVERSION_SSLv3);
+#endif
+                    break;
+                }
+                req->set_opt_bool(CURLOPT_SSL_ENABLE_ALPN, conf_.ssl_enable_alpn);
+                if (!conf_.ssl_client_cert.empty()) {
+                    req->set_opt_string(CURLOPT_SSLCERT, &conf_.ssl_client_cert[0]);
+                }
+#if LIBCURL_VERSION_NUM >= 0x070903
+                if (!conf_.ssl_client_cert_type.empty()) {
+                    req->set_opt_string(CURLOPT_SSLCERTTYPE, &conf_.ssl_client_cert_type[0]);
+                }
+#endif
+                if (!conf_.ssl_client_key.empty()) {
+                    req->set_opt_string(CURLOPT_SSLKEY, &conf_.ssl_client_key[0]);
+                }
+#if LIBCURL_VERSION_NUM >= 0x071004
+                if (!conf_.ssl_client_key_passwd.empty()) {
+                    req->set_opt_string(CURLOPT_SSLKEYPASSWD, &conf_.ssl_client_key_passwd[0]);
+                }
+#elif LIBCURL_VERSION_NUM >= 0x070902
+                if (!conf_.ssl_client_key_passwd.empty()) {
+                    req->set_opt_string(CURLOPT_SSLCERTPASSWD, &conf_.ssl_client_key_passwd[0]);
+                }
+#endif
+                if (!conf_.ssl_ca_cert.empty()) {
+                    req->set_opt_string(CURLOPT_CAINFO, &conf_.ssl_ca_cert[0]);
+                }
+
+                if (!conf_.ssl_cipher_list.empty()) {
+                    req->set_opt_string(CURLOPT_SSL_CIPHER_LIST, &conf_.ssl_cipher_list[0]);
+                } else if (ssl_version_t::TLS_V12 == conf_.ssl_min_version || ssl_version_t::TLS_V13 == conf_.ssl_min_version) {
+                    char ciphers[] = "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384";
+                    req->set_opt_string(CURLOPT_SSL_CIPHER_LIST, ciphers);
+                }
+
+#if LIBCURL_VERSION_NUM >= 0x073d00
+                if (!conf_.ssl_cipher_list_tls13.empty()) {
+                    req->set_opt_string(CURLOPT_TLS13_CIPHERS, &conf_.ssl_cipher_list_tls13[0]);
+                } else if (ssl_version_t::TLS_V12 == conf_.ssl_min_version) {
+                    char ciphers[] = "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256";
+                    req->set_opt_string(CURLOPT_TLS13_CIPHERS, ciphers);
+                }
+#endif
             }
 
             // req->set_on_verbose(details::etcd_cluster_verbose_callback);
