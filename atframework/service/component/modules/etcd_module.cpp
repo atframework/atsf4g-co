@@ -834,7 +834,8 @@ namespace atframe {
             for (size_t i = 0; i < body.events.size(); ++i) {
                 const ::atframe::component::etcd_watcher::event_t &evt_data = body.events[i];
                 node_info_t                                        node;
-                if (!unpack(node, evt_data.kv.key, evt_data.kv.value, true)) {
+                unpack(node, evt_data.kv.key, evt_data.kv.value, true);
+                if (node.id == 0) {
                     continue;
                 }
 
@@ -864,7 +865,8 @@ namespace atframe {
             for (size_t i = 0; i < body.events.size(); ++i) {
                 const ::atframe::component::etcd_watcher::event_t &evt_data = body.events[i];
                 node_info_t                                        node;
-                if (!unpack(node, evt_data.kv.key, evt_data.kv.value, true)) {
+                unpack(node, evt_data.kv.key, evt_data.kv.value, true);
+                if (node.id == 0) {
                     continue;
                 }
 
