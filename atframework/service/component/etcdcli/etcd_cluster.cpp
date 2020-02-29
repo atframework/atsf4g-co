@@ -181,11 +181,11 @@ namespace atframe {
             conf_.ssl_verify_peer = false;
 
             conf_.ssl_min_version = ssl_version_t::DISABLED;
-            conf_.ssl_client_cert.clear();      
-            conf_.ssl_client_cert_type.clear(); 
-            conf_.ssl_client_key.clear();       
+            conf_.ssl_client_cert.clear();
+            conf_.ssl_client_cert_type.clear();
+            conf_.ssl_client_key.clear();
             conf_.ssl_client_key_passwd.clear();
-            conf_.ssl_ca_cert.clear();          
+            conf_.ssl_ca_cert.clear();
             conf_.ssl_cipher_list.clear();
             conf_.ssl_cipher_list_tls13.clear();
 
@@ -281,11 +281,11 @@ namespace atframe {
             conf_.ssl_verify_peer = false;
 
             conf_.ssl_min_version = ssl_version_t::DISABLED;
-            conf_.ssl_client_cert.clear();      
-            conf_.ssl_client_cert_type.clear(); 
-            conf_.ssl_client_key.clear();       
+            conf_.ssl_client_cert.clear();
+            conf_.ssl_client_cert_type.clear();
+            conf_.ssl_client_key.clear();
             conf_.ssl_client_key_passwd.clear();
-            conf_.ssl_ca_cert.clear();          
+            conf_.ssl_ca_cert.clear();
             conf_.ssl_cipher_list.clear();
             conf_.ssl_cipher_list_tls13.clear();
         }
@@ -327,6 +327,8 @@ namespace atframe {
                 } else if (util::time::time_utility::now() > conf_.keepalive_next_update_time) {
                     ret += create_request_lease_keepalive() ? 1 : 0;
                 }
+            } else if (!check_flag(flag_t::RUNNING)) {
+                set_flag(flag_t::RUNNING, true);
             }
 
             // reactive watcher
@@ -412,6 +414,11 @@ namespace atframe {
 
             set_flag(flag_t::ENABLE_LEASE, true);
             keepalive_actors_.push_back(keepalive);
+
+            // auto active if cluster is running
+            if (check_flag(flag_t::RUNNING)) {
+                keepalive->active();
+            }
             return true;
         }
 
@@ -437,6 +444,43 @@ namespace atframe {
             return true;
         }
 
+        bool etcd_cluster::remove_keepalive(std::shared_ptr<etcd_keepalive> keepalive) {
+            if (!keepalive) {
+                return false;
+            }
+
+            bool has_data = false;
+            for (size_t i = 0; i < keepalive_actors_.size(); ++i) {
+                if (keepalive_actors_[i] == keepalive) {
+                    if (i != keepalive_actors_.size() - 1) {
+                        keepalive_actors_[i].swap(keepalive_actors_[keepalive_actors_.size() - 1]);
+                    }
+
+                    keepalive_actors_.pop_back();
+                    has_data = true;
+                    break;
+                }
+            }
+
+            for (size_t i = 0; i < keepalive_retry_actors_.size(); ++i) {
+                if (keepalive_retry_actors_[i] == keepalive) {
+                    if (i != keepalive_retry_actors_.size() - 1) {
+                        keepalive_retry_actors_[i].swap(keepalive_retry_actors_[keepalive_retry_actors_.size() - 1]);
+                    }
+
+                    keepalive_retry_actors_.pop_back();
+                    has_data = true;
+                    break;
+                }
+            }
+
+            if (has_data) {
+                keepalive->close();
+            }
+
+            return has_data;
+        }
+
         bool etcd_cluster::add_watcher(const std::shared_ptr<etcd_watcher> &watcher) {
             if (!watcher) {
                 return false;
@@ -458,6 +502,31 @@ namespace atframe {
             return true;
         }
 
+        bool etcd_cluster::remove_watcher(std::shared_ptr<etcd_watcher> watcher) {
+            if (!watcher) {
+                return false;
+            }
+
+            bool has_data = false;
+            for (size_t i = 0; i < watcher_actors_.size(); ++i) {
+                if (watcher_actors_[i] == watcher) {
+                    if (i != watcher_actors_.size() - 1) {
+                        watcher_actors_[i].swap(watcher_actors_[watcher_actors_.size() - 1]);
+                    }
+
+                    watcher_actors_.pop_back();
+                    has_data = true;
+                    break;
+                }
+            }
+
+            if (has_data) {
+                watcher->close();
+            }
+
+            return has_data;
+        }
+
         void etcd_cluster::set_lease(int64_t v, bool force_active_keepalives) {
             int64_t old_v = get_lease();
             conf_.lease   = v;
@@ -466,6 +535,7 @@ namespace atframe {
                 // 仅重试失败项目
                 for (size_t i = 0; i < keepalive_retry_actors_.size(); ++i) {
                     if (keepalive_retry_actors_[i]) {
+                        keepalive_retry_actors_[i]->reset_value_changed();
                         keepalive_retry_actors_[i]->active();
                     }
                 }
@@ -474,17 +544,11 @@ namespace atframe {
                 return;
             }
 
-            if (0 == old_v && 0 != v) {
-                // all keepalive object start a set request
+            if (0 != v) {
+                // all keepalive object start a update/set request
                 for (size_t i = 0; i < keepalive_actors_.size(); ++i) {
                     if (keepalive_actors_[i]) {
-                        keepalive_actors_[i]->active();
-                    }
-                }
-            } else if (0 != old_v && 0 != v) {
-                // all keepalive object start a update request
-                for (size_t i = 0; i < keepalive_actors_.size(); ++i) {
-                    if (keepalive_actors_[i]) {
+                        keepalive_actors_[i]->reset_value_changed();
                         keepalive_actors_[i]->active();
                     }
                 }
@@ -966,6 +1030,11 @@ namespace atframe {
                 }
 
                 self->add_stats_success_request();
+                if (!self->check_flag(flag_t::RUNNING)) {
+                    self->set_flag(flag_t::RUNNING, true);
+                }
+
+                // 这里会触发重试失败的keepalive
                 self->set_lease(new_lease, is_grant);
             } while (false);
 
@@ -1267,7 +1336,8 @@ namespace atframe {
                 if (!conf_.ssl_cipher_list.empty()) {
                     req->set_opt_string(CURLOPT_SSL_CIPHER_LIST, &conf_.ssl_cipher_list[0]);
                 } else if (ssl_version_t::TLS_V12 == conf_.ssl_min_version || ssl_version_t::TLS_V13 == conf_.ssl_min_version) {
-                    char ciphers[] = "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384";
+                    char ciphers[] = "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:"
+                                     "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384";
                     req->set_opt_string(CURLOPT_SSL_CIPHER_LIST, ciphers);
                 }
 

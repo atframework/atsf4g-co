@@ -22,6 +22,8 @@ namespace atframe {
             rpc_.last_revision             = 0;
         }
 
+        etcd_watcher::~etcd_watcher() { close(); }
+
         etcd_watcher::ptr_t etcd_watcher::create(etcd_cluster &owner, const std::string &path, const std::string &range_end) {
             constrict_helper_t h;
             return std::make_shared<etcd_watcher>(owner, path, range_end, h);
@@ -32,6 +34,7 @@ namespace atframe {
                 WLOGDEBUG("Etcd watcher %p cancel http request.", this);
                 rpc_.rpc_opr_->set_on_complete(NULL);
                 rpc_.rpc_opr_->set_on_write(NULL);
+                rpc_.rpc_opr_->set_priv_data(NULL);
                 rpc_.rpc_opr_->stop();
                 rpc_.rpc_opr_.reset();
             }

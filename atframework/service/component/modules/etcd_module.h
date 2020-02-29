@@ -129,8 +129,14 @@ namespace atframe {
             int add_watcher_by_name(watcher_list_callback_t fn);
             int add_watcher_by_tag(const std::string &tag_name, watcher_one_callback_t fn);
 
+            int add_watcher_by_custom_path(const std::string &custom_path, watcher_one_callback_t fn);
+
             inline const ::atframe::component::etcd_cluster &get_raw_etcd_ctx() const { return etcd_ctx_; }
             inline ::atframe::component::etcd_cluster &      get_raw_etcd_ctx() { return etcd_ctx_; }
+
+            const conf_t &get_configure() const { return conf_; }
+
+            atframe::component::etcd_keepalive::ptr_t add_keepalive_actor(std::string &val, const std::string &node_path);
 
         private:
             static bool unpack(node_info_t &out, const std::string &path, const std::string &json, bool reset_data);
@@ -153,8 +159,6 @@ namespace atframe {
                 watcher_callback_one_wrapper_t(etcd_module &m, watcher_one_callback_t cbk);
                 void operator()(const ::atframe::component::etcd_response_header &header, const ::atframe::component::etcd_watcher::response_t &evt_data);
             };
-
-            atframe::component::etcd_keepalive::ptr_t add_keepalive_actor(std::string &val, const std::string &node_path);
 
         private:
             conf_t                                         conf_;

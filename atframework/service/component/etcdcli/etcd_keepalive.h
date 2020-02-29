@@ -44,6 +44,7 @@ namespace atframe {
 
         public:
             etcd_keepalive(etcd_cluster &owner, const std::string &path, constrict_helper_t &helper);
+            ~etcd_keepalive();
             static ptr_t create(etcd_cluster &owner, const std::string &path);
 
             void close();
@@ -51,7 +52,8 @@ namespace atframe {
             void set_checker(const std::string &checked_str);
             void set_checker(checker_fn_t fn);
 
-            inline void set_value(const std::string &str) { value_ = str; }
+            void set_value(const std::string &str);
+            void reset_value_changed();
 
             inline const std::string &get_value() const { return value_; }
 
@@ -69,6 +71,8 @@ namespace atframe {
         private:
             void process();
 
+            void remove_etcd_path();
+
         private:
             static int libcurl_callback_on_get_data(util::network::http_request &req);
             static int libcurl_callback_on_set_data(util::network::http_request &req);
@@ -80,6 +84,8 @@ namespace atframe {
             typedef struct {
                 util::network::http_request::ptr_t rpc_opr_;
                 bool                               is_actived;
+                bool                               is_value_changed;
+                bool                               has_data;
             } rpc_data_t;
             rpc_data_t rpc_;
 

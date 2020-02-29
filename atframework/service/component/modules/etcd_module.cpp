@@ -683,6 +683,8 @@ namespace atframe {
             return 0;
         }
 
+        int etcd_module::add_watcher_by_custom_path(const std::string &custom_path, watcher_one_callback_t fn) {}
+
 
         bool etcd_module::unpack(node_info_t &out, const std::string &path, const std::string &json, bool reset_data) {
             if (reset_data) {
@@ -901,11 +903,8 @@ namespace atframe {
             }
 
             ret->set_checker(val);
-#if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
-            ret->set_value(std::move(val));
-#else
             ret->set_value(val);
-#endif
+
             if (!etcd_ctx_.add_keepalive(ret)) {
                 ret.reset();
             }

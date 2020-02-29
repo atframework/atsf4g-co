@@ -36,6 +36,7 @@ namespace atframe {
             struct flag_t {
                 enum type {
                     CLOSING      = 0x0001, // closeing
+                    RUNNING      = 0x0002,
                     ENABLE_LEASE = 0x0100, // enable auto get lease
                 };
             };
@@ -179,7 +180,9 @@ namespace atframe {
             // ================== apis for sub-services ==================
             bool add_keepalive(const std::shared_ptr<etcd_keepalive> &keepalive);
             bool add_retry_keepalive(const std::shared_ptr<etcd_keepalive> &keepalive);
+            bool remove_keepalive(std::shared_ptr<etcd_keepalive> keepalive);
             bool add_watcher(const std::shared_ptr<etcd_watcher> &watcher);
+            bool remove_watcher(std::shared_ptr<etcd_watcher> watcher);
 
             // ================== apis of create request for key-value operation ==================
         public:
