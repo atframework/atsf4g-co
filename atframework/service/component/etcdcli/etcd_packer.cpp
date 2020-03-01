@@ -239,50 +239,50 @@ namespace atframe {
                 return false;
             }
 
-            switch (iter->value.GetType()) {
+            val = unpack_to_string(iter->value);
+            return true;
+        }
+
+        std::string etcd_packer::unpack_to_string(const rapidjson::Value &json_val) {
+            switch (json_val.GetType()) {
             case rapidjson::kNullType: {
-                val.clear();
-                break;
+                return "null";
             }
             case rapidjson::kFalseType: {
-                val = "false";
-                break;
+                return "false";
             }
             case rapidjson::kTrueType: {
-                val = "true";
-                break;
+                return "true";
             }
             case rapidjson::kObjectType: {
-                val = "[object object]";
-                break;
+                return "[object object]";
             }
             case rapidjson::kArrayType: {
-                val = "[object array]";
-                break;
+                return "[object array]";
             }
             case rapidjson::kStringType: {
-                val = iter->value.GetString();
-                break;
+                return json_val.GetString();
             }
             case rapidjson::kNumberType: {
                 std::stringstream ss;
-                if (iter->value.IsDouble()) {
-                    ss << iter->value.GetDouble();
-                } else if (iter->value.IsInt()) {
-                    ss << iter->value.GetInt();
-                } else if (iter->value.IsUint()) {
-                    ss << iter->value.GetUint();
-                } else if (iter->value.IsInt64()) {
-                    ss << iter->value.GetInt64();
+                if (json_val.IsDouble()) {
+                    ss << json_val.GetDouble();
+                } else if (json_val.IsInt()) {
+                    ss << json_val.GetInt();
+                } else if (json_val.IsUint()) {
+                    ss << json_val.GetUint();
+                } else if (json_val.IsInt64()) {
+                    ss << json_val.GetInt64();
                 } else {
-                    ss << iter->value.GetUint64();
+                    ss << json_val.GetUint64();
                 }
-                val = ss.str();
+                return ss.str();
+            }
+            default:
                 break;
             }
-            }
 
-            return true;
+            return "";
         }
 
         void etcd_packer::pack_base64(rapidjson::Value &json_val, const char *key, const std::string &val, rapidjson::Document &doc) {

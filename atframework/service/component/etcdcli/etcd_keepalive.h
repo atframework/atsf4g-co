@@ -67,11 +67,10 @@ namespace atframe {
             inline bool   is_check_run() const { return checker_.is_check_run; }
             inline bool   is_check_passed() const { return checker_.is_check_passed; }
             inline size_t get_check_times() const { return checker_.retry_times; }
+            inline bool   has_data() const { return rpc_.has_data; }
 
         private:
             void process();
-
-            void remove_etcd_path();
 
         private:
             static int libcurl_callback_on_get_data(util::network::http_request &req);

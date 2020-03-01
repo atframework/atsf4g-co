@@ -8,31 +8,6 @@
 
 namespace atframe {
     namespace component {
-        namespace details {
-            struct etcd_keepalive_deletor {
-                std::string                        keepalive_path;
-                etcd_keepalive *                   deleted_keepalive;
-                util::network::http_request::ptr_t rpc;
-            };
-
-            static int etcd_keepalive_deletor_fn(util::network::http_request &req) {
-                etcd_keepalive_deletor *self = reinterpret_cast<etcd_keepalive_deletor *>(req.get_priv_data());
-                assert(self && self->deleted_keepalive && self->rpc);
-                do {
-                    if (NULL == self || !self->rpc) {
-                        WLOGERROR("Etcd keepalive delete request shouldn't has request without private data");
-                        break;
-                    }
-
-                    WLOGINFO("Etcd keepalive %p delete %s finished, res: %d, http code: %d\n%s", self->deleted_keepalive, self->keepalive_path.c_str(),
-                             self->rpc->get_error_code(), self->rpc->get_response_code(), self->rpc->get_error_msg());
-                } while (false);
-
-                delete self;
-                return 0;
-            }
-        } // namespace details
-
         etcd_keepalive::default_checker_t::default_checker_t(const std::string &checked) : data(checked) {}
 
         bool etcd_keepalive::default_checker_t::operator()(const std::string &checked) const { return checked.empty() || data == checked; }
@@ -62,9 +37,9 @@ namespace atframe {
                 rpc_.rpc_opr_.reset();
             }
 
-            remove_etcd_path();
             rpc_.is_actived       = false;
             rpc_.is_value_changed = true;
+            rpc_.has_data         = false;
 
             checker_.is_check_run    = false;
             checker_.is_check_passed = false;
@@ -156,51 +131,6 @@ namespace atframe {
 
             if (need_retry) {
                 owner_->add_retry_keepalive(shared_from_this());
-            }
-        }
-
-        void etcd_keepalive::remove_etcd_path() {
-            if (owner_ == NULL || !rpc_.has_data) {
-                return;
-            }
-
-            // 会随lease的释放而释放，不需要额外删除
-            if (owner_->check_flag(etcd_cluster::flag_t::CLOSING) && owner_->check_flag(etcd_cluster::flag_t::ENABLE_LEASE)) {
-                return;
-            }
-
-            if (path_.empty()) {
-                return;
-            }
-
-            util::network::http_request::ptr_t rpc = owner_->create_request_kv_del(path_, "+1");
-            if (!rpc) {
-                WLOGERROR("Etcd keepalive %p create delete data request to %s failed", this, path_.c_str());
-                return;
-            }
-
-            details::etcd_keepalive_deletor *deletor = new details::etcd_keepalive_deletor();
-            if (nullptr == deletor) {
-                WLOGERROR("Etcd keepalive %p create etcd_keepalive_deletor request to %s failed", this, path_.c_str());
-                return;
-            }
-
-            deletor->rpc               = rpc;
-            deletor->deleted_keepalive = this;
-            deletor->keepalive_path    = get_path();
-
-            rpc->set_on_complete(details::etcd_keepalive_deletor_fn);
-            rpc->set_priv_data(deletor);
-
-            int res = rpc->start(util::network::http_request::method_t::EN_MT_POST, false);
-            if (res != 0) {
-                WLOGERROR("Etcd keepalive %p start delete request to %s failed, res: %d", this, rpc->get_url().c_str(), res);
-                delete deletor;
-                rpc->set_on_complete(NULL);
-                rpc->set_priv_data(NULL);
-            } else {
-                WLOGDEBUG("Etcd keepalive %p start delete request to %s success", this, rpc->get_url().c_str());
-                rpc_.has_data = false;
             }
         }
 

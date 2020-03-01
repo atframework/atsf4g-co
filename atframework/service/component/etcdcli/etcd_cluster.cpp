@@ -54,6 +54,7 @@ namespace atframe {
          *       curl -L http://127.0.0.1:2379/v3/auth/role/add -XPOST -d '{"name": "root"}'
          *       curl -L http://127.0.0.1:2379/v3/auth/user/grant -XPOST -d '{"user": "root", "role": "root"}'
          *       curl -L http://127.0.0.1:2379/v3/auth/enable -XPOST -d '{}'
+         *       curl -L http://127.0.0.1:2379/v3/auth/user/get -XPOST -X POST -d '{"name": "root"}'
          */
 
 #define ETCD_API_V3_ERROR_HTTP_CODE_AUTH 401
@@ -64,6 +65,7 @@ namespace atframe {
 
 #define ETCD_API_V3_MEMBER_LIST "/v3/cluster/member/list"
 #define ETCD_API_V3_AUTH_AUTHENTICATE "/v3/auth/authenticate"
+#define ETCD_API_V3_AUTH_USER_GET "/v3/auth/user/get"
 
 #define ETCD_API_V3_KV_GET "/v3/kv/range"
 #define ETCD_API_V3_KV_SET "/v3/kv/put"
@@ -167,10 +169,14 @@ namespace atframe {
         } // namespace details
 
         etcd_cluster::etcd_cluster() : flags_(0) {
-            conf_.http_cmd_timeout              = std::chrono::seconds(10);
-            conf_.etcd_members_next_update_time = std::chrono::system_clock::from_time_t(0);
-            conf_.etcd_members_update_interval  = std::chrono::minutes(5);
-            conf_.etcd_members_retry_interval   = std::chrono::minutes(1);
+            conf_.authorization_next_update_time = std::chrono::system_clock::from_time_t(0);
+            conf_.authorization_retry_interval   = std::chrono::seconds(5);
+            conf_.auth_user_get_next_update_time = std::chrono::system_clock::from_time_t(0);
+            conf_.auth_user_get_retry_interval   = std::chrono::minutes(2);
+            conf_.http_cmd_timeout               = std::chrono::seconds(10);
+            conf_.etcd_members_next_update_time  = std::chrono::system_clock::from_time_t(0);
+            conf_.etcd_members_update_interval   = std::chrono::minutes(5);
+            conf_.etcd_members_retry_interval    = std::chrono::minutes(1);
 
             conf_.lease                      = 0;
             conf_.keepalive_next_update_time = std::chrono::system_clock::from_time_t(0);
@@ -192,7 +198,10 @@ namespace atframe {
             memset(&stats_, 0, sizeof(stats_));
         }
 
-        etcd_cluster::~etcd_cluster() { reset(); }
+        etcd_cluster::~etcd_cluster() {
+            reset();
+            cleanup_keepalive_deletors();
+        }
 
         void etcd_cluster::init(const util::network::http_request::curl_m_bind_ptr_t &curl_mgr) {
             curl_multi_ = curl_mgr;
@@ -209,6 +218,8 @@ namespace atframe {
                 rpc_keepalive_->stop();
                 rpc_keepalive_.reset();
             }
+
+            cleanup_keepalive_deletors();
 
             if (rpc_update_members_) {
                 rpc_update_members_->set_on_complete(NULL);
@@ -228,6 +239,7 @@ namespace atframe {
                 }
             }
             keepalive_actors_.clear();
+            keepalive_retry_actors_.clear();
 
             for (size_t i = 0; i < watcher_actors_.size(); ++i) {
                 if (watcher_actors_[i]) {
@@ -266,7 +278,12 @@ namespace atframe {
 
             conf_.http_cmd_timeout = std::chrono::seconds(10);
 
+            conf_.authorization_user_roles.clear();
             conf_.authorization_header.clear();
+            conf_.authorization_next_update_time = std::chrono::system_clock::from_time_t(0);
+            conf_.authorization_retry_interval   = std::chrono::seconds(5);
+            conf_.auth_user_get_next_update_time = std::chrono::system_clock::from_time_t(0);
+            conf_.auth_user_get_retry_interval   = std::chrono::minutes(2);
             conf_.path_node.clear();
             conf_.etcd_members_next_update_time = std::chrono::system_clock::from_time_t(0);
             conf_.etcd_members_update_interval  = std::chrono::minutes(5);
@@ -320,10 +337,18 @@ namespace atframe {
                 return ret;
             }
 
+            // Send /v3/auth/user/get interval to renew auth token
+            if (!conf_.authorization.empty() && !rpc_authenticate_) {
+                ret += create_request_auth_user_get() ? 1 : 0;
+            }
+
             // keepalive lease
             if (check_flag(flag_t::ENABLE_LEASE)) {
                 if (0 == get_lease()) {
                     ret += create_request_lease_grant() ? 1 : 0;
+
+                    // run actions after lease granted
+                    return;
                 } else if (util::time::time_utility::now() > conf_.keepalive_next_update_time) {
                     ret += create_request_lease_keepalive() ? 1 : 0;
                 }
@@ -331,12 +356,8 @@ namespace atframe {
                 set_flag(flag_t::RUNNING, true);
             }
 
-            // reactive watcher
-            for (size_t i = 0; i < watcher_actors_.size(); ++i) {
-                if (watcher_actors_[i]) {
-                    watcher_actors_[i]->active();
-                }
-            }
+            // run pending
+            retry_pending_actions();
 
             return ret;
         }
@@ -386,6 +407,18 @@ namespace atframe {
             }
         }
 
+        void etcd_cluster::pick_conf_authorization(std::string &username, std::string *password) {
+            std::string::size_type username_sep = conf_.authorization.find(':');
+            if (username_sep == std::string::npos) {
+                username = conf_.authorization;
+            } else {
+                username = conf_.authorization.substr(0, username_sep);
+                if (NULL != password && username_sep + 1 < conf_.authorization.size()) {
+                    *password = conf_.authorization.substr(username_sep + 1);
+                }
+            }
+        }
+
         time_t etcd_cluster::get_http_timeout_ms() const {
             time_t ret = static_cast<time_t>(std::chrono::duration_cast<std::chrono::milliseconds>(get_conf_http_timeout()).count());
             if (ret <= 0) {
@@ -414,6 +447,13 @@ namespace atframe {
 
             set_flag(flag_t::ENABLE_LEASE, true);
             keepalive_actors_.push_back(keepalive);
+
+            etcd_keepalive_deletor_map_t::iterator iter = keepalive_deletors_.find(keepalive->get_path());
+            if (iter != keepalive_deletors_.end()) {
+                etcd_keepalive_deletor *keepalive_deletor = iter->second;
+                keepalive_deletors_.erase(iter);
+                delete_keepalive_deletor(keepalive_deletor, true);
+            }
 
             // auto active if cluster is running
             if (check_flag(flag_t::RUNNING)) {
@@ -449,7 +489,7 @@ namespace atframe {
                 return false;
             }
 
-            bool has_data = false;
+            bool found = false;
             for (size_t i = 0; i < keepalive_actors_.size(); ++i) {
                 if (keepalive_actors_[i] == keepalive) {
                     if (i != keepalive_actors_.size() - 1) {
@@ -457,7 +497,7 @@ namespace atframe {
                     }
 
                     keepalive_actors_.pop_back();
-                    has_data = true;
+                    found = true;
                     break;
                 }
             }
@@ -469,16 +509,30 @@ namespace atframe {
                     }
 
                     keepalive_retry_actors_.pop_back();
-                    has_data = true;
+                    found = true;
                     break;
                 }
             }
 
-            if (has_data) {
+            if (found) {
+                if (keepalive->has_data()) {
+                    etcd_keepalive_deletor *keepalive_deletor = new etcd_keepalive_deletor();
+                    if (NULL == keepalive_deletor) {
+                        WLOGERROR("Etcd cluster try to delete keepalive %p path %s but malloc etcd_keepalive_deletor failed.", keepalive,
+                                  keepalive->get_path().c_str());
+                    } else {
+                        keepalive_deletor->retry_times    = 0;
+                        keepalive_deletor->path           = keepalive->get_path();
+                        keepalive_deletor->keepalive_addr = keepalive.get();
+                        keepalive_deletor->owner          = NULL;
+
+                        remove_keepalive_path(keepalive_deletor, false);
+                    }
+                }
                 keepalive->close();
             }
 
-            return has_data;
+            return found;
         }
 
         bool etcd_cluster::add_watcher(const std::shared_ptr<etcd_watcher> &watcher) {
@@ -527,24 +581,164 @@ namespace atframe {
             return has_data;
         }
 
+#if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
+        void etcd_cluster::remove_keepalive_path(etcd_keepalive_deletor *keepalive_deletor, bool delay_delete) {
+#else
+        void etcd_cluster::remove_keepalive_path(etcd_keepalive_deletor *&&keepalive_deletor, bool delay_delete) {
+#endif
+            if (NULL == keepalive_deletor) {
+                return;
+            }
+
+            {
+                etcd_keepalive_deletor_map_t::iterator iter = keepalive_deletors_.find(keepalive_deletor->path);
+                if (iter != keepalive_deletors_.end()) {
+                    etcd_keepalive_deletor *delete_deletor = iter->second;
+                    keepalive_deletors_.erase(iter);
+
+                    delete_keepalive_deletor(delete_deletor, true);
+                }
+            }
+
+            if (delay_delete) {
+                // insert and retry later
+                keepalive_deletors_[keepalive_deletor->path] = keepalive_deletor;
+                return;
+            }
+
+            keepalive_deletor->owner = this;
+
+            ++keepalive_deletor->retry_times;
+            // retry at most 5 times
+            if (keepalive_deletor->retry_times > 8) {
+                WLOGERROR("Etcd cluster try to delete keepalive %p path %s too many times, skip to retry again.", keepalive_deletor->keepalive_addr,
+                          keepalive_deletor->path.c_str());
+                delete_keepalive_deletor(keepalive_deletor, true);
+                return;
+            }
+
+            util::network::http_request::ptr_t rpc = create_request_kv_del(keepalive_deletor->path, "+1");
+            if (!rpc) {
+                WLOGERROR("Etcd cluster create delete keepalive %p path request to %s failed", keepalive_deletor->keepalive_addr,
+                          keepalive_deletor->path.c_str());
+
+                // insert and retry later
+                keepalive_deletors_[keepalive_deletor->path] = keepalive_deletor;
+                return;
+            }
+
+            keepalive_deletor->rpc = rpc;
+            rpc->set_on_complete(etcd_cluster::libcurl_callback_on_remove_keepalive_path);
+            rpc->set_priv_data(keepalive_deletor);
+
+            int res = rpc->start(util::network::http_request::method_t::EN_MT_POST, false);
+            if (res != 0) {
+                WLOGERROR("Etcd cluster start delete keepalive %p request to %s failed, res: %d", this, rpc->get_url().c_str(), res);
+                rpc->set_on_complete(NULL);
+                rpc->set_priv_data(NULL);
+                keepalive_deletor->rpc.reset();
+
+                // insert and retry later
+                keepalive_deletors_[keepalive_deletor->path] = keepalive_deletor;
+            } else {
+                WLOGDEBUG("Etcd cluster start delete keepalive %p request to %s success", this, rpc->get_url().c_str());
+            }
+        } // namespace component
+
+        int etcd_cluster::libcurl_callback_on_remove_keepalive_path(util::network::http_request &req) {
+            etcd_keepalive_deletor *self = reinterpret_cast<etcd_keepalive_deletor *>(req.get_priv_data());
+            if (NULL == self) {
+                // Maybe deleted before or in callback, just skip
+                return 0;
+            }
+
+            assert(self->keepalive_addr);
+            do {
+                if (NULL == self) {
+                    WLOGERROR("Etcd cluster delete keepalive path shouldn't has request without private data");
+                    break;
+                }
+
+                if (self->rpc.get() == &req) {
+                    self->rpc.reset();
+                }
+
+                // 服务器错误则忽略，正常流程path不存在也会返回200，然后没有 deleted=1 。如果删除成功会有 deleted=1
+                // 判定 404 只是是个防御性判定
+                if (0 != req.get_error_code() || (util::network::http_request::status_code_t::EN_ECG_SUCCESS !=
+                                                      util::network::http_request::get_status_code_group(req.get_response_code()) &&
+                                                  util::network::http_request::status_code_t::EN_SCT_NOT_FOUND != req.get_response_code())) {
+
+                    WLOGERROR("Etcd cluster delete keepalive %p path %s failed, error code: %d, http code: %d\n%s", self->keepalive_addr, self->path.c_str(),
+                              req.get_error_code(), req.get_response_code(), req.get_error_msg());
+
+                    if (NULL != self->owner) {
+                        // only network error will trigger a etcd member update
+                        if (0 != req.get_error_code()) {
+                            self->owner->retry_request_member_update();
+                        }
+                        self->owner->add_stats_error_request();
+
+                        self->owner->check_authorization_expired(req.get_response_code(), req.get_response_stream().str());
+
+                        self->owner->remove_keepalive_path(self, true);
+                    } else {
+                        delete_keepalive_deletor(self, false);
+                    }
+
+                    return 0;
+                }
+
+                WLOGINFO("Etcd cluster delete keepalive %p path %s finished, res: %d, http code: %d\n%s", self->keepalive_addr, self->path.c_str(),
+                         req.get_error_code(), req.get_response_code(), req.get_error_msg());
+            } while (false);
+
+            delete_keepalive_deletor(self, false);
+            return 0;
+        }
+
+        void etcd_cluster::retry_pending_actions() {
+            // retry keepalive in retry list
+            for (size_t i = 0; i < keepalive_retry_actors_.size(); ++i) {
+                if (keepalive_retry_actors_[i]) {
+                    keepalive_retry_actors_[i]->reset_value_changed();
+                    keepalive_retry_actors_[i]->active();
+                }
+            }
+
+            keepalive_retry_actors_.clear();
+
+
+            // reactive watcher
+            for (size_t i = 0; i < watcher_actors_.size(); ++i) {
+                if (watcher_actors_[i]) {
+                    watcher_actors_[i]->active();
+                }
+            }
+
+            // retry keepalive deletors
+            if (!keepalive_deletors_.empty()) {
+                etcd_keepalive_deletor_map_t pending_deletes;
+                pending_deletes.swap(keepalive_deletors_);
+
+                for (etcd_keepalive_deletor_map_t::iterator iter = pending_deletes.begin(); iter != pending_deletes.end(); ++iter) {
+                    remove_keepalive_path(iter->second, false);
+                }
+            }
+        }
+
         void etcd_cluster::set_lease(int64_t v, bool force_active_keepalives) {
             int64_t old_v = get_lease();
             conf_.lease   = v;
 
-            if (old_v == v && false == force_active_keepalives) {
-                // 仅重试失败项目
-                for (size_t i = 0; i < keepalive_retry_actors_.size(); ++i) {
-                    if (keepalive_retry_actors_[i]) {
-                        keepalive_retry_actors_[i]->reset_value_changed();
-                        keepalive_retry_actors_[i]->active();
-                    }
-                }
-
-                keepalive_retry_actors_.clear();
+            if (old_v == v && false == force_active_keepalives && v != 0) {
+                retry_pending_actions();
                 return;
             }
 
             if (0 != v) {
+                keepalive_retry_actors_.clear();
+
                 // all keepalive object start a update/set request
                 for (size_t i = 0; i < keepalive_actors_.size(); ++i) {
                     if (keepalive_actors_[i]) {
@@ -552,9 +746,9 @@ namespace atframe {
                         keepalive_actors_[i]->active();
                     }
                 }
-            }
 
-            keepalive_retry_actors_.clear();
+                retry_pending_actions();
+            }
         }
 
         bool etcd_cluster::create_request_auth_authenticate() {
@@ -579,20 +773,23 @@ namespace atframe {
                 return false;
             }
 
+            if (util::time::time_utility::now() <= conf_.authorization_next_update_time) {
+                return false;
+            }
+
+            // At least 1 second
+            if (std::chrono::system_clock::duration::zero() >= conf_.authorization_retry_interval) {
+                conf_.authorization_next_update_time = util::time::time_utility::now();
+            } else {
+                conf_.authorization_next_update_time = util::time::time_utility::now() + conf_.authorization_retry_interval;
+            }
+
             std::stringstream ss;
             ss << conf_.path_node << ETCD_API_V3_AUTH_AUTHENTICATE;
             util::network::http_request::ptr_t req = util::network::http_request::create(curl_multi_.get(), ss.str());
 
-            std::string::size_type username_sep = conf_.authorization.find(':');
-            std::string            username, password;
-            if (username_sep == std::string::npos) {
-                username = conf_.authorization;
-            } else {
-                username = conf_.authorization.substr(0, username_sep);
-                if (username_sep + 1 < conf_.authorization.size()) {
-                    password = conf_.authorization.substr(username_sep + 1);
-                }
-            }
+            std::string username, password;
+            pick_conf_authorization(username, &password);
 
             if (req) {
                 add_stats_create_request();
@@ -673,7 +870,163 @@ namespace atframe {
                 WLOGDEBUG("Etcd cluster got authenticate token: %s", token.c_str());
 
                 self->add_stats_success_request();
+                self->retry_pending_actions();
+
+                // Renew user token later
+                if (std::chrono::system_clock::duration::zero() >= self->conf_.auth_user_get_retry_interval) {
+                    self->conf_.auth_user_get_next_update_time = util::time::time_utility::now();
+                } else {
+                    self->conf_.auth_user_get_next_update_time = util::time::time_utility::now() + self->conf_.auth_user_get_retry_interval;
+                }
             } while (false);
+
+            return 0;
+        }
+
+        bool etcd_cluster::create_request_auth_user_get() {
+            if (!curl_multi_) {
+                return false;
+            }
+
+            if (check_flag(flag_t::CLOSING)) {
+                return false;
+            }
+
+            if (conf_.path_node.empty()) {
+                return false;
+            }
+
+            if (conf_.authorization.empty()) {
+                return false;
+            }
+
+            if (rpc_authenticate_) {
+                return false;
+            }
+
+            if (util::time::time_utility::now() <= conf_.auth_user_get_next_update_time) {
+                return false;
+            }
+
+            // At least 1 second
+            if (std::chrono::system_clock::duration::zero() >= conf_.auth_user_get_retry_interval) {
+                conf_.auth_user_get_next_update_time = util::time::time_utility::now();
+            } else {
+                conf_.auth_user_get_next_update_time = util::time::time_utility::now() + conf_.auth_user_get_retry_interval;
+            }
+
+            std::stringstream ss;
+            ss << conf_.path_node << ETCD_API_V3_AUTH_USER_GET;
+            util::network::http_request::ptr_t req = util::network::http_request::create(curl_multi_.get(), ss.str());
+
+            std::string username;
+            pick_conf_authorization(username, NULL);
+
+            if (req) {
+                add_stats_create_request();
+
+                rapidjson::Document doc;
+                doc.SetObject();
+                doc.AddMember("name", rapidjson::StringRef(username.c_str(), username.size()), doc.GetAllocator());
+
+                setup_http_request(req, doc, get_http_timeout_ms());
+                req->set_priv_data(this);
+                req->set_on_complete(libcurl_callback_on_auth_user_get);
+
+                // req->set_on_verbose(details::etcd_cluster_verbose_callback);
+                int res = req->start(util::network::http_request::method_t::EN_MT_POST, false);
+                if (res != 0) {
+                    req->set_on_complete(NULL);
+                    WLOGERROR("Etcd start user get request for user %s to %s failed, res: %d", username.c_str(), req->get_url().c_str(), res);
+                    add_stats_error_request();
+                    return false;
+                }
+
+                WLOGINFO("Etcd start user get request for user %s to %s", username.c_str(), req->get_url().c_str());
+                rpc_authenticate_ = req;
+            } else {
+                add_stats_error_request();
+            }
+
+            return !!rpc_authenticate_;
+        }
+
+        int etcd_cluster::libcurl_callback_on_auth_user_get(util::network::http_request &req) {
+            etcd_cluster *self = reinterpret_cast<etcd_cluster *>(req.get_priv_data());
+            if (NULL == self) {
+                WLOGERROR("Etcd user get shouldn't has request without private data");
+                return 0;
+            }
+
+            util::network::http_request::ptr_t keep_rpc = self->rpc_authenticate_;
+            self->rpc_authenticate_.reset();
+
+            // 服务器错误则忽略
+            if (0 != req.get_error_code() ||
+                util::network::http_request::status_code_t::EN_ECG_SUCCESS != util::network::http_request::get_status_code_group(req.get_response_code())) {
+
+                // only network error will trigger a etcd member update
+                if (0 != req.get_error_code()) {
+                    self->retry_request_member_update();
+                }
+                self->add_stats_error_request();
+
+                WLOGERROR("Etcd user get failed, error code: %d, http code: %d\n%s", req.get_error_code(), req.get_response_code(), req.get_error_msg());
+                self->check_authorization_expired(req.get_response_code(), req.get_response_stream().str());
+                return 0;
+            }
+
+            std::string http_content;
+            req.get_response_stream().str().swap(http_content);
+            WLOGTRACE("Etcd cluster got http response: %s", http_content.c_str());
+
+            bool is_success = false;
+            do {
+                // 如果lease不存在（没有TTL）则启动创建流程
+                // 忽略空数据
+                rapidjson::Document doc;
+                if (false == ::atframe::component::etcd_packer::parse_object(doc, http_content.c_str())) {
+                    break;
+                }
+
+                std::string username;
+                self->pick_conf_authorization(username, NULL);
+
+                rapidjson::Value                 root = doc.GetObject();
+                rapidjson::Value::MemberIterator iter = root.FindMember("roles");
+                if (iter == root.MemberEnd() || false == iter->value.IsArray()) {
+                    WLOGDEBUG("Etcd user get %s without any role", username.c_str());
+                    break;
+                }
+
+                rapidjson::Document::Array roles = iter->value.GetArray();
+
+                self->conf_.authorization_user_roles.clear();
+                self->conf_.authorization_user_roles.reserve(static_cast<size_t>(roles.Size()));
+                for (rapidjson::Document::Array::ValueIterator iter = roles.Begin(); iter != roles.End(); ++iter) {
+                    if (iter->IsString()) {
+                        self->conf_.authorization_user_roles.push_back(iter->GetString());
+                    } else {
+                        WLOGERROR("Etcd user get %s with bad role type", username.c_str(), etcd_packer::unpack_to_string(*iter).c_str());
+                    }
+                }
+
+                std::stringstream ss;
+                ss << "[ ";
+                for (size_t i = 0; i < self->conf_.authorization_user_roles.size(); ++i) {
+                    if (0 != i) {
+                        ss << ", ";
+                    }
+                    ss << self->conf_.authorization_user_roles[i];
+                }
+                ss << " ]";
+                WLOGDEBUG("Etcd cluster got user %s with roles: %s", ss.str().c_str());
+            } while (false);
+
+            if (is_success) {
+                self->add_stats_success_request();
+                self->retry_pending_actions();
+            }
 
             return 0;
         }
@@ -1006,6 +1359,7 @@ namespace atframe {
                         WLOGERROR("Etcd lease grant failed");
                     } else {
                         WLOGERROR("Etcd lease keepalive failed because not found, try to grant one");
+                        self->set_lease(0, is_grant);
                         self->create_request_lease_grant();
                     }
 
@@ -1226,6 +1580,38 @@ namespace atframe {
             }
 
             return false;
+        }
+
+        void etcd_cluster::delete_keepalive_deletor(etcd_keepalive_deletor *in, bool close_rpc) {
+            if (NULL == in) {
+                return;
+            }
+
+            in->owner = NULL;
+            if (close_rpc) {
+                if (in->rpc) {
+                    in->rpc->set_priv_data(NULL);
+                    in->rpc->set_on_complete(NULL);
+                    in->rpc->stop();
+                }
+            } else {
+                if (in->rpc) {
+                    in->rpc->set_priv_data(NULL);
+                }
+            }
+
+            delete in;
+        }
+
+        void etcd_cluster::cleanup_keepalive_deletors() {
+            while (!keepalive_deletors_.empty()) {
+                etcd_keepalive_deletor_map_t pending_deletes;
+                pending_deletes.swap(keepalive_deletors_);
+
+                for (etcd_keepalive_deletor_map_t::iterator iter = pending_deletes.begin(); iter != pending_deletes.end(); ++iter) {
+                    delete_keepalive_deletor(iter->second, true);
+                }
+            }
         }
 
         void etcd_cluster::check_authorization_expired(int http_code, const std::string &content) {

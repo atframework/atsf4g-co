@@ -24,12 +24,23 @@
 #include <random/random_generator.h>
 #include <time/time_utility.h>
 
+#include <detail/libatbus_config.h>
+
 #include "etcd_packer.h"
 
 namespace atframe {
     namespace component {
         class etcd_keepalive;
         class etcd_watcher;
+        class etcd_cluster;
+
+        struct etcd_keepalive_deletor {
+            util::network::http_request::ptr_t rpc;
+            std::string                        path;
+            void *                             keepalive_addr; // maybe already destroyed, just used to write log
+            size_t                             retry_times;
+            etcd_cluster *                     owner;
+        };
 
         class etcd_cluster {
         public:
@@ -59,7 +70,22 @@ namespace atframe {
                 std::chrono::system_clock::duration http_cmd_timeout;
 
                 // generated data for cluster members
+                std::vector<std::string>              authorization_user_roles;
                 std::string                           authorization_header;
+                std::chrono::system_clock::time_point authorization_next_update_time;
+                std::chrono::system_clock::duration   authorization_retry_interval;
+                /**
+                 * @note We use /v3/auth/user/get to renew the timeout of authorization token.
+                 *       /v3/lease/keepalive do not need authorization and can not used to renew the token.
+                 *       auth-token=simple will set timeout to 5 minutes, so we use auth_user_get_retry_interval=2 minutes for default
+                 *       If set auth-token=jwt,pub-key=PUBLIC KEY,priv-key=PRIVITE KEY,sign-method=METHOD,ttl=TTL
+                 *          please set auth_user_get_retry_interval to any value less than TTL
+                 * @see https://etcd.io/docs/v3.4.0/op-guide/configuration/#--auth-token
+                 * @see https://github.com/etcd-io/etcd/blob/master/auth/simple_token.go
+                 * @see https://github.com/etcd-io/etcd/blob/master/auth/jwt.go
+                 */
+                std::chrono::system_clock::time_point auth_user_get_next_update_time;
+                std::chrono::system_clock::duration   auth_user_get_retry_interval;
                 std::string                           path_node;
                 std::chrono::system_clock::time_point etcd_members_next_update_time;
                 std::chrono::system_clock::duration   etcd_members_update_interval;
@@ -120,6 +146,7 @@ namespace atframe {
 
             inline void               set_conf_authorization(const std::string &authorization) { conf_.authorization = authorization; }
             inline const std::string &get_conf_authorization() const { return conf_.authorization; }
+            void                      pick_conf_authorization(std::string &username, std::string *password);
 
             inline int64_t get_keepalive_lease() const { return get_lease(); }
 
@@ -238,11 +265,21 @@ namespace atframe {
                                                                     bool prev_kv = false, bool progress_notify = true);
 
         private:
+#if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
+            void remove_keepalive_path(etcd_keepalive_deletor *keepalive_deletor, bool delay_delete);
+#else
+            void remove_keepalive_path(etcd_keepalive_deletor *&&keepalive_deletor, bool delay_delete);
+#endif
+            static int libcurl_callback_on_remove_keepalive_path(util::network::http_request &req);
+
+            void           retry_pending_actions();
             void           set_lease(int64_t v, bool force_active_keepalives);
             inline int64_t get_lease() const { return conf_.lease; }
 
             bool       create_request_auth_authenticate();
             static int libcurl_callback_on_auth_authenticate(util::network::http_request &req);
+            bool       create_request_auth_user_get();
+            static int libcurl_callback_on_auth_user_get(util::network::http_request &req);
 
             bool       retry_request_member_update();
             bool       create_request_member_update();
@@ -259,12 +296,20 @@ namespace atframe {
 
             bool check_authorization() const;
 
+            static void delete_keepalive_deletor(etcd_keepalive_deletor *in, bool close_rpc);
+            void        cleanup_keepalive_deletors();
+
         public:
+            /**
+             * @see https://github.com/grpc-ecosystem/grpc-gateway/blob/master/runtime/errors.go
+             * @see https://golang.org/pkg/net/http/
+             */
             void check_authorization_expired(int http_code, const std::string &content);
 
             void setup_http_request(util::network::http_request::ptr_t &req, rapidjson::Document &doc, time_t timeout);
 
         private:
+            typedef ATBUS_ADVANCE_TYPE_MAP(std::string, etcd_keepalive_deletor *) etcd_keepalive_deletor_map_t;
             uint32_t                                       flags_;
             util::random::mt19937                          random_generator_;
             conf_t                                         conf_;
@@ -275,6 +320,7 @@ namespace atframe {
             util::network::http_request::ptr_t             rpc_keepalive_;
             std::vector<std::shared_ptr<etcd_keepalive> >  keepalive_actors_;
             std::vector<std::shared_ptr<etcd_keepalive> >  keepalive_retry_actors_;
+            etcd_keepalive_deletor_map_t                   keepalive_deletors_;
             std::vector<std::shared_ptr<etcd_watcher> >    watcher_actors_;
         };
     } // namespace component
