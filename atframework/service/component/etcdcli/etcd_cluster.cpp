@@ -235,7 +235,7 @@ namespace atframe {
 
             for (size_t i = 0; i < keepalive_actors_.size(); ++i) {
                 if (keepalive_actors_[i]) {
-                    keepalive_actors_[i]->close();
+                    keepalive_actors_[i]->close(false);
                 }
             }
             keepalive_actors_.clear();
@@ -348,7 +348,7 @@ namespace atframe {
                     ret += create_request_lease_grant() ? 1 : 0;
 
                     // run actions after lease granted
-                    return;
+                    return ret;
                 } else if (util::time::time_utility::now() > conf_.keepalive_next_update_time) {
                     ret += create_request_lease_keepalive() ? 1 : 0;
                 }
@@ -403,7 +403,9 @@ namespace atframe {
                 }
                 break;
             }
-            default: { break; }
+            default: {
+                break;
+            }
             }
         }
 
@@ -518,7 +520,7 @@ namespace atframe {
                 if (keepalive->has_data()) {
                     etcd_keepalive_deletor *keepalive_deletor = new etcd_keepalive_deletor();
                     if (NULL == keepalive_deletor) {
-                        WLOGERROR("Etcd cluster try to delete keepalive %p path %s but malloc etcd_keepalive_deletor failed.", keepalive,
+                        WLOGERROR("Etcd cluster try to delete keepalive %p path %s but malloc etcd_keepalive_deletor failed.", keepalive.get(),
                                   keepalive->get_path().c_str());
                     } else {
                         keepalive_deletor->retry_times    = 0;
@@ -528,8 +530,11 @@ namespace atframe {
 
                         remove_keepalive_path(keepalive_deletor, false);
                     }
+
+                    keepalive->close(true);
+                } else {
+                    keepalive->close(false);
                 }
-                keepalive->close();
             }
 
             return found;
@@ -1007,7 +1012,7 @@ namespace atframe {
                     if (iter->IsString()) {
                         self->conf_.authorization_user_roles.push_back(iter->GetString());
                     } else {
-                        WLOGERROR("Etcd user get %s with bad role type", username.c_str(), etcd_packer::unpack_to_string(*iter).c_str());
+                        WLOGERROR("Etcd user get %s with bad role type: %s", username.c_str(), etcd_packer::unpack_to_string(*iter).c_str());
                     }
                 }
 
@@ -1020,7 +1025,7 @@ namespace atframe {
                     ss << self->conf_.authorization_user_roles[i];
                 }
                 ss << " ]";
-                WLOGDEBUG("Etcd cluster got user %s with roles: %s", ss.str().c_str());
+                WLOGDEBUG("Etcd cluster got user %s with roles: %s", username.c_str(), ss.str().c_str());
             } while (false);
 
             if (is_success) {
@@ -1694,7 +1699,9 @@ namespace atframe {
 #endif
                     break;
                 }
+#if LIBCURL_VERSION_NUM >= 0x072400
                 req->set_opt_bool(CURLOPT_SSL_ENABLE_ALPN, conf_.ssl_enable_alpn);
+#endif
                 if (!conf_.ssl_client_cert.empty()) {
                     req->set_opt_string(CURLOPT_SSLCERT, &conf_.ssl_client_cert[0]);
                 }

@@ -683,8 +683,31 @@ namespace atframe {
             return 0;
         }
 
-        int etcd_module::add_watcher_by_custom_path(const std::string &custom_path, watcher_one_callback_t fn) {}
+        atframe::component::etcd_watcher::ptr_t etcd_module::add_watcher_by_custom_path(const std::string &custom_path, watcher_one_callback_t fn) {
+            if (!fn) {
+                WLOGERROR("create etcd_watcher by custom path %s failed. callback can not be empty.", custom_path.c_str());
+                return NULL;
+            }
 
+            if (custom_path.size() < conf_.path_prefix.size() ||
+                0 != UTIL_STRFUNC_STRNCMP(custom_path.c_str(), conf_.path_prefix.c_str(), conf_.path_prefix.size())) {
+
+                WLOGERROR("create etcd_watcher by custom path %s failed. path must has prefix of %s.", custom_path.c_str(), conf_.path_prefix.c_str());
+                return NULL;
+            }
+
+            atframe::component::etcd_watcher::ptr_t p = atframe::component::etcd_watcher::create(etcd_ctx_, custom_path, "+1");
+            if (!p) {
+                WLOGERROR("create etcd_watcher by custom path %s failed. malloc etcd_watcher failed.", custom_path.c_str());
+                return NULL;
+            }
+
+            etcd_ctx_.add_watcher(p);
+            WLOGINFO("create etcd_watcher by custom path %s success", custom_path.c_str());
+
+            p->set_evt_handle(watcher_callback_one_wrapper_t(*this, fn));
+            return p;
+        }
 
         bool etcd_module::unpack(node_info_t &out, const std::string &path, const std::string &json, bool reset_data) {
             if (reset_data) {
@@ -697,6 +720,7 @@ namespace atframe {
                 out.type_id = 0;
                 out.type_name.clear();
                 out.version.clear();
+                out.custom_data.clear();
             }
 
             if (json.empty()) {
@@ -791,6 +815,12 @@ namespace atframe {
                 } else {
                     return false;
                 }
+
+                if (val.MemberEnd() != (atproxy_iter = val.FindMember("custom_data"))) {
+                    if (atproxy_iter->value.IsString()) {
+                        out.custom_data = atproxy_iter->value.GetString();
+                    }
+                }
             }
 
             return true;
@@ -815,6 +845,9 @@ namespace atframe {
             doc.AddMember("type_id", src.type_id, doc.GetAllocator());
             doc.AddMember("type_name", rapidjson::StringRef(src.type_name.c_str(), src.type_name.size()), doc.GetAllocator());
             doc.AddMember("version", rapidjson::StringRef(src.version.c_str(), src.version.size()), doc.GetAllocator());
+            if (!src.custom_data.empty()) {
+                doc.AddMember("custom_data", rapidjson::StringRef(src.custom_data.c_str(), src.custom_data.size()), doc.GetAllocator());
+            }
 
             // Stringify the DOM
             rapidjson::StringBuffer                    buffer;
@@ -896,14 +929,15 @@ namespace atframe {
             atframe::component::etcd_keepalive::ptr_t ret;
             if (val.empty()) {
                 node_info_t ni;
-                ni.id        = get_app()->get_id();
-                ni.name      = get_app()->get_app_name();
-                ni.hostname  = ::atbus::node::get_hostname();
-                ni.listens   = get_app()->get_bus_node()->get_listen_list();
-                ni.hash_code = get_app()->get_hash_code();
-                ni.type_id   = static_cast<uint64_t>(get_app()->get_type_id());
-                ni.type_name = get_app()->get_type_name();
-                ni.version   = get_app()->get_app_version();
+                ni.id          = get_app()->get_id();
+                ni.name        = get_app()->get_app_name();
+                ni.hostname    = ::atbus::node::get_hostname();
+                ni.listens     = get_app()->get_bus_node()->get_listen_list();
+                ni.hash_code   = get_app()->get_hash_code();
+                ni.type_id     = static_cast<uint64_t>(get_app()->get_type_id());
+                ni.type_name   = get_app()->get_type_name();
+                ni.version     = get_app()->get_app_version();
+                ni.custom_data = get_conf_custom_data();
                 pack(ni, val);
             }
 

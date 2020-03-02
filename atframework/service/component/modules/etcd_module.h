@@ -43,6 +43,7 @@ namespace atframe {
                 uint64_t               type_id;
                 std::string            type_name;
                 std::string            version;
+                std::string            custom_data;
 
                 node_action_t::type action;
             };
@@ -53,6 +54,7 @@ namespace atframe {
 
             struct conf_t {
                 std::string                         path_prefix;
+                std::string                         custom_data;
                 std::chrono::system_clock::duration etcd_init_timeout;
                 std::chrono::system_clock::duration watcher_retry_interval;
                 std::chrono::system_clock::duration watcher_request_timeout;
@@ -111,6 +113,9 @@ namespace atframe {
 
             virtual int tick() UTIL_CONFIG_OVERRIDE;
 
+            inline const std::string &get_conf_custom_data() const { return conf_.custom_data; }
+            inline void               set_conf_custom_data(const std::string &v) { conf_.custom_data = v; }
+
             std::string get_by_id_path() const;
             std::string get_by_type_id_path() const;
             std::string get_by_type_name_path() const;
@@ -129,7 +134,7 @@ namespace atframe {
             int add_watcher_by_name(watcher_list_callback_t fn);
             int add_watcher_by_tag(const std::string &tag_name, watcher_one_callback_t fn);
 
-            int add_watcher_by_custom_path(const std::string &custom_path, watcher_one_callback_t fn);
+            atframe::component::etcd_keepalive::ptr_t add_watcher_by_custom_path(const std::string &custom_path, watcher_one_callback_t fn);
 
             inline const ::atframe::component::etcd_cluster &get_raw_etcd_ctx() const { return etcd_ctx_; }
             inline ::atframe::component::etcd_cluster &      get_raw_etcd_ctx() { return etcd_ctx_; }

@@ -47,7 +47,7 @@ namespace atframe {
             ~etcd_keepalive();
             static ptr_t create(etcd_cluster &owner, const std::string &path);
 
-            void close();
+            void close(bool reset_has_data_flag);
 
             void set_checker(const std::string &checked_str);
             void set_checker(checker_fn_t fn);

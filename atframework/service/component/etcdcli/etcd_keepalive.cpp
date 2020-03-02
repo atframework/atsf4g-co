@@ -21,14 +21,14 @@ namespace atframe {
             rpc_.has_data            = false;
         }
 
-        etcd_keepalive::~etcd_keepalive() { close(); }
+        etcd_keepalive::~etcd_keepalive() { close(true); }
 
         etcd_keepalive::ptr_t etcd_keepalive::create(etcd_cluster &owner, const std::string &path) {
             constrict_helper_t h;
             return std::make_shared<etcd_keepalive>(owner, path, h);
         }
 
-        void etcd_keepalive::close() {
+        void etcd_keepalive::close(bool reset_has_data_flag) {
             if (rpc_.rpc_opr_) {
                 WLOGDEBUG("Etcd watcher %p cancel http request.", this);
                 rpc_.rpc_opr_->set_on_complete(NULL);
@@ -39,7 +39,9 @@ namespace atframe {
 
             rpc_.is_actived       = false;
             rpc_.is_value_changed = true;
-            rpc_.has_data         = false;
+            if (reset_has_data_flag) {
+                rpc_.has_data = false;
+            }
 
             checker_.is_check_run    = false;
             checker_.is_check_passed = false;
