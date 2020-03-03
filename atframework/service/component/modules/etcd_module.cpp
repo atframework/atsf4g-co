@@ -702,10 +702,15 @@ namespace atframe {
                 return NULL;
             }
 
-            etcd_ctx_.add_watcher(p);
-            WLOGINFO("create etcd_watcher by custom path %s success", custom_path.c_str());
-
             p->set_evt_handle(watcher_callback_one_wrapper_t(*this, fn));
+            if (etcd_ctx_.add_watcher(p)) {
+                WLOGINFO("create etcd_watcher by custom path %s success", custom_path.c_str());
+            } else {
+                WLOGINFO("add etcd_watcher by custom path %s failed", custom_path.c_str());
+                p->set_evt_handle(NULL);
+                p.reset();
+            }
+
             return p;
         }
 

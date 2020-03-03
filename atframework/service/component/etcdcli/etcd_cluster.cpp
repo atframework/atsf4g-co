@@ -458,7 +458,7 @@ namespace atframe {
             }
 
             // auto active if cluster is running
-            if (check_flag(flag_t::RUNNING)) {
+            if (check_flag(flag_t::RUNNING) && 0 != get_lease()) {
                 keepalive->active();
             }
             return true;
@@ -704,14 +704,15 @@ namespace atframe {
 
         void etcd_cluster::retry_pending_actions() {
             // retry keepalive in retry list
-            for (size_t i = 0; i < keepalive_retry_actors_.size(); ++i) {
-                if (keepalive_retry_actors_[i]) {
-                    keepalive_retry_actors_[i]->reset_value_changed();
-                    keepalive_retry_actors_[i]->active();
+            if (0 != get_lease()) {
+                for (size_t i = 0; i < keepalive_retry_actors_.size(); ++i) {
+                    if (keepalive_retry_actors_[i]) {
+                        keepalive_retry_actors_[i]->reset_value_changed();
+                        keepalive_retry_actors_[i]->active();
+                    }
                 }
+                keepalive_retry_actors_.clear();
             }
-
-            keepalive_retry_actors_.clear();
 
 
             // reactive watcher
