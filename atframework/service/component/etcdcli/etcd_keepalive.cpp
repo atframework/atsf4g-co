@@ -58,7 +58,9 @@ namespace atframe {
                 value_                = str;
                 rpc_.is_value_changed = true;
 
-                active();
+                if (NULL != owner_ && owner_->check_flag(etcd_cluster::flag_t::RUNNING) && 0 != owner_->get_lease()) {
+                    active();
+                }
             }
         }
 

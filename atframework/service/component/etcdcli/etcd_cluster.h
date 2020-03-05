@@ -264,6 +264,8 @@ namespace atframe {
             util::network::http_request::ptr_t create_request_watch(const std::string &key, const std::string &range_end = "", int64_t start_revision = 0,
                                                                     bool prev_kv = false, bool progress_notify = true);
 
+            inline int64_t get_lease() const { return conf_.lease; }
+
         private:
 #if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
             void remove_keepalive_path(etcd_keepalive_deletor *keepalive_deletor, bool delay_delete);
@@ -272,9 +274,8 @@ namespace atframe {
 #endif
             static int libcurl_callback_on_remove_keepalive_path(util::network::http_request &req);
 
-            void           retry_pending_actions();
-            void           set_lease(int64_t v, bool force_active_keepalives);
-            inline int64_t get_lease() const { return conf_.lease; }
+            void retry_pending_actions();
+            void set_lease(int64_t v, bool force_active_keepalives);
 
             bool       create_request_auth_authenticate();
             static int libcurl_callback_on_auth_authenticate(util::network::http_request &req);
