@@ -550,8 +550,14 @@ def get_server_proxy():
     return server_proxy_addr
 
 
-def get_server_children_mask():
-    return get_server_option('children_mask', 0)
+def get_server_subnets():
+    ret = []
+    for subnet in get_server_list('subnets', ['0/0']):
+        if subnet.isdigit():
+            ret.append('0/{0}'.format(subnet))
+        else:
+            ret.append(subnet)
+    return ret
 
 
 def get_server_recv_buffer_size():

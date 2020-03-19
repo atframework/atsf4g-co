@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.7.0)
+﻿cmake_minimum_required(VERSION 3.12.0)
 cmake_policy(SET CMP0054 NEW)
 if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.13")
     cmake_policy(SET CMP0074 NEW)
@@ -18,6 +18,7 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_CMAKE_MODULE_DIR}/modules")
 include("${PROJECT_CMAKE_MODULE_DIR}/modules/IncludeDirectoryRecurse.cmake")
 include("${PROJECT_CMAKE_MODULE_DIR}/modules/EchoWithColor.cmake")
 include("${PROJECT_CMAKE_MODULE_DIR}/modules/FindConfigurePackage.cmake")
+include("${PROJECT_CMAKE_MODULE_DIR}/modules/ProjectBuildTools.cmake")
 
 include("${CMAKE_CURRENT_LIST_DIR}/project/cmake/ProjectBuildOption.cmake")
 include("${PROJECT_CMAKE_MODULE_DIR}/FindPlatform.cmake")
@@ -54,16 +55,6 @@ file(MAKE_DIRECTORY ${PROJECT_INSTALL_SHARED_DIR})
 file(MAKE_DIRECTORY ${PROJECT_INSTALL_RES_PBD_DIR})
 
 ########################################################################
-if (ANDROID_ABI)
-    string(TOLOWER "${CMAKE_SYSTEM_NAME}-${ANDROID_ABI}" PLATFORM_BUILD_PLATFORM_NAME)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-omit-frame-pointer")
-elseif (CMAKE_OSX_ARCHITECTURES)
-    string(TOLOWER "${CMAKE_SYSTEM_NAME}-${CMAKE_OSX_ARCHITECTURES}" PLATFORM_BUILD_PLATFORM_NAME)
-else ()
-    string(TOLOWER "${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}" PLATFORM_BUILD_PLATFORM_NAME)
-endif ()
-
 if(MINGW)
     if("" STREQUAL "$ENV{MINGW_MOUNT_POINT}")
         if(NOT "" STREQUAL "$ENV{MINGW_PREFIX}")
@@ -87,7 +78,7 @@ endif()
 
 # 导入项目配置
 ## 导入所有 macro 定义
-include_macro_recurse(${PROJECT_3RD_PARTY_ROOT_DIR})
+include("${PROJECT_3RD_PARTY_ROOT_DIR}/3rd_party.macro.cmake")
 # atframwork 内有依赖关系，所以不能直接导，要手动导入
 include("${ATFRAMEWORK_BASE_DIR}/atframework.macro.cmake")
 
@@ -101,10 +92,6 @@ endif ()
 
 ## 导入所有工程项目
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/atframework")
-
-if (COMPILER_STRICT_CFLAGS)
-    add_definitions(${COMPILER_STRICT_CFLAGS})
-endif ()
 
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/src")
 
@@ -144,3 +131,11 @@ install(
     USE_SOURCE_PERMISSIONS
     PATTERN ".svn" EXCLUDE
 )
+
+if (PROJECT_INSTALL_EXPORT_TARGETS)
+    export(EXPORT ${PROJECT_INSTALL_EXPORT_NAME} NAMESPACE "${PROJECT_NAME}::" FILE ${PROJECT_INSTALL_EXPORT_FILE})
+    install(EXPORT ${PROJECT_INSTALL_EXPORT_NAME}
+        NAMESPACE "${PROJECT_NAME}::"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake"
+    )
+endif()

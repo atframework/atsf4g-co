@@ -19,3 +19,5 @@ set(ATFRAME_GATEWAY_MACRO_DATA_SMALL_SIZE 3072 CACHE STRING "small message buffe
 
 # libatbus
 set(ATBUS_MACRO_MSG_LIMIT 65536 CACHE STRING "message size limit of libatbus")
+
+option(PROJECT_RESET_DENPEND_REPOSITORIES "Reset depended repositories if it's already exists." OFF)

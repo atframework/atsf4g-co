@@ -3,9 +3,9 @@
 
 #include <time/time_utility.h>
 
-#include <log/log_wrapper.h>
-
 #include <uv.h>
+
+#include <log/log_wrapper.h>
 
 #include <etcdcli/etcd_cluster.h>
 #include <etcdcli/etcd_keepalive.h>

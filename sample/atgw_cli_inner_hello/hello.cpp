@@ -12,6 +12,14 @@
 #include <config/atframe_services_build_feature.h>
 #include <libatgw_inner_v1_c.h>
 
+template <typename TCH = char>
+TCH to_lower_case(TCH c) {
+    if (c >= 'A' && c <= 'Z') {
+        return static_cast<TCH>(c - 'A' + 'a');
+    }
+
+    return c;
+}
 
 struct client_libuv_data_t {
     uv_tcp_t         tcp_sock;
@@ -483,7 +491,7 @@ int main(int argc, char *argv[]) {
 
     if (argc > 4) {
         mode = argv[4];
-        std::transform(mode.begin(), mode.end(), mode.begin(), ::tolower);
+        std::transform(mode.begin(), mode.end(), mode.begin(), to_lower_case<char>);
     }
 
     if ("tick" == mode) {

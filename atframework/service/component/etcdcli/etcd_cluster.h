@@ -1,4 +1,4 @@
-/**
+﻿/**
  * etcd_cluster.h
  *
  *  Created on: 2017-11-17
@@ -282,7 +282,7 @@ namespace atframe {
             bool       create_request_auth_user_get();
             static int libcurl_callback_on_auth_user_get(util::network::http_request &req);
 
-            bool       retry_request_member_update();
+            bool       retry_request_member_update(const std::string &bad_url);
             bool       create_request_member_update();
             static int libcurl_callback_on_member_update(util::network::http_request &req);
 

@@ -70,7 +70,7 @@ int main(int argc, char *argv[]) {
     app.add_module(proxy_mgr_mod);
 
     // setup message handle
-    app.set_evt_on_send_fail(app_handle_on_send_fail);
+    app.set_evt_on_forward_response(app_handle_on_send_fail);
     app.set_evt_on_app_connected(app_handle_on_connected(*proxy_mgr_mod));
     app.set_evt_on_app_disconnected(app_handle_on_disconnected(*proxy_mgr_mod));
 

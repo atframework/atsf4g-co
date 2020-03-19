@@ -1,10 +1,11 @@
+﻿#include <libatbus.h>
+
 #include <algorithm/base64.h>
 
 #include <log/log_wrapper.h>
 
 #include "etcd_cluster.h"
 #include "etcd_keepalive.h"
-
 
 namespace atframe {
     namespace component {
@@ -185,11 +186,10 @@ namespace atframe {
                     }
 
                     rapidjson::Document::Array all_kvs = kvs->value.GetArray();
-                    for (rapidjson::Document::Array::ValueIterator iter = all_kvs.Begin(); iter != all_kvs.End(); ++iter) {
+                    if(all_kvs.Begin() != all_kvs.End()) {
                         etcd_key_value kv;
-                        etcd_packer::unpack(kv, *iter);
+                        etcd_packer::unpack(kv, *all_kvs.Begin());
                         value_content.swap(kv.value);
-                        break;
                     }
                 }
             }

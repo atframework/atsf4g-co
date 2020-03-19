@@ -1,11 +1,12 @@
-#include <cstring>
+﻿#include <cstring>
 #include <sstream>
 
 #include <algorithm/base64.h>
 #include <common/string_oprs.h>
 
-
 #include "etcd_packer.h"
+
+#include <config/compiler/migrate_prefix.h>
 
 namespace atframe {
     namespace component {
@@ -292,7 +293,7 @@ namespace atframe {
             rapidjson::Value k;
             rapidjson::Value v;
             k.SetString(key, doc.GetAllocator());
-            v.SetString(base64_val.c_str(), base64_val.size(), doc.GetAllocator());
+            v.SetString(base64_val.c_str(), static_cast<rapidjson::SizeType>(base64_val.size()), doc.GetAllocator());
             json_val.AddMember(k, v, doc.GetAllocator());
         }
 
@@ -361,3 +362,5 @@ namespace atframe {
         }
     } // namespace component
 } // namespace atframe
+
+#include <config/compiler/migrate_suffix.h>

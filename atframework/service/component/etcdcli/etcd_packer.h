@@ -1,4 +1,4 @@
-/**
+﻿/**
  * etcd_cluster.h
  *
  *  Created on: 2017-11-17
@@ -12,7 +12,9 @@
 
 #pragma once
 
+#include <config/compiler/template_prefix.h>
 #include "rapidjson/document.h"
+#include <config/compiler/template_suffix.h>
 
 #include "etcd_def.h"
 

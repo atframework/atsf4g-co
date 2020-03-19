@@ -40,12 +40,16 @@ struct app_command_handler_kickoff {
         }
 
         ::atframe::gw::ss_msg msg;
-        msg.init(ATFRAME_GW_CMD_SESSION_KICKOFF, sess_id);
+        msg.mutable_head()->set_session_id(sess_id);
 
-        std::stringstream ss;
-        msgpack::pack(ss, msg);
+        msg.mutable_body()->mutable_kickoff_session();
+
         std::string packed_buffer;
-        ss.str().swap(packed_buffer);
+        if(false == msg.SerializeToString(&packed_buffer)) {
+            WLOGERROR("try to kickoff %llx with serialize failed: %s", 
+            static_cast<unsigned long long>(sess_id), msg.InitializationErrorString().c_str());
+            return 0;
+        }
 
         return app_->get_bus_node()->send_data(iter->second, 0, packed_buffer.data(), packed_buffer.size());
     }
@@ -56,52 +60,61 @@ struct app_handle_on_msg {
     app_handle_on_msg(session_gw_map_t *gw) : gw_(gw) {}
 
     int operator()(atapp::app &app, const atapp::app::msg_t &msg, const void *buffer, size_t len) {
-        if (NULL == msg.body.forward || 0 == msg.head.src_bus_id) {
-            WLOGERROR("receive a message from unknown source");
-            return app.get_bus_node()->send_data(msg.head.src_bus_id, msg.head.type, buffer, len);
+        if (atbus::protocol::msg::kDataTransformReq != msg.msg_body_case()) {
+            WLOGERROR("receive msg from x0%llx: %s",
+                static_cast<unsigned long long>(len), static_cast<unsigned long long>(msg.head().src_bus_id()), 
+                msg.DebugString().c_str()
+            );
+            return 0;
         }
 
-        switch (msg.head.type) {
+        if (0 == msg.head().src_bus_id()) {
+            WLOGERROR("receive a message from unknown source");
+            return app.get_bus_node()->send_data(msg.head().src_bus_id(), msg.head().type(), buffer, len);
+        }
+
+        switch (msg.head().type()) {
         case ::atframe::component::service_type::EN_ATST_GATEWAY: {
             ::atframe::gw::ss_msg req_msg;
-            msgpack::unpacked     result;
-            msgpack::unpack(result, reinterpret_cast<const char *>(buffer), len);
-            msgpack::object obj = result.get();
-            if (obj.is_nil()) {
+            if (false == req_msg.ParseFromArray(reinterpret_cast<const void*>(buffer), static_cast<int>(len))) {
+                WLOGERROR("receive msg of %llu bytes from x0%llx parse failed: %s",
+                    static_cast<unsigned long long>(len), static_cast<unsigned long long>(msg.head().src_bus_id()), 
+                    req_msg.InitializationErrorString().c_str()
+                );
                 return 0;
             }
-            obj.convert(req_msg);
 
-            switch (req_msg.head.cmd) {
-            case ATFRAME_GW_CMD_POST: {
+            switch (req_msg.body().cmd_case()) {
+            case ::atframe::gw::ss_msg_body::kPost: {
                 // keep all data not changed and send back
-                int res = app.get_bus_node()->send_data(msg.body.forward->from, 0, buffer, len);
+                int res = app.get_bus_node()->send_data(msg.data_transform_req().from(), 0, buffer, len);
                 if (res < 0) {
-                    WLOGERROR("send back post data to 0x%llx failed, res: %d", static_cast<unsigned long long>(msg.body.forward->from), res);
-                } else if (NULL != req_msg.body.post) {
+                    WLOGERROR("send back post data to 0x%llx failed, res: %d", 
+                        static_cast<unsigned long long>(msg.data_transform_req().from()), res);
+                } else {
                     WLOGDEBUG("receive msg %s and send back to 0x%llx done",
-                              std::string(reinterpret_cast<const char *>(req_msg.body.post->content.ptr), req_msg.body.post->content.size).c_str(),
-                              static_cast<unsigned long long>(msg.body.forward->from));
+                              req_msg.body().post().content().c_str(),
+                              static_cast<unsigned long long>(msg.data_transform_req().from()));
                 }
                 break;
             }
-            case ATFRAME_GW_CMD_SESSION_ADD: {
-                WLOGINFO("create new session 0x%llx, address: %s:%d", static_cast<unsigned long long>(req_msg.head.session_id),
-                         req_msg.body.session->client_ip.c_str(), req_msg.body.session->client_port);
+            case ::atframe::gw::ss_msg_body::kAddSession: {
+                WLOGINFO("create new session 0x%llx, address: %s:%d", static_cast<unsigned long long>(req_msg.head().session_id()),
+                         req_msg.body().add_session().client_ip().c_str(), req_msg.body().add_session().client_port());
 
-                if (0 != req_msg.head.session_id) {
-                    (*gw_)[req_msg.head.session_id] = msg.body.forward->from;
+                if (0 != req_msg.head().session_id()) {
+                    (*gw_)[req_msg.head().session_id()] = msg.data_transform_req().from();
                 }
                 break;
             }
-            case ATFRAME_GW_CMD_SESSION_REMOVE: {
-                WLOGINFO("remove session 0x%llx", static_cast<unsigned long long>(req_msg.head.session_id));
+            case ::atframe::gw::ss_msg_body::kRemoveSession: {
+                WLOGINFO("remove session 0x%llx", static_cast<unsigned long long>(req_msg.head().session_id()));
 
-                gw_->erase(req_msg.head.session_id);
+                gw_->erase(req_msg.head().session_id());
                 break;
             }
             default:
-                WLOGERROR("receive a unsupport atgateway message of invalid cmd:%d", static_cast<int>(req_msg.head.cmd));
+                WLOGERROR("receive a unsupport atgateway message of invalid cmd:%d", static_cast<int>(req_msg.body().cmd_case()));
                 break;
             }
 
@@ -109,7 +122,7 @@ struct app_handle_on_msg {
         }
 
         default:
-            WLOGERROR("receive a message of invalid type:%d", msg.head.type);
+            WLOGERROR("receive a message of invalid type:%d", msg.head().type());
             break;
         }
 
@@ -117,8 +130,12 @@ struct app_handle_on_msg {
     }
 };
 
-static int app_handle_on_send_fail(atapp::app &app, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd, const atbus::protocol::msg &m) {
-    WLOGERROR("send data from 0x%llx to 0x%llx failed", static_cast<unsigned long long>(src_pd), static_cast<unsigned long long>(dst_pd));
+static int app_handle_on_forward_response(atapp::app &app, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd, const atbus::protocol::msg &m) {
+    if (m.head().ret() < 0) {
+        WLOGERROR("send data from 0x%llx to 0x%llx failed", static_cast<unsigned long long>(src_pd), static_cast<unsigned long long>(dst_pd));
+    } else {
+        WLOGINFO("send data from 0x%llx to 0x%llx got response", static_cast<unsigned long long>(src_pd), static_cast<unsigned long long>(dst_pd));
+    }
     return 0;
 }
 
@@ -158,7 +175,7 @@ int main(int argc, char *argv[]) {
 
     // setup message handle
     app.set_evt_on_recv_msg(app_handle_on_msg(&gws));
-    app.set_evt_on_send_fail(app_handle_on_send_fail);
+    app.set_evt_on_forward_response(app_handle_on_forward_response);
     app.set_evt_on_app_connected(app_handle_on_connected);
     app.set_evt_on_app_disconnected(app_handle_on_disconnected);
 

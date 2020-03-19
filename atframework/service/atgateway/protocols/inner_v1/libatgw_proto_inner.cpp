@@ -36,6 +36,15 @@ std::fstream debuger_fout = std::fstream("debug.log", std::ios::out);
 namespace atframe {
     namespace gateway {
         namespace detail {
+            template <typename TCH = char>
+            TCH tolower(TCH c) {
+                if (c >= 'A' && c <= 'Z') {
+                    return static_cast<TCH>(c - 'A' + 'a');
+                }
+
+                return c;
+            }
+
             static uint64_t alloc_seq() {
                 static ::util::lock::seq_alloc_u64 seq_alloc;
                 uint64_t                           ret = seq_alloc.inc();
@@ -103,7 +112,7 @@ namespace atframe {
                             if (NULL != res.first && NULL != res.second) {
                                 std::string cipher_type;
                                 cipher_type.assign(res.first, res.second);
-                                std::transform(cipher_type.begin(), cipher_type.end(), cipher_type.begin(), ::tolower);
+                                std::transform(cipher_type.begin(), cipher_type.end(), cipher_type.begin(), tolower<char>);
                                 if (all_supported_type_set.find(cipher_type) != all_supported_type_set.end()) {
                                     available_types_.insert(cipher_type);
                                 }
@@ -128,7 +137,7 @@ namespace atframe {
                         return true;
                     }
 
-                    std::transform(crypt_type.begin(), crypt_type.end(), crypt_type.begin(), ::tolower);
+                    std::transform(crypt_type.begin(), crypt_type.end(), crypt_type.begin(), tolower<char>);
                     return available_types_.find(crypt_type) != available_types_.end();
                 }
 
@@ -229,7 +238,7 @@ namespace atframe {
                 // iv should be just after key
                 ret = cipher.set_iv(&in[key_size], iv_size);
                 if (ret < 0) {
-                    libres = cipher.get_last_errno();
+                    libres = static_cast<int>(cipher.get_last_errno());
                     return ret;
                 }
             } else {
@@ -245,7 +254,7 @@ namespace atframe {
             debuger_fout << " , res: " << cipher.get_last_errno() << std::endl;
 #endif
             if (ret < 0) {
-                libres = cipher.get_last_errno();
+                libres = static_cast<int>(cipher.get_last_errno());
                 return ret;
             }
 

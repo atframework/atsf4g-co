@@ -1,4 +1,4 @@
-#include <sstream>
+﻿#include <sstream>
 
 #if (defined(__cplusplus) && __cplusplus >= 201103L) || (defined(_MSC_VER) && _MSC_VER >= 1900)
 #include <type_traits>
@@ -174,8 +174,13 @@ namespace atframe {
 
             // send new msg
             ::atframe::gw::ss_msg msg;
-            msg.init(ATFRAME_GW_CMD_SESSION_ADD, id_);
-            msg.body.make_session(peer_ip_, peer_port_);
+            msg.mutable_head()->set_session_id(id_);
+
+            ::atframe::gw::ss_body_session* sess = msg.mutable_body()->mutable_add_session();
+            if (NULL != sess) {
+                sess->set_client_ip(peer_ip_);
+                sess->set_client_port(peer_port_);
+            }
 
             int ret = send_to_server(msg);
             if (0 == ret) {
@@ -199,7 +204,13 @@ namespace atframe {
 
             // send remove msg
             ::atframe::gw::ss_msg msg;
-            msg.init(ATFRAME_GW_CMD_SESSION_REMOVE, id_);
+            msg.mutable_head()->set_session_id(id_);
+
+            ::atframe::gw::ss_body_session* sess = msg.mutable_body()->mutable_remove_session();
+            if (NULL != sess) {
+                sess->set_client_ip(get_peer_host());
+                sess->set_client_port(get_peer_port());
+            }
 
             int ret = send_to_server(msg, mgr);
             if (0 == ret) {
@@ -349,10 +360,12 @@ namespace atframe {
             }
 
             // send to server with type = ::atframe::component::service_type::EN_ATST_GATEWAY
-            std::stringstream ss;
-            msgpack::pack(ss, msg);
             std::string packed_buffer;
-            ss.str().swap(packed_buffer);
+            if(false == msg.SerializeToString(&packed_buffer)) {
+                WLOGERROR("sesseion %llx serialize failed and can not send ss message: %s", 
+                static_cast<unsigned long long>(id_), msg.InitializationErrorString().c_str());
+                return error_code_t::EN_ECT_BAD_DATA;
+            }
 
             size_t len = packed_buffer.size();
             // recv limit

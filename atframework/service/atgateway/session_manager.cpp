@@ -1,4 +1,4 @@
-#include <new>
+﻿#include <new>
 #include <sstream>
 
 #include "uv.h"
@@ -347,10 +347,12 @@ namespace atframe {
 
         int session_manager::post_data(::atbus::node::bus_id_t tid, int type, ::atframe::gw::ss_msg &msg) {
             // send to server with type = ::atframe::component::service_type::EN_ATST_GATEWAY
-            std::stringstream ss;
-            msgpack::pack(ss, msg);
             std::string packed_buffer;
-            ss.str().swap(packed_buffer);
+            if(false == msg.SerializeToString(&packed_buffer)) {
+                WLOGERROR("can not send ss message to 0x%llx with serialize failed: %s", 
+                static_cast<unsigned long long>(tid), msg.InitializationErrorString().c_str());
+                return error_code_t::EN_ECT_BAD_DATA;
+            }
 
             return post_data(tid, type, packed_buffer.data(), packed_buffer.size());
         }

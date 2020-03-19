@@ -1,4 +1,4 @@
-/**
+﻿/**
  * etcd_watcher.h
  *
  *  Created on: 2017-12-26
@@ -57,6 +57,7 @@ namespace atframe {
 
         public:
             etcd_watcher(etcd_cluster &owner, const std::string &path, const std::string &range_end, constrict_helper_t &helper);
+            ~etcd_watcher();
             static ptr_t create(etcd_cluster &owner, const std::string &path, const std::string &range_end = "+1");
 
             void close();

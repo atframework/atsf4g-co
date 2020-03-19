@@ -44,19 +44,18 @@ macro(project_build_cmake_options OUTVAR)
 endmacro ()
 
 # =========== 3rd_party ===========
-unset (PROJECT_3RD_PARTY_SRC_LIST)
+# =========== 3rd_party - jemalloc ===========
+if(NOT MSVC OR PROJECT_ENABLE_JEMALLOC)
+    include("${PROJECT_3RD_PARTY_ROOT_DIR}/jemalloc/jemalloc.cmake")
+endif()
 
-# =========== 3rd_party - msgpack ===========
-include("${PROJECT_3RD_PARTY_ROOT_DIR}/msgpack/msgpack.cmake")
+# =========== 3rd_party - zlib ===========
+# if (NOT WIN32)
+    include("${PROJECT_3RD_PARTY_ROOT_DIR}/zlib/zlib.cmake")
+# endif()
 
 # =========== 3rd_party - libuv ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/libuv/libuv.cmake")
-
-# =========== 3rd_party - libiniloader ===========
-include("${PROJECT_3RD_PARTY_ROOT_DIR}/libiniloader/libiniloader.cmake")
-
-# =========== 3rd_party - libcurl ===========
-include("${PROJECT_3RD_PARTY_ROOT_DIR}/libcurl/libcurl.cmake")
 
 # =========== 3rd_party - rapidjson ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/rapidjson/rapidjson.cmake")
@@ -67,21 +66,22 @@ include("${PROJECT_3RD_PARTY_ROOT_DIR}/flatbuffers/flatbuffers.cmake")
 # =========== 3rd_party - protobuf ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/protobuf/protobuf.cmake")
 
-# =========== 3rd_party - jemalloc ===========
-if(NOT MSVC OR PROJECT_ENABLE_JEMALLOC)
-    include("${PROJECT_3RD_PARTY_ROOT_DIR}/jemalloc/jemalloc.cmake")
-endif()
-
 # =========== 3rd_party - crypto ===========
 # copy from atframework/libatframe_utils/repo/project/cmake/ProjectBuildOption.cmake
+set (OPENSSL_USE_STATIC_LIBS TRUE)
 if (CRYPTO_USE_OPENSSL OR CRYPTO_USE_LIBRESSL OR CRYPTO_USE_BORINGSSL)
-    find_package(OpenSSL)
-    if (OPENSSL_FOUND)
-        include_directories(${OPENSSL_INCLUDE_DIR})
+    if (CRYPTO_USE_OPENSSL)
+        include("${PROJECT_3RD_PARTY_ROOT_DIR}/openssl/openssl.cmake")
+    elseif (CRYPTO_USE_LIBRESSL)
+        include("${PROJECT_3RD_PARTY_ROOT_DIR}/libressl/libressl.cmake")
     else()
+        find_package(OpenSSL)
+    endif ()
+    if (NOT OPENSSL_FOUND)
         message(FATAL_ERROR "CRYPTO_USE_OPENSSL,CRYPTO_USE_LIBRESSL,CRYPTO_USE_BORINGSSL is set but openssl not found")
     endif()
 elseif (CRYPTO_USE_MBEDTLS)
+    EchoWithColor(COLOR GREEN "-- Try to find and use mbedtls")
     find_package(MbedTLS)
     if (MBEDTLS_FOUND) 
         include_directories(${MbedTLS_INCLUDE_DIRS})
@@ -91,11 +91,18 @@ elseif (CRYPTO_USE_MBEDTLS)
 elseif (NOT CRYPTO_DISABLED)
     # try to find openssl or mbedtls
     find_package(OpenSSL)
+    if(NOT OPENSSL_FOUND)
+        include("${PROJECT_3RD_PARTY_ROOT_DIR}/openssl/openssl.cmake")
+    endif ()
+    if(NOT OPENSSL_FOUND)
+        include("${PROJECT_3RD_PARTY_ROOT_DIR}/libressl/libressl.cmake")
+    endif ()
     if (OPENSSL_FOUND)
         message(STATUS "Crypto enabled.(openssl found)")
         set(CRYPTO_USE_OPENSSL 1)
         include_directories(${OPENSSL_INCLUDE_DIR})
     else ()
+        EchoWithColor(COLOR GREEN "-- Try to find and use mbedtls")
         find_package(MbedTLS)
         if (MBEDTLS_FOUND) 
             message(STATUS "Crypto enabled.(mbedtls found)")
@@ -104,32 +111,31 @@ elseif (NOT CRYPTO_DISABLED)
         endif()
     endif()
 endif()
-if (OPENSSL_FOUND)
-    list(APPEND 3RD_PARTY_CRYPT_LINK_NAME ${OPENSSL_CRYPTO_LIBRARY})
-elseif (MBEDTLS_FOUND)
-    list(APPEND 3RD_PARTY_CRYPT_LINK_NAME ${MbedTLS_CRYPTO_LIBRARIES})
-else()
-    message(FATAL_ERROR "must at least have one of openssl,libressl or mbedtls.")
+
+if (NOT OPENSSL_FOUND AND NOT MBEDTLS_FOUND)
+    message(FATAL_ERROR "Dependency: must at least have one of openssl,libressl or mbedtls.")
 endif()
 
 if (NOT CRYPTO_DISABLED)
     find_package(Libsodium)
     if (Libsodium_FOUND)
+        list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES ${Libsodium_LIBRARIES})
         list(APPEND 3RD_PARTY_CRYPT_LINK_NAME ${Libsodium_LIBRARIES})
     endif()
 endif()
 
-if (MINGW)
-    EchoWithColor(COLOR GREEN "-- MinGW: custom add lib gdi32")
-    list(APPEND 3RD_PARTY_CRYPT_LINK_NAME gdi32)
-endif()
+# =========== 3rd_party - libcurl ===========
+include("${PROJECT_3RD_PARTY_ROOT_DIR}/libcurl/libcurl.cmake")
+
+# =========== 3rd_party - libwebsockets ===========
+if (OPENSSL_ROOT_DIR AND OPENSSL_FOUND AND NOT LIBRESSL_FOUND)
+    include("${PROJECT_3RD_PARTY_ROOT_DIR}/libwebsockets/libwebsockets.cmake")
+endif ()
+
+# =========== 3rd_party - lua ===========
+include("${PROJECT_3RD_PARTY_ROOT_DIR}/lua/lua.cmake")
 
 # =========== 3rd_party - libcopp ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/libcopp/libcopp.cmake")
-## 导入所有工程项目
-add_project_recurse(${CMAKE_CURRENT_LIST_DIR})
 
-## 移除可能重复的依赖项目
-if (COMPILER_OPTION_EXTERN_CXX_LIBS)
-    list(REMOVE_DUPLICATES COMPILER_OPTION_EXTERN_CXX_LIBS)
-endif()
+

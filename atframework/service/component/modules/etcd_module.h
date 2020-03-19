@@ -1,4 +1,4 @@
-#ifndef ATFRAME_SERVICE_COMPONENT_MODULES_ETCD_MODULE_H
+﻿#ifndef ATFRAME_SERVICE_COMPONENT_MODULES_ETCD_MODULE_H
 #define ATFRAME_SERVICE_COMPONENT_MODULES_ETCD_MODULE_H
 
 #pragma once
@@ -9,8 +9,9 @@
 #include <string>
 #include <vector>
 
-
+#include <config/compiler/template_prefix.h>
 #include <rapidjson/document.h>
+#include <config/compiler/template_suffix.h>
 
 #include <network/http_request.h>
 #include <random/random_generator.h>
@@ -134,7 +135,7 @@ namespace atframe {
             int add_watcher_by_name(watcher_list_callback_t fn);
             int add_watcher_by_tag(const std::string &tag_name, watcher_one_callback_t fn);
 
-            atframe::component::etcd_keepalive::ptr_t add_watcher_by_custom_path(const std::string &custom_path, watcher_one_callback_t fn);
+            atframe::component::etcd_watcher::ptr_t add_watcher_by_custom_path(const std::string &custom_path, watcher_one_callback_t fn);
 
             inline const ::atframe::component::etcd_cluster &get_raw_etcd_ctx() const { return etcd_ctx_; }
             inline ::atframe::component::etcd_cluster &      get_raw_etcd_ctx() { return etcd_ctx_; }

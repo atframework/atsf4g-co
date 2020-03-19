@@ -4,12 +4,12 @@
 #include <common/string_oprs.h>
 #include <time/time_utility.h>
 
+#include <uv.h>
+
 #include <log/log_wrapper.h>
 
 #include <cli/cmd_option.h>
 #include <cli/cmd_option_phoenix.h>
-
-#include <uv.h>
 
 #include <etcdcli/etcd_cluster.h>
 

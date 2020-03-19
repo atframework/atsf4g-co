@@ -130,7 +130,8 @@ inline const char * const *EnumNamesswitch_secret_t() {
 }
 
 inline const char *EnumNameswitch_secret_t(switch_secret_t e) {
-  const size_t index = static_cast<int>(e);
+  if (e < switch_secret_t_EN_SST_DIRECT || e > switch_secret_t_EN_SST_ECDH) return "";
+  const size_t index = static_cast<size_t>(e);
   return EnumNamesswitch_secret_t()[index];
 }
 
@@ -177,7 +178,8 @@ inline const char * const *EnumNamescs_msg_type_t() {
 }
 
 inline const char *EnumNamecs_msg_type_t(cs_msg_type_t e) {
-  const size_t index = static_cast<int>(e);
+  if (e < cs_msg_type_t_EN_MTT_UNKNOWN || e > cs_msg_type_t_EN_MTT_POST_KEY_ACK) return "";
+  const size_t index = static_cast<size_t>(e);
   return EnumNamescs_msg_type_t()[index];
 }
 
@@ -215,7 +217,8 @@ inline const char * const *EnumNamescs_msg_body() {
 }
 
 inline const char *EnumNamecs_msg_body(cs_msg_body e) {
-  const size_t index = static_cast<int>(e);
+  if (e < cs_msg_body_NONE || e > cs_msg_body_cs_body_handshake) return "";
+  const size_t index = static_cast<size_t>(e);
   return EnumNamescs_msg_body()[index];
 }
 
@@ -243,7 +246,7 @@ bool Verifycs_msg_body(flatbuffers::Verifier &verifier, const void *obj, cs_msg_
 bool Verifycs_msg_bodyVector(flatbuffers::Verifier &verifier, const flatbuffers::Vector<flatbuffers::Offset<void>> *values, const flatbuffers::Vector<uint8_t> *types);
 
 struct cs_msg_head FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
-  enum {
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_TYPE = 4,
     VT_SEQUENCE = 6
   };
@@ -299,7 +302,7 @@ inline flatbuffers::Offset<cs_msg_head> Createcs_msg_head(
 }
 
 struct cs_body_post FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
-  enum {
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_LENGTH = 4,
     VT_DATA = 6
   };
@@ -360,14 +363,15 @@ inline flatbuffers::Offset<cs_body_post> Createcs_body_postDirect(
     flatbuffers::FlatBufferBuilder &_fbb,
     uint64_t length = 0,
     const std::vector<int8_t> *data = nullptr) {
+  auto data__ = data ? _fbb.CreateVector<int8_t>(*data) : 0;
   return atframe::gw::inner::v1::Createcs_body_post(
       _fbb,
       length,
-      data ? _fbb.CreateVector<int8_t>(*data) : 0);
+      data__);
 }
 
 struct cs_body_kickoff FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
-  enum {
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_REASON = 4
   };
   int32_t reason() const {
@@ -418,7 +422,7 @@ inline flatbuffers::Offset<cs_body_kickoff> Createcs_body_kickoff(
 ///     step=EN_HST_START_RSP, switch_type=EN_SST_DIRECT                        : secret
 ///     step=EN_HST_VERIFY, switch_type=ANY                                     : verify data prefix + suffix
 struct cs_body_handshake FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
-  enum {
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_SESSION_ID = 4,
     VT_STEP = 6,
     VT_SWITCH_TYPE = 8,
@@ -536,18 +540,21 @@ inline flatbuffers::Offset<cs_body_handshake> Createcs_body_handshakeDirect(
     const char *crypt_type = nullptr,
     const std::vector<int8_t> *crypt_param = nullptr,
     const std::vector<int8_t> *switch_param = nullptr) {
+  auto crypt_type__ = crypt_type ? _fbb.CreateString(crypt_type) : 0;
+  auto crypt_param__ = crypt_param ? _fbb.CreateVector<int8_t>(*crypt_param) : 0;
+  auto switch_param__ = switch_param ? _fbb.CreateVector<int8_t>(*switch_param) : 0;
   return atframe::gw::inner::v1::Createcs_body_handshake(
       _fbb,
       session_id,
       step,
       switch_type,
-      crypt_type ? _fbb.CreateString(crypt_type) : 0,
-      crypt_param ? _fbb.CreateVector<int8_t>(*crypt_param) : 0,
-      switch_param ? _fbb.CreateVector<int8_t>(*switch_param) : 0);
+      crypt_type__,
+      crypt_param__,
+      switch_param__);
 }
 
 struct cs_body_ping FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
-  enum {
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_TIMEPOINT = 4
   };
   /// the time when start ping
@@ -592,7 +599,7 @@ inline flatbuffers::Offset<cs_body_ping> Createcs_body_ping(
 
 /// message
 struct cs_msg FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
-  enum {
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_HEAD = 4,
     VT_BODY_TYPE = 6,
     VT_BODY = 8

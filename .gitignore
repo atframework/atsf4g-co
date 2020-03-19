@@ -58,6 +58,8 @@
 
 ## atframework
 /atframework/service/component/config/atframe_services_build_feature.h
+/atframework/service/atgateway/protocols/libatgw_server_protocol.pb.h
+/atframework/service/atgateway/protocols/libatgw_server_protocol.pb.cc
 
 # editors
 .vscode

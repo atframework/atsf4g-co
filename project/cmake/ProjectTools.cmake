@@ -21,67 +21,35 @@ set(LOG_WRAPPER_CATEGORIZE_SIZE 16 CACHE STRING "全局日志分类个数限制"
 add_compiler_define(LOG_WRAPPER_CATEGORIZE_SIZE=${LOG_WRAPPER_CATEGORIZE_SIZE})
 
 
-function(project_make_executable)
-    if (UNIX OR MINGW OR CYGWIN OR APPLE OR CMAKE_HOST_APPLE OR CMAKE_HOST_UNIX)
-        foreach(ARG IN LISTS ARGN)
-            execute_process(COMMAND chmod -R +x ${ARG})
-        endforeach()
-    endif()
-endfunction()
 
-function (project_make_writable)
-    if (CMAKE_HOST_APPLE OR APPLE OR UNIX OR MINGW OR MSYS OR CYGWIN)
-        execute_process(COMMAND chmod -R +w ${ARGN})
-    else ()
-        foreach(arg IN LISTS ARGN)
-            execute_process(COMMAND attrib -R "${arg}" /S /D /L)
-        endforeach()
-    endif ()
-endfunction()
-
-
-# 如果仅仅是设置环境变量的话可以用 ${CMAKE_COMMAND} -E env M4=/foo/bar 代替
-macro (project_expand_list_for_command_line OUTPUT INPUT)
-    foreach(ARG IN LISTS ${INPUT})
-        string(REPLACE "\\" "\\\\" project_expand_list_for_command_line_OUT_VAR ${ARG})
-        string(REPLACE "\"" "\\\"" project_expand_list_for_command_line_OUT_VAR ${project_expand_list_for_command_line_OUT_VAR})
-        set (${OUTPUT} "${${OUTPUT}} \"${project_expand_list_for_command_line_OUT_VAR}\"")
-        unset (project_expand_list_for_command_line_OUT_VAR)
+set (PROJECT_INSTALL_EXPORT_NAME "${PROJECT_NAME}-target")
+set (PROJECT_INSTALL_EXPORT_FILE "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_INSTALL_EXPORT_NAME}.cmake")
+if (NOT EXISTS "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake")
+    file(MAKE_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake")
+endif ()
+unset (PROJECT_INSTALL_EXPORT_TARGETS)
+macro(project_install_and_export_targets)
+    foreach(PROJECT_INSTALL_EXPORT_TARGET ${ARGN})
+        list(APPEND PROJECT_INSTALL_EXPORT_TARGETS ${PROJECT_INSTALL_EXPORT_TARGET})
+        install(TARGETS ${PROJECT_INSTALL_EXPORT_TARGET}
+            EXPORT ${PROJECT_INSTALL_EXPORT_NAME}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        )
+        export(TARGETS ${PROJECT_INSTALL_EXPORT_TARGET}
+            NAMESPACE "${PROJECT_NAME}::"
+            APPEND FILE ${PROJECT_INSTALL_EXPORT_FILE}
+        )
     endforeach()
+    unset(PROJECT_INSTALL_EXPORT_TARGET)
 endmacro()
 
-function (project_expand_list_for_command_line_to_file)
-    unset (project_expand_list_for_command_line_to_file_OUTPUT)
-    unset (project_expand_list_for_command_line_to_file_LINE)
-    foreach(ARG IN LISTS ARGN)
-        if (NOT project_expand_list_for_command_line_to_file_OUTPUT)
-            set (project_expand_list_for_command_line_to_file_OUTPUT "${ARG}")
-        else ()
-            string(REPLACE "\\" "\\\\" project_expand_list_for_command_line_OUT_VAR ${ARG})
-            string(REPLACE "\"" "\\\"" project_expand_list_for_command_line_OUT_VAR ${project_expand_list_for_command_line_OUT_VAR})
-            if (project_expand_list_for_command_line_to_file_LINE)
-                set (project_expand_list_for_command_line_to_file_LINE "${project_expand_list_for_command_line_to_file_LINE} \"${project_expand_list_for_command_line_OUT_VAR}\"")
-            else ()
-                set (project_expand_list_for_command_line_to_file_LINE "\"${project_expand_list_for_command_line_OUT_VAR}\"")
-            endif ()
-            unset (project_expand_list_for_command_line_OUT_VAR)
-        endif ()
-    endforeach()
 
-    if (project_expand_list_for_command_line_to_file_OUTPUT)
-        file(APPEND "${project_expand_list_for_command_line_to_file_OUTPUT}" "${project_expand_list_for_command_line_to_file_LINE}${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
-    endif ()
-    unset (project_expand_list_for_command_line_to_file_OUTPUT)
-    unset (project_expand_list_for_command_line_to_file_LINE)
-endfunction()
-
-if (CMAKE_HOST_WIN32)
-    set (PROJECT_THIRD_PARTY_BUILDTOOLS_EOL "\r\n")
-    set (PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL "\r\n")
-elseif (CMAKE_HOST_APPLE OR APPLE)
-    set (PROJECT_THIRD_PARTY_BUILDTOOLS_EOL "\r")
-    set (PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL "\n")
-else ()
-    set (PROJECT_THIRD_PARTY_BUILDTOOLS_EOL "\n")
-    set (PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL "\n")
+unset(PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS)
+if (COMPILER_STRICT_CFLAGS)
+    list(APPEND PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS ${COMPILER_STRICT_CFLAGS})
+endif ()
+if (COMPILER_STRICT_EXTRA_CFLAGS)
+    list(APPEND PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS ${COMPILER_STRICT_EXTRA_CFLAGS})
 endif ()

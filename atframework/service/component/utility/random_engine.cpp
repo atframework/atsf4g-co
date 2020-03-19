@@ -17,12 +17,12 @@ namespace util {
     }
 
     ::util::random::taus88& random_engine::_get_fast_generator() {
-        static ::util::random::taus88 ret(time(NULL));
+        static ::util::random::taus88 ret(static_cast<uint32_t>(time(NULL)));
         return ret;
     }
 
     uint32_t random_engine::random() {
-        return _get_common_generator().random();
+        return static_cast<uint32_t>(_get_common_generator().random());
     }
 
     uint32_t random_engine::fast_random() {

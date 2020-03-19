@@ -1,4 +1,6 @@
-#include <assert.h>
+﻿#include <assert.h>
+
+#include <libatbus.h>
 
 #include <std/explicit_declare.h>
 
@@ -6,8 +8,12 @@
 
 #include <log/log_wrapper.h>
 
+#include <config/compiler/template_prefix.h>
+
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
+
+#include <config/compiler/template_suffix.h>
 
 #include "etcd_keepalive.h"
 #include "etcd_watcher.h"
@@ -128,6 +134,7 @@ namespace atframe {
                 return 0;
             }
 
+            #if 0
             EXPLICIT_UNUSED_ATTR static int etcd_cluster_verbose_callback(util::network::http_request &req, curl_infotype type, char *data, size_t size) {
                 if (util::log::log_wrapper::check_level(WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT),
                                                         util::log::log_wrapper::level_t::LOG_LW_TRACE)) {
@@ -166,6 +173,7 @@ namespace atframe {
 
                 return 0;
             }
+            #endif
         } // namespace details
 
         etcd_cluster::etcd_cluster() : flags_(0) {
@@ -680,7 +688,7 @@ namespace atframe {
                     if (NULL != self->owner) {
                         // only network error will trigger a etcd member update
                         if (0 != req.get_error_code()) {
-                            self->owner->retry_request_member_update();
+                            self->owner->retry_request_member_update(req.get_url());
                         }
                         self->owner->add_stats_error_request();
 
@@ -843,7 +851,7 @@ namespace atframe {
 
                 // only network error will trigger a etcd member update
                 if (0 != req.get_error_code()) {
-                    self->retry_request_member_update();
+                    self->retry_request_member_update(req.get_url());
                 }
                 self->add_stats_error_request();
 
@@ -973,7 +981,7 @@ namespace atframe {
 
                 // only network error will trigger a etcd member update
                 if (0 != req.get_error_code()) {
-                    self->retry_request_member_update();
+                    self->retry_request_member_update(req.get_url());
                 }
                 self->add_stats_error_request();
 
@@ -1009,11 +1017,11 @@ namespace atframe {
 
                 self->conf_.authorization_user_roles.clear();
                 self->conf_.authorization_user_roles.reserve(static_cast<size_t>(roles.Size()));
-                for (rapidjson::Document::Array::ValueIterator iter = roles.Begin(); iter != roles.End(); ++iter) {
-                    if (iter->IsString()) {
-                        self->conf_.authorization_user_roles.push_back(iter->GetString());
+                for (rapidjson::Document::Array::ValueIterator role_iter = roles.Begin(); role_iter != roles.End(); ++role_iter) {
+                    if (role_iter->IsString()) {
+                        self->conf_.authorization_user_roles.push_back(role_iter->GetString());
                     } else {
-                        WLOGERROR("Etcd user get %s with bad role type: %s", username.c_str(), etcd_packer::unpack_to_string(*iter).c_str());
+                        WLOGERROR("Etcd user get %s with bad role type: %s", username.c_str(), etcd_packer::unpack_to_string(*role_iter).c_str());
                     }
                 }
 
@@ -1037,7 +1045,26 @@ namespace atframe {
             return 0;
         }
 
-        bool etcd_cluster::retry_request_member_update() {
+        bool etcd_cluster::retry_request_member_update(const std::string &bad_url) {
+            if (!conf_.path_node.empty() && 0 == UTIL_STRFUNC_STRNCASE_CMP(conf_.path_node.c_str(), bad_url.c_str(), conf_.path_node.size())) {
+                for (size_t i = 0; i < conf_.hosts.size(); ++i) {
+                    if (conf_.hosts[i] != conf_.path_node) {
+                        continue;
+                    }
+
+                    if (i + 1 != conf_.hosts.size()) {
+                        conf_.hosts[i].swap(conf_.hosts[conf_.hosts.size() - 1]);
+                    }
+                    conf_.hosts.pop_back();
+                }
+
+                if (!conf_.hosts.empty()) {
+                    conf_.path_node = conf_.hosts[random_generator_.random_between<size_t>(0, conf_.hosts.size())];
+                } else {
+                    conf_.path_node.clear();
+                }
+            }
+
             if (util::time::time_utility::now() + conf_.etcd_members_retry_interval < conf_.etcd_members_next_update_time) {
                 conf_.etcd_members_next_update_time = util::time::time_utility::now() + conf_.etcd_members_retry_interval;
                 return false;
@@ -1128,22 +1155,11 @@ namespace atframe {
 
                 // only network error will trigger a etcd member update
                 if (0 != req.get_error_code()) {
-                    self->retry_request_member_update();
+                    self->retry_request_member_update(req.get_url());
                 }
                 WLOGERROR("Etcd member list failed, error code: %d, http code: %d\n%s", req.get_error_code(), req.get_response_code(), req.get_error_msg());
                 self->add_stats_error_request();
 
-                // 出错则从host里移除无效数据
-                for (size_t i = 0; i < self->conf_.hosts.size(); ++i) {
-                    if (0 == UTIL_STRFUNC_STRNCASE_CMP(self->conf_.hosts[i].c_str(), req.get_url().c_str(), self->conf_.hosts[i].size())) {
-                        if (i != self->conf_.hosts.size() - 1) {
-                            self->conf_.hosts[self->conf_.hosts.size() - 1].swap(self->conf_.hosts[i]);
-                        }
-
-                        self->conf_.hosts.pop_back();
-                        break;
-                    }
-                }
                 return 0;
             }
 
@@ -1329,7 +1345,7 @@ namespace atframe {
 
                 // only network error will trigger a etcd member update
                 if (0 != req.get_error_code()) {
-                    self->retry_request_member_update();
+                    self->retry_request_member_update(req.get_url());
                 }
                 self->add_stats_error_request();
 

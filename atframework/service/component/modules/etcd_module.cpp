@@ -1,8 +1,10 @@
-#include <sstream>
+﻿#include <sstream>
 #include <vector>
 
+#include <config/compiler/template_prefix.h>
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
+#include <config/compiler/template_suffix.h>
 
 #include <common/string_oprs.h>
 #include <random/random_generator.h>
@@ -42,13 +44,26 @@ namespace atframe {
                 uv_stop(handle->loop);
             }
 
-            void init_timer_closed_callback(uv_handle_t *handle) {
+            static void init_timer_tick_callback(uv_timer_t *handle) {
+                if (NULL == handle->data) {
+                    return;
+                }
                 assert(handle);
-                assert(handle->data);
                 assert(handle->loop);
 
-                bool *is_timeout = reinterpret_cast<bool *>(handle->data);
-                *is_timeout      = false;
+                etcd_cluster *cluster = reinterpret_cast<etcd_cluster *>(handle->data);
+                cluster->tick();
+            }
+
+            static void init_timer_closed_callback(uv_handle_t *handle) {
+                if (NULL == handle->data) {
+                    uv_stop(handle->loop);
+                    return;
+                }
+                assert(handle);
+                assert(handle->loop);
+
+                handle->data = NULL;
                 uv_stop(handle->loop);
             }
 
@@ -172,11 +187,15 @@ namespace atframe {
 
             // setup timer for timeout
             uv_timer_t timeout_timer;
+            uv_timer_t tick_timer;
             uv_timer_init(get_app()->get_bus_node()->get_evloop(), &timeout_timer);
+            uv_timer_init(get_app()->get_bus_node()->get_evloop(), &tick_timer);
             timeout_timer.data = &is_timeout;
+            tick_timer.data    = &etcd_ctx_;
 
             uint64_t timeout_ms = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(conf_.etcd_init_timeout).count());
             uv_timer_start(&timeout_timer, detail::init_timer_timeout_callback, timeout_ms, 0);
+            uv_timer_start(&tick_timer, detail::init_timer_tick_callback, 128, 128);
 
             int ticks = 0;
             while (false == is_failed && false == is_timeout) {
@@ -237,9 +256,10 @@ namespace atframe {
 
             // close timer for timeout
             uv_timer_stop(&timeout_timer);
-            is_timeout = true;
+            uv_timer_stop(&tick_timer);
             uv_close((uv_handle_t *)&timeout_timer, detail::init_timer_closed_callback);
-            while (is_timeout) {
+            uv_close((uv_handle_t *)&tick_timer, detail::init_timer_closed_callback);
+            while (timeout_timer.data || tick_timer.data) {
                 uv_run(get_app()->get_bus_node()->get_evloop(), UV_RUN_ONCE);
             }
 
