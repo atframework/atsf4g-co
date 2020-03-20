@@ -172,7 +172,7 @@ namespace atframe {
             etcd_response_header header;
             {
                 header.revision                         = 0;
-                rapidjson::Document::MemberIterator res = doc.FindMember("header");
+                rapidjson::Document::ConstMemberIterator res = doc.FindMember("header");
                 if (res != doc.MemberEnd()) {
                     etcd_packer::unpack(header, res->value);
                 }
@@ -196,7 +196,7 @@ namespace atframe {
             response.canceled         = false;
             response.compact_revision = 0;
             {
-                rapidjson::Document::MemberIterator res = doc.FindMember("kvs");
+                rapidjson::Document::ConstMemberIterator res = doc.FindMember("kvs");
 
                 if (doc.MemberEnd() != res) {
                     size_t reverse_sz = 0;
@@ -207,8 +207,8 @@ namespace atframe {
                     response.events.reserve(reverse_sz);
 
                     if (res->value.IsArray()) {
-                        rapidjson::Document::Array all_events = res->value.GetArray();
-                        for (rapidjson::Document::Array::ValueIterator iter = all_events.Begin(); iter != all_events.End(); ++iter) {
+                        rapidjson::Document::ConstArray all_events = res->value.GetArray();
+                        for (rapidjson::Document::Array::ConstValueIterator iter = all_events.Begin(); iter != all_events.End(); ++iter) {
                             response.events.push_back(event_t());
                             event_t &evt = response.events.back();
 
@@ -351,9 +351,9 @@ namespace atframe {
                 }
 
                 rapidjson::Value  root   = doc.GetObject();
-                rapidjson::Value *result = &root;
+                const rapidjson::Value *result = &root;
                 {
-                    rapidjson::Document::MemberIterator res = root.FindMember("result");
+                    rapidjson::Document::ConstMemberIterator res = root.FindMember("result");
                     if (res != root.MemberEnd()) {
                         result = &res->value;
                     }
@@ -362,7 +362,7 @@ namespace atframe {
                 // unpack header
                 etcd_response_header header;
                 {
-                    rapidjson::Document::MemberIterator res = result->FindMember("header");
+                    rapidjson::Document::ConstMemberIterator res = result->FindMember("header");
                     if (res != result->MemberEnd()) {
                         etcd_packer::unpack(header, res->value);
                         // save revision
@@ -381,14 +381,14 @@ namespace atframe {
                 etcd_packer::unpack_bool(*result, "created", response.created);
                 etcd_packer::unpack_bool(*result, "canceled", response.canceled);
 
-                rapidjson::Document::MemberIterator events = result->FindMember("events");
+                rapidjson::Document::ConstMemberIterator events = result->FindMember("events");
                 if (result->MemberEnd() != events && events->value.IsArray()) {
-                    rapidjson::Document::Array all_events = events->value.GetArray();
-                    for (rapidjson::Document::Array::ValueIterator iter = all_events.Begin(); iter != all_events.End(); ++iter) {
+                    rapidjson::Document::ConstArray all_events = events->value.GetArray();
+                    for (rapidjson::Document::Array::ConstValueIterator iter = all_events.Begin(); iter != all_events.End(); ++iter) {
                         response.events.push_back(event_t());
                         event_t &evt = response.events.back();
 
-                        rapidjson::Document::MemberIterator type = iter->FindMember("type");
+                        rapidjson::Document::ConstMemberIterator type = iter->FindMember("type");
                         if (type == iter->MemberEnd()) {
                             evt.evt_type = etcd_watch_event::EN_WEVT_PUT; // etcd可能不会下发默认值
                         } else {
@@ -412,12 +412,12 @@ namespace atframe {
                         }
 
 
-                        rapidjson::Document::MemberIterator kv = iter->FindMember("kv");
+                        rapidjson::Document::ConstMemberIterator kv = iter->FindMember("kv");
                         if (kv != iter->MemberEnd()) {
                             etcd_packer::unpack(evt.kv, kv->value);
                         }
 
-                        rapidjson::Document::MemberIterator prev_kv = iter->FindMember("prev_kv");
+                        rapidjson::Document::ConstMemberIterator prev_kv = iter->FindMember("prev_kv");
                         if (prev_kv != iter->MemberEnd()) {
                             etcd_packer::unpack(evt.prev_kv, prev_kv->value);
                         }

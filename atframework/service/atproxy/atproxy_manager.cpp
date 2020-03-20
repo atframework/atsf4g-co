@@ -85,6 +85,10 @@ namespace atframe {
                         continue;
                     }
 
+                    if (false == iter->second.is_available) {
+                        continue;
+                    }
+
                     {
                         size_t check_size = iter->second.etcd_node.listens.size();
                         for (size_t i = 0; i < check_size; ++i) {
@@ -146,6 +150,7 @@ namespace atframe {
                 node_info_t &proxy_info     = proxy_set_[etcd_node.id];
                 proxy_info.next_action_time = ci.timeout_sec;
                 proxy_info.etcd_node        = etcd_node;
+                proxy_info.is_available     = check_available(etcd_node);
                 WLOGINFO("new atproxy %llx found", static_cast<unsigned long long>(etcd_node.id));
             }
 
@@ -178,6 +183,7 @@ namespace atframe {
                 ci.timeout_sec           = util::time::time_utility::get_now();
                 ci.proxy_id              = iter->etcd_node.id;
                 (*iter).next_action_time = ci.timeout_sec;
+                (*iter).is_available     = check_available((*iter).etcd_node);
 
                 // copy proxy info
                 proxy_set_[ci.proxy_id] = *iter;
@@ -227,8 +233,13 @@ namespace atframe {
             swap(l.etcd_node.type_id, r.etcd_node.type_id);
             swap(l.etcd_node.type_name, r.etcd_node.type_name);
             swap(l.etcd_node.action, r.etcd_node.action);
+            swap(l.etcd_node.version, r.etcd_node.version);
+            swap(l.etcd_node.custom_data, r.etcd_node.custom_data);
+            swap(l.etcd_node.atbus_protocol_version, r.etcd_node.atbus_protocol_version);
+            swap(l.etcd_node.atbus_protocol_min_version, r.etcd_node.atbus_protocol_min_version);
 
             swap(l.next_action_time, r.next_action_time);
+            swap(l.is_available, r.is_available);
         }
 
         void atproxy_manager::on_watcher_notify(atframe::component::etcd_module::watcher_sender_one_t &sender) {
@@ -239,6 +250,21 @@ namespace atframe {
                 // trigger manager
                 set(sender.node);
             }
+        }
+
+        bool atproxy_manager::check_available(const atframe::component::etcd_module::node_info_t& node_event) const {
+            uint64_t atbus_protocol_version = 0;
+            uint64_t atbus_protocol_min_version = 0;
+            if (get_app() && get_app()->get_bus_node()) {
+                atbus_protocol_version       = get_app()->get_bus_node()->get_protocol_version();
+                atbus_protocol_min_version   = get_app()->get_bus_node()->get_protocol_minimal_version();
+            } else {
+                atbus_protocol_version     = atbus::protocol::ATBUS_PROTOCOL_VERSION;
+                atbus_protocol_min_version = atbus::protocol::ATBUS_PROTOCOL_MINIMAL_VERSION;
+            }
+
+            return node_event.atbus_protocol_version >= atbus_protocol_min_version &&
+                atbus_protocol_version >= node_event.atbus_protocol_min_version;
         }
     } // namespace proxy
 } // namespace atframe

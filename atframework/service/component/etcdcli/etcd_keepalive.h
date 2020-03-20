@@ -80,20 +80,20 @@ namespace atframe {
             etcd_cluster *owner_;
             std::string   path_;
             std::string   value_;
-            typedef struct {
+            struct rpc_data_t {
                 util::network::http_request::ptr_t rpc_opr_;
                 bool                               is_actived;
                 bool                               is_value_changed;
                 bool                               has_data;
-            } rpc_data_t;
+            };
             rpc_data_t rpc_;
 
-            typedef struct {
+            struct checker_t {
                 checker_fn_t fn;
                 bool         is_check_run;
                 bool         is_check_passed;
                 size_t       retry_times;
-            } checker_t;
+            };
             checker_t checker_;
         };
     } // namespace component

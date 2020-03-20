@@ -25,10 +25,10 @@ namespace atframe {
             static bool parse_object(rapidjson::Document &doc, const char *data);
 
             static void pack(const etcd_key_value &etcd_val, rapidjson::Value &json_val, rapidjson::Document &doc);
-            static void unpack(etcd_key_value &etcd_val, rapidjson::Value &json_val);
+            static void unpack(etcd_key_value &etcd_val, const rapidjson::Value &json_val);
 
             static void pack(const etcd_response_header &etcd_val, rapidjson::Value &json_val, rapidjson::Document &doc);
-            static void unpack(etcd_response_header &etcd_val, rapidjson::Value &json_val);
+            static void unpack(etcd_response_header &etcd_val, const rapidjson::Value &json_val);
 
             /**
              * @brief pack key-range into json_val
@@ -43,15 +43,15 @@ namespace atframe {
             static void pack_key_range(rapidjson::Value &json_val, const std::string &key, std::string range_end, rapidjson::Document &doc);
 
             static void        pack_string(rapidjson::Value &json_val, const char *key, const char *val, rapidjson::Document &doc);
-            static bool        unpack_string(rapidjson::Value &json_val, const char *key, std::string &val);
+            static bool        unpack_string(const rapidjson::Value &json_val, const char *key, std::string &val);
             static std::string unpack_to_string(const rapidjson::Value &json_val);
 
             static void pack_base64(rapidjson::Value &json_val, const char *key, const std::string &val, rapidjson::Document &doc);
-            static bool unpack_base64(rapidjson::Value &json_val, const char *key, std::string &val);
+            static bool unpack_base64(const rapidjson::Value &json_val, const char *key, std::string &val);
 
-            static void unpack_int(rapidjson::Value &json_val, const char *key, int64_t &out);
-            static void unpack_int(rapidjson::Value &json_val, const char *key, uint64_t &out);
-            static void unpack_bool(rapidjson::Value &json_val, const char *key, bool &out);
+            static void unpack_int(const rapidjson::Value &json_val, const char *key, int64_t &out);
+            static void unpack_int(const rapidjson::Value &json_val, const char *key, uint64_t &out);
+            static void unpack_bool(const rapidjson::Value &json_val, const char *key, bool &out);
         };
     } // namespace component
 } // namespace atframe

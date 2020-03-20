@@ -20,6 +20,11 @@
 
 #include "etcd_cluster.h"
 
+// Patch for MSVC
+#if defined(GetObject)
+#undef GetObject
+#endif
+
 namespace atframe {
     namespace component {
         /**
@@ -872,9 +877,8 @@ namespace atframe {
                     break;
                 }
 
-                rapidjson::Value root = doc.GetObject();
-                std::string      token;
-                if (false == etcd_packer::unpack_string(root, "token", token)) {
+                std::string                      token;
+                if (false == etcd_packer::unpack_string(doc, "token", token)) {
                     WLOGERROR("Etcd authenticate failed, token not found.(%s)", http_content.c_str());
                     self->add_stats_error_request();
                     return 0;
@@ -1006,18 +1010,17 @@ namespace atframe {
                 std::string username;
                 self->pick_conf_authorization(username, NULL);
 
-                rapidjson::Value                 root = doc.GetObject();
-                rapidjson::Value::MemberIterator iter = root.FindMember("roles");
-                if (iter == root.MemberEnd() || false == iter->value.IsArray()) {
+                rapidjson::Value::ConstMemberIterator iter = doc.FindMember("roles");
+                if (iter == doc.MemberEnd() || false == iter->value.IsArray()) {
                     WLOGDEBUG("Etcd user get %s without any role", username.c_str());
                     break;
                 }
 
-                rapidjson::Document::Array roles = iter->value.GetArray();
+                rapidjson::Document::ConstArray roles = iter->value.GetArray();
 
                 self->conf_.authorization_user_roles.clear();
                 self->conf_.authorization_user_roles.reserve(static_cast<size_t>(roles.Size()));
-                for (rapidjson::Document::Array::ValueIterator role_iter = roles.Begin(); role_iter != roles.End(); ++role_iter) {
+                for (rapidjson::Document::Array::ConstValueIterator role_iter = roles.Begin(); role_iter != roles.End(); ++role_iter) {
                     if (role_iter->IsString()) {
                         self->conf_.authorization_user_roles.push_back(role_iter->GetString());
                     } else {
@@ -1174,25 +1177,24 @@ namespace atframe {
                     break;
                 }
 
-                rapidjson::Value                    root    = doc.GetObject();
-                rapidjson::Document::MemberIterator members = root.FindMember("members");
-                if (root.MemberEnd() == members) {
+                rapidjson::Document::ConstMemberIterator members = doc.FindMember("members");
+                if (doc.MemberEnd() == members) {
                     WLOGERROR("Etcd members not found");
                     self->add_stats_error_request();
                     return 0;
                 }
 
                 self->conf_.hosts.clear();
-                bool                       need_select_node = true;
-                rapidjson::Document::Array all_members      = members->value.GetArray();
-                for (rapidjson::Document::Array::ValueIterator iter = all_members.Begin(); iter != all_members.End(); ++iter) {
-                    rapidjson::Document::MemberIterator client_urls = iter->FindMember("clientURLs");
+                bool                            need_select_node = true;
+                rapidjson::Document::ConstArray all_members      = members->value.GetArray();
+                for (rapidjson::Document::Array::ConstValueIterator iter = all_members.Begin(); iter != all_members.End(); ++iter) {
+                    rapidjson::Document::ConstMemberIterator client_urls = iter->FindMember("clientURLs");
                     if (client_urls == iter->MemberEnd()) {
                         continue;
                     }
 
-                    rapidjson::Document::Array all_client_urls = client_urls->value.GetArray();
-                    for (rapidjson::Document::Array::ValueIterator cli_url_iter = all_client_urls.Begin(); cli_url_iter != all_client_urls.End();
+                    rapidjson::Document::ConstArray all_client_urls = client_urls->value.GetArray();
+                    for (rapidjson::Document::Array::ConstValueIterator cli_url_iter = all_client_urls.Begin(); cli_url_iter != all_client_urls.End();
                          ++cli_url_iter) {
                         if (cli_url_iter->GetStringLength() > 0) {
                             self->conf_.hosts.push_back(cli_url_iter->GetString());
@@ -1366,17 +1368,17 @@ namespace atframe {
                     break;
                 }
 
-                bool                             is_grant = false;
-                rapidjson::Value                 root     = doc.GetObject();
-                rapidjson::Value::MemberIterator result   = root.FindMember("result");
-                if (result == root.MemberEnd()) {
+                bool                                  is_grant = false;
+                const rapidjson::Value*      root              = &doc;
+                rapidjson::Value::ConstMemberIterator result   = doc.FindMember("result");
+                if (result == doc.MemberEnd()) {
                     is_grant = true;
                 } else {
-                    root = result->value;
+                    root = &result->value;
                 }
 
 
-                if (root.MemberEnd() == root.FindMember("TTL")) {
+                if (root->MemberEnd() == root->FindMember("TTL")) {
                     if (is_grant) {
                         WLOGERROR("Etcd lease grant failed");
                     } else {
@@ -1391,7 +1393,7 @@ namespace atframe {
 
                 // 更新lease
                 int64_t new_lease = 0;
-                etcd_packer::unpack_int(root, "ID", new_lease);
+                etcd_packer::unpack_int(*root, "ID", new_lease);
 
                 if (0 == new_lease) {
                     WLOGERROR("Etcd cluster got a error http response for grant or keepalive lease: %s", http_content.c_str());

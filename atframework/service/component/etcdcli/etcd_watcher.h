@@ -110,7 +110,7 @@ namespace atframe {
             std::string       range_end_;
             std::stringstream rpc_data_stream_;
             int64_t           rpc_data_brackets_;
-            typedef struct {
+            struct rpc_data_t {
                 util::network::http_request::ptr_t    rpc_opr_;
                 bool                                  is_actived;
                 bool                                  is_retry_mode;
@@ -120,7 +120,7 @@ namespace atframe {
                 std::chrono::system_clock::time_point watcher_next_request_time;
                 std::chrono::system_clock::duration   retry_interval;
                 std::chrono::system_clock::duration   request_timeout;
-            } rpc_data_t;
+            };
             rpc_data_t rpc_;
 
             watch_event_fn_t evt_handle_;

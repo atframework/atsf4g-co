@@ -61,7 +61,7 @@ struct app_handle_on_msg {
 
     int operator()(atapp::app &app, const atapp::app::msg_t &msg, const void *buffer, size_t len) {
         if (atbus::protocol::msg::kDataTransformReq != msg.msg_body_case()) {
-            WLOGERROR("receive msg from x0%llx: %s",
+            WLOGERROR("receive msg with %llu bytes from x0%llx: %s",
                 static_cast<unsigned long long>(len), static_cast<unsigned long long>(msg.head().src_bus_id()), 
                 msg.DebugString().c_str()
             );
@@ -130,7 +130,7 @@ struct app_handle_on_msg {
     }
 };
 
-static int app_handle_on_forward_response(atapp::app &app, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd, const atbus::protocol::msg &m) {
+static int app_handle_on_forward_response(atapp::app &, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd, const atbus::protocol::msg &m) {
     if (m.head().ret() < 0) {
         WLOGERROR("send data from 0x%llx to 0x%llx failed", static_cast<unsigned long long>(src_pd), static_cast<unsigned long long>(dst_pd));
     } else {
@@ -139,12 +139,12 @@ static int app_handle_on_forward_response(atapp::app &app, atapp::app::app_id_t 
     return 0;
 }
 
-static int app_handle_on_connected(atapp::app &app, atbus::endpoint &ep, int status) {
+static int app_handle_on_connected(atapp::app &, atbus::endpoint &ep, int status) {
     WLOGINFO("app 0x%llx connected, status: %d", static_cast<unsigned long long>(ep.get_id()), status);
     return 0;
 }
 
-static int app_handle_on_disconnected(atapp::app &app, atbus::endpoint &ep, int status) {
+static int app_handle_on_disconnected(atapp::app &, atbus::endpoint &ep, int status) {
     WLOGINFO("app 0x%llx disconnected, status: %d", static_cast<unsigned long long>(ep.get_id()), status);
     return 0;
 }

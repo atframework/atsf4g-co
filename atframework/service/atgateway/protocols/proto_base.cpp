@@ -5,7 +5,7 @@
 #include "std/thread.h"
 
 #ifndef ATBUS_MACRO_MSG_LIMIT
-#define ATBUS_MACRO_MSG_LIMIT 65536
+#define ATBUS_MACRO_MSG_LIMIT 262144
 #endif
 
 #if !(defined(THREAD_TLS_USE_PTHREAD) && THREAD_TLS_USE_PTHREAD) && defined(THREAD_TLS_ENABLED) && THREAD_TLS_ENABLED

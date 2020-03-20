@@ -18,17 +18,13 @@ if(NOT Rapidjson_FOUND)
         file(MAKE_DIRECTORY ${3RD_PARTY_RAPIDJSON_BASE_DIR})
     endif()
 
-    if(NOT EXISTS ${3RD_PARTY_RAPIDJSON_REPO_DIR})
-        find_package(Git)
-        if(NOT GIT_FOUND)
-            message(FATAL_ERROR "git not found")
-        endif()
-
-        file(RELATIVE_PATH 3RD_PARTY_RAPIDJSON_GIT_SUBMODULE_PATH ${CMAKE_SOURCE_DIR} ${3RD_PARTY_RAPIDJSON_REPO_DIR})
-        execute_process(COMMAND ${GIT_EXECUTABLE} clone -b ${3RD_PARTY_RAPIDJSON_VERSION} --depth=100 "https://github.com/Tencent/rapidjson.git" ${3RD_PARTY_RAPIDJSON_REPO_DIR}
-            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        )
-    endif()
+    project_git_clone_3rd_party(
+        URL "https://github.com/Tencent/rapidjson.git"
+        REPO_DIRECTORY ${3RD_PARTY_RAPIDJSON_REPO_DIR}
+        DEPTH 200
+        BRANCH ${3RD_PARTY_RAPIDJSON_VERSION}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
 
     set(Rapidjson_ROOT ${3RD_PARTY_RAPIDJSON_REPO_DIR})
     set(RAPIDJSON_ROOT ${3RD_PARTY_RAPIDJSON_REPO_DIR})

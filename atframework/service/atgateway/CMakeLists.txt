@@ -69,6 +69,9 @@ if (MSVC)
         # see https://docs.microsoft.com/en-us/cpp/overview/cpp-conformance-improvements?view=vs-2019#improvements_162 for detail
         list(APPEND PROJECT_LIBATBUS_PROTOCOL_COMPILE_OPTIONS "/wd5054")
     endif ()
+    if (MSVC_VERSION GREATER_EQUAL 1925)
+        list(APPEND PROJECT_LIBATBUS_PROTOCOL_COMPILE_OPTIONS "/wd4996")
+    endif ()
     target_compile_options(${ATFRAMEWORK_SERVICE_GATEWAY_LINK_NAME} PRIVATE ${PROJECT_LIBATBUS_PROTOCOL_COMPILE_OPTIONS})
 endif ()
 

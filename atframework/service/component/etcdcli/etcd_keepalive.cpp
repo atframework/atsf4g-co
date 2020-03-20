@@ -178,14 +178,14 @@ namespace atframe {
 
                 etcd_packer::unpack_int(root, "count", count);
                 if (count > 0) {
-                    rapidjson::Document::MemberIterator kvs = root.FindMember("kvs");
+                    rapidjson::Document::ConstMemberIterator kvs = root.FindMember("kvs");
                     if (root.MemberEnd() == kvs) {
                         WLOGERROR("Etcd keepalive %p get data count=%lld, but kvs not found", self, static_cast<long long>(count));
                         self->owner_->add_retry_keepalive(self->shared_from_this());
                         return 0;
                     }
 
-                    rapidjson::Document::Array all_kvs = kvs->value.GetArray();
+                    rapidjson::Document::ConstArray all_kvs = kvs->value.GetArray();
                     if(all_kvs.Begin() != all_kvs.End()) {
                         etcd_key_value kv;
                         etcd_packer::unpack(kv, *all_kvs.Begin());

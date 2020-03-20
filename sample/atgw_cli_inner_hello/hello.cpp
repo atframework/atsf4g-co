@@ -117,7 +117,7 @@ static void libuv_tcp_recv_alloc_fn(uv_handle_t *handle, size_t suggested_size, 
     }
 }
 
-static void libuv_tcp_recv_read_fn(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
+static void libuv_tcp_recv_read_fn(uv_stream_t *, ssize_t nread, const uv_buf_t *buf) {
     // if no more data or EAGAIN or break by signal, just ignore
     if (0 == nread || UV_EAGAIN == nread || UV_EAI_AGAIN == nread || UV_EINTR == nread) {
         return;
@@ -262,13 +262,13 @@ int close_sock() {
 }
 
 // ======================== 以下为协议处理回调 ========================
-static void proto_inner_callback_on_written_fn(uv_write_t *req, int status) {
+static void proto_inner_callback_on_written_fn(uv_write_t *, int status) {
     if (g_client_sess.proto) {
         libatgw_inner_v1_c_write_done(g_client_sess.proto->ctx, status);
     }
 }
 
-static int32_t proto_inner_callback_on_write(libatgw_inner_v1_c_context ctx, void *buffer, uint64_t sz, int32_t *is_done) {
+static int32_t proto_inner_callback_on_write(libatgw_inner_v1_c_context, void *buffer, uint64_t sz, int32_t *is_done) {
     if (!g_client_sess.proto || NULL == buffer) {
         if (NULL != is_done) {
             *is_done = 1;
@@ -311,7 +311,7 @@ static int send_next_hello_message() {
     return ret;
 }
 
-static int proto_inner_callback_on_message(libatgw_inner_v1_c_context ctx, const void *buffer, uint64_t sz) {
+static int proto_inner_callback_on_message(libatgw_inner_v1_c_context, const void *buffer, uint64_t sz) {
     if (g_client_sess.print_msg && NULL != buffer && sz > 0) {
         printf("[recv message]: %s\n", std::string(reinterpret_cast<const char *>(buffer), (size_t)sz).c_str());
     }
@@ -328,18 +328,18 @@ static int proto_inner_callback_on_message(libatgw_inner_v1_c_context ctx, const
 }
 
 // useless
-static int proto_inner_callback_on_new_session(libatgw_inner_v1_c_context ctx, uint64_t *sess_id) {
+static int proto_inner_callback_on_new_session(libatgw_inner_v1_c_context, uint64_t *sess_id) {
     printf("create session 0x%llx\n", NULL == sess_id ? 0 : static_cast<unsigned long long>(*sess_id));
     return 0;
 }
 
 // useless
-static int proto_inner_callback_on_reconnect(libatgw_inner_v1_c_context ctx, uint64_t sess_id) {
+static int proto_inner_callback_on_reconnect(libatgw_inner_v1_c_context, uint64_t sess_id) {
     printf("reconnect session 0x%llx\n", static_cast<unsigned long long>(sess_id));
     return 0;
 }
 
-static int proto_inner_callback_on_close(libatgw_inner_v1_c_context ctx, int32_t reason) {
+static int proto_inner_callback_on_close(libatgw_inner_v1_c_context, int32_t reason) {
     if (NULL == g_client.tcp_sock.data) {
         return 0;
     }
@@ -386,7 +386,7 @@ static int proto_inner_callback_on_handshake_update(libatgw_inner_v1_c_context c
     return 0;
 }
 
-static int proto_inner_callback_on_error(libatgw_inner_v1_c_context ctx, const char *filename, int line, int errcode, const char *errmsg) {
+static int proto_inner_callback_on_error(libatgw_inner_v1_c_context, const char *filename, int line, int errcode, const char *errmsg) {
     fprintf(stderr, "[Error][%s:%d]: error code: %d, msg: %s\n", filename, line, errcode, errmsg);
     return 0;
 }

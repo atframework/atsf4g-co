@@ -37,7 +37,7 @@ file(MAKE_DIRECTORY ${EXPORT_SOURCE_CMAKE_DIR})
 
 # ===== For inner protocol, some macro may has effect on code:
 # ATFRAME_GATEWAY_MACRO_DATA_SMALL_SIZE: used for merge small package(default: 3072)
-# ATBUS_MACRO_MSG_LIMIT: max message length, can not be greater than it in atgateway(default: 65536,64K)
+# ATBUS_MACRO_MSG_LIMIT: max message length, can not be greater than it in atgateway(default: 262144,256K)
 
 # ----- copy dependency utility files -----
 file(COPY 

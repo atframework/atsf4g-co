@@ -168,10 +168,10 @@ namespace atframe {
              * @brief 由于大多数数据包都比较小
              *        当数据包比较小时和动态直接放在动态int的数据包一起，这样可以减少内存拷贝次数
              */
-            typedef struct {
+            struct read_head_t {
                 char buffer[ATFRAME_GATEWAY_MACRO_DATA_SMALL_SIZE]; // 小数据包存储区
                 size_t len;                                         // 小数据包存储区已使用长度
-            } read_head_t;
+            };
             read_head_t read_head_;
 
             ::atbus::detail::buffer_manager write_buffers_;

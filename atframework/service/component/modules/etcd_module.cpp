@@ -746,6 +746,8 @@ namespace atframe {
                 out.type_name.clear();
                 out.version.clear();
                 out.custom_data.clear();
+                out.atbus_protocol_version = 0;
+                out.atbus_protocol_min_version = 0;
             }
 
             if (json.empty()) {
@@ -846,6 +848,20 @@ namespace atframe {
                         out.custom_data = atproxy_iter->value.GetString();
                     }
                 }
+
+                out.atbus_protocol_version = 0;
+                if (val.MemberEnd() != (atproxy_iter = val.FindMember("atbus-protocol-version"))) {
+                    if (atproxy_iter->value.IsUint64()) {
+                        out.atbus_protocol_version = atproxy_iter->value.GetUint64();
+                    }
+                }
+
+                out.atbus_protocol_min_version = 0;
+                if (val.MemberEnd() != (atproxy_iter = val.FindMember("atbus-protocol-min-version"))) {
+                    if (atproxy_iter->value.IsUint64()) {
+                        out.atbus_protocol_min_version = atproxy_iter->value.GetUint64();
+                    }
+                }
             }
 
             return true;
@@ -873,6 +889,8 @@ namespace atframe {
             if (!src.custom_data.empty()) {
                 doc.AddMember("custom_data", rapidjson::StringRef(src.custom_data.c_str(), src.custom_data.size()), doc.GetAllocator());
             }
+            doc.AddMember("atbus-protocol-version", src.atbus_protocol_version, doc.GetAllocator());
+            doc.AddMember("atbus-protocol-min-version", src.atbus_protocol_min_version, doc.GetAllocator());
 
             // Stringify the DOM
             rapidjson::StringBuffer                    buffer;
@@ -954,15 +972,22 @@ namespace atframe {
             atframe::component::etcd_keepalive::ptr_t ret;
             if (val.empty()) {
                 node_info_t ni;
-                ni.id          = get_app()->get_id();
-                ni.name        = get_app()->get_app_name();
-                ni.hostname    = ::atbus::node::get_hostname();
-                ni.listens     = get_app()->get_bus_node()->get_listen_list();
-                ni.hash_code   = get_app()->get_hash_code();
-                ni.type_id     = static_cast<uint64_t>(get_app()->get_type_id());
-                ni.type_name   = get_app()->get_type_name();
-                ni.version     = get_app()->get_app_version();
-                ni.custom_data = get_conf_custom_data();
+                ni.id                           = get_app()->get_id();
+                ni.name                         = get_app()->get_app_name();
+                ni.hostname                     = ::atbus::node::get_hostname();
+                ni.listens                      = get_app()->get_bus_node()->get_listen_list();
+                ni.hash_code                    = get_app()->get_hash_code();
+                ni.type_id                      = static_cast<uint64_t>(get_app()->get_type_id());
+                ni.type_name                    = get_app()->get_type_name();
+                ni.version                      = get_app()->get_app_version();
+                ni.custom_data                  = get_conf_custom_data();
+                if (get_app()->get_bus_node()) {
+                    ni.atbus_protocol_version       = get_app()->get_bus_node()->get_protocol_version();
+                    ni.atbus_protocol_min_version   = get_app()->get_bus_node()->get_protocol_minimal_version();
+                } else {
+                    ni.atbus_protocol_version     = atbus::protocol::ATBUS_PROTOCOL_VERSION;
+                    ni.atbus_protocol_min_version = atbus::protocol::ATBUS_PROTOCOL_MINIMAL_VERSION;
+                }
                 pack(ni, val);
             }
 

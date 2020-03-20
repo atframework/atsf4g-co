@@ -45,9 +45,9 @@ namespace atframe {
             }
         }
 
-        void etcd_packer::unpack(etcd_key_value &etcd_val, rapidjson::Value &json_val) {
+        void etcd_packer::unpack(etcd_key_value &etcd_val, const rapidjson::Value &json_val) {
             {
-                rapidjson::Value::MemberIterator iter = json_val.FindMember("create_revision");
+                rapidjson::Value::ConstMemberIterator iter = json_val.FindMember("create_revision");
                 if (iter == json_val.MemberEnd()) {
                     etcd_val.create_revision = 0;
                 } else {
@@ -63,7 +63,7 @@ namespace atframe {
             }
 
             {
-                rapidjson::Value::MemberIterator iter = json_val.FindMember("mod_revision");
+                rapidjson::Value::ConstMemberIterator iter = json_val.FindMember("mod_revision");
                 if (iter == json_val.MemberEnd()) {
                     etcd_val.mod_revision = 0;
                 } else {
@@ -79,7 +79,7 @@ namespace atframe {
             }
 
             {
-                rapidjson::Value::MemberIterator iter = json_val.FindMember("version");
+                rapidjson::Value::ConstMemberIterator iter = json_val.FindMember("version");
                 if (iter == json_val.MemberEnd()) {
                     etcd_val.version = 0;
                 } else {
@@ -95,7 +95,7 @@ namespace atframe {
             }
 
             {
-                rapidjson::Value::MemberIterator iter = json_val.FindMember("lease");
+                rapidjson::Value::ConstMemberIterator iter = json_val.FindMember("lease");
                 if (iter == json_val.MemberEnd()) {
                     etcd_val.lease = 0;
                 } else {
@@ -132,9 +132,9 @@ namespace atframe {
             }
         }
 
-        void etcd_packer::unpack(etcd_response_header &etcd_val, rapidjson::Value &json_val) {
+        void etcd_packer::unpack(etcd_response_header &etcd_val, const rapidjson::Value &json_val) {
             {
-                rapidjson::Value::MemberIterator iter = json_val.FindMember("cluster_id");
+                rapidjson::Value::ConstMemberIterator iter = json_val.FindMember("cluster_id");
                 if (iter == json_val.MemberEnd()) {
                     etcd_val.cluster_id = 0;
                 } else {
@@ -150,7 +150,7 @@ namespace atframe {
             }
 
             {
-                rapidjson::Value::MemberIterator iter = json_val.FindMember("member_id");
+                rapidjson::Value::ConstMemberIterator iter = json_val.FindMember("member_id");
                 if (iter == json_val.MemberEnd()) {
                     etcd_val.member_id = 0;
                 } else {
@@ -166,7 +166,7 @@ namespace atframe {
             }
 
             {
-                rapidjson::Value::MemberIterator iter = json_val.FindMember("revision");
+                rapidjson::Value::ConstMemberIterator iter = json_val.FindMember("revision");
                 if (iter == json_val.MemberEnd()) {
                     etcd_val.revision = 0;
                 } else {
@@ -182,7 +182,7 @@ namespace atframe {
             }
 
             {
-                rapidjson::Value::MemberIterator iter = json_val.FindMember("raft_term");
+                rapidjson::Value::ConstMemberIterator iter = json_val.FindMember("raft_term");
                 if (iter == json_val.MemberEnd()) {
                     etcd_val.raft_term = 0;
                 } else {
@@ -234,8 +234,8 @@ namespace atframe {
             json_val.AddMember(k, v, doc.GetAllocator());
         }
 
-        bool etcd_packer::unpack_string(rapidjson::Value &json_val, const char *key, std::string &val) {
-            rapidjson::Value::MemberIterator iter = json_val.FindMember(key);
+        bool etcd_packer::unpack_string(const rapidjson::Value &json_val, const char *key, std::string &val) {
+            rapidjson::Value::ConstMemberIterator iter = json_val.FindMember(key);
             if (iter == json_val.MemberEnd()) {
                 return false;
             }
@@ -297,8 +297,8 @@ namespace atframe {
             json_val.AddMember(k, v, doc.GetAllocator());
         }
 
-        bool etcd_packer::unpack_base64(rapidjson::Value &json_val, const char *key, std::string &val) {
-            rapidjson::Value::MemberIterator iter = json_val.FindMember(key);
+        bool etcd_packer::unpack_base64(const rapidjson::Value &json_val, const char *key, std::string &val) {
+            rapidjson::Value::ConstMemberIterator iter = json_val.FindMember(key);
             if (iter == json_val.MemberEnd()) {
                 return false;
             }
@@ -313,8 +313,8 @@ namespace atframe {
             return 0 == util::base64_decode(val, reinterpret_cast<const unsigned char *>(base64_val), base64_val_sz);
         }
 
-        void etcd_packer::unpack_int(rapidjson::Value &json_val, const char *key, int64_t &out) {
-            rapidjson::Value::MemberIterator iter = json_val.FindMember(key);
+        void etcd_packer::unpack_int(const rapidjson::Value &json_val, const char *key, int64_t &out) {
+            rapidjson::Value::ConstMemberIterator iter = json_val.FindMember(key);
             if (iter == json_val.MemberEnd()) {
                 out = 0;
             } else {
@@ -327,8 +327,8 @@ namespace atframe {
             }
         }
 
-        void etcd_packer::unpack_int(rapidjson::Value &json_val, const char *key, uint64_t &out) {
-            rapidjson::Value::MemberIterator iter = json_val.FindMember(key);
+        void etcd_packer::unpack_int(const rapidjson::Value &json_val, const char *key, uint64_t &out) {
+            rapidjson::Value::ConstMemberIterator iter = json_val.FindMember(key);
             if (iter == json_val.MemberEnd()) {
                 out = 0;
             } else {
@@ -341,8 +341,8 @@ namespace atframe {
             }
         }
 
-        void etcd_packer::unpack_bool(rapidjson::Value &json_val, const char *key, bool &out) {
-            rapidjson::Value::MemberIterator iter = json_val.FindMember(key);
+        void etcd_packer::unpack_bool(const rapidjson::Value &json_val, const char *key, bool &out) {
+            rapidjson::Value::ConstMemberIterator iter = json_val.FindMember(key);
             if (iter == json_val.MemberEnd()) {
                 out = false;
             } else {

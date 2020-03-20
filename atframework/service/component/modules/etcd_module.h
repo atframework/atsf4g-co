@@ -45,6 +45,8 @@ namespace atframe {
                 std::string            type_name;
                 std::string            version;
                 std::string            custom_data;
+                uint64_t               atbus_protocol_version;
+                uint64_t               atbus_protocol_min_version;
 
                 node_action_t::type action;
             };

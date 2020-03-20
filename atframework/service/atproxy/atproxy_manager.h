@@ -22,6 +22,7 @@ namespace atframe {
             struct node_info_t {
                 atframe::component::etcd_module::node_info_t etcd_node;
                 time_t                                       next_action_time;
+                bool                                         is_available;
             };
 
             struct node_list_t {
@@ -31,10 +32,10 @@ namespace atframe {
             typedef std::shared_ptr<atframe::component::etcd_module> etcd_mod_ptr;
 
         private:
-            typedef struct {
+            struct check_info_t {
                 time_t                 timeout_sec;
                 ::atapp::app::app_id_t proxy_id;
-            } check_info_t;
+            };
 
         public:
             atproxy_manager(etcd_mod_ptr etcd_mod);
@@ -58,6 +59,7 @@ namespace atframe {
         private:
             void swap(node_info_t &l, node_info_t &r);
             void on_watcher_notify(atframe::component::etcd_module::watcher_sender_one_t &sender);
+            bool check_available(const atframe::component::etcd_module::node_info_t& node_event) const;
 
         private:
             std::list<check_info_t>                                check_list_;
