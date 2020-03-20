@@ -1,4 +1,8 @@
 
+if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.10")
+    include_guard(GLOBAL)
+endif()
+
 # =========== 3rdparty jemalloc ==================
 set (3RD_PARTY_JEMALLOC_BASE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 set (3RD_PARTY_JEMALLOC_PKG_DIR "${CMAKE_CURRENT_LIST_DIR}/pkg")

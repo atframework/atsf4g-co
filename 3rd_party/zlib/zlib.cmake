@@ -1,3 +1,7 @@
+if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.10")
+    include_guard(GLOBAL)
+endif()
+
 # =========== 3rdparty zlib ==================
 if (NOT 3RD_PARTY_ZLIB_BASE_DIR)
     set (3RD_PARTY_ZLIB_BASE_DIR ${CMAKE_CURRENT_LIST_DIR})

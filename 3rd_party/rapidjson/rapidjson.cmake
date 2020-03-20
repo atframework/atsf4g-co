@@ -1,3 +1,6 @@
+if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.10")
+    include_guard(GLOBAL)
+endif()
 
 # =========== 3rdparty rapidjson ==================
 if(NOT 3RD_PARTY_RAPIDJSON_BASE_DIR)
