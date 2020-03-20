@@ -47,7 +47,23 @@
 /3rd_party/libcurl/prebuilt
 
 ## flatbuffers
-/3rd_party/flatbuffers/repo
+/3rd_party/flatbuffers/pkg
+/3rd_party/flatbuffers/prebuilt
+
+## lua
+/3rd_party/lua/repo
+
+## libressl
+/3rd_party/libressl/pkg
+/3rd_party/libressl/prebuilt
+
+## openssl
+/3rd_party/openssl/pkg
+/3rd_party/openssl/prebuilt
+
+## zlib
+/3rd_party/zlib/pkg
+/3rd_party/zlib/prebuilt
 
 ## jemalloc
 /3rd_party/jemalloc/pkg
@@ -55,6 +71,10 @@
 
 ## rapidjson
 /3rd_party/rapidjson/repo
+
+## libwebsockets
+/3rd_party/libwebsockets/repo
+/3rd_party/libwebsockets/prebuilt
 
 ## atframework
 /atframework/service/component/config/atframe_services_build_feature.h

@@ -1,0 +1,53 @@
+$PSDefaultParameterValues['*:Encoding'] = 'UTF-8'
+
+$OutputEncoding = [System.Text.UTF8Encoding]::new()
+
+$SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Definition
+
+# Set-Location $SCRIPT_DIR
+
+$3RD_PARTY_PROTOBUF_BUILD_DIR = "@CMAKE_CURRENT_BINARY_DIR@/deps/protobuf-@3RD_PARTY_PROTOBUF_VERSION@/build_jobs_dir_@PROJECT_PREBUILT_PLATFORM_NAME@"
+$3RD_PARTY_PROTOBUF_HOST_BUILD_DIR = "@CMAKE_CURRENT_BINARY_DIR@/deps/protobuf-@3RD_PARTY_PROTOBUF_VERSION@/build_jobs_dir_@PROJECT_PREBUILT_HOST_PLATFORM_NAME@"
+
+# build host protoc first
+if ( "@CMAKE_SYSTEM@" -ne "@CMAKE_HOST_SYSTEM@" ) {
+    $ENV:PATH = "$3RD_PARTY_PROTOBUF_HOST_BUILD_DIR" + [IO.Path]::PathSeparator + "$ENV:PATH"
+
+    if (!(Test-Path "$3RD_PARTY_PROTOBUF_HOST_BUILD_DIR" )) {
+        New-Item -Path "$3RD_PARTY_PROTOBUF_HOST_BUILD_DIR" -ItemType "directory" -Force
+    }
+
+    Set-Location "$3RD_PARTY_PROTOBUF_HOST_BUILD_DIR"
+
+    if (!(Test-Path "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/bin/protoc" ) -and !(Test-Path "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/bin/protoc.exe" )) {
+        & @3RD_PARTY_PROTOBUF_HOST_BUILD_FLAGS_CMD@ "-DCMAKE_INSTALL_PREFIX=@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@"
+        if (("@MSVC@".ToLower() -ne "true") -or ("@MSVC@".ToLower() -ne "yes") -or ("@MSVC@".ToLower() -eq "1")) {
+            & "@CMAKE_COMMAND@" --build . --target install --config Debug @3RD_PARTY_PROTOBUF_BUILD_MULTI_CORE@
+        }
+        & "@CMAKE_COMMAND@" --build . --target install --config Release @3RD_PARTY_PROTOBUF_BUILD_MULTI_CORE@
+    }
+
+}
+else {
+    $ENV:PATH = "$3RD_PARTY_PROTOBUF_BUILD_DIR" + [IO.Path]::PathSeparator + "$ENV:PATH"
+}
+
+if (!(Test-Path "$3RD_PARTY_PROTOBUF_BUILD_DIR" )) {
+    New-Item -Path "$3RD_PARTY_PROTOBUF_BUILD_DIR" -ItemType "directory" -Force
+}
+
+Set-Location "$3RD_PARTY_PROTOBUF_BUILD_DIR"
+
+if ("@CMAKE_SYSTEM@" -ne "@CMAKE_HOST_SYSTEM@" ) {
+    & @3RD_PARTY_PROTOBUF_BUILD_FLAGS_CMD@ "-DCMAKE_INSTALL_PREFIX=@3RD_PARTY_PROTOBUF_ROOT_DIR@" -Dprotobuf_BUILD_CONFORMANCE=OFF -Dprotobuf_BUILD_PROTOC_BINARIES=OFF
+}
+else {
+    & @3RD_PARTY_PROTOBUF_BUILD_FLAGS_CMD@ "-DCMAKE_INSTALL_PREFIX=@3RD_PARTY_PROTOBUF_ROOT_DIR@"
+}
+
+if (("@MSVC@".ToLower() -eq "true") -or ("@MSVC@".ToLower() -eq "yes") -or ("@MSVC@".ToLower() -eq "1")) {
+    & "@CMAKE_COMMAND@" --build . --target install --config Debug @3RD_PARTY_PROTOBUF_BUILD_MULTI_CORE@
+}
+
+& "@CMAKE_COMMAND@" --build . --target install --config Release @3RD_PARTY_PROTOBUF_BUILD_MULTI_CORE@
+
