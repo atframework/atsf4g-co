@@ -39,7 +39,7 @@ foreach(SRC_FILE ${hiredis_check_sources})
     endif()
 endforeach()
 
-IF(WIN32)
+IF(WIN32 AND EXISTS "${3RD_PARTY_REDIS_HIREDIS_DIR}/hiredis.def")
     list(APPEND hiredis_sources
         "${3RD_PARTY_REDIS_HIREDIS_DIR}/hiredis.def"
     )

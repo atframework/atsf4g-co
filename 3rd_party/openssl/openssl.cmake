@@ -23,16 +23,19 @@ if (NOT OPENSSL_FOUND)
     endif()
 
     set (OPENSSL_ROOT_DIR ${3RD_PARTY_OPENSSL_ROOT_DIR})
-    set(OPENSSL_USE_STATIC_LIBS TRUE)
+    set (OPENSSL_USE_STATIC_LIBS TRUE)
 
     set(3RD_PARTY_OPENSSL_BACKUP_FIND_ROOT ${CMAKE_FIND_ROOT_PATH})
     list(APPEND CMAKE_FIND_ROOT_PATH ${OPENSSL_ROOT_DIR})
 
-    find_library(3RD_PARTY_OPENSSL_FIND_LIB_CRYPTO NAMES crypto PATHS "${3RD_PARTY_OPENSSL_ROOT_DIR}/lib" "${3RD_PARTY_OPENSSL_ROOT_DIR}/lib64" NO_DEFAULT_PATH)
-    find_library(3RD_PARTY_OPENSSL_FIND_LIB_SSL NAMES ssl PATHS "${3RD_PARTY_OPENSSL_ROOT_DIR}/lib" "${3RD_PARTY_OPENSSL_ROOT_DIR}/lib64" NO_DEFAULT_PATH)
+    find_library(3RD_PARTY_OPENSSL_FIND_LIB_CRYPTO NAMES crypto libcrypto PATHS "${3RD_PARTY_OPENSSL_ROOT_DIR}/lib" "${3RD_PARTY_OPENSSL_ROOT_DIR}/lib64" NO_DEFAULT_PATH)
+    find_library(3RD_PARTY_OPENSSL_FIND_LIB_SSL NAMES ssl libssl PATHS "${3RD_PARTY_OPENSSL_ROOT_DIR}/lib" "${3RD_PARTY_OPENSSL_ROOT_DIR}/lib64" NO_DEFAULT_PATH)
 
     if (3RD_PARTY_OPENSSL_FIND_LIB_CRYPTO AND 3RD_PARTY_OPENSSL_FIND_LIB_SSL)
         find_package(OpenSSL)
+    else ()
+        message(STATUS "3RD_PARTY_OPENSSL_FIND_LIB_CRYPTO -- ${3RD_PARTY_OPENSSL_FIND_LIB_CRYPTO}")
+        message(STATUS "3RD_PARTY_OPENSSL_FIND_LIB_SSL    -- ${3RD_PARTY_OPENSSL_FIND_LIB_SSL}")
     endif ()
 
     unset(3RD_PARTY_OPENSSL_FIND_LIB_CRYPTO)
@@ -41,6 +44,7 @@ endif()
 
 if (NOT OPENSSL_FOUND)
     EchoWithColor(COLOR GREEN "-- Try to configure and use openssl")
+    unset(OPENSSL_FOUND CACHE)
     unset(OPENSSL_EXECUTABLE CACHE)
     unset(OPENSSL_INCLUDE_DIR CACHE)
     unset(OPENSSL_CRYPTO_LIBRARY CACHE)
@@ -158,17 +162,15 @@ if (NOT OPENSSL_FOUND)
         project_expand_list_for_command_line_to_file("${3RD_PARTY_OPENSSL_BUILD_DIR}/run-config.bat"
             perl "../Configure" ${3RD_PARTY_OPENSSL_BUILD_OPTIONS}
         )
+        file(APPEND "${3RD_PARTY_OPENSSL_BUILD_DIR}/run-build-release.bat" "set CL=${3RD_PARTY_OPENSSL_BUILD_MULTI_CORE}${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
         project_expand_list_for_command_line_to_file("${3RD_PARTY_OPENSSL_BUILD_DIR}/run-build-release.bat"
-            "set" "CL=${3RD_PARTY_OPENSSL_BUILD_MULTI_CORE}"
+            "nmake" "build_all_generated"
         )
         project_expand_list_for_command_line_to_file("${3RD_PARTY_OPENSSL_BUILD_DIR}/run-build-release.bat"
-            "nmake" "build_all_generated" ${3RD_PARTY_OPENSSL_BUILD_MULTI_CORE} "2>&1"
+            "nmake" "PERL=no-perl"
         )
         project_expand_list_for_command_line_to_file("${3RD_PARTY_OPENSSL_BUILD_DIR}/run-build-release.bat"
-            "nmake" "PERL=no-perl" ${3RD_PARTY_OPENSSL_BUILD_MULTI_CORE} "2>&1"
-        )
-        project_expand_list_for_command_line_to_file("${3RD_PARTY_OPENSSL_BUILD_DIR}/run-build-release.bat"
-            "nmake" "install" "DESTDIR=${3RD_PARTY_OPENSSL_ROOT_DIR}" "2>&1"
+            "nmake" "install" # "DESTDIR=${3RD_PARTY_OPENSSL_ROOT_DIR}"
         )
 
         # build & install
