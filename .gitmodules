@@ -1,6 +1,3 @@
-[submodule "3rd_party/libiniloader/repo"]
-	path = 3rd_party/libiniloader/repo
-	url = https://github.com/owt5008137/libiniloader.git
 [submodule "atframework/libatframe_utils/repo"]
 	path = atframework/libatframe_utils/repo
 	url = https://github.com/atframework/atframe_utils.git
