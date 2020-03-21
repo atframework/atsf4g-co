@@ -9,6 +9,20 @@ if(NOT 3RD_PARTY_FLATBUFFER_BASE_DIR)
     set (3RD_PARTY_FLATBUFFER_BASE_DIR ${CMAKE_CURRENT_LIST_DIR})
 endif()
 
+macro(PROJECT_3RD_PARTY_FLATBUFFERS_IMPORT)
+    if (TARGET flatbuffers::flatc AND TARGET flatbuffers::flatbuffers)
+        get_target_property(3RD_PARTY_FLATBUFFER_INC_DIR flatbuffers::flatbuffers INTERFACE_INCLUDE_DIRECTORIES)
+        list(APPEND 3RD_PARTY_PUBLIC_INCLUDE_DIRS ${3RD_PARTY_FLATBUFFER_INC_DIR})
+
+        EchoWithColor(COLOR GREEN "-- Dependency: Flatbuffer ${Flatbuffers_VERSION} found.(${3RD_PARTY_FLATBUFFER_INC_DIR})")
+    endif()
+endmacro()
+
+if (VCPKG_TOOLCHAIN)
+    find_package(Flatbuffers)
+    PROJECT_3RD_PARTY_FLATBUFFERS_IMPORT()
+endif ()
+
 if (NOT TARGET flatbuffers::flatc OR NOT TARGET flatbuffers::flatbuffers)
     set (3RD_PARTY_FLATBUFFER_REPO_DIR "${3RD_PARTY_FLATBUFFER_BASE_DIR}/repo")
     set (3RD_PARTY_FLATBUFFER_PKG_DIR "${3RD_PARTY_FLATBUFFER_BASE_DIR}/pkg")
@@ -38,10 +52,6 @@ if (NOT TARGET flatbuffers::flatc OR NOT TARGET flatbuffers::flatbuffers)
         EchoWithColor(COLOR RED "-- Dependency: Flatbuffer is required but not found")
         message(FATAL_ERROR "Flatbuffer not found")
     endif()
-
-    get_target_property(3RD_PARTY_FLATBUFFER_INC_DIR flatbuffers::flatbuffers INTERFACE_INCLUDE_DIRECTORIES)
-    list(APPEND 3RD_PARTY_PUBLIC_INCLUDE_DIRS ${3RD_PARTY_FLATBUFFER_INC_DIR})
-
-    EchoWithColor(COLOR GREEN "-- Dependency: Flatbuffer ${Flatbuffer_VERSION} found.(${3RD_PARTY_FLATBUFFER_INC_DIR})")
+    PROJECT_3RD_PARTY_FLATBUFFERS_IMPORT()
 endif ()
 

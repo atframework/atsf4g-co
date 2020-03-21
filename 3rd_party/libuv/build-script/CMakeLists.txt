@@ -67,7 +67,8 @@ if(WIN32)
   endif()
   list(APPEND uv_defines WIN32_LEAN_AND_MEAN _WIN32_WINNT=0x0600)
   list(APPEND uv_libraries
-       $<$<STREQUAL:${windows-version},0x0600>:psapi>
+       psapi # Patch for Win10 with MSVC 1925
+       # $<$<STREQUAL:${windows-version},0x0600>:psapi>
        # advapi32
        iphlpapi
        # psapi

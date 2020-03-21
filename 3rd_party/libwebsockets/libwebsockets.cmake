@@ -10,30 +10,45 @@ endif()
 set (3RD_PARTY_LIBWEBSOCKETS_ROOT_DIR "${3RD_PARTY_LIBWEBSOCKETS_BASE_DIR}/prebuilt/${PROJECT_PREBUILT_PLATFORM_NAME}")
 set (3RD_PARTY_LIBWEBSOCKETS_VERSION "v4.0.1")
 
-if (NOT Libwebsockets_FOUND)
+macro(PROJECT_3RD_PARTY_LIBWEBSOCKETS_IMPORT)
+    if(TARGET websockets)
+        EchoWithColor(COLOR GREEN "-- Dependency: libwebsockets found.(TARGET: websockets)")
+        list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES websockets)
+    elseif(TARGET websockets_shared)
+        EchoWithColor(COLOR GREEN "-- Dependency: libwebsockets found.(TARGET: websockets_shared)")
+        list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES websockets_shared)
+    elseif(Libwebsockets_FOUND)
+        EchoWithColor(COLOR RED "-- Dependency: libwebsockets found")
+        list(APPEND 3RD_PARTY_PUBLIC_INCLUDE_DIRS ${LIBWEBSOCKETS_INCLUDE_DIRS})
+        list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES ${LIBWEBSOCKETS_LIBRARIES})
+    endif()
+endmacro()
+
+if (VCPKG_TOOLCHAIN)
+    find_package(Libwebsockets)
+    PROJECT_3RD_PARTY_LIBWEBSOCKETS_IMPORT()
+endif ()
+
+if (NOT Libwebsockets_FOUND AND NOT TARGET websockets AND NOT TARGET websockets_shared)
     # force to use prebuilt when using mingw
     set(Libwebsockets_ROOT ${3RD_PARTY_LIBWEBSOCKETS_ROOT_DIR})
     set(Libwebsockets_DIR ${3RD_PARTY_LIBWEBSOCKETS_ROOT_DIR})
 
     if (EXISTS ${Libwebsockets_ROOT})
         find_package(Libwebsockets)
+        PROJECT_3RD_PARTY_LIBWEBSOCKETS_IMPORT()
     endif ()
     if (NOT Libwebsockets_FOUND)
         set (3RD_PARTY_LIBWEBSOCKETS_REPO_DIR "${3RD_PARTY_LIBWEBSOCKETS_BASE_DIR}/repo")
         set (3RD_PARTY_LIBWEBSOCKETS_BUILD_DIR "${3RD_PARTY_LIBWEBSOCKETS_REPO_DIR}/build_jobs_${PROJECT_PREBUILT_PLATFORM_NAME}")
 
-        find_package(Git)
-        if(NOT EXISTS ${3RD_PARTY_LIBWEBSOCKETS_REPO_DIR})
-            execute_process(COMMAND ${GIT_EXECUTABLE} clone --depth=200 -b ${3RD_PARTY_LIBWEBSOCKETS_VERSION} "https://github.com/warmcat/libwebsockets.git" ${3RD_PARTY_LIBWEBSOCKETS_REPO_DIR}
-                WORKING_DIRECTORY ${3RD_PARTY_LIBWEBSOCKETS_BASE_DIR}
-            )
-        elseif(PROJECT_RESET_DENPEND_REPOSITORIES)
-            execute_process(
-                COMMAND ${GIT_EXECUTABLE} fetch -f --depth=200 --tags origin
-                COMMAND ${GIT_EXECUTABLE} reset --hard tags/${3RD_PARTY_LIBWEBSOCKETS_VERSION}
-                WORKING_DIRECTORY ${3RD_PARTY_LIBWEBSOCKETS_REPO_DIR}
-            )
-        endif()
+        project_git_clone_3rd_party(
+            URL "https://github.com/warmcat/libwebsockets.git"
+            REPO_DIRECTORY ${3RD_PARTY_LIBWEBSOCKETS_REPO_DIR}
+            DEPTH 200
+            TAG ${3RD_PARTY_LIBWEBSOCKETS_VERSION}
+            WORKING_DIRECTORY ${3RD_PARTY_LIBWEBSOCKETS_BASE_DIR}
+        )
 
         if (NOT EXISTS ${3RD_PARTY_LIBWEBSOCKETS_BUILD_DIR})
             file(MAKE_DIRECTORY ${3RD_PARTY_LIBWEBSOCKETS_BUILD_DIR})
@@ -50,7 +65,7 @@ if (NOT Libwebsockets_FOUND)
             "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
         )
 
-        if (NOT WIN32) 
+        if (NOT WIN32 AND NOT CYGWIN AND NOT MINGW) 
             list(APPEND 3RD_PARTY_LIBWEBSOCKETS_BUILD_OPTIONS
                 "-DLWS_UNIX_SOCK=ON"
             )
@@ -61,12 +76,19 @@ if (NOT Libwebsockets_FOUND)
                 "-DLWS_WITH_ZLIB=ON" "-DLWS_ZLIB_LIBRARIES=${ZLIB_LIBRARIES}" "-DLWS_ZLIB_INCLUDE_DIRS=${ZLIB_INCLUDE_DIRS}"
             )
         endif ()
-        if (OPENSSL_ROOT_DIR AND OPENSSL_FOUND AND NOT LIBRESSL_FOUND)
-            list(APPEND 3RD_PARTY_LIBWEBSOCKETS_BUILD_OPTIONS 
-                # "-DOPENSSL_LIBRARIES=${OPENSSL_LIBRARIES}" "-DOPENSSL_INCLUDE_DIR=${OPENSSL_INCLUDE_DIR}" "-DOPENSSL_EXECUTABLE=${3RD_PARTY_OPENSSL_EXECUTABLE}" 
-                # "-DOPENSSL_CRYPTO_LIBRARY=${OPENSSL_CRYPTO_LIBRARY}" "-DOPENSSL_SSL_LIBRARY=${OPENSSL_SSL_LIBRARY}" "-DOPENSSL_VERSION=${OPENSSL_VERSION}" # "-DLWS_WITH_BORINGSSL=ON"
-                "-DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}" "-DOPENSSL_USE_STATIC_LIBS=YES"
-            )
+        if (OPENSSL_FOUND AND NOT LIBRESSL_FOUND)
+            # list(APPEND 3RD_PARTY_LIBWEBSOCKETS_BUILD_OPTIONS 
+            #     # "-DOPENSSL_LIBRARIES=${OPENSSL_LIBRARIES}" "-DOPENSSL_INCLUDE_DIR=${OPENSSL_INCLUDE_DIR}"
+            #     # "-DOPENSSL_CRYPTO_LIBRARY=${OPENSSL_CRYPTO_LIBRARY}" "-DOPENSSL_SSL_LIBRARY=${OPENSSL_SSL_LIBRARY}" "-DOPENSSL_VERSION=${OPENSSL_VERSION}" # "-DLWS_WITH_BORINGSSL=ON"
+            # )
+            if (OPENSSL_ROOT_DIR)
+                list(APPEND 3RD_PARTY_LIBWEBSOCKETS_BUILD_OPTIONS "-DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}")
+            endif ()
+            if (NOT MSVC)
+                # libwebsockets的检测脚本写得不是特别健壮，会导致MSVC环境下很多链接问题，所以还是用动态库
+                # 其他环境为了适配兼容性一律使用静态库
+                list(APPEND 3RD_PARTY_LIBWEBSOCKETS_BUILD_OPTIONS "-DOPENSSL_USE_STATIC_LIBS=YES")
+            endif ()
         endif ()
         if (NOT MSVC)
             file(WRITE "${3RD_PARTY_LIBWEBSOCKETS_BUILD_DIR}/run-config.sh" "#!/bin/bash${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
@@ -150,7 +172,7 @@ if (NOT Libwebsockets_FOUND)
                 ${CMAKE_COMMAND} "--build" "." "-j"
             )
             project_expand_list_for_command_line_to_file("${3RD_PARTY_LIBWEBSOCKETS_BUILD_DIR}/run-build-release.bat"
-                ${CMAKE_COMMAND} "--build" "." "--" "install"
+                ${CMAKE_COMMAND} "--build" "." "--target" "INSTALL"
             )
 
             # build & install
@@ -168,6 +190,7 @@ if (NOT Libwebsockets_FOUND)
         endif ()
 
         find_package(Libwebsockets)
+        PROJECT_3RD_PARTY_LIBWEBSOCKETS_IMPORT()
     endif ()
     # FindConfigurePackage(
     #     PACKAGE Libwebsockets
@@ -177,7 +200,7 @@ if (NOT Libwebsockets_FOUND)
     #                  "-DLWS_WITHOUT_DAEMONIZE=ON" "-DLWS_WITHOUT_TESTAPPS=ON" "-DLWS_WITHOUT_TEST_CLIENT=ON"
     #                  "-DLWS_WITHOUT_TEST_PING=ON" "-DLWS_WITHOUT_TEST_SERVER=ON" "-DLWS_WITHOUT_TEST_SERVER_EXTPOLL=ON"
     #                  "-DLWS_WITH_PLUGINS=ON" "-DLWS_WITHOUT_EXTENSIONS=OFF"
-    #                  "-DOPENSSL_LIBRARIES=${OPENSSL_LIBRARIES}" "-DOPENSSL_INCLUDE_DIR=${OPENSSL_INCLUDE_DIR}" "-DOPENSSL_EXECUTABLE=${3RD_PARTY_OPENSSL_EXECUTABLE}" 
+    #                  "-DOPENSSL_LIBRARIES=${OPENSSL_LIBRARIES}" "-DOPENSSL_INCLUDE_DIR=${OPENSSL_INCLUDE_DIR}"
     #                  "-DOPENSSL_CRYPTO_LIBRARY=${OPENSSL_CRYPTO_LIBRARY}" "-DOPENSSL_SSL_LIBRARY=${OPENSSL_SSL_LIBRARY}" "-DOPENSSL_VERSION=${OPENSSL_VERSION}" # "-DLWS_WITH_BORINGSSL=ON"
     #                  "-DOPENSSL_ROOT_DIR=${3RD_PARTY_OPENSSL_ROOT_DIR}" "-DOPENSSL_USE_STATIC_LIBS=YES"
     #                  "-DLWS_WITH_ZLIB=ON" "-DLWS_ZLIB_LIBRARIES=${ZLIB_LIBRARIES}" "-DLWS_ZLIB_INCLUDE_DIRS=${ZLIB_INCLUDE_DIRS}"
@@ -194,21 +217,8 @@ if (NOT Libwebsockets_FOUND)
     #     GIT_URL "https://github.com/warmcat/libwebsockets.git"
     #     GIT_BRANCH ${3RD_PARTY_LIBWEBSOCKETS_VERSION}
     # )
-
-    if (Libwebsockets_FOUND)
-        if(TARGET websockets)
-            EchoWithColor(COLOR GREEN "-- Dependency: libwebsockets found.(TARGET: websockets)")
-            list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES websockets)
-        elseif(TARGET websockets_shared)
-            EchoWithColor(COLOR GREEN "-- Dependency: libwebsockets found.(TARGET: websockets_shared)")
-            list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES websockets_shared)
-        else()
-            EchoWithColor(COLOR RED "-- Dependency: libwebsockets is required")
-            message(FATAL_ERROR "libwebsockets not found")
-        endif()
-
-        if (LIBWEBSOCKETS_INCLUDE_DIRS)
-            list(APPEND 3RD_PARTY_PUBLIC_INCLUDE_DIRS ${LIBWEBSOCKETS_INCLUDE_DIRS})
-        endif ()
-    endif()
 endif()
+
+if (NOT Libwebsockets_FOUND AND NOT TARGET websockets AND NOT TARGET websockets_shared)
+    EchoWithColor(COLOR YELLOW "-- Dependency: libwebsockets not found")
+endif ()

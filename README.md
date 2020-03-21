@@ -37,8 +37,8 @@ Then run
 ```bash
 mkdir build_jobs_msvc
 cd build_jobs_msvc
-# run cmake
-cmake [SOURCE PATH] -G "Visual Studio ... Win64" -DLIBUV_ROOT=[LIBUV INSTALL PATH] -DOPENSSL_ROOT=[OPENSSL INSTALL PATH] -DPROJECT_ENABLE_UNITTEST=YES -DPROJECT_ENABLE_SAMPLE=YES -DPROJECT_ENABLE_TOOLS=YES ...
+# run cmake with vcpkg
+cmake [SOURCE PATH] -G "Visual Studio 16 2019" -A x64 "-DCMAKE_TOOLCHAIN_FILE=<VCPKG_INSTALL_DIR>/scripts/buildsystems/vcpkg.cmake" -DPROJECT_ENABLE_UNITTEST=YES -DPROJECT_ENABLE_SAMPLE=YES -DPROJECT_ENABLE_TOOLS=YES ...
 
 cd build_jobs_msvc
 
@@ -49,8 +49,10 @@ Please see [3rd_party](3rd_party) to see which libraries is required.
 ## Build on Unix like system
 ```bash
 # auto setup cmake
+bash cmake_dev.sh [options] ...
 
-sh cmake_dev.sh [options] ...
+# auto setup cmake with openssl, unit test , sample and tools
+bash ./cmake_dev.sh -lus -- -DCRYPTO_USE_OPENSSL=YES
 
 # we will generate directory build_jobs_$(basename $(uname -s)) for build and place publish directory
 cd build_jobs_*
