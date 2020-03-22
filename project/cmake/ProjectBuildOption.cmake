@@ -18,3 +18,4 @@ set(PROJECT_RPC_DB_BUFFER_LENGTH 262144 CACHE STRING "DB package buffer length, 
 set(ATFRAME_GATEWAY_MACRO_DATA_SMALL_SIZE 3072 CACHE STRING "small message buffer for atgateway connection(used to reduce memory copy when there are many small messages)")
 
 option(PROJECT_RESET_DENPEND_REPOSITORIES "Reset depended repositories if it's already exists." OFF)
+option(PROJECT_GIT_CLONE_REMOTE_ORIGIN_DISABLE_SSH "Do not try to use ssh url when clone dependency." OFF)
