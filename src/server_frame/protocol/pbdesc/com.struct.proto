@@ -1,0 +1,118 @@
+syntax = "proto3";
+
+import "com.const.proto";
+
+package hello;
+
+// 登录用户终端信息
+message DClientDeviceInfo {
+    uint32 system_id        = 1;  // EnSystemID
+    string client_version   = 2;  // 客户端版本号
+    string system_software  = 3;  // 移动终端操作系统版本
+    string system_hardware  = 4;  // 移动终端机型
+    string telecom_operator = 5;  // 运营商
+    string network          = 6;  // WIFI/3G/2G
+    uint32 reg_channel      = 7;  // 注册渠道
+    uint32 screen_width     = 8;  // 显示屏宽度
+    uint32 screen_hight     = 9;  // ScreenHight
+    float  density          = 10; // 像素密度
+    string cpu_info         = 11; // 类型#核数#频率
+    uint32 memory           = 12; // 内存信息单位M
+    string glrender         = 13; // opengl render信息
+    string glversion        = 14; // opengl版本信息
+    string channel          = 15; // 登录渠道
+    string device_id        = 16; // 设备ID
+    uint32 version          = 17; // 客户端数字版本号
+}
+
+message DAppleGameCenter {
+    // 一个都不能少
+    string player_id           = 1; //
+    string public_key_url      = 2; //
+    string signature           = 3; //
+    string encoded_signed_data = 4; // 由player_id and salt and bundle_id and timestamp生成
+    string salt                = 5; //
+    string bundle_id           = 6; //
+    int64  timestamp           = 7; //
+}
+
+// 平台信息
+message DAccountData {
+    uint32 account_type = 1; // 平台类型 EnAccountTypeID
+    string access       = 2; // 授权码（内置账户的话就是密码的hash值，OAuth的话就是access token）
+    uint32 channel_id   = 3; // 渠道ID（某些品太需要区分认证体系以外的渠道号） @see EnPlatformChannelID
+}
+
+message DUpdateData {
+    int32  result  = 1;
+    int32  version = 2;
+    string url     = 3;
+}
+
+// 更新信息
+message DClientUpdateCfg {
+    int32  result  = 1; // @ENUpdateType
+    string cdn_url = 2; // 网址前缀
+
+    DUpdateData res_data = 3; // 资源包
+    DUpdateData app_data = 4; // app包
+}
+
+// 用户profile
+message DPlayerProfile {
+    string open_id   = 1;
+    uint64 user_id   = 2;
+    string nick_name = 3;
+    string logo_url  = 4;
+    bool   sex       = 5; // true男, false女
+}
+
+// 用户profile
+message DPlayerStat {
+    int64 register_time   = 1; // 注册时间
+    int64 last_login_time = 2; // 注册时间
+}
+
+// 用户数据
+message DPlayerInfo {
+    DPlayerProfile player       = 1;
+    uint32         player_level = 2; // 玩家（主城）等级
+    DPlayerStat    player_stat  = 4;
+}
+
+// 用户自定义选项
+message DPlayerOptions {}
+
+/////////////////////////////////////////////////////////////////////////
+// 好友数据
+/////////////////////////////////////////////////////////////////////////
+
+// 用户好友礼物数据
+
+// 用户好友赠送记录
+
+// 用户好友礼物控制选项
+
+// 用户新手选项数据
+
+// 用户处罚禁止选项
+
+// 用户选项
+
+// 用户排行相关数据
+
+// 用户好友数据
+
+// 好友关卡信息
+
+// 好友缓存数据
+
+// 用户好友数据
+
+// ====================== 角色人物相关数据 ======================
+// 道具数据
+message DItem {
+    uint32 type_id = 1;
+    uint32 number  = 2;
+    uint32 value   = 3; // 自定义值
+}

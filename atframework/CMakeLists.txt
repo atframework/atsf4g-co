@@ -1,5 +1,9 @@
 # 基本框架程序
-add_subdirectory(${ATFRAME_UTILS_ROOT})
+if(TARGET ${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME})
+    message(STATUS "[atframework] ${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME} already exist, use it directly.")
+else()
+    add_subdirectory(${ATFRAME_UTILS_ROOT})
+endif()
 add_subdirectory(${LIBATBUS_ROOT})
 add_subdirectory(${LIBATAPP_ROOT})
 

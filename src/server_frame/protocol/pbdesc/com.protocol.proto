@@ -1,0 +1,140 @@
+syntax = "proto3";
+// 前后台通信协议定义
+
+// import "com.const.proto";
+import "com.struct.proto";
+
+package hello;
+
+/////////////////////////////////////////////////////
+// 到loginsvr的CS协议
+/////////////////////////////////////////////////////
+
+message CSLoginUpdateReq {
+    DAccountData account          = 1;  // 平台信息
+    int32        platform_type    = 2;  // 系统id，ios or android
+    string       package_version  = 11; // 包版本
+    string       resource_version = 12; // 资源版本
+    string       protocol_version = 13; // 协议版本
+}
+
+message SCLoginUpdateRsp {
+    DClientUpdateCfg update_info  = 1; // 更新信息
+    int32            version_type = 2; // 版本类型 @EnVersionType
+}
+
+
+message CSLoginAuthReq {
+    string       open_id          = 1;
+    DAccountData account          = 2;  // 平台信息
+    int32        platform_type    = 3;  // 系统id，ios or android
+    string       package_version  = 11; // 包版本
+    string       resource_version = 12; // 资源版本
+    string       protocol_version = 13; // 协议版本
+
+    DClientDeviceInfo client_info = 21;
+}
+
+message SCLoginAuthRsp {
+    string login_code = 1;
+    // repeated 表示有多个备选 。域名|IP + 端口, 类似下面的形式：10.164.1.54:8002 or dd.qq.com:8080
+    repeated string  login_address = 2;
+    DClientUpdateCfg update_info   = 3; // 更新信息
+    uint32           version_type  = 4; // 版本类型 @EnVersionType
+
+    string open_id       = 21; // 最终open_id
+    uint64 user_id       = 22; // 玩家数字ID
+    bool   is_new_player = 23; // 是否是新玩家
+    uint32 zone_id       = 24; // 大区ID
+
+    int64 ban_time   = 101; // 封号期限
+    int64 start_time = 102; // 开服时间
+}
+
+// 修改密码
+message CSAccessUpdateReq {
+    string open_id    = 1;
+    uint64 user_id    = 2; // 玩家数字ID
+    string old_access = 3; // 老密码
+    string new_access = 4;
+}
+
+message SCAccessUpdateRsp {}
+
+////////////////////////////////////////////////////////
+// 到gamesvr的CS协议
+////////////////////////////////////////////////////////
+
+// 登录请求
+message CSLoginReq {
+    string            login_code  = 1; // loginsvr下发的登录码
+    string            open_id     = 2;
+    uint64            user_id     = 3; // 玩家数字ID
+    DAccountData      account     = 4; // 平台信息
+    DClientDeviceInfo client_info = 11;
+}
+
+// 登录返回
+message SCLoginRsp {
+    int32 last_sequence      = 1; // 上次收包的seq(不算MCSLogin)
+    int64 heartbeat_interval = 2; // 心跳包间隔
+    bool  is_new_player      = 3; // 是否是新玩家
+    int32 version_type       = 4; // 版本类型 @EnVersionType
+    int32 zone_id            = 5; // 大区ID
+}
+
+message SCPlayerProfileSyn { DPlayerProfile player = 1; }
+
+// 心跳包，上行包
+message CSPingReq {}
+
+// 心跳包，下行包
+message SCPongRsp {}
+
+// 请求用户数据
+message CSPlayerGetInfoReq {
+    bool need_player_info    = 1; // 标记为true 回包才有会有玩家基本数据
+    bool need_player_options = 2; // 标记为true 回包才有会有玩家选项数据
+}
+
+// 用户数据返回
+message SCPlayerGetInfoRsp {
+    DPlayerInfo    player_info    = 1; // 玩家数据
+    DPlayerOptions player_options = 2; // 玩家自定义选项
+}
+
+// 协议包头
+message CSMsgHead {
+    // 通用结构
+    int32  error_code = 1;
+    int64  timestamp  = 2; // lua 5.3 才开始支持int64
+    uint32 sequence   = 3;
+
+    // 通道和任务信息
+    uint64 session_bus_id = 11;
+    uint64 session_id     = 12;
+}
+
+// 协议包体
+message CSMsgBody {
+    oneof body_oneof {
+        CSLoginAuthReq mcs_login_auth_req = 1001;
+        SCLoginAuthRsp msc_login_auth_rsp = 1002;
+
+        CSLoginReq        mcs_login_req         = 1003;
+        SCLoginRsp        msc_login_rsp         = 1004;
+        CSPingReq         mcs_ping_req          = 1005;
+        SCPongRsp         msc_pong_rsp          = 1006;
+        CSAccessUpdateReq mcs_access_update_req = 1007;
+        SCAccessUpdateRsp msc_access_update_rsp = 1008;
+
+        CSPlayerGetInfoReq mcs_player_getinfo_req = 1011;
+        SCPlayerGetInfoRsp msc_player_getinfo_rsp = 1012;
+    }
+}
+
+// 协议包
+message CSMsg {
+    CSMsgHead head = 1;
+    CSMsgBody body = 2;
+}

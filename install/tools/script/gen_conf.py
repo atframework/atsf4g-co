@@ -56,7 +56,7 @@ if __name__ == '__main__':
             script_template_dir, 
             os.path.join(project_template_dir, 'custom')
         ], 
-        module_directory=os.path.join(script_dir, '.mako_modules'),
+        module_directory=os.path.join(script_dir, '.mako_modules-{0}.{1}.{2}'.format(sys.version_info[0], sys.version_info[1], sys.version_info[2])),
         input_encoding='utf-8'
     )
     project.set_templete_engine(project_lookup)
@@ -233,7 +233,7 @@ fi
     # custom global rules
     project_install_abs_path = os.path.normpath(os.path.join(script_dir, '..', '..'))
     for custom_global_rule_file in glob.glob(os.path.join(script_dir, 'helper', 'custom_global_rules', '*')):
-        if os.path.exists(custom_global_rule_file): # ×Ô¶¨ÒåÈ«¾ÖÄ£°åÁÐ±í
+        if os.path.exists(custom_global_rule_file): # 自定义全局模板列表
             rules_data = project.render_string(
                 codecs.open(custom_global_rule_file, mode='r', encoding='utf-8').read()
             )

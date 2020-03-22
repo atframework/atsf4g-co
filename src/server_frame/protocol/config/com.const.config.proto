@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package hello.config;
+
+// 常量类型
+enum game_const_config {
+    // option allow_alias               = true;
+    EN_GCC_UNKNOWN                   = 0;
+    EN_GCC_PERCENT_BASE              = 1000;     // 所有比例都是千分率
+    EN_GCC_RESOURCE_MAX_LIMIT        = 99999999; // 资源限制
+    EN_GCC_LEVEL_LIMIT               = 999;      // 最大等级限制
+    EN_GCC_ACTIVATION_CODE_PERMANENT = 64;       // 永久生效的激活码最大批次
+    EN_GCC_START_PLAYER_ID           = 10000;    // start id for alloc player id
+}
+
+// GUID类型
+enum global_unique_id_type {
+    EN_GUIT_SHARED    = 0; // 共享的全局ID
+    EN_GUIT_PLAYER_ID = 1; // 用户玩家ID分配
+}

@@ -1,0 +1,83 @@
+﻿# ============ simulator - [...] ============
+get_filename_component(SIMULATOR_SRC_BIN_NAME ${CMAKE_CURRENT_LIST_DIR} NAME_WE)
+set(SIMULATOR_SRC_BIN_NAME "${SIMULATOR_SRC_BIN_NAME}-cli")
+EchoWithColor(COLOR GREEN "-- Configure ${SIMULATOR_SRC_BIN_NAME} on ${CMAKE_CURRENT_LIST_DIR}")
+
+aux_source_directory(${CMAKE_CURRENT_LIST_DIR} SIMULATOR_SRC_LIST)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/tools/simulator/bin")
+file(MAKE_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/tools/simulator/bin")
+
+unset(SIMULATOR_PRIVATE_DEFINITIONS)
+unset(SIMULATOR_PRIVATE_LINK_NAMES)
+unset(SIMULATOR_PRIVATE_INCLUDE_DIRS)
+
+
+set(SRC_LIST "${CMAKE_CURRENT_LIST_DIR}/main.cpp")
+# build libserver_frame.so
+file(GLOB SRC_LIST_LIBSIMULATOR_UV
+    ${CMAKE_CURRENT_LIST_DIR}/libsimulator_uv/*.h
+    ${CMAKE_CURRENT_LIST_DIR}/libsimulator_uv/*.c
+    ${CMAKE_CURRENT_LIST_DIR}/libsimulator_uv/*.cpp
+)
+list(APPEND SRC_LIST ${SRC_LIST_LIBSIMULATOR_UV})
+
+file(GLOB SRC_LIST_UTILITY
+    ${CMAKE_CURRENT_LIST_DIR}/utility/*.h
+    ${CMAKE_CURRENT_LIST_DIR}/utility/*.cpp
+)
+list(APPEND SRC_LIST ${SRC_LIST_UTILITY})
+
+file(GLOB_RECURSE SRC_LIST_PROTO
+    ${CMAKE_CURRENT_LIST_DIR}/proto/*.h
+    ${CMAKE_CURRENT_LIST_DIR}/proto/*.cpp
+)
+list(APPEND SRC_LIST ${SRC_LIST_PROTO})
+
+# these service will use atgateway protocol
+list(APPEND SIMULATOR_PRIVATE_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR} "${CMAKE_CURRENT_LIST_DIR}/libsimulator_uv")
+
+if (TARGET lua)
+    list(APPEND SIMULATOR_PRIVATE_LINK_NAMES lua)
+    list(APPEND SIMULATOR_PRIVATE_DEFINITIONS SIMULATOR_ENABLE_LUA=1)
+elseif (LUA_FOUND)
+    list(APPEND SIMULATOR_PRIVATE_DEFINITIONS SIMULATOR_ENABLE_LUA=1)
+    if (3RD_PARTY_LUA_INC_DIR)
+        list(APPEND SIMULATOR_PRIVATE_INCLUDE_DIRS ${3RD_PARTY_LUA_INC_DIR})
+    endif ()
+
+    if (3RD_PARTY_LUA_LINK_NAME)
+        list(APPEND SIMULATOR_PRIVATE_LINK_NAMES ${3RD_PARTY_LUA_LINK_NAME})
+    endif ()
+endif ()
+
+if (TARGET lua OR LUA_FOUND)
+    EchoWithColor(COLOR GREEN "-- Install: Copy ${CMAKE_CURRENT_LIST_DIR}/lua/lua ...")
+    file(
+        COPY "${CMAKE_CURRENT_LIST_DIR}/lua/lua"
+        DESTINATION "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/lua"
+        USE_SOURCE_PERMISSIONS
+    )
+endif ()
+
+source_group_by_dir(SRC_LIST)
+
+add_executable(${SIMULATOR_SRC_BIN_NAME}
+    ${SRC_LIST}
+)
+
+target_link_libraries(${SIMULATOR_SRC_BIN_NAME}
+    ${PROJECT_SERVER_FRAME_LIB_LINK}
+    ${EXPORT_LIBATGW_INNER_V1_C_BIN_NAME}
+    ${SIMULATOR_PRIVATE_LINK_NAMES}
+)
+
+if (SIMULATOR_PRIVATE_DEFINITIONS)
+    target_compile_definitions(${SIMULATOR_SRC_BIN_NAME}
+        PRIVATE ${SIMULATOR_PRIVATE_DEFINITIONS}
+    )
+endif ()
+
+target_include_directories(${ATSF4G_APP_NAME} 
+    PRIVATE 
+        "$<BUILD_INTERFACE:${SIMULATOR_PRIVATE_INCLUDE_DIRS}>"
+)

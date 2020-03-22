@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+// 后台协议常量定义
+
+import "extensions_error_code.proto";
+
+package hello.err;
+
+enum EnSysErrorType {
+    EN_SUCCESS = 0 [ (error_code.description) = "成功" ];
+
+    EN_SYS_UNKNOWN = -1
+                     [(error_code.description) = "未知异常"];
+
+
+    EN_SYS_PARAM       = -1000001 [(error_code.description) = "参数错误"];
+    EN_SYS_INIT        = -1000002 [(error_code.description) = "初始化错误"];
+    EN_SYS_MALLOC      = -1000003 [(error_code.description) = "分配失败"];
+    EN_SYS_NOTFOUND    = -1000004 [(error_code.description) = "Not Found"];
+    EN_SYS_BUFF_EXTEND = -1000005 [(error_code.description) = "缓冲区大小超过限制"];
+    EN_SYS_BUSY        = -1000006 [(error_code.description) = "正忙"];
+    EN_SYS_TIMEOUT     = -1000007 [(error_code.description) = "操作超时"];
+    EN_SYS_PACK        = -1000008 [(error_code.description) = "打包失败"];
+    EN_SYS_UNPACK      = -1000009 [(error_code.description) = "解包失败"];
+
+    EN_SYS_RPC_CALL = -1000021
+                      [(error_code.description) = "通用调用错误"];
+    EN_SYS_RPC_NO_TASK = -1000022
+                         [(error_code.description) = "不在协程任务中"];
+    EN_SYS_RPC_SEND_FAILED = -1000023
+                             [(error_code.description) = "发送消息失败"];
+    EN_SYS_RPC_TASK_EXITING = -1000024
+                              [(error_code.description) = "协程任务正在退出"];
+    EN_SYS_RPC_TASK_NOT_FOUND = -1000025
+                                [(error_code.description) = "找不到该协程任务"];
+    EN_SYS_RPC_TASK_KILLED = -1000026
+                                [(error_code.description) = "协程任务被强制关闭"];
+    EN_SYS_RPC_TASK_CANCELLED = -1000027
+                                [(error_code.description) = "协程任务被取消"];
+    EN_SYS_SIGN_VERIFY = -1000031
+                         [(error_code.description) = "签名校检失败"];
+
+    EN_ROUTER_NOT_FOUND = -10000081
+                          [(error_code.description) = "路由信息找不到"];
+    EN_ROUTER_TTL_EXTEND = -10000082
+                           [(error_code.description) = "TTL超出限制"];
+    EN_ROUTER_NOT_IN_SERVER = -10000083
+                              [(error_code.description) = "不在任何节点上"];
+    EN_ROUTER_TYPE_INVALID = -10000084
+                             [(error_code.description) = "路由数据类型未被注册"];
+    EN_ROUTER_TYPE_CONFLICT = -10000085
+                              [(error_code.description) = "路由数据类型已经被注册"];
+    EN_ROUTER_NOT_WRITABLE = -10000086
+                             [(error_code.description) = "不可写(不是实体)"];
+    EN_ROUTER_IN_OTHER_SERVER = -10000087
+                                [(error_code.description) = "在其他节点上"];
+    EN_ROUTER_TRANSFER = -10000088
+                         [(error_code.description) = "转移失败"];
+    EN_ROUTER_CLOSING = -10000089
+                         [(error_code.description) = "路由系统正在关闭"];
+    EN_ROUTER_ACCESS_DENY = -10000090
+                         [(error_code.description) = "路由对象的操作被禁止"];
+
+    EN_DB_RECORD_NOT_FOUND = -1000101;
+    EN_DB_SEND_FAILED      = -1000102;
+    EN_DB_OLD_VERSION      = -1000103
+                        [(error_code.description) = "CAS数据已经过期"];
+    EN_DB_REPLY_ERROR = -1000104
+                        [(error_code.description) = "数据库返回错误信息"];
+    EN_DB_KEY_EXISTS = -1000105
+                       [(error_code.description) = "key已经存在"];
+    EN_DB_OPERATION_ERROR = -1000106
+                            [(error_code.description) = "数据库返回错误"];
+
+    EN_MSG_PACK_NOT_ENOUGH = -1000201;
+    EN_MSG_PARSE_FAIL      = -1000202;
+
+    EN_PLAYER_KICKOUT = -1001001
+                        [(error_code.description) = "踢出用户失败"];
+}

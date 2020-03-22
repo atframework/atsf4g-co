@@ -11,6 +11,8 @@
 
 #include <uv.h>
 
+#include <libatbus_protocol.h>
+
 #include <common/file_system.h>
 #include <common/string_oprs.h>
 #include <log/log_wrapper.h>

@@ -1,0 +1,55 @@
+syntax = "proto3";
+// 后台数据结构定义
+
+import "com.struct.proto";
+
+package hello;
+
+message table_simple_info {
+    string msg_str = 1;
+    int32  msg_i32 = 2;
+    uint32 msg_u32 = 3;
+    int64  msg_i64 = 4;
+    uint64 msg_u64 = 5;
+
+    repeated string arr_str = 6;
+    repeated int32 arr_i32  = 7;
+    repeated uint32 arr_u32 = 8;
+    repeated int64 arr_i64  = 9;
+    repeated uint64 arr_u64 = 10;
+}
+
+message client_session_index {
+    uint64 bus_id     = 1;
+    uint64 session_id = 2;
+}
+
+message account_information {
+    uint32         account_type = 1;  // @see EnAccountTypeID
+    string         access       = 11; // 可能有的属性（【上一次的】校验码）
+    DPlayerProfile profile      = 31; // 用户账号属性
+    uint32         channel_id   = 36; // 渠道号
+    int32          version_type = 37; // 上一次的登入版本类型 @EnVersionType
+}
+
+// 账号异常数据
+message account_except {
+    int64  last_except_time = 1; // 上一次异常时间
+    uint32 except_con_times = 2; // 短时间内异常计数
+
+    uint32 except_sum_times = 21; // 总异常计数
+}
+
+// 登入数据记录
+message login_record {
+    uint32 gamesvr_index   = 1; // 上一次登入放入gamesvr的索引
+    uint32 gamesvr_version = 2; // Gamesvr组版本号
+}
+
+message player_data {
+    uint32 player_level = 1; // 玩家等级
+}
+
+message player_options {
+    DPlayerOptions custom_options = 1; // 用户自定义选项
+}

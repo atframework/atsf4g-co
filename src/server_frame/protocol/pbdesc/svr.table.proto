@@ -1,0 +1,59 @@
+syntax = "proto3";
+// 前后台共用数据结构定义
+
+import "com.struct.proto";
+import "svr.struct.proto";
+
+package hello;
+
+message table_login {
+    string open_id          = 1;
+    uint64 user_id          = 2;
+    uint32 zone_id          = 3;
+    uint64 router_server_id = 4; // 路由系统 - 登入进程id
+    uint64 router_version   = 5; // 路由系统 - 登入进程变更版本号
+
+    // 登入信息
+    int64  login_time         = 12; // 上次登入时间
+    string login_code         = 13; // 认证码
+    int64  login_code_expired = 14; // 认证码到期时间
+    int64  logout_time        = 15; // 登出时间
+
+    // 限制登入信息
+    int64 ban_time = 21; // 封号期限
+
+    // 注册信息
+    int64 register_time = 31; // 注册时间
+
+    account_information account    = 41; // 账号信息
+    login_record        last_login = 42; // 上次登入的信息
+    account_except      except     = 43; // 账户异常数据
+
+    // 统计数据
+    uint32 stat_login_total_times   = 51; // 总登入次数
+    uint32 stat_login_success_times = 52; // 成功登入次数
+    uint32 stat_login_failed_times  = 53; // 失败登入次数
+}
+
+message table_user {
+    string open_id = 1;
+    uint64 user_id = 2;
+    uint32 zone_id = 3;
+
+    account_information account      = 11; // 账号信息
+    player_data         player       = 12; // 玩家数据
+    uint32              data_version = 13; // 数据版本号
+
+    player_options options = 21; // 玩家选项
+}
+
+message table_all_message {
+    uint64 bus_id      = 1; // 用于恢复协程的BusID
+    uint64 dst_task_id = 2; // 用于恢复协程的任务ID
+    int32  error_code  = 3; // 用于恢复协程的透传解包层错误码
+
+    table_login       login   = 11;
+    table_user        user    = 12;
+    string            version = 13; //透传版本
+    table_simple_info simple  = 14; //简单数据类型
+}

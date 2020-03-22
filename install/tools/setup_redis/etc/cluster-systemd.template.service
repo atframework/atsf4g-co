@@ -1,0 +1,15 @@
+[Unit]
+Description=redis services - cluster REDIS_INST_ID
+After=syslog.target network.target
+
+[Service]
+Type=forking
+PIDFile=/var/run/redis-cluster-REDIS_INST_ID.pid
+ExecStart=REDIS_PREFIX_DIR/bin/redis-server REDIS_PREFIX_DIR/etc/cluster-REDIS_INST_ID/redis.conf
+ExecStop=/bin/kill -s QUIT $MAINPID
+PrivateTmp=true
+Restart=on-failure
+SuccessExitStatus=SIGTERM
+
+[Install]
+WantedBy=multi-user.target

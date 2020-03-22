@@ -1,4 +1,5 @@
 #!/bin/bash
+#!/usr/bin/env bash
 
 SYS_NAME="$(uname -s)";
 SYS_NAME="$(basename $SYS_NAME)";
@@ -8,6 +9,14 @@ CCACHE="$(which ccache)";
 DISTCC="";
 if [ ! -z "$DISTCC_HOSTS" ]; then
     DISTCC="$(which distcc 2>/dev/null)";
+fi
+
+NINJA_BIN="$(which ninja 2>&1)";
+if [ $? -ne 0 ]; then
+    NINJA_BIN="$(which ninja-build 2>&1)";
+    if [ $? -ne 0 ]; then
+        NINJA_BIN="";
+    fi
 fi
 
 CMAKE_OPTIONS="";
@@ -150,7 +159,9 @@ else
     CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX";
 fi
 
-if [ "$CHECK_MSYS" == "mingw" ]; then
+if [ "x$NINJA_BIN" != "x" ]; then
+    cmake .. -G Ninja -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE -DRAPIDJSON_ROOT=$SCRIPT_DIR/3rd_party/rapidjson/repo $CMAKE_OPTIONS "$@";
+elif [ "$CHECK_MSYS" == "mingw" ]; then
     cmake .. -G "MSYS Makefiles" -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE -DRAPIDJSON_ROOT=$SCRIPT_DIR/3rd_party/rapidjson/repo $CMAKE_OPTIONS "$@";
 else
     cmake .. -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE -DRAPIDJSON_ROOT=$SCRIPT_DIR/3rd_party/rapidjson/repo $CMAKE_OPTIONS "$@";

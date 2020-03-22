@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+// 后台协议常量定义
+
+package hello;
+
+enum EnSystemLimit {
+    // option allow_alias   = true;
+    EN_SL_NONE           = 0;
+    EN_SL_MAX_SS_MSG_LEN = 65536;
+}

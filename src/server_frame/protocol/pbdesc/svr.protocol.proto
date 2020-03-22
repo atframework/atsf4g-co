@@ -1,0 +1,103 @@
+syntax = "proto3";
+
+// 后台通信协议定义
+
+import "com.struct.proto";
+import "svr.struct.proto";
+
+package hello;
+
+/////////////////////////////////////////////////////
+////  此处开始是登入相关协议
+/////////////////////////////////////////////////////
+message SSPlayerKickOffReq {
+    uint32 reason    = 1; // 原因
+    string gm_reason = 2; // 原因
+}
+
+message SSPlayerKickOffRsp {}
+
+/////////////////////////////////////////////////////
+////  登入相关协议到此结束
+/////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////
+////  此处开始是外部接入支持的协议
+/////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////
+////  外部接入支持的协议到此结束
+/////////////////////////////////////////////////////
+
+
+/////////////////////////////////////////////////////
+////  此处开始是对象路由系统协议协议
+/////////////////////////////////////////////////////
+enum EnRouterObjectType {
+    EN_ROT_INVALID = 0;
+    EN_ROT_PLAYER  = 1;
+}
+
+message SSRouterHead {
+    uint64 router_src_bus_id = 1; // 路由协议原始发起者的BUS ID
+    uint64 router_version    = 2;
+
+    int32 message_type = 11; // 消息的body_case缓存
+    // 因为如果发生消息转发则不需要解析body内容，所以这里缓存body_case以便知道要启用哪一个task
+
+    // 路由对象信息
+    uint32 object_type_id = 21; // 每种路由对象都要有自己的类型ID（router_manager_set根据这个来区分走哪个路由对象管理器）
+    uint64 object_inst_id = 22; // 每个路由对象的唯一实例ID
+    uint32 object_zone_id = 23; // 每个路由对象的大区ID
+}
+
+// 路由表更新通知
+message SSRouterUpdateSync { SSRouterHead object = 1; }
+
+// 路由对象转移请求
+message SSRouterTransferReq { SSRouterHead object = 1; }
+message SSRouterTransferRsp {}
+
+/////////////////////////////////////////////////////
+////  对象路由系统协议到此结束
+/////////////////////////////////////////////////////
+
+// 协议包头
+message SSMsgHead {
+    // 通用数据
+    int32  error_code = 1;
+    int64  timestamp  = 2;
+    uint32 sequence   = 3;
+
+    // 通道和任务信息
+    uint64 bus_id      = 11;
+    uint64 src_task_id = 12;
+    uint64 dst_task_id = 13;
+
+    // 路由系统信息
+    SSRouterHead router = 21;
+
+    // 玩家标识
+    uint64 player_user_id = 101; // 如果涉及玩家此项必需
+    string player_open_id = 102; // 此项可选
+    uint32 player_zone_id = 103; // 如果涉及玩家此项必需
+}
+
+// 协议包体
+message SSMsgBody {
+    oneof body_oneof {
+        SSRouterUpdateSync  mss_router_update_sync  = 1001; // 路由表更新通知
+        SSRouterTransferReq mss_router_transfer_req = 1003; // 路由对象转移请求
+        SSRouterTransferRsp mss_router_transfer_rsp = 1004; // 路由对象转移回包
+
+        SSPlayerKickOffReq mss_player_kickoff_req = 2001;
+        SSPlayerKickOffRsp mss_player_kickoff_rsp = 2002;
+    }
+}
+
+// 协议包
+message SSMsg {
+    SSMsgHead head     = 1;
+    SSMsgBody body     = 2;
+    bytes     body_bin = 3;
+}
