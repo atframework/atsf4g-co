@@ -45,7 +45,7 @@ if (NOT MSVC)
         set (3RD_PARTY_JEMALLOC_INC_DIR ${Jemalloc_INCLUDE_DIRS})
         set (3RD_PARTY_JEMALLOC_LIB_DIR ${Jemalloc_LIBRARY_DIRS})
 
-        include_directories(${3RD_PARTY_JEMALLOC_INC_DIR})
+        list(APPEND 3RD_PARTY_PUBLIC_INCLUDE_DIRS ${3RD_PARTY_JEMALLOC_INC_DIR})
 
         file(GLOB 3RD_PARTY_JEMALLOC_ALL_LIB_FILES  
             "${3RD_PARTY_JEMALLOC_LIB_DIR}/libjemalloc*.so*"
