@@ -1,4 +1,4 @@
-#include <sstream>
+﻿#include <sstream>
 #include <vector>
 
 #include <config/compiler/template_prefix.h>

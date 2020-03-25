@@ -62,6 +62,10 @@
 /3rd_party/openssl/pkg
 /3rd_party/openssl/prebuilt
 
+## mbedtls
+/3rd_party/mbedtls/pkg
+/3rd_party/mbedtls/prebuilt
+
 ## zlib
 /3rd_party/zlib/pkg
 /3rd_party/zlib/prebuilt

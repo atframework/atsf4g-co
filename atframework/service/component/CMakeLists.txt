@@ -36,6 +36,7 @@ target_compile_options(${ATSF4G_APP_NAME}
 
 target_include_directories(${ATSF4G_APP_NAME} 
     PUBLIC 
+        "$<BUILD_INTERFACE:${3RD_PARTY_PUBLIC_INCLUDE_DIRS}>"
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>"
 )
 
