@@ -65,7 +65,7 @@ namespace rpc {
                     return hello::err::EN_SYS_PARAM;
                 }
 
-                if (resume_data->message.msg_type == check_type) {
+                if (resume_data->message.msg_type != check_type) {
                     WLOGERROR("task %llu resume and expect message type 0x%llx but real is 0x%llx", 
                         static_cast<unsigned long long>(task->get_id()),
                         static_cast<unsigned long long>(check_type),
