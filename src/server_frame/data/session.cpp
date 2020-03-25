@@ -59,7 +59,7 @@ int32_t session::send_msg_to_client(hello::CSMsg &msg) {
             return send_msg_to_client(msg, user->alloc_session_sequence());
         }
     }
-    return send_msg_to_client(msg, 0);
+    return send_msg_to_client(msg, msg.head().session_sequence());
 }
 
 int32_t session::send_msg_to_client(hello::CSMsg &msg, uint64_t session_sequence) {
