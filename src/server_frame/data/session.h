@@ -53,6 +53,7 @@ public:
 
     // 下行post包
     int32_t send_msg_to_client(hello::CSMsg &msg);
+    int32_t send_msg_to_client(hello::CSMsg &msg, uint64_t session_sequence);
 
     int32_t send_msg_to_client(const void *msg_data, size_t msg_size);
 

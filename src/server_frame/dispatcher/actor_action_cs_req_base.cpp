@@ -79,7 +79,7 @@ void actor_action_cs_req_base::send_rsp_msg() {
 
     player_cache::ptr_t owner_player = sess->get_player();
 
-    uint32_t seq = 0;
+    uint64_t seq = 0;
     {
         msg_ref_type req_msg = get_request();
         if (req_msg.has_head()) {

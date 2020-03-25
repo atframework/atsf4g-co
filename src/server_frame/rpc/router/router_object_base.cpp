@@ -1,4 +1,4 @@
-//
+﻿//
 // Created by owent on 2018/05/01.
 //
 
@@ -59,7 +59,7 @@ namespace rpc {
 
                 hello::SSMsg rsp_msg;
                 // 协程操作
-                res = rpc::wait(rsp_msg);
+                res = rpc::wait(rsp_msg, req_msg.head().sequence());
                 if (res < 0) {
                     return res;
                 }

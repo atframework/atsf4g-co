@@ -16,14 +16,22 @@
 
 #include "ss_msg_dispatcher.h"
 
+#include <config/compiler/protobuf_prefix.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/pbdesc/svr.protocol.pb.h>
+#include <protocol/pbdesc/svr.const.pb.h>
+#include <config/compiler/protobuf_suffix.h>
+
 #include <utility/protobuf_mini_dumper.h>
 
-ss_msg_dispatcher::ss_msg_dispatcher() {}
+ss_msg_dispatcher::ss_msg_dispatcher() : sequence_allocator_(0) {}
 ss_msg_dispatcher::~ss_msg_dispatcher() {}
 
-int32_t ss_msg_dispatcher::init() { return 0; }
+int32_t ss_msg_dispatcher::init() { 
+    sequence_allocator_ = static_cast<uint64_t>((util::time::time_utility::get_sys_now() - hello::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET) << 23) + 
+        static_cast<uint64_t>(util::time::time_utility::get_now_usec() << 3);
+    return 0; 
+}
 
 uint64_t ss_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
     hello::SSMsg *real_msg = get_protobuf_msg<hello::SSMsg>(raw_msg);
@@ -49,7 +57,10 @@ ss_msg_dispatcher::msg_type_t ss_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw
     return static_cast<msg_type_t>(real_msg->body().body_oneof_case());
 }
 
-int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, const hello::SSMsg &ss_msg) {
+int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, hello::SSMsg &ss_msg) {
+    if (0 == ss_msg.head().sequence()) {
+        ss_msg.mutable_head()->set_sequence(allocate_sequence());
+    }
 
     size_t msg_buf_len = ss_msg.ByteSizeLong();
     size_t tls_buf_len = atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);
@@ -125,7 +136,7 @@ int32_t ss_msg_dispatcher::dispatch(const atbus::protocol::msg &msg, const void 
     }
     ss_msg.mutable_head()->set_bus_id(from_server_id);
 
-    ret = on_recv_msg(callback_data.message, callback_data.private_data);
+    ret = on_recv_msg(callback_data.message, callback_data.private_data, ss_msg.head().sequence());
     if (ret < 0) {
         WLOGERROR("%s dispatch message from 0x%llx failed, res: %d", name(), static_cast<unsigned long long>(from_server_id), ret);
     }
@@ -171,11 +182,15 @@ int32_t ss_msg_dispatcher::on_receive_send_data_response(const atbus::protocol::
         ss_msg.mutable_head()->set_src_task_id(0);
         ss_msg.mutable_head()->set_error_code(hello::err::EN_SYS_RPC_SEND_FAILED);
 
-        ret = on_send_msg_failed(callback_data.message, msg.head().ret());
+        ret = on_send_msg_failed(callback_data.message, msg.head().ret(), msg.head().sequence());
         if (ret < 0) {
             WLOGERROR("%s dispatch on_send_msg_failed to 0x%llx failed, res: %d", name(), static_cast<unsigned long long>(fwd_data->to()), ret);
         }
     }
 
     return ret;
+}
+
+uint64_t ss_msg_dispatcher::allocate_sequence() {
+    return ++ sequence_allocator_;
 }

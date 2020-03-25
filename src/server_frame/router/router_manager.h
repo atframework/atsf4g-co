@@ -344,8 +344,13 @@ public:
                 std::list<hello::SSMsg> all_msgs;
                 all_msgs.swap(obj->get_transfer_pending_list());
 
+                uint64_t rpc_sequence;
                 for (hello::SSMsg &msg : all_msgs) {
-                    int res = send_msg_raw(*obj, msg);
+#if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
+                    int res = send_msg_raw(*obj, std::move(msg), rpc_sequence);
+#else
+                    int res = send_msg_raw(*obj, msg, rpc_sequence);
+#endif
                     if (res < 0) {
                         WLOGERROR("transfer router object (type=%u,zone_id=%u) 0x%llx message failed, res: %d", get_type_id(), 
                             obj->get_key().zone_id, obj->get_key().object_id_ull(), res);

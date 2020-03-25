@@ -33,6 +33,7 @@
 struct db_async_data_t {
     uint64_t task_id;
     uint64_t bus_id;
+    uint64_t sequence;
 
     redisReply *                   response;
     db_msg_dispatcher::unpack_fn_t unpack_fn;
@@ -46,7 +47,7 @@ static_assert(std::is_trivial<db_async_data_t>::value, "db_async_data_t must be 
                                                        "buffer and will not call dtor fn");
 #endif
 
-db_msg_dispatcher::db_msg_dispatcher() : tick_timer_(NULL), tick_msg_count_(0) {}
+db_msg_dispatcher::db_msg_dispatcher() : sequence_allocator_(0), tick_timer_(NULL), tick_msg_count_(0) {}
 
 db_msg_dispatcher::~db_msg_dispatcher() {
     if (NULL != tick_timer_) {
@@ -168,7 +169,7 @@ int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
     msg_raw_t msg;
     msg.msg_addr = &table_msg;
     msg.msg_type = get_instance_ident();
-    ret          = on_recv_msg(msg, req->response);
+    ret          = on_recv_msg(msg, req->response, req->sequence);
     return ret;
 }
 
@@ -183,12 +184,12 @@ uint64_t db_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
 
 db_msg_dispatcher::msg_type_t db_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw_msg) { return 0; }
 
-int db_msg_dispatcher::send_msg(channel_t::type t, const char *ks, size_t kl, uint64_t task_id, uint64_t pd, unpack_fn_t fn, int argc, const char **argv,
-                                const size_t *argvlen) {
+int db_msg_dispatcher::send_msg(channel_t::type t, const char *ks, size_t kl, uint64_t task_id, uint64_t pd, unpack_fn_t fn, uint64_t& sequence, 
+    int argc, const char **argv, const size_t *argvlen) {
 
     if (t > channel_t::CLUSTER_BOUND && t < channel_t::SENTINEL_BOUND) {
         if (db_cluster_conns_[t]) {
-            return cluster_send_msg(*db_cluster_conns_[t], ks, kl, task_id, pd, fn, argc, argv, argvlen);
+            return cluster_send_msg(*db_cluster_conns_[t], ks, kl, task_id, pd, fn, sequence, argc, argv, argvlen);
         } else {
             WLOGERROR("db cluster %d not inited", static_cast<int>(t));
             return hello::err::EN_SYS_INIT;
@@ -197,7 +198,7 @@ int db_msg_dispatcher::send_msg(channel_t::type t, const char *ks, size_t kl, ui
 
     if (t >= channel_t::RAW_DEFAULT && t < channel_t::RAW_BOUND) {
         if (db_raw_conns_[t - channel_t::RAW_DEFAULT]) {
-            return raw_send_msg(*db_raw_conns_[t - channel_t::RAW_DEFAULT], task_id, pd, fn, argc, argv, argvlen);
+            return raw_send_msg(*db_raw_conns_[t - channel_t::RAW_DEFAULT], task_id, pd, fn, sequence, argc, argv, argvlen);
         } else {
             WLOGERROR("db single %d not inited", static_cast<int>(t));
             return hello::err::EN_SYS_INIT;
@@ -432,8 +433,8 @@ void db_msg_dispatcher::cluster_on_connected(hiredis::happ::cluster *clu, hiredi
     }
 }
 
-int db_msg_dispatcher::cluster_send_msg(hiredis::happ::cluster &clu, const char *ks, size_t kl, uint64_t task_id, uint64_t pd, unpack_fn_t fn, int argc,
-                                        const char **argv, const size_t *argvlen) {
+int db_msg_dispatcher::cluster_send_msg(hiredis::happ::cluster &clu, const char *ks, size_t kl, uint64_t task_id, uint64_t pd, unpack_fn_t fn, 
+    uint64_t& sequence, int argc, const char **argv, const size_t *argvlen) {
     hiredis::happ::cmd_exec *cmd;
     if (NULL == fn) {
         cmd = clu.exec(ks, kl, NULL, NULL, argc, argv, argvlen);
@@ -444,6 +445,7 @@ int db_msg_dispatcher::cluster_send_msg(hiredis::happ::cluster &clu, const char 
         req.task_id   = task_id;
         req.unpack_fn = fn;
         req.response  = NULL;
+        req.sequence  = allocate_sequence();
 
         // 防止异步调用转同步调用，预先使用栈上的DBAsyncData
         cmd = clu.exec(ks, kl, cluster_request_callback, &req, argc, argv, argvlen);
@@ -573,8 +575,8 @@ void db_msg_dispatcher::raw_on_connected(hiredis::happ::raw *raw_conn, hiredis::
     }
 }
 
-int db_msg_dispatcher::raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_id, uint64_t pd, unpack_fn_t fn, int argc, const char **argv,
-                                    const size_t *argvlen) {
+int db_msg_dispatcher::raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_id, uint64_t pd, unpack_fn_t fn, uint64_t& sequence, 
+    int argc, const char **argv, const size_t *argvlen) {
     hiredis::happ::cmd_exec *cmd;
     if (NULL == fn) {
         cmd = raw_conn.exec(NULL, NULL, argc, argv, argvlen);
@@ -585,6 +587,7 @@ int db_msg_dispatcher::raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_
         req.task_id   = task_id;
         req.unpack_fn = fn;
         req.response  = NULL;
+        req.sequence  = allocate_sequence();
 
         // 防止异步调用转同步调用，预先使用栈上的DBAsyncData
         cmd = raw_conn.exec(raw_request_callback, &req, argc, argv, argvlen);
@@ -602,4 +605,8 @@ int db_msg_dispatcher::raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_
     }
 
     return hello::err::EN_SUCCESS;
+}
+
+uint64_t db_msg_dispatcher::allocate_sequence() {
+    return ++ sequence_allocator_;
 }

@@ -6,6 +6,7 @@ package hello;
 
 enum EnSystemLimit {
     // option allow_alias   = true;
-    EN_SL_NONE           = 0;
-    EN_SL_MAX_SS_MSG_LEN = 65536;
+    EN_SL_NONE                              = 0;
+    EN_SL_MAX_SS_MSG_LEN                    = 65536;
+    EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET = 1577836800; // 2020-01-01 00:00:00 UTC
 }

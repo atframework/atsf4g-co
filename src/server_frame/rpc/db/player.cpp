@@ -63,9 +63,10 @@ namespace rpc {
                     args.push(user_key);
                 }
 
+                uint64_t rpc_sequence = 0;
                 int res = db_msg_dispatcher::me()->send_msg(db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, user_key, user_key_len, task->get_id(),
-                                                            logic_config::me()->get_self_bus_id(), detail::unpack_user, static_cast<int>(args.size()),
-                                                            args.get_args_values(), args.get_args_lengths());
+                                                            logic_config::me()->get_self_bus_id(), detail::unpack_user, rpc_sequence,
+                                                            static_cast<int>(args.size()), args.get_args_values(), args.get_args_lengths());
 
                 if (res < 0) {
                     return res;
@@ -73,7 +74,7 @@ namespace rpc {
 
                 hello::table_all_message msg;
                 // 协程操作
-                res = rpc::wait(msg);
+                res = rpc::wait(msg, rpc_sequence);
                 if (res < 0) {
                     return res;
                 }
@@ -137,9 +138,10 @@ namespace rpc {
 
                 WLOGDEBUG("user %llu save curr data version:%s", static_cast<unsigned long long>(user_id), version.c_str());
 
+                uint64_t rpc_sequence = 0;
                 res = db_msg_dispatcher::me()->send_msg(db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, user_key, user_key_len, task->get_id(),
-                                                        logic_config::me()->get_self_bus_id(), detail::unpack_user, static_cast<int>(args.size()),
-                                                        args.get_args_values(), args.get_args_lengths());
+                                                        logic_config::me()->get_self_bus_id(), detail::unpack_user, rpc_sequence,
+                                                        static_cast<int>(args.size()), args.get_args_values(), args.get_args_lengths());
 
                 // args unavailable now
 
@@ -149,7 +151,7 @@ namespace rpc {
 
                 hello::table_all_message msg;
                 // 协程操作
-                res = rpc::wait(msg);
+                res = rpc::wait(msg, rpc_sequence);
                 if (res < 0) {
                     if (hello::err::EN_DB_OLD_VERSION == res && !msg.version().empty()) {
                         version.assign(msg.version());

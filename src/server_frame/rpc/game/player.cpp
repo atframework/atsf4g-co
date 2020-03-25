@@ -1,4 +1,4 @@
-//
+﻿//
 // Created by owt50 on 2016/9/28.
 //
 
@@ -43,8 +43,7 @@ namespace rpc {
                 }
 
                 hello::SSMsg rsp_msg;
-                // 坝程擝作
-                res = rpc::wait(rsp_msg);
+                res = rpc::wait(rsp_msg, req_msg.head().sequence());
                 if (res < 0) {
                     return res;
                 }

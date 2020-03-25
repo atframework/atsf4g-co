@@ -74,6 +74,8 @@ int32_t actor_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd, ms
         msg.mutable_head()->set_src_task_id(0);
     }
 
+    msg.mutable_head()->set_sequence(req_msg.head().sequence());
+
     return 0;
 }
 

@@ -36,8 +36,13 @@ public:
     virtual bool     is_auto_mutable_cache() const;
     virtual uint64_t get_default_router_server_id(const router_object_base &router_cache) const;
 
-    int send_msg(router_object_base &obj, hello::SSMsg &msg);
-    int send_msg(const key_t &key, hello::SSMsg &msg);
+#if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
+    int send_msg(router_object_base &obj, hello::SSMsg &&msg, uint64_t& sequence);
+    int send_msg(const key_t &key, hello::SSMsg &&msg, uint64_t& sequence);
+#else
+    int send_msg(router_object_base &obj, hello::SSMsg &msg, uint64_t& sequence);
+    int send_msg(const key_t &key, hello::SSMsg &msg, uint64_t& sequence);
+#endif
 
     inline size_t size() const { return stat_size_; }
 
@@ -48,7 +53,11 @@ public:
     virtual int pull_online_server(const key_t &key, uint64_t &router_svr_id, uint64_t &router_svr_ver);
 
 protected:
-    int send_msg_raw(router_object_base &obj, hello::SSMsg &msg);
+#if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
+    int send_msg_raw(router_object_base &obj, hello::SSMsg &&msg, uint64_t& sequence);
+#else
+    int send_msg_raw(router_object_base &obj, hello::SSMsg &msg, uint64_t& sequence);
+#endif
 
 protected:
     size_t stat_size_;

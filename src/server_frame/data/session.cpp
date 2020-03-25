@@ -1,5 +1,6 @@
 #include <algorithm/hash.h>
 #include <log/log_wrapper.h>
+#include <time/time_utility.h>
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
@@ -52,6 +53,21 @@ void session::set_player(std::shared_ptr<player_cache> u) { player_ = u; }
 std::shared_ptr<player_cache> session::get_player() const { return player_.lock(); }
 
 int32_t session::send_msg_to_client(hello::CSMsg &msg) {
+    if (0 == msg.head().session_sequence()) {
+        std::shared_ptr<player_cache> user = get_player() ;
+        if (user) {
+            return send_msg_to_client(msg, user->alloc_session_sequence());
+        }
+    }
+    return send_msg_to_client(msg, 0);
+}
+
+int32_t session::send_msg_to_client(hello::CSMsg &msg, uint64_t session_sequence) {
+    if (!msg.has_head() || msg.head().timestamp() == 0) {
+        msg.mutable_head()->set_timestamp(::util::time::time_utility::get_now());
+    }
+    msg.mutable_head()->set_session_sequence(session_sequence);
+
     size_t msg_buf_len = msg.ByteSizeLong();
     size_t tls_buf_len = atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);
     if (msg_buf_len > tls_buf_len) {

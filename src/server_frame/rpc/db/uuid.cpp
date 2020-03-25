@@ -120,8 +120,9 @@ namespace rpc {
                     args.push(keyvar);
                 }
 
+                uint64_t rpc_sequence = 0;
                 int res = db_msg_dispatcher::me()->send_msg(db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, keyvar, keylen, task->get_id(),
-                                                            logic_config::me()->get_self_bus_id(), rpc::db::detail::unpack_integer,
+                                                            logic_config::me()->get_self_bus_id(), rpc::db::detail::unpack_integer, rpc_sequence,
                                                             static_cast<int>(args.size()), args.get_args_values(), args.get_args_lengths());
 
                 if (res < 0) {
@@ -130,7 +131,7 @@ namespace rpc {
 
                 hello::table_all_message msg;
                 // 协程操作
-                res = rpc::wait(msg);
+                res = rpc::wait(msg, rpc_sequence);
                 if (res < 0) {
                     return res;
                 }

@@ -25,17 +25,29 @@ bool router_manager_base::is_auto_mutable_cache() const { return true; }
 
 uint64_t router_manager_base::get_default_router_server_id(const router_object_base &router_cache) const { return 0; }
 
-int router_manager_base::send_msg(router_object_base &obj, hello::SSMsg &msg) {
+#if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
+int router_manager_base::send_msg(router_object_base &obj, hello::SSMsg &&msg, uint64_t& sequence) {
+#else
+int router_manager_base::send_msg(router_object_base &obj, hello::SSMsg &msg, uint64_t& sequence) {
+#endif
     // 如果正在转移过程中，追加到pending列表
     if (obj.check_flag(router_object_base::flag_t::EN_ROFT_TRANSFERING)) {
         obj.get_transfer_pending_list().push_back(hello::SSMsg());
         obj.get_transfer_pending_list().back().Swap(&msg);
     }
 
-    return send_msg_raw(obj, msg);
+#if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
+    return send_msg_raw(obj, std::move(msg), sequence);
+#else
+    return send_msg_raw(obj, msg, sequence);
+#endif
 }
 
-int router_manager_base::send_msg(const key_t &key, hello::SSMsg &msg) {
+#if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
+int router_manager_base::send_msg(const key_t &key, hello::SSMsg &&msg, uint64_t& sequence) {
+#else
+int router_manager_base::send_msg(const key_t &key, hello::SSMsg &msg, uint64_t& sequence) {
+#endif
     int                                 res = 0;
     std::shared_ptr<router_object_base> obj;
     res = mutable_cache(obj, key, NULL);
@@ -47,10 +59,18 @@ int router_manager_base::send_msg(const key_t &key, hello::SSMsg &msg) {
         return hello::err::EN_ROUTER_NOT_FOUND;
     }
 
-    return send_msg(*obj, msg);
+#if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
+    return send_msg(*obj, std::move(msg), sequence);
+#else
+    return send_msg(*obj, msg, sequence);
+#endif
 }
 
-int router_manager_base::send_msg_raw(router_object_base &obj, hello::SSMsg &msg) {
+#if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
+int router_manager_base::send_msg_raw(router_object_base &obj, hello::SSMsg &&msg, uint64_t& sequence) {
+#else
+int router_manager_base::send_msg_raw(router_object_base &obj, hello::SSMsg &msg, uint64_t& sequence) {
+#endif
     // 这里必须直接发送
 
     hello::SSRouterHead *router_head = msg.mutable_head()->mutable_router();
@@ -80,7 +100,9 @@ int router_manager_base::send_msg_raw(router_object_base &obj, hello::SSMsg &msg
         msg.clear_body();
     }
 
-    return ss_msg_dispatcher::me()->send_to_proc(obj.get_router_server_id(), msg);
+    int ret = ss_msg_dispatcher::me()->send_to_proc(obj.get_router_server_id(), msg);
+    sequence = msg.head().sequence();
+    return ret;
 }
 
 void router_manager_base::on_stop() { is_closing_ = false; }

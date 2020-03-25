@@ -164,7 +164,8 @@ public:
     inline const hello::player_data &get_player_data() const { return player_data_; }
 
     inline uint32_t get_data_version() const { return data_version_; }
-
+    
+    uint64_t alloc_session_sequence();
 private:
     inline hello::player_data &mutable_player_data() { return player_data_.ref(); }
 
@@ -182,6 +183,7 @@ private:
     uint32_t    data_version_;
 
     std::weak_ptr<session> session_;
+    uint64_t               session_sequence_;
 
     player_cache_dirty_wrapper<hello::account_information>  account_info_;
     player_cache_dirty_wrapper<hello::player_data>          player_data_;

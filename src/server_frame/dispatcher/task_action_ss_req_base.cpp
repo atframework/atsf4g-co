@@ -100,6 +100,8 @@ int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd, msg
         msg.mutable_head()->set_src_task_id(0);
     }
 
+    msg.mutable_head()->set_sequence(req_msg.head().sequence());
+
     return 0;
 }
 
@@ -272,7 +274,12 @@ namespace detail {
 
         // 路由消息转发
         if (obj && 0 != obj->get_router_server_id()) {
-            res = mgr.send_msg(*obj, request_msg);
+            uint64_t rpc_sequence;
+#if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
+            res = mgr.send_msg(*obj, std::move(request_msg), rpc_sequence);
+#else
+            res = mgr.send_msg(*obj, request_msg, rpc_sequence);
+#endif
 
             // 如果路由转发成功，需要禁用掉回包和通知事件，也不需要走逻辑处理了
             if (res < 0) {

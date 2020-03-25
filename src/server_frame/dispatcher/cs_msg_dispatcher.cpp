@@ -116,7 +116,7 @@ int32_t cs_msg_dispatcher::dispatch(const atbus::protocol::msg &msg, const void 
             break;
         }
 
-        ret = on_recv_msg(start_data.message, start_data.private_data);
+        ret = on_recv_msg(start_data.message, start_data.private_data, cs_msg.head().sequence());
         if (ret < 0) {
             WLOGERROR("%s on receive message callback from to 0x%llx, session id:0x%llx failed, res: %d", name(),
                       static_cast<unsigned long long>(session_key.bus_id), static_cast<unsigned long long>(session_key.session_id), ret);

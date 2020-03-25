@@ -102,5 +102,6 @@
 /src/server_frame/protocol/**/*.cc
 /src/server_frame/config/excel/pb_header_v3.pb.h
 /src/server_frame/config/excel/pb_header_v3.pb.cc
+/src/server_frame/config/server_frame_build_feature.h
 
 # generated

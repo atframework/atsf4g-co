@@ -69,12 +69,18 @@ public:
      */
     int32_t on_receive_send_data_response(const atbus::protocol::msg &msg);
 
+    /**
+     * allocate a message sequence
+     * @return allocated sequence
+     */
+    uint64_t allocate_sequence();
 public:
-    int32_t send_to_proc(uint64_t bus_id, const hello::SSMsg &ss_msg);
+    int32_t send_to_proc(uint64_t bus_id, hello::SSMsg &ss_msg);
     int32_t send_to_proc(uint64_t bus_id, const void *msg_buf, size_t msg_len);
 
 
 private:
+    uint64_t sequence_allocator_;
     const google::protobuf::OneofDescriptor *get_body_oneof_desc() const;
 };
 

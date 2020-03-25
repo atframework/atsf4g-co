@@ -98,13 +98,14 @@ public:
      * @param task_id 任务id
      * @param pd 启动进程pd
      * @param fn 解包函数
+     * @param sequence 传出本次RPC的sequence
      * @param argc @see redisAsyncCommandArgv
      * @param argv @see redisAsyncCommandArgv
      * @param argvlen @see redisAsyncCommandArgv
      * @return 0或错误码
      */
-    int send_msg(channel_t::type t, const char *ks, size_t kl, uint64_t task_id, uint64_t pd, unpack_fn_t fn, int argc, const char **argv,
-                 const size_t *argvlen);
+    int send_msg(channel_t::type t, const char *ks, size_t kl, uint64_t task_id, uint64_t pd, unpack_fn_t fn, uint64_t& sequence, 
+        int argc, const char **argv, const size_t *argvlen);
 
     /**
      * @brief 获取用于protobuf序列化的临时缓冲区
@@ -136,6 +137,11 @@ public:
      */
     void set_on_connected(channel_t::type t, user_callback_t fn);
 
+    /**
+     * allocate a message sequence
+     * @return allocated sequence
+     */
+    uint64_t allocate_sequence();
 private:
     static void log_debug_fn(const char *content);
     static void log_info_fn(const char *content);
@@ -166,8 +172,8 @@ private:
      * @return 0或错误码
      */
 
-    int cluster_send_msg(hiredis::happ::cluster &clu, const char *ks, size_t kl, uint64_t task_id, uint64_t pd, unpack_fn_t fn, int argc, const char **argv,
-                         const size_t *argvlen);
+    int cluster_send_msg(hiredis::happ::cluster &clu, const char *ks, size_t kl, uint64_t task_id, uint64_t pd, unpack_fn_t fn, uint64_t& sequence, 
+        int argc, const char **argv, const size_t *argvlen);
 
     // raw
     int raw_init(const std::vector<logic_config::LC_DBCONN> &conns, int index);
@@ -185,9 +191,11 @@ private:
      * @param argvlen @see redisAsyncCommandArgv
      * @return 0或错误码
      */
-    int raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_id, uint64_t pd, unpack_fn_t fn, int argc, const char **argv, const size_t *argvlen);
+    int raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_id, uint64_t pd, unpack_fn_t fn, uint64_t& sequence, 
+        int argc, const char **argv, const size_t *argvlen);
 
 private:
+    uint64_t sequence_allocator_;
     uv_timer_t *tick_timer_;
     int tick_msg_count_;
     std::vector<char> pack_cache_;

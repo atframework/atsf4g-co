@@ -46,7 +46,7 @@ const char *dispatcher_implement::name() const {
 
 uintptr_t dispatcher_implement::get_instance_ident() const { return reinterpret_cast<uintptr_t>(this); }
 
-int32_t dispatcher_implement::on_recv_msg(msg_raw_t &msg, void *priv_data) {
+int32_t dispatcher_implement::on_recv_msg(msg_raw_t &msg, void *priv_data, uint64_t sequence) {
     if (NULL == msg.msg_addr) {
         WLOGERROR("msg.msg_addr == NULL.");
         return hello::err::EN_SYS_PARAM;
@@ -76,6 +76,7 @@ int32_t dispatcher_implement::on_recv_msg(msg_raw_t &msg, void *priv_data) {
         resume_data_t callback_data;
         callback_data.message = msg;
         callback_data.private_data = priv_data;
+        callback_data.sequence = sequence;
 
         // 查找并恢复已有task
         return task_manager::me()->resume_task(task_id, callback_data);
@@ -115,10 +116,11 @@ int32_t dispatcher_implement::on_recv_msg(msg_raw_t &msg, void *priv_data) {
     return 0;
 }
 
-int32_t dispatcher_implement::on_send_msg_failed(msg_raw_t &msg, int32_t error_code) {
+int32_t dispatcher_implement::on_send_msg_failed(msg_raw_t &msg, int32_t error_code, uint64_t sequence) {
     resume_data_t callback_data;
     callback_data.message = msg;
     callback_data.private_data = NULL;
+    callback_data.sequence = sequence;
 
     // msg->set_rpc_result(hello::err::EN_SYS_RPC_SEND_FAILED);
     uint64_t task_id = pick_msg_task_id(msg);

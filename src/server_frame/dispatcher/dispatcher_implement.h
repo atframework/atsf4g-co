@@ -64,7 +64,7 @@ public:
      * @param msg_size 数据长度
      * @return 返回错误码或0
      */
-    virtual int32_t on_recv_msg(msg_raw_t &msg, void *priv_data);
+    virtual int32_t on_recv_msg(msg_raw_t &msg, void *priv_data, uint64_t sequence);
 
     /**
      * @brief 发送消息消息失败的通知接口，通常会尝试填充错误码后恢复协程任务
@@ -74,7 +74,7 @@ public:
      * @param error_code 数据长度
      * @return 返回错误码或0
      */
-    virtual int32_t on_send_msg_failed(msg_raw_t &msg, int32_t error_code);
+    virtual int32_t on_send_msg_failed(msg_raw_t &msg, int32_t error_code, uint64_t sequence);
 
     /**
      * @brief 数据解包

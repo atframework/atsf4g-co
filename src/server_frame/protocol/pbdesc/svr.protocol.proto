@@ -67,7 +67,7 @@ message SSMsgHead {
     // 通用数据
     int32  error_code = 1;
     int64  timestamp  = 2;
-    uint32 sequence   = 3;
+    uint64 sequence   = 3;
 
     // 通道和任务信息
     uint64 bus_id      = 11;

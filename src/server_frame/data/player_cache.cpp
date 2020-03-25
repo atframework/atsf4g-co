@@ -1,7 +1,10 @@
 #include <log/log_wrapper.h>
 
+#include <config/compiler/protobuf_prefix.h>
 #include <protocol/pbdesc/com.protocol.pb.h>
 #include <protocol/pbdesc/svr.table.pb.h>
+#include <protocol/pbdesc/svr.const.pb.h>
+#include <config/compiler/protobuf_suffix.h>
 
 #include <config/logic_config.h>
 #include <time/time_utility.h>
@@ -13,6 +16,8 @@
 
 
 player_cache::player_cache(fake_constructor &) : user_id_(0), zone_id_(0), data_version_(0) {
+    session_sequence_ = static_cast<uint64_t>((util::time::time_utility::get_sys_now() - hello::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET) << 10) + 
+        static_cast<uint64_t>(util::time::time_utility::get_now_usec() / 1000);
 }
 
 player_cache::~player_cache() { WPLOGDEBUG(*this, "destroyed"); }
@@ -97,6 +102,9 @@ void player_cache::init_from_table_data(const hello::table_user &tb_player) {
 
     if (src_tb->has_player()) {
         protobuf_copy_message(player_data_.ref(), src_tb->player());
+        if (player_data_.ref().session_sequence() > session_sequence_) {
+            session_sequence_ = player_data_.ref().session_sequence();
+        }
     }
 
     if (src_tb->has_options()) {
@@ -111,6 +119,7 @@ int player_cache::dump(hello::table_user &user, bool always) {
     user.set_data_version(data_version_);
 
     if (always || player_data_.is_dirty()) {
+        player_data_.ref().set_session_sequence(session_sequence_);
         protobuf_copy_message(*user.mutable_player(), player_data_.ref());
     }
 
@@ -154,3 +163,8 @@ void player_cache::load_and_move_login_info(hello::table_login COPP_MACRO_RV_REF
 
     login_info_.set_zone_id(get_zone_id());
 }
+
+uint64_t player_cache::alloc_session_sequence() {
+    return ++ session_sequence_;
+}
+

@@ -21,6 +21,7 @@ struct dispatcher_msg_raw_t {
 struct dispatcher_resume_data_t {
     dispatcher_msg_raw_t message;      // 异步回调中用于透传消息体
     void *               private_data; // 异步回调中用于透传额外的私有数据
+    uint64_t             sequence;     // 等待序号，通常和发送序号匹配。用于检测同类消息是否是发出的那个
 };
 
 struct dispatcher_start_data_t {
