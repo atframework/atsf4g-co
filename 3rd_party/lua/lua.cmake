@@ -4,10 +4,12 @@ endif()
 
 macro(PROJECT_3RD_PARTY_LUA_IMPORT)
     if (TARGET lua)
+        EchoWithColor(COLOR GREEN "-- Dependency: Lua found.(Target: lua: ${3RD_PARTY_LUA_ROOT_DIR})")
         list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES lua)
     elseif (LUA_FOUND)
-        if (3RD_PARTY_LUA_INC_DIR)
-            list(APPEND 3RD_PARTY_PUBLIC_INCLUDE_DIRS ${3RD_PARTY_LUA_INC_DIR})
+        EchoWithColor(COLOR GREEN "-- Dependency: Lua found.(${LUA_INCLUDE_DIR}:${LUA_LIBRARIES})")
+        if (LUA_INCLUDE_DIR)
+            list(APPEND 3RD_PARTY_PUBLIC_INCLUDE_DIRS ${LUA_INCLUDE_DIR})
         endif ()
 
         if (3RD_PARTY_LUA_LINK_NAME)
@@ -44,8 +46,13 @@ if (NOT TARGET lua AND NOT LUA_FOUND)
         find_library(3RD_PARTY_LUA_LINK_NAME NAMES lua liblua PATH_SUFFIXES lib lib64 PATHS ${3RD_PARTY_LUA_ROOT_DIR} NO_DEFAULT_PATH)
         if (NOT 3RD_PARTY_LUA_INC_DIR OR NOT 3RD_PARTY_LUA_LINK_NAME)
             message(STATUS "Clone lua ${3RD_PARTY_LUA_VERSION}")
+            if (PROJECT_GIT_REMOTE_ORIGIN_USE_SSH AND NOT PROJECT_GIT_CLONE_REMOTE_ORIGIN_DISABLE_SSH)
+                set (3RD_PARTY_LUA_REPO_URL "git@git.code.oa.com:atframework/lua.git")
+            else ()
+                set (3RD_PARTY_LUA_REPO_URL "http://git.code.oa.com/atframework/lua.git")
+            endif ()
             project_git_clone_3rd_party(
-                URL "https://github.com/lua/lua.git"
+                URL ${3RD_PARTY_LUA_REPO_URL}
                 REPO_DIRECTORY ${3RD_PARTY_LUA_REPO_DIR}
                 DEPTH 200
                 TAG ${3RD_PARTY_LUA_VERSION}
@@ -74,11 +81,10 @@ if (NOT TARGET lua AND NOT LUA_FOUND)
     endif ()
 
     if (3RD_PARTY_LUA_INC_DIR AND 3RD_PARTY_LUA_LINK_NAME)
-        EchoWithColor(COLOR GREEN "-- Dependency: Lua found.(${3RD_PARTY_LUA_ROOT_DIR})")
         # support for find_package(Lua)
         set(LUA_FOUND YES CACHE BOOL "if false, do not try to link to Lua" FORCE)
         set(LUA_LIBRARIES ${3RD_PARTY_LUA_LINK_NAME} CACHE STRING "both lua and lualib" FORCE)
-        set(LUA_INCLUDE_DIR ${3RD_PARTY_LUA_INC_DIR} YES CACHE PATH "where to find lua.h" FORCE)
+        set(LUA_INCLUDE_DIR ${3RD_PARTY_LUA_INC_DIR} CACHE PATH "where to find lua.h" FORCE)
         PROJECT_3RD_PARTY_LUA_IMPORT()
     else ()
         EchoWithColor(COLOR YELLOW "-- Dependency: Lua not found.")
@@ -89,8 +95,10 @@ if (NOT TARGET lua AND NOT LUA_FOUND)
         unset(LUA_VERSION_MINOR CACHE)
         unset(LUA_VERSION_PATCH CACHE)
     endif ()
+else()
+    PROJECT_3RD_PARTY_LUA_IMPORT()
 endif ()
 
 
-unset(3RD_PARTY_LUA_INC_DIR)
-unset(3RD_PARTY_LUA_LINK_NAME)
+unset(3RD_PARTY_LUA_INC_DIR CACHE)
+unset(3RD_PARTY_LUA_LINK_NAME CACHE)
