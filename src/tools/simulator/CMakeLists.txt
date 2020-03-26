@@ -51,6 +51,11 @@ elseif (LUA_FOUND)
 endif ()
 
 if (TARGET lua OR LUA_FOUND)
+    file(GLOB_RECURSE SRC_LIST_LUA
+        ${CMAKE_CURRENT_LIST_DIR}/lua/*.h
+        ${CMAKE_CURRENT_LIST_DIR}/lua/*.cpp
+    )
+    list(APPEND SRC_LIST ${SRC_LIST_LUA})
     EchoWithColor(COLOR GREEN "-- Install: Copy ${CMAKE_CURRENT_LIST_DIR}/lua/lua ...")
     file(
         COPY "${CMAKE_CURRENT_LIST_DIR}/lua/lua"
