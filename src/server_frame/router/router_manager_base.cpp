@@ -86,7 +86,13 @@ int router_manager_base::send_msg_raw(router_object_base &obj, hello::SSMsg &msg
         obj.pull_cache_inner(NULL);
     }
 
-    if (0 == obj.get_router_server_id()) {
+    // 如果允许自动路由拉取,则发到默认server上
+    uint64_t target_server_id = obj.get_router_server_id();
+    if (0 == target_server_id && is_auto_mutable_object()) {
+        target_server_id = get_default_router_server_id(obj);
+    }
+
+    if (0 == target_server_id) {
         WLOGERROR("router object (type=%u) %u:%u:0x%llx has no valid router server", get_type_id(), obj.get_key().type_id, obj.get_key().zone_id,
                   static_cast<unsigned long long>(obj.get_key().object_id_ull()));
         return hello::err::EN_ROUTER_NOT_IN_SERVER;
@@ -100,7 +106,7 @@ int router_manager_base::send_msg_raw(router_object_base &obj, hello::SSMsg &msg
         msg.clear_body();
     }
 
-    int ret = ss_msg_dispatcher::me()->send_to_proc(obj.get_router_server_id(), msg);
+    int ret = ss_msg_dispatcher::me()->send_to_proc(target_server_id, msg);
     sequence = msg.head().sequence();
     return ret;
 }
