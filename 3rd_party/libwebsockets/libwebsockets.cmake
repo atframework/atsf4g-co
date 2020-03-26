@@ -222,3 +222,7 @@ endif()
 if (NOT Libwebsockets_FOUND AND NOT TARGET websockets AND NOT TARGET websockets_shared)
     EchoWithColor(COLOR YELLOW "-- Dependency: libwebsockets not found")
 endif ()
+
+if (LIBWEBSOCKETS_INCLUDE_DIRS)
+    list(APPEND 3RD_PARTY_PUBLIC_INCLUDE_DIRS ${LIBWEBSOCKETS_INCLUDE_DIRS})
+endif ()
