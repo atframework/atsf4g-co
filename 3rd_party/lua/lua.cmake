@@ -10,22 +10,24 @@ macro(PROJECT_3RD_PARTY_LUA_IMPORT)
         EchoWithColor(COLOR GREEN "-- Dependency: Lua found.(${LUA_INCLUDE_DIR}:${LUA_LIBRARIES})")
         if (LUA_INCLUDE_DIR)
             list(APPEND 3RD_PARTY_PUBLIC_INCLUDE_DIRS ${LUA_INCLUDE_DIR})
+            set(3RD_PARTY_LUA_INC_DIR ${LUA_INCLUDE_DIR})
         endif ()
 
-        if (3RD_PARTY_LUA_LINK_NAME)
-            list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES ${3RD_PARTY_LUA_LINK_NAME})
+        if (LUA_LIBRARIES)
+            list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES ${LUA_LIBRARIES})
+            set(3RD_PARTY_LUA_LINK_NAME ${LUA_LIBRARIES})
         endif ()
     endif ()
 endmacro()
 
-if (NOT TARGET lua AND NOT LUA_FOUND)
+if (NOT TARGET lua AND NOT (3RD_PARTY_LUA_INC_DIR AND 3RD_PARTY_LUA_LINK_NAME))
     if (VCPKG_TOOLCHAIN)
         find_package(Lua)
         PROJECT_3RD_PARTY_LUA_IMPORT()
     endif ()
 endif()
 
-if (NOT TARGET lua AND NOT LUA_FOUND)
+if (NOT TARGET lua AND NOT (3RD_PARTY_LUA_INC_DIR AND 3RD_PARTY_LUA_LINK_NAME))
     if (NOT 3RD_PARTY_LUA_BASE_DIR)
         set(3RD_PARTY_LUA_BASE_DIR ${CMAKE_CURRENT_LIST_DIR})
     endif ()
@@ -41,42 +43,39 @@ if (NOT TARGET lua AND NOT LUA_FOUND)
         set (3RD_PARTY_LUA_ROOT_DIR ${3RD_PARTY_LUA_REPO_DIR})
     endif()
 
+    find_path(3RD_PARTY_LUA_INC_DIR NAMES "lua.h" PATH_SUFFIXES include src PATHS ${3RD_PARTY_LUA_ROOT_DIR} NO_DEFAULT_PATH)
+    find_library(3RD_PARTY_LUA_LINK_NAME NAMES lua liblua PATH_SUFFIXES lib lib64 PATHS ${3RD_PARTY_LUA_ROOT_DIR} NO_DEFAULT_PATH)
     if (NOT 3RD_PARTY_LUA_INC_DIR OR NOT 3RD_PARTY_LUA_LINK_NAME)
-        find_path(3RD_PARTY_LUA_INC_DIR NAMES "lua.h" PATH_SUFFIXES include src PATHS ${3RD_PARTY_LUA_ROOT_DIR} NO_DEFAULT_PATH)
-        find_library(3RD_PARTY_LUA_LINK_NAME NAMES lua liblua PATH_SUFFIXES lib lib64 PATHS ${3RD_PARTY_LUA_ROOT_DIR} NO_DEFAULT_PATH)
-        if (NOT 3RD_PARTY_LUA_INC_DIR OR NOT 3RD_PARTY_LUA_LINK_NAME)
-            message(STATUS "Clone lua ${3RD_PARTY_LUA_VERSION}")
-            if (PROJECT_GIT_REMOTE_ORIGIN_USE_SSH AND NOT PROJECT_GIT_CLONE_REMOTE_ORIGIN_DISABLE_SSH)
-                set (3RD_PARTY_LUA_REPO_URL "git@git.code.oa.com:atframework/lua.git")
-            else ()
-                set (3RD_PARTY_LUA_REPO_URL "http://git.code.oa.com/atframework/lua.git")
-            endif ()
-            project_git_clone_3rd_party(
-                URL ${3RD_PARTY_LUA_REPO_URL}
-                REPO_DIRECTORY ${3RD_PARTY_LUA_REPO_DIR}
-                DEPTH 200
-                TAG ${3RD_PARTY_LUA_VERSION}
-                WORKING_DIRECTORY ${3RD_PARTY_LUA_BASE_DIR}
-            )
-            set (3RD_PARTY_LUA_BUILD_DIR "${CMAKE_BINARY_DIR}/deps/lua-${3RD_PARTY_LUA_VERSION}")
-            find_path(3RD_PARTY_LUA_SRC_DIR NAMES "lua.h" "lauxlib.h" PATH_SUFFIXES src PATHS ${3RD_PARTY_LUA_ROOT_DIR} NO_DEFAULT_PATH)
-            if (3RD_PARTY_LUA_SRC_DIR)
-                set(3RD_PARTY_LUA_INC_DIR ${3RD_PARTY_LUA_SRC_DIR})
-                set(3RD_PARTY_LUA_LINK_NAME lua)
+        if (PROJECT_GIT_REMOTE_ORIGIN_USE_SSH AND NOT PROJECT_GIT_CLONE_REMOTE_ORIGIN_DISABLE_SSH)
+            set (3RD_PARTY_LUA_REPO_URL "git@git.code.oa.com:atframework/lua.git")
+        else ()
+            set (3RD_PARTY_LUA_REPO_URL "http://git.code.oa.com/atframework/lua.git")
+        endif ()
+        project_git_clone_3rd_party(
+            URL ${3RD_PARTY_LUA_REPO_URL}
+            REPO_DIRECTORY ${3RD_PARTY_LUA_REPO_DIR}
+            DEPTH 200
+            TAG ${3RD_PARTY_LUA_VERSION}
+            WORKING_DIRECTORY ${3RD_PARTY_LUA_BASE_DIR}
+        )
+        set (3RD_PARTY_LUA_BUILD_DIR "${CMAKE_BINARY_DIR}/deps/lua-${3RD_PARTY_LUA_VERSION}")
+        find_path(3RD_PARTY_LUA_SRC_DIR NAMES "lua.h" "lauxlib.h" PATH_SUFFIXES src PATHS ${3RD_PARTY_LUA_ROOT_DIR} NO_DEFAULT_PATH)
+        if (3RD_PARTY_LUA_SRC_DIR)
+            set(3RD_PARTY_LUA_INC_DIR ${3RD_PARTY_LUA_SRC_DIR})
+            set(3RD_PARTY_LUA_LINK_NAME lua)
 
-                if (NOT EXISTS ${3RD_PARTY_LUA_BUILD_DIR})
-                    file(MAKE_DIRECTORY ${3RD_PARTY_LUA_BUILD_DIR})
-                endif ()
-
-                # patch for ios SDK 11.0 or upper
-                if (CMAKE_HOST_APPLE OR APPLE)
-                    execute_process(COMMAND 
-                        sed -E -i.bak "s/system[^;]+;/luaL_error(L, \"can not call this function on macOS or ios\");/g" loslib.c 
-                        WORKING_DIRECTORY ${3RD_PARTY_LUA_SRC_DIR}
-                    )
-                endif ()
-                add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/build-script" ${3RD_PARTY_LUA_BUILD_DIR})
+            if (NOT EXISTS ${3RD_PARTY_LUA_BUILD_DIR})
+                file(MAKE_DIRECTORY ${3RD_PARTY_LUA_BUILD_DIR})
             endif ()
+
+            # patch for ios SDK 11.0 or upper
+            if (CMAKE_HOST_APPLE OR APPLE)
+                execute_process(COMMAND 
+                    sed -E -i.bak "s/system[^;]+;/luaL_error(L, \"can not call this function on macOS or ios\");/g" loslib.c 
+                    WORKING_DIRECTORY ${3RD_PARTY_LUA_SRC_DIR}
+                )
+            endif ()
+            add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/build-script" ${3RD_PARTY_LUA_BUILD_DIR})
         endif ()
     endif ()
 
