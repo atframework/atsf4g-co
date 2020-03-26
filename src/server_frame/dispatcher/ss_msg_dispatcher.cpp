@@ -162,6 +162,11 @@ int32_t ss_msg_dispatcher::on_receive_send_data_response(const atbus::protocol::
         return hello::err::EN_SYS_PARAM;
     }
 
+    if (msg.head().ret() >= 0) {
+        WLOGDEBUG("receive_send_data_response from 0x%llx", static_cast<unsigned long long>(fwd_data->from()));
+        return msg.head().ret();
+    }
+
     const void *buffer = reinterpret_cast<const void*>(fwd_data->content().data());
     size_t      len    = fwd_data->content().size();
 

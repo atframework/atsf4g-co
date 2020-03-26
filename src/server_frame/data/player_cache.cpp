@@ -119,7 +119,6 @@ int player_cache::dump(hello::table_user &user, bool always) {
     user.set_data_version(data_version_);
 
     if (always || player_data_.is_dirty()) {
-        player_data_.ref().set_session_sequence(session_sequence_);
         protobuf_copy_message(*user.mutable_player(), player_data_.ref());
     }
 
@@ -165,6 +164,8 @@ void player_cache::load_and_move_login_info(hello::table_login COPP_MACRO_RV_REF
 }
 
 uint64_t player_cache::alloc_session_sequence() {
-    return ++ session_sequence_;
+    uint64_t ret = ++ session_sequence_;
+    player_data_.ref().set_session_sequence(ret);
+    return ret;
 }
 
