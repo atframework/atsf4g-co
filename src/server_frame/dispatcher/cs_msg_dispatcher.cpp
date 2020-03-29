@@ -44,6 +44,19 @@ cs_msg_dispatcher::msg_type_t cs_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw
     return static_cast<msg_type_t>(real_msg->body().body_oneof_case());
 }
 
+cs_msg_dispatcher::msg_op_type_t cs_msg_dispatcher::pick_msg_op_type(msg_raw_t &raw_msg) {
+    hello::CSMsg *real_msg = get_protobuf_msg<hello::CSMsg>(raw_msg);
+    if (NULL == real_msg) {
+        return hello::EN_MSG_OP_TYPE_MIXUP;
+    }
+
+    if (false == hello::EnMsgOpType_IsValid(real_msg->head().op_type())) {
+        return hello::EN_MSG_OP_TYPE_MIXUP;
+    }
+
+    return static_cast<msg_op_type_t>(real_msg->head().op_type());
+}
+
 int32_t cs_msg_dispatcher::dispatch(const atbus::protocol::msg &msg, const void *buffer, size_t len) {
     if (::atframe::component::service_type::EN_ATST_GATEWAY != msg.head().type()) {
         WLOGERROR("message type %d invalid", msg.head().type());

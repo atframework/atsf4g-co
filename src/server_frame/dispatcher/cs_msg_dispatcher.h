@@ -22,8 +22,9 @@ namespace atbus {
 
 class cs_msg_dispatcher : public dispatcher_implement, public util::design_pattern::singleton<cs_msg_dispatcher> {
 public:
-    typedef dispatcher_implement::msg_raw_t  msg_raw_t;
-    typedef dispatcher_implement::msg_type_t msg_type_t;
+    typedef dispatcher_implement::msg_op_type_t msg_op_type_t;
+    typedef dispatcher_implement::msg_raw_t     msg_raw_t;
+    typedef dispatcher_implement::msg_type_t    msg_type_t;
 
 protected:
     cs_msg_dispatcher();
@@ -45,6 +46,14 @@ public:
      * @return 消息类型ID
      */
     virtual msg_type_t pick_msg_type_id(msg_raw_t &raw_msg) UTIL_CONFIG_OVERRIDE;
+
+    /**
+     * @brief 获取操作类型
+     * @param raw_msg 消息抽象结构
+     * @note 这只是一个调度曾规范，不强制执行。详情 @see hello::EnMsgOpType
+     * @return 消息操作类型
+     */
+    virtual msg_op_type_t pick_msg_op_type(msg_raw_t &raw_msg) UTIL_CONFIG_OVERRIDE;
 
     /**
      * deal with cs message data

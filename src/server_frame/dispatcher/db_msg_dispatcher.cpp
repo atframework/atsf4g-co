@@ -184,6 +184,10 @@ uint64_t db_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
 
 db_msg_dispatcher::msg_type_t db_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw_msg) { return 0; }
 
+db_msg_dispatcher::msg_op_type_t db_msg_dispatcher::pick_msg_op_type(msg_raw_t &raw_msg) {
+    return hello::EN_MSG_OP_TYPE_MIXUP;
+}
+
 int db_msg_dispatcher::send_msg(channel_t::type t, const char *ks, size_t kl, uint64_t task_id, uint64_t pd, unpack_fn_t fn, uint64_t& sequence, 
     int argc, const char **argv, const size_t *argvlen) {
 

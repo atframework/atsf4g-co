@@ -19,6 +19,7 @@
 #include <utility/protobuf_mini_dumper.h>
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
+#include <protocol/pbdesc/com.const.pb.h>
 
 #include "dispatcher_type_defines.h"
 
@@ -27,6 +28,7 @@
 
 class dispatcher_implement : public ::atapp::module_impl {
 public:
+    typedef hello::EnMsgOpType       msg_op_type_t;
     typedef dispatcher_msg_raw_t     msg_raw_t;
     typedef dispatcher_resume_data_t resume_data_t;
     typedef dispatcher_start_data_t  start_data_t;
@@ -103,6 +105,14 @@ public:
      * @return 消息类型ID
      */
     virtual msg_type_t pick_msg_type_id(msg_raw_t &raw_msg) = 0;
+
+    /**
+     * @brief 获取操作类型
+     * @param raw_msg 消息抽象结构
+     * @note 这只是一个调度曾规范，不强制执行。详情 @see hello::EnMsgOpType
+     * @return 消息操作类型
+     */
+    virtual msg_op_type_t pick_msg_op_type(msg_raw_t &raw_msg) = 0;
 
     /**
      * @brief 创建协程任务

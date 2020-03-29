@@ -57,6 +57,19 @@ ss_msg_dispatcher::msg_type_t ss_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw
     return static_cast<msg_type_t>(real_msg->body().body_oneof_case());
 }
 
+ss_msg_dispatcher::msg_op_type_t ss_msg_dispatcher::pick_msg_op_type(msg_raw_t &raw_msg) {
+    hello::SSMsg *real_msg = get_protobuf_msg<hello::SSMsg>(raw_msg);
+    if (NULL == real_msg) {
+        return hello::EN_MSG_OP_TYPE_MIXUP;
+    }
+
+    if (false == hello::EnMsgOpType_IsValid(real_msg->head().op_type())) {
+        return hello::EN_MSG_OP_TYPE_MIXUP;
+    }
+
+    return static_cast<msg_op_type_t>(real_msg->head().op_type());
+}
+
 int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, hello::SSMsg &ss_msg) {
     if (0 == ss_msg.head().sequence()) {
         ss_msg.mutable_head()->set_sequence(allocate_sequence());

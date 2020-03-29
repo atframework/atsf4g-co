@@ -13,6 +13,13 @@ enum EnConstLimits {
     EN_CL_MAX_AUTH_TOKEN_LENGHT = 128;   // token length limit
 }
 
+enum EnMsgOpType {
+    EN_MSG_OP_TYPE_MIXUP          = 0; // 混合模式
+    EN_MSG_OP_TYPE_STREAM         = 1; // 流,如果上行包时流，那么下行包也是流
+    EN_MSG_OP_TYPE_UNARY_REQUEST  = 2; // 请求-应答模式，请求包
+    EN_MSG_OP_TYPE_UNARY_RESPONSE = 3; // 请求-应答模式，回应包
+};
+
 // account type
 enum EnAccountTypeID {
     EN_ATI_ACCOUNT_INNER     = 0; // inner: username/password

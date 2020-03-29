@@ -109,8 +109,12 @@ int task_manager::start_task(id_t task_id, start_data_t &data) {
 int task_manager::resume_task(id_t task_id, resume_data_t &data) {
     int res = native_mgr_->resume(task_id, &data);
     if (res < 0) {
-        WLOGERROR("resume task 0x%llx failed.", static_cast<unsigned long long>(task_id));
-
+        if (copp::COPP_EC_NOT_FOUND == res) {
+            WLOGINFO("resume task 0x%llx but not found, ignored.", static_cast<unsigned long long>(task_id));
+            return 0;
+        }
+        
+        WLOGERROR("resume task 0x%llx failed, res: %d.", static_cast<unsigned long long>(task_id), res);
         // 错误码
         return hello::err::EN_SYS_NOTFOUND;
     }

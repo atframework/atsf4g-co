@@ -71,49 +71,56 @@ int32_t dispatcher_implement::on_recv_msg(msg_raw_t &msg, void *priv_data, uint6
         }
     }
 
-    uint64_t task_id = pick_msg_task_id(msg);
-    if (task_id > 0) { // 如果是恢复任务则尝试切回协程任务
-        resume_data_t callback_data;
-        callback_data.message = msg;
-        callback_data.private_data = priv_data;
-        callback_data.sequence = sequence;
+    msg_op_type_t op_type = pick_msg_op_type(msg);
+    if (hello::EN_MSG_OP_TYPE_MIXUP == op_type || hello::EN_MSG_OP_TYPE_UNARY_RESPONSE == op_type) {
+        uint64_t task_id = pick_msg_task_id(msg);
+        if (task_id > 0) { // 如果是恢复任务则尝试切回协程任务
+            resume_data_t callback_data;
+            callback_data.message = msg;
+            callback_data.private_data = priv_data;
+            callback_data.sequence = sequence;
 
-        // 查找并恢复已有task
-        return task_manager::me()->resume_task(task_id, callback_data);
-    } else {
-        start_data_t callback_data;
-        callback_data.message = msg;
-        callback_data.private_data = priv_data;
-
-        // 先尝试使用task 模块
-        int res = create_task(callback_data, task_id);
-
-        if (res == hello::err::EN_SYS_NOTFOUND) {
-            task_manager::actor_action_ptr_t actor;
-            if (!actor_action_name_map_.empty()) {
-                actor = create_actor(callback_data);
-                // actor 流程
-                if (actor) {
-                    return actor->run();
-                }
-            }
+            // 查找并恢复已有task
+            return task_manager::me()->resume_task(task_id, callback_data);
         }
 
-        if (res < 0) {
-            WLOGERROR("%s(type=0x%llx) create task failed, errcode=%d", name(), get_instance_ident_llu(), res);
-            return hello::err::EN_SYS_MALLOC;
+        if (hello::EN_MSG_OP_TYPE_UNARY_RESPONSE == op_type) {
+            WLOGDEBUG("Ignore response message %u of %s without task id", pick_msg_type_id(msg), name());
+            return 0;
         }
-
-        // 不创建消息
-        if (res == 0 && 0 == task_id) {
-            return hello::err::EN_SUCCESS;
-        }
-
-        // 再启动
-        return task_manager::me()->start_task(task_id, callback_data);
     }
 
-    return 0;
+    uint64_t task_id = 0;
+    start_data_t callback_data;
+    callback_data.message = msg;
+    callback_data.private_data = priv_data;
+
+    // 先尝试使用task 模块
+    int res = create_task(callback_data, task_id);
+
+    if (res == hello::err::EN_SYS_NOTFOUND) {
+        task_manager::actor_action_ptr_t actor;
+        if (!actor_action_name_map_.empty()) {
+            actor = create_actor(callback_data);
+            // actor 流程
+            if (actor) {
+                return actor->run();
+            }
+        }
+    }
+
+    if (res < 0) {
+        WLOGERROR("%s(type=0x%llx) create task failed, errcode=%d", name(), get_instance_ident_llu(), res);
+        return hello::err::EN_SYS_MALLOC;
+    }
+
+    // 不创建消息
+    if (res == 0 && 0 == task_id) {
+        return hello::err::EN_SUCCESS;
+    }
+
+    // 再启动
+    return task_manager::me()->start_task(task_id, callback_data);
 }
 
 int32_t dispatcher_implement::on_send_msg_failed(msg_raw_t &msg, int32_t error_code, uint64_t sequence) {

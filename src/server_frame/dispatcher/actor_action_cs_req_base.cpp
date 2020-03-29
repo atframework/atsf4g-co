@@ -80,10 +80,16 @@ void actor_action_cs_req_base::send_rsp_msg() {
     player_cache::ptr_t owner_player = sess->get_player();
 
     uint64_t seq = 0;
+    int32_t op_type;
     {
         msg_ref_type req_msg = get_request();
         if (req_msg.has_head()) {
             seq = req_msg.head().sequence();
+        }
+        if (hello::EN_MSG_OP_TYPE_STREAM == req_msg.head().op_type()) {
+            op_type = hello::EN_MSG_OP_TYPE_STREAM;
+        } else {
+            op_type = hello::EN_MSG_OP_TYPE_UNARY_RESPONSE;
         }
     }
 
@@ -91,6 +97,7 @@ void actor_action_cs_req_base::send_rsp_msg() {
         (*iter).mutable_head()->set_error_code(get_rsp_code());
         (*iter).mutable_head()->set_timestamp(util::time::time_utility::get_now());
         (*iter).mutable_head()->set_sequence(seq);
+        (*iter).mutable_head()->set_op_type(op_type);
 
         // send message using session
         int32_t res = sess->send_msg_to_client(*iter);

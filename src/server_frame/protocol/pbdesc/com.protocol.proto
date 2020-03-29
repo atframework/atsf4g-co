@@ -110,6 +110,7 @@ message CSMsgHead {
     int64  timestamp        = 2; // lua 5.3 才开始支持int64
     uint64 sequence         = 3;
     uint64 session_sequence = 4; // 服务器生成的消息序号
+    int32  op_type          = 5;
 
     // 通道和任务信息
     uint64 session_bus_id = 11;
