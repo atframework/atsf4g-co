@@ -132,13 +132,25 @@ public:
     virtual task_manager::actor_action_ptr_t create_actor(start_data_t &start_data);
 
     /**
+     * @brief 根据类型ID获取action或actor选项
+     * @param raw_msg 消息抽象结构
+     * @return 返回action或actor选项或NULL
+     */
+    virtual const hello::DDispatcherOptions* get_options_by_message_type(msg_type_t msg_type);
+
+    /**
      * @brief 注册Action
      * @param msg_name action名称
      * @return 或错误码
      */
     template <typename TAction>
     int register_action(msg_type_t msg_type) {
-        return _register_action(msg_type, task_manager::me()->make_task_creator<TAction>());
+        const hello::DDispatcherOptions* options = get_options_by_message_type(msg_type);
+        if (NULL != options) {
+            return _register_action(msg_type, task_manager::me()->make_task_creator<TAction>(options->timeout_s()));
+        } else {
+            return _register_action(msg_type, task_manager::me()->make_task_creator<TAction>(0));
+        }
     }
 
     /**

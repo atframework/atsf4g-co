@@ -70,6 +70,19 @@ ss_msg_dispatcher::msg_op_type_t ss_msg_dispatcher::pick_msg_op_type(msg_raw_t &
     return static_cast<msg_op_type_t>(real_msg->head().op_type());
 }
 
+const hello::DDispatcherOptions* ss_msg_dispatcher::get_options_by_message_type(msg_type_t msg_type) {
+    const google::protobuf::FieldDescriptor* fd = hello::SSMsgBody::descriptor()->FindFieldByNumber(static_cast<int>(msg_type));
+    if (NULL == fd) {
+        return NULL;
+    }
+
+    if(fd->options().HasExtension(hello::dispatcher_options)) {
+        return &fd->options().GetExtension(hello::dispatcher_options);
+    }
+
+    return NULL;
+}
+
 int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, hello::SSMsg &ss_msg) {
     if (0 == ss_msg.head().sequence()) {
         ss_msg.mutable_head()->set_sequence(allocate_sequence());

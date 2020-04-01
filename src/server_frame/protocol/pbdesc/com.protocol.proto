@@ -1,7 +1,7 @@
 syntax = "proto3";
 // 前后台通信协议定义
 
-// import "com.const.proto";
+import "com.const.proto";
 import "com.struct.proto";
 
 package hello;
@@ -123,7 +123,7 @@ message CSMsgBody {
         CSLoginAuthReq mcs_login_auth_req = 1001;
         SCLoginAuthRsp msc_login_auth_rsp = 1002;
 
-        CSLoginReq        mcs_login_req         = 1003;
+        CSLoginReq        mcs_login_req         = 1003 [ (dispatcher_options) = {timeout_s : 10} ];
         SCLoginRsp        msc_login_rsp         = 1004;
         CSPingReq         mcs_ping_req          = 1005;
         SCPongRsp         msc_pong_rsp          = 1006;

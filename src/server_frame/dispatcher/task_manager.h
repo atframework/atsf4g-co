@@ -51,8 +51,14 @@ public:
 
     template <typename TAction>
     struct task_action_maker_t {
+        time_t timeout_s;
+        task_action_maker_t(time_t sec): timeout_s(sec) {}
         int operator()(task_manager::id_t &task_id, start_data_t ctor_param) {
-            return task_manager::me()->create_task<TAction>(task_id, COPP_MACRO_STD_MOVE(ctor_param));
+            if (timeout_s <= 0) {
+                return task_manager::me()->create_task<TAction>(task_id, COPP_MACRO_STD_MOVE(ctor_param));
+            } else {
+                return task_manager::me()->create_task_with_timeout<TAction>(task_id, timeout_s, COPP_MACRO_STD_MOVE(ctor_param));
+            }
         };
     };
 
@@ -136,8 +142,8 @@ public:
      * @return 任务构造器
      */
     template <typename TAction>
-    task_action_creator_t make_task_creator() {
-        return task_action_maker_t<TAction>();
+    task_action_creator_t make_task_creator(time_t timeout_s) {
+        return task_action_maker_t<TAction>(timeout_s);
     }
 
     /**

@@ -181,6 +181,10 @@ task_manager::actor_action_ptr_t dispatcher_implement::create_actor(start_data_t
     return iter->second(start_data);
 }
 
+const hello::DDispatcherOptions* dispatcher_implement::get_options_by_message_type(msg_type_t msg_type) {
+    return NULL;
+}
+
 void dispatcher_implement::push_filter_to_front(msg_filter_handle_t fn) { msg_filter_list_.push_front(fn); }
 
 void dispatcher_implement::push_filter_to_back(msg_filter_handle_t fn) { msg_filter_list_.push_back(fn); }

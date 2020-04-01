@@ -19,6 +19,14 @@ option (CONST_SETTINGS) = {
     time_tolerate : 10
 };
 
+message DDispatcherOptions {
+    int32 timeout_s = 1; // 手动指定协程任务超时时间
+}
+
+extend google.protobuf.FieldOptions {
+    DDispatcherOptions dispatcher_options = 100001; // 自定义配置
+}
+
 // limits
 enum EnConstLimits {
     EN_CL_UNKNOWN               = 0;

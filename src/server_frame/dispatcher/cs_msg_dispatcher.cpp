@@ -57,6 +57,19 @@ cs_msg_dispatcher::msg_op_type_t cs_msg_dispatcher::pick_msg_op_type(msg_raw_t &
     return static_cast<msg_op_type_t>(real_msg->head().op_type());
 }
 
+const hello::DDispatcherOptions* cs_msg_dispatcher::get_options_by_message_type(msg_type_t msg_type) {
+    const google::protobuf::FieldDescriptor* fd = hello::CSMsgBody::descriptor()->FindFieldByNumber(static_cast<int>(msg_type));
+    if (NULL == fd) {
+        return NULL;
+    }
+
+    if(fd->options().HasExtension(hello::dispatcher_options)) {
+        return &fd->options().GetExtension(hello::dispatcher_options);
+    }
+
+    return NULL;
+}
+
 int32_t cs_msg_dispatcher::dispatch(const atbus::protocol::msg &msg, const void *buffer, size_t len) {
     if (::atframe::component::service_type::EN_ATST_GATEWAY != msg.head().type()) {
         WLOGERROR("message type %d invalid", msg.head().type());

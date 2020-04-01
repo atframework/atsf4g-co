@@ -56,6 +56,13 @@ public:
     virtual msg_op_type_t pick_msg_op_type(msg_raw_t &raw_msg) UTIL_CONFIG_OVERRIDE;
 
     /**
+     * @brief 根据类型ID获取action或actor选项
+     * @param raw_msg 消息抽象结构
+     * @return 返回action或actor选项或NULL
+     */
+    virtual const hello::DDispatcherOptions* get_options_by_message_type(msg_type_t msg_type) UTIL_CONFIG_OVERRIDE;
+
+    /**
      * deal with cs message data
      * @param msg msg information
      * @param buffer data
