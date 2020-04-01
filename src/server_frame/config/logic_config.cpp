@@ -223,3 +223,20 @@ void logic_config::_load_loginsvr(util::config::ini_loader &loader) {
 }
 
 void logic_config::_load_gamesvr(util::config::ini_loader &loader) {}
+
+const hello::DConstSettingsType& logic_config::get_const_settings() {
+    if (likely(nullptr != const_settings_)) {
+        return *const_settings_;
+    }
+    auto desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("com.const.proto");
+    if (nullptr != desc && desc->options().HasExtension(hello::CONST_SETTINGS)) {
+        const_settings_ = &desc->options().GetExtension(hello::CONST_SETTINGS);
+    }
+
+    if (nullptr == const_settings_) {
+        return hello::DConstSettingsType::default_instance();
+    }
+
+    return *const_settings_;
+}
+

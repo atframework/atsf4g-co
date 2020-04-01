@@ -230,7 +230,7 @@ simulator_base::simulator_base() : is_closing_(false), exec_path_(NULL) {
     shell_opts_.history_file   = ".simulator_history";
     shell_opts_.protocol_log   = "protocol.log";
     shell_opts_.no_interactive = false;
-    shell_opts_.buffer_.resize(65536);
+    shell_opts_.buffer_.resize(262144);
     shell_opts_.tick_timer_interval = 200; // 200 ms for default
 
     signals_.is_used     = false;

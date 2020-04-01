@@ -117,6 +117,7 @@ public:
     inline const LC_LOGINSVR &get_cfg_svr_login() const { return cfg_loginsvr_; }
     inline const LC_GAMESVR & get_cfg_svr_game() const { return cfg_gamesvr_; }
 
+    const hello::DConstSettingsType& get_const_settings();
 private:
     void _load_logic(util::config::ini_loader &loader);
 
@@ -128,6 +129,7 @@ private:
 
 private:
     uint64_t bus_id_;
+    const hello::DConstSettingsType* const_settings_;
     LC_LOGIC cfg_logic_;
     LC_DBCONF cfg_db_;
 

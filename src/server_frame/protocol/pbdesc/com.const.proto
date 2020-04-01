@@ -1,16 +1,30 @@
 syntax = "proto3";
 // client and server will both use this
 
+import "google/protobuf/descriptor.proto";
 import "extensions_error_code.proto";
 
 package hello;
 
+// 只能配置在 com.const.proto 这个文件里有效
+extend google.protobuf.FileOptions {
+    DConstSettingsType CONST_SETTINGS = 100001; // 自定义配置
+}
+
+message DConstSettingsType {
+    int64 time_tolerate = 1; // 时间错容忍值
+}
+
+option (CONST_SETTINGS) = {
+    time_tolerate : 10
+};
+
 // limits
 enum EnConstLimits {
     EN_CL_UNKNOWN               = 0;
-    EN_CL_MAX_PROTOCOL_LENGTH   = 65536; // message length limit: 64K
-    EN_CL_MAX_OPEN_ID_LENGTH    = 64;    // openid length limit
-    EN_CL_MAX_AUTH_TOKEN_LENGHT = 128;   // token length limit
+    EN_CL_MAX_PROTOCOL_LENGTH   = 262144; // message length limit: 256K
+    EN_CL_MAX_OPEN_ID_LENGTH    = 64;     // openid length limit
+    EN_CL_MAX_AUTH_TOKEN_LENGHT = 128;    // token length limit
 }
 
 enum EnMsgOpType {
@@ -32,7 +46,7 @@ enum EnPlatformTypeID {
     EN_PTI_LINUX   = 1; // PC
     EN_PTI_MAXOS   = 2; // PC
     EN_PTI_IOS     = 3; // ios
-    EN_PTI_ANDROID = 4; // android 
+    EN_PTI_ANDROID = 4; // android
 }
 
 // channel id

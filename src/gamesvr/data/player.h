@@ -186,6 +186,7 @@ private:
 /**
  * @brief 用户回包数据缓存包装，析构时自动还原发送数据
  * @note 注意只能用作局部变量
+ * @note 所有此guard构造的下行包为流类型 hello::EN_MSG_OP_TYPE_STREAM
  */
 class player_cs_syn_msg_holder {
 public:

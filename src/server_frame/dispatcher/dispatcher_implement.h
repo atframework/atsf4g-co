@@ -18,8 +18,10 @@
 #include <utility/environment_helper.h>
 #include <utility/protobuf_mini_dumper.h>
 
+#include <config/compiler/protobuf_prefix.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
+#include <config/compiler/protobuf_suffix.h>
 
 #include "dispatcher_type_defines.h"
 

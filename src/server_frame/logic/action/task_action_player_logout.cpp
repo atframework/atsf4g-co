@@ -31,6 +31,7 @@ int task_action_player_logout::operator()() {
         player_cache::ptr_t user = s->get_player();
         // 如果玩家数据是缓存，不是实际登入点，则不用保存
         if (user && user->is_writable()) {
+            set_player_id(user->get_user_id());
             int res = player_manager::me()->remove(user, false);
             if (res < 0) {
                 WPLOGERROR(*user, "logout failed, res: %d(%s)", res, protobuf_mini_dumper_get_error_msg(res));

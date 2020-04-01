@@ -161,6 +161,9 @@ int32_t cs_msg_dispatcher::dispatch(const atbus::protocol::msg &msg, const void 
         session_key.bus_id     = from_server_id;
         session_key.session_id = req_msg.head().session_id();
 
+        // session 移除前强制update一次，用以处理debug调试断点导致task_action_player_logout被立刻认为超时
+        util::time::time_utility::update();
+
         WLOGINFO("remove session [0x%llx, 0x%llx]", static_cast<unsigned long long>(session_key.bus_id),
                  static_cast<unsigned long long>(session_key.session_id));
 

@@ -35,7 +35,7 @@ struct linenoiseCompletions;
 #ifdef ATBUS_MACRO_MSG_LIMIT
 #define SIMULATOR_MSG_MAX_LENGTH (ATBUS_MACRO_MSG_LIMIT - 8192)
 #else
-#define SIMULATOR_MSG_MAX_LENGTH 65536
+#define SIMULATOR_MSG_MAX_LENGTH 262144
 #endif
 
 #endif

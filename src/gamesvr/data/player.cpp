@@ -221,6 +221,7 @@ player_cs_syn_msg_holder::~player_cs_syn_msg_holder() {
     }
 
     if (msg_.has_body()) {
+        msg_.mutable_head()->set_op_type(hello::EN_MSG_OP_TYPE_STREAM);
         sess->send_msg_to_client(msg_);
     }
 }
