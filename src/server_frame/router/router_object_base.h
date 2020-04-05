@@ -60,6 +60,7 @@ public:
             EN_ROFT_PULLING_OBJECT      = 0x0080, // 是否正在拉取对象实体
             EN_ROFT_SCHED_REMOVE_OBJECT = 0x0100, // 定时任务 - 实体降级计划任务是否有效
             EN_ROFT_SCHED_REMOVE_CACHE  = 0x0200, // 定时任务 - 移除缓存计划任务是否有效
+            EN_ROFT_SCHED_SAVE_OBJECT   = 0x0400, // 定时任务 - 实体保存计划任务是否有效
         };
     };
 

@@ -352,7 +352,8 @@ int router_object_base::pull_object_inner(void *priv_data) {
 }
 
 int router_object_base::save_object_inner(void *priv_data) {
-
+    unset_flag(flag_t::EN_ROFT_SCHED_SAVE_OBJECT);
+    
     // 排队写任务和并发写merge
     uint64_t this_saving_seq = ++saving_sequence_;
 
@@ -391,7 +392,7 @@ int router_object_base::save_object_inner(void *priv_data) {
         // 保存失败
         return ret;
     }
-
+    
     refresh_save_time();
     return ret;
 }

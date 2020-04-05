@@ -39,6 +39,11 @@ int task_action_auto_save_objects::operator()() {
         int res = 0;
         switch (auto_save.action) {
         case router_manager_set::EN_ASA_SAVE: {
+            // 有可能有可能手动触发了保存，导致多一次冗余的auto_save_data_t，就不需要再保存一次了
+            if (false == auto_save.object->check_flag(router_object_base::flag_t::EN_ROFT_SCHED_SAVE_OBJECT)) {
+                break;
+            }
+
             res = auto_save.object->save(UTIL_CONFIG_NULLPTR);
 
             if (res >= 0) {

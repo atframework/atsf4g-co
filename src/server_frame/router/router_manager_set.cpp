@@ -214,103 +214,6 @@ void router_manager_set::force_close() {
     }
 }
 
-int router_manager_set::tick_timer(time_t cache_expire, time_t object_expire, time_t object_save, std::list<timer_t> &timer_list, bool is_fast) {
-    int ret = 0;
-    // 缓存失效定时器
-    do {
-        if (timer_list.empty()) {
-            break;
-        }
-
-        std::list<timer_t>::iterator timer_iter = timer_list.begin();
-        timer_t &                    cache      = *timer_iter;
-
-        // 如果没到时间，后面的全没到时间
-        if (last_proc_time_ <= cache.timeout) {
-            break;
-        }
-
-        // 如果已下线并且缓存失效则跳过
-        std::shared_ptr<router_object_base> obj = cache.obj_watcher.lock();
-        if (!obj) {
-            timer_list.erase(timer_iter);
-            continue;
-        }
-
-        // 如果操作序列失效则跳过
-        if (false == obj->check_timer_sequence(cache.timer_sequence)) {
-            obj->check_and_remove_timer_ref(&timer_list, timer_iter);
-            timer_list.erase(timer_iter);
-            continue;
-        }
-
-        // 已销毁则跳过
-        router_manager_base *mgr = get_manager(cache.type_id);
-        if (NULL == mgr) {
-            obj->check_and_remove_timer_ref(&timer_list, timer_iter);
-            timer_list.erase(timer_iter);
-            continue;
-        }
-
-        // 管理器中的对象已被替换或移除则跳过
-        if (mgr->get_base_cache(obj->get_key()) != obj) {
-            obj->check_and_remove_timer_ref(&timer_list, timer_iter);
-            timer_list.erase(timer_iter);
-            continue;
-        }
-
-        bool is_next_timer_fast = is_fast; // 快队列定时器只能进入快队列
-        // 正在执行IO任务则不需要任何流程,因为IO任务结束后可能改变状态
-        if (false == obj->is_io_running()) {
-            if (obj->check_flag(router_object_base::flag_t::EN_ROFT_IS_OBJECT)) {
-                // 实体过期
-                if (obj->get_last_visit_time() + object_expire < last_proc_time_) {
-                    save_list_.push_back(auto_save_data_t());
-                    auto_save_data_t &auto_save = save_list_.back();
-                    auto_save.object            = obj;
-                    auto_save.type_id           = cache.type_id;
-                    auto_save.action            = EN_ASA_REMOVE_OBJECT;
-
-                    obj->set_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_OBJECT);
-                } else if (obj->get_last_save_time() + object_save < last_proc_time_) { // 实体保存
-                    save_list_.push_back(auto_save_data_t());
-                    auto_save_data_t &auto_save = save_list_.back();
-                    auto_save.object            = obj;
-                    auto_save.type_id           = cache.type_id;
-                    auto_save.action            = EN_ASA_SAVE;
-                    obj->refresh_save_time();
-                }
-            } else {
-                // 缓存过期,和下面主动回收缓存的逻辑保持一致
-                if (obj->get_last_visit_time() + cache_expire < last_proc_time_) {
-                    save_list_.push_back(auto_save_data_t());
-                    auto_save_data_t &auto_save = save_list_.back();
-                    auto_save.object            = obj;
-                    auto_save.type_id           = cache.type_id;
-                    auto_save.action            = EN_ASA_REMOVE_CACHE;
-
-                    obj->set_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
-
-                    // 移除任务可以在快队列里复查
-                    is_next_timer_fast = true;
-                }
-            }
-        } else {
-            // 如果IO任务正在执行，则下次进入快队列
-            is_next_timer_fast = true;
-        }
-
-        // 无论什么事件，都需要插入下一个定时器做检查，以防异步流程异常结束
-        // 先移除定时器引用，否则insert_timer里会移除一次
-        obj->check_and_remove_timer_ref(&timer_list, timer_iter);
-        insert_timer(mgr, obj, is_next_timer_fast);
-        timer_list.erase(timer_iter);
-        ++ret;
-    } while (true);
-
-    return ret;
-}
-
 bool router_manager_set::insert_timer(router_manager_base *mgr, const std::shared_ptr<router_object_base> &obj, bool is_fast) {
     if (last_proc_time_ <= 0) {
         WLOGERROR("router_manager_set not actived");
@@ -524,6 +427,129 @@ int router_manager_set::recycle_caches(int max_count) {
     return ret;
 }
 
+bool router_manager_set::add_save_schedule(const std::shared_ptr<router_object_base> &obj) {
+    if (!obj) {
+        return false;
+    }
+
+    if (obj->check_flag(router_object_base::flag_t::EN_ROFT_SCHED_SAVE_OBJECT)) {
+        return false;
+    }
+
+    if (!obj->is_writable()) {
+        return false;
+    }
+
+    save_list_.push_back(auto_save_data_t());
+    auto_save_data_t &auto_save = save_list_.back();
+    auto_save.object            = obj;
+    auto_save.type_id           = obj->get_key().type_id;
+    auto_save.action            = EN_ASA_SAVE;
+    obj->refresh_save_time();
+
+    obj->set_flag(router_object_base::flag_t::EN_ROFT_SCHED_SAVE_OBJECT);
+    return true;
+}
+
 bool router_manager_set::is_save_task_running() const { return save_task_ && !save_task_->is_exiting(); }
 
 bool router_manager_set::is_closing_task_running() const { return closing_task_ && !closing_task_->is_exiting(); }
+
+int router_manager_set::tick_timer(time_t cache_expire, time_t object_expire, time_t object_save, std::list<timer_t> &timer_list, bool is_fast) {
+    int ret = 0;
+    // 缓存失效定时器
+    do {
+        if (timer_list.empty()) {
+            break;
+        }
+
+        std::list<timer_t>::iterator timer_iter = timer_list.begin();
+        timer_t &                    cache      = *timer_iter;
+
+        // 如果没到时间，后面的全没到时间
+        if (last_proc_time_ <= cache.timeout) {
+            break;
+        }
+
+        // 如果已下线并且缓存失效则跳过
+        std::shared_ptr<router_object_base> obj = cache.obj_watcher.lock();
+        if (!obj) {
+            timer_list.erase(timer_iter);
+            continue;
+        }
+
+        // 如果操作序列失效则跳过
+        if (false == obj->check_timer_sequence(cache.timer_sequence)) {
+            obj->check_and_remove_timer_ref(&timer_list, timer_iter);
+            timer_list.erase(timer_iter);
+            continue;
+        }
+
+        // 已销毁则跳过
+        router_manager_base *mgr = get_manager(cache.type_id);
+        if (NULL == mgr) {
+            obj->check_and_remove_timer_ref(&timer_list, timer_iter);
+            timer_list.erase(timer_iter);
+            continue;
+        }
+
+        // 管理器中的对象已被替换或移除则跳过
+        if (mgr->get_base_cache(obj->get_key()) != obj) {
+            obj->check_and_remove_timer_ref(&timer_list, timer_iter);
+            timer_list.erase(timer_iter);
+            continue;
+        }
+
+        bool is_next_timer_fast = is_fast; // 快队列定时器只能进入快队列
+        // 正在执行IO任务则不需要任何流程,因为IO任务结束后可能改变状态
+        if (false == obj->is_io_running()) {
+            if (obj->check_flag(router_object_base::flag_t::EN_ROFT_IS_OBJECT)) {
+                // 实体过期
+                if (obj->get_last_visit_time() + object_expire < last_proc_time_) {
+                    save_list_.push_back(auto_save_data_t());
+                    auto_save_data_t &auto_save = save_list_.back();
+                    auto_save.object            = obj;
+                    auto_save.type_id           = cache.type_id;
+                    auto_save.action            = EN_ASA_REMOVE_OBJECT;
+
+                    obj->set_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_OBJECT);
+                } else if (obj->get_last_save_time() + object_save < last_proc_time_) { // 实体保存
+                    save_list_.push_back(auto_save_data_t());
+                    auto_save_data_t &auto_save = save_list_.back();
+                    auto_save.object            = obj;
+                    auto_save.type_id           = cache.type_id;
+                    auto_save.action            = EN_ASA_SAVE;
+                    obj->refresh_save_time();
+
+                    obj->set_flag(router_object_base::flag_t::EN_ROFT_SCHED_SAVE_OBJECT);
+                }
+            } else {
+                // 缓存过期,和下面主动回收缓存的逻辑保持一致
+                if (obj->get_last_visit_time() + cache_expire < last_proc_time_) {
+                    save_list_.push_back(auto_save_data_t());
+                    auto_save_data_t &auto_save = save_list_.back();
+                    auto_save.object            = obj;
+                    auto_save.type_id           = cache.type_id;
+                    auto_save.action            = EN_ASA_REMOVE_CACHE;
+
+                    obj->set_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
+
+                    // 移除任务可以在快队列里复查
+                    is_next_timer_fast = true;
+                }
+            }
+        } else {
+            // 如果IO任务正在执行，则下次进入快队列
+            is_next_timer_fast = true;
+        }
+
+        // 无论什么事件，都需要插入下一个定时器做检查，以防异步流程异常结束
+        // 先移除定时器引用，否则insert_timer里会移除一次
+        obj->check_and_remove_timer_ref(&timer_list, timer_iter);
+        insert_timer(mgr, obj, is_next_timer_fast);
+        timer_list.erase(timer_iter);
+        ++ret;
+    } while (true);
+
+    return ret;
+}

@@ -42,6 +42,12 @@ public:
     bool save(uint64_t user_id, uint32_t zone_id);
 
     /**
+     * @brief 添加到计划保存队列
+     * @param user_id user_id
+     */
+    bool add_save_schedule(uint64_t user_id, uint32_t zone_id);
+
+    /**
      * @brief 加载指定玩家数据。
      * @note 注意这个函数只是读数据库做缓存。
      * @note gamesvr 请不要强制拉去数据 会冲掉玩家数据
