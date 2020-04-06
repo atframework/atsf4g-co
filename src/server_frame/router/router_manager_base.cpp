@@ -90,6 +90,9 @@ int router_manager_base::send_msg_raw(router_object_base &obj, hello::SSMsg &msg
     uint64_t target_server_id = obj.get_router_server_id();
     if (0 == target_server_id && is_auto_mutable_object()) {
         target_server_id = get_default_router_server_id(obj);
+        if (0 != target_server_id) {
+            obj.set_router_server_id(target_server_id, obj.get_router_version());
+        }
     }
 
     if (0 == target_server_id) {
