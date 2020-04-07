@@ -9,7 +9,8 @@ endif()
 
 set (3RD_PARTY_OPENSSL_PKG_DIR "${3RD_PARTY_OPENSSL_BASE_DIR}/pkg")
 
-set (3RD_PARTY_OPENSSL_DEFAULT_VERSION "1.1.1e")
+set (3RD_PARTY_OPENSSL_DEFAULT_VERSION "1.1.1f")
+set (3RD_PARTY_OPENSSL_GITHUB_TAG "OpenSSL_1_1_1f")
 set (3RD_PARTY_OPENSSL_ROOT_DIR "${CMAKE_CURRENT_LIST_DIR}/prebuilt/${PROJECT_PREBUILT_PLATFORM_NAME}")
 # "no-hw"
 set (3RD_PARTY_OPENSSL_BUILD_OPTIONS "--prefix=${3RD_PARTY_OPENSSL_ROOT_DIR}" "--openssldir=${3RD_PARTY_OPENSSL_ROOT_DIR}/ssl"
@@ -88,15 +89,14 @@ if (NOT OPENSSL_FOUND)
     unset(OPENSSL_SSL_LIBRARIES CACHE)
     unset(OPENSSL_LIBRARIES CACHE)
     unset(OPENSSL_VERSION CACHE)
-    if (NOT EXISTS "${3RD_PARTY_OPENSSL_PKG_DIR}/openssl-${3RD_PARTY_OPENSSL_DEFAULT_VERSION}")
-        if (NOT EXISTS "${3RD_PARTY_OPENSSL_PKG_DIR}/openssl-${3RD_PARTY_OPENSSL_DEFAULT_VERSION}.tar.gz")
-            FindConfigurePackageDownloadFile("https://www.openssl.org/source/openssl-${3RD_PARTY_OPENSSL_DEFAULT_VERSION}.tar.gz" "${3RD_PARTY_OPENSSL_PKG_DIR}/openssl-${3RD_PARTY_OPENSSL_DEFAULT_VERSION}.tar.gz")
-        endif ()
 
-        execute_process(COMMAND ${CMAKE_COMMAND} -E tar xvf "${3RD_PARTY_OPENSSL_PKG_DIR}/openssl-${3RD_PARTY_OPENSSL_DEFAULT_VERSION}.tar.gz"
-            WORKING_DIRECTORY ${3RD_PARTY_OPENSSL_PKG_DIR}
-        )
-    endif ()
+    project_git_clone_3rd_party(
+        URL "https://github.com/openssl/openssl.git"
+        REPO_DIRECTORY "${3RD_PARTY_OPENSSL_PKG_DIR}/openssl-${3RD_PARTY_OPENSSL_DEFAULT_VERSION}"
+        DEPTH 200
+        TAG ${3RD_PARTY_OPENSSL_GITHUB_TAG}
+        WORKING_DIRECTORY ${3RD_PARTY_OPENSSL_PKG_DIR}
+    )
 
     if (NOT EXISTS "${3RD_PARTY_OPENSSL_PKG_DIR}/openssl-${3RD_PARTY_OPENSSL_DEFAULT_VERSION}")
         EchoWithColor(COLOR RED "-- Dependency: Build openssl failed")
