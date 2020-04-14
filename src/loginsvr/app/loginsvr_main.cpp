@@ -187,7 +187,7 @@ public:
     virtual int tick() {
         int ret = 0;
         ret += session_manager::me()->proc();
-        ret += task_manager::me()->tick(util::time::time_utility::get_now(), 1000 * util::time::time_utility::get_now_usec());
+        ret += task_manager::me()->tick(util::time::time_utility::get_sys_now(), 1000 * util::time::time_utility::get_now_usec());
         ret += router_manager_set::me()->tick();
 
         return ret;

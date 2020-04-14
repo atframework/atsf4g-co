@@ -115,6 +115,13 @@ void router_object_base::refresh_visit_time() {
 void router_object_base::refresh_save_time() { last_save_time_ = util::time::time_utility::get_now(); }
 
 int router_object_base::remove_object(void *priv_data, uint64_t transfer_to_svr_id) {
+    // 先等待其他IO任务完成
+    int ret = await_io_task();
+    if (ret < 0) {
+        return ret;
+    }
+
+    // 在等待其他任务的时候已经完成移除或降级，直接成功即可
     if (!is_writable()) {
         return hello::EN_SUCCESS;
     }
@@ -128,7 +135,7 @@ int router_object_base::remove_object(void *priv_data, uint64_t transfer_to_svr_
     }
     refresh_visit_time();
 
-    int ret = save(priv_data);
+    ret = save(priv_data);
     if (ret < 0) {
         WLOGERROR("remove router object %u:%u:0x%llx, res:%d", get_key().type_id, get_key().zone_id, get_key().object_id_ull(), ret);
 
@@ -266,6 +273,11 @@ int router_object_base::await_io_task(task_manager::task_ptr_t &self_task) {
             continue;
         }
 
+        WLOGDEBUG("task 0x%llx start to await for task 0x%llx by router object/cache %u:%u:0x%llx",
+            static_cast<unsigned long long>(self_task->get_id()),
+            static_cast<unsigned long long>(io_task_->get_id()),
+            get_key().type_id, get_key().zone_id, get_key().object_id_ull()
+        );
         io_task_->next(self_task);
         self_task->yield(NULL);
     }
@@ -319,6 +331,11 @@ int router_object_base::pull_object_inner(void *priv_data) {
     int ret = await_io_task(self_task);
     if (ret < 0) {
         return ret;
+    }
+
+    // 其他任务中已经拉取成功并已经升级为实体且未失效，直接视为成功
+    if (is_writable()) {
+        return hello::EN_SUCCESS;
     }
 
     // 先等待之前的任务完成再设置flag

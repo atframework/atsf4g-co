@@ -22,6 +22,10 @@ task_action_player_logout::task_action_player_logout(ctor_param_t COPP_MACRO_RV_
 task_action_player_logout::~task_action_player_logout() {}
 
 int task_action_player_logout::operator()() {
+    WLOGDEBUG("task_action_player_logout for session [0x%llx, 0x%llx] start", 
+        static_cast<unsigned long long>(ctor_param_.atgateway_bus_id),
+        static_cast<unsigned long long>(ctor_param_.atgateway_session_id)
+    );
     session::key_t key;
     key.bus_id = ctor_param_.atgateway_bus_id;
     key.session_id = ctor_param_.atgateway_session_id;

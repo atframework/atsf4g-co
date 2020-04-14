@@ -10,6 +10,8 @@
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
+#include <utility/protobuf_mini_dumper.h>
+
 #include "task_action_base.h"
 #include "task_manager.h"
 
@@ -72,14 +74,24 @@ int task_action_base::operator()(void *priv_data) {
         return hello::err::EN_SYS_INIT;
     }
 
+    if (0 != get_player_id()) {
+        WLOGDEBUG("task %s [0x%llx] for player %llu start to run\n", name(), get_task_id_llu(), get_player_id_llu());
+    } else {
+        WLOGDEBUG("task %s [0x%llx] start to run\n", name(), get_task_id_llu());
+    }
+
     task_id_ = task->get_id();
     ret_code_ = hook_run();
 
     if (evt_disabled_) {
         if (ret_code_ < 0) {
-            WLOGERROR("task %s [0x%llx] without evt ret code %d, rsp code %d\n", name(), get_task_id_llu(), ret_code_, rsp_code_);
+            WLOGERROR("task %s [0x%llx] without evt ret code (%s)%d, rsp code (%s)%d\n", name(), get_task_id_llu(), 
+                protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_, protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_
+            );
         } else {
-            WLOGDEBUG("task %s [0x%llx] without evt ret code %d, rsp code %d\n", name(), get_task_id_llu(), ret_code_, rsp_code_);
+            WLOGDEBUG("task %s [0x%llx] without evt ret code (%s)%d, rsp code (%s)%d\n", name(), get_task_id_llu(), 
+                protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_, protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_
+            );
         }
 
         if (!rsp_msg_disabled_) {
@@ -92,7 +104,9 @@ int task_action_base::operator()(void *priv_data) {
         int ret = 0;
         if (rsp_code_ < 0) {
             ret = on_failed();
-            WLOGINFO("task %s [0x%llx] finished success but response errorcode, rsp code: %d\n", name(), get_task_id_llu(), rsp_code_);
+            WLOGINFO("task %s [0x%llx] finished success but response errorcode, rsp code: (%s)%d\n", name(), get_task_id_llu(),
+                protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_
+            );
         } else {
             ret = on_success();
         }
@@ -136,7 +150,13 @@ int task_action_base::operator()(void *priv_data) {
         }
     }
 
-    WLOGERROR("task %s [0x%llx] ret code %d, rsp code %d\n", name(), get_task_id_llu(), ret_code_, rsp_code_);
+    if (0 != get_player_id()) {
+        WLOGERROR("task %s [0x%llx] for player %llu ret code (%s)%d, rsp code (%s)%d\n", name(), get_task_id_llu(), get_player_id_llu(), 
+            protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_, protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
+    } else {
+        WLOGERROR("task %s [0x%llx] ret code (%s)%d, rsp code (%s)%d\n", name(), get_task_id_llu(),
+            protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_, protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
+    }
 
     // 响应OnTimeout
     if (cotask::EN_TS_TIMEOUT == task->get_status()) {

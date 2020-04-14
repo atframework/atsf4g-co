@@ -266,10 +266,6 @@ public:
             return hello::err::EN_SYS_PARAM;
         }
 
-        if (!obj->is_writable()) {
-            return hello::err::EN_ROUTER_NOT_WRITABLE;
-        }
-
         if (svr_id == obj->get_router_server_id()) {
             return hello::err::EN_SUCCESS;
         }
@@ -283,6 +279,14 @@ public:
         int ret = obj->await_io_task(self_task);
         if (ret < 0) {
             return ret;
+        }
+
+        if (!obj->is_writable()) {
+            return hello::err::EN_ROUTER_NOT_WRITABLE;
+        }
+
+        if (svr_id == obj->get_router_server_id()) {
+            return hello::err::EN_SUCCESS;
         }
 
         // 正在转移中
