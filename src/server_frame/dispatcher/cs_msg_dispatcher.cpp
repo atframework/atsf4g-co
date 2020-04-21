@@ -120,8 +120,7 @@ int32_t cs_msg_dispatcher::dispatch(const atbus::protocol::msg &msg, const void 
             break;
         }
 
-        start_data_t start_data;
-        start_data.private_data = NULL;
+        start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
         ret                     = unpack_protobuf_msg(cs_msg, start_data.message, 
                                     reinterpret_cast<const void*>(post.content().data()), 
                                     post.content().size());
@@ -188,10 +187,7 @@ int32_t cs_msg_dispatcher::dispatch(const atbus::protocol::msg &msg, const void 
 
         ret = task_manager::me()->create_task<task_action_player_logout>(logout_task_id, COPP_MACRO_STD_MOVE(task_param));
         if (0 == ret) {
-            start_data_t start_data;
-            start_data.private_data     = NULL;
-            start_data.message.msg_type = 0;
-            start_data.message.msg_addr = NULL;
+            start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
 
             ret = task_manager::me()->start_task(logout_task_id, start_data);
             if (0 != ret) {

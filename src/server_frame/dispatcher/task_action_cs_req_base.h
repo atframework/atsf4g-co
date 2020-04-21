@@ -39,6 +39,8 @@ public:
     task_action_cs_req_base(dispatcher_start_data_t COPP_MACRO_RV_REF start_param);
     virtual ~task_action_cs_req_base();
 
+    virtual int hook_run() UTIL_CONFIG_OVERRIDE;
+
     std::pair<uint64_t, uint64_t> get_gateway_info() const;
 
     std::shared_ptr<session> get_session() const;

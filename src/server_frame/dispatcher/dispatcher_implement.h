@@ -38,6 +38,7 @@ public:
     typedef uint32_t msg_type_t;
     typedef UTIL_ENV_AUTO_MAP(msg_type_t, task_manager::task_action_creator_t) msg_task_action_set_t;
     typedef UTIL_ENV_AUTO_MAP(msg_type_t, task_manager::actor_action_creator_t) msg_actor_action_set_t;
+    typedef UTIL_ENV_AUTO_MAP(msg_type_t, const hello::DDispatcherOptions*) msg_options_set_t;
 
     struct msg_filter_data_t {
         msg_raw_t msg;
@@ -147,6 +148,7 @@ public:
     int register_action(msg_type_t msg_type) {
         const hello::DDispatcherOptions* options = get_options_by_message_type(msg_type);
         if (NULL != options) {
+            msg_options_map_[msg_type] = options;
             return _register_action(msg_type, task_manager::me()->make_task_creator<TAction>(options->timeout_s()));
         } else {
             return _register_action(msg_type, task_manager::me()->make_task_creator<TAction>(0));
@@ -160,6 +162,10 @@ public:
      */
     template <typename TAction>
     int register_actor(msg_type_t msg_type) {
+        const hello::DDispatcherOptions* options = get_options_by_message_type(msg_type);
+        if (NULL != options) {
+            msg_options_map_[msg_type] = options;
+        }
         return _register_action(msg_type, task_manager::me()->make_actor_creator<TAction>());
     }
 
@@ -187,6 +193,7 @@ private:
 private:
     msg_task_action_set_t          task_action_name_map_;
     msg_actor_action_set_t         actor_action_name_map_;
+    msg_options_set_t              msg_options_map_;
     std::list<msg_filter_handle_t> msg_filter_list_;
     mutable std::string            human_readable_name_;
 };

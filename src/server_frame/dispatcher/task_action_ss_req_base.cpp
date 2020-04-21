@@ -35,8 +35,10 @@ task_action_ss_req_base::~task_action_ss_req_base() {}
 
 int task_action_ss_req_base::hook_run() {
     // 路由对象系统支持
+    router_manager_base* mgr = NULL;
+    std::shared_ptr<router_object_base> obj;
     if (get_request().head().has_router()) {
-        std::pair<bool, int> res = filter_router_msg();
+        std::pair<bool, int> res = filter_router_msg(mgr, obj);
         if (false == res.first) {
             return res.second;
         }
@@ -44,7 +46,15 @@ int task_action_ss_req_base::hook_run() {
         WLOGDEBUG("task %s [0x%llx] receive router message body:\n%s", name(), get_task_id_llu(), protobuf_mini_dumper_get_readable(get_request_body()));
     }
 
-    return base_type::hook_run();
+    // 自动设置快队列保存
+    int ret = base_type::hook_run();
+    if (NULL != get_dispatcher_start_data().dispatcher_options && 
+        get_dispatcher_start_data().dispatcher_options->mark_fast_save()) {
+        if (mgr && obj) {
+            router_manager_set::me()->mark_fast_save(mgr, obj);
+        }
+    }
+    return ret;
 }
 
 uint64_t task_action_ss_req_base::get_request_bus_id() const {
@@ -301,13 +311,13 @@ namespace detail {
     }
 } // namespace detail
 
-std::pair<bool, int> task_action_ss_req_base::filter_router_msg() {
+std::pair<bool, int> task_action_ss_req_base::filter_router_msg(router_manager_base*& mgr, std::shared_ptr<router_object_base>& obj) {
     // request 可能会被move走，所以这里copy一份
     hello::SSRouterHead router;
     protobuf_copy_message(router, get_request().head().router());
 
     // find router manager in router set
-    router_manager_base *mgr = router_manager_set::me()->get_manager(router.object_type_id());
+    mgr = router_manager_set::me()->get_manager(router.object_type_id());
     if (NULL == mgr) {
         WLOGERROR("router manager %u not found", router.object_type_id());
         return std::make_pair(false, hello::err::EN_ROUTER_TYPE_INVALID);
@@ -315,9 +325,8 @@ std::pair<bool, int> task_action_ss_req_base::filter_router_msg() {
 
     router_manager_base::key_t key(router.object_type_id(), router.object_zone_id(), router.object_inst_id());
 
-    int                                 retry_times = 0;
-    int                                 last_result = 0;
-    std::shared_ptr<router_object_base> obj;
+    int retry_times = 0;
+    int last_result = 0;
 
     // 最多重试3次，故障恢复过程中可能发生抢占，这时候正常情况下第二次就应该会成功
     while ((++retry_times) <= 3) {

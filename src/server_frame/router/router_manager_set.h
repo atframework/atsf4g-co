@@ -69,6 +69,7 @@ public:
     inline bool is_closed() const { return is_closed_; }
 
     bool add_save_schedule(const std::shared_ptr<router_object_base> &obj);
+    bool mark_fast_save(router_manager_base *mgr, const std::shared_ptr<router_object_base> &obj);
 private:
     bool is_save_task_running() const;
 

@@ -431,6 +431,7 @@ void router_object_base::check_and_remove_timer_ref(std::list<router_system_time
     }
 
     if (timer_list_ != NULL && timer_iter_ != timer_list_->end()) {
+        // 内部接口，会在外层执行timer_list_->erase(timer_iter_);所以这里不执行移除
         timer_iter_ = timer_list_->end();
     }
     timer_list_ = NULL;

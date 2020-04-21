@@ -200,10 +200,7 @@ int task_action_player_login::on_success() {
         if (0 == tid) {
             WLOGERROR("create task_action_player_async_jobs failed");
         } else {
-            dispatcher_start_data_t start_data;
-            start_data.private_data     = NULL;
-            start_data.message.msg_addr = NULL;
-            start_data.message.msg_type = 0;
+            dispatcher_start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
 
             int res = task_manager::me()->start_task(tid, start_data);
             if (res < 0) {

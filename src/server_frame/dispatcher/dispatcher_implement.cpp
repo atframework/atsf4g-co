@@ -91,7 +91,7 @@ int32_t dispatcher_implement::on_recv_msg(msg_raw_t &msg, void *priv_data, uint6
     }
 
     uint64_t task_id = 0;
-    start_data_t callback_data;
+    start_data_t callback_data = dispatcher_make_default<dispatcher_start_data_t>();
     callback_data.message = msg;
     callback_data.private_data = priv_data;
 
@@ -124,9 +124,8 @@ int32_t dispatcher_implement::on_recv_msg(msg_raw_t &msg, void *priv_data, uint6
 }
 
 int32_t dispatcher_implement::on_send_msg_failed(msg_raw_t &msg, int32_t error_code, uint64_t sequence) {
-    resume_data_t callback_data;
+    resume_data_t callback_data = dispatcher_make_default<dispatcher_resume_data_t>();
     callback_data.message = msg;
-    callback_data.private_data = NULL;
     callback_data.sequence = sequence;
 
     // msg->set_rpc_result(hello::err::EN_SYS_RPC_SEND_FAILED);
@@ -158,6 +157,11 @@ int dispatcher_implement::create_task(start_data_t &start_data, task_manager::id
         return hello::err::EN_SYS_NOTFOUND;
     }
 
+    msg_options_set_t::iterator options_iter = msg_options_map_.find(msg_type_id);
+    if (options_iter != msg_options_map_.end()) {
+        start_data.dispatcher_options = options_iter->second;
+    }
+
     return iter->second(task_id, start_data);
 }
 
@@ -176,6 +180,11 @@ task_manager::actor_action_ptr_t dispatcher_implement::create_actor(start_data_t
     msg_actor_action_set_t::iterator iter = actor_action_name_map_.find(msg_type_id);
     if (actor_action_name_map_.end() == iter) {
         return ret;
+    }
+
+    msg_options_set_t::iterator options_iter = msg_options_map_.find(msg_type_id);
+    if (options_iter != msg_options_map_.end()) {
+        start_data.dispatcher_options = options_iter->second;
     }
 
     return iter->second(start_data);

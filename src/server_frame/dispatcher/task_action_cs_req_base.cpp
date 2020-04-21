@@ -12,6 +12,10 @@
 
 #include <dispatcher/cs_msg_dispatcher.h>
 
+#include <router/router_manager_base.h>
+#include <router/router_manager_set.h>
+#include <router/router_object_base.h>
+
 #include "task_action_cs_req_base.h"
 
 task_action_cs_req_base::task_action_cs_req_base(dispatcher_start_data_t COPP_MACRO_RV_REF start_param) {
@@ -30,6 +34,41 @@ task_action_cs_req_base::task_action_cs_req_base(dispatcher_start_data_t COPP_MA
 }
 
 task_action_cs_req_base::~task_action_cs_req_base() {}
+
+int task_action_cs_req_base::hook_run() { 
+    int ret = base_type::hook_run();
+
+    // 自动设置快队列保存
+    do {
+        if (NULL == get_dispatcher_start_data().dispatcher_options) {
+            break;
+        }
+
+        if (!get_dispatcher_start_data().dispatcher_options->mark_fast_save()) {
+            break;
+        }
+
+        router_manager_base* mgr = router_manager_set::me()->get_manager(hello::EN_ROT_PLAYER);
+        if (NULL == mgr) {
+            break;
+        }
+
+        std::shared_ptr<player_cache> player_cache = get_player_cache();
+        if (!player_cache) {
+            break;
+        }
+
+        router_manager_base::key_t key(hello::EN_ROT_PLAYER, player_cache->get_zone_id(), player_cache->get_user_id());
+        std::shared_ptr<router_object_base> obj = mgr->get_base_cache(key);
+        if (!obj || !obj->is_writable()) {
+            break;
+        }
+
+        router_manager_set::me()->mark_fast_save(mgr, obj);
+    } while (false);
+
+    return ret;
+}
 
 std::pair<uint64_t, uint64_t> task_action_cs_req_base::get_gateway_info() const {
     const msg_type &cs_msg = get_request();

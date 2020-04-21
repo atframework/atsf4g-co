@@ -185,7 +185,7 @@ public:
     }
 
     virtual int stop() {
-        time_t now = util::time::time_utility::get_now();
+        time_t now = util::time::time_utility::get_sys_now();
         if (now != stop_log_tm_) {
             stop_log_tm_ = now;
             WLOGINFO("============ server stop ============");

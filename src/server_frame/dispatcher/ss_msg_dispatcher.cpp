@@ -152,8 +152,7 @@ int32_t ss_msg_dispatcher::dispatch(const atbus::protocol::msg &msg, const void 
 
     hello::SSMsg ss_msg;
 
-    start_data_t callback_data;
-    callback_data.private_data = NULL;
+    start_data_t callback_data = dispatcher_make_default<dispatcher_start_data_t>();
 
     int32_t ret = unpack_protobuf_msg(ss_msg, callback_data.message, buffer, len);
     if (ret != 0) {
@@ -197,8 +196,7 @@ int32_t ss_msg_dispatcher::on_receive_send_data_response(const atbus::protocol::
     size_t      len    = fwd_data->content().size();
 
     hello::SSMsg ss_msg;
-    start_data_t callback_data;
-    callback_data.private_data = NULL;
+    start_data_t callback_data = dispatcher_make_default<dispatcher_start_data_t>();
 
     int32_t ret = unpack_protobuf_msg(ss_msg, callback_data.message, buffer, len);
     if (ret != 0) {

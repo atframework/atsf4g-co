@@ -15,6 +15,9 @@
 
 #include <protocol/pbdesc/svr.protocol.pb.h>
 
+class router_manager_base;
+class router_object_base;
+
 class task_action_ss_req_base : public task_action_req_base<hello::SSMsg> {
 public:
     typedef task_action_req_base<hello::SSMsg> base_type;
@@ -53,7 +56,7 @@ protected:
 
     virtual bool is_router_offline_ignored(); // 忽略路由对象不在线
 
-    std::pair<bool, int> filter_router_msg();
+    std::pair<bool, int> filter_router_msg(router_manager_base*& mgr, std::shared_ptr<router_object_base>& obj);
 
 private:
     std::list<msg_type> rsp_msgs_;

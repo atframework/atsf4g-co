@@ -96,11 +96,7 @@ int router_manager_set::tick() {
         if (0 == tid) {
             WLOGERROR("create task_action_auto_save_objects failed");
         } else {
-            dispatcher_start_data_t start_data;
-            start_data.private_data     = NULL;
-            start_data.message.msg_addr = NULL;
-            start_data.message.msg_type = 0;
-
+            dispatcher_start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
             if (0 == task_manager::me()->start_task(tid, start_data)) {
                 save_task_ = task_manager::me()->get_task(tid);
             }
@@ -174,10 +170,7 @@ int router_manager_set::stop() {
     if (0 == tid) {
         WLOGERROR("create task_action_router_close_manager_set failed");
     } else {
-        dispatcher_start_data_t start_data;
-        start_data.private_data     = NULL;
-        start_data.message.msg_addr = NULL;
-        start_data.message.msg_type = 0;
+        dispatcher_start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
 
         closing_task_ = task_manager::me()->get_task(tid);
         if (!closing_task_) {
@@ -451,6 +444,29 @@ bool router_manager_set::add_save_schedule(const std::shared_ptr<router_object_b
     return true;
 }
 
+bool router_manager_set::mark_fast_save(router_manager_base *mgr, const std::shared_ptr<router_object_base> &obj) {
+    if (!obj || !mgr) {
+        return false;
+    }
+
+    if (!obj->is_writable()) {
+        return false;
+    }
+
+    // It's already pending to save, no need move to fast timer
+    if (obj->check_flag(router_object_base::flag_t::EN_ROFT_SCHED_SAVE_OBJECT)) {
+        return false;
+    }
+
+    // Mark force save and move to fast timer
+    obj->set_flag(router_object_base::flag_t::EN_ROFT_FORCE_SAVE_OBJECT);
+    if (obj->timer_list_ == &timers_.fast_timer_list) {
+        return false;
+    }
+
+    return insert_timer(mgr, obj, true);
+}
+
 bool router_manager_set::is_save_task_running() const { return save_task_ && !save_task_->is_exiting(); }
 
 bool router_manager_set::is_closing_task_running() const { return closing_task_ && !closing_task_->is_exiting(); }
@@ -513,7 +529,8 @@ int router_manager_set::tick_timer(time_t cache_expire, time_t object_expire, ti
                     auto_save.action            = EN_ASA_REMOVE_OBJECT;
 
                     obj->set_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_OBJECT);
-                } else if (obj->get_last_save_time() + object_save < last_proc_time_) { // 实体保存
+                } else if (obj->get_last_save_time() + object_save < last_proc_time_ || 
+                    obj->check_flag(router_object_base::flag_t::EN_ROFT_FORCE_SAVE_OBJECT)) { // 实体保存
                     save_list_.push_back(auto_save_data_t());
                     auto_save_data_t &auto_save = save_list_.back();
                     auto_save.object            = obj;
@@ -522,6 +539,7 @@ int router_manager_set::tick_timer(time_t cache_expire, time_t object_expire, ti
                     obj->refresh_save_time();
 
                     obj->set_flag(router_object_base::flag_t::EN_ROFT_SCHED_SAVE_OBJECT);
+                    obj->unset_flag(router_object_base::flag_t::EN_ROFT_FORCE_SAVE_OBJECT);
                 }
             } else {
                 // 缓存过期,和下面主动回收缓存的逻辑保持一致

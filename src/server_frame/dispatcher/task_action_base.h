@@ -14,6 +14,8 @@
 #include <libcopp/utils/features.h>
 #include <libcotask/task.h>
 
+#include "dispatcher_type_defines.h"
+
 /**
  * action 默认结构
  * action rpc 接口
@@ -94,6 +96,15 @@ protected:
      */
     inline void disable_rsp_msg() { rsp_msg_disabled_ = false; }
 
+    /**
+     * @brief 获取启动透传参数
+     */
+    inline const dispatcher_start_data_t& get_dispatcher_start_data() const { return start_data_; }
+
+    /**
+     * @brief 获取启动透传参数
+     */
+    inline dispatcher_start_data_t& get_dispatcher_start_data() { return start_data_; }
 private:
     uint64_t player_id_;
     uint64_t task_id_;
@@ -101,6 +112,7 @@ private:
     int32_t  rsp_code_;
     bool     rsp_msg_disabled_;
     bool     evt_disabled_;
+    dispatcher_start_data_t start_data_;
 };
 
 template <typename TREQ>

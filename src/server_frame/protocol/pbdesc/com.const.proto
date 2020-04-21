@@ -20,7 +20,8 @@ option (CONST_SETTINGS) = {
 };
 
 message DDispatcherOptions {
-    int32 timeout_s = 1; // 手动指定协程任务超时时间
+    int32 timeout_s      = 1; // 手动指定协程任务超时时间
+    bool  mark_fast_save = 2; // 标记把涉及的路由对象转移到快队列并触发保存(需要dispatcher层和task_action_base层支持)
 }
 
 extend google.protobuf.FieldOptions {

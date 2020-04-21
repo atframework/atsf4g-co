@@ -47,7 +47,8 @@ namespace detail {
     };
 } // namespace detail
 
-task_action_base::task_action_base() : player_id_(0), task_id_(0), ret_code_(0), rsp_code_(0), rsp_msg_disabled_(false), evt_disabled_(false) {}
+task_action_base::task_action_base() : player_id_(0), task_id_(0), ret_code_(0), rsp_code_(0), 
+    rsp_msg_disabled_(false), evt_disabled_(false), start_data_(dispatcher_make_default<dispatcher_start_data_t>()) {}
 task_action_base::~task_action_base() {}
 
 const char *task_action_base::name() const {
@@ -66,8 +67,9 @@ const char *task_action_base::name() const {
 int task_action_base::operator()(void *priv_data) {
     detail::task_action_stat_guard stat(this);
 
-    // reinterpret_cast<task_manager::start_data_t*>(priv_data);
-    //
+    if (NULL != priv_data) {
+        start_data_ = *reinterpret_cast<task_manager::start_data_t*>(priv_data);
+    }
     task_manager::task_t *task = cotask::this_task::get<task_manager::task_t>();
     if (NULL == task) {
         WLOGERROR("task convert failed, must in task.");

@@ -183,10 +183,7 @@ void player::try_patch_remote_command() {
     } else {
         remote_command_patch_task_ = task_manager::me()->get_task(tid);
 
-        dispatcher_start_data_t start_data;
-        start_data.private_data     = NULL;
-        start_data.message.msg_addr = NULL;
-        start_data.message.msg_type = 0;
+        dispatcher_start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
 
         int res = task_manager::me()->start_task(tid, start_data);
         if (res < 0) {
