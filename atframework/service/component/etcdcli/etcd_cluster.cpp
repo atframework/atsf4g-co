@@ -1038,6 +1038,8 @@ namespace atframe {
                 }
                 ss << " ]";
                 WLOGDEBUG("Etcd cluster got user %s with roles: %s", username.c_str(), ss.str().c_str());
+
+                is_success = true;
             } while (false);
 
             if (is_success) {
