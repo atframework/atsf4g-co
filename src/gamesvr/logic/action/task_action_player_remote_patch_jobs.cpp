@@ -6,6 +6,7 @@
 #include <protocol/pbdesc/svr.const.err.pb.h>
 #include <time/time_utility.h>
 
+#include <data/session.h>
 #include <data/player.h>
 #include <router/router_player_cache.h>
 #include <router/router_player_manager.h>
@@ -42,6 +43,7 @@ int task_action_player_remote_patch_jobs::operator()() {
         return hello::err::EN_SUCCESS;
     }
     is_writable_ = true;
+    bool pending_to_logout = false;
 
     /**
      * 一致性：
@@ -54,7 +56,7 @@ int task_action_player_remote_patch_jobs::operator()() {
      */
 
     int ret = hello::err::EN_SUCCESS;
-    // while (is_writable_ && param_.user->is_inited() && false == need_restart_) {
+    // while (is_writable_ && !pending_to_logout && param_.user->is_inited() && false == need_restart_) {
     //     // TODO 拉取远程命令列表
     //     // TODO 如果没有待执行的远程命令，直接成功返回
     //     if (true) {
@@ -77,11 +79,23 @@ int task_action_player_remote_patch_jobs::operator()() {
     //     is_writable_ = cache->is_writable();
     //     // 执行时间过长则中断，下一次再启动流程
     //     need_restart_ = param_.timeout_timepoint - util::time::time_utility::get_now() < param_.timeout_duration / 2;
+            // 如果玩家离线和正在准备登出则停止异步任务流程，下次登入再继续
+            {
+                session::ptr_t s = param_.user->get_session();
+                if (!s) {
+                    pending_to_logout = true;
+                } else if (s->check_flag(session::flag_t::EN_SESSION_FLAG_CLOSING) || s->check_flag(session::flag_t::EN_SESSION_FLAG_CLOSED)) {
+                    pending_to_logout = true;
+                }
+            }
     // }
 
     // 可能是从中间中断的，需要重新计算一次是否可写和超时
     // is_writable_ = cache->is_writable();
     need_restart_ = param_.timeout_timepoint - util::time::time_utility::get_now() < param_.timeout_duration / 2;
+    if (pending_to_logout) {
+        need_restart_ = false;
+    }
     return ret;
 }
 
