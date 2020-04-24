@@ -61,6 +61,12 @@ int task_action_player_kickoff::operator()() {
         return hello::err::EN_SUCCESS;
     }
 
+    set_rsp_code(user->await_before_logout_tasks());
+    if (get_rsp_code() < 0) {
+        WPLOGERROR(*user, "kickoff failed, res: %d(%s)", get_rsp_code(), protobuf_mini_dumper_get_error_msg(get_rsp_code()));
+        return hello::err::EN_SUCCESS;
+    }
+
     // 仅在有session时才下发踢出消息
     std::shared_ptr<session> sess = user->get_session();
     if (sess) {

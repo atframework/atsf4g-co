@@ -39,7 +39,40 @@ bool session::key_t::operator>(const key_t &r) const {
 
 bool session::key_t::operator>=(const key_t &r) const { return (*this) > r || (*this) == r; }
 
-session::session() : login_task_id_(0) {
+session::flag_guard_t::flag_guard_t(): flag_(flag_t::EN_SESSION_FLAG_NONE), owner_(NULL) {}
+session::flag_guard_t::~flag_guard_t() { reset(); }
+
+void session::flag_guard_t::setup(session& owner, flag_t::type f) {
+    if (flag_t::EN_SESSION_FLAG_NONE == f) {
+        return;
+    }
+
+    // 一次只能设置一个flag
+    if (f & (f - 1)) {
+        return;
+    }
+
+    // 已被其他地方设置
+    if (owner.check_flag(f)) {
+        return;
+    }
+
+    reset();
+    owner_ = &owner;
+    flag_ = f;
+    owner_->set_flag(flag_, true);
+}
+
+void session::flag_guard_t::reset() {
+    if (owner_ && flag_t::EN_SESSION_FLAG_NONE != flag_) {
+        owner_->set_flag(flag_, false);
+    }
+
+    owner_ = NULL;
+    flag_ = flag_t::EN_SESSION_FLAG_NONE;
+}
+
+session::session() : flags_(0), login_task_id_(0) {
     id_.bus_id     = 0;
     id_.session_id = 0;
 }

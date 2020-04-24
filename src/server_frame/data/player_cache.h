@@ -122,6 +122,11 @@ public:
     virtual void send_all_syn_msg();
 
     /**
+     * @brief 等待登出前需要结算完的任务
+     */
+    virtual int await_before_logout_tasks();
+
+    /**
      * @brief 监视关联的Session
      * @param session_ptr 关联的Session
      */

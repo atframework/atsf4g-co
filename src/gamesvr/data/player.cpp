@@ -202,6 +202,16 @@ void player::send_all_syn_msg() {
     clear_dirty_cache();
 }
 
+int player::await_before_logout_tasks() {
+    // 等待全部涉及保存的异步任务完成
+    int ret = base_type::await_before_logout_tasks();
+    if (ret < 0) {
+        return ret;
+    }
+
+    return ret;
+}
+
 void player::clear_dirty_cache() {
     // TODO 清理要推送的脏数据
 }

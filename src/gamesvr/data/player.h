@@ -164,7 +164,8 @@ public:
      * @brief 下发同步消息
      */
     virtual void send_all_syn_msg() UTIL_CONFIG_OVERRIDE;
-    void clear_dirty_cache();
+    int          await_before_logout_tasks() UTIL_CONFIG_OVERRIDE;
+    void         clear_dirty_cache();
 
 private:
     /**

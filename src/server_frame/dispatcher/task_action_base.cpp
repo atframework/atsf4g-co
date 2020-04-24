@@ -76,13 +76,14 @@ int task_action_base::operator()(void *priv_data) {
         return hello::err::EN_SYS_INIT;
     }
 
+    task_id_ = task->get_id();
+
     if (0 != get_player_id()) {
         WLOGDEBUG("task %s [0x%llx] for player %llu start to run\n", name(), get_task_id_llu(), get_player_id_llu());
     } else {
         WLOGDEBUG("task %s [0x%llx] start to run\n", name(), get_task_id_llu());
     }
-
-    task_id_ = task->get_id();
+    
     ret_code_ = hook_run();
 
     if (evt_disabled_) {

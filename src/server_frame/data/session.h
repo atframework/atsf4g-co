@@ -4,6 +4,8 @@
 #pragma once
 
 #include <std/smart_ptr.h>
+#include <design_pattern/noncopyable.h>
+#include <design_pattern/nomovable.h>
 
 namespace hello {
     class CSMsg;
@@ -29,6 +31,31 @@ public:
         bool operator>=(const key_t &r) const;
     };
 
+    struct flag_t {
+        enum type {
+            EN_SESSION_FLAG_NONE    = 0,
+            EN_SESSION_FLAG_CLOSING = 0x0001,
+            EN_SESSION_FLAG_CLOSED  = 0x0002,
+        };
+    };
+
+    class flag_guard_t {
+    public:
+        flag_guard_t();
+        ~flag_guard_t();
+
+        void setup(session& owner, flag_t::type f);
+        void reset();
+        inline operator bool() const { return !!owner_ && !!flag_; }
+
+        UTIL_DESIGN_PATTERN_NOCOPYABLE(flag_guard_t)
+        UTIL_DESIGN_PATTERN_NOMOVABLE(flag_guard_t)
+
+    private:
+        flag_t::type flag_;
+        session* owner_;
+    };
+
 public:
     session();
     ~session();
@@ -38,6 +65,28 @@ public:
 
     inline void     set_login_task_id(uint64_t id) { login_task_id_ = id; }
     inline uint64_t get_login_task_id() const { return login_task_id_; }
+
+    inline bool check_flag(flag_t::type f) const {
+        // 一次只能检查一个flag
+        if (f & (f - 1)) {
+            return false;
+        }
+        return !!(flags_ & f); 
+    }
+
+    inline void set_flag(flag_t::type f, bool v) {
+        // 一次只能设置一个flag
+        if (f & (f - 1)) {
+            return;
+        }
+
+        if (v) {
+            flags_ |= f;
+        } else {
+            flags_ &= ~static_cast<uint32_t>(f);
+        }
+    }
+
 
     /**
      * @brief 监视关联的player
@@ -70,6 +119,7 @@ public:
 
 private:
     key_t                       id_;
+    uint32_t                    flags_;
     std::weak_ptr<player_cache> player_;
     uint64_t                    login_task_id_;
 };

@@ -119,8 +119,12 @@ void session_manager::remove(sess_ptr_t sess, int reason) {
             }
         } while (false);
 
+        // 回收ID
+        if (iter->second) {
+            iter->second->set_flag(session::flag_t::EN_SESSION_FLAG_CLOSED, true);
+        }
         // 移除session
-        all_sessions_.erase(key);
+        all_sessions_.erase(iter);
     }
 
     // 移除绑定的player
@@ -140,6 +144,7 @@ void session_manager::remove(sess_ptr_t sess, int reason) {
 void session_manager::remove_all() {
     for (session_index_t::iterator iter = all_sessions_.begin(); iter != all_sessions_.end(); ++iter) {
         if (iter->second) {
+            iter->second->set_flag(session::flag_t::EN_SESSION_FLAG_CLOSED, true);
             iter->second->send_kickoff(::atframe::gateway::close_reason_t::EN_CRT_SERVER_CLOSED);
         }
     }

@@ -135,6 +135,10 @@ int player_cache::dump(hello::table_user &user, bool always) {
 
 void player_cache::send_all_syn_msg() {}
 
+int player_cache::await_before_logout_tasks() {
+    return 0;
+}
+
 void player_cache::set_session(std::shared_ptr<session> session_ptr) {
     std::shared_ptr<session> old_sess = session_.lock();
     if (old_sess == session_ptr) {
