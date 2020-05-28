@@ -34,6 +34,10 @@
 # external libs
 ## libiniloader
 
+## fmtlib
+/3rd_party/fmtlib/prebuilt
+/3rd_party/fmtlib/pkg
+
 ## libuv
 /3rd_party/libuv/pkg
 /3rd_party/libuv/prebuilt
