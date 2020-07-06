@@ -10,3 +10,11 @@ enum EnSystemLimit {
     EN_SL_MAX_SS_MSG_LEN                    = 262144;
     EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET = 1577836800; // 2020-01-01 00:00:00 UTC
 }
+
+enum EnGlobalUUIDMajorType {
+    EN_GLOBAL_UUID_MAT_DEFAULT     = 0; // INVALID
+    EN_GLOBAL_UUID_MAT_MAIL        = 1; // 邮件GUID分配器
+    EN_GLOBAL_UUID_MAT_TRANSACTION = 2; // 事务GUID分配器
+    EN_GLOBAL_UUID_MAT_USER_ID     = 3; // User ID分配器
+    EN_GLOBAL_UUID_MAT_GUILD_ID    = 4; // Guild ID分配器
+}

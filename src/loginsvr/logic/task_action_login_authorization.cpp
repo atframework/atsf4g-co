@@ -210,8 +210,8 @@ int task_action_login_authorization::operator()() {
                 }
             } else {
                 // 8. 验证踢出后的登入pd
-                login_data_.Clear();
                 uint64_t old_svr_id = login_data_.router_server_id();
+                login_data_.Clear();
                 res                 = rpc::db::login::get(msg_body.open_id().c_str(), zone_id_, login_data_, version_);
                 if (res < 0) {
                     WLOGERROR("call login rpc method failed, msg: %s", msg_body.DebugString().c_str());
@@ -222,7 +222,7 @@ int task_action_login_authorization::operator()() {
                 // 可能目标服务器重启后没有这个玩家的数据而直接忽略请求直接返回成功
                 // 这时候走故障恢复流程，直接把router_server_id设成0即可
                 if (0 != login_data_.router_server_id() && old_svr_id != login_data_.router_server_id()) {
-                    WLOGERROR("user %s loginout failed.", msg_body.open_id().c_str());
+                    WLOGERROR("user %s logout failed.", msg_body.open_id().c_str());
                     // 踢下线失败的错误码
                     set_rsp_code(hello::EN_ERR_LOGIN_ALREADY_ONLINE);
                     return hello::err::EN_PLAYER_KICKOUT;
@@ -236,9 +236,9 @@ int task_action_login_authorization::operator()() {
     // 新用户则创建
     if (hello::err::EN_DB_RECORD_NOT_FOUND == res) {
         // 生成容易识别的数字UUID
-        int64_t player_uid = rpc::db::uuid::generate_global_unique_id(hello::config::EN_GUIT_PLAYER_ID, 0, 0);
+        int64_t player_uid = rpc::game::player::alloc_user_id();
         if (player_uid <= 0) {
-            WLOGERROR("call generate_global_unique_id failed, openid:%s, res:%d", msg_body.open_id().c_str(), static_cast<int>(player_uid));
+            WLOGERROR("call alloc_user_id failed, openid:%s, res:%d", msg_body.open_id().c_str(), static_cast<int>(player_uid));
             set_rsp_code(hello::EN_ERR_LOGIN_CREATE_PLAYER_FAILED);
             return res;
         }

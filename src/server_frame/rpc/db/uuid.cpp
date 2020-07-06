@@ -15,8 +15,8 @@
 
 #include <protocol/config/com.const.config.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
+#include <protocol/pbdesc/svr.const.pb.h>
 #include <protocol/pbdesc/svr.table.pb.h>
-
 
 #include <dispatcher/db_msg_dispatcher.h>
 #include <dispatcher/task_manager.h>
@@ -193,14 +193,15 @@ namespace rpc {
             static UTIL_ENV_AUTO_MAP(unique_id_key_t, unique_id_value_t, unique_id_container_helper) g_unique_id_pools;
             static util::lock::spin_rw_lock g_unique_id_pool_locker;
 
-            int64_t generate_global_unique_id(uint32_t major_type, uint32_t minor_type, uint32_t patch_type) {
+            template<int64_t bits_off>
+            static int64_t generate_global_unique_id(uint32_t major_type, uint32_t minor_type, uint32_t patch_type) {
                 task_manager::task_t *this_task = task_manager::task_t::this_task();
                 if (NULL == this_task) {
                     return hello::err::EN_SYS_RPC_NO_TASK;
                 }
 
                 // POOL => 1 | 50 | 13
-                UTIL_CONFIG_CONSTEXPR int64_t bits_off   = 13;
+                // UTIL_CONFIG_CONSTEXPR int64_t bits_off   = 13;
                 UTIL_CONFIG_CONSTEXPR int64_t bits_range = 1 << bits_off;
                 UTIL_CONFIG_CONSTEXPR int64_t bits_mask  = bits_range - 1;
 
@@ -209,28 +210,32 @@ namespace rpc {
                 key.minor_type = minor_type;
                 key.patch_type = patch_type;
 
-                typedef UTIL_ENV_AUTO_MAP(unique_id_key_t, unique_id_value_t, unique_id_container_helper) real_map_type;
-                real_map_type::iterator iter;
-
+                unique_id_value_t *alloc;
                 do {
+                    typedef UTIL_ENV_AUTO_MAP(unique_id_key_t, unique_id_value_t, unique_id_container_helper) real_map_type;
+                    real_map_type::iterator iter;
+
                     {
                         util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard(g_unique_id_pool_locker);
                         iter = g_unique_id_pools.find(key);
-                    }
-                    if (g_unique_id_pools.end() == iter) {
-                        util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard(g_unique_id_pool_locker);
-                        unique_id_value_t                                       val;
-                        val.unique_id_index = 0;
-                        val.unique_id_base  = 0;
-                        iter                = g_unique_id_pools.insert(real_map_type::value_type(key, val)).first;
-
-                        if (g_unique_id_pools.end() == iter) {
-                            return hello::err::EN_SYS_MALLOC;
+                        if (g_unique_id_pools.end() != iter) {
+                            alloc = &iter->second;
+                            break;
                         }
                     }
-                } while (false);
 
-                unique_id_value_t *alloc = &iter->second;
+                    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard(g_unique_id_pool_locker);
+                    unique_id_value_t val;
+                    val.unique_id_index = 0;
+                    val.unique_id_base  = 0;
+                    iter                = g_unique_id_pools.insert(real_map_type::value_type(key, val)).first;
+
+                    if (g_unique_id_pools.end() == iter) {
+                        return hello::err::EN_SYS_MALLOC;
+                    }
+
+                    alloc = &iter->second;
+                } while (false);
 
                 int64_t ret      = 0;
                 int     try_left = 5;
@@ -280,6 +285,19 @@ namespace rpc {
                 // WLOGINFO("=====DEBUG===== malloc uuid for (%u, %u, %u), val: %lld", major_type, minor_type, patch_type, static_cast<long
                 // long>(ret));
                 return ret;
+            }
+
+            int64_t generate_global_unique_id(uint32_t major_type, uint32_t minor_type, uint32_t patch_type) {
+                if (hello::EN_GLOBAL_UUID_MAT_USER_ID == major_type || hello::EN_GLOBAL_UUID_MAT_GUILD_ID == major_type) {
+                    // POOL => 1 | * | 5
+                    // EN_GLOBAL_UUID_MAT_USER_ID:     [1 | 55 | 5] | 3
+                    // EN_GLOBAL_UUID_MAT_GUILD_ID:    [1 | 55 | 5] | 3
+                    // 公会和玩家账号分配采用短ID模式
+                    return generate_global_unique_id<5>(major_type, minor_type, patch_type);
+                } else {
+                    // POOL => 1 | 50 | 13
+                    return generate_global_unique_id<13>(major_type, minor_type, patch_type);;
+                }
             }
         } // namespace uuid
     }     // namespace db

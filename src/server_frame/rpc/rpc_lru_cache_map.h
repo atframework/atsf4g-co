@@ -142,7 +142,7 @@ namespace rpc {
                         out->pulling_task.reset();
                     } else {
                         task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
-                        self_task->await(out->pulling_task);
+                        self_task->await_task(out->pulling_task);
                         if (self_task->is_timeout()) {
                             out.reset();
                             return hello::err::EN_SYS_TIMEOUT;

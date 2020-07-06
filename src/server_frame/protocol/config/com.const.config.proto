@@ -12,9 +12,3 @@ enum game_const_config {
     EN_GCC_ACTIVATION_CODE_PERMANENT = 64;       // 永久生效的激活码最大批次
     EN_GCC_START_PLAYER_ID           = 10000;    // start id for alloc player id
 }
-
-// GUID类型
-enum global_unique_id_type {
-    EN_GUIT_SHARED    = 0; // 共享的全局ID
-    EN_GUIT_PLAYER_ID = 1; // 用户玩家ID分配
-}
