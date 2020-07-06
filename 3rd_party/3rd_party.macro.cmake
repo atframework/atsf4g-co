@@ -4,6 +4,9 @@ if(NOT MSVC OR PROJECT_ENABLE_JEMALLOC)
     include("${PROJECT_3RD_PARTY_ROOT_DIR}/jemalloc/jemalloc.cmake")
 endif()
 
+# =========== 3rd_party - fmtlib/std::format ===========
+include("${PROJECT_3RD_PARTY_ROOT_DIR}/fmtlib/fmtlib.cmake")
+
 # =========== 3rd_party - zlib ===========
 # if (NOT WIN32)
     include("${PROJECT_3RD_PARTY_ROOT_DIR}/zlib/zlib.cmake")
