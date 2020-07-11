@@ -93,6 +93,7 @@
 .vscode
 .idea
 /cmake-build-*
+.mako_modules-*
 
 # 3rd party source and building output files
 /3rd_party/redis/pkg

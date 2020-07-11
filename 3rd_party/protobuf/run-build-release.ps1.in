@@ -20,15 +20,15 @@ if ( "@PROJECT_PREBUILT_PLATFORM_NAME@" -ne "@PROJECT_PREBUILT_HOST_PLATFORM_NAM
     Set-Location "$3RD_PARTY_PROTOBUF_HOST_BUILD_DIR"
 
     if (!(Test-Path "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/bin/protoc" ) -and !(Test-Path "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/bin/protoc.exe" )) {
-        $ENV:BACKUP_CC=$ENV:CC
-        $ENV:BACKUP_CXX=$ENV:CXX
+        $ENV:BACKUP_CC = $ENV:CC
+        $ENV:BACKUP_CXX = $ENV:CXX
         & @3RD_PARTY_PROTOBUF_HOST_BUILD_FLAGS_CMD@ "-DCMAKE_INSTALL_PREFIX=@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@"
         if (("@MSVC@".ToLower() -ne "true") -or ("@MSVC@".ToLower() -ne "yes") -or ("@MSVC@".ToLower() -eq "1")) {
             & "@CMAKE_COMMAND@" --build . --target install --config Debug @3RD_PARTY_PROTOBUF_BUILD_MULTI_CORE@
         }
         & "@CMAKE_COMMAND@" --build . --target install --config Release @3RD_PARTY_PROTOBUF_BUILD_MULTI_CORE@
-        $ENV:CC=$ENV:BACKUP_CC
-        $ENV:CXX=$ENV:BACKUP_CXX
+        $ENV:CC = $ENV:BACKUP_CC
+        $ENV:CXX = $ENV:BACKUP_CXX
     }
 
 }
@@ -55,3 +55,43 @@ if (("@MSVC@".ToLower() -eq "true") -or ("@MSVC@".ToLower() -eq "yes") -or ("@MS
 
 & "@CMAKE_COMMAND@" --build . --target install --config Release @3RD_PARTY_PROTOBUF_BUILD_MULTI_CORE@
 
+if (( $LastExitCode -eq 0 ) -and (Test-Path "@3RD_PARTY_PROTOBUF_PKG_DIR@/protobuf-@3RD_PARTY_PROTOBUF_VERSION@/python/setup.py" )) {
+    if ($IsWindows) {
+        $ENV:PATH = "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/bin;${ENV:PATH}"
+    }
+    else {
+        $ENV:PATH = "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/bin:${ENV:PATH}"
+    }
+    
+    if (Test-Path "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/python") {
+        Remove-Item -Path "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/python" -Recurse -Force
+    }
+    Copy-Item -Path "@3RD_PARTY_PROTOBUF_PKG_DIR@/protobuf-@3RD_PARTY_PROTOBUF_VERSION@/python" -Destination "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@" -Force -Recurse
+    Copy-Item -Path "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/include" -Destination "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/src" -Force -Recurse
+    Set-Location "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/python"
+
+    $PYTHON_BIN = "";
+    if ( "x" -ne "x@PYTHON_EXECUTABLE@" ) {
+        "@PYTHON_EXECUTABLE@" --version
+        if ( $LastExitCode -eq 0 ) {
+            $PYTHON_BIN = "@PYTHON_EXECUTABLE@"
+        }
+    }
+
+    if ( "x" -eq "x$PYTHON_BIN" ) {
+        python3 --version
+        if ( $LastExitCode -eq 0 ) {
+            $PYTHON_BIN = "python3"
+        }
+    }
+    if ( "x" -eq "x$PYTHON_BIN" ) {
+        python --version
+        if ( $LastExitCode -eq 0 ) {
+            $PYTHON_BIN = "python"
+        }
+    }
+    if ( "x" -ne "x$PYTHON_BIN" ) {
+        & "$PYTHON_BIN" ./setup.py build_py
+    }
+    Remove-Item -Path "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/src" -Recurse -Force
+}

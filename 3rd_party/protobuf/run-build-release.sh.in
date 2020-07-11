@@ -43,3 +43,36 @@ fi
 
 @CMAKE_COMMAND@ --build . --target install --config Release @3RD_PARTY_PROTOBUF_BUILD_MULTI_CORE@ ;
 
+if [[ $? -eq 0 ]] && [[ -e "@3RD_PARTY_PROTOBUF_PKG_DIR@/protobuf-@3RD_PARTY_PROTOBUF_VERSION@/python/setup.py" ]]; then
+    export PATH="@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/bin:$PATH" ;
+    if [[ -e "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/python" ]]; then
+        rm -rf "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/python";
+    fi
+    cp -rf "@3RD_PARTY_PROTOBUF_PKG_DIR@/protobuf-@3RD_PARTY_PROTOBUF_VERSION@/python" "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/python";
+    cp -rf "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/include" "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/src";
+    cd "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/python";
+    
+    PYTHON_BIN="";
+    if [[ "x" != "x@PYTHON_EXECUTABLE@" ]]; then
+        "@PYTHON_EXECUTABLE@" --version > /dev/null 2>&1;
+        if [[ $? -eq 0 ]]; then
+            PYTHON_BIN="@PYTHON_EXECUTABLE@";
+        fi
+    fi
+    if [[ "x" == "x$PYTHON_BIN" ]]; then
+        python3 --version > /dev/null 2>&1;
+        if [[ $? -eq 0 ]]; then
+            PYTHON_BIN="python3";
+        fi
+    fi
+    if [[ "x" == "x$PYTHON_BIN" ]]; then
+        python --version > /dev/null 2>&1;
+        if [[ $? -eq 0 ]]; then
+            PYTHON_BIN="python";
+        fi
+    fi
+    if [[ "x" != "x$PYTHON_BIN" ]]; then
+        "$PYTHON_BIN" ./setup.py build_py ;
+    fi
+    rm -rf "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/src";
+fi
