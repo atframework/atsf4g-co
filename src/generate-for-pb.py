@@ -10,6 +10,7 @@ import sys
 import codecs
 import re
 import shutil
+import sysconfig
 from subprocess import PIPE, STDOUT, Popen
 
 HANDLE_SPLIT_PBFIELD_RULE = re.compile("\\d+|_+|\\s+|\\-")
@@ -495,9 +496,9 @@ def split_path_rule(input):
     if dot_pos <= 0 or dot_pos > len(input):
         temp_path = input
         if temp_path.endswith(".mako"):
-            rule = temp_path[0: len(temp_path) - 5]
+            rule = os.path.basename(temp_path[0: len(temp_path) - 5])
         else:
-            rule = temp_path
+            rule = os.path.basename(temp_path)
     else:
         temp_path = input[0:dot_pos]
         rule = input[(dot_pos+1):]
@@ -620,9 +621,10 @@ def generate_group(options, group):
             "output_file_path": None,
             "output_render_path": None,
             "current_instance": group.outer_inst,
-            "PbConvertRule": PbConvertRule,
-            **group.database.custom_variables
+            "PbConvertRule": PbConvertRule
         }
+        for k in group.database.custom_variables:
+            render_args[k] = group.database.custom_variables[k]
 
         try:
             (intput_template, output_rule, output_render) = split_path_rule(outer_rule)
@@ -674,9 +676,10 @@ def generate_group(options, group):
             "output_file_path": None,
             "output_render_path": None,
             "current_instance": None,
-            "PbConvertRule": PbConvertRule,
-            **group.database.custom_variables
+            "PbConvertRule": PbConvertRule
         }
+        for k in group.database.custom_variables:
+            render_args[k] = group.database.custom_variables[k]
 
         (intput_template, output_rule, output_render) = split_path_rule(inner_rule)
         if not os.path.exists(intput_template):
@@ -795,6 +798,7 @@ def main():
     script_dir = os.path.dirname(os.path.realpath(__file__))
     work_dir = os.getcwd()
     ret = 0
+    os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
 
     usage = '[--service-name <server-name>] --proto-files "*.proto" [--rpc-template TEMPLATE:OUTPUT ...] [--service-template TEMPLATE:OUTPUT ...] [other options...]'
     parser = CmdArgsGetParser(usage)
@@ -817,6 +821,12 @@ def main():
         action="append",
         help="add path to python module(where to find protobuf,six,mako,print_style and etc...)",
         dest="add_path",
+        default=[])
+    CmdArgsAddOption(parser,
+        "--add-package-prefix",
+        action="append",
+        help="add path to python module install prefix(where to find protobuf,six,mako,print_style and etc...)",
+        dest="add_package_prefix",
         default=[])
     CmdArgsAddOption(parser,
         "-p",
@@ -1003,7 +1013,7 @@ def main():
 
     if not options.proto_files and not options.pb_file:
         sys.stderr.write("-P/--proto-files <*.proto> or --pb-file <something.pb> is required.\n")
-        print("[RUNNING]: {0} '{1}'", sys.executable, "' '".join(sys.argv))
+        print("[RUNNING]: {0} '{1}'".format(sys.executable, "' '".join(sys.argv)))
         parser.print_help()
         return 1
 
@@ -1023,21 +1033,38 @@ def main():
         test_project_dirs = None
         if project_dir is None:
             sys.stderr.write("Can not find project directory please add --project-dir <project directory> with .git in it.\n")
-            print("[RUNNING]: {0} '{1}'", sys.executable, "' '".join(sys.argv))
+            print("[RUNNING]: {0} '{1}'".format(sys.executable, "' '".join(sys.argv)))
             parser.print_help()
             return 1
     
     for path in options.add_path:
         sys.path.append(path)
 
-    HANDLE_INCLUDE_RULE = re.compile("\\#\\s*include\\s*[\\<\\\"](?P<FILE_PATH>[^\\>\\\"]+)[\\>\\\"]")
-    HANDLE_REGISTER_RULE = re.compile("REG_[^\\(]+\\(\\s*(?P<DISPATCHER>[^\\s,]+)\\s*,\\s*(?P<RET>[^\\s,]+)\\s*,\s*(?P<TASK_NAME>[^\\s,]+)\\s*,\\s*(?P<REQ_CMD>[^\\s\\)]+)\\s*\\)\\s*\\;")
-    HANDLE_RETURN_RULE = re.compile("\\s*return\\s+[^\\']+\\;")
+    # See https://docs.python.org/3/install/#how-installation-works
+    for path in options.add_package_prefix:
+        add_package_bin_path = os.path.join(path, 'bin')
+        if os.path.exists(add_package_bin_path):
+            if sys.platform.lower() == "win32":
+                os.environ['PATH'] = add_package_bin_path + ";" + os.environ['PATH']
+            else:
+                os.environ['PATH'] = add_package_bin_path + ":" + os.environ['PATH']
+
+        add_package_lib_path = os.path.join(path, 'lib', 'python{0}'.format(sysconfig.get_python_version()), 'site-packages')
+        if os.path.exists(add_package_lib_path):
+            sys.path.append(add_package_lib_path)
+        
+        add_package_lib64_path = os.path.join(path, 'lib64', 'python{0}'.format(sysconfig.get_python_version()), 'site-packages')
+        if os.path.exists(add_package_lib64_path):
+            sys.path.append(add_package_lib64_path)
+
+        add_package_lib_path_for_win = os.path.join(path, 'Lib', 'site-packages')
+        if os.path.exists(add_package_lib64_path):
+            sys.path.append(add_package_lib64_path)
 
     if options.pb_file:
         if not os.path.exists(options.pb_file):
             sys.stderr.write("Can not find --pb-file {0}.\n".format(options.pb_file))
-            print("[RUNNING]: {0} '{1}'", sys.executable, "' '".join(sys.argv))
+            print("[RUNNING]: {0} '{1}'".format(sys.executable, "' '".join(sys.argv)))
             parser.print_help()
             return 1
         tmp_pb_file = options.pb_file
@@ -1095,6 +1122,8 @@ def main():
             key_value_pair = custom_var.split("=")
             if len(key_value_pair) > 1:
                 pb_db.custom_variables[key_value_pair[0].strip()] = key_value_pair[1].strip()
+            elif key_value_pair:
+                pb_db.custom_variables[key_value_pair[0].strip()] = ''
         generate_service_group(pb_db, options, project_dir, local_vcs_user_name)
         generate_message_group(pb_db, options, project_dir, local_vcs_user_name)
         generate_enum_group(pb_db, options, project_dir, local_vcs_user_name)
