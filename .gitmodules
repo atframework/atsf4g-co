@@ -14,3 +14,6 @@
 [submodule "3rd_party/redis/hiredis-happ"]
 	path = 3rd_party/redis/hiredis-happ
 	url = https://github.com/owt5008137/hiredis-happ.git
+[submodule "3rd_party/xres-code-generator/repo"]
+	path = 3rd_party/xres-code-generator/repo
+	url = https://github.com/xresloader/xres-code-generator.git
