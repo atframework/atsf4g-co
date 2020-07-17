@@ -90,4 +90,8 @@ include("${PROJECT_3RD_PARTY_ROOT_DIR}/lua/lua.cmake")
 # =========== 3rd_party - libcopp ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/libcopp/libcopp.cmake")
 
+# =========== 3rd_party - python_env ===========
+include("${PROJECT_3RD_PARTY_ROOT_DIR}/python_env/python_env.cmake")
 
+# =========== 3rd_party - xres-code-generator ===========
+include("${PROJECT_3RD_PARTY_ROOT_DIR}/xres-code-generator/xres-code-generator.cmake")

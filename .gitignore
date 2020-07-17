@@ -84,6 +84,10 @@
 /3rd_party/libwebsockets/repo
 /3rd_party/libwebsockets/prebuilt
 
+# python packages
+/3rd_party/python_env/.modules
+.mako_modules-*
+
 ## atframework
 /atframework/service/component/config/atframe_services_build_feature.h
 /atframework/service/atgateway/protocols/libatgw_server_protocol.pb.h
