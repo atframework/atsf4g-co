@@ -232,7 +232,7 @@ namespace atframe {
         }
 
         int session_manager::tick() {
-            time_t now = util::time::time_utility::get_now();
+            time_t now = util::time::time_utility::get_sys_now();
             // 每秒只需要判定一次
             if (last_tick_time_ == now) {
                 return 0;
@@ -320,7 +320,7 @@ namespace atframe {
                 reconnect_timeout_.push_back(session_timeout_t());
                 session_timeout_t &sess_timer = reconnect_timeout_.back();
                 sess_timer.s = iter->second;
-                sess_timer.timeout = util::time::time_utility::get_now() + conf_.reconnect_timeout;
+                sess_timer.timeout = util::time::time_utility::get_sys_now() + conf_.reconnect_timeout;
 
                 reconnect_cache_[sess_timer.s->get_id()] = sess_timer.s;
                 WLOGINFO("session 0x%llx(%p) closed and setup reconnect timeout %lld(+%lld)", static_cast<unsigned long long>(sess_timer.s->get_id()),
@@ -557,13 +557,13 @@ namespace atframe {
             session_timeout_t &sess_timeout = mgr->first_idle_.back();
             sess_timeout.s = sess;
             if (mgr->conf_.first_idle_timeout > 0) {
-                sess_timeout.timeout = util::time::time_utility::get_now() + mgr->conf_.first_idle_timeout;
+                sess_timeout.timeout = util::time::time_utility::get_sys_now() + mgr->conf_.first_idle_timeout;
             } else {
-                sess_timeout.timeout = util::time::time_utility::get_now() + 1;
+                sess_timeout.timeout = util::time::time_utility::get_sys_now() + 1;
             }
             WLOGINFO("accept a tcp socket(%s:%d), create sesson %p and to wait for handshake now, expired time is %lld(+%lld)", sess->get_peer_host().c_str(),
                      sess->get_peer_port(), sess.get(), static_cast<long long>(sess_timeout.timeout),
-                     static_cast<long long>(sess_timeout.timeout - util::time::time_utility::get_now()));
+                     static_cast<long long>(sess_timeout.timeout - util::time::time_utility::get_sys_now()));
         }
 
         void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
@@ -633,9 +633,9 @@ namespace atframe {
             session_timeout_t &sess_timeout = mgr->first_idle_.back();
             sess_timeout.s = sess;
             if (mgr->conf_.first_idle_timeout > 0) {
-                sess_timeout.timeout = util::time::time_utility::get_now() + mgr->conf_.first_idle_timeout;
+                sess_timeout.timeout = util::time::time_utility::get_sys_now() + mgr->conf_.first_idle_timeout;
             } else {
-                sess_timeout.timeout = util::time::time_utility::get_now() + 1;
+                sess_timeout.timeout = util::time::time_utility::get_sys_now() + 1;
             }
         }
 

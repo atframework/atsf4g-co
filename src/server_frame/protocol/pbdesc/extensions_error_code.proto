@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package hello.error_code;
+
+import "google/protobuf/descriptor.proto";
+
+extend google.protobuf.EnumValueOptions {
+    string description = 2001;
+    bool   show_code   = 2002;
+}

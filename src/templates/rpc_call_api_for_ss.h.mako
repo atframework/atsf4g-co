@@ -1,0 +1,85 @@
+## -*- coding: utf-8 -*-
+<%!
+import time
+%><%
+module_name = service.get_extension_field("service_options", lambda x: x.module_name, service.get_name_lower_rule())
+%>/**
+ * @brief Created by ${generator} for ${service.get_full_name()}, please don't edit it
+ */
+
+#ifndef GENERATED_API_${service.get_identify_upper_rule(output_render_path)}
+#define GENERATED_API_${service.get_identify_upper_rule(output_render_path)}
+
+#pragma once
+
+
+#include <cstddef>
+#include <stdint.h>
+#include <cstring>
+#include <string>
+
+#include <config/compiler/protobuf_prefix.h>
+
+#include <protocol/pbdesc/svr.protocol.pb.h>
+
+#include <config/compiler/protobuf_suffix.h>
+
+namespace rpc {
+% for ns in service.get_cpp_namespace_begin(module_name, '    '):
+    ${ns}
+% endfor
+% for rpc in rpcs.values():
+<%
+    rpc_is_router_api = rpc.get_extension_field('rpc_options', lambda x: x.router_rpc, False)
+    rpc_is_user_rpc = rpc.get_extension_field('rpc_options', lambda x: x.user_rpc, False)
+    rpc_is_stream_mode = rpc.is_request_stream() or rpc.is_response_stream()
+    rpc_params = []
+    rpc_param_docs = []
+    if rpc_is_router_api:
+        rpc_params.extend(['uint32_t type_id', 'uint32_t zone_id', 'uint64_t object_id'])
+        rpc_param_docs.extend([
+            'type_id        router object type id',
+            'zone_id        router object zone id, pass 0 if it has no zone id',
+            'object_id      router object instance id'
+        ])
+        if rpc_is_user_rpc:
+            rpc_params.extend(['uint64_t user_id', "const std::string& open_id"])
+            rpc_param_docs.extend([
+                'user_id        user id that will be passsed into header',
+                'open_id        open id that will be passsed into header'
+            ])
+    else:
+        rpc_params.append('uint64_t dst_bus_id')
+        rpc_param_docs.append('dst_bus_id     target server bus id')
+        if rpc_is_user_rpc:
+            rpc_params.extend(['uint32_t zone_id', 'uint64_t user_id', "const std::string& open_id"])
+            rpc_param_docs.extend([
+                'zone_id        zone id that will be passsed into header',
+                'user_id        user id that will be passsed into header',
+                'open_id        open id that will be passsed into header'
+            ])
+    rpc_params.append('{0} &req_body'.format(rpc.get_request().get_cpp_class_name()))
+    rpc_param_docs.append('req_body       request body')
+    if not rpc_is_stream_mode:
+        rpc_params.append('{0} &rsp_body'.format(rpc.get_response().get_cpp_class_name()))
+        rpc_param_docs.append('rsp_body       response body')
+%>
+        // ============ ${rpc.get_full_name()} ============
+        /**
+         * @brief ${rpc.get_extension_field('rpc_options', lambda x: x.api_name, rpc.get_name())}
+%   for param_doc in rpc_param_docs:
+         * @param ${param_doc.replace('*/', '*')}
+%   endfor
+%   for desc in rpc.get_extension_field('rpc_options', lambda x: x.descriptions, []):
+         * @note  ${desc.replace('*/', '*')}
+%   endfor
+         * @return 0 or error code
+         */
+        int ${rpc.get_name()}(${', '.join(rpc_params)});
+% endfor
+% for ns in service.get_cpp_namespace_end(module_name, '    '):
+    ${ns}
+% endfor
+}
+
+#endif

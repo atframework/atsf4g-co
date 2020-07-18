@@ -151,7 +151,7 @@ namespace atframe {
             // alloc id
             id_                               = id_alloc.allocate();
             router_                           = router;
-            limit_.update_handshake_timepoint = util::time::time_utility::get_now() + owner_->get_conf().crypt.update_interval;
+            limit_.update_handshake_timepoint = util::time::time_utility::get_sys_now() + owner_->get_conf().crypt.update_interval;
 
             set_flag(flag_t::EN_FT_INITED, true);
             return 0;
@@ -162,7 +162,7 @@ namespace atframe {
             id_                               = sess.id_;
             router_                           = sess.router_;
             limit_                            = sess.limit_;
-            limit_.update_handshake_timepoint = util::time::time_utility::get_now() + owner_->get_conf().crypt.update_interval;
+            limit_.update_handshake_timepoint = util::time::time_utility::get_sys_now() + owner_->get_conf().crypt.update_interval;
 
             private_data_ = sess.private_data_;
 
@@ -423,7 +423,7 @@ namespace atframe {
         }
 
         void session::check_hour_limit(bool check_recv, bool check_send) {
-            time_t now_hr = ::util::time::time_utility::get_now() / ::util::time::time_utility::DAY_SECONDS;
+            time_t now_hr = ::util::time::time_utility::get_sys_now() / ::util::time::time_utility::DAY_SECONDS;
             if (now_hr != limit_.hour_timepoint) {
                 limit_.hour_timepoint  = now_hr;
                 limit_.hour_recv_bytes = 0;
@@ -459,7 +459,7 @@ namespace atframe {
         }
 
         void session::check_minute_limit(bool check_recv, bool check_send) {
-            time_t now_mi = ::util::time::time_utility::get_now() / ::util::time::time_utility::MINITE_SECONDS;
+            time_t now_mi = ::util::time::time_utility::get_sys_now() / ::util::time::time_utility::MINITE_SECONDS;
             if (now_mi != limit_.minute_timepoint) {
                 limit_.minute_timepoint  = now_mi;
                 limit_.minute_recv_bytes = 0;
@@ -498,8 +498,8 @@ namespace atframe {
             }
 
             if (NULL != owner_ && owner_->get_conf().crypt.update_interval > 0 && check_flag(flag_t::EN_FT_HAS_FD)) {
-                if (limit_.update_handshake_timepoint < ::util::time::time_utility::get_now()) {
-                    limit_.update_handshake_timepoint = ::util::time::time_utility::get_now() + owner_->get_conf().crypt.update_interval;
+                if (limit_.update_handshake_timepoint < ::util::time::time_utility::get_sys_now()) {
+                    limit_.update_handshake_timepoint = ::util::time::time_utility::get_sys_now() + owner_->get_conf().crypt.update_interval;
                     proto_base *proto                 = get_protocol_handle();
                     if (NULL != proto) {
                         proto->handshake_update();

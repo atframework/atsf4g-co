@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+import "com.struct.proto";
+import "svr.struct.proto";
+
+package hello;
+
+/////////////////////////////////////////////////////
+////  此处开始是登入相关协议
+/////////////////////////////////////////////////////
+message GMPlayerKickOffReq {
+    string openid   = 1;
+    bool   login    = 2; // true登录，false登出
+    uint32 ban_time = 3; // 封号期限
+
+    uint32 reason = 4; // 原因
+}
+
+message GMPlayerKickOffRsp {}
+
+/////////////////////////////////////////////////////
+////  登入相关协议到此结束
+/////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////
+////  此处开始是外部接入支持的协议
+/////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////
+////  外部接入支持的协议到此结束
+/////////////////////////////////////////////////////
+
+
+// 请求用户数据
+message GMPlayerGetInfoReq {
+    bool need_player_info = 1; // 标记为true 回包才有会有玩家数据
+}
+
+// 用户数据返回
+message GMPlayerGetInfoRsp {
+    DPlayerInfo player_info = 1; // 玩家数据
+}
+
+// 协议包头
+message GMMsgHead {
+    int32  error_code = 1;
+    int64  timestamp  = 2;
+    uint32 sequence   = 3;
+    int32  fd         = 4;
+
+    string auth_token = 11;
+    string openid     = 100;
+}
+
+// 协议包体
+message GMMsgBody {
+    GMPlayerKickOffReq mgm_player_kickoff_req = 2001;
+    GMPlayerKickOffRsp mgm_player_kickoff_rsp = 2002;
+
+    GMPlayerGetInfoReq mgm_player_getinfo_req = 2011;
+    GMPlayerGetInfoRsp mgm_player_getinfo_rsp = 2012;
+}
+
+// 协议包
+message GMMsg {
+    GMMsgHead head = 1;
+    GMMsgBody body = 2;
+}

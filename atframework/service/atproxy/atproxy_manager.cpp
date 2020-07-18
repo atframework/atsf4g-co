@@ -41,7 +41,7 @@ namespace atframe {
         }
 
         int atproxy_manager::tick() {
-            time_t now = util::time::time_utility::get_now();
+            time_t now = util::time::time_utility::get_sys_now();
 
             int ret = 0;
             do {
@@ -134,7 +134,7 @@ namespace atframe {
 
         int atproxy_manager::set(atframe::component::etcd_module::node_info_t &etcd_node) {
             check_info_t ci;
-            ci.timeout_sec = util::time::time_utility::get_now();
+            ci.timeout_sec = util::time::time_utility::get_sys_now();
             ci.proxy_id    = etcd_node.id;
 
             proxy_set_t::iterator iter = proxy_set_.find(etcd_node.id);
@@ -180,7 +180,7 @@ namespace atframe {
                 }
 
                 check_info_t ci;
-                ci.timeout_sec           = util::time::time_utility::get_now();
+                ci.timeout_sec           = util::time::time_utility::get_sys_now();
                 ci.proxy_id              = iter->etcd_node.id;
                 (*iter).next_action_time = ci.timeout_sec;
                 (*iter).is_available     = check_available((*iter).etcd_node);
@@ -205,12 +205,12 @@ namespace atframe {
                 // when stoping bus noe may be unavailable
                 if (!app.check_flag(::atapp::app::flag_t::STOPING)) {
                     if (app.get_bus_node() && app.get_bus_node()->get_conf().retry_interval > 0) {
-                        ci.timeout_sec = util::time::time_utility::get_now() + app.get_bus_node()->get_conf().retry_interval;
+                        ci.timeout_sec = util::time::time_utility::get_sys_now() + app.get_bus_node()->get_conf().retry_interval;
                     } else {
-                        ci.timeout_sec = util::time::time_utility::get_now() + 1;
+                        ci.timeout_sec = util::time::time_utility::get_sys_now() + 1;
                     }
                 } else {
-                    ci.timeout_sec = util::time::time_utility::get_now() - 1;
+                    ci.timeout_sec = util::time::time_utility::get_sys_now() - 1;
                 }
 
                 if (iter->second.next_action_time < ci.timeout_sec) {

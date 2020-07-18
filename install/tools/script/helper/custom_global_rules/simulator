@@ -1,0 +1,6 @@
+<%!
+    import common.project_utils as project
+%>
+# <template file name> = <output dir/output file name>
+
+simulator.start.sh.mako = tools/simulator/bin/start.sh

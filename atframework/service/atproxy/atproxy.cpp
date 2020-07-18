@@ -11,6 +11,7 @@
 
 #include <atframe/atapp.h>
 #include <common/file_system.h>
+#include <libatbus_protocol.h>
 #include <time/time_utility.h>
 
 #include "atproxy_manager.h"

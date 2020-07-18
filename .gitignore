@@ -41,6 +41,7 @@
 ## libuv
 /3rd_party/libuv/pkg
 /3rd_party/libuv/prebuilt
+/3rd_party/libuv/repo-v*
 
 ## msgpack
 /3rd_party/msgpack/pkg
@@ -104,11 +105,17 @@
 /3rd_party/redis/prebuilt
 /3rd_party/protobuf/pkg
 /3rd_party/protobuf/prebuilt
+/3rd_party/xres-code-generator/repo
+
+# python packages
+/3rd_party/python_env/.modules
 
 # protocol
 /src/server_frame/protocol/**/*.h
 /src/server_frame/protocol/**/*.cc
 /src/server_frame/config/excel/pb_header_v3.pb.h
 /src/server_frame/config/excel/pb_header_v3.pb.cc
+/src/server_frame/config/server_frame_build_feature.h
 
 # generated
+/src/server_frame/config/server_frame_build_feature.h

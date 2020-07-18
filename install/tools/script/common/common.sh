@@ -294,6 +294,38 @@ function StatusMsg() {
 	echo "Status: $*";
 }
 
+function CheckProcessRunning() {
+	if [ $# -lt 1 ]; then
+		return 0;
+	fi
+	PROC_NAME="$1" ;
+	if [ $# -gt 1 ]; then
+		PROC_EXPECT_PID=$2;
+	else
+		PROC_EXPECT_PID="";
+	fi
+
+	if [ ! -f "$PROC_NAME" ]; then
+		return 0;
+	fi
+
+	PROC_PID=$(cat "$PROC_NAME" 2>/dev/null);
+
+	if [[ "x$PROC_EXPECT_PID" != "x" ]] && [[ "x$PROC_PID" != "x$PROC_EXPECT_PID" ]]; then
+		return 0;
+	fi
+
+	SYSFLAGS=($PROC_PID);
+	if [[ "x${MSYSTEM:0:5}" == "xMINGW" ]] || [[ "x${MSYSTEM:0:4}" == "xMSYS" ]]; then
+		SYSFLAGS=($PROC_PID -W);
+	fi
+	if [ ! -z "$PROC_PID" ] && [ ! -z "$(ps -p ${SYSFLAGS[@]} 2>&1 | grep $PROC_PID)" ]; then
+		return 1;
+	fi
+	
+	return 0;
+}
+
 function WaitProcessStarted() {
 	if [ $# -lt 1 ]; then
 		return 1;
@@ -306,44 +338,23 @@ function WaitProcessStarted() {
 		WAIT_TIME=$2;
 	fi
 
-	while [ ! -f "$PROC_NAME" ] || [ -z "$(cat "$PROC_NAME")" ]; do
-		if [ $WAIT_TIME -gt 0 ]; then
-			WaitForMS 100;
-			let WAIT_TIME=$WAIT_TIME-100;
-		else
-			return 2;
+	if [ $# -gt 2 ]; then
+		PROC_EXPECT_PID=$3;
+	else
+		PROC_EXPECT_PID="";
+	fi
+
+	while [ $WAIT_TIME -gt 0 ] ; do
+		CheckProcessRunning "$PROC_NAME" "$PROC_EXPECT_PID";
+		if [ 1 -eq $? ]; then
+			return 0;
 		fi
+
+		WaitForMS 100;
+		let WAIT_TIME=$WAIT_TIME-100;
 	done
-	
-	PROC_PID=$(cat "$PROC_NAME");
-	SYSFLAGS="";
-	if [ "${MSYSTEM:0:5}" == "MINGW" ] || [ "${MSYSTEM:0:4}" == "MSYS" ]; then
-		SYSFLAGS="-W";
-	fi
-	if [ -z "$(ps -p $PROC_PID $SYSFLAGS 2>&1 | grep $PROC_PID)" ]; then
-		return 2;
-	fi
 
-	return 0;
-}
-
-function CheckProcessRunning() {
-	if [ $# -lt 1 ]; then
-		return 0;
-	fi
-	PROC_NAME="$1" ;
-	SYSFLAGS="";
-	if [ "${MSYSTEM:0:5}" == "MINGW" ] || [ "${MSYSTEM:0:4}" == "MSYS" ] ; then
-		SYSFLAGS=" -W";
-	fi
-	if [ -f "$PROC_NAME" ]; then
-		PROC_PID=$(cat "$PROC_NAME" 2>/dev/null);
-		if [ ! -z "$PROC_PID" ] && [ ! -z "$(ps -p $PROC_PID $SYSFLAGS 2>&1 | grep $PROC_PID)" ]; then
-			return 1;
-		fi
-	fi
-	
-	return 0;
+	return 2;
 }
 
 function WaitProcessStoped() {
