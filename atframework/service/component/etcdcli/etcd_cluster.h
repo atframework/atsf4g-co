@@ -101,6 +101,7 @@ namespace atframe {
                 // @see https://github.com/etcd-io/etcd/blob/master/Documentation/op-guide/security.md for detail
                 bool ssl_enable_alpn; // curl 7.36.0 CURLOPT_SSL_ENABLE_ALPN
                 bool ssl_verify_peer; // CURLOPT_SSL_VERIFYPEER
+                bool http_debug_mode; // print verbose information
 
                 ssl_version_t::type ssl_min_version;       // CURLOPT_SSLVERSION @see ssl_version_t, SSLv3/TLSv1/TLSv1.1/TLSv1.2/TLSv1.3
                 std::string         ssl_client_cert;       // CURLOPT_SSLCERT
@@ -179,6 +180,9 @@ namespace atframe {
 
             inline void set_conf_ssl_verify_peer(bool v) { conf_.ssl_verify_peer = v; }
             inline bool get_conf_ssl_verify_peer() const { return conf_.ssl_verify_peer; }
+
+            inline void set_conf_http_debug_mode(bool v) { conf_.http_debug_mode = v; }
+            inline bool get_conf_http_debug_mode() const { return conf_.http_debug_mode; }
 
             inline void                set_conf_ssl_min_version(ssl_version_t::type v) { conf_.ssl_min_version = v; }
             inline ssl_version_t::type get_conf_ssl_min_version() const { return conf_.ssl_min_version; }

@@ -44,6 +44,13 @@ macro(PROJECT_3RD_PARTY_OPENSSL_IMPORT)
                 list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES ${OPENSSL_LIBRARIES})
             endif()
         endif ()
+
+        find_program(OPENSSL_EXECUTABLE NAMES openssl openssl.exe PATHS 
+            "${OPENSSL_INCLUDE_DIR}/../bin" "${OPENSSL_INCLUDE_DIR}/../" ${OPENSSL_INCLUDE_DIR}
+            NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
+        if (OPENSSL_EXECUTABLE AND EXISTS ${OPENSSL_EXECUTABLE})
+            file(COPY ${OPENSSL_EXECUTABLE} DESTINATION "${PROJECT_INSTALL_TOOLS_DIR}/bin" USE_SOURCE_PERMISSIONS)
+        endif ()
     endif()
 endmacro()
 

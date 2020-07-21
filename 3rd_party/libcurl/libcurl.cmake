@@ -27,6 +27,25 @@ macro(PROJECT_3RD_PARTY_LIBCURL_IMPORT)
                 list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES ${3RD_PARTY_LIBCURL_STATIC_LINK_NAMES})
             endif()
         endif ()
+
+        if (TARGET CURL::curl)
+            get_target_property(CURL_EXECUTABLE CURL::curl IMPORTED_LOCATION)
+            if (CURL_EXECUTABLE AND EXISTS ${CURL_EXECUTABLE})
+                file(COPY ${CURL_EXECUTABLE} DESTINATION "${PROJECT_INSTALL_TOOLS_DIR}/bin" USE_SOURCE_PERMISSIONS)
+            else()
+                get_target_property(CURL_EXECUTABLE CURL::curl IMPORTED_LOCATION_NOCONFIG)
+                if (CURL_EXECUTABLE AND EXISTS ${CURL_EXECUTABLE})
+                    file(COPY ${CURL_EXECUTABLE} DESTINATION "${PROJECT_INSTALL_TOOLS_DIR}/bin" USE_SOURCE_PERMISSIONS)
+                endif ()
+            endif ()
+        else ()
+            find_program(CURL_EXECUTABLE NAMES curl curl.exe PATHS 
+                "${CURL_INCLUDE_DIRS}/../bin" "${CURL_INCLUDE_DIRS}/../" ${CURL_INCLUDE_DIRS}
+                NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
+            if (CURL_EXECUTABLE AND EXISTS ${CURL_EXECUTABLE})
+                file(COPY ${CURL_EXECUTABLE} DESTINATION "${PROJECT_INSTALL_TOOLS_DIR}/bin" USE_SOURCE_PERMISSIONS)
+            endif ()
+        endif ()
     endif()
 endmacro()
 
@@ -62,10 +81,26 @@ if (NOT CURL_FOUND)
         file(MAKE_DIRECTORY ${3RD_PARTY_LIBCURL_PKG_DIR})
     endif ()
 
+    unset(3RD_PARTY_LIBCURL_SSL_BACKEND)
+    if (OPENSSL_FOUND)
+        set(3RD_PARTY_LIBCURL_SSL_BACKEND "-DCMAKE_USE_OPENSSL=YES" )
+        if (OPENSSL_ROOT_DIR)
+            list(APPEND 3RD_PARTY_LIBCURL_SSL_BACKEND "-DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}")
+        endif()
+        if (OPENSSL_USE_STATIC_LIBS)
+            list(APPEND 3RD_PARTY_LIBCURL_SSL_BACKEND "-DOPENSSL_USE_STATIC_LIBS=${OPENSSL_USE_STATIC_LIBS}")
+        endif ()
+    elseif (3RD_PARTY_MBEDTLS_FOUND)
+        set(3RD_PARTY_LIBCURL_SSL_BACKEND "-DCMAKE_USE_MBEDTLS=YES" )
+        if (MbedTLS_ROOT)
+            list(APPEND 3RD_PARTY_LIBCURL_SSL_BACKEND "-DMbedTLS_ROOT=${MbedTLS_ROOT}")
+        endif ()
+    endif ()
+
     FindConfigurePackage(
         PACKAGE CURL
         BUILD_WITH_CMAKE
-        CMAKE_FLAGS "-DBUILD_SHARED_LIBS=NO"
+        CMAKE_FLAGS "-DBUILD_SHARED_LIBS=NO" ${3RD_PARTY_LIBCURL_SSL_BACKEND}
         WORKING_DIRECTORY "${3RD_PARTY_LIBCURL_PKG_DIR}"
         BUILD_DIRECTORY "${3RD_PARTY_LIBCURL_PKG_DIR}/${3RD_PARTY_LIBCURL_PKG_NAME}/build_jobs_${PROJECT_PREBUILT_PLATFORM_NAME}"
         PREFIX_DIRECTORY "${3RD_PARTY_LIBCURL_ROOT_DIR}"

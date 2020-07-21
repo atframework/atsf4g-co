@@ -351,6 +351,12 @@ namespace atframe {
             }
 
             {
+                bool v = false;
+                cfg.dump_to("atapp.etcd.http.debug", v, false);
+                etcd_ctx_.set_conf_http_debug_mode(v);
+            }
+
+            {
                 std::string ssl_version;
                 cfg.dump_to("atapp.etcd.ssl.ssl_min_version", ssl_version, false);
                 if (0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv1.3", 7) || 0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv13", 6)) {

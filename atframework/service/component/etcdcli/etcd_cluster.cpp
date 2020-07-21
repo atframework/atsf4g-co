@@ -139,7 +139,6 @@ namespace atframe {
                 return 0;
             }
 
-            #if 0
             EXPLICIT_UNUSED_ATTR static int etcd_cluster_verbose_callback(util::network::http_request &req, curl_infotype type, char *data, size_t size) {
                 if (util::log::log_wrapper::check_level(WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT),
                                                         util::log::log_wrapper::level_t::LOG_LW_TRACE)) {
@@ -178,7 +177,6 @@ namespace atframe {
 
                 return 0;
             }
-            #endif
         } // namespace details
 
         etcd_cluster::etcd_cluster() : flags_(0) {
@@ -198,6 +196,7 @@ namespace atframe {
 
             conf_.ssl_enable_alpn = true;
             conf_.ssl_verify_peer = false;
+            conf_.http_debug_mode = false;
 
             conf_.ssl_min_version = ssl_version_t::DISABLED;
             conf_.ssl_client_cert.clear();
@@ -309,6 +308,7 @@ namespace atframe {
 
             conf_.ssl_enable_alpn = true;
             conf_.ssl_verify_peer = false;
+            conf_.http_debug_mode = false;
 
             conf_.ssl_min_version = ssl_version_t::DISABLED;
             conf_.ssl_client_cert.clear();
@@ -822,7 +822,9 @@ namespace atframe {
                 req->set_priv_data(this);
                 req->set_on_complete(libcurl_callback_on_auth_authenticate);
 
-                // req->set_on_verbose(details::etcd_cluster_verbose_callback);
+                if (get_conf_http_debug_mode()) {
+                    req->set_on_verbose(details::etcd_cluster_verbose_callback);
+                }
                 int res = req->start(util::network::http_request::method_t::EN_MT_POST, false);
                 if (res != 0) {
                     req->set_on_complete(NULL);
@@ -951,7 +953,9 @@ namespace atframe {
                 req->set_priv_data(this);
                 req->set_on_complete(libcurl_callback_on_auth_user_get);
 
-                // req->set_on_verbose(details::etcd_cluster_verbose_callback);
+                if (get_conf_http_debug_mode()) {
+                    req->set_on_verbose(details::etcd_cluster_verbose_callback);
+                }
                 int res = req->start(util::network::http_request::method_t::EN_MT_POST, false);
                 if (res != 0) {
                     req->set_on_complete(NULL);
@@ -1258,7 +1262,9 @@ namespace atframe {
                 req->set_priv_data(this);
                 req->set_on_complete(libcurl_callback_on_lease_keepalive);
 
-                // req->set_on_verbose(details::etcd_cluster_verbose_callback);
+                if (get_conf_http_debug_mode()) {
+                    req->set_on_verbose(details::etcd_cluster_verbose_callback);
+                }
                 int res = req->start(util::network::http_request::method_t::EN_MT_POST, false);
                 if (res != 0) {
                     req->set_on_complete(NULL);
@@ -1674,6 +1680,10 @@ namespace atframe {
 
             req->set_opt_follow_location(true);
             req->set_opt_ssl_verify_peer(conf_.ssl_verify_peer);
+            req->set_opt_long(CURLOPT_SSL_VERIFYHOST, conf_.ssl_verify_peer? 2L:0L);
+#if LIBCURL_VERSION_NUM >= 0x072900
+            req->set_opt_bool(CURLOPT_SSL_VERIFYSTATUS, conf_.ssl_verify_peer);
+#endif
             req->set_opt_accept_encoding("");
             req->set_opt_http_content_decoding(true);
             req->set_opt_timeout(timeout);
@@ -1749,23 +1759,18 @@ namespace atframe {
 
                 if (!conf_.ssl_cipher_list.empty()) {
                     req->set_opt_string(CURLOPT_SSL_CIPHER_LIST, &conf_.ssl_cipher_list[0]);
-                } else if (ssl_version_t::TLS_V12 == conf_.ssl_min_version || ssl_version_t::TLS_V13 == conf_.ssl_min_version) {
-                    char ciphers[] = "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:"
-                                     "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384";
-                    req->set_opt_string(CURLOPT_SSL_CIPHER_LIST, ciphers);
                 }
 
 #if LIBCURL_VERSION_NUM >= 0x073d00
                 if (!conf_.ssl_cipher_list_tls13.empty()) {
                     req->set_opt_string(CURLOPT_TLS13_CIPHERS, &conf_.ssl_cipher_list_tls13[0]);
-                } else if (ssl_version_t::TLS_V12 == conf_.ssl_min_version) {
-                    char ciphers[] = "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256";
-                    req->set_opt_string(CURLOPT_TLS13_CIPHERS, ciphers);
                 }
 #endif
             }
 
-            // req->set_on_verbose(details::etcd_cluster_verbose_callback);
+            if (get_conf_http_debug_mode()) {
+                req->set_on_verbose(details::etcd_cluster_verbose_callback);
+            }
 
             if (util::log::log_wrapper::check_level(WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT),
                                                     util::log::log_wrapper::level_t::LOG_LW_TRACE)) {

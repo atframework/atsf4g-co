@@ -16,6 +16,6 @@ execute_process(
 )
 
 execute_process(
-    COMMAND ${Python_EXECUTABLE} "-m" "pip" "install" ${PROJECT_3RD_PARTY_PYTHON_PIP_SOURCE} "--no-warn-script-location" "--prefix" ${PROJECT_3RD_PARTY_PYTHON_MODULE_DIR} "-r" "${CMAKE_CURRENT_LIST_DIR}/requirements.txt"
+    COMMAND ${Python_EXECUTABLE} "-m" "pip" "install" ${PROJECT_3RD_PARTY_PYTHON_PIP_SOURCE} "--prefix" ${PROJECT_3RD_PARTY_PYTHON_MODULE_DIR} "-r" "${CMAKE_CURRENT_LIST_DIR}/requirements.txt"
     WORKING_DIRECTORY ${PROJECT_3RD_PARTY_PYTHON_MODULE_DIR}
 )
