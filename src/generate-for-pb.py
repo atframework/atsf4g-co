@@ -573,6 +573,7 @@ class PbGroupGenerator(object):
         self.inner_name_map         = inner_name_map
 
 def generate_group(options, group):
+    # type: (argparse.Namespace, PbGroupGenerator) -> None
     if group.outer_inst is None:
         return
 
@@ -580,7 +581,6 @@ def generate_group(options, group):
     # render templates
     from mako.template import Template
     from mako.lookup import TemplateLookup
-    from mako.runtime import supports_caller
     make_module_cache_dir = os.path.join(group.project_dir, '.mako_modules-{0}.{1}.{2}'.format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
     
     inner_include_rule = None
@@ -723,6 +723,87 @@ def generate_group(options, group):
                 import traceback
                 cprintf_stderr([print_style.FC_RED, print_style.FW_BOLD], "[ERROR]: {0}.\n{1}\n", str(e), traceback.format_exc())
 
+class PbGlobalGenerator(object):
+    def __init__(self, database, project_dir, local_vcs_user_name, global_templates):
+        self.database               = database
+        self.project_dir            = project_dir
+        self.local_vcs_user_name    = local_vcs_user_name
+        self.global_templates       = global_templates
+
+
+def generate_global(options, global_generator):
+    # type: (argparse.Namespace, PbGlobalGenerator) -> None
+    if not global_generator.global_templates:
+        return
+
+    from print_color import print_style, cprintf_stdout, cprintf_stderr
+    # render templates
+    from mako.template import Template
+    from mako.lookup import TemplateLookup
+    make_module_cache_dir = os.path.join(global_generator.project_dir, '.mako_modules-{0}.{1}.{2}'.format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
+    
+    # generate global templates
+    for global_rule in global_generator.global_templates:
+        render_args = {
+            "generator": os.path.basename(__file__),
+            "local_vcs_user_name": global_generator.local_vcs_user_name,
+            "output_file_path": None,
+            "output_render_path": None,
+            "database": global_generator.database,
+            "PbConvertRule": PbConvertRule
+        }
+        for k in global_generator.database.custom_variables:
+            render_args[k] = global_generator.database.custom_variables[k]
+
+        try:
+            (intput_template, output_rule, output_render) = split_path_rule(global_rule)
+            if not os.path.exists(intput_template):
+                cprintf_stderr([print_style.FC_RED, print_style.FW_BOLD], "[INFO]: template file {0} not found.\n", intput_template)
+                continue
+            
+            lookup = TemplateLookup(directories=[os.path.dirname(intput_template)], module_directory=make_module_cache_dir)
+            if output_render:
+                output_file = Template(output_rule, lookup=lookup).render(**render_args)
+            else:
+                output_file = output_rule
+            render_args['output_render_path'] = output_file
+
+            if options.output_dir:
+                output_file = os.path.join(options.output_dir, output_file)
+
+            if options.print_output_files:
+                print(output_file)
+            else:
+                if os.path.exists(output_file) and options.no_overwrite:
+                    if not options.quiet:
+                        cprintf_stdout([print_style.FC_YELLOW, print_style.FW_BOLD], "[INFO]: file {0} is already exists, we will ignore generating template {1} to it.\n", output_file, intput_template)
+                    continue
+
+                render_args['output_file_path'] = output_file
+                source_tmpl = lookup.get_template(os.path.basename(intput_template))
+                final_output_dir = os.path.dirname(output_file)
+                if final_output_dir and not os.path.exists(final_output_dir):
+                    os.makedirs(final_output_dir, 0o777)
+                codecs.open(output_file, mode='w', encoding=options.encoding).write(
+                    source_tmpl.render(**render_args)
+                )
+
+                if not options.quiet:
+                    cprintf_stdout([print_style.FC_GREEN, print_style.FW_BOLD], "[INFO]: generate {0} to {1} success.\n", intput_template, output_file)
+        except Exception as e:
+            import traceback
+            cprintf_stderr([print_style.FC_RED, print_style.FW_BOLD], "[ERROR]: {0}.\n{1}\n", str(e), traceback.format_exc())
+
+def generate_global_templates(pb_db, options, project_dir, local_vcs_user_name):
+    if not options.global_template:
+        return
+
+    generate_global(options, PbGlobalGenerator(
+        database=pb_db,
+        project_dir=project_dir,
+        local_vcs_user_name=local_vcs_user_name,
+        global_templates=options.global_template
+    ))
 
 def generate_service_group(pb_db, options, project_dir, local_vcs_user_name):
     if options.service_name is None:
@@ -1005,6 +1086,14 @@ def main():
         dest="enumvalue_exclude_rule",
         default=None)
 
+    # For global templates
+    CmdArgsAddOption(parser,
+        "--global-template",
+        action="append",
+        help="add template rules for global(<template PATH>:<output rule>)",
+        dest="global_template",
+        default=[])
+
     (options, left_args) = CmdArgsParse(parser)
 
     if options.version:
@@ -1058,8 +1147,8 @@ def main():
             sys.path.append(add_package_lib64_path)
 
         add_package_lib_path_for_win = os.path.join(path, 'Lib', 'site-packages')
-        if os.path.exists(add_package_lib64_path):
-            sys.path.append(add_package_lib64_path)
+        if os.path.exists(add_package_lib_path_for_win):
+            sys.path.append(add_package_lib_path_for_win)
 
     if options.pb_file:
         if not os.path.exists(options.pb_file):
@@ -1127,6 +1216,7 @@ def main():
         generate_service_group(pb_db, options, project_dir, local_vcs_user_name)
         generate_message_group(pb_db, options, project_dir, local_vcs_user_name)
         generate_enum_group(pb_db, options, project_dir, local_vcs_user_name)
+        generate_global_templates(pb_db, options, project_dir, local_vcs_user_name)
 
     except Exception as e:
         if not options.keep_pb_file and os.path.exists(tmp_pb_file) and options.pb_file != tmp_pb_file:
