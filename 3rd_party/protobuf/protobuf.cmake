@@ -2,7 +2,7 @@ if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.10")
     include_guard(GLOBAL)
 endif()
 
-macro(PROJECT_3RD_PARTY_PROTOBUF_IMPORT)
+macro(PROJECT_LIBATBUS_3RD_PARTY_PROTOBUF_IMPORT)
     if(PROTOBUF_FOUND AND PROTOBUF_PROTOC_EXECUTABLE AND Protobuf_INCLUDE_DIRS AND Protobuf_LIBRARY)
         if (UNIX)
             execute_process(COMMAND chmod +x "${PROTOBUF_PROTOC_EXECUTABLE}")
@@ -59,7 +59,7 @@ if (NOT 3RD_PARTY_PROTOBUF_BIN_PROTOC OR (NOT 3RD_PARTY_PROTOBUF_LINK_NAME AND N
 
     if (VCPKG_TOOLCHAIN)
         find_package(Protobuf)
-        PROJECT_3RD_PARTY_PROTOBUF_IMPORT()
+        PROJECT_LIBATBUS_3RD_PARTY_PROTOBUF_IMPORT()
     endif ()
 
     if (NOT PROTOBUF_FOUND OR NOT PROTOBUF_PROTOC_EXECUTABLE OR NOT Protobuf_INCLUDE_DIRS OR NOT Protobuf_LIBRARY)
@@ -144,7 +144,7 @@ if (NOT 3RD_PARTY_PROTOBUF_BIN_PROTOC OR (NOT 3RD_PARTY_PROTOBUF_LINK_NAME AND N
             list(APPEND CMAKE_LIBRARY_PATH "${3RD_PARTY_PROTOBUF_ROOT_DIR}/${CMAKE_INSTALL_LIBDIR}" "${3RD_PARTY_PROTOBUF_ROOT_DIR}/${CMAKE_INSTALL_BINDIR}")
         endif()
 
-        if (NOT "${PROJECT_PREBUILT_PLATFORM_NAME}" STREQUAL "${PROJECT_PREBUILT_HOST_PLATFORM_NAME}")
+        if (NOT CMAKE_SYSTEM STREQUAL CMAKE_HOST_SYSTEM)
             list(APPEND CMAKE_PROGRAM_PATH "${3RD_PARTY_PROTOBUF_HOST_ROOT_DIR}/${CMAKE_INSTALL_BINDIR}")
         endif ()
         set (Protobuf_ROOT ${3RD_PARTY_PROTOBUF_ROOT_DIR})
@@ -171,12 +171,12 @@ if (NOT 3RD_PARTY_PROTOBUF_BIN_PROTOC OR (NOT 3RD_PARTY_PROTOBUF_LINK_NAME AND N
             PATHS "${3RD_PARTY_PROTOBUF_ROOT_DIR}/lib" "${3RD_PARTY_PROTOBUF_ROOT_DIR}/lib64" NO_DEFAULT_PATH)
         if (NOT 3RD_PARTY_PROTOBUF_FIND_LIB)
             if (NOT EXISTS "${3RD_PARTY_PROTOBUF_PKG_DIR}/protobuf-${3RD_PARTY_PROTOBUF_VERSION}")
-                if (NOT EXISTS "${3RD_PARTY_PROTOBUF_PKG_DIR}/protobuf-cpp-${3RD_PARTY_PROTOBUF_VERSION}.tar.gz")
-                    FindConfigurePackageDownloadFile("https://github.com/google/protobuf/releases/download/v${3RD_PARTY_PROTOBUF_VERSION}/protobuf-cpp-${3RD_PARTY_PROTOBUF_VERSION}.tar.gz" "${3RD_PARTY_PROTOBUF_PKG_DIR}/protobuf-cpp-${3RD_PARTY_PROTOBUF_VERSION}.tar.gz")
+                if (NOT EXISTS "${3RD_PARTY_PROTOBUF_PKG_DIR}/protobuf-all-${3RD_PARTY_PROTOBUF_VERSION}.tar.gz")
+                    FindConfigurePackageDownloadFile("https://github.com/google/protobuf/releases/download/v${3RD_PARTY_PROTOBUF_VERSION}/protobuf-all-${3RD_PARTY_PROTOBUF_VERSION}.tar.gz" "${3RD_PARTY_PROTOBUF_PKG_DIR}/protobuf-all-${3RD_PARTY_PROTOBUF_VERSION}.tar.gz")
                 endif ()
 
                 FindConfigurePackageTarXV(
-                    "${3RD_PARTY_PROTOBUF_PKG_DIR}/protobuf-cpp-${3RD_PARTY_PROTOBUF_VERSION}.tar.gz"
+                    "${3RD_PARTY_PROTOBUF_PKG_DIR}/protobuf-all-${3RD_PARTY_PROTOBUF_VERSION}.tar.gz"
                     ${3RD_PARTY_PROTOBUF_PKG_DIR}
                 )
             endif ()
@@ -206,24 +206,10 @@ if (NOT 3RD_PARTY_PROTOBUF_BIN_PROTOC OR (NOT 3RD_PARTY_PROTOBUF_LINK_NAME AND N
                 file(MAKE_DIRECTORY ${3RD_PARTY_PROTOBUF_BUILD_SCRIPT_DIR})
             endif()
 
-            set(3RD_PARTY_PROTOBUF_BUILD_MULTI_CORE ${FindConfigurePackageCMakeBuildMultiJobs})
-
-            if (CMAKE_OSX_ARCHITECTURES AND NOT "${PROJECT_PREBUILT_PLATFORM_NAME}" STREQUAL "${PROJECT_PREBUILT_HOST_PLATFORM_NAME}")
-                execute_process(
-                    COMMAND "xcrun" "-sdk" "macosx" "--show-sdk-version"
-                    OUTPUT_VARIABLE 3RD_PARTY_PROTOBUF_OSX_HOST_SDK_VERSION
-                    OUTPUT_STRIP_TRAILING_WHITESPACE
-                )
-                execute_process(
-                    COMMAND "xcode-select" "-print-path"
-                    OUTPUT_VARIABLE 3RD_PARTY_PROTOBUF_OSX_HOST_DEVELOPER_ROOT
-                    OUTPUT_STRIP_TRAILING_WHITESPACE
-                )
-                set(3RD_PARTY_PROTOBUF_OSX_HOST_SYS_ROOT "${3RD_PARTY_PROTOBUF_OSX_HOST_DEVELOPER_ROOT}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX${3RD_PARTY_PROTOBUF_OSX_HOST_SDK_VERSION}.sdk")
-                list(APPEND 3RD_PARTY_PROTOBUF_HOST_BUILD_FLAGS 
-                    "-DCMAKE_OSX_SYSROOT=${3RD_PARTY_PROTOBUF_OSX_HOST_SYS_ROOT}"
-                    "-DCMAKE_SYSROOT=${3RD_PARTY_PROTOBUF_OSX_HOST_SYS_ROOT}"
-                )
+            if (PROJECT_FIND_CONFIGURE_PACKAGE_PARALLEL_BUILD)
+                set(3RD_PARTY_PROTOBUF_BUILD_MULTI_CORE ${FindConfigurePackageCMakeBuildMultiJobs})
+            else ()
+                unset(3RD_PARTY_PROTOBUF_BUILD_MULTI_CORE)
             endif ()
 
             string(REGEX REPLACE ";" "\" \"" 3RD_PARTY_PROTOBUF_BUILD_FLAGS_CMD "${3RD_PARTY_PROTOBUF_BUILD_FLAGS}")
@@ -275,7 +261,7 @@ if (NOT 3RD_PARTY_PROTOBUF_BIN_PROTOC OR (NOT 3RD_PARTY_PROTOBUF_LINK_NAME AND N
         endif ()
 
         find_package(Protobuf)
-        PROJECT_3RD_PARTY_PROTOBUF_IMPORT()
+        PROJECT_LIBATBUS_3RD_PARTY_PROTOBUF_IMPORT()
     endif ()
 
     # try again, cached vars will cause find failed.
@@ -307,7 +293,7 @@ if (NOT 3RD_PARTY_PROTOBUF_BIN_PROTOC OR (NOT 3RD_PARTY_PROTOBUF_LINK_NAME AND N
         unset(Protobuf_LITE_LIBRARIES)
         unset(Protobuf::protoc)
         find_package(Protobuf)
-        PROJECT_3RD_PARTY_PROTOBUF_IMPORT()
+        PROJECT_LIBATBUS_3RD_PARTY_PROTOBUF_IMPORT()
     endif()
 
     if(PROTOBUF_FOUND AND Protobuf_LIBRARY)
@@ -323,3 +309,13 @@ if (3RD_PARTY_PROTOBUF_BACKUP_FIND_ROOT)
     set(CMAKE_FIND_ROOT_PATH ${3RD_PARTY_PROTOBUF_BACKUP_FIND_ROOT})
     unset(3RD_PARTY_PROTOBUF_BACKUP_FIND_ROOT)
 endif ()
+
+
+if (3RD_PARTY_PROTOBUF_INC_DIR)
+    list(APPEND PROJECT_LIBATBUS_PUBLIC_INCLUDE_DIRS ${3RD_PARTY_PROTOBUF_INC_DIR})
+endif ()
+
+if (3RD_PARTY_PROTOBUF_LINK_NAME)
+    list(APPEND PROJECT_LIBATBUS_PUBLIC_LINK_NAMES ${3RD_PARTY_PROTOBUF_LINK_NAME})
+endif ()
+

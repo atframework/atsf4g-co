@@ -4,20 +4,20 @@ BUILD_3RD_PARTY_PROTOBUF_BUILD_DIR="@CMAKE_CURRENT_BINARY_DIR@/deps/protobuf-@3R
 BUILD_3RD_PARTY_PROTOBUF_HOST_BUILD_DIR="@CMAKE_CURRENT_BINARY_DIR@/deps/protobuf-@3RD_PARTY_PROTOBUF_VERSION@/build_jobs_dir_@PROJECT_PREBUILT_HOST_PLATFORM_NAME@" ;
 
 # build host protoc first
-if [[ "@PROJECT_PREBUILT_PLATFORM_NAME@" != "@PROJECT_PREBUILT_HOST_PLATFORM_NAME@" ]]; then
+if [[ "@CMAKE_SYSTEM@" != "@CMAKE_HOST_SYSTEM@" ]]; then
     export PATH="$BUILD_3RD_PARTY_PROTOBUF_HOST_BUILD_DIR:$PATH" ;
 
-    if [ ! -e "$BUILD_3RD_PARTY_PROTOBUF_HOST_BUILD_DIR" ]; then
+    if [[ ! -e "$BUILD_3RD_PARTY_PROTOBUF_HOST_BUILD_DIR" ]]; then
         mkdir -p "$BUILD_3RD_PARTY_PROTOBUF_HOST_BUILD_DIR" ;    
     fi
 
     cd "$BUILD_3RD_PARTY_PROTOBUF_HOST_BUILD_DIR" ;
 
-    if [ ! -e "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/bin/protoc" ] && [ ! -e "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/bin/protoc.exe" ]; then
+    if [[ ! -e "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/bin/protoc" ]] && [[ ! -e "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/bin/protoc.exe" ]]; then
 
         env CC= CXX= @3RD_PARTY_PROTOBUF_HOST_BUILD_FLAGS_CMD@ "-DCMAKE_INSTALL_PREFIX=@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@" ;
 
-        @CMAKE_COMMAND@ --build . --target install --config Release @3RD_PARTY_PROTOBUF_BUILD_MULTI_CORE@ || @CMAKE_COMMAND@ --build . --target install --config Release ;
+        "@CMAKE_COMMAND@" --build . --target install --config Release "@3RD_PARTY_PROTOBUF_BUILD_MULTI_CORE@" || "@CMAKE_COMMAND@" --build . --target install --config Release ;
 
     fi
 
@@ -31,7 +31,7 @@ fi
 
 cd "$BUILD_3RD_PARTY_PROTOBUF_BUILD_DIR" ;
 
-if [[ "@PROJECT_PREBUILT_PLATFORM_NAME@" != "@PROJECT_PREBUILT_HOST_PLATFORM_NAME@" ]]; then
+if [[ "@CMAKE_SYSTEM@" != "@CMAKE_HOST_SYSTEM@" ]]; then
 
     @3RD_PARTY_PROTOBUF_BUILD_FLAGS_CMD@ "-DCMAKE_INSTALL_PREFIX=@3RD_PARTY_PROTOBUF_ROOT_DIR@" -Dprotobuf_BUILD_CONFORMANCE=OFF -Dprotobuf_BUILD_PROTOC_BINARIES=OFF ;
 
@@ -41,7 +41,7 @@ else
 
 fi
 
-@CMAKE_COMMAND@ --build . --target install --config Release @3RD_PARTY_PROTOBUF_BUILD_MULTI_CORE@ || @CMAKE_COMMAND@ --build . --target install --config Release ;
+"@CMAKE_COMMAND@" --build . --target install --config Release "@3RD_PARTY_PROTOBUF_BUILD_MULTI_CORE@" || "@CMAKE_COMMAND@" --build . --target install --config Release ;
 
 if [[ $? -eq 0 ]] && [[ -e "@3RD_PARTY_PROTOBUF_PKG_DIR@/protobuf-@3RD_PARTY_PROTOBUF_VERSION@/python/setup.py" ]]; then
     export PATH="@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/bin:$PATH" ;
