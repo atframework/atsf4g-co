@@ -87,6 +87,9 @@ endif ()
 # =========== 3rd_party - lua ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/lua/lua.cmake")
 
+# =========== 3rd_party - yaml-cpp ===========
+include("${PROJECT_3RD_PARTY_ROOT_DIR}/yaml-cpp/yaml-cpp.cmake")
+
 # =========== 3rd_party - libcopp ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/libcopp/libcopp.cmake")
 

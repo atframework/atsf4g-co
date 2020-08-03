@@ -80,6 +80,10 @@
 ## rapidjson
 /3rd_party/rapidjson/repo
 
+## yaml-cpp
+/3rd_party/yaml-cpp/pkg
+/3rd_party/yaml-cpp/prebuilt
+
 ## libwebsockets
 /3rd_party/libwebsockets/repo
 /3rd_party/libwebsockets/prebuilt

@@ -12,7 +12,7 @@ if(NOT DEFINED __PROJECT_3RD_PARTY_FMTLIB_LOADED)
             set (3RD_PARTY_FMTLIB_LINK_NAME fmt::fmt-header-only)
             list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES ${3RD_PARTY_FMTLIB_LINK_NAME})
         elseif (TARGET fmt::fmt)
-            message(STATUS "fmtlib using target: uv")
+            message(STATUS "fmtlib using target: fmt::fmt")
             set (3RD_PARTY_FMTLIB_LINK_NAME fmt::fmt)
             list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES ${3RD_PARTY_FMTLIB_LINK_NAME})
         else()
@@ -68,8 +68,7 @@ if(NOT DEFINED __PROJECT_3RD_PARTY_FMTLIB_LOADED)
         list(APPEND CMAKE_FIND_ROOT_PATH ${3RD_PARTY_FMTLIB_ROOT_DIR})
         FindConfigurePackage(
             PACKAGE fmt
-            BUILD_WITH_CMAKE
-            CMAKE_INHIRT_BUILD_ENV ON
+            BUILD_WITH_CMAKE CMAKE_INHIRT_BUILD_ENV
             CMAKE_FLAGS "-DCMAKE_POSITION_INDEPENDENT_CODE=YES" "-DBUILD_SHARED_LIBS=OFF" "-DFMT_DOC=OFF" "-DFMT_INSTALL=ON" 
                         "-DFMT_TEST=OFF" "-DFMT_FUZZ=OFF" "-DFMT_CUDA_TEST=OFF"
             WORKING_DIRECTORY "${3RD_PARTY_FMTLIB_PKG_DIR}"

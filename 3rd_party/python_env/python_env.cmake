@@ -10,10 +10,10 @@ if (NOT Python_Interpreter_FOUND)
 endif()
 
 message(STATUS "Install dependency python modules into ${PROJECT_3RD_PARTY_PYTHON_MODULE_DIR}")
-execute_process(
-    COMMAND ${Python_EXECUTABLE} "-m" "pip" "install" ${PROJECT_3RD_PARTY_PYTHON_PIP_SOURCE} "--upgrade" "--prefix" ${PROJECT_3RD_PARTY_PYTHON_MODULE_DIR} "pip"
-    WORKING_DIRECTORY ${PROJECT_3RD_PARTY_PYTHON_MODULE_DIR}
-)
+# execute_process(
+#     COMMAND ${Python_EXECUTABLE} "-m" "pip" "install" ${PROJECT_3RD_PARTY_PYTHON_PIP_SOURCE} "--upgrade" "--prefix" ${PROJECT_3RD_PARTY_PYTHON_MODULE_DIR} "pip"
+#     WORKING_DIRECTORY ${PROJECT_3RD_PARTY_PYTHON_MODULE_DIR}
+# )
 
 execute_process(
     COMMAND ${Python_EXECUTABLE} "-m" "pip" "install" ${PROJECT_3RD_PARTY_PYTHON_PIP_SOURCE} "--prefix" ${PROJECT_3RD_PARTY_PYTHON_MODULE_DIR} "-r" "${CMAKE_CURRENT_LIST_DIR}/requirements.txt"

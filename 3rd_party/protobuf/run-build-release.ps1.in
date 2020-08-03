@@ -71,7 +71,7 @@ if (( $LastExitCode -eq 0 ) -and (Test-Path "@3RD_PARTY_PROTOBUF_PKG_DIR@/protob
 
     $PYTHON_BIN="";
     if ( "x" -ne "x@PYTHON_EXECUTABLE@" ) {
-        "@PYTHON_EXECUTABLE@" --version
+        & "@PYTHON_EXECUTABLE@" --version
         if ( $LastExitCode -eq 0 ) {
             $PYTHON_BIN="@PYTHON_EXECUTABLE@"
         }
