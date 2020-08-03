@@ -120,7 +120,7 @@ public:
         gw_mgr_.get_conf().default_router     = 0;
         gw_mgr_.get_conf().first_idle_timeout = 10; // 10s
 
-        util::config::ini_loader &cfg = get_app()->get_configure();
+        util::config::ini_loader &cfg = get_app()->get_configure_loader();
         // listen configures
         cfg.dump_to("atgateway.listen.address", gw_mgr_.get_conf().listen.address);
         cfg.dump_to("atgateway.listen.type", gw_mgr_.get_conf().listen.type);

@@ -275,7 +275,7 @@ namespace atframe {
 
         int etcd_module::reload() {
             // load init cluster member from configure
-            util::config::ini_loader &cfg = get_app()->get_configure();
+            util::config::ini_loader &cfg = get_app()->get_configure_loader();
 
             cfg.dump_to("atapp.etcd.path", conf_.path_prefix);
             if (!conf_.path_prefix.empty() && conf_.path_prefix[conf_.path_prefix.size() - 1] != '/' &&
