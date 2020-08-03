@@ -10,7 +10,7 @@ $3RD_PARTY_PROTOBUF_BUILD_DIR = "@CMAKE_CURRENT_BINARY_DIR@/deps/protobuf-@3RD_P
 $3RD_PARTY_PROTOBUF_HOST_BUILD_DIR = "@CMAKE_CURRENT_BINARY_DIR@/deps/protobuf-@3RD_PARTY_PROTOBUF_VERSION@/build_jobs_dir_@PROJECT_PREBUILT_HOST_PLATFORM_NAME@"
 
 # build host protoc first
-if ( "@PROJECT_PREBUILT_PLATFORM_NAME@" -ne "@PROJECT_PREBUILT_HOST_PLATFORM_NAME@" ) {
+if ( "@CMAKE_SYSTEM@" -ne "@CMAKE_HOST_SYSTEM@" ) {
     $ENV:PATH = "$3RD_PARTY_PROTOBUF_HOST_BUILD_DIR" + [IO.Path]::PathSeparator + "$ENV:PATH"
 
     if (!(Test-Path "$3RD_PARTY_PROTOBUF_HOST_BUILD_DIR" )) {
@@ -25,8 +25,20 @@ if ( "@PROJECT_PREBUILT_PLATFORM_NAME@" -ne "@PROJECT_PREBUILT_HOST_PLATFORM_NAM
         & @3RD_PARTY_PROTOBUF_HOST_BUILD_FLAGS_CMD@ "-DCMAKE_INSTALL_PREFIX=@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@"
         if (("@MSVC@".ToLower() -ne "true") -or ("@MSVC@".ToLower() -ne "yes") -or ("@MSVC@".ToLower() -eq "1")) {
             & "@CMAKE_COMMAND@" --build . --target install --config Debug @3RD_PARTY_PROTOBUF_BUILD_MULTI_CORE@
+            if ( $LastExitCode -ne 0 ) {
+                & "@CMAKE_COMMAND@" --build . --target install --config Debug
+            }
+            else {
+                exit $LastExitCode
+            }
         }
         & "@CMAKE_COMMAND@" --build . --target install --config Release @3RD_PARTY_PROTOBUF_BUILD_MULTI_CORE@
+        if ( $LastExitCode -ne 0 ) {
+            & "@CMAKE_COMMAND@" --build . --target install --config Release
+        }
+        else {
+            exit $LastExitCode
+        }
         $ENV:CC = $ENV:BACKUP_CC
         $ENV:CXX = $ENV:BACKUP_CXX
     }
@@ -42,7 +54,7 @@ if (!(Test-Path "$3RD_PARTY_PROTOBUF_BUILD_DIR" )) {
 
 Set-Location "$3RD_PARTY_PROTOBUF_BUILD_DIR"
 
-if ("@PROJECT_PREBUILT_PLATFORM_NAME@" -ne "@PROJECT_PREBUILT_HOST_PLATFORM_NAME@" ) {
+if ("@CMAKE_SYSTEM@" -ne "@CMAKE_HOST_SYSTEM@" ) {
     & @3RD_PARTY_PROTOBUF_BUILD_FLAGS_CMD@ "-DCMAKE_INSTALL_PREFIX=@3RD_PARTY_PROTOBUF_ROOT_DIR@" -Dprotobuf_BUILD_CONFORMANCE=OFF -Dprotobuf_BUILD_PROTOC_BINARIES=OFF
 }
 else {
@@ -51,15 +63,29 @@ else {
 
 if (("@MSVC@".ToLower() -eq "true") -or ("@MSVC@".ToLower() -eq "yes") -or ("@MSVC@".ToLower() -eq "1")) {
     & "@CMAKE_COMMAND@" --build . --target install --config Debug @3RD_PARTY_PROTOBUF_BUILD_MULTI_CORE@
+    if ( $LastExitCode -ne 0 ) {
+        & "@CMAKE_COMMAND@" --build . --target install --config Debug
+    }
+    else {
+        exit $LastExitCode
+    }
 }
 
 & "@CMAKE_COMMAND@" --build . --target install --config Release @3RD_PARTY_PROTOBUF_BUILD_MULTI_CORE@
 
+if ( $LastExitCode -ne 0 ) {
+    & "@CMAKE_COMMAND@" --build . --target install --config Release
+}
+else {
+    exit $LastExitCode
+}
+
 if (( $LastExitCode -eq 0 ) -and (Test-Path "@3RD_PARTY_PROTOBUF_PKG_DIR@/protobuf-@3RD_PARTY_PROTOBUF_VERSION@/python/setup.py" )) {
     if ($IsWindows) {
-        $ENV:PATH="@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/bin;${ENV:PATH}"
-    } else {
-        $ENV:PATH="@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/bin:${ENV:PATH}"
+        $ENV:PATH = "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/bin;${ENV:PATH}"
+    }
+    else {
+        $ENV:PATH = "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/bin:${ENV:PATH}"
     }
     
     if (Test-Path "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/python") {
@@ -68,25 +94,25 @@ if (( $LastExitCode -eq 0 ) -and (Test-Path "@3RD_PARTY_PROTOBUF_PKG_DIR@/protob
     Copy-Item -Path "@3RD_PARTY_PROTOBUF_PKG_DIR@/protobuf-@3RD_PARTY_PROTOBUF_VERSION@/python" -Destination "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@" -Force -Recurse
     Copy-Item -Path "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/include" -Destination "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/src" -Force -Recurse
     Set-Location "@3RD_PARTY_PROTOBUF_HOST_ROOT_DIR@/python"
-
-    $PYTHON_BIN="";
+    
+    $PYTHON_BIN = "";
     if ( "x" -ne "x@PYTHON_EXECUTABLE@" ) {
         & "@PYTHON_EXECUTABLE@" --version
         if ( $LastExitCode -eq 0 ) {
-            $PYTHON_BIN="@PYTHON_EXECUTABLE@"
+            $PYTHON_BIN = "@PYTHON_EXECUTABLE@"
         }
     }
 
     if ( "x" -eq "x$PYTHON_BIN" ) {
         python3 --version
         if ( $LastExitCode -eq 0 ) {
-            $PYTHON_BIN="python3"
+            $PYTHON_BIN = "python3"
         }
     }
     if ( "x" -eq "x$PYTHON_BIN" ) {
         python --version
         if ( $LastExitCode -eq 0 ) {
-            $PYTHON_BIN="python"
+            $PYTHON_BIN = "python"
         }
     }
     if ( "x" -ne "x$PYTHON_BIN" ) {

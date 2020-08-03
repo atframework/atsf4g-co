@@ -94,8 +94,6 @@ if (NOT TARGET lua AND NOT (3RD_PARTY_LUA_INC_DIR AND 3RD_PARTY_LUA_LINK_NAME))
         unset(LUA_VERSION_MINOR CACHE)
         unset(LUA_VERSION_PATCH CACHE)
     endif ()
-else()
-    PROJECT_3RD_PARTY_LUA_IMPORT()
 endif ()
 
 
