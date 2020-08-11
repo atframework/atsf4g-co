@@ -12,12 +12,19 @@ service framework for game server using libatbus, libatapp, libcopp and etc.
 
 # Dependency
 1. [libuv](http://libuv.org/)  -- libuv is a multi-platform support library with a focus on asynchronous I/O.
-2. [msgpack-c](https://github.com/msgpack/msgpack-c)  -- [MessagePack](http://msgpack.org/) is an efficient binary serialization format, and [msgpack-c](https://github.com/msgpack/msgpack-c) is a c and c++ driver for it.
-3. [libiniloader](https://github.com/owt5008137/libiniloader) -- a small and lightweight ini loader code.
-4. [libcurl](https://curl.haxx.se/libcurl/) -- libcurl is a free and easy-to-use client-side URL transfer library
-5. [libcopp](https://github.com/owt5008137/libcopp) -- Cross-platform coroutine library written in c++.
-6. [rapidjson](https://github.com/miloyip/rapidjson) -- A fast and header only json library.
-7. [flatbuffer](https://github.com/google/flatbuffers) -- A simple pack/unpack library. It's used in atgateway's inner protocol.
+2. [fmtlib](https://fmt.dev/)  -- A modern C++ formatting library.
+3. [libcurl](https://curl.haxx.se/libcurl/) -- libcurl is a free and easy-to-use client-side URL transfer library
+4. [libcopp](https://github.com/owt5008137/libcopp) -- Cross-platform coroutine library written in c++.
+5. [rapidjson](https://github.com/miloyip/rapidjson) -- A fast and header only json library.
+6. [flatbuffer](https://github.com/google/flatbuffers) -- A simple pack/unpack library. It's used in atgateway's inner protocol.
+7. [yaml-cpp](https://github.com/jbeder/yaml-cpp) -- A library to load YAML configure files.
+8. [rapidjson](https://rapidjson.org/) -- A library to load JSON string.
+9.  [zlib](https://zlib.net/) -- This library is depended by many libraries.
+10. [openssl](https://www.openssl.org)/[libressl](https://www.libressl.org/)/[mbedtls](https://tls.mbed.org/) -- Provide SSL and TLS support for many libraries and tools.
+11. [libwebsockets](https://libwebsockets.org/) -- A library used to implement HTTP and Websocket server.
+12. [lua](https://lua.org/) -- Lua script engine
+13. [protobuf](https://github.com/protocolbuffers/protobuf) -- A well known serialization library.
+14. [python](https://www.python.org/) with [pip](https://pypi.org/project/pip/) support -- We use python to generate codes.
 
 
 # Prepare
@@ -146,7 +153,7 @@ Then run
 mkdir build_jobs_msvc
 cd build_jobs_msvc
 # run cmake
-cmake [SOURCE PATH] -G "Visual Studio ... Win64" -DLIBUV_ROOT=[LIBUV INSTALL PATH] -DOPENSSL_ROOT=[OPENSSL INSTALL PATH] -DPROJECT_ENABLE_UNITTEST=YES -DPROJECT_ENABLE_SAMPLE=YES -DPROJECT_ENABLE_TOOLS=YES ...
+cmake [SOURCE PATH] -G "Visual Studio XXXX" -A x64 -DLIBUV_ROOT=[LIBUV INSTALL PATH] -DOPENSSL_ROOT=[OPENSSL INSTALL PATH] -DPROJECT_ENABLE_UNITTEST=YES -DPROJECT_ENABLE_SAMPLE=YES -DPROJECT_ENABLE_TOOLS=YES ...
 
 cd build_jobs_msvc
 

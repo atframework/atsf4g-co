@@ -806,73 +806,76 @@ def generate_global_templates(pb_db, options, project_dir, local_vcs_user_name):
     ))
 
 def generate_service_group(pb_db, options, project_dir, local_vcs_user_name):
-    if options.service_name is None:
+    if not options.service_name:
         return
 
-    selected_service = pb_db.get_service(options.service_name)
-    if selected_service is None:
-        return
+    for service_name in options.service_name:
+        selected_service = pb_db.get_service(service_name)
+        if selected_service is None:
+            return
 
-    generate_group(options, PbGroupGenerator(
-        database=pb_db,
-        project_dir=project_dir,
-        local_vcs_user_name=local_vcs_user_name,
-        outer_name="service",
-        inner_name="rpc",
-        inner_set_name="rpcs",
-        inner_include_rule=options.rpc_include_rule,
-        inner_exclude_rule=options.rpc_exclude_rule,
-        outer_templates=options.service_template,
-        inner_templates=options.rpc_template,
-        outer_inst=selected_service,
-        inner_name_map=selected_service.rpcs
-    ))
+        generate_group(options, PbGroupGenerator(
+            database=pb_db,
+            project_dir=project_dir,
+            local_vcs_user_name=local_vcs_user_name,
+            outer_name="service",
+            inner_name="rpc",
+            inner_set_name="rpcs",
+            inner_include_rule=options.rpc_include_rule,
+            inner_exclude_rule=options.rpc_exclude_rule,
+            outer_templates=options.service_template,
+            inner_templates=options.rpc_template,
+            outer_inst=selected_service,
+            inner_name_map=selected_service.rpcs
+        ))
 
 def generate_message_group(pb_db, options, project_dir, local_vcs_user_name):
-    if options.message_name is None:
+    if not options.message_name:
         return
 
-    selected_message = pb_db.get_message(options.message_name)
-    if selected_message is None:
-        return
+    for message_name in options.message_name:
+        selected_message = pb_db.get_message(message_name)
+        if selected_message is None:
+            return
 
-    generate_group(options, PbGroupGenerator(
-        database=pb_db,
-        project_dir=project_dir,
-        local_vcs_user_name=local_vcs_user_name,
-        outer_name="message",
-        inner_name="field",
-        inner_set_name="fields",
-        inner_include_rule=options.field_include_rule,
-        inner_exclude_rule=options.field_exclude_rule,
-        outer_templates=options.message_template,
-        inner_templates=options.field_template,
-        outer_inst=selected_message,
-        inner_name_map=selected_message.fields_by_name
-    ))
+        generate_group(options, PbGroupGenerator(
+            database=pb_db,
+            project_dir=project_dir,
+            local_vcs_user_name=local_vcs_user_name,
+            outer_name="message",
+            inner_name="field",
+            inner_set_name="fields",
+            inner_include_rule=options.field_include_rule,
+            inner_exclude_rule=options.field_exclude_rule,
+            outer_templates=options.message_template,
+            inner_templates=options.field_template,
+            outer_inst=selected_message,
+            inner_name_map=selected_message.fields_by_name
+        ))
 
 def generate_enum_group(pb_db, options, project_dir, local_vcs_user_name):
-    if options.enum_name is None:
+    if not options.enum_name:
         return
 
-    selected_enum = pb_db.get_enum(options.enum_name)
-    if selected_enum is None:
-        return
+    for enum_name in options.enum_name:
+        selected_enum = pb_db.get_enum(enum_name)
+        if selected_enum is None:
+            return
 
-    generate_group(options, PbGroupGenerator(
-        database=pb_db,
-        project_dir=project_dir,
-        local_vcs_user_name=local_vcs_user_name,
-        outer_name="enum",
-        inner_name="enumvalue",
-        inner_set_name="enumvalues",
-        inner_include_rule=options.enumvalue_include_rule,
-        inner_exclude_rule=options.enumvalue_exclude_rule,
-        outer_templates=options.enum_template,
-        inner_templates=options.enumvalue_template,
-        outer_inst=selected_enum,
-        inner_name_map=selected_enum.values_by_name
-    ))
+        generate_group(options, PbGroupGenerator(
+            database=pb_db,
+            project_dir=project_dir,
+            local_vcs_user_name=local_vcs_user_name,
+            outer_name="enum",
+            inner_name="enumvalue",
+            inner_set_name="enumvalues",
+            inner_include_rule=options.enumvalue_include_rule,
+            inner_exclude_rule=options.enumvalue_exclude_rule,
+            outer_templates=options.enum_template,
+            inner_templates=options.enumvalue_template,
+            outer_inst=selected_enum,
+            inner_name_map=selected_enum.values_by_name
+        ))
 
 def main():
     #lizard forgives
@@ -1008,7 +1011,7 @@ def main():
         action="store",
         help="set service name to generate",
         dest="service_name",
-        default=None)
+        default=[])
     CmdArgsAddOption(parser,
         "--rpc-include",
         action="store",
