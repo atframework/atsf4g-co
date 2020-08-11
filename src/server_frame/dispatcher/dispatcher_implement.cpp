@@ -109,9 +109,13 @@ int32_t dispatcher_implement::on_recv_msg(msg_raw_t &msg, void *priv_data, uint6
     }
 
     if (res < 0) {
-        FWLOGERROR("{}(type={}) create task failed, error={}({})", name(), get_instance_ident_llu(), 
-            res, protobuf_mini_dumper_get_error_msg(res));
-        return hello::err::EN_SYS_MALLOC;
+        if (hello::err::EN_SYS_NOTFOUND == res) {
+            FWLOGWARNING("{}(type={}) create task failed, task action or actor action not registered", name(), get_instance_ident_llu());
+        } else {
+            FWLOGERROR("{}(type={}) create task failed, error={}({})", name(), get_instance_ident_llu(), 
+                res, protobuf_mini_dumper_get_error_msg(res));
+        }
+        return res;
     }
 
     // 不创建消息
