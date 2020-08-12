@@ -1008,7 +1008,7 @@ def main():
     CmdArgsAddOption(parser,
         "-s",
         "--service-name",
-        action="store",
+        action="append",
         help="set service name to generate",
         dest="service_name",
         default=[])
@@ -1040,10 +1040,10 @@ def main():
         default=[])
     CmdArgsAddOption(parser,
         "--message-name",
-        action="store",
+        action="append",
         help="set message name tp generate",
         dest="message_name",
-        default=None)
+        default=[])
     CmdArgsAddOption(parser,
         "--field-include",
         action="store",
@@ -1072,10 +1072,10 @@ def main():
         default=[])
     CmdArgsAddOption(parser,
         "--enum-name",
-        action="store",
+        action="append",
         help="set enum name tp generate",
         dest="enum_name",
-        default=None)
+        default=[])
     CmdArgsAddOption(parser,
         "--enumvalue-include",
         action="store",
