@@ -93,9 +93,19 @@ namespace atframe {
             }
         }
 
-        void *proto_base::get_tls_buffer(tls_buffer_t::type tls_type) { return ::atframe::gateway::detail::atgateway_get_msg_buffer(tls_type); }
+        void *proto_base::get_tls_buffer(tls_buffer_t::type tls_type) {
+            if (tls_type >= tls_buffer_t::EN_TBT_MAX || tls_type < 0) {
+                return NULL;
+            }
+            return ::atframe::gateway::detail::atgateway_get_msg_buffer(tls_type);
+        }
 
-        size_t proto_base::get_tls_length(tls_buffer_t::type) { return ATBUS_MACRO_MSG_LIMIT; }
+        size_t proto_base::get_tls_length(tls_buffer_t::type tls_type) {
+            if (tls_type >= tls_buffer_t::EN_TBT_MAX || tls_type < 0) {
+                return 0;
+            }
+            return ATBUS_MACRO_MSG_LIMIT;
+        }
 
         int proto_base::write_done(int /*status*/) {
             if (!check_flag(flag_t::EN_PFT_WRITING)) {

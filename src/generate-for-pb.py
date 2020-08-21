@@ -1009,7 +1009,7 @@ def main():
         "-s",
         "--service-name",
         action="append",
-        help="set service name to generate",
+        help="add service name to generate",
         dest="service_name",
         default=[])
     CmdArgsAddOption(parser,
@@ -1041,7 +1041,7 @@ def main():
     CmdArgsAddOption(parser,
         "--message-name",
         action="append",
-        help="set message name tp generate",
+        help="add message name tp generate",
         dest="message_name",
         default=[])
     CmdArgsAddOption(parser,
@@ -1073,7 +1073,7 @@ def main():
     CmdArgsAddOption(parser,
         "--enum-name",
         action="append",
-        help="set enum name tp generate",
+        help="add enum name tp generate",
         dest="enum_name",
         default=[])
     CmdArgsAddOption(parser,
