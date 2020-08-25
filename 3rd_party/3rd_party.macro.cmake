@@ -98,3 +98,12 @@ include("${PROJECT_3RD_PARTY_ROOT_DIR}/python_env/python_env.cmake")
 
 # =========== 3rd_party - xres-code-generator ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/xres-code-generator/xres-code-generator.cmake")
+
+if (3RD_PARTY_PUBLIC_LINK_NAMES)
+    list(REMOVE_DUPLICATES 3RD_PARTY_PUBLIC_LINK_NAMES)
+    list(REVERSE 3RD_PARTY_PUBLIC_LINK_NAMES)
+endif()
+if (3RD_PARTY_INTERFACE_LINK_NAMES)
+    list(REMOVE_DUPLICATES 3RD_PARTY_INTERFACE_LINK_NAMES)
+    list(REVERSE 3RD_PARTY_INTERFACE_LINK_NAMES)
+endif ()

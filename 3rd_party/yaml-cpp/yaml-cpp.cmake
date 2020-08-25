@@ -24,32 +24,11 @@ if (NOT TARGET yaml-cpp)
     endif()
 
     set (3RD_PARTY_YAML_CPP_PKG_DIR "${3RD_PARTY_YAML_CPP_BASE_DIR}/pkg")
-
     set (3RD_PARTY_YAML_CPP_DEFAULT_VERSION "0.6.3")
-    # if (YamlCpp_ROOT)
-    #     set (3RD_PARTY_YAML_CPP_ROOT_DIR ${YamlCpp_ROOT})
-    # else()
-    #     set (3RD_PARTY_YAML_CPP_ROOT_DIR "${CMAKE_CURRENT_LIST_DIR}/prebuilt/${PROJECT_PREBUILT_PLATFORM_NAME}")
-    #     set (YamlCpp_ROOT ${3RD_PARTY_YAML_CPP_ROOT_DIR})
-    # endif()
-    # set (YamlCpp_DIR "${YamlCpp_ROOT}/CMake")
-
+    
     if(NOT EXISTS ${3RD_PARTY_YAML_CPP_PKG_DIR})
         file(MAKE_DIRECTORY ${3RD_PARTY_YAML_CPP_PKG_DIR})
     endif()
-
-    # set(3RD_PARTY_YAML_CPP_BACKUP_FIND_ROOT ${CMAKE_FIND_ROOT_PATH})
-    # list(APPEND CMAKE_FIND_ROOT_PATH ${3RD_PARTY_YAML_CPP_ROOT_DIR})
-    # FindConfigurePackage(
-    #     PACKAGE yaml-cpp
-    #     BUILD_WITH_CMAKE CMAKE_INHIRT_BUILD_ENV
-    #     CMAKE_FLAGS "-DCMAKE_POSITION_INDEPENDENT_CODE=YES" "-DBUILD_SHARED_LIBS=OFF" "-DYAML_CPP_BUILD_TESTS=OFF"
-    #     WORKING_DIRECTORY "${3RD_PARTY_YAML_CPP_PKG_DIR}"
-    #     BUILD_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/deps/yaml-cpp-${3RD_PARTY_YAML_CPP_DEFAULT_VERSION}/build_jobs_${PROJECT_PREBUILT_PLATFORM_NAME}"
-    #     PREFIX_DIRECTORY "${3RD_PARTY_YAML_CPP_ROOT_DIR}"
-    #     GIT_BRANCH "yaml-cpp-${3RD_PARTY_YAML_CPP_DEFAULT_VERSION}"
-    #     GIT_URL "https://github.com/jbeder/yaml-cpp.git"
-    # )
 
     if (PROJECT_GIT_REMOTE_ORIGIN_USE_SSH AND NOT PROJECT_GIT_CLONE_REMOTE_ORIGIN_DISABLE_SSH)
         set (3RD_PARTY_YAML_CPP_REPO_URL "git@github.com:jbeder/yaml-cpp.git")
@@ -57,6 +36,12 @@ if (NOT TARGET yaml-cpp)
         set (3RD_PARTY_YAML_CPP_REPO_URL "https://github.com/jbeder/yaml-cpp.git")
     endif ()
     set(3RD_PARTY_YAML_CPP_REPO_DIR "${3RD_PARTY_YAML_CPP_PKG_DIR}/yaml-cpp-${3RD_PARTY_YAML_CPP_DEFAULT_VERSION}")
+    if(NOT EXISTS "${3RD_PARTY_YAML_CPP_REPO_DIR}/CMakeLists.txt")
+        if(EXISTS ${3RD_PARTY_YAML_CPP_REPO_DIR})
+            file(REMOVE_RECURSE ${3RD_PARTY_YAML_CPP_REPO_DIR})
+        endif()
+    endif()
+
     project_git_clone_3rd_party(
         URL ${3RD_PARTY_YAML_CPP_REPO_URL}
         REPO_DIRECTORY ${3RD_PARTY_YAML_CPP_REPO_DIR}

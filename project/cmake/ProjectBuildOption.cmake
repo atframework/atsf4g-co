@@ -34,3 +34,5 @@ if (NOT PROJECT_GIT_REMOTE_ORIGIN_USE_SSH)
         endif()
     endif()
 endif()
+
+option(ATFRAMEWORK_USE_DYNAMIC_LIBRARY "Build and linking with dynamic libraries." OFF)
