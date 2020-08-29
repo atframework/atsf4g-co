@@ -22,22 +22,13 @@
 #include <libatbus.h>
 #include <libatbus_protocol.h>
 
-static int app_handle_on_forward_response(atapp::app &, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd, const atbus::protocol::msg &m) {
-    if (m.head().ret() >= 0 || atbus::protocol::msg::kDataTransformRsp != m.msg_body_case()) {
+static int app_handle_on_forward_response(atapp::app & app, const atapp::app::message_sender_t& source, const atapp::app::message_t & m, int32_t error_code) {
+    if (error_code >= 0) {
         return 0;
     }
 
-    atapp::app::app_id_t stop_at = m.head().src_bus_id();
-    const atbus::protocol::forward_data* fwd_data = &m.data_transform_rsp();
-
-    // 一般会原路返回，所以中间的路由节点就是转发失败的节点
-    if (NULL != fwd_data && fwd_data->router_size() > 0) {
-        stop_at = fwd_data->router(fwd_data->router_size() - 1);
-    }
-
-    WLOGERROR("send data from 0x%llx to 0x%llx failed, stop at 0x%llx, msg sequence: %llu", static_cast<unsigned long long>(src_pd),
-              static_cast<unsigned long long>(dst_pd), static_cast<unsigned long long>(stop_at), 
-              static_cast<unsigned long long>(m.head().sequence()));
+    FWLOGERROR("send data from {:#x} to {:#x} failed, msg sequence: {}, code: {}", app.get_id(),
+              source.id, m.msg_sequence, error_code);
     return 0;
 }
 
@@ -605,27 +596,20 @@ struct app_handle_on_recv {
     std::reference_wrapper<gateway_module> mod_;
     app_handle_on_recv(gateway_module &mod) : mod_(mod) {}
 
-    int operator()(::atapp::app &, const ::atapp::app::msg_t &recv_msg, const void *buffer, size_t len) {
-        const atbus::protocol::forward_data* fwd_data = NULL;
-        if (atbus::protocol::msg::kDataTransformReq == recv_msg.msg_body_case()) {
-            fwd_data = &recv_msg.data_transform_req();
-        } else if (atbus::protocol::msg::kDataTransformRsp == recv_msg.msg_body_case()) {
-            fwd_data = &recv_msg.data_transform_rsp();
-        }
-
-        if (NULL == buffer || 0 == len || NULL == fwd_data) {
+    int operator()(::atapp::app &, const atapp::app::message_sender_t& source, const atapp::app::message_t &message) {
+        if (NULL == message.data || 0 == message.data_size) {
             return 0;
         }
 
         ::google::protobuf::ArenaOptions arena_options;
-        arena_options.initial_block_size = (len + 256) & 255;
+        arena_options.initial_block_size = (message.data_size + 256) & 255;
         ::google::protobuf::Arena arena(arena_options);
         ::atframe::gw::ss_msg* msg = ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::Arena::CreateMessage<::atframe::gw::ss_msg>(&arena);
         assert(msg);
 
-        if (false == msg->ParseFromArray(reinterpret_cast<const void*>(buffer), static_cast<int>(len))) {
-            WLOGDEBUG("from server 0x%llx: session 0x%llx parse %llu bytes data failed: %s", static_cast<unsigned long long>(fwd_data->from()),
-                    static_cast<unsigned long long>(msg->head().session_id()), static_cast<unsigned long long>(len),
+        if (false == msg->ParseFromArray(message.data, static_cast<int>(message.data_size))) {
+            WLOGDEBUG("from server 0x%llx: session 0x%llx parse %llu bytes data failed: %s", static_cast<unsigned long long>(source.id),
+                    static_cast<unsigned long long>(msg->head().session_id()), static_cast<unsigned long long>(message.data_size),
                     msg->InitializationErrorString().c_str()
             );
             return 0;
@@ -635,12 +619,12 @@ struct app_handle_on_recv {
         case ::atframe::gw::ss_msg_body::kPost: {
             // post to single client
             if (0 != msg->head().session_id() && 0 == msg->body().post().session_ids_size()) {
-                WLOGDEBUG("from server 0x%llx: session 0x%llx send %llu bytes data to client", static_cast<unsigned long long>(fwd_data->from()),
+                WLOGDEBUG("from server 0x%llx: session 0x%llx send %llu bytes data to client", static_cast<unsigned long long>(source.id),
                           static_cast<unsigned long long>(msg->head().session_id()), static_cast<unsigned long long>(msg->body().post().content().size()));
 
                 int res = mod_.get().get_session_manager().push_data(msg->head().session_id(), msg->body().post().content().data(), msg->body().post().content().size());
                 if (0 != res) {
-                    WLOGERROR("from server 0x%llx: session 0x%llx push data failed, res: %d ", static_cast<unsigned long long>(fwd_data->from()),
+                    WLOGERROR("from server 0x%llx: session 0x%llx push data failed, res: %d ", static_cast<unsigned long long>(source.id),
                               static_cast<unsigned long long>(msg->head().session_id()), res);
 
                     // session not found, maybe gateway has restarted or server cache expired without remove
@@ -649,16 +633,16 @@ struct app_handle_on_recv {
                         ::atframe::gw::ss_msg rsp;
                         rsp.mutable_head()->set_session_id(msg->head().session_id());
                         rsp.mutable_body()->mutable_remove_session();
-                        res = mod_.get().get_session_manager().post_data(fwd_data->from(), rsp);
+                        res = mod_.get().get_session_manager().post_data(source.id, rsp);
                         if (0 != res) {
-                            WLOGERROR("send remove notify to server 0x%llx failed, res: %d", static_cast<unsigned long long>(fwd_data->from()), res);
+                            WLOGERROR("send remove notify to server 0x%llx failed, res: %d", static_cast<unsigned long long>(source.id), res);
                         }
                     }
                 }
             } else if (0 == msg->body().post().session_ids_size()) { // broadcast to all actived session
                 int res = mod_.get().get_session_manager().broadcast_data(msg->body().post().content().data(), msg->body().post().content().size());
                 if (0 != res) {
-                    WLOGERROR("from server 0x%llx: broadcast data failed, res: %d ", static_cast<unsigned long long>(fwd_data->from()), res);
+                    WLOGERROR("from server 0x%llx: broadcast data failed, res: %d ", static_cast<unsigned long long>(source.id), res);
                 }
             } else { // multicast to more than one client
                 for (int  i = 0; i < msg->body().post().session_ids_size(); ++ i) {
@@ -666,7 +650,7 @@ struct app_handle_on_recv {
                         msg->body().post().content().data(), msg->body().post().content().size());
                     if (0 != res) {
                         WLOGERROR("from server 0x%llx: session 0x%llx push data failed, res: %d ", 
-                                static_cast<unsigned long long>(fwd_data->from()), 
+                                static_cast<unsigned long long>(source.id), 
                                 static_cast<unsigned long long>(msg->body().post().session_ids(i)), res);
                     }
                 }
@@ -674,7 +658,7 @@ struct app_handle_on_recv {
             break;
         }
         case ::atframe::gw::ss_msg_body::kKickoffSession: {
-            WLOGINFO("from server 0x%llx: session 0x%llx kickoff by server", static_cast<unsigned long long>(fwd_data->from()),
+            WLOGINFO("from server 0x%llx: session 0x%llx kickoff by server", static_cast<unsigned long long>(source.id),
                      static_cast<unsigned long long>(msg->head().session_id()));
             if (0 == msg->head().error_code()) {
                 mod_.get().get_session_manager().close(msg->head().session_id(), ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
@@ -688,7 +672,7 @@ struct app_handle_on_recv {
         case ::atframe::gw::ss_msg_body::kSetRouterReq: {
             int res = mod_.get().get_session_manager().set_session_router(msg->head().session_id(), msg->body().set_router_req());
             WLOGINFO("from server 0x%llx: session 0x%llx set router to 0x%llx by server, res: %d", 
-                    static_cast<unsigned long long>(fwd_data->from()),
+                    static_cast<unsigned long long>(source.id),
                     static_cast<unsigned long long>(msg->head().session_id()), static_cast<unsigned long long>(msg->body().set_router_req()), res);
 
             ::atframe::gw::ss_msg rsp;
@@ -696,14 +680,14 @@ struct app_handle_on_recv {
             rsp.mutable_head()->set_error_code(res);
             rsp.mutable_body()->set_set_router_rsp(msg->body().set_router_req());
 
-            res = mod_.get().get_session_manager().post_data(fwd_data->from(), rsp);
+            res = mod_.get().get_session_manager().post_data(source.id, rsp);
             if (0 != res) {
-                WLOGERROR("send set router response to server 0x%llx failed, res: %d", static_cast<unsigned long long>(fwd_data->from()), res);
+                WLOGERROR("send set router response to server 0x%llx failed, res: %d", static_cast<unsigned long long>(source.id), res);
             }
             break;
         }
         default: {
-            WLOGERROR("from server 0x%llx: session 0x%llx recv invalid cmd %d", static_cast<unsigned long long>(fwd_data->from()),
+            WLOGERROR("from server 0x%llx: session 0x%llx recv invalid cmd %d", static_cast<unsigned long long>(source.id),
                       static_cast<unsigned long long>(msg->head().session_id()), static_cast<int>(msg->body().cmd_case()));
             break;
         }
@@ -743,7 +727,7 @@ int main(int argc, char *argv[]) {
 
     // setup message handle
     app.set_evt_on_forward_response(app_handle_on_forward_response);
-    app.set_evt_on_recv_msg(app_handle_on_recv(*gw_mod));
+    app.set_evt_on_forward_request(app_handle_on_recv(*gw_mod));
 
     // run
     int ret = app.run(uv_default_loop(), argc, (const char **)argv, NULL);

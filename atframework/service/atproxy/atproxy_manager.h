@@ -12,24 +12,23 @@
 #include <atframe/atapp.h>
 #include <atframe/atapp_module_impl.h>
 
-#include <modules/etcd_module.h>
+#include <atframe/modules/etcd_module.h>
 
 namespace atframe {
     namespace proxy {
         class atproxy_manager : public ::atapp::module_impl {
         public:
-            typedef atframe::component::etcd_module::node_action_t node_action_t;
+            typedef atapp::etcd_module::node_action_t node_action_t;
             struct node_info_t {
-                atframe::component::etcd_module::node_info_t etcd_node;
-                time_t                                       next_action_time;
-                bool                                         is_available;
+                atapp::etcd_module::node_info_t etcd_node;
+                time_t                          next_action_time;
+                bool                            is_available;
+                int                             round_robin_index;
             };
 
             struct node_list_t {
                 std::list<node_info_t> nodes;
             };
-
-            typedef std::shared_ptr<atframe::component::etcd_module> etcd_mod_ptr;
 
         private:
             struct check_info_t {
@@ -38,7 +37,7 @@ namespace atframe {
             };
 
         public:
-            atproxy_manager(etcd_mod_ptr etcd_mod);
+            atproxy_manager();
 
             virtual int init() UTIL_CONFIG_OVERRIDE;
 
@@ -46,7 +45,7 @@ namespace atframe {
 
             virtual const char *name() const UTIL_CONFIG_OVERRIDE;
 
-            int set(atframe::component::etcd_module::node_info_t &proxy_info);
+            int set(atapp::etcd_module::node_info_t &proxy_info);
 
             int remove(::atapp::app::app_id_t id);
 
@@ -58,14 +57,13 @@ namespace atframe {
 
         private:
             void swap(node_info_t &l, node_info_t &r);
-            void on_watcher_notify(atframe::component::etcd_module::watcher_sender_one_t &sender);
-            bool check_available(const atframe::component::etcd_module::node_info_t& node_event) const;
+            void on_watcher_notify(atapp::etcd_module::watcher_sender_one_t &sender);
+            bool check_available(const atapp::etcd_module::node_info_t& node_event) const;
 
         private:
             std::list<check_info_t>                                check_list_;
             typedef std::map< ::atapp::app::app_id_t, node_info_t> proxy_set_t;
             proxy_set_t                                            proxy_set_;
-            etcd_mod_ptr                                           binded_etcd_mod_;
         };
     } // namespace proxy
 } // namespace atframe

@@ -22,6 +22,7 @@ if (Libcopp_FOUND)
 elseif(EXISTS "${3RD_PARTY_LIBCOPP_REPO_DIR}/CMakeLists.txt")
     set (3RD_PARTY_LIBCOPP_INC_DIR "${3RD_PARTY_LIBCOPP_REPO_DIR}/include")
     set (3RD_PARTY_LIBCOPP_LINK_NAME copp cotask)
+    set (LIBCOPP_USE_DYNAMIC_LIBRARY ${ATFRAMEWORK_USE_DYNAMIC_LIBRARY} CACHE BOOL "Build dynamic libraries of libcopp" FORCE)
     add_subdirectory(${3RD_PARTY_LIBCOPP_REPO_DIR})
 
     EchoWithColor(COLOR GREEN "-- Dependency: libcopp submodule found.(repository=${3RD_PARTY_LIBCOPP_REPO_DIR})")
