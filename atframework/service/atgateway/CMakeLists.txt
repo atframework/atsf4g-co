@@ -48,6 +48,21 @@ add_custom_command (
 )
 
 # ============ libatbus - src ============
+if (TARGET flatbuffers::flatc)
+    add_custom_command (
+        OUTPUT "${CMAKE_CURRENT_LIST_DIR}/protocols/inner_v1/libatgw_proto_inner_generated.h"
+        COMMAND flatbuffers::flatc --cpp --allow-non-utf8 --gen-mutable
+            -o "${CMAKE_CURRENT_LIST_DIR}/protocols/inner_v1"
+            -I "${CMAKE_CURRENT_LIST_DIR}/protocols/inner_v1"
+            "${CMAKE_CURRENT_LIST_DIR}/protocols/inner_v1/libatgw_proto_inner.fbs"
+        DEPENDS "${CMAKE_CURRENT_LIST_DIR}/protocols/inner_v1/libatgw_proto_inner.fbs"
+        COMMENT "Generate libatgw_proto_inner_generated.h"
+    )
+    set_source_files_properties("${CMAKE_CURRENT_LIST_DIR}/protocols/inner_v1/libatgw_proto_inner_generated.h"
+        PROPERTIES GENERATED TRUE
+    )
+endif()
+
 add_library(${ATFRAMEWORK_SERVICE_GATEWAY_LINK_NAME} STATIC ${ATSF4G_APP_PROTO_SRC_LIST})
 set_target_properties(${ATFRAMEWORK_SERVICE_GATEWAY_LINK_NAME} PROPERTIES 
     C_VISIBILITY_PRESET "default"
@@ -73,18 +88,6 @@ if (MSVC)
         list(APPEND PROJECT_LIBATBUS_PROTOCOL_COMPILE_OPTIONS "/wd4996")
     endif ()
     target_compile_options(${ATFRAMEWORK_SERVICE_GATEWAY_LINK_NAME} PRIVATE ${PROJECT_LIBATBUS_PROTOCOL_COMPILE_OPTIONS})
-endif ()
-
-if (TARGET flatbuffers::flatc)
-    add_custom_command (
-        OUTPUT "${CMAKE_CURRENT_LIST_DIR}/protocols/inner_v1/libatgw_proto_inner_generated.h"
-        COMMAND flatbuffers::flatc --cpp --allow-non-utf8 --gen-mutable
-            -o "${CMAKE_CURRENT_LIST_DIR}/protocols/inner_v1"
-            -I "${CMAKE_CURRENT_LIST_DIR}/protocols/inner_v1"
-            "${CMAKE_CURRENT_LIST_DIR}/protocols/inner_v1/libatgw_proto_inner.fbs"
-        DEPENDS "${CMAKE_CURRENT_LIST_DIR}/protocols/inner_v1/libatgw_proto_inner.fbs"
-        COMMENT "Generate libatgw_proto_inner_generated.h"
-    )
 endif ()
 
 add_executable(${ATSF4G_APP_NAME} ${ATSF4G_APP_SRC_LIST})

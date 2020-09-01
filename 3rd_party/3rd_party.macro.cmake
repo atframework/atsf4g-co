@@ -87,6 +87,9 @@ endif ()
 # =========== 3rd_party - lua ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/lua/lua.cmake")
 
+# =========== 3rd_party - yaml-cpp ===========
+include("${PROJECT_3RD_PARTY_ROOT_DIR}/yaml-cpp/yaml-cpp.cmake")
+
 # =========== 3rd_party - libcopp ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/libcopp/libcopp.cmake")
 
@@ -101,3 +104,12 @@ include("${PROJECT_3RD_PARTY_ROOT_DIR}/python_env/python_env.cmake")
 
 # =========== 3rd_party - xres-code-generator ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/xres-code-generator/xres-code-generator.cmake")
+
+if (3RD_PARTY_PUBLIC_LINK_NAMES)
+    list(REMOVE_DUPLICATES 3RD_PARTY_PUBLIC_LINK_NAMES)
+    list(REVERSE 3RD_PARTY_PUBLIC_LINK_NAMES)
+endif()
+if (3RD_PARTY_INTERFACE_LINK_NAMES)
+    list(REMOVE_DUPLICATES 3RD_PARTY_INTERFACE_LINK_NAMES)
+    list(REVERSE 3RD_PARTY_INTERFACE_LINK_NAMES)
+endif ()

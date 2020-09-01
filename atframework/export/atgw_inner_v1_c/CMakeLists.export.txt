@@ -182,18 +182,29 @@ file(GLOB_RECURSE SRC_LIST
 set(LIB_NAME "atgw_inner_v1_c")
 # endif()
 
-set (EXPORT_SRC_LIB_TYPE SHARED)
-if (MINGW OR APPLE) 
-    set (EXPORT_SRC_LIB_TYPE STATIC)
+if(BUILD_SHARED_LIBS OR NOT MINGW)
+    add_library(${LIB_NAME} SHARED ${SRC_LIST})
+    set_target_properties(${LIB_NAME} PROPERTIES 
+        C_VISIBILITY_PRESET "hidden"
+        CXX_VISIBILITY_PRESET "hidden"
+        VERSION ${ATFRAMEWORK_SERVICE_GATEWAY_VERSION}
+        SOVERSION ${ATFRAMEWORK_SERVICE_GATEWAY_VERSION}
+        INTERFACE_COMPILE_DEFINITIONS LIBATFRAME_UTILS_API_DLL=1
+    )
+    target_compile_definitions(${LIB_NAME}
+        PRIVATE LIBATFRAME_UTILS_API_NATIVE=1 LIBATFRAME_UTILS_API_DLL=1
+    )
+else ()
+    add_library(${LIB_NAME} STATIC ${SRC_LIST})
+    set_target_properties(${LIB_NAME} PROPERTIES 
+        C_VISIBILITY_PRESET "hidden"
+        CXX_VISIBILITY_PRESET "hidden"
+        VERSION ${ATFRAMEWORK_SERVICE_GATEWAY_VERSION}
+    )
+    target_compile_definitions(${LIB_NAME}
+        PRIVATE LIBATFRAME_UTILS_API_NATIVE=1
+    )
 endif()
-
-add_library(${LIB_NAME} ${EXPORT_SRC_LIB_TYPE} ${SRC_LIST})
-
-# 保持和MSVC得导出行为一致
-set_target_properties(${LIB_NAME} PROPERTIES 
-    C_VISIBILITY_PRESET "hidden"
-    CXX_VISIBILITY_PRESET "hidden"
-)
 
 target_link_libraries(${LIB_NAME}
     PUBLIC ${LIB_NAME_PUBLIC_LINK_NAMES}

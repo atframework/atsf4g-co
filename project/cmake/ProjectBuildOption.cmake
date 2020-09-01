@@ -19,6 +19,7 @@ set(ATFRAME_GATEWAY_MACRO_DATA_SMALL_SIZE 3072 CACHE STRING "small message buffe
 
 option(PROJECT_RESET_DENPEND_REPOSITORIES "Reset depended repositories if it's already exists." OFF)
 option(PROJECT_GIT_CLONE_REMOTE_ORIGIN_DISABLE_SSH "Do not try to use ssh url when clone dependency." OFF)
+option(PROJECT_FIND_CONFIGURE_PACKAGE_PARALLEL_BUILD "Parallel building for FindConfigurePackage. It's usually useful for some CI with low memory." ON)
 
 if (NOT PROJECT_GIT_REMOTE_ORIGIN_USE_SSH)
     if (EXISTS "${PROJECT_SOURCE_DIR}/.git")
@@ -33,3 +34,5 @@ if (NOT PROJECT_GIT_REMOTE_ORIGIN_USE_SSH)
         endif()
     endif()
 endif()
+
+option(ATFRAMEWORK_USE_DYNAMIC_LIBRARY "Build and linking with dynamic libraries." OFF)
