@@ -44,9 +44,7 @@ cs_msg_dispatcher::msg_type_t cs_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw
     return static_cast<msg_type_t>(real_msg->body().body_oneof_case());
 }
 
-const std::string& cs_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
-    return get_empty_string();
-}
+const std::string &cs_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) { return get_empty_string(); }
 
 cs_msg_dispatcher::msg_op_type_t cs_msg_dispatcher::pick_msg_op_type(msg_raw_t &raw_msg) {
     hello::CSMsg *real_msg = get_protobuf_msg<hello::CSMsg>(raw_msg);
@@ -61,22 +59,22 @@ cs_msg_dispatcher::msg_op_type_t cs_msg_dispatcher::pick_msg_op_type(msg_raw_t &
     return static_cast<msg_op_type_t>(real_msg->head().op_type());
 }
 
-const atframework::DispatcherOptions* cs_msg_dispatcher::get_options_by_message_type(msg_type_t msg_type) {
+const atframework::DispatcherOptions *cs_msg_dispatcher::get_options_by_message_type(msg_type_t msg_type) {
     if (unlikely(dispatcher_options_map_.empty())) {
         dispatcher_options_map_.reserve(static_cast<size_t>(hello::CSMsgBody::descriptor()->field_count()));
-        for (int i = 0; i < hello::CSMsgBody::descriptor()->field_count(); ++ i) {
-            const google::protobuf::FieldDescriptor* fd = hello::CSMsgBody::descriptor()->field(i);
+        for (int i = 0; i < hello::CSMsgBody::descriptor()->field_count(); ++i) {
+            const google::protobuf::FieldDescriptor *fd = hello::CSMsgBody::descriptor()->field(i);
             if (nullptr == fd) {
                 continue;
             }
 
-            if(fd->options().HasExtension(atframework::dispatcher_options)) {
+            if (fd->options().HasExtension(atframework::dispatcher_options)) {
                 dispatcher_options_map_[fd->number()] = &fd->options().GetExtension(atframework::dispatcher_options);
             }
         }
     }
 
-    std::unordered_map<msg_type_t, const atframework::DispatcherOptions*>::iterator iter = dispatcher_options_map_.find(msg_type);
+    std::unordered_map<msg_type_t, const atframework::DispatcherOptions *>::iterator iter = dispatcher_options_map_.find(msg_type);
     if (iter == dispatcher_options_map_.end()) {
         return nullptr;
     }
@@ -84,40 +82,29 @@ const atframework::DispatcherOptions* cs_msg_dispatcher::get_options_by_message_
     return iter->second;
 }
 
-int32_t cs_msg_dispatcher::dispatch(const atbus::protocol::msg &msg, const void *buffer, size_t len) {
-    if (::atframe::component::service_type::EN_ATST_GATEWAY != msg.head().type()) {
-        WLOGERROR("message type %d invalid", msg.head().type());
+int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, const atapp::app::message_t &msg) {
+    if (::atframe::component::service_type::EN_ATST_GATEWAY != msg.type) {
+        FWLOGERROR("message type {} invalid", msg.type);
         return hello::err::EN_SYS_PARAM;
     }
 
-    if (atbus::protocol::msg::kDataTransformReq != msg.msg_body_case()) {
-        WLOGERROR("receive msg with %llu bytes from x0%llx: %s",
-            static_cast<unsigned long long>(len), static_cast<unsigned long long>(msg.head().src_bus_id()), 
-            msg.DebugString().c_str()
-        );
-        return 0;
-    }
+    uint64_t from_server_id = source.id;
 
-    uint64_t from_server_id = msg.data_transform_req().from();
-
-    if (NULL == buffer || 0 == from_server_id) {
-        WLOGERROR("receive a message from unknown source");
+    if (NULL == msg.data || 0 == from_server_id) {
+        FWLOGERROR("receive a message from unknown source");
         return hello::err::EN_SYS_PARAM;
     }
 
     ::atframe::gw::ss_msg req_msg;
-    if (false == req_msg.ParseFromArray(reinterpret_cast<const void*>(buffer), static_cast<int>(len))) {
-        WLOGERROR("receive msg of %llu bytes from x0%llx parse failed: %s",
-            static_cast<unsigned long long>(len), static_cast<unsigned long long>(msg.head().src_bus_id()), 
-            req_msg.InitializationErrorString().c_str()
-        );
+    if (false == req_msg.ParseFromArray(msg.data, static_cast<int>(msg.data_size))) {
+        FWLOGERROR("receive msg of {} bytes from {:#x} parse failed: {}", msg.data_size, from_server_id, req_msg.InitializationErrorString());
         return 0;
     }
 
     int ret = hello::err::EN_SUCCESS;
-    switch (msg.head().type()) {
+    switch (req_msg.body().cmd_case()) {
     case ::atframe::gw::ss_msg_body::kPost: {
-        const ::atframe::gw::ss_body_post& post = req_msg.body().post();
+        const ::atframe::gw::ss_body_post &post = req_msg.body().post();
 
         hello::CSMsg   cs_msg;
         session::key_t session_key;
@@ -135,9 +122,7 @@ int32_t cs_msg_dispatcher::dispatch(const atbus::protocol::msg &msg, const void 
         }
 
         start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
-        ret                     = unpack_protobuf_msg(cs_msg, start_data.message, 
-                                    reinterpret_cast<const void*>(post.content().data()), 
-                                    post.content().size());
+        ret                     = unpack_protobuf_msg(cs_msg, start_data.message, reinterpret_cast<const void *>(post.content().data()), post.content().size());
         if (ret != 0) {
             WLOGERROR("%s unpack received message from 0x%llx, session id:0x%llx failed, res: %d", name(), static_cast<unsigned long long>(session_key.bus_id),
                       static_cast<unsigned long long>(session_key.session_id), ret);
@@ -151,7 +136,7 @@ int32_t cs_msg_dispatcher::dispatch(const atbus::protocol::msg &msg, const void 
             cs_msg.mutable_head()->set_error_code(hello::EN_ERR_SYSTEM_BUSY);
             sess->send_msg_to_client(cs_msg);
             WLOGINFO("server busy and send msg back to session [0x%llx, 0x%llx]", static_cast<unsigned long long>(session_key.bus_id),
-                      static_cast<unsigned long long>(session_key.session_id));
+                     static_cast<unsigned long long>(session_key.session_id));
             break;
         }
 
@@ -163,7 +148,7 @@ int32_t cs_msg_dispatcher::dispatch(const atbus::protocol::msg &msg, const void 
         break;
     }
     case ::atframe::gw::ss_msg_body::kAddSession: {
-        const ::atframe::gw::ss_body_session& sess_data = req_msg.body().add_session();
+        const ::atframe::gw::ss_body_session &sess_data = req_msg.body().add_session();
 
         session::key_t session_key;
         session_key.bus_id     = from_server_id;
@@ -237,9 +222,8 @@ int32_t cs_msg_dispatcher::send_kickoff(uint64_t bus_id, uint64_t session_id, in
     msg.mutable_body()->mutable_kickoff_session();
 
     std::string packed_buffer;
-    if(false == msg.SerializeToString(&packed_buffer)) {
-        WLOGERROR("try to kickoff %llx with serialize failed: %s", 
-        static_cast<unsigned long long>(session_id), msg.InitializationErrorString().c_str());
+    if (false == msg.SerializeToString(&packed_buffer)) {
+        WLOGERROR("try to kickoff %llx with serialize failed: %s", static_cast<unsigned long long>(session_id), msg.InitializationErrorString().c_str());
         return 0;
     }
 
@@ -260,16 +244,15 @@ int32_t cs_msg_dispatcher::send_data(uint64_t bus_id, uint64_t session_id, const
     ::atframe::gw::ss_msg msg;
     msg.mutable_head()->set_session_id(session_id);
 
-    ::atframe::gw::ss_body_post* post = msg.mutable_body()->mutable_post();
+    ::atframe::gw::ss_body_post *post = msg.mutable_body()->mutable_post();
 
     if (NULL == post) {
         if (0 == session_id) {
-            WLOGERROR("broadcast %llu bytes data to atgateway 0x%llx failed when malloc post", 
-                static_cast<unsigned long long>(len), static_cast<unsigned long long>(bus_id));
+            WLOGERROR("broadcast %llu bytes data to atgateway 0x%llx failed when malloc post", static_cast<unsigned long long>(len),
+                      static_cast<unsigned long long>(bus_id));
         } else {
-            WLOGERROR("send %llu bytes data to session [0x%llx, 0x%llx] failed when malloc post", 
-                static_cast<unsigned long long>(len), static_cast<unsigned long long>(bus_id),
-                static_cast<unsigned long long>(session_id));
+            WLOGERROR("send %llu bytes data to session [0x%llx, 0x%llx] failed when malloc post", static_cast<unsigned long long>(len),
+                      static_cast<unsigned long long>(bus_id), static_cast<unsigned long long>(session_id));
         }
         return hello::err::EN_SYS_MALLOC;
     }
@@ -277,10 +260,9 @@ int32_t cs_msg_dispatcher::send_data(uint64_t bus_id, uint64_t session_id, const
     post->set_content(buffer, len);
 
     std::string packed_buffer;
-    if(false == msg.SerializeToString(&packed_buffer)) {
-        WLOGERROR("try to send %llu bytes data to 0x%llx with serialize failed: %s",
-            static_cast<unsigned long long>(len),
-            static_cast<unsigned long long>(session_id), msg.InitializationErrorString().c_str());
+    if (false == msg.SerializeToString(&packed_buffer)) {
+        WLOGERROR("try to send %llu bytes data to 0x%llx with serialize failed: %s", static_cast<unsigned long long>(len),
+                  static_cast<unsigned long long>(session_id), msg.InitializationErrorString().c_str());
         return 0;
     }
 
@@ -313,20 +295,19 @@ int32_t cs_msg_dispatcher::broadcast_data(uint64_t bus_id, const std::vector<uin
     ::atframe::gw::ss_msg msg;
     msg.mutable_head()->set_session_id(0);
 
-    ::atframe::gw::ss_body_post* post = msg.mutable_body()->mutable_post();
+    ::atframe::gw::ss_body_post *post = msg.mutable_body()->mutable_post();
 
     if (NULL == post) {
-        WLOGERROR("broadcast %llu bytes data to atgateway 0x%llx failed when malloc post", 
-            static_cast<unsigned long long>(len), static_cast<unsigned long long>(bus_id));
+        WLOGERROR("broadcast %llu bytes data to atgateway 0x%llx failed when malloc post", static_cast<unsigned long long>(len),
+                  static_cast<unsigned long long>(bus_id));
         return hello::err::EN_SYS_MALLOC;
     }
 
     post->set_content(buffer, len);
 
     std::string packed_buffer;
-    if(false == msg.SerializeToString(&packed_buffer)) {
-        WLOGERROR("try to broadcast %llu bytes data with serialize failed: %s", 
-            static_cast<unsigned long long>(len), msg.InitializationErrorString().c_str());
+    if (false == msg.SerializeToString(&packed_buffer)) {
+        WLOGERROR("try to broadcast %llu bytes data with serialize failed: %s", static_cast<unsigned long long>(len), msg.InitializationErrorString().c_str());
         return 0;
     }
 

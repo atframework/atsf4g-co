@@ -44,13 +44,13 @@
         }                                                               \
     }
 
-#define INIT_CALL_FN(FUNC, ...)                                         \
-    {                                                                   \
-        int res = FUNC(__VA_ARGS__);                                    \
-        if (res < 0) {                                                  \
-            WLOGERROR("initialize %s failed, res: %d", #FUNC, res);     \
-            return res;                                                 \
-        }                                                               \
+#define INIT_CALL_FN(FUNC, ...)                                     \
+    {                                                               \
+        int res = FUNC(__VA_ARGS__);                                \
+        if (res < 0) {                                              \
+            WLOGERROR("initialize %s failed, res: %d", #FUNC, res); \
+            return res;                                             \
+        }                                                           \
     }
 
 #define RELOAD_CALL(RET_VAR, MOD_NAME, ...)                         \
@@ -72,13 +72,13 @@
         }                                                               \
     }
 
-#define INIT_CALL_FN(FUNC, args...)                                     \
-    {                                                                   \
-        int res = FUNC(args);                                           \
-        if (res < 0) {                                                  \
-            WLOGERROR("initialize %s failed, res: %d", #FUNC, res);     \
-            return res;                                                 \
-        }                                                               \
+#define INIT_CALL_FN(FUNC, args...)                                 \
+    {                                                               \
+        int res = FUNC(args);                                       \
+        if (res < 0) {                                              \
+            WLOGERROR("initialize %s failed, res: %d", #FUNC, res); \
+            return res;                                             \
+        }                                                           \
     }
 
 #define RELOAD_CALL(RET_VAR, MOD_NAME, args...)                     \
@@ -95,26 +95,26 @@
 struct app_handle_on_msg {
     app_handle_on_msg() {}
 
-    int operator()(atapp::app &app, const atapp::app::msg_t &msg, const void *buffer, size_t len) {
-        if (atbus::protocol::msg::kDataTransformReq != msg.msg_body_case() || 0 == msg.head().src_bus_id()) {
-            WLOGERROR("receive a message from unknown source or invalid body case");
-            return app.get_bus_node()->send_data(msg.head().src_bus_id(), msg.head().type(), buffer, len);
+    int operator()(atapp::app &app, const atapp::app::message_sender_t &source, const atapp::app::message_t &msg) {
+        if (0 == source.id) {
+            FWLOGERROR("receive a message from unknown source or invalid body case");
+            return hello::EN_ERR_INVALID_PARAM;
         }
 
         int ret = 0;
-        switch (msg.head().type()) {
+        switch (msg.type) {
         case ::atframe::component::service_type::EN_ATST_GATEWAY: {
-            ret = cs_msg_dispatcher::me()->dispatch(msg, buffer, len);
+            ret = cs_msg_dispatcher::me()->dispatch(source, msg);
             break;
         }
 
         case ::atframe::component::message_type::EN_ATST_SS_MSG: {
-            ret = ss_msg_dispatcher::me()->dispatch(msg, buffer, len);
+            ret = ss_msg_dispatcher::me()->dispatch(source, msg);
             break;
         }
 
         default: {
-            WLOGERROR("receive a message of invalid type:%d", msg.head().type());
+            FWLOGERROR("receive a message of invalid type: {}", msg.type);
             break;
         }
         }
@@ -123,21 +123,23 @@ struct app_handle_on_msg {
     }
 };
 
-static int app_handle_on_receive_send_response(atapp::app &app, atapp::app::app_id_t src_pd, atapp::app::app_id_t dst_pd, const atapp::app::msg_t &msg) {
-    if (msg.head().ret() < 0) {
-        WLOGERROR("send data from 0%llx to 0x%llx failed", static_cast<unsigned long long>(src_pd), static_cast<unsigned long long>(dst_pd));
+static int app_handle_on_forward_response(atapp::app &app, const atapp::app::message_sender_t &source, const atapp::app::message_t &msg, int32_t error_code) {
+    if (error_code < 0) {
+        FWLOGERROR("send data from {:#x} to {:#x} failed, sequence: {}, code: {}", app.get_id(), source.id, msg.msg_sequence, error_code);
     } else {
-        WLOGDEBUG("receive response for sending data from 0%llx to 0x%llx", static_cast<unsigned long long>(src_pd), static_cast<unsigned long long>(dst_pd));
+        FWLOGINFO("send data from {:#x} to {:#x} got response, sequence: {}, ", app.get_id(), source.id, msg.msg_sequence);
     }
 
     int ret = 0;
-    switch (msg.head().type()) {
+    switch (msg.type) {
     case ::atframe::component::message_type::EN_ATST_SS_MSG: {
-        ret = ss_msg_dispatcher::me()->on_receive_send_data_response(msg);
+        ret = ss_msg_dispatcher::me()->on_receive_send_data_response(source, msg, error_code);
         break;
     }
 
-    default: { break; }
+    default: {
+        break;
+    }
     }
 
     return ret;
@@ -192,7 +194,7 @@ public:
     virtual int reload() {
         WLOGINFO("============ server reload ============");
         int                       ret = 0;
-        util::config::ini_loader &cfg = get_app()->get_configure();
+        util::config::ini_loader &cfg = get_app()->get_configure_loader();
 
         RELOAD_CALL(ret, logic_config, cfg);
         ret = excel::config_manager::me()->reload_all();
@@ -259,8 +261,8 @@ int main(int argc, char *argv[]) {
     app.add_module(db_msg_dispatcher::me());
 
     // setup message handle
-    app.set_evt_on_recv_msg(app_handle_on_msg());
-    app.set_evt_on_forward_response(app_handle_on_receive_send_response);
+    app.set_evt_on_forward_request(app_handle_on_msg());
+    app.set_evt_on_forward_response(app_handle_on_forward_response);
     app.set_evt_on_app_connected(app_handle_on_connected);
     app.set_evt_on_app_disconnected(app_handle_on_disconnected);
 

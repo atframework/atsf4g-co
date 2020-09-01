@@ -59,7 +59,7 @@ public:
      * @param raw_msg 消息抽象结构
      * @return 消息的RPC名字,如果不是RPC消息，返回空字符串
      */
-    virtual const std::string& pick_rpc_name(msg_raw_t &raw_msg) UTIL_CONFIG_OVERRIDE;
+    virtual const std::string &pick_rpc_name(msg_raw_t &raw_msg) UTIL_CONFIG_OVERRIDE;
 
     /**
      * @brief 获取操作类型
@@ -74,7 +74,7 @@ public:
      * @param raw_msg 消息抽象结构
      * @return 返回action或actor选项或NULL
      */
-    virtual const atframework::DispatcherOptions* get_options_by_message_type(msg_type_t msg_type) UTIL_CONFIG_OVERRIDE;
+    virtual const atframework::DispatcherOptions *get_options_by_message_type(msg_type_t msg_type) UTIL_CONFIG_OVERRIDE;
 
     /**
      * deal with cs message data
@@ -83,7 +83,7 @@ public:
      * @param len data length
      * @return 0 or error code
      */
-    int32_t dispatch(const atbus::protocol::msg &msg, const void *buffer, size_t len);
+    int32_t dispatch(const atapp::app::message_sender_t &source, const atapp::app::message_t &msg);
 
     /**
      * notify send failed
@@ -92,21 +92,23 @@ public:
      * @param len data length
      * @return 0 or error code
      */
-    int32_t on_receive_send_data_response(const atbus::protocol::msg &msg);
+    int32_t on_receive_send_data_response(const atapp::app::message_sender_t &source, const atapp::app::message_t &msg, int32_t error_code);
 
     /**
      * allocate a message sequence
      * @return allocated sequence
      */
     uint64_t allocate_sequence();
+
 public:
     int32_t send_to_proc(uint64_t bus_id, hello::SSMsg &ss_msg);
     int32_t send_to_proc(uint64_t bus_id, const void *msg_buf, size_t msg_len);
 
-    inline const std::string& get_current_service_name() const { return service_name_; }
+    inline const std::string &get_current_service_name() const { return service_name_; }
+
 private:
-    uint64_t sequence_allocator_;
-    std::string service_name_;
+    uint64_t                                 sequence_allocator_;
+    std::string                              service_name_;
     const google::protobuf::OneofDescriptor *get_body_oneof_desc() const;
 };
 

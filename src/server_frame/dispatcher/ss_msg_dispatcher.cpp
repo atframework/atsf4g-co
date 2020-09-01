@@ -21,8 +21,8 @@
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
-#include <protocol/pbdesc/svr.protocol.pb.h>
 #include <protocol/pbdesc/svr.const.pb.h>
+#include <protocol/pbdesc/svr.protocol.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 
@@ -31,10 +31,10 @@
 ss_msg_dispatcher::ss_msg_dispatcher() : sequence_allocator_(0) {}
 ss_msg_dispatcher::~ss_msg_dispatcher() {}
 
-int32_t ss_msg_dispatcher::init() { 
-    sequence_allocator_ = static_cast<uint64_t>((util::time::time_utility::get_sys_now() - hello::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET) << 23) + 
-        static_cast<uint64_t>(util::time::time_utility::get_now_usec() << 3);
-    return 0; 
+int32_t ss_msg_dispatcher::init() {
+    sequence_allocator_ = static_cast<uint64_t>((util::time::time_utility::get_sys_now() - hello::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET) << 23) +
+                          static_cast<uint64_t>(util::time::time_utility::get_now_usec() << 3);
+    return 0;
 }
 
 int32_t ss_msg_dispatcher::reload() {
@@ -51,11 +51,9 @@ uint64_t ss_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
     return real_msg->head().dst_task_id();
 }
 
-ss_msg_dispatcher::msg_type_t ss_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw_msg) {
-    return 0;
-}
+ss_msg_dispatcher::msg_type_t ss_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw_msg) { return 0; }
 
-const std::string& ss_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
+const std::string &ss_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
     hello::SSMsg *real_msg = get_protobuf_msg<hello::SSMsg>(raw_msg);
     if (NULL == real_msg) {
         return get_empty_string();
@@ -89,9 +87,7 @@ ss_msg_dispatcher::msg_op_type_t ss_msg_dispatcher::pick_msg_op_type(msg_raw_t &
     return static_cast<msg_op_type_t>(real_msg->head().op_type());
 }
 
-const atframework::DispatcherOptions* ss_msg_dispatcher::get_options_by_message_type(msg_type_t msg_type) {
-    return NULL;
-}
+const atframework::DispatcherOptions *ss_msg_dispatcher::get_options_by_message_type(msg_type_t msg_type) { return NULL; }
 
 int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, hello::SSMsg &ss_msg) {
     if (0 == ss_msg.head().sequence()) {
@@ -139,97 +135,80 @@ int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, const void *msg_buf, si
     return res;
 }
 
-int32_t ss_msg_dispatcher::dispatch(const atbus::protocol::msg &msg, const void *buffer, size_t len) {
-    if (::atframe::component::message_type::EN_ATST_SS_MSG != msg.head().type()) {
-        WLOGERROR("message type %d invalid", msg.head().type());
+int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, const atapp::app::message_t &msg) {
+    if (::atframe::component::message_type::EN_ATST_SS_MSG != msg.type) {
+        FWLOGERROR("message type {} invalid", msg.type);
         return hello::err::EN_SYS_PARAM;
     }
 
-    if (atbus::protocol::msg::kDataTransformReq != msg.msg_body_case()) {
-        WLOGERROR("receive msg with %llu bytes from x0%llx: %s",
-            static_cast<unsigned long long>(len), static_cast<unsigned long long>(msg.head().src_bus_id()), 
-            msg.DebugString().c_str()
-        );
-        return 0;
-    }
-
-    if (0 == msg.head().src_bus_id()) {
-        WLOGERROR("receive a message from unknown source");
+    if (0 == source.id) {
+        FWLOGERROR("receive a message from unknown source");
         return hello::err::EN_SYS_PARAM;
     }
 
-    uint64_t from_server_id = msg.data_transform_req().from();
+    uint64_t from_server_id = source.id;
 
     hello::SSMsg ss_msg;
 
     start_data_t callback_data = dispatcher_make_default<dispatcher_start_data_t>();
 
-    int32_t ret = unpack_protobuf_msg(ss_msg, callback_data.message, buffer, len);
+    int32_t ret = unpack_protobuf_msg(ss_msg, callback_data.message, msg.data, msg.data_size);
     if (ret != 0) {
-        WLOGERROR("%s unpack received message from 0x%llx failed, res: %d", name(), static_cast<unsigned long long>(from_server_id), ret);
+        FWLOGERROR("{} unpack received message from {:#x} failed, res: {}", name(), from_server_id, ret);
         return ret;
     }
     ss_msg.mutable_head()->set_bus_id(from_server_id);
 
     ret = on_recv_msg(callback_data.message, callback_data.private_data, ss_msg.head().sequence());
     if (ret < 0) {
-        WLOGERROR("%s dispatch message from 0x%llx failed, res: %d", name(), static_cast<unsigned long long>(from_server_id), ret);
+        FWLOGERROR("{} dispatch message from {:#x} failed, res: {}", name(), from_server_id, ret);
     }
 
     return ret;
 }
 
-int32_t ss_msg_dispatcher::on_receive_send_data_response(const atbus::protocol::msg &msg) {
-    if (::atframe::component::message_type::EN_ATST_SS_MSG != msg.head().type()) {
-        WLOGERROR("message type %d invalid", msg.head().type());
+int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::message_sender_t &source, const atapp::app::message_t &msg, int32_t error_code) {
+    if (::atframe::component::message_type::EN_ATST_SS_MSG != msg.type) {
+        FWLOGERROR("message type {} invalid", msg.type);
         return hello::err::EN_SYS_PARAM;
     }
 
-    const atbus::protocol::forward_data* fwd_data = NULL;
-    if (atbus::protocol::msg::kDataTransformReq == msg.msg_body_case()) {
-        fwd_data = &msg.data_transform_req();
-    } else if (atbus::protocol::msg::kDataTransformRsp == msg.msg_body_case()) {
-        fwd_data = &msg.data_transform_rsp();
-    }
-
-    if (NULL == fwd_data) {
-        WLOGERROR("send a message from unknown source");
+    if (NULL == msg.data || 0 == source.id) {
+        FWLOGERROR("send a message from unknown source");
         return hello::err::EN_SYS_PARAM;
     }
 
-    if (msg.head().ret() >= 0) {
-        WLOGDEBUG("receive_send_data_response from 0x%llx", static_cast<unsigned long long>(fwd_data->from()));
-        return msg.head().ret();
+    if (error_code >= 0) {
+        FWLOGDEBUG("receive_send_data_response from {:#x}", source.id);
+        return error_code;
     }
 
-    const void *buffer = reinterpret_cast<const void*>(fwd_data->content().data());
-    size_t      len    = fwd_data->content().size();
+    const void *buffer = msg.data;
+    size_t      len    = msg.data_size;
 
     hello::SSMsg ss_msg;
     start_data_t callback_data = dispatcher_make_default<dispatcher_start_data_t>();
 
     int32_t ret = unpack_protobuf_msg(ss_msg, callback_data.message, buffer, len);
     if (ret != 0) {
-        WLOGERROR("%s unpack on_receive_send_data_response to 0x%llx failed, res: %d", name(), static_cast<unsigned long long>(fwd_data->to()), ret);
+        FWLOGERROR("{} unpack on_receive_send_data_response from {:#x} failed, res: {}", name(), source.id, ret);
         return ret;
     }
 
-    if (atbus::protocol::msg::kDataTransformRsp == msg.msg_body_case() && msg.head().ret() < 0) {
-        ss_msg.mutable_head()->set_bus_id(fwd_data->from());
+    if (error_code < 0) {
+        ss_msg.mutable_head()->set_bus_id(source.id);
         // 转移要恢复的任务ID
         ss_msg.mutable_head()->set_dst_task_id(ss_msg.head().src_task_id());
         ss_msg.mutable_head()->set_src_task_id(0);
         ss_msg.mutable_head()->set_error_code(hello::err::EN_SYS_RPC_SEND_FAILED);
 
-        ret = on_send_msg_failed(callback_data.message, msg.head().ret(), msg.head().sequence());
+        ret = on_send_msg_failed(callback_data.message, error_code, msg.msg_sequence);
         if (ret < 0) {
-            WLOGERROR("%s dispatch on_send_msg_failed to 0x%llx failed, res: %d", name(), static_cast<unsigned long long>(fwd_data->to()), ret);
+            FWLOGERROR("{} dispatch on_send_msg_failed from {:#x} failed, res: {}", name(), source.id, ret);
         }
     }
 
     return ret;
 }
 
-uint64_t ss_msg_dispatcher::allocate_sequence() {
-    return ++ sequence_allocator_;
-}
+uint64_t ss_msg_dispatcher::allocate_sequence() { return ++sequence_allocator_; }

@@ -10,8 +10,8 @@
 
 #include <dispatcher/ss_msg_dispatcher.h>
 
-#include <TASK_PATH_PREFIX/action/task_action_router_update_sync.h>
-#include <TASK_PATH_PREFIX/action/task_action_router_transfer.h>
+#include <router/action/task_action_router_update_sync.h>
+#include <router/action/task_action_router_transfer.h>
 
 #include "handle_ss_rpc_routerservice.h"
 

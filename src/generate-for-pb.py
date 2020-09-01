@@ -102,6 +102,9 @@ class PbObjectBase(object):
             return self._reflect_extensions
         self._reflect_extensions = dict()
 
+        if not self.descriptor.GetOptions():
+            return self._reflect_extensions
+
         for ext_handle in self.descriptor.GetOptions().Extensions:
             ext_value = self.descriptor.GetOptions().Extensions[ext_handle]
             self._reflect_extensions[ext_handle.name] = ext_value

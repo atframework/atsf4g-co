@@ -12,6 +12,7 @@
 #include <log/log_wrapper.h>
 #include <std/explicit_declare.h>
 
+#include <atframe/atapp.h>
 #include <atframe/atapp_module_impl.h>
 #include <libatbus_protocol.h>
 
@@ -20,12 +21,12 @@
 
 #include <config/compiler/protobuf_prefix.h>
 
-#include <google/protobuf/service.h>
 #include <google/protobuf/descriptor.h>
+#include <google/protobuf/service.h>
 
-#include <protocol/pbdesc/svr.const.err.pb.h>
-#include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/atframework.pb.h>
+#include <protocol/pbdesc/com.const.pb.h>
+#include <protocol/pbdesc/svr.const.err.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 
@@ -122,7 +123,7 @@ public:
      * @param raw_msg 消息抽象结构
      * @return 消息的RPC名字,如果不是RPC消息，返回空字符串
      */
-    virtual const std::string& pick_rpc_name(msg_raw_t &raw_msg) = 0;
+    virtual const std::string &pick_rpc_name(msg_raw_t &raw_msg) = 0;
 
     /**
      * @brief 获取操作类型
@@ -152,7 +153,7 @@ public:
      * @param raw_msg 消息抽象结构
      * @return 返回action或actor选项或NULL
      */
-    virtual const atframework::DispatcherOptions* get_options_by_message_type(msg_type_t msg_type);
+    virtual const atframework::DispatcherOptions *get_options_by_message_type(msg_type_t msg_type);
 
     /**
      * @brief 注册Action
@@ -161,7 +162,7 @@ public:
      */
     template <typename TAction>
     inline int register_action(msg_type_t msg_type) {
-        const atframework::DispatcherOptions* options = get_options_by_message_type(msg_type);
+        const atframework::DispatcherOptions *options = get_options_by_message_type(msg_type);
         if (nullptr != options) {
             return _register_action(msg_type, task_manager::me()->make_task_creator<TAction>(options));
         } else {
@@ -175,35 +176,35 @@ public:
      * @return 或错误码
      */
     template <typename TAction>
-    int register_action(const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::ServiceDescriptor* service_desc, const std::string& rpc_name) {
+    int register_action(const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::ServiceDescriptor *service_desc, const std::string &rpc_name) {
         if (nullptr == service_desc) {
             return hello::err::EN_SYS_PARAM;
         }
 
         std::string::size_type final_segment = rpc_name.find_last_of('.');
-        std::string rpc_short_name;
+        std::string            rpc_short_name;
         if (std::string::npos == final_segment) {
             rpc_short_name = rpc_name;
         } else {
             rpc_short_name = rpc_name.substr(final_segment + 1);
         }
-        const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::MethodDescriptor* method = service_desc->FindMethodByName(rpc_short_name);
+        const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::MethodDescriptor *method = service_desc->FindMethodByName(rpc_short_name);
         if (nullptr == method) {
             FWLOGERROR("{} try to register rpc action {} for service {} failed, not found", name(), rpc_name, service_desc->full_name());
             return hello::err::EN_SYS_NOTFOUND;
         }
 
         if (method->full_name() != rpc_name) {
-            FWLOGERROR("{} try to register rpc action {} for service {} failed, the real full name is {}", 
-                name(), rpc_name, service_desc->full_name(), method->full_name());
+            FWLOGERROR("{} try to register rpc action {} for service {} failed, the real full name is {}", name(), rpc_name, service_desc->full_name(),
+                       method->full_name());
             return hello::err::EN_SYS_NOTFOUND;
         }
-        
-        const atframework::DispatcherOptions* options = nullptr;
+
+        const atframework::DispatcherOptions *options = nullptr;
         if (method->options().HasExtension(atframework::rpc_options)) {
             options = &method->options().GetExtension(atframework::rpc_options);
         }
-        
+
         return _register_action(method->full_name(), task_manager::me()->make_task_creator<TAction>(options));
     }
 
@@ -214,7 +215,7 @@ public:
      */
     template <typename TAction>
     inline int register_actor(msg_type_t msg_type) {
-        const atframework::DispatcherOptions* options = get_options_by_message_type(msg_type);
+        const atframework::DispatcherOptions *options = get_options_by_message_type(msg_type);
         return _register_action(msg_type, task_manager::me()->make_actor_creator<TAction>(options));
     }
 
@@ -224,35 +225,35 @@ public:
      * @return 或错误码
      */
     template <typename TAction>
-    int register_actor(const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::ServiceDescriptor* service_desc, const std::string& rpc_name) {
+    int register_actor(const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::ServiceDescriptor *service_desc, const std::string &rpc_name) {
         if (nullptr == service_desc) {
             return hello::err::EN_SYS_PARAM;
         }
 
         std::string::size_type final_segment = rpc_name.find_last_of('.');
-        std::string rpc_short_name;
+        std::string            rpc_short_name;
         if (std::string::npos == final_segment) {
             rpc_short_name = rpc_name;
         } else {
             rpc_short_name = rpc_name.substr(final_segment + 1);
         }
-        const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::MethodDescriptor* method = service_desc->FindMethodByName(rpc_short_name);
+        const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::MethodDescriptor *method = service_desc->FindMethodByName(rpc_short_name);
         if (nullptr == method) {
             FWLOGERROR("{} try to register rpc actor {} for service {} failed, not found", name(), rpc_name, service_desc->full_name());
             return hello::err::EN_SYS_NOTFOUND;
         }
 
         if (method->full_name() != rpc_name) {
-            FWLOGERROR("{} try to register rpc action {} for service {} failed, the real full name is {}", 
-                name(), rpc_name, service_desc->full_name(), method->full_name());
+            FWLOGERROR("{} try to register rpc action {} for service {} failed, the real full name is {}", name(), rpc_name, service_desc->full_name(),
+                       method->full_name());
             return hello::err::EN_SYS_NOTFOUND;
         }
-        
-        const atframework::DispatcherOptions* options = nullptr;
+
+        const atframework::DispatcherOptions *options = nullptr;
         if (method->options().HasExtension(atframework::rpc_options)) {
             options = &method->options().GetExtension(atframework::rpc_options);
         }
-        
+
         return _register_action(method->full_name(), task_manager::me()->make_actor_creator<TAction>(options));
     }
 
@@ -276,8 +277,8 @@ protected:
 private:
     int _register_action(msg_type_t msg_type, task_manager::task_action_creator_t action);
     int _register_action(msg_type_t msg_type, task_manager::actor_action_creator_t action);
-    int _register_action(const std::string& rpc_full_name, task_manager::task_action_creator_t action);
-    int _register_action(const std::string& rpc_full_name, task_manager::actor_action_creator_t action);
+    int _register_action(const std::string &rpc_full_name, task_manager::task_action_creator_t action);
+    int _register_action(const std::string &rpc_full_name, task_manager::actor_action_creator_t action);
 
 private:
     msg_task_action_set_t          task_action_map_by_id_;
@@ -337,18 +338,18 @@ TMsg *dispatcher_implement::get_protobuf_msg(msg_raw_t &raw_msg) {
         ret = dispatcher::me()->register_actor<act>(proto); \
     }
 
-#define REG_TASK_RPC_HANDLE(dispatcher, ret, act, service_desc, rpc_name)       \
-    if (ret < 0) {                                                              \
-        dispatcher::me()->register_action<act>(service_desc, rpc_name);         \
-    } else {                                                                    \
-        ret = dispatcher::me()->register_action<act>(service_desc, rpc_name);   \
+#define REG_TASK_RPC_HANDLE(dispatcher, ret, act, service_desc, rpc_name)     \
+    if (ret < 0) {                                                            \
+        dispatcher::me()->register_action<act>(service_desc, rpc_name);       \
+    } else {                                                                  \
+        ret = dispatcher::me()->register_action<act>(service_desc, rpc_name); \
     }
 
-#define REG_ACTOR_RPC_HANDLE(dispatcher, ret, act, service_desc, rpc_name)      \
-    if (ret < 0) {                                                              \
-        dispatcher::me()->register_actor<act>(service_desc, rpc_name);          \
-    } else {                                                                    \
-        ret = dispatcher::me()->register_actor<act>(service_desc, rpc_name);    \
+#define REG_ACTOR_RPC_HANDLE(dispatcher, ret, act, service_desc, rpc_name)   \
+    if (ret < 0) {                                                           \
+        dispatcher::me()->register_actor<act>(service_desc, rpc_name);       \
+    } else {                                                                 \
+        ret = dispatcher::me()->register_actor<act>(service_desc, rpc_name); \
     }
 
 

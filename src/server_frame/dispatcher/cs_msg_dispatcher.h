@@ -52,7 +52,7 @@ public:
      * @param raw_msg 消息抽象结构
      * @return 消息的RPC名字,如果不是RPC消息，返回空字符串
      */
-    virtual const std::string& pick_rpc_name(msg_raw_t &raw_msg) UTIL_CONFIG_OVERRIDE;
+    virtual const std::string &pick_rpc_name(msg_raw_t &raw_msg) UTIL_CONFIG_OVERRIDE;
 
     /**
      * @brief 获取操作类型
@@ -67,7 +67,7 @@ public:
      * @param raw_msg 消息抽象结构
      * @return 返回action或actor选项或NULL
      */
-    virtual const atframework::DispatcherOptions* get_options_by_message_type(msg_type_t msg_type) UTIL_CONFIG_OVERRIDE;
+    virtual const atframework::DispatcherOptions *get_options_by_message_type(msg_type_t msg_type) UTIL_CONFIG_OVERRIDE;
 
     /**
      * deal with cs message data
@@ -76,7 +76,7 @@ public:
      * @param len data length
      * @return 0 or error code
      */
-    int32_t dispatch(const atbus::protocol::msg &msg, const void *buffer, size_t len);
+    int32_t dispatch(const atapp::app::message_sender_t &source, const atapp::app::message_t &msg);
 
     /**
      * send kickoff message to atgateway
@@ -115,8 +115,9 @@ public:
      * @return 0 or error code
      */
     int32_t broadcast_data(uint64_t bus_id, const std::vector<uint64_t> &session_ids, const void *buffer, size_t len);
+
 private:
-    std::unordered_map<msg_type_t, const atframework::DispatcherOptions*> dispatcher_options_map_;
+    std::unordered_map<msg_type_t, const atframework::DispatcherOptions *> dispatcher_options_map_;
 };
 
 
