@@ -1,6 +1,7 @@
 ﻿cmake_minimum_required(VERSION 3.12.0)
 cmake_policy(SET CMP0054 NEW)
 cmake_policy(SET CMP0022 NEW)
+cmake_policy(SET CMP0067 NEW)
 if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.13")
     cmake_policy(SET CMP0074 NEW)
 endif()
@@ -85,12 +86,9 @@ include("${PROJECT_3RD_PARTY_ROOT_DIR}/3rd_party.macro.cmake")
 include("${ATFRAMEWORK_BASE_DIR}/atframework.macro.cmake")
 
 # 增加相对链接路径
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
-if(CMAKE_SIZEOF_VOID_P MATCHES 8)
-    set(CMAKE_BUILD_RPATH "../../lib64" "../../../lib64" "../../lib" "../../../lib")
-else ()
-    set(CMAKE_BUILD_RPATH "../../lib" "../../../lib")
-endif ()
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH YES)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH NO)
+set(CMAKE_BUILD_RPATH_USE_ORIGIN YES)
 
 ## 导入所有工程项目
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/atframework")
