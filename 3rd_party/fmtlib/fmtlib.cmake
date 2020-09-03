@@ -33,7 +33,7 @@ if(NOT DEFINED __PROJECT_3RD_PARTY_FMTLIB_LOADED)
         int main() {
             std::cout<< std::format(\"The answer is {}.\", 42)<< std::endl;
             char buffer[64] = {0};
-            const auto result = std::format_to_n(buffer, std::size(buffer), \"{} {}: {}\", \"Hello\", \"World!\", 42);
+            const auto result = std::format_to_n(buffer, sizeof(buffer), \"{} {}: {}\", \"Hello\", \"World!\", 42);
             std::cout << \"Buffer: \" << buffer << \",Untruncated output size = \" << result.size << std::endl;
             return 0;
         }" 3RD_PARTY_TEST_STD_FORMAT)
@@ -69,6 +69,7 @@ if(NOT DEFINED __PROJECT_3RD_PARTY_FMTLIB_LOADED)
         FindConfigurePackage(
             PACKAGE fmt
             BUILD_WITH_CMAKE CMAKE_INHIRT_BUILD_ENV
+            CMAKE_INHIRT_BUILD_ENV_DISABLE_C_FLAGS CMAKE_INHIRT_BUILD_ENV_DISABLE_ASM_FLAGS 
             CMAKE_FLAGS "-DCMAKE_POSITION_INDEPENDENT_CODE=YES" "-DBUILD_SHARED_LIBS=OFF" "-DFMT_DOC=OFF" "-DFMT_INSTALL=ON" 
                         "-DFMT_TEST=OFF" "-DFMT_FUZZ=OFF" "-DFMT_CUDA_TEST=OFF"
             WORKING_DIRECTORY "${3RD_PARTY_FMTLIB_PKG_DIR}"
