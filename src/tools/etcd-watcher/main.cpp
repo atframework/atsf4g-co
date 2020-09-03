@@ -7,9 +7,9 @@
 
 #include <log/log_wrapper.h>
 
-#include <etcdcli/etcd_cluster.h>
-#include <etcdcli/etcd_keepalive.h>
-#include <etcdcli/etcd_watcher.h>
+#include <atframe/etcdcli/etcd_cluster.h>
+#include <atframe/etcdcli/etcd_keepalive.h>
+#include <atframe/etcdcli/etcd_watcher.h>
 
 
 static bool is_run         = true;
@@ -17,7 +17,7 @@ static int  wait_for_close = 0;
 static void tick_timer_callback(uv_timer_t *handle) {
     util::time::time_utility::update();
 
-    atframe::component::etcd_cluster *ec = reinterpret_cast<atframe::component::etcd_cluster *>(handle->data);
+    atapp::etcd_cluster *ec = reinterpret_cast<atapp::etcd_cluster *>(handle->data);
     ec->tick();
 }
 
@@ -73,21 +73,21 @@ int main(int argc, char *argv[]) {
 
     util::network::http_request::curl_m_bind_ptr_t curl_mgr;
     util::network::http_request::create_curl_multi(uv_default_loop(), curl_mgr);
-    atframe::component::etcd_cluster ec;
+    atapp::etcd_cluster ec;
     ec.init(curl_mgr);
     std::vector<std::string> hosts;
     hosts.push_back(argv[1]);
     ec.set_conf_hosts(hosts);
 
     if (argc > 2) {
-        atframe::component::etcd_watcher::ptr_t p = atframe::component::etcd_watcher::create(ec, argv[2]);
+        atapp::etcd_watcher::ptr_t p = atapp::etcd_watcher::create(ec, argv[2]);
         if (p) {
             ec.add_watcher(p);
         }
     }
 
     if (argc > 4) {
-        atframe::component::etcd_keepalive::ptr_t p = atframe::component::etcd_keepalive::create(ec, argv[3]);
+        atapp::etcd_keepalive::ptr_t p = atapp::etcd_keepalive::create(ec, argv[3]);
         if (p) {
             p->set_checker(check_keepalive_data_callback(argv[4]));
             p->set_value(argv[4]);
