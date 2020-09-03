@@ -82,7 +82,9 @@ if (SIMULATOR_PRIVATE_DEFINITIONS)
     )
 endif ()
 
-target_include_directories(${ATSF4G_APP_NAME} 
+target_include_directories(${SIMULATOR_SRC_BIN_NAME} 
     PRIVATE 
         "$<BUILD_INTERFACE:${SIMULATOR_PRIVATE_INCLUDE_DIRS}>"
 )
+
+project_install_and_export_targets(${SIMULATOR_SRC_BIN_NAME})

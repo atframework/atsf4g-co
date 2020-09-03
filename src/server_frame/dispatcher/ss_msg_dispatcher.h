@@ -78,18 +78,17 @@ public:
 
     /**
      * deal with cs message data
-     * @param msg msg information
-     * @param buffer data
-     * @param len data length
+     * @param source data source wrapper
+     * @param msg msg wrapper
      * @return 0 or error code
      */
     int32_t dispatch(const atapp::app::message_sender_t &source, const atapp::app::message_t &msg);
 
     /**
      * notify send failed
-     * @param msg msg information
-     * @param buffer data
-     * @param len data length
+     * @param source data source wrapper
+     * @param msg msg wrapper
+     * @param error_code error code
      * @return 0 or error code
      */
     int32_t on_receive_send_data_response(const atapp::app::message_sender_t &source, const atapp::app::message_t &msg, int32_t error_code);

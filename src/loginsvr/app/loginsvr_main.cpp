@@ -140,7 +140,7 @@ class main_service_module : public atapp::module_impl {
 public:
     virtual int init() {
         WLOGINFO("============ server initialize ============");
-        INIT_CALL(logic_config, get_app()->get_id());
+        INIT_CALL(logic_config, get_app()->get_id(), get_app()->get_app_name());
         INIT_CALL(excel::config_manager);
 
         // logic managers
@@ -166,7 +166,7 @@ public:
         int                       ret = 0;
         util::config::ini_loader &cfg = get_app()->get_configure_loader();
 
-        RELOAD_CALL(ret, logic_config, cfg);
+        RELOAD_CALL(ret, logic_config, *get_app());
         ret = excel::config_manager::me()->reload_all();
 
         RELOAD_CALL(ret, task_manager);

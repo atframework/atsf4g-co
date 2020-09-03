@@ -7,3 +7,5 @@ add_subdirectory(echosvr)
 add_subdirectory(server_frame)
 add_subdirectory(loginsvr)
 add_subdirectory(gamesvr)
+
+add_subdirectory(tools)

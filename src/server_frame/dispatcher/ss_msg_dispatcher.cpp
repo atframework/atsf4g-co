@@ -141,8 +141,8 @@ int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
         return hello::err::EN_SYS_PARAM;
     }
 
-    if (0 == source.id) {
-        FWLOGERROR("receive a message from unknown source");
+    if (0 == source.id || (NULL == msg.data && msg.data_size > 0)) {
+        FWLOGERROR("receive a message from unknown source or without data content");
         return hello::err::EN_SYS_PARAM;
     }
 
@@ -173,13 +173,18 @@ int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::messa
         return hello::err::EN_SYS_PARAM;
     }
 
-    if (NULL == msg.data || 0 == source.id) {
+    if (0 == source.id || (NULL == msg.data && msg.data_size > 0)) {
         FWLOGERROR("send a message from unknown source");
         return hello::err::EN_SYS_PARAM;
     }
 
     if (error_code >= 0) {
         FWLOGDEBUG("receive_send_data_response from {:#x}", source.id);
+        return error_code;
+    }
+
+    if (NULL == msg.data && msg.data_size > 0) {
+        FWLOGERROR("receive_send_data_response from {:#x} without data, res: {}", source.id, error_code);
         return error_code;
     }
 

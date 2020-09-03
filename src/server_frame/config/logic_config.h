@@ -7,11 +7,21 @@
 
 #pragma once
 
-#include <design_pattern/singleton.h>
 #include <config/ini_loader.h>
+#include <design_pattern/singleton.h>
 
-#include <protocol/pbdesc/com.const.pb.h>
+#include <config/compiler/protobuf_prefix.h>
+
+#include <protocol/config/com.const.config.pb.h>
+
 #include <protocol/pbdesc/atframework.pb.h>
+#include <protocol/pbdesc/com.const.pb.h>
+
+#include <config/compiler/protobuf_suffix.h>
+
+namespace atapp {
+    class app;
+}
 
 class logic_config : public util::design_pattern::singleton<logic_config> {
 public:
@@ -24,11 +34,11 @@ public:
     struct LC_DBCONF {
         std::vector<LC_DBCONN> cluster_default;
         std::vector<LC_DBCONN> raw_default;
-        std::string db_script_file[hello::EnDBScriptShaType_ARRAYSIZE];
-        time_t time_retry_sec;
-        time_t time_retry_usec;
-        time_t timeout;
-        uint64_t proc;
+        std::string            db_script_file[hello::EnDBScriptShaType_ARRAYSIZE];
+        time_t                 time_retry_sec;
+        time_t                 time_retry_usec;
+        time_t                 timeout;
+        uint64_t               proc;
     };
 
     struct LC_ROUTER {
@@ -55,7 +65,7 @@ public:
         time_t task_stats_interval;
         size_t task_stack_size;
         size_t task_stack_gc_once_number;
-        size_t task_stack_mmap_count;     // check sys mmap configure(linux: only, >=max(task_stack_busy_count, task_stack_pool_max_count)*2+task_stack_keep_count)
+        size_t task_stack_mmap_count; // check sys mmap configure(linux: only, >=max(task_stack_busy_count, task_stack_pool_max_count)*2+task_stack_keep_count)
         size_t task_stack_pool_max_count;
         size_t task_stack_busy_count;
         size_t task_stack_keep_count;
@@ -106,20 +116,22 @@ protected:
     ~logic_config();
 
 public:
-    int init(uint64_t bus_id);
+    int init(uint64_t server_id, const std::string &server_name);
 
-    int reload(util::config::ini_loader &cfg_set);
+    int reload(atapp::app &app);
 
-    uint64_t get_self_bus_id() const;
+    uint64_t           get_self_bus_id() const;
+    const std::string &get_self_name() const;
 
-    inline const LC_LOGIC &get_cfg_logic() const { return cfg_logic_; }
+    inline const LC_LOGIC & get_cfg_logic() const { return cfg_logic_; }
     inline const LC_DBCONF &get_cfg_db() const { return cfg_db_; }
 
     inline const LC_LOGINSVR &get_cfg_svr_login() const { return cfg_loginsvr_; }
     inline const LC_GAMESVR & get_cfg_svr_game() const { return cfg_gamesvr_; }
 
-    const hello::DConstSettingsType& get_const_settings();
-    const atframework::ConstSettingsType& get_atframework_settings();
+    const hello::DConstSettingsType &     get_const_settings();
+    const atframework::ConstSettingsType &get_atframework_settings();
+
 private:
     void _load_logic(util::config::ini_loader &loader);
 
@@ -129,15 +141,20 @@ private:
     void _load_loginsvr(util::config::ini_loader &loader);
     void _load_gamesvr(util::config::ini_loader &loader);
 
+    void _load_server_cfg(atapp::app &app);
+
 private:
-    uint64_t bus_id_;
-    const hello::DConstSettingsType* const_settings_;
-    const atframework::ConstSettingsType* atframe_settings_;
-    LC_LOGIC cfg_logic_;
-    LC_DBCONF cfg_db_;
+    uint64_t                              server_id_;
+    std::string                           server_name_;
+    const hello::DConstSettingsType *     const_settings_;
+    const atframework::ConstSettingsType *atframe_settings_;
+    LC_LOGIC                              cfg_logic_;
+    LC_DBCONF                             cfg_db_;
 
     LC_LOGINSVR cfg_loginsvr_;
     LC_GAMESVR  cfg_gamesvr_;
+
+    hello::config::server_cfg server_cfg_;
 };
 
 
