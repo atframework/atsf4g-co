@@ -32,3 +32,5 @@ target_include_directories(${TOOL_SRC_BIN_NAME}
     PRIVATE 
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>"
 )
+
+project_install_and_export_targets(${TOOL_SRC_BIN_NAME})
