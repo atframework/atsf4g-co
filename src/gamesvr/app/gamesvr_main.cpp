@@ -193,8 +193,7 @@ public:
 
     virtual int reload() {
         WLOGINFO("============ server reload ============");
-        int                       ret = 0;
-        util::config::ini_loader &cfg = get_app()->get_configure_loader();
+        int ret = 0;
 
         RELOAD_CALL(ret, logic_config, *get_app());
         ret = excel::config_manager::me()->reload_all();

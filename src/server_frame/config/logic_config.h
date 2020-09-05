@@ -12,7 +12,7 @@
 
 #include <config/compiler/protobuf_prefix.h>
 
-#include <protocol/config/com.const.config.pb.h>
+#include <protocol/config/svr.protocol.config.pb.h>
 
 #include <protocol/pbdesc/atframework.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
