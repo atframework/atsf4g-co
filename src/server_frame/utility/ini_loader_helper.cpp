@@ -1,16 +1,16 @@
 ﻿#include <assert.h>
 
-#include <vector>
 #include <algorithm>
+#include <vector>
 
 #include <common/string_oprs.h>
 
 #include <config/ini_loader.h>
 
+#include <google/protobuf/duration.pb.h>
 #include <google/protobuf/message.h>
 #include <google/protobuf/repeated_field.h>
 #include <google/protobuf/timestamp.pb.h>
-#include <google/protobuf/duration.pb.h>
 
 #include <config/excel_config_const_index.h>
 
@@ -106,12 +106,11 @@ namespace detail {
                 if (fds->is_repeated()) {
                     rapidjson::Value ls;
                     ls.SetArray();
-                    const ::google::protobuf::RepeatedPtrField<::google::protobuf::Message>& data = src.GetReflection()->GetRepeatedPtrField<::google::protobuf::Message>(src, fds);
-                    if (ls.IsArray()) {
-                        for (int i = 0; i < data.size(); ++ i) {
+                    const ::google::protobuf::RepeatedPtrField<::google::protobuf::Message>& data =
+    src.GetReflection()->GetRepeatedPtrField<::google::protobuf::Message>(src, fds); if (ls.IsArray()) { for (int i = 0; i < data.size(); ++ i) {
                             ls.PushBack(rapidjson::kObjectType, doc.GetAllocator());
                             rapidsjon_helper_load_from(ls[ls.Size() - 1], doc, data.Get(i), options);
-                        }                    
+                        }
                     }
                     rapidsjon_helper_mutable_set_member(parent, fds->name().c_str(), std::move(ls), doc);
                 } else {
@@ -122,7 +121,7 @@ namespace detail {
                     }
                     rapidsjon_helper_mutable_set_member(parent, fds->name().c_str(), std::move(obj), doc);
                 }
-                
+
                 break;
             };
             case google::protobuf::FieldDescriptor::CPPTYPE_DOUBLE: {
@@ -189,145 +188,146 @@ namespace detail {
     }
     */
 
-    static void dump_pick_field(const util::config::ini_value& val, ::google::protobuf::Message& dst, const ::google::protobuf::FieldDescriptor* fds, size_t index) {
+    static void dump_pick_field(const util::config::ini_value &val, ::google::protobuf::Message &dst, const ::google::protobuf::FieldDescriptor *fds,
+                                size_t index) {
         if (NULL == fds) {
             return;
         }
 
-        switch(fds->cpp_type()) {
-            case google::protobuf::FieldDescriptor::CPPTYPE_INT32: {
+        switch (fds->cpp_type()) {
+        case google::protobuf::FieldDescriptor::CPPTYPE_INT32: {
+            if (fds->is_repeated()) {
+                dst.GetReflection()->AddInt32(&dst, fds, val.as_int32(index));
+            } else {
+                dst.GetReflection()->SetInt32(&dst, fds, val.as_int32(index));
+            }
+            break;
+        };
+        case google::protobuf::FieldDescriptor::CPPTYPE_INT64: {
+            if (fds->is_repeated()) {
+                dst.GetReflection()->AddInt64(&dst, fds, val.as_int64(index));
+            } else {
+                dst.GetReflection()->SetInt64(&dst, fds, val.as_int64(index));
+            }
+            break;
+        };
+        case google::protobuf::FieldDescriptor::CPPTYPE_UINT32: {
+            if (fds->is_repeated()) {
+                dst.GetReflection()->AddUInt32(&dst, fds, val.as_uint32(index));
+            } else {
+                dst.GetReflection()->SetUInt32(&dst, fds, val.as_uint32(index));
+            }
+            break;
+        };
+        case google::protobuf::FieldDescriptor::CPPTYPE_UINT64: {
+            if (fds->is_repeated()) {
+                dst.GetReflection()->AddUInt64(&dst, fds, val.as_uint64(index));
+            } else {
+                dst.GetReflection()->SetUInt64(&dst, fds, val.as_uint64(index));
+            }
+            break;
+        };
+        case google::protobuf::FieldDescriptor::CPPTYPE_STRING: {
+            if (fds->is_repeated()) {
+                dst.GetReflection()->AddString(&dst, fds, val.as_cpp_string(index));
+            } else {
+                dst.GetReflection()->SetString(&dst, fds, val.as_cpp_string(index));
+            }
+            break;
+        };
+        case google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE: {
+            // ç‰¹æ®Šmessage
+            if (fds->message_type()->full_name() == ::google::protobuf::Duration::descriptor()->full_name()) {
+                const std::string &value = val.as_cpp_string(index);
                 if (fds->is_repeated()) {
-                    dst.GetReflection()->AddInt32(&dst, fds, val.as_int32(index));
+                    excel::parse_duration(value, *static_cast< ::google::protobuf::Duration *>(dst.GetReflection()->AddMessage(&dst, fds)));
                 } else {
-                    dst.GetReflection()->SetInt32(&dst, fds, val.as_int32(index));
+                    excel::parse_duration(value, *static_cast< ::google::protobuf::Duration *>(dst.GetReflection()->MutableMessage(&dst, fds)));
                 }
                 break;
-            };
-            case google::protobuf::FieldDescriptor::CPPTYPE_INT64: {
+            } else if (fds->message_type()->full_name() == ::google::protobuf::Timestamp::descriptor()->full_name()) {
+                const std::string &value = val.as_cpp_string(index);
                 if (fds->is_repeated()) {
-                    dst.GetReflection()->AddInt64(&dst, fds, val.as_int64(index));
+                    excel::parse_timepoint(value, *static_cast< ::google::protobuf::Timestamp *>(dst.GetReflection()->AddMessage(&dst, fds)));
                 } else {
-                    dst.GetReflection()->SetInt64(&dst, fds, val.as_int64(index));
+                    excel::parse_timepoint(value, *static_cast< ::google::protobuf::Timestamp *>(dst.GetReflection()->MutableMessage(&dst, fds)));
                 }
-                break;
-            };
-            case google::protobuf::FieldDescriptor::CPPTYPE_UINT32: {
-                if (fds->is_repeated()) {
-                    dst.GetReflection()->AddUInt32(&dst, fds, val.as_uint32(index));
-                } else {
-                    dst.GetReflection()->SetUInt32(&dst, fds, val.as_uint32(index));
-                }
-                break;
-            };
-            case google::protobuf::FieldDescriptor::CPPTYPE_UINT64: {
-                if (fds->is_repeated()) {
-                    dst.GetReflection()->AddUInt64(&dst, fds, val.as_uint64(index));
-                } else {
-                    dst.GetReflection()->SetUInt64(&dst, fds, val.as_uint64(index));
-                }
-                break;
-            };
-            case google::protobuf::FieldDescriptor::CPPTYPE_STRING: {
-                if (fds->is_repeated()) {
-                    dst.GetReflection()->AddString(&dst, fds, val.as_cpp_string(index));
-                } else {
-                    dst.GetReflection()->SetString(&dst, fds, val.as_cpp_string(index));
-                }
-                break;
-            };
-            case google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE: {
-                // ç‰¹æ®Šmessage
-                if (fds->message_type()->full_name() == ::google::protobuf::Duration::descriptor()->full_name()) {
-                    const std::string& value = val.as_cpp_string(index);
-                    if (fds->is_repeated()) {
-                        excel::parse_duration(value, *static_cast<::google::protobuf::Duration*>(dst.GetReflection()->AddMessage(&dst, fds)));
-                    } else {
-                        excel::parse_duration(value, *static_cast<::google::protobuf::Duration*>(dst.GetReflection()->MutableMessage(&dst, fds)));
-                    }
-                    break;
-                } else if (fds->message_type()->full_name() == ::google::protobuf::Timestamp::descriptor()->full_name()) {
-                    const std::string& value = val.as_cpp_string(index);
-                    if (fds->is_repeated()) {
-                        excel::parse_timepoint(value, *static_cast<::google::protobuf::Timestamp*>(dst.GetReflection()->AddMessage(&dst, fds)));
-                    } else {
-                        excel::parse_timepoint(value, *static_cast<::google::protobuf::Timestamp*>(dst.GetReflection()->MutableMessage(&dst, fds)));
-                    }
-                    break;
-                }
-
-                if (fds->is_repeated()) {
-                    // repeated message is not supported by ini_loader
-                    break;
-                } else {
-                    ::google::protobuf::Message* submsg = dst.GetReflection()->MutableMessage(&dst, fds);
-                    if (NULL != submsg) {
-                        ini_loader_helper_dump_to(val, *submsg);
-                    }
-                }
-                
-                break;
-            };
-            case google::protobuf::FieldDescriptor::CPPTYPE_DOUBLE: {
-                if (fds->is_repeated()) {
-                    dst.GetReflection()->AddDouble(&dst, fds, val.as_double(index));
-                } else {
-                    dst.GetReflection()->SetDouble(&dst, fds, val.as_double(index));
-                }
-                break;
-            };
-            case google::protobuf::FieldDescriptor::CPPTYPE_FLOAT: {
-                if (fds->is_repeated()) {
-                    dst.GetReflection()->AddFloat(&dst, fds, val.as_float(index));
-                } else {
-                    dst.GetReflection()->SetFloat(&dst, fds, val.as_float(index));
-                }
-                break;
-            };
-            case google::protobuf::FieldDescriptor::CPPTYPE_BOOL: {
-                bool jval = true;
-                std::string trans = val.as_cpp_string(index);
-                std::transform(trans.begin(), trans.end(), trans.begin(), util::string::tolower<char>);
-
-                if ("0" == trans || "false" == trans || "no" == trans || "disable" == trans || "disabled" == trans || "" == trans) {
-                    jval = false;
-                }
-
-                if (fds->is_repeated()) {
-                    dst.GetReflection()->AddBool(&dst, fds, jval);
-                } else {
-                    dst.GetReflection()->SetBool(&dst, fds, jval);
-                }
-                break;
-            };
-            case google::protobuf::FieldDescriptor::CPPTYPE_ENUM: {
-                const std::string& name = val.as_cpp_string(index);
-                const google::protobuf::EnumValueDescriptor* jval = NULL;
-                if (name.empty() || (name[0] >= '0' && name[0] <= '9')) {
-                    jval = fds->enum_type()->FindValueByNumber(val.as_int32(index));
-                } else {
-                    jval = fds->enum_type()->FindValueByName(name);
-                }
-                
-                if (jval == NULL) {
-                    // invalid value
-                    break;
-                }
-                // fds->enum_type
-                if (fds->is_repeated()) {
-                    dst.GetReflection()->AddEnum(&dst, fds, jval);
-                } else {
-                    dst.GetReflection()->SetEnum(&dst, fds, jval);
-                }
-                break;
-            };
-            default: {
-                WLOGERROR("%s in %s with type=%s is not supported now", fds->name().c_str(), dst.GetDescriptor()->full_name().c_str(), fds->type_name());
                 break;
             }
+
+            if (fds->is_repeated()) {
+                // repeated message is not supported by ini_loader
+                break;
+            } else {
+                ::google::protobuf::Message *submsg = dst.GetReflection()->MutableMessage(&dst, fds);
+                if (NULL != submsg) {
+                    ini_loader_helper_dump_to(val, *submsg);
+                }
+            }
+
+            break;
+        };
+        case google::protobuf::FieldDescriptor::CPPTYPE_DOUBLE: {
+            if (fds->is_repeated()) {
+                dst.GetReflection()->AddDouble(&dst, fds, val.as_double(index));
+            } else {
+                dst.GetReflection()->SetDouble(&dst, fds, val.as_double(index));
+            }
+            break;
+        };
+        case google::protobuf::FieldDescriptor::CPPTYPE_FLOAT: {
+            if (fds->is_repeated()) {
+                dst.GetReflection()->AddFloat(&dst, fds, val.as_float(index));
+            } else {
+                dst.GetReflection()->SetFloat(&dst, fds, val.as_float(index));
+            }
+            break;
+        };
+        case google::protobuf::FieldDescriptor::CPPTYPE_BOOL: {
+            bool        jval  = true;
+            std::string trans = val.as_cpp_string(index);
+            std::transform(trans.begin(), trans.end(), trans.begin(), util::string::tolower<char>);
+
+            if ("0" == trans || "false" == trans || "no" == trans || "disable" == trans || "disabled" == trans || "" == trans) {
+                jval = false;
+            }
+
+            if (fds->is_repeated()) {
+                dst.GetReflection()->AddBool(&dst, fds, jval);
+            } else {
+                dst.GetReflection()->SetBool(&dst, fds, jval);
+            }
+            break;
+        };
+        case google::protobuf::FieldDescriptor::CPPTYPE_ENUM: {
+            const std::string &                          name = val.as_cpp_string(index);
+            const google::protobuf::EnumValueDescriptor *jval = NULL;
+            if (name.empty() || (name[0] >= '0' && name[0] <= '9')) {
+                jval = fds->enum_type()->FindValueByNumber(val.as_int32(index));
+            } else {
+                jval = fds->enum_type()->FindValueByName(name);
+            }
+
+            if (jval == NULL) {
+                // invalid value
+                break;
+            }
+            // fds->enum_type
+            if (fds->is_repeated()) {
+                dst.GetReflection()->AddEnum(&dst, fds, jval);
+            } else {
+                dst.GetReflection()->SetEnum(&dst, fds, jval);
+            }
+            break;
+        };
+        default: {
+            WLOGERROR("%s in %s with type=%s is not supported now", fds->name().c_str(), dst.GetDescriptor()->full_name().c_str(), fds->type_name());
+            break;
+        }
         }
     }
 
-    static void dump_field_item(const util::config::ini_value& src, ::google::protobuf::Message& dst, const ::google::protobuf::FieldDescriptor* fds) {
+    static void dump_field_item(const util::config::ini_value &src, ::google::protobuf::Message &dst, const ::google::protobuf::FieldDescriptor *fds) {
         if (NULL == fds) {
             return;
         }
@@ -338,25 +338,29 @@ namespace detail {
             return;
         }
 
+        if (!child_iter->second) {
+            return;
+        }
+
         if (fds->is_repeated()) {
             size_t arrsz = src.size();
-            for (size_t i = 0; i < arrsz; ++ i) {
-                dump_pick_field(child_iter->second, dst, fds, i);
-            }     
+            for (size_t i = 0; i < arrsz; ++i) {
+                dump_pick_field(*child_iter->second, dst, fds, i);
+            }
         } else {
 
-            dump_pick_field(child_iter->second, dst, fds, 0);
+            dump_pick_field(*child_iter->second, dst, fds, 0);
         }
     }
-}
+} // namespace detail
 
-void ini_loader_helper_dump_to(const util::config::ini_value& src, ::google::protobuf::Message& dst) {
-    const ::google::protobuf::Descriptor* desc = dst.GetDescriptor();
+void ini_loader_helper_dump_to(const util::config::ini_value &src, ::google::protobuf::Message &dst) {
+    const ::google::protobuf::Descriptor *desc = dst.GetDescriptor();
     if (NULL == desc) {
         return;
     }
 
-    for (int i = 0 ;i < desc->field_count(); ++ i) {
+    for (int i = 0; i < desc->field_count(); ++i) {
         detail::dump_field_item(src, dst, desc->field(i));
     }
 }
