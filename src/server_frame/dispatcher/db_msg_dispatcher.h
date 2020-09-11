@@ -94,7 +94,7 @@ public:
      * @param raw_msg 消息抽象结构
      * @return 消息的RPC名字,如果不是RPC消息，返回空字符串
      */
-    virtual const std::string& pick_rpc_name(msg_raw_t &raw_msg) UTIL_CONFIG_OVERRIDE;
+    virtual const std::string &pick_rpc_name(msg_raw_t &raw_msg) UTIL_CONFIG_OVERRIDE;
 
     /**
      * @brief 获取操作类型
@@ -120,8 +120,8 @@ public:
      * @param argvlen @see redisAsyncCommandArgv
      * @return 0或错误码
      */
-    int send_msg(channel_t::type t, const char *ks, size_t kl, uint64_t task_id, uint64_t pd, unpack_fn_t fn, uint64_t& sequence, 
-        int argc, const char **argv, const size_t *argvlen);
+    int send_msg(channel_t::type t, const char *ks, size_t kl, uint64_t task_id, uint64_t pd, unpack_fn_t fn, uint64_t &sequence, int argc, const char **argv,
+                 const size_t *argvlen);
 
     /**
      * @brief 获取用于protobuf序列化的临时缓冲区
@@ -158,11 +158,12 @@ public:
      * @return allocated sequence
      */
     uint64_t allocate_sequence();
+
 private:
     static void log_debug_fn(const char *content);
     static void log_info_fn(const char *content);
 
-    int script_load(redisAsyncContext *c, uint32_t type);
+    int script_load(redisAsyncContext *c, int32_t type);
     int open_file(const char *file, std::string &script);
 
     // common helper
@@ -170,7 +171,7 @@ private:
     static void script_callback(redisAsyncContext *c, void *r, void *privdata);
 
     // cluster
-    int cluster_init(const std::vector<logic_config::LC_DBCONN> &conns, int index);
+    int         cluster_init(const hello::config::db_group_cfg &conns, int index);
     static void cluster_request_callback(hiredis::happ::cmd_exec *, struct redisAsyncContext *c, void *r, void *privdata);
     static void cluster_on_connect(hiredis::happ::cluster *, hiredis::happ::connection *);
     static void cluster_on_connected(hiredis::happ::cluster *, hiredis::happ::connection *, const struct redisAsyncContext *, int status);
@@ -188,11 +189,11 @@ private:
      * @return 0或错误码
      */
 
-    int cluster_send_msg(hiredis::happ::cluster &clu, const char *ks, size_t kl, uint64_t task_id, uint64_t pd, unpack_fn_t fn, uint64_t& sequence, 
-        int argc, const char **argv, const size_t *argvlen);
+    int cluster_send_msg(hiredis::happ::cluster &clu, const char *ks, size_t kl, uint64_t task_id, uint64_t pd, unpack_fn_t fn, uint64_t &sequence, int argc,
+                         const char **argv, const size_t *argvlen);
 
     // raw
-    int raw_init(const std::vector<logic_config::LC_DBCONN> &conns, int index);
+    int         raw_init(const hello::config::db_group_cfg &conns, int index);
     static void raw_request_callback(hiredis::happ::cmd_exec *, struct redisAsyncContext *c, void *r, void *privdata);
     static void raw_on_connect(hiredis::happ::raw *c, hiredis::happ::connection *);
     static void raw_on_connected(hiredis::happ::raw *c, hiredis::happ::connection *, const struct redisAsyncContext *, int status);
@@ -207,13 +208,13 @@ private:
      * @param argvlen @see redisAsyncCommandArgv
      * @return 0或错误码
      */
-    int raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_id, uint64_t pd, unpack_fn_t fn, uint64_t& sequence, 
-        int argc, const char **argv, const size_t *argvlen);
+    int raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_id, uint64_t pd, unpack_fn_t fn, uint64_t &sequence, int argc, const char **argv,
+                     const size_t *argvlen);
 
 private:
-    uint64_t sequence_allocator_;
-    uv_timer_t *tick_timer_;
-    int tick_msg_count_;
+    uint64_t          sequence_allocator_;
+    uv_timer_t *      tick_timer_;
+    int               tick_msg_count_;
     std::vector<char> pack_cache_;
 
     // user callbacks
@@ -224,7 +225,7 @@ private:
 
     // channels
     std::shared_ptr<hiredis::happ::cluster> db_cluster_conns_[channel_t::SENTINEL_BOUND];
-    std::shared_ptr<hiredis::happ::raw> db_raw_conns_[channel_t::RAW_BOUND - channel_t::SENTINEL_BOUND];
+    std::shared_ptr<hiredis::happ::raw>     db_raw_conns_[channel_t::RAW_BOUND - channel_t::SENTINEL_BOUND];
 };
 
 #endif // ATF4G_CO_DB_MSG_DISPATCHER_H

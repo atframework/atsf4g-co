@@ -40,24 +40,18 @@ int logic_config::reload(atapp::app &app) {
     const_settings_                   = nullptr;
     atframe_settings_                 = nullptr;
 
+    _load_server_cfg(app);
+
     const util::config::ini_value::node_type &children = cfg_set.get_root_node().get_children();
     if (children.find("logic") != children.end()) {
         _load_logic(cfg_set);
     }
 
-    if (children.find("db") != children.end()) {
-        _load_db(cfg_set);
-    }
-
-    if (children.find("gamesvr") != children.end()) {
-        _load_gamesvr(cfg_set);
-    }
+    _load_db();
 
     if (children.find("loginsvr") != children.end()) {
         _load_loginsvr(cfg_set);
     }
-
-    _load_server_cfg(app);
 
     return 0;
 }
@@ -144,67 +138,48 @@ void logic_config::_load_logic(util::config::ini_loader &loader) {
     load_int_compare(loader, "logic.router.fast_timer_interval", cfg_logic_.router.fast_timer_interval, 8, 1);
 }
 
-void logic_config::_load_db(util::config::ini_loader &loader) {
-    loader.dump_to("db.script.login", cfg_db_.db_script_file[hello::EN_DBSST_LOGIN]);
-    loader.dump_to("db.script.user", cfg_db_.db_script_file[hello::EN_DBSST_PLAYER]);
-
-    cfg_db_.time_retry_sec  = 0;
-    cfg_db_.time_retry_usec = 100000;
-    cfg_db_.timeout         = 75;
-    cfg_db_.proc            = 100;
-
-    {
-        ::util::config::duration_value dur;
-        loader.dump_to("db.timer.retry", dur);
-        cfg_db_.time_retry_sec  = dur.sec;
-        cfg_db_.time_retry_usec = dur.nsec / 1000;
-    }
-    loader.dump_to("db.timer.timeout", cfg_db_.timeout);
-    loader.dump_to("db.timer.proc", cfg_db_.proc);
-
-    cfg_db_.cluster_default.clear();
-    _load_db_hosts(cfg_db_.cluster_default, "cluster", loader);
-
-    cfg_db_.raw_default.clear();
-    _load_db_hosts(cfg_db_.raw_default, "raw", loader);
+void logic_config::_load_db() {
+    _load_db_hosts(*server_cfg_.mutable_db()->mutable_cluster(), "cluster");
+    _load_db_hosts(*server_cfg_.mutable_db()->mutable_raw(), "raw");
 }
 
-void logic_config::_load_db_hosts(std::vector<LC_DBCONN> &out, const char *group_name, util::config::ini_loader &loader) {
-    std::stringstream ss;
-    ss << "db." << group_name << ".host";
-    std::string              path = ss.str();
-    std::vector<std::string> urls;
-    loader.dump_to(path, urls);
+void logic_config::_load_db_hosts(hello::config::db_group_cfg &out, const char *group_name) {
+    for (int i = 0; i < out.host_size(); ++i) {
+        const std::string &host = out.host(i);
+        out.clear_gateways();
 
-    owent_foreach(std::string & url, urls) {
-        LC_DBCONN db_conn;
-        db_conn.url               = url;
-        std::string::size_type fn = db_conn.url.find_last_of(":");
+        std::string::size_type fn = host.find_last_of(":");
         if (std::string::npos == fn) {
-            db_conn.host = url;
-            db_conn.port = 6379;
-            out.push_back(db_conn);
+            hello::config::db_group_gateway_cfg *db_gateway = out.add_gateways();
+            if (NULL != db_gateway) {
+                db_gateway->set_port(6379);
+                db_gateway->set_host(host);
+                db_gateway->set_url(LOG_WRAPPER_FWAPI_FORMAT("{}:{}", db_gateway->host(), db_gateway->port()));
+            }
         } else {
-            db_conn.host = url.substr(0, fn);
-
             // check if it's IP:port-port mode
-            std::string::size_type minu_pos = url.find('-', fn + 1);
+            std::string::size_type minu_pos = host.find('-', fn + 1);
             if (std::string::npos == minu_pos) {
                 // IP:port
-                util::string::str2int(db_conn.port, url.substr(fn + 1).c_str());
-                out.push_back(db_conn);
+                hello::config::db_group_gateway_cfg *db_gateway = out.add_gateways();
+                if (NULL != db_gateway) {
+                    db_gateway->set_port(util::string::to_int<int32_t>(host.c_str() + fn + 1));
+                    db_gateway->set_host(host.substr(0, fn));
+                    db_gateway->set_url(LOG_WRAPPER_FWAPI_FORMAT("{}:{}", db_gateway->host(), db_gateway->port()));
+                }
             } else {
                 // IP:begin_port-end_port
-                uint16_t begin_port = 0, end_port = 0;
-                util::string::str2int(begin_port, &url[fn + 1]);
-                util::string::str2int(end_port, &url[minu_pos + 1]);
+                int32_t begin_port = 0, end_port = 0;
+                util::string::str2int(begin_port, &host[fn + 1]);
+                util::string::str2int(end_port, &host[minu_pos + 1]);
 
-                for (db_conn.port = begin_port; db_conn.port < end_port; ++db_conn.port) {
-                    ss.clear();
-                    ss << db_conn.host << ":" << db_conn.port;
-                    db_conn.url = ss.str();
-
-                    out.push_back(db_conn);
+                for (int32_t port = begin_port; port < end_port; ++port) {
+                    hello::config::db_group_gateway_cfg *db_gateway = out.add_gateways();
+                    if (NULL != db_gateway) {
+                        db_gateway->set_port(port);
+                        db_gateway->set_host(host.substr(0, fn));
+                        db_gateway->set_url(LOG_WRAPPER_FWAPI_FORMAT("{}:{}", db_gateway->host(), db_gateway->port()));
+                    }
                 }
             }
         }
@@ -235,8 +210,6 @@ void logic_config::_load_loginsvr(util::config::ini_loader &loader) {
     loader.dump_to("loginsvr.white.openid", cfg_loginsvr_.white_openid_list);
     loader.dump_to("loginsvr.debug_platform", cfg_loginsvr_.debug_platform_mode);
 }
-
-void logic_config::_load_gamesvr(util::config::ini_loader &loader) {}
 
 const hello::DConstSettingsType &logic_config::get_const_settings() {
     if (likely(nullptr != const_settings_)) {

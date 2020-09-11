@@ -99,8 +99,8 @@ enum EnVersionType {
 
 // db script type
 enum EnDBScriptShaType {
-    EN_DBSST_LOGIN  = 0; // login
-    EN_DBSST_PLAYER = 1; // player
+    EN_DBSST_LOGIN = 0; // login
+    EN_DBSST_USER  = 1; // user
 }
 
 // chat channel type

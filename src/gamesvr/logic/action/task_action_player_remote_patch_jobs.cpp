@@ -3,27 +3,72 @@
 //
 
 #include <log/log_wrapper.h>
-#include <protocol/pbdesc/svr.const.err.pb.h>
 #include <time/time_utility.h>
 
-#include <data/session.h>
+#include <protocol/pbdesc/svr.const.err.pb.h>
+#include <protocol/pbdesc/svr.const.pb.h>
+
+#include <utility/protobuf_mini_dumper.h>
+
 #include <data/player.h>
+#include <data/session.h>
 #include <router/router_player_cache.h>
 #include <router/router_player_manager.h>
+
+#include <dispatcher/task_manager.h>
+
+// TODO #include <rpc/db/async_jobs.h>
 
 #include "task_action_player_remote_patch_jobs.h"
 
 task_action_player_remote_patch_jobs::task_action_player_remote_patch_jobs(ctor_param_t COPP_MACRO_RV_REF param)
-    : param_(param), need_restart_(false), is_writable_(false) {}
+    : param_(param), need_restart_(false), is_writable_(false), patched_job_number_(0) {}
 
 task_action_player_remote_patch_jobs::~task_action_player_remote_patch_jobs() {}
 
+static int save_player_data(const router_player_cache::ptr_t &cache, size_t batch_job_number, std::vector<int32_t> &complete_jobs_idx, int job_type,
+                            uint64_t user_id, uint32_t zone_id, const std::string &openid) {
+    if (!cache || !cache->is_writable()) {
+        return hello::err::EN_SYS_PARAM;
+    }
+
+    int ret = 0;
+    // 保存玩家数据
+    if (batch_job_number > 0) {
+        ret = cache->save(NULL);
+        if (ret < 0) {
+            // 这里可能是因为保存过程城中下线了，这时候直接放弃执行即可。下次登入后会继续执行的
+            if (hello::err::EN_ROUTER_NOT_WRITABLE == ret) {
+                FWLOGWARNING("save player {}({}:{}) failed, res: {}({})", openid, zone_id, user_id, ret, protobuf_mini_dumper_get_error_msg(ret));
+            } else {
+                FWLOGERROR("save player {}({}:{}) failed, res: {}({})", openid, zone_id, user_id, ret, protobuf_mini_dumper_get_error_msg(ret));
+            }
+            return ret;
+        }
+    }
+
+    if (!complete_jobs_idx.empty()) {
+        // 移除远程命令
+        // TODO
+        // ret = ::rpc::db::async_jobs::del_jobs(job_type, user_id, zone_id, openid, complete_jobs_idx);
+        if (ret < 0) {
+            FWLOGERROR("delete async jobs for player {}({}:{}) failed, res: {}({})", openid, zone_id, user_id, ret, protobuf_mini_dumper_get_error_msg(ret));
+            return ret;
+        }
+
+        complete_jobs_idx.clear();
+    }
+
+    return ret;
+}
+
 int task_action_player_remote_patch_jobs::operator()() {
     need_restart_ = false;
-    is_writable_ = false;
+    is_writable_  = false;
     if (!param_.user) {
         return hello::err::EN_SYS_PARAM;
     }
+    set_player_id(param_.user->get_user_id());
 
     router_player_cache::key_t key(router_player_manager::me()->get_type_id(), param_.user->get_zone_id(), param_.user->get_user_id());
     router_player_cache::ptr_t cache = router_player_manager::me()->get_cache(key);
@@ -39,10 +84,12 @@ int task_action_player_remote_patch_jobs::operator()() {
     }
 
     // 注意这里会续期缓存生命周期，所以要确保前面判定都过后才能到这里
-    if (param_.user != cache->get_object()) {
+    if (!cache->is_object_equal(param_.user)) {
         return hello::err::EN_SUCCESS;
     }
-    is_writable_ = true;
+    is_writable_           = true;
+    need_restart_          = false;
+    patched_job_number_    = 0;
     bool pending_to_logout = false;
 
     /**
@@ -55,66 +102,165 @@ int task_action_player_remote_patch_jobs::operator()() {
      *     出错的流程不应该重启任务，而是放进队列尾等待后续重试，否则某些服务故障期间可能会导致无限循环。
      */
 
-    int ret = hello::err::EN_SUCCESS;
-    // while (is_writable_ && !pending_to_logout && param_.user->is_inited() && false == need_restart_) {
-    //     // TODO 拉取远程命令列表
-    //     // TODO 如果没有待执行的远程命令，直接成功返回
-    //     if (true) {
-    //         break;
-    //     }
-    //
-    //     // TODO patch逻辑 - 邮件？
-    //     // TODO patch逻辑 - GM命令？
-    //
-    //     // 保存玩家数据
-    //     ret = cache->save(NULL);
-    //     if (ret < 0) {
-    //         WPLOGERROR(*param_.user, "save failed, res: %d", res);
-    //         break;
-    //     }
-    //
-    //     // TODO 移除远程命令
-    //
-    //     // 如果对象被踢出（不可写），则放弃后续流程
-    //     is_writable_ = cache->is_writable();
-    //     // 执行时间过长则中断，下一次再启动流程
-    //     need_restart_ = param_.timeout_timepoint - util::time::time_utility::get_now() < param_.timeout_duration / 2;
-            // 如果玩家离线和正在准备登出则停止异步任务流程，下次登入再继续
-            {
-                session::ptr_t s = param_.user->get_session();
-                if (!s) {
-                    pending_to_logout = true;
-                } else if (s->check_flag(session::flag_t::EN_SESSION_FLAG_CLOSING) || s->check_flag(session::flag_t::EN_SESSION_FLAG_CLOSED)) {
-                    pending_to_logout = true;
-                }
-            }
-    // }
+    int                                       ret  = hello::err::EN_SUCCESS;
+    const ::google::protobuf::EnumDescriptor *desc = hello::EnPlayerAsyncJobsType_descriptor();
+    for (int pull_jobs_idx = 0;
+         desc && is_writable_ && !pending_to_logout && pull_jobs_idx < desc->value_count() && param_.user->is_inited() && false == need_restart_;
+         ++pull_jobs_idx) {
 
-    // 可能是从中间中断的，需要重新计算一次是否可写和超时
-    // is_writable_ = cache->is_writable();
-    need_restart_ = param_.timeout_timepoint - util::time::time_utility::get_now() < param_.timeout_duration / 2;
+        const ::google::protobuf::EnumValueDescriptor *val_desc = desc->value(pull_jobs_idx);
+        if (NULL == val_desc) {
+            continue;
+        }
+
+        // 忽略列表
+        if (0 == val_desc->number()) {
+            continue;
+        }
+
+        std::vector<int32_t> complete_jobs_idx;
+        size_t               batch_job_number = 0;
+        // TODO
+        /**
+        std::vector<tdr2pb::TABLE_USER_ASYNC_JOBS_DEF> job_list;
+
+        ret = ::rpc::db::async_jobs::get_jobs(val_desc->number(), param_.user->get_user_id(), param_.user->get_zone_id(), param_.user->get_open_id(), job_list);
+        if (ret == hello::err::EN_DB_RECORD_NOT_FOUND) {
+            ret = 0;
+            continue;
+        }
+
+        complete_jobs_idx.reserve(hello::EN_SL_PLAYER_ASYNC_JOBS_BATCH_NUMBER);
+        for (size_t i = 0; i < job_list.size(); ++i) {
+            // 如果拉取完玩家下线了，中断后续任务
+            is_writable_ = cache->is_writable();
+            if (!is_writable_) {
+                break;
+            }
+
+            complete_jobs_idx.push_back(job_list[i].action_blob().tcaplus_index());
+
+            if (param_.user->get_user_async_jobs_manager().is_job_uuid_exists(job_list[i].action_blob().action_uuid())) {
+                // 已执行则跳过
+                continue;
+            }
+
+            ++batch_job_number;
+            int async_job_res = 0;
+            switch (job_list[i].action_blob().action_case()) {
+            case hello::table_user_async_jobs_blob_data::kDebugMessage:
+            // TODO More actions
+            default:
+                WPLOGERROR(*param_.user, "do invalid async action %d, msg: %s", job_list[i].action_blob().action_case(), job_list[i].DebugString().c_str());
+                break;
+            }
+
+            if (async_job_res < 0) {
+                WPLOGERROR(*param_.user, "do async action %d, msg: %s failed, res: %d(%s)", job_list[i].action_blob().action_case(),
+                           job_list[i].DebugString().c_str(), async_job_res, protobuf_mini_dumper_get_error_msg(async_job_res));
+            }
+
+            if (batch_job_number >= hello::EN_SL_PLAYER_ASYNC_JOBS_BATCH_NUMBER) {
+                // 如果拉取完玩家下线了，中断后续任务
+                is_writable_ = cache->is_writable();
+                if (!is_writable_) {
+                    break;
+                }
+
+                // 保存玩家数据
+                ret = save_player_data(cache, batch_job_number, complete_jobs_idx, val_desc->number(), param_.user->get_user_id(), param_.user->get_zone_id(),
+                                       param_.user->get_open_id());
+                if (ret < 0) {
+                    break;
+                }
+
+                patched_job_number_ += batch_job_number;
+                batch_job_number = 0;
+                param_.user->get_user_async_jobs_manager().clear_job_uuids();
+            }
+        }
+        **/
+
+        if (ret < 0) {
+            break;
+        }
+
+        // 如果拉取完玩家下线了，中断后续任务
+        is_writable_ = cache->is_writable();
+        if (!is_writable_) {
+            break;
+        }
+
+        if (batch_job_number > 0 || !complete_jobs_idx.empty()) {
+            ret = save_player_data(cache, batch_job_number, complete_jobs_idx, val_desc->number(), param_.user->get_user_id(), param_.user->get_zone_id(),
+                                   param_.user->get_open_id());
+            if (ret < 0) {
+                break;
+            }
+
+            patched_job_number_ += batch_job_number;
+            batch_job_number = 0;
+            // TODO
+            // param_.user->get_user_async_jobs_manager().clear_job_uuids();
+
+            // 如果对象被踢出（不可写），则放弃后续流程
+            is_writable_ = cache->is_writable();
+            if (!is_writable_) {
+                break;
+            }
+        }
+
+        // 执行时间过长则中断，下一次再启动流程
+        need_restart_ = param_.timeout_timepoint - util::time::time_utility::get_now() < param_.timeout_duration / 2;
+
+        // 如果玩家离线和正在准备登出则停止异步任务流程，下次登入再继续
+        {
+            session::ptr_t s = param_.user->get_session();
+            if (!s) {
+                pending_to_logout = true;
+            } else if (s->check_flag(session::flag_t::EN_SESSION_FLAG_CLOSING) || s->check_flag(session::flag_t::EN_SESSION_FLAG_CLOSED)) {
+                pending_to_logout = true;
+            }
+        }
+    }
+
+    // 可能是从中间中断的，需要重新计算一次是否可写
+    is_writable_ = cache->is_writable();
+
     if (pending_to_logout) {
         need_restart_ = false;
+    }
+
+    // 如果是执行过程中玩家对象离线导致不可写，直接跳过即可，前面会打印warning日志，不需要输出错误
+    if (hello::err::EN_ROUTER_NOT_WRITABLE == ret) {
+        ret = 0;
     }
     return ret;
 }
 
 int task_action_player_remote_patch_jobs::on_success() {
     if (param_.user) {
-        WPLOGDEBUG(*param_.user, "do task_action_player_remote_patch_jobs success");
+        FWPLOGDEBUG(*param_.user, "do task_action_player_remote_patch_jobs success");
     }
 
-    // 尝试再启动一次，启动排队后的任务
+    // TODO 尝试再启动一次，启动排队后的任务
+    /**
     if (is_writable_ && param_.user) {
-        if (param_.user->remote_command_patch_task_.get() == task_manager::task_t::this_task()) {
-            param_.user->remote_command_patch_task_.reset();
+        if (param_.user->get_user_async_jobs_manager().remote_command_patch_task_.get() == task_manager::task_t::this_task()) {
+            param_.user->get_user_async_jobs_manager().remote_command_patch_task_.reset();
         }
 
         if (need_restart_) {
-            param_.user->start_patch_remote_command();
-        } else {
-            param_.user->try_patch_remote_command();
+            param_.user->get_user_async_jobs_manager().reset_async_jobs_protect();
         }
+
+        param_.user->get_user_async_jobs_manager().try_async_jobs();
+    }
+    **/
+
+    if (patched_job_number_ > 0) {
+        // 数据变更推送
+        param_.user->send_all_syn_msg();
     }
 
     return get_ret_code();
@@ -122,20 +268,28 @@ int task_action_player_remote_patch_jobs::on_success() {
 
 int task_action_player_remote_patch_jobs::on_failed() {
     if (param_.user) {
-        WPLOGERROR(*param_.user, "do task_action_player_remote_patch_jobs failed, res: %d", get_ret_code());
+        FWPLOGERROR(*param_.user, "do task_action_player_remote_patch_jobs failed, res: {}", get_ret_code());
     }
 
-    // 尝试再启动一次，启动排队后的任务
+    // TODO 尝试再启动一次，启动排队后的任务
+    /**
     if (is_writable_ && param_.user) {
-        if (param_.user->remote_command_patch_task_.get() == task_manager::task_t::this_task()) {
-            param_.user->remote_command_patch_task_.reset();
+        if (param_.user->get_user_async_jobs_manager().remote_command_patch_task_.get() == task_manager::task_t::this_task()) {
+            param_.user->get_user_async_jobs_manager().remote_command_patch_task_.reset();
         }
 
         if (need_restart_) {
-            param_.user->start_patch_remote_command();
-        } else {
-            param_.user->try_patch_remote_command();
+            param_.user->get_user_async_jobs_manager().reset_async_jobs_protect();
         }
+
+        param_.user->get_user_async_jobs_manager().try_async_jobs();
     }
+    **/
+
+    if (patched_job_number_ > 0) {
+        // 数据变更推送
+        param_.user->send_all_syn_msg();
+    }
+
     return get_ret_code();
 }

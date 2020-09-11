@@ -77,7 +77,9 @@ int32_t db_msg_dispatcher::init() {
             }
 
             // load proc interval from configure
-            res = uv_timer_start(tick_timer_, db_msg_dispatcher::on_timer_proc, logic_config::me()->get_cfg_db().proc, logic_config::me()->get_cfg_db().proc);
+            uint64_t timer_tick_interval = static_cast<uint64_t>(logic_config::me()->get_cfg_db().timer().proc().seconds() * 1000 +
+                                                                 logic_config::me()->get_cfg_db().timer().proc().nanos() / 1000000);
+            res                          = uv_timer_start(tick_timer_, db_msg_dispatcher::on_timer_proc, timer_tick_interval, timer_tick_interval);
             if (0 != res) {
                 WLOGERROR("start db dispatcher timer failed, res: %d", res);
                 break;
@@ -91,8 +93,8 @@ int32_t db_msg_dispatcher::init() {
     }
 
     // init
-    cluster_init(logic_config::me()->get_cfg_db().cluster_default, channel_t::CLUSTER_DEFAULT);
-    raw_init(logic_config::me()->get_cfg_db().raw_default, channel_t::RAW_DEFAULT);
+    cluster_init(logic_config::me()->get_cfg_db().cluster(), channel_t::CLUSTER_DEFAULT);
+    raw_init(logic_config::me()->get_cfg_db().raw(), channel_t::RAW_DEFAULT);
     return hello::err::EN_SUCCESS;
 }
 
@@ -184,16 +186,12 @@ uint64_t db_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
 
 db_msg_dispatcher::msg_type_t db_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw_msg) { return 0; }
 
-const std::string& db_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
-    return get_empty_string();
-}
+const std::string &db_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) { return get_empty_string(); }
 
-db_msg_dispatcher::msg_op_type_t db_msg_dispatcher::pick_msg_op_type(msg_raw_t &raw_msg) {
-    return hello::EN_MSG_OP_TYPE_MIXUP;
-}
+db_msg_dispatcher::msg_op_type_t db_msg_dispatcher::pick_msg_op_type(msg_raw_t &raw_msg) { return hello::EN_MSG_OP_TYPE_MIXUP; }
 
-int db_msg_dispatcher::send_msg(channel_t::type t, const char *ks, size_t kl, uint64_t task_id, uint64_t pd, unpack_fn_t fn, uint64_t& sequence, 
-    int argc, const char **argv, const size_t *argvlen) {
+int db_msg_dispatcher::send_msg(channel_t::type t, const char *ks, size_t kl, uint64_t task_id, uint64_t pd, unpack_fn_t fn, uint64_t &sequence, int argc,
+                                const char **argv, const size_t *argvlen) {
 
     if (t > channel_t::CLUSTER_BOUND && t < channel_t::SENTINEL_BOUND) {
         if (db_cluster_conns_[t]) {
@@ -255,11 +253,21 @@ void db_msg_dispatcher::log_debug_fn(const char *content) { WCLOGDEBUG(log_categ
 
 void db_msg_dispatcher::log_info_fn(const char *content) { WCLOGINFO(log_categorize_t::DB, "%s", content); }
 
-int db_msg_dispatcher::script_load(redisAsyncContext *c, uint32_t type) {
+int db_msg_dispatcher::script_load(redisAsyncContext *c, int32_t type) {
     // load lua script
-    int                status;
-    std::string        script;
-    const std::string &script_file_path = logic_config::me()->get_cfg_db().db_script_file[type % hello::EnDBScriptShaType_ARRAYSIZE];
+    int         status;
+    std::string script;
+    std::string script_file_path;
+    switch (type) {
+    case hello::EN_DBSST_LOGIN:
+        script_file_path = logic_config::me()->get_cfg_db().script().login();
+        break;
+    case hello::EN_DBSST_USER:
+        script_file_path = logic_config::me()->get_cfg_db().script().user();
+        break;
+    default:
+        break;
+    }
     if (script_file_path.empty()) {
         return 0;
     }
@@ -326,7 +334,7 @@ void db_msg_dispatcher::script_callback(redisAsyncContext *c, void *r, void *pri
 }
 
 // cluster
-int db_msg_dispatcher::cluster_init(const std::vector<logic_config::LC_DBCONN> &conns, int index) {
+int db_msg_dispatcher::cluster_init(const hello::config::db_group_cfg &conns, int index) {
     if (index >= channel_t::SENTINEL_BOUND || index < 0) {
         return hello::err::EN_SYS_PARAM;
     }
@@ -337,15 +345,15 @@ int db_msg_dispatcher::cluster_init(const std::vector<logic_config::LC_DBCONN> &
     }
     conn.reset();
 
-    if (conns.empty()) {
+    if (0 == conns.gateways_size()) {
         return hello::err::EN_SUCCESS;
     }
 
-    conn            = std::make_shared<hiredis::happ::cluster>();
-    size_t conn_idx = util::random_engine::random_between<size_t>(0, conns.size());
+    conn             = std::make_shared<hiredis::happ::cluster>();
+    int32_t conn_idx = util::random_engine::random_between<int32_t>(0, conns.gateways_size());
 
     // 初始化
-    conn->init(conns[conn_idx].host, conns[conn_idx].port);
+    conn->init(conns.gateways(conn_idx).host(), static_cast<uint16_t>(conns.gateways(conn_idx).port()));
 
     // 设置日志handle
     {
@@ -368,8 +376,8 @@ int db_msg_dispatcher::cluster_init(const std::vector<logic_config::LC_DBCONN> &
     conn->set_on_connect(db_msg_dispatcher::cluster_on_connect);
     conn->set_on_connected(db_msg_dispatcher::cluster_on_connected);
 
-    conn->set_timeout(logic_config::me()->get_cfg_db().timeout);
-    conn->set_timer_interval(logic_config::me()->get_cfg_db().time_retry_sec, logic_config::me()->get_cfg_db().time_retry_usec);
+    conn->set_timeout(logic_config::me()->get_cfg_db().timer().timeout().seconds());
+    conn->set_timer_interval(logic_config::me()->get_cfg_db().timer().retry().seconds(), logic_config::me()->get_cfg_db().timer().retry().nanos() / 1000);
 
     conn->set_cmd_buffer_size(sizeof(db_async_data_t));
 
@@ -441,8 +449,8 @@ void db_msg_dispatcher::cluster_on_connected(hiredis::happ::cluster *clu, hiredi
     }
 }
 
-int db_msg_dispatcher::cluster_send_msg(hiredis::happ::cluster &clu, const char *ks, size_t kl, uint64_t task_id, uint64_t pd, unpack_fn_t fn, 
-    uint64_t& sequence, int argc, const char **argv, const size_t *argvlen) {
+int db_msg_dispatcher::cluster_send_msg(hiredis::happ::cluster &clu, const char *ks, size_t kl, uint64_t task_id, uint64_t pd, unpack_fn_t fn,
+                                        uint64_t &sequence, int argc, const char **argv, const size_t *argvlen) {
     hiredis::happ::cmd_exec *cmd;
     if (NULL == fn) {
         cmd = clu.exec(ks, kl, NULL, NULL, argc, argv, argvlen);
@@ -474,7 +482,7 @@ int db_msg_dispatcher::cluster_send_msg(hiredis::happ::cluster &clu, const char 
 }
 
 // raw
-int db_msg_dispatcher::raw_init(const std::vector<logic_config::LC_DBCONN> &conns, int index) {
+int db_msg_dispatcher::raw_init(const hello::config::db_group_cfg &conns, int index) {
     if (index >= channel_t::RAW_BOUND || index < channel_t::RAW_DEFAULT) {
         return hello::err::EN_SYS_PARAM;
     }
@@ -485,14 +493,14 @@ int db_msg_dispatcher::raw_init(const std::vector<logic_config::LC_DBCONN> &conn
     }
     conn.reset();
 
-    if (conns.empty()) {
+    if (0 == conns.gateways_size()) {
         return hello::err::EN_SUCCESS;
     }
 
     conn = std::make_shared<hiredis::happ::raw>();
 
     // 初始化- raw入口唯一
-    conn->init(conns[0].host, conns[0].port);
+    conn->init(conns.gateways(0).host(), static_cast<uint16_t>(conns.gateways(0).port()));
 
     // 设置日志handle
     {
@@ -515,8 +523,8 @@ int db_msg_dispatcher::raw_init(const std::vector<logic_config::LC_DBCONN> &conn
     conn->set_on_connect(db_msg_dispatcher::raw_on_connect);
     conn->set_on_connected(db_msg_dispatcher::raw_on_connected);
 
-    conn->set_timeout(logic_config::me()->get_cfg_db().timeout);
-    conn->set_timer_interval(logic_config::me()->get_cfg_db().time_retry_sec, logic_config::me()->get_cfg_db().time_retry_usec);
+    conn->set_timeout(logic_config::me()->get_cfg_db().timer().timeout().seconds());
+    conn->set_timer_interval(logic_config::me()->get_cfg_db().timer().retry().seconds(), logic_config::me()->get_cfg_db().timer().retry().nanos() / 1000);
 
     conn->set_cmd_buffer_size(sizeof(db_async_data_t));
 
@@ -583,8 +591,8 @@ void db_msg_dispatcher::raw_on_connected(hiredis::happ::raw *raw_conn, hiredis::
     }
 }
 
-int db_msg_dispatcher::raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_id, uint64_t pd, unpack_fn_t fn, uint64_t& sequence, 
-    int argc, const char **argv, const size_t *argvlen) {
+int db_msg_dispatcher::raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_id, uint64_t pd, unpack_fn_t fn, uint64_t &sequence, int argc,
+                                    const char **argv, const size_t *argvlen) {
     hiredis::happ::cmd_exec *cmd;
     if (NULL == fn) {
         cmd = raw_conn.exec(NULL, NULL, argc, argv, argvlen);
@@ -615,6 +623,4 @@ int db_msg_dispatcher::raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_
     return hello::err::EN_SUCCESS;
 }
 
-uint64_t db_msg_dispatcher::allocate_sequence() {
-    return ++ sequence_allocator_;
-}
+uint64_t db_msg_dispatcher::allocate_sequence() { return ++sequence_allocator_; }

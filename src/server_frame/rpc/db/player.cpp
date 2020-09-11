@@ -51,7 +51,7 @@ namespace rpc {
                 }
 
                 user_table_key_t user_key;
-                size_t user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, user_id, zone_id);
+                size_t           user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, user_id, zone_id);
                 if (user_key_len <= 0) {
                     WLOGERROR("format db cmd failed, cmd %s", user_key);
                     return hello::err::EN_DB_SEND_FAILED;
@@ -64,7 +64,7 @@ namespace rpc {
                 }
 
                 uint64_t rpc_sequence = 0;
-                int res = db_msg_dispatcher::me()->send_msg(db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, user_key, user_key_len, task->get_id(),
+                int      res          = db_msg_dispatcher::me()->send_msg(db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, user_key, user_key_len, task->get_id(),
                                                             logic_config::me()->get_self_bus_id(), detail::unpack_user, rpc_sequence,
                                                             static_cast<int>(args.size()), args.get_args_values(), args.get_args_lengths());
 
@@ -109,14 +109,14 @@ namespace rpc {
                 std::stringstream segs_debug_info;
 
                 user_table_key_t user_key;
-                size_t user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, user_id, zone_id);
+                size_t           user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, user_id, zone_id);
                 if (user_key_len <= 0) {
                     WLOGERROR("format db cmd failed, cmd %s", user_key);
                     return hello::err::EN_DB_SEND_FAILED;
                 }
 
                 std::vector<const ::google::protobuf::FieldDescriptor *> fds;
-                const google::protobuf::Reflection *reflect = store.GetReflection();
+                const google::protobuf::Reflection *                     reflect = store.GetReflection();
                 if (NULL == reflect) {
                     WLOGERROR("pack message %s failed, get reflection failed", store.GetDescriptor()->full_name().c_str());
                     return hello::err::EN_SYS_PACK;
@@ -127,7 +127,7 @@ namespace rpc {
                 redis_args args(fds.size() * 2 + 6);
 
                 args.push("EVALSHA");
-                args.push(db_msg_dispatcher::me()->get_db_script_sha1(hello::EN_DBSST_PLAYER));
+                args.push(db_msg_dispatcher::me()->get_db_script_sha1(hello::EN_DBSST_USER));
                 args.push(1);
                 args.push(user_key);
 
@@ -139,9 +139,9 @@ namespace rpc {
                 WLOGDEBUG("user %llu save curr data version:%s", static_cast<unsigned long long>(user_id), version.c_str());
 
                 uint64_t rpc_sequence = 0;
-                res = db_msg_dispatcher::me()->send_msg(db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, user_key, user_key_len, task->get_id(),
-                                                        logic_config::me()->get_self_bus_id(), detail::unpack_user, rpc_sequence,
-                                                        static_cast<int>(args.size()), args.get_args_values(), args.get_args_lengths());
+                res                   = db_msg_dispatcher::me()->send_msg(db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, user_key, user_key_len, task->get_id(),
+                                                        logic_config::me()->get_self_bus_id(), detail::unpack_user, rpc_sequence, static_cast<int>(args.size()),
+                                                        args.get_args_values(), args.get_args_lengths());
 
                 // args unavailable now
 

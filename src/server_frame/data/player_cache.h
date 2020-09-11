@@ -16,6 +16,8 @@
 
 #include <dispatcher/task_manager.h>
 
+#include <log/log_wrapper.h>
+
 class session;
 
 /**
@@ -154,8 +156,8 @@ public:
     inline uint32_t get_zone_id() const { return zone_id_; }
 
     inline const hello::table_login &get_login_info() const { return login_info_; }
-    inline hello::table_login &get_login_info() { return login_info_; }
-    void load_and_move_login_info(hello::table_login COPP_MACRO_RV_REF lg, const std::string& ver);
+    inline hello::table_login &      get_login_info() { return login_info_; }
+    void                             load_and_move_login_info(hello::table_login COPP_MACRO_RV_REF lg, const std::string &ver);
 
     inline const std::string &get_login_version() const { return login_info_version_; }
     inline std::string &      get_login_version() { return login_info_version_; }
@@ -169,8 +171,9 @@ public:
     inline const hello::player_data &get_player_data() const { return player_data_; }
 
     inline uint32_t get_data_version() const { return data_version_; }
-    
+
     uint64_t alloc_session_sequence();
+
 private:
     inline hello::player_data &mutable_player_data() { return player_data_.ref(); }
 
@@ -190,29 +193,84 @@ private:
     std::weak_ptr<session> session_;
     uint64_t               session_sequence_;
 
-    player_cache_dirty_wrapper<hello::account_information>  account_info_;
-    player_cache_dirty_wrapper<hello::player_data>          player_data_;
-    player_cache_dirty_wrapper<hello::player_options>       player_options_;
+    player_cache_dirty_wrapper<hello::account_information> account_info_;
+    player_cache_dirty_wrapper<hello::player_data>         player_data_;
+    player_cache_dirty_wrapper<hello::player_options>      player_options_;
 };
 
 
 // 玩家日志输出工具
 #ifdef _MSC_VER
-#define WPLOGTRACE(PLAYER, fmt, ...) WLOGTRACE("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
-#define WPLOGDEBUG(PLAYER, fmt, ...) WLOGDEBUG("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
-#define WPLOGNOTICE(PLAYER, fmt, ...) WLOGNOTICE("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
-#define WPLOGINFO(PLAYER, fmt, ...) WLOGINFO("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
-#define WPLOGWARNING(PLAYER, fmt, ...) WLOGWARNING("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
-#define WPLOGERROR(PLAYER, fmt, ...) WLOGERROR("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
-#define WPLOGFATAL(PLAYER, fmt, ...) WLOGFATAL("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
+#define WPLOGTRACE(PLAYER, fmt, ...) \
+    WLOGTRACE("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
+#define WPLOGDEBUG(PLAYER, fmt, ...) \
+    WLOGDEBUG("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
+#define WPLOGNOTICE(PLAYER, fmt, ...) \
+    WLOGNOTICE("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
+#define WPLOGINFO(PLAYER, fmt, ...) \
+    WLOGINFO("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
+#define WPLOGWARNING(PLAYER, fmt, ...) \
+    WLOGWARNING("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
+#define WPLOGERROR(PLAYER, fmt, ...) \
+    WLOGERROR("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
+#define WPLOGFATAL(PLAYER, fmt, ...) \
+    WLOGFATAL("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
+
+#define FWPLOGTRACE(PLAYER, fmt, ...) \
+    FWLOGTRACE("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
+#define FWPLOGDEBUG(PLAYER, fmt, ...) \
+    FWLOGDEBUG("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
+#define FWPLOGNOTICE(PLAYER, fmt, ...) \
+    FWLOGNOTICE("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
+#define FWPLOGINFO(PLAYER, fmt, ...) FWLOGINFO("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
+#define FWPLOGWARNING(PLAYER, fmt, ...) \
+    FWLOGWARNING("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
+#define FWPLOGERROR(PLAYER, fmt, ...) \
+    FWLOGERROR("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
+#define FWPLOGFATAL(PLAYER, fmt, ...) \
+    FWLOGFATAL("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), __VA_ARGS__)
+
 #else
-#define WPLOGTRACE(PLAYER, fmt, args...) WLOGTRACE("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
-#define WPLOGDEBUG(PLAYER, fmt, args...) WLOGDEBUG("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
-#define WPLOGNOTICE(PLAYER, fmt, args...) WLOGNOTICE("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
-#define WPLOGINFO(PLAYER, fmt, args...) WLOGINFO("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
-#define WPLOGWARNING(PLAYER, fmt, args...) WLOGWARNING("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
-#define WPLOGERROR(PLAYER, fmt, args...) WLOGERROR("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
-#define WPLOGFATAL(PLAYER, fmt, args...) WLOGFATAL("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
+#define WPLOGTRACE(PLAYER, fmt, args...) \
+    WLOGTRACE("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
+#define WPLOGDEBUG(PLAYER, fmt, args...) \
+    WLOGDEBUG("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
+#define WPLOGNOTICE(PLAYER, fmt, args...) \
+    WLOGNOTICE("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
+#define WPLOGINFO(PLAYER, fmt, args...) \
+    WLOGINFO("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
+#define WPLOGWARNING(PLAYER, fmt, args...) \
+    WLOGWARNING("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
+#define WPLOGERROR(PLAYER, fmt, args...) \
+    WLOGERROR("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
+#define WPLOGFATAL(PLAYER, fmt, args...) \
+    WLOGFATAL("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
+
+#define FWPLOGTRACE(PLAYER, fmt, args...) \
+    FWLOGTRACE("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
+#define FWPLOGDEBUG(PLAYER, fmt, args...) \
+    FWLOGDEBUG("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
+#define FWPLOGNOTICE(PLAYER, fmt, args...) \
+    FWLOGNOTICE("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
+#define FWPLOGINFO(PLAYER, fmt, args...) FWLOGINFO("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
+#define FWPLOGWARNING(PLAYER, fmt, args...) \
+    FWLOGWARNING("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
+#define FWPLOGERROR(PLAYER, fmt, args...) \
+    FWLOGERROR("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
+#define FWPLOGFATAL(PLAYER, fmt, args...) \
+    FWLOGFATAL("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id_llu(), ##args)
 #endif
+
+
+namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID {
+    template <class T>
+    struct formatter<T, typename std::enable_if<std::is_base_of<player_cache, T>::value, char>::type> : formatter<std::string> {
+
+        template <class FormatContext>
+        auto format(const player_cache &user, FormatContext &ctx) {
+            return LOG_WRAPPER_FWAPI_FORMAT_TO(ctx.out(), "player {}({}:{})", user.get_open_id(), user.get_zone_id(), user.get_user_id_llu());
+        }
+    };
+} // namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID
 
 #endif

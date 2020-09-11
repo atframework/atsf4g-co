@@ -25,22 +25,6 @@ namespace atapp {
 
 class logic_config : public util::design_pattern::singleton<logic_config> {
 public:
-    struct LC_DBCONN {
-        std::string url;
-        std::string host;
-        uint16_t    port;
-    };
-
-    struct LC_DBCONF {
-        std::vector<LC_DBCONN> cluster_default;
-        std::vector<LC_DBCONN> raw_default;
-        std::string            db_script_file[hello::EnDBScriptShaType_ARRAYSIZE];
-        time_t                 time_retry_sec;
-        time_t                 time_retry_usec;
-        time_t                 timeout;
-        uint64_t               proc;
-    };
-
     struct LC_ROUTER {
         time_t cache_update_interval;
         time_t cache_free_timeout;
@@ -109,8 +93,6 @@ public:
         uint32_t                 reload_version;
     };
 
-    struct LC_GAMESVR {};
-
 protected:
     logic_config();
     ~logic_config();
@@ -123,11 +105,10 @@ public:
     uint64_t           get_self_bus_id() const;
     const std::string &get_self_name() const;
 
-    inline const LC_LOGIC & get_cfg_logic() const { return cfg_logic_; }
-    inline const LC_DBCONF &get_cfg_db() const { return cfg_db_; }
+    inline const LC_LOGIC &                     get_cfg_logic() const { return cfg_logic_; }
+    inline const hello::config::db_section_cfg &get_cfg_db() const { return server_cfg_.db(); }
 
     inline const LC_LOGINSVR &get_cfg_svr_login() const { return cfg_loginsvr_; }
-    inline const LC_GAMESVR & get_cfg_svr_game() const { return cfg_gamesvr_; }
 
     const hello::DConstSettingsType &     get_const_settings();
     const atframework::ConstSettingsType &get_atframework_settings();
@@ -135,11 +116,10 @@ public:
 private:
     void _load_logic(util::config::ini_loader &loader);
 
-    void _load_db(util::config::ini_loader &loader);
-    void _load_db_hosts(std::vector<LC_DBCONN> &out, const char *group_name, util::config::ini_loader &loader);
+    void _load_db();
+    void _load_db_hosts(hello::config::db_group_cfg &out, const char *group_name);
 
     void _load_loginsvr(util::config::ini_loader &loader);
-    void _load_gamesvr(util::config::ini_loader &loader);
 
     void _load_server_cfg(atapp::app &app);
 
@@ -149,10 +129,8 @@ private:
     const hello::DConstSettingsType *     const_settings_;
     const atframework::ConstSettingsType *atframe_settings_;
     LC_LOGIC                              cfg_logic_;
-    LC_DBCONF                             cfg_db_;
 
     LC_LOGINSVR cfg_loginsvr_;
-    LC_GAMESVR  cfg_gamesvr_;
 
     hello::config::server_cfg server_cfg_;
 };
