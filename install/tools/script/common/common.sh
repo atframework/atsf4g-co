@@ -351,7 +351,7 @@ function WaitProcessStoped() {
 		return 1;
 	fi
 
-	WAIT_TIME=5000;
+	WAIT_TIME=10000;
 	PROC_NAME="$1"
 
 	if [ $# -gt 1 ]; then
@@ -373,4 +373,39 @@ function WaitProcessStoped() {
 	done
 	
 	return 0;
+}
+
+
+function CheckLinuxPidAndExePath() {
+	if [[ $# -lt 2 ]]; then
+		echo "0" ;
+		return 0 ;
+	fi
+
+	EXPECT_EXE_PATH="$(readlink -f "$1")";
+	if [[ ! -e "/proc/$2/exe" ]] ; then
+		echo "1" ;
+		return 1 ;
+	fi
+
+	RUNNING_EXE_PATH="$(readlink -f "/proc/$2/exe")";
+	RUNNING_EXE_PATH="${RUNNING_EXE_PATH% (deleted)}";
+
+	if [[ "x$EXPECT_EXE_PATH" == "x$RUNNING_EXE_PATH" ]] ; then
+		echo "0" ;
+		return 0 ;
+	fi
+
+	# Support wrapper
+	for OPEN_FILE in /proc/$2/fd/* ; do
+		RUNNING_EXE_PATH="$(readlink -f "$OPEN_FILE")";
+		RUNNING_EXE_PATH="${RUNNING_EXE_PATH% (deleted)}";
+		if [[ "x$EXPECT_EXE_PATH" == "x$RUNNING_EXE_PATH" ]] ; then
+			echo "0" ;
+			return 0 ;
+		fi
+	done
+
+	echo "1" ;
+	return 1 ;
 }
