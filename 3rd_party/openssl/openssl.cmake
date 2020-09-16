@@ -29,9 +29,15 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
                     list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES OpenSSL::Crypto)
 
                     if (TARGET Threads::Threads)
-                        project_build_tools_patch_add_imported_link_interface_libraries(OpenSSL::Crypto Threads::Threads ${CMAKE_DL_LIBS})
+                        project_build_tools_patch_imported_link_interface_libraries(
+                            OpenSSL::Crypto
+                            ADD_LIBRARIES Threads::Threads ${CMAKE_DL_LIBS}
+                        )
                     elseif (CMAKE_DL_LIBS)
-                        project_build_tools_patch_add_imported_link_interface_libraries(OpenSSL::Crypto ${CMAKE_DL_LIBS})
+                        project_build_tools_patch_imported_link_interface_libraries(
+                            OpenSSL::Crypto
+                            ADD_LIBRARIES ${CMAKE_DL_LIBS}
+                        )
                     endif ()
                 endif()
                 if (TARGET OpenSSL::SSL)
@@ -39,9 +45,15 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
                     list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES OpenSSL::SSL)
 
                     if (TARGET Threads::Threads)
-                        project_build_tools_patch_add_imported_link_interface_libraries(OpenSSL::SSL Threads::Threads ${CMAKE_DL_LIBS})
+                        project_build_tools_patch_imported_link_interface_libraries(
+                            OpenSSL::SSL
+                            ADD_LIBRARIES Threads::Threads ${CMAKE_DL_LIBS}
+                        )
                     elseif (CMAKE_DL_LIBS)
-                        project_build_tools_patch_add_imported_link_interface_libraries(OpenSSL::SSL ${CMAKE_DL_LIBS})
+                        project_build_tools_patch_imported_link_interface_libraries(
+                            OpenSSL::SSL
+                            ADD_LIBRARIES ${CMAKE_DL_LIBS}
+                        )
                     endif ()
                 endif()
             else()

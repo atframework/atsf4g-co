@@ -12,15 +12,24 @@ set (3RD_PARTY_LIBWEBSOCKETS_VERSION "v4.0.20")
 
 
 function (PROJECT_3RD_PARTY_LIBWEBSOCKETS_PATCH_IMPORTED_TARGET TARGET_NAME)
+    unset(PATCH_REMOVE_RULES)
+    unset(PATCH_ADD_TARGETS)
     if (TARGET OpenSSL::SSL OR TARGET OpenSSL::Crypto OR TARGET LibreSSL::TLS OR TARGET mbedtls_static OR TARGET mbedtls)
-        project_build_tools_patch_remove_imported_link_interface_libraries(${TARGET_NAME} "(lib)?crypto" "(lib)?ssl")
-        project_build_tools_patch_add_imported_link_interface_libraries(${TARGET_NAME} ${3RD_PARTY_CRYPT_LINK_NAME})
+        list(APPEND PATCH_REMOVE_RULES "(lib)?crypto" "(lib)?ssl")
+        list(APPEND PATCH_ADD_TARGETS ${3RD_PARTY_CRYPT_LINK_NAME})
     endif ()
 
     if (TARGET uv_a OR TARGET uv OR TARGET libuv)
-        project_build_tools_patch_remove_imported_link_interface_libraries(${TARGET_NAME} "(lib)?uv(_a)?")
-        project_build_tools_patch_add_imported_link_interface_libraries(${TARGET_NAME} ${3RD_PARTY_LIBUV_LINK_NAME})
+        list(APPEND PATCH_REMOVE_RULES "(lib)?uv(_a)?")
+        list(APPEND PATCH_ADD_TARGETS ${3RD_PARTY_LIBUV_LINK_NAME})
     endif ()
+    if (PATCH_REMOVE_RULES OR PATCH_ADD_TARGETS)
+        project_build_tools_patch_imported_link_interface_libraries(
+            ${TARGET_NAME}
+            REMOVE_LIBRARIES ${PATCH_REMOVE_RULES}
+            ADD_LIBRARIES ${PATCH_ADD_TARGETS}
+        )
+    endif()
 endfunction()
 
 macro(PROJECT_3RD_PARTY_LIBWEBSOCKETS_IMPORT)
