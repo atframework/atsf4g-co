@@ -27,10 +27,22 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
                 if (TARGET OpenSSL::Crypto)
                     list(APPEND 3RD_PARTY_CRYPT_LINK_NAME OpenSSL::Crypto)
                     list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES OpenSSL::Crypto)
+
+                    if (TARGET Threads::Threads)
+                        project_build_tools_patch_add_imported_link_interface_libraries(OpenSSL::Crypto Threads::Threads ${CMAKE_DL_LIBS})
+                    elseif (CMAKE_DL_LIBS)
+                        project_build_tools_patch_add_imported_link_interface_libraries(OpenSSL::Crypto ${CMAKE_DL_LIBS})
+                    endif ()
                 endif()
                 if (TARGET OpenSSL::SSL)
                     list(APPEND 3RD_PARTY_CRYPT_LINK_NAME OpenSSL::SSL)
                     list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES OpenSSL::SSL)
+
+                    if (TARGET Threads::Threads)
+                        project_build_tools_patch_add_imported_link_interface_libraries(OpenSSL::SSL Threads::Threads ${CMAKE_DL_LIBS})
+                    elseif (CMAKE_DL_LIBS)
+                        project_build_tools_patch_add_imported_link_interface_libraries(OpenSSL::SSL ${CMAKE_DL_LIBS})
+                    endif ()
                 endif()
             else()
                 if (OPENSSL_INCLUDE_DIR)
@@ -171,7 +183,7 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
                 "make" ${3RD_PARTY_OPENSSL_BUILD_MULTI_CORE}
             )
             project_expand_list_for_command_line_to_file("${3RD_PARTY_OPENSSL_BUILD_DIR}/run-build-release.sh"
-                "make" "install"
+                "make" "install_sw" "install_ssldirs"
             )
 
             # build & install
@@ -217,7 +229,7 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
                 "nmake" "PERL=no-perl"
             )
             project_expand_list_for_command_line_to_file("${3RD_PARTY_OPENSSL_BUILD_DIR}/run-build-release.bat"
-                "nmake" "install" # "DESTDIR=${3RD_PARTY_OPENSSL_ROOT_DIR}"
+                "nmake" "install_sw" "install_ssldirs" # "DESTDIR=${3RD_PARTY_OPENSSL_ROOT_DIR}"
             )
 
             # build & install

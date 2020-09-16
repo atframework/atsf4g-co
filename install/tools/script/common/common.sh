@@ -378,8 +378,8 @@ function WaitProcessStoped() {
 
 function CheckLinuxPidAndExePath() {
 	if [[ $# -lt 2 ]]; then
-		echo "0" ;
-		return 0 ;
+		echo "1" ;
+		return 1 ;
 	fi
 
 	EXPECT_EXE_PATH="$(readlink -f "$1")";
