@@ -174,6 +174,8 @@ public:
 
     uint64_t alloc_session_sequence();
 
+    void set_quick_save() const;
+
 private:
     inline hello::player_data &mutable_player_data() { return player_data_.ref(); }
 

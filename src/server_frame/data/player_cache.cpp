@@ -3,8 +3,8 @@
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/com.protocol.pb.h>
-#include <protocol/pbdesc/svr.table.pb.h>
 #include <protocol/pbdesc/svr.const.pb.h>
+#include <protocol/pbdesc/svr.table.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 
@@ -13,13 +13,16 @@
 
 #include <logic/player_manager.h>
 
+#include <router/router_manager_base.h>
+#include <router/router_manager_set.h>
+
 #include "player_cache.h"
 #include "session.h"
 
 
 player_cache::player_cache(fake_constructor &) : user_id_(0), zone_id_(0), data_version_(0) {
-    session_sequence_ = static_cast<uint64_t>((util::time::time_utility::get_sys_now() - hello::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET) << 10) + 
-        static_cast<uint64_t>(util::time::time_utility::get_now_usec() / 1000);
+    session_sequence_ = static_cast<uint64_t>((util::time::time_utility::get_sys_now() - hello::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET) << 10) +
+                        static_cast<uint64_t>(util::time::time_utility::get_now_usec() / 1000);
 }
 
 player_cache::~player_cache() { WPLOGDEBUG(*this, "destroyed"); }
@@ -29,9 +32,7 @@ bool player_cache::can_be_writable() const {
     return false;
 }
 
-bool player_cache::is_writable() const {
-    return false;
-}
+bool player_cache::is_writable() const { return false; }
 
 void player_cache::init(uint64_t user_id, uint32_t zone_id, const std::string &openid) {
     user_id_      = user_id;
@@ -137,9 +138,7 @@ int player_cache::dump(hello::table_user &user, bool always) {
 
 void player_cache::send_all_syn_msg() {}
 
-int player_cache::await_before_logout_tasks() {
-    return 0;
-}
+int player_cache::await_before_logout_tasks() { return 0; }
 
 void player_cache::set_session(std::shared_ptr<session> session_ptr) {
     std::shared_ptr<session> old_sess = session_.lock();
@@ -162,7 +161,7 @@ std::shared_ptr<session> player_cache::get_session() { return session_.lock(); }
 
 bool player_cache::has_session() const { return false == session_.expired(); }
 
-void player_cache::load_and_move_login_info(hello::table_login COPP_MACRO_RV_REF lg, const std::string& ver) {
+void player_cache::load_and_move_login_info(hello::table_login COPP_MACRO_RV_REF lg, const std::string &ver) {
     login_info_.Swap(&lg);
     login_info_version_ = ver;
 
@@ -170,8 +169,22 @@ void player_cache::load_and_move_login_info(hello::table_login COPP_MACRO_RV_REF
 }
 
 uint64_t player_cache::alloc_session_sequence() {
-    uint64_t ret = ++ session_sequence_;
+    uint64_t ret = ++session_sequence_;
     player_data_.ref().set_session_sequence(ret);
     return ret;
 }
 
+void player_cache::set_quick_save() const {
+    router_manager_base *mgr = router_manager_set::me()->get_manager(hello::EN_ROT_PLAYER);
+    if (NULL == mgr) {
+        return;
+    }
+
+    router_manager_base::key_t          key(hello::EN_ROT_PLAYER, get_zone_id(), get_user_id());
+    std::shared_ptr<router_object_base> obj = mgr->get_base_cache(key);
+    if (!obj || !obj->is_writable()) {
+        return;
+    }
+
+    router_manager_set::me()->mark_fast_save(mgr, obj);
+}

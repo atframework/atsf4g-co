@@ -2,8 +2,8 @@
  * @brief Created by owent with generate-for-pb.py at 2020-07-10 22:02:19
  */
 
-#include <std/explicit_declare.h>
 #include <log/log_wrapper.h>
+#include <std/explicit_declare.h>
 #include <time/time_utility.h>
 
 #include <config/compiler/protobuf_prefix.h>
@@ -30,25 +30,23 @@
 task_action_player_kickoff::task_action_player_kickoff(dispatcher_start_data_t COPP_MACRO_RV_REF param) : base_type(COPP_MACRO_STD_MOVE(param)) {}
 task_action_player_kickoff::~task_action_player_kickoff() {}
 
-bool task_action_player_kickoff::is_stream_rpc() const {
-    return false;
-}
+bool task_action_player_kickoff::is_stream_rpc() const { return false; }
 
 int task_action_player_kickoff::operator()() {
-    msg_cref_type req_msg = get_request();
-    const rpc_request_type& req_body = get_request_body();
+    msg_cref_type           req_msg  = get_request();
+    const rpc_request_type &req_body = get_request_body();
 
-    uint64_t player_user_id = req_msg.head().player_user_id();
-    uint32_t player_zone_id = req_msg.head().player_zone_id();
+    uint64_t          player_user_id = req_msg.head().player_user_id();
+    uint32_t          player_zone_id = req_msg.head().player_zone_id();
     const std::string player_open_id = req_msg.head().player_open_id();
-    player::ptr_t user = player_manager::me()->find_as<player>(player_user_id, player_zone_id);
+    player::ptr_t     user           = player_manager::me()->find_as<player>(player_user_id, player_zone_id);
     if (!user) {
         FWLOGERROR("user {}({}:{}) not found, maybe already logout.", player_open_id, player_zone_id, player_user_id);
 
         // 尝试保存用户数据
         hello::table_login user_lg;
-        std::string version;
-        int res = rpc::db::login::get(player_open_id.c_str(), player_zone_id, user_lg, version);
+        std::string        version;
+        int                res = rpc::db::login::get(player_open_id.c_str(), player_zone_id, user_lg, version);
         if (res < 0) {
             FWLOGERROR("user {}({}:{}) try load login data failed.", player_open_id, player_zone_id, player_user_id);
             set_rsp_code(hello::err::EN_DB_REPLY_ERROR);
@@ -57,7 +55,7 @@ int task_action_player_kickoff::operator()() {
 
         if (user_lg.router_server_id() != logic_config::me()->get_self_bus_id()) {
             FWLOGERROR("user {}({}:{}) login pd error(expected: 0x{:x}, real: 0x{:x})", player_open_id, player_zone_id, player_user_id,
-                      user_lg.router_server_id(), logic_config::me()->get_self_bus_id());
+                       logic_config::me()->get_self_bus_id(), user_lg.router_server_id());
             set_rsp_code(hello::EN_ERR_SYSTEM);
             return hello::err::EN_SUCCESS;
         }
