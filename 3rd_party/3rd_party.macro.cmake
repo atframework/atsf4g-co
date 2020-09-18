@@ -15,6 +15,11 @@ include("${PROJECT_3RD_PARTY_ROOT_DIR}/fmtlib/fmtlib.cmake")
 # =========== 3rd_party - libuv ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/libuv/libuv.cmake")
 
+# =========== 3rd_party - libunwind ===========
+if (UNIX AND NOT CYGWIN)
+    include("${PROJECT_3RD_PARTY_ROOT_DIR}/libunwind/libunwind.cmake")
+endif ()
+
 # =========== 3rd_party - rapidjson ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/rapidjson/rapidjson.cmake")
 

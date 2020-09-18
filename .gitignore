@@ -43,6 +43,10 @@
 /3rd_party/libuv/prebuilt
 /3rd_party/libuv/repo-v*
 
+## libunwind
+/3rd_party/libunwind/pkg/
+/3rd_party/libunwind/prebuilt/
+
 ## msgpack
 /3rd_party/msgpack/pkg
 /3rd_party/msgpack/prebuilt

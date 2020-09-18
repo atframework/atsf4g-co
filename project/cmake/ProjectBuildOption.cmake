@@ -9,6 +9,9 @@ option(PROJECT_TEST_ENABLE_BOOST_UNIT_TEST "Enable boost unit test." OFF)
 # 编译的组件
 option(PROJECT_ENABLE_SAMPLE "Enable build sample." OFF)
 option(PROJECT_ENABLE_UNITTEST "Enable build unit test." OFF)
+if(UNIX AND NOT CYGWIN)
+    option(LIBUNWIND_ENABLED "Enable libunwind." ON)
+endif()
 
 # project name
 set(PROJECT_BUILD_NAME "publish" CACHE STRING "Project name")
