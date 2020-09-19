@@ -34,66 +34,10 @@
 # external libs
 ## libiniloader
 
-## fmtlib
-/3rd_party/fmtlib/prebuilt
-/3rd_party/fmtlib/pkg
+# packages and installed
+/3rd_party/packages
+/3rd_party/install
 
-## libuv
-/3rd_party/libuv/pkg
-/3rd_party/libuv/prebuilt
-
-## libunwind
-/3rd_party/libunwind/pkg/
-/3rd_party/libunwind/prebuilt/
-
-## msgpack
-/3rd_party/msgpack/pkg
-/3rd_party/msgpack/prebuilt
-
-## libcurl
-/3rd_party/libcurl/pkg
-/3rd_party/libcurl/prebuilt
-
-## flatbuffers
-/3rd_party/flatbuffers/pkg
-/3rd_party/flatbuffers/prebuilt
-
-## lua
-/3rd_party/lua/repo
-
-## libressl
-/3rd_party/libressl/pkg
-/3rd_party/libressl/prebuilt
-
-## openssl
-/3rd_party/openssl/pkg
-/3rd_party/openssl/prebuilt
-
-## mbedtls
-/3rd_party/mbedtls/pkg
-/3rd_party/mbedtls/prebuilt
-
-## zlib
-/3rd_party/zlib/pkg
-/3rd_party/zlib/prebuilt
-
-## jemalloc
-/3rd_party/jemalloc/pkg
-/3rd_party/jemalloc/prebuilt
-
-## rapidjson
-/3rd_party/rapidjson/repo
-
-## yaml-cpp
-/3rd_party/yaml-cpp/pkg
-/3rd_party/yaml-cpp/prebuilt
-
-## libwebsockets
-/3rd_party/libwebsockets/repo
-/3rd_party/libwebsockets/prebuilt
-
-# python packages
-/3rd_party/python_env/.modules
 .mako_modules-*
 
 ## atframework

@@ -1,22 +1,14 @@
 # =========== 3rdparty xres-code-generator ==================
-if (NOT 3RD_PARTY_XRESCODE_GENERATOR_BASE_DIR)
-    set (3RD_PARTY_XRESCODE_GENERATOR_BASE_DIR ${CMAKE_CURRENT_LIST_DIR})
-endif()
-
-set (3RD_PARTY_XRESCODE_GENERATOR_REPO_DIR "${3RD_PARTY_XRESCODE_GENERATOR_BASE_DIR}/repo")
+set (3RD_PARTY_XRESCODE_GENERATOR_REPO_DIR "${PROJECT_3RD_PARTY_PACKAGE_DIR}/xres-code-generator-repo")
 set (3RD_PARTY_XRESCODE_GENERATOR_PY "${3RD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/xrescode-gen.py")
 
 if (NOT EXISTS ${3RD_PARTY_XRESCODE_GENERATOR_PY})
-    if (PROJECT_GIT_REMOTE_ORIGIN_USE_SSH AND NOT PROJECT_GIT_CLONE_REMOTE_ORIGIN_DISABLE_SSH)
-        set (3RD_PARTY_XRESCODE_GENERATOR_REPO_URL "git@github.com:xresloader/xres-code-generator.git")
-    else ()
-        set (3RD_PARTY_XRESCODE_GENERATOR_REPO_URL "https://github.com/xresloader/xres-code-generator.git")
-    endif ()
     project_git_clone_3rd_party(
-        URL ${3RD_PARTY_XRESCODE_GENERATOR_REPO_URL}
+        URL "https://github.com/xresloader/xres-code-generator.git"
         REPO_DIRECTORY ${3RD_PARTY_XRESCODE_GENERATOR_REPO_DIR}
         DEPTH 200
         # TAG ${3RD_PARTY_LUA_VERSION}
-        WORKING_DIRECTORY ${3RD_PARTY_XRESCODE_GENERATOR_BASE_DIR}
+        WORKING_DIRECTORY ${PROJECT_3RD_PARTY_PACKAGE_DIR}
+        CHECK_PATH "xrescode-gen.py"
     )
 endif ()

@@ -4,17 +4,10 @@ endif()
 
 # =========== 3rdparty openssl ==================
 if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
-    if (NOT 3RD_PARTY_OPENSSL_BASE_DIR)
-        set (3RD_PARTY_OPENSSL_BASE_DIR ${CMAKE_CURRENT_LIST_DIR})
-    endif()
-
-    set (3RD_PARTY_OPENSSL_PKG_DIR "${3RD_PARTY_OPENSSL_BASE_DIR}/pkg")
-
     set (3RD_PARTY_OPENSSL_DEFAULT_VERSION "1.1.1g")
     set (3RD_PARTY_OPENSSL_GITHUB_TAG "OpenSSL_1_1_1g")
-    set (3RD_PARTY_OPENSSL_ROOT_DIR "${CMAKE_CURRENT_LIST_DIR}/prebuilt/${PROJECT_PREBUILT_PLATFORM_NAME}")
     # "no-hw"
-    set (3RD_PARTY_OPENSSL_BUILD_OPTIONS "--prefix=${3RD_PARTY_OPENSSL_ROOT_DIR}" "--openssldir=${3RD_PARTY_OPENSSL_ROOT_DIR}/ssl"
+    set (3RD_PARTY_OPENSSL_BUILD_OPTIONS "--prefix=${PROJECT_3RD_PARTY_INSTALL_DIR}" "--openssldir=${PROJECT_3RD_PARTY_INSTALL_DIR}/ssl"
         "--release" "no-deprecated" "no-dso" "no-tests" "no-external-tests" "no-external-tests" "no-shared"
         "no-aria" "no-bf" "no-blake2" "no-camellia" "no-cast" "no-idea" "no-md2" "no-md4" "no-mdc2" "no-rc2" "no-rc4" "no-rc5" "no-ssl3"
         "enable-static-engine"
@@ -85,18 +78,14 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
     endif ()
 
     if (NOT OPENSSL_FOUND)
-        if(NOT EXISTS ${3RD_PARTY_OPENSSL_PKG_DIR})
-            file(MAKE_DIRECTORY ${3RD_PARTY_OPENSSL_PKG_DIR})
-        endif()
-
-        set (OPENSSL_ROOT_DIR ${3RD_PARTY_OPENSSL_ROOT_DIR})
+        set (OPENSSL_ROOT_DIR ${PROJECT_3RD_PARTY_INSTALL_DIR})
         set (OPENSSL_USE_STATIC_LIBS TRUE)
 
         set(3RD_PARTY_OPENSSL_BACKUP_FIND_ROOT ${CMAKE_FIND_ROOT_PATH})
         list(APPEND CMAKE_FIND_ROOT_PATH ${OPENSSL_ROOT_DIR})
 
-        find_library(3RD_PARTY_OPENSSL_FIND_LIB_CRYPTO NAMES crypto libcrypto PATHS "${3RD_PARTY_OPENSSL_ROOT_DIR}/lib" "${3RD_PARTY_OPENSSL_ROOT_DIR}/lib64" NO_DEFAULT_PATH)
-        find_library(3RD_PARTY_OPENSSL_FIND_LIB_SSL NAMES ssl libssl PATHS "${3RD_PARTY_OPENSSL_ROOT_DIR}/lib" "${3RD_PARTY_OPENSSL_ROOT_DIR}/lib64" NO_DEFAULT_PATH)
+        find_library(3RD_PARTY_OPENSSL_FIND_LIB_CRYPTO NAMES crypto libcrypto PATHS "${PROJECT_3RD_PARTY_INSTALL_DIR}/lib" "${PROJECT_3RD_PARTY_INSTALL_DIR}/lib64" NO_DEFAULT_PATH)
+        find_library(3RD_PARTY_OPENSSL_FIND_LIB_SSL NAMES ssl libssl PATHS "${PROJECT_3RD_PARTY_INSTALL_DIR}/lib" "${PROJECT_3RD_PARTY_INSTALL_DIR}/lib64" NO_DEFAULT_PATH)
 
         if (3RD_PARTY_OPENSSL_FIND_LIB_CRYPTO AND 3RD_PARTY_OPENSSL_FIND_LIB_SSL)
             find_package(OpenSSL)
@@ -124,18 +113,18 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
 
         project_git_clone_3rd_party(
             URL "https://github.com/openssl/openssl.git"
-            REPO_DIRECTORY "${3RD_PARTY_OPENSSL_PKG_DIR}/openssl-${3RD_PARTY_OPENSSL_DEFAULT_VERSION}"
+            REPO_DIRECTORY "${PROJECT_3RD_PARTY_PACKAGE_DIR}/openssl-${3RD_PARTY_OPENSSL_DEFAULT_VERSION}"
             DEPTH 200
             TAG ${3RD_PARTY_OPENSSL_GITHUB_TAG}
-            WORKING_DIRECTORY ${3RD_PARTY_OPENSSL_PKG_DIR}
+            WORKING_DIRECTORY ${PROJECT_3RD_PARTY_PACKAGE_DIR}
         )
 
-        if (NOT EXISTS "${3RD_PARTY_OPENSSL_PKG_DIR}/openssl-${3RD_PARTY_OPENSSL_DEFAULT_VERSION}")
+        if (NOT EXISTS "${PROJECT_3RD_PARTY_PACKAGE_DIR}/openssl-${3RD_PARTY_OPENSSL_DEFAULT_VERSION}")
             EchoWithColor(COLOR RED "-- Dependency: Build openssl failed")
             message(FATAL_ERROR "Dependency: openssl is required")
         endif ()
 
-        set (3RD_PARTY_OPENSSL_BUILD_DIR "${3RD_PARTY_OPENSSL_PKG_DIR}/openssl-${3RD_PARTY_OPENSSL_DEFAULT_VERSION}/build_jobs_${PROJECT_PREBUILT_PLATFORM_NAME}")
+        set (3RD_PARTY_OPENSSL_BUILD_DIR "${PROJECT_3RD_PARTY_PACKAGE_DIR}/openssl-${3RD_PARTY_OPENSSL_DEFAULT_VERSION}/build_jobs_${PROJECT_PREBUILT_PLATFORM_NAME}")
         if (NOT EXISTS ${3RD_PARTY_OPENSSL_BUILD_DIR})
             file(MAKE_DIRECTORY ${3RD_PARTY_OPENSSL_BUILD_DIR})
         endif()
@@ -241,7 +230,7 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
                 "nmake" "PERL=no-perl"
             )
             project_expand_list_for_command_line_to_file("${3RD_PARTY_OPENSSL_BUILD_DIR}/run-build-release.bat"
-                "nmake" "install_sw" "install_ssldirs" # "DESTDIR=${3RD_PARTY_OPENSSL_ROOT_DIR}"
+                "nmake" "install_sw" "install_ssldirs" # "DESTDIR=${PROJECT_3RD_PARTY_INSTALL_DIR}"
             )
 
             # build & install

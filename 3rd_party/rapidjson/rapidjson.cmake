@@ -4,12 +4,8 @@ endif()
 
 if (NOT 3RD_PARTY_RAPIDJSON_INC_DIR)
     # =========== 3rdparty rapidjson ==================
-    if(NOT 3RD_PARTY_RAPIDJSON_BASE_DIR)
-        set (3RD_PARTY_RAPIDJSON_BASE_DIR ${CMAKE_CURRENT_LIST_DIR})
-    endif()
-
-    set (3RD_PARTY_RAPIDJSON_REPO_DIR "${3RD_PARTY_RAPIDJSON_BASE_DIR}/repo")
     set (3RD_PARTY_RAPIDJSON_VERSION master)
+    set (3RD_PARTY_RAPIDJSON_REPO_DIR "${PROJECT_3RD_PARTY_PACKAGE_DIR}/rapidjson-${3RD_PARTY_RAPIDJSON_VERSION}")
 
     if (Rapidjson_ROOT)
         set(RAPIDJSON_ROOT ${Rapidjson_ROOT})
@@ -17,11 +13,6 @@ if (NOT 3RD_PARTY_RAPIDJSON_INC_DIR)
 
     find_package(Rapidjson)
     if(NOT Rapidjson_FOUND)
-        if(NOT EXISTS ${3RD_PARTY_RAPIDJSON_BASE_DIR})
-            message(STATUS "mkdir 3RD_PARTY_RAPIDJSON_BASE_DIR=${3RD_PARTY_RAPIDJSON_BASE_DIR}")
-            file(MAKE_DIRECTORY ${3RD_PARTY_RAPIDJSON_BASE_DIR})
-        endif()
-
         project_git_clone_3rd_party(
             URL "https://github.com/Tencent/rapidjson.git"
             REPO_DIRECTORY ${3RD_PARTY_RAPIDJSON_REPO_DIR}

@@ -4,8 +4,6 @@ if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.10")
 endif()
 
 # =========== 3rdparty jemalloc ==================
-set (3RD_PARTY_JEMALLOC_BASE_DIR "${CMAKE_CURRENT_LIST_DIR}")
-set (3RD_PARTY_JEMALLOC_PKG_DIR "${CMAKE_CURRENT_LIST_DIR}/pkg")
 set (3RD_PARTY_JEMALLOC_PKG_VERSION 5.2.1)
 set (3RD_PARTY_JEMALLOC_MODE "release")
 
@@ -13,15 +11,7 @@ if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
     set (3RD_PARTY_JEMALLOC_MODE "debug")
 endif()
 
-if(JEMALLOC_ROOT)
-    set (3RD_PARTY_JEMALLOC_ROOT_DIR "${JEMALLOC_ROOT}")
-else()
-    set (3RD_PARTY_JEMALLOC_ROOT_DIR "${CMAKE_CURRENT_LIST_DIR}/prebuilt/${PROJECT_PREBUILT_PLATFORM_NAME}/${3RD_PARTY_JEMALLOC_MODE}")
-endif()
-
 if (NOT MSVC)
-    file(MAKE_DIRECTORY ${3RD_PARTY_JEMALLOC_PKG_DIR})
-
     set (3RD_PARTY_JEMALLOC_BUILD_OPTIONS "--enable-debug")
     if ("release" STREQUAL ${3RD_PARTY_JEMALLOC_MODE})
         set (3RD_PARTY_JEMALLOC_BUILD_OPTIONS "")
@@ -33,9 +23,9 @@ if (NOT MSVC)
         CONFIGURE_FLAGS "--enable-static=no --enable-prof --enable-valgrind --enable-lazy-lock --enable-xmalloc --enable-mremap --enable-utrace --enable-munmap ${3RD_PARTY_JEMALLOC_BUILD_OPTIONS}"
         MAKE_FLAGS "-j4"
         # PREBUILD_COMMAND "./autogen.sh"
-        WORKING_DIRECTORY "${3RD_PARTY_JEMALLOC_PKG_DIR}"
-        BUILD_DIRECTORY "${3RD_PARTY_JEMALLOC_PKG_DIR}/jemalloc-${3RD_PARTY_JEMALLOC_PKG_VERSION}/build_jobs_${PROJECT_PREBUILT_PLATFORM_NAME}"
-        PREFIX_DIRECTORY "${3RD_PARTY_JEMALLOC_ROOT_DIR}"
+        WORKING_DIRECTORY "${PROJECT_3RD_PARTY_PACKAGE_DIR}"
+        BUILD_DIRECTORY "${PROJECT_3RD_PARTY_PACKAGE_DIR}/jemalloc-${3RD_PARTY_JEMALLOC_PKG_VERSION}/build_jobs_${PROJECT_PREBUILT_PLATFORM_NAME}"
+        PREFIX_DIRECTORY ${PROJECT_3RD_PARTY_INSTALL_DIR}
         TAR_URL "https://github.com/jemalloc/jemalloc/releases/download/${3RD_PARTY_JEMALLOC_PKG_VERSION}/jemalloc-${3RD_PARTY_JEMALLOC_PKG_VERSION}.tar.bz2"
     )
 

@@ -3,13 +3,7 @@ if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.10")
 endif()
 
 # =========== 3rdparty libwebsockets ==================
-if (NOT 3RD_PARTY_LIBWEBSOCKETS_BASE_DIR)
-    set (3RD_PARTY_LIBWEBSOCKETS_BASE_DIR ${CMAKE_CURRENT_LIST_DIR})
-endif()
-
-set (3RD_PARTY_LIBWEBSOCKETS_ROOT_DIR "${3RD_PARTY_LIBWEBSOCKETS_BASE_DIR}/prebuilt/${PROJECT_PREBUILT_PLATFORM_NAME}")
 set (3RD_PARTY_LIBWEBSOCKETS_VERSION "v4.0.20")
-
 
 function (PROJECT_3RD_PARTY_LIBWEBSOCKETS_PATCH_IMPORTED_TARGET TARGET_NAME)
     unset(PATCH_REMOVE_RULES)
@@ -55,15 +49,15 @@ endif ()
 
 if (NOT Libwebsockets_FOUND AND NOT TARGET websockets AND NOT TARGET websockets_shared)
     # force to use prebuilt when using mingw
-    set(Libwebsockets_ROOT ${3RD_PARTY_LIBWEBSOCKETS_ROOT_DIR})
-    set(Libwebsockets_DIR ${3RD_PARTY_LIBWEBSOCKETS_ROOT_DIR})
+    set(Libwebsockets_ROOT ${PROJECT_3RD_PARTY_INSTALL_DIR})
+    set(Libwebsockets_DIR ${PROJECT_3RD_PARTY_INSTALL_DIR})
 
     if (EXISTS ${Libwebsockets_ROOT})
         find_package(Libwebsockets)
         PROJECT_3RD_PARTY_LIBWEBSOCKETS_IMPORT()
     endif ()
     if (NOT Libwebsockets_FOUND)
-        set (3RD_PARTY_LIBWEBSOCKETS_REPO_DIR "${3RD_PARTY_LIBWEBSOCKETS_BASE_DIR}/repo")
+        set (3RD_PARTY_LIBWEBSOCKETS_REPO_DIR "${PROJECT_3RD_PARTY_PACKAGE_DIR}/libwebsockets-${3RD_PARTY_LIBWEBSOCKETS_VERSION}")
         set (3RD_PARTY_LIBWEBSOCKETS_BUILD_DIR "${3RD_PARTY_LIBWEBSOCKETS_REPO_DIR}/build_jobs_${PROJECT_PREBUILT_PLATFORM_NAME}")
 
         project_git_clone_3rd_party(
@@ -71,7 +65,7 @@ if (NOT Libwebsockets_FOUND AND NOT TARGET websockets AND NOT TARGET websockets_
             REPO_DIRECTORY ${3RD_PARTY_LIBWEBSOCKETS_REPO_DIR}
             DEPTH 200
             TAG ${3RD_PARTY_LIBWEBSOCKETS_VERSION}
-            WORKING_DIRECTORY ${3RD_PARTY_LIBWEBSOCKETS_BASE_DIR}
+            WORKING_DIRECTORY ${PROJECT_3RD_PARTY_PACKAGE_DIR}
         )
 
         if (NOT EXISTS ${3RD_PARTY_LIBWEBSOCKETS_BUILD_DIR})
@@ -234,9 +228,9 @@ if (NOT Libwebsockets_FOUND AND NOT TARGET websockets AND NOT TARGET websockets_
     #                  # "-DLWS_HAVE_X509_get_key_usage=1" "-DLWS_HAVE_SSL_CTX_get0_certificate=1" "-DLWS_HAVE_SSL_get0_alpn_selected=1" "-DLWS_HAVE_SSL_set_alpn_protos=1"
     #                  # "-DLWS_HAVE_SSL_CTX_set_ciphersuites=1" "-DLWS_HAVE_TLS_CLIENT_METHOD=1" "-DLWS_HAVE_TLSV1_2_CLIENT_METHOD=1" "-DLWS_HAVE_HMAC_CTX_new=1"
     #     MAKE_FLAGS "-j8"
-    #     WORKING_DIRECTORY ${3RD_PARTY_LIBWEBSOCKETS_BASE_DIR}
+    #     WORKING_DIRECTORY ${PROJECT_3RD_PARTY_PACKAGE_DIR}
     #     BUILD_DIRECTORY "${3RD_PARTY_LIBWEBSOCKETS_REPO_DIR}/build_jobs_${PROJECT_PREBUILT_PLATFORM_NAME}"
-    #     PREFIX_DIRECTORY "${3RD_PARTY_LIBWEBSOCKETS_ROOT_DIR}"
+    #     PREFIX_DIRECTORY "${PROJECT_3RD_PARTY_INSTALL_DIR}"
     #     SRC_DIRECTORY_NAME "repo"
     #     GIT_URL "https://github.com/warmcat/libwebsockets.git"
     #     GIT_BRANCH ${3RD_PARTY_LIBWEBSOCKETS_VERSION}
