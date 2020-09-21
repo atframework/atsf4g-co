@@ -4,14 +4,7 @@ if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.10")
 endif()
 
 if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
-    if (NOT 3RD_PARTY_LIBRESSL_BASE_DIR)
-        set (3RD_PARTY_LIBRESSL_BASE_DIR ${CMAKE_CURRENT_LIST_DIR})
-    endif()
-
-    set (3RD_PARTY_LIBRESSL_PKG_DIR "${3RD_PARTY_LIBRESSL_BASE_DIR}/pkg")
-
-    set (3RD_PARTY_LIBRESSL_DEFAULT_VERSION "3.2.0")
-    set (3RD_PARTY_LIBRESSL_ROOT_DIR "${CMAKE_CURRENT_LIST_DIR}/prebuilt/${PROJECT_PREBUILT_PLATFORM_NAME}")
+    set (3RD_PARTY_LIBRESSL_DEFAULT_VERSION "3.2.1")
 
     macro(PROJECT_3RD_PARTY_LIBRESSL_IMPORT)
         if(LIBRESSL_FOUND)
@@ -48,30 +41,23 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
         PROJECT_3RD_PARTY_LIBRESSL_IMPORT()
     endif ()
 
-    if (NOT LIBRESSL_FOUND)
-        if(NOT EXISTS ${3RD_PARTY_LIBRESSL_PKG_DIR})
-            file(MAKE_DIRECTORY ${3RD_PARTY_LIBRESSL_PKG_DIR})
-        endif()
+    if (NOT 3RD_PARTY_LIBRESSL_INCLUDE_MODULE_DIR)
+        set (3RD_PARTY_LIBRESSL_INCLUDE_MODULE_DIR TRUE)
+        list(APPEND CMAKE_MODULE_PATH "${PROJECT_3RD_PARTY_PACKAGE_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}")
+    endif ()
 
-        set (OPENSSL_ROOT_DIR ${3RD_PARTY_LIBRESSL_ROOT_DIR})
-        set (LIBRESSL_ROOT_DIR ${3RD_PARTY_LIBRESSL_ROOT_DIR})
-        set(LibreSSL_ROOT ${3RD_PARTY_LIBRESSL_ROOT_DIR})
+    if (NOT LIBRESSL_FOUND)
+        set (OPENSSL_ROOT_DIR ${PROJECT_3RD_PARTY_INSTALL_DIR})
+        set (LIBRESSL_ROOT_DIR ${PROJECT_3RD_PARTY_INSTALL_DIR})
+        set (LibreSSL_ROOT ${PROJECT_3RD_PARTY_INSTALL_DIR})
 
         set(3RD_PARTY_LIBRESSL_BACKUP_FIND_ROOT ${CMAKE_FIND_ROOT_PATH})
-        list(APPEND CMAKE_FIND_ROOT_PATH ${3RD_PARTY_LIBRESSL_ROOT_DIR})
+        list(APPEND CMAKE_FIND_ROOT_PATH ${PROJECT_3RD_PARTY_INSTALL_DIR})
 
-        find_library(3RD_PARTY_LIBRESSL_FIND_LIB_CRYPTO NAMES crypto libcrypto PATHS "${3RD_PARTY_LIBRESSL_ROOT_DIR}/lib" "${3RD_PARTY_LIBRESSL_ROOT_DIR}/lib64" NO_DEFAULT_PATH)
-        find_library(3RD_PARTY_LIBRESSL_FIND_LIB_SSL NAMES ssl libssl PATHS "${3RD_PARTY_LIBRESSL_ROOT_DIR}/lib" "${3RD_PARTY_LIBRESSL_ROOT_DIR}/lib64" NO_DEFAULT_PATH)
-        find_library(3RD_PARTY_LIBRESSL_FIND_LIB_TLS NAMES tls libtls PATHS "${3RD_PARTY_LIBRESSL_ROOT_DIR}/lib" "${3RD_PARTY_LIBRESSL_ROOT_DIR}/lib64" NO_DEFAULT_PATH)
-        
-        if (3RD_PARTY_LIBRESSL_FIND_LIB_CRYPTO AND 3RD_PARTY_LIBRESSL_FIND_LIB_SSL AND 3RD_PARTY_LIBRESSL_FIND_LIB_TLS)
+        if (EXISTS "${PROJECT_3RD_PARTY_PACKAGE_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}")
             find_package(LibreSSL)
-        endif ()
-        unset(3RD_PARTY_LIBRESSL_FIND_LIB_CRYPTO)
-        unset(3RD_PARTY_LIBRESSL_FIND_LIB_SSL)
-        unset(3RD_PARTY_LIBRESSL_FIND_LIB_TLS)
-
-        PROJECT_3RD_PARTY_LIBRESSL_IMPORT()
+            PROJECT_3RD_PARTY_LIBRESSL_IMPORT()
+        endif()
     endif()
 
     if (NOT LIBRESSL_FOUND)
@@ -84,36 +70,37 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
         unset(OPENSSL_SSL_LIBRARIES CACHE)
         unset(OPENSSL_LIBRARIES CACHE)
         unset(OPENSSL_VERSION CACHE)
+        
         # patch for old build script
-        if (EXISTS "${3RD_PARTY_LIBRESSL_PKG_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}/CMakeCache.txt")
-            execute_process(COMMAND ${CMAKE_COMMAND} -E remove_directory "${3RD_PARTY_LIBRESSL_PKG_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}"
-                WORKING_DIRECTORY ${3RD_PARTY_LIBRESSL_PKG_DIR}
+        if (EXISTS "${PROJECT_3RD_PARTY_PACKAGE_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}/CMakeCache.txt")
+            execute_process(COMMAND ${CMAKE_COMMAND} -E remove_directory "${PROJECT_3RD_PARTY_PACKAGE_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}"
+                WORKING_DIRECTORY ${PROJECT_3RD_PARTY_PACKAGE_DIR}
             )
         endif ()
 
-        if (NOT EXISTS "${3RD_PARTY_LIBRESSL_PKG_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}")
-            if (NOT EXISTS "${3RD_PARTY_LIBRESSL_PKG_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}.tar.gz")
-                FindConfigurePackageDownloadFile("https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}.tar.gz" "${3RD_PARTY_LIBRESSL_PKG_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}.tar.gz")
+        if (NOT EXISTS "${PROJECT_3RD_PARTY_PACKAGE_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}")
+            if (NOT EXISTS "${PROJECT_3RD_PARTY_PACKAGE_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}.tar.gz")
+                FindConfigurePackageDownloadFile("https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}.tar.gz" "${PROJECT_3RD_PARTY_PACKAGE_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}.tar.gz")
             endif ()
 
-            execute_process(COMMAND ${CMAKE_COMMAND} -E tar xvf "${3RD_PARTY_LIBRESSL_PKG_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}.tar.gz"
-                WORKING_DIRECTORY ${3RD_PARTY_LIBRESSL_PKG_DIR}
+            execute_process(COMMAND ${CMAKE_COMMAND} -E tar xvf "${PROJECT_3RD_PARTY_PACKAGE_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}.tar.gz"
+                WORKING_DIRECTORY ${PROJECT_3RD_PARTY_PACKAGE_DIR}
             )
         endif ()
 
-        if (NOT EXISTS "${3RD_PARTY_LIBRESSL_PKG_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}")
+        if (NOT EXISTS "${PROJECT_3RD_PARTY_PACKAGE_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}")
             EchoWithColor(COLOR RED "-- Dependency: Build libressl failed")
             message(FATAL_ERROR "Dependency: LibreSSL is required")
         endif ()
 
         unset(3RD_PARTY_LIBRESSL_BUILD_FLAGS)
         list(APPEND 3RD_PARTY_LIBRESSL_BUILD_FLAGS 
-            ${CMAKE_COMMAND} "${3RD_PARTY_LIBRESSL_PKG_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}"
-            "-DCMAKE_INSTALL_PREFIX=${3RD_PARTY_LIBRESSL_ROOT_DIR}" "-DLIBRESSL_TESTS=OFF" "-DBUILD_SHARED_LIBS=NO"
+            ${CMAKE_COMMAND} "${PROJECT_3RD_PARTY_PACKAGE_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}"
+            "-DCMAKE_INSTALL_PREFIX=${PROJECT_3RD_PARTY_INSTALL_DIR}" "-DLIBRESSL_TESTS=OFF" "-DBUILD_SHARED_LIBS=NO"
         )
         project_build_tools_append_cmake_options_for_lib(3RD_PARTY_LIBRESSL_BUILD_FLAGS)
 
-        set (3RD_PARTY_LIBRESSL_BUILD_DIR "${3RD_PARTY_LIBRESSL_PKG_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}/build_jobs_dir_${PROJECT_PREBUILT_PLATFORM_NAME}")
+        set (3RD_PARTY_LIBRESSL_BUILD_DIR "${PROJECT_3RD_PARTY_PACKAGE_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}/build_jobs_dir_${PROJECT_PREBUILT_PLATFORM_NAME}")
         if (NOT EXISTS ${3RD_PARTY_LIBRESSL_BUILD_DIR})
             file(MAKE_DIRECTORY ${3RD_PARTY_LIBRESSL_BUILD_DIR})
         endif()
@@ -158,9 +145,6 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
             project_expand_list_for_command_line_to_file("${3RD_PARTY_LIBRESSL_BUILD_DIR}/run-cmake.bat"
                 ${3RD_PARTY_LIBRESSL_BUILD_FLAGS}
             )
-            project_expand_list_for_command_line_to_file("${3RD_PARTY_LIBRESSL_BUILD_DIR}/run-build-debug.bat"
-                ${CMAKE_COMMAND} --build . --target install --config Debug "-j"
-            )
             project_expand_list_for_command_line_to_file("${3RD_PARTY_LIBRESSL_BUILD_DIR}/run-build-release.bat"
                 ${CMAKE_COMMAND} --build . --target install --config Release "-j"
             )
@@ -193,7 +177,52 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
         unset(LIBRESSL_SSL_LIBRARY CACHE)
         unset(LIBRESSL_TLS_LIBRARY CACHE)
         unset(LIBRESSL_LIBRARIES CACHE)
+        unset(LIBRESSL_LIBRARIES)
         unset(LIBRESSL_VERSION CACHE)
+
+        if (WIN32)
+            # Patch and remove postfix file
+            file(GLOB LIBRESSL_PATCH_WIN32_FILE_NAMES "${PROJECT_3RD_PARTY_INSTALL_DIR}/lib/crypto-*.lib")
+            if (LIBRESSL_PATCH_WIN32_FILE_NAMES)
+                list(GET LIBRESSL_PATCH_WIN32_FILE_NAMES 0 LIBRESSL_PATCH_WIN32_FILE_NAME)
+                file(RENAME ${LIBRESSL_PATCH_WIN32_FILE_NAME} "${PROJECT_3RD_PARTY_INSTALL_DIR}/lib/crypto.lib")
+            endif ()
+            unset(LIBRESSL_PATCH_WIN32_FILE_NAMES)
+            file(GLOB LIBRESSL_PATCH_WIN32_FILE_NAMES "${PROJECT_3RD_PARTY_INSTALL_DIR}/bin/crypto-*.dll")
+            if (LIBRESSL_PATCH_WIN32_FILE_NAMES)
+                list(GET LIBRESSL_PATCH_WIN32_FILE_NAMES 0 LIBRESSL_PATCH_WIN32_FILE_NAME)
+                file(RENAME ${LIBRESSL_PATCH_WIN32_FILE_NAME} "${PROJECT_3RD_PARTY_INSTALL_DIR}/bin/crypto.dll")
+            endif ()
+            unset(LIBRESSL_PATCH_WIN32_FILE_NAMES)
+
+            file(GLOB LIBRESSL_PATCH_WIN32_FILE_NAMES "${PROJECT_3RD_PARTY_INSTALL_DIR}/lib/ssl-*.lib")
+            if (LIBRESSL_PATCH_WIN32_FILE_NAMES)
+                list(GET LIBRESSL_PATCH_WIN32_FILE_NAMES 0 LIBRESSL_PATCH_WIN32_FILE_NAME)
+                file(RENAME ${LIBRESSL_PATCH_WIN32_FILE_NAME} "${PROJECT_3RD_PARTY_INSTALL_DIR}/lib/ssl.lib")
+            endif ()
+            unset(LIBRESSL_PATCH_WIN32_FILE_NAMES)
+            file(GLOB LIBRESSL_PATCH_WIN32_FILE_NAMES "${PROJECT_3RD_PARTY_INSTALL_DIR}/bin/ssl-*.dll")
+            if (LIBRESSL_PATCH_WIN32_FILE_NAMES)
+                list(GET LIBRESSL_PATCH_WIN32_FILE_NAMES 0 LIBRESSL_PATCH_WIN32_FILE_NAME)
+                file(RENAME ${LIBRESSL_PATCH_WIN32_FILE_NAME} "${PROJECT_3RD_PARTY_INSTALL_DIR}/bin/ssl.dll")
+            endif ()
+            unset(LIBRESSL_PATCH_WIN32_FILE_NAMES)
+
+            file(GLOB LIBRESSL_PATCH_WIN32_FILE_NAMES "${PROJECT_3RD_PARTY_INSTALL_DIR}/lib/tls-*.lib")
+            if (LIBRESSL_PATCH_WIN32_FILE_NAMES)
+                list(GET LIBRESSL_PATCH_WIN32_FILE_NAMES 0 LIBRESSL_PATCH_WIN32_FILE_NAME)
+                file(RENAME ${LIBRESSL_PATCH_WIN32_FILE_NAME} "${PROJECT_3RD_PARTY_INSTALL_DIR}/lib/tls.lib")
+            endif ()
+            unset(LIBRESSL_PATCH_WIN32_FILE_NAMES)
+            file(GLOB LIBRESSL_PATCH_WIN32_FILE_NAMES "${PROJECT_3RD_PARTY_INSTALL_DIR}/bin/tls-*.dll")
+            if (LIBRESSL_PATCH_WIN32_FILE_NAMES)
+                list(GET LIBRESSL_PATCH_WIN32_FILE_NAMES 0 LIBRESSL_PATCH_WIN32_FILE_NAME)
+                file(RENAME ${LIBRESSL_PATCH_WIN32_FILE_NAME} "${PROJECT_3RD_PARTY_INSTALL_DIR}/bin/tls.dll")
+            endif ()
+            unset(LIBRESSL_PATCH_WIN32_FILE_NAMES)
+
+            unset(LIBRESSL_PATCH_WIN32_FILE_NAME)
+        endif()
         find_package(LibreSSL)
         PROJECT_3RD_PARTY_LIBRESSL_IMPORT()
     endif ()
@@ -202,9 +231,7 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
         EchoWithColor(COLOR GREEN "-- Dependency: Libressl found.(${LIBRESSL_VERSION})")
     else()
         EchoWithColor(COLOR RED "-- Dependency: Libressl is required")
-        message(FATAL_ERROR "must at least have one of openssl,libressl or mbedtls")
     endif()
-
 
     if (3RD_PARTY_LIBRESSL_BACKUP_FIND_ROOT)
         set(CMAKE_FIND_ROOT_PATH ${3RD_PARTY_LIBRESSL_BACKUP_FIND_ROOT})

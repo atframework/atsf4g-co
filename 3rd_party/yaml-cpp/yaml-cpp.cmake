@@ -19,23 +19,14 @@ endif ()
 
 # =========== 3rdparty yaml-cpp ==================
 if (NOT TARGET yaml-cpp)
-    if (NOT 3RD_PARTY_YAML_CPP_BASE_DIR)
-        set (3RD_PARTY_YAML_CPP_BASE_DIR ${CMAKE_CURRENT_LIST_DIR})
-    endif()
-
-    set (3RD_PARTY_YAML_CPP_PKG_DIR "${3RD_PARTY_YAML_CPP_BASE_DIR}/pkg")
     set (3RD_PARTY_YAML_CPP_DEFAULT_VERSION "0.6.3")
-    
-    if(NOT EXISTS ${3RD_PARTY_YAML_CPP_PKG_DIR})
-        file(MAKE_DIRECTORY ${3RD_PARTY_YAML_CPP_PKG_DIR})
-    endif()
 
     if (PROJECT_GIT_REMOTE_ORIGIN_USE_SSH AND NOT PROJECT_GIT_CLONE_REMOTE_ORIGIN_DISABLE_SSH)
         set (3RD_PARTY_YAML_CPP_REPO_URL "git@github.com:jbeder/yaml-cpp.git")
     else ()
         set (3RD_PARTY_YAML_CPP_REPO_URL "https://github.com/jbeder/yaml-cpp.git")
     endif ()
-    set(3RD_PARTY_YAML_CPP_REPO_DIR "${3RD_PARTY_YAML_CPP_PKG_DIR}/yaml-cpp-${3RD_PARTY_YAML_CPP_DEFAULT_VERSION}")
+    set(3RD_PARTY_YAML_CPP_REPO_DIR "${PROJECT_3RD_PARTY_PACKAGE_DIR}/yaml-cpp-${3RD_PARTY_YAML_CPP_DEFAULT_VERSION}")
     if(NOT EXISTS "${3RD_PARTY_YAML_CPP_REPO_DIR}/CMakeLists.txt")
         if(EXISTS ${3RD_PARTY_YAML_CPP_REPO_DIR})
             file(REMOVE_RECURSE ${3RD_PARTY_YAML_CPP_REPO_DIR})
@@ -47,7 +38,7 @@ if (NOT TARGET yaml-cpp)
         REPO_DIRECTORY ${3RD_PARTY_YAML_CPP_REPO_DIR}
         DEPTH 200
         TAG "yaml-cpp-${3RD_PARTY_YAML_CPP_DEFAULT_VERSION}"
-        WORKING_DIRECTORY ${3RD_PARTY_YAML_CPP_PKG_DIR}
+        WORKING_DIRECTORY ${PROJECT_3RD_PARTY_PACKAGE_DIR}
     )
 
     set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "Enable testing for yaml-cpp")

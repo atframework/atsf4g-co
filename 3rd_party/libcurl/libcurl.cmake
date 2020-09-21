@@ -3,14 +3,6 @@ if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.10")
 endif()
 # =========== 3rdparty libcurl ==================
 if (NOT CURL_EXECUTABLE)
-    if(NOT 3RD_PARTY_LIBCURL_BASE_DIR)
-        set (3RD_PARTY_LIBCURL_BASE_DIR ${CMAKE_CURRENT_LIST_DIR})
-    endif()
-
-    set (3RD_PARTY_LIBCURL_PKG_DIR "${3RD_PARTY_LIBCURL_BASE_DIR}/pkg")
-
-    set (3RD_PARTY_LIBCURL_ROOT_DIR "${CMAKE_CURRENT_LIST_DIR}/prebuilt/${PROJECT_PREBUILT_PLATFORM_NAME}")
-
     set (3RD_PARTY_LIBCURL_VERSION "7.71.1")
     set (3RD_PARTY_LIBCURL_PKG_NAME "curl-${3RD_PARTY_LIBCURL_VERSION}")
     set (3RD_PARTY_LIBCURL_SRC_URL_PREFIX "http://curl.haxx.se/download")
@@ -19,6 +11,13 @@ if (NOT CURL_EXECUTABLE)
         if (CURL_FOUND)
             if (TARGET CURL::libcurl)
                 list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES CURL::libcurl)
+                if (LIBRESSL_FOUND AND TARGET LibreSSL::Crypto AND TARGET LibreSSL::SSL)
+                    project_build_tools_patch_imported_link_interface_libraries(
+                        CURL::libcurl
+                        REMOVE_LIBRARIES "OpenSSL::SSL;OpenSSL::Crypto"
+                        ADD_LIBRARIES "LibreSSL::SSL;LibreSSL::Crypto"
+                    )
+                endif()
             else()
                 if (CURL_INCLUDE_DIRS)
                     list(APPEND 3RD_PARTY_PUBLIC_INCLUDE_DIRS ${CURL_INCLUDE_DIRS})
@@ -67,20 +66,12 @@ if (NOT CURL_EXECUTABLE)
             set(CURL_ROOT ${LIBCURL_ROOT})
         endif()
 
-        if (LIBCURL_ROOT)
-            set (3RD_PARTY_LIBCURL_ROOT_DIR ${LIBCURL_ROOT})
-        else()
-            set(Libcurl_ROOT ${3RD_PARTY_LIBCURL_ROOT_DIR})
-            set(LIBCURL_ROOT ${3RD_PARTY_LIBCURL_ROOT_DIR})
-        endif()
+        set(Libcurl_ROOT ${PROJECT_3RD_PARTY_INSTALL_DIR})
+        set(LIBCURL_ROOT ${PROJECT_3RD_PARTY_INSTALL_DIR})
+
         set(CURL_ROOT ${LIBCURL_ROOT})
         set(3RD_PARTY_LIBCURL_BACKUP_FIND_ROOT ${CMAKE_FIND_ROOT_PATH})
         list(APPEND CMAKE_FIND_ROOT_PATH ${CURL_ROOT})
-
-        if ( NOT EXISTS ${3RD_PARTY_LIBCURL_PKG_DIR})
-            message(STATUS "mkdir 3RD_PARTY_LIBCURL_PKG_DIR=${3RD_PARTY_LIBCURL_PKG_DIR}")
-            file(MAKE_DIRECTORY ${3RD_PARTY_LIBCURL_PKG_DIR})
-        endif ()
 
         unset(3RD_PARTY_LIBCURL_SSL_BACKEND)
         if (OPENSSL_FOUND)
@@ -102,9 +93,9 @@ if (NOT CURL_EXECUTABLE)
             PACKAGE CURL
             BUILD_WITH_CMAKE
             CMAKE_FLAGS "-DBUILD_SHARED_LIBS=NO" "-DCMAKE_POSITION_INDEPENDENT_CODE=YES" ${3RD_PARTY_LIBCURL_SSL_BACKEND}
-            WORKING_DIRECTORY "${3RD_PARTY_LIBCURL_PKG_DIR}"
-            BUILD_DIRECTORY "${3RD_PARTY_LIBCURL_PKG_DIR}/${3RD_PARTY_LIBCURL_PKG_NAME}/build_jobs_${PROJECT_PREBUILT_PLATFORM_NAME}"
-            PREFIX_DIRECTORY "${3RD_PARTY_LIBCURL_ROOT_DIR}"
+            WORKING_DIRECTORY "${PROJECT_3RD_PARTY_PACKAGE_DIR}"
+            BUILD_DIRECTORY "${PROJECT_3RD_PARTY_PACKAGE_DIR}/${3RD_PARTY_LIBCURL_PKG_NAME}/build_jobs_${PROJECT_PREBUILT_PLATFORM_NAME}"
+            PREFIX_DIRECTORY "${PROJECT_3RD_PARTY_INSTALL_DIR}"
             TAR_URL "${3RD_PARTY_LIBCURL_SRC_URL_PREFIX}/${3RD_PARTY_LIBCURL_PKG_NAME}.tar.gz"
             ZIP_URL "${3RD_PARTY_LIBCURL_SRC_URL_PREFIX}/${3RD_PARTY_LIBCURL_PKG_NAME}.zip"
         )
