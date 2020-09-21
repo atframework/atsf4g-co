@@ -23,6 +23,7 @@ endmacro()
 
 # if (VCPKG_TOOLCHAIN)
 #     find_package(hiredis QUIET)
+#     find_package(hiredis_ssl QUIET NO_MODULE)
 #     PROJECT_3RD_PARTY_REDIS_HIREDIS_IMPORT()
 # endif ()
 
@@ -54,6 +55,9 @@ if (NOT TARGET hiredis::hiredis_ssl_static AND NOT TARGET hiredis::hiredis_stati
         message(FATAL_ERROR "hiredis not found")
     endif()
 
+    if (TARGET hiredis::hiredis_static OR TARGET hiredis::hiredis)
+        find_package(hiredis_ssl QUIET NO_MODULE)
+    endif()
     PROJECT_3RD_PARTY_REDIS_HIREDIS_IMPORT()
 endif ()
 
@@ -80,10 +84,6 @@ if (NOT TARGET hiredis-happ)
     if (NOT TARGET hiredis-happ)
         EchoWithColor(COLOR RED "-- Dependency: hiredis-happ not found")
         message(FATAL_ERROR "hiredis-happ not found")
-    else ()
-        if (TARGET hiredis::hiredis_static OR TARGET hiredis::hiredis)
-            find_package(hiredis_ssl QUIET NO_MODULE)
-        endif()
     endif ()
 
     list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES hiredis-happ)
