@@ -58,7 +58,7 @@ if (NOT 3RD_PARTY_PROTOBUF_BIN_PROTOC OR (NOT 3RD_PARTY_PROTOBUF_LINK_NAME AND N
     include(ProjectBuildTools)
 
     if (VCPKG_TOOLCHAIN)
-        find_package(Protobuf)
+        find_package(Protobuf QUIET)
         PROJECT_LIBATBUS_3RD_PARTY_PROTOBUF_IMPORT()
     endif ()
 
@@ -250,7 +250,7 @@ if (NOT 3RD_PARTY_PROTOBUF_BIN_PROTOC OR (NOT 3RD_PARTY_PROTOBUF_LINK_NAME AND N
             unset(3RD_PARTY_PROTOBUF_FLAG_OPTIONS)
         endif ()
 
-        find_package(Protobuf)
+        find_package(Protobuf QUIET)
         PROJECT_LIBATBUS_3RD_PARTY_PROTOBUF_IMPORT()
     endif ()
 

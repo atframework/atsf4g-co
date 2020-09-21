@@ -22,7 +22,7 @@ endmacro()
 
 if (NOT TARGET lua AND NOT (3RD_PARTY_LUA_INC_DIR AND 3RD_PARTY_LUA_LINK_NAME))
     if (VCPKG_TOOLCHAIN)
-        find_package(Lua)
+        find_package(Lua QUIET)
         PROJECT_3RD_PARTY_LUA_IMPORT()
     endif ()
 endif()

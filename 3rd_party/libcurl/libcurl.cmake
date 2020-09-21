@@ -50,7 +50,7 @@ if (NOT CURL_EXECUTABLE)
     endmacro()
 
     if (VCPKG_TOOLCHAIN)
-        find_package(CURL)
+        find_package(CURL QUIET)
         PROJECT_3RD_PARTY_LIBCURL_IMPORT()
     endif ()
 

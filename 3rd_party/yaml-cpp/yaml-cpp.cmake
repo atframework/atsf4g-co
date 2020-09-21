@@ -13,7 +13,7 @@ macro(PROJECT_3RD_PARTY_YAML_CPP_IMPORT)
 endmacro()
 
 if (VCPKG_TOOLCHAIN)
-    find_package(yaml-cpp)
+    find_package(yaml-cpp QUIET)
     PROJECT_3RD_PARTY_YAML_CPP_IMPORT()
 endif ()
 

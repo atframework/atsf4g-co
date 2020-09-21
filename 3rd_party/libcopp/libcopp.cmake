@@ -11,7 +11,7 @@ else()
     set (3RD_PARTY_LIBCOPP_ROOT_DIR ${3RD_PARTY_LIBCOPP_REPO_DIR})
 endif()
 
-find_package(Libcopp)
+find_package(Libcopp QUIET)
 if (Libcopp_FOUND)
     set (3RD_PARTY_LIBCOPP_INC_DIR ${Libcopp_INCLUDE_DIRS})
     set (3RD_PARTY_LIBCOPP_LINK_NAME ${Libcopp_LIBRARIES} ${Libcotask_LIBRARIES})

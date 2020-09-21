@@ -15,7 +15,7 @@ macro(PROJECT_3RD_PARTY_FLATBUFFERS_IMPORT)
 endmacro()
 
 if (VCPKG_TOOLCHAIN)
-    find_package(Flatbuffers)
+    find_package(Flatbuffers QUIET)
     PROJECT_3RD_PARTY_FLATBUFFERS_IMPORT()
 endif ()
 

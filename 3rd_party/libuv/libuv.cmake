@@ -37,7 +37,7 @@ macro(PROJECT_3RD_PARTY_LIBUV_IMPORT)
 endmacro()
 
 if (VCPKG_TOOLCHAIN)
-    find_package(Libuv)
+    find_package(Libuv QUIET)
     PROJECT_3RD_PARTY_LIBUV_IMPORT()
 endif ()
 

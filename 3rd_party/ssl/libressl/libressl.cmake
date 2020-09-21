@@ -37,7 +37,7 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
     endmacro()
 
     if (VCPKG_TOOLCHAIN)
-        find_package(LibreSSL)
+        find_package(LibreSSL QUIET)
         PROJECT_3RD_PARTY_LIBRESSL_IMPORT()
     endif ()
 
@@ -55,7 +55,7 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
         list(APPEND CMAKE_FIND_ROOT_PATH ${PROJECT_3RD_PARTY_INSTALL_DIR})
 
         if (EXISTS "${PROJECT_3RD_PARTY_PACKAGE_DIR}/libressl-${3RD_PARTY_LIBRESSL_DEFAULT_VERSION}")
-            find_package(LibreSSL)
+            find_package(LibreSSL QUIET)
             PROJECT_3RD_PARTY_LIBRESSL_IMPORT()
         endif()
     endif()
