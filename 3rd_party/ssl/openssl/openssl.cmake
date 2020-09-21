@@ -73,7 +73,7 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
     endmacro()
 
     if (VCPKG_TOOLCHAIN)
-        find_package(OpenSSL)
+        find_package(OpenSSL QUIET)
         PROJECT_3RD_PARTY_OPENSSL_IMPORT()
     endif ()
 
@@ -88,7 +88,7 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
         find_library(3RD_PARTY_OPENSSL_FIND_LIB_SSL NAMES ssl libssl PATHS "${PROJECT_3RD_PARTY_INSTALL_DIR}/lib" "${PROJECT_3RD_PARTY_INSTALL_DIR}/lib64" NO_DEFAULT_PATH)
 
         if (3RD_PARTY_OPENSSL_FIND_LIB_CRYPTO AND 3RD_PARTY_OPENSSL_FIND_LIB_SSL)
-            find_package(OpenSSL)
+            find_package(OpenSSL QUIET)
         else ()
             message(STATUS "3RD_PARTY_OPENSSL_FIND_LIB_CRYPTO -- ${3RD_PARTY_OPENSSL_FIND_LIB_CRYPTO}")
             message(STATUS "3RD_PARTY_OPENSSL_FIND_LIB_SSL    -- ${3RD_PARTY_OPENSSL_FIND_LIB_SSL}")

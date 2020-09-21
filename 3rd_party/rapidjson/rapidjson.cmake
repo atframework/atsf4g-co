@@ -11,7 +11,7 @@ if (NOT 3RD_PARTY_RAPIDJSON_INC_DIR)
         set(RAPIDJSON_ROOT ${Rapidjson_ROOT})
     endif()
 
-    find_package(Rapidjson)
+    find_package(Rapidjson QUIET)
     if(NOT Rapidjson_FOUND)
         project_git_clone_3rd_party(
             URL "https://github.com/Tencent/rapidjson.git"

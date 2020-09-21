@@ -35,7 +35,7 @@ if (NOT 3RD_PARTY_MBEDTLS_FOUND)
     endmacro()
 
     if (VCPKG_TOOLCHAIN)
-        find_package(mbedtls)
+        find_package(mbedtls QUIET)
         PROJECT_3RD_PARTY_MBEDTLS_IMPORT()
     endif ()
 

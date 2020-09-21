@@ -43,7 +43,7 @@ macro(PROJECT_3RD_PARTY_LIBWEBSOCKETS_IMPORT)
 endmacro()
 
 if (VCPKG_TOOLCHAIN)
-    find_package(Libwebsockets)
+    find_package(Libwebsockets QUIET)
     PROJECT_3RD_PARTY_LIBWEBSOCKETS_IMPORT()
 endif ()
 
@@ -53,7 +53,7 @@ if (NOT Libwebsockets_FOUND AND NOT TARGET websockets AND NOT TARGET websockets_
     set(Libwebsockets_DIR ${PROJECT_3RD_PARTY_INSTALL_DIR})
 
     if (EXISTS ${Libwebsockets_ROOT})
-        find_package(Libwebsockets)
+        find_package(Libwebsockets QUIET)
         PROJECT_3RD_PARTY_LIBWEBSOCKETS_IMPORT()
     endif ()
     if (NOT Libwebsockets_FOUND)

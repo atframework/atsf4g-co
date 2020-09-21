@@ -21,7 +21,7 @@ macro(PROJECT_3RD_PARTY_ZLIB_IMPORT)
 endmacro()
 
 if (VCPKG_TOOLCHAIN)
-    find_package(ZLIB)
+    find_package(ZLIB QUIET)
     PROJECT_3RD_PARTY_ZLIB_IMPORT()
 endif ()
 
