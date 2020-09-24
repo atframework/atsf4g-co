@@ -7,7 +7,3 @@
 [submodule "atframework/libatapp/repo"]
 	path = atframework/libatapp/repo
 	url = https://github.com/atframework/libatapp.git
-[submodule "3rd_party/libcopp/repo"]
-	path = 3rd_party/libcopp/repo
-	url = https://github.com/owt5008137/libcopp.git
-	branch = v2

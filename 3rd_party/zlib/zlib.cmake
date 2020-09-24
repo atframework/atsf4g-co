@@ -3,30 +3,30 @@ if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.10")
 endif()
 
 # =========== 3rdparty zlib ==================
-set (3RD_PARTY_ZLIB_DEFAULT_VERSION "1.2.11")
-
-macro(PROJECT_3RD_PARTY_ZLIB_IMPORT)
-    if (ZLIB_FOUND)
-        # find static library first
-        EchoWithColor(COLOR GREEN "-- Dependency: zlib found.(${ZLIB_LIBRARIES})")
-
-        if (ZLIB_INCLUDE_DIRS)
-            list(APPEND 3RD_PARTY_PUBLIC_INCLUDE_DIRS ${ZLIB_INCLUDE_DIRS})
-        endif ()
-
-        if(ZLIB_LIBRARIES)
-            list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES ${ZLIB_LIBRARIES})
-        endif()
-    endif()
-endmacro()
-
-if (VCPKG_TOOLCHAIN)
-    find_package(ZLIB QUIET)
-    PROJECT_3RD_PARTY_ZLIB_IMPORT()
-endif ()
-
 # force to use prebuilt when using mingw
 if (NOT ZLIB_FOUND)
+    set (3RD_PARTY_ZLIB_DEFAULT_VERSION "1.2.11")
+
+    macro(PROJECT_3RD_PARTY_ZLIB_IMPORT)
+        if (ZLIB_FOUND)
+            # find static library first
+            EchoWithColor(COLOR GREEN "-- Dependency: zlib found.(${ZLIB_LIBRARIES})")
+
+            if (ZLIB_INCLUDE_DIRS)
+                list(APPEND 3RD_PARTY_PUBLIC_INCLUDE_DIRS ${ZLIB_INCLUDE_DIRS})
+            endif ()
+
+            if(ZLIB_LIBRARIES)
+                list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES ${ZLIB_LIBRARIES})
+            endif()
+        endif()
+    endmacro()
+
+    if (VCPKG_TOOLCHAIN)
+        find_package(ZLIB QUIET)
+        PROJECT_3RD_PARTY_ZLIB_IMPORT()
+    endif ()
+
     set(ZLIB_ROOT ${PROJECT_3RD_PARTY_INSTALL_DIR})
 
     FindConfigurePackage(

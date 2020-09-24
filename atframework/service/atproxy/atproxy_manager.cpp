@@ -6,7 +6,9 @@
 namespace atframe {
     namespace proxy {
         static const std::string* next_listen_address(atproxy_manager::node_info_t& node_info) {
-
+            if (node_info.round_robin_index < 0) {
+                node_info.round_robin_index = 0;
+            }
             if (node_info.etcd_node.node_discovery.gateway_size() > 0) {
                 if (node_info.round_robin_index > node_info.etcd_node.node_discovery.gateway_size()) {
                     node_info.round_robin_index %= node_info.etcd_node.node_discovery.gateway_size();

@@ -23,9 +23,7 @@ endif()
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/fmtlib/fmtlib.cmake")
 
 # =========== 3rd_party - zlib ===========
-# if (NOT WIN32)
-    include("${PROJECT_3RD_PARTY_ROOT_DIR}/zlib/zlib.cmake")
-# endif()
+include("${PROJECT_3RD_PARTY_ROOT_DIR}/zlib/zlib.cmake")
 
 # =========== 3rd_party - libuv ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/libuv/libuv.cmake")
@@ -43,6 +41,10 @@ include("${PROJECT_3RD_PARTY_ROOT_DIR}/flatbuffers/flatbuffers.cmake")
 
 # =========== 3rd_party - protobuf ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/protobuf/protobuf.cmake")
+
+# =========== 3rd_party - grpc ===========
+# Must be imported after ssl,protobuf,zlib
+include("${PROJECT_3RD_PARTY_ROOT_DIR}/grpc/import.cmake")
 
 # =========== 3rd_party - crypto ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/ssl/port.cmake")

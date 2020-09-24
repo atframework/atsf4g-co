@@ -17,8 +17,8 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
             set (OPENSSL_LIBRARIES ${LIBRESSL_LIBRARIES} CACHE STRING "libressl all libs" FORCE)
             set (OPENSSL_VERSION "1.1.0" CACHE STRING "openssl version of libressl" FORCE)
 
-            set (OpenSSL::Crypto LibreSSL::Crypto)
-            set (OpenSSL::SSL LibreSSL::SSL)
+            add_library (OpenSSL::Crypto ALIAS LibreSSL::Crypto)
+            add_library (OpenSSL::SSL ALIAS LibreSSL::SSL)
 
             if (TARGET LibreSSL::TLS)
                 list(APPEND 3RD_PARTY_CRYPT_LINK_NAME LibreSSL::TLS)
