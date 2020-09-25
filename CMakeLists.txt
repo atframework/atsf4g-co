@@ -136,20 +136,22 @@ if(CYGWIN OR UNIX OR APPLE)
     )
 endif()
 
-find_program (POWERSHELL_BIN NAMES pwsh pwsh.exe powershell powershell.exe)
-if (POWERSHELL_BIN)
-    EchoWithColor(COLOR GREEN "-- Cleanup old built libraries ...")
-    execute_process(
-        COMMAND ${POWERSHELL_BIN} "-NoProfile" "-InputFormat" "None" "-ExecutionPolicy" "Bypass"
-                "-NonInteractive" "-NoLogo" "-File" "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1"
-        WORKING_DIRECTORY ${PROJECT_INSTALL_BAS_DIR}
-    )
-elseif (CYGWIN OR UNIX OR APPLE)
+if (CYGWIN OR UNIX OR APPLE)
     EchoWithColor(COLOR GREEN "-- Cleanup old built libraries ...")
     execute_process(
         COMMAND "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.sh"
         WORKING_DIRECTORY ${PROJECT_INSTALL_BAS_DIR}
     )
+else ()
+    find_program (POWERSHELL_BIN NAMES pwsh pwsh.exe powershell powershell.exe)
+    if (POWERSHELL_BIN)
+        EchoWithColor(COLOR GREEN "-- Cleanup old built libraries ...")
+        execute_process(
+            COMMAND ${POWERSHELL_BIN} "-NoProfile" "-InputFormat" "None" "-ExecutionPolicy" "Bypass"
+                    "-NonInteractive" "-NoLogo" "-File" "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1"
+            WORKING_DIRECTORY ${PROJECT_INSTALL_BAS_DIR}
+        )
+    endif()
 endif ()
 
 # 安装目录
