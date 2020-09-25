@@ -5,11 +5,6 @@
 # SSL
 # ZLIB
 
-include ("${CMAKE_CURRENT_LIST_DIR}/abseil-cpp.cmake")
-include ("${CMAKE_CURRENT_LIST_DIR}/c-ares.cmake")
-include ("${CMAKE_CURRENT_LIST_DIR}/re2.cmake")
-# include ("${CMAKE_CURRENT_LIST_DIR}/upb.cmake")
-
 if(CMAKE_SYSTEM STREQUAL CMAKE_HOST_SYSTEM)
     set(gRPC_BUILD_CODEGEN ON)
     set(gRPC_CMAKE_CROSSCOMPILING OFF)
@@ -17,6 +12,13 @@ else()
     set(gRPC_BUILD_CODEGEN OFF)
     set(gRPC_CMAKE_CROSSCOMPILING ON)
 endif()
+
+set(gRPC_MSVC_CONFIGURE ${CMAKE_BUILD_TYPE})
+
+include ("${CMAKE_CURRENT_LIST_DIR}/abseil-cpp.cmake")
+include ("${CMAKE_CURRENT_LIST_DIR}/c-ares.cmake")
+include ("${CMAKE_CURRENT_LIST_DIR}/re2.cmake")
+# include ("${CMAKE_CURRENT_LIST_DIR}/upb.cmake")
 
 # cmake ../.. -DgRPC_INSTALL=ON        \
 #     -DCMAKE_BUILD_TYPE=Release       \
