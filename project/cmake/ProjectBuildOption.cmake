@@ -24,18 +24,52 @@ option(PROJECT_RESET_DENPEND_REPOSITORIES "Reset depended repositories if it's a
 option(PROJECT_GIT_CLONE_REMOTE_ORIGIN_DISABLE_SSH "Do not try to use ssh url when clone dependency." OFF)
 option(PROJECT_FIND_CONFIGURE_PACKAGE_PARALLEL_BUILD "Parallel building for FindConfigurePackage. It's usually useful for some CI with low memory." ON)
 
-if (NOT PROJECT_GIT_REMOTE_ORIGIN_USE_SSH)
-    if (EXISTS "${PROJECT_SOURCE_DIR}/.git")
-        find_package(Git)
-        if(NOT EXISTS ${ATFRAMEWORK_ATFRAME_UTILS_REPO_DIR})
-            execute_process(COMMAND ${GIT_EXECUTABLE} config "remote.origin.url"
-                OUTPUT_VARIABLE PROJECT_GIT_REMOTE_ORIGIN_URL
-                WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-                OUTPUT_STRIP_TRAILING_WHITESPACE
-            )
-            string(REGEX MATCH "^http(s?):" PROJECT_GIT_REMOTE_ORIGIN_USE_SSH "${PROJECT_GIT_REMOTE_ORIGIN_URL}")
-        endif()
-    endif()
-endif()
+find_package(Git)
+if (GIT_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} config remote.origin.url
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        OUTPUT_VARIABLE PROJECT_GIT_REPO_URL
+    )
+    mark_as_advanced(FORCE PROJECT_GIT_REPO_URL)
+    if(PROJECT_GIT_REPO_URL MATCHES "^(http:)|(https:)")
+        option(PROJECT_GIT_REMOTE_ORIGIN_USE_SSH "Using ssh git url" OFF)
+    else ()
+        option(PROJECT_GIT_REMOTE_ORIGIN_USE_SSH "Using ssh git url" ON)
+    endif ()
+
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} log -n 1 --format="%cd %H" --encoding=UTF-8
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        OUTPUT_VARIABLE PROJECT_VCS_COMMIT
+    )
+
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} log -n 1 "--format=%H" --encoding=UTF-8
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        OUTPUT_VARIABLE PROJECT_VCS_COMMIT_SHA
+    )
+
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} log -n 1 --pretty=oneline --encoding=UTF-8
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        OUTPUT_VARIABLE SERVER_FRAME_VCS_VERSION
+    )
+
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} branch --show-current
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        OUTPUT_VARIABLE PROJECT_VCS_BRANCH
+    )
+
+    string(STRIP "${PROJECT_VCS_COMMIT}" PROJECT_VCS_COMMIT)
+    string(STRIP "${PROJECT_VCS_BRANCH}" PROJECT_VCS_BRANCH)
+endif ()
+
+if (NOT PROJECT_VCS_COMMIT_SHA)
+    set(PROJECT_VCS_COMMIT_SHA "UNKNOWN_COMMIT_SHA")
+else ()
+    string(STRIP "${PROJECT_VCS_COMMIT_SHA}" PROJECT_VCS_COMMIT_SHA)
+endif ()
 
 option(ATFRAMEWORK_USE_DYNAMIC_LIBRARY "Build and linking with dynamic libraries." OFF)

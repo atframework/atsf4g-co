@@ -44,8 +44,8 @@ if(NOT EXISTS ${PROJECT_INSTALL_BAS_DIR})
     message(STATUS "create ${PROJECT_INSTALL_BAS_DIR} for build target.")
 endif()
 
-set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/${CMAKE_INSTALL_LIBDIR}")
-set (CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/${CMAKE_INSTALL_LIBDIR}")
+set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/${CMAKE_INSTALL_LIBDIR}/${PROJECT_VCS_COMMIT_SHA}")
+set (CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/${CMAKE_INSTALL_LIBDIR}/${PROJECT_VCS_COMMIT_SHA}")
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/${CMAKE_INSTALL_BINDIR}")
 
 set (PROJECT_INSTALL_RES_DIR "${PROJECT_INSTALL_BAS_DIR}/resource")
@@ -116,6 +116,18 @@ foreach(INSTALL_DST_ITEM ${PROJECT_INSTALL_DST_LIST})
     )
 endforeach()
 
+configure_file(
+    "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.sh.in"
+    "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.sh"
+    ESCAPE_QUOTES @ONLY
+)
+
+configure_file(
+    "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1.in"
+    "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1"
+    ESCAPE_QUOTES @ONLY
+)
+
 # add +rx permission
 if(CYGWIN OR UNIX OR APPLE)
     execute_process (
@@ -123,6 +135,22 @@ if(CYGWIN OR UNIX OR APPLE)
     	WORKING_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}"
     )
 endif()
+
+find_program (POWERSHELL_BIN NAMES pwsh pwsh.exe powershell powershell.exe)
+if (POWERSHELL_BIN)
+    EchoWithColor(COLOR GREEN "-- Cleanup old built libraries ...")
+    execute_process(
+        COMMAND ${POWERSHELL_BIN} "-NoProfile" "-InputFormat" "None" "-ExecutionPolicy" "Bypass"
+                "-NonInteractive" "-NoLogo" "-File" "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1"
+        WORKING_DIRECTORY ${PROJECT_INSTALL_BAS_DIR}
+    )
+elseif (CYGWIN OR UNIX OR APPLE)
+    EchoWithColor(COLOR GREEN "-- Cleanup old built libraries ...")
+    execute_process(
+        COMMAND "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.sh"
+        WORKING_DIRECTORY ${PROJECT_INSTALL_BAS_DIR}
+    )
+endif ()
 
 # 安装目录
 install(

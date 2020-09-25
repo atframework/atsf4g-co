@@ -1,0 +1,48 @@
+$PSDefaultParameterValues['*:Encoding'] = 'UTF-8'
+
+$OutputEncoding = [System.Text.UTF8Encoding]::new()
+
+$SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Definition
+
+Set-Location $SCRIPT_DIR
+
+function Cleanup-Library-Directory {
+    param (
+        [string] $LibraryDirectory
+    )
+
+    if (Test-Path $LibraryDirectory) {
+
+        $DIR_PATHS = Get-ChildItem -Path $LibraryDirectory.FullName -Directory
+
+        foreach ($DIR_PATH in $DIR_PATHS) {
+            if ($DIR_PATH.Name -eq "@PROJECT_VCS_COMMIT_SHA@") {
+                continue
+            }
+    
+            if ($IsWindows) {
+                Write-Output "Remove $DIR_PATH ..."
+                Remove-Item -Recurse -Force $DIR_PATH.FullName
+                continue
+            }
+    
+            $SO_PATHS = Get-ChildItem -Path $DIR_PATH.FullName -Filter "*.so*" -File
+            foreach ($SO_PATH in $SO_PATHS) {
+                & lsof $SO_PATH.FullName 2>/dev/null
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Output "Remove $SO_PATH ..."
+                    Remove-Item -Force $SO_PATH.FullName
+                }
+            }
+    
+            $SO_PATHS = Get-ChildItem -Path $DIR_PATH.FullName -Filter "*.so*" -File
+            if (-Not $SO_PATHS) {
+                Write-Output "Remove $DIR_PATH ..."
+                Remove-Item -Recurse -Force $DIR_PATH.FullName
+            }
+        }
+    }
+}
+
+Cleanup-Library-Directory lib ;
+Cleanup-Library-Directory lib64 ;
