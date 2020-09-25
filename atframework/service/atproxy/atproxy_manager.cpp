@@ -10,14 +10,14 @@ namespace atframe {
                 node_info.round_robin_index = 0;
             }
             if (node_info.etcd_node.node_discovery.gateway_size() > 0) {
-                if (node_info.round_robin_index > node_info.etcd_node.node_discovery.gateway_size()) {
+                if (node_info.round_robin_index >= node_info.etcd_node.node_discovery.gateway_size()) {
                     node_info.round_robin_index %= node_info.etcd_node.node_discovery.gateway_size();
                     return &node_info.etcd_node.node_discovery.gateway(node_info.round_robin_index ++);
                 }
             }
 
-            if (node_info.etcd_node.node_discovery.listen_size() >= 0) {
-                if (node_info.round_robin_index > node_info.etcd_node.node_discovery.listen_size()) {
+            if (node_info.etcd_node.node_discovery.listen_size() > 0) {
+                if (node_info.round_robin_index >= node_info.etcd_node.node_discovery.listen_size()) {
                     node_info.round_robin_index %= node_info.etcd_node.node_discovery.listen_size();
                     return &node_info.etcd_node.node_discovery.listen(node_info.round_robin_index ++);
                 }
