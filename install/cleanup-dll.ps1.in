@@ -22,7 +22,7 @@ function Cleanup-Library-Directory {
     
             if ($IsWindows) {
                 Write-Output "Remove $DIR_PATH ..."
-                Remove-Item -Recurse -Force $DIR_PATH.FullName
+                Remove-Item -Recurse -Force -Path $DIR_PATH.FullName
                 continue
             }
     
@@ -31,14 +31,14 @@ function Cleanup-Library-Directory {
                 & lsof $SO_PATH.FullName 2>/dev/null
                 if ($LASTEXITCODE -ne 0) {
                     Write-Output "Remove $SO_PATH ..."
-                    Remove-Item -Force $SO_PATH.FullName
+                    Remove-Item -Force -Path $SO_PATH.FullName
                 }
             }
     
             $SO_PATHS = Get-ChildItem -Path $DIR_PATH.FullName -Filter "*.so*" -File
             if (-Not $SO_PATHS) {
                 Write-Output "Remove $DIR_PATH ..."
-                Remove-Item -Recurse -Force $DIR_PATH.FullName
+                Remove-Item -Recurse -Force -Path $DIR_PATH.FullName
             }
         }
     }
