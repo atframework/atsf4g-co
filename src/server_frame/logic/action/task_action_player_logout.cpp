@@ -10,8 +10,8 @@
 
 #include <data/player_cache.h>
 #include <data/session.h>
-#include <logic/session_manager.h>
 #include <logic/player_manager.h>
+#include <logic/session_manager.h>
 
 #include <utility/protobuf_mini_dumper.h>
 
@@ -22,14 +22,12 @@ task_action_player_logout::task_action_player_logout(ctor_param_t COPP_MACRO_RV_
 task_action_player_logout::~task_action_player_logout() {}
 
 int task_action_player_logout::operator()() {
-    WLOGDEBUG("task_action_player_logout for session [0x%llx, 0x%llx] start", 
-        static_cast<unsigned long long>(ctor_param_.atgateway_bus_id),
-        static_cast<unsigned long long>(ctor_param_.atgateway_session_id)
-    );
+    WLOGDEBUG("task_action_player_logout for session [0x%llx, 0x%llx] start", static_cast<unsigned long long>(ctor_param_.atgateway_bus_id),
+              static_cast<unsigned long long>(ctor_param_.atgateway_session_id));
     session::key_t key;
-    key.bus_id = ctor_param_.atgateway_bus_id;
-    key.session_id = ctor_param_.atgateway_session_id;
-    session::ptr_t s = session_manager::me()->find(key);
+    key.bus_id              = ctor_param_.atgateway_bus_id;
+    key.session_id          = ctor_param_.atgateway_session_id;
+    session::ptr_t        s = session_manager::me()->find(key);
     session::flag_guard_t flag_guard;
     if (s) {
         flag_guard.setup(*s, session::flag_t::EN_SESSION_FLAG_CLOSING);
@@ -52,13 +50,12 @@ int task_action_player_logout::operator()() {
 
             if (!player_manager::me()->remove(user, false)) {
                 set_rsp_code(hello::err::EN_SYS_PARAM);
-                WPLOGERROR(*user, "logout failed, res: %d(%s)", hello::err::EN_SYS_PARAM, 
-                    protobuf_mini_dumper_get_error_msg(hello::err::EN_SYS_PARAM));
+                WPLOGERROR(*user, "logout failed, res: %d(%s)", hello::err::EN_SYS_PARAM, protobuf_mini_dumper_get_error_msg(hello::err::EN_SYS_PARAM));
             }
         }
     }
 
-    session_manager::me()->remove(key);
+    session_manager::me()->remove(s);
     return hello::err::EN_SUCCESS;
 }
 

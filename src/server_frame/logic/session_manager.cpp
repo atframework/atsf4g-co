@@ -100,36 +100,38 @@ void session_manager::remove(sess_ptr_t sess, int reason) {
     }
 
     session::key_t key = sess->get_key();
-    WLOGINFO("session (0x%llx:0x%llx) removed", static_cast<unsigned long long>(key.bus_id), static_cast<unsigned long long>(key.session_id));
+    FWLOGINFO("session {}({:#x}:{:#x}) removed", reinterpret_cast<const void *>(sess.get()), key.bus_id, key.session_id);
 
-    session_index_t::iterator iter = all_sessions_.find(key);
-    if (all_sessions_.end() != iter) {
-        // gateway 统计
-        do {
-            session_counter_t::iterator iter_counter = session_counter_.find(key.bus_id);
-            if (session_counter_.end() == iter_counter) {
-                WLOGERROR("gateway session removed, but gateway not found, bus id: 0x%llx", static_cast<unsigned long long>(key.bus_id));
-                break;
-            }
+    {
+        session_index_t::iterator iter = all_sessions_.find(key);
+        if (all_sessions_.end() != iter && iter->second == sess) {
+            // gateway 统计
+            do {
+                session_counter_t::iterator iter_counter = session_counter_.find(key.bus_id);
+                if (session_counter_.end() == iter_counter) {
+                    FWLOGERROR("gateway session removed, but gateway not found, bus id: {:#x}", key.bus_id);
+                    break;
+                }
 
-            --iter_counter->second;
-            if (iter_counter->second <= 0) {
-                WLOGINFO("gateway unregistered, bus id: 0x%llx", static_cast<unsigned long long>(key.bus_id));
-                session_counter_.erase(iter_counter);
-            }
-        } while (false);
+                --iter_counter->second;
+                if (iter_counter->second <= 0) {
+                    FWLOGINFO("gateway unregistered, bus id: {:#x}", key.bus_id);
+                    session_counter_.erase(iter_counter);
+                }
+            } while (false);
 
-        // 回收ID
-        if (iter->second) {
-            iter->second->set_flag(session::flag_t::EN_SESSION_FLAG_CLOSED, true);
+            // 移除session
+            all_sessions_.erase(iter);
         }
-        // 移除session
-        all_sessions_.erase(iter);
+    }
+
+    if (sess) {
+        sess->set_flag(session::flag_t::EN_SESSION_FLAG_CLOSED, true);
     }
 
     // 移除绑定的player
     player_cache::ptr_t u = sess->get_player();
-    if (u) {
+    if (u && u->get_session() == sess) {
         sess->set_player(NULL);
         u->set_session(NULL);
 
