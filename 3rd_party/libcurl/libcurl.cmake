@@ -2,52 +2,52 @@ if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.10")
     include_guard(GLOBAL)
 endif()
 # =========== 3rdparty libcurl ==================
+macro(PROJECT_3RD_PARTY_LIBCURL_IMPORT)
+    if (CURL_FOUND)
+        if (TARGET CURL::libcurl)
+            list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES CURL::libcurl)
+            if (LIBRESSL_FOUND AND TARGET LibreSSL::Crypto AND TARGET LibreSSL::SSL)
+                project_build_tools_patch_imported_link_interface_libraries(
+                    CURL::libcurl
+                    REMOVE_LIBRARIES "OpenSSL::SSL;OpenSSL::Crypto"
+                    ADD_LIBRARIES "LibreSSL::SSL;LibreSSL::Crypto"
+                )
+            endif()
+        else()
+            if (CURL_INCLUDE_DIRS)
+                list(APPEND 3RD_PARTY_PUBLIC_INCLUDE_DIRS ${CURL_INCLUDE_DIRS})
+            endif ()
+
+            if(3RD_PARTY_LIBCURL_STATIC_LINK_NAMES)
+                list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES ${3RD_PARTY_LIBCURL_STATIC_LINK_NAMES})
+            endif()
+        endif ()
+
+        if (TARGET CURL::curl)
+            get_target_property(CURL_EXECUTABLE CURL::curl IMPORTED_LOCATION)
+            if (CURL_EXECUTABLE AND EXISTS ${CURL_EXECUTABLE})
+                file(COPY ${CURL_EXECUTABLE} DESTINATION "${PROJECT_INSTALL_TOOLS_DIR}/bin" USE_SOURCE_PERMISSIONS)
+            else()
+                get_target_property(CURL_EXECUTABLE CURL::curl IMPORTED_LOCATION_NOCONFIG)
+                if (CURL_EXECUTABLE AND EXISTS ${CURL_EXECUTABLE})
+                    file(COPY ${CURL_EXECUTABLE} DESTINATION "${PROJECT_INSTALL_TOOLS_DIR}/bin" USE_SOURCE_PERMISSIONS)
+                endif ()
+            endif ()
+        else ()
+            find_program(CURL_EXECUTABLE NAMES curl curl.exe PATHS 
+                "${CURL_INCLUDE_DIRS}/../bin" "${CURL_INCLUDE_DIRS}/../" ${CURL_INCLUDE_DIRS}
+                NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
+            if (CURL_EXECUTABLE AND EXISTS ${CURL_EXECUTABLE})
+                file(COPY ${CURL_EXECUTABLE} DESTINATION "${PROJECT_INSTALL_TOOLS_DIR}/bin" USE_SOURCE_PERMISSIONS)
+            endif ()
+        endif ()
+    endif()
+endmacro()
+
 if (NOT CURL_EXECUTABLE)
     set (3RD_PARTY_LIBCURL_VERSION "7.71.1")
     set (3RD_PARTY_LIBCURL_PKG_NAME "curl-${3RD_PARTY_LIBCURL_VERSION}")
     set (3RD_PARTY_LIBCURL_SRC_URL_PREFIX "http://curl.haxx.se/download")
-
-    macro(PROJECT_3RD_PARTY_LIBCURL_IMPORT)
-        if (CURL_FOUND)
-            if (TARGET CURL::libcurl)
-                list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES CURL::libcurl)
-                if (LIBRESSL_FOUND AND TARGET LibreSSL::Crypto AND TARGET LibreSSL::SSL)
-                    project_build_tools_patch_imported_link_interface_libraries(
-                        CURL::libcurl
-                        REMOVE_LIBRARIES "OpenSSL::SSL;OpenSSL::Crypto"
-                        ADD_LIBRARIES "LibreSSL::SSL;LibreSSL::Crypto"
-                    )
-                endif()
-            else()
-                if (CURL_INCLUDE_DIRS)
-                    list(APPEND 3RD_PARTY_PUBLIC_INCLUDE_DIRS ${CURL_INCLUDE_DIRS})
-                endif ()
-
-                if(3RD_PARTY_LIBCURL_STATIC_LINK_NAMES)
-                    list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES ${3RD_PARTY_LIBCURL_STATIC_LINK_NAMES})
-                endif()
-            endif ()
-
-            if (TARGET CURL::curl)
-                get_target_property(CURL_EXECUTABLE CURL::curl IMPORTED_LOCATION)
-                if (CURL_EXECUTABLE AND EXISTS ${CURL_EXECUTABLE})
-                    file(COPY ${CURL_EXECUTABLE} DESTINATION "${PROJECT_INSTALL_TOOLS_DIR}/bin" USE_SOURCE_PERMISSIONS)
-                else()
-                    get_target_property(CURL_EXECUTABLE CURL::curl IMPORTED_LOCATION_NOCONFIG)
-                    if (CURL_EXECUTABLE AND EXISTS ${CURL_EXECUTABLE})
-                        file(COPY ${CURL_EXECUTABLE} DESTINATION "${PROJECT_INSTALL_TOOLS_DIR}/bin" USE_SOURCE_PERMISSIONS)
-                    endif ()
-                endif ()
-            else ()
-                find_program(CURL_EXECUTABLE NAMES curl curl.exe PATHS 
-                    "${CURL_INCLUDE_DIRS}/../bin" "${CURL_INCLUDE_DIRS}/../" ${CURL_INCLUDE_DIRS}
-                    NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
-                if (CURL_EXECUTABLE AND EXISTS ${CURL_EXECUTABLE})
-                    file(COPY ${CURL_EXECUTABLE} DESTINATION "${PROJECT_INSTALL_TOOLS_DIR}/bin" USE_SOURCE_PERMISSIONS)
-                endif ()
-            endif ()
-        endif()
-    endmacro()
 
     if (VCPKG_TOOLCHAIN)
         find_package(CURL QUIET)
@@ -193,13 +193,32 @@ if (NOT CURL_EXECUTABLE)
                     if(3RD_PARTY_LIBCURL_TRY_RUN_OUT)
                         message(STATUS ${3RD_PARTY_LIBCURL_TRY_RUN_OUT})
                     endif()
-                    list(APPEND 3RD_PARTY_PUBLIC_DEFINITIONS CURL_STATICLIB=1)
+ 
+                    add_library(CURL::libcurl UNKNOWN IMPORTED)
+                    set_target_properties(CURL::libcurl PROPERTIES
+                        INTERFACE_INCLUDE_DIRECTORIES ${CURL_INCLUDE_DIRS}
+                        INTERFACE_COMPILE_DEFINITIONS "CURL_STATICLIB=1"
+                    )
+                    set_target_properties(CURL::libcurl PROPERTIES
+                        IMPORTED_LINK_INTERFACE_LANGUAGES "C;CXX"
+                        IMPORTED_LOCATION ${CURL_LIBRARIES}
+                        INTERFACE_LINK_LIBRARIES ${3RD_PARTY_LIBCURL_STATIC_LINK_NAMES}
+                    )
                 endif()
             else()
                 EchoWithColor(COLOR GREEN "-- Libcurl: use dynamic symbols")
                 if(3RD_PARTY_LIBCURL_TRY_RUN_OUT)
                     message(STATUS ${3RD_PARTY_LIBCURL_TRY_RUN_OUT})
                 endif()
+
+                add_library(CURL::libcurl UNKNOWN IMPORTED)
+                set_target_properties(CURL::libcurl PROPERTIES
+                    INTERFACE_INCLUDE_DIRECTORIES ${CURL_INCLUDE_DIRS}
+                )
+                set_target_properties(CURL::libcurl PROPERTIES
+                    IMPORTED_LINK_INTERFACE_LANGUAGES "C;CXX"
+                    IMPORTED_LOCATION ${CURL_LIBRARIES}
+                )
             endif()
         endif()
         unset(3RD_PARTY_LIBCURL_TRY_RUN_OUT)
@@ -211,4 +230,6 @@ if (NOT CURL_EXECUTABLE)
         set(CMAKE_FIND_ROOT_PATH ${3RD_PARTY_LIBCURL_BACKUP_FIND_ROOT})
         unset(3RD_PARTY_LIBCURL_BACKUP_FIND_ROOT)
     endif ()
+else()
+    PROJECT_3RD_PARTY_LIBCURL_IMPORT()
 endif()

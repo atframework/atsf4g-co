@@ -3,6 +3,66 @@ if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.10")
 endif()
 
 # =========== 3rdparty openssl ==================
+
+macro(PROJECT_3RD_PARTY_OPENSSL_IMPORT)
+    if(OPENSSL_FOUND)
+        EchoWithColor(COLOR GREEN "-- Dependency: openssl found.(${OPENSSL_VERSION})")
+        if (TARGET OpenSSL::SSL OR TARGET OpenSSL::Crypto)
+            if (TARGET OpenSSL::Crypto)
+                list(APPEND 3RD_PARTY_CRYPT_LINK_NAME OpenSSL::Crypto)
+                list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES OpenSSL::Crypto)
+
+                if (TARGET Threads::Threads)
+                    project_build_tools_patch_imported_link_interface_libraries(
+                        OpenSSL::Crypto
+                        ADD_LIBRARIES Threads::Threads ${CMAKE_DL_LIBS}
+                    )
+                elseif (CMAKE_DL_LIBS)
+                    project_build_tools_patch_imported_link_interface_libraries(
+                        OpenSSL::Crypto
+                        ADD_LIBRARIES ${CMAKE_DL_LIBS}
+                    )
+                endif ()
+            endif()
+            if (TARGET OpenSSL::SSL)
+                list(APPEND 3RD_PARTY_CRYPT_LINK_NAME OpenSSL::SSL)
+                list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES OpenSSL::SSL)
+
+                if (TARGET Threads::Threads)
+                    project_build_tools_patch_imported_link_interface_libraries(
+                        OpenSSL::SSL
+                        ADD_LIBRARIES Threads::Threads ${CMAKE_DL_LIBS}
+                    )
+                elseif (CMAKE_DL_LIBS)
+                    project_build_tools_patch_imported_link_interface_libraries(
+                        OpenSSL::SSL
+                        ADD_LIBRARIES ${CMAKE_DL_LIBS}
+                    )
+                endif ()
+            endif()
+        else()
+            if (OPENSSL_INCLUDE_DIR)
+                list(APPEND 3RD_PARTY_PUBLIC_INCLUDE_DIRS ${OPENSSL_INCLUDE_DIR})
+            endif ()
+
+            if (NOT OPENSSL_LIBRARIES)
+                set(OPENSSL_LIBRARIES ${OPENSSL_SSL_LIBRARY} ${OPENSSL_CRYPTO_LIBRARY} CACHE INTERNAL "Fix cmake module path for openssl" FORCE)
+            endif ()
+            if(OPENSSL_LIBRARIES)
+                list(APPEND 3RD_PARTY_CRYPT_LINK_NAME ${OPENSSL_LIBRARIES})
+                list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES ${OPENSSL_LIBRARIES})
+            endif()
+        endif ()
+
+        find_program(OPENSSL_EXECUTABLE NAMES openssl openssl.exe PATHS 
+            "${OPENSSL_INCLUDE_DIR}/../bin" "${OPENSSL_INCLUDE_DIR}/../" ${OPENSSL_INCLUDE_DIR}
+            NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
+        if (OPENSSL_EXECUTABLE AND EXISTS ${OPENSSL_EXECUTABLE})
+            file(COPY ${OPENSSL_EXECUTABLE} DESTINATION "${PROJECT_INSTALL_TOOLS_DIR}/bin" USE_SOURCE_PERMISSIONS)
+        endif ()
+    endif()
+endmacro()
+
 if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
     set (3RD_PARTY_OPENSSL_DEFAULT_VERSION "1.1.1g")
     set (3RD_PARTY_OPENSSL_GITHUB_TAG "OpenSSL_1_1_1g")
@@ -12,65 +72,6 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
         "no-aria" "no-bf" "no-blake2" "no-camellia" "no-cast" "no-idea" "no-md2" "no-md4" "no-mdc2" "no-rc2" "no-rc4" "no-rc5" "no-ssl3"
         "enable-static-engine"
     )
-
-    macro(PROJECT_3RD_PARTY_OPENSSL_IMPORT)
-        if(OPENSSL_FOUND)
-            EchoWithColor(COLOR GREEN "-- Dependency: openssl found.(${OPENSSL_VERSION})")
-            if (TARGET OpenSSL::SSL OR TARGET OpenSSL::Crypto)
-                if (TARGET OpenSSL::Crypto)
-                    list(APPEND 3RD_PARTY_CRYPT_LINK_NAME OpenSSL::Crypto)
-                    list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES OpenSSL::Crypto)
-
-                    if (TARGET Threads::Threads)
-                        project_build_tools_patch_imported_link_interface_libraries(
-                            OpenSSL::Crypto
-                            ADD_LIBRARIES Threads::Threads ${CMAKE_DL_LIBS}
-                        )
-                    elseif (CMAKE_DL_LIBS)
-                        project_build_tools_patch_imported_link_interface_libraries(
-                            OpenSSL::Crypto
-                            ADD_LIBRARIES ${CMAKE_DL_LIBS}
-                        )
-                    endif ()
-                endif()
-                if (TARGET OpenSSL::SSL)
-                    list(APPEND 3RD_PARTY_CRYPT_LINK_NAME OpenSSL::SSL)
-                    list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES OpenSSL::SSL)
-
-                    if (TARGET Threads::Threads)
-                        project_build_tools_patch_imported_link_interface_libraries(
-                            OpenSSL::SSL
-                            ADD_LIBRARIES Threads::Threads ${CMAKE_DL_LIBS}
-                        )
-                    elseif (CMAKE_DL_LIBS)
-                        project_build_tools_patch_imported_link_interface_libraries(
-                            OpenSSL::SSL
-                            ADD_LIBRARIES ${CMAKE_DL_LIBS}
-                        )
-                    endif ()
-                endif()
-            else()
-                if (OPENSSL_INCLUDE_DIR)
-                    list(APPEND 3RD_PARTY_PUBLIC_INCLUDE_DIRS ${OPENSSL_INCLUDE_DIR})
-                endif ()
-
-                if (NOT OPENSSL_LIBRARIES)
-                    set(OPENSSL_LIBRARIES ${OPENSSL_SSL_LIBRARY} ${OPENSSL_CRYPTO_LIBRARY} CACHE INTERNAL "Fix cmake module path for openssl" FORCE)
-                endif ()
-                if(OPENSSL_LIBRARIES)
-                    list(APPEND 3RD_PARTY_CRYPT_LINK_NAME ${OPENSSL_LIBRARIES})
-                    list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES ${OPENSSL_LIBRARIES})
-                endif()
-            endif ()
-
-            find_program(OPENSSL_EXECUTABLE NAMES openssl openssl.exe PATHS 
-                "${OPENSSL_INCLUDE_DIR}/../bin" "${OPENSSL_INCLUDE_DIR}/../" ${OPENSSL_INCLUDE_DIR}
-                NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
-            if (OPENSSL_EXECUTABLE AND EXISTS ${OPENSSL_EXECUTABLE})
-                file(COPY ${OPENSSL_EXECUTABLE} DESTINATION "${PROJECT_INSTALL_TOOLS_DIR}/bin" USE_SOURCE_PERMISSIONS)
-            endif ()
-        endif()
-    endmacro()
 
     if (VCPKG_TOOLCHAIN)
         find_package(OpenSSL QUIET)
@@ -264,4 +265,6 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
             list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES Crypt32)
         endif()
     endif()
+else()
+    PROJECT_3RD_PARTY_OPENSSL_IMPORT()
 endif()
