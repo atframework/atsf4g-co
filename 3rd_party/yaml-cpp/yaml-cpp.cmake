@@ -26,7 +26,7 @@ if (VCPKG_TOOLCHAIN)
 endif ()
 
 # =========== 3rdparty yaml-cpp ==================
-if (NOT TARGET yaml-cpp::yaml-cpp AND NOT TARGET yaml-cpp::yaml-cpp AND (NOT YAML_CPP_INCLUDE_DIR OR NOT YAML_CPP_LIBRARIES))
+if (NOT TARGET yaml-cpp::yaml-cpp AND NOT TARGET yaml-cpp AND (NOT YAML_CPP_INCLUDE_DIR OR NOT YAML_CPP_LIBRARIES))
     set (3RD_PARTY_YAML_CPP_DEFAULT_VERSION "0.6.3")
 
     if (PROJECT_GIT_REMOTE_ORIGIN_USE_SSH AND NOT PROJECT_GIT_CLONE_REMOTE_ORIGIN_DISABLE_SSH)
@@ -35,9 +35,6 @@ if (NOT TARGET yaml-cpp::yaml-cpp AND NOT TARGET yaml-cpp::yaml-cpp AND (NOT YAM
         set (3RD_PARTY_YAML_CPP_REPO_URL "https://github.com/jbeder/yaml-cpp.git")
     endif ()
 
-    set(3RD_PARTY_YAML_CPP_BACKUP_FIND_ROOT ${CMAKE_FIND_ROOT_PATH})
-    list(APPEND CMAKE_FIND_ROOT_PATH ${PROJECT_3RD_PARTY_INSTALL_DIR})
-    set(YamlCpp_ROOT ${PROJECT_3RD_PARTY_INSTALL_DIR})
     FindConfigurePackage(
         PACKAGE yaml-cpp
         BUILD_WITH_CMAKE CMAKE_INHIRT_BUILD_ENV
@@ -59,9 +56,4 @@ if (NOT TARGET yaml-cpp::yaml-cpp AND NOT TARGET yaml-cpp::yaml-cpp AND (NOT YAM
     PROJECT_3RD_PARTY_YAML_CPP_IMPORT()
 else()
     PROJECT_3RD_PARTY_YAML_CPP_IMPORT()
-endif ()
-
-if (3RD_PARTY_YAML_CPP_BACKUP_FIND_ROOT)
-    set(CMAKE_FIND_ROOT_PATH ${3RD_PARTY_YAML_CPP_BACKUP_FIND_ROOT})
-    unset(3RD_PARTY_YAML_CPP_BACKUP_FIND_ROOT)
 endif ()

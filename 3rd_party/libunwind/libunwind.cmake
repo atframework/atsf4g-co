@@ -30,8 +30,7 @@ if (NOT TARGET Libunwind::libunwind AND NOT Libunwind_FOUND)
     else ()
         set (3RD_PARTY_LIBUNWIND_REPO_URL "https://github.com/libunwind/libunwind.git")
     endif ()
-    set(3RD_PARTY_LIBUNWIND_BACKUP_FIND_ROOT ${CMAKE_FIND_ROOT_PATH})
-    list(APPEND CMAKE_FIND_ROOT_PATH ${PROJECT_3RD_PARTY_INSTALL_DIR})
+
     FindConfigurePackage(
         PACKAGE Libunwind
         BUILD_WITH_CONFIGURE
@@ -51,9 +50,3 @@ if (NOT TARGET Libunwind::libunwind AND NOT Libunwind_FOUND)
         PROJECT_3RD_PARTY_LIBUNWIND_IMPORT()
     endif()
 endif ()
-
-if (3RD_PARTY_LIBUNWIND_BACKUP_FIND_ROOT)
-    set(CMAKE_FIND_ROOT_PATH ${3RD_PARTY_LIBUNWIND_BACKUP_FIND_ROOT})
-    unset(3RD_PARTY_LIBUNWIND_BACKUP_FIND_ROOT)
-endif ()
-

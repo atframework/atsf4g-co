@@ -35,9 +35,6 @@ if (NOT TARGET c-ares::cares AND NOT TARGET c-ares::cares_static AND NOT TARGET 
     if (NOT TARGET c-ares::cares AND NOT TARGET c-ares::cares_static AND NOT TARGET c-ares::cares_shared AND NOT CARES_FOUND)
         set (3RD_PARTY_CARES_DEFAULT_VERSION "cares-1_16_1")
 
-        set(3RD_PARTY_CARES_BACKUP_FIND_ROOT ${CMAKE_FIND_ROOT_PATH})
-        list(APPEND CMAKE_FIND_ROOT_PATH ${PROJECT_3RD_PARTY_INSTALL_DIR})
-        set(c-ares_ROOT ${PROJECT_3RD_PARTY_INSTALL_DIR})
         FindConfigurePackage(
             PACKAGE c-ares
             BUILD_WITH_CMAKE CMAKE_INHIRT_BUILD_ENV CMAKE_INHIRT_BUILD_ENV_DISABLE_CXX_FLAGS
@@ -58,9 +55,3 @@ if (NOT TARGET c-ares::cares AND NOT TARGET c-ares::cares_static AND NOT TARGET 
 else()
     PROJECT_3RD_PARTY_CARES_IMPORT()
 endif ()
-
-if (3RD_PARTY_CARES_BACKUP_FIND_ROOT)
-    set(CMAKE_FIND_ROOT_PATH ${3RD_PARTY_CARES_BACKUP_FIND_ROOT})
-    unset(3RD_PARTY_CARES_BACKUP_FIND_ROOT)
-endif ()
-
