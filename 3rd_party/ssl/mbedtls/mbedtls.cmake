@@ -28,6 +28,10 @@ macro(PROJECT_3RD_PARTY_MBEDTLS_IMPORT)
 
             set(3RD_PARTY_MBEDTLS_FOUND TRUE)
         endif()
+
+        if (3RD_PARTY_MBEDTLS_FOUND AND NOT CRYPTO_USE_MBEDTLS)
+            set(CRYPTO_USE_MBEDTLS TRUE CACHE BOOL "Cache ssl selector and directly use mbedtls next time")
+        endif()
     endif()
 endmacro()
 

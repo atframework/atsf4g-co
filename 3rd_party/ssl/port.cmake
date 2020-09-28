@@ -21,10 +21,8 @@ elseif (CRYPTO_USE_MBEDTLS)
     endif()
 elseif (NOT CRYPTO_DISABLED)
     # try to find openssl or mbedtls
-    find_package(OpenSSL QUIET)
-    if(NOT OPENSSL_FOUND)
-        include("${CMAKE_CURRENT_LIST_DIR}/openssl/openssl.cmake")
-    endif ()
+    include("${CMAKE_CURRENT_LIST_DIR}/openssl/openssl.cmake")
+
     if(NOT OPENSSL_FOUND)
         include("${CMAKE_CURRENT_LIST_DIR}/libressl/libressl.cmake")
     endif ()

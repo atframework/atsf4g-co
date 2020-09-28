@@ -60,15 +60,21 @@ macro(PROJECT_3RD_PARTY_OPENSSL_IMPORT)
         if (OPENSSL_EXECUTABLE AND EXISTS ${OPENSSL_EXECUTABLE})
             file(COPY ${OPENSSL_EXECUTABLE} DESTINATION "${PROJECT_INSTALL_TOOLS_DIR}/bin" USE_SOURCE_PERMISSIONS)
         endif ()
+
+        if (NOT CRYPTO_USE_OPENSSL)
+            set(CRYPTO_USE_OPENSSL TRUE CACHE BOOL "Cache ssl selector and directly use openssl next time")
+        endif()
     endif()
 endmacro()
 
 if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
-    set (3RD_PARTY_OPENSSL_DEFAULT_VERSION "1.1.1g")
-    set (3RD_PARTY_OPENSSL_GITHUB_TAG "OpenSSL_1_1_1g")
+    set (3RD_PARTY_OPENSSL_DEFAULT_VERSION "1.1.1h")
+    set (3RD_PARTY_OPENSSL_GITHUB_TAG "OpenSSL_1_1_1h")
     # "no-hw"
-    set (3RD_PARTY_OPENSSL_BUILD_OPTIONS "--prefix=${PROJECT_3RD_PARTY_INSTALL_DIR}" "--openssldir=${PROJECT_3RD_PARTY_INSTALL_DIR}/ssl"
-        "--release" "no-deprecated" "no-dso" "no-tests" "no-external-tests" "no-external-tests" "no-shared"
+    set (3RD_PARTY_OPENSSL_BUILD_OPTIONS "--prefix=${PROJECT_3RD_PARTY_INSTALL_DIR}" "--openssldir=${PROJECT_3RD_PARTY_INSTALL_DIR}/ssl" "--release" 
+        "--api=1.1.1" # libwebsockets and atframe_utils has warnings of using deprecated APIs, maybe it can be remove later
+        # "no-deprecated" # libcurl and gRPC requires openssl's API of 1.1.0 and 1.0.2, so we can not disable deprecated APIS here
+        "no-dso" "no-tests" "no-external-tests" "no-external-tests" "no-shared"
         "no-aria" "no-bf" "no-blake2" "no-camellia" "no-cast" "no-idea" "no-md2" "no-md4" "no-mdc2" "no-rc2" "no-rc4" "no-rc5" "no-ssl3"
         "enable-static-engine"
     )
@@ -92,8 +98,8 @@ if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
             message(STATUS "3RD_PARTY_OPENSSL_FIND_LIB_SSL    -- ${3RD_PARTY_OPENSSL_FIND_LIB_SSL}")
         endif ()
 
-        unset(3RD_PARTY_OPENSSL_FIND_LIB_CRYPTO)
-        unset(3RD_PARTY_OPENSSL_FIND_LIB_SSL)
+        unset(3RD_PARTY_OPENSSL_FIND_LIB_CRYPTO CACHE)
+        unset(3RD_PARTY_OPENSSL_FIND_LIB_SSL CACHE)
         PROJECT_3RD_PARTY_OPENSSL_IMPORT()
     endif()
 

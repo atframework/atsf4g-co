@@ -23,7 +23,7 @@ endif()
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/fmtlib/fmtlib.cmake")
 
 # =========== 3rd_party - zlib ===========
-include("${PROJECT_3RD_PARTY_ROOT_DIR}/zlib/zlib.cmake")
+include("${PROJECT_3RD_PARTY_ROOT_DIR}/compression/import.cmake")
 
 # =========== 3rd_party - libuv ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/libuv/libuv.cmake")

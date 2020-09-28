@@ -58,7 +58,7 @@ if (NOT TARGET hiredis::hiredis_ssl_static AND NOT TARGET hiredis::hiredis_stati
         BUILD_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/deps/hiredis-${3RD_PARTY_REDIS_HIREDIS_VERSION}/build_jobs_${PROJECT_PREBUILT_PLATFORM_NAME}"
         PREFIX_DIRECTORY "${PROJECT_3RD_PARTY_INSTALL_DIR}"
         SRC_DIRECTORY_NAME "hiredis-${3RD_PARTY_REDIS_HIREDIS_VERSION}"
-        GIT_BRANCH "${3RD_PARTY_REDIS_HIREDIS_VERSION}"
+        GIT_COMMIT "${3RD_PARTY_REDIS_HIREDIS_VERSION}"
         GIT_URL "https://github.com/redis/hiredis.git"
     )
 

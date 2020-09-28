@@ -55,10 +55,8 @@ if (NOT Libwebsockets_FOUND AND NOT TARGET websockets AND NOT TARGET websockets_
         list(APPEND CMAKE_FIND_ROOT_PATH ${PROJECT_3RD_PARTY_INSTALL_DIR})
         list(APPEND CMAKE_PREFIX_PATH ${PROJECT_3RD_PARTY_INSTALL_DIR})
 
-        if (EXISTS ${Libwebsockets_ROOT})
-            find_package(Libwebsockets QUIET)
-            PROJECT_3RD_PARTY_LIBWEBSOCKETS_IMPORT()
-        endif ()
+        find_package(Libwebsockets QUIET)
+        PROJECT_3RD_PARTY_LIBWEBSOCKETS_IMPORT()
         if (NOT Libwebsockets_FOUND)
             set (3RD_PARTY_LIBWEBSOCKETS_REPO_DIR "${PROJECT_3RD_PARTY_PACKAGE_DIR}/libwebsockets-${3RD_PARTY_LIBWEBSOCKETS_VERSION}")
             set (3RD_PARTY_LIBWEBSOCKETS_BUILD_DIR "${3RD_PARTY_LIBWEBSOCKETS_REPO_DIR}/build_jobs_${PROJECT_PREBUILT_PLATFORM_NAME}")
@@ -77,7 +75,7 @@ if (NOT Libwebsockets_FOUND AND NOT TARGET websockets AND NOT TARGET websockets_
 
             # 服务器目前不需要适配ARM和android
             set (3RD_PARTY_LIBWEBSOCKETS_BUILD_OPTIONS ${CMAKE_COMMAND} "${3RD_PARTY_LIBWEBSOCKETS_REPO_DIR}"
-                "-DCMAKE_INSTALL_PREFIX=${Libwebsockets_ROOT}"
+                "-DCMAKE_INSTALL_PREFIX=${PROJECT_3RD_PARTY_INSTALL_DIR}"
                 "-DLWS_WITH_LIBUV=ON" "-DLWS_LIBUV_LIBRARIES=${Libuv_LIBRARIES}" "-DLWS_LIBUV_INCLUDE_DIRS=${Libuv_INCLUDE_DIRS}"
                 "-DLWS_WITH_SHARED=OFF" "-DLWS_STATIC_PIC=ON" "-DLWS_LINK_TESTAPPS_DYNAMIC=OFF" "-DLWS_WITHOUT_CLIENT=ON"
                 "-DLWS_WITHOUT_DAEMONIZE=ON" "-DLWS_WITHOUT_TESTAPPS=ON" "-DLWS_WITHOUT_TEST_CLIENT=ON"
@@ -223,8 +221,4 @@ endif()
 
 if (NOT Libwebsockets_FOUND AND NOT TARGET websockets AND NOT TARGET websockets_shared)
     EchoWithColor(COLOR YELLOW "-- Dependency: libwebsockets not found")
-endif ()
-
-if (LIBWEBSOCKETS_INCLUDE_DIRS)
-    list(APPEND 3RD_PARTY_PUBLIC_INCLUDE_DIRS ${LIBWEBSOCKETS_INCLUDE_DIRS})
 endif ()
