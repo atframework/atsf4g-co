@@ -151,9 +151,9 @@ else
 fi
 
 if [ "$CHECK_MSYS" == "mingw" ]; then
-    cmake .. -G "MSYS Makefiles" -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE -DRAPIDJSON_ROOT=$SCRIPT_DIR/3rd_party/rapidjson/repo $CMAKE_OPTIONS "$@";
+    cmake .. -G "MSYS Makefiles" -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE $CMAKE_OPTIONS "$@";
 else
-    cmake .. -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE -DRAPIDJSON_ROOT=$SCRIPT_DIR/3rd_party/rapidjson/repo $CMAKE_OPTIONS "$@";
+    cmake .. -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE $CMAKE_OPTIONS "$@";
 fi
 
 

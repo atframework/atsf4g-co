@@ -41,6 +41,8 @@ macro(PROJECT_3RD_PARTY_LIBCURL_IMPORT)
                 file(COPY ${CURL_EXECUTABLE} DESTINATION "${PROJECT_INSTALL_TOOLS_DIR}/bin" USE_SOURCE_PERMISSIONS)
             endif ()
         endif ()
+
+        list(APPEND 3RD_PARTY_COPY_EXECUTABLE_PATTERN "${PROJECT_3RD_PARTY_INSTALL_DIR}/bin/curl*")
     endif()
 endmacro()
 

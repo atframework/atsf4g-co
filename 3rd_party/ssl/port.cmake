@@ -40,6 +40,8 @@ endif()
 
 if (NOT OPENSSL_FOUND AND NOT MBEDTLS_FOUND)
     message(FATAL_ERROR "Dependency: must at least have one of openssl,libressl or mbedtls.")
+else ()
+    list(APPEND 3RD_PARTY_COPY_EXECUTABLE_PATTERN "${PROJECT_3RD_PARTY_INSTALL_DIR}/bin/openssl*")
 endif()
 
 if (NOT CRYPTO_DISABLED)
