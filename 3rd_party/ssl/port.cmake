@@ -21,10 +21,8 @@ elseif (CRYPTO_USE_MBEDTLS)
     endif()
 elseif (NOT CRYPTO_DISABLED)
     # try to find openssl or mbedtls
-    find_package(OpenSSL QUIET)
-    if(NOT OPENSSL_FOUND)
-        include("${CMAKE_CURRENT_LIST_DIR}/openssl/openssl.cmake")
-    endif ()
+    include("${CMAKE_CURRENT_LIST_DIR}/openssl/openssl.cmake")
+
     if(NOT OPENSSL_FOUND)
         include("${CMAKE_CURRENT_LIST_DIR}/libressl/libressl.cmake")
     endif ()
@@ -42,6 +40,8 @@ endif()
 
 if (NOT OPENSSL_FOUND AND NOT MBEDTLS_FOUND)
     message(FATAL_ERROR "Dependency: must at least have one of openssl,libressl or mbedtls.")
+else ()
+    list(APPEND 3RD_PARTY_COPY_EXECUTABLE_PATTERN "${PROJECT_3RD_PARTY_INSTALL_DIR}/bin/openssl*")
 endif()
 
 if (NOT CRYPTO_DISABLED)

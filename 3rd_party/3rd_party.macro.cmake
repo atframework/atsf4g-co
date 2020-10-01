@@ -23,7 +23,7 @@ endif()
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/fmtlib/fmtlib.cmake")
 
 # =========== 3rd_party - zlib ===========
-include("${PROJECT_3RD_PARTY_ROOT_DIR}/zlib/zlib.cmake")
+include("${PROJECT_3RD_PARTY_ROOT_DIR}/compression/import.cmake")
 
 # =========== 3rd_party - libuv ===========
 include("${PROJECT_3RD_PARTY_ROOT_DIR}/libuv/libuv.cmake")
@@ -86,3 +86,25 @@ if (3RD_PARTY_INTERFACE_LINK_NAMES)
     list(REMOVE_DUPLICATES 3RD_PARTY_INTERFACE_LINK_NAMES)
     list(REVERSE 3RD_PARTY_INTERFACE_LINK_NAMES)
 endif ()
+
+# Copy executable/dll/.so files
+file(GLOB 3RD_PARTY_JEMALLOC_ALL_DYNAMIC_LIB_FILES  
+    "${PROJECT_3RD_PARTY_INSTALL_DIR}/lib/*.so*"
+    "${PROJECT_3RD_PARTY_INSTALL_DIR}/lib/*.dll*"
+    "${PROJECT_3RD_PARTY_INSTALL_DIR}/lib64/*.so*"
+    "${PROJECT_3RD_PARTY_INSTALL_DIR}/lib64/*.dll*"
+)
+project_copy_shared_lib(${3RD_PARTY_JEMALLOC_ALL_DYNAMIC_LIB_FILES} ${PROJECT_INSTALL_SHARED_DIR})
+
+if (NOT EXISTS "${PROJECT_INSTALL_BAS_DIR}/bin")
+    file(MAKE_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/bin")
+endif ()
+file(GLOB 3RD_PARTY_JEMALLOC_ALL_DYNAMIC_BIN_FILES  
+    "${PROJECT_3RD_PARTY_INSTALL_DIR}/bin/*.dll"
+    ${3RD_PARTY_COPY_EXECUTABLE_PATTERN}
+)
+
+if (3RD_PARTY_JEMALLOC_ALL_DYNAMIC_BIN_FILES)
+    list(REMOVE_DUPLICATES 3RD_PARTY_JEMALLOC_ALL_DYNAMIC_BIN_FILES)
+    project_copy_shared_lib(${3RD_PARTY_JEMALLOC_ALL_DYNAMIC_BIN_FILES} "${PROJECT_INSTALL_BAS_DIR}/bin")
+endif()

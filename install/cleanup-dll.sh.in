@@ -9,7 +9,7 @@ function cleanup_dir() {
 
     for DIR_PATH in "$1"/* ; do
         DIR_NAME="$(basename "$DIR_PATH")";
-        if [ "$DIR_NAME" == "@PROJECT_VCS_COMMIT_SHA@" ]; then
+        if [ "$DIR_NAME" == "@PROJECT_VCS_COMMIT_SHORT_SHA@" ]; then
             continue;
         fi
 
