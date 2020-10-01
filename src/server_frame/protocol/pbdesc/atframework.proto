@@ -1,5 +1,11 @@
 syntax = "proto3";
 
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
 package atframework;
 
 import "google/protobuf/duration.proto";
@@ -26,11 +32,11 @@ message DispatcherOptions {
 
     google.protobuf.Duration timeout = 201; // custom timeout
 
-    // functional 
-    bool  mark_fast_save = 301; // 标记把涉及的路由对象转移到快队列并触发保存(需要dispatcher层和task_action_base层支持)
-    bool  router_rpc     = 302; // 是否是路由系统rpc，生成的接口使用路由系统参数(需要generator支持)
-    bool  user_rpc       = 303; // RPC接口是否需要附带用户信息
-    bool  no_cache       = 304; 
+    // functional
+    bool mark_fast_save = 301; // 标记把涉及的路由对象转移到快队列并触发保存(需要dispatcher层和task_action_base层支持)
+    bool router_rpc     = 302; // 是否是路由系统rpc，生成的接口使用路由系统参数(需要generator支持)
+    bool user_rpc       = 303; // RPC接口是否需要附带用户信息
+    bool no_cache       = 304;
 }
 
 extend google.protobuf.MethodOptions {

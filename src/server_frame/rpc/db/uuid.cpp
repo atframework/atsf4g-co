@@ -121,7 +121,7 @@ namespace rpc {
                 }
 
                 uint64_t rpc_sequence = 0;
-                int res = db_msg_dispatcher::me()->send_msg(db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, keyvar, keylen, task->get_id(),
+                int      res          = db_msg_dispatcher::me()->send_msg(db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, keyvar, keylen, task->get_id(),
                                                             logic_config::me()->get_self_bus_id(), rpc::db::detail::unpack_integer, rpc_sequence,
                                                             static_cast<int>(args.size()), args.get_args_values(), args.get_args_lengths());
 
@@ -193,7 +193,7 @@ namespace rpc {
             static UTIL_ENV_AUTO_MAP(unique_id_key_t, unique_id_value_t, unique_id_container_helper) g_unique_id_pools;
             static util::lock::spin_rw_lock g_unique_id_pool_locker;
 
-            template<int64_t bits_off>
+            template <int64_t bits_off>
             static int64_t generate_global_unique_id(uint32_t major_type, uint32_t minor_type, uint32_t patch_type) {
                 task_manager::task_t *this_task = task_manager::task_t::this_task();
                 if (NULL == this_task) {
@@ -225,7 +225,7 @@ namespace rpc {
                     }
 
                     util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard(g_unique_id_pool_locker);
-                    unique_id_value_t val;
+                    unique_id_value_t                                       val;
                     val.unique_id_index = 0;
                     val.unique_id_base  = 0;
                     iter                = g_unique_id_pools.insert(real_map_type::value_type(key, val)).first;
@@ -246,7 +246,15 @@ namespace rpc {
 
                     // 任务已经失败或者不在任务中
                     if (nullptr == this_task || this_task->is_exiting()) {
-                        ret = 0;
+                        if (this_task->is_timeout()) {
+                            ret = hello::err::EN_SYS_TIMEOUT;
+                        } else if (this_task->is_faulted()) {
+                            ret = hello::err::EN_SYS_RPC_TASK_KILLED;
+                        } else if (this_task->is_canceled()) {
+                            ret = hello::err::EN_SYS_RPC_TASK_CANCELLED;
+                        } else {
+                            ret = hello::err::EN_SYS_RPC_TASK_EXITING;
+                        }
                         break;
                     }
 
@@ -284,6 +292,9 @@ namespace rpc {
 
                 // WLOGINFO("=====DEBUG===== malloc uuid for (%u, %u, %u), val: %lld", major_type, minor_type, patch_type, static_cast<long
                 // long>(ret));
+                if (0 == ret) {
+                    ret = mvp::err::EN_SYS_RPC_CALL;
+                }
                 return ret;
             }
 
@@ -296,7 +307,8 @@ namespace rpc {
                     return generate_global_unique_id<5>(major_type, minor_type, patch_type);
                 } else {
                     // POOL => 1 | 50 | 13
-                    return generate_global_unique_id<13>(major_type, minor_type, patch_type);;
+                    return generate_global_unique_id<13>(major_type, minor_type, patch_type);
+                    ;
                 }
             }
         } // namespace uuid

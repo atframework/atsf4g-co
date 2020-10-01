@@ -27,18 +27,14 @@ namespace rpc {
 
             if (task->is_timeout()) {
                 return hello::err::EN_SYS_TIMEOUT;
-            }
-
-            if (task->is_faulted()) {
+            } else if (task->is_faulted()) {
                 return hello::err::EN_SYS_RPC_TASK_KILLED;
-            }
-
-            if (task->is_canceled()) {
+            } else if (task->is_canceled()) {
                 return hello::err::EN_SYS_RPC_TASK_CANCELLED;
             }
 
             bool is_continue = true;
-            for (int retry_times = 0; is_continue && retry_times < 5; ++ retry_times) {
+            for (int retry_times = 0; is_continue && retry_times < 5; ++retry_times) {
                 is_continue = false;
                 // 协程 swap out
                 void *result = NULL;
@@ -66,22 +62,16 @@ namespace rpc {
                 }
 
                 if (resume_data->message.msg_type != check_type) {
-                    WLOGERROR("task %llu resume and expect message type 0x%llx but real is 0x%llx", 
-                        static_cast<unsigned long long>(task->get_id()),
-                        static_cast<unsigned long long>(check_type),
-                        static_cast<unsigned long long>(resume_data->message.msg_type)
-                    );
+                    WLOGERROR("task %llu resume and expect message type 0x%llx but real is 0x%llx", static_cast<unsigned long long>(task->get_id()),
+                              static_cast<unsigned long long>(check_type), static_cast<unsigned long long>(resume_data->message.msg_type));
 
                     is_continue = true;
                     continue;
                 }
 
                 if (0 != check_sequence && 0 != resume_data->sequence && check_sequence != resume_data->sequence) {
-                    WLOGERROR("task %llu resume and expect message sequence %llu but real is %llu", 
-                        static_cast<unsigned long long>(task->get_id()),
-                        static_cast<unsigned long long>(check_sequence),
-                        static_cast<unsigned long long>(resume_data->sequence)
-                    );
+                    WLOGERROR("task %llu resume and expect message sequence %llu but real is %llu", static_cast<unsigned long long>(task->get_id()),
+                              static_cast<unsigned long long>(check_sequence), static_cast<unsigned long long>(resume_data->sequence));
                     is_continue = true;
                     continue;
                 }
