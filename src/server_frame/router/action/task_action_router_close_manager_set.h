@@ -31,11 +31,11 @@ public:
     task_action_router_close_manager_set(ctor_param_t COPP_MACRO_RV_REF param);
     ~task_action_router_close_manager_set();
 
-    virtual int operator()();
+    virtual int operator()() UTIL_CONFIG_OVERRIDE;
 
-    virtual int on_success();
-    virtual int on_failed();
-    virtual int on_timeout();
+    virtual int on_success() UTIL_CONFIG_OVERRIDE;
+    virtual int on_failed() UTIL_CONFIG_OVERRIDE;
+    virtual int on_timeout() UTIL_CONFIG_OVERRIDE;
 
 private:
     void save_fallback();

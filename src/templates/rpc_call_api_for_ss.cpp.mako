@@ -123,8 +123,9 @@ namespace rpc {
                 );
             }
 
+            rpc::context child_ctx(ctx);
             rpc::context::tracer tracer;
-            ctx.setup_tracer(tracer, "${rpc.get_full_name()}");
+            child_ctx.setup_tracer(tracer, "${rpc.get_full_name()}");
 
 %   if rpc_is_user_rpc:
             req_msg.mutable_head()->set_player_user_id(user_id);

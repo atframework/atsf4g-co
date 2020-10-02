@@ -34,8 +34,6 @@ namespace hello {
 namespace rpc {
 
     class context {
-
-        UTIL_DESIGN_PATTERN_NOCOPYABLE(context)
         UTIL_DESIGN_PATTERN_NOMOVABLE(context)
 
     public:
@@ -44,8 +42,12 @@ namespace rpc {
             ~tracer();
         };
 
+    private:
+        context &operator=(const context &) UTIL_CONFIG_DELETED_FUNCTION;
+
     public:
         context();
+        context(context &parent);
         ~context();
 
         void setup_tracer(tracer &, const char *name);

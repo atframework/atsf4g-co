@@ -130,7 +130,7 @@ public:
 
     rpc_response_type &get_response_body() {
         if (nullptr == response_body_) {
-            response_body_ = get_shared_context().create<rpc_response_type>();
+            response_body_ = get_shared_context().template create<rpc_response_type>();
         }
 
         if (nullptr == response_body_) {
@@ -159,7 +159,7 @@ private:
     void unpack_request() {
         has_unpack_request_ = true;
 
-        request_body_ = get_shared_context().create<rpc_request_type>();
+        request_body_ = get_shared_context().template create<rpc_request_type>();
         if (nullptr == request_body_) {
             return;
         }

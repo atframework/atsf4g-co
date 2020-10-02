@@ -20,11 +20,11 @@ public:
     task_action_auto_save_objects(ctor_param_t COPP_MACRO_RV_REF param);
     ~task_action_auto_save_objects();
 
-    virtual int operator()();
+    virtual int operator()() UTIL_CONFIG_OVERRIDE;
 
-    virtual int on_success();
-    virtual int on_failed();
-    virtual int on_timeout();
+    virtual int on_success() UTIL_CONFIG_OVERRIDE;
+    virtual int on_failed() UTIL_CONFIG_OVERRIDE;
+    virtual int on_timeout() UTIL_CONFIG_OVERRIDE;
 
 private:
     const char *get_action_name(uint32_t) const;

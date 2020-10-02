@@ -77,8 +77,9 @@ namespace rpc {
                 );
             }
 
+            rpc::context child_ctx(ctx);
             rpc::context::tracer tracer;
-            ctx.setup_tracer(tracer, "hello.GamesvrService.player_kickoff");
+            child_ctx.setup_tracer(tracer, "hello.GamesvrService.player_kickoff");
 
             req_msg.mutable_head()->set_player_user_id(user_id);
             req_msg.mutable_head()->set_player_zone_id(zone_id);

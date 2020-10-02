@@ -152,7 +152,7 @@ protected:
             return *request_msg_;
         }
 
-        request_msg_ = get_shared_context().create<TREQ>();
+        request_msg_ = get_shared_context().template create<TREQ>();
         if (nullptr != request_msg_) {
             return *request_msg_;
         }

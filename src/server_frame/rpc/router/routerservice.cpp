@@ -71,8 +71,9 @@ namespace rpc {
                 );
             }
 
+            rpc::context child_ctx(ctx);
             rpc::context::tracer tracer;
-            ctx.setup_tracer(tracer, "hello.RouterService.router_update_sync");
+            child_ctx.setup_tracer(tracer, "hello.RouterService.router_update_sync");
 
 
             if (dst_bus_id == 0) {
@@ -129,8 +130,9 @@ namespace rpc {
                 );
             }
 
+            rpc::context child_ctx(ctx);
             rpc::context::tracer tracer;
-            ctx.setup_tracer(tracer, "hello.RouterService.router_transfer");
+            child_ctx.setup_tracer(tracer, "hello.RouterService.router_transfer");
 
 
             if (dst_bus_id == 0) {

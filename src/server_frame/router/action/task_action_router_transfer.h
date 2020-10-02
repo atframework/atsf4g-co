@@ -35,10 +35,10 @@ public:
 
     virtual bool is_stream_rpc() const UTIL_CONFIG_OVERRIDE;
 
-    virtual int operator()();
+    virtual int operator()() UTIL_CONFIG_OVERRIDE;
 
-    virtual int on_success();
-    virtual int on_failed();
+    virtual int on_success() UTIL_CONFIG_OVERRIDE;
+    virtual int on_failed() UTIL_CONFIG_OVERRIDE;
 };
 
 #endif // GENERATED_TASK_ACTION_ROUTER_TRANSFER_H

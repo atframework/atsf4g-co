@@ -28,8 +28,8 @@ namespace detail {
     static void help_func(util::cli::callback_param stParams, simulator_base *self) {
         util::cli::shell_stream(std::cout)() << util::cli::shell_font_style::SHELL_FONT_COLOR_YELLOW << util::cli::shell_font_style::SHELL_FONT_SPEC_BOLD
                                              << "Usage: " << self->get_exec() << " [options...]" << std::endl;
-        self->get_option_manager()->set_help_cmd_style(util::cli::shell_font_style::SHELL_FONT_COLOR_MAGENTA |
-                                                       util::cli::shell_font_style::SHELL_FONT_SPEC_BOLD);
+        self->get_option_manager()->set_help_cmd_style(static_cast<int>(util::cli::shell_font_style::SHELL_FONT_COLOR_MAGENTA) |
+                                                       static_cast<int>(util::cli::shell_font_style::SHELL_FONT_SPEC_BOLD));
 
         std::cout << *self->get_option_manager() << std::endl;
 
@@ -46,7 +46,7 @@ namespace detail {
             std::cout << "Usage:" << std::endl;
             std::cout << "Commands:" << std::endl;
             owner->get_cmd_manager()->set_help_cmd_style(util::cli::shell_font_style::SHELL_FONT_COLOR_YELLOW |
-                                                         util::cli::shell_font_style::SHELL_FONT_SPEC_BOLD);
+                                                         static_cast<int>(util::cli::shell_font_style::SHELL_FONT_SPEC_BOLD));
             std::cout << *owner->get_cmd_manager() << std::endl;
         }
     };
