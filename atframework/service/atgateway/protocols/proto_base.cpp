@@ -79,7 +79,7 @@ namespace atframe {
         proto_base::proto_base() : flags_(0), write_header_offset_(0), callbacks_(NULL), private_data_(NULL) {}
         proto_base::~proto_base() {
             if (check_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE) || !check_flag(flag_t::EN_PFT_HANDSHAKE_DONE)) {
-                handshake_done(error_code_t::EN_ECT_HANDSHAKE);
+                inner_handshake_done(error_code_t::EN_ECT_HANDSHAKE);
             }
         };
 
@@ -134,7 +134,8 @@ namespace atframe {
         void proto_base::set_recv_buffer_limit(size_t, size_t) {}
         void proto_base::set_send_buffer_limit(size_t, size_t) {}
 
-        int proto_base::handshake_done(int status) {
+        int proto_base::handshake_done(int status) { return inner_handshake_done(status); }
+        int proto_base::inner_handshake_done(int status);
             bool has_handshake_done = check_flag(flag_t::EN_PFT_HANDSHAKE_DONE);
             if (has_handshake_done && !check_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE)) {
                 return error_code_t::EN_ECT_HANDSHAKE;

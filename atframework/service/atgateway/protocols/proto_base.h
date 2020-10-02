@@ -285,6 +285,7 @@ namespace atframe {
              * @return 0 or error code
              */
             virtual int handshake_done(int status);
+            int inner_handshake_done(int status);
 
             /**
              * @biref update and do handshake again

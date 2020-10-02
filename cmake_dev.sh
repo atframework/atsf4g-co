@@ -199,6 +199,10 @@ if [[ 1 -eq $CMAKE_CLANG_ANALYZER ]]; then
         CMAKE_CLANG_ANALYZER_OPTIONS="$CMAKE_CLANG_ANALYZER_OPTIONS --exclude $BUILD_JOBS_DIRS";
     done
 
+    for TEST_DIRS in $(find ../atframework -name test) ; do
+        CMAKE_CLANG_ANALYZER_OPTIONS="$CMAKE_CLANG_ANALYZER_OPTIONS --exclude $BUILD_JOBS_DIRS";
+    done
+
     echo "#!/bin/bash
 cd '$SCRIPT_DIR/$BUILD_DIR';
 " > run-scan-build.sh;
