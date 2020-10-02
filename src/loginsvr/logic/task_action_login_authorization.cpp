@@ -12,8 +12,8 @@
 #include <rpc/auth/login.h>
 #include <rpc/db/login.h>
 #include <rpc/db/uuid.h>
-#include <rpc/game/player.h>
 #include <rpc/game/gamesvrservice.h>
+#include <rpc/game/player.h>
 #include <time/time_utility.h>
 
 
@@ -191,10 +191,8 @@ int task_action_login_authorization::operator()() {
             hello::SSPlayerKickOffReq kickoff_req;
             hello::SSPlayerKickOffRsp kickoff_rsp;
             kickoff_req.set_reason(::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
-            int32_t ret = rpc::game::player_kickoff(
-                login_data_.router_server_id(), zone_id_, login_data_.user_id(), msg_body.open_id(),
-                kickoff_req, kickoff_rsp
-            );
+            int32_t ret = rpc::game::player_kickoff(get_shared_context(), login_data_.router_server_id(), zone_id_, login_data_.user_id(), msg_body.open_id(),
+                                                    kickoff_req, kickoff_rsp);
             if (ret) {
                 WLOGERROR("user %s send msg to 0x%llx fail: %d", login_data_.open_id().c_str(), static_cast<unsigned long long>(login_data_.router_server_id()),
                           ret);
@@ -218,7 +216,7 @@ int task_action_login_authorization::operator()() {
                 // 8. 验证踢出后的登入pd
                 uint64_t old_svr_id = login_data_.router_server_id();
                 login_data_.Clear();
-                res                 = rpc::db::login::get(msg_body.open_id().c_str(), zone_id_, login_data_, version_);
+                res = rpc::db::login::get(msg_body.open_id().c_str(), zone_id_, login_data_, version_);
                 if (res < 0) {
                     WLOGERROR("call login rpc method failed, msg: %s", msg_body.DebugString().c_str());
                     set_rsp_code(hello::EN_ERR_LOGIN_ALREADY_ONLINE);

@@ -25,6 +25,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 #include <config/compiler/protobuf_suffix.h>
 
 namespace rpc {
+    class context;
 % for ns in service.get_cpp_namespace_begin(module_name, '    '):
     ${ns}
 % endfor
@@ -33,7 +34,7 @@ namespace rpc {
     rpc_is_router_api = rpc.get_extension_field('rpc_options', lambda x: x.router_rpc, False)
     rpc_is_user_rpc = rpc.get_extension_field('rpc_options', lambda x: x.user_rpc, False)
     rpc_is_stream_mode = rpc.is_request_stream() or rpc.is_response_stream()
-    rpc_params = []
+    rpc_params = ['context& ctx']
     rpc_param_docs = []
     if rpc_is_router_api:
         rpc_params.extend(['uint32_t type_id', 'uint32_t zone_id', 'uint64_t object_id'])

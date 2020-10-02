@@ -16,9 +16,16 @@
 #include <router/router_manager_set.h>
 #include <router/router_object_base.h>
 
+#include <rpc/db/uuid.h>
+
 #include "task_action_cs_req_base.h"
 
 task_action_cs_req_base::task_action_cs_req_base(dispatcher_start_data_t COPP_MACRO_RV_REF start_param) {
+    // 必须先设置共享的arena
+    if (nullptr != start_param.context) {
+        get_shared_context().try_reuse_protobuf_arena(start_param.context->mutable_protobuf_arena());
+    }
+
     msg_type *cs_msg = cs_msg_dispatcher::me()->get_protobuf_msg<msg_type>(start_param.message);
     if (NULL != cs_msg) {
         get_request().Swap(cs_msg);
@@ -31,11 +38,13 @@ task_action_cs_req_base::task_action_cs_req_base(dispatcher_start_data_t COPP_MA
             }
         }
     }
+
+    get_shared_context().set_trace_id(rpc::db::uuid::generate_short_uuid());
 }
 
 task_action_cs_req_base::~task_action_cs_req_base() {}
 
-int task_action_cs_req_base::hook_run() { 
+int task_action_cs_req_base::hook_run() {
     int ret = base_type::hook_run();
 
     // 自动设置快队列保存
@@ -48,7 +57,7 @@ int task_action_cs_req_base::hook_run() {
             break;
         }
 
-        router_manager_base* mgr = router_manager_set::me()->get_manager(hello::EN_ROT_PLAYER);
+        router_manager_base *mgr = router_manager_set::me()->get_manager(hello::EN_ROT_PLAYER);
         if (NULL == mgr) {
             break;
         }
@@ -58,7 +67,7 @@ int task_action_cs_req_base::hook_run() {
             break;
         }
 
-        router_manager_base::key_t key(hello::EN_ROT_PLAYER, player_cache->get_zone_id(), player_cache->get_user_id());
+        router_manager_base::key_t          key(hello::EN_ROT_PLAYER, player_cache->get_zone_id(), player_cache->get_user_id());
         std::shared_ptr<router_object_base> obj = mgr->get_base_cache(key);
         if (!obj || !obj->is_writable()) {
             break;
@@ -95,13 +104,20 @@ std::shared_ptr<player_cache> task_action_cs_req_base::get_player_cache() const 
 }
 
 task_action_cs_req_base::msg_ref_type task_action_cs_req_base::add_rsp_msg() {
-    rsp_msgs_.push_back(msg_type());
-    return rsp_msgs_.back();
+    msg_type *msg = get_shared_context().create<msg_type>();
+    if (nullptr == msg) {
+        static msg_type empty_msg;
+        empty_msg.Clear();
+        return empty_msg;
+    }
+
+    rsp_msgs_.push_back(msg);
+    return *msg;
 }
 
-std::list<task_action_cs_req_base::msg_type> &task_action_cs_req_base::get_rsp_list() { return rsp_msgs_; }
+std::list<task_action_cs_req_base::msg_type *> &task_action_cs_req_base::get_rsp_list() { return rsp_msgs_; }
 
-const std::list<task_action_cs_req_base::msg_type> &task_action_cs_req_base::get_rsp_list() const { return rsp_msgs_; }
+const std::list<task_action_cs_req_base::msg_type *> &task_action_cs_req_base::get_rsp_list() const { return rsp_msgs_; }
 
 void task_action_cs_req_base::send_rsp_msg() {
     if (rsp_msgs_.empty()) {
@@ -119,7 +135,7 @@ void task_action_cs_req_base::send_rsp_msg() {
     player_cache::ptr_t owner_player = sess->get_player();
 
     uint64_t seq = 0;
-    int32_t op_type;
+    int32_t  op_type;
     {
         msg_ref_type req_msg = get_request();
         if (req_msg.has_head()) {
@@ -132,14 +148,14 @@ void task_action_cs_req_base::send_rsp_msg() {
         }
     }
 
-    for (std::list<msg_type>::iterator iter = rsp_msgs_.begin(); iter != rsp_msgs_.end(); ++iter) {
-        (*iter).mutable_head()->set_error_code(get_rsp_code());
-        (*iter).mutable_head()->set_timestamp(util::time::time_utility::get_now());
-        (*iter).mutable_head()->set_sequence(seq);
-        (*iter).mutable_head()->set_op_type(op_type);
+    for (std::list<msg_type *>::iterator iter = rsp_msgs_.begin(); iter != rsp_msgs_.end(); ++iter) {
+        (*iter)->mutable_head()->set_error_code(get_rsp_code());
+        (*iter)->mutable_head()->set_timestamp(util::time::time_utility::get_now());
+        (*iter)->mutable_head()->set_sequence(seq);
+        (*iter)->mutable_head()->set_op_type(op_type);
 
         // send message using session
-        int32_t res = sess->send_msg_to_client(*iter);
+        int32_t res = sess->send_msg_to_client(**iter);
         if (res) {
             if (owner_player) {
                 WLOGERROR("task %s [0x%llx] send message to player_cache %s failed, res: %d", name(), get_task_id_llu(), owner_player->get_open_id().c_str(),
@@ -159,8 +175,8 @@ void task_action_cs_req_base::send_rsp_msg() {
 
         // refresh visit time if success
         if (0 == get_rsp_code()) {
-            router_player_manager::ptr_t router_cache =
-                router_player_manager::me()->get_cache(router_player_manager::key_t(router_player_manager::me()->get_type_id(), owner_player->get_zone_id(), owner_player->get_user_id()));
+            router_player_manager::ptr_t router_cache = router_player_manager::me()->get_cache(
+                router_player_manager::key_t(router_player_manager::me()->get_type_id(), owner_player->get_zone_id(), owner_player->get_user_id()));
             if (router_cache && router_cache->is_object_equal(owner_player)) {
                 router_cache->refresh_visit_time();
             }

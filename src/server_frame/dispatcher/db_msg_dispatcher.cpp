@@ -26,9 +26,14 @@
 #include "db_msg_dispatcher.h"
 #include <config/logic_config.h>
 
+#include <config/compiler/protobuf_prefix.h>
+
 #include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/pbdesc/svr.table.pb.h>
 
+#include <config/compiler/protobuf_suffix.h>
+
+#include <rpc/rpc_utils.h>
 
 struct db_async_data_t {
     uint64_t task_id;
@@ -113,7 +118,13 @@ int db_msg_dispatcher::tick() {
 
 int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
     assert(msg_buf_sz == sizeof(db_async_data_t));
-    hello::table_all_message table_msg;
+
+    rpc::context              ctx;
+    hello::table_all_message *table_msg = ctx.create<hello::table_all_message>();
+    if (nullptr == table_msg) {
+        FWLOGERROR("{} create message instance failed", name());
+        return hello::err::EN_SYS_MALLOC;
+    }
 
     const db_async_data_t *req = reinterpret_cast<const db_async_data_t *>(msg_buf);
 
@@ -130,11 +141,11 @@ int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
         } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("CAS_FAILED", req->response->str, 10)) {
             WLOGINFO("db reply status: %s", req->response->str);
             if (req->response->str[10] && req->response->str[11]) {
-                table_msg.set_version(&req->response->str[11]);
+                table_msg->set_version(&req->response->str[11]);
             }
             ret = hello::err::EN_DB_OLD_VERSION;
         } else {
-            table_msg.set_version(req->response->str);
+            table_msg->set_version(req->response->str);
             ret = hello::err::EN_SUCCESS;
         }
         break;
@@ -142,7 +153,7 @@ int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
     case REDIS_REPLY_ERROR: {
         if (0 == UTIL_STRFUNC_STRNCASE_CMP("CAS_FAILED", req->response->str, 10)) {
             if (req->response->str[10] && req->response->str[11]) {
-                table_msg.set_version(&req->response->str[11]);
+                table_msg->set_version(&req->response->str[11]);
             }
             ret = hello::err::EN_DB_OLD_VERSION;
         } else {
@@ -153,7 +164,7 @@ int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
     }
     default: {
         if (NULL != req->unpack_fn) {
-            ret = req->unpack_fn(table_msg, req->response);
+            ret = req->unpack_fn(*table_msg, req->response);
             if (ret < 0) {
                 WLOGERROR("db unpack data error, res: %d", ret);
             }
@@ -164,14 +175,15 @@ int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
     }
     }
 
-    table_msg.set_bus_id(req->bus_id);
-    table_msg.set_dst_task_id(req->task_id);
-    table_msg.set_error_code(ret);
+    table_msg->set_bus_id(req->bus_id);
+    table_msg->set_dst_task_id(req->task_id);
+    table_msg->set_error_code(ret);
 
-    msg_raw_t msg;
-    msg.msg_addr = &table_msg;
-    msg.msg_type = get_instance_ident();
-    ret          = on_recv_msg(msg, req->response, req->sequence);
+    dispatcher_msg_raw_t callback_msg = dispatcher_make_default<dispatcher_msg_raw_t>();
+    callback_msg.msg_addr             = table_msg;
+    callback_msg.msg_type             = get_instance_ident();
+
+    ret = on_receive_message(ctx, callback_msg, req->response, req->sequence);
     return ret;
 }
 

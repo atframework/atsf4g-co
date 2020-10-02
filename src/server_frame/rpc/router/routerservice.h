@@ -20,6 +20,7 @@
 #include <config/compiler/protobuf_suffix.h>
 
 namespace rpc {
+    class context;
     namespace router {
 
         // ============ hello.RouterService.router_update_sync ============
@@ -30,7 +31,7 @@ namespace rpc {
          * @note  notify another server instance to update router table
          * @return 0 or error code
          */
-        int router_update_sync(uint64_t dst_bus_id, hello::SSRouterUpdateSync &req_body);
+        int router_update_sync(context& ctx, uint64_t dst_bus_id, hello::SSRouterUpdateSync &req_body);
 
         // ============ hello.RouterService.router_transfer ============
         /**
@@ -41,7 +42,7 @@ namespace rpc {
          * @note  transfer a router object into another server instance
          * @return 0 or error code
          */
-        int router_transfer(uint64_t dst_bus_id, hello::SSRouterTransferReq &req_body, hello::SSRouterTransferRsp &rsp_body);
+        int router_transfer(context& ctx, uint64_t dst_bus_id, hello::SSRouterTransferReq &req_body, hello::SSRouterTransferRsp &rsp_body);
     }
 }
 

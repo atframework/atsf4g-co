@@ -27,8 +27,8 @@ const char *dispatcher_implement::name() const {
     }
 #if defined(__GLIBCXX__) || defined(_LIBCOPP_ABI_VERSION)
     const char *raw_name = typeid(*this).name();
-    int cxx_abi_status;
-    char *readable_name = abi::__cxa_demangle(raw_name, 0, 0, &cxx_abi_status);
+    int         cxx_abi_status;
+    char *      readable_name = abi::__cxa_demangle(raw_name, 0, 0, &cxx_abi_status);
     if (NULL == readable_name) {
         human_readable_name_ = ::atapp::module_impl::name();
         return human_readable_name_.c_str();
@@ -46,7 +46,7 @@ const char *dispatcher_implement::name() const {
 
 uintptr_t dispatcher_implement::get_instance_ident() const { return reinterpret_cast<uintptr_t>(this); }
 
-int32_t dispatcher_implement::on_recv_msg(msg_raw_t &msg, void *priv_data, uint64_t sequence) {
+int32_t dispatcher_implement::on_receive_message(rpc::context &ctx, msg_raw_t &msg, void *priv_data, uint64_t sequence) {
     if (NULL == msg.msg_addr) {
         FWLOGERROR("msg.msg_addr == NULL.");
         return hello::err::EN_SYS_PARAM;
@@ -61,8 +61,7 @@ int32_t dispatcher_implement::on_recv_msg(msg_raw_t &msg, void *priv_data, uint6
     // 用于提供给所有消息进行前置处理的功能
     // 过滤器可以控制消息是否要下发下去
     if (!msg_filter_list_.empty()) {
-        msg_filter_data_t filter_data;
-        filter_data.msg = msg;
+        msg_filter_data_t filter_data(msg);
 
         for (std::list<msg_filter_handle_t>::iterator iter = msg_filter_list_.begin(); iter != msg_filter_list_.end(); ++iter) {
             if (false == (*iter)(filter_data)) {
@@ -76,9 +75,10 @@ int32_t dispatcher_implement::on_recv_msg(msg_raw_t &msg, void *priv_data, uint6
         uint64_t task_id = pick_msg_task_id(msg);
         if (task_id > 0) { // 如果是恢复任务则尝试切回协程任务
             resume_data_t callback_data = dispatcher_make_default<resume_data_t>();
-            callback_data.message = msg;
-            callback_data.private_data = priv_data;
-            callback_data.sequence = sequence;
+            callback_data.message       = msg;
+            callback_data.private_data  = priv_data;
+            callback_data.sequence      = sequence;
+            callback_data.context       = &ctx;
 
             // 查找并恢复已有task
             return task_manager::me()->resume_task(task_id, callback_data);
@@ -90,10 +90,11 @@ int32_t dispatcher_implement::on_recv_msg(msg_raw_t &msg, void *priv_data, uint6
         }
     }
 
-    uint64_t task_id = 0;
+    uint64_t     task_id       = 0;
     start_data_t callback_data = dispatcher_make_default<dispatcher_start_data_t>();
-    callback_data.message = msg;
+    callback_data.message      = msg;
     callback_data.private_data = priv_data;
+    callback_data.context      = &ctx;
 
     // 先尝试使用task 模块
     int res = create_task(callback_data, task_id);
@@ -112,8 +113,7 @@ int32_t dispatcher_implement::on_recv_msg(msg_raw_t &msg, void *priv_data, uint6
         if (hello::err::EN_SYS_NOTFOUND == res) {
             FWLOGWARNING("{}(type={}) create task failed, task action or actor action not registered", name(), get_instance_ident_llu());
         } else {
-            FWLOGERROR("{}(type={}) create task failed, error={}({})", name(), get_instance_ident_llu(), 
-                res, protobuf_mini_dumper_get_error_msg(res));
+            FWLOGERROR("{}(type={}) create task failed, error={}({})", name(), get_instance_ident_llu(), res, protobuf_mini_dumper_get_error_msg(res));
         }
         return res;
     }
@@ -127,10 +127,11 @@ int32_t dispatcher_implement::on_recv_msg(msg_raw_t &msg, void *priv_data, uint6
     return task_manager::me()->start_task(task_id, callback_data);
 }
 
-int32_t dispatcher_implement::on_send_msg_failed(msg_raw_t &msg, int32_t error_code, uint64_t sequence) {
+int32_t dispatcher_implement::on_send_message_failed(rpc::context &ctx, msg_raw_t &msg, int32_t error_code, uint64_t sequence) {
     resume_data_t callback_data = dispatcher_make_default<dispatcher_resume_data_t>();
-    callback_data.message = msg;
-    callback_data.sequence = sequence;
+    callback_data.message       = msg;
+    callback_data.sequence      = sequence;
+    callback_data.context       = &ctx;
 
     // msg->set_rpc_result(hello::err::EN_SYS_RPC_SEND_FAILED);
     uint64_t task_id = pick_msg_task_id(msg);
@@ -147,8 +148,8 @@ int32_t dispatcher_implement::on_send_msg_failed(msg_raw_t &msg, int32_t error_c
 int dispatcher_implement::create_task(start_data_t &start_data, task_manager::id_t &task_id) {
     task_id = 0;
 
-    msg_type_t msg_type_id = pick_msg_type_id(start_data.message);
-    const std::string& rpc_name = pick_rpc_name(start_data.message);
+    msg_type_t         msg_type_id = pick_msg_type_id(start_data.message);
+    const std::string &rpc_name    = pick_rpc_name(start_data.message);
     if (0 == msg_type_id && rpc_name.empty()) {
         return hello::err::EN_SUCCESS;
     }
@@ -177,8 +178,8 @@ int dispatcher_implement::create_task(start_data_t &start_data, task_manager::id
 }
 
 task_manager::actor_action_ptr_t dispatcher_implement::create_actor(start_data_t &start_data) {
-    msg_type_t msg_type_id = pick_msg_type_id(start_data.message);
-    const std::string& rpc_name = pick_rpc_name(start_data.message);
+    msg_type_t         msg_type_id = pick_msg_type_id(start_data.message);
+    const std::string &rpc_name    = pick_rpc_name(start_data.message);
     if (0 == msg_type_id && rpc_name.empty()) {
         return nullptr;
     }
@@ -207,9 +208,7 @@ task_manager::actor_action_ptr_t dispatcher_implement::create_actor(start_data_t
     return nullptr;
 }
 
-const atframework::DispatcherOptions* dispatcher_implement::get_options_by_message_type(msg_type_t msg_type) {
-    return NULL;
-}
+const atframework::DispatcherOptions *dispatcher_implement::get_options_by_message_type(msg_type_t msg_type) { return NULL; }
 
 void dispatcher_implement::push_filter_to_front(msg_filter_handle_t fn) { msg_filter_list_.push_front(fn); }
 
@@ -242,7 +241,7 @@ int dispatcher_implement::_register_action(msg_type_t msg_type, task_manager::ac
     return hello::err::EN_SUCCESS;
 }
 
-int dispatcher_implement::_register_action(const std::string& rpc_full_name, task_manager::task_action_creator_t action) {
+int dispatcher_implement::_register_action(const std::string &rpc_full_name, task_manager::task_action_creator_t action) {
     rpc_task_action_set_t::iterator iter = task_action_map_by_name_.find(rpc_full_name);
     if (task_action_map_by_name_.end() != iter) {
         FWLOGERROR("{} try to register more than one task actions to rpc {}.", name(), rpc_full_name);
@@ -253,7 +252,7 @@ int dispatcher_implement::_register_action(const std::string& rpc_full_name, tas
     return hello::err::EN_SUCCESS;
 }
 
-int dispatcher_implement::_register_action(const std::string& rpc_full_name, task_manager::actor_action_creator_t action) {
+int dispatcher_implement::_register_action(const std::string &rpc_full_name, task_manager::actor_action_creator_t action) {
     rpc_actor_action_set_t::iterator iter = actor_action_map_by_name_.find(rpc_full_name);
     if (actor_action_map_by_name_.end() != iter) {
         FWLOGERROR("{} try to register more than one actor actions to rpc {}.", name(), rpc_full_name);

@@ -17,6 +17,7 @@
 #include <log/log_wrapper.h>
 
 #include <rpc/router/routerservice.h>
+#include <rpc/rpc_utils.h>
 
 #include "router_manager_base.h"
 #include "router_manager_set.h"
@@ -318,27 +319,32 @@ public:
 
         if (0 != svr_id && need_notify) {
             // 如果目标不是0则通知目标服务器
-            hello::SSRouterTransferReq req;
-            hello::SSRouterTransferRsp rsp;
-            hello::SSRouterHead *      router_head = req.mutable_object();
-            if (NULL != router_head) {
-                router_head->set_router_src_bus_id(obj->get_router_server_id());
-                router_head->set_router_version(obj->get_router_version());
-
-                router_head->set_object_inst_id(obj->get_key().object_id);
-                router_head->set_object_type_id(get_type_id());
-                router_head->set_object_zone_id(obj->get_key().zone_id);
-
-                // 转移通知RPC也需要设置为IO任务，这样如果有其他的读写任务或者转移任务都会等本任务完成
-                obj->io_task_.swap(self_task);
-                ret = rpc::router::router_transfer(svr_id, req, rsp);
-                obj->io_task_.reset();
-                if (ret < 0) {
-                    WLOGERROR("transfer router object (type=%u,zone_id=%u) 0x%llx failed, res: %d", get_type_id(), 
-                        obj->get_key().zone_id, obj->get_key().object_id_ull(), ret);
-                }
-            } else {
+            rpc::context                ctx;
+            hello::SSRouterTransferReq *req = ctx.create<hello::SSRouterTransferReq>();
+            hello::SSRouterTransferRsp *rsp = ctx.create<hello::SSRouterTransferRsp>();
+            if (nullptr == req || nullptr == rsp) {
                 ret = hello::err::EN_SYS_MALLOC;
+            } else {
+                hello::SSRouterHead *router_head = req->mutable_object();
+                if (NULL != router_head) {
+                    router_head->set_router_src_bus_id(obj->get_router_server_id());
+                    router_head->set_router_version(obj->get_router_version());
+
+                    router_head->set_object_inst_id(obj->get_key().object_id);
+                    router_head->set_object_type_id(get_type_id());
+                    router_head->set_object_zone_id(obj->get_key().zone_id);
+
+                    // 转移通知RPC也需要设置为IO任务，这样如果有其他的读写任务或者转移任务都会等本任务完成
+                    obj->io_task_.swap(self_task);
+                    ret = rpc::router::router_transfer(ctx, svr_id, *req, *rsp);
+                    obj->io_task_.reset();
+                    if (ret < 0) {
+                        FWLOGERROR("transfer router object (type={},zone_id={}) {} failed, res: {}", get_type_id(), obj->get_key().zone_id,
+                                   obj->get_key().object_id_ull(), ret);
+                    }
+                } else {
+                    ret = hello::err::EN_SYS_MALLOC;
+                }
             }
         }
 
@@ -356,8 +362,8 @@ public:
                     int res = send_msg_raw(*obj, msg, rpc_sequence);
 #endif
                     if (res < 0) {
-                        WLOGERROR("transfer router object (type=%u,zone_id=%u) 0x%llx message failed, res: %d", get_type_id(), 
-                            obj->get_key().zone_id, obj->get_key().object_id_ull(), res);
+                        WLOGERROR("transfer router object (type=%u,zone_id=%u) 0x%llx message failed, res: %d", get_type_id(), obj->get_key().zone_id,
+                                  obj->get_key().object_id_ull(), res);
                     } else {
                         obj->send_transfer_msg_failed(COPP_MACRO_STD_MOVE(msg));
                     }

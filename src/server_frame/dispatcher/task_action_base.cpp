@@ -12,6 +12,8 @@
 
 #include <utility/protobuf_mini_dumper.h>
 
+#include <rpc/db/uuid.h>
+
 #include "task_action_base.h"
 #include "task_manager.h"
 
@@ -43,12 +45,13 @@ namespace detail {
         }
 
         util::time::time_utility::raw_time_t start;
-        task_action_base *action;
+        task_action_base *                   action;
     };
 } // namespace detail
 
-task_action_base::task_action_base() : player_id_(0), task_id_(0), ret_code_(0), rsp_code_(0), 
-    rsp_msg_disabled_(false), evt_disabled_(false), start_data_(dispatcher_make_default<dispatcher_start_data_t>()) {}
+task_action_base::task_action_base()
+    : player_id_(0), task_id_(0), ret_code_(0), rsp_code_(0), rsp_msg_disabled_(false), evt_disabled_(false),
+      start_data_(dispatcher_make_default<dispatcher_start_data_t>()) {}
 task_action_base::~task_action_base() {}
 
 const char *task_action_base::name() const {
@@ -68,8 +71,32 @@ int task_action_base::operator()(void *priv_data) {
     detail::task_action_stat_guard stat(this);
 
     if (NULL != priv_data) {
-        start_data_ = *reinterpret_cast<task_manager::start_data_t*>(priv_data);
+        start_data_ = *reinterpret_cast<task_manager::start_data_t *>(priv_data);
+
+        // Set parent context if not set by child type
+        if (nullptr != start_data_.context) {
+            if (!shared_context_.get_protobuf_arena()) {
+                shared_context_.try_reuse_protobuf_arena(start_data_.context->mutable_protobuf_arena());
+            }
+
+            if (nullptr != start_data_.context->get_trace_span()) {
+                const atframework::RpcTraceSpan *origin_trace_span = shared_context_.get_trace_span();
+                if (nullptr == origin_trace_span) {
+                    shared_context_.set_trace_id(rpc::db::uuid::generate_short_uuid());
+                    shared_context_.set_trace_parent(*start_data_.context->get_trace_span());
+                } else {
+                    if (origin_trace_span->trace_id().empty()) {
+                        shared_context_.set_trace_id(rpc::db::uuid::generate_short_uuid());
+                    }
+
+                    if (origin_trace_span->parent_id().empty()) {
+                        shared_context_.set_trace_parent(*start_data_.context->get_trace_span());
+                    }
+                }
+            }
+        }
     }
+
     task_manager::task_t *task = cotask::this_task::get<task_manager::task_t>();
     if (NULL == task) {
         WLOGERROR("task convert failed, must in task.");
@@ -83,18 +110,16 @@ int task_action_base::operator()(void *priv_data) {
     } else {
         WLOGDEBUG("task %s [0x%llx] start to run\n", name(), get_task_id_llu());
     }
-    
+
     ret_code_ = hook_run();
 
     if (evt_disabled_) {
         if (ret_code_ < 0) {
-            WLOGERROR("task %s [0x%llx] without evt ret code (%s)%d, rsp code (%s)%d\n", name(), get_task_id_llu(), 
-                protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_, protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_
-            );
+            WLOGERROR("task %s [0x%llx] without evt ret code (%s)%d, rsp code (%s)%d\n", name(), get_task_id_llu(),
+                      protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_, protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
         } else {
-            WLOGDEBUG("task %s [0x%llx] without evt ret code (%s)%d, rsp code (%s)%d\n", name(), get_task_id_llu(), 
-                protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_, protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_
-            );
+            WLOGDEBUG("task %s [0x%llx] without evt ret code (%s)%d, rsp code (%s)%d\n", name(), get_task_id_llu(),
+                      protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_, protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
         }
 
         if (!rsp_msg_disabled_) {
@@ -108,8 +133,7 @@ int task_action_base::operator()(void *priv_data) {
         if (rsp_code_ < 0) {
             ret = on_failed();
             WLOGINFO("task %s [0x%llx] finished success but response errorcode, rsp code: (%s)%d\n", name(), get_task_id_llu(),
-                protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_
-            );
+                     protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
         } else {
             ret = on_success();
         }
@@ -154,11 +178,11 @@ int task_action_base::operator()(void *priv_data) {
     }
 
     if (0 != get_player_id()) {
-        WLOGERROR("task %s [0x%llx] for player %llu ret code (%s)%d, rsp code (%s)%d\n", name(), get_task_id_llu(), get_player_id_llu(), 
-            protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_, protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
+        WLOGERROR("task %s [0x%llx] for player %llu ret code (%s)%d, rsp code (%s)%d\n", name(), get_task_id_llu(), get_player_id_llu(),
+                  protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_, protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
     } else {
-        WLOGERROR("task %s [0x%llx] ret code (%s)%d, rsp code (%s)%d\n", name(), get_task_id_llu(),
-            protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_, protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
+        WLOGERROR("task %s [0x%llx] ret code (%s)%d, rsp code (%s)%d\n", name(), get_task_id_llu(), protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_,
+                  protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
     }
 
     // 响应OnTimeout

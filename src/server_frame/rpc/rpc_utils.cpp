@@ -16,6 +16,91 @@
 
 
 namespace rpc {
+
+    context::tracer::tracer() {
+        // TODO Call distributed tracing SDK API, zipkin for example
+    }
+
+    context::tracer::~tracer() {
+        // TODO Call distributed tracing SDK API, zipkin for example
+    }
+
+    context::context() : trace_span_(nullptr) {}
+
+    context::~context() {}
+
+    void context::setup_tracer(tracer &, const char *) {
+        // TODO Call distributed tracing SDK API, zipkin for example
+    }
+
+    std::shared_ptr< ::google::protobuf::Arena> context::mutable_protobuf_arena() {
+        if (allocator_) {
+            return allocator_;
+        }
+
+        ::google::protobuf::ArenaOptions arena_options;
+        arena_options.start_block_size = 512;   // 链路跟踪可能就占了200字节，起始可以大一点
+        arena_options.max_block_size   = 65536; // 数据库的数据块比较大。最大值可以大一点
+
+        allocator_ = std::make_shared< ::google::protobuf::Arena>(arena_options);
+        return allocator_;
+    }
+
+    const std::shared_ptr< ::google::protobuf::Arena> &context::get_protobuf_arena() const { return allocator_; }
+
+    bool context::try_reuse_protobuf_arena(const std::shared_ptr< ::google::protobuf::Arena> &arena) {
+        if (!arena || allocator_) {
+            return false;
+        }
+
+        allocator_ = arena;
+        return true;
+    }
+
+    atframework::RpcTraceSpan *context::mutable_trace_span() {
+        if (nullptr != trace_span_) {
+            return trace_span_;
+        }
+
+        trace_span_ = create<atframework::RpcTraceSpan>();
+        return trace_span_;
+    }
+
+    const atframework::RpcTraceSpan *context::get_trace_span() const { return trace_span_; }
+
+    void context::set_trace_parent(const atframework::RpcTraceSpan &parent_span) {
+        atframework::RpcTraceSpan *trace_span = mutable_trace_span();
+        if (nullptr != trace_span) {
+            trace_span->set_trace_id(parent_span.trace_id());
+            trace_span->set_parent_id(parent_span.span_id());
+        }
+    }
+
+    void context::set_trace_name(const std::string &name) {
+        atframework::RpcTraceSpan *trace_span = mutable_trace_span();
+        if (nullptr != trace_span) {
+            trace_span->set_name(name);
+        }
+    }
+
+    void context::set_trace_span_id(const std::string &span_id) {
+        atframework::RpcTraceSpan *trace_span = mutable_trace_span();
+        if (nullptr != trace_span) {
+            trace_span->set_span_id(span_id);
+
+            if (trace_span->trace_id().empty()) {
+                trace_span->set_trace_id(span_id);
+            }
+        }
+    }
+
+    void context::set_trace_id(const std::string &trace_id) {
+        atframework::RpcTraceSpan *trace_span = mutable_trace_span();
+        if (nullptr != trace_span) {
+            trace_span->set_trace_id(trace_id);
+        }
+    }
+
     namespace detail {
         template <typename TMSG>
         static int wait(TMSG &msg, uintptr_t check_type, uint64_t check_sequence) {

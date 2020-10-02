@@ -18,24 +18,36 @@
 #include <router/router_manager_set.h>
 #include <router/router_object_base.h>
 
+#include <rpc/db/uuid.h>
 #include <rpc/router/routerservice.h>
 
 #include "task_action_ss_req_base.h"
 
 task_action_ss_req_base::task_action_ss_req_base(dispatcher_start_data_t COPP_MACRO_RV_REF start_param) {
+    // 必须先设置共享的arena
+    if (nullptr != start_param.context) {
+        get_shared_context().try_reuse_protobuf_arena(start_param.context->mutable_protobuf_arena());
+    }
+
     msg_type *ss_msg = ss_msg_dispatcher::me()->get_protobuf_msg<msg_type>(start_param.message);
     if (NULL != ss_msg) {
+        if (ss_msg->head().has_rpc_trace()) {
+            get_shared_context().set_trace_parent(ss_msg->head().rpc_trace());
+        }
+
         get_request().Swap(ss_msg);
 
         set_player_id(get_request().head().player_user_id());
     }
+
+    get_shared_context().set_trace_id(rpc::db::uuid::generate_short_uuid());
 }
 
 task_action_ss_req_base::~task_action_ss_req_base() {}
 
 int task_action_ss_req_base::hook_run() {
     // 路由对象系统支持
-    router_manager_base* mgr = NULL;
+    router_manager_base *               mgr = NULL;
     std::shared_ptr<router_object_base> obj;
     if (get_request().head().has_router()) {
         std::pair<bool, int> res = filter_router_msg(mgr, obj);
@@ -46,8 +58,7 @@ int task_action_ss_req_base::hook_run() {
 
     // 自动设置快队列保存
     int ret = base_type::hook_run();
-    if (nullptr != get_dispatcher_start_data().options && 
-        get_dispatcher_start_data().options->mark_fast_save()) {
+    if (nullptr != get_dispatcher_start_data().options && get_dispatcher_start_data().options->mark_fast_save()) {
         if (mgr && obj) {
             router_manager_set::me()->mark_fast_save(mgr, obj);
         }
@@ -61,14 +72,20 @@ uint64_t task_action_ss_req_base::get_request_bus_id() const {
 }
 
 task_action_ss_req_base::msg_ref_type task_action_ss_req_base::add_rsp_msg(uint64_t dst_pd) {
-    rsp_msgs_.push_back(msg_type());
-    msg_ref_type msg = rsp_msgs_.back();
+    msg_type *msg = get_shared_context().create<msg_type>();
+    if (nullptr == msg) {
+        static msg_type empty_msg;
+        empty_msg.Clear();
+        return empty_msg;
+    }
 
-    msg.mutable_head()->set_error_code(get_rsp_code());
+    rsp_msgs_.push_back(msg);
+
+    msg->mutable_head()->set_error_code(get_rsp_code());
     dst_pd = 0 == dst_pd ? get_request_bus_id() : dst_pd;
 
-    init_msg(msg, dst_pd, get_request());
-    return msg;
+    init_msg(*msg, dst_pd, get_request());
+    return *msg;
 }
 
 
@@ -106,27 +123,25 @@ int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd, msg
     return 0;
 }
 
-const std::string& task_action_ss_req_base::get_current_service_name() {
-    return ss_msg_dispatcher::me()->get_current_service_name();
-}
+const std::string &task_action_ss_req_base::get_current_service_name() { return ss_msg_dispatcher::me()->get_current_service_name(); }
 
 void task_action_ss_req_base::send_rsp_msg() {
     if (rsp_msgs_.empty()) {
         return;
     }
 
-    for (std::list<msg_type>::iterator iter = rsp_msgs_.begin(); iter != rsp_msgs_.end(); ++iter) {
-        if (0 == (*iter).head().bus_id()) {
+    for (std::list<msg_type *>::iterator iter = rsp_msgs_.begin(); iter != rsp_msgs_.end(); ++iter) {
+        if (0 == (*iter)->head().bus_id()) {
             FWLOGERROR("task {} [{}] send message to unknown server", name(), get_task_id_llu());
             continue;
         }
-        (*iter).mutable_head()->set_error_code(get_rsp_code());
+        (*iter)->mutable_head()->set_error_code(get_rsp_code());
 
         // send message using ss dispatcher
-        int32_t res = ss_msg_dispatcher::me()->send_to_proc((*iter).head().bus_id(), *iter);
+        int32_t res = ss_msg_dispatcher::me()->send_to_proc((*iter)->head().bus_id(), **iter);
         if (res) {
             FWLOGERROR("task {} [{}] send message to server 0x{:x} failed, res: {}({})", name(), get_task_id_llu(),
-                      static_cast<unsigned long long>((*iter).head().bus_id()), res, protobuf_mini_dumper_get_error_msg(res));
+                       static_cast<unsigned long long>((*iter)->head().bus_id()), res, protobuf_mini_dumper_get_error_msg(res));
         }
     }
 
@@ -153,8 +168,8 @@ namespace detail {
             }
             res = mgr.mutable_cache(obj, key, NULL);
             if (res < 0 || !obj) {
-                FWLOGERROR("router object {}:{}:{} fetch cache failed, res: {}({})", key.type_id, key.zone_id, key.object_id_ull(), 
-                    res, protobuf_mini_dumper_get_error_msg(res));
+                FWLOGERROR("router object {}:{}:{} fetch cache failed, res: {}({})", key.type_id, key.zone_id, key.object_id_ull(), res,
+                           protobuf_mini_dumper_get_error_msg(res));
                 return res;
             }
         }
@@ -172,8 +187,8 @@ namespace detail {
 
         int res = mgr.mutable_object(obj, key, NULL);
         if (res < 0) {
-            FWLOGERROR("router object {}:{}:{} repair object failed, res: {}({})", key.type_id, key.zone_id, key.object_id_ull(), 
-                res, protobuf_mini_dumper_get_error_msg(res));
+            FWLOGERROR("router object {}:{}:{} repair object failed, res: {}({})", key.type_id, key.zone_id, key.object_id_ull(), res,
+                       protobuf_mini_dumper_get_error_msg(res));
             // 失败则删除缓存重试
             mgr.remove_cache(key, obj, NULL);
 
@@ -183,7 +198,7 @@ namespace detail {
         // Check log
         if (self_bus_id != obj->get_router_server_id()) {
             FWLOGERROR("router object {}:{}:{} auto mutable object failed, expect server id 0x{:x}, real server id 0x{:x}", key.type_id, key.zone_id,
-                      key.object_id_ull(), self_bus_id, obj->get_router_server_id());
+                       key.object_id_ull(), self_bus_id, obj->get_router_server_id());
         }
 
         return filter_router_msg_res_t(true, true, res);
@@ -199,9 +214,8 @@ namespace detail {
         // 这里可能是服务器崩溃过，导致数据库记录对象在本机上，但实际上没有。所以这里升级一次做个数据修复
         int res = mgr.mutable_object(obj, key, NULL);
         if (res < 0) {
-            FWLOGERROR("router object {}:{}:{} repair object failed, res: {}({})", key.type_id, key.zone_id, key.object_id_ull(),
-                res, protobuf_mini_dumper_get_error_msg(res)
-            );
+            FWLOGERROR("router object {}:{}:{} repair object failed, res: {}({})", key.type_id, key.zone_id, key.object_id_ull(), res,
+                       protobuf_mini_dumper_get_error_msg(res));
             // 失败则删除缓存重试
             mgr.remove_cache(key, obj, NULL);
 
@@ -211,7 +225,7 @@ namespace detail {
         // Check log
         if (self_bus_id != obj->get_router_server_id()) {
             FWLOGERROR("router object {}:{}:{} repair object failed, expect server id 0x{:x}, real server id 0x{:x}", key.type_id, key.zone_id,
-                      key.object_id_ull(), self_bus_id, obj->get_router_server_id());
+                       key.object_id_ull(), self_bus_id, obj->get_router_server_id());
         }
 
         // 恢复成功，直接开始执行任务逻辑
@@ -293,7 +307,7 @@ namespace detail {
             // 如果路由转发成功，需要禁用掉回包和通知事件，也不需要走逻辑处理了
             if (res < 0) {
                 FWLOGERROR("try to transfer router object {}:{}:{} to 0x{:x} failed, res: {}({})", key.type_id, key.zone_id, key.object_id_ull(),
-                          obj->get_router_server_id(), res, protobuf_mini_dumper_get_error_msg(res));
+                           obj->get_router_server_id(), res, protobuf_mini_dumper_get_error_msg(res));
             }
 
             return filter_router_msg_res_t(false, false, res);
@@ -305,7 +319,7 @@ namespace detail {
     }
 } // namespace detail
 
-std::pair<bool, int> task_action_ss_req_base::filter_router_msg(router_manager_base*& mgr, std::shared_ptr<router_object_base>& obj) {
+std::pair<bool, int> task_action_ss_req_base::filter_router_msg(router_manager_base *&mgr, std::shared_ptr<router_object_base> &obj) {
     // request 可能会被move走，所以这里copy一份
     hello::SSRouterHead router;
     protobuf_copy_message(router, get_request().head().router());
@@ -358,7 +372,7 @@ std::pair<bool, int> task_action_ss_req_base::filter_router_msg(router_manager_b
         }
 
         // 只通知直接来源
-        rpc::router::router_update_sync(get_request_bus_id(), sync_msg);
+        rpc::router::router_update_sync(get_shared_context(), get_request_bus_id(), sync_msg);
     }
 
     // 失败则要回发转发失败

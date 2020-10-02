@@ -33,16 +33,22 @@ namespace rpc {
     namespace router {
 
         // ============ hello.RouterService.router_update_sync ============
-        int router_update_sync(uint64_t dst_bus_id, hello::SSRouterUpdateSync &req_body) {
+        int router_update_sync(context& ctx, uint64_t dst_bus_id, hello::SSRouterUpdateSync &req_body) {
             if (dst_bus_id == 0) {
                 return hello::err::EN_SYS_PARAM;
             }
 
 
-            hello::SSMsg req_msg;
+            hello::SSMsg* req_msg_ptr = ctx.create<hello::SSMsg>();
+            if (nullptr == req_msg_ptr) {
+                FWLOGERROR("rpc {} create request message failed", "hello.RouterService.router_update_sync");
+                return hello::err::EN_SYS_MALLOC;
+            }
+
+            hello::SSMsg& req_msg = *req_msg_ptr;
             task_action_ss_req_base::init_msg(req_msg, logic_config::me()->get_self_bus_id());
             req_msg.mutable_head()->set_op_type(hello::EN_MSG_OP_TYPE_STREAM);
-            hello::SSMsgRpcStreamMeta* stream_meta = req_msg.mutable_head()->mutable_rpc_stream();
+            atframework::RpcStreamMeta* stream_meta = req_msg.mutable_head()->mutable_rpc_stream();
             if (nullptr == stream_meta) {
                 return hello::err::EN_SYS_MALLOC;
             }
@@ -65,6 +71,9 @@ namespace rpc {
                 );
             }
 
+            rpc::context::tracer tracer;
+            ctx.setup_tracer(tracer, "hello.RouterService.router_update_sync");
+
 
             if (dst_bus_id == 0) {
                 return hello::err::EN_SYS_PARAM;
@@ -76,7 +85,7 @@ namespace rpc {
         }
 
         // ============ hello.RouterService.router_transfer ============
-        int router_transfer(uint64_t dst_bus_id, hello::SSRouterTransferReq &req_body, hello::SSRouterTransferRsp &rsp_body) {
+        int router_transfer(context& ctx, uint64_t dst_bus_id, hello::SSRouterTransferReq &req_body, hello::SSRouterTransferRsp &rsp_body) {
             if (dst_bus_id == 0) {
                 return hello::err::EN_SYS_PARAM;
             }
@@ -87,11 +96,17 @@ namespace rpc {
                 return hello::err::EN_SYS_RPC_NO_TASK;
             }
 
-            hello::SSMsg req_msg;
+            hello::SSMsg* req_msg_ptr = ctx.create<hello::SSMsg>();
+            if (nullptr == req_msg_ptr) {
+                FWLOGERROR("rpc {} create request message failed", "hello.RouterService.router_transfer");
+                return hello::err::EN_SYS_MALLOC;
+            }
+
+            hello::SSMsg& req_msg = *req_msg_ptr;
             task_action_ss_req_base::init_msg(req_msg, logic_config::me()->get_self_bus_id());
             req_msg.mutable_head()->set_src_task_id(task->get_id());
             req_msg.mutable_head()->set_op_type(hello::EN_MSG_OP_TYPE_UNARY_REQUEST);
-            hello::SSMsgRpcRequestMeta* request_meta = req_msg.mutable_head()->mutable_rpc_request();
+            atframework::RpcRequestMeta* request_meta = req_msg.mutable_head()->mutable_rpc_request();
             if (nullptr == request_meta) {
                 return hello::err::EN_SYS_MALLOC;
             }
@@ -114,6 +129,9 @@ namespace rpc {
                 );
             }
 
+            rpc::context::tracer tracer;
+            ctx.setup_tracer(tracer, "hello.RouterService.router_transfer");
+
 
             if (dst_bus_id == 0) {
                 return hello::err::EN_SYS_PARAM;
@@ -126,7 +144,13 @@ namespace rpc {
                 return res;
             }
 
-            hello::SSMsg rsp_msg;
+            hello::SSMsg* rsp_msg_ptr = ctx.create<hello::SSMsg>();
+            if (nullptr == rsp_msg_ptr) {
+                FWLOGERROR("rpc {} create response message failed", "hello.RouterService.router_transfer");
+                return hello::err::EN_SYS_MALLOC;
+            }
+
+            hello::SSMsg& rsp_msg = *rsp_msg_ptr;
             res = rpc::wait(rsp_msg, rpc_sequence);
             if (res < 0) {
                 FWLOGERROR("rpc {} wait for {} failed, res: {}({})", "hello.RouterService.router_transfer",

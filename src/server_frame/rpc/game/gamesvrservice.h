@@ -20,6 +20,7 @@
 #include <config/compiler/protobuf_suffix.h>
 
 namespace rpc {
+    class context;
     namespace game {
 
         // ============ hello.GamesvrService.player_kickoff ============
@@ -33,7 +34,7 @@ namespace rpc {
          * @param rsp_body       response body
          * @return 0 or error code
          */
-        int player_kickoff(uint64_t dst_bus_id, uint32_t zone_id, uint64_t user_id, const std::string& open_id, hello::SSPlayerKickOffReq &req_body, hello::SSPlayerKickOffRsp &rsp_body);
+        int player_kickoff(context& ctx, uint64_t dst_bus_id, uint32_t zone_id, uint64_t user_id, const std::string& open_id, hello::SSPlayerKickOffReq &req_body, hello::SSPlayerKickOffRsp &rsp_body);
     }
 }
 

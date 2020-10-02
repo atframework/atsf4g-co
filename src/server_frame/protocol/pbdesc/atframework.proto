@@ -56,3 +56,44 @@ message ServiceOptions {
 extend google.protobuf.ServiceOptions {
     ServiceOptions service_options = 3271; // 自定义配置
 }
+
+// ============================= 内部RPC协议共享 =============================
+message RpcRequestMeta {
+    string version = 1; // 协议版本号
+
+    string caller = 11; // 请求方服务名
+    string callee = 12; // 被调方服务名
+
+    string rpc_name = 21; // 调度分发名称: <ServiceFullName>.<MethodName>
+    string type_url = 22; // 类型地址
+}
+
+message RpcResponseMeta {
+    string version = 1; // 协议版本号
+
+    string rpc_name = 21; // 调度分发名称: <ServiceFullName>.<MethodName>
+    string type_url = 22; // 类型地址
+}
+
+message RpcStreamMeta {
+    string version = 1; // 协议版本号
+
+    string caller = 11; // 请求方服务名
+    string callee = 12; // 被调方服务名
+
+    string rpc_name = 21; // 调度分发名称: <ServiceFullName>.<MethodName>
+    string type_url = 22; // 类型地址
+}
+
+message RpcTraceSpan {
+    string name      = 1;
+    string trace_id  = 2; // Every span in a trace shares this ID.
+    string span_id   = 3; // The ID for a particular span. This may or may not be the same as the trace id.
+    string parent_id = 4; // This is an optional ID that will only be present on child spans. That is the span without a parent id is considered the root of the trace.
+
+    // google.protobuf.Timestamp timestamp   = 5; // timestamp should be update when call trace API
+    // google.protobuf.Duration  duration    = 6; // timestamp should be update when finish trace Call
+
+    repeated string     tags        = 7;
+    map<string, string> annotations = 8;
+}

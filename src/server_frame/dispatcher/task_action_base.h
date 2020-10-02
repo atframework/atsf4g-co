@@ -16,8 +16,11 @@
 #include <libcopp/utils/features.h>
 #include <libcotask/task.h>
 
-
 #include "dispatcher_type_defines.h"
+
+#include <log/log_wrapper.h>
+
+#include <rpc/rpc_utils.h>
 
 /**
  * action 默认结构
@@ -112,20 +115,26 @@ protected:
     /**
      * @brief 获取启动透传参数
      */
-    inline const dispatcher_start_data_t& get_dispatcher_start_data() const { return start_data_; }
+    inline const dispatcher_start_data_t &get_dispatcher_start_data() const { return start_data_; }
 
     /**
      * @brief 获取启动透传参数
      */
-    inline dispatcher_start_data_t& get_dispatcher_start_data() { return start_data_; }
+    inline dispatcher_start_data_t &get_dispatcher_start_data() { return start_data_; }
+
+    inline const rpc::context &get_shared_context() const { return shared_context_; }
+    inline rpc::context &      get_shared_context() { return shared_context_; }
+
 private:
-    uint64_t player_id_;
-    uint64_t task_id_;
-    int32_t  ret_code_;
-    int32_t  rsp_code_;
-    bool     rsp_msg_disabled_;
-    bool     evt_disabled_;
+    uint64_t                player_id_;
+    uint64_t                task_id_;
+    int32_t                 ret_code_;
+    int32_t                 rsp_code_;
+    bool                    rsp_msg_disabled_;
+    bool                    evt_disabled_;
     dispatcher_start_data_t start_data_;
+
+    rpc::context shared_context_;
 };
 
 template <typename TREQ>
@@ -138,12 +147,49 @@ public:
 #endif
 
 protected:
-    inline TREQ &      get_request() { return request_msg_; }
-    inline const TREQ &get_request() const { return request_msg_; }
+    inline TREQ &get_request() {
+        if (nullptr != request_msg_) {
+            return *request_msg_;
+        }
+
+        request_msg_ = get_shared_context().create<TREQ>();
+        if (nullptr != request_msg_) {
+            return *request_msg_;
+        }
+
+        static TREQ empty_msg;
+        empty_msg.Clear();
+        return empty_msg;
+    }
+
+    inline const TREQ &get_request() const {
+        if (nullptr != request_msg_) {
+            return *request_msg_;
+        }
+
+        request_msg_ = const_cast<rpc::context &>(get_shared_context()).create<TREQ>();
+        if (nullptr != request_msg_) {
+            return *request_msg_;
+        }
+
+        static TREQ empty_msg;
+        empty_msg.Clear();
+        return empty_msg;
+    }
 
 private:
-    TREQ request_msg_;
+    mutable TREQ *request_msg_;
 };
 
+namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID {
+    template <class T>
+    struct formatter<T, typename std::enable_if<std::is_base_of<task_action_base, T>::value, char>::type> : formatter<std::string> {
+
+        template <class FormatContext>
+        auto format(const task_action_base &action, FormatContext &ctx) {
+            return LOG_WRAPPER_FWAPI_FORMAT_TO(ctx.out(), "task action {} [{:x}]", action.name(), action.get_task_id());
+        }
+    };
+} // namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID
 
 #endif // ATF4G_CO_TASK_ACTION_BASE_H

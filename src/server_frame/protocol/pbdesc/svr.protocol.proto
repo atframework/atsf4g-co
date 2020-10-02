@@ -64,34 +64,6 @@ message SSRouterTransferRsp {}
 ////  对象路由系统协议到此结束
 /////////////////////////////////////////////////////
 
-
-message SSMsgRpcRequestMeta {
-    string version = 1; // 协议版本号
-
-    string caller = 11; // 请求方服务名
-    string callee = 12; // 被调方服务名
-
-    string rpc_name = 21; // 调度分发名称: <ServiceFullName>.<MethodName>
-    string type_url = 22; // 类型地址
-}
-
-message SSMsgRpcResponseMeta {
-    string version = 1; // 协议版本号
-
-    string rpc_name = 21; // 调度分发名称: <ServiceFullName>.<MethodName>
-    string type_url = 22; // 类型地址
-}
-
-message SSMsgRpcStreamMeta {
-    string version = 1; // 协议版本号
-
-    string caller = 11; // 请求方服务名
-    string callee = 12; // 被调方服务名
-
-    string rpc_name = 21; // 调度分发名称: <ServiceFullName>.<MethodName>
-    string type_url = 22; // 类型地址
-}
-
 // 协议包头
 message SSMsgHead {
     // 通用数据
@@ -109,9 +81,12 @@ message SSMsgHead {
     SSRouterHead router = 21;
 
     // 新RPC接口的meta信息
-    SSMsgRpcRequestMeta  rpc_request  = 31;
-    SSMsgRpcResponseMeta rpc_response = 32;
-    SSMsgRpcStreamMeta   rpc_stream   = 33;
+    oneof rpc_type {
+        atframework.RpcRequestMeta  rpc_request  = 31;
+        atframework.RpcResponseMeta rpc_response = 32;
+        atframework.RpcStreamMeta   rpc_stream   = 33;
+    }
+    atframework.RpcTraceSpan rpc_trace = 34; // 用于链路追踪
 
     // 玩家标识
     uint64 player_user_id = 101; // 如果涉及玩家此项必需
@@ -127,35 +102,35 @@ message SSMsg {
 
 service RouterService {
     option (atframework.service_options) = {
-        module_name: "router"
+        module_name : "router"
     };
 
     // Use stream request to disab;e waiting for response
     rpc router_update_sync(stream SSRouterUpdateSync) returns (google.protobuf.Empty) {
         option (atframework.rpc_options) = {
-            api_name: "通知路由表更新"
-            descriptions: "notify another server instance to update router table"
+            api_name : "通知路由表更新"
+            descriptions : "notify another server instance to update router table"
         };
     };
 
     rpc router_transfer(SSRouterTransferReq) returns (SSRouterTransferRsp) {
         option (atframework.rpc_options) = {
-            api_name: "路由对象转移"
-            descriptions: "transfer a router object into another server instance"
+            api_name : "路由对象转移"
+            descriptions : "transfer a router object into another server instance"
         };
     };
 }
 
 service GamesvrService {
     option (atframework.service_options) = {
-        module_name: "game"
+        module_name : "game"
     };
 
     rpc player_kickoff(SSPlayerKickOffReq) returns (SSPlayerKickOffRsp) {
         option (atframework.rpc_options) = {
-            module_name: "player"
-            api_name: "通知提用户下线"
-            user_rpc: true
+            module_name : "player"
+            api_name : "通知提用户下线"
+            user_rpc : true
         };
     };
 }

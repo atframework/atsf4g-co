@@ -28,6 +28,8 @@
 
 #include <utility/protobuf_mini_dumper.h>
 
+#include <rpc/rpc_utils.h>
+
 ss_msg_dispatcher::ss_msg_dispatcher() : sequence_allocator_(0) {}
 ss_msg_dispatcher::~ss_msg_dispatcher() {}
 
@@ -148,18 +150,23 @@ int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
 
     uint64_t from_server_id = source.id;
 
-    hello::SSMsg ss_msg;
+    rpc::context  ctx;
+    hello::SSMsg *ss_msg = ctx.create<hello::SSMsg>();
+    if (nullptr == ss_msg) {
+        FWLOGERROR("{} create message instance failed", name());
+        return hello::err::EN_SYS_MALLOC;
+    }
 
-    start_data_t callback_data = dispatcher_make_default<dispatcher_start_data_t>();
+    dispatcher_msg_raw_t callback_msg = dispatcher_make_default<dispatcher_msg_raw_t>();
 
-    int32_t ret = unpack_protobuf_msg(ss_msg, callback_data.message, msg.data, msg.data_size);
+    int32_t ret = unpack_protobuf_msg(*ss_msg, callback_msg, msg.data, msg.data_size);
     if (ret != 0) {
         FWLOGERROR("{} unpack received message from {:#x} failed, res: {}", name(), from_server_id, ret);
         return ret;
     }
-    ss_msg.mutable_head()->set_bus_id(from_server_id);
+    ss_msg->mutable_head()->set_bus_id(from_server_id);
 
-    ret = on_recv_msg(callback_data.message, callback_data.private_data, ss_msg.head().sequence());
+    ret = on_receive_message(ctx, callback_msg, nullptr, ss_msg->head().sequence());
     if (ret < 0) {
         FWLOGERROR("{} dispatch message from {:#x} failed, res: {}", name(), from_server_id, ret);
     }
@@ -191,25 +198,31 @@ int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::messa
     const void *buffer = msg.data;
     size_t      len    = msg.data_size;
 
-    hello::SSMsg ss_msg;
-    start_data_t callback_data = dispatcher_make_default<dispatcher_start_data_t>();
+    rpc::context  ctx;
+    hello::SSMsg *ss_msg = ctx.create<hello::SSMsg>();
+    if (nullptr == ss_msg) {
+        FWLOGERROR("{} create message instance failed", name());
+        return hello::err::EN_SYS_MALLOC;
+    }
 
-    int32_t ret = unpack_protobuf_msg(ss_msg, callback_data.message, buffer, len);
+    dispatcher_msg_raw_t callback_msg = dispatcher_make_default<dispatcher_msg_raw_t>();
+
+    int32_t ret = unpack_protobuf_msg(*ss_msg, callback_msg, buffer, len);
     if (ret != 0) {
         FWLOGERROR("{} unpack on_receive_send_data_response from {:#x} failed, res: {}", name(), source.id, ret);
         return ret;
     }
 
     if (error_code < 0) {
-        ss_msg.mutable_head()->set_bus_id(source.id);
+        ss_msg->mutable_head()->set_bus_id(source.id);
         // 转移要恢复的任务ID
-        ss_msg.mutable_head()->set_dst_task_id(ss_msg.head().src_task_id());
-        ss_msg.mutable_head()->set_src_task_id(0);
-        ss_msg.mutable_head()->set_error_code(hello::err::EN_SYS_RPC_SEND_FAILED);
+        ss_msg->mutable_head()->set_dst_task_id(ss_msg->head().src_task_id());
+        ss_msg->mutable_head()->set_src_task_id(0);
+        ss_msg->mutable_head()->set_error_code(hello::err::EN_SYS_RPC_SEND_FAILED);
 
-        ret = on_send_msg_failed(callback_data.message, error_code, msg.msg_sequence);
+        ret = on_send_message_failed(ctx, callback_msg, error_code, msg.msg_sequence);
         if (ret < 0) {
-            FWLOGERROR("{} dispatch on_send_msg_failed from {:#x} failed, res: {}", name(), source.id, ret);
+            FWLOGERROR("{} dispatch on_send_message_failed from {:#x} failed, res: {}", name(), source.id, ret);
         }
     }
 

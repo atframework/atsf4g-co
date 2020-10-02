@@ -106,7 +106,14 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
     case ::atframe::gw::ss_msg_body::kPost: {
         const ::atframe::gw::ss_body_post &post = req_msg.body().post();
 
-        hello::CSMsg   cs_msg;
+        rpc::context  ctx;
+        hello::CSMsg *cs_msg = ctx.create<hello::CSMsg>();
+        if (nullptr == cs_msg) {
+            FWLOGERROR("{} create message instance failed", name());
+            ret = hello::err::EN_SYS_MALLOC;
+            break;
+        }
+
         session::key_t session_key;
         session_key.bus_id     = from_server_id;
         session_key.session_id = req_msg.head().session_id();
@@ -121,26 +128,26 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
             break;
         }
 
-        start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
-        ret                     = unpack_protobuf_msg(cs_msg, start_data.message, reinterpret_cast<const void *>(post.content().data()), post.content().size());
+        dispatcher_msg_raw_t callback_msg = dispatcher_make_default<dispatcher_msg_raw_t>();
+        ret = unpack_protobuf_msg(*cs_msg, callback_msg, reinterpret_cast<const void *>(post.content().data()), post.content().size());
         if (ret != 0) {
             WLOGERROR("%s unpack received message from 0x%llx, session id:0x%llx failed, res: %d", name(), static_cast<unsigned long long>(session_key.bus_id),
                       static_cast<unsigned long long>(session_key.session_id), ret);
             return ret;
         }
 
-        cs_msg.mutable_head()->set_session_bus_id(session_key.bus_id);
-        cs_msg.mutable_head()->set_session_id(session_key.session_id);
+        cs_msg->mutable_head()->set_session_bus_id(session_key.bus_id);
+        cs_msg->mutable_head()->set_session_id(session_key.session_id);
 
         if (task_manager::me()->is_busy()) {
-            cs_msg.mutable_head()->set_error_code(hello::EN_ERR_SYSTEM_BUSY);
-            sess->send_msg_to_client(cs_msg);
+            cs_msg->mutable_head()->set_error_code(hello::EN_ERR_SYSTEM_BUSY);
+            sess->send_msg_to_client(*cs_msg);
             WLOGINFO("server busy and send msg back to session [0x%llx, 0x%llx]", static_cast<unsigned long long>(session_key.bus_id),
                      static_cast<unsigned long long>(session_key.session_id));
             break;
         }
 
-        ret = on_recv_msg(start_data.message, start_data.private_data, cs_msg.head().sequence());
+        ret = on_receive_message(ctx, callback_msg, nullptr, cs_msg->head().sequence());
         if (ret < 0) {
             WLOGERROR("%s on receive message callback from to 0x%llx, session id:0x%llx failed, res: %d", name(),
                       static_cast<unsigned long long>(session_key.bus_id), static_cast<unsigned long long>(session_key.session_id), ret);

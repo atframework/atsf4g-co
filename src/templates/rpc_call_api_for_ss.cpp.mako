@@ -44,7 +44,7 @@ namespace rpc {
     rpc_is_router_api = rpc.get_extension_field('rpc_options', lambda x: x.router_rpc, False)
     rpc_is_user_rpc = rpc.get_extension_field('rpc_options', lambda x: x.user_rpc, False)
     rpc_is_stream_mode = rpc.is_request_stream() or rpc.is_response_stream()
-    rpc_params = []
+    rpc_params = ['context& ctx']
     if rpc_is_router_api:
         rpc_params.extend(['uint32_t type_id', 'uint32_t zone_id', 'uint64_t object_id'])
         if rpc_is_user_rpc:
@@ -77,11 +77,17 @@ namespace rpc {
             }
 %   endif
 
-            ${project_namespace}::SSMsg req_msg;
+            ${project_namespace}::SSMsg* req_msg_ptr = ctx.create<${project_namespace}::SSMsg>();
+            if (nullptr == req_msg_ptr) {
+                FWLOGERROR("rpc {} create request message failed", "${rpc.get_full_name()}");
+                return ${project_namespace}::err::EN_SYS_MALLOC;
+            }
+
+            ${project_namespace}::SSMsg& req_msg = *req_msg_ptr;
             task_action_ss_req_base::init_msg(req_msg, logic_config::me()->get_self_bus_id());
 %   if rpc_is_stream_mode:
             req_msg.mutable_head()->set_op_type(${project_namespace}::EN_MSG_OP_TYPE_STREAM);
-            ${project_namespace}::SSMsgRpcStreamMeta* stream_meta = req_msg.mutable_head()->mutable_rpc_stream();
+            atframework::RpcStreamMeta* stream_meta = req_msg.mutable_head()->mutable_rpc_stream();
             if (nullptr == stream_meta) {
                 return ${project_namespace}::err::EN_SYS_MALLOC;
             }
@@ -93,7 +99,7 @@ namespace rpc {
 %   else:
             req_msg.mutable_head()->set_src_task_id(task->get_id());
             req_msg.mutable_head()->set_op_type(${project_namespace}::EN_MSG_OP_TYPE_UNARY_REQUEST);
-            ${project_namespace}::SSMsgRpcRequestMeta* request_meta = req_msg.mutable_head()->mutable_rpc_request();
+            atframework::RpcRequestMeta* request_meta = req_msg.mutable_head()->mutable_rpc_request();
             if (nullptr == request_meta) {
                 return ${project_namespace}::err::EN_SYS_MALLOC;
             }
@@ -116,6 +122,9 @@ namespace rpc {
                     protobuf_mini_dumper_get_readable(req_body)
                 );
             }
+
+            rpc::context::tracer tracer;
+            ctx.setup_tracer(tracer, "${rpc.get_full_name()}");
 
 %   if rpc_is_user_rpc:
             req_msg.mutable_head()->set_player_user_id(user_id);
@@ -158,7 +167,13 @@ namespace rpc {
                 return res;
             }
 
-            ${project_namespace}::SSMsg rsp_msg;
+            ${project_namespace}::SSMsg* rsp_msg_ptr = ctx.create<${project_namespace}::SSMsg>();
+            if (nullptr == rsp_msg_ptr) {
+                FWLOGERROR("rpc {} create response message failed", "${rpc.get_full_name()}");
+                return ${project_namespace}::err::EN_SYS_MALLOC;
+            }
+
+            ${project_namespace}::SSMsg& rsp_msg = *rsp_msg_ptr;
             res = rpc::wait(rsp_msg, rpc_sequence);
             if (res < 0) {
                 FWLOGERROR("rpc {} wait for {} failed, res: {}({})", "${rpc.get_full_name()}",

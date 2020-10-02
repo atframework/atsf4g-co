@@ -50,7 +50,9 @@ public:
     typedef UTIL_ENV_AUTO_MAP(std::string, task_manager::actor_action_creator_t) rpc_actor_action_set_t;
 
     struct msg_filter_data_t {
-        msg_raw_t msg;
+        dispatcher_msg_raw_t msg;
+
+        inline msg_filter_data_t(const dispatcher_msg_raw_t &m) : msg(m) {}
     };
 
     /**
@@ -78,7 +80,7 @@ public:
      * @param msg_size 数据长度
      * @return 返回错误码或0
      */
-    virtual int32_t on_recv_msg(msg_raw_t &msg, void *priv_data, uint64_t sequence);
+    virtual int32_t on_receive_message(rpc::context &ctx, msg_raw_t &msg, void *priv_data, uint64_t sequence);
 
     /**
      * @brief 发送消息消息失败的通知接口，通常会尝试填充错误码后恢复协程任务
@@ -88,7 +90,7 @@ public:
      * @param error_code 数据长度
      * @return 返回错误码或0
      */
-    virtual int32_t on_send_msg_failed(msg_raw_t &msg, int32_t error_code, uint64_t sequence);
+    virtual int32_t on_send_message_failed(rpc::context &ctx, msg_raw_t &msg, int32_t error_code, uint64_t sequence);
 
     /**
      * @brief 数据解包

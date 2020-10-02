@@ -18,51 +18,65 @@ namespace atframework {
     class DispatcherOptions;
 }
 
+namespace rpc {
+    class context;
+}
+
+template <class T>
+T dispatcher_make_default();
+
 struct dispatcher_msg_raw_t {
     uintptr_t msg_type; // 建议对所有的消息体类型分配一个ID，用以检查回调类型转换。推荐时使用dispatcher单例的地址。
     void *    msg_addr;
+
+private:
+    dispatcher_msg_raw_t() : msg_type(0), msg_addr(nullptr) {}
+
+    template <class T>
+    friend T dispatcher_make_default();
 };
+
+template <>
+inline dispatcher_msg_raw_t dispatcher_make_default<dispatcher_msg_raw_t>() {
+    return dispatcher_msg_raw_t();
+}
 
 struct dispatcher_resume_data_t {
     dispatcher_msg_raw_t message;      // 异步回调中用于透传消息体
     void *               private_data; // 异步回调中用于透传额外的私有数据
     uint64_t             sequence;     // 等待序号，通常和发送序号匹配。用于检测同类消息是否是发出的那个
+
+    rpc::context *context; // 上下文对象，用于优化pb消息的生命周期和链路跟踪
+
+private:
+    dispatcher_resume_data_t() : message(dispatcher_make_default<dispatcher_msg_raw_t>()), private_data(nullptr), sequence(0), context(nullptr) {}
+
+    template <class T>
+    friend T dispatcher_make_default();
 };
 
 struct dispatcher_start_data_t {
-    dispatcher_msg_raw_t message;      // 启动回调中用于透传消息体
-    void *               private_data; // 启动回调中用于透传额外的私有数据
-    const atframework::DispatcherOptions* options; // 调度协议层选项
+    dispatcher_msg_raw_t                  message;      // 启动回调中用于透传消息体
+    void *                                private_data; // 启动回调中用于透传额外的私有数据
+    const atframework::DispatcherOptions *options;      // 调度协议层选项
+
+    rpc::context *context; // 上下文对象，用于优化pb消息的生命周期和链路跟踪
+
+private:
+    dispatcher_start_data_t() : message(dispatcher_make_default<dispatcher_msg_raw_t>()), private_data(nullptr), options(nullptr), context(nullptr) {}
+
+    template <class T>
+    friend T dispatcher_make_default();
 };
 
-
-template<class T>
-T dispatcher_make_default();
-
-template<>
-inline dispatcher_msg_raw_t dispatcher_make_default<dispatcher_msg_raw_t>() {
-    dispatcher_msg_raw_t ret;
-    ret.msg_addr = NULL;
-    ret.msg_type = 0;
-    return ret;
-}
-
-template<>
+template <>
 inline dispatcher_start_data_t dispatcher_make_default<dispatcher_start_data_t>() {
-    dispatcher_start_data_t ret;
-    ret.message = dispatcher_make_default<dispatcher_msg_raw_t>();
-    ret.private_data = NULL;
-    ret.options = NULL;
-    return ret;
+    return dispatcher_start_data_t();
 }
 
-template<>
+template <>
 inline dispatcher_resume_data_t dispatcher_make_default<dispatcher_resume_data_t>() {
-    dispatcher_resume_data_t ret;
-    ret.message = dispatcher_make_default<dispatcher_msg_raw_t>();
-    ret.private_data = NULL;
-    ret.sequence = 0;
-    return ret;
+    return dispatcher_resume_data_t();
 }
 
 #endif // DISPATCHER_DISPATCHER_TYPE_DEFINES_H

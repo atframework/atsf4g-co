@@ -33,7 +33,7 @@ namespace rpc {
     namespace game {
 
         // ============ hello.GamesvrService.player_kickoff ============
-        int player_kickoff(uint64_t dst_bus_id, uint32_t zone_id, uint64_t user_id, const std::string& open_id, hello::SSPlayerKickOffReq &req_body, hello::SSPlayerKickOffRsp &rsp_body) {
+        int player_kickoff(context& ctx, uint64_t dst_bus_id, uint32_t zone_id, uint64_t user_id, const std::string& open_id, hello::SSPlayerKickOffReq &req_body, hello::SSPlayerKickOffRsp &rsp_body) {
             if (dst_bus_id == 0) {
                 return hello::err::EN_SYS_PARAM;
             }
@@ -44,11 +44,17 @@ namespace rpc {
                 return hello::err::EN_SYS_RPC_NO_TASK;
             }
 
-            hello::SSMsg req_msg;
+            hello::SSMsg* req_msg_ptr = ctx.create<hello::SSMsg>();
+            if (nullptr == req_msg_ptr) {
+                FWLOGERROR("rpc {} create request message failed", "hello.GamesvrService.player_kickoff");
+                return hello::err::EN_SYS_MALLOC;
+            }
+
+            hello::SSMsg& req_msg = *req_msg_ptr;
             task_action_ss_req_base::init_msg(req_msg, logic_config::me()->get_self_bus_id());
             req_msg.mutable_head()->set_src_task_id(task->get_id());
             req_msg.mutable_head()->set_op_type(hello::EN_MSG_OP_TYPE_UNARY_REQUEST);
-            hello::SSMsgRpcRequestMeta* request_meta = req_msg.mutable_head()->mutable_rpc_request();
+            atframework::RpcRequestMeta* request_meta = req_msg.mutable_head()->mutable_rpc_request();
             if (nullptr == request_meta) {
                 return hello::err::EN_SYS_MALLOC;
             }
@@ -71,6 +77,9 @@ namespace rpc {
                 );
             }
 
+            rpc::context::tracer tracer;
+            ctx.setup_tracer(tracer, "hello.GamesvrService.player_kickoff");
+
             req_msg.mutable_head()->set_player_user_id(user_id);
             req_msg.mutable_head()->set_player_zone_id(zone_id);
             req_msg.mutable_head()->set_player_open_id(open_id);
@@ -86,7 +95,13 @@ namespace rpc {
                 return res;
             }
 
-            hello::SSMsg rsp_msg;
+            hello::SSMsg* rsp_msg_ptr = ctx.create<hello::SSMsg>();
+            if (nullptr == rsp_msg_ptr) {
+                FWLOGERROR("rpc {} create response message failed", "hello.GamesvrService.player_kickoff");
+                return hello::err::EN_SYS_MALLOC;
+            }
+
+            hello::SSMsg& rsp_msg = *rsp_msg_ptr;
             res = rpc::wait(rsp_msg, rpc_sequence);
             if (res < 0) {
                 FWLOGERROR("rpc {} wait for {} failed, res: {}({})", "hello.GamesvrService.player_kickoff",

@@ -47,8 +47,8 @@ public:
 
     msg_ref_type add_rsp_msg();
 
-    std::list<msg_type> &      get_rsp_list();
-    const std::list<msg_type> &get_rsp_list() const;
+    std::list<msg_type *> &      get_rsp_list();
+    const std::list<msg_type *> &get_rsp_list() const;
 
     std::shared_ptr<player_cache> get_player_cache() const;
 
@@ -62,7 +62,7 @@ protected:
 
 private:
     mutable std::shared_ptr<session> session_inst_;
-    std::list<msg_type>              rsp_msgs_;
+    std::list<msg_type *>            rsp_msgs_;
 };
 
 

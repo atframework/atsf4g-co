@@ -293,7 +293,7 @@ namespace rpc {
                 // WLOGINFO("=====DEBUG===== malloc uuid for (%u, %u, %u), val: %lld", major_type, minor_type, patch_type, static_cast<long
                 // long>(ret));
                 if (0 == ret) {
-                    ret = mvp::err::EN_SYS_RPC_CALL;
+                    ret = hello::err::EN_SYS_RPC_CALL;
                 }
                 return ret;
             }
