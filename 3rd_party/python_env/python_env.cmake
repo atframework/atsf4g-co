@@ -19,7 +19,7 @@ if (NOT Python3_Interpreter_FOUND AND UNIX)
         find_package(Python3 COMPONENTS Interpreter)
     endif ()
 endif()
-if (NOT Python_Interpreter_FOUND)
+if (NOT Python3_Interpreter_FOUND)
     message(FATAL_ERROR "Python is required but not found")
 endif()
 
