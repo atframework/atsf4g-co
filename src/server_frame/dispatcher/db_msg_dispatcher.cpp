@@ -118,15 +118,28 @@ int db_msg_dispatcher::tick() {
 
 int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
     assert(msg_buf_sz == sizeof(db_async_data_t));
+    const db_async_data_t *req = reinterpret_cast<const db_async_data_t *>(msg_buf);
 
-    rpc::context              ctx;
-    hello::table_all_message *table_msg = ctx.create<hello::table_all_message>();
+    rpc::context  ctx;
+    rpc::context *ctx_ptr = nullptr;
+
+    if (0 != req->task_id) {
+        // Try to reuse context in task
+        task_manager::task_ptr_t task = task_manager::me()->get_task(req->task_id);
+        if (task) {
+            ctx_ptr = task_manager::get_shared_context(*task);
+        }
+    }
+
+    if (nullptr == ctx_ptr) {
+        ctx_ptr = &ctx;
+    }
+
+    hello::table_all_message *table_msg = ctx_ptr->create<hello::table_all_message>();
     if (nullptr == table_msg) {
         FWLOGERROR("{} create message instance failed", name());
         return hello::err::EN_SYS_MALLOC;
     }
-
-    const db_async_data_t *req = reinterpret_cast<const db_async_data_t *>(msg_buf);
 
     if (NULL == req->response) {
         WLOGERROR("task [0x%llx] DB msg, no response found", static_cast<unsigned long long>(req->task_id));
@@ -183,7 +196,7 @@ int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
     callback_msg.msg_addr             = table_msg;
     callback_msg.msg_type             = get_instance_ident();
 
-    ret = on_receive_message(ctx, callback_msg, req->response, req->sequence);
+    ret = on_receive_message(*ctx_ptr, callback_msg, req->response, req->sequence);
     return ret;
 }
 

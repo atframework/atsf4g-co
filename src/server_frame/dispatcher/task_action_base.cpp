@@ -49,6 +49,8 @@ namespace detail {
     };
 } // namespace detail
 
+rpc::context &task_action_base::task_action_helper_t::get_shared_context(task_action_base &action) { return action.get_shared_context(); }
+
 task_action_base::task_action_base()
     : player_id_(0), task_id_(0), ret_code_(0), rsp_code_(0), rsp_msg_disabled_(false), evt_disabled_(false),
       start_data_(dispatcher_make_default<dispatcher_start_data_t>()) {}
@@ -103,6 +105,12 @@ int task_action_base::operator()(void *priv_data) {
         return hello::err::EN_SYS_INIT;
     }
 
+    task_manager::task_private_data_t *task_priv_data = task_manager::get_private_data(*task);
+    if (nullptr != task_priv_data) {
+        // setup action
+        task_priv_data->action = this;
+    }
+
     task_id_ = task->get_id();
 
     if (0 != get_player_id()) {
@@ -125,6 +133,11 @@ int task_action_base::operator()(void *priv_data) {
         if (!rsp_msg_disabled_) {
             send_rsp_msg();
         }
+
+        if (nullptr != task_priv_data) {
+            // reset action
+            task_priv_data->action = nullptr;
+        }
         return ret_code_;
     }
     // 响应OnSuccess(这时候任务的status还是running)
@@ -145,6 +158,11 @@ int task_action_base::operator()(void *priv_data) {
 
         if (!rsp_msg_disabled_) {
             send_rsp_msg();
+        }
+
+        if (nullptr != task_priv_data) {
+            // reset action
+            task_priv_data->action = nullptr;
         }
         return ret;
     }
@@ -202,6 +220,10 @@ int task_action_base::operator()(void *priv_data) {
         send_rsp_msg();
     }
 
+    if (nullptr != task_priv_data) {
+        // reset action
+        task_priv_data->action = nullptr;
+    }
     return ret;
 }
 

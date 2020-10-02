@@ -21,12 +21,10 @@
 
 #include <config/compiler/protobuf_prefix.h>
 
-#include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/atframework.pb.h>
+#include <protocol/pbdesc/com.const.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
-
-class actor_action_base;
 
 /**
  * @brief 协程任务和简单actor的管理创建manager类
@@ -36,24 +34,24 @@ class actor_action_base;
 class task_manager : public ::util::design_pattern::singleton<task_manager> {
 public:
 #if defined(UTIL_CONFIG_COMPILER_CXX_ALIAS_TEMPLATES) && UTIL_CONFIG_COMPILER_CXX_ALIAS_TEMPLATES
-    using msg_raw_t = dispatcher_msg_raw_t;
+    using msg_raw_t     = dispatcher_msg_raw_t;
     using resume_data_t = dispatcher_resume_data_t;
-    using start_data_t = dispatcher_start_data_t;
-    using stack_pool_t = copp::stack_pool<copp::allocator::default_statck_allocator>;
+    using start_data_t  = dispatcher_start_data_t;
+    using stack_pool_t  = copp::stack_pool<copp::allocator::default_statck_allocator>;
 
     struct task_macro_coroutine {
         using stack_allocator_t = copp::allocator::stack_allocator_pool<stack_pool_t>;
-        using coroutine_t = copp::coroutine_context_container<stack_allocator_t>;
+        using coroutine_t       = copp::coroutine_context_container<stack_allocator_t>;
     };
 
     using task_t = cotask::task<task_macro_coroutine>;
-    using id_t = typename task_t::id_t;
+    using id_t   = typename task_t::id_t;
 
     using actor_action_ptr_t = std::shared_ptr<actor_action_base>;
 #else
-    typedef dispatcher_msg_raw_t     msg_raw_t;
-    typedef dispatcher_resume_data_t resume_data_t;
-    typedef dispatcher_start_data_t  start_data_t;
+    typedef dispatcher_msg_raw_t                                        msg_raw_t;
+    typedef dispatcher_resume_data_t                                    resume_data_t;
+    typedef dispatcher_start_data_t                                     start_data_t;
     typedef copp::stack_pool<copp::allocator::default_statck_allocator> stack_pool_t;
 
     struct task_macro_coroutine {
@@ -64,41 +62,43 @@ public:
     typedef cotask::task<task_macro_coroutine> task_t;
     typedef typename task_t::id_t              id_t;
 
-    typedef std::shared_ptr<actor_action_base> actor_action_ptr_t;
+    typedef std::shared_ptr<actor_action_base>         actor_action_ptr_t;
 #endif
 
+    struct task_private_data_t {
+        task_action_base *action;
+    };
 
     struct task_action_maker_base_t {
         atframework::DispatcherOptions options;
-        task_action_maker_base_t(const atframework::DispatcherOptions* opt);
+        task_action_maker_base_t(const atframework::DispatcherOptions *opt);
         virtual ~task_action_maker_base_t();
         virtual int operator()(task_manager::id_t &task_id, start_data_t ctor_param) = 0;
     };
 
     struct actor_action_maker_base_t {
         atframework::DispatcherOptions options;
-        actor_action_maker_base_t(const atframework::DispatcherOptions* opt);
+        actor_action_maker_base_t(const atframework::DispatcherOptions *opt);
         virtual ~actor_action_maker_base_t();
         virtual actor_action_ptr_t operator()(start_data_t ctor_param) = 0;
     };
 
     /// 协程任务创建器
 #if defined(UTIL_CONFIG_COMPILER_CXX_ALIAS_TEMPLATES) && UTIL_CONFIG_COMPILER_CXX_ALIAS_TEMPLATES
-    using task_action_creator_t = std::shared_ptr<task_action_maker_base_t>;
+    using task_action_creator_t  = std::shared_ptr<task_action_maker_base_t>;
     using actor_action_creator_t = std::shared_ptr<actor_action_maker_base_t>;
 #else
-    typedef std::shared_ptr<task_action_maker_base_t> task_action_creator_t;
+    typedef std::shared_ptr<task_action_maker_base_t>  task_action_creator_t;
     typedef std::shared_ptr<actor_action_maker_base_t> actor_action_creator_t;
 #endif
 
     template <typename TAction>
     struct task_action_maker_t : public task_action_maker_base_t {
-        task_action_maker_t(const atframework::DispatcherOptions* opt): task_action_maker_base_t(opt) { }
+        task_action_maker_t(const atframework::DispatcherOptions *opt) : task_action_maker_base_t(opt) {}
         virtual int operator()(task_manager::id_t &task_id, start_data_t ctor_param) UTIL_CONFIG_OVERRIDE {
             if (options.has_timeout() && (options.timeout().seconds() > 0 || options.timeout().nanos() > 0)) {
-                return task_manager::me()->create_task_with_timeout<TAction>(
-                    task_id, options.timeout().seconds(), options.timeout().nanos(), COPP_MACRO_STD_MOVE(ctor_param)
-                );
+                return task_manager::me()->create_task_with_timeout<TAction>(task_id, options.timeout().seconds(), options.timeout().nanos(),
+                                                                             COPP_MACRO_STD_MOVE(ctor_param));
             } else {
                 return task_manager::me()->create_task<TAction>(task_id, COPP_MACRO_STD_MOVE(ctor_param));
             }
@@ -107,17 +107,17 @@ public:
 
     template <typename TAction>
     struct actor_action_maker_t : public actor_action_maker_base_t {
-        actor_action_maker_t(const atframework::DispatcherOptions* opt): actor_action_maker_base_t(opt) {}
-        virtual actor_action_ptr_t operator()(start_data_t ctor_param) UTIL_CONFIG_OVERRIDE { 
-            return task_manager::me()->create_actor<TAction>(COPP_MACRO_STD_MOVE(ctor_param)); 
+        actor_action_maker_t(const atframework::DispatcherOptions *opt) : actor_action_maker_base_t(opt) {}
+        virtual actor_action_ptr_t operator()(start_data_t ctor_param) UTIL_CONFIG_OVERRIDE {
+            return task_manager::me()->create_actor<TAction>(COPP_MACRO_STD_MOVE(ctor_param));
         };
     };
 
 #if defined(UTIL_CONFIG_COMPILER_CXX_ALIAS_TEMPLATES) && UTIL_CONFIG_COMPILER_CXX_ALIAS_TEMPLATES
 private:
     using native_task_container_t = UTIL_ENV_AUTO_MAP(id_t, cotask::detail::task_manager_node<task_t>);
-    using mgr_t = cotask::task_manager<task_t, native_task_container_t>;
-    using mgr_ptr_t = typename mgr_t::ptr_t;
+    using mgr_t                   = cotask::task_manager<task_t, native_task_container_t>;
+    using mgr_ptr_t               = typename mgr_t::ptr_t;
 
 public:
     using task_ptr_t = typename mgr_t::task_ptr_t;
@@ -184,10 +184,16 @@ public:
 
         task_macro_coroutine::stack_allocator_t alloc(stack_pool_);
 
-        task_t::ptr_t res = task_t::create_with_delegate<TAction>(COPP_MACRO_STD_FORWARD(TParams, args), alloc, get_stack_size(), 0);
+        task_t::ptr_t res = task_t::create_with_delegate<TAction>(COPP_MACRO_STD_FORWARD(TParams, args), alloc, get_stack_size(), sizeof(task_private_data_t));
         if (!res) {
             task_id = 0;
             return report_create_error(__FUNCTION__);
+        }
+
+        task_private_data_t *task_priv_data = get_private_data(*res);
+        if (nullptr != task_priv_data) {
+            // initialize private data
+            task_priv_data->action = nullptr;
         }
 
         task_id = res->get_id();
@@ -218,7 +224,7 @@ public:
      * @return 任务构造器
      */
     template <typename TAction>
-    inline task_action_creator_t make_task_creator(const atframework::DispatcherOptions* opt) {
+    inline task_action_creator_t make_task_creator(const atframework::DispatcherOptions *opt) {
         return std::make_shared<task_action_maker_t<TAction> >(opt);
     }
 
@@ -259,7 +265,7 @@ public:
      * @return Actor构造器
      */
     template <typename TAction>
-    inline actor_action_creator_t make_actor_creator(const atframework::DispatcherOptions* opt) {
+    inline actor_action_creator_t make_actor_creator(const atframework::DispatcherOptions *opt) {
         return std::make_shared<actor_action_maker_t<TAction> >(opt);
     }
 
@@ -279,9 +285,13 @@ public:
     inline const mgr_ptr_t &          get_native_manager() const { return native_mgr_; }
 
     bool is_busy() const;
+
+    static task_private_data_t *get_private_data(task_t &task);
+    static rpc::context *       get_shared_context(task_t &task);
+
 private:
     bool check_sys_config() const;
-    
+
     /**
      * @brief 创建任务
      * @param task 协程任务

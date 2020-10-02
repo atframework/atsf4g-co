@@ -79,4 +79,7 @@ inline dispatcher_resume_data_t dispatcher_make_default<dispatcher_resume_data_t
     return dispatcher_resume_data_t();
 }
 
+class task_action_base;
+class actor_action_base;
+
 #endif // DISPATCHER_DISPATCHER_TYPE_DEFINES_H

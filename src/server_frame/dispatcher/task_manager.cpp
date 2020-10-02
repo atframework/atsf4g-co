@@ -2,14 +2,16 @@
 // Created by owt50 on 2016/9/26.
 //
 
-#include <log/log_wrapper.h>
 #include <common/file_system.h>
 #include <common/string_oprs.h>
+#include <log/log_wrapper.h>
 
 #include <google/protobuf/stubs/logging.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
 #include <config/logic_config.h>
+
+#include "task_action_base.h"
 
 #include "task_manager.h"
 
@@ -52,7 +54,7 @@ static void log_wrapper_for_protobuf(::google::protobuf::LogLevel level, const c
     }
 }
 
-task_manager::task_action_maker_base_t::task_action_maker_base_t(const atframework::DispatcherOptions* opt) {
+task_manager::task_action_maker_base_t::task_action_maker_base_t(const atframework::DispatcherOptions *opt) {
     if (nullptr != opt) {
         options.CopyFrom(*opt);
     }
@@ -60,7 +62,7 @@ task_manager::task_action_maker_base_t::task_action_maker_base_t(const atframewo
 
 task_manager::task_action_maker_base_t::~task_action_maker_base_t() {}
 
-task_manager::actor_action_maker_base_t::actor_action_maker_base_t(const atframework::DispatcherOptions* opt) {
+task_manager::actor_action_maker_base_t::actor_action_maker_base_t(const atframework::DispatcherOptions *opt) {
     if (nullptr != opt) {
         options.CopyFrom(*opt);
     }
@@ -68,7 +70,7 @@ task_manager::actor_action_maker_base_t::actor_action_maker_base_t(const atframe
 
 task_manager::actor_action_maker_base_t::~actor_action_maker_base_t() {}
 
-task_manager::task_manager(): stat_interval_(60), stat_last_checkpoint_(0), conf_busy_count_(0), conf_busy_warn_count_(0) {}
+task_manager::task_manager() : stat_interval_(60), stat_last_checkpoint_(0), conf_busy_count_(0), conf_busy_warn_count_(0) {}
 
 task_manager::~task_manager() {
     // free protobuf meta
@@ -104,7 +106,7 @@ int task_manager::reload() {
             stack_pool_->set_stack_size(logic_config::me()->get_cfg_logic().task_stack_size);
         }
     }
-    conf_busy_count_ = logic_config::me()->get_cfg_logic().task_stack_busy_count;
+    conf_busy_count_      = logic_config::me()->get_cfg_logic().task_stack_busy_count;
     conf_busy_warn_count_ = logic_config::me()->get_cfg_logic().task_stack_busy_warn_count;
 
     return 0;
@@ -129,7 +131,7 @@ int task_manager::resume_task(id_t task_id, resume_data_t &data) {
             WLOGINFO("resume task 0x%llx but not found, ignored.", static_cast<unsigned long long>(task_id));
             return 0;
         }
-        
+
         WLOGERROR("resume task 0x%llx failed, res: %d.", static_cast<unsigned long long>(task_id), res);
         // 错误码
         return hello::err::EN_SYS_NOTFOUND;
@@ -154,21 +156,17 @@ int task_manager::tick(time_t sec, int nsec) {
             if (!native_mgr_->get_checkpoints().empty()) {
                 first_checkpoint = native_mgr_->get_checkpoints().begin()->expired_time.tv_sec;
             }
-            WLOGINFO(
-                "[STATS] Coroutine stack stats:\n\tRuntime - Task Number: %llu\n\tRuntime - Checkpoint Number: %llu\n\tRuntime - Next Checkpoint: %llu\n\tConfigure - Max GC Number: %llu\n\tConfigure - Stack Max: number %llu, size %llu\n\tConfigure - Stack Min: number %llu, size %llu\n\tRuntime - Stack Used: number %llu, size %llu\n\tRuntime - Stack Free: number %llu, size %llu",
-                static_cast<unsigned long long>(native_mgr_->get_task_size()),
-                static_cast<unsigned long long>(native_mgr_->get_tick_checkpoint_size()),
-                static_cast<unsigned long long>(first_checkpoint),
-                static_cast<unsigned long long>(stack_pool_->get_gc_once_number()),
-                static_cast<unsigned long long>(stack_pool_->get_max_stack_number()),
-                static_cast<unsigned long long>(stack_pool_->get_max_stack_size()),
-                static_cast<unsigned long long>(stack_pool_->get_min_stack_number()),
-                static_cast<unsigned long long>(stack_pool_->get_min_stack_size()),
-                static_cast<unsigned long long>(stack_pool_->get_limit().used_stack_number),
-                static_cast<unsigned long long>(stack_pool_->get_limit().used_stack_size),
-                static_cast<unsigned long long>(stack_pool_->get_limit().free_stack_number),
-                static_cast<unsigned long long>(stack_pool_->get_limit().free_stack_size)
-            );
+            WLOGINFO("[STATS] Coroutine stack stats:\n\tRuntime - Task Number: %llu\n\tRuntime - Checkpoint Number: %llu\n\tRuntime - Next Checkpoint: "
+                     "%llu\n\tConfigure - Max GC Number: %llu\n\tConfigure - Stack Max: number %llu, size %llu\n\tConfigure - Stack Min: number %llu, size "
+                     "%llu\n\tRuntime - Stack Used: number %llu, size %llu\n\tRuntime - Stack Free: number %llu, size %llu",
+                     static_cast<unsigned long long>(native_mgr_->get_task_size()), static_cast<unsigned long long>(native_mgr_->get_tick_checkpoint_size()),
+                     static_cast<unsigned long long>(first_checkpoint), static_cast<unsigned long long>(stack_pool_->get_gc_once_number()),
+                     static_cast<unsigned long long>(stack_pool_->get_max_stack_number()), static_cast<unsigned long long>(stack_pool_->get_max_stack_size()),
+                     static_cast<unsigned long long>(stack_pool_->get_min_stack_number()), static_cast<unsigned long long>(stack_pool_->get_min_stack_size()),
+                     static_cast<unsigned long long>(stack_pool_->get_limit().used_stack_number),
+                     static_cast<unsigned long long>(stack_pool_->get_limit().used_stack_size),
+                     static_cast<unsigned long long>(stack_pool_->get_limit().free_stack_number),
+                     static_cast<unsigned long long>(stack_pool_->get_limit().free_stack_size));
         }
     }
     return 0;
@@ -207,7 +205,8 @@ int task_manager::add_task(const task_t::ptr_t &task, time_t timeout_sec, time_t
     }
 
     if (conf_busy_warn_count_ > 0 && native_mgr_->get_task_size() > conf_busy_warn_count_) {
-        WLOGWARNING("task number %llu extend %llu", static_cast<unsigned long long>(native_mgr_->get_task_size()), static_cast<unsigned long long>(conf_busy_warn_count_));
+        WLOGWARNING("task number %llu extend %llu", static_cast<unsigned long long>(native_mgr_->get_task_size()),
+                    static_cast<unsigned long long>(conf_busy_warn_count_));
     }
 
     return hello::err::EN_SUCCESS;
@@ -218,22 +217,40 @@ int task_manager::report_create_error(const char *fn_name) {
     return hello::err::EN_SYS_MALLOC;
 }
 
-bool task_manager::is_busy() const {
-    return conf_busy_count_ > 0 && native_mgr_->get_task_size() > conf_busy_count_;
+bool task_manager::is_busy() const { return conf_busy_count_ > 0 && native_mgr_->get_task_size() > conf_busy_count_; }
+
+task_manager::task_private_data_t *task_manager::get_private_data(task_t &task) {
+    if (task.get_private_buffer_size() < sizeof(task_private_data_t)) {
+        return nullptr;
+    }
+
+    return reinterpret_cast<task_private_data_t *>(task.get_private_buffer());
+}
+
+rpc::context *task_manager::get_shared_context(task_t &task) {
+    task_private_data_t *task_priv_data = get_private_data(task);
+    if (nullptr == task_priv_data) {
+        return nullptr;
+    }
+
+    if (nullptr == task_priv_data->action) {
+        return nullptr;
+    }
+
+    return &task_action_base::task_action_helper_t::get_shared_context(*task_priv_data->action);
 }
 
 bool task_manager::check_sys_config() const {
-    const char* vm_map_count_file = "/proc/sys/vm/max_map_count";
+    const char *vm_map_count_file = "/proc/sys/vm/max_map_count";
 
     if (util::file_system::is_exist(vm_map_count_file)) {
         std::string content;
         util::file_system::get_file_content(content, vm_map_count_file);
         uint64_t sys_mmap_count = util::string::to_int<uint64_t>(content.c_str());
         if (logic_config::me()->get_cfg_logic().task_stack_mmap_count > sys_mmap_count) {
-            WLOGERROR("task_stack_mmap_count %llu is greater than /proc/sys/vm/max_map_count %llu", 
-                static_cast<unsigned long long>(logic_config::me()->get_cfg_logic().task_stack_mmap_count),
-                static_cast<unsigned long long>(sys_mmap_count)
-            );
+            WLOGERROR("task_stack_mmap_count %llu is greater than /proc/sys/vm/max_map_count %llu",
+                      static_cast<unsigned long long>(logic_config::me()->get_cfg_logic().task_stack_mmap_count),
+                      static_cast<unsigned long long>(sys_mmap_count));
 
             return false;
         }
@@ -245,10 +262,8 @@ bool task_manager::check_sys_config() const {
         }
         uint64_t check_mmap = 2 * task_max_num + logic_config::me()->get_cfg_logic().task_stack_keep_count;
         if (check_mmap > logic_config::me()->get_cfg_logic().task_stack_mmap_count) {
-            WLOGERROR("2 * max(task_stack_busy_count, task_stack_pool_max_count) + task_stack_keep_count %llu is greater than task_stack_mmap_count %llu", 
-                static_cast<unsigned long long>(check_mmap),
-                static_cast<unsigned long long>(logic_config::me()->get_cfg_logic().task_stack_mmap_count)
-            );
+            WLOGERROR("2 * max(task_stack_busy_count, task_stack_pool_max_count) + task_stack_keep_count %llu is greater than task_stack_mmap_count %llu",
+                      static_cast<unsigned long long>(check_mmap), static_cast<unsigned long long>(logic_config::me()->get_cfg_logic().task_stack_mmap_count));
 
             return false;
         }

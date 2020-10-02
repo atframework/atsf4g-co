@@ -39,6 +39,12 @@ protected:
     virtual ~task_action_base();
 
 public:
+    struct task_action_helper_t {
+        friend class task_manager;
+
+        static rpc::context &get_shared_context(task_action_base &action);
+    };
+
     virtual const char *name() const;
 
     int         operator()(void *priv_data);
