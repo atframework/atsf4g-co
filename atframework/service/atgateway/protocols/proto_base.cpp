@@ -135,7 +135,7 @@ namespace atframe {
         void proto_base::set_send_buffer_limit(size_t, size_t) {}
 
         int proto_base::handshake_done(int status) { return inner_handshake_done(status); }
-        int proto_base::inner_handshake_done(int status);
+        int proto_base::inner_handshake_done(int status) {
             bool has_handshake_done = check_flag(flag_t::EN_PFT_HANDSHAKE_DONE);
             if (has_handshake_done && !check_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE)) {
                 return error_code_t::EN_ECT_HANDSHAKE;
