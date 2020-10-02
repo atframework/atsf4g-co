@@ -1,10 +1,8 @@
-﻿cmake_minimum_required(VERSION 3.12.0)
+﻿cmake_minimum_required(VERSION 3.16.0)
 cmake_policy(SET CMP0054 NEW)
 cmake_policy(SET CMP0022 NEW)
 cmake_policy(SET CMP0067 NEW)
-if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.13")
-    cmake_policy(SET CMP0074 NEW)
-endif()
+cmake_policy(SET CMP0074 NEW)
 
 project(atf4g-co)
 

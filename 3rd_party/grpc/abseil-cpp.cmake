@@ -10,7 +10,7 @@ endif()
 # =========== 3rdparty abseil-cpp ==================
 macro(PROJECT_3RD_PARTY_ABSEIL_IMPORT)
     if (absl_FOUND)
-        message(STATUS "abseil-cpp found.")
+        message(STATUS "abseil-cpp found(${PROJECT_NAME})")
     endif()
 endmacro()
 

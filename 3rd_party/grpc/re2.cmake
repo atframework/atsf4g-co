@@ -9,7 +9,7 @@ endif()
 # =========== 3rdparty re2 ==================
 macro(PROJECT_3RD_PARTY_RE2_IMPORT)
     if (TARGET re2::re2)
-        message(STATUS "re2 using target: re2::re2")
+        message(STATUS "re2 using target(${PROJECT_NAME}): re2::re2")
         set (3RD_PARTY_RE2_LINK_NAME re2::re2)
     endif()
 endmacro()
