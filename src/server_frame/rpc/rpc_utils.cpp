@@ -25,6 +25,11 @@ namespace rpc {
         // TODO Call distributed tracing SDK API, zipkin for example
     }
 
+    int context::tracer::return_code(int code) {
+        // TODO record return code
+        return code;
+    }
+
     context::context() : trace_span_(nullptr) {}
 
     context::context(context &parent) {

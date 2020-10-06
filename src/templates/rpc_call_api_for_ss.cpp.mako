@@ -145,33 +145,33 @@ namespace rpc {
             router_manager_base* router_manager = router_manager_set::me()->get_manager(type_id);
             if (nullptr == router_manager) {
                 FWLOGERROR("rpc {} can not get router manager of type {}", "${rpc.get_full_name()}", type_id);
-                return ${project_namespace}::err::EN_SYS_NOT_SUPPORT;
+                return tracer.return_code(${project_namespace}::err::EN_SYS_NOT_SUPPORT);
             }
 
             uint64_t rpc_sequence = 0;
             int res = router_manager->send_msg(router_key, std::move(req_msg), rpc_sequence);
 %   else:
             if (dst_bus_id == 0) {
-                return ${project_namespace}::err::EN_SYS_PARAM;
+                return tracer.return_code(${project_namespace}::err::EN_SYS_PARAM);
             }
 
             int res = ss_msg_dispatcher::me()->send_to_proc(dst_bus_id, req_msg);
 %   endif
 
 %   if rpc_is_stream_mode:
-            return res;
+            return tracer.return_code(res);
 %   else:
 %     if not rpc_is_router_api:
             uint64_t rpc_sequence = req_msg.head().sequence();
 %     endif
             if (res < 0) {
-                return res;
+                return tracer.return_code(res);
             }
 
             ${project_namespace}::SSMsg* rsp_msg_ptr = ctx.create<${project_namespace}::SSMsg>();
             if (nullptr == rsp_msg_ptr) {
                 FWLOGERROR("rpc {} create response message failed", "${rpc.get_full_name()}");
-                return ${project_namespace}::err::EN_SYS_MALLOC;
+                return tracer.return_code(${project_namespace}::err::EN_SYS_MALLOC);
             }
 
             ${project_namespace}::SSMsg& rsp_msg = *rsp_msg_ptr;
@@ -181,7 +181,7 @@ namespace rpc {
                     ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), 
                     res, protobuf_mini_dumper_get_error_msg(res)
                 );
-                return res;
+                return tracer.return_code(res);
             }
 
             if (rsp_msg.head().rpc_response().type_url() != ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()) {
@@ -198,7 +198,7 @@ namespace rpc {
                         rsp_body.InitializationErrorString()
                     );
 
-                    return ${project_namespace}::err::EN_SYS_UNPACK;
+                    return tracer.return_code(${project_namespace}::err::EN_SYS_UNPACK);
                 } else {
                     FWLOGDEBUG("rpc {} parse message {} success:\n{}", "${rpc.get_full_name()}", 
                         ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), 
@@ -207,7 +207,7 @@ namespace rpc {
                 }
             }
 
-            return rsp_msg.head().error_code();
+            return tracer.return_code(rsp_msg.head().error_code());
 %   endif
         }
 % endfor
