@@ -28,13 +28,13 @@ namespace rpc {
     context::context() : trace_span_(nullptr) {}
 
     context::context(context &parent) {
+        // reuse parent arena
+        try_reuse_protobuf_arena(parent.mutable_protobuf_arena());
+        
         // Set parent tracer data
         if (nullptr != parent.get_trace_span()) {
             set_trace_parent(*parent.get_trace_span());
         }
-
-        // reuse parent arena
-        try_reuse_protobuf_arena(parent.mutable_protobuf_arena());
     }
 
     context::~context() {}
