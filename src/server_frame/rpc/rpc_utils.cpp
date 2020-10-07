@@ -27,7 +27,7 @@ namespace rpc {
 
     context::context() : trace_span_(nullptr) {}
 
-    context::context(context &parent) {
+    context::context(context &parent) : trace_span_(nullptr) {
         // reuse parent arena
         try_reuse_protobuf_arena(parent.mutable_protobuf_arena());
         
