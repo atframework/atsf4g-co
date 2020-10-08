@@ -70,12 +70,7 @@ namespace rpc {
                 static short_uuid_encoder short_uuid_encoder_;
             } // namespace detail
 
-#if defined(LIBATFRAME_UTILS_ENABLE_UUID) && LIBATFRAME_UTILS_ENABLE_UUID
-            int generate_standard_uuid(std::string &uuid) {
-                uuid = util::random::uuid_generator::generate_string();
-                return hello::err::EN_SUCCESS;
-            }
-#endif
+            std::string generate_standard_uuid(bool remove_minus) { return util::random::uuid_generator::generate_string_time(remove_minus); }
 
             std::string generate_short_uuid() {
                 // bus_id:(timestamp-2018-01-01 00:00:00):sequence
