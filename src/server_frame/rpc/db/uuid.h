@@ -19,7 +19,7 @@ namespace rpc {
              * @param remove_minus 是否移除减号(存hex模式输出)
              * @note 符合RFC4122标准，变种 1: 基于本地MAC地址和时间，时间周期为100纳秒，随机数部分为14位
              *       如果本地存在libuuid会复用libuuid的clock缓存文件: /var/lib/libuuid/clock.txt
-             *       如果clock缓存文件不存在，100纳秒内分配N个uuid则有 (1-1/2^14)^N 的概率不冲突
+             *       如果clock缓存文件不存在，100纳秒内分配N个uuid则有 (1-1/2^14)^(N-1) 的概率不冲突
              *       性能数据请参考 util::random::generate_string_time 的注解
              * @see util::random::generate_string_time
              * @see https://tools.ietf.org/html/rfc4122

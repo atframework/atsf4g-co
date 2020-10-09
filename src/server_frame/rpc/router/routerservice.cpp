@@ -77,12 +77,12 @@ namespace rpc {
 
 
             if (dst_bus_id == 0) {
-                return hello::err::EN_SYS_PARAM;
+                return tracer.return_code(hello::err::EN_SYS_PARAM);
             }
 
             int res = ss_msg_dispatcher::me()->send_to_proc(dst_bus_id, req_msg);
 
-            return res;
+            return tracer.return_code(res);
         }
 
         // ============ hello.RouterService.router_transfer ============
@@ -136,20 +136,20 @@ namespace rpc {
 
 
             if (dst_bus_id == 0) {
-                return hello::err::EN_SYS_PARAM;
+                return tracer.return_code(hello::err::EN_SYS_PARAM);
             }
 
             int res = ss_msg_dispatcher::me()->send_to_proc(dst_bus_id, req_msg);
 
             uint64_t rpc_sequence = req_msg.head().sequence();
             if (res < 0) {
-                return res;
+                return tracer.return_code(res);
             }
 
             hello::SSMsg* rsp_msg_ptr = ctx.create<hello::SSMsg>();
             if (nullptr == rsp_msg_ptr) {
                 FWLOGERROR("rpc {} create response message failed", "hello.RouterService.router_transfer");
-                return hello::err::EN_SYS_MALLOC;
+                return tracer.return_code(hello::err::EN_SYS_MALLOC);
             }
 
             hello::SSMsg& rsp_msg = *rsp_msg_ptr;
@@ -159,7 +159,7 @@ namespace rpc {
                     hello::SSRouterTransferRsp::descriptor()->full_name(), 
                     res, protobuf_mini_dumper_get_error_msg(res)
                 );
-                return res;
+                return tracer.return_code(res);
             }
 
             if (rsp_msg.head().rpc_response().type_url() != hello::SSRouterTransferRsp::descriptor()->full_name()) {
@@ -176,7 +176,7 @@ namespace rpc {
                         rsp_body.InitializationErrorString()
                     );
 
-                    return hello::err::EN_SYS_UNPACK;
+                    return tracer.return_code(hello::err::EN_SYS_UNPACK);
                 } else {
                     FWLOGDEBUG("rpc {} parse message {} success:\n{}", "hello.RouterService.router_transfer", 
                         hello::SSRouterTransferRsp::descriptor()->full_name(), 
@@ -185,7 +185,7 @@ namespace rpc {
                 }
             }
 
-            return rsp_msg.head().error_code();
+            return tracer.return_code(rsp_msg.head().error_code());
         }
     }
 }

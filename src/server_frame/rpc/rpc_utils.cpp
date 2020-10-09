@@ -25,12 +25,17 @@ namespace rpc {
         // TODO Call distributed tracing SDK API, zipkin for example
     }
 
+    int context::tracer::return_code(int ret) {
+        // TODO Record return code
+        return ret;
+    }
+
     context::context() : trace_span_(nullptr) {}
 
     context::context(context &parent) : trace_span_(nullptr) {
         // reuse parent arena
         try_reuse_protobuf_arena(parent.mutable_protobuf_arena());
-        
+
         // Set parent tracer data
         if (nullptr != parent.get_trace_span()) {
             set_trace_parent(*parent.get_trace_span());
@@ -42,7 +47,7 @@ namespace rpc {
     void context::setup_tracer(tracer &, const char *name) {
         atframework::RpcTraceSpan *trace_span = mutable_trace_span();
         if (nullptr != trace_span && trace_span->span_id().empty()) {
-            set_trace_span_id(rpc::db::uuid::generate_short_uuid());
+            set_trace_span_id(rpc::db::uuid::generate_standard_uuid(true));
         }
 
         if (nullptr != trace_span && nullptr != name && trace_span->name().empty()) {

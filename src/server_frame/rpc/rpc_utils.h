@@ -40,6 +40,8 @@ namespace rpc {
         struct tracer {
             tracer();
             ~tracer();
+
+            int return_code(int ret);
         };
 
     private:
