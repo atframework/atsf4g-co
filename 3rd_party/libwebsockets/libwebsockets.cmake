@@ -3,8 +3,6 @@ if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.10")
 endif()
 
 # =========== 3rdparty libwebsockets ==================
-set (3RD_PARTY_LIBWEBSOCKETS_VERSION "v4.0.20")
-
 function (PROJECT_3RD_PARTY_LIBWEBSOCKETS_PATCH_IMPORTED_TARGET TARGET_NAME)
     unset(PATCH_REMOVE_RULES)
     unset(PATCH_ADD_TARGETS)
@@ -58,6 +56,7 @@ if (NOT Libwebsockets_FOUND AND NOT TARGET websockets AND NOT TARGET websockets_
         find_package(Libwebsockets QUIET)
         PROJECT_3RD_PARTY_LIBWEBSOCKETS_IMPORT()
         if (NOT Libwebsockets_FOUND)
+            set (3RD_PARTY_LIBWEBSOCKETS_VERSION "v4.1.2")
             set (3RD_PARTY_LIBWEBSOCKETS_REPO_DIR "${PROJECT_3RD_PARTY_PACKAGE_DIR}/libwebsockets-${3RD_PARTY_LIBWEBSOCKETS_VERSION}")
             set (3RD_PARTY_LIBWEBSOCKETS_BUILD_DIR "${3RD_PARTY_LIBWEBSOCKETS_REPO_DIR}/build_jobs_${PROJECT_PREBUILT_PLATFORM_NAME}")
 
