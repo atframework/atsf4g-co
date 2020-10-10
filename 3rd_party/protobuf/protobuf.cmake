@@ -3,11 +3,7 @@ if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.10")
 endif()
 
 macro(PROJECT_3RD_PARTY_PROTOBUF_IMPORT)
-    if(PROTOBUF_FOUND AND PROTOBUF_PROTOC_EXECUTABLE AND Protobuf_INCLUDE_DIRS AND Protobuf_LIBRARY)
-        if (UNIX)
-            execute_process(COMMAND chmod +x "${PROTOBUF_PROTOC_EXECUTABLE}")
-        endif()
-
+    if(Protobuf_FOUND AND Protobuf_INCLUDE_DIRS AND Protobuf_LIBRARY AND Protobuf_PROTOC_EXECUTABLE)
         if (TARGET protobuf::libprotobuf AND TARGET protobuf::libprotobuf-lite)
             set (3RD_PARTY_PROTOBUF_LINK_NAME protobuf::libprotobuf)
             set (3RD_PARTY_PROTOBUF_LITE_LINK_NAME protobuf::libprotobuf-lite)
@@ -41,6 +37,9 @@ macro(PROJECT_3RD_PARTY_PROTOBUF_IMPORT)
         else ()
             set (3RD_PARTY_PROTOBUF_BIN_PROTOC ${PROTOBUF_PROTOC_EXECUTABLE})
         endif ()
+        if (UNIX)
+            execute_process(COMMAND chmod +x "${3RD_PARTY_PROTOBUF_BIN_PROTOC}")
+        endif()
 
         if (3RD_PARTY_PROTOBUF_INC_DIR)
             list(APPEND 3RD_PARTY_PUBLIC_INCLUDE_DIRS ${3RD_PARTY_PROTOBUF_INC_DIR})
@@ -64,7 +63,7 @@ if (NOT 3RD_PARTY_PROTOBUF_BIN_PROTOC OR (NOT 3RD_PARTY_PROTOBUF_LINK_NAME AND N
         PROJECT_3RD_PARTY_PROTOBUF_IMPORT()
     endif ()
 
-    if (NOT PROTOBUF_FOUND OR NOT PROTOBUF_PROTOC_EXECUTABLE OR NOT Protobuf_INCLUDE_DIRS OR NOT Protobuf_LIBRARY)
+    if (NOT Protobuf_FOUND OR NOT Protobuf_PROTOC_EXECUTABLE OR NOT Protobuf_INCLUDE_DIRS OR NOT Protobuf_LIBRARY)
         set (3RD_PARTY_PROTOBUF_VERSION "3.13.0")
 
         if( ${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
@@ -111,24 +110,6 @@ if (NOT 3RD_PARTY_PROTOBUF_BIN_PROTOC OR (NOT 3RD_PARTY_PROTOBUF_LINK_NAME AND N
 
         project_build_tools_append_cmake_options_for_lib(3RD_PARTY_PROTOBUF_FLAG_OPTIONS)
 
-        # MSVC 必须用静态库，而且会被用/MT编译。我们要把默认的/MD改为/MT
-        # 使用 /MD protobuf容易跨堆管理数据，容易崩溃，/MT依赖较少不容易出问题
-        # 注意protobuf的 RelWithDebInfo 默认使用 /MT 而本工程默认是 /MTd
-        # if (MSVC)
-        #     set (3RD_PARTY_PROTOBUF_BUILD_SHARED_LIBS -DBUILD_SHARED_LIBS=OFF)
-        #     # add_compiler_define(PROTOBUF_USE_DLLS) # MSVC 使用动态库必须加这个选项
-        #     foreach(flag_var
-        #         CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE
-        #         CMAKE_CXX_FLAGS_MINSIZEREL CMAKE_CXX_FLAGS_RELWITHDEBINFO)
-        #         if(${flag_var} MATCHES "/MD")
-        #             string(REGEX REPLACE "/MD" "/MT" ${flag_var} "${${flag_var}}")
-        #         endif(${flag_var} MATCHES "/MD")
-        #     endforeach(flag_var)
-        # #else ()
-        #     # 其他情况使用默认值即可
-        #     # set (3RD_PARTY_PROTOBUF_BUILD_SHARED_LIBS OFF)
-        # endif ()
-
         list(APPEND CMAKE_INCLUDE_PATH "${3RD_PARTY_PROTOBUF_ROOT_DIR}/include")
         if (CMAKE_ANDROID_ARCH_ABI)
             list(APPEND CMAKE_LIBRARY_PATH "${3RD_PARTY_PROTOBUF_ROOT_DIR}/lib/${CMAKE_ANDROID_ARCH_ABI}" "${3RD_PARTY_PROTOBUF_ROOT_DIR}/${CMAKE_INSTALL_BINDIR}")
@@ -136,7 +117,7 @@ if (NOT 3RD_PARTY_PROTOBUF_BIN_PROTOC OR (NOT 3RD_PARTY_PROTOBUF_LINK_NAME AND N
             list(APPEND CMAKE_LIBRARY_PATH "${3RD_PARTY_PROTOBUF_ROOT_DIR}/${CMAKE_INSTALL_LIBDIR}" "${3RD_PARTY_PROTOBUF_ROOT_DIR}/${CMAKE_INSTALL_BINDIR}")
         endif()
 
-        if (NOT CMAKE_SYSTEM STREQUAL CMAKE_HOST_SYSTEM)
+        if (NOT PROJECT_PREBUILT_PLATFORM_NAME STREQUAL PROJECT_PREBUILT_HOST_PLATFORM_NAME)
             list(APPEND CMAKE_PROGRAM_PATH "${3RD_PARTY_PROTOBUF_HOST_ROOT_DIR}/${CMAKE_INSTALL_BINDIR}")
         endif ()
         set (Protobuf_ROOT ${3RD_PARTY_PROTOBUF_ROOT_DIR})
@@ -250,12 +231,16 @@ if (NOT 3RD_PARTY_PROTOBUF_BIN_PROTOC OR (NOT 3RD_PARTY_PROTOBUF_LINK_NAME AND N
             unset(3RD_PARTY_PROTOBUF_FLAG_OPTIONS)
         endif ()
 
+        # prefer to find protoc from host prebuilt directory
+        if (NOT PROJECT_PREBUILT_PLATFORM_NAME STREQUAL PROJECT_PREBUILT_HOST_PLATFORM_NAME)
+            find_program(Protobuf_PROTOC_EXECUTABLE NAMES protoc protoc.exe PATHS "${3RD_PARTY_PROTOBUF_HOST_ROOT_DIR}/${CMAKE_INSTALL_BINDIR}" NO_DEFAULT_PATH)
+        endif ()
         find_package(Protobuf QUIET)
         PROJECT_3RD_PARTY_PROTOBUF_IMPORT()
     endif ()
 
     # try again, cached vars will cause find failed.
-    if (NOT PROTOBUF_FOUND OR NOT PROTOBUF_PROTOC_EXECUTABLE OR NOT Protobuf_INCLUDE_DIRS OR NOT Protobuf_LIBRARY)
+    if (NOT Protobuf_FOUND OR NOT Protobuf_PROTOC_EXECUTABLE OR NOT Protobuf_INCLUDE_DIRS OR NOT Protobuf_LIBRARY)
         if (CMAKE_VERSION VERSION_LESS "3.14" AND EXISTS "${3RD_PARTY_PROTOBUF_ROOT_DIR}/lib64" AND NOT EXISTS "${3RD_PARTY_PROTOBUF_ROOT_DIR}/lib")
             if (CMAKE_HOST_WIN32)
                 execute_process(
@@ -270,24 +255,47 @@ if (NOT 3RD_PARTY_PROTOBUF_BIN_PROTOC OR (NOT 3RD_PARTY_PROTOBUF_LINK_NAME AND N
             endif ()
         endif()
         EchoWithColor(COLOR YELLOW "-- Dependency: Try to find protobuf libraries again")
+        unset(Protobuf_FOUND)
+        unset(Protobuf_FOUND CACHE)
+        unset(PROTOBUF_FOUND)
+        unset(PROTOBUF_FOUND CACHE)
+        if (NOT Protobuf_PROTOC_EXECUTABLE)
+            unset(Protobuf_PROTOC_EXECUTABLE)
+            unset(Protobuf_PROTOC_EXECUTABLE CACHE)
+            unset(PROTOBUF_PROTOC_EXECUTABLE)
+            unset(PROTOBUF_PROTOC_EXECUTABLE CACHE)
+        endif ()
         unset(Protobuf_LIBRARY)
+        unset(Protobuf_LIBRARY CACHE)
         unset(Protobuf_PROTOC_LIBRARY)
+        unset(Protobuf_PROTOC_LIBRARY CACHE)
         unset(Protobuf_INCLUDE_DIR)
-        unset(Protobuf_PROTOC_EXECUTABLE)
+        unset(Protobuf_INCLUDE_DIR CACHE)
         unset(Protobuf_LIBRARY_DEBUG)
+        unset(Protobuf_LIBRARY_DEBUG CACHE)
         unset(Protobuf_PROTOC_LIBRARY_DEBUG)
+        unset(Protobuf_PROTOC_LIBRARY_DEBUG CACHE)
         unset(Protobuf_LITE_LIBRARY)
+        unset(Protobuf_LITE_LIBRARY CACHE)
         unset(Protobuf_LITE_LIBRARY_DEBUG)
+        unset(Protobuf_LITE_LIBRARY_DEBUG CACHE)
+        unset(Protobuf_VERSION)
+        unset(Protobuf_VERSION CACHE)
+        unset(Protobuf_INCLUDE_DIRS)
+        unset(Protobuf_INCLUDE_DIRS CACHE)
         unset(Protobuf_LIBRARIES)
+        unset(Protobuf_LIBRARIES CACHE)
         unset(Protobuf_PROTOC_LIBRARIES)
+        unset(Protobuf_PROTOC_LIBRARIES CACHE)
         unset(Protobuf_LITE_LIBRARIES)
+        unset(Protobuf_LITE_LIBRARIES CACHE)
         unset(Protobuf::protoc)
         find_package(Protobuf)
         PROJECT_3RD_PARTY_PROTOBUF_IMPORT()
     endif()
 
-    if(PROTOBUF_FOUND AND Protobuf_LIBRARY)
-        EchoWithColor(COLOR GREEN "-- Dependency: Protobuf found.(${PROTOBUF_PROTOC_EXECUTABLE})")
+    if(Protobuf_FOUND AND Protobuf_LIBRARY)
+        EchoWithColor(COLOR GREEN "-- Dependency: Protobuf found.(${Protobuf_PROTOC_EXECUTABLE})")
         EchoWithColor(COLOR GREEN "-- Dependency: Protobuf include.(${Protobuf_INCLUDE_DIRS})")
     else()
         EchoWithColor(COLOR RED "-- Dependency: Protobuf is required")
