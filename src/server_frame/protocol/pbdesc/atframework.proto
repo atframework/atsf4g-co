@@ -85,15 +85,51 @@ message RpcStreamMeta {
     string type_url = 22; // 类型地址
 }
 
+// RpcTraceSpan follows opentracing and opentelemetry.
+// @see https://github.com/open-telemetry/opentelemetry-proto/blob/master/opentelemetry/proto/trace/v1/trace.proto
+// @see https://opentelemetry.io
+// @see https://opentracing.io/specification/
+
+message AnyValue {
+    // The value is one of the listed fields. It is valid for all values to be unspecified
+    // in which case this AnyValue is considered to be "null".
+    oneof value {
+        string       string_value = 1;
+        bool         bool_value   = 2;
+        int64        int_value    = 3;
+        double       double_value = 4;
+        ArrayValue   array_value  = 5;
+        KeyValueList kvlist_value = 6;
+    }
+}
+
+// ArrayValue is a list of AnyValue messages. We need ArrayValue as a message
+// since oneof in AnyValue does not allow repeated fields.
+message ArrayValue {
+    // Array of values. The array may be empty (contain 0 elements).
+    repeated AnyValue values = 1;
+}
+
+// KeyValueList is a list of KeyValue messages. We need KeyValueList as a message
+// since `oneof` in AnyValue does not allow repeated fields. Everywhere else where we need
+// a list of KeyValue messages (e.g. in Span) we use `repeated KeyValue` directly to
+// avoid unnecessary extra wrapping (which slows down the protocol). The 2 approaches
+// are semantically equivalent.
+message KeyValueList {
+    // A collection of key/value pairs of key-value pairs. The list may be empty (may
+    // contain 0 elements).
+    map<string, AnyValue> values = 1;
+}
+
 message RpcTraceSpan {
     string name      = 1;
-    string trace_id  = 2; // Every span in a trace shares this ID.
-    string span_id   = 3; // The ID for a particular span. This may or may not be the same as the trace id.
-    string parent_id = 4; // This is an optional ID that will only be present on child spans. That is the span without a parent id is considered the root of the trace.
+    bytes  trace_id  = 2; // Every span in a trace shares this ID.
+    bytes  span_id   = 3; // The ID for a particular span. This may or may not be the same as the trace id.
+    bytes  parent_id = 4; // This is an optional ID that will only be present on child spans. That is the span without a parent id is considered the root of the trace.
 
     // google.protobuf.Timestamp timestamp   = 5; // timestamp should be update when call trace API
     // google.protobuf.Duration  duration    = 6; // timestamp should be update when finish trace Call
 
-    repeated string     tags        = 7;
+    map<string, string> tags        = 7;
     map<string, string> annotations = 8;
 }
