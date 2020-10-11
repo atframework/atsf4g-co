@@ -99,10 +99,13 @@ int task_action_base::operator()(void *priv_data) {
         }
     }
 
+    rpc::context::tracer tracer;
+    shared_context_.setup_tracer(tracer, name());
+
     task_manager::task_t *task = cotask::this_task::get<task_manager::task_t>();
     if (NULL == task) {
         WLOGERROR("task convert failed, must in task.");
-        return hello::err::EN_SYS_INIT;
+        return tracer.return_code(hello::err::EN_SYS_INIT);
     }
 
     task_manager::task_private_data_t *task_priv_data = task_manager::get_private_data(*task);
@@ -138,7 +141,7 @@ int task_action_base::operator()(void *priv_data) {
             // reset action
             task_priv_data->action = nullptr;
         }
-        return ret_code_;
+        return tracer.return_code(ret_code_);
     }
     // 响应OnSuccess(这时候任务的status还是running)
     if (cotask::EN_TS_RUNNING == task->get_status() && ret_code_ >= 0) {
@@ -164,7 +167,7 @@ int task_action_base::operator()(void *priv_data) {
             // reset action
             task_priv_data->action = nullptr;
         }
-        return ret;
+        return tracer.return_code(ret);
     }
 
     if (hello::err::EN_SUCCESS == ret_code_) {
@@ -224,6 +227,8 @@ int task_action_base::operator()(void *priv_data) {
         // reset action
         task_priv_data->action = nullptr;
     }
+
+    tracer.return_code(ret_code_);
     return ret;
 }
 

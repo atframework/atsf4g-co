@@ -41,7 +41,7 @@ namespace rpc {
             tracer();
             ~tracer();
 
-            int return_code(int code);
+            int return_code(int ret);
         };
 
     private:

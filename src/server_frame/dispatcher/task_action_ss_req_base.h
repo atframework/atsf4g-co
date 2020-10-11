@@ -111,7 +111,7 @@ public:
 
 public:
     task_action_ss_rpc_base(dispatcher_start_data_t COPP_MACRO_RV_REF start_param)
-        : base_type(COPP_MACRO_STD_MOVE(start_param)), has_unpack_request_(false), has_pack_response_(false) {}
+        : base_type(COPP_MACRO_STD_MOVE(start_param)), has_unpack_request_(false), has_pack_response_(false), request_body_(nullptr), response_body_(nullptr) {}
 
     rpc_request_type &get_request_body() {
         // Unpack on first call to get_request_body(), so router transfer need not unpack message body

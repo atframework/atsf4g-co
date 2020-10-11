@@ -153,6 +153,8 @@ public:
 #endif
 
 protected:
+    task_action_req_base() : request_msg_(nullptr) {}
+
     inline TREQ &get_request() {
         if (nullptr != request_msg_) {
             return *request_msg_;
