@@ -63,10 +63,14 @@ file(APPEND ${GENERATE_FOR_PB_OUT_SH}
     "  --proto_path \"${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --proto_path \"${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --proto_path \"${PROTOBUF_INCLUDE_DIRS}\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --proto_path \"${ATFRAMEWORK_ATBUS_INC_DIR}\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --proto_path \"${ATFRAMEWORK_ATAPP_INC_DIR}\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  -o \"${PROJECT_INSTALL_RES_PBD_DIR}/network.pb\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  \"${3RD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension/xrescode_extensions_v3.proto\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  \"${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config\"/*.proto \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-    "  \"${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc\"/*.proto ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc\"/*.proto \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${ATFRAMEWORK_ATBUS_INC_DIR}\"/*.proto \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${ATFRAMEWORK_ATAPP_INC_DIR}/atframe\"/*.proto ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
 )
 
 file(APPEND ${GENERATE_FOR_PB_OUT_PWSH}
@@ -74,15 +78,21 @@ file(APPEND ${GENERATE_FOR_PB_OUT_PWSH}
     "  --proto_path \"${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --proto_path \"${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --proto_path \"${PROTOBUF_INCLUDE_DIRS}\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --proto_path \"${ATFRAMEWORK_ATBUS_INC_DIR}\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --proto_path \"${ATFRAMEWORK_ATAPP_INC_DIR}\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  -o \"${PROJECT_INSTALL_RES_PBD_DIR}/network.pb\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  \"${3RD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension/xrescode_extensions_v3.proto\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  \$(Get-ChildItem \"${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config/*.proto\") `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-    "  \$(Get-ChildItem \"${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc/*.proto\") ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \$(Get-ChildItem \"${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc/*.proto\") `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \$(Get-ChildItem \"${ATFRAMEWORK_ATBUS_INC_DIR}/*.proto\") `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \$(Get-ChildItem \"${ATFRAMEWORK_ATAPP_INC_DIR}/atframe/*.proto\") ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
 )
 
 file(GLOB_RECURSE GENERATE_FOR_PB_PY_PROTO_FILES 
     "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config/*.proto"
     "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc/*.proto"
+    "${ATFRAMEWORK_ATBUS_INC_DIR}/*.proto"
+    "${ATFRAMEWORK_ATAPP_INC_DIR}/atframe/*.proto"
 )
 execute_process(
     COMMAND 
@@ -90,6 +100,8 @@ execute_process(
         "--proto_path" "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config"
         "--proto_path" "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc"
         "--proto_path" ${PROTOBUF_INCLUDE_DIRS}
+        "--proto_path" ${ATFRAMEWORK_ATBUS_INC_DIR}
+        "--proto_path" ${ATFRAMEWORK_ATAPP_INC_DIR}
         "-o" "${PROJECT_INSTALL_RES_PBD_DIR}/network.pb"
         "${3RD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension/xrescode_extensions_v3.proto"
         ${GENERATE_FOR_PB_PY_PROTO_FILES}

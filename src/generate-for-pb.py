@@ -102,6 +102,9 @@ class PbObjectBase(object):
             return self._reflect_extensions
         self._reflect_extensions = dict()
 
+        if not self.descriptor.GetOptions():
+            return self._reflect_extensions
+
         for ext_handle in self.descriptor.GetOptions().Extensions:
             ext_value = self.descriptor.GetOptions().Extensions[ext_handle]
             self._reflect_extensions[ext_handle.name] = ext_value
@@ -153,8 +156,8 @@ class PbObjectBase(object):
     def get_cpp_namespace_end(self, full_name, pretty_ident='  '):
         current_ident = ''
         ret = []
-        for _ in HANDLE_SPLIT_MODULE_RULE.split(full_name):
-            ret.append(current_ident + "}")
+        for name in HANDLE_SPLIT_MODULE_RULE.split(full_name):
+            ret.append(current_ident + "} // namespace " + name)
             current_ident = current_ident + pretty_ident
         ret.reverse()
         return ret
