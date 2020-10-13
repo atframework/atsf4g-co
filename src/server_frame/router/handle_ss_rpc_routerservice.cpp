@@ -23,6 +23,6 @@ namespace handle {
             REG_TASK_RPC_HANDLE(ss_msg_dispatcher, ret, task_action_router_transfer, hello::RouterService::descriptor(), "hello.RouterService.router_transfer");
             return ret;
         }
-    }
+    } // namespace router
 }
 

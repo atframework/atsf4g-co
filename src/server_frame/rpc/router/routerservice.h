@@ -19,9 +19,21 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
+#include <libcopp/future/poll.h>
+
 namespace rpc {
     class context;
     namespace router {
+        struct routerservice_result_t {
+            routerservice_result_t();
+            routerservice_result_t(int code);
+            operator int() const LIBCOPP_MACRO_NOEXCEPT;
+
+            bool is_success() const LIBCOPP_MACRO_NOEXCEPT;
+            bool is_error() const LIBCOPP_MACRO_NOEXCEPT;
+
+            copp::future::poll_t<int> result;
+        };
 
         // ============ hello.RouterService.router_update_sync ============
         /**
@@ -31,7 +43,7 @@ namespace rpc {
          * @note  notify another server instance to update router table
          * @return 0 or error code
          */
-        int router_update_sync(context& ctx, uint64_t dst_bus_id, hello::SSRouterUpdateSync &req_body);
+        routerservice_result_t router_update_sync(context& ctx, uint64_t dst_bus_id, hello::SSRouterUpdateSync &req_body);
 
         // ============ hello.RouterService.router_transfer ============
         /**
@@ -42,8 +54,8 @@ namespace rpc {
          * @note  transfer a router object into another server instance
          * @return 0 or error code
          */
-        int router_transfer(context& ctx, uint64_t dst_bus_id, hello::SSRouterTransferReq &req_body, hello::SSRouterTransferRsp &rsp_body);
-    }
+        routerservice_result_t router_transfer(context& ctx, uint64_t dst_bus_id, hello::SSRouterTransferReq &req_body, hello::SSRouterTransferRsp &rsp_body);
+    } // namespace router
 }
 
 #endif

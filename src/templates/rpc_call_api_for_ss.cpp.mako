@@ -4,6 +4,7 @@ import time
 import os
 %><%
 module_name = service.get_extension_field("service_options", lambda x: x.module_name, service.get_name_lower_rule())
+result_clazz_name = service.get_name_lower_rule() + '_result_t'
 %>/**
  * @brief Created by ${generator} for ${service.get_full_name()}, please don't edit it
  */
@@ -39,6 +40,47 @@ namespace rpc {
 % for ns in service.get_cpp_namespace_begin(module_name, '    '):
     ${ns}
 % endfor
+        ${result_clazz_name}::${result_clazz_name}() {}
+        ${result_clazz_name}::${result_clazz_name}(int code): result(code) {}
+        ${result_clazz_name}::operator int() const LIBCOPP_MACRO_NOEXCEPT {
+            if (!result.is_ready()) {
+                return 0;
+            }
+
+            const int* ret = result.data();
+            if (nullptr == ret) {
+                return 0;
+            }
+
+            return *ret;
+        }
+
+        bool ${result_clazz_name}::is_success() const LIBCOPP_MACRO_NOEXCEPT {
+            if (!result.is_ready()) {
+                return false;
+            }
+
+            const int* ret = result.data();
+            if (nullptr == ret) {
+                return false;
+            }
+
+            return *ret >= 0;
+        }
+
+        bool ${result_clazz_name}::is_error() const LIBCOPP_MACRO_NOEXCEPT {
+            if (!result.is_ready()) {
+                return false;
+            }
+
+            const int* ret = result.data();
+            if (nullptr == ret) {
+                return false;
+            }
+
+            return *ret < 0;
+        }
+
 % for rpc in rpcs.values():
 <%
     rpc_is_router_api = rpc.get_extension_field('rpc_options', lambda x: x.router_rpc, False)
@@ -58,14 +100,14 @@ namespace rpc {
         rpc_params.append('{0} &rsp_body'.format(rpc.get_response().get_cpp_class_name()))
 %>
         // ============ ${rpc.get_full_name()} ============
-        int ${rpc.get_name()}(${', '.join(rpc_params)}) {
+        ${result_clazz_name} ${rpc.get_name()}(${', '.join(rpc_params)}) {
 %   if rpc_is_router_api:
             if (object_id == 0 || type_id == 0) {
-                return ${project_namespace}::err::EN_SYS_PARAM;
+                return ${result_clazz_name}(${project_namespace}::err::EN_SYS_PARAM);
             }
 %   else:
             if (dst_bus_id == 0) {
-                return ${project_namespace}::err::EN_SYS_PARAM;
+                return ${result_clazz_name}(${project_namespace}::err::EN_SYS_PARAM);
             }
 %   endif
 
@@ -73,14 +115,14 @@ namespace rpc {
             task_manager::task_t *task = task_manager::task_t::this_task();
             if (!task) {
                 FWLOGERROR("rpc {} must be called in a task", "${rpc.get_full_name()}");
-                return ${project_namespace}::err::EN_SYS_RPC_NO_TASK;
+                return ${result_clazz_name}(${project_namespace}::err::EN_SYS_RPC_NO_TASK);
             }
 %   endif
 
             ${project_namespace}::SSMsg* req_msg_ptr = ctx.create<${project_namespace}::SSMsg>();
             if (nullptr == req_msg_ptr) {
                 FWLOGERROR("rpc {} create request message failed", "${rpc.get_full_name()}");
-                return ${project_namespace}::err::EN_SYS_MALLOC;
+                return ${result_clazz_name}(${project_namespace}::err::EN_SYS_MALLOC);
             }
 
             ${project_namespace}::SSMsg& req_msg = *req_msg_ptr;
@@ -89,7 +131,7 @@ namespace rpc {
             req_msg.mutable_head()->set_op_type(${project_namespace}::EN_MSG_OP_TYPE_STREAM);
             atframework::RpcStreamMeta* stream_meta = req_msg.mutable_head()->mutable_rpc_stream();
             if (nullptr == stream_meta) {
-                return ${project_namespace}::err::EN_SYS_MALLOC;
+                return ${result_clazz_name}(${project_namespace}::err::EN_SYS_MALLOC);
             }
             stream_meta->set_version(logic_config::me()->get_atframework_settings().rpc_version());
             stream_meta->set_caller(ss_msg_dispatcher::me()->get_current_service_name());
@@ -101,7 +143,7 @@ namespace rpc {
             req_msg.mutable_head()->set_op_type(${project_namespace}::EN_MSG_OP_TYPE_UNARY_REQUEST);
             atframework::RpcRequestMeta* request_meta = req_msg.mutable_head()->mutable_rpc_request();
             if (nullptr == request_meta) {
-                return ${project_namespace}::err::EN_SYS_MALLOC;
+                return ${result_clazz_name}(${project_namespace}::err::EN_SYS_MALLOC);
             }
             request_meta->set_version(logic_config::me()->get_atframework_settings().rpc_version());
             request_meta->set_caller(ss_msg_dispatcher::me()->get_current_service_name());
@@ -115,7 +157,7 @@ namespace rpc {
                     ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name(), 
                     req_body.InitializationErrorString()
                 );
-                return ${project_namespace}::err::EN_SYS_PACK;
+                return ${result_clazz_name}(${project_namespace}::err::EN_SYS_PACK);
             } else {
                 FWLOGDEBUG("rpc {} serialize message {} success:\n{}", "${rpc.get_full_name()}",
                     ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name(), 
@@ -145,33 +187,33 @@ namespace rpc {
             router_manager_base* router_manager = router_manager_set::me()->get_manager(type_id);
             if (nullptr == router_manager) {
                 FWLOGERROR("rpc {} can not get router manager of type {}", "${rpc.get_full_name()}", type_id);
-                return tracer.return_code(${project_namespace}::err::EN_SYS_NOT_SUPPORT);
+                return ${result_clazz_name}(tracer.return_code(${project_namespace}::err::EN_SYS_NOT_SUPPORT));
             }
 
             uint64_t rpc_sequence = 0;
             int res = router_manager->send_msg(router_key, std::move(req_msg), rpc_sequence);
 %   else:
             if (dst_bus_id == 0) {
-                return tracer.return_code(${project_namespace}::err::EN_SYS_PARAM);
+                return ${result_clazz_name}(tracer.return_code(${project_namespace}::err::EN_SYS_PARAM));
             }
 
             int res = ss_msg_dispatcher::me()->send_to_proc(dst_bus_id, req_msg);
 %   endif
 
 %   if rpc_is_stream_mode:
-            return tracer.return_code(res);
+            return ${result_clazz_name}(tracer.return_code(res));
 %   else:
 %     if not rpc_is_router_api:
             uint64_t rpc_sequence = req_msg.head().sequence();
 %     endif
             if (res < 0) {
-                return tracer.return_code(res);
+                return ${result_clazz_name}(tracer.return_code(res));
             }
 
             ${project_namespace}::SSMsg* rsp_msg_ptr = ctx.create<${project_namespace}::SSMsg>();
             if (nullptr == rsp_msg_ptr) {
                 FWLOGERROR("rpc {} create response message failed", "${rpc.get_full_name()}");
-                return tracer.return_code(${project_namespace}::err::EN_SYS_MALLOC);
+                return ${result_clazz_name}(tracer.return_code(${project_namespace}::err::EN_SYS_MALLOC));
             }
 
             ${project_namespace}::SSMsg& rsp_msg = *rsp_msg_ptr;
@@ -181,7 +223,7 @@ namespace rpc {
                     ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), 
                     res, protobuf_mini_dumper_get_error_msg(res)
                 );
-                return tracer.return_code(res);
+                return ${result_clazz_name}(tracer.return_code(res));
             }
 
             if (rsp_msg.head().rpc_response().type_url() != ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()) {
@@ -198,7 +240,7 @@ namespace rpc {
                         rsp_body.InitializationErrorString()
                     );
 
-                    return tracer.return_code(${project_namespace}::err::EN_SYS_UNPACK);
+                    return ${result_clazz_name}(tracer.return_code(${project_namespace}::err::EN_SYS_UNPACK));
                 } else {
                     FWLOGDEBUG("rpc {} parse message {} success:\n{}", "${rpc.get_full_name()}", 
                         ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), 
@@ -207,7 +249,7 @@ namespace rpc {
                 }
             }
 
-            return tracer.return_code(rsp_msg.head().error_code());
+            return ${result_clazz_name}(tracer.return_code(rsp_msg.head().error_code()));
 %   endif
         }
 % endfor

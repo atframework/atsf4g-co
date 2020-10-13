@@ -130,6 +130,6 @@ message RpcTraceSpan {
     // google.protobuf.Timestamp timestamp   = 5; // timestamp should be update when call trace API
     // google.protobuf.Duration  duration    = 6; // timestamp should be update when finish trace Call
 
-    map<string, string> tags        = 7;
-    map<string, string> annotations = 8;
+    map<string, AnyValue> tags        = 7;
+    map<string, AnyValue> annotations = 8;
 }

@@ -21,6 +21,6 @@ namespace handle {
             REG_TASK_RPC_HANDLE(ss_msg_dispatcher, ret, task_action_player_kickoff, hello::GamesvrService::descriptor(), "hello.GamesvrService.player_kickoff");
             return ret;
         }
-    }
+    } // namespace game
 }
 

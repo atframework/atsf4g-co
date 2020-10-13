@@ -12,7 +12,7 @@ class dispatcher_implement;
 namespace handle {
     namespace game {
         int register_handles_for_gamesvrservice();
-    }
+    } // namespace game
 }
 
 #endif

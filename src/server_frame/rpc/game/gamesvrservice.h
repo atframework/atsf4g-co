@@ -19,9 +19,21 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
+#include <libcopp/future/poll.h>
+
 namespace rpc {
     class context;
     namespace game {
+        struct gamesvrservice_result_t {
+            gamesvrservice_result_t();
+            gamesvrservice_result_t(int code);
+            operator int() const LIBCOPP_MACRO_NOEXCEPT;
+
+            bool is_success() const LIBCOPP_MACRO_NOEXCEPT;
+            bool is_error() const LIBCOPP_MACRO_NOEXCEPT;
+
+            copp::future::poll_t<int> result;
+        };
 
         // ============ hello.GamesvrService.player_kickoff ============
         /**
@@ -34,8 +46,8 @@ namespace rpc {
          * @param rsp_body       response body
          * @return 0 or error code
          */
-        int player_kickoff(context& ctx, uint64_t dst_bus_id, uint32_t zone_id, uint64_t user_id, const std::string& open_id, hello::SSPlayerKickOffReq &req_body, hello::SSPlayerKickOffRsp &rsp_body);
-    }
+        gamesvrservice_result_t player_kickoff(context& ctx, uint64_t dst_bus_id, uint32_t zone_id, uint64_t user_id, const std::string& open_id, hello::SSPlayerKickOffReq &req_body, hello::SSPlayerKickOffRsp &rsp_body);
+    } // namespace game
 }
 
 #endif

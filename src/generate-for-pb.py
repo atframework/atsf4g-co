@@ -156,8 +156,8 @@ class PbObjectBase(object):
     def get_cpp_namespace_end(self, full_name, pretty_ident='  '):
         current_ident = ''
         ret = []
-        for _ in HANDLE_SPLIT_MODULE_RULE.split(full_name):
-            ret.append(current_ident + "}")
+        for name in HANDLE_SPLIT_MODULE_RULE.split(full_name):
+            ret.append(current_ident + "} // namespace " + name)
             current_ident = current_ident + pretty_ident
         ret.reverse()
         return ret

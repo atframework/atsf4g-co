@@ -31,23 +31,64 @@
 
 namespace rpc {
     namespace game {
+        gamesvrservice_result_t::gamesvrservice_result_t() {}
+        gamesvrservice_result_t::gamesvrservice_result_t(int code): result(code) {}
+        gamesvrservice_result_t::operator int() const LIBCOPP_MACRO_NOEXCEPT {
+            if (!result.is_ready()) {
+                return 0;
+            }
+
+            const int* ret = result.data();
+            if (nullptr == ret) {
+                return 0;
+            }
+
+            return *ret;
+        }
+
+        bool gamesvrservice_result_t::is_success() const LIBCOPP_MACRO_NOEXCEPT {
+            if (!result.is_ready()) {
+                return false;
+            }
+
+            const int* ret = result.data();
+            if (nullptr == ret) {
+                return false;
+            }
+
+            return *ret >= 0;
+        }
+
+        bool gamesvrservice_result_t::is_error() const LIBCOPP_MACRO_NOEXCEPT {
+            if (!result.is_ready()) {
+                return false;
+            }
+
+            const int* ret = result.data();
+            if (nullptr == ret) {
+                return false;
+            }
+
+            return *ret < 0;
+        }
+
 
         // ============ hello.GamesvrService.player_kickoff ============
-        int player_kickoff(context& ctx, uint64_t dst_bus_id, uint32_t zone_id, uint64_t user_id, const std::string& open_id, hello::SSPlayerKickOffReq &req_body, hello::SSPlayerKickOffRsp &rsp_body) {
+        gamesvrservice_result_t player_kickoff(context& ctx, uint64_t dst_bus_id, uint32_t zone_id, uint64_t user_id, const std::string& open_id, hello::SSPlayerKickOffReq &req_body, hello::SSPlayerKickOffRsp &rsp_body) {
             if (dst_bus_id == 0) {
-                return hello::err::EN_SYS_PARAM;
+                return gamesvrservice_result_t(hello::err::EN_SYS_PARAM);
             }
 
             task_manager::task_t *task = task_manager::task_t::this_task();
             if (!task) {
                 FWLOGERROR("rpc {} must be called in a task", "hello.GamesvrService.player_kickoff");
-                return hello::err::EN_SYS_RPC_NO_TASK;
+                return gamesvrservice_result_t(hello::err::EN_SYS_RPC_NO_TASK);
             }
 
             hello::SSMsg* req_msg_ptr = ctx.create<hello::SSMsg>();
             if (nullptr == req_msg_ptr) {
                 FWLOGERROR("rpc {} create request message failed", "hello.GamesvrService.player_kickoff");
-                return hello::err::EN_SYS_MALLOC;
+                return gamesvrservice_result_t(hello::err::EN_SYS_MALLOC);
             }
 
             hello::SSMsg& req_msg = *req_msg_ptr;
@@ -56,7 +97,7 @@ namespace rpc {
             req_msg.mutable_head()->set_op_type(hello::EN_MSG_OP_TYPE_UNARY_REQUEST);
             atframework::RpcRequestMeta* request_meta = req_msg.mutable_head()->mutable_rpc_request();
             if (nullptr == request_meta) {
-                return hello::err::EN_SYS_MALLOC;
+                return gamesvrservice_result_t(hello::err::EN_SYS_MALLOC);
             }
             request_meta->set_version(logic_config::me()->get_atframework_settings().rpc_version());
             request_meta->set_caller(ss_msg_dispatcher::me()->get_current_service_name());
@@ -69,7 +110,7 @@ namespace rpc {
                     hello::SSPlayerKickOffReq::descriptor()->full_name(), 
                     req_body.InitializationErrorString()
                 );
-                return hello::err::EN_SYS_PACK;
+                return gamesvrservice_result_t(hello::err::EN_SYS_PACK);
             } else {
                 FWLOGDEBUG("rpc {} serialize message {} success:\n{}", "hello.GamesvrService.player_kickoff",
                     hello::SSPlayerKickOffReq::descriptor()->full_name(), 
@@ -86,20 +127,20 @@ namespace rpc {
             req_msg.mutable_head()->set_player_open_id(open_id);
 
             if (dst_bus_id == 0) {
-                return tracer.return_code(hello::err::EN_SYS_PARAM);
+                return gamesvrservice_result_t(tracer.return_code(hello::err::EN_SYS_PARAM));
             }
 
             int res = ss_msg_dispatcher::me()->send_to_proc(dst_bus_id, req_msg);
 
             uint64_t rpc_sequence = req_msg.head().sequence();
             if (res < 0) {
-                return tracer.return_code(res);
+                return gamesvrservice_result_t(tracer.return_code(res));
             }
 
             hello::SSMsg* rsp_msg_ptr = ctx.create<hello::SSMsg>();
             if (nullptr == rsp_msg_ptr) {
                 FWLOGERROR("rpc {} create response message failed", "hello.GamesvrService.player_kickoff");
-                return tracer.return_code(hello::err::EN_SYS_MALLOC);
+                return gamesvrservice_result_t(tracer.return_code(hello::err::EN_SYS_MALLOC));
             }
 
             hello::SSMsg& rsp_msg = *rsp_msg_ptr;
@@ -109,7 +150,7 @@ namespace rpc {
                     hello::SSPlayerKickOffRsp::descriptor()->full_name(), 
                     res, protobuf_mini_dumper_get_error_msg(res)
                 );
-                return tracer.return_code(res);
+                return gamesvrservice_result_t(tracer.return_code(res));
             }
 
             if (rsp_msg.head().rpc_response().type_url() != hello::SSPlayerKickOffRsp::descriptor()->full_name()) {
@@ -126,7 +167,7 @@ namespace rpc {
                         rsp_body.InitializationErrorString()
                     );
 
-                    return tracer.return_code(hello::err::EN_SYS_UNPACK);
+                    return gamesvrservice_result_t(tracer.return_code(hello::err::EN_SYS_UNPACK));
                 } else {
                     FWLOGDEBUG("rpc {} parse message {} success:\n{}", "hello.GamesvrService.player_kickoff", 
                         hello::SSPlayerKickOffRsp::descriptor()->full_name(), 
@@ -135,7 +176,7 @@ namespace rpc {
                 }
             }
 
-            return tracer.return_code(rsp_msg.head().error_code());
+            return gamesvrservice_result_t(tracer.return_code(rsp_msg.head().error_code()));
         }
-    }
+    } // namespace game
 }

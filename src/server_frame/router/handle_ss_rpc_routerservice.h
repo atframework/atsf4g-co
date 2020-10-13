@@ -12,7 +12,7 @@ class dispatcher_implement;
 namespace handle {
     namespace router {
         int register_handles_for_routerservice();
-    }
+    } // namespace router
 }
 
 #endif
