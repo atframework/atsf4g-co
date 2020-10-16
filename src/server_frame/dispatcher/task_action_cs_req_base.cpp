@@ -39,7 +39,7 @@ task_action_cs_req_base::task_action_cs_req_base(dispatcher_start_data_t COPP_MA
         }
     }
 
-    get_shared_context().set_trace_id(rpc::db::uuid::generate_short_uuid());
+    get_shared_context().set_trace_id(rpc::db::uuid::generate_standard_uuid(true));
 }
 
 task_action_cs_req_base::~task_action_cs_req_base() {}

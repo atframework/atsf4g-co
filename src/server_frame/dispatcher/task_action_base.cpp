@@ -84,11 +84,11 @@ int task_action_base::operator()(void *priv_data) {
             if (nullptr != start_data_.context->get_trace_span()) {
                 const atframework::RpcTraceSpan *origin_trace_span = shared_context_.get_trace_span();
                 if (nullptr == origin_trace_span) {
-                    shared_context_.set_trace_id(rpc::db::uuid::generate_short_uuid());
+                    shared_context_.set_trace_id(rpc::db::uuid::generate_standard_uuid(true));
                     shared_context_.set_trace_parent(*start_data_.context->get_trace_span());
                 } else {
                     if (origin_trace_span->trace_id().empty()) {
-                        shared_context_.set_trace_id(rpc::db::uuid::generate_short_uuid());
+                        shared_context_.set_trace_id(rpc::db::uuid::generate_standard_uuid(true));
                     }
 
                     if (origin_trace_span->parent_id().empty()) {

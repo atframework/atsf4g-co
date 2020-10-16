@@ -9,7 +9,7 @@
 #include "task_action_no_req_base.h"
 
 
-task_action_no_req_base::task_action_no_req_base() { get_shared_context().set_trace_id(rpc::db::uuid::generate_short_uuid()); }
+task_action_no_req_base::task_action_no_req_base() { get_shared_context().set_trace_id(rpc::db::uuid::generate_standard_uuid(true)); }
 
 task_action_no_req_base::~task_action_no_req_base() {}
 
