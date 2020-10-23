@@ -216,6 +216,8 @@ if (NOT Libwebsockets_FOUND AND NOT TARGET websockets AND NOT TARGET websockets_
         unset(3RD_PARTY_LIBWEBSOCKET_BACKUP_FIND_ROOT)
         unset(3RD_PARTY_LIBWEBSOCKET_BACKUP_PREFIX_PATH)
     endif()
+else ()
+    PROJECT_3RD_PARTY_LIBWEBSOCKETS_IMPORT()
 endif()
 
 if (NOT Libwebsockets_FOUND AND NOT TARGET websockets AND NOT TARGET websockets_shared)
