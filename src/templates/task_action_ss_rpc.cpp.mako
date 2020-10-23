@@ -33,21 +33,18 @@ const char *${task_class_name}::name() const {
     return "${task_class_name}";
 }
 
-bool ${task_class_name}::is_stream_rpc() const {
-% if rpc_is_stream_mode:
-    return true;
-% else:
-    return false;
-% endif
-}
-
 int ${task_class_name}::operator()() {
     EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
 % if rpc.is_request_stream() or rpc.is_response_stream():
     // Stream request or stream response, just ignore auto response
     disable_rsp_msg();
 % else:
-    EXPLICIT_UNUSED_ATTR const rpc_response_type& rsp_body = get_response_body();
+    EXPLICIT_UNUSED_ATTR rpc_response_type& rsp_body = get_response_body();
+%   if rpc.get_extension_field('rpc_options', lambda x: x.allow_no_wait, False):
+    if (is_stream_rpc()) {
+        disable_rsp_msg();
+    }
+%   endif
 % endif
 
     // TODO ...

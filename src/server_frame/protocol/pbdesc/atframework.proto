@@ -35,8 +35,9 @@ message DispatcherOptions {
     // functional
     bool mark_fast_save = 301; // 标记把涉及的路由对象转移到快队列并触发保存(需要dispatcher层和task_action_base层支持)
     bool router_rpc     = 302; // 是否是路由系统rpc，生成的接口使用路由系统参数(需要generator支持)
-    bool user_rpc       = 303; // RPC接口是否需要附带用户信息
+    bool user_rpc       = 303; // RPC接口是否需要附带用户信息,如果router_rpc同时设为true则会走路由rpc规则，但是认为路由对象的zone_id和object_id和用户ID一致
     bool no_cache       = 304;
+    bool allow_no_wait  = 305; // 是否允许不等待回包
 }
 
 extend google.protobuf.MethodOptions {

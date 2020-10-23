@@ -40,7 +40,6 @@ public:
     ~${task_class_name}();
 
     virtual const char *name() const UTIL_CONFIG_OVERRIDE;
-    virtual bool is_stream_rpc() const UTIL_CONFIG_OVERRIDE;
 
     virtual int operator()() UTIL_CONFIG_OVERRIDE;
 

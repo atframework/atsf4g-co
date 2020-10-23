@@ -74,7 +74,7 @@ namespace rpc {
 
 
         // ============ hello.GamesvrService.player_kickoff ============
-        gamesvrservice_result_t player_kickoff(context& ctx, uint64_t dst_bus_id, uint32_t zone_id, uint64_t user_id, const std::string& open_id, hello::SSPlayerKickOffReq &req_body, hello::SSPlayerKickOffRsp &rsp_body) {
+        gamesvrservice_result_t player_kickoff(context& __ctx, uint64_t dst_bus_id, uint32_t zone_id, uint64_t user_id, const std::string& open_id, hello::SSPlayerKickOffReq &req_body, hello::SSPlayerKickOffRsp &rsp_body) {
             if (dst_bus_id == 0) {
                 return gamesvrservice_result_t(hello::err::EN_SYS_PARAM);
             }
@@ -85,7 +85,7 @@ namespace rpc {
                 return gamesvrservice_result_t(hello::err::EN_SYS_RPC_NO_TASK);
             }
 
-            hello::SSMsg* req_msg_ptr = ctx.create<hello::SSMsg>();
+            hello::SSMsg* req_msg_ptr = __ctx.create<hello::SSMsg>();
             if (nullptr == req_msg_ptr) {
                 FWLOGERROR("rpc {} create request message failed", "hello.GamesvrService.player_kickoff");
                 return gamesvrservice_result_t(hello::err::EN_SYS_MALLOC);
@@ -118,29 +118,46 @@ namespace rpc {
                 );
             }
 
-            rpc::context child_ctx(ctx);
-            rpc::context::tracer tracer;
-            child_ctx.setup_tracer(tracer, "hello.GamesvrService.player_kickoff");
+            rpc::context __child_ctx(__ctx);
+            rpc::context::tracer __tracer;
+            __child_ctx.setup_tracer(__tracer, "hello.GamesvrService.player_kickoff");
+
+            if (nullptr != __child_ctx.get_trace_span()) {
+                if (nullptr != req_msg.mutable_head()->GetArena() && req_msg.mutable_head()->GetArena() == __child_ctx.get_trace_span()->GetArena()) {
+                    req_msg.mutable_head()->unsafe_arena_set_allocated_rpc_trace(__child_ctx.mutable_trace_span());
+                } else {
+                    auto trace_span = req_msg.mutable_head()->mutable_rpc_trace();
+                    if (nullptr != trace_span) {
+                        protobuf_copy_message(*trace_span, *__child_ctx.get_trace_span());
+                    }
+                }
+            }
 
             req_msg.mutable_head()->set_player_user_id(user_id);
             req_msg.mutable_head()->set_player_zone_id(zone_id);
             req_msg.mutable_head()->set_player_open_id(open_id);
 
             if (dst_bus_id == 0) {
-                return gamesvrservice_result_t(tracer.return_code(hello::err::EN_SYS_PARAM));
+                if (__child_ctx.get_trace_span() == &req_msg.head().rpc_trace()) {
+                    req_msg.mutable_head()->unsafe_arena_release_rpc_trace();
+                }
+                return gamesvrservice_result_t(__tracer.return_code(hello::err::EN_SYS_PARAM));
             }
 
             int res = ss_msg_dispatcher::me()->send_to_proc(dst_bus_id, req_msg);
+            if (__child_ctx.get_trace_span() == &req_msg.head().rpc_trace()) {
+                req_msg.mutable_head()->unsafe_arena_release_rpc_trace();
+            }
 
             uint64_t rpc_sequence = req_msg.head().sequence();
             if (res < 0) {
-                return gamesvrservice_result_t(tracer.return_code(res));
+                return gamesvrservice_result_t(__tracer.return_code(res));
             }
 
-            hello::SSMsg* rsp_msg_ptr = ctx.create<hello::SSMsg>();
+            hello::SSMsg* rsp_msg_ptr = __ctx.create<hello::SSMsg>();
             if (nullptr == rsp_msg_ptr) {
                 FWLOGERROR("rpc {} create response message failed", "hello.GamesvrService.player_kickoff");
-                return gamesvrservice_result_t(tracer.return_code(hello::err::EN_SYS_MALLOC));
+                return gamesvrservice_result_t(__tracer.return_code(hello::err::EN_SYS_MALLOC));
             }
 
             hello::SSMsg& rsp_msg = *rsp_msg_ptr;
@@ -150,7 +167,7 @@ namespace rpc {
                     hello::SSPlayerKickOffRsp::descriptor()->full_name(), 
                     res, protobuf_mini_dumper_get_error_msg(res)
                 );
-                return gamesvrservice_result_t(tracer.return_code(res));
+                return gamesvrservice_result_t(__tracer.return_code(res));
             }
 
             if (rsp_msg.head().rpc_response().type_url() != hello::SSPlayerKickOffRsp::descriptor()->full_name()) {
@@ -167,7 +184,7 @@ namespace rpc {
                         rsp_body.InitializationErrorString()
                     );
 
-                    return gamesvrservice_result_t(tracer.return_code(hello::err::EN_SYS_UNPACK));
+                    return gamesvrservice_result_t(__tracer.return_code(hello::err::EN_SYS_UNPACK));
                 } else {
                     FWLOGDEBUG("rpc {} parse message {} success:\n{}", "hello.GamesvrService.player_kickoff", 
                         hello::SSPlayerKickOffRsp::descriptor()->full_name(), 
@@ -176,7 +193,7 @@ namespace rpc {
                 }
             }
 
-            return gamesvrservice_result_t(tracer.return_code(rsp_msg.head().error_code()));
+            return gamesvrservice_result_t(__tracer.return_code(rsp_msg.head().error_code()));
         }
     } // namespace game
 }

@@ -38,23 +38,25 @@ namespace rpc {
         // ============ hello.RouterService.router_update_sync ============
         /**
          * @brief 通知路由表更新
+         * @param __ctx          RPC context, you can get it from get_shared_context() of task_action or just create one on stack
          * @param dst_bus_id     target server bus id
          * @param req_body       request body
          * @note  notify another server instance to update router table
          * @return 0 or error code
          */
-        routerservice_result_t router_update_sync(context& ctx, uint64_t dst_bus_id, hello::SSRouterUpdateSync &req_body);
+        routerservice_result_t router_update_sync(context& __ctx, uint64_t dst_bus_id, hello::SSRouterUpdateSync &req_body);
 
         // ============ hello.RouterService.router_transfer ============
         /**
          * @brief 路由对象转移
+         * @param __ctx          RPC context, you can get it from get_shared_context() of task_action or just create one on stack
          * @param dst_bus_id     target server bus id
          * @param req_body       request body
          * @param rsp_body       response body
          * @note  transfer a router object into another server instance
          * @return 0 or error code
          */
-        routerservice_result_t router_transfer(context& ctx, uint64_t dst_bus_id, hello::SSRouterTransferReq &req_body, hello::SSRouterTransferRsp &rsp_body);
+        routerservice_result_t router_transfer(context& __ctx, uint64_t dst_bus_id, hello::SSRouterTransferReq &req_body, hello::SSRouterTransferRsp &rsp_body);
     } // namespace router
 }
 

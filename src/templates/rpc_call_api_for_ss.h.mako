@@ -47,8 +47,8 @@ namespace rpc {
     rpc_is_router_api = rpc.get_extension_field('rpc_options', lambda x: x.router_rpc, False)
     rpc_is_user_rpc = rpc.get_extension_field('rpc_options', lambda x: x.user_rpc, False)
     rpc_is_stream_mode = rpc.is_request_stream() or rpc.is_response_stream()
-    rpc_params = ['context& ctx']
-    rpc_param_docs = []
+    rpc_params = ['context& __ctx']
+    rpc_param_docs = ['__ctx          RPC context, you can get it from get_shared_context() of task_action or just create one on stack']
     if rpc_is_router_api:
         rpc_params.extend(['uint32_t type_id', 'uint32_t zone_id', 'uint64_t object_id'])
         rpc_param_docs.extend([
@@ -56,12 +56,6 @@ namespace rpc {
             'zone_id        router object zone id, pass 0 if it has no zone id',
             'object_id      router object instance id'
         ])
-        if rpc_is_user_rpc:
-            rpc_params.extend(['uint64_t user_id', "const std::string& open_id"])
-            rpc_param_docs.extend([
-                'user_id        user id that will be passsed into header',
-                'open_id        open id that will be passsed into header'
-            ])
     else:
         rpc_params.append('uint64_t dst_bus_id')
         rpc_param_docs.append('dst_bus_id     target server bus id')
@@ -77,6 +71,11 @@ namespace rpc {
     if not rpc_is_stream_mode:
         rpc_params.append('{0} &rsp_body'.format(rpc.get_response().get_cpp_class_name()))
         rpc_param_docs.append('rsp_body       response body')
+        if rpc.get_extension_field('rpc_options', lambda x: x.allow_no_wait, False):
+            rpc_params.append('bool __no_wait = false')
+            rpc_params.append('uint64_t* __wait_later = nullptr')
+            rpc_param_docs.append('__no_wait      set true if not need to wait response')
+            rpc_param_docs.append('__wait_later   set not nullptr if caller want to wait this RPC later, and receive rpc sequence to wait here')
 %>
         // ============ ${rpc.get_full_name()} ============
         /**

@@ -44,6 +44,67 @@ namespace rpc {
             int return_code(int ret);
         };
 
+        template <class TMsg>
+        struct message_holder {
+
+            message_holder(context &ctx) : arena_msg_ptr_(ctx.create<TMsg>()) {}
+            message_holder(message_holder &&other) : arena_msg_ptr_(nullptr) {
+                using std::swap;
+
+                if (other->GetArena() != nullptr) {
+                    arena_msg_ptr_ = ::google::protobuf::Arena::CreateMessage<TMsg>(other->GetArena());
+                }
+                swap(arena_msg_ptr_, other.arena_msg_ptr_);
+                local_msg_.Swap(&other.local_msg_);
+            }
+
+            message_holder &operator=(message_holder &&other) {
+                using std::swap;
+
+                swap(arena_msg_ptr_, other.arena_msg_ptr_);
+                local_msg_.Swap(&other.local_msg_);
+
+                return *this;
+            }
+
+            inline const TMsg *operator->() const {
+                if (unlikely(nullptr == arena_msg_ptr_)) {
+                    return &local_msg_;
+                }
+
+                return arena_msg_ptr_;
+            }
+
+            inline TMsg *operator->() {
+                if (unlikely(nullptr == arena_msg_ptr_)) {
+                    return &local_msg_;
+                }
+
+                return arena_msg_ptr_;
+            }
+
+            inline const TMsg &operator*() const {
+                if (unlikely(nullptr == arena_msg_ptr_)) {
+                    return local_msg_;
+                }
+
+                return *arena_msg_ptr_;
+            }
+
+            inline TMsg &operator*() {
+                if (unlikely(nullptr == arena_msg_ptr_)) {
+                    return local_msg_;
+                }
+
+                return *arena_msg_ptr_;
+            }
+
+            UTIL_DESIGN_PATTERN_NOCOPYABLE(message_holder)
+        private:
+            TMsg *arena_msg_ptr_;
+            TMsg  local_msg_;
+        };
+
     private:
         context &operator=(const context &) UTIL_CONFIG_DELETED_FUNCTION;
 

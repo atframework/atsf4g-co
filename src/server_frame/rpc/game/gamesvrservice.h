@@ -38,6 +38,7 @@ namespace rpc {
         // ============ hello.GamesvrService.player_kickoff ============
         /**
          * @brief 通知提用户下线
+         * @param __ctx          RPC context, you can get it from get_shared_context() of task_action or just create one on stack
          * @param dst_bus_id     target server bus id
          * @param zone_id        zone id that will be passsed into header
          * @param user_id        user id that will be passsed into header
@@ -46,7 +47,7 @@ namespace rpc {
          * @param rsp_body       response body
          * @return 0 or error code
          */
-        gamesvrservice_result_t player_kickoff(context& ctx, uint64_t dst_bus_id, uint32_t zone_id, uint64_t user_id, const std::string& open_id, hello::SSPlayerKickOffReq &req_body, hello::SSPlayerKickOffRsp &rsp_body);
+        gamesvrservice_result_t player_kickoff(context& __ctx, uint64_t dst_bus_id, uint32_t zone_id, uint64_t user_id, const std::string& open_id, hello::SSPlayerKickOffReq &req_body, hello::SSPlayerKickOffRsp &rsp_body);
     } // namespace game
 }
 

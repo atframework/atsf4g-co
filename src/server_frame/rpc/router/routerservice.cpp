@@ -74,13 +74,13 @@ namespace rpc {
 
 
         // ============ hello.RouterService.router_update_sync ============
-        routerservice_result_t router_update_sync(context& ctx, uint64_t dst_bus_id, hello::SSRouterUpdateSync &req_body) {
+        routerservice_result_t router_update_sync(context& __ctx, uint64_t dst_bus_id, hello::SSRouterUpdateSync &req_body) {
             if (dst_bus_id == 0) {
                 return routerservice_result_t(hello::err::EN_SYS_PARAM);
             }
 
 
-            hello::SSMsg* req_msg_ptr = ctx.create<hello::SSMsg>();
+            hello::SSMsg* req_msg_ptr = __ctx.create<hello::SSMsg>();
             if (nullptr == req_msg_ptr) {
                 FWLOGERROR("rpc {} create request message failed", "hello.RouterService.router_update_sync");
                 return routerservice_result_t(hello::err::EN_SYS_MALLOC);
@@ -112,22 +112,39 @@ namespace rpc {
                 );
             }
 
-            rpc::context child_ctx(ctx);
-            rpc::context::tracer tracer;
-            child_ctx.setup_tracer(tracer, "hello.RouterService.router_update_sync");
+            rpc::context __child_ctx(__ctx);
+            rpc::context::tracer __tracer;
+            __child_ctx.setup_tracer(__tracer, "hello.RouterService.router_update_sync");
+
+            if (nullptr != __child_ctx.get_trace_span()) {
+                if (nullptr != req_msg.mutable_head()->GetArena() && req_msg.mutable_head()->GetArena() == __child_ctx.get_trace_span()->GetArena()) {
+                    req_msg.mutable_head()->unsafe_arena_set_allocated_rpc_trace(__child_ctx.mutable_trace_span());
+                } else {
+                    auto trace_span = req_msg.mutable_head()->mutable_rpc_trace();
+                    if (nullptr != trace_span) {
+                        protobuf_copy_message(*trace_span, *__child_ctx.get_trace_span());
+                    }
+                }
+            }
 
 
             if (dst_bus_id == 0) {
-                return routerservice_result_t(tracer.return_code(hello::err::EN_SYS_PARAM));
+                if (__child_ctx.get_trace_span() == &req_msg.head().rpc_trace()) {
+                    req_msg.mutable_head()->unsafe_arena_release_rpc_trace();
+                }
+                return routerservice_result_t(__tracer.return_code(hello::err::EN_SYS_PARAM));
             }
 
             int res = ss_msg_dispatcher::me()->send_to_proc(dst_bus_id, req_msg);
+            if (__child_ctx.get_trace_span() == &req_msg.head().rpc_trace()) {
+                req_msg.mutable_head()->unsafe_arena_release_rpc_trace();
+            }
 
-            return routerservice_result_t(tracer.return_code(res));
+            return routerservice_result_t(__tracer.return_code(res));
         }
 
         // ============ hello.RouterService.router_transfer ============
-        routerservice_result_t router_transfer(context& ctx, uint64_t dst_bus_id, hello::SSRouterTransferReq &req_body, hello::SSRouterTransferRsp &rsp_body) {
+        routerservice_result_t router_transfer(context& __ctx, uint64_t dst_bus_id, hello::SSRouterTransferReq &req_body, hello::SSRouterTransferRsp &rsp_body) {
             if (dst_bus_id == 0) {
                 return routerservice_result_t(hello::err::EN_SYS_PARAM);
             }
@@ -138,7 +155,7 @@ namespace rpc {
                 return routerservice_result_t(hello::err::EN_SYS_RPC_NO_TASK);
             }
 
-            hello::SSMsg* req_msg_ptr = ctx.create<hello::SSMsg>();
+            hello::SSMsg* req_msg_ptr = __ctx.create<hello::SSMsg>();
             if (nullptr == req_msg_ptr) {
                 FWLOGERROR("rpc {} create request message failed", "hello.RouterService.router_transfer");
                 return routerservice_result_t(hello::err::EN_SYS_MALLOC);
@@ -171,26 +188,43 @@ namespace rpc {
                 );
             }
 
-            rpc::context child_ctx(ctx);
-            rpc::context::tracer tracer;
-            child_ctx.setup_tracer(tracer, "hello.RouterService.router_transfer");
+            rpc::context __child_ctx(__ctx);
+            rpc::context::tracer __tracer;
+            __child_ctx.setup_tracer(__tracer, "hello.RouterService.router_transfer");
+
+            if (nullptr != __child_ctx.get_trace_span()) {
+                if (nullptr != req_msg.mutable_head()->GetArena() && req_msg.mutable_head()->GetArena() == __child_ctx.get_trace_span()->GetArena()) {
+                    req_msg.mutable_head()->unsafe_arena_set_allocated_rpc_trace(__child_ctx.mutable_trace_span());
+                } else {
+                    auto trace_span = req_msg.mutable_head()->mutable_rpc_trace();
+                    if (nullptr != trace_span) {
+                        protobuf_copy_message(*trace_span, *__child_ctx.get_trace_span());
+                    }
+                }
+            }
 
 
             if (dst_bus_id == 0) {
-                return routerservice_result_t(tracer.return_code(hello::err::EN_SYS_PARAM));
+                if (__child_ctx.get_trace_span() == &req_msg.head().rpc_trace()) {
+                    req_msg.mutable_head()->unsafe_arena_release_rpc_trace();
+                }
+                return routerservice_result_t(__tracer.return_code(hello::err::EN_SYS_PARAM));
             }
 
             int res = ss_msg_dispatcher::me()->send_to_proc(dst_bus_id, req_msg);
+            if (__child_ctx.get_trace_span() == &req_msg.head().rpc_trace()) {
+                req_msg.mutable_head()->unsafe_arena_release_rpc_trace();
+            }
 
             uint64_t rpc_sequence = req_msg.head().sequence();
             if (res < 0) {
-                return routerservice_result_t(tracer.return_code(res));
+                return routerservice_result_t(__tracer.return_code(res));
             }
 
-            hello::SSMsg* rsp_msg_ptr = ctx.create<hello::SSMsg>();
+            hello::SSMsg* rsp_msg_ptr = __ctx.create<hello::SSMsg>();
             if (nullptr == rsp_msg_ptr) {
                 FWLOGERROR("rpc {} create response message failed", "hello.RouterService.router_transfer");
-                return routerservice_result_t(tracer.return_code(hello::err::EN_SYS_MALLOC));
+                return routerservice_result_t(__tracer.return_code(hello::err::EN_SYS_MALLOC));
             }
 
             hello::SSMsg& rsp_msg = *rsp_msg_ptr;
@@ -200,7 +234,7 @@ namespace rpc {
                     hello::SSRouterTransferRsp::descriptor()->full_name(), 
                     res, protobuf_mini_dumper_get_error_msg(res)
                 );
-                return routerservice_result_t(tracer.return_code(res));
+                return routerservice_result_t(__tracer.return_code(res));
             }
 
             if (rsp_msg.head().rpc_response().type_url() != hello::SSRouterTransferRsp::descriptor()->full_name()) {
@@ -217,7 +251,7 @@ namespace rpc {
                         rsp_body.InitializationErrorString()
                     );
 
-                    return routerservice_result_t(tracer.return_code(hello::err::EN_SYS_UNPACK));
+                    return routerservice_result_t(__tracer.return_code(hello::err::EN_SYS_UNPACK));
                 } else {
                     FWLOGDEBUG("rpc {} parse message {} success:\n{}", "hello.RouterService.router_transfer", 
                         hello::SSRouterTransferRsp::descriptor()->full_name(), 
@@ -226,7 +260,7 @@ namespace rpc {
                 }
             }
 
-            return routerservice_result_t(tracer.return_code(rsp_msg.head().error_code()));
+            return routerservice_result_t(__tracer.return_code(rsp_msg.head().error_code()));
         }
     } // namespace router
 }

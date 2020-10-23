@@ -146,7 +146,7 @@ public:
 
     static const std::string &get_response_type_url() { return rpc_response_type::descriptor()->full_name(); }
 
-    virtual bool is_stream_rpc() const = 0;
+    virtual bool is_stream_rpc() const { return get_request().head().has_rpc_stream(); }
 
 protected:
     virtual void send_rsp_msg() UTIL_CONFIG_OVERRIDE {

@@ -35,7 +35,7 @@ const char *protobuf_mini_dumper_get_error_msg(int error_code);
  * @param error_code 错误码
  * @return 错误码的文本描述，永远不会返回NULL
  */
-std::string protobuf_mini_dumper_get_error_msg(int error_code, const ::google::protobuf::EnumDescriptor* enum_desc, bool fallback_common_errmsg);
+std::string protobuf_mini_dumper_get_error_msg(int error_code, const ::google::protobuf::EnumDescriptor *enum_desc, bool fallback_common_errmsg);
 
 
 /**
@@ -55,8 +55,53 @@ inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst
     dst.CopyFrom(src);
 }
 
-template<typename TEle>
-void protobuf_remove_repeated_at(::google::protobuf::RepeatedPtrField<TEle>& arr, int index) {
+template <typename TField>
+inline void protobuf_copy_message(::google::protobuf::RepeatedPtrField<TField> &dst, const ::google::protobuf::RepeatedPtrField<TField> &src) {
+    dst.Reserve(src.size());
+    dst.CopyFrom(src);
+}
+
+/**
+ * @brief protobuf 数据移动，移动前检查Arena
+ * @note 加这个接口是为了解决protobuf的CopyFrom重载了CopyFrom(const Message&)。如果类型不匹配只能在运行时发现抛异常。加一层这个接口是为了提到编译期
+ * @param dst 拷贝目标
+ * @param src 拷贝源
+ */
+template <typename TMsg>
+inline void protobuf_move_message(TMsg &dst, TMsg &&src) {
+    if (dst.GetArena() == src.GetArena()) {
+        dst.Swap(&src);
+    } else {
+        protobuf_copy_message(dst, src);
+    }
+
+    src.Clear();
+}
+
+template <typename TField>
+inline void protobuf_move_message(::google::protobuf::RepeatedField<TField> &dst, ::google::protobuf::RepeatedField<TField> &&src) {
+    if (dst.GetArena() == src.GetArena()) {
+        dst.Swap(&src);
+    } else {
+        protobuf_copy_message(dst, src);
+    }
+
+    src.Clear();
+}
+
+template <typename TField>
+inline void protobuf_move_message(::google::protobuf::RepeatedPtrField<TField> &dst, ::google::protobuf::RepeatedPtrField<TField> &&src) {
+    if (dst.GetArena() == src.GetArena()) {
+        dst.Swap(&src);
+    } else {
+        protobuf_copy_message(dst, src);
+    }
+
+    src.Clear();
+}
+
+template <typename TEle>
+void protobuf_remove_repeated_at(::google::protobuf::RepeatedPtrField<TEle> &arr, int index) {
     if (index < 0 || index >= arr.size()) {
         return;
     }
@@ -68,17 +113,17 @@ void protobuf_remove_repeated_at(::google::protobuf::RepeatedPtrField<TEle>& arr
     arr.RemoveLast();
 }
 
-template<typename TEle, typename TCheckFn>
-void protobuf_remove_repeated_if(::google::protobuf::RepeatedPtrField<TEle>& arr, const TCheckFn& fn) {
+template <typename TEle, typename TCheckFn>
+void protobuf_remove_repeated_if(::google::protobuf::RepeatedPtrField<TEle> &arr, const TCheckFn &fn) {
     int new_index = 0;
     int old_index = 0;
-    for (; old_index < arr.size(); ++ old_index, ++new_index) {
+    for (; old_index < arr.size(); ++old_index, ++new_index) {
         if (new_index != old_index) {
             arr.SwapElements(new_index, old_index);
         }
 
         if (fn(*arr.Mutable(new_index))) {
-            -- new_index;
+            --new_index;
         }
     }
 
