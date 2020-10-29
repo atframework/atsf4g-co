@@ -12,6 +12,8 @@
 #include <config/server_frame_build_feature.h>
 
 namespace rpc {
+    class context;
+
     namespace db {
         namespace uuid {
             /**
@@ -43,7 +45,7 @@ namespace rpc {
              * @param patch_type 补充类型(不需要可填0)
              * @return 如果成功，返回一个自增ID（正数），失败返回错误码，错误码 <= 0，
              */
-            int64_t generate_global_increase_id(uint32_t major_type, uint32_t minor_type, uint32_t patch_type);
+            int64_t generate_global_increase_id(::rpc::context &ctx, uint32_t major_type, uint32_t minor_type, uint32_t patch_type);
 
             /**
              * @biref 生成唯一ID
@@ -55,7 +57,7 @@ namespace rpc {
              * @param patch_type 补充类型(不需要可填0)
              * @return 如果成功，返回一个自增ID（正数），失败返回错误码，错误码 <= 0，
              */
-            int64_t generate_global_unique_id(uint32_t major_type, uint32_t minor_type = 0, uint32_t patch_type = 0);
+            int64_t generate_global_unique_id(::rpc::context &ctx, uint32_t major_type, uint32_t minor_type = 0, uint32_t patch_type = 0);
         } // namespace uuid
 
     } // namespace db

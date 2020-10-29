@@ -240,7 +240,7 @@ int task_action_login_authorization::operator()() {
     // 新用户则创建
     if (hello::err::EN_DB_RECORD_NOT_FOUND == res) {
         // 生成容易识别的数字UUID
-        int64_t player_uid = rpc::game::player::alloc_user_id();
+        int64_t player_uid = rpc::game::player::alloc_user_id(get_shared_context());
         if (player_uid <= 0) {
             WLOGERROR("call alloc_user_id failed, openid:%s, res:%d", msg_body.open_id().c_str(), static_cast<int>(player_uid));
             set_rsp_code(hello::EN_ERR_LOGIN_CREATE_PLAYER_FAILED);

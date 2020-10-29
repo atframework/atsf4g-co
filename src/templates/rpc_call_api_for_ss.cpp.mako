@@ -274,6 +274,24 @@ namespace rpc {
             ${project_namespace}::SSMsg& rsp_msg = *rsp_msg_ptr;
             res = rpc::wait(rsp_msg, rpc_sequence);
             if (res < 0) {
+% for warning_log_codes in rpc.get_extension_field('rpc_options', lambda x: x.warning_log_response_code, []):
+                if (${warning_log_codes} == res) {
+                    FWLOGWARNING("rpc {} wait for {} failed, res: {}({})", "${rpc.get_full_name()}",
+                        ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), 
+                        res, protobuf_mini_dumper_get_error_msg(res)
+                    );
+                    return ${result_clazz_name}(__tracer.return_code(res));
+                }
+% endfor
+% for warning_log_codes in rpc.get_extension_field('rpc_options', lambda x: x.info_log_response_code, []):
+                if (${warning_log_codes} == res) {
+                    FWLOGINFO("rpc {} wait for {} failed, res: {}({})", "${rpc.get_full_name()}",
+                        ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), 
+                        res, protobuf_mini_dumper_get_error_msg(res)
+                    );
+                    return ${result_clazz_name}(__tracer.return_code(res));
+                }
+% endfor
                 FWLOGERROR("rpc {} wait for {} failed, res: {}({})", "${rpc.get_full_name()}",
                     ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), 
                     res, protobuf_mini_dumper_get_error_msg(res)

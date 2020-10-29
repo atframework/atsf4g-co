@@ -90,7 +90,7 @@ namespace rpc {
                 return bin_buffer;
             }
 
-            int64_t generate_global_increase_id(uint32_t major_type, uint32_t minor_type, uint32_t patch_type) {
+            int64_t generate_global_increase_id(::rpc::context &ctx, uint32_t major_type, uint32_t minor_type, uint32_t patch_type) {
                 task_manager::task_t *task = task_manager::task_t::this_task();
                 if (!task) {
                     WLOGERROR("current not in a task");
@@ -115,27 +115,31 @@ namespace rpc {
                     args.push(keyvar);
                 }
 
+                ::rpc::context         child_ctx(ctx);
+                ::rpc::context::tracer tracer;
+                child_ctx.setup_tracer(tracer, "rpc.db.uuid.generate_global_increase_id");
+
                 uint64_t rpc_sequence = 0;
                 int      res          = db_msg_dispatcher::me()->send_msg(db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, keyvar, keylen, task->get_id(),
                                                             logic_config::me()->get_self_bus_id(), rpc::db::detail::unpack_integer, rpc_sequence,
                                                             static_cast<int>(args.size()), args.get_args_values(), args.get_args_lengths());
 
                 if (res < 0) {
-                    return res;
+                    return tracer.return_code(res);
                 }
 
                 hello::table_all_message msg;
                 // 协程操作
                 res = rpc::wait(msg, rpc_sequence);
                 if (res < 0) {
-                    return res;
+                    return tracer.return_code(res);
                 }
 
                 if (!msg.has_simple()) {
-                    return hello::err::EN_DB_RECORD_NOT_FOUND;
+                    return tracer.return_code(hello::err::EN_DB_RECORD_NOT_FOUND);
                 }
 
-                return msg.simple().msg_i64();
+                return tracer.return_code(msg.simple().msg_i64());
             }
 
 
@@ -189,7 +193,7 @@ namespace rpc {
             static util::lock::spin_rw_lock g_unique_id_pool_locker;
 
             template <int64_t bits_off>
-            static int64_t generate_global_unique_id(uint32_t major_type, uint32_t minor_type, uint32_t patch_type) {
+            static int64_t generate_global_unique_id(::rpc::context &ctx, uint32_t major_type, uint32_t minor_type, uint32_t patch_type) {
                 task_manager::task_t *this_task = task_manager::task_t::this_task();
                 if (NULL == this_task) {
                     return hello::err::EN_SYS_RPC_NO_TASK;
@@ -270,7 +274,7 @@ namespace rpc {
                     // call rpc to allocate a id pool
                     if (0 == (ret >> bits_off) || 0 == (ret & bits_mask)) {
                         alloc->alloc_task = task_manager::me()->get_task(this_task->get_id());
-                        int64_t res       = generate_global_increase_id(major_type, minor_type, patch_type);
+                        int64_t res       = generate_global_increase_id(ctx, major_type, minor_type, patch_type);
                         // WLOGINFO("=====DEBUG===== generate uuid pool for (%u, %u, %u), val: %lld", major_type, minor_type, patch_type,
                         // static_cast<long long>(res));
                         if (alloc->alloc_task.get() == this_task) {
@@ -293,16 +297,16 @@ namespace rpc {
                 return ret;
             }
 
-            int64_t generate_global_unique_id(uint32_t major_type, uint32_t minor_type, uint32_t patch_type) {
+            int64_t generate_global_unique_id(::rpc::context &ctx, uint32_t major_type, uint32_t minor_type, uint32_t patch_type) {
                 if (hello::EN_GLOBAL_UUID_MAT_USER_ID == major_type || hello::EN_GLOBAL_UUID_MAT_GUILD_ID == major_type) {
                     // POOL => 1 | * | 5
                     // EN_GLOBAL_UUID_MAT_USER_ID:     [1 | 55 | 5] | 3
                     // EN_GLOBAL_UUID_MAT_GUILD_ID:    [1 | 55 | 5] | 3
                     // 公会和玩家账号分配采用短ID模式
-                    return generate_global_unique_id<5>(major_type, minor_type, patch_type);
+                    return generate_global_unique_id<5>(ctx, major_type, minor_type, patch_type);
                 } else {
                     // POOL => 1 | 50 | 13
-                    return generate_global_unique_id<13>(major_type, minor_type, patch_type);
+                    return generate_global_unique_id<13>(ctx, major_type, minor_type, patch_type);
                     ;
                 }
             }
