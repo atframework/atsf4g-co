@@ -247,34 +247,8 @@ namespace rpc {
 %   endif
 
 %   if rpc_is_stream_mode:
-            return ${result_clazz_name}(__tracer.return_code(res));
-%   else:
-%     if not rpc_is_router_api:
-            uint64_t rpc_sequence = req_msg.head().sequence();
-%     endif
-%     if rpc_allow_no_wait:
-            if (__no_wait) {
-                return ${result_clazz_name}(__tracer.return_code(res));
-            } else if (nullptr != __wait_later) {
-                *__wait_later = rpc_sequence;
-                // need to call rpc::wait(...) to wait this rpc sequence later
-                return ${result_clazz_name}(__tracer.return_code(res));
-            }
-%     endif
             if (res < 0) {
-                return ${result_clazz_name}(__tracer.return_code(res));
-            }
-
-            ${project_namespace}::SSMsg* rsp_msg_ptr = __ctx.create<${project_namespace}::SSMsg>();
-            if (nullptr == rsp_msg_ptr) {
-                FWLOGERROR("rpc {} create response message failed", "${rpc.get_full_name()}");
-                return ${result_clazz_name}(__tracer.return_code(${project_namespace}::err::EN_SYS_MALLOC));
-            }
-
-            ${project_namespace}::SSMsg& rsp_msg = *rsp_msg_ptr;
-            res = rpc::wait(rsp_msg, rpc_sequence);
-            if (res < 0) {
-% for warning_log_codes in rpc.get_extension_field('rpc_options', lambda x: x.warning_log_response_code, []):
+%     for warning_log_codes in rpc.get_extension_field('rpc_options', lambda x: x.warning_log_response_code, []):
                 if (${warning_log_codes} == res) {
                     FWLOGWARNING("rpc {} wait for {} failed, res: {}({})", "${rpc.get_full_name()}",
                         ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), 
@@ -282,8 +256,8 @@ namespace rpc {
                     );
                     return ${result_clazz_name}(__tracer.return_code(res));
                 }
-% endfor
-% for warning_log_codes in rpc.get_extension_field('rpc_options', lambda x: x.info_log_response_code, []):
+%     endfor
+%     for warning_log_codes in rpc.get_extension_field('rpc_options', lambda x: x.info_log_response_code, []):
                 if (${warning_log_codes} == res) {
                     FWLOGINFO("rpc {} wait for {} failed, res: {}({})", "${rpc.get_full_name()}",
                         ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), 
@@ -291,38 +265,94 @@ namespace rpc {
                     );
                     return ${result_clazz_name}(__tracer.return_code(res));
                 }
-% endfor
-                FWLOGERROR("rpc {} wait for {} failed, res: {}({})", "${rpc.get_full_name()}",
-                    ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), 
+%     endfor
+                FWLOGERROR("rpc {} call failed, res: {}({})", "${rpc.get_full_name()}",
                     res, protobuf_mini_dumper_get_error_msg(res)
                 );
-                return ${result_clazz_name}(__tracer.return_code(res));
             }
+            return ${result_clazz_name}(__tracer.return_code(res));
+%   else:
+            do {
+%     if not rpc_is_router_api:
+                uint64_t rpc_sequence = req_msg.head().sequence();
+%     endif
+%     if rpc_allow_no_wait:
+                if (__no_wait) {
+                    break;
+                } else if (nullptr != __wait_later) {
+                    *__wait_later = rpc_sequence;
+                    // need to call rpc::wait(...) to wait this rpc sequence later
+                    break;
+                }
+%     endif
+                if (res < 0) {
+                    break;
+                }
 
-            if (rsp_msg.head().rpc_response().type_url() != ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()) {
-                FWLOGERROR("rpc {} expect response message {}, but got {}", "${rpc.get_full_name()}",
-                    ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), 
-                    rsp_msg.head().rpc_response().type_url()
+                ${project_namespace}::SSMsg* rsp_msg_ptr = __ctx.create<${project_namespace}::SSMsg>();
+                if (nullptr == rsp_msg_ptr) {
+                    FWLOGERROR("rpc {} create response message failed", "${rpc.get_full_name()}");
+                    res = ${result_clazz_name}(__tracer.return_code(${project_namespace}::err::EN_SYS_MALLOC));
+                    break;
+                }
+
+                ${project_namespace}::SSMsg& rsp_msg = *rsp_msg_ptr;
+                res = rpc::wait(rsp_msg, rpc_sequence);
+                if (res < 0) {
+                    break;
+                }
+
+                if (rsp_msg.head().rpc_response().type_url() != ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()) {
+                    FWLOGERROR("rpc {} expect response message {}, but got {}", "${rpc.get_full_name()}",
+                        ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), 
+                        rsp_msg.head().rpc_response().type_url()
+                    );
+                }
+
+                if (!rsp_msg.body_bin().empty()) {
+                    if (false == rsp_body.ParseFromString(rsp_msg.body_bin())) {
+                        FWLOGERROR("rpc {} parse message {} for failed, msg: {}", "${rpc.get_full_name()}", 
+                            ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), 
+                            rsp_body.InitializationErrorString()
+                        );
+
+                        res = ${project_namespace}::err::EN_SYS_UNPACK;
+                        break;
+                    } else {
+                        FWLOGDEBUG("rpc {} parse message {} success:\n{}", "${rpc.get_full_name()}", 
+                            ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), 
+                            protobuf_mini_dumper_get_readable(rsp_body)
+                        );
+                    }
+                }
+                res = rsp_msg.head().error_code();
+            } while (false);
+
+            if (res < 0) {
+%     for warning_log_codes in rpc.get_extension_field('rpc_options', lambda x: x.warning_log_response_code, []):
+                if (${warning_log_codes} == res) {
+                    FWLOGWARNING("rpc {} wait for {} failed, res: {}({})", "${rpc.get_full_name()}",
+                        ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), 
+                        res, protobuf_mini_dumper_get_error_msg(res)
+                    );
+                    return ${result_clazz_name}(__tracer.return_code(res));
+                }
+%     endfor
+%     for warning_log_codes in rpc.get_extension_field('rpc_options', lambda x: x.info_log_response_code, []):
+                if (${warning_log_codes} == res) {
+                    FWLOGINFO("rpc {} wait for {} failed, res: {}({})", "${rpc.get_full_name()}",
+                        ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), 
+                        res, protobuf_mini_dumper_get_error_msg(res)
+                    );
+                    return ${result_clazz_name}(__tracer.return_code(res));
+                }
+%     endfor
+                FWLOGERROR("rpc {} call failed, res: {}({})", "${rpc.get_full_name()}",
+                    res, protobuf_mini_dumper_get_error_msg(res)
                 );
             }
 
-            if (!rsp_msg.body_bin().empty()) {
-                if (false == rsp_body.ParseFromString(rsp_msg.body_bin())) {
-                    FWLOGERROR("rpc {} parse message {} for failed, msg: {}", "${rpc.get_full_name()}", 
-                        ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), 
-                        rsp_body.InitializationErrorString()
-                    );
-
-                    return ${result_clazz_name}(__tracer.return_code(${project_namespace}::err::EN_SYS_UNPACK));
-                } else {
-                    FWLOGDEBUG("rpc {} parse message {} success:\n{}", "${rpc.get_full_name()}", 
-                        ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), 
-                        protobuf_mini_dumper_get_readable(rsp_body)
-                    );
-                }
-            }
-
-            return ${result_clazz_name}(__tracer.return_code(rsp_msg.head().error_code()));
+            return ${result_clazz_name}(__tracer.return_code(res));
 %   endif
         }
 % endfor
