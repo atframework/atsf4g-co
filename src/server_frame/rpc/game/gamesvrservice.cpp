@@ -123,13 +123,9 @@ namespace rpc {
             __child_ctx.setup_tracer(__tracer, "hello.GamesvrService.player_kickoff");
 
             if (nullptr != __child_ctx.get_trace_span()) {
-                if (nullptr != req_msg.mutable_head()->GetArena() && req_msg.mutable_head()->GetArena() == __child_ctx.get_trace_span()->GetArena()) {
-                    req_msg.mutable_head()->unsafe_arena_set_allocated_rpc_trace(__child_ctx.mutable_trace_span());
-                } else {
-                    auto trace_span = req_msg.mutable_head()->mutable_rpc_trace();
-                    if (nullptr != trace_span) {
-                        protobuf_copy_message(*trace_span, *__child_ctx.get_trace_span());
-                    }
+                auto trace_span = req_msg.mutable_head()->mutable_rpc_trace();
+                if (nullptr != trace_span) {
+                    protobuf_copy_message(*trace_span, *__child_ctx.get_trace_span());
                 }
             }
 
@@ -138,16 +134,10 @@ namespace rpc {
             req_msg.mutable_head()->set_player_open_id(open_id);
 
             if (dst_bus_id == 0) {
-                if (__child_ctx.get_trace_span() == &req_msg.head().rpc_trace()) {
-                    req_msg.mutable_head()->unsafe_arena_release_rpc_trace();
-                }
                 return gamesvrservice_result_t(__tracer.return_code(hello::err::EN_SYS_PARAM));
             }
 
             int res = ss_msg_dispatcher::me()->send_to_proc(dst_bus_id, req_msg);
-            if (__child_ctx.get_trace_span() == &req_msg.head().rpc_trace()) {
-                req_msg.mutable_head()->unsafe_arena_release_rpc_trace();
-            }
 
             do {
                 uint64_t rpc_sequence = req_msg.head().sequence();

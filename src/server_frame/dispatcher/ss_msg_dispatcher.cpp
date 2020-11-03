@@ -213,17 +213,15 @@ int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::messa
         return ret;
     }
 
-    if (error_code < 0) {
-        ss_msg->mutable_head()->set_bus_id(source.id);
-        // 转移要恢复的任务ID
-        ss_msg->mutable_head()->set_dst_task_id(ss_msg->head().src_task_id());
-        ss_msg->mutable_head()->set_src_task_id(0);
-        ss_msg->mutable_head()->set_error_code(hello::err::EN_SYS_RPC_SEND_FAILED);
+    ss_msg->mutable_head()->set_bus_id(source.id);
+    // 转移要恢复的任务ID
+    ss_msg->mutable_head()->set_dst_task_id(ss_msg->head().src_task_id());
+    ss_msg->mutable_head()->set_src_task_id(0);
+    ss_msg->mutable_head()->set_error_code(hello::err::EN_SYS_RPC_SEND_FAILED);
 
-        ret = on_send_message_failed(ctx, callback_msg, error_code, msg.msg_sequence);
-        if (ret < 0) {
-            FWLOGERROR("{} dispatch on_send_message_failed from {:#x} failed, res: {}", name(), source.id, ret);
-        }
+    ret = on_send_message_failed(ctx, callback_msg, error_code, msg.msg_sequence);
+    if (ret < 0) {
+        FWLOGERROR("{} dispatch on_send_message_failed from {:#x} failed, res: {}", name(), source.id, ret);
     }
 
     return ret;

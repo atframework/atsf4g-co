@@ -188,13 +188,9 @@ namespace rpc {
             __child_ctx.setup_tracer(__tracer, "${rpc.get_full_name()}");
 
             if (nullptr != __child_ctx.get_trace_span()) {
-                if (nullptr != req_msg.mutable_head()->GetArena() && req_msg.mutable_head()->GetArena() == __child_ctx.get_trace_span()->GetArena()) {
-                    req_msg.mutable_head()->unsafe_arena_set_allocated_rpc_trace(__child_ctx.mutable_trace_span());
-                } else {
-                    auto trace_span = req_msg.mutable_head()->mutable_rpc_trace();
-                    if (nullptr != trace_span) {
-                        protobuf_copy_message(*trace_span, *__child_ctx.get_trace_span());
-                    }
+                auto trace_span = req_msg.mutable_head()->mutable_rpc_trace();
+                if (nullptr != trace_span) {
+                    protobuf_copy_message(*trace_span, *__child_ctx.get_trace_span());
                 }
             }
 
@@ -221,29 +217,17 @@ namespace rpc {
             router_manager_base* router_manager = router_manager_set::me()->get_manager(type_id);
             if (nullptr == router_manager) {
                 FWLOGERROR("rpc {} can not get router manager of type {}", "${rpc.get_full_name()}", type_id);
-                if (__child_ctx.get_trace_span() == &req_msg.head().rpc_trace()) {
-                    req_msg.mutable_head()->unsafe_arena_release_rpc_trace();
-                }
                 return ${result_clazz_name}(__tracer.return_code(${project_namespace}::err::EN_SYS_NOT_SUPPORT));
             }
 
             uint64_t rpc_sequence = 0;
             int res = router_manager->send_msg(router_key, std::move(req_msg), rpc_sequence);
-            if (__child_ctx.get_trace_span() == &req_msg.head().rpc_trace()) {
-                req_msg.mutable_head()->unsafe_arena_release_rpc_trace();
-            }
 %   else:
             if (dst_bus_id == 0) {
-                if (__child_ctx.get_trace_span() == &req_msg.head().rpc_trace()) {
-                    req_msg.mutable_head()->unsafe_arena_release_rpc_trace();
-                }
                 return ${result_clazz_name}(__tracer.return_code(${project_namespace}::err::EN_SYS_PARAM));
             }
 
             int res = ss_msg_dispatcher::me()->send_to_proc(dst_bus_id, req_msg);
-            if (__child_ctx.get_trace_span() == &req_msg.head().rpc_trace()) {
-                req_msg.mutable_head()->unsafe_arena_release_rpc_trace();
-            }
 %   endif
 
 %   if rpc_is_stream_mode:
