@@ -3,11 +3,11 @@
 
 #pragma once
 
-#include <stdint.h>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <functional>
+#include <stdint.h>
 #include <string>
 #include <type_traits>
 
@@ -16,18 +16,18 @@
 #include "../lua_module/lua_adaptor.h"
 #include "lua_binding_wrapper.h"
 
-#define LUA_CHECK_TYPE_AND_RET(name, L, index, ret)                                            \
-    if (!lua_is##name(L, index)) {                                                             \
-        WLOGERROR("parameter %d must be a %s, got %s", index, #name, luaL_typename(L, index)); \
-        fn::print_traceback(L, "");                                                            \
-        return ret;                                                                            \
+#define LUA_CHECK_TYPE_AND_RET(name, L, index, ret)                                             \
+    if (!lua_is##name(L, index)) {                                                              \
+        FWLOGERROR("parameter {} must be a {}, got {}", index, #name, luaL_typename(L, index)); \
+        fn::print_traceback(L, "");                                                             \
+        return ret;                                                                             \
     }
 
-#define LUA_CHECK_TYPE_AND_NORET(name, L, index)                                               \
-    if (!lua_is##name(L, index)) {                                                             \
-        WLOGERROR("parameter %d must be a %s, got %s", index, #name, luaL_typename(L, index)); \
-        fn::print_traceback(L, "");                                                            \
-        return;                                                                                \
+#define LUA_CHECK_TYPE_AND_NORET(name, L, index)                                                \
+    if (!lua_is##name(L, index)) {                                                              \
+        FWLOGERROR("parameter {} must be a {}, got {}", index, #name, luaL_typename(L, index)); \
+        fn::print_traceback(L, "");                                                             \
+        return;                                                                                 \
     }
 
 namespace script {
@@ -44,7 +44,11 @@ namespace script {
                 static Tt unwraper(lua_State *L, int index) {
                     if (lua_gettop(L) < index) return static_cast<Tt>(0);
 
+#if defined(LUA_VERSION_NUM) && LUA_VERSION_NUM > 503
+                    LUA_CHECK_TYPE_AND_RET(integer, L, index, static_cast<Tt>(0));
+#else
                     LUA_CHECK_TYPE_AND_RET(number, L, index, static_cast<Tt>(0));
+#endif
                     return static_cast<Tt>(lua_tointeger(L, index));
                 }
             };
@@ -67,7 +71,11 @@ namespace script {
                 static Tt unwraper(lua_State *L, int index) {
                     if (lua_gettop(L) < index) return static_cast<Tt>(0);
 
+#if defined(LUA_VERSION_NUM) && LUA_VERSION_NUM > 503
+                    LUA_CHECK_TYPE_AND_RET(integer, L, index, static_cast<Tt>(0));
+#else
                     LUA_CHECK_TYPE_AND_RET(number, L, index, static_cast<Tt>(0));
+#endif
 
                     return static_cast<Tt>(lua_tointeger(L, index));
                 }
@@ -110,22 +118,21 @@ namespace script {
                 typedef Ty value_type;
 
                 static Tt unwraper(lua_State *L, int index) {
-                    typedef
-                        typename std::remove_reference<typename std::remove_cv<typename std::remove_pointer<Tt>::type>::type>::type obj_t;
+                    typedef typename std::remove_cv<typename std::remove_reference<typename std::remove_pointer<Tt>::type>::type>::type obj_t;
 
                     // 最好是不要这么用，如果有需要再加对非POD类型的支持吧
                     static_assert(std::is_pod<obj_t>::value, "custom type must be pod type");
 
                     if (lua_gettop(L) < index) {
-                        return static_cast<Tt>(0);  // NULL static_cast from 'null_ptr' to 'unsigned long' is not allowed
+                        return static_cast<Tt>(0); // NULL static_cast from 'null_ptr' to 'unsigned long' is not allowed
                     }
                     if (lua_isnil(L, index)) {
-                        return static_cast<Tt>(0);  // NULL static_cast from 'null_ptr' to 'unsigned long' is not allowed
+                        return static_cast<Tt>(0); // NULL static_cast from 'null_ptr' to 'unsigned long' is not allowed
                     }
 
                     obj_t *ptr = reinterpret_cast<obj_t *>(lua_touserdata(L, index));
                     if (NULL == ptr) {
-                        return static_cast<Tt>(0);  // NULL static_cast from 'null_ptr' to 'unsigned long' is not allowed
+                        return static_cast<Tt>(0); // NULL static_cast from 'null_ptr' to 'unsigned long' is not allowed
                     }
 
                     return static_cast<Tt>(*ptr);
@@ -218,8 +225,8 @@ namespace script {
                     typedef typename lua_binding_userdata_info<TC>::userdata_type ud_t;
 
                     LUA_CHECK_TYPE_AND_RET(userdata, L, index, std::shared_ptr<TC>());
-                    const char *class_name = lua_binding_userdata_info<TC>::get_lua_metatable_name();
-                    ud_t *watcher = static_cast<ud_t *>(luaL_checkudata(L, index, class_name));
+                    const char *class_name = lua_binding_metatable_info<TC>::get_lua_metatable_name();
+                    ud_t *      watcher    = static_cast<ud_t *>(luaL_checkudata(L, index, class_name));
 
                     if (NULL == watcher) {
                         return std::shared_ptr<TC>();
@@ -237,8 +244,8 @@ namespace script {
 
                     LUA_CHECK_TYPE_AND_RET(userdata, L, index, std::weak_ptr<TC>());
 
-                    const char *class_name = lua_binding_userdata_info<TC>::get_lua_metatable_name();
-                    ud_t *watcher = static_cast<ud_t *>(luaL_checkudata(L, index, class_name));
+                    const char *class_name = lua_binding_metatable_info<TC>::get_lua_metatable_name();
+                    ud_t *      watcher    = static_cast<ud_t *>(luaL_checkudata(L, index, class_name));
 
                     if (NULL == watcher) {
                         return std::weak_ptr<TC>();
@@ -341,7 +348,7 @@ namespace script {
                     std::string ret;
                     LUA_CHECK_TYPE_AND_RET(string, L, index, ret);
 
-                    size_t len = 0;
+                    size_t      len   = 0;
                     const char *start = lua_tolstring(L, index, &len);
                     ret.assign(start, len);
                     return ret;
@@ -397,13 +404,12 @@ namespace script {
 
             template <typename Ty, typename... Tl>
             struct unwraper_var
-                : public std::conditional<
-                      std::is_enum<Ty>::value || std::is_integral<Ty>::value,
-                      unwraper_var_lua_type<Ty, typename std::conditional<std::is_enum<Ty>::value || std::is_unsigned<Ty>::value,
-                                                                          lua_Unsigned, lua_Integer>::type>,    // 枚举类型
-                      typename std::conditional<std::is_pointer<Ty>::value, unwraper_ptr_var_lua_type<Ty, Ty>,  // 指针类型
-                                                unwraper_var_lua_type<Ty, Ty>                                   // POD类型
-                                                >::type>::type {};
+                : public std::conditional<std::is_enum<Ty>::value || std::is_integral<Ty>::value,
+                                          unwraper_var_lua_type<Ty, typename std::conditional<std::is_enum<Ty>::value || std::is_unsigned<Ty>::value,
+                                                                                              lua_Unsigned, lua_Integer>::type>,   // 枚举类型
+                                          typename std::conditional<std::is_pointer<Ty>::value, unwraper_ptr_var_lua_type<Ty, Ty>, // 指针类型
+                                                                    unwraper_var_lua_type<Ty, Ty>                                  // POD类型
+                                                                    >::type>::type {};
 
 
             // --------------- 解包装接口结束 ----------------
@@ -470,8 +476,7 @@ namespace script {
                         return 0;
                     }
 
-                    return base_type::template run_fn<
-                        value_type, std::tuple<typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...> >(
+                    return base_type::template run_fn<value_type, std::tuple<typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...> >(
                         L, fn, typename build_args_index<TParam...>::index_seq_type());
                 }
             };
@@ -490,8 +495,7 @@ namespace script {
                         return 0;
                     }
 
-                    return base_type::template run_fn<
-                        value_type, std::tuple<typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...> >(
+                    return base_type::template run_fn<value_type, std::tuple<typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...> >(
                         L, fn, typename build_args_index<TParam...>::index_seq_type());
                 }
             };
@@ -504,7 +508,7 @@ namespace script {
 
             template <typename Tr, typename... TParam>
             struct unwraper_functor_fn<Tr, lua_State *, TParam...> : public unwraper_static_fn_base_with_L<Tr> {
-                typedef unwraper_static_fn_base_with_L<Tr> base_type;
+                typedef unwraper_static_fn_base_with_L<Tr>        base_type;
                 typedef std::function<Tr(lua_State *, TParam...)> value_type;
 
 
@@ -516,15 +520,14 @@ namespace script {
                         return 0;
                     }
 
-                    return base_type::template run_fn<
-                        value_type, std::tuple<typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...> >(
+                    return base_type::template run_fn<value_type, std::tuple<typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...> >(
                         L, *fn, typename build_args_index<TParam...>::index_seq_type());
                 }
             };
 
             template <typename Tr, typename... TParam>
             struct unwraper_functor_fn : public unwraper_static_fn_base<Tr> {
-                typedef unwraper_static_fn_base<Tr> base_type;
+                typedef unwraper_static_fn_base<Tr>  base_type;
                 typedef std::function<Tr(TParam...)> value_type;
 
 
@@ -536,8 +539,7 @@ namespace script {
                         return 0;
                     }
 
-                    return base_type::template run_fn<
-                        value_type, std::tuple<typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...> >(
+                    return base_type::template run_fn<value_type, std::tuple<typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...> >(
                         L, *fn, typename build_args_index<TParam...>::index_seq_type());
                 }
             };
@@ -557,8 +559,8 @@ namespace script {
                 static int LuaCFunction(lua_State *L, TClass *obj, Tr (TClass::*fn)(lua_State *, TParam...)) {
                     auto fn_wraper = [obj, fn](lua_State *L, TParam &&... args) { return (obj->*fn)(L, std::forward<TParam>(args)...); };
 
-                    return base_type::template run_fn<
-                        decltype(fn_wraper), std::tuple<typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...> >(
+                    return base_type::template run_fn<decltype(fn_wraper),
+                                                      std::tuple<typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...> >(
                         L, fn_wraper, typename build_args_index<TParam...>::index_seq_type());
                 }
 
@@ -566,8 +568,8 @@ namespace script {
                 static int LuaCFunction(lua_State *L, TClass *obj, Tr (TClass::*fn)(lua_State *, TParam...) const) {
                     auto fn_wraper = [obj, fn](lua_State *L, TParam &&... args) { return (obj->*fn)(L, std::forward<TParam>(args)...); };
 
-                    return base_type::template run_fn<
-                        decltype(fn_wraper), std::tuple<typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...> >(
+                    return base_type::template run_fn<decltype(fn_wraper),
+                                                      std::tuple<typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...> >(
                         L, fn_wraper, typename build_args_index<TParam...>::index_seq_type());
                 }
             };
@@ -580,22 +582,22 @@ namespace script {
                 static int LuaCFunction(lua_State *L, TClass *obj, Tr (TClass::*fn)(TParam...)) {
                     auto fn_wraper = [obj, fn](TParam &&... args) { return (obj->*fn)(std::forward<TParam>(args)...); };
 
-                    return base_type::template run_fn<
-                        decltype(fn_wraper), std::tuple<typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...> >(
+                    return base_type::template run_fn<decltype(fn_wraper),
+                                                      std::tuple<typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...> >(
                         L, fn_wraper, typename build_args_index<TParam...>::index_seq_type());
                 }
 
                 // 动态参数个数 - 常量成员函数
-                static int LuaCFunction(lua_State *L, TClass *obj, Tr (TClass::*fn)(TParam...) const) {
+                static int LuaCFunction(lua_State *L, const TClass *obj, Tr (TClass::*fn)(TParam...) const) {
                     auto fn_wraper = [obj, fn](TParam &&... args) { return (obj->*fn)(std::forward<TParam>(args)...); };
 
-                    return base_type::template run_fn<
-                        decltype(fn_wraper), std::tuple<typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...> >(
+                    return base_type::template run_fn<decltype(fn_wraper),
+                                                      std::tuple<typename std::remove_cv<typename std::remove_reference<TParam>::type>::type...> >(
                         L, fn_wraper, typename build_args_index<TParam...>::index_seq_type());
                 }
             };
-        }  // namespace detail
-    }      // namespace lua
-}  // namespace script
+        } // namespace detail
+    }     // namespace lua
+} // namespace script
 
 #endif

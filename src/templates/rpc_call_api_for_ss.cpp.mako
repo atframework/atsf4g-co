@@ -223,10 +223,6 @@ namespace rpc {
             uint64_t rpc_sequence = 0;
             int res = router_manager->send_msg(router_key, std::move(req_msg), rpc_sequence);
 %   else:
-            if (dst_bus_id == 0) {
-                return ${result_clazz_name}(__tracer.return_code(${project_namespace}::err::EN_SYS_PARAM));
-            }
-
             int res = ss_msg_dispatcher::me()->send_to_proc(dst_bus_id, req_msg);
 %   endif
 

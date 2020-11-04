@@ -124,10 +124,6 @@ namespace rpc {
             }
 
 
-            if (dst_bus_id == 0) {
-                return routerservice_result_t(__tracer.return_code(hello::err::EN_SYS_PARAM));
-            }
-
             int res = ss_msg_dispatcher::me()->send_to_proc(dst_bus_id, req_msg);
 
             if (res < 0) {
@@ -194,10 +190,6 @@ namespace rpc {
                 }
             }
 
-
-            if (dst_bus_id == 0) {
-                return routerservice_result_t(__tracer.return_code(hello::err::EN_SYS_PARAM));
-            }
 
             int res = ss_msg_dispatcher::me()->send_to_proc(dst_bus_id, req_msg);
 

@@ -22,8 +22,8 @@ namespace script {
 
 #if !(defined(LIBATFRAME_UTILS_ENABLE_RTTI) && LIBATFRAME_UTILS_ENABLE_RTTI)
         std::string lua_binding_userdata_generate_metatable_name() {
-            static int        clazz_idx = 0;
-            std::stringstream ss;
+            static util::lock::atomic_int_type<size_t> clazz_idx(0);
+            std::stringstream                          ss;
             ss << "lua metatable " << (++clazz_idx);
             return ss.str();
         }
@@ -42,15 +42,13 @@ namespace script {
                 return lua_gettop(L);
             }
 
-            bool load_item(lua_State *L, const std::string &path, bool auto_create_table) {
-                return load_item(L, path.c_str(), auto_create_table);
-            }
+            bool load_item(lua_State *L, const std::string &path, bool auto_create_table) { return load_item(L, path.c_str(), auto_create_table); }
 
             bool load_item(lua_State *L, const std::string &path, int table_index, bool auto_create_table) {
                 return load_item(L, path.c_str(), table_index, auto_create_table);
             }
 
-            bool load_item(lua_State *L, const char* path, bool auto_create_table) {
+            bool load_item(lua_State *L, const char *path, bool auto_create_table) {
 #ifdef LUA_RIDX_GLOBALS
                 lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
                 bool res = load_item(L, path, -1, auto_create_table);
@@ -61,7 +59,7 @@ namespace script {
 #endif
             }
 
-            bool load_item(lua_State *L, const char* path, int table_index, bool auto_create_table) {
+            bool load_item(lua_State *L, const char *path, int table_index, bool auto_create_table) {
                 bool                   res = true;
                 std::list<std::string> idents;
                 // strtok(str, ".") is not thread safe
@@ -96,15 +94,11 @@ namespace script {
                 return res && !lua_isnil(L, -1);
             }
 
-            bool remove_item(lua_State *L, const std::string &path) {
-                return remove_item(L, path.c_str());
-            }
+            bool remove_item(lua_State *L, const std::string &path) { return remove_item(L, path.c_str()); }
 
-            bool remove_item(lua_State *L, const std::string &path, int table_index) {
-                return remove_item(L, path.c_str(), table_index);
-            }
+            bool remove_item(lua_State *L, const std::string &path, int table_index) { return remove_item(L, path.c_str(), table_index); }
 
-            bool remove_item(lua_State *L, const char* path) {
+            bool remove_item(lua_State *L, const char *path) {
 #ifdef LUA_RIDX_GLOBALS
                 lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
                 bool res = remove_item(L, path, -1);
@@ -115,7 +109,7 @@ namespace script {
 #endif
             }
 
-            bool remove_item(lua_State *L, const char* path, int table_index) {
+            bool remove_item(lua_State *L, const char *path, int table_index) {
                 lua_auto_block block(L);
 
                 std::list<std::string> idents;
@@ -188,12 +182,12 @@ namespace script {
                     }
                 }
 
-                WLOGINFO("STACK :%s", ss.str().c_str());
+                FWLOGINFO("STACK :{}", ss.str());
             }
 
             void print_traceback(lua_State *L, const std::string &msg) {
                 lua_auto_block autoBlock(L);
-                WLOGINFO("TRACEBACK:%s\n%s", msg.c_str(), lua_stackdump_to_string(L).c_str());
+                FWLOGINFO("TRACEBACK:{}\n{}", msg, lua_stackdump_to_string(L));
             }
 
             bool exec_file(lua_State *L, const char *file_path) {
@@ -201,7 +195,7 @@ namespace script {
 
                 int hmsg = get_pcall_hmsg(L);
                 if (luaL_loadfile(L, file_path) || lua_pcall(L, 0, LUA_MULTRET, hmsg)) {
-                    WLOGERROR("%s", luaL_checkstring(L, -1));
+                    FWLOGERROR("{}", luaL_checkstring(L, -1));
                     return false;
                 }
 
@@ -210,9 +204,9 @@ namespace script {
 
             bool exec_code(lua_State *L, const char *codes) {
                 lua_auto_block autoBlock(L);
-                int hmsg = get_pcall_hmsg(L);
+                int            hmsg = get_pcall_hmsg(L);
                 if (luaL_loadstring(L, codes) || lua_pcall(L, 0, LUA_MULTRET, hmsg)) {
-                    WLOGERROR("%s", luaL_checkstring(L, -1));
+                    FWLOGERROR("{}", luaL_checkstring(L, -1));
                     return false;
                 }
 
@@ -224,7 +218,7 @@ namespace script {
 
                 int hmsg = get_pcall_hmsg(L);
                 if (LUA_OK != luaL_loadfile(L, file_path)) {
-                    WLOGERROR("%s", luaL_checkstring(L, -1));
+                    FWLOGERROR("{}", luaL_checkstring(L, -1));
                     return false;
                 }
 
@@ -237,18 +231,18 @@ namespace script {
 #if defined(LUA_VERSION_NUM) && LUA_VERSION_NUM > 501
                 if (NULL == lua_setupvalue(L, -2, 1)) {
                     lua_pop(L, 1);
-                    WLOGERROR("%s", "lua_setupvalue failed");
+                    FWLOGERROR("{}", "lua_setupvalue failed");
                     return false;
                 }
 #else
                 if (0 == lua_setfenv(L, -2)) {
-                    WLOGERROR("%s", "lua_setfenv failed");
+                    FWLOGERROR("{}", "lua_setfenv failed");
                     return false;
                 }
 #endif
 
                 if (LUA_OK != lua_pcall(L, 0, LUA_MULTRET, hmsg)) {
-                    WLOGERROR("%s", luaL_checkstring(L, -1));
+                    FWLOGERROR("{}", luaL_checkstring(L, -1));
                     return false;
                 }
 
@@ -260,7 +254,7 @@ namespace script {
 
                 int hmsg = get_pcall_hmsg(L);
                 if (LUA_OK != luaL_loadstring(L, codes)) {
-                    WLOGERROR("%s", luaL_checkstring(L, -1));
+                    FWLOGERROR("{}", luaL_checkstring(L, -1));
                     return false;
                 }
 
@@ -273,25 +267,25 @@ namespace script {
 #if defined(LUA_VERSION_NUM) && LUA_VERSION_NUM > 501
                 if (NULL == lua_setupvalue(L, -2, 1)) {
                     lua_pop(L, 1);
-                    WLOGERROR("%s", "lua_setupvalue failed");
+                    FWLOGERROR("{}", "lua_setupvalue failed");
                     return false;
                 }
 #else
                 if (0 == lua_setfenv(L, -2)) {
-                    WLOGERROR("%s", "lua_setfenv failed");
+                    FWLOGERROR("{}", "lua_setfenv failed");
                     return false;
                 }
 #endif
 
                 if (LUA_OK != lua_pcall(L, 0, LUA_MULTRET, hmsg)) {
-                    WLOGERROR("%s", luaL_checkstring(L, -1));
+                    FWLOGERROR("{}", luaL_checkstring(L, -1));
                     return false;
                 }
 
                 return true;
             }
 
-            bool exec_file_with_protected_env(lua_State *L, const char *file_path, const char* env_cache_path) {
+            bool exec_file_with_protected_env(lua_State *L, const char *file_path, const char *env_cache_path) {
                 lua_auto_block autoBlock(L);
 
                 if (mutable_env_table(L, env_cache_path)) {
@@ -301,7 +295,7 @@ namespace script {
                 }
             }
 
-            bool exec_code_with_protected_env(lua_State *L, const char *codes, const char* env_cache_path) {
+            bool exec_code_with_protected_env(lua_State *L, const char *codes, const char *env_cache_path) {
                 lua_auto_block autoBlock(L);
 
                 if (mutable_env_table(L, env_cache_path)) {
@@ -311,7 +305,7 @@ namespace script {
                 }
             }
 
-            int mutable_env_table(lua_State *L, const char* env_cache_path) {
+            int mutable_env_table(lua_State *L, const char *env_cache_path) {
                 if (L == NULL) {
                     return 0;
                 }
@@ -319,32 +313,32 @@ namespace script {
                 int top = lua_gettop(L);
 
                 if (env_cache_path && *env_cache_path) {
-                    if(load_item(L, env_cache_path, false)) {
+                    if (load_item(L, env_cache_path, false)) {
                         return 1;
                     }
                     lua_pop(L, 1);
 
-                    if (load_item(L, env_cache_path, true)) {   // table 1
-                        lua_newtable(L);                        // table 2
-                        int hmsg = get_pcall_hmsg(L);           // function 3
+                    if (load_item(L, env_cache_path, true)) { // table 1
+                        lua_newtable(L);                      // table 2
+                        int hmsg = get_pcall_hmsg(L);         // function 3
 #if defined(LUA_VERSION_NUM) && LUA_VERSION_NUM > 501
                         if (luaL_loadstring(L, "return _ENV") || lua_pcall(L, 0, LUA_MULTRET, hmsg)) {
                             // ->| table 1, table 2, function 3, error string
-                            WLOGERROR("%s", luaL_checkstring(L, -1));
+                            FWLOGERROR("{}", luaL_checkstring(L, -1));
                             lua_settop(L, top);
                             return 0;
                         }
 #else
                         if (luaL_loadstring(L, "return _G") || lua_pcall(L, 0, LUA_MULTRET, hmsg)) {
                             // ->| table 1, table 2, function 3, error string
-                            WLOGERROR("%s", luaL_checkstring(L, -1));
+                            FWLOGERROR("{}", luaL_checkstring(L, -1));
                             lua_settop(L, top);
                             return 0;
                         }
 #endif
                         // ->| table 1, table 2, function 3, table _G or _ENV
                         lua_remove(L, -2); // remove function 3
-                        lua_setfield(L , -2, "__index");
+                        lua_setfield(L, -2, "__index");
                         lua_setmetatable(L, -2);
                         return 1;
                     } else {
@@ -352,27 +346,27 @@ namespace script {
                     }
                 }
 
-                lua_newtable(L);                // table 1
-                lua_newtable(L);                // table 2
-                int hmsg = get_pcall_hmsg(L);   // function 3
+                lua_newtable(L);              // table 1
+                lua_newtable(L);              // table 2
+                int hmsg = get_pcall_hmsg(L); // function 3
 #if defined(LUA_VERSION_NUM) && LUA_VERSION_NUM > 501
                 if (luaL_loadstring(L, "return _ENV") || lua_pcall(L, 0, LUA_MULTRET, hmsg)) {
                     // ->| table 1, table 2, function 3, error string
-                    WLOGERROR("%s", luaL_checkstring(L, -1));
+                    FWLOGERROR("{}", luaL_checkstring(L, -1));
                     lua_settop(L, top);
                     return 0;
                 }
 #else
                 if (luaL_loadstring(L, "return _G") || lua_pcall(L, 0, LUA_MULTRET, hmsg)) {
                     // ->| table 1, table 2, function 3, error string
-                    WLOGERROR("%s", luaL_checkstring(L, -1));
+                    FWLOGERROR("{}", luaL_checkstring(L, -1));
                     lua_settop(L, top);
                     return 0;
                 }
 #endif
                 // ->| table 1, table 2, function 3, table _G or _ENV
                 lua_remove(L, -2); // remove function
-                lua_setfield(L , -2, "__index");
+                lua_setfield(L, -2, "__index");
                 lua_setmetatable(L, -2);
                 return 1;
             }
@@ -396,7 +390,7 @@ namespace script {
                 lua_pushinteger(L, 1);
 
                 if (lua_pcall(L, 2, LUA_MULTRET, 0) != 0) {
-                    WLOGERROR("%s", luaL_checkstring(L, -1));
+                    FWLOGERROR("{}", luaL_checkstring(L, -1));
                 }
 #endif
                 return lua_gettop(L) - top;

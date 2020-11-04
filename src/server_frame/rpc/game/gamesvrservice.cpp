@@ -133,10 +133,6 @@ namespace rpc {
             req_msg.mutable_head()->set_player_zone_id(zone_id);
             req_msg.mutable_head()->set_player_open_id(open_id);
 
-            if (dst_bus_id == 0) {
-                return gamesvrservice_result_t(__tracer.return_code(hello::err::EN_SYS_PARAM));
-            }
-
             int res = ss_msg_dispatcher::me()->send_to_proc(dst_bus_id, req_msg);
 
             do {

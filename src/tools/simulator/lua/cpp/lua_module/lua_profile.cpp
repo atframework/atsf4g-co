@@ -54,8 +54,8 @@ namespace script {
         static int lua_profile_dump_to(lua_State *L) {
             std::string file_path;
             if (lua_gettop(L) > 0) {
-                size_t len = 0;
-                const char *fn = luaL_checklstring(L, 1, &len);
+                size_t      len = 0;
+                const char *fn  = luaL_checklstring(L, 1, &len);
                 file_path.assign(fn, len);
             }
 
@@ -82,16 +82,13 @@ namespace script {
             lua_pushinteger(L, root_ptr->line_number);
             lua_setfield(L, -2, "line_number");
 
-            lua_pushinteger(
-                L, static_cast<lua_Integer>(std::chrono::duration_cast<std::chrono::microseconds>(root_ptr->call_full_duration).count()));
+            lua_pushinteger(L, static_cast<lua_Integer>(std::chrono::duration_cast<std::chrono::microseconds>(root_ptr->call_full_duration).count()));
             lua_setfield(L, -2, "call_full_duration");
 
-            lua_pushinteger(
-                L, static_cast<lua_Integer>(std::chrono::duration_cast<std::chrono::microseconds>(root_ptr->call_inner_duration).count()));
+            lua_pushinteger(L, static_cast<lua_Integer>(std::chrono::duration_cast<std::chrono::microseconds>(root_ptr->call_inner_duration).count()));
             lua_setfield(L, -2, "call_inner_duration");
 
-            lua_pushinteger(
-                L, static_cast<lua_Integer>(std::chrono::duration_cast<std::chrono::microseconds>(root_ptr->call_native_duration).count()));
+            lua_pushinteger(L, static_cast<lua_Integer>(std::chrono::duration_cast<std::chrono::microseconds>(root_ptr->call_native_duration).count()));
             lua_setfield(L, -2, "call_native_duration");
 
             lua_pushinteger(L, root_ptr->call_count);
@@ -120,8 +117,8 @@ namespace script {
             lua_getinfo(L, "Sn", &ar);
 
             lua_profile_stack_data::stack_ptr_t root_ptr = lua_profile_stack_data::make(std::make_pair(__FUNCTION__, __LINE__));
-            root_ptr->name = ar.name;
-            size_t top = profile->push_fn(root_ptr);
+            root_ptr->name                               = ar.name;
+            size_t top                                   = profile->push_fn(root_ptr);
 
             // native 级cpu时钟统计
             auto start_tm = lua_profile_stack_data::clock_t::now();
@@ -155,7 +152,7 @@ namespace script {
 
             // 优先读取第一子节点的信息
             if (!root_ptr->children.empty()) {
-                root_ptr->source = root_ptr->children.begin()->second->source;
+                root_ptr->source      = root_ptr->children.begin()->second->source;
                 root_ptr->line_number = root_ptr->children.begin()->second->line_number;
             }
 
@@ -251,20 +248,20 @@ namespace script {
         }
 
         void lua_profile_stat_data::reset() {
-            call_count = 0;
-            call_full_duration = call_full_duration.zero();
-            call_inner_duration = call_inner_duration.zero();
+            call_count           = 0;
+            call_full_duration   = call_full_duration.zero();
+            call_inner_duration  = call_inner_duration.zero();
             call_native_duration = call_native_duration.zero();
         }
 
 
         lua_profile_stack_data::stack_ptr_t lua_profile_stack_data::make(const prof_key_t &key) {
-            stack_ptr_t ret = stack_ptr_t(new lua_profile_stack_data());
-            ret->line_number = key.second;
-            ret->source = key.first;
-            ret->call_count = 0;
-            ret->call_full_duration = clock_t::duration::zero();
-            ret->call_inner_duration = clock_t::duration::zero();
+            stack_ptr_t ret           = stack_ptr_t(new lua_profile_stack_data());
+            ret->line_number          = key.second;
+            ret->source               = key.first;
+            ret->call_count           = 0;
+            ret->call_full_duration   = clock_t::duration::zero();
+            ret->call_inner_duration  = clock_t::duration::zero();
             ret->call_native_duration = clock_t::duration::zero();
 
             return ret;
@@ -279,9 +276,9 @@ namespace script {
                 return self;
             }
 
-            stack_ptr_t ret = make(key);
+            stack_ptr_t ret     = make(key);
             self->children[key] = ret;
-            ret->parent = self;
+            ret->parent         = self;
 
             self = ret;
 
@@ -298,7 +295,7 @@ namespace script {
         }
 
 
-        lua_profile::lua_profile() : inited_(false), enabled_(true), origin_hook_(NULL), origin_mask_(0) {}
+        lua_profile::lua_profile() : inited_(false), enabled_(true), enabled_native_code_(true), origin_hook_(NULL), origin_mask_(0) {}
 
 
         lua_profile::~lua_profile() {}
@@ -310,7 +307,7 @@ namespace script {
 
             origin_hook_ = lua_gethook(L);
             origin_mask_ = lua_gethookmask(L);
-            int mask = origin_mask_ | LUA_MASKCALL | LUA_MASKRET;
+            int mask     = origin_mask_ | LUA_MASKCALL | LUA_MASKRET;
             lua_sethook(L, Hook_Fn, mask, lua_gethookcount(L));
         }
 
@@ -322,7 +319,7 @@ namespace script {
             call_stats_.clear();
 
             lua_profile_call_data &call_data = enter_lua_func(prof_key_t("#root", 0));
-            call_data.call_stats->name = "@root";
+            call_data.call_stats->name       = "@root";
 
             enabled_native_code_ = true;
         }
@@ -346,7 +343,7 @@ namespace script {
         void lua_profile::disable_native_prof() { enabled_native_code_ = false; }
 
         std::string lua_profile::dump_to(const std::string &file_path) {
-            std::fstream f;
+            std::fstream      f;
             std::stringstream ss;
 
             std::ostream *out = NULL;
@@ -365,13 +362,10 @@ namespace script {
                       "Inner Call Clock(Avg.), Native Call Clock(Total), Native Call Clock(Avg.)"
                    << std::endl;
             for (map_t::value_type &ele : call_stats_) {
-                (*out) << ele.second->source << ", " << ele.second->line_number << ", " << ele.second->name << ", "
-                       << ele.second->call_count << ", " << ele.second->call_full_duration.count() << ", "
-                       << (ele.second->call_full_duration.count() / ele.second->call_count) << ", "
-                       << ele.second->call_inner_duration.count() << ", "
-                       << (ele.second->call_inner_duration.count() / ele.second->call_count) << ", "
-                       << ele.second->call_native_duration.count() << ", "
-                       << (ele.second->call_native_duration.count() / ele.second->call_count) << std::endl;
+                (*out) << ele.second->source << ", " << ele.second->line_number << ", " << ele.second->name << ", " << ele.second->call_count << ", "
+                       << ele.second->call_full_duration.count() << ", " << (ele.second->call_full_duration.count() / ele.second->call_count) << ", "
+                       << ele.second->call_inner_duration.count() << ", " << (ele.second->call_inner_duration.count() / ele.second->call_count) << ", "
+                       << ele.second->call_native_duration.count() << ", " << (ele.second->call_native_duration.count() / ele.second->call_count) << std::endl;
             }
 
             return ss.str();
@@ -386,7 +380,8 @@ namespace script {
         }
 
         void lua_profile::pop_fn(size_t p) {
-            while (call_fn_prof_list_.size() > p) call_fn_prof_list_.pop_back();
+            while (call_fn_prof_list_.size() > p)
+                call_fn_prof_list_.pop_back();
 
             // while (call_fn_prof_list_.size() > p) {
             //    while (call_fn_prof_list_.size() > p && call_fn_prof_list_.back()->parent.expired())
@@ -408,8 +403,8 @@ namespace script {
         }
 
         void lua_profile::Hook_Fn(lua_State *L, lua_Debug *ar) {
-            lua_profile *profile = lua_profile::instance();
-            lua_Hook origin_hook = profile->origin_hook_;
+            lua_profile *profile     = lua_profile::instance();
+            lua_Hook     origin_hook = profile->origin_hook_;
             if (NULL != origin_hook && ((1 << ar->event) & profile->origin_mask_)) {
                 origin_hook(L, ar);
             }
@@ -438,7 +433,7 @@ namespace script {
             //#endif
 
 
-            bool lua_func = (0 == UTIL_STRFUNC_STRCASE_CMP("Lua", ar->what)) || (0 == ar->what[0]);
+            bool lua_func    = (0 == UTIL_STRFUNC_STRCASE_CMP("Lua", ar->what)) || (0 == ar->what[0]);
             bool lua_is_main = !lua_func && (0 == UTIL_STRFUNC_STRCASE_CMP("main", ar->what));
             bool native_func = (!lua_func) && (!lua_is_main) && (0 == UTIL_STRFUNC_STRCASE_CMP("C", ar->what));
 
@@ -494,7 +489,7 @@ namespace script {
                 // [函数名/变量名] ar->name
                 // [名字类型] ar->namewhat  : field->匿名函数 , method->具名函数 , global->系统函数, local->本地C函数
                 // [类型] ar->what Lua|C|main
-            } else {  // 结束调用函数统计
+            } else { // 结束调用函数统计
                 if (lua_func || lua_is_main) {
                     profile->exit_lua_func(index_key);
                 } else {
@@ -513,14 +508,14 @@ namespace script {
         }
 
         lua_profile_call_data &lua_profile::enter_lua_func(const prof_key_t &key) {
-            auto iter = call_stats_.find(key);
+            auto     iter = call_stats_.find(key);
             prof_ptr prof_data;
             if (iter == call_stats_.end()) {
-                prof_data = std::make_shared<prof_ptr::element_type>();
+                prof_data        = std::make_shared<prof_ptr::element_type>();
                 call_stats_[key] = prof_data;
                 prof_data->reset();
 
-                prof_data->source = key.first;
+                prof_data->source      = key.first;
                 prof_data->line_number = key.second;
             } else {
                 prof_data = iter->second;
@@ -530,15 +525,15 @@ namespace script {
 
             call_stack_.push_back(lua_profile_call_data());
             lua_profile_call_data &this_stack = call_stack_.back();
-            this_stack.key = key;
-            this_stack.call_enter_time_point = lua_profile_call_data::clock_t::now();
-            this_stack.is_native_call = false;
+            this_stack.key                    = key;
+            this_stack.call_enter_time_point  = lua_profile_call_data::clock_t::now();
+            this_stack.is_native_call         = false;
 
             this_stack.call_stats = prof_data;
 
             if (call_stack_.size() > 1) {
                 lua_profile_call_data &pre_stack = call_stack_[call_stack_.size() - 2];
-                auto duration = this_stack.call_enter_time_point - pre_stack.call_enter_time_point;
+                auto                   duration  = this_stack.call_enter_time_point - pre_stack.call_enter_time_point;
                 pre_stack.call_full_duration += duration;
                 pre_stack.call_inner_duration += duration;
             }
@@ -576,7 +571,7 @@ namespace script {
             }
 
             auto now_clock = lua_profile_call_data::clock_t::now();
-            auto duration = now_clock - this_stack->call_enter_time_point;
+            auto duration  = now_clock - this_stack->call_enter_time_point;
             this_stack->call_full_duration += duration;
             this_stack->call_inner_duration += duration;
 
@@ -607,7 +602,7 @@ namespace script {
 
         lua_profile_call_data &lua_profile::enter_native_func(const prof_key_t &key) {
             lua_profile_call_data &ret = enter_lua_func(key);
-            ret.is_native_call = true;
+            ret.is_native_call         = true;
             return ret;
         }
 
@@ -634,7 +629,7 @@ namespace script {
             assert(this_stack->is_native_call);
 
             auto now_clock = lua_profile_call_data::clock_t::now();
-            auto duration = now_clock - this_stack->call_enter_time_point;
+            auto duration  = now_clock - this_stack->call_enter_time_point;
             this_stack->call_full_duration += duration;
             this_stack->call_inner_duration += duration;
 
@@ -659,7 +654,7 @@ namespace script {
                 fn_prof_ptr->call_inner_duration += this_stack->call_inner_duration;
 
                 lua_profile_stack_data::exit_fn(fn_prof_ptr);
-                fn_prof_ptr->call_native_duration += this_stack->call_inner_duration;  // 父节点追加本地调用时间
+                fn_prof_ptr->call_native_duration += this_stack->call_inner_duration; // 父节点追加本地调用时间
             }
 
 
@@ -667,5 +662,5 @@ namespace script {
             call_stack_.pop_back();
             this_stack = NULL;
         }
-    }  // namespace lua
-}  // namespace script
+    } // namespace lua
+} // namespace script

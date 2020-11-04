@@ -39,13 +39,9 @@ namespace script {
         std::string lua_binding_userdata_generate_metatable_name();
 #endif
 
-        template <typename TC>
-        struct lua_binding_userdata_info {
-            typedef TC                          value_type;
-            typedef std::shared_ptr<value_type> pointer_type;
-            typedef std::weak_ptr<value_type>   userdata_type;
-            typedef userdata_type *             userdata_ptr_type;
-
+        template <typename TClass>
+        struct lua_binding_metatable_info {
+            typedef TClass     value_type;
             static const char *get_lua_metatable_name() {
 #if defined(LIBATFRAME_UTILS_ENABLE_RTTI) && LIBATFRAME_UTILS_ENABLE_RTTI
                 return typeid(value_type).name();
@@ -65,9 +61,17 @@ namespace script {
         };
 
 #if !(defined(LIBATFRAME_UTILS_ENABLE_RTTI) && LIBATFRAME_UTILS_ENABLE_RTTI)
-        template <typename TC>
-        std::string lua_binding_userdata_info<TC>::metatable_name_;
+        template <typename TClass>
+        std::string lua_binding_metatable_info<TClass>::metatable_name_;
 #endif
+
+        template <typename TProxy>
+        struct lua_binding_userdata_info {
+            typedef TProxy                      value_type;
+            typedef std::shared_ptr<value_type> pointer_type;
+            typedef std::weak_ptr<value_type>   userdata_type;
+            typedef userdata_type *             userdata_ptr_type;
+        };
 
         /**
          * 特殊实例（整个对象直接存在userdata里）
@@ -80,7 +84,7 @@ namespace script {
             typedef TC value_type;
 
             static void push_metatable(lua_State *L) {
-                const char *class_name = lua_binding_userdata_info<value_type>::get_lua_metatable_name();
+                const char *class_name = lua_binding_metatable_info<value_type>::get_lua_metatable_name();
                 luaL_getmetatable(L, class_name);
                 if (lua_istable(L, -1)) return;
 
@@ -120,7 +124,7 @@ namespace script {
 
             static int __lua_gc(lua_State *L) {
                 if (0 == lua_gettop(L)) {
-                    WLOGERROR("userdata __gc is called without self");
+                    FWLOGERROR("userdata __gc is called without self");
                     return 0;
                 }
 
@@ -130,10 +134,9 @@ namespace script {
                     return 0;
                 }
 
-                auto obj =
-                    static_cast<value_type *>(luaL_checkudata(L, 1, lua_binding_userdata_info<value_type>::get_lua_metatable_name()));
+                auto obj = static_cast<value_type *>(luaL_checkudata(L, 1, lua_binding_metatable_info<value_type>::get_lua_metatable_name()));
                 if (NULL == obj) {
-                    WLOGERROR("try to convert userdata to %s but failed", lua_binding_userdata_info<value_type>::get_lua_metatable_name());
+                    FWLOGERROR("try to convert userdata to {} but failed", lua_binding_metatable_info<value_type>::get_lua_metatable_name());
                     return 0;
                 }
                 // 执行析构，由lua负责释放内存
@@ -164,7 +167,7 @@ namespace script {
              * @note this API always push a value into stack, push nil if failed
              * @return true if success
              */
-            bool load_item(lua_State *L, const char* path, bool auto_create_table = false);
+            bool load_item(lua_State *L, const char *path, bool auto_create_table = false);
 
             /**
              * @brief load path from table and push it into stack
@@ -186,22 +189,22 @@ namespace script {
              * @note this API always push a value into stack, push nil if failed
              * @return true if success
              */
-            bool load_item(lua_State *L, const char* path, int table_index, bool auto_create_table = false);
+            bool load_item(lua_State *L, const char *path, int table_index, bool auto_create_table = false);
 
             bool remove_item(lua_State *L, const std::string &path);
 
-            bool remove_item(lua_State *L, const char* path);
+            bool remove_item(lua_State *L, const char *path);
 
             bool remove_item(lua_State *L, const std::string &path, int table_index);
 
-            bool remove_item(lua_State *L, const char* path, int table_index);
+            bool remove_item(lua_State *L, const char *path, int table_index);
 
             void print_stack(lua_State *L);
 
             void print_traceback(lua_State *L, const std::string &msg);
 
             /**
-             * @brief run file 
+             * @brief run file
              * @param L lua State
              * @param file_path file path
              * @note this call will not push anything into stack
@@ -210,7 +213,7 @@ namespace script {
             bool exec_file(lua_State *L, const char *file_path);
 
             /**
-             * @brief run code 
+             * @brief run code
              * @param L lua State
              * @param codes lua code
              * @note this call will not push anything into stack
@@ -246,7 +249,7 @@ namespace script {
              * @note this call will not push anything into stack
              * @return true if success
              */
-            bool exec_file_with_protected_env(lua_State *L, const char *file_path, const char* env_cache_path);
+            bool exec_file_with_protected_env(lua_State *L, const char *file_path, const char *env_cache_path);
 
             /**
              * @brief run code with custom envirment table
@@ -256,7 +259,7 @@ namespace script {
              * @note this call will not push anything into stack
              * @return true if success
              */
-            bool exec_code_with_protected_env(lua_State *L, const char *codes, const char* env_cache_path);
+            bool exec_code_with_protected_env(lua_State *L, const char *codes, const char *env_cache_path);
 
             /**
              * @brief get environment at specify path or create a new environment table at specify path
@@ -264,7 +267,7 @@ namespace script {
              * @param env_cache_path environment cache path
              * @return the number of values pushed into stack, return 0 if failed
              */
-            int mutable_env_table(lua_State *L, const char* env_cache_path);
+            int mutable_env_table(lua_State *L, const char *env_cache_path);
 
             int lua_stackdump(lua_State *L);
 

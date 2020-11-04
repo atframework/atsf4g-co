@@ -1,5 +1,5 @@
-﻿#include <cstdlib>
-#include <cmath>
+﻿#include <cmath>
+#include <cstdlib>
 #include <ctime>
 #include <list>
 #include <sstream>
@@ -21,19 +21,19 @@ namespace script {
     namespace lua {
         extern int lua_profile_openlib(lua_State *L);
 
-        lua_auto_stats::lua_auto_stats(lua_engine& engine): engine_(&engine) { begin_clock_ = std::chrono::system_clock::now(); }
+        lua_auto_stats::lua_auto_stats(lua_engine &engine) : engine_(&engine) { begin_clock_ = std::chrono::system_clock::now(); }
 
         lua_auto_stats::~lua_auto_stats() {
             if (NULL != engine_) {
                 auto duration = (std::chrono::system_clock::now() - begin_clock_);
-                engine_->add_lua_stat_time(std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() / 1000.0f);
+                engine_->add_lua_stat_time(static_cast<int64_t>(std::chrono::duration_cast<std::chrono::microseconds>(duration).count()));
                 // engine_->add_lua_stat_time(abs(end_clock_ - begin_clock_) * 1.0f / CLOCKS_PER_SEC);
             }
         }
 
-        lua_engine::lua_engine(constructor_helper& helper) : state_(helper.L) {
-            lua_update_stats_.lua_time = 0.0f;
-            lua_update_stats_.run_time = 0.0f;
+        lua_engine::lua_engine(constructor_helper &helper) : state_(helper.L) {
+            lua_update_stats_.lua_time = 0;
+            lua_update_stats_.run_time = 0;
         }
 
 
@@ -51,17 +51,25 @@ namespace script {
             return 0;
         }
 
-        lua_engine::ptr_t lua_engine::create() {
-            lua_State* L = luaL_newstate();
+        lua_engine::ptr_t lua_engine::create() { return create(NULL); }
+
+        lua_engine::ptr_t lua_engine::create(lua_State *L) {
+            bool auto_create = false;
+            if (L == NULL) {
+                auto_create = true;
+                L           = luaL_newstate();
+            }
             if (NULL == L) {
                 return ptr_t();
             }
 
             constructor_helper helper;
-            helper.L = L;
+            helper.L              = L;
             lua_engine::ptr_t ret = std::make_shared<lua_engine>(helper);
             if (!ret) {
-                lua_close(L);
+                if (auto_create) {
+                    lua_close(L);
+                }
             }
 
             return ret;
@@ -98,9 +106,7 @@ namespace script {
             return 0;
         }
 
-        int lua_engine::proc() {
-            return lua_binding_mgr::me()->proc(this);
-        }
+        int lua_engine::proc() { return lua_binding_mgr::me()->proc(this); }
 
         void lua_engine::add_ext_lib(lua_CFunction regfunc) { add_ext_lib(state_, regfunc); }
 
@@ -110,20 +116,30 @@ namespace script {
 
         void lua_engine::add_search_path(lua_State *L, const std::string &path, bool is_front) {
             lua_getglobal(L, "package"); /* L: package */
+            if (0 == lua_istable(L, -1)) {
+                lua_pop(L, 1);
+                return;
+            }
+
             lua_getfield(L, -1, "path"); /* get package.path, L: package path */
             const char *cur_path = lua_tostring(L, -1);
             if (is_front)
                 lua_pushfstring(L, "%s/?.lua;%s/?.luac;%s", path.c_str(), path.c_str(), cur_path); /* L: package path newpath */
             else
                 lua_pushfstring(L, "%s;%s/?.lua;%s/?.luac", cur_path, path.c_str(), path.c_str()); /* L: package path newpath */
-            lua_setfield(L, -3, "path"); /* package.path = newpath, L: package path */
-            lua_pop(L, 2);               /* L: - */
+            lua_setfield(L, -3, "path");                                                           /* package.path = newpath, L: package path */
+            lua_pop(L, 2);                                                                         /* L: - */
         }
 
         void lua_engine::add_csearch_path(const std::string &path, bool is_front) { add_csearch_path(state_, path, is_front); }
 
         void lua_engine::add_csearch_path(lua_State *L, const std::string &path, bool is_front) {
-            lua_getglobal(L, "package");  /* L: package */
+            lua_getglobal(L, "package"); /* L: package */
+            if (0 == lua_istable(L, -1)) {
+                lua_pop(L, 1);
+                return;
+            }
+
             lua_getfield(L, -1, "cpath"); /* get package.path, L: package cpath */
             const char *cur_path = lua_tostring(L, -1);
 #ifdef WIN32
@@ -149,6 +165,11 @@ namespace script {
             // stack content after the invoking of the function
             // get loader table
             lua_getglobal(L, "package"); /* L: package */
+            if (0 == lua_istable(L, -1)) {
+                lua_pop(L, 1);
+                return;
+            }
+
             const char *loader_name = "loaders";
             lua_getfield(L, -1, loader_name); /* L: package, loaders */
             if (lua_isnil(L, -1)) {
@@ -166,8 +187,8 @@ namespace script {
 
             // insert loader into index 2
             lua_pushcfunction(L, func); /* L: package, loaders, func */
-            LUA_GET_TABLE_LEN(int len, L, -2);
-            for (int i = len + 1; i > 2; --i) {
+            LUA_GET_TABLE_LEN(size_t len, L, -2);
+            for (int i = static_cast<int>(len) + 1; i > 2; --i) {
                 lua_rawgeti(L, -2, i - 1); /* L: package, loaders, func, function */
                 // we call lua_rawgeti, so the loader table now is at -3
                 lua_rawseti(L, -3, i); /* L: package, loaders, func */
@@ -180,25 +201,21 @@ namespace script {
             lua_pop(L, 1);
         }
 
-        bool lua_engine::run_code(const char *codes) { 
+        bool lua_engine::run_code(const char *codes) {
             lua::lua_auto_stats autoLuaStat(*this);
 
-            return run_code(state_, codes); 
+            return run_code(state_, codes);
         }
 
-        bool lua_engine::run_code(lua_State *L, const char *codes) {
-            return fn::exec_code(L, codes);
-        }
+        bool lua_engine::run_code(lua_State *L, const char *codes) { return fn::exec_code(L, codes); }
 
-        bool lua_engine::run_file(const char *file_path) { 
+        bool lua_engine::run_file(const char *file_path) {
             lua::lua_auto_stats autoLuaStat(*this);
 
-            return run_file(state_, file_path); 
+            return run_file(state_, file_path);
         }
 
-        bool lua_engine::run_file(lua_State *L, const char *file_path) {
-            return fn::exec_file(L, file_path);
-        }
+        bool lua_engine::run_file(lua_State *L, const char *file_path) { return fn::exec_file(L, file_path); }
 
         lua_State *lua_engine::get_lua_state() { return state_; }
 
@@ -213,32 +230,26 @@ namespace script {
         }
 
 
-        bool lua_engine::load_item(lua_State *L, const std::string &path, bool auto_create_table) {
-            return fn::load_item(L, path, auto_create_table);
-        }
+        bool lua_engine::load_item(lua_State *L, const std::string &path, bool auto_create_table) { return fn::load_item(L, path, auto_create_table); }
 
         bool lua_engine::load_item(lua_State *L, const std::string &path, int table_index, bool auto_create_table) {
             return fn::load_item(L, path, table_index, auto_create_table);
         }
 
-        bool lua_engine::remove_item(const std::string &path) { 
+        bool lua_engine::remove_item(const std::string &path) {
             lua::lua_auto_stats autoLuaStat(*this);
-            return remove_item(get_lua_state(), path); 
+            return remove_item(get_lua_state(), path);
         }
 
-        bool lua_engine::remove_item(const std::string &path, int table_index) { 
+        bool lua_engine::remove_item(const std::string &path, int table_index) {
             lua::lua_auto_stats autoLuaStat(*this);
-            return remove_item(get_lua_state(), path, table_index); 
+            return remove_item(get_lua_state(), path, table_index);
         }
 
 
-        bool lua_engine::remove_item(lua_State *L, const std::string &path) {
-            return fn::remove_item(L, path);
-        }
+        bool lua_engine::remove_item(lua_State *L, const std::string &path) { return fn::remove_item(L, path); }
 
-        bool lua_engine::remove_item(lua_State *L, const std::string &path, int table_index) {
-            return fn::remove_item(L, path, table_index);
-        }
+        bool lua_engine::remove_item(lua_State *L, const std::string &path, int table_index) { return fn::remove_item(L, path, table_index); }
 
         bool lua_engine::load_global_event_trigger(lua_State *L, const std::string &bind_name) {
             lua_getglobal(L, "utils");
@@ -276,10 +287,10 @@ namespace script {
 
         int lua_engine::get_pcall_hmsg() { return get_pcall_hmsg(get_lua_state()); }
 
-        void lua_engine::update_global_timer(float delta) {
-            lua_State *state = get_lua_state();
+        void lua_engine::update_global_timer(int64_t delta) {
+            lua_State *         state = get_lua_state();
             lua::lua_auto_block block(state);
-            lua_auto_stats autoLuaStat(*this);
+            lua_auto_stats      autoLuaStat(*this);
 
             int hmsg = get_pcall_hmsg(state);
 
@@ -289,7 +300,7 @@ namespace script {
                 if (lua_istable(state, -1)) {
                     lua_getfield(state, -1, "update");
                     if (lua_isfunction(state, -1)) {
-                        lua_pushnumber(state, delta);
+                        lua_pushinteger(state, delta);
 
                         if (0 != lua_pcall(state, 1, LUA_MULTRET, hmsg)) {
                             WLOGERROR("[Lua]: %s", luaL_checkstring(state, -1));
@@ -301,12 +312,12 @@ namespace script {
             lua_update_stats_.run_time += delta;
         }
 
-        void lua_engine::add_lua_stat_time(float delta) { lua_update_stats_.lua_time += delta; }
+        void lua_engine::add_lua_stat_time(int64_t delta) { lua_update_stats_.lua_time += delta; }
 
-        std::pair<float, float> lua_engine::get_and_reset_lua_stats() {
-            std::pair<float, float> ret = std::make_pair(lua_update_stats_.lua_time, lua_update_stats_.run_time);
+        std::pair<int64_t, int64_t> lua_engine::get_and_reset_lua_stats() {
+            std::pair<int64_t, int64_t> ret = std::make_pair(lua_update_stats_.lua_time, lua_update_stats_.run_time);
             lua_update_stats_.lua_time = lua_update_stats_.run_time = 0.0f;
             return ret;
         }
-    }
-}
+    } // namespace lua
+} // namespace script

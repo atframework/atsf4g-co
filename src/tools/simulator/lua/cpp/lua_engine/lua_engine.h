@@ -27,11 +27,11 @@ namespace script {
 
         /** A lua automatic statistics. */
         struct lua_auto_stats {
-            lua_auto_stats(lua_engine& engine);
+            lua_auto_stats(lua_engine &engine);
             ~lua_auto_stats();
 
             std::chrono::system_clock::time_point begin_clock_;
-            lua_engine* engine_;
+            lua_engine *                          engine_;
             // std::chrono::system_clock::time_point end_clock_;
         };
 
@@ -45,12 +45,14 @@ namespace script {
             };
 
         public:
-            lua_engine(constructor_helper& helper);
+            lua_engine(constructor_helper &helper);
             ~lua_engine();
 
             int add_on_inited(std::function<void(lua_State *)> fn);
 
             static ptr_t create();
+
+            static ptr_t create(lua_State *L);
 
             int init();
 
@@ -136,24 +138,24 @@ namespace script {
 
             int get_pcall_hmsg();
 
-            void update_global_timer(float delta);
-            void add_lua_stat_time(float delta);
+            void update_global_timer(int64_t delta);
+            void add_lua_stat_time(int64_t delta);
 
-            std::pair<float, float> get_and_reset_lua_stats();
+            std::pair<int64_t, int64_t> get_and_reset_lua_stats();
 
         private:
             struct lua_stats {
-                float lua_time;
-                float run_time;
+                int64_t lua_time;
+                int64_t run_time;
             };
 
 
-            lua_State *state_;
+            lua_State *                                  state_;
             std::list<std::function<void(lua_State *)> > on_inited_;
 
             lua_stats lua_update_stats_;
         };
-    }
-}
+    } // namespace lua
+} // namespace script
 
 #endif

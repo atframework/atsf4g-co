@@ -32,8 +32,8 @@ namespace script {
 
         struct string_buffer {
             typedef std::string::value_type value_type;
-            const value_type *data;
-            size_t length;
+            const value_type *              data;
+            size_t                          length;
 
             string_buffer(const value_type *d) : data(d), length(strlen(d) + 1) {}
             string_buffer(const value_type *d, size_t s) : data(d), length(s) {}
@@ -82,9 +82,8 @@ namespace script {
                 static int wraper(lua_State *L, const TParam &v) {
                     if (sizeof(v) >= sizeof(lua_Integer) && v > static_cast<TParam>(std::numeric_limits<lua_Integer>::max())) {
                         lua_getglobal(L, "tonumber");
-                        char n[32] = {0};
-                        sprintf(n, "%llu", static_cast<unsigned long long>(v));
-                        lua_pushstring(L, n);
+                        std::string n = LOG_WRAPPER_FWAPI_FORMAT("{}", v);
+                        lua_pushstring(L, n.c_str());
                         lua_call(L, 1, 1);
                     } else {
                         lua_pushinteger(L, static_cast<lua_Unsigned>(v));
@@ -146,8 +145,7 @@ namespace script {
 
                 template <typename TParam>
                 static int wraper(lua_State *L, TParam &&v) {
-                    typedef
-                        typename std::remove_reference<typename std::remove_cv<typename std::remove_pointer<Ty>::type>::type>::type obj_t;
+                    typedef typename std::remove_cv<typename std::remove_reference<typename std::remove_pointer<Ty>::type>::type>::type obj_t;
 
                     // 最好是不要这么用，如果有需要再加对非POD类型的支持吧
                     static_assert(std::is_pod<obj_t>::value, "custom type must be pod type");
@@ -241,7 +239,7 @@ namespace script {
                     void *buff = lua_newuserdata(L, sizeof(ud_t));
                     new (buff) ud_t(v);
 
-                    const char *class_name = lua_binding_userdata_info<TC>::get_lua_metatable_name();
+                    const char *class_name = lua_binding_metatable_info<TC>::get_lua_metatable_name();
                     luaL_getmetatable(L, class_name);
 
                     lua_setmetatable(L, -2);
@@ -264,7 +262,7 @@ namespace script {
                     void *buff = lua_newuserdata(L, sizeof(ud_t));
                     new (buff) ud_t(v);
 
-                    const char *class_name = lua_binding_userdata_info<TC>::get_lua_metatable_name();
+                    const char *class_name = lua_binding_metatable_info<TC>::get_lua_metatable_name();
                     luaL_getmetatable(L, class_name);
 
                     lua_setmetatable(L, -2);
@@ -388,23 +386,21 @@ namespace script {
 
             template <typename Ty, typename... Tl>
             struct wraper_var
-                : public std::conditional<
-                      std::is_enum<Ty>::value || std::is_integral<Ty>::value,
-                      wraper_var_lua_type<typename std::conditional<
-                          std::is_enum<Ty>::value || std::is_unsigned<Ty>::value, lua_Unsigned,
-                          lua_Integer>::type>,  // 枚举类型和未识别的整数(某些编译器的size_t和uint32_t/uint64_t被判定为不同类型)
-                      typename std::conditional<std::is_pointer<Ty>::value,
-                                                wraper_ptr_var_lua_type<Ty>,  // 指针类型
-                                                wraper_var_lua_type<Ty>       // POD类型
-                                                >::type>::type {};
+                : public std::conditional<std::is_enum<Ty>::value || std::is_integral<Ty>::value,
+                                          wraper_var_lua_type<typename std::conditional<
+                                              std::is_enum<Ty>::value || std::is_unsigned<Ty>::value, lua_Unsigned,
+                                              lua_Integer>::type>, // 枚举类型和未识别的整数(某些编译器的size_t和uint32_t/uint64_t被判定为不同类型)
+                                          typename std::conditional<std::is_pointer<Ty>::value,
+                                                                    wraper_ptr_var_lua_type<Ty>, // 指针类型
+                                                                    wraper_var_lua_type<Ty>      // POD类型
+                                                                    >::type>::type {};
 
 
             struct wraper_bat_cmd {
                 template <typename TupleT, int N>
                 struct runner {
                     int operator()(lua_State *L, TupleT &t) {
-                        typedef typename std::remove_cv<
-                            typename std::remove_reference<typename std::tuple_element<N, TupleT>::type>::type>::type var_t;
+                        typedef typename std::remove_cv<typename std::remove_reference<typename std::tuple_element<N, TupleT>::type>::type>::type var_t;
 
                         return detail::wraper_var<var_t>::wraper(L, std::get<N>(t));
                     }
@@ -427,7 +423,7 @@ namespace script {
                     return 0;
                 }
             };
-        }  // namespace detail
+        } // namespace detail
 
         /**
          * @brief 自动打包调用lua函数
@@ -435,25 +431,25 @@ namespace script {
          */
         template <typename... TParams>
         int auto_call(lua_State *L, int index, TParams &&... params) {
-            int top = lua_gettop(L);
+            int top  = lua_gettop(L);
             int hmsg = script::lua::fn::get_pcall_hmsg(L);
 
             int fn_index = index > 0 ? index : index - 1;
 
             if (!lua_isfunction(L, fn_index)) {
-                WLOGERROR("var in lua stack %d is not a function.", index);
+                FWLOGERROR("var in lua stack {} is not a function.", index);
                 lua_pop(L, 1);
                 return LUA_ERRRUN;
             }
 
             lua_pushvalue(L, fn_index);
 
-            int param_num = detail::wraper_bat_cmd::wraper_bat_count(L, std::forward_as_tuple(params...),
-                                                                     typename detail::build_args_index<TParams...>::index_seq_type());
+            int param_num =
+                detail::wraper_bat_cmd::wraper_bat_count(L, std::forward_as_tuple(params...), typename detail::build_args_index<TParams...>::index_seq_type());
 
             int res = lua_pcall(L, param_num, LUA_MULTRET, hmsg);
             if (res) {
-                WLOGERROR("call stack %d error. ret code: %d\n%s", index, res, lua_tostring(L, -1));
+                FWLOGERROR("call stack {} error. ret code: {}\n{}", index, res, lua_tostring(L, -1));
                 lua_settop(L, top);
             } else {
                 // 移除hmsg
@@ -465,22 +461,22 @@ namespace script {
 
         template <typename... TParams>
         int auto_call(lua_State *L, const std::string &path, TParams &&... params) {
-            int top = lua_gettop(L);
+            int top  = lua_gettop(L);
             int hmsg = script::lua::fn::get_pcall_hmsg(L);
 
             fn::load_item(L, path);
             if (!lua_isfunction(L, -1)) {
-                WLOGERROR("var in lua stack %s is not a function.", path.c_str());
+                FWLOGERROR("var in lua stack {} is not a function.", path.c_str());
                 lua_settop(L, top);
                 return LUA_ERRRUN;
             }
 
-            int param_num = detail::wraper_bat_cmd::wraper_bat_count(L, std::forward_as_tuple(params...),
-                                                                     typename detail::build_args_index<TParams...>::index_seq_type());
+            int param_num =
+                detail::wraper_bat_cmd::wraper_bat_count(L, std::forward_as_tuple(params...), typename detail::build_args_index<TParams...>::index_seq_type());
 
             int res = lua_pcall(L, param_num, LUA_MULTRET, hmsg);
             if (res) {
-                WLOGERROR("call stack %s error. ret code: %d\n%s", path.c_str(), res, lua_tostring(L, -1));
+                FWLOGERROR("call stack {} error. ret code: {}\n{}", path.c_str(), res, lua_tostring(L, -1));
                 lua_settop(L, top);
             } else {
                 // 移除hmsg
@@ -489,6 +485,14 @@ namespace script {
 
             return res ? res : (lua_gettop(L) - top);
         };
-    }  // namespace lua
-}  // namespace script
+
+        template <typename TParams>
+        int push_into_stack(lua_State *L, TParams &&params) {
+            // typedef typename std::remove_cv<typename std::remove_reference<typename std::remove_pointer<TParams>::type>::type>::type obj_t;
+            return detail::wraper_var<typename std::remove_cv<typename std::remove_reference<typename std::remove_pointer<TParams>::type>::type>::type>::wraper(
+                L, std::forward<TParams>(params));
+        }
+
+    } // namespace lua
+} // namespace script
 #endif
