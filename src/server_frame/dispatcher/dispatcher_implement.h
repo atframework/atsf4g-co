@@ -165,11 +165,7 @@ public:
     template <typename TAction>
     inline int register_action(msg_type_t msg_type) {
         const atframework::DispatcherOptions *options = get_options_by_message_type(msg_type);
-        if (nullptr != options) {
-            return _register_action(msg_type, task_manager::me()->make_task_creator<TAction>(options));
-        } else {
-            return _register_action(msg_type, task_manager::me()->make_task_creator<TAction>(options));
-        }
+        return _register_action(msg_type, task_manager::me()->make_task_creator<TAction>(options));
     }
 
     /**
