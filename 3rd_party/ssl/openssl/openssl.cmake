@@ -70,13 +70,13 @@ endmacro()
 if (NOT 3RD_PARTY_CRYPT_LINK_NAME)
     set (3RD_PARTY_OPENSSL_DEFAULT_VERSION "1.1.1h")
     set (3RD_PARTY_OPENSSL_GITHUB_TAG "OpenSSL_1_1_1h")
-    # "no-hw"
+    # "no-hw" and "no-engine" is recommanded by openssl only for mobile devices
+    # @see https://wiki.openssl.org/index.php/Compilation_and_Installation
     set (3RD_PARTY_OPENSSL_BUILD_OPTIONS "--prefix=${PROJECT_3RD_PARTY_INSTALL_DIR}" "--openssldir=${PROJECT_3RD_PARTY_INSTALL_DIR}/ssl" "--release" 
         # "--api=1.1.1" # libwebsockets and atframe_utils has warnings of using deprecated APIs, maybe it can be remove later
         # "no-deprecated" # libcurl and gRPC requires openssl's API of 1.1.0 and 1.0.2, so we can not disable deprecated APIS here
-        "no-dso" "no-tests" "no-external-tests" "no-external-tests" "no-shared"
-        "no-aria" "no-bf" "no-blake2" "no-camellia" "no-cast" "no-idea" "no-md2" "no-md4" "no-mdc2" "no-rc2" "no-rc4" "no-rc5" "no-ssl3"
-        "enable-static-engine"
+        "no-dso" "no-tests" "no-external-tests" "no-shared" "no-blake2" "no-camellia" "no-cast" "no-idea" "no-md4" "no-mdc2" "no-rc2"
+        "no-ssl2" "no-ssl3" "no-weak-ssl-ciphers" "enable-ec_nistp_64_gcc_128" "enable-static-engine"
     )
 
     if (VCPKG_TOOLCHAIN)
