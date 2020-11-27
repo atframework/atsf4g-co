@@ -385,30 +385,44 @@ public:
     }
 
     virtual bool remove_cache(const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data) UTIL_CONFIG_OVERRIDE {
-        typename std::unordered_map<key_t, ptr_t>::iterator iter;
-        if (cache) {
-            iter = caches_.find(cache->get_key());
-        } else {
-            iter = caches_.find(key);
+        ptr_t cache_child;
+        bool ret = true;
+        {
+            typename std::unordered_map<key_t, ptr_t>::iterator iter;
+            if (cache) {
+                iter = caches_.find(cache->get_key());
+            } else {
+                iter = caches_.find(key);
+            }
+
+            if (iter == caches_.end()) {
+                return false;
+            }
+
+            if (cache && iter->second != cache) {
+                return false;
+            }
+            cache_child = iter->second;
+
+            if (cache_child->is_writable()) {
+                ret = remove_object(key, cache_child, priv_data);
+            }
+        }
+        // After RPC, iter may be different
+
+        if (!cache_child->check_flag(router_object_base::flag_t::EN_ROFT_CACHE_REMOVED)) {
+            on_evt_remove_cache(key, cache_child, reinterpret_cast<priv_data_t>(priv_data));
+            cache_child->set_flag(router_object_base::flag_t::EN_ROFT_CACHE_REMOVED);
         }
 
-        if (iter == caches_.end()) {
-            return false;
+        // Double check the value of iterator
+        {
+            typename std::unordered_map<key_t, ptr_t>::iterator iter;
+            iter = caches_.find(cache_child->get_key());
+            if (iter != caches_.end() && cache_child == iter->second) {
+                caches_.erase(iter);
+            }
         }
-
-        if (cache && iter->second != cache) {
-            return false;
-        }
-
-        int ret = true;
-        if (cache->is_writable()) {
-            ret = remove_object(key, cache, priv_data);
-        }
-
-        on_evt_remove_cache(key, iter->second, reinterpret_cast<priv_data_t>(priv_data));
-
-        iter->second->set_flag(router_object_base::flag_t::EN_ROFT_CACHE_REMOVED);
-        caches_.erase(iter);
         stat_size_ = caches_.size();
         return ret;
     }
@@ -433,7 +447,7 @@ public:
             return false;
         }
 
-        if (cache->remove_object(reinterpret_cast<priv_data_t>(priv_data), 0) < 0) {
+        if (cache_child->remove_object(reinterpret_cast<priv_data_t>(priv_data), 0) < 0) {
             return false;
         }
 

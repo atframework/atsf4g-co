@@ -7,13 +7,6 @@ file(MAKE_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/${SERVER_INST_SRC_BIN_NAME}/bin"
 file(MAKE_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/${SERVER_INST_SRC_BIN_NAME}/etc")
 file(MAKE_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/${SERVER_INST_SRC_BIN_NAME}/log")
 
-# add tool to binding router rpcs
-generate_for_pb_add_service("hello.GamesvrService" ${CMAKE_CURRENT_LIST_DIR} 
-    TASK_PATH_PREFIX "logic"
-    HANDLE_PATH_PREFIX "app"
-    PROJECT_NAMESPACE "hello"
-)
-
 # ============ atgateway ============
 
 file(GLOB_RECURSE SERVER_INST_SRC_LIST

@@ -87,10 +87,10 @@ public:
     void refresh_save_time();
 
     inline const key_t &get_key() const { return key_; }
-    inline bool         check_flag(int v) const { return (flags_ & v) == v; }
-    inline void         set_flag(int v) { flags_ |= v; }
-    inline void         unset_flag(int v) { flags_ &= ~v; }
-    inline int          get_flags() const { return flags_; }
+    inline bool         check_flag(int32_t v) const { return (flags_ & v) == v; }
+    inline void         set_flag(int32_t v) { flags_ |= v; }
+    inline void         unset_flag(int32_t v) { flags_ &= ~v; }
+    inline int32_t      get_flags() const { return flags_; }
 
     inline uint32_t alloc_timer_sequence() { return ++timer_sequence_; }
     inline bool     check_timer_sequence(uint32_t seq) const { return seq == timer_sequence_; }
@@ -275,7 +275,7 @@ private:
     uint64_t                 saving_sequence_;
     uint64_t                 saved_sequence_;
 
-    int                     flags_;
+    int32_t                 flags_;
     std::list<hello::SSMsg> transfer_pending_;
 
     friend class router_manager_base;

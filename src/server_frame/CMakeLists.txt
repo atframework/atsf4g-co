@@ -4,13 +4,6 @@ unset(PROJECT_SERVER_FRAME_PUBLIC_COMPILE_OPTIONS)
 
 list(APPEND PROJECT_SERVER_FRAME_PUBLIC_INCLUDE_DIRS ${PROJECT_SERVER_FRAME_INC_DIR} "${ATFRAMEWORK_ATBUS_INC_DIR}/detail" "${ATFRAMEWORK_ATAPP_INC_DIR}/atframe")
 
-# add tool to binding router rpcs
-generate_for_pb_add_service("hello.RouterService" ${CMAKE_CURRENT_LIST_DIR}
-    TASK_PATH_PREFIX "router"
-    HANDLE_PATH_PREFIX "router"
-    PROJECT_NAMESPACE "hello"
-)
-
 # generated config loader protocol
 add_custom_command(OUTPUT 
     "${PROJECT_SERVER_FRAME_SRC_DIR}/config/excel/pb_header_v3.pb.h"

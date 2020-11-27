@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @brief Created by generate-for-pb.py for hello.RouterService, please don't edit it
  */
 
