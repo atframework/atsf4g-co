@@ -82,7 +82,6 @@ else ()
     )
     list(APPEND PROJECT_3RD_PARTY_LUA_LIB_DEPEND_FLAGS
         "-Wall"
-        "-fmax-errors=5"
         "-Wextra"
         "-Wshadow"
         "-Wsign-compare"
@@ -91,8 +90,7 @@ else ()
         "-Wredundant-decls"
         "-Wdisabled-optimization"
         "-Wdouble-promotion"
-        "-Wlogical-op"
-        "-Wno-aggressive-loop-optimizations"
+        "$<$<COMPILE_LANGUAGE:CXX>:-fmax-errors=5;-Wlogical-op;-Wno-aggressive-loop-optimizations>"
         "$<$<COMPILE_LANGUAGE:C>:${PROJECT_3RD_PARTY_LUA_LIB_DEPEND_FLAGS_FOR_C}>"
     )
     check_cxx_compiler_flag("-fno-stack-protector" PROJECT_3RD_PARTY_LUA_TEST_NO_STACK_PROTECTOR)
