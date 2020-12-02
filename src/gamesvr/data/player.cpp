@@ -10,17 +10,17 @@
 
 #include <logic/action/task_action_player_remote_patch_jobs.h>
 
-#include <data/session.h>
 #include "player.h"
+#include <data/session.h>
 
 
-player::player(fake_constructor & ctor) : base_type(ctor) {
+player::player(fake_constructor &ctor) : base_type(ctor) {
     heartbeat_data_.continue_error_times = 0;
     heartbeat_data_.last_recv_time       = 0;
     heartbeat_data_.sum_error_times      = 0;
 }
 
-player::~player() { }
+player::~player() {}
 
 bool player::can_be_writable() const {
     // this player type can be writable
@@ -91,9 +91,7 @@ void player::on_login() {
     // TODO sync messages
 }
 
-void player::on_logout() {
-    base_type::on_logout();
-}
+void player::on_logout() { base_type::on_logout(); }
 
 void player::on_remove() {
 
@@ -101,6 +99,7 @@ void player::on_remove() {
     base_type::on_remove();
 }
 
+void player::on_update_session(const std::shared_ptr<session> &from, const std::shared_ptr<session> &to) { base_type::on_update_session(from, to); }
 
 void player::init_from_table_data(const hello::table_user &tb_player) {
     base_type::init_from_table_data(tb_player);
@@ -187,7 +186,8 @@ void player::try_patch_remote_command() {
 
         int res = task_manager::me()->start_task(tid, start_data);
         if (res < 0) {
-            WLOGERROR("start task_action_player_remote_patch_jobs for player %s(%u:%llu) failed, res: %d", get_open_id().c_str(), get_zone_id(), get_user_id_llu(), res);
+            WLOGERROR("start task_action_player_remote_patch_jobs for player %s(%u:%llu) failed, res: %d", get_open_id().c_str(), get_zone_id(),
+                      get_user_id_llu(), res);
             remote_command_patch_task_.reset();
             return;
         }

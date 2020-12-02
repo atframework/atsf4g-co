@@ -11,8 +11,8 @@
 #include <rpc/db/player.h>
 
 
-#include <router/router_player_manager.h>
 #include <router/router_manager_set.h>
+#include <router/router_player_manager.h>
 
 #include "player_manager.h"
 #include "session_manager.h"
@@ -22,10 +22,10 @@ bool player_manager::remove(player_manager::player_ptr_t u, bool force_kickoff) 
         return false;
     }
 
-    return remove(u->get_user_id(), u->get_zone_id(), force_kickoff);
+    return remove(u->get_user_id(), u->get_zone_id(), force_kickoff, u.get());
 }
 
-bool player_manager::remove(uint64_t user_id, uint32_t zone_id, bool force_kickoff) {
+bool player_manager::remove(uint64_t user_id, uint32_t zone_id, bool force_kickoff, player_cache *check_user) {
     if (0 == user_id) {
         return false;
     }
@@ -35,6 +35,11 @@ bool player_manager::remove(uint64_t user_id, uint32_t zone_id, bool force_kicko
     router_player_cache::ptr_t cache = router_player_manager::me()->get_cache(key);
     // 先保存用户数据，防止重复保存
     if (!cache) {
+        return true;
+    }
+
+    if (check_user != nullptr && false == cache->is_object_equal(*check_user)) {
+        check_user->set_session(nullptr);
         return true;
     }
 
@@ -50,11 +55,15 @@ bool player_manager::remove(uint64_t user_id, uint32_t zone_id, bool force_kicko
     }
 }
 
-bool player_manager::save(uint64_t user_id, uint32_t zone_id) {
+bool player_manager::save(uint64_t user_id, uint32_t zone_id, const player_cache *check_user) {
     router_player_cache::key_t key(router_player_manager::me()->get_type_id(), zone_id, user_id);
     router_player_cache::ptr_t cache = router_player_manager::me()->get_cache(key);
 
     if (!cache || !cache->is_writable()) {
+        return false;
+    }
+
+    if (check_user != nullptr && false == cache->is_object_equal(*check_user)) {
         return false;
     }
 

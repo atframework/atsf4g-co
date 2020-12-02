@@ -95,6 +95,8 @@ void player_cache::on_logout() {}
 
 void player_cache::on_remove() {}
 
+void player_cache::on_update_session(const std::shared_ptr<session> &from, const std::shared_ptr<session> &to) {}
+
 void player_cache::init_from_table_data(const hello::table_user &tb_player) {
     data_version_ = tb_player.data_version();
 
@@ -147,11 +149,12 @@ void player_cache::set_session(std::shared_ptr<session> session_ptr) {
     }
 
     session_ = session_ptr;
+    on_update_session(old_sess, session_ptr);
 
     // 如果为置空Session，则要加入登出缓存排队列表
     if (!session_ptr) {
         // 移除Session时触发Logout
-        if (old_sess) {
+        if (old_sess && is_writable()) {
             on_logout();
         }
     }

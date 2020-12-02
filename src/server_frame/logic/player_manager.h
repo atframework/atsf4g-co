@@ -32,14 +32,13 @@ public:
      * @param zone_id zone_id
      * @param force_kickoff 强制移除，不进入离线缓存
      */
-    bool remove(uint64_t user_id, uint32_t zone_id, bool force_kickoff = false);
-
+    bool remove(uint64_t user_id, uint32_t zone_id, bool force_kickoff = false, player_cache *check_user = nullptr);
 
     /**
      * @brief 保存用户数据
      * @param user_id user_id
      */
-    bool save(uint64_t user_id, uint32_t zone_id);
+    bool save(uint64_t user_id, uint32_t zone_id, const player_cache *check_user = nullptr);
 
     /**
      * @brief 添加到计划保存队列

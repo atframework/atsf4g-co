@@ -50,7 +50,7 @@ private:
     };
 
 public:
-    typedef player_cache base_type;
+    typedef player_cache            base_type;
     typedef std::shared_ptr<player> ptr_t;
     friend class task_action_player_remote_patch_jobs;
 
@@ -67,9 +67,7 @@ public:
     };
 
 public:
-    ptr_t shared_from_this() {
-        return std::static_pointer_cast<player>(base_type::shared_from_this());
-    }
+    ptr_t shared_from_this() { return std::static_pointer_cast<player>(base_type::shared_from_this()); }
 
 public:
     player(fake_constructor &);
@@ -101,6 +99,9 @@ public:
 
     // 移除事件
     virtual void on_remove() UTIL_CONFIG_OVERRIDE;
+
+    // 更新session事件
+    virtual void on_update_session(const std::shared_ptr<session> &from, const std::shared_ptr<session> &to) UTIL_CONFIG_OVERRIDE;
 
     // 从table数据初始化
     virtual void init_from_table_data(const hello::table_user &stTableplayer_cache) UTIL_CONFIG_OVERRIDE;
@@ -211,7 +212,7 @@ public:
 
 private:
     player::ptr_t owner_;
-    value_type          msg_;
+    value_type    msg_;
 };
 
 #endif

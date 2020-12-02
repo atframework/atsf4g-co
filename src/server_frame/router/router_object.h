@@ -17,12 +17,12 @@
 template <typename TObj, typename TChild>
 class router_object : public router_object_base {
 public:
-    typedef router_object_base::key_t key_t;
-    typedef router_object_base::flag_t flag_t;
-    typedef TObj value_type;
-    typedef TChild self_type;
-    typedef std::shared_ptr<value_type> object_ptr_t;
-    typedef std::shared_ptr<self_type> ptr_t;
+    typedef router_object_base::key_t               key_t;
+    typedef router_object_base::flag_t              flag_t;
+    typedef TObj                                    value_type;
+    typedef TChild                                  self_type;
+    typedef std::shared_ptr<value_type>             object_ptr_t;
+    typedef std::shared_ptr<self_type>              ptr_t;
     typedef typename router_object_base::flag_guard flag_guard;
 
 public:
@@ -31,6 +31,7 @@ public:
     router_object(const object_ptr_t &data, key_t &&k) : router_object_base(k), obj_(data) { assert(obj_); }
 
     inline bool is_object_equal(const object_ptr_t &checked) const { return checked == obj_; }
+    inline bool is_object_equal(const value_type &checked) const { return &checked == obj_.get(); }
 
     const object_ptr_t &get_object() {
         refresh_visit_time();

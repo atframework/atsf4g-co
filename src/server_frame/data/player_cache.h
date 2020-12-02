@@ -107,6 +107,9 @@ public:
     // 移除事件
     virtual void on_remove();
 
+    // 更新session事件
+    virtual void on_update_session(const std::shared_ptr<session> &from, const std::shared_ptr<session> &to);
+
     // 从table数据初始化
     virtual void init_from_table_data(const hello::table_user &stTableplayer_cache);
 
