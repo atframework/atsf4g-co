@@ -39,10 +39,10 @@ bool session::key_t::operator>(const key_t &r) const {
 
 bool session::key_t::operator>=(const key_t &r) const { return (*this) > r || (*this) == r; }
 
-session::flag_guard_t::flag_guard_t(): flag_(flag_t::EN_SESSION_FLAG_NONE), owner_(NULL) {}
+session::flag_guard_t::flag_guard_t() : flag_(flag_t::EN_SESSION_FLAG_NONE), owner_(NULL) {}
 session::flag_guard_t::~flag_guard_t() { reset(); }
 
-void session::flag_guard_t::setup(session& owner, flag_t::type f) {
+void session::flag_guard_t::setup(session &owner, flag_t::type f) {
     if (flag_t::EN_SESSION_FLAG_NONE == f) {
         return;
     }
@@ -59,7 +59,7 @@ void session::flag_guard_t::setup(session& owner, flag_t::type f) {
 
     reset();
     owner_ = &owner;
-    flag_ = f;
+    flag_  = f;
     owner_->set_flag(flag_, true);
 }
 
@@ -69,7 +69,7 @@ void session::flag_guard_t::reset() {
     }
 
     owner_ = NULL;
-    flag_ = flag_t::EN_SESSION_FLAG_NONE;
+    flag_  = flag_t::EN_SESSION_FLAG_NONE;
 }
 
 session::session() : flags_(0), login_task_id_(0) {
@@ -77,9 +77,7 @@ session::session() : flags_(0), login_task_id_(0) {
     id_.session_id = 0;
 }
 
-session::~session() {
-    WLOGDEBUG("session src_pd=0x%llx, idx=0x%llx destroyed", static_cast<unsigned long long>(id_.bus_id), static_cast<unsigned long long>(id_.session_id));
-}
+session::~session() { FWLOGDEBUG("session src_pd={:#x}, idx={} destroyed", id_.bus_id, id_.session_id); }
 
 void session::set_player(std::shared_ptr<player_cache> u) { player_ = u; }
 
@@ -87,7 +85,7 @@ std::shared_ptr<player_cache> session::get_player() const { return player_.lock(
 
 int32_t session::send_msg_to_client(hello::CSMsg &msg) {
     if (0 == msg.head().session_sequence()) {
-        std::shared_ptr<player_cache> user = get_player() ;
+        std::shared_ptr<player_cache> user = get_player();
         if (user) {
             return send_msg_to_client(msg, user->alloc_session_sequence());
         }
@@ -104,16 +102,14 @@ int32_t session::send_msg_to_client(hello::CSMsg &msg, uint64_t session_sequence
     size_t msg_buf_len = msg.ByteSizeLong();
     size_t tls_buf_len = atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);
     if (msg_buf_len > tls_buf_len) {
-        WLOGERROR("send to gateway [0x%llx, 0x%llx] failed: require %llu, only have %llu", static_cast<unsigned long long>(id_.bus_id),
-                  static_cast<unsigned long long>(id_.session_id), static_cast<unsigned long long>(msg_buf_len), static_cast<unsigned long long>(tls_buf_len));
+        FWLOGERROR("send to gateway [{:#x}, {}] failed: require {}, only have {}", id_.bus_id, id_.session_id, msg_buf_len, tls_buf_len);
         return hello::err::EN_SYS_BUFF_EXTEND;
     }
 
     ::google::protobuf::uint8 *buf_start =
         reinterpret_cast< ::google::protobuf::uint8 *>(atframe::gateway::proto_base::get_tls_buffer(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM));
     msg.SerializeWithCachedSizesToArray(buf_start);
-    WLOGDEBUG("send msg to client:[0x%llx, 0x%llx] %llu bytes\n%s", static_cast<unsigned long long>(id_.bus_id),
-              static_cast<unsigned long long>(id_.session_id), static_cast<unsigned long long>(msg_buf_len), protobuf_mini_dumper_get_readable(msg));
+    FWLOGDEBUG("send msg to client:[{:#x}, {}] {} bytes\n{}", id_.bus_id, id_.session_id, msg_buf_len, protobuf_mini_dumper_get_readable(msg));
 
     return send_msg_to_client(buf_start, msg_buf_len);
 }
@@ -127,16 +123,14 @@ int32_t session::broadcast_msg_to_client(uint64_t bus_id, const hello::CSMsg &ms
     size_t msg_buf_len = msg.ByteSizeLong();
     size_t tls_buf_len = atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);
     if (msg_buf_len > tls_buf_len) {
-        WLOGERROR("broadcast to gateway [0x%llx] failed: require %llu, only have %llu", static_cast<unsigned long long>(bus_id),
-                  static_cast<unsigned long long>(msg_buf_len), static_cast<unsigned long long>(tls_buf_len));
+        FWLOGERROR("broadcast to gateway [{:#x}] failed: require {}, only have {}", bus_id, msg_buf_len, tls_buf_len);
         return hello::err::EN_SYS_BUFF_EXTEND;
     }
 
     ::google::protobuf::uint8 *buf_start =
         reinterpret_cast< ::google::protobuf::uint8 *>(atframe::gateway::proto_base::get_tls_buffer(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM));
     msg.SerializeWithCachedSizesToArray(buf_start);
-    WLOGDEBUG("broadcast msg to gateway [0x%llx] %llu bytes\n%s", static_cast<unsigned long long>(bus_id), static_cast<unsigned long long>(msg_buf_len),
-              protobuf_mini_dumper_get_readable(msg));
+    FWLOGDEBUG("broadcast msg to gateway [{:#x}] {} bytes\n{}", bus_id, msg_buf_len, protobuf_mini_dumper_get_readable(msg));
 
     return broadcast_msg_to_client(bus_id, buf_start, msg_buf_len);
 }

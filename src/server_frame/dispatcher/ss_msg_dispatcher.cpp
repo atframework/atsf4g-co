@@ -99,16 +99,14 @@ int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, hello::SSMsg &ss_msg) {
     size_t msg_buf_len = ss_msg.ByteSizeLong();
     size_t tls_buf_len = atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);
     if (msg_buf_len > tls_buf_len) {
-        WLOGERROR("send to proc [0x%llx] failed: require %llu, only have %llu", static_cast<unsigned long long>(bus_id),
-                  static_cast<unsigned long long>(msg_buf_len), static_cast<unsigned long long>(tls_buf_len));
+        FWLOGERROR("send to proc [{:#x}] failed: require {}, only have {}", bus_id, msg_buf_len, tls_buf_len);
         return hello::err::EN_SYS_BUFF_EXTEND;
     }
 
     ::google::protobuf::uint8 *buf_start =
         reinterpret_cast< ::google::protobuf::uint8 *>(atframe::gateway::proto_base::get_tls_buffer(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM));
     ss_msg.SerializeWithCachedSizesToArray(buf_start);
-    WLOGDEBUG("send msg to proc [0x%llx] %llu bytes\n%s", static_cast<unsigned long long>(bus_id), static_cast<unsigned long long>(msg_buf_len),
-              protobuf_mini_dumper_get_readable(ss_msg));
+    FWLOGDEBUG("send msg to proc [{:#x}] {} bytes\n{}", bus_id, msg_buf_len, protobuf_mini_dumper_get_readable(ss_msg));
 
     return send_to_proc(bus_id, buf_start, msg_buf_len);
 }
@@ -116,22 +114,21 @@ int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, hello::SSMsg &ss_msg) {
 int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, const void *msg_buf, size_t msg_len) {
     atapp::app *owner = get_app();
     if (NULL == owner) {
-        WLOGERROR("module not attached to a atapp");
+        FWLOGERROR("module not attached to a atapp");
         return hello::err::EN_SYS_INIT;
     }
 
     if (!owner->get_bus_node()) {
-        WLOGERROR("owner app has no valid bus node");
+        FWLOGERROR("owner app has no valid bus node");
         return hello::err::EN_SYS_INIT;
     }
 
     int res = owner->get_bus_node()->send_data(bus_id, atframe::component::message_type::EN_ATST_SS_MSG, msg_buf, msg_len, false);
 
     if (res < 0) {
-        WLOGERROR("send msg to proc [0x%llx] %llu bytes failed, res: %d", static_cast<unsigned long long>(bus_id), static_cast<unsigned long long>(msg_len),
-                  res);
+        FWLOGERROR("send msg to proc [{:#x}] {} bytes failed, res: {}", bus_id, msg_len, res);
     } else {
-        WLOGDEBUG("send msg to proc [0x%llx] %llu bytes success", static_cast<unsigned long long>(bus_id), static_cast<unsigned long long>(msg_len));
+        FWLOGDEBUG("send msg to proc [{:#x}] {} bytes success", bus_id, msg_len);
     }
 
     return res;

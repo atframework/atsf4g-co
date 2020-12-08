@@ -20,11 +20,7 @@ const char *router_player_manager::name() const {
 }
 
 bool router_player_manager::remove_player_object(uint64_t user_id, uint32_t zone_id, priv_data_t priv_data) {
-#if defined(UTIL_CONFIG_COMPILER_CXX_NULLPTR) && UTIL_CONFIG_COMPILER_CXX_NULLPTR
     return remove_player_object(user_id, zone_id, nullptr, priv_data);
-#else
-    return remove_player_object(user_id, zone_id, NULL, priv_data);
-#endif
 }
 
 bool router_player_manager::remove_player_object(uint64_t user_id, uint32_t zone_id, std::shared_ptr<router_object_base> cache, priv_data_t priv_data) {
@@ -33,11 +29,7 @@ bool router_player_manager::remove_player_object(uint64_t user_id, uint32_t zone
 }
 
 bool router_player_manager::remove_player_cache(uint64_t user_id, uint32_t zone_id, priv_data_t priv_data) {
-#if defined(UTIL_CONFIG_COMPILER_CXX_NULLPTR) && UTIL_CONFIG_COMPILER_CXX_NULLPTR
     return remove_player_cache(user_id, zone_id, nullptr, priv_data);
-#else
-    return remove_player_cache(user_id, zone_id, NULL, priv_data);
-#endif
 }
 
 bool router_player_manager::remove_player_cache(uint64_t user_id, uint32_t zone_id, std::shared_ptr<router_object_base> cache, priv_data_t priv_data) {
@@ -65,9 +57,12 @@ void router_player_manager::on_evt_remove_object(const key_t &key, const ptr_t &
     // 释放本地数据, 下线相关Session
     session::ptr_t s = obj->get_session();
     if (s) {
-        obj->set_session(NULL);
-        s->set_player(NULL);
-        session_manager::me()->remove(s, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
+        obj->set_session(nullptr);
+        std::shared_ptr<player_cache> check_binded_user = s->get_player();
+        if (!check_binded_user || check_binded_user == obj) {
+            s->set_player(nullptr);
+            session_manager::me()->remove(s, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
+        }
     }
 
     base_type::on_evt_remove_object(key, cache, priv_data);

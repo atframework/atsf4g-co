@@ -131,15 +131,15 @@ void session_manager::remove(sess_ptr_t sess, int reason) {
 
     // 移除绑定的player
     player_cache::ptr_t u = sess->get_player();
-    if (u && u->get_session() == sess) {
-        sess->set_player(NULL);
-        u->set_session(NULL);
-
-        // TODO 统计日志
-        // u->GetLogMgr().WLOGLogout();
-
-        // 如果是踢下线，则需要强制保存并移除GameUser对象
-        player_manager::me()->remove(u, 0 != reason);
+    if (u) {
+        sess->set_player(nullptr);
+        sess_ptr_t check_session = u->get_session();
+        if (!check_session || check_session == sess) {
+            u->set_session(nullptr);
+            // TODO 统计日志
+            // 如果是踢下线，则需要强制保存并移除GameUser对象
+            player_manager::me()->remove(u, 0 != reason);
+        }
     }
 }
 

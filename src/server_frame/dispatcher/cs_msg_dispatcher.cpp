@@ -25,10 +25,23 @@
 #include "task_manager.h"
 
 
-cs_msg_dispatcher::cs_msg_dispatcher() {}
+cs_msg_dispatcher::cs_msg_dispatcher() : is_closing_(false) {}
 cs_msg_dispatcher::~cs_msg_dispatcher() {}
 
-int32_t cs_msg_dispatcher::init() { return 0; }
+int32_t cs_msg_dispatcher::init() {
+    is_closing_ = false;
+    return 0;
+}
+
+int cs_msg_dispatcher::stop() {
+    if (is_closing_) {
+        return dispatcher_implement::stop();
+    }
+
+    session_manager::me()->remove_all();
+    is_closing_ = true;
+    return dispatcher_implement::stop();
+}
 
 uint64_t cs_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
     // cs msg not allow resume task
@@ -120,8 +133,7 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
 
         std::shared_ptr<session> sess = session_manager::me()->find(session_key);
         if (!sess) {
-            WLOGERROR("session [0x%llx, 0x%llx] not found, try to kickoff", static_cast<unsigned long long>(session_key.bus_id),
-                      static_cast<unsigned long long>(session_key.session_id));
+            FWLOGERROR("session [{:#x}, {}] not found, try to kickoff", session_key.bus_id, session_key.session_id);
             ret = hello::err::EN_SYS_NOTFOUND;
 
             send_kickoff(session_key.bus_id, session_key.session_id, hello::EN_CRT_SESSION_NOT_FOUND);
@@ -131,8 +143,7 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
         dispatcher_msg_raw_t callback_msg = dispatcher_make_default<dispatcher_msg_raw_t>();
         ret = unpack_protobuf_msg(*cs_msg, callback_msg, reinterpret_cast<const void *>(post.content().data()), post.content().size());
         if (ret != 0) {
-            WLOGERROR("%s unpack received message from 0x%llx, session id:0x%llx failed, res: %d", name(), static_cast<unsigned long long>(session_key.bus_id),
-                      static_cast<unsigned long long>(session_key.session_id), ret);
+            FWLOGERROR("{} unpack received message from {:#x}, session id: {} failed, res: %d", name(), session_key.bus_id, session_key.session_id, ret);
             return ret;
         }
 
@@ -142,15 +153,13 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
         if (task_manager::me()->is_busy()) {
             cs_msg->mutable_head()->set_error_code(hello::EN_ERR_SYSTEM_BUSY);
             sess->send_msg_to_client(*cs_msg);
-            WLOGINFO("server busy and send msg back to session [0x%llx, 0x%llx]", static_cast<unsigned long long>(session_key.bus_id),
-                     static_cast<unsigned long long>(session_key.session_id));
+            FWLOGINFO("server busy and send msg back to session [{:#x}, {}]", session_key.bus_id, session_key.session_id);
             break;
         }
 
         ret = on_receive_message(ctx, callback_msg, nullptr, cs_msg->head().sequence());
         if (ret < 0) {
-            WLOGERROR("%s on receive message callback from to 0x%llx, session id:0x%llx failed, res: %d", name(),
-                      static_cast<unsigned long long>(session_key.bus_id), static_cast<unsigned long long>(session_key.session_id), ret);
+            FWLOGERROR("{} on receive message callback from {:#x}, session id: {} failed, res: {}", name(), session_key.bus_id, session_key.session_id, ret);
         }
         break;
     }
@@ -161,12 +170,19 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
         session_key.bus_id     = from_server_id;
         session_key.session_id = req_msg.head().session_id();
 
-        WLOGINFO("create new session [0x%llx, 0x%llx], address: %s:%d", static_cast<unsigned long long>(session_key.bus_id),
-                 static_cast<unsigned long long>(session_key.session_id), sess_data.client_ip().c_str(), sess_data.client_port());
+        // check closing ...
+        if (is_closing_) {
+            FWLOGWARNING("destroy session [{:#x}, {}] because app is closing", session_key.bus_id, session_key.session_id);
+            ret = hello::err::EN_SYS_SERVER_SHUTDOWN;
+            send_kickoff(session_key.bus_id, session_key.session_id, ::atframe::gateway::close_reason_t::EN_CRT_SERVER_CLOSED);
+            break;
+        }
+
+        FWLOGINFO("create new session [{:#x}, {}], address: {}:{}", session_key.bus_id, session_key.session_id, sess_data.client_ip(), sess_data.client_port());
 
         session_manager::sess_ptr_t sess = session_manager::me()->create(session_key);
         if (!sess) {
-            WLOGERROR("malloc failed");
+            FWLOGERROR("malloc failed");
             ret = hello::err::EN_SYS_MALLOC;
             send_kickoff(session_key.bus_id, session_key.session_id, ::atframe::gateway::close_reason_t::EN_CRT_SERVER_BUSY);
             break;
@@ -182,8 +198,7 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
         // session 移除前强制update一次，用以处理debug调试断点导致task_action_player_logout被立刻认为超时
         util::time::time_utility::update();
 
-        WLOGINFO("remove session [0x%llx, 0x%llx]", static_cast<unsigned long long>(session_key.bus_id),
-                 static_cast<unsigned long long>(session_key.session_id));
+        FWLOGINFO("remove session [{:#x}, {}]", session_key.bus_id, session_key.session_id);
 
         // logout task
         task_manager::id_t                      logout_task_id = 0;
@@ -197,17 +212,17 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
 
             ret = task_manager::me()->start_task(logout_task_id, start_data);
             if (0 != ret) {
-                WLOGERROR("run logout task failed, res: %d", ret);
+                FWLOGERROR("run logout task failed, res: {}", ret);
                 session_manager::me()->remove(session_key);
             }
         } else {
-            WLOGERROR("create logout task failed, res: %d", ret);
+            FWLOGERROR("create logout task failed, res: {}", ret);
             session_manager::me()->remove(session_key);
         }
         break;
     }
     default:
-        WLOGERROR("receive a unsupport atgateway message of invalid cmd:%d", static_cast<int>(req_msg.body().cmd_case()));
+        FWLOGERROR("receive a unsupport atgateway message of invalid cmd:{}", req_msg.body().cmd_case());
         break;
     }
 
@@ -217,7 +232,7 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
 int32_t cs_msg_dispatcher::send_kickoff(uint64_t bus_id, uint64_t session_id, int32_t reason) {
     atapp::app *owner = get_app();
     if (NULL == owner) {
-        WLOGERROR("not in a atapp");
+        FWLOGERROR("not in a atapp");
         return hello::err::EN_SYS_INIT;
     }
 
@@ -230,7 +245,7 @@ int32_t cs_msg_dispatcher::send_kickoff(uint64_t bus_id, uint64_t session_id, in
 
     std::string packed_buffer;
     if (false == msg.SerializeToString(&packed_buffer)) {
-        WLOGERROR("try to kickoff %llx with serialize failed: %s", static_cast<unsigned long long>(session_id), msg.InitializationErrorString().c_str());
+        FWLOGERROR("try to kickoff {} with serialize failed: {}", session_id, msg.InitializationErrorString());
         return 0;
     }
 
@@ -240,7 +255,7 @@ int32_t cs_msg_dispatcher::send_kickoff(uint64_t bus_id, uint64_t session_id, in
 int32_t cs_msg_dispatcher::send_data(uint64_t bus_id, uint64_t session_id, const void *buffer, size_t len) {
     atapp::app *owner = get_app();
     if (NULL == owner) {
-        WLOGERROR("not in a atapp");
+        FWLOGERROR("not in a atapp");
         return hello::err::EN_SYS_INIT;
     }
 
@@ -255,11 +270,9 @@ int32_t cs_msg_dispatcher::send_data(uint64_t bus_id, uint64_t session_id, const
 
     if (NULL == post) {
         if (0 == session_id) {
-            WLOGERROR("broadcast %llu bytes data to atgateway 0x%llx failed when malloc post", static_cast<unsigned long long>(len),
-                      static_cast<unsigned long long>(bus_id));
+            FWLOGERROR("broadcast {} bytes data to atgateway {:#x} failed when malloc post", len, bus_id);
         } else {
-            WLOGERROR("send %llu bytes data to session [0x%llx, 0x%llx] failed when malloc post", static_cast<unsigned long long>(len),
-                      static_cast<unsigned long long>(bus_id), static_cast<unsigned long long>(session_id));
+            FWLOGERROR("send {} bytes data to session [{:#x}, {}] failed when malloc post", len, bus_id, session_id);
         }
         return hello::err::EN_SYS_MALLOC;
     }
@@ -268,18 +281,16 @@ int32_t cs_msg_dispatcher::send_data(uint64_t bus_id, uint64_t session_id, const
 
     std::string packed_buffer;
     if (false == msg.SerializeToString(&packed_buffer)) {
-        WLOGERROR("try to send %llu bytes data to 0x%llx with serialize failed: %s", static_cast<unsigned long long>(len),
-                  static_cast<unsigned long long>(session_id), msg.InitializationErrorString().c_str());
+        FWLOGERROR("try to send {} bytes data to {:#x} with serialize failed: {}", len, session_id, msg.InitializationErrorString());
         return 0;
     }
 
     int ret = owner->get_bus_node()->send_data(bus_id, ::atframe::component::service_type::EN_ATST_GATEWAY, packed_buffer.data(), packed_buffer.size());
     if (ret < 0) {
         if (0 == session_id) {
-            WLOGERROR("broadcast data to atgateway 0x%llx failed, res: %d", static_cast<unsigned long long>(bus_id), ret);
+            FWLOGERROR("broadcast data to atgateway {:#x} failed, res: {}", bus_id, ret);
         } else {
-            WLOGERROR("send data to session [0x%llx, 0x%llx] failed, res: %d", static_cast<unsigned long long>(bus_id),
-                      static_cast<unsigned long long>(session_id), ret);
+            FWLOGERROR("send data to session [{:#x}, {}] failed, res: {}", bus_id, session_id, ret);
         }
     }
 
@@ -291,7 +302,7 @@ int32_t cs_msg_dispatcher::broadcast_data(uint64_t bus_id, const void *buffer, s
 int32_t cs_msg_dispatcher::broadcast_data(uint64_t bus_id, const std::vector<uint64_t> &session_ids, const void *buffer, size_t len) {
     atapp::app *owner = get_app();
     if (NULL == owner) {
-        WLOGERROR("not in a atapp");
+        FWLOGERROR("not in a atapp");
         return hello::err::EN_SYS_INIT;
     }
 
@@ -305,8 +316,7 @@ int32_t cs_msg_dispatcher::broadcast_data(uint64_t bus_id, const std::vector<uin
     ::atframe::gw::ss_body_post *post = msg.mutable_body()->mutable_post();
 
     if (NULL == post) {
-        WLOGERROR("broadcast %llu bytes data to atgateway 0x%llx failed when malloc post", static_cast<unsigned long long>(len),
-                  static_cast<unsigned long long>(bus_id));
+        FWLOGERROR("broadcast {} bytes data to atgateway {:#x} failed when malloc post", len, bus_id);
         return hello::err::EN_SYS_MALLOC;
     }
 
@@ -314,13 +324,13 @@ int32_t cs_msg_dispatcher::broadcast_data(uint64_t bus_id, const std::vector<uin
 
     std::string packed_buffer;
     if (false == msg.SerializeToString(&packed_buffer)) {
-        WLOGERROR("try to broadcast %llu bytes data with serialize failed: %s", static_cast<unsigned long long>(len), msg.InitializationErrorString().c_str());
+        FWLOGERROR("try to broadcast {} bytes data with serialize failed: {}", len, msg.InitializationErrorString());
         return 0;
     }
 
     int ret = owner->get_bus_node()->send_data(bus_id, ::atframe::component::service_type::EN_ATST_GATEWAY, packed_buffer.data(), packed_buffer.size());
     if (ret < 0) {
-        WLOGERROR("broadcast data to atgateway 0x%llx failed, res: %d", static_cast<unsigned long long>(bus_id), ret);
+        FWLOGERROR("broadcast data to atgateway {:#x} failed, res: {}", bus_id, ret);
     }
 
     return ret;

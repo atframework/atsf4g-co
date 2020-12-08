@@ -34,6 +34,13 @@ public:
     virtual int32_t init() UTIL_CONFIG_OVERRIDE;
 
     /**
+     * @brief 启动关闭命令
+     * @note 如果有延时关闭，在本模块关闭返回0前会定期反复调用，直到某次返回值<=0为止
+     * @return 0正常关闭，>0需要延时关闭，<0错误码
+     */
+    virtual int stop() UTIL_CONFIG_OVERRIDE;
+
+    /**
      * @brief 获取任务信息
      * @param raw_msg 消息抽象结构
      * @return 相关的任务id
@@ -117,6 +124,7 @@ public:
     int32_t broadcast_data(uint64_t bus_id, const std::vector<uint64_t> &session_ids, const void *buffer, size_t len);
 
 private:
+    bool                                                                   is_closing_;
     std::unordered_map<msg_type_t, const atframework::DispatcherOptions *> dispatcher_options_map_;
 };
 
