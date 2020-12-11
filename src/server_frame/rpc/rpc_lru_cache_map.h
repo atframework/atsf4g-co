@@ -117,12 +117,12 @@ namespace rpc {
          */
         int await_fetch(key_type key, cache_ptr_t &out, int (*fn)(key_type key, value_type &val_out, int32_t *out_version)) {
             if (NULL == fn) {
-                WLOGERROR("%s must be called with rpc function", __FUNCTION__);
+                FWLOGERROR("{} must be called with rpc function", __FUNCTION__);
                 return hello::err::EN_SYS_PARAM;
             }
 
             if (NULL == cotask::this_task::get_task()) {
-                WLOGERROR("%s must be called in a cotask", __FUNCTION__);
+                FWLOGERROR("{} must be called in a cotask", __FUNCTION__);
                 return hello::err::EN_SYS_RPC_NO_TASK;
             }
 
@@ -197,7 +197,7 @@ namespace rpc {
                     set_cache(out);
                 }
             } else {
-                WLOGERROR("%s try to rpc fetch data failed and will remove lru cache, res: %d", __FUNCTION__, ret);
+                FWLOGERROR("{} try to rpc fetch data failed and will remove lru cache, res: {}", __FUNCTION__, ret);
                 remove_cache(key);
             }
 
@@ -217,7 +217,7 @@ namespace rpc {
             }
 
             if (NULL == fn) {
-                WLOGERROR("%s must be called with rpc function", __FUNCTION__);
+                FWLOGERROR("{} must be called with rpc function", __FUNCTION__);
                 return hello::err::EN_SYS_PARAM;
             }
 
