@@ -68,9 +68,7 @@ if (MSVC)
         list(APPEND PROJECT_3RD_PARTY_LUA_LIB_DEPEND_FLAGS "/Zc:__cplusplus")
     endif()
 
-    if(NOT CMAKE_MSVC_RUNTIME_LIBRARY)
-        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-    endif()
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>$<$<NOT:$<STREQUAL:${VCPKG_CRT_LINKAGE},static>>:DLL>" CACHE STRING "")
 else ()
     list(APPEND PROJECT_3RD_PARTY_LUA_LIB_DEPEND_FLAGS_FOR_C
         "-Wdeclaration-after-statement"
