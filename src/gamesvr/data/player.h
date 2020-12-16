@@ -63,6 +63,9 @@ public:
 
 
     struct cache_t {
+        time_t refresh_feature_limit_second;
+        time_t refresh_feature_limit_minute;
+        time_t refresh_feature_limit_hour;
         // hello::SCPlayerLevelupSyn player_level_up_syn;
     };
 

@@ -18,6 +18,10 @@ player::player(fake_constructor &ctor) : base_type(ctor) {
     heartbeat_data_.continue_error_times = 0;
     heartbeat_data_.last_recv_time       = 0;
     heartbeat_data_.sum_error_times      = 0;
+
+    cache_data_.refresh_feature_limit_second = 0;
+    cache_data_.refresh_feature_limit_minute = 0;
+    cache_data_.refresh_feature_limit_hour   = 0;
 }
 
 player::~player() {}
@@ -83,6 +87,22 @@ void player::login_init() {
 void player::refresh_feature_limit() {
     base_type::refresh_feature_limit();
     // refresh daily limit
+
+    time_t now = util::time::time_utility::get_now();
+    if (now != cache_data_.refresh_feature_limit_second) {
+        cache_data_.refresh_feature_limit_second = now;
+        // 每秒仅需要执行一次的refresh_feature_limit
+    }
+    if (now >= cache_data_.refresh_feature_limit_minute + util::time::time_utility::MINITE_SECONDS || now < cache_data_.refresh_feature_limit_minute) {
+        cache_data_.refresh_feature_limit_minute = now - now % util::time::time_utility::MINITE_SECONDS;
+
+        // 每分钟仅需要执行一次的refresh_feature_limit
+    }
+    if (now >= cache_data_.refresh_feature_limit_hour + util::time::time_utility::HOUR_SECONDS || now < cache_data_.refresh_feature_limit_hour) {
+        cache_data_.refresh_feature_limit_hour = now - now % util::time::time_utility::HOUR_SECONDS;
+
+        // 每小时仅需要执行一次的refresh_feature_limit
+    }
 }
 
 void player::on_login() {
