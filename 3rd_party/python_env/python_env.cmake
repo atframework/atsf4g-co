@@ -30,6 +30,6 @@ message(STATUS "Install dependency python(${Python3_EXECUTABLE}) modules into ${
 # )
 
 execute_process(
-    COMMAND ${Python3_EXECUTABLE} "-m" "pip" "install" ${PROJECT_3RD_PARTY_PYTHON_PIP_SOURCE} "--prefix" ${PROJECT_3RD_PARTY_PYTHON_MODULE_DIR} "-r" "${CMAKE_CURRENT_LIST_DIR}/requirements.txt"
+    COMMAND ${Python3_EXECUTABLE} "-m" "pip" "install" ${PROJECT_3RD_PARTY_PYTHON_PIP_SOURCE} "--prefix" ${PROJECT_3RD_PARTY_PYTHON_MODULE_DIR} "--ignore-installed" "-r" "${CMAKE_CURRENT_LIST_DIR}/requirements.txt"
     WORKING_DIRECTORY ${PROJECT_3RD_PARTY_PYTHON_MODULE_DIR}
 )
