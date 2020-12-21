@@ -101,9 +101,9 @@ inline void protobuf_move_message(::google::protobuf::RepeatedPtrField<TField> &
 }
 
 template <typename TEle>
-void protobuf_remove_repeated_at(::google::protobuf::RepeatedPtrField<TEle> &arr, int index) {
+int protobuf_remove_repeated_at(::google::protobuf::RepeatedPtrField<TEle> &arr, int index) {
     if (index < 0 || index >= arr.size()) {
-        return;
+        return 0;
     }
 
     if (index != arr.size() - 1) {
@@ -111,12 +111,14 @@ void protobuf_remove_repeated_at(::google::protobuf::RepeatedPtrField<TEle> &arr
     }
 
     arr.RemoveLast();
+    return 1;
 }
 
 template <typename TEle, typename TCheckFn>
-void protobuf_remove_repeated_if(::google::protobuf::RepeatedPtrField<TEle> &arr, const TCheckFn &fn) {
+int protobuf_remove_repeated_if(::google::protobuf::RepeatedPtrField<TEle> &arr, const TCheckFn &fn) {
     int new_index = 0;
     int old_index = 0;
+    int ret       = 0;
     for (; old_index < arr.size(); ++old_index, ++new_index) {
         if (new_index != old_index) {
             arr.SwapElements(new_index, old_index);
@@ -129,7 +131,10 @@ void protobuf_remove_repeated_if(::google::protobuf::RepeatedPtrField<TEle> &arr
 
     while (arr.size() > new_index) {
         arr.RemoveLast();
+        ++ret;
     }
+
+    return ret;
 }
 
 

@@ -4,6 +4,8 @@
 
 #include <log/log_wrapper.h>
 
+#include <std/smart_ptr.h>
+
 #include <dispatcher/db_msg_dispatcher.h>
 #include <dispatcher/ss_msg_dispatcher.h>
 
@@ -190,6 +192,100 @@ namespace rpc {
 
             return hello::err::EN_SUCCESS;
         }
+
+        template <typename TMSG>
+        static inline void wait_swap_message(std::shared_ptr<TMSG> &output, void *input) {
+            if (output && input) {
+                output->Swap(reinterpret_cast<TMSG *>(input));
+            }
+        }
+        template <typename TMSG>
+        static inline void wait_swap_message(std::unique_ptr<TMSG> &output, void *input) {
+            if (output && input) {
+                output->Swap(reinterpret_cast<TMSG *>(input));
+            }
+        }
+        template <typename TMSG>
+        static inline void wait_swap_message(TMSG *output, void *input) {
+            if (output && input) {
+                output->Swap(reinterpret_cast<TMSG *>(input));
+            }
+        }
+        template <typename TMSG>
+        static inline void wait_swap_message(TMSG &output, void *input) {
+            if (input) {
+                output.Swap(reinterpret_cast<TMSG *>(input));
+            }
+        }
+
+        template <typename TMSG>
+        static int wait(uintptr_t check_type, std::unordered_map<uint64_t, TMSG> &msg_waiters) {
+            task_manager::task_t *task = task_manager::task_t::this_task();
+            if (!task) {
+                WLOGERROR("current not in a task");
+                return hello::err::EN_SYS_RPC_NO_TASK;
+            }
+
+            if (task->is_timeout()) {
+                return hello::err::EN_SYS_TIMEOUT;
+            }
+
+            if (task->is_faulted()) {
+                return hello::err::EN_SYS_RPC_TASK_KILLED;
+            }
+
+            if (task->is_canceled()) {
+                return hello::err::EN_SYS_RPC_TASK_CANCELLED;
+            }
+
+            std::unordered_set<uint64_t> received;
+            received.reserve(msg_waiters.size());
+            for (size_t retry_times = 0; received.size() < msg_waiters.size() && retry_times < msg_waiters.size() * 3; ++retry_times) {
+                // 协程 swap out
+                void *result = NULL;
+                task->yield(&result);
+
+                dispatcher_resume_data_t *resume_data = reinterpret_cast<dispatcher_resume_data_t *>(result);
+
+                // 协程 swap in
+
+                if (task->is_timeout()) {
+                    return hello::err::EN_SYS_TIMEOUT;
+                }
+
+                if (task->is_faulted()) {
+                    return hello::err::EN_SYS_RPC_TASK_KILLED;
+                }
+
+                if (task->is_canceled()) {
+                    return hello::err::EN_SYS_RPC_TASK_CANCELLED;
+                }
+
+                if (NULL == resume_data) {
+                    WLOGERROR("task %llu resume data con not be empty", static_cast<unsigned long long>(task->get_id()));
+                    return hello::err::EN_SYS_PARAM;
+                }
+
+                if (resume_data->message.msg_type != check_type) {
+                    WLOGERROR("task %llu resume and expect message type 0x%llx but real is 0x%llx", static_cast<unsigned long long>(task->get_id()),
+                              static_cast<unsigned long long>(check_type), static_cast<unsigned long long>(resume_data->message.msg_type));
+
+                    continue;
+                }
+
+                auto rsp_iter = msg_waiters.find(resume_data->sequence);
+                if (rsp_iter == msg_waiters.end()) {
+                    WLOGERROR("task %llu resume and with message sequence %llu but not found in waiters", static_cast<unsigned long long>(task->get_id()),
+                              static_cast<unsigned long long>(resume_data->sequence));
+                    continue;
+                }
+
+                wait_swap_message(rsp_iter->second, resume_data->message.msg_addr);
+                received.insert(resume_data->sequence);
+            }
+
+            return hello::err::EN_SUCCESS;
+        }
     } // namespace detail
 
     int wait(hello::SSMsg &msg, uint64_t check_sequence) {
@@ -209,5 +305,9 @@ namespace rpc {
 
         return msg.error_code();
     }
+
+    int wait(std::unordered_map<uint64_t, hello::SSMsg> &msg_waiters) { return detail::wait(ss_msg_dispatcher::me()->get_instance_ident(), msg_waiters); }
+
+    int wait(std::unordered_map<uint64_t, hello::SSMsg *> &msg_waiters) { return detail::wait(ss_msg_dispatcher::me()->get_instance_ident(), msg_waiters); }
 
 } // namespace rpc

@@ -103,6 +103,9 @@ public:
     // 移除事件
     virtual void on_remove() UTIL_CONFIG_OVERRIDE;
 
+    // 保存完毕事件
+    virtual void on_saved() UTIL_CONFIG_OVERRIDE;
+
     // 更新session事件
     virtual void on_update_session(const std::shared_ptr<session> &from, const std::shared_ptr<session> &to) UTIL_CONFIG_OVERRIDE;
 

@@ -324,5 +324,9 @@ int router_player_cache::save_object(void *priv_data) {
                   obj->get_version().c_str());
     }
 
+    if (res >= 0) {
+        obj->on_saved();
+    }
+
     return res;
 }

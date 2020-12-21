@@ -95,6 +95,8 @@ void player_cache::on_logout() {}
 
 void player_cache::on_remove() {}
 
+void player_cache::on_saved() {}
+
 void player_cache::on_update_session(const std::shared_ptr<session> &from, const std::shared_ptr<session> &to) {}
 
 void player_cache::init_from_table_data(const hello::table_user &tb_player) {

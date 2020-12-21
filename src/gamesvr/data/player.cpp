@@ -119,6 +119,11 @@ void player::on_remove() {
     base_type::on_remove();
 }
 
+void player::on_saved() {
+    // at last call base on remove callback
+    base_type::on_saved();
+}
+
 void player::on_update_session(const std::shared_ptr<session> &from, const std::shared_ptr<session> &to) { base_type::on_update_session(from, to); }
 
 void player::init_from_table_data(const hello::table_user &tb_player) {
