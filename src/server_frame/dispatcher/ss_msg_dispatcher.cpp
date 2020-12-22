@@ -99,14 +99,15 @@ int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, hello::SSMsg &ss_msg) {
     size_t msg_buf_len = ss_msg.ByteSizeLong();
     size_t tls_buf_len = atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);
     if (msg_buf_len > tls_buf_len) {
-        FWLOGERROR("send to proc [{:#x}] failed: require {}, only have {}", bus_id, msg_buf_len, tls_buf_len);
+        FWLOGERROR("send to proc [{:#x}: {}] failed: require {}, only have {}", bus_id, get_app()->convert_app_id_to_string(bus_id), msg_buf_len, tls_buf_len);
         return hello::err::EN_SYS_BUFF_EXTEND;
     }
 
     ::google::protobuf::uint8 *buf_start =
         reinterpret_cast< ::google::protobuf::uint8 *>(atframe::gateway::proto_base::get_tls_buffer(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM));
     ss_msg.SerializeWithCachedSizesToArray(buf_start);
-    FWLOGDEBUG("send msg to proc [{:#x}] {} bytes\n{}", bus_id, msg_buf_len, protobuf_mini_dumper_get_readable(ss_msg));
+    FWLOGDEBUG("send msg to proc [{:#x}: {}] {} bytes\n{}", bus_id, get_app()->convert_app_id_to_string(bus_id), msg_buf_len,
+               protobuf_mini_dumper_get_readable(ss_msg));
 
     return send_to_proc(bus_id, buf_start, msg_buf_len);
 }
@@ -126,9 +127,9 @@ int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, const void *msg_buf, si
     int res = owner->get_bus_node()->send_data(bus_id, atframe::component::message_type::EN_ATST_SS_MSG, msg_buf, msg_len, false);
 
     if (res < 0) {
-        FWLOGERROR("send msg to proc [{:#x}] {} bytes failed, res: {}", bus_id, msg_len, res);
+        FWLOGERROR("send msg to proc [{:#x}: {}] {} bytes failed, res: {}", bus_id, get_app()->convert_app_id_to_string(bus_id), msg_len, res);
     } else {
-        FWLOGDEBUG("send msg to proc [{:#x}] {} bytes success", bus_id, msg_len);
+        FWLOGDEBUG("send msg to proc [{:#x}: {}] {} bytes success", bus_id, get_app()->convert_app_id_to_string(bus_id), msg_len);
     }
 
     return res;
@@ -158,14 +159,15 @@ int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
 
     int32_t ret = unpack_protobuf_msg(*ss_msg, callback_msg, msg.data, msg.data_size);
     if (ret != 0) {
-        FWLOGERROR("{} unpack received message from {:#x} failed, res: {}", name(), from_server_id, ret);
+        FWLOGERROR("{} unpack received message from [{:#x}: {}] failed, res: {}", name(), from_server_id, get_app()->convert_app_id_to_string(from_server_id),
+                   ret);
         return ret;
     }
     ss_msg->mutable_head()->set_bus_id(from_server_id);
 
     ret = on_receive_message(ctx, callback_msg, nullptr, ss_msg->head().sequence());
     if (ret < 0) {
-        FWLOGERROR("{} dispatch message from {:#x} failed, res: {}", name(), from_server_id, ret);
+        FWLOGERROR("{} dispatch message from [{:#x}: {}] failed, res: {}", name(), from_server_id, get_app()->convert_app_id_to_string(from_server_id), ret);
     }
 
     return ret;
@@ -183,12 +185,12 @@ int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::messa
     }
 
     if (error_code >= 0) {
-        FWLOGDEBUG("receive_send_data_response from {:#x}", source.id);
+        FWLOGDEBUG("receive_send_data_response from [{:#x}: {}]", source.id, get_app()->convert_app_id_to_string(source.id));
         return error_code;
     }
 
     if (NULL == msg.data && msg.data_size > 0) {
-        FWLOGERROR("receive_send_data_response from {:#x} without data, res: {}", source.id, error_code);
+        FWLOGERROR("receive_send_data_response from [{:#x}: {}] without data, res: {}", source.id, get_app()->convert_app_id_to_string(source.id), error_code);
         return error_code;
     }
 
@@ -206,7 +208,8 @@ int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::messa
 
     int32_t ret = unpack_protobuf_msg(*ss_msg, callback_msg, buffer, len);
     if (ret != 0) {
-        FWLOGERROR("{} unpack on_receive_send_data_response from {:#x} failed, res: {}", name(), source.id, ret);
+        FWLOGERROR("{} unpack on_receive_send_data_response from [{:#x}: {}] failed, res: {}", name(), source.id,
+                   get_app()->convert_app_id_to_string(source.id), ret);
         return ret;
     }
 
@@ -218,7 +221,8 @@ int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::messa
 
     ret = on_send_message_failed(ctx, callback_msg, error_code, msg.msg_sequence);
     if (ret < 0) {
-        FWLOGERROR("{} dispatch on_send_message_failed from {:#x} failed, res: {}", name(), source.id, ret);
+        FWLOGERROR("{} dispatch on_send_message_failed from [{:#x}: {}] failed, res: {}", name(), source.id, get_app()->convert_app_id_to_string(source.id),
+                   ret);
     }
 
     return ret;

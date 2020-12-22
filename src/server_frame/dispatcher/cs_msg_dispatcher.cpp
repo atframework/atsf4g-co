@@ -110,7 +110,8 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
 
     ::atframe::gw::ss_msg req_msg;
     if (false == req_msg.ParseFromArray(msg.data, static_cast<int>(msg.data_size))) {
-        FWLOGERROR("receive msg of {} bytes from {:#x} parse failed: {}", msg.data_size, from_server_id, req_msg.InitializationErrorString());
+        FWLOGERROR("receive msg of {} bytes from [{:#x}: {}] parse failed: {}", msg.data_size, from_server_id,
+                   get_app()->convert_app_id_to_string(from_server_id), req_msg.InitializationErrorString());
         return 0;
     }
 
@@ -133,7 +134,8 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
 
         std::shared_ptr<session> sess = session_manager::me()->find(session_key);
         if (!sess) {
-            FWLOGERROR("session [{:#x}, {}] not found, try to kickoff", session_key.bus_id, session_key.session_id);
+            FWLOGERROR("session [{:#x}: {}, {}] not found, try to kickoff", session_key.bus_id, get_app()->convert_app_id_to_string(session_key.bus_id),
+                       session_key.session_id);
             ret = hello::err::EN_SYS_NOTFOUND;
 
             send_kickoff(session_key.bus_id, session_key.session_id, hello::EN_CRT_SESSION_NOT_FOUND);
@@ -143,7 +145,8 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
         dispatcher_msg_raw_t callback_msg = dispatcher_make_default<dispatcher_msg_raw_t>();
         ret = unpack_protobuf_msg(*cs_msg, callback_msg, reinterpret_cast<const void *>(post.content().data()), post.content().size());
         if (ret != 0) {
-            FWLOGERROR("{} unpack received message from {:#x}, session id: {} failed, res: %d", name(), session_key.bus_id, session_key.session_id, ret);
+            FWLOGERROR("{} unpack received message from [{:#x}: {}], session id: {} failed, res: %d", name(), session_key.bus_id,
+                       get_app()->convert_app_id_to_string(session_key.bus_id), session_key.session_id, ret);
             return ret;
         }
 
@@ -153,13 +156,15 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
         if (task_manager::me()->is_busy()) {
             cs_msg->mutable_head()->set_error_code(hello::EN_ERR_SYSTEM_BUSY);
             sess->send_msg_to_client(*cs_msg);
-            FWLOGINFO("server busy and send msg back to session [{:#x}, {}]", session_key.bus_id, session_key.session_id);
+            FWLOGINFO("server busy and send msg back to session [{:#x}: {}, {}]", session_key.bus_id, get_app()->convert_app_id_to_string(session_key.bus_id),
+                      session_key.session_id);
             break;
         }
 
         ret = on_receive_message(ctx, callback_msg, nullptr, cs_msg->head().sequence());
         if (ret < 0) {
-            FWLOGERROR("{} on receive message callback from {:#x}, session id: {} failed, res: {}", name(), session_key.bus_id, session_key.session_id, ret);
+            FWLOGERROR("{} on receive message callback from [{:#x}: {}, {}] failed, res: {}", name(), session_key.bus_id,
+                       get_app()->convert_app_id_to_string(session_key.bus_id), session_key.session_id, ret);
         }
         break;
     }
@@ -172,13 +177,15 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
 
         // check closing ...
         if (is_closing_) {
-            FWLOGWARNING("destroy session [{:#x}, {}] because app is closing", session_key.bus_id, session_key.session_id);
+            FWLOGWARNING("destroy session [{:#x}: {}, {}] because app is closing", session_key.bus_id, get_app()->convert_app_id_to_string(session_key.bus_id),
+                         session_key.session_id);
             ret = hello::err::EN_SYS_SERVER_SHUTDOWN;
             send_kickoff(session_key.bus_id, session_key.session_id, ::atframe::gateway::close_reason_t::EN_CRT_SERVER_CLOSED);
             break;
         }
 
-        FWLOGINFO("create new session [{:#x}, {}], address: {}:{}", session_key.bus_id, session_key.session_id, sess_data.client_ip(), sess_data.client_port());
+        FWLOGINFO("create new session [{:#x}: {}, {}], address: {}:{}", session_key.bus_id, get_app()->convert_app_id_to_string(session_key.bus_id),
+                  session_key.session_id, sess_data.client_ip(), sess_data.client_port());
 
         session_manager::sess_ptr_t sess = session_manager::me()->create(session_key);
         if (!sess) {
@@ -198,7 +205,7 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
         // session 移除前强制update一次，用以处理debug调试断点导致task_action_player_logout被立刻认为超时
         util::time::time_utility::update();
 
-        FWLOGINFO("remove session [{:#x}, {}]", session_key.bus_id, session_key.session_id);
+        FWLOGINFO("remove session [{:#x}: {}, {}]", session_key.bus_id, get_app()->convert_app_id_to_string(session_key.bus_id), session_key.session_id);
 
         // logout task
         task_manager::id_t                      logout_task_id = 0;
@@ -270,9 +277,10 @@ int32_t cs_msg_dispatcher::send_data(uint64_t bus_id, uint64_t session_id, const
 
     if (NULL == post) {
         if (0 == session_id) {
-            FWLOGERROR("broadcast {} bytes data to atgateway {:#x} failed when malloc post", len, bus_id);
+            FWLOGERROR("broadcast {} bytes data to atgateway {:#x}: {} failed when malloc post", len, bus_id, get_app()->convert_app_id_to_string(bus_id));
         } else {
-            FWLOGERROR("send {} bytes data to session [{:#x}, {}] failed when malloc post", len, bus_id, session_id);
+            FWLOGERROR("send {} bytes data to session [{:#x}: {}, {}] failed when malloc post", len, bus_id, get_app()->convert_app_id_to_string(bus_id),
+                       session_id);
         }
         return hello::err::EN_SYS_MALLOC;
     }
@@ -281,16 +289,17 @@ int32_t cs_msg_dispatcher::send_data(uint64_t bus_id, uint64_t session_id, const
 
     std::string packed_buffer;
     if (false == msg.SerializeToString(&packed_buffer)) {
-        FWLOGERROR("try to send {} bytes data to {:#x} with serialize failed: {}", len, session_id, msg.InitializationErrorString());
+        FWLOGERROR("try to send {} bytes data to [{:#x}: {}] with serialize failed: {}", len, session_id, get_app()->convert_app_id_to_string(session_id),
+                   msg.InitializationErrorString());
         return 0;
     }
 
     int ret = owner->get_bus_node()->send_data(bus_id, ::atframe::component::service_type::EN_ATST_GATEWAY, packed_buffer.data(), packed_buffer.size());
     if (ret < 0) {
         if (0 == session_id) {
-            FWLOGERROR("broadcast data to atgateway {:#x} failed, res: {}", bus_id, ret);
+            FWLOGERROR("broadcast data to atgateway [{:#x}: {}] failed, res: {}", bus_id, get_app()->convert_app_id_to_string(bus_id), ret);
         } else {
-            FWLOGERROR("send data to session [{:#x}, {}] failed, res: {}", bus_id, session_id, ret);
+            FWLOGERROR("send data to session [{:#x}: {}, {}] failed, res: {}", bus_id, get_app()->convert_app_id_to_string(bus_id), session_id, ret);
         }
     }
 
@@ -316,7 +325,7 @@ int32_t cs_msg_dispatcher::broadcast_data(uint64_t bus_id, const std::vector<uin
     ::atframe::gw::ss_body_post *post = msg.mutable_body()->mutable_post();
 
     if (NULL == post) {
-        FWLOGERROR("broadcast {} bytes data to atgateway {:#x} failed when malloc post", len, bus_id);
+        FWLOGERROR("broadcast {} bytes data to atgateway [{:#x}: {}] failed when malloc post", len, bus_id, get_app()->convert_app_id_to_string(bus_id));
         return hello::err::EN_SYS_MALLOC;
     }
 
@@ -330,7 +339,7 @@ int32_t cs_msg_dispatcher::broadcast_data(uint64_t bus_id, const std::vector<uin
 
     int ret = owner->get_bus_node()->send_data(bus_id, ::atframe::component::service_type::EN_ATST_GATEWAY, packed_buffer.data(), packed_buffer.size());
     if (ret < 0) {
-        FWLOGERROR("broadcast data to atgateway {:#x} failed, res: {}", bus_id, ret);
+        FWLOGERROR("broadcast data to atgateway [{:#x}: {}] failed, res: {}", bus_id, get_app()->convert_app_id_to_string(bus_id), ret);
     }
 
     return ret;
