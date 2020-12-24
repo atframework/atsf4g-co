@@ -218,6 +218,9 @@ int task_action_player_login::on_success() {
         }
     }
 
+    // 加入快速保存队列，确保玩家登入成功后保存一次在线状态
+    user->set_quick_save();
+
     return get_ret_code();
 }
 

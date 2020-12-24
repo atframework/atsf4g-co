@@ -389,4 +389,4 @@ std::pair<bool, int> task_action_ss_req_base::filter_router_msg(router_manager_b
     return std::make_pair(false, last_result);
 }
 
-bool task_action_ss_req_base::is_router_offline_ignored() { return false; }
+bool task_action_ss_req_base::is_router_offline_ignored() const { return false; }

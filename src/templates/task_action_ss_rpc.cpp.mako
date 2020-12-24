@@ -55,3 +55,7 @@ int ${task_class_name}::operator()() {
 int ${task_class_name}::on_success() { return get_ret_code(); }
 
 int ${task_class_name}::on_failed() { return get_ret_code(); }
+
+% if rpc.get_extension_field('rpc_options', lambda x: x.router_rpc, False) and rpc.get_extension_field('rpc_options', lambda x: x.router_ignore_offline, False):
+bool ${task_class_name}::is_router_offline_ignored() const { return true; }
+% endif

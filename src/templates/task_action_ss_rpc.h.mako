@@ -45,6 +45,10 @@ public:
 
     virtual int on_success() UTIL_CONFIG_OVERRIDE;
     virtual int on_failed() UTIL_CONFIG_OVERRIDE;
+
+% if rpc.get_extension_field('rpc_options', lambda x: x.router_rpc, False) and rpc.get_extension_field('rpc_options', lambda x: x.router_ignore_offline, False):
+    virtual bool is_router_offline_ignored() const UTIL_CONFIG_OVERRIDE;
+% endif
 };
 
 #endif // GENERATED_${task_class_name.upper()}_H

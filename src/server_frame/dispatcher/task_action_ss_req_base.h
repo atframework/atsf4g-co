@@ -70,7 +70,7 @@ public:
 protected:
     virtual void send_rsp_msg() UTIL_CONFIG_OVERRIDE;
 
-    virtual bool is_router_offline_ignored(); // 忽略路由对象不在线
+    virtual bool is_router_offline_ignored() const; // 忽略路由对象不在线
 
     std::pair<bool, int> filter_router_msg(router_manager_base *&mgr, std::shared_ptr<router_object_base> &obj);
 

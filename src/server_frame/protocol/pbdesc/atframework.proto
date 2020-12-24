@@ -40,6 +40,7 @@ message DispatcherOptions {
     bool            allow_no_wait             = 305; // 是否允许不等待回包
     repeated string warning_log_response_code = 306; // 以下错误码使用warning log而不是error log
     repeated string info_log_response_code    = 307; // 以下错误码使用info log而不是error log
+    bool            router_ignore_offline     = 308; // 路由RPC忽略路由对象不存在
 }
 
 extend google.protobuf.MethodOptions {
