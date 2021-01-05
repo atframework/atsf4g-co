@@ -67,7 +67,7 @@ for rpc in rpcs.values():
 %>    namespace details {
 % if rpc_common_codes_enable_common:
         template<class TBodyType>
-        inline int __pack_rpc_body(TBodyType &req_body, std::string *output, const char *rpc_full_name, const std::string &type_full_name) {
+        static inline int __pack_rpc_body(TBodyType &req_body, std::string *output, const char *rpc_full_name, const std::string &type_full_name) {
             if (false == req_body.SerializeToString(output)) {
                 FWLOGERROR("rpc {} serialize message {} failed, msg: {}", rpc_full_name, type_full_name, req_body.InitializationErrorString());
                 return ${project_namespace}::err::EN_SYS_PACK;
@@ -77,7 +77,7 @@ for rpc in rpcs.values():
             }
         }
 
-        inline void __setup_tracer(rpc::context &__child_ctx, rpc::context::tracer &__tracer, hello::SSMsgHead &head, const char *rpc_full_name) {
+        static inline void __setup_tracer(rpc::context &__child_ctx, rpc::context::tracer &__tracer, ${project_namespace}::SSMsgHead &head, const char *rpc_full_name) {
             __child_ctx.setup_tracer(__tracer, rpc_full_name);
 
             if (nullptr != __child_ctx.get_trace_span()) {
@@ -90,7 +90,7 @@ for rpc in rpcs.values():
 
 % endif
 % if rpc_common_codes_enable_stream_header:
-        inline int __setup_rpc_stream_header(${project_namespace}::SSMsgHead &head, const char *rpc_full_name, const std::string &type_full_name) {
+        static inline int __setup_rpc_stream_header(${project_namespace}::SSMsgHead &head, const char *rpc_full_name, const std::string &type_full_name) {
             head.set_op_type(${project_namespace}::EN_MSG_OP_TYPE_STREAM);
             atframework::RpcStreamMeta* stream_meta = head.mutable_rpc_stream();
             if (nullptr == stream_meta) {
@@ -106,7 +106,7 @@ for rpc in rpcs.values():
         }
 % endif
 % if rpc_common_codes_enable_request_header:
-        inline int __setup_rpc_request_header(${project_namespace}::SSMsgHead &head, task_manager::task_t &task, const char *rpc_full_name,
+        static inline int __setup_rpc_request_header(${project_namespace}::SSMsgHead &head, task_manager::task_t &task, const char *rpc_full_name,
                                                 const std::string &type_full_name) {
             head.set_src_task_id(task.get_id());
             head.set_op_type(${project_namespace}::EN_MSG_OP_TYPE_UNARY_REQUEST);
@@ -124,8 +124,8 @@ for rpc in rpcs.values():
         }
 % endif
 % if rpc_common_codes_enable_redirect_info_log:
-        template<class TCode, size_t CONVERT_SIZE>
-        inline bool __redirect_rpc_result_to_info_log(TCode &origin_result, const TCode convert_list[CONVERT_SIZE], 
+        template<class TCode, class TConvertList>
+        static inline bool __redirect_rpc_result_to_info_log(TCode &origin_result, TConvertList&& convert_list, 
                                                 const char *rpc_full_name, const std::string &type_full_name) {
             for (auto& check: convert_list) {
                 if (origin_result == check) {
@@ -142,8 +142,8 @@ for rpc in rpcs.values():
         }
 % endif
 % if rpc_common_codes_enable_redirect_warning_log:
-        template<class TCode, size_t CONVERT_SIZE>
-        inline bool __redirect_rpc_result_to_warning_log(TCode &origin_result, const TCode convert_list[CONVERT_SIZE], 
+        template<class TCode, class TConvertList>
+        static inline bool __redirect_rpc_result_to_warning_log(TCode &origin_result, TConvertList&& convert_list, 
                                                 const char *rpc_full_name, const std::string &type_full_name) {
             for (auto& check: convert_list) {
                 if (origin_result == check) {
@@ -161,7 +161,7 @@ for rpc in rpcs.values():
 % endif
 % if rpc_common_codes_enable_wait_response:
         template<class TResponseBody>
-        inline int __rpc_wait_and_unpack_response(rpc::context &__ctx, uint64_t rpc_sequence, TResponseBody &rsp_body, const char *rpc_full_name, 
+        static inline int __rpc_wait_and_unpack_response(rpc::context &__ctx, uint64_t rpc_sequence, TResponseBody &rsp_body, const char *rpc_full_name, 
                                                   const std::string &type_full_name) {
             ${project_namespace}::SSMsg* rsp_msg_ptr = __ctx.create<${project_namespace}::SSMsg>();
             if (nullptr == rsp_msg_ptr) {
@@ -360,14 +360,14 @@ for rpc in rpcs.values():
 %   if rpc_is_stream_mode:
             if (res < 0) {
 %     if rpc.get_extension_field('rpc_options', lambda x: x.warning_log_response_code, []):
-                const int warning_codes[] = ${', '.join(rpc.get_extension_field('rpc_options', lambda x: x.warning_log_response_code, []))};
+                const int warning_codes[] = {${', '.join(rpc.get_extension_field('rpc_options', lambda x: x.warning_log_response_code, []))}};
                 if (details::__redirect_rpc_result_to_warning_log(res, warning_codes, "${rpc.get_full_name()}",
                     ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name())) {
                     return ${result_clazz_name}(__tracer.return_code(res));
                 }
 %     endif
 %     if rpc.get_extension_field('rpc_options', lambda x: x.info_log_response_code, []):
-                const int info_codes[] = ${', '.join(rpc.get_extension_field('rpc_options', lambda x: x.info_log_response_code, []))};
+                const int info_codes[] = {${', '.join(rpc.get_extension_field('rpc_options', lambda x: x.info_log_response_code, []))}};
                 if (details::__redirect_rpc_result_to_info_log(res, info_codes, "${rpc.get_full_name()}",
                     ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name())) {
                     return ${result_clazz_name}(__tracer.return_code(res));
@@ -399,14 +399,14 @@ for rpc in rpcs.values():
 
             if (res < 0) {
 %     if rpc.get_extension_field('rpc_options', lambda x: x.warning_log_response_code, []):
-                const int warning_codes[] = ${', '.join(rpc.get_extension_field('rpc_options', lambda x: x.warning_log_response_code, []))};
+                const int warning_codes[] = {${', '.join(rpc.get_extension_field('rpc_options', lambda x: x.warning_log_response_code, []))}};
                 if (details::__redirect_rpc_result_to_warning_log(res, warning_codes, "${rpc.get_full_name()}",
                     ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name())) {
                     return ${result_clazz_name}(__tracer.return_code(res));
                 }
 %     endif
 %     if warning_log_codes in rpc.get_extension_field('rpc_options', lambda x: x.info_log_response_code, []):
-                const int info_codes[] = ${', '.join(rpc.get_extension_field('rpc_options', lambda x: x.info_log_response_code, []))};
+                const int info_codes[] = {${', '.join(rpc.get_extension_field('rpc_options', lambda x: x.info_log_response_code, []))}};
                 if (details::__redirect_rpc_result_to_info_log(res, info_codes, "${rpc.get_full_name()}",
                     ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name())) {
                     return ${result_clazz_name}(__tracer.return_code(res));

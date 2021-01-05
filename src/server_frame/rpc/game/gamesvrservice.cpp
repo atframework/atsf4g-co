@@ -32,7 +32,7 @@
 namespace rpc {
     namespace details {
         template<class TBodyType>
-        inline int __pack_rpc_body(TBodyType& req_body, std::string* output, const char* rpc_full_name, const std::string& type_full_name) {
+        static inline int __pack_rpc_body(TBodyType &req_body, std::string *output, const char *rpc_full_name, const std::string &type_full_name) {
             if (false == req_body.SerializeToString(output)) {
                 FWLOGERROR("rpc {} serialize message {} failed, msg: {}", rpc_full_name, type_full_name, req_body.InitializationErrorString());
                 return hello::err::EN_SYS_PACK;
@@ -42,7 +42,7 @@ namespace rpc {
             }
         }
 
-        inline void __setup_tracer(rpc::context& __child_ctx, rpc::context::tracer& __tracer, hello::SSMsgHead &head, const char* rpc_full_name) {
+        static inline void __setup_tracer(rpc::context &__child_ctx, rpc::context::tracer &__tracer, hello::SSMsgHead &head, const char *rpc_full_name) {
             __child_ctx.setup_tracer(__tracer, rpc_full_name);
 
             if (nullptr != __child_ctx.get_trace_span()) {
@@ -53,8 +53,8 @@ namespace rpc {
             }
         }
 
-        inline int __setup_rpc_request_header(hello::SSMsgHead& head, task_manager::task_t& task, const char* rpc_full_name,
-                                                const std::string& type_full_name) {
+        static inline int __setup_rpc_request_header(hello::SSMsgHead &head, task_manager::task_t &task, const char *rpc_full_name,
+                                                const std::string &type_full_name) {
             head.set_src_task_id(task.get_id());
             head.set_op_type(hello::EN_MSG_OP_TYPE_UNARY_REQUEST);
             atframework::RpcRequestMeta* request_meta = head.mutable_rpc_request();
@@ -70,8 +70,8 @@ namespace rpc {
             return hello::err::EN_SUCCESS;
         }
         template<class TResponseBody>
-        inline int __rpc_wait_and_unpack_response(rpc::context& __ctx, uint64_t rpc_sequence, TResponseBody& rsp_body, const char* rpc_full_name, 
-                                                  const std::string& type_full_name) {
+        static inline int __rpc_wait_and_unpack_response(rpc::context &__ctx, uint64_t rpc_sequence, TResponseBody &rsp_body, const char *rpc_full_name, 
+                                                  const std::string &type_full_name) {
             hello::SSMsg* rsp_msg_ptr = __ctx.create<hello::SSMsg>();
             if (nullptr == rsp_msg_ptr) {
                 FWLOGERROR("rpc {} create response message failed", rpc_full_name);
