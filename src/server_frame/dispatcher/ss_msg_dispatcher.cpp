@@ -41,6 +41,10 @@ int32_t ss_msg_dispatcher::init() {
 
 int32_t ss_msg_dispatcher::reload() {
     service_name_ = get_app()->get_app_name();
+
+    // Update rpc caller context data
+    rpc::context::set_current_service(*get_app());
+
     return dispatcher_implement::reload();
 }
 

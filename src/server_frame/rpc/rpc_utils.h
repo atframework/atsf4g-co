@@ -15,12 +15,18 @@
 #include <design_pattern/nomovable.h>
 #include <design_pattern/noncopyable.h>
 #include <std/smart_ptr.h>
+#include <time/time_utility.h>
 
 #include <config/compiler/protobuf_prefix.h>
 
 #include <google/protobuf/arena.h>
+#include <google/protobuf/timestamp.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
+
+namespace atapp {
+    class app;
+}
 
 namespace atframework {
     class RpcTraceSpan;
@@ -37,11 +43,19 @@ namespace rpc {
         UTIL_DESIGN_PATTERN_NOMOVABLE(context)
 
     public:
-        struct tracer {
+        class tracer {
+        public:
             tracer();
             ~tracer();
 
             int return_code(int ret);
+
+        private:
+            friend class context;
+            int32_t                                     return_code_;
+            atframework::RpcTraceSpan *                 trace_span_;
+            std::shared_ptr< ::google::protobuf::Arena> allocator_;
+            google::protobuf::Timestamp                 start_timepoint_;
         };
 
         template <class TMsg>
@@ -164,6 +178,12 @@ namespace rpc {
          * @param trace_id Every span in a trace shares this ID.
          */
         void set_trace_id(const std::string &trace_id);
+
+        /**
+         * @brief Set the current service object, it's used for tracer
+         * @param app atapp instance
+         */
+        static void set_current_service(const atapp::app &app);
 
     private:
         std::shared_ptr< ::google::protobuf::Arena> allocator_;
