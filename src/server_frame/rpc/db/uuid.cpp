@@ -117,7 +117,8 @@ namespace rpc {
 
                 ::rpc::context         child_ctx(ctx);
                 ::rpc::context::tracer tracer;
-                child_ctx.setup_tracer(tracer, "rpc.db.uuid.generate_global_increase_id");
+                child_ctx.setup_tracer(tracer, "rpc.db.uuid.generate_global_increase_id",
+                                       std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me()));
 
                 uint64_t rpc_sequence = 0;
                 int      res          = db_msg_dispatcher::me()->send_msg(db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, keyvar, keylen, task->get_id(),

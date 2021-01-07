@@ -100,7 +100,7 @@ int task_action_base::operator()(void *priv_data) {
     }
 
     rpc::context::tracer tracer;
-    shared_context_.setup_tracer(tracer, name());
+    shared_context_.setup_tracer(tracer, name(), get_dispatcher());
 
     task_manager::task_t *task = cotask::this_task::get<task_manager::task_t>();
     if (NULL == task) {
@@ -241,6 +241,8 @@ int task_action_base::on_failed() { return 0; }
 int task_action_base::on_timeout() { return 0; }
 
 int task_action_base::on_complete() { return 0; }
+
+std::shared_ptr<dispatcher_implement> task_action_base::get_dispatcher() const { return nullptr; }
 
 uint64_t task_action_base::get_task_id() const { return task_id_; }
 

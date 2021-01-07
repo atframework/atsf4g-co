@@ -32,6 +32,8 @@ namespace atframework {
     class RpcTraceSpan;
 } // namespace atframework
 
+class dispatcher_implement;
+
 namespace hello {
     class SSMsg;
     class table_all_message;
@@ -54,8 +56,9 @@ namespace rpc {
             friend class context;
             int32_t                                     return_code_;
             atframework::RpcTraceSpan *                 trace_span_;
+            std::shared_ptr<dispatcher_implement>       dispatcher_;
             std::shared_ptr< ::google::protobuf::Arena> allocator_;
-            google::protobuf::Timestamp                 start_timepoint_;
+            util::time::time_utility::raw_time_t        start_timepoint_;
         };
 
         template <class TMsg>
@@ -127,7 +130,7 @@ namespace rpc {
         context(context &parent);
         ~context();
 
-        void setup_tracer(tracer &, const char *name);
+        void setup_tracer(tracer &, const char *name, const std::shared_ptr<dispatcher_implement> &dispatcher);
 
         /**
          * @brief 使用内置的Arena创建protobuf对象。注意，该对象必须是局部变量，不允许转移给外部使用

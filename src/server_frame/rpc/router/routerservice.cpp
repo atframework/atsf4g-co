@@ -43,7 +43,7 @@ namespace rpc {
         }
 
         static inline void __setup_tracer(rpc::context &__child_ctx, rpc::context::tracer &__tracer, hello::SSMsgHead &head, const char *rpc_full_name) {
-            __child_ctx.setup_tracer(__tracer, rpc_full_name);
+            __child_ctx.setup_tracer(__tracer, rpc_full_name, std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me()));
 
             if (nullptr != __child_ctx.get_trace_span()) {
                 auto trace_span = head.mutable_rpc_trace();

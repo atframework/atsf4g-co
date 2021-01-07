@@ -41,7 +41,7 @@ namespace detail {
         }
 
         util::time::time_utility::raw_time_t start;
-        actor_action_base *action;
+        actor_action_base *                  action;
     };
 } // namespace detail
 
@@ -109,3 +109,5 @@ int actor_action_base::on_success() { return 0; }
 int actor_action_base::on_failed() { return 0; }
 
 int actor_action_base::on_complete() { return 0; }
+
+std::shared_ptr<dispatcher_implement> actor_action_base::get_dispatcher() const { return nullptr; }

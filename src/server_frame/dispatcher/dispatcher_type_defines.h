@@ -81,5 +81,6 @@ inline dispatcher_resume_data_t dispatcher_make_default<dispatcher_resume_data_t
 
 class task_action_base;
 class actor_action_base;
+class dispatcher_implement;
 
 #endif // DISPATCHER_DISPATCHER_TYPE_DEFINES_H

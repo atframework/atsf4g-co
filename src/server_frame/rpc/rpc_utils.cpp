@@ -69,7 +69,7 @@ namespace rpc {
 
     context::~context() {}
 
-    void context::setup_tracer(tracer &tracer_instance, const char *name) {
+    void context::setup_tracer(tracer &tracer_instance, const char *name, const std::shared_ptr<dispatcher_implement> &dispatcher) {
         atframework::RpcTraceSpan *trace_span = mutable_trace_span();
         if (nullptr != trace_span && trace_span->span_id().empty()) {
             set_trace_span_id(rpc::db::uuid::generate_standard_uuid(true));
@@ -80,9 +80,11 @@ namespace rpc {
         }
 
         // TODO Call distributed tracing SDK API, zipkin for example
-        tracer_instance.start_timepoint_ = ::google::protobuf::util::TimeUtil::GetCurrentTime();
+        util::time::time_utility::update();
+        tracer_instance.start_timepoint_ = util::time::time_utility::sys_now();
         tracer_instance.allocator_       = mutable_protobuf_arena();
         tracer_instance.trace_span_      = trace_span;
+        tracer_instance.dispatcher_      = dispatcher;
     }
 
     std::shared_ptr< ::google::protobuf::Arena> context::mutable_protobuf_arena() {

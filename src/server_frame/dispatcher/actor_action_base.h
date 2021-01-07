@@ -13,6 +13,8 @@
 
 #include <libcopp/utils/features.h>
 
+#include "dispatcher_type_defines.h"
+
 class actor_action_base {
 public:
     enum status_t { EN_AAS_CREATED = 0, EN_AAS_RUNNING, EN_AAS_FINISHED };
@@ -24,19 +26,21 @@ protected:
 public:
     virtual const char *name() const;
 
-    virtual int hook_run();
-    virtual int operator()() = 0;
-    inline uint64_t get_player_id() const { return player_id_; }
+    virtual int               hook_run();
+    virtual int               operator()() = 0;
+    inline uint64_t           get_player_id() const { return player_id_; }
     inline unsigned long long get_player_id_llu() const { return static_cast<unsigned long long>(get_player_id()); };
 
     virtual int on_success();
     virtual int on_failed();
     virtual int on_complete();
 
+    virtual std::shared_ptr<dispatcher_implement> get_dispatcher() const;
+
     int32_t run();
 
 protected:
-    inline void set_player_id(uint64_t player_id) { player_id_ = player_id; }
+    inline void  set_player_id(uint64_t player_id) { player_id_ = player_id; }
     virtual void send_rsp_msg() = 0;
 
 public:
@@ -100,11 +104,11 @@ protected:
 
 private:
     uint64_t player_id_;
-    int32_t ret_code_;
-    int32_t rsp_code_;
+    int32_t  ret_code_;
+    int32_t  rsp_code_;
     status_t status_;
-    bool rsp_msg_disabled_;
-    bool evt_disabled_;
+    bool     rsp_msg_disabled_;
+    bool     evt_disabled_;
 };
 
 template <typename TREQ>
@@ -113,7 +117,7 @@ public:
     typedef TREQ msg_type;
 
 protected:
-    inline TREQ &get_request() { return request_msg_; }
+    inline TREQ &      get_request() { return request_msg_; }
     inline const TREQ &get_request() const { return request_msg_; }
 
 private:
