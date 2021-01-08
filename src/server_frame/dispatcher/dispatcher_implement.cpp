@@ -104,7 +104,7 @@ int32_t dispatcher_implement::on_receive_message(rpc::context &ctx, msg_raw_t &m
             actor = create_actor(callback_data);
             // actor 流程
             if (actor) {
-                return actor->run();
+                return actor->run(&callback_data);
             }
         }
     }

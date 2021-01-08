@@ -5,18 +5,30 @@
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
-
 #include <dispatcher/ss_msg_dispatcher.h>
+
+#include <rpc/db/uuid.h>
 
 #include "actor_action_ss_req_base.h"
 
 actor_action_ss_req_base::actor_action_ss_req_base(dispatcher_start_data_t COPP_MACRO_RV_REF start_param) {
+    // 必须先设置共享的arena
+    if (nullptr != start_param.context) {
+        get_shared_context().try_reuse_protobuf_arena(start_param.context->mutable_protobuf_arena());
+    }
+
     msg_type *ss_msg = ss_msg_dispatcher::me()->get_protobuf_msg<msg_type>(start_param.message);
     if (NULL != ss_msg) {
+        if (ss_msg->head().has_rpc_trace()) {
+            get_shared_context().set_trace_parent(ss_msg->head().rpc_trace());
+        }
+
         get_request().Swap(ss_msg);
 
         set_player_id(get_request().head().player_user_id());
     }
+
+    get_shared_context().set_trace_id(rpc::db::uuid::generate_standard_uuid(true));
 }
 
 actor_action_ss_req_base::~actor_action_ss_req_base() {}
@@ -80,7 +92,7 @@ void actor_action_ss_req_base::send_rsp_msg() {
 
     for (std::list<msg_type>::iterator iter = rsp_msgs_.begin(); iter != rsp_msgs_.end(); ++iter) {
         if (0 == (*iter).head().bus_id()) {
-            FWLOGERROR("actor {} [{}] send message to unknown server", name(), (const void*)this);
+            FWLOGERROR("actor {} [{}] send message to unknown server", name(), (const void *)this);
             continue;
         }
         (*iter).mutable_head()->set_error_code(get_rsp_code());
@@ -88,10 +100,14 @@ void actor_action_ss_req_base::send_rsp_msg() {
         // send message using ss dispatcher
         int32_t res = ss_msg_dispatcher::me()->send_to_proc((*iter).head().bus_id(), *iter);
         if (res) {
-            FWLOGERROR("task {} [{}] send message to server 0x{:x} failed, res: {}({})", name(), (const void*)this, (*iter).head().bus_id(),
-                      res, protobuf_mini_dumper_get_error_msg(res));
+            FWLOGERROR("task {} [{}] send message to server 0x{:x} failed, res: {}({})", name(), (const void *)this, (*iter).head().bus_id(), res,
+                       protobuf_mini_dumper_get_error_msg(res));
         }
     }
 
     rsp_msgs_.clear();
+}
+
+std::shared_ptr<dispatcher_implement> actor_action_ss_req_base::get_dispatcher() const {
+    return std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());
 }

@@ -79,6 +79,10 @@ int task_action_cs_req_base::hook_run() {
     return ret;
 }
 
+std::shared_ptr<dispatcher_implement> task_action_cs_req_base::get_dispatcher() const {
+    return std::static_pointer_cast<dispatcher_implement>(cs_msg_dispatcher::me());
+}
+
 std::pair<uint64_t, uint64_t> task_action_cs_req_base::get_gateway_info() const {
     const msg_type &cs_msg = get_request();
     return std::pair<uint64_t, uint64_t>(cs_msg.head().session_bus_id(), cs_msg.head().session_id());

@@ -14,3 +14,5 @@ task_action_no_req_base::task_action_no_req_base() { get_shared_context().set_tr
 task_action_no_req_base::~task_action_no_req_base() {}
 
 void task_action_no_req_base::send_rsp_msg() {}
+
+std::shared_ptr<dispatcher_implement> task_action_no_req_base::get_dispatcher() const { return nullptr; }

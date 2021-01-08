@@ -26,6 +26,8 @@ public:
     task_action_no_req_base();
     ~task_action_no_req_base();
 
+    std::shared_ptr<dispatcher_implement> get_dispatcher() const UTIL_CONFIG_OVERRIDE;
+
 protected:
     virtual void send_rsp_msg() UTIL_CONFIG_OVERRIDE;
 };

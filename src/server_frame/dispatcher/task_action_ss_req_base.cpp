@@ -125,6 +125,10 @@ int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd, msg
 
 const std::string &task_action_ss_req_base::get_current_service_name() { return ss_msg_dispatcher::me()->get_current_service_name(); }
 
+std::shared_ptr<dispatcher_implement> task_action_ss_req_base::get_dispatcher() const {
+    return std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());
+}
+
 void task_action_ss_req_base::send_rsp_msg() {
     if (rsp_msgs_.empty()) {
         return;

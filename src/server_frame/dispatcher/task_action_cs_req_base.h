@@ -41,6 +41,8 @@ public:
 
     virtual int hook_run() UTIL_CONFIG_OVERRIDE;
 
+    std::shared_ptr<dispatcher_implement> get_dispatcher() const UTIL_CONFIG_OVERRIDE;
+
     std::pair<uint64_t, uint64_t> get_gateway_info() const;
 
     std::shared_ptr<session> get_session() const;

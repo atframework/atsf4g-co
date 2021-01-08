@@ -45,7 +45,9 @@ namespace detail {
     };
 } // namespace detail
 
-actor_action_base::actor_action_base() : player_id_(0), ret_code_(0), rsp_code_(0), status_(EN_AAS_CREATED), rsp_msg_disabled_(false), evt_disabled_(false) {}
+actor_action_base::actor_action_base()
+    : player_id_(0), ret_code_(0), rsp_code_(0), status_(EN_AAS_CREATED), rsp_msg_disabled_(false), evt_disabled_(false),
+      start_data_(dispatcher_make_default<dispatcher_start_data_t>()) {}
 actor_action_base::~actor_action_base() {
     if (EN_AAS_FINISHED != status_) {
         WLOGERROR("actor %s [%p] is created but not run", name(), this);
@@ -69,8 +71,12 @@ const char *actor_action_base::name() const {
 
 int actor_action_base::hook_run() { return (*this)(); }
 
-int32_t actor_action_base::run() {
+int32_t actor_action_base::run(void *priv_data) {
     detail::actor_action_stat_guard stat(this);
+
+    if (NULL != priv_data) {
+        start_data_ = *reinterpret_cast<dispatcher_start_data_t *>(priv_data);
+    }
 
     if (get_status() > EN_AAS_CREATED) {
         WLOGERROR("actor %s [%p] already running", name(), this);
@@ -109,5 +115,3 @@ int actor_action_base::on_success() { return 0; }
 int actor_action_base::on_failed() { return 0; }
 
 int actor_action_base::on_complete() { return 0; }
-
-std::shared_ptr<dispatcher_implement> actor_action_base::get_dispatcher() const { return nullptr; }

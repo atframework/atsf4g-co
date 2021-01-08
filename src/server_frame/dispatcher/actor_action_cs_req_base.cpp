@@ -80,7 +80,7 @@ void actor_action_cs_req_base::send_rsp_msg() {
     player_cache::ptr_t owner_player = sess->get_player();
 
     uint64_t seq = 0;
-    int32_t op_type;
+    int32_t  op_type;
     {
         msg_ref_type req_msg = get_request();
         if (req_msg.has_head()) {
@@ -119,11 +119,15 @@ void actor_action_cs_req_base::send_rsp_msg() {
 
         // refresh visit time if success
         if (0 == get_rsp_code()) {
-            router_player_manager::ptr_t router_cache =
-                router_player_manager::me()->get_cache(router_player_manager::key_t(router_player_manager::me()->get_type_id(), owner_player->get_zone_id(), owner_player->get_user_id()));
+            router_player_manager::ptr_t router_cache = router_player_manager::me()->get_cache(
+                router_player_manager::key_t(router_player_manager::me()->get_type_id(), owner_player->get_zone_id(), owner_player->get_user_id()));
             if (router_cache && router_cache->is_object_equal(owner_player)) {
                 router_cache->refresh_visit_time();
             }
         }
     }
+}
+
+std::shared_ptr<dispatcher_implement> actor_action_cs_req_base::get_dispatcher() const {
+    return std::static_pointer_cast<dispatcher_implement>(cs_msg_dispatcher::me());
 }

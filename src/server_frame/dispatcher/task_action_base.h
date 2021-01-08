@@ -59,7 +59,7 @@ public:
     virtual int on_timeout();
     virtual int on_complete();
 
-    virtual std::shared_ptr<dispatcher_implement> get_dispatcher() const;
+    virtual std::shared_ptr<dispatcher_implement> get_dispatcher() const = 0;
 
     uint64_t           get_task_id() const;
     unsigned long long get_task_id_llu() const;

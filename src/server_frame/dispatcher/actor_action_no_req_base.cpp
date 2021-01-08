@@ -9,3 +9,5 @@ actor_action_no_req_base::actor_action_no_req_base() {}
 actor_action_no_req_base::~actor_action_no_req_base() {}
 
 void actor_action_no_req_base::send_rsp_msg() {}
+
+std::shared_ptr<dispatcher_implement> actor_action_no_req_base::get_dispatcher() const { return nullptr; }

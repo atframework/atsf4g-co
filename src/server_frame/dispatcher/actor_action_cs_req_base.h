@@ -53,6 +53,8 @@ public:
     std::list<msg_type> &      get_rsp_list();
     const std::list<msg_type> &get_rsp_list() const;
 
+    std::shared_ptr<dispatcher_implement> get_dispatcher() const UTIL_CONFIG_OVERRIDE;
+
 protected:
     virtual void send_rsp_msg() UTIL_CONFIG_OVERRIDE;
 

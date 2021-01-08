@@ -67,6 +67,8 @@ public:
     static int32_t            init_msg(msg_ref_type msg, uint64_t dst_pd, msg_cref_type req_msg);
     static const std::string &get_current_service_name();
 
+    std::shared_ptr<dispatcher_implement> get_dispatcher() const UTIL_CONFIG_OVERRIDE;
+
 protected:
     virtual void send_rsp_msg() UTIL_CONFIG_OVERRIDE;
 

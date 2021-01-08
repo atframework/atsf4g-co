@@ -242,8 +242,6 @@ int task_action_base::on_timeout() { return 0; }
 
 int task_action_base::on_complete() { return 0; }
 
-std::shared_ptr<dispatcher_implement> task_action_base::get_dispatcher() const { return nullptr; }
-
 uint64_t task_action_base::get_task_id() const { return task_id_; }
 
 unsigned long long task_action_base::get_task_id_llu() const { return static_cast<unsigned long long>(task_id_); }

@@ -15,6 +15,8 @@
 
 #include "dispatcher_type_defines.h"
 
+#include <rpc/rpc_utils.h>
+
 class actor_action_base {
 public:
     enum status_t { EN_AAS_CREATED = 0, EN_AAS_RUNNING, EN_AAS_FINISHED };
@@ -35,9 +37,9 @@ public:
     virtual int on_failed();
     virtual int on_complete();
 
-    virtual std::shared_ptr<dispatcher_implement> get_dispatcher() const;
+    virtual std::shared_ptr<dispatcher_implement> get_dispatcher() const = 0;
 
-    int32_t run();
+    int32_t run(void *priv_data);
 
 protected:
     inline void  set_player_id(uint64_t player_id) { player_id_ = player_id; }
@@ -102,6 +104,25 @@ protected:
      */
     inline void enable_rsp_msg() { rsp_msg_disabled_ = false; }
 
+    /**
+     * @brief 获取启动透传参数
+     */
+    inline dispatcher_start_data_t &get_dispatcher_start_data() { return start_data_; }
+
+    /**
+     * @brief Get the shared context object
+     *
+     * @return const rpc::context&
+     */
+    inline const rpc::context &get_shared_context() const { return shared_context_; }
+
+    /**
+     * @brief Get the shared context object
+     *
+     * @return const rpc::context&
+     */
+    inline rpc::context &get_shared_context() { return shared_context_; }
+
 private:
     uint64_t player_id_;
     int32_t  ret_code_;
@@ -109,6 +130,9 @@ private:
     status_t status_;
     bool     rsp_msg_disabled_;
     bool     evt_disabled_;
+
+    dispatcher_start_data_t start_data_;
+    rpc::context            shared_context_;
 };
 
 template <typename TREQ>
