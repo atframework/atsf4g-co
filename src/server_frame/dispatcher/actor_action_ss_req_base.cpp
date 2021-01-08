@@ -27,8 +27,6 @@ actor_action_ss_req_base::actor_action_ss_req_base(dispatcher_start_data_t COPP_
 
         set_player_id(get_request().head().player_user_id());
     }
-
-    get_shared_context().set_trace_id(rpc::db::uuid::generate_standard_uuid(true));
 }
 
 actor_action_ss_req_base::~actor_action_ss_req_base() {}
