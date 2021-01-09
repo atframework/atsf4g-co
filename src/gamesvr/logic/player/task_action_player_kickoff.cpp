@@ -86,7 +86,7 @@ int task_action_player_kickoff::operator()() {
         }
         int32_t ret = sess->send_kickoff(reason);
         if (ret) {
-            FWLOGERROR("task {} [{}] send cs msg failed, ret: {}", name(), get_task_id_llu(), ret);
+            FWLOGERROR("task {} [{}] send cs msg failed, ret: {}", name(), get_task_id(), ret);
 
             // 发送失败也没有关系，下次客户端发包的时候自然会出错
         }

@@ -134,7 +134,7 @@ void task_action_ss_req_base::send_rsp_msg() {
 
     for (std::list<msg_type *>::iterator iter = rsp_msgs_.begin(); iter != rsp_msgs_.end(); ++iter) {
         if (0 == (*iter)->head().bus_id()) {
-            FWLOGERROR("task {} [{}] send message to unknown server", name(), get_task_id_llu());
+            FWLOGERROR("task {} [{}] send message to unknown server", name(), get_task_id());
             continue;
         }
         (*iter)->mutable_head()->set_error_code(get_rsp_code());
@@ -142,7 +142,7 @@ void task_action_ss_req_base::send_rsp_msg() {
         // send message using ss dispatcher
         int32_t res = ss_msg_dispatcher::me()->send_to_proc((*iter)->head().bus_id(), **iter);
         if (res) {
-            FWLOGERROR("task {} [{}] send message to server 0x{:x} failed, res: {}({})", name(), get_task_id_llu(),
+            FWLOGERROR("task {} [{}] send message to server 0x{:x} failed, res: {}({})", name(), get_task_id(),
                        static_cast<unsigned long long>((*iter)->head().bus_id()), res, protobuf_mini_dumper_get_error_msg(res));
         }
     }

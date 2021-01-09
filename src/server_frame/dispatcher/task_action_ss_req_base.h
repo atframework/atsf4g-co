@@ -169,21 +169,21 @@ private:
         // Check message type
         if (get_request().head().has_rpc_request()) {
             if (get_request_type_url() != get_request().head().rpc_request().type_url()) {
-                FWLOGERROR("task {} [{}] except message {}, real got {}", name(), get_task_id_llu(), get_request_type_url().c_str(),
+                FWLOGERROR("task {} [{}] except message {}, real got {}", name(), get_task_id(), get_request_type_url().c_str(),
                            get_request().head().rpc_request().type_url().c_str());
             }
         } else if (get_request().head().has_rpc_stream()) {
             if (get_request_type_url() != get_request().head().rpc_stream().type_url()) {
-                FWLOGERROR("task {} [{}] except message {}, real got {}", name(), get_task_id_llu(), get_request_type_url().c_str(),
+                FWLOGERROR("task {} [{}] except message {}, real got {}", name(), get_task_id(), get_request_type_url().c_str(),
                            get_request().head().rpc_stream().type_url().c_str());
             }
         }
 
         if (false == request_body_->ParseFromString(get_request().body_bin())) {
-            FWLOGERROR("task {} [{}] try to parse message {} failed, msg: {}", name(), get_task_id_llu(), get_request_type_url().c_str(),
+            FWLOGERROR("task {} [{}] try to parse message {} failed, msg: {}", name(), get_task_id(), get_request_type_url().c_str(),
                        request_body_->InitializationErrorString().c_str());
         } else {
-            FWLOGDEBUG("task {} [{}] parse rpc request message {} success:\n{}", name(), get_task_id_llu(), get_request_type_url().c_str(),
+            FWLOGDEBUG("task {} [{}] parse rpc request message {} success:\n{}", name(), get_task_id(), get_request_type_url().c_str(),
                        protobuf_mini_dumper_get_readable(*request_body_));
         }
     }
@@ -194,7 +194,7 @@ private:
         hello::SSMsg &    rsp  = add_rsp_msg();
         hello::SSMsgHead *head = rsp.mutable_head();
         if (nullptr == head) {
-            FWLOGERROR("task {} [{}] pack response but malloc header failed", name(), get_task_id_llu());
+            FWLOGERROR("task {} [{}] pack response but malloc header failed", name(), get_task_id());
             return;
         }
 
@@ -215,10 +215,10 @@ private:
 
         if (nullptr != response_body_) {
             if (false == response_body_->SerializeToString(rsp.mutable_body_bin())) {
-                FWLOGERROR("task {} [{}] try to serialize message {} failed, msg: {}", name(), get_task_id_llu(), get_response_type_url().c_str(),
+                FWLOGERROR("task {} [{}] try to serialize message {} failed, msg: {}", name(), get_task_id(), get_response_type_url().c_str(),
                            response_body_->InitializationErrorString().c_str());
             } else {
-                FWLOGDEBUG("task {} [{}] serialize rpc response message {} success:\n{}", name(), get_task_id_llu(), get_response_type_url().c_str(),
+                FWLOGDEBUG("task {} [{}] serialize rpc response message {} success:\n{}", name(), get_task_id(), get_response_type_url().c_str(),
                            protobuf_mini_dumper_get_readable(*response_body_));
             }
         }

@@ -161,11 +161,10 @@ void task_action_cs_req_base::send_rsp_msg() {
         int32_t res = sess->send_msg_to_client(**iter);
         if (res) {
             if (owner_player) {
-                WLOGERROR("task %s [0x%llx] send message to player_cache %s failed, res: %d", name(), get_task_id_llu(), owner_player->get_open_id().c_str(),
-                          res);
+                FWLOGERROR("task {} [{}] send message to player_cache {} failed, res: {}", name(), get_task_id(), owner_player->get_open_id().c_str(), res);
             } else {
-                WLOGERROR("task %s [0x%llx] send message to session [0x%llx,0x%llx] failed, res: %d", name(), get_task_id_llu(),
-                          static_cast<unsigned long long>(sess->get_key().bus_id), static_cast<unsigned long long>(sess->get_key().session_id), res);
+                FWLOGERROR("task {} [{}] send message to session [{:#x}, {}] failed, res: {}", name(), get_task_id(), sess->get_key().bus_id,
+                           sess->get_key().session_id, res);
             }
         }
     }

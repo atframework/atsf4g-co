@@ -61,8 +61,7 @@ public:
 
     virtual std::shared_ptr<dispatcher_implement> get_dispatcher() const = 0;
 
-    uint64_t           get_task_id() const;
-    unsigned long long get_task_id_llu() const;
+    uint64_t get_task_id() const;
 
 protected:
     inline void set_user_key(uint64_t user_id, uint32_t zone_id) {
