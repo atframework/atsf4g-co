@@ -2,8 +2,12 @@
 // Created by owt50 on 2016/9/26.
 //
 
+#include <config/compiler/protobuf_prefix.h>
+
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
+
+#include <config/compiler/protobuf_suffix.h>
 
 #include <config/extern_log_categorize.h>
 
@@ -33,14 +37,12 @@ namespace detail {
 
             util::time::time_utility::update();
             util::time::time_utility::raw_time_t end = util::time::time_utility::now();
-            if (0 != action->get_player_id()) {
-                WCLOGINFO(log_categorize_t::PROTO_STAT, "%s|%llu|%lldus|%d|%d", action->name(), action->get_player_id_llu(),
-                          static_cast<long long>(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()), action->get_ret_code(),
-                          action->get_rsp_code());
+            if (0 != action->get_user_id()) {
+                FWCLOGINFO(log_categorize_t::PROTO_STAT, "{}|{}|{}us|{}|{}", action->name(), action->get_user_id(),
+                           std::chrono::duration_cast<std::chrono::microseconds>(end - start).count(), action->get_ret_code(), action->get_rsp_code());
             } else {
-                WCLOGINFO(log_categorize_t::PROTO_STAT, "%s|NO PLAYER|%lldus|%d|%d", action->name(),
-                          static_cast<long long>(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()), action->get_ret_code(),
-                          action->get_rsp_code());
+                FWCLOGINFO(log_categorize_t::PROTO_STAT, "{}|NO PLAYER|{}us|{}|{}", action->name(),
+                           std::chrono::duration_cast<std::chrono::microseconds>(end - start).count(), action->get_ret_code(), action->get_rsp_code());
             }
         }
 
@@ -52,7 +54,7 @@ namespace detail {
 rpc::context &task_action_base::task_action_helper_t::get_shared_context(task_action_base &action) { return action.get_shared_context(); }
 
 task_action_base::task_action_base()
-    : player_id_(0), task_id_(0), ret_code_(0), rsp_code_(0), rsp_msg_disabled_(false), evt_disabled_(false),
+    : user_id_(0), zone_id_(0), task_id_(0), ret_code_(0), rsp_code_(0), rsp_msg_disabled_(false), evt_disabled_(false),
       start_data_(dispatcher_make_default<dispatcher_start_data_t>()) {}
 task_action_base::~task_action_base() {}
 
@@ -104,7 +106,7 @@ int task_action_base::operator()(void *priv_data) {
 
     task_manager::task_t *task = cotask::this_task::get<task_manager::task_t>();
     if (NULL == task) {
-        WLOGERROR("task convert failed, must in task.");
+        FWLOGERROR("task convert failed, must in task.");
         return tracer.return_code(hello::err::EN_SYS_INIT);
     }
 
@@ -116,21 +118,21 @@ int task_action_base::operator()(void *priv_data) {
 
     task_id_ = task->get_id();
 
-    if (0 != get_player_id()) {
-        WLOGDEBUG("task %s [0x%llx] for player %llu start to run\n", name(), get_task_id_llu(), get_player_id_llu());
+    if (0 != get_user_id()) {
+        FWLOGDEBUG("task {} [{}] for player {}:{} start to run\n", name(), get_task_id(), get_zone_id(), get_user_id());
     } else {
-        WLOGDEBUG("task %s [0x%llx] start to run\n", name(), get_task_id_llu());
+        FWLOGDEBUG("task {} [{}] start to run\n", name(), get_task_id());
     }
 
     ret_code_ = hook_run();
 
     if (evt_disabled_) {
         if (ret_code_ < 0) {
-            WLOGERROR("task %s [0x%llx] without evt ret code (%s)%d, rsp code (%s)%d\n", name(), get_task_id_llu(),
-                      protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_, protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
+            FWLOGERROR("task {} [{}] without evt ret code ({}){} rsp code ({}){}\n", name(), get_task_id(), protobuf_mini_dumper_get_error_msg(ret_code_),
+                       ret_code_, protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
         } else {
-            WLOGDEBUG("task %s [0x%llx] without evt ret code (%s)%d, rsp code (%s)%d\n", name(), get_task_id_llu(),
-                      protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_, protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
+            FWLOGDEBUG("task {} [{}] without evt ret code ({}){}, rsp code ({}){}\n", name(), get_task_id(), protobuf_mini_dumper_get_error_msg(ret_code_),
+                       ret_code_, protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
         }
 
         if (!rsp_msg_disabled_) {
@@ -148,8 +150,8 @@ int task_action_base::operator()(void *priv_data) {
         int ret = 0;
         if (rsp_code_ < 0) {
             ret = on_failed();
-            WLOGINFO("task %s [0x%llx] finished success but response errorcode, rsp code: (%s)%d\n", name(), get_task_id_llu(),
-                     protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
+            FWLOGINFO("task {} [{}] finished success but response errorcode, rsp code: ({}){}\n", name(), get_task_id(),
+                      protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
         } else {
             ret = on_success();
         }
@@ -198,12 +200,12 @@ int task_action_base::operator()(void *priv_data) {
         }
     }
 
-    if (0 != get_player_id()) {
-        WLOGERROR("task %s [0x%llx] for player %llu ret code (%s)%d, rsp code (%s)%d\n", name(), get_task_id_llu(), get_player_id_llu(),
-                  protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_, protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
+    if (0 != get_user_id()) {
+        FWLOGERROR("task {} [{}] for player {}:{} ret code ({}){}, rsp code ({}){}\n", name(), get_task_id(), get_zone_id(), get_user_id(),
+                   protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_, protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
     } else {
-        WLOGERROR("task %s [0x%llx] ret code (%s)%d, rsp code (%s)%d\n", name(), get_task_id_llu(), protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_,
-                  protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
+        FWLOGERROR("task {} [{}] ret code ({}){}, rsp code ({}){}\n", name(), get_task_id(), protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_,
+                   protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
     }
 
     // 响应OnTimeout

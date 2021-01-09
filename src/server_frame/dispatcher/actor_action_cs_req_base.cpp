@@ -23,7 +23,7 @@ actor_action_cs_req_base::actor_action_cs_req_base(dispatcher_start_data_t COPP_
         if (sess) {
             player_cache::ptr_t player_cache = sess->get_player();
             if (player_cache) {
-                set_player_id(player_cache->get_user_id());
+                set_user_key(player_cache->get_user_id(), player_cache->get_zone_id());
             }
         }
     }
@@ -72,8 +72,7 @@ void actor_action_cs_req_base::send_rsp_msg() {
     session::ptr_t sess = get_session();
     if (!sess) {
         std::pair<uint64_t, uint64_t> sess_id = get_gateway_info();
-        WLOGERROR("try to send response message, but session (0x%llx, 0x%llx) not found", static_cast<unsigned long long>(sess_id.first),
-                  static_cast<unsigned long long>(sess_id.second));
+        FWLOGERROR("try to send response message, but session [{:#x}, {}] not found", sess_id.first, sess_id.second);
         return;
     }
 

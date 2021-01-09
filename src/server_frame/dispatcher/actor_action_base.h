@@ -28,10 +28,10 @@ protected:
 public:
     virtual const char *name() const;
 
-    virtual int               hook_run();
-    virtual int               operator()() = 0;
-    inline uint64_t           get_player_id() const { return player_id_; }
-    inline unsigned long long get_player_id_llu() const { return static_cast<unsigned long long>(get_player_id()); };
+    virtual int     hook_run();
+    virtual int     operator()() = 0;
+    inline uint64_t get_user_id() const { return user_id_; }
+    inline uint32_t get_zone_id() const { return zone_id_; }
 
     virtual int on_success();
     virtual int on_failed();
@@ -42,7 +42,10 @@ public:
     int32_t run(void *priv_data);
 
 protected:
-    inline void  set_player_id(uint64_t player_id) { player_id_ = player_id; }
+    inline void set_user_key(uint64_t user_id, uint32_t zone_id) {
+        user_id_ = user_id;
+        zone_id_ = zone_id;
+    }
     virtual void send_rsp_msg() = 0;
 
 public:
@@ -124,7 +127,8 @@ protected:
     inline rpc::context &get_shared_context() { return shared_context_; }
 
 private:
-    uint64_t player_id_;
+    uint64_t user_id_;
+    uint32_t zone_id_;
     int32_t  ret_code_;
     int32_t  rsp_code_;
     status_t status_;

@@ -2,13 +2,21 @@
 // Created by owt50 on 2016/11/14.
 //
 
+#include <config/compiler/protobuf_prefix.h>
+
+#include <protocol/pbdesc/atframework.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
+
+#include <config/compiler/protobuf_suffix.h>
 
 #include <config/extern_log_categorize.h>
 
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
+
+#include <rpc/db/uuid.h>
+#include <utility/protobuf_mini_dumper.h>
 
 #include "actor_action_base.h"
 
@@ -29,14 +37,12 @@ namespace detail {
 
             util::time::time_utility::update();
             util::time::time_utility::raw_time_t end = util::time::time_utility::now();
-            if (0 != action->get_player_id()) {
-                WCLOGINFO(log_categorize_t::PROTO_STAT, "%s|%llu|%lldus|%d|%d", action->name(), action->get_player_id_llu(),
-                          static_cast<long long>(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()), action->get_ret_code(),
-                          action->get_rsp_code());
+            if (0 != action->get_user_id()) {
+                FWCLOGINFO(log_categorize_t::PROTO_STAT, "{}|{}|{}us|{}|{}", action->name(), action->get_user_id(),
+                           std::chrono::duration_cast<std::chrono::microseconds>(end - start).count(), action->get_ret_code(), action->get_rsp_code());
             } else {
-                WCLOGINFO(log_categorize_t::PROTO_STAT, "%s|NO PLAYER|%lldus|%d|%d", action->name(),
-                          static_cast<long long>(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()), action->get_ret_code(),
-                          action->get_rsp_code());
+                FWCLOGINFO(log_categorize_t::PROTO_STAT, "{}|NO PLAYER|{}us|{}|{}", action->name(),
+                           std::chrono::duration_cast<std::chrono::microseconds>(end - start).count(), action->get_ret_code(), action->get_rsp_code());
             }
         }
 
@@ -46,11 +52,11 @@ namespace detail {
 } // namespace detail
 
 actor_action_base::actor_action_base()
-    : player_id_(0), ret_code_(0), rsp_code_(0), status_(EN_AAS_CREATED), rsp_msg_disabled_(false), evt_disabled_(false),
+    : user_id_(0), zone_id_(0), ret_code_(0), rsp_code_(0), status_(EN_AAS_CREATED), rsp_msg_disabled_(false), evt_disabled_(false),
       start_data_(dispatcher_make_default<dispatcher_start_data_t>()) {}
 actor_action_base::~actor_action_base() {
     if (EN_AAS_FINISHED != status_) {
-        WLOGERROR("actor %s [%p] is created but not run", name(), this);
+        FWLOGERROR("actor {} [{}] is created but not run", name(), reinterpret_cast<const void *>(this));
         set_rsp_code(hello::EN_ERR_TIMEOUT);
         set_ret_code(hello::err::EN_SYS_TIMEOUT);
     }
@@ -76,15 +82,45 @@ int32_t actor_action_base::run(void *priv_data) {
 
     if (NULL != priv_data) {
         start_data_ = *reinterpret_cast<dispatcher_start_data_t *>(priv_data);
+
+        // Set parent context if not set by child type
+        if (nullptr != start_data_.context) {
+            if (!shared_context_.get_protobuf_arena()) {
+                shared_context_.try_reuse_protobuf_arena(start_data_.context->mutable_protobuf_arena());
+            }
+
+            if (nullptr != start_data_.context->get_trace_span()) {
+                const atframework::RpcTraceSpan *origin_trace_span = shared_context_.get_trace_span();
+                if (nullptr == origin_trace_span) {
+                    shared_context_.set_trace_id(rpc::db::uuid::generate_standard_uuid(true));
+                    shared_context_.set_trace_parent(*start_data_.context->get_trace_span());
+                } else {
+                    if (origin_trace_span->trace_id().empty()) {
+                        shared_context_.set_trace_id(rpc::db::uuid::generate_standard_uuid(true));
+                    }
+
+                    if (origin_trace_span->parent_id().empty()) {
+                        shared_context_.set_trace_parent(*start_data_.context->get_trace_span());
+                    }
+                }
+            }
+        }
     }
 
     if (get_status() > EN_AAS_CREATED) {
-        WLOGERROR("actor %s [%p] already running", name(), this);
+        FWLOGERROR("actor {} [{}] already running", name(), reinterpret_cast<const void *>(this));
         return hello::err::EN_SYS_BUSY;
     }
 
+    rpc::context::tracer tracer;
+    shared_context_.setup_tracer(tracer, name(), get_dispatcher());
+
     status_ = EN_AAS_RUNNING;
-    WLOGDEBUG("actor %s [%p] start to run", name(), this);
+    if (0 != get_user_id()) {
+        FWLOGDEBUG("actor {} [{}] for player {}:{} start to run\n", name(), reinterpret_cast<const void *>(this), get_zone_id(), get_user_id());
+    } else {
+        FWLOGDEBUG("actor {} [{}] start to run\n", name(), reinterpret_cast<const void *>(this));
+    }
     ret_code_ = hook_run();
 
     // 响应OnSuccess(这时候任务的status还是running)
@@ -92,7 +128,8 @@ int32_t actor_action_base::run(void *priv_data) {
     if (!evt_disabled_) {
         if (rsp_code_ < 0) {
             ret = on_failed();
-            WLOGINFO("actor %s [%p] finished success but response errorcode, rsp code: %d\n", name(), this, rsp_code_);
+            FWLOGINFO("actor {} [{}] finished success but response errorcode, rsp code: {}({})\n", name(), reinterpret_cast<const void *>(this), rsp_code_,
+                      protobuf_mini_dumper_get_error_msg(rsp_code_));
         } else {
             ret = on_success();
         }

@@ -68,7 +68,7 @@ int task_action_player_remote_patch_jobs::operator()() {
     if (!param_.user) {
         return hello::err::EN_SYS_PARAM;
     }
-    set_player_id(param_.user->get_user_id());
+    set_user_key(param_.user->get_user_id(), param_.user->get_zone_id());
 
     router_player_cache::key_t key(router_player_manager::me()->get_type_id(), param_.user->get_zone_id(), param_.user->get_user_id());
     router_player_cache::ptr_t cache = router_player_manager::me()->get_cache(key);

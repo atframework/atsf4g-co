@@ -40,7 +40,7 @@ int task_action_player_logout::operator()() {
         player_cache::ptr_t user = s->get_player();
         // 如果玩家数据是缓存，不是实际登入点，则不用保存
         if (user && user->is_writable()) {
-            set_player_id(user->get_user_id());
+            set_user_key(user->get_user_id(), user->get_zone_id());
 
             set_rsp_code(user->await_before_logout_tasks());
             if (get_rsp_code() < 0) {
