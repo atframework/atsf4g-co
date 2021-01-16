@@ -10,8 +10,17 @@
 #include "actor_action_base.h"
 
 class actor_action_no_req_base : public actor_action_base {
-public:
+#if defined(UTIL_CONFIG_COMPILER_CXX_ALIAS_TEMPLATES) && UTIL_CONFIG_COMPILER_CXX_ALIAS_TEMPLATES
+    using base_type = actor_action_base;
+#else
     typedef actor_action_base base_type;
+#endif
+
+    struct ctor_param_t {
+        rpc::context *caller_context;
+
+        ctor_param_t();
+    };
 
 public:
     using base_type::get_ret_code;
@@ -23,6 +32,7 @@ public:
 
 public:
     actor_action_no_req_base();
+    actor_action_no_req_base(const ctor_param_t &param);
     ~actor_action_no_req_base();
 
     std::shared_ptr<dispatcher_implement> get_dispatcher() const UTIL_CONFIG_OVERRIDE;

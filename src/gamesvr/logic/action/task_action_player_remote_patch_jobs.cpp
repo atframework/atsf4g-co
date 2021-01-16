@@ -22,7 +22,8 @@
 #include "task_action_player_remote_patch_jobs.h"
 
 task_action_player_remote_patch_jobs::task_action_player_remote_patch_jobs(ctor_param_t COPP_MACRO_RV_REF param)
-    : param_(param), need_restart_(false), is_writable_(false), patched_job_number_(0) {}
+    : task_action_no_req_base(param), param_(param), need_restart_(false), is_writable_(false), patched_job_number_(0) {}
+
 
 task_action_player_remote_patch_jobs::~task_action_player_remote_patch_jobs() {}
 

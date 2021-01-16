@@ -15,7 +15,7 @@ class player;
 
 class task_action_player_remote_patch_jobs : public task_action_no_req_base {
 public:
-    struct ctor_param_t {
+    struct ctor_param_t : public task_action_no_req_base::ctor_param_t {
         std::shared_ptr<player> user;
         time_t                  timeout_duration;
         time_t                  timeout_timepoint;

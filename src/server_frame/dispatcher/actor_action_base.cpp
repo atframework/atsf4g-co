@@ -54,6 +54,15 @@ namespace detail {
 actor_action_base::actor_action_base()
     : user_id_(0), zone_id_(0), ret_code_(0), rsp_code_(0), status_(EN_AAS_CREATED), rsp_msg_disabled_(false), evt_disabled_(false),
       start_data_(dispatcher_make_default<dispatcher_start_data_t>()) {}
+
+actor_action_base::actor_action_base(rpc::context *caller_context)
+    : user_id_(0), zone_id_(0), ret_code_(0), rsp_code_(0), status_(EN_AAS_CREATED), rsp_msg_disabled_(false), evt_disabled_(false),
+      start_data_(dispatcher_make_default<dispatcher_start_data_t>()) {
+    if (nullptr != caller_context) {
+        set_caller_context(*caller_context);
+    }
+}
+
 actor_action_base::~actor_action_base() {
     if (EN_AAS_FINISHED != status_) {
         FWLOGERROR("actor {} [{}] is created but not run", name(), reinterpret_cast<const void *>(this));
@@ -152,3 +161,17 @@ int actor_action_base::on_success() { return 0; }
 int actor_action_base::on_failed() { return 0; }
 
 int actor_action_base::on_complete() { return 0; }
+
+void actor_action_base::set_caller_context(rpc::context &ctx) {
+    get_shared_context().try_reuse_protobuf_arena(ctx.mutable_protobuf_arena());
+
+    if (nullptr == ctx.get_trace_span()) {
+        return;
+    }
+
+    if (nullptr != get_shared_context().get_trace_span() && !get_shared_context().get_trace_span()->parent_id().empty()) {
+        return;
+    }
+
+    get_shared_context().set_trace_parent(*ctx.get_trace_span());
+}

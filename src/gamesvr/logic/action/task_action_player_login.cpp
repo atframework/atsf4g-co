@@ -203,7 +203,8 @@ int task_action_player_login::on_success() {
     {
         task_manager::id_t                          tid = 0;
         task_action_player_async_jobs::ctor_param_t params;
-        params.user = user;
+        params.user           = user;
+        params.caller_context = &get_shared_context();
         task_manager::me()->create_task_with_timeout<task_action_player_async_jobs>(tid, logic_config::me()->get_cfg_logic().task_nomsg_timeout,
                                                                                     COPP_MACRO_STD_MOVE(params));
         if (0 == tid) {

@@ -56,6 +56,15 @@ rpc::context &task_action_base::task_action_helper_t::get_shared_context(task_ac
 task_action_base::task_action_base()
     : user_id_(0), zone_id_(0), task_id_(0), ret_code_(0), rsp_code_(0), rsp_msg_disabled_(false), evt_disabled_(false),
       start_data_(dispatcher_make_default<dispatcher_start_data_t>()) {}
+
+task_action_base::task_action_base(rpc::context *caller_context)
+    : user_id_(0), zone_id_(0), task_id_(0), ret_code_(0), rsp_code_(0), rsp_msg_disabled_(false), evt_disabled_(false),
+      start_data_(dispatcher_make_default<dispatcher_start_data_t>()) {
+    if (nullptr != caller_context) {
+        set_caller_context(*caller_context);
+    }
+}
+
 task_action_base::~task_action_base() {}
 
 const char *task_action_base::name() const {
@@ -245,3 +254,17 @@ int task_action_base::on_timeout() { return 0; }
 int task_action_base::on_complete() { return 0; }
 
 uint64_t task_action_base::get_task_id() const { return task_id_; }
+
+void task_action_base::set_caller_context(rpc::context &ctx) {
+    get_shared_context().try_reuse_protobuf_arena(ctx.mutable_protobuf_arena());
+
+    if (nullptr == ctx.get_trace_span()) {
+        return;
+    }
+
+    if (nullptr != get_shared_context().get_trace_span() && !get_shared_context().get_trace_span()->parent_id().empty()) {
+        return;
+    }
+
+    get_shared_context().set_trace_parent(*ctx.get_trace_span());
+}

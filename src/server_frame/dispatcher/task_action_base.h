@@ -36,6 +36,7 @@ class player_cache;
 class task_action_base : public ::cotask::impl::task_action_impl {
 protected:
     task_action_base();
+    task_action_base(rpc::context *caller_context);
     virtual ~task_action_base();
 
 public:
@@ -134,6 +135,13 @@ protected:
 
     inline const rpc::context &get_shared_context() const { return shared_context_; }
     inline rpc::context &      get_shared_context() { return shared_context_; }
+
+    /**
+     * @brief Set caller rpc context, we will try to reuse arena allocator and set trace parent data
+     *
+     * @param ctx caller context
+     */
+    void set_caller_context(rpc::context &ctx);
 
 private:
     uint64_t                user_id_;

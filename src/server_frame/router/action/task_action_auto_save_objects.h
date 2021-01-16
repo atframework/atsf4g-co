@@ -11,7 +11,7 @@
 
 class task_action_auto_save_objects : public task_action_no_req_base {
 public:
-    struct ctor_param_t {};
+    struct ctor_param_t : public task_action_no_req_base::ctor_param_t {};
 
 public:
     using task_action_no_req_base::operator();

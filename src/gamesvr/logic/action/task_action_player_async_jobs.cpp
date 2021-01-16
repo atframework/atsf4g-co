@@ -10,7 +10,7 @@
 
 #include "task_action_player_async_jobs.h"
 
-task_action_player_async_jobs::task_action_player_async_jobs(ctor_param_t COPP_MACRO_RV_REF param) : param_(param) {}
+task_action_player_async_jobs::task_action_player_async_jobs(ctor_param_t COPP_MACRO_RV_REF param) : task_action_no_req_base(param), param_(param) {}
 
 task_action_player_async_jobs::~task_action_player_async_jobs() {}
 

@@ -23,6 +23,7 @@ public:
 
 protected:
     actor_action_base();
+    actor_action_base(rpc::context *caller_context);
     virtual ~actor_action_base();
 
 public:
@@ -125,6 +126,13 @@ protected:
      * @return const rpc::context&
      */
     inline rpc::context &get_shared_context() { return shared_context_; }
+
+    /**
+     * @brief Set caller rpc context, we will try to reuse arena allocator and set trace parent data
+     *
+     * @param ctx caller context
+     */
+    void set_caller_context(rpc::context &ctx);
 
 private:
     uint64_t user_id_;

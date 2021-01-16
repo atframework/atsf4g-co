@@ -15,7 +15,8 @@
 #include "../router_object_base.h"
 #include "task_action_auto_save_objects.h"
 
-task_action_auto_save_objects::task_action_auto_save_objects(ctor_param_t COPP_MACRO_RV_REF param) : success_count_(0), failed_count_(0) {}
+task_action_auto_save_objects::task_action_auto_save_objects(ctor_param_t COPP_MACRO_RV_REF param)
+    : task_action_no_req_base(param), success_count_(0), failed_count_(0) {}
 
 task_action_auto_save_objects::~task_action_auto_save_objects() {}
 

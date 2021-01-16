@@ -17,7 +17,7 @@
 #include "task_action_router_close_manager_set.h"
 
 task_action_router_close_manager_set::task_action_router_close_manager_set(ctor_param_t COPP_MACRO_RV_REF param)
-    : param_(param), success_count_(0), failed_count_(0), current_idx_(0) {}
+    : task_action_no_req_base(param), param_(param), success_count_(0), failed_count_(0), current_idx_(0) {}
 
 task_action_router_close_manager_set::~task_action_router_close_manager_set() {}
 

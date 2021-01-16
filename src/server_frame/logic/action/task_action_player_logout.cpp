@@ -18,7 +18,8 @@
 #include "task_action_player_logout.h"
 
 
-task_action_player_logout::task_action_player_logout(ctor_param_t COPP_MACRO_RV_REF param) : ctor_param_(COPP_MACRO_STD_MOVE(param)) {}
+task_action_player_logout::task_action_player_logout(ctor_param_t COPP_MACRO_RV_REF param)
+    : task_action_no_req_base(param), ctor_param_(COPP_MACRO_STD_MOVE(param)) {}
 task_action_player_logout::~task_action_player_logout() {}
 
 int task_action_player_logout::operator()() {

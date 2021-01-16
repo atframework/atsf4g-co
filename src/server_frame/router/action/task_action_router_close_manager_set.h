@@ -20,7 +20,7 @@ public:
     typedef std::vector<router_object_ptr_t>    pending_list_t;
     typedef std::shared_ptr<pending_list_t>     pending_list_ptr_t;
 
-    struct ctor_param_t {
+    struct ctor_param_t : public task_action_no_req_base::ctor_param_t {
         pending_list_ptr_t pending_list;
     };
 
