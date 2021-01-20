@@ -8,6 +8,7 @@ AlignTrailingComments: true
 AllowAllParametersOfDeclarationOnNextLine: false
 AllowShortIfStatementsOnASingleLine: true
 AlwaysBreakTemplateDeclarations: true
+SpacesBeforeTrailingComments: 2
 ColumnLimit: 160
 CommentPragmas: ''
 IndentWidth: 4
