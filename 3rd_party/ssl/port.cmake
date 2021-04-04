@@ -14,7 +14,9 @@ if(CRYPTO_USE_OPENSSL
     find_package(OpenSSL)
   endif()
   if(NOT OPENSSL_FOUND)
-    message(FATAL_ERROR "CRYPTO_USE_OPENSSL,CRYPTO_USE_LIBRESSL,CRYPTO_USE_BORINGSSL is set but openssl not found")
+    message(
+      FATAL_ERROR
+        "CRYPTO_USE_OPENSSL,CRYPTO_USE_LIBRESSL,CRYPTO_USE_BORINGSSL is set but openssl not found")
   endif()
 elseif(CRYPTO_USE_MBEDTLS)
   include("${CMAKE_CURRENT_LIST_DIR}/mbedtls/mbedtls.cmake")

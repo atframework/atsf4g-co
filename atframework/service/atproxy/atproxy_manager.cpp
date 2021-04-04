@@ -5,21 +5,22 @@
 
 namespace atframe {
     namespace proxy {
-        static const std::string* next_listen_address(atproxy_manager::node_info_t& node_info) {
+        static const atapp::protocol::atapp_gateway *next_listen_address(atproxy_manager::node_info_t &node_info) {
             if (node_info.round_robin_index < 0) {
                 node_info.round_robin_index = 0;
             }
-            if (node_info.etcd_node.node_discovery.gateway_size() > 0) {
-                if (node_info.round_robin_index >= node_info.etcd_node.node_discovery.gateway_size()) {
-                    node_info.round_robin_index %= node_info.etcd_node.node_discovery.gateway_size();
-                    return &node_info.etcd_node.node_discovery.gateway(node_info.round_robin_index ++);
+            if (node_info.etcd_node.node_discovery.gateways_size() > 0) {
+                if (node_info.round_robin_index >= node_info.etcd_node.node_discovery.gateways_size()) {
+                    node_info.round_robin_index %= node_info.etcd_node.node_discovery.gateways_size();
+                    return &node_info.etcd_node.node_discovery.gateways(node_info.round_robin_index++);
                 }
             }
 
             if (node_info.etcd_node.node_discovery.listen_size() > 0) {
                 if (node_info.round_robin_index >= node_info.etcd_node.node_discovery.listen_size()) {
                     node_info.round_robin_index %= node_info.etcd_node.node_discovery.listen_size();
-                    return &node_info.etcd_node.node_discovery.listen(node_info.round_robin_index ++);
+                    node_info.ingress_for_listen.set_address(node_info.etcd_node.node_discovery.listen(node_info.round_robin_index++));
+                    return &node_info.ingress_for_listen;
                 }
             }
 
@@ -27,8 +28,8 @@ namespace atframe {
         }
 
         static int listen_address_size(atproxy_manager::node_info_t& node_info) {
-            if (node_info.etcd_node.node_discovery.gateway_size() > 0) {
-                return node_info.etcd_node.node_discovery.gateway_size();
+            if (node_info.etcd_node.node_discovery.gateways_size() > 0) {
+                return node_info.etcd_node.node_discovery.gateways_size();
             }
 
             return node_info.etcd_node.node_discovery.listen_size();
@@ -115,16 +116,19 @@ namespace atframe {
                         int check_size = listen_address_size(iter->second);
                         for (int i = 0; NULL == select_address && i < check_size; ++i) {
                             // support more protocols
-                            const std::string* try_addr = next_listen_address(iter->second);
-                            if (NULL == try_addr) {
+                            const atapp::protocol::atapp_gateway *try_gateway = next_listen_address(iter->second);
+                            if (NULL == try_gateway) {
                                 continue;
                             }
-                            uint32_t address_type = get_app()->get_address_type(*try_addr);
+                            if (!get_app()->match_gateway(*try_gateway)) {
+                                continue;
+                            }
+                            uint32_t address_type = get_app()->get_address_type(try_gateway->address());
                             if (address_type & atapp::app::address_type_t::EN_ACAT_LOCAL_HOST) {
                                 continue;
                             }
 
-                            select_address = try_addr;
+                            select_address = &try_gateway->address();
                         }
                     }
 

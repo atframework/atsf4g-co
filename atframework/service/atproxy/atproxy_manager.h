@@ -21,6 +21,7 @@ namespace atframe {
             typedef atapp::etcd_module::node_action_t node_action_t;
             struct node_info_t {
                 atapp::etcd_module::node_info_t etcd_node;
+                atapp::protocol::atapp_gateway  ingress_for_listen;
                 time_t                          next_action_time;
                 bool                            is_available;
                 int                             round_robin_index;

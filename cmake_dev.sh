@@ -97,7 +97,7 @@ while getopts "ab:c:d:e:hltus-" OPTION; do
             CMAKE_BUILD_TYPE="$OPTARG";
         ;;
         c)
-            if [ $CMAKE_CLANG_ANALYZER -ne 0 ]; then
+            if [[ $CMAKE_CLANG_ANALYZER -ne 0 ]]; then
                 CCC_CC="$OPTARG";
                 CCC_CXX="${CCC_CC/%clang/clang++}";
                 CCC_CXX="${CCC_CXX/%gcc/g++}";
@@ -105,8 +105,8 @@ while getopts "ab:c:d:e:hltus-" OPTION; do
                 export CCC_CXX;
             else
                 CC="$OPTARG";
-                CXX="${CC/%clang/clang++}";
-                CXX="${CXX/%gcc/g++}";
+                CXX="$(echo "$CC" | sed 's/\(.*\)clang/\1clang++/')";
+                CXX="$(echo "$CXX" | sed 's/\(.*\)gcc/\1g++/')";
             fi
         ;;
         d)
