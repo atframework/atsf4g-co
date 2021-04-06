@@ -36,10 +36,6 @@ macro(PROJECT_3RD_PARTY_LIBWEBSOCKETS_IMPORT)
     echowithcolor(COLOR GREEN "-- Dependency: libwebsockets found.(TARGET: websockets_shared)")
     list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES websockets_shared)
     project_3rd_party_libwebsockets_patch_imported_target(websockets_shared)
-  elseif(Libwebsockets_FOUND)
-    echowithcolor(COLOR RED "-- Dependency: libwebsockets found")
-    list(APPEND 3RD_PARTY_PUBLIC_INCLUDE_DIRS ${LIBWEBSOCKETS_INCLUDE_DIRS})
-    list(APPEND 3RD_PARTY_PUBLIC_LINK_NAMES ${LIBWEBSOCKETS_LIBRARIES})
   endif()
 endmacro()
 
@@ -47,7 +43,7 @@ if(NOT Libwebsockets_FOUND
    AND NOT TARGET websockets
    AND NOT TARGET websockets_shared)
   if(VCPKG_TOOLCHAIN)
-    find_package(Libwebsockets QUIET)
+    find_package(Libwebsockets QUIET CONFIG)
     project_3rd_party_libwebsockets_import()
   endif()
 
@@ -60,7 +56,7 @@ if(NOT Libwebsockets_FOUND
     list(APPEND CMAKE_FIND_ROOT_PATH ${PROJECT_3RD_PARTY_INSTALL_DIR})
     list(APPEND CMAKE_PREFIX_PATH ${PROJECT_3RD_PARTY_INSTALL_DIR})
 
-    find_package(Libwebsockets QUIET)
+    find_package(Libwebsockets QUIET CONFIG)
     project_3rd_party_libwebsockets_import()
     if(NOT Libwebsockets_FOUND)
       set(3RD_PARTY_LIBWEBSOCKETS_VERSION "v4.1.6")
@@ -115,9 +111,11 @@ if(NOT Libwebsockets_FOUND
       endif()
 
       if(ZLIB_INCLUDE_DIRS AND ZLIB_LIBRARIES)
+        string(REPLACE ";" "\\;" ZLIB_LIBRARIES_AS_CMD_ARGS "${ZLIB_LIBRARIES}")
         list(APPEND 3RD_PARTY_LIBWEBSOCKETS_BUILD_OPTIONS "-DLWS_WITH_ZLIB=ON"
-             "-DLWS_ZLIB_LIBRARIES=${ZLIB_LIBRARIES}"
+             "-DLWS_ZLIB_LIBRARIES=${ZLIB_LIBRARIES_AS_CMD_ARGS}"
              "-DLWS_ZLIB_INCLUDE_DIRS=${ZLIB_INCLUDE_DIRS}")
+        unset(ZLIB_LIBRARIES_AS_CMD_ARGS)
       endif()
       if(OPENSSL_FOUND AND NOT LIBRESSL_FOUND)
         # list(APPEND 3RD_PARTY_LIBWEBSOCKETS_BUILD_OPTIONS #
@@ -129,8 +127,14 @@ if(NOT Libwebsockets_FOUND
           list(APPEND 3RD_PARTY_LIBWEBSOCKETS_BUILD_OPTIONS
                "-DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}")
         endif()
-        if(NOT MSVC)
-          # libwebsockets的检测脚本写得不是特别健壮，会导致MSVC环境下很多链接问题，所以还是用动态库 其他环境为了适配兼容性一律使用静态库
+        if(MSVC)
+          string(REPLACE ";" "\\;" OPENSSL_LIBRARIES_AS_CMD_ARGS "${OPENSSL_SSL_LIBRARIES}")
+          # Some version of libwebsockets have compiling problems.
+          list(APPEND 3RD_PARTY_LIBWEBSOCKETS_BUILD_OPTIONS "-DLWS_WITH_SSL=ON"
+               "-DLWS_WITH_CLIENT=ON" "-DLWS_OPENSSL_INCLUDE_DIRS=${OPENSSL_INCLUDE_DIR}"
+               "-DLWS_OPENSSL_LIBRARIES=${OPENSSL_LIBRARIES_AS_CMD_ARGS}")
+          unset(OPENSSL_LIBRARIES_AS_CMD_ARGS)
+        else()
           list(APPEND 3RD_PARTY_LIBWEBSOCKETS_BUILD_OPTIONS "-DOPENSSL_USE_STATIC_LIBS=YES")
         endif()
       endif()
@@ -196,7 +200,7 @@ if(NOT Libwebsockets_FOUND
 
         project_expand_list_for_command_line_to_file(
           "${3RD_PARTY_LIBWEBSOCKETS_BUILD_DIR}/run-config.sh"
-          ${3RD_PARTY_LIBWEBSOCKETS_BUILD_OPTIONS})
+          "${3RD_PARTY_LIBWEBSOCKETS_BUILD_OPTIONS}")
         project_expand_list_for_command_line_to_file(
           "${3RD_PARTY_LIBWEBSOCKETS_BUILD_DIR}/run-build-release.sh" ${CMAKE_COMMAND} "--build"
           "." "-j")
@@ -231,7 +235,7 @@ if(NOT Libwebsockets_FOUND
 
         project_expand_list_for_command_line_to_file(
           "${3RD_PARTY_LIBWEBSOCKETS_BUILD_DIR}/run-config.bat"
-          ${3RD_PARTY_LIBWEBSOCKETS_BUILD_OPTIONS})
+          "${3RD_PARTY_LIBWEBSOCKETS_BUILD_OPTIONS}")
         project_expand_list_for_command_line_to_file(
           "${3RD_PARTY_LIBWEBSOCKETS_BUILD_DIR}/run-build-release.bat" ${CMAKE_COMMAND} "--build"
           "." "-j")
@@ -255,7 +259,7 @@ if(NOT Libwebsockets_FOUND
                         WORKING_DIRECTORY ${3RD_PARTY_LIBWEBSOCKETS_BUILD_DIR})
       endif()
 
-      find_package(Libwebsockets)
+      find_package(Libwebsockets CONFIG)
       project_3rd_party_libwebsockets_import()
     endif()
 
