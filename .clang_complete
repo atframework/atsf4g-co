@@ -1,8 +1,0 @@
--I3rd_party/libiniloader/repo
--I3rd_party/libuv/prebuilt/include
--I3rd_party/msgpack/prebuilt/include
--Iatframework/libatapp/repo/include
--Iatframework/libatbus/repo/include
--Iatframework/libatframe_utils/repo/include
--Iatframework/service/component/include
--Isrc/server_frame

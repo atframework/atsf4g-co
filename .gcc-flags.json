@@ -1,8 +1,0 @@
-{
-    "execPath": "C:/msys64/mingw64/bin/g++.exe",
-    "gccDefaultCFlags": "-Wall",
-    "gccDefaultCppFlags": "-Wall -std=c++11",
-    "gccErrorLimit": 15,
-    "gccIncludePaths": "./3rd_party/libiniloader/repo,./3rd_party/libiniloader/repo,./3rd_party/msgpack/repo,./atframework/libatapp/repo/include,./atframework/libatbus/repo/include,./atframework/libatframe_utils/repo/include,./atframework/service/component/include,./src/server_frame",
-    "gccSuppressWarnings": true
-}
