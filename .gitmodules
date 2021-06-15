@@ -1,9 +1,8 @@
-[submodule "atframework/libatframe_utils/repo"]
-	path = atframework/libatframe_utils/repo
+[submodule "atframework/cmake-toolset"]
+	path = atframework/cmake-toolset
+	url = https://github.com/atframework/cmake-toolset.git
+	branch = main
+[submodule "atframework/atframe_utils"]
+	path = atframework/atframe_utils
 	url = https://github.com/atframework/atframe_utils.git
-[submodule "atframework/libatbus/repo"]
-	path = atframework/libatbus/repo
-	url = https://github.com/atframework/libatbus.git
-[submodule "atframework/libatapp/repo"]
-	path = atframework/libatapp/repo
-	url = https://github.com/atframework/libatapp.git
+	branch = main

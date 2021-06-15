@@ -30,7 +30,7 @@ unset(LIB_NAME_PUBLIC_LINK_NAMES)
 list(APPEND LIB_NAME_PUBLIC_DEFINITIONS ATBUS_MACRO_MSG_LIMIT=${ATBUS_MACRO_MSG_LIMIT})
 
 # 加密算法库检测
-# =========== 3rd_party - openssl/libressl/boringssl/mbedtls ===========
+# =========== third_party - openssl/libressl/boringssl/mbedtls ===========
 if (CRYPTO_USE_OPENSSL OR CRYPTO_USE_LIBRESSL OR CRYPTO_USE_BORINGSSL)
     if (NOT OPENSSL_FOUND AND NOT LIBRESSL_FOUND)
         if (CRYPTO_USE_LIBRESSL)
@@ -131,13 +131,13 @@ endif()
 if (NOT CRYPTO_DISABLED)
     find_package(Libsodium)
     if (Libsodium_FOUND)
-        list(APPEND 3RD_PARTY_CRYPT_LINK_NAME ${Libsodium_LIBRARIES})
+        list(APPEND THIRD_PARTY_CRYPT_LINK_NAME ${Libsodium_LIBRARIES})
     endif()
 endif()
 
 if (MINGW)
     EchoWithColor(COLOR GREEN "-- MinGW: custom add lib gdi32")
-    list(APPEND 3RD_PARTY_CRYPT_LINK_NAME gdi32)
+    list(APPEND THIRD_PARTY_CRYPT_LINK_NAME gdi32)
 endif()
 
 find_package(Threads)

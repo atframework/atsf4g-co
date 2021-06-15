@@ -51,7 +51,7 @@ cd build_jobs_msvc
 
 cmake --build . --config Debug
 ```  
-Please see [3rd_party](3rd_party) to see which libraries is required.
+Please see [third_party](third_party) to see which libraries is required.
 
 ## Build on Unix like system
 ```bash
@@ -111,7 +111,7 @@ python3 gen_conf.py
 
 ## Framework Code Tree
 
-+ 3rd_party: all dependency 3rd_party libraries
++ third_party: all dependency third_party libraries
 + atframework: atframework projects and libraries
 > * export: exported libraries, used by client
 > * libatframe_utils: framework utility codes
@@ -159,7 +159,7 @@ cd build_jobs_msvc
 
 cmake --build . --config Debug
 ```  
-Please see [3rd_party](3rd_party) to see which libraries is required.
+Please see [third_party](third_party) to see which libraries is required.
 
 ### Build on Unix like system
 ```bash

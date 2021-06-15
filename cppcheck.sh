@@ -39,11 +39,11 @@ done
 
 shift $(($OPTIND - 1));
 
-for inc_dir in $(find "$SCRIPT_DIR/3rd_party" -name include); do
+for inc_dir in $(find "$SCRIPT_DIR/third_party" -name include); do
     CPPCHECK_OPTIONS="$CPPCHECK_OPTIONS -I$inc_dir";
 done
 
-CPPCHECK_OPTIONS="$CPPCHECK_OPTIONS -I$SCRIPT_DIR/3rd_party/libiniloader/repo";
+CPPCHECK_OPTIONS="$CPPCHECK_OPTIONS -I$SCRIPT_DIR/third_party/libiniloader/repo";
 
 if [ ".xml" == "${CPPCHECK_OUTPUT:((${#CPPCHECK_OUTPUT}-4))}" ]; then
     CPPCHECK_OPTIONS="$CPPCHECK_OPTIONS --xml";

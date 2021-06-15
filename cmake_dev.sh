@@ -182,7 +182,7 @@ fi
 
 if [[ 1 -eq $CMAKE_CLANG_ANALYZER ]]; then
     echo "=========================================================================================================";
-    CMAKE_CLANG_ANALYZER_OPTIONS="--exclude ../3rd_party --exclude ../src/server_frame/protocol";
+    CMAKE_CLANG_ANALYZER_OPTIONS="--exclude ../third_party --exclude ../src/server_frame/protocol";
     if [[ -e "$SCRIPT_DIR/.scan-build.enable" ]]; then
         for OPT in $(cat "$SCRIPT_DIR/.scan-build.enable"); do
             CMAKE_CLANG_ANALYZER_OPTIONS="$CMAKE_CLANG_ANALYZER_OPTIONS -enable-checker $OPT";
