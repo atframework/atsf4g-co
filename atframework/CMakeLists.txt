@@ -1,5 +1,5 @@
 # Basic services
-add_subdirectory("${ATFRAMEWORK_BASE_DIR}/service")
+add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/service")
 
 # Export
-add_subdirectory("${ATFRAMEWORK_BASE_DIR}/export")
+add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/export")

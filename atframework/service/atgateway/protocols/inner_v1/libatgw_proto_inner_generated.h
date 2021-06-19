@@ -29,7 +29,7 @@ struct cs_body_pingBuilder;
 struct cs_msg;
 struct cs_msgBuilder;
 
-enum error_code_t {
+enum error_code_t : int32_t {
   error_code_t_EN_ECT_REFUSE_RECONNECT = -1005,
   error_code_t_EN_ECT_SESSION_EXPIRED = -1004,
   error_code_t_EN_ECT_BUSY = -1003,
@@ -64,7 +64,7 @@ inline const char *EnumNameerror_code_t(error_code_t e) {
   }
 }
 
-enum handshake_step_t {
+enum handshake_step_t : uint8_t {
   handshake_step_t_EN_HST_START_REQ = 0,
   handshake_step_t_EN_HST_START_RSP = 1,
   handshake_step_t_EN_HST_RECONNECT_REQ = 11,
@@ -108,7 +108,7 @@ inline const char *EnumNamehandshake_step_t(handshake_step_t e) {
   }
 }
 
-enum switch_secret_t {
+enum switch_secret_t : uint8_t {
   switch_secret_t_EN_SST_DIRECT = 0,
   switch_secret_t_EN_SST_DH = 1,
   switch_secret_t_EN_SST_ECDH = 2,
@@ -141,7 +141,7 @@ inline const char *EnumNameswitch_secret_t(switch_secret_t e) {
   return EnumNamesswitch_secret_t()[index];
 }
 
-enum cs_msg_type_t {
+enum cs_msg_type_t : uint8_t {
   cs_msg_type_t_EN_MTT_UNKNOWN = 0,
   cs_msg_type_t_EN_MTT_POST = 1,
   cs_msg_type_t_EN_MTT_HANDSHAKE = 2,
@@ -189,7 +189,7 @@ inline const char *EnumNamecs_msg_type_t(cs_msg_type_t e) {
   return EnumNamescs_msg_type_t()[index];
 }
 
-enum cs_msg_body {
+enum cs_msg_body : uint8_t {
   cs_msg_body_NONE = 0,
   cs_msg_body_cs_body_post = 1,
   cs_msg_body_cs_body_kickoff = 2,
@@ -291,7 +291,6 @@ struct cs_msg_headBuilder {
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  cs_msg_headBuilder &operator=(const cs_msg_headBuilder &);
   flatbuffers::Offset<cs_msg_head> Finish() {
     const auto end = fbb_.EndTable(start_);
     auto o = flatbuffers::Offset<cs_msg_head>(end);
@@ -351,7 +350,6 @@ struct cs_body_postBuilder {
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  cs_body_postBuilder &operator=(const cs_body_postBuilder &);
   flatbuffers::Offset<cs_body_post> Finish() {
     const auto end = fbb_.EndTable(start_);
     auto o = flatbuffers::Offset<cs_body_post>(end);
@@ -409,7 +407,6 @@ struct cs_body_kickoffBuilder {
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  cs_body_kickoffBuilder &operator=(const cs_body_kickoffBuilder &);
   flatbuffers::Offset<cs_body_kickoff> Finish() {
     const auto end = fbb_.EndTable(start_);
     auto o = flatbuffers::Offset<cs_body_kickoff>(end);
@@ -520,7 +517,6 @@ struct cs_body_handshakeBuilder {
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  cs_body_handshakeBuilder &operator=(const cs_body_handshakeBuilder &);
   flatbuffers::Offset<cs_body_handshake> Finish() {
     const auto end = fbb_.EndTable(start_);
     auto o = flatbuffers::Offset<cs_body_handshake>(end);
@@ -597,7 +593,6 @@ struct cs_body_pingBuilder {
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  cs_body_pingBuilder &operator=(const cs_body_pingBuilder &);
   flatbuffers::Offset<cs_body_ping> Finish() {
     const auto end = fbb_.EndTable(start_);
     auto o = flatbuffers::Offset<cs_body_ping>(end);
@@ -693,7 +688,6 @@ struct cs_msgBuilder {
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  cs_msgBuilder &operator=(const cs_msgBuilder &);
   flatbuffers::Offset<cs_msg> Finish() {
     const auto end = fbb_.EndTable(start_);
     auto o = flatbuffers::Offset<cs_msg>(end);
