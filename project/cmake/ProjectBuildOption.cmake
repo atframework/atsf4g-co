@@ -1,19 +1,6 @@
 ﻿# 默认配置选项
 #####################################################################
 
-include("${CMAKE_CURRENT_LIST_DIR}/FetchDependeny.cmake")
-include(IncludeDirectoryRecurse)
-include(EchoWithColor)
-
-# 测试配置选项
-set(GTEST_ROOT
-    ""
-    CACHE STRING "GTest root directory")
-set(BOOST_ROOT
-    ""
-    CACHE STRING "Boost root directory")
-option(PROJECT_TEST_ENABLE_BOOST_UNIT_TEST "Enable boost unit test." OFF)
-
 # 编译的组件
 option(PROJECT_ENABLE_SAMPLE "Enable build sample." OFF)
 option(PROJECT_ENABLE_UNITTEST "Enable build unit test." OFF)
@@ -36,6 +23,8 @@ set(ATFRAME_GATEWAY_MACRO_DATA_SMALL_SIZE
           "small message buffer for atgateway connection(used to reduce memory copy when there are many small messages)"
 )
 
+# Patch for `FindGit.cmake` on windows
+find_program(GIT_EXECUTABLE NAMES git git.cmd)
 find_package(Git)
 if(GIT_FOUND)
   execute_process(
@@ -108,3 +97,8 @@ else()
 endif()
 
 option(ATFRAMEWORK_USE_DYNAMIC_LIBRARY "Build and linking with dynamic libraries." OFF)
+
+# ============ fetch cmake toolset ============
+include("${CMAKE_CURRENT_LIST_DIR}/FetchDependeny.cmake")
+include(IncludeDirectoryRecurse)
+include(EchoWithColor)

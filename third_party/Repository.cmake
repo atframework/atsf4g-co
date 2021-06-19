@@ -1,3 +1,5 @@
+include_guard(GLOBAL)
+
 include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/compression/import.cmake")
 if(NOT ANDROID AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
   include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/jemalloc/jemalloc.cmake")

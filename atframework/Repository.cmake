@@ -1,3 +1,5 @@
+include_guard(GLOBAL)
+
 set(ATFRAMEWORK_ATFRAME_UTILS_REPO_DIR
     "${PROJECT_SOURCE_DIR}/atframework/atframe_utils"
     CACHE PATH "PATH to atframe_utils")

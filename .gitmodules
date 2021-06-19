@@ -6,3 +6,11 @@
 	path = atframework/atframe_utils
 	url = https://github.com/atframework/atframe_utils.git
 	branch = main
+[submodule "atframework/libatbus"]
+	path = atframework/libatbus
+	url = https://github.com/atframework/libatbus.git
+	branch = main
+[submodule "atframework/libatapp"]
+	path = atframework/libatapp
+	url = https://github.com/atframework/libatapp.git
+	branch = main
