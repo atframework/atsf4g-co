@@ -16,11 +16,6 @@ project(
 
 include("${CMAKE_CURRENT_LIST_DIR}/project/cmake/ProjectBuildOption.cmake")
 include(MaybePopulateSubmodule)
-if(COMMAND MaybePopulateSubmodule AND NOT maybe_populate_submodule)
-  macro(maybe_populate_submodule)
-    maybepopulatesubmodule(${ARGN})
-  endmacro()
-endif()
 include("${CMAKE_CURRENT_LIST_DIR}/third_party/Repository.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/atframework/Repository.cmake")
 
