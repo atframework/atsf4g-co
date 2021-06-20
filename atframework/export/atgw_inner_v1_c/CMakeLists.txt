@@ -1,4 +1,4 @@
-﻿# ============ export - [...] ============
+# ============ export - [...] ============
 get_filename_component(EXPORT_SRC_BIN_NAME ${CMAKE_CURRENT_LIST_DIR} NAME_WE)
 if(WIN32
    AND NOT MINGW

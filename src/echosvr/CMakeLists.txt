@@ -1,4 +1,4 @@
-﻿# ============ sample - [...] ============
+# ============ sample - [...] ============
 get_filename_component(SERVER_INST_SRC_BIN_NAME ${CMAKE_CURRENT_LIST_DIR} NAME_WE)
 echowithcolor(COLOR GREEN "-- Configure ${SERVER_INST_SRC_BIN_NAME} on ${CMAKE_CURRENT_LIST_DIR}")
 
@@ -27,7 +27,8 @@ if(MSVC)
   add_target_properties(${SERVER_INST_SRC_BIN_NAME} LINK_FLAGS /NODEFAULTLIB:library)
 endif()
 
-target_link_libraries(${SERVER_INST_SRC_BIN_NAME} ${ATFRAMEWORK_SERVICE_GATEWAY_LINK_NAME} ${ATFRAMEWORK_SERVICE_COMPONENT_LINK_NAME})
+target_link_libraries(${SERVER_INST_SRC_BIN_NAME} ${ATFRAMEWORK_SERVICE_GATEWAY_LINK_NAME}
+                      ${ATFRAMEWORK_SERVICE_COMPONENT_LINK_NAME})
 
 target_compile_options(${SERVER_INST_SRC_BIN_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
 

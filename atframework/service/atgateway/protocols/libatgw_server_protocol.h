@@ -9,4 +9,4 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
-#endif // ATFRAME_SERVICE_ATGATEWAY_PROTOCOL_SERVER_PROTO_H
+#endif  // ATFRAME_SERVICE_ATGATEWAY_PROTOCOL_SERVER_PROTO_H
