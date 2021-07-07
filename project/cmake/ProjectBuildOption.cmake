@@ -60,6 +60,21 @@ if(GIT_FOUND)
 
   string(STRIP "${PROJECT_VCS_COMMIT}" PROJECT_VCS_COMMIT)
   string(STRIP "${PROJECT_VCS_BRANCH}" PROJECT_VCS_BRANCH)
+  
+  # URL Alias
+  if(PROJECT_GIT_REMOTE_ORIGIN_USE_SSH AND NOT PROJECT_GIT_CLONE_REMOTE_ORIGIN_DISABLE_SSH)
+    execute_process(
+      COMMAND ${GIT_EXECUTABLE} config --local --unset-all "url.https://github.com/.insteadOf"
+      COMMAND ${GIT_EXECUTABLE} config --local --unset-all "url.git@git.github.com:.insteadOf"
+      COMMAND ${GIT_EXECUTABLE} config --add --local "url.git@git.github.com:.insteadOf" "https://github.com/"
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+  else()
+    execute_process(
+      COMMAND ${GIT_EXECUTABLE} config --local --unset-all "url.https://github.com/.insteadOf"
+      COMMAND ${GIT_EXECUTABLE} config --local --unset-all "url.git@git.github.com:.insteadOf"
+      COMMAND ${GIT_EXECUTABLE} config --add --local "url.https://github.com/.insteadOf" "git@git.github.com:"
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+  endif()
 endif()
 
 if(NOT PROJECT_VCS_COMMIT_SHA)
