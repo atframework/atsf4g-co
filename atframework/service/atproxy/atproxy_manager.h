@@ -40,11 +40,11 @@ class atproxy_manager : public ::atapp::module_impl {
  public:
   atproxy_manager();
 
-  virtual int init() UTIL_CONFIG_OVERRIDE;
+  int init() UTIL_CONFIG_OVERRIDE;
 
-  virtual int tick() UTIL_CONFIG_OVERRIDE;
+  int tick() UTIL_CONFIG_OVERRIDE;
 
-  virtual const char *name() const UTIL_CONFIG_OVERRIDE;
+  const char *name() const UTIL_CONFIG_OVERRIDE;
 
   int set(atapp::etcd_module::node_info_t &proxy_info);
 

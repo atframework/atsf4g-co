@@ -38,7 +38,7 @@ class gateway_module : public ::atapp::module_impl {
   virtual ~gateway_module() {}
 
  public:
-  virtual int init() UTIL_CONFIG_OVERRIDE {
+  int init() UTIL_CONFIG_OVERRIDE {
     gw_mgr_.get_conf().version = 1;
 
     int res = 0;
@@ -86,7 +86,7 @@ class gateway_module : public ::atapp::module_impl {
     return 0;
   }
 
-  virtual int reload() UTIL_CONFIG_OVERRIDE {
+  int reload() UTIL_CONFIG_OVERRIDE {
     ++gw_mgr_.get_conf().version;
 
     // load init cluster member from configure
@@ -203,16 +203,16 @@ class gateway_module : public ::atapp::module_impl {
     return 0;
   }
 
-  virtual int stop() UTIL_CONFIG_OVERRIDE {
+  int stop() UTIL_CONFIG_OVERRIDE {
     gw_mgr_.reset();
     return 0;
   }
 
-  virtual int timeout() UTIL_CONFIG_OVERRIDE { return 0; }
+  int timeout() UTIL_CONFIG_OVERRIDE { return 0; }
 
-  virtual const char *name() const UTIL_CONFIG_OVERRIDE { return "gateway_module"; }
+  const char *name() const UTIL_CONFIG_OVERRIDE { return "gateway_module"; }
 
-  virtual int tick() UTIL_CONFIG_OVERRIDE { return gw_mgr_.tick(); }
+  int tick() UTIL_CONFIG_OVERRIDE { return gw_mgr_.tick(); }
 
   inline ::atframe::gateway::session_manager &get_session_manager() { return gw_mgr_; }
   inline const ::atframe::gateway::session_manager &get_session_manager() const { return gw_mgr_; }
