@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package atframe.gw;
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+import "atframe/atapp_conf.proto";
+
+message atgateway_listen_cfg {
+  repeated string address = 1;
+  string type = 2;
+  uint64 max_client = 3 [(atapp.protocol.CONFIGURE) = { default_value: "65536" }];
+  int32 backlog = 4 [(atapp.protocol.CONFIGURE) = { default_value: "1024" min_value: "1" }];
+}
+
+message atgateway_client_limit_cfg {
+  uint64 total_send_bytes = 1 [(atapp.protocol.CONFIGURE) = { size_mode: true }];
+  uint64 total_recv_bytes = 2 [(atapp.protocol.CONFIGURE) = { size_mode: true }];
+  uint64 hour_send_bytes = 3 [(atapp.protocol.CONFIGURE) = { size_mode: true }];
+  uint64 hour_recv_bytes = 4 [(atapp.protocol.CONFIGURE) = { size_mode: true }];
+  uint64 minute_send_bytes = 5 [(atapp.protocol.CONFIGURE) = { size_mode: true }];
+  uint64 minute_recv_bytes = 6 [(atapp.protocol.CONFIGURE) = { size_mode: true }];
+  uint64 total_send_times = 7;
+  uint64 total_recv_times = 8;
+  uint64 hour_send_times = 9;
+  uint64 hour_recv_times = 10;
+  uint64 minute_send_times = 11;
+  uint64 minute_recv_times = 12;
+}
+
+message atgateway_client_crypt_cfg {
+  string key = 1;
+  google.protobuf.Duration update_interval = 2 [(atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "1s" }];
+  string type = 3;
+  string dhparam = 4;
+}
+
+message atgateway_client_cfg {
+  google.protobuf.Duration reconnect_timeout = 1
+      [(atapp.protocol.CONFIGURE) = { default_value: "180s" min_value: "1s" }];
+  google.protobuf.Duration first_idle_timeout = 2
+      [(atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
+  uint64 send_buffer_size = 3 [(atapp.protocol.CONFIGURE) = { default_value: "1MB" size_mode: true }];
+  uint64 default_router = 4;
+  atgateway_client_limit_cfg limit = 5;
+  atgateway_client_crypt_cfg crypt = 6;
+}
+
+message atgateway_cfg {
+  atgateway_listen_cfg listen = 1;
+  atgateway_client_cfg client = 2;
+}

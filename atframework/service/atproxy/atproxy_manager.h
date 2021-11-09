@@ -1,7 +1,13 @@
-#ifndef ATFRAME_SERVICE_ATPROXY_ATPROXY_MANAGER_H
-#define ATFRAME_SERVICE_ATPROXY_ATPROXY_MANAGER_H
+// Copyright 2021 atframework
+// Created by owent on 2016/9/29.
+//
 
 #pragma once
+
+#include <atframe/atapp.h>
+#include <atframe/atapp_module_impl.h>
+
+#include <atframe/modules/etcd_module.h>
 
 #include <ctime>
 #include <list>
@@ -9,16 +15,11 @@
 #include <string>
 #include <vector>
 
-#include <atframe/atapp.h>
-#include <atframe/atapp_module_impl.h>
-
-#include <atframe/modules/etcd_module.h>
-
 namespace atframe {
 namespace proxy {
 class atproxy_manager : public ::atapp::module_impl {
  public:
-  typedef atapp::etcd_module::node_action_t node_action_t;
+  using node_action_t = atapp::etcd_module::node_action_t;
   struct node_info_t {
     atapp::etcd_module::node_info_t etcd_node;
     atapp::protocol::atapp_gateway ingress_for_listen;
@@ -40,11 +41,11 @@ class atproxy_manager : public ::atapp::module_impl {
  public:
   atproxy_manager();
 
-  int init() UTIL_CONFIG_OVERRIDE;
+  int init() override;
 
-  int tick() UTIL_CONFIG_OVERRIDE;
+  int tick() override;
 
-  const char *name() const UTIL_CONFIG_OVERRIDE;
+  const char *name() const override;
 
   int set(atapp::etcd_module::node_info_t &proxy_info);
 
@@ -63,9 +64,8 @@ class atproxy_manager : public ::atapp::module_impl {
 
  private:
   std::list<check_info_t> check_list_;
-  typedef std::map< ::atapp::app::app_id_t, node_info_t> proxy_set_t;
+  using proxy_set_t = std::map< ::atapp::app::app_id_t, node_info_t>;
   proxy_set_t proxy_set_;
 };
 }  // namespace proxy
 }  // namespace atframe
-#endif

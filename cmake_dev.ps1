@@ -10,7 +10,7 @@
 .PARAMETER Compiler
     Compiler to use: clang, gcc, /usr/bin/gcc and etc.
 .PARAMETER GaneratorToolset
-    Ganerator Toolset of cmake: v142, v141, v140 and etc.
+    Ganerator Toolset of cmake: v143, v142, v141, v140 and etc.
 .PARAMETER Generator
     Generator to use: Ninja, Makefiles, Xcode, Visual Studio 16 2019 and etc.
 .PARAMETER GeneratorPlatform

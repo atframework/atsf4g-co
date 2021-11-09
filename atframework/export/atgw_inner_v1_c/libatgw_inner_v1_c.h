@@ -1,5 +1,6 @@
-#ifndef ATFRAME_EXPORT_ATGATEWAY_INNER_PROTO_V1_H
-#define ATFRAME_EXPORT_ATGATEWAY_INNER_PROTO_V1_H
+// Copyright 2021 atframework
+// Created by owent on 2016/9/29.
+//
 
 #pragma once
 
@@ -12,21 +13,16 @@
 extern "C" {
 #endif
 
-typedef void *libatgw_inner_v1_c_context;
-// typedef union {
-//     void *pa;
-//     uintptr_t pu;
-//     intptr_t pi;
-// } libatgw_inner_v1_c_context;
+using libatgw_inner_v1_c_context = void *;
 
-typedef int32_t (*libatgw_inner_v1_c_on_write_start_fn_t)(libatgw_inner_v1_c_context, void *, uint64_t, int32_t *);
-typedef int32_t (*libatgw_inner_v1_c_on_message_fn_t)(libatgw_inner_v1_c_context, const void *, uint64_t);
-typedef int32_t (*libatgw_inner_v1_c_on_init_new_session_fn_t)(libatgw_inner_v1_c_context, uint64_t *);
-typedef int32_t (*libatgw_inner_v1_c_on_init_reconnect_fn_t)(libatgw_inner_v1_c_context, uint64_t);
-typedef int32_t (*libatgw_inner_v1_c_on_close_fn_t)(libatgw_inner_v1_c_context, int32_t);
-typedef int32_t (*libatgw_inner_v1_c_on_handshake_done_fn_t)(libatgw_inner_v1_c_context, int32_t);
-typedef int32_t (*libatgw_inner_v1_c_on_error_fn_t)(libatgw_inner_v1_c_context, const char *, int32_t, int32_t,
-                                                    const char *);
+using libatgw_inner_v1_c_on_write_start_fn_t = int32_t (*)(libatgw_inner_v1_c_context, void *, uint64_t, int32_t *);
+using libatgw_inner_v1_c_on_message_fn_t = int32_t (*)(libatgw_inner_v1_c_context, const void *, uint64_t);
+using libatgw_inner_v1_c_on_init_new_session_fn_t = int32_t (*)(libatgw_inner_v1_c_context, uint64_t *);
+using libatgw_inner_v1_c_on_init_reconnect_fn_t = int32_t (*)(libatgw_inner_v1_c_context, uint64_t);
+using libatgw_inner_v1_c_on_close_fn_t = int32_t (*)(libatgw_inner_v1_c_context, int32_t);
+using libatgw_inner_v1_c_on_handshake_done_fn_t = int32_t (*)(libatgw_inner_v1_c_context, int32_t);
+using libatgw_inner_v1_c_on_error_fn_t = int32_t (*)(libatgw_inner_v1_c_context, const char *, int32_t, int32_t,
+                                                     const char *);
 
 UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_global_init_algorithms();
 UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_global_cleanup_algorithms();
@@ -109,6 +105,4 @@ UTIL_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_is_in_callback(libatgw_inn
 
 #ifdef __cplusplus
 }
-#endif
-
 #endif

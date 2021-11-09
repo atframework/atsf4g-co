@@ -1,15 +1,15 @@
-﻿#ifndef ATFRAME_SERVICE_ATGATEWAY_SESSION_H
-#define ATFRAME_SERVICE_ATGATEWAY_SESSION_H
+// Copyright 2021 atframework
+// Created by owent on 2016/9/29.
+//
 
 #pragma once
 
 #include <stdint.h>
 #include <cstddef>
 #include <ctime>
+#include <memory>
 
 #include "uv.h"
-
-#include <std/smart_ptr.h>
 
 #include "libatbus.h"
 #include "protocols/inner_v1/libatgw_proto_inner.h"
@@ -40,7 +40,7 @@ class session : public std::enable_shared_from_this<session> {
     time_t update_handshake_timepoint;
   };
 
-  typedef uint64_t id_t;
+  using id_t = uint64_t;
 
   struct flag_t {
     enum type {
@@ -55,7 +55,7 @@ class session : public std::enable_shared_from_this<session> {
     };
   };
 
-  typedef std::shared_ptr<session> ptr_t;
+  using ptr_t = std::shared_ptr<session>;
 
  public:
   session();
@@ -145,5 +145,3 @@ class session : public std::enable_shared_from_this<session> {
 };
 }  // namespace gateway
 }  // namespace atframe
-
-#endif

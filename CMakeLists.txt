@@ -10,7 +10,7 @@ endif()
 
 project(
   atf4g-co
-  VERSION "0.10.0"
+  VERSION "0.11.0"
   HOMEPAGE_URL "https://github.com/atframework/atsf4g-co"
   LANGUAGES C CXX)
 

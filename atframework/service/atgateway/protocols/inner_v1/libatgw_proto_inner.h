@@ -1,10 +1,11 @@
-﻿#ifndef ATFRAME_SERVICE_ATGATEWAY_PROTOCOL_INNER_V1_H
-#define ATFRAME_SERVICE_ATGATEWAY_PROTOCOL_INNER_V1_H
+﻿// Copyright 2021 atframework
+// Created by owent on 2016/9/29.
+//
 
 #pragma once
 
-#include <std/chrono.h>
-#include <std/smart_ptr.h>
+#include <chrono>
+#include <memory>
 #include <vector>
 
 #include "algorithm/crypto_cipher.h"
@@ -199,5 +200,3 @@ class libatgw_proto_inner_v1 : public proto_base {
 };
 }  // namespace gateway
 }  // namespace atframe
-
-#endif

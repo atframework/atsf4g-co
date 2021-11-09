@@ -46,13 +46,14 @@
 /atframework/service/component/config/atframe_services_build_feature.h
 /atframework/service/atgateway/protocols/libatgw_server_protocol.pb.h
 /atframework/service/atgateway/protocols/libatgw_server_protocol.pb.cc
+/atframework/service/atgateway/protocols/libatgw_server_config.pb.h
+/atframework/service/atgateway/protocols/libatgw_server_config.pb.cc
 
 # editors
 .vscode
 .idea
 /cmake-build-*
 .mako_modules-*
-
 
 # protocol
 /src/server_frame/protocol/**/*.h

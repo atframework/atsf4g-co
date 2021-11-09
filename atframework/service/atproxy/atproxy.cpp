@@ -1,17 +1,21 @@
-
-#include <std/ref.h>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <iostream>
-#include <sstream>
-#include <vector>
+// Copyright 2021 atframework
+// Created by owent on 2016/9/29.
+//
 
 #include <uv.h>
 
 #include <atframe/atapp.h>
 #include <common/file_system.h>
+#include <libatbus_protocol.h>
 #include <time/time_utility.h>
+
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <functional>
+#include <iostream>
+#include <sstream>
+#include <vector>
 
 #include "atproxy_manager.h"
 
@@ -19,9 +23,9 @@ static int app_handle_on_response(atapp::app &app, const atapp::app::message_sen
                                   const atapp::app::message_t &msg, int32_t error_code) {
   if (error_code < 0) {
     FWLOGERROR("send data from {:#x} to {:#x} failed, sequence: {}, code: {}", app.get_id(), source.id,
-               msg.msg_sequence, error_code);
+               msg.message_sequence, error_code);
   } else {
-    FWLOGDEBUG("send data from {:#x} to {:#x} finished, sequence: {}", app.get_id(), source.id, msg.msg_sequence);
+    FWLOGDEBUG("send data from {:#x} to {:#x} finished, sequence: {}", app.get_id(), source.id, msg.message_sequence);
   }
   return 0;
 }
@@ -75,5 +79,5 @@ int main(int argc, char *argv[]) {
   app.set_evt_on_app_disconnected(app_handle_on_disconnected(*proxy_mgr_mod));
 
   // run
-  return app.run(uv_default_loop(), argc, (const char **)argv, NULL);
+  return app.run(uv_default_loop(), argc, (const char **)argv, nullptr);
 }

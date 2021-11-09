@@ -1,5 +1,6 @@
-#ifndef ATFRAME_SERVICE_ATGATEWAY_PROTOCOL_SERVER_PROTO_H
-#define ATFRAME_SERVICE_ATGATEWAY_PROTOCOL_SERVER_PROTO_H
+// Copyright 2021 atframework
+// Created by owent on 2016/9/29.
+//
 
 #pragma once
 
@@ -8,5 +9,3 @@
 #include "libatgw_server_protocol.pb.h"
 
 #include <config/compiler/protobuf_suffix.h>
-
-#endif  // ATFRAME_SERVICE_ATGATEWAY_PROTOCOL_SERVER_PROTO_H

@@ -1,20 +1,19 @@
-﻿#ifndef ATFRAME_SERVICE_ATGATEWAY_SESSION_MANAGER_H
-#define ATFRAME_SERVICE_ATGATEWAY_SESSION_MANAGER_H
+// Copyright 2021 atframework
+// Created by owent on 2016/9/29.
+//
 
 #pragma once
 
-#include <std/functional.h>
+#include <config/compiler/protobuf_prefix.h>
+
+#include <protocols/libatgw_server_config.pb.h>
+
+#include <config/compiler/protobuf_suffix.h>
+
+#include <functional>
 #include <list>
 #include <map>
-
-#if (defined(__cplusplus) && __cplusplus >= 201103L) || (defined(_MSC_VER) && _MSC_VER >= 1600)
-#  include <unordered_map>
-#  define ATFRAME_GATEWAY_AUTO_MAP(...) std::unordered_map<__VA_ARGS__>
-
-#else
-#  include <map>
-#  define ATFRAME_GATEWAY_AUTO_MAP(...) std::map<__VA_ARGS__>
-#endif
+#include <unordered_map>
 
 #include "session.h"
 
@@ -22,47 +21,19 @@ namespace atframe {
 namespace gateway {
 class session_manager {
  public:
-  struct client_limit_t {
-    size_t total_recv_bytes;
-    size_t total_send_bytes;
-    size_t hour_recv_bytes;
-    size_t hour_send_bytes;
-    size_t minute_recv_bytes;
-    size_t minute_send_bytes;
-
-    size_t total_recv_times;
-    size_t total_send_times;
-    size_t hour_recv_times;
-    size_t hour_send_times;
-    size_t minute_recv_times;
-    size_t minute_send_times;
-
-    size_t max_client_number;
-  };
-
-  struct lister_conf_t {
-    std::vector<std::string> address;
-    std::string type;
-    int backlog;
-  };
-
-  typedef ::atframe::gateway::libatgw_proto_inner_v1::crypt_conf_t crypt_conf_t;
+  using crypt_conf_t = ::atframe::gateway::libatgw_proto_inner_v1::crypt_conf_t;
 
   struct conf_t {
     size_t version;
-    client_limit_t limits;
-    lister_conf_t listen;
-    time_t reconnect_timeout;
-    time_t first_idle_timeout;
-    size_t send_buffer_size;
-    ::atbus::node::bus_id_t default_router;
+
+    atframe::gw::atgateway_cfg origin_conf;
 
     crypt_conf_t crypt;
   };
 
-  typedef ATFRAME_GATEWAY_AUTO_MAP(session::id_t, session::ptr_t) session_map_t;
-  typedef std::function<std::unique_ptr< ::atframe::gateway::proto_base>()> create_proto_fn_t;
-  typedef std::function<int(session *, uv_stream_t *)> on_create_session_fn_t;
+  using session_map_t = std::unordered_map<session::id_t, session::ptr_t>;
+  using create_proto_fn_t = std::function<std::unique_ptr< ::atframe::gateway::proto_base>()>;
+  using on_create_session_fn_t = std::function<int(session *, uv_stream_t *)>;
 
  public:
   session_manager();
@@ -120,7 +91,7 @@ class session_manager {
   create_proto_fn_t create_proto_fn_;
   on_create_session_fn_t on_create_session_fn_;
 
-  typedef std::shared_ptr<uv_stream_t> listen_handle_ptr_t;
+  using listen_handle_ptr_t = std::shared_ptr<uv_stream_t>;
   std::list<listen_handle_ptr_t> listen_handles_;
   session_map_t actived_sessions_;
   std::list<session_timeout_t> first_idle_;
@@ -131,5 +102,3 @@ class session_manager {
 };
 }  // namespace gateway
 }  // namespace atframe
-
-#endif

@@ -1,11 +1,15 @@
-﻿#include <new>
-#include <sstream>
+// Copyright 2021 atframework
+// Created by owent on 2016/9/29.
+//
 
-#include "uv.h"
+#include <uv.h>
 
 #include <common/string_oprs.h>
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
+
+#include <new>
+#include <sstream>
 
 #include "config/atframe_service_types.h"
 
@@ -16,7 +20,7 @@ namespace gateway {
 namespace detail {
 template <typename T>
 static void session_manager_delete_stream_fn(uv_stream_t *handle) {
-  if (NULL == handle) {
+  if (nullptr == handle) {
     return;
   }
 
@@ -29,18 +33,18 @@ static void session_manager_delete_stream_fn(uv_stream_t *handle) {
 template <typename T>
 static T *session_manager_make_stream_ptr(std::shared_ptr<uv_stream_t> &res) {
   T *real_conn = new (std::nothrow) T();
-  if (NULL == real_conn) {
+  if (nullptr == real_conn) {
     return real_conn;
   }
 
   uv_stream_t *stream_conn = reinterpret_cast<uv_stream_t *>(real_conn);
   res = std::shared_ptr<uv_stream_t>(stream_conn, session_manager_delete_stream_fn<T>);
-  stream_conn->data = NULL;
+  stream_conn->data = nullptr;
   return real_conn;
 }
 }  // namespace detail
 
-session_manager::session_manager() : evloop_(NULL), app_node_(NULL), last_tick_time_(0), private_data_(NULL) {}
+session_manager::session_manager() : evloop_(nullptr), app_node_(nullptr), last_tick_time_(0), private_data_(nullptr) {}
 
 session_manager::~session_manager() { reset(); }
 
@@ -57,13 +61,12 @@ int session_manager::init(::atbus::node *bus_node, create_proto_fn_t fn) {
 
 int session_manager::listen_all() {
   int ret = 0;
-  for (std::vector<std::string>::iterator iter = conf_.listen.address.begin(); iter != conf_.listen.address.end();
-       ++iter) {
-    int res = listen((*iter).c_str());
+  for (auto &listen_address : conf_.origin_conf.listen().address()) {
+    int res = listen(listen_address.c_str());
     if (0 != res) {
-      WLOGERROR("try to listen %s failed, res: %d", (*iter).c_str(), res);
+      FWLOGERROR("try to listen {} failed, res: {}", listen_address, res);
     } else {
-      WLOGDEBUG("listen to %s success", (*iter).c_str());
+      FWLOGDEBUG("listen to {} success", listen_address);
       ++ret;
     }
   }
@@ -88,14 +91,14 @@ int session_manager::listen(const char *address) {
         uv_stream_set_blocking(res.get(), 0);
         uv_tcp_nodelay(tcp_handle, 1);
       } else {
-        WLOGERROR("create uv_tcp_t failed.");
+        FWLOGERROR("create uv_tcp_t failed.");
         ret = error_code_t::EN_ECT_NETWORK;
         break;
       }
 
       libuv_res = uv_tcp_init(evloop_, tcp_handle);
       if (0 != libuv_res) {
-        WLOGERROR("init listen to %s failed, libuv_res: %d(%s)", address, libuv_res, uv_strerror(libuv_res));
+        FWLOGERROR("init listen to {} failed, libuv_res: {}({})", address, libuv_res, uv_strerror(libuv_res));
         ret = error_code_t::EN_ECT_NETWORK;
         break;
       }
@@ -105,16 +108,16 @@ int session_manager::listen(const char *address) {
         uv_ip4_addr(addr.host.c_str(), addr.port, &sock_addr);
         libuv_res = uv_tcp_bind(tcp_handle, reinterpret_cast<const sockaddr *>(&sock_addr), 0);
         if (0 != libuv_res) {
-          WLOGERROR("bind sock to tcp/ip v4 %s:%d failed, libuv_res: %d(%s)", addr.host.c_str(), addr.port, libuv_res,
-                    uv_strerror(libuv_res));
+          FWLOGERROR("bind sock to tcp/ip v4 {}:{} failed, libuv_res: {}({})", addr.host, addr.port, libuv_res,
+                     uv_strerror(libuv_res));
           ret = error_code_t::EN_ECT_NETWORK;
           break;
         }
 
-        libuv_res = uv_listen(res.get(), conf_.listen.backlog, on_evt_accept_tcp);
+        libuv_res = uv_listen(res.get(), conf_.origin_conf.listen().backlog(), on_evt_accept_tcp);
         if (0 != libuv_res) {
-          WLOGERROR("listen to tcp/ip v4 %s:%d failed, libuv_res: %d(%s)", addr.host.c_str(), addr.port, libuv_res,
-                    uv_strerror(libuv_res));
+          FWLOGERROR("listen to tcp/ip v4 {}:{} failed, libuv_res: {}({})", addr.host, addr.port, libuv_res,
+                     uv_strerror(libuv_res));
           ret = error_code_t::EN_ECT_NETWORK;
           break;
         }
@@ -125,16 +128,16 @@ int session_manager::listen(const char *address) {
         uv_ip6_addr(addr.host.c_str(), addr.port, &sock_addr);
         libuv_res = uv_tcp_bind(tcp_handle, reinterpret_cast<const sockaddr *>(&sock_addr), 0);
         if (0 != libuv_res) {
-          WLOGERROR("bind sock to tcp/ip v6 %s:%d failed, libuv_res: %d(%s)", addr.host.c_str(), addr.port, libuv_res,
-                    uv_strerror(libuv_res));
+          FWLOGERROR("bind sock to tcp/ip v6 {}:{} failed, libuv_res: {}({})", addr.host, addr.port, libuv_res,
+                     uv_strerror(libuv_res));
           ret = error_code_t::EN_ECT_NETWORK;
           break;
         }
 
-        libuv_res = uv_listen(res.get(), conf_.listen.backlog, on_evt_accept_tcp);
+        libuv_res = uv_listen(res.get(), conf_.origin_conf.listen().backlog(), on_evt_accept_tcp);
         if (0 != libuv_res) {
-          WLOGERROR("listen to tcp/ip v6 %s:%d failed, libuv_res: %d(%s)", addr.host.c_str(), addr.port, libuv_res,
-                    uv_strerror(libuv_res));
+          FWLOGERROR("listen to tcp/ip v6 {}:{} failed, libuv_res: {}({})", addr.host, addr.port, libuv_res,
+                     uv_strerror(libuv_res));
           ret = error_code_t::EN_ECT_NETWORK;
           break;
         }
@@ -147,31 +150,29 @@ int session_manager::listen(const char *address) {
       if (res) {
         uv_stream_set_blocking(res.get(), 0);
       } else {
-        WLOGERROR("create uv_pipe_t failed.");
+        FWLOGERROR("create uv_pipe_t failed.");
         ret = error_code_t::EN_ECT_NETWORK;
         break;
       }
 
       libuv_res = uv_pipe_init(evloop_, pipe_handle, 1);
       if (0 != libuv_res) {
-        WLOGERROR("init listen to unix sock %s failed, libuv_res: %d(%s)", addr.host.c_str(), libuv_res,
-                  uv_strerror(libuv_res));
+        FWLOGERROR("init listen to unix sock {} failed, libuv_res: {}({})", addr.host, libuv_res,
+                   uv_strerror(libuv_res));
         ret = error_code_t::EN_ECT_NETWORK;
         break;
       }
 
       libuv_res = uv_pipe_bind(pipe_handle, addr.host.c_str());
       if (0 != libuv_res) {
-        WLOGERROR("bind pipe to unix sock %s failed, libuv_res: %d(%s)", addr.host.c_str(), libuv_res,
-                  uv_strerror(libuv_res));
+        FWLOGERROR("bind pipe to unix sock {} failed, libuv_res: {}({})", addr.host, libuv_res, uv_strerror(libuv_res));
         ret = error_code_t::EN_ECT_NETWORK;
         break;
       }
 
-      libuv_res = uv_listen(res.get(), conf_.listen.backlog, on_evt_accept_pipe);
+      libuv_res = uv_listen(res.get(), conf_.origin_conf.listen().backlog(), on_evt_accept_pipe);
       if (0 != libuv_res) {
-        WLOGERROR("listen to unix sock %s failed, libuv_res: %d(%s)", addr.host.c_str(), libuv_res,
-                  uv_strerror(libuv_res));
+        FWLOGERROR("listen to unix sock {} failed, libuv_res: {}({})", addr.host, libuv_res, uv_strerror(libuv_res));
         ret = error_code_t::EN_ECT_NETWORK;
         break;
       }
@@ -326,16 +327,16 @@ int session_manager::close(session::id_t sess_id, int reason, bool allow_reconne
     return 0;
   }
 
-  if (conf_.reconnect_timeout > 0 && allow_reconnect) {
+  if (conf_.origin_conf.client().reconnect_timeout().seconds() > 0 && allow_reconnect) {
     reconnect_timeout_.push_back(session_timeout_t());
     session_timeout_t &sess_timer = reconnect_timeout_.back();
     sess_timer.s = iter->second;
-    sess_timer.timeout = util::time::time_utility::get_now() + conf_.reconnect_timeout;
+    sess_timer.timeout = util::time::time_utility::get_now() + conf_.origin_conf.client().reconnect_timeout().seconds();
 
     reconnect_cache_[sess_timer.s->get_id()] = sess_timer.s;
-    WLOGINFO("session 0x%llx(%p) closed and setup reconnect timeout %lld(+%lld)",
-             static_cast<unsigned long long>(sess_timer.s->get_id()), sess_timer.s.get(),
-             static_cast<long long>(sess_timer.timeout), static_cast<long long>(conf_.reconnect_timeout));
+    FWLOGINFO("session {:#x}({}) closed and setup reconnect timeout {}(+{})", sess_timer.s->get_id(),
+              reinterpret_cast<const void *>(sess_timer.s.get()), sess_timer.timeout,
+              conf_.origin_conf.client().reconnect_timeout().seconds());
 
     // maybe transfer reconnecting session, old session still keep EN_FT_WAIT_RECONNECT flag
     sess_timer.s->set_flag(session::flag_t::EN_FT_WAIT_RECONNECT, true);
@@ -343,8 +344,8 @@ int session_manager::close(session::id_t sess_id, int reason, bool allow_reconne
     // just close fd
     sess_timer.s->close_fd(reason);
   } else {
-    WLOGINFO("session 0x%llx(%p) closed and disable reconnect", static_cast<unsigned long long>(iter->second->get_id()),
-             iter->second.get());
+    FWLOGINFO("session {:#x}({}) closed and disable reconnect", iter->second->get_id(),
+              reinterpret_cast<const void *>(iter->second.get()));
     iter->second->close(reason);
   }
 
@@ -361,8 +362,7 @@ int session_manager::post_data(::atbus::node::bus_id_t tid, int type, ::atframe:
   // send to server with type = ::atframe::component::service_type::EN_ATST_GATEWAY
   std::string packed_buffer;
   if (false == msg.SerializeToString(&packed_buffer)) {
-    WLOGERROR("can not send ss message to 0x%llx with serialize failed: %s", static_cast<unsigned long long>(tid),
-              msg.InitializationErrorString().c_str());
+    FWLOGERROR("can not send ss message to {:#x} with serialize failed: {}", tid, msg.InitializationErrorString());
     return error_code_t::EN_ECT_BAD_DATA;
   }
 
@@ -423,8 +423,8 @@ int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
   // replace the existed session, in case of the lost connection has not be detected
   if (iter == reconnect_cache_.end()) {
     iter = actived_sessions_.find(old_sess_id);
-    if (iter != actived_sessions_.end() && NULL != new_sess.get_protocol_handle() &&
-        NULL != iter->second->get_protocol_handle()) {
+    if (iter != actived_sessions_.end() && nullptr != new_sess.get_protocol_handle() &&
+        nullptr != iter->second->get_protocol_handle()) {
       has_reconnect_checked = true;
       if (new_sess.get_protocol_handle()->check_reconnect(iter->second->get_protocol_handle())) {
         WLOGDEBUG("session %s:%d try to reconnect 0x%llx and need to close old connection %p",
@@ -438,7 +438,7 @@ int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
       }
     } else if (iter == actived_sessions_.end()) {
       WLOGDEBUG("old session 0x%llx not found", static_cast<unsigned long long>(old_sess_id));
-    } else if (NULL == iter->second->get_protocol_handle()) {
+    } else if (nullptr == iter->second->get_protocol_handle()) {
       WLOGERROR("old session 0x%llx(%p) has no protocol handle", static_cast<unsigned long long>(old_sess_id),
                 iter->second.get());
     }
@@ -463,7 +463,7 @@ int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
   }
 
   // run proto check
-  if (NULL == new_sess.get_protocol_handle() || NULL == iter->second->get_protocol_handle()) {
+  if (nullptr == new_sess.get_protocol_handle() || nullptr == iter->second->get_protocol_handle()) {
     return error_code_t::EN_ECT_BAD_PROTOCOL;
   }
 
@@ -509,7 +509,7 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   // server's data is session_manager
   session_manager *mgr = reinterpret_cast<session_manager *>(server->data);
   assert(mgr);
-  if (NULL == mgr) {
+  if (nullptr == mgr) {
     WLOGERROR("session_manager not found");
     return;
   }
@@ -528,11 +528,11 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
     }
   }
 
-  if (!sess || NULL == sess->get_protocol_handle()) {
+  if (!sess || nullptr == sess->get_protocol_handle()) {
     WLOGERROR("create proto fn is null or create proto object failed or create session failed");
     listen_handle_ptr_t sp;
     uv_tcp_t *sock = detail::session_manager_make_stream_ptr<uv_tcp_t>(sp);
-    if (NULL != sock) {
+    if (nullptr != sock) {
       uv_tcp_init(server->loop, sock);
       uv_accept(server, reinterpret_cast<uv_stream_t *>(sock));
       sock->data = new listen_handle_ptr_t(sp);
@@ -543,10 +543,10 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
 
   // setup send buffer size
   sess->get_protocol_handle()->set_recv_buffer_limit(ATBUS_MACRO_MSG_LIMIT, 2);
-  sess->get_protocol_handle()->set_send_buffer_limit(mgr->conf_.send_buffer_size, 0);
+  sess->get_protocol_handle()->set_send_buffer_limit(mgr->conf_.origin_conf.client().send_buffer_size(), 0);
 
   // setup default router
-  sess->set_router(mgr->conf_.default_router);
+  sess->set_router(mgr->conf_.origin_conf.client().default_router());
 
   // create proto object and session object
   int res = sess->accept_tcp(server);
@@ -556,9 +556,9 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   }
 
   // check session number limit
-  if (mgr->conf_.limits.max_client_number > 0 &&
-      mgr->reconnect_cache_.size() + mgr->actived_sessions_.size() >= mgr->conf_.limits.max_client_number) {
-    WLOGWARNING("accept tcp socket failed, gateway have too many sessions now");
+  if (mgr->conf_.origin_conf.listen().max_client() > 0 &&
+      mgr->reconnect_cache_.size() + mgr->actived_sessions_.size() >= mgr->conf_.origin_conf.listen().max_client()) {
+    FWLOGWARNING("accept tcp socket failed, gateway have too many sessions now");
     sess->close(close_reason_t::EN_CRT_SERVER_BUSY);
     return;
   }
@@ -571,8 +571,9 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   mgr->first_idle_.push_back(session_timeout_t());
   session_timeout_t &sess_timeout = mgr->first_idle_.back();
   sess_timeout.s = sess;
-  if (mgr->conf_.first_idle_timeout > 0) {
-    sess_timeout.timeout = util::time::time_utility::get_now() + mgr->conf_.first_idle_timeout;
+  if (mgr->conf_.origin_conf.client().first_idle_timeout().seconds() > 0) {
+    sess_timeout.timeout =
+        util::time::time_utility::get_now() + mgr->conf_.origin_conf.client().first_idle_timeout().seconds();
   } else {
     sess_timeout.timeout = util::time::time_utility::get_now() + 1;
   }
@@ -591,7 +592,7 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
   // server's data is session_manager
   session_manager *mgr = reinterpret_cast<session_manager *>(server->data);
   assert(mgr);
-  if (NULL == mgr) {
+  if (nullptr == mgr) {
     WLOGERROR("session_manager not found");
     return;
   }
@@ -611,7 +612,7 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
     WLOGERROR("create proto fn is null or create proto object failed or create session failed");
     listen_handle_ptr_t sp;
     uv_pipe_t *sock = detail::session_manager_make_stream_ptr<uv_pipe_t>(sp);
-    if (NULL != sock) {
+    if (nullptr != sock) {
       uv_pipe_init(server->loop, sock, 1);
       uv_accept(server, reinterpret_cast<uv_stream_t *>(sock));
       sock->data = new listen_handle_ptr_t(sp);
@@ -622,10 +623,10 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
 
   // setup send buffer size
   proto->set_recv_buffer_limit(ATBUS_MACRO_MSG_LIMIT, 2);
-  proto->set_send_buffer_limit(mgr->conf_.send_buffer_size, 0);
+  proto->set_send_buffer_limit(mgr->conf_.origin_conf.client().send_buffer_size(), 0);
 
   // setup default router
-  sess->set_router(mgr->conf_.default_router);
+  sess->set_router(mgr->conf_.origin_conf.client().default_router());
 
   int res = sess->accept_pipe(server);
   if (0 != res) {
@@ -634,8 +635,8 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
   }
 
   // check session number limit
-  if (mgr->conf_.limits.max_client_number > 0 &&
-      mgr->reconnect_cache_.size() + mgr->actived_sessions_.size() >= mgr->conf_.limits.max_client_number) {
+  if (mgr->conf_.origin_conf.listen().max_client() > 0 &&
+      mgr->reconnect_cache_.size() + mgr->actived_sessions_.size() >= mgr->conf_.origin_conf.listen().max_client()) {
     sess->close(close_reason_t::EN_CRT_SERVER_BUSY);
     return;
   }
@@ -648,8 +649,9 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
   mgr->first_idle_.push_back(session_timeout_t());
   session_timeout_t &sess_timeout = mgr->first_idle_.back();
   sess_timeout.s = sess;
-  if (mgr->conf_.first_idle_timeout > 0) {
-    sess_timeout.timeout = util::time::time_utility::get_now() + mgr->conf_.first_idle_timeout;
+  if (mgr->conf_.origin_conf.client().first_idle_timeout().seconds() > 0) {
+    sess_timeout.timeout =
+        util::time::time_utility::get_now() + mgr->conf_.origin_conf.client().first_idle_timeout().seconds();
   } else {
     sess_timeout.timeout = util::time::time_utility::get_now() + 1;
   }

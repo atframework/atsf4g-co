@@ -252,10 +252,10 @@ install(TARGETS ${LIB_NAME}
 
 export(TARGETS ${LIB_NAME}
     NAMESPACE "atframework::"
-    FILE "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${LIB_NAME}-target.cmake"
+    FILE "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${LIB_NAME}/${LIB_NAME}-target.cmake"
 )
 
 install(EXPORT "${LIB_NAME}-target"
     NAMESPACE "atframework::"
-    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${LIB_NAME}"
 )

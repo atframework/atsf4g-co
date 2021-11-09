@@ -66,9 +66,9 @@ install(
 export(
   TARGETS ${ATSF4G_APP_NAME}
   NAMESPACE "atframework::"
-  FILE "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${ATSF4G_APP_NAME}-target.cmake")
+  FILE "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${ATSF4G_APP_NAME}/${ATSF4G_APP_NAME}-target.cmake")
 
 install(
   EXPORT "${ATSF4G_APP_NAME}-target"
   NAMESPACE "atframework::"
-  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake")
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${ATSF4G_APP_NAME}")

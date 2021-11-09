@@ -1,9 +1,6 @@
-﻿//
-// Created by owt50 on 2016/9/29.
+// Copyright 2021 atframework
+// Created by owent on 2016/9/29.
 //
-
-#ifndef _ATFRAME_SERVICE_COMPONENT_RANDOM_ENGINE_H
-#define _ATFRAME_SERVICE_COMPONENT_RANDOM_ENGINE_H
 
 #pragma once
 
@@ -76,5 +73,3 @@ class random_engine {
   }
 };
 }  // namespace util
-
-#endif  // _ATFRAME_SERVICE_COMPONENT_RANDOM_ENGINE_H

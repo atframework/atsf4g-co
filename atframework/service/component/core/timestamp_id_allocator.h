@@ -1,14 +1,4 @@
-﻿/*
- * timestamp_id_allocator.h
- *
- *  Created on: 2016-07-26
- *      Author: owent
- *
- *  Released under the MIT license
- */
-
-#ifndef ATFRAME_SERVICE_COMPONENT_TIMESTAMP_ID_ALLOCATOR_H
-#define ATFRAME_SERVICE_COMPONENT_TIMESTAMP_ID_ALLOCATOR_H
+// Copyright 2021 atframework.
 
 #pragma once
 
@@ -30,15 +20,16 @@ namespace component {
 template <typename TKey = uint64_t>
 class ATFRAME_SERVICE_COMPONENT_MACRO_API_HEAD_ONLY timestamp_id_allocator {
  public:
-  typedef TKey value_type;
+  using value_type = TKey;
 
-  static const value_type npos = 0; /** invalid key **/
+  static constexpr const value_type npos = 0; /** invalid key **/
  public:
-  value_type allocate() UTIL_CONFIG_NOEXCEPT {
+  value_type allocate() noexcept {
     static util::lock::atomic_int_type<value_type> seq_alloc(255);
 
-    static const size_t seq_bits = sizeof(value_type) * 4;
-    static const value_type time_mask = (static_cast<value_type>(1) << (sizeof(value_type) * 8 - seq_bits)) - 1;
+    static constexpr const size_t seq_bits = sizeof(value_type) * 4;
+    static constexpr const value_type time_mask =
+        (static_cast<value_type>(1) << (sizeof(value_type) * 8 - seq_bits)) - 1;
 
     // always do not allocate 0 as a valid ID
     value_type ret = npos;
@@ -68,9 +59,7 @@ class ATFRAME_SERVICE_COMPONENT_MACRO_API_HEAD_ONLY timestamp_id_allocator {
     return ret;
   }
 
-  void deallocate(value_type) UTIL_CONFIG_NOEXCEPT {}
+  void deallocate(value_type) noexcept {}
 };
 }  // namespace component
 }  // namespace atframe
-
-#endif /* STANDARD_INT_ID_ALLOCATOR_H_ */

@@ -1,4 +1,10 @@
+// Copyright 2021 atframework
+// Created by owent on 2016/9/29.
+//
+
 #include "libatgw_inner_v1_c.h"
+
+#include <inner_v1/libatgw_proto_inner.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -10,10 +16,8 @@
 #include "common/compiler_message.h"
 #include "common/string_oprs.h"
 
-#include <inner_v1/libatgw_proto_inner.h>
-
 #define ATGW_CONTEXT(x) ((::atframe::gateway::libatgw_proto_inner_v1 *)(x))
-#define ATGW_CONTEXT_IS_NULL(x) (NULL == (x))
+#define ATGW_CONTEXT_IS_NULL(x) (nullptr == (x))
 
 struct g_libatgw_inner_v1_c_callbacks_t {
   ::atframe::gateway::proto_base::proto_callbacks_t callbacks;
@@ -27,13 +31,13 @@ struct g_libatgw_inner_v1_c_callbacks_t {
   libatgw_inner_v1_c_on_error_fn_t on_error_fn;
 
   g_libatgw_inner_v1_c_callbacks_t()
-      : write_start_fn(NULL),
-        on_message_fn(NULL),
-        on_init_new_session_fn(NULL),
-        on_init_reconnect_fn(NULL),
-        on_close_fn(NULL),
-        on_handshake_done_fn(NULL),
-        on_error_fn(NULL) {}
+      : write_start_fn(nullptr),
+        on_message_fn(nullptr),
+        on_init_new_session_fn(nullptr),
+        on_init_reconnect_fn(nullptr),
+        on_close_fn(nullptr),
+        on_handshake_done_fn(nullptr),
+        on_error_fn(nullptr) {}
 };
 
 static g_libatgw_inner_v1_c_callbacks_t *libatgw_inner_v1_c_get_c_callbacks() {
@@ -43,16 +47,16 @@ static g_libatgw_inner_v1_c_callbacks_t *libatgw_inner_v1_c_get_c_callbacks() {
 
 static int32_t proto_inner_callback_on_write(::atframe::gateway::proto_base *proto, void *buffer, size_t sz,
                                              bool *is_done) {
-  if (NULL == buffer || 0 == sz) {
-    if (NULL != is_done) {
+  if (nullptr == buffer || 0 == sz) {
+    if (nullptr != is_done) {
       *is_done = true;
     }
     return ::atframe::gateway::error_code_t::EN_ECT_PARAM;
   }
 
   libatgw_inner_v1_c_on_write_start_fn_t fn = libatgw_inner_v1_c_get_c_callbacks()->write_start_fn;
-  if (NULL == fn) {
-    if (NULL != is_done) {
+  if (nullptr == fn) {
+    if (nullptr != is_done) {
       *is_done = true;
     }
     return ::atframe::gateway::error_code_t::EN_ECT_MISS_CALLBACKS;
@@ -62,7 +66,7 @@ static int32_t proto_inner_callback_on_write(::atframe::gateway::proto_base *pro
   libatgw_inner_v1_c_context context;
   context = proto;
   int32_t ret = fn(context, buffer, sz, &is_done_i);
-  if (NULL != is_done) {
+  if (nullptr != is_done) {
     *is_done = !!is_done_i;
   }
 
@@ -71,7 +75,7 @@ static int32_t proto_inner_callback_on_write(::atframe::gateway::proto_base *pro
 
 static int32_t proto_inner_callback_on_message(::atframe::gateway::proto_base *proto, const void *buffer, size_t sz) {
   libatgw_inner_v1_c_on_message_fn_t fn = libatgw_inner_v1_c_get_c_callbacks()->on_message_fn;
-  if (NULL != fn) {
+  if (nullptr != fn) {
     libatgw_inner_v1_c_context context;
     context = proto;
     fn(context, buffer, sz);
@@ -83,7 +87,7 @@ static int32_t proto_inner_callback_on_message(::atframe::gateway::proto_base *p
 // useless
 static int32_t proto_inner_callback_on_new_session(::atframe::gateway::proto_base *proto, uint64_t &sess_id) {
   libatgw_inner_v1_c_on_init_new_session_fn_t fn = libatgw_inner_v1_c_get_c_callbacks()->on_init_new_session_fn;
-  if (NULL != fn) {
+  if (nullptr != fn) {
     libatgw_inner_v1_c_context context;
     context = proto;
     fn(context, &sess_id);
@@ -95,7 +99,7 @@ static int32_t proto_inner_callback_on_new_session(::atframe::gateway::proto_bas
 // useless
 static int32_t proto_inner_callback_on_reconnect(::atframe::gateway::proto_base *proto, uint64_t sess_id) {
   libatgw_inner_v1_c_on_init_reconnect_fn_t fn = libatgw_inner_v1_c_get_c_callbacks()->on_init_reconnect_fn;
-  if (NULL != fn) {
+  if (nullptr != fn) {
     libatgw_inner_v1_c_context context;
     context = proto;
     fn(context, sess_id);
@@ -106,7 +110,7 @@ static int32_t proto_inner_callback_on_reconnect(::atframe::gateway::proto_base 
 
 static int32_t proto_inner_callback_on_close(::atframe::gateway::proto_base *proto, int32_t reason) {
   libatgw_inner_v1_c_on_close_fn_t fn = libatgw_inner_v1_c_get_c_callbacks()->on_close_fn;
-  if (NULL != fn) {
+  if (nullptr != fn) {
     libatgw_inner_v1_c_context context;
     context = proto;
     fn(context, reason);
@@ -117,7 +121,7 @@ static int32_t proto_inner_callback_on_close(::atframe::gateway::proto_base *pro
 
 static int32_t proto_inner_callback_on_handshake(::atframe::gateway::proto_base *proto, int32_t status) {
   libatgw_inner_v1_c_on_handshake_done_fn_t fn = libatgw_inner_v1_c_get_c_callbacks()->on_handshake_done_fn;
-  if (NULL != fn) {
+  if (nullptr != fn) {
     libatgw_inner_v1_c_context context;
     context = proto;
     fn(context, status);
@@ -128,7 +132,7 @@ static int32_t proto_inner_callback_on_handshake(::atframe::gateway::proto_base 
 
 static int32_t proto_inner_callback_on_handshake_update(::atframe::gateway::proto_base *proto, int32_t status) {
   libatgw_inner_v1_c_on_handshake_done_fn_t fn = libatgw_inner_v1_c_get_c_callbacks()->on_handshake_update_fn;
-  if (NULL != fn) {
+  if (nullptr != fn) {
     libatgw_inner_v1_c_context context;
     context = proto;
     fn(context, status);
@@ -140,7 +144,7 @@ static int32_t proto_inner_callback_on_handshake_update(::atframe::gateway::prot
 static int32_t proto_inner_callback_on_error(::atframe::gateway::proto_base *proto, const char *filename, int32_t line,
                                              int32_t errcode, const char *errmsg) {
   libatgw_inner_v1_c_on_error_fn_t fn = libatgw_inner_v1_c_get_c_callbacks()->on_error_fn;
-  if (NULL != fn) {
+  if (nullptr != fn) {
     libatgw_inner_v1_c_context context;
     context = proto;
     fn(context, filename, line, errcode, errmsg);
@@ -184,7 +188,7 @@ UTIL_SYMBOL_EXPORT uint64_t __cdecl libatgw_inner_v1_c_global_get_crypt_size() {
 UTIL_SYMBOL_EXPORT const char *__cdecl libatgw_inner_v1_c_global_get_crypt_name(uint64_t idx) {
   const std::vector<std::string> &res = util::crypto::cipher::get_all_cipher_names();
   if (idx >= res.size()) {
-    return NULL;
+    return nullptr;
   }
 
   return res[idx].c_str();
@@ -231,7 +235,7 @@ UTIL_SYMBOL_EXPORT libatgw_inner_v1_c_context __cdecl libatgw_inner_v1_c_create(
   assert(sizeof(void *) == sizeof(libatgw_inner_v1_c_context));
 
   atframe::gateway::libatgw_proto_inner_v1 *res = new (std::nothrow) atframe::gateway::libatgw_proto_inner_v1();
-  if (NULL != res) {
+  if (nullptr != res) {
     res->set_callbacks(libatgw_inner_v1_c_get_proto_callbacks());
   }
 
@@ -285,7 +289,7 @@ UTIL_SYMBOL_EXPORT int32_t __cdecl libatgw_inner_v1_c_reconnect_session(libatgw_
 
 UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_get_info(libatgw_inner_v1_c_context context, char *info_str,
                                                             uint64_t info_len) {
-  if (NULL == info_str || 0 == info_len) {
+  if (nullptr == info_str || 0 == info_len) {
     return;
   }
 
@@ -314,7 +318,7 @@ UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_set_private_data(libatgw_inne
 
 UTIL_SYMBOL_EXPORT void *__cdecl libatgw_inner_v1_c_get_private_data(libatgw_inner_v1_c_context context) {
   if (ATGW_CONTEXT_IS_NULL(context)) {
-    return NULL;
+    return nullptr;
   }
 
   return ATGW_CONTEXT(context)->get_private_data();
@@ -375,15 +379,15 @@ UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_read_alloc(libatgw_inner_v1_c
     return;
   }
 
-  char *co = NULL;
+  char *co = nullptr;
   size_t colen = 0;
-  if (NULL == out_buf) {
+  if (nullptr == out_buf) {
     out_buf = &co;
   }
 
   ATGW_CONTEXT(context)->alloc_recv_buffer(suggested_size, *out_buf, colen);
 
-  if (NULL != out_len) {
+  if (nullptr != out_len) {
     *out_len = colen;
   }
 }
@@ -398,7 +402,7 @@ UTIL_SYMBOL_EXPORT void __cdecl libatgw_inner_v1_c_read(libatgw_inner_v1_c_conte
 
   ATGW_CONTEXT(context)->read(ssz, buff, (size_t)len, ecd);
 
-  if (NULL != errcode) {
+  if (nullptr != errcode) {
     *errcode = ecd;
   }
 }

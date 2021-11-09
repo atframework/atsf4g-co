@@ -9,34 +9,34 @@ option optimize_for = SPEED;
 option cc_enable_arenas = true;
 
 message ss_body_post {
-    repeated uint64 session_ids = 1;
-    bytes content               = 2;
+  repeated uint64 session_ids = 1;
+  bytes content = 2;
 }
 
 message ss_body_session {
-    string client_ip   = 1;
-    int32  client_port = 2;
+  string client_ip = 1;
+  int32 client_port = 2;
 }
 
 message ss_msg_head {
-    uint64 session_id = 1;
-    int32  error_code = 2;
+  uint64 session_id = 1;
+  int32 error_code = 2;
 }
 
 message ss_msg_body {
-    oneof cmd {
-        ss_body_post post = 1;
+  oneof cmd {
+    ss_body_post post = 1;
 
-        ss_body_session add_session     = 11;
-        ss_body_session remove_session  = 12;
-        ss_body_session kickoff_session = 14;
+    ss_body_session add_session = 11;
+    ss_body_session remove_session = 12;
+    ss_body_session kickoff_session = 14;
 
-        uint64 set_router_req = 15;
-        uint64 set_router_rsp = 16;
-    }
+    uint64 set_router_req = 15;
+    uint64 set_router_rsp = 16;
+  }
 }
 
 message ss_msg {
-    ss_msg_head head = 1;
-    ss_msg_body body = 2;
+  ss_msg_head head = 1;
+  ss_msg_body body = 2;
 }

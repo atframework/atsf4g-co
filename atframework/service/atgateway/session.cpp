@@ -1,10 +1,10 @@
-﻿#include <sstream>
+// Copyright 2021 atframework
+// Created by owent on 2016/9/29.
+//
 
-#if (defined(__cplusplus) && __cplusplus >= 201103L) || (defined(_MSC_VER) && _MSC_VER >= 1900)
-#  include <type_traits>
-#endif
+#include "session.h"
 
-#include "uv.h"
+#include <uv.h>
 
 #include <common/file_system.h>
 #include <log/log_wrapper.h>
@@ -12,10 +12,12 @@
 
 #include <config/compiler_features.h>
 
+#include <sstream>
+#include <type_traits>
+
 #include "config/atframe_service_types.h"
 #include "core/timestamp_id_allocator.h"
 
-#include "session.h"
 #include "session_manager.h"
 
 namespace atframe {
@@ -30,7 +32,7 @@ UTIL_CONFIG_STATIC_ASSERT(std::is_pod<session::limit_t>::value);
 #  endif
 #endif
 
-session::session() : id_(0), router_(0), owner_(NULL), flags_(0), peer_port_(0), private_data_(NULL) {
+session::session() : id_(0), router_(0), owner_(nullptr), flags_(0), peer_port_(0), private_data_(nullptr) {
   memset(&limit_, 0, sizeof(limit_));
   raw_handle_.data = this;
 }
@@ -184,7 +186,7 @@ int session::send_new_session() {
   msg.mutable_head()->set_session_id(id_);
 
   ::atframe::gw::ss_body_session *sess = msg.mutable_body()->mutable_add_session();
-  if (NULL != sess) {
+  if (nullptr != sess) {
     sess->set_client_ip(peer_ip_);
     sess->set_client_port(peer_port_);
   }
@@ -214,7 +216,7 @@ int session::send_remove_session(session_manager *mgr) {
   msg.mutable_head()->set_session_id(id_);
 
   ::atframe::gw::ss_body_session *sess = msg.mutable_body()->mutable_remove_session();
-  if (NULL != sess) {
+  if (nullptr != sess) {
     sess->set_client_ip(get_peer_host());
     sess->set_client_port(get_peer_port());
   }
@@ -236,7 +238,7 @@ void session::on_alloc_read(size_t suggested_size, char *&out_buf, size_t &out_l
   if (proto_) {
     proto_->alloc_recv_buffer(suggested_size, out_buf, out_len);
 
-    if (NULL == out_buf && 0 == out_len) {
+    if (nullptr == out_buf && 0 == out_len) {
       close_fd(::atframe::gateway::close_reason_t::EN_CRT_INVALID_DATA);
     }
   }
@@ -302,7 +304,7 @@ int session::close_fd(int reason) {
 
     // shutdown and close uv_stream_t
     // manager can not be used any more
-    owner_ = NULL;
+    owner_ = nullptr;
     shutdown_req_.data = new ptr_t(shared_from_this());
 
     // if writing, wait all data written an then shutdown it
@@ -358,11 +360,11 @@ int session::send_to_server(::atframe::gw::ss_msg &msg, session_manager *mgr) {
     return error_code_t::EN_ECT_INVALID_ROUTER;
   }
 
-  if (NULL == mgr) {
+  if (nullptr == mgr) {
     mgr = owner_;
   }
 
-  if (NULL == mgr) {
+  if (nullptr == mgr) {
     WLOGERROR("sesseion %llx has lost manager and can not send ss message any more",
               static_cast<unsigned long long>(id_));
     return error_code_t::EN_ECT_LOST_MANAGER;
@@ -410,7 +412,7 @@ void session::on_evt_shutdown(uv_shutdown_t *req, int /*status*/) {
 
 void session::on_evt_closed(uv_handle_t *handle) {
   assert(handle && handle->data);
-  if (NULL == handle || NULL == handle->data) {
+  if (nullptr == handle || nullptr == handle->data) {
     return;
   }
 
@@ -435,7 +437,7 @@ void session::check_hour_limit(bool check_recv, bool check_send) {
     return;
   }
 
-  if (NULL == owner_) {
+  if (nullptr == owner_) {
     return;
   }
 
@@ -443,23 +445,23 @@ void session::check_hour_limit(bool check_recv, bool check_send) {
     return;
   }
 
-  if (check_recv && owner_->get_conf().limits.hour_recv_bytes > 0 &&
-      limit_.hour_recv_bytes > owner_->get_conf().limits.hour_recv_bytes) {
+  if (check_recv && owner_->get_conf().origin_conf.client().limit().hour_recv_bytes() > 0 &&
+      limit_.hour_recv_bytes > owner_->get_conf().origin_conf.client().limit().hour_recv_bytes()) {
     close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
   }
 
-  if (check_recv && owner_->get_conf().limits.hour_send_bytes > 0 &&
-      limit_.hour_send_bytes > owner_->get_conf().limits.hour_send_bytes) {
+  if (check_recv && owner_->get_conf().origin_conf.client().limit().hour_send_bytes() > 0 &&
+      limit_.hour_send_bytes > owner_->get_conf().origin_conf.client().limit().hour_send_bytes()) {
     close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
   }
 
-  if (check_send && owner_->get_conf().limits.hour_recv_times > 0 &&
-      limit_.hour_recv_times > owner_->get_conf().limits.hour_recv_times) {
+  if (check_send && owner_->get_conf().origin_conf.client().limit().hour_recv_times() > 0 &&
+      limit_.hour_recv_times > owner_->get_conf().origin_conf.client().limit().hour_recv_times()) {
     close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
   }
 
-  if (check_send && owner_->get_conf().limits.hour_send_times > 0 &&
-      limit_.hour_send_times > owner_->get_conf().limits.hour_send_times) {
+  if (check_send && owner_->get_conf().origin_conf.client().limit().hour_send_times() > 0 &&
+      limit_.hour_send_times > owner_->get_conf().origin_conf.client().limit().hour_send_times()) {
     close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
   }
 }
@@ -475,7 +477,7 @@ void session::check_minute_limit(bool check_recv, bool check_send) {
     return;
   }
 
-  if (NULL == owner_) {
+  if (nullptr == owner_) {
     return;
   }
 
@@ -483,36 +485,36 @@ void session::check_minute_limit(bool check_recv, bool check_send) {
     return;
   }
 
-  if (check_recv && owner_->get_conf().limits.minute_recv_bytes > 0 &&
-      limit_.minute_recv_bytes > owner_->get_conf().limits.minute_recv_bytes) {
+  if (check_recv && owner_->get_conf().origin_conf.client().limit().minute_recv_bytes() > 0 &&
+      limit_.minute_recv_bytes > owner_->get_conf().origin_conf.client().limit().minute_recv_bytes()) {
     close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
     return;
   }
 
-  if (check_recv && owner_->get_conf().limits.minute_recv_times > 0 &&
-      limit_.minute_recv_times > owner_->get_conf().limits.minute_recv_times) {
+  if (check_recv && owner_->get_conf().origin_conf.client().limit().minute_recv_times() > 0 &&
+      limit_.minute_recv_times > owner_->get_conf().origin_conf.client().limit().minute_recv_times()) {
     close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
     return;
   }
 
-  if (check_send && owner_->get_conf().limits.minute_send_bytes > 0 &&
-      limit_.minute_send_bytes > owner_->get_conf().limits.minute_send_bytes) {
+  if (check_send && owner_->get_conf().origin_conf.client().limit().minute_send_bytes() > 0 &&
+      limit_.minute_send_bytes > owner_->get_conf().origin_conf.client().limit().minute_send_bytes()) {
     close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
     return;
   }
 
-  if (check_send && owner_->get_conf().limits.minute_send_times > 0 &&
-      limit_.minute_send_times > owner_->get_conf().limits.minute_send_times) {
+  if (check_send && owner_->get_conf().origin_conf.client().limit().minute_send_times() > 0 &&
+      limit_.minute_send_times > owner_->get_conf().origin_conf.client().limit().minute_send_times()) {
     close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
     return;
   }
 
-  if (NULL != owner_ && owner_->get_conf().crypt.update_interval > 0 && check_flag(flag_t::EN_FT_HAS_FD)) {
+  if (nullptr != owner_ && owner_->get_conf().crypt.update_interval > 0 && check_flag(flag_t::EN_FT_HAS_FD)) {
     if (limit_.update_handshake_timepoint < ::util::time::time_utility::get_now()) {
       limit_.update_handshake_timepoint =
           ::util::time::time_utility::get_now() + owner_->get_conf().crypt.update_interval;
       proto_base *proto = get_protocol_handle();
-      if (NULL != proto) {
+      if (nullptr != proto) {
         proto->handshake_update();
       }
     }
@@ -520,7 +522,7 @@ void session::check_minute_limit(bool check_recv, bool check_send) {
 }
 
 void session::check_total_limit(bool check_recv, bool check_send) {
-  if (NULL == owner_) {
+  if (nullptr == owner_) {
     return;
   }
 
@@ -528,23 +530,23 @@ void session::check_total_limit(bool check_recv, bool check_send) {
     return;
   }
 
-  if (check_recv && owner_->get_conf().limits.total_recv_bytes > 0 &&
-      limit_.total_recv_bytes > owner_->get_conf().limits.total_send_bytes) {
+  if (check_recv && owner_->get_conf().origin_conf.client().limit().total_recv_bytes() > 0 &&
+      limit_.total_recv_bytes > owner_->get_conf().origin_conf.client().limit().total_send_bytes()) {
     close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
   }
 
-  if (check_recv && owner_->get_conf().limits.total_recv_times > 0 &&
-      limit_.total_recv_times > owner_->get_conf().limits.total_recv_times) {
+  if (check_recv && owner_->get_conf().origin_conf.client().limit().total_recv_times() > 0 &&
+      limit_.total_recv_times > owner_->get_conf().origin_conf.client().limit().total_recv_times()) {
     close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
   }
 
-  if (check_send && owner_->get_conf().limits.total_send_bytes > 0 &&
-      limit_.total_send_bytes > owner_->get_conf().limits.total_send_bytes) {
+  if (check_send && owner_->get_conf().origin_conf.client().limit().total_send_bytes() > 0 &&
+      limit_.total_send_bytes > owner_->get_conf().origin_conf.client().limit().total_send_bytes()) {
     close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
   }
 
-  if (check_send && owner_->get_conf().limits.total_send_times > 0 &&
-      limit_.total_send_times > owner_->get_conf().limits.total_send_times) {
+  if (check_send && owner_->get_conf().origin_conf.client().limit().total_send_times() > 0 &&
+      limit_.total_send_times > owner_->get_conf().origin_conf.client().limit().total_send_times()) {
     close(close_reason_t::EN_CRT_TRAFIC_EXTENDED);
   }
 }

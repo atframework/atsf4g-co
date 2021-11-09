@@ -1,15 +1,10 @@
-﻿
-#include <std/functional.h>
-#include <std/ref.h>
-#include <std/smart_ptr.h>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <iostream>
-#include <sstream>
-#include <vector>
+// Copyright 2021 atframework
+// Created by owent on 2016/9/29.
+//
 
 #include <uv.h>
+
+#include <libatbus_protocol.h>
 
 #include <common/file_system.h>
 #include <common/string_oprs.h>
@@ -19,6 +14,16 @@
 #include <atframe/atapp.h>
 #include <libatbus.h>
 #include <libatbus_protocol.h>
+
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <functional>
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <vector>
+
 #include "session_manager.h"
 
 static int app_handle_on_forward_response(atapp::app &app, const atapp::app::message_sender_t &source,
@@ -28,7 +33,7 @@ static int app_handle_on_forward_response(atapp::app &app, const atapp::app::mes
   }
 
   FWLOGERROR("send data from {:#x} to {:#x} failed, msg sequence: {}, code: {}", app.get_id(), source.id,
-             m.msg_sequence, error_code);
+             m.message_sequence, error_code);
   return 0;
 }
 
@@ -38,12 +43,12 @@ class gateway_module : public ::atapp::module_impl {
   virtual ~gateway_module() {}
 
  public:
-  int init() UTIL_CONFIG_OVERRIDE {
+  int init() override {
     gw_mgr_.get_conf().version = 1;
 
     int res = 0;
-    if ("inner" == gw_mgr_.get_conf().listen.type) {
-      typedef std::unique_ptr<::atframe::gateway::proto_base> proto_ptr_t;
+    if ("inner" == gw_mgr_.get_conf().origin_conf.listen().type()) {
+      using proto_ptr_t = std::unique_ptr<::atframe::gateway::proto_base>;
       gw_mgr_.init(get_app()->get_bus_node().get(), std::bind<proto_ptr_t>(&gateway_module::create_proto_inner, this));
 
       gw_mgr_.set_on_create_session(std::bind<int>(&gateway_module::proto_inner_callback_on_create_session, this,
@@ -72,127 +77,44 @@ class gateway_module : public ::atapp::module_impl {
                          std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
 
     } else {
-      PSTDERROR("listen type %s not supported.\n", gw_mgr_.get_conf().listen.type.c_str());
+      FWLOGERROR("listen type {} not supported.", gw_mgr_.get_conf().origin_conf.listen().type());
       return -1;
     }
 
     // init limits
     res = gw_mgr_.listen_all();
     if (res <= 0) {
-      PSTDERROR("nothing listened for client, please see log for more details.\n");
+      FWLOGERROR("nothing listened for client, please see log for more details.");
       return -1;
     }
 
     return 0;
   }
 
-  int reload() UTIL_CONFIG_OVERRIDE {
+  int reload() override {
     ++gw_mgr_.get_conf().version;
 
-    // load init cluster member from configure
-    gw_mgr_.get_conf().limits.total_recv_bytes = 0;
-    gw_mgr_.get_conf().limits.total_send_bytes = 0;
-    gw_mgr_.get_conf().limits.hour_recv_bytes = 0;
-    gw_mgr_.get_conf().limits.hour_send_bytes = 0;
-    gw_mgr_.get_conf().limits.minute_recv_bytes = 0;
-    gw_mgr_.get_conf().limits.minute_send_bytes = 0;
-    gw_mgr_.get_conf().limits.total_recv_times = 0;
-    gw_mgr_.get_conf().limits.total_send_times = 0;
-    gw_mgr_.get_conf().limits.hour_recv_times = 0;
-    gw_mgr_.get_conf().limits.hour_send_times = 0;
-    gw_mgr_.get_conf().limits.minute_recv_times = 0;
-    gw_mgr_.get_conf().limits.minute_send_times = 0;
-    gw_mgr_.get_conf().limits.max_client_number = 65536;
-
-    gw_mgr_.get_conf().listen.address.clear();
-    gw_mgr_.get_conf().listen.type.clear();
-    gw_mgr_.get_conf().listen.backlog = 1024;
-
-    gw_mgr_.get_conf().reconnect_timeout = 180;     // 60s
-    gw_mgr_.get_conf().send_buffer_size = 1048576;  // 1MB
-    gw_mgr_.get_conf().default_router = 0;
-    gw_mgr_.get_conf().first_idle_timeout = 10;  // 10s
-
-    util::config::ini_loader &cfg = get_app()->get_configure_loader();
-    // listen configures
-    cfg.dump_to("atgateway.listen.address", gw_mgr_.get_conf().listen.address);
-    cfg.dump_to("atgateway.listen.type", gw_mgr_.get_conf().listen.type);
-    cfg.dump_to("atgateway.listen.max_client", gw_mgr_.get_conf().limits.max_client_number);
-    cfg.dump_to("atgateway.listen.backlog", gw_mgr_.get_conf().listen.backlog);
-
-    // client session configure
-    cfg.dump_to("atgateway.client.router.default", gw_mgr_.get_conf().default_router);
-    cfg.dump_to("atgateway.client.send_buffer_size", gw_mgr_.get_conf().send_buffer_size);
-    cfg.dump_to("atgateway.client.reconnect_timeout", gw_mgr_.get_conf().reconnect_timeout);
-    cfg.dump_to("atgateway.client.first_idle_timeout", gw_mgr_.get_conf().first_idle_timeout);
-
-    // client limit
-    cfg.dump_to("atgateway.client.limit.total_send_bytes", gw_mgr_.get_conf().limits.total_send_bytes);
-    cfg.dump_to("atgateway.client.limit.total_recv_bytes", gw_mgr_.get_conf().limits.total_recv_bytes);
-    cfg.dump_to("atgateway.client.limit.hour_send_bytes", gw_mgr_.get_conf().limits.hour_send_bytes);
-    cfg.dump_to("atgateway.client.limit.hour_recv_bytes", gw_mgr_.get_conf().limits.hour_recv_bytes);
-    cfg.dump_to("atgateway.client.limit.minute_send_bytes", gw_mgr_.get_conf().limits.minute_send_bytes);
-    cfg.dump_to("atgateway.client.limit.minute_recv_bytes", gw_mgr_.get_conf().limits.minute_recv_bytes);
-    cfg.dump_to("atgateway.client.limit.total_send_times", gw_mgr_.get_conf().limits.total_send_times);
-    cfg.dump_to("atgateway.client.limit.total_recv_times", gw_mgr_.get_conf().limits.total_recv_times);
-    cfg.dump_to("atgateway.client.limit.hour_send_times", gw_mgr_.get_conf().limits.hour_send_times);
-    cfg.dump_to("atgateway.client.limit.hour_recv_times", gw_mgr_.get_conf().limits.hour_recv_times);
-    cfg.dump_to("atgateway.client.limit.minute_send_times", gw_mgr_.get_conf().limits.minute_send_times);
-    cfg.dump_to("atgateway.client.limit.minute_recv_times", gw_mgr_.get_conf().limits.minute_recv_times);
+    get_app()->parse_configures_into(gw_mgr_.get_conf().origin_conf, "atgateway");
 
     // crypt
     ::atframe::gateway::session_manager::crypt_conf_t &crypt_conf = gw_mgr_.get_conf().crypt;
-    crypt_conf.default_key.clear();
-    crypt_conf.update_interval = 300;  // 5min
-    crypt_conf.type.clear();
+    crypt_conf.default_key = gw_mgr_.get_conf().origin_conf.client().crypt().key();
+    crypt_conf.update_interval = gw_mgr_.get_conf().origin_conf.client().crypt().update_interval().seconds();
+    crypt_conf.type = gw_mgr_.get_conf().origin_conf.client().crypt().type();
     crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT;
     crypt_conf.client_mode = false;
 
-    // crypt_conf.rsa_sign_type = ::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1;
-    // crypt_conf.hash_id =
-    // crypt_conf.rsa_public_key.clear();
-    // crypt_conf.rsa_private_key.clear();
-    crypt_conf.dh_param.clear();
-    do {
-      std::string val;
-      cfg.dump_to("atgateway.client.crypt.key", crypt_conf.default_key);
-      cfg.dump_to("atgateway.client.crypt.update_interval", crypt_conf.update_interval);
-      cfg.dump_to("atgateway.client.crypt.type", crypt_conf.type);
-
-      // rsa
-      // cfg.dump_to("atgateway.client.crypt.rsa.public_key", crypt_conf.rsa_public_key);
-      // cfg.dump_to("atgateway.client.crypt.rsa.private_key", crypt_conf.rsa_private_key);
-      // if (!crypt_conf.rsa_public_key.empty() && !crypt_conf.rsa_private_key.empty()) {
-      //     crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_RSA;
-      //
-      //     val.clear();
-      //     cfg.dump_to("atgateway.client.crypt.rsa.sign", val);
-      //     if (0 == UTIL_STRFUNC_STRNCASE_CMP("pkcs1_v15", val.c_str(), 9)) {
-      //         crypt_conf.rsa_sign_type = ::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1_V15;
-      //     } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("pkcs1", val.c_str(), 5)) {
-      //         crypt_conf.rsa_sign_type = ::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PKCS1;
-      //     } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("pss", val.c_str(), 3)) {
-      //         crypt_conf.rsa_sign_type = ::atframe::gw::inner::v1::rsa_sign_t_EN_RST_PSS;
-      //     }
-      // }
-
-      // dh
-      cfg.dump_to("atgateway.client.crypt.dhparam", crypt_conf.dh_param);
-      if (!crypt_conf.dh_param.empty()) {
-        if (0 == UTIL_STRFUNC_STRNCASE_CMP("ecdh:", crypt_conf.dh_param.c_str(), 5)) {
-          crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_ECDH;
-        } else {
-          crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH;
-        }
+    crypt_conf.dh_param = gw_mgr_.get_conf().origin_conf.client().crypt().dhparam();
+    if (!crypt_conf.dh_param.empty()) {
+      if (0 == UTIL_STRFUNC_STRNCASE_CMP("ecdh:", crypt_conf.dh_param.c_str(), 5)) {
+        crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_ECDH;
+      } else {
+        crypt_conf.switch_secret_type = ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH;
       }
-
-      // hash id
-      // val.clear();
-      // cfg.dump_to("atgateway.client.crypt.hash_id", crypt_conf.hash_id);
-    } while (false);
+    }
 
     // protocol reload
-    if ("inner" == gw_mgr_.get_conf().listen.type) {
+    if ("inner" == gw_mgr_.get_conf().origin_conf.listen().type()) {
       int res = ::atframe::gateway::libatgw_proto_inner_v1::global_reload(crypt_conf);
       if (res < 0) {
         WLOGERROR("reload inner protocol global configure failed, res: %d", res);
@@ -203,16 +125,16 @@ class gateway_module : public ::atapp::module_impl {
     return 0;
   }
 
-  int stop() UTIL_CONFIG_OVERRIDE {
+  int stop() override {
     gw_mgr_.reset();
     return 0;
   }
 
-  int timeout() UTIL_CONFIG_OVERRIDE { return 0; }
+  int timeout() override { return 0; }
 
-  const char *name() const UTIL_CONFIG_OVERRIDE { return "gateway_module"; }
+  const char *name() const override { return "gateway_module"; }
 
-  int tick() UTIL_CONFIG_OVERRIDE { return gw_mgr_.tick(); }
+  int tick() override { return gw_mgr_.tick(); }
 
   inline ::atframe::gateway::session_manager &get_session_manager() { return gw_mgr_; }
   inline const ::atframe::gateway::session_manager &get_session_manager() const { return gw_mgr_; }
@@ -220,7 +142,7 @@ class gateway_module : public ::atapp::module_impl {
  private:
   std::unique_ptr<::atframe::gateway::proto_base> create_proto_inner() {
     ::atframe::gateway::libatgw_proto_inner_v1 *ret = new (std::nothrow)::atframe::gateway::libatgw_proto_inner_v1();
-    if (NULL != ret) {
+    if (nullptr != ret) {
       ret->set_callbacks(&proto_callbacks_);
       ret->set_write_header_offset(sizeof(uv_write_t));
     }
@@ -233,9 +155,9 @@ class gateway_module : public ::atapp::module_impl {
     ::atframe::gateway::session *sess = reinterpret_cast<::atframe::gateway::session *>(handle->data);
     assert(sess);
 
-    if (NULL == sess) {
-      if (NULL != buf) {
-        buf->base = NULL;
+    if (nullptr == sess) {
+      if (nullptr != buf) {
+        buf->base = nullptr;
         buf->len = 0;
       }
       return;
@@ -253,13 +175,13 @@ class gateway_module : public ::atapp::module_impl {
   }
 
   static void proto_inner_callback_on_read_data(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
-    if (NULL == stream) {
+    if (nullptr == stream) {
       return;
     }
 
     ::atframe::gateway::session *sess = reinterpret_cast<::atframe::gateway::session *>(stream->data);
     assert(sess);
-    if (NULL == sess) {
+    if (nullptr == sess) {
       return;
     }
 
@@ -268,7 +190,7 @@ class gateway_module : public ::atapp::module_impl {
       return;
     }
 
-    if (NULL == sess->get_manager()) {
+    if (nullptr == sess->get_manager()) {
       return;
     }
     ::atframe::gateway::session_manager *mgr = sess->get_manager();
@@ -285,7 +207,7 @@ class gateway_module : public ::atapp::module_impl {
       return;
     }
 
-    if (NULL != buf) {
+    if (nullptr != buf) {
       // in case of deallocator session in read callback.
       ::atframe::gateway::session::ptr_t sess_holder = sess->shared_from_this();
       sess_holder->on_read(static_cast<int>(nread), buf->base, static_cast<size_t>(nread));
@@ -293,12 +215,12 @@ class gateway_module : public ::atapp::module_impl {
   }
 
   int proto_inner_callback_on_create_session(::atframe::gateway::session *sess, uv_stream_t *handle) {
-    if (NULL == sess) {
+    if (nullptr == sess) {
       WLOGERROR("create session with inner proto without session object");
       return 0;
     }
 
-    if (NULL == handle) {
+    if (nullptr == handle) {
       WLOGERROR("create session with inner proto without handle");
       return 0;
     }
@@ -314,23 +236,23 @@ class gateway_module : public ::atapp::module_impl {
     ::atframe::gateway::session *sess = reinterpret_cast<::atframe::gateway::session *>(req->data);
     assert(sess);
 
-    if (NULL != sess) {
+    if (nullptr != sess) {
       sess->set_flag(::atframe::gateway::session::flag_t::EN_FT_WRITING_FD, false);
       sess->on_write_done(status);
     }
   }
 
   int proto_inner_callback_on_write(::atframe::gateway::proto_base *proto, void *buffer, size_t sz, bool *is_done) {
-    if (NULL == proto || NULL == buffer) {
-      if (NULL != is_done) {
+    if (nullptr == proto || nullptr == buffer) {
+      if (nullptr != is_done) {
         *is_done = true;
       }
       return ::atframe::gateway::error_code_t::EN_ECT_PARAM;
     }
 
     ::atframe::gateway::session *sess = reinterpret_cast<::atframe::gateway::session *>(proto->get_private_data());
-    if (NULL == sess) {
-      if (NULL != is_done) {
+    if (nullptr == sess) {
+      if (nullptr != is_done) {
         *is_done = true;
       }
       return -1;
@@ -357,7 +279,7 @@ class gateway_module : public ::atapp::module_impl {
 
     } while (false);
 
-    if (NULL != is_done) {
+    if (nullptr != is_done) {
       // if not writting, notify write finished
       *is_done = !sess->check_flag(::atframe::gateway::session::flag_t::EN_FT_WRITING_FD);
     }
@@ -366,7 +288,7 @@ class gateway_module : public ::atapp::module_impl {
 
   int proto_inner_callback_on_message(::atframe::gateway::proto_base *proto, const void *buffer, size_t sz) {
     ::atframe::gateway::session *sess = reinterpret_cast<::atframe::gateway::session *>(proto->get_private_data());
-    if (NULL == sess) {
+    if (nullptr == sess) {
       WLOGERROR("recv message from proto object %p length, but has no session", proto);
       return -1;
     }
@@ -376,7 +298,7 @@ class gateway_module : public ::atapp::module_impl {
     post_msg.mutable_head()->set_session_id(sess_holder->get_id());
 
     ::atframe::gw::ss_body_post *post = post_msg.mutable_body()->mutable_post();
-    if (NULL != post) {
+    if (nullptr != post) {
       post->add_session_ids(sess_holder->get_id());
       post->set_content(buffer, sz);
     }
@@ -391,13 +313,13 @@ class gateway_module : public ::atapp::module_impl {
 
   int proto_inner_callback_on_new_session(::atframe::gateway::proto_base *proto, uint64_t &sess_id) {
     ::atframe::gateway::session *sess = reinterpret_cast<::atframe::gateway::session *>(proto->get_private_data());
-    if (NULL == sess) {
+    if (nullptr == sess) {
       WLOGERROR("recv new session message from proto object %p length, but has no session", proto);
       return -1;
     }
     ::atframe::gateway::session::ptr_t sess_holder = sess->shared_from_this();
 
-    int ret = sess_holder->init_new_session(gw_mgr_.get_conf().default_router);
+    int ret = sess_holder->init_new_session(gw_mgr_.get_conf().origin_conf.client().default_router());
     sess_id = sess_holder->get_id();
     if (0 != ret) {
       WLOGERROR("create new session failed, ret: %d", ret);
@@ -407,13 +329,13 @@ class gateway_module : public ::atapp::module_impl {
   }
 
   int proto_inner_callback_on_reconnect(::atframe::gateway::proto_base *proto, uint64_t sess_id) {
-    if (NULL == proto) {
+    if (nullptr == proto) {
       WLOGERROR("parameter error");
       return -1;
     }
 
     ::atframe::gateway::session *sess = reinterpret_cast<::atframe::gateway::session *>(proto->get_private_data());
-    if (NULL == sess) {
+    if (nullptr == sess) {
       WLOGERROR("close session from proto object %p length, but has no session", proto);
       return -1;
     }
@@ -445,13 +367,13 @@ class gateway_module : public ::atapp::module_impl {
   }
 
   int proto_inner_callback_on_close(::atframe::gateway::proto_base *proto, int reason) {
-    if (NULL == proto) {
+    if (nullptr == proto) {
       WLOGERROR("parameter error");
       return -1;
     }
 
     ::atframe::gateway::session *sess = reinterpret_cast<::atframe::gateway::session *>(proto->get_private_data());
-    if (NULL == sess) {
+    if (nullptr == sess) {
       WLOGERROR("close session from proto object %p length, but has no session", proto);
       return -1;
     }
@@ -466,7 +388,7 @@ class gateway_module : public ::atapp::module_impl {
         WLOGINFO("session 0x%llx(%p) closed disable reconnect", static_cast<unsigned long long>(sess_holder->get_id()),
                  sess);
       }
-      if (NULL != sess_holder->get_manager()) {
+      if (nullptr != sess_holder->get_manager()) {
         if (sess_holder->get_manager()->close(sess_holder->get_id(), reason, enable_reconnect) < 0) {
           sess_holder->close(reason);
         }
@@ -489,7 +411,7 @@ class gateway_module : public ::atapp::module_impl {
   int proto_inner_callback_on_handshake_done(::atframe::gateway::proto_base *proto, int status) {
     if (0 == status) {
       ::atframe::gateway::session *sess = reinterpret_cast<::atframe::gateway::session *>(proto->get_private_data());
-      if (NULL == sess) {
+      if (nullptr == sess) {
         WLOGERROR("handshake done from proto object %p length, but has no session", proto);
         return -1;
       }
@@ -506,7 +428,7 @@ class gateway_module : public ::atapp::module_impl {
       }
     } else {
       ::atframe::gateway::session *sess = reinterpret_cast<::atframe::gateway::session *>(proto->get_private_data());
-      if (NULL == sess) {
+      if (nullptr == sess) {
         WLOGERROR("session NONE handshake failed,res: %d\n%s", status, proto->get_info().c_str());
       } else {
         WLOGERROR("session 0x%llx(%p) handshake failed,res: %d\n%s", static_cast<unsigned long long>(sess->get_id()),
@@ -519,14 +441,14 @@ class gateway_module : public ::atapp::module_impl {
   int proto_inner_callback_on_update_done(::atframe::gateway::proto_base *proto, int status) {
     ::atframe::gateway::session *sess = reinterpret_cast<::atframe::gateway::session *>(proto->get_private_data());
     if (0 == status) {
-      if (NULL == sess) {
+      if (nullptr == sess) {
         WLOGDEBUG("session NONE handshake update success\n%s", proto->get_info().c_str());
       } else {
         WLOGDEBUG("session 0x%llx(%p) handshake update success\n%s", static_cast<unsigned long long>(sess->get_id()),
                   sess, proto->get_info().c_str());
       }
     } else {
-      if (NULL == sess) {
+      if (nullptr == sess) {
         WLOGERROR("session NONE handshake update failed,res: %d\n%s", status, proto->get_info().c_str());
       } else {
         WLOGERROR("session 0x%llx(%p) handshake update failed,res: %d\n%s",
@@ -609,7 +531,7 @@ struct app_handle_on_recv {
   app_handle_on_recv(gateway_module &mod) : mod_(mod) {}
 
   int operator()(::atapp::app &, const atapp::app::message_sender_t &source, const atapp::app::message_t &message) {
-    if (NULL == message.data || 0 == message.data_size) {
+    if (nullptr == message.data || 0 == message.data_size) {
       return 0;
     }
 
@@ -755,7 +677,7 @@ int main(int argc, char *argv[]) {
   app.set_evt_on_forward_request(app_handle_on_recv(*gw_mod));
 
   // run
-  int ret = app.run(uv_default_loop(), argc, (const char **)argv, NULL);
+  int ret = app.run(uv_default_loop(), argc, (const char **)argv, nullptr);
 
   // cleanup crypt algorithms
   util::crypto::cipher::cleanup_global_algorithm();

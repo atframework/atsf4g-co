@@ -4,8 +4,12 @@ echowithcolor(COLOR GREEN "-- Configure ${ATSF4G_APP_NAME} on ${CMAKE_CURRENT_LI
 # ============ atgateway ============
 
 set(ATSF4G_APP_SRC_LIST
-    "${CMAKE_CURRENT_LIST_DIR}/session.h" "${CMAKE_CURRENT_LIST_DIR}/session_manager.h"
-    "${CMAKE_CURRENT_LIST_DIR}/atgateway.cpp" "${CMAKE_CURRENT_LIST_DIR}/session.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/protocols/libatgw_server_config.pb.h"
+    "${CMAKE_CURRENT_LIST_DIR}/protocols/libatgw_server_config.pb.cc"
+    "${CMAKE_CURRENT_LIST_DIR}/session.h"
+    "${CMAKE_CURRENT_LIST_DIR}/session_manager.h"
+    "${CMAKE_CURRENT_LIST_DIR}/atgateway.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/session.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/session_manager.cpp")
 source_group_by_dir(ATSF4G_APP_SRC_LIST)
 
@@ -35,6 +39,19 @@ add_custom_command(
   DEPENDS "${CMAKE_CURRENT_LIST_DIR}/protocols/libatgw_server_protocol.proto"
   COMMENT "Generate libatgw_server_protocol.pb.h, libatgw_server_protocol.pb.cc")
 
+add_custom_command(
+  OUTPUT "${CMAKE_CURRENT_LIST_DIR}/protocols/libatgw_server_config.pb.h"
+         "${CMAKE_CURRENT_LIST_DIR}/protocols/libatgw_server_config.pb.cc"
+  COMMAND
+    "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" --proto_path "${CMAKE_CURRENT_LIST_DIR}/protocols"
+    --proto_path "${CMAKE_CURRENT_LIST_DIR}/protocols" --proto_path "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include"
+    --proto_path "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include" --proto_path "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include"
+    "--cpp_out=${CMAKE_CURRENT_LIST_DIR}/protocols" "${CMAKE_CURRENT_LIST_DIR}/protocols/libatgw_server_config.proto"
+  DEPENDS "${CMAKE_CURRENT_LIST_DIR}/protocols/libatgw_server_config.proto"
+  COMMENT "Generate libatgw_server_config.pb.h, libatgw_server_config.pb.cc")
+
+project_build_tools_patch_protobuf_sources("${CMAKE_CURRENT_LIST_DIR}/protocols/libatgw_server_config.pb.h"
+                                           "${CMAKE_CURRENT_LIST_DIR}/protocols/libatgw_server_config.pb.cc")
 # ============ libatbus - src ============
 if(TARGET flatbuffers::flatc)
   add_custom_command(
@@ -101,9 +118,9 @@ install(
 export(
   TARGETS ${ATSF4G_APP_NAME} ${ATFRAMEWORK_SERVICE_GATEWAY_LINK_NAME}
   NAMESPACE "atframework::"
-  FILE "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${ATSF4G_APP_NAME}-target.cmake")
+  FILE "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${ATSF4G_APP_NAME}/${ATSF4G_APP_NAME}-target.cmake")
 
 install(
   EXPORT "${ATSF4G_APP_NAME}-target"
   NAMESPACE "atframework::"
-  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake")
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${ATSF4G_APP_NAME}")

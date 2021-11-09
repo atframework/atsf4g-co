@@ -1,6 +1,11 @@
-#include <algorithm>
+// Copyright 2021 atframework
+// Created by owent on 2016/9/29.
+//
 
 #include <time/time_utility.h>
+
+#include <algorithm>
+
 #include "atproxy_manager.h"
 
 namespace atframe {
@@ -25,7 +30,7 @@ static const atapp::protocol::atapp_gateway *next_listen_address(atproxy_manager
     }
   }
 
-  return NULL;
+  return nullptr;
 }
 
 static int listen_address_size(atproxy_manager::node_info_t &node_info) {
@@ -104,7 +109,7 @@ int atproxy_manager::tick() {
       iter->second.next_action_time = 0;
 
       // already connected, skip
-      if (NULL != get_app()->get_bus_node()->get_endpoint(ci.proxy_id)) {
+      if (nullptr != get_app()->get_bus_node()->get_endpoint(ci.proxy_id)) {
         continue;
       }
 
@@ -112,13 +117,13 @@ int atproxy_manager::tick() {
         continue;
       }
 
-      const std::string *select_address = NULL;
+      const std::string *select_address = nullptr;
       {
         int check_size = listen_address_size(iter->second);
-        for (int i = 0; NULL == select_address && i < check_size; ++i) {
+        for (int i = 0; nullptr == select_address && i < check_size; ++i) {
           // support more protocols
           const atapp::protocol::atapp_gateway *try_gateway = next_listen_address(iter->second);
-          if (NULL == try_gateway) {
+          if (nullptr == try_gateway) {
             continue;
           }
           if (!get_app()->match_gateway(*try_gateway)) {
@@ -133,7 +138,7 @@ int atproxy_manager::tick() {
         }
       }
 
-      if (NULL == select_address) {
+      if (nullptr == select_address) {
         continue;
       }
 
