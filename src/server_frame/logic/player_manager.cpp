@@ -45,7 +45,12 @@ bool player_manager::remove(uint64_t user_id, uint32_t zone_id, bool force_kicko
   }
 
   if (check_user != nullptr && false == cache->is_object_equal(*check_user)) {
+    auto check_sess = check_user->get_session();
     check_user->set_session(nullptr);
+    if (check_sess && check_sess->get_player().get() == check_user) {
+      check_sess->set_player(nullptr);
+      session_manager::me()->remove(check_sess, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
+    }
     return true;
   }
 

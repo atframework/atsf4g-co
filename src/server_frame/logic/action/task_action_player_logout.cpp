@@ -50,6 +50,8 @@ int task_action_player_logout::operator()() {
       if (get_rsp_code() < 0) {
         FWPLOGERROR(*user, "kickoff failed, res: {}({})", get_rsp_code(),
                     protobuf_mini_dumper_get_error_msg(get_rsp_code()));
+
+        session_manager::me()->remove(s);
         return hello::err::EN_SUCCESS;
       }
 
