@@ -1,0 +1,102 @@
+<%!
+    import common.project_utils as project
+%>
+# =========== logic configure ===========
+logic:
+  server:
+    maintenance_mode: 0             # maintenance mode
+    resource_path: ${project_install_prefix}/resource    # resource directory
+    log_path: ${project.get_log_dir()} # log directory
+  excel:
+    enable: true
+    override_same_version: true
+    group_number: 4
+    bindir: ${project_install_prefix}/resource/excel
+  user:
+    max_online: 20000                 # max online number
+    default_openid: "gm://system"     # default openid for system action
+    async_job:
+      timeout: 30s          # async job task timeout
+      interval: 600s        # async job task interval
+  session:
+    login_code_protect: 1200s      # protect time when login failed
+    login_code_valid_sec: 600s     # login code expire time
+    login_ban_time: 10800s         # ban time when login event
+    tick_sec: 60s                  # session event interval
+  task:
+    stack:
+      size: 524288                # task stack size.(512KB)
+      gc_once_number: 10          # max recycle count of stacks when call gc
+      pool_max_count: 25000       # max stack can be allocated by stack pool
+      pool_min_count: 64
+      mmap_count: 60000           # check /proc/sys/vm/max_map_count when initialize(should be greater than max(busy_count, pool_max_count)*2+keep_count)
+      busy_count: 20000           # return busy to client when running task is too many
+      keep_count: 10000           # left some mmap segments for system
+      busy_warn_count: 15000      # print warning log when task number is greater than this
+    csmsg:
+      timeout: 8s                 # csmsg task timeout
+    nomsg:
+      timeout: 600s               # nomsg task timeout
+    paymsg:
+      timeout: 300s               # paymsg task timeout
+    warn:
+      timeout: 5s                 # write to mon log if task run too long
+    stats:
+      interval: 60s               # stats log interval
+      enable_internal_pstat_log: true
+  heartbeat:
+    interval: 120s                # heartbeat interval
+    tolerance: 20s                # heartbeat network latency tolerance
+    error_times: 4                # heartbeat error times to kickoff
+    ban_error_times: 3            # heatbeat ban account of continue kickoff
+    ban_time_bound: 10800s        # heartbeat ban time
+  router:
+    cache_update_interval: 1800s  # the interval to mark as expired for cache
+    cache_free_timeout: 600s      # timeout for removing cache if not visited
+    object_free_timeout: 1500s    # timeout for downgrade from object to cache if not visited
+    object_save_interval: 600s    # saving interval for object
+    retry_max_ttl: 3              # retry times if do some actions failed
+    default_timer_interval: 300s  # timer interval for checking the object or cache to see if it should be save, downgrade or removed
+    fast_timer_interval: 10s      # timer interval for checking the object or cache when it's busy when first checked
+  telemetry:
+    opentelemetry:
+      log:
+        level: debug
+        category:
+          name: opentelemetry
+          prefix: "[Log %L][%F %T.%f][%k:%n]: "
+          stacktrace:
+            min: disable
+            max: disable
+          sink:
+            - type: file
+              level:
+                min: fatal
+                max: debug
+              rotate:
+                number: 3
+                size: 10485760 # 10MB
+              file: "${project.get_log_dir()}/${project.get_server_full_name()}.telemetry.%N.log"
+              writing_alias: "${project.get_log_dir()}/${project.get_server_full_name()}.telemetry.log"
+              auto_flush: error
+              flush_interval: 1m
+      tracer_name: "${project.get_server_name()}"
+      resource:
+        "tenant.id": "default"
+      exporters:
+       # otlp_grpc_trace:
+       #  endpoint: "localhost:4317"
+       #  insecure: true
+       #  # ca_file: ""
+       # otlp_http_trace:
+       #   endpoint: "http://localhost:4318/v1/traces"
+       #   timeout: 10s
+       # ostream: "${project.get_log_dir()}/${project.get_server_full_name()}.debug.telemetry.log"
+      processors:
+        batch:
+          timeout: 5s
+          send_batch_size: 512
+          send_batch_max_size: 4096
+      samplers:
+        always_on: true
+        # trace_id_ratio: 0.25

@@ -80,11 +80,11 @@ class libatgw_proto_inner_v1 : public proto_base {
     util::crypto::cipher cipher;
     bool is_inited_;
   };
-  typedef std::shared_ptr<crypt_session_t> crypt_session_ptr_t;
+  using crypt_session_ptr_t = std::shared_ptr<crypt_session_t>;
 
   // ping/pong
   struct ping_data_t {
-    typedef std::chrono::system_clock clk_t;
+    using clk_t = std::chrono::system_clock;
     clk_t::time_point last_ping;
     time_t last_delta;
   };

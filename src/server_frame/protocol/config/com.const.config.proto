@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+import "xrescode_extensions_v3.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+package hello.config;
+
+// 常量类型
+enum game_const_config {
+  // option allow_alias               = true;
+  EN_GCC_UNKNOWN = 0;
+  EN_GCC_PERCENT_BASE = 1000;             // 所有比例都是千分率
+  EN_GCC_RESOURCE_MAX_LIMIT = 99999999;   // 资源限制
+  EN_GCC_LEVEL_LIMIT = 999;               // 最大等级限制
+  EN_GCC_ACTIVATION_CODE_PERMANENT = 64;  // 永久生效的激活码最大批次
+  EN_GCC_START_PLAYER_ID = 10000;         // start id for alloc player id
+}
+
+message excel_const_config_item {
+  string key = 1;
+  string value = 2;
+}
+
+message excel_const_config {
+  google.protobuf.Duration test_duration = 1;
+  repeated google.protobuf.Timestamp test_timestamp = 2;
+  google.protobuf.Duration mail_default_expire = 3;
+  int32 mail_max_count_per_major_type = 4;
+  int32 global_mail_max_count_per_major_type = 5;
+  string i18n_system_admin = 6;
+}
+
+message excel_origin_const_config {
+  option (xrescode.loader) = {
+    file_path: "const.bytes"
+    indexes: { fields: "key" index_type: EN_INDEX_KV }
+
+    tags: "client"
+    tags: "server"
+  };
+
+  string key = 1;
+  string value = 2;
+}

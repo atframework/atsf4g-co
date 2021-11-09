@@ -1,0 +1,179 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+// 后台通信协议定义
+
+import "google/protobuf/empty.proto";
+import "atframework.proto";
+
+import "com.struct.proto";
+import "svr.struct.proto";
+
+package hello;
+
+/////////////////////////////////////////////////////
+////  此处开始是登入相关协议
+/////////////////////////////////////////////////////
+message SSPlayerKickOffReq {
+  uint32 reason = 1;     // 原因
+  string gm_reason = 2;  // 原因
+}
+
+message SSPlayerKickOffRsp {}
+
+message SSPlayerAsyncJobsSync {}
+
+/////////////////////////////////////////////////////
+////  登入相关协议到此结束
+/////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////
+////  此处开始是外部接入支持的协议
+/////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////
+////  外部接入支持的协议到此结束
+/////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////
+////  此处开始是对象路由系统协议协议
+/////////////////////////////////////////////////////
+enum EnRouterObjectType {
+  EN_ROT_INVALID = 0;
+  EN_ROT_PLAYER = 1;
+}
+
+message SSRouterHead {
+  uint64 router_src_bus_id = 1;  // 路由协议原始发起者的BUS ID
+  uint64 router_version = 2;
+
+  // 路由对象信息
+  uint32 object_type_id = 21;  // 每种路由对象都要有自己的类型ID（router_manager_set根据这个来区分走哪个路由对象管理器）
+  uint64 object_inst_id = 22;  // 每个路由对象的唯一实例ID
+  uint32 object_zone_id = 23;  // 每个路由对象的大区ID
+}
+
+// 路由表更新通知
+message SSRouterUpdateSync {
+  SSRouterHead object = 1;
+}
+
+// 路由对象转移请求
+message SSRouterTransferReq {
+  SSRouterHead object = 1;
+}
+message SSRouterTransferRsp {}
+
+/////////////////////////////////////////////////////
+////  对象路由系统协议到此结束
+/////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////
+////  此处开始是服务器公共协议
+/////////////////////////////////////////////////////
+message SSGlobalLogicSetServerTimeSync {
+  int64 global_now_offset = 1;
+}
+/////////////////////////////////////////////////////
+////  服务器公共协议到此结束
+/////////////////////////////////////////////////////
+
+// 协议包头
+message SSMsgHead {
+  // 通用数据
+  int32 error_code = 1;
+  int64 timestamp = 2;
+  uint64 sequence = 3;
+  int32 op_type = 4;
+
+  // 通道和任务信息
+  uint64 bus_id = 11;
+  uint64 src_task_id = 12;
+  uint64 dst_task_id = 13;
+
+  // 路由系统信息
+  SSRouterHead router = 21;
+
+  // 新RPC接口的meta信息
+  oneof rpc_type {
+    atframework.RpcRequestMeta rpc_request = 31;
+    atframework.RpcResponseMeta rpc_response = 32;
+    atframework.RpcStreamMeta rpc_stream = 33;
+  }
+  atframework.RpcTraceSpan rpc_trace = 34;  // 用于链路追踪
+
+  // 玩家标识
+  uint64 player_user_id = 101;  // 如果涉及玩家此项必需
+  string player_open_id = 102;  // 此项可选
+  uint32 player_zone_id = 103;  // 如果涉及玩家此项必需
+}
+
+// 协议包
+message SSMsg {
+  SSMsgHead head = 1;
+  bytes body_bin = 3;
+}
+
+service RouterService {
+  option (atframework.service_options) = {
+    module_name: "router"
+  };
+
+  // Use stream request to disable waiting for response
+  rpc router_update_sync(stream SSRouterUpdateSync) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "通知路由表更新"
+      descriptions: "notify another server instance to update router table"
+    };
+  };
+
+  rpc router_transfer(SSRouterTransferReq) returns (SSRouterTransferRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "路由对象转移"
+      descriptions: "transfer a router object into another server instance"
+    };
+  };
+}
+
+service LogicCommonService {
+  option (atframework.service_options) = {
+    module_name: "logic"
+  };
+
+  rpc set_server_time(stream SSGlobalLogicSetServerTimeSync) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "设置服务器逻辑时间偏移"
+      descriptions: "set server time offset"
+      allow_no_wait: true
+    };
+  };
+}
+
+service GamesvrService {
+  option (atframework.service_options) = {
+    module_name: "game"
+  };
+
+  rpc player_kickoff(SSPlayerKickOffReq) returns (SSPlayerKickOffRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "player"
+      api_name: "通知提用户下线"
+      user_rpc: true
+    };
+  };
+
+  rpc player_async_jobs_sync(stream SSPlayerAsyncJobsSync) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      module_name: "player"
+      api_name: "通知更新和执行异步任务"
+      descriptions: "notify another server instance to sync async jobs"
+      user_rpc: true
+    };
+  };
+}

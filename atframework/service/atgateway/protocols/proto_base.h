@@ -79,7 +79,7 @@ class proto_base {
    * peer 2: buffer length, should be greater than write_header_offset_ 3: output if it's already done RETURN: 0 or
    * error code REQUIRED PROTOCOL: any custom protocol must call this when there is any data to send to peer.
    */
-  typedef std::function<int(proto_base *, void *, size_t, bool *)> on_write_start_fn_t;
+  using on_write_start_fn_t = std::function<int(proto_base *, void *, size_t, bool *)>;
 
   /**
    * SPECIFY: callback when receive any custom message
@@ -92,7 +92,7 @@ class proto_base {
    * PROTOCOL: any custom protocol should call this when receive a custom message.
    * check_flag(flag_t::EN_PFT_IN_CALLBACK) must return true here
    */
-  typedef std::function<int(proto_base *, const void *, size_t)> on_message_fn_t;
+  using on_message_fn_t = std::function<int(proto_base *, const void *, size_t)>;
 
   /**
    * SPECIFY: callback when start init a new session
@@ -104,7 +104,7 @@ class proto_base {
    * PROTOCOL: any custom protocol must call this when the new connection is a new session.
    * check_flag(flag_t::EN_PFT_IN_CALLBACK) must return true here
    */
-  typedef std::function<int(proto_base *, uint64_t &)> on_init_new_session_fn_t;
+  using on_init_new_session_fn_t = std::function<int(proto_base *, uint64_t &)>;
 
   /**
    * SPECIFY: callback when start init a reconnect session
@@ -116,7 +116,7 @@ class proto_base {
    * PROTOCOL: if not provided, we think reconnect is not supported. check_flag(flag_t::EN_PFT_IN_CALLBACK) must
    *           return true here
    */
-  typedef std::function<int(proto_base *, uint64_t)> on_init_reconnect_fn_t;
+  using on_init_reconnect_fn_t = std::function<int(proto_base *, uint64_t)>;
 
   /**
    * SPECIFY: callback when all recource closed and do not use this object's resource any more
@@ -125,7 +125,7 @@ class proto_base {
    * PROTOCOL: any custom protocol must set_flag(flag_t::EN_PFT_CLOSED, true) and then call this when all resource
    * closed.
    */
-  typedef std::function<int(proto_base *, int)> on_close_fn_t;
+  using on_close_fn_t = std::function<int(proto_base *, int)>;
 
   /**
    * SPECIFY: callback when handshake done
@@ -133,7 +133,7 @@ class proto_base {
    * check_flag(flag_t::EN_PFT_CLOSED) PARAMETER: 0: proto object 1: status RETURN: 0 or error code OPTIONAL PROTOCOL:
    * just notify when handshake finished. check_flag(flag_t::EN_PFT_IN_CALLBACK) must return true here
    */
-  typedef std::function<int(proto_base *, int)> on_handshake_done_fn_t;
+  using on_handshake_done_fn_t = std::function<int(proto_base *, int)>;
 
   /**
    * SPECIFY: callback when any error happen
@@ -147,7 +147,7 @@ class proto_base {
    * OPTIONAL
    * PROTOCOL: any custom protocol should call this when any error happen.
    */
-  typedef std::function<int(proto_base *, const char *, int, int, const char *)> on_error_fn_t;
+  using on_error_fn_t = std::function<int(proto_base *, const char *, int, int, const char *)>;
 
   struct tls_buffer_t {
     enum type {
@@ -369,7 +369,8 @@ class proto_base {
 }  // namespace gateway
 }  // namespace atframe
 
-#define ATFRAME_GATEWAY_ON_ERROR(errcode, errmsg) \
-  if (NULL != callbacks_ && callbacks_->on_error_fn) callbacks_->on_error_fn(this, __FILE__, __LINE__, errcode, errmsg)
+#define ATFRAME_GATEWAY_ON_ERROR(errcode, errmsg)       \
+  if (nullptr != callbacks_ && callbacks_->on_error_fn) \
+  callbacks_->on_error_fn(this, __FILE__, __LINE__, errcode, errmsg)
 
 #endif

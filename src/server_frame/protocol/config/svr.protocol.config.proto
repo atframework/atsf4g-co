@@ -1,0 +1,237 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+package hello.config;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+import "atframe/atapp_conf.proto";
+
+message logic_server_cfg {
+  int64 open_service_time = 101;
+  bool maintenance_mode = 102;
+  string resource_path = 103 [(atapp.protocol.CONFIGURE) = { default_value: "../../resource" }];
+  string log_path = 104 [(atapp.protocol.CONFIGURE) = { default_value: "../log" }];
+  google.protobuf.Timestamp reload_timepoint = 105;
+}
+
+message logic_user_async_job_cfg {
+  google.protobuf.Duration timeout = 101 [(atapp.protocol.CONFIGURE) = { default_value: "30s" min_value: "5" }];
+  google.protobuf.Duration interval = 102 [(atapp.protocol.CONFIGURE) = { default_value: "10m" min_value: "60" }];
+}
+
+message logic_user_cfg {
+  uint64 max_online = 101 [(atapp.protocol.CONFIGURE) = { default_value: "50000" }];
+  string default_openid = 102 [(atapp.protocol.CONFIGURE) = { default_value: "gm://system" }];
+  logic_user_async_job_cfg async_job = 103;
+}
+
+message logic_session_cfg {
+  google.protobuf.Duration login_code_protect = 101 [(atapp.protocol.CONFIGURE) = { default_value: "20m" }];
+  google.protobuf.Duration login_code_valid_sec = 102 [(atapp.protocol.CONFIGURE) = { default_value: "10m" }];
+  google.protobuf.Duration login_ban_time = 103 [(atapp.protocol.CONFIGURE) = { default_value: "3h" }];
+  google.protobuf.Duration tick_sec = 104 [(atapp.protocol.CONFIGURE) = { default_value: "60s" }];
+  bool enable_actor_log = 105 [(atapp.protocol.CONFIGURE) = { default_value: "false" }];
+  bool remove_player_cache_when_stop = 106 [(atapp.protocol.CONFIGURE) = { default_value: "true" }];
+  uint64 actor_log_size = 107 [(atapp.protocol.CONFIGURE) = { default_value: "1MB" size_mode: true }];
+  uint64 actor_log_rotate = 108 [(atapp.protocol.CONFIGURE) = { default_value: "3" min_value: "1" }];
+}
+
+message logic_task_stack_cfg {
+  uint64 size = 101 [(atapp.protocol.CONFIGURE) = { default_value: "512KB" size_mode: true }];
+  uint64 gc_once_number = 102 [(atapp.protocol.CONFIGURE) = { default_value: "10" min_value: "1" }];
+  uint64 pool_max_count = 103 [(atapp.protocol.CONFIGURE) = { default_value: "25000" min_value: "1" }];
+  uint64 pool_min_count = 104 [(atapp.protocol.CONFIGURE) = { default_value: "64" }];
+  uint64 mmap_count = 105 [
+    (atapp.protocol.CONFIGURE) = { default_value: "60000" min_value: "200" }
+  ];  // sys mmap configure(linux: only, >=busy_count*2+keep_count)
+  uint64 busy_count = 106 [(atapp.protocol.CONFIGURE) = { default_value: "20000" min_value: "1" }];
+  uint64 keep_count = 107 [(atapp.protocol.CONFIGURE) = { default_value: "10000" min_value: "100" }];
+  uint64 busy_warn_count = 108 [(atapp.protocol.CONFIGURE) = { default_value: "15000" min_value: "100" }];
+}
+
+message logic_task_stats_cfg {
+  google.protobuf.Duration interval = 101 [(atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "1s" }];
+  bool enable_internal_pstat_log = 102 [(atapp.protocol.CONFIGURE) = { default_value: "true" }];
+}
+
+message logic_task_type_cfg {
+  google.protobuf.Duration timeout = 101 [(atapp.protocol.CONFIGURE) = { default_value: "8s" min_value: "1s" }];
+}
+
+message logic_task_cfg {
+  logic_task_type_cfg csmsg = 101;
+  logic_task_type_cfg nomsg = 102;
+  logic_task_type_cfg paymsg = 103;
+  logic_task_type_cfg warn = 104;
+
+  logic_task_stats_cfg stats = 201;
+  logic_task_stack_cfg stack = 301;
+}
+
+message logic_heartbeat_cfg {
+  google.protobuf.Duration interval = 101;
+  google.protobuf.Duration tolerance = 102;
+  uint32 error_times = 103;
+  uint32 ban_error_times = 104;
+  google.protobuf.Duration ban_time_bound = 105;
+}
+
+message logic_router_cfg {
+  google.protobuf.Duration cache_update_interval = 101
+      [(atapp.protocol.CONFIGURE) = { default_value: "1800s" min_value: "1s" }];
+  google.protobuf.Duration cache_free_timeout = 102
+      [(atapp.protocol.CONFIGURE) = { default_value: "600s" min_value: "1s" }];
+  google.protobuf.Duration object_free_timeout = 103
+      [(atapp.protocol.CONFIGURE) = { default_value: "1500s" min_value: "1s" }];
+  google.protobuf.Duration object_save_interval = 104
+      [(atapp.protocol.CONFIGURE) = { default_value: "600s" min_value: "1s" }];
+  google.protobuf.Duration default_timer_interval = 105
+      [(atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "10s" }];
+  google.protobuf.Duration fast_timer_interval = 106
+      [(atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
+  uint32 retry_max_ttl = 107 [(atapp.protocol.CONFIGURE) = { default_value: "3" min_value: "1" }];
+}
+
+message opentelemetry_exporter_otlp_grpc {
+  string endpoint = 11;
+  bool insecure = 12 [(atapp.protocol.CONFIGURE) = { default_value: "true" }];
+  string ca_file = 13;
+}
+
+message opentelemetry_exporter_otlp_http {
+  string endpoint = 11;
+  google.protobuf.Duration timeout = 12 [(atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "16ms" }];
+}
+
+message opentelemetry_exporter_cfg {
+  opentelemetry_exporter_otlp_grpc otlp_grpc_trace = 1;
+  opentelemetry_exporter_otlp_http otlp_http_trace = 2;
+  string ostream = 3;  // Just for debug
+}
+
+message opentelemetry_simple_processor_cfg {}
+
+message opentelemetry_batch_processor_cfg {
+  google.protobuf.Duration timeout = 1 [(atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
+  uint64 send_batch_size = 2 [(atapp.protocol.CONFIGURE) = { default_value: "512" min_value: "1" }];
+  uint64 send_batch_max_size = 3 [(atapp.protocol.CONFIGURE) = { default_value: "2048" min_value: "1" }];
+}
+
+message opentelemetry_processor_cfg {
+  opentelemetry_simple_processor_cfg simple = 1;
+  opentelemetry_batch_processor_cfg batch = 2;
+}
+
+message opentelemetry_sampler_cfg {
+  oneof sampler_type {
+    bool always_on = 1;
+    bool always_off = 2;
+    double trace_id_ratio = 3;
+  }
+}
+
+message opentelemetry_cfg {
+  string tracer_name = 1;
+  map<string, string> resource = 2;
+  opentelemetry_exporter_cfg exporters = 3;
+  opentelemetry_processor_cfg processors = 4;
+  opentelemetry_sampler_cfg samplers = 5;
+}
+
+message logic_telemetry_cfg {
+  opentelemetry_cfg opentelemetry = 1;
+}
+
+message logic_localization_cfg {
+  string lang = 1;
+}
+
+message logic_battle_cfg {
+  string etcd_version_path = 1;
+  bool ignore_invalid_version = 2;
+}
+
+message logic_excel_cfg {
+  bool enable = 1;
+  bool override_same_version = 2;
+  uint32 group_number = 3 [(atapp.protocol.CONFIGURE) = { default_value: "8" }];
+  string bindir = 4 [(atapp.protocol.CONFIGURE) = { default_value: "../../resource/excel" }];
+}
+
+message logic_section_cfg {
+  logic_localization_cfg localization = 8;
+  google.protobuf.Duration remote_configure_update_interval = 24
+      [(atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "60s" }];
+
+  logic_server_cfg server = 102;
+  logic_user_cfg user = 103;
+  logic_session_cfg session = 104;
+  logic_task_cfg task = 105;
+  logic_heartbeat_cfg heartbeat = 106;
+  logic_router_cfg router = 107;
+  logic_telemetry_cfg telemetry = 108;
+  logic_battle_cfg battle = 109;
+  logic_excel_cfg excel = 110;
+}
+
+message db_group_gateway_cfg {
+  string url = 1;
+  int32 port = 2;
+  string host = 3;
+}
+
+message db_group_cfg {
+  repeated string host = 1;
+  repeated db_group_gateway_cfg gateways = 2;
+}
+
+message db_script_cfg {
+  string login = 101;
+  string user = 102;
+}
+
+message db_timer_cfg {
+  google.protobuf.Duration retry = 1;
+  google.protobuf.Duration timeout = 2;
+  google.protobuf.Duration proc = 3;
+}
+
+message db_section_cfg {
+  db_group_cfg cluster = 101;
+  db_group_cfg raw = 102;
+  db_script_cfg script = 103;
+  db_timer_cfg timer = 104;
+}
+
+message loginsvr_cfg {
+  string version_conf = 1 [(atapp.protocol.CONFIGURE) = { default_value: "../cfg/cfg_version.xml" }];
+  string strategy_conf = 2 [(atapp.protocol.CONFIGURE) = { default_value: "../cfg/cfg_strategy.xml" }];
+  uint32 debug_platform = 3 [(atapp.protocol.CONFIGURE) = { default_value: "false" }];
+  string cdn_url = 4;
+
+  google.protobuf.Timestamp start_time = 11;
+  google.protobuf.Timestamp end_time = 12;
+
+  repeated string white_openid_list = 21;
+
+  message gamesvr_ingress_cfg {
+    repeated string addr = 1;
+    google.protobuf.Duration relogin_expire = 2
+        [(atapp.protocol.CONFIGURE) = { default_value: "3600s" min_value: "1" }];
+  }
+  gamesvr_ingress_cfg gamesvr = 31;
+}
+
+message server_cfg {
+  logic_section_cfg logic = 101;
+  db_section_cfg db = 102;
+
+  loginsvr_cfg loginsvr = 201;
+}

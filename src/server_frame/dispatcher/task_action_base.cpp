@@ -1,0 +1,299 @@
+// Copyright 2021 atframework
+// Created by owent on 2016/9/26.
+//
+
+#include "dispatcher/task_action_base.h"
+
+#include <config/compiler/protobuf_prefix.h>
+
+#include <protocol/pbdesc/com.const.pb.h>
+#include <protocol/pbdesc/svr.const.err.pb.h>
+
+#include <config/compiler/protobuf_suffix.h>
+
+#include <config/extern_log_categorize.h>
+
+#include <log/log_wrapper.h>
+#include <time/time_utility.h>
+
+#include <utility/protobuf_mini_dumper.h>
+
+#include <rpc/db/uuid.h>
+
+#include <config/logic_config.h>
+
+#include <functional>
+#include <utility>
+
+#include "dispatcher/task_manager.h"
+
+namespace detail {
+struct task_action_stat_guard {
+  explicit task_action_stat_guard(task_action_base *act) : action(act) {
+    if (nullptr != action) {
+      util::time::time_utility::update();
+      start = util::time::time_utility::now();
+    }
+  }
+
+  ~task_action_stat_guard() {
+    if (nullptr == action) {
+      return;
+    }
+
+    util::time::time_utility::update();
+    util::time::time_utility::raw_time_t end = util::time::time_utility::now();
+    if (logic_config::me()->get_cfg_task().stats().enable_internal_pstat_log()) {
+      if (0 != action->get_user_id()) {
+        FWCLOGINFO(log_categorize_t::PROTO_STAT, "{}|{}|{}us|{}|{}", action->name(), action->get_user_id(),
+                   std::chrono::duration_cast<std::chrono::microseconds>(end - start).count(), action->get_ret_code(),
+                   action->get_rsp_code());
+      } else {
+        FWCLOGINFO(log_categorize_t::PROTO_STAT, "{}|NO PLAYER|{}us|{}|{}", action->name(),
+                   std::chrono::duration_cast<std::chrono::microseconds>(end - start).count(), action->get_ret_code(),
+                   action->get_rsp_code());
+      }
+    }
+  }
+
+  util::time::time_utility::raw_time_t start;
+  task_action_base *action;
+};
+}  // namespace detail
+
+rpc::context &task_action_base::task_action_helper_t::get_shared_context(task_action_base &action) {
+  return action.get_shared_context();
+}
+
+task_action_base::task_action_base()
+    : user_id_(0),
+      zone_id_(0),
+      task_id_(0),
+      ret_code_(0),
+      rsp_code_(0),
+      rsp_msg_disabled_(false),
+      evt_disabled_(false),
+      start_data_(dispatcher_make_default<dispatcher_start_data_t>()) {}
+
+task_action_base::task_action_base(rpc::context *caller_context)
+    : user_id_(0),
+      zone_id_(0),
+      task_id_(0),
+      ret_code_(0),
+      rsp_code_(0),
+      rsp_msg_disabled_(false),
+      evt_disabled_(false),
+      start_data_(dispatcher_make_default<dispatcher_start_data_t>()) {
+  if (nullptr != caller_context) {
+    set_caller_context(*caller_context);
+  }
+}
+
+task_action_base::~task_action_base() {}
+
+const char *task_action_base::name() const {
+  const char *ret = typeid(*this).name();
+  if (nullptr == ret) {
+    return "RTTI Unavailable: task_action_base";
+  }
+
+  // some compiler will generate number to mark the type
+  while (ret && *ret >= '0' && *ret <= '9') {
+    ++ret;
+  }
+  return ret;
+}
+
+int task_action_base::operator()(void *priv_data) {
+  detail::task_action_stat_guard stat(this);
+
+  rpc::context::trace_option trace_option;
+  trace_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
+  trace_option.is_remote = true;
+  trace_option.dispatcher = get_dispatcher();
+  trace_option.parent_trace_span = get_parent_trace_span();
+
+  if (nullptr != priv_data) {
+    start_data_ = *reinterpret_cast<task_manager::start_data_t *>(priv_data);
+
+    // Set parent context if not set by child type
+    if (nullptr != start_data_.context) {
+      shared_context_.set_parent_context(*start_data_.context);
+    }
+  }
+
+  rpc::context::tracer tracer;
+  shared_context_.setup_tracer(tracer, name(), std::move(trace_option));
+
+  task_manager::task_t *task = cotask::this_task::get<task_manager::task_t>();
+  if (nullptr == task) {
+    FWLOGERROR("task convert failed, must in task.");
+    return tracer.return_code(hello::err::EN_SYS_INIT);
+  }
+
+  task_manager::task_private_data_t *task_priv_data = task_manager::get_private_data(*task);
+  if (nullptr != task_priv_data) {
+    // setup action
+    task_priv_data->action = this;
+  }
+
+  task_id_ = task->get_id();
+
+  if (0 != get_user_id()) {
+    FWLOGDEBUG("task {} [{}] for player {}:{} start to run\n", name(), get_task_id(), get_zone_id(), get_user_id());
+  } else {
+    FWLOGDEBUG("task {} [{}] start to run\n", name(), get_task_id());
+  }
+
+  ret_code_ = hook_run();
+
+  if (evt_disabled_) {
+    if (ret_code_ < 0) {
+      FWLOGERROR("task {} [{}] without evt ret code ({}){} rsp code ({}){}\n", name(), get_task_id(),
+                 protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_,
+                 protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
+    } else {
+      FWLOGDEBUG("task {} [{}] without evt ret code ({}){}, rsp code ({}){}\n", name(), get_task_id(),
+                 protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_,
+                 protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
+    }
+
+    if (!rsp_msg_disabled_) {
+      send_rsp_msg();
+    }
+
+    _notify_finished(*task);
+    return tracer.return_code(ret_code_);
+  }
+  // 响应OnSuccess(这时候任务的status还是running)
+  if (cotask::EN_TS_RUNNING == task->get_status() && ret_code_ >= 0) {
+    int ret = 0;
+    if (rsp_code_ < 0) {
+      ret = on_failed();
+      FWLOGINFO("task {} [{}] finished success but response errorcode, rsp code: ({}){}\n", name(), get_task_id(),
+                protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
+    } else {
+      ret = on_success();
+    }
+
+    int complete_res = on_complete();
+    if (0 != complete_res) {
+      ret = complete_res;
+    }
+
+    if (!rsp_msg_disabled_) {
+      send_rsp_msg();
+    }
+
+    _notify_finished(*task);
+    return tracer.return_code(ret);
+  }
+
+  if (hello::err::EN_SUCCESS == ret_code_) {
+    if (task->is_timeout()) {
+      ret_code_ = hello::err::EN_SYS_TIMEOUT;
+    } else if (task->is_faulted()) {
+      ret_code_ = hello::err::EN_SYS_RPC_TASK_KILLED;
+    } else if (task->is_canceled()) {
+      ret_code_ = hello::err::EN_SYS_RPC_TASK_CANCELLED;
+    } else if (task->is_exiting()) {
+      ret_code_ = hello::err::EN_SYS_RPC_TASK_EXITING;
+    } else {
+      ret_code_ = hello::err::EN_SYS_UNKNOWN;
+    }
+  }
+
+  if (hello::EN_SUCCESS == rsp_code_) {
+    if (task->is_timeout()) {
+      rsp_code_ = hello::EN_ERR_TIMEOUT;
+    } else if (task->is_faulted()) {
+      rsp_code_ = hello::EN_ERR_SYSTEM;
+    } else if (task->is_canceled()) {
+      rsp_code_ = hello::EN_ERR_SYSTEM;
+    } else if (task->is_exiting()) {
+      rsp_code_ = hello::EN_ERR_SYSTEM;
+    } else {
+      rsp_code_ = hello::EN_ERR_UNKNOWN;
+    }
+  }
+
+  if (0 != get_user_id()) {
+    FWLOGERROR("task {} [{}] for player {}:{} ret code ({}){}, rsp code ({}){}\n", name(), get_task_id(), get_zone_id(),
+               get_user_id(), protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_,
+               protobuf_mini_dumper_get_error_msg(rsp_code_), rsp_code_);
+  } else {
+    FWLOGERROR("task {} [{}] ret code ({}){}, rsp code ({}){}\n", name(), get_task_id(),
+               protobuf_mini_dumper_get_error_msg(ret_code_), ret_code_, protobuf_mini_dumper_get_error_msg(rsp_code_),
+               rsp_code_);
+  }
+
+  // 响应OnTimeout
+  if (cotask::EN_TS_TIMEOUT == task->get_status()) {
+    on_timeout();
+  }
+
+  // 如果不是running且不是timeout，可能是其他原因被kill掉了，响应OnFailed
+  int ret = on_failed();
+
+  int complete_res = on_complete();
+  if (0 != complete_res) {
+    ret = complete_res;
+  }
+
+  if (!rsp_msg_disabled_) {
+    send_rsp_msg();
+  }
+
+  _notify_finished(*task);
+  tracer.return_code(ret_code_);
+  return ret;
+}
+
+task_action_base::result_type task_action_base::hook_run() { return (*this)(); }
+
+int task_action_base::on_success() { return 0; }
+
+int task_action_base::on_failed() { return 0; }
+
+int task_action_base::on_timeout() { return 0; }
+
+int task_action_base::on_complete() { return 0; }
+
+const atframework::RpcTraceSpan *task_action_base::get_parent_trace_span() const { return nullptr; }
+
+uint64_t task_action_base::get_task_id() const { return task_id_; }
+
+task_action_base::on_finished_callback_handle_t task_action_base::add_on_on_finished(on_finished_callback_fn_t &&fn) {
+  return on_finished_callback_.insert(on_finished_callback_.end(), std::move(fn));
+}
+
+void task_action_base::remove_on_finished(on_finished_callback_handle_t handle) { on_finished_callback_.erase(handle); }
+
+void task_action_base::set_caller_context(rpc::context &ctx) { get_shared_context().set_parent_context(ctx); }
+
+void task_action_base::_notify_finished(cotask::impl::task_impl &task_inst) {
+  // Additional trace data
+  auto trace_span = shared_context_.get_trace_span();
+  if (trace_span) {
+    if (0 != get_user_id() && 0 != get_zone_id()) {
+      trace_span->SetAttribute("user_id", get_user_id());
+      trace_span->SetAttribute("zone_id", get_zone_id());
+    }
+    trace_span->SetAttribute("response_code", get_rsp_code());
+  }
+
+  // Callbacks
+  for (on_finished_callback_fn_t &fn : on_finished_callback_) {
+    if (fn) {
+      fn(*this);
+    }
+  }
+  on_finished_callback_.clear();
+
+  task_manager::task_private_data_t *task_priv_data =
+      task_manager::get_private_data(*static_cast<task_manager::task_t *>(&task_inst));
+  if (nullptr != task_priv_data) {
+    // setup action
+    task_priv_data->action = nullptr;
+  }
+}

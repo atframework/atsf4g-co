@@ -17,5 +17,5 @@ if len(valgrind_tool) > 0:
 		valgrind_tool, os.path.join(profile_dir, '$SERVER_NAME.%p.valgrind'), valgrind_options
 	)
 %>
-${valgrind_tool}./$SERVERD_NAME -id $SERVER_BUS_ID -c ../etc/$SERVER_FULL_NAME.conf -p $SERVER_PID_FILE_NAME run "$@"
+${valgrind_tool}./$SERVERD_NAME -id $SERVER_BUS_ID -c ../etc/$SERVER_FULL_NAME.yaml -p $SERVER_PID_FILE_NAME run "$@"
 

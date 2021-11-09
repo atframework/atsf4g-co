@@ -50,3 +50,9 @@ else()
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/atframework.macro.cmake")
+
+# =========== third_party - hiredis-happ ===========
+include("${CMAKE_CURRENT_LIST_DIR}/../third_party/redis/redis.cmake")
+list(PREPEND PROJECT_THIRD_PARTY_PUBLIC_LINK_NAMES
+    ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_HIREDIS_HAPP_LINK_NAME})
+

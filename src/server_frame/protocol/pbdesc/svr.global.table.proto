@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+// 前后台共用数据结构定义
+package hello;
+
+// 这是一个独立的表描述。不能import其他的本项目的proto
+// ============ 全局表数据结构 ============
+
+message table_service_configure_data {
+  int64 zone_open_time = 101;  // 开服时间
+}

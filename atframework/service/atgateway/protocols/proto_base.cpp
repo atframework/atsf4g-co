@@ -31,7 +31,7 @@ static pthread_key_t gt_atgateway_get_msg_buffer_tls_key[::atframe::gateway::pro
 
 static void dtor_pthread_atgateway_get_msg_buffer_tls(void *p) {
   char *res = reinterpret_cast<char *>(p);
-  if (NULL != res) {
+  if (nullptr != res) {
     delete[] res;
   }
 }
@@ -45,7 +45,7 @@ static void init_pthread_atgateway_get_msg_buffer_tls() {
 static char *atgateway_get_msg_buffer(::atframe::gateway::proto_base::tls_buffer_t::type t) {
   (void)pthread_once(&gt_atgateway_get_msg_buffer_tls_once, init_pthread_atgateway_get_msg_buffer_tls);
   char *ret = reinterpret_cast<char *>(pthread_getspecific(gt_atgateway_get_msg_buffer_tls_key[t]));
-  if (NULL == ret) {
+  if (nullptr == ret) {
     ret = new char[ATBUS_MACRO_MSG_LIMIT + 2 * sizeof(size_t)];  // in case of padding
     pthread_setspecific(gt_atgateway_get_msg_buffer_tls_key[t], ret);
   }
@@ -61,7 +61,7 @@ namespace atframe {
 namespace gateway {
 proto_base::flag_guard_t::flag_guard_t(int &f, int v) : flags_(&f), v_(0) {
   if (f == (f | v)) {
-    flags_ = NULL;
+    flags_ = nullptr;
   } else {
     v_ = (f | v) ^ f;
     f |= v_;
@@ -69,14 +69,14 @@ proto_base::flag_guard_t::flag_guard_t(int &f, int v) : flags_(&f), v_(0) {
 }
 
 proto_base::flag_guard_t::~flag_guard_t() {
-  if (NULL == flags_) {
+  if (nullptr == flags_) {
     return;
   }
 
   *flags_ &= ~v_;
 }
 
-proto_base::proto_base() : flags_(0), write_header_offset_(0), callbacks_(NULL), private_data_(NULL) {}
+proto_base::proto_base() : flags_(0), write_header_offset_(0), callbacks_(nullptr), private_data_(nullptr) {}
 proto_base::~proto_base() {
   if (check_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE) || !check_flag(flag_t::EN_PFT_HANDSHAKE_DONE)) {
     inner_handshake_done(error_code_t::EN_ECT_HANDSHAKE);
@@ -95,7 +95,7 @@ void proto_base::set_flag(flag_t::type t, bool v) {
 
 void *proto_base::get_tls_buffer(tls_buffer_t::type tls_type) {
   if (tls_type >= tls_buffer_t::EN_TBT_MAX || tls_type < 0) {
-    return NULL;
+    return nullptr;
   }
   return ::atframe::gateway::detail::atgateway_get_msg_buffer(tls_type);
 }
@@ -123,7 +123,7 @@ int proto_base::close(int reason) {
   set_flag(flag_t::EN_PFT_CLOSING, true);
   set_flag(flag_t::EN_PFT_CLOSED, true);
 
-  if (NULL != callbacks_ && callbacks_->close_fn) {
+  if (nullptr != callbacks_ && callbacks_->close_fn) {
     return callbacks_->close_fn(this, reason);
   }
   return 0;
@@ -144,9 +144,9 @@ int proto_base::inner_handshake_done(int status) {
   set_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE, false);
 
   // on_handshake_done_fn only active when handshake done
-  if (!has_handshake_done && NULL != callbacks_ && callbacks_->on_handshake_done_fn) {
+  if (!has_handshake_done && nullptr != callbacks_ && callbacks_->on_handshake_done_fn) {
     callbacks_->on_handshake_done_fn(this, status);
-  } else if (NULL != callbacks_ && callbacks_->on_handshake_update_fn) {
+  } else if (nullptr != callbacks_ && callbacks_->on_handshake_update_fn) {
     callbacks_->on_handshake_update_fn(this, status);
   }
 

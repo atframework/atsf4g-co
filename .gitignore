@@ -39,6 +39,8 @@
 /3rd_party/install
 /third_party/install
 /third_party/packages
+/third_party/xresloader/bin/xresloader.jar
+/third_party/xresloader/xresconv-cli
 
 .mako_modules-*
 
@@ -58,7 +60,20 @@
 # protocol
 /src/server_frame/protocol/**/*.h
 /src/server_frame/protocol/**/*.cc
-/src/server_frame/config/excel/pb_header_v3.pb.h
-/src/server_frame/config/excel/pb_header_v3.pb.cc
 
 # generated
+/src/server_frame/config/server_frame_build_feature.h
+/src/server_frame/config/server_frame_build_feature.cpp
+/src/server_frame/config/excel/*
+/src/gamesvr/app/handle_ss_rpc_gamesvrservice.cpp
+/src/gamesvr/app/handle_ss_rpc_gamesvrservice.h
+/src/server_frame/router/handle_ss_rpc_routerservice.cpp
+/src/server_frame/router/handle_ss_rpc_routerservice.h
+/src/server_frame/rpc/game/gamesvrservice.cpp
+/src/server_frame/rpc/game/gamesvrservice.h
+/src/server_frame/rpc/router/routerservice.cpp
+/src/server_frame/rpc/router/routerservice.h
+/src/server_frame/logic/handle_ss_rpc_logiccommonservice.h
+/src/server_frame/logic/handle_ss_rpc_logiccommonservice.cpp
+/src/server_frame/rpc/logic/logiccommonservice.h
+/src/server_frame/rpc/logic/logiccommonservice.cpp

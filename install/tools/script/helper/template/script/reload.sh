@@ -8,7 +8,7 @@ if [ 0 -eq $? ]; then
 	exit 1;
 fi
 
-./$SERVERD_NAME -id $SERVER_BUS_ID -c ../etc/$SERVER_FULL_NAME.conf -p $SERVER_PID_FILE_NAME reload
+./$SERVERD_NAME -id $SERVER_BUS_ID -c ../etc/$SERVER_FULL_NAME.yaml -p $SERVER_PID_FILE_NAME reload
 
 export LD_PRELOAD=;
 

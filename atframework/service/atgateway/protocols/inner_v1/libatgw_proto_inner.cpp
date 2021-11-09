@@ -54,7 +54,7 @@ static uint64_t alloc_seq() {
 }
 
 struct crypt_global_configure_t {
-  typedef std::shared_ptr<crypt_global_configure_t> ptr_t;
+  using ptr_t = std::shared_ptr<crypt_global_configure_t>;
 
   crypt_global_configure_t(const libatgw_proto_inner_v1::crypt_conf_t &conf) : conf_(conf), inited_(false) {
     shared_dh_context_ = util::crypto::dh::shared_context::create();
@@ -105,10 +105,10 @@ struct crypt_global_configure_t {
         all_supported_type_set.insert(all_supported_type_list[i]);
       }
 
-      while (NULL != res.second) {
+      while (nullptr != res.second) {
         res = util::crypto::cipher::ciphertok(res.second);
 
-        if (NULL != res.first && NULL != res.second) {
+        if (nullptr != res.first && nullptr != res.second) {
           std::string cipher_type;
           cipher_type.assign(res.first, res.second);
           std::transform(cipher_type.begin(), cipher_type.end(), cipher_type.begin(), tolower<char>);
@@ -265,7 +265,7 @@ int libatgw_proto_inner_v1::crypt_session_t::swap_secret(std::vector<unsigned ch
   return 0;
 }
 
-libatgw_proto_inner_v1::libatgw_proto_inner_v1() : session_id_(0), last_write_ptr_(NULL), close_reason_(0) {
+libatgw_proto_inner_v1::libatgw_proto_inner_v1() : session_id_(0), last_write_ptr_(nullptr), close_reason_(0) {
   crypt_handshake_ = std::make_shared<crypt_session_t>();
 
   read_head_.len = 0;
@@ -275,7 +275,7 @@ libatgw_proto_inner_v1::libatgw_proto_inner_v1() : session_id_(0), last_write_pt
 
   handshake_.switch_secret_type = 0;
   handshake_.has_data = false;
-  handshake_.ext_data = NULL;
+  handshake_.ext_data = nullptr;
 }
 
 libatgw_proto_inner_v1::~libatgw_proto_inner_v1() {
@@ -288,22 +288,22 @@ void libatgw_proto_inner_v1::alloc_recv_buffer(size_t /*suggested_size*/, char *
 
   // 如果正处于关闭阶段，忽略所有数据
   if (check_flag(flag_t::EN_PFT_CLOSING)) {
-    out_buf = NULL;
+    out_buf = nullptr;
     out_len = 0;
     return;
   }
 
-  void *data = NULL;
+  void *data = nullptr;
   size_t sread = 0, swrite = 0;
   read_buffers_.back(data, sread, swrite);
 
   // reading length and hash code, use small buffer block
-  if (NULL == data || 0 == swrite) {
+  if (nullptr == data || 0 == swrite) {
     out_len = sizeof(read_head_.buffer) - read_head_.len;
 
     if (0 == out_len) {
       // hash code and length shouldn't be greater than small buffer block
-      out_buf = NULL;
+      out_buf = nullptr;
       assert(false);
     } else {
       out_buf = &read_head_.buffer[read_head_.len];
@@ -325,7 +325,7 @@ void libatgw_proto_inner_v1::read(int /*ssz*/, const char * /*buff*/, size_t nre
   errcode = error_code_t::EN_ECT_SUCCESS;
   flag_guard_t flag_guard(flags_, flag_t::EN_PFT_IN_CALLBACK);
 
-  void *data = NULL;
+  void *data = nullptr;
   size_t sread = 0, swrite = 0;
   read_buffers_.back(data, sread, swrite);
   bool is_free = false;
@@ -333,7 +333,7 @@ void libatgw_proto_inner_v1::read(int /*ssz*/, const char * /*buff*/, size_t nre
   // first 32bits is hash code, and then 32bits length
   const size_t msg_header_len = sizeof(uint32_t) + sizeof(uint32_t);
 
-  if (NULL == data || 0 == swrite) {
+  if (nullptr == data || 0 == swrite) {
     // first, read from small buffer block
     // read header
     assert(nread_s <= sizeof(read_head_.buffer) - read_head_.len);
@@ -399,7 +399,7 @@ void libatgw_proto_inner_v1::read(int /*ssz*/, const char * /*buff*/, size_t nre
 
   // if big message recv done, dispatch it
   read_buffers_.front(data, sread, swrite);
-  if (NULL != data && 0 == swrite) {
+  if (nullptr != data && 0 == swrite) {
     data = reinterpret_cast<char *>(data) - sread;
 
     // 32bits hash code
@@ -434,7 +434,7 @@ void libatgw_proto_inner_v1::dispatch_data(const char *buffer, size_t len, int e
   }
 
   // do nothing if any error
-  if (errcode < 0 || NULL == buffer) {
+  if (errcode < 0 || nullptr == buffer) {
     return;
   }
 
@@ -447,7 +447,7 @@ void libatgw_proto_inner_v1::dispatch_data(const char *buffer, size_t len, int e
 
   // unpack
   const atframe::gw::inner::v1::cs_msg *msg = atframe::gw::inner::v1::Getcs_msg(buffer);
-  if (NULL == msg->head()) {
+  if (nullptr == msg->head()) {
     return;
   }
 
@@ -471,7 +471,7 @@ void libatgw_proto_inner_v1::dispatch_data(const char *buffer, size_t len, int e
       int res = decode_post(msg_body->data()->data(), static_cast<size_t>(msg_body->data()->size()), out, outsz);
       if (0 == res) {
         // on_message
-        if (NULL != callbacks_ && callbacks_->message_fn) {
+        if (nullptr != callbacks_ && callbacks_->message_fn) {
           callbacks_->message_fn(this, out, static_cast<size_t>(msg_body->length()));
         }
       } else {
@@ -618,7 +618,7 @@ int libatgw_proto_inner_v1::dispatch_handshake_start_req(
     return error_code_t::EN_ECT_CLOSING;
   }
 
-  if (NULL == callbacks_ || !callbacks_->write_fn || !callbacks_->new_session_fn) {
+  if (nullptr == callbacks_ || !callbacks_->write_fn || !callbacks_->new_session_fn) {
     return error_code_t::EN_ECT_MISS_CALLBACKS;
   }
 
@@ -629,7 +629,7 @@ int libatgw_proto_inner_v1::dispatch_handshake_start_req(
   }
 
   std::string crypt_type;
-  if (NULL != body_handshake.crypt_type()) {
+  if (nullptr != body_handshake.crypt_type()) {
     crypt_type = body_handshake.crypt_type()->str();
   }
 
@@ -637,10 +637,10 @@ int libatgw_proto_inner_v1::dispatch_handshake_start_req(
   if (!crypt_type.empty()) {
     std::pair<const char *, const char *> res;
     res.first = res.second = crypt_type.c_str();
-    while (NULL != res.second) {
+    while (nullptr != res.second) {
       res = util::crypto::cipher::ciphertok(res.second);
 
-      if (NULL != res.first && NULL != res.second) {
+      if (nullptr != res.first && nullptr != res.second) {
         std::string cipher_type;
         cipher_type.assign(res.first, res.second);
         if (global_cfg->check_type(cipher_type)) {
@@ -651,7 +651,7 @@ int libatgw_proto_inner_v1::dispatch_handshake_start_req(
     }
 
     // can not find a available crypt method, disable crypt
-    if (NULL == res.second) {
+    if (nullptr == res.second) {
       crypt_type.clear();
     }
   }
@@ -696,7 +696,7 @@ int libatgw_proto_inner_v1::dispatch_handshake_start_rsp(
   std::string crypt_type;
   // if is running handshake, can not handshake again
   if (!handshake_.has_data) {
-    if (NULL != body_handshake.crypt_type()) {
+    if (nullptr != body_handshake.crypt_type()) {
       crypt_type = body_handshake.crypt_type()->str();
     }
 
@@ -735,7 +735,7 @@ int libatgw_proto_inner_v1::dispatch_handshake_start_rsp(
   }
 
   handshake_.switch_secret_type = body_handshake.switch_type();
-  if (NULL == body_handshake.crypt_param()) {
+  if (nullptr == body_handshake.crypt_param()) {
     ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_HANDSHAKE, "has no secret");
     return error_code_t::EN_ECT_HANDSHAKE;
   }
@@ -757,7 +757,7 @@ int libatgw_proto_inner_v1::dispatch_handshake_start_rsp(
       close_handshake(ret);
 
       // send verify
-      ret = send_verify(NULL, 0);
+      ret = send_verify(nullptr, 0);
       break;
     }
     case ::atframe::gw::inner::v1::switch_secret_t_EN_SST_DH:
@@ -797,7 +797,7 @@ int libatgw_proto_inner_v1::dispatch_handshake_start_rsp(
 int libatgw_proto_inner_v1::dispatch_handshake_reconn_req(
     const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
   // try to reconnect
-  if (NULL == callbacks_ || !callbacks_->reconnect_fn) {
+  if (nullptr == callbacks_ || !callbacks_->reconnect_fn) {
     return error_code_t::EN_ECT_MISS_CALLBACKS;
   }
 
@@ -859,7 +859,7 @@ int libatgw_proto_inner_v1::dispatch_handshake_reconn_rsp(
 
   std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
   std::string crypt_type;
-  if (NULL != body_handshake.crypt_type()) {
+  if (nullptr != body_handshake.crypt_type()) {
     crypt_type = body_handshake.crypt_type()->str();
   }
   // check if global configure changed
@@ -939,7 +939,7 @@ int libatgw_proto_inner_v1::dispatch_handshake_dh_pubkey_req(
   } while (false);
 
   // send verify text prefix
-  const void *outbuf = NULL;
+  const void *outbuf = nullptr;
   size_t outsz = 0;
   if (0 == ret) {
     // generate verify data
@@ -947,7 +947,7 @@ int libatgw_proto_inner_v1::dispatch_handshake_dh_pubkey_req(
       size_t secret_len = crypt_handshake_->cipher.get_key_bits() / 8;
       // 3 * secret_len, 1 for binary data, 2 for hex data
       unsigned char *verify_text = (unsigned char *)malloc((secret_len << 1) + secret_len);
-      if (NULL != verify_text) {
+      if (nullptr != verify_text) {
         int res = crypt_handshake_->shared_conf->shared_dh_context_->random(reinterpret_cast<void *>(verify_text),
                                                                             secret_len);
         if (0 == res) {
@@ -961,7 +961,7 @@ int libatgw_proto_inner_v1::dispatch_handshake_dh_pubkey_req(
       }
     }
 
-    if (NULL == outbuf || 0 == outsz) {
+    if (nullptr == outbuf || 0 == outsz) {
       ret = encrypt_data(*crypt_handshake_, crypt_handshake_->shared_conf->conf_.default_key.data(),
                          crypt_handshake_->shared_conf->conf_.default_key.size(), outbuf, outsz);
     }
@@ -970,11 +970,11 @@ int libatgw_proto_inner_v1::dispatch_handshake_dh_pubkey_req(
   if (0 == ret) {
     pubkey_rsp_body = Createcs_body_handshake(
         builder, session_id_, next_step, peer_body.switch_type(), builder.CreateString(std::string()),
-        builder.CreateVector(reinterpret_cast<const int8_t *>(outbuf), NULL == outbuf ? 0 : outsz));
+        builder.CreateVector(reinterpret_cast<const int8_t *>(outbuf), nullptr == outbuf ? 0 : outsz));
   } else {
     pubkey_rsp_body =
         Createcs_body_handshake(builder, 0, next_step, peer_body.switch_type(), builder.CreateString(std::string()),
-                                builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
+                                builder.CreateVector(static_cast<const int8_t *>(nullptr), 0));
   }
 
   builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, pubkey_rsp_body.Union()),
@@ -985,12 +985,12 @@ int libatgw_proto_inner_v1::dispatch_handshake_dh_pubkey_req(
 
 int libatgw_proto_inner_v1::dispatch_handshake_dh_pubkey_rsp(
     const ::atframe::gw::inner::v1::cs_body_handshake &body_handshake) {
-  if (0 == body_handshake.session_id() || NULL == body_handshake.crypt_param()) {
+  if (0 == body_handshake.session_id() || nullptr == body_handshake.crypt_param()) {
     ATFRAME_GATEWAY_ON_ERROR(error_code_t::EN_ECT_HANDSHAKE, "DH switch key failed.");
     return error_code_t::EN_ECT_HANDSHAKE;
   }
 
-  const void *outbuf = NULL;
+  const void *outbuf = nullptr;
   size_t outsz = 0;
   // decrypt default key
   int ret = decrypt_data(*crypt_handshake_, body_handshake.crypt_param()->data(), body_handshake.crypt_param()->size(),
@@ -1036,9 +1036,9 @@ int libatgw_proto_inner_v1::dispatch_handshake_verify_ntf(
   }
 
   // check hello message prefix
-  if (NULL != body_handshake.crypt_param() && !crypt_read_->param.empty() &&
+  if (nullptr != body_handshake.crypt_param() && !crypt_read_->param.empty() &&
       crypt_read_->param.size() <= body_handshake.crypt_param()->size()) {
-    const void *outbuf = NULL;
+    const void *outbuf = nullptr;
     size_t outsz = 0;
     ret = decrypt_data(*crypt_read_, body_handshake.crypt_param()->data(), body_handshake.crypt_param()->size(), outbuf,
                        outsz);
@@ -1081,7 +1081,7 @@ int libatgw_proto_inner_v1::pack_handshake_start_rsp(
     // empty data
     handshake_data = Createcs_body_handshake(builder, sess_id, handshake_step_t_EN_HST_START_RSP,
                                              switch_secret_t_EN_SST_DIRECT, builder.CreateString(crypt_type),
-                                             builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
+                                             builder.CreateVector(static_cast<const int8_t *>(nullptr), 0));
 
     crypt_read_ = crypt_handshake_;
     crypt_write_ = crypt_handshake_;
@@ -1152,11 +1152,11 @@ int libatgw_proto_inner_v1::pack_handshake_dh_pubkey_req(
   using namespace ::atframe::gw::inner::v1;
 
   int ret = 0;
-  if (0 == peer_body.session_id() || NULL == peer_body.crypt_param() || !crypt_handshake_->shared_conf) {
+  if (0 == peer_body.session_id() || nullptr == peer_body.crypt_param() || !crypt_handshake_->shared_conf) {
     // empty data
     handshake_data = Createcs_body_handshake(builder, peer_body.session_id(), next_step, switch_secret_t_EN_SST_DIRECT,
                                              builder.CreateString(std::string()),
-                                             builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
+                                             builder.CreateVector(static_cast<const int8_t *>(nullptr), 0));
 
     return error_code_t::EN_ECT_SESSION_NOT_FOUND;
   }
@@ -1288,7 +1288,7 @@ void libatgw_proto_inner_v1::close_handshake(int status) {
 }
 
 int libatgw_proto_inner_v1::try_write() {
-  if (NULL == callbacks_ || !callbacks_->write_fn) {
+  if (nullptr == callbacks_ || !callbacks_->write_fn) {
     return error_code_t::EN_ECT_MISS_CALLBACKS;
   }
 
@@ -1354,15 +1354,15 @@ int libatgw_proto_inner_v1::try_write() {
     char *buffer_start = reinterpret_cast<char *>(get_tls_buffer(tls_buffer_t::EN_TBT_MERGE));
     char *free_buffer = buffer_start;
 
-    ::atbus::detail::buffer_block *preview_bb = NULL;
+    ::atbus::detail::buffer_block *preview_bb = nullptr;
     while (!write_buffers_.empty() && available_bytes > 0) {
       ::atbus::detail::buffer_block *bb = write_buffers_.front();
-      if (NULL == bb || bb->raw_size() > available_bytes) {
+      if (nullptr == bb || bb->raw_size() > available_bytes) {
         break;
       }
 
       // if write_buffers_ is a static circle buffer, can not merge the bound blocks
-      if (write_buffers_.is_static_mode() && NULL != preview_bb && preview_bb > bb) {
+      if (write_buffers_.is_static_mode() && nullptr != preview_bb && preview_bb > bb) {
         break;
       }
       preview_bb = bb;
@@ -1376,7 +1376,7 @@ int libatgw_proto_inner_v1::try_write() {
       write_buffers_.pop_front(bb->raw_size(), true);
     }
 
-    void *data = NULL;
+    void *data = nullptr;
     write_buffers_.push_front(data, write_header_offset_ + (free_buffer - buffer_start));
 
     // already pop more data than write_header_offset_ + (free_buffer - buffer_start)
@@ -1396,7 +1396,7 @@ int libatgw_proto_inner_v1::try_write() {
   ::atbus::detail::buffer_block *writing_block = write_buffers_.front();
 
   // should always exist, empty will cause return before
-  if (NULL == writing_block) {
+  if (nullptr == writing_block) {
     assert(writing_block);
     write_buffers_.pop_front(0, true);
     set_flag(flag_t::EN_PFT_WRITING, true);
@@ -1427,7 +1427,7 @@ int libatgw_proto_inner_v1::write_msg(flatbuffers::FlatBufferBuilder &builder) {
   size_t len = static_cast<size_t>(builder.GetSize());
 
   // push back message
-  if (NULL != buf && len > 0) {
+  if (nullptr != buf && len > 0) {
     if (len >= std::numeric_limits<uint32_t>::max()) {
       return error_code_t::EN_ECT_INVALID_SIZE;
     }
@@ -1468,7 +1468,7 @@ int libatgw_proto_inner_v1::write_done(int status) {
   }
   flag_guard_t flag_guard(flags_, flag_t::EN_PFT_IN_CALLBACK);
 
-  void *data = NULL;
+  void *data = nullptr;
   size_t nread, nwrite;
 
   // first 32bits is hash code, and then 32bits length
@@ -1477,7 +1477,7 @@ int libatgw_proto_inner_v1::write_done(int status) {
   // popup the lost callback
   while (true) {
     write_buffers_.front(data, nread, nwrite);
-    if (NULL == data) {
+    if (nullptr == data) {
       break;
     }
 
@@ -1519,7 +1519,7 @@ int libatgw_proto_inner_v1::write_done(int status) {
       break;
     }
   };
-  last_write_ptr_ = NULL;
+  last_write_ptr_ = nullptr;
 
   // unset writing mode
   set_flag(flag_t::EN_PFT_WRITING, false);
@@ -1531,7 +1531,7 @@ int libatgw_proto_inner_v1::write_done(int status) {
   if (check_flag(flag_t::EN_PFT_CLOSING) && !check_flag(flag_t::EN_PFT_CLOSED) && !check_flag(flag_t::EN_PFT_WRITING)) {
     set_flag(flag_t::EN_PFT_CLOSED, true);
 
-    if (NULL != callbacks_ && callbacks_->close_fn) {
+    if (nullptr != callbacks_ && callbacks_->close_fn) {
       return callbacks_->close_fn(this, close_reason_);
     }
   }
@@ -1560,7 +1560,7 @@ int libatgw_proto_inner_v1::close(int reason, bool is_send_kickoff) {
   if (!check_flag(flag_t::EN_PFT_WRITING) && !check_flag(flag_t::EN_PFT_CLOSED)) {
     set_flag(flag_t::EN_PFT_CLOSED, true);
 
-    if (NULL != callbacks_ && callbacks_->close_fn) {
+    if (nullptr != callbacks_ && callbacks_->close_fn) {
       return callbacks_->close_fn(this, close_reason_);
     }
   }
@@ -1586,19 +1586,19 @@ bool libatgw_proto_inner_v1::check_reconnect(const proto_base *other) {
   do {
     std::vector<unsigned char> handshake_secret;
     std::string crypt_type;
-    if (NULL == handshake_.ext_data) {
+    if (nullptr == handshake_.ext_data) {
       ret = false;
       break;
     } else {
       const ::atframe::gw::inner::v1::cs_body_handshake *body_handshake =
           reinterpret_cast<const ::atframe::gw::inner::v1::cs_body_handshake *>(handshake_.ext_data);
       const flatbuffers::Vector<int8_t> *secret = body_handshake->crypt_param();
-      if (NULL != secret) {
+      if (nullptr != secret) {
         handshake_secret.resize(secret->size());
         memcpy(handshake_secret.data(), secret->data(), secret->size());
       }
 
-      if (NULL != body_handshake->crypt_type()) {
+      if (nullptr != body_handshake->crypt_type()) {
         crypt_type = body_handshake->crypt_type()->str();
       }
     }
@@ -1634,7 +1634,7 @@ bool libatgw_proto_inner_v1::check_reconnect(const proto_base *other) {
     }
 
     // decrypt secret
-    const void *outbuf = NULL;
+    const void *outbuf = nullptr;
     size_t outsz = 0;
     if (0 != decrypt_data(*crypt_handshake_, handshake_secret.data(), handshake_secret.size(), outbuf, outsz)) {
       ret = false;
@@ -1643,7 +1643,7 @@ bool libatgw_proto_inner_v1::check_reconnect(const proto_base *other) {
 
     // compare secret and encrypted secret
     // decrypt will padding data, so outsz should always equal or greater than secret.size()
-    if (NULL == outbuf || outsz < crypt_handshake_->secret.size() ||
+    if (nullptr == outbuf || outsz < crypt_handshake_->secret.size() ||
         0 != memcmp(outbuf, crypt_handshake_->secret.data(), crypt_handshake_->secret.size())) {
       ret = false;
     }
@@ -1740,7 +1740,7 @@ int libatgw_proto_inner_v1::start_session(const std::string &crypt_type) {
     return error_code_t::EN_ECT_SESSION_ALREADY_EXIST;
   }
 
-  if (NULL == callbacks_ || !callbacks_->write_fn) {
+  if (nullptr == callbacks_ || !callbacks_->write_fn) {
     return error_code_t::EN_ECT_MISS_CALLBACKS;
   }
 
@@ -1753,7 +1753,7 @@ int libatgw_proto_inner_v1::start_session(const std::string &crypt_type) {
 
   handshake_body = Createcs_body_handshake(builder, 0, handshake_step_t_EN_HST_START_REQ, switch_secret_t_EN_SST_DIRECT,
                                            builder.CreateString(crypt_type),
-                                           builder.CreateVector(reinterpret_cast<const int8_t *>(NULL), 0));
+                                           builder.CreateVector(static_cast<const int8_t *>(nullptr), 0));
 
   builder.Finish(Createcs_msg(builder, header_data, cs_msg_body_cs_body_handshake, handshake_body.Union()),
                  cs_msgIdentifier());
@@ -1766,7 +1766,7 @@ int libatgw_proto_inner_v1::reconnect_session(uint64_t sess_id, const std::strin
     return error_code_t::EN_ECT_CLOSING;
   }
 
-  if (NULL == callbacks_ || !callbacks_->write_fn) {
+  if (nullptr == callbacks_ || !callbacks_->write_fn) {
     return error_code_t::EN_ECT_MISS_CALLBACKS;
   }
 
@@ -1784,7 +1784,7 @@ int libatgw_proto_inner_v1::reconnect_session(uint64_t sess_id, const std::strin
     }
   }
 
-  const void *secret_buffer = NULL;
+  const void *secret_buffer = nullptr;
   size_t secret_length = secret.size();
   encrypt_data(*crypt_handshake_, secret.data(), secret.size(), secret_buffer, secret_length);
 
@@ -1811,7 +1811,7 @@ int libatgw_proto_inner_v1::send_post(::atframe::gw::inner::v1::cs_msg_type_t ms
     return error_code_t::EN_ECT_CLOSING;
   }
 
-  if (NULL == callbacks_ || !callbacks_->write_fn || !crypt_write_) {
+  if (nullptr == callbacks_ || !callbacks_->write_fn || !crypt_write_) {
     return error_code_t::EN_ECT_MISS_CALLBACKS;
   }
 
@@ -1845,7 +1845,7 @@ int libatgw_proto_inner_v1::send_ping() {
     return error_code_t::EN_ECT_CLOSING;
   }
 
-  if (NULL == callbacks_ || !callbacks_->write_fn) {
+  if (nullptr == callbacks_ || !callbacks_->write_fn) {
     return error_code_t::EN_ECT_MISS_CALLBACKS;
   }
 
@@ -1869,7 +1869,7 @@ int libatgw_proto_inner_v1::send_pong(int64_t tp) {
     return error_code_t::EN_ECT_CLOSING;
   }
 
-  if (NULL == callbacks_ || !callbacks_->write_fn) {
+  if (nullptr == callbacks_ || !callbacks_->write_fn) {
     return error_code_t::EN_ECT_MISS_CALLBACKS;
   }
 
@@ -1896,7 +1896,7 @@ int libatgw_proto_inner_v1::send_key_syn() {
 
   std::string crypt_type = crypt_handshake_->type;
 
-  if (NULL == callbacks_ || !callbacks_->write_fn || !crypt_write_) {
+  if (nullptr == callbacks_ || !callbacks_->write_fn || !crypt_write_) {
     return error_code_t::EN_ECT_MISS_CALLBACKS;
   }
 
@@ -1946,7 +1946,7 @@ int libatgw_proto_inner_v1::send_kickoff(int reason) {
     return error_code_t::EN_ECT_CLOSING;
   }
 
-  if (NULL == callbacks_ || !callbacks_->write_fn) {
+  if (nullptr == callbacks_ || !callbacks_->write_fn) {
     return error_code_t::EN_ECT_MISS_CALLBACKS;
   }
 
@@ -1968,23 +1968,23 @@ int libatgw_proto_inner_v1::send_verify(const void *buf, size_t sz) {
     return error_code_t::EN_ECT_CLOSING;
   }
 
-  if (NULL == callbacks_ || !callbacks_->write_fn || !crypt_write_) {
+  if (nullptr == callbacks_ || !callbacks_->write_fn || !crypt_write_) {
     return error_code_t::EN_ECT_MISS_CALLBACKS;
   }
 
   // pack
   uint64_t sess_id = session_id_;
 
-  const void *outbuf = NULL;
+  const void *outbuf = nullptr;
   size_t outsz = 0;
   int ret = 0;
-  if (NULL != buf && sz > 0) {
+  if (nullptr != buf && sz > 0) {
     ret = encrypt_data(*crypt_write_, buf, sz, outbuf, outsz);
   }
 
   if (0 != ret) {
     sess_id = 0;
-    outbuf = NULL;
+    outbuf = nullptr;
     outsz = 0;
   }
 
@@ -2075,7 +2075,7 @@ int libatgw_proto_inner_v1::encrypt_data(crypt_session_t &crypt_info, const void
     return error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
   }
 
-  if (0 == insz || NULL == in) {
+  if (0 == insz || nullptr == in) {
     out = in;
     outsz = insz;
     return error_code_t::EN_ECT_PARAM;
@@ -2103,7 +2103,7 @@ int libatgw_proto_inner_v1::encrypt_data(crypt_session_t &crypt_info, const void
   debuger_fout << std::endl;
 #endif
   if (res < 0) {
-    out = NULL;
+    out = nullptr;
     outsz = 0;
     ATFRAME_GATEWAY_ON_ERROR(res, "encrypt data failed");
     return error_code_t::EN_ECT_CRYPT_OPERATION;
@@ -2124,7 +2124,7 @@ int libatgw_proto_inner_v1::decrypt_data(crypt_session_t &crypt_info, const void
     return error_code_t::EN_ECT_CRYPT_NOT_SUPPORTED;
   }
 
-  if (0 == insz || NULL == in) {
+  if (0 == insz || nullptr == in) {
     out = in;
     outsz = insz;
     return error_code_t::EN_ECT_PARAM;
@@ -2151,7 +2151,7 @@ int libatgw_proto_inner_v1::decrypt_data(crypt_session_t &crypt_info, const void
   debuger_fout << std::endl;
 #endif
   if (res < 0) {
-    out = NULL;
+    out = nullptr;
     outsz = 0;
     ATFRAME_GATEWAY_ON_ERROR(res, "decrypt data failed");
     return error_code_t::EN_ECT_CRYPT_OPERATION;

@@ -2,6 +2,8 @@ set(GENERATE_FOR_PB_PY "${CMAKE_CURRENT_LIST_DIR}/generate-for-pb.py")
 set(GENERATE_FOR_PB_WORK_DIR ${CMAKE_CURRENT_LIST_DIR})
 set(GENERATE_FOR_PB_OUT_SH "${CMAKE_BINARY_DIR}/generate-for-pb-run.sh")
 set(GENERATE_FOR_PB_OUT_PWSH "${CMAKE_BINARY_DIR}/generate-for-pb-run.ps1")
+set(GENERATE_FOR_PB_OUT_LOG "${CMAKE_CURRENT_BINARY_DIR}/generate-for-pb-run.log")
+file(WRITE "${GENERATE_FOR_PB_OUT_LOG}" "# generate-for-pb-run")
 if(NOT PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR)
   set(PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR "${PROJECT_THIRD_PARTY_INSTALL_DIR }/.python_modules")
 endif()
@@ -83,14 +85,16 @@ execute_process(
     "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension/xrescode_extensions_v3.proto"
     ${GENERATE_FOR_PB_PY_PROTO_FILES}
   RESULT_VARIABLE GENERATE_FOR_PB_PROTOC_RESULT
+  OUTPUT_FILE "${GENERATE_FOR_PB_OUT_LOG}"
+  ERROR_FILE "${GENERATE_FOR_PB_OUT_LOG}"
   WORKING_DIRECTORY ${GENERATE_FOR_PB_WORK_DIR} ${GENERATE_FOR_PB_PY_ENCODING})
 if(NOT GENERATE_FOR_PB_PROTOC_RESULT EQUAL 0)
-  message(FATAL_ERROR "Run protoc failed.")
+  message(FATAL_ERROR "Run protoc failed.See ${GENERATE_FOR_PB_OUT_LOG} for details.")
 endif()
 unset(GENERATE_FOR_PB_PY_PROTO_FILES)
 unset(GENERATE_FOR_PB_PROTOC_RESULT)
 
-function(generate_for_pb_add_service SERVICE_NAME SERVICE_ROOT_DIR)
+function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
   set(GENERATE_FOR_PB_ARGS_OPTIONS "")
   set(GENERATE_FOR_PB_ARGS_ONE_VALUE TASK_PATH_PREFIX HANDLE_PATH_PREFIX PROJECT_NAMESPACE PROTOBUF_PYTHON_PATH
                                      MAKO_PYTHON_PATH SIX_PYTHON_PATH)
@@ -199,6 +203,7 @@ function(generate_for_pb_add_service SERVICE_NAME SERVICE_ROOT_DIR)
   # Run script once when run cmake
   echowithcolor(COLOR GREEN
                 "-- Ready to run ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} for ${SERVICE_NAME} @ ${SERVICE_ROOT_DIR}")
+  file(APPEND "${GENERATE_FOR_PB_OUT_LOG}" "-- Ready to run ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} for ${SERVICE_NAME} @ ${SERVICE_ROOT_DIR}\n")
   execute_process(
     COMMAND
       ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} "--quiet" "-s" "${SERVICE_NAME}" "-o" ${PROJECT_SERVER_FRAME_BAS_DIR}
@@ -227,25 +232,37 @@ function(generate_for_pb_add_service SERVICE_NAME SERVICE_ROOT_DIR)
       "templates/task_action_ss_rpc.h.mako:${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.h"
       "--rpc-template"
       "templates/task_action_ss_rpc.cpp.mako:${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.cpp"
-    WORKING_DIRECTORY ${GENERATE_FOR_PB_WORK_DIR} ${GENERATE_FOR_PB_PY_ENCODING})
-endfunction(generate_for_pb_add_service)
+    WORKING_DIRECTORY ${GENERATE_FOR_PB_WORK_DIR}
+    OUTPUT_FILE "${GENERATE_FOR_PB_OUT_LOG}"
+    ERROR_FILE "${GENERATE_FOR_PB_OUT_LOG}" ${GENERATE_FOR_PB_PY_ENCODING})
+endfunction(generate_for_pb_add_ss_service)
 
 function(generate_for_pb_run_generator)
   if(ATFRAMEWORK_CMAKE_TOOLSET_PWSH)
     execute_process(
       COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_PWSH}" "${GENERATE_FOR_PB_OUT_PWSH}"
       RESULT_VARIABLE GENERATE_FOR_PB_PROTOC_RESULT
-      WORKING_DIRECTORY ${GENERATE_FOR_PB_WORK_DIR} ${GENERATE_FOR_PB_PY_ENCODING})
+      WORKING_DIRECTORY ${GENERATE_FOR_PB_WORK_DIR}
+      OUTPUT_FILE "${GENERATE_FOR_PB_OUT_LOG}"
+      ERROR_FILE "${GENERATE_FOR_PB_OUT_LOG}" ${GENERATE_FOR_PB_PY_ENCODING})
     if(NOT GENERATE_FOR_PB_PROTOC_RESULT EQUAL 0)
-      message(FATAL_ERROR "Run \"${ATFRAMEWORK_CMAKE_TOOLSET_PWSH}\" \"${GENERATE_FOR_PB_OUT_PWSH}\" failed.")
+      message(
+        FATAL_ERROR
+          "Run \"${ATFRAMEWORK_CMAKE_TOOLSET_PWSH}\" \"${GENERATE_FOR_PB_OUT_PWSH}\" failed. See ${GENERATE_FOR_PB_OUT_LOG} for details."
+      )
     endif()
   else()
     execute_process(
       COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_BASH}" "${GENERATE_FOR_PB_OUT_SH}"
       RESULT_VARIABLE GENERATE_FOR_PB_PROTOC_RESULT
-      WORKING_DIRECTORY ${GENERATE_FOR_PB_WORK_DIR} ${GENERATE_FOR_PB_PY_ENCODING})
+      WORKING_DIRECTORY ${GENERATE_FOR_PB_WORK_DIR}
+      OUTPUT_FILE "${GENERATE_FOR_PB_OUT_LOG}"
+      ERROR_FILE "${GENERATE_FOR_PB_OUT_LOG}" ${GENERATE_FOR_PB_PY_ENCODING})
     if(NOT GENERATE_FOR_PB_PROTOC_RESULT EQUAL 0)
-      message(FATAL_ERROR "Run \"${ATFRAMEWORK_CMAKE_TOOLSET_BASH}\" \"${GENERATE_FOR_PB_OUT_SH}\" failed.")
+      message(
+        FATAL_ERROR
+          "Run \"${ATFRAMEWORK_CMAKE_TOOLSET_BASH}\" \"${GENERATE_FOR_PB_OUT_SH}\" failed. See ${GENERATE_FOR_PB_OUT_LOG} for details."
+      )
     endif()
   endif()
 endfunction()

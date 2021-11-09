@@ -19,7 +19,7 @@ def append_start_script(s, lc, line):
     s.append(line)
     return max(lc, len(line))
 
-# max_line_column = append_start_script(start_scripts, max_line_column,'nohup $SERVERD_NAME --config-file ../etc/$SERVER_FULL_NAME.conf" > /dev/null 2>&1 &')
+# max_line_column = append_start_script(start_scripts, max_line_column,'nohup $SERVERD_NAME --config-file ../etc/$SERVER_FULL_NAME.yaml" > /dev/null 2>&1 &')
 max_line_column = append_start_script(start_scripts, max_line_column,'nohup $SERVERD_NAME --name "$SERVER_CLUSTER_NAME"')
 max_line_column = append_start_script(start_scripts, max_line_column,'  --data-dir "$SERVER_DATA_DIR" --wal-dir "$SERVER_WAL_DIR" --force-new-cluster')
 max_line_column = append_start_script(start_scripts, max_line_column,'  --snapshot-count 20000 --heartbeat-interval 100 --election-timeout 1000 --max-snapshots 3 --max-wals 3')

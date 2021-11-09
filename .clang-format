@@ -3,13 +3,15 @@ Language: Cpp
 BasedOnStyle: Google
 ColumnLimit: 120
 DerivePointerAlignment: true
+
+# 默认对齐到类型名
 PointerAlignment: Left
 
 # Only sort headers in each include block
 SortIncludes: true
 IncludeBlocks: Preserve
 
-# Ident #if/#else/#endif:
+# 让 #if/#else/#endif 宏中的内容保持缩进，比如：
 #   #if defined(WIN)
 #   #  include <windows.h>
 #   #else

@@ -1,16 +1,18 @@
-﻿#include <algorithm>
-#include <cstdio>
-#include <cstdlib>
-#include <string>
-#include <vector>
+﻿// Copyright 2021 atframework
 
-#include "uv.h"
+#include <uv.h>
 
-#include "common/string_oprs.h"
-#include "std/smart_ptr.h"
+#include <common/string_oprs.h>
 
 #include <config/atframe_services_build_feature.h>
 #include <libatgw_inner_v1_c.h>
+
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <memory>
+#include <string>
+#include <vector>
 
 template <typename TCH = char>
 TCH to_lower_case(TCH c) {
@@ -35,7 +37,7 @@ struct proto_wrapper {
   libatgw_inner_v1_c_context ctx;
   proto_wrapper() : ctx(libatgw_inner_v1_c_create()) {}
   ~proto_wrapper() {
-    if (NULL != ctx) {
+    if (nullptr != ctx) {
       libatgw_inner_v1_c_destroy(ctx);
     }
   }
@@ -111,7 +113,7 @@ static void libuv_tcp_recv_alloc_fn(uv_handle_t *handle, size_t suggested_size, 
   buf->len = len;
 #endif
 
-  if (NULL == buf->base && 0 == buf->len) {
+  if (nullptr == buf->base && 0 == buf->len) {
     uv_read_stop((uv_stream_t *)handle);
   }
 }
@@ -143,7 +145,7 @@ static void libuv_tcp_recv_read_fn(uv_stream_t *, ssize_t nread, const uv_buf_t 
 }
 
 static void libuv_tcp_connect_callback(uv_connect_t *req, int status) {
-  req->data = NULL;
+  req->data = nullptr;
   if (0 != status) {
     fprintf(stderr, "libuv_tcp_connect_callback callback failed, msg: %s\n", uv_strerror(status));
     uv_stop(req->handle->loop);
@@ -180,7 +182,7 @@ static void libuv_tcp_connect_callback(uv_connect_t *req, int status) {
 }
 
 static void libuv_dns_callback(uv_getaddrinfo_t *req, int status, struct addrinfo *res) {
-  req->data = NULL;
+  req->data = nullptr;
   do {
     if (0 != status) {
       fprintf(stderr, "uv_getaddrinfo callback failed, msg: %s\n", uv_strerror(status));
@@ -188,7 +190,7 @@ static void libuv_dns_callback(uv_getaddrinfo_t *req, int status, struct addrinf
       break;
     }
 
-    if (NULL != g_client.dns_req.data || NULL != g_client.tcp_sock.data) {
+    if (nullptr != g_client.dns_req.data || nullptr != g_client.tcp_sock.data) {
       break;
     }
 
@@ -222,17 +224,17 @@ static void libuv_dns_callback(uv_getaddrinfo_t *req, int status, struct addrinf
   } while (false);
 
   // free addrinfo
-  if (NULL != res) {
+  if (nullptr != res) {
     uv_freeaddrinfo(res);
   }
 }
 
 static int start_connect() {
-  if (NULL != g_client.dns_req.data) {
+  if (nullptr != g_client.dns_req.data) {
     return 0;
   }
 
-  int ret = uv_getaddrinfo(uv_default_loop(), &g_client.dns_req, libuv_dns_callback, g_host.c_str(), NULL, NULL);
+  int ret = uv_getaddrinfo(uv_default_loop(), &g_client.dns_req, libuv_dns_callback, g_host.c_str(), nullptr, nullptr);
   if (0 != ret) {
     fprintf(stderr, "uv_getaddrinfo failed, msg: %s\n", uv_strerror(ret));
     return ret;
@@ -243,15 +245,15 @@ static int start_connect() {
 }
 
 void libuv_close_sock_callback(uv_handle_t *handle) {
-  handle->data = NULL;
+  handle->data = nullptr;
   printf("close socket finished\n");
 
-  g_client.tcp_sock.data = NULL;
+  g_client.tcp_sock.data = nullptr;
 }
 
 int close_sock() {
   if (!g_client_sess.proto) {
-    if (NULL != g_client.tcp_sock.data) {
+    if (nullptr != g_client.tcp_sock.data) {
       printf("close socket start\n");
       uv_close((uv_handle_t *)&g_client.tcp_sock, libuv_close_sock_callback);
     }
@@ -271,8 +273,8 @@ static void proto_inner_callback_on_written_fn(uv_write_t *, int status) {
 }
 
 static int32_t proto_inner_callback_on_write(libatgw_inner_v1_c_context, void *buffer, uint64_t sz, int32_t *is_done) {
-  if (!g_client_sess.proto || NULL == buffer) {
-    if (NULL != is_done) {
+  if (!g_client_sess.proto || nullptr == buffer) {
+    if (nullptr != is_done) {
       *is_done = 1;
     }
 
@@ -287,7 +289,7 @@ static int32_t proto_inner_callback_on_write(libatgw_inner_v1_c_context, void *b
             static_cast<unsigned long long>(g_client_sess.session_id), uv_strerror(ret));
   }
 
-  if (NULL != is_done) {
+  if (nullptr != is_done) {
     // if not writting, notify write finished
     *is_done = (0 != ret) ? 1 : 0;
   }
@@ -317,7 +319,7 @@ static int send_next_hello_message() {
 }
 
 static int proto_inner_callback_on_message(libatgw_inner_v1_c_context, const void *buffer, uint64_t sz) {
-  if (g_client_sess.print_msg && NULL != buffer && sz > 0) {
+  if (g_client_sess.print_msg && nullptr != buffer && sz > 0) {
     printf("[recv message]: %s\n", std::string(reinterpret_cast<const char *>(buffer), (size_t)sz).c_str());
   }
 
@@ -334,7 +336,7 @@ static int proto_inner_callback_on_message(libatgw_inner_v1_c_context, const voi
 
 // useless
 static int proto_inner_callback_on_new_session(libatgw_inner_v1_c_context, uint64_t *sess_id) {
-  printf("create session 0x%llx\n", NULL == sess_id ? 0 : static_cast<unsigned long long>(*sess_id));
+  printf("create session 0x%llx\n", nullptr == sess_id ? 0 : static_cast<unsigned long long>(*sess_id));
   return 0;
 }
 
@@ -345,7 +347,7 @@ static int proto_inner_callback_on_reconnect(libatgw_inner_v1_c_context, uint64_
 }
 
 static int proto_inner_callback_on_close(libatgw_inner_v1_c_context, int32_t reason) {
-  if (NULL == g_client.tcp_sock.data) {
+  if (nullptr == g_client.tcp_sock.data) {
     return 0;
   }
 
@@ -398,7 +400,7 @@ static int proto_inner_callback_on_error(libatgw_inner_v1_c_context, const char 
 }
 
 static void libuv_tick_timer_callback(uv_timer_t *handle) {
-  if (NULL == g_client.tcp_sock.data && NULL == g_client.dns_req.data) {
+  if (nullptr == g_client.tcp_sock.data && nullptr == g_client.dns_req.data) {
     if (!g_client_sess.allow_reconnect) {
       puts("client exit.");
       uv_stop(handle->loop);
@@ -487,7 +489,7 @@ int main(int argc, char *argv[]) {
 
   std::string mode = "tick";
   g_host = argv[1];
-  g_port = static_cast<int>(strtol(argv[2], NULL, 10));
+  g_port = static_cast<int>(strtol(argv[2], nullptr, 10));
   memset(&g_client, 0, sizeof(g_client));
 
   if (argc > 3) {

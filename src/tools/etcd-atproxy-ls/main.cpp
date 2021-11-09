@@ -23,7 +23,7 @@ static int wait_for_close = 0;
 static std::string etcd_host;
 static std::string prefix = ETCD_MODULE_BY_ID_DIR;
 static std::string authorization;
-static const char *exec_path = NULL;
+static const char *exec_path = nullptr;
 static int init_wait_ticks = 200;
 
 static void tick_timer_callback(uv_timer_t *handle) {
@@ -89,7 +89,7 @@ static int prog_option_handler_help(util::cli::callback_param params, util::cli:
 static int libcurl_callback_on_range_completed(util::network::http_request &req) {
   is_run = false;
   int *ret = reinterpret_cast<int *>(req.get_priv_data());
-  if (NULL == ret) {
+  if (nullptr == ret) {
     WLOGERROR("Etcd range request shouldn't has request without private data");
     return 0;
   }
@@ -256,7 +256,7 @@ int main(int argc, char *argv[]) {
     get_range_req->set_on_complete(libcurl_callback_on_range_completed);
     ret = get_range_req->start(util::network::http_request::method_t::EN_MT_POST, false);
     if (ret != 0) {
-      get_range_req->set_on_complete(NULL);
+      get_range_req->set_on_complete(nullptr);
       WLOGERROR("Start request to %s failed, res: %d", get_range_req->get_url().c_str(), ret);
     } else {
       WLOGDEBUG("Start request to %s success.", get_range_req->get_url().c_str());

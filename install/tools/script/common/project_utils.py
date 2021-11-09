@@ -552,7 +552,7 @@ def get_server_proxy():
 
 def get_server_subnets():
     ret = []
-    for subnet in get_server_list('subnets', ['0/0']):
+    for subnet in get_server_list('subnets', '0/0'):
         if subnet.isdigit():
             ret.append('0/{0}'.format(subnet))
         else:

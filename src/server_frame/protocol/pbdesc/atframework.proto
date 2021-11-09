@@ -1,0 +1,209 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+package atframework;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/descriptor.proto";
+
+// 只能配置在 com.const.proto 这个文件里有效
+extend google.protobuf.FileOptions {
+  ConstSettingsType CONST_SETTINGS = 3271;  // 自定义配置
+}
+
+message ConstSettingsType {
+  string rpc_version = 1;  // RPC协议版本号
+}
+
+option (CONST_SETTINGS) = {
+  rpc_version: "0.1.0"
+};
+
+message DispatcherOptions {
+  string module_name = 101;            // module name
+  string api_name = 102;               // api name
+  repeated string descriptions = 103;  // descriptions
+
+  google.protobuf.Duration timeout = 201;  // custom timeout
+
+  // functional
+  // 标记把涉及的路由对象转移到快队列并触发保存(需要dispatcher层和task_action_base层支持)
+  bool mark_fast_save = 301;
+  // 是否是路由系统rpc，生成的接口使用路由系统参数(需要generator支持)
+  bool mark_wait_save = 302;
+  bool router_rpc = 303;
+  // RPC接口是否需要附带用户信息,如果router_rpc同时设为true则会走路由rpc规则，但是认为路由对象的zone_id和object_id和用户ID一致
+  bool user_rpc = 304;
+  bool no_cache = 305;
+  bool allow_no_wait = 306;                         // 是否允许不等待回包
+  repeated string warning_log_response_code = 307;  // 以下错误码使用warning log而不是error log
+  repeated string info_log_response_code = 308;     // 以下错误码使用info log而不是error log
+  bool router_ignore_offline = 309;                 // 路由RPC忽略路由对象不存在
+}
+
+extend google.protobuf.MethodOptions {
+  DispatcherOptions rpc_options = 3271;  // extension
+}
+
+extend google.protobuf.FieldOptions {
+  DispatcherOptions dispatcher_options = 3271;  // 自定义配置
+}
+
+message ServiceOptions {
+  string module_name = 101;            // module name
+  string service_name = 102;           // service name
+  repeated string descriptions = 103;  // descriptions
+}
+
+extend google.protobuf.ServiceOptions {
+  ServiceOptions service_options = 3271;  // 自定义配置
+}
+
+// ============================= 内部RPC协议共享 =============================
+message RpcRequestMeta {
+  string version = 1;  // 协议版本号
+
+  string caller = 11;  // 请求方服务名
+  string callee = 12;  // 被调方服务名
+
+  string rpc_name = 21;  // 调度分发名称: <ServiceFullName>.<MethodName>
+  string type_url = 22;  // 类型地址
+}
+
+message RpcResponseMeta {
+  string version = 1;  // 协议版本号
+
+  string rpc_name = 21;  // 调度分发名称: <ServiceFullName>.<MethodName>
+  string type_url = 22;  // 类型地址
+}
+
+message RpcStreamMeta {
+  string version = 1;  // 协议版本号
+
+  string caller = 11;  // 请求方服务名
+  string callee = 12;  // 被调方服务名
+
+  string rpc_name = 21;  // 调度分发名称: <ServiceFullName>.<MethodName>
+  string type_url = 22;  // 类型地址
+}
+
+// RpcTraceSpan follows opentracing and opentelemetry.
+// @see https://github.com/open-telemetry/opentelemetry-proto/blob/master/opentelemetry/proto/trace/v1/trace.proto
+// @see https://opentelemetry.io
+// @see https://opentracing.io/specification/
+
+message AnyValue {
+  // The value is one of the listed fields. It is valid for all values to be unspecified
+  // in which case this AnyValue is considered to be "null".
+  oneof value {
+    string string_value = 1;
+    bool bool_value = 2;
+    int64 int_value = 3;
+    double double_value = 4;
+    ArrayValue array_value = 5;
+    KeyValueList kvlist_value = 6;
+  }
+}
+
+// ArrayValue is a list of AnyValue messages. We need ArrayValue as a message
+// since oneof in AnyValue does not allow repeated fields.
+message ArrayValue {
+  // Array of values. The array may be empty (contain 0 elements).
+  repeated AnyValue values = 1;
+}
+
+// KeyValueList is a list of KeyValue messages. We need KeyValueList as a message
+// since `oneof` in AnyValue does not allow repeated fields. Everywhere else where we need
+// a list of KeyValue messages (e.g. in Span) we use `repeated KeyValue` directly to
+// avoid unnecessary extra wrapping (which slows down the protocol). The 2 approaches
+// are semantically equivalent.
+message KeyValueList {
+  // A collection of key/value pairs of key-value pairs. The list may be empty (may
+  // contain 0 elements).
+  map<string, AnyValue> values = 1;
+}
+
+message RpcTraceSpan {
+  string name = 1;
+  bytes trace_id = 2;   // Every span in a trace shares this ID.
+  bytes span_id = 3;    // The ID for a particular span. This may or may not be the same as the trace id.
+  bytes parent_id = 4;  // This is an optional ID that will only be present on child spans. That is the span without a
+  // parent id is considered the root of the trace.
+
+  enum SpanKind {
+    // Unspecified. Do NOT use as default.
+    // Implementations MAY assume SpanKind to be INTERNAL when receiving UNSPECIFIED.
+    SPAN_KIND_UNSPECIFIED = 0;
+
+    // Indicates that the span represents an internal operation within an application,
+    // as opposed to an operation happening at the boundaries. Default value.
+    SPAN_KIND_INTERNAL = 1;
+
+    // Indicates that the span covers server-side handling of an RPC or other
+    // remote network request.
+    SPAN_KIND_SERVER = 2;
+
+    // Indicates that the span describes a request to some remote service.
+    SPAN_KIND_CLIENT = 3;
+
+    // Indicates that the span describes a producer sending a message to a broker.
+    // Unlike CLIENT and SERVER, there is often no direct critical path latency relationship
+    // between producer and consumer spans. A PRODUCER span ends when the message was accepted
+    // by the broker while the logical processing of the message might span a much longer time.
+    SPAN_KIND_PRODUCER = 4;
+
+    // Indicates that the span describes consumer receiving a message from a broker.
+    // Like the PRODUCER kind, there is often no direct critical path latency relationship
+    // between producer and consumer spans.
+    SPAN_KIND_CONSUMER = 5;
+  }
+
+  // Distinguishes between spans generated in a particular context. For example,
+  // two spans with the same name may be distinguished using `CLIENT` (caller)
+  // and `SERVER` (callee) to identify queueing latency associated with the span.
+  SpanKind kind = 6;
+
+  map<string, AnyValue> attributes = 9;
+
+  message Event {
+    // time_unix_nano is the time the event occurred.
+    fixed64 time_unix_nano = 1;
+
+    // name of the event.
+    // This field is semantically required to be set to non-empty string.
+    string name = 2;
+
+    // attributes is a collection of attribute key/value pairs on the event.
+    map<string, AnyValue> attributes = 3;
+
+    // dropped_attributes_count is the number of dropped attributes. If the value is 0,
+    // then no attributes were dropped.
+    uint32 dropped_attributes_count = 4;
+  }
+  repeated Event events = 11;
+
+  message Link {
+    // A unique identifier of a trace that this linked span is part of. The ID is a
+    // 16-byte array.
+    bytes trace_id = 1;
+
+    // A unique identifier for the linked span. The ID is an 8-byte array.
+    bytes span_id = 2;
+
+    // The trace_state associated with the link.
+    string trace_state = 3;
+
+    // attributes is a collection of attribute key/value pairs on the link.
+    map<string, AnyValue> attributes = 4;
+
+    // dropped_attributes_count is the number of dropped attributes. If the value is 0,
+    // then no attributes were dropped.
+    uint32 dropped_attributes_count = 5;
+  }
+  repeated Link links = 13;
+}

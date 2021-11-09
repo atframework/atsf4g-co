@@ -1,0 +1,30 @@
+set(PROJECT_THIRD_PARTY_XRESLOADER_JAR_URL
+    "https://github.com/xresloader/xresloader/releases/download/v2.11.0-rc2/xresloader-2.11.0-rc2.jar")
+
+get_filename_component(PROJECT_THIRD_PARTY_XRESLOADER_JAR_BASENAME "${PROJECT_THIRD_PARTY_XRESLOADER_JAR_URL}" NAME)
+set(PROJECT_THIRD_PARTY_XRESLOADER_JAR
+    "${CMAKE_CURRENT_LIST_DIR}/${CMAKE_INSTALL_BINDIR}/${PROJECT_THIRD_PARTY_XRESLOADER_JAR_BASENAME}")
+
+if(NOT EXISTS "${PROJECT_THIRD_PARTY_XRESLOADER_JAR}")
+  findconfigurepackagedownloadfile("${PROJECT_THIRD_PARTY_XRESLOADER_JAR_URL}" "${PROJECT_THIRD_PARTY_XRESLOADER_JAR}")
+endif()
+
+set(PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR "${CMAKE_CURRENT_LIST_DIR}/protocols")
+
+set(PROJECT_THIRD_PARTY_XRESLOADER_CLI "${CMAKE_CURRENT_LIST_DIR}/xresconv-cli/xresconv-cli.py")
+
+if(NOT EXISTS ${PROJECT_THIRD_PARTY_XRESLOADER_CLI})
+  project_git_clone_repository(
+    URL
+    "https://github.com/xresloader/xresconv-cli.git"
+    REPO_DIRECTORY
+    "${CMAKE_CURRENT_LIST_DIR}/xresconv-cli"
+    DEPTH
+    100
+    BRANCH
+    main
+    WORKING_DIRECTORY
+    ${PROJECT_THIRD_PARTY_PACKAGE_DIR}
+    CHECK_PATH
+    "xresconv-cli.py")
+endif()

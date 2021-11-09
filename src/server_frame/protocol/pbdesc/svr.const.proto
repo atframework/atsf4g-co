@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+// 后台协议常量定义
+
+package hello;
+
+enum EnSystemLimit {
+  // option allow_alias   = true;
+  EN_SL_NONE = 0;
+  EN_SL_MAX_SS_MSG_LEN = 262144;
+  EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET = 1577836800;  // 2020-01-01 00:00:00 UTC
+  EN_SL_PLAYER_ASYNC_JOBS_BATCH_NUMBER = 50;
+}
+
+enum EnGlobalUUIDMajorType {
+  EN_GLOBAL_UUID_MAT_DEFAULT = 0;      // INVALID
+  EN_GLOBAL_UUID_MAT_MAIL = 1;         // 邮件GUID分配器
+  EN_GLOBAL_UUID_MAT_TRANSACTION = 2;  // 事务GUID分配器
+  EN_GLOBAL_UUID_MAT_USER_ID = 3;      // User ID分配器
+  EN_GLOBAL_UUID_MAT_GUILD_ID = 4;     // Guild ID分配器
+}
+
+// player async job type
+enum EnPlayerAsyncJobsType {
+  EN_PAJT_INVALID = 0;  // INVALID
+  EN_PAJT_PAY = 1001;
+  EN_PAJT_NORMAL = 1002;          // 普通类型的异步任务，比如GM加道具
+  EN_PAJT_MAIL_IMPORTANT = 2001;  // 高权重邮件（比如支付、封号通知等）
+  EN_PAJT_MAIL_SYSTEM = 2002;     // 普通系统邮件，一般是业务逻辑的邮件和带附件的好友邮件
+                                  // EN_PAJT_FRIEND_REQUEST = 3001; // 好友请求和不带附件的好友邮件
+}

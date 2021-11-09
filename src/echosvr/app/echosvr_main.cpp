@@ -1,11 +1,5 @@
-
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <iostream>
-#include <map>
-#include <sstream>
-#include <vector>
+// Copyright 2021 atframework
+// Created by owent
 
 #include <atframe/atapp.h>
 #include <common/file_system.h>
@@ -16,7 +10,15 @@
 #include <config/atframe_service_types.h>
 #include <libatgw_server_protocol.h>
 
-typedef std::map<uint64_t, uint64_t> session_gw_map_t;
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <map>
+#include <sstream>
+#include <vector>
+
+using session_gw_map_t = std::map<uint64_t, uint64_t>;
 
 struct app_command_handler_kickoff {
   atapp::app *app_;
@@ -24,17 +26,17 @@ struct app_command_handler_kickoff {
   app_command_handler_kickoff(atapp::app *app, session_gw_map_t *gw) : app_(app), gw_(gw) {}
   int operator()(util::cli::callback_param params) {
     if (params.get_params_number() <= 0) {
-      WLOGERROR("kickoff command must require session id");
+      FWLOGERROR("kickoff command must require session id");
       return 0;
     }
 
     uint64_t sess_id = params[0]->to_uint64();
     session_gw_map_t::iterator iter = gw_->find(sess_id);
     if (iter == gw_->end()) {
-      WLOGWARNING("try to kickoff 0x%llx, but session not found", static_cast<unsigned long long>(sess_id));
+      FWLOGWARNING("try to kickoff {}, but session not found", sess_id);
       return 0;
     } else {
-      WLOGINFO("kickoff 0x%llx", static_cast<unsigned long long>(sess_id));
+      FWLOGINFO("kickoff {}", sess_id);
     }
 
     ::atframe::gw::ss_msg msg;
@@ -44,8 +46,7 @@ struct app_command_handler_kickoff {
 
     std::string packed_buffer;
     if (false == msg.SerializeToString(&packed_buffer)) {
-      WLOGERROR("try to kickoff %llx with serialize failed: %s", static_cast<unsigned long long>(sess_id),
-                msg.InitializationErrorString().c_str());
+      FWLOGERROR("try to kickoff {} with serialize failed: {}", sess_id, msg.InitializationErrorString());
       return 0;
     }
 
@@ -72,18 +73,16 @@ struct app_handle_on_msg {
             // keep all data not changed and send back
             int res = app.get_bus_node()->send_data(source.id, 0, msg.data, msg.data_size);
             if (res < 0) {
-              WLOGERROR("send back post data to 0x%llx failed, res: %d", static_cast<unsigned long long>(source.id),
-                        res);
+              FWLOGERROR("send back post data to {:#x}({}) failed, res: {}", source.id, source.name, res);
             } else {
-              WLOGDEBUG("receive msg %s and send back to 0x%llx done", req_msg.body().post().content().c_str(),
-                        static_cast<unsigned long long>(source.id));
+              FWLOGDEBUG("receive msg {} and send back to {:#x}({}) done", req_msg.body().post().content(), source.id,
+                         source.name);
             }
             break;
           }
           case ::atframe::gw::ss_msg_body::kAddSession: {
-            WLOGINFO("create new session 0x%llx, address: %s:%d",
-                     static_cast<unsigned long long>(req_msg.head().session_id()),
-                     req_msg.body().add_session().client_ip().c_str(), req_msg.body().add_session().client_port());
+            FWLOGINFO("create new session {}, address: {}:{}", req_msg.head().session_id(),
+                      req_msg.body().add_session().client_ip(), req_msg.body().add_session().client_port());
 
             if (0 != req_msg.head().session_id()) {
               (*gw_)[req_msg.head().session_id()] = source.id;
@@ -91,14 +90,14 @@ struct app_handle_on_msg {
             break;
           }
           case ::atframe::gw::ss_msg_body::kRemoveSession: {
-            WLOGINFO("remove session 0x%llx", static_cast<unsigned long long>(req_msg.head().session_id()));
+            FWLOGINFO("remove session {}", req_msg.head().session_id());
 
             gw_->erase(req_msg.head().session_id());
             break;
           }
           default:
-            WLOGERROR("receive a unsupport atgateway message of invalid cmd:%d",
-                      static_cast<int>(req_msg.body().cmd_case()));
+            FWLOGERROR("receive a unsupport atgateway message of invalid cmd: {}",
+                       static_cast<int>(req_msg.body().cmd_case()));
             break;
         }
 
@@ -117,21 +116,22 @@ struct app_handle_on_msg {
 static int app_handle_on_forward_response(atapp::app &app, const atapp::app::message_sender_t &source,
                                           const atapp::app::message_t &msg, int32_t error_code) {
   if (error_code < 0) {
-    FWLOGERROR("send data from {:#x} to {:#x} failed, sequence: {}, code: {}", app.get_id(), source.id,
-               msg.msg_sequence, error_code);
+    FWLOGERROR("send data from {:#x}({}) to {:#x}({}) failed, sequence: {}, code: {}", app.get_id(), app.get_app_name(),
+               source.id, source.name, msg.message_sequence, error_code);
   } else {
-    FWLOGINFO("send data from {:#x} to {:#x} got response, sequence: {}, ", app.get_id(), source.id, msg.msg_sequence);
+    FWLOGINFO("send data from {:#x}({}) to {:#x}({}) got response, sequence: {}, ", app.get_id(), app.get_app_name(),
+              source.id, source.name, msg.message_sequence);
   }
   return 0;
 }
 
 static int app_handle_on_connected(atapp::app &, atbus::endpoint &ep, int status) {
-  WLOGINFO("app 0x%llx connected, status: %d", static_cast<unsigned long long>(ep.get_id()), status);
+  FWLOGINFO("app {:#x} connected, status: {}", ep.get_id(), status);
   return 0;
 }
 
 static int app_handle_on_disconnected(atapp::app &, atbus::endpoint &ep, int status) {
-  WLOGINFO("app 0x%llx disconnected, status: %d", static_cast<unsigned long long>(ep.get_id()), status);
+  FWLOGINFO("app {:#x} disconnected, status: {}", ep.get_id(), status);
   return 0;
 }
 
@@ -159,5 +159,5 @@ int main(int argc, char *argv[]) {
   app.set_evt_on_app_disconnected(app_handle_on_disconnected);
 
   // run
-  return app.run(uv_default_loop(), argc, (const char **)argv, NULL);
+  return app.run(uv_default_loop(), argc, (const char **)argv, nullptr);
 }

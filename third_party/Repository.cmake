@@ -30,10 +30,13 @@ else()
   include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/protobuf/protobuf.cmake")
   include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/grpc/import.cmake")
   #
-  # include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/telemetry/prometheus-cpp.cmake") if(MSVC AND MSVC_VERSION LESS 1920)
-  # message( STATUS "Opentelemetry-cpp only support Visual Studio 2019 and upper. Skip it for
-  # MSVC_VERSION=${MSVC_VERSION}") else()
-  # include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/telemetry/opentelemetry-cpp.cmake") endif()
+  # include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/telemetry/prometheus-cpp.cmake")
+  if(MSVC AND MSVC_VERSION LESS 1920)
+    message(STATUS "Opentelemetry-cpp only support Visual Studio 2019 and upper. Skip it for
+  MSVC_VERSION=${MSVC_VERSION}")
+  else()
+    include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/telemetry/opentelemetry-cpp.cmake")
+  endif()
 endif()
 
 include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/libcopp/libcopp.cmake")
@@ -41,14 +44,22 @@ include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/libcopp/libcopp.cmake")
 # =========== third_party - python_env ===========
 include("${CMAKE_CURRENT_LIST_DIR}/python_env/python_env.cmake")
 
-# =========== third_party - xres-code-generator ===========
+# =========== third_party - xres-code-generator and xresloader ===========
 include("${CMAKE_CURRENT_LIST_DIR}/xres-code-generator/xres-code-generator.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/xresloader/xresloader.cmake")
 
 # =========== set dependency variables ===========
 set(PROJECT_THIRD_PARTY_PUBLIC_LINK_NAMES
+    opentelemetry-cpp::otlp_http_exporter
+    opentelemetry-cpp::otlp_grpc_exporter
+    opentelemetry-cpp::ostream_span_exporter
+    opentelemetry-cpp::resources
+    opentelemetry-cpp::sdk
+    opentelemetry-cpp::api
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_GRPC_LINK_NAME}
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_LINK_NAME}
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_FLAT_BUFFERS_LINK_NAME}
+    ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_LIBCOPP_LINK_NAME}
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_NLOHMANN_JSON_LINK_NAME}
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_RAPIDJSON_LINK_NAME}
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_YAML_CPP_LINK_NAME}
