@@ -152,7 +152,7 @@ int task_action_router_close_manager_set::on_success() {
   }
 
   FWLOGINFO("router close task done.(success save: {}, failed save: {})", success_count_, failed_count_);
-  return get_ret_code();
+  return get_result();
 }
 
 int task_action_router_close_manager_set::on_failed() {
@@ -161,8 +161,8 @@ int task_action_router_close_manager_set::on_failed() {
   }
 
   FWLOGERROR("router close task failed.(success save: {}, failed save: {}) ret: {}", success_count_, failed_count_,
-             get_ret_code());
-  return get_ret_code();
+             get_result());
+  return get_result();
 }
 
 int task_action_router_close_manager_set::on_timeout() {

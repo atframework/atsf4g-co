@@ -31,7 +31,7 @@ bool task_action_router_update_sync::is_stream_rpc() const { return true; }
 int task_action_router_update_sync::operator()() {
   const rpc_request_type& req_body = get_request_body();
   // Stream request or stream response, just ignore auto response
-  disable_rsp_msg();
+  disable_response_message();
 
   router_manager_base* mgr = router_manager_set::me()->get_manager(req_body.object().object_type_id());
   if (nullptr == mgr) {
@@ -54,6 +54,6 @@ int task_action_router_update_sync::operator()() {
   return hello::err::EN_SUCCESS;
 }
 
-int task_action_router_update_sync::on_success() { return get_ret_code(); }
+int task_action_router_update_sync::on_success() { return get_result(); }
 
-int task_action_router_update_sync::on_failed() { return get_ret_code(); }
+int task_action_router_update_sync::on_failed() { return get_result(); }

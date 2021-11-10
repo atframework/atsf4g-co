@@ -76,7 +76,7 @@ class task_action_base : public ::cotask::impl::task_action_impl {
     user_id_ = user_id;
     zone_id_ = zone_id;
   }
-  virtual void send_rsp_msg() = 0;
+  virtual void send_response() = 0;
 
  public:
   /**
@@ -85,7 +85,7 @@ class task_action_base : public ::cotask::impl::task_action_impl {
    * @see T_APP_SUCCESS
    * @return 返回码
    */
-  inline const result_type &get_ret_code() const { return ret_code_; }
+  inline const result_type &get_result() const { return result_; }
 
   /**
    * @brief 获取回包返回码
@@ -93,7 +93,7 @@ class task_action_base : public ::cotask::impl::task_action_impl {
    * @see Polar::EN_CS_SUCCESS
    * @return 回包返回码
    */
-  inline int32_t get_rsp_code() const { return rsp_code_; }
+  inline int32_t get_response_code() const { return response_code_; }
 
   on_finished_callback_handle_t add_on_on_finished(on_finished_callback_fn_t &&fn);
   void remove_on_finished(on_finished_callback_handle_t handle);
@@ -102,11 +102,11 @@ class task_action_base : public ::cotask::impl::task_action_impl {
   /**
    * @brief 设置逻辑返回码
    * @note 用于临时存储逻辑操作错误码
-   * @param ret_code 返回码
+   * @param result 返回码
    */
   template <class TArg>
-  inline void set_ret_code(TArg &&ret_code) {
-    ret_code_ = std::forward<TArg>(ret_code);
+  inline void set_result(TArg &&result) {
+    result_ = std::forward<TArg>(result);
   }
 
   /**
@@ -114,27 +114,27 @@ class task_action_base : public ::cotask::impl::task_action_impl {
    * @note 用于临时存储回包返回码
    * @param rsp_code 回包返回码
    */
-  inline void set_rsp_code(int32_t rsp_code) { rsp_code_ = rsp_code; }
+  inline void set_response_code(int32_t rsp_code) { response_code_ = rsp_code; }
 
   /**
    * @brief 禁用结束事件响应
    */
-  inline void disable_finish_evt() { evt_disabled_ = true; }
+  inline void disable_finish_event() { event_disabled_ = true; }
 
   /**
    * @brief 开启结束事件响应
    */
-  inline void enable_finish_evt() { evt_disabled_ = false; }
+  inline void enable_finish_event() { event_disabled_ = false; }
 
   /**
    * @brief 禁用自动回包
    */
-  inline void disable_rsp_msg() { rsp_msg_disabled_ = true; }
+  inline void disable_response_message() { response_message_disabled_ = true; }
 
   /**
    * @brief 开启自动回包
    */
-  inline void enable_rsp_msg() { rsp_msg_disabled_ = false; }
+  inline void enable_response_message() { response_message_disabled_ = false; }
 
   /**
    * @brief 获取启动透传参数
@@ -163,10 +163,10 @@ class task_action_base : public ::cotask::impl::task_action_impl {
   uint64_t user_id_;
   uint32_t zone_id_;
   uint64_t task_id_;
-  result_type ret_code_;
-  int32_t rsp_code_;
-  bool rsp_msg_disabled_;
-  bool evt_disabled_;
+  result_type result_;
+  int32_t response_code_;
+  bool response_message_disabled_;
+  bool event_disabled_;
   dispatcher_start_data_t start_data_;
 
   // Additional events

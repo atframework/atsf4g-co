@@ -288,12 +288,12 @@ int task_action_player_remote_patch_jobs::on_success() {
     param_.user->send_all_syn_msg();
   }
 
-  return get_ret_code();
+  return get_result();
 }
 
 int task_action_player_remote_patch_jobs::on_failed() {
   if (param_.user) {
-    FWPLOGERROR(*param_.user, "do task_action_player_remote_patch_jobs failed, res: {}", get_ret_code());
+    FWPLOGERROR(*param_.user, "do task_action_player_remote_patch_jobs failed, res: {}", get_result());
   }
 
   // 尝试再启动一次，启动排队后的任务
@@ -323,5 +323,5 @@ int task_action_player_remote_patch_jobs::on_failed() {
     param_.user->send_all_syn_msg();
   }
 
-  return get_ret_code();
+  return get_result();
 }

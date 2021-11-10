@@ -71,6 +71,6 @@ int task_action_reload_remote_server_configure::operator()() {
   return hello::err::EN_SUCCESS;
 }
 
-int task_action_reload_remote_server_configure::on_success() { return get_ret_code(); }
+int task_action_reload_remote_server_configure::on_success() { return get_result(); }
 
-int task_action_reload_remote_server_configure::on_failed() { return get_ret_code(); }
+int task_action_reload_remote_server_configure::on_failed() { return get_result(); }

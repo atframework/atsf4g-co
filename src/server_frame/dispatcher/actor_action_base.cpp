@@ -40,12 +40,12 @@ struct actor_action_stat_guard {
     util::time::time_utility::raw_time_t end = util::time::time_utility::now();
     if (0 != action->get_user_id()) {
       FWCLOGINFO(log_categorize_t::PROTO_STAT, "{}|{}|{}us|{}|{}", action->name(), action->get_user_id(),
-                 std::chrono::duration_cast<std::chrono::microseconds>(end - start).count(), action->get_ret_code(),
-                 action->get_rsp_code());
+                 std::chrono::duration_cast<std::chrono::microseconds>(end - start).count(), action->get_result(),
+                 action->get_response_code());
     } else {
       FWCLOGINFO(log_categorize_t::PROTO_STAT, "{}|NO PLAYER|{}us|{}|{}", action->name(),
-                 std::chrono::duration_cast<std::chrono::microseconds>(end - start).count(), action->get_ret_code(),
-                 action->get_rsp_code());
+                 std::chrono::duration_cast<std::chrono::microseconds>(end - start).count(), action->get_result(),
+                 action->get_response_code());
     }
   }
 
@@ -57,21 +57,21 @@ struct actor_action_stat_guard {
 actor_action_base::actor_action_base()
     : user_id_(0),
       zone_id_(0),
-      ret_code_(0),
-      rsp_code_(0),
+      result_(0),
+      response_code_(0),
       status_(EN_AAS_CREATED),
-      rsp_msg_disabled_(false),
-      evt_disabled_(false),
+      response_message_disabled_(false),
+      event_disabled_(false),
       start_data_(dispatcher_make_default<dispatcher_start_data_t>()) {}
 
 actor_action_base::actor_action_base(rpc::context *caller_context)
     : user_id_(0),
       zone_id_(0),
-      ret_code_(0),
-      rsp_code_(0),
+      result_(0),
+      response_code_(0),
       status_(EN_AAS_CREATED),
-      rsp_msg_disabled_(false),
-      evt_disabled_(false),
+      response_message_disabled_(false),
+      event_disabled_(false),
       start_data_(dispatcher_make_default<dispatcher_start_data_t>()) {
   if (nullptr != caller_context) {
     set_caller_context(*caller_context);
@@ -81,8 +81,8 @@ actor_action_base::actor_action_base(rpc::context *caller_context)
 actor_action_base::~actor_action_base() {
   if (EN_AAS_FINISHED != status_) {
     FWLOGERROR("actor {} [{}] is created but not run", name(), reinterpret_cast<const void *>(this));
-    set_rsp_code(hello::EN_ERR_TIMEOUT);
-    set_ret_code(hello::err::EN_SYS_TIMEOUT);
+    set_response_code(hello::EN_ERR_TIMEOUT);
+    set_result(hello::err::EN_SYS_TIMEOUT);
   }
 }
 
@@ -133,15 +133,16 @@ actor_action_base::result_type actor_action_base::run(void *priv_data) {
   } else {
     FWLOGDEBUG("actor {} [{}] start to run\n", name(), reinterpret_cast<const void *>(this));
   }
-  ret_code_ = hook_run();
+  result_ = hook_run();
 
   // 响应OnSuccess(这时候任务的status还是running)
   int32_t ret = 0;
-  if (!evt_disabled_) {
-    if (rsp_code_ < 0) {
+  if (!event_disabled_) {
+    if (response_code_ < 0) {
       ret = on_failed();
       FWLOGINFO("actor {} [{}] finished success but response errorcode, rsp code: {}({})\n", name(),
-                reinterpret_cast<const void *>(this), rsp_code_, protobuf_mini_dumper_get_error_msg(rsp_code_));
+                reinterpret_cast<const void *>(this), response_code_,
+                protobuf_mini_dumper_get_error_msg(response_code_));
     } else {
       ret = on_success();
     }
@@ -152,8 +153,8 @@ actor_action_base::result_type actor_action_base::run(void *priv_data) {
     }
   }
 
-  if (!rsp_msg_disabled_) {
-    send_rsp_msg();
+  if (!response_message_disabled_) {
+    send_response();
   }
   status_ = EN_AAS_FINISHED;
 
@@ -179,7 +180,7 @@ void actor_action_base::_notify_finished() {
       trace_span->SetAttribute("user_id", get_user_id());
       trace_span->SetAttribute("zone_id", get_zone_id());
     }
-    trace_span->SetAttribute("response_code", get_rsp_code());
+    trace_span->SetAttribute("response_code", get_response_code());
   }
 
   // Callbacks

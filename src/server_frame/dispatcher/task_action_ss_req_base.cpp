@@ -73,9 +73,9 @@ task_action_ss_req_base::msg_ref_type task_action_ss_req_base::add_rsp_msg(uint6
     return empty_msg;
   }
 
-  rsp_msgs_.push_back(msg);
+  response_messages_.push_back(msg);
 
-  msg->mutable_head()->set_error_code(get_rsp_code());
+  msg->mutable_head()->set_error_code(get_response_code());
   dst_pd = 0 == dst_pd ? get_request_bus_id() : dst_pd;
 
   init_msg(*msg, dst_pd, get_request());
@@ -130,17 +130,17 @@ const atframework::RpcTraceSpan *task_action_ss_req_base::get_parent_trace_span(
   }
 }
 
-void task_action_ss_req_base::send_rsp_msg() {
-  if (rsp_msgs_.empty()) {
+void task_action_ss_req_base::send_response() {
+  if (response_messages_.empty()) {
     return;
   }
 
-  for (std::list<msg_type *>::iterator iter = rsp_msgs_.begin(); iter != rsp_msgs_.end(); ++iter) {
+  for (std::list<msg_type *>::iterator iter = response_messages_.begin(); iter != response_messages_.end(); ++iter) {
     if (0 == (*iter)->head().bus_id()) {
       FWLOGERROR("task {} [{}] send message to unknown server", name(), get_task_id());
       continue;
     }
-    (*iter)->mutable_head()->set_error_code(get_rsp_code());
+    (*iter)->mutable_head()->set_error_code(get_response_code());
 
     // send message using ss dispatcher
     int32_t res = ss_msg_dispatcher::me()->send_to_proc((*iter)->head().bus_id(), **iter);
@@ -151,7 +151,7 @@ void task_action_ss_req_base::send_rsp_msg() {
     }
   }
 
-  rsp_msgs_.clear();
+  response_messages_.clear();
 }
 
 namespace detail {
@@ -360,8 +360,8 @@ std::pair<bool, int> task_action_ss_req_base::filter_router_msg(router_manager_b
     // 如果路由转发成功或者路由转移期间待处理的消息队列添加成功
     // 需要禁用掉回包和通知事件，也不需要走逻辑处理了
     if (last_result >= 0) {
-      disable_rsp_msg();
-      disable_finish_evt();
+      disable_response_message();
+      disable_finish_event();
       break;
     }
 
@@ -388,7 +388,7 @@ std::pair<bool, int> task_action_ss_req_base::filter_router_msg(router_manager_b
   }
 
   // 失败则要回发转发失败
-  set_rsp_code(last_result);
+  set_response_code(last_result);
 
   // 如果忽略路由节点不在线,直接返回0即可
   if (hello::err::EN_ROUTER_NOT_IN_SERVER == last_result && is_router_offline_ignored()) {

@@ -43,7 +43,7 @@ int task_action_player_login::operator()() {
   msg_cref_type req = get_request();
   if (!req.has_body() || !req.body().has_mcs_login_req()) {
     FWLOGERROR("login package error, msg: {}", req.DebugString());
-    set_rsp_code(hello::EN_ERR_INVALID_PARAM);
+    set_response_code(hello::EN_ERR_INVALID_PARAM);
     return hello::err::EN_SUCCESS;
   }
 
@@ -95,28 +95,28 @@ int task_action_player_login::operator()() {
   res = rpc::db::login::get(get_shared_context(), msg_body.open_id().c_str(), zone_id, tb, version);
   if (res < 0) {
     FWLOGERROR("player {} not found", msg_body.open_id());
-    set_rsp_code(hello::EN_ERR_INVALID_PARAM);
+    set_response_code(hello::EN_ERR_INVALID_PARAM);
     return hello::err::EN_SUCCESS;
   }
 
   if (msg_body.user_id() != tb.user_id()) {
     FWLOGERROR("player {} expect user_id={}, but we got {} not found", msg_body.open_id(), tb.user_id(),
                msg_body.user_id());
-    set_rsp_code(hello::EN_ERR_LOGIN_USERID_NOT_MATCH);
+    set_response_code(hello::EN_ERR_LOGIN_USERID_NOT_MATCH);
     return hello::err::EN_SUCCESS;
   }
 
   // 2. 校验登入码
   if (util::time::time_utility::get_now() > tb.login_code_expired()) {
     FWLOGERROR("player {}({}:{}) login code expired", msg_body.open_id(), zone_id, msg_body.user_id());
-    set_rsp_code(hello::EN_ERR_LOGIN_VERIFY);
+    set_response_code(hello::EN_ERR_LOGIN_VERIFY);
     return hello::err::EN_SUCCESS;
   }
 
   if (0 != UTIL_STRFUNC_STRCMP(msg_body.login_code().c_str(), tb.login_code().c_str())) {
     FWLOGERROR("player {}({}:{}) login code error(expected: {}, real: {})", msg_body.open_id(), zone_id,
                msg_body.user_id(), tb.login_code(), msg_body.login_code());
-    set_rsp_code(hello::EN_ERR_LOGIN_VERIFY);
+    set_response_code(hello::EN_ERR_LOGIN_VERIFY);
     return hello::err::EN_SUCCESS;
   }
 
@@ -127,7 +127,7 @@ int task_action_player_login::operator()() {
   // ============ 在这之后tb不再有效 ============
 
   if (!user) {
-    set_rsp_code(hello::EN_ERR_USER_NOT_FOUND);
+    set_response_code(hello::EN_ERR_USER_NOT_FOUND);
     return hello::err::EN_SUCCESS;
   }
   set_user_key(msg_body.user_id(), zone_id);
@@ -136,7 +136,7 @@ int task_action_player_login::operator()() {
   std::shared_ptr<session> my_sess = get_session();
   if (!my_sess) {
     FWLOGERROR("session not found");
-    set_rsp_code(hello::EN_ERR_NOT_LOGIN);
+    set_response_code(hello::EN_ERR_NOT_LOGIN);
     return hello::err::EN_SUCCESS;
   }
 
@@ -149,7 +149,7 @@ int task_action_player_login::operator()() {
   // 如果不存在则是登入过程中掉线了
   if (!my_sess) {
     FWLOGERROR("session not found");
-    set_rsp_code(hello::EN_ERR_NOT_LOGIN);
+    set_response_code(hello::EN_ERR_NOT_LOGIN);
     return hello::err::EN_SYS_NOTFOUND;
   }
 
@@ -178,13 +178,13 @@ int task_action_player_login::on_success() {
   msg_cref_type req = get_request();
   if (!req.has_body() || !req.body().has_mcs_login_req()) {
     FWLOGERROR("login package error, msg: {}", req.DebugString());
-    return get_ret_code();
+    return get_result();
   }
 
   player::ptr_t user = player_manager::me()->find_as<player>(req.body().mcs_login_req().user_id(), get_zone_id());
   if (!user) {
     FWLOGERROR("login success but user not found");
-    return get_ret_code();
+    return get_result();
   }
   rsp_body->set_zone_id(user->get_zone_id());
   rsp_body->set_version_type(user->get_account_info().version_type());
@@ -197,14 +197,14 @@ int task_action_player_login::on_success() {
     FWPLOGWARNING(*user, "login success but session changed , remove old session {}:{}", s->get_key().bus_id,
                   s->get_key().session_id);
     session_manager::me()->remove(s, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
-    set_rsp_code(hello::EN_ERR_LOGIN_OTHER_DEVICE);
-    return get_ret_code();
+    set_response_code(hello::EN_ERR_LOGIN_OTHER_DEVICE);
+    return get_result();
   }
 
   if (!user->is_inited()) {
     FWLOGERROR("player %s login success but user not inited", user->get_open_id().c_str());
     player_manager::me()->remove(user, true);
-    return get_ret_code();
+    return get_result();
   }
 
   // login success and try to restore tick limit
@@ -234,7 +234,7 @@ int task_action_player_login::on_success() {
   // 加入快速保存队列，确保玩家登入成功后保存一次在线状态
   user->set_quick_save();
 
-  return get_ret_code();
+  return get_result();
 }
 
 int task_action_player_login::on_failed() {
@@ -263,7 +263,7 @@ int task_action_player_login::on_failed() {
   }
 
   FWLOGERROR("session [{},{}] login failed, rsp code: {}, ret code: {}", get_gateway_info().first,
-             get_gateway_info().second, get_rsp_code(), get_ret_code());
+             get_gateway_info().second, get_response_code(), get_result());
 
   hello::CSMsg &msg = add_rsp_msg();
 
@@ -272,8 +272,8 @@ int task_action_player_login::on_failed() {
   rsp_body->set_zone_id(0);
 
   // 手动发包并无情地踢下线
-  send_rsp_msg();
+  send_response();
 
   session_manager::me()->remove(s, ::atframe::gateway::close_reason_t::EN_CRT_FIRST_IDLE);
-  return get_ret_code();
+  return get_result();
 }

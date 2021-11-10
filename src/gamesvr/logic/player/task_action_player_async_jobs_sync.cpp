@@ -28,13 +28,13 @@ const char* task_action_player_async_jobs_sync::name() const { return "task_acti
 int task_action_player_async_jobs_sync::operator()() {
   EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
   // Stream request or stream response, just ignore auto response
-  disable_rsp_msg();
+  disable_response_message();
 
   // TODO ...
 
   return hello::err::EN_SUCCESS;
 }
 
-int task_action_player_async_jobs_sync::on_success() { return get_ret_code(); }
+int task_action_player_async_jobs_sync::on_success() { return get_result(); }
 
-int task_action_player_async_jobs_sync::on_failed() { return get_ret_code(); }
+int task_action_player_async_jobs_sync::on_failed() { return get_result(); }

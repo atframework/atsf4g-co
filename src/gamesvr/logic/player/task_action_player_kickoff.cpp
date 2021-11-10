@@ -53,14 +53,14 @@ int task_action_player_kickoff::operator()() {
     int res = rpc::db::login::get(get_shared_context(), player_open_id.c_str(), player_zone_id, *user_lg, version);
     if (res < 0) {
       FWLOGERROR("user {}({}:{}) try load login data failed.", player_open_id, player_zone_id, player_user_id);
-      set_rsp_code(hello::err::EN_DB_REPLY_ERROR);
+      set_response_code(hello::err::EN_DB_REPLY_ERROR);
       return hello::err::EN_SUCCESS;
     }
 
     if (user_lg->router_server_id() != logic_config::me()->get_local_server_id()) {
       FWLOGERROR("user {}({}:{}) login pd error(expected: 0x{:x}, real: 0x{:x})", player_open_id, player_zone_id,
                  player_user_id, logic_config::me()->get_local_server_id(), user_lg->router_server_id());
-      set_rsp_code(hello::EN_ERR_SYSTEM);
+      set_response_code(hello::EN_ERR_SYSTEM);
       return hello::err::EN_SUCCESS;
     }
 
@@ -68,17 +68,17 @@ int task_action_player_kickoff::operator()() {
     res = rpc::db::login::set(get_shared_context(), player_open_id.c_str(), player_zone_id, *user_lg, version);
     if (res < 0) {
       FWLOGERROR("user {}({}:{}) try load login data failed.", player_open_id, player_zone_id, player_user_id);
-      set_rsp_code(hello::err::EN_DB_SEND_FAILED);
+      set_response_code(hello::err::EN_DB_SEND_FAILED);
       return hello::err::EN_SUCCESS;
     }
 
     return hello::err::EN_SUCCESS;
   }
 
-  set_rsp_code(user->await_before_logout_tasks());
-  if (get_rsp_code() < 0) {
-    WPLOGERROR(*user, "kickoff failed, res: %d(%s)", get_rsp_code(),
-               protobuf_mini_dumper_get_error_msg(get_rsp_code()));
+  set_response_code(user->await_before_logout_tasks());
+  if (get_response_code() < 0) {
+    WPLOGERROR(*user, "kickoff failed, res: %d(%s)", get_response_code(),
+               protobuf_mini_dumper_get_error_msg(get_response_code()));
     return hello::err::EN_SUCCESS;
   }
 
@@ -99,13 +99,13 @@ int task_action_player_kickoff::operator()() {
 
   if (!player_manager::me()->remove(user, true)) {
     FWLOGERROR("kickoff user {}({}:{}) failed", user->get_open_id(), player_zone_id, user->get_user_id_llu());
-    set_rsp_code(hello::EN_ERR_SYSTEM);
+    set_response_code(hello::EN_ERR_SYSTEM);
     return hello::err::EN_SUCCESS;
   }
 
   return hello::err::EN_SUCCESS;
 }
 
-int task_action_player_kickoff::on_success() { return get_ret_code(); }
+int task_action_player_kickoff::on_success() { return get_result(); }
 
-int task_action_player_kickoff::on_failed() { return get_ret_code(); }
+int task_action_player_kickoff::on_failed() { return get_result(); }

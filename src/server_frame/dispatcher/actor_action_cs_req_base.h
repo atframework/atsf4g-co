@@ -32,11 +32,11 @@ class actor_action_cs_req_base : public actor_action_req_base<hello::CSMsg> {
   using base_type::get_request;
 
  public:
-  using base_type::get_ret_code;
-  using base_type::get_rsp_code;
+  using base_type::get_response_code;
+  using base_type::get_result;
   using base_type::name;
-  using base_type::set_ret_code;
-  using base_type::set_rsp_code;
+  using base_type::set_response_code;
+  using base_type::set_result;
   using base_type::operator();
 
  public:
@@ -63,11 +63,11 @@ class actor_action_cs_req_base : public actor_action_req_base<hello::CSMsg> {
   const char *get_type_name() const override;
 
  protected:
-  void send_rsp_msg() override;
-  void send_rsp_msg(bool sync_dirty);
+  void send_response() override;
+  void send_response(bool sync_dirty);
 
  private:
   mutable std::shared_ptr<session> session_inst_;
-  std::list<msg_type> rsp_msgs_;
+  std::list<msg_type> response_messages_;
   bool has_sync_dirty_;
 };

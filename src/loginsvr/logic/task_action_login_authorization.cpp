@@ -51,7 +51,7 @@ int task_action_login_authorization::operator()() {
   session::ptr_t my_sess = get_session();
   if (!my_sess) {
     FWLOGERROR("session not found");
-    set_rsp_code(hello::EN_ERR_SYSTEM);
+    set_response_code(hello::EN_ERR_SYSTEM);
     return hello::err::EN_SYS_PARAM;
   }
   // 设置登入协议ID
@@ -66,7 +66,7 @@ int task_action_login_authorization::operator()() {
   msg_cref_type req = get_request();
   if (!req.has_body() || !req.body().has_mcs_login_auth_req()) {
     FWLOGERROR("login package error, msg: {}", req.DebugString());
-    set_rsp_code(hello::EN_ERR_INVALID_PARAM);
+    set_response_code(hello::EN_ERR_INVALID_PARAM);
     return hello::err::EN_SUCCESS;
   }
 
@@ -94,7 +94,7 @@ int task_action_login_authorization::operator()() {
   //    // 检查客户端更新信息 更新不分平台值0
   //    if (update_rule_manager::me()->check_update(update_info_, account_type, channel_id, system_id, version,
   //    strategy_type_)) {
-  //        set_rsp_code(hello::EN_ERR_LOGIN_VERSION);
+  //        set_response_code(hello::EN_ERR_LOGIN_VERSION);
   //        return hello::EN_ERR_LOGIN_VERSION;
   //    }
   //} while (false);
@@ -105,7 +105,7 @@ int task_action_login_authorization::operator()() {
     auth_fn_t vfn = get_verify_fn(account_type);
     if (nullptr == vfn) {
       // 平台不收支持错误码
-      set_rsp_code(hello::EN_ERR_LOGIN_INVALID_PLAT);
+      set_response_code(hello::EN_ERR_LOGIN_INVALID_PLAT);
       FWLOGERROR("user {} report invalid account type {}", msg_body.open_id(), account_type);
       return hello::err::EN_SUCCESS;
     }
@@ -121,7 +121,7 @@ int task_action_login_authorization::operator()() {
 
     if (res < 0) {
       // 平台校验错误错误码
-      set_rsp_code(res);
+      set_response_code(res);
       return hello::err::EN_SUCCESS;
     }
   }
@@ -152,9 +152,9 @@ int task_action_login_authorization::operator()() {
     if (white_skip_openids_.end() == white_skip_openids_.find(final_open_id_)) {
       // 维护模式，直接踢下线
       // if (server_maintenance_mode) {
-      //   set_rsp_code(hello::EN_ERR_MAINTENANCE);
+      //   set_response_code(hello::EN_ERR_MAINTENANCE);
       // } else {
-      set_rsp_code(hello::EN_ERR_LOGIN_SERVER_PENDING);
+      set_response_code(hello::EN_ERR_LOGIN_SERVER_PENDING);
       // }
 
       return hello::err::EN_SUCCESS;
@@ -166,7 +166,7 @@ int task_action_login_authorization::operator()() {
     res = rpc::db::login::get(get_shared_context(), msg_body.open_id().c_str(), zone_id_, login_data_, version_);
     if (hello::err::EN_DB_RECORD_NOT_FOUND != res && res < 0) {
       FWLOGERROR("call login rpc method failed, msg: {}", msg_body.DebugString());
-      set_rsp_code(hello::EN_ERR_UNKNOWN);
+      set_response_code(hello::EN_ERR_UNKNOWN);
       return res;
     }
 
@@ -176,7 +176,7 @@ int task_action_login_authorization::operator()() {
 
     // 6. 是否禁止登入
     if (util::time::time_utility::get_now() < login_data_.ban_time()) {
-      set_rsp_code(hello::EN_ERR_LOGIN_BAN);
+      set_response_code(hello::EN_ERR_LOGIN_BAN);
       FWLOGINFO("user {} try to login but banned", msg_body.open_id());
       return hello::err::EN_SUCCESS;
     }
@@ -226,7 +226,7 @@ int task_action_login_authorization::operator()() {
 
         if (util::time::time_utility::get_now() - last_saved_time <
             logic_config::me()->get_logic().session().login_code_protect().seconds()) {
-          set_rsp_code(hello::EN_ERR_LOGIN_ALREADY_ONLINE);
+          set_response_code(hello::EN_ERR_LOGIN_ALREADY_ONLINE);
           return hello::err::EN_PLAYER_KICKOUT;
         } else {
           FWLOGWARNING("user {} send kickoff failed, but login time timeout, conitnue login.", login_data_.open_id());
@@ -239,7 +239,7 @@ int task_action_login_authorization::operator()() {
         res = rpc::db::login::get(get_shared_context(), msg_body.open_id().c_str(), zone_id_, login_data_, version_);
         if (res < 0) {
           FWLOGERROR("call login rpc method failed, msg: {}", msg_body.DebugString());
-          set_rsp_code(hello::EN_ERR_LOGIN_ALREADY_ONLINE);
+          set_response_code(hello::EN_ERR_LOGIN_ALREADY_ONLINE);
           return res;
         }
 
@@ -248,7 +248,7 @@ int task_action_login_authorization::operator()() {
         if (0 != login_data_.router_server_id() && old_svr_id != login_data_.router_server_id()) {
           FWLOGERROR("user {} logout failed.", msg_body.open_id());
           // 踢下线失败的错误码
-          set_rsp_code(hello::EN_ERR_LOGIN_ALREADY_ONLINE);
+          set_response_code(hello::EN_ERR_LOGIN_ALREADY_ONLINE);
           return hello::err::EN_PLAYER_KICKOUT;
         }
         login_data_.set_router_server_id(0);
@@ -263,7 +263,7 @@ int task_action_login_authorization::operator()() {
     int64_t player_uid = rpc::game::player::alloc_user_id(get_shared_context());
     if (player_uid <= 0) {
       FWLOGERROR("call alloc_user_id failed, openid: {}, res: {}", msg_body.open_id(), player_uid);
-      set_rsp_code(hello::EN_ERR_LOGIN_CREATE_PLAYER_FAILED);
+      set_response_code(hello::EN_ERR_LOGIN_CREATE_PLAYER_FAILED);
       return res;
     }
 
@@ -305,7 +305,7 @@ int task_action_login_authorization::operator()() {
   res = rpc::db::login::set(get_shared_context(), msg_body.open_id().c_str(), zone_id_, login_data_, version_);
   if (res < 0) {
     FWLOGERROR("save login data for {} failed, msg:\n{}", msg_body.open_id(), login_data_.DebugString());
-    set_rsp_code(hello::EN_ERR_SYSTEM);
+    set_response_code(hello::EN_ERR_SYSTEM);
     return res;
   }
 
@@ -350,11 +350,11 @@ int task_action_login_authorization::on_success() {
   }
 
   // 先发送数据，再通知踢下线
-  send_rsp_msg();
+  send_response();
 
   // 登入成功，不需要再在LoginSvr上操作了
   session_manager::me()->remove(my_sess, ::atframe::gateway::close_reason_t::EN_CRT_EOF);
-  return get_ret_code();
+  return get_result();
 }
 
 int task_action_login_authorization::on_failed() {
@@ -379,17 +379,18 @@ int task_action_login_authorization::on_failed() {
     rsp_body->mutable_update_info()->Swap(&update_info_);
   }
 
-  // if (hello::EN_ERR_LOGIN_SERVER_PENDING == get_rsp_code() || hello::EN_ERR_MAINTENANCE == get_rsp_code()) {
+  // if (hello::EN_ERR_LOGIN_SERVER_PENDING == get_response_code() || hello::EN_ERR_MAINTENANCE == get_response_code())
+  // {
   //   rsp_body->set_start_time(logic_config::me()->get_logic().server_open_time);
   // } else {
   //   FWLOGERROR("session [{:#x}, {}] login failed", get_gateway_info().first, get_gateway_info().second);
   // }
 
-  send_rsp_msg();
+  send_response();
 
   // 无情地踢下线
   session_manager::me()->remove(s, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
-  return get_ret_code();
+  return get_result();
 }
 
 int32_t task_action_login_authorization::check_proto_update(uint32_t ver_no) {

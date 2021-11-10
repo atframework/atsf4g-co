@@ -38,12 +38,12 @@ class task_action_ss_req_base : public task_action_req_base<hello::SSMsg> {
   using base_type::get_request;
 
  public:
-  using base_type::get_ret_code;
-  using base_type::get_rsp_code;
+  using base_type::get_response_code;
+  using base_type::get_result;
   using base_type::get_task_id;
   using base_type::name;
-  using base_type::set_ret_code;
-  using base_type::set_rsp_code;
+  using base_type::set_response_code;
+  using base_type::set_result;
   using base_type::operator();
 
  public:
@@ -64,14 +64,14 @@ class task_action_ss_req_base : public task_action_req_base<hello::SSMsg> {
   const atframework::RpcTraceSpan *get_parent_trace_span() const override;
 
  protected:
-  void send_rsp_msg() override;
+  void send_response() override;
 
   virtual bool is_router_offline_ignored() const;  // 忽略路由对象不在线
 
   std::pair<bool, int> filter_router_msg(router_manager_base *&mgr, std::shared_ptr<router_object_base> &obj);
 
  private:
-  std::list<msg_type *> rsp_msgs_;
+  std::list<msg_type *> response_messages_;
 };
 
 template <class TReqType, class TRspType>
@@ -88,12 +88,12 @@ class task_action_ss_rpc_base : public task_action_ss_req_base {
   using base_type::get_request;
 
  public:
-  using base_type::get_ret_code;
-  using base_type::get_rsp_code;
+  using base_type::get_response_code;
+  using base_type::get_result;
   using base_type::get_task_id;
   using base_type::name;
-  using base_type::set_ret_code;
-  using base_type::set_rsp_code;
+  using base_type::set_response_code;
+  using base_type::set_result;
   using base_type::operator();
 
  public:
@@ -140,11 +140,11 @@ class task_action_ss_rpc_base : public task_action_ss_req_base {
   virtual bool is_stream_rpc() const { return get_request().head().has_rpc_stream(); }
 
  protected:
-  void send_rsp_msg() override {
+  void send_response() override {
     if (!has_pack_response_ && !is_stream_rpc()) {
       pack_response();
     }
-    base_type::send_rsp_msg();
+    base_type::send_response();
   }
 
  private:

@@ -156,7 +156,7 @@ int task_action_auto_save_objects::on_success() {
   if (0 == success_count_ && 0 == failed_count_) {
     FWLOGWARNING("there is no need to start a auto save task when no object need save.");
   }
-  return get_ret_code();
+  return get_result();
 }
 
 int task_action_auto_save_objects::on_failed() {
@@ -165,8 +165,8 @@ int task_action_auto_save_objects::on_failed() {
   }
 
   FWLOGERROR("auto save task failed.(success save: {}, failed save: {}) ret: {}", success_count_, failed_count_,
-             get_ret_code());
-  return get_ret_code();
+             get_result());
+  return get_result();
 }
 
 int task_action_auto_save_objects::on_timeout() {

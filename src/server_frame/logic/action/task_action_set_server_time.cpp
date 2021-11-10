@@ -29,7 +29,7 @@ const char* task_action_set_server_time::name() const { return "task_action_set_
 int task_action_set_server_time::operator()() {
   EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
   // Stream request or stream response, just ignore auto response
-  disable_rsp_msg();
+  disable_response_message();
 
   ::util::time::time_utility::set_global_now_offset(std::chrono::duration_cast<std::chrono::system_clock::duration>(
       std::chrono::seconds(req_body.global_now_offset())));
@@ -45,6 +45,6 @@ int task_action_set_server_time::operator()() {
   return hello::err::EN_SUCCESS;
 }
 
-int task_action_set_server_time::on_success() { return get_ret_code(); }
+int task_action_set_server_time::on_success() { return get_result(); }
 
-int task_action_set_server_time::on_failed() { return get_ret_code(); }
+int task_action_set_server_time::on_failed() { return get_result(); }

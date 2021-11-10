@@ -43,18 +43,18 @@ int task_action_router_transfer::operator()() {
   // 如果本地版本号更高就不用远程拉取了
   if (obj && obj->get_router_version() >= req_body.object().router_version()) {
     if (logic_config::me()->get_local_server_id() != obj->get_router_server_id()) {
-      set_rsp_code(hello::err::EN_ROUTER_IN_OTHER_SERVER);
+      set_response_code(hello::err::EN_ROUTER_IN_OTHER_SERVER);
     }
 
     return hello::err::EN_SUCCESS;
   }
 
   int res = mgr->mutable_object(obj, key, nullptr);
-  set_rsp_code(res);
+  set_response_code(res);
 
   return hello::err::EN_SUCCESS;
 }
 
-int task_action_router_transfer::on_success() { return get_ret_code(); }
+int task_action_router_transfer::on_success() { return get_result(); }
 
-int task_action_router_transfer::on_failed() { return get_ret_code(); }
+int task_action_router_transfer::on_failed() { return get_result(); }

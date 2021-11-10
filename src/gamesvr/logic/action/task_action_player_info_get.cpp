@@ -30,14 +30,14 @@ int task_action_player_info_get::operator()() {
   player::ptr_t user = get_player<player>();
   if (!user) {
     WLOGERROR("not logined.");
-    set_rsp_code(hello::EN_ERR_LOGIN_NOT_LOGINED);
+    set_response_code(hello::EN_ERR_LOGIN_NOT_LOGINED);
     return 0;
   }
 
   msg_cref_type req_msg = get_request();
   if (!req_msg.has_body() || !req_msg.body().has_mcs_player_getinfo_req()) {
     WLOGERROR("parameter error");
-    set_rsp_code(hello::EN_ERR_INVALID_PARAM);
+    set_response_code(hello::EN_ERR_INVALID_PARAM);
     return hello::err::EN_SYS_PARAM;
   }
 
@@ -91,11 +91,11 @@ int task_action_player_info_get::operator()() {
   return hello::err::EN_SUCCESS;
 }
 
-int task_action_player_info_get::on_success() { return get_ret_code(); }
+int task_action_player_info_get::on_success() { return get_result(); }
 
 int task_action_player_info_get::on_failed() {
   get_rsp();
-  return get_ret_code();
+  return get_result();
 }
 
 hello::CSMsg &task_action_player_info_get::get_rsp() {

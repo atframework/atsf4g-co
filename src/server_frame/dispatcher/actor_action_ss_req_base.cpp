@@ -33,10 +33,10 @@ uint64_t actor_action_ss_req_base::get_request_bus_id() const {
 }
 
 actor_action_ss_req_base::msg_ref_type actor_action_ss_req_base::add_rsp_msg(uint64_t dst_pd) {
-  rsp_msgs_.push_back(msg_type());
-  msg_ref_type msg = rsp_msgs_.back();
+  response_messages_.push_back(msg_type());
+  msg_ref_type msg = response_messages_.back();
 
-  msg.mutable_head()->set_error_code(get_rsp_code());
+  msg.mutable_head()->set_error_code(get_response_code());
   dst_pd = 0 == dst_pd ? get_request_bus_id() : dst_pd;
 
   init_msg(msg, dst_pd, get_request());
@@ -78,17 +78,17 @@ int32_t actor_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd, ms
   return 0;
 }
 
-void actor_action_ss_req_base::send_rsp_msg() {
-  if (rsp_msgs_.empty()) {
+void actor_action_ss_req_base::send_response() {
+  if (response_messages_.empty()) {
     return;
   }
 
-  for (std::list<msg_type>::iterator iter = rsp_msgs_.begin(); iter != rsp_msgs_.end(); ++iter) {
+  for (std::list<msg_type>::iterator iter = response_messages_.begin(); iter != response_messages_.end(); ++iter) {
     if (0 == (*iter).head().bus_id()) {
       FWLOGERROR("actor {} [{}] send message to unknown server", name(), (const void *)this);
       continue;
     }
-    (*iter).mutable_head()->set_error_code(get_rsp_code());
+    (*iter).mutable_head()->set_error_code(get_response_code());
 
     // send message using ss dispatcher
     int32_t res = ss_msg_dispatcher::me()->send_to_proc((*iter).head().bus_id(), *iter);
@@ -98,7 +98,7 @@ void actor_action_ss_req_base::send_rsp_msg() {
     }
   }
 
-  rsp_msgs_.clear();
+  response_messages_.clear();
 }
 
 std::shared_ptr<dispatcher_implement> actor_action_ss_req_base::get_dispatcher() const {

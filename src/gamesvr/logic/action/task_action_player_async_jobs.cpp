@@ -81,13 +81,13 @@ int task_action_player_async_jobs::on_success() {
     param_.user->set_quick_save();
   }
 
-  return get_ret_code();
+  return get_result();
 }
 
 int task_action_player_async_jobs::on_failed() {
   if (param_.user) {
-    FWPLOGERROR(*param_.user, "do task_action_player_async_jobs failed, res: {}", get_ret_code());
+    FWPLOGERROR(*param_.user, "do task_action_player_async_jobs failed, res: {}", get_result());
   }
 
-  return get_ret_code();
+  return get_result();
 }

@@ -57,20 +57,20 @@ std::shared_ptr<player_cache> actor_action_cs_req_base::get_player_cache() const
 }
 
 actor_action_cs_req_base::msg_ref_type actor_action_cs_req_base::add_rsp_msg() {
-  rsp_msgs_.push_back(msg_type());
-  return rsp_msgs_.back();
+  response_messages_.push_back(msg_type());
+  return response_messages_.back();
 }
 
-std::list<actor_action_cs_req_base::msg_type> &actor_action_cs_req_base::get_rsp_list() { return rsp_msgs_; }
+std::list<actor_action_cs_req_base::msg_type> &actor_action_cs_req_base::get_rsp_list() { return response_messages_; }
 
 const std::list<actor_action_cs_req_base::msg_type> &actor_action_cs_req_base::get_rsp_list() const {
-  return rsp_msgs_;
+  return response_messages_;
 }
 
-void actor_action_cs_req_base::send_rsp_msg() { send_rsp_msg(!has_sync_dirty_); }
+void actor_action_cs_req_base::send_response() { send_response(!has_sync_dirty_); }
 
-void actor_action_cs_req_base::send_rsp_msg(bool sync_dirty) {
-  if (rsp_msgs_.empty() && !sync_dirty) {
+void actor_action_cs_req_base::send_response(bool sync_dirty) {
+  if (response_messages_.empty() && !sync_dirty) {
     return;
   }
 
@@ -88,7 +88,7 @@ void actor_action_cs_req_base::send_rsp_msg(bool sync_dirty) {
     has_sync_dirty_ = true;
 
     // refresh visit time if success
-    if (0 == get_rsp_code()) {
+    if (0 == get_response_code()) {
       router_player_manager::ptr_t router_cache = router_player_manager::me()->get_cache(router_player_manager::key_t(
           router_player_manager::me()->get_type_id(), owner_player->get_zone_id(), owner_player->get_user_id()));
       if (router_cache && router_cache->is_object_equal(owner_player)) {
@@ -98,7 +98,7 @@ void actor_action_cs_req_base::send_rsp_msg(bool sync_dirty) {
     }
   }
 
-  if (rsp_msgs_.empty()) {
+  if (response_messages_.empty()) {
     return;
   }
 
@@ -116,8 +116,8 @@ void actor_action_cs_req_base::send_rsp_msg(bool sync_dirty) {
     }
   }
 
-  for (std::list<msg_type>::iterator iter = rsp_msgs_.begin(); iter != rsp_msgs_.end(); ++iter) {
-    (*iter).mutable_head()->set_error_code(get_rsp_code());
+  for (std::list<msg_type>::iterator iter = response_messages_.begin(); iter != response_messages_.end(); ++iter) {
+    (*iter).mutable_head()->set_error_code(get_response_code());
     (*iter).mutable_head()->set_timestamp(util::time::time_utility::get_now());
     (*iter).mutable_head()->set_client_sequence(seq);
     (*iter).mutable_head()->set_op_type(op_type);
@@ -136,7 +136,7 @@ void actor_action_cs_req_base::send_rsp_msg(bool sync_dirty) {
     }
   }
 
-  rsp_msgs_.clear();
+  response_messages_.clear();
 }
 
 std::shared_ptr<dispatcher_implement> actor_action_cs_req_base::get_dispatcher() const {

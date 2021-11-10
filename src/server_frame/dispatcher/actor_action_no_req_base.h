@@ -18,11 +18,11 @@ class actor_action_no_req_base : public actor_action_base {
   };
 
  public:
-  using base_type::get_ret_code;
-  using base_type::get_rsp_code;
+  using base_type::get_response_code;
+  using base_type::get_result;
   using base_type::name;
-  using base_type::set_ret_code;
-  using base_type::set_rsp_code;
+  using base_type::set_response_code;
+  using base_type::set_result;
   using base_type::operator();
 
  public:
@@ -34,5 +34,5 @@ class actor_action_no_req_base : public actor_action_base {
   const char *get_type_name() const override;
 
  protected:
-  void send_rsp_msg() override;
+  void send_response() override;
 };

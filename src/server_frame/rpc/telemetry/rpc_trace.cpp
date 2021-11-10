@@ -33,7 +33,7 @@ trace_option::trace_option()
       kind(atframework::RpcTraceSpan::SPAN_KIND_INTERNAL),
       is_remote(true) {}
 
-tracer::tracer() : return_code_(0), trace_span_(nullptr) {}
+tracer::tracer() : result_(0), trace_span_(nullptr) {}
 
 tracer::~tracer() {
   if (trace_span_) {
@@ -93,7 +93,7 @@ bool tracer::start(string_view name, trace_option &&options, const span_ptr_type
 }
 
 int tracer::return_code(int ret) {
-  return_code_ = ret;
+  result_ = ret;
   if (trace_span_) {
     if (ret < 0) {
       trace_span_->SetStatus(::opentelemetry::trace::StatusCode::kError, protobuf_mini_dumper_get_error_msg(ret));

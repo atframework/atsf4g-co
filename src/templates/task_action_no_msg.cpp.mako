@@ -34,6 +34,6 @@ int ${task_class_name}::operator()() {
   return hello::err::EN_SUCCESS;
 }
 
-int ${task_class_name}::on_success() { return get_ret_code(); }
+int ${task_class_name}::on_success() { return get_result(); }
 
-int ${task_class_name}::on_failed() { return get_ret_code(); }
+int ${task_class_name}::on_failed() { return get_result(); }

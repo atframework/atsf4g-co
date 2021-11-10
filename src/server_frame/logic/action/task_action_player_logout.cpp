@@ -46,17 +46,17 @@ int task_action_player_logout::operator()() {
     if (user) {
       set_user_key(user->get_user_id(), user->get_zone_id());
 
-      set_rsp_code(user->await_before_logout_tasks());
-      if (get_rsp_code() < 0) {
-        FWPLOGERROR(*user, "kickoff failed, res: {}({})", get_rsp_code(),
-                    protobuf_mini_dumper_get_error_msg(get_rsp_code()));
+      set_response_code(user->await_before_logout_tasks());
+      if (get_response_code() < 0) {
+        FWPLOGERROR(*user, "kickoff failed, res: {}({})", get_response_code(),
+                    protobuf_mini_dumper_get_error_msg(get_response_code()));
 
         session_manager::me()->remove(s);
         return hello::err::EN_SUCCESS;
       }
 
       if (user->is_writable() && user->get_session() == s && !player_manager::me()->remove(user, false)) {
-        set_rsp_code(hello::err::EN_SYS_PARAM);
+        set_response_code(hello::err::EN_SYS_PARAM);
         FWPLOGERROR(*user, "logout failed, res: {}({})", static_cast<int>(hello::err::EN_SYS_PARAM),
                     protobuf_mini_dumper_get_error_msg(hello::err::EN_SYS_PARAM));
       }
@@ -67,6 +67,6 @@ int task_action_player_logout::operator()() {
   return hello::err::EN_SUCCESS;
 }
 
-int task_action_player_logout::on_success() { return get_ret_code(); }
+int task_action_player_logout::on_success() { return get_result(); }
 
-int task_action_player_logout::on_failed() { return get_ret_code(); }
+int task_action_player_logout::on_failed() { return get_result(); }

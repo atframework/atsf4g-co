@@ -1,6 +1,8 @@
+// Copyright 2021 atframework
+// Created by owent on 2016/9/26.
 //
-// Created by owt50 on 2016/9/26.
-//
+
+#include "dispatcher/task_action_no_req_base.h"
 
 #include <rpc/db/uuid.h>
 #include <rpc/rpc_utils.h>
@@ -12,8 +14,6 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
-#include "task_action_no_req_base.h"
-
 task_action_no_req_base::ctor_param_t::ctor_param_t() : caller_context(nullptr) {}
 
 task_action_no_req_base::task_action_no_req_base() {}
@@ -22,7 +22,7 @@ task_action_no_req_base::task_action_no_req_base(const ctor_param_t& param) : ta
 
 task_action_no_req_base::~task_action_no_req_base() {}
 
-void task_action_no_req_base::send_rsp_msg() {}
+void task_action_no_req_base::send_response() {}
 
 std::shared_ptr<dispatcher_implement> task_action_no_req_base::get_dispatcher() const { return nullptr; }
 

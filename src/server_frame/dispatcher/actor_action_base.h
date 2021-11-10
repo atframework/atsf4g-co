@@ -50,7 +50,7 @@ class actor_action_base {
     user_id_ = user_id;
     zone_id_ = zone_id;
   }
-  virtual void send_rsp_msg() = 0;
+  virtual void send_response() = 0;
 
  public:
   /**
@@ -59,7 +59,7 @@ class actor_action_base {
    * @see T_APP_SUCCESS
    * @return 返回码
    */
-  inline const result_type &get_ret_code() const { return ret_code_; }
+  inline const result_type &get_result() const { return result_; }
 
   /**
    * @brief 获取回包返回码
@@ -67,7 +67,7 @@ class actor_action_base {
    * @see Polar::EN_CS_SUCCESS
    * @return 回包返回码
    */
-  inline int32_t get_rsp_code() const { return rsp_code_; }
+  inline int32_t get_response_code() const { return response_code_; }
 
   /**
    * @brief 返回当前状态
@@ -82,8 +82,8 @@ class actor_action_base {
    * @param ret_code 返回码
    */
   template <class TArg>
-  inline void set_ret_code(TArg &&ret_code) {
-    ret_code_ = std::forward<TArg>(ret_code);
+  inline void set_result(TArg &&ret_code) {
+    result_ = std::forward<TArg>(ret_code);
   }
 
   /**
@@ -91,27 +91,27 @@ class actor_action_base {
    * @note 用于临时存储回包返回码
    * @param rsp_code 回包返回码
    */
-  inline void set_rsp_code(int32_t rsp_code) { rsp_code_ = rsp_code; }
+  inline void set_response_code(int32_t rsp_code) { response_code_ = rsp_code; }
 
   /**
    * @brief 禁用结束事件响应
    */
-  inline void disable_finish_evt() { evt_disabled_ = true; }
+  inline void disable_finish_event() { event_disabled_ = true; }
 
   /**
    * @brief 开启结束事件响应
    */
-  inline void enable_finish_evt() { evt_disabled_ = false; }
+  inline void enable_finish_event() { event_disabled_ = false; }
 
   /**
    * @brief 禁用自动回包
    */
-  inline void disable_rsp_msg() { rsp_msg_disabled_ = true; }
+  inline void disable_response_message() { response_message_disabled_ = true; }
 
   /**
    * @brief 开启自动回包
    */
-  inline void enable_rsp_msg() { rsp_msg_disabled_ = false; }
+  inline void enable_response_message() { response_message_disabled_ = false; }
 
   /**
    * @brief 获取启动透传参数
@@ -145,11 +145,11 @@ class actor_action_base {
  private:
   uint64_t user_id_;
   uint32_t zone_id_;
-  result_type ret_code_;
-  int32_t rsp_code_;
+  result_type result_;
+  int32_t response_code_;
   status_t status_;
-  bool rsp_msg_disabled_;
-  bool evt_disabled_;
+  bool response_message_disabled_;
+  bool event_disabled_;
 
   dispatcher_start_data_t start_data_;
 

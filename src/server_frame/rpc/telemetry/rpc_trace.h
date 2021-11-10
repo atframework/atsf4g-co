@@ -59,7 +59,7 @@ class tracer {
 
  private:
   friend class context;
-  int32_t return_code_;
+  int32_t result_;
   span_ptr_type trace_span_;
   std::shared_ptr<dispatcher_implement> dispatcher_;
 };

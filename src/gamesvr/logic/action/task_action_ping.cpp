@@ -33,7 +33,7 @@ int task_action_ping::operator()() {
   player::ptr_t user = get_player<player>();
   if (!user) {
     WLOGERROR("not logined.");
-    set_rsp_code(hello::EN_ERR_LOGIN_NOT_LOGINED);
+    set_response_code(hello::EN_ERR_LOGIN_NOT_LOGINED);
     return 0;
   }
 
@@ -48,7 +48,7 @@ int task_action_ping::operator()() {
   if (user->get_heartbeat_data().continue_error_times >= logic_config::me()->get_logic().heartbeat().error_times()) {
     // 封号一段时间
 
-    set_rsp_code(hello::EN_ERR_LOGIN_BAN);
+    set_response_code(hello::EN_ERR_LOGIN_BAN);
     int kick_off_reason = hello::EN_CRT_LOGIN_BAN;
     hello::table_login tb;
     do {
@@ -80,10 +80,10 @@ int task_action_ping::operator()() {
         tb.set_ban_time(static_cast<uint32_t>(util::time::time_utility::get_now() +
                                               logic_config::me()->get_logic().session().login_ban_time().seconds()));
         kick_off_reason = hello::EN_CRT_LOGIN_BAN;
-        set_rsp_code(hello::EN_ERR_LOGIN_BAN);
+        set_response_code(hello::EN_ERR_LOGIN_BAN);
       } else {
         kick_off_reason = hello::EN_CRT_SPEED_WARNING;
-        set_rsp_code(hello::EN_ERR_LOGIN_SPEED_WARNING);
+        set_response_code(hello::EN_ERR_LOGIN_SPEED_WARNING);
       }
       // 保存封号结果
       res = rpc::db::login::set(get_shared_context(), user->get_open_id().c_str(), user->get_zone_id(), tb, login_ver);
@@ -99,7 +99,7 @@ int task_action_ping::operator()() {
     // 游戏速度异常，强制踢出，这时候也可能是某些手机切到后台再切回来会加速运行，这时候强制断开走登入流程，防止高频发包
 
     // 先发包
-    send_rsp_msg();
+    send_response();
 
     session::ptr_t sess = user->get_session();
     if (sess) {
@@ -112,6 +112,6 @@ int task_action_ping::operator()() {
   return hello::err::EN_SUCCESS;
 }
 
-int task_action_ping::on_success() { return get_ret_code(); }
+int task_action_ping::on_success() { return get_result(); }
 
-int task_action_ping::on_failed() { return get_ret_code(); }
+int task_action_ping::on_failed() { return get_result(); }

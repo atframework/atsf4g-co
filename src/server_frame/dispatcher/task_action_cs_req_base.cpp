@@ -4,6 +4,7 @@
 
 #include "dispatcher/task_action_cs_req_base.h"
 
+#include <gsl/select-gsl.h>
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
@@ -26,7 +27,8 @@
 #include <memory>
 #include <utility>
 
-task_action_cs_req_base::task_action_cs_req_base(dispatcher_start_data_t &&start_param) : has_sync_dirty_(false) {
+task_action_cs_req_base::task_action_cs_req_base(dispatcher_start_data_t &&start_param)
+    : has_sync_dirty_(false), recursive_sync_dirty_(false) {
   // 必须先设置共享的arena
   if (nullptr != start_param.context) {
     get_shared_context().set_parent_context(*start_param.context);
@@ -139,23 +141,23 @@ task_action_cs_req_base::msg_ref_type task_action_cs_req_base::add_rsp_msg() {
     return empty_msg;
   }
 
-  rsp_msgs_.push_back(msg);
+  response_messages_.push_back(msg);
   return *msg;
 }
 
-std::list<task_action_cs_req_base::msg_type *> &task_action_cs_req_base::get_rsp_list() { return rsp_msgs_; }
+std::list<task_action_cs_req_base::msg_type *> &task_action_cs_req_base::get_rsp_list() { return response_messages_; }
 
 const std::list<task_action_cs_req_base::msg_type *> &task_action_cs_req_base::get_rsp_list() const {
-  return rsp_msgs_;
+  return response_messages_;
 }
 
-void task_action_cs_req_base::send_rsp_msg() {
+void task_action_cs_req_base::send_response() {
   if (!has_sync_dirty_) {
-    send_rsp_msg(true);
+    send_response(true);
     return;
   }
 
-  if (rsp_msgs_.empty()) {
+  if (response_messages_.empty()) {
     return;
   }
 
@@ -180,8 +182,8 @@ void task_action_cs_req_base::send_rsp_msg() {
     }
   }
 
-  for (std::list<msg_type *>::iterator iter = rsp_msgs_.begin(); iter != rsp_msgs_.end(); ++iter) {
-    (*iter)->mutable_head()->set_error_code(get_rsp_code());
+  for (std::list<msg_type *>::iterator iter = response_messages_.begin(); iter != response_messages_.end(); ++iter) {
+    (*iter)->mutable_head()->set_error_code(get_response_code());
     (*iter)->mutable_head()->set_timestamp(util::time::time_utility::get_now());
     (*iter)->mutable_head()->set_client_sequence(seq);
     if ((*iter)->head().op_type() == hello::EN_MSG_OP_TYPE_MIXUP) {
@@ -201,14 +203,21 @@ void task_action_cs_req_base::send_rsp_msg() {
     }
   }
 
-  rsp_msgs_.clear();
+  response_messages_.clear();
 }
 
-void task_action_cs_req_base::send_rsp_msg(bool sync_dirty) {
+void task_action_cs_req_base::send_response(bool sync_dirty) {
+  if (recursive_sync_dirty_) {
+    return;
+  }
+  recursive_sync_dirty_ = true;
+  gsl::final_action recursive_sync_dirty_guard([this] { recursive_sync_dirty_ = false; });
+
   do {
     if (has_sync_dirty_ || !sync_dirty) {
       break;
     }
+    has_sync_dirty_ = true;
 
     player_cache::ptr_t owner_player = get_player_cache();
     if (!owner_player) {
@@ -216,11 +225,10 @@ void task_action_cs_req_base::send_rsp_msg(bool sync_dirty) {
       break;
     }
 
-    has_sync_dirty_ = true;
     owner_player->send_all_syn_msg();
 
     // refresh visit time if success
-    if (0 == get_rsp_code()) {
+    if (0 == get_response_code()) {
       router_player_manager::ptr_t router_cache = router_player_manager::me()->get_cache(router_player_manager::key_t(
           router_player_manager::me()->get_type_id(), owner_player->get_zone_id(), owner_player->get_user_id()));
       if (router_cache && router_cache->is_object_equal(owner_player)) {
@@ -229,5 +237,5 @@ void task_action_cs_req_base::send_rsp_msg(bool sync_dirty) {
     }
   } while (false);
 
-  send_rsp_msg();
+  send_response();
 }

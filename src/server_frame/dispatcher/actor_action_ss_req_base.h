@@ -28,11 +28,11 @@ class actor_action_ss_req_base : public actor_action_req_base<hello::SSMsg> {
   using base_type::get_request;
 
  public:
-  using base_type::get_ret_code;
-  using base_type::get_rsp_code;
+  using base_type::get_response_code;
+  using base_type::get_result;
   using base_type::name;
-  using base_type::set_ret_code;
-  using base_type::set_rsp_code;
+  using base_type::set_response_code;
+  using base_type::set_result;
   using base_type::operator();
 
  public:
@@ -51,8 +51,8 @@ class actor_action_ss_req_base : public actor_action_req_base<hello::SSMsg> {
   const atframework::RpcTraceSpan* get_parent_trace_span() const override;
 
  protected:
-  void send_rsp_msg() override;
+  void send_response() override;
 
  private:
-  std::list<msg_type> rsp_msgs_;
+  std::list<msg_type> response_messages_;
 };

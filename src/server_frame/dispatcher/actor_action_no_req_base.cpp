@@ -22,7 +22,7 @@ actor_action_no_req_base::actor_action_no_req_base(const ctor_param_t& param)
 
 actor_action_no_req_base::~actor_action_no_req_base() {}
 
-void actor_action_no_req_base::send_rsp_msg() {}
+void actor_action_no_req_base::send_response() {}
 
 std::shared_ptr<dispatcher_implement> actor_action_no_req_base::get_dispatcher() const { return nullptr; }
 

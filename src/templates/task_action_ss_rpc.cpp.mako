@@ -36,12 +36,12 @@ int ${task_class_name}::operator()() {
   EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
 % if rpc.is_request_stream() or rpc.is_response_stream():
   // Stream request or stream response, just ignore auto response
-  disable_rsp_msg();
+  disable_response_message();
 % else:
   EXPLICIT_UNUSED_ATTR rpc_response_type& rsp_body = get_response_body();
 %   if rpc.get_extension_field('rpc_options', lambda x: x.allow_no_wait, False):
   if (is_stream_rpc()) {
-    disable_rsp_msg();
+    disable_response_message();
   }
 %   endif
 % endif
@@ -51,9 +51,9 @@ int ${task_class_name}::operator()() {
   return ${project_namespace}::err::EN_SUCCESS;
 }
 
-int ${task_class_name}::on_success() { return get_ret_code(); }
+int ${task_class_name}::on_success() { return get_result(); }
 
-int ${task_class_name}::on_failed() { return get_ret_code(); }
+int ${task_class_name}::on_failed() { return get_result(); }
 
 % if rpc.get_extension_field('rpc_options', lambda x: x.router_rpc, False) and rpc.get_extension_field('rpc_options', lambda x: x.router_ignore_offline, False):
 bool ${task_class_name}::is_router_offline_ignored() const { return true; }
