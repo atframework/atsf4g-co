@@ -7,8 +7,8 @@ execute_process(
     "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/config" --proto_path "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include" --proto_path
     "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include" --proto_path "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include" --proto_path
     "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}" --proto_path
-    "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/extensions/v3" --proto_path
     "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension" -o "${CMAKE_CURRENT_BINARY_DIR}/config-test.pb"
+    # Protocol buffer files
     ${PROTO_DESC_LIST_CONFIG} "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/pb_header_v3.proto"
     "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/extensions/v3/xresloader.proto"
     "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/extensions/v3/xresloader_ue.proto"

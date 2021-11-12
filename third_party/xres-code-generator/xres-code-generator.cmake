@@ -1,4 +1,4 @@
-# =========== 3rdparty xres-code-generator ==================
+# =========== third_party xres-code-generator ==================
 set(PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_VERSION "main")
 set(PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR
     "${PROJECT_THIRD_PARTY_PACKAGE_DIR}/xres-code-generator-${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_VERSION}")

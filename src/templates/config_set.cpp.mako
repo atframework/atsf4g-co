@@ -50,7 +50,7 @@ pb_msg_class_name = loader.get_cpp_class_name()
 
 #include "lock/lock_holder.h"
 
-#include "config_manager.h"
+#include "config/excel/config_manager.h"
 
 #ifndef UTIL_STRFUNC_SNPRINTF
 // @see https://github.com/atframework/atframe_utils/blob/master/include/common/string_oprs.h

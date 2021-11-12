@@ -211,7 +211,7 @@ void task_action_cs_req_base::send_response(bool sync_dirty) {
     return;
   }
   recursive_sync_dirty_ = true;
-  gsl::final_action recursive_sync_dirty_guard([this] { recursive_sync_dirty_ = false; });
+  auto recursive_sync_dirty_guard = gsl::finally([this]() { recursive_sync_dirty_ = false; });
 
   do {
     if (has_sync_dirty_ || !sync_dirty) {

@@ -48,6 +48,15 @@ foreach(PROTO_GENARATED_SRC "pb_header_v3" "xrescode_extensions_v3")
        "${PROJECT_SERVER_FRAME_PROTO_RELATIVE_DIR}/${PROTO_GENARATED_SRC}.pb.cc")
 endforeach()
 
+file(MAKE_DIRECTORY "${PROJECT_SERVER_FRAME_PROTO_RELATIVE_DIR}/extensions/v3")
+unset(PROJECT_SERVER_FRAME_PROTO_GENARATED_EXTENSIONS_V3_SRCS)
+foreach(PROTO_GENARATED_SRC "xresloader" "xresloader_ue")
+  list(APPEND PROJECT_SERVER_FRAME_PROTO_GENARATED_EXTENSIONS_V3_SRCS
+       "${PROJECT_SERVER_FRAME_PROTO_GENERATED_CONFIG_DIR}/extensions/v3/${PROTO_GENARATED_SRC}.pb.h"
+       "${PROJECT_SERVER_FRAME_PROTO_GENERATED_CONFIG_DIR}/extensions/v3/${PROTO_GENARATED_SRC}.pb.cc")
+  list(APPEND PROJECT_SERVER_FRAME_PROTO_SRCS "${PROJECT_SERVER_FRAME_PROTO_RELATIVE_DIR}/extensions/v3/${PROTO_GENARATED_SRC}.pb.h"
+       "${PROJECT_SERVER_FRAME_PROTO_RELATIVE_DIR}/extensions/v3/${PROTO_GENARATED_SRC}.pb.cc")
+endforeach()
 add_custom_command(
   OUTPUT ${PROJECT_SERVER_FRAME_PROTO_SRCS} "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb"
   COMMAND
@@ -56,21 +65,31 @@ add_custom_command(
     "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include" --proto_path "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include" --proto_path
     "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}" --proto_path
     "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension" --cpp_out
-    "${PROJECT_SERVER_FRAME_PROTO_GENERATED_CONFIG_DIR}" ${PROTO_DESC_LIST_CONFIG}
+    "${PROJECT_SERVER_FRAME_PROTO_GENERATED_CONFIG_DIR}"
+    # Protocol buffer files
+    ${PROTO_DESC_LIST_CONFIG}
     "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/pb_header_v3.proto"
+    "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/extensions/v3/xresloader.proto"
+    "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/extensions/v3/xresloader_ue.proto"
     "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension/xrescode_extensions_v3.proto"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${PROJECT_SERVER_FRAME_PROTO_GENARATED_SRCS}
           "${PROJECT_SERVER_FRAME_PROTO_RELATIVE_DIR}"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${PROJECT_SERVER_FRAME_PROTO_GENARATED_EXTENSIONS_V3_SRCS}
+          "${PROJECT_SERVER_FRAME_PROTO_RELATIVE_DIR}/extensions/v3/"
   COMMAND
     "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" --proto_path
     "${PROJECT_SERVER_FRAME_PROTO_RELATIVE_DIR}" --proto_path "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include" --proto_path
     "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include" --proto_path "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include" --proto_path
     "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}" --proto_path
     "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension" -o "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb"
+    # Protocol buffer files
     ${PROTO_DESC_LIST_CONFIG} "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/pb_header_v3.proto"
+    "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/extensions/v3/xresloader.proto"
+    "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/extensions/v3/xresloader_ue.proto"
     "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension/xrescode_extensions_v3.proto"
     "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include/atframe/atapp_conf.proto"
     "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include/libatbus_protocol.proto"
+    "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/any.proto"
     "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/duration.proto"
     "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/timestamp.proto"
     "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/descriptor.proto"
@@ -86,7 +105,7 @@ project_build_tools_optimize_sources(${PROJECT_SERVER_FRAME_PROTO_SRCS})
 
 # ============= Convert excel =============
 find_package(Java REQUIRED COMPONENTS Runtime)
-file(GLOB PROJECT_RESOURCE_EXCEL_FILES "${PROJECT_SOURCE_DIR}/resource/excel/*.xlsx")
+file(GLOB PROJECT_RESOURCE_EXCEL_FILES "${PROJECT_THIRD_PARTY_XRESLOADER_EXCEL_DIR}/*.xlsx")
 configure_file("${PROJECT_SOURCE_DIR}/resource/excel_xml/xresconv.xml.in" "${CMAKE_CURRENT_BINARY_DIR}/xresconv.xml"
                ESCAPE_QUOTES @ONLY)
 
@@ -96,13 +115,14 @@ if (Java_JAVA_EXECUTABLE)
 endif()
 list(APPEND PROJECT_RESOURCE_EXCEL_COMMAND_ARGS "${CMAKE_CURRENT_BINARY_DIR}/xresconv.xml")
 add_custom_command(
-  OUTPUT "${PROJECT_INSTALL_RES_DIR}/excel/const.bytes"
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/resource-config.log"
   COMMAND ${PROJECT_RESOURCE_EXCEL_COMMAND_ARGS}
+  COMMAND "${CMAKE_COMMAND}" "-E" "touch" "${CMAKE_CURRENT_BINARY_DIR}/resource-config.log"
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   DEPENDS "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb" ${PROJECT_RESOURCE_EXCEL_FILES}
   COMMENT "Generate excel resources [@${CMAKE_CURRENT_BINARY_DIR}]")
 
-add_custom_target(resource-config ALL DEPENDS "${PROJECT_INSTALL_RES_DIR}/excel/const.bytes")
+add_custom_target(resource-config ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/resource-config.log")
 
 # ============= network protocols =============
 unset(PROJECT_SERVER_FRAME_PROTO_FILES)
@@ -131,14 +151,18 @@ add_custom_command(
     "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" --proto_path
     "${PROJECT_SERVER_FRAME_PROTO_RELATIVE_DIR}" --proto_path "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include" --proto_path
     "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include" --proto_path "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include" --cpp_out
-    "${PROJECT_SERVER_FRAME_PROTO_GENERATED_PBDESC_DIR}" ${PROTO_DESC_LIST_PBDESC}
+    "${PROJECT_SERVER_FRAME_PROTO_GENERATED_PBDESC_DIR}"
+    # Protocol buffer files
+    ${PROTO_DESC_LIST_PBDESC}
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${PROJECT_SERVER_FRAME_PROTO_GENARATED_SRCS}
           "${PROJECT_SERVER_FRAME_PROTO_RELATIVE_DIR}"
   COMMAND
     "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" --proto_path
     "${PROJECT_SERVER_FRAME_PROTO_RELATIVE_DIR}" --proto_path "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include" --proto_path
     "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include" --proto_path "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include" -o
-    "${PROJECT_INSTALL_RES_PBD_DIR}/network.pb" ${PROTO_DESC_LIST_PBDESC}
+    "${PROJECT_INSTALL_RES_PBD_DIR}/network.pb"
+    # Protocol buffer files
+    ${PROTO_DESC_LIST_PBDESC}
     "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include/atframe/atapp_conf.proto"
     "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include/libatbus_protocol.proto"
     "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/duration.proto"

@@ -52,11 +52,11 @@ struct config_group_t {
 
 class config_manager {
 public:
-  typedef std::function<bool(std::string&, const char* path)> read_buffer_func_t;
-  typedef std::function<bool(std::string&)> read_version_func_t;
-  typedef std::shared_ptr<config_group_t> config_group_ptr_t;
-  typedef std::function<void(config_group_ptr_t)> on_load_func_t;
-  typedef std::function<bool(org::xresloader::pb::xresloader_datablocks&, const ::google::protobuf::Descriptor*, const std::string&)> on_filter_func_t;
+  using read_buffer_func_t = std::function<bool(std::string&, const char* path)>;
+  using read_version_func_t = std::function<bool(std::string&)>;
+  using config_group_ptr_t = std::shared_ptr<config_group_t>;
+  using on_load_func_t = std::function<void(config_group_ptr_t)>;
+  using on_filter_func_t = std::function<bool(org::xresloader::pb::xresloader_datablocks&, const ::google::protobuf::Descriptor*, const std::string&)>;
 
   struct on_not_found_event_data_t {
     const std::list<org::xresloader::pb::xresloader_data_source>* data_source;
@@ -66,7 +66,7 @@ public:
     bool is_list;
     size_t list_index;
   };
-  typedef std::function<void(const on_not_found_event_data_t&)> on_not_found_func_t;
+  using on_not_found_func_t = std::function<void(const on_not_found_event_data_t&)>;
 
   struct log_level_t {
     enum type {
@@ -89,7 +89,7 @@ public:
     log_caller_info_t(log_level_t::type lid, const char *lname, const char *fpath, uint32_t lnum, const char *fnname);
   };
 
-  typedef std::function<void(const log_caller_info_t& caller, const char* content)> on_log_func_t;
+  using on_log_func_t = std::function<void(const log_caller_info_t& caller, const char* content)>;
 
 private:
   config_manager();

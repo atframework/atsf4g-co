@@ -13,7 +13,7 @@
     <proto_file desc="协议描述文件，-f选项">@PROJECT_INSTALL_RES_PBD_DIR@/config.pb</proto_file>
 
     <output_dir desc="输出目录，-o选项">@PROJECT_INSTALL_RES_DIR@/excel</output_dir>
-    <data_src_dir desc="数据源目录，-d选项">@PROJECT_SOURCE_DIR@/resource/excel</data_src_dir>
+    <data_src_dir desc="数据源目录，-d选项">@PROJECT_THIRD_PARTY_XRESLOADER_EXCEL_DIR@</data_src_dir>
     <!--<data_version desc="数据版本号，留空则自动生成">1.0.0.0</data_version>-->
 
     <java_option desc="java选项-最大内存限制2GB">-Xmx2048m</java_option>

@@ -117,11 +117,11 @@ config_manager::~config_manager() {
 }
 
 std::shared_ptr<config_manager> config_manager::me() {
-  static std::shared_ptr<config_manager> ret;
   if (is_destroyed_) {
     return std::shared_ptr<config_manager>();
   }
 
+  static std::shared_ptr<config_manager> ret;
   if (ret) {
     return ret;
   }

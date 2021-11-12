@@ -1,5 +1,13 @@
 syntax = "proto3";
 
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "extensions/v3/xresloader.proto";
+import "extensions/v3/xresloader_ue.proto";
 import "xrescode_extensions_v3.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
@@ -15,11 +23,6 @@ enum game_const_config {
   EN_GCC_LEVEL_LIMIT = 999;               // 最大等级限制
   EN_GCC_ACTIVATION_CODE_PERMANENT = 64;  // 永久生效的激活码最大批次
   EN_GCC_START_PLAYER_ID = 10000;         // start id for alloc player id
-}
-
-message excel_const_config_item {
-  string key = 1;
-  string value = 2;
 }
 
 message excel_const_config {

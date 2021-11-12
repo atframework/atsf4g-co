@@ -33,9 +33,9 @@ ${loader.get_cpp_namespace_decl_begin()}
 
 class ${loader.get_cpp_class_name()} {
  public:
-  typedef const ${loader.get_pb_inner_class_name()} item_type;
-  typedef ${loader.get_pb_inner_class_name()} proto_type;
-  typedef std::shared_ptr<item_type> item_ptr_type;
+  using item_type = const ${loader.get_pb_inner_class_name()};
+  using proto_type = ${loader.get_pb_inner_class_name()};
+  using item_ptr_type = std::shared_ptr<item_type>;
 
  public:
   ${loader.get_cpp_class_name()}();
@@ -64,20 +64,20 @@ class ${loader.get_cpp_class_name()} {
   // ------------------------- index: ${code_index.name} -------------------------
  public:
 % if code_index.is_list():
-  typedef std::vector<item_ptr_type> ${code_index.name}_value_type;
+  using ${code_index.name}_value_type = std::vector<item_ptr_type>;
   const ${code_index.name}_value_type* get_list_by_${code_index.name}(${code_index.get_key_decl()});
   item_ptr_type get_by_${code_index.name}(${code_index.get_key_decl()}, size_t index);
  private:
   const ${code_index.name}_value_type* _get_list_by_${code_index.name}(${code_index.get_key_decl()});
  public:
 % else:
-  typedef item_ptr_type ${code_index.name}_value_type;
+  using ${code_index.name}_value_type = item_ptr_type;
   ${code_index.name}_value_type get_by_${code_index.name}(${code_index.get_key_decl()});
 % endif
 % if code_index.is_vector():
-  typedef std::vector<${code_index.name}_value_type> ${code_index.name}_container_type;
+  using ${code_index.name}_container_type = std::vector<${code_index.name}_value_type>;
 % else:
-  typedef std::map<std::tuple<${code_index.get_key_type_list()}>, ${code_index.name}_value_type> ${code_index.name}_container_type;
+  using ${code_index.name}_container_type = std::map<std::tuple<${code_index.get_key_type_list()}>, ${code_index.name}_value_type>;
 % endif
   const ${code_index.name}_container_type& get_all_of_${code_index.name}() const;
 
