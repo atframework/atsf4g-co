@@ -12,12 +12,6 @@ result_clazz_name = service.get_name_lower_rule() + '_result_t'
 
 #pragma once
 
-
-#include <cstddef>
-#include <stdint.h>
-#include <cstring>
-#include <string>
-
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/svr.protocol.pb.h>
@@ -25,6 +19,11 @@ result_clazz_name = service.get_name_lower_rule() + '_result_t'
 #include <config/compiler/protobuf_suffix.h>
 
 #include <libcopp/future/poller.h>
+
+#include <cstddef>
+#include <stdint.h>
+#include <cstring>
+#include <string>
 
 namespace rpc {
 class context;

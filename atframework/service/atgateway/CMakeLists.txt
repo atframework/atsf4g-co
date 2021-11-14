@@ -37,6 +37,7 @@ add_custom_command(
     "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" --proto_path "${CMAKE_CURRENT_LIST_DIR}/protocols"
     "--cpp_out=${CMAKE_CURRENT_LIST_DIR}/protocols" "${CMAKE_CURRENT_LIST_DIR}/protocols/libatgw_server_protocol.proto"
   DEPENDS "${CMAKE_CURRENT_LIST_DIR}/protocols/libatgw_server_protocol.proto"
+          "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}"
   COMMENT "Generate libatgw_server_protocol.pb.h, libatgw_server_protocol.pb.cc")
 
 add_custom_command(
@@ -48,6 +49,7 @@ add_custom_command(
     --proto_path "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include" --proto_path "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include"
     "--cpp_out=${CMAKE_CURRENT_LIST_DIR}/protocols" "${CMAKE_CURRENT_LIST_DIR}/protocols/libatgw_server_config.proto"
   DEPENDS "${CMAKE_CURRENT_LIST_DIR}/protocols/libatgw_server_config.proto"
+          "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}"
   COMMENT "Generate libatgw_server_config.pb.h, libatgw_server_config.pb.cc")
 
 project_build_tools_patch_protobuf_sources("${CMAKE_CURRENT_LIST_DIR}/protocols/libatgw_server_config.pb.h"

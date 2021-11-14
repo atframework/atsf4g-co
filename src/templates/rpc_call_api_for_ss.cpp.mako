@@ -8,6 +8,8 @@ result_clazz_name = service.get_name_lower_rule() + '_result_t'
 %>// Copyright ${time.strftime("%Y", time.localtime()) } atframework
 // @brief Created by ${generator} for ${service.get_full_name()}, please don't edit it
 
+#include "${service.get_name_lower_rule()}.h"
+
 #include <log/log_wrapper.h>
 
 #include <config/compiler/protobuf_prefix.h>
@@ -32,8 +34,6 @@ result_clazz_name = service.get_name_lower_rule() + '_result_t'
 #include <utility/protobuf_mini_dumper.h>
 
 #include <rpc/rpc_utils.h>
-
-#include "${service.get_name_lower_rule()}.h"
 
 namespace rpc {
 <%
@@ -63,7 +63,7 @@ for rpc in rpcs.values():
             rpc_common_codes_enable_stream_header = True
         if not rpc_is_stream_mode:
             rpc_common_codes_enable_request_header = True
-%>    namespace details {
+%>namespace details {
 % if rpc_common_codes_enable_common:
 template<class TBodyType>
 static inline int __pack_rpc_body(TBodyType &req_body, std::string *output, const char *rpc_full_name,

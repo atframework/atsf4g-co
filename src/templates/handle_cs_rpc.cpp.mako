@@ -2,12 +2,13 @@
 <%!
 import time
 import os
+import re
 %><%
 module_name = service.get_extension_field("service_options", lambda x: x.module_name, service.get_name_lower_rule())
 %>// Copyright ${time.strftime("%Y", time.localtime()) } atframework
 // @brief Created by ${generator} for ${service.get_full_name()}, please don't edit it
 
-#include "handle_ss_rpc_${service.get_name_lower_rule()}.h"
+#include "handle_cs_rpc_${service.get_name_lower_rule()}.h"
 
 #include <config/compiler/protobuf_prefix.h>
 
@@ -15,7 +16,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 
 #include <config/compiler/protobuf_suffix.h>
 
-#include <dispatcher/ss_msg_dispatcher.h>
+#include <dispatcher/cs_msg_dispatcher.h>
 
 % for rpc in rpcs.values():
 %   if rpc_include_prefix and os.path.dirname(rpc_include_prefix) != '.':
@@ -32,7 +33,7 @@ ${ns}
 int register_handles_for_${service.get_name_lower_rule()}() {
   int ret = 0;
 % for rpc in rpcs.values():
-  REG_TASK_RPC_HANDLE(ss_msg_dispatcher, ret, task_action_${rpc.get_name()}, ${service.get_cpp_class_name()}::descriptor(), "${rpc.get_full_name()}");
+  REG_TASK_RPC_HANDLE(cs_msg_dispatcher, ret, task_action_${rpc.get_name()}, ${service.get_cpp_class_name()}::descriptor(), "${rpc.get_full_name()}");
 % endfor
   return ret;
 }

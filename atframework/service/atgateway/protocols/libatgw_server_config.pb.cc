@@ -107,7 +107,7 @@ static ::PROTOBUF_NAMESPACE_ID::Metadata file_level_metadata_libatgw_5fserver_5f
 static constexpr ::PROTOBUF_NAMESPACE_ID::EnumDescriptor const** file_level_enum_descriptors_libatgw_5fserver_5fconfig_2eproto = nullptr;
 static constexpr ::PROTOBUF_NAMESPACE_ID::ServiceDescriptor const** file_level_service_descriptors_libatgw_5fserver_5fconfig_2eproto = nullptr;
 
-const ::PROTOBUF_NAMESPACE_ID::uint32 TableStruct_libatgw_5fserver_5fconfig_2eproto::offsets[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) = {
+const uint32_t TableStruct_libatgw_5fserver_5fconfig_2eproto::offsets[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) = {
   ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::atframe::gw::atgateway_listen_cfg, _internal_metadata_),
   ~0u,  // no _extensions_
@@ -259,6 +259,9 @@ atgateway_listen_cfg::atgateway_listen_cfg(const atgateway_listen_cfg& from)
       address_(from.address_) {
   _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
   type_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    type_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   if (!from._internal_type().empty()) {
     type_.Set(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, from._internal_type(), 
       GetArenaForAllocation());
@@ -269,8 +272,11 @@ atgateway_listen_cfg::atgateway_listen_cfg(const atgateway_listen_cfg& from)
   // @@protoc_insertion_point(copy_constructor:atframe.gw.atgateway_listen_cfg)
 }
 
-void atgateway_listen_cfg::SharedCtor() {
+inline void atgateway_listen_cfg::SharedCtor() {
 type_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  type_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
 ::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
     reinterpret_cast<char*>(&max_client_) - reinterpret_cast<char*>(this)),
     0, static_cast<size_t>(reinterpret_cast<char*>(&backlog_) -
@@ -301,7 +307,7 @@ void atgateway_listen_cfg::SetCachedSize(int size) const {
 
 void atgateway_listen_cfg::Clear() {
 // @@protoc_insertion_point(message_clear_start:atframe.gw.atgateway_listen_cfg)
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
@@ -316,12 +322,12 @@ void atgateway_listen_cfg::Clear() {
 const char* atgateway_listen_cfg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
 #define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
   while (!ctx->Done(&ptr)) {
-    ::PROTOBUF_NAMESPACE_ID::uint32 tag;
+    uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
       // repeated string address = 1;
       case 1:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 10)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
           do {
             ptr += 1;
@@ -336,7 +342,7 @@ const char* atgateway_listen_cfg::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         continue;
       // string type = 2;
       case 2:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 18)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           auto str = _internal_mutable_type();
           ptr = ::PROTOBUF_NAMESPACE_ID::internal::InlineGreedyStringParser(str, ptr, ctx);
           CHK_(::PROTOBUF_NAMESPACE_ID::internal::VerifyUTF8(str, "atframe.gw.atgateway_listen_cfg.type"));
@@ -346,7 +352,7 @@ const char* atgateway_listen_cfg::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         continue;
       // uint64 max_client = 3 [(.atapp.protocol.CONFIGURE) = {
       case 3:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 24)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           max_client_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -354,8 +360,8 @@ const char* atgateway_listen_cfg::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         continue;
       // int32 backlog = 4 [(.atapp.protocol.CONFIGURE) = {
       case 4:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 32)) {
-          backlog_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
+          backlog_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
           CHK_(ptr);
         } else
           goto handle_unusual;
@@ -383,10 +389,10 @@ failure:
 #undef CHK_
 }
 
-::PROTOBUF_NAMESPACE_ID::uint8* atgateway_listen_cfg::_InternalSerialize(
-    ::PROTOBUF_NAMESPACE_ID::uint8* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+uint8_t* atgateway_listen_cfg::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
   // @@protoc_insertion_point(serialize_to_array_start:atframe.gw.atgateway_listen_cfg)
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
   // repeated string address = 1;
@@ -433,7 +439,7 @@ size_t atgateway_listen_cfg::ByteSizeLong() const {
 // @@protoc_insertion_point(message_byte_size_start:atframe.gw.atgateway_listen_cfg)
   size_t total_size = 0;
 
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
@@ -481,7 +487,7 @@ void atgateway_listen_cfg::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
 void atgateway_listen_cfg::MergeFrom(const atgateway_listen_cfg& from) {
 // @@protoc_insertion_point(class_specific_merge_from_start:atframe.gw.atgateway_listen_cfg)
   GOOGLE_DCHECK_NE(&from, this);
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
   address_.MergeFrom(from.address_);
@@ -557,7 +563,7 @@ atgateway_client_limit_cfg::atgateway_client_limit_cfg(const atgateway_client_li
   // @@protoc_insertion_point(copy_constructor:atframe.gw.atgateway_client_limit_cfg)
 }
 
-void atgateway_client_limit_cfg::SharedCtor() {
+inline void atgateway_client_limit_cfg::SharedCtor() {
 ::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
     reinterpret_cast<char*>(&total_send_bytes_) - reinterpret_cast<char*>(this)),
     0, static_cast<size_t>(reinterpret_cast<char*>(&minute_recv_times_) -
@@ -587,7 +593,7 @@ void atgateway_client_limit_cfg::SetCachedSize(int size) const {
 
 void atgateway_client_limit_cfg::Clear() {
 // @@protoc_insertion_point(message_clear_start:atframe.gw.atgateway_client_limit_cfg)
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
@@ -600,12 +606,12 @@ void atgateway_client_limit_cfg::Clear() {
 const char* atgateway_client_limit_cfg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
 #define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
   while (!ctx->Done(&ptr)) {
-    ::PROTOBUF_NAMESPACE_ID::uint32 tag;
+    uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
       // uint64 total_send_bytes = 1 [(.atapp.protocol.CONFIGURE) = {
       case 1:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 8)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           total_send_bytes_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -613,7 +619,7 @@ const char* atgateway_client_limit_cfg::_InternalParse(const char* ptr, ::PROTOB
         continue;
       // uint64 total_recv_bytes = 2 [(.atapp.protocol.CONFIGURE) = {
       case 2:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 16)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           total_recv_bytes_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -621,7 +627,7 @@ const char* atgateway_client_limit_cfg::_InternalParse(const char* ptr, ::PROTOB
         continue;
       // uint64 hour_send_bytes = 3 [(.atapp.protocol.CONFIGURE) = {
       case 3:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 24)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           hour_send_bytes_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -629,7 +635,7 @@ const char* atgateway_client_limit_cfg::_InternalParse(const char* ptr, ::PROTOB
         continue;
       // uint64 hour_recv_bytes = 4 [(.atapp.protocol.CONFIGURE) = {
       case 4:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 32)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
           hour_recv_bytes_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -637,7 +643,7 @@ const char* atgateway_client_limit_cfg::_InternalParse(const char* ptr, ::PROTOB
         continue;
       // uint64 minute_send_bytes = 5 [(.atapp.protocol.CONFIGURE) = {
       case 5:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 40)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 40)) {
           minute_send_bytes_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -645,7 +651,7 @@ const char* atgateway_client_limit_cfg::_InternalParse(const char* ptr, ::PROTOB
         continue;
       // uint64 minute_recv_bytes = 6 [(.atapp.protocol.CONFIGURE) = {
       case 6:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 48)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 48)) {
           minute_recv_bytes_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -653,7 +659,7 @@ const char* atgateway_client_limit_cfg::_InternalParse(const char* ptr, ::PROTOB
         continue;
       // uint64 total_send_times = 7;
       case 7:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 56)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 56)) {
           total_send_times_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -661,7 +667,7 @@ const char* atgateway_client_limit_cfg::_InternalParse(const char* ptr, ::PROTOB
         continue;
       // uint64 total_recv_times = 8;
       case 8:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 64)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 64)) {
           total_recv_times_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -669,7 +675,7 @@ const char* atgateway_client_limit_cfg::_InternalParse(const char* ptr, ::PROTOB
         continue;
       // uint64 hour_send_times = 9;
       case 9:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 72)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 72)) {
           hour_send_times_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -677,7 +683,7 @@ const char* atgateway_client_limit_cfg::_InternalParse(const char* ptr, ::PROTOB
         continue;
       // uint64 hour_recv_times = 10;
       case 10:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 80)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 80)) {
           hour_recv_times_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -685,7 +691,7 @@ const char* atgateway_client_limit_cfg::_InternalParse(const char* ptr, ::PROTOB
         continue;
       // uint64 minute_send_times = 11;
       case 11:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 88)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 88)) {
           minute_send_times_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -693,7 +699,7 @@ const char* atgateway_client_limit_cfg::_InternalParse(const char* ptr, ::PROTOB
         continue;
       // uint64 minute_recv_times = 12;
       case 12:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 96)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 96)) {
           minute_recv_times_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -722,10 +728,10 @@ failure:
 #undef CHK_
 }
 
-::PROTOBUF_NAMESPACE_ID::uint8* atgateway_client_limit_cfg::_InternalSerialize(
-    ::PROTOBUF_NAMESPACE_ID::uint8* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+uint8_t* atgateway_client_limit_cfg::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
   // @@protoc_insertion_point(serialize_to_array_start:atframe.gw.atgateway_client_limit_cfg)
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
   // uint64 total_send_bytes = 1 [(.atapp.protocol.CONFIGURE) = {
@@ -812,7 +818,7 @@ size_t atgateway_client_limit_cfg::ByteSizeLong() const {
 // @@protoc_insertion_point(message_byte_size_start:atframe.gw.atgateway_client_limit_cfg)
   size_t total_size = 0;
 
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
@@ -895,7 +901,7 @@ void atgateway_client_limit_cfg::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
 void atgateway_client_limit_cfg::MergeFrom(const atgateway_client_limit_cfg& from) {
 // @@protoc_insertion_point(class_specific_merge_from_start:atframe.gw.atgateway_client_limit_cfg)
   GOOGLE_DCHECK_NE(&from, this);
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
   if (from._internal_total_send_bytes() != 0) {
@@ -995,16 +1001,25 @@ atgateway_client_crypt_cfg::atgateway_client_crypt_cfg(const atgateway_client_cr
   : ::PROTOBUF_NAMESPACE_ID::Message() {
   _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
   key_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    key_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   if (!from._internal_key().empty()) {
     key_.Set(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, from._internal_key(), 
       GetArenaForAllocation());
   }
   type_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    type_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   if (!from._internal_type().empty()) {
     type_.Set(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, from._internal_type(), 
       GetArenaForAllocation());
   }
   dhparam_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    dhparam_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   if (!from._internal_dhparam().empty()) {
     dhparam_.Set(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, from._internal_dhparam(), 
       GetArenaForAllocation());
@@ -1017,10 +1032,19 @@ atgateway_client_crypt_cfg::atgateway_client_crypt_cfg(const atgateway_client_cr
   // @@protoc_insertion_point(copy_constructor:atframe.gw.atgateway_client_crypt_cfg)
 }
 
-void atgateway_client_crypt_cfg::SharedCtor() {
+inline void atgateway_client_crypt_cfg::SharedCtor() {
 key_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  key_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
 type_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  type_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
 dhparam_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  dhparam_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
 update_interval_ = nullptr;
 }
 
@@ -1051,7 +1075,7 @@ void atgateway_client_crypt_cfg::SetCachedSize(int size) const {
 
 void atgateway_client_crypt_cfg::Clear() {
 // @@protoc_insertion_point(message_clear_start:atframe.gw.atgateway_client_crypt_cfg)
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
@@ -1068,12 +1092,12 @@ void atgateway_client_crypt_cfg::Clear() {
 const char* atgateway_client_crypt_cfg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
 #define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
   while (!ctx->Done(&ptr)) {
-    ::PROTOBUF_NAMESPACE_ID::uint32 tag;
+    uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
       // string key = 1;
       case 1:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 10)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           auto str = _internal_mutable_key();
           ptr = ::PROTOBUF_NAMESPACE_ID::internal::InlineGreedyStringParser(str, ptr, ctx);
           CHK_(::PROTOBUF_NAMESPACE_ID::internal::VerifyUTF8(str, "atframe.gw.atgateway_client_crypt_cfg.key"));
@@ -1083,7 +1107,7 @@ const char* atgateway_client_crypt_cfg::_InternalParse(const char* ptr, ::PROTOB
         continue;
       // .google.protobuf.Duration update_interval = 2 [(.atapp.protocol.CONFIGURE) = {
       case 2:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 18)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_update_interval(), ptr);
           CHK_(ptr);
         } else
@@ -1091,7 +1115,7 @@ const char* atgateway_client_crypt_cfg::_InternalParse(const char* ptr, ::PROTOB
         continue;
       // string type = 3;
       case 3:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 26)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           auto str = _internal_mutable_type();
           ptr = ::PROTOBUF_NAMESPACE_ID::internal::InlineGreedyStringParser(str, ptr, ctx);
           CHK_(::PROTOBUF_NAMESPACE_ID::internal::VerifyUTF8(str, "atframe.gw.atgateway_client_crypt_cfg.type"));
@@ -1101,7 +1125,7 @@ const char* atgateway_client_crypt_cfg::_InternalParse(const char* ptr, ::PROTOB
         continue;
       // string dhparam = 4;
       case 4:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 34)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           auto str = _internal_mutable_dhparam();
           ptr = ::PROTOBUF_NAMESPACE_ID::internal::InlineGreedyStringParser(str, ptr, ctx);
           CHK_(::PROTOBUF_NAMESPACE_ID::internal::VerifyUTF8(str, "atframe.gw.atgateway_client_crypt_cfg.dhparam"));
@@ -1132,10 +1156,10 @@ failure:
 #undef CHK_
 }
 
-::PROTOBUF_NAMESPACE_ID::uint8* atgateway_client_crypt_cfg::_InternalSerialize(
-    ::PROTOBUF_NAMESPACE_ID::uint8* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+uint8_t* atgateway_client_crypt_cfg::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
   // @@protoc_insertion_point(serialize_to_array_start:atframe.gw.atgateway_client_crypt_cfg)
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
   // string key = 1;
@@ -1188,7 +1212,7 @@ size_t atgateway_client_crypt_cfg::ByteSizeLong() const {
 // @@protoc_insertion_point(message_byte_size_start:atframe.gw.atgateway_client_crypt_cfg)
   size_t total_size = 0;
 
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
@@ -1239,7 +1263,7 @@ void atgateway_client_crypt_cfg::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
 void atgateway_client_crypt_cfg::MergeFrom(const atgateway_client_crypt_cfg& from) {
 // @@protoc_insertion_point(class_specific_merge_from_start:atframe.gw.atgateway_client_crypt_cfg)
   GOOGLE_DCHECK_NE(&from, this);
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
   if (!from._internal_key().empty()) {
@@ -1373,7 +1397,7 @@ atgateway_client_cfg::atgateway_client_cfg(const atgateway_client_cfg& from)
   // @@protoc_insertion_point(copy_constructor:atframe.gw.atgateway_client_cfg)
 }
 
-void atgateway_client_cfg::SharedCtor() {
+inline void atgateway_client_cfg::SharedCtor() {
 ::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
     reinterpret_cast<char*>(&reconnect_timeout_) - reinterpret_cast<char*>(this)),
     0, static_cast<size_t>(reinterpret_cast<char*>(&default_router_) -
@@ -1407,7 +1431,7 @@ void atgateway_client_cfg::SetCachedSize(int size) const {
 
 void atgateway_client_cfg::Clear() {
 // @@protoc_insertion_point(message_clear_start:atframe.gw.atgateway_client_cfg)
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
@@ -1436,12 +1460,12 @@ void atgateway_client_cfg::Clear() {
 const char* atgateway_client_cfg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
 #define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
   while (!ctx->Done(&ptr)) {
-    ::PROTOBUF_NAMESPACE_ID::uint32 tag;
+    uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
       // .google.protobuf.Duration reconnect_timeout = 1 [(.atapp.protocol.CONFIGURE) = {
       case 1:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 10)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_reconnect_timeout(), ptr);
           CHK_(ptr);
         } else
@@ -1449,7 +1473,7 @@ const char* atgateway_client_cfg::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         continue;
       // .google.protobuf.Duration first_idle_timeout = 2 [(.atapp.protocol.CONFIGURE) = {
       case 2:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 18)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_first_idle_timeout(), ptr);
           CHK_(ptr);
         } else
@@ -1457,7 +1481,7 @@ const char* atgateway_client_cfg::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         continue;
       // uint64 send_buffer_size = 3 [(.atapp.protocol.CONFIGURE) = {
       case 3:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 24)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           send_buffer_size_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -1465,7 +1489,7 @@ const char* atgateway_client_cfg::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         continue;
       // uint64 default_router = 4;
       case 4:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 32)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
           default_router_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -1473,7 +1497,7 @@ const char* atgateway_client_cfg::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         continue;
       // .atframe.gw.atgateway_client_limit_cfg limit = 5;
       case 5:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 42)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
           ptr = ctx->ParseMessage(_internal_mutable_limit(), ptr);
           CHK_(ptr);
         } else
@@ -1481,7 +1505,7 @@ const char* atgateway_client_cfg::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         continue;
       // .atframe.gw.atgateway_client_crypt_cfg crypt = 6;
       case 6:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 50)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 50)) {
           ptr = ctx->ParseMessage(_internal_mutable_crypt(), ptr);
           CHK_(ptr);
         } else
@@ -1510,10 +1534,10 @@ failure:
 #undef CHK_
 }
 
-::PROTOBUF_NAMESPACE_ID::uint8* atgateway_client_cfg::_InternalSerialize(
-    ::PROTOBUF_NAMESPACE_ID::uint8* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+uint8_t* atgateway_client_cfg::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
   // @@protoc_insertion_point(serialize_to_array_start:atframe.gw.atgateway_client_cfg)
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
   // .google.protobuf.Duration reconnect_timeout = 1 [(.atapp.protocol.CONFIGURE) = {
@@ -1572,7 +1596,7 @@ size_t atgateway_client_cfg::ByteSizeLong() const {
 // @@protoc_insertion_point(message_byte_size_start:atframe.gw.atgateway_client_cfg)
   size_t total_size = 0;
 
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
@@ -1633,7 +1657,7 @@ void atgateway_client_cfg::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
 void atgateway_client_cfg::MergeFrom(const atgateway_client_cfg& from) {
 // @@protoc_insertion_point(class_specific_merge_from_start:atframe.gw.atgateway_client_cfg)
   GOOGLE_DCHECK_NE(&from, this);
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
   if (from._internal_has_reconnect_timeout()) {
@@ -1726,7 +1750,7 @@ atgateway_cfg::atgateway_cfg(const atgateway_cfg& from)
   // @@protoc_insertion_point(copy_constructor:atframe.gw.atgateway_cfg)
 }
 
-void atgateway_cfg::SharedCtor() {
+inline void atgateway_cfg::SharedCtor() {
 ::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
     reinterpret_cast<char*>(&listen_) - reinterpret_cast<char*>(this)),
     0, static_cast<size_t>(reinterpret_cast<char*>(&client_) -
@@ -1758,7 +1782,7 @@ void atgateway_cfg::SetCachedSize(int size) const {
 
 void atgateway_cfg::Clear() {
 // @@protoc_insertion_point(message_clear_start:atframe.gw.atgateway_cfg)
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
@@ -1776,12 +1800,12 @@ void atgateway_cfg::Clear() {
 const char* atgateway_cfg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
 #define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
   while (!ctx->Done(&ptr)) {
-    ::PROTOBUF_NAMESPACE_ID::uint32 tag;
+    uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
       // .atframe.gw.atgateway_listen_cfg listen = 1;
       case 1:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 10)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_listen(), ptr);
           CHK_(ptr);
         } else
@@ -1789,7 +1813,7 @@ const char* atgateway_cfg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_
         continue;
       // .atframe.gw.atgateway_client_cfg client = 2;
       case 2:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<::PROTOBUF_NAMESPACE_ID::uint8>(tag) == 18)) {
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_client(), ptr);
           CHK_(ptr);
         } else
@@ -1818,10 +1842,10 @@ failure:
 #undef CHK_
 }
 
-::PROTOBUF_NAMESPACE_ID::uint8* atgateway_cfg::_InternalSerialize(
-    ::PROTOBUF_NAMESPACE_ID::uint8* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+uint8_t* atgateway_cfg::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
   // @@protoc_insertion_point(serialize_to_array_start:atframe.gw.atgateway_cfg)
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
   // .atframe.gw.atgateway_listen_cfg listen = 1;
@@ -1852,7 +1876,7 @@ size_t atgateway_cfg::ByteSizeLong() const {
 // @@protoc_insertion_point(message_byte_size_start:atframe.gw.atgateway_cfg)
   size_t total_size = 0;
 
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
@@ -1889,7 +1913,7 @@ void atgateway_cfg::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
 void atgateway_cfg::MergeFrom(const atgateway_cfg& from) {
 // @@protoc_insertion_point(class_specific_merge_from_start:atframe.gw.atgateway_cfg)
   GOOGLE_DCHECK_NE(&from, this);
-  ::PROTOBUF_NAMESPACE_ID::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
   if (from._internal_has_listen()) {

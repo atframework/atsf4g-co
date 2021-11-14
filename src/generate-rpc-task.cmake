@@ -22,7 +22,28 @@ generate_for_pb_add_ss_service(
   PROJECT_NAMESPACE
   "hello")
 
+# add tool to binding loginsvr rpcs
+generate_for_pb_add_cs_service(
+  "hello.LoginsvrClientService"
+  "${CMAKE_CURRENT_LIST_DIR}/loginsvr"
+  TASK_PATH_PREFIX
+  "logic"
+  HANDLE_PATH_PREFIX
+  "app"
+  PROJECT_NAMESPACE
+  "hello")
+
 # add tool to binding gamesvr rpcs
+generate_for_pb_add_cs_service(
+  "hello.GamesvrClientService"
+  "${CMAKE_CURRENT_LIST_DIR}/gamesvr"
+  TASK_PATH_PREFIX
+  "logic"
+  HANDLE_PATH_PREFIX
+  "app"
+  PROJECT_NAMESPACE
+  "hello")
+
 generate_for_pb_add_ss_service(
   "hello.GamesvrService"
   "${CMAKE_CURRENT_LIST_DIR}/gamesvr"

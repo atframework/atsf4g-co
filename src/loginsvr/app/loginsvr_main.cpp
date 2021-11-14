@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "app/handle_cs_msg.h"
+#include "app/handle_cs_rpc_loginsvrclientservice.h"
 #include "app/handle_ss_msg.h"
 
 #ifdef _MSC_VER
@@ -41,6 +42,15 @@
         FWLOGERROR("initialize {} failed, res: {}", #MOD_NAME, res); \
         return res;                                                  \
       }                                                              \
+    }
+
+#  define INIT_CALL_FN(FUNC, ...)                                \
+    {                                                            \
+      int res = FUNC(__VA_ARGS__);                               \
+      if (res < 0) {                                             \
+        FWLOGERROR("initialize {} failed, res: {}", #FUNC, res); \
+        return res;                                              \
+      }                                                          \
     }
 
 #  define RELOAD_CALL(RET_VAR, MOD_NAME, ...)                    \
@@ -60,6 +70,15 @@
         FWLOGERROR("initialize {} failed, res: {}", #MOD_NAME, res); \
         return res;                                                  \
       }                                                              \
+    }
+
+#  define INIT_CALL_FN(FUNC, args...)                            \
+    {                                                            \
+      int res = FUNC(args);                                      \
+      if (res < 0) {                                             \
+        FWLOGERROR("initialize {} failed, res: {}", #FUNC, res); \
+        return res;                                              \
+      }                                                          \
     }
 
 #  define RELOAD_CALL(RET_VAR, MOD_NAME, args...)                \
@@ -159,6 +178,7 @@ class main_service_module : public atapp::module_impl {
     // register handles
     INIT_CALL(app_handle_ss_msg);
     INIT_CALL(app_handle_cs_msg);
+    INIT_CALL_FN(handle::loginsvrclientservice::register_handles_for_loginsvrclientservice);
 
     // reload will be triggered before init, so reload again here
     return excel::config_manager::me()->reload_all();

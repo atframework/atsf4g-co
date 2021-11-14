@@ -17,6 +17,7 @@
 #include "config/logic_config.h"
 #include "dispatcher/dispatcher_type_defines.h"
 #include "dispatcher/task_action_base.h"
+#include "utility/protobuf_mini_dumper.h"
 
 class session;
 class player_cache;
