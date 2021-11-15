@@ -33,9 +33,9 @@ class user_async_jobs_manager {
   void refresh_feature_limit();
 
   // 从table数据初始化
-  void init_from_table_data(const hello::table_user& player_table);
+  void init_from_table_data(const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user& player_table);
 
-  int dump(hello::table_user& user) const;
+  int dump(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user& user) const;
 
   bool is_dirty() const;
 

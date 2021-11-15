@@ -22,6 +22,7 @@ result_clazz_name = service.get_name_lower_rule() + '_result_t'
 #include <config/compiler/protobuf_suffix.h>
 
 #include <config/logic_config.h>
+#include <config/server_frame_build_feature.h>
 
 #include <data/session.h>
 #include <dispatcher/cs_msg_dispatcher.h>
@@ -80,12 +81,12 @@ ${result_clazz_name}::${result_clazz_name}() {}
 ${result_clazz_name}::${result_clazz_name}(int code): result(code) {}
 ${result_clazz_name}::operator int() const noexcept {
   if (!result.is_ready()) {
-    return hello::err::EN_SYS_RPC_CALL_NOT_READY;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_CALL_NOT_READY;
   }
 
   const int* ret = result.data();
   if (nullptr == ret) {
-    return hello::err::EN_SYS_RPC_CALL;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_CALL;
   }
 
   return *ret;

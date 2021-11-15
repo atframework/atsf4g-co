@@ -40,14 +40,16 @@ ss_msg_dispatcher::~ss_msg_dispatcher() {}
 
 int32_t ss_msg_dispatcher::init() {
   sequence_allocator_ =
-      static_cast<uint64_t>((util::time::time_utility::get_sys_now() - hello::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET)
+      static_cast<uint64_t>((util::time::time_utility::get_sys_now() -
+                             PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET)
                             << 23) +
       static_cast<uint64_t>(util::time::time_utility::get_now_usec() << 3);
   return 0;
 }
 
 uint64_t ss_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
-  hello::SSMsg *real_msg = get_protobuf_msg<hello::SSMsg>(raw_msg);
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg *real_msg =
+      get_protobuf_msg<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg>(raw_msg);
   if (nullptr == real_msg) {
     return 0;
   }
@@ -58,7 +60,8 @@ uint64_t ss_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
 ss_msg_dispatcher::msg_type_t ss_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw_msg) { return 0; }
 
 const std::string &ss_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
-  hello::SSMsg *real_msg = get_protobuf_msg<hello::SSMsg>(raw_msg);
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg *real_msg =
+      get_protobuf_msg<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg>(raw_msg);
   if (nullptr == real_msg) {
     return get_empty_string();
   }
@@ -79,13 +82,14 @@ const std::string &ss_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
 }
 
 ss_msg_dispatcher::msg_op_type_t ss_msg_dispatcher::pick_msg_op_type(msg_raw_t &raw_msg) {
-  hello::SSMsg *real_msg = get_protobuf_msg<hello::SSMsg>(raw_msg);
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg *real_msg =
+      get_protobuf_msg<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg>(raw_msg);
   if (nullptr == real_msg) {
-    return hello::EN_MSG_OP_TYPE_MIXUP;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP;
   }
 
-  if (false == hello::EnMsgOpType_IsValid(real_msg->head().op_type())) {
-    return hello::EN_MSG_OP_TYPE_MIXUP;
+  if (false == PROJECT_SERVER_FRAME_NAMESPACE_ID::EnMsgOpType_IsValid(real_msg->head().op_type())) {
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP;
   }
 
   return static_cast<msg_op_type_t>(real_msg->head().op_type());
@@ -95,7 +99,7 @@ const atframework::DispatcherOptions *ss_msg_dispatcher::get_options_by_message_
   return nullptr;
 }
 
-int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, hello::SSMsg &ss_msg) {
+int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg &ss_msg) {
   if (0 == ss_msg.head().sequence()) {
     ss_msg.mutable_head()->set_sequence(allocate_sequence());
   }
@@ -106,7 +110,7 @@ int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, hello::SSMsg &ss_msg) {
   if (msg_buf_len > tls_buf_len) {
     FWLOGERROR("send to proc [{:#x}: {}] failed: require {}, only have {}", bus_id,
                get_app()->convert_app_id_to_string(bus_id), msg_buf_len, tls_buf_len);
-    return hello::err::EN_SYS_BUFF_EXTEND;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
   }
 
   ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(
@@ -122,12 +126,12 @@ int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, const void *msg_buf, si
   atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("module not attached to a atapp");
-    return hello::err::EN_SYS_INIT;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
   if (!owner->get_bus_node()) {
     FWLOGERROR("owner app has no valid bus node");
-    return hello::err::EN_SYS_INIT;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
   int res = owner->get_bus_node()->send_data(bus_id, atframe::component::message_type::EN_ATST_SS_MSG, msg_buf, msg_len,
@@ -171,21 +175,21 @@ bool ss_msg_dispatcher::is_target_server_available(gsl::string_view node_name) c
 int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, const atapp::app::message_t &msg) {
   if (::atframe::component::message_type::EN_ATST_SS_MSG != msg.type) {
     FWLOGERROR("message type {} invalid", msg.type);
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   if (0 == source.id || (nullptr == msg.data && msg.data_size > 0)) {
     FWLOGERROR("receive a message from unknown source or without data content");
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   uint64_t from_server_id = source.id;
 
   rpc::context ctx;
-  hello::SSMsg *ss_msg = ctx.create<hello::SSMsg>();
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg *ss_msg = ctx.create<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg>();
   if (nullptr == ss_msg) {
     FWLOGERROR("{} create message instance failed", name());
-    return hello::err::EN_SYS_MALLOC;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
 
   dispatcher_msg_raw_t callback_msg = dispatcher_make_default<dispatcher_msg_raw_t>();
@@ -212,12 +216,12 @@ int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::messa
                                                          const atapp::app::message_t &msg, int32_t error_code) {
   if (::atframe::component::message_type::EN_ATST_SS_MSG != msg.type) {
     FWLOGERROR("message type {} invalid", msg.type);
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   if (0 == source.id || (nullptr == msg.data && msg.data_size > 0)) {
     FWLOGERROR("send a message from unknown source");
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   if (error_code >= 0) {
@@ -236,10 +240,10 @@ int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::messa
   size_t len = msg.data_size;
 
   rpc::context ctx;
-  hello::SSMsg *ss_msg = ctx.create<hello::SSMsg>();
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg *ss_msg = ctx.create<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg>();
   if (nullptr == ss_msg) {
     FWLOGERROR("{} create message instance failed", name());
-    return hello::err::EN_SYS_MALLOC;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
 
   dispatcher_msg_raw_t callback_msg = dispatcher_make_default<dispatcher_msg_raw_t>();
@@ -255,7 +259,7 @@ int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::messa
   // 转移要恢复的任务ID
   ss_msg->mutable_head()->set_dst_task_id(ss_msg->head().src_task_id());
   ss_msg->mutable_head()->set_src_task_id(0);
-  ss_msg->mutable_head()->set_error_code(hello::err::EN_SYS_RPC_SEND_FAILED);
+  ss_msg->mutable_head()->set_error_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_SEND_FAILED);
 
   ret = on_send_message_failed(ctx, callback_msg, error_code, msg.message_sequence);
   if (ret < 0) {
@@ -272,7 +276,8 @@ void ss_msg_dispatcher::on_create_task_failed(start_data_t &start_data, int32_t 
     return;
   }
 
-  hello::SSMsg *real_msg = get_protobuf_msg<hello::SSMsg>(start_data.message);
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg *real_msg =
+      get_protobuf_msg<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg>(start_data.message);
   if (nullptr == real_msg) {
     return;
   }
@@ -299,8 +304,8 @@ void ss_msg_dispatcher::on_create_task_failed(start_data_t &start_data, int32_t 
     }
   }
 
-  rpc::context::message_holder<hello::SSMsg> rsp{*child_context};
-  hello::SSMsgHead *head = rsp->mutable_head();
+  rpc::context::message_holder<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg> rsp{*child_context};
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsgHead *head = rsp->mutable_head();
   if (nullptr == head) {
     FWLOGERROR("malloc header failed when pack response of {} (source task id: {})", rpc_name,
                real_msg->head().src_task_id());
@@ -311,7 +316,7 @@ void ss_msg_dispatcher::on_create_task_failed(start_data_t &start_data, int32_t 
   head->set_dst_task_id(real_msg->head().src_task_id());
   head->set_sequence(real_msg->head().sequence());
   head->set_error_code(error_code);
-  head->set_op_type(hello::EN_MSG_OP_TYPE_UNARY_RESPONSE);
+  head->set_op_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE);
   head->set_bus_id(real_msg->head().bus_id());
   head->set_timestamp(util::time::time_utility::get_now());
 

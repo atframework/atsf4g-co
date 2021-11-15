@@ -108,11 +108,11 @@ class router_manager : public router_manager_base {
       if (!out) {
         out = std::make_shared<cache_t>(key);
         if (!out) {
-          return hello::err::EN_SYS_MALLOC;
+          return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
         }
 
         if (!insert(key, out)) {
-          return hello::err::EN_SYS_PARAM;
+          return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
         }
       } else {
         // 先等待IO任务完成，完成后可能在其他任务里已经拉取完毕了。
@@ -124,7 +124,7 @@ class router_manager : public router_manager_base {
         if (out->is_cache_available()) {
           // 触发拉取实体并命中cache时要取消移除缓存和降级的计划任务
           out->unset_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
-          return hello::err::EN_SUCCESS;
+          return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
         }
       }
 
@@ -134,14 +134,14 @@ class router_manager : public router_manager_base {
       if (res < 0) {
         if (res < 0) {
           switch (res) {
-            case hello::err::EN_SYS_TIMEOUT:
-            case hello::err::EN_SYS_RPC_TASK_KILLED:
-            case hello::err::EN_SYS_RPC_TASK_CANCELLED:
-            case hello::err::EN_SYS_NOTFOUND:
-            case hello::err::EN_SYS_RPC_TASK_EXITING:
-            case hello::err::EN_SYS_RPC_NO_TASK:
-            case hello::err::EN_ROUTER_NOT_FOUND:
-            case hello::err::EN_DB_RECORD_NOT_FOUND:
+            case PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_TIMEOUT:
+            case PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED:
+            case PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED:
+            case PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_NOTFOUND:
+            case PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING:
+            case PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK:
+            case PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND:
+            case PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND:
               return res;
             default:
               break;
@@ -152,11 +152,11 @@ class router_manager : public router_manager_base {
       }
 
       on_evt_pull_cache(out, priv_data);
-      return hello::err::EN_SUCCESS;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
     }
 
     // 超出重试次数限制
-    return hello::err::EN_ROUTER_TTL_EXTEND;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_TTL_EXTEND;
   }
 
   /**
@@ -175,7 +175,7 @@ class router_manager : public router_manager_base {
     }
 
     if (out && !out->check_flag(flag_t::EN_ROFT_CACHE_REMOVED)) {
-      return hello::err::EN_SUCCESS;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
     }
 
     int ret = mutable_cache(out, key, priv_data);
@@ -201,11 +201,11 @@ class router_manager : public router_manager_base {
       if (!out) {
         out = std::make_shared<cache_t>(key);
         if (!out) {
-          return hello::err::EN_SYS_MALLOC;
+          return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
         }
 
         if (!insert(key, out)) {
-          return hello::err::EN_SYS_MALLOC;
+          return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
         }
       } else {
         // 先等待IO任务完成，完成后可能在其他任务里已经拉取完毕了。
@@ -217,13 +217,13 @@ class router_manager : public router_manager_base {
           // 触发拉取实体并命中cache时要取消移除缓存和降级的计划任务
           out->unset_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_OBJECT);
           out->unset_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
-          return hello::err::EN_SUCCESS;
+          return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
         }
       }
 
       // 如果处于正在关闭的状态，则不允许创建新的实体，只能访问缓存
       if (is_closing()) {
-        return hello::err::EN_ROUTER_CLOSING;
+        return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_CLOSING;
       }
 
       // pull using TYPE's API
@@ -231,14 +231,14 @@ class router_manager : public router_manager_base {
 
       if (res < 0) {
         switch (res) {
-          case hello::err::EN_SYS_TIMEOUT:
-          case hello::err::EN_SYS_RPC_TASK_KILLED:
-          case hello::err::EN_SYS_RPC_TASK_CANCELLED:
-          case hello::err::EN_SYS_NOTFOUND:
-          case hello::err::EN_SYS_RPC_TASK_EXITING:
-          case hello::err::EN_SYS_RPC_NO_TASK:
-          case hello::err::EN_ROUTER_NOT_FOUND:
-          case hello::err::EN_DB_RECORD_NOT_FOUND:
+          case PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_TIMEOUT:
+          case PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED:
+          case PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED:
+          case PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_NOTFOUND:
+          case PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING:
+          case PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK:
+          case PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND:
+          case PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND:
             return res;
           default:
             break;
@@ -249,12 +249,12 @@ class router_manager : public router_manager_base {
       // 如果中途被移除，则降级回缓存
       if (!out->check_flag(router_object_base::flag_t::EN_ROFT_CACHE_REMOVED)) {
         on_evt_pull_object(out, priv_data);
-        return hello::err::EN_SUCCESS;
+        return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
       }
     }
 
     // 超出重试次数限制
-    return hello::err::EN_ROUTER_TTL_EXTEND;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_TTL_EXTEND;
   }
 
   virtual int transfer(const key_t &key, uint64_t svr_id, bool need_notify, priv_data_t priv_data) {
@@ -269,16 +269,16 @@ class router_manager : public router_manager_base {
 
   virtual int transfer(const ptr_t &obj, uint64_t svr_id, bool need_notify, priv_data_t priv_data) {
     if (!obj) {
-      return hello::err::EN_SYS_PARAM;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
     }
 
     if (svr_id == obj->get_router_server_id()) {
-      return hello::err::EN_SUCCESS;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
     }
 
     task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
     if (!self_task) {
-      return hello::err::EN_SYS_RPC_NO_TASK;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
     }
 
     // 先等待其他IO任务完成
@@ -288,17 +288,17 @@ class router_manager : public router_manager_base {
     }
 
     if (!obj->is_writable()) {
-      return hello::err::EN_ROUTER_NOT_WRITABLE;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE;
     }
 
     if (svr_id == obj->get_router_server_id()) {
-      return hello::err::EN_SUCCESS;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
     }
 
     // 正在转移中
     router_object_base::flag_guard transfer_flag(*obj, router_object_base::flag_t::EN_ROFT_TRANSFERING);
     if (!transfer_flag) {
-      return hello::err::EN_ROUTER_TRANSFER;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_TRANSFER;
     }
 
     on_evt_remove_object(obj->get_key(), obj, reinterpret_cast<priv_data_t>(priv_data));
@@ -311,10 +311,10 @@ class router_manager : public router_manager_base {
 
       // 如果转发不成功，要回发执行失败
       if (!obj->get_transfer_pending_list().empty()) {
-        std::list<hello::SSMsg> all_msgs;
+        std::list<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg> all_msgs;
         all_msgs.swap(obj->get_transfer_pending_list());
 
-        for (hello::SSMsg &msg : all_msgs) {
+        for (PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg &msg : all_msgs) {
           obj->send_transfer_msg_failed(COPP_MACRO_STD_MOVE(msg));
         }
       }
@@ -327,12 +327,14 @@ class router_manager : public router_manager_base {
     if (0 != svr_id && need_notify) {
       // 如果目标不是0则通知目标服务器
       rpc::context ctx;
-      hello::SSRouterTransferReq *req = ctx.create<hello::SSRouterTransferReq>();
-      hello::SSRouterTransferRsp *rsp = ctx.create<hello::SSRouterTransferRsp>();
+      PROJECT_SERVER_FRAME_NAMESPACE_ID::SSRouterTransferReq *req =
+          ctx.create<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSRouterTransferReq>();
+      PROJECT_SERVER_FRAME_NAMESPACE_ID::SSRouterTransferRsp *rsp =
+          ctx.create<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSRouterTransferRsp>();
       if (nullptr == req || nullptr == rsp) {
-        ret = hello::err::EN_SYS_MALLOC;
+        ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
       } else {
-        hello::SSRouterHead *router_head = req->mutable_object();
+        PROJECT_SERVER_FRAME_NAMESPACE_ID::SSRouterHead *router_head = req->mutable_object();
         if (nullptr != router_head) {
           router_head->set_router_src_bus_id(obj->get_router_server_id());
           router_head->set_router_version(obj->get_router_version());
@@ -350,7 +352,7 @@ class router_manager : public router_manager_base {
                        obj->get_key().zone_id, obj->get_key().object_id, ret);
           }
         } else {
-          ret = hello::err::EN_SYS_MALLOC;
+          ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
         }
       }
     }
@@ -358,11 +360,11 @@ class router_manager : public router_manager_base {
     // 如果转发成功，要转发这期间收到的消息
     if (ret >= 0) {
       while (!obj->get_transfer_pending_list().empty()) {
-        std::list<hello::SSMsg> all_msgs;
+        std::list<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg> all_msgs;
         all_msgs.swap(obj->get_transfer_pending_list());
 
         uint64_t rpc_sequence;
-        for (hello::SSMsg &msg : all_msgs) {
+        for (PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg &msg : all_msgs) {
           int res = send_msg_raw(*obj, std::move(msg), rpc_sequence);
           if (res < 0) {
             FWLOGERROR("transfer router object (type={},zone_id={}) {} message failed, res: {}", get_type_id(),
@@ -375,10 +377,10 @@ class router_manager : public router_manager_base {
     } else {
       // 如果转发不成功，要回发执行失败
       if (!obj->get_transfer_pending_list().empty()) {
-        std::list<hello::SSMsg> all_msgs;
+        std::list<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg> all_msgs;
         all_msgs.swap(obj->get_transfer_pending_list());
 
-        for (hello::SSMsg &msg : all_msgs) {
+        for (PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg &msg : all_msgs) {
           obj->send_transfer_msg_failed(COPP_MACRO_STD_MOVE(msg));
         }
       }

@@ -7,9 +7,11 @@
 #include <dispatcher/task_action_ss_req_base.h>
 
 class task_action_player_kickoff
-    : public task_action_ss_rpc_base<hello::SSPlayerKickOffReq, hello::SSPlayerKickOffRsp> {
+    : public task_action_ss_rpc_base<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSPlayerKickOffReq,
+                                     PROJECT_SERVER_FRAME_NAMESPACE_ID::SSPlayerKickOffRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<hello::SSPlayerKickOffReq, hello::SSPlayerKickOffRsp>;
+  using base_type = task_action_ss_rpc_base<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSPlayerKickOffReq,
+                                            PROJECT_SERVER_FRAME_NAMESPACE_ID::SSPlayerKickOffRsp>;
   using msg_type = base_type::msg_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

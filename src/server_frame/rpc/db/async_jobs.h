@@ -10,6 +10,8 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
+#include <config/server_frame_build_feature.h>
+
 #include <stdint.h>
 #include <cstddef>
 #include <string>
@@ -24,7 +26,7 @@ namespace async_jobs {
 struct async_jobs_record {
   int64_t record_index;
   int64_t version;
-  hello::table_user_async_jobs_blob_data action_blob;
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user_async_jobs_blob_data action_blob;
 };
 
 /**
@@ -60,7 +62,7 @@ int del_jobs(::rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t 
  * @return 0或错误码
  */
 int add_jobs(::rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-             hello::table_user_async_jobs_blob_data &in);
+             PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user_async_jobs_blob_data &in);
 
 /**
  * @brief 删除用户异步任务表所有数据的rpc操作
@@ -84,7 +86,8 @@ int remove_all_jobs(::rpc::context &ctx, int32_t jobs_type, uint64_t user_id, ui
  * @return 0或错误码
  */
 int update_jobs(::rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-                hello::table_user_async_jobs_blob_data &inout, int64_t record_index, int64_t *version = nullptr);
+                PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user_async_jobs_blob_data &inout, int64_t record_index,
+                int64_t *version = nullptr);
 }  // namespace async_jobs
 }  // namespace db
 }  // namespace rpc

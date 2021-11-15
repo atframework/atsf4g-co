@@ -21,9 +21,9 @@
 class session;
 class player_cache;
 
-class actor_action_cs_req_base : public actor_action_req_base<hello::CSMsg> {
+class actor_action_cs_req_base : public actor_action_req_base<PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg> {
  public:
-  using base_type = actor_action_req_base<hello::CSMsg>;
+  using base_type = actor_action_req_base<PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg>;
   using msg_type = base_type::msg_type;
   using msg_ref_type = msg_type &;
   using msg_cref_type = const msg_type &;

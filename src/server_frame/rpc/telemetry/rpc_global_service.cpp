@@ -133,7 +133,7 @@ class opentelemetry_internal_log_handler : public opentelemetry::sdk::common::in
 
 static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> _opentelemetry_create_exporter(
     ::rpc::telemetry::details::local_caller_info_t &caller,
-    const hello::config::opentelemetry_exporter_cfg &exporter_cfg) {
+    const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::opentelemetry_exporter_cfg &exporter_cfg) {
   std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> ret;
   ret.reserve(2);
 
@@ -181,7 +181,7 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> _op
 
 static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanProcessor>> _opentelemetry_create_processor(
     std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> &&exporters,
-    const hello::config::opentelemetry_processor_cfg &processor_cfg) {
+    const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::opentelemetry_processor_cfg &processor_cfg) {
   std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanProcessor>> ret;
   ret.reserve(exporters.size());
   if (processor_cfg.has_simple() && !processor_cfg.has_batch()) {
@@ -209,17 +209,17 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanProcessor>> _o
 }
 
 static std::unique_ptr<opentelemetry::sdk::trace::Sampler> _opentelemetry_create_sampler(
-    const hello::config::opentelemetry_sampler_cfg &sampler_cfg) {
+    const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::opentelemetry_sampler_cfg &sampler_cfg) {
   switch (sampler_cfg.sampler_type_case()) {
-    case hello::config::opentelemetry_sampler_cfg::kAlwaysOff: {
+    case PROJECT_SERVER_FRAME_NAMESPACE_ID::config::opentelemetry_sampler_cfg::kAlwaysOff: {
       return std::unique_ptr<opentelemetry::sdk::trace::Sampler>(new opentelemetry::sdk::trace::AlwaysOffSampler());
     }
-    case hello::config::opentelemetry_sampler_cfg::kTraceIdRatio: {
+    case PROJECT_SERVER_FRAME_NAMESPACE_ID::config::opentelemetry_sampler_cfg::kTraceIdRatio: {
       return std::unique_ptr<opentelemetry::sdk::trace::Sampler>(
           new opentelemetry::sdk::trace::ParentBasedSampler(std::unique_ptr<opentelemetry::sdk::trace::Sampler>(
               new opentelemetry::sdk::trace::TraceIdRatioBasedSampler{sampler_cfg.trace_id_ratio()})));
     }
-    // case hello::config::opentelemetry_sampler_cfg::kAlwaysOn: {}
+    // case PROJECT_SERVER_FRAME_NAMESPACE_ID::config::opentelemetry_sampler_cfg::kAlwaysOn: {}
     default: {
       return std::unique_ptr<opentelemetry::sdk::trace::Sampler>(new opentelemetry::sdk::trace::AlwaysOnSampler());
     }
@@ -242,7 +242,7 @@ static opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> _o
 static void _opentelemetry_set_global_provider(
     const atapp::app &app, opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> provider,
     std::shared_ptr<details::local_caller_info_t> app_info_cache,
-    const hello::config::opentelemetry_cfg &opentelemetry_cfg) {
+    const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::opentelemetry_cfg &opentelemetry_cfg) {
   // Default tracer
   if (!opentelemetry_cfg.tracer_name().empty()) {
     app_info_cache->tracer = provider->GetTracer(opentelemetry_cfg.tracer_name(), app.get_app_version());
@@ -316,7 +316,8 @@ static opentelemetry::sdk::resource::ResourceAttributes _create_opentelemetry_ap
   return resource_values;
 }
 
-void global_service::set_current_service(const atapp::app &app, const hello::config::logic_telemetry_cfg &telemetry) {
+void global_service::set_current_service(
+    const atapp::app &app, const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::logic_telemetry_cfg &telemetry) {
   std::shared_ptr<details::local_caller_info_t> app_info_cache = std::make_shared<details::local_caller_info_t>();
   if (!app_info_cache) {
     return;

@@ -46,7 +46,7 @@ fi
   --proto-files "$PROJECT_DIR/third_party/xres-code-generator/repo/pb_extension/xrescode_extensions_v3.proto" \
   --proto-files "$PROJECT_DIR/atframework/libatapp/include/atframe/*.proto" \
   --proto-files "$PROJECT_DIR/atframework/libatbus/include/*.proto" \
-  --set "project_namespace=hello" --set "task_class_name=$TASK_NAME" \
+  --set "project_namespace=@PROJECT_SERVER_FRAME_NAMESPACE@" --set "task_class_name=$TASK_NAME" \
   --add-path "$PROJECT_DIR/atframework/cmake-toolset/modules" \
   --add-package-prefix "$EXTERNAL_MODULE_PATH" \
   --global-template "$SCRIPT_DIR/templates/task_action_no_msg.h.mako:$TASK_NAME.h" \

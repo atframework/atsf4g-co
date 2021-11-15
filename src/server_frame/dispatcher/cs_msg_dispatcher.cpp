@@ -54,7 +54,8 @@ uint64_t cs_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
 }
 
 cs_msg_dispatcher::msg_type_t cs_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw_msg) {
-  hello::CSMsg *real_msg = get_protobuf_msg<hello::CSMsg>(raw_msg);
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg *real_msg =
+      get_protobuf_msg<PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg>(raw_msg);
   if (nullptr == real_msg) {
     return 0;
   }
@@ -63,7 +64,8 @@ cs_msg_dispatcher::msg_type_t cs_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw
 }
 
 const std::string &cs_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
-  hello::CSMsg *real_msg = get_protobuf_msg<hello::CSMsg>(raw_msg);
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg *real_msg =
+      get_protobuf_msg<PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg>(raw_msg);
   if (nullptr == real_msg) {
     return get_empty_string();
   }
@@ -84,13 +86,14 @@ const std::string &cs_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
 }
 
 cs_msg_dispatcher::msg_op_type_t cs_msg_dispatcher::pick_msg_op_type(msg_raw_t &raw_msg) {
-  hello::CSMsg *real_msg = get_protobuf_msg<hello::CSMsg>(raw_msg);
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg *real_msg =
+      get_protobuf_msg<PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg>(raw_msg);
   if (nullptr == real_msg) {
-    return hello::EN_MSG_OP_TYPE_MIXUP;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP;
   }
 
-  if (false == hello::EnMsgOpType_IsValid(real_msg->head().op_type())) {
-    return hello::EN_MSG_OP_TYPE_MIXUP;
+  if (false == PROJECT_SERVER_FRAME_NAMESPACE_ID::EnMsgOpType_IsValid(real_msg->head().op_type())) {
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP;
   }
 
   return static_cast<msg_op_type_t>(real_msg->head().op_type());
@@ -98,9 +101,11 @@ cs_msg_dispatcher::msg_op_type_t cs_msg_dispatcher::pick_msg_op_type(msg_raw_t &
 
 const atframework::DispatcherOptions *cs_msg_dispatcher::get_options_by_message_type(msg_type_t msg_type) {
   if (unlikely(dispatcher_options_map_.empty())) {
-    dispatcher_options_map_.reserve(static_cast<size_t>(hello::CSMsgBody::descriptor()->field_count()));
-    for (int i = 0; i < hello::CSMsgBody::descriptor()->field_count(); ++i) {
-      const google::protobuf::FieldDescriptor *fd = hello::CSMsgBody::descriptor()->field(i);
+    dispatcher_options_map_.reserve(
+        static_cast<size_t>(PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsgBody::descriptor()->field_count()));
+    for (int i = 0; i < PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsgBody::descriptor()->field_count(); ++i) {
+      const google::protobuf::FieldDescriptor *fd =
+          PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsgBody::descriptor()->field(i);
       if (nullptr == fd) {
         continue;
       }
@@ -126,7 +131,8 @@ void cs_msg_dispatcher::on_create_task_failed(start_data_t &start_data, int32_t 
     return;
   }
 
-  hello::CSMsg *real_msg = get_protobuf_msg<hello::CSMsg>(start_data.message);
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg *real_msg =
+      get_protobuf_msg<PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg>(start_data.message);
   if (nullptr == real_msg) {
     return;
   }
@@ -164,8 +170,8 @@ void cs_msg_dispatcher::on_create_task_failed(start_data_t &start_data, int32_t 
     }
   }
 
-  rpc::context::message_holder<hello::CSMsg> rsp{*child_context};
-  hello::CSMsgHead *head = rsp->mutable_head();
+  rpc::context::message_holder<PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg> rsp{*child_context};
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsgHead *head = rsp->mutable_head();
   if (nullptr == head) {
     FWLOGERROR("malloc header failed when pack response of {} (session: [{:#x}, {}])", rpc_name,
                real_msg->head().session_bus_id(), real_msg->head().session_id());
@@ -173,12 +179,12 @@ void cs_msg_dispatcher::on_create_task_failed(start_data_t &start_data, int32_t 
   }
 
   head->set_client_sequence(real_msg->head().client_sequence());
-  if (hello::err::EN_SYS_NOTFOUND == error_code) {
-    head->set_error_code(hello::EN_ERR_INVALID_PARAM);
+  if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_NOTFOUND == error_code) {
+    head->set_error_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   } else {
-    head->set_error_code(hello::err::EN_SYS_UNKNOWN);
+    head->set_error_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_UNKNOWN);
   }
-  head->set_op_type(hello::EN_MSG_OP_TYPE_UNARY_RESPONSE);
+  head->set_op_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE);
   head->set_session_id(real_msg->head().session_id());
   head->set_session_bus_id(real_msg->head().session_bus_id());
   head->set_timestamp(util::time::time_utility::get_now());
@@ -202,14 +208,14 @@ void cs_msg_dispatcher::on_create_task_failed(start_data_t &start_data, int32_t 
 int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, const atapp::app::message_t &msg) {
   if (::atframe::component::service_type::EN_ATST_GATEWAY != msg.type) {
     FWLOGERROR("message type {} invalid", msg.type);
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   uint64_t from_server_id = source.id;
 
   if (nullptr == msg.data || 0 == from_server_id) {
     FWLOGERROR("receive a message from unknown source");
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   ::atframe::gw::ss_msg req_msg;
@@ -219,16 +225,16 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
     return 0;
   }
 
-  int ret = hello::err::EN_SUCCESS;
+  int ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   switch (req_msg.body().cmd_case()) {
     case ::atframe::gw::ss_msg_body::kPost: {
       const ::atframe::gw::ss_body_post &post = req_msg.body().post();
 
       rpc::context ctx;
-      hello::CSMsg *cs_msg = ctx.create<hello::CSMsg>();
+      PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg *cs_msg = ctx.create<PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg>();
       if (nullptr == cs_msg) {
         FWLOGERROR("{} create message instance failed", name());
-        ret = hello::err::EN_SYS_MALLOC;
+        ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
         break;
       }
 
@@ -240,9 +246,10 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
       if (!sess) {
         FWLOGERROR("session [{:#x}: {}, {}] not found, try to kickoff", session_key.bus_id,
                    get_app()->convert_app_id_to_string(session_key.bus_id), session_key.session_id);
-        ret = hello::err::EN_SYS_NOTFOUND;
+        ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
 
-        send_kickoff(session_key.bus_id, session_key.session_id, hello::EN_CRT_SESSION_NOT_FOUND);
+        send_kickoff(session_key.bus_id, session_key.session_id,
+                     PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_CRT_SESSION_NOT_FOUND);
         break;
       }
 
@@ -260,7 +267,7 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
       cs_msg->mutable_head()->set_session_id(session_key.session_id);
 
       if (task_manager::me()->is_busy()) {
-        cs_msg->mutable_head()->set_error_code(hello::EN_ERR_SYSTEM_BUSY);
+        cs_msg->mutable_head()->set_error_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_SYSTEM_BUSY);
         sess->send_msg_to_client(*cs_msg);
         FWLOGINFO("server busy and send msg back to session [{:#x}: {}, {}]", session_key.bus_id,
                   get_app()->convert_app_id_to_string(session_key.bus_id), session_key.session_id);
@@ -286,7 +293,7 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
       if (is_closing_) {
         FWLOGWARNING("destroy session [{:#x}: {}, {}] because app is closing", session_key.bus_id,
                      get_app()->convert_app_id_to_string(session_key.bus_id), session_key.session_id);
-        ret = hello::err::EN_SYS_SERVER_SHUTDOWN;
+        ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_SERVER_SHUTDOWN;
         send_kickoff(session_key.bus_id, session_key.session_id,
                      ::atframe::gateway::close_reason_t::EN_CRT_SERVER_CLOSED);
         break;
@@ -304,7 +311,7 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
           FWLOGWARNING("session [{:#x}: {}, {}] already exists, address: {}:{}", session_key.bus_id,
                        get_app()->convert_app_id_to_string(session_key.bus_id), session_key.session_id,
                        sess_data.client_ip(), sess_data.client_port());
-          ret = hello::err::EN_SYS_MALLOC;
+          ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
           send_kickoff(session_key.bus_id, session_key.session_id,
                        ::atframe::gateway::close_reason_t::EN_CRT_SERVER_BUSY);
           break;
@@ -313,7 +320,7 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
       sess = session_manager::me()->create(session_key);
       if (!sess) {
         FWLOGERROR("malloc failed");
-        ret = hello::err::EN_SYS_MALLOC;
+        ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
         send_kickoff(session_key.bus_id, session_key.session_id,
                      ::atframe::gateway::close_reason_t::EN_CRT_SERVER_BUSY);
         break;
@@ -375,7 +382,7 @@ int32_t cs_msg_dispatcher::send_kickoff(uint64_t bus_id, uint64_t session_id, in
   atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("not in a atapp");
-    return hello::err::EN_SYS_INIT;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
   ::atframe::gw::ss_msg msg;
@@ -397,7 +404,7 @@ int32_t cs_msg_dispatcher::send_data(uint64_t bus_id, uint64_t session_id, const
   atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("not in a atapp");
-    return hello::err::EN_SYS_INIT;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
   if (nullptr == buffer || 0 == len) {
@@ -417,7 +424,7 @@ int32_t cs_msg_dispatcher::send_data(uint64_t bus_id, uint64_t session_id, const
       FWLOGERROR("send {} bytes data to session [{:#x}: {}, {}] failed when malloc post", len, bus_id,
                  get_app()->convert_app_id_to_string(bus_id), session_id);
     }
-    return hello::err::EN_SYS_MALLOC;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
 
   post->set_content(buffer, len);
@@ -453,7 +460,7 @@ int32_t cs_msg_dispatcher::broadcast_data(uint64_t bus_id, const std::vector<uin
   atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("not in a atapp");
-    return hello::err::EN_SYS_INIT;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
   if (nullptr == buffer || 0 == len) {
@@ -468,7 +475,7 @@ int32_t cs_msg_dispatcher::broadcast_data(uint64_t bus_id, const std::vector<uin
   if (nullptr == post) {
     FWLOGERROR("broadcast {} bytes data to atgateway [{:#x}: {}] failed when malloc post", len, bus_id,
                get_app()->convert_app_id_to_string(bus_id));
-    return hello::err::EN_SYS_MALLOC;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
 
   post->set_content(buffer, len);

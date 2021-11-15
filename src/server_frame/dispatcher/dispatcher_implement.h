@@ -41,7 +41,7 @@
 
 class dispatcher_implement : public ::atapp::module_impl {
  public:
-  using msg_op_type_t = hello::EnMsgOpType;
+  using msg_op_type_t = PROJECT_SERVER_FRAME_NAMESPACE_ID::EnMsgOpType;
   using msg_raw_t = dispatcher_msg_raw_t;
   using resume_data_t = dispatcher_resume_data_t;
   using start_data_t = dispatcher_start_data_t;
@@ -165,7 +165,7 @@ class dispatcher_implement : public ::atapp::module_impl {
   /**
    * @brief 获取操作类型
    * @param raw_msg 消息抽象结构
-   * @note 这只是一个调度曾规范，不强制执行。详情 @see hello::EnMsgOpType
+   * @note 这只是一个调度曾规范，不强制执行。详情 @see PROJECT_SERVER_FRAME_NAMESPACE_ID::EnMsgOpType
    * @return 消息操作类型
    */
   virtual msg_op_type_t pick_msg_op_type(msg_raw_t &raw_msg) = 0;
@@ -212,7 +212,7 @@ class dispatcher_implement : public ::atapp::module_impl {
   int register_action(const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::ServiceDescriptor *service_desc,
                       const std::string &rpc_name) {
     if (nullptr == service_desc) {
-      return hello::err::EN_SYS_PARAM;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
     }
     registered_service_[service_desc->full_name()] = service_desc;
 
@@ -228,14 +228,14 @@ class dispatcher_implement : public ::atapp::module_impl {
     if (nullptr == method) {
       FWLOGERROR("{} try to register rpc action {} for service {} failed, not found", name(), rpc_name,
                  service_desc->full_name());
-      return hello::err::EN_SYS_NOTFOUND;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
     }
     registered_method_[method->full_name()] = method;
 
     if (method->full_name() != rpc_name) {
       FWLOGERROR("{} try to register rpc action {} for service {} failed, the real full name is {}", name(), rpc_name,
                  service_desc->full_name(), method->full_name());
-      return hello::err::EN_SYS_NOTFOUND;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
     }
 
     const atframework::DispatcherOptions *options = nullptr;
@@ -266,7 +266,7 @@ class dispatcher_implement : public ::atapp::module_impl {
   int register_actor(const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::ServiceDescriptor *service_desc,
                      const std::string &rpc_name) {
     if (nullptr == service_desc) {
-      return hello::err::EN_SYS_PARAM;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
     }
     registered_service_[service_desc->full_name()] = service_desc;
 
@@ -282,14 +282,14 @@ class dispatcher_implement : public ::atapp::module_impl {
     if (nullptr == method) {
       FWLOGERROR("{} try to register rpc actor {} for service {} failed, not found", name(), rpc_name,
                  service_desc->full_name());
-      return hello::err::EN_SYS_NOTFOUND;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
     }
     registered_method_[method->full_name()] = method;
 
     if (method->full_name() != rpc_name) {
       FWLOGERROR("{} try to register rpc action {} for service {} failed, the real full name is {}", name(), rpc_name,
                  service_desc->full_name(), method->full_name());
-      return hello::err::EN_SYS_NOTFOUND;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
     }
 
     const atframework::DispatcherOptions *options = nullptr;
@@ -363,13 +363,13 @@ int32_t dispatcher_implement::unpack_protobuf_msg(TMsg &real_msg, msg_raw_t &raw
 
   if (nullptr == msg_buf || 0 == msg_size) {
     FWLOGERROR("{} try to parameter error, nullptr == msg_buf or 0 == msg_size", name());
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   if (false == real_msg.ParseFromArray(msg_buf, static_cast<int>(msg_size))) {
     FWLOGERROR("{} unpack msg for type={} failed\n{}", name(), get_instance_ident(),
                real_msg.InitializationErrorString().c_str());
-    return hello::err::EN_SYS_UNPACK;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_UNPACK;
   }
 
   raw_msg.msg_addr = &real_msg;

@@ -30,7 +30,7 @@ int task_action_login::operator()() {
 
   // TODO ...
 
-  return hello::err::EN_SUCCESS;
+  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int task_action_login::on_success() { return get_result(); }

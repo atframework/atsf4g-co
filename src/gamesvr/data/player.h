@@ -5,6 +5,8 @@
 #include <design_pattern/nomovable.h>
 #include <design_pattern/noncopyable.h>
 
+#include <config/server_frame_build_feature.h>
+
 #include <data/player_cache.h>
 
 #include <dispatcher/task_type_defines.h>
@@ -80,7 +82,7 @@ class player : public player_cache {
   };
   /** 因为会对其进行memset，所以内部不允许出现非POD类型 **/
 
-  using build_dirty_message_fn_t = std::function<void(player &, hello::CSMsg &)>;
+  using build_dirty_message_fn_t = std::function<void(player &, PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg &)>;
   using clear_dirty_cache_fn_t = std::function<void(player &)>;
   struct dirty_sync_handle_t {
     build_dirty_message_fn_t build_fn;
@@ -91,9 +93,9 @@ class player : public player_cache {
     time_t refresh_feature_limit_second;
     time_t refresh_feature_limit_minute;
     time_t refresh_feature_limit_hour;
-    // hello::SCPlayerLevelupSyn player_level_up_syn;
+    // PROJECT_SERVER_FRAME_NAMESPACE_ID::SCPlayerLevelupSyn player_level_up_syn;
 
-    std::unordered_map<int32_t, hello::DItem> dirty_item_by_type;
+    std::unordered_map<int32_t, PROJECT_SERVER_FRAME_NAMESPACE_ID::DItem> dirty_item_by_type;
 
     std::unordered_map<uintptr_t, dirty_sync_handle_t> dirty_handles;
   };
@@ -170,7 +172,7 @@ class player : public player_cache {
   void on_update_session(const std::shared_ptr<session> &from, const std::shared_ptr<session> &to) override;
 
   // 从table数据初始化
-  void init_from_table_data(const hello::table_user &stTableplayer_cache) override;
+  void init_from_table_data(const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &stTableplayer_cache) override;
 
   /**
    * @brief 转储数据
@@ -178,7 +180,7 @@ class player : public player_cache {
    * @param always 是否忽略脏数据
    * @return 0或错误码
    */
-  int dump(hello::table_user &user, bool always) override;
+  int dump(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &user, bool always) override;
 
   /**
    * @brief 是否完整执行过初始化
@@ -194,8 +196,10 @@ class player : public player_cache {
    */
   void set_inited() { inner_flags_.set(inner_flag::EN_IFT_IS_INITED, true); }
 
-  const hello::DClientDeviceInfo &get_client_info() const { return client_info_; }
-  void set_client_info(const hello::DClientDeviceInfo &info) { client_info_.CopyFrom(info); }
+  const PROJECT_SERVER_FRAME_NAMESPACE_ID::DClientDeviceInfo &get_client_info() const { return client_info_; }
+  void set_client_info(const PROJECT_SERVER_FRAME_NAMESPACE_ID::DClientDeviceInfo &info) {
+    client_info_.CopyFrom(info);
+  }
 
   /**
    * @brief 获取心跳包统计数据
@@ -227,7 +231,7 @@ class player : public player_cache {
   int await_before_logout_tasks() override;
   void clear_dirty_cache();
 
-  hello::DItem &mutable_dirty_item(const hello::DItem &in);
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::DItem &mutable_dirty_item(const PROJECT_SERVER_FRAME_NAMESPACE_ID::DItem &in);
 
   /**
    * @brief 插入脏数据handle
@@ -257,7 +261,7 @@ class player : public player_cache {
   friend class task_queue_lock_guard;
   std::list<task_queue_node> task_lock_queue_;
 
-  hello::DClientDeviceInfo client_info_;
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::DClientDeviceInfo client_info_;
   // =======================================================
   heartbeat_t heartbeat_data_;
   cache_t cache_data_;
@@ -269,11 +273,11 @@ class player : public player_cache {
 /**
  * @brief 用户回包数据缓存包装，析构时自动还原发送数据
  * @note 注意只能用作局部变量
- * @note 所有此guard构造的下行包为流类型 hello::EN_MSG_OP_TYPE_STREAM
+ * @note 所有此guard构造的下行包为流类型 PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM
  */
 class player_cs_syn_msg_holder {
  public:
-  using value_type = hello::CSMsg;
+  using value_type = PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg;
 
  public:
   explicit player_cs_syn_msg_holder(player::ptr_t u);

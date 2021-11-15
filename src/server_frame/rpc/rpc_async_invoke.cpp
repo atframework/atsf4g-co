@@ -22,7 +22,7 @@ namespace rpc {
 rpc_result<task_manager::task_ptr_t, int> async_invoke(context &ctx, gsl::string_view name,
                                                        std::function<task_action_base::result_type(context &)> fn) {
   if (!fn) {
-    return rpc_result<task_manager::task_ptr_t, int>::make_error(hello::err::EN_SYS_PARAM);
+    return rpc_result<task_manager::task_ptr_t, int>::make_error(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
   task_manager::task_ptr_t task_ptr;

@@ -13,6 +13,8 @@
 
 #include <common/string_oprs.h>
 
+#include <config/server_frame_build_feature.h>
+
 #include <sstream>
 
 #include "utility/environment_helper.h"
@@ -51,8 +53,8 @@ static std::string build_error_code_msg(const ::google::protobuf::EnumValueDescr
   bool has_descritpion = false;
   std::stringstream ss;
 
-  if (desc.options().HasExtension(hello::error_code::description)) {
-    auto description = desc.options().GetExtension(hello::error_code::description);
+  if (desc.options().HasExtension(PROJECT_SERVER_FRAME_NAMESPACE_ID::error_code::description)) {
+    auto description = desc.options().GetExtension(PROJECT_SERVER_FRAME_NAMESPACE_ID::error_code::description);
     if (!description.empty()) {
       ss << description << "[";
       has_descritpion = true;
@@ -90,14 +92,15 @@ const char *protobuf_mini_dumper_get_error_msg(int error_code) {
     return iter->second.c_str();
   }
 
-  const ::google::protobuf::EnumValueDescriptor *desc = hello::EnErrorCode_descriptor()->FindValueByNumber(error_code);
+  const ::google::protobuf::EnumValueDescriptor *desc =
+      PROJECT_SERVER_FRAME_NAMESPACE_ID::EnErrorCode_descriptor()->FindValueByNumber(error_code);
   if (nullptr != desc) {
     cs_error_desc[error_code] = build_error_code_msg(*desc);
     ret = cs_error_desc[error_code].c_str();
     return ret;
   }
 
-  desc = hello::err::EnSysErrorType_descriptor()->FindValueByNumber(error_code);
+  desc = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EnSysErrorType_descriptor()->FindValueByNumber(error_code);
   if (nullptr != desc) {
     ss_error_desc[error_code] = build_error_code_msg(*desc);
     ret = ss_error_desc[error_code].c_str();

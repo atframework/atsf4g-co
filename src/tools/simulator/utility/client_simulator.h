@@ -10,14 +10,16 @@
 #include <simulator_active.h>
 #include <simulator_base.h>
 
+#include <config/server_frame_build_feature.h>
+
 #include <string>
 
 #include "utility/client_player.h"
 
-class client_simulator : public simulator_msg_base<client_player, hello::CSMsg> {
+class client_simulator : public simulator_msg_base<client_player, PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg> {
  public:
   using self_type = client_simulator;
-  using base_type = simulator_msg_base<client_player, hello::CSMsg>;
+  using base_type = simulator_msg_base<client_player, PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg>;
   using player_t = typename base_type::player_t;
   using player_ptr_t = typename base_type::player_ptr_t;
   using msg_t = typename base_type::msg_t;
@@ -36,7 +38,7 @@ class client_simulator : public simulator_msg_base<client_player, hello::CSMsg> 
 
   int tick() override;
 
-  static const hello::DConstSettingsType &get_const_settings();
+  static const PROJECT_SERVER_FRAME_NAMESPACE_ID::DConstSettingsType &get_const_settings();
   static const atframework::ConstSettingsType &get_atframework_settings();
 
   static client_simulator *cast(simulator_base *b);
@@ -57,7 +59,7 @@ class client_simulator : public simulator_msg_base<client_player, hello::CSMsg> 
     }
 
     if (method->client_streaming()) {
-      msg.mutable_head()->set_op_type(hello::EN_MSG_OP_TYPE_STREAM);
+      msg.mutable_head()->set_op_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM);
       auto meta = msg.mutable_head()->mutable_rpc_request();
       meta->set_version(get_atframework_settings().rpc_version());
       meta->set_rpc_name(service_desc.full_name() + "." + rpc_name);
@@ -65,7 +67,7 @@ class client_simulator : public simulator_msg_base<client_player, hello::CSMsg> 
       meta->set_caller("similator");
       meta->set_callee(service_desc.full_name());
     } else {
-      msg.mutable_head()->set_op_type(hello::EN_MSG_OP_TYPE_UNARY_REQUEST);
+      msg.mutable_head()->set_op_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_REQUEST);
       auto meta = msg.mutable_head()->mutable_rpc_request();
       meta->set_version(get_atframework_settings().rpc_version());
       meta->set_rpc_name(service_desc.full_name() + "." + rpc_name);

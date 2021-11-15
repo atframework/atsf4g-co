@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <config/server_frame_build_feature.h>
+
 #include <stdint.h>
 #include <memory>
 #include <utility>
@@ -15,11 +17,11 @@ namespace atapp {
 class app;
 }
 
-namespace hello {
+PROJECT_SERVER_FRAME_NAMESPACE_BEGIN
 namespace config {
 class logic_telemetry_cfg;
 }
-}  // namespace hello
+PROJECT_SERVER_FRAME_NAMESPACE_END
 
 namespace rpc {
 
@@ -39,7 +41,8 @@ class global_service {
    * @param app atapp instance
    * @param telemetry telemetry configure
    */
-  static void set_current_service(const atapp::app& app, const hello::config::logic_telemetry_cfg& telemetry);
+  static void set_current_service(const atapp::app& app,
+                                  const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::logic_telemetry_cfg& telemetry);
 };
 
 }  // namespace telemetry

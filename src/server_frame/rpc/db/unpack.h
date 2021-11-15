@@ -1,5 +1,5 @@
-//
-// Created by owt50 on 2016/9/28.
+// Copyright 2021 atframework
+// Created by owent on 2016/9/28.
 //
 
 #ifndef RPC_DB_UNPACK_H
@@ -7,11 +7,13 @@
 
 #pragma once
 
+#include <config/server_frame_build_feature.h>
+
 #include <vector>
 
-namespace hello {
+PROJECT_SERVER_FRAME_NAMESPACE_BEGIN
 class table_all_message;
-}
+PROJECT_SERVER_FRAME_NAMESPACE_END
 
 extern "C" struct redisReply;
 
@@ -19,13 +21,13 @@ namespace rpc {
 namespace db {
 namespace detail {
 
-int32_t do_nothing(hello::table_all_message &msg, const redisReply *data);
+int32_t do_nothing(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_all_message &msg, const redisReply *data);
 
-int32_t unpack_integer(hello::table_all_message &msg, const redisReply *data);
+int32_t unpack_integer(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_all_message &msg, const redisReply *data);
 
-int32_t unpack_str(hello::table_all_message &msg, const redisReply *data);
+int32_t unpack_str(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_all_message &msg, const redisReply *data);
 
-int32_t unpack_arr_str(hello::table_all_message &msg, const redisReply *data);
+int32_t unpack_arr_str(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_all_message &msg, const redisReply *data);
 }  // namespace detail
 }  // namespace db
 }  // namespace rpc

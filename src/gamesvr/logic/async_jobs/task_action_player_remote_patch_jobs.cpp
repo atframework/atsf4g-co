@@ -43,7 +43,7 @@ static int save_player_data(rpc::context& ctx, router_player_cache::ptr_t& cache
                             std::vector<int64_t>& complete_jobs_idx, int job_type, uint64_t user_id, uint32_t zone_id,
                             const std::string& openid) {
   if (!cache || !cache->is_writable()) {
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   int ret = 0;
@@ -52,7 +52,7 @@ static int save_player_data(rpc::context& ctx, router_player_cache::ptr_t& cache
     ret = cache->save(NULL);
     if (ret < 0) {
       // 这里可能是因为保存过程城中下线了，这时候直接放弃执行即可。下次登入后会继续执行的
-      if (hello::err::EN_ROUTER_NOT_WRITABLE == ret) {
+      if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE == ret) {
         FWLOGWARNING("save player {}({}:{}) failed, res: {}({})", openid, zone_id, user_id, ret,
                      protobuf_mini_dumper_get_error_msg(ret));
       } else {
@@ -82,7 +82,7 @@ int task_action_player_remote_patch_jobs::operator()() {
   need_restart_ = false;
   is_writable_ = false;
   if (!param_.user) {
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
   set_user_key(param_.user->get_user_id(), param_.user->get_zone_id());
 
@@ -92,17 +92,17 @@ int task_action_player_remote_patch_jobs::operator()() {
 
   // 缓存已被移除，当前player可能是上下文缓存，忽略patch
   if (!cache) {
-    return hello::err::EN_SUCCESS;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   // 缓存已被踢出，当前player是路由缓存，忽略patch
   if (!cache->is_writable()) {
-    return hello::err::EN_SUCCESS;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   // 注意这里会续期缓存生命周期，所以要确保前面判定都过后才能到这里
   if (!cache->is_object_equal(param_.user)) {
-    return hello::err::EN_SUCCESS;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
   is_writable_ = true;
   need_restart_ = false;
@@ -119,8 +119,9 @@ int task_action_player_remote_patch_jobs::operator()() {
    *     出错的流程不应该重启任务，而是放进队列尾等待后续重试，否则某些服务故障期间可能会导致无限循环。
    */
 
-  int ret = hello::err::EN_SUCCESS;
-  const ::google::protobuf::EnumDescriptor* desc = hello::EnPlayerAsyncJobsType_descriptor();
+  int ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+  const ::google::protobuf::EnumDescriptor* desc =
+      PROJECT_SERVER_FRAME_NAMESPACE_ID::EnPlayerAsyncJobsType_descriptor();
   for (int pull_jobs_idx = 0; desc && is_writable_ && !pending_to_logout && pull_jobs_idx < desc->value_count() &&
                               param_.user->is_inited() && false == need_restart_;
        ++pull_jobs_idx) {
@@ -139,12 +140,12 @@ int task_action_player_remote_patch_jobs::operator()() {
 
     ret = ::rpc::db::async_jobs::get_jobs(get_shared_context(), val_desc->number(), param_.user->get_user_id(),
                                           param_.user->get_zone_id(), job_list);
-    if (ret == hello::err::EN_DB_RECORD_NOT_FOUND) {
+    if (ret == PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
       ret = 0;
       continue;
     }
 
-    complete_jobs_idx.reserve(hello::EN_SL_PLAYER_ASYNC_JOBS_BATCH_NUMBER);
+    complete_jobs_idx.reserve(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_SL_PLAYER_ASYNC_JOBS_BATCH_NUMBER);
     size_t batch_job_number = 0;
     for (size_t i = 0; i < job_list.size(); ++i) {
       // 如果拉取完玩家下线了，中断后续任务
@@ -163,7 +164,7 @@ int task_action_player_remote_patch_jobs::operator()() {
       ++batch_job_number;
       int async_job_res = 0;
       switch (job_list[i].action_blob.action_case()) {
-        case hello::table_user_async_jobs_blob_data::kDebugMessage:
+        case PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user_async_jobs_blob_data::kDebugMessage:
           FWPLOGINFO(*param_.user, "[TODO] do async action {}, msg: {}",
                      static_cast<int>(job_list[i].action_blob.action_case()), job_list[i].action_blob.DebugString());
           break;
@@ -179,7 +180,7 @@ int task_action_player_remote_patch_jobs::operator()() {
                     async_job_res, protobuf_mini_dumper_get_error_msg(async_job_res));
       }
 
-      if (batch_job_number >= hello::EN_SL_PLAYER_ASYNC_JOBS_BATCH_NUMBER) {
+      if (batch_job_number >= PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_SL_PLAYER_ASYNC_JOBS_BATCH_NUMBER) {
         // 如果拉取完玩家下线了，中断后续任务
         is_writable_ = cache->is_writable();
         if (!is_writable_) {
@@ -250,7 +251,7 @@ int task_action_player_remote_patch_jobs::operator()() {
   }
 
   // 如果是执行过程中玩家对象离线导致不可写，直接跳过即可，前面会打印warning日志，不需要输出错误
-  if (hello::err::EN_ROUTER_NOT_WRITABLE == ret) {
+  if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE == ret) {
     ret = 0;
   }
   return ret;

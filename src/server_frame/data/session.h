@@ -5,14 +5,16 @@
 #include <design_pattern/nomovable.h>
 #include <design_pattern/noncopyable.h>
 
+#include <config/server_frame_build_feature.h>
+
 #include <memory>
 #include <string>
 #include <type_traits>
 #include <utility>
 
-namespace hello {
+PROJECT_SERVER_FRAME_NAMESPACE_BEGIN
 class CSMsg;
-}
+PROJECT_SERVER_FRAME_NAMESPACE_END
 
 class player_cache;
 
@@ -108,12 +110,12 @@ class session {
   std::shared_ptr<player_cache> get_player() const;
 
   // 下行post包
-  int32_t send_msg_to_client(hello::CSMsg &msg);
-  int32_t send_msg_to_client(hello::CSMsg &msg, uint64_t server_sequence);
+  int32_t send_msg_to_client(PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg &msg);
+  int32_t send_msg_to_client(PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg &msg, uint64_t server_sequence);
 
   int32_t send_msg_to_client(const void *msg_data, size_t msg_size);
 
-  static int32_t broadcast_msg_to_client(uint64_t bus_id, const hello::CSMsg &msg);
+  static int32_t broadcast_msg_to_client(uint64_t bus_id, const PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg &msg);
 
   static int32_t broadcast_msg_to_client(uint64_t bus_id, const void *msg_data, size_t msg_size);
 
@@ -124,7 +126,7 @@ class session {
 
   int32_t send_kickoff(int32_t reason);
 
-  void alloc_session_sequence(hello::CSMsg &msg);
+  void alloc_session_sequence(PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg &msg);
 
   inline uint64_t get_last_session_sequence() const { return session_sequence_; }
 

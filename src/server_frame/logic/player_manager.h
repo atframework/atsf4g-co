@@ -10,6 +10,7 @@
 
 #include <design_pattern/singleton.h>
 
+#include <config/server_frame_build_feature.h>
 #include <utility/environment_helper.h>
 
 #include <list>
@@ -62,11 +63,12 @@ class player_manager : public util::design_pattern::singleton<player_manager> {
 
   size_t size() const;
 
-  player_ptr_t create(uint64_t user_id, uint32_t zone_id, const std::string &openid, hello::table_login &login_tb,
-                      std::string &login_ver);
+  player_ptr_t create(uint64_t user_id, uint32_t zone_id, const std::string &openid,
+                      PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login &login_tb, std::string &login_ver);
   template <typename TPLAYER>
   const std::shared_ptr<TPLAYER> create_as(uint64_t user_id, uint32_t zone_id, const std::string &openid,
-                                           hello::table_login &login_tb, std::string &login_ver) {
+                                           PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login &login_tb,
+                                           std::string &login_ver) {
     return std::static_pointer_cast<TPLAYER>(create(user_id, zone_id, openid, login_tb, login_ver));
   }
 

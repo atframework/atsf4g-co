@@ -73,7 +73,7 @@ class cs_msg_dispatcher : public dispatcher_implement, public util::design_patte
   /**
    * @brief 获取操作类型
    * @param raw_msg 消息抽象结构
-   * @note 这只是一个调度曾规范，不强制执行。详情 @see hello::EnMsgOpType
+   * @note 这只是一个调度曾规范，不强制执行。详情 @see PROJECT_SERVER_FRAME_NAMESPACE_ID::EnMsgOpType
    * @return 消息操作类型
    */
   msg_op_type_t pick_msg_op_type(msg_raw_t &raw_msg) override;

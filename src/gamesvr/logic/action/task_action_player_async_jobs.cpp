@@ -27,7 +27,7 @@ task_action_player_async_jobs::~task_action_player_async_jobs() {}
 
 int task_action_player_async_jobs::operator()() {
   if (!param_.user) {
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
   set_user_key(param_.user->get_user_id(), param_.user->get_zone_id());
 
@@ -37,7 +37,7 @@ int task_action_player_async_jobs::operator()() {
   ::task_manager::task_t* current = ::task_manager::task_t::this_task();
   assert(current);
   if (NULL == current) {
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   if (param_.after && !param_.after->is_exiting()) {
@@ -50,19 +50,19 @@ int task_action_player_async_jobs::operator()() {
   player::task_queue_lock_guard lock_guard(*param_.user);
 
   if (current->is_timeout()) {
-    return hello::err::EN_SYS_TIMEOUT;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
   }
 
   if (current->is_faulted()) {
-    return hello::err::EN_SYS_RPC_TASK_KILLED;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
   }
 
   if (current->is_canceled()) {
-    return hello::err::EN_SYS_RPC_TASK_CANCELLED;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
   }
 
   if (current->is_exiting()) {
-    return hello::err::EN_SYS_RPC_TASK_EXITING;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING;
   }
 
   // 启动玩家数据异步命令patch任务
@@ -70,7 +70,7 @@ int task_action_player_async_jobs::operator()() {
     param_.user->get_user_async_jobs_manager().try_async_jobs(get_shared_context());
   }
 
-  return hello::err::EN_SUCCESS;
+  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int task_action_player_async_jobs::on_success() {

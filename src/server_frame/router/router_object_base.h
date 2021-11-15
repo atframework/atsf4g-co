@@ -196,7 +196,7 @@ class router_object_base : public ::util::design_pattern::noncopyable {
    *          路由BUS ID
    * @return 0或错误码
    */
-  // virtual int load(hello::SSMsg& msg_set) = 0;
+  // virtual int load(PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg& msg_set) = 0;
 
   /**
    * @brief 缓存升级为实体
@@ -230,15 +230,17 @@ class router_object_base : public ::util::design_pattern::noncopyable {
   }
   **/
 
-  inline std::list<hello::SSMsg> &get_transfer_pending_list() { return transfer_pending_; }
-  inline const std::list<hello::SSMsg> &get_transfer_pending_list() const { return transfer_pending_; }
+  inline std::list<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg> &get_transfer_pending_list() { return transfer_pending_; }
+  inline const std::list<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg> &get_transfer_pending_list() const {
+    return transfer_pending_;
+  }
 
   /**
    * @brief 根据请求包回发转发失败回包
    * @param req 请求包，在这个接口调用后req的内容将被移入到rsp包。req内容不再可用
    * @return 0或错误码
    */
-  int send_transfer_msg_failed(hello::SSMsg &&req);
+  int send_transfer_msg_failed(PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg &&req);
 
   int await_io_task();
 
@@ -295,7 +297,7 @@ class router_object_base : public ::util::design_pattern::noncopyable {
   std::list<task_manager::task_ptr_t> io_task_awaiter_;
 
   int32_t flags_;
-  std::list<hello::SSMsg> transfer_pending_;
+  std::list<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg> transfer_pending_;
 
   friend class router_manager_base;
   template <typename TCache, typename TObj, typename TPrivData>

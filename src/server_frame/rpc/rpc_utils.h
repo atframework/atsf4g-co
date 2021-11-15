@@ -19,6 +19,8 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
+#include <config/server_frame_build_feature.h>
+
 #include <opentelemetry/trace/span.h>
 
 #include <stdint.h>
@@ -36,16 +38,14 @@ namespace atapp {
 class app;
 }
 
-namespace hello {
+PROJECT_SERVER_FRAME_NAMESPACE_BEGIN
 namespace config {
 class logic_telemetry_cfg;
 }
-}  // namespace hello
 
-namespace hello {
 class SSMsg;
 class table_all_message;
-}  // namespace hello
+PROJECT_SERVER_FRAME_NAMESPACE_END
 
 namespace rpc {
 class context {
@@ -160,7 +160,8 @@ class context {
    * @param app atapp instance
    * @param telemetry telemetry configure
    */
-  static void set_current_service(const atapp::app &app, const hello::config::logic_telemetry_cfg &telemetry);
+  static void set_current_service(const atapp::app &app,
+                                  const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::logic_telemetry_cfg &telemetry);
 
  private:
   std::shared_ptr<::google::protobuf::Arena> allocator_;
@@ -168,8 +169,8 @@ class context {
   tracer::span_ptr_type parent_span_;
 };
 
-int wait(hello::SSMsg &msg, uint64_t check_sequence);
-int wait(hello::table_all_message &msg, uint64_t check_sequence);
-int wait(std::unordered_map<uint64_t, hello::SSMsg> &msg_waiters);
-int wait(std::unordered_map<uint64_t, hello::SSMsg *> &msg_waiters);
+int wait(PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg &msg, uint64_t check_sequence);
+int wait(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_all_message &msg, uint64_t check_sequence);
+int wait(std::unordered_map<uint64_t, PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg> &msg_waiters);
+int wait(std::unordered_map<uint64_t, PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg *> &msg_waiters);
 }  // namespace rpc

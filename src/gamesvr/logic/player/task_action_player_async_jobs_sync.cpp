@@ -32,7 +32,7 @@ int task_action_player_async_jobs_sync::operator()() {
 
   // TODO ...
 
-  return hello::err::EN_SUCCESS;
+  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int task_action_player_async_jobs_sync::on_success() { return get_result(); }

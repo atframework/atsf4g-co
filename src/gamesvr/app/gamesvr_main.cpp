@@ -16,6 +16,7 @@
 #include <config/excel/config_manager.h>
 #include <config/excel_config_wrapper.h>
 #include <config/logic_config.h>
+#include <config/server_frame_build_feature.h>
 
 #include <logic/logic_server_setup.h>
 #include <logic/session_manager.h>
@@ -101,7 +102,7 @@ struct app_handle_on_msg {
   int operator()(atapp::app &app, const atapp::app::message_sender_t &source, const atapp::app::message_t &msg) {
     if (0 == source.id) {
       FWLOGERROR("receive a message from unknown source or invalid body case");
-      return hello::EN_ERR_INVALID_PARAM;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
     }
 
     int ret = 0;

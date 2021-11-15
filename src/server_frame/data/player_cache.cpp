@@ -25,10 +25,10 @@
 #include "data/session.h"
 
 player_cache::player_cache(fake_constructor &) : user_id_(0), zone_id_(0), data_version_(0) {
-  server_sequence_ =
-      static_cast<uint64_t>((util::time::time_utility::get_sys_now() - hello::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET)
-                            << 10) +
-      static_cast<uint64_t>(util::time::time_utility::get_now_usec() / 1000);
+  server_sequence_ = static_cast<uint64_t>((util::time::time_utility::get_sys_now() -
+                                            PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET)
+                                           << 10) +
+                     static_cast<uint64_t>(util::time::time_utility::get_now_usec() / 1000);
 }
 
 player_cache::~player_cache() { FWPLOGDEBUG(*this, "destroyed {}", reinterpret_cast<const void *>(this)); }
@@ -74,7 +74,7 @@ void player_cache::login_init() {
 
   // refresh account parameters，这里只刷新部分数据
   {
-    hello::account_information &account = get_account_info();
+    PROJECT_SERVER_FRAME_NAMESPACE_ID::account_information &account = get_account_info();
     account.set_access(get_login_info().account().access());
     account.set_account_type(get_login_info().account().account_type());
     account.set_version_type(get_login_info().account().version_type());
@@ -109,7 +109,9 @@ void player_cache::refresh_feature_limit() {
 
 bool player_cache::gm_init() { return true; }
 
-bool player_cache::is_gm() const { return get_account_info().version_type() == hello::EN_VERSION_GM; }
+bool player_cache::is_gm() const {
+  return get_account_info().version_type() == PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_VERSION_GM;
+}
 
 void player_cache::on_login() {}
 
@@ -119,10 +121,10 @@ void player_cache::on_saved() {}
 
 void player_cache::on_update_session(const std::shared_ptr<session> &from, const std::shared_ptr<session> &to) {}
 
-void player_cache::init_from_table_data(const hello::table_user &tb_player) {
+void player_cache::init_from_table_data(const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &tb_player) {
   data_version_ = tb_player.data_version();
 
-  const hello::table_user *src_tb = &tb_player;
+  const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user *src_tb = &tb_player;
   if (src_tb->has_account()) {
     protobuf_copy_message(account_info_.ref(), src_tb->account());
   }
@@ -139,7 +141,7 @@ void player_cache::init_from_table_data(const hello::table_user &tb_player) {
   }
 }
 
-int player_cache::dump(hello::table_user &user, bool always) {
+int player_cache::dump(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &user, bool always) {
   user.set_open_id(get_open_id());
   user.set_user_id(get_user_id());
   user.set_zone_id(get_zone_id());
@@ -188,7 +190,8 @@ std::shared_ptr<session> player_cache::get_session() { return session_.lock(); }
 
 bool player_cache::has_session() const { return false == session_.expired(); }
 
-void player_cache::load_and_move_login_info(hello::table_login &&lg, const std::string &ver) {
+void player_cache::load_and_move_login_info(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login &&lg,
+                                            const std::string &ver) {
   login_info_.Swap(&lg);
   login_info_version_ = ver;
 
@@ -202,12 +205,12 @@ uint64_t player_cache::alloc_server_sequence() {
 }
 
 void player_cache::set_quick_save() const {
-  router_manager_base *mgr = router_manager_set::me()->get_manager(hello::EN_ROT_PLAYER);
+  router_manager_base *mgr = router_manager_set::me()->get_manager(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ROT_PLAYER);
   if (nullptr == mgr) {
     return;
   }
 
-  router_manager_base::key_t key(hello::EN_ROT_PLAYER, get_zone_id(), get_user_id());
+  router_manager_base::key_t key(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ROT_PLAYER, get_zone_id(), get_user_id());
   std::shared_ptr<router_object_base> obj = mgr->get_base_cache(key);
   if (!obj || !obj->is_writable()) {
     return;

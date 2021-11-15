@@ -596,7 +596,7 @@ void logic_server_common_module::update_remote_server_configure(const std::strin
   }
 
   rapidsjon_helper_dump_options default_dump_options;
-  hello::table_service_configure_data new_conf;
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_service_configure_data new_conf;
   rapidsjon_helper_parse(new_conf, global_conf, default_dump_options);
   rapidsjon_helper_parse(new_conf, zone_conf, default_dump_options);
 

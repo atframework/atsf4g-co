@@ -1,16 +1,21 @@
-#ifndef LOGIC_SESSION_MANAGER_H
-#define LOGIC_SESSION_MANAGER_H
+// Copyright 2021 atframework
 
 #pragma once
 
 #include <design_pattern/singleton.h>
 
+#include <config/server_frame_build_feature.h>
+
 #include <data/session.h>
 #include <utility/environment_helper.h>
 
-namespace hello {
+#include <map>
+#include <unordered_map>
+#include <vector>
+
+PROJECT_SERVER_FRAME_NAMESPACE_BEGIN
 class CSMsg;
-}
+PROJECT_SERVER_FRAME_NAMESPACE_END
 
 class session_manager : public util::design_pattern::singleton<session_manager> {
  public:
@@ -39,12 +44,10 @@ class session_manager : public util::design_pattern::singleton<session_manager> 
 
   size_t size() const;
 
-  int32_t broadcast_msg_to_client(const hello::CSMsg& msg);
+  int32_t broadcast_msg_to_client(const PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg& msg);
 
  private:
   session_counter_t session_counter_;
   session_index_t all_sessions_;
   time_t last_proc_timepoint_;
 };
-
-#endif

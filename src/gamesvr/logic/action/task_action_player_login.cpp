@@ -43,13 +43,13 @@ int task_action_player_login::operator()() {
   msg_cref_type req = get_request();
   if (!req.has_body() || !req.body().has_mcs_login_req()) {
     FWLOGERROR("login package error, msg: {}", req.DebugString());
-    set_response_code(hello::EN_ERR_INVALID_PARAM);
-    return hello::err::EN_SUCCESS;
+    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   int res = 0;
 
-  const ::hello::CSLoginReq &msg_body = req.body().mcs_login_req();
+  const PROJECT_SERVER_FRAME_NAMESPACE_ID::CSLoginReq &msg_body = req.body().mcs_login_req();
 
   // 先查找用户缓存，使用缓存。如果缓存正确则不需要拉取login表和user表
   player::ptr_t user = player_manager::me()->find_as<player>(msg_body.user_id(), zone_id);
@@ -63,7 +63,7 @@ int task_action_player_login::operator()() {
     std::shared_ptr<session> cur_sess = get_session();
     if (!cur_sess) {
       FWLOGERROR("session not found");
-      return hello::err::EN_SUCCESS;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
     }
 
     // 踢出前一个session
@@ -71,7 +71,7 @@ int task_action_player_login::operator()() {
 
     // 重复的登入包直接接受
     if (cur_sess == old_sess) {
-      return hello::err::EN_SUCCESS;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
     }
 
     user->set_session(cur_sess);
@@ -83,41 +83,41 @@ int task_action_player_login::operator()() {
     cur_sess->set_player(user);
 
     WPLOGDEBUG(*user, "relogin curr data version:%s", user->get_version().c_str());
-    return hello::err::EN_SUCCESS;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   // 如果有缓存要强制失效，因为可能其他地方登入了，这时候也不能复用缓存
   player_manager::me()->remove(msg_body.user_id(), zone_id, true);
   user.reset();
 
-  hello::table_login tb;
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login tb;
   std::string version;
   res = rpc::db::login::get(get_shared_context(), msg_body.open_id().c_str(), zone_id, tb, version);
   if (res < 0) {
     FWLOGERROR("player {} not found", msg_body.open_id());
-    set_response_code(hello::EN_ERR_INVALID_PARAM);
-    return hello::err::EN_SUCCESS;
+    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   if (msg_body.user_id() != tb.user_id()) {
     FWLOGERROR("player {} expect user_id={}, but we got {} not found", msg_body.open_id(), tb.user_id(),
                msg_body.user_id());
-    set_response_code(hello::EN_ERR_LOGIN_USERID_NOT_MATCH);
-    return hello::err::EN_SUCCESS;
+    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_USERID_NOT_MATCH);
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   // 2. 校验登入码
   if (util::time::time_utility::get_now() > tb.login_code_expired()) {
     FWLOGERROR("player {}({}:{}) login code expired", msg_body.open_id(), zone_id, msg_body.user_id());
-    set_response_code(hello::EN_ERR_LOGIN_VERIFY);
-    return hello::err::EN_SUCCESS;
+    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   if (0 != UTIL_STRFUNC_STRCMP(msg_body.login_code().c_str(), tb.login_code().c_str())) {
     FWLOGERROR("player {}({}:{}) login code error(expected: {}, real: {})", msg_body.open_id(), zone_id,
                msg_body.user_id(), tb.login_code(), msg_body.login_code());
-    set_response_code(hello::EN_ERR_LOGIN_VERIFY);
-    return hello::err::EN_SUCCESS;
+    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   // 3. 写入登入信息和登入信息续期会在路由系统中完成
@@ -127,8 +127,8 @@ int task_action_player_login::operator()() {
   // ============ 在这之后tb不再有效 ============
 
   if (!user) {
-    set_response_code(hello::EN_ERR_USER_NOT_FOUND);
-    return hello::err::EN_SUCCESS;
+    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_USER_NOT_FOUND);
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
   set_user_key(msg_body.user_id(), zone_id);
 
@@ -136,8 +136,8 @@ int task_action_player_login::operator()() {
   std::shared_ptr<session> my_sess = get_session();
   if (!my_sess) {
     FWLOGERROR("session not found");
-    set_response_code(hello::EN_ERR_NOT_LOGIN);
-    return hello::err::EN_SUCCESS;
+    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_NOT_LOGIN);
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   user->set_client_info(req.body().mcs_login_req().client_info());
@@ -149,8 +149,8 @@ int task_action_player_login::operator()() {
   // 如果不存在则是登入过程中掉线了
   if (!my_sess) {
     FWLOGERROR("session not found");
-    set_response_code(hello::EN_ERR_NOT_LOGIN);
-    return hello::err::EN_SYS_NOTFOUND;
+    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_NOT_LOGIN);
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
   }
 
   my_sess->set_player(user);
@@ -159,12 +159,12 @@ int task_action_player_login::operator()() {
 
   // 9. 登入成功
   // TODO Log
-  return hello::err::EN_SUCCESS;
+  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int task_action_player_login::on_success() {
-  hello::CSMsg &msg = add_rsp_msg();
-  ::hello::SCLoginRsp *rsp_body = msg.mutable_body()->mutable_msc_login_rsp();
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg &msg = add_rsp_msg();
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::SCLoginRsp *rsp_body = msg.mutable_body()->mutable_msc_login_rsp();
 
   rsp_body->set_heartbeat_interval(logic_config::me()->get_logic().heartbeat().interval().seconds());
   rsp_body->set_is_new_player(is_new_player_);
@@ -197,7 +197,7 @@ int task_action_player_login::on_success() {
     FWPLOGWARNING(*user, "login success but session changed , remove old session {}:{}", s->get_key().bus_id,
                   s->get_key().session_id);
     session_manager::me()->remove(s, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
-    set_response_code(hello::EN_ERR_LOGIN_OTHER_DEVICE);
+    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_OTHER_DEVICE);
     return get_result();
   }
 
@@ -259,15 +259,15 @@ int task_action_player_login::on_failed() {
   // 登入过程中掉线了，直接退出
   if (!s) {
     FWLOGERROR("session [{},{}] not found", get_gateway_info().first, get_gateway_info().second);
-    return hello::err::EN_SUCCESS;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   FWLOGERROR("session [{},{}] login failed, rsp code: {}, ret code: {}", get_gateway_info().first,
              get_gateway_info().second, get_response_code(), get_result());
 
-  hello::CSMsg &msg = add_rsp_msg();
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg &msg = add_rsp_msg();
 
-  ::hello::SCLoginRsp *rsp_body = msg.mutable_body()->mutable_msc_login_rsp();
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::SCLoginRsp *rsp_body = msg.mutable_body()->mutable_msc_login_rsp();
   rsp_body->set_last_sequence(0);
   rsp_body->set_zone_id(0);
 

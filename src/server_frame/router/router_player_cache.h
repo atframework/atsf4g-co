@@ -13,9 +13,9 @@
 
 struct router_player_private_type {
   router_player_private_type();
-  router_player_private_type(hello::table_login *tb, std::string *ver);
+  router_player_private_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login *tb, std::string *ver);
 
-  hello::table_login *login_tb;
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login *login_tb;
   std::string *login_ver;
 };
 

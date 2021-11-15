@@ -143,7 +143,7 @@ int router_object_base::remove_object(void *priv_data, uint64_t transfer_to_svr_
 
   // 在等待其他任务的时候已经完成移除或降级，直接成功即可
   if (!is_writable()) {
-    return hello::EN_SUCCESS;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_SUCCESS;
   }
 
   // 移除实体需要设置路由BUS ID为0并保存一次
@@ -221,7 +221,7 @@ int router_object_base::downgrade() {
   return 0;
 }
 
-int router_object_base::send_transfer_msg_failed(hello::SSMsg &&req) {
+int router_object_base::send_transfer_msg_failed(PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg &&req) {
   task_action_ss_req_base::msg_type rsp_msg;
   uint64_t dst_pd = req.head().bus_id();
   if (req.head().has_router()) {
@@ -236,7 +236,7 @@ int router_object_base::send_transfer_msg_failed(hello::SSMsg &&req) {
   }
 
   // 转移失败错误码
-  rsp_msg.mutable_head()->set_error_code(hello::err::EN_ROUTER_TRANSFER);
+  rsp_msg.mutable_head()->set_error_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_TRANSFER);
 
   return ss_msg_dispatcher::me()->send_to_proc(dst_pd, rsp_msg);
 }
@@ -253,7 +253,7 @@ int router_object_base::await_io_task() {
 
   task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
   if (!self_task) {
-    return hello::err::EN_SYS_RPC_NO_TASK;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
   }
 
   return await_io_task(self_task);
@@ -293,16 +293,16 @@ int router_object_base::await_io_task(task_manager::task_ptr_t &self_task) {
   int ret = 0;
   while (io_task_ && self_task && self_task != io_task_) {
     if (self_task->is_timeout()) {
-      ret = hello::err::EN_SYS_TIMEOUT;
+      ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
       break;
     } else if (self_task->is_faulted()) {
-      ret = hello::err::EN_SYS_RPC_TASK_KILLED;
+      ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
       break;
     } else if (self_task->is_canceled()) {
-      ret = hello::err::EN_SYS_RPC_TASK_CANCELLED;
+      ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
       break;
     } else if (self_task->is_exiting()) {
-      ret = hello::err::EN_SYS_RPC_TASK_EXITING;
+      ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING;
       break;
     }
 
@@ -323,7 +323,7 @@ int router_object_base::await_io_task(task_manager::task_ptr_t &self_task) {
 
 int router_object_base::await_io_task(task_manager::task_ptr_t &self_task, task_manager::task_ptr_t &other_task) {
   if (!self_task || !other_task) {
-    return hello::err::EN_SYS_RPC_NO_TASK;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
   }
 
   if (other_task == io_task_) {
@@ -333,16 +333,16 @@ int router_object_base::await_io_task(task_manager::task_ptr_t &self_task, task_
   int ret = 0;
   while (true) {
     if (self_task->is_timeout()) {
-      ret = hello::err::EN_SYS_TIMEOUT;
+      ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
       break;
     } else if (self_task->is_faulted()) {
-      ret = hello::err::EN_SYS_RPC_TASK_KILLED;
+      ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
       break;
     } else if (self_task->is_canceled()) {
-      ret = hello::err::EN_SYS_RPC_TASK_CANCELLED;
+      ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
       break;
     } else if (self_task->is_exiting()) {
-      ret = hello::err::EN_SYS_RPC_TASK_EXITING;
+      ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING;
       break;
     }
 
@@ -370,7 +370,7 @@ int router_object_base::pull_cache_inner(void *priv_data) {
 
   task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
   if (!self_task) {
-    return hello::err::EN_SYS_RPC_NO_TASK;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
   }
 
   int ret = await_io_task(self_task);
@@ -407,7 +407,7 @@ int router_object_base::pull_object_inner(void *priv_data) {
 
   task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
   if (!self_task) {
-    return hello::err::EN_SYS_RPC_NO_TASK;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
   }
 
   int ret = await_io_task(self_task);
@@ -417,7 +417,7 @@ int router_object_base::pull_object_inner(void *priv_data) {
 
   // 其他任务中已经拉取成功并已经升级为实体且未失效，直接视为成功
   if (is_writable()) {
-    return hello::EN_SUCCESS;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_SUCCESS;
   }
 
   // 先等待之前的任务完成再设置flag
@@ -445,7 +445,7 @@ int router_object_base::pull_object_inner(void *priv_data) {
   if (0 != get_router_server_id()) {
     if (logic_config::me()->get_local_server_id() != get_router_server_id()) {
       // 可能某处的缓存过老，这是正常流程，返回错误码即可，不用打错误日志
-      return hello::err::EN_ROUTER_NOT_WRITABLE;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE;
     }
   }
 
@@ -462,7 +462,7 @@ int router_object_base::save_object_inner(void *priv_data) {
 
   task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
   if (!self_task) {
-    return hello::err::EN_SYS_RPC_NO_TASK;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
   }
 
   // 如果有其他任务正在保存，需要等待那个任务结束
@@ -472,7 +472,7 @@ int router_object_base::save_object_inner(void *priv_data) {
   }
 
   if (!is_writable()) {
-    return hello::err::EN_ROUTER_NOT_WRITABLE;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE;
   }
 
   // 因为可能叠加和被其他任务抢占，所以这里需要核查一遍保存序号
@@ -540,7 +540,7 @@ void router_object_base::unset_timer_ref() {
 
 int router_object_base::await_io_schedule_order_task(task_manager::task_ptr_t &self_task) {
   if (io_schedule_order_.empty()) {
-    return hello::err::EN_SUCCESS;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   auto last_task_id = *io_schedule_order_.rbegin();
@@ -588,5 +588,5 @@ int router_object_base::await_io_schedule_order_task(task_manager::task_ptr_t &s
     io_schedule_order_.erase(select_task_id);
   }
 
-  return hello::err::EN_SUCCESS;
+  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
 }

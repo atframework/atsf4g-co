@@ -19,6 +19,8 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
+#include <config/server_frame_build_feature.h>
+
 #include <stdint.h>
 
 #include <cstddef>
@@ -77,19 +79,19 @@ class logic_server_common_module : public atapp::module_impl {
   explicit logic_server_common_module(const logic_server_common_module_conf_t& static_conf);
   ~logic_server_common_module();
 
-  virtual int init() override;
+  int init() override;
 
-  virtual void ready() override;
+  void ready() override;
 
-  virtual int reload() override;
+  int reload() override;
 
-  virtual int stop() override;
+  int stop() override;
 
-  virtual int timeout() override;
+  int timeout() override;
 
-  virtual const char* name() const override;
+  const char* name() const override;
 
-  virtual int tick() override;
+  int tick() override;
 
   int debug_stop_app();
 
@@ -118,7 +120,8 @@ class logic_server_common_module : public atapp::module_impl {
 
   void update_remote_server_configure(const std::string& global_conf, int32_t global_version,
                                       const std::string& zone_conf, int32_t zone_version);
-  inline const hello::table_service_configure_data& get_remote_server_configure() const noexcept {
+  inline const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_service_configure_data& get_remote_server_configure()
+      const noexcept {
     return server_remote_conf_;
   }
 
@@ -137,7 +140,7 @@ class logic_server_common_module : public atapp::module_impl {
   bool etcd_event_handle_registered_;
   int64_t cachesvr_discovery_version_;
 
-  hello::table_service_configure_data server_remote_conf_;
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_service_configure_data server_remote_conf_;
   int32_t server_remote_conf_global_version_;
   int32_t server_remote_conf_zone_version_;
   time_t server_remote_conf_next_update_time_;

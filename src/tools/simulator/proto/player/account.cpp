@@ -28,7 +28,7 @@ void on_cmd_login_auth(util::cli::callback_param params) {
 
   client_simulator::msg_t &msg = client_simulator::add_req(params);
   // token
-  hello::CSLoginAuthReq *req_body = msg.mutable_body()->mutable_mcs_login_auth_req();
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSLoginAuthReq *req_body = msg.mutable_body()->mutable_mcs_login_auth_req();
   req_body->set_open_id(params[0]->to_cpp_string());
   req_body->set_resource_version(sender.player->get_resource_version());
   req_body->set_package_version(sender.player->get_package_version());
@@ -53,7 +53,7 @@ void on_cmd_login_auth(util::cli::callback_param params) {
   }
 
   protobuf_copy_message(*req_body->mutable_account(), sender.player->get_account());
-  req_body->set_system_id(static_cast<hello::EnSystemID>(sender.player->get_system_id()));
+  req_body->set_system_id(static_cast<PROJECT_SERVER_FRAME_NAMESPACE_ID::EnSystemID>(sender.player->get_system_id()));
 }
 
 void on_rsp_login_auth(client_simulator::player_ptr_t player, client_simulator::msg_t &msg) {
@@ -127,7 +127,7 @@ void on_cmd_login(util::cli::callback_param params) {
   }
 
   client_simulator::msg_t &req = client_simulator::add_req(params);
-  hello::CSLoginReq *req_body = req.mutable_body()->mutable_mcs_login_req();
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSLoginReq *req_body = req.mutable_body()->mutable_mcs_login_req();
 
   req_body->set_login_code(sender.player->get_login_code());
   req_body->set_open_id(sender.player->get_id());
@@ -157,11 +157,12 @@ void on_rsp_pong(client_simulator::player_ptr_t player, client_simulator::msg_t 
 void on_cmd_get_info(util::cli::callback_param params) {
   SIMULATOR_CHECK_PLAYER_PARAMNUM(params, 1);
 
-  const ::google::protobuf::Descriptor *mds = hello::CSPlayerGetInfoReq::descriptor();
+  const ::google::protobuf::Descriptor *mds = PROJECT_SERVER_FRAME_NAMESPACE_ID::CSPlayerGetInfoReq::descriptor();
   int field_count = mds->field_count();
 
   client_simulator::msg_t &req = client_simulator::add_req(params);
-  hello::CSPlayerGetInfoReq *req_body = req.mutable_body()->mutable_mcs_player_getinfo_req();
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSPlayerGetInfoReq *req_body =
+      req.mutable_body()->mutable_mcs_player_getinfo_req();
 
   std::string seg_name;
   const google::protobuf::Reflection *reflet = req_body->GetReflection();
@@ -214,7 +215,7 @@ SIMULATOR_ACTIVE(player_account, base) {
   {
     // 通过protobuf反射的智能补全设置
     client_simulator::cast(base)->reg_req()["Player"]["GetInfo"]["all"];
-    const ::google::protobuf::Descriptor *mds = hello::CSPlayerGetInfoReq::descriptor();
+    const ::google::protobuf::Descriptor *mds = PROJECT_SERVER_FRAME_NAMESPACE_ID::CSPlayerGetInfoReq::descriptor();
     int field_count = mds->field_count();
 
     for (int i = 0; i < field_count; ++i) {

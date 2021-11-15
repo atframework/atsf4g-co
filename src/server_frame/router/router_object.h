@@ -48,7 +48,7 @@ class router_object : public router_object_base {
    */
   int save(void *priv_data) override {
     if (!is_writable()) {
-      return hello::err::EN_ROUTER_NOT_WRITABLE;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE;
     }
 
     int ret = save_object_inner(priv_data);

@@ -17,9 +17,9 @@
 
 #include "dispatcher/actor_action_base.h"
 
-class actor_action_ss_req_base : public actor_action_req_base<hello::SSMsg> {
+class actor_action_ss_req_base : public actor_action_req_base<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg> {
  public:
-  using base_type = actor_action_req_base<hello::SSMsg>;
+  using base_type = actor_action_req_base<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg>;
   using msg_type = base_type::msg_type;
   using msg_ref_type = msg_type&;
   using msg_cref_type = const msg_type;

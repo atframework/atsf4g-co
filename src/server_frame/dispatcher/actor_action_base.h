@@ -6,6 +6,8 @@
 
 #include <libcopp/utils/features.h>
 
+#include <config/server_frame_build_feature.h>
+
 #include <rpc/rpc_utils.h>
 
 #include <list>

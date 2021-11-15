@@ -37,7 +37,7 @@ int task_action_player_logout::operator()() {
     flag_guard.setup(*s, session::flag_t::EN_SESSION_FLAG_CLOSING);
     // 如果正在其他任务中执行移除流程，这里直接跳过即可
     if (!flag_guard) {
-      return hello::err::EN_SUCCESS;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
     }
 
     // 连接断开的时候需要保存一下数据
@@ -52,19 +52,20 @@ int task_action_player_logout::operator()() {
                     protobuf_mini_dumper_get_error_msg(get_response_code()));
 
         session_manager::me()->remove(s);
-        return hello::err::EN_SUCCESS;
+        return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
       }
 
       if (user->is_writable() && user->get_session() == s && !player_manager::me()->remove(user, false)) {
-        set_response_code(hello::err::EN_SYS_PARAM);
-        FWPLOGERROR(*user, "logout failed, res: {}({})", static_cast<int>(hello::err::EN_SYS_PARAM),
-                    protobuf_mini_dumper_get_error_msg(hello::err::EN_SYS_PARAM));
+        set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM);
+        FWPLOGERROR(*user, "logout failed, res: {}({})",
+                    static_cast<int>(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM),
+                    protobuf_mini_dumper_get_error_msg(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM));
       }
     }
     session_manager::me()->remove(s);
   }
 
-  return hello::err::EN_SUCCESS;
+  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int task_action_player_logout::on_success() { return get_result(); }

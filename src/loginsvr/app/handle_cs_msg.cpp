@@ -11,7 +11,8 @@
 int app_handle_cs_msg::init() {
   int ret = 0;
 
-  REG_TASK_MSG_HANDLE(cs_msg_dispatcher, ret, task_action_login_authorization, hello::CSMsgBody::kMcsLoginAuthReq);
+  REG_TASK_MSG_HANDLE(cs_msg_dispatcher, ret, task_action_login_authorization,
+                      PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsgBody::kMcsLoginAuthReq);
 
   return ret;
 }

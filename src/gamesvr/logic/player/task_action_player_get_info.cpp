@@ -32,13 +32,13 @@ int task_action_player_get_info::operator()() {
   player::ptr_t user = get_player<player>();
   if (!user) {
     FWLOGERROR("not logined.");
-    set_response_code(hello::EN_ERR_LOGIN_NOT_LOGINED);
-    return hello::err::EN_SUCCESS;
+    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   // TODO ...
 
-  return hello::err::EN_SUCCESS;
+  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int task_action_player_get_info::on_success() { return get_result(); }

@@ -38,21 +38,21 @@ std::unordered_set<std::string> task_action_login_authorization::white_skip_open
 task_action_login_authorization::task_action_login_authorization(dispatcher_start_data_t &&param)
     : task_action_cs_req_base(COPP_MACRO_STD_MOVE(param)),
       is_new_player_(false),
-      strategy_type_(hello::EN_VERSION_DEFAULT),
+      strategy_type_(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_VERSION_DEFAULT),
       zone_id_(0),
       final_user_id_(0) {}
 task_action_login_authorization::~task_action_login_authorization() {}
 
 int task_action_login_authorization::operator()() {
   is_new_player_ = false;
-  strategy_type_ = hello::EN_VERSION_DEFAULT;
+  strategy_type_ = PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_VERSION_DEFAULT;
   zone_id_ = logic_config::me()->get_local_zone_id();
 
   session::ptr_t my_sess = get_session();
   if (!my_sess) {
     FWLOGERROR("session not found");
-    set_response_code(hello::EN_ERR_SYSTEM);
-    return hello::err::EN_SYS_PARAM;
+    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_SYSTEM);
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
   // 设置登入协议ID
   my_sess->set_login_task_id(get_task_id());
@@ -66,12 +66,12 @@ int task_action_login_authorization::operator()() {
   msg_cref_type req = get_request();
   if (!req.has_body() || !req.body().has_mcs_login_auth_req()) {
     FWLOGERROR("login package error, msg: {}", req.DebugString());
-    set_response_code(hello::EN_ERR_INVALID_PARAM);
-    return hello::err::EN_SUCCESS;
+    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
-  const ::hello::CSLoginAuthReq &msg_body_raw = req.body().mcs_login_auth_req();
-  ::hello::CSLoginAuthReq msg_body;
+  const PROJECT_SERVER_FRAME_NAMESPACE_ID::CSLoginAuthReq &msg_body_raw = req.body().mcs_login_auth_req();
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSLoginAuthReq msg_body;
   protobuf_copy_message(msg_body, msg_body_raw);
 
   // 2. 版本号及更新逻辑
@@ -94,8 +94,8 @@ int task_action_login_authorization::operator()() {
   //    // 检查客户端更新信息 更新不分平台值0
   //    if (update_rule_manager::me()->check_update(update_info_, account_type, channel_id, system_id, version,
   //    strategy_type_)) {
-  //        set_response_code(hello::EN_ERR_LOGIN_VERSION);
-  //        return hello::EN_ERR_LOGIN_VERSION;
+  //        set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_VERSION);
+  //        return PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_VERSION;
   //    }
   //} while (false);
 
@@ -105,13 +105,13 @@ int task_action_login_authorization::operator()() {
     auth_fn_t vfn = get_verify_fn(account_type);
     if (nullptr == vfn) {
       // 平台不收支持错误码
-      set_response_code(hello::EN_ERR_LOGIN_INVALID_PLAT);
+      set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_INVALID_PLAT);
       FWLOGERROR("user {} report invalid account type {}", msg_body.open_id(), account_type);
-      return hello::err::EN_SUCCESS;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
     }
 
     // 第三方平台用原始数据
-    if (account_type == hello::EN_ATI_ACCOUNT_INNER) {
+    if (account_type == PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ATI_ACCOUNT_INNER) {
       res = (this->*vfn)(msg_body);
     } else {
       res = (this->*vfn)(msg_body_raw);
@@ -122,7 +122,7 @@ int task_action_login_authorization::operator()() {
     if (res < 0) {
       // 平台校验错误错误码
       set_response_code(res);
-      return hello::err::EN_SUCCESS;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
     }
   }
 
@@ -152,33 +152,33 @@ int task_action_login_authorization::operator()() {
     if (white_skip_openids_.end() == white_skip_openids_.find(final_open_id_)) {
       // 维护模式，直接踢下线
       // if (server_maintenance_mode) {
-      //   set_response_code(hello::EN_ERR_MAINTENANCE);
+      //   set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_MAINTENANCE);
       // } else {
-      set_response_code(hello::EN_ERR_LOGIN_SERVER_PENDING);
+      set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_SERVER_PENDING);
       // }
 
-      return hello::err::EN_SUCCESS;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
     }
   }
 
   // 5. 获取当前账户登入信息(如果不存在则直接转到 9)
   do {
     res = rpc::db::login::get(get_shared_context(), msg_body.open_id().c_str(), zone_id_, login_data_, version_);
-    if (hello::err::EN_DB_RECORD_NOT_FOUND != res && res < 0) {
+    if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res && res < 0) {
       FWLOGERROR("call login rpc method failed, msg: {}", msg_body.DebugString());
-      set_response_code(hello::EN_ERR_UNKNOWN);
+      set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_UNKNOWN);
       return res;
     }
 
-    if (hello::err::EN_DB_RECORD_NOT_FOUND == res) {
+    if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == res) {
       break;
     }
 
     // 6. 是否禁止登入
     if (util::time::time_utility::get_now() < login_data_.ban_time()) {
-      set_response_code(hello::EN_ERR_LOGIN_BAN);
+      set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_BAN);
       FWLOGINFO("user {} try to login but banned", msg_body.open_id());
-      return hello::err::EN_SUCCESS;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
     }
 
     // 优先使用未过期的gamesvr index
@@ -207,8 +207,8 @@ int task_action_login_authorization::operator()() {
 
     // 7. 如果在线则尝试踢出
     if (0 != login_data_.router_server_id()) {
-      hello::SSPlayerKickOffReq kickoff_req;
-      hello::SSPlayerKickOffRsp kickoff_rsp;
+      PROJECT_SERVER_FRAME_NAMESPACE_ID::SSPlayerKickOffReq kickoff_req;
+      PROJECT_SERVER_FRAME_NAMESPACE_ID::SSPlayerKickOffRsp kickoff_rsp;
       kickoff_req.set_reason(::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
       int32_t ret = static_cast<int>(rpc::game::player_kickoff(get_shared_context(), login_data_.router_server_id(),
                                                                zone_id_, login_data_.user_id(), msg_body.open_id(),
@@ -226,8 +226,8 @@ int task_action_login_authorization::operator()() {
 
         if (util::time::time_utility::get_now() - last_saved_time <
             logic_config::me()->get_logic().session().login_code_protect().seconds()) {
-          set_response_code(hello::EN_ERR_LOGIN_ALREADY_ONLINE);
-          return hello::err::EN_PLAYER_KICKOUT;
+          set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_ALREADY_ONLINE);
+          return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_PLAYER_KICKOUT;
         } else {
           FWLOGWARNING("user {} send kickoff failed, but login time timeout, conitnue login.", login_data_.open_id());
           login_data_.set_router_server_id(0);
@@ -239,7 +239,7 @@ int task_action_login_authorization::operator()() {
         res = rpc::db::login::get(get_shared_context(), msg_body.open_id().c_str(), zone_id_, login_data_, version_);
         if (res < 0) {
           FWLOGERROR("call login rpc method failed, msg: {}", msg_body.DebugString());
-          set_response_code(hello::EN_ERR_LOGIN_ALREADY_ONLINE);
+          set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_ALREADY_ONLINE);
           return res;
         }
 
@@ -248,8 +248,8 @@ int task_action_login_authorization::operator()() {
         if (0 != login_data_.router_server_id() && old_svr_id != login_data_.router_server_id()) {
           FWLOGERROR("user {} logout failed.", msg_body.open_id());
           // 踢下线失败的错误码
-          set_response_code(hello::EN_ERR_LOGIN_ALREADY_ONLINE);
-          return hello::err::EN_PLAYER_KICKOUT;
+          set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_ALREADY_ONLINE);
+          return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_PLAYER_KICKOUT;
         }
         login_data_.set_router_server_id(0);
       }
@@ -258,16 +258,16 @@ int task_action_login_authorization::operator()() {
 
   // 9. 创建或更新登入信息（login_code）
   // 新用户则创建
-  if (hello::err::EN_DB_RECORD_NOT_FOUND == res) {
+  if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == res) {
     // 生成容易识别的数字UUID
     int64_t player_uid = rpc::game::player::alloc_user_id(get_shared_context());
     if (player_uid <= 0) {
       FWLOGERROR("call alloc_user_id failed, openid: {}, res: {}", msg_body.open_id(), player_uid);
-      set_response_code(hello::EN_ERR_LOGIN_CREATE_PLAYER_FAILED);
+      set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_CREATE_PLAYER_FAILED);
       return res;
     }
 
-    player_uid += hello::config::EN_GCC_START_PLAYER_ID;
+    player_uid += PROJECT_SERVER_FRAME_NAMESPACE_ID::config::EN_GCC_START_PLAYER_ID;
 
     init_login_data(login_data_, msg_body, player_uid, channel_id);
 
@@ -290,10 +290,10 @@ int task_action_login_authorization::operator()() {
                                        util::time::time_utility::get_now());
 
     // 平台信息更新
-    ::hello::account_information *plat_dst = login_data_.mutable_account();
-    const ::hello::DAccountData &plat_src = msg_body.account();
+    PROJECT_SERVER_FRAME_NAMESPACE_ID::account_information *plat_dst = login_data_.mutable_account();
+    const PROJECT_SERVER_FRAME_NAMESPACE_ID::DAccountData &plat_src = msg_body.account();
 
-    plat_dst->set_account_type(static_cast<hello::EnAccountTypeID>(account_type));
+    plat_dst->set_account_type(static_cast<PROJECT_SERVER_FRAME_NAMESPACE_ID::EnAccountTypeID>(account_type));
     if (!plat_src.access().empty()) {
       plat_dst->set_access(plat_src.access());
     }
@@ -305,18 +305,18 @@ int task_action_login_authorization::operator()() {
   res = rpc::db::login::set(get_shared_context(), msg_body.open_id().c_str(), zone_id_, login_data_, version_);
   if (res < 0) {
     FWLOGERROR("save login data for {} failed, msg:\n{}", msg_body.open_id(), login_data_.DebugString());
-    set_response_code(hello::EN_ERR_SYSTEM);
+    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_SYSTEM);
     return res;
   }
 
   // 10.登入成功
-  return hello::err::EN_SUCCESS;
+  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int task_action_login_authorization::on_success() {
-  hello::CSMsg &msg = add_rsp_msg();
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg &msg = add_rsp_msg();
 
-  ::hello::SCLoginAuthRsp *rsp_body = msg.mutable_body()->mutable_msc_login_auth_rsp();
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::SCLoginAuthRsp *rsp_body = msg.mutable_body()->mutable_msc_login_auth_rsp();
   rsp_body->set_login_code(login_data_.login_code());
   rsp_body->set_open_id(final_open_id_);  // 最终使用的OpenID
   rsp_body->set_user_id(final_user_id_);
@@ -329,14 +329,14 @@ int task_action_login_authorization::on_success() {
   // 登入过程中掉线了，直接退出
   if (!my_sess) {
     FWLOGERROR("session not found");
-    return hello::err::EN_SUCCESS;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   // 完成登入流程，不再处于登入状态
   my_sess->set_login_task_id(0);
 
   // 如果是版本过低则要下发更新信息
-  if (hello::EN_UPDATE_NONE != update_info_.result()) {
+  if (PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_UPDATE_NONE != update_info_.result()) {
     rsp_body->mutable_update_info()->Swap(&update_info_);
   }
 
@@ -362,11 +362,11 @@ int task_action_login_authorization::on_failed() {
   // 登入过程中掉线了，直接退出
   if (!s) {
     FWLOGERROR("session not found");
-    return hello::err::EN_SUCCESS;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
-  hello::CSMsg &msg = add_rsp_msg();
-  hello::SCLoginAuthRsp *rsp_body = msg.mutable_body()->mutable_msc_login_auth_rsp();
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg &msg = add_rsp_msg();
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::SCLoginAuthRsp *rsp_body = msg.mutable_body()->mutable_msc_login_auth_rsp();
   rsp_body->set_login_code("");
   rsp_body->set_open_id(final_open_id_);
   rsp_body->set_user_id(final_user_id_);
@@ -375,11 +375,12 @@ int task_action_login_authorization::on_failed() {
   rsp_body->set_zone_id(zone_id_);
 
   // 如果是版本过低则要下发更新信息
-  if (hello::EN_UPDATE_NONE != update_info_.result()) {
+  if (PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_UPDATE_NONE != update_info_.result()) {
     rsp_body->mutable_update_info()->Swap(&update_info_);
   }
 
-  // if (hello::EN_ERR_LOGIN_SERVER_PENDING == get_response_code() || hello::EN_ERR_MAINTENANCE == get_response_code())
+  // if (PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_SERVER_PENDING == get_response_code() ||
+  // PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_MAINTENANCE == get_response_code())
   // {
   //   rsp_body->set_start_time(logic_config::me()->get_logic().server_open_time);
   // } else {
@@ -395,21 +396,23 @@ int task_action_login_authorization::on_failed() {
 
 int32_t task_action_login_authorization::check_proto_update(uint32_t ver_no) {
   // FIXME check if client version is available
-  return hello::err::EN_SUCCESS;
+  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 task_action_login_authorization::auth_fn_t task_action_login_authorization::get_verify_fn(uint32_t account_type) {
-  static auth_fn_t all_auth_fns[hello::EnAccountTypeID_ARRAYSIZE];
+  static auth_fn_t all_auth_fns[PROJECT_SERVER_FRAME_NAMESPACE_ID::EnAccountTypeID_ARRAYSIZE];
 
-  if (nullptr != all_auth_fns[hello::EN_ATI_ACCOUNT_INNER]) {
-    return all_auth_fns[account_type % hello::EnAccountTypeID_ARRAYSIZE];
+  if (nullptr != all_auth_fns[PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ATI_ACCOUNT_INNER]) {
+    return all_auth_fns[account_type % PROJECT_SERVER_FRAME_NAMESPACE_ID::EnAccountTypeID_ARRAYSIZE];
   }
 
-  all_auth_fns[hello::EN_ATI_ACCOUNT_INNER] = &task_action_login_authorization::verify_plat_account;
-  return all_auth_fns[account_type % hello::EnAccountTypeID_ARRAYSIZE];
+  all_auth_fns[PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ATI_ACCOUNT_INNER] =
+      &task_action_login_authorization::verify_plat_account;
+  return all_auth_fns[account_type % PROJECT_SERVER_FRAME_NAMESPACE_ID::EnAccountTypeID_ARRAYSIZE];
 }
 
-void task_action_login_authorization::init_login_data(hello::table_login &tb, const ::hello::CSLoginAuthReq &req,
+void task_action_login_authorization::init_login_data(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login &tb,
+                                                      const PROJECT_SERVER_FRAME_NAMESPACE_ID::CSLoginAuthReq &req,
                                                       int64_t player_uid, uint32_t channel_id) {
   tb.set_open_id(req.open_id());
   tb.set_user_id(static_cast<uint64_t>(player_uid));
@@ -433,38 +436,38 @@ void task_action_login_authorization::init_login_data(hello::table_login &tb, co
   tb.set_stat_login_failed_times(0);
 }
 
-std::string task_action_login_authorization::make_openid(const hello::CSLoginAuthReq &req) {
+std::string task_action_login_authorization::make_openid(const PROJECT_SERVER_FRAME_NAMESPACE_ID::CSLoginAuthReq &req) {
   return rpc::auth::login::make_open_id(zone_id_, req.account().account_type(), req.account().channel_id(),
                                         req.open_id());
 }
 
-int task_action_login_authorization::verify_plat_account(const ::hello::CSLoginAuthReq &req) {
-  hello::table_login tb;
+int task_action_login_authorization::verify_plat_account(const PROJECT_SERVER_FRAME_NAMESPACE_ID::CSLoginAuthReq &req) {
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login tb;
   std::string version;
   int res = rpc::db::login::get(get_shared_context(), req.open_id().c_str(), zone_id_, tb, version);
-  if (hello::err::EN_DB_RECORD_NOT_FOUND != res && res < 0) {
+  if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res && res < 0) {
     FWLOGERROR("call login rpc method failed, msg: {}", req.DebugString());
-    return hello::EN_ERR_SYSTEM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_SYSTEM;
   }
 
-  if (hello::err::EN_DB_RECORD_NOT_FOUND == res) {
-    return hello::EN_SUCCESS;
+  if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == res) {
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_SUCCESS;
   }
 
   // 校验密码
   if (!req.has_account()) {
     if (tb.account().access().empty()) {
-      return hello::EN_SUCCESS;
+      return PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_SUCCESS;
     }
 
     // 参数错误
-    return hello::EN_ERR_INVALID_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
   }
 
   if (req.account().access() != tb.account().access()) {
     // 平台校验不通过错误码
-    return hello::EN_ERR_LOGIN_VERIFY;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY;
   }
 
-  return hello::EN_SUCCESS;
+  return PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_SUCCESS;
 }

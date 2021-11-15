@@ -22,6 +22,9 @@ endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/generate-rpc-task.cmake")
 
+configure_file("${CMAKE_CURRENT_LIST_DIR}/generate-nomsg-task.sh.in" "${CMAKE_CURRENT_LIST_DIR}/generate-nomsg-task.sh"
+               @ONLY NEWLINE_STYLE LF)
+
 add_subdirectory(echosvr)
 
 add_subdirectory(server_frame)

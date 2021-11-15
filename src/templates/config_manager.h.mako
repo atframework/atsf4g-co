@@ -29,6 +29,11 @@ import time
 
 #include "config/compiler/protobuf_suffix.h"
 
+% for block_file in pb_set.get_custom_blocks("custom_config_include"):
+// include custom_config_include: ${block_file}
+<%include file="${block_file}" />
+% endfor
+
 % for pb_msg in pb_set.generate_message:
 %   for loader in pb_msg.loaders:
 #include "${loader.get_cpp_header_path()}"
@@ -48,7 +53,7 @@ struct config_group_t {
 % for block_file in pb_set.get_custom_blocks("custom_config_group"):
 <%include file="${block_file}" />
 % endfor
-} ;
+};
 
 class config_manager {
 public:

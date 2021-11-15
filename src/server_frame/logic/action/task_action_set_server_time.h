@@ -9,9 +9,11 @@
 #include <dispatcher/task_action_ss_req_base.h>
 
 class task_action_set_server_time
-    : public task_action_ss_rpc_base<hello::SSGlobalLogicSetServerTimeSync, google::protobuf::Empty> {
+    : public task_action_ss_rpc_base<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSGlobalLogicSetServerTimeSync,
+                                     google::protobuf::Empty> {
  public:
-  using base_type = task_action_ss_rpc_base<hello::SSGlobalLogicSetServerTimeSync, google::protobuf::Empty>;
+  using base_type = task_action_ss_rpc_base<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSGlobalLogicSetServerTimeSync,
+                                            google::protobuf::Empty>;
   using msg_type = base_type::msg_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

@@ -17,6 +17,7 @@ import time
 #include <time/time_utility.h>
 
 #include <config/logic_config.h>
+#include <config/server_frame_build_feature.h>
 #include <utility/protobuf_mini_dumper.h>
 
 ${task_class_name}::${task_class_name}(
@@ -31,7 +32,7 @@ const char *${task_class_name}::name() const {
 int ${task_class_name}::operator()() {
   // Maybe need to call 
   // set_user_key(param_.user_id, param_.zone_id); 
-  return hello::err::EN_SUCCESS;
+  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int ${task_class_name}::on_success() { return get_result(); }

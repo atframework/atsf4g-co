@@ -69,10 +69,10 @@ int32_t actor_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd, ms
   }
 
   msg.mutable_head()->set_sequence(req_msg.head().sequence());
-  if (hello::EN_MSG_OP_TYPE_STREAM == req_msg.head().op_type()) {
-    msg.mutable_head()->set_op_type(hello::EN_MSG_OP_TYPE_STREAM);
+  if (PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM == req_msg.head().op_type()) {
+    msg.mutable_head()->set_op_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM);
   } else {
-    msg.mutable_head()->set_op_type(hello::EN_MSG_OP_TYPE_UNARY_RESPONSE);
+    msg.mutable_head()->set_op_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE);
   }
 
   return 0;

@@ -56,13 +56,13 @@ dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_messa
   dispatcher_result_t ret;
   if (nullptr == msg.msg_addr) {
     FWLOGERROR("msg.msg_addr == nullptr.");
-    ret.result_code = hello::err::EN_SYS_PARAM;
+    ret.result_code = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
     return ret;
   }
 
   if (expect_msg_type != msg.msg_type) {
     FWLOGERROR("msg.msg_type expected: {}, real: {}.", expect_msg_type, msg.msg_type);
-    ret.result_code = hello::err::EN_SYS_PARAM;
+    ret.result_code = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
     return ret;
   }
 
@@ -82,7 +82,8 @@ dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_messa
   }
 
   msg_op_type_t op_type = pick_msg_op_type(msg);
-  if (hello::EN_MSG_OP_TYPE_MIXUP == op_type || hello::EN_MSG_OP_TYPE_UNARY_RESPONSE == op_type) {
+  if (PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP == op_type ||
+      PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE == op_type) {
     ret.task_id = pick_msg_task_id(msg);
     if (ret.task_id > 0) {  // 如果是恢复任务则尝试切回协程任务
       resume_data_t callback_data = dispatcher_make_default<resume_data_t>();
@@ -96,7 +97,7 @@ dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_messa
       return ret;
     }
 
-    if (hello::EN_MSG_OP_TYPE_UNARY_RESPONSE == op_type) {
+    if (PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE == op_type) {
       FWLOGDEBUG("Ignore response message {}:{} of {} without task id", pick_rpc_name(msg), pick_msg_type_id(msg),
                  name());
       ret.result_code = 0;
@@ -113,7 +114,7 @@ dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_messa
   int res = create_task(callback_data, ret.task_id);
   ret.options = callback_data.options;
 
-  if (res == hello::err::EN_SYS_NOTFOUND) {
+  if (res == PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_NOTFOUND) {
     task_manager::actor_action_ptr_t actor;
     if (!actor_action_map_by_id_.empty()) {
       actor = create_actor(callback_data);
@@ -127,7 +128,7 @@ dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_messa
   }
 
   if (res < 0) {
-    if (hello::err::EN_SYS_NOTFOUND == res) {
+    if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_NOTFOUND == res) {
       FWLOGWARNING("{}(type={}) create task failed, task action or actor action not registered", name(),
                    expect_msg_type);
     } else {
@@ -142,7 +143,7 @@ dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_messa
 
   // 不创建消息
   if (res == 0 && 0 == ret.task_id) {
-    ret.result_code = hello::err::EN_SUCCESS;
+    ret.result_code = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
     return ret;
   }
 
@@ -158,7 +159,7 @@ int32_t dispatcher_implement::on_send_message_failed(rpc::context &ctx, msg_raw_
   callback_data.sequence = sequence;
   callback_data.context = &ctx;
 
-  // msg->set_rpc_result(hello::err::EN_SYS_RPC_SEND_FAILED);
+  // msg->set_rpc_result(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_SEND_FAILED);
   uint64_t task_id = pick_msg_task_id(msg);
   if (task_id > 0) {  // 如果是恢复任务则尝试切回协程任务
     FWLOGERROR("dispatcher {} send data failed with error code = {}, try to resume task {}", name(), error_code,
@@ -179,11 +180,11 @@ int dispatcher_implement::create_task(start_data_t &start_data, task_manager::id
   msg_type_t msg_type_id = pick_msg_type_id(start_data.message);
   const std::string &rpc_name = pick_rpc_name(start_data.message);
   if (0 == msg_type_id && rpc_name.empty()) {
-    return hello::err::EN_SUCCESS;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   if (task_action_map_by_id_.empty() && task_action_map_by_name_.empty()) {
-    return hello::err::EN_SYS_INIT;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
   if (0 != msg_type_id) {
@@ -202,7 +203,7 @@ int dispatcher_implement::create_task(start_data_t &start_data, task_manager::id
     }
   }
 
-  return hello::err::EN_SYS_NOTFOUND;
+  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
 }
 
 task_manager::actor_action_ptr_t dispatcher_implement::create_actor(start_data_t &start_data) {
@@ -274,22 +275,22 @@ int dispatcher_implement::_register_action(msg_type_t msg_type, task_manager::ta
   msg_task_action_set_t::iterator iter = task_action_map_by_id_.find(msg_type);
   if (task_action_map_by_id_.end() != iter) {
     FWLOGERROR("{} try to register more than one task actions to type {}.", name(), msg_type);
-    return hello::err::EN_SYS_INIT;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
   task_action_map_by_id_[msg_type] = action;
-  return hello::err::EN_SUCCESS;
+  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int dispatcher_implement::_register_action(msg_type_t msg_type, task_manager::actor_action_creator_t action) {
   msg_actor_action_set_t::iterator iter = actor_action_map_by_id_.find(msg_type);
   if (actor_action_map_by_id_.end() != iter) {
     FWLOGERROR("{} try to register more than one actor actions to type {}.", name(), msg_type);
-    return hello::err::EN_SYS_INIT;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
   actor_action_map_by_id_[msg_type] = action;
-  return hello::err::EN_SUCCESS;
+  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int dispatcher_implement::_register_action(const std::string &rpc_full_name,
@@ -297,11 +298,11 @@ int dispatcher_implement::_register_action(const std::string &rpc_full_name,
   rpc_task_action_set_t::iterator iter = task_action_map_by_name_.find(rpc_full_name);
   if (task_action_map_by_name_.end() != iter) {
     FWLOGERROR("{} try to register more than one task actions to rpc {}.", name(), rpc_full_name);
-    return hello::err::EN_SYS_INIT;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
   task_action_map_by_name_[rpc_full_name] = action;
-  return hello::err::EN_SUCCESS;
+  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int dispatcher_implement::_register_action(const std::string &rpc_full_name,
@@ -309,9 +310,9 @@ int dispatcher_implement::_register_action(const std::string &rpc_full_name,
   rpc_actor_action_set_t::iterator iter = actor_action_map_by_name_.find(rpc_full_name);
   if (actor_action_map_by_name_.end() != iter) {
     FWLOGERROR("{} try to register more than one actor actions to rpc {}.", name(), rpc_full_name);
-    return hello::err::EN_SYS_INIT;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
   actor_action_map_by_name_[rpc_full_name] = action;
-  return hello::err::EN_SUCCESS;
+  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
 }

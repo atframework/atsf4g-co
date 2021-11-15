@@ -17,6 +17,8 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
+#include <config/server_frame_build_feature.h>
+
 #include <libatgw_inner_v1_c.h>
 
 #include <simulator_player_impl.h>
@@ -50,8 +52,8 @@ class client_player : public simulator_player_impl {
   void on_close() override;
   void on_closed() override;
 
-  inline const hello::DAccountData &get_account() const { return account_; }
-  inline hello::DAccountData &get_account() { return account_; }
+  inline const PROJECT_SERVER_FRAME_NAMESPACE_ID::DAccountData &get_account() const { return account_; }
+  inline PROJECT_SERVER_FRAME_NAMESPACE_ID::DAccountData &get_account() { return account_; }
 
   inline int32_t get_system_id() const { return system_id_; }
   inline void set_system_id(int32_t id) { system_id_ = id; }
@@ -91,7 +93,7 @@ class client_player : public simulator_player_impl {
 
  private:
   std::map<uint32_t, libatgw_inner_v1_c_context> proto_handles_;
-  hello::DAccountData account_;
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::DAccountData account_;
   int32_t system_id_;
   std::string package_version_;
   std::string resource_version_;

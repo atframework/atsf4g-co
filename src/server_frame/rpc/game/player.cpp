@@ -28,7 +28,8 @@ namespace rpc {
 namespace game {
 namespace player {
 int64_t alloc_user_id(::rpc::context &ctx) {
-  int64_t prefix_id = rpc::db::uuid::generate_global_unique_id(ctx, hello::EN_GLOBAL_UUID_MAT_USER_ID, 0, 0);
+  int64_t prefix_id = rpc::db::uuid::generate_global_unique_id(
+      ctx, PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_GLOBAL_UUID_MAT_USER_ID, 0, 0);
   if (prefix_id < 0) {
     return static_cast<int>(prefix_id);
   }

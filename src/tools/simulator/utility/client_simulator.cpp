@@ -104,13 +104,13 @@ int client_simulator::unpack_message(msg_t &msg, const void *buffer, size_t sz) 
 
 int client_simulator::tick() { return 0; }
 
-const hello::DConstSettingsType &client_simulator::get_const_settings() {
-  static hello::DConstSettingsType ret;
+const PROJECT_SERVER_FRAME_NAMESPACE_ID::DConstSettingsType &client_simulator::get_const_settings() {
+  static PROJECT_SERVER_FRAME_NAMESPACE_ID::DConstSettingsType ret;
   static std::once_flag ret_init_flag;
   std::call_once(ret_init_flag, []() {
     auto desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("com.const.proto");
-    if (nullptr != desc && desc->options().HasExtension(hello::CONST_SETTINGS)) {
-      ret.CopyFrom(desc->options().GetExtension(hello::CONST_SETTINGS));
+    if (nullptr != desc && desc->options().HasExtension(PROJECT_SERVER_FRAME_NAMESPACE_ID::CONST_SETTINGS)) {
+      ret.CopyFrom(desc->options().GetExtension(PROJECT_SERVER_FRAME_NAMESPACE_ID::CONST_SETTINGS));
     }
   });
 
@@ -143,7 +143,7 @@ client_simulator::msg_t &client_simulator::add_req(cmd_sender_t &sender) {
   msg.mutable_head()->set_error_code(0);
   msg.mutable_head()->set_client_sequence(sender.player->alloc_sequence());
   msg.mutable_head()->set_timestamp(util::time::time_utility::get_now());
-  msg.mutable_head()->set_op_type(hello::EN_MSG_OP_TYPE_MIXUP);
+  msg.mutable_head()->set_op_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP);
   return msg;
 }
 

@@ -13,6 +13,8 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
+#include <config/server_frame_build_feature.h>
+
 #include <rpc/db/db_utils.h>
 
 #include <stdint.h>
@@ -31,9 +33,11 @@ namespace player {
  * @param rsp 返回的登入信息
  * @return 0或错误码
  */
-result_t get_all(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id, hello::table_user &rsp, std::string &version);
+result_t get_all(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
+                 PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &rsp, std::string &version);
 
-result_t get_basic(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id, hello::table_user &rsp);
+result_t get_basic(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
+                   PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &rsp);
 
 /**
  * @brief 设置用户表的rpc操作
@@ -42,7 +46,8 @@ result_t get_basic(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id, hell
  * @warning 默认值会被忽略，比如空message或者空字符串，或者0不会更新
  * @return 0或错误码
  */
-result_t set(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id, hello::table_user &store, std::string &version);
+result_t set(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
+             PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &store, std::string &version);
 
 }  // namespace player
 }  // namespace db

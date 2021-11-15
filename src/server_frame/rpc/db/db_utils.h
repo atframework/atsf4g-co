@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <cstddef>
 #include <vector>
+#include <string>
 
 extern "C" struct redisReply;
 

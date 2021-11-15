@@ -35,7 +35,7 @@ int task_action_router_close_manager_set::operator()() {
   task_manager::task_t *task = task_manager::task_t::this_task();
   if (!task) {
     FWLOGERROR("current not in a task");
-    return hello::err::EN_SYS_RPC_NO_TASK;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
   }
 
   while (param_.pending_list && current_idx_ < param_.pending_list->size()) {
@@ -105,7 +105,7 @@ int task_action_router_close_manager_set::operator()() {
     save_fallback();
   }
 
-  return hello::err::EN_SUCCESS;
+  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 void task_action_router_close_manager_set::save_fallback() {

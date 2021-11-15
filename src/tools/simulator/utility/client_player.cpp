@@ -110,7 +110,7 @@ void client_player::init_handles() {
 }
 
 client_player::client_player()
-    : system_id_(hello::EN_OS_WINDOWS),
+    : system_id_(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_OS_WINDOWS),
       package_version_("255.255.255.255"),
       resource_version_("255.255.255.255"),
       protocol_version_("255.255.255.255"),
@@ -118,8 +118,8 @@ client_player::client_player()
       sequence_(0),
       gamesvr_index_(0),
       is_connecting_(false) {
-  account_.set_account_type(hello::EN_ATI_ACCOUNT_INNER);
-  account_.set_channel_id(hello::EN_PCI_NONE);
+  account_.set_account_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ATI_ACCOUNT_INNER);
+  account_.set_channel_id(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_PCI_NONE);
 }
 
 client_player::~client_player() {

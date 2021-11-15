@@ -37,7 +37,7 @@ namespace async_jobs {
 
 namespace detail {
 struct player_key_hash_t {
-  size_t operator()(const hello::DPlayerIDKey& key) const {
+  size_t operator()(const PROJECT_SERVER_FRAME_NAMESPACE_ID::DPlayerIDKey& key) const {
     uint64_t out[2] = {0};
     uint64_t val = key.user_id();
     util::hash::murmur_hash3_x64_128(&val, static_cast<int>(sizeof(val)), key.zone_id(), out);
@@ -46,14 +46,18 @@ struct player_key_hash_t {
 };
 
 struct player_key_equal_t {
-  bool operator()(const hello::DPlayerIDKey& l, const hello::DPlayerIDKey& r) const {
+  bool operator()(const PROJECT_SERVER_FRAME_NAMESPACE_ID::DPlayerIDKey& l,
+                  const PROJECT_SERVER_FRAME_NAMESPACE_ID::DPlayerIDKey& r) const {
     return l.zone_id() == r.zone_id() && l.user_id() == r.user_id();
   }
 };
 
 // 如果短期内发生太多次针对同一玩家得在线表拉取，则直接用缓存。这可以优化短期频繁拉取login表，并且异步任务就算过期也只是回延后触发，不影响逻辑
-static int fetch_user_login_cache(rpc::context& ctx, uint64_t user_id, uint32_t zone_id, hello::table_login& rsp) {
-  static std::unordered_map<hello::DPlayerIDKey, hello::table_login, player_key_hash_t, player_key_equal_t> local_cache;
+static int fetch_user_login_cache(rpc::context& ctx, uint64_t user_id, uint32_t zone_id,
+                                  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login& rsp) {
+  static std::unordered_map<PROJECT_SERVER_FRAME_NAMESPACE_ID::DPlayerIDKey,
+                            PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login, player_key_hash_t, player_key_equal_t>
+      local_cache;
   static time_t local_cache_timepoint = 0;
   time_t now = util::time::time_utility::get_now();
   if (now != local_cache_timepoint) {
@@ -61,7 +65,7 @@ static int fetch_user_login_cache(rpc::context& ctx, uint64_t user_id, uint32_t 
     local_cache.clear();
   }
 
-  hello::DPlayerIDKey key;
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::DPlayerIDKey key;
   key.set_user_id(user_id);
   key.set_zone_id(zone_id);
 
@@ -85,12 +89,13 @@ int get_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t 
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid paronlineameters.(jobs_type={}, user_id={})", __FUNCTION__, jobs_type,
                user_id);
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
-  if (NULL == hello::EnPlayerAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
+  if (NULL == PROJECT_SERVER_FRAME_NAMESPACE_ID::EnPlayerAsyncJobsType_descriptor()->FindValueByNumber(
+                  static_cast<int>(jobs_type))) {
     FWLOGERROR("{} be called with unsupported type.(jobs_type={}, user_id={})", __FUNCTION__, jobs_type, user_id);
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   // TODO db operation
@@ -102,12 +107,13 @@ int del_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t 
              const std::vector<int64_t>& in) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={})", __FUNCTION__, jobs_type, user_id);
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
-  if (NULL == hello::EnPlayerAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
+  if (NULL == PROJECT_SERVER_FRAME_NAMESPACE_ID::EnPlayerAsyncJobsType_descriptor()->FindValueByNumber(
+                  static_cast<int>(jobs_type))) {
     FWLOGERROR("{} be called with unsupported type.(jobs_type={}, user_id={})", __FUNCTION__, jobs_type, user_id);
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   if (in.empty()) {
@@ -120,23 +126,24 @@ int del_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t 
 }
 
 int add_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-             hello::table_user_async_jobs_blob_data& in) {
+             PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user_async_jobs_blob_data& in) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
                user_id, zone_id);
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
-  if (NULL == hello::EnPlayerAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
+  if (NULL == PROJECT_SERVER_FRAME_NAMESPACE_ID::EnPlayerAsyncJobsType_descriptor()->FindValueByNumber(
+                  static_cast<int>(jobs_type))) {
     FWLOGERROR("{} be called with unsupported type.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
                user_id, zone_id);
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
-  if (hello::table_user_async_jobs_blob_data::ACTION_NOT_SET == in.action_case()) {
+  if (PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user_async_jobs_blob_data::ACTION_NOT_SET == in.action_case()) {
     FWLOGERROR("{} be called without a action.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type, user_id,
                zone_id);
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   if (in.action_uuid().empty()) {
@@ -154,8 +161,10 @@ int add_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t 
   // 尝试通知在线玩家, 失败则放弃。只是会延迟到账，不影响逻辑。
   do {
     // 不走路由系统，异步任务允许任意节点发送，但是有些服务不需要拉缓存对象
-    hello::table_login* login_table = ctx.create<hello::table_login>();
-    hello::SSPlayerAsyncJobsSync* req_body = ctx.create<hello::SSPlayerAsyncJobsSync>();
+    PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login* login_table =
+        ctx.create<PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login>();
+    PROJECT_SERVER_FRAME_NAMESPACE_ID::SSPlayerAsyncJobsSync* req_body =
+        ctx.create<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSPlayerAsyncJobsSync>();
     if (nullptr == login_table || nullptr == req_body) {
       FWLOGERROR("::rpc::db::login::get({}, {}) create table_login or SSPlayerAsyncJobsSync failed, ignore notify",
                  user_id, zone_id);
@@ -164,7 +173,7 @@ int add_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t 
 
     int res = detail::fetch_user_login_cache(ctx, user_id, zone_id, *login_table);
     if (res < 0) {
-      if (hello::err::EN_DB_RECORD_NOT_FOUND == res) {
+      if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == res) {
         FWLOGWARNING("::rpc::db::login::get({}, {}) but not found, maybe not created yet", user_id, zone_id);
       } else {
         FWLOGERROR("::rpc::db::login::get({}, {}) failed, res: {}", user_id, zone_id, res);
@@ -187,12 +196,13 @@ int add_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t 
 int remove_all_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={})", __FUNCTION__, jobs_type, user_id);
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
-  if (NULL == hello::EnPlayerAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
+  if (NULL == PROJECT_SERVER_FRAME_NAMESPACE_ID::EnPlayerAsyncJobsType_descriptor()->FindValueByNumber(
+                  static_cast<int>(jobs_type))) {
     FWLOGERROR("{} be called with unsupported type.(jobs_type={}, user_id={})", __FUNCTION__, jobs_type, user_id);
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   // TODO db operation
@@ -201,29 +211,31 @@ int remove_all_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, ui
 }
 
 int update_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-                hello::table_user_async_jobs_blob_data& inout, int64_t record_index, int64_t* version) {
+                PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user_async_jobs_blob_data& inout, int64_t record_index,
+                int64_t* version) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
                user_id, zone_id);
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
-  if (NULL == hello::EnPlayerAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
+  if (NULL == PROJECT_SERVER_FRAME_NAMESPACE_ID::EnPlayerAsyncJobsType_descriptor()->FindValueByNumber(
+                  static_cast<int>(jobs_type))) {
     FWLOGERROR("{} be called with unsupported type.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
                user_id, zone_id);
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
-  if (hello::table_user_async_jobs_blob_data::ACTION_NOT_SET == inout.action_case()) {
+  if (PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user_async_jobs_blob_data::ACTION_NOT_SET == inout.action_case()) {
     FWLOGERROR("{} be called without a action.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type, user_id,
                zone_id);
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   if (record_index < 0) {
     FWLOGERROR("{} be called with invalid index {}.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, record_index,
                jobs_type, user_id, zone_id);
-    return hello::err::EN_SYS_PARAM;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   if (inout.action_uuid().empty()) {
@@ -242,8 +254,10 @@ int update_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32
   // 尝试通知在线玩家, 失败则放弃。只是会延迟到账，不影响逻辑。
   do {
     // 不走路由系统，异步任务允许任意节点发送，但是有些服务不需要拉缓存对象
-    hello::table_login* login_table = ctx.create<hello::table_login>();
-    hello::SSPlayerAsyncJobsSync* req_body = ctx.create<hello::SSPlayerAsyncJobsSync>();
+    PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login* login_table =
+        ctx.create<PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login>();
+    PROJECT_SERVER_FRAME_NAMESPACE_ID::SSPlayerAsyncJobsSync* req_body =
+        ctx.create<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSPlayerAsyncJobsSync>();
     if (nullptr == login_table || nullptr == req_body) {
       FWLOGERROR("::rpc::db::login::get({}, {}) create TABLE_LOGIN_DEF or SSPlayerAsyncJobsSync failed, ignore notify",
                  user_id, zone_id);
@@ -252,7 +266,7 @@ int update_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32
 
     int res = detail::fetch_user_login_cache(ctx, user_id, zone_id, *login_table);
     if (res < 0) {
-      if (hello::err::EN_DB_RECORD_NOT_FOUND == res) {
+      if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == res) {
         FWLOGWARNING("::rpc::db::login::get({}, {}) but not found, maybe not created yet", user_id, zone_id);
       } else {
         FWLOGERROR("::rpc::db::login::get({}, {}) failed, res: {}", user_id, zone_id, res);

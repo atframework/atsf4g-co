@@ -209,7 +209,7 @@ function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
        "-- Ready to run ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} for ${SERVICE_NAME} @ ${SERVICE_ROOT_DIR}\n")
   execute_process(
     COMMAND
-      ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} "--quiet" "-s" "${SERVICE_NAME}" "-o" ${PROJECT_SERVER_FRAME_BAS_DIR}
+      ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} "--quiet" "-s" "${SERVICE_NAME}" "-o" "${PROJECT_SERVER_FRAME_BAS_DIR}"
       "--project-dir" ${PROJECT_SOURCE_DIR} "--pb-file" "${PROJECT_INSTALL_RES_PBD_DIR}/network.pb" "--set"
       "project_namespace=${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE}" "--set"
       "rpc_include_prefix=${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}" "--add-path"
@@ -218,7 +218,7 @@ function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
       "--service-template"
       "templates/rpc_call_api_for_ss.cpp.mako:rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.cpp"
     COMMAND
-      ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} "--quiet" "-s" ${SERVICE_NAME} "-o" ${SERVICE_ROOT_DIR}
+      ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} "--quiet" "-s" ${SERVICE_NAME} "-o" "${SERVICE_ROOT_DIR}"
       "--project-dir" ${PROJECT_SOURCE_DIR} "--pb-file" "${PROJECT_INSTALL_RES_PBD_DIR}/network.pb" "--set"
       "project_namespace=${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE}" "--set"
       "rpc_include_prefix=${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}" "--add-path"
@@ -227,7 +227,7 @@ function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
       "--service-template"
       "templates/handle_ss_rpc.cpp.mako:${HANDLE_PATH_PREFIX}handle_ss_rpc_\${service.get_name_lower_rule()}.cpp"
     COMMAND
-      ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} "--quiet" "-s" ${SERVICE_NAME} "-o" ${SERVICE_ROOT_DIR}
+      ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} "--quiet" "-s" ${SERVICE_NAME} "-o" "${SERVICE_ROOT_DIR}"
       "--project-dir" ${PROJECT_SOURCE_DIR} "--no-overwrite" "--pb-file" "${PROJECT_INSTALL_RES_PBD_DIR}/network.pb"
       "--set" "project_namespace=${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE}" "--set"
       "rpc_include_prefix=${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}" "--add-path"
@@ -353,7 +353,7 @@ function(generate_for_pb_add_cs_service SERVICE_NAME SERVICE_ROOT_DIR)
        "-- Ready to run ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} for ${SERVICE_NAME} @ ${SERVICE_ROOT_DIR}\n")
   execute_process(
     COMMAND
-      ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} "--quiet" "-s" "${SERVICE_NAME}" "-o" \"${SERVICE_ROOT_DIR}\"
+      ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} "--quiet" "-s" "${SERVICE_NAME}" "-o" "${SERVICE_ROOT_DIR}"
       "--project-dir" ${PROJECT_SOURCE_DIR} "--pb-file" "${PROJECT_INSTALL_RES_PBD_DIR}/network.pb" "--set"
       "project_namespace=${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE}" "--set"
       "rpc_include_prefix=${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}" "--add-path"
@@ -362,7 +362,7 @@ function(generate_for_pb_add_cs_service SERVICE_NAME SERVICE_ROOT_DIR)
       "--service-template"
       "templates/session_downstream_api_for_cs.cpp.mako:rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.cpp"
     COMMAND
-      ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} "--quiet" "-s" ${SERVICE_NAME} "-o" \"${SERVICE_ROOT_DIR}\"
+      ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} "--quiet" "-s" ${SERVICE_NAME} "-o" "${SERVICE_ROOT_DIR}"
       "--project-dir" ${PROJECT_SOURCE_DIR} "--pb-file" "${PROJECT_INSTALL_RES_PBD_DIR}/network.pb" "--set"
       "project_namespace=${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE}" "--set"
       "rpc_include_prefix=${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}" "--add-path"
@@ -371,7 +371,7 @@ function(generate_for_pb_add_cs_service SERVICE_NAME SERVICE_ROOT_DIR)
       "--service-template"
       "templates/handle_cs_rpc.cpp.mako:${HANDLE_PATH_PREFIX}handle_cs_rpc_\${service.get_name_lower_rule()}.cpp"
     COMMAND
-      ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} "--quiet" "-s" ${SERVICE_NAME} "-o" \"${SERVICE_ROOT_DIR}\"
+      ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} "--quiet" "-s" ${SERVICE_NAME} "-o" "${SERVICE_ROOT_DIR}"
       "--project-dir" ${PROJECT_SOURCE_DIR} "--no-overwrite" "--pb-file" "${PROJECT_INSTALL_RES_PBD_DIR}/network.pb"
       "--set" "project_namespace=${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE}" "--set"
       "rpc_include_prefix=${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}" "--add-path"

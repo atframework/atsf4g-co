@@ -17,7 +17,7 @@
 
 #include "router_player_manager.h"
 
-router_player_manager::router_player_manager() : base_type(hello::EN_ROT_PLAYER) {}
+router_player_manager::router_player_manager() : base_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ROT_PLAYER) {}
 
 const char *router_player_manager::name() const {
   return "[player_cache router manager]";
@@ -81,9 +81,9 @@ int router_player_manager::pull_online_server(const key_t &key, uint64_t &router
   router_svr_ver = 0;
 
   /**
-  hello::table_login local_login_tb;
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login local_login_tb;
   std::string        local_login_ver;
-  hello::table_user  tbu;
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user  tbu;
 
   // ** 如果login表和user表的jey保持一致的话也可以直接从login表取
   int ret = rpc::db::player::get_basic(key.object_id, key.zone_id, tbu);

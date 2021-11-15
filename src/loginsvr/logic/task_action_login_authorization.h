@@ -20,7 +20,7 @@ class task_action_login_authorization : public task_action_cs_req_base {
   using msg_ref_type = task_action_cs_req_base::msg_ref_type;
   using msg_cref_type = task_action_cs_req_base::msg_cref_type;
 
-  using auth_fn_t = int (task_action_login_authorization::*)(const ::hello::CSLoginAuthReq &);
+  using auth_fn_t = int (task_action_login_authorization::*)(const PROJECT_SERVER_FRAME_NAMESPACE_ID::CSLoginAuthReq &);
 
  public:
   using task_action_cs_req_base::operator();
@@ -39,7 +39,8 @@ class task_action_login_authorization : public task_action_cs_req_base {
 
   auth_fn_t get_verify_fn(uint32_t account_type);
 
-  void init_login_data(hello::table_login &tb, const ::hello::CSLoginAuthReq &req, int64_t player_uid,
+  void init_login_data(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login &tb,
+                       const PROJECT_SERVER_FRAME_NAMESPACE_ID::CSLoginAuthReq &req, int64_t player_uid,
                        uint32_t channel_id);
 
   /**
@@ -47,14 +48,14 @@ class task_action_login_authorization : public task_action_cs_req_base {
    * @param req 请求包
    * @return 最终openid
    */
-  std::string make_openid(const hello::CSLoginAuthReq &req);
+  std::string make_openid(const PROJECT_SERVER_FRAME_NAMESPACE_ID::CSLoginAuthReq &req);
 
   /**
    * @brief 校验本地账户
    * @param req 请求包
    * @return 回包的错误码或0
    */
-  int verify_plat_account(const ::hello::CSLoginAuthReq &req);
+  int verify_plat_account(const PROJECT_SERVER_FRAME_NAMESPACE_ID::CSLoginAuthReq &req);
 
  private:
   bool is_new_player_;
@@ -63,8 +64,8 @@ class task_action_login_authorization : public task_action_cs_req_base {
   std::string version_;
   std::string final_open_id_;
   uint64_t final_user_id_;
-  hello::table_login login_data_;
-  hello::DClientUpdateCfg update_info_;  // 更新信息
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login login_data_;
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::DClientUpdateCfg update_info_;  // 更新信息
 
   google::protobuf::RepeatedPtrField< ::google::protobuf::string> gamesvr_addrs_;  // 登录地址
 

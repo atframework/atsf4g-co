@@ -27,8 +27,8 @@ class task_action_player_info_get : public actor_action_cs_req_base {
   virtual int on_failed();
 
  private:
-  hello::CSMsg &get_rsp();
-  hello::CSMsg *rsp_;
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg &get_rsp();
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg *rsp_;
 };
 
 #endif  //_LOGIC_ACTION_TASK_ACTION_PLAYER_INFO_GET_H

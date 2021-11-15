@@ -134,10 +134,11 @@ void player::create_init(uint32_t version_type) {
   // TODO init all interval checkpoint
 
   // TODO init items
-  // if (hello::EN_VERSION_GM != version_type) {
+  // if (PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_VERSION_GM != version_type) {
   //     excel::player_init_items::me()->foreach ([this](const excel::player_init_items::value_type &v) {
   //         if (0 != v->id()) {
-  //             add_entity(v->id(), v->number(), hello::EN_ICMT_INIT, hello::EN_ICST_DEFAULT);
+  //             add_entity(v->id(), v->number(), PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ICMT_INIT,
+  //             PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ICST_DEFAULT);
   //         }
   //     });
   // }
@@ -227,12 +228,12 @@ void player::on_update_session(const std::shared_ptr<session> &from, const std::
   base_type::on_update_session(from, to);
 }
 
-void player::init_from_table_data(const hello::table_user &tb_player) {
+void player::init_from_table_data(const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &tb_player) {
   base_type::init_from_table_data(tb_player);
 
   // TODO data patch, 这里用于版本升级时可能需要升级玩家数据库，做版本迁移
-  // hello::table_user tb_patch;
-  // const hello::table_user *src_tb = &tb_player;
+  // PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user tb_patch;
+  // const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user *src_tb = &tb_player;
   // if (data_version_ < PLAYER_DATA_LOGIC_VERSION) {
   //     protobuf_copy_message(tb_patch, tb_player);
   //     src_tb = &tb_patch;
@@ -246,7 +247,7 @@ void player::init_from_table_data(const hello::table_user &tb_player) {
   }
 }
 
-int player::dump(hello::table_user &user, bool always) {
+int player::dump(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &user, bool always) {
   int ret = base_type::dump(user, always);
   if (ret < 0) {
     return ret;
@@ -322,10 +323,10 @@ void player::clear_dirty_cache() {
 }
 
 template <class TMSG, class TCONTAINER>
-static player::dirty_sync_handle_t _player_generate_dirty_handle(TMSG *(hello::SCPlayerDirtyChgSync::*add_fn)(),
-                                                                 TCONTAINER player::cache_t::*get_mem) {
+static player::dirty_sync_handle_t _player_generate_dirty_handle(
+    TMSG *(PROJECT_SERVER_FRAME_NAMESPACE_ID::SCPlayerDirtyChgSync::*add_fn)(), TCONTAINER player::cache_t::*get_mem) {
   player::dirty_sync_handle_t handle;
-  handle.build_fn = [add_fn, get_mem](player &user, hello::CSMsg &output) {
+  handle.build_fn = [add_fn, get_mem](player &user, PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg &output) {
     if (!get_mem) {
       return;
     }
@@ -335,12 +336,12 @@ static player::dirty_sync_handle_t _player_generate_dirty_handle(TMSG *(hello::S
       return;
     }
 
-    hello::CSMsgBody *msg_body = output.mutable_body();
+    PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsgBody *msg_body = output.mutable_body();
     if (nullptr == msg_body) {
       FWLOGERROR("malloc dirty msg body failed");
       return;
     }
-    hello::SCPlayerDirtyChgSync *sync_msg = msg_body->mutable_msc_player_dirty_chg_sync();
+    PROJECT_SERVER_FRAME_NAMESPACE_ID::SCPlayerDirtyChgSync *sync_msg = msg_body->mutable_msc_player_dirty_chg_sync();
     if (nullptr == sync_msg) {
       FWLOGERROR("malloc SCPlayerDirtyChgSync failed");
       return;
@@ -365,13 +366,14 @@ static player::dirty_sync_handle_t _player_generate_dirty_handle(TMSG *(hello::S
   return handle;
 }
 
-hello::DItem &player::mutable_dirty_item(const hello::DItem &in) {
+PROJECT_SERVER_FRAME_NAMESPACE_ID::DItem &player::mutable_dirty_item(
+    const PROJECT_SERVER_FRAME_NAMESPACE_ID::DItem &in) {
   insert_dirty_handle_if_not_exists(reinterpret_cast<uintptr_t>(&cache_data_.dirty_item_by_type), [](player &) {
-    return _player_generate_dirty_handle(&hello::SCPlayerDirtyChgSync::add_dirty_items,
+    return _player_generate_dirty_handle(&PROJECT_SERVER_FRAME_NAMESPACE_ID::SCPlayerDirtyChgSync::add_dirty_items,
                                          &player::cache_t::dirty_item_by_type);
   });
 
-  hello::DItem &ret = cache_data_.dirty_item_by_type[in.type_id()];
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::DItem &ret = cache_data_.dirty_item_by_type[in.type_id()];
   ret = in;
   return ret;
 }
@@ -415,7 +417,7 @@ player_cs_syn_msg_holder::~player_cs_syn_msg_holder() {
   }
 
   if (msg_.has_body()) {
-    msg_.mutable_head()->set_op_type(hello::EN_MSG_OP_TYPE_STREAM);
+    msg_.mutable_head()->set_op_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM);
     sess->send_msg_to_client(msg_);
   }
 }

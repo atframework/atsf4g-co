@@ -36,14 +36,14 @@ int task_action_router_update_sync::operator()() {
   router_manager_base* mgr = router_manager_set::me()->get_manager(req_body.object().object_type_id());
   if (nullptr == mgr) {
     FWLOGERROR("router manager {} invalid", req_body.object().object_type_id());
-    return hello::err::EN_SUCCESS;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   router_manager_base::key_t key(req_body.object().object_type_id(), req_body.object().object_zone_id(),
                                  req_body.object().object_inst_id());
   std::shared_ptr<router_object_base> obj = mgr->get_base_cache(key);
   if (!obj) {
-    return hello::err::EN_SUCCESS;
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   if (obj->get_router_version() < req_body.object().router_version()) {
@@ -51,7 +51,7 @@ int task_action_router_update_sync::operator()() {
     obj->set_router_server_id(req_body.object().router_src_bus_id(), req_body.object().router_version());
   }
 
-  return hello::err::EN_SUCCESS;
+  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int task_action_router_update_sync::on_success() { return get_result(); }
