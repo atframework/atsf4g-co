@@ -2,6 +2,8 @@
 // Created by owent on 2018/05/07.
 //
 
+#include "router/router_player_manager.h"
+
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
@@ -15,13 +17,10 @@
 #include <rpc/db/login.h>
 #include <rpc/db/player.h>
 
-#include "router_player_manager.h"
-
 router_player_manager::router_player_manager() : base_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ROT_PLAYER) {}
 
 const char *router_player_manager::name() const {
   return "[player_cache router manager]";
-  ;
 }
 
 bool router_player_manager::remove_player_object(uint64_t user_id, uint32_t zone_id, priv_data_t priv_data) {

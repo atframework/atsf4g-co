@@ -2,9 +2,6 @@
 // Created by owent on 2018/05/01.
 //
 
-#ifndef ROUTER_ROUTER_MANAGER_SET_H
-#define ROUTER_ROUTER_MANAGER_SET_H
-
 #pragma once
 
 #include <config/compiler/protobuf_prefix.h>
@@ -14,11 +11,14 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
-#include "router_system_defs.h"
-
 #include <utility/environment_helper.h>
 
 #include <dispatcher/task_manager.h>
+
+#include <list>
+#include <memory>
+
+#include "router/router_system_defs.h"
 
 class task_action_auto_save_objects;
 class router_manager_set : public util::design_pattern::singleton<router_manager_set> {
@@ -31,7 +31,7 @@ class router_manager_set : public util::design_pattern::singleton<router_manager
     EN_ASA_REMOVE_CACHE,
   };
 
-  struct auto_save_data_t {
+  struct pending_action_data {
     auto_save_action_t action;
     uint32_t type_id;
 
@@ -93,8 +93,8 @@ class router_manager_set : public util::design_pattern::singleton<router_manager
   timer_set_t timers_;
   time_t last_proc_time_;
   router_manager_base *mgrs_[PROJECT_SERVER_FRAME_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE];
-  std::list<auto_save_data_t> save_list_;
-  task_manager::task_ptr_t save_task_;
+  std::list<pending_action_data> pending_action_list_;
+  task_manager::task_ptr_t pending_action_task_;
   task_manager::task_ptr_t closing_task_;
   bool is_closing_;
   bool is_closed_;
@@ -102,5 +102,3 @@ class router_manager_set : public util::design_pattern::singleton<router_manager
   friend class task_action_auto_save_objects;
   friend class task_action_router_close_manager_set;
 };
-
-#endif  //_ROUTER_ROUTER_MANAGER_SET_H

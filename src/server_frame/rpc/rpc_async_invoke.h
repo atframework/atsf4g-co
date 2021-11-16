@@ -2,6 +2,8 @@
 // Created by owent on 2021/11/01.
 //
 
+#pragma once
+
 #include <design_pattern/result_type.h>
 #include <gsl/select-gsl.h>
 #include <std/explicit_declare.h>
@@ -12,6 +14,8 @@
 #include <stdint.h>
 #include <cstddef>
 #include <functional>
+#include <utility>
+#include <vector>
 
 namespace rpc {
 class context;
@@ -51,5 +55,7 @@ EXPLICIT_NODISCARD_ATTR rpc_result<task_manager::task_ptr_t, int> async_invoke(
 
 EXPLICIT_NODISCARD_ATTR rpc_result<task_manager::task_ptr_t, int> async_invoke(
     gsl::string_view caller_name, gsl::string_view name, std::function<task_action_base::result_type(context &)> fn);
+
+EXPLICIT_NODISCARD_ATTR rpc_result<int, int> wait_tasks(const std::vector<task_manager::task_ptr_t> &tasks);
 
 }  // namespace rpc

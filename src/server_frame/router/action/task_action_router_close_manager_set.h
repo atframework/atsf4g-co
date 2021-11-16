@@ -1,4 +1,4 @@
-//
+// Copyright 2021 atframework
 // Created by owent on 2019/06/20.
 //
 
@@ -28,7 +28,7 @@ class task_action_router_close_manager_set : public task_action_no_req_base {
   using task_action_no_req_base::operator();
 
  public:
-  task_action_router_close_manager_set(ctor_param_t&& param);
+  explicit task_action_router_close_manager_set(ctor_param_t&& param);
   ~task_action_router_close_manager_set();
 
   int operator()() override;
@@ -42,9 +42,12 @@ class task_action_router_close_manager_set : public task_action_no_req_base {
 
  private:
   ctor_param_t param_;
-  int success_count_;
-  int failed_count_;
-  size_t current_idx_;
+  struct status_data_t {
+    int success_count_;
+    int failed_count_;
+    size_t current_idx_;
+  };
+  std::shared_ptr<status_data_t> status_data_;
 };
 
 #endif  // ROUTER_ACTION_TASK_ACTION_ROUTER_CLOSE_MANAGER_SET_H

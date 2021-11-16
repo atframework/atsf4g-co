@@ -1,13 +1,12 @@
-//
+// Copyright 2021 atframework
 // Created by owent on 2018/05/01.
 //
-
-#ifndef ROUTER_ACTION_TASK_ACTION_AUTO_SAVE_OBJECTS_H
-#define ROUTER_ACTION_TASK_ACTION_AUTO_SAVE_OBJECTS_H
 
 #pragma once
 
 #include <dispatcher/task_action_no_req_base.h>
+
+#include <memory>
 
 class task_action_auto_save_objects : public task_action_no_req_base {
  public:
@@ -17,7 +16,7 @@ class task_action_auto_save_objects : public task_action_no_req_base {
   using task_action_no_req_base::operator();
 
  public:
-  task_action_auto_save_objects(ctor_param_t&& param);
+  explicit task_action_auto_save_objects(ctor_param_t&& param);
   ~task_action_auto_save_objects();
 
   int operator()() override;
@@ -30,12 +29,13 @@ class task_action_auto_save_objects : public task_action_no_req_base {
   static bool debug_receive_stop_when_running;
 
  private:
-  const char* get_action_name(uint32_t) const;
+  static const char* get_action_name(uint32_t);
 
  private:
-  int success_count_;
-  int failed_count_;
-  time_t start_timepooint_;
+  struct status_data_t {
+    int success_count_;
+    int failed_count_;
+    time_t start_timepooint_;
+  };
+  std::shared_ptr<status_data_t> status_data_;
 };
-
-#endif  //_ROUTER_ACTION_TASK_ACTION_AUTO_SAVE_OBJECTS_H

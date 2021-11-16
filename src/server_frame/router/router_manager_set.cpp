@@ -16,16 +16,19 @@
 #include <dispatcher/task_action_base.h>
 #include <dispatcher/task_manager.h>
 
+#include <list>
+#include <memory>
 #include <sstream>
 #include <unordered_set>
+#include <utility>
 
-#include "action/task_action_auto_save_objects.h"
-#include "action/task_action_router_close_manager_set.h"
+#include "router/action/task_action_auto_save_objects.h"
+#include "router/action/task_action_router_close_manager_set.h"
 
-#include "handle_ss_rpc_routerservice.h"
-#include "router_manager_base.h"
-#include "router_manager_set.h"
-#include "router_object_base.h"
+#include "router/handle_ss_rpc_routerservice.h"
+#include "router/router_manager_base.h"
+#include "router/router_manager_set.h"
+#include "router/router_object_base.h"
 
 // #include "router_guild_manager.h"
 // #include "router_player_group_manager.h"
@@ -92,7 +95,8 @@ int router_manager_set::tick() {
     ret += tick_timer(cache_expire, object_expire, object_save, timers_.fast_timer_list, true);
   }
 
-  if (!save_list_.empty() && !is_closed() && false == is_save_task_running() && false == is_closing_task_running()) {
+  if (!pending_action_list_.empty() && !is_closed() && false == is_save_task_running() &&
+      false == is_closing_task_running()) {
     task_manager::id_t tid = 0;
     task_manager::me()->create_task_with_timeout<task_action_auto_save_objects>(
         tid, logic_config::me()->get_cfg_task().nomsg().timeout().seconds(),
@@ -102,7 +106,7 @@ int router_manager_set::tick() {
     } else {
       dispatcher_start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
       if (0 == task_manager::me()->start_task(tid, start_data)) {
-        save_task_ = task_manager::me()->get_task(tid);
+        pending_action_task_ = task_manager::me()->get_task(tid);
       }
     }
   }
@@ -182,8 +186,8 @@ int router_manager_set::stop() {
       return 0;
     }
 
-    if (is_save_task_running() && save_task_) {
-      save_task_->then(closing_task_);
+    if (is_save_task_running() && pending_action_task_) {
+      pending_action_task_->then(closing_task_);
     } else {
       int res = task_manager::me()->start_task(tid, start_data);
       if (res < 0) {
@@ -405,8 +409,8 @@ int router_manager_set::recycle_caches(int max_count) {
     recheck_set.insert(obj->get_key());
 
     // 缓存过期,和上面定时回收缓存的逻辑保持一致
-    save_list_.push_back(auto_save_data_t());
-    auto_save_data_t &auto_save = save_list_.back();
+    pending_action_list_.push_back(pending_action_data());
+    pending_action_data &auto_save = pending_action_list_.back();
     auto_save.object = obj;
     auto_save.type_id = (*selected_iter).type_id;
     auto_save.action = EN_ASA_REMOVE_CACHE;
@@ -440,8 +444,8 @@ bool router_manager_set::add_save_schedule(const std::shared_ptr<router_object_b
     return false;
   }
 
-  save_list_.push_back(auto_save_data_t());
-  auto_save_data_t &auto_save = save_list_.back();
+  pending_action_list_.push_back(pending_action_data());
+  pending_action_data &auto_save = pending_action_list_.back();
   auto_save.object = obj;
   auto_save.type_id = obj->get_key().type_id;
   auto_save.action = EN_ASA_SAVE;
@@ -495,7 +499,9 @@ void router_manager_set::add_io_schedule_order_task(const std::shared_ptr<router
       [obj, task_id](const task_action_base &) { obj->io_schedule_order_.erase(task_id); });
 }
 
-bool router_manager_set::is_save_task_running() const { return save_task_ && !save_task_->is_exiting(); }
+bool router_manager_set::is_save_task_running() const {
+  return pending_action_task_ && !pending_action_task_->is_exiting();
+}
 
 bool router_manager_set::is_closing_task_running() const { return closing_task_ && !closing_task_->is_exiting(); }
 
@@ -551,8 +557,8 @@ int router_manager_set::tick_timer(time_t cache_expire, time_t object_expire, ti
       if (obj->check_flag(router_object_base::flag_t::EN_ROFT_IS_OBJECT)) {
         // 实体过期
         if (obj->get_last_visit_time() + object_expire < last_proc_time_) {
-          save_list_.push_back(auto_save_data_t());
-          auto_save_data_t &auto_save = save_list_.back();
+          pending_action_list_.push_back(pending_action_data());
+          pending_action_data &auto_save = pending_action_list_.back();
           auto_save.object = obj;
           auto_save.type_id = cache.type_id;
           auto_save.action = EN_ASA_REMOVE_OBJECT;
@@ -560,8 +566,8 @@ int router_manager_set::tick_timer(time_t cache_expire, time_t object_expire, ti
           obj->set_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_OBJECT);
         } else if (obj->get_last_save_time() + object_save < last_proc_time_ ||
                    obj->check_flag(router_object_base::flag_t::EN_ROFT_FORCE_SAVE_OBJECT)) {  // 实体保存
-          save_list_.push_back(auto_save_data_t());
-          auto_save_data_t &auto_save = save_list_.back();
+          pending_action_list_.push_back(pending_action_data());
+          pending_action_data &auto_save = pending_action_list_.back();
           auto_save.object = obj;
           auto_save.type_id = cache.type_id;
           auto_save.action = EN_ASA_SAVE;
@@ -573,8 +579,8 @@ int router_manager_set::tick_timer(time_t cache_expire, time_t object_expire, ti
       } else {
         // 缓存过期,和下面主动回收缓存的逻辑保持一致
         if (obj->get_last_visit_time() + cache_expire < last_proc_time_) {
-          save_list_.push_back(auto_save_data_t());
-          auto_save_data_t &auto_save = save_list_.back();
+          pending_action_list_.push_back(pending_action_data());
+          pending_action_data &auto_save = pending_action_list_.back();
           auto_save.object = obj;
           auto_save.type_id = cache.type_id;
           auto_save.action = EN_ASA_REMOVE_CACHE;

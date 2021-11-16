@@ -111,7 +111,7 @@ template <typename TMSG>
 static int wait(TMSG &msg, uintptr_t check_type, uint64_t check_sequence) {
   task_manager::task_t *task = task_manager::task_t::this_task();
   if (!task) {
-    WLOGERROR("current not in a task");
+    FWLOGERROR("current not in a task");
     return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
   }
 
@@ -147,23 +147,21 @@ static int wait(TMSG &msg, uintptr_t check_type, uint64_t check_sequence) {
     }
 
     if (nullptr == resume_data) {
-      WLOGERROR("task %llu resume data con not be empty", static_cast<unsigned long long>(task->get_id()));
+      FWLOGERROR("task {} resume data con not be empty", task->get_id());
       return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
     }
 
     if (resume_data->message.msg_type != check_type) {
-      WLOGERROR("task %llu resume and expect message type 0x%llx but real is 0x%llx",
-                static_cast<unsigned long long>(task->get_id()), static_cast<unsigned long long>(check_type),
-                static_cast<unsigned long long>(resume_data->message.msg_type));
+      FWLOGERROR("task {} resume and expect message type {:#x} but real is {:#x}", task->get_id(), check_type,
+                 resume_data->message.msg_type);
 
       is_continue = true;
       continue;
     }
 
     if (0 != check_sequence && 0 != resume_data->sequence && check_sequence != resume_data->sequence) {
-      WLOGERROR("task %llu resume and expect message sequence %llu but real is %llu",
-                static_cast<unsigned long long>(task->get_id()), static_cast<unsigned long long>(check_sequence),
-                static_cast<unsigned long long>(resume_data->sequence));
+      FWLOGERROR("task {} resume and expect message sequence {:#x} but real is {:#x}", task->get_id(), check_sequence,
+                 resume_data->sequence);
       is_continue = true;
       continue;
     }
@@ -203,7 +201,7 @@ template <typename TMSG>
 static int wait(uintptr_t check_type, std::unordered_map<uint64_t, TMSG> &msg_waiters) {
   task_manager::task_t *task = task_manager::task_t::this_task();
   if (!task) {
-    WLOGERROR("current not in a task");
+    FWLOGERROR("current not in a task");
     return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
   }
 
@@ -244,23 +242,21 @@ static int wait(uintptr_t check_type, std::unordered_map<uint64_t, TMSG> &msg_wa
     }
 
     if (nullptr == resume_data) {
-      WLOGERROR("task %llu resume data con not be empty", static_cast<unsigned long long>(task->get_id()));
+      FWLOGERROR("task {} resume data con not be empty", task->get_id());
       return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
     }
 
     if (resume_data->message.msg_type != check_type) {
-      WLOGERROR("task %llu resume and expect message type 0x%llx but real is 0x%llx",
-                static_cast<unsigned long long>(task->get_id()), static_cast<unsigned long long>(check_type),
-                static_cast<unsigned long long>(resume_data->message.msg_type));
+      FWLOGERROR("task {} resume and expect message type {:#x} but real is {:#x}", task->get_id(), check_type,
+                 resume_data->message.msg_type);
 
       continue;
     }
 
     auto rsp_iter = msg_waiters.find(resume_data->sequence);
     if (rsp_iter == msg_waiters.end()) {
-      WLOGERROR("task %llu resume and with message sequence %llu but not found in waiters",
-                static_cast<unsigned long long>(task->get_id()),
-                static_cast<unsigned long long>(resume_data->sequence));
+      FWLOGERROR("task {} resume and with message sequence {} but not found in waiters", task->get_id(),
+                 resume_data->sequence);
       continue;
     }
 

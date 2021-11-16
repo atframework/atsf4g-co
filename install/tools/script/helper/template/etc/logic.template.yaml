@@ -51,13 +51,16 @@ logic:
     ban_error_times: 3            # heatbeat ban account of continue kickoff
     ban_time_bound: 10800s        # heartbeat ban time
   router:
-    cache_update_interval: 1800s  # the interval to mark as expired for cache
-    cache_free_timeout: 600s      # timeout for removing cache if not visited
-    object_free_timeout: 1500s    # timeout for downgrade from object to cache if not visited
-    object_save_interval: 600s    # saving interval for object
-    retry_max_ttl: 3              # retry times if do some actions failed
-    default_timer_interval: 300s  # timer interval for checking the object or cache to see if it should be save, downgrade or removed
-    fast_timer_interval: 10s      # timer interval for checking the object or cache when it's busy when first checked
+    cache_update_interval: 1800s    # the interval to mark as expired for cache
+    cache_free_timeout: 600s        # timeout for removing cache if not visited
+    object_free_timeout: 1500s      # timeout for downgrade from object to cache if not visited
+    object_save_interval: 600s      # saving interval for object
+    retry_max_ttl: 3                # retry times if do some actions failed
+    default_timer_interval: 300s    # timer interval for checking the object or cache to see if it should be save, downgrade or removed
+    fast_timer_interval: 10s        # timer interval for checking the object or cache when it's busy when first checked
+    pending_action_batch_count: 200 # batch count for pending actions
+    pending_action_max_count: 2000  # max action count when in interval task of router system
+    closing_action_batch_count: 500 # max action count when in closing task of router system
   telemetry:
     opentelemetry:
       log:

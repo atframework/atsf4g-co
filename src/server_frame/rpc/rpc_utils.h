@@ -109,6 +109,7 @@ class context {
     }
 
     UTIL_DESIGN_PATTERN_NOCOPYABLE(message_holder)
+
    private:
     TMsg *arena_msg_ptr_;
     TMsg local_msg_;
