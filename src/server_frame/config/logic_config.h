@@ -20,6 +20,8 @@
 
 #include <config/server_frame_build_feature.h>
 
+#include <string>
+
 namespace atapp {
 class app;
 }
