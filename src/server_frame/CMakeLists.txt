@@ -38,7 +38,7 @@ file(
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/skip-glob-sources.txt" "")
 foreach(SRC_FILE_REALPATH IN LISTS SRC_LIST_ORIGIN)
   get_filename_component(SRC_DIRPATH_REALPATH ${SRC_FILE_REALPATH} DIRECTORY)
-  if(SOURCE_FILE MATCHES "^${PROJECT_SERVER_FRAME_SRC_DIR}[/\\\\]config[/\\\\]server_frame_build_feature.h")
+  if(SOURCE_FILE MATCHES "^${PROJECT_SERVER_FRAME_SRC_DIR}[/\\\\]config[/\\\\]server_frame_build_feature.(h|cpp)")
     file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/skip-glob-sources.txt" "${SRC_FILE_REALPATH}\r\n")
     continue()
   endif()

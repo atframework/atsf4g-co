@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+package hello;
+
+// 道具数据
+message DItemBase {
+  uint32 type_id = 1;
+  uint32 count = 2;
+}

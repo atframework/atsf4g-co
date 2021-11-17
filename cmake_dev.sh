@@ -7,14 +7,14 @@ CC=gcc
 CXX=g++
 CCACHE="$(which ccache)"
 DISTCC=""
-if [ ! -z "$DISTCC_HOSTS" ]; then
+if [[ ! -z "$DISTCC_HOSTS" ]]; then
   DISTCC="$(which distcc 2>/dev/null)"
 fi
 
 NINJA_BIN="$(which ninja 2>&1)"
-if [ $? -ne 0 ]; then
+if [[ $? -ne 0 ]]; then
   NINJA_BIN="$(which ninja-build 2>&1)"
-  if [ $? -ne 0 ]; then
+  if [[ $? -ne 0 ]]; then
     NINJA_BIN=""
   fi
 fi
@@ -25,7 +25,7 @@ CMAKE_CLANG_ANALYZER=0
 CMAKE_CLANG_ANALYZER_PATH=""
 BUILD_DIR=$(echo "build_jobs_$SYS_NAME" | tr '[:upper:]' '[:lower:]')
 CMAKE_BUILD_TYPE=Debug
-PROJECT_NAME=atsf4g-co
+PROJECT_NAME="$(basename "$0")"
 
 which git >/dev/null 2>&1
 if [[ $? -eq 0 ]]; then
@@ -177,7 +177,7 @@ fi
 if [[ "x$NINJA_BIN" != "x" ]]; then
   ${CMAKE_BIN[@]} .. -G Ninja -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE $CMAKE_OPTIONS "$@"
 elif [[ "$CHECK_MSYS" == "mingw" ]]; then
-  ${CMAKE_BIN[@]} .. -G "MSYS Makefiles" -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE $CMAKE_OPTIONS "$@"
+  ${CMAKE_BIN[@]} .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE $CMAKE_OPTIONS "$@"
 else
   ${CMAKE_BIN[@]} .. -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE $CMAKE_OPTIONS "$@"
 fi
