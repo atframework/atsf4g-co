@@ -122,10 +122,11 @@ bool ${result_clazz_name}::is_error() const noexcept {
     if not rpc.is_response_stream():
         continue
     rpc_allow_no_wait = False
-    rpc_params = ['context& __ctx', '{0} &__body'.format(rpc.get_request().get_cpp_class_name())]
+    rpc_params = ['context& __ctx', '{0} &__body'.format(rpc.get_response().get_cpp_class_name())]
 %>
 // ============ ${rpc.get_full_name()} ============
-${result_clazz_name} send_${rpc.get_name()}(${', '.join(rpc_params)}, session& __session) {
+${result_clazz_name} send_${rpc.get_name()}(
+  ${', '.join(rpc_params)}, session& __session) {
   ${project_namespace}::CSMsg* msg_ptr = __ctx.create<${project_namespace}::CSMsg>();
   if (nullptr == msg_ptr) {
     FWLOGERROR("rpc {} create request message for session [{:#x}, {}] failed",
@@ -136,7 +137,7 @@ ${result_clazz_name} send_${rpc.get_name()}(${', '.join(rpc_params)}, session& _
 
   int res = details::__setup_rpc_stream_header(
     *msg_ptr->mutable_head(), "${rpc.get_full_name()}",
-    ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()
+    ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()
   );
 
   if (res < 0) {
@@ -145,7 +146,7 @@ ${result_clazz_name} send_${rpc.get_name()}(${', '.join(rpc_params)}, session& _
 
   res = details::__pack_body(__body, msg_ptr->mutable_body_bin(),
                             "${rpc.get_full_name()}",
-                            ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name());
+                            ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
   if (res < 0) {
     return ${result_clazz_name}(res);
   }
@@ -161,7 +162,8 @@ ${result_clazz_name} send_${rpc.get_name()}(${', '.join(rpc_params)}, session& _
   return ${result_clazz_name}(res);
 }
 
-${result_clazz_name} send_${rpc.get_name()}(${', '.join(rpc_params)}, session& __session, uint64_t server_sequence) {
+${result_clazz_name} send_${rpc.get_name()}(
+  ${', '.join(rpc_params)}, session& __session, uint64_t server_sequence) {
   ${project_namespace}::CSMsg* msg_ptr = __ctx.create<${project_namespace}::CSMsg>();
   if (nullptr == msg_ptr) {
     FWLOGERROR("rpc {} create request message for session [{:#x}, {}] failed",
@@ -172,7 +174,7 @@ ${result_clazz_name} send_${rpc.get_name()}(${', '.join(rpc_params)}, session& _
 
   int res = details::__setup_rpc_stream_header(
     *msg_ptr->mutable_head(), "${rpc.get_full_name()}",
-    ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()
+    ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()
   );
 
   if (res < 0) {
@@ -181,7 +183,7 @@ ${result_clazz_name} send_${rpc.get_name()}(${', '.join(rpc_params)}, session& _
 
   res = details::__pack_body(__body, msg_ptr->mutable_body_bin(),
                             "${rpc.get_full_name()}",
-                            ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name());
+                            ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
   if (res < 0) {
     return ${result_clazz_name}(res);
   }
@@ -198,7 +200,8 @@ ${result_clazz_name} send_${rpc.get_name()}(${', '.join(rpc_params)}, session& _
 }
 
 
-${result_clazz_name} broadcast_${rpc.get_name()}(${', '.join(rpc_params)}, uint64_t service_id) {
+${result_clazz_name} broadcast_${rpc.get_name()}(
+  ${', '.join(rpc_params)}, uint64_t service_id) {
   ${project_namespace}::CSMsg* msg_ptr = __ctx.create<${project_namespace}::CSMsg>();
   if (nullptr == msg_ptr) {
     FWLOGERROR("rpc {} create request message to broadcast failed",
@@ -208,7 +211,7 @@ ${result_clazz_name} broadcast_${rpc.get_name()}(${', '.join(rpc_params)}, uint6
 
   int res = details::__setup_rpc_stream_header(
     *msg_ptr->mutable_head(), "${rpc.get_full_name()}",
-    ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()
+    ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()
   );
 
   if (res < 0) {
@@ -217,7 +220,7 @@ ${result_clazz_name} broadcast_${rpc.get_name()}(${', '.join(rpc_params)}, uint6
 
   res = details::__pack_body(__body, msg_ptr->mutable_body_bin(),
                             "${rpc.get_full_name()}",
-                            ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name());
+                            ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
   if (res < 0) {
     return ${result_clazz_name}(res);
   }

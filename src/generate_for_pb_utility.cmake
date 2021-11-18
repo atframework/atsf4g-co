@@ -130,9 +130,11 @@ function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
         "${GENERATE_FOR_PB_ARGS_BASH_ARGS} --add-path \"${GENERATE_FOR_PB_ARGS_SIX_PYTHON_PATH}\"")
     list(APPEND GENERATE_FOR_PB_ARGS_CMAKE_ARGS "--add-path" ${GENERATE_FOR_PB_ARGS_SIX_PYTHON_PATH})
   endif()
+  unset(GENERATE_FOR_PB_RPC_TEMPLATE_ARGS_BASH_ARGS)
+  unset(GENERATE_FOR_PB_RPC_TEMPLATE_ARGS_CMAKE_ARGS)
   if(GENERATE_FOR_PB_ARGS_RPC_IGNORE_EMPTY_REQUEST)
-    set(GENERATE_FOR_PB_ARGS_BASH_ARGS "${GENERATE_FOR_PB_ARGS_BASH_ARGS} --rpc-ignore-empty-request")
-    list(APPEND GENERATE_FOR_PB_ARGS_CMAKE_ARGS "--rpc-ignore-empty-request")
+    set(GENERATE_FOR_PB_RPC_TEMPLATE_ARGS_BASH_ARGS "${GENERATE_FOR_PB_ARGS_BASH_ARGS} --rpc-ignore-empty-request")
+    list(APPEND GENERATE_FOR_PB_RPC_TEMPLATE_ARGS_CMAKE_ARGS "--rpc-ignore-empty-request")
   endif()
   # Add bash script into generate-for-pb-run.sh
   file(APPEND ${GENERATE_FOR_PB_OUT_SH}
@@ -165,7 +167,7 @@ function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
     "  --project-dir \"${PROJECT_SOURCE_DIR}\" --no-overwrite --pb-file \"${PROJECT_INSTALL_RES_PBD_DIR}/network.pb\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --set project_namespace=${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE} --set rpc_include_prefix=${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX} \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --add-path \"${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/modules\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-    "  ${GENERATE_FOR_PB_ARGS_BASH_ARGS} \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  ${GENERATE_FOR_PB_ARGS_BASH_ARGS} ${GENERATE_FOR_PB_RPC_TEMPLATE_ARGS_BASH_ARGS} \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --rpc-template 'templates/task_action_ss_rpc.h.mako:${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.h' \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --rpc-template 'templates/task_action_ss_rpc.cpp.mako:${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.cpp' ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
   )
@@ -201,7 +203,7 @@ function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
     "  --project-dir \"${PROJECT_SOURCE_DIR}\" --no-overwrite --pb-file \"${PROJECT_INSTALL_RES_PBD_DIR}/network.pb\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --set project_namespace=${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE} --set rpc_include_prefix=${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX} `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --add-path \"${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/modules\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-    "  ${GENERATE_FOR_PB_ARGS_BASH_ARGS} `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  ${GENERATE_FOR_PB_ARGS_BASH_ARGS} ${GENERATE_FOR_PB_RPC_TEMPLATE_ARGS_BASH_ARGS} `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --rpc-template 'templates/task_action_ss_rpc.h.mako:${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\\\"rpc_options\\\", lambda x: x.module_name, \\\"action\\\")}/task_action_\${rpc.get_name()}.h' `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --rpc-template 'templates/task_action_ss_rpc.cpp.mako:${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\\\"rpc_options\\\", lambda x: x.module_name, \\\"action\\\")}/task_action_\${rpc.get_name()}.cpp' ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
   )
@@ -235,7 +237,7 @@ function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
       "--project-dir" ${PROJECT_SOURCE_DIR} "--no-overwrite" "--pb-file" "${PROJECT_INSTALL_RES_PBD_DIR}/network.pb"
       "--set" "project_namespace=${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE}" "--set"
       "rpc_include_prefix=${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}" "--add-path"
-      "${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/modules" ${GENERATE_FOR_PB_ARGS_CMAKE_ARGS} "--rpc-template"
+      "${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/modules" ${GENERATE_FOR_PB_ARGS_CMAKE_ARGS} ${GENERATE_FOR_PB_RPC_TEMPLATE_ARGS_CMAKE_ARGS} "--rpc-template"
       "templates/task_action_ss_rpc.h.mako:${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.h"
       "--rpc-template"
       "templates/task_action_ss_rpc.cpp.mako:${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.cpp"
@@ -278,9 +280,11 @@ function(generate_for_pb_add_cs_service SERVICE_NAME SERVICE_ROOT_DIR)
         "${GENERATE_FOR_PB_ARGS_BASH_ARGS} --add-path \"${GENERATE_FOR_PB_ARGS_SIX_PYTHON_PATH}\"")
     list(APPEND GENERATE_FOR_PB_ARGS_CMAKE_ARGS "--add-path" ${GENERATE_FOR_PB_ARGS_SIX_PYTHON_PATH})
   endif()
+  unset(GENERATE_FOR_PB_RPC_TEMPLATE_ARGS_BASH_ARGS)
+  unset(GENERATE_FOR_PB_RPC_TEMPLATE_ARGS_CMAKE_ARGS)
   if(GENERATE_FOR_PB_ARGS_RPC_IGNORE_EMPTY_REQUEST)
-    set(GENERATE_FOR_PB_ARGS_BASH_ARGS "${GENERATE_FOR_PB_ARGS_BASH_ARGS} --rpc-ignore-empty-request")
-    list(APPEND GENERATE_FOR_PB_ARGS_CMAKE_ARGS "--rpc-ignore-empty-request")
+    set(GENERATE_FOR_PB_RPC_TEMPLATE_ARGS_BASH_ARGS "${GENERATE_FOR_PB_ARGS_BASH_ARGS} --rpc-ignore-empty-request")
+    list(APPEND GENERATE_FOR_PB_RPC_TEMPLATE_ARGS_CMAKE_ARGS "--rpc-ignore-empty-request")
   endif()
   # Add bash script into generate-for-pb-run.sh
   file(APPEND ${GENERATE_FOR_PB_OUT_SH}
@@ -313,7 +317,7 @@ function(generate_for_pb_add_cs_service SERVICE_NAME SERVICE_ROOT_DIR)
     "  --project-dir \"${PROJECT_SOURCE_DIR}\" --no-overwrite --pb-file \"${PROJECT_INSTALL_RES_PBD_DIR}/network.pb\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --set project_namespace=${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE} --set rpc_include_prefix=${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX} \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --add-path \"${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/modules\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-    "  ${GENERATE_FOR_PB_ARGS_BASH_ARGS} \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  ${GENERATE_FOR_PB_ARGS_BASH_ARGS} ${GENERATE_FOR_PB_RPC_TEMPLATE_ARGS_BASH_ARGS} \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --rpc-template 'templates/task_action_cs_rpc.h.mako:${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.h' \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --rpc-template 'templates/task_action_cs_rpc.cpp.mako:${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.cpp' ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
   )
@@ -349,7 +353,7 @@ function(generate_for_pb_add_cs_service SERVICE_NAME SERVICE_ROOT_DIR)
     "  --project-dir \"${PROJECT_SOURCE_DIR}\" --no-overwrite --pb-file \"${PROJECT_INSTALL_RES_PBD_DIR}/network.pb\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --set project_namespace=${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE} --set rpc_include_prefix=${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX} `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --add-path \"${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/modules\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-    "  ${GENERATE_FOR_PB_ARGS_BASH_ARGS} `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  ${GENERATE_FOR_PB_ARGS_BASH_ARGS} ${GENERATE_FOR_PB_RPC_TEMPLATE_ARGS_BASH_ARGS} `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --rpc-template 'templates/task_action_cs_rpc.h.mako:${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\\\"rpc_options\\\", lambda x: x.module_name, \\\"action\\\")}/task_action_\${rpc.get_name()}.h' `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --rpc-template 'templates/task_action_cs_rpc.cpp.mako:${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\\\"rpc_options\\\", lambda x: x.module_name, \\\"action\\\")}/task_action_\${rpc.get_name()}.cpp' ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
   )
@@ -383,7 +387,7 @@ function(generate_for_pb_add_cs_service SERVICE_NAME SERVICE_ROOT_DIR)
       "--project-dir" ${PROJECT_SOURCE_DIR} "--no-overwrite" "--pb-file" "${PROJECT_INSTALL_RES_PBD_DIR}/network.pb"
       "--set" "project_namespace=${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE}" "--set"
       "rpc_include_prefix=${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}" "--add-path"
-      "${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/modules" ${GENERATE_FOR_PB_ARGS_CMAKE_ARGS} "--rpc-template"
+      "${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/modules" ${GENERATE_FOR_PB_ARGS_CMAKE_ARGS} ${GENERATE_FOR_PB_RPC_TEMPLATE_ARGS_CMAKE_ARGS} "--rpc-template"
       "templates/task_action_cs_rpc.h.mako:${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.h"
       "--rpc-template"
       "templates/task_action_cs_rpc.cpp.mako:${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.cpp"

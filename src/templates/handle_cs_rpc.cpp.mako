@@ -19,10 +19,12 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 #include <dispatcher/cs_msg_dispatcher.h>
 
 % for rpc in rpcs.values():
-%   if rpc_include_prefix and os.path.dirname(rpc_include_prefix) != '.':
+%   if not rpc.get_request_descriptor().full_name == "google.protobuf.Empty":
+%     if rpc_include_prefix and os.path.dirname(rpc_include_prefix) != '.':
 #include <${rpc_include_prefix}/${rpc.get_extension_field("rpc_options", lambda x: x.module_name, "action")}/task_action_${rpc.get_name()}.h>
-%   else:
+%     else:
 #include <${rpc.get_extension_field("rpc_options", lambda x: x.module_name, "action")}/task_action_${rpc.get_name()}.h>
+%     endif
 %   endif
 % endfor
 
@@ -33,7 +35,9 @@ ${ns}
 int register_handles_for_${service.get_name_lower_rule()}() {
   int ret = 0;
 % for rpc in rpcs.values():
+%   if not rpc.get_request_descriptor().full_name == "google.protobuf.Empty":
   REG_TASK_RPC_HANDLE(cs_msg_dispatcher, ret, task_action_${rpc.get_name()}, ${service.get_cpp_class_name()}::descriptor(), "${rpc.get_full_name()}");
+%   endif
 % endfor
   return ret;
 }

@@ -248,7 +248,7 @@ class PbObjectBase(object):
         current_ident = ""
         ret = []
         for name in HANDLE_SPLIT_MODULE_RULE.split(full_name):
-            ret.append(current_ident + "} // namespace " + name)
+            ret.append(current_ident + "}  // namespace " + name)
             current_ident = current_ident + pretty_ident
         ret.reverse()
         return ret

@@ -67,7 +67,8 @@ struct ${result_clazz_name} {
 %   endfor
  * @return 0 or error code
  */
-${result_clazz_name} send_${rpc.get_name()}(${', '.join(rpc_params)}, session& __session);
+${result_clazz_name} send_${rpc.get_name()}(
+  ${', '.join(rpc_params)}, session& __session);
 
 /**
  * @brief send ${rpc.get_response().get_cpp_class_name()} for ${rpc.get_name()} to session
@@ -82,7 +83,8 @@ ${result_clazz_name} send_${rpc.get_name()}(${', '.join(rpc_params)}, session& _
 %   endfor
  * @return 0 or error code
  */
-${result_clazz_name} send_${rpc.get_name()}(${', '.join(rpc_params)}, session& __session, uint64_t server_sequence);
+${result_clazz_name} send_${rpc.get_name()}(
+  ${', '.join(rpc_params)}, session& __session, uint64_t server_sequence);
 
 /**
  * @brief broadcast ${rpc.get_response().get_cpp_class_name()} for ${rpc.get_name()} to gateway service
@@ -96,7 +98,8 @@ ${result_clazz_name} send_${rpc.get_name()}(${', '.join(rpc_params)}, session& _
 %   endfor
  * @return 0 or error code
  */
-${result_clazz_name} broadcast_${rpc.get_name()}(${', '.join(rpc_params)}, uint64_t service_id);
+${result_clazz_name} broadcast_${rpc.get_name()}(
+  ${', '.join(rpc_params)}, uint64_t service_id);
 % endfor
 % for ns in service.get_cpp_namespace_end(module_name, ''):
 ${ns}

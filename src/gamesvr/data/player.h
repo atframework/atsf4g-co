@@ -82,7 +82,11 @@ class player : public player_cache {
   };
   /** 因为会对其进行memset，所以内部不允许出现非POD类型 **/
 
-  using build_dirty_message_fn_t = std::function<void(player &, PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg &)>;
+  struct dirty_message_container {
+    std::unique_ptr<PROJECT_SERVER_FRAME_NAMESPACE_ID::SCPlayerDirtyChgSync> player_dirty;
+  };
+
+  using build_dirty_message_fn_t = std::function<void(player &, dirty_message_container &)>;
   using clear_dirty_cache_fn_t = std::function<void(player &)>;
   struct dirty_sync_handle_t {
     build_dirty_message_fn_t build_fn;
@@ -277,7 +281,7 @@ class player : public player_cache {
  */
 class player_cs_syn_msg_holder {
  public:
-  using value_type = PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg;
+  using value_type = player::dirty_message_container;
 
  public:
   explicit player_cs_syn_msg_holder(player::ptr_t u);

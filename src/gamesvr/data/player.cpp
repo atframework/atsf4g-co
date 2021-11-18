@@ -11,6 +11,8 @@
 
 #include <log/log_wrapper.h>
 
+#include <gsl/select-gsl.h>
+
 #include <config/logic_config.h>
 #include <time/time_utility.h>
 
@@ -18,6 +20,8 @@
 #include <logic/player_manager.h>
 
 #include <data/session.h>
+#include <rpc/gamesvrclientservice/gamesvrclientservice.h>
+#include <rpc/rpc_utils.h>
 
 player::task_queue_node::task_queue_node(const task_manager::task_ptr_t &t) : related_task(t), is_waiting(false) {}
 
@@ -326,7 +330,7 @@ template <class TMSG, class TCONTAINER>
 static player::dirty_sync_handle_t _player_generate_dirty_handle(
     TMSG *(PROJECT_SERVER_FRAME_NAMESPACE_ID::SCPlayerDirtyChgSync::*add_fn)(), TCONTAINER player::cache_t::*get_mem) {
   player::dirty_sync_handle_t handle;
-  handle.build_fn = [add_fn, get_mem](player &user, PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg &output) {
+  handle.build_fn = [add_fn, get_mem](player &user, player::dirty_message_container &output) {
     if (!get_mem) {
       return;
     }
@@ -336,19 +340,16 @@ static player::dirty_sync_handle_t _player_generate_dirty_handle(
       return;
     }
 
-    PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsgBody *msg_body = output.mutable_body();
-    if (nullptr == msg_body) {
-      FWLOGERROR("malloc dirty msg body failed");
-      return;
+    if (!output.player_dirty) {
+      output.player_dirty = gsl::make_unique<PROJECT_SERVER_FRAME_NAMESPACE_ID::SCPlayerDirtyChgSync>();
     }
-    PROJECT_SERVER_FRAME_NAMESPACE_ID::SCPlayerDirtyChgSync *sync_msg = msg_body->mutable_msc_player_dirty_chg_sync();
-    if (nullptr == sync_msg) {
-      FWLOGERROR("malloc SCPlayerDirtyChgSync failed");
+    if (!output.player_dirty) {
+      FWLOGERROR("malloc dirty msg body failed");
       return;
     }
 
     for (auto &dirty_data : container) {
-      auto copied_item = (sync_msg->*add_fn)();
+      auto copied_item = (output.player_dirty.get()->*add_fn)();
       if (nullptr == copied_item) {
         FWLOGERROR("SCPlayerDirtyChgSync add item failed");
         return;
@@ -416,9 +417,9 @@ player_cs_syn_msg_holder::~player_cs_syn_msg_holder() {
     return;
   }
 
-  if (msg_.has_body()) {
-    msg_.mutable_head()->set_op_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM);
-    sess->send_msg_to_client(msg_);
+  if (msg_.player_dirty) {
+    rpc::context ctx;
+    rpc::gamesvrclientservice::send_player_dirty_chg_sync(ctx, *msg_.player_dirty, *sess);
   }
 }
 
