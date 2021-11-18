@@ -4,7 +4,8 @@
 execute_process(
   COMMAND
     "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" --proto_path
-    "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/config" --proto_path "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include" --proto_path
+    "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/config" --proto_path
+    "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/common" --proto_path "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include" --proto_path
     "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include" --proto_path "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include" --proto_path
     "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}" --proto_path
     "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension" -o "${CMAKE_CURRENT_BINARY_DIR}/config-test.pb"

@@ -38,8 +38,12 @@ int task_action_access_update::operator()() {
     return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
-  // TODO ...
+  if (user->get_login_info().login_code() != req_body.old_access()) {
+    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+  }
 
+  user->get_login_info().set_login_code(req_body.new_access());
   return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
 }
 

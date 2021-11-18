@@ -41,18 +41,17 @@ def check_has_module(module_name):
 
 class MakoModuleTempDir:
     """ RAII: Auto remove tempory directory """
-
     def __init__(self, prefix_path):
         if not os.path.exists(prefix_path):
             os.makedirs(prefix_path)
-        self.directory_path = tempfile.mkdtemp(suffix="", prefix="", dir=prefix_path)
+        self.directory_path = tempfile.mkdtemp(suffix="",
+                                               prefix="",
+                                               dir=prefix_path)
 
     def __del__(self):
-        if (
-            self.directory_path is not None
-            and os.path.exists(self.directory_path)
-            and os.path.isdir(self.directory_path)
-        ):
+        if (self.directory_path is not None
+                and os.path.exists(self.directory_path)
+                and os.path.isdir(self.directory_path)):
             shutil.rmtree(self.directory_path, ignore_errors=True)
             self.directory_path = None
 
@@ -63,8 +62,8 @@ def split_segments_for_protobuf_field_name(input_name):
     before_start = 0
     for iter in HANDLE_SPLIT_PBFIELD_RULE.finditer(input_name):
         if iter.start() > before_start:
-            ret.append(input_name[before_start : iter.start()])
-        val = input_name[iter.start() : iter.end()].strip()
+            ret.append(input_name[before_start:iter.start()])
+        val = input_name[iter.start():iter.end()].strip()
         if val and val[0:1] != "_" and val[0:1] != "-":
             ret.append(val)
         before_start = iter.end()
@@ -80,9 +79,11 @@ def add_package_prefix_paths(packag_paths):
         add_package_bin_path = os.path.join(path, "bin")
         if os.path.exists(add_package_bin_path):
             if sys.platform.lower() == "win32":
-                os.environ["PATH"] = add_package_bin_path + ";" + os.environ["PATH"]
+                os.environ[
+                    "PATH"] = add_package_bin_path + ";" + os.environ["PATH"]
             else:
-                os.environ["PATH"] = add_package_bin_path + ":" + os.environ["PATH"]
+                os.environ[
+                    "PATH"] = add_package_bin_path + ":" + os.environ["PATH"]
 
         add_package_lib_path = os.path.join(
             path,
@@ -102,7 +103,8 @@ def add_package_prefix_paths(packag_paths):
         if os.path.exists(add_package_lib64_path):
             append_paths.append(add_package_lib64_path)
 
-        add_package_lib_path_for_win = os.path.join(path, "Lib", "site-packages")
+        add_package_lib_path_for_win = os.path.join(path, "Lib",
+                                                    "site-packages")
         if os.path.exists(add_package_lib_path_for_win):
             append_paths.append(add_package_lib_path_for_win)
     append_paths.extend(sys.path)
@@ -126,17 +128,18 @@ class PbObjectBase(object):
         self._cache_name_lower_rule = None
         self._cache_name_upper_rule = None
 
-    def get_identify_name(
-        self, name, mode=PbConvertRule.CONVERT_NAME_LOWERCASE, package_seperator="."
-    ):
+    def get_identify_name(self,
+                          name,
+                          mode=PbConvertRule.CONVERT_NAME_LOWERCASE,
+                          package_seperator="."):
         if name is None:
             return None
         res = []
-        for segment in filter(
-            lambda x: x.strip(), HANDLE_SPLIT_MODULE_RULE.split(name)
-        ):
+        for segment in filter(lambda x: x.strip(),
+                              HANDLE_SPLIT_MODULE_RULE.split(name)):
             groups = [
-                x.strip() for x in split_segments_for_protobuf_field_name(segment)
+                x.strip()
+                for x in split_segments_for_protobuf_field_name(segment)
             ]
             sep = ""
             if mode == PbConvertRule.CONVERT_NAME_LOWERCASE:
@@ -145,12 +148,11 @@ class PbObjectBase(object):
             if mode == PbConvertRule.CONVERT_NAME_UPPERCASE:
                 groups = [y for y in map(lambda x: x.upper(), groups)]
                 sep = "_"
-            if (
-                mode == PbConvertRule.CONVERT_NAME_CAMEL_FIRST_LOWERCASE
-                or mode == PbConvertRule.CONVERT_NAME_CAMEL_CAMEL
-            ):
+            if (mode == PbConvertRule.CONVERT_NAME_CAMEL_FIRST_LOWERCASE
+                    or mode == PbConvertRule.CONVERT_NAME_CAMEL_CAMEL):
                 groups = [
-                    y for y in map(lambda x: (x[0:1].upper() + x[1:].lower()), groups)
+                    y for y in map(lambda x: (x[0:1].upper() + x[1:].lower()),
+                                   groups)
                 ]
             if mode == PbConvertRule.CONVERT_NAME_CAMEL_FIRST_LOWERCASE and groups:
                 groups[0] = groups[0].lower()
@@ -158,19 +160,25 @@ class PbObjectBase(object):
         return package_seperator.join(res)
 
     def get_identify_lower_rule(self, name):
-        return self.get_identify_name(name, PbConvertRule.CONVERT_NAME_LOWERCASE, "_")
+        return self.get_identify_name(name,
+                                      PbConvertRule.CONVERT_NAME_LOWERCASE,
+                                      "_")
 
     def get_identify_upper_rule(self, name):
-        return self.get_identify_name(name, PbConvertRule.CONVERT_NAME_UPPERCASE, "_")
+        return self.get_identify_name(name,
+                                      PbConvertRule.CONVERT_NAME_UPPERCASE,
+                                      "_")
 
     def get_name_lower_rule(self):
         if self._cache_name_lower_rule is None:
-            self._cache_name_lower_rule = self.get_identify_lower_rule(self.get_name())
+            self._cache_name_lower_rule = self.get_identify_lower_rule(
+                self.get_name())
         return self._cache_name_lower_rule
 
     def get_name_upper_rule(self):
         if self._cache_name_upper_rule is None:
-            self._cache_name_upper_rule = self.get_identify_upper_rule(self.get_name())
+            self._cache_name_upper_rule = self.get_identify_upper_rule(
+                self.get_name())
         return self._cache_name_upper_rule
 
     def _expand_extension_message(self, prefix, full_prefix, ext_value):
@@ -193,7 +201,8 @@ class PbObjectBase(object):
     def _get_raw_proto(self):
         if self._refer_raw_proto is not None:
             return self._refer_raw_proto
-        self._refer_raw_proto = self.refer_database.get_raw_symbol(self.get_full_name())
+        self._refer_raw_proto = self.refer_database.get_raw_symbol(
+            self.get_full_name())
         return self._refer_raw_proto
 
     def get_extension(self, name, default_value=None):
@@ -214,6 +223,9 @@ class PbObjectBase(object):
         if current_object:
             return current_object
         return default_value
+
+    def is_valid(self, options):
+        return True
 
     def get_name(self):
         return self.descriptor.name
@@ -318,7 +330,8 @@ class PbEnumValue(PbObjectBase):
         return self.container.get_package()
 
     def get_full_name(self):
-        return "{0}.{1}".format(self.container.get_full_name(), self.get_name())
+        return "{0}.{1}".format(self.container.get_full_name(),
+                                self.get_name())
 
 
 class PbEnum(PbObjectBase):
@@ -347,6 +360,12 @@ class PbRpc(PbObjectBase):
         self._request = None
         self._response = None
 
+    def is_valid(self, options):
+        if options.rpc_ignore_empty_request:
+            if self.descriptor.input_type.full_name == "google.protobuf.Empty":
+                return False
+        return True
+
     def get_name(self):
         return self.descriptor.name
 
@@ -358,8 +377,7 @@ class PbRpc(PbObjectBase):
             return self._request
 
         self._request = self.refer_database.get_message(
-            self.descriptor.input_type.full_name
-        )
+            self.descriptor.input_type.full_name)
         return self._request
 
     def get_request_descriptor(self):
@@ -373,8 +391,7 @@ class PbRpc(PbObjectBase):
             return self._response
 
         self._response = self.refer_database.get_message(
-            self.descriptor.output_type.full_name
-        )
+            self.descriptor.output_type.full_name)
         return self._response
 
     def get_response_descriptor(self):
@@ -427,7 +444,10 @@ class PbDatabase(object):
         self._cache_services = dict()
 
     def _register_by_pb_fds(self, factory, file_protos):
-        file_by_name = {file_proto.name: file_proto for file_proto in file_protos}
+        file_by_name = {
+            file_proto.name: file_proto
+            for file_proto in file_protos
+        }
 
         def _AddFile(file_proto):
             for dependency in file_proto.dependency:
@@ -438,52 +458,47 @@ class PbDatabase(object):
 
         while file_by_name:
             _AddFile(file_by_name.popitem()[1])
-        return factory.GetMessages([file_proto.name for file_proto in file_protos])
+        return factory.GetMessages(
+            [file_proto.name for file_proto in file_protos])
 
     def _extended_raw_message(self, package, message_proto):
-        self.raw_symbols["{0}.{1}".format(package, message_proto.name)] = message_proto
+        self.raw_symbols["{0}.{1}".format(package,
+                                          message_proto.name)] = message_proto
         for enum_type in message_proto.enum_type:
             self._extended_raw_enum(
-                "{0}.{1}".format(package, message_proto.name), enum_type
-            )
+                "{0}.{1}".format(package, message_proto.name), enum_type)
         for nested_type in message_proto.nested_type:
             self._extended_raw_message(
-                "{0}.{1}".format(package, message_proto.name), nested_type
-            )
+                "{0}.{1}".format(package, message_proto.name), nested_type)
         for extension in message_proto.extension:
-            self.raw_symbols[
-                "{0}.{1}.{2}".format(package, message_proto.name, extension.name)
-            ] = extension
+            self.raw_symbols["{0}.{1}.{2}".format(package, message_proto.name,
+                                                  extension.name)] = extension
         for field in message_proto.field:
-            self.raw_symbols[
-                "{0}.{1}.{2}".format(package, message_proto.name, field.name)
-            ] = field
+            self.raw_symbols["{0}.{1}.{2}".format(package, message_proto.name,
+                                                  field.name)] = field
         for oneof_decl in message_proto.oneof_decl:
-            self.raw_symbols[
-                "{0}.{1}.{2}".format(package, message_proto.name, oneof_decl.name)
-            ] = oneof_decl
+            self.raw_symbols["{0}.{1}.{2}".format(
+                package, message_proto.name, oneof_decl.name)] = oneof_decl
 
     def _extended_raw_enum(self, package, enum_type):
         self.raw_symbols["{0}.{1}".format(package, enum_type.name)] = enum_type
         for enum_value in enum_type.value:
-            self.raw_symbols[
-                "{0}.{1}.{2}".format(package, enum_type.name, enum_value.name)
-            ] = enum_value
+            self.raw_symbols["{0}.{1}.{2}".format(
+                package, enum_type.name, enum_value.name)] = enum_value
 
     def _extended_raw_service(self, package, service_proto):
-        self.raw_symbols["{0}.{1}".format(package, service_proto.name)] = service_proto
+        self.raw_symbols["{0}.{1}".format(package,
+                                          service_proto.name)] = service_proto
         for method in service_proto.method:
-            self.raw_symbols[
-                "{0}.{1}.{2}".format(package, service_proto.name, method.name)
-            ] = method
+            self.raw_symbols["{0}.{1}.{2}".format(package, service_proto.name,
+                                                  method.name)] = method
 
     def _extended_raw_file(self, file_proto):
         for enum_type in file_proto.enum_type:
             self._extended_raw_enum(file_proto.package, enum_type)
         for extension in file_proto.extension:
-            self.raw_symbols[
-                "{0}.{1}".format(file_proto.package, extension.name)
-            ] = extension
+            self.raw_symbols["{0}.{1}".format(file_proto.package,
+                                              extension.name)] = extension
         for message_type in file_proto.message_type:
             self._extended_raw_message(file_proto.package, message_type)
         for service in file_proto.service:
@@ -509,21 +524,30 @@ class PbDatabase(object):
         pb_fds = descriptor_pb2.FileDescriptorSet.FromString(pb_file_buffer)
         pb_fds_patched = [x for x in pb_fds.file]
         pb_fds_inner = []
-        protobuf_inner_descriptors = dict(
-            {
-                descriptor_pb2.DESCRIPTOR.name: descriptor_pb2.DESCRIPTOR.serialized_pb,
-                any_pb2.DESCRIPTOR.name: any_pb2.DESCRIPTOR.serialized_pb,
-                api_pb2.DESCRIPTOR.name: api_pb2.DESCRIPTOR.serialized_pb,
-                duration_pb2.DESCRIPTOR.name: duration_pb2.DESCRIPTOR.serialized_pb,
-                empty_pb2.DESCRIPTOR.name: empty_pb2.DESCRIPTOR.serialized_pb,
-                field_mask_pb2.DESCRIPTOR.name: field_mask_pb2.DESCRIPTOR.serialized_pb,
-                source_context_pb2.DESCRIPTOR.name: source_context_pb2.DESCRIPTOR.serialized_pb,
-                struct_pb2.DESCRIPTOR.name: struct_pb2.DESCRIPTOR.serialized_pb,
-                timestamp_pb2.DESCRIPTOR.name: timestamp_pb2.DESCRIPTOR.serialized_pb,
-                type_pb2.DESCRIPTOR.name: type_pb2.DESCRIPTOR.serialized_pb,
-                wrappers_pb2.DESCRIPTOR.name: wrappers_pb2.DESCRIPTOR.serialized_pb,
-            }
-        )
+        protobuf_inner_descriptors = dict({
+            descriptor_pb2.DESCRIPTOR.name:
+            descriptor_pb2.DESCRIPTOR.serialized_pb,
+            any_pb2.DESCRIPTOR.name:
+            any_pb2.DESCRIPTOR.serialized_pb,
+            api_pb2.DESCRIPTOR.name:
+            api_pb2.DESCRIPTOR.serialized_pb,
+            duration_pb2.DESCRIPTOR.name:
+            duration_pb2.DESCRIPTOR.serialized_pb,
+            empty_pb2.DESCRIPTOR.name:
+            empty_pb2.DESCRIPTOR.serialized_pb,
+            field_mask_pb2.DESCRIPTOR.name:
+            field_mask_pb2.DESCRIPTOR.serialized_pb,
+            source_context_pb2.DESCRIPTOR.name:
+            source_context_pb2.DESCRIPTOR.serialized_pb,
+            struct_pb2.DESCRIPTOR.name:
+            struct_pb2.DESCRIPTOR.serialized_pb,
+            timestamp_pb2.DESCRIPTOR.name:
+            timestamp_pb2.DESCRIPTOR.serialized_pb,
+            type_pb2.DESCRIPTOR.name:
+            type_pb2.DESCRIPTOR.serialized_pb,
+            wrappers_pb2.DESCRIPTOR.name:
+            wrappers_pb2.DESCRIPTOR.serialized_pb,
+        })
         for x in pb_fds_patched:
             if x.name in protobuf_inner_descriptors:
                 protobuf_inner_descriptors[x.name] = None
@@ -532,8 +556,8 @@ class PbDatabase(object):
             patch_inner_pb_data = protobuf_inner_descriptors[patch_inner_name]
             if patch_inner_pb_data is not None:
                 pb_fds_inner.append(
-                    descriptor_pb2.FileDescriptorProto.FromString(patch_inner_pb_data)
-                )
+                    descriptor_pb2.FileDescriptorProto.FromString(
+                        patch_inner_pb_data))
         pb_fds_patched.extend(pb_fds_inner)
         msg_set = self._register_by_pb_fds(self.raw_factory, pb_fds_patched)
 
@@ -608,7 +632,8 @@ class PbDatabase(object):
             return None
         if full_name in self._cache_messages:
             return self._cache_messages[full_name]
-        target_desc = self.extended_factory.pool.FindMessageTypeByName(full_name)
+        target_desc = self.extended_factory.pool.FindMessageTypeByName(
+            full_name)
         if target_desc is None:
             return None
         file_obj = self.get_file(target_desc.file.name)
@@ -637,12 +662,12 @@ def parse_generate_rule(rule):
         if dot_pos <= 0 or dot_pos > len(rule):
             temp_path = rule
             if temp_path.endswith(".mako"):
-                rule = os.path.basename(temp_path[0 : len(temp_path) - 5])
+                rule = os.path.basename(temp_path[0:len(temp_path) - 5])
             else:
                 rule = os.path.basename(temp_path)
         else:
             temp_path = rule[0:dot_pos]
-            rule = rule[(dot_pos + 1) :]
+            rule = rule[(dot_pos + 1):]
 
         dolar_pos = rule.find("$")
         if dolar_pos >= 0 and dolar_pos < len(rule):
@@ -658,7 +683,7 @@ def parse_generate_rule(rule):
         output = rule["output"]
     else:
         if input.endswith(".mako"):
-            output = os.path.basename(input[0 : len(input) - 5])
+            output = os.path.basename(input[0:len(input) - 5])
         else:
             output = os.path.basename(input)
     dolar_pos = output.find("$")
@@ -682,14 +707,15 @@ if sys.version_info[0] == 2:
     def CmdArgsParse(parser):
         return parser.parse_args()
 
-
 else:
 
     def CmdArgsGetParser(usage):
         import argparse
 
         ret = argparse.ArgumentParser(usage="%(prog)s " + usage)
-        ret.add_argument("REMAINDER", nargs=argparse.REMAINDER, help="task names")
+        ret.add_argument("REMAINDER",
+                         nargs=argparse.REMAINDER,
+                         help="task names")
         return ret
 
     def CmdArgsAddOption(parser, *args, **kwargs):
@@ -737,9 +763,8 @@ def get_pb_db_with_cache(pb_file):
     return ret
 
 
-def get_real_output_directory_and_custom_variables(
-    options, yaml_conf_item, origin_custom_vars
-):
+def get_real_output_directory_and_custom_variables(options, yaml_conf_item,
+                                                   origin_custom_vars):
     if yaml_conf_item is None:
         return (options.output_dir, origin_custom_vars)
 
@@ -760,9 +785,10 @@ def get_real_output_directory_and_custom_variables(
     return (output_directory, local_custom_variables)
 
 
-def get_yaml_configure_child(
-    yaml_conf_item, name, default_value, transfer_into_array=False
-):
+def get_yaml_configure_child(yaml_conf_item,
+                             name,
+                             default_value,
+                             transfer_into_array=False):
     if name in yaml_conf_item:
         ret = yaml_conf_item[name]
         if transfer_into_array and type(ret) is not list:
@@ -819,9 +845,9 @@ def generate_group(options, group):
 
     make_module_cache_dir = os.path.join(
         group.project_dir,
-        ".mako_modules-{0}.{1}.{2}".format(
-            sys.version_info[0], sys.version_info[1], sys.version_info[2]
-        ),
+        ".mako_modules-{0}.{1}.{2}".format(sys.version_info[0],
+                                           sys.version_info[1],
+                                           sys.version_info[2]),
     )
 
     inner_include_rule = None
@@ -872,6 +898,8 @@ def generate_group(options, group):
         if inner_exclude_rule is not None:
             if inner_exclude_rule.match(inner_obj.get_name()) is not None:
                 continue
+        if not inner_obj.is_valid(options):
+            continue
         selected_inner_items[inner_key] = inner_obj
 
     # generate global templates
@@ -909,7 +937,8 @@ def generate_group(options, group):
                 module_directory=make_module_cache_dir,
             )
             if output_render:
-                output_file = Template(output_rule, lookup=lookup).render(**render_args)
+                output_file = Template(output_rule,
+                                       lookup=lookup).render(**render_args)
             else:
                 output_file = output_rule
             render_args["output_render_path"] = output_file
@@ -939,13 +968,14 @@ def generate_group(options, group):
                         continue
 
                 render_args["output_file_path"] = output_file
-                source_tmpl = lookup.get_template(os.path.basename(intput_template))
+                source_tmpl = lookup.get_template(
+                    os.path.basename(intput_template))
                 final_output_dir = os.path.dirname(output_file)
                 if final_output_dir and not os.path.exists(final_output_dir):
                     os.makedirs(final_output_dir, 0o777)
-                codecs.open(output_file, mode="w", encoding=options.encoding).write(
-                    source_tmpl.render(**render_args)
-                )
+                codecs.open(output_file, mode="w",
+                            encoding=options.encoding).write(
+                                source_tmpl.render(**render_args))
 
                 if not options.quiet:
                     cprintf_stdout(
@@ -1003,15 +1033,15 @@ def generate_group(options, group):
             render_args["current_instance"] = selected_inner
             try:
                 if output_render:
-                    output_file = Template(output_rule, lookup=lookup).render(
-                        **render_args
-                    )
+                    output_file = Template(output_rule,
+                                           lookup=lookup).render(**render_args)
                 else:
                     output_file = output_rule
                 render_args["output_render_path"] = output_file
 
                 if group.output_directory:
-                    output_file = os.path.join(group.output_directory, output_file)
+                    output_file = os.path.join(group.output_directory,
+                                               output_file)
                 elif options.output_dir:
                     output_file = os.path.join(options.output_dir, output_file)
 
@@ -1027,7 +1057,10 @@ def generate_group(options, group):
                         if not force_overwrite:
                             if not options.quiet:
                                 cprintf_stdout(
-                                    [print_style.FC_YELLOW, print_style.FW_BOLD],
+                                    [
+                                        print_style.FC_YELLOW,
+                                        print_style.FW_BOLD
+                                    ],
                                     "[INFO]: file {0} is already exists, we will ignore generating template {1} to it.\n",
                                     output_file,
                                     intput_template,
@@ -1035,13 +1068,16 @@ def generate_group(options, group):
                             continue
 
                     render_args["output_file_path"] = output_file
-                    source_tmpl = lookup.get_template(os.path.basename(intput_template))
+                    source_tmpl = lookup.get_template(
+                        os.path.basename(intput_template))
                     final_output_dir = os.path.dirname(output_file)
-                    if final_output_dir and not os.path.exists(final_output_dir):
+                    if final_output_dir and not os.path.exists(
+                            final_output_dir):
                         os.makedirs(final_output_dir, 0o777)
-                    codecs.open(output_file, mode="w", encoding=options.encoding).write(
-                        source_tmpl.render(**render_args)
-                    )
+                    codecs.open(output_file,
+                                mode="w",
+                                encoding=options.encoding).write(
+                                    source_tmpl.render(**render_args))
 
                     if not options.quiet:
                         cprintf_stdout(
@@ -1091,9 +1127,9 @@ def generate_global(options, global_generator):
 
     make_module_cache_dir = os.path.join(
         global_generator.project_dir,
-        ".mako_modules-{0}.{1}.{2}".format(
-            sys.version_info[0], sys.version_info[1], sys.version_info[2]
-        ),
+        ".mako_modules-{0}.{1}.{2}".format(sys.version_info[0],
+                                           sys.version_info[1],
+                                           sys.version_info[2]),
     )
 
     # generate global templates
@@ -1129,15 +1165,15 @@ def generate_global(options, global_generator):
                 module_directory=make_module_cache_dir,
             )
             if output_render:
-                output_file = Template(output_rule, lookup=lookup).render(**render_args)
+                output_file = Template(output_rule,
+                                       lookup=lookup).render(**render_args)
             else:
                 output_file = output_rule
             render_args["output_render_path"] = output_file
 
             if global_generator.output_directory:
-                output_file = os.path.join(
-                    global_generator.output_directory, output_file
-                )
+                output_file = os.path.join(global_generator.output_directory,
+                                           output_file)
             elif options.output_dir:
                 output_file = os.path.join(options.output_dir, output_file)
 
@@ -1159,13 +1195,14 @@ def generate_global(options, global_generator):
                         continue
 
                 render_args["output_file_path"] = output_file
-                source_tmpl = lookup.get_template(os.path.basename(intput_template))
+                source_tmpl = lookup.get_template(
+                    os.path.basename(intput_template))
                 final_output_dir = os.path.dirname(output_file)
                 if final_output_dir and not os.path.exists(final_output_dir):
                     os.makedirs(final_output_dir, 0o777)
-                codecs.open(output_file, mode="w", encoding=options.encoding).write(
-                    source_tmpl.render(**render_args)
-                )
+                codecs.open(output_file, mode="w",
+                            encoding=options.encoding).write(
+                                source_tmpl.render(**render_args))
 
                 if not options.quiet:
                     cprintf_stdout(
@@ -1185,7 +1222,8 @@ def generate_global(options, global_generator):
             )
 
 
-def generate_global_templates(pb_db, options, yaml_conf, project_dir, custom_vars):
+def generate_global_templates(pb_db, options, yaml_conf, project_dir,
+                              custom_vars):
     if options.global_template:
         generate_global(
             options,
@@ -1212,8 +1250,7 @@ def generate_global_templates(pb_db, options, yaml_conf, project_dir, custom_var
             output_directory,
             custom_variables,
         ) = get_real_output_directory_and_custom_variables(
-            options, global_rule, custom_vars
-        )
+            options, global_rule, custom_vars)
         generate_global(
             options,
             PbGlobalGenerator(
@@ -1226,7 +1263,8 @@ def generate_global_templates(pb_db, options, yaml_conf, project_dir, custom_var
         )
 
 
-def generate_service_group(pb_db, options, yaml_conf, project_dir, custom_vars):
+def generate_service_group(pb_db, options, yaml_conf, project_dir,
+                           custom_vars):
     for service_name in options.service_name:
         selected_service = pb_db.get_service(service_name)
         if selected_service is None:
@@ -1271,8 +1309,7 @@ def generate_service_group(pb_db, options, yaml_conf, project_dir, custom_vars):
             output_directory,
             custom_variables,
         ) = get_real_output_directory_and_custom_variables(
-            options, rule_yaml_item, custom_vars
-        )
+            options, rule_yaml_item, custom_vars)
         generate_group(
             options,
             PbGroupGenerator(
@@ -1280,29 +1317,27 @@ def generate_service_group(pb_db, options, yaml_conf, project_dir, custom_vars):
                 project_dir=project_dir,
                 output_directory=output_directory,
                 custom_variables=custom_variables,
-                overwrite=get_yaml_configure_child(rule_yaml_item, "overwrite", None),
+                overwrite=get_yaml_configure_child(rule_yaml_item, "overwrite",
+                                                   None),
                 outer_name="service",
                 inner_name="rpc",
                 inner_set_name="rpcs",
                 inner_include_rule=get_yaml_configure_child(
-                    rule_yaml_item, "rpc_include", None
-                ),
+                    rule_yaml_item, "rpc_include", None),
                 inner_exclude_rule=get_yaml_configure_child(
-                    rule_yaml_item, "rpc_exclude", None
-                ),
+                    rule_yaml_item, "rpc_exclude", None),
                 outer_templates=get_yaml_configure_child(
-                    rule_yaml_item, "service_template", [], True
-                ),
+                    rule_yaml_item, "service_template", [], True),
                 inner_templates=get_yaml_configure_child(
-                    rule_yaml_item, "rpc_template", [], True
-                ),
+                    rule_yaml_item, "rpc_template", [], True),
                 outer_inst=selected_service,
                 inner_name_map=selected_service.rpcs,
             ),
         )
 
 
-def generate_message_group(pb_db, options, yaml_conf, project_dir, custom_vars):
+def generate_message_group(pb_db, options, yaml_conf, project_dir,
+                           custom_vars):
     for message_name in options.message_name:
         selected_message = pb_db.get_message(message_name)
         if selected_message is None:
@@ -1347,8 +1382,7 @@ def generate_message_group(pb_db, options, yaml_conf, project_dir, custom_vars):
             output_directory,
             custom_variables,
         ) = get_real_output_directory_and_custom_variables(
-            options, rule_yaml_item, custom_vars
-        )
+            options, rule_yaml_item, custom_vars)
         generate_group(
             options,
             PbGroupGenerator(
@@ -1356,22 +1390,19 @@ def generate_message_group(pb_db, options, yaml_conf, project_dir, custom_vars):
                 project_dir=project_dir,
                 output_directory=output_directory,
                 custom_variables=custom_variables,
-                overwrite=get_yaml_configure_child(rule_yaml_item, "overwrite", None),
+                overwrite=get_yaml_configure_child(rule_yaml_item, "overwrite",
+                                                   None),
                 outer_name="message",
                 inner_name="field",
                 inner_set_name="fields",
                 inner_include_rule=get_yaml_configure_child(
-                    rule_yaml_item, "field_include", None
-                ),
+                    rule_yaml_item, "field_include", None),
                 inner_exclude_rule=get_yaml_configure_child(
-                    rule_yaml_item, "field_exclude", None
-                ),
+                    rule_yaml_item, "field_exclude", None),
                 outer_templates=get_yaml_configure_child(
-                    rule_yaml_item, "message_template", [], True
-                ),
+                    rule_yaml_item, "message_template", [], True),
                 inner_templates=get_yaml_configure_child(
-                    rule_yaml_item, "field_template", [], True
-                ),
+                    rule_yaml_item, "field_template", [], True),
                 outer_inst=selected_message,
                 inner_name_map=selected_message.fields_by_name,
             ),
@@ -1423,8 +1454,7 @@ def generate_enum_group(pb_db, options, yaml_conf, project_dir, custom_vars):
             output_directory,
             custom_variables,
         ) = get_real_output_directory_and_custom_variables(
-            options, rule_yaml_item, custom_vars
-        )
+            options, rule_yaml_item, custom_vars)
         generate_group(
             options,
             PbGroupGenerator(
@@ -1432,22 +1462,19 @@ def generate_enum_group(pb_db, options, yaml_conf, project_dir, custom_vars):
                 project_dir=project_dir,
                 output_directory=output_directory,
                 custom_variables=custom_variables,
-                overwrite=get_yaml_configure_child(rule_yaml_item, "overwrite", None),
+                overwrite=get_yaml_configure_child(rule_yaml_item, "overwrite",
+                                                   None),
                 outer_name="enum",
                 inner_name="enumvalue",
                 inner_set_name="enumvalues",
                 inner_include_rule=get_yaml_configure_child(
-                    rule_yaml_item, "value_include", None
-                ),
+                    rule_yaml_item, "value_include", None),
                 inner_exclude_rule=get_yaml_configure_child(
-                    rule_yaml_item, "value_exclude", None
-                ),
+                    rule_yaml_item, "value_exclude", None),
                 outer_templates=get_yaml_configure_child(
-                    rule_yaml_item, "enum_template", [], True
-                ),
+                    rule_yaml_item, "enum_template", [], True),
                 inner_templates=get_yaml_configure_child(
-                    rule_yaml_item, "value_template", [], True
-                ),
+                    rule_yaml_item, "value_template", [], True),
                 outer_inst=selected_enum,
                 inner_name_map=selected_enum.values_by_name,
             ),
@@ -1485,7 +1512,8 @@ def main():
         parser,
         "--add-path",
         action="append",
-        help="add path to python module(where to find protobuf,six,mako,print_style and etc...)",
+        help=
+        "add path to python module(where to find protobuf,six,mako,print_style and etc...)",
         dest="add_path",
         default=[],
     )
@@ -1493,7 +1521,8 @@ def main():
         parser,
         "--add-package-prefix",
         action="append",
-        help="add path to python module install prefix(where to find protobuf,six,mako,print_style and etc...)",
+        help=
+        "add path to python module install prefix(where to find protobuf,six,mako,print_style and etc...)",
         dest="add_package_prefix",
         default=[],
     )
@@ -1535,7 +1564,8 @@ def main():
         parser,
         "--pb-file",
         action="store",
-        help="set and using pb file instead of generate it with -P/--proto-files",
+        help=
+        "set and using pb file instead of generate it with -P/--proto-files",
         dest="pb_file",
         default=None,
     )
@@ -1545,7 +1575,7 @@ def main():
         action="store",
         help="set encoding of output files",
         dest="encoding",
-        default="utf-8-sig",
+        default="utf-8",
     )
     CmdArgsAddOption(
         parser,
@@ -1611,6 +1641,14 @@ def main():
         help="add template rules for each rpc(<template PATH>:<output rule>)",
         dest="rpc_template",
         default=[],
+    )
+    CmdArgsAddOption(
+        parser,
+        "--rpc-ignore-empty-request",
+        action="store_true",
+        help="ignore rpc with request of google.protobuf.Empty",
+        dest="rpc_ignore_empty_request",
+        default=False,
     )
     CmdArgsAddOption(
         parser,
@@ -1693,7 +1731,8 @@ def main():
         parser,
         "--enumvalue-template",
         action="append",
-        help="add template rules for each enumvalue(<template PATH>:<output rule>)",
+        help=
+        "add template rules for each enumvalue(<template PATH>:<output rule>)",
         dest="enumvalue_template",
         default=[],
     )
@@ -1765,8 +1804,8 @@ def main():
     # Merge configure from YAML file
     if options.yaml_configure and not check_has_module("yaml"):
         sys.stderr.write(
-            "[ERROR]: module {0} is required to using configure file\n".format("PyYAML")
-        )
+            "[ERROR]: module {0} is required to using configure file\n".format(
+                "PyYAML"))
         options.yaml_configure = None
 
     yaml_conf = None
@@ -1781,9 +1820,9 @@ def main():
         import yaml
 
         yaml_conf = yaml.load(
-            codecs.open(
-                options.yaml_configure, mode="r", encoding=options.encoding
-            ).read(),
+            codecs.open(options.yaml_configure,
+                        mode="r",
+                        encoding=options.encoding).read(),
             Loader=yaml.SafeLoader,
         )
         if "configure" in yaml_conf:
@@ -1806,26 +1845,29 @@ def main():
             if "protoc_flags" in globla_setting:
                 options.protoc_flags.extend(globla_setting["protoc_flags"])
             if "protoc_includes" in globla_setting:
-                options.protoc_includes.extend(globla_setting["protoc_includes"])
+                options.protoc_includes.extend(
+                    globla_setting["protoc_includes"])
             if "protocol_files" in globla_setting:
                 options.proto_files.extend(globla_setting["protocol_files"])
             if "protocol_input_pb_file" in globla_setting:
                 options.pb_file = globla_setting["protocol_input_pb_file"]
             if "protocol_output_pb_file" in globla_setting:
-                options.output_pb_file = globla_setting["protocol_output_pb_file"]
+                options.output_pb_file = globla_setting[
+                    "protocol_output_pb_file"]
             if "protocol_project_directory" in globla_setting:
-                options.project_dir = globla_setting["protocol_project_directory"]
+                options.project_dir = globla_setting[
+                    "protocol_project_directory"]
             if "custom_variables" in globla_setting:
                 for custom_var_name in globla_setting["custom_variables"]:
-                    custom_vars[custom_var_name] = globla_setting["custom_variables"][
-                        custom_var_name
-                    ]
+                    custom_vars[custom_var_name] = globla_setting[
+                        "custom_variables"][custom_var_name]
 
     if not options.proto_files and not options.pb_file:
         sys.stderr.write(
             "-P/--proto-files <*.proto> or --pb-file <something.pb> is required.\n"
         )
-        print("[RUNNING]: {0} '{1}'".format(sys.executable, "' '".join(sys.argv)))
+        print("[RUNNING]: {0} '{1}'".format(sys.executable,
+                                            "' '".join(sys.argv)))
         parser.print_help()
         return 1
 
@@ -1847,14 +1889,17 @@ def main():
             sys.stderr.write(
                 "Can not find project directory please add --project-dir <project directory> with .git in it.\n"
             )
-            print("[RUNNING]: {0} '{1}'".format(sys.executable, "' '".join(sys.argv)))
+            print("[RUNNING]: {0} '{1}'".format(sys.executable,
+                                                "' '".join(sys.argv)))
             parser.print_help()
             return 1
 
     if options.pb_file:
         if not os.path.exists(options.pb_file):
-            sys.stderr.write("Can not find --pb-file {0}.\n".format(options.pb_file))
-            print("[RUNNING]: {0} '{1}'".format(sys.executable, "' '".join(sys.argv)))
+            sys.stderr.write("Can not find --pb-file {0}.\n".format(
+                options.pb_file))
+            print("[RUNNING]: {0} '{1}'".format(sys.executable,
+                                                "' '".join(sys.argv)))
             parser.print_help()
             return 1
         tmp_pb_file = options.pb_file
@@ -1892,24 +1937,27 @@ def main():
         protoc_run_args.extend(options.protoc_flags)
         if not options.quiet and not options.print_output_files:
             print("[DEBUG]: '" + "' '".join(protoc_run_args) + "'")
-        pexec = Popen(
-            protoc_run_args, stdin=None, stdout=None, stderr=None, shell=False
-        )
+        pexec = Popen(protoc_run_args,
+                      stdin=None,
+                      stdout=None,
+                      stderr=None,
+                      shell=False)
         pexec.wait()
 
     try:
         pb_db = get_pb_db_with_cache(tmp_pb_file)
-        generate_service_group(pb_db, options, yaml_conf, project_dir, custom_vars)
-        generate_message_group(pb_db, options, yaml_conf, project_dir, custom_vars)
-        generate_enum_group(pb_db, options, yaml_conf, project_dir, custom_vars)
-        generate_global_templates(pb_db, options, yaml_conf, project_dir, custom_vars)
+        generate_service_group(pb_db, options, yaml_conf, project_dir,
+                               custom_vars)
+        generate_message_group(pb_db, options, yaml_conf, project_dir,
+                               custom_vars)
+        generate_enum_group(pb_db, options, yaml_conf, project_dir,
+                            custom_vars)
+        generate_global_templates(pb_db, options, yaml_conf, project_dir,
+                                  custom_vars)
 
     except Exception as e:
-        if (
-            not options.keep_pb_file
-            and os.path.exists(tmp_pb_file)
-            and options.pb_file != tmp_pb_file
-        ):
+        if (not options.keep_pb_file and os.path.exists(tmp_pb_file)
+                and options.pb_file != tmp_pb_file):
             os.remove(tmp_pb_file)
 
         import traceback
@@ -1921,14 +1969,12 @@ def main():
             str(e),
             traceback.format_exc(),
         )
-        print("[RUNNING]: {0} '{1}'".format(sys.executable, "' '".join(sys.argv)))
+        print("[RUNNING]: {0} '{1}'".format(sys.executable,
+                                            "' '".join(sys.argv)))
         ret = 1
 
-    if (
-        not options.keep_pb_file
-        and os.path.exists(tmp_pb_file)
-        and options.pb_file != tmp_pb_file
-    ):
+    if (not options.keep_pb_file and os.path.exists(tmp_pb_file)
+            and options.pb_file != tmp_pb_file):
         os.remove(tmp_pb_file)
     return ret
 

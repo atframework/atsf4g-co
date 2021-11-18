@@ -28,4 +28,7 @@ class task_action_login : public task_action_cs_rpc_base<PROJECT_SERVER_FRAME_NA
 
   int on_success() override;
   int on_failed() override;
+
+ private:
+  bool is_new_player_;
 };

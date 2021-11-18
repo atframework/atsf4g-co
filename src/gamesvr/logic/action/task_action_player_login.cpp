@@ -28,6 +28,7 @@
 #include <dispatcher/task_manager.h>
 
 #include <memory>
+#include <string>
 
 #include "logic/action/task_action_player_async_jobs.h"
 
