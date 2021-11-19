@@ -24,12 +24,12 @@ class task_action_player_async_jobs_sync
   using task_action_ss_req_base::operator();
 
  public:
-  task_action_player_async_jobs_sync(dispatcher_start_data_t&& param);
+  explicit task_action_player_async_jobs_sync(dispatcher_start_data_t&& param);
   ~task_action_player_async_jobs_sync();
 
   const char* name() const override;
 
-  int operator()() override;
+  result_type operator()() override;
 
   int on_success() override;
   int on_failed() override;

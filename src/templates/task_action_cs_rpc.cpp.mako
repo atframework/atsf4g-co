@@ -35,7 +35,7 @@ const char *${task_class_name}::name() const {
   return "${task_class_name}";
 }
 
-int ${task_class_name}::operator()() {
+${task_class_name}::result_type ${task_class_name}::operator()() {
   EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
 % if rpc.is_request_stream() or rpc.is_response_stream():
   // Stream request or stream response, just ignore auto response

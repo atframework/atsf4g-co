@@ -25,7 +25,7 @@ task_action_player_logout::task_action_player_logout(ctor_param_t&& param)
     : task_action_no_req_base(param), ctor_param_(COPP_MACRO_STD_MOVE(param)) {}
 task_action_player_logout::~task_action_player_logout() {}
 
-int task_action_player_logout::operator()() {
+task_action_player_logout::result_type task_action_player_logout::operator()() {
   FWLOGDEBUG("task_action_player_logout for session [{:#}, {}] start", ctor_param_.atgateway_bus_id,
              ctor_param_.atgateway_session_id);
   session::key_t key;

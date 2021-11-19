@@ -1,9 +1,6 @@
-//
+// Copyright 2021 atframework
 // Created by owent on 2016/10/6.
 //
-
-#ifndef LOGIC_ACTION_TASK_ACTION_PLAYER_LOGOUT_H
-#define LOGIC_ACTION_TASK_ACTION_PLAYER_LOGOUT_H
 
 #pragma once
 
@@ -20,10 +17,10 @@ class task_action_player_logout : public task_action_no_req_base {
   using task_action_no_req_base::operator();
 
  public:
-  task_action_player_logout(ctor_param_t&& param);
+  explicit task_action_player_logout(ctor_param_t&& param);
   ~task_action_player_logout();
 
-  int operator()() override;
+  result_type operator()() override;
 
   int on_success() override;
   int on_failed() override;
@@ -31,5 +28,3 @@ class task_action_player_logout : public task_action_no_req_base {
  private:
   ctor_param_t ctor_param_;
 };
-
-#endif  //_LOGIC_ACTION_TASK_ACTION_PLAYER_LOGOUT_H

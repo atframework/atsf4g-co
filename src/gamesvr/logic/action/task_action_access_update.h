@@ -24,7 +24,7 @@ class task_action_access_update : public task_action_cs_rpc_base<PROJECT_SERVER_
 
   const char* name() const override;
 
-  int operator()() override;
+  result_type operator()() override;
 
   int on_success() override;
   int on_failed() override;

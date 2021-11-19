@@ -36,7 +36,7 @@ task_action_player_kickoff::~task_action_player_kickoff() {}
 
 bool task_action_player_kickoff::is_stream_rpc() const { return false; }
 
-int task_action_player_kickoff::operator()() {
+task_action_player_kickoff::result_type task_action_player_kickoff::operator()() {
   msg_cref_type req_msg = get_request();
   const rpc_request_type& req_body = get_request_body();
 

@@ -25,7 +25,7 @@ task_action_player_get_info::~task_action_player_get_info() {}
 
 const char* task_action_player_get_info::name() const { return "task_action_player_get_info"; }
 
-int task_action_player_get_info::operator()() {
+task_action_player_get_info::result_type task_action_player_get_info::operator()() {
   const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
 

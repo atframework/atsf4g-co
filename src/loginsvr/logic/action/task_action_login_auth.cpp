@@ -25,7 +25,7 @@ task_action_login_auth::~task_action_login_auth() {}
 
 const char* task_action_login_auth::name() const { return "task_action_login_auth"; }
 
-int task_action_login_auth::operator()() {
+task_action_login_auth::result_type task_action_login_auth::operator()() {
   EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
   EXPLICIT_UNUSED_ATTR rpc_response_type& rsp_body = get_response_body();
 

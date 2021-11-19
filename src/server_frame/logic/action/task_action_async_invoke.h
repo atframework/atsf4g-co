@@ -27,7 +27,7 @@ class task_action_async_invoke : public task_action_no_req_base {
 
   const char *name() const override;
 
-  int operator()() override;
+  result_type operator()() override;
 
  private:
   ctor_param_t param_;

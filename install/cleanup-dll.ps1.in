@@ -16,7 +16,7 @@ function Cleanup-Library-Directory {
         $DIR_PATHS = Get-ChildItem -Path $LibraryDirectory -Directory
 
         foreach ($DIR_PATH in $DIR_PATHS) {
-            if ($DIR_PATH.Name -eq "@PROJECT_VCS_COMMIT_SHORT_SHA@") {
+            if ($DIR_PATH.Name -eq "@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@") {
                 continue
             }
     

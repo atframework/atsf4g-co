@@ -18,6 +18,8 @@
 
 #include <logic/logic_server_setup.h>
 
+#include <string>
+
 task_action_reload_remote_server_configure::task_action_reload_remote_server_configure(ctor_param_t&& param)
     : task_action_no_req_base(param), param_(param) {}
 task_action_reload_remote_server_configure::~task_action_reload_remote_server_configure() {}
@@ -26,7 +28,7 @@ const char* task_action_reload_remote_server_configure::name() const {
   return "task_action_reload_remote_server_configure";
 }
 
-int task_action_reload_remote_server_configure::operator()() {
+task_action_reload_remote_server_configure::result_type task_action_reload_remote_server_configure::operator()() {
   std::string global_conf;
   int32_t global_version = 0;
 

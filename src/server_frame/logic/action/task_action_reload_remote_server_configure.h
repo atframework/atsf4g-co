@@ -13,12 +13,12 @@ class task_action_reload_remote_server_configure : public task_action_no_req_bas
   using task_action_no_req_base::operator();
 
  public:
-  task_action_reload_remote_server_configure(ctor_param_t&& param);
+  explicit task_action_reload_remote_server_configure(ctor_param_t&& param);
   ~task_action_reload_remote_server_configure();
 
   const char* name() const override;
 
-  int operator()() override;
+  result_type operator()() override;
 
   int on_success() override;
   int on_failed() override;

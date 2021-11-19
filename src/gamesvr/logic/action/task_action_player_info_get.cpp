@@ -24,7 +24,7 @@ task_action_player_info_get::task_action_player_info_get(dispatcher_start_data_t
     : actor_action_cs_req_base(COPP_MACRO_STD_MOVE(param)), rsp_(nullptr) {}
 task_action_player_info_get::~task_action_player_info_get() {}
 
-int task_action_player_info_get::operator()() {
+task_action_player_info_get::result_type task_action_player_info_get::operator()() {
   rsp_ = nullptr;
 
   player::ptr_t user = get_player<player>();

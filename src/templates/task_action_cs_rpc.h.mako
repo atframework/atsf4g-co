@@ -28,7 +28,7 @@ class ${task_class_name} : public task_action_cs_rpc_base<${rpc.get_request().ge
 
   const char *name() const override;
 
-  int operator()() override;
+  result_type operator()() override;
 
   int on_success() override;
   int on_failed() override;

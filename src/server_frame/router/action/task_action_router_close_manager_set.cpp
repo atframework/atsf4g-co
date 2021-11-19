@@ -35,7 +35,7 @@ task_action_router_close_manager_set::task_action_router_close_manager_set(ctor_
 
 task_action_router_close_manager_set::~task_action_router_close_manager_set() {}
 
-int task_action_router_close_manager_set::operator()() {
+task_action_router_close_manager_set::result_type task_action_router_close_manager_set::operator()() {
   FWLOGINFO("router close task started");
   status_data_->success_count_ = 0;
   status_data_->failed_count_ = 0;

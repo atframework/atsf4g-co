@@ -27,7 +27,7 @@ task_action_router_transfer::~task_action_router_transfer() {}
 
 bool task_action_router_transfer::is_stream_rpc() const { return false; }
 
-int task_action_router_transfer::operator()() {
+task_action_router_transfer::result_type task_action_router_transfer::operator()() {
   const rpc_request_type& req_body = get_request_body();
 
   router_manager_base* mgr = router_manager_set::me()->get_manager(req_body.object().object_type_id());

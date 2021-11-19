@@ -28,7 +28,7 @@ task_action_router_update_sync::~task_action_router_update_sync() {}
 
 bool task_action_router_update_sync::is_stream_rpc() const { return true; }
 
-int task_action_router_update_sync::operator()() {
+task_action_router_update_sync::result_type task_action_router_update_sync::operator()() {
   const rpc_request_type& req_body = get_request_body();
   // Stream request or stream response, just ignore auto response
   disable_response_message();

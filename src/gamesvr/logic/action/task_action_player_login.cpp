@@ -36,7 +36,7 @@ task_action_player_login::task_action_player_login(dispatcher_start_data_t &&par
     : task_action_cs_req_base(COPP_MACRO_STD_MOVE(param)), is_new_player_(false) {}
 task_action_player_login::~task_action_player_login() {}
 
-int task_action_player_login::operator()() {
+task_action_player_login::result_type task_action_player_login::operator()() {
   is_new_player_ = false;
   uint32_t zone_id = logic_config::me()->get_local_zone_id();
 

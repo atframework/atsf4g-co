@@ -24,12 +24,12 @@ class task_action_router_transfer
   using task_action_ss_req_base::operator();
 
  public:
-  task_action_router_transfer(dispatcher_start_data_t&& param);
+  explicit task_action_router_transfer(dispatcher_start_data_t&& param);
   ~task_action_router_transfer();
 
   bool is_stream_rpc() const override;
 
-  int operator()() override;
+  result_type operator()() override;
 
   int on_success() override;
   int on_failed() override;

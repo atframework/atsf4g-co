@@ -3,23 +3,23 @@
 cd "$(dirname "$0")";
 
 function cleanup_dir() {
-    if [ ! -e $1 ]; then
+    if [[ ! -e $1 ]]; then
         return 0;
     fi
 
     for DIR_PATH in "$1"/* ; do
         DIR_NAME="$(basename "$DIR_PATH")";
-        if [ "$DIR_NAME" == "@PROJECT_VCS_COMMIT_SHORT_SHA@" ]; then
+        if [[ "$DIR_NAME" == "@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@" ]]; then
             continue;
         fi
 
-        if [ ! -d "$1/$DIR_NAME" ]; then
+        if [[ ! -d "$1/$DIR_NAME" ]]; then
             rm -rfv "$1/$DIR_NAME";
             continue;
         fi
 
         which lsof > /dev/null 2>&1;
-        if [ ! $? -eq 0 ]; then
+        if [[ ! $? -eq 0 ]]; then
             rm -rfv "$1/$DIR_NAME";
             continue;
         fi
@@ -27,12 +27,12 @@ function cleanup_dir() {
         for SO_PATH in "$1/$DIR_NAME"/*.so* ; do
             SO_NAME="$(basename "$SO_PATH")";
             lsof "$1/$DIR_NAME/$SO_NAME" 2>/dev/null;
-            if [ $? -ne 0 ]; then
+            if [[ $? -ne 0 ]]; then
                 rm -rfv "$1/$DIR_NAME/$SO_NAME";
             fi
         done
         HAS_SO=$(find "$1/$DIR_NAME" -name '*.so*' -type f | wc | awk '{print $1}') ;
-        if [ $HAS_SO -eq 0 ]; then
+        if [[ $HAS_SO -eq 0 ]]; then
             echo "rm -rf \"$1/$DIR_NAME\"" ;
             rm -rf "$1/$DIR_NAME";
         fi

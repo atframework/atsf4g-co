@@ -40,7 +40,7 @@ task_action_auto_save_objects::task_action_auto_save_objects(ctor_param_t &&para
 
 task_action_auto_save_objects::~task_action_auto_save_objects() {}
 
-int task_action_auto_save_objects::operator()() {
+task_action_auto_save_objects::result_type task_action_auto_save_objects::operator()() {
   FWLOGINFO("auto save task started");
   util::time::time_utility::update();
 

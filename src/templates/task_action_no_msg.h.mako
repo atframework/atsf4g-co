@@ -25,7 +25,7 @@ class ${task_class_name} : public task_action_no_req_base {
 
   const char *name() const override;
 
-  int operator()() override;
+  result_type operator()() override;
 
   int on_success() override;
   int on_failed() override;

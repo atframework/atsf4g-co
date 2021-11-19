@@ -25,7 +25,7 @@ task_action_player_async_jobs::task_action_player_async_jobs(ctor_param_t&& para
 
 task_action_player_async_jobs::~task_action_player_async_jobs() {}
 
-int task_action_player_async_jobs::operator()() {
+task_action_player_async_jobs::result_type task_action_player_async_jobs::operator()() {
   if (!param_.user) {
     return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
   }

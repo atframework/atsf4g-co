@@ -37,7 +37,7 @@ task_action_login::~task_action_login() {}
 
 const char* task_action_login::name() const { return "task_action_login"; }
 
-int task_action_login::operator()() {
+task_action_login::result_type task_action_login::operator()() {
   const rpc_request_type& req_body = get_request_body();
 
   is_new_player_ = false;

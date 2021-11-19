@@ -29,7 +29,7 @@ const char *${task_class_name}::name() const {
   return "${task_class_name}";
 }
 
-int ${task_class_name}::operator()() {
+${task_class_name}::result_type ${task_class_name}::operator()() {
   // Maybe need to call 
   // set_user_key(param_.user_id, param_.zone_id); 
   return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;

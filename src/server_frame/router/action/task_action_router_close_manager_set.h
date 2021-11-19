@@ -31,7 +31,7 @@ class task_action_router_close_manager_set : public task_action_no_req_base {
   explicit task_action_router_close_manager_set(ctor_param_t&& param);
   ~task_action_router_close_manager_set();
 
-  int operator()() override;
+  result_type operator()() override;
 
   int on_success() override;
   int on_failed() override;

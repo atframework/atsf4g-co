@@ -78,7 +78,7 @@ static int save_player_data(rpc::context& ctx, router_player_cache::ptr_t& cache
   return ret;
 }
 
-int task_action_player_remote_patch_jobs::operator()() {
+task_action_player_remote_patch_jobs::result_type task_action_player_remote_patch_jobs::operator()() {
   need_restart_ = false;
   is_writable_ = false;
   if (!param_.user) {

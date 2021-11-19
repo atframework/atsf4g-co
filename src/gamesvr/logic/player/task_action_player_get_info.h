@@ -25,7 +25,7 @@ class task_action_player_get_info
 
   const char* name() const override;
 
-  int operator()() override;
+  result_type operator()() override;
 
   int on_success() override;
   int on_failed() override;

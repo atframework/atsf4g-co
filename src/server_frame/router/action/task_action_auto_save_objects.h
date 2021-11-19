@@ -19,7 +19,7 @@ class task_action_auto_save_objects : public task_action_no_req_base {
   explicit task_action_auto_save_objects(ctor_param_t&& param);
   ~task_action_auto_save_objects();
 
-  int operator()() override;
+  result_type operator()() override;
 
   int on_success() override;
   int on_failed() override;

@@ -26,7 +26,7 @@ task_action_set_server_time::~task_action_set_server_time() {}
 
 const char* task_action_set_server_time::name() const { return "task_action_set_server_time"; }
 
-int task_action_set_server_time::operator()() {
+task_action_set_server_time::result_type task_action_set_server_time::operator()() {
   EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
   // Stream request or stream response, just ignore auto response
   disable_response_message();

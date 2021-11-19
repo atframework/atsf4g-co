@@ -25,7 +25,7 @@ task_action_player_async_jobs_sync::~task_action_player_async_jobs_sync() {}
 
 const char* task_action_player_async_jobs_sync::name() const { return "task_action_player_async_jobs_sync"; }
 
-int task_action_player_async_jobs_sync::operator()() {
+task_action_player_async_jobs_sync::result_type task_action_player_async_jobs_sync::operator()() {
   EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
   // Stream request or stream response, just ignore auto response
   disable_response_message();

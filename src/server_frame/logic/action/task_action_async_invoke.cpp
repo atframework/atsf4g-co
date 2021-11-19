@@ -23,7 +23,7 @@ task_action_async_invoke::~task_action_async_invoke() {}
 
 const char* task_action_async_invoke::name() const { return param_.name.c_str(); }
 
-int task_action_async_invoke::operator()() {
+task_action_async_invoke::result_type task_action_async_invoke::operator()() {
   if (param_.callable) {
     return param_.callable(get_shared_context());
   }

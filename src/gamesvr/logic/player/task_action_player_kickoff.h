@@ -26,7 +26,7 @@ class task_action_player_kickoff
 
   bool is_stream_rpc() const override;
 
-  int operator()() override;
+  result_type operator()() override;
 
   int on_success() override;
   int on_failed() override;

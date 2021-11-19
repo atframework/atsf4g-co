@@ -43,7 +43,7 @@ task_action_login_authorization::task_action_login_authorization(dispatcher_star
       final_user_id_(0) {}
 task_action_login_authorization::~task_action_login_authorization() {}
 
-int task_action_login_authorization::operator()() {
+task_action_login_authorization::result_type task_action_login_authorization::operator()() {
   is_new_player_ = false;
   strategy_type_ = PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_VERSION_DEFAULT;
   zone_id_ = logic_config::me()->get_local_zone_id();

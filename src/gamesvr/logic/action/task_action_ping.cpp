@@ -35,7 +35,7 @@ task_action_ping::~task_action_ping() {}
 
 const char* task_action_ping::name() const { return "task_action_ping"; }
 
-int task_action_ping::operator()() {
+task_action_ping::result_type task_action_ping::operator()() {
   EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
   EXPLICIT_UNUSED_ATTR rpc_response_type& rsp_body = get_response_body();
 
