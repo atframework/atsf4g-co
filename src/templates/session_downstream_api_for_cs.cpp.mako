@@ -137,8 +137,7 @@ ${result_clazz_name} send_${rpc.get_name()}(
 
   int res = details::__setup_rpc_stream_header(
     *msg_ptr->mutable_head(), "${rpc.get_full_name()}",
-    ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()
-  );
+    ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
 
   if (res < 0) {
     return ${result_clazz_name}(res);
@@ -174,8 +173,7 @@ ${result_clazz_name} send_${rpc.get_name()}(
 
   int res = details::__setup_rpc_stream_header(
     *msg_ptr->mutable_head(), "${rpc.get_full_name()}",
-    ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()
-  );
+    ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
 
   if (res < 0) {
     return ${result_clazz_name}(res);
@@ -211,8 +209,7 @@ ${result_clazz_name} broadcast_${rpc.get_name()}(
 
   int res = details::__setup_rpc_stream_header(
     *msg_ptr->mutable_head(), "${rpc.get_full_name()}",
-    ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()
-  );
+    ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
 
   if (res < 0) {
     return ${result_clazz_name}(res);

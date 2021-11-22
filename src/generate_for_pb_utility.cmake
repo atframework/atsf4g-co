@@ -396,6 +396,84 @@ function(generate_for_pb_add_cs_service SERVICE_NAME SERVICE_ROOT_DIR)
     ERROR_FILE "${GENERATE_FOR_PB_OUT_LOG}" COMMAND_ECHO STDOUT ${GENERATE_FOR_PB_PY_ENCODING})
 endfunction(generate_for_pb_add_cs_service)
 
+function(generate_for_pb_add_simulator_cs_api SERVICE_NAME SERVICE_ROOT_DIR)
+  set(GENERATE_FOR_PB_ARGS_OPTIONS RPC_IGNORE_EMPTY_REQUEST)
+  set(GENERATE_FOR_PB_ARGS_ONE_VALUE PROJECT_NAMESPACE PROTOBUF_PYTHON_PATH
+                                     MAKO_PYTHON_PATH SIX_PYTHON_PATH)
+  set(GENERATE_FOR_PB_ARGS_MULTI_VALUE "")
+  cmake_parse_arguments(PARSE_ARGV 2 GENERATE_FOR_PB_ARGS "${GENERATE_FOR_PB_ARGS_OPTIONS}"
+                        "${GENERATE_FOR_PB_ARGS_ONE_VALUE}" "${GENERATE_FOR_PB_ARGS_MULTI_VALUE}")
+  if(NOT GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE)
+    set(GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE "")
+  endif()
+  set(GENERATE_FOR_PB_ARGS_BASH_ARGS "--add-package-prefix \"${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}\"")
+  set(GENERATE_FOR_PB_ARGS_CMAKE_ARGS "--add-package-prefix" ${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR})
+  if(GENERATE_FOR_PB_ARGS_PROTOBUF_PYTHON_PATH)
+    set(GENERATE_FOR_PB_ARGS_BASH_ARGS " --add-path \"${GENERATE_FOR_PB_ARGS_PROTOBUF_PYTHON_PATH}\"")
+    list(APPEND GENERATE_FOR_PB_ARGS_CMAKE_ARGS "--add-path" ${GENERATE_FOR_PB_ARGS_PROTOBUF_PYTHON_PATH})
+  endif()
+  if(GENERATE_FOR_PB_ARGS_MAKO_PYTHON_PATH)
+    set(GENERATE_FOR_PB_ARGS_BASH_ARGS
+        "${GENERATE_FOR_PB_ARGS_BASH_ARGS} --add-path \"${GENERATE_FOR_PB_ARGS_MAKO_PYTHON_PATH}\"")
+    list(APPEND GENERATE_FOR_PB_ARGS_CMAKE_ARGS "--add-path" ${GENERATE_FOR_PB_ARGS_MAKO_PYTHON_PATH})
+  endif()
+  if(GENERATE_FOR_PB_ARGS_SIX_PYTHON_PATH)
+    set(GENERATE_FOR_PB_ARGS_BASH_ARGS
+        "${GENERATE_FOR_PB_ARGS_BASH_ARGS} --add-path \"${GENERATE_FOR_PB_ARGS_SIX_PYTHON_PATH}\"")
+    list(APPEND GENERATE_FOR_PB_ARGS_CMAKE_ARGS "--add-path" ${GENERATE_FOR_PB_ARGS_SIX_PYTHON_PATH})
+  endif()
+  unset(GENERATE_FOR_PB_RPC_TEMPLATE_ARGS_BASH_ARGS)
+  unset(GENERATE_FOR_PB_RPC_TEMPLATE_ARGS_CMAKE_ARGS)
+  if(GENERATE_FOR_PB_ARGS_RPC_IGNORE_EMPTY_REQUEST)
+    set(GENERATE_FOR_PB_RPC_TEMPLATE_ARGS_BASH_ARGS "${GENERATE_FOR_PB_ARGS_BASH_ARGS} --rpc-ignore-empty-request")
+    list(APPEND GENERATE_FOR_PB_RPC_TEMPLATE_ARGS_CMAKE_ARGS "--rpc-ignore-empty-request")
+  endif()
+  # Add bash script into generate-for-pb-run.sh
+  file(APPEND ${GENERATE_FOR_PB_OUT_SH}
+       "${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}# ${SERVICE_NAME}${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+  file(
+    APPEND ${GENERATE_FOR_PB_OUT_SH}
+    "\"${Python3_EXECUTABLE}\" \"${GENERATE_FOR_PB_PY}\" -s ${SERVICE_NAME} -o \"${SERVICE_ROOT_DIR}\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --project-dir \"${PROJECT_SOURCE_DIR}\" --pb-file \"${PROJECT_INSTALL_RES_PBD_DIR}/network.pb\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --set project_namespace=${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE} \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --add-path \"${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/modules\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  ${GENERATE_FOR_PB_ARGS_BASH_ARGS} \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --service-template 'templates/package_request_api_for_simulator.h.mako:rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.h' \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --service-template 'templates/package_request_api_for_simulator.cpp.mako:rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.cpp' ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+  )
+
+  # Add powershell script into generate-for-pb-run.ps1
+  file(APPEND ${GENERATE_FOR_PB_OUT_PWSH}
+       "${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}# ${SERVICE_NAME}${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+  file(
+    APPEND ${GENERATE_FOR_PB_OUT_PWSH}
+    "& \"${Python3_EXECUTABLE}\" \"${GENERATE_FOR_PB_PY}\" -s ${SERVICE_NAME} -o \"${SERVICE_ROOT_DIR}\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --project-dir \"${PROJECT_SOURCE_DIR}\" --pb-file \"${PROJECT_INSTALL_RES_PBD_DIR}/network.pb\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --set project_namespace=${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE} `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --add-path \"${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/modules\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  ${GENERATE_FOR_PB_ARGS_BASH_ARGS} `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --service-template 'templates/package_request_api_for_simulator.h.mako:rpc/\${service.get_extension_field(\\\"service_options\\\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.h' `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --service-template 'templates/package_request_api_for_simulator.cpp.mako:rpc/\${service.get_extension_field(\\\"service_options\\\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.cpp' ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+  )
+
+  # Run script once when run cmake
+  echowithcolor(COLOR GREEN
+                "-- Ready to run ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} for ${SERVICE_NAME} @ ${SERVICE_ROOT_DIR}")
+  file(APPEND "${GENERATE_FOR_PB_OUT_LOG}"
+       "-- Ready to run ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} for ${SERVICE_NAME} @ ${SERVICE_ROOT_DIR}\n")
+  execute_process(
+    COMMAND
+      ${Python3_EXECUTABLE} ${GENERATE_FOR_PB_PY} "--quiet" "-s" "${SERVICE_NAME}" "-o" "${SERVICE_ROOT_DIR}"
+      "--project-dir" ${PROJECT_SOURCE_DIR} "--pb-file" "${PROJECT_INSTALL_RES_PBD_DIR}/network.pb" "--set"
+      "project_namespace=${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE}" "--add-path"
+      "${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/modules" ${GENERATE_FOR_PB_ARGS_CMAKE_ARGS}
+      "--service-template" "templates/package_request_api_for_simulator.h.mako:rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.h"
+      "--service-template" "templates/package_request_api_for_simulator.cpp.mako:rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.cpp"
+    WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
+    OUTPUT_FILE "${GENERATE_FOR_PB_OUT_LOG}"
+    ERROR_FILE "${GENERATE_FOR_PB_OUT_LOG}" COMMAND_ECHO STDOUT ${GENERATE_FOR_PB_PY_ENCODING})
+endfunction(generate_for_pb_add_simulator_cs_api)
+
 function(generate_for_pb_run_generator)
   if(ATFRAMEWORK_CMAKE_TOOLSET_PWSH)
     execute_process(

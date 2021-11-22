@@ -20,8 +20,8 @@ result_clazz_name = service.get_name_lower_rule() + '_result_t'
 
 #include <libcopp/future/poller.h>
 
-#include <cstddef>
 #include <stdint.h>
+#include <cstddef>
 #include <cstring>
 #include <string>
 

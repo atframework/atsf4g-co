@@ -1,4 +1,4 @@
-//
+// Copyright 2021 atframework
 // Created by owt50 on 2016/10/11.
 //
 
@@ -11,6 +11,9 @@
 #include <simulator_active.h>
 #include <utility/client_config.h>
 #include <utility/client_simulator.h>
+
+#include <rpc/gamesvrclientservice/gamesvrclientservice.h>
+#include <rpc/loginsvrclientservice/loginsvrclientservice.h>
 
 namespace proto {
 namespace player {
@@ -26,13 +29,12 @@ void on_cmd_login_auth(util::cli::callback_param params) {
   }
   sender.player->set_id(params[0]->to_cpp_string());
 
-  client_simulator::msg_t &msg = client_simulator::add_req(params);
   // token
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSLoginAuthReq *req_body = msg.mutable_body()->mutable_mcs_login_auth_req();
-  req_body->set_open_id(params[0]->to_cpp_string());
-  req_body->set_resource_version(sender.player->get_resource_version());
-  req_body->set_package_version(sender.player->get_package_version());
-  req_body->set_protocol_version(sender.player->get_protocol_version());
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSLoginAuthReq req_body;
+  req_body.set_open_id(params[0]->to_cpp_string());
+  req_body.set_resource_version(sender.player->get_resource_version());
+  req_body.set_package_version(sender.player->get_package_version());
+  req_body.set_protocol_version(sender.player->get_protocol_version());
 
   if (params.get_params_number() > 1) {
     sender.player->set_system_id(params[1]->to_int32());
@@ -52,8 +54,11 @@ void on_cmd_login_auth(util::cli::callback_param params) {
     sender.player->set_gamesvr_index(params[4]->to_int32());
   }
 
-  protobuf_copy_message(*req_body->mutable_account(), sender.player->get_account());
-  req_body->set_system_id(static_cast<PROJECT_SERVER_FRAME_NAMESPACE_ID::EnSystemID>(sender.player->get_system_id()));
+  protobuf_copy_message(*req_body.mutable_account(), sender.player->get_account());
+  req_body.set_system_id(static_cast<PROJECT_SERVER_FRAME_NAMESPACE_ID::EnSystemID>(sender.player->get_system_id()));
+
+  client_simulator::msg_t &msg = client_simulator::add_req(params);
+  rpc::loginsvrclientservice::package_login_auth(msg, req_body);
 }
 
 void on_rsp_login_auth(client_simulator::player_ptr_t player, client_simulator::msg_t &msg) {
@@ -64,10 +69,17 @@ void on_rsp_login_auth(client_simulator::player_ptr_t player, client_simulator::
     return;
   }
 
-  player->set_id(msg.body().msc_login_auth_rsp().open_id());
-  player->set_login_code(msg.body().msc_login_auth_rsp().login_code());
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::SCLoginAuthRsp rsp_body;
+  if (!rsp_body.ParseFromArray(msg.body_bin().data(), msg.body_bin().size())) {
+    SIMULATOR_INFO_MSG() << "parse login auth rsp failed, err: " << rsp_body.InitializationErrorString() << std::endl;
+    player->close();
+    return;
+  }
 
-  int sz = msg.body().msc_login_auth_rsp().login_address_size();
+  player->set_id(rsp_body.open_id());
+  player->set_login_code(rsp_body.login_code());
+
+  int sz = rsp_body.login_address_size();
   if (sz <= 0) {
     SIMULATOR_INFO_MSG() << "player " << player->get_id() << " login auth failed, has no gamesvr." << std::endl;
     player->close();
@@ -84,8 +96,8 @@ void on_rsp_login_auth(client_simulator::player_ptr_t player, client_simulator::
     index = (player->get_gamesvr_index() + sz) % sz;
   }
 
-  player->set_user_id(msg.body().msc_login_auth_rsp().user_id());
-  player->set_gamesvr_addr(msg.body().msc_login_auth_rsp().login_address(index));
+  player->set_user_id(rsp_body.user_id());
+  player->set_gamesvr_addr(rsp_body.login_address(index));
 
   player->get_owner()->exec_cmd(player, "Player LoginGame");
 }
@@ -126,13 +138,15 @@ void on_cmd_login(util::cli::callback_param params) {
     return;
   }
 
-  client_simulator::msg_t &req = client_simulator::add_req(params);
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSLoginReq *req_body = req.mutable_body()->mutable_mcs_login_req();
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSLoginReq req_body;
 
-  req_body->set_login_code(sender.player->get_login_code());
-  req_body->set_open_id(sender.player->get_id());
-  req_body->set_user_id(sender.player->get_user_id());
-  protobuf_copy_message(*req_body->mutable_account(), sender.player->get_account());
+  req_body.set_login_code(sender.player->get_login_code());
+  req_body.set_open_id(sender.player->get_id());
+  req_body.set_user_id(sender.player->get_user_id());
+  protobuf_copy_message(*req_body.mutable_account(), sender.player->get_account());
+
+  client_simulator::msg_t &req = client_simulator::add_req(params);
+  rpc::gamesvrclientservice::package_login(req, req_body);
 }
 
 void on_rsp_login(client_simulator::player_ptr_t player, client_simulator::msg_t &msg) {
@@ -149,10 +163,9 @@ void on_cmd_ping(util::cli::callback_param params) {
   SIMULATOR_CHECK_PLAYER_PARAMNUM(params, 0);
 
   client_simulator::msg_t &req = client_simulator::add_req(params);
-  req.mutable_body()->mutable_mcs_ping_req();
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSPingReq req_body;
+  rpc::gamesvrclientservice::package_ping(req, req_body);
 }
-
-void on_rsp_pong(client_simulator::player_ptr_t player, client_simulator::msg_t &msg) {}
 
 void on_cmd_get_info(util::cli::callback_param params) {
   SIMULATOR_CHECK_PLAYER_PARAMNUM(params, 1);
@@ -160,16 +173,14 @@ void on_cmd_get_info(util::cli::callback_param params) {
   const ::google::protobuf::Descriptor *mds = PROJECT_SERVER_FRAME_NAMESPACE_ID::CSPlayerGetInfoReq::descriptor();
   int field_count = mds->field_count();
 
-  client_simulator::msg_t &req = client_simulator::add_req(params);
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSPlayerGetInfoReq *req_body =
-      req.mutable_body()->mutable_mcs_player_getinfo_req();
+  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSPlayerGetInfoReq req_body;
 
   std::string seg_name;
-  const google::protobuf::Reflection *reflet = req_body->GetReflection();
+  const google::protobuf::Reflection *reflet = req_body.GetReflection();
   for (size_t i = 0; i < params.get_params_number(); ++i) {
     if ("all" == params[i]->to_cpp_string()) {
       for (int j = 0; j < field_count; ++j) {
-        reflet->SetBool(req_body, mds->field(j), true);
+        reflet->SetBool(&req_body, mds->field(j), true);
       }
 
       break;
@@ -178,20 +189,22 @@ void on_cmd_get_info(util::cli::callback_param params) {
     seg_name = "need_";
     seg_name += params[i]->to_cpp_string();
 
-    const google::protobuf::FieldDescriptor *fd = req_body->GetDescriptor()->FindFieldByName(seg_name);
+    const google::protobuf::FieldDescriptor *fd = req_body.GetDescriptor()->FindFieldByName(seg_name);
     if (nullptr == fd) {
       SIMULATOR_ERR_MSG() << "player get info segment name " << seg_name << " not found" << std::endl;
     } else {
       if (fd->cpp_type() != google::protobuf::FieldDescriptor::CPPTYPE_BOOL) {
         SIMULATOR_ERR_MSG() << "player get info segment name " << seg_name << " is not a bool" << std::endl;
       } else {
-        reflet->SetBool(req_body, fd, true);
+        reflet->SetBool(&req_body, fd, true);
       }
     }
   }
+
+  client_simulator::msg_t &req = client_simulator::add_req(params);
+  rpc::gamesvrclientservice::package_player_get_info(req, req_body);
 }
 
-void on_rsp_get_info(client_simulator::player_ptr_t player, client_simulator::msg_t &msg) {}
 }  // namespace player
 }  // namespace proto
 
@@ -199,18 +212,18 @@ SIMULATOR_ACTIVE(player_account, base) {
   client_simulator::cast(base)->reg_req()["Player"]["Login"].bind(
       proto::player::on_cmd_login_auth,
       "<openid> [platform type=0] [account type=1] [access=''] [use gamesvr=0] login into loginsvr");
-  client_simulator::cast(base)->reg_rsp("msc_login_auth_rsp", proto::player::on_rsp_login_auth);
+  client_simulator::cast(base)->reg_rsp(rpc::loginsvrclientservice::get_full_name_of_login_auth(),
+                                        proto::player::on_rsp_login_auth);
 
   client_simulator::cast(base)->reg_req()["Player"]["LoginGame"].bind(proto::player::on_cmd_login,
                                                                       "login into gamesvr");
-  client_simulator::cast(base)->reg_rsp("msc_login_rsp", proto::player::on_rsp_login);
+  client_simulator::cast(base)->reg_rsp(rpc::gamesvrclientservice::get_full_name_of_login(),
+                                        proto::player::on_rsp_login);
 
   client_simulator::cast(base)->reg_req()["Player"]["Ping"].bind(proto::player::on_cmd_ping, "send ping package");
-  client_simulator::cast(base)->reg_rsp("msc_pong_rsp", proto::player::on_rsp_pong);
 
   client_simulator::cast(base)->reg_req()["Player"]["GetInfo"].bind(proto::player::on_cmd_get_info,
                                                                     "[segments...] get player data");
-  client_simulator::cast(base)->reg_rsp("msc_player_getinfo_rsp", proto::player::on_rsp_get_info);
   // special auto complete for GetInfo
   {
     // 通过protobuf反射的智能补全设置

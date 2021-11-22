@@ -18,40 +18,28 @@ client_simulator::client_simulator() {}
 
 client_simulator::~client_simulator() {}
 
-uint32_t client_simulator::pick_message_id(const msg_t &msg) const {
-  if (false == msg.has_body()) {
-    return 0;
-  }
-
-  std::vector<const google::protobuf::FieldDescriptor *> output;
-  msg.body().GetReflection()->ListFields(msg.body(), &output);
-  if (output.empty()) {
-    return 0;
-  }
-
-  return static_cast<uint32_t>(output[0]->number());
-}
+uint32_t client_simulator::pick_message_id(const msg_t &) const { return 0; }
 
 std::string client_simulator::pick_message_name(const msg_t &msg) const {
-  if (false == msg.has_body()) {
-    return 0;
+  if (msg.head().has_rpc_response()) {
+    return msg.head().rpc_response().rpc_name();
   }
 
-  std::vector<const google::protobuf::FieldDescriptor *> output;
-  msg.body().GetReflection()->ListFields(msg.body(), &output);
-  if (output.empty()) {
-    return 0;
+  if (msg.head().has_rpc_stream()) {
+    return msg.head().rpc_stream().rpc_name();
   }
 
-  return output[0]->name();
+  if (msg.head().has_rpc_request()) {
+    return msg.head().rpc_request().rpc_name();
+  }
+
+  return "";
 }
 
 std::string client_simulator::dump_message(const msg_t &msg) {
   std::stringstream ss;
   ss << "Head: " << msg.head().DebugString() << std::endl;
-  if (msg.has_body()) {
-    ss << "Body: " << msg.body().DebugString() << std::endl;
-  } else if (msg.body_bin().empty() == false) {
+  if (msg.body_bin().empty() == false) {
     const ::google::protobuf::Descriptor *descriptor = nullptr;
     if (msg.head().has_rpc_request()) {
       descriptor = ::google::protobuf::DescriptorPool::generated_pool()->FindMessageTypeByName(

@@ -1,9 +1,6 @@
+// Copyright 2021 atframework
+// Created by owent on 2016/10/9.
 //
-// Created by owt50 on 2016/10/9.
-//
-
-#ifndef ATFRAMEWORK_LIBSIMULATOR_SIMULATOR_BASE_H
-#define ATFRAMEWORK_LIBSIMULATOR_SIMULATOR_BASE_H
 
 #pragma once
 
@@ -11,6 +8,8 @@
 
 #include <uv.h>
 
+#include <cli/cmd_option.h>
+#include <gsl/select-gsl.h>
 #include <lock/spin_lock.h>
 
 #include <bitset>
@@ -20,10 +19,12 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
-#include "simulator_player_impl.h"
-
-#include <cli/cmd_option.h>
+#include "libsimulator_uv/simulator_player_impl.h"
 
 extern "C" {
 struct linenoiseCompletions;
@@ -59,7 +60,7 @@ class simulator_base {
     std::string hint_;
     std::bitset<cmd_autocomplete_flag_t::EN_CACF_MAX> autocomplete_;
 
-    cmd_wrapper_t(const std::string &n);
+    explicit cmd_wrapper_t(const std::string &n);
 
     // create a child node
     cmd_wrapper_t &operator[](const std::string &name);
@@ -260,6 +261,7 @@ class simulator_msg_base : public simulator_base {
   void reg_rsp(uint32_t msg_id, rsp_fn_t fn) { msg_id_handles_[msg_id] = fn; }
 
   void reg_rsp(const std::string &msg_name, rsp_fn_t fn) { msg_name_handles_[msg_name] = fn; }
+  void reg_rsp(const gsl::string_view &msg_name, rsp_fn_t fn) { reg_rsp(static_cast<std::string>(msg_name), fn); }
 
   static cmd_sender_t &get_sender(util::cli::callback_param param) {
     return *reinterpret_cast<cmd_sender_t *>(param.get_ext_param());
@@ -310,7 +312,7 @@ class simulator_msg_base : public simulator_base {
   virtual int dispatch_message(player_ptr_t player, msg_t &msg) {
     uint32_t msg_id = pick_message_id(msg);
     if (msg_id != 0) {
-      typename std::map<uint32_t, rsp_fn_t>::iterator iter = msg_id_handles_.find(msg_id);
+      typename std::unordered_map<uint32_t, rsp_fn_t>::iterator iter = msg_id_handles_.find(msg_id);
       if (msg_id_handles_.end() != iter && iter->second) {
         iter->second(player, msg);
       }
@@ -318,7 +320,7 @@ class simulator_msg_base : public simulator_base {
 
     std::string msg_name = pick_message_name(msg);
     if (!msg_name.empty()) {
-      typename std::map<std::string, rsp_fn_t>::iterator iter = msg_name_handles_.find(msg_name);
+      typename std::unordered_map<std::string, rsp_fn_t>::iterator iter = msg_name_handles_.find(msg_name);
       if (msg_name_handles_.end() != iter && iter->second) {
         iter->second(player, msg);
       }
@@ -356,7 +358,7 @@ class simulator_msg_base : public simulator_base {
     }
   }
 
-  virtual uint32_t pick_message_id(const msg_t &msg) const { return 0; };
+  virtual uint32_t pick_message_id(const msg_t &msg) const { return 0; }
 
   virtual std::string pick_message_name(const msg_t &msg) const { return std::string(); }
 
@@ -366,9 +368,7 @@ class simulator_msg_base : public simulator_base {
   virtual int unpack_message(msg_t &msg, const void *buffer, size_t sz) const = 0;
 
  private:
-  std::map<uint32_t, rsp_fn_t> msg_id_handles_;
-  std::map<std::string, rsp_fn_t> msg_name_handles_;
+  std::unordered_map<uint32_t, rsp_fn_t> msg_id_handles_;
+  std::unordered_map<std::string, rsp_fn_t> msg_name_handles_;
   std::fstream proto_file;
 };
-
-#endif  // ATFRAMEWORK_LIBSIMULATOR_SIMULATOR_BASE_H

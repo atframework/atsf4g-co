@@ -11,6 +11,7 @@
 
 #include <dispatcher/task_type_defines.h>
 
+#include <functional>
 #include <list>
 #include <memory>
 #include <string>
@@ -272,39 +273,4 @@ class player : public player_cache {
   // -------------------------------------------------------
 
   REG_PLAYER_MGR_PTR_DEF(user_async_jobs_manager)
-};
-
-/**
- * @brief 用户回包数据缓存包装，析构时自动还原发送数据
- * @note 注意只能用作局部变量
- * @note 所有此guard构造的下行包为流类型 PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM
- */
-class player_cs_syn_msg_holder {
- public:
-  using value_type = player::dirty_message_container;
-
- public:
-  explicit player_cs_syn_msg_holder(player::ptr_t u);
-  ~player_cs_syn_msg_holder();
-
-  inline const value_type *operator->() const noexcept { return &msg_; }
-
-  inline operator const value_type &() const noexcept { return msg_; }
-
-  inline const value_type *get() const noexcept { return &msg_; }
-
-  inline value_type *get() noexcept { return &msg_; }
-
-  inline const value_type &ref() const noexcept { return msg_; }
-
-  inline value_type &ref() noexcept { return msg_; }
-
-  void disable() noexcept;
-
-  void enable() noexcept;
-
- private:
-  player::ptr_t owner_;
-  value_type msg_;
-  bool disabled_;
 };

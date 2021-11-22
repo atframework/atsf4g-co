@@ -45,39 +45,6 @@ class client_simulator : public simulator_msg_base<client_player, PROJECT_SERVER
   static cmd_sender_t &get_cmd_sender(util::cli::callback_param params);
   static msg_t &add_req(cmd_sender_t &sender);
   static msg_t &add_req(util::cli::callback_param params);
-
-  template <class TRequestType>
-  static bool pack_rpc(const TRequestType &body, msg_t &msg, ::google::protobuf::ServiceDescriptor &service_desc,
-                       const std::string &rpc_name) {
-    const ::google::protobuf::MethodDescriptor *method = service_desc.FindMethodByName(rpc_name);
-    if (nullptr == method) {
-      return false;
-    }
-
-    if (method->input_type()->full_name() != TRequestType::descriptor()->full_name()) {
-      return false;
-    }
-
-    if (method->client_streaming()) {
-      msg.mutable_head()->set_op_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM);
-      auto meta = msg.mutable_head()->mutable_rpc_request();
-      meta->set_version(get_atframework_settings().rpc_version());
-      meta->set_rpc_name(service_desc.full_name() + "." + rpc_name);
-      meta->set_type_url(method->input_type()->full_name());
-      meta->set_caller("similator");
-      meta->set_callee(service_desc.full_name());
-    } else {
-      msg.mutable_head()->set_op_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_REQUEST);
-      auto meta = msg.mutable_head()->mutable_rpc_request();
-      meta->set_version(get_atframework_settings().rpc_version());
-      meta->set_rpc_name(service_desc.full_name() + "." + rpc_name);
-      meta->set_type_url(method->input_type()->full_name());
-      meta->set_caller("similator");
-      meta->set_callee(service_desc.full_name());
-    }
-
-    body.SerializeToString(msg.mutable_body_bin());
-  }
 };
 
 #define SIMULATOR_CHECK_PLAYER_PARAMNUM(PARAM, N)                                             \

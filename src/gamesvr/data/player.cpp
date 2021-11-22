@@ -290,11 +290,18 @@ void player::update_heartbeat() {
 }
 
 void player::send_all_syn_msg() {
-  player_cs_syn_msg_holder sync_msg(shared_from_this());
+  auto sess = get_session();
+  if (sess) {
+    dirty_message_container dirty_msg;
+    for (auto &handle : cache_data_.dirty_handles) {
+      if (handle.second.build_fn) {
+        handle.second.build_fn(*this, dirty_msg);
+      }
+    }
 
-  for (auto &handle : cache_data_.dirty_handles) {
-    if (handle.second.build_fn) {
-      handle.second.build_fn(*this, sync_msg.ref());
+    if (dirty_msg.player_dirty) {
+      rpc::context ctx;
+      rpc::gamesvrclientservice::send_player_dirty_chg_sync(ctx, *dirty_msg.player_dirty, *sess);
     }
   }
 
@@ -405,24 +412,3 @@ void player::insert_dirty_handle_if_not_exists(uintptr_t key, build_dirty_messag
   handle.build_fn = build_fn;
   handle.clear_fn = clear_fn;
 }
-
-player_cs_syn_msg_holder::player_cs_syn_msg_holder(player::ptr_t u) : owner_(u), disabled_(false) {}
-player_cs_syn_msg_holder::~player_cs_syn_msg_holder() {
-  if (!owner_) {
-    return;
-  }
-
-  std::shared_ptr<session> sess = owner_->get_session();
-  if (!sess || disabled_) {
-    return;
-  }
-
-  if (msg_.player_dirty) {
-    rpc::context ctx;
-    rpc::gamesvrclientservice::send_player_dirty_chg_sync(ctx, *msg_.player_dirty, *sess);
-  }
-}
-
-void player_cs_syn_msg_holder::disable() noexcept { disabled_ = true; }
-
-void player_cs_syn_msg_holder::enable() noexcept { disabled_ = false; }

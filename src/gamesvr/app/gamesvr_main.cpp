@@ -31,7 +31,6 @@
 #include <sstream>
 #include <vector>
 
-#include "app/handle_cs_msg.h"
 #include "app/handle_cs_rpc_gamesvrclientservice.h"
 #include "app/handle_ss_rpc_gamesvrservice.h"
 
@@ -189,7 +188,6 @@ class main_service_module : public atapp::module_impl {
     // register handles
     INIT_CALL_FN(handle::game::register_handles_for_gamesvrservice);
     INIT_CALL_FN(handle::gamesvrclientservice::register_handles_for_gamesvrclientservice);
-    INIT_CALL(app_handle_cs_msg);
 
     // reload will be triggered before init, so reload again here
 

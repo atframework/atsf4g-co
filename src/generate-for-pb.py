@@ -831,6 +831,17 @@ class PbGroupGenerator(object):
         self.overwrite = overwrite
         self.local_vcs_user_name = try_read_vcs_username(project_dir)
 
+def write_code_if_different(output_file, encoding, data):
+    content_changed = False
+    if not os.path.exists(output_file):
+        content_changed = True
+    else:
+        old_data = codecs.open(output_file, mode="r", encoding=encoding).read()
+        if old_data != data:
+            content_changed = True
+
+    if content_changed:
+        codecs.open(output_file, mode="w", encoding=encoding).write(data)
 
 def generate_group(options, group):
     # type: (argparse.Namespace, PbGroupGenerator) -> None
@@ -973,9 +984,7 @@ def generate_group(options, group):
                 final_output_dir = os.path.dirname(output_file)
                 if final_output_dir and not os.path.exists(final_output_dir):
                     os.makedirs(final_output_dir, 0o777)
-                codecs.open(output_file, mode="w",
-                            encoding=options.encoding).write(
-                                source_tmpl.render(**render_args))
+                write_code_if_different(output_file, options.encoding, source_tmpl.render(**render_args))
 
                 if not options.quiet:
                     cprintf_stdout(
@@ -1074,10 +1083,7 @@ def generate_group(options, group):
                     if final_output_dir and not os.path.exists(
                             final_output_dir):
                         os.makedirs(final_output_dir, 0o777)
-                    codecs.open(output_file,
-                                mode="w",
-                                encoding=options.encoding).write(
-                                    source_tmpl.render(**render_args))
+                    write_code_if_different(output_file, options.encoding, source_tmpl.render(**render_args))
 
                     if not options.quiet:
                         cprintf_stdout(
@@ -1200,9 +1206,7 @@ def generate_global(options, global_generator):
                 final_output_dir = os.path.dirname(output_file)
                 if final_output_dir and not os.path.exists(final_output_dir):
                     os.makedirs(final_output_dir, 0o777)
-                codecs.open(output_file, mode="w",
-                            encoding=options.encoding).write(
-                                source_tmpl.render(**render_args))
+                write_code_if_different(output_file, options.encoding, source_tmpl.render(**render_args))
 
                 if not options.quiet:
                     cprintf_stdout(

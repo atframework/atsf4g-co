@@ -53,15 +53,7 @@ uint64_t cs_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
   return 0;
 }
 
-cs_msg_dispatcher::msg_type_t cs_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw_msg) {
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg *real_msg =
-      get_protobuf_msg<PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg>(raw_msg);
-  if (nullptr == real_msg) {
-    return 0;
-  }
-
-  return static_cast<msg_type_t>(real_msg->body().body_oneof_case());
-}
+cs_msg_dispatcher::msg_type_t cs_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw_msg) { return 0; }
 
 const std::string &cs_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
   PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg *real_msg =
@@ -100,29 +92,7 @@ cs_msg_dispatcher::msg_op_type_t cs_msg_dispatcher::pick_msg_op_type(msg_raw_t &
 }
 
 const atframework::DispatcherOptions *cs_msg_dispatcher::get_options_by_message_type(msg_type_t msg_type) {
-  if (unlikely(dispatcher_options_map_.empty())) {
-    dispatcher_options_map_.reserve(
-        static_cast<size_t>(PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsgBody::descriptor()->field_count()));
-    for (int i = 0; i < PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsgBody::descriptor()->field_count(); ++i) {
-      const google::protobuf::FieldDescriptor *fd =
-          PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsgBody::descriptor()->field(i);
-      if (nullptr == fd) {
-        continue;
-      }
-
-      if (fd->options().HasExtension(atframework::dispatcher_options)) {
-        dispatcher_options_map_[fd->number()] = &fd->options().GetExtension(atframework::dispatcher_options);
-      }
-    }
-  }
-
-  std::unordered_map<msg_type_t, const atframework::DispatcherOptions *>::iterator iter =
-      dispatcher_options_map_.find(msg_type);
-  if (iter == dispatcher_options_map_.end()) {
-    return nullptr;
-  }
-
-  return iter->second;
+  return nullptr;
 }
 
 void cs_msg_dispatcher::on_create_task_failed(start_data_t &start_data, int32_t error_code) {
