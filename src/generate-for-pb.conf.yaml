@@ -39,6 +39,7 @@ rules:
           output: 'output path rule'
       rpc_include: 'regex rule'
       rpc_exclude: 'regex rule'
+      rpc_ignore_request: [] # ignore request types for rpc template
   - message:
       name: 'message name'
       overwrite: false # overwrite configure.overwrite
@@ -55,6 +56,7 @@ rules:
           output: 'output path rule'
       field_include: 'regex rule'
       field_exclude: 'regex rule'
+      field_ignore_type: [] # ignore types for field template
   - enum:
       name: 'enum name'
       overwrite: false # overwrite configure.overwrite

@@ -224,7 +224,7 @@ class PbObjectBase(object):
             return current_object
         return default_value
 
-    def is_valid(self, options):
+    def is_valid(self, ignore_request):
         return True
 
     def get_name(self):
@@ -274,6 +274,12 @@ class PbField(PbObjectBase):
         super(PbField, self).__init__(descriptor, refer_database)
         self.file = container_message.file
         self.container = container_message
+
+    def is_valid(self, ignore_request):
+        if ignore_request:
+            if self.descriptor.full_name in ignore_request:
+                return False
+        return True
 
 
 class PbOneof(PbObjectBase):
@@ -360,9 +366,9 @@ class PbRpc(PbObjectBase):
         self._request = None
         self._response = None
 
-    def is_valid(self, options):
-        if options.rpc_ignore_empty_request:
-            if self.descriptor.input_type.full_name == "google.protobuf.Empty":
+    def is_valid(self, ignore_request):
+        if ignore_request:
+            if self.descriptor.input_type.full_name in ignore_request:
                 return False
         return True
 
@@ -814,6 +820,7 @@ class PbGroupGenerator(object):
         inner_templates,
         outer_inst,
         inner_name_map,
+        inner_ignore_types
     ):
         self.database = database
         self.project_dir = project_dir
@@ -826,6 +833,7 @@ class PbGroupGenerator(object):
         self.inner_templates = inner_templates
         self.outer_inst = outer_inst
         self.inner_name_map = inner_name_map
+        self.inner_ignore_types = inner_ignore_types
         self.output_directory = output_directory
         self.custom_variables = custom_variables
         self.overwrite = overwrite
@@ -909,7 +917,7 @@ def generate_group(options, group):
         if inner_exclude_rule is not None:
             if inner_exclude_rule.match(inner_obj.get_name()) is not None:
                 continue
-        if not inner_obj.is_valid(options):
+        if not inner_obj.is_valid(group.inner_ignore_types):
             continue
         selected_inner_items[inner_key] = inner_obj
 
@@ -1291,6 +1299,7 @@ def generate_service_group(pb_db, options, yaml_conf, project_dir,
                 inner_templates=options.rpc_template,
                 outer_inst=selected_service,
                 inner_name_map=selected_service.rpcs,
+                inner_ignore_types=set(options.rpc_ignore_request),
             ),
         )
 
@@ -1336,6 +1345,8 @@ def generate_service_group(pb_db, options, yaml_conf, project_dir,
                     rule_yaml_item, "rpc_template", [], True),
                 outer_inst=selected_service,
                 inner_name_map=selected_service.rpcs,
+                inner_ignore_types=get_yaml_configure_child(rule_yaml_item, "rpc_ignore_request",
+                                                   False),
             ),
         )
 
@@ -1364,6 +1375,7 @@ def generate_message_group(pb_db, options, yaml_conf, project_dir,
                 inner_templates=options.field_template,
                 outer_inst=selected_message,
                 inner_name_map=selected_message.fields_by_name,
+                inner_ignore_types=set(options.field_ignore_type),
             ),
         )
 
@@ -1409,6 +1421,8 @@ def generate_message_group(pb_db, options, yaml_conf, project_dir,
                     rule_yaml_item, "field_template", [], True),
                 outer_inst=selected_message,
                 inner_name_map=selected_message.fields_by_name,
+                inner_ignore_types=get_yaml_configure_child(rule_yaml_item, "field_ignore_type",
+                                                   False),
             ),
         )
 
@@ -1436,6 +1450,7 @@ def generate_enum_group(pb_db, options, yaml_conf, project_dir, custom_vars):
                 inner_templates=options.enumvalue_template,
                 outer_inst=selected_enum,
                 inner_name_map=selected_enum.values_by_name,
+                inner_ignore_types=set(),
             ),
         )
 
@@ -1481,6 +1496,7 @@ def generate_enum_group(pb_db, options, yaml_conf, project_dir, custom_vars):
                     rule_yaml_item, "value_template", [], True),
                 outer_inst=selected_enum,
                 inner_name_map=selected_enum.values_by_name,
+                inner_ignore_types=set(),
             ),
         )
 
@@ -1648,11 +1664,11 @@ def main():
     )
     CmdArgsAddOption(
         parser,
-        "--rpc-ignore-empty-request",
-        action="store_true",
-        help="ignore rpc with request of google.protobuf.Empty",
-        dest="rpc_ignore_empty_request",
-        default=False,
+        "--rpc-ignore-request",
+        action="append",
+        help="ignore rpc with request of specify types",
+        dest="rpc_ignore_request",
+        default=[],
     )
     CmdArgsAddOption(
         parser,
@@ -1728,6 +1744,14 @@ def main():
         help="skip field name match the exclude rule(by regex)",
         dest="field_exclude_rule",
         default=None,
+    )
+    CmdArgsAddOption(
+        parser,
+        "--field-ignore-type",
+        action="append",
+        help="ignore fields with specify types",
+        dest="field_ignore_type",
+        default=[],
     )
 
     # For enum - enumvalue
