@@ -209,7 +209,8 @@ int ${pb_msg_class_name}::load_file(const std::string& file_path) {
 % endfor
 
   for (int i = 0; i < outer_data.${loader.code_field.name.lower()}_size(); ++ i) {
-    std::shared_ptr<item_type> new_item = std::make_shared<item_type>();
+    std::shared_ptr<item_type> new_item = std::const_pointer_cast<item_type>(
+      std::make_shared<${loader.get_pb_inner_class_name()}>());
     if (!new_item) {
       EXCEL_CONFIG_MANAGER_LOGERROR("[EXCEL] parse file %s for %s(message type: %s) and create item object %d failed",
         file_path.c_str(), "${pb_msg_class_name}", "${loader.get_pb_outer_class_name()}", i
