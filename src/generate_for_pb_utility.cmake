@@ -62,7 +62,7 @@ file(
 
 file(
   APPEND ${GENERATE_FOR_PB_OUT_SH}
-  "\"${Python3_EXECUTABLE}\" \"${GENERATE_FOR_PB_PY}\" -c \"${GENERATE_FOR_PB_OUT_CONF}\" \"$@\" ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+  "\"${Python3_EXECUTABLE}\" \"${GENERATE_FOR_PB_PY}\" --add-package-prefix \"${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}\" -c \"${GENERATE_FOR_PB_OUT_CONF}\" \"$@\" ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
 )
 
 file(APPEND ${GENERATE_FOR_PB_OUT_PWSH}
@@ -90,7 +90,7 @@ if ($LastExitCode -ne 0) {
 file(
   APPEND ${GENERATE_FOR_PB_OUT_PWSH}
   "
-& \"${Python3_EXECUTABLE}\" \"${GENERATE_FOR_PB_PY}\" -c \"${GENERATE_FOR_PB_OUT_CONF}\" $args
+& \"${Python3_EXECUTABLE}\" \"${GENERATE_FOR_PB_PY}\" --add-package-prefix \"${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}\" -c \"${GENERATE_FOR_PB_OUT_CONF}\" $args
 if ($LastExitCode -ne 0) {
   exit $LastExitCode
 }${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
@@ -233,6 +233,13 @@ function(generate_for_pb_add_cs_service SERVICE_NAME SERVICE_ROOT_DIR)
         - overwrite: true
           input: '${GENERATE_FOR_PB_WORK_DIR}/templates/handle_cs_rpc.cpp.mako'
           output: '${HANDLE_PATH_PREFIX}handle_cs_rpc_\${service.get_name_lower_rule()}.cpp'
+  - service:
+      name: '${SERVICE_NAME}'
+      overwrite: false
+      output_directory: '${SERVICE_ROOT_DIR}'
+      custom_variables:
+        project_namespace: '${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE}'
+        rpc_include_prefix: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}'
       ${GENERATE_FOR_PB_RPC_IGNORE_EMPTY_REQUEST}
       rpc_template:
         - overwrite: false

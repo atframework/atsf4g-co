@@ -32,7 +32,7 @@ ${ns}
 % endfor
 struct ${result_clazz_name} {
   ${result_clazz_name}();
-  ${result_clazz_name}(int code);
+  explicit ${result_clazz_name}(int code);
 
   // Remove this and implement co_yield to get the result in the future
   explicit operator int() const noexcept;

@@ -33,14 +33,18 @@ result_clazz_name = service.get_name_lower_rule() + '_result_t'
 
 namespace rpc {
 <%
+rpc_common_codes_enable_stream_header = False
 rpc_common_codes_enable_common = len(rpcs.values()) > 0
 
 for rpc in rpcs.values():
     if not rpc.is_response_stream():
-        continue
+      continue
+
+    if rpc.is_response_stream():
+      rpc_common_codes_enable_stream_header = True
 
 %>namespace details {
-% if rpc_common_codes_enable_common:
+% if rpc_common_codes_enable_stream_header:
 template<class TBodyType>
 static inline int __pack_body(TBodyType &body, std::string *output, const char *rpc_full_name,
                                   const std::string &type_full_name) {
@@ -56,6 +60,7 @@ static inline int __pack_body(TBodyType &body, std::string *output, const char *
 }
 % endif
 
+% if rpc_common_codes_enable_stream_header:
 static inline int __setup_rpc_stream_header(${project_namespace}::CSMsgHead &head, const char *rpc_full_name,
                                             const std::string &type_full_name) {
   head.set_op_type(${project_namespace}::EN_MSG_OP_TYPE_STREAM);
@@ -72,6 +77,7 @@ static inline int __setup_rpc_stream_header(${project_namespace}::CSMsgHead &hea
   return ${project_namespace}::err::EN_SUCCESS;
 
 }
+% endif
 }
 
 % for ns in service.get_cpp_namespace_begin(module_name, ''):

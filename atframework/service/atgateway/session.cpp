@@ -23,7 +23,10 @@
 namespace atframe {
 namespace gateway {
 #if defined(UTIL_CONFIG_COMPILER_CXX_STATIC_ASSERT) && UTIL_CONFIG_COMPILER_CXX_STATIC_ASSERT
-#  if (defined(__cplusplus) && __cplusplus >= 201402L) || ((defined(_MSVC_LANG) && _MSVC_LANG >= 201402L))
+#  if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201402L)) ||                       \
+      (defined(__cplusplus) && __cplusplus >= 201402L &&                        \
+       !(!defined(__clang__) && defined(__GNUC__) && defined(__GNUC_MINOR__) && \
+         __GNUC__ * 100 + __GNUC_MINOR__ <= 409))
 UTIL_CONFIG_STATIC_ASSERT(std::is_trivially_copyable<session::limit_t>::value);
 #  elif (defined(__cplusplus) && __cplusplus >= 201103L) || ((defined(_MSVC_LANG) && _MSVC_LANG >= 201103L))
 UTIL_CONFIG_STATIC_ASSERT(std::is_trivial<session::limit_t>::value);
