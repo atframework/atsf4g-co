@@ -101,7 +101,7 @@ void context::set_parent_context(rpc::context &parent) {
   parent_span_ = parent.get_trace_span();
 }
 
-void context::set_current_service(const atapp::app &app,
+void context::set_current_service(atapp::app &app,
                                   const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::logic_telemetry_cfg &telemetry) {
   telemetry::global_service::set_current_service(app, telemetry);
 }

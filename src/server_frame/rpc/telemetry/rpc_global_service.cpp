@@ -240,7 +240,7 @@ static opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> _o
 }
 
 static void _opentelemetry_set_global_provider(
-    const atapp::app &app, opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> provider,
+    atapp::app &app, opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> provider,
     std::shared_ptr<details::local_caller_info_t> app_info_cache,
     const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::opentelemetry_cfg &opentelemetry_cfg) {
   // Default tracer
@@ -270,6 +270,21 @@ static void _opentelemetry_set_global_provider(
     opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogHandler(
         nostd::shared_ptr<opentelemetry::sdk::common::internal_log::LogHandler>{
             new details::opentelemetry_internal_log_handler()});
+    app.add_evt_on_finally([](atapp::app &app) {
+      ::util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{details::g_global_service_lock};
+      if (details::g_global_service_cache) {
+        if (details::g_global_service_cache->tracer) {
+          details::g_global_service_cache->tracer->Close(
+              std::chrono::seconds(app.get_origin_configure().timer().stop_timeout().seconds()) +
+              std::chrono::nanoseconds(app.get_origin_configure().timer().stop_timeout().nanos()));
+          opentelemetry::nostd::shared_ptr<::opentelemetry::trace::Tracer> swap_out;
+          details::g_global_service_cache->tracer.swap(swap_out);
+        }
+        opentelemetry::trace::Provider::SetTracerProvider(
+            opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>());
+        details::g_global_service_cache.reset();
+      }
+    });
   }
   details::g_global_service_cache.swap(app_info_cache);
 }
@@ -317,7 +332,7 @@ static opentelemetry::sdk::resource::ResourceAttributes _create_opentelemetry_ap
 }
 
 void global_service::set_current_service(
-    const atapp::app &app, const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::logic_telemetry_cfg &telemetry) {
+    atapp::app &app, const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::logic_telemetry_cfg &telemetry) {
   std::shared_ptr<details::local_caller_info_t> app_info_cache = std::make_shared<details::local_caller_info_t>();
   if (!app_info_cache) {
     return;

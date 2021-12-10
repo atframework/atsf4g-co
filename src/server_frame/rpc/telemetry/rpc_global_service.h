@@ -41,7 +41,7 @@ class global_service {
    * @param app atapp instance
    * @param telemetry telemetry configure
    */
-  static void set_current_service(const atapp::app& app,
+  static void set_current_service(atapp::app& app,
                                   const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::logic_telemetry_cfg& telemetry);
 };
 
