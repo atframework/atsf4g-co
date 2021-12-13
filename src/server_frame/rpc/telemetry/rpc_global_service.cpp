@@ -105,17 +105,21 @@ class opentelemetry_internal_log_handler : public opentelemetry::sdk::common::in
       }
     }
 
-    ::util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{details::g_global_service_lock};
-    if (!details::g_global_service_cache) {
+    std::shared_ptr<local_caller_info_t> current_service_cache;
+    {
+      ::util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{details::g_global_service_lock};
+      current_service_cache = details::g_global_service_cache;
+    }
+    if (!current_service_cache) {
       return;
     }
 
-    if (!details::g_global_service_cache->logger) {
+    if (!current_service_cache->logger) {
       return;
     }
 
     if (nullptr != msg) {
-      details::g_global_service_cache->logger->format_log(caller, "{}", msg);
+      current_service_cache->logger->format_log(caller, "{}", msg);
     }
   }
 };
@@ -239,6 +243,29 @@ static opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> _o
   return provider;
 }
 
+static void _opentelemetry_cleanup_global_provider(atapp::app &app) {
+  std::shared_ptr<details::local_caller_info_t> current_service_cache;
+  {
+    ::util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{details::g_global_service_lock};
+    current_service_cache = details::g_global_service_cache;
+    details::g_global_service_cache.reset();
+  }
+
+  // Hold provider in case of start another span again
+  auto provider = opentelemetry::trace::Provider::GetTracerProvider();
+  opentelemetry::trace::Provider::SetTracerProvider(
+      opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>());
+  if (current_service_cache) {
+    if (current_service_cache->tracer) {
+      current_service_cache->tracer->Close(
+          std::chrono::seconds(app.get_origin_configure().timer().stop_timeout().seconds()) +
+          std::chrono::nanoseconds(app.get_origin_configure().timer().stop_timeout().nanos()));
+      opentelemetry::nostd::shared_ptr<::opentelemetry::trace::Tracer> swap_out;
+      current_service_cache->tracer.swap(swap_out);
+    }
+  }
+}
+
 static void _opentelemetry_set_global_provider(
     atapp::app &app, opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> provider,
     std::shared_ptr<details::local_caller_info_t> app_info_cache,
@@ -270,21 +297,7 @@ static void _opentelemetry_set_global_provider(
     opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogHandler(
         nostd::shared_ptr<opentelemetry::sdk::common::internal_log::LogHandler>{
             new details::opentelemetry_internal_log_handler()});
-    app.add_evt_on_finally([](atapp::app &app) {
-      ::util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{details::g_global_service_lock};
-      if (details::g_global_service_cache) {
-        if (details::g_global_service_cache->tracer) {
-          details::g_global_service_cache->tracer->Close(
-              std::chrono::seconds(app.get_origin_configure().timer().stop_timeout().seconds()) +
-              std::chrono::nanoseconds(app.get_origin_configure().timer().stop_timeout().nanos()));
-          opentelemetry::nostd::shared_ptr<::opentelemetry::trace::Tracer> swap_out;
-          details::g_global_service_cache->tracer.swap(swap_out);
-        }
-        opentelemetry::trace::Provider::SetTracerProvider(
-            opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>());
-        details::g_global_service_cache.reset();
-      }
-    });
+    app.add_evt_on_finally(_opentelemetry_cleanup_global_provider);
   }
   details::g_global_service_cache.swap(app_info_cache);
 }
