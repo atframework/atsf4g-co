@@ -62,13 +62,31 @@ class player_cache_ptr_holder : public util::design_pattern::noncopyable {
 class player : public player_cache {
  private:
   static constexpr const uint32_t PLAYER_DATA_LOGIC_VERSION = 1;
-  struct inner_flag {
+  struct internal_flag {
     enum type {
       EN_IFT_FEATURE_INVALID = 0,
       EN_IFT_IS_INITED,                  // 是否已初始化
       EN_IFT_NEED_PATCH_REMOTE_COMMAND,  // 是否需要启动远程命令任务
+      EN_IFT_IN_DIRTY_CALLBACK,          // 是否在结算脏数据过程中
       EN_IFT_MAX
     };
+  };
+
+  class internal_flag_guard_t {
+   public:
+    internal_flag_guard_t();
+    ~internal_flag_guard_t();
+
+    void setup(player &owner, internal_flag::type f);
+    void reset();
+    inline operator bool() const { return !!owner_ && !!flag_; }
+
+    UTIL_DESIGN_PATTERN_NOCOPYABLE(internal_flag_guard_t)
+    UTIL_DESIGN_PATTERN_NOMOVABLE(internal_flag_guard_t)
+
+   private:
+    internal_flag::type flag_;
+    player *owner_;
   };
 
  public:
@@ -193,13 +211,13 @@ class player : public player_cache {
    *       比如如果一个玩家对象是缓存，则不会走完整的登入流程，也不会被完全初始化，那么这个数据就是只读的。
    *        这时候如果登出或者移除玩家对象的时候清理就不能写数据库。
    */
-  bool is_inited() const { return inner_flags_.test(inner_flag::EN_IFT_IS_INITED); }
+  bool is_inited() const { return internal_flags_.test(internal_flag::EN_IFT_IS_INITED); }
   /**
    * @brief 标记为完全初始化，也表示在此进程中玩家数据是可写的。
    * @note 这个flag用于标记玩家实时数据必须最多唯一存在于一个进程中，其他进程的数据都是缓存。
    *       缓存可以升级为实时数据，但是不能降级。如果需要降级，则直接移除玩家对象，下一次需要的时候重新拉取缓存
    */
-  void set_inited() { inner_flags_.set(inner_flag::EN_IFT_IS_INITED, true); }
+  void set_inited() { internal_flags_.set(internal_flag::EN_IFT_IS_INITED, true); }
 
   const PROJECT_SERVER_FRAME_NAMESPACE_ID::DClientDeviceInfo &get_client_info() const { return client_info_; }
   void set_client_info(const PROJECT_SERVER_FRAME_NAMESPACE_ID::DClientDeviceInfo &info) {
@@ -261,7 +279,7 @@ class player : public player_cache {
                                          clear_dirty_cache_fn_t clear_fn);
 
  private:
-  mutable std::bitset<inner_flag::EN_IFT_MAX> inner_flags_;
+  mutable std::bitset<internal_flag::EN_IFT_MAX> internal_flags_;
 
   friend class task_queue_lock_guard;
   std::list<task_queue_node> task_lock_queue_;

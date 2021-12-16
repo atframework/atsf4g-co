@@ -15,6 +15,8 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
+#include <atframe/atapp.h>
+
 #include <config/logic_config.h>
 
 #include <string>
@@ -82,6 +84,12 @@ task_manager::task_manager()
     : stat_interval_(60), stat_last_checkpoint_(0), conf_busy_count_(0), conf_busy_warn_count_(0) {}
 
 task_manager::~task_manager() {
+  if (native_mgr_) {
+    native_mgr_->reset();
+  }
+  native_mgr_.reset();
+  stack_pool_.reset();
+
   // free protobuf meta
   ::google::protobuf::ShutdownProtobufLibrary();
 }
@@ -98,6 +106,21 @@ int task_manager::init() {
 
   if (!check_sys_config()) {
     return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_INIT;
+  }
+
+  atapp::app *app = atapp::app::get_last_instance();
+  if (nullptr != app) {
+    // Cleanup and destroy task manager
+    native_task_manager_ptr_type hold_task_manager = native_mgr_;
+    app->add_evt_on_finally([hold_task_manager](atapp::app &) {
+      if (hold_task_manager) {
+        hold_task_manager->reset();
+      }
+
+      if (!task_manager::is_instance_destroyed()) {
+        task_manager::me()->native_mgr_.reset();
+      }
+    });
   }
 
   return 0;

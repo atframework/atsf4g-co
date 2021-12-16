@@ -23,6 +23,39 @@
 #include <rpc/gamesvrclientservice/gamesvrclientservice.h>
 #include <rpc/rpc_utils.h>
 
+player::internal_flag_guard_t::internal_flag_guard_t() : flag_(internal_flag::EN_IFT_FEATURE_INVALID), owner_(NULL) {}
+player::internal_flag_guard_t::~internal_flag_guard_t() { reset(); }
+
+void player::internal_flag_guard_t::setup(player &owner, internal_flag::type f) {
+  if (internal_flag::EN_IFT_FEATURE_INVALID == f) {
+    return;
+  }
+
+  // 一次只能设置一个flag
+  if (f & (f - 1)) {
+    return;
+  }
+
+  // 已被其他地方设置
+  if (owner.internal_flags_.test(f)) {
+    return;
+  }
+
+  reset();
+  owner_ = &owner;
+  flag_ = f;
+  owner_->internal_flags_.set(flag_, true);
+}
+
+void player::internal_flag_guard_t::reset() {
+  if (owner_ && internal_flag::EN_IFT_FEATURE_INVALID != flag_) {
+    owner_->internal_flags_.set(flag_, false);
+  }
+
+  owner_ = NULL;
+  flag_ = internal_flag::EN_IFT_FEATURE_INVALID;
+}
+
 player::task_queue_node::task_queue_node(const task_manager::task_ptr_t &t) : related_task(t), is_waiting(false) {}
 
 player::task_queue_lock_guard::task_queue_lock_guard(player &user)
@@ -292,6 +325,13 @@ void player::update_heartbeat() {
 void player::send_all_syn_msg() {
   auto sess = get_session();
   if (sess) {
+    internal_flag_guard_t flag_guard;
+    flag_guard.setup(*this, internal_flag::EN_IFT_IN_DIRTY_CALLBACK);
+    if (!flag_guard) {
+      FWPLOGERROR(*this, "can not send sync messages when in dirty callback");
+      return;
+    }
+
     dirty_message_container dirty_msg;
     for (auto &handle : cache_data_.dirty_handles) {
       if (handle.second.build_fn) {
@@ -324,6 +364,13 @@ int player::await_before_logout_tasks() {
 }
 
 void player::clear_dirty_cache() {
+  internal_flag_guard_t flag_guard;
+  flag_guard.setup(*this, internal_flag::EN_IFT_IN_DIRTY_CALLBACK);
+  if (!flag_guard) {
+    FWPLOGERROR(*this, "can not clean dirty handles when in dirty callback");
+    return;
+  }
+
   // 清理要推送的脏数据
   for (auto &handle : cache_data_.dirty_handles) {
     if (handle.second.clear_fn) {
@@ -391,6 +438,11 @@ void player::insert_dirty_handle_if_not_exists(uintptr_t key, dirty_sync_handle_
     return;
   }
 
+  if (internal_flags_.test(internal_flag::EN_IFT_IN_DIRTY_CALLBACK)) {
+    FWPLOGERROR(*this, "can not insert dirty handle when in dirty callback");
+    return;
+  }
+
   if (cache_data_.dirty_handles.end() != cache_data_.dirty_handles.find(key)) {
     return;
   }
@@ -401,6 +453,11 @@ void player::insert_dirty_handle_if_not_exists(uintptr_t key, dirty_sync_handle_
 void player::insert_dirty_handle_if_not_exists(uintptr_t key, build_dirty_message_fn_t build_fn,
                                                clear_dirty_cache_fn_t clear_fn) {
   if (!build_fn && !clear_fn) {
+    return;
+  }
+
+  if (internal_flags_.test(internal_flag::EN_IFT_IN_DIRTY_CALLBACK)) {
+    FWPLOGERROR(*this, "can not insert dirty handle when in dirty callback");
     return;
   }
 
