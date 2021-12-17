@@ -23,16 +23,12 @@
 #include <rpc/gamesvrclientservice/gamesvrclientservice.h>
 #include <rpc/rpc_utils.h>
 
-player::internal_flag_guard_t::internal_flag_guard_t() : flag_(internal_flag::EN_IFT_FEATURE_INVALID), owner_(NULL) {}
+player::internal_flag_guard_t::internal_flag_guard_t()
+    : flag_(internal_flag::EN_IFT_FEATURE_INVALID), owner_(nullptr) {}
 player::internal_flag_guard_t::~internal_flag_guard_t() { reset(); }
 
 void player::internal_flag_guard_t::setup(player &owner, internal_flag::type f) {
-  if (internal_flag::EN_IFT_FEATURE_INVALID == f) {
-    return;
-  }
-
-  // 一次只能设置一个flag
-  if (f & (f - 1)) {
+  if (f <= internal_flag::EN_IFT_FEATURE_INVALID || f >= internal_flag::EN_IFT_MAX) {
     return;
   }
 
@@ -48,11 +44,11 @@ void player::internal_flag_guard_t::setup(player &owner, internal_flag::type f) 
 }
 
 void player::internal_flag_guard_t::reset() {
-  if (owner_ && internal_flag::EN_IFT_FEATURE_INVALID != flag_) {
+  if (nullptr != owner_ && internal_flag::EN_IFT_FEATURE_INVALID != flag_) {
     owner_->internal_flags_.set(flag_, false);
   }
 
-  owner_ = NULL;
+  owner_ = nullptr;
   flag_ = internal_flag::EN_IFT_FEATURE_INVALID;
 }
 
