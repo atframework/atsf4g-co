@@ -319,20 +319,29 @@ void player::update_heartbeat() {
 }
 
 void player::send_all_syn_msg() {
+  if (internal_flags_.test(internal_flag::EN_IFT_IN_DIRTY_CALLBACK)) {
+    FWPLOGERROR(*this, "can not send sync messages when when running dirty handle {}",
+                cache_data_.current_dirty_handle_name);
+    return;
+  }
+
   auto sess = get_session();
   if (sess) {
-    internal_flag_guard_t flag_guard;
-    flag_guard.setup(*this, internal_flag::EN_IFT_IN_DIRTY_CALLBACK);
-    if (!flag_guard) {
-      FWPLOGERROR(*this, "can not send sync messages when in dirty callback");
-      return;
-    }
-
     dirty_message_container dirty_msg;
-    for (auto &handle : cache_data_.dirty_handles) {
-      if (handle.second.build_fn) {
-        handle.second.build_fn(*this, dirty_msg);
+    {
+      internal_flag_guard_t flag_guard;
+      flag_guard.setup(*this, internal_flag::EN_IFT_IN_DIRTY_CALLBACK);
+      if (!flag_guard) {
+        return;
       }
+
+      for (auto &handle : cache_data_.dirty_handles) {
+        if (handle.second.build_fn) {
+          cache_data_.current_dirty_handle_name = handle.second.name;
+          handle.second.build_fn(*this, dirty_msg);
+        }
+      }
+      cache_data_.current_dirty_handle_name = gsl::string_view{};
     }
 
     if (dirty_msg.player_dirty) {
@@ -360,25 +369,33 @@ int player::await_before_logout_tasks() {
 }
 
 void player::clear_dirty_cache() {
-  internal_flag_guard_t flag_guard;
-  flag_guard.setup(*this, internal_flag::EN_IFT_IN_DIRTY_CALLBACK);
-  if (!flag_guard) {
-    FWPLOGERROR(*this, "can not clean dirty handles when in dirty callback");
-    return;
+  {
+    internal_flag_guard_t flag_guard;
+    flag_guard.setup(*this, internal_flag::EN_IFT_IN_DIRTY_CALLBACK);
+    if (!flag_guard) {
+      FWPLOGERROR(*this, "can not clear dirty handles when running dirty handle {}",
+                  cache_data_.current_dirty_handle_name);
+      return;
+    }
+
+    // 清理要推送的脏数据
+    for (auto &handle : cache_data_.dirty_handles) {
+      if (handle.second.clear_fn) {
+        cache_data_.current_dirty_handle_name = handle.second.name;
+        handle.second.clear_fn(*this);
+      }
+    }
+    cache_data_.current_dirty_handle_name = gsl::string_view{};
+    cache_data_.dirty_handles.clear();
   }
 
-  // 清理要推送的脏数据
-  for (auto &handle : cache_data_.dirty_handles) {
-    if (handle.second.clear_fn) {
-      handle.second.clear_fn(*this);
-    }
-  }
-  cache_data_.dirty_handles.clear();
+  // Other clear actions
 }
 
 template <class TMSG, class TCONTAINER>
 static player::dirty_sync_handle_t _player_generate_dirty_handle(
-    TMSG *(PROJECT_SERVER_FRAME_NAMESPACE_ID::SCPlayerDirtyChgSync::*add_fn)(), TCONTAINER player::cache_t::*get_mem) {
+    gsl::string_view handle_name, TMSG *(PROJECT_SERVER_FRAME_NAMESPACE_ID::SCPlayerDirtyChgSync::*add_fn)(),
+    TCONTAINER player::cache_t::*get_mem) {
   player::dirty_sync_handle_t handle;
   handle.build_fn = [add_fn, get_mem](player &user, player::dirty_message_container &output) {
     if (!get_mem) {
@@ -419,23 +436,29 @@ static player::dirty_sync_handle_t _player_generate_dirty_handle(
 
 PROJECT_SERVER_FRAME_NAMESPACE_ID::DItem &player::mutable_dirty_item(
     const PROJECT_SERVER_FRAME_NAMESPACE_ID::DItem &in) {
-  insert_dirty_handle_if_not_exists(reinterpret_cast<uintptr_t>(&cache_data_.dirty_item_by_type), [](player &) {
-    return _player_generate_dirty_handle(&PROJECT_SERVER_FRAME_NAMESPACE_ID::SCPlayerDirtyChgSync::add_dirty_items,
-                                         &player::cache_t::dirty_item_by_type);
-  });
+  insert_dirty_handle_if_not_exists(reinterpret_cast<uintptr_t>(&cache_data_.dirty_item_by_type),
+                                    "player.mutable_dirty_item", [](gsl::string_view handle_name, player &) {
+                                      return _player_generate_dirty_handle(
+                                          handle_name,
+                                          &PROJECT_SERVER_FRAME_NAMESPACE_ID::SCPlayerDirtyChgSync::add_dirty_items,
+                                          &player::cache_t::dirty_item_by_type);
+                                    });
 
   PROJECT_SERVER_FRAME_NAMESPACE_ID::DItem &ret = cache_data_.dirty_item_by_type[in.type_id()];
   ret = in;
   return ret;
 }
 
-void player::insert_dirty_handle_if_not_exists(uintptr_t key, dirty_sync_handle_t (*create_handle_fn)(player &)) {
+void player::insert_dirty_handle_if_not_exists(uintptr_t key, gsl::string_view handle_name,
+                                               dirty_sync_handle_t (*create_handle_fn)(gsl::string_view handle_name,
+                                                                                       player &)) {
   if (!create_handle_fn) {
     return;
   }
 
   if (internal_flags_.test(internal_flag::EN_IFT_IN_DIRTY_CALLBACK)) {
-    FWPLOGERROR(*this, "can not insert dirty handle when in dirty callback");
+    FWPLOGERROR(*this, "can not insert dirty handle {} when running dirty handle {}", handle_name,
+                cache_data_.current_dirty_handle_name);
     return;
   }
 
@@ -443,17 +466,18 @@ void player::insert_dirty_handle_if_not_exists(uintptr_t key, dirty_sync_handle_
     return;
   }
 
-  cache_data_.dirty_handles[key] = create_handle_fn(*this);
+  cache_data_.dirty_handles[key] = create_handle_fn(handle_name, *this);
 }
 
-void player::insert_dirty_handle_if_not_exists(uintptr_t key, build_dirty_message_fn_t build_fn,
-                                               clear_dirty_cache_fn_t clear_fn) {
+void player::insert_dirty_handle_if_not_exists(uintptr_t key, gsl::string_view handle_name,
+                                               build_dirty_message_fn_t build_fn, clear_dirty_cache_fn_t clear_fn) {
   if (!build_fn && !clear_fn) {
     return;
   }
 
   if (internal_flags_.test(internal_flag::EN_IFT_IN_DIRTY_CALLBACK)) {
-    FWPLOGERROR(*this, "can not insert dirty handle when in dirty callback");
+    FWPLOGERROR(*this, "can not insert dirty handle {} when running dirty handle {}", handle_name,
+                cache_data_.current_dirty_handle_name);
     return;
   }
 
@@ -464,4 +488,5 @@ void player::insert_dirty_handle_if_not_exists(uintptr_t key, build_dirty_messag
   dirty_sync_handle_t &handle = cache_data_.dirty_handles[key];
   handle.build_fn = build_fn;
   handle.clear_fn = clear_fn;
+  handle.name = handle_name;
 }

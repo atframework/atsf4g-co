@@ -4,6 +4,7 @@
 
 #include <design_pattern/nomovable.h>
 #include <design_pattern/noncopyable.h>
+#include <gsl/select-gsl.h>
 
 #include <config/server_frame_build_feature.h>
 
@@ -79,7 +80,9 @@ class player : public player_cache {
 
     void setup(player &owner, internal_flag::type f);
     void reset();
-    inline operator bool() const { return !!owner_ && !!flag_; }
+    inline operator bool() const noexcept {
+      return nullptr != owner_ && internal_flag::EN_IFT_FEATURE_INVALID != flag_;
+    }
 
     UTIL_DESIGN_PATTERN_NOCOPYABLE(internal_flag_guard_t)
     UTIL_DESIGN_PATTERN_NOMOVABLE(internal_flag_guard_t)
@@ -110,6 +113,7 @@ class player : public player_cache {
   struct dirty_sync_handle_t {
     build_dirty_message_fn_t build_fn;
     clear_dirty_cache_fn_t clear_fn;
+    gsl::string_view name;
   };
 
   struct cache_t {
@@ -121,6 +125,7 @@ class player : public player_cache {
     std::unordered_map<int32_t, PROJECT_SERVER_FRAME_NAMESPACE_ID::DItem> dirty_item_by_type;
 
     std::unordered_map<uintptr_t, dirty_sync_handle_t> dirty_handles;
+    gsl::string_view current_dirty_handle_name;
   };
 
   struct task_queue_node {
@@ -264,7 +269,8 @@ class player : public player_cache {
    * @note
    * 所有回调函数请尽可能小，保证整个闭包在3个指针以内（成员函数占2个指针）。这样std::function会使用小对象优化
    */
-  void insert_dirty_handle_if_not_exists(uintptr_t key, dirty_sync_handle_t (*create_handle_fn)(player &));
+  void insert_dirty_handle_if_not_exists(uintptr_t key, gsl::string_view handle_name,
+                                         dirty_sync_handle_t (*create_handle_fn)(gsl::string_view, player &));
 
   /**
    * @brief 插入脏数据handle
@@ -275,7 +281,7 @@ class player : public player_cache {
    * @note
    * 所有回调函数请尽可能小，保证整个闭包在3个指针以内（成员函数占2个指针）。这样std::function会使用小对象优化
    */
-  void insert_dirty_handle_if_not_exists(uintptr_t key, build_dirty_message_fn_t build_fn,
+  void insert_dirty_handle_if_not_exists(uintptr_t key, gsl::string_view handle_name, build_dirty_message_fn_t build_fn,
                                          clear_dirty_cache_fn_t clear_fn);
 
  private:
