@@ -7,22 +7,18 @@
 
 #pragma once
 
+#include <rapidjson/document.h>
+
+#include <log/log_wrapper.h>
+
+#include <config/ini_loader.h>
+
 #include <stdint.h>
 #include <cstddef>
 #include <cstring>
 #include <memory>
 #include <string>
 #include <type_traits>
-
-#include <rapidjson/document.h>
-
-#include <log/log_wrapper.h>
-
-namespace util {
-namespace config {
-class ini_value;
-}
-}  // namespace util
 
 namespace google {
 namespace protobuf {
