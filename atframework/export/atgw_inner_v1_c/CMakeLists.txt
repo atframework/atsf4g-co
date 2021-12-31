@@ -43,7 +43,7 @@ file(MAKE_DIRECTORY ${EXPORT_SOURCE_CMAKE_DIR})
 
 # ----- copy dependency utility files -----
 file(
-  COPY "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_FLATBUFFER_INC_DIR}/flatbuffers"
+  COPY "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_FLATBUFFERS_INC_DIR}/flatbuffers"
        "${ATFRAMEWORK_ATFRAME_UTILS_REPO_DIR}/include/std"
        "${ATFRAMEWORK_ATFRAME_UTILS_REPO_DIR}/include/lock"
        "${ATFRAMEWORK_ATFRAME_UTILS_REPO_DIR}/include/design_pattern"

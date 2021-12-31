@@ -4,9 +4,6 @@ import time
 %>// Copyright ${time.strftime("%Y", time.localtime()) } atframework
 // @brief Created by ${local_vcs_user_name} on ${time.strftime("%Y-%m-%d %H:%M:%S")}
 
-#ifndef LOGIC_ACTION_${task_class_name.upper()}_H
-#define LOGIC_ACTION_${task_class_name.upper()}_H
-
 #pragma once
 
 #include <dispatcher/task_action_no_req_base.h>
@@ -33,5 +30,3 @@ class ${task_class_name} : public task_action_no_req_base {
  private:
   ctor_param_t param_;
 };
-
-#endif  //LOGIC_ACTION_${task_class_name.upper()}_H
