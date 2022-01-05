@@ -117,7 +117,7 @@ function remove_user_ipc() {
 
 # 获取系统IPv4地址
 function get_ipv4_address() {
-  ALL_IP_ADDRESS=($(ip -4 -o addr | awk '{print $4;}' | cut -d/ -f1))
+  ALL_IP_ADDRESS=($(ip -4 -o addr show scope global | awk 'match($0, /inet\s+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/, ip) { print ip[1] }'))
   if [[ $# -gt 0 ]]; then
     if [[ "$1" == "count" ]] || [[ "$1" == "number" ]]; then
       echo ${#ALL_IP_ADDRESS[@]}
@@ -131,7 +131,7 @@ function get_ipv4_address() {
 
 # 获取系统IPv6地址
 function get_ipv6_address() {
-  ALL_IP_ADDRESS=($(ip -6 -o addr | awk '{print $4;}' | cut -d/ -f1))
+  ALL_IP_ADDRESS=($(ip -6 -o addr show scope global | awk 'match($0, /inet6\s+([0-9a-fA-F:]+)/, ip) { print ip[1] }'))
   if [[ $# -gt 0 ]]; then
     if [[ "$1" == "count" ]] || [[ "$1" == "number" ]]; then
       echo ${#ALL_IP_ADDRESS[@]}
@@ -284,21 +284,22 @@ function StatusMsg() {
 }
 
 function CheckProcessRunning() {
+  # parameters: <pid file> [except pid]
   if [[ $# -lt 1 ]]; then
     return 0
   fi
-  PIDFILE="$1"
+  PID_FILE="$1"
   if [[ $# -gt 1 ]]; then
     PROC_EXPECT_PID=$2
   else
     PROC_EXPECT_PID=""
   fi
 
-  if [[ ! -f "$PIDFILE" ]]; then
+  if [[ ! -f "$PID_FILE" ]]; then
     return 0
   fi
 
-  PROC_PID=$(cat "$PIDFILE" 2>/dev/null)
+  PROC_PID=$(cat "$PID_FILE" 2>/dev/null)
 
   if [[ "x$PROC_PID" != "x" ]] && [[ $PROC_PID -le 0 ]]; then
     return 2
@@ -309,7 +310,7 @@ function CheckProcessRunning() {
   fi
 
   SYSFLAGS=($PROC_PID)
-  if [[ "x${MSYSTEM:0:5}" == "xMINGW" ]] || [[ "x${MSYSTEM:0:4}" == "xMSYS" ]]; then
+  if [[ "x${MSYSTEM}" != "x" ]]; then
     SYSFLAGS=($PROC_PID -W)
   fi
   if [[ ! -z "$PROC_PID" ]] && [[ ! -z "$(ps -p ${SYSFLAGS[@]} 2>&1 | grep $PROC_PID)" ]]; then
@@ -320,12 +321,13 @@ function CheckProcessRunning() {
 }
 
 function WaitProcessStarted() {
+  # parameters: <pid file> [wait time] [except pid]
   if [[ $# -lt 1 ]]; then
     return 1
   fi
 
   WAIT_TIME=5000
-  PIDFILE="$1"
+  PID_FILE="$1"
 
   if [[ $# -gt 1 ]]; then
     WAIT_TIME=$2
@@ -338,7 +340,7 @@ function WaitProcessStarted() {
   fi
 
   while [[ $WAIT_TIME -gt 0 ]]; do
-    CheckProcessRunning "$PIDFILE" "$PROC_EXPECT_PID"
+    CheckProcessRunning "$PID_FILE" "$PROC_EXPECT_PID"
     CheckResult=$?
     if [[ 1 -eq $CheckResult ]]; then
       return 0
@@ -356,19 +358,20 @@ function WaitProcessStarted() {
 }
 
 function WaitProcessStoped() {
+  # parameters: <pid file> [wait time]
   if [[ $# -lt 1 ]]; then
     return 1
   fi
 
   WAIT_TIME=10000
-  PIDFILE="$1"
+  PID_FILE="$1"
 
   if [[ $# -gt 1 ]]; then
     WAIT_TIME=$2
   fi
 
   while [[ 1 -eq 1 ]]; do
-    CheckProcessRunning "$PIDFILE"
+    CheckProcessRunning "$PID_FILE"
     if [[ 1 -ne $? ]]; then
       return 0
     fi
@@ -385,6 +388,7 @@ function WaitProcessStoped() {
 }
 
 function CheckLinuxPidAndExePath() {
+  # parameters: <checked executable file path> <pid>
   if [[ $# -lt 2 ]]; then
     echo "1"
     return 1
