@@ -29,7 +29,7 @@ bool router_manager_base::is_auto_mutable_object() const { return false; }
 
 bool router_manager_base::is_auto_mutable_cache() const { return true; }
 
-uint64_t router_manager_base::get_default_router_server_id(const router_object_base &router_cache) const { return 0; }
+uint64_t router_manager_base::get_default_router_server_id(const key_t &key) const { return 0; }
 
 int router_manager_base::send_msg(router_object_base &obj, PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg &&msg,
                                   uint64_t &sequence) {
@@ -87,7 +87,7 @@ int router_manager_base::send_msg_raw(router_object_base &obj, PROJECT_SERVER_FR
     // 如果允许自动路由拉取,则发到默认server上
     uint64_t target_server_id = obj.get_router_server_id();
     if (0 == target_server_id && is_auto_mutable_object()) {
-      target_server_id = get_default_router_server_id(obj);
+      target_server_id = get_default_router_server_id(obj.get_key());
       if (0 != target_server_id) {
         obj.set_router_server_id(target_server_id, obj.get_router_version());
       }

@@ -28,7 +28,7 @@ class router_manager_base {
   virtual ~router_manager_base();
   virtual const char *name() const = 0;
 
-  inline uint32_t get_type_id() const { return type_id_; };
+  inline uint32_t get_type_id() const { return type_id_; }
   virtual std::shared_ptr<router_object_base> get_base_cache(const key_t &key) const = 0;
   virtual int mutable_cache(std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data) = 0;
   virtual int mutable_object(std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data) = 0;
@@ -38,7 +38,7 @@ class router_manager_base {
 
   virtual bool is_auto_mutable_object() const;
   virtual bool is_auto_mutable_cache() const;
-  virtual uint64_t get_default_router_server_id(const router_object_base &router_cache) const;
+  virtual uint64_t get_default_router_server_id(const key_t &key) const;
 
   int send_msg(router_object_base &obj, PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg &&msg, uint64_t &sequence);
   int send_msg(const key_t &key, PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg &&msg, uint64_t &sequence);
