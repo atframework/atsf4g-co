@@ -56,7 +56,7 @@ struct app_command_handler_kickoff {
 
 struct app_handle_on_msg {
   session_gw_map_t *gw_;
-  app_handle_on_msg(session_gw_map_t *gw) : gw_(gw) {}
+  explicit app_handle_on_msg(session_gw_map_t *gw) : gw_(gw) {}
 
   int operator()(atapp::app &app, const atapp::app::message_sender_t &source, const atapp::app::message_t &msg) {
     switch (msg.type) {

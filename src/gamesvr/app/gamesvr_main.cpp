@@ -169,7 +169,7 @@ class main_service_module : public atapp::module_impl {
   }
 
  public:
-  virtual int init() {
+  int init() override {
     stop_log_tm_ = 0;
     FWLOGINFO("============ server initialize ============");
     INIT_CALL(logic_config, get_app()->get_id(), get_app()->get_app_name());
@@ -197,7 +197,7 @@ class main_service_module : public atapp::module_impl {
     return excel_config_wrapper_reload_all(true);
   }
 
-  virtual int reload() {
+  int reload() override {
     FWLOGINFO("============ server reload ============");
     int ret = 0;
 
@@ -215,7 +215,7 @@ class main_service_module : public atapp::module_impl {
     return ret;
   }
 
-  virtual int stop() {
+  int stop() override {
     time_t now = util::time::time_utility::get_sys_now();
     if (now != stop_log_tm_) {
       stop_log_tm_ = now;
@@ -235,15 +235,15 @@ class main_service_module : public atapp::module_impl {
     return ret;
   }
 
-  virtual int timeout() {
+  int timeout() override {
     FWLOGINFO("============ server timeout ============");
     router_manager_set::me()->force_close();
     return 0;
   }
 
-  virtual const char *name() const { return "main_service_module"; }
+  const char *name() const override { return "main_service_module"; }
 
-  virtual int tick() {
+  int tick() override {
     int ret = 0;
     ret += session_manager::me()->proc();
     ret += task_manager::me()->tick(util::time::time_utility::get_sys_now(),
