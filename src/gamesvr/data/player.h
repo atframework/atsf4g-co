@@ -174,10 +174,10 @@ class player : public player_cache {
   static ptr_t create(uint64_t user_id, uint32_t zone_id, const std::string &openid);
 
   // 创建默认角色数据
-  void create_init(uint32_t version_type) override;
+  void create_init(rpc::context &ctx, uint32_t version_type) override;
 
   // 登入读取用户数据
-  void login_init() override;
+  void login_init(rpc::context &ctx) override;
 
   bool is_dirty() const override;
 
@@ -185,22 +185,22 @@ class player : public player_cache {
   void clear_dirty() override;
 
   // 刷新功能限制次数
-  void refresh_feature_limit() override;
+  void refresh_feature_limit(rpc::context &ctx) override;
 
   // 登入事件
-  void on_login() override;
+  void on_login(rpc::context &ctx) override;
 
   // 登出事件
-  void on_logout() override;
+  void on_logout(rpc::context &ctx) override;
 
   // 保存完毕事件
-  void on_saved() override;
+  void on_saved(rpc::context &ctx) override;
 
   // 更新session事件
   void on_update_session(const std::shared_ptr<session> &from, const std::shared_ptr<session> &to) override;
 
   // 从table数据初始化
-  void init_from_table_data(const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &stTableplayer_cache) override;
+  void init_from_table_data(rpc::context &ctx, const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &) override;
 
   /**
    * @brief 转储数据
@@ -208,7 +208,7 @@ class player : public player_cache {
    * @param always 是否忽略脏数据
    * @return 0或错误码
    */
-  int dump(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &user, bool always) override;
+  int dump(rpc::context &ctx, PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &user, bool always) override;
 
   /**
    * @brief 是否完整执行过初始化
@@ -255,7 +255,7 @@ class player : public player_cache {
   /**
    * @brief 下发同步消息
    */
-  void send_all_syn_msg() override;
+  void send_all_syn_msg(rpc::context &ctx) override;
   int await_before_logout_tasks() override;
   void clear_dirty_cache();
 

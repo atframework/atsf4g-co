@@ -286,7 +286,7 @@ int task_action_player_remote_patch_jobs::on_success() {
 
   if (patched_job_number_ > 0) {
     // 数据变更推送
-    param_.user->send_all_syn_msg();
+    param_.user->send_all_syn_msg(get_shared_context());
   }
 
   return get_result();
@@ -321,7 +321,7 @@ int task_action_player_remote_patch_jobs::on_failed() {
 
   if (patched_job_number_ > 0) {
     // 数据变更推送
-    param_.user->send_all_syn_msg();
+    param_.user->send_all_syn_msg(get_shared_context());
   }
 
   return get_result();

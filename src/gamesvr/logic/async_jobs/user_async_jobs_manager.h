@@ -20,22 +20,22 @@ class player;
 
 class user_async_jobs_manager {
  public:
-  user_async_jobs_manager(player& owner);
+  explicit user_async_jobs_manager(player& owner);
   ~user_async_jobs_manager();
 
   // 创建默认角色数据
-  void create_init(uint32_t version_type);
+  void create_init(rpc::context& ctx, uint32_t version_type);
 
   // 登入读取用户数据
-  void login_init();
+  void login_init(rpc::context& ctx);
 
   // 刷新功能限制次数
-  void refresh_feature_limit();
+  void refresh_feature_limit(rpc::context& ctx);
 
   // 从table数据初始化
-  void init_from_table_data(const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user& player_table);
+  void init_from_table_data(rpc::context& ctx, const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user& player_table);
 
-  int dump(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user& user) const;
+  int dump(rpc::context& ctx, PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user& user) const;
 
   bool is_dirty() const;
 

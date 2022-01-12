@@ -156,13 +156,13 @@ player::ptr_t player::create(uint64_t user_id, uint32_t zone_id, const std::stri
   return ret;
 }
 
-void player::create_init(uint32_t version_type) {
-  base_type::create_init(version_type);
+void player::create_init(rpc::context &ctx, uint32_t version_type) {
+  base_type::create_init(ctx, version_type);
 
   set_data_version(PLAYER_DATA_LOGIC_VERSION);
 
   //! === manager implement === 创建后事件回调，这时候还没进入数据库并且未执行login_init()
-  user_async_jobs_manager_->create_init(version_type);
+  user_async_jobs_manager_->create_init(ctx, version_type);
 
   // TODO init all interval checkpoint
 
@@ -177,18 +177,18 @@ void player::create_init(uint32_t version_type) {
   // }
 }
 
-void player::login_init() {
-  base_type::login_init();
+void player::login_init(rpc::context &ctx) {
+  base_type::login_init(ctx);
 
   // 由于对象缓存可以被复用，这个函数可能会被多次执行。这个阶段，新版本的 login_table 已载入
 
   //! === manager implement === 登入成功后事件回调，新用户也会触发
 
   // all module login init
-  user_async_jobs_manager_->login_init();
+  user_async_jobs_manager_->login_init(ctx);
 
   set_inited();
-  on_login();
+  on_login(ctx);
 }
 
 bool player::is_dirty() const {
@@ -213,12 +213,12 @@ void player::clear_dirty() {
   user_async_jobs_manager_->clear_dirty();
 }
 
-void player::refresh_feature_limit() {
-  base_type::refresh_feature_limit();
+void player::refresh_feature_limit(rpc::context &ctx) {
+  base_type::refresh_feature_limit(ctx);
 
   //! === manager implement === 不定期调用，用于刷新逻辑
   // all modules refresh limit
-  user_async_jobs_manager_->refresh_feature_limit();
+  user_async_jobs_manager_->refresh_feature_limit(ctx);
 
   time_t now = util::time::time_utility::get_now();
   if (now != cache_data_.refresh_feature_limit_second) {
@@ -239,30 +239,30 @@ void player::refresh_feature_limit() {
   }
 }
 
-void player::on_login() {
+void player::on_login(rpc::context &ctx) {
   // Trigger by login_init()
   if (!is_inited()) {
     return;
   }
 
-  base_type::on_login();
+  base_type::on_login(ctx);
 
   // TODO sync messages
 }
 
-void player::on_logout() { base_type::on_logout(); }
+void player::on_logout(rpc::context &ctx) { base_type::on_logout(ctx); }
 
-void player::on_saved() {
+void player::on_saved(rpc::context &ctx) {
   // at last call base on remove callback
-  base_type::on_saved();
+  base_type::on_saved(ctx);
 }
 
 void player::on_update_session(const std::shared_ptr<session> &from, const std::shared_ptr<session> &to) {
   base_type::on_update_session(from, to);
 }
 
-void player::init_from_table_data(const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &tb_player) {
-  base_type::init_from_table_data(tb_player);
+void player::init_from_table_data(rpc::context &ctx, const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &tb_player) {
+  base_type::init_from_table_data(ctx, tb_player);
 
   // TODO data patch, 这里用于版本升级时可能需要升级玩家数据库，做版本迁移
   // PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user tb_patch;
@@ -276,19 +276,19 @@ void player::init_from_table_data(const PROJECT_SERVER_FRAME_NAMESPACE_ID::table
 
   //! === manager implement === 从数据库读取，注意本接口可能被调用多次，需要清理老数据
   if (tb_player.has_async_jobs()) {
-    user_async_jobs_manager_->init_from_table_data(tb_player);
+    user_async_jobs_manager_->init_from_table_data(ctx, tb_player);
   }
 }
 
-int player::dump(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &user, bool always) {
-  int ret = base_type::dump(user, always);
+int player::dump(rpc::context &ctx, PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &user, bool always) {
+  int ret = base_type::dump(ctx, user, always);
   if (ret < 0) {
     return ret;
   }
 
   //! === manager implement === 保存到数据库
   // all modules dump to DB
-  ret = user_async_jobs_manager_->dump(user);
+  ret = user_async_jobs_manager_->dump(ctx, user);
   if (ret < 0) {
     FWPLOGERROR(*this, "dump async_jobs_manager_ failed, res: {}({})", ret, protobuf_mini_dumper_get_error_msg(ret));
     return ret;
@@ -318,7 +318,7 @@ void player::update_heartbeat() {
   get_login_info().set_login_code_expired(now_time + logic_cfg.session().login_code_valid_sec().seconds());
 }
 
-void player::send_all_syn_msg() {
+void player::send_all_syn_msg(rpc::context &ctx) {
   if (internal_flags_.test(internal_flag::EN_IFT_IN_DIRTY_CALLBACK)) {
     FWPLOGERROR(*this, "can not send sync messages when when running dirty handle {}",
                 cache_data_.current_dirty_handle_name);
@@ -345,7 +345,6 @@ void player::send_all_syn_msg() {
     }
 
     if (dirty_msg.player_dirty) {
-      rpc::context ctx;
       rpc::gamesvrclientservice::send_player_dirty_chg_sync(ctx, *dirty_msg.player_dirty, *sess);
     }
   }

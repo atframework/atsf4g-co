@@ -84,7 +84,7 @@ void actor_action_cs_req_base::send_response(bool sync_dirty) {
   player_cache::ptr_t owner_player = sess->get_player();
   // sync messages
   if (owner_player) {
-    owner_player->send_all_syn_msg();
+    owner_player->send_all_syn_msg(get_shared_context());
     has_sync_dirty_ = true;
 
     // refresh visit time if success

@@ -16,6 +16,7 @@
 #include <rpc/db/player.h>
 
 #include <algorithm>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -85,7 +86,7 @@ int router_player_cache::pull_cache(router_player_private_type &priv_data) {
 
   // table_login内的平台信息复制到player里
   if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
-    obj->init_from_table_data(tbu);
+    obj->init_from_table_data(ctx, tbu);
   }
 
   return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
@@ -155,7 +156,7 @@ int router_player_cache::pull_object(router_player_private_type &priv_data) {
 
   // table_login内的平台信息复制到player里
   if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
-    obj->init_from_table_data(tbu);
+    obj->init_from_table_data(ctx, tbu);
   }
 
   uint64_t self_bus_id = logic_config::me()->get_local_server_id();
@@ -329,7 +330,7 @@ int router_player_cache::save_object(void *priv_data) {
 
   // 尝试保存用户数据
   PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user user_tb;
-  obj->dump(user_tb, true);
+  obj->dump(ctx, user_tb, true);
 
   FWPLOGDEBUG(*obj, "save curr data version: {}", obj->get_version());
 
@@ -348,7 +349,7 @@ int router_player_cache::save_object(void *priv_data) {
   }
 
   if (res >= 0) {
-    obj->on_saved();
+    obj->on_saved(ctx);
   }
 
   return res;

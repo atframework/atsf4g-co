@@ -26,26 +26,16 @@ user_async_jobs_manager::user_async_jobs_manager(player& owner)
 
 user_async_jobs_manager::~user_async_jobs_manager() {}
 
-void user_async_jobs_manager::create_init(uint32_t) {
+void user_async_jobs_manager::create_init(rpc::context&, uint32_t) {
   // do nothing
 }
 
-void user_async_jobs_manager::login_init() { reset_async_jobs_protect(); }
+void user_async_jobs_manager::login_init(rpc::context&) { reset_async_jobs_protect(); }
 
-void user_async_jobs_manager::refresh_feature_limit() {
-  rpc::context ctx;
-  rpc::context::tracer tracer;
-  rpc::context::trace_option trace_option;
-  trace_option.dispatcher = nullptr;
-  trace_option.is_remote = true;
-  trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+void user_async_jobs_manager::refresh_feature_limit(rpc::context& ctx) { try_async_jobs(ctx); }
 
-  ctx.setup_tracer(tracer, "user_async_jobs_manager.refresh_feature_limit", std::move(trace_option));
-
-  try_async_jobs(ctx);
-}
-
-void user_async_jobs_manager::init_from_table_data(const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user& player_table) {
+void user_async_jobs_manager::init_from_table_data(rpc::context&,
+                                                   const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user& player_table) {
   if (player_table.has_async_jobs()) {
     remote_command_patch_task_next_timepoint_ = static_cast<time_t>(player_table.async_jobs().next_task_active_time());
 
@@ -58,7 +48,7 @@ void user_async_jobs_manager::init_from_table_data(const PROJECT_SERVER_FRAME_NA
   }
 }
 
-int user_async_jobs_manager::dump(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user& user) const {
+int user_async_jobs_manager::dump(rpc::context&, PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user& user) const {
   PROJECT_SERVER_FRAME_NAMESPACE_ID::player_async_jobs_data* jobs_data = user.mutable_async_jobs();
   if (NULL == jobs_data) {
     return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;

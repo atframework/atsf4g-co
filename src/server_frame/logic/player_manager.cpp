@@ -16,6 +16,7 @@
 #include <dispatcher/task_manager.h>
 #include <rpc/db/login.h>
 #include <rpc/db/player.h>
+#include <rpc/rpc_utils.h>
 #include <utility/protobuf_mini_dumper.h>
 
 #include <router/router_manager_set.h>
@@ -45,8 +46,9 @@ bool player_manager::remove(uint64_t user_id, uint32_t zone_id, bool force_kicko
   }
 
   if (check_user != nullptr && false == cache->is_object_equal(*check_user)) {
+    rpc::context ctx;
     auto check_sess = check_user->get_session();
-    check_user->set_session(nullptr);
+    check_user->set_session(ctx, nullptr);
     if (check_sess && check_sess->get_player().get() == check_user) {
       check_sess->set_player(nullptr);
       session_manager::me()->remove(check_sess, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
@@ -119,7 +121,8 @@ player_manager::player_ptr_t player_manager::load(uint64_t user_id, uint32_t zon
 
 size_t player_manager::size() const { return router_player_manager::me()->size(); }
 
-player_manager::player_ptr_t player_manager::create(uint64_t user_id, uint32_t zone_id, const std::string &openid,
+player_manager::player_ptr_t player_manager::create(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
+                                                    const std::string &openid,
                                                     PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login &login_tb,
                                                     std::string &login_ver) {
   if (0 == user_id || openid.empty()) {
@@ -160,9 +163,9 @@ player_manager::player_ptr_t player_manager::create(uint64_t user_id, uint32_t z
   if (0 == ret->get_data_version()) {
     // manager 创建初始化
     if (ret->get_login_info().account().version_type() >= PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_VERSION_INNER) {
-      ret->create_init(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_VERSION_DEFAULT);
+      ret->create_init(ctx, PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_VERSION_DEFAULT);
     } else {
-      ret->create_init(ret->get_login_info().account().version_type());
+      ret->create_init(ctx, ret->get_login_info().account().version_type());
     }
 
     // 初始化完成，保存一次

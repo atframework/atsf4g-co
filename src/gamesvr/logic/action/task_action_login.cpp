@@ -68,7 +68,7 @@ task_action_login::result_type task_action_login::operator()() {
       return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
     }
 
-    user->set_session(cur_sess);
+    user->set_session(get_shared_context(), cur_sess);
     if (old_sess) {
       // 下发踢下线包，防止循环重连互踢
       old_sess->set_player(nullptr);
@@ -116,7 +116,8 @@ task_action_login::result_type task_action_login::operator()() {
 
   // 3. 写入登入信息和登入信息续期会在路由系统中完成
 
-  user = player_manager::me()->create_as<player>(req_body.user_id(), zone_id, req_body.open_id(), tb, version);
+  user = player_manager::me()->create_as<player>(get_shared_context(), req_body.user_id(), zone_id, req_body.open_id(),
+                                                 tb, version);
   is_new_player_ = user && user->get_version() == "1";
   // ============ 在这之后tb不再有效 ============
 
@@ -137,8 +138,8 @@ task_action_login::result_type task_action_login::operator()() {
   user->set_client_info(req_body.client_info());
 
   // 8. 设置和Session互相关联
-  user->set_session(my_sess);
-  user->login_init();
+  user->set_session(get_shared_context(), my_sess);
+  user->login_init(get_shared_context());
 
   // 如果不存在则是登入过程中掉线了
   if (!my_sess) {
@@ -193,7 +194,7 @@ int task_action_login::on_success() {
   }
 
   // login success and try to restore tick limit
-  user->refresh_feature_limit();
+  user->refresh_feature_limit(get_shared_context());
   user->clear_dirty_cache();
 
   // 自动启动异步任务

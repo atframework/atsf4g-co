@@ -98,7 +98,7 @@ task_action_player_kickoff::result_type task_action_player_kickoff::operator()()
   }
 
   if (!player_manager::me()->remove(user, true)) {
-    FWLOGERROR("kickoff user {}({}:{}) failed", user->get_open_id(), player_zone_id, user->get_user_id_llu());
+    FWLOGERROR("kickoff user {}({}:{}) failed", user->get_open_id(), player_zone_id, user->get_user_id());
     set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_SYSTEM);
     return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
   }

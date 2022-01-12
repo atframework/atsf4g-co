@@ -12,6 +12,8 @@
 #include <config/logic_config.h>
 #include <utility/protobuf_mini_dumper.h>
 
+#include <rpc/rpc_utils.h>
+
 #include <memory>
 
 #include "data/player_cache.h"
@@ -143,7 +145,8 @@ void session_manager::remove(sess_ptr_t sess, int reason) {
     sess->set_player(nullptr);
     sess_ptr_t check_session = u->get_session();
     if (!check_session || check_session == sess) {
-      u->set_session(nullptr);
+      rpc::context ctx;
+      u->set_session(ctx, nullptr);
       // TODO 统计日志
       // 如果是踢下线，则需要强制保存并移除GameUser对象
       player_manager::me()->remove(u, 0 != reason);

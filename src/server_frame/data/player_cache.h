@@ -24,6 +24,10 @@
 
 #include "data/player_key_hash_helper.h"
 
+namespace rpc {
+class context;
+}
+
 class session;
 
 /**
@@ -77,7 +81,7 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
   struct fake_constructor {};
 
  public:
-  player_cache(fake_constructor &);
+  explicit player_cache(fake_constructor &);
   virtual ~player_cache();
 
   virtual bool can_be_writable() const;
@@ -90,10 +94,10 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
   static ptr_t create(uint64_t user_id, uint32_t zone_id, const std::string &openid);
 
   // 创建默认角色数据
-  virtual void create_init(uint32_t version_type);
+  virtual void create_init(rpc::context &ctx, uint32_t version_type);
 
   // 登入读取用户数据
-  virtual void login_init();
+  virtual void login_init(rpc::context &ctx);
 
   // 是否脏（有数据变更）
   virtual bool is_dirty() const;
@@ -102,7 +106,7 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
   virtual void clear_dirty();
 
   // 刷新功能限制次数
-  virtual void refresh_feature_limit();
+  virtual void refresh_feature_limit(rpc::context &ctx);
 
   // GM操作
   virtual bool gm_init();
@@ -111,19 +115,20 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
   virtual bool is_gm() const;
 
   // 登入事件
-  virtual void on_login();
+  virtual void on_login(rpc::context &ctx);
 
   // 登出事件
-  virtual void on_logout();
+  virtual void on_logout(rpc::context &ctx);
 
   // 完成保存事件
-  virtual void on_saved();
+  virtual void on_saved(rpc::context &ctx);
 
   // 更新session事件
   virtual void on_update_session(const std::shared_ptr<session> &from, const std::shared_ptr<session> &to);
 
   // 从table数据初始化
-  virtual void init_from_table_data(const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &stTableplayer_cache);
+  virtual void init_from_table_data(rpc::context &ctx,
+                                    const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &stTableplayer_cache);
 
   /**
    * @brief 转储数据
@@ -131,12 +136,12 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
    * @param always 是否忽略脏数据
    * @return 0或错误码
    */
-  virtual int dump(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &user, bool always);
+  virtual int dump(rpc::context &ctx, PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &user, bool always);
 
   /**
    * @brief 下发同步消息
    */
-  virtual void send_all_syn_msg();
+  virtual void send_all_syn_msg(rpc::context &ctx);
 
   /**
    * @brief 等待登出前需要结算完的任务
@@ -147,7 +152,7 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
    * @brief 监视关联的Session
    * @param session_ptr 关联的Session
    */
-  void set_session(std::shared_ptr<session> session_ptr);
+  void set_session(rpc::context &ctx, std::shared_ptr<session> session_ptr);
 
   /**
    * @brief 获取关联的Session
@@ -157,13 +162,13 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
 
   bool has_session() const;
 
-  inline const std::string &get_open_id() const { return openid_id_; };
-  inline uint64_t get_user_id() const { return user_id_; };
-  inline unsigned long long get_user_id_llu() const { return static_cast<unsigned long long>(get_user_id()); };
+  inline const std::string &get_open_id() const { return openid_id_; }
+  inline uint64_t get_user_id() const { return user_id_; }
+  inline unsigned long long get_user_id_llu() const { return static_cast<unsigned long long>(get_user_id()); }
 
-  const std::string &get_version() const { return version_; };
-  std::string &get_version() { return version_; };
-  void set_version(const std::string &version) { version_ = version; };
+  const std::string &get_version() const { return version_; }
+  std::string &get_version() { return version_; }
+  void set_version(const std::string &version) { version_ = version; }
 
   /**
    * @brief 获取大区号

@@ -225,7 +225,7 @@ void task_action_cs_req_base::send_response(bool sync_dirty) {
       break;
     }
 
-    owner_player->send_all_syn_msg();
+    owner_player->send_all_syn_msg(get_shared_context());
 
     // refresh visit time if success
     if (0 == get_response_code()) {

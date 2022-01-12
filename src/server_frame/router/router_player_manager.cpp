@@ -16,12 +16,11 @@
 
 #include <rpc/db/login.h>
 #include <rpc/db/player.h>
+#include <rpc/rpc_utils.h>
 
 router_player_manager::router_player_manager() : base_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ROT_PLAYER) {}
 
-const char *router_player_manager::name() const {
-  return "[player_cache router manager]";
-}
+const char *router_player_manager::name() const { return "[player_cache router manager]"; }
 
 bool router_player_manager::remove_player_object(uint64_t user_id, uint32_t zone_id, priv_data_t priv_data) {
   return remove_player_object(user_id, zone_id, nullptr, priv_data);
@@ -64,7 +63,8 @@ void router_player_manager::on_evt_remove_object(const key_t &key, const ptr_t &
   // 释放本地数据, 下线相关Session
   session::ptr_t s = obj->get_session();
   if (s) {
-    obj->set_session(nullptr);
+    rpc::context ctx;
+    obj->set_session(ctx, nullptr);
     std::shared_ptr<player_cache> check_binded_user = s->get_player();
     if (!check_binded_user || check_binded_user == obj) {
       s->set_player(nullptr);

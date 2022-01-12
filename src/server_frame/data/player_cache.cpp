@@ -60,7 +60,7 @@ player_cache::ptr_t player_cache::create(uint64_t user_id, uint32_t zone_id, con
   return ret;
 }
 
-void player_cache::create_init(uint32_t version_type) {
+void player_cache::create_init(rpc::context &, uint32_t version_type) {
   data_version_ = 0;
   version_.assign("0");
 
@@ -69,7 +69,7 @@ void player_cache::create_init(uint32_t version_type) {
   login_info_.set_zone_id(get_zone_id());
 }
 
-void player_cache::login_init() {
+void player_cache::login_init(rpc::context &) {
   // 由于对象缓存可以被复用，这个函数可能会被多次执行。这个阶段，新版本的 login_table 已载入
 
   // refresh account parameters，这里只刷新部分数据
@@ -103,7 +103,7 @@ void player_cache::clear_dirty() {
   player_options_.clear_dirty();
 }
 
-void player_cache::refresh_feature_limit() {
+void player_cache::refresh_feature_limit(rpc::context &) {
   // refresh daily limit
 }
 
@@ -113,15 +113,16 @@ bool player_cache::is_gm() const {
   return get_account_info().version_type() == PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_VERSION_GM;
 }
 
-void player_cache::on_login() {}
+void player_cache::on_login(rpc::context &ctx) {}
 
-void player_cache::on_logout() {}
+void player_cache::on_logout(rpc::context &ctx) {}
 
-void player_cache::on_saved() {}
+void player_cache::on_saved(rpc::context &ctx) {}
 
 void player_cache::on_update_session(const std::shared_ptr<session> &from, const std::shared_ptr<session> &to) {}
 
-void player_cache::init_from_table_data(const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &tb_player) {
+void player_cache::init_from_table_data(rpc::context &,
+                                        const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &tb_player) {
   data_version_ = tb_player.data_version();
 
   const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user *src_tb = &tb_player;
@@ -141,7 +142,7 @@ void player_cache::init_from_table_data(const PROJECT_SERVER_FRAME_NAMESPACE_ID:
   }
 }
 
-int player_cache::dump(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &user, bool always) {
+int player_cache::dump(rpc::context &, PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &user, bool always) {
   user.set_open_id(get_open_id());
   user.set_user_id(get_user_id());
   user.set_zone_id(get_zone_id());
@@ -162,11 +163,11 @@ int player_cache::dump(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &user, bool
   return 0;
 }
 
-void player_cache::send_all_syn_msg() {}
+void player_cache::send_all_syn_msg(rpc::context &) {}
 
 int player_cache::await_before_logout_tasks() { return 0; }
 
-void player_cache::set_session(std::shared_ptr<session> session_ptr) {
+void player_cache::set_session(rpc::context &ctx, std::shared_ptr<session> session_ptr) {
   std::shared_ptr<session> old_sess = session_.lock();
   if (old_sess == session_ptr) {
     return;
@@ -179,10 +180,10 @@ void player_cache::set_session(std::shared_ptr<session> session_ptr) {
   if (!session_ptr) {
     // 移除Session时触发Logout
     if (old_sess && is_writable()) {
-      on_logout();
+      on_logout(ctx);
     }
   } else if (is_writable()) {
-    on_login();
+    on_login(ctx);
   }
 }
 
