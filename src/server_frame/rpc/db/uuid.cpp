@@ -317,7 +317,7 @@ static int64_t generate_global_unique_id(::rpc::context &ctx, uint32_t major_typ
     // Queue to Allocate id pool
     if (alloc->alloc_task && !alloc->alloc_task->is_exiting() && alloc->alloc_task.get() != this_task) {
       unique_id_container_waker::insert_into_pool(*alloc, this_task);
-      ret = 0;
+      ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_RETRY_TIMES_EXCEED;
       continue;
     }
 
@@ -332,7 +332,7 @@ static int64_t generate_global_unique_id(::rpc::context &ctx, uint32_t major_typ
       // Keep order here
       if (!alloc->wake_tasks.empty()) {
         unique_id_container_waker::insert_into_pool(*alloc, this_task);
-        ret = 0;
+        ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_RETRY_TIMES_EXCEED;
         continue;
       }
 

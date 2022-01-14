@@ -45,7 +45,12 @@ task_action_player_logout::result_type task_action_player_logout::operator()() {
     // 如果玩家数据是缓存，不是实际登入点，则不用保存
     if (user) {
       set_user_key(user->get_user_id(), user->get_zone_id());
+      user->set_session(get_shared_context(), nullptr);
+      s->set_player(nullptr);
+    }
+    session_manager::me()->remove(s);
 
+    if (user) {
       set_response_code(user->await_before_logout_tasks());
       if (get_response_code() < 0) {
         FWPLOGERROR(*user, "kickoff failed, res: {}({})", get_response_code(),
