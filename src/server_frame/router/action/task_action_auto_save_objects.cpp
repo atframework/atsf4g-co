@@ -150,7 +150,7 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
           }
 
           if (res < 0) {
-            FWLOGERROR("auto do {} to router object {}({}:{}:{}) failed, res: %d", get_action_name(auto_save.action),
+            FWLOGERROR("auto do {} to router object {}({}:{}:{}) failed, res: {}", get_action_name(auto_save.action),
                        auto_save.object->name(), auto_save.object->get_key().type_id,
                        auto_save.object->get_key().zone_id, auto_save.object->get_key().object_id, res);
             ++status_data->failed_count_;

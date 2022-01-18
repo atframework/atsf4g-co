@@ -42,8 +42,10 @@ task_action_player_logout::result_type task_action_player_logout::operator()() {
 
     // 连接断开的时候需要保存一下数据
     player_cache::ptr_t user = s->get_player();
+    bool user_writeable = false;
     // 如果玩家数据是缓存，不是实际登入点，则不用保存
     if (user) {
+      user_writeable = user->is_writable();
       set_user_key(user->get_user_id(), user->get_zone_id());
       user->set_session(get_shared_context(), nullptr);
       s->set_player(nullptr);
@@ -56,18 +58,16 @@ task_action_player_logout::result_type task_action_player_logout::operator()() {
         FWPLOGERROR(*user, "kickoff failed, res: {}({})", get_response_code(),
                     protobuf_mini_dumper_get_error_msg(get_response_code()));
 
-        session_manager::me()->remove(s);
         return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
       }
 
-      if (user->is_writable() && user->get_session() == s && !player_manager::me()->remove(user, false)) {
+      if (user_writeable && !user->has_session() && !player_manager::me()->remove(user, false)) {
         set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM);
         FWPLOGERROR(*user, "logout failed, res: {}({})",
                     static_cast<int>(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM),
                     protobuf_mini_dumper_get_error_msg(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM));
       }
     }
-    session_manager::me()->remove(s);
   }
 
   return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
