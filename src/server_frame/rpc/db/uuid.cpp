@@ -33,6 +33,7 @@
 #include <list>
 #include <memory>
 #include <unordered_map>
+#include <utility>
 
 #include "rpc/db/db_utils.h"
 #include "rpc/rpc_utils.h"
@@ -186,9 +187,17 @@ struct unique_id_key_t {
 
 struct unique_id_value_t {
   task_manager::task_ptr_t alloc_task;
-  int64_t unique_id_index;
-  int64_t unique_id_base;
+  util::lock::atomic_int_type<int64_t> unique_id_index;
+  util::lock::atomic_int_type<int64_t> unique_id_base;
   std::list<task_manager::task_ptr_t> wake_tasks;
+
+  unique_id_value_t() noexcept : alloc_task{nullptr}, unique_id_index{0}, unique_id_base{0} {}
+
+  unique_id_value_t(unique_id_value_t &&other) noexcept
+      : alloc_task{std::move(other.alloc_task)},
+        unique_id_index{other.unique_id_index.load()},
+        unique_id_base{other.unique_id_base.load()},
+        wake_tasks{std::move(other.wake_tasks)} {}
 };
 
 struct unique_id_container_helper {
@@ -280,10 +289,7 @@ static int64_t generate_global_unique_id(::rpc::context &ctx, uint32_t major_typ
     }
 
     util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard(g_unique_id_pool_locker);
-    unique_id_value_t val;
-    val.unique_id_index = 0;
-    val.unique_id_base = 0;
-    iter = g_unique_id_pools.insert(real_map_type::value_type(key, val)).first;
+    iter = g_unique_id_pools.insert(real_map_type::value_type(key, unique_id_value_t{})).first;
 
     if (g_unique_id_pools.end() == iter) {
       return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
@@ -295,6 +301,7 @@ static int64_t generate_global_unique_id(::rpc::context &ctx, uint32_t major_typ
   int64_t ret = 0;
   int try_left = 5;
   bool should_wake_key = false;
+  bool has_scheduled = false;
 
   while (try_left-- > 0 && ret <= 0) {
     // must in task, checked before
@@ -318,21 +325,24 @@ static int64_t generate_global_unique_id(::rpc::context &ctx, uint32_t major_typ
     if (alloc->alloc_task && !alloc->alloc_task->is_exiting() && alloc->alloc_task.get() != this_task) {
       unique_id_container_waker::insert_into_pool(*alloc, this_task);
       ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_RETRY_TIMES_EXCEED;
+      has_scheduled = true;
       continue;
     }
 
-    int64_t &unique_id_index = alloc->unique_id_index;
-    int64_t &unique_id_base = alloc->unique_id_base;
-    unique_id_index &= bits_mask;
+    auto &unique_id_index = alloc->unique_id_index;
+    auto &unique_id_base = alloc->unique_id_base;
 
-    ret = (unique_id_base << bits_off) | (unique_id_index++);
+    int64_t current_unique_id_index = unique_id_index.load();
+    current_unique_id_index &= bits_mask;
+    ret = (unique_id_base.load(util::lock::memory_order_acquire) << bits_off) | current_unique_id_index;
 
     // call rpc to allocate a id pool
     if (0 == (ret >> bits_off) || 0 == (ret & bits_mask)) {
       // Keep order here
-      if (!alloc->wake_tasks.empty()) {
+      if (!has_scheduled && !alloc->wake_tasks.empty()) {
         unique_id_container_waker::insert_into_pool(*alloc, this_task);
         ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_RETRY_TIMES_EXCEED;
+        has_scheduled = true;
         continue;
       }
 
@@ -348,9 +358,11 @@ static int64_t generate_global_unique_id(::rpc::context &ctx, uint32_t major_typ
         ret = res;
         continue;
       }
-      unique_id_base = res;
-      unique_id_index = 1;
+      unique_id_base.store(res, util::lock::memory_order_release);
+      unique_id_index.store(0);
     }
+
+    ++unique_id_index;
   }
 
   if (should_wake_key) {
