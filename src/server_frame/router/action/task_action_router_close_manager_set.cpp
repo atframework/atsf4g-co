@@ -45,7 +45,7 @@ task_action_router_close_manager_set::result_type task_action_router_close_manag
   task_manager::task_t *task = task_manager::task_t::this_task();
   if (!task) {
     FWLOGERROR("current not in a task");
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
   }
 
   size_t closing_action_batch_count = logic_config::me()->get_cfg_router().closing_action_batch_count();
@@ -61,7 +61,7 @@ task_action_router_close_manager_set::result_type task_action_router_close_manag
           task_manager::task_t *sub_task = task_manager::task_t::this_task();
           if (!sub_task) {
             FWLOGERROR("current not in a task");
-            return task_action_base::result_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
+            return task_action_base::result_type(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
           }
 
           router_object_ptr_t obj = (*pending_list)[status_data->current_idx_];
@@ -161,7 +161,7 @@ task_action_router_close_manager_set::result_type task_action_router_close_manag
     save_fallback();
   }
 
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 void task_action_router_close_manager_set::save_fallback() {

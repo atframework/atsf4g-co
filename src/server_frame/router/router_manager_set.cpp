@@ -75,7 +75,7 @@ int router_manager_set::tick() {
       ss << timers_.fast_timer_list.front().timeout << std::endl;
     }
 
-    for (int i = 0; i < PROJECT_SERVER_FRAME_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE; ++i) {
+    for (int i = 0; i < PROJECT_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE; ++i) {
       if (mgrs_[i]) {
         ss << "\t" << mgrs_[i]->name() << " has " << mgrs_[i]->size() << " cache(s)" << std::endl;
       }
@@ -167,7 +167,7 @@ int router_manager_set::stop() {
   }
 
   // cleanup router manager now, it will also cleanup timers_
-  for (int i = 0; i < PROJECT_SERVER_FRAME_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE; ++i) {
+  for (int i = 0; i < PROJECT_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE; ++i) {
     if (nullptr != mgrs_[i]) {
       mgrs_[i]->on_stop();
     }
@@ -262,7 +262,7 @@ bool router_manager_set::insert_timer(router_manager_base *mgr, const std::share
 }
 
 router_manager_base *router_manager_set::get_manager(uint32_t type) {
-  if (type >= PROJECT_SERVER_FRAME_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE) {
+  if (type >= PROJECT_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE) {
     return nullptr;
   }
 
@@ -271,18 +271,18 @@ router_manager_base *router_manager_set::get_manager(uint32_t type) {
 
 int router_manager_set::register_manager(router_manager_base *b) {
   if (nullptr == b) {
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   uint32_t type = b->get_type_id();
-  if (type >= PROJECT_SERVER_FRAME_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE) {
+  if (type >= PROJECT_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE) {
     FWLOGERROR("router {} has invalid type id {}", b->name(), type);
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_TYPE_INVALID;
+    return PROJECT_NAMESPACE_ID::err::EN_ROUTER_TYPE_INVALID;
   }
 
   if (mgrs_[type]) {
     FWLOGERROR("router {} has type conflicy with {}", mgrs_[type]->name(), b->name());
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_TYPE_CONFLICT;
+    return PROJECT_NAMESPACE_ID::err::EN_ROUTER_TYPE_CONFLICT;
   }
 
   mgrs_[type] = b;
@@ -291,30 +291,30 @@ int router_manager_set::register_manager(router_manager_base *b) {
   if (is_closing()) {
     b->on_stop();
   }
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int router_manager_set::unregister_manager(router_manager_base *b) {
   if (nullptr == b) {
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   uint32_t type = b->get_type_id();
-  if (type >= PROJECT_SERVER_FRAME_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE) {
+  if (type >= PROJECT_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE) {
     FWLOGERROR("router {} has invalid type id {}", b->name(), type);
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_TYPE_INVALID;
+    return PROJECT_NAMESPACE_ID::err::EN_ROUTER_TYPE_INVALID;
   }
 
   if (mgrs_[type] == b) {
     mgrs_[type] = nullptr;
   }
 
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 size_t router_manager_set::size() const {
   size_t ret = 0;
-  for (int i = 0; i < PROJECT_SERVER_FRAME_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE; ++i) {
+  for (int i = 0; i < PROJECT_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE; ++i) {
     if (nullptr != mgrs_[i]) {
       ret += mgrs_[i]->size();
     }

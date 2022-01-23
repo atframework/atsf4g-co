@@ -105,7 +105,7 @@ int64_t generate_global_increase_id(::rpc::context &ctx, uint32_t major_type, ui
   task_manager::task_t *task = task_manager::task_t::this_task();
   if (!task) {
     WLOGERROR("current not in a task");
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
   }
 
   // 这个算法比许固定
@@ -146,7 +146,7 @@ int64_t generate_global_increase_id(::rpc::context &ctx, uint32_t major_type, ui
     return tracer.return_code(res);
   }
 
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_all_message msg;
+  PROJECT_NAMESPACE_ID::table_all_message msg;
   // 协程操作
   res = rpc::wait(msg, rpc_sequence);
   if (res < 0) {
@@ -154,7 +154,7 @@ int64_t generate_global_increase_id(::rpc::context &ctx, uint32_t major_type, ui
   }
 
   if (!msg.has_simple()) {
-    return tracer.return_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND);
+    return tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND);
   }
 
   return tracer.return_code(static_cast<int>(msg.simple().msg_i64()));
@@ -252,7 +252,7 @@ static int64_t generate_global_unique_id(::rpc::context &ctx, uint32_t major_typ
                                          uint32_t patch_type) {
   task_manager::task_t *this_task = task_manager::task_t::this_task();
   if (nullptr == this_task) {
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
   }
 
   // POOL => 1 | 50 | 13
@@ -286,7 +286,7 @@ static int64_t generate_global_unique_id(::rpc::context &ctx, uint32_t major_typ
     iter = g_unique_id_pools.insert(real_map_type::value_type(key, val)).first;
 
     if (g_unique_id_pools.end() == iter) {
-      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
     }
 
     alloc = &iter->second;
@@ -303,13 +303,13 @@ static int64_t generate_global_unique_id(::rpc::context &ctx, uint32_t major_typ
     // 任务已经失败或者不在任务中
     if (nullptr == this_task || this_task->is_exiting()) {
       if (this_task->is_timeout()) {
-        ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+        ret = PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
       } else if (this_task->is_faulted()) {
-        ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
+        ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
       } else if (this_task->is_canceled()) {
-        ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
+        ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
       } else {
-        ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING;
+        ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING;
       }
       break;
     }
@@ -317,7 +317,7 @@ static int64_t generate_global_unique_id(::rpc::context &ctx, uint32_t major_typ
     // Queue to Allocate id pool
     if (alloc->alloc_task && !alloc->alloc_task->is_exiting() && alloc->alloc_task.get() != this_task) {
       unique_id_container_waker::insert_into_pool(*alloc, this_task);
-      ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_RETRY_TIMES_EXCEED;
+      ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_RETRY_TIMES_EXCEED;
       continue;
     }
 
@@ -332,7 +332,7 @@ static int64_t generate_global_unique_id(::rpc::context &ctx, uint32_t major_typ
       // Keep order here
       if (!alloc->wake_tasks.empty()) {
         unique_id_container_waker::insert_into_pool(*alloc, this_task);
-        ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_RETRY_TIMES_EXCEED;
+        ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_RETRY_TIMES_EXCEED;
         continue;
       }
 
@@ -361,14 +361,14 @@ static int64_t generate_global_unique_id(::rpc::context &ctx, uint32_t major_typ
   // WLOGINFO("=====DEBUG===== malloc uuid for (%u, %u, %u), val: %lld", major_type, minor_type, patch_type,
   // static_cast<long long>(ret));
   if (0 == ret) {
-    ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_CALL;
+    ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL;
   }
   return ret;
 }
 
 int64_t generate_global_unique_id(::rpc::context &ctx, uint32_t major_type, uint32_t minor_type, uint32_t patch_type) {
-  if (PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_GLOBAL_UUID_MAT_USER_ID == major_type ||
-      PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_GLOBAL_UUID_MAT_GUILD_ID == major_type) {
+  if (PROJECT_NAMESPACE_ID::EN_GLOBAL_UUID_MAT_USER_ID == major_type ||
+      PROJECT_NAMESPACE_ID::EN_GLOBAL_UUID_MAT_GUILD_ID == major_type) {
     // POOL => 1 | * | 5
     // EN_GLOBAL_UUID_MAT_USER_ID:     [1 | 55 | 5] | 3
     // EN_GLOBAL_UUID_MAT_GUILD_ID:    [1 | 55 | 5] | 3

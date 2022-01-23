@@ -105,7 +105,7 @@ class player : public player_cache {
   /** 因为会对其进行memset，所以内部不允许出现非POD类型 **/
 
   struct dirty_message_container {
-    std::unique_ptr<PROJECT_SERVER_FRAME_NAMESPACE_ID::SCPlayerDirtyChgSync> player_dirty;
+    std::unique_ptr<PROJECT_NAMESPACE_ID::SCPlayerDirtyChgSync> player_dirty;
   };
 
   using build_dirty_message_fn_t = std::function<void(player &, dirty_message_container &)>;
@@ -120,9 +120,9 @@ class player : public player_cache {
     time_t refresh_feature_limit_second;
     time_t refresh_feature_limit_minute;
     time_t refresh_feature_limit_hour;
-    // PROJECT_SERVER_FRAME_NAMESPACE_ID::SCPlayerLevelupSyn player_level_up_syn;
+    // PROJECT_NAMESPACE_ID::SCPlayerLevelupSyn player_level_up_syn;
 
-    std::unordered_map<int32_t, PROJECT_SERVER_FRAME_NAMESPACE_ID::DItem> dirty_item_by_type;
+    std::unordered_map<int32_t, PROJECT_NAMESPACE_ID::DItem> dirty_item_by_type;
 
     std::unordered_map<uintptr_t, dirty_sync_handle_t> dirty_handles;
     gsl::string_view current_dirty_handle_name;
@@ -200,7 +200,7 @@ class player : public player_cache {
   void on_update_session(const std::shared_ptr<session> &from, const std::shared_ptr<session> &to) override;
 
   // 从table数据初始化
-  void init_from_table_data(rpc::context &ctx, const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &) override;
+  void init_from_table_data(rpc::context &ctx, const PROJECT_NAMESPACE_ID::table_user &) override;
 
   /**
    * @brief 转储数据
@@ -208,7 +208,7 @@ class player : public player_cache {
    * @param always 是否忽略脏数据
    * @return 0或错误码
    */
-  int dump(rpc::context &ctx, PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &user, bool always) override;
+  int dump(rpc::context &ctx, PROJECT_NAMESPACE_ID::table_user &user, bool always) override;
 
   /**
    * @brief 是否完整执行过初始化
@@ -224,10 +224,8 @@ class player : public player_cache {
    */
   void set_inited() { internal_flags_.set(internal_flag::EN_IFT_IS_INITED, true); }
 
-  const PROJECT_SERVER_FRAME_NAMESPACE_ID::DClientDeviceInfo &get_client_info() const { return client_info_; }
-  void set_client_info(const PROJECT_SERVER_FRAME_NAMESPACE_ID::DClientDeviceInfo &info) {
-    client_info_.CopyFrom(info);
-  }
+  const PROJECT_NAMESPACE_ID::DClientDeviceInfo &get_client_info() const { return client_info_; }
+  void set_client_info(const PROJECT_NAMESPACE_ID::DClientDeviceInfo &info) { client_info_.CopyFrom(info); }
 
   /**
    * @brief 获取心跳包统计数据
@@ -259,7 +257,7 @@ class player : public player_cache {
   int await_before_logout_tasks() override;
   void clear_dirty_cache();
 
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::DItem &mutable_dirty_item(const PROJECT_SERVER_FRAME_NAMESPACE_ID::DItem &in);
+  PROJECT_NAMESPACE_ID::DItem &mutable_dirty_item(const PROJECT_NAMESPACE_ID::DItem &in);
 
   /**
    * @brief 插入脏数据handle
@@ -290,7 +288,7 @@ class player : public player_cache {
   friend class task_queue_lock_guard;
   std::list<task_queue_node> task_lock_queue_;
 
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::DClientDeviceInfo client_info_;
+  PROJECT_NAMESPACE_ID::DClientDeviceInfo client_info_;
   // =======================================================
   heartbeat_t heartbeat_data_;
   cache_t cache_data_;

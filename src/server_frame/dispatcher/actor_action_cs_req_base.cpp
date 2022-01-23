@@ -109,10 +109,10 @@ void actor_action_cs_req_base::send_response(bool sync_dirty) {
     if (req_msg.has_head()) {
       seq = req_msg.head().client_sequence();
     }
-    if (PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM == req_msg.head().op_type()) {
-      op_type = PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM;
+    if (PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM == req_msg.head().op_type()) {
+      op_type = PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM;
     } else {
-      op_type = PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE;
+      op_type = PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE;
     }
   }
 

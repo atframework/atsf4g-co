@@ -120,8 +120,7 @@ class logic_server_common_module : public atapp::module_impl {
 
   void update_remote_server_configure(const std::string& global_conf, int32_t global_version,
                                       const std::string& zone_conf, int32_t zone_version);
-  inline const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_service_configure_data& get_remote_server_configure()
-      const noexcept {
+  inline const PROJECT_NAMESPACE_ID::table_service_configure_data& get_remote_server_configure() const noexcept {
     return server_remote_conf_;
   }
 
@@ -140,7 +139,7 @@ class logic_server_common_module : public atapp::module_impl {
   bool etcd_event_handle_registered_;
   int64_t cachesvr_discovery_version_;
 
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_service_configure_data server_remote_conf_;
+  PROJECT_NAMESPACE_ID::table_service_configure_data server_remote_conf_;
   int32_t server_remote_conf_global_version_;
   int32_t server_remote_conf_zone_version_;
   time_t server_remote_conf_next_update_time_;

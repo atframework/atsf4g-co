@@ -52,7 +52,7 @@ ${task_class_name}::result_type ${task_class_name}::operator()() {
   player::ptr_t user = get_player<player>();
   if (!user) {
     FWLOGERROR("not logined.");
-    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
     return ${project_namespace}::err::EN_SUCCESS;
   }
 

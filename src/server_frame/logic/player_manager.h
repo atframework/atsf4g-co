@@ -68,11 +68,10 @@ class player_manager : public util::design_pattern::singleton<player_manager> {
   size_t size() const;
 
   player_ptr_t create(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const std::string &openid,
-                      PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login &login_tb, std::string &login_ver);
+                      PROJECT_NAMESPACE_ID::table_login &login_tb, std::string &login_ver);
   template <typename TPLAYER>
   const std::shared_ptr<TPLAYER> create_as(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                           const std::string &openid,
-                                           PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login &login_tb,
+                                           const std::string &openid, PROJECT_NAMESPACE_ID::table_login &login_tb,
                                            std::string &login_ver) {
     return std::static_pointer_cast<TPLAYER>(create(ctx, user_id, zone_id, openid, login_tb, login_ver));
   }

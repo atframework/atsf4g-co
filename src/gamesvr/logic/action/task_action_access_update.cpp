@@ -34,17 +34,17 @@ task_action_access_update::result_type task_action_access_update::operator()() {
   player::ptr_t user = get_player<player>();
   if (!user) {
     FWLOGERROR("not logined.");
-    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   if (user->get_login_info().login_code() != req_body.old_access()) {
-    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   user->get_login_info().set_login_code(req_body.new_access());
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int task_action_access_update::on_success() { return get_result(); }

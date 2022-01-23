@@ -42,8 +42,8 @@ task_action_ping::result_type task_action_ping::operator()() {
   player::ptr_t user = get_player<player>();
   if (!user) {
     FWLOGERROR("not logined.");
-    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   // 用户更新心跳信息
@@ -53,9 +53,9 @@ task_action_ping::result_type task_action_ping::operator()() {
   if (user->get_heartbeat_data().continue_error_times >= logic_config::me()->get_logic().heartbeat().error_times()) {
     // 封号一段时间
 
-    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_BAN);
-    int kick_off_reason = PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_CRT_LOGIN_BAN;
-    PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login tb;
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_BAN);
+    int kick_off_reason = PROJECT_NAMESPACE_ID::EN_CRT_LOGIN_BAN;
+    PROJECT_NAMESPACE_ID::table_login tb;
     do {
       std::string login_ver;
       int res =
@@ -84,11 +84,11 @@ task_action_ping::result_type task_action_ping::operator()() {
       if (tb.except().except_con_times() >= logic_config::me()->get_logic().heartbeat().ban_error_times()) {
         tb.set_ban_time(static_cast<uint32_t>(util::time::time_utility::get_now() +
                                               logic_config::me()->get_logic().session().login_ban_time().seconds()));
-        kick_off_reason = PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_CRT_LOGIN_BAN;
-        set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_BAN);
+        kick_off_reason = PROJECT_NAMESPACE_ID::EN_CRT_LOGIN_BAN;
+        set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_BAN);
       } else {
-        kick_off_reason = PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_CRT_SPEED_WARNING;
-        set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_SPEED_WARNING);
+        kick_off_reason = PROJECT_NAMESPACE_ID::EN_CRT_SPEED_WARNING;
+        set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_SPEED_WARNING);
       }
       // 保存封号结果
       res = rpc::db::login::set(get_shared_context(), user->get_open_id().c_str(), user->get_zone_id(), tb, login_ver);
@@ -115,7 +115,7 @@ task_action_ping::result_type task_action_ping::operator()() {
     player_manager::me()->remove(user);
   }
 
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int task_action_ping::on_success() { return get_result(); }

@@ -7,7 +7,11 @@
 #include <proto_base.h>
 #include <time/time_utility.h>
 
+#include <config/compiler/protobuf_prefix.h>
+
 #include <protocol/pbdesc/svr.const.err.pb.h>
+
+#include <config/compiler/protobuf_suffix.h>
 
 #include <config/logic_config.h>
 #include <utility/protobuf_mini_dumper.h>
@@ -168,13 +172,13 @@ void session_manager::remove_all() {
 
 size_t session_manager::size() const { return all_sessions_.size(); }
 
-int32_t session_manager::broadcast_msg_to_client(const PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg &msg) {
+int32_t session_manager::broadcast_msg_to_client(const PROJECT_NAMESPACE_ID::CSMsg &msg) {
   size_t msg_buf_len = msg.ByteSizeLong();
   size_t tls_buf_len =
       atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);
   if (msg_buf_len > tls_buf_len) {
     FWLOGERROR("broadcast to all gateway failed: require {}, only have {}", msg_buf_len, tls_buf_len);
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
   }
 
   ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(

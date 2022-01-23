@@ -5,12 +5,11 @@
 
 #include <dispatcher/task_action_cs_req_base.h>
 
-class task_action_player_get_info
-    : public task_action_cs_rpc_base<PROJECT_SERVER_FRAME_NAMESPACE_ID::CSPlayerGetInfoReq,
-                                     PROJECT_SERVER_FRAME_NAMESPACE_ID::SCPlayerGetInfoRsp> {
+class task_action_player_get_info : public task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSPlayerGetInfoReq,
+                                                                   PROJECT_NAMESPACE_ID::SCPlayerGetInfoRsp> {
  public:
-  using base_type = task_action_cs_rpc_base<PROJECT_SERVER_FRAME_NAMESPACE_ID::CSPlayerGetInfoReq,
-                                            PROJECT_SERVER_FRAME_NAMESPACE_ID::SCPlayerGetInfoRsp>;
+  using base_type =
+      task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSPlayerGetInfoReq, PROJECT_NAMESPACE_ID::SCPlayerGetInfoRsp>;
   using msg_type = base_type::msg_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

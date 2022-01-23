@@ -5,11 +5,11 @@
 
 #include <dispatcher/task_action_cs_req_base.h>
 
-class task_action_login_auth : public task_action_cs_rpc_base<PROJECT_SERVER_FRAME_NAMESPACE_ID::CSLoginAuthReq,
-                                                              PROJECT_SERVER_FRAME_NAMESPACE_ID::SCLoginAuthRsp> {
+class task_action_login_auth : public task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSLoginAuthReq,
+                                                              PROJECT_NAMESPACE_ID::SCLoginAuthRsp> {
  public:
-  using base_type = task_action_cs_rpc_base<PROJECT_SERVER_FRAME_NAMESPACE_ID::CSLoginAuthReq,
-                                            PROJECT_SERVER_FRAME_NAMESPACE_ID::SCLoginAuthRsp>;
+  using base_type = task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSLoginAuthReq,
+                                            PROJECT_NAMESPACE_ID::SCLoginAuthRsp>;
   using msg_type = base_type::msg_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

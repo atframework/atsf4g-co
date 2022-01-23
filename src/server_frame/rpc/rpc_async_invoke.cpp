@@ -22,7 +22,7 @@ namespace rpc {
 rpc_result<task_manager::task_ptr_t, int> async_invoke(context &ctx, gsl::string_view name,
                                                        std::function<task_action_base::result_type(context &)> fn) {
   if (!fn) {
-    return rpc_result<task_manager::task_ptr_t, int>::make_error(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM);
+    return rpc_result<task_manager::task_ptr_t, int>::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
   task_manager::task_ptr_t task_ptr;
@@ -65,18 +65,18 @@ rpc_result<task_manager::task_ptr_t, int> async_invoke(gsl::string_view caller_n
 rpc_result<int, int> wait_tasks(const std::vector<task_manager::task_ptr_t> &tasks) {
   task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
   if (!self_task) {
-    return rpc_result<int, int>::make_error(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
+    return rpc_result<int, int>::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
   }
 
   while (true) {
     if (self_task->is_timeout()) {
-      return rpc_result<int, int>::make_error(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+      return rpc_result<int, int>::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
     } else if (self_task->is_faulted()) {
-      return rpc_result<int, int>::make_error(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
+      return rpc_result<int, int>::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
     } else if (self_task->is_canceled()) {
-      return rpc_result<int, int>::make_error(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
+      return rpc_result<int, int>::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
     } else if (self_task->is_exiting()) {
-      return rpc_result<int, int>::make_error(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING);
+      return rpc_result<int, int>::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING);
     }
 
     task_manager::task_ptr_t last_task;
@@ -103,7 +103,7 @@ rpc_result<int, int> wait_tasks(const std::vector<task_manager::task_ptr_t> &tas
     self_task->await_task(last_task);
   }
 
-  return rpc_result<int, int>::make_success(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS);
+  return rpc_result<int, int>::make_success(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 }  // namespace rpc

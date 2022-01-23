@@ -9,12 +9,11 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-class task_action_router_transfer
-    : public task_action_ss_rpc_base<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSRouterTransferReq,
-                                     PROJECT_SERVER_FRAME_NAMESPACE_ID::SSRouterTransferRsp> {
+class task_action_router_transfer : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRouterTransferReq,
+                                                                   PROJECT_NAMESPACE_ID::SSRouterTransferRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSRouterTransferReq,
-                                            PROJECT_SERVER_FRAME_NAMESPACE_ID::SSRouterTransferRsp>;
+  using base_type =
+      task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRouterTransferReq, PROJECT_NAMESPACE_ID::SSRouterTransferRsp>;
   using msg_type = base_type::msg_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

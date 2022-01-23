@@ -42,39 +42,35 @@ class logic_config : public util::design_pattern::singleton<logic_config> {
 
   gsl::string_view get_deployment_environment_name() const noexcept;
 
-  const PROJECT_SERVER_FRAME_NAMESPACE_ID::DConstSettingsType &get_const_settings();
+  const PROJECT_NAMESPACE_ID::DConstSettingsType &get_const_settings();
   const atframework::ConstSettingsType &get_atframework_settings();
 
-  inline const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::server_cfg &get_server_cfg() const noexcept {
-    return server_cfg_;
-  }
-  inline PROJECT_SERVER_FRAME_NAMESPACE_ID::config::server_cfg *mutable_server_cfg() noexcept { return &server_cfg_; }
-  inline const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::db_section_cfg &get_cfg_db() const noexcept {
-    return server_cfg_.db();
-  }
-  inline const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::logic_section_cfg &get_logic() const noexcept {
+  inline const PROJECT_NAMESPACE_ID::config::server_cfg &get_server_cfg() const noexcept { return server_cfg_; }
+  inline PROJECT_NAMESPACE_ID::config::server_cfg *mutable_server_cfg() noexcept { return &server_cfg_; }
+  inline const PROJECT_NAMESPACE_ID::config::db_section_cfg &get_cfg_db() const noexcept { return server_cfg_.db(); }
+  inline const PROJECT_NAMESPACE_ID::config::logic_section_cfg &get_logic() const noexcept {
     return server_cfg_.logic();
   }
-  inline const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::logic_router_cfg &get_cfg_router() const noexcept {
+  inline const PROJECT_NAMESPACE_ID::config::logic_router_cfg &get_cfg_router() const noexcept {
     return get_logic().router();
   }
-  inline const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::logic_task_cfg &get_cfg_task() const noexcept {
+  inline const PROJECT_NAMESPACE_ID::config::logic_task_cfg &get_cfg_task() const noexcept {
     return get_logic().task();
   }
 
-  inline const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::loginsvr_cfg &get_cfg_loginsvr() const noexcept {
+  inline const PROJECT_NAMESPACE_ID::config::loginsvr_cfg &get_cfg_loginsvr() const noexcept {
     return get_server_cfg().loginsvr();
   }
 
  private:
   void _load_db();
-  void _load_db_hosts(PROJECT_SERVER_FRAME_NAMESPACE_ID::config::db_group_cfg &out);
+  void _load_db_hosts(PROJECT_NAMESPACE_ID::config::db_group_cfg &out);
 
   void _load_server_cfg(atapp::app &app);
 
  private:
-  const PROJECT_SERVER_FRAME_NAMESPACE_ID::DConstSettingsType *const_settings_;
+  const PROJECT_NAMESPACE_ID::DConstSettingsType *const_settings_;
   const atframework::ConstSettingsType *atframe_settings_;
 
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::config::server_cfg server_cfg_;
+  PROJECT_NAMESPACE_ID::config::server_cfg server_cfg_;
 };

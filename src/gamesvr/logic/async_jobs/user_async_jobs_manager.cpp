@@ -35,7 +35,7 @@ void user_async_jobs_manager::login_init(rpc::context&) { reset_async_jobs_prote
 void user_async_jobs_manager::refresh_feature_limit(rpc::context& ctx) { try_async_jobs(ctx); }
 
 void user_async_jobs_manager::init_from_table_data(rpc::context&,
-                                                   const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user& player_table) {
+                                                   const PROJECT_NAMESPACE_ID::table_user& player_table) {
   if (player_table.has_async_jobs()) {
     remote_command_patch_task_next_timepoint_ = static_cast<time_t>(player_table.async_jobs().next_task_active_time());
 
@@ -48,10 +48,10 @@ void user_async_jobs_manager::init_from_table_data(rpc::context&,
   }
 }
 
-int user_async_jobs_manager::dump(rpc::context&, PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user& user) const {
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::player_async_jobs_data* jobs_data = user.mutable_async_jobs();
+int user_async_jobs_manager::dump(rpc::context&, PROJECT_NAMESPACE_ID::table_user& user) const {
+  PROJECT_NAMESPACE_ID::player_async_jobs_data* jobs_data = user.mutable_async_jobs();
   if (NULL == jobs_data) {
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
 
   jobs_data->set_next_task_active_time(static_cast<int64_t>(remote_command_patch_task_next_timepoint_));
@@ -134,24 +134,24 @@ int user_async_jobs_manager::wait_for_async_task() {
 
   task_manager::task_t* current = task_manager::task_t::this_task();
   if (NULL == current) {
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
   }
 
   int res = current->await_task(remote_command_patch_task_);
   if (current->is_timeout()) {
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
   }
 
   if (current->is_faulted()) {
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
   }
 
   if (current->is_canceled()) {
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
   }
 
   if (current->is_exiting()) {
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING;
   }
 
   return res;

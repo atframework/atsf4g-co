@@ -77,7 +77,7 @@ int32_t db_msg_dispatcher::init() {
     tick_timer_ = new (std::nothrow) uv_timer_t();
     if (nullptr == tick_timer_) {
       WLOGERROR("malloc timer failed");
-      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
     }
     tick_timer_->data = this;
 
@@ -109,7 +109,7 @@ int32_t db_msg_dispatcher::init() {
   // init
   cluster_init(logic_config::me()->get_cfg_db().cluster(), channel_t::CLUSTER_DEFAULT);
   raw_init(logic_config::me()->get_cfg_db().raw(), channel_t::RAW_DEFAULT);
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int db_msg_dispatcher::tick() {
@@ -144,19 +144,18 @@ int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
     ctx_ptr = &ctx;
   }
 
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_all_message *table_msg =
-      ctx_ptr->create<PROJECT_SERVER_FRAME_NAMESPACE_ID::table_all_message>();
+  PROJECT_NAMESPACE_ID::table_all_message *table_msg = ctx_ptr->create<PROJECT_NAMESPACE_ID::table_all_message>();
   if (nullptr == table_msg) {
     FWLOGERROR("{} create message instance failed", name());
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
 
   if (nullptr == req->response) {
     WLOGERROR("task [0x%llx] DB msg, no response found", static_cast<unsigned long long>(req->task_id));
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
-  int ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+  int ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   switch (req->response->type) {
     case REDIS_REPLY_STATUS: {
       if (0 == UTIL_STRFUNC_STRNCASE_CMP("OK", req->response->str, 2)) {
@@ -166,10 +165,10 @@ int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
         if (req->response->str[10] && req->response->str[11]) {
           table_msg->set_version(&req->response->str[11]);
         }
-        ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_OLD_VERSION;
+        ret = PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION;
       } else {
         table_msg->set_version(req->response->str);
-        ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+        ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
       }
       break;
     }
@@ -178,10 +177,10 @@ int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
         if (req->response->str[10] && req->response->str[11]) {
           table_msg->set_version(&req->response->str[11]);
         }
-        ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_OLD_VERSION;
+        ret = PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION;
       } else {
         WLOGERROR("db reply error: %s", req->response->str);
-        ret = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_REPLY_ERROR;
+        ret = PROJECT_NAMESPACE_ID::err::EN_DB_REPLY_ERROR;
       }
       break;
     }
@@ -212,8 +211,8 @@ int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
 }
 
 uint64_t db_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_all_message *real_msg =
-      get_protobuf_msg<PROJECT_SERVER_FRAME_NAMESPACE_ID::table_all_message>(raw_msg);
+  PROJECT_NAMESPACE_ID::table_all_message *real_msg =
+      get_protobuf_msg<PROJECT_NAMESPACE_ID::table_all_message>(raw_msg);
   if (nullptr == real_msg) {
     return 0;
   }
@@ -226,7 +225,7 @@ db_msg_dispatcher::msg_type_t db_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw
 const std::string &db_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) { return get_empty_string(); }
 
 db_msg_dispatcher::msg_op_type_t db_msg_dispatcher::pick_msg_op_type(msg_raw_t &raw_msg) {
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP;
+  return PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP;
 }
 
 int db_msg_dispatcher::send_msg(channel_t::type t, const char *ks, size_t kl, uint64_t task_id, uint64_t pd,
@@ -237,7 +236,7 @@ int db_msg_dispatcher::send_msg(channel_t::type t, const char *ks, size_t kl, ui
       return cluster_send_msg(*db_cluster_conns_[t], ks, kl, task_id, pd, fn, sequence, argc, argv, argvlen);
     } else {
       WLOGERROR("db cluster %d not inited", static_cast<int>(t));
-      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_INIT;
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
     }
   }
 
@@ -246,12 +245,12 @@ int db_msg_dispatcher::send_msg(channel_t::type t, const char *ks, size_t kl, ui
       return raw_send_msg(*db_raw_conns_[t - channel_t::RAW_DEFAULT], task_id, pd, fn, sequence, argc, argv, argvlen);
     } else {
       WLOGERROR("db single %d not inited", static_cast<int>(t));
-      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_INIT;
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
     }
   }
 
   WLOGERROR("db channel %d invalid", static_cast<int>(t));
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
+  return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
 }
 
 void *db_msg_dispatcher::get_cache_buffer(size_t len) {
@@ -275,11 +274,11 @@ bool db_msg_dispatcher::is_available(channel_t::type t) const {
 }
 
 const std::string &db_msg_dispatcher::get_db_script_sha1(uint32_t type) const {
-  return db_script_sha1_[type % PROJECT_SERVER_FRAME_NAMESPACE_ID::EnDBScriptShaType_ARRAYSIZE];
+  return db_script_sha1_[type % PROJECT_NAMESPACE_ID::EnDBScriptShaType_ARRAYSIZE];
 }
 
 void db_msg_dispatcher::set_db_script_sha1(uint32_t type, const char *str, int len) {
-  db_script_sha1_[type % PROJECT_SERVER_FRAME_NAMESPACE_ID::EnDBScriptShaType_ARRAYSIZE].assign(str, len);
+  db_script_sha1_[type % PROJECT_NAMESPACE_ID::EnDBScriptShaType_ARRAYSIZE].assign(str, len);
 }
 
 void db_msg_dispatcher::set_on_connected(channel_t::type t, user_callback_t fn) {
@@ -300,10 +299,10 @@ int db_msg_dispatcher::script_load(redisAsyncContext *c, int32_t type) {
   std::string script;
   std::string script_file_path;
   switch (type) {
-    case PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_DBSST_LOGIN:
+    case PROJECT_NAMESPACE_ID::EN_DBSST_LOGIN:
       script_file_path = logic_config::me()->get_cfg_db().script().login();
       break;
-    case PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_DBSST_USER:
+    case PROJECT_NAMESPACE_ID::EN_DBSST_USER:
       script_file_path = logic_config::me()->get_cfg_db().script().user();
       break;
     default:
@@ -314,10 +313,10 @@ int db_msg_dispatcher::script_load(redisAsyncContext *c, int32_t type) {
   }
 
   open_file(script_file_path.c_str(), script);
-  status = redisAsyncCommand(c, script_callback,
-                             reinterpret_cast<void *>(static_cast<intptr_t>(
-                                 type % PROJECT_SERVER_FRAME_NAMESPACE_ID::EnDBScriptShaType_ARRAYSIZE)),
-                             "SCRIPT LOAD %s", script.c_str());
+  status = redisAsyncCommand(
+      c, script_callback,
+      reinterpret_cast<void *>(static_cast<intptr_t>(type % PROJECT_NAMESPACE_ID::EnDBScriptShaType_ARRAYSIZE)),
+      "SCRIPT LOAD %s", script.c_str());
   if (REDIS_OK != status) {
     WLOGERROR("send db msg failed, status: %d, msg: %s", status, c->errstr);
   }
@@ -333,7 +332,7 @@ int db_msg_dispatcher::open_file(const char *file, std::string &script) {
 
   if (false == util::file_system::get_file_content(script, path, false)) {
     WLOGERROR("load db script file %s failed", path);
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
   }
 
   return 0;
@@ -379,9 +378,9 @@ void db_msg_dispatcher::script_callback(redisAsyncContext *c, void *r, void *pri
 }
 
 // cluster
-int db_msg_dispatcher::cluster_init(const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::db_group_cfg &conns, int index) {
+int db_msg_dispatcher::cluster_init(const PROJECT_NAMESPACE_ID::config::db_group_cfg &conns, int index) {
   if (index >= channel_t::SENTINEL_BOUND || index < 0) {
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   std::shared_ptr<hiredis::happ::cluster> &conn = db_cluster_conns_[index];
@@ -391,7 +390,7 @@ int db_msg_dispatcher::cluster_init(const PROJECT_SERVER_FRAME_NAMESPACE_ID::con
   conn.reset();
 
   if (0 == conns.gateways_size()) {
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   conn = std::make_shared<hiredis::happ::cluster>();
@@ -432,7 +431,7 @@ int db_msg_dispatcher::cluster_init(const PROJECT_SERVER_FRAME_NAMESPACE_ID::con
     return 0;
   }
 
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_INIT;
+  return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
 }
 
 void db_msg_dispatcher::cluster_request_callback(hiredis::happ::cmd_exec *, struct redisAsyncContext *c, void *r,
@@ -483,9 +482,8 @@ void db_msg_dispatcher::cluster_on_connected(hiredis::happ::cluster *clu, hiredi
 
   WLOGINFO("connect to db host %s success", conn->get_key().name.c_str());
   // 注入redis的lua脚本
-  for (int i = 0; i < PROJECT_SERVER_FRAME_NAMESPACE_ID::EnDBScriptShaType_descriptor()->value_count(); ++i) {
-    me()->script_load(conn->get_context(),
-                      PROJECT_SERVER_FRAME_NAMESPACE_ID::EnDBScriptShaType_descriptor()->value(i)->number());
+  for (int i = 0; i < PROJECT_NAMESPACE_ID::EnDBScriptShaType_descriptor()->value_count(); ++i) {
+    me()->script_load(conn->get_context(), PROJECT_NAMESPACE_ID::EnDBScriptShaType_descriptor()->value(i)->number());
   }
 
   for (int i = 0; i < channel_t::SENTINEL_BOUND; ++i) {
@@ -526,16 +524,16 @@ int db_msg_dispatcher::cluster_send_msg(hiredis::happ::cluster &clu, const char 
 
   if (nullptr == cmd) {
     WLOGERROR("send db msg failed");
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_SEND_FAILED;
+    return PROJECT_NAMESPACE_ID::err::EN_DB_SEND_FAILED;
   }
 
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 // raw
-int db_msg_dispatcher::raw_init(const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::db_group_cfg &conns, int index) {
+int db_msg_dispatcher::raw_init(const PROJECT_NAMESPACE_ID::config::db_group_cfg &conns, int index) {
   if (index >= channel_t::RAW_BOUND || index < channel_t::RAW_DEFAULT) {
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   std::shared_ptr<hiredis::happ::raw> &conn = db_raw_conns_[index - channel_t::RAW_DEFAULT];
@@ -545,7 +543,7 @@ int db_msg_dispatcher::raw_init(const PROJECT_SERVER_FRAME_NAMESPACE_ID::config:
   conn.reset();
 
   if (0 == conns.gateways_size()) {
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   conn = std::make_shared<hiredis::happ::raw>();
@@ -585,7 +583,7 @@ int db_msg_dispatcher::raw_init(const PROJECT_SERVER_FRAME_NAMESPACE_ID::config:
     return 0;
   }
 
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_INIT;
+  return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
 }
 void db_msg_dispatcher::raw_request_callback(hiredis::happ::cmd_exec *, struct redisAsyncContext *c, void *r,
                                              void *privdata) {
@@ -672,10 +670,10 @@ int db_msg_dispatcher::raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_
 
   if (nullptr == cmd) {
     WLOGERROR("send db msg failed");
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_SEND_FAILED;
+    return PROJECT_NAMESPACE_ID::err::EN_DB_SEND_FAILED;
   }
 
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 uint64_t db_msg_dispatcher::allocate_sequence() { return ++sequence_allocator_; }

@@ -13,9 +13,9 @@
 #include <unordered_map>
 #include <vector>
 
-PROJECT_SERVER_FRAME_NAMESPACE_BEGIN
+PROJECT_NAMESPACE_BEGIN
 class CSMsg;
-PROJECT_SERVER_FRAME_NAMESPACE_END
+PROJECT_NAMESPACE_END
 
 class session_manager : public util::design_pattern::singleton<session_manager> {
  public:
@@ -44,7 +44,7 @@ class session_manager : public util::design_pattern::singleton<session_manager> 
 
   size_t size() const;
 
-  int32_t broadcast_msg_to_client(const PROJECT_SERVER_FRAME_NAMESPACE_ID::CSMsg& msg);
+  int32_t broadcast_msg_to_client(const PROJECT_NAMESPACE_ID::CSMsg& msg);
 
  private:
   session_counter_t session_counter_;

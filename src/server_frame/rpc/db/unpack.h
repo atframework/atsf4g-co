@@ -11,9 +11,9 @@
 
 #include <vector>
 
-PROJECT_SERVER_FRAME_NAMESPACE_BEGIN
+PROJECT_NAMESPACE_BEGIN
 class table_all_message;
-PROJECT_SERVER_FRAME_NAMESPACE_END
+PROJECT_NAMESPACE_END
 
 extern "C" struct redisReply;
 
@@ -21,13 +21,13 @@ namespace rpc {
 namespace db {
 namespace detail {
 
-int32_t do_nothing(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_all_message &msg, const redisReply *data);
+int32_t do_nothing(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *data);
 
-int32_t unpack_integer(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_all_message &msg, const redisReply *data);
+int32_t unpack_integer(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *data);
 
-int32_t unpack_str(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_all_message &msg, const redisReply *data);
+int32_t unpack_str(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *data);
 
-int32_t unpack_arr_str(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_all_message &msg, const redisReply *data);
+int32_t unpack_arr_str(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *data);
 }  // namespace detail
 }  // namespace db
 }  // namespace rpc

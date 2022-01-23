@@ -221,12 +221,12 @@ ${result_clazz_name}::${result_clazz_name}() {}
 ${result_clazz_name}::${result_clazz_name}(int code): result(code) {}
 ${result_clazz_name}::operator int() const noexcept {
   if (!result.is_ready()) {
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_CALL_NOT_READY;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL_NOT_READY;
   }
 
   const int* ret = result.data();
   if (nullptr == ret) {
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_CALL;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL;
   }
 
   return *ret;

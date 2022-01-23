@@ -118,7 +118,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
   int create_task_with_timeout(task_t::ptr_t &task_instance, time_t timeout_sec, time_t timeout_nsec, TParams &&args) {
     if (!stack_pool_ || !native_mgr_) {
       task_instance = nullptr;
-      return PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_SYSTEM;
+      return PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
     }
 
     task_types::task_macro_coroutine::stack_allocator_t alloc(stack_pool_);

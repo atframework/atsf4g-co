@@ -33,9 +33,9 @@ class user_async_jobs_manager {
   void refresh_feature_limit(rpc::context& ctx);
 
   // 从table数据初始化
-  void init_from_table_data(rpc::context& ctx, const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user& player_table);
+  void init_from_table_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_user& player_table);
 
-  int dump(rpc::context& ctx, PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user& user) const;
+  int dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_user& user) const;
 
   bool is_dirty() const;
 

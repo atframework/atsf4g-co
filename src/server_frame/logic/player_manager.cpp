@@ -123,7 +123,7 @@ size_t player_manager::size() const { return router_player_manager::me()->size()
 
 player_manager::player_ptr_t player_manager::create(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
                                                     const std::string &openid,
-                                                    PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login &login_tb,
+                                                    PROJECT_NAMESPACE_ID::table_login &login_tb,
                                                     std::string &login_ver) {
   if (0 == user_id || openid.empty()) {
     FWLOGERROR("can not create player_cache without user id or open id");
@@ -162,8 +162,8 @@ player_manager::player_ptr_t player_manager::create(rpc::context &ctx, uint64_t 
   // 新用户，数据版本号为0，启动创建初始化
   if (0 == ret->get_data_version()) {
     // manager 创建初始化
-    if (ret->get_login_info().account().version_type() >= PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_VERSION_INNER) {
-      ret->create_init(ctx, PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_VERSION_DEFAULT);
+    if (ret->get_login_info().account().version_type() >= PROJECT_NAMESPACE_ID::EN_VERSION_INNER) {
+      ret->create_init(ctx, PROJECT_NAMESPACE_ID::EN_VERSION_DEFAULT);
     } else {
       ret->create_init(ctx, ret->get_login_info().account().version_type());
     }

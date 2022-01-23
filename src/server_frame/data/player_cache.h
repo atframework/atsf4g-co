@@ -127,8 +127,7 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
   virtual void on_update_session(const std::shared_ptr<session> &from, const std::shared_ptr<session> &to);
 
   // 从table数据初始化
-  virtual void init_from_table_data(rpc::context &ctx,
-                                    const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &stTableplayer_cache);
+  virtual void init_from_table_data(rpc::context &ctx, const PROJECT_NAMESPACE_ID::table_user &stTableplayer_cache);
 
   /**
    * @brief 转储数据
@@ -136,7 +135,7 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
    * @param always 是否忽略脏数据
    * @return 0或错误码
    */
-  virtual int dump(rpc::context &ctx, PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &user, bool always);
+  virtual int dump(rpc::context &ctx, PROJECT_NAMESPACE_ID::table_user &user, bool always);
 
   /**
    * @brief 下发同步消息
@@ -175,22 +174,20 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
    */
   inline uint32_t get_zone_id() const { return zone_id_; }
 
-  inline const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login &get_login_info() const { return login_info_; }
-  inline PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login &get_login_info() { return login_info_; }
-  void load_and_move_login_info(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login &&lg, const std::string &ver);
+  inline const PROJECT_NAMESPACE_ID::table_login &get_login_info() const { return login_info_; }
+  inline PROJECT_NAMESPACE_ID::table_login &get_login_info() { return login_info_; }
+  void load_and_move_login_info(PROJECT_NAMESPACE_ID::table_login &&lg, const std::string &ver);
 
   inline const std::string &get_login_version() const { return login_info_version_; }
   inline std::string &get_login_version() { return login_info_version_; }
 
-  inline const PROJECT_SERVER_FRAME_NAMESPACE_ID::account_information &get_account_info() const {
-    return account_info_;
-  }
-  inline PROJECT_SERVER_FRAME_NAMESPACE_ID::account_information &get_account_info() { return account_info_.ref(); }
+  inline const PROJECT_NAMESPACE_ID::account_information &get_account_info() const { return account_info_; }
+  inline PROJECT_NAMESPACE_ID::account_information &get_account_info() { return account_info_.ref(); }
 
-  inline const PROJECT_SERVER_FRAME_NAMESPACE_ID::player_options &get_player_options() const { return player_options_; }
-  inline PROJECT_SERVER_FRAME_NAMESPACE_ID::player_options &get_player_options() { return player_options_.ref(); }
+  inline const PROJECT_NAMESPACE_ID::player_options &get_player_options() const { return player_options_; }
+  inline PROJECT_NAMESPACE_ID::player_options &get_player_options() { return player_options_.ref(); }
 
-  inline const PROJECT_SERVER_FRAME_NAMESPACE_ID::player_data &get_player_data() const { return player_data_; }
+  inline const PROJECT_NAMESPACE_ID::player_data &get_player_data() const { return player_data_; }
 
   inline uint32_t get_data_version() const { return data_version_; }
 
@@ -199,7 +196,7 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
   void set_quick_save() const;
 
  private:
-  inline PROJECT_SERVER_FRAME_NAMESPACE_ID::player_data &mutable_player_data() { return player_data_.ref(); }
+  inline PROJECT_NAMESPACE_ID::player_data &mutable_player_data() { return player_data_.ref(); }
 
  protected:
   inline void set_data_version(uint32_t ver) { data_version_ = ver; }
@@ -208,7 +205,7 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
   std::string openid_id_;
   uint64_t user_id_;
   uint32_t zone_id_;
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login login_info_;
+  PROJECT_NAMESPACE_ID::table_login login_info_;
   std::string login_info_version_;
 
   std::string version_;
@@ -217,9 +214,9 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
   std::weak_ptr<session> session_;
   uint64_t server_sequence_;
 
-  player_cache_dirty_wrapper<PROJECT_SERVER_FRAME_NAMESPACE_ID::account_information> account_info_;
-  player_cache_dirty_wrapper<PROJECT_SERVER_FRAME_NAMESPACE_ID::player_data> player_data_;
-  player_cache_dirty_wrapper<PROJECT_SERVER_FRAME_NAMESPACE_ID::player_options> player_options_;
+  player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::account_information> account_info_;
+  player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::player_data> player_data_;
+  player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::player_options> player_options_;
 };
 
 // 玩家日志输出工具

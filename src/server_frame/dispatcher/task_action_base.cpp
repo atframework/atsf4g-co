@@ -128,7 +128,7 @@ int task_action_base::operator()(void *priv_data) {
   task_manager::task_t *task = cotask::this_task::get<task_manager::task_t>();
   if (nullptr == task) {
     FWLOGERROR("task convert failed, must in task.");
-    return tracer.return_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_INIT);
+    return tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_INIT);
   }
 
   task_manager::task_private_data_t *task_priv_data = task_manager::get_private_data(*task);
@@ -189,31 +189,31 @@ int task_action_base::operator()(void *priv_data) {
     return tracer.return_code(ret);
   }
 
-  if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS == result_) {
+  if (PROJECT_NAMESPACE_ID::err::EN_SUCCESS == result_) {
     if (task->is_timeout()) {
-      result_ = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+      result_ = PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
     } else if (task->is_faulted()) {
-      result_ = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
+      result_ = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
     } else if (task->is_canceled()) {
-      result_ = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
+      result_ = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
     } else if (task->is_exiting()) {
-      result_ = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING;
+      result_ = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING;
     } else {
-      result_ = PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_UNKNOWN;
+      result_ = PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN;
     }
   }
 
-  if (PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_SUCCESS == response_code_) {
+  if (PROJECT_NAMESPACE_ID::EN_SUCCESS == response_code_) {
     if (task->is_timeout()) {
-      response_code_ = PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_TIMEOUT;
+      response_code_ = PROJECT_NAMESPACE_ID::EN_ERR_TIMEOUT;
     } else if (task->is_faulted()) {
-      response_code_ = PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_SYSTEM;
+      response_code_ = PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
     } else if (task->is_canceled()) {
-      response_code_ = PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_SYSTEM;
+      response_code_ = PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
     } else if (task->is_exiting()) {
-      response_code_ = PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_SYSTEM;
+      response_code_ = PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
     } else {
-      response_code_ = PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_UNKNOWN;
+      response_code_ = PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN;
     }
   }
 

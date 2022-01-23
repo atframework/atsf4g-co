@@ -32,8 +32,8 @@ task_action_player_get_info::result_type task_action_player_get_info::operator()
   player::ptr_t user = get_player<player>();
   if (!user) {
     FWLOGERROR("not logined.");
-    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   // 苹果审核模式
@@ -43,7 +43,7 @@ task_action_player_get_info::result_type task_action_player_get_info::operator()
   if (req_body.need_player_info()) {
     // TODO(owent) update auto restore
 
-    PROJECT_SERVER_FRAME_NAMESPACE_ID::DPlayerInfo* rsp_item = rsp_body.mutable_player_info();
+    PROJECT_NAMESPACE_ID::DPlayerInfo* rsp_item = rsp_body.mutable_player_info();
     protobuf_copy_message(*rsp_item->mutable_player(), user->get_account_info().profile());
     // rsp_item->set_player_level(user->get_player_level());
 
@@ -53,9 +53,9 @@ task_action_player_get_info::result_type task_action_player_get_info::operator()
     // TODO(owent) 审核版本功能全开
     // if (is_review_mode) {
     //    player_level_func_bound = static_cast<uint32_t>(config_const_parameter_index::me()->get(
-    //        PROJECT_SERVER_FRAME_NAMESPACE_ID::config::EN_CPT_PLAYER_MAX_LEVEL));
+    //        PROJECT_NAMESPACE_ID::config::EN_CPT_PLAYER_MAX_LEVEL));
     //    player_vip_level_func_bound = static_cast<uint32_t>(config_const_parameter_index::me()->get(
-    //        PROJECT_SERVER_FRAME_NAMESPACE_ID::config::EN_CPT_PLAYER_MAX_VIP_LEVEL));
+    //        PROJECT_NAMESPACE_ID::config::EN_CPT_PLAYER_MAX_VIP_LEVEL));
     //}
 
     //// 额外下发依靠等级解锁的功能
@@ -78,7 +78,7 @@ task_action_player_get_info::result_type task_action_player_get_info::operator()
     protobuf_copy_message(*rsp_body.mutable_player_options(), user->get_player_options().custom_options());
   }
 
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int task_action_player_get_info::on_success() { return get_result(); }

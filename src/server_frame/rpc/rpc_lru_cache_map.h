@@ -123,12 +123,12 @@ class rpc_lru_cache_map {
   int await_fetch(key_type key, cache_ptr_t &out, int (*fn)(key_type key, value_type &val_out, int32_t *out_version)) {
     if (nullptr == fn) {
       FWLOGERROR("{} must be called with rpc function", __FUNCTION__);
-      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
     }
 
     if (nullptr == cotask::this_task::get_task()) {
       FWLOGERROR("{} must be called in a cotask", __FUNCTION__);
-      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
     }
 
     int retry_times = RPC_LRU_CACHE_MAP_DEFAULT_RETRY_TIMES + 1;
@@ -150,7 +150,7 @@ class rpc_lru_cache_map {
           self_task->await_task(out->pulling_task);
           if (self_task->is_timeout()) {
             out.reset();
-            return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+            return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
           }
         }
         continue;
@@ -161,14 +161,14 @@ class rpc_lru_cache_map {
 
     if (retry_times <= 0) {
       out.reset();
-      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_RETRY_TIMES_EXCEED;
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_RETRY_TIMES_EXCEED;
     }
 
     // 尝试拉取，成功的话放进缓存
     auto res = pool_.insert_key_value(key, value_cache_t(key));
     if (!res.second) {
       out.reset();
-      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
     }
 
     task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
@@ -218,12 +218,12 @@ class rpc_lru_cache_map {
    */
   int await_save(cache_ptr_t &inout, int (*fn)(const value_type &in, int32_t *out_version)) {
     if (!inout) {
-      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
     }
 
     if (nullptr == fn) {
       FWLOGERROR("{} must be called with rpc function", __FUNCTION__);
-      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
     }
 
     // 分配一个保存序号，相当于保存版本号
@@ -252,7 +252,7 @@ class rpc_lru_cache_map {
           self_task->yield();
 
           if (self_task->is_timeout()) {
-            return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+            return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
           }
         }
       }

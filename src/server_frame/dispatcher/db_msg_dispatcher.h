@@ -41,7 +41,7 @@ class connection;
 }  // namespace happ
 }  // namespace hiredis
 
-namespace PROJECT_SERVER_FRAME_NAMESPACE_ID {
+namespace PROJECT_NAMESPACE_ID {
 class table_all_message;
 }
 
@@ -50,7 +50,7 @@ class db_msg_dispatcher : public dispatcher_implement, public util::design_patte
   using msg_op_type_t = dispatcher_implement::msg_op_type_t;
   using msg_raw_t = dispatcher_implement::msg_raw_t;
   using msg_type_t = dispatcher_implement::msg_type_t;
-  using unpack_fn_t = int32_t (*)(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_all_message &msg, const redisReply *reply);
+  using unpack_fn_t = int32_t (*)(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply);
   using user_callback_t = std::function<int()>;
 
   struct channel_t {
@@ -105,7 +105,7 @@ class db_msg_dispatcher : public dispatcher_implement, public util::design_patte
   /**
    * @brief 获取操作类型
    * @param raw_msg 消息抽象结构
-   * @note 这只是一个调度曾规范，不强制执行。详情 @see PROJECT_SERVER_FRAME_NAMESPACE_ID::EnMsgOpType
+   * @note 这只是一个调度曾规范，不强制执行。详情 @see PROJECT_NAMESPACE_ID::EnMsgOpType
    * @return 消息操作类型
    */
   msg_op_type_t pick_msg_op_type(msg_raw_t &raw_msg) override;
@@ -177,7 +177,7 @@ class db_msg_dispatcher : public dispatcher_implement, public util::design_patte
   static void script_callback(redisAsyncContext *c, void *r, void *privdata);
 
   // cluster
-  int cluster_init(const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::db_group_cfg &conns, int index);
+  int cluster_init(const PROJECT_NAMESPACE_ID::config::db_group_cfg &conns, int index);
   static void cluster_request_callback(hiredis::happ::cmd_exec *, struct redisAsyncContext *c, void *r, void *privdata);
   static void cluster_on_connect(hiredis::happ::cluster *, hiredis::happ::connection *);
   static void cluster_on_connected(hiredis::happ::cluster *, hiredis::happ::connection *,
@@ -200,7 +200,7 @@ class db_msg_dispatcher : public dispatcher_implement, public util::design_patte
                        unpack_fn_t fn, uint64_t &sequence, int argc, const char **argv, const size_t *argvlen);
 
   // raw
-  int raw_init(const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::db_group_cfg &conns, int index);
+  int raw_init(const PROJECT_NAMESPACE_ID::config::db_group_cfg &conns, int index);
   static void raw_request_callback(hiredis::happ::cmd_exec *, struct redisAsyncContext *c, void *r, void *privdata);
   static void raw_on_connect(hiredis::happ::raw *c, hiredis::happ::connection *);
   static void raw_on_connected(hiredis::happ::raw *c, hiredis::happ::connection *, const struct redisAsyncContext *,
@@ -229,7 +229,7 @@ class db_msg_dispatcher : public dispatcher_implement, public util::design_patte
   std::list<user_callback_t> user_callback_onconnected_[channel_t::MAX];
 
   // script sha1
-  std::string db_script_sha1_[PROJECT_SERVER_FRAME_NAMESPACE_ID::EnDBScriptShaType_ARRAYSIZE];
+  std::string db_script_sha1_[PROJECT_NAMESPACE_ID::EnDBScriptShaType_ARRAYSIZE];
 
   // channels
   std::shared_ptr<hiredis::happ::cluster> db_cluster_conns_[channel_t::SENTINEL_BOUND];

@@ -125,28 +125,28 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
             }
           }
 
-          if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_TIMEOUT == res) {
+          if (PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT == res) {
             FWLOGERROR("auto do {} to router object {}({}:{}:{}) timeout", get_action_name(auto_save.action),
                        auto_save.object->name(), auto_save.object->get_key().type_id,
                        auto_save.object->get_key().zone_id, auto_save.object->get_key().object_id);
             ++status_data->failed_count_;
-            return task_action_base::result_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS);
+            return task_action_base::result_type(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
           }
 
-          if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED == res) {
+          if (PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED == res) {
             FWLOGERROR("auto do {} to router object {}({}:{}:{}) but cancelled", get_action_name(auto_save.action),
                        auto_save.object->name(), auto_save.object->get_key().type_id,
                        auto_save.object->get_key().zone_id, auto_save.object->get_key().object_id);
             ++status_data->failed_count_;
-            return task_action_base::result_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS);
+            return task_action_base::result_type(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
           }
 
-          if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED == res) {
+          if (PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED == res) {
             FWLOGERROR("auto do {} to router object {}({}:{}:{}) but killed", get_action_name(auto_save.action),
                        auto_save.object->name(), auto_save.object->get_key().type_id,
                        auto_save.object->get_key().zone_id, auto_save.object->get_key().object_id);
             ++status_data->failed_count_;
-            return task_action_base::result_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS);
+            return task_action_base::result_type(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
           }
 
           if (res < 0) {
@@ -194,7 +194,7 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
     }
   }
 
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int task_action_auto_save_objects::on_success() {

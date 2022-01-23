@@ -27,9 +27,9 @@
 class router_manager_base;
 class router_object_base;
 
-class task_action_ss_req_base : public task_action_req_base<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg> {
+class task_action_ss_req_base : public task_action_req_base<PROJECT_NAMESPACE_ID::SSMsg> {
  public:
-  using base_type = task_action_req_base<PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg>;
+  using base_type = task_action_req_base<PROJECT_NAMESPACE_ID::SSMsg>;
   using msg_type = base_type::msg_type;
   using msg_ref_type = msg_type &;
   using msg_cref_type = const msg_type &;
@@ -181,8 +181,8 @@ class task_action_ss_rpc_base : public task_action_ss_req_base {
   void pack_response() {
     has_pack_response_ = true;
 
-    PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg &rsp = add_rsp_msg();
-    PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsgHead *head = rsp.mutable_head();
+    PROJECT_NAMESPACE_ID::SSMsg &rsp = add_rsp_msg();
+    PROJECT_NAMESPACE_ID::SSMsgHead *head = rsp.mutable_head();
     if (nullptr == head) {
       FWLOGERROR("task {} [{}] pack response but malloc header failed", name(), get_task_id());
       return;

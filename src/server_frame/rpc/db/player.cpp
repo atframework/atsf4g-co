@@ -31,19 +31,19 @@ namespace db {
 namespace player {
 
 namespace detail {
-static int32_t unpack_user(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_all_message &msg, const redisReply *reply) {
+static int32_t unpack_user(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply) {
   if (nullptr == reply) {
     WLOGDEBUG("data mot found.");
     // 数据找不到，直接成功结束，外层会判为无数据
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   return ::rpc::db::unpack_message(*msg.mutable_user(), reply, msg.mutable_version());
 }
 }  // namespace detail
 
-result_t get_all(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                 PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &rsp, std::string &version) {
+result_t get_all(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id, PROJECT_NAMESPACE_ID::table_user &rsp,
+                 std::string &version) {
   rpc::context __child_ctx(ctx);
   rpc::context::tracer __tracer;
   ::rpc::context::trace_option __trace_option;
@@ -56,14 +56,14 @@ result_t get_all(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
   task_manager::task_t *task = task_manager::task_t::this_task();
   if (!task) {
     FWLOGERROR("current not in a task");
-    return ::rpc::db::result_t(__tracer.return_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK));
+    return ::rpc::db::result_t(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK));
   }
 
   user_table_key_t user_key;
   size_t user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, user_id, zone_id);
   if (user_key_len <= 0) {
     FWLOGERROR("format db cmd failed, cmd {}", user_key);
-    return ::rpc::db::result_t(__tracer.return_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_SEND_FAILED));
+    return ::rpc::db::result_t(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_DB_SEND_FAILED));
   }
 
   redis_args args(2);
@@ -82,7 +82,7 @@ result_t get_all(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
     return ::rpc::db::result_t(__tracer.return_code(res));
   }
 
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_all_message msg;
+  PROJECT_NAMESPACE_ID::table_all_message msg;
   // 协程操作
   res = rpc::wait(msg, rpc_sequence);
   if (res < 0) {
@@ -90,24 +90,23 @@ result_t get_all(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
   }
 
   if (!msg.has_user() || msg.version().empty()) {
-    return ::rpc::db::result_t(__tracer.return_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND));
+    return ::rpc::db::result_t(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND));
   }
 
   version.assign(msg.version());
   rsp.Swap(msg.mutable_user());
 
   FWLOGINFO("table_user[user_id={}] get all data version: {}", user_id, version);
-  return ::rpc::db::result_t(__tracer.return_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS));
+  return ::rpc::db::result_t(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
 }
 
-result_t get_basic(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                   PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &rsp) {
+result_t get_basic(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id, PROJECT_NAMESPACE_ID::table_user &rsp) {
   std::string version;
   return get_all(ctx, user_id, zone_id, rsp, version);
 }
 
-result_t set(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-             PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &store, std::string &version) {
+result_t set(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id, PROJECT_NAMESPACE_ID::table_user &store,
+             std::string &version) {
   rpc::context __child_ctx(ctx);
   rpc::context::tracer __tracer;
   ::rpc::context::trace_option __trace_option;
@@ -120,7 +119,7 @@ result_t set(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
   task_manager::task_t *task = task_manager::task_t::this_task();
   if (!task) {
     FWLOGERROR("current not in a task");
-    return ::rpc::db::result_t(__tracer.return_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK));
+    return ::rpc::db::result_t(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK));
   }
 
   if (version.empty()) {
@@ -133,14 +132,14 @@ result_t set(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
   size_t user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, user_id, zone_id);
   if (user_key_len <= 0) {
     FWLOGERROR("format db cmd failed, cmd {}", user_key);
-    return ::rpc::db::result_t(__tracer.return_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_SEND_FAILED));
+    return ::rpc::db::result_t(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_DB_SEND_FAILED));
   }
 
   std::vector<const ::google::protobuf::FieldDescriptor *> fds;
   const google::protobuf::Reflection *reflect = store.GetReflection();
   if (nullptr == reflect) {
     FWLOGERROR("pack message {} failed, get reflection failed", store.GetDescriptor()->full_name());
-    return ::rpc::db::result_t(__tracer.return_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PACK));
+    return ::rpc::db::result_t(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PACK));
   }
   reflect->ListFields(store, &fds);
   // version will take two segments
@@ -148,7 +147,7 @@ result_t set(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
   redis_args args(fds.size() * 2 + 6);
 
   args.push("EVALSHA");
-  args.push(db_msg_dispatcher::me()->get_db_script_sha1(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_DBSST_USER));
+  args.push(db_msg_dispatcher::me()->get_db_script_sha1(PROJECT_NAMESPACE_ID::EN_DBSST_USER));
   args.push(1);
   args.push(user_key);
 
@@ -171,18 +170,18 @@ result_t set(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
     return ::rpc::db::result_t(__tracer.return_code(res));
   }
 
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_all_message msg;
+  PROJECT_NAMESPACE_ID::table_all_message msg;
   // 协程操作
   res = rpc::wait(msg, rpc_sequence);
   if (res < 0) {
-    if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res && !msg.version().empty()) {
+    if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res && !msg.version().empty()) {
       version.assign(msg.version());
     }
     return ::rpc::db::result_t(__tracer.return_code(res));
   }
 
   if (msg.version().empty()) {
-    return ::rpc::db::result_t(__tracer.return_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND));
+    return ::rpc::db::result_t(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND));
   }
 
   version.assign(msg.version());
@@ -190,7 +189,7 @@ result_t set(::rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
   FWLOGINFO("table_user [user_id={}] all saved, new version: {}, detail: {}", user_id, version.c_str(),
             segs_debug_info.str().c_str());
 
-  return ::rpc::db::result_t(__tracer.return_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS));
+  return ::rpc::db::result_t(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
 }
 
 }  // namespace player

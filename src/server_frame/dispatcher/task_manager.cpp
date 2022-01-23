@@ -105,7 +105,7 @@ int task_manager::init() {
   reload();
 
   if (!check_sys_config()) {
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_INIT;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
   atapp::app *app = atapp::app::get_last_instance();
@@ -151,7 +151,7 @@ int task_manager::start_task(id_t task_id, start_data_t &data) {
     FWLOGERROR("start task {:#x} failed.", task_id);
 
     // 错误码
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
   }
 
   return 0;
@@ -167,7 +167,7 @@ int task_manager::resume_task(id_t task_id, resume_data_t &data) {
 
     FWLOGERROR("resume task {:#x} failed, res: {}.", task_id, res);
     // 错误码
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
   }
 
   return 0;
@@ -221,7 +221,7 @@ size_t task_manager::get_stack_size() const { return logic_config::me()->get_cfg
 
 int task_manager::add_task(const task_t::ptr_t &task, time_t timeout_sec, time_t timeout_nsec) {
   if (!native_mgr_) {
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_INIT;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
   int res = 0;
@@ -234,19 +234,19 @@ int task_manager::add_task(const task_t::ptr_t &task, time_t timeout_sec, time_t
 
   if (res < 0) {
     FWLOGERROR("add task failed, res: {}", res);
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   if (conf_busy_warn_count_ > 0 && native_mgr_->get_task_size() > conf_busy_warn_count_) {
     FWLOGWARNING("task number {} extend {}", native_mgr_->get_task_size(), conf_busy_warn_count_);
   }
 
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int task_manager::report_create_error(const char *fn_name) {
   FWLOGERROR("[{}] create task failed. current task number={}", fn_name, native_mgr_->get_task_size());
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
+  return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
 }
 
 bool task_manager::is_busy() const { return conf_busy_count_ > 0 && native_mgr_->get_task_size() > conf_busy_count_; }

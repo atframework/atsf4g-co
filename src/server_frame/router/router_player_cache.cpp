@@ -23,8 +23,7 @@
 #include "router/router_player_manager.h"
 
 router_player_private_type::router_player_private_type() : login_tb(nullptr), login_ver(nullptr) {}
-router_player_private_type::router_player_private_type(PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login *tb,
-                                                       std::string *ver)
+router_player_private_type::router_player_private_type(PROJECT_NAMESPACE_ID::table_login *tb, std::string *ver)
     : login_tb(tb), login_ver(ver) {}
 
 router_player_cache::router_player_cache(uint64_t user_id, uint32_t zone_id, const std::string &openid)
@@ -48,17 +47,17 @@ int router_player_cache::pull_cache(void *priv_data) {
 
 int router_player_cache::pull_cache(router_player_private_type &priv_data) {
   ::rpc::context ctx;
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login local_login_tb;
+  PROJECT_NAMESPACE_ID::table_login local_login_tb;
   std::string local_login_ver;
   if (nullptr == priv_data.login_ver) {
     priv_data.login_ver = &local_login_ver;
   }
 
   // 先尝试从数据库读数据
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user tbu;
+  PROJECT_NAMESPACE_ID::table_user tbu;
   int res = rpc::db::player::get_basic(ctx, get_key().object_id, get_key().zone_id, tbu);
   if (res < 0) {
-    if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
+    if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
       FWLOGERROR("load player_cache data for {}:{} failed, error code: {}", get_key().zone_id, get_key().object_id,
                  res);
     }
@@ -85,11 +84,11 @@ int router_player_cache::pull_cache(router_player_private_type &priv_data) {
   obj->load_and_move_login_info(COPP_MACRO_STD_MOVE(*priv_data.login_tb), *priv_data.login_ver);
 
   // table_login内的平台信息复制到player里
-  if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
+  if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
     obj->init_from_table_data(ctx, tbu);
   }
 
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int router_player_cache::pull_object(void *priv_data) {
@@ -104,7 +103,7 @@ int router_player_cache::pull_object(void *priv_data) {
 int router_player_cache::pull_object(router_player_private_type &priv_data) {
   ::rpc::context ctx;
 
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_login local_login_tb;
+  PROJECT_NAMESPACE_ID::table_login local_login_tb;
   std::string local_login_ver;
   if (nullptr == priv_data.login_ver) {
     priv_data.login_ver = &local_login_ver;
@@ -113,15 +112,15 @@ int router_player_cache::pull_object(router_player_private_type &priv_data) {
   player_cache::ptr_t obj = get_object();
   if (!obj || !obj->can_be_writable()) {
     FWLOGERROR("pull_object for {}:{}:{} failed, error code: {}", get_key().type_id, get_key().zone_id,
-               get_key().object_id, static_cast<int>(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY));
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY;
+               get_key().object_id, static_cast<int>(PROJECT_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY));
+    return PROJECT_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY;
   }
 
   // 先尝试从数据库读数据
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user tbu;
+  PROJECT_NAMESPACE_ID::table_user tbu;
   int res = rpc::db::player::get_basic(ctx, get_key().object_id, get_key().zone_id, tbu);
   if (res < 0) {
-    if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
+    if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
       FWLOGERROR("load player_cache data for {}:{} failed, error code: {}", get_key().zone_id, get_key().object_id,
                  res);
       return res;
@@ -155,7 +154,7 @@ int router_player_cache::pull_object(router_player_private_type &priv_data) {
   obj->load_and_move_login_info(COPP_MACRO_STD_MOVE(*priv_data.login_tb), *priv_data.login_ver);
 
   // table_login内的平台信息复制到player里
-  if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
+  if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
     obj->init_from_table_data(ctx, tbu);
   }
 
@@ -186,7 +185,7 @@ int router_player_cache::pull_object(router_player_private_type &priv_data) {
     // 不在这个进程上
     FWPLOGERROR(*obj, "is in server {:#x} but try to pull in server {:#x}", get_router_server_id(), self_bus_id);
 
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_IN_OTHER_SERVER;
+    return PROJECT_NAMESPACE_ID::err::EN_ROUTER_IN_OTHER_SERVER;
   }
 
   return 0;
@@ -199,8 +198,8 @@ int router_player_cache::save_object(void *priv_data) {
   player_cache::ptr_t obj = object();
   if (!obj || !obj->can_be_writable()) {
     FWLOGERROR("save_object for {}:{}:{} failed, error code: {}", get_key().type_id, get_key().zone_id,
-               get_key().object_id, static_cast<int>(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY));
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY;
+               get_key().object_id, static_cast<int>(PROJECT_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY));
+    return PROJECT_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY;
   }
 
   uint64_t self_bus_id = logic_config::me()->get_local_server_id();
@@ -210,7 +209,7 @@ int router_player_cache::save_object(void *priv_data) {
   bool bad_data_kickoff = false;
   int try_times = 2;  // 其实并不需要重试，这里只是处理table_login过期后走更新流程
   while (try_times-- > 0) {
-    if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res) {
+    if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res) {
       res = rpc::db::login::get(ctx, obj->get_open_id().c_str(), obj->get_zone_id(), obj->get_login_info(),
                                 obj->get_login_version());
       if (res < 0) {
@@ -236,7 +235,7 @@ int router_player_cache::save_object(void *priv_data) {
       // RPC save to db
       res = rpc::db::login::set(ctx, obj->get_open_id().c_str(), obj->get_zone_id(), obj->get_login_info(),
                                 obj->get_login_version());
-      if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res) {
+      if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res) {
         obj->get_login_info().set_router_server_id(old_router_server_id);
         obj->get_login_info().set_router_version(old_router_ver);
         continue;
@@ -265,7 +264,7 @@ int router_player_cache::save_object(void *priv_data) {
       // RPC save to db
       res = rpc::db::login::set(ctx, obj->get_open_id().c_str(), obj->get_zone_id(), obj->get_login_info(),
                                 obj->get_login_version());
-      if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res) {
+      if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res) {
         obj->get_login_info().set_router_server_id(old_router_server_id);
         obj->get_login_info().set_router_version(old_router_ver);
         continue;
@@ -295,7 +294,7 @@ int router_player_cache::save_object(void *priv_data) {
 
       res = rpc::db::login::set(ctx, obj->get_open_id().c_str(), obj->get_zone_id(), obj->get_login_info(),
                                 obj->get_login_version());
-      if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res) {
+      if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res) {
         obj->get_login_info().set_router_server_id(old_router_server_id);
         obj->get_login_info().set_router_version(old_router_ver);
         continue;
@@ -325,11 +324,11 @@ int router_player_cache::save_object(void *priv_data) {
     }
 
     router_player_manager::me()->remove_object(get_key(), nullptr, nullptr);
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_LOGIN_OTHER_DEVICE;
+    return PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_OTHER_DEVICE;
   }
 
   // 尝试保存用户数据
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user user_tb;
+  PROJECT_NAMESPACE_ID::table_user user_tb;
   obj->dump(ctx, user_tb, true);
 
   FWPLOGDEBUG(*obj, "save curr data version: {}", obj->get_version());
@@ -340,7 +339,7 @@ int router_player_cache::save_object(void *priv_data) {
   // CAS 序号错误（可能是先超时再返回成功）,重试一次
   // 前面已经确认了当前用户在此处登入并且已经更新了版本号到版本信息
   // RPC save to DB again
-  if (PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res) {
+  if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res) {
     res = rpc::db::player::set(ctx, obj->get_user_id(), obj->get_zone_id(), user_tb, obj->get_version());
   }
 

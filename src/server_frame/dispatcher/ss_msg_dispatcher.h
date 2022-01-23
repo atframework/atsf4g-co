@@ -27,7 +27,7 @@ class msg;
 }
 }  // namespace atbus
 
-namespace PROJECT_SERVER_FRAME_NAMESPACE_ID {
+namespace PROJECT_NAMESPACE_ID {
 class SSMsg;
 }
 
@@ -69,7 +69,7 @@ class ss_msg_dispatcher : public dispatcher_implement, public util::design_patte
   /**
    * @brief 获取操作类型
    * @param raw_msg 消息抽象结构
-   * @note 这只是一个调度曾规范，不强制执行。详情 @see PROJECT_SERVER_FRAME_NAMESPACE_ID::EnMsgOpType
+   * @note 这只是一个调度曾规范，不强制执行。详情 @see PROJECT_NAMESPACE_ID::EnMsgOpType
    * @return 消息操作类型
    */
   msg_op_type_t pick_msg_op_type(msg_raw_t &raw_msg) override;
@@ -113,7 +113,7 @@ class ss_msg_dispatcher : public dispatcher_implement, public util::design_patte
   uint64_t allocate_sequence();
 
  public:
-  int32_t send_to_proc(uint64_t bus_id, PROJECT_SERVER_FRAME_NAMESPACE_ID::SSMsg &ss_msg);
+  int32_t send_to_proc(uint64_t bus_id, PROJECT_NAMESPACE_ID::SSMsg &ss_msg);
   int32_t send_to_proc(uint64_t bus_id, const void *msg_buf, size_t msg_len);
   bool is_target_server_available(uint64_t bus_id) const;
   bool is_target_server_available(gsl::string_view node_name) const;

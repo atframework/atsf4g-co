@@ -64,7 +64,7 @@ int task_action_cs_req_base::hook_run() {
       break;
     }
 
-    router_manager_base *mgr = router_manager_set::me()->get_manager(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ROT_PLAYER);
+    router_manager_base *mgr = router_manager_set::me()->get_manager(PROJECT_NAMESPACE_ID::EN_ROT_PLAYER);
     if (nullptr == mgr) {
       break;
     }
@@ -175,10 +175,10 @@ void task_action_cs_req_base::send_response() {
     if (req_msg.has_head()) {
       seq = req_msg.head().client_sequence();
     }
-    if (PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM == req_msg.head().op_type()) {
-      op_type = PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM;
+    if (PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM == req_msg.head().op_type()) {
+      op_type = PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM;
     } else {
-      op_type = PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE;
+      op_type = PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE;
     }
   }
 
@@ -186,7 +186,7 @@ void task_action_cs_req_base::send_response() {
     (*iter)->mutable_head()->set_error_code(get_response_code());
     (*iter)->mutable_head()->set_timestamp(util::time::time_utility::get_now());
     (*iter)->mutable_head()->set_client_sequence(seq);
-    if ((*iter)->head().op_type() == PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP) {
+    if ((*iter)->head().op_type() == PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP) {
       (*iter)->mutable_head()->set_op_type(op_type);
     }
 

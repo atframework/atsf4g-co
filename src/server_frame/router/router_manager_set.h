@@ -92,7 +92,7 @@ class router_manager_set : public util::design_pattern::singleton<router_manager
   };
   timer_set_t timers_;
   time_t last_proc_time_;
-  router_manager_base *mgrs_[PROJECT_SERVER_FRAME_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE];
+  router_manager_base *mgrs_[PROJECT_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE];
   std::list<pending_action_data> pending_action_list_;
   task_manager::task_ptr_t pending_action_task_;
   task_manager::task_ptr_t closing_task_;

@@ -167,11 +167,11 @@ void player::create_init(rpc::context &ctx, uint32_t version_type) {
   // TODO init all interval checkpoint
 
   // TODO init items
-  // if (PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_VERSION_GM != version_type) {
+  // if (PROJECT_NAMESPACE_ID::EN_VERSION_GM != version_type) {
   //     excel::player_init_items::me()->foreach ([this](const excel::player_init_items::value_type &v) {
   //         if (0 != v->id()) {
-  //             add_entity(v->id(), v->number(), PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ICMT_INIT,
-  //             PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ICST_DEFAULT);
+  //             add_entity(v->id(), v->number(), PROJECT_NAMESPACE_ID::EN_ICMT_INIT,
+  //             PROJECT_NAMESPACE_ID::EN_ICST_DEFAULT);
   //         }
   //     });
   // }
@@ -261,12 +261,12 @@ void player::on_update_session(const std::shared_ptr<session> &from, const std::
   base_type::on_update_session(from, to);
 }
 
-void player::init_from_table_data(rpc::context &ctx, const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &tb_player) {
+void player::init_from_table_data(rpc::context &ctx, const PROJECT_NAMESPACE_ID::table_user &tb_player) {
   base_type::init_from_table_data(ctx, tb_player);
 
   // TODO data patch, 这里用于版本升级时可能需要升级玩家数据库，做版本迁移
-  // PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user tb_patch;
-  // const PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user *src_tb = &tb_player;
+  // PROJECT_NAMESPACE_ID::table_user tb_patch;
+  // const PROJECT_NAMESPACE_ID::table_user *src_tb = &tb_player;
   // if (data_version_ < PLAYER_DATA_LOGIC_VERSION) {
   //     protobuf_copy_message(tb_patch, tb_player);
   //     src_tb = &tb_patch;
@@ -280,7 +280,7 @@ void player::init_from_table_data(rpc::context &ctx, const PROJECT_SERVER_FRAME_
   }
 }
 
-int player::dump(rpc::context &ctx, PROJECT_SERVER_FRAME_NAMESPACE_ID::table_user &user, bool always) {
+int player::dump(rpc::context &ctx, PROJECT_NAMESPACE_ID::table_user &user, bool always) {
   int ret = base_type::dump(ctx, user, always);
   if (ret < 0) {
     return ret;
@@ -393,7 +393,7 @@ void player::clear_dirty_cache() {
 
 template <class TMSG, class TCONTAINER>
 static player::dirty_sync_handle_t _player_generate_dirty_handle(
-    gsl::string_view handle_name, TMSG *(PROJECT_SERVER_FRAME_NAMESPACE_ID::SCPlayerDirtyChgSync::*add_fn)(),
+    gsl::string_view handle_name, TMSG *(PROJECT_NAMESPACE_ID::SCPlayerDirtyChgSync::*add_fn)(),
     TCONTAINER player::cache_t::*get_mem) {
   player::dirty_sync_handle_t handle;
   handle.build_fn = [add_fn, get_mem](player &user, player::dirty_message_container &output) {
@@ -407,7 +407,7 @@ static player::dirty_sync_handle_t _player_generate_dirty_handle(
     }
 
     if (!output.player_dirty) {
-      output.player_dirty = gsl::make_unique<PROJECT_SERVER_FRAME_NAMESPACE_ID::SCPlayerDirtyChgSync>();
+      output.player_dirty = gsl::make_unique<PROJECT_NAMESPACE_ID::SCPlayerDirtyChgSync>();
     }
     if (!output.player_dirty) {
       FWLOGERROR("malloc dirty msg body failed");
@@ -433,17 +433,15 @@ static player::dirty_sync_handle_t _player_generate_dirty_handle(
   return handle;
 }
 
-PROJECT_SERVER_FRAME_NAMESPACE_ID::DItem &player::mutable_dirty_item(
-    const PROJECT_SERVER_FRAME_NAMESPACE_ID::DItem &in) {
+PROJECT_NAMESPACE_ID::DItem &player::mutable_dirty_item(const PROJECT_NAMESPACE_ID::DItem &in) {
   insert_dirty_handle_if_not_exists(reinterpret_cast<uintptr_t>(&cache_data_.dirty_item_by_type),
                                     "player.mutable_dirty_item", [](gsl::string_view handle_name, player &) {
                                       return _player_generate_dirty_handle(
-                                          handle_name,
-                                          &PROJECT_SERVER_FRAME_NAMESPACE_ID::SCPlayerDirtyChgSync::add_dirty_items,
+                                          handle_name, &PROJECT_NAMESPACE_ID::SCPlayerDirtyChgSync::add_dirty_items,
                                           &player::cache_t::dirty_item_by_type);
                                     });
 
-  PROJECT_SERVER_FRAME_NAMESPACE_ID::DItem &ret = cache_data_.dirty_item_by_type[in.type_id()];
+  PROJECT_NAMESPACE_ID::DItem &ret = cache_data_.dirty_item_by_type[in.type_id()];
   ret = in;
   return ret;
 }

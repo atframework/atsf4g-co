@@ -356,7 +356,7 @@ static void pick_const_data(const std::string& value, google::protobuf::Timestam
   timepoint.set_seconds(res);
 }
 
-static bool pick_const_data(::PROJECT_SERVER_FRAME_NAMESPACE_ID::config::excel_const_config& settings,
+static bool pick_const_data(::PROJECT_NAMESPACE_ID::config::excel_const_config& settings,
                             const ::google::protobuf::FieldDescriptor* fds, const std::string& value) {
   if (NULL == fds) {
     return false;
@@ -534,7 +534,7 @@ static bool pick_const_data(::PROJECT_SERVER_FRAME_NAMESPACE_ID::config::excel_c
   }
 }
 
-static bool reset_const_value(::PROJECT_SERVER_FRAME_NAMESPACE_ID::config::excel_const_config& settings,
+static bool reset_const_value(::PROJECT_NAMESPACE_ID::config::excel_const_config& settings,
                               const ::google::protobuf::FieldDescriptor* fds, const std::string& value) {
   if (NULL == fds) {
     return false;
@@ -571,7 +571,7 @@ void setup_const_config(config_group_t& group) {
       continue;
     }
 
-    auto fds = ::PROJECT_SERVER_FRAME_NAMESPACE_ID::config::excel_const_config::descriptor()->FindFieldByName(
+    auto fds = ::PROJECT_NAMESPACE_ID::config::excel_const_config::descriptor()->FindFieldByName(
         std::string(trimed_key.first, trimed_key.second));
     if (fds == nullptr) {
       FWLOGWARNING("const config {}={}, but {} is not found in ConstSettings", kv.second->key(), kv.second->value(),
@@ -589,18 +589,18 @@ void setup_const_config(config_group_t& group) {
     }
   }
 
-  for (int i = 0; i < ::PROJECT_SERVER_FRAME_NAMESPACE_ID::config::excel_const_config::descriptor()->field_count(); ++i) {
-    auto fds = ::PROJECT_SERVER_FRAME_NAMESPACE_ID::config::excel_const_config::descriptor()->field(i);
+  for (int i = 0; i < ::PROJECT_NAMESPACE_ID::config::excel_const_config::descriptor()->field_count(); ++i) {
+    auto fds = ::PROJECT_NAMESPACE_ID::config::excel_const_config::descriptor()->field(i);
     if (dumped_keys.end() == dumped_keys.find(fds->name())) {
       FWLOGWARNING("{} not found in const excel, we will use the previous or default value", fds->full_name());
     }
   }
 }
 
-const ::PROJECT_SERVER_FRAME_NAMESPACE_ID::config::excel_const_config& get_const_config() {
+const ::PROJECT_NAMESPACE_ID::config::excel_const_config& get_const_config() {
   auto group = config_manager::me()->get_current_config_group();
   if (!group) {
-    return ::PROJECT_SERVER_FRAME_NAMESPACE_ID::config::excel_const_config::default_instance();
+    return ::PROJECT_NAMESPACE_ID::config::excel_const_config::default_instance();
   }
 
   return group->const_settings;

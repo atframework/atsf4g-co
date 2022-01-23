@@ -340,7 +340,7 @@ bool redis_args::push(int64_t v) {
 int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, std::string *version) {
   if (nullptr == reply) {
     WLOGDEBUG("unpack message %s failed, data mot found.", msg.GetDescriptor()->full_name().c_str());
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PARAM;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   bool has_failed = false;
@@ -350,11 +350,11 @@ int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, st
   if (REDIS_REPLY_ARRAY != reply->type) {
     WLOGDEBUG("unpack message %s failed, reply type %d is not a array.", msg.GetDescriptor()->full_name().c_str(),
               reply->type);
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_UNPACK;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
   }
 
   if (reply->elements <= 0) {
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   for (size_t i = 0; i < reply->elements - 1; i += 2) {
@@ -483,10 +483,10 @@ int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, st
   if (has_failed) {
     WLOGERROR("unpack message %s finished, but not all data fields success: %s",
               msg.GetDescriptor()->full_name().c_str(), msg.DebugString().c_str());
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_UNPACK;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
   }
 
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
@@ -496,14 +496,14 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
   const google::protobuf::Reflection *reflect = msg.GetReflection();
   if (nullptr == reflect) {
     WLOGERROR("pack message %s failed, get reflection failed", msg.GetDescriptor()->full_name().c_str());
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_PACK;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
   }
 
   if (nullptr != version) {
     char *d = args.alloc(RPC_DB_VERSION_LENGTH);
     if (nullptr == d) {
       WLOGERROR("pack message %s failed, alloc version key failed", msg.GetDescriptor()->full_name().c_str());
-      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
     }
     memcpy(d, RPC_DB_VERSION_NAME, RPC_DB_VERSION_LENGTH);
 
@@ -512,7 +512,7 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
     if (nullptr == d) {
       args.dealloc();
       WLOGERROR("pack message %s failed, alloc version value failed", msg.GetDescriptor()->full_name().c_str());
-      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
     }
     memcpy(d, version->c_str(), version->size());
   }
@@ -527,7 +527,7 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
     if (nullptr == data_allocated) {
       WLOGERROR("pack message %s failed, alloc %s key failed", msg.GetDescriptor()->full_name().c_str(),
                 fds[i]->name().c_str());
-      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
     }
     memcpy(data_allocated, fds[i]->name().c_str(), fds[i]->name().size());
 
@@ -541,7 +541,7 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
       WLOGERROR("pack message %s failed, alloc %s,len=%d value failed", msg.GetDescriptor()->full_name().c_str(), \
                 fds[i]->name().c_str(), intlen);                                                                  \
       args.dealloc();                                                                                             \
-      return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;                                               \
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;                                                            \
     }                                                                                                             \
     memcpy(data_allocated, vstr, static_cast<size_t>(intlen));                                                    \
     stat_sum_len += static_cast<size_t>(intlen);                                                                  \
@@ -569,7 +569,7 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
                     fds[i]->name().c_str());
 
           args.dealloc();
-          return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
+          return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
         }
         memcpy(data_allocated, seg_val->data(), seg_val->size());
 
@@ -591,7 +591,7 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
                     fds[i]->name().c_str());
 
           args.dealloc();
-          return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_MALLOC;
+          return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
         }
 
         // 再dump 字段内容
@@ -627,7 +627,7 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
     (*debug_message) << ". total value length=" << stat_sum_len << " bytes";
   }
 
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 }  // namespace db
 }  // namespace rpc

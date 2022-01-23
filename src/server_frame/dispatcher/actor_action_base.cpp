@@ -81,8 +81,8 @@ actor_action_base::actor_action_base(rpc::context *caller_context)
 actor_action_base::~actor_action_base() {
   if (EN_AAS_FINISHED != status_) {
     FWLOGERROR("actor {} [{}] is created but not run", name(), reinterpret_cast<const void *>(this));
-    set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::EN_ERR_TIMEOUT);
-    set_result(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TIMEOUT);
+    set_result(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
   }
 }
 
@@ -120,7 +120,7 @@ actor_action_base::result_type actor_action_base::run(void *priv_data) {
 
   if (get_status() > EN_AAS_CREATED) {
     FWLOGERROR("actor {} [{}] already running", name(), reinterpret_cast<const void *>(this));
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SYS_BUSY;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_BUSY;
   }
 
   rpc::context::tracer tracer;

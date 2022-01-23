@@ -17,11 +17,11 @@ namespace atapp {
 class app;
 }
 
-PROJECT_SERVER_FRAME_NAMESPACE_BEGIN
+PROJECT_NAMESPACE_BEGIN
 namespace config {
 class logic_telemetry_cfg;
 }
-PROJECT_SERVER_FRAME_NAMESPACE_END
+PROJECT_NAMESPACE_END
 
 namespace rpc {
 
@@ -41,8 +41,7 @@ class global_service {
    * @param app atapp instance
    * @param telemetry telemetry configure
    */
-  static void set_current_service(atapp::app& app,
-                                  const PROJECT_SERVER_FRAME_NAMESPACE_ID::config::logic_telemetry_cfg& telemetry);
+  static void set_current_service(atapp::app& app, const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg& telemetry);
 };
 
 }  // namespace telemetry

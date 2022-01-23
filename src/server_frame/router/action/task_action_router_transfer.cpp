@@ -33,7 +33,7 @@ task_action_router_transfer::result_type task_action_router_transfer::operator()
   router_manager_base* mgr = router_manager_set::me()->get_manager(req_body.object().object_type_id());
   if (nullptr == mgr) {
     FWLOGERROR("router manager {} invalid", req_body.object().object_type_id());
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   router_manager_base::key_t key(req_body.object().object_type_id(), req_body.object().object_zone_id(),
@@ -43,16 +43,16 @@ task_action_router_transfer::result_type task_action_router_transfer::operator()
   // 如果本地版本号更高就不用远程拉取了
   if (obj && obj->get_router_version() >= req_body.object().router_version()) {
     if (logic_config::me()->get_local_server_id() != obj->get_router_server_id()) {
-      set_response_code(PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_ROUTER_IN_OTHER_SERVER);
+      set_response_code(PROJECT_NAMESPACE_ID::err::EN_ROUTER_IN_OTHER_SERVER);
     }
 
-    return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   int res = mgr->mutable_object(obj, key, nullptr);
   set_response_code(res);
 
-  return PROJECT_SERVER_FRAME_NAMESPACE_ID::err::EN_SUCCESS;
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 int task_action_router_transfer::on_success() { return get_result(); }
