@@ -49,24 +49,14 @@ enum EnRouterObjectType {
   EN_ROT_PLAYER = 1;
 }
 
-message SSRouterHead {
-  uint64 router_src_bus_id = 1;  // 路由协议原始发起者的BUS ID
-  uint64 router_version = 2;
-
-  // 路由对象信息
-  uint32 object_type_id = 21;  // 每种路由对象都要有自己的类型ID（router_manager_set根据这个来区分走哪个路由对象管理器）
-  uint64 object_inst_id = 22;  // 每个路由对象的唯一实例ID
-  uint32 object_zone_id = 23;  // 每个路由对象的大区ID
-}
-
 // 路由表更新通知
 message SSRouterUpdateSync {
-  SSRouterHead object = 1;
+  atframework.SSRouterHead object = 1;
 }
 
 // 路由对象转移请求
 message SSRouterTransferReq {
-  SSRouterHead object = 1;
+  atframework.SSRouterHead object = 1;
 }
 message SSRouterTransferRsp {}
 
@@ -83,42 +73,6 @@ message SSGlobalLogicSetServerTimeSync {
 /////////////////////////////////////////////////////
 ////  服务器公共协议到此结束
 /////////////////////////////////////////////////////
-
-// 协议包头
-message SSMsgHead {
-  // 通用数据
-  int32 error_code = 1;
-  int64 timestamp = 2;
-  uint64 sequence = 3;
-  int32 op_type = 4;
-
-  // 通道和任务信息
-  uint64 bus_id = 11;
-  uint64 src_task_id = 12;
-  uint64 dst_task_id = 13;
-
-  // 路由系统信息
-  SSRouterHead router = 21;
-
-  // 新RPC接口的meta信息
-  oneof rpc_type {
-    atframework.RpcRequestMeta rpc_request = 31;
-    atframework.RpcResponseMeta rpc_response = 32;
-    atframework.RpcStreamMeta rpc_stream = 33;
-  }
-  atframework.RpcTraceSpan rpc_trace = 34;  // 用于链路追踪
-
-  // 玩家标识
-  uint64 player_user_id = 101;  // 如果涉及玩家此项必需
-  string player_open_id = 102;  // 此项可选
-  uint32 player_zone_id = 103;  // 如果涉及玩家此项必需
-}
-
-// 协议包
-message SSMsg {
-  SSMsgHead head = 1;
-  bytes body_bin = 3;
-}
 
 service RouterService {
   option (atframework.service_options) = {

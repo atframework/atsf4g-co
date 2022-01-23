@@ -61,7 +61,7 @@ static inline int __pack_body(TBodyType &body, std::string *output, const char *
 % endif
 
 % if rpc_common_codes_enable_stream_header:
-static inline int __setup_rpc_stream_header(${project_namespace}::CSMsgHead &head, const char *rpc_full_name,
+static inline int __setup_rpc_stream_header(atframework::CSMsgHead &head, const char *rpc_full_name,
                                             const std::string &type_full_name) {
   head.set_op_type(${project_namespace}::EN_MSG_OP_TYPE_STREAM);
   atframework::RpcStreamMeta* stream_meta = head.mutable_rpc_stream();
@@ -133,7 +133,7 @@ bool ${result_clazz_name}::is_error() const noexcept {
 // ============ ${rpc.get_full_name()} ============
 ${result_clazz_name} send_${rpc.get_name()}(
   ${', '.join(rpc_params)}, session& __session) {
-  ${project_namespace}::CSMsg* msg_ptr = __ctx.create<${project_namespace}::CSMsg>();
+  atframework::CSMsg* msg_ptr = __ctx.create<atframework::CSMsg>();
   if (nullptr == msg_ptr) {
     FWLOGERROR("rpc {} create request message for session [{:#x}, {}] failed",
                "${rpc.get_full_name()}",
@@ -169,7 +169,7 @@ ${result_clazz_name} send_${rpc.get_name()}(
 
 ${result_clazz_name} send_${rpc.get_name()}(
   ${', '.join(rpc_params)}, session& __session, uint64_t server_sequence) {
-  ${project_namespace}::CSMsg* msg_ptr = __ctx.create<${project_namespace}::CSMsg>();
+  atframework::CSMsg* msg_ptr = __ctx.create<atframework::CSMsg>();
   if (nullptr == msg_ptr) {
     FWLOGERROR("rpc {} create request message for session [{:#x}, {}] failed",
                "${rpc.get_full_name()}",
@@ -206,7 +206,7 @@ ${result_clazz_name} send_${rpc.get_name()}(
 
 ${result_clazz_name} broadcast_${rpc.get_name()}(
   ${', '.join(rpc_params)}, uint64_t service_id) {
-  ${project_namespace}::CSMsg* msg_ptr = __ctx.create<${project_namespace}::CSMsg>();
+  atframework::CSMsg* msg_ptr = __ctx.create<atframework::CSMsg>();
   if (nullptr == msg_ptr) {
     FWLOGERROR("rpc {} create request message to broadcast failed",
                "${rpc.get_full_name()}");

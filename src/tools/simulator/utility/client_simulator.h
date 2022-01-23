@@ -16,10 +16,10 @@
 
 #include "utility/client_player.h"
 
-class client_simulator : public simulator_msg_base<client_player, PROJECT_NAMESPACE_ID::CSMsg> {
+class client_simulator : public simulator_msg_base<client_player, atframework::CSMsg> {
  public:
   using self_type = client_simulator;
-  using base_type = simulator_msg_base<client_player, PROJECT_NAMESPACE_ID::CSMsg>;
+  using base_type = simulator_msg_base<client_player, atframework::CSMsg>;
   using player_t = typename base_type::player_t;
   using player_ptr_t = typename base_type::player_ptr_t;
   using msg_t = typename base_type::msg_t;

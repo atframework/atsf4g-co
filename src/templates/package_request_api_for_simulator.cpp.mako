@@ -54,7 +54,7 @@ static inline int __pack_body(const TBodyType &body, std::string *output, const 
 % endif
 
 % if rpc_common_codes_enable_stream_header:
-static inline int __setup_rpc_stream_header(${project_namespace}::CSMsgHead &head, const char *rpc_full_name,
+static inline int __setup_rpc_stream_header(atframework::CSMsgHead &head, const char *rpc_full_name,
                                             const std::string &type_full_name) {
   head.set_op_type(${project_namespace}::EN_MSG_OP_TYPE_STREAM);
   atframework::RpcStreamMeta* stream_meta = head.mutable_rpc_stream();
@@ -73,7 +73,7 @@ static inline int __setup_rpc_stream_header(${project_namespace}::CSMsgHead &hea
 % endif
 
 % if rpc_common_codes_enable_request_header:
-static inline int __setup_rpc_request_header(${project_namespace}::CSMsgHead &head, const char *rpc_full_name,
+static inline int __setup_rpc_request_header(atframework::CSMsgHead &head, const char *rpc_full_name,
                                             const std::string &type_full_name) {
   head.set_op_type(${project_namespace}::EN_MSG_OP_TYPE_UNARY_REQUEST);
   atframework::RpcRequestMeta* request_meta = head.mutable_rpc_request();
@@ -100,7 +100,7 @@ ${ns}
         continue
     rpc_allow_no_wait = False
     rpc_params = [
-      '{}::CSMsg& __output'.format(project_namespace),
+      'atframework::CSMsg& __output',
       'const {0} &__body'.format(rpc.get_request().get_cpp_class_name())
     ]
 %>

@@ -243,12 +243,12 @@ static filter_router_msg_res_t check_local_router_object(uint64_t self_bus_id, r
 }
 
 static filter_router_msg_res_t try_filter_router_msg(EXPLICIT_UNUSED_ATTR int retry_times, uint64_t request_bus_id,
-                                                     PROJECT_NAMESPACE_ID::SSMsg &request_msg, router_manager_base &mgr,
+                                                     atframework::SSMsg &request_msg, router_manager_base &mgr,
                                                      router_manager_base::key_t key,
                                                      std::shared_ptr<router_object_base> &obj) {
   obj.reset();
 
-  const PROJECT_NAMESPACE_ID::SSRouterHead &router = request_msg.head().router();
+  const atframework::SSRouterHead &router = request_msg.head().router();
   int32_t res = try_fetch_router_cache(mgr, key, obj);
   if (res == PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND) {
     return filter_router_msg_res_t(false, false, res);
@@ -263,7 +263,7 @@ static filter_router_msg_res_t try_filter_router_msg(EXPLICIT_UNUSED_ATTR int re
 
   // 如果正在迁移，追加到pending队列，本task直接退出
   if (obj->check_flag(router_object_base::flag_t::EN_ROFT_TRANSFERING)) {
-    obj->get_transfer_pending_list().push_back(PROJECT_NAMESPACE_ID::SSMsg());
+    obj->get_transfer_pending_list().push_back(atframework::SSMsg());
     obj->get_transfer_pending_list().back().Swap(&request_msg);
 
     return filter_router_msg_res_t(false, false, PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -331,7 +331,7 @@ static filter_router_msg_res_t try_filter_router_msg(EXPLICIT_UNUSED_ATTR int re
 std::pair<bool, int> task_action_ss_req_base::filter_router_msg(router_manager_base *&mgr,
                                                                 std::shared_ptr<router_object_base> &obj) {
   // request 可能会被move走，所以这里copy一份
-  PROJECT_NAMESPACE_ID::SSRouterHead router;
+  atframework::SSRouterHead router;
   protobuf_copy_message(router, get_request().head().router());
 
   // find router manager in router set
@@ -374,7 +374,7 @@ std::pair<bool, int> task_action_ss_req_base::filter_router_msg(router_manager_b
   // 如果本地路由版本号大于来源，通知来源更新路由表
   if (obj && obj->get_router_version() > router.router_version()) {
     PROJECT_NAMESPACE_ID::SSRouterUpdateSync sync_msg;
-    PROJECT_NAMESPACE_ID::SSRouterHead *router_head = sync_msg.mutable_object();
+    atframework::SSRouterHead *router_head = sync_msg.mutable_object();
     if (nullptr != router_head) {
       router_head->set_router_src_bus_id(obj->get_router_server_id());
       router_head->set_router_version(obj->get_router_version());

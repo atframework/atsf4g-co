@@ -311,10 +311,10 @@ class router_manager : public router_manager_base {
 
       // 如果转发不成功，要回发执行失败
       if (!obj->get_transfer_pending_list().empty()) {
-        std::list<PROJECT_NAMESPACE_ID::SSMsg> all_msgs;
+        std::list<atframework::SSMsg> all_msgs;
         all_msgs.swap(obj->get_transfer_pending_list());
 
-        for (PROJECT_NAMESPACE_ID::SSMsg &msg : all_msgs) {
+        for (atframework::SSMsg &msg : all_msgs) {
           obj->send_transfer_msg_failed(COPP_MACRO_STD_MOVE(msg));
         }
       }
@@ -332,7 +332,7 @@ class router_manager : public router_manager_base {
       if (nullptr == req || nullptr == rsp) {
         ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
       } else {
-        PROJECT_NAMESPACE_ID::SSRouterHead *router_head = req->mutable_object();
+        atframework::SSRouterHead *router_head = req->mutable_object();
         if (nullptr != router_head) {
           router_head->set_router_src_bus_id(obj->get_router_server_id());
           router_head->set_router_version(obj->get_router_version());
@@ -358,11 +358,11 @@ class router_manager : public router_manager_base {
     // 如果转发成功，要转发这期间收到的消息
     if (ret >= 0) {
       while (!obj->get_transfer_pending_list().empty()) {
-        std::list<PROJECT_NAMESPACE_ID::SSMsg> all_msgs;
+        std::list<atframework::SSMsg> all_msgs;
         all_msgs.swap(obj->get_transfer_pending_list());
 
         uint64_t rpc_sequence;
-        for (PROJECT_NAMESPACE_ID::SSMsg &msg : all_msgs) {
+        for (atframework::SSMsg &msg : all_msgs) {
           int res = send_msg_raw(*obj, std::move(msg), rpc_sequence);
           if (res < 0) {
             FWLOGERROR("transfer router object (type={},zone_id={}) {} message failed, res: {}", get_type_id(),
@@ -375,10 +375,10 @@ class router_manager : public router_manager_base {
     } else {
       // 如果转发不成功，要回发执行失败
       if (!obj->get_transfer_pending_list().empty()) {
-        std::list<PROJECT_NAMESPACE_ID::SSMsg> all_msgs;
+        std::list<atframework::SSMsg> all_msgs;
         all_msgs.swap(obj->get_transfer_pending_list());
 
-        for (PROJECT_NAMESPACE_ID::SSMsg &msg : all_msgs) {
+        for (atframework::SSMsg &msg : all_msgs) {
           obj->send_transfer_msg_failed(COPP_MACRO_STD_MOVE(msg));
         }
       }

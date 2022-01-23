@@ -267,7 +267,7 @@ static int wait(uintptr_t check_type, std::unordered_map<uint64_t, TMSG> &msg_wa
 }
 }  // namespace detail
 
-int wait(PROJECT_NAMESPACE_ID::SSMsg &msg, uint64_t check_sequence) {
+int wait(atframework::SSMsg &msg, uint64_t check_sequence) {
   int ret = detail::wait(msg, ss_msg_dispatcher::me()->get_instance_ident(), check_sequence);
   if (0 != ret) {
     return ret;
@@ -285,11 +285,11 @@ int wait(PROJECT_NAMESPACE_ID::table_all_message &msg, uint64_t check_sequence) 
   return msg.error_code();
 }
 
-int wait(std::unordered_map<uint64_t, PROJECT_NAMESPACE_ID::SSMsg> &msg_waiters) {
+int wait(std::unordered_map<uint64_t, atframework::SSMsg> &msg_waiters) {
   return detail::wait(ss_msg_dispatcher::me()->get_instance_ident(), msg_waiters);
 }
 
-int wait(std::unordered_map<uint64_t, PROJECT_NAMESPACE_ID::SSMsg *> &msg_waiters) {
+int wait(std::unordered_map<uint64_t, atframework::SSMsg *> &msg_waiters) {
   return detail::wait(ss_msg_dispatcher::me()->get_instance_ident(), msg_waiters);
 }
 

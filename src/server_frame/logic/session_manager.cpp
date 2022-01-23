@@ -172,7 +172,7 @@ void session_manager::remove_all() {
 
 size_t session_manager::size() const { return all_sessions_.size(); }
 
-int32_t session_manager::broadcast_msg_to_client(const PROJECT_NAMESPACE_ID::CSMsg &msg) {
+int32_t session_manager::broadcast_msg_to_client(const atframework::CSMsg &msg) {
   size_t msg_buf_len = msg.ByteSizeLong();
   size_t tls_buf_len =
       atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);

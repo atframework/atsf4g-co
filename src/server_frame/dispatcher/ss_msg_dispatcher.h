@@ -27,7 +27,7 @@ class msg;
 }
 }  // namespace atbus
 
-namespace PROJECT_NAMESPACE_ID {
+namespace atframework {
 class SSMsg;
 }
 
@@ -113,7 +113,7 @@ class ss_msg_dispatcher : public dispatcher_implement, public util::design_patte
   uint64_t allocate_sequence();
 
  public:
-  int32_t send_to_proc(uint64_t bus_id, PROJECT_NAMESPACE_ID::SSMsg &ss_msg);
+  int32_t send_to_proc(uint64_t bus_id, atframework::SSMsg &ss_msg);
   int32_t send_to_proc(uint64_t bus_id, const void *msg_buf, size_t msg_len);
   bool is_target_server_available(uint64_t bus_id) const;
   bool is_target_server_available(gsl::string_view node_name) const;

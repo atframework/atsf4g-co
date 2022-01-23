@@ -40,16 +40,15 @@ ss_msg_dispatcher::~ss_msg_dispatcher() {}
 
 int32_t ss_msg_dispatcher::init() {
   sequence_allocator_ =
-      static_cast<uint64_t>((util::time::time_utility::get_sys_now() -
-                             PROJECT_NAMESPACE_ID::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET)
-                            << 23) +
+      static_cast<uint64_t>(
+          (util::time::time_utility::get_sys_now() - PROJECT_NAMESPACE_ID::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET)
+          << 23) +
       static_cast<uint64_t>(util::time::time_utility::get_now_usec() << 3);
   return 0;
 }
 
 uint64_t ss_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
-  PROJECT_NAMESPACE_ID::SSMsg *real_msg =
-      get_protobuf_msg<PROJECT_NAMESPACE_ID::SSMsg>(raw_msg);
+  atframework::SSMsg *real_msg = get_protobuf_msg<atframework::SSMsg>(raw_msg);
   if (nullptr == real_msg) {
     return 0;
   }
@@ -60,8 +59,7 @@ uint64_t ss_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
 ss_msg_dispatcher::msg_type_t ss_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw_msg) { return 0; }
 
 const std::string &ss_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
-  PROJECT_NAMESPACE_ID::SSMsg *real_msg =
-      get_protobuf_msg<PROJECT_NAMESPACE_ID::SSMsg>(raw_msg);
+  atframework::SSMsg *real_msg = get_protobuf_msg<atframework::SSMsg>(raw_msg);
   if (nullptr == real_msg) {
     return get_empty_string();
   }
@@ -82,8 +80,7 @@ const std::string &ss_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
 }
 
 ss_msg_dispatcher::msg_op_type_t ss_msg_dispatcher::pick_msg_op_type(msg_raw_t &raw_msg) {
-  PROJECT_NAMESPACE_ID::SSMsg *real_msg =
-      get_protobuf_msg<PROJECT_NAMESPACE_ID::SSMsg>(raw_msg);
+  atframework::SSMsg *real_msg = get_protobuf_msg<atframework::SSMsg>(raw_msg);
   if (nullptr == real_msg) {
     return PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP;
   }
@@ -99,7 +96,7 @@ const atframework::DispatcherOptions *ss_msg_dispatcher::get_options_by_message_
   return nullptr;
 }
 
-int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, PROJECT_NAMESPACE_ID::SSMsg &ss_msg) {
+int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, atframework::SSMsg &ss_msg) {
   if (0 == ss_msg.head().sequence()) {
     ss_msg.mutable_head()->set_sequence(allocate_sequence());
   }
@@ -186,7 +183,7 @@ int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
   uint64_t from_server_id = source.id;
 
   rpc::context ctx;
-  PROJECT_NAMESPACE_ID::SSMsg *ss_msg = ctx.create<PROJECT_NAMESPACE_ID::SSMsg>();
+  atframework::SSMsg *ss_msg = ctx.create<atframework::SSMsg>();
   if (nullptr == ss_msg) {
     FWLOGERROR("{} create message instance failed", name());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
@@ -240,7 +237,7 @@ int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::messa
   size_t len = msg.data_size;
 
   rpc::context ctx;
-  PROJECT_NAMESPACE_ID::SSMsg *ss_msg = ctx.create<PROJECT_NAMESPACE_ID::SSMsg>();
+  atframework::SSMsg *ss_msg = ctx.create<atframework::SSMsg>();
   if (nullptr == ss_msg) {
     FWLOGERROR("{} create message instance failed", name());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
@@ -276,8 +273,7 @@ void ss_msg_dispatcher::on_create_task_failed(start_data_t &start_data, int32_t 
     return;
   }
 
-  PROJECT_NAMESPACE_ID::SSMsg *real_msg =
-      get_protobuf_msg<PROJECT_NAMESPACE_ID::SSMsg>(start_data.message);
+  atframework::SSMsg *real_msg = get_protobuf_msg<atframework::SSMsg>(start_data.message);
   if (nullptr == real_msg) {
     return;
   }
@@ -304,8 +300,8 @@ void ss_msg_dispatcher::on_create_task_failed(start_data_t &start_data, int32_t 
     }
   }
 
-  rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSMsg> rsp{*child_context};
-  PROJECT_NAMESPACE_ID::SSMsgHead *head = rsp->mutable_head();
+  rpc::context::message_holder<atframework::SSMsg> rsp{*child_context};
+  atframework::SSMsgHead *head = rsp->mutable_head();
   if (nullptr == head) {
     FWLOGERROR("malloc header failed when pack response of {} (source task id: {})", rpc_name,
                real_msg->head().src_task_id());

@@ -28,6 +28,8 @@
 #include <logic/action/task_action_player_logout.h>
 #include <logic/session_manager.h>
 
+#include <utility>
+
 #include "dispatcher/task_manager.h"
 
 cs_msg_dispatcher::cs_msg_dispatcher() : is_closing_(false) {}
@@ -56,7 +58,7 @@ uint64_t cs_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
 cs_msg_dispatcher::msg_type_t cs_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw_msg) { return 0; }
 
 const std::string &cs_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
-  PROJECT_NAMESPACE_ID::CSMsg *real_msg = get_protobuf_msg<PROJECT_NAMESPACE_ID::CSMsg>(raw_msg);
+  atframework::CSMsg *real_msg = get_protobuf_msg<atframework::CSMsg>(raw_msg);
   if (nullptr == real_msg) {
     return get_empty_string();
   }
@@ -77,7 +79,7 @@ const std::string &cs_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
 }
 
 cs_msg_dispatcher::msg_op_type_t cs_msg_dispatcher::pick_msg_op_type(msg_raw_t &raw_msg) {
-  PROJECT_NAMESPACE_ID::CSMsg *real_msg = get_protobuf_msg<PROJECT_NAMESPACE_ID::CSMsg>(raw_msg);
+  atframework::CSMsg *real_msg = get_protobuf_msg<atframework::CSMsg>(raw_msg);
   if (nullptr == real_msg) {
     return PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP;
   }
@@ -99,7 +101,7 @@ void cs_msg_dispatcher::on_create_task_failed(start_data_t &start_data, int32_t 
     return;
   }
 
-  PROJECT_NAMESPACE_ID::CSMsg *real_msg = get_protobuf_msg<PROJECT_NAMESPACE_ID::CSMsg>(start_data.message);
+  atframework::CSMsg *real_msg = get_protobuf_msg<atframework::CSMsg>(start_data.message);
   if (nullptr == real_msg) {
     return;
   }
@@ -137,8 +139,8 @@ void cs_msg_dispatcher::on_create_task_failed(start_data_t &start_data, int32_t 
     }
   }
 
-  rpc::context::message_holder<PROJECT_NAMESPACE_ID::CSMsg> rsp{*child_context};
-  PROJECT_NAMESPACE_ID::CSMsgHead *head = rsp->mutable_head();
+  rpc::context::message_holder<atframework::CSMsg> rsp{*child_context};
+  atframework::CSMsgHead *head = rsp->mutable_head();
   if (nullptr == head) {
     FWLOGERROR("malloc header failed when pack response of {} (session: [{:#x}, {}])", rpc_name,
                real_msg->head().session_bus_id(), real_msg->head().session_id());
@@ -198,7 +200,7 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
       const ::atframe::gw::ss_body_post &post = req_msg.body().post();
 
       rpc::context ctx;
-      PROJECT_NAMESPACE_ID::CSMsg *cs_msg = ctx.create<PROJECT_NAMESPACE_ID::CSMsg>();
+      atframework::CSMsg *cs_msg = ctx.create<atframework::CSMsg>();
       if (nullptr == cs_msg) {
         FWLOGERROR("{} create message instance failed", name());
         ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;

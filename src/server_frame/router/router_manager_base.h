@@ -40,8 +40,8 @@ class router_manager_base {
   virtual bool is_auto_mutable_cache() const;
   virtual uint64_t get_default_router_server_id(const key_t &key) const;
 
-  int send_msg(router_object_base &obj, PROJECT_NAMESPACE_ID::SSMsg &&msg, uint64_t &sequence);
-  int send_msg(const key_t &key, PROJECT_NAMESPACE_ID::SSMsg &&msg, uint64_t &sequence);
+  int send_msg(router_object_base &obj, atframework::SSMsg &&msg, uint64_t &sequence);
+  int send_msg(const key_t &key, atframework::SSMsg &&msg, uint64_t &sequence);
 
   inline size_t size() const { return stat_size_; }
 
@@ -52,7 +52,7 @@ class router_manager_base {
   virtual int pull_online_server(const key_t &key, uint64_t &router_svr_id, uint64_t &router_svr_ver);
 
  protected:
-  int send_msg_raw(router_object_base &obj, PROJECT_NAMESPACE_ID::SSMsg &&msg, uint64_t &sequence);
+  int send_msg_raw(router_object_base &obj, atframework::SSMsg &&msg, uint64_t &sequence);
 
  protected:
   size_t stat_size_;

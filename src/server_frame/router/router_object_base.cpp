@@ -221,7 +221,7 @@ int router_object_base::downgrade() {
   return 0;
 }
 
-int router_object_base::send_transfer_msg_failed(PROJECT_NAMESPACE_ID::SSMsg &&req) {
+int router_object_base::send_transfer_msg_failed(atframework::SSMsg &&req) {
   task_action_ss_req_base::msg_type rsp_msg;
   uint64_t dst_pd = req.head().bus_id();
   if (req.head().has_router()) {

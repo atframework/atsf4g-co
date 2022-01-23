@@ -80,7 +80,7 @@ static inline int __pack_rpc_body(TBodyType &req_body, std::string *output, cons
   }
 }
 
-static inline void __setup_tracer(rpc::context &__child_ctx, rpc::context::tracer &__tracer, ${project_namespace}::SSMsgHead &head,
+static inline void __setup_tracer(rpc::context &__child_ctx, rpc::context::tracer &__tracer, atframework::SSMsgHead &head,
                                   const char *rpc_full_name) {
   ::rpc::context::trace_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());
@@ -108,7 +108,7 @@ static inline void __setup_tracer(rpc::context &__child_ctx, rpc::context::trace
 
 % endif
 % if rpc_common_codes_enable_stream_header:
-static inline int __setup_rpc_stream_header(${project_namespace}::SSMsgHead &head, const char *rpc_full_name,
+static inline int __setup_rpc_stream_header(atframework::SSMsgHead &head, const char *rpc_full_name,
                                             const std::string &type_full_name) {
   head.set_op_type(${project_namespace}::EN_MSG_OP_TYPE_STREAM);
   atframework::RpcStreamMeta* stream_meta = head.mutable_rpc_stream();
@@ -125,7 +125,7 @@ static inline int __setup_rpc_stream_header(${project_namespace}::SSMsgHead &hea
 }
 % endif
 % if rpc_common_codes_enable_request_header:
-static inline int __setup_rpc_request_header(${project_namespace}::SSMsgHead &head, task_manager::task_t &task,
+static inline int __setup_rpc_request_header(atframework::SSMsgHead &head, task_manager::task_t &task,
                                              const char *rpc_full_name, const std::string &type_full_name) {
   head.set_src_task_id(task.get_id());
   head.set_op_type(${project_namespace}::EN_MSG_OP_TYPE_UNARY_REQUEST);
@@ -180,13 +180,13 @@ static inline bool __redirect_rpc_result_to_warning_log(TCode &origin_result, TC
 template<class TResponseBody>
 static inline int __rpc_wait_and_unpack_response(rpc::context &__ctx, uint64_t rpc_sequence, TResponseBody &rsp_body, const char *rpc_full_name, 
                                             const std::string &type_full_name) {
-  ${project_namespace}::SSMsg* rsp_msg_ptr = __ctx.create<${project_namespace}::SSMsg>();
+  atframework::SSMsg* rsp_msg_ptr = __ctx.create<atframework::SSMsg>();
   if (nullptr == rsp_msg_ptr) {
     FWLOGERROR("rpc {} create response message failed", rpc_full_name);
     return ${project_namespace}::err::EN_SYS_MALLOC;
   }
 
-  ${project_namespace}::SSMsg& rsp_msg = *rsp_msg_ptr;
+  atframework::SSMsg& rsp_msg = *rsp_msg_ptr;
   int res = rpc::wait(rsp_msg, rpc_sequence);
   if (res < 0) {
     return res;
@@ -304,7 +304,7 @@ ${result_clazz_name} ${rpc.get_name()}(${', '.join(rpc_params)}) {
   }
 %   endif
 
-  ${project_namespace}::SSMsg* req_msg_ptr = __ctx.create<${project_namespace}::SSMsg>();
+  atframework::SSMsg* req_msg_ptr = __ctx.create<atframework::SSMsg>();
   if (nullptr == req_msg_ptr) {
     FWLOGERROR("rpc {} create request message failed",
                "${rpc.get_full_name()}");
@@ -312,7 +312,7 @@ ${result_clazz_name} ${rpc.get_name()}(${', '.join(rpc_params)}) {
   }
 
   int res;
-  ${project_namespace}::SSMsg& req_msg = *req_msg_ptr;
+  atframework::SSMsg& req_msg = *req_msg_ptr;
   task_action_ss_req_base::init_msg(req_msg, logic_config::me()->get_local_server_id());
 %   if rpc_allow_no_wait:
   if (__no_wait) {

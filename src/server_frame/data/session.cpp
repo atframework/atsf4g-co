@@ -100,7 +100,7 @@ void session::set_player(std::shared_ptr<player_cache> u) { player_ = u; }
 
 std::shared_ptr<player_cache> session::get_player() const { return player_.lock(); }
 
-int32_t session::send_msg_to_client(PROJECT_NAMESPACE_ID::CSMsg &msg) {
+int32_t session::send_msg_to_client(atframework::CSMsg &msg) {
   if (0 == msg.head().server_sequence()) {
     std::shared_ptr<player_cache> user = get_player();
     if (user) {
@@ -110,7 +110,7 @@ int32_t session::send_msg_to_client(PROJECT_NAMESPACE_ID::CSMsg &msg) {
   return send_msg_to_client(msg, msg.head().server_sequence());
 }
 
-int32_t session::send_msg_to_client(PROJECT_NAMESPACE_ID::CSMsg &msg, uint64_t server_sequence) {
+int32_t session::send_msg_to_client(atframework::CSMsg &msg, uint64_t server_sequence) {
   if (!msg.has_head() || msg.head().timestamp() == 0) {
     msg.mutable_head()->set_timestamp(::util::time::time_utility::get_now());
   }
@@ -140,7 +140,7 @@ int32_t session::send_msg_to_client(const void *msg_data, size_t msg_size) {
   return cs_msg_dispatcher::me()->send_data(get_key().bus_id, get_key().session_id, msg_data, msg_size);
 }
 
-int32_t session::broadcast_msg_to_client(uint64_t bus_id, const PROJECT_NAMESPACE_ID::CSMsg &msg) {
+int32_t session::broadcast_msg_to_client(uint64_t bus_id, const atframework::CSMsg &msg) {
   size_t msg_buf_len = msg.ByteSizeLong();
   size_t tls_buf_len =
       atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);
@@ -176,7 +176,7 @@ size_t session::compare_callback::operator()(const key_t &hash_obj) const {
          util::hash::hash_fnv1<size_t>(&hash_obj.session_id, sizeof(hash_obj.session_id));
 }
 
-void session::alloc_session_sequence(PROJECT_NAMESPACE_ID::CSMsg &msg) {
+void session::alloc_session_sequence(atframework::CSMsg &msg) {
   do {
     // has already alloc sequence, do nothing
     if (msg.head().session_sequence() != 0) {

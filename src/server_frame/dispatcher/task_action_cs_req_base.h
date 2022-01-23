@@ -22,9 +22,9 @@
 class session;
 class player_cache;
 
-class task_action_cs_req_base : public task_action_req_base<PROJECT_NAMESPACE_ID::CSMsg> {
+class task_action_cs_req_base : public task_action_req_base<atframework::CSMsg> {
  public:
-  using base_type = task_action_req_base<PROJECT_NAMESPACE_ID::CSMsg>;
+  using base_type = task_action_req_base<atframework::CSMsg>;
   using msg_type = base_type::msg_type;
   using msg_ref_type = msg_type &;
   using msg_cref_type = const msg_type &;
@@ -185,8 +185,8 @@ class task_action_cs_rpc_base : public task_action_cs_req_base {
   void pack_response() {
     has_pack_response_ = true;
 
-    PROJECT_NAMESPACE_ID::CSMsg &rsp = add_rsp_msg();
-    PROJECT_NAMESPACE_ID::CSMsgHead *head = rsp.mutable_head();
+    atframework::CSMsg &rsp = add_rsp_msg();
+    atframework::CSMsgHead *head = rsp.mutable_head();
     if (nullptr == head) {
       FWLOGERROR("task {} [{}] pack response but malloc header failed", name(), get_task_id());
       return;

@@ -43,9 +43,12 @@ namespace config {
 class logic_telemetry_cfg;
 }
 
-class SSMsg;
 class table_all_message;
 PROJECT_NAMESPACE_END
+
+namespace atframework {
+class SSMsg;
+}
 
 namespace rpc {
 class context {
@@ -169,8 +172,8 @@ class context {
   tracer::span_ptr_type parent_span_;
 };
 
-int wait(PROJECT_NAMESPACE_ID::SSMsg &msg, uint64_t check_sequence);
+int wait(atframework::SSMsg &msg, uint64_t check_sequence);
 int wait(PROJECT_NAMESPACE_ID::table_all_message &msg, uint64_t check_sequence);
-int wait(std::unordered_map<uint64_t, PROJECT_NAMESPACE_ID::SSMsg> &msg_waiters);
-int wait(std::unordered_map<uint64_t, PROJECT_NAMESPACE_ID::SSMsg *> &msg_waiters);
+int wait(std::unordered_map<uint64_t, atframework::SSMsg> &msg_waiters);
+int wait(std::unordered_map<uint64_t, atframework::SSMsg *> &msg_waiters);
 }  // namespace rpc

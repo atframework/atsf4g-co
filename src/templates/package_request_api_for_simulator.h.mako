@@ -36,7 +36,7 @@ ${ns}
     if rpc.get_request_descriptor().full_name == "google.protobuf.Empty":
         continue
     rpc_params = [
-      '{}::CSMsg& __output'.format(project_namespace),
+      'atframework::CSMsg& __output',
       'const {0} &__body'.format(rpc.get_request().get_cpp_class_name())
     ]
     rpc_param_docs = [

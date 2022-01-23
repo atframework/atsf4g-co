@@ -17,6 +17,8 @@
 #include <dispatcher/ss_msg_dispatcher.h>
 #include <log/log_wrapper.h>
 
+#include <utility>
+
 #include "router/router_manager_set.h"
 #include "router/router_object_base.h"
 
@@ -31,17 +33,17 @@ bool router_manager_base::is_auto_mutable_cache() const { return true; }
 
 uint64_t router_manager_base::get_default_router_server_id(const key_t &key) const { return 0; }
 
-int router_manager_base::send_msg(router_object_base &obj, PROJECT_NAMESPACE_ID::SSMsg &&msg, uint64_t &sequence) {
+int router_manager_base::send_msg(router_object_base &obj, atframework::SSMsg &&msg, uint64_t &sequence) {
   // 如果正在转移过程中，追加到pending列表
   if (obj.check_flag(router_object_base::flag_t::EN_ROFT_TRANSFERING)) {
-    obj.get_transfer_pending_list().push_back(PROJECT_NAMESPACE_ID::SSMsg());
+    obj.get_transfer_pending_list().push_back(atframework::SSMsg());
     obj.get_transfer_pending_list().back().Swap(&msg);
   }
 
   return send_msg_raw(obj, std::move(msg), sequence);
 }
 
-int router_manager_base::send_msg(const key_t &key, PROJECT_NAMESPACE_ID::SSMsg &&msg, uint64_t &sequence) {
+int router_manager_base::send_msg(const key_t &key, atframework::SSMsg &&msg, uint64_t &sequence) {
   int res = 0;
   std::shared_ptr<router_object_base> obj;
   res = mutable_cache(obj, key, nullptr);
@@ -56,10 +58,10 @@ int router_manager_base::send_msg(const key_t &key, PROJECT_NAMESPACE_ID::SSMsg 
   return send_msg(*obj, std::move(msg), sequence);
 }
 
-int router_manager_base::send_msg_raw(router_object_base &obj, PROJECT_NAMESPACE_ID::SSMsg &&msg, uint64_t &sequence) {
+int router_manager_base::send_msg_raw(router_object_base &obj, atframework::SSMsg &&msg, uint64_t &sequence) {
   // 这里必须直接发送
 
-  PROJECT_NAMESPACE_ID::SSRouterHead *router_head = msg.mutable_head()->mutable_router();
+  atframework::SSRouterHead *router_head = msg.mutable_head()->mutable_router();
   router_head->set_router_src_bus_id(logic_config::me()->get_local_server_id());  // 源BUS ID是自己
   router_head->set_router_version(obj.get_router_version());
   router_head->set_object_type_id(obj.get_key().type_id);
