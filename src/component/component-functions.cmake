@@ -2,50 +2,65 @@ set(PROJECT_INSTALL_COMPONENT_EXPORT_NAME "${PROJECT_NAME}-component-target")
 set(PROJECT_INSTALL_COMPONENT_EXPORT_FILE
     "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_NAME}/${PROJECT_INSTALL_COMPONENT_EXPORT_NAME}.cmake")
 
-function(project_component_declare_sdk SDK_NAME)
+function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   set(optionArgs "")
-  set(oneValueArgs INCLUDE_DIR OUTPUT_NAME)
+  set(oneValueArgs INCLUDE_DIR OUTPUT_NAME OUTPUT_TARGET_NAME)
   set(multiValueArgs HRADERS SOURCES)
   cmake_parse_arguments(project_component_declare_sdk "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
-  set(TARGET_NAME "${PROJECT_NAME}-component-${SDK_NAME}")
+  set(TARGET_FULL_NAME "${PROJECT_NAME}-component-${TARGET_NAME}")
+  echowithcolor(COLOR GREEN "-- Configure components::${TARGET_NAME} on ${SDK_ROOT_DIR}")
+
   if(project_component_declare_sdk_SOURCES)
+    source_group_by_dir(project_component_declare_sdk_HRADERS project_component_declare_sdk_SOURCES)
     if(NOT WIN32 AND (BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY))
-      add_library(${TARGET_NAME} SHARED ${project_component_declare_sdk_HRADERS}
-                                        ${project_component_declare_sdk_SOURCES})
+      add_library(${TARGET_FULL_NAME} SHARED ${project_component_declare_sdk_HRADERS}
+                                             ${project_component_declare_sdk_SOURCES})
     else()
-      add_library(${TARGET_NAME} STATIC ${project_component_declare_sdk_HRADERS}
-                                        ${project_component_declare_sdk_SOURCES})
+      add_library(${TARGET_FULL_NAME} STATIC ${project_component_declare_sdk_HRADERS}
+                                             ${project_component_declare_sdk_SOURCES})
     endif()
+    set_target_properties(${TARGET_FULL_NAME} PROPERTIES BUILD_RPATH_USE_ORIGIN YES)
+    target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
   else()
-    add_library(${TARGET_NAME} INTERFACE)
+    add_library(${TARGET_FULL_NAME} INTERFACE)
   endif()
+
   if(project_component_declare_sdk_OUTPUT_NAME)
-    set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME "${project_component_declare_sdk_OUTPUT_NAME}")
+    set_target_properties(${TARGET_FULL_NAME} PROPERTIES OUTPUT_NAME "${project_component_declare_sdk_OUTPUT_NAME}")
+  endif()
+  if(project_component_declare_sdk_OUTPUT_TARGET_NAME)
+    set(${project_component_declare_sdk_OUTPUT_TARGET_NAME}
+        "${TARGET_FULL_NAME}"
+        PARENT_SCOPE)
   endif()
 
   if(project_component_declare_sdk_HRADERS AND project_component_declare_sdk_INCLUDE_DIR)
     if(project_component_declare_sdk_SOURCES)
-      target_include_directories(${TARGET_NAME}
+      target_include_directories(${TARGET_FULL_NAME}
                                  PUBLIC "$<BUILD_INTERFACE:${project_component_declare_sdk_INCLUDE_DIR}>")
     else()
-      target_include_directories(${TARGET_NAME}
+      target_include_directories(${TARGET_FULL_NAME}
                                  INTERFACE "$<BUILD_INTERFACE:${project_component_declare_sdk_INCLUDE_DIR}>")
     endif()
   endif()
 
   if(project_component_declare_sdk_SOURCES)
-    target_link_libraries(${TARGET_NAME} PUBLIC ${PROJECT_SERVER_FRAME_LIB_LINK})
+    target_link_libraries(${TARGET_FULL_NAME} PUBLIC ${PROJECT_SERVER_FRAME_LIB_LINK})
   elseif(project_component_declare_sdk_HRADERS)
-    target_link_libraries(${TARGET_NAME} INTERFACE ${PROJECT_SERVER_FRAME_LIB_LINK})
+    target_link_libraries(${TARGET_FULL_NAME} INTERFACE ${PROJECT_SERVER_FRAME_LIB_LINK})
+  endif()
+
+  if(MSVC)
+    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "component/sdk")
   endif()
 
   install(
-    TARGETS ${TARGET_NAME}
+    TARGETS ${TARGET_FULL_NAME}
     EXPORT ${PROJECT_INSTALL_COMPONENT_EXPORT_NAME}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}"
+    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}")
 
   if(project_component_declare_sdk_HRADERS AND project_component_declare_sdk_INCLUDE_DIR)
     install(
@@ -57,5 +72,240 @@ function(project_component_declare_sdk SDK_NAME)
       PATTERN ".git" EXCLUDE)
   endif()
 
-  add_library("components::${SDK_NAME}" ALIAS "${TARGET_NAME}")
+  add_library("components::${TARGET_NAME}" ALIAS "${TARGET_FULL_NAME}")
+endfunction()
+
+function(project_component_force_optimize_sources)
+  if(${CMAKE_CXX_COMPILER_ID} MATCHES "GNU|Clang|AppleClang" AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    foreach(PROTO_SRC ${ARGN})
+      unset(PROTO_SRC_OPTIONS)
+      get_source_file_property(PROTO_SRC_OPTIONS ${PROTO_SRC} COMPILE_OPTIONS)
+      if(PROTO_SRC_OPTIONS)
+        list(APPEND PROTO_SRC_OPTIONS "$<$<CONFIG:Debug>:-O2>")
+      else()
+        set(PROTO_SRC_OPTIONS "$<$<CONFIG:Debug>:-O2>")
+      endif()
+
+      set_source_files_properties(${PROTO_SRC} PROPERTIES COMPILE_OPTIONS "${PROTO_SRC_OPTIONS}")
+    endforeach()
+    unset(PROTO_SRC)
+    unset(PROTO_SRC_OPTIONS)
+  endif()
+endfunction()
+
+function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
+  set(optionArgs "")
+  set(oneValueArgs OUTPUT_DIR OUTPUT_NAME OUTPUT_TARGET_NAME)
+  set(multiValueArgs PROTOCOLS)
+  cmake_parse_arguments(project_component_declare_protocol "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}"
+                        ${ARGN})
+
+  if(project_component_declare_protocol_OUTPUT_DIR)
+    file(MAKE_DIRECTORY "${project_component_declare_protocol_OUTPUT_DIR}")
+  else()
+    set(project_component_declare_protocol_OUTPUT_DIR "${PROTOCOL_DIR}")
+  endif()
+
+  if(NOT project_component_declare_protocol_PROTOCOLS)
+    message(FATAL_ERROR "PROTOCOLS is required for project_component_declare_protocol")
+  endif()
+  echowithcolor(COLOR GREEN "-- Configure components::${TARGET_NAME} on ${PROTOCOL_DIR}")
+
+  unset(FINAL_GENERATED_SOURCE_FILES)
+  unset(FINAL_GENERATED_HEADER_FILES)
+  set(FINAL_GENERATED_LAST_CREATED_DIR ".")
+  unset(FINAL_GENERATED_COPY_COMMANDS)
+  list(SORT project_component_declare_protocol_PROTOCOLS)
+  foreach(PROTO_FILE ${project_component_declare_protocol_PROTOCOLS})
+    file(RELATIVE_PATH RELATIVE_FILE_PATH "${PROTOCOL_DIR}" "${PROTO_FILE}")
+    string(REGEX REPLACE "\\.proto$" "" RELATIVE_FILE_PREFIX "${RELATIVE_FILE_PATH}")
+    list(APPEND FINAL_GENERATED_HEADER_FILES
+         "${project_component_declare_protocol_OUTPUT_DIR}/${RELATIVE_FILE_PREFIX}.pb.h")
+    list(APPEND FINAL_GENERATED_SOURCE_FILES
+         "${project_component_declare_protocol_OUTPUT_DIR}/${RELATIVE_FILE_PREFIX}.pb.cc")
+    get_filename_component(FINAL_GENERATED_SOURCE_DIR
+                           "${project_component_declare_protocol_OUTPUT_DIR}/${RELATIVE_FILE_PREFIX}.pb.cc" DIRECTORY)
+    if(NOT FINAL_GENERATED_LAST_CREATED_DIR STREQUAL FINAL_GENERATED_SOURCE_DIR)
+      if(NOT EXISTS "${FINAL_GENERATED_SOURCE_DIR}")
+        file(MAKE_DIRECTORY "${FINAL_GENERATED_SOURCE_DIR}")
+      endif()
+      set(FINAL_GENERATED_LAST_CREATED_DIR "${FINAL_GENERATED_SOURCE_DIR}")
+
+      if(FINAL_GENERATED_COPY_COMMANDS)
+        list(APPEND FINAL_GENERATED_COPY_COMMANDS "${FINAL_GENERATED_LAST_CREATED_DIR}")
+      endif()
+      list(
+        APPEND
+        FINAL_GENERATED_COPY_COMMANDS
+        "COMMAND"
+        "${CMAKE_COMMAND}"
+        "-E"
+        "copy_if_different"
+        "${CMAKE_CURRENT_BINARY_DIR}/${RELATIVE_FILE_PREFIX}.pb.h"
+        "${CMAKE_CURRENT_BINARY_DIR}/${RELATIVE_FILE_PREFIX}.pb.cc")
+    else()
+      list(APPEND FINAL_GENERATED_COPY_COMMANDS "${CMAKE_CURRENT_BINARY_DIR}/${RELATIVE_FILE_PREFIX}.pb.h"
+           "${CMAKE_CURRENT_BINARY_DIR}/${RELATIVE_FILE_PREFIX}.pb.cc")
+    endif()
+  endforeach()
+  if(FINAL_GENERATED_COPY_COMMANDS)
+    list(APPEND FINAL_GENERATED_COPY_COMMANDS "${FINAL_GENERATED_LAST_CREATED_DIR}")
+  endif()
+
+  add_custom_command(
+    OUTPUT ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES}
+    COMMAND
+      "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" --proto_path "${PROTOCOL_DIR}" --proto_path
+      "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/common" --proto_path "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config"
+      --proto_path "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc" --proto_path
+      "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include" --proto_path "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include" --proto_path
+      "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include" --cpp_out "${CMAKE_CURRENT_BINARY_DIR}"
+      # Protocol buffer files
+      ${project_component_declare_protocol_PROTOCOLS} ${FINAL_GENERATED_COPY_COMMANDS}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    DEPENDS ${project_component_declare_protocol_PROTOCOLS}
+            "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}"
+    COMMENT "Generate [@${CMAKE_CURRENT_BINARY_DIR}] ${FINAL_GENERATED_SOURCE_FILES};${FINAL_GENERATED_HEADER_FILES}")
+
+  project_build_tools_patch_protobuf_sources(${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
+  project_component_force_optimize_sources(${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
+
+  set(TARGET_FULL_NAME "${PROJECT_NAME}-component-${TARGET_NAME}")
+  source_group_by_dir(FINAL_GENERATED_SOURCE_FILES FINAL_GENERATED_HEADER_FILES)
+  add_library(${TARGET_FULL_NAME} STATIC ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
+  set_target_properties(
+    ${TARGET_FULL_NAME}
+    PROPERTIES C_VISIBILITY_PRESET "default"
+               CXX_VISIBILITY_PRESET "default"
+               VERSION "${PROJECT_VERSION}"
+               WINDOWS_EXPORT_ALL_SYMBOLS TRUE
+               BUILD_RPATH_USE_ORIGIN YES)
+
+  target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
+
+  if(project_component_declare_protocol_OUTPUT_NAME)
+    set_target_properties(${TARGET_FULL_NAME} PROPERTIES OUTPUT_NAME
+                                                         "${project_component_declare_protocol_OUTPUT_NAME}")
+  endif()
+  if(project_component_declare_protocol_OUTPUT_TARGET_NAME)
+    set(${project_component_declare_protocol_OUTPUT_TARGET_NAME}
+        "${TARGET_FULL_NAME}"
+        PARENT_SCOPE)
+  endif()
+
+  target_include_directories(
+    ${TARGET_FULL_NAME}
+    PUBLIC "$<BUILD_INTERFACE:${project_component_declare_protocol_OUTPUT_DIR}>"
+    PRIVATE "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/common>"
+            "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config>"
+            "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc>")
+
+  target_link_libraries(${TARGET_FULL_NAME} PUBLIC ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol
+                                                   ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_LINK_NAME})
+
+  if(MSVC)
+    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "component/protocol")
+  endif()
+  install(
+    TARGETS ${TARGET_FULL_NAME}
+    EXPORT ${PROJECT_INSTALL_COMPONENT_EXPORT_NAME}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}"
+    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}")
+
+  install(
+    DIRECTORY ${project_component_declare_protocol_OUTPUT_DIR}
+    TYPE INCLUDE
+    USE_SOURCE_PERMISSIONS FILES_MATCHING
+    REGEX ".+\\.pb\\.h?$"
+    PATTERN ".svn" EXCLUDE
+    PATTERN ".git" EXCLUDE)
+
+  add_library("components::${TARGET_NAME}" ALIAS "${TARGET_FULL_NAME}")
+endfunction()
+
+function(project_component_declare_service TARGET_NAME SERVICE_ROOT_DIR)
+  set(optionArgs "")
+  set(oneValueArgs INCLUDE_DIR OUTPUT_NAME OUTPUT_TARGET_NAME RUNTIME_OUTPUT_DIRECTORY)
+  set(multiValueArgs HRADERS SOURCES RESOURCE_DIRECTORIES RESOURCE_FILES USE_COMPONENTS)
+  cmake_parse_arguments(project_component_declare_service "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+  set(TARGET_FULL_NAME "${PROJECT_NAME}-component-${TARGET_NAME}")
+  echowithcolor(COLOR GREEN "-- Configure components::${TARGET_NAME} on ${SERVICE_ROOT_DIR}")
+
+  source_group_by_dir(project_component_declare_service_HRADERS project_component_declare_service_SOURCES)
+  add_executable(${TARGET_FULL_NAME} ${project_component_declare_service_HRADERS}
+                                     ${project_component_declare_service_SOURCES})
+
+  target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
+  if(project_component_declare_service_OUTPUT_NAME)
+    set_target_properties(${TARGET_FULL_NAME} PROPERTIES OUTPUT_NAME "${project_component_declare_service_OUTPUT_NAME}"
+                                                         BUILD_RPATH_USE_ORIGIN YES)
+  else()
+    set_target_properties(${TARGET_FULL_NAME} PROPERTIES OUTPUT_NAME "${TARGET_NAME}d" BUILD_RPATH_USE_ORIGIN YES)
+  endif()
+  if(NOT project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY)
+    set(project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY "component/${TARGET_NAME}/bin")
+  endif()
+
+  set_target_properties(
+    ${TARGET_FULL_NAME}
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+               "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
+               PDB_OUTPUT_DIRECTORY
+               "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}")
+
+  if(project_component_declare_service_OUTPUT_TARGET_NAME)
+    set(${project_component_declare_service_OUTPUT_TARGET_NAME}
+        "${TARGET_FULL_NAME}"
+        PARENT_SCOPE)
+  endif()
+
+  target_include_directories(${TARGET_FULL_NAME} PRIVATE "$<BUILD_INTERFACE:${SERVICE_ROOT_DIR}>")
+  if(project_component_declare_service_INCLUDE_DIR)
+    target_include_directories(${TARGET_FULL_NAME}
+                               PRIVATE "$<BUILD_INTERFACE:${project_component_declare_service_INCLUDE_DIR}>")
+  endif()
+
+  unset(LINK_TARGETS)
+  if(project_component_declare_service_USE_COMPONENTS)
+    foreach(USE_COMPONENT ${project_component_declare_service_USE_COMPONENTS})
+      list(APPEND LINK_TARGETS "components::${USE_COMPONENT}")
+    endforeach()
+  endif()
+  list(APPEND LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK})
+  target_link_libraries(${TARGET_FULL_NAME} PRIVATE ${LINK_TARGETS})
+
+  if(MSVC)
+    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "component/service")
+  endif()
+
+  install(
+    TARGETS ${TARGET_FULL_NAME}
+    EXPORT ${PROJECT_INSTALL_COMPONENT_EXPORT_NAME}
+    RUNTIME DESTINATION "${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
+    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}"
+    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}")
+
+  if(project_component_declare_service_RESOURCE_DIRECTORIES)
+    foreach(RESOURCE_DIRECTORY ${project_component_declare_service_RESOURCE_DIRECTORIES})
+      if(NOT EXISTS "${PROJECT_INSTALL_BAS_DIR}/${RESOURCE_DIRECTORY}")
+        file(MAKE_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/${RESOURCE_DIRECTORY}")
+      endif()
+      install(
+        DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/${RESOURCE_DIRECTORY}"
+        DESTINATION "${RESOURCE_DIRECTORY}"
+        USE_SOURCE_PERMISSIONS FILES_MATCHING
+        PATTERN ".svn" EXCLUDE
+        PATTERN ".git" EXCLUDE)
+    endforeach()
+  endif()
+  if(project_component_declare_service_RESOURCE_FILES)
+    foreach(RESOURCE_FILE ${project_component_declare_service_RESOURCE_FILES})
+      get_filename_component(RESOURCE_FILE_DIR "${RESOURCE_FILE}" DIRECTORY)
+      install(FILES "${PROJECT_INSTALL_BAS_DIR}/${RESOURCE_FILE}" DESTINATION "${RESOURCE_FILE_DIR}")
+    endforeach()
+  endif()
+
+  add_executable("components::${TARGET_NAME}" ALIAS "${TARGET_FULL_NAME}")
 endfunction()
