@@ -2,8 +2,12 @@ set(GENERATE_FOR_PB_PY "${CMAKE_CURRENT_LIST_DIR}/generate-for-pb.py")
 set(GENERATE_FOR_PB_WORK_DIR "${CMAKE_CURRENT_LIST_DIR}")
 set(GENERATE_FOR_PB_OUT_SH "${CMAKE_BINARY_DIR}/generate-for-pb-run.sh")
 set(GENERATE_FOR_PB_OUT_PWSH "${CMAKE_BINARY_DIR}/generate-for-pb-run.ps1")
+set(GENERATE_FOR_PB_PROTO_SH "${CMAKE_BINARY_DIR}/generate-for-pb-generate-pb.sh")
+set(GENERATE_FOR_PB_PROTO_PWSH "${CMAKE_BINARY_DIR}/generate-for-pb-generate-pb.ps1")
 set(GENERATE_FOR_PB_OUT_CONF "${CMAKE_BINARY_DIR}/generate-for-pb-run.yaml")
 set(GENERATE_FOR_PB_OUT_LOG "${CMAKE_CURRENT_BINARY_DIR}/generate-for-pb-run.log")
+set(GENERATE_FOR_PB_OUT_PB "${PROJECT_INSTALL_RES_PBD_DIR}/network.pb")
+unset(GENERATE_FOR_PB_PROTO_COMMAND)
 file(WRITE "${GENERATE_FOR_PB_OUT_LOG}" "# generate-for-pb-run")
 if(NOT PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR)
   set(PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR "${PROJECT_THIRD_PARTY_INSTALL_DIR }/.python_modules")
@@ -28,73 +32,6 @@ if(NOT GENERATE_FOR_PB_PROROC_BIN)
   message(FATAL_ERROR "Protobuf - protoc is required.")
 endif()
 
-file(WRITE ${GENERATE_FOR_PB_OUT_SH} "#!/bin/bash${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
-file(APPEND ${GENERATE_FOR_PB_OUT_SH} "set -xe${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
-file(WRITE ${GENERATE_FOR_PB_OUT_PWSH} "#!/usr/bin/env pwsh${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
-file(APPEND ${GENERATE_FOR_PB_OUT_PWSH} "$ErrorActionPreference = \"Stop\"${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
-file(APPEND ${GENERATE_FOR_PB_OUT_PWSH}
-     "$PSDefaultParameterValues['*:Encoding'] = 'UTF-8'${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
-file(APPEND ${GENERATE_FOR_PB_OUT_PWSH}
-     "$OutputEncoding = [System.Text.UTF8Encoding]::new()${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
-
-file(APPEND ${GENERATE_FOR_PB_OUT_SH} "cd \"${GENERATE_FOR_PB_WORK_DIR}\"${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
-file(APPEND ${GENERATE_FOR_PB_OUT_PWSH}
-     "Set-Location \"${GENERATE_FOR_PB_WORK_DIR}\"${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
-
-project_make_executable(${GENERATE_FOR_PB_OUT_SH})
-project_make_executable(${GENERATE_FOR_PB_OUT_PWSH})
-
-file(APPEND ${GENERATE_FOR_PB_OUT_SH}
-     "\"${GENERATE_FOR_PB_PROROC_BIN}\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-     "  -o \"${PROJECT_INSTALL_RES_PBD_DIR}/network.pb\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
-foreach(PROTO_PATH IN LISTS GENERATE_FOR_PB_PROTO_PATH)
-  file(APPEND ${GENERATE_FOR_PB_OUT_SH} "  --proto_path \"${PROTO_PATH}\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
-endforeach()
-foreach(PROTO_PATH IN LISTS GENERATE_FOR_PB_EXTEND_PROTO_FILES)
-  file(APPEND ${GENERATE_FOR_PB_OUT_SH} "  \"${PROTO_PATH}\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
-endforeach()
-file(
-  APPEND ${GENERATE_FOR_PB_OUT_SH}
-  "  \"${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config\"/*.proto \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-  "  \"${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc\"/*.proto \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-  "  \"${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include\"/*.proto \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-  "  \"${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include/atframe\"/*.proto ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
-
-file(
-  APPEND ${GENERATE_FOR_PB_OUT_SH}
-  "\"${Python3_EXECUTABLE}\" \"${GENERATE_FOR_PB_PY}\" --add-package-prefix \"${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}\" -c \"${GENERATE_FOR_PB_OUT_CONF}\" \"$@\" ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-)
-
-file(APPEND ${GENERATE_FOR_PB_OUT_PWSH}
-     "& \"${GENERATE_FOR_PB_PROROC_BIN}\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-     "  -o \"${PROJECT_INSTALL_RES_PBD_DIR}/network.pb\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
-foreach(PROTO_PATH IN LISTS GENERATE_FOR_PB_PROTO_PATH)
-  file(APPEND ${GENERATE_FOR_PB_OUT_PWSH}
-       "  --proto_path \"${PROTO_PATH}\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
-endforeach()
-foreach(PROTO_PATH IN LISTS GENERATE_FOR_PB_EXTEND_PROTO_FILES)
-  file(APPEND ${GENERATE_FOR_PB_OUT_PWSH} "  \"${PROTO_PATH}\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
-endforeach()
-file(
-  APPEND ${GENERATE_FOR_PB_OUT_PWSH}
-  "  \$(Get-ChildItem \"${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config/*.proto\") `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-  "  \$(Get-ChildItem \"${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc/*.proto\") `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-  "  \$(Get-ChildItem \"${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include/*.proto\") `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-  "  \$(Get-ChildItem \"${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include/atframe/*.proto\") ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}
-
-if ($LastExitCode -ne 0) {
-  exit $LastExitCode
-}
-")
-
-file(
-  APPEND ${GENERATE_FOR_PB_OUT_PWSH}
-  "
-& \"${Python3_EXECUTABLE}\" \"${GENERATE_FOR_PB_PY}\" --add-package-prefix \"${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}\" -c \"${GENERATE_FOR_PB_OUT_CONF}\" $args
-if ($LastExitCode -ne 0) {
-  exit $LastExitCode
-}${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
-
 file(
   WRITE "${GENERATE_FOR_PB_OUT_CONF}"
   "configure:
@@ -115,19 +52,31 @@ file(
   "
   package_prefix:
     - \"${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}\"
-  protocol_input_pb_file: '${PROJECT_INSTALL_RES_PBD_DIR}/network.pb'
+  protocol_input_pb_file: '${GENERATE_FOR_PB_OUT_PB}'
   protocol_project_directory: '${PROJECT_SOURCE_DIR}'
 
 rules:
   # Rules to generate rpc codes
 ")
 
+macro(generate_for_pb_add_proto_path)
+  foreach(PROTO_PATH ${ARGN})
+    list(APPEND GENERATE_FOR_PB_PROTO_PATHS "${PROTO_PATH}")
+  endforeach()
+endmacro()
+
+macro(generate_for_pb_add_proto_file)
+  foreach(PROTO_FILE ${ARGN})
+    list(APPEND GENERATE_FOR_PB_PROTO_FILES "${PROTO_FILE}")
+  endforeach()
+endmacro()
+
 function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
   set(GENERATE_FOR_PB_ARGS_OPTIONS RPC_IGNORE_EMPTY_REQUEST)
-  set(GENERATE_FOR_PB_ARGS_ONE_VALUE TASK_PATH_PREFIX HANDLE_PATH_PREFIX PROJECT_NAMESPACE)
+  set(GENERATE_FOR_PB_ARGS_ONE_VALUE TASK_PATH_PREFIX HANDLE_PATH_PREFIX PROJECT_NAMESPACE RPC_ROOT_DIR)
   set(GENERATE_FOR_PB_ARGS_MULTI_VALUE "")
-  cmake_parse_arguments(PARSE_ARGV 2 GENERATE_FOR_PB_ARGS "${GENERATE_FOR_PB_ARGS_OPTIONS}"
-                        "${GENERATE_FOR_PB_ARGS_ONE_VALUE}" "${GENERATE_FOR_PB_ARGS_MULTI_VALUE}")
+  cmake_parse_arguments(GENERATE_FOR_PB_ARGS "${GENERATE_FOR_PB_ARGS_OPTIONS}" "${GENERATE_FOR_PB_ARGS_ONE_VALUE}"
+                        "${GENERATE_FOR_PB_ARGS_MULTI_VALUE}" ${ARGN})
   if(NOT GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX)
     set(GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX ".")
   endif()
@@ -144,6 +93,9 @@ function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
   else()
     set(GENERATE_FOR_PB_RPC_IGNORE_EMPTY_REQUEST "rpc_ignore_request: [ ]")
   endif()
+  if(NOT GENERATE_FOR_PB_ARGS_RPC_ROOT_DIR)
+    set(GENERATE_FOR_PB_ARGS_RPC_ROOT_DIR "${PROJECT_SERVER_FRAME_BAS_DIR}")
+  endif()
 
   file(
     APPEND "${GENERATE_FOR_PB_OUT_CONF}"
@@ -151,7 +103,7 @@ function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
   - service:
       name: '${SERVICE_NAME}'
       overwrite: true
-      output_directory: '${PROJECT_SERVER_FRAME_BAS_DIR}'
+      output_directory: '${GENERATE_FOR_PB_ARGS_RPC_ROOT_DIR}'
       custom_variables:
         project_namespace: '${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE}'
         rpc_include_prefix: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}'
@@ -191,8 +143,8 @@ function(generate_for_pb_add_cs_service SERVICE_NAME SERVICE_ROOT_DIR)
   set(GENERATE_FOR_PB_ARGS_OPTIONS RPC_IGNORE_EMPTY_REQUEST)
   set(GENERATE_FOR_PB_ARGS_ONE_VALUE TASK_PATH_PREFIX HANDLE_PATH_PREFIX PROJECT_NAMESPACE)
   set(GENERATE_FOR_PB_ARGS_MULTI_VALUE "")
-  cmake_parse_arguments(PARSE_ARGV 2 GENERATE_FOR_PB_ARGS "${GENERATE_FOR_PB_ARGS_OPTIONS}"
-                        "${GENERATE_FOR_PB_ARGS_ONE_VALUE}" "${GENERATE_FOR_PB_ARGS_MULTI_VALUE}")
+  cmake_parse_arguments(GENERATE_FOR_PB_ARGS "${GENERATE_FOR_PB_ARGS_OPTIONS}" "${GENERATE_FOR_PB_ARGS_ONE_VALUE}"
+                        "${GENERATE_FOR_PB_ARGS_MULTI_VALUE}" ${ARGN})
   if(NOT GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX)
     set(GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX ".")
   endif()
@@ -255,8 +207,8 @@ function(generate_for_pb_add_simulator_cs_api SERVICE_NAME SERVICE_ROOT_DIR)
   set(GENERATE_FOR_PB_ARGS_OPTIONS RPC_IGNORE_EMPTY_REQUEST)
   set(GENERATE_FOR_PB_ARGS_ONE_VALUE PROJECT_NAMESPACE)
   set(GENERATE_FOR_PB_ARGS_MULTI_VALUE "")
-  cmake_parse_arguments(PARSE_ARGV 2 GENERATE_FOR_PB_ARGS "${GENERATE_FOR_PB_ARGS_OPTIONS}"
-                        "${GENERATE_FOR_PB_ARGS_ONE_VALUE}" "${GENERATE_FOR_PB_ARGS_MULTI_VALUE}")
+  cmake_parse_arguments(GENERATE_FOR_PB_ARGS "${GENERATE_FOR_PB_ARGS_OPTIONS}" "${GENERATE_FOR_PB_ARGS_ONE_VALUE}"
+                        "${GENERATE_FOR_PB_ARGS_MULTI_VALUE}" ${ARGN})
   if(NOT GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE)
     set(GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE "")
   endif()
@@ -287,8 +239,166 @@ function(generate_for_pb_add_simulator_cs_api SERVICE_NAME SERVICE_ROOT_DIR)
 ")
 endfunction(generate_for_pb_add_simulator_cs_api)
 
+function(generate_for_pb_initialize_sh SCRIPT_PATH)
+  set(optionArgs COMMAND_ECHO STOP_ON_ERROR)
+  set(oneValueArgs SET_LOCATION)
+  set(multiValueArgs "")
+  cmake_parse_arguments(generate_for_pb_initialize_sh "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+  file(WRITE "${SCRIPT_PATH}" "#!/bin/bash${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+
+  if(generate_for_pb_initialize_sh_STOP_ON_ERROR)
+    file(APPEND "${SCRIPT_PATH}" "set -e ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+  endif()
+  if(generate_for_pb_initialize_sh_COMMAND_ECHO)
+    file(APPEND "${SCRIPT_PATH}" "set -x ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+  endif()
+  if(generate_for_pb_initialize_sh_SET_LOCATION)
+    file(APPEND "${SCRIPT_PATH}"
+         "cd \"${generate_for_pb_initialize_sh_SET_LOCATION}\"${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+  endif()
+
+  project_make_executable("${SCRIPT_PATH}")
+endfunction()
+
+function(generate_for_pb_initialize_pwsh SCRIPT_PATH)
+  set(optionArgs COMMAND_ECHO STOP_ON_ERROR)
+  set(oneValueArgs SET_LOCATION)
+  set(multiValueArgs "")
+  cmake_parse_arguments(generate_for_pb_initialize_pwsh "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+  file(WRITE "${SCRIPT_PATH}" "#!/usr/bin/env pwsh${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+  file(APPEND "${SCRIPT_PATH}"
+       "$PSDefaultParameterValues['*:Encoding'] = 'UTF-8'${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+  file(APPEND "${SCRIPT_PATH}"
+       "$OutputEncoding = [System.Text.UTF8Encoding]::new()${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+
+  if(generate_for_pb_initialize_pwsh_STOP_ON_ERROR)
+    file(APPEND "${SCRIPT_PATH}" "$ErrorActionPreference = \"Stop\"${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+  endif()
+  if(generate_for_pb_initialize_pwsh_COMMAND_ECHO)
+    file(APPEND "${SCRIPT_PATH}" "Set-PSDebug -Trace 1 ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+  endif()
+
+  if(generate_for_pb_initialize_pwsh_SET_LOCATION)
+    file(APPEND "${SCRIPT_PATH}"
+         "Set-Location \"${generate_for_pb_initialize_pwsh_SET_LOCATION}\"${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+  endif()
+
+  project_make_executable("${SCRIPT_PATH}")
+endfunction()
+
 function(generate_for_pb_run_generator)
+  generate_for_pb_initialize_sh("${GENERATE_FOR_PB_OUT_SH}" STOP_ON_ERROR SET_LOCATION "${GENERATE_FOR_PB_WORK_DIR}")
+  generate_for_pb_initialize_sh("${GENERATE_FOR_PB_PROTO_SH}" STOP_ON_ERROR SET_LOCATION "${GENERATE_FOR_PB_WORK_DIR}")
+  generate_for_pb_initialize_pwsh("${GENERATE_FOR_PB_OUT_PWSH}" STOP_ON_ERROR SET_LOCATION
+                                  "${GENERATE_FOR_PB_WORK_DIR}")
+  generate_for_pb_initialize_pwsh("${GENERATE_FOR_PB_PROTO_PWSH}" STOP_ON_ERROR SET_LOCATION
+                                  "${GENERATE_FOR_PB_WORK_DIR}")
+
+  file(
+    APPEND "${GENERATE_FOR_PB_PROTO_SH}"
+    "\"${GENERATE_FOR_PB_PROROC_BIN}\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  -o \"${GENERATE_FOR_PB_OUT_PB}\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --proto_path \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --proto_path \"${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --proto_path \"${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+  foreach(PROTO_PATH IN LISTS GENERATE_FOR_PB_PROTO_PATHS)
+    file(APPEND "${GENERATE_FOR_PB_PROTO_SH}"
+         "  --proto_path \"${PROTO_PATH}\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+  endforeach()
+  foreach(PROTO_PATH IN LISTS GENERATE_FOR_PB_PROTO_FILES)
+    if(PROTO_PATH MATCHES "[\\*\\?]")
+      string(REPLACE "*" "\"*\"" PROTO_PATTERN "${PROTO_PATH}")
+      string(REPLACE "?" "\"?\"" PROTO_PATTERN "${PROTO_PATTERN}")
+      file(APPEND "${GENERATE_FOR_PB_PROTO_SH}" "  \"${PROTO_PATTERN}\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+    else()
+      file(APPEND "${GENERATE_FOR_PB_PROTO_SH}" "  \"${PROTO_PATH}\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+    endif()
+  endforeach()
+  file(
+    APPEND "${GENERATE_FOR_PB_PROTO_SH}"
+    "  \"${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include\"/*.proto \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include/atframe\"/*.proto \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/any.proto\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/empty.proto\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/duration.proto\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/timestamp.proto\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/descriptor.proto\"")
+
+  if(ATFRAMEWORK_CMAKE_TOOLSET_BASH)
+    file(
+      APPEND "${GENERATE_FOR_PB_OUT_SH}"
+      "\"${ATFRAMEWORK_CMAKE_TOOLSET_BASH}\" \"${GENERATE_FOR_PB_PROTO_SH}\" ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    )
+  else()
+    file(APPEND "${GENERATE_FOR_PB_OUT_SH}"
+         "bash \"${GENERATE_FOR_PB_PROTO_SH}\" ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+  endif()
+  file(
+    APPEND "${GENERATE_FOR_PB_OUT_SH}"
+    "\"${Python3_EXECUTABLE}\" \"${GENERATE_FOR_PB_PY}\" --add-package-prefix \"${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}\" -c \"${GENERATE_FOR_PB_OUT_CONF}\" \"$@\" ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+  )
+
+  file(
+    APPEND "${GENERATE_FOR_PB_PROTO_PWSH}"
+    "& \"${GENERATE_FOR_PB_PROROC_BIN}\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  -o \"${GENERATE_FOR_PB_OUT_PB}\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --proto_path \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --proto_path \"${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --proto_path \"${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+  foreach(PROTO_PATH IN LISTS GENERATE_FOR_PB_PROTO_PATHS)
+    file(APPEND "${GENERATE_FOR_PB_PROTO_PWSH}"
+         "  --proto_path \"${PROTO_PATH}\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+  endforeach()
+  foreach(PROTO_PATH IN LISTS GENERATE_FOR_PB_PROTO_FILES)
+    if(PROTO_PATH MATCHES "[\\*\\?]")
+      file(APPEND "${GENERATE_FOR_PB_PROTO_PWSH}"
+           "  \$(Get-ChildItem \"${PROTO_PATH}\") `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+    else()
+      file(APPEND "${GENERATE_FOR_PB_PROTO_PWSH}" "  \"${PROTO_PATH}\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+    endif()
+  endforeach()
+  file(
+    APPEND "${GENERATE_FOR_PB_PROTO_PWSH}"
+    "  \$(Get-ChildItem \"${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include/*.proto\") `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \$(Get-ChildItem \"${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include/atframe/*.proto\") `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/any.proto\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/empty.proto\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/duration.proto\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/timestamp.proto\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/descriptor.proto\" ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "
+if ($LastExitCode -ne 0) {
+  exit $LastExitCode
+}
+")
+
   if(ATFRAMEWORK_CMAKE_TOOLSET_PWSH)
+    file(
+      APPEND "${GENERATE_FOR_PB_OUT_PWSH}"
+      "& \"${ATFRAMEWORK_CMAKE_TOOLSET_PWSH}\" -File \"${GENERATE_FOR_PB_PROTO_PWSH}\" ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    )
+  else()
+    file(APPEND "${GENERATE_FOR_PB_OUT_PWSH}"
+         "pwsh -File \"${GENERATE_FOR_PB_PROTO_PWSH}\" ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+  endif()
+
+  file(
+    APPEND "${GENERATE_FOR_PB_OUT_PWSH}"
+    "
+if ($LastExitCode -ne 0) {
+  exit $LastExitCode
+}${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}
+& \"${Python3_EXECUTABLE}\" \"${GENERATE_FOR_PB_PY}\" --add-package-prefix \"${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}\" -c \"${GENERATE_FOR_PB_OUT_CONF}\" $args
+if ($LastExitCode -ne 0) {
+  exit $LastExitCode
+}${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+
+  if(ATFRAMEWORK_CMAKE_TOOLSET_PWSH)
+    set(GENERATE_FOR_PB_PROTO_COMMAND
+        "${ATFRAMEWORK_CMAKE_TOOLSET_PWSH}" "-File" "${GENERATE_FOR_PB_OUT_PWSH}"
+        PARENT_SCOPE)
     execute_process(
       COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_PWSH}" -File "${GENERATE_FOR_PB_OUT_PWSH}"
       RESULT_VARIABLE GENERATE_FOR_PB_PROTOC_RESULT
@@ -302,6 +412,9 @@ function(generate_for_pb_run_generator)
       )
     endif()
   else()
+    set(GENERATE_FOR_PB_PROTO_COMMAND
+        "${ATFRAMEWORK_CMAKE_TOOLSET_BASH}" "${GENERATE_FOR_PB_OUT_SH}"
+        PARENT_SCOPE)
     execute_process(
       COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_BASH}" "${GENERATE_FOR_PB_OUT_SH}"
       RESULT_VARIABLE GENERATE_FOR_PB_PROTOC_RESULT

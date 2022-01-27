@@ -38,15 +38,15 @@ file(
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/skip-glob-sources.txt" "")
 foreach(SRC_FILE_REALPATH IN LISTS SRC_LIST_ORIGIN)
   get_filename_component(SRC_DIRPATH_REALPATH ${SRC_FILE_REALPATH} DIRECTORY)
-  if(SOURCE_FILE MATCHES "^${PROJECT_SERVER_FRAME_SRC_DIR}[/\\\\]config[/\\\\]server_frame_build_feature.(h|cpp)")
+  if(SRC_FILE_REALPATH MATCHES "^${PROJECT_SERVER_FRAME_SRC_DIR}[/\\\\]config[/\\\\]server_frame_build_feature.(h|cpp)")
     file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/skip-glob-sources.txt" "${SRC_FILE_REALPATH}\r\n")
     continue()
   endif()
-  if(SOURCE_FILE MATCHES "^${PROJECT_SERVER_FRAME_SRC_DIR}[/\\\\]config[/\\\\]excel[/\\\\]")
+  if(SRC_FILE_REALPATH MATCHES "^${PROJECT_SERVER_FRAME_SRC_DIR}[/\\\\]config[/\\\\]excel[/\\\\]")
     file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/skip-glob-sources.txt" "${SRC_FILE_REALPATH}\r\n")
     continue()
   endif()
-  if(SOURCE_FILE MATCHES "^${PROJECT_SERVER_FRAME_SRC_DIR}[/\\\\]protocol[/\\\\].*")
+  if(SRC_FILE_REALPATH MATCHES "^${PROJECT_SERVER_FRAME_SRC_DIR}[/\\\\]protocol[/\\\\].*")
     file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/skip-glob-sources.txt" "${SRC_FILE_REALPATH}\r\n")
     continue()
   endif()
@@ -78,7 +78,8 @@ else()
   add_library(${PROJECT_SERVER_FRAME_LIB_LINK} STATIC ${SRC_LIST})
 endif()
 
-target_link_libraries(${PROJECT_SERVER_FRAME_LIB_LINK} PUBLIC ${PROJECT_SERVER_FRAME_PUBLIC_LINK_NAMES})
+target_link_libraries(${PROJECT_SERVER_FRAME_LIB_LINK} PUBLIC ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol
+                                                              ${PROJECT_SERVER_FRAME_PUBLIC_LINK_NAMES})
 
 target_include_directories(
   ${PROJECT_SERVER_FRAME_LIB_LINK}

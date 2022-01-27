@@ -1,5 +1,28 @@
 include("${CMAKE_CURRENT_LIST_DIR}/generate_for_pb_utility.cmake")
 
+# -----------------------------------------------------------------------------
+generate_for_pb_add_proto_path(
+  "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/common" "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config"
+  "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc")
+generate_for_pb_add_proto_file(
+  "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/common/*.proto" "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config/*.proto"
+  "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc/*.proto")
+
+# Add additional proto files and paths
+if(PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR
+   AND EXISTS "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/extensions/v3/xresloader.proto")
+  generate_for_pb_add_proto_path("${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}")
+  generate_for_pb_add_proto_file("${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/extensions/v3/xresloader.proto"
+                                 "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/extensions/v3/xresloader_ue.proto")
+endif()
+if(PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR
+   AND EXISTS "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension/xrescode_extensions_v3.proto")
+  generate_for_pb_add_proto_path("${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension")
+  generate_for_pb_add_proto_file(
+    "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension/xrescode_extensions_v3.proto")
+endif()
+
+# -----------------------------------------------------------------------------
 # add tool to binding router rpcs
 generate_for_pb_add_ss_service(
   "${PROJECT_NAMESPACE}.RouterService"
@@ -58,20 +81,12 @@ generate_for_pb_add_ss_service(
 
 # add tool to generate simulator rpcs
 generate_for_pb_add_simulator_cs_api(
-  "${PROJECT_NAMESPACE}.LoginsvrClientService"
-  "${CMAKE_CURRENT_LIST_DIR}/tools/simulator"
-  RPC_IGNORE_EMPTY_REQUEST
-  PROJECT_NAMESPACE
-  "${PROJECT_NAMESPACE}"
-)
+  "${PROJECT_NAMESPACE}.LoginsvrClientService" "${CMAKE_CURRENT_LIST_DIR}/tools/simulator" RPC_IGNORE_EMPTY_REQUEST
+  PROJECT_NAMESPACE "${PROJECT_NAMESPACE}")
 
 generate_for_pb_add_simulator_cs_api(
-  "${PROJECT_NAMESPACE}.GamesvrClientService"
-  "${CMAKE_CURRENT_LIST_DIR}/tools/simulator"
-  RPC_IGNORE_EMPTY_REQUEST
-  PROJECT_NAMESPACE
-  "${PROJECT_NAMESPACE}"
-)
+  "${PROJECT_NAMESPACE}.GamesvrClientService" "${CMAKE_CURRENT_LIST_DIR}/tools/simulator" RPC_IGNORE_EMPTY_REQUEST
+  PROJECT_NAMESPACE "${PROJECT_NAMESPACE}")
 
 # Run generator finally
 generate_for_pb_run_generator()

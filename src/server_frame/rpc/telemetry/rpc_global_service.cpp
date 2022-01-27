@@ -233,14 +233,8 @@ static std::unique_ptr<opentelemetry::sdk::trace::Sampler> _opentelemetry_create
 static opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> _opentelemetry_create_provider(
     std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanProcessor>> &&processors,
     std::unique_ptr<opentelemetry::sdk::trace::Sampler> &&sampler, opentelemetry::sdk::resource::Resource resource) {
-  auto provider = opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>(
+  return opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>(
       new opentelemetry::sdk::trace::TracerProvider(std::move(processors), resource, std::move(sampler)));
-  if (provider) {
-    // Set the global trace provider.
-    opentelemetry::trace::Provider::SetTracerProvider(provider);
-  }
-
-  return provider;
 }
 
 static void _opentelemetry_cleanup_global_provider(atapp::app &app) {
