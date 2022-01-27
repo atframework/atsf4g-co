@@ -14,6 +14,11 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/com.protocol.pb.h>
+% if include_headers:
+%   for include_header in include_headers:
+#include <${include_header}>
+%   endfor
+% endif
 
 #include <config/compiler/protobuf_suffix.h>
 

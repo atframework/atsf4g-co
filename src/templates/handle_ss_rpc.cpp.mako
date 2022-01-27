@@ -14,6 +14,11 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 #include <protocol/pbdesc/svr.protocol.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
+% if include_headers:
+%   for include_header in include_headers:
+#include <${include_header}>
+%   endfor
+% endif
 
 #include <dispatcher/ss_msg_dispatcher.h>
 

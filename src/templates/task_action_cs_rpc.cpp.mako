@@ -19,6 +19,11 @@ rpc_is_stream_mode = rpc.is_request_stream() or rpc.is_response_stream()
 
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
+% if include_headers:
+%   for include_header in include_headers:
+#include <${include_header}>
+%   endfor
+% endif
 
 #include <config/compiler/protobuf_suffix.h>
 

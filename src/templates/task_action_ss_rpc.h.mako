@@ -9,6 +9,14 @@ task_class_name = os.path.splitext(os.path.basename(output_render_path))[0]
 
 #pragma once
 
+% if include_headers:
+#include <config/compiler/protobuf_prefix.h>
+%   for include_header in include_headers:
+#include <${include_header}>
+%   endfor
+#include <config/compiler/protobuf_suffix.h>
+% endif
+
 #include <dispatcher/task_action_ss_req_base.h>
 
 class ${task_class_name} : public task_action_ss_rpc_base<${rpc.get_request().get_cpp_class_name()}, ${rpc.get_response().get_cpp_class_name()}> {
