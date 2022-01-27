@@ -28,3 +28,50 @@ endif()
 if(COMPILER_STRICT_EXTRA_CFLAGS)
   list(APPEND PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS ${COMPILER_STRICT_EXTRA_CFLAGS})
 endif()
+
+function(project_link_or_copy_files)
+  set(FILE_LIST ${ARGN})
+  list(POP_BACK FILE_LIST DESTINATION)
+  if(NOT EXISTS "${DESTINATION}")
+    file(MAKE_DIRECTORY "${DESTINATION}")
+  endif()
+  foreach(FILE_PATH IN LISTS FILE_LIST)
+    if(IS_SYMLINK "${FILE_PATH}")
+      get_filename_component(FILE_BASENAME "${FILE_PATH}" NAME)
+      file(READ_SYMLINK "${FILE_PATH}" FILE_REALPATH)
+      if(EXISTS "${DESTINATION}/${FILE_BASENAME}")
+        file(REMOVE "${DESTINATION}/${FILE_BASENAME}")
+      endif()
+      file(
+        CREATE_LINK "${FILE_REALPATH}" "${DESTINATION}/${FILE_BASENAME}"
+        RESULT CREATE_LINK_RESULT
+        COPY_ON_ERROR SYMBOLIC)
+      if(NOT CREATE_LINK_RESULT EQUAL 0)
+        echowithcolor(COLOR GREEN
+                      "-- Try to link ${FILE_PATH} to ${DESTINATION}/${FILE_BASENAME} failed: ${CREATE_LINK_RESULT}")
+      endif()
+    elseif(IS_DIRECTORY "${FILE_PATH}")
+      get_filename_component(FILE_BASENAME "${FILE_PATH}" NAME)
+      file(
+        GLOB FILES_IN_SUBDIRECTORY
+        LIST_DIRECTORIES TRUE
+        "${FILE_PATH}/*")
+      if(FILES_IN_SUBDIRECTORY)
+        project_link_or_copy_files(${FILES_IN_SUBDIRECTORY} "${DESTINATION}/${FILE_BASENAME}")
+      endif()
+    else()
+      get_filename_component(FILE_BASENAME "${FILE_PATH}" NAME)
+      if(EXISTS "${DESTINATION}/${FILE_BASENAME}")
+        file(REMOVE "${DESTINATION}/${FILE_BASENAME}")
+      endif()
+      file(
+        CREATE_LINK "${FILE_PATH}" "${DESTINATION}/${FILE_BASENAME}"
+        RESULT CREATE_LINK_RESULT
+        COPY_ON_ERROR)
+      if(NOT CREATE_LINK_RESULT EQUAL 0)
+        echowithcolor(COLOR GREEN
+                      "-- Try to link ${FILE_PATH} to ${DESTINATION}/${FILE_BASENAME} failed: ${CREATE_LINK_RESULT}")
+      endif()
+    endif()
+  endforeach()
+endfunction()
