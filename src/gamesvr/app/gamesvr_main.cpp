@@ -13,9 +13,6 @@
 #include <dispatcher/ss_msg_dispatcher.h>
 #include <libatgw_server_protocol.h>
 
-#include <config/excel/config_manager.h>
-#include <config/excel_config_wrapper.h>
-#include <config/logic_config.h>
 #include <config/server_frame_build_feature.h>
 
 #include <logic/logic_server_macro.h>
