@@ -18,6 +18,8 @@
 
 #include <gsl/select-gsl.h>
 
+#include <string>
+
 #include "dispatcher/dispatcher_implement.h"
 #include "dispatcher/dispatcher_type_defines.h"
 

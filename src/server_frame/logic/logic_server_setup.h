@@ -1,9 +1,6 @@
 // Copyright 2021 atframework
 // Created by owent
 
-#ifndef LOGIC_SERVER_SETUP_H
-#define LOGIC_SERVER_SETUP_H
-
 #pragma once
 
 #include <config/compiler_features.h>
@@ -15,6 +12,7 @@
 
 #include <config/compiler/protobuf_prefix.h>
 
+#include <protocol/config/svr.protocol.config.pb.h>
 #include <protocol/pbdesc/svr.global.table.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
@@ -24,6 +22,8 @@
 #include <stdint.h>
 
 #include <cstddef>
+#include <ctime>
+#include <functional>
 #include <list>
 #include <memory>
 #include <string>
@@ -40,13 +40,13 @@ class etcd_cluster;
 
 class logic_server_common_module;
 
-struct logic_server_common_module_conf_t {
+struct logic_server_common_module_configure {
   bool enable_watch_battlesvr;
 
-  inline logic_server_common_module_conf_t() : enable_watch_battlesvr(false) {}
+  logic_server_common_module_configure();
 };
 
-int logic_server_setup_common(atapp::app& app, const logic_server_common_module_conf_t& conf);
+int logic_server_setup_common(atapp::app& app, const logic_server_common_module_configure& conf);
 
 /**
  * @brief 获取共用模块
@@ -57,8 +57,8 @@ logic_server_common_module* logic_server_last_common_module();
 
 class logic_server_common_module : public atapp::module_impl {
  public:
-  typedef std::shared_ptr<atapp::etcd_keepalive> etcd_keepalive_ptr_t;
-  typedef std::shared_ptr<atapp::etcd_watcher> etcd_watcher_ptr_t;
+  using etcd_keepalive_ptr_t = std::shared_ptr<atapp::etcd_keepalive>;
+  using etcd_watcher_ptr_t = std::shared_ptr<atapp::etcd_watcher>;
 
   struct battle_service_node_t {
     uint64_t server_id;
@@ -71,12 +71,12 @@ class logic_server_common_module : public atapp::module_impl {
     size_t operator()(const battle_service_node_t& in) const;
   };
 
-  typedef std::unordered_set<battle_service_node_t, battle_service_node_hash_t> battle_service_set_t;
-  typedef std::unordered_map<std::string, battle_service_set_t> battle_service_version_map_t;
-  typedef std::unordered_map<uint64_t, battle_service_node_t> battle_service_id_map_t;
+  using battle_service_set_t = std::unordered_set<battle_service_node_t, battle_service_node_hash_t>;
+  using battle_service_version_map_t = std::unordered_map<std::string, battle_service_set_t>;
+  using battle_service_id_map_t = std::unordered_map<uint64_t, battle_service_node_t>;
 
  public:
-  explicit logic_server_common_module(const logic_server_common_module_conf_t& static_conf);
+  explicit logic_server_common_module(const logic_server_common_module_configure& static_conf);
   ~logic_server_common_module();
 
   int init() override;
@@ -131,7 +131,9 @@ class logic_server_common_module : public atapp::module_impl {
   int tick_update_remote_configures();
 
  private:
-  logic_server_common_module_conf_t static_conf_;
+  logic_server_common_module_configure static_conf_;
+  time_t stop_log_timepoint_;
+  PROJECT_NAMESPACE_ID::config::logic_server_shared_component_cfg shared_component_;
 
   battle_service_version_map_t battle_service_version_map_;
   battle_service_id_map_t battle_service_id_;
@@ -144,5 +146,3 @@ class logic_server_common_module : public atapp::module_impl {
   int32_t server_remote_conf_zone_version_;
   time_t server_remote_conf_next_update_time_;
 };
-
-#endif

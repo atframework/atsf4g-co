@@ -13,12 +13,21 @@ import "google/protobuf/timestamp.proto";
 
 import "atframe/atapp_conf.proto";
 
+message logic_server_shared_component_cfg {
+  bool task_manager = 101 [(atapp.protocol.CONFIGURE) = { default_value: "true" }];
+  bool router_manager_set = 102 [(atapp.protocol.CONFIGURE) = { default_value: "true" }];
+  bool session_manager = 103 [(atapp.protocol.CONFIGURE) = { default_value: "false" }];
+  bool excel_config = 104 [(atapp.protocol.CONFIGURE) = { default_value: "false" }];
+}
+
 message logic_server_cfg {
   int64 open_service_time = 101;
   bool maintenance_mode = 102;
   string resource_path = 103 [(atapp.protocol.CONFIGURE) = { default_value: "../../resource" }];
   string log_path = 104 [(atapp.protocol.CONFIGURE) = { default_value: "../log" }];
   google.protobuf.Timestamp reload_timepoint = 105;
+
+  logic_server_shared_component_cfg shared_component = 106;
 }
 
 message logic_user_async_job_cfg {

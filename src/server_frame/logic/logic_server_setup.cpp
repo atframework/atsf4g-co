@@ -25,12 +25,16 @@
 #endif
 
 #include <config/excel/config_manager.h>
+#include <config/excel_config_wrapper.h>
 #include <config/extern_log_categorize.h>
 
 #include <router/action/task_action_auto_save_objects.h>
+#include <router/router_manager_set.h>
 
+#include <dispatcher/cs_msg_dispatcher.h>
 #include <dispatcher/ss_msg_dispatcher.h>
 #include <dispatcher/task_manager.h>
+#include <logic/session_manager.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -44,6 +48,7 @@
 
 #include "logic/action/task_action_reload_remote_server_configure.h"
 #include "logic/handle_ss_rpc_logiccommonservice.h"
+#include "logic/logic_server_macro.h"
 
 namespace detail {
 static logic_server_common_module *g_last_common_module = NULL;
@@ -101,14 +106,83 @@ static int show_battlesvr_by_version(util::cli::callback_param params) {
   }
   return 0;
 }
+
+static int app_default_handle_on_receive_request(atapp::app &app, const atapp::app::message_sender_t &source,
+                                                 const atapp::app::message_t &msg) {
+  if (0 == source.id) {
+    FWLOGERROR("receive a message from unknown source or invalid body case");
+    return PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+  }
+
+  int ret = 0;
+  switch (msg.type) {
+    case ::atframe::component::service_type::EN_ATST_GATEWAY: {
+      ret = cs_msg_dispatcher::me()->dispatch(source, msg);
+      break;
+    }
+
+    case ::atframe::component::message_type::EN_ATST_SS_MSG: {
+      ret = ss_msg_dispatcher::me()->dispatch(source, msg);
+      break;
+    }
+
+    default: {
+      FWLOGERROR("receive a message of invalid type: {}", msg.type);
+      break;
+    }
+  }
+
+  return ret;
+}
+
+static int app_default_handle_on_forward_response(atapp::app &app, const atapp::app::message_sender_t &source,
+                                                  const atapp::app::message_t &msg, int32_t error_code) {
+  if (error_code < 0) {
+    FWLOGERROR("send data from {:#x}({}) to {:#x}({}) failed, sequence: {}, code: {}", app.get_id(), app.get_app_name(),
+               source.id, source.name, msg.message_sequence, error_code);
+  } else {
+    FWLOGINFO("send data from {:#x}({}) to {:#x}({}) got response, sequence: {}, ", app.get_id(), app.get_app_name(),
+              source.id, source.name, msg.message_sequence);
+  }
+
+  int ret = 0;
+  switch (msg.type) {
+    case ::atframe::component::message_type::EN_ATST_SS_MSG: {
+      ret = ss_msg_dispatcher::me()->on_receive_send_data_response(source, msg, error_code);
+      break;
+    }
+
+    default: {
+      break;
+    }
+  }
+
+  return ret;
+}
+
+static int app_default_handle_on_connected(atapp::app &, atbus::endpoint &ep, int status) {
+  FWLOGINFO("endpoint {:#x} connected, status: {}", ep.get_id(), status);
+  return 0;
+}
+
+static int app_default_handle_on_disconnected(atapp::app &, atbus::endpoint &ep, int status) {
+  FWLOGINFO("endpoint {:#x} disconnected, status: {}", ep.get_id(), status);
+  return 0;
+}
+
 }  // namespace
 
-int logic_server_setup_common(atapp::app &app, const logic_server_common_module_conf_t &conf) {
+logic_server_common_module_configure::logic_server_common_module_configure() : enable_watch_battlesvr(false) {}
+
+int logic_server_setup_common(atapp::app &app, const logic_server_common_module_configure &conf) {
 #if defined(SERVER_FRAME_ENABLE_SANITIZER_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_INTERFACE
   // @see
   // https://github.com/gcc-mirror/gcc/blob/releases/gcc-4.8.5/libsanitizer/include/sanitizer/asan_interface.h
   __asan_set_death_callback([]() { FWLOGINFO("[SANITIZE=ADDRESS]: Exit"); });
-  __asan_set_error_report_callback([](const char *content) { FWLOGERROR("[SANITIZE=ADDRESS]: Report: {}", content); });
+  __asan_set_error_report_callback([](const char *content) {
+    // Sanitizer report
+    FWLOGERROR("[SANITIZE=ADDRESS]: Report: {}", content);
+  });
 #endif
 
   // setup options
@@ -186,6 +260,12 @@ int logic_server_setup_common(atapp::app &app, const logic_server_common_module_
     app.set_build_version(ss.str());
   }
 
+  // setup default message handle
+  app.set_evt_on_forward_request(app_default_handle_on_receive_request);
+  app.set_evt_on_forward_response(app_default_handle_on_forward_response);
+  app.set_evt_on_app_connected(app_default_handle_on_connected);
+  app.set_evt_on_app_disconnected(app_default_handle_on_disconnected);
+
   return 0;
 }
 
@@ -199,8 +279,9 @@ size_t logic_server_common_module::battle_service_node_hash_t::operator()(const 
   return std::hash<uint64_t>()(in.server_id);
 }
 
-logic_server_common_module::logic_server_common_module(const logic_server_common_module_conf_t &static_conf)
+logic_server_common_module::logic_server_common_module(const logic_server_common_module_configure &static_conf)
     : static_conf_(static_conf),
+      stop_log_timepoint_(0),
       etcd_event_handle_registered_(false),
       cachesvr_discovery_version_(0),
       server_remote_conf_global_version_(0),
@@ -216,7 +297,26 @@ logic_server_common_module::~logic_server_common_module() {
 }
 
 int logic_server_common_module::init() {
+  FWLOGINFO("============ Server initialize ============");
   FWLOGINFO("[Server startup]: {}\n{}", get_app()->get_app_version(), get_app()->get_build_version());
+
+  INIT_CALL(logic_config, get_app()->get_id(), get_app()->get_app_name());
+
+  // 内部模块暂不支持热开关
+  shared_component_ = logic_config::me()->get_logic().server().shared_component();
+
+  if (shared_component_.excel_config()) {
+    INIT_CALL_FN(excel_config_wrapper_reload_all, true);
+  }
+  if (shared_component_.task_manager()) {
+    INIT_CALL(task_manager);
+  }
+  if (shared_component_.session_manager()) {
+    INIT_CALL(session_manager);
+  }
+  if (shared_component_.router_manager_set()) {
+    INIT_CALL(router_manager_set);
+  }
 
   // 注册路由系统的内部事件
   int ret = handle::logic::register_handles_for_logiccommonservice();
@@ -229,29 +329,64 @@ int logic_server_common_module::init() {
   return ret;
 }
 
-void logic_server_common_module::ready() {}
+void logic_server_common_module::ready() { FWLOGINFO("============ Server ready ============"); }
 
 int logic_server_common_module::reload() {
+  FWLOGINFO("============ Server reload ============");
   int ret = 0;
+
+  RELOAD_CALL(ret, logic_config, *get_app());
 
   if (get_app() && get_app()->is_running()) {
     ret = setup_battle_service_watcher();
     setup_etcd_event_handle();
   }
 
+  if (shared_component_.excel_config()) {
+    RELOAD_CALL_FN(ret, excel_config_wrapper_reload_all, false);
+  }
+  if (shared_component_.task_manager()) {
+    RELOAD_CALL(ret, task_manager);
+  }
+
   return ret;
 }
 
 int logic_server_common_module::stop() {
+  time_t now = util::time::time_utility::get_sys_now();
+  if (now != stop_log_timepoint_) {
+    stop_log_timepoint_ = now;
+    FWLOGINFO("============ Server stop ============");
+  }
+
+  int ret = 0;
+  if (shared_component_.router_manager_set()) {
+    ret = router_manager_set::me()->stop();
+    if (ret < 0) {
+      FWLOGERROR("router_manager_set stop failed, res: {}", ret);
+      return ret;
+    }
+
+    // 保存任务未完成，需要继续等待
+    if (!router_manager_set::me()->is_closed()) {
+      ret = 1;
+    }
+  }
+
   // can not use this module after stop
-  if (detail::g_last_common_module == this) {
+  if (0 == ret && detail::g_last_common_module == this) {
     detail::g_last_common_module = nullptr;
   }
 
-  return 0;
+  return ret;
 }
 
 int logic_server_common_module::timeout() {
+  FWLOGINFO("============ Server module timeout ============");
+  if (shared_component_.router_manager_set()) {
+    router_manager_set::me()->force_close();
+  }
+
   // can not use this module after stop
   if (detail::g_last_common_module == this) {
     detail::g_last_common_module = nullptr;
@@ -265,6 +400,20 @@ int logic_server_common_module::tick() {
   int ret = 0;
 
   ret += tick_update_remote_configures();
+  if (shared_component_.excel_config()) {
+    INIT_CALL_FN(excel_config_wrapper_reload_all, true);
+  }
+  if (shared_component_.task_manager()) {
+    ret += task_manager::me()->tick(util::time::time_utility::get_sys_now(),
+                                    static_cast<int>(1000 * util::time::time_utility::get_now_usec()));
+  }
+  if (shared_component_.session_manager()) {
+    ret += session_manager::me()->proc();
+  }
+  if (shared_component_.router_manager_set()) {
+    ret += router_manager_set::me()->tick();
+  }
+
   return ret;
 }
 
