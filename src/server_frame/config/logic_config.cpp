@@ -147,7 +147,7 @@ const atframework::ConstSettingsType &logic_config::get_atframework_settings() {
 
 void logic_config::_load_server_cfg(atapp::app &app) {
   server_cfg_.Clear();
-  app.parse_configures_into(server_cfg_, std::string());
+  app.parse_configures_into(server_cfg_, std::string(), "ATAPP");
 
   util::time::time_utility::update();
   auto reload_timepoint = server_cfg_.mutable_logic()->mutable_server()->mutable_reload_timepoint();

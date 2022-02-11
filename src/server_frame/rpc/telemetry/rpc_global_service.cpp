@@ -277,7 +277,8 @@ static void _opentelemetry_set_global_provider(
   // Logger
   ::atapp::protocol::atapp_log opentelemetry_log_conf;
   app.parse_log_configures_into(opentelemetry_log_conf,
-                                std::vector<gsl::string_view>{"logic", "telemetry", "opentelemetry", "log"});
+                                std::vector<gsl::string_view>{"logic", "telemetry", "opentelemetry", "log"},
+                                "ATAPP_LOGIC_TELEMETRY_OPENTELEMETRY_LOG");
   if (app_info_cache->logger && opentelemetry_log_conf.category_size() > 0) {
     app_info_cache->logger->init(util::log::log_formatter::get_level_by_name(opentelemetry_log_conf.level().c_str()));
     app.setup_logger(*app_info_cache->logger, opentelemetry_log_conf.level(), opentelemetry_log_conf.category(0));
@@ -289,7 +290,7 @@ static void _opentelemetry_set_global_provider(
   if (!details::g_global_service_cache) {
     // Setup global log handle for opentelemetry for first startup
     opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogHandler(
-        nostd::shared_ptr<opentelemetry::sdk::common::internal_log::LogHandler>{
+        opentelemetry::nostd::unique_ptr<opentelemetry::sdk::common::internal_log::LogHandler>{
             new details::opentelemetry_internal_log_handler()});
     app.add_evt_on_finally(_opentelemetry_cleanup_global_provider);
   }

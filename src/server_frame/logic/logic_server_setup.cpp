@@ -400,9 +400,6 @@ int logic_server_common_module::tick() {
   int ret = 0;
 
   ret += tick_update_remote_configures();
-  if (shared_component_.excel_config()) {
-    INIT_CALL_FN(excel_config_wrapper_reload_all, true);
-  }
   if (shared_component_.task_manager()) {
     ret += task_manager::me()->tick(util::time::time_utility::get_sys_now(),
                                     static_cast<int>(1000 * util::time::time_utility::get_now_usec()));
