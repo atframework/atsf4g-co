@@ -11,8 +11,8 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <cstddef>
-#include <vector>
 #include <string>
+#include <vector>
 
 extern "C" struct redisReply;
 
@@ -23,15 +23,22 @@ namespace db {
  * @brief 数据库接口统一返回结构
  * @note 这里不使用原始int类型是为了位以后扩展更高级的设计模式做预留。（比武无栈协程）
  */
-struct result_t {
-  result_t();
-  explicit result_t(int code);
-  operator int() const noexcept;
+class result_type {
+ public:
+  using value_type = int32_t;
+
+ public:
+  result_type();
+  explicit result_type(value_type code);
+  operator value_type() const noexcept;
 
   bool is_success() const noexcept;
   bool is_error() const noexcept;
 
-  copp::future::poller<int> result;
+  inline bool is_ready() const noexcept { return result_data_.is_ready(); }
+
+ private:
+  copp::future::poller<value_type> result_data_;
 };
 
 /**

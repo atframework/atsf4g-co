@@ -343,7 +343,7 @@ class router_manager : public router_manager_base {
 
           // 转移通知RPC也需要设置为IO任务，这样如果有其他的读写任务或者转移任务都会等本任务完成
           obj->io_task_.swap(self_task);
-          ret = static_cast<int>(rpc::router::router_transfer(ctx, svr_id, *req, *rsp));
+          ret = RPC_AWAIT_CODE_RESULT(rpc::router::router_transfer(ctx, svr_id, *req, *rsp));
           obj->wakeup_io_task_awaiter();
           if (ret < 0) {
             FWLOGERROR("transfer router object (type={},zone_id={}) {} failed, res: {}", get_type_id(),

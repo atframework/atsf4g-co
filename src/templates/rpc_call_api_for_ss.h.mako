@@ -3,7 +3,6 @@
 import time
 %><%
 module_name = service.get_extension_field("service_options", lambda x: x.module_name, service.get_name_lower_rule())
-result_clazz_name = service.get_name_lower_rule() + '_result_t'
 %>// Copyright ${time.strftime("%Y", time.localtime()) } atframework
 // @brief Created by ${generator} for ${service.get_full_name()}, please don't edit it
 
@@ -23,30 +22,18 @@ result_clazz_name = service.get_name_lower_rule() + '_result_t'
 
 #include <config/compiler/protobuf_suffix.h>
 
-#include <libcopp/future/poller.h>
-
 #include <stdint.h>
 #include <cstddef>
 #include <cstring>
 #include <string>
+
+#include "rpc/rpc_common_types.h"
 
 namespace rpc {
 class context;
 % for ns in service.get_cpp_namespace_begin(module_name, ''):
 ${ns}
 % endfor
-struct ${result_clazz_name} {
-  ${result_clazz_name}();
-  explicit ${result_clazz_name}(int code);
-
-  // Remove this and implement co_yield to get the result in the future
-  explicit operator int() const noexcept;
-
-  bool is_success() const noexcept;
-  bool is_error() const noexcept;
-
-  copp::future::poller<int> result;
-};
 % for rpc in rpcs.values():
 <%
     rpc_is_router_api = rpc.get_extension_field('rpc_options', lambda x: x.router_rpc, False)
@@ -93,7 +80,7 @@ struct ${result_clazz_name} {
 %   endfor
  * @return 0 or error code
  */
-${result_clazz_name} ${rpc.get_name()}(${', '.join(rpc_params)});
+rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)});
 % endfor
 % for ns in service.get_cpp_namespace_end(module_name, ''):
 ${ns}

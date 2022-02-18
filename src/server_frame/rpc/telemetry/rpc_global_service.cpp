@@ -290,7 +290,7 @@ static void _opentelemetry_set_global_provider(
   if (!details::g_global_service_cache) {
     // Setup global log handle for opentelemetry for first startup
     opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogHandler(
-        opentelemetry::nostd::unique_ptr<opentelemetry::sdk::common::internal_log::LogHandler>{
+        opentelemetry::nostd::shared_ptr<opentelemetry::sdk::common::internal_log::LogHandler>{
             new details::opentelemetry_internal_log_handler()});
     app.add_evt_on_finally(_opentelemetry_cleanup_global_provider);
   }

@@ -78,10 +78,10 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  app.add_module(std::make_shared<main_service_module>());
   app.add_module(cs_msg_dispatcher::me());
   app.add_module(ss_msg_dispatcher::me());
   app.add_module(db_msg_dispatcher::me());
+  app.add_module(std::make_shared<main_service_module>());
 
   // run
   return app.run(uv_default_loop(), argc, (const char **)argv, nullptr);

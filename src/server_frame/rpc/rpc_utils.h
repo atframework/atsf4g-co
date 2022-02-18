@@ -33,6 +33,7 @@
 #include <vector>
 
 #include "rpc/telemetry/rpc_trace.h"
+#include "rpc/rpc_common_types.h"
 
 namespace atapp {
 class app;

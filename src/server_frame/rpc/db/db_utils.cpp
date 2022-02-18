@@ -92,14 +92,14 @@ char *get_pack_tls_buffer() {
 namespace rpc {
 namespace db {
 
-result_t::result_t() {}
-result_t::result_t(int code) : result(code) {}
-result_t::operator int() const noexcept {
-  if (!result.is_ready()) {
+result_type::result_type() {}
+result_type::result_type(int32_t code) : result_data_(code) {}
+result_type::operator int32_t() const noexcept {
+  if (!result_data_.is_ready()) {
     return 0;
   }
 
-  const int *ret = result.data();
+  const int32_t *ret = result_data_.data();
   if (nullptr == ret) {
     return 0;
   }
@@ -107,12 +107,12 @@ result_t::operator int() const noexcept {
   return *ret;
 }
 
-bool result_t::is_success() const noexcept {
-  if (!result.is_ready()) {
+bool result_type::is_success() const noexcept {
+  if (!result_data_.is_ready()) {
     return false;
   }
 
-  const int *ret = result.data();
+  const int32_t *ret = result_data_.data();
   if (nullptr == ret) {
     return false;
   }
@@ -120,12 +120,12 @@ bool result_t::is_success() const noexcept {
   return *ret >= 0;
 }
 
-bool result_t::is_error() const noexcept {
-  if (!result.is_ready()) {
+bool result_type::is_error() const noexcept {
+  if (!result_data_.is_ready()) {
     return false;
   }
 
-  const int *ret = result.data();
+  const int32_t *ret = result_data_.data();
   if (nullptr == ret) {
     return false;
   }
