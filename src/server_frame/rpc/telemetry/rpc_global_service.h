@@ -34,7 +34,16 @@ class global_service {
    *
    * @return ::opentelemetry::nostd::shared_ptr<::opentelemetry::trace::Tracer>
    */
-  static ::opentelemetry::nostd::shared_ptr<::opentelemetry::trace::Tracer> get_current_default_tracer();
+  static opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> get_current_default_tracer();
+
+  /**
+   * @brief Get tracer
+   *
+   * @return ::opentelemetry::nostd::shared_ptr<::opentelemetry::trace::Tracer>
+   */
+  static opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> get_tracer(
+      opentelemetry::nostd::string_view library_name, opentelemetry::nostd::string_view library_version = "",
+      opentelemetry::nostd::string_view schema_url = "");
 
   /**
    * @brief Set the current service object, it's used for tracer

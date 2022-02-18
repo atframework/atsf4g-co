@@ -88,7 +88,7 @@ logic:
               writing_alias: "${project.get_log_dir()}/${project.get_server_full_name()}.telemetry.log"
               auto_flush: error
               flush_interval: 1m
-      tracer_name: "${project.get_server_name()}"
+      default_name: "${project.get_server_name()}"
       resource:
         "tenant.id": "default"
       exporters:
