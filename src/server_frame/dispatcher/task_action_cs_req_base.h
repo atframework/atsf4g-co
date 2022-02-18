@@ -12,6 +12,7 @@
 
 #include <list>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "config/logic_config.h"
@@ -70,6 +71,7 @@ class task_action_cs_req_base : public task_action_req_base<atframework::CSMsg> 
  protected:
   void send_response() override;
   void send_response(bool sync_dirty);
+  void write_actor_log_body(const google::protobuf::Message &msg, const atframework::CSMsgHead &head);
 
  private:
   mutable std::shared_ptr<session> session_inst_;
@@ -179,6 +181,7 @@ class task_action_cs_rpc_base : public task_action_cs_req_base {
     } else {
       FWLOGDEBUG("task {} [{}] parse rpc request message {} success:\n{}", name(), get_task_id(),
                  get_request_type_url(), protobuf_mini_dumper_get_readable(*request_body_));
+      write_actor_log_body(*request_body_, get_request().head());
     }
   }
 
@@ -214,6 +217,7 @@ class task_action_cs_rpc_base : public task_action_cs_req_base {
       } else {
         FWLOGDEBUG("task {} [{}] serialize rpc response message {} success:\n{}", name(), get_task_id(),
                    get_response_type_url(), protobuf_mini_dumper_get_readable(*response_body_));
+        write_actor_log_body(*response_body_, *head);
       }
     }
   }

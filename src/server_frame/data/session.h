@@ -5,6 +5,14 @@
 #include <design_pattern/nomovable.h>
 #include <design_pattern/noncopyable.h>
 
+#include <config/compiler/protobuf_prefix.h>
+
+#include <protocol/pbdesc/com.protocol.pb.h>
+
+#include <config/compiler/protobuf_suffix.h>
+
+#include <log/log_wrapper.h>
+
 #include <config/server_frame_build_feature.h>
 
 #include <memory>
@@ -126,9 +134,15 @@ class session {
 
   int32_t send_kickoff(int32_t reason);
 
+  void write_actor_log_head(const atframework::CSMsg &msg, size_t byte_size, bool is_input);
+  void write_actor_log_body(const google::protobuf::Message &msg, const atframework::CSMsgHead &head);
+
   void alloc_session_sequence(atframework::CSMsg &msg);
 
   inline uint64_t get_last_session_sequence() const { return session_sequence_; }
+
+ private:
+  ::util::log::log_wrapper *mutable_actor_log_writter();
 
  private:
   key_t id_;
@@ -136,4 +150,6 @@ class session {
   std::weak_ptr<player_cache> player_;
   uint64_t login_task_id_;
   uint64_t session_sequence_;
+
+  std::shared_ptr<util::log::log_wrapper> actor_log_writter_;
 };

@@ -3,6 +3,7 @@
 #include "data/session.h"
 
 #include <algorithm/hash.h>
+#include <log/log_sink_file_backend.h>
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
@@ -17,6 +18,8 @@
 
 #include <utility/environment_helper.h>
 #include <utility/protobuf_mini_dumper.h>
+
+#include <config/logic_config.h>
 
 #include <utility>
 
@@ -85,7 +88,16 @@ session::session() : flags_(0), login_task_id_(0), session_sequence_(0) {
   id_.session_id = 0;
 }
 
-session::~session() { FWLOGDEBUG("session [{:#x}, {}] destroyed", id_.bus_id, id_.session_id); }
+session::~session() {
+  FWLOGDEBUG("session [{:#x}, {}] destroyed", id_.bus_id, id_.session_id);
+
+  if (actor_log_writter_) {
+    util::log::log_wrapper::caller_info_t caller = util::log::log_wrapper::caller_info_t(
+        util::log::log_formatter::level_t::LOG_LW_INFO, NULL, __FILE__, __LINE__, __FUNCTION__);
+    actor_log_writter_->format_log(caller, "------------ session: {:#x}:{} destroyed ------------", get_key().bus_id,
+                                   get_key().session_id);
+  }
+}
 
 bool session::is_closing() const noexcept { return check_flag(flag_t::EN_SESSION_FLAG_CLOSING); }
 
@@ -96,7 +108,39 @@ bool session::is_valid() const noexcept {
                          flag_t::EN_SESSION_FLAG_GATEWAY_REMOVED));
 }
 
-void session::set_player(std::shared_ptr<player_cache> u) { player_ = u; }
+void session::set_player(std::shared_ptr<player_cache> u) {
+  player_ = u;
+
+  if (u && !actor_log_writter_ && logic_config::me()->get_logic().session().enable_actor_log() &&
+      logic_config::me()->get_logic().session().actor_log_size() > 0 &&
+      logic_config::me()->get_logic().session().actor_log_rotate() > 0) {
+    actor_log_writter_ = util::log::log_wrapper::create_user_logger();
+    if (actor_log_writter_) {
+      actor_log_writter_->init(util::log::log_formatter::level_t::LOG_LW_INFO);
+      actor_log_writter_->set_stacktrace_level(util::log::log_formatter::level_t::LOG_LW_DISABLED,
+                                               util::log::log_formatter::level_t::LOG_LW_DISABLED);
+      actor_log_writter_->set_prefix_format("[%F %T.%f]: ");
+
+      std::stringstream ss_path;
+      std::stringstream ss_alias;
+      ss_path << logic_config::me()->get_logic().server().log_path() << "/cs-actor/%Y-%m-%d/" << u->get_user_id()
+              << ".%N.log";
+      ss_alias << logic_config::me()->get_logic().server().log_path() << "/cs-actor/%Y-%m-%d/" << u->get_user_id()
+               << ".log";
+      ::util::log::log_sink_file_backend file_sink(ss_path.str());
+      file_sink.set_writing_alias_pattern(ss_alias.str());
+      file_sink.set_flush_interval(1);  // flush every 1 second
+      file_sink.set_max_file_size(logic_config::me()->get_logic().session().actor_log_size());
+      file_sink.set_rotate_size(logic_config::me()->get_logic().session().actor_log_rotate());
+      actor_log_writter_->add_sink(file_sink);
+
+      util::log::log_wrapper::caller_info_t caller = util::log::log_wrapper::caller_info_t(
+          util::log::log_formatter::level_t::LOG_LW_INFO, NULL, __FILE__, __LINE__, __FUNCTION__);
+      actor_log_writter_->format_log(caller, "============ user id: {}, session: {:#x}:{} created ============",
+                                     u->get_user_id(), get_key().bus_id, get_key().session_id);
+    }
+  }
+}
 
 std::shared_ptr<player_cache> session::get_player() const { return player_.lock(); }
 
@@ -200,3 +244,91 @@ int32_t session::send_kickoff(int32_t reason) {
   // send kickoff using dispatcher
   return cs_msg_dispatcher::me()->send_kickoff(get_key().bus_id, get_key().session_id, reason);
 }
+
+void session::write_actor_log_head(const atframework::CSMsg &msg, size_t byte_size, bool is_input) {
+  ::util::log::log_wrapper *writter = mutable_actor_log_writter();
+  if (nullptr == writter) {
+    return;
+  }
+
+  uint64_t player_user_id = 0;
+  uint32_t player_zone_id = 0;
+  {
+    std::shared_ptr<player_cache> user = get_player();
+    if (user) {
+      player_user_id = user->get_user_id();
+      player_zone_id = user->get_zone_id();
+    }
+  }
+
+  gsl::string_view rpc_name;
+  gsl::string_view type_url;
+  const atframework::CSMsgHead &head = msg.head();
+  switch (head.rpc_type_case()) {
+    case atframework::CSMsgHead::kRpcRequest:
+      rpc_name = head.rpc_request().rpc_name();
+      type_url = head.rpc_request().type_url();
+      break;
+    case atframework::CSMsgHead::kRpcResponse:
+      rpc_name = head.rpc_response().rpc_name();
+      type_url = head.rpc_response().type_url();
+      break;
+    case atframework::CSMsgHead::kRpcStream:
+      rpc_name = head.rpc_stream().rpc_name();
+      type_url = head.rpc_stream().type_url();
+      break;
+    default:
+      rpc_name = "UNKNOWN RPC";
+      type_url = "UNKNOWN TYPE";
+      break;
+  }
+
+  util::log::log_wrapper::caller_info_t caller = util::log::log_wrapper::caller_info_t(
+      util::log::log_formatter::level_t::LOG_LW_INFO, NULL, __FILE__, __LINE__, __FUNCTION__);
+  if (is_input) {
+    writter->format_log(caller, "<<<<<<<<<<<< receive {} bytes from player {}:{}, session: {:#x}:{}, rpc: {}, type: {}",
+                        byte_size, player_zone_id, player_user_id, get_key().bus_id, get_key().session_id, rpc_name,
+                        type_url);
+  } else {
+    writter->format_log(caller, ">>>>>>>>>>>> send {} bytes to player {}:{}, session: {:#x}:{}, rpc: {}, type: {}",
+                        byte_size, player_zone_id, player_user_id, get_key().bus_id, get_key().session_id, rpc_name,
+                        type_url);
+  }
+}
+
+void session::write_actor_log_body(const google::protobuf::Message &msg, const atframework::CSMsgHead &head) {
+  ::util::log::log_wrapper *writter = mutable_actor_log_writter();
+  if (nullptr == writter) {
+    return;
+  }
+
+  gsl::string_view rpc_name;
+  gsl::string_view type_url;
+  switch (head.rpc_type_case()) {
+    case atframework::CSMsgHead::kRpcRequest:
+      rpc_name = head.rpc_request().rpc_name();
+      type_url = head.rpc_request().type_url();
+      break;
+    case atframework::CSMsgHead::kRpcResponse:
+      rpc_name = head.rpc_response().rpc_name();
+      type_url = head.rpc_response().type_url();
+      break;
+    case atframework::CSMsgHead::kRpcStream:
+      rpc_name = head.rpc_stream().rpc_name();
+      type_url = head.rpc_stream().type_url();
+      break;
+    default:
+      rpc_name = "UNKNOWN RPC";
+      type_url = "UNKNOWN TYPE";
+      break;
+  }
+  util::log::log_wrapper::caller_info_t caller = util::log::log_wrapper::caller_info_t(
+      util::log::log_formatter::level_t::LOG_LW_INFO, NULL, __FILE__, __LINE__, __FUNCTION__);
+  writter->format_log(caller,
+                      "============ session: {:#x}:{}, rpc: {}, type: {} ============\n------------ "
+                      "Head ------------\n{}------------ Body ------------\n{}",
+                      get_key().bus_id, get_key().session_id, rpc_name, type_url,
+                      protobuf_mini_dumper_get_readable(head, 1), protobuf_mini_dumper_get_readable(msg, 2));
+}
+
+::util::log::log_wrapper *session::mutable_actor_log_writter() { return actor_log_writter_.get(); }

@@ -239,3 +239,11 @@ void task_action_cs_req_base::send_response(bool sync_dirty) {
 
   send_response();
 }
+
+void task_action_cs_req_base::write_actor_log_body(const google::protobuf::Message &msg,
+                                                   const atframework::CSMsgHead &head) {
+  auto sess = get_session();
+  if (sess) {
+    sess->write_actor_log_body(msg, head);
+  }
+}

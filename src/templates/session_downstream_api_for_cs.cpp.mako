@@ -161,6 +161,7 @@ ${result_clazz_name} send_${rpc.get_name()}(
     return ${result_clazz_name}(res);
   }
 
+  __session.write_actor_log_body(__body, *msg_ptr->mutable_head());
   res = __session.send_msg_to_client(*msg_ptr);
   if (res < 0) {
     FWLOGERROR("rpc {} send message to session [{:#x}, {}] failed, result: {}({})",
@@ -197,6 +198,7 @@ ${result_clazz_name} send_${rpc.get_name()}(
     return ${result_clazz_name}(res);
   }
 
+  __session.write_actor_log_body(__body, *msg_ptr->mutable_head());
   res = __session.send_msg_to_client(*msg_ptr, server_sequence);
   if (res < 0) {
     FWLOGERROR("rpc {} send message to session [{:#x}, {}] failed, result: {}({})",
