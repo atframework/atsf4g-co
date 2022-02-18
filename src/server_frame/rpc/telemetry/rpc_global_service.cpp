@@ -175,22 +175,22 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> _op
     }
   }
 
-  if (exporter_cfg.has_otlp_grpc_trace() && !exporter_cfg.otlp_grpc_trace().endpoint().empty()) {
+  if (exporter_cfg.has_otlp_grpc() && !exporter_cfg.otlp_grpc().endpoint().empty()) {
     opentelemetry::exporter::otlp::OtlpGrpcExporterOptions options;
-    options.endpoint = exporter_cfg.otlp_grpc_trace().endpoint();
-    options.use_ssl_credentials = !exporter_cfg.otlp_grpc_trace().insecure();
-    options.ssl_credentials_cacert_path = exporter_cfg.otlp_grpc_trace().ca_file();
+    options.endpoint = exporter_cfg.otlp_grpc().endpoint();
+    options.use_ssl_credentials = !exporter_cfg.otlp_grpc().insecure();
+    options.ssl_credentials_cacert_path = exporter_cfg.otlp_grpc().ca_file();
 
     ret.emplace_back(std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>(
         new opentelemetry::exporter::otlp::OtlpGrpcExporter(options)));
   }
 
-  if (exporter_cfg.has_otlp_http_trace() && !exporter_cfg.otlp_http_trace().endpoint().empty()) {
+  if (exporter_cfg.has_otlp_http() && !exporter_cfg.otlp_http().endpoint().empty()) {
     opentelemetry::exporter::otlp::OtlpHttpExporterOptions options;
-    options.url = exporter_cfg.otlp_http_trace().endpoint();
+    options.url = exporter_cfg.otlp_http().endpoint();
     options.timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::seconds(exporter_cfg.otlp_http_trace().timeout().seconds()) +
-        std::chrono::nanoseconds(exporter_cfg.otlp_http_trace().timeout().nanos()));
+        std::chrono::seconds(exporter_cfg.otlp_http().timeout().seconds()) +
+        std::chrono::nanoseconds(exporter_cfg.otlp_http().timeout().nanos()));
 
     ret.emplace_back(std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>(
         new opentelemetry::exporter::otlp::OtlpHttpExporter(options)));
@@ -278,11 +278,10 @@ static void _opentelemetry_cleanup_global_provider(atapp::app &app) {
 
 static void _opentelemetry_set_global_provider(
     atapp::app &app, opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> provider,
-    std::shared_ptr<details::local_caller_info_t> app_info_cache,
-    const PROJECT_NAMESPACE_ID::config::opentelemetry_cfg &opentelemetry_cfg) {
+    std::shared_ptr<details::local_caller_info_t> app_info_cache, opentelemetry::nostd::string_view default_name) {
   // Default tracer
-  if (!opentelemetry_cfg.default_name().empty()) {
-    app_info_cache->default_tracer = provider->GetTracer(opentelemetry_cfg.default_name(), app.get_app_version());
+  if (!default_name.empty()) {
+    app_info_cache->default_tracer = provider->GetTracer(default_name, app.get_app_version());
   } else if (!app.get_type_name().empty()) {
     app_info_cache->default_tracer = provider->GetTracer(app.get_type_name(), app.get_app_version());
   } else {
@@ -386,18 +385,19 @@ void global_service::set_current_service(atapp::app &app,
   }
 
   auto resource = opentelemetry::sdk::resource::Resource::Create(resource_values);
-  auto exporter = _opentelemetry_create_exporter(*app_info_cache, opentelemetry_cfg.exporters());
-  auto sampler = _opentelemetry_create_sampler(opentelemetry_cfg.samplers());
-  if (!sampler) {
-    return;
+  if (opentelemetry_cfg.has_tracer()) {
+    auto exporter = _opentelemetry_create_exporter(*app_info_cache, opentelemetry_cfg.tracer().exporters());
+    auto sampler = _opentelemetry_create_sampler(opentelemetry_cfg.tracer().samplers());
+    if (!sampler) {
+      return;
+    }
+    auto processor = _opentelemetry_create_processor(std::move(exporter), opentelemetry_cfg.tracer().processors());
+    auto provider = _opentelemetry_create_provider(std::move(processor), std::move(sampler), std::move(resource));
+    if (!provider) {
+      return;
+    }
+    _opentelemetry_set_global_provider(app, provider, app_info_cache, opentelemetry_cfg.tracer().default_name());
   }
-  auto processor = _opentelemetry_create_processor(std::move(exporter), opentelemetry_cfg.processors());
-  auto provider = _opentelemetry_create_provider(std::move(processor), std::move(sampler), std::move(resource));
-  if (!provider) {
-    return;
-  }
-
-  _opentelemetry_set_global_provider(app, provider, app_info_cache, opentelemetry_cfg);
 }
 
 }  // namespace telemetry

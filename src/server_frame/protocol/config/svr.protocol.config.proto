@@ -123,8 +123,8 @@ message opentelemetry_exporter_otlp_http {
 }
 
 message opentelemetry_exporter_cfg {
-  opentelemetry_exporter_otlp_grpc otlp_grpc_trace = 1;
-  opentelemetry_exporter_otlp_http otlp_http_trace = 2;
+  opentelemetry_exporter_otlp_grpc otlp_grpc = 1;
+  opentelemetry_exporter_otlp_http otlp_http = 2;
   string ostream = 3;  // Just for debug
 }
 
@@ -149,12 +149,26 @@ message opentelemetry_sampler_cfg {
   }
 }
 
-message opentelemetry_cfg {
+message opentelemetry_tracer_cfg {
   string default_name = 1;
+  opentelemetry_exporter_cfg exporters = 2;
+  opentelemetry_processor_cfg processors = 3;
+  opentelemetry_sampler_cfg samplers = 4;
+}
+
+message opentelemetry_metrics_cfg {}
+
+message opentelemetry_logs_cfg {
+  string default_name = 1;
+  opentelemetry_exporter_cfg exporters = 2;
+  opentelemetry_processor_cfg processors = 3;
+}
+
+message opentelemetry_cfg {
   map<string, string> resource = 2;
-  opentelemetry_exporter_cfg exporters = 3;
-  opentelemetry_processor_cfg processors = 4;
-  opentelemetry_sampler_cfg samplers = 5;
+  opentelemetry_tracer_cfg tracer = 3;
+  opentelemetry_metrics_cfg metrics = 4;
+  opentelemetry_logs_cfg logs = 5;
 }
 
 message logic_telemetry_cfg {

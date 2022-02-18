@@ -91,20 +91,21 @@ logic:
       default_name: "${project.get_server_name()}"
       resource:
         "tenant.id": "default"
-      exporters:
-       # otlp_grpc_trace:
-       #  endpoint: "localhost:4317"
-       #  insecure: true
-       #  # ca_file: ""
-       # otlp_http_trace:
-       #   endpoint: "http://localhost:4318/v1/traces"
-       #   timeout: 10s
-       # ostream: "${project.get_log_dir()}/${project.get_server_full_name()}.debug.telemetry.log"
-      processors:
-        batch:
-          timeout: 5s
-          send_batch_size: 512
-          send_batch_max_size: 4096
-      samplers:
-        always_on: true
-        # trace_id_ratio: 0.25
+      tracer:
+        exporters:
+        # otlp_grpc:
+        #  endpoint: "localhost:4317"
+        #  insecure: true
+        #  # ca_file: ""
+        # otlp_http:
+        #   endpoint: "http://localhost:4318/v1/traces"
+        #   timeout: 10s
+        # ostream: "${project.get_log_dir()}/${project.get_server_full_name()}.debug.telemetry.log"
+        processors:
+          batch:
+            timeout: 5s
+            send_batch_size: 512
+            send_batch_max_size: 4096
+        samplers:
+          always_on: true
+          # trace_id_ratio: 0.25
