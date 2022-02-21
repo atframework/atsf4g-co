@@ -21,17 +21,27 @@
 #include <lock/spin_rw_lock.h>
 #include <log/log_wrapper.h>
 
+#include <config/logic_config.h>
 #include <config/server_frame_build_feature.h>
 #include <utility/protobuf_mini_dumper.h>
 
 #include <fstream>
 #include <string>
+#include <thread>
 #include <vector>
 
+#include "opentelemetry/exporters/ostream/log_exporter.h"
 #include "opentelemetry/exporters/ostream/span_exporter.h"
 #include "opentelemetry/exporters/otlp/otlp_grpc_exporter.h"
+#include "opentelemetry/exporters/otlp/otlp_grpc_log_exporter.h"
 #include "opentelemetry/exporters/otlp/otlp_http_exporter.h"
+#include "opentelemetry/exporters/otlp/otlp_http_log_exporter.h"
+#include "opentelemetry/logs/logger_provider.h"
+#include "opentelemetry/logs/noop.h"
 #include "opentelemetry/sdk/common/global_log_handler.h"
+#include "opentelemetry/sdk/logs/batch_log_processor.h"
+#include "opentelemetry/sdk/logs/logger_provider.h"
+#include "opentelemetry/sdk/logs/simple_log_processor.h"
 #include "opentelemetry/sdk/trace/batch_span_processor.h"
 #include "opentelemetry/sdk/trace/multi_span_processor.h"
 #include "opentelemetry/sdk/trace/samplers/always_off.h"
@@ -60,9 +70,13 @@ struct local_caller_info_t {
   atapp::protocol::atapp_area app_area;
   atapp::protocol::atapp_metadata app_metadata;
 
-  util::log::log_wrapper::ptr_t logger;
-  ::opentelemetry::nostd::shared_ptr<::opentelemetry::trace::Tracer> default_tracer;
-  ::opentelemetry::nostd::shared_ptr<std::ofstream> debug_ostream_exportor;
+  util::log::log_wrapper::ptr_t internal_logger;
+
+  opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> default_tracer;
+  opentelemetry::nostd::shared_ptr<std::ofstream> debug_tracer_ostream_exportor;
+  opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider> logs_provider;
+  opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> default_logger;
+  opentelemetry::nostd::shared_ptr<std::ofstream> debug_logger_ostream_exportor;
 };
 
 static std::shared_ptr<local_caller_info_t> g_global_service_cache;
@@ -114,12 +128,12 @@ class opentelemetry_internal_log_handler : public opentelemetry::sdk::common::in
       return;
     }
 
-    if (!current_service_cache->logger) {
+    if (!current_service_cache->internal_logger) {
       return;
     }
 
     if (nullptr != msg) {
-      current_service_cache->logger->format_log(caller, "{}", msg);
+      current_service_cache->internal_logger->format_log(caller, "{}", msg);
     }
   }
 };
@@ -132,26 +146,73 @@ opentelemetry::nostd::shared_ptr<::opentelemetry::trace::Tracer> global_service:
     return details::g_global_service_cache->default_tracer;
   }
 
-  return opentelemetry::nostd::shared_ptr<::opentelemetry::trace::Tracer>();
+  return opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
 }
 
 opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> global_service::get_tracer(
     opentelemetry::nostd::string_view library_name, opentelemetry::nostd::string_view library_version,
     opentelemetry::nostd::string_view schema_url) {
   util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{details::g_global_service_lock};
-  if (!details::g_global_service_cache) {
-    return opentelemetry::nostd::shared_ptr<::opentelemetry::trace::Tracer>();
+  auto current_service_cache = details::g_global_service_cache;
+  if (!current_service_cache) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
   }
 
   auto provider = opentelemetry::trace::Provider::GetTracerProvider();
   if (!provider) {
-    return opentelemetry::nostd::shared_ptr<::opentelemetry::trace::Tracer>();
+    return opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
+  }
+
+  if (library_name.empty()) {
+    library_name = current_service_cache->server_name;
+    if (library_version.empty()) {
+      library_version = current_service_cache->app_version;
+    }
+  }
+  if (schema_url.empty()) {
+    schema_url = logic_config::me()->get_cfg_telemetry().opentelemetry().logs().schema_url();
   }
 
   return provider->GetTracer(library_name, library_version, schema_url);
 }
 
-static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> _opentelemetry_create_exporter(
+opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> global_service::get_current_default_logger() {
+  util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{details::g_global_service_lock};
+  if (details::g_global_service_cache) {
+    return details::g_global_service_cache->default_logger;
+  }
+
+  return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
+}
+
+opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> global_service::get_logger(
+    opentelemetry::nostd::string_view logger_name, opentelemetry::nostd::string_view options,
+    opentelemetry::nostd::string_view library_name, opentelemetry::nostd::string_view library_version,
+    opentelemetry::nostd::string_view schema_url) {
+  auto current_service_cache = details::g_global_service_cache;
+  if (!current_service_cache) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
+  }
+
+  if (!current_service_cache->logs_provider) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
+  }
+
+  if (library_name.empty()) {
+    library_name = current_service_cache->server_name;
+    if (library_version.empty()) {
+      library_version = current_service_cache->app_version;
+    }
+  }
+  if (schema_url.empty()) {
+    schema_url = logic_config::me()->get_cfg_telemetry().opentelemetry().logs().schema_url();
+  }
+
+  return current_service_cache->logs_provider->GetLogger(logger_name, options, library_name, library_version,
+                                                         schema_url);
+}
+
+static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> _opentelemetry_create_trace_exporter(
     ::rpc::telemetry::details::local_caller_info_t &caller,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_exporter_cfg &exporter_cfg) {
   std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> ret;
@@ -168,7 +229,7 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> _op
       ::opentelemetry::nostd::shared_ptr<std::ofstream> fout{
           new std::ofstream(exporter_cfg.ostream().c_str(), std::ios::out | std::ios::trunc | std::ios::binary)};
       if (fout && fout->is_open()) {
-        caller.debug_ostream_exportor = fout;
+        caller.debug_tracer_ostream_exportor = fout;
         ret.emplace_back(std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>(
             new opentelemetry::exporter::trace::OStreamSpanExporter(*fout)));
       }
@@ -199,7 +260,7 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> _op
   return ret;
 }
 
-static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanProcessor>> _opentelemetry_create_processor(
+static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanProcessor>> _opentelemetry_create_trace_processor(
     std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> &&exporters,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_processor_cfg &processor_cfg) {
   std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanProcessor>> ret;
@@ -228,7 +289,7 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanProcessor>> _o
   return ret;
 }
 
-static std::unique_ptr<opentelemetry::sdk::trace::Sampler> _opentelemetry_create_sampler(
+static std::unique_ptr<opentelemetry::sdk::trace::Sampler> _opentelemetry_create_trace_sampler(
     const PROJECT_NAMESPACE_ID::config::opentelemetry_sampler_cfg &sampler_cfg) {
   switch (sampler_cfg.sampler_type_case()) {
     case PROJECT_NAMESPACE_ID::config::opentelemetry_sampler_cfg::kAlwaysOff: {
@@ -246,11 +307,91 @@ static std::unique_ptr<opentelemetry::sdk::trace::Sampler> _opentelemetry_create
   }
 }
 
-static opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> _opentelemetry_create_provider(
+static opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> _opentelemetry_create_trace_provider(
     std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanProcessor>> &&processors,
     std::unique_ptr<opentelemetry::sdk::trace::Sampler> &&sampler, opentelemetry::sdk::resource::Resource resource) {
   return opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>(
       new opentelemetry::sdk::trace::TracerProvider(std::move(processors), resource, std::move(sampler)));
+}
+
+static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogExporter>> _opentelemetry_create_logs_exporter(
+    ::rpc::telemetry::details::local_caller_info_t &caller,
+    const PROJECT_NAMESPACE_ID::config::opentelemetry_exporter_cfg &exporter_cfg) {
+  std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogExporter>> ret;
+  ret.reserve(2);
+
+  if (!exporter_cfg.ostream().empty()) {
+    if (0 == UTIL_STRFUNC_STRCASE_CMP("stdout", exporter_cfg.ostream().c_str())) {
+      ret.emplace_back(std::unique_ptr<opentelemetry::sdk::logs::LogExporter>(
+          new opentelemetry::exporter::logs::OStreamLogExporter(std::cout)));
+    } else if (0 == UTIL_STRFUNC_STRCASE_CMP("stderr", exporter_cfg.ostream().c_str())) {
+      ret.emplace_back(std::unique_ptr<opentelemetry::sdk::logs::LogExporter>(
+          new opentelemetry::exporter::logs::OStreamLogExporter(std::cerr)));
+    } else {
+      ::opentelemetry::nostd::shared_ptr<std::ofstream> fout{
+          new std::ofstream(exporter_cfg.ostream().c_str(), std::ios::out | std::ios::trunc | std::ios::binary)};
+      if (fout && fout->is_open()) {
+        caller.debug_logger_ostream_exportor = fout;
+        ret.emplace_back(std::unique_ptr<opentelemetry::sdk::logs::LogExporter>(
+            new opentelemetry::exporter::logs::OStreamLogExporter(*fout)));
+      }
+    }
+  }
+
+  if (exporter_cfg.has_otlp_grpc() && !exporter_cfg.otlp_grpc().endpoint().empty()) {
+    opentelemetry::exporter::otlp::OtlpGrpcExporterOptions options;
+    options.endpoint = exporter_cfg.otlp_grpc().endpoint();
+    options.use_ssl_credentials = !exporter_cfg.otlp_grpc().insecure();
+    options.ssl_credentials_cacert_path = exporter_cfg.otlp_grpc().ca_file();
+
+    ret.emplace_back(std::unique_ptr<opentelemetry::sdk::logs::LogExporter>(
+        new opentelemetry::exporter::otlp::OtlpGrpcLogExporter(options)));
+  }
+
+  if (exporter_cfg.has_otlp_http() && !exporter_cfg.otlp_http().endpoint().empty()) {
+    opentelemetry::exporter::otlp::OtlpHttpLogExporterOptions options;
+    options.url = exporter_cfg.otlp_http().endpoint();
+    options.timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::seconds(exporter_cfg.otlp_http().timeout().seconds()) +
+        std::chrono::nanoseconds(exporter_cfg.otlp_http().timeout().nanos()));
+
+    ret.emplace_back(std::unique_ptr<opentelemetry::sdk::logs::LogExporter>(
+        new opentelemetry::exporter::otlp::OtlpHttpLogExporter(options)));
+  }
+
+  return ret;
+}
+
+static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogProcessor>> _opentelemetry_create_logs_processor(
+    std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogExporter>> &&exporters,
+    const PROJECT_NAMESPACE_ID::config::opentelemetry_processor_cfg &processor_cfg) {
+  std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogProcessor>> ret;
+  ret.reserve(exporters.size());
+  if (processor_cfg.has_simple() && !processor_cfg.has_batch()) {
+    for (auto &exporter : exporters) {
+      ret.emplace_back(std::unique_ptr<opentelemetry::sdk::logs::LogProcessor>(
+          new opentelemetry::sdk::logs::SimpleLogProcessor(std::move(exporter))));
+    }
+    return ret;
+  }
+
+  for (auto &exporter : exporters) {
+    ret.emplace_back(
+        std::unique_ptr<opentelemetry::sdk::logs::LogProcessor>(new opentelemetry::sdk::logs::BatchLogProcessor(
+            std::move(exporter), static_cast<size_t>(processor_cfg.batch().send_batch_size()),
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::seconds(processor_cfg.batch().timeout().seconds()) +
+                std::chrono::nanoseconds(processor_cfg.batch().timeout().nanos())),
+            static_cast<size_t>(processor_cfg.batch().send_batch_max_size()))));
+  }
+  return ret;
+}
+
+static opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider> _opentelemetry_create_logs_provider(
+    std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogProcessor>> &&processors,
+    opentelemetry::sdk::resource::Resource resource) {
+  return opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>(
+      new opentelemetry::sdk::logs::LoggerProvider(std::move(processors), resource));
 }
 
 static void _opentelemetry_cleanup_global_provider(atapp::app &app) {
@@ -277,31 +418,59 @@ static void _opentelemetry_cleanup_global_provider(atapp::app &app) {
 }
 
 static void _opentelemetry_set_global_provider(
-    atapp::app &app, opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> provider,
-    std::shared_ptr<details::local_caller_info_t> app_info_cache, opentelemetry::nostd::string_view default_name) {
+    atapp::app &app, std::shared_ptr<details::local_caller_info_t> app_info_cache,
+    opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> tracer_provider,
+    const PROJECT_NAMESPACE_ID::config::opentelemetry_tracer_cfg &tracer_config,
+    opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider> logs_provider,
+    const PROJECT_NAMESPACE_ID::config::opentelemetry_logs_cfg &logs_config) {
   // Default tracer
-  if (!default_name.empty()) {
-    app_info_cache->default_tracer = provider->GetTracer(default_name, app.get_app_version());
-  } else if (!app.get_type_name().empty()) {
-    app_info_cache->default_tracer = provider->GetTracer(app.get_type_name(), app.get_app_version());
-  } else {
-    app_info_cache->default_tracer = provider->GetTracer(app.get_app_name(), app.get_app_version());
+  if (!tracer_provider) {
+    tracer_provider = opentelemetry::trace::Provider::GetTracerProvider();
   }
-  app_info_cache->logger = util::log::log_wrapper::create_user_logger();
+  if (!tracer_config.default_name().empty()) {
+    app_info_cache->default_tracer =
+        tracer_provider->GetTracer(tracer_config.default_name(), app.get_app_version(), tracer_config.schema_url());
+  } else if (!app.get_type_name().empty()) {
+    app_info_cache->default_tracer =
+        tracer_provider->GetTracer(app.get_type_name(), app.get_app_version(), tracer_config.schema_url());
+  } else {
+    app_info_cache->default_tracer =
+        tracer_provider->GetTracer(app.get_app_name(), app.get_app_version(), tracer_config.schema_url());
+  }
 
-  // Logger
+  // Default logger
+  if (!logs_provider) {
+    logs_provider = opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>{
+        new opentelemetry::logs::NoopLoggerProvider()};
+  }
+  app_info_cache->logs_provider = logs_provider;
+  if (!logs_config.default_name().empty()) {
+    app_info_cache->default_logger = logs_provider->GetLogger(logs_config.default_name(), "", app.get_app_name(),
+                                                              app.get_app_version(), logs_config.schema_url());
+  } else if (!app.get_type_name().empty()) {
+    app_info_cache->default_logger = logs_provider->GetLogger(app.get_type_name(), "", app.get_app_name(),
+                                                              app.get_app_version(), logs_config.schema_url());
+  } else {
+    app_info_cache->default_logger = logs_provider->GetLogger(app.get_app_name(), "", app.get_app_name(),
+                                                              app.get_app_version(), logs_config.schema_url());
+  }
+
+  // Internal Logger
+  app_info_cache->internal_logger = util::log::log_wrapper::create_user_logger();
   ::atapp::protocol::atapp_log opentelemetry_log_conf;
   app.parse_log_configures_into(opentelemetry_log_conf,
-                                std::vector<gsl::string_view>{"logic", "telemetry", "opentelemetry", "log"},
+                                std::vector<gsl::string_view>{"logic", "telemetry", "opentelemetry", "app_log"},
                                 "ATAPP_LOGIC_TELEMETRY_OPENTELEMETRY_LOG");
-  if (app_info_cache->logger && opentelemetry_log_conf.category_size() > 0) {
-    app_info_cache->logger->init(util::log::log_formatter::get_level_by_name(opentelemetry_log_conf.level().c_str()));
-    app.setup_logger(*app_info_cache->logger, opentelemetry_log_conf.level(), opentelemetry_log_conf.category(0));
+  if (app_info_cache->internal_logger && opentelemetry_log_conf.category_size() > 0) {
+    app_info_cache->internal_logger->init(
+        util::log::log_formatter::get_level_by_name(opentelemetry_log_conf.level().c_str()));
+    app.setup_logger(*app_info_cache->internal_logger, opentelemetry_log_conf.level(),
+                     opentelemetry_log_conf.category(0));
   }
 
   ::util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{details::g_global_service_lock};
   // Set the global trace provider and service cache.
-  opentelemetry::trace::Provider::SetTracerProvider(provider);
+  opentelemetry::trace::Provider::SetTracerProvider(tracer_provider);
   if (!details::g_global_service_cache) {
     // Setup global log handle for opentelemetry for first startup
     opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogHandler(
@@ -385,19 +554,26 @@ void global_service::set_current_service(atapp::app &app,
   }
 
   auto resource = opentelemetry::sdk::resource::Resource::Create(resource_values);
+  opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> tracer_provider;
   if (opentelemetry_cfg.has_tracer()) {
-    auto exporter = _opentelemetry_create_exporter(*app_info_cache, opentelemetry_cfg.tracer().exporters());
-    auto sampler = _opentelemetry_create_sampler(opentelemetry_cfg.tracer().samplers());
+    auto exporter = _opentelemetry_create_trace_exporter(*app_info_cache, opentelemetry_cfg.tracer().exporters());
+    auto sampler = _opentelemetry_create_trace_sampler(opentelemetry_cfg.tracer().samplers());
     if (!sampler) {
       return;
     }
-    auto processor = _opentelemetry_create_processor(std::move(exporter), opentelemetry_cfg.tracer().processors());
-    auto provider = _opentelemetry_create_provider(std::move(processor), std::move(sampler), std::move(resource));
-    if (!provider) {
-      return;
-    }
-    _opentelemetry_set_global_provider(app, provider, app_info_cache, opentelemetry_cfg.tracer().default_name());
+    auto processor =
+        _opentelemetry_create_trace_processor(std::move(exporter), opentelemetry_cfg.tracer().processors());
+    tracer_provider = _opentelemetry_create_trace_provider(std::move(processor), std::move(sampler), resource);
   }
+
+  opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider> logs_provider;
+  if (opentelemetry_cfg.has_logs()) {
+    auto exporter = _opentelemetry_create_logs_exporter(*app_info_cache, opentelemetry_cfg.logs().exporters());
+    auto processor = _opentelemetry_create_logs_processor(std::move(exporter), opentelemetry_cfg.logs().processors());
+    logs_provider = _opentelemetry_create_logs_provider(std::move(processor), resource);
+  }
+  _opentelemetry_set_global_provider(app, app_info_cache, tracer_provider, opentelemetry_cfg.tracer(), logs_provider,
+                                     opentelemetry_cfg.logs());
 }
 
 }  // namespace telemetry

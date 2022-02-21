@@ -52,6 +52,9 @@ include("${CMAKE_CURRENT_LIST_DIR}/xresloader/xresloader.cmake")
 set(PROJECT_THIRD_PARTY_PUBLIC_LINK_NAMES
     opentelemetry-cpp::otlp_http_exporter
     opentelemetry-cpp::otlp_grpc_exporter
+    opentelemetry-cpp::otlp_http_log_exporter
+    opentelemetry-cpp::otlp_grpc_log_exporter
+    opentelemetry-cpp::ostream_log_exporter
     opentelemetry-cpp::ostream_span_exporter
     opentelemetry-cpp::resources
     opentelemetry-cpp::sdk

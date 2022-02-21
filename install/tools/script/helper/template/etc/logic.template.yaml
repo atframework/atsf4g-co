@@ -68,7 +68,7 @@ logic:
     closing_action_batch_count: 500 # max action count when in closing task of router system
   telemetry:
     opentelemetry:
-      log:
+      app_log:
         level: debug
         category:
           name: opentelemetry
@@ -88,10 +88,10 @@ logic:
               writing_alias: "${project.get_log_dir()}/${project.get_server_full_name()}.telemetry.log"
               auto_flush: error
               flush_interval: 1m
-      default_name: "${project.get_server_name()}"
       resource:
         "tenant.id": "default"
       tracer:
+        default_name: "${project.get_server_name()}"
         exporters:
         # otlp_grpc:
         #  endpoint: "localhost:4317"
@@ -109,3 +109,19 @@ logic:
         samplers:
           always_on: true
           # trace_id_ratio: 0.25
+      logs:
+        default_name: "${project.get_server_name()}"
+        exporters:
+        # otlp_grpc:
+        #  endpoint: "localhost:4317"
+        #  insecure: true
+        #  # ca_file: ""
+        # otlp_http:
+        #   endpoint: "http://localhost:4318/v1/logs"
+        #   timeout: 10s
+        # ostream: "${project.get_log_dir()}/${project.get_server_full_name()}.debug.telemetry.log"
+        processors:
+          batch:
+            timeout: 5s
+            send_batch_size: 512
+            send_batch_max_size: 4096

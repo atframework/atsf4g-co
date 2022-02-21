@@ -11,6 +11,7 @@
 #include <memory>
 #include <utility>
 
+#include "opentelemetry/logs/logger.h"
 #include "opentelemetry/trace/tracer.h"
 
 namespace atapp {
@@ -43,6 +44,23 @@ class global_service {
    */
   static opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> get_tracer(
       opentelemetry::nostd::string_view library_name, opentelemetry::nostd::string_view library_version = "",
+      opentelemetry::nostd::string_view schema_url = "");
+
+  /**
+   * @brief Get the current default logger
+   *
+   * @return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>
+   */
+  static opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> get_current_default_logger();
+
+  /**
+   * @brief Get logger
+   *
+   * @return opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>
+   */
+  static opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> get_logger(
+      opentelemetry::nostd::string_view logger_name, opentelemetry::nostd::string_view options = "",
+      opentelemetry::nostd::string_view library_name = "", opentelemetry::nostd::string_view library_version = "",
       opentelemetry::nostd::string_view schema_url = "");
 
   /**

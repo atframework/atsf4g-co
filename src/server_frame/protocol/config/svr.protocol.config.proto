@@ -151,17 +151,21 @@ message opentelemetry_sampler_cfg {
 
 message opentelemetry_tracer_cfg {
   string default_name = 1;
-  opentelemetry_exporter_cfg exporters = 2;
-  opentelemetry_processor_cfg processors = 3;
-  opentelemetry_sampler_cfg samplers = 4;
+  string schema_url = 2 [(atapp.protocol.CONFIGURE) = { default_value: "https://opentelemetry.io/schemas/1.9.0" }];
+
+  opentelemetry_exporter_cfg exporters = 11;
+  opentelemetry_processor_cfg processors = 12;
+  opentelemetry_sampler_cfg samplers = 13;
 }
 
 message opentelemetry_metrics_cfg {}
 
 message opentelemetry_logs_cfg {
   string default_name = 1;
-  opentelemetry_exporter_cfg exporters = 2;
-  opentelemetry_processor_cfg processors = 3;
+  string schema_url = 2 [(atapp.protocol.CONFIGURE) = { default_value: "https://opentelemetry.io/schemas/1.9.0" }];
+
+  opentelemetry_exporter_cfg exporters = 11;
+  opentelemetry_processor_cfg processors = 12;
 }
 
 message opentelemetry_cfg {

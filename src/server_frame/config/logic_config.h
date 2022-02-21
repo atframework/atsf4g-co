@@ -51,6 +51,9 @@ class logic_config : public util::design_pattern::singleton<logic_config> {
   inline const PROJECT_NAMESPACE_ID::config::logic_section_cfg &get_logic() const noexcept {
     return server_cfg_.logic();
   }
+  inline const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &get_cfg_telemetry() const noexcept {
+    return get_logic().telemetry();
+  }
   inline const PROJECT_NAMESPACE_ID::config::logic_router_cfg &get_cfg_router() const noexcept {
     return get_logic().router();
   }
