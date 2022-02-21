@@ -78,7 +78,8 @@ player::task_queue_lock_guard::task_queue_lock_guard(player &user)
 
   if (need_yield) {
     queue_iter_->is_waiting = true;
-    task->yield();
+    RPC_AWAIT_IGNORE_RESULT(
+        rpc::custom_wait(reinterpret_cast<const void *>(&user.task_lock_queue_), nullptr, task->get_id()));
     queue_iter_->is_waiting = false;
 
     is_exiting_ = task->is_exiting();
@@ -100,14 +101,16 @@ player::task_queue_lock_guard::~task_queue_lock_guard() {
 
   // 激活下一个任务
   while (!lock_target_->task_lock_queue_.empty()) {
-    if (!lock_target_->task_lock_queue_.front().related_task) {
+    auto related_task = lock_target_->task_lock_queue_.front().related_task;
+    if (!related_task) {
       lock_target_->task_lock_queue_.pop_front();
       continue;
     }
 
     // 如果下一个任务在等待解锁，则直接解锁。否则可能下一个任务已经解锁（timeout或被killed）但在等待其他RPC
     if (lock_target_->task_lock_queue_.front().is_waiting) {
-      lock_target_->task_lock_queue_.front().related_task->resume();
+      rpc::custom_resume(*related_task, reinterpret_cast<const void *>(&lock_target_->task_lock_queue_),
+                         related_task->get_id(), nullptr);
     }
     break;
   }

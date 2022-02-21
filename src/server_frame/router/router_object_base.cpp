@@ -278,7 +278,7 @@ void router_object_base::wakeup_io_task_awaiter() {
     task_manager::task_ptr_t wake_task = io_task_awaiter_.front();
     if (wake_task && !wake_task->is_exiting()) {
       // iter will be erased in task
-      wake_task->resume(nullptr);
+      rpc::custom_resume(*wake_task, reinterpret_cast<const void *>(&io_task_awaiter_), wake_task->get_id(), nullptr);
     } else {
       // This should not be called
       if (wake_task) {
@@ -314,7 +314,8 @@ int router_object_base::await_io_task(task_manager::task_ptr_t &self_task) {
     FWLOGDEBUG("task {} start to await for task {} by router object/cache {}:{}:{}", self_task->get_id(),
                io_task_->get_id(), get_key().type_id, get_key().zone_id, get_key().object_id);
     auto awaiter_iter = io_task_awaiter_.insert(io_task_awaiter_.end(), self_task);
-    self_task->yield(nullptr);
+    RPC_AWAIT_IGNORE_RESULT(
+        rpc::custom_wait(reinterpret_cast<const void *>(&io_task_awaiter_), nullptr, self_task->get_id()));
     io_task_awaiter_.erase(awaiter_iter);
   }
 

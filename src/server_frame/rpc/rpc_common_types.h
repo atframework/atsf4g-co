@@ -6,11 +6,14 @@
 
 #include <config/server_frame_build_feature.h>
 
+#include <design_pattern/result_type.h>
+
 #include <libcopp/future/poller.h>
 
 #include <stdint.h>
 #include <cstddef>
 #include <type_traits>
+#include <utility>
 
 #include "rpc/rpc_macros.h"
 
@@ -26,14 +29,32 @@ class result_code_type {
   // Remove this and implement co_yield to get the result in the future
   explicit operator value_type() const noexcept;
 
-  bool is_success() const noexcept;
-  bool is_error() const noexcept;
-
   inline bool is_ready() const noexcept { return result_data_.is_ready(); }
 
  private:
   copp::future::poller<value_type> result_data_;
 };
+
+template <class TSuccess, class TError>
+class rpc_result : public util::design_pattern::result_type<TSuccess, TError> {
+ public:
+  using self_type = rpc_result<TSuccess, TError>;
+  using base_type = util::design_pattern::result_type<TSuccess, TError>;
+
+ public:
+  explicit rpc_result(base_type &&origin_input) : base_type(std::move(origin_input)) {}
+
+  template <class... TARGS>
+  static inline self_type make_success(TARGS &&...args) {
+    return rpc_result(base_type::make_success(std::forward<TARGS>(args)...));
+  }
+
+  template <class... TARGS>
+  static inline self_type make_error(TARGS &&...args) {
+    return rpc_result(base_type::make_error(std::forward<TARGS>(args)...));
+  }
+};
+
 }  // namespace rpc
 
 // When using c++20 coroutine, declare RPC_AWAIT_CODE_RESULT like this

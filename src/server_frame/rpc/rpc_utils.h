@@ -29,11 +29,13 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
-#include "rpc/telemetry/rpc_trace.h"
+#include "dispatcher/task_type_defines.h"
 #include "rpc/rpc_common_types.h"
+#include "rpc/telemetry/rpc_trace.h"
 
 namespace atapp {
 class app;
@@ -173,8 +175,50 @@ class context {
   tracer::span_ptr_type parent_span_;
 };
 
-int wait(atframework::SSMsg &msg, uint64_t check_sequence);
-int wait(PROJECT_NAMESPACE_ID::table_all_message &msg, uint64_t check_sequence);
-int wait(std::unordered_map<uint64_t, atframework::SSMsg> &msg_waiters);
-int wait(std::unordered_map<uint64_t, atframework::SSMsg *> &msg_waiters);
+result_code_type wait(atframework::SSMsg &msg, uint64_t check_sequence);
+result_code_type wait(PROJECT_NAMESPACE_ID::table_all_message &msg, uint64_t check_sequence);
+
+/**
+ * @brief wait for multiple messages
+ *
+ * @param waiters sequences of waiting messages
+ * @param received received messages
+ * @param wakeup_count wakeup and return after got this count of messages(0 means wait all)
+ * @return result_code_type
+ */
+result_code_type wait(const std::unordered_set<uint64_t> &waiters,
+                      std::unordered_map<uint64_t, atframework::SSMsg> &received, size_t wakeup_count = 0);
+
+/**
+ * @brief wait for multiple messages
+ *
+ * @param waiters sequences of waiting messages
+ * @param received received messages
+ * @param wakeup_count wakeup and return after got this count of messages(0 means wait all)
+ * @return result_code_type
+ */
+result_code_type wait(const std::unordered_set<uint64_t> &waiters,
+                      std::unordered_map<uint64_t, atframework::SSMsg *> &received, size_t wakeup_count = 0);
+
+/**
+ * @brief Custom wait for a message or resume
+ *
+ * @param type_address type object address, user should keep it unique for each message type
+ * @param received where to store received data, pass nullptr to ignore it
+ * @param check_sequence check sequence for this message type
+ * @return result_code_type
+ */
+result_code_type custom_wait(const void *type_address, void **received, uint64_t check_sequence);
+
+/**
+ * @brief Custom resume a waiter
+ *
+ * @param task task to resume
+ * @param type_address type object address, user should keep it unique for each message type
+ * @param sequence sequence for this message type and this resume
+ * @param received this will be assigned received in custom_wait
+ * @return result_code_type
+ */
+result_code_type custom_resume(task_types::task_type &task, const void *type_address, uint64_t sequence,
+                               void *received);
 }  // namespace rpc

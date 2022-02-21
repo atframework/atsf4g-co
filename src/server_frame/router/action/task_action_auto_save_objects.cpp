@@ -176,21 +176,21 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
     }
 
     if (need_wait) {
-      auto wait_result = rpc::wait_tasks(pending_action_batch_tasks);
+      auto wait_result = RPC_AWAIT_CODE_RESULT(rpc::wait_tasks(pending_action_batch_tasks));
       pending_action_batch_tasks.clear();
-      if (wait_result.is_error()) {
-        FWLOGERROR("Wait sub tasks to failed, result: {}({})", *wait_result.get_error(),
-                   protobuf_mini_dumper_get_error_msg(*wait_result.get_error()));
+      if (wait_result < 0) {
+        FWLOGERROR("Wait sub tasks to failed, result: {}({})", wait_result,
+                   protobuf_mini_dumper_get_error_msg(wait_result));
       }
     }
   }
 
   if (!pending_action_batch_tasks.empty()) {
-    auto wait_result = rpc::wait_tasks(pending_action_batch_tasks);
+    auto wait_result = RPC_AWAIT_CODE_RESULT(rpc::wait_tasks(pending_action_batch_tasks));
     pending_action_batch_tasks.clear();
-    if (wait_result.is_error()) {
-      FWLOGERROR("Wait sub tasks to remove_object failed, result: {}({})", *wait_result.get_error(),
-                 protobuf_mini_dumper_get_error_msg(*wait_result.get_error()));
+    if (wait_result < 0) {
+      FWLOGERROR("Wait sub tasks to remove_object failed, result: {}({})", wait_result,
+                 protobuf_mini_dumper_get_error_msg(wait_result));
     }
   }
 

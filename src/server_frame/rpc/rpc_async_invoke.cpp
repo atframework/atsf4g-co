@@ -62,21 +62,21 @@ rpc_result<task_manager::task_ptr_t, int> async_invoke(gsl::string_view caller_n
   return async_invoke(ctx, name, std::move(fn));
 }
 
-rpc_result<int, int> wait_tasks(const std::vector<task_manager::task_ptr_t> &tasks) {
+result_code_type wait_tasks(const std::vector<task_manager::task_ptr_t> &tasks) {
   task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
   if (!self_task) {
-    return rpc_result<int, int>::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
+    return result_code_type(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
   }
 
   while (true) {
     if (self_task->is_timeout()) {
-      return rpc_result<int, int>::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+      return result_code_type(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
     } else if (self_task->is_faulted()) {
-      return rpc_result<int, int>::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
+      return result_code_type(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
     } else if (self_task->is_canceled()) {
-      return rpc_result<int, int>::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
+      return result_code_type(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
     } else if (self_task->is_exiting()) {
-      return rpc_result<int, int>::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING);
+      return result_code_type(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING);
     }
 
     task_manager::task_ptr_t last_task;
@@ -103,7 +103,7 @@ rpc_result<int, int> wait_tasks(const std::vector<task_manager::task_ptr_t> &tas
     self_task->await_task(last_task);
   }
 
-  return rpc_result<int, int>::make_success(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  return result_code_type(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 }  // namespace rpc

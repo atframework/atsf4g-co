@@ -30,30 +30,4 @@ result_code_type::operator int32_t() const noexcept {
   return *ret;
 }
 
-bool result_code_type::is_success() const noexcept {
-  if (!result_data_.is_ready()) {
-    return false;
-  }
-
-  const int32_t* ret = result_data_.data();
-  if (nullptr == ret) {
-    return false;
-  }
-
-  return *ret >= 0;
-}
-
-bool result_code_type::is_error() const noexcept {
-  if (!result_data_.is_ready()) {
-    return false;
-  }
-
-  const int32_t* ret = result_data_.data();
-  if (nullptr == ret) {
-    return false;
-  }
-
-  return *ret < 0;
-}
-
 }  // namespace rpc

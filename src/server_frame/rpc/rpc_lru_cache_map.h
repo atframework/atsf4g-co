@@ -138,7 +138,7 @@ class rpc_lru_cache_map {
       // 如果没有缓存，本任务就是拉取任务
       if (nullptr == out) {
         break;
-      };
+      }
 
       // 如果正在拉取，则排到拉取任务后面
       if (out->pulling_task) {
@@ -248,8 +248,7 @@ class rpc_lru_cache_map {
           // fallback, clear data, 理论上不会走到这个流程，前面就是reset掉
           inout->saving_task.reset();
         } else {
-          inout->saving_task->next(self_task);
-          self_task->yield();
+          self_task->await_task(inout->saving_task);
 
           if (self_task->is_timeout()) {
             return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;

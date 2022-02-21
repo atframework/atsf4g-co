@@ -149,7 +149,7 @@ int64_t generate_global_increase_id(::rpc::context &ctx, uint32_t major_type, ui
 
   PROJECT_NAMESPACE_ID::table_all_message msg;
   // 协程操作
-  res = rpc::wait(msg, rpc_sequence);
+  res = RPC_AWAIT_CODE_RESULT(rpc::wait(msg, rpc_sequence));
   if (res < 0) {
     return tracer.return_code(res);
   }
@@ -235,7 +235,7 @@ struct unique_id_container_waker {
       auto wake_task = *iter->second.wake_tasks.begin();
       if (wake_task && !wake_task->is_exiting()) {
         // iter will be erased in task
-        wake_task->resume(nullptr);
+        rpc::custom_resume(*wake_task, reinterpret_cast<const void *>(&iter->second), wake_task->get_id(), nullptr);
       } else {
         // This should not be called
         if (wake_task) {
@@ -249,9 +249,9 @@ struct unique_id_container_waker {
   }
 
   static void insert_into_pool(unique_id_value_t &pool, task_manager::task_ptr_t task) {
-    // Append to wake list and then yield to switch out
+    // Append to wake list and then custom_wait to switch out
     auto iter = pool.wake_tasks.insert(pool.wake_tasks.end(), task);
-    task->yield(nullptr);
+    RPC_AWAIT_IGNORE_RESULT(rpc::custom_wait(reinterpret_cast<const void *>(&pool), nullptr, task->get_id()));
     pool.wake_tasks.erase(iter);
   }
 };

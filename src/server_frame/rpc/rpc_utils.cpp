@@ -15,6 +15,7 @@
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
+#include <protocol/pbdesc/svr.const.pb.h>
 #include <protocol/pbdesc/svr.global.table.pb.h>
 #include <protocol/pbdesc/svr.local.table.pb.h>
 #include <protocol/pbdesc/svr.protocol.pb.h>
@@ -106,24 +107,28 @@ void context::set_current_service(atapp::app &app, const PROJECT_NAMESPACE_ID::c
 }
 
 namespace detail {
-template <typename TMSG>
-static int wait(TMSG &msg, uintptr_t check_type, uint64_t check_sequence) {
+static result_code_type wait(void **output_msg, uintptr_t check_type, uint64_t check_sequence) {
+  if (nullptr != output_msg) {
+    *output_msg = nullptr;
+  }
+
   task_manager::task_t *task = task_manager::task_t::this_task();
   if (!task) {
     FWLOGERROR("current not in a task");
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
+    return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK};
   }
 
   if (task->is_timeout()) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+    return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT};
   } else if (task->is_faulted()) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
+    return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED};
   } else if (task->is_canceled()) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
+    return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED};
   }
 
   bool is_continue = true;
-  for (int retry_times = 0; is_continue && retry_times < 5; ++retry_times) {
+  for (int retry_times = 0; is_continue && retry_times < PROJECT_NAMESPACE_ID::EN_SL_RPC_MAX_MISMATCH_RETRY_TIMES + 1;
+       ++retry_times) {
     is_continue = false;
     // 协程 swap out
     void *result = nullptr;
@@ -134,41 +139,44 @@ static int wait(TMSG &msg, uintptr_t check_type, uint64_t check_sequence) {
     // 协程 swap in
 
     if (task->is_timeout()) {
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+      return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT};
     }
 
     if (task->is_faulted()) {
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
+      return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED};
     }
 
     if (task->is_canceled()) {
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
+      return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED};
     }
 
     if (nullptr == resume_data) {
-      FWLOGERROR("task {} resume data con not be empty", task->get_id());
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+      FWLOGINFO("task {} resume data is empty, maybe resumed by await_task", task->get_id());
+      is_continue = true;
+      continue;
     }
 
     if (resume_data->message.msg_type != check_type) {
-      FWLOGERROR("task {} resume and expect message type {:#x} but real is {:#x}", task->get_id(), check_type,
-                 resume_data->message.msg_type);
+      FWLOGINFO("task {} resume and expect message type {:#x} but real is {:#x}, ignore this message", task->get_id(),
+                check_type, resume_data->message.msg_type);
 
       is_continue = true;
       continue;
     }
 
     if (0 != check_sequence && 0 != resume_data->sequence && check_sequence != resume_data->sequence) {
-      FWLOGERROR("task {} resume and expect message sequence {:#x} but real is {:#x}", task->get_id(), check_sequence,
-                 resume_data->sequence);
+      FWLOGINFO("task {} resume and expect message sequence {:#x} but real is {:#x}, ignore this message",
+                task->get_id(), check_sequence, resume_data->sequence);
       is_continue = true;
       continue;
     }
 
-    msg.Swap(reinterpret_cast<TMSG *>(resume_data->message.msg_addr));
+    if (nullptr != output_msg) {
+      *output_msg = resume_data->message.msg_addr;
+    }
   }
 
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SUCCESS};
 }
 
 template <typename TMSG>
@@ -197,28 +205,29 @@ static inline void wait_swap_message(TMSG &output, void *input) {
 }
 
 template <typename TMSG>
-static int wait(uintptr_t check_type, std::unordered_map<uint64_t, TMSG> &msg_waiters) {
+static result_code_type wait(uintptr_t check_type, const std::unordered_set<uint64_t> &waiters,
+                             std::unordered_map<uint64_t, TMSG> &received, size_t wakeup_count) {
   task_manager::task_t *task = task_manager::task_t::this_task();
   if (!task) {
     FWLOGERROR("current not in a task");
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
+    return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK};
   }
 
   if (task->is_timeout()) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+    return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT};
   }
 
   if (task->is_faulted()) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
+    return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED};
   }
 
   if (task->is_canceled()) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
+    return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED};
   }
 
-  std::unordered_set<uint64_t> received;
-  received.reserve(msg_waiters.size());
-  for (size_t retry_times = 0; received.size() < msg_waiters.size() && retry_times < msg_waiters.size() * 3;
+  received.reserve(waiters.size());
+  for (size_t retry_times = 0; received.size() < wakeup_count &&
+                               retry_times < waiters.size() + PROJECT_NAMESPACE_ID::EN_SL_RPC_MAX_MISMATCH_RETRY_TIMES;
        ++retry_times) {
     // 协程 swap out
     void *result = nullptr;
@@ -229,68 +238,101 @@ static int wait(uintptr_t check_type, std::unordered_map<uint64_t, TMSG> &msg_wa
     // 协程 swap in
 
     if (task->is_timeout()) {
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+      return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT};
     }
 
     if (task->is_faulted()) {
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
+      return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED};
     }
 
     if (task->is_canceled()) {
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
+      return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED};
     }
 
     if (nullptr == resume_data) {
-      FWLOGERROR("task {} resume data con not be empty", task->get_id());
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+      FWLOGINFO("task {} resume data is empty, maybe resumed by await_task", task->get_id());
+      continue;
     }
 
     if (resume_data->message.msg_type != check_type) {
-      FWLOGERROR("task {} resume and expect message type {:#x} but real is {:#x}", task->get_id(), check_type,
-                 resume_data->message.msg_type);
+      FWLOGINFO("task {} resume and expect message type {:#x} but real is {:#x}, ignore this message", task->get_id(),
+                check_type, resume_data->message.msg_type);
 
       continue;
     }
 
-    auto rsp_iter = msg_waiters.find(resume_data->sequence);
-    if (rsp_iter == msg_waiters.end()) {
-      FWLOGERROR("task {} resume and with message sequence {} but not found in waiters", task->get_id(),
-                 resume_data->sequence);
+    auto rsp_iter = waiters.find(resume_data->sequence);
+    if (rsp_iter == waiters.end()) {
+      FWLOGINFO("task {} resume and with message sequence {} but not found in waiters, ignore this message",
+                task->get_id(), resume_data->sequence);
       continue;
     }
 
-    wait_swap_message(rsp_iter->second, resume_data->message.msg_addr);
-    received.insert(resume_data->sequence);
+    wait_swap_message(received[resume_data->sequence], resume_data->message.msg_addr);
   }
 
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SUCCESS};
 }
 }  // namespace detail
 
-int wait(atframework::SSMsg &msg, uint64_t check_sequence) {
-  int ret = detail::wait(msg, ss_msg_dispatcher::me()->get_instance_ident(), check_sequence);
+result_code_type wait(atframework::SSMsg &msg, uint64_t check_sequence) {
+  void *result = nullptr;
+  int ret = RPC_AWAIT_CODE_RESULT(detail::wait(&result, ss_msg_dispatcher::me()->get_instance_ident(), check_sequence));
   if (0 != ret) {
-    return ret;
+    return result_code_type{ret};
   }
 
-  return msg.head().error_code();
-}
-
-int wait(PROJECT_NAMESPACE_ID::table_all_message &msg, uint64_t check_sequence) {
-  int ret = detail::wait(msg, db_msg_dispatcher::me()->get_instance_ident(), check_sequence);
-  if (0 != ret) {
-    return ret;
+  if (nullptr != result) {
+    msg.Swap(reinterpret_cast<atframework::SSMsg *>(result));
   }
 
-  return msg.error_code();
+  return result_code_type{msg.head().error_code()};
 }
 
-int wait(std::unordered_map<uint64_t, atframework::SSMsg> &msg_waiters) {
-  return detail::wait(ss_msg_dispatcher::me()->get_instance_ident(), msg_waiters);
+result_code_type wait(PROJECT_NAMESPACE_ID::table_all_message &msg, uint64_t check_sequence) {
+  void *result = nullptr;
+  int ret = RPC_AWAIT_CODE_RESULT(detail::wait(&result, db_msg_dispatcher::me()->get_instance_ident(), check_sequence));
+  if (0 != ret) {
+    return result_code_type{ret};
+  }
+
+  if (nullptr != result) {
+    msg.Swap(reinterpret_cast<PROJECT_NAMESPACE_ID::table_all_message *>(result));
+  }
+
+  return result_code_type{msg.error_code()};
 }
 
-int wait(std::unordered_map<uint64_t, atframework::SSMsg *> &msg_waiters) {
-  return detail::wait(ss_msg_dispatcher::me()->get_instance_ident(), msg_waiters);
+result_code_type wait(const std::unordered_set<uint64_t> &waiters,
+                      std::unordered_map<uint64_t, atframework::SSMsg> &received, size_t wakeup_count) {
+  return detail::wait(ss_msg_dispatcher::me()->get_instance_ident(), waiters, received,
+                      0 == wakeup_count ? waiters.size() : wakeup_count);
+}
+
+result_code_type wait(const std::unordered_set<uint64_t> &waiters,
+                      std::unordered_map<uint64_t, atframework::SSMsg *> &received, size_t wakeup_count) {
+  return detail::wait(ss_msg_dispatcher::me()->get_instance_ident(), waiters, received,
+                      0 == wakeup_count ? waiters.size() : wakeup_count);
+}
+
+result_code_type custom_wait(const void *type_address, void **received, uint64_t check_sequence) {
+  return detail::wait(received, reinterpret_cast<uintptr_t>(type_address), check_sequence);
+}
+
+result_code_type custom_resume(task_types::task_type &task, const void *type_address, uint64_t sequence,
+                               void *received) {
+  dispatcher_resume_data_t resume_data = dispatcher_make_default<dispatcher_resume_data_t>();
+  resume_data.message.msg_type = reinterpret_cast<uintptr_t>(type_address);
+  resume_data.message.msg_addr = received;
+  resume_data.sequence = sequence;
+
+  int res = task.resume(&resume_data);
+  if (res < 0) {
+    FWLOGERROR("resume task {:#x} failed, res: {}.", task.get_id(), res);
+    return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND};
+  }
+
+  return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SUCCESS};
 }
 
 }  // namespace rpc

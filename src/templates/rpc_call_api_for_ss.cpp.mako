@@ -191,7 +191,7 @@ static inline int __rpc_wait_and_unpack_response(rpc::context &__ctx, uint64_t r
   }
 
   atframework::SSMsg& rsp_msg = *rsp_msg_ptr;
-  int res = rpc::wait(rsp_msg, rpc_sequence);
+  int res = RPC_AWAIT_CODE_RESULT(rpc::wait(rsp_msg, rpc_sequence));
   if (res < 0) {
     return res;
   }
@@ -380,7 +380,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
       break;
     } else if (nullptr != __wait_later) {
       *__wait_later = rpc_sequence;
-      // need to call rpc::wait(...) to wait this rpc sequence later
+      // need to call RPC_AWAIT_CODE_RESULT(rpc::wait(...)) to wait this rpc sequence later
       break;
     }
 %     endif

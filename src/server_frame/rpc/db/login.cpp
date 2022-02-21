@@ -83,7 +83,7 @@ result_type get(::rpc::context &ctx, const char *openid, uint32_t zone_id, PROJE
 
   PROJECT_NAMESPACE_ID::table_all_message table_msg;
   // 协程操作
-  res = rpc::wait(table_msg, rpc_sequence);
+  res = RPC_AWAIT_CODE_RESULT(rpc::wait(table_msg, rpc_sequence));
   if (res < 0) {
     return ::rpc::db::result_type(__tracer.return_code(res));
   }
@@ -163,7 +163,7 @@ result_type set(::rpc::context &ctx, const char *openid, uint32_t zone_id, PROJE
 
   PROJECT_NAMESPACE_ID::table_all_message table_msg;
   // 协程操作
-  res = rpc::wait(table_msg, rpc_sequence);
+  res = RPC_AWAIT_CODE_RESULT(rpc::wait(table_msg, rpc_sequence));
   if (res < 0) {
     if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res && !table_msg.version().empty()) {
       version.assign(table_msg.version());
