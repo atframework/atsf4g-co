@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <log/log_wrapper.h>
 #include <mem_pool/lru_map.h>
 #include <time/time_utility.h>
 
@@ -22,43 +23,46 @@
 #include <stdint.h>
 #include <unordered_map>
 
+#include "rpc/rpc_common_types.h"
+
 namespace rpc {
+class context;
+
 template <typename TKey, typename TObject>
 class rpc_lru_cache_map {
  public:
-  using key_type = TKey;
   using key_type = TKey;
   using value_type = TObject;
   using self_type = rpc_lru_cache_map<TKey, TObject>;
   enum { RPC_LRU_CACHE_MAP_DEFAULT_RETRY_TIMES = 3 };
 
-  struct value_cache_t {
+  struct value_cache_type {
     task_manager::task_ptr_t pulling_task;
     task_manager::task_ptr_t saving_task;
     key_type data_key;
-    int32_t data_version;
+    int64_t data_version;
     time_t last_visit_timepoint;
     value_type data_object;
     uint64_t saving_sequence;
     uint64_t saved_sequence;
 
-    value_cache_t(const key_type &k)
+    value_cache_type(const key_type &k)
         : data_key(k), data_version(0), last_visit_timepoint(0), saving_sequence(0), saved_sequence(0) {}
-    value_cache_t(const value_cache_t &) = default;
-    value_cache_t(value_cache_t &&) = default;
+    value_cache_type(const value_cache_type &) = default;
+    value_cache_type(value_cache_type &&) = default;
 
-    value_cache_t &operator=(const value_cache_t &) = default;
-    value_cache_t &operator=(value_cache_t &&) = default;
+    value_cache_type &operator=(const value_cache_type &) = default;
+    value_cache_type &operator=(value_cache_type &&) = default;
   };
 
-  using lru_map_t = util::mempool::lru_map<key_type, value_cache_t>;
-  using cache_ptr_t = typename lru_map_t::store_type;
-  using iterator = typename lru_map_t::iterator;
-  using const_iterator = typename lru_map_t::const_iterator;
-  using size_type = typename lru_map_t::size_type;
+  using lru_map_type = util::mempool::lru_map<key_type, value_cache_type>;
+  using cache_ptr_type = typename lru_map_type::store_type;
+  using iterator = typename lru_map_type::iterator;
+  using const_iterator = typename lru_map_type::const_iterator;
+  using size_type = typename lru_map_type::size_type;
 
  public:
-  cache_ptr_t get_cache(const key_type &key) {
+  cache_ptr_type get_cache(const key_type &key) {
     auto iter = pool_.find(key);
     if (iter != pool_.end()) {
       if (iter->second) {
@@ -70,7 +74,7 @@ class rpc_lru_cache_map {
     return nullptr;
   }
 
-  void set_cache(cache_ptr_t &cache) {
+  void set_cache(cache_ptr_type &cache) {
     if (!cache) {
       return;
     }
@@ -92,16 +96,16 @@ class rpc_lru_cache_map {
   inline const_iterator cbegin() const { return pool_.cbegin(); }
   inline iterator end() { return pool_.end(); }
   inline const_iterator cend() const { return pool_.cend(); }
-  inline const typename lru_map_t::value_type &front() const { return pool_.front(); }
-  inline typename lru_map_t::value_type &front() { return pool_.front(); }
-  inline const typename lru_map_t::value_type &back() const { return pool_.back(); }
-  inline typename lru_map_t::value_type &back() { return pool_.back(); }
+  inline const typename lru_map_type::value_type &front() const { return pool_.front(); }
+  inline typename lru_map_type::value_type &front() { return pool_.front(); }
+  inline const typename lru_map_type::value_type &back() const { return pool_.back(); }
+  inline typename lru_map_type::value_type &back() { return pool_.back(); }
   inline void pop_front() { return pool_.pop_front(); }
   inline void pop_back() { return pool_.pop_back(); }
   inline size_type size() const { return pool_.size(); }
   inline void reserve(size_type s) { pool_.reserve(s); }
 
-  bool remove_cache(key_type key) {
+  bool remove_cache(const key_type &key) {
     auto iter = pool_.find(key);
     if (iter != pool_.end()) {
       pool_.erase(iter);
@@ -120,15 +124,17 @@ class rpc_lru_cache_map {
    * @param[in]  fn   拉取协程函数
    * @return 0或错误码
    */
-  int await_fetch(key_type key, cache_ptr_t &out, int (*fn)(key_type key, value_type &val_out, int32_t *out_version)) {
+  result_code_type await_fetch(rpc::context &ctx, const key_type &key, cache_ptr_type &out,
+                               result_code_type (*fn)(rpc::context &ctx, const key_type &key, value_type &val_out,
+                                                      int64_t *out_version)) {
     if (nullptr == fn) {
       FWLOGERROR("{} must be called with rpc function", __FUNCTION__);
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+      return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM};
     }
 
     if (nullptr == cotask::this_task::get_task()) {
       FWLOGERROR("{} must be called in a cotask", __FUNCTION__);
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
+      return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK};
     }
 
     int retry_times = RPC_LRU_CACHE_MAP_DEFAULT_RETRY_TIMES + 1;
@@ -138,7 +144,7 @@ class rpc_lru_cache_map {
       // 如果没有缓存，本任务就是拉取任务
       if (nullptr == out) {
         break;
-      }
+      };
 
       // 如果正在拉取，则排到拉取任务后面
       if (out->pulling_task) {
@@ -150,25 +156,25 @@ class rpc_lru_cache_map {
           self_task->await_task(out->pulling_task);
           if (self_task->is_timeout()) {
             out.reset();
-            return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+            return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT};
           }
         }
         continue;
       }
 
-      return 0;
+      return result_code_type{0};
     }
 
     if (retry_times <= 0) {
       out.reset();
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_RETRY_TIMES_EXCEED;
+      return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_RETRY_TIMES_EXCEED};
     }
 
     // 尝试拉取，成功的话放进缓存
-    auto res = pool_.insert_key_value(key, value_cache_t(key));
+    auto res = pool_.insert_key_value(key, value_cache_type(key));
     if (!res.second) {
       out.reset();
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+      return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC};
     }
 
     task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
@@ -177,7 +183,7 @@ class rpc_lru_cache_map {
     out->last_visit_timepoint = util::time::time_utility::get_now();
     out->pulling_task = self_task;
 
-    int ret = fn(key, out->data_object, &out->data_version);
+    int ret = RPC_AWAIT_CODE_RESULT(fn(ctx, key, out->data_object, &out->data_version));
 
     // 拉取结束，重置拉取任务
     if (out->pulling_task == self_task) {
@@ -185,7 +191,7 @@ class rpc_lru_cache_map {
     }
 
     if (0 == ret) {
-      cache_ptr_t test_cache = get_cache(key);
+      cache_ptr_type test_cache = get_cache(key);
       if (nullptr != test_cache) {
         // 可能前面的缓存被淘汰过，新起了拉取任务
         if (test_cache->pulling_task == self_task) {
@@ -206,7 +212,7 @@ class rpc_lru_cache_map {
       remove_cache(key);
     }
 
-    return ret;
+    return result_code_type{ret};
   }
 
   /**
@@ -216,14 +222,15 @@ class rpc_lru_cache_map {
    * @param[in]  fn  保存协程函数
    * @return 0或错误码
    */
-  int await_save(cache_ptr_t &inout, int (*fn)(const value_type &in, int32_t *out_version)) {
+  result_code_type await_save(rpc::context &ctx, cache_ptr_type &inout,
+                              result_code_type (*fn)(rpc::context &ctx, const value_type &in, int64_t *out_version)) {
     if (!inout) {
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+      return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM};
     }
 
     if (nullptr == fn) {
-      FWLOGERROR("{} must be called with rpc function", __FUNCTION__);
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+      FWLOGERROR("{} must be called with rpc function", "rpc_lru_cache_map<KEY,ALUE>.await_save");
+      return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM};
     }
 
     // 分配一个保存序号，相当于保存版本号
@@ -234,7 +241,7 @@ class rpc_lru_cache_map {
     while (true) {
       // 如果其他得任务得保存已经覆盖了自己得版本，直接成功返回
       if (inout->saved_sequence >= this_saving_seq) {
-        return 0;
+        return result_code_type{0};
       }
 
       // 自己就是保存任务
@@ -251,7 +258,7 @@ class rpc_lru_cache_map {
           self_task->await_task(inout->saving_task);
 
           if (self_task->is_timeout()) {
-            return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+            return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT};
           }
         }
       }
@@ -261,24 +268,24 @@ class rpc_lru_cache_map {
     uint64_t real_saving_seq = inout->saving_sequence;
 
     inout->saving_task = task_manager::task_t::this_task();
-    int ret = fn(inout->data_object, &inout->data_version);
+    int ret = RPC_AWAIT_CODE_RESULT(fn(ctx, inout->data_object, &inout->data_version));
     inout->saving_task.reset();
 
     if (0 == ret && real_saving_seq > inout->saved_sequence) {
       inout->saved_sequence = real_saving_seq;
     } else if (0 != ret) {
-      cache_ptr_t cur = get_cache(inout->data_key);
+      cache_ptr_type cur = get_cache(inout->data_key);
       if (cur == inout) {
         // 数据错误，清除缓存，下次重新拉取
         remove_cache(inout->data_key);
       }
     }
 
-    return ret;
+    return result_code_type{ret};
   }
 
  private:
-  lru_map_t pool_;
+  lru_map_type pool_;
 };
 }  // namespace rpc
 

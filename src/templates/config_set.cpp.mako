@@ -249,6 +249,10 @@ int ${pb_msg_class_name}::load_list(const char* file_list_path) {
   for (; line_start < content.c_str() + content.size() && *line_start; line_start = line_end + 1) {
     line_end = line_start;
 
+    if ('\r' == *line_end || '\n' == *line_end || !*line_end) {
+      continue;
+    }
+
     while (*line_end && '\r' != *line_end && '\n' != *line_end) {
       ++ line_end;
     }

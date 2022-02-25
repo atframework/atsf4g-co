@@ -100,7 +100,7 @@ logic:
         # otlp_http:
         #   endpoint: "http://localhost:4318/v1/traces"
         #   timeout: 10s
-        # ostream: "${project.get_log_dir()}/${project.get_server_full_name()}.debug.telemetry.log"
+        # ostream: "${project.get_log_dir()}/${project.get_server_full_name()}.debug-trace.telemetry.log"
         processors:
           batch:
             timeout: 5s
@@ -119,7 +119,7 @@ logic:
         # otlp_http:
         #   endpoint: "http://localhost:4318/v1/logs"
         #   timeout: 10s
-        # ostream: "${project.get_log_dir()}/${project.get_server_full_name()}.debug.telemetry.log"
+        # ostream: "${project.get_log_dir()}/${project.get_server_full_name()}.debug-logs.telemetry.log"
         processors:
           batch:
             timeout: 5s

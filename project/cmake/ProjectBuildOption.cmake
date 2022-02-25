@@ -9,6 +9,8 @@ option(PROJECT_ENABLE_UNITTEST "Enable build unit test." OFF)
 if(UNIX AND NOT CYGWIN)
   option(LIBUNWIND_ENABLED "Enable libunwind." ON)
 endif()
+option(PROJECT_TOOL_REPORT_COMPILE_UNIT_TIME "Show compiling time of each unit" OFF)
+option(PROJECT_TOOL_REPORT_LINK_UNIT_TIME "Show linking time of each target." OFF)
 
 # project name
 set(PROJECT_BUILD_NAME
@@ -190,4 +192,11 @@ if(PROJECT_FIND_LINKER_MOLD)
   else()
     project_try_set_linker(LINKER "${PROJECT_FIND_LINKER_MOLD}")
   endif()
+endif()
+
+if(PROJECT_TOOL_REPORT_COMPILE_UNIT_TIME)
+  set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CMAKE_COMMAND} -E time")
+endif()
+if(PROJECT_TOOL_REPORT_LINK_UNIT_TIME)
+  set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "${CMAKE_COMMAND} -E time")
 endif()
