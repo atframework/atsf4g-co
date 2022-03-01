@@ -251,11 +251,11 @@ ${ns}
 rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
 %   if rpc_is_router_api:
   if (object_id == 0 || type_id == 0) {
-    return rpc::result_code_type(${project_namespace}::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(${project_namespace}::err::EN_SYS_PARAM);
   }
 %   else:
   if (dst_bus_id == 0) {
-    return rpc::result_code_type(${project_namespace}::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(${project_namespace}::err::EN_SYS_PARAM);
   }
 %   endif
 
@@ -264,7 +264,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
   if (!task) {
     FWLOGERROR("rpc {} must be called in a task",
                "${rpc.get_full_name()}");
-    return rpc::result_code_type(${project_namespace}::err::EN_SYS_RPC_NO_TASK);
+    RPC_RETURN_CODE(${project_namespace}::err::EN_SYS_RPC_NO_TASK);
   }
 %   endif
 
@@ -272,7 +272,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
   if (nullptr == req_msg_ptr) {
     FWLOGERROR("rpc {} create request message failed",
                "${rpc.get_full_name()}");
-    return rpc::result_code_type(${project_namespace}::err::EN_SYS_MALLOC);
+    RPC_RETURN_CODE(${project_namespace}::err::EN_SYS_MALLOC);
   }
 
   int res;
@@ -300,14 +300,14 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
   }
 %   endif
   if (res < 0) {
-    return rpc::result_code_type(res);
+    RPC_RETURN_CODE(res);
   }
 
   res = details::__pack_rpc_body(req_body, req_msg.mutable_body_bin(),
                                  "${rpc.get_full_name()}", 
                                  ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name());
   if (res < 0) {
-    return rpc::result_code_type(res);
+    RPC_RETURN_CODE(res);
   }
 
   rpc::context __child_ctx(__ctx);
@@ -340,7 +340,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
   if (nullptr == router_manager) {
     FWLOGERROR("rpc {} can not get router manager of type {}",
                "${rpc.get_full_name()}", type_id);
-    return rpc::result_code_type(__tracer.return_code(${project_namespace}::err::EN_SYS_NOT_SUPPORT));
+    RPC_RETURN_CODE(__tracer.return_code(${project_namespace}::err::EN_SYS_NOT_SUPPORT));
   }
 
   uint64_t rpc_sequence = 0;
@@ -355,7 +355,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
     if (details::__redirect_rpc_result_to_warning_log(res, warning_codes,
         "${rpc.get_full_name()}",
         ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name())) {
-        return rpc::result_code_type(__tracer.return_code(res));
+        RPC_RETURN_CODE(__tracer.return_code(res));
   }
 %     endif
 %     if rpc.get_extension_field('rpc_options', lambda x: x.info_log_response_code, []):
@@ -363,7 +363,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
   if (details::__redirect_rpc_result_to_info_log(res, info_codes,
       "${rpc.get_full_name()}",
       ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name())) {
-    return rpc::result_code_type(__tracer.return_code(res));
+    RPC_RETURN_CODE(__tracer.return_code(res));
   }
 %     endif
     FWLOGERROR("rpc {} call failed, res: {}({})",
@@ -371,7 +371,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
                res, protobuf_mini_dumper_get_error_msg(res)
     );
   }
-  return rpc::result_code_type(__tracer.return_code(res));
+  RPC_RETURN_CODE(__tracer.return_code(res));
 %   else:
   do {
     uint64_t rpc_sequence = req_msg.head().sequence();
@@ -398,7 +398,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
     if (details::__redirect_rpc_result_to_warning_log(res, warning_codes,
         "${rpc.get_full_name()}",
         ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name())) {
-      return rpc::result_code_type(__tracer.return_code(res));
+      RPC_RETURN_CODE(__tracer.return_code(res));
     }
 %     endif
 %     if warning_log_codes in rpc.get_extension_field('rpc_options', lambda x: x.info_log_response_code, []):
@@ -406,7 +406,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
     if (details::__redirect_rpc_result_to_info_log(res, info_codes,
         "${rpc.get_full_name()}",
         ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name())) {
-      return rpc::result_code_type(__tracer.return_code(res));
+      RPC_RETURN_CODE(__tracer.return_code(res));
     }
 %     endif
       FWLOGERROR("rpc {} call failed, res: {}({})",
@@ -415,7 +415,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
       );
   }
 
-  return rpc::result_code_type(__tracer.return_code(res));
+  RPC_RETURN_CODE(__tracer.return_code(res));
 %   endif
 }
 % endfor

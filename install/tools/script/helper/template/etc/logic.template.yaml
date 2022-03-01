@@ -91,6 +91,7 @@ logic:
       resource:
         "tenant.id": "default"
       tracer:
+        # resource:
         default_name: "${project.get_server_name()}"
         exporters:
         # otlp_grpc:
@@ -110,6 +111,7 @@ logic:
           always_on: true
           # trace_id_ratio: 0.25
       logs:
+        # resource:
         default_name: "${project.get_server_name()}"
         exporters:
         # otlp_grpc:

@@ -225,8 +225,10 @@ static result_code_type wait(uintptr_t check_type, const std::unordered_set<uint
     return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED};
   }
 
+  std::unordered_set<uint64_t> received_sequences;
+  received_sequences.reserve(waiters.size());
   received.reserve(waiters.size());
-  for (size_t retry_times = 0; received.size() < wakeup_count &&
+  for (size_t retry_times = 0; received_sequences.size() < wakeup_count &&
                                retry_times < waiters.size() + PROJECT_NAMESPACE_ID::EN_SL_RPC_MAX_MISMATCH_RETRY_TIMES;
        ++retry_times) {
     // 协程 swap out
@@ -268,6 +270,7 @@ static result_code_type wait(uintptr_t check_type, const std::unordered_set<uint
       continue;
     }
 
+    received_sequences.insert(resume_data->sequence);
     wait_swap_message(received[resume_data->sequence], resume_data->message.msg_addr);
   }
 

@@ -553,7 +553,6 @@ void global_service::set_current_service(atapp::app &app,
     resource_values.SetAttribute(ext_res.first, ext_res.second);
   }
 
-  auto resource = opentelemetry::sdk::resource::Resource::Create(resource_values);
   opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> tracer_provider;
   if (opentelemetry_cfg.has_tracer()) {
     auto exporter = _opentelemetry_create_trace_exporter(*app_info_cache, opentelemetry_cfg.tracer().exporters());
@@ -563,14 +562,33 @@ void global_service::set_current_service(atapp::app &app,
     }
     auto processor =
         _opentelemetry_create_trace_processor(std::move(exporter), opentelemetry_cfg.tracer().processors());
-    tracer_provider = _opentelemetry_create_trace_provider(std::move(processor), std::move(sampler), resource);
+
+    opentelemetry::sdk::resource::ResourceAttributes trace_resource_values = resource_values;
+    for (auto &ext_res : opentelemetry_cfg.tracer().resource()) {
+      if (ext_res.second.empty()) {
+        continue;
+      }
+      trace_resource_values.SetAttribute(ext_res.first, ext_res.second);
+    }
+    tracer_provider =
+        _opentelemetry_create_trace_provider(std::move(processor), std::move(sampler),
+                                             opentelemetry::sdk::resource::Resource::Create(trace_resource_values));
   }
 
   opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider> logs_provider;
   if (opentelemetry_cfg.has_logs()) {
     auto exporter = _opentelemetry_create_logs_exporter(*app_info_cache, opentelemetry_cfg.logs().exporters());
     auto processor = _opentelemetry_create_logs_processor(std::move(exporter), opentelemetry_cfg.logs().processors());
-    logs_provider = _opentelemetry_create_logs_provider(std::move(processor), resource);
+
+    opentelemetry::sdk::resource::ResourceAttributes logs_resource_values = resource_values;
+    for (auto &ext_res : opentelemetry_cfg.logs().resource()) {
+      if (ext_res.second.empty()) {
+        continue;
+      }
+      logs_resource_values.SetAttribute(ext_res.first, ext_res.second);
+    }
+    logs_provider = _opentelemetry_create_logs_provider(
+        std::move(processor), opentelemetry::sdk::resource::Resource::Create(logs_resource_values));
   }
   _opentelemetry_set_global_provider(app, app_info_cache, tracer_provider, opentelemetry_cfg.tracer(), logs_provider,
                                      opentelemetry_cfg.logs());
