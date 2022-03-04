@@ -36,10 +36,10 @@ struct trace_option {
 
 class tracer {
  public:
-  using string_view = ::opentelemetry::nostd::string_view;
-  using span_ptr_type = ::opentelemetry::nostd::shared_ptr<::opentelemetry::trace::Span>;
-  using trace_id_span = ::opentelemetry::nostd::span<const uint8_t, ::opentelemetry::trace::TraceId::kSize>;
-  using span_id_span = ::opentelemetry::nostd::span<const uint8_t, ::opentelemetry::trace::SpanId::kSize>;
+  using string_view = opentelemetry::nostd::string_view;
+  using span_ptr_type = opentelemetry::nostd::shared_ptr<opentelemetry::trace::Span>;
+  using trace_id_span = opentelemetry::nostd::span<const uint8_t, opentelemetry::trace::TraceId::kSize>;
+  using span_id_span = opentelemetry::nostd::span<const uint8_t, opentelemetry::trace::SpanId::kSize>;
 
  public:
   tracer();

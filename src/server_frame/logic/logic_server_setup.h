@@ -21,11 +21,13 @@
 
 #include <stdint.h>
 
+#include <chrono>
 #include <cstddef>
 #include <ctime>
 #include <functional>
 #include <list>
 #include <memory>
+#include <queue>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -54,6 +56,21 @@ int logic_server_setup_common(atapp::app& app, const logic_server_common_module_
  * @return 初始化后,stop前,返回模块地址,否则返回NULL
  */
 logic_server_common_module* logic_server_last_common_module();
+
+struct logic_server_timer {
+  std::chrono::system_clock::time_point timeout;
+  uint64_t task_id;
+  uintptr_t message_type;
+  uint64_t sequence;
+
+  friend inline bool operator<(const logic_server_timer& lhs, const logic_server_timer& rhs) noexcept {
+    if (lhs.timeout != rhs.timeout) {
+      return lhs.timeout < rhs.timeout;
+    }
+
+    return lhs.task_id < rhs.task_id;
+  }
+};
 
 class logic_server_common_module : public atapp::module_impl {
  public:
@@ -124,6 +141,8 @@ class logic_server_common_module : public atapp::module_impl {
     return server_remote_conf_;
   }
 
+  void insert_timer(uint64_t task_id, std::chrono::system_clock::duration timeout, logic_server_timer& output);
+
  private:
   int setup_battle_service_watcher();
   int setup_etcd_event_handle();
@@ -145,4 +164,6 @@ class logic_server_common_module : public atapp::module_impl {
   int32_t server_remote_conf_global_version_;
   int32_t server_remote_conf_zone_version_;
   time_t server_remote_conf_next_update_time_;
+
+  std::priority_queue<logic_server_timer> task_timer_;
 };

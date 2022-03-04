@@ -42,7 +42,7 @@
 class dispatcher_implement : public ::atapp::module_impl {
  public:
   using msg_op_type_t = PROJECT_NAMESPACE_ID::EnMsgOpType;
-  using msg_raw_t = dispatcher_msg_raw_t;
+  using msg_raw_t = dispatcher_raw_message;
   using resume_data_t = dispatcher_resume_data_t;
   using start_data_t = dispatcher_start_data_t;
   using msg_type_t = uint32_t;
@@ -56,9 +56,9 @@ class dispatcher_implement : public ::atapp::module_impl {
       std::unordered_map<std::string, const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::MethodDescriptor *>;
 
   struct msg_filter_data_t {
-    dispatcher_msg_raw_t msg;
+    dispatcher_raw_message msg;
 
-    inline explicit msg_filter_data_t(const dispatcher_msg_raw_t &m) : msg(m) {}
+    inline explicit msg_filter_data_t(const dispatcher_raw_message &m) : msg(m) {}
   };
 
   struct dispatcher_result_t {

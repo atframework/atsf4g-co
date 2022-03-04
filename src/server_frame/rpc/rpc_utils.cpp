@@ -33,6 +33,8 @@
 
 #include "rpc/telemetry/rpc_global_service.h"
 
+#include "logic/logic_server_setup.h"
+
 namespace rpc {
 
 context::context() {
@@ -115,15 +117,15 @@ static result_code_type wait(void **output_msg, uintptr_t check_type, uint64_t c
   task_manager::task_t *task = task_manager::task_t::this_task();
   if (!task) {
     FWLOGERROR("current not in a task");
-    return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK};
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
   }
 
   if (task->is_timeout()) {
-    return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT};
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
   } else if (task->is_faulted()) {
-    return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED};
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
   } else if (task->is_canceled()) {
-    return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED};
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
   }
 
   bool is_continue = true;
@@ -139,15 +141,15 @@ static result_code_type wait(void **output_msg, uintptr_t check_type, uint64_t c
     // 协程 swap in
 
     if (task->is_timeout()) {
-      return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT};
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
     }
 
     if (task->is_faulted()) {
-      return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED};
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
     }
 
     if (task->is_canceled()) {
-      return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED};
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
     }
 
     if (nullptr == resume_data) {
@@ -176,7 +178,7 @@ static result_code_type wait(void **output_msg, uintptr_t check_type, uint64_t c
     }
   }
 
-  return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SUCCESS};
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 template <typename TMSG>
@@ -210,19 +212,19 @@ static result_code_type wait(uintptr_t check_type, const std::unordered_set<uint
   task_manager::task_t *task = task_manager::task_t::this_task();
   if (!task) {
     FWLOGERROR("current not in a task");
-    return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK};
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
   }
 
   if (task->is_timeout()) {
-    return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT};
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
   }
 
   if (task->is_faulted()) {
-    return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED};
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
   }
 
   if (task->is_canceled()) {
-    return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED};
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
   }
 
   std::unordered_set<uint64_t> received_sequences;
@@ -240,15 +242,15 @@ static result_code_type wait(uintptr_t check_type, const std::unordered_set<uint
     // 协程 swap in
 
     if (task->is_timeout()) {
-      return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT};
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
     }
 
     if (task->is_faulted()) {
-      return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED};
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
     }
 
     if (task->is_canceled()) {
-      return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED};
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
     }
 
     if (nullptr == resume_data) {
@@ -274,36 +276,61 @@ static result_code_type wait(uintptr_t check_type, const std::unordered_set<uint
     wait_swap_message(received[resume_data->sequence], resume_data->message.msg_addr);
   }
 
-  return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SUCCESS};
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 }  // namespace detail
+
+result_code_type wait(context &ctx, std::chrono::system_clock::duration timeout) {
+  logic_server_common_module *mod = logic_server_last_common_module();
+  if (nullptr == mod) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_COMMON_LOGIC_TIMER_NEED_COMMON_MODULE);
+  }
+
+  task_manager::task_t *task = task_manager::task_t::this_task();
+  if (!task) {
+    FWLOGERROR("current not in a task");
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
+  }
+  rpc::context child_ctx(ctx);
+  rpc::context::tracer tracer;
+  ::rpc::context::trace_option trace_option;
+  trace_option.dispatcher = nullptr;
+  trace_option.is_remote = false;
+  trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+  child_ctx.setup_tracer(tracer, "rpc.wait.timer", std::move(trace_option));
+
+  logic_server_timer timer;
+  mod->insert_timer(task->get_id(), timeout, timer);
+
+  return detail::wait(nullptr, timer.message_type, timer.sequence);
+}
 
 result_code_type wait(atframework::SSMsg &msg, uint64_t check_sequence) {
   void *result = nullptr;
   int ret = RPC_AWAIT_CODE_RESULT(detail::wait(&result, ss_msg_dispatcher::me()->get_instance_ident(), check_sequence));
   if (0 != ret) {
-    return result_code_type{ret};
+    RPC_RETURN_CODE(ret);
   }
 
   if (nullptr != result) {
     msg.Swap(reinterpret_cast<atframework::SSMsg *>(result));
   }
 
-  return result_code_type{msg.head().error_code()};
+  RPC_RETURN_CODE(msg.head().error_code());
 }
 
 result_code_type wait(PROJECT_NAMESPACE_ID::table_all_message &msg, uint64_t check_sequence) {
   void *result = nullptr;
   int ret = RPC_AWAIT_CODE_RESULT(detail::wait(&result, db_msg_dispatcher::me()->get_instance_ident(), check_sequence));
   if (0 != ret) {
-    return result_code_type{ret};
+    RPC_RETURN_CODE(ret);
   }
 
   if (nullptr != result) {
     msg.Swap(reinterpret_cast<PROJECT_NAMESPACE_ID::table_all_message *>(result));
   }
 
-  return result_code_type{msg.error_code()};
+  RPC_RETURN_CODE(msg.error_code());
 }
 
 result_code_type wait(const std::unordered_set<uint64_t> &waiters,
@@ -332,10 +359,10 @@ result_code_type custom_resume(task_types::task_type &task, const void *type_add
   int res = task.resume(&resume_data);
   if (res < 0) {
     FWLOGERROR("resume task {:#x} failed, res: {}.", task.get_id(), res);
-    return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND};
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
 
-  return result_code_type{PROJECT_NAMESPACE_ID::err::EN_SUCCESS};
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 }  // namespace rpc

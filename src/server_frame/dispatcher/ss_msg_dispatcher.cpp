@@ -96,7 +96,7 @@ const atframework::DispatcherOptions *ss_msg_dispatcher::get_options_by_message_
   return nullptr;
 }
 
-int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, atframework::SSMsg &ss_msg) {
+int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, atframework::SSMsg &ss_msg, bool ignore_discovery) {
   if (0 == ss_msg.head().sequence()) {
     ss_msg.mutable_head()->set_sequence(allocate_sequence());
   }
@@ -116,10 +116,11 @@ int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, atframework::SSMsg &ss_
   FWLOGDEBUG("send msg to proc [{:#x}: {}] {} bytes\n{}", bus_id, get_app()->convert_app_id_to_string(bus_id),
              msg_buf_len, protobuf_mini_dumper_get_readable(ss_msg));
 
-  return send_to_proc(bus_id, buf_start, msg_buf_len);
+  return send_to_proc(bus_id, buf_start, msg_buf_len, ignore_discovery);
 }
 
-int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, const void *msg_buf, size_t msg_len) {
+int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, const void *msg_buf, size_t msg_len,
+                                        EXPLICIT_UNUSED_ATTR bool ignore_discovery) {
   atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("module not attached to a atapp");
@@ -189,7 +190,7 @@ int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
     return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
 
-  dispatcher_msg_raw_t callback_msg = dispatcher_make_default<dispatcher_msg_raw_t>();
+  dispatcher_raw_message callback_msg = dispatcher_make_default<dispatcher_raw_message>();
 
   int32_t ret = unpack_protobuf_msg(*ss_msg, callback_msg, msg.data, msg.data_size);
   if (ret != 0) {
@@ -243,7 +244,7 @@ int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::messa
     return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
 
-  dispatcher_msg_raw_t callback_msg = dispatcher_make_default<dispatcher_msg_raw_t>();
+  dispatcher_raw_message callback_msg = dispatcher_make_default<dispatcher_raw_message>();
 
   int32_t ret = unpack_protobuf_msg(*ss_msg, callback_msg, buffer, len);
   if (ret != 0) {

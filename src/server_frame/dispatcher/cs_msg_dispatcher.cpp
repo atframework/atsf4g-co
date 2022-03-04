@@ -221,7 +221,7 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
         break;
       }
 
-      dispatcher_msg_raw_t callback_msg = dispatcher_make_default<dispatcher_msg_raw_t>();
+      dispatcher_raw_message callback_msg = dispatcher_make_default<dispatcher_raw_message>();
       ret = unpack_protobuf_msg(*cs_msg, callback_msg, reinterpret_cast<const void *>(post.content().data()),
                                 post.content().size());
       if (ret != 0) {

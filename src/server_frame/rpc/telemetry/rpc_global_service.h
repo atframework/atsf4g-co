@@ -1,4 +1,3 @@
-
 // Copyright 2021 atframework
 // Created by owent on 2021/10/18.
 //
@@ -6,6 +5,12 @@
 #pragma once
 
 #include <config/server_frame_build_feature.h>
+
+#include <config/compiler/protobuf_prefix.h>
+
+#include <protocol/config/svr.protocol.config.pb.h>
+
+#include <config/compiler/protobuf_suffix.h>
 
 #include <stdint.h>
 #include <memory>
@@ -17,12 +22,6 @@
 namespace atapp {
 class app;
 }
-
-PROJECT_NAMESPACE_BEGIN
-namespace config {
-class logic_telemetry_cfg;
-}
-PROJECT_NAMESPACE_END
 
 namespace rpc {
 

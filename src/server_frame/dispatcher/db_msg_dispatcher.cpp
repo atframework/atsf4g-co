@@ -201,7 +201,7 @@ int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
   table_msg->set_dst_task_id(req->task_id);
   table_msg->set_error_code(ret);
 
-  dispatcher_msg_raw_t callback_msg = dispatcher_make_default<dispatcher_msg_raw_t>();
+  dispatcher_raw_message callback_msg = dispatcher_make_default<dispatcher_raw_message>();
   callback_msg.msg_addr = table_msg;
   callback_msg.msg_type = get_instance_ident();
 

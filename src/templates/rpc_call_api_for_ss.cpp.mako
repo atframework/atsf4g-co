@@ -71,15 +71,29 @@ for rpc in rpcs.values():
 %>namespace details {
 % if rpc_common_codes_enable_common:
 template<class TBodyType>
-static inline int __pack_rpc_body(TBodyType &req_body, std::string *output, const char *rpc_full_name,
-                                  const std::string &type_full_name) {
-  if (false == req_body.SerializeToString(output)) {
+static inline int __pack_rpc_body(TBodyType &&input, std::string *output, const char *rpc_full_name,
+                                const std::string &type_full_name) {
+  if (false == input.SerializeToString(output)) {
     FWLOGERROR("rpc {} serialize message {} failed, msg: {}", rpc_full_name, type_full_name,
-               req_body.InitializationErrorString());
+              input.InitializationErrorString());
     return ${project_namespace}::err::EN_SYS_PACK;
   } else {
     FWLOGDEBUG("rpc {} serialize message {} success:\n{}", rpc_full_name, type_full_name,
-               protobuf_mini_dumper_get_readable(req_body));
+              protobuf_mini_dumper_get_readable(input));
+    return ${project_namespace}::err::EN_SUCCESS;
+  }
+}
+
+template<class TBodyType>
+static inline int __unpack_rpc_body(TBodyType &&output, const std::string& input, const char *rpc_full_name,
+                                const std::string &type_full_name) {
+  if (false == output.ParseFromString(input)) {
+    FWLOGERROR("rpc {} parse message {} failed, msg: {}", rpc_full_name, type_full_name,
+              output.InitializationErrorString());
+    return ${project_namespace}::err::EN_SYS_PACK;
+  } else {
+    FWLOGDEBUG("rpc {} parse message {} success:\n{}", rpc_full_name, type_full_name,
+              protobuf_mini_dumper_get_readable(output));
     return ${project_namespace}::err::EN_SUCCESS;
   }
 }
@@ -202,21 +216,13 @@ static inline int __rpc_wait_and_unpack_response(rpc::context &__ctx, uint64_t r
   }
 
   if (!rsp_msg.body_bin().empty()) {
-    if (false == rsp_body.ParseFromString(rsp_msg.body_bin())) {
-      FWLOGERROR("rpc {} parse message {} for failed, msg: {}", rpc_full_name, type_full_name,
-                 rsp_body.InitializationErrorString());
-
-      return ${project_namespace}::err::EN_SYS_UNPACK;
-    } else {
-      FWLOGDEBUG("rpc {} parse message {} success:\n{}", rpc_full_name, type_full_name,
-                 protobuf_mini_dumper_get_readable(rsp_body));
-    }
+    return details::__unpack_rpc_body(rsp_body, rsp_msg.body_bin(), rpc_full_name, type_full_name);
   }
 
   return rsp_msg.head().error_code();
 }
 % endif
-}
+}  // namespace details
 
 % for ns in service.get_cpp_namespace_begin(module_name, ''):
 ${ns}
@@ -226,6 +232,7 @@ ${ns}
     rpc_is_router_api = rpc.get_extension_field('rpc_options', lambda x: x.router_rpc, False)
     rpc_is_user_rpc = rpc.get_extension_field('rpc_options', lambda x: x.user_rpc, False)
     rpc_is_stream_mode = rpc.is_request_stream() or rpc.is_response_stream()
+    rpc_allow_ignore_discovery = rpc.get_extension_field('rpc_options', lambda x: x.allow_ignore_discovery, False)
     rpc_allow_no_wait = False
     if not rpc_is_stream_mode:
         rpc_allow_no_wait = rpc.get_extension_field('rpc_options', lambda x: x.allow_no_wait, False)
@@ -246,8 +253,39 @@ ${ns}
         if rpc_allow_no_wait:
             rpc_params.append('bool __no_wait')
             rpc_params.append('uint64_t* __wait_later')
+    if rpc_allow_ignore_discovery:
+      rpc_params.append('bool __ignore_discovery')
 %>
 // ============ ${rpc.get_full_name()} ============
+namespace packer {
+bool pack_${rpc.get_name()}(std::string& output, const ${rpc.get_request().get_cpp_class_name()}& input) {
+  return ${project_namespace}::err::EN_SUCCESS == details::__pack_rpc_body(input, &output,
+                                 "${rpc.get_full_name()}", 
+                                 ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name());
+}
+
+bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_request().get_cpp_class_name()}& output) {
+  return ${project_namespace}::err::EN_SUCCESS == details::__unpack_rpc_body(output, input,
+                                 "${rpc.get_full_name()}", 
+                                 ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name());
+}
+
+% if not rpc_is_stream_mode:
+bool pack_${rpc.get_name()}(std::string& output, const ${rpc.get_response().get_cpp_class_name()}& input) {
+  return ${project_namespace}::err::EN_SUCCESS == details::__pack_rpc_body(input, &output,
+                                 "${rpc.get_full_name()}", 
+                                 ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name());
+}
+
+bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_response().get_cpp_class_name()}& output) {
+  return ${project_namespace}::err::EN_SUCCESS == details::__unpack_rpc_body(output, input,
+                                 "${rpc.get_full_name()}", 
+                                 ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name());
+}
+
+% endif
+}  // namespace packer
+
 rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
 %   if rpc_is_router_api:
   if (object_id == 0 || type_id == 0) {
@@ -346,7 +384,11 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
   uint64_t rpc_sequence = 0;
   res = router_manager->send_msg(router_key, std::move(req_msg), rpc_sequence);
 %   else:
+%     if rpc_allow_ignore_discovery:
+  res = ss_msg_dispatcher::me()->send_to_proc(dst_bus_id, req_msg, __ignore_discovery);
+%     else:
   res = ss_msg_dispatcher::me()->send_to_proc(dst_bus_id, req_msg);
+%     endif
 %   endif
 %   if rpc_is_stream_mode:
   if (res < 0) {

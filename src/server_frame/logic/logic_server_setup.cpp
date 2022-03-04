@@ -411,6 +411,26 @@ int logic_server_common_module::tick() {
     ret += router_manager_set::me()->tick();
   }
 
+  if (!task_timer_.empty()) {
+    auto now = util::time::time_utility::sys_now();
+    int left_timer_per_tick = 4096;
+    while (!task_timer_.empty() && left_timer_per_tick-- > 0) {
+      if (task_timer_.top().timeout >= now) {
+        break;
+      }
+
+      auto timer_data = task_timer_.top();
+      task_timer_.pop();
+
+      auto resume_data = dispatcher_make_default<dispatcher_resume_data_t>();
+      resume_data.sequence = timer_data.sequence;
+      resume_data.message.msg_type = timer_data.message_type;
+      task_manager::me()->resume_task(timer_data.task_id, resume_data);
+
+      ++ret;
+    }
+  }
+
   return ret;
 }
 
@@ -749,4 +769,14 @@ void logic_server_common_module::update_remote_server_configure(const std::strin
   server_remote_conf_.Swap(&new_conf);
 
   // TODO(owentou): 服务器配置数据变化事件
+}
+
+void logic_server_common_module::insert_timer(uint64_t task_id, std::chrono::system_clock::duration timeout,
+                                              logic_server_timer &output) {
+  output.task_id = task_id;
+  output.message_type = reinterpret_cast<uintptr_t>(&task_timer_);
+  output.sequence = ss_msg_dispatcher::me()->allocate_sequence();
+  output.timeout = util::time::time_utility::sys_now() + timeout;
+
+  task_timer_.push(output);
 }

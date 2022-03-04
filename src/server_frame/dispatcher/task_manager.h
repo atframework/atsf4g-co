@@ -32,7 +32,7 @@
  */
 class task_manager : public ::util::design_pattern::singleton<task_manager> {
  public:
-  using msg_raw_t = dispatcher_msg_raw_t;
+  using msg_raw_t = dispatcher_raw_message;
   using resume_data_t = dispatcher_resume_data_t;
   using start_data_t = dispatcher_start_data_t;
 

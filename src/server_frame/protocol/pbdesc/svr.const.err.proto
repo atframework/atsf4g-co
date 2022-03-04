@@ -94,8 +94,9 @@ enum EnSysErrorType {
   EN_DB_OPERATION_ERROR = -1000106
                           [(error_code.description) = "数据库返回错误"];
 
-  EN_MSG_PACK_NOT_ENOUGH = -1000201;
-  EN_MSG_PARSE_FAIL = -1000202;
+  EN_COMMON_LOGIC_TIMER_NEED_COMMON_MODULE =
+      -1000201
+      [(error_code.description) = "使用定时器必须开启 logic_server_common_module"];
 
   EN_PLAYER_KICKOUT = -1001001
                       [(error_code.description) = "踢出用户失败"];

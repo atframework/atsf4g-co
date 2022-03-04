@@ -8,11 +8,13 @@
 
 #include <google/protobuf/util/time_util.h>
 #include <protocol/config/svr.protocol.config.pb.h>
+#include <protocol/pbdesc/svr.const.err.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 
 #include <atframe/atapp.h>
 
+#include <config/server_frame_build_feature.h>
 #include <utility/protobuf_mini_dumper.h>
 
 #include <fstream>
@@ -95,10 +97,21 @@ bool tracer::start(string_view name, trace_option &&options, const span_ptr_type
 int tracer::return_code(int ret) {
   result_ = ret;
   if (trace_span_) {
-    if (ret < 0) {
-      trace_span_->SetStatus(::opentelemetry::trace::StatusCode::kError, protobuf_mini_dumper_get_error_msg(ret));
-    } else {
-      trace_span_->SetStatus(::opentelemetry::trace::StatusCode::kOk, "success");
+    switch (ret) {
+      case PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND:
+      case PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND:
+      case PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION: {
+        trace_span_->SetStatus(opentelemetry::trace::StatusCode::kUnset, protobuf_mini_dumper_get_error_msg(ret));
+        break;
+      }
+      default: {
+        if (ret < 0) {
+          trace_span_->SetStatus(opentelemetry::trace::StatusCode::kError, protobuf_mini_dumper_get_error_msg(ret));
+        } else {
+          trace_span_->SetStatus(opentelemetry::trace::StatusCode::kOk, "success");
+        }
+        break;
+      }
     }
     trace_span_->SetAttribute("result_code", ret);
   }
