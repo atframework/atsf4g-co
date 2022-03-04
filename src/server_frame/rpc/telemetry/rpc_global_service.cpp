@@ -416,12 +416,19 @@ static void _opentelemetry_cleanup_local_caller_info_t(
     std::shared_ptr<details::local_caller_info_t> app_info_cache,
     EXPLICIT_UNUSED_ATTR opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> tracer_provider) {
   if (app_info_cache) {
+    // Context must be destroy bnefore logger
     if (app_info_cache->logs_context) {
-      app_info_cache->logs_context->Shutdown();
+      app_info_cache->logs_context->ForceFlush();
+      app_info_cache->logs_context.reset();
     }
+    app_info_cache->default_logger = opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
+
+    // Context must be destroy bnefore tracer
     if (app_info_cache->tracer_context) {
-      app_info_cache->tracer_context->Shutdown();
+      app_info_cache->tracer_context->ForceFlush();
+      app_info_cache->tracer_context.reset();
     }
+    app_info_cache->default_tracer = opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
   }
 }
 
