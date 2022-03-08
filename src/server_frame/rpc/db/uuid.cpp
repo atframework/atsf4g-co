@@ -83,6 +83,10 @@ std::string generate_standard_uuid(bool remove_minus) {
   return util::random::uuid_generator::generate_string_time(remove_minus);
 }
 
+std::string generate_standard_uuid_binary() {
+  return util::random::uuid_generator::uuid_to_binary(util::random::uuid_generator::generate_time());
+}
+
 std::string generate_short_uuid() {
   // bus_id:(timestamp-2018-01-01 00:00:00):sequence
   // 2018-01-01 00:00:00 UTC => 1514764800

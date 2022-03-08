@@ -108,7 +108,7 @@ actor_action_base::result_type actor_action_base::run(void *priv_data) {
   trace_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
   trace_option.is_remote = true;
   trace_option.dispatcher = get_dispatcher();
-  trace_option.parent_trace_span = get_parent_trace_span();
+  trace_option.parent_network_span = get_parent_trace_span();
   if (nullptr != priv_data) {
     start_data_ = *reinterpret_cast<dispatcher_start_data_t *>(priv_data);
 

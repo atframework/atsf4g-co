@@ -3,7 +3,12 @@ include_guard(GLOBAL)
 include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/compression/import.cmake")
 if(NOT ANDROID AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
   include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/jemalloc/jemalloc.cmake")
-  if(NOT WIN32 AND NOT MINGW)
+  #[[
+  # There is a BUG in gcc 4.6-4.8 and finxed in gcc 4.9
+  #   @see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=58016
+  #   @see https://gcc.gnu.org/gcc-4.9/changes.html
+  #]]
+  if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "4.9")
     include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/libunwind/libunwind.cmake")
   endif()
 endif()

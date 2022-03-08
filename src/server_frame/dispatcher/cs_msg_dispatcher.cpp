@@ -134,7 +134,7 @@ void cs_msg_dispatcher::on_create_task_failed(start_data_t &start_data, int32_t 
       trace_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
       trace_option.is_remote = true;
       trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(cs_msg_dispatcher::me());
-      trace_option.parent_trace_span = &real_msg->head().rpc_trace();
+      trace_option.parent_network_span = &real_msg->head().rpc_trace();
       child_context->setup_tracer(tracer, rpc_name, std::move(trace_option));
     }
   }

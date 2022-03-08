@@ -14,7 +14,10 @@
 
 #include <stdint.h>
 #include <memory>
+#include <string>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "opentelemetry/trace/span.h"
 #include "opentelemetry/trace/tracer.h"
@@ -26,26 +29,38 @@ namespace rpc {
 namespace telemetry {
 
 struct trace_option {
+  using string_view = opentelemetry::nostd::string_view;
+  using span_ptr_type = opentelemetry::nostd::shared_ptr<opentelemetry::trace::Span>;
+  using trace_id_span = opentelemetry::nostd::span<const uint8_t, opentelemetry::trace::TraceId::kSize>;
+  using span_id_span = opentelemetry::nostd::span<const uint8_t, opentelemetry::trace::SpanId::kSize>;
+  using link_pair_type = std::pair<opentelemetry::trace::SpanContext,
+                                   std::unordered_map<std::string, opentelemetry::common::AttributeValue>>;
+  using links_type = std::vector<link_pair_type>;
+
   std::shared_ptr<dispatcher_implement> dispatcher;
-  const ::atframework::RpcTraceSpan* parent_trace_span;
   atframework::RpcTraceSpan::SpanKind kind;
   bool is_remote;
+  const ::atframework::RpcTraceSpan* parent_network_span;
+  span_ptr_type parent_memory_span;
+  const links_type* links;
 
   trace_option();
 };
 
 class tracer {
  public:
-  using string_view = opentelemetry::nostd::string_view;
-  using span_ptr_type = opentelemetry::nostd::shared_ptr<opentelemetry::trace::Span>;
-  using trace_id_span = opentelemetry::nostd::span<const uint8_t, opentelemetry::trace::TraceId::kSize>;
-  using span_id_span = opentelemetry::nostd::span<const uint8_t, opentelemetry::trace::SpanId::kSize>;
+  using string_view = trace_option::string_view;
+  using span_ptr_type = trace_option::span_ptr_type;
+  using trace_id_span = trace_option::trace_id_span;
+  using span_id_span = trace_option::span_id_span;
+  using link_pair_type = trace_option::link_pair_type;
+  using links_type = trace_option::links_type;
 
  public:
   tracer();
   ~tracer();
 
-  bool start(string_view name, trace_option&& options, const span_ptr_type& parent_span);
+  bool start(string_view name, trace_option&& options);
   int return_code(int ret);
 
   inline const tracer::span_ptr_type& get_trace_span() const { return trace_span_; }

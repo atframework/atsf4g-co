@@ -111,14 +111,14 @@ int task_action_base::operator()(void *priv_data) {
   trace_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
   trace_option.is_remote = true;
   trace_option.dispatcher = get_dispatcher();
-  trace_option.parent_trace_span = get_parent_trace_span();
+  trace_option.parent_network_span = get_parent_trace_span();
 
   if (nullptr != priv_data) {
     start_data_ = *reinterpret_cast<task_manager::start_data_t *>(priv_data);
 
     // Set parent context if not set by child type
     if (nullptr != start_data_.context) {
-      shared_context_.set_parent_context(*start_data_.context);
+      set_caller_context(*start_data_.context);
     }
   }
 
@@ -269,7 +269,7 @@ task_action_base::on_finished_callback_handle_t task_action_base::add_on_on_fini
 
 void task_action_base::remove_on_finished(on_finished_callback_handle_t handle) { on_finished_callback_.erase(handle); }
 
-void task_action_base::set_caller_context(rpc::context &ctx) { get_shared_context().set_parent_context(ctx); }
+void task_action_base::set_caller_context(rpc::context &ctx) { get_shared_context().set_parent_context(ctx, true); }
 
 void task_action_base::_notify_finished(cotask::impl::task_impl &task_inst) {
   // Additional trace data

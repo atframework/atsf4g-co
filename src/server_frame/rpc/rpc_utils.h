@@ -57,9 +57,9 @@ class SSMsg;
 namespace rpc {
 class context {
  public:
-  using string_view = ::opentelemetry::nostd::string_view;
-  using tracer = ::rpc::telemetry::tracer;
-  using trace_option = ::rpc::telemetry::trace_option;
+  using string_view = opentelemetry::nostd::string_view;
+  using tracer = rpc::telemetry::tracer;
+  using trace_option = rpc::telemetry::trace_option;
 
   template <class TMsg>
   struct message_holder {
@@ -130,7 +130,7 @@ class context {
  public:
   context();
   explicit context(context &&other);
-  explicit context(context &parent);
+  explicit context(context &parent, bool link_mode = false);
   ~context();
 
   void setup_tracer(tracer &, string_view name, trace_option &&options);
@@ -158,10 +158,12 @@ class context {
 
   std::shared_ptr<::google::protobuf::Arena> mutable_protobuf_arena();
   const std::shared_ptr<::google::protobuf::Arena> &get_protobuf_arena() const;
-  bool try_reuse_protobuf_arena(const std::shared_ptr<::google::protobuf::Arena> &arena);
+  bool try_reuse_protobuf_arena(const std::shared_ptr<::google::protobuf::Arena> &arena) noexcept;
 
   inline const tracer::span_ptr_type &get_trace_span() const { return trace_span_; }
-  void set_parent_context(rpc::context &parent);
+
+  void set_parent_context(rpc::context &parent, bool link_mode = false) noexcept;
+  void add_link_span(const tracer::span_ptr_type &span_ptr) noexcept;
 
   /**
    * @brief Set the current service object, it's used for tracer
@@ -174,6 +176,8 @@ class context {
   std::shared_ptr<::google::protobuf::Arena> allocator_;
   tracer::span_ptr_type trace_span_;
   tracer::span_ptr_type parent_span_;
+  bool parent_link_mode_;
+  std::vector<tracer::span_ptr_type> link_spans_;
 };
 
 /**
