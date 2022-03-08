@@ -1,5 +1,7 @@
-﻿// Copyright 2021 atframework
+// Copyright 2021 atframework
 // Created by owent with generate-for-pb.py at 2020-07-10 21:34:16
+
+#include "router/action/task_action_router_transfer.h"
 
 #include <config/compiler/protobuf_prefix.h>
 
@@ -16,10 +18,10 @@
 
 #include <config/extern_service_types.h>
 
+#include <memory>
+
 #include "router/router_manager_base.h"
 #include "router/router_manager_set.h"
-
-#include "task_action_router_transfer.h"
 
 task_action_router_transfer::task_action_router_transfer(dispatcher_start_data_t&& param)
     : base_type(COPP_MACRO_STD_MOVE(param)) {}
@@ -49,7 +51,7 @@ task_action_router_transfer::result_type task_action_router_transfer::operator()
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
-  int res = mgr->mutable_object(obj, key, nullptr);
+  auto res = RPC_AWAIT_CODE_RESULT(mgr->mutable_object(get_shared_context(), obj, key, nullptr));
   set_response_code(res);
 
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;

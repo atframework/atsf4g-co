@@ -1,5 +1,7 @@
-﻿// Copyright 2021 atframework
+// Copyright 2021 atframework
 // Created by owent with generate-for-pb.py at 2020-07-10 21:34:16
+
+#include "router/action/task_action_router_update_sync.h"
 
 #include <config/compiler/protobuf_prefix.h>
 
@@ -17,10 +19,10 @@
 
 #include <config/extern_service_types.h>
 
+#include <memory>
+
 #include "router/router_manager_base.h"
 #include "router/router_manager_set.h"
-
-#include "task_action_router_update_sync.h"
 
 task_action_router_update_sync::task_action_router_update_sync(dispatcher_start_data_t&& param)
     : base_type(COPP_MACRO_STD_MOVE(param)) {}

@@ -2,9 +2,6 @@
 // Created by owent on 2018/05/07.
 //
 
-#ifndef ROUTER_ROUTER_OBJECT_BASE_H
-#define ROUTER_ROUTER_OBJECT_BASE_H
-
 #pragma once
 
 #include <config/compiler/protobuf_prefix.h>
@@ -16,6 +13,7 @@
 #include <config/compiler_features.h>
 #include <design_pattern/noncopyable.h>
 
+#include <config/server_frame_build_feature.h>
 #include <dispatcher/task_manager.h>
 
 #include <stdint.h>
@@ -26,6 +24,8 @@
 #include <set>
 #include <string>
 #include <type_traits>
+
+#include "rpc/rpc_common_types.h"
 
 #include "router/router_system_defs.h"
 
@@ -135,7 +135,7 @@ class router_object_base : public ::util::design_pattern::noncopyable {
   /**
    * @brief 移除实体，降级为缓存
    */
-  int remove_object(void *priv_data, uint64_t transfer_to_svr_id);
+  rpc::result_code_type remove_object(rpc::context &ctx, void *priv_data, uint64_t transfer_to_svr_id);
 
   /**
    * @brief 名字接口
@@ -155,7 +155,7 @@ class router_object_base : public ::util::design_pattern::noncopyable {
    *       如果需要处理容灾也可以保存时间并忽略过长时间的不匹配路由信息
    * @return 0或错误码
    */
-  virtual int pull_cache(void *priv_data);
+  virtual rpc::result_code_type pull_cache(rpc::context &ctx, void *priv_data);
 
   /**
    * @brief 启动拉取实体流程
@@ -168,7 +168,7 @@ class router_object_base : public ::util::design_pattern::noncopyable {
    *       如果需要处理容灾也可以保存时间并忽略过长时间的不匹配路由信息
    * @return 0或错误码
    */
-  virtual int pull_object(void *priv_data) = 0;
+  virtual rpc::result_code_type pull_object(rpc::context &ctx, void *priv_data) = 0;
 
   /**
    * @brief 启动保存实体的流程(这个接口不会设置状态)
@@ -181,14 +181,14 @@ class router_object_base : public ::util::design_pattern::noncopyable {
    *        * 可以保存执行时间用以处理容灾时的过期数据（按需）
    * @return 0或错误码
    */
-  virtual int save_object(void *priv_data) = 0;
+  virtual rpc::result_code_type save_object(rpc::context &ctx, void *priv_data) = 0;
 
   /**
    * @brief 启动保存实体的流程(这个接口会设置状态,被router_object<TObj, TChild>覆盖)
    * @param priv_data 外部传入的私有数据
    * @return 0或错误码
    */
-  virtual int save(void *priv_data) = 0;
+  virtual rpc::result_code_type save(rpc::context &ctx, void *priv_data) = 0;
 
   /**
    * @brief 启动拉取缓存流程
@@ -215,9 +215,9 @@ class router_object_base : public ::util::design_pattern::noncopyable {
    * @brief 获取路由版本号
    * @return 路由版本号
    */
-  inline uint64_t get_router_version() const { return router_svr_ver_; }
+  inline uint64_t get_router_version() const noexcept { return router_svr_ver_; }
 
-  inline void set_router_server_id(uint64_t r, uint64_t v) {
+  inline void set_router_server_id(uint64_t r, uint64_t v) noexcept {
     router_svr_id_ = r;
     router_svr_ver_ = v;
   }
@@ -231,8 +231,8 @@ class router_object_base : public ::util::design_pattern::noncopyable {
   }
   **/
 
-  inline std::list<atframework::SSMsg> &get_transfer_pending_list() { return transfer_pending_; }
-  inline const std::list<atframework::SSMsg> &get_transfer_pending_list() const { return transfer_pending_; }
+  inline std::list<atframework::SSMsg> &get_transfer_pending_list() noexcept { return transfer_pending_; }
+  inline const std::list<atframework::SSMsg> &get_transfer_pending_list() const noexcept { return transfer_pending_; }
 
   /**
    * @brief 根据请求包回发转发失败回包
@@ -241,7 +241,7 @@ class router_object_base : public ::util::design_pattern::noncopyable {
    */
   int send_transfer_msg_failed(atframework::SSMsg &&req);
 
-  int await_io_task();
+  rpc::result_code_type await_io_task(rpc::context &ctx);
 
   /**
    * @brief 设置链路跟踪信息到RPC上下文
@@ -259,15 +259,16 @@ class router_object_base : public ::util::design_pattern::noncopyable {
 
  protected:
   void wakeup_io_task_awaiter();
-  int await_io_task(task_manager::task_ptr_t &self_task);
-  int await_io_task(task_manager::task_ptr_t &self_task, task_manager::task_ptr_t &other_task);
+  rpc::result_code_type await_io_task(rpc::context &ctx, task_manager::task_ptr_t &self_task);
+  rpc::result_code_type await_io_task(rpc::context &ctx, task_manager::task_ptr_t &self_task,
+                                      task_manager::task_ptr_t &other_task);
 
   // 内部接口，拉取缓存。会排队读任务
-  int pull_cache_inner(void *priv_data);
+  rpc::result_code_type pull_cache_inner(rpc::context &ctx, void *priv_data);
   // 内部接口，拉取实体。会排队读任务
-  int pull_object_inner(void *priv_data);
+  rpc::result_code_type pull_object_inner(rpc::context &ctx, void *priv_data);
   // 内部接口，保存数据。会排队写任务
-  int save_object_inner(void *priv_data);
+  rpc::result_code_type save_object_inner(rpc::context &ctx, void *priv_data);
 
  private:
   void reset_timer_ref(std::list<router_system_timer_t> *timer_list,
@@ -276,7 +277,7 @@ class router_object_base : public ::util::design_pattern::noncopyable {
                                   const std::list<router_system_timer_t>::iterator &it);
   void unset_timer_ref();
 
-  int await_io_schedule_order_task(task_manager::task_ptr_t &self_task);
+  rpc::result_code_type await_io_schedule_order_task(rpc::context &ctx, task_manager::task_ptr_t &self_task);
 
  private:
   key_t key_;
@@ -314,5 +315,3 @@ struct hash<router_object_base::key_t> {
   }
 };
 }  // namespace std
-
-#endif  //_ROUTER_ROUTER_OBJECT_BASE_H

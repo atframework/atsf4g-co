@@ -44,9 +44,10 @@ int task_action_ss_req_base::hook_run() {
   router_manager_base *mgr = nullptr;
   std::shared_ptr<router_object_base> obj;
   if (get_request().head().has_router()) {
-    std::pair<bool, int> res = filter_router_msg(mgr, obj);
-    if (false == res.first) {
-      return res.second;
+    std::pair<bool, int> result;
+    RPC_AWAIT_IGNORE_RESULT(filter_router_msg(mgr, obj, result));
+    if (false == result.first) {
+      return result.second;
     }
   }
 
@@ -145,9 +146,8 @@ void task_action_ss_req_base::send_response() {
     // send message using ss dispatcher
     int32_t res = ss_msg_dispatcher::me()->send_to_proc((*iter)->head().bus_id(), **iter);
     if (res) {
-      FWLOGERROR("task {} [{}] send message to server 0x{:x} failed, res: {}({})", name(), get_task_id(),
-                 static_cast<unsigned long long>((*iter)->head().bus_id()), res,
-                 protobuf_mini_dumper_get_error_msg(res));
+      FWLOGERROR("task {} [{}] send message to server {:#x} failed, res: {}({})", name(), get_task_id(),
+                 (*iter)->head().bus_id(), res, protobuf_mini_dumper_get_error_msg(res));
     }
   }
 
@@ -155,53 +155,57 @@ void task_action_ss_req_base::send_response() {
 }
 
 namespace detail {
-struct filter_router_msg_res_t {
+struct filter_router_message_result_type {
   bool is_on_current_server;
   bool enable_retry;
-  int result;
-  inline filter_router_msg_res_t(bool cur, bool retry, int res)
-      : is_on_current_server(cur), enable_retry(retry), result(res) {}
+
+  inline filter_router_message_result_type() : is_on_current_server(false), enable_retry(false) {}
+  inline filter_router_message_result_type(bool cur, bool retry) : is_on_current_server(cur), enable_retry(retry) {}
 };
 
-static int try_fetch_router_cache(router_manager_base &mgr, router_manager_base::key_t key,
-                                  std::shared_ptr<router_object_base> &obj) {
-  int res = 0;
+static rpc::result_code_type try_fetch_router_cache(rpc::context &ctx, router_manager_base &mgr,
+                                                    router_manager_base::key_t key,
+                                                    std::shared_ptr<router_object_base> &obj) {
+  rpc::result_code_type::value_type res = 0;
   obj = mgr.get_base_cache(key);
 
   // 如果不存在那么实体一定不在这台机器上，但是可能在其他机器上，需要拉取一次确认
   if (!obj) {
     if (!mgr.is_auto_mutable_cache()) {
-      return PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND;
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
     }
-    res = mgr.mutable_cache(obj, key, nullptr);
+    res = RPC_AWAIT_CODE_RESULT(mgr.mutable_cache(ctx, obj, key, nullptr));
     if (res < 0 || !obj) {
       FWLOGERROR("router object {}:{}:{} fetch cache failed, res: {}({})", key.type_id, key.zone_id, key.object_id, res,
                  protobuf_mini_dumper_get_error_msg(res));
-      return res;
+      RPC_RETURN_CODE(res);
     }
   }
 
-  return res;
+  RPC_RETURN_CODE(res);
 }
 
-static filter_router_msg_res_t auto_mutable_router_object(uint64_t self_bus_id, router_manager_base &mgr,
-                                                          router_manager_base::key_t key,
-                                                          std::shared_ptr<router_object_base> &obj) {
+static rpc::result_code_type auto_mutable_router_object(rpc::context &ctx, uint64_t self_bus_id,
+                                                        router_manager_base &mgr, router_manager_base::key_t key,
+                                                        std::shared_ptr<router_object_base> &obj,
+                                                        filter_router_message_result_type &result) {
   // 如果开启了自动拉取object，尝试拉取object
   if (!mgr.is_auto_mutable_object()) {
     FWLOGINFO("router object key={}:{}:{} not found and not auto mutable object", key.type_id, key.zone_id,
               key.object_id);
-    return filter_router_msg_res_t(false, false, PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_IN_SERVER);
+    result = filter_router_message_result_type(false, false);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_IN_SERVER);
   }
 
-  int res = mgr.mutable_object(obj, key, nullptr);
+  auto res = RPC_AWAIT_CODE_RESULT(mgr.mutable_object(ctx, obj, key, nullptr));
   if (res < 0) {
     FWLOGERROR("router object {}:{}:{} repair object failed, res: {}({})", key.type_id, key.zone_id, key.object_id, res,
                protobuf_mini_dumper_get_error_msg(res));
     // 失败则删除缓存重试
-    mgr.remove_cache(key, obj, nullptr);
+    RPC_AWAIT_IGNORE_RESULT(mgr.remove_cache(ctx, key, obj, nullptr));
 
-    return filter_router_msg_res_t(false, true, res);
+    result = filter_router_message_result_type(false, true);
+    RPC_RETURN_CODE(res);
   }
 
   // Check log
@@ -210,26 +214,30 @@ static filter_router_msg_res_t auto_mutable_router_object(uint64_t self_bus_id, 
                key.type_id, key.zone_id, key.object_id, self_bus_id, obj->get_router_server_id());
   }
 
-  return filter_router_msg_res_t(true, true, res);
+  result = filter_router_message_result_type(true, true);
+  RPC_RETURN_CODE(res);
 }
 
-static filter_router_msg_res_t check_local_router_object(uint64_t self_bus_id, router_manager_base &mgr,
-                                                         router_manager_base::key_t key,
-                                                         std::shared_ptr<router_object_base> &obj) {
+static rpc::result_code_type check_local_router_object(rpc::context &ctx, uint64_t self_bus_id,
+                                                       router_manager_base &mgr, router_manager_base::key_t key,
+                                                       std::shared_ptr<router_object_base> &obj,
+                                                       filter_router_message_result_type &result) {
   // 路由对象命中当前节点，要开始执行任务逻辑
   if (obj->is_writable()) {
-    return filter_router_msg_res_t(true, true, PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    result = filter_router_message_result_type(true, true);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 这里可能是服务器崩溃过，导致数据库记录对象在本机上，但实际上没有。所以这里升级一次做个数据修复
-  int res = mgr.mutable_object(obj, key, nullptr);
+  auto res = RPC_AWAIT_CODE_RESULT(mgr.mutable_object(ctx, obj, key, nullptr));
   if (res < 0) {
     FWLOGERROR("router object {}:{}:{} repair object failed, res: {}({})", key.type_id, key.zone_id, key.object_id, res,
                protobuf_mini_dumper_get_error_msg(res));
     // 失败则删除缓存重试
-    mgr.remove_cache(key, obj, nullptr);
+    RPC_AWAIT_IGNORE_RESULT(mgr.remove_cache(ctx, key, obj, nullptr));
 
-    return filter_router_msg_res_t(false, true, res);
+    result = filter_router_message_result_type(false, true);
+    RPC_RETURN_CODE(res);
   }
 
   // Check log
@@ -239,26 +247,30 @@ static filter_router_msg_res_t check_local_router_object(uint64_t self_bus_id, r
   }
 
   // 恢复成功，直接开始执行任务逻辑
-  return filter_router_msg_res_t(true, true, PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  result = filter_router_message_result_type(true, true);
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-static filter_router_msg_res_t try_filter_router_msg(EXPLICIT_UNUSED_ATTR int retry_times, uint64_t request_bus_id,
-                                                     atframework::SSMsg &request_msg, router_manager_base &mgr,
-                                                     router_manager_base::key_t key,
-                                                     std::shared_ptr<router_object_base> &obj) {
+static rpc::result_code_type try_filter_router_msg(rpc::context &ctx, EXPLICIT_UNUSED_ATTR int retry_times,
+                                                   uint64_t request_bus_id, atframework::SSMsg &request_msg,
+                                                   router_manager_base &mgr, router_manager_base::key_t key,
+                                                   std::shared_ptr<router_object_base> &obj,
+                                                   filter_router_message_result_type &result) {
   obj.reset();
 
   const atframework::SSRouterHead &router = request_msg.head().router();
-  int32_t res = try_fetch_router_cache(mgr, key, obj);
+  int32_t res = RPC_AWAIT_CODE_RESULT(try_fetch_router_cache(ctx, mgr, key, obj));
   if (res == PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND) {
-    return filter_router_msg_res_t(false, false, res);
+    result = filter_router_message_result_type(false, false);
+    RPC_RETURN_CODE(res);
   }
 
   if (!obj) {
     if (res >= 0) {
       res = PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND;
     }
-    return filter_router_msg_res_t(false, false, res);
+    result = filter_router_message_result_type(false, false);
+    RPC_RETURN_CODE(res);
   }
 
   // 如果正在迁移，追加到pending队列，本task直接退出
@@ -266,15 +278,17 @@ static filter_router_msg_res_t try_filter_router_msg(EXPLICIT_UNUSED_ATTR int re
     obj->get_transfer_pending_list().push_back(atframework::SSMsg());
     obj->get_transfer_pending_list().back().Swap(&request_msg);
 
-    return filter_router_msg_res_t(false, false, PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    result = filter_router_message_result_type(false, false);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 如果本地版本号低于来源服务器，刷新一次路由表。正常情况下这里不可能走到，如果走到了。需要删除缓存再来一次
   if (obj->get_router_version() < router.router_version()) {
     FWLOGERROR("router object {}:{}:{} has invalid router version, refresh cache", key.type_id, key.zone_id,
                key.object_id);
-    mgr.remove_cache(key, obj, nullptr);
-    return filter_router_msg_res_t(false, true, PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
+    RPC_AWAIT_IGNORE_RESULT(mgr.remove_cache(ctx, key, obj, nullptr));
+    result = filter_router_message_result_type(false, true);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
   }
 
   uint64_t self_bus_id = logic_config::me()->get_local_server_id();
@@ -282,13 +296,15 @@ static filter_router_msg_res_t try_filter_router_msg(EXPLICIT_UNUSED_ATTR int re
   if (0 == obj->get_router_server_id() && !mgr.is_auto_mutable_object() && !obj->is_writable()) {
     uint64_t renew_router_server_id = 0;
     uint64_t renew_router_version = 0;
-    res = mgr.pull_online_server(key, renew_router_server_id, renew_router_version);
+    res = RPC_AWAIT_CODE_RESULT(mgr.pull_online_server(ctx, key, renew_router_server_id, renew_router_version));
     if (res < 0) {
-      return filter_router_msg_res_t(false, true, res);
+      result = filter_router_message_result_type(false, true);
+      RPC_RETURN_CODE(res);
     }
 
     if (0 == renew_router_server_id) {
-      return filter_router_msg_res_t(false, false, PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_IN_SERVER);
+      result = filter_router_message_result_type(false, false);
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_IN_SERVER);
     }
 
     if (!obj->is_writable() && 0 == obj->get_router_server_id() && renew_router_version > obj->get_router_version()) {
@@ -297,21 +313,23 @@ static filter_router_msg_res_t try_filter_router_msg(EXPLICIT_UNUSED_ATTR int re
   }
 
   if (0 == obj->get_router_server_id()) {
-    filter_router_msg_res_t auto_res = auto_mutable_router_object(self_bus_id, mgr, key, obj);
-    if (auto_res.result < 0) {
-      return auto_res;
+    filter_router_message_result_type auto_res;
+    res = RPC_AWAIT_CODE_RESULT(auto_mutable_router_object(ctx, self_bus_id, mgr, key, obj, auto_res));
+    if (res < 0) {
+      result = auto_res;
+      RPC_RETURN_CODE(res);
     }
   }
 
   // 如果和本地的路由缓存匹配则break直接开始消息处理
   if (obj && self_bus_id == obj->get_router_server_id()) {
-    return check_local_router_object(self_bus_id, mgr, key, obj);
+    RPC_AWAIT_IGNORE_RESULT(check_local_router_object(ctx, self_bus_id, mgr, key, obj, result));
   }
 
   // 路由消息转发
   if (obj && 0 != obj->get_router_server_id()) {
     uint64_t rpc_sequence;
-    res = mgr.send_msg(*obj, std::move(request_msg), rpc_sequence);
+    res = RPC_AWAIT_CODE_RESULT(mgr.send_msg(ctx, *obj, std::move(request_msg), rpc_sequence));
 
     // 如果路由转发成功，需要禁用掉回包和通知事件，也不需要走逻辑处理了
     if (res < 0) {
@@ -319,17 +337,20 @@ static filter_router_msg_res_t try_filter_router_msg(EXPLICIT_UNUSED_ATTR int re
                  key.object_id, obj->get_router_server_id(), res, protobuf_mini_dumper_get_error_msg(res));
     }
 
-    return filter_router_msg_res_t(false, false, res);
+    result = filter_router_message_result_type(false, false);
+    RPC_RETURN_CODE(res);
   }
 
   // 这个分支理论上也不会跑到，前面已经枚举了所有流程分支了
   FWLOGERROR("miss router object {}:{}:{} prediction code", key.type_id, key.zone_id, key.object_id);
-  return filter_router_msg_res_t(false, true, PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_IN_SERVER);
+  result = filter_router_message_result_type(false, true);
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_IN_SERVER);
 }
 }  // namespace detail
 
-std::pair<bool, int> task_action_ss_req_base::filter_router_msg(router_manager_base *&mgr,
-                                                                std::shared_ptr<router_object_base> &obj) {
+rpc::result_code_type task_action_ss_req_base::filter_router_msg(router_manager_base *&mgr,
+                                                                 std::shared_ptr<router_object_base> &obj,
+                                                                 std::pair<bool, int> &filter_result) {
   // request 可能会被move走，所以这里copy一份
   atframework::SSRouterHead router;
   protobuf_copy_message(router, get_request().head().router());
@@ -338,24 +359,26 @@ std::pair<bool, int> task_action_ss_req_base::filter_router_msg(router_manager_b
   mgr = router_manager_set::me()->get_manager(router.object_type_id());
   if (nullptr == mgr) {
     FWLOGERROR("router manager {} not found", router.object_type_id());
-    return std::make_pair(false, PROJECT_NAMESPACE_ID::err::EN_ROUTER_TYPE_INVALID);
+    filter_result = std::make_pair(false, PROJECT_NAMESPACE_ID::err::EN_ROUTER_TYPE_INVALID);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_TYPE_INVALID);
   }
 
   router_manager_base::key_t key(router.object_type_id(), router.object_zone_id(), router.object_inst_id());
   router_object_base::trace_router(get_shared_context(), key);
 
   int retry_times = 0;
-  int last_result = 0;
+  rpc::result_code_type::value_type last_result = 0;
 
   // 最多重试3次，故障恢复过程中可能发生抢占，这时候正常情况下第二次就应该会成功
   while ((++retry_times) <= 3) {
-    detail::filter_router_msg_res_t res =
-        detail::try_filter_router_msg(retry_times, get_request_bus_id(), get_request(), *mgr, key, obj);
-    if (res.is_on_current_server) {
-      return std::make_pair(true, res.result);
+    detail::filter_router_message_result_type internal_filter_result;
+    last_result =
+        RPC_AWAIT_CODE_RESULT(detail::try_filter_router_msg(get_shared_context(), retry_times, get_request_bus_id(),
+                                                            get_request(), *mgr, key, obj, internal_filter_result));
+    if (internal_filter_result.is_on_current_server) {
+      filter_result = std::make_pair(true, last_result);
+      RPC_RETURN_CODE(last_result);
     }
-
-    last_result = res.result;
 
     // 如果路由转发成功或者路由转移期间待处理的消息队列添加成功
     // 需要禁用掉回包和通知事件，也不需要走逻辑处理了
@@ -366,7 +389,7 @@ std::pair<bool, int> task_action_ss_req_base::filter_router_msg(router_manager_b
     }
 
     // 某些情况下不需要重试
-    if (!res.enable_retry) {
+    if (!internal_filter_result.enable_retry) {
       break;
     }
   }
@@ -398,7 +421,8 @@ std::pair<bool, int> task_action_ss_req_base::filter_router_msg(router_manager_b
   if (obj && last_result < 0) {
     obj->send_transfer_msg_failed(COPP_MACRO_STD_MOVE(get_request()));
   }
-  return std::make_pair(false, last_result);
+  filter_result = std::make_pair(false, last_result);
+  RPC_RETURN_CODE(last_result);
 }
 
 bool task_action_ss_req_base::is_router_offline_ignored() const { return false; }

@@ -81,7 +81,7 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
             }
           }
 
-          int res = 0;
+          rpc::result_code_type::value_type res = 0;
           switch (auto_save.action) {
             case router_manager_set::EN_ASA_SAVE: {
               // 有可能有可能手动触发了保存，导致多一次冗余的auto_save_data_t，就不需要再保存一次了
@@ -89,7 +89,7 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
                 break;
               }
 
-              res = auto_save.object->save(nullptr);
+              res = RPC_AWAIT_CODE_RESULT(auto_save.object->save(ctx, nullptr));
 
               if (res >= 0) {
                 auto_save.object->refresh_save_time();
@@ -104,7 +104,8 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
 
               router_manager_base *mgr = router_manager_set::me()->get_manager(auto_save.type_id);
               if (nullptr != mgr) {
-                mgr->remove_object(auto_save.object->get_key(), auto_save.object, nullptr);
+                RPC_AWAIT_IGNORE_RESULT(
+                    mgr->remove_object(ctx, auto_save.object->get_key(), auto_save.object, nullptr));
               }
               break;
             }
@@ -116,7 +117,7 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
 
               router_manager_base *mgr = router_manager_set::me()->get_manager(auto_save.type_id);
               if (nullptr != mgr) {
-                mgr->remove_cache(auto_save.object->get_key(), auto_save.object, nullptr);
+                RPC_AWAIT_IGNORE_RESULT(mgr->remove_cache(ctx, auto_save.object->get_key(), auto_save.object, nullptr));
               }
               break;
             }
@@ -194,7 +195,7 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
     }
   }
 
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  return task_action_base::result_type(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 int task_action_auto_save_objects::on_success() {

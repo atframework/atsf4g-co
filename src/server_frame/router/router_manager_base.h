@@ -27,18 +27,23 @@ class router_manager_base {
 
   inline uint32_t get_type_id() const { return type_id_; }
   virtual std::shared_ptr<router_object_base> get_base_cache(const key_t &key) const = 0;
-  virtual int mutable_cache(std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data) = 0;
-  virtual int mutable_object(std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data) = 0;
+  virtual rpc::result_code_type mutable_cache(rpc::context &ctx, std::shared_ptr<router_object_base> &out,
+                                              const key_t &key, void *priv_data) = 0;
+  virtual rpc::result_code_type mutable_object(rpc::context &ctx, std::shared_ptr<router_object_base> &out,
+                                               const key_t &key, void *priv_data) = 0;
 
-  virtual bool remove_cache(const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data) = 0;
-  virtual bool remove_object(const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data) = 0;
+  virtual rpc::result_code_type remove_cache(rpc::context &ctx, const key_t &key,
+                                             std::shared_ptr<router_object_base> cache, void *priv_data) = 0;
+  virtual rpc::result_code_type remove_object(rpc::context &ctx, const key_t &key,
+                                              std::shared_ptr<router_object_base> cache, void *priv_data) = 0;
 
   virtual bool is_auto_mutable_object() const;
   virtual bool is_auto_mutable_cache() const;
   virtual uint64_t get_default_router_server_id(const key_t &key) const;
 
-  int send_msg(router_object_base &obj, atframework::SSMsg &&msg, uint64_t &sequence);
-  int send_msg(const key_t &key, atframework::SSMsg &&msg, uint64_t &sequence);
+  rpc::result_code_type send_msg(rpc::context &ctx, router_object_base &obj, atframework::SSMsg &&msg,
+                                 uint64_t &sequence);
+  rpc::result_code_type send_msg(rpc::context &ctx, const key_t &key, atframework::SSMsg &&msg, uint64_t &sequence);
 
   inline size_t size() const { return stat_size_; }
 
@@ -46,10 +51,12 @@ class router_manager_base {
 
   virtual void on_stop();
 
-  virtual int pull_online_server(const key_t &key, uint64_t &router_svr_id, uint64_t &router_svr_ver);
+  virtual rpc::result_code_type pull_online_server(rpc::context &ctx, const key_t &key, uint64_t &router_svr_id,
+                                                   uint64_t &router_svr_ver);
 
  protected:
-  int send_msg_raw(router_object_base &obj, atframework::SSMsg &&msg, uint64_t &sequence);
+  rpc::result_code_type send_msg_raw(rpc::context &ctx, router_object_base &obj, atframework::SSMsg &&msg,
+                                     uint64_t &sequence);
 
  protected:
   size_t stat_size_;

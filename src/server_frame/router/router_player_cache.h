@@ -1,15 +1,14 @@
 // Copyright 2021 atframework
-// Created by owt50 on 2018/05/07.
+// Created by owent on 2018/05/07.
 //
-
-#ifndef ROUTER_ROUTER_PLAYER_CACHE_H
-#define ROUTER_ROUTER_PLAYER_CACHE_H
 
 #pragma once
 
 #include <data/player_cache.h>
 
-#include "router_object.h"
+#include <string>
+
+#include "router/router_object.h"
 
 struct router_player_private_type {
   router_player_private_type();
@@ -30,17 +29,15 @@ class router_player_cache : public router_object<player_cache, router_player_cac
   using flag_guard = base_type::flag_guard;
 
  public:
-  router_player_cache(uint64_t user_id, uint32_t zone_id, const std::string &openid);
+  explicit router_player_cache(uint64_t user_id, uint32_t zone_id, const std::string &openid);
   explicit router_player_cache(const key_t &key);
 
   const char *name() const override;
 
-  int pull_cache(void *priv_data) override;
-  int pull_cache(router_player_private_type &priv_data);
-  int pull_object(void *priv_data) override;
-  int pull_object(router_player_private_type &priv_data);
+  rpc::result_code_type pull_cache(rpc::context &ctx, void *priv_data) override;
+  rpc::result_code_type pull_cache(rpc::context &ctx, router_player_private_type &priv_data);
+  rpc::result_code_type pull_object(rpc::context &ctx, void *priv_data) override;
+  rpc::result_code_type pull_object(rpc::context &ctx, router_player_private_type &priv_data);
 
-  int save_object(void *priv_data) override;
+  rpc::result_code_type save_object(rpc::context &ctx, void *priv_data) override;
 };
-
-#endif  // ROUTER_ROUTER_PLAYER_CACHE_H

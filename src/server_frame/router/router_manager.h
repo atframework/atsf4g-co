@@ -41,8 +41,9 @@ class router_manager : public router_manager_base {
   using object_ptr_t = typename cache_t::object_ptr_t;
   using ptr_t = typename cache_t::ptr_t;
 
-  using remove_fn_t = std::function<void(self_type &, const key_t &, const ptr_t &, priv_data_t)>;
-  using pull_fn_t = std::function<void(self_type &, const ptr_t &, priv_data_t)>;
+  using remove_fn_t =
+      std::function<rpc::result_code_type(rpc::context &, self_type &, const key_t &, const ptr_t &, priv_data_t)>;
+  using pull_fn_t = std::function<rpc::result_code_type(rpc::context &, self_type &, const ptr_t &, priv_data_t)>;
 
   using store_ptr_t = std::weak_ptr<cache_t>;
 
@@ -92,14 +93,15 @@ class router_manager : public router_manager_base {
     return iter->second;
   }
 
-  int mutable_cache(std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data) override {
+  rpc::result_code_type mutable_cache(rpc::context &ctx, std::shared_ptr<router_object_base> &out, const key_t &key,
+                                      void *priv_data) override {
     ptr_t outc;
-    int ret = mutable_cache(outc, key, reinterpret_cast<priv_data_t>(priv_data));
+    auto ret = RPC_AWAIT_CODE_RESULT(mutable_cache(ctx, outc, key, reinterpret_cast<priv_data_t>(priv_data)));
     out = std::dynamic_pointer_cast<router_object_base>(outc);
-    return ret;
+    RPC_RETURN_CODE(ret);
   }
 
-  virtual int mutable_cache(ptr_t &out, const key_t &key, priv_data_t priv_data) {
+  virtual rpc::result_code_type mutable_cache(rpc::context &ctx, ptr_t &out, const key_t &key, priv_data_t priv_data) {
     size_t left_ttl = logic_config::me()->get_cfg_router().retry_max_ttl();
     for (; left_ttl > 0; --left_ttl) {
       int res;
@@ -107,28 +109,28 @@ class router_manager : public router_manager_base {
       if (!out) {
         out = std::make_shared<cache_t>(key);
         if (!out) {
-          return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
         }
 
         if (!insert(key, out)) {
-          return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
         }
       } else {
         // 先等待IO任务完成，完成后可能在其他任务里已经拉取完毕了。
-        res = out->await_io_task();
+        res = RPC_AWAIT_CODE_RESULT(out->await_io_task(ctx));
         if (res < 0) {
-          return res;
+          RPC_RETURN_CODE(res);
         }
 
         if (out->is_cache_available()) {
           // 触发拉取实体并命中cache时要取消移除缓存和降级的计划任务
           out->unset_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
-          return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
         }
       }
 
       // pull using TYPE's API
-      res = out->pull_cache_inner(reinterpret_cast<void *>(priv_data));
+      res = RPC_AWAIT_CODE_RESULT(out->pull_cache_inner(ctx, reinterpret_cast<void *>(priv_data)));
 
       if (res < 0) {
         if (res < 0) {
@@ -141,7 +143,7 @@ class router_manager : public router_manager_base {
             case PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK:
             case PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND:
             case PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND:
-              return res;
+              RPC_RETURN_CODE(res);
             default:
               break;
           }
@@ -150,12 +152,12 @@ class router_manager : public router_manager_base {
         continue;
       }
 
-      on_evt_pull_cache(out, priv_data);
-      return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+      RPC_AWAIT_IGNORE_RESULT(on_evt_pull_cache(ctx, out, priv_data));
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
 
     // 超出重试次数限制
-    return PROJECT_NAMESPACE_ID::err::EN_ROUTER_TTL_EXTEND;
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_TTL_EXTEND);
   }
 
   /**
@@ -166,7 +168,8 @@ class router_manager : public router_manager_base {
    * @param priv_data
    * @return
    */
-  int renew_cache(store_ptr_t &in, ptr_t &out, const key_t &key, priv_data_t priv_data) {
+  rpc::result_code_type renew_cache(rpc::context &ctx, store_ptr_t &in, ptr_t &out, const key_t &key,
+                                    priv_data_t priv_data) {
     if (!in.expired()) {
       out = in.lock();
     } else {
@@ -174,59 +177,60 @@ class router_manager : public router_manager_base {
     }
 
     if (out && !out->check_flag(flag_t::EN_ROFT_CACHE_REMOVED)) {
-      return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
 
-    int ret = mutable_cache(out, key, priv_data);
+    auto ret = RPC_AWAIT_CODE_RESULT(mutable_cache(ctx, out, key, priv_data));
     if (ret >= 0) {
       in = out;
     }
 
-    return ret;
+    RPC_RETURN_CODE(ret);
   }
 
-  int mutable_object(std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data) override {
+  rpc::result_code_type mutable_object(rpc::context &ctx, std::shared_ptr<router_object_base> &out, const key_t &key,
+                                       void *priv_data) override {
     ptr_t outc;
-    int ret = mutable_object(outc, key, reinterpret_cast<priv_data_t>(priv_data));
+    auto ret = RPC_AWAIT_CODE_RESULT(mutable_object(ctx, outc, key, reinterpret_cast<priv_data_t>(priv_data)));
     out = std::dynamic_pointer_cast<router_object_base>(outc);
-    return ret;
+    RPC_RETURN_CODE(ret);
   }
 
-  virtual int mutable_object(ptr_t &out, const key_t &key, priv_data_t priv_data) {
+  virtual rpc::result_code_type mutable_object(rpc::context &ctx, ptr_t &out, const key_t &key, priv_data_t priv_data) {
     size_t left_ttl = logic_config::me()->get_cfg_router().retry_max_ttl();
     for (; left_ttl > 0; --left_ttl) {
-      int res;
+      rpc::result_code_type::value_type res;
       out = get_cache(key);
       if (!out) {
         out = std::make_shared<cache_t>(key);
         if (!out) {
-          return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
         }
 
         if (!insert(key, out)) {
-          return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
         }
       } else {
         // 先等待IO任务完成，完成后可能在其他任务里已经拉取完毕了。
-        res = out->await_io_task();
+        res = RPC_AWAIT_CODE_RESULT(out->await_io_task(ctx));
         if (res < 0) {
-          return res;
+          RPC_RETURN_CODE(res);
         }
         if (out->is_object_available()) {
           // 触发拉取实体并命中cache时要取消移除缓存和降级的计划任务
           out->unset_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_OBJECT);
           out->unset_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
-          return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
         }
       }
 
       // 如果处于正在关闭的状态，则不允许创建新的实体，只能访问缓存
       if (is_closing()) {
-        return PROJECT_NAMESPACE_ID::err::EN_ROUTER_CLOSING;
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_CLOSING);
       }
 
       // pull using TYPE's API
-      res = out->pull_object_inner(reinterpret_cast<void *>(priv_data));
+      res = RPC_AWAIT_CODE_RESULT(out->pull_object_inner(ctx, reinterpret_cast<void *>(priv_data)));
 
       if (res < 0) {
         switch (res) {
@@ -238,7 +242,7 @@ class router_manager : public router_manager_base {
           case PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK:
           case PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND:
           case PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND:
-            return res;
+            RPC_RETURN_CODE(res);
           default:
             break;
         }
@@ -247,63 +251,65 @@ class router_manager : public router_manager_base {
 
       // 如果中途被移除，则降级回缓存
       if (!out->check_flag(router_object_base::flag_t::EN_ROFT_CACHE_REMOVED)) {
-        on_evt_pull_object(out, priv_data);
-        return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+        RPC_AWAIT_IGNORE_RESULT(on_evt_pull_object(ctx, out, priv_data));
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
       }
     }
 
     // 超出重试次数限制
-    return PROJECT_NAMESPACE_ID::err::EN_ROUTER_TTL_EXTEND;
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_TTL_EXTEND);
   }
 
-  virtual int transfer(const key_t &key, uint64_t svr_id, bool need_notify, priv_data_t priv_data) {
+  virtual rpc::result_code_type transfer(rpc::context &ctx, const key_t &key, uint64_t svr_id, bool need_notify,
+                                         priv_data_t priv_data) {
     ptr_t obj;
-    int ret = mutable_object(obj, key, priv_data);
+    auto ret = RPC_AWAIT_CODE_RESULT(mutable_object(ctx, obj, key, priv_data));
     if (ret < 0 || !obj) {
-      return ret;
+      RPC_RETURN_CODE(ret);
     }
 
-    return transfer(obj, svr_id, need_notify, priv_data);
+    return transfer(ctx, obj, svr_id, need_notify, priv_data);
   }
 
-  virtual int transfer(const ptr_t &obj, uint64_t svr_id, bool need_notify, priv_data_t priv_data) {
+  virtual rpc::result_code_type transfer(rpc::context &ctx, const ptr_t &obj, uint64_t svr_id, bool need_notify,
+                                         priv_data_t priv_data) {
     if (!obj) {
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
     }
 
     if (svr_id == obj->get_router_server_id()) {
-      return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
 
     task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
     if (!self_task) {
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
     }
 
     // 先等待其他IO任务完成
-    int ret = obj->await_io_task(self_task);
+    auto ret = RPC_AWAIT_CODE_RESULT(obj->await_io_task(ctx, self_task));
     if (ret < 0) {
-      return ret;
+      RPC_RETURN_CODE(ret);
     }
 
     if (!obj->is_writable()) {
-      return PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE;
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE);
     }
 
     if (svr_id == obj->get_router_server_id()) {
-      return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
 
     // 正在转移中
     router_object_base::flag_guard transfer_flag(*obj, router_object_base::flag_t::EN_ROFT_TRANSFERING);
     if (!transfer_flag) {
-      return PROJECT_NAMESPACE_ID::err::EN_ROUTER_TRANSFER;
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_TRANSFER);
     }
 
-    on_evt_remove_object(obj->get_key(), obj, reinterpret_cast<priv_data_t>(priv_data));
+    RPC_AWAIT_IGNORE_RESULT(on_evt_remove_object(ctx, obj->get_key(), obj, reinterpret_cast<priv_data_t>(priv_data)));
 
     // 保存到数据库
-    ret = obj->remove_object(reinterpret_cast<void *>(priv_data), svr_id);
+    ret = RPC_AWAIT_CODE_RESULT(obj->remove_object(ctx, reinterpret_cast<void *>(priv_data), svr_id));
     // 数据库失败要强制拉取
     if (ret < 0) {
       obj->unset_flag(router_object_base::flag_t::EN_ROFT_IS_OBJECT);
@@ -318,14 +324,13 @@ class router_manager : public router_manager_base {
         }
       }
 
-      return ret;
+      RPC_RETURN_CODE(ret);
     }
 
-    on_evt_object_removed(obj->get_key(), obj, reinterpret_cast<priv_data_t>(priv_data));
+    RPC_AWAIT_IGNORE_RESULT(on_evt_object_removed(ctx, obj->get_key(), obj, reinterpret_cast<priv_data_t>(priv_data)));
 
     if (0 != svr_id && need_notify) {
       // 如果目标不是0则通知目标服务器
-      rpc::context ctx;
       PROJECT_NAMESPACE_ID::SSRouterTransferReq *req = ctx.create<PROJECT_NAMESPACE_ID::SSRouterTransferReq>();
       PROJECT_NAMESPACE_ID::SSRouterTransferRsp *rsp = ctx.create<PROJECT_NAMESPACE_ID::SSRouterTransferRsp>();
       if (nullptr == req || nullptr == rsp) {
@@ -362,7 +367,7 @@ class router_manager : public router_manager_base {
 
         uint64_t rpc_sequence;
         for (atframework::SSMsg &msg : all_msgs) {
-          int res = send_msg_raw(*obj, std::move(msg), rpc_sequence);
+          auto res = RPC_AWAIT_CODE_RESULT(send_msg_raw(ctx, *obj, std::move(msg), rpc_sequence));
           if (res < 0) {
             FWLOGERROR("transfer router object (type={},zone_id={}) {} message failed, res: {}", get_type_id(),
                        obj->get_key().zone_id, obj->get_key().object_id, res);
@@ -383,12 +388,13 @@ class router_manager : public router_manager_base {
       }
     }
 
-    return ret;
+    RPC_RETURN_CODE(ret);
   }
 
-  bool remove_cache(const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data) override {
+  rpc::result_code_type remove_cache(rpc::context &ctx, const key_t &key, std::shared_ptr<router_object_base> cache,
+                                     void *priv_data) override {
     ptr_t cache_child;
-    bool ret = true;
+    rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
     {
       typename std::unordered_map<key_t, ptr_t>::iterator iter;
       if (cache) {
@@ -398,27 +404,22 @@ class router_manager : public router_manager_base {
       }
 
       if (iter == caches_.end()) {
-        return false;
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
       }
 
       if (cache && iter->second != cache) {
-        return false;
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
       }
       cache_child = iter->second;
 
       if (cache_child->is_writable()) {
-        ret = remove_object(key, cache_child, priv_data);
+        ret = RPC_AWAIT_CODE_RESULT(remove_object(ctx, key, cache_child, priv_data));
       }
     }
     // After RPC, iter may be different
     bool trigger_evt = !cache_child->check_flag(router_object_base::flag_t::EN_ROFT_CACHE_REMOVED);
     if (trigger_evt) {
-      on_evt_remove_cache(key, cache_child, reinterpret_cast<priv_data_t>(priv_data));
-      cache_child->set_flag(router_object_base::flag_t::EN_ROFT_CACHE_REMOVED);
-    }
-
-    if (!cache_child->check_flag(router_object_base::flag_t::EN_ROFT_CACHE_REMOVED)) {
-      on_evt_remove_cache(key, cache_child, reinterpret_cast<priv_data_t>(priv_data));
+      RPC_AWAIT_IGNORE_RESULT(on_evt_remove_cache(ctx, key, cache_child, reinterpret_cast<priv_data_t>(priv_data)));
       cache_child->set_flag(router_object_base::flag_t::EN_ROFT_CACHE_REMOVED);
     }
 
@@ -433,17 +434,18 @@ class router_manager : public router_manager_base {
     stat_size_ = caches_.size();
 
     if (trigger_evt) {
-      on_evt_cache_removed(key, cache_child, reinterpret_cast<priv_data_t>(priv_data));
+      RPC_AWAIT_IGNORE_RESULT(on_evt_cache_removed(ctx, key, cache_child, reinterpret_cast<priv_data_t>(priv_data)));
     }
-    return ret;
+    RPC_RETURN_CODE(ret);
   }
 
-  bool remove_object(const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data) override {
+  rpc::result_code_type remove_object(rpc::context &ctx, const key_t &key, std::shared_ptr<router_object_base> cache,
+                                      void *priv_data) override {
     ptr_t cache_child;
     if (!cache) {
       typename std::unordered_map<key_t, ptr_t>::iterator iter = caches_.find(key);
       if (iter == caches_.end()) {
-        return false;
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
       }
 
       cache_child = iter->second;
@@ -455,17 +457,19 @@ class router_manager : public router_manager_base {
     }
 
     if (!cache_child) {
-      return false;
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
     }
 
-    on_evt_remove_object(key, cache_child, reinterpret_cast<priv_data_t>(priv_data));
+    RPC_AWAIT_IGNORE_RESULT(on_evt_remove_object(ctx, key, cache_child, reinterpret_cast<priv_data_t>(priv_data)));
 
-    if (cache_child->remove_object(reinterpret_cast<priv_data_t>(priv_data), 0) < 0) {
-      return false;
+    rpc::result_code_type::value_type ret =
+        RPC_AWAIT_CODE_RESULT(cache_child->remove_object(ctx, reinterpret_cast<priv_data_t>(priv_data), 0));
+    if (ret < 0) {
+      RPC_RETURN_CODE(ret);
     }
 
-    on_evt_object_removed(key, cache_child, reinterpret_cast<priv_data_t>(priv_data));
-    return true;
+    RPC_AWAIT_IGNORE_RESULT(on_evt_object_removed(ctx, key, cache_child, reinterpret_cast<priv_data_t>(priv_data)));
+    RPC_RETURN_CODE(ret);
   }
 
   void set_on_remove_object(remove_fn_t &&fn) { handle_on_remove_object_ = fn; }
@@ -485,25 +489,6 @@ class router_manager : public router_manager_base {
 
   void set_on_pull_cache(pull_fn_t &&fn) { handle_on_pull_cache_ = fn; }
   void set_on_pull_cache(const pull_fn_t &fn) { handle_on_pull_cache_ = fn; }
-
-  void foreach (const std::function<bool(const ptr_t &)> fn) {
-    if (!fn) {
-      return;
-    }
-
-    // 先复制出所有的只能指针，防止回掉过程中成员变化带来问题
-    std::vector<ptr_t> res;
-    res.reserve(caches_.size());
-    for (typename std::unordered_map<key_t, ptr_t>::iterator iter = caches_.begin(); iter != caches_.end(); ++iter) {
-      res.push_back(iter->second);
-    }
-
-    for (size_t i = 0; i < res.size(); ++i) {
-      if (!fn(res[i])) {
-        break;
-      }
-    }
-  }
 
   void foreach_cache(const std::function<bool(const ptr_t &)> fn) {
     if (!fn) {
@@ -565,40 +550,50 @@ class router_manager : public router_manager_base {
 
  protected:
   // =============== event =================
-  virtual void on_evt_remove_cache(const key_t &key, const ptr_t &cache, priv_data_t priv_data) {
+  virtual rpc::result_code_type on_evt_remove_cache(rpc::context &ctx, const key_t &key, const ptr_t &cache,
+                                                    priv_data_t priv_data) {
     if (handle_on_remove_cache_) {
-      handle_on_remove_cache_(*this, key, cache, priv_data);
+      return handle_on_remove_cache_(ctx, *this, key, cache, priv_data);
     }
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  virtual void on_evt_cache_removed(const key_t &key, const ptr_t &cache, priv_data_t priv_data) {
+  virtual rpc::result_code_type on_evt_cache_removed(rpc::context &ctx, const key_t &key, const ptr_t &cache,
+                                                     priv_data_t priv_data) {
     if (handle_on_cache_removed_) {
-      handle_on_cache_removed_(*this, key, cache, priv_data);
+      return handle_on_cache_removed_(ctx, *this, key, cache, priv_data);
     }
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  virtual void on_evt_remove_object(const key_t &key, const ptr_t &cache, priv_data_t priv_data) {
+  virtual rpc::result_code_type on_evt_remove_object(rpc::context &ctx, const key_t &key, const ptr_t &cache,
+                                                     priv_data_t priv_data) {
     if (handle_on_remove_object_) {
-      handle_on_remove_object_(*this, key, cache, priv_data);
+      return handle_on_remove_object_(ctx, *this, key, cache, priv_data);
     }
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  virtual void on_evt_object_removed(const key_t &key, const ptr_t &cache, priv_data_t priv_data) {
+  virtual rpc::result_code_type on_evt_object_removed(rpc::context &ctx, const key_t &key, const ptr_t &cache,
+                                                      priv_data_t priv_data) {
     if (handle_on_object_removed_) {
-      handle_on_object_removed_(*this, key, cache, priv_data);
+      return handle_on_object_removed_(ctx, *this, key, cache, priv_data);
     }
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  virtual void on_evt_pull_cache(const ptr_t &cache, priv_data_t priv_data) {
+  virtual rpc::result_code_type on_evt_pull_cache(rpc::context &ctx, const ptr_t &cache, priv_data_t priv_data) {
     if (handle_on_pull_cache_) {
-      handle_on_pull_cache_(*this, cache, priv_data);
+      return handle_on_pull_cache_(ctx, *this, cache, priv_data);
     }
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  virtual void on_evt_pull_object(const ptr_t &cache, priv_data_t priv_data) {
+  virtual rpc::result_code_type on_evt_pull_object(rpc::context &ctx, const ptr_t &cache, priv_data_t priv_data) {
     if (handle_on_pull_object_) {
-      handle_on_pull_object_(*this, cache, priv_data);
+      return handle_on_pull_object_(ctx, *this, cache, priv_data);
     }
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
  private:

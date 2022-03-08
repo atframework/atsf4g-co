@@ -97,8 +97,10 @@ task_action_player_kickoff::result_type task_action_player_kickoff::operator()()
     }
   }
 
-  if (!player_manager::me()->remove(user, true)) {
-    FWLOGERROR("kickoff user {}({}:{}) failed", user->get_open_id(), player_zone_id, user->get_user_id());
+  auto remove_res = RPC_AWAIT_CODE_RESULT(player_manager::me()->remove(get_shared_context(), user, true));
+  if (remove_res < 0) {
+    FWLOGERROR("kickoff user {}({}:{}) failed, res: {}({})", user->get_open_id(), player_zone_id, user->get_user_id(),
+               remove_res, protobuf_mini_dumper_get_error_msg(remove_res));
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }

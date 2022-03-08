@@ -16,6 +16,7 @@
 #include <config/logic_config.h>
 #include <utility/protobuf_mini_dumper.h>
 
+#include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_utils.h>
 
 #include <memory>
@@ -153,7 +154,14 @@ void session_manager::remove(sess_ptr_t sess, int reason) {
       u->set_session(ctx, nullptr);
       // TODO 统计日志
       // 如果是踢下线，则需要强制保存并移除GameUser对象
-      player_manager::me()->remove(u, 0 != reason);
+      auto remove_player_task = rpc::async_invoke(ctx, "session_manager.remove", [u, reason](rpc::context &ctx) {
+        return RPC_AWAIT_CODE_RESULT(player_manager::me()->remove(ctx, u, 0 != reason));
+      });
+      if (remove_player_task.is_error()) {
+        FWLOGERROR("async_invoke task to remove player {}:{} failed, res: {}({})", u->get_zone_id(), u->get_user_id(),
+                   *remove_player_task.get_error(),
+                   protobuf_mini_dumper_get_error_msg(*remove_player_task.get_error()));
+      }
     }
   }
 }

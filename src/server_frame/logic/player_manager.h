@@ -17,6 +17,8 @@
 #include <memory>
 #include <string>
 
+#include "rpc/rpc_common_types.h"
+
 namespace rpc {
 class context;
 }
@@ -33,7 +35,7 @@ class player_manager : public util::design_pattern::singleton<player_manager> {
    * @param user user指针
    * @param force_kickoff 强制移除，不进入离线缓存
    */
-  bool remove(player_ptr_t user, bool force_kickoff = false);
+  rpc::result_code_type remove(rpc::context &ctx, player_ptr_t user, bool force_kickoff = false);
 
   /**
    * @brief 移除用户
@@ -41,13 +43,15 @@ class player_manager : public util::design_pattern::singleton<player_manager> {
    * @param zone_id zone_id
    * @param force_kickoff 强制移除，不进入离线缓存
    */
-  bool remove(uint64_t user_id, uint32_t zone_id, bool force_kickoff = false, player_cache *check_user = nullptr);
+  rpc::result_code_type remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, bool force_kickoff = false,
+                               player_cache *check_user = nullptr);
 
   /**
    * @brief 保存用户数据
    * @param user_id user_id
    */
-  bool save(uint64_t user_id, uint32_t zone_id, const player_cache *check_user = nullptr);
+  rpc::result_code_type save(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
+                             const player_cache *check_user = nullptr);
 
   /**
    * @brief 添加到计划保存队列
@@ -63,17 +67,22 @@ class player_manager : public util::design_pattern::singleton<player_manager> {
    * @param user_id
    * @return null 或者 user指针
    */
-  player_ptr_t load(uint64_t user_id, uint32_t zone_id, bool force = false);
+  rpc::result_code_type load(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, player_ptr_t &output,
+                             bool force = false);
 
   size_t size() const;
 
-  player_ptr_t create(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const std::string &openid,
-                      PROJECT_NAMESPACE_ID::table_login &login_tb, std::string &login_ver);
+  rpc::result_code_type create(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const std::string &openid,
+                               PROJECT_NAMESPACE_ID::table_login &login_tb, std::string &login_ver,
+                               player_ptr_t &output);
   template <typename TPLAYER>
-  const std::shared_ptr<TPLAYER> create_as(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                           const std::string &openid, PROJECT_NAMESPACE_ID::table_login &login_tb,
-                                           std::string &login_ver) {
-    return std::static_pointer_cast<TPLAYER>(create(ctx, user_id, zone_id, openid, login_tb, login_ver));
+  rpc::result_code_type create_as(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const std::string &openid,
+                                  PROJECT_NAMESPACE_ID::table_login &login_tb, std::string &login_ver,
+                                  std::shared_ptr<TPLAYER> &output) {
+    player_ptr_t output_base;
+    auto ret = RPC_AWAIT_CODE_RESULT(create(ctx, user_id, zone_id, openid, login_tb, login_ver, output_base));
+    output = std::static_pointer_cast<TPLAYER>(output_base);
+    RPC_RETURN_CODE(ret);
   }
 
   player_ptr_t find(uint64_t user_id, uint32_t zone_id) const;

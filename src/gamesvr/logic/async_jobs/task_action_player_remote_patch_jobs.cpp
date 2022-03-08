@@ -39,17 +39,18 @@ task_action_player_remote_patch_jobs::task_action_player_remote_patch_jobs(ctor_
 
 task_action_player_remote_patch_jobs::~task_action_player_remote_patch_jobs() {}
 
-static int save_player_data(rpc::context& ctx, router_player_cache::ptr_t& cache, size_t batch_job_number,
-                            std::vector<int64_t>& complete_jobs_idx, int job_type, uint64_t user_id, uint32_t zone_id,
-                            const std::string& openid) {
+static rpc::result_code_type save_player_data(rpc::context& ctx, router_player_cache::ptr_t& cache,
+                                              size_t batch_job_number, std::vector<int64_t>& complete_jobs_idx,
+                                              int job_type, uint64_t user_id, uint32_t zone_id,
+                                              const std::string& openid) {
   if (!cache || !cache->is_writable()) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
   int ret = 0;
   // 保存玩家数据
   if (batch_job_number > 0) {
-    ret = cache->save(NULL);
+    ret = RPC_AWAIT_CODE_RESULT(cache->save(ctx, nullptr));
     if (ret < 0) {
       // 这里可能是因为保存过程城中下线了，这时候直接放弃执行即可。下次登入后会继续执行的
       if (PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE == ret) {
@@ -59,7 +60,7 @@ static int save_player_data(rpc::context& ctx, router_player_cache::ptr_t& cache
         FWLOGERROR("save player {}({}:{}) failed, res: {}({})", openid, zone_id, user_id, ret,
                    protobuf_mini_dumper_get_error_msg(ret));
       }
-      return ret;
+      RPC_RETURN_CODE(ret);
     }
   }
 
@@ -69,13 +70,13 @@ static int save_player_data(rpc::context& ctx, router_player_cache::ptr_t& cache
     if (ret < 0) {
       FWLOGERROR("delete async jobs for player {}({}:{}) failed, res: {}({})", openid, zone_id, user_id, ret,
                  protobuf_mini_dumper_get_error_msg(ret));
-      return ret;
+      RPC_RETURN_CODE(ret);
     }
 
     complete_jobs_idx.clear();
   }
 
-  return ret;
+  RPC_RETURN_CODE(ret);
 }
 
 task_action_player_remote_patch_jobs::result_type task_action_player_remote_patch_jobs::operator()() {
@@ -187,8 +188,9 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
         }
 
         // 保存玩家数据
-        ret = save_player_data(get_shared_context(), cache, batch_job_number, complete_jobs_idx, val_desc->number(),
-                               param_.user->get_user_id(), param_.user->get_zone_id(), param_.user->get_open_id());
+        ret = RPC_AWAIT_CODE_RESULT(save_player_data(get_shared_context(), cache, batch_job_number, complete_jobs_idx,
+                                                     val_desc->number(), param_.user->get_user_id(),
+                                                     param_.user->get_zone_id(), param_.user->get_open_id()));
         if (ret < 0) {
           break;
         }
@@ -210,8 +212,9 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
     }
 
     if (batch_job_number > 0 || !complete_jobs_idx.empty()) {
-      ret = save_player_data(get_shared_context(), cache, batch_job_number, complete_jobs_idx, val_desc->number(),
-                             param_.user->get_user_id(), param_.user->get_zone_id(), param_.user->get_open_id());
+      ret = RPC_AWAIT_CODE_RESULT(save_player_data(get_shared_context(), cache, batch_job_number, complete_jobs_idx,
+                                                   val_desc->number(), param_.user->get_user_id(),
+                                                   param_.user->get_zone_id(), param_.user->get_open_id()));
       if (ret < 0) {
         break;
       }

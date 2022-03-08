@@ -22,24 +22,28 @@ router_player_manager::router_player_manager() : base_type(PROJECT_NAMESPACE_ID:
 
 const char *router_player_manager::name() const { return "[player_cache router manager]"; }
 
-bool router_player_manager::remove_player_object(uint64_t user_id, uint32_t zone_id, priv_data_t priv_data) {
-  return remove_player_object(user_id, zone_id, nullptr, priv_data);
+rpc::result_code_type router_player_manager::remove_player_object(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
+                                                                  priv_data_t priv_data) {
+  return remove_player_object(ctx, user_id, zone_id, nullptr, priv_data);
 }
 
-bool router_player_manager::remove_player_object(uint64_t user_id, uint32_t zone_id,
-                                                 std::shared_ptr<router_object_base> cache, priv_data_t priv_data) {
+rpc::result_code_type router_player_manager::remove_player_object(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
+                                                                  std::shared_ptr<router_object_base> cache,
+                                                                  priv_data_t priv_data) {
   key_t key(get_type_id(), zone_id, user_id);
-  return remove_object(key, cache, priv_data);
+  return remove_object(ctx, key, cache, priv_data);
 }
 
-bool router_player_manager::remove_player_cache(uint64_t user_id, uint32_t zone_id, priv_data_t priv_data) {
-  return remove_player_cache(user_id, zone_id, nullptr, priv_data);
+rpc::result_code_type router_player_manager::remove_player_cache(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
+                                                                 priv_data_t priv_data) {
+  return remove_player_cache(ctx, user_id, zone_id, nullptr, priv_data);
 }
 
-bool router_player_manager::remove_player_cache(uint64_t user_id, uint32_t zone_id,
-                                                std::shared_ptr<router_object_base> cache, priv_data_t priv_data) {
+rpc::result_code_type router_player_manager::remove_player_cache(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
+                                                                 std::shared_ptr<router_object_base> cache,
+                                                                 priv_data_t priv_data) {
   key_t key(get_type_id(), zone_id, user_id);
-  return remove_cache(key, cache, priv_data);
+  return remove_cache(ctx, key, cache, priv_data);
 }
 
 void router_player_manager::set_create_object_fn(create_object_fn_t fn) { create_fn_ = fn; }
@@ -58,12 +62,12 @@ router_player_cache::object_ptr_t router_player_manager::create_player_object(ui
   return ret;
 }
 
-void router_player_manager::on_evt_remove_object(const key_t &key, const ptr_t &cache, priv_data_t priv_data) {
+rpc::result_code_type router_player_manager::on_evt_remove_object(rpc::context &ctx, const key_t &key,
+                                                                  const ptr_t &cache, priv_data_t priv_data) {
   player_cache::ptr_t obj = cache->get_object();
   // 释放本地数据, 下线相关Session
   session::ptr_t s = obj->get_session();
   if (s) {
-    rpc::context ctx;
     obj->set_session(ctx, nullptr);
     std::shared_ptr<player_cache> check_binded_user = s->get_player();
     if (!check_binded_user || check_binded_user == obj) {
@@ -72,10 +76,11 @@ void router_player_manager::on_evt_remove_object(const key_t &key, const ptr_t &
     }
   }
 
-  base_type::on_evt_remove_object(key, cache, priv_data);
+  return base_type::on_evt_remove_object(ctx, key, cache, priv_data);
 }
 
-int router_player_manager::pull_online_server(const key_t &key, uint64_t &router_svr_id, uint64_t &router_svr_ver) {
+rpc::result_code_type router_player_manager::pull_online_server(rpc::context &ctx, const key_t &key,
+                                                                uint64_t &router_svr_id, uint64_t &router_svr_ver) {
   router_svr_id = 0;
   router_svr_ver = 0;
 
@@ -106,5 +111,5 @@ int router_player_manager::pull_online_server(const key_t &key, uint64_t &router
   return ret;
   */
 
-  return 0;
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

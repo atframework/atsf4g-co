@@ -82,7 +82,8 @@ int task_action_cs_req_base::hook_run() {
     obj->trace_router(get_shared_context());
 
     if (dispatcher_options->mark_wait_save()) {
-      ret = player_manager::me()->save(player_cache->get_user_id(), player_cache->get_zone_id(), player_cache.get());
+      ret = RPC_AWAIT_CODE_RESULT(player_manager::me()->save(get_shared_context(), player_cache->get_user_id(),
+                                                             player_cache->get_zone_id(), player_cache.get()));
       if (ret < 0) {
         FWLOGERROR("save player {}:{} failed, res: {}({})", player_cache->get_zone_id(), player_cache->get_user_id(),
                    ret, protobuf_mini_dumper_get_error_msg(ret));

@@ -2,9 +2,6 @@
 // Created by owent on 2018/05/01.
 //
 
-#ifndef ROUTER_ROUTER_OBJECT_H
-#define ROUTER_ROUTER_OBJECT_H
-
 #pragma once
 
 #include <config/compiler/protobuf_prefix.h>
@@ -30,9 +27,8 @@ class router_object : public router_object_base {
   using flag_guard = typename router_object_base::flag_guard;
 
  public:
-  router_object(const object_ptr_t &data, const key_t &k) : router_object_base(k), obj_(data) { assert(obj_); }
-
-  router_object(const object_ptr_t &data, key_t &&k) : router_object_base(k), obj_(data) { assert(obj_); }
+  explicit router_object(const object_ptr_t &data, const key_t &k) : router_object_base(k), obj_(data) { assert(obj_); }
+  explicit router_object(const object_ptr_t &data, key_t &&k) : router_object_base(k), obj_(data) { assert(obj_); }
 
   inline bool is_object_equal(const object_ptr_t &checked) const { return checked == obj_; }
   inline bool is_object_equal(const value_type &checked) const { return &checked == obj_.get(); }
@@ -46,19 +42,23 @@ class router_object : public router_object_base {
    * @brief 保存到数据库，如果成功会更新最后保存时间
    * @return
    */
-  int save(void *priv_data) override {
+  rpc::result_code_type save(rpc::context &ctx, void *priv_data) override {
     if (!is_writable()) {
-      return PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE;
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE);
     }
 
-    int ret = save_object_inner(priv_data);
-    return ret;
+    return save_object_inner(ctx, priv_data);
   }
 
   // =========================== 子类需要实现以下接口 ===========================
-  // virtual int pull_cache(void *priv_data);     // 可选 - 不接入的话会调用pull_object(void *priv_data)
-  // virtual int pull_object(void *priv_data);    // 必需 - 注意事项见 router_object_base::pull_cache
-  // virtual int save_object(void *priv_data);    // 必需 - 注意事项见 router_object_base::save_object
+  // 可选 - 不接入的话会调用pull_object(void *priv_data)
+  // rpc::result_code_type pull_cache(rpc::context ctx, void *priv_data) override;
+
+  // 必需 - 注意事项见 router_object_base::pull_cache
+  // rpc::result_code_type pull_object(rpc::context ctx, void *priv_data) override;
+
+  // 必需 - 注意事项见 router_object_base::save_object
+  // rpc::result_code_type save_object(rpc::context ctx, void *priv_data) override;
 
  protected:
   inline const object_ptr_t &object() const { return obj_; }
@@ -66,5 +66,3 @@ class router_object : public router_object_base {
  private:
   object_ptr_t obj_;
 };
-
-#endif  //_ROUTER_ROUTER_OBJECT_H

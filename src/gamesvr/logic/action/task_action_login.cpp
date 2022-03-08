@@ -81,7 +81,7 @@ task_action_login::result_type task_action_login::operator()() {
   }
 
   // 如果有缓存要强制失效，因为可能其他地方登入了，这时候也不能复用缓存
-  player_manager::me()->remove(req_body.user_id(), zone_id, true);
+  RPC_AWAIT_IGNORE_RESULT(player_manager::me()->remove(get_shared_context(), req_body.user_id(), zone_id, true));
   user.reset();
 
   PROJECT_NAMESPACE_ID::table_login tb;
@@ -116,8 +116,8 @@ task_action_login::result_type task_action_login::operator()() {
 
   // 3. 写入登入信息和登入信息续期会在路由系统中完成
 
-  user = player_manager::me()->create_as<player>(get_shared_context(), req_body.user_id(), zone_id, req_body.open_id(),
-                                                 tb, version);
+  res = RPC_AWAIT_CODE_RESULT(player_manager::me()->create_as<player>(get_shared_context(), req_body.user_id(), zone_id,
+                                                                      req_body.open_id(), tb, version, user));
   is_new_player_ = user && user->get_version() == "1";
   // ============ 在这之后tb不再有效 ============
 
@@ -189,7 +189,7 @@ int task_action_login::on_success() {
 
   if (!user->is_inited()) {
     FWLOGERROR("player %s login success but user not inited", user->get_open_id().c_str());
-    player_manager::me()->remove(user, true);
+    RPC_AWAIT_IGNORE_RESULT(player_manager::me()->remove(get_shared_context(), user, true));
     return get_result();
   }
 
@@ -239,7 +239,7 @@ int task_action_login::on_failed() {
     } else if (user && !user->is_inited()) {
       // 如果创建了未初始化的GameUser对象，则需要移除
       user->clear_dirty_cache();
-      player_manager::me()->remove(user, true);
+      RPC_AWAIT_IGNORE_RESULT(player_manager::me()->remove(get_shared_context(), user, true));
     }
   }
 

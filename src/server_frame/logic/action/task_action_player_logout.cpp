@@ -61,10 +61,13 @@ task_action_player_logout::result_type task_action_player_logout::operator()() {
         return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
       }
 
-      if (user_writeable && !user->has_session() && !player_manager::me()->remove(user, false)) {
-        set_response_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
-        FWPLOGERROR(*user, "logout failed, res: {}({})", static_cast<int>(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM),
-                    protobuf_mini_dumper_get_error_msg(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM));
+      if (user_writeable && !user->has_session()) {
+        auto remove_res = RPC_AWAIT_CODE_RESULT(player_manager::me()->remove(get_shared_context(), user, false));
+        if (remove_res < 0) {
+          set_response_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+          FWPLOGERROR(*user, "logout failed, res: {}({})", static_cast<int>(remove_res),
+                      protobuf_mini_dumper_get_error_msg(remove_res));
+        }
       }
     }
   }

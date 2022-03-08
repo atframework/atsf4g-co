@@ -112,7 +112,7 @@ task_action_ping::result_type task_action_ping::operator()() {
     }
 
     // 再踢下线
-    player_manager::me()->remove(user);
+    RPC_AWAIT_IGNORE_RESULT(player_manager::me()->remove(get_shared_context(), user));
   }
 
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;

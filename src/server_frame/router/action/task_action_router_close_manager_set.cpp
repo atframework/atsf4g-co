@@ -91,7 +91,7 @@ task_action_router_close_manager_set::result_type task_action_router_close_manag
           }
 
           // 降级的时候会保存
-          bool res = mgr->remove_object(obj->get_key(), obj, nullptr);
+          auto res = RPC_AWAIT_CODE_RESULT(mgr->remove_object(ctx, obj->get_key(), obj, nullptr));
 
           if (sub_task->is_timeout()) {
             FWLOGERROR("router close task save router object {}({}:{}:{}) timeout", obj->name(), obj->get_key().type_id,
@@ -114,7 +114,7 @@ task_action_router_close_manager_set::result_type task_action_router_close_manag
             return task_action_base::result_type(0);
           }
 
-          if (!res) {
+          if (res < 0) {
             FWLOGERROR("router close task save router object {}({}:{}:{}) failed", obj->name(), obj->get_key().type_id,
                        obj->get_key().zone_id, obj->get_key().object_id);
             ++status_data->failed_count_;
@@ -193,7 +193,7 @@ void task_action_router_close_manager_set::save_fallback() {
     }
 
     // 降级的时候会保存
-    mgr->remove_object(obj->get_key(), obj, nullptr);
+    RPC_AWAIT_IGNORE_RESULT(mgr->remove_object(get_shared_context(), obj->get_key(), obj, nullptr));
 
     FWLOGWARNING(
         "router close task save router object {}({}:{}:{}) for fallback(task killed), we don't know if it's success "

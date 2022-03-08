@@ -33,32 +33,35 @@ bool router_manager_base::is_auto_mutable_cache() const { return true; }
 
 uint64_t router_manager_base::get_default_router_server_id(const key_t &key) const { return 0; }
 
-int router_manager_base::send_msg(router_object_base &obj, atframework::SSMsg &&msg, uint64_t &sequence) {
+rpc::result_code_type router_manager_base::send_msg(rpc::context &ctx, router_object_base &obj,
+                                                    atframework::SSMsg &&msg, uint64_t &sequence) {
   // 如果正在转移过程中，追加到pending列表
   if (obj.check_flag(router_object_base::flag_t::EN_ROFT_TRANSFERING)) {
     obj.get_transfer_pending_list().push_back(atframework::SSMsg());
     obj.get_transfer_pending_list().back().Swap(&msg);
   }
 
-  return send_msg_raw(obj, std::move(msg), sequence);
+  return send_msg_raw(ctx, obj, std::move(msg), sequence);
 }
 
-int router_manager_base::send_msg(const key_t &key, atframework::SSMsg &&msg, uint64_t &sequence) {
-  int res = 0;
+rpc::result_code_type router_manager_base::send_msg(rpc::context &ctx, const key_t &key, atframework::SSMsg &&msg,
+                                                    uint64_t &sequence) {
+  rpc::result_code_type::value_type res = 0;
   std::shared_ptr<router_object_base> obj;
-  res = mutable_cache(obj, key, nullptr);
+  res = RPC_AWAIT_CODE_RESULT(mutable_cache(ctx, obj, key, nullptr));
   if (res < 0) {
-    return res;
+    RPC_RETURN_CODE(res);
   }
 
   if (!obj) {
-    return PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND;
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
   }
 
-  return send_msg(*obj, std::move(msg), sequence);
+  return send_msg(ctx, *obj, std::move(msg), sequence);
 }
 
-int router_manager_base::send_msg_raw(router_object_base &obj, atframework::SSMsg &&msg, uint64_t &sequence) {
+rpc::result_code_type router_manager_base::send_msg_raw(rpc::context &ctx, router_object_base &obj,
+                                                        atframework::SSMsg &&msg, uint64_t &sequence) {
   // 这里必须直接发送
 
   atframework::SSRouterHead *router_head = msg.mutable_head()->mutable_router();
@@ -80,7 +83,7 @@ int router_manager_base::send_msg_raw(router_object_base &obj, atframework::SSMs
   while (retry_times-- > 0) {
     // 如果路由节点为0，可能是缓存过期，尝试拉取一次
     if (0 == obj.get_router_server_id()) {
-      obj.pull_cache_inner(nullptr);
+      RPC_AWAIT_IGNORE_RESULT(obj.pull_cache_inner(ctx, nullptr));
     }
 
     // 如果允许自动路由拉取,则发到默认server上
@@ -111,13 +114,14 @@ int router_manager_base::send_msg_raw(router_object_base &obj, atframework::SSMs
     }
   }
 
-  return ret;
+  RPC_RETURN_CODE(ret);
 }
 
 void router_manager_base::on_stop() { is_closing_ = false; }
 
-int router_manager_base::pull_online_server(const key_t &, uint64_t &router_svr_id, uint64_t &router_svr_ver) {
+rpc::result_code_type router_manager_base::pull_online_server(rpc::context &ctx, const key_t &, uint64_t &router_svr_id,
+                                                              uint64_t &router_svr_ver) {
   router_svr_id = 0;
   router_svr_ver = 0;
-  return 0;
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
