@@ -39,7 +39,7 @@ task_action_ss_req_base::task_action_ss_req_base(dispatcher_start_data_t &&start
 
 task_action_ss_req_base::~task_action_ss_req_base() {}
 
-int task_action_ss_req_base::hook_run() {
+task_action_ss_req_base::result_type task_action_ss_req_base::hook_run() {
   // 路由对象系统支持
   router_manager_base *mgr = nullptr;
   std::shared_ptr<router_object_base> obj;

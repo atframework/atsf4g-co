@@ -50,7 +50,7 @@ task_action_cs_req_base::task_action_cs_req_base(dispatcher_start_data_t &&start
 
 task_action_cs_req_base::~task_action_cs_req_base() {}
 
-int task_action_cs_req_base::hook_run() {
+task_action_cs_req_base::result_type task_action_cs_req_base::hook_run() {
   int ret = base_type::hook_run();
 
   // 自动设置快队列保存

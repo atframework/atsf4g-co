@@ -8,6 +8,8 @@
 
 #include <dispatcher/task_action_no_req_base.h>
 
+#include <memory>
+
 class player;
 
 class task_action_player_remote_patch_jobs : public task_action_no_req_base {
@@ -22,13 +24,13 @@ class task_action_player_remote_patch_jobs : public task_action_no_req_base {
   using task_action_no_req_base::operator();
 
  public:
-  task_action_player_remote_patch_jobs(ctor_param_t&& param);
+  explicit task_action_player_remote_patch_jobs(ctor_param_t&& param);
   ~task_action_player_remote_patch_jobs();
 
-  virtual int operator()();
+  result_type operator()() override;
 
-  virtual int on_success();
-  virtual int on_failed();
+  int on_success() override;
+  int on_failed() override;
 
  private:
   ctor_param_t param_;

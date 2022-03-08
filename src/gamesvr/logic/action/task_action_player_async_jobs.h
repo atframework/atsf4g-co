@@ -2,9 +2,6 @@
 // Created by owent on 2018/05/09.
 //
 
-#ifndef ROUTER_ACTION_TASK_ACTION_PLAYER_ASYNC_JOBS_H
-#define ROUTER_ACTION_TASK_ACTION_PLAYER_ASYNC_JOBS_H
-
 #pragma once
 
 #include <dispatcher/task_action_no_req_base.h>
@@ -26,16 +23,14 @@ class task_action_player_async_jobs : public task_action_no_req_base {
   using task_action_no_req_base::operator();
 
  public:
-  task_action_player_async_jobs(ctor_param_t&& param);
+  explicit task_action_player_async_jobs(ctor_param_t&& param);
   ~task_action_player_async_jobs();
 
-  virtual int operator()();
+  result_type operator()() override;
 
-  virtual int on_success();
-  virtual int on_failed();
+  int on_success() override;
+  int on_failed() override;
 
  private:
   ctor_param_t param_;
 };
-
-#endif  // ROUTER_ACTION_TASK_ACTION_PLAYER_ASYNC_JOBS_H

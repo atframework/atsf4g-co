@@ -181,6 +181,7 @@ template <typename TREQ>
 class task_action_req_base : public task_action_base {
  public:
   using msg_type = TREQ;
+  using result_type = task_action_base::result_type;
 
  protected:
   task_action_req_base() : request_msg_(nullptr) {}

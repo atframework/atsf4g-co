@@ -11,6 +11,7 @@
 class task_action_no_req_base : public task_action_base {
  public:
   using base_type = task_action_base;
+  using result_type = base_type::result_type;
 
   struct ctor_param_t {
     rpc::context *caller_context;

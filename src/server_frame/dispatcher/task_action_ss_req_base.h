@@ -31,6 +31,7 @@ class task_action_ss_req_base : public task_action_req_base<atframework::SSMsg> 
  public:
   using base_type = task_action_req_base<atframework::SSMsg>;
   using msg_type = base_type::msg_type;
+  using result_type = base_type::result_type;
   using msg_ref_type = msg_type &;
   using msg_cref_type = const msg_type &;
 
@@ -50,7 +51,7 @@ class task_action_ss_req_base : public task_action_req_base<atframework::SSMsg> 
   explicit task_action_ss_req_base(dispatcher_start_data_t &&start_param);
   virtual ~task_action_ss_req_base();
 
-  int hook_run() override;
+  result_type hook_run() override;
 
   uint64_t get_request_bus_id() const;
 
@@ -80,6 +81,7 @@ class task_action_ss_rpc_base : public task_action_ss_req_base {
  public:
   using base_type = task_action_ss_req_base;
   using msg_type = base_type::msg_type;
+  using result_type = base_type::result_type;
   using msg_ref_type = msg_type &;
   using msg_cref_type = const msg_type &;
   using rpc_request_type = TReqType;

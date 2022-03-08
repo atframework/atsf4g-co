@@ -27,6 +27,7 @@ class task_action_cs_req_base : public task_action_req_base<atframework::CSMsg> 
  public:
   using base_type = task_action_req_base<atframework::CSMsg>;
   using msg_type = base_type::msg_type;
+  using result_type = base_type::result_type;
   using msg_ref_type = msg_type &;
   using msg_cref_type = const msg_type &;
 
@@ -46,7 +47,7 @@ class task_action_cs_req_base : public task_action_req_base<atframework::CSMsg> 
   explicit task_action_cs_req_base(dispatcher_start_data_t &&start_param);
   virtual ~task_action_cs_req_base();
 
-  int hook_run() override;
+  result_type hook_run() override;
 
   std::shared_ptr<dispatcher_implement> get_dispatcher() const override;
   const char *get_type_name() const override;
@@ -85,6 +86,7 @@ class task_action_cs_rpc_base : public task_action_cs_req_base {
  public:
   using base_type = task_action_cs_req_base;
   using msg_type = base_type::msg_type;
+  using result_type = base_type::result_type;
   using msg_ref_type = msg_type &;
   using msg_cref_type = const msg_type &;
   using rpc_request_type = TReqType;
