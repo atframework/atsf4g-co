@@ -2,9 +2,6 @@
 // Created by owent on 2018/05/01.
 //
 
-#ifndef ROUTER_ROUTER_MANAGER_BASE_H
-#define ROUTER_ROUTER_MANAGER_BASE_H
-
 #pragma once
 
 #include <config/compiler/protobuf_prefix.h>
@@ -61,5 +58,3 @@ class router_manager_base {
   uint32_t type_id_;
   bool is_closing_;
 };
-
-#endif  //_ROUTER_ROUTER_MANAGER_BASE_H

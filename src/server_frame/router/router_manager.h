@@ -2,9 +2,6 @@
 // Created by owent on 2018/05/01.
 //
 
-#ifndef ROUTER_ROUTER_MANAGER_H
-#define ROUTER_ROUTER_MANAGER_H
-
 #pragma once
 
 #include <config/compiler/protobuf_prefix.h>
@@ -21,15 +18,17 @@
 #include <rpc/router/routerservice.h>
 #include <rpc/rpc_utils.h>
 
-#include <config/logic_config.h>
 #include <dispatcher/task_manager.h>
 
 #include <functional>
+#include <list>
+#include <memory>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
-#include "router_manager_base.h"
-#include "router_manager_set.h"
+#include "router/router_manager_base.h"
+#include "router/router_manager_set.h"
 
 template <typename TCache, typename TObj, typename TPrivData>
 class router_manager : public router_manager_base {
@@ -387,7 +386,7 @@ class router_manager : public router_manager_base {
     return ret;
   }
 
-  virtual bool remove_cache(const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data) override {
+  bool remove_cache(const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data) override {
     ptr_t cache_child;
     bool ret = true;
     {
@@ -439,7 +438,7 @@ class router_manager : public router_manager_base {
     return ret;
   }
 
-  virtual bool remove_object(const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data) override {
+  bool remove_object(const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data) override {
     ptr_t cache_child;
     if (!cache) {
       typename std::unordered_map<key_t, ptr_t>::iterator iter = caches_.find(key);
@@ -612,5 +611,3 @@ class router_manager : public router_manager_base {
 
   std::unordered_map<key_t, ptr_t> caches_;
 };
-
-#endif  //_ROUTER_ROUTER_MANAGER_H

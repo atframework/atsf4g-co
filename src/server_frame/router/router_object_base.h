@@ -56,8 +56,9 @@ class router_object_base : public ::util::design_pattern::noncopyable {
       EN_ROFT_FORCE_PULL_OBJECT = 0x0001,  // 下一次mutable_object时是否强制执行数据拉取
       EN_ROFT_IS_OBJECT = 0x0002,          // 当前对象是否时实体（可写）
       EN_ROFT_FORCE_SAVE_OBJECT = 0x0004,  // 下一次触发定时器时是否强制执行数据保存
-      EN_ROFT_CACHE_REMOVED =
-          0x0008,  // 当前对象缓存是否已处于实体被移除的状态，缓存被移除意味着已经不在manager的管理中，但是可能临时存在于部分正在进行的任务里
+
+      // 当前对象缓存是否已处于实体被移除的状态，缓存被移除意味着已经不在manager的管理中，但是可能临时存在于部分正在进行的任务里
+      EN_ROFT_CACHE_REMOVED = 0x0008,
       EN_ROFT_SAVING = 0x0010,               // 是否正在保存
       EN_ROFT_TRANSFERING = 0x0020,          // 是否正在进行数据转移
       EN_ROFT_PULLING_CACHE = 0x0040,        // 是否正在拉取对象缓存

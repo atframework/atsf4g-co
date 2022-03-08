@@ -87,7 +87,7 @@ void context::setup_tracer(tracer &tracer_instance, string_view name, trace_opti
 
   if (trace_span_) {
     trace_span_->End();
-    trace_span_.reset();
+    trace_span_ = tracer::span_ptr_type();
   }
   trace_span_ = tracer_instance.get_trace_span();
 }
