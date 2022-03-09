@@ -313,7 +313,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
     RPC_RETURN_CODE(${project_namespace}::err::EN_SYS_MALLOC);
   }
 
-  int res;
+  rpc::result_code_type::value_type res;
   atframework::SSMsg& req_msg = *req_msg_ptr;
   task_action_ss_req_base::init_msg(req_msg, logic_config::me()->get_local_server_id());
 %   if rpc_allow_no_wait:
@@ -382,7 +382,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
   }
 
   uint64_t rpc_sequence = 0;
-  res = router_manager->send_msg(router_key, std::move(req_msg), rpc_sequence);
+  res = RPC_AWAIT_CODE_RESULT(router_manager->send_msg(router_key, std::move(req_msg), rpc_sequence));
 %   else:
 %     if rpc_allow_ignore_discovery:
   res = ss_msg_dispatcher::me()->send_to_proc(dst_bus_id, req_msg, __ignore_discovery);
