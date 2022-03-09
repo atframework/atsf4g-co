@@ -382,7 +382,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
   }
 
   uint64_t rpc_sequence = 0;
-  res = RPC_AWAIT_CODE_RESULT(router_manager->send_msg(router_key, std::move(req_msg), rpc_sequence));
+  res = RPC_AWAIT_CODE_RESULT(router_manager->send_msg(__ctx, router_key, std::move(req_msg), rpc_sequence));
 %   else:
 %     if rpc_allow_ignore_discovery:
   res = ss_msg_dispatcher::me()->send_to_proc(dst_bus_id, req_msg, __ignore_discovery);
