@@ -45,7 +45,10 @@ tracer::~tracer() {
   }
 }
 
-bool tracer::start(string_view name, trace_option &&options) {
+bool tracer::start(
+    string_view name, trace_option &&options,
+    std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
+        attributes) {
   if (trace_span_) {
     return true;
   }
@@ -93,11 +96,8 @@ bool tracer::start(string_view name, trace_option &&options) {
   }
 
   if (nullptr == options.links) {
-    trace_span_ = tracer_obj->StartSpan(name, {}, span_options);
+    trace_span_ = tracer_obj->StartSpan(name, attributes, span_options);
   } else {
-    opentelemetry::nostd::span<
-        const std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
-        attributes;
     trace_span_ = tracer_obj->StartSpan(name, attributes, *options.links, span_options);
   }
 

@@ -64,7 +64,10 @@ context::context(context &parent, bool link_mode) {
 
 context::~context() {}
 
-void context::setup_tracer(tracer &tracer_instance, string_view name, trace_option &&options) {
+void context::setup_tracer(
+    tracer &tracer_instance, string_view name, trace_option &&options,
+    std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
+        attributes) {
   if (!parent_link_mode_ && parent_span_ && !options.parent_memory_span) {
     options.parent_memory_span = parent_span_;
   }
@@ -81,7 +84,7 @@ void context::setup_tracer(tracer &tracer_instance, string_view name, trace_opti
     }
   }
 
-  if (!tracer_instance.start(name, std::move(options))) {
+  if (!tracer_instance.start(name, std::move(options), attributes)) {
     return;
   }
 

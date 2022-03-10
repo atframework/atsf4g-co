@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 """
 Copyright (c) 2022 atframework
 """
@@ -378,6 +377,9 @@ class PbRpc(PbObjectBase):
 
     def get_name(self):
         return self.descriptor.name
+
+    def get_service(self):
+        return self.service
 
     def get_package(self):
         return self.service.get_package()
@@ -808,24 +810,11 @@ def get_yaml_configure_child(yaml_conf_item,
 
 
 class PbGroupGenerator(object):
-    def __init__(
-        self,
-        database,
-        project_dir,
-        output_directory,
-        custom_variables,
-        overwrite,
-        outer_name,
-        inner_name,
-        inner_set_name,
-        inner_include_rule,
-        inner_exclude_rule,
-        outer_templates,
-        inner_templates,
-        outer_inst,
-        inner_name_map,
-        inner_ignore_types
-    ):
+    def __init__(self, database, project_dir, output_directory,
+                 custom_variables, overwrite, outer_name, inner_name,
+                 inner_set_name, inner_include_rule, inner_exclude_rule,
+                 outer_templates, inner_templates, outer_inst, inner_name_map,
+                 inner_ignore_types):
         self.database = database
         self.project_dir = project_dir
         self.outer_name = outer_name
@@ -843,6 +832,7 @@ class PbGroupGenerator(object):
         self.overwrite = overwrite
         self.local_vcs_user_name = try_read_vcs_username(project_dir)
 
+
 def write_code_if_different(output_file, encoding, data):
     content_changed = False
     if not os.path.exists(output_file):
@@ -854,6 +844,7 @@ def write_code_if_different(output_file, encoding, data):
 
     if content_changed:
         codecs.open(output_file, mode="w", encoding=encoding).write(data)
+
 
 def generate_group(options, group):
     # type: (argparse.Namespace, PbGroupGenerator) -> None
@@ -996,7 +987,8 @@ def generate_group(options, group):
                 final_output_dir = os.path.dirname(output_file)
                 if final_output_dir and not os.path.exists(final_output_dir):
                     os.makedirs(final_output_dir, 0o777)
-                write_code_if_different(output_file, options.encoding, source_tmpl.render(**render_args))
+                write_code_if_different(output_file, options.encoding,
+                                        source_tmpl.render(**render_args))
 
                 if not options.quiet:
                     cprintf_stdout(
@@ -1095,7 +1087,8 @@ def generate_group(options, group):
                     if final_output_dir and not os.path.exists(
                             final_output_dir):
                         os.makedirs(final_output_dir, 0o777)
-                    write_code_if_different(output_file, options.encoding, source_tmpl.render(**render_args))
+                    write_code_if_different(output_file, options.encoding,
+                                            source_tmpl.render(**render_args))
 
                     if not options.quiet:
                         cprintf_stdout(
@@ -1218,7 +1211,8 @@ def generate_global(options, global_generator):
                 final_output_dir = os.path.dirname(output_file)
                 if final_output_dir and not os.path.exists(final_output_dir):
                     os.makedirs(final_output_dir, 0o777)
-                write_code_if_different(output_file, options.encoding, source_tmpl.render(**render_args))
+                write_code_if_different(output_file, options.encoding,
+                                        source_tmpl.render(**render_args))
 
                 if not options.quiet:
                     cprintf_stdout(
@@ -1349,8 +1343,8 @@ def generate_service_group(pb_db, options, yaml_conf, project_dir,
                     rule_yaml_item, "rpc_template", [], True),
                 outer_inst=selected_service,
                 inner_name_map=selected_service.rpcs,
-                inner_ignore_types=get_yaml_configure_child(rule_yaml_item, "rpc_ignore_request",
-                                                   False),
+                inner_ignore_types=get_yaml_configure_child(
+                    rule_yaml_item, "rpc_ignore_request", False),
             ),
         )
 
@@ -1425,8 +1419,8 @@ def generate_message_group(pb_db, options, yaml_conf, project_dir,
                     rule_yaml_item, "field_template", [], True),
                 outer_inst=selected_message,
                 inner_name_map=selected_message.fields_by_name,
-                inner_ignore_types=get_yaml_configure_child(rule_yaml_item, "field_ignore_type",
-                                                   False),
+                inner_ignore_types=get_yaml_configure_child(
+                    rule_yaml_item, "field_ignore_type", False),
             ),
         )
 

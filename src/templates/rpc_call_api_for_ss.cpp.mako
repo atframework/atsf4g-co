@@ -9,6 +9,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 
 #include "${service.get_name_lower_rule()}.h"
 
+#include <gsl/select-gsl.h>
 #include <log/log_wrapper.h>
 
 #include <config/compiler/protobuf_prefix.h>
@@ -71,7 +72,7 @@ for rpc in rpcs.values():
 %>namespace details {
 % if rpc_common_codes_enable_common:
 template<class TBodyType>
-static inline int __pack_rpc_body(TBodyType &&input, std::string *output, const char *rpc_full_name,
+static inline int __pack_rpc_body(TBodyType &&input, std::string *output, gsl::string_view rpc_full_name,
                                 const std::string &type_full_name) {
   if (false == input.SerializeToString(output)) {
     FWLOGERROR("rpc {} serialize message {} failed, msg: {}", rpc_full_name, type_full_name,
@@ -85,7 +86,7 @@ static inline int __pack_rpc_body(TBodyType &&input, std::string *output, const 
 }
 
 template<class TBodyType>
-static inline int __unpack_rpc_body(TBodyType &&output, const std::string& input, const char *rpc_full_name,
+static inline int __unpack_rpc_body(TBodyType &&output, const std::string& input, gsl::string_view rpc_full_name,
                                 const std::string &type_full_name) {
   if (false == output.ParseFromString(input)) {
     FWLOGERROR("rpc {} parse message {} failed, msg: {}", rpc_full_name, type_full_name,
@@ -98,26 +99,32 @@ static inline int __unpack_rpc_body(TBodyType &&output, const std::string& input
   }
 }
 
-static inline void __setup_tracer(rpc::context &__child_ctx, rpc::context::tracer &__tracer, atframework::SSMsgHead &head,
-                                  const char *rpc_full_name) {
-  ::rpc::context::trace_option __trace_option;
+static inline void __setup_tracer(rpc::context &__child_ctx, rpc::context::tracer &__tracer,
+                                  atframework::SSMsgHead &head, gsl::string_view rpc_full_name,
+                                  gsl::string_view service_full_name) {
+  rpc::context::trace_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());
   __trace_option.is_remote = true;
   __trace_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
 
-  __child_ctx.setup_tracer(__tracer, rpc_full_name, std::move(__trace_option));
-  ::rpc::context::tracer::span_ptr_type __child_trace_span = __child_ctx.get_trace_span();
+  // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/semantic_conventions/README.md
+  __child_ctx.setup_tracer(__tracer, rpc::context::string_view{rpc_full_name.data(), rpc_full_name.size()}, std::move(__trace_option), {
+    {"rpc.system", "atrpc.ss"},
+    {"rpc.service", rpc::context::string_view{service_full_name.data(), service_full_name.size()}},
+    {"rpc.method", rpc::context::string_view{rpc_full_name.data(), rpc_full_name.size()}}
+  });
+  rpc::context::tracer::span_ptr_type __child_trace_span = __child_ctx.get_trace_span();
   if (__child_trace_span) {
     auto trace_span_head = head.mutable_rpc_trace();
     if (trace_span_head) {
       auto trace_context = __child_trace_span->GetContext();
-      ::rpc::context::tracer::trace_id_span trace_id = trace_context.trace_id().Id();
-      ::rpc::context::tracer::span_id_span span_id = trace_context.span_id().Id();
+      rpc::context::tracer::trace_id_span trace_id = trace_context.trace_id().Id();
+      rpc::context::tracer::span_id_span span_id = trace_context.span_id().Id();
 
       trace_span_head->mutable_trace_id()->assign(reinterpret_cast<const char *>(trace_id.data()), trace_id.size());
       trace_span_head->mutable_span_id()->assign(reinterpret_cast<const char *>(span_id.data()), span_id.size());
       trace_span_head->set_kind(__trace_option.kind);
-      trace_span_head->set_name(rpc_full_name);
+      trace_span_head->set_name(static_cast<std::string>(rpc_full_name));
 
       // trace_context.IsSampled();
     }
@@ -126,7 +133,7 @@ static inline void __setup_tracer(rpc::context &__child_ctx, rpc::context::trace
 
 % endif
 % if rpc_common_codes_enable_stream_header:
-static inline int __setup_rpc_stream_header(atframework::SSMsgHead &head, const char *rpc_full_name,
+static inline int __setup_rpc_stream_header(atframework::SSMsgHead &head, gsl::string_view rpc_full_name,
                                             const std::string &type_full_name) {
   head.set_op_type(${project_namespace}::EN_MSG_OP_TYPE_STREAM);
   atframework::RpcStreamMeta* stream_meta = head.mutable_rpc_stream();
@@ -136,7 +143,7 @@ static inline int __setup_rpc_stream_header(atframework::SSMsgHead &head, const 
   stream_meta->set_version(logic_config::me()->get_atframework_settings().rpc_version());
   stream_meta->set_caller(static_cast<std::string>(logic_config::me()->get_local_server_name()));
   stream_meta->set_callee("${service.get_full_name()}");
-  stream_meta->set_rpc_name(rpc_full_name);
+  stream_meta->set_rpc_name(static_cast<std::string>(rpc_full_name));
   stream_meta->set_type_url(type_full_name);
 
   return ${project_namespace}::err::EN_SUCCESS;
@@ -144,7 +151,8 @@ static inline int __setup_rpc_stream_header(atframework::SSMsgHead &head, const 
 % endif
 % if rpc_common_codes_enable_request_header:
 static inline int __setup_rpc_request_header(atframework::SSMsgHead &head, task_manager::task_t &task,
-                                             const char *rpc_full_name, const std::string &type_full_name) {
+                                             gsl::string_view rpc_full_name,
+                                             const std::string &type_full_name) {
   head.set_src_task_id(task.get_id());
   head.set_op_type(${project_namespace}::EN_MSG_OP_TYPE_UNARY_REQUEST);
   atframework::RpcRequestMeta* request_meta = head.mutable_rpc_request();
@@ -154,7 +162,7 @@ static inline int __setup_rpc_request_header(atframework::SSMsgHead &head, task_
   request_meta->set_version(logic_config::me()->get_atframework_settings().rpc_version());
   request_meta->set_caller(static_cast<std::string>(logic_config::me()->get_local_server_name()));
   request_meta->set_callee("${service.get_full_name()}");
-  request_meta->set_rpc_name(rpc_full_name);
+  request_meta->set_rpc_name(static_cast<std::string>(rpc_full_name));
   request_meta->set_type_url(type_full_name);
 
   return ${project_namespace}::err::EN_SUCCESS;
@@ -163,7 +171,7 @@ static inline int __setup_rpc_request_header(atframework::SSMsgHead &head, task_
 % if rpc_common_codes_enable_redirect_info_log:
 template<class TCode, class TConvertList>
 static inline bool __redirect_rpc_result_to_info_log(TCode &origin_result, TConvertList&& convert_list, 
-                                        const char *rpc_full_name, const std::string &type_full_name) {
+                                        gsl::string_view rpc_full_name, const std::string &type_full_name) {
   for (auto& check: convert_list) {
     if (origin_result == check) {
       FWLOGINFO("rpc {} wait for {} failed, res: {}({})", rpc_full_name, type_full_name,
@@ -180,7 +188,7 @@ static inline bool __redirect_rpc_result_to_info_log(TCode &origin_result, TConv
 % if rpc_common_codes_enable_redirect_warning_log:
 template<class TCode, class TConvertList>
 static inline bool __redirect_rpc_result_to_warning_log(TCode &origin_result, TConvertList&& convert_list, 
-                                        const char *rpc_full_name, const std::string &type_full_name) {
+                                        gsl::string_view rpc_full_name, const std::string &type_full_name) {
   for (auto& check: convert_list) {
     if (origin_result == check) {
       FWLOGWARNING("rpc {} wait for {} failed, res: {}({})", rpc_full_name, type_full_name,
@@ -196,8 +204,8 @@ static inline bool __redirect_rpc_result_to_warning_log(TCode &origin_result, TC
 % endif
 % if rpc_common_codes_enable_wait_response:
 template<class TResponseBody>
-static inline int __rpc_wait_and_unpack_response(rpc::context &__ctx, uint64_t rpc_sequence, TResponseBody &rsp_body, const char *rpc_full_name, 
-                                            const std::string &type_full_name) {
+static inline int __rpc_wait_and_unpack_response(rpc::context &__ctx, uint64_t rpc_sequence, TResponseBody &rsp_body,
+                                            gsl::string_view rpc_full_name, const std::string &type_full_name) {
   atframework::SSMsg* rsp_msg_ptr = __ctx.create<atframework::SSMsg>();
   if (nullptr == rsp_msg_ptr) {
     FWLOGERROR("rpc {} create response message failed", rpc_full_name);
@@ -351,7 +359,8 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
   rpc::context __child_ctx(__ctx);
   rpc::context::tracer __tracer;
   details::__setup_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
-                          "${rpc.get_full_name()}");
+                          "${rpc.get_full_name()}",
+                          "${rpc.get_service().get_full_name()}");
 
 %   if rpc_is_user_rpc:
 %     if rpc_is_router_api:

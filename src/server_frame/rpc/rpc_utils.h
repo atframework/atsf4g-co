@@ -133,7 +133,10 @@ class context {
   explicit context(context &parent, bool link_mode = false);
   ~context();
 
-  void setup_tracer(tracer &, string_view name, trace_option &&options);
+  void setup_tracer(
+      tracer &, string_view name, trace_option &&options,
+      std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
+          attributes = {});
 
   /**
    * @brief 使用内置的Arena创建protobuf对象。注意，该对象必须是局部变量，不允许转移给外部使用

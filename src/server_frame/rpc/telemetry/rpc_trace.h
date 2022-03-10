@@ -60,7 +60,9 @@ class tracer {
   tracer();
   ~tracer();
 
-  bool start(string_view name, trace_option&& options);
+  bool start(string_view name, trace_option&& options,
+             std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
+                 attributes = {});
   int return_code(int ret);
 
   inline const tracer::span_ptr_type& get_trace_span() const { return trace_span_; }
