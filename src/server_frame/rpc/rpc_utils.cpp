@@ -387,7 +387,7 @@ result_code_type custom_resume(task_types::task_type &task, const void *type_add
 
   int res = task.resume(&resume_data);
   if (res < 0) {
-    FWLOGERROR("resume task {:#x} failed, res: {}.", task.get_id(), res);
+    FWLOGERROR("resume task {} failed, res: {}.", task.get_id(), res);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
 

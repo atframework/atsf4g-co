@@ -164,14 +164,43 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
     list(APPEND FINAL_GENERATED_COPY_COMMANDS "${FINAL_GENERATED_LAST_CREATED_DIR}")
   endif()
 
+  set(PROTOBUF_PROTO_PATHS
+      --proto_path
+      "${PROTOCOL_DIR}"
+      --proto_path
+      "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/common"
+      --proto_path
+      "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config"
+      --proto_path
+      "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc"
+      --proto_path
+      "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include"
+      --proto_path
+      "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include"
+      --proto_path
+      "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include")
+  if(project_service_declare_protocol_USE_COMPONENTS)
+    foreach(USE_COMPONENT ${project_service_declare_protocol_USE_COMPONENTS})
+      get_target_property(FIND_PROTO_DIR "components::${USE_COMPONENT}" LABELS)
+      if(FIND_PROTO_DIR MATCHES "PROTOCOL_DIR=([^;]+)")
+        list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${CMAKE_MATCH_1}")
+      endif()
+    endforeach()
+  endif()
+  if(project_service_declare_protocol_USE_SERVICE_PROTOCOL)
+    foreach(USE_SERVICE_PROTOCOL ${project_service_declare_protocol_USE_SERVICE_PROTOCOL})
+      get_target_property(FIND_PROTO_DIR "protocol::${USE_SERVICE_PROTOCOL}" LABELS)
+      if(FIND_PROTO_DIR MATCHES "PROTOCOL_DIR=([^;]+)")
+        list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${CMAKE_MATCH_1}")
+      endif()
+    endforeach()
+  endif()
+
   add_custom_command(
     OUTPUT ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES}
     COMMAND
-      "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" --proto_path "${PROTOCOL_DIR}" --proto_path
-      "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/common" --proto_path "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config"
-      --proto_path "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc" --proto_path
-      "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include" --proto_path "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include" --proto_path
-      "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include" --cpp_out "${CMAKE_CURRENT_BINARY_DIR}"
+      "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" ${PROTOBUF_PROTO_PATHS} --cpp_out
+      "${CMAKE_CURRENT_BINARY_DIR}"
       # Protocol buffer files
       ${project_service_declare_protocol_PROTOCOLS} ${FINAL_GENERATED_COPY_COMMANDS}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -190,7 +219,8 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
                CXX_VISIBILITY_PRESET "default"
                VERSION "${PROJECT_VERSION}"
                WINDOWS_EXPORT_ALL_SYMBOLS TRUE
-               BUILD_RPATH_USE_ORIGIN YES)
+               BUILD_RPATH_USE_ORIGIN YES
+               LABELS "PROTOCOL_DIR=${PROTOCOL_DIR}")
 
   target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
 
