@@ -200,6 +200,18 @@ int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
   }
   ss_msg->mutable_head()->set_bus_id(from_server_id);
 
+  rpc::context::tracer tracer;
+  rpc::context::trace_option trace_option;
+  trace_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
+  trace_option.is_remote = true;
+  trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());
+  if (ss_msg->head().has_rpc_trace()) {
+    trace_option.parent_network_span = &ss_msg->head().rpc_trace();
+  } else {
+    trace_option.parent_network_span = nullptr;
+  }
+  ctx.setup_tracer(tracer, "ss_msg_dispatcher", std::move(trace_option));
+
   dispatcher_result_t res = on_receive_message(ctx, callback_msg, nullptr, ss_msg->head().sequence());
   ret = res.result_code;
   if (ret < 0) {

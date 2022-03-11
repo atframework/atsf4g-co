@@ -106,11 +106,3 @@ std::shared_ptr<dispatcher_implement> actor_action_ss_req_base::get_dispatcher()
 }
 
 const char *actor_action_ss_req_base::get_type_name() const { return "inserver"; }
-
-const atframework::RpcTraceSpan *actor_action_ss_req_base::get_parent_trace_span() const {
-  if (get_request().has_head() && get_request().head().has_rpc_trace()) {
-    return &get_request().head().rpc_trace();
-  } else {
-    return nullptr;
-  }
-}

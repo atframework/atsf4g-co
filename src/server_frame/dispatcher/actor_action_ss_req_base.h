@@ -48,7 +48,6 @@ class actor_action_ss_req_base : public actor_action_req_base<atframework::SSMsg
 
   std::shared_ptr<dispatcher_implement> get_dispatcher() const override;
   const char* get_type_name() const override;
-  const atframework::RpcTraceSpan* get_parent_trace_span() const override;
 
  protected:
   void send_response() override;

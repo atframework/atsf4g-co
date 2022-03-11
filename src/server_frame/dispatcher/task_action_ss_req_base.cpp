@@ -123,14 +123,6 @@ std::shared_ptr<dispatcher_implement> task_action_ss_req_base::get_dispatcher() 
 
 const char *task_action_ss_req_base::get_type_name() const { return "inserver"; }
 
-const atframework::RpcTraceSpan *task_action_ss_req_base::get_parent_trace_span() const {
-  if (get_request().has_head() && get_request().head().has_rpc_trace()) {
-    return &get_request().head().rpc_trace();
-  } else {
-    return nullptr;
-  }
-}
-
 void task_action_ss_req_base::send_response() {
   if (response_messages_.empty()) {
     return;

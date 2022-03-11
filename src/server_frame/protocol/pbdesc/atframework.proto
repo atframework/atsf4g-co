@@ -94,9 +94,11 @@ message RpcStreamMeta {
 }
 
 // RpcTraceSpan follows opentracing and opentelemetry.
+// We must keep these declares effectively when converting to opentelemetry::common::AttributeValue .
 // @see https://github.com/open-telemetry/opentelemetry-proto/blob/master/opentelemetry/proto/trace/v1/trace.proto
 // @see https://opentelemetry.io
 // @see https://opentracing.io/specification/
+// @see https://github.com/open-telemetry/opentelemetry-cpp/blob/main/api/include/opentelemetry/common/attribute_value.h
 
 message AnyValue {
   // The value is one of the listed fields. It is valid for all values to be unspecified
@@ -108,6 +110,7 @@ message AnyValue {
     double double_value = 4;
     ArrayValue array_value = 5;
     KeyValueList kvlist_value = 6;
+    bytes bytes_value = 7;
   }
 }
 
@@ -129,11 +132,49 @@ message KeyValueList {
   map<string, AnyValue> values = 1;
 }
 
+message AttributeStringList {
+  repeated string values = 1;
+}
+
+message AttributeBoolList {
+  repeated bool values = 1;
+}
+
+message AttributeIntList {
+  repeated int64 values = 1;
+}
+
+message AttributeDoubleList {
+  repeated double values = 1;
+}
+
+message AttributeBytesList {
+  repeated bytes values = 1;
+}
+
+message AttributeValue {
+  // The value is one of the listed fields. It is valid for all values to be unspecified
+  // in which case this AnyValue is considered to be "null".
+  oneof value {
+    string string_value = 1;
+    bool bool_value = 2;
+    int64 int_value = 3;
+    double double_value = 4;
+    bytes bytes_value = 5;
+    AttributeStringList string_list = 6;
+    AttributeBoolList bool_list = 7;
+    AttributeIntList int_list = 8;
+    AttributeDoubleList double_list = 9;
+    AttributeBytesList bytes_list = 10;
+  }
+}
+
 message RpcTraceSpan {
   string name = 1;
-  bytes trace_id = 2;   // Every span in a trace shares this ID.
-  bytes span_id = 3;    // The ID for a particular span. This may or may not be the same as the trace id.
-  bytes parent_id = 4;  // This is an optional ID that will only be present on child spans. That is the span without a
+  bytes trace_id = 2;  // Every span in a trace shares this ID.
+  bytes span_id = 3;   // The ID for a particular span. This may or may not be the same as the trace id.
+  // This is an optional ID that will only be present on child spans. That is the span without a
+  bytes parent_span_id = 4;
   // parent id is considered the root of the trace.
 
   enum SpanKind {
@@ -169,44 +210,7 @@ message RpcTraceSpan {
   // and `SERVER` (callee) to identify queueing latency associated with the span.
   SpanKind kind = 6;
 
-  map<string, AnyValue> attributes = 9;
-
-  message Event {
-    // time_unix_nano is the time the event occurred.
-    fixed64 time_unix_nano = 1;
-
-    // name of the event.
-    // This field is semantically required to be set to non-empty string.
-    string name = 2;
-
-    // attributes is a collection of attribute key/value pairs on the event.
-    map<string, AnyValue> attributes = 3;
-
-    // dropped_attributes_count is the number of dropped attributes. If the value is 0,
-    // then no attributes were dropped.
-    uint32 dropped_attributes_count = 4;
-  }
-  repeated Event events = 11;
-
-  message Link {
-    // A unique identifier of a trace that this linked span is part of. The ID is a
-    // 16-byte array.
-    bytes trace_id = 1;
-
-    // A unique identifier for the linked span. The ID is an 8-byte array.
-    bytes span_id = 2;
-
-    // The trace_state associated with the link.
-    string trace_state = 3;
-
-    // attributes is a collection of attribute key/value pairs on the link.
-    map<string, AnyValue> attributes = 4;
-
-    // dropped_attributes_count is the number of dropped attributes. If the value is 0,
-    // then no attributes were dropped.
-    uint32 dropped_attributes_count = 5;
-  }
-  repeated Link links = 13;
+  map<string, AttributeValue> attributes = 9;
 }
 
 // ============================= Dispatchers =============================

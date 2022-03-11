@@ -69,7 +69,6 @@ class task_action_base : public ::cotask::impl::task_action_impl {
 
   virtual std::shared_ptr<dispatcher_implement> get_dispatcher() const = 0;
   virtual const char *get_type_name() const = 0;
-  virtual const atframework::RpcTraceSpan *get_parent_trace_span() const;
 
   uint64_t get_task_id() const;
 

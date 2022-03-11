@@ -111,7 +111,7 @@ int task_action_base::operator()(void *priv_data) {
   trace_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
   trace_option.is_remote = true;
   trace_option.dispatcher = get_dispatcher();
-  trace_option.parent_network_span = get_parent_trace_span();
+  trace_option.parent_network_span = nullptr;
 
   if (nullptr != priv_data) {
     start_data_ = *reinterpret_cast<task_manager::start_data_t *>(priv_data);
@@ -258,8 +258,6 @@ int task_action_base::on_failed() { return 0; }
 int task_action_base::on_timeout() { return 0; }
 
 int task_action_base::on_complete() { return 0; }
-
-const atframework::RpcTraceSpan *task_action_base::get_parent_trace_span() const { return nullptr; }
 
 uint64_t task_action_base::get_task_id() const { return task_id_; }
 

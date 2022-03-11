@@ -43,7 +43,6 @@ class actor_action_base {
 
   virtual std::shared_ptr<dispatcher_implement> get_dispatcher() const = 0;
   virtual const char *get_type_name() const = 0;
-  virtual const atframework::RpcTraceSpan *get_parent_trace_span() const;
 
   result_type run(void *priv_data);
 
