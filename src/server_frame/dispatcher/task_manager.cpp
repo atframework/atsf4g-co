@@ -148,7 +148,7 @@ int task_manager::reload() {
 int task_manager::start_task(id_t task_id, start_data_t &data) {
   int res = native_mgr_->start(task_id, &data);
   if (res < 0) {
-    FWLOGERROR("start task {:#x} failed.", task_id);
+    FWLOGERROR("start task {} failed.", task_id);
 
     // 错误码
     return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
@@ -161,11 +161,11 @@ int task_manager::resume_task(id_t task_id, resume_data_t &data) {
   int res = native_mgr_->resume(task_id, &data);
   if (res < 0) {
     if (copp::COPP_EC_NOT_FOUND == res) {
-      FWLOGINFO("resume task {:#x} but not found, ignored.", task_id);
+      FWLOGINFO("resume task {} but not found, ignored.", task_id);
       return 0;
     }
 
-    FWLOGERROR("resume task {:#x} failed, res: {}.", task_id, res);
+    FWLOGERROR("resume task {} failed, res: {}.", task_id, res);
     // 错误码
     return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
   }
