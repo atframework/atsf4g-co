@@ -47,7 +47,6 @@ rpc::result_code_type player_manager::remove(rpc::context &ctx, uint64_t user_id
   }
 
   if (check_user != nullptr && false == cache->is_object_equal(*check_user)) {
-    rpc::context ctx;
     auto check_sess = check_user->get_session();
     check_user->set_session(ctx, nullptr);
     if (check_sess && check_sess->get_player().get() == check_user) {
@@ -170,9 +169,14 @@ rpc::result_code_type player_manager::create(rpc::context &ctx, uint64_t user_id
   if (0 == output->get_data_version()) {
     // manager 创建初始化
     if (output->get_login_info().account().version_type() >= PROJECT_NAMESPACE_ID::EN_VERSION_INNER) {
-      output->create_init(ctx, PROJECT_NAMESPACE_ID::EN_VERSION_DEFAULT);
+      res = RPC_AWAIT_CODE_RESULT(output->create_init(ctx, PROJECT_NAMESPACE_ID::EN_VERSION_DEFAULT));
     } else {
-      output->create_init(ctx, output->get_login_info().account().version_type());
+      res = RPC_AWAIT_CODE_RESULT(output->create_init(ctx, output->get_login_info().account().version_type()));
+    }
+    if (res < 0) {
+      FWLOGERROR("save create {}:{} object failed, res: {}({})", zone_id, user_id, res,
+                 protobuf_mini_dumper_get_error_msg(res));
+      RPC_RETURN_CODE(res);
     }
 
     // 初始化完成，保存一次

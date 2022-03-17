@@ -86,8 +86,8 @@ char *get_pack_tls_buffer() {
 
 #endif
 
-#define RPC_DB_VERSION_NAME "version"
-#define RPC_DB_VERSION_LENGTH 7
+#define RPC_DB_VERSION_NAME "__version"
+#define RPC_DB_VERSION_LENGTH 9
 
 namespace rpc {
 namespace db {

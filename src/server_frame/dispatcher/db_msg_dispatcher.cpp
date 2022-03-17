@@ -273,12 +273,20 @@ bool db_msg_dispatcher::is_available(channel_t::type t) const {
   }
 }
 
-const std::string &db_msg_dispatcher::get_db_script_sha1(uint32_t type) const {
-  return db_script_sha1_[type % PROJECT_NAMESPACE_ID::EnDBScriptShaType_ARRAYSIZE];
+const std::string &db_msg_dispatcher::get_db_script_sha1(script_type type) const {
+  if (type >= script_type::kMax) {
+    return db_script_sha1_[0];
+  }
+
+  return db_script_sha1_[static_cast<size_t>(type)];
 }
 
-void db_msg_dispatcher::set_db_script_sha1(uint32_t type, const char *str, int len) {
-  db_script_sha1_[type % PROJECT_NAMESPACE_ID::EnDBScriptShaType_ARRAYSIZE].assign(str, len);
+void db_msg_dispatcher::set_db_script_sha1(script_type type, const char *str, int len) {
+  if (type >= script_type::kMax || type <= script_type::kInvalid) {
+    return;
+  }
+
+  db_script_sha1_[static_cast<size_t>(type)].assign(str, len);
 }
 
 void db_msg_dispatcher::set_on_connected(channel_t::type t, user_callback_t fn) {
@@ -293,49 +301,45 @@ void db_msg_dispatcher::log_debug_fn(const char *content) { WCLOGDEBUG(log_categ
 
 void db_msg_dispatcher::log_info_fn(const char *content) { WCLOGINFO(log_categorize_t::DB, "%s", content); }
 
-int db_msg_dispatcher::script_load(redisAsyncContext *c, int32_t type) {
+int db_msg_dispatcher::script_load(redisAsyncContext *c, script_type type) {
   // load lua script
   int status;
   std::string script;
-  std::string script_file_path;
+  std::stringstream script_stream;
   switch (type) {
-    case PROJECT_NAMESPACE_ID::EN_DBSST_LOGIN:
-      script_file_path = logic_config::me()->get_cfg_db().script().login();
+    case script_type::kCompareAndSetHashTable: {
+      script_stream << "local real_version_str = redis.call('HGET', KEYS[1], ARGV[1])\n";
+      script_stream << "local real_version = 0\n";
+      script_stream << "if real_version_str != false and real_version_str != nil then\n";
+      script_stream << "  real_version = tonumber(real_version_str)\n";
+      script_stream << "end\n";
+      script_stream << "local except_version = tonumber(ARGV[2])\n";
+      script_stream << "local unpack_fn = table.unpack or unpack -- Lua 5.1 - 5.3\n";
+      script_stream << "if real_version == 0 or except_version == real_version then\n";
+      script_stream << "  ARGV[2] = real_version + 1;\n";
+      script_stream << "  redis.call('HMSET', KEYS[1], unpack_fn(ARGV))\n";
+      script_stream << "  return  { ok = tostring(ARGV[2]) }\n";
+      script_stream << "else\n";
+      script_stream << "  return  { err = 'CAS_FAILED|' .. tostring(real_version) }\n";
+      script_stream << "end\n";
       break;
-    case PROJECT_NAMESPACE_ID::EN_DBSST_USER:
-      script_file_path = logic_config::me()->get_cfg_db().script().user();
-      break;
+    }
     default:
       break;
   }
-  if (script_file_path.empty()) {
+
+  script = script_stream.str();
+  if (script.empty()) {
     return 0;
   }
 
-  open_file(script_file_path.c_str(), script);
-  status = redisAsyncCommand(
-      c, script_callback,
-      reinterpret_cast<void *>(static_cast<intptr_t>(type % PROJECT_NAMESPACE_ID::EnDBScriptShaType_ARRAYSIZE)),
-      "SCRIPT LOAD %s", script.c_str());
+  status = redisAsyncCommand(c, script_callback, reinterpret_cast<void *>(static_cast<intptr_t>(type)),
+                             "SCRIPT LOAD %s", script.c_str());
   if (REDIS_OK != status) {
     WLOGERROR("send db msg failed, status: %d, msg: %s", status, c->errstr);
   }
 
   return status;
-}
-
-int db_msg_dispatcher::open_file(const char *file, std::string &script) {
-  script.clear();
-  char path[util::file_system::MAX_PATH_LEN];
-  UTIL_STRFUNC_SNPRINTF(path, util::file_system::MAX_PATH_LEN, "%s/script/%s",
-                        logic_config::me()->get_logic().server().resource_path().c_str(), file);
-
-  if (false == util::file_system::get_file_content(script, path, false)) {
-    WLOGERROR("load db script file %s failed", path);
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
-  }
-
-  return 0;
 }
 
 void db_msg_dispatcher::on_timer_proc(uv_timer_t *handle) {
@@ -366,7 +370,7 @@ void db_msg_dispatcher::script_callback(redisAsyncContext *c, void *r, void *pri
 
   if (reply && reply->type == REDIS_REPLY_STRING && reply->str) {
     WLOGDEBUG("db script reply: %s", reply->str);
-    (me()->set_db_script_sha1(static_cast<uint32_t>(reinterpret_cast<intptr_t>(privdata)), reply->str,
+    (me()->set_db_script_sha1(static_cast<script_type>(reinterpret_cast<intptr_t>(privdata)), reply->str,
                               static_cast<int>(reply->len)));
 
   } else if (c->err) {
@@ -482,9 +486,7 @@ void db_msg_dispatcher::cluster_on_connected(hiredis::happ::cluster *clu, hiredi
 
   WLOGINFO("connect to db host %s success", conn->get_key().name.c_str());
   // 注入redis的lua脚本
-  for (int i = 0; i < PROJECT_NAMESPACE_ID::EnDBScriptShaType_descriptor()->value_count(); ++i) {
-    me()->script_load(conn->get_context(), PROJECT_NAMESPACE_ID::EnDBScriptShaType_descriptor()->value(i)->number());
-  }
+  me()->script_load(conn->get_context(), script_type::kCompareAndSetHashTable);
 
   for (int i = 0; i < channel_t::SENTINEL_BOUND; ++i) {
     std::shared_ptr<hiredis::happ::cluster> &clu_ptr = me()->db_cluster_conns_[i];

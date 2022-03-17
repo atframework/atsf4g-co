@@ -159,13 +159,13 @@ player::ptr_t player::create(uint64_t user_id, uint32_t zone_id, const std::stri
   return ret;
 }
 
-void player::create_init(rpc::context &ctx, uint32_t version_type) {
-  base_type::create_init(ctx, version_type);
+rpc::result_code_type player::create_init(rpc::context &ctx, uint32_t version_type) {
+  RPC_AWAIT_IGNORE_RESULT(base_type::create_init(ctx, version_type));
 
   set_data_version(PLAYER_DATA_LOGIC_VERSION);
 
   //! === manager implement === 创建后事件回调，这时候还没进入数据库并且未执行login_init()
-  user_async_jobs_manager_->create_init(ctx, version_type);
+  RPC_AWAIT_IGNORE_RESULT(user_async_jobs_manager_->create_init(ctx, version_type));
 
   // TODO init all interval checkpoint
 
@@ -178,20 +178,24 @@ void player::create_init(rpc::context &ctx, uint32_t version_type) {
   //         }
   //     });
   // }
+
+  RPC_RETURN_CODE(0);
 }
 
-void player::login_init(rpc::context &ctx) {
-  base_type::login_init(ctx);
+rpc::result_code_type player::login_init(rpc::context &ctx) {
+  RPC_AWAIT_IGNORE_RESULT(base_type::login_init(ctx));
 
   // 由于对象缓存可以被复用，这个函数可能会被多次执行。这个阶段，新版本的 login_table 已载入
 
   //! === manager implement === 登入成功后事件回调，新用户也会触发
 
   // all module login init
-  user_async_jobs_manager_->login_init(ctx);
+  RPC_AWAIT_IGNORE_RESULT(user_async_jobs_manager_->login_init(ctx));
 
   set_inited();
   on_login(ctx);
+
+  RPC_RETURN_CODE(0);
 }
 
 bool player::is_dirty() const {
@@ -355,19 +359,19 @@ void player::send_all_syn_msg(rpc::context &ctx) {
   clear_dirty_cache();
 }
 
-int player::await_before_logout_tasks() {
+rpc::result_code_type player::await_before_logout_tasks(rpc::context &ctx) {
   // 等待全部涉及保存的异步任务完成
-  int ret = base_type::await_before_logout_tasks();
+  rpc::result_code_type::value_type ret = RPC_AWAIT_CODE_RESULT(base_type::await_before_logout_tasks(ctx));
   if (ret < 0) {
-    return ret;
+    RPC_RETURN_CODE(ret);
   }
 
-  ret = user_async_jobs_manager_->wait_for_async_task();
+  ret = RPC_AWAIT_CODE_RESULT(user_async_jobs_manager_->wait_for_async_task(ctx));
   if (ret < 0) {
-    return ret;
+    RPC_RETURN_CODE(ret);
   }
 
-  return ret;
+  RPC_RETURN_CODE(ret);
 }
 
 void player::clear_dirty_cache() {

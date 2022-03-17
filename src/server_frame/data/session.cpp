@@ -131,7 +131,7 @@ void session::set_player(std::shared_ptr<player_cache> u) {
       file_sink.set_writing_alias_pattern(ss_alias.str());
       file_sink.set_flush_interval(1);  // flush every 1 second
       file_sink.set_max_file_size(logic_config::me()->get_logic().session().actor_log_size());
-      file_sink.set_rotate_size(logic_config::me()->get_logic().session().actor_log_rotate());
+      file_sink.set_rotate_size(static_cast<uint32_t>(logic_config::me()->get_logic().session().actor_log_rotate()));
       actor_log_writter_->add_sink(file_sink);
 
       util::log::log_wrapper::caller_info_t caller = util::log::log_wrapper::caller_info_t(

@@ -61,16 +61,18 @@ player_cache::ptr_t player_cache::create(uint64_t user_id, uint32_t zone_id, con
   return ret;
 }
 
-void player_cache::create_init(rpc::context &, uint32_t version_type) {
+rpc::result_code_type player_cache::create_init(rpc::context &, uint32_t version_type) {
   data_version_ = 0;
   version_.assign("0");
 
   // copy account information
   protobuf_copy_message(get_account_info(), get_login_info().account());
   login_info_.set_zone_id(get_zone_id());
+
+  RPC_RETURN_CODE(0);
 }
 
-void player_cache::login_init(rpc::context &) {
+rpc::result_code_type player_cache::login_init(rpc::context &) {
   // 由于对象缓存可以被复用，这个函数可能会被多次执行。这个阶段，新版本的 login_table 已载入
 
   // refresh account parameters，这里只刷新部分数据
@@ -86,6 +88,8 @@ void player_cache::login_init(rpc::context &) {
   }
 
   login_info_.set_zone_id(get_zone_id());
+
+  RPC_RETURN_CODE(0);
 }
 
 bool player_cache::is_dirty() const {
@@ -163,7 +167,7 @@ int player_cache::dump(rpc::context &, PROJECT_NAMESPACE_ID::table_user &user, b
 
 void player_cache::send_all_syn_msg(rpc::context &) {}
 
-int player_cache::await_before_logout_tasks() { return 0; }
+rpc::result_code_type player_cache::await_before_logout_tasks(rpc::context &ctx) { RPC_RETURN_CODE(0); }
 
 void player_cache::set_session(rpc::context &ctx, std::shared_ptr<session> session_ptr) {
   std::shared_ptr<session> old_sess = session_.lock();

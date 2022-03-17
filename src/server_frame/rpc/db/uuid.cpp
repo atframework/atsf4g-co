@@ -105,8 +105,7 @@ std::string generate_short_uuid() {
   return bin_buffer;
 }
 
-int64_t generate_global_increase_id(::rpc::context &ctx, uint32_t major_type, uint32_t minor_type,
-                                    uint32_t patch_type) {
+int64_t generate_global_increase_id(rpc::context &ctx, uint32_t major_type, uint32_t minor_type, uint32_t patch_type) {
   task_manager::task_t *task = task_manager::task_t::this_task();
   if (!task) {
     WLOGERROR("current not in a task");
@@ -126,15 +125,15 @@ int64_t generate_global_increase_id(::rpc::context &ctx, uint32_t major_type, ui
     keyvar[__snprintf_writen_length] = '\0';
   }
 
-  ::rpc::db::redis_args args(2);
+  rpc::db::redis_args args(2);
   {
     args.push("INCR");
     args.push(keyvar);
   }
 
-  ::rpc::context child_ctx(ctx);
-  ::rpc::context::tracer tracer;
-  ::rpc::context::trace_option trace_option;
+  rpc::context child_ctx(ctx);
+  rpc::context::tracer tracer;
+  rpc::context::trace_option trace_option;
   trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
   trace_option.is_remote = true;
   trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
@@ -261,7 +260,7 @@ struct unique_id_container_waker {
 };
 
 template <int64_t bits_off>
-static int64_t generate_global_unique_id(::rpc::context &ctx, uint32_t major_type, uint32_t minor_type,
+static int64_t generate_global_unique_id(rpc::context &ctx, uint32_t major_type, uint32_t minor_type,
                                          uint32_t patch_type) {
   task_manager::task_t *this_task = task_manager::task_t::this_task();
   if (nullptr == this_task) {
@@ -382,7 +381,7 @@ static int64_t generate_global_unique_id(::rpc::context &ctx, uint32_t major_typ
   return ret;
 }
 
-int64_t generate_global_unique_id(::rpc::context &ctx, uint32_t major_type, uint32_t minor_type, uint32_t patch_type) {
+int64_t generate_global_unique_id(rpc::context &ctx, uint32_t major_type, uint32_t minor_type, uint32_t patch_type) {
   if (PROJECT_NAMESPACE_ID::EN_GLOBAL_UUID_MAT_USER_ID == major_type ||
       PROJECT_NAMESPACE_ID::EN_GLOBAL_UUID_MAT_GUILD_ID == major_type) {
     // POOL => 1 | * | 5

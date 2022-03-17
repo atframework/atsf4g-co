@@ -1,51 +1,42 @@
+// Copyright 2022 atframework
+// Created by owent on 2016/9/28.
 //
-// Created by owt50 on 2016/9/28.
-//
-
-#ifndef RPC_DB_DB_MACROS_H
-#define RPC_DB_DB_MACROS_H
 
 #pragma once
+
+#include <common/string_oprs.h>
+
+#include <gsl/select-gsl.h>
+
+#include <log/log_wrapper.h>
 
 #include <inttypes.h>
 #include <stdint.h>
 #include <cstddef>
-
-#include <common/string_oprs.h>
+#include <utility>
 
 namespace rpc {
 namespace db {
-using user_table_key_t = char[256];
-inline size_t format_user_key(user_table_key_t &key, const char *table, const char *open_id, uint32_t zone_id) {
+using table_key_type = char[256];
+
+template <class TTable, class TID, class TZone>
+inline size_t format_user_key(table_key_type& key, TTable&& table, TID&& id, TZone&& zone_id) {
   size_t keylen = sizeof(key) - 1;
-  int __snprintf_writen_length = UTIL_STRFUNC_SNPRINTF(key, keylen, "%s:%u:%s", table, zone_id, open_id);
-  if (__snprintf_writen_length < 0) {
-    key[sizeof(key) - 1] = '\0';
-    keylen = 0;
-  } else {
-    keylen = static_cast<size_t>(__snprintf_writen_length);
-    key[__snprintf_writen_length] = '\0';
+  auto result = util::log::format_to_n(key, keylen, "{}:{}:{}", std::forward<TTable>(table), std::forward<TID>(id),
+                                       std::forward<TZone>(zone_id));
+  if (result.size <= 0) {
+    key[0] = '\0';
+    return 0;
   }
 
-  return keylen;
-}
-
-inline size_t format_user_key(user_table_key_t &key, const char *table, uint64_t user_id, uint32_t zone_id) {
-  size_t keylen = sizeof(key) - 1;
-  int __snprintf_writen_length =
-      UTIL_STRFUNC_SNPRINTF(key, keylen, "%s:%u:%llu", table, zone_id, static_cast<unsigned long long>(user_id));
-  if (__snprintf_writen_length < 0) {
-    key[sizeof(key) - 1] = '\0';
-    keylen = 0;
-  } else {
-    keylen = static_cast<size_t>(__snprintf_writen_length);
-    key[__snprintf_writen_length] = '\0';
+  if (static_cast<size_t>(result.size) > keylen) {
+    key[keylen] = '\0';
+    return keylen;
   }
 
+  key[result.size] = '\0';
   return keylen;
 }
 
 }  // namespace db
 }  // namespace rpc
-
-#endif  //_RPC_DB_DB_MACROS_H

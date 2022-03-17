@@ -139,7 +139,7 @@ task_action_login::result_type task_action_login::operator()() {
 
   // 8. 设置和Session互相关联
   user->set_session(get_shared_context(), my_sess);
-  user->login_init(get_shared_context());
+  RPC_AWAIT_IGNORE_RESULT(user->login_init(get_shared_context()));
 
   // 如果不存在则是登入过程中掉线了
   if (!my_sess) {

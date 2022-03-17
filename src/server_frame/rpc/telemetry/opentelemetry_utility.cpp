@@ -14,6 +14,11 @@
 
 #include <vector>
 
+// Patch for Windows SDK
+#ifdef GetMessage
+#  undef GetMessage
+#endif
+
 namespace {
 static void opentelemetry_utility_protobuf_to_otel_attributes_message(
     const google::protobuf::Reflection* reflection, const google::protobuf::Message& message,

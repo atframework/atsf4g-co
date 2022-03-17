@@ -10,12 +10,12 @@
 
 #include <google/protobuf/message.h>
 
+#include <opentelemetry/common/attribute_value.h>
+#include <opentelemetry/sdk/common/attribute_utils.h>
+
 #include <config/compiler/protobuf_suffix.h>
 
 #include <gsl/select-gsl.h>
-
-#include <opentelemetry/common/attribute_value.h>
-#include <opentelemetry/sdk/common/attribute_utils.h>
 
 #include <list>
 #include <memory>

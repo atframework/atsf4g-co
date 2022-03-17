@@ -127,3 +127,7 @@ int pack_message(const ::google::protobuf::Message& msg, redis_args& args,
                  std::ostream* debug_message);
 }  // namespace db
 }  // namespace rpc
+
+// When using c++20 coroutine, declare RPC_AWAIT_CODE_RESULT like this
+//   #define RPC_DB_RETURN_CODE(x) co_return (x)
+#define RPC_DB_RETURN_CODE(x) return rpc::db::result_type(x)

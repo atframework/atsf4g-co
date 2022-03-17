@@ -84,7 +84,7 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   add_library("sdk::${TARGET_NAME}" ALIAS "${TARGET_FULL_NAME}")
 
   if(MSVC)
-    set_property(TARGET "${TARGET_FULL_NAME}" "sdk::${TARGET_NAME}" PROPERTY FOLDER "service/sdk")
+    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "service/sdk")
   endif()
 endfunction()
 
@@ -273,7 +273,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
 
   add_library("protocol::${TARGET_NAME}" ALIAS "${TARGET_FULL_NAME}")
   if(MSVC)
-    set_property(TARGET "protocol::${TARGET_NAME}" "${TARGET_FULL_NAME}" PROPERTY FOLDER "service/protocol")
+    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "service/protocol")
   endif()
 endfunction()
 

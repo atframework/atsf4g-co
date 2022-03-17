@@ -94,12 +94,6 @@ enum EnVersionType {
   EN_VERSION_GM = 10001;     // gm
 }
 
-// db script type
-enum EnDBScriptShaType {
-  EN_DBSST_LOGIN = 0;  // login
-  EN_DBSST_USER = 1;   // user
-}
-
 // chat channel type
 enum EnChatChannelType {
   EN_CCT_INVALID = 0;              // invalid

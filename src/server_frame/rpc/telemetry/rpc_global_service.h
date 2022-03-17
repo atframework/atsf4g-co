@@ -10,14 +10,14 @@
 
 #include <protocol/config/svr.protocol.config.pb.h>
 
+#include <opentelemetry/logs/logger.h>
+#include <opentelemetry/trace/tracer.h>
+
 #include <config/compiler/protobuf_suffix.h>
 
 #include <stdint.h>
 #include <memory>
 #include <utility>
-
-#include "opentelemetry/logs/logger.h"
-#include "opentelemetry/trace/tracer.h"
 
 namespace atapp {
 class app;

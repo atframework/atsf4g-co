@@ -67,6 +67,12 @@ class db_msg_dispatcher : public dispatcher_implement, public util::design_patte
     };
   };
 
+  enum class script_type : uint8_t {
+    kInvalid = 0,
+    kCompareAndSetHashTable = 1,
+    kMax  // Unused
+  };
+
  protected:
   db_msg_dispatcher();
 
@@ -145,14 +151,14 @@ class db_msg_dispatcher : public dispatcher_implement, public util::design_patte
   /*
    * @brief 获取表脚本SHA1
    */
-  const std::string &get_db_script_sha1(uint32_t type) const;
+  const std::string &get_db_script_sha1(script_type type) const;
 
   /*
    * @brief 设置表脚本SHA1
    * @param 字符串指针
    * @param 字符串长度
    */
-  void set_db_script_sha1(uint32_t type, const char *str, int len);
+  void set_db_script_sha1(script_type type, const char *str, int len);
 
   /*
    * @brief 连接完成时调用用户的设置的回调函数
@@ -169,8 +175,7 @@ class db_msg_dispatcher : public dispatcher_implement, public util::design_patte
   static void log_debug_fn(const char *content);
   static void log_info_fn(const char *content);
 
-  int script_load(redisAsyncContext *c, int32_t type);
-  int open_file(const char *file, std::string &script);
+  int script_load(redisAsyncContext *c, script_type type);
 
   // common helper
   static void on_timer_proc(uv_timer_t *handle);
@@ -229,7 +234,7 @@ class db_msg_dispatcher : public dispatcher_implement, public util::design_patte
   std::list<user_callback_t> user_callback_onconnected_[channel_t::MAX];
 
   // script sha1
-  std::string db_script_sha1_[PROJECT_NAMESPACE_ID::EnDBScriptShaType_ARRAYSIZE];
+  std::string db_script_sha1_[static_cast<size_t>(script_type::kMax)];
 
   // channels
   std::shared_ptr<hiredis::happ::cluster> db_cluster_conns_[channel_t::SENTINEL_BOUND];

@@ -6,6 +6,8 @@
 
 #include <dispatcher/task_manager.h>
 
+#include <rpc/rpc_async_invoke.h>
+
 #include <stdint.h>
 #include <cstddef>
 #include <cstring>
@@ -24,10 +26,10 @@ class user_async_jobs_manager {
   ~user_async_jobs_manager();
 
   // 创建默认角色数据
-  void create_init(rpc::context& ctx, uint32_t version_type);
+  rpc::result_code_type create_init(rpc::context& ctx, uint32_t version_type);
 
   // 登入读取用户数据
-  void login_init(rpc::context& ctx);
+  rpc::result_code_type login_init(rpc::context& ctx);
 
   // 刷新功能限制次数
   void refresh_feature_limit(rpc::context& ctx);
@@ -52,7 +54,7 @@ class user_async_jobs_manager {
    */
   bool try_async_jobs(rpc::context& ctx);
 
-  int wait_for_async_task();
+  rpc::result_code_type wait_for_async_task(rpc::context& ctx);
 
   /**
    * @brief 重置远程命令任务的定时间隔

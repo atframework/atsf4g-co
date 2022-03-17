@@ -53,7 +53,7 @@ task_action_player_logout::result_type task_action_player_logout::operator()() {
     session_manager::me()->remove(s);
 
     if (user) {
-      set_response_code(user->await_before_logout_tasks());
+      set_response_code(RPC_AWAIT_CODE_RESULT(user->await_before_logout_tasks(get_shared_context())));
       if (get_response_code() < 0) {
         FWPLOGERROR(*user, "kickoff failed, res: {}({})", get_response_code(),
                     protobuf_mini_dumper_get_error_msg(get_response_code()));

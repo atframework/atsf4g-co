@@ -174,10 +174,10 @@ class player : public player_cache {
   static ptr_t create(uint64_t user_id, uint32_t zone_id, const std::string &openid);
 
   // 创建默认角色数据
-  void create_init(rpc::context &ctx, uint32_t version_type) override;
+  rpc::result_code_type create_init(rpc::context &ctx, uint32_t version_type) override;
 
   // 登入读取用户数据
-  void login_init(rpc::context &ctx) override;
+  rpc::result_code_type login_init(rpc::context &ctx) override;
 
   bool is_dirty() const override;
 
@@ -254,7 +254,7 @@ class player : public player_cache {
    * @brief 下发同步消息
    */
   void send_all_syn_msg(rpc::context &ctx) override;
-  int await_before_logout_tasks() override;
+  rpc::result_code_type await_before_logout_tasks(rpc::context &ctx) override;
   void clear_dirty_cache();
 
   PROJECT_NAMESPACE_ID::DItem &mutable_dirty_item(const PROJECT_NAMESPACE_ID::DItem &in);

@@ -26,11 +26,15 @@ user_async_jobs_manager::user_async_jobs_manager(player& owner)
 
 user_async_jobs_manager::~user_async_jobs_manager() {}
 
-void user_async_jobs_manager::create_init(rpc::context&, uint32_t) {
+rpc::result_code_type user_async_jobs_manager::create_init(rpc::context&, uint32_t) {
   // do nothing
+  RPC_RETURN_CODE(0);
 }
 
-void user_async_jobs_manager::login_init(rpc::context&) { reset_async_jobs_protect(); }
+rpc::result_code_type user_async_jobs_manager::login_init(rpc::context&) {
+  reset_async_jobs_protect();
+  RPC_RETURN_CODE(0);
+}
 
 void user_async_jobs_manager::refresh_feature_limit(rpc::context& ctx) { try_async_jobs(ctx); }
 
@@ -127,34 +131,34 @@ bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
   return true;
 }
 
-int user_async_jobs_manager::wait_for_async_task() {
+rpc::result_code_type user_async_jobs_manager::wait_for_async_task(rpc::context& ctx) {
   if (!is_async_jobs_task_running()) {
-    return 0;
+    RPC_RETURN_CODE(0);
   }
 
   task_manager::task_t* current = task_manager::task_t::this_task();
   if (NULL == current) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK;
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
   }
 
   int res = current->await_task(remote_command_patch_task_);
   if (current->is_timeout()) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
   }
 
   if (current->is_faulted()) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
   }
 
   if (current->is_canceled()) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
   }
 
   if (current->is_exiting()) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING;
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING);
   }
 
-  return res;
+  RPC_RETURN_CODE(res);
 }
 
 void user_async_jobs_manager::reset_async_jobs_protect() {

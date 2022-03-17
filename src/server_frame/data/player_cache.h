@@ -23,6 +23,7 @@
 #include <string>
 
 #include "data/player_key_hash_helper.h"
+#include "rpc/rpc_common_types.h"
 
 namespace rpc {
 class context;
@@ -94,10 +95,10 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
   static ptr_t create(uint64_t user_id, uint32_t zone_id, const std::string &openid);
 
   // 创建默认角色数据
-  virtual void create_init(rpc::context &ctx, uint32_t version_type);
+  virtual rpc::result_code_type create_init(rpc::context &ctx, uint32_t version_type);
 
   // 登入读取用户数据
-  virtual void login_init(rpc::context &ctx);
+  virtual rpc::result_code_type login_init(rpc::context &ctx);
 
   // 是否脏（有数据变更）
   virtual bool is_dirty() const;
@@ -145,7 +146,7 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
   /**
    * @brief 等待登出前需要结算完的任务
    */
-  virtual int await_before_logout_tasks();
+  virtual rpc::result_code_type await_before_logout_tasks(rpc::context &ctx);
 
   /**
    * @brief 监视关联的Session

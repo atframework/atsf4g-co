@@ -71,7 +71,7 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   add_library("components::${TARGET_NAME}" ALIAS "${TARGET_FULL_NAME}")
 
   if(MSVC)
-    set_property(TARGET "${TARGET_FULL_NAME}" "components::${TARGET_NAME}" PROPERTY FOLDER "component/sdk")
+    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "component/sdk")
   endif()
 endfunction()
 
@@ -249,7 +249,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
 
   add_library("components::${TARGET_NAME}" ALIAS "${TARGET_FULL_NAME}")
   if(MSVC)
-    set_property(TARGET "components::${TARGET_NAME}" "${TARGET_FULL_NAME}" PROPERTY FOLDER "component/protocol")
+    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "component/protocol")
   endif()
 endfunction()
 
@@ -335,6 +335,6 @@ function(project_component_declare_service TARGET_NAME SERVICE_ROOT_DIR)
   add_executable("components::${TARGET_NAME}" ALIAS "${TARGET_FULL_NAME}")
 
   if(MSVC)
-    set_property(TARGET "components::${TARGET_NAME}" "${TARGET_FULL_NAME}" PROPERTY FOLDER "component/service")
+    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "component/service")
   endif()
 endfunction()

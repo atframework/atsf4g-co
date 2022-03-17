@@ -10,6 +10,8 @@
 #include <protocol/config/svr.protocol.config.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
+#include <opentelemetry/trace/span_context.h>
+
 #include <config/compiler/protobuf_suffix.h>
 
 #include <atframe/atapp.h>
@@ -20,8 +22,6 @@
 #include <fstream>
 #include <string>
 #include <vector>
-
-#include "opentelemetry/trace/span_context.h"
 
 #include "rpc/telemetry/rpc_global_service.h"
 

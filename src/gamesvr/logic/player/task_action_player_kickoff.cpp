@@ -75,7 +75,7 @@ task_action_player_kickoff::result_type task_action_player_kickoff::operator()()
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
-  set_response_code(user->await_before_logout_tasks());
+  set_response_code(RPC_AWAIT_CODE_RESULT(user->await_before_logout_tasks(get_shared_context())));
   if (get_response_code() < 0) {
     WPLOGERROR(*user, "kickoff failed, res: %d(%s)", get_response_code(),
                protobuf_mini_dumper_get_error_msg(get_response_code()));

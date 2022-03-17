@@ -10,6 +10,9 @@
 
 #include <protocol/pbdesc/atframework.pb.h>
 
+#include <opentelemetry/trace/span.h>
+#include <opentelemetry/trace/tracer.h>
+
 #include <config/compiler/protobuf_suffix.h>
 
 #include <stdint.h>
@@ -18,9 +21,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
-#include "opentelemetry/trace/span.h"
-#include "opentelemetry/trace/tracer.h"
 
 class dispatcher_implement;
 
