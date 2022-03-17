@@ -160,12 +160,18 @@ player::ptr_t player::create(uint64_t user_id, uint32_t zone_id, const std::stri
 }
 
 rpc::result_code_type player::create_init(rpc::context &ctx, uint32_t version_type) {
-  RPC_AWAIT_IGNORE_RESULT(base_type::create_init(ctx, version_type));
+  auto res = RPC_AWAIT_CODE_RESULT(base_type::create_init(ctx, version_type));
+  if (res < 0) {
+    RPC_RETURN_CODE(res);
+  }
 
   set_data_version(PLAYER_DATA_LOGIC_VERSION);
 
   //! === manager implement === 创建后事件回调，这时候还没进入数据库并且未执行login_init()
-  RPC_AWAIT_IGNORE_RESULT(user_async_jobs_manager_->create_init(ctx, version_type));
+  res = RPC_AWAIT_CODE_RESULT(user_async_jobs_manager_->create_init(ctx, version_type));
+  if (res < 0) {
+    RPC_RETURN_CODE(res);
+  }
 
   // TODO init all interval checkpoint
 
@@ -179,23 +185,29 @@ rpc::result_code_type player::create_init(rpc::context &ctx, uint32_t version_ty
   //     });
   // }
 
-  RPC_RETURN_CODE(0);
+  RPC_RETURN_CODE(res);
 }
 
 rpc::result_code_type player::login_init(rpc::context &ctx) {
-  RPC_AWAIT_IGNORE_RESULT(base_type::login_init(ctx));
+  auto res = RPC_AWAIT_CODE_RESULT(base_type::login_init(ctx));
+  if (res < 0) {
+    RPC_RETURN_CODE(res);
+  }
 
   // 由于对象缓存可以被复用，这个函数可能会被多次执行。这个阶段，新版本的 login_table 已载入
 
   //! === manager implement === 登入成功后事件回调，新用户也会触发
 
   // all module login init
-  RPC_AWAIT_IGNORE_RESULT(user_async_jobs_manager_->login_init(ctx));
+  res = RPC_AWAIT_CODE_RESULT(user_async_jobs_manager_->login_init(ctx));
+  if (res < 0) {
+    RPC_RETURN_CODE(res);
+  }
 
   set_inited();
   on_login(ctx);
 
-  RPC_RETURN_CODE(0);
+  RPC_RETURN_CODE(res);
 }
 
 bool player::is_dirty() const {
