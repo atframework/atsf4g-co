@@ -348,7 +348,8 @@ rpc::result_code_type initialize_new_transaction(rpc::context& ctx,
   atframework::distributed_system::transaction_configure& configure = *inout.mutable_configure();
   metadata.set_transaction_uuid(trans_uuid);
   metadata.mutable_prepare_timepoint()->set_seconds(util::time::time_utility::get_now());
-  metadata.mutable_prepare_timepoint()->set_nanos(util::time::time_utility::get_now_usec() * 1000);
+  metadata.mutable_prepare_timepoint()->set_nanos(
+      static_cast<int32_t>(util::time::time_utility::get_now_usec() * 1000));
   int64_t timeout_sec;
   int32_t timeout_nanos;
   if (timeout.seconds() <= 0 && timeout.nanos() <= 0) {

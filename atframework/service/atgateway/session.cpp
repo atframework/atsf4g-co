@@ -142,9 +142,14 @@ int session::accept_pipe(uv_stream_t *server) {
   uv_stream_set_blocking(&stream_handle_, 0);
 
   // get peer path
-  char pipe_path[util::file_system::MAX_PATH_LEN] = {0};
+  char pipe_path[util::file_system::MAX_PATH_LEN];
   size_t path_len = sizeof(pipe_path);
   uv_pipe_getpeername(&unix_handle_, pipe_path, &path_len);
+  if (path_len < sizeof(pipe_path)) {
+    pipe_path[path_len] = 0;
+  } else {
+    pipe_path[sizeof(pipe_path) - 1] = 0;
+  }
   peer_ip_.assign(pipe_path, path_len);
   peer_port_ = 0;
 

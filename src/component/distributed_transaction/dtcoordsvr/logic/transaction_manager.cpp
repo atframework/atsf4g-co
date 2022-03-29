@@ -98,7 +98,7 @@ rpc::result_code_type transaction_manager::create_transaction(
   }
 
   time_t now = util::time::time_utility::get_now();
-  time_t now_nanos = util::time::time_utility::get_now_usec() * 1000;
+  int32_t now_nanos = static_cast<int32_t>(util::time::time_utility::get_now_usec() * 1000);
   storage.mutable_metadata()->mutable_prepare_timepoint()->set_seconds(now);
   storage.mutable_metadata()->mutable_prepare_timepoint()->set_nanos(now_nanos);
 
@@ -369,12 +369,13 @@ rpc::result_code_type transaction_manager::try_commit(rpc::context& ctx, transac
 
   if (metadata->status() > atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
     FWLOGERROR("Transaction {} already has status: {}, can not commit", metadata->transaction_uuid(),
-               metadata->status());
+               static_cast<int>(metadata->status()));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
   metadata->set_status(atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
   metadata->mutable_finish_timepoint()->set_seconds(util::time::time_utility::get_now());
-  metadata->mutable_finish_timepoint()->set_nanos(util::time::time_utility::get_now_usec() * 1000);
+  metadata->mutable_finish_timepoint()->set_nanos(
+      static_cast<int32_t>(util::time::time_utility::get_now_usec() * 1000));
 
   if (metadata->memory_only()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -404,12 +405,13 @@ rpc::result_code_type transaction_manager::try_reject(rpc::context& ctx, transac
 
   if (metadata->status() > atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
     FWLOGERROR("Transaction {} already has status: {}, can not reject", metadata->transaction_uuid(),
-               metadata->status());
+               static_cast<int>(metadata->status()));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
   metadata->set_status(atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
   metadata->mutable_finish_timepoint()->set_seconds(util::time::time_utility::get_now());
-  metadata->mutable_finish_timepoint()->set_nanos(util::time::time_utility::get_now_usec() * 1000);
+  metadata->mutable_finish_timepoint()->set_nanos(
+      static_cast<int32_t>(util::time::time_utility::get_now_usec() * 1000));
 
   if (metadata->memory_only()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);

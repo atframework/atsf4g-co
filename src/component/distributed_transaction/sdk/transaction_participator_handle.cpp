@@ -694,7 +694,7 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
   // Reset timer
   resolve_timers_.erase(storage_resolve_timer_type{*transaction_ptr});
   int64_t now_seconds = util::time::time_utility::get_now();
-  int32_t now_nanos = util::time::time_utility::get_now_usec() * 1000;
+  int32_t now_nanos = static_cast<int32_t>(util::time::time_utility::get_now_usec() * 1000);
   if (now_nanos + transaction_ptr->configure().resolve_retry_interval().nanos() > 1000000000) {
     transaction_ptr->mutable_resolve_timepoint()->set_seconds(
         now_seconds + transaction_ptr->configure().resolve_retry_interval().seconds() + 1);
@@ -855,7 +855,7 @@ rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::c
 
   // event callback
   if (vtable_ && vtable_->on_rejected) {
-    int res = RPC_AWAIT_CODE_RESULT(vtable_->on_rejected(child_ctx, *this, *transaction_ptr));
+    res = RPC_AWAIT_CODE_RESULT(vtable_->on_rejected(child_ctx, *this, *transaction_ptr));
     if (res < 0) {
       FWLOGERROR("participator {} call on_rejected for transaction {} failed, error code: {}({})",
                  get_participator_key(), transaction_ptr->metadata().transaction_uuid(), res,
