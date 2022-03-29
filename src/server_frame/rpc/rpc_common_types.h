@@ -61,6 +61,8 @@ class rpc_result : public util::design_pattern::result_type<TSuccess, TError> {
 //   #define RPC_AWAIT_IGNORE_RESULT(x) ((void)(co_await (x)))
 //   #define RPC_AWAIT_CODE_RESULT(x) (co_await (x))
 //   #define RPC_RETURN_CODE(x) co_return (x)
+//   #define RPC_RETURN_VOID co_return
 #define RPC_AWAIT_IGNORE_RESULT(x) ((void)(x))
 #define RPC_AWAIT_CODE_RESULT(x) static_cast<int32_t>(x)
 #define RPC_RETURN_CODE(x) return rpc::result_code_type(x)
+#define RPC_RETURN_VOID return

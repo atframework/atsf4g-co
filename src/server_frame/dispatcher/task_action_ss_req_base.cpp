@@ -204,6 +204,13 @@ static rpc::result_code_type auto_mutable_router_object(rpc::context &ctx, uint6
   if (self_bus_id != obj->get_router_server_id()) {
     FWLOGERROR("router object {}:{}:{} auto mutable object failed, expect server id 0x{:x}, real server id 0x{:x}",
                key.type_id, key.zone_id, key.object_id, self_bus_id, obj->get_router_server_id());
+    if (0 == obj->get_router_server_id()) {
+      result = filter_router_message_result_type(false, true);
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_IN_SERVER);
+    } else {
+      result = filter_router_message_result_type(false, false);
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_IN_OTHER_SERVER);
+    }
   }
 
   result = filter_router_message_result_type(true, true);
@@ -315,13 +322,19 @@ static rpc::result_code_type try_filter_router_msg(rpc::context &ctx, EXPLICIT_U
 
   // 如果和本地的路由缓存匹配则break直接开始消息处理
   if (obj && self_bus_id == obj->get_router_server_id()) {
-    RPC_AWAIT_IGNORE_RESULT(check_local_router_object(ctx, self_bus_id, mgr, key, obj, result));
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(check_local_router_object(ctx, self_bus_id, mgr, key, obj, result)));
   }
 
   // 路由消息转发
   if (obj && 0 != obj->get_router_server_id()) {
     uint64_t rpc_sequence;
-    res = RPC_AWAIT_CODE_RESULT(mgr.send_msg(ctx, *obj, std::move(request_msg), rpc_sequence));
+    if (request_msg.head().router().router_transfer_ttl() < logic_config::me()->get_cfg_router().transfer_max_ttl()) {
+      request_msg.mutable_head()->mutable_router()->set_router_transfer_ttl(
+          request_msg.head().router().router_transfer_ttl() + 1);
+      res = RPC_AWAIT_CODE_RESULT(mgr.send_msg(ctx, *obj, std::move(request_msg), rpc_sequence));
+    } else {
+      res = PROJECT_NAMESPACE_ID::err::EN_ROUTER_TTL_EXTEND;
+    }
 
     // 如果路由转发成功，需要禁用掉回包和通知事件，也不需要走逻辑处理了
     if (res < 0) {
@@ -387,9 +400,9 @@ rpc::result_code_type task_action_ss_req_base::filter_router_msg(router_manager_
   }
 
   // 如果本地路由版本号大于来源，通知来源更新路由表
-  if (obj && obj->get_router_version() > router.router_version()) {
-    PROJECT_NAMESPACE_ID::SSRouterUpdateSync sync_msg;
-    atframework::SSRouterHead *router_head = sync_msg.mutable_object();
+  if (last_result >= 0 && obj && obj->get_router_version() > router.router_version()) {
+    rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRouterUpdateSync> sync_msg{get_shared_context()};
+    atframework::SSRouterHead *router_head = sync_msg->mutable_object();
     if (nullptr != router_head) {
       router_head->set_router_src_bus_id(obj->get_router_server_id());
       router_head->set_router_version(obj->get_router_version());
@@ -399,7 +412,7 @@ rpc::result_code_type task_action_ss_req_base::filter_router_msg(router_manager_
     }
 
     // 只通知直接来源
-    rpc::router::router_update_sync(get_shared_context(), get_request_bus_id(), sync_msg);
+    RPC_AWAIT_IGNORE_RESULT(rpc::router::router_update_sync(get_shared_context(), get_request_bus_id(), *sync_msg));
   }
 
   // 失败则要回发转发失败

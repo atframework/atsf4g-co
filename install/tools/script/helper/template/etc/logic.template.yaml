@@ -66,6 +66,7 @@ logic:
     pending_action_batch_count: 200 # batch count for pending actions
     pending_action_max_count: 2000  # max action count when in interval task of router system
     closing_action_batch_count: 500 # max action count when in closing task of router system
+    transfer_max_ttl: 128           # max TTL when transfer router messages
   telemetry:
     opentelemetry:
       app_log:

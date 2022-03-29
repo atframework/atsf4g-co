@@ -198,7 +198,10 @@ int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
                get_app()->convert_app_id_to_string(from_server_id), ret);
     return ret;
   }
-  ss_msg->mutable_head()->set_bus_id(from_server_id);
+  // 不能改消息来源，可能是路由转发消息
+  if (0 == ss_msg->head().bus_id()) {
+    ss_msg->mutable_head()->set_bus_id(from_server_id);
+  }
 
   rpc::context::tracer tracer;
   rpc::context::trace_option trace_option;

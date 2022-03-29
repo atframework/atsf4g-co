@@ -8,7 +8,8 @@ if(NOT ANDROID AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
   #   @see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=58016
   #   @see https://gcc.gnu.org/gcc-4.9/changes.html
   #]]
-  if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "4.9")
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_VERSION
+                                                                                         VERSION_GREATER_EQUAL "4.9"))
     include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/libunwind/libunwind.cmake")
   endif()
 endif()
@@ -25,8 +26,8 @@ include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/redis/hiredis.cmake")
 include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/cares/c-ares.cmake")
 include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/re2/re2.cmake")
 include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/libcurl/libcurl.cmake")
-# include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/web/civetweb.cmake")
-# include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/web/libwebsockets.cmake")
+include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/web/civetweb.cmake")
+include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/web/libwebsockets.cmake")
 if(VCPKG_TOOLCHAIN
    AND MSVC
    AND MSVC_VERSION GREATER_EQUAL 1929)

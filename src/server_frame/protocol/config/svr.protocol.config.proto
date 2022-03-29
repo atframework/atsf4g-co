@@ -109,6 +109,7 @@ message logic_router_cfg {
   uint64 pending_action_batch_count = 108 [(atapp.protocol.CONFIGURE) = { default_value: "200" min_value: "1" }];
   uint64 pending_action_max_count = 109 [(atapp.protocol.CONFIGURE) = { default_value: "2000" min_value: "1" }];
   uint64 closing_action_batch_count = 110 [(atapp.protocol.CONFIGURE) = { default_value: "500" min_value: "1" }];
+  uint32 transfer_max_ttl = 111 [(atapp.protocol.CONFIGURE) = { default_value: "128" min_value: "1" }];
 }
 
 message opentelemetry_exporter_otlp_grpc {

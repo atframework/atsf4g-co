@@ -85,6 +85,7 @@ class rpc_lru_cache_map {
       pool_.erase(iter);
     }
 
+    cache->last_visit_timepoint = util::time::time_utility::get_now();
     pool_.insert_key_value(cache->data_key, cache);
   }
 

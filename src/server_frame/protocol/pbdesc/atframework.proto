@@ -218,6 +218,7 @@ message RpcTraceSpan {
 message SSRouterHead {
   uint64 router_src_bus_id = 1;  // 路由协议原始发起者的BUS ID
   uint64 router_version = 2;
+  uint32 router_transfer_ttl = 3;  // 路由消息转发条数
 
   // 路由对象信息
   uint32 object_type_id = 21;  // 每种路由对象都要有自己的类型ID（router_manager_set根据这个来区分走哪个路由对象管理器）
