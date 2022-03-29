@@ -1,5 +1,5 @@
 // Copyright 2021 atframework
-// Created by owent on 2019/07/05.
+// Created by owent on 2019-07-05.
 //
 
 #ifndef LOGIC_SIMPLE_TEMPLATE_CORE_H

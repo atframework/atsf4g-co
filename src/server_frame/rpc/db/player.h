@@ -2,9 +2,6 @@
 // Created by owent on 2016/9/28.
 //
 
-#ifndef RPC_DB_PLAYER_H
-#define RPC_DB_PLAYER_H
-
 #pragma once
 
 #include <config/compiler/protobuf_prefix.h>
@@ -51,5 +48,3 @@ result_type set(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const PRO
 }  // namespace player
 }  // namespace db
 }  // namespace rpc
-
-#endif  //_RPC_DB_PLAYER_H

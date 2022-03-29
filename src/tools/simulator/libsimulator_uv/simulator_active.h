@@ -1,5 +1,5 @@
 //
-// Created by owt50 on 2016/10/11.
+// Created by owt50 on 2016-10-11.
 //
 
 #ifndef ATFRAMEWORK_LIBSIMULATOR_SIMULATOR_ACTIVE_H

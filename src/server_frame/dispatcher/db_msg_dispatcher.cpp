@@ -76,7 +76,7 @@ int32_t db_msg_dispatcher::init() {
   if (nullptr == tick_timer_) {
     tick_timer_ = new (std::nothrow) uv_timer_t();
     if (nullptr == tick_timer_) {
-      WLOGERROR("malloc timer failed");
+      FWLOGERROR("malloc {} failed", "timer");
       return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
     }
     tick_timer_->data = this;
@@ -85,7 +85,7 @@ int32_t db_msg_dispatcher::init() {
     do {
       res = uv_timer_init(loop, tick_timer_);
       if (0 != res) {
-        WLOGERROR("init db dispatcher timer failed, res: %d", res);
+        FWLOGERROR("init db dispatcher timer failed, res: {}({})", res, uv_strerror(res));
         break;
       }
 
@@ -95,7 +95,7 @@ int32_t db_msg_dispatcher::init() {
                                 logic_config::me()->get_cfg_db().timer().proc().nanos() / 1000000);
       res = uv_timer_start(tick_timer_, db_msg_dispatcher::on_timer_proc, timer_tick_interval, timer_tick_interval);
       if (0 != res) {
-        WLOGERROR("start db dispatcher timer failed, res: %d", res);
+        FWLOGERROR("start db dispatcher timer failed, res: {}({})", res, uv_strerror(res));
         break;
       }
     } while (false);
@@ -151,7 +151,7 @@ int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
   }
 
   if (nullptr == req->response) {
-    WLOGERROR("task [0x%llx] DB msg, no response found", static_cast<unsigned long long>(req->task_id));
+    FWLOGERROR("task [{}] DB msg, no response found", req->task_id);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
@@ -159,9 +159,9 @@ int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
   switch (req->response->type) {
     case REDIS_REPLY_STATUS: {
       if (0 == UTIL_STRFUNC_STRNCASE_CMP("OK", req->response->str, 2)) {
-        WLOGINFO("db reply status: %s", req->response->str);
+        FWLOGINFO("db reply status: {}", req->response->str);
       } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("CAS_FAILED", req->response->str, 10)) {
-        WLOGINFO("db reply status: %s", req->response->str);
+        FWLOGINFO("db reply status: {}", req->response->str);
         if (req->response->str[10] && req->response->str[11]) {
           table_msg->set_version(&req->response->str[11]);
         }
@@ -179,7 +179,7 @@ int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
         }
         ret = PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION;
       } else {
-        WLOGERROR("db reply error: %s", req->response->str);
+        FWLOGERROR("db reply error: {}", req->response->str);
         ret = PROJECT_NAMESPACE_ID::err::EN_DB_REPLY_ERROR;
       }
       break;
@@ -188,10 +188,10 @@ int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
       if (nullptr != req->unpack_fn) {
         ret = req->unpack_fn(*table_msg, req->response);
         if (ret < 0) {
-          WLOGERROR("db unpack data error, res: %d", ret);
+          FWLOGERROR("db unpack data error, res: {}", ret);
         }
       } else if (REDIS_REPLY_STRING == req->response->type) {
-        WLOGINFO("db reply msg: %s", req->response->str);
+        FWLOGINFO("db reply msg: {}", req->response->str);
       }
       break;
     }
@@ -235,7 +235,7 @@ int db_msg_dispatcher::send_msg(channel_t::type t, const char *ks, size_t kl, ui
     if (db_cluster_conns_[t]) {
       return cluster_send_msg(*db_cluster_conns_[t], ks, kl, task_id, pd, fn, sequence, argc, argv, argvlen);
     } else {
-      WLOGERROR("db cluster %d not inited", static_cast<int>(t));
+      FWLOGERROR("db cluster {} not inited", static_cast<int>(t));
       return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
     }
   }
@@ -244,12 +244,12 @@ int db_msg_dispatcher::send_msg(channel_t::type t, const char *ks, size_t kl, ui
     if (db_raw_conns_[t - channel_t::RAW_DEFAULT]) {
       return raw_send_msg(*db_raw_conns_[t - channel_t::RAW_DEFAULT], task_id, pd, fn, sequence, argc, argv, argvlen);
     } else {
-      WLOGERROR("db single %d not inited", static_cast<int>(t));
+      FWLOGERROR("db single {} not inited", static_cast<int>(t));
       return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
     }
   }
 
-  WLOGERROR("db channel %d invalid", static_cast<int>(t));
+  FWLOGERROR("db channel {} invalid", static_cast<int>(t));
   return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
 }
 
@@ -336,7 +336,7 @@ int db_msg_dispatcher::script_load(redisAsyncContext *c, script_type type) {
   status = redisAsyncCommand(c, script_callback, reinterpret_cast<void *>(static_cast<intptr_t>(type)),
                              "SCRIPT LOAD %s", script.c_str());
   if (REDIS_OK != status) {
-    WLOGERROR("send db msg failed, status: %d, msg: %s", status, c->errstr);
+    FWLOGERROR("send db msg failed, status: {}, msg: {}", status, c->errstr);
   }
 
   return status;
@@ -369,12 +369,12 @@ void db_msg_dispatcher::script_callback(redisAsyncContext *c, void *r, void *pri
   redisReply *reply = reinterpret_cast<redisReply *>(r);
 
   if (reply && reply->type == REDIS_REPLY_STRING && reply->str) {
-    WLOGDEBUG("db script reply: %s", reply->str);
+    FWLOGDEBUG("db script reply: {}", reply->str);
     (me()->set_db_script_sha1(static_cast<script_type>(reinterpret_cast<intptr_t>(privdata)), reply->str,
                               static_cast<int>(reply->len)));
 
   } else if (c->err) {
-    WLOGERROR("db got a error response, %s", c->errstr);
+    FWLOGERROR("db got a error response, {}", c->errstr);
   }
 
   // 响应调度器
@@ -445,7 +445,7 @@ void db_msg_dispatcher::cluster_request_callback(hiredis::happ::cmd_exec *, stru
 
   // 所有的请求都应该走标准流程，出错了
   if (nullptr == req) {
-    WLOGERROR("all cmd should has a req data");
+    FWLOGERROR("{}", "all cmd should has a req data");
     return;
   }
 
@@ -453,9 +453,9 @@ void db_msg_dispatcher::cluster_request_callback(hiredis::happ::cmd_exec *, stru
     // 无回包,可能是连接出现问题
     if (nullptr == reply) {
       if (nullptr == c) {
-        WLOGERROR("connect to db failed.");
+        FWLOGERROR("{}", "connect to db failed.");
       } else if (c->err) {
-        WLOGERROR("db got a error response, %s", c->errstr);
+        FWLOGERROR("db got a error response, {}", c->errstr);
       }
 
       break;
@@ -479,12 +479,12 @@ void db_msg_dispatcher::cluster_on_connect(hiredis::happ::cluster *, hiredis::ha
 void db_msg_dispatcher::cluster_on_connected(hiredis::happ::cluster *clu, hiredis::happ::connection *conn,
                                              const struct redisAsyncContext *, int status) {
   if (0 != status || nullptr == conn) {
-    WLOGERROR("connect to db host %s failed, status: %d", (nullptr == conn ? "Unknown" : conn->get_key().name.c_str()),
-              status);
+    FWLOGERROR("connect to db host {} failed, status: {}", (nullptr == conn ? "Unknown" : conn->get_key().name.c_str()),
+               status);
     return;
   }
 
-  WLOGINFO("connect to db host %s success", conn->get_key().name.c_str());
+  FWLOGINFO("connect to db host {} success", conn->get_key().name);
   // 注入redis的lua脚本
   me()->script_load(conn->get_context(), script_type::kCompareAndSetHashTable);
 
@@ -525,7 +525,7 @@ int db_msg_dispatcher::cluster_send_msg(hiredis::happ::cluster &clu, const char 
   }
 
   if (nullptr == cmd) {
-    WLOGERROR("send db msg failed");
+    FWLOGERROR("{}", "send db msg failed");
     return PROJECT_NAMESPACE_ID::err::EN_DB_SEND_FAILED;
   }
 
@@ -594,7 +594,7 @@ void db_msg_dispatcher::raw_request_callback(hiredis::happ::cmd_exec *, struct r
 
   // 所有的请求都应该走标准流程，出错了
   if (nullptr == req) {
-    WLOGERROR("all cmd should has a req data");
+    FWLOGERROR("{}", "all cmd should has a req data");
     return;
   }
 
@@ -602,9 +602,9 @@ void db_msg_dispatcher::raw_request_callback(hiredis::happ::cmd_exec *, struct r
     // 无回包,可能是连接出现问题
     if (nullptr == reply) {
       if (nullptr == c) {
-        WLOGERROR("connect to db failed.");
+        FWLOGERROR("{}", "connect to db failed.");
       } else if (c->err) {
-        WLOGERROR("db got a error response, %s", c->errstr);
+        FWLOGERROR("db got a error response, {}", c->errstr);
       }
 
       break;
@@ -628,12 +628,12 @@ void db_msg_dispatcher::raw_on_connect(hiredis::happ::raw *c, hiredis::happ::con
 void db_msg_dispatcher::raw_on_connected(hiredis::happ::raw *raw_conn, hiredis::happ::connection *conn,
                                          const struct redisAsyncContext *, int status) {
   if (0 != status || nullptr == conn) {
-    WLOGERROR("connect to db host %s failed, status: %d", (nullptr == conn ? "Unknown" : conn->get_key().name.c_str()),
-              status);
+    FWLOGERROR("connect to db host {} failed, status: {}", (nullptr == conn ? "Unknown" : conn->get_key().name.c_str()),
+               status);
     return;
   }
 
-  WLOGINFO("connect to db host %s success", conn->get_key().name.c_str());
+  FWLOGINFO("connect to db host {} success", conn->get_key().name);
 
   for (int i = channel_t::RAW_DEFAULT; i < channel_t::RAW_BOUND; ++i) {
     std::shared_ptr<hiredis::happ::raw> &raw_ptr = me()->db_raw_conns_[i - channel_t::RAW_DEFAULT];
@@ -671,7 +671,7 @@ int db_msg_dispatcher::raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_
   }
 
   if (nullptr == cmd) {
-    WLOGERROR("send db msg failed");
+    FWLOGERROR("send db msg failed");
     return PROJECT_NAMESPACE_ID::err::EN_DB_SEND_FAILED;
   }
 

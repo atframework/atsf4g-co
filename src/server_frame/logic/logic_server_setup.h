@@ -9,6 +9,8 @@
 #include <std/smart_ptr.h>
 
 #include <atframe/atapp_module_impl.h>
+#include <atframe/etcdcli/etcd_discovery.h>
+#include <atframe/modules/etcd_module.h>
 
 #include <config/compiler/protobuf_prefix.h>
 
@@ -32,13 +34,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-
-namespace atapp {
-class etcd_module;
-class etcd_keepalive;
-class etcd_watcher;
-class etcd_cluster;
-}  // namespace atapp
 
 class logic_server_common_module;
 
@@ -70,6 +65,11 @@ struct logic_server_timer {
 
     return lhs.task_id < rhs.task_id;
   }
+};
+
+struct logic_server_type_discovery_set_t {
+  atapp::etcd_discovery_set::ptr_t all_index;
+  std::unordered_map<uint64_t, atapp::etcd_discovery_set::ptr_t> zone_index;
 };
 
 class logic_server_common_module : public atapp::module_impl {
@@ -105,6 +105,8 @@ class logic_server_common_module : public atapp::module_impl {
   int stop() override;
 
   int timeout() override;
+
+  void cleanup() override;
 
   const char* name() const override;
 
@@ -143,11 +145,31 @@ class logic_server_common_module : public atapp::module_impl {
 
   void insert_timer(uint64_t task_id, std::chrono::system_clock::duration timeout, logic_server_timer& output);
 
+  atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type(uint64_t type_id) const;
+  atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type(const std::string& type_name) const;
+  atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type_zone(uint64_t type_id, uint64_t zone_id) const;
+  atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type_zone(const std::string& type_name,
+                                                                    uint64_t zone_id) const;
+  atapp::etcd_discovery_set::ptr_t get_discovery_index_by_zone(uint64_t zone_id) const;
+  inline const std::unordered_map<uint64_t, atapp::etcd_discovery_set::ptr_t>& get_origin_zone_index() const noexcept {
+    return service_zone_index_;
+  }
+
+  std::shared_ptr<atapp::etcd_discovery_node> get_discovery_by_id(uint64_t id) const;
+  std::shared_ptr<atapp::etcd_discovery_node> get_discovery_by_name(gsl::string_view name) const;
+
  private:
   int setup_battle_service_watcher();
   int setup_etcd_event_handle();
 
   int tick_update_remote_configures();
+
+  void add_service_type_id_index(const atapp::etcd_discovery_node::ptr_t& node);
+  void remove_service_type_id_index(const atapp::etcd_discovery_node::ptr_t& node);
+  void add_service_type_name_index(const atapp::etcd_discovery_node::ptr_t& node);
+  void remove_service_type_name_index(const atapp::etcd_discovery_node::ptr_t& node);
+  void add_service_zone_index(const atapp::etcd_discovery_node::ptr_t& node);
+  void remove_service_zone_index(const atapp::etcd_discovery_node::ptr_t& node);
 
  private:
   logic_server_common_module_configure static_conf_;
@@ -159,6 +181,11 @@ class logic_server_common_module : public atapp::module_impl {
   etcd_watcher_ptr_t battle_service_watcher_;
   bool etcd_event_handle_registered_;
   int64_t cachesvr_discovery_version_;
+
+  std::unordered_map<uint64_t, logic_server_type_discovery_set_t> service_type_id_index_;
+  std::unordered_map<std::string, logic_server_type_discovery_set_t> service_type_name_index_;
+  std::unordered_map<uint64_t, atapp::etcd_discovery_set::ptr_t> service_zone_index_;
+  std::unique_ptr<atapp::etcd_module::node_event_callback_handle_t> service_index_handle_;
 
   PROJECT_NAMESPACE_ID::table_service_configure_data server_remote_conf_;
   int32_t server_remote_conf_global_version_;

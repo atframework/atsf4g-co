@@ -6,6 +6,8 @@ option optimize_for = SPEED;
 // --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
 
+import "google/protobuf/any.proto";
+
 import "com.struct.proto";
 import "svr.struct.proto";
 
@@ -64,6 +66,13 @@ message table_user_async_jobs_blob_data {
   }
 }
 
+message table_distribute_transaction {
+  uint32 zone_id = 1;
+  bytes transaction_uuid = 2;
+
+  google.protobuf.Any blob_data = 11;
+}
+
 message table_all_message {
   uint64 bus_id = 1;       // 用于恢复协程的BusID
   uint64 dst_task_id = 2;  // 用于恢复协程的任务ID
@@ -74,4 +83,5 @@ message table_all_message {
   string version = 13;            //透传版本
   table_simple_info simple = 14;  //简单数据类型
   table_user_async_jobs_blob_data async_jobs = 15;
+  table_distribute_transaction distribute_transaction = 16;
 }

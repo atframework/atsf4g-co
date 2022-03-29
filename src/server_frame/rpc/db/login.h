@@ -2,9 +2,6 @@
 // Created by owent on 2016/9/28.
 //
 
-#ifndef RPC_DB_LOGIN_H
-#define RPC_DB_LOGIN_H
-
 #pragma once
 
 #include <config/compiler/protobuf_prefix.h>
@@ -49,5 +46,3 @@ result_type set(rpc::context &ctx, const char *openid, uint32_t zone_id, const P
 }  // namespace login
 }  // namespace db
 }  // namespace rpc
-
-#endif  // ATF4G_CO_LOGIN_H

@@ -23,6 +23,10 @@ if(PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR
 endif()
 
 # -----------------------------------------------------------------------------
+# Components
+include("${CMAKE_CURRENT_LIST_DIR}/component/distributed_transaction/generate-rpc-task.cmake")
+
+# -----------------------------------------------------------------------------
 # add tool to binding router rpcs
 generate_for_pb_add_ss_service(
   "${PROJECT_NAMESPACE}.RouterService"

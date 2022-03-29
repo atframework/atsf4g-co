@@ -1,5 +1,5 @@
 // Copyright 2021 atframework
-// Created by owent on 2022/03/17.
+// Created by owent on 2022-03-17.
 //
 
 #pragma once
@@ -51,6 +51,14 @@ result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
 result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key, const google::protobuf::Message &store,
                 std::string &version, PROJECT_NAMESPACE_ID::table_all_message &output,
                 int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply));
+
+/**
+ * @brief Remove all data of hash table key
+ * @param channel DB channel
+ * @param key key
+ * @return future of 0 or error code
+ */
+result_type remove_all(rpc::context &ctx, uint32_t channel, gsl::string_view key);
 
 }  // namespace hash_table
 }  // namespace db

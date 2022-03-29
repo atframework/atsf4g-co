@@ -1,0 +1,283 @@
+syntax = "proto3";
+
+package atframework.distributed_system;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+import "atframework.proto";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+// ============ Basic data ============
+enum EnDistibutedTransactionStatus {
+  option allow_alias = true;
+
+  EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED = 0;    // 无效状态
+  EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED = 1;   // 事务处于准备完成状态
+  EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED = 2;   // 事务处于完成状态,这之后的状态都不可回退
+  EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING = 2;  // 事务处于正在拒绝状态(超时或失败)
+  EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING = 3;  // 事务处于正在提交状态
+  EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED = 4;   // 事务处于已拒绝状态(超时或失败)
+  EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED = 5;   // 事务处于已提交状态
+}
+
+message transaction_participator {
+  string participator_key = 1;  // 事务参与者key
+
+  EnDistibutedTransactionStatus participator_status = 11;  // 事务参与者状态
+  google.protobuf.Any participator_data = 12;              // 事务参与者数据
+}
+
+message transaction_configure {
+  bool force_commit = 1;  // 是否直接强制提交（并执行）事务。可用于实现2PC流程
+
+  uint32 resolve_max_times = 11;                         // 最大重试次数
+  google.protobuf.Duration resolve_retry_interval = 12;  // 失败重试间隔
+  google.protobuf.Duration lock_wait_interval_min = 13;  // 锁重试间隔最小值
+  google.protobuf.Duration lock_wait_interval_max = 14;  // 锁重试间隔最大值
+  uint32 lock_retry_max_times = 15;                      // 资源锁重试最大次数
+}
+
+message transaction_metadata {
+  bytes transaction_uuid = 1;  // 事务UUID，全局唯一
+  EnDistibutedTransactionStatus status = 2;
+  uint32 replicate_read_count = 3;               // Read-Your-Writes: R
+  repeated uint64 replicate_node_server_id = 4;  // Read-Your-Writes: N
+  bool memory_only = 5;                          // 是否只在内存中进行事务
+
+  google.protobuf.Timestamp prepare_timepoint = 11;  // 准备阶段时间，一般就是创建时间
+  google.protobuf.Timestamp finish_timepoint = 12;   // 提交阶段时间
+  google.protobuf.Timestamp expire_timepoint = 13;   // 过期时间
+}
+
+// ============ Storage data ============
+message transaction_blob_storage {
+  transaction_metadata metadata = 1;
+  transaction_configure configure = 2;
+  map<string, transaction_participator> participators = 3;  // <participator_key,data>
+  google.protobuf.Any transaction_data = 4;
+}
+
+message transaction_participator_storage {
+  transaction_metadata metadata = 1;
+  transaction_configure configure = 2;
+
+  google.protobuf.Any participator_data = 3;  // 参与者私有数据(副本,只读)
+  google.protobuf.Any transaction_data = 4;   // 事务私有数据(副本,只读)
+
+  uint32 resolve_times = 11;                         // 当前重试次数
+  google.protobuf.Timestamp resolve_timepoint = 12;  // 下一次重试时间
+
+  repeated bytes lock_resource = 21;
+}
+
+message transaction_participator_failure_reason {
+  bool allow_retry = 1;
+
+  repeated bytes locked_resource = 12;
+}
+
+message transaction_participator_snapshot {
+  repeated transaction_participator_storage running_transaction = 2;
+  repeated transaction_participator_storage finished_transaction = 3;
+}
+
+// ============ 协调者RPC ============
+message SSDistributeTransactionQueryReq {
+  transaction_metadata metadata = 1;
+}
+
+message SSDistributeTransactionQueryRsp {
+  transaction_blob_storage storage = 1;
+}
+
+// ====== 事务准备阶段 ======
+message SSDistributeTransactionCreateReq {
+  transaction_blob_storage storage = 1;
+}
+
+// ====== 事务准备阶段 ======
+message SSDistributeTransactionCreateRsp {}
+
+// ====== 事务提交（成功完成）请求 ======
+message SSDistributeTransactionCommitReq {
+  transaction_metadata metadata = 1;
+}
+
+// ====== 事务提交（成功完成）回包 ======
+message SSDistributeTransactionCommitRsp {
+  transaction_metadata metadata = 1;
+}
+
+// ====== 事务拒绝（失败）请求 ======
+message SSDistributeTransactionRejectReq {
+  transaction_metadata metadata = 1;
+}
+
+// ====== 事务拒绝（失败）回包 ======
+message SSDistributeTransactionRejectRsp {
+  transaction_metadata metadata = 1;
+}
+
+// ====== 事务角色提交（成功完成）请求 ======
+message SSDistributeTransactionCommitParticipatorReq {
+  transaction_metadata metadata = 1;
+  string participator_key = 2;  // 操作的角色
+}
+
+// ====== 事务角色提交（成功完成）回包 ======
+message SSDistributeTransactionCommitParticipatorRsp {
+  transaction_metadata metadata = 1;
+}
+
+// ====== 事务角色拒绝（失败）请求 ======
+message SSDistributeTransactionRejectParticipatorReq {
+  transaction_metadata metadata = 1;
+  string participator_key = 2;  // 操作的角色
+}
+
+// ====== 事务角色拒绝（失败）回包 ======
+message SSDistributeTransactionRejectParticipatorRsp {
+  transaction_metadata metadata = 1;
+}
+
+// ====== 事务删除请求 ======
+message SSDistributeTransactionRemoveReq {
+  transaction_metadata metadata = 1;
+}
+
+// ====== 事务删除请求回包 ======
+message SSDistributeTransactionRemoveRsp {}
+
+service DtcoordsvrService {
+  option (atframework.service_options) = {
+    module_name: "transaction"
+  };
+
+  rpc query(SSDistributeTransactionQueryReq) returns (SSDistributeTransactionQueryRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "拉取事务数据"
+      allow_no_wait: true
+      warning_log_response_code: "PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND"
+    };
+  };
+
+  rpc create(SSDistributeTransactionCreateReq) returns (SSDistributeTransactionCreateRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "创建分布式事务"
+      allow_no_wait: true
+    };
+  };
+
+  rpc commit(SSDistributeTransactionCommitReq) returns (SSDistributeTransactionCommitRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "分布式事务-提交"
+      allow_no_wait: true
+      warning_log_response_code: "PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION"
+    };
+  };
+
+  rpc reject(SSDistributeTransactionRejectReq) returns (SSDistributeTransactionRejectRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "分布式事务-拒绝"
+      allow_no_wait: true
+      warning_log_response_code: "PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION"
+    };
+  };
+
+  rpc commit_participator(SSDistributeTransactionCommitParticipatorReq)
+      returns (SSDistributeTransactionCommitParticipatorRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "分布式事务-单个参与者提交"
+      allow_no_wait: true
+      warning_log_response_code: "PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND"
+      warning_log_response_code: "PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION"
+    };
+  };
+
+  rpc reject_participator(SSDistributeTransactionRejectParticipatorReq)
+      returns (SSDistributeTransactionRejectParticipatorRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "分布式事务-单个参与者拒绝"
+      allow_no_wait: true
+      warning_log_response_code: "PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND"
+      warning_log_response_code: "PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION"
+    };
+  };
+
+  rpc remove(SSDistributeTransactionRemoveReq) returns (SSDistributeTransactionRemoveRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "强制删除分布式事务"
+      allow_no_wait: true
+      warning_log_response_code: "PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION"
+      info_log_response_code: "PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND"
+    };
+  };
+}
+
+// ============ 参与者RPC结构定义，所有参与者逻辑需要实现这些RPC接口 ============
+// ====== 事件准备阶段 ======
+message SSParticipatorTransactionPrepareReq {
+  transaction_participator_storage storage = 1;
+}
+
+// ====== 事件准备阶段 ======
+message SSParticipatorTransactionPrepareRsp {
+  transaction_participator_failure_reason reason = 1;
+}
+
+// ====== 事件提交（成功完成）请求 ======
+message SSParticipatorTransactionCommitReq {
+  bytes transaction_uuid = 1;  // 事务UUID
+}
+
+// ====== 事件提交（成功完成）回包 ======
+message SSParticipatorTransactionCommitRsp {}
+
+// ====== 事件拒绝（失败）请求 ======
+message SSParticipatorTransactionRejectReq {
+  bytes transaction_uuid = 1;  // 事务UUID
+
+  // 对于 force_commit=true 的事务，拒绝时，需要提供完整信息以便执行undo操作
+  transaction_participator_storage storage = 2;
+}
+
+// ====== 事件拒绝（失败）回包 ======
+message SSParticipatorTransactionRejectRsp {}
+
+// ------------ Here is the sample service for participator ------------
+// service ParticipatorService {
+//   rpc transaction_prepare(SSParticipatorTransactionPrepareReq) returns (SSParticipatorTransactionPrepareRsp) {
+//     option (atframework.rpc_options) = {
+//       api_name: "事务准备阶段(Try)"
+//       router_rpc: true
+//       user_rpc: true
+//       allow_no_wait: true
+//     };
+//   };
+//
+//   rpc transaction_commit(SSParticipatorTransactionCommitReq) returns (SSParticipatorTransactionCommitRsp) {
+//     option (atframework.rpc_options) = {
+//       api_name: "事务提交(Commit)"
+//       router_rpc: true
+//       user_rpc: true
+//       allow_no_wait: true
+//     };
+//   };
+//
+//   rpc transaction_reject(SSParticipatorTransactionRejectReq) returns (SSParticipatorTransactionRejectRsp) {
+//     option (atframework.rpc_options) = {
+//       api_name: "事务拒绝(Commit)"
+//       router_rpc: true
+//       user_rpc: true
+//       allow_no_wait: true
+//     };
+//   };
+// }

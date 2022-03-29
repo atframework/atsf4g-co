@@ -1,5 +1,5 @@
 //
-// Created by owt50 on 2016/10/12.
+// Created by owt50 on 2016-10-12.
 //
 
 #include "client_config.h"

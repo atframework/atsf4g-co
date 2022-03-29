@@ -1,0 +1,10 @@
+<%!
+    import common.project_utils as project
+%><%include file="atapp.template.yaml" />
+<%include file="db.template.yaml" />
+<%include file="logic.template.yaml" />
+
+dtcoordsvr:
+  lru_expired_duration: 1800s    # 30min for lru cache expired
+  lru_max_cache_count: 30000     # max count of transaction cache
+  transaction_default_timeout: 10s

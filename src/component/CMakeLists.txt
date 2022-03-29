@@ -2,6 +2,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/component-functions.cmake")
 
 # ============ components ============
 add_subdirectory(test)
+add_subdirectory(distributed_transaction)
 
 # ============ Export and install components ============
 export(

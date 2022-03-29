@@ -35,7 +35,7 @@ namespace player {
 namespace detail {
 static int32_t unpack_user(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply) {
   if (nullptr == reply) {
-    FWLOGDEBUG("data mot found.");
+    FWLOGDEBUG("{}", "data mot found.");
     // 数据找不到，直接成功结束，外层会判为无数据
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }

@@ -374,8 +374,10 @@ int logic_server_common_module::stop() {
   }
 
   // can not use this module after stop
-  if (0 == ret && detail::g_last_common_module == this) {
-    detail::g_last_common_module = nullptr;
+  if (0 == ret) {
+    if (detail::g_last_common_module == this) {
+      detail::g_last_common_module = nullptr;
+    }
   }
 
   return ret;
@@ -392,6 +394,16 @@ int logic_server_common_module::timeout() {
     detail::g_last_common_module = nullptr;
   }
   return 0;
+}
+
+void logic_server_common_module::cleanup() {
+  if (!service_index_handle_) {
+    std::shared_ptr<atapp::etcd_module> etcd_mod = get_etcd_module();
+    if (etcd_mod) {
+      etcd_mod->remove_on_node_event(*service_index_handle_);
+    }
+    service_index_handle_.reset();
+  }
 }
 
 const char *logic_server_common_module::name() const { return "logic_server_common_module"; }
@@ -505,7 +517,7 @@ static void logic_server_common_module_on_watch_battlesvr_callback(atapp::etcd_m
 }
 
 int logic_server_common_module::setup_battle_service_watcher() {
-  std::shared_ptr< ::atapp::etcd_module> etcd_mod = get_etcd_module();
+  std::shared_ptr<atapp::etcd_module> etcd_mod = get_etcd_module();
 
   if (!static_conf_.enable_watch_battlesvr) {
     if (battle_service_watcher_) {
@@ -569,19 +581,137 @@ int logic_server_common_module::setup_battle_service_watcher() {
   return 0;
 }
 
+atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type(uint64_t type_id) const {
+  auto iter = service_type_id_index_.find(type_id);
+  if (iter == service_type_id_index_.end()) {
+    return nullptr;
+  }
+
+  return iter->second.all_index;
+}
+
+atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type(const std::string &type_name) const {
+  auto iter = service_type_name_index_.find(type_name);
+  if (iter == service_type_name_index_.end()) {
+    return nullptr;
+  }
+
+  return iter->second.all_index;
+}
+
+atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type_zone(uint64_t type_id,
+                                                                                    uint64_t zone_id) const {
+  auto type_iter = service_type_id_index_.find(type_id);
+  if (type_iter == service_type_id_index_.end()) {
+    return nullptr;
+  }
+
+  auto zone_iter = type_iter->second.zone_index.find(zone_id);
+  if (zone_iter == type_iter->second.zone_index.end()) {
+    return nullptr;
+  }
+
+  return zone_iter->second;
+}
+
+atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type_zone(const std::string &type_name,
+                                                                                    uint64_t zone_id) const {
+  auto type_iter = service_type_name_index_.find(type_name);
+  if (type_iter == service_type_name_index_.end()) {
+    return nullptr;
+  }
+
+  auto zone_iter = type_iter->second.zone_index.find(zone_id);
+  if (zone_iter == type_iter->second.zone_index.end()) {
+    return nullptr;
+  }
+
+  return zone_iter->second;
+}
+
+atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_zone(uint64_t zone_id) const {
+  auto iter = service_zone_index_.find(zone_id);
+  if (iter == service_zone_index_.end()) {
+    return nullptr;
+  }
+
+  return iter->second;
+}
+
+std::shared_ptr<atapp::etcd_discovery_node> logic_server_common_module::get_discovery_by_id(uint64_t id) const {
+  if (nullptr == get_app()) {
+    return nullptr;
+  }
+
+  return get_app()->get_global_discovery().get_node_by_id(id);
+}
+
+std::shared_ptr<atapp::etcd_discovery_node> logic_server_common_module::get_discovery_by_name(
+    gsl::string_view name) const {
+  if (nullptr == get_app()) {
+    return nullptr;
+  }
+
+  return get_app()->get_global_discovery().get_node_by_name(name);
+}
+
 int logic_server_common_module::setup_etcd_event_handle() {
   if (etcd_event_handle_registered_) {
     return 0;
   }
 
-  atapp::etcd_cluster *raw_ctx = get_etcd_cluster();
-  if (NULL == raw_ctx) {
+  std::shared_ptr< ::atapp::etcd_module> etcd_mod = get_etcd_module();
+  if (!etcd_mod) {
     return 0;
   }
+  if (service_index_handle_) {
+    etcd_mod->remove_on_node_event(*service_index_handle_);
+  } else {
+    service_index_handle_ = std::unique_ptr<atapp::etcd_module::node_event_callback_handle_t>(
+        new atapp::etcd_module::node_event_callback_handle_t());
+  }
+  if (service_index_handle_) {
+    *service_index_handle_ = etcd_mod->add_on_node_discovery_event(
+        [this](atapp::etcd_module::node_action_t::type action_type, const atapp::etcd_discovery_node::ptr_t &node) {
+          if (!node) {
+            return;
+          }
 
-  raw_ctx->add_on_event_up([this](atapp::etcd_cluster &ctx) { setup_battle_service_watcher(); }, true);
+          switch (action_type) {
+            case atapp::etcd_module::node_action_t::EN_NAT_PUT: {
+              if (0 != node->get_discovery_info().type_id()) {
+                add_service_type_id_index(node);
+              }
+              if (!node->get_discovery_info().type_name().empty()) {
+                add_service_type_name_index(node);
+              }
+              if (0 != node->get_discovery_info().area().zone_id()) {
+                add_service_zone_index(node);
+              }
+              break;
+            }
+            case atapp::etcd_module::node_action_t::EN_NAT_DELETE: {
+              if (0 != node->get_discovery_info().type_id()) {
+                remove_service_type_id_index(node);
+              }
+              if (!node->get_discovery_info().type_name().empty()) {
+                remove_service_type_name_index(node);
+              }
+              if (0 != node->get_discovery_info().area().zone_id()) {
+                remove_service_zone_index(node);
+              }
+              break;
+            }
+            default:
+              break;
+          }
+        });
+  }
 
-  raw_ctx->add_on_event_down(
+  atapp::etcd_cluster &raw_ctx = etcd_mod->get_raw_etcd_ctx();
+  raw_ctx.add_on_event_down([this](atapp::etcd_cluster &ctx) { setup_battle_service_watcher(); }, true);
+
+  raw_ctx.add_on_event_down(
       [this](atapp::etcd_cluster &ctx) {
         // clear cache, then watcher will be setup again when etcd is enabled in the future.
         battle_service_watcher_.reset();
@@ -631,6 +761,213 @@ int logic_server_common_module::tick_update_remote_configures() {
   }
 
   return 1;
+}
+
+void logic_server_common_module::add_service_type_id_index(const atapp::etcd_discovery_node::ptr_t &node) {
+  uint64_t zone_id = node->get_discovery_info().area().zone_id();
+  uint64_t type_id = node->get_discovery_info().type_id();
+  logic_server_type_discovery_set_t &type_index = service_type_id_index_[type_id];
+  if (!type_index.all_index) {
+    type_index.all_index = std::make_shared<atapp::etcd_discovery_set>();
+  }
+
+  if (!type_index.all_index) {
+    // Bad data
+    service_type_id_index_.erase(type_id);
+    return;
+  }
+
+  type_index.all_index->add_node(node);
+
+  if (0 == zone_id) {
+    return;
+  }
+
+  atapp::etcd_discovery_set::ptr_t &zone_index = type_index.zone_index[zone_id];
+  if (!zone_index) {
+    zone_index = std::make_shared<atapp::etcd_discovery_set>();
+  }
+
+  if (!zone_index) {
+    type_index.zone_index.erase(zone_id);
+    return;
+  }
+
+  zone_index->add_node(node);
+}
+
+void logic_server_common_module::remove_service_type_id_index(const atapp::etcd_discovery_node::ptr_t &node) {
+  uint64_t zone_id = node->get_discovery_info().area().zone_id();
+  uint64_t type_id = node->get_discovery_info().type_id();
+  auto type_iter = service_type_id_index_.find(type_id);
+  if (type_iter == service_type_id_index_.end()) {
+    return;
+  }
+
+  if (!type_iter->second.all_index) {
+    service_type_id_index_.erase(type_iter);
+    return;
+  }
+
+  type_iter->second.all_index->remove_node(node);
+
+  if (0 == zone_id) {
+    if (type_iter->second.all_index->empty() && type_iter->second.zone_index.empty()) {
+      service_type_id_index_.erase(type_iter);
+    }
+    return;
+  }
+  auto zone_iter = type_iter->second.zone_index.find(zone_id);
+  if (zone_iter == type_iter->second.zone_index.end()) {
+    if (type_iter->second.all_index->empty() && type_iter->second.zone_index.empty()) {
+      service_type_id_index_.erase(type_iter);
+    }
+    return;
+  }
+
+  if (!zone_iter->second) {
+    type_iter->second.zone_index.erase(zone_iter);
+
+    if (type_iter->second.all_index->empty() && type_iter->second.zone_index.empty()) {
+      service_type_id_index_.erase(type_iter);
+    }
+    return;
+  }
+
+  zone_iter->second->remove_node(node);
+  if (zone_iter->second->empty()) {
+    type_iter->second.zone_index.erase(zone_iter);
+  }
+
+  if (type_iter->second.all_index->empty() && type_iter->second.zone_index.empty()) {
+    service_type_id_index_.erase(type_iter);
+  }
+}
+
+void logic_server_common_module::add_service_type_name_index(const atapp::etcd_discovery_node::ptr_t &node) {
+  uint64_t zone_id = node->get_discovery_info().area().zone_id();
+  const std::string &type_name = node->get_discovery_info().type_name();
+  logic_server_type_discovery_set_t &type_index = service_type_name_index_[type_name];
+  if (!type_index.all_index) {
+    type_index.all_index = std::make_shared<atapp::etcd_discovery_set>();
+  }
+
+  if (!type_index.all_index) {
+    // Bad data
+    service_type_name_index_.erase(type_name);
+    return;
+  }
+
+  type_index.all_index->add_node(node);
+
+  if (0 == zone_id) {
+    return;
+  }
+
+  atapp::etcd_discovery_set::ptr_t &zone_index = type_index.zone_index[zone_id];
+  if (!zone_index) {
+    zone_index = std::make_shared<atapp::etcd_discovery_set>();
+  }
+
+  if (!zone_index) {
+    type_index.zone_index.erase(zone_id);
+    return;
+  }
+
+  zone_index->add_node(node);
+}
+
+void logic_server_common_module::remove_service_type_name_index(const atapp::etcd_discovery_node::ptr_t &node) {
+  uint64_t zone_id = node->get_discovery_info().area().zone_id();
+  const std::string &type_name = node->get_discovery_info().type_name();
+  auto type_iter = service_type_name_index_.find(type_name);
+  if (type_iter == service_type_name_index_.end()) {
+    return;
+  }
+
+  if (!type_iter->second.all_index) {
+    service_type_name_index_.erase(type_iter);
+    return;
+  }
+
+  type_iter->second.all_index->remove_node(node);
+
+  if (0 == zone_id) {
+    if (type_iter->second.all_index->empty() && type_iter->second.zone_index.empty()) {
+      service_type_name_index_.erase(type_iter);
+    }
+    return;
+  }
+  auto zone_iter = type_iter->second.zone_index.find(zone_id);
+  if (zone_iter == type_iter->second.zone_index.end()) {
+    if (type_iter->second.all_index->empty() && type_iter->second.zone_index.empty()) {
+      service_type_name_index_.erase(type_iter);
+    }
+    return;
+  }
+
+  if (!zone_iter->second) {
+    type_iter->second.zone_index.erase(zone_iter);
+
+    if (type_iter->second.all_index->empty() && type_iter->second.zone_index.empty()) {
+      service_type_name_index_.erase(type_iter);
+    }
+    return;
+  }
+
+  zone_iter->second->remove_node(node);
+  if (zone_iter->second->empty()) {
+    type_iter->second.zone_index.erase(zone_iter);
+  }
+
+  if (type_iter->second.all_index->empty() && type_iter->second.zone_index.empty()) {
+    service_type_name_index_.erase(type_iter);
+  }
+}
+
+void logic_server_common_module::add_service_zone_index(const atapp::etcd_discovery_node::ptr_t &node) {
+  uint64_t zone_id = node->get_discovery_info().area().zone_id();
+  atapp::etcd_discovery_set::ptr_t &zone_index = service_zone_index_[zone_id];
+  if (!zone_index) {
+    zone_index = std::make_shared<atapp::etcd_discovery_set>();
+  }
+
+  if (!zone_index) {
+    // Bad data
+    service_zone_index_.erase(zone_id);
+    return;
+  }
+  zone_index->add_node(node);
+
+  FWLOGINFO("service discovery {}({}, {}) indexed, type name={}, zone_id={}",
+            node->get_discovery_info().area().district(), node->get_discovery_info().id(),
+            node->get_discovery_info().name(), node->get_discovery_info().type_name(),
+            node->get_discovery_info().area().zone_id());
+}
+
+void logic_server_common_module::remove_service_zone_index(const atapp::etcd_discovery_node::ptr_t &node) {
+  uint64_t zone_id = node->get_discovery_info().area().zone_id();
+
+  auto zone_iter = service_zone_index_.find(zone_id);
+  if (zone_iter == service_zone_index_.end()) {
+    return;
+  }
+
+  if (!zone_iter->second) {
+    service_zone_index_.erase(zone_iter);
+    return;
+  }
+
+  zone_iter->second->remove_node(node);
+
+  if (zone_iter->second->empty()) {
+    service_zone_index_.erase(zone_iter);
+  }
+
+  FWLOGINFO("service discovery {}({}, {}) unindexed, type name={}, zone_id={}",
+            node->get_discovery_info().area().district(), node->get_discovery_info().id(),
+            node->get_discovery_info().name(), node->get_discovery_info().type_name(),
+            node->get_discovery_info().area().zone_id());
 }
 
 std::string logic_server_common_module::make_battle_etcd_version_path(const std::string &version) const {
@@ -768,7 +1105,7 @@ void logic_server_common_module::update_remote_server_configure(const std::strin
 
   server_remote_conf_.Swap(&new_conf);
 
-  // TODO(owentou): 服务器配置数据变化事件
+  // TODO(owent): 服务器配置数据变化事件
 }
 
 void logic_server_common_module::insert_timer(uint64_t task_id, std::chrono::system_clock::duration timeout,

@@ -12,6 +12,8 @@ logic:
     task_manager: ${project.get_server_option_bool('shared_component.task_manager', 'true')}
     router_manager_set: ${project.get_server_option_bool('shared_component.router_manager_set', 'true')}
     session_manager: ${project.get_server_option_bool('shared_component.session_manager', 'false')}
+  transaction:
+    timeout: 10s
   excel:
     enable: true
     override_same_version: true

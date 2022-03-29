@@ -1,5 +1,5 @@
 // Copyright 2021 atframework
-// Created by owent on 2019/07/05.
+// Created by owent on 2019-07-05.
 //
 
 #include "logic/simple_template/simple_template_core.h"

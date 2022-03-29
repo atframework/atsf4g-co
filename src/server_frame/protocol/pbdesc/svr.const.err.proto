@@ -100,4 +100,15 @@ enum EnSysErrorType {
 
   EN_PLAYER_KICKOUT = -1001001
                       [(error_code.description) = "踢出用户失败"];
+
+  EN_TRANSACTION_NOT_FOUND = -1004001
+                             [(error_code.description) = "该事务不存在"];
+  EN_TRANSACTION_FINISHED = -1004002
+                            [(error_code.description) = "事务已结束"];
+  EN_TRANSACTION_ALREADY_RUN = -1004003
+                               [(error_code.description) = "事务已运行"];
+  EN_TRANSACTION_PARTICIPATOR_NOT_FOUND = -1004101
+                                          [(error_code.description) = "该事务没有指定的参与者"];
+  EN_TRANSACTION_RESOURCE_PREEMPTED = -1004301
+                                      [(error_code.description) = "资源被抢占"];
 }

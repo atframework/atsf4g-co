@@ -1,5 +1,5 @@
 // Copyright 2021 atframework
-// Created by owent on 2018/04/06.
+// Created by owent on 2018-04-06.
 //
 
 #ifndef DISPATCHER_DISPATCHER_TYPE_DEFINES_H

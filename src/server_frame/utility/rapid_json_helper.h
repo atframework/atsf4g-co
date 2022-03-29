@@ -1,5 +1,5 @@
 ﻿//
-// Created by owt50 on 2019/07/29.
+// Created by owt50 on 2019-07-29.
 //
 
 #ifndef UTILITY_RAPIDJSON_HELPER_H

@@ -2,13 +2,13 @@
 // Created by owent on 2016/9/28.
 //
 
+#include "rpc/db/login.h"
+
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
-
-#include "rpc/db/login.h"
 
 #include <log/log_wrapper.h>
 
@@ -34,7 +34,7 @@ namespace login {
 namespace detail {
 static int32_t unpack_login(PROJECT_NAMESPACE_ID::table_all_message &table_msg, const redisReply *reply) {
   if (nullptr == reply) {
-    WLOGDEBUG("data not found.");
+    FWLOGDEBUG("{}", "data not found.");
     //数据找不到，直接成功结束，外层会判断为无数据
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }

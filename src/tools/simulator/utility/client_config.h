@@ -1,5 +1,5 @@
 //
-// Created by owt50 on 2016/10/12.
+// Created by owt50 on 2016-10-12.
 //
 
 #ifndef ATFRAMEWORK_LIBSIMULATOR_UTILITY_CLIENT_CONFIG_H

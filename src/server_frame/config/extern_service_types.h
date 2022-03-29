@@ -17,6 +17,7 @@ struct logic_service_type {
   enum type {
     EN_LST_LOGINSVR = 35,
     EN_LST_GAMESVR = 36,
+    EN_LST_DTCOORDSVR = 70,  // 用于分布式事务的协调者服务
   };
 };
 }  // namespace component

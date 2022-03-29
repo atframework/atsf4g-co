@@ -195,6 +195,10 @@ message logic_battle_cfg {
   bool ignore_invalid_version = 2;
 }
 
+message logic_transaction_cfg {
+  google.protobuf.Duration timeout = 1 [(atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
+}
+
 message logic_excel_cfg {
   bool enable = 1;
   bool override_same_version = 2;
@@ -216,6 +220,7 @@ message logic_section_cfg {
   logic_telemetry_cfg telemetry = 108;
   logic_battle_cfg battle = 109;
   logic_excel_cfg excel = 110;
+  logic_transaction_cfg transaction = 111;
 }
 
 message db_group_gateway_cfg {
@@ -266,9 +271,19 @@ message loginsvr_cfg {
   gamesvr_ingress_cfg gamesvr = 31;
 }
 
+message dtcoordsvr_cfg {
+  google.protobuf.Duration lru_expired_duration = 1
+      [(atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "1s" }];
+  uint32 lru_max_cache_count = 2;
+
+  google.protobuf.Duration transaction_default_timeout = 11
+      [(atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
+}
+
 message server_cfg {
   logic_section_cfg logic = 101;
   db_section_cfg db = 102;
 
   loginsvr_cfg loginsvr = 201;
+  dtcoordsvr_cfg dtcoordsvr = 202;
 }
