@@ -44,6 +44,8 @@ class actor_action_base {
   virtual std::shared_ptr<dispatcher_implement> get_dispatcher() const = 0;
   virtual const char *get_type_name() const = 0;
 
+  virtual rpc::context::parent_mode get_caller_mode() const noexcept;
+
   result_type run(void *priv_data);
 
  protected:

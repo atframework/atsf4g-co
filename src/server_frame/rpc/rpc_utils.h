@@ -61,6 +61,11 @@ class context {
   using tracer = rpc::telemetry::tracer;
   using trace_option = rpc::telemetry::trace_option;
 
+  enum class parent_mode : uint8_t {
+    kParent = 0,
+    kLink = 1,
+  };
+
   template <class TMsg>
   struct message_holder {
     explicit message_holder(context &ctx) : arena_msg_ptr_(ctx.create<TMsg>()) {}
@@ -130,7 +135,7 @@ class context {
  public:
   context();
   explicit context(context &&other);
-  explicit context(context &parent, bool link_mode = false);
+  explicit context(context &parent, parent_mode mode = parent_mode::kParent);
   ~context();
 
   void setup_tracer(
@@ -165,7 +170,7 @@ class context {
 
   inline const tracer::span_ptr_type &get_trace_span() const { return trace_span_; }
 
-  void set_parent_context(rpc::context &parent, bool link_mode = false) noexcept;
+  void set_parent_context(rpc::context &parent, parent_mode mode = parent_mode::kParent) noexcept;
   void add_link_span(const tracer::span_ptr_type &span_ptr) noexcept;
 
   /**
@@ -179,7 +184,7 @@ class context {
   std::shared_ptr<::google::protobuf::Arena> allocator_;
   tracer::span_ptr_type trace_span_;
   tracer::span_ptr_type parent_span_;
-  bool parent_link_mode_;
+  parent_mode parent_mode_;
   std::vector<tracer::span_ptr_type> link_spans_;
 };
 

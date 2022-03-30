@@ -252,7 +252,7 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
       } else {
         trace_option.parent_network_span = nullptr;
       }
-      ctx.setup_tracer(tracer, "ss_msg_dispatcher", std::move(trace_option));
+      ctx.setup_tracer(tracer, "cs_msg_dispatcher", std::move(trace_option));
 
       dispatcher_result_t res = on_receive_message(ctx, callback_msg, nullptr, cs_msg->head().client_sequence());
       ret = res.result_code;

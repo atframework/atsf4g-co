@@ -114,7 +114,7 @@ actor_action_base::result_type actor_action_base::run(void *priv_data) {
 
     // Set parent context if not set by child type
     if (nullptr != start_data_.context) {
-      shared_context_.set_parent_context(*start_data_.context);
+      set_caller_context(*start_data_.context);
     }
   }
 
@@ -168,7 +168,13 @@ int actor_action_base::on_failed() { return 0; }
 
 int actor_action_base::on_complete() { return 0; }
 
-void actor_action_base::set_caller_context(rpc::context &ctx) { get_shared_context().set_parent_context(ctx); }
+rpc::context::parent_mode actor_action_base::get_caller_mode() const noexcept {
+  return rpc::context::parent_mode::kLink;
+}
+
+void actor_action_base::set_caller_context(rpc::context &ctx) {
+  get_shared_context().set_parent_context(ctx, get_caller_mode());
+}
 
 void actor_action_base::_notify_finished() {
   // Additional trace data

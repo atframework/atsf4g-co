@@ -37,7 +37,7 @@
 
 namespace rpc {
 
-context::context() : parent_link_mode_(false) {
+context::context() : parent_mode_(parent_mode::kParent) {
   task_manager::task_t *task = task_manager::task_t::this_task();
   if (task) {
     rpc::context *parent = task_manager::get_shared_context(*task);
@@ -47,19 +47,19 @@ context::context() : parent_link_mode_(false) {
   }
 }
 
-context::context(context &&other) : parent_link_mode_(false) {
+context::context(context &&other) : parent_mode_(parent_mode::kParent) {
   using std::swap;
 
   allocator_.swap(other.allocator_);
   trace_span_.swap(other.trace_span_);
   parent_span_.swap(other.parent_span_);
   link_spans_.swap(other.link_spans_);
-  swap(parent_link_mode_, other.parent_link_mode_);
+  swap(parent_mode_, other.parent_mode_);
 }
 
-context::context(context &parent, bool link_mode) {
+context::context(context &parent, parent_mode mode) {
   // Set parent tracer and arena allocator
-  set_parent_context(parent, link_mode);
+  set_parent_context(parent, mode);
 }
 
 context::~context() {}
@@ -68,20 +68,62 @@ void context::setup_tracer(
     tracer &tracer_instance, string_view name, trace_option &&options,
     std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
         attributes) {
-  if (!parent_link_mode_ && parent_span_ && !options.parent_memory_span) {
-    options.parent_memory_span = parent_span_;
+  tracer::links_type tracer_links;
+  std::unique_ptr<opentelemetry::trace::SpanContext> parent_span_context;
+  tracer_links.reserve(link_spans_.size() + 1);
+
+  switch (parent_mode_) {
+    case parent_mode::kLink: {
+      if (nullptr != options.parent_memory_span) {
+        tracer_links.push_back(tracer::link_pair_type(options.parent_memory_span->GetContext(), {}));
+        options.parent_memory_span = tracer::span_ptr_type();
+        break;
+      }
+
+      if (nullptr != options.parent_network_span &&
+          options.parent_network_span->trace_id().size() == tracer::trace_id_span::extent &&
+          options.parent_network_span->span_id().size() == tracer::span_id_span::extent) {
+        const uint8_t *parent_trace_id =
+            reinterpret_cast<const uint8_t *>(options.parent_network_span->trace_id().c_str());
+        const uint8_t *parent_span_id =
+            reinterpret_cast<const uint8_t *>(options.parent_network_span->span_id().c_str());
+        parent_span_context.reset(new opentelemetry::trace::SpanContext{
+            opentelemetry::trace::TraceId{tracer::trace_id_span{parent_trace_id, tracer::trace_id_span::extent}},
+            opentelemetry::trace::SpanId{tracer::span_id_span{parent_span_id, tracer::span_id_span::extent}},
+            opentelemetry::trace::TraceFlags{opentelemetry::trace::TraceFlags::kIsSampled}, options.is_remote});
+        if (parent_span_context) {
+          tracer_links.push_back(tracer::link_pair_type(*parent_span_context, {}));
+          options.parent_network_span = nullptr;
+          break;
+        }
+      }
+
+      if (parent_span_) {
+        tracer_links.push_back(tracer::link_pair_type(parent_span_->GetContext(), {}));
+      }
+
+      break;
+    }
+    // parent_mode::kParent by default
+    default: {
+      if (nullptr != options.parent_memory_span || nullptr != options.parent_network_span) {
+        break;
+      }
+
+      if (parent_span_) {
+        options.parent_memory_span = parent_span_;
+        break;
+      }
+      break;
+    }
   }
 
-  tracer::links_type tracer_links;
-  if ((parent_link_mode_ && parent_span_) || !link_spans_.empty()) {
-    tracer_links.reserve(link_spans_.size() + 1);
+  // Add links
+  for (auto &link_span : link_spans_) {
+    tracer_links.push_back(tracer::link_pair_type(link_span->GetContext(), {}));
+  }
+  if (!tracer_links.empty()) {
     options.links = &tracer_links;
-    if (parent_link_mode_ && parent_span_) {
-      tracer_links.push_back(tracer::link_pair_type(parent_span_->GetContext(), {}));
-    }
-    for (auto &link_span : link_spans_) {
-      tracer_links.push_back(tracer::link_pair_type(link_span->GetContext(), {}));
-    }
   }
 
   if (!tracer_instance.start(name, std::move(options), attributes)) {
@@ -119,13 +161,13 @@ bool context::try_reuse_protobuf_arena(const std::shared_ptr<::google::protobuf:
   return true;
 }
 
-void context::set_parent_context(rpc::context &parent, bool link_mode) noexcept {
+void context::set_parent_context(rpc::context &parent, parent_mode mode) noexcept {
   if (nullptr == allocator_) {
     try_reuse_protobuf_arena(parent.mutable_protobuf_arena());
   }
 
   parent_span_ = parent.get_trace_span();
-  parent_link_mode_ = link_mode;
+  parent_mode_ = mode;
 }
 
 void context::add_link_span(const tracer::span_ptr_type &span_ptr) noexcept {

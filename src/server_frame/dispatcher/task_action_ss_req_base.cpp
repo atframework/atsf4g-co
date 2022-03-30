@@ -26,7 +26,7 @@
 task_action_ss_req_base::task_action_ss_req_base(dispatcher_start_data_t &&start_param) {
   // 必须先设置共享的arena
   if (nullptr != start_param.context) {
-    get_shared_context().set_parent_context(*start_param.context);
+    get_shared_context().try_reuse_protobuf_arena(start_param.context->mutable_protobuf_arena());
   }
 
   msg_type *ss_msg = ss_msg_dispatcher::me()->get_protobuf_msg<msg_type>(start_param.message);
@@ -34,6 +34,11 @@ task_action_ss_req_base::task_action_ss_req_base(dispatcher_start_data_t &&start
     get_request().Swap(ss_msg);
 
     set_user_key(get_request().head().player_user_id(), get_request().head().player_zone_id());
+  }
+
+  // 最后设置 caller
+  if (nullptr != start_param.context) {
+    set_caller_context(*start_param.context);
   }
 }
 
@@ -122,6 +127,15 @@ std::shared_ptr<dispatcher_implement> task_action_ss_req_base::get_dispatcher() 
 }
 
 const char *task_action_ss_req_base::get_type_name() const { return "inserver"; }
+
+rpc::context::parent_mode task_action_ss_req_base::get_caller_mode() const noexcept {
+  auto &req_msg = get_request();
+  if (req_msg.has_head() && req_msg.head().has_rpc_request() && 0 != req_msg.head().src_task_id()) {
+    return rpc::context::parent_mode::kParent;
+  }
+
+  return rpc::context::parent_mode::kLink;
+}
 
 void task_action_ss_req_base::send_response() {
   if (response_messages_.empty()) {
