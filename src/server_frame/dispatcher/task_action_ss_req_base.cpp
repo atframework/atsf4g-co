@@ -54,6 +54,13 @@ task_action_ss_req_base::result_type task_action_ss_req_base::hook_run() {
     if (false == result.first) {
       return result.second;
     }
+
+    auto trace_span = get_shared_context().get_trace_span();
+    if (trace_span) {
+      trace_span->SetAttribute("router_object.type_id", get_request().head().router().object_type_id());
+      trace_span->SetAttribute("router_object.zone_id", get_request().head().router().object_zone_id());
+      trace_span->SetAttribute("router_object.instance_id", get_request().head().router().object_inst_id());
+    }
   }
 
   // 自动设置快队列保存

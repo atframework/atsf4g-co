@@ -99,7 +99,8 @@ static inline int __unpack_rpc_body(TBodyType &&output, const std::string& input
   }
 }
 
-static inline void __setup_tracer(rpc::context &__child_ctx, rpc::context::tracer &__tracer,
+static inline rpc::context::tracer::span_ptr_type __setup_tracer(rpc::context &__child_ctx,
+                                  rpc::context::tracer &__tracer,
                                   atframework::SSMsgHead &head, gsl::string_view rpc_full_name,
                                   gsl::string_view service_full_name) {
   rpc::context::trace_option __trace_option;
@@ -108,7 +109,8 @@ static inline void __setup_tracer(rpc::context &__child_ctx, rpc::context::trace
   __trace_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
 
   // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/semantic_conventions/README.md
-  __child_ctx.setup_tracer(__tracer, rpc::context::string_view{rpc_full_name.data(), rpc_full_name.size()}, std::move(__trace_option), {
+  __child_ctx.setup_tracer(__tracer, rpc::context::string_view{rpc_full_name.data(), rpc_full_name.size()},
+    std::move(__trace_option), {
     {"rpc.system", "atrpc.ss"},
     {"rpc.service", rpc::context::string_view{service_full_name.data(), service_full_name.size()}},
     {"rpc.method", rpc::context::string_view{rpc_full_name.data(), rpc_full_name.size()}}
@@ -129,6 +131,7 @@ static inline void __setup_tracer(rpc::context &__child_ctx, rpc::context::trace
       // trace_context.IsSampled();
     }
   }
+  return __child_trace_span;
 }
 
 % endif
@@ -358,18 +361,30 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
 
   rpc::context __child_ctx(__ctx);
   rpc::context::tracer __tracer;
+%   if rpc_is_user_rpc or rpc_is_router_api:
+  auto __child_trace_span = details::__setup_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
+%   else:
   details::__setup_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
+%   endif
                           "${rpc.get_full_name()}",
                           "${rpc.get_service().get_full_name()}");
 
 %   if rpc_is_user_rpc:
 %     if rpc_is_router_api:
-            req_msg.mutable_head()->set_player_user_id(object_id);
-            req_msg.mutable_head()->set_player_zone_id(zone_id);
+  req_msg.mutable_head()->set_player_user_id(object_id);
+  req_msg.mutable_head()->set_player_zone_id(zone_id);
+  if (__child_trace_span) {
+    __child_trace_span->SetAttribute("user_id", object_id);
+    __child_trace_span->SetAttribute("zone_id", zone_id);
+  }
 %     else:
-            req_msg.mutable_head()->set_player_user_id(user_id);
-            req_msg.mutable_head()->set_player_zone_id(zone_id);
-            req_msg.mutable_head()->set_player_open_id(open_id);
+  req_msg.mutable_head()->set_player_user_id(user_id);
+  req_msg.mutable_head()->set_player_zone_id(zone_id);
+  req_msg.mutable_head()->set_player_open_id(open_id);
+  if (__child_trace_span) {
+    __child_trace_span->SetAttribute("user_id", user_id);
+    __child_trace_span->SetAttribute("zone_id", zone_id);
+  }
 %     endif
 %   endif
 %   if rpc_is_router_api:
@@ -377,6 +392,11 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
   if (type_id == router_player_manager::me()->get_type_id()) {
     req_msg.mutable_head()->set_player_user_id(object_id);
     req_msg.mutable_head()->set_player_zone_id(zone_id);
+  }
+  if (__child_trace_span) {
+    __child_trace_span->SetAttribute("router_object.type_id", type_id);
+    __child_trace_span->SetAttribute("router_object.zone_id", zone_id);
+    __child_trace_span->SetAttribute("router_object.instance_id", object_id);
   }
 %     endif
 

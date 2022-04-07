@@ -425,13 +425,13 @@ static bool pick_const_data(::PROJECT_NAMESPACE_ID::config::excel_const_config& 
       } else {
         const ::google::protobuf::Descriptor* msg_desc = fds->message_type();
         if (NULL == msg_desc) {
-          WLOGWARNING("%s in ConstSettings with type=%s is not supported now", fds->name().c_str(), fds->type_name());
+          FWLOGWARNING("{} in ConstSettings with type={} is not supported now", fds->name(), fds->type_name());
         } else {
           bool auto_parse = true;
           for (int i = 0; auto_parse && i < msg_desc->field_count(); ++i) {
             if (msg_desc->field(i)->is_repeated()) {
-              WLOGWARNING("%s in ConstSettings with type=%s is not supported, because it has repeated field",
-                          fds->name().c_str(), msg_desc->full_name().c_str());
+              FWLOGWARNING("{} in ConstSettings with type={} is not supported, because it has repeated field",
+                           fds->name(), msg_desc->full_name());
               auto_parse = false;
             }
 
@@ -444,10 +444,9 @@ static bool pick_const_data(::PROJECT_NAMESPACE_ID::config::excel_const_config& 
               case ::google::protobuf::FieldDescriptor::CPPTYPE_UINT64:
                 break;
               default:
-                WLOGWARNING(
-                    "%s in ConstSettings with type=%s is not supported, because it has unsupported field type %s %s",
-                    fds->name().c_str(), msg_desc->full_name().c_str(), msg_desc->field(i)->name().c_str(),
-                    msg_desc->field(i)->type_name());
+                FWLOGWARNING(
+                    "{} in ConstSettings with type={} is not supported, because it has unsupported field type {} {}",
+                    fds->name(), msg_desc->full_name(), msg_desc->field(i)->name(), msg_desc->field(i)->type_name());
                 auto_parse = false;
                 break;
             }
@@ -515,8 +514,8 @@ static bool pick_const_data(::PROJECT_NAMESPACE_ID::config::excel_const_config& 
       const google::protobuf::EnumDescriptor* eds = fds->enum_type();
       const google::protobuf::EnumValueDescriptor* evs = eds->FindValueByNumber(val);
       if (NULL == evs) {
-        WLOGERROR("%s in ConstSettings has value %s, but is invalid in it's type %s", fds->name().c_str(),
-                  value.c_str(), eds->full_name().c_str());
+        FWLOGERROR("{} in ConstSettings has value {}, but is invalid in it's type {}", fds->name(), value,
+                   eds->full_name());
         return false;
       } else {
         if (fds->is_repeated()) {

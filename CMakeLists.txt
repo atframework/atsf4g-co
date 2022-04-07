@@ -117,27 +117,18 @@ configure_file("${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.sh.in" "${PROJECT_INSTALL
 configure_file("${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1.in" "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1"
                ESCAPE_QUOTES @ONLY)
 
-# add +rx permission
 if(CYGWIN
    OR UNIX
-   OR APPLE)
-  execute_process(COMMAND chmod +rx -R "${PROJECT_INSTALL_BAS_DIR}" WORKING_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}")
-endif()
-
-if(CYGWIN
-   OR UNIX
-   OR APPLE)
+   OR APPLE
+   OR NOT ATFRAMEWORK_CMAKE_TOOLSET_PWSH)
   echowithcolor(COLOR GREEN "-- Cleanup old built libraries ...")
-  execute_process(COMMAND "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.sh" WORKING_DIRECTORY ${PROJECT_INSTALL_BAS_DIR})
+  execute_process(COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_BASH}" "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.sh"
+                  WORKING_DIRECTORY ${PROJECT_INSTALL_BAS_DIR})
 else()
-  find_program(POWERSHELL_BIN NAMES pwsh pwsh.exe powershell powershell.exe)
-  if(POWERSHELL_BIN)
-    echowithcolor(COLOR GREEN "-- Cleanup old built libraries ...")
-    execute_process(
-      COMMAND ${POWERSHELL_BIN} "-NoProfile" "-InputFormat" "None" "-ExecutionPolicy" "Bypass" "-NonInteractive"
-              "-NoLogo" "-File" "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1"
-      WORKING_DIRECTORY ${PROJECT_INSTALL_BAS_DIR})
-  endif()
+  execute_process(
+    COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_PWSH}" "-NoProfile" "-InputFormat" "None" "-ExecutionPolicy" "Bypass"
+            "-NonInteractive" "-NoLogo" "-File" "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1"
+    WORKING_DIRECTORY ${PROJECT_INSTALL_BAS_DIR})
 endif()
 
 # 安装目录

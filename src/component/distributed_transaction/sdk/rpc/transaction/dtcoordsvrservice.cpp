@@ -61,7 +61,8 @@ static inline int __unpack_rpc_body(TBodyType &&output, const std::string& input
   }
 }
 
-static inline void __setup_tracer(rpc::context &__child_ctx, rpc::context::tracer &__tracer,
+static inline rpc::context::tracer::span_ptr_type __setup_tracer(rpc::context &__child_ctx,
+                                  rpc::context::tracer &__tracer,
                                   atframework::SSMsgHead &head, gsl::string_view rpc_full_name,
                                   gsl::string_view service_full_name) {
   rpc::context::trace_option __trace_option;
@@ -70,7 +71,8 @@ static inline void __setup_tracer(rpc::context &__child_ctx, rpc::context::trace
   __trace_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
 
   // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/semantic_conventions/README.md
-  __child_ctx.setup_tracer(__tracer, rpc::context::string_view{rpc_full_name.data(), rpc_full_name.size()}, std::move(__trace_option), {
+  __child_ctx.setup_tracer(__tracer, rpc::context::string_view{rpc_full_name.data(), rpc_full_name.size()},
+    std::move(__trace_option), {
     {"rpc.system", "atrpc.ss"},
     {"rpc.service", rpc::context::string_view{service_full_name.data(), service_full_name.size()}},
     {"rpc.method", rpc::context::string_view{rpc_full_name.data(), rpc_full_name.size()}}
@@ -91,6 +93,7 @@ static inline void __setup_tracer(rpc::context &__child_ctx, rpc::context::trace
       // trace_context.IsSampled();
     }
   }
+  return __child_trace_span;
 }
 
 static inline int __setup_rpc_stream_header(atframework::SSMsgHead &head, gsl::string_view rpc_full_name,
