@@ -86,6 +86,7 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
   set_user_key(param_.user->get_user_id(), param_.user->get_zone_id());
+  param_.user->refresh_feature_limit(get_shared_context());
 
   router_player_cache::key_t key(router_player_manager::me()->get_type_id(), param_.user->get_zone_id(),
                                  param_.user->get_user_id());

@@ -45,7 +45,7 @@ int cs_msg_dispatcher::stop() {
     return dispatcher_implement::stop();
   }
 
-  session_manager::me()->remove_all();
+  session_manager::me()->remove_all(atframe::gateway::close_reason_t::EN_CRT_SERVER_CLOSED);
   is_closing_ = true;
   return dispatcher_implement::stop();
 }

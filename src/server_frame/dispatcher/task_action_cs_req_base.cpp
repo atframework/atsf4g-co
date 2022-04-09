@@ -56,6 +56,11 @@ task_action_cs_req_base::task_action_cs_req_base(dispatcher_start_data_t &&start
 task_action_cs_req_base::~task_action_cs_req_base() {}
 
 task_action_cs_req_base::result_type task_action_cs_req_base::hook_run() {
+  std::shared_ptr<player_cache> player_cache = get_player_cache();
+  if (player_cache) {
+    player_cache->refresh_feature_limit(get_shared_context());
+  }
+
   int ret = base_type::hook_run();
 
   // 自动设置快队列保存
@@ -74,7 +79,13 @@ task_action_cs_req_base::result_type task_action_cs_req_base::hook_run() {
       break;
     }
 
-    std::shared_ptr<player_cache> player_cache = get_player_cache();
+    if (!player_cache) {
+      player_cache = get_player_cache();
+      if (player_cache) {
+        player_cache->refresh_feature_limit(get_shared_context());
+      }
+    }
+
     if (!player_cache) {
       break;
     }

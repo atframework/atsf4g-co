@@ -166,16 +166,43 @@ void session_manager::remove(sess_ptr_t sess, int reason) {
   }
 }
 
-void session_manager::remove_all() {
+void session_manager::remove_all(int32_t reason) {
   for (session_index_t::iterator iter = all_sessions_.begin(); iter != all_sessions_.end(); ++iter) {
     if (iter->second) {
       iter->second->set_flag(session::flag_t::EN_SESSION_FLAG_CLOSED, true);
-      iter->second->send_kickoff(::atframe::gateway::close_reason_t::EN_CRT_SERVER_CLOSED);
+      iter->second->send_kickoff(reason);
     }
   }
 
-  all_sessions_.clear();
+  std::shared_ptr<session_index_t> all_sessions = std::make_shared<session_index_t>();
+  all_sessions_.swap(*all_sessions);
   session_counter_.clear();
+
+  if (!all_sessions->empty()) {
+    rpc::context ctx;
+    auto remove_player_task = rpc::async_invoke(ctx, "session_manager.remove_all", [all_sessions](rpc::context &ctx) {
+      for (auto &session : *all_sessions) {
+        if (!session.second) {
+          continue;
+        }
+        player_cache::ptr_t u = session.second->get_player();
+        if (u) {
+          session.second->set_player(nullptr);
+          sess_ptr_t check_session = u->get_session();
+          if (!check_session || check_session == session.second) {
+            u->set_session(ctx, nullptr);
+            // 不能直接保存，不然如果玩家数很多依次保存会超时
+            player_manager::me()->add_save_schedule(u->get_user_id(), u->get_zone_id());
+          }
+        }
+      }
+      return 0;
+    });
+    if (remove_player_task.is_error()) {
+      FWLOGERROR("async_invoke task to remove player failed, res: {}({})", *remove_player_task.get_error(),
+                 protobuf_mini_dumper_get_error_msg(*remove_player_task.get_error()));
+    }
+  }
 }
 
 size_t session_manager::size() const { return all_sessions_.size(); }

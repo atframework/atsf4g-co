@@ -40,7 +40,7 @@ class session_manager : public util::design_pattern::singleton<session_manager> 
   void remove(const session::key_t& key, int reason = 0);
   void remove(sess_ptr_t sess, int reason = 0);
 
-  void remove_all();
+  void remove_all(int32_t reason);
 
   size_t size() const;
 

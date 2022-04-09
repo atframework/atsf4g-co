@@ -22,21 +22,26 @@ actor_action_cs_req_base::actor_action_cs_req_base(dispatcher_start_data_t &&sta
   }
 
   msg_type *cs_msg = cs_msg_dispatcher::me()->get_protobuf_msg<msg_type>(start_param.message);
+  player_cache::ptr_t player_cache;
   if (nullptr != cs_msg) {
     get_request().Swap(cs_msg);
 
     session::ptr_t sess = get_session();
     if (sess) {
-      player_cache::ptr_t player_cache = sess->get_player();
+      player_cache = sess->get_player();
       if (player_cache) {
         set_user_key(player_cache->get_user_id(), player_cache->get_zone_id());
       }
     }
   }
 
-  // 最后设置 caller
+  // 最后设置caller
   if (nullptr != start_param.context) {
     set_caller_context(*start_param.context);
+  }
+
+  if (player_cache) {
+    player_cache->refresh_feature_limit(get_shared_context());
   }
 }
 
