@@ -94,7 +94,7 @@ bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_response().get
 %   endfor
  * @return 0 or error code
  */
-rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)});
+EXPLICIT_NODISCARD_ATTR rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)});
 % endfor
 % for ns in service.get_cpp_namespace_end(module_name, ''):
 ${ns}

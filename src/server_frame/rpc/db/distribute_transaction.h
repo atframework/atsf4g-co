@@ -14,12 +14,12 @@
 
 #include <config/server_frame_build_feature.h>
 
-#include <rpc/db/db_utils.h>
-
 #include <stdint.h>
 #include <cstddef>
 #include <string>
 #include <vector>
+
+#include "rpc/db/db_utils.h"
 
 namespace rpc {
 class context;
@@ -35,8 +35,9 @@ namespace distribute_transaction {
  * @param version 版本号
  * @return 0或错误码
  */
-result_type get(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid,
-                PROJECT_NAMESPACE_ID::table_distribute_transaction &output, std::string &version);
+EXPLICIT_NODISCARD_ATTR result_type get(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid,
+                                        PROJECT_NAMESPACE_ID::table_distribute_transaction &output,
+                                        std::string &version);
 
 /**
  * @brief 分布式事务表的rpc操作 - 保存
@@ -47,8 +48,9 @@ result_type get(rpc::context &ctx, uint32_t zone_id, gsl::string_view transactio
  *
  * @return 0或错误码
  */
-result_type set(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid,
-                const PROJECT_NAMESPACE_ID::table_distribute_transaction &store, std::string &version);
+EXPLICIT_NODISCARD_ATTR result_type set(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid,
+                                        const PROJECT_NAMESPACE_ID::table_distribute_transaction &store,
+                                        std::string &version);
 
 /**
  * @brief 分布式事务表的rpc操作 - 删除
@@ -59,7 +61,7 @@ result_type set(rpc::context &ctx, uint32_t zone_id, gsl::string_view transactio
  *
  * @return 0或错误码
  */
-result_type remove(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid);
+EXPLICIT_NODISCARD_ATTR result_type remove(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid);
 }  // namespace distribute_transaction
 }  // namespace db
 }  // namespace rpc

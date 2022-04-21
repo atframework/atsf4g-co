@@ -30,4 +30,7 @@ result_code_type::operator int32_t() const noexcept {
   return *ret;
 }
 
+result_void_type::result_void_type() {}
+result_void_type::result_void_type(bool is_ready) : result_data_(is_ready) {}
+
 }  // namespace rpc

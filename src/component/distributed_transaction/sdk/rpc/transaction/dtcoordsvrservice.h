@@ -43,7 +43,7 @@ bool unpack_query(const std::string& input, atframework::distributed_system::SSD
  * @param __wait_later        set not nullptr if caller want to wait this RPC later, and receive rpc sequence to wait here
  * @return 0 or error code
  */
-rpc::result_code_type query(context& __ctx, uint64_t dst_bus_id, atframework::distributed_system::SSDistributeTransactionQueryReq &req_body, atframework::distributed_system::SSDistributeTransactionQueryRsp &rsp_body, bool __no_wait = false, uint64_t* __wait_later = nullptr);
+EXPLICIT_NODISCARD_ATTR rpc::result_code_type query(context& __ctx, uint64_t dst_bus_id, atframework::distributed_system::SSDistributeTransactionQueryReq &req_body, atframework::distributed_system::SSDistributeTransactionQueryRsp &rsp_body, bool __no_wait = false, uint64_t* __wait_later = nullptr);
 
 // ============ atframework.distributed_system.DtcoordsvrService.create ============
 namespace packer {
@@ -63,7 +63,7 @@ bool unpack_create(const std::string& input, atframework::distributed_system::SS
  * @param __wait_later        set not nullptr if caller want to wait this RPC later, and receive rpc sequence to wait here
  * @return 0 or error code
  */
-rpc::result_code_type create(context& __ctx, uint64_t dst_bus_id, atframework::distributed_system::SSDistributeTransactionCreateReq &req_body, atframework::distributed_system::SSDistributeTransactionCreateRsp &rsp_body, bool __no_wait = false, uint64_t* __wait_later = nullptr);
+EXPLICIT_NODISCARD_ATTR rpc::result_code_type create(context& __ctx, uint64_t dst_bus_id, atframework::distributed_system::SSDistributeTransactionCreateReq &req_body, atframework::distributed_system::SSDistributeTransactionCreateRsp &rsp_body, bool __no_wait = false, uint64_t* __wait_later = nullptr);
 
 // ============ atframework.distributed_system.DtcoordsvrService.commit ============
 namespace packer {
@@ -83,7 +83,7 @@ bool unpack_commit(const std::string& input, atframework::distributed_system::SS
  * @param __wait_later        set not nullptr if caller want to wait this RPC later, and receive rpc sequence to wait here
  * @return 0 or error code
  */
-rpc::result_code_type commit(context& __ctx, uint64_t dst_bus_id, atframework::distributed_system::SSDistributeTransactionCommitReq &req_body, atframework::distributed_system::SSDistributeTransactionCommitRsp &rsp_body, bool __no_wait = false, uint64_t* __wait_later = nullptr);
+EXPLICIT_NODISCARD_ATTR rpc::result_code_type commit(context& __ctx, uint64_t dst_bus_id, atframework::distributed_system::SSDistributeTransactionCommitReq &req_body, atframework::distributed_system::SSDistributeTransactionCommitRsp &rsp_body, bool __no_wait = false, uint64_t* __wait_later = nullptr);
 
 // ============ atframework.distributed_system.DtcoordsvrService.reject ============
 namespace packer {
@@ -103,7 +103,7 @@ bool unpack_reject(const std::string& input, atframework::distributed_system::SS
  * @param __wait_later        set not nullptr if caller want to wait this RPC later, and receive rpc sequence to wait here
  * @return 0 or error code
  */
-rpc::result_code_type reject(context& __ctx, uint64_t dst_bus_id, atframework::distributed_system::SSDistributeTransactionRejectReq &req_body, atframework::distributed_system::SSDistributeTransactionRejectRsp &rsp_body, bool __no_wait = false, uint64_t* __wait_later = nullptr);
+EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject(context& __ctx, uint64_t dst_bus_id, atframework::distributed_system::SSDistributeTransactionRejectReq &req_body, atframework::distributed_system::SSDistributeTransactionRejectRsp &rsp_body, bool __no_wait = false, uint64_t* __wait_later = nullptr);
 
 // ============ atframework.distributed_system.DtcoordsvrService.commit_participator ============
 namespace packer {
@@ -123,7 +123,7 @@ bool unpack_commit_participator(const std::string& input, atframework::distribut
  * @param __wait_later        set not nullptr if caller want to wait this RPC later, and receive rpc sequence to wait here
  * @return 0 or error code
  */
-rpc::result_code_type commit_participator(context& __ctx, uint64_t dst_bus_id, atframework::distributed_system::SSDistributeTransactionCommitParticipatorReq &req_body, atframework::distributed_system::SSDistributeTransactionCommitParticipatorRsp &rsp_body, bool __no_wait = false, uint64_t* __wait_later = nullptr);
+EXPLICIT_NODISCARD_ATTR rpc::result_code_type commit_participator(context& __ctx, uint64_t dst_bus_id, atframework::distributed_system::SSDistributeTransactionCommitParticipatorReq &req_body, atframework::distributed_system::SSDistributeTransactionCommitParticipatorRsp &rsp_body, bool __no_wait = false, uint64_t* __wait_later = nullptr);
 
 // ============ atframework.distributed_system.DtcoordsvrService.reject_participator ============
 namespace packer {
@@ -143,7 +143,7 @@ bool unpack_reject_participator(const std::string& input, atframework::distribut
  * @param __wait_later        set not nullptr if caller want to wait this RPC later, and receive rpc sequence to wait here
  * @return 0 or error code
  */
-rpc::result_code_type reject_participator(context& __ctx, uint64_t dst_bus_id, atframework::distributed_system::SSDistributeTransactionRejectParticipatorReq &req_body, atframework::distributed_system::SSDistributeTransactionRejectParticipatorRsp &rsp_body, bool __no_wait = false, uint64_t* __wait_later = nullptr);
+EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject_participator(context& __ctx, uint64_t dst_bus_id, atframework::distributed_system::SSDistributeTransactionRejectParticipatorReq &req_body, atframework::distributed_system::SSDistributeTransactionRejectParticipatorRsp &rsp_body, bool __no_wait = false, uint64_t* __wait_later = nullptr);
 
 // ============ atframework.distributed_system.DtcoordsvrService.remove ============
 namespace packer {
@@ -163,7 +163,7 @@ bool unpack_remove(const std::string& input, atframework::distributed_system::SS
  * @param __wait_later        set not nullptr if caller want to wait this RPC later, and receive rpc sequence to wait here
  * @return 0 or error code
  */
-rpc::result_code_type remove(context& __ctx, uint64_t dst_bus_id, atframework::distributed_system::SSDistributeTransactionRemoveReq &req_body, atframework::distributed_system::SSDistributeTransactionRemoveRsp &rsp_body, bool __no_wait = false, uint64_t* __wait_later = nullptr);
+EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove(context& __ctx, uint64_t dst_bus_id, atframework::distributed_system::SSDistributeTransactionRemoveReq &req_body, atframework::distributed_system::SSDistributeTransactionRemoveRsp &rsp_body, bool __no_wait = false, uint64_t* __wait_later = nullptr);
 }  // namespace transaction
 }
 

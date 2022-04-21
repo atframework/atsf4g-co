@@ -1,15 +1,14 @@
 // Copyright 2022 atframework
-// Created by owt50 on 2016/10/9.
+// Created by owent on 2016-10-09.
 //
-
-#ifndef RPC_DB_UUID_H
-#define RPC_DB_UUID_H
 
 #pragma once
 
+#include <config/server_frame_build_feature.h>
+
 #include <string>
 
-#include <config/server_frame_build_feature.h>
+#include "rpc/db/db_utils.h"
 
 namespace rpc {
 class context;
@@ -28,7 +27,7 @@ namespace uuid {
  * @see https://en.wikipedia.org/wiki/Universally_unique_identifier#Version_1_(date-time_and_MAC_address)
  * @return 生成的UUID
  */
-std::string generate_standard_uuid(bool remove_minus = false);
+EXPLICIT_NODISCARD_ATTR std::string generate_standard_uuid(bool remove_minus = false);
 
 /**
  * @brief 生成标准UUID,返回二进制
@@ -41,14 +40,14 @@ std::string generate_standard_uuid(bool remove_minus = false);
  * @see https://en.wikipedia.org/wiki/Universally_unique_identifier#Version_1_(date-time_and_MAC_address)
  * @return 生成的UUID,返回二进制
  */
-std::string generate_standard_uuid_binary();
+EXPLICIT_NODISCARD_ATTR std::string generate_standard_uuid_binary();
 
 /**
  * 生成短UUID,和server id相关
  * @note 线程安全，但是一秒内的分配数量不能超过 2^32 个
  * @return 短UUID
  */
-std::string generate_short_uuid();
+EXPLICIT_NODISCARD_ATTR std::string generate_short_uuid();
 
 /**
  * @biref 生成自增ID
@@ -58,7 +57,8 @@ std::string generate_short_uuid();
  * @param patch_type 补充类型(不需要可填0)
  * @return 如果成功，返回一个自增ID（正数），失败返回错误码，错误码 <= 0，
  */
-int64_t generate_global_increase_id(rpc::context &ctx, uint32_t major_type, uint32_t minor_type, uint32_t patch_type);
+EXPLICIT_NODISCARD_ATTR int64_t generate_global_increase_id(rpc::context &ctx, uint32_t major_type, uint32_t minor_type,
+                                                            uint32_t patch_type);
 
 /**
  * @biref 生成唯一ID
@@ -71,11 +71,9 @@ int64_t generate_global_increase_id(rpc::context &ctx, uint32_t major_type, uint
  * @param patch_type 补充类型(不需要可填0)
  * @return 如果成功，返回一个自增ID（正数），失败返回错误码，错误码 <= 0，
  */
-int64_t generate_global_unique_id(rpc::context &ctx, uint32_t major_type, uint32_t minor_type = 0,
-                                  uint32_t patch_type = 0);
+EXPLICIT_NODISCARD_ATTR int64_t generate_global_unique_id(rpc::context &ctx, uint32_t major_type,
+                                                          uint32_t minor_type = 0, uint32_t patch_type = 0);
 }  // namespace uuid
 
 }  // namespace db
 }  // namespace rpc
-
-#endif  //_RPC_DB_UUID_H

@@ -8,6 +8,8 @@
 
 #include <libcopp/future/poller.h>
 
+#include <std/explicit_declare.h>
+
 #include <inttypes.h>
 #include <stdint.h>
 #include <cstddef>

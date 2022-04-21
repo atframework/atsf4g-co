@@ -184,8 +184,8 @@ int add_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t 
       break;
     }
 
-    ::rpc::game::player_async_jobs_sync(ctx, login_table->router_server_id(), zone_id, user_id,
-                                        LOG_WRAPPER_FWAPI_FORMAT("{}", user_id), *req_body);
+    RPC_AWAIT_IGNORE_RESULT(rpc::game::player_async_jobs_sync(ctx, login_table->router_server_id(), zone_id, user_id,
+                                                              LOG_WRAPPER_FWAPI_FORMAT("{}", user_id), *req_body));
   } while (false);
   return ret;
 }
@@ -274,8 +274,8 @@ int update_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32
       break;
     }
 
-    ::rpc::game::player_async_jobs_sync(ctx, login_table->router_server_id(), zone_id, user_id,
-                                        LOG_WRAPPER_FWAPI_FORMAT("{}", user_id), *req_body);
+    RPC_AWAIT_IGNORE_RESULT(rpc::game::player_async_jobs_sync(ctx, login_table->router_server_id(), zone_id, user_id,
+                                                              LOG_WRAPPER_FWAPI_FORMAT("{}", user_id), *req_body));
   } while (false);
 
   return ret;

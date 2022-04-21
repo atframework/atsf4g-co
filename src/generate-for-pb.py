@@ -44,6 +44,7 @@ def check_has_module(module_name):
 
 class MakoModuleTempDir:
     """ RAII: Auto remove tempory directory """
+
     def __init__(self, prefix_path):
         if not os.path.exists(prefix_path):
             os.makedirs(prefix_path)
@@ -123,6 +124,7 @@ class PbConvertRule:
 
 
 class PbObjectBase(object):
+
     def __init__(self, descriptor, refer_database):
         self.descriptor = descriptor
         self.refer_database = refer_database
@@ -239,7 +241,7 @@ class PbObjectBase(object):
     def get_cpp_class_name(self):
         return self.get_full_name().replace(".", "::")
 
-    def get_cpp_namespace_begin(self, full_name, pretty_ident="  "):
+    def get_cpp_namespace_begin(self, full_name, pretty_ident=""):
         current_ident = ""
         ret = []
         for name in HANDLE_SPLIT_MODULE_RULE.split(full_name):
@@ -247,7 +249,7 @@ class PbObjectBase(object):
             current_ident = current_ident + pretty_ident
         return ret
 
-    def get_cpp_namespace_end(self, full_name, pretty_ident="  "):
+    def get_cpp_namespace_end(self, full_name, pretty_ident=""):
         current_ident = ""
         ret = []
         for name in HANDLE_SPLIT_MODULE_RULE.split(full_name):
@@ -256,11 +258,15 @@ class PbObjectBase(object):
         ret.reverse()
         return ret
 
+    def get_cpp_namespace_prefix(self, full_name):
+        return "::".join(HANDLE_SPLIT_MODULE_RULE.split(full_name))
+
     def get_package(self):
         return self.descriptor.file.package
 
 
 class PbFile(PbObjectBase):
+
     def __init__(self, descriptor, refer_database):
         super(PbFile, self).__init__(descriptor, refer_database)
         refer_database._cache_files[descriptor.name] = self
@@ -273,6 +279,7 @@ class PbFile(PbObjectBase):
 
 
 class PbField(PbObjectBase):
+
     def __init__(self, container_message, descriptor, refer_database):
         super(PbField, self).__init__(descriptor, refer_database)
         self.file = container_message.file
@@ -286,6 +293,7 @@ class PbField(PbObjectBase):
 
 
 class PbOneof(PbObjectBase):
+
     def __init__(self, container_message, fields, descriptor, refer_database):
         super(PbOneof, self).__init__(descriptor, refer_database)
         self.file = container_message.file
@@ -303,6 +311,7 @@ class PbOneof(PbObjectBase):
 
 
 class PbMessage(PbObjectBase):
+
     def __init__(self, file, descriptor, refer_database):
         super(PbMessage, self).__init__(descriptor, refer_database)
         refer_database._cache_messages[descriptor.full_name] = self
@@ -330,6 +339,7 @@ class PbMessage(PbObjectBase):
 
 
 class PbEnumValue(PbObjectBase):
+
     def __init__(self, container_enum, descriptor, refer_database):
         super(PbEnumValue, self).__init__(descriptor, refer_database)
         self.file = container_enum.file
@@ -344,6 +354,7 @@ class PbEnumValue(PbObjectBase):
 
 
 class PbEnum(PbObjectBase):
+
     def __init__(self, file, descriptor, refer_database):
         super(PbEnum, self).__init__(descriptor, refer_database)
         refer_database._cache_enums[descriptor.full_name] = self
@@ -361,6 +372,7 @@ class PbEnum(PbObjectBase):
 
 
 class PbRpc(PbObjectBase):
+
     def __init__(self, service, descriptor, refer_database):
         super(PbRpc, self).__init__(descriptor, refer_database)
 
@@ -426,6 +438,7 @@ class PbRpc(PbObjectBase):
 
 
 class PbService(PbObjectBase):
+
     def __init__(self, file, descriptor, refer_database):
         super(PbService, self).__init__(descriptor, refer_database)
         refer_database._cache_services[descriptor.full_name] = self
@@ -442,6 +455,7 @@ class PbService(PbObjectBase):
 
 
 class PbDatabase(object):
+
     def __init__(self):
         from google.protobuf import descriptor_pb2 as pb2
         from google.protobuf import message_factory as _message_factory
@@ -810,6 +824,7 @@ def get_yaml_configure_child(yaml_conf_item,
 
 
 class PbGroupGenerator(object):
+
     def __init__(self, database, project_dir, output_directory,
                  custom_variables, overwrite, outer_name, inner_name,
                  inner_set_name, inner_include_rule, inner_exclude_rule,
@@ -1109,6 +1124,7 @@ def generate_group(options, group):
 
 
 class PbGlobalGenerator(object):
+
     def __init__(
         self,
         database,

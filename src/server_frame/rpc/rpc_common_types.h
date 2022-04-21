@@ -10,6 +10,8 @@
 
 #include <libcopp/future/poller.h>
 
+#include <std/explicit_declare.h>
+
 #include <stdint.h>
 #include <cstddef>
 #include <type_traits>
@@ -33,6 +35,17 @@ class result_code_type {
 
  private:
   copp::future::poller<value_type> result_data_;
+};
+
+class result_void_type {
+ public:
+  result_void_type();
+  explicit result_void_type(bool is_ready);
+
+  inline bool is_ready() const noexcept { return result_data_.is_ready(); }
+
+ private:
+  copp::future::poller<void> result_data_;
 };
 
 template <class TSuccess, class TError>
