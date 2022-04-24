@@ -17,7 +17,8 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
 
   if(project_component_declare_sdk_SOURCES)
     source_group_by_dir(project_component_declare_sdk_HRADERS project_component_declare_sdk_SOURCES)
-    if(NOT WIN32 AND (BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY))
+    if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows|MinGW|WindowsStore" AND (BUILD_SHARED_LIBS
+                                                                       OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY))
       add_library(${TARGET_FULL_NAME} SHARED ${project_component_declare_sdk_HRADERS}
                                              ${project_component_declare_sdk_SOURCES})
     else()
@@ -171,12 +172,15 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
       "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include"
       --proto_path
       "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include")
+  unset(PUBLIC_LINK_TARGETS)
+  unset(INTERFACE_LINK_TARGETS)
   if(project_service_declare_protocol_USE_COMPONENTS)
     foreach(USE_COMPONENT ${project_service_declare_protocol_USE_COMPONENTS})
-      get_target_property(FIND_PROTO_DIR "components::${USE_COMPONENT}" LABELS)
-      if(FIND_PROTO_DIR MATCHES "PROTOCOL_DIR=([^;]+)")
-        list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${CMAKE_MATCH_1}")
+      get_target_property(FIND_PROTO_DIR "components::${USE_COMPONENT}" PORJECT_PROTOCOL_DIR)
+      if(FIND_PROTO_DIR)
+        list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${FIND_PROTO_DIR}")
       endif()
+      list(APPEND PUBLIC_LINK_TARGETS "components::${USE_COMPONENT}")
     endforeach()
   endif()
 
@@ -201,7 +205,12 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
     set(TARGET_FULL_NAME "${PROJECT_NAME}-component-${TARGET_NAME}")
   endif()
   source_group_by_dir(FINAL_GENERATED_SOURCE_FILES FINAL_GENERATED_HEADER_FILES)
-  add_library(${TARGET_FULL_NAME} STATIC ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
+  if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows|MinGW|WindowsStore" AND (BUILD_SHARED_LIBS
+                                                                     OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY))
+    add_library(${TARGET_FULL_NAME} SHARED ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
+  else()
+    add_library(${TARGET_FULL_NAME} STATIC ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
+  endif()
   set_target_properties(
     ${TARGET_FULL_NAME}
     PROPERTIES C_VISIBILITY_PRESET "default"
@@ -209,7 +218,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
                VERSION "${PROJECT_VERSION}"
                WINDOWS_EXPORT_ALL_SYMBOLS TRUE
                BUILD_RPATH_USE_ORIGIN YES
-               LABELS "PROTOCOL_DIR=${PROTOCOL_DIR}")
+               PORJECT_PROTOCOL_DIR "${PROTOCOL_DIR}")
 
   target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
 
@@ -230,15 +239,12 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
             "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config>"
             "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc>")
 
-  unset(LINK_TARGETS)
-  if(project_service_declare_protocol_USE_COMPONENTS)
-    foreach(USE_COMPONENT ${project_service_declare_protocol_USE_COMPONENTS})
-      list(APPEND LINK_TARGETS "components::${USE_COMPONENT}")
-    endforeach()
+  list(APPEND PUBLIC_LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol)
+  list(APPEND PUBLIC_LINK_TARGETS ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_LINK_NAME})
+  if(INTERFACE_LINK_TARGETS)
+    target_link_libraries(${TARGET_FULL_NAME} INTERFACE ${INTERFACE_LINK_TARGETS})
   endif()
-  list(APPEND LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol
-       ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_LINK_NAME})
-  target_link_libraries(${TARGET_FULL_NAME} PUBLIC ${LINK_TARGETS})
+  target_link_libraries(${TARGET_FULL_NAME} PUBLIC ${PUBLIC_LINK_TARGETS})
 
   install(
     TARGETS ${TARGET_FULL_NAME}

@@ -13,7 +13,8 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
 
   if(project_service_declare_sdk_SOURCES)
     source_group_by_dir(project_service_declare_sdk_HRADERS project_service_declare_sdk_SOURCES)
-    if(NOT WIN32 AND (BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY))
+    if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows|MinGW|WindowsStore" AND (BUILD_SHARED_LIBS
+                                                                       OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY))
       add_library(${TARGET_FULL_NAME} SHARED ${project_service_declare_sdk_HRADERS}
                                              ${project_service_declare_sdk_SOURCES})
     else()
@@ -45,27 +46,31 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
     endif()
   endif()
 
-  unset(LINK_TARGETS)
+  unset(PUBLIC_LINK_TARGETS)
+  unset(INTERFACE_LINK_TARGETS)
   if(project_service_declare_sdk_USE_COMPONENTS)
     foreach(USE_COMPONENT ${project_service_declare_sdk_USE_COMPONENTS})
-      list(APPEND LINK_TARGETS "components::${USE_COMPONENT}")
+      list(APPEND PUBLIC_LINK_TARGETS "components::${USE_COMPONENT}")
     endforeach()
   endif()
   if(project_service_declare_sdk_USE_SERVICE_PROTOCOL)
     foreach(USE_SERVICE_PROTOCOL ${project_service_declare_sdk_USE_SERVICE_PROTOCOL})
-      list(APPEND LINK_TARGETS "protocol::${USE_SERVICE_PROTOCOL}")
+      list(APPEND PUBLIC_LINK_TARGETS "protocol::${USE_SERVICE_PROTOCOL}")
     endforeach()
   endif()
   if(project_service_declare_sdk_USE_SERVICE_SDK)
     foreach(USE_SERVICE_SDK ${project_service_declare_sdk_USE_SERVICE_SDK})
-      list(APPEND LINK_TARGETS "sdk::${USE_SERVICE_SDK}")
+      list(APPEND PUBLIC_LINK_TARGETS "sdk::${USE_SERVICE_SDK}")
     endforeach()
   endif()
-  list(APPEND LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK})
+  list(APPEND PUBLIC_LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK})
   if(project_service_declare_sdk_SOURCES)
-    target_link_libraries(${TARGET_FULL_NAME} PUBLIC ${LINK_TARGETS})
+    if(INTERFACE_LINK_TARGETS)
+      target_link_libraries(${TARGET_FULL_NAME} INTERFACE ${PUBLIC_LINK_TARGETS})
+    endif()
+    target_link_libraries(${TARGET_FULL_NAME} PUBLIC ${PUBLIC_LINK_TARGETS})
   elseif(project_service_declare_sdk_HRADERS)
-    target_link_libraries(${TARGET_FULL_NAME} INTERFACE ${LINK_TARGETS})
+    target_link_libraries(${TARGET_FULL_NAME} INTERFACE ${INTERFACE_LINK_TARGETS} ${PUBLIC_LINK_TARGETS})
   endif()
 
   install(
@@ -183,20 +188,24 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
       "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include"
       --proto_path
       "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include")
+  unset(PUBLIC_LINK_TARGETS)
+  unset(INTERFACE_LINK_TARGETS)
   if(project_service_declare_protocol_USE_COMPONENTS)
     foreach(USE_COMPONENT ${project_service_declare_protocol_USE_COMPONENTS})
-      get_target_property(FIND_PROTO_DIR "components::${USE_COMPONENT}" LABELS)
-      if(FIND_PROTO_DIR MATCHES "PROTOCOL_DIR=([^;]+)")
-        list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${CMAKE_MATCH_1}")
+      get_target_property(FIND_PROTO_DIR "components::${USE_COMPONENT}" PORJECT_PROTOCOL_DIR)
+      if(FIND_PROTO_DIR)
+        list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${FIND_PROTO_DIR}")
       endif()
+      list(APPEND PUBLIC_LINK_TARGETS "components::${USE_COMPONENT}")
     endforeach()
   endif()
   if(project_service_declare_protocol_USE_SERVICE_PROTOCOL)
     foreach(USE_SERVICE_PROTOCOL ${project_service_declare_protocol_USE_SERVICE_PROTOCOL})
-      get_target_property(FIND_PROTO_DIR "protocol::${USE_SERVICE_PROTOCOL}" LABELS)
-      if(FIND_PROTO_DIR MATCHES "PROTOCOL_DIR=([^;]+)")
-        list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${CMAKE_MATCH_1}")
+      get_target_property(FIND_PROTO_DIR "protocol::${USE_SERVICE_PROTOCOL}" PORJECT_PROTOCOL_DIR)
+      if(FIND_PROTO_DIR)
+        list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${FIND_PROTO_DIR}")
       endif()
+      list(APPEND PUBLIC_LINK_TARGETS "protocol::${USE_SERVICE_PROTOCOL}")
     endforeach()
   endif()
 
@@ -220,7 +229,12 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
     set(TARGET_FULL_NAME "${PROJECT_NAME}-protocol-${TARGET_NAME}")
   endif()
   source_group_by_dir(FINAL_GENERATED_SOURCE_FILES FINAL_GENERATED_HEADER_FILES)
-  add_library(${TARGET_FULL_NAME} STATIC ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
+  if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows|MinGW|WindowsStore" AND (BUILD_SHARED_LIBS
+                                                                     OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY))
+    add_library(${TARGET_FULL_NAME} SHARED ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
+  else()
+    add_library(${TARGET_FULL_NAME} STATIC ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
+  endif()
   set_target_properties(
     ${TARGET_FULL_NAME}
     PROPERTIES C_VISIBILITY_PRESET "default"
@@ -228,7 +242,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
                VERSION "${PROJECT_VERSION}"
                WINDOWS_EXPORT_ALL_SYMBOLS TRUE
                BUILD_RPATH_USE_ORIGIN YES
-               LABELS "PROTOCOL_DIR=${PROTOCOL_DIR}")
+               PORJECT_PROTOCOL_DIR "${PROTOCOL_DIR}")
 
   target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
 
@@ -249,20 +263,12 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
       "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/protocol/common;${CMAKE_INSTALL_INCLUDEDIR}/protocol/pbdesc>"
     PRIVATE "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config>")
 
-  unset(LINK_TARGETS)
-  if(project_service_declare_protocol_USE_COMPONENTS)
-    foreach(USE_COMPONENT ${project_service_declare_protocol_USE_COMPONENTS})
-      list(APPEND LINK_TARGETS "components::${USE_COMPONENT}")
-    endforeach()
-  endif()
-  if(project_service_declare_protocol_USE_SERVICE_PROTOCOL)
-    foreach(USE_SERVICE_PROTOCOL ${project_service_declare_protocol_USE_SERVICE_PROTOCOL})
-      list(APPEND LINK_TARGETS "protocol::${USE_SERVICE_PROTOCOL}")
-    endforeach()
-  endif()
-  list(APPEND LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol
+  list(APPEND PUBLIC_LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol
        ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_LINK_NAME})
-  target_link_libraries(${TARGET_FULL_NAME} PUBLIC ${LINK_TARGETS})
+  if(INTERFACE_LINK_TARGETS)
+    target_link_libraries(${TARGET_FULL_NAME} INTERFACE ${PUBLIC_LINK_TARGETS})
+  endif()
+  target_link_libraries(${TARGET_FULL_NAME} PUBLIC ${PUBLIC_LINK_TARGETS})
 
   install(
     TARGETS ${TARGET_FULL_NAME}
