@@ -173,8 +173,10 @@ int32_t session::send_msg_to_client(atframework::CSMsg &msg, uint64_t server_seq
   ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(
       atframe::gateway::proto_base::get_tls_buffer(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM));
   msg.SerializeWithCachedSizesToArray(buf_start);
-  FWLOGDEBUG("send msg to client:[{:#x}, {}] {} bytes\n{}", id_.bus_id, id_.session_id, msg_buf_len,
-             protobuf_mini_dumper_get_readable(msg));
+  FWLOGDEBUG(
+      "send msg to client:[{:#x}, {}] {} bytes.(session sequence: {}, client sequence: {}, server sequence: {})\n{}",
+      id_.bus_id, id_.session_id, msg_buf_len, msg.head().session_sequence(), msg.head().client_sequence(),
+      msg.head().server_sequence(), protobuf_mini_dumper_get_readable(msg));
 
   return send_msg_to_client(buf_start, msg_buf_len);
 }

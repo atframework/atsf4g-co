@@ -73,7 +73,18 @@ std::shared_ptr<player_cache> actor_action_cs_req_base::get_player_cache() const
 
 actor_action_cs_req_base::msg_ref_type actor_action_cs_req_base::add_rsp_msg() {
   response_messages_.push_back(msg_type());
-  return response_messages_.back();
+
+  msg_ref_type ret = response_messages_.back();
+  ret.mutable_head()->set_error_code(get_response_code());
+  ret.mutable_head()->set_timestamp(util::time::time_utility::get_now());
+  ret.mutable_head()->set_client_sequence(get_request().head().client_sequence());
+  if (get_request().head().op_type() == PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM) {
+    ret.mutable_head()->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM);
+  } else {
+    ret.mutable_head()->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE);
+  }
+
+  return ret;
 }
 
 std::list<actor_action_cs_req_base::msg_type> &actor_action_cs_req_base::get_rsp_list() { return response_messages_; }
@@ -117,25 +128,8 @@ void actor_action_cs_req_base::send_response(bool sync_dirty) {
     return;
   }
 
-  uint64_t seq = 0;
-  int32_t op_type;
-  {
-    msg_ref_type req_msg = get_request();
-    if (req_msg.has_head()) {
-      seq = req_msg.head().client_sequence();
-    }
-    if (PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM == req_msg.head().op_type()) {
-      op_type = PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM;
-    } else {
-      op_type = PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE;
-    }
-  }
-
   for (std::list<msg_type>::iterator iter = response_messages_.begin(); iter != response_messages_.end(); ++iter) {
     (*iter).mutable_head()->set_error_code(get_response_code());
-    (*iter).mutable_head()->set_timestamp(util::time::time_utility::get_now());
-    (*iter).mutable_head()->set_client_sequence(seq);
-    (*iter).mutable_head()->set_op_type(op_type);
 
     // send message using session
     int32_t res = sess->send_msg_to_client(*iter);

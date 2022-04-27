@@ -150,6 +150,15 @@ task_action_cs_req_base::msg_ref_type task_action_cs_req_base::add_rsp_msg() {
     return empty_msg;
   }
 
+  msg->mutable_head()->set_error_code(get_response_code());
+  msg->mutable_head()->set_timestamp(util::time::time_utility::get_now());
+  msg->mutable_head()->set_client_sequence(get_request().head().client_sequence());
+  if (get_request().head().op_type() == PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM) {
+    msg->mutable_head()->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM);
+  } else {
+    msg->mutable_head()->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE);
+  }
+
   response_messages_.push_back(msg);
   return *msg;
 }
@@ -177,27 +186,8 @@ void task_action_cs_req_base::send_response() {
     return;
   }
 
-  uint64_t seq = 0;
-  int32_t op_type;
-  {
-    msg_ref_type req_msg = get_request();
-    if (req_msg.has_head()) {
-      seq = req_msg.head().client_sequence();
-    }
-    if (PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM == req_msg.head().op_type()) {
-      op_type = PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM;
-    } else {
-      op_type = PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE;
-    }
-  }
-
   for (std::list<msg_type *>::iterator iter = response_messages_.begin(); iter != response_messages_.end(); ++iter) {
     (*iter)->mutable_head()->set_error_code(get_response_code());
-    (*iter)->mutable_head()->set_timestamp(util::time::time_utility::get_now());
-    (*iter)->mutable_head()->set_client_sequence(seq);
-    if ((*iter)->head().op_type() == PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP) {
-      (*iter)->mutable_head()->set_op_type(op_type);
-    }
 
     // send message using session
     int32_t res = sess->send_msg_to_client(**iter);
