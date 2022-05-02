@@ -32,4 +32,8 @@ target_link_libraries(${SERVER_INST_SRC_BIN_NAME} ${ATFRAMEWORK_SERVICE_GATEWAY_
 
 target_compile_options(${SERVER_INST_SRC_BIN_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
 
+if(MSVC)
+  set_property(TARGET ${SERVER_INST_SRC_BIN_NAME} PROPERTY FOLDER "${PROJECT_NAME}/service/server")
+endif()
+
 project_install_and_export_targets(${SERVER_INST_SRC_BIN_NAME})

@@ -76,7 +76,7 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   add_library("components::${TARGET_NAME}" ALIAS "${TARGET_FULL_NAME}")
 
   if(MSVC)
-    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "component/sdk")
+    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/component/sdk")
   endif()
 endfunction()
 
@@ -161,11 +161,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
       --proto_path
       "${PROTOCOL_DIR}"
       --proto_path
-      "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/common"
-      --proto_path
-      "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config"
-      --proto_path
-      "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc"
+      "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/proto"
       --proto_path
       "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include"
       --proto_path
@@ -235,9 +231,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   target_include_directories(
     ${TARGET_FULL_NAME}
     PUBLIC "$<BUILD_INTERFACE:${project_component_declare_protocol_OUTPUT_DIR}>"
-    PRIVATE "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/common>"
-            "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config>"
-            "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc>")
+    PRIVATE "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/include>")
 
   list(APPEND PUBLIC_LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol)
   list(APPEND PUBLIC_LINK_TARGETS ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_LINK_NAME})
@@ -263,7 +257,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
 
   add_library("components::${TARGET_NAME}" ALIAS "${TARGET_FULL_NAME}")
   if(MSVC)
-    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "component/protocol")
+    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/component/protocol")
   endif()
 endfunction()
 
@@ -353,6 +347,6 @@ function(project_component_declare_service TARGET_NAME SERVICE_ROOT_DIR)
   add_executable("components::${TARGET_NAME}" ALIAS "${TARGET_FULL_NAME}")
 
   if(MSVC)
-    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "component/service")
+    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/component/service")
   endif()
 endfunction()

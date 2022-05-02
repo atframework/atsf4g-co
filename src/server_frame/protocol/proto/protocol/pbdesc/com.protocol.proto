@@ -9,10 +9,10 @@ option cc_enable_arenas = true;
 option cc_generic_services = true;
 
 import "google/protobuf/empty.proto";
-import "atframework.proto";
+import "protocol/pbdesc/atframework.proto";
 
-import "com.const.proto";
-import "com.struct.proto";
+import "protocol/pbdesc/com.const.proto";
+import "protocol/pbdesc/com.struct.proto";
 
 package hello;
 

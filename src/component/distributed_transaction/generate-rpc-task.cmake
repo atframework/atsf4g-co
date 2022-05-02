@@ -1,5 +1,5 @@
 generate_for_pb_add_proto_path("${CMAKE_CURRENT_LIST_DIR}/protocol")
-generate_for_pb_add_proto_file("${CMAKE_CURRENT_LIST_DIR}/protocol/pbdesc/distributed_transaction.proto")
+generate_for_pb_add_proto_file("${CMAKE_CURRENT_LIST_DIR}/protocol/protocol/pbdesc/distributed_transaction.proto")
 
 # add tool to binding distributed transaction rpcs
 generate_for_pb_add_ss_service(
@@ -14,4 +14,4 @@ generate_for_pb_add_ss_service(
   RPC_ROOT_DIR
   "${CMAKE_CURRENT_LIST_DIR}/sdk"
   INCLUDE_HEADERS
-  "pbdesc/distributed_transaction.pb.h")
+  "protocol/pbdesc/distributed_transaction.pb.h")

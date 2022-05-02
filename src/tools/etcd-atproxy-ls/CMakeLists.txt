@@ -24,7 +24,7 @@ source_group_by_dir(SRC_LIST)
 add_executable(${TOOL_SRC_BIN_NAME} ${SRC_LIST})
 
 if(MSVC)
-  set_property(TARGET ${TOOL_SRC_BIN_NAME} PROPERTY FOLDER "tools")
+  set_property(TARGET ${TOOL_SRC_BIN_NAME} PROPERTY FOLDER "${PROJECT_NAME}/tools")
   add_target_properties(${TOOL_SRC_BIN_NAME} LINK_FLAGS /NODEFAULTLIB:library)
 endif()
 

@@ -58,8 +58,8 @@
 .mako_modules-*
 
 # protocol
-/src/server_frame/protocol/**/*.h
-/src/server_frame/protocol/**/*.cc
+/src/**/protocol/**/*.h
+/src/**/protocol/**/*.cc
 
 # generated
 /src/generate-nomsg-task.sh

@@ -11,9 +11,11 @@ task_class_name = os.path.splitext(os.path.basename(output_render_path))[0]
 
 % if include_headers:
 #include <config/compiler/protobuf_prefix.h>
+
 %   for include_header in include_headers:
 #include <${include_header}>
 %   endfor
+
 #include <config/compiler/protobuf_suffix.h>
 % endif
 

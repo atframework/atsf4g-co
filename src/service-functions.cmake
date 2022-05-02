@@ -93,7 +93,7 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   add_library("sdk::${TARGET_NAME}" ALIAS "${TARGET_FULL_NAME}")
 
   if(MSVC)
-    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "service/sdk")
+    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/service/sdk")
   endif()
 endfunction()
 
@@ -177,11 +177,8 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
       --proto_path
       "${PROTOCOL_DIR}"
       --proto_path
-      "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/common"
+      "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/proto"
       --proto_path
-      "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config"
-      --proto_path
-      "${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc"
       --proto_path
       "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include"
       --proto_path
@@ -257,11 +254,9 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
 
   target_include_directories(
     ${TARGET_FULL_NAME}
-    PUBLIC
-      "$<BUILD_INTERFACE:${project_service_declare_protocol_OUTPUT_DIR}>"
-      "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/common;${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/pbdesc>"
-      "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/protocol/common;${CMAKE_INSTALL_INCLUDEDIR}/protocol/pbdesc>"
-    PRIVATE "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_BAS_DIR}/protocol/config>")
+    PUBLIC "$<BUILD_INTERFACE:${project_service_declare_protocol_OUTPUT_DIR}>"
+           "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/include>"
+           "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 
   list(APPEND PUBLIC_LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol
        ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_LINK_NAME})
@@ -287,7 +282,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
 
   add_library("protocol::${TARGET_NAME}" ALIAS "${TARGET_FULL_NAME}")
   if(MSVC)
-    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "service/protocol")
+    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/service/protocol")
   endif()
 endfunction()
 
@@ -359,7 +354,7 @@ function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
   target_link_libraries(${TARGET_NAME} PRIVATE ${LINK_TARGETS})
 
   if(MSVC)
-    set_property(TARGET "${TARGET_NAME}" PROPERTY FOLDER "service/server")
+    set_property(TARGET "${TARGET_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/service/server")
   endif()
 
   install(

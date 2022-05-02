@@ -130,6 +130,11 @@ rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, router
     } else {
       RPC_RETURN_CODE(res);
     }
+  } else if (nullptr != priv_data.login_tb) {
+    // 修复数据
+    tbu.set_open_id(priv_data.login_tb->open_id());
+    tbu.set_user_id(priv_data.login_tb->user_id());
+    protobuf_copy_message(*tbu.mutable_account(), priv_data.login_tb->account());
   }
 
   if (obj->get_open_id().empty()) {

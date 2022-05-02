@@ -9,8 +9,6 @@
 
 #include <atframe/atapp.h>
 
-#include <rpc/rpc_utils.h>
-
 #include <sstream>
 #include <string>
 
@@ -153,7 +151,4 @@ void logic_config::_load_server_cfg(atapp::app &app) {
   auto reload_timepoint = server_cfg_.mutable_logic()->mutable_server()->mutable_reload_timepoint();
   reload_timepoint->set_seconds(util::time::time_utility::get_sys_now());
   reload_timepoint->set_nanos(static_cast<int32_t>(util::time::time_utility::get_now_usec() * 1000));
-
-  // Update rpc caller context data
-  rpc::context::set_current_service(app, server_cfg_.logic().telemetry());
 }

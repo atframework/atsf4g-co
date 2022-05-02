@@ -55,4 +55,9 @@ endif()
 
 target_include_directories(${SIMULATOR_SRC_BIN_NAME} PRIVATE "$<BUILD_INTERFACE:${SIMULATOR_PRIVATE_INCLUDE_DIRS}>")
 
+if(MSVC)
+  set_property(TARGET ${SIMULATOR_SRC_BIN_NAME} PROPERTY FOLDER "${PROJECT_NAME}/tools")
+  add_target_properties(${SIMULATOR_SRC_BIN_NAME} LINK_FLAGS /NODEFAULTLIB:library)
+endif()
+
 project_install_and_export_targets(${SIMULATOR_SRC_BIN_NAME})

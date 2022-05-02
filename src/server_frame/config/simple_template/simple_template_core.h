@@ -1,9 +1,6 @@
-// Copyright 2021 atframework
+// Copyright 2022 atframework
 // Created by owent on 2019-07-05.
 //
-
-#ifndef LOGIC_SIMPLE_TEMPLATE_CORE_H
-#define LOGIC_SIMPLE_TEMPLATE_CORE_H
 
 #pragma once
 
@@ -17,6 +14,7 @@
 #include <unordered_map>
 #include <vector>
 
+namespace excel {
 class simple_template_core : public ::util::design_pattern::noncopyable {
  public:
   using ptr_t = std::unique_ptr<simple_template_core>;
@@ -211,4 +209,4 @@ class simple_template {
   simple_template_core::ptr_t core_;
 };
 
-#endif
+}  // namespace excel

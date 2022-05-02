@@ -14,8 +14,6 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
-#include <utility/protobuf_mini_dumper.h>
-
 #include <list>
 #include <unordered_map>
 

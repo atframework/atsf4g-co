@@ -5,15 +5,15 @@
 
 #include <config/compiler/protobuf_prefix.h>
 
-#include <pbdesc/distributed_transaction.pb.h>
+#include <protocol/pbdesc/distributed_transaction.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 
 #include <dispatcher/task_action_no_req_base.h>
 
 #include <list>
-#include <string>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace atframework {
@@ -39,7 +39,7 @@ class task_action_participator_resolve_transaction : public task_action_no_req_b
   explicit task_action_participator_resolve_transaction(ctor_param_t&& param);
   ~task_action_participator_resolve_transaction();
 
-  const char *name() const override;
+  const char* name() const override;
 
   result_type operator()() override;
 
@@ -50,5 +50,5 @@ class task_action_participator_resolve_transaction : public task_action_no_req_b
   ctor_param_t param_;
 };
 
-}
-}
+}  // namespace distributed_system
+}  // namespace atframework

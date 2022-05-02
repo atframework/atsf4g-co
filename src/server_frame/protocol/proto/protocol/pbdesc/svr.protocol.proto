@@ -10,10 +10,10 @@ option cc_generic_services = true;
 // 后台通信协议定义
 
 import "google/protobuf/empty.proto";
-import "atframework.proto";
+import "protocol/pbdesc/atframework.proto";
 
-import "com.struct.proto";
-import "svr.struct.proto";
+import "protocol/pbdesc/com.struct.proto";
+import "protocol/pbdesc/svr.struct.proto";
 
 package hello;
 

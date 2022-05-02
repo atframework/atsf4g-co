@@ -17,7 +17,12 @@
 
 #include <config/logic_config.h>
 
+#include <config/compiler/protobuf_prefix.h>
+
 #include <protocol/pbdesc/svr.const.err.pb.h>
+
+#include <config/compiler/protobuf_suffix.h>
+
 #include <utility/rapid_json_helper.h>
 
 #if defined(SERVER_FRAME_ENABLE_SANITIZER_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_INTERFACE
@@ -337,6 +342,9 @@ int logic_server_common_module::reload() {
 
   RELOAD_CALL(ret, logic_config, *get_app());
 
+  // Update rpc caller context data
+  rpc::context::set_current_service(*get_app(), logic_config::me()->get_logic().telemetry());
+
   if (get_app() && get_app()->is_running()) {
     ret = setup_battle_service_watcher();
     setup_etcd_event_handle();
@@ -590,7 +598,8 @@ atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index
   return iter->second.all_index;
 }
 
-atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type(const std::string &type_name) const {
+atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type(
+    const std::string &type_name) const {
   auto iter = service_type_name_index_.find(type_name);
   if (iter == service_type_name_index_.end()) {
     return nullptr;
@@ -600,7 +609,7 @@ atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index
 }
 
 atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type_zone(uint64_t type_id,
-                                                                                    uint64_t zone_id) const {
+                                                                                              uint64_t zone_id) const {
   auto type_iter = service_type_id_index_.find(type_id);
   if (type_iter == service_type_id_index_.end()) {
     return nullptr;
@@ -614,8 +623,8 @@ atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index
   return zone_iter->second;
 }
 
-atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type_zone(const std::string &type_name,
-                                                                                    uint64_t zone_id) const {
+atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type_zone(
+    const std::string &type_name, uint64_t zone_id) const {
   auto type_iter = service_type_name_index_.find(type_name);
   if (type_iter == service_type_name_index_.end()) {
     return nullptr;

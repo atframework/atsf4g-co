@@ -13,7 +13,7 @@
 #include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/pbdesc/svr.local.table.pb.h>
 #include <protocol/pbdesc/svr.protocol.pb.h>
-#include <pbdesc/distributed_transaction.pb.h>
+#include <protocol/pbdesc/distributed_transaction.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 

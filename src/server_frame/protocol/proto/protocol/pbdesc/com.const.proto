@@ -1,0 +1,230 @@
+syntax = "proto3";
+// client and server will both use this
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "google/protobuf/descriptor.proto";
+import "protocol/pbdesc/extensions_error_code.proto";
+
+package hello;
+
+// 只能配置在 com.const.proto 这个文件里有效
+extend google.protobuf.FileOptions {
+  DConstSettingsType CONST_SETTINGS = 100001;  // 自定义配置
+}
+
+message DConstSettingsType {
+  int64 time_tolerate = 1;  // 时间错容忍值
+}
+
+option (CONST_SETTINGS) = {
+  time_tolerate: 10
+};
+
+// limits
+enum EnConstLimits {
+  EN_CL_UNKNOWN = 0;
+  EN_CL_MAX_PROTOCOL_LENGTH = 262144;  // message length limit: 256K
+  EN_CL_MAX_OPEN_ID_LENGTH = 64;       // openid length limit
+  EN_CL_MAX_AUTH_TOKEN_LENGHT = 128;   // token length limit
+}
+
+enum EnMsgOpType {
+  EN_MSG_OP_TYPE_MIXUP = 0;           // 混合模式
+  EN_MSG_OP_TYPE_STREAM = 1;          // 流,如果上行包时流，那么下行包也是流
+  EN_MSG_OP_TYPE_UNARY_REQUEST = 2;   // 请求-应答模式，请求包
+  EN_MSG_OP_TYPE_UNARY_RESPONSE = 3;  // 请求-应答模式，回应包
+};
+
+// account type
+enum EnAccountTypeID {
+  EN_ATI_ACCOUNT_INNER = 0;      // inner: username/password
+  EN_ATI_ACCOUNT_IOS_GUEST = 1;  // ios guest
+}
+
+// channel id
+enum EnPlatformChannelID {
+  EN_PCI_NONE = 0;              // NONE
+  EN_PCI_APPLE_GAMECENTER = 1;  // 苹果GAMECENTER渠道
+}
+
+// system type
+enum EnSystemID {
+  EN_OS_WINDOWS = 0;
+  EN_OS_LINUX = 1;
+  EN_OS_MAC = 2;
+  EN_OS_ANDROID = 3;
+  EN_OS_IPHONE = 4;
+  EN_OS_IPAD = 5;
+  EN_OS_BLACKBERRY = 6;
+  EN_OS_NACL = 7;
+  EN_OS_EMSCRIPTEN = 8;
+  EN_OS_TIZEN = 9;
+  EN_OS_WINRT = 10;
+  EN_OS_WP8 = 11;
+
+  /*EN_SYS_UNKNOWN  = 0;*/
+  /*EN_SYS_IOS      = 1;*/
+  /*EN_SYS_ANDROID  = 2;*/
+  /*EN_SYS_WINDOWS  = 3;*/
+}
+
+// update type
+enum EnUpdateType {
+  EN_UPDATE_NONE = 0;              // no upgrade
+  EN_UPDATE_INVALID = -1;          // error parameters
+  EN_UPDATE_DEFAULT_RECOM = 1;     // recommand resource upgrade
+  EN_UPDATE_PACKAGE_RECOM = 2;     // recommand package upgrade
+  EN_UPDATE_FORCE_START = 1024;    // force upgrade bound
+  EN_UPDATE_DEFAULT_FORCE = 1025;  // force resource upgrade
+  EN_UPDATE_PACKAGE_FORCE = 1026;  // force package upgrade
+}
+
+// user type
+enum EnVersionType {
+  EN_VERSION_DEFAULT = 0;  // default
+  EN_VERSION_GRAY = 1;     // gray
+  EN_VERSION_REVIEW = 2;   // review
+
+  EN_VERSION_INNER = 10000;  // inner
+  EN_VERSION_GM = 10001;     // gm
+}
+
+// chat channel type
+enum EnChatChannelType {
+  EN_CCT_INVALID = 0;              // invalid
+  EN_CCT_ALL_DEFAULT = 1001;       // all zones
+  EN_CCT_ALL_BOUND = 2000;         // all zones bound
+  EN_CCT_ZONE_DEFAULT = 2001;      // one zone
+  EN_CCT_ZONE_BOUND = 3000;        // one zone bound
+  EN_CCT_PERSONAL_DEFAULT = 3001;  // personal
+  EN_CCT_PERSONAL_BOUND = 4000;    // personal bound
+
+  EN_CCT_SUB_GUILD = 8001;  // subcribe-guild
+}
+
+// item change type
+enum EnItemChgMainType {
+  EN_ICMT_UNKNOWN = 0;  // unknown
+  EN_ICMT_USE = 1;      // use
+  EN_ICMT_SALE = 2;     // sale
+  EN_ICMT_BUY = 3;      // 使用资源
+}
+
+// item change sub type
+enum EnItemChgSubType {
+  EN_ICST_DEFAULT = 0;  // default
+}
+
+// @see atframework/service/atgateway/protocols/proto_base.h
+// @see atframe::gateway::close_reason_t
+enum EnCloseReasonType {
+  EN_CRT_UNKNOWN = 0;
+  // 0x00 - 0x100 是atgateway内部的网络层可重连关闭原因
+  // 0x10000 - 0x10100 是atgateway内部的网络层不可重连关闭原因
+
+  // 0x20000 == 131072
+  // 0x20000 - 0x30000 是自定义网络层不可重连，逻辑层可重连关闭原因
+  EN_CRT_SESSION_NOT_FOUND = 131073;  // session不存在
+  EN_CRT_SPEED_WARNING = 131074;      // 游戏速度异常
+
+  // 0x30000 == 196608
+  // 0x30000 - 0x40000 是自定义网络层不可重连，逻辑层不可重连关闭原因
+  EN_CRT_LOGIN_BAN = 196609;  // 封号
+}
+
+// error code
+enum EnErrorCode {
+  EN_SUCCESS = 0 [(error_code.description) = "成功"];
+  EN_ERR_UNKNOWN = -1
+                   [(error_code.description) = "未知异常"];
+  EN_ERR_TIMEOUT = -101
+                   [(error_code.description) = "超时"];
+  EN_ERR_INVALID_PARAM = -102
+                         [(error_code.description) = "参数错误"];
+  EN_ERR_CANT_AFFORD = -103
+                       [(error_code.description) = "买不起"];
+  EN_ERR_NOT_LOGIN = -104
+                     [(error_code.description) = "没有登录"];
+  EN_ERR_NOT_GM = -105
+                  [(error_code.description) = "没有GM权限"];
+  EN_ERR_SYSTEM = -106
+                  [(error_code.description) = "服务器系统错误"];
+  EN_ERR_USER_NOT_FOUND = -107
+                          [(error_code.description) = "没有找到这个玩家"];
+  EN_ERR_REWARD_RECEIVED = -108
+                           [(error_code.description) = "这个奖励已经领取"];
+  EN_ERR_NOT_FOUND_UUID = -109
+                          [(error_code.description) = "uuid没有找到"];
+  EN_ERR_MANUAL_DISCONNECT = -110
+                             [(error_code.description) = "主动断开连接"];
+  EN_ERR_LOST_CONNECTION = -111
+                           [(error_code.description) = "丢失网络连接"];
+  EN_ERR_CONNECT_FAILED = -112
+                          [(error_code.description) = "无法连接到服务器"];
+  EN_ERR_MAINTENANCE = -113
+                       [(error_code.description) = "服务器正在维护"];
+  EN_ERR_SYSTEM_BUSY = -114
+                       [(error_code.description) = "服务器系统繁忙，请稍后重试"];
+
+  // openapi
+  EN_ERR_OPENAPI_LIMIT = -201
+                         [(error_code.description) = "openapi调用频率限制"];
+  EN_ERR_OPENAPI_CGI_FAIL = -202
+                            [(error_code.description) = "openapi内部cgi错误"];
+  EN_ERR_OPENAPI_CALL_FAIL = -203
+                             [(error_code.description) = "openapi内部调用错误"];
+  EN_ERR_OPENAPI_PARSE_FAIL = -204
+                              [(error_code.description) = "openapi调用解析失败"];
+  EN_ERR_OPENAPI_PF_FAIL = -205
+                           [(error_code.description) = "openapi调用pf无效"];
+  EN_ERR_OPENAPI_PAY_TOKEN_FAIL = -206
+                                  [(error_code.description) = "openapi pay token 失效"];
+  EN_ERR_OPENAPI_PAY_MAINTAIN = -207
+                                [(error_code.description) = "支付服务器维护中，暂不可用"];
+
+  EN_ERR_TEXT_HAS_DIRTY_WORD = -301
+                               [(error_code.description) = "检测到脏字"];
+
+  // 登录服务的返回错误码
+  EN_ERR_LOGIN_BAN = -401
+                     [(error_code.description) = "账号被临时封停"];
+  EN_ERR_LOGIN_GM_LOCKED = -402
+                           [(error_code.description) = "GM正在操作，请稍后再试"];
+  EN_ERR_LOGIN_VERSION = -403
+                         [(error_code.description) = "版本错误或需要更新"];
+  EN_ERR_LOGIN_PROTO_VERSION = -404
+                               [(error_code.description) = "协议版本错误"];
+  EN_ERR_LOGIN_VERIFY = -405
+                        [(error_code.description) = "校验不通过"];
+  EN_ERR_LOGIN_ALREADY_ONLINE = -406
+                                [(error_code.description) = "仍然在线且踢下线失败"];
+  EN_ERR_LOGIN_INVALID_PLAT = -407
+                              [(error_code.description) = "平台不受支持"];
+  EN_ERR_LOGIN_OTHER_DEVICE = -408
+                              [(error_code.description) = "在其他地方有登入"];
+  EN_ERR_LOGIN_NOT_LOGINED = -409
+                             [(error_code.description) = "未登录"];
+  EN_ERR_LOGIN_OPENID = -410
+                        [(error_code.description) = "openid错误"];
+  EN_ERR_LOGIN_SERVER_PENDING = -411
+                                [(error_code.description) = "游戏暂未开放"];
+  EN_ERR_LOGIN_SPEED_WARNING = -412
+                               [(error_code.description) = "游戏速度异常，使用加速器会被封号一段时间"];
+  EN_ERR_LOGIN_OPENID_NOT_FOUND = -413
+                                  [(error_code.description) = "openid未找到"];
+  EN_ERR_LOGIN_DEVICEID_EMPTY = -414
+                                [(error_code.description) = "device_id 为空"];
+  EN_ERR_LOGIN_OPENID_NOT_MATCH = -415
+                                  [(error_code.description) = "上传上来的openid不匹配"];
+  EN_ERR_LOGIN_CREATE_PLAYER_FAILED = -416
+                                      [(error_code.description) = "创建用户失败"];
+  EN_ERR_LOGIN_USERID_NOT_MATCH = -417
+                                  [(error_code.description) = "用户ID不匹配"];
+
+  // 注意错误码不能小于 -999999，便于区分服务器错误码和客户端错误码
+}

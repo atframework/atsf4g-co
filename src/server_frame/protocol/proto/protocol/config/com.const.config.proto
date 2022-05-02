@@ -6,11 +6,12 @@ option optimize_for = SPEED;
 // --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
 
-import "extensions/v3/xresloader.proto";
-import "extensions/v3/xresloader_ue.proto";
-import "xrescode_extensions_v3.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
+
+import "protocol/config/extensions/v3/xresloader.proto";
+import "protocol/config/extensions/v3/xresloader_ue.proto";
+import "protocol/config/xrescode_extensions_v3.proto";
 
 package hello.config;
 

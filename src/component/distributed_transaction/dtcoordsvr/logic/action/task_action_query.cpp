@@ -9,7 +9,7 @@
 
 #include <config/compiler/protobuf_prefix.h>
 
-#include <pbdesc/distributed_transaction.pb.h>
+#include <protocol/pbdesc/distributed_transaction.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
@@ -33,7 +33,7 @@ task_action_query::result_type task_action_query::operator()() {
 
   if (req_body.metadata().transaction_uuid().empty()) {
     FWLOGERROR("try to find transaction id from request {} for {} failed.", "SSDistributeTransactionQueryReq",
-              "task_action_query");
+               "task_action_query");
     set_response_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
