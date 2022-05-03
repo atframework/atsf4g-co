@@ -321,6 +321,8 @@ target_include_directories(
          "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/include>"
          "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 target_compile_options(${PROJECT_SERVER_FRAME_LIB_LINK}-protocol PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
+
+add_dependencies(${PROJECT_SERVER_FRAME_LIB_LINK}-protocol protocol)
 target_link_libraries(${PROJECT_SERVER_FRAME_LIB_LINK}-protocol
                       PUBLIC ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_LINK_NAME} atbus-protocol atapp-protocol)
 

@@ -140,7 +140,7 @@ target_include_directories(
           "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PUBLIC_INCLUDE_DIRS}>")
 target_compile_options(${PROJECT_SERVER_FRAME_LIB_LINK}-config PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
 
-add_dependencies(${PROJECT_SERVER_FRAME_LIB_LINK}-config ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol)
+add_dependencies(${PROJECT_SERVER_FRAME_LIB_LINK}-config protocol config-loader)
 target_link_libraries(
   ${PROJECT_SERVER_FRAME_LIB_LINK}-config
   INTERFACE ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol

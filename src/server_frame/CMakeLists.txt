@@ -57,6 +57,7 @@ else()
   set_target_properties(${PROJECT_SERVER_FRAME_LIB_LINK} PROPERTIES VERSION "${PROJECT_VERSION}")
 endif()
 
+add_dependencies(${PROJECT_SERVER_FRAME_LIB_LINK} protocol config-loader)
 target_link_libraries(
   ${PROJECT_SERVER_FRAME_LIB_LINK}
   INTERFACE ${PROJECT_SERVER_FRAME_LIB_LINK}-config
