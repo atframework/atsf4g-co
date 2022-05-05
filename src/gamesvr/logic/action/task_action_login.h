@@ -5,6 +5,8 @@
 
 #include <dispatcher/task_action_cs_req_base.h>
 
+class player;
+
 class task_action_login
     : public task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSLoginReq, PROJECT_NAMESPACE_ID::SCLoginRsp> {
  public:
@@ -28,6 +30,10 @@ class task_action_login
   int on_success() override;
   int on_failed() override;
 
+ private:
+  task_action_login::result_type replace_session(std::shared_ptr<player> user);
+  rpc::result_code_type await_io_task(rpc::context &ctx, std::shared_ptr<player> user);
+  
  private:
   bool is_new_player_;
 };

@@ -435,6 +435,7 @@ rpc::result_code_type router_object_base::pull_object_inner(rpc::context &ctx, v
   io_task_.swap(self_task);
   ret = RPC_AWAIT_CODE_RESULT(await_io_schedule_order_task(ctx, self_task));
   if (ret < 0) {
+    wakeup_io_task_awaiter();
     RPC_RETURN_CODE(ret);
   }
   ret = RPC_AWAIT_CODE_RESULT(pull_object(ctx, priv_data));

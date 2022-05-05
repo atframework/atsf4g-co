@@ -11,6 +11,7 @@
 
 #include <common/string_oprs.h>
 #include <log/log_wrapper.h>
+#include <time/time_utility.h>
 
 #include <rpc/db/login.h>
 
@@ -22,7 +23,8 @@
 #include <config/logic_config.h>
 #include <proto_base.h>
 #include <rpc/db/player.h>
-#include <time/time_utility.h>
+
+#include <router/router_player_manager.h>
 
 #include <dispatcher/task_manager.h>
 
@@ -42,41 +44,26 @@ task_action_login::result_type task_action_login::operator()() {
 
   is_new_player_ = false;
   uint32_t zone_id = logic_config::me()->get_local_zone_id();
+  set_user_key(req_body.user_id(), zone_id);
 
   int res = 0;
 
   // 先查找用户缓存，使用缓存。如果缓存正确则不需要拉取login表和user表
   player::ptr_t user = player_manager::me()->find_as<player>(req_body.user_id(), zone_id);
+  // 如果先前的login还在执行中，需要等待路由系统的io任务完成，否则前一个登入尚未设置router对象为writable
+  // 后面的remove不会等待IO事件，而本次的login写表时会冲突。最终导致两个登入都失败
+  if (user && !user->is_writable()) {
+    res = RPC_AWAIT_CODE_RESULT(await_io_task(get_shared_context(), user));
+    if (res < 0) {
+      set_response_code(res);
+      return res;
+    }
+  }
+
   if (user && user->get_login_info().login_code() == req_body.login_code() &&
       util::time::time_utility::get_now() <= static_cast<time_t>(user->get_login_info().login_code_expired()) &&
       user->is_writable()) {
-    set_user_key(req_body.user_id(), zone_id);
-    FWPLOGDEBUG(*user, "relogin using login code: {}", req_body.login_code());
-
-    // 获取当前Session
-    std::shared_ptr<session> cur_sess = get_session();
-    if (!cur_sess) {
-      FWLOGERROR("session not found");
-      return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
-    }
-
-    // 踢出前一个session
-    std::shared_ptr<session> old_sess = user->get_session();
-
-    // 重复的登入包直接接受
-    if (cur_sess == old_sess) {
-      return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
-    }
-
-    user->set_session(get_shared_context(), cur_sess);
-    if (old_sess) {
-      // 下发踢下线包，防止循环重连互踢
-      old_sess->set_player(nullptr);
-      session_manager::me()->remove(old_sess, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
-    }
-    cur_sess->set_player(user);
-
-    FWPLOGDEBUG(*user, "relogin curr data version: {}", user->get_version());
+    replace_session(user);
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
@@ -125,7 +112,6 @@ task_action_login::result_type task_action_login::operator()() {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_USER_NOT_FOUND);
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
-  set_user_key(req_body.user_id(), zone_id);
 
   // 4. 先读本地缓存
   std::shared_ptr<session> my_sess = get_session();
@@ -260,4 +246,54 @@ int task_action_login::on_failed() {
 
   session_manager::me()->remove(s, ::atframe::gateway::close_reason_t::EN_CRT_FIRST_IDLE);
   return get_result();
+}
+
+task_action_login::result_type task_action_login::replace_session(std::shared_ptr<player> user) {
+  FWPLOGDEBUG(*user, "relogin using login code: {}", get_request_body().login_code());
+
+  // 获取当前Session
+  std::shared_ptr<session> cur_sess = get_session();
+  if (!cur_sess) {
+    FWLOGERROR("session not found");
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  }
+
+  // 踢出前一个session
+  std::shared_ptr<session> old_sess = user->get_session();
+
+  // 重复的登入包直接接受
+  if (cur_sess == old_sess) {
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  }
+
+  user->set_session(get_shared_context(), cur_sess);
+  if (old_sess) {
+    // 下发踢下线包，防止循环重连互踢
+    old_sess->set_player(nullptr);
+    session_manager::me()->remove(old_sess, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
+  }
+  cur_sess->set_player(user);
+
+  FWPLOGDEBUG(*user, "relogin curr data version: {}", user->get_version());
+
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+}
+
+rpc::result_code_type task_action_login::await_io_task(rpc::context& ctx, std::shared_ptr<player> user) {
+  router_player_cache::key_t router_key(router_player_manager::me()->get_type_id(), user->get_zone_id(),
+                                        user->get_user_id());
+  router_player_cache::ptr_t router_cache = router_player_manager::me()->get_cache(router_key);
+  if (router_cache && false == router_cache->is_object_equal(*user)) {
+    int32_t res = RPC_AWAIT_CODE_RESULT(router_cache->await_io_task(ctx));
+    if (res < 0) {
+      FWPLOGERROR(*user, "await io task failed, res: {}({})", res, protobuf_mini_dumper_get_error_msg(res));
+      if (res == PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TIMEOUT);
+      } else {
+        RPC_RETURN_CODE(res);
+      }
+    }
+  }
+
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
 }
