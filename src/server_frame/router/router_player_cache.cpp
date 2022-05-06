@@ -6,6 +6,7 @@
 
 #include <config/logic_config.h>
 
+#include <common/string_oprs.h>
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
@@ -46,10 +47,15 @@ rpc::result_code_type router_player_cache::pull_cache(rpc::context &ctx, void *p
 }
 
 rpc::result_code_type router_player_cache::pull_cache(rpc::context &ctx, router_player_private_type &priv_data) {
-  PROJECT_NAMESPACE_ID::table_login local_login_tb;
+  PROJECT_NAMESPACE_ID::table_login *login_table_ptr = priv_data.login_tb;
+  if (nullptr == login_table_ptr) {
+    login_table_ptr = ctx.create<PROJECT_NAMESPACE_ID::table_login>();
+  }
+
   std::string local_login_ver;
-  if (nullptr == priv_data.login_ver) {
-    priv_data.login_ver = &local_login_ver;
+  std::string *local_login_ver_ptr = priv_data.login_ver;
+  if (nullptr == local_login_ver_ptr) {
+    local_login_ver_ptr = &local_login_ver;
   }
 
   // 先尝试从数据库读数据
@@ -68,19 +74,20 @@ rpc::result_code_type router_player_cache::pull_cache(rpc::context &ctx, router_
     obj->init(get_key().object_id, get_key().zone_id, tbu.open_id());
   }
 
-  if (nullptr == priv_data.login_tb) {
-    priv_data.login_tb = &local_login_tb;
+  if (0 == login_table_ptr->user_id() || 0 == login_table_ptr->zone_id()) {
     auto ret = RPC_AWAIT_CODE_RESULT(rpc::db::login::get(ctx, obj->get_open_id().c_str(), get_key().zone_id,
-                                                         *priv_data.login_tb, *priv_data.login_ver));
+                                                         *login_table_ptr, *local_login_ver_ptr));
     if (ret < 0) {
       RPC_RETURN_CODE(ret);
     }
   }
 
   // 设置路由ID
-  set_router_server_id(priv_data.login_tb->router_server_id(), priv_data.login_tb->router_version());
+  set_router_server_id(login_table_ptr->router_server_id(), login_table_ptr->router_version());
 
-  obj->load_and_move_login_info(COPP_MACRO_STD_MOVE(*priv_data.login_tb), *priv_data.login_ver);
+  obj->load_and_move_login_info(COPP_MACRO_STD_MOVE(*login_table_ptr), *local_login_ver_ptr);
+  login_table_ptr->set_user_id(0);
+  login_table_ptr->set_zone_id(0);
 
   // table_login内的平台信息复制到player里
   if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
@@ -100,10 +107,15 @@ rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, void *
 }
 
 rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, router_player_private_type &priv_data) {
-  PROJECT_NAMESPACE_ID::table_login local_login_tb;
+  PROJECT_NAMESPACE_ID::table_login *login_table_ptr = priv_data.login_tb;
+  if (nullptr == login_table_ptr) {
+    login_table_ptr = ctx.create<PROJECT_NAMESPACE_ID::table_login>();
+  }
+
   std::string local_login_ver;
-  if (nullptr == priv_data.login_ver) {
-    priv_data.login_ver = &local_login_ver;
+  std::string *local_login_ver_ptr = priv_data.login_ver;
+  if (nullptr == local_login_ver_ptr) {
+    local_login_ver_ptr = &local_login_ver;
   }
 
   player_cache::ptr_t obj = get_object();
@@ -115,7 +127,9 @@ rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, router
 
   // 先尝试从数据库读数据
   PROJECT_NAMESPACE_ID::table_user tbu;
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::player::get_basic(ctx, get_key().object_id, get_key().zone_id, tbu));
+  std::string tbu_version;
+  auto res =
+      RPC_AWAIT_CODE_RESULT(rpc::db::player::get_basic(ctx, get_key().object_id, get_key().zone_id, tbu, &tbu_version));
   if (res < 0) {
     if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
       FWLOGERROR("load player_cache data for {}:{} failed, error code: {}", get_key().zone_id, get_key().object_id,
@@ -123,37 +137,64 @@ rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, router
       RPC_RETURN_CODE(res);
     } else if (nullptr != priv_data.login_tb) {
       // 创建用户走这里的流程
-      tbu.set_open_id(priv_data.login_tb->open_id());
-      tbu.set_user_id(priv_data.login_tb->user_id());
-      protobuf_copy_message(*tbu.mutable_account(), priv_data.login_tb->account());
+      if (!priv_data.login_tb->open_id().empty()) {
+        tbu.set_open_id(priv_data.login_tb->open_id());
+      } else if (!obj->get_open_id().empty()) {
+        // 重试流程
+        tbu.set_open_id(obj->get_open_id());
+      } else {
+        // Fallback
+        tbu.set_open_id(util::log::format("{}", get_key().object_id));
+      }
+      tbu.set_user_id(get_key().object_id);
+      tbu.set_zone_id(get_key().zone_id);
+      protobuf_copy_message(*tbu.mutable_account(), login_table_ptr->account());
       res = 0;
     } else {
       RPC_RETURN_CODE(res);
     }
-  } else if (nullptr != priv_data.login_tb) {
+  } else if (nullptr != login_table_ptr) {
     // 修复数据
-    tbu.set_open_id(priv_data.login_tb->open_id());
-    tbu.set_user_id(priv_data.login_tb->user_id());
-    protobuf_copy_message(*tbu.mutable_account(), priv_data.login_tb->account());
+    tbu.set_open_id(login_table_ptr->open_id());
+    tbu.set_user_id(login_table_ptr->user_id());
+    protobuf_copy_message(*tbu.mutable_account(), login_table_ptr->account());
   }
 
   if (obj->get_open_id().empty()) {
     obj->init(get_key().object_id, get_key().zone_id, tbu.open_id());
   }
 
-  if (nullptr == priv_data.login_tb) {
-    priv_data.login_tb = &local_login_tb;
+  if (0 == login_table_ptr->user_id() || 0 == login_table_ptr->zone_id()) {
     auto ret = RPC_AWAIT_CODE_RESULT(rpc::db::login::get(ctx, obj->get_open_id().c_str(), obj->get_zone_id(),
-                                                         *priv_data.login_tb, *priv_data.login_ver));
+                                                         *login_table_ptr, *local_login_ver_ptr));
     if (ret < 0) {
       RPC_RETURN_CODE(ret);
     }
   }
 
+  // 冲突检测
+  {
+    int64_t expect_table_user_version =
+        util::string::to_int<int64_t>(login_table_ptr->expect_table_user_db_version().c_str());
+    int64_t real_table_user_version = util::string::to_int<int64_t>(tbu_version.c_str());
+    if (expect_table_user_version > 0 && real_table_user_version > 0 &&
+        expect_table_user_version >= real_table_user_version) {
+      // Check timeout
+      auto sys_now = util::time::time_utility::sys_now();
+      auto timeout = std::chrono::system_clock::from_time_t(login_table_ptr->expect_table_user_db_timeout().seconds()) +
+                     std::chrono::nanoseconds(login_table_ptr->expect_table_user_db_timeout().nanos());
+      if (timeout >= sys_now) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_EAGAIN);
+      }
+    }
+  }
+
   // 拉取玩家数据
   // 设置路由ID
-  set_router_server_id(priv_data.login_tb->router_server_id(), priv_data.login_tb->router_version());
-  obj->load_and_move_login_info(COPP_MACRO_STD_MOVE(*priv_data.login_tb), *priv_data.login_ver);
+  set_router_server_id(login_table_ptr->router_server_id(), login_table_ptr->router_version());
+  obj->load_and_move_login_info(COPP_MACRO_STD_MOVE(*login_table_ptr), *local_login_ver_ptr);
+  login_table_ptr->set_user_id(0);
+  login_table_ptr->set_zone_id(0);
 
   // table_login内的平台信息复制到player里
   if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
@@ -250,6 +291,21 @@ rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void *
         set_router_server_id(obj->get_login_info().router_server_id(), obj->get_login_info().router_version());
         break;
       }
+    }
+
+    // 冲突检测的版本号设置
+    {
+      obj->get_login_info().set_expect_table_user_db_version(obj->get_version());
+      time_t timeout_sec = util::time::time_utility::get_sys_now();
+      int32_t timeout_nano = static_cast<int32_t>(util::time::time_utility::get_now_usec() * 1000);
+      timeout_sec += logic_config::me()->get_cfg_task().csmsg().timeout().seconds();
+      timeout_nano += logic_config::me()->get_cfg_task().csmsg().timeout().nanos();
+      if (timeout_nano >= 1000000000) {
+        timeout_sec += 1;
+        timeout_nano -= 1000000000;
+      }
+      obj->get_login_info().mutable_expect_table_user_db_timeout()->set_seconds(timeout_sec);
+      obj->get_login_info().mutable_expect_table_user_db_timeout()->set_nanos(timeout_nano);
     }
 
     // 登出流程

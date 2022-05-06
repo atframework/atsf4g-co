@@ -60,8 +60,10 @@ logic:
   router:
     cache_update_interval: 1800s    # the interval to mark as expired for cache
     cache_free_timeout: 600s        # timeout for removing cache if not visited
+    cache_retry_interval: 512ms     # retry interval when pull_cache and got EN_ROUTER_EAGAIN
     object_free_timeout: 1500s      # timeout for downgrade from object to cache if not visited
     object_save_interval: 600s      # saving interval for object
+    object_retry_interval: 512ms    # retry interval when pull_object and got EN_ROUTER_EAGAIN
     retry_max_ttl: 3                # retry times if do some actions failed
     default_timer_interval: 300s    # timer interval for checking the object or cache to see if it should be save, downgrade or removed
     fast_timer_interval: 10s        # timer interval for checking the object or cache when it's busy when first checked

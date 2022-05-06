@@ -97,19 +97,23 @@ message logic_router_cfg {
       [(atapp.protocol.CONFIGURE) = { default_value: "1800s" min_value: "1s" }];
   google.protobuf.Duration cache_free_timeout = 102
       [(atapp.protocol.CONFIGURE) = { default_value: "600s" min_value: "1s" }];
-  google.protobuf.Duration object_free_timeout = 103
+  google.protobuf.Duration cache_retry_interval = 103
+      [(atapp.protocol.CONFIGURE) = { default_value: "256ms" min_value: "1ms" }];
+  google.protobuf.Duration object_free_timeout = 104
       [(atapp.protocol.CONFIGURE) = { default_value: "1500s" min_value: "1s" }];
-  google.protobuf.Duration object_save_interval = 104
+  google.protobuf.Duration object_save_interval = 105
       [(atapp.protocol.CONFIGURE) = { default_value: "600s" min_value: "1s" }];
-  google.protobuf.Duration default_timer_interval = 105
+  google.protobuf.Duration object_retry_interval = 106
+      [(atapp.protocol.CONFIGURE) = { default_value: "256ms" min_value: "1ms" }];
+  google.protobuf.Duration default_timer_interval = 107
       [(atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "10s" }];
-  google.protobuf.Duration fast_timer_interval = 106
+  google.protobuf.Duration fast_timer_interval = 108
       [(atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
-  uint32 retry_max_ttl = 107 [(atapp.protocol.CONFIGURE) = { default_value: "3" min_value: "1" }];
-  uint64 pending_action_batch_count = 108 [(atapp.protocol.CONFIGURE) = { default_value: "200" min_value: "1" }];
-  uint64 pending_action_max_count = 109 [(atapp.protocol.CONFIGURE) = { default_value: "2000" min_value: "1" }];
-  uint64 closing_action_batch_count = 110 [(atapp.protocol.CONFIGURE) = { default_value: "500" min_value: "1" }];
-  uint32 transfer_max_ttl = 111 [(atapp.protocol.CONFIGURE) = { default_value: "128" min_value: "1" }];
+  uint32 retry_max_ttl = 109 [(atapp.protocol.CONFIGURE) = { default_value: "3" min_value: "1" }];
+  uint64 pending_action_batch_count = 110 [(atapp.protocol.CONFIGURE) = { default_value: "200" min_value: "1" }];
+  uint64 pending_action_max_count = 111 [(atapp.protocol.CONFIGURE) = { default_value: "2000" min_value: "1" }];
+  uint64 closing_action_batch_count = 112 [(atapp.protocol.CONFIGURE) = { default_value: "500" min_value: "1" }];
+  uint32 transfer_max_ttl = 113 [(atapp.protocol.CONFIGURE) = { default_value: "128" min_value: "1" }];
 }
 
 message opentelemetry_exporter_otlp_grpc {

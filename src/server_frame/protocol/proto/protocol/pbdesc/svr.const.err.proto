@@ -82,6 +82,8 @@ enum EnSysErrorType {
                       [(error_code.description) = "路由系统正在关闭"];
   EN_ROUTER_ACCESS_DENY = -10000090
                           [(error_code.description) = "路由对象的操作被禁止"];
+  EN_ROUTER_EAGAIN = -10000091
+                     [(error_code.description) = "路由对象的资源被占用，请稍后重试"];
 
   EN_DB_RECORD_NOT_FOUND = -1000101;
   EN_DB_SEND_FAILED = -1000102;

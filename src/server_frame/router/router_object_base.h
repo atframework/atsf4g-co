@@ -14,7 +14,7 @@
 #include <design_pattern/noncopyable.h>
 
 #include <config/server_frame_build_feature.h>
-#include <dispatcher/task_manager.h>
+#include <dispatcher/task_type_defines.h>
 
 #include <stdint.h>
 #include <cstddef>
@@ -111,6 +111,9 @@ class router_object_base : public ::util::design_pattern::noncopyable {
 
   inline time_t get_last_visit_time() const { return last_visit_time_; }
   inline time_t get_last_save_time() const { return last_save_time_; }
+
+  inline task_types::id_type get_last_pull_cache_task_id() { return io_last_pull_cache_task_id_; }
+  inline task_types::id_type get_last_pull_object_task_id() { return io_last_pull_object_task_id_; }
 
   /**
    * @brief 获取缓存是否有效
@@ -259,9 +262,9 @@ class router_object_base : public ::util::design_pattern::noncopyable {
 
  protected:
   void wakeup_io_task_awaiter();
-  rpc::result_code_type await_io_task(rpc::context &ctx, task_manager::task_ptr_t &self_task);
-  rpc::result_code_type await_io_task(rpc::context &ctx, task_manager::task_ptr_t &self_task,
-                                      task_manager::task_ptr_t &other_task);
+  rpc::result_code_type await_io_task(rpc::context &ctx, task_types::task_ptr_type &self_task);
+  rpc::result_code_type await_io_task(rpc::context &ctx, task_types::task_ptr_type &self_task,
+                                      task_types::task_ptr_type &other_task);
 
   // 内部接口，拉取缓存。会排队读任务
   rpc::result_code_type pull_cache_inner(rpc::context &ctx, void *priv_data);
@@ -277,7 +280,7 @@ class router_object_base : public ::util::design_pattern::noncopyable {
                                   const std::list<router_system_timer_t>::iterator &it);
   void unset_timer_ref();
 
-  rpc::result_code_type await_io_schedule_order_task(rpc::context &ctx, task_manager::task_ptr_t &self_task);
+  rpc::result_code_type await_io_schedule_order_task(rpc::context &ctx, task_types::task_ptr_type &self_task);
 
  private:
   key_t key_;
@@ -290,11 +293,13 @@ class router_object_base : public ::util::design_pattern::noncopyable {
   std::list<router_system_timer_t>::iterator timer_iter_;
 
   // 新版排队系统
-  task_manager::task_ptr_t io_task_;
+  task_types::task_ptr_type io_task_;
   uint64_t saving_sequence_;
   uint64_t saved_sequence_;
-  std::set<task_manager::task_t::id_t> io_schedule_order_;
-  std::list<task_manager::task_ptr_t> io_task_awaiter_;
+  std::set<task_types::id_type> io_schedule_order_;
+  std::list<task_types::task_ptr_type> io_task_awaiter_;
+  task_types::id_type io_last_pull_cache_task_id_;
+  task_types::id_type io_last_pull_object_task_id_;
 
   int32_t flags_;
   std::list<atframework::SSMsg> transfer_pending_;

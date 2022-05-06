@@ -7,6 +7,7 @@ option optimize_for = SPEED;
 option cc_enable_arenas = true;
 
 import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
 
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/svr.struct.proto";
@@ -19,6 +20,10 @@ message table_login {
   uint32 zone_id = 3;
   uint64 router_server_id = 4;  // 路由系统 - 登入进程id
   uint64 router_version = 5;    // 路由系统 - 登入进程变更版本号
+
+  // 资源冲突检测
+  string expect_table_user_db_version = 6;
+  google.protobuf.Timestamp expect_table_user_db_timeout = 7;
 
   // 登入信息
   int64 login_time = 12;          // 上次登入时间

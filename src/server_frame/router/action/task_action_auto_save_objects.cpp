@@ -18,6 +18,8 @@
 
 #include <libatbus_protocol.h>
 
+#include <dispatcher/task_manager.h>
+
 #include <logic/logic_server_setup.h>
 #include <rpc/rpc_async_invoke.h>
 #include <utility/protobuf_mini_dumper.h>

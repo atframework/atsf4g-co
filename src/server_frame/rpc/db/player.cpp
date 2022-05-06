@@ -68,9 +68,13 @@ result_type get_all(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, PROJE
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-result_type get_basic(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, PROJECT_NAMESPACE_ID::table_user &rsp) {
-  std::string version;
-  return get_all(ctx, user_id, zone_id, rsp, version);
+result_type get_basic(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, PROJECT_NAMESPACE_ID::table_user &rsp,
+                      std::string *version) {
+  std::string ignore_version;
+  if (nullptr == version) {
+    version = &ignore_version;
+  }
+  return get_all(ctx, user_id, zone_id, rsp, *version);
 }
 
 result_type set(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const PROJECT_NAMESPACE_ID::table_user &store,

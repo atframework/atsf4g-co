@@ -34,7 +34,7 @@ EXPLICIT_NODISCARD_ATTR result_type get_all(rpc::context &ctx, uint64_t user_id,
                                             PROJECT_NAMESPACE_ID::table_user &rsp, std::string &version);
 
 EXPLICIT_NODISCARD_ATTR result_type get_basic(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                              PROJECT_NAMESPACE_ID::table_user &rsp);
+                                              PROJECT_NAMESPACE_ID::table_user &rsp, std::string *version = nullptr);
 
 /**
  * @brief 设置用户表的rpc操作

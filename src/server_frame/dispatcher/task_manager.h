@@ -259,6 +259,8 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
   static task_private_data_t *get_private_data(task_t &task);
   static rpc::context *get_shared_context(task_t &task);
 
+  static int32_t convert_task_status_to_error_code(task_t &task) noexcept;
+
  private:
   bool check_sys_config() const;
 

@@ -15,6 +15,8 @@
 #include <config/logic_config.h>
 #include <log/log_wrapper.h>
 
+#include <utility/random_engine.h>
+
 #include <rpc/router/routerservice.h>
 #include <rpc/rpc_utils.h>
 
@@ -144,6 +146,18 @@ class router_manager : public router_manager_base {
             case PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND:
             case PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND:
               RPC_RETURN_CODE(res);
+            case PROJECT_NAMESPACE_ID::err::EN_ROUTER_EAGAIN: {
+              time_t wait_interval_ms =
+                  static_cast<time_t>(logic_config::me()->get_cfg_router().cache_retry_interval().seconds() * 1000 +
+                                      logic_config::me()->get_cfg_router().cache_retry_interval().nanos() / 1000000);
+              if (wait_interval_ms <= 0) {
+                wait_interval_ms = 512;
+              }
+
+              RPC_AWAIT_IGNORE_RESULT(rpc::wait(ctx, std::chrono::milliseconds{util::random_engine::random_between(
+                                                         wait_interval_ms / 2, wait_interval_ms)}));
+              break;
+            }
             default:
               break;
           }
@@ -243,6 +257,18 @@ class router_manager : public router_manager_base {
           case PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND:
           case PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND:
             RPC_RETURN_CODE(res);
+          case PROJECT_NAMESPACE_ID::err::EN_ROUTER_EAGAIN: {
+            time_t wait_interval_ms =
+                static_cast<time_t>(logic_config::me()->get_cfg_router().object_retry_interval().seconds() * 1000 +
+                                    logic_config::me()->get_cfg_router().object_retry_interval().nanos() / 1000000);
+            if (wait_interval_ms <= 0) {
+              wait_interval_ms = 512;
+            }
+
+            RPC_AWAIT_IGNORE_RESULT(rpc::wait(ctx, std::chrono::milliseconds{util::random_engine::random_between(
+                                                       wait_interval_ms / 2, wait_interval_ms)}));
+            break;
+          }
           default:
             break;
         }

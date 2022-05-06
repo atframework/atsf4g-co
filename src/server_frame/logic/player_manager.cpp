@@ -1,4 +1,4 @@
-// Copyright 2021 atframework
+// Copyright 2022 atframework
 
 #include "logic/player_manager.h"
 
@@ -7,6 +7,8 @@
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
+
+#include <gsl/select-gsl.h>
 
 #include <log/log_wrapper.h>
 #include <proto_base.h>
@@ -146,6 +148,26 @@ rpc::result_code_type player_manager::create(rpc::context &ctx, uint64_t user_id
     FWLOGERROR("online number extended");
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY);
   }
+
+  PROJECT_NAMESPACE_ID::DPlayerIDKey user_key;
+  user_key.set_user_id(user_id);
+  user_key.set_zone_id(zone_id);
+  // check conflict
+  {
+    auto lock_iter = create_user_lock_.find(user_key);
+    if (lock_iter != create_user_lock_.end()) {
+      FWLOGWARNING("there are more than one session trying to create player {}:{}", zone_id, user_id);
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_OTHER_DEVICE);
+    }
+  }
+  create_user_lock_.insert(user_key);
+  auto lock_guard = gsl::finally([user_key] {
+    if (player_manager::is_instance_destroyed()) {
+      return;
+    }
+
+    player_manager::me()->create_user_lock_.erase(user_key);
+  });
 
   router_player_cache::key_t key(router_player_manager::me()->get_type_id(), zone_id, user_id);
   router_player_cache::ptr_t cache;

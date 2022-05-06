@@ -109,7 +109,11 @@ task_action_login::result_type task_action_login::operator()() {
   // ============ 在这之后tb不再有效 ============
 
   if (!user) {
-    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_USER_NOT_FOUND);
+    if (res < 0 && res >= PROJECT_NAMESPACE_ID::EnErrorCode_MIN) {
+      set_response_code(res);
+    } else {
+      set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_USER_NOT_FOUND);
+    }
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
@@ -279,20 +283,35 @@ task_action_login::result_type task_action_login::replace_session(std::shared_pt
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-rpc::result_code_type task_action_login::await_io_task(rpc::context& ctx, std::shared_ptr<player> user) {
+rpc::result_code_type task_action_login::await_io_task(rpc::context&, std::shared_ptr<player> user) {
   router_player_cache::key_t router_key(router_player_manager::me()->get_type_id(), user->get_zone_id(),
                                         user->get_user_id());
   router_player_cache::ptr_t router_cache = router_player_manager::me()->get_cache(router_key);
-  if (router_cache && false == router_cache->is_object_equal(*user)) {
-    int32_t res = RPC_AWAIT_CODE_RESULT(router_cache->await_io_task(ctx));
-    if (res < 0) {
-      FWPLOGERROR(*user, "await io task failed, res: {}({})", res, protobuf_mini_dumper_get_error_msg(res));
-      if (res == PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT) {
-        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TIMEOUT);
-      } else {
-        RPC_RETURN_CODE(res);
-      }
-    }
+  if (!router_cache) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+
+  task_types::id_type last_pull_object_task_id = router_cache->get_last_pull_object_task_id();
+  if (0 == last_pull_object_task_id) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+
+  task_types::task_ptr_type last_pull_object_task = task_manager::me()->get_task(last_pull_object_task_id);
+  if (!last_pull_object_task) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+
+  if (last_pull_object_task->is_exiting()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+
+  task_manager::task_t* this_task = task_manager::task_t::this_task();
+  if (nullptr != this_task) {
+    FWPLOGDEBUG(*user, "current task {} start await last pull object task {}", this_task->get_id(),
+                last_pull_object_task_id);
+    RPC_AWAIT_IGNORE_RESULT(this_task->await_task(last_pull_object_task));
+
+    RPC_RETURN_CODE(task_manager::convert_task_status_to_error_code(*this_task));
   }
 
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);

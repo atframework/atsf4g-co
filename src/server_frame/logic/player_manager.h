@@ -16,7 +16,9 @@
 #include <list>
 #include <memory>
 #include <string>
+#include <unordered_set>
 
+#include "data/player_key_hash_helper.h"
 #include "rpc/rpc_common_types.h"
 
 namespace rpc {
@@ -91,4 +93,7 @@ class player_manager : public util::design_pattern::singleton<player_manager> {
   const std::shared_ptr<TPLAYER> find_as(uint64_t user_id, uint32_t zone_id) const {
     return std::static_pointer_cast<TPLAYER>(find(user_id, zone_id));
   }
+
+ private:
+  std::unordered_set<PROJECT_NAMESPACE_ID::DPlayerIDKey, player_key_hash_t, player_key_equal_t> create_user_lock_;
 };

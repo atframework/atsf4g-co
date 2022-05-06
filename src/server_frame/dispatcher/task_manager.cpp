@@ -275,6 +275,20 @@ rpc::context *task_manager::get_shared_context(task_t &task) {
   return &task_action_base::task_action_helper_t::get_shared_context(*task_priv_data->action);
 }
 
+int32_t task_manager::convert_task_status_to_error_code(task_t &task) noexcept {
+  if (task.is_timeout()) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+  } else if (task.is_faulted()) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
+  } else if (task.is_canceled()) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
+  } else if (task.is_exiting()) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING;
+  }
+
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+}
+
 bool task_manager::check_sys_config() const {
   const char *vm_map_count_file = "/proc/sys/vm/max_map_count";
 

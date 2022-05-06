@@ -15,6 +15,8 @@
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
+#include <dispatcher/task_manager.h>
+
 #include <dispatcher/ss_msg_dispatcher.h>
 #include <dispatcher/task_action_ss_req_base.h>
 
@@ -100,6 +102,8 @@ router_object_base::router_object_base(const key_t &k)
       timer_list_(nullptr),
       saving_sequence_(0),
       saved_sequence_(0),
+      io_last_pull_cache_task_id_(0),
+      io_last_pull_object_task_id_(0),
       flags_(0) {
   // 创建时初始化最后访问时间
   refresh_visit_time();
@@ -115,6 +119,8 @@ router_object_base::router_object_base(key_t &&k)
       timer_list_(nullptr),
       saving_sequence_(0),
       saved_sequence_(0),
+      io_last_pull_cache_task_id_(0),
+      io_last_pull_object_task_id_(0),
       flags_(0) {
   // 创建时初始化最后访问时间
   refresh_visit_time();
@@ -295,17 +301,8 @@ void router_object_base::wakeup_io_task_awaiter() {
 rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx, task_manager::task_ptr_t &self_task) {
   int ret = 0;
   while (io_task_ && self_task && self_task != io_task_) {
-    if (self_task->is_timeout()) {
-      ret = PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
-      break;
-    } else if (self_task->is_faulted()) {
-      ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
-      break;
-    } else if (self_task->is_canceled()) {
-      ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
-      break;
-    } else if (self_task->is_exiting()) {
-      ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING;
+    ret = task_manager::convert_task_status_to_error_code(*self_task);
+    if (ret < 0) {
       break;
     }
 
@@ -337,17 +334,8 @@ rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx, task_
 
   rpc::result_code_type::value_type ret = 0;
   while (true) {
-    if (self_task->is_timeout()) {
-      ret = PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
-      break;
-    } else if (self_task->is_faulted()) {
-      ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
-      break;
-    } else if (self_task->is_canceled()) {
-      ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
-      break;
-    } else if (self_task->is_exiting()) {
-      ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING;
+    ret = task_manager::convert_task_status_to_error_code(*self_task);
+    if (ret < 0) {
       break;
     }
 
@@ -387,7 +375,8 @@ rpc::result_code_type router_object_base::pull_cache_inner(rpc::context &ctx, vo
   flag_guard fg(*this, flag_t::EN_ROFT_PULLING_CACHE);
 
   // 执行读任务
-  io_task_.swap(self_task);
+  io_task_ = self_task;
+  io_last_pull_cache_task_id_ = io_task_->get_id();
   ret = RPC_AWAIT_CODE_RESULT(await_io_schedule_order_task(ctx, self_task));
   if (ret < 0) {
     RPC_RETURN_CODE(ret);
@@ -432,7 +421,8 @@ rpc::result_code_type router_object_base::pull_object_inner(rpc::context &ctx, v
   unset_flag(flag_t::EN_ROFT_FORCE_PULL_OBJECT);
 
   // 执行读任务
-  io_task_.swap(self_task);
+  io_task_ = self_task;
+  io_last_pull_object_task_id_ = io_task_->get_id();
   ret = RPC_AWAIT_CODE_RESULT(await_io_schedule_order_task(ctx, self_task));
   if (ret < 0) {
     wakeup_io_task_awaiter();

@@ -13,7 +13,7 @@
 
 #include <utility/environment_helper.h>
 
-#include <dispatcher/task_manager.h>
+#include <dispatcher/task_type_defines.h>
 
 #include <list>
 #include <memory>
@@ -75,7 +75,7 @@ class router_manager_set : public util::design_pattern::singleton<router_manager
   bool add_save_schedule(const std::shared_ptr<router_object_base> &obj);
   bool mark_fast_save(router_manager_base *mgr, const std::shared_ptr<router_object_base> &obj);
 
-  void add_io_schedule_order_task(const std::shared_ptr<router_object_base> &obj, const task_manager::task_ptr_t &task);
+  void add_io_schedule_order_task(const std::shared_ptr<router_object_base> &obj, const task_types::task_ptr_type &task);
 
  private:
   bool is_save_task_running() const;
@@ -94,8 +94,8 @@ class router_manager_set : public util::design_pattern::singleton<router_manager
   time_t last_proc_time_;
   router_manager_base *mgrs_[PROJECT_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE];
   std::list<pending_action_data> pending_action_list_;
-  task_manager::task_ptr_t pending_action_task_;
-  task_manager::task_ptr_t closing_task_;
+  task_types::task_ptr_type pending_action_task_;
+  task_types::task_ptr_type closing_task_;
   bool is_closing_;
   bool is_closed_;
 
