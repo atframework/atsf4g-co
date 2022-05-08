@@ -225,3 +225,11 @@ player_manager::player_ptr_t player_manager::find(uint64_t user_id, uint32_t zon
 
   return nullptr;
 }
+
+bool player_manager::has_create_user_lock(uint64_t user_id, uint32_t zone_id) const noexcept {
+  PROJECT_NAMESPACE_ID::DPlayerIDKey user_key;
+  user_key.set_user_id(user_id);
+  user_key.set_zone_id(zone_id);
+
+  return create_user_lock_.find(user_key) != create_user_lock_.end();
+}

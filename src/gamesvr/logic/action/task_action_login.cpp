@@ -67,6 +67,11 @@ task_action_login::result_type task_action_login::operator()() {
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
+  if (player_manager::me()->has_create_user_lock(req_body.user_id(), zone_id)) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_OTHER_DEVICE);
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  }
+
   // 如果有缓存要强制失效，因为可能其他地方登入了，这时候也不能复用缓存
   RPC_AWAIT_IGNORE_RESULT(player_manager::me()->remove(get_shared_context(), req_body.user_id(), zone_id, true));
   user.reset();
@@ -159,7 +164,7 @@ int task_action_login::on_success() {
   // 1. 包校验
   player::ptr_t user = player_manager::me()->find_as<player>(req_body.user_id(), get_zone_id());
   if (!user) {
-    FWLOGERROR("login success but user not found");
+    FWLOGWARNING("login success but user {}:{} not found, maybe parrallel login", get_zone_id(), req_body.user_id());
     return get_result();
   }
   rsp_body.set_zone_id(user->get_zone_id());
@@ -178,7 +183,7 @@ int task_action_login::on_success() {
   }
 
   if (!user->is_inited()) {
-    FWLOGERROR("player %s login success but user not inited", user->get_open_id().c_str());
+    FWLOGWARNING("login success but user {}:{} not inited", get_zone_id(), req_body.user_id());
     RPC_AWAIT_IGNORE_RESULT(player_manager::me()->remove(get_shared_context(), user, true));
     return get_result();
   }
@@ -202,7 +207,8 @@ int task_action_login::on_success() {
 
       int res = task_manager::me()->start_task(tid, start_data);
       if (res < 0) {
-        WPLOGERROR(*user, "start task_action_player_async_jobs failed, res: %d", res);
+        FWPLOGERROR(*user, "start task_action_player_async_jobs failed, res: {}({})", res,
+                    protobuf_mini_dumper_get_error_msg(res));
       }
     }
   }
@@ -235,12 +241,24 @@ int task_action_login::on_failed() {
 
   // 登入过程中掉线了，直接退出
   if (!s) {
-    FWLOGERROR("session [{},{}] not found", get_gateway_info().first, get_gateway_info().second);
+    FWLOGWARNING("session [{},{}] not found", get_gateway_info().first, get_gateway_info().second);
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
-  FWLOGERROR("session [{},{}] login failed, rsp code: {}, ret code: {}", get_gateway_info().first,
-             get_gateway_info().second, get_response_code(), get_result());
+  switch (get_response_code()) {
+    case PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_OTHER_DEVICE:
+    case PROJECT_NAMESPACE_ID::EN_ERR_NOT_LOGIN:
+    case PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_BAN: {
+      FWLOGWARNING("session [{},{}] login failed, rsp code: {}, ret code: {}", get_gateway_info().first,
+                   get_gateway_info().second, get_response_code(), get_result());
+      break;
+    }
+    default: {
+      FWLOGERROR("session [{},{}] login failed, rsp code: {}, ret code: {}", get_gateway_info().first,
+                 get_gateway_info().second, get_response_code(), get_result());
+      break;
+    }
+  }
 
   rsp_body.set_last_sequence(0);
   rsp_body.set_zone_id(0);

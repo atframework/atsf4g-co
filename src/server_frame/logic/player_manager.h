@@ -94,6 +94,8 @@ class player_manager : public util::design_pattern::singleton<player_manager> {
     return std::static_pointer_cast<TPLAYER>(find(user_id, zone_id));
   }
 
+  bool has_create_user_lock(uint64_t user_id, uint32_t zone_id) const noexcept;
+
  private:
   std::unordered_set<PROJECT_NAMESPACE_ID::DPlayerIDKey, player_key_hash_t, player_key_equal_t> create_user_lock_;
 };

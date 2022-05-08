@@ -211,15 +211,13 @@ class task_action_cs_rpc_base : public task_action_cs_req_base {
       head->mutable_rpc_stream()->set_callee(get_request().head().rpc_stream().caller());
     }
 
-    if (nullptr != response_body_) {
-      if (false == response_body_->SerializeToString(rsp.mutable_body_bin())) {
-        FWLOGERROR("task {} [{}] try to serialize message {} failed, msg: {}", name(), get_task_id(),
-                   get_response_type_url(), response_body_->InitializationErrorString());
-      } else {
-        FWLOGDEBUG("task {} [{}] serialize rpc response message {} success:\n{}", name(), get_task_id(),
-                   get_response_type_url(), protobuf_mini_dumper_get_readable(*response_body_));
-        write_actor_log_body(*response_body_, *head);
-      }
+    if (false == get_response_body().SerializeToString(rsp.mutable_body_bin())) {
+      FWLOGERROR("task {} [{}] try to serialize message {} failed, msg: {}", name(), get_task_id(),
+                 get_response_type_url(), get_response_body().InitializationErrorString());
+    } else {
+      FWLOGDEBUG("task {} [{}] serialize rpc response message {} success:\n{}", name(), get_task_id(),
+                 get_response_type_url(), protobuf_mini_dumper_get_readable(get_response_body()));
+      write_actor_log_body(get_response_body(), *head);
     }
   }
 
