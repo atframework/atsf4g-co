@@ -121,13 +121,14 @@ int excel_config_wrapper_reload_all(bool is_init) {
     excel::config_manager::me()->set_override_same_version(
         logic_config::me()->get_logic().excel().override_same_version());
     excel::config_manager::me()->set_group_number(logic_config::me()->get_logic().excel().group_number());
-    excel::config_manager::me()->set_on_not_found([](const excel::config_manager::on_not_found_event_data_t& evt_data) {
-      if (details::g_excel_reporter_blocker.load() > 0) {
-        return;
-      }
+    excel::config_manager::me()->set_on_not_found(
+        [](const excel::config_manager::on_not_found_event_data_t& /*evt_data*/) {
+          if (details::g_excel_reporter_blocker.load() > 0) {
+            return;
+          }
 
-      // TODO Remote remote(Metrics)
-    });
+          // TODO Remote remote(Metrics)
+        });
 
     int ret = excel::config_manager::me()->reload_all();
     ::util::time::time_utility::update();

@@ -507,7 +507,7 @@ simple_template_core::print_const_string::print_const_string(const std::string& 
                                                              const std::string& s)
     : raw_block(r), line(l), col(c), data(s) {}
 
-bool simple_template_core::print_const_string::operator()(std::ostream& os, std::ostream& es, void*) {
+bool simple_template_core::print_const_string::operator()(std::ostream& os, std::ostream& /*es*/, void*) {
   os.write(data.c_str(), data.size());
   return true;
 }
