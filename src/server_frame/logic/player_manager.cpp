@@ -97,7 +97,7 @@ rpc::result_code_type player_manager::save(rpc::context &ctx, uint64_t user_id, 
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-bool player_manager::add_save_schedule(uint64_t user_id, uint32_t zone_id) {
+bool player_manager::add_save_schedule(uint64_t user_id, uint32_t zone_id, bool kickoff) {
   router_player_cache::key_t key(router_player_manager::me()->get_type_id(), zone_id, user_id);
   router_player_cache::ptr_t cache = router_player_manager::me()->get_cache(key);
 
@@ -105,7 +105,11 @@ bool player_manager::add_save_schedule(uint64_t user_id, uint32_t zone_id) {
     return false;
   }
 
-  return router_manager_set::me()->add_save_schedule(std::static_pointer_cast<router_object_base>(cache));
+  if (kickoff) {
+    return router_manager_set::me()->add_downgrade_schedule(std::static_pointer_cast<router_object_base>(cache));
+  } else {
+    return router_manager_set::me()->add_save_schedule(std::static_pointer_cast<router_object_base>(cache));
+  }
 }
 
 rpc::result_code_type player_manager::load(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,

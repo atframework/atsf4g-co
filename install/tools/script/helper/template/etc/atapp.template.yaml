@@ -46,6 +46,7 @@ atapp:
   timer:
     tick_interval: 16ms # 32ms for tick active
     stop_timeout: 10s # 10s for stop operation
+    stop_interval: 256ms
   # =========== log configure ===========
   log:
     level: ${project.get_log_level()}  # log active level(disable/disabled, fatal, error, warn/warning, info, notice, debug)

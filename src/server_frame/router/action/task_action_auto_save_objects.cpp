@@ -85,19 +85,6 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
 
           rpc::result_code_type::value_type res = 0;
           switch (auto_save.action) {
-            case router_manager_set::EN_ASA_SAVE: {
-              // 有可能有可能手动触发了保存，导致多一次冗余的auto_save_data_t，就不需要再保存一次了
-              if (false == auto_save.object->check_flag(router_object_base::flag_t::EN_ROFT_SCHED_SAVE_OBJECT)) {
-                break;
-              }
-
-              res = RPC_AWAIT_CODE_RESULT(auto_save.object->save(ctx, nullptr));
-
-              if (res >= 0) {
-                auto_save.object->refresh_save_time();
-              }
-              break;
-            }
             case router_manager_set::EN_ASA_REMOVE_OBJECT: {
               // 有可能在一系列异步流程后又被mutable_object()了，这时候要放弃降级
               if (false == auto_save.object->check_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_OBJECT)) {
@@ -108,6 +95,19 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
               if (nullptr != mgr) {
                 RPC_AWAIT_IGNORE_RESULT(
                     mgr->remove_object(ctx, auto_save.object->get_key(), auto_save.object, nullptr));
+              }
+              break;
+            }
+            case router_manager_set::EN_ASA_SAVE: {
+              // 有可能有可能手动触发了保存，导致多一次冗余的auto_save_data_t，就不需要再保存一次了
+              if (false == auto_save.object->check_flag(router_object_base::flag_t::EN_ROFT_SCHED_SAVE_OBJECT)) {
+                break;
+              }
+
+              res = RPC_AWAIT_CODE_RESULT(auto_save.object->save(ctx, nullptr));
+
+              if (res >= 0) {
+                auto_save.object->refresh_save_time();
               }
               break;
             }

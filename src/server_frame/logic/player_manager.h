@@ -58,8 +58,10 @@ class player_manager : public util::design_pattern::singleton<player_manager> {
   /**
    * @brief 添加到计划保存队列
    * @param user_id user_id
+   * @param zone_id zone_id
+   * @param kickoff kickoff true表示要下线，路由系统降执行降级操作
    */
-  bool add_save_schedule(uint64_t user_id, uint32_t zone_id);
+  bool add_save_schedule(uint64_t user_id, uint32_t zone_id, bool kickoff = false);
 
   /**
    * @brief 加载指定玩家数据。

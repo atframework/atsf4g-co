@@ -455,6 +455,32 @@ bool router_manager_set::add_save_schedule(const std::shared_ptr<router_object_b
   return true;
 }
 
+bool router_manager_set::add_downgrade_schedule(const std::shared_ptr<router_object_base> &obj) {
+  if (!obj) {
+    return false;
+  }
+
+  if (obj->check_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_OBJECT)) {
+    return false;
+  }
+
+  if (!obj->is_writable()) {
+    return false;
+  }
+
+  pending_action_list_.push_back(pending_action_data());
+  pending_action_data &auto_save = pending_action_list_.back();
+  auto_save.object = obj;
+  auto_save.type_id = obj->get_key().type_id;
+  auto_save.action = EN_ASA_REMOVE_OBJECT;
+  obj->refresh_save_time();
+
+  obj->set_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_OBJECT);
+  // We will save the object when downgrade, and after that, cache can not be saved anymore
+  obj->unset_flag(router_object_base::flag_t::EN_ROFT_SCHED_SAVE_OBJECT);
+  return true;
+}
+
 bool router_manager_set::mark_fast_save(router_manager_base *mgr, const std::shared_ptr<router_object_base> &obj) {
   if (!obj || !mgr) {
     return false;

@@ -192,7 +192,7 @@ void session_manager::remove_all(int32_t reason) {
           if (!check_session || check_session == session.second) {
             u->set_session(ctx, nullptr);
             // 不能直接保存，不然如果玩家数很多依次保存会超时
-            player_manager::me()->add_save_schedule(u->get_user_id(), u->get_zone_id());
+            player_manager::me()->add_save_schedule(u->get_user_id(), u->get_zone_id(), true);
           }
         }
       }

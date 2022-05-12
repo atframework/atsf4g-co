@@ -73,9 +73,11 @@ class router_manager_set : public util::design_pattern::singleton<router_manager
   inline bool is_closed() const { return is_closed_; }
 
   bool add_save_schedule(const std::shared_ptr<router_object_base> &obj);
+  bool add_downgrade_schedule(const std::shared_ptr<router_object_base> &obj);
   bool mark_fast_save(router_manager_base *mgr, const std::shared_ptr<router_object_base> &obj);
 
-  void add_io_schedule_order_task(const std::shared_ptr<router_object_base> &obj, const task_types::task_ptr_type &task);
+  void add_io_schedule_order_task(const std::shared_ptr<router_object_base> &obj,
+                                  const task_types::task_ptr_type &task);
 
  private:
   bool is_save_task_running() const;
