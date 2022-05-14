@@ -89,33 +89,25 @@ class context {
     }
 
     inline const TMsg *operator->() const {
-      if (unlikely(nullptr == arena_msg_ptr_)) {
-        return &local_msg_;
-      }
+      UTIL_UNLIKELY_IF(nullptr == arena_msg_ptr_) { return &local_msg_; }
 
       return arena_msg_ptr_;
     }
 
     inline TMsg *operator->() {
-      if (unlikely(nullptr == arena_msg_ptr_)) {
-        return &local_msg_;
-      }
+      UTIL_UNLIKELY_IF(nullptr == arena_msg_ptr_) { return &local_msg_; }
 
       return arena_msg_ptr_;
     }
 
     inline const TMsg &operator*() const {
-      if (unlikely(nullptr == arena_msg_ptr_)) {
-        return local_msg_;
-      }
+      UTIL_UNLIKELY_IF(nullptr == arena_msg_ptr_) { return local_msg_; }
 
       return *arena_msg_ptr_;
     }
 
     inline TMsg &operator*() {
-      if (unlikely(nullptr == arena_msg_ptr_)) {
-        return local_msg_;
-      }
+      UTIL_UNLIKELY_IF(nullptr == arena_msg_ptr_) { return local_msg_; }
 
       return *arena_msg_ptr_;
     }
