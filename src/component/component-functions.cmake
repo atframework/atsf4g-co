@@ -27,6 +27,10 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
     endif()
     set_target_properties(${TARGET_FULL_NAME} PROPERTIES BUILD_RPATH_USE_ORIGIN YES)
     target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
+    if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
+      target_link_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
+    endif()
+
   else()
     add_library(${TARGET_FULL_NAME} INTERFACE)
   endif()
@@ -217,6 +221,9 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
                PORJECT_PROTOCOL_DIR "${PROTOCOL_DIR}")
 
   target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
+  if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
+    target_link_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
+  endif()
 
   if(project_component_declare_protocol_OUTPUT_NAME)
     set_target_properties(${TARGET_FULL_NAME} PROPERTIES OUTPUT_NAME
@@ -279,6 +286,10 @@ function(project_component_declare_service TARGET_NAME SERVICE_ROOT_DIR)
                                      ${project_component_declare_service_SOURCES})
 
   target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
+  if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
+    target_link_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
+  endif()
+
   if(project_component_declare_service_OUTPUT_NAME)
     set_target_properties(${TARGET_FULL_NAME} PROPERTIES OUTPUT_NAME "${project_component_declare_service_OUTPUT_NAME}"
                                                          BUILD_RPATH_USE_ORIGIN YES)

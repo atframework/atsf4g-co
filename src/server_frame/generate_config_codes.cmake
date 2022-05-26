@@ -139,6 +139,9 @@ target_include_directories(
   PRIVATE # TODO move to standalone directory
           "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PUBLIC_INCLUDE_DIRS}>")
 target_compile_options(${PROJECT_SERVER_FRAME_LIB_LINK}-config PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
+if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
+  target_link_options(${PROJECT_SERVER_FRAME_LIB_LINK}-config PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
+endif()
 
 add_dependencies(${PROJECT_SERVER_FRAME_LIB_LINK}-config protocol config-loader)
 target_link_libraries(

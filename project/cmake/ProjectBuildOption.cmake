@@ -13,6 +13,9 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang")
 else()
   option(PROJECT_ENABLE_LINKER_MOLD "Enable use mold as linker." OFF)
 endif()
+option(PROJECT_ENABLE_SPLIT_DEBUG_INFORMATION "Enable split debug information." OFF)
+option(PROJECT_ENABLE_COMPRESS_DEBUG_INFORMATION "Enable compress debug information." OFF)
+
 option(PROJECT_TOOL_REPORT_COMPILE_UNIT_TIME "Show compiling time of each unit" OFF)
 option(PROJECT_TOOL_REPORT_LINK_UNIT_TIME "Show linking time of each target." OFF)
 
@@ -129,7 +132,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/${CMAKE_INSTALL_B
 file(MAKE_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
 file(MAKE_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
-# Try to use mold
+# Linker options
+unset(PROJECT_TRY_SET_LINKER)
 if(PROJECT_ENABLE_LINKER_MOLD)
   find_program(PROJECT_FIND_LINKER_MOLD NAMES mold mold.exe)
   if(PROJECT_FIND_LINKER_MOLD)
@@ -141,7 +145,15 @@ if(PROJECT_ENABLE_LINKER_MOLD)
     else()
       try_set_linker(LINKER "${PROJECT_FIND_LINKER_MOLD}")
     endif()
+    set(PROJECT_TRY_SET_LINKER "${PROJECT_FIND_LINKER_MOLD}")
   endif()
+endif()
+if(NOT PROJECT_TRY_SET_LINKER
+   AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
+   AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  # Use ld.gold
+  try_set_linker(LINKER gold)
+  set(PROJECT_TRY_SET_LINKER "gold")
 endif()
 
 if(PROJECT_TOOL_REPORT_COMPILE_UNIT_TIME)

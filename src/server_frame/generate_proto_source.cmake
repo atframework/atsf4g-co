@@ -321,6 +321,9 @@ target_include_directories(
          "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/include>"
          "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 target_compile_options(${PROJECT_SERVER_FRAME_LIB_LINK}-protocol PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
+if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
+  target_link_options(${PROJECT_SERVER_FRAME_LIB_LINK}-protocol PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
+endif()
 
 add_dependencies(${PROJECT_SERVER_FRAME_LIB_LINK}-protocol protocol)
 target_link_libraries(${PROJECT_SERVER_FRAME_LIB_LINK}-protocol
