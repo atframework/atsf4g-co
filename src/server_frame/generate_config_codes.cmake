@@ -26,11 +26,14 @@ endif()
 execute_process(
   COMMAND
     ${Python3_EXECUTABLE} ${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_PY} -i "${PROJECT_SOURCE_TEMPLATE_DIR}" -p
-    "${CMAKE_CURRENT_BINARY_DIR}/config-test.pb" -o "${CMAKE_CURRENT_LIST_DIR}/config/excel" -g
-    "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.h.mako" -g "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.cpp.mako"
-    -l "H:${PROJECT_SOURCE_TEMPLATE_DIR}/config_set.h.mako" -l "S:${PROJECT_SOURCE_TEMPLATE_DIR}/config_set.cpp.mako" -g
-    "${PROJECT_SOURCE_TEMPLATE_DIR}/config_easy_api.h.mako" -g "${PROJECT_SOURCE_TEMPLATE_DIR}/config_easy_api.cpp.mako"
-    --pb-include-prefix "protocol/config/" --print-output-file
+    "${CMAKE_CURRENT_BINARY_DIR}/config-test.pb" -o "${CMAKE_CURRENT_LIST_DIR}/config" -g
+    "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.h.mako:include/config/excel/config_manager.h" -g
+    "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.cpp.mako:src/excel/config_manager.cpp" -l
+    "H:${PROJECT_SOURCE_TEMPLATE_DIR}/config_set.h.mako:include/config/excel/\${loader.get_cpp_header_path()}" -l
+    "S:${PROJECT_SOURCE_TEMPLATE_DIR}/config_set.cpp.mako:src/excel/\${loader.get_cpp_source_path()}" -g
+    "${PROJECT_SOURCE_TEMPLATE_DIR}/config_easy_api.h.mako:include/config/excel/config_easy_api.h" -g
+    "${PROJECT_SOURCE_TEMPLATE_DIR}/config_easy_api.cpp.mako:src/excel/config_easy_api.cpp" --pb-include-prefix
+    "protocol/config/" --print-output-file
   OUTPUT_VARIABLE PROJECT_SERVER_FRAME_CONFIG_SET_SRC_LIST_STR
   RESULT_VARIABLE PROJECT_SERVER_FRAME_CONFIG_SET_RES
   ERROR_VARIABLE PROJECT_SERVER_FRAME_CONFIG_SET_ERR COMMAND_ECHO STDOUT)
@@ -46,13 +49,19 @@ string(REPLACE "\\" "/" PROJECT_SERVER_FRAME_CONFIG_SET_SRC_LIST_STR "${PROJECT_
 string(REGEX MATCHALL "[^\r\n]+" PROJECT_SERVER_FRAME_CONFIG_SET_SRC_LIST
              ${PROJECT_SERVER_FRAME_CONFIG_SET_SRC_LIST_STR})
 
-set(PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SRC_DIR "${CMAKE_CURRENT_BINARY_DIR}/_generated/config/excel")
+set(PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SRC_DIR "${CMAKE_CURRENT_BINARY_DIR}/_generated/config")
 file(MAKE_DIRECTORY "${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SRC_DIR}")
-unset(PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SRC_LIST)
+unset(PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_HEADER_LIST)
+unset(PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SOURCE_LIST)
 foreach(SRC_ITEM ${PROJECT_SERVER_FRAME_CONFIG_SET_SRC_LIST})
   get_filename_component(CONFIG_SET_SRC_BASENAME "${SRC_ITEM}" NAME)
-  list(APPEND PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SRC_LIST
-       "${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SRC_DIR}/${CONFIG_SET_SRC_BASENAME}")
+  if(CONFIG_SET_SRC_BASENAME MATCHES "\\.h$")
+    list(APPEND PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_HEADER_LIST
+         "${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SRC_DIR}/${CONFIG_SET_SRC_BASENAME}")
+  else()
+    list(APPEND PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SOURCE_LIST
+         "${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SRC_DIR}/${CONFIG_SET_SRC_BASENAME}")
+  endif()
 endforeach()
 
 add_custom_command(
@@ -60,13 +69,18 @@ add_custom_command(
   COMMAND
     ${Python3_EXECUTABLE} ${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_PY} -i "${PROJECT_SOURCE_TEMPLATE_DIR}" -p
     "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb" -o "${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SRC_DIR}" -g
-    "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.h.mako" -g "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.cpp.mako"
-    -l "H:${PROJECT_SOURCE_TEMPLATE_DIR}/config_set.h.mako" -l "S:${PROJECT_SOURCE_TEMPLATE_DIR}/config_set.cpp.mako" -g
-    "${PROJECT_SOURCE_TEMPLATE_DIR}/config_easy_api.h.mako" -g "${PROJECT_SOURCE_TEMPLATE_DIR}/config_easy_api.cpp.mako"
-    -c "custom_config_group:custom_group_fields.h.mako" -c "custom_config_include:custom_include_fields.h.mako"
+    "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.h.mako:config_manager.h" -g
+    "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.cpp.mako:config_manager.cpp" -l
+    "H:${PROJECT_SOURCE_TEMPLATE_DIR}/config_set.h.mako:\${loader.get_cpp_header_path()}" -l
+    "S:${PROJECT_SOURCE_TEMPLATE_DIR}/config_set.cpp.mako:\${loader.get_cpp_source_path()}" -g
+    "${PROJECT_SOURCE_TEMPLATE_DIR}/config_easy_api.h.mako:config_easy_api.h" -g
+    "${PROJECT_SOURCE_TEMPLATE_DIR}/config_easy_api.cpp.mako:config_easy_api.cpp" -c
+    "custom_config_group:custom_group_fields.h.mako" -c "custom_config_include:custom_include_fields.h.mako"
     --pb-include-prefix "protocol/config/"
-  COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SRC_LIST}
-          "${CMAKE_CURRENT_LIST_DIR}/config/excel"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_HEADER_LIST}
+          "${CMAKE_CURRENT_LIST_DIR}/config/include/config/excel/"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SOURCE_LIST}
+          "${CMAKE_CURRENT_LIST_DIR}/config/src/excel/"
   DEPENDS "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb"
           "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.h.mako"
           "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.cpp.mako"
@@ -88,25 +102,31 @@ if(MSVC)
   set_property(TARGET "config-loader" PROPERTY FOLDER "${PROJECT_NAME}")
 endif()
 
-unset(PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SRC_LIST)
+unset(PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_HEADER_LIST)
+unset(PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SOURCE_LIST)
 unset(PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SRC_DIR)
 
-configure_file("${CMAKE_CURRENT_LIST_DIR}/config/server_frame_build_feature.h.in"
-               "${CMAKE_CURRENT_LIST_DIR}/config/server_frame_build_feature.h" ESCAPE_QUOTES @ONLY)
-configure_file("${CMAKE_CURRENT_LIST_DIR}/config/server_frame_build_feature.cpp.in"
-               "${CMAKE_CURRENT_LIST_DIR}/config/server_frame_build_feature.cpp" ESCAPE_QUOTES @ONLY)
-list(APPEND PROJECT_SERVER_FRAME_CONFIG_SRC_LIST "${CMAKE_CURRENT_LIST_DIR}/config/server_frame_build_feature.h"
-     "${CMAKE_CURRENT_LIST_DIR}/config/server_frame_build_feature.cpp")
+configure_file("${CMAKE_CURRENT_LIST_DIR}/config/include/config/server_frame_build_feature.h.in"
+               "${CMAKE_CURRENT_LIST_DIR}/config/include/config/server_frame_build_feature.h" ESCAPE_QUOTES @ONLY)
+configure_file("${CMAKE_CURRENT_LIST_DIR}/config/src/server_frame_build_feature.cpp.in"
+               "${CMAKE_CURRENT_LIST_DIR}/config/src/server_frame_build_feature.cpp" ESCAPE_QUOTES @ONLY)
+list(APPEND PROJECT_SERVER_FRAME_CONFIG_SRC_LIST
+     "${CMAKE_CURRENT_LIST_DIR}/config/include/config/server_frame_build_feature.h"
+     "${CMAKE_CURRENT_LIST_DIR}/config/src/server_frame_build_feature.cpp")
 
-file(GLOB_RECURSE PROJECT_SERVER_FRAME_CONFIG_SRC_ORIGIN ${PROJECT_SERVER_FRAME_SRC_DIR}/config/*.h
-     ${PROJECT_SERVER_FRAME_SRC_DIR}/config/*.cpp)
+file(GLOB_RECURSE PROJECT_SERVER_FRAME_CONFIG_SRC_ORIGIN ${PROJECT_SERVER_FRAME_SRC_DIR}/config/include/config/*.h
+     ${PROJECT_SERVER_FRAME_SRC_DIR}/config/src/*.cpp)
 
 foreach(SRC_FILE_REALPATH IN LISTS PROJECT_SERVER_FRAME_CONFIG_SRC_ORIGIN)
   get_filename_component(SRC_DIRPATH_REALPATH ${SRC_FILE_REALPATH} DIRECTORY)
-  if(SRC_FILE_REALPATH MATCHES "^${PROJECT_SERVER_FRAME_SRC_DIR}[/\\\\]config[/\\\\]server_frame_build_feature.(h|cpp)")
+  if(SRC_FILE_REALPATH
+     MATCHES
+     "^${PROJECT_SERVER_FRAME_SRC_DIR}[/\\\\]config[/\\\\](src|include[/\\\\]config)[/\\\\]server_frame_build_feature.(h|cpp)"
+  )
     continue()
   endif()
-  if(SRC_FILE_REALPATH MATCHES "^${PROJECT_SERVER_FRAME_SRC_DIR}[/\\\\]config[/\\\\]excel[/\\\\]")
+  if(SRC_FILE_REALPATH MATCHES
+     "^${PROJECT_SERVER_FRAME_SRC_DIR}[/\\\\]config[/\\\\](src|include[/\\\\]config)[/\\\\]excel[/\\\\]")
     continue()
   endif()
   list(APPEND PROJECT_SERVER_FRAME_CONFIG_SRC_LIST ${SRC_FILE_REALPATH})
@@ -135,9 +155,9 @@ target_include_directories(
   PUBLIC "$<BUILD_INTERFACE:${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include>"
          "$<BUILD_INTERFACE:${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include>"
          "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/include>"
+         "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/config/include>"
          "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
-  PRIVATE # TODO move to standalone directory
-          "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PUBLIC_INCLUDE_DIRS}>")
+  )
 target_compile_options(${PROJECT_SERVER_FRAME_LIB_LINK}-config PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
 if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
   target_link_options(${PROJECT_SERVER_FRAME_LIB_LINK}-config PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})

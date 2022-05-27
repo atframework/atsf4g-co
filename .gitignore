@@ -73,9 +73,10 @@
 /src/gamesvr/app/handle_cs_rpc_gamesvrclientservice.h
 /src/gamesvr/rpc/gamesvrclientservice/gamesvrclientservice.h
 /src/gamesvr/rpc/gamesvrclientservice/gamesvrclientservice.cpp
-/src/server_frame/config/server_frame_build_feature.h
-/src/server_frame/config/server_frame_build_feature.cpp
-/src/server_frame/config/excel/*
+/src/server_frame/config/include/config/server_frame_build_feature.h
+/src/server_frame/config/src/server_frame_build_feature.cpp
+/src/server_frame/config/include/config/excel/*
+/src/server_frame/config/src/excel/*
 /src/server_frame/router/handle_ss_rpc_routerservice.cpp
 /src/server_frame/router/handle_ss_rpc_routerservice.h
 /src/server_frame/rpc/game/gamesvrservice.cpp
