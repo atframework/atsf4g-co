@@ -369,7 +369,7 @@ static int64_t generate_global_unique_id(rpc::context &ctx, uint32_t major_type,
   }
 
   if (should_wake_key) {
-    task_types::task_macro_coroutine::stack_allocator_t stack_alloc(task_manager::me()->get_stack_pool());
+    task_types::task_macro_coroutine::stack_allocator_type stack_alloc(task_manager::me()->get_stack_pool());
     this_task->next(unique_id_container_waker(key), stack_alloc);
   }
 

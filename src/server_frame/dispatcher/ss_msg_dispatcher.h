@@ -118,7 +118,7 @@ class ss_msg_dispatcher : public dispatcher_implement, public util::design_patte
   int32_t send_to_proc(uint64_t bus_id, atframework::SSMsg &ss_msg, bool ignore_discovery = false);
   int32_t send_to_proc(uint64_t bus_id, const void *msg_buf, size_t msg_len, bool ignore_discovery);
   bool is_target_server_available(uint64_t bus_id) const;
-  bool is_target_server_available(gsl::string_view node_name) const;
+  bool is_target_server_available(const std::string &node_name) const;
 
  private:
   uint64_t sequence_allocator_;

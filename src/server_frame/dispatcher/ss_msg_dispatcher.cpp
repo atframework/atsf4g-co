@@ -158,7 +158,7 @@ bool ss_msg_dispatcher::is_target_server_available(uint64_t bus_id) const {
   return !get_app()->get_discovery_node_by_id(bus_id);
 }
 
-bool ss_msg_dispatcher::is_target_server_available(gsl::string_view node_name) const {
+bool ss_msg_dispatcher::is_target_server_available(const std::string &node_name) const {
   if (!is_enabled()) {
     return false;
   }

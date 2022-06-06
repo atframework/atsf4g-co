@@ -121,7 +121,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
       return PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
     }
 
-    task_types::task_macro_coroutine::stack_allocator_t alloc(stack_pool_);
+    task_types::task_macro_coroutine::stack_allocator_type alloc(stack_pool_);
 
     task_instance = task_t::create_with_delegate<TAction>(COPP_MACRO_STD_FORWARD(TParams, args), alloc,
                                                           get_stack_size(), sizeof(task_private_data_t));

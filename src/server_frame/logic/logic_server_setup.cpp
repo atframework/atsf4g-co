@@ -656,7 +656,7 @@ std::shared_ptr<atapp::etcd_discovery_node> logic_server_common_module::get_disc
 }
 
 std::shared_ptr<atapp::etcd_discovery_node> logic_server_common_module::get_discovery_by_name(
-    gsl::string_view name) const {
+    const std::string& name) const {
   if (nullptr == get_app()) {
     return nullptr;
   }

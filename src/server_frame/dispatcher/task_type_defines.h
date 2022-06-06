@@ -14,8 +14,9 @@ struct task_types {
   using stack_pool_type = copp::stack_pool<copp::allocator::default_statck_allocator>;
 
   struct task_macro_coroutine {
-    using stack_allocator_t = copp::allocator::stack_allocator_pool<stack_pool_type>;
-    using coroutine_t = copp::coroutine_context_container<stack_allocator_t>;
+    using stack_allocator_type = copp::allocator::stack_allocator_pool<stack_pool_type>;
+    using coroutine_type = copp::coroutine_context_container<stack_allocator_type>;
+    using value_type = int;
   };
 
   using task_type = cotask::task<task_macro_coroutine>;

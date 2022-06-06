@@ -156,7 +156,7 @@ class logic_server_common_module : public atapp::module_impl {
   }
 
   std::shared_ptr<atapp::etcd_discovery_node> get_discovery_by_id(uint64_t id) const;
-  std::shared_ptr<atapp::etcd_discovery_node> get_discovery_by_name(gsl::string_view name) const;
+  std::shared_ptr<atapp::etcd_discovery_node> get_discovery_by_name(const std::string& name) const;
 
  private:
   int setup_battle_service_watcher();

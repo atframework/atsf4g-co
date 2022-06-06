@@ -10,7 +10,6 @@ atapp:
   area:
     zone_id: ${project.get_global_option('global', 'zone_id', 0)}
   hostname: "${project.get_hostname()[0]}"   # hostname, any host should has a unique name. if empty, we wil try to use the mac address
-  configure_metadata: true
   metadata:
     labels:
       "deployment.environment": "${project.get_global_option('global', 'deployment_environment', '')}" # formal/dev/test/qa
