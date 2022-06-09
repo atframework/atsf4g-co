@@ -222,28 +222,6 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
 
 // 玩家日志输出工具
 #ifdef _MSC_VER
-#  define WPLOGTRACE(PLAYER, fmt, ...)                                                           \
-    WLOGTRACE("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), \
-              (PLAYER).get_user_id_llu(), __VA_ARGS__)
-#  define WPLOGDEBUG(PLAYER, fmt, ...)                                                           \
-    WLOGDEBUG("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), \
-              (PLAYER).get_user_id_llu(), __VA_ARGS__)
-#  define WPLOGNOTICE(PLAYER, fmt, ...)                                                           \
-    WLOGNOTICE("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), \
-               (PLAYER).get_user_id_llu(), __VA_ARGS__)
-#  define WPLOGINFO(PLAYER, fmt, ...)                                                           \
-    WLOGINFO("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), \
-             (PLAYER).get_user_id_llu(), __VA_ARGS__)
-#  define WPLOGWARNING(PLAYER, fmt, ...)                                                           \
-    WLOGWARNING("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), \
-                (PLAYER).get_user_id_llu(), __VA_ARGS__)
-#  define WPLOGERROR(PLAYER, fmt, ...)                                                           \
-    WLOGERROR("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), \
-              (PLAYER).get_user_id_llu(), __VA_ARGS__)
-#  define WPLOGFATAL(PLAYER, fmt, ...)                                                           \
-    WLOGFATAL("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), \
-              (PLAYER).get_user_id_llu(), __VA_ARGS__)
-
 #  define FWPLOGTRACE(PLAYER, fmt, ...)                                                                         \
     FWLOGTRACE("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id(), \
                __VA_ARGS__)
@@ -267,28 +245,6 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
                __VA_ARGS__)
 
 #else
-#  define WPLOGTRACE(PLAYER, fmt, args...)                                                       \
-    WLOGTRACE("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), \
-              (PLAYER).get_user_id_llu(), ##args)
-#  define WPLOGDEBUG(PLAYER, fmt, args...)                                                       \
-    WLOGDEBUG("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), \
-              (PLAYER).get_user_id_llu(), ##args)
-#  define WPLOGNOTICE(PLAYER, fmt, args...)                                                       \
-    WLOGNOTICE("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), \
-               (PLAYER).get_user_id_llu(), ##args)
-#  define WPLOGINFO(PLAYER, fmt, args...)                                                       \
-    WLOGINFO("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), \
-             (PLAYER).get_user_id_llu(), ##args)
-#  define WPLOGWARNING(PLAYER, fmt, args...)                                                       \
-    WLOGWARNING("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), \
-                (PLAYER).get_user_id_llu(), ##args)
-#  define WPLOGERROR(PLAYER, fmt, args...)                                                       \
-    WLOGERROR("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), \
-              (PLAYER).get_user_id_llu(), ##args)
-#  define WPLOGFATAL(PLAYER, fmt, args...)                                                       \
-    WLOGFATAL("player %s(%u:%llu) " fmt, (PLAYER).get_open_id().c_str(), (PLAYER).get_zone_id(), \
-              (PLAYER).get_user_id_llu(), ##args)
-
 #  define FWPLOGTRACE(PLAYER, fmt, args...) \
     FWLOGTRACE("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id(), ##args)
 #  define FWPLOGDEBUG(PLAYER, fmt, args...) \
@@ -313,7 +269,7 @@ struct formatter<T, typename std::enable_if<std::is_base_of<player_cache, T>::va
   template <class FormatContext>
   auto format(const player_cache &user, FormatContext &ctx) {
     return LOG_WRAPPER_FWAPI_FORMAT_TO(ctx.out(), "player {}({}:{})", user.get_open_id(), user.get_zone_id(),
-                                       user.get_user_id_llu());
+                                       user.get_user_id());
   }
 };
 }  // namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID

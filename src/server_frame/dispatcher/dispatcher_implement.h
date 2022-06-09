@@ -67,8 +67,6 @@ class dispatcher_implement : public ::atapp::module_impl {
     const atframework::DispatcherOptions *options;  // 如果启动了新任务传出可能的配置选项数据
 
     inline dispatcher_result_t() : result_code(0), task_id(0), options(nullptr) {}
-
-    inline operator bool() { return result_code; }
   };
 
   /**

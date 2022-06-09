@@ -49,9 +49,9 @@ rpc_result<task_manager::task_ptr_t, int> async_invoke(context &ctx, gsl::string
 
 rpc_result<task_manager::task_ptr_t, int> async_invoke(gsl::string_view caller_name, gsl::string_view name,
                                                        std::function<task_action_base::result_type(context &)> fn) {
-  ::rpc::context ctx;
-  ::rpc::context::tracer tracer;
-  ::rpc::context::trace_option trace_option;
+  rpc::context ctx;
+  rpc::context::tracer tracer;
+  rpc::context::trace_option trace_option;
   trace_option.dispatcher = nullptr;
   trace_option.is_remote = false;
   trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
