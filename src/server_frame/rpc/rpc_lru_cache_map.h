@@ -215,7 +215,7 @@ class rpc_lru_cache_map {
         if (nullptr != private_data && nullptr != private_data->action) {
           action_name = private_data->action->name();
         }
-        if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == ret) {
+        if (PROJECT_NAMESPACE_ID ::err::EN_DB_RECORD_NOT_FOUND == ret) {
           FWLOGWARNING("{} try to rpc fetch data failed and will remove lru cache(task: {} {}), res: {}",
                        self_task->get_id(), action_name, ret);
         } else {
