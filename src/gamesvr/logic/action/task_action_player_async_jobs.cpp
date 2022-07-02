@@ -81,6 +81,8 @@ int task_action_player_async_jobs::on_success() {
     param_.user->set_quick_save();
   }
 
+  param_.user.reset();
+  param_.after.reset();
   return get_result();
 }
 
@@ -89,5 +91,7 @@ int task_action_player_async_jobs::on_failed() {
     FWPLOGERROR(*param_.user, "do task_action_player_async_jobs failed, res: {}", get_result());
   }
 
+  param_.user.reset();
+  param_.after.reset();
   return get_result();
 }

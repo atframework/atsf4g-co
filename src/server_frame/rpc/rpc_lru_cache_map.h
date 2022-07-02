@@ -8,6 +8,7 @@
 #include <mem_pool/lru_map.h>
 #include <time/time_utility.h>
 
+#include <dispatcher/task_action_base.h>
 #include <dispatcher/task_manager.h>
 
 #include <config/compiler/protobuf_prefix.h>
@@ -208,7 +209,26 @@ class rpc_lru_cache_map {
         set_cache(out);
       }
     } else {
-      FWLOGERROR("{} try to rpc fetch data failed and will remove lru cache, res: {}", __FUNCTION__, ret);
+      if (self_task) {
+        auto private_data = task_manager::get_private_data(*self_task);
+        const char *action_name = "";
+        if (nullptr != private_data && nullptr != private_data->action) {
+          action_name = private_data->action->name();
+        }
+        if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == ret) {
+          FWLOGWARNING("{} try to rpc fetch data failed and will remove lru cache(task: {} {}), res: {}",
+                       self_task->get_id(), action_name, ret);
+        } else {
+          FWLOGERROR("{} try to rpc fetch data failed and will remove lru cache(task: {} {}), res: {}",
+                     self_task->get_id(), action_name, ret);
+        }
+      } else {
+        if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == ret) {
+          FWLOGWARNING("{} try to rpc fetch data failed and will remove lru cache, res: {}", ret);
+        } else {
+          FWLOGERROR("{} try to rpc fetch data failed and will remove lru cache, res: {}", ret);
+        }
+      }
       remove_cache(key);
     }
 

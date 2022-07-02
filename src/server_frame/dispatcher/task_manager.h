@@ -85,9 +85,15 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
   };
 
  private:
-  using native_task_container_t = std::unordered_map<id_t, cotask::detail::task_manager_node<task_t> >;
-  using native_task_manager_type = cotask::task_manager<task_t, native_task_container_t>;
+#if (LIBCOPP_VERSION_MAJOR * 1000000 + LIBCOPP_VERSION_MINOR * 1000 + LIBCOPP_VERSION_PATCH) >= 2000001
+  using native_task_manager_type = cotask::task_manager<task_types::task_type>;
+  using native_task_manager_ptr_type = typename native_task_manager_type::ptr_type;
+#else
+  using native_task_container_t =
+      std::unordered_map<task_types::id_type, cotask::detail::task_manager_node<task_types::task_type> >;
+  using native_task_manager_type = cotask::task_manager<task_types::task_type, native_task_container_t>;
   using native_task_manager_ptr_type = typename native_task_manager_type::ptr_t;
+#endif
 
  public:
   using task_ptr_t = task_types::task_ptr_type;
