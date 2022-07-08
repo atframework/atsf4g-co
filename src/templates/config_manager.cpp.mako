@@ -15,9 +15,12 @@ import time
 #include <Windows.h>
 #endif
 
+#include <std/thread.h>
+
+#include <chrono>
+#include <cstdarg>
 #include <cstdio>
 #include <sstream>
-#include <cstdarg>
 
 #if (defined(_MSC_VER) && _MSC_VER >= 1600) || (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L)
 #define EXCEL_CONFIG_FS_OPEN(e, f, path, mode) errno_t e = fopen_s(&f, path, mode)
@@ -50,55 +53,98 @@ ${pb_loader.CppNamespaceBegin(global_package)}
 bool config_manager::is_destroyed_ = false;
 
 namespace details {
-  static bool get_file_content(std::string &out, const char *file_path) {
-    FILE *f = NULL;
+static bool get_file_content(std::string &out, const char *file_path) {
+  FILE *f = NULL;
 
-    EXCEL_CONFIG_FS_OPEN(error_code, f, file_path, "rb");
-    ((void)error_code); // unused
+  EXCEL_CONFIG_FS_OPEN(error_code, f, file_path, "rb");
+  ((void)error_code); // unused
 
-    if (NULL == f) {
-      return false;
+  if (NULL == f) {
+    return false;
+  }
+
+  fseek(f, 0, SEEK_END);
+  long len = ftell(f);
+  fseek(f, 0, SEEK_SET);
+
+  bool ret = true;
+  if (len > 0) {
+    out.resize(static_cast<size_t>(len));
+    size_t real_read_sz = fread(const_cast<char *>(out.data()), sizeof(char), static_cast<size_t>(len), f);
+    if (real_read_sz < out.size()) {
+      out.resize(real_read_sz);
+      // CLRF maybe converted into CL or RF on text mode
+      ret = false;
+    }
+  } else {
+    // 虚拟文件ftell(f)会拿不到长度，只能按流来读
+    char              buf[4096]; // 4K for each block
+    std::stringstream ss;
+    while (true) {
+      size_t read_sz = fread(buf, 1, sizeof(buf), f);
+      ss.write(buf, read_sz);
+      if (read_sz < sizeof(buf)) {
+        break;
+      }
     }
 
-    fseek(f, 0, SEEK_END);
-    long len = ftell(f);
-    fseek(f, 0, SEEK_SET);
+    ss.str().swap(out);
+  }
 
-    bool ret = true;
-    if (len > 0) {
-      out.resize(static_cast<size_t>(len));
-      size_t real_read_sz = fread(const_cast<char *>(out.data()), sizeof(char), static_cast<size_t>(len), f);
-      if (real_read_sz < out.size()) {
-        out.resize(real_read_sz);
-        // CLRF maybe converted into CL or RF on text mode
-        ret = false;
-      }
-    } else {
-      // 虚拟文件ftell(f)会拿不到长度，只能按流来读
-      char              buf[4096]; // 4K for each block
-      std::stringstream ss;
-      while (true) {
-        size_t read_sz = fread(buf, 1, sizeof(buf), f);
-        ss.write(buf, read_sz);
-        if (read_sz < sizeof(buf)) {
-          break;
-        }
-      }
+  EXCEL_CONFIG_FS_CLOSE(f);
+  return ret;
+}
 
-      ss.str().swap(out);
-    }
+struct thread_local_config_group_data {
+  int64_t current_version;
+  config_manager::config_group_ptr_t current_group;
 
-    EXCEL_CONFIG_FS_CLOSE(f);
-    return ret;
+  thread_local_config_group_data() : current_version(0) {}
+};
+
+#if defined(THREAD_TLS_ENABLED) && THREAD_TLS_ENABLED
+static thread_local_config_group_data& get_tls_config_group() {
+  static THREAD_TLS thread_local_config_group_data ret;
+  return ret;
+}
+#else
+#  include <pthread.h>
+static pthread_once_t gt_thread_local_config_group_data_once = PTHREAD_ONCE_INIT;
+static pthread_key_t gt_thread_local_config_group_data_key;
+
+static void dtor_thread_local_config_group_data(void* p) {
+  thread_local_config_group_data* res = reinterpret_cast<thread_local_config_group_data*>(p);
+  if (NULL != res) {
+    delete res;
   }
 }
+
+static void init_thread_local_config_group_data() {
+  (void)pthread_key_create(&gt_thread_local_config_group_data_key, dtor_thread_local_config_group_data);
+}
+
+static thread_local_config_group_data& get_tls_config_group() {
+  (void)pthread_once(&gt_thread_local_config_group_data_once, init_thread_local_config_group_data);
+  thread_local_config_group_data* ret =
+      reinterpret_cast<thread_local_config_group_data*>(pthread_getspecific(gt_thread_local_config_group_data_key));
+  if (nullptr == ret) {
+    ret = new thread_local_config_group_data();  // in case of padding
+    pthread_setspecific(gt_thread_local_config_group_data_key, reinterpret_cast<void*>(ret));
+  }
+
+  return *ret;
+}
+
+#endif
+}  // namespace details
 
 config_manager::log_caller_info_t::log_caller_info_t(): level_id(log_level_t::LOG_LW_DISABLED), level_name(NULL), file_path(NULL), line_number(0), func_name(NULL) {}
 
 config_manager::log_caller_info_t::log_caller_info_t(log_level_t::type lid, const char *lname, const char *fpath, uint32_t lnum, const char *fnname):
   level_id(lid), level_name(lname), file_path(fpath), line_number(lnum), func_name(fnname) {}
 
-config_manager::config_manager() : 
+config_manager::config_manager() :
+  reload_version_(std::chrono::system_clock::now().time_since_epoch().count()),
   override_same_version_(false),
   max_group_number_(8),
   on_log_(config_manager::default_log_writer),
@@ -106,6 +152,7 @@ config_manager::config_manager() :
   read_version_handle_(default_version_loader) {}
 
 config_manager::config_manager(constructor_helper_t&) : 
+  reload_version_(std::chrono::system_clock::now().time_since_epoch().count()),
   override_same_version_(false),
   max_group_number_(8),
   on_log_(config_manager::default_log_writer),
@@ -207,6 +254,7 @@ int config_manager::init_new_group() {
 
   if (ret >= 0) {
     ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh(config_group_lock_);
+    ++ reload_version_;
     config_group_list_.push_back(cfg_group);
     if (on_group_created_ && cfg_group) {
       on_group_created_(cfg_group);
@@ -267,7 +315,7 @@ int config_manager::reload_all(bool del_when_failed) {
     return 0;
   }
 
-  config_group_ptr_t cfg_group = get_current_config_group();
+  const config_group_ptr_t& cfg_group = get_current_config_group();
   if (!cfg_group) {
     EXCEL_CONFIG_MANAGER_LOGERROR("[EXCEL] mutable config group failed");
     return -2;
@@ -328,22 +376,32 @@ void config_manager::set_version_loader(read_version_func_t fn) {
   read_version_handle_ = fn; 
 }
 
-config_manager::config_group_ptr_t config_manager::get_current_config_group() {
+const config_manager::config_group_ptr_t& config_manager::get_current_config_group() {
+  details::thread_local_config_group_data& tls_cache = details::get_tls_config_group();
+  if (tls_cache.current_version == reload_version_.load(util::lock::memory_order_acquire) && tls_cache.current_group) {
+    return tls_cache.current_group;
+  }
+
   {
     ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh(config_group_lock_);
     if (!config_group_list_.empty()) {
-      return *config_group_list_.rbegin();
+      tls_cache.current_version = reload_version_.load(util::lock::memory_order_acquire);
+      tls_cache.current_group = *config_group_list_.rbegin();
+      return tls_cache.current_group;
     }
   }
 
   if (0 == init_new_group()) {
     ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh(config_group_lock_);
     if (!config_group_list_.empty()) {
-      return *config_group_list_.rbegin();
+      tls_cache.current_version = reload_version_.load(util::lock::memory_order_acquire);
+      tls_cache.current_group = *config_group_list_.rbegin();
+      return tls_cache.current_group;
     }
   }
 
-  return nullptr;
+  static config_manager::config_group_ptr_t empty;
+  return empty;
 }
 
 void config_manager::log(const log_caller_info_t &caller,

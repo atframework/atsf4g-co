@@ -140,6 +140,27 @@ atapp:
 % else:
     enable: false
 % endif
+    log:
+      startup_level: debug
+      level: info
+      category:
+        - name: etcd_default
+          prefix: "[Log %L][%F %T.%f][%s:%n(%C)]: " # log categorize 0's name = etcd_default
+          stacktrace:
+            min: disable
+            max: disable
+          sink:
+            - type: file
+              level:
+                min: fatal
+                max: trace
+              rotate:
+                number: 10
+                size: 10485760 # 10MB
+              file: "${project.get_log_dir()}/${project.get_server_full_name()}.etcd.%N.log"
+              writing_alias: "${project.get_log_dir()}/${project.get_server_full_name()}.etcd.log"
+              auto_flush: info
+              flush_interval: 1s # 1s (unit: s,m,h,d)
     hosts:
 % for etcd_host in project.get_etcd_client_urls().split(','):
       - ${etcd_host}

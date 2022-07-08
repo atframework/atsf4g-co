@@ -134,7 +134,7 @@ public:
   read_version_func_t get_version_loader() const;
   void set_version_loader(read_version_func_t fn);
 
-  config_group_ptr_t get_current_config_group();
+  const config_group_ptr_t& get_current_config_group();
 
   inline void set_override_same_version(bool v) { override_same_version_ = v; }
   inline bool get_override_same_version() const { return override_same_version_; }
@@ -203,6 +203,7 @@ private:
 
 private:
   static bool is_destroyed_;
+  util::lock::atomic_int_type<int64_t> reload_version_;
   bool override_same_version_;
   size_t max_group_number_;
   on_load_func_t on_group_created_;
@@ -214,10 +215,10 @@ private:
 
   read_buffer_func_t read_file_handle_;
   read_version_func_t read_version_handle_;
-  mutable ::util::lock::spin_rw_lock handle_lock_;
+  mutable util::lock::spin_rw_lock handle_lock_;
 
   std::list<config_group_ptr_t> config_group_list_;
-  mutable ::util::lock::spin_rw_lock config_group_lock_;
+  mutable util::lock::spin_rw_lock config_group_lock_;
 
   std::string log_buffer_;
 };
