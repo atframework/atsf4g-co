@@ -161,6 +161,7 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
         // 已执行则跳过
         continue;
       }
+      param_.user->get_user_async_jobs_manager().add_job_uuid(job_list[i].action_blob.action_uuid());
 
       ++batch_job_number;
       int async_job_res = 0;
