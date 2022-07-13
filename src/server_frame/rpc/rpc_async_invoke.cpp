@@ -14,26 +14,38 @@
 
 #include <utility/protobuf_mini_dumper.h>
 
+#include <dispatcher/task_manager.h>
+
 #include <logic/action/task_action_async_invoke.h>
 
 #include "rpc/rpc_utils.h"
 
 namespace rpc {
-rpc_result<task_manager::task_ptr_t, int> async_invoke(context &ctx, gsl::string_view name,
-                                                       std::function<task_action_base::result_type(context &)> fn) {
+rpc_result<task_types::task_ptr_type, int> async_invoke(context &ctx, gsl::string_view name,
+                                                        std::function<task_action_base::result_type(context &)> fn,
+                                                        std::chrono::system_clock::duration timeout) {
   if (!fn) {
-    return rpc_result<task_manager::task_ptr_t, int>::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    return rpc_result<task_types::task_ptr_type, int>::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  task_manager::task_ptr_t task_ptr;
+  task_types::task_ptr_type task_ptr;
   task_action_async_invoke::ctor_param_t params;
   params.caller_context = &ctx;
   params.callable = std::move(fn);
   params.name = util::log::format("rpc.async_invoke:{}", name);
-  int res = task_manager::me()->create_task<task_action_async_invoke>(task_ptr, std::move(params));
+  int res;
+  if (timeout > std::chrono::system_clock::duration::zero()) {
+    auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timeout);
+    res = task_manager::me()->create_task_with_timeout<task_action_async_invoke>(
+        task_ptr, static_cast<time_t>(seconds.count()),
+        static_cast<time_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(timeout - seconds).count()),
+        std::move(params));
+  } else {
+    res = task_manager::me()->create_task<task_action_async_invoke>(task_ptr, std::move(params));
+  }
   if (0 != res || !task_ptr) {
     FWLOGERROR("create task_action_async_invoke failed, res: {}({})", res, protobuf_mini_dumper_get_error_msg(res));
-    return rpc_result<task_manager::task_ptr_t, int>::make_error(res);
+    return rpc_result<task_types::task_ptr_type, int>::make_error(res);
   }
 
   task_manager::start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
@@ -41,14 +53,15 @@ rpc_result<task_manager::task_ptr_t, int> async_invoke(context &ctx, gsl::string
   if (0 != res) {
     FWLOGERROR("start task_action_async_invoke {} with name rpc.async_invoke:{} failed, res: {}({})",
                task_ptr->get_id(), name, res, protobuf_mini_dumper_get_error_msg(res));
-    return rpc_result<task_manager::task_ptr_t, int>::make_error(res);
+    return rpc_result<task_types::task_ptr_type, int>::make_error(res);
   }
 
-  return rpc_result<task_manager::task_ptr_t, int>::make_success(std::move(task_ptr));
+  return rpc_result<task_types::task_ptr_type, int>::make_success(std::move(task_ptr));
 }
 
-rpc_result<task_manager::task_ptr_t, int> async_invoke(gsl::string_view caller_name, gsl::string_view name,
-                                                       std::function<task_action_base::result_type(context &)> fn) {
+rpc_result<task_types::task_ptr_type, int> async_invoke(gsl::string_view caller_name, gsl::string_view name,
+                                                        std::function<task_action_base::result_type(context &)> fn,
+                                                        std::chrono::system_clock::duration timeout) {
   rpc::context ctx;
   rpc::context::tracer tracer;
   rpc::context::trace_option trace_option;
@@ -59,11 +72,11 @@ rpc_result<task_manager::task_ptr_t, int> async_invoke(gsl::string_view caller_n
   ctx.setup_tracer(tracer, ::rpc::context::tracer::string_view{caller_name.data(), caller_name.size()},
                    std::move(trace_option));
 
-  return async_invoke(ctx, name, std::move(fn));
+  return async_invoke(ctx, name, std::move(fn), timeout);
 }
 
-result_code_type wait_tasks(const std::vector<task_manager::task_ptr_t> &tasks) {
-  task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
+result_code_type wait_tasks(const std::vector<task_types::task_ptr_type> &tasks) {
+  task_types::task_ptr_type self_task(task_manager::task_t::this_task());
   if (!self_task) {
     return result_code_type(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
   }
@@ -79,7 +92,7 @@ result_code_type wait_tasks(const std::vector<task_manager::task_ptr_t> &tasks) 
       return result_code_type(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING);
     }
 
-    task_manager::task_ptr_t last_task;
+    task_types::task_ptr_type last_task;
     for (auto &task : tasks) {
       if (!task || task == self_task) {
         continue;

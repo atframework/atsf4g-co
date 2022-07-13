@@ -18,8 +18,13 @@ if len(valgrind_tool) > 0:
 	)
 %>
 
-if [ -e "$SERVER_PID_FILE_NAME" ]; then
-	rm -f "$SERVER_PID_FILE_NAME";
+if [[ -e "$SERVER_PID_FILE_NAME" ]]; then
+  PROC_PID=$(cat $SERVER_PID_FILE_NAME 2>/dev/null)
+else
+  PROC_PID=0
+fi
+if [[ $PROC_PID -gt 0 ]]; then
+  cp -f "$SERVER_PID_FILE_NAME" "$SERVER_PID_FILE_NAME.old"
 fi
 
 ${valgrind_tool}./$SERVERD_NAME -id $SERVER_BUS_ID -c ../etc/$SERVER_FULL_NAME.yaml -p $SERVER_PID_FILE_NAME start "$@" &

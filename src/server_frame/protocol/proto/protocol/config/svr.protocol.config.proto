@@ -154,9 +154,9 @@ message opentelemetry_sampler_cfg {
   }
 }
 
-message opentelemetry_tracer_cfg {
+message opentelemetry_trace_cfg {
   string default_name = 1;
-  string schema_url = 2 [(atapp.protocol.CONFIGURE) = { default_value: "https://opentelemetry.io/schemas/1.9.0" }];
+  string schema_url = 2 [(atapp.protocol.CONFIGURE) = { default_value: "https://opentelemetry.io/schemas/1.12.0" }];
   map<string, string> resource = 3;
 
   opentelemetry_exporter_cfg exporters = 11;
@@ -166,13 +166,13 @@ message opentelemetry_tracer_cfg {
 
 message opentelemetry_metrics_cfg {
   string default_name = 1;
-  string schema_url = 2 [(atapp.protocol.CONFIGURE) = { default_value: "https://opentelemetry.io/schemas/1.9.0" }];
+  string schema_url = 2 [(atapp.protocol.CONFIGURE) = { default_value: "https://opentelemetry.io/schemas/1.12.0" }];
   map<string, string> resource = 3;
 }
 
 message opentelemetry_logs_cfg {
   string default_name = 1;
-  string schema_url = 2 [(atapp.protocol.CONFIGURE) = { default_value: "https://opentelemetry.io/schemas/1.9.0" }];
+  string schema_url = 2 [(atapp.protocol.CONFIGURE) = { default_value: "https://opentelemetry.io/schemas/1.12.0" }];
   map<string, string> resource = 3;
 
   opentelemetry_exporter_cfg exporters = 11;
@@ -181,7 +181,7 @@ message opentelemetry_logs_cfg {
 
 message opentelemetry_cfg {
   map<string, string> resource = 2;
-  opentelemetry_tracer_cfg tracer = 3;
+  opentelemetry_trace_cfg trace = 3;
   opentelemetry_metrics_cfg metrics = 4;
   opentelemetry_logs_cfg logs = 5;
 }

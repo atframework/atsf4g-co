@@ -95,7 +95,7 @@ logic:
               flush_interval: 1m
       resource:
         "tenant.id": "default"
-      tracer:
+      trace:
         # resource:
         default_name: "${project.get_server_name()}"
         exporters:
