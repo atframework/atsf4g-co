@@ -109,7 +109,7 @@ task_action_cs_req_base::result_type task_action_cs_req_base::hook_run() {
     }
   } while (false);
 
-  return ret;
+  TASK_ACTION_RETURN_CODE(ret);
 }
 
 std::shared_ptr<dispatcher_implement> task_action_cs_req_base::get_dispatcher() const {

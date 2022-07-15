@@ -35,25 +35,25 @@ task_action_reject::result_type task_action_reject::operator()() {
     FWLOGERROR("try to find transaction id from request {} for {} failed.", "SSDistributeTransactionRejectReq",
                "task_action_reject");
     set_response_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
   transaction_manager::transaction_ptr_type trans;
   set_response_code(RPC_AWAIT_CODE_RESULT(
       transaction_manager::me()->mutable_transaction(get_shared_context(), req_body.metadata(), trans)));
   if (0 != get_response_code()) {
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   if (!trans) {
     set_response_code(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   set_response_code(RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_reject(get_shared_context(), trans)));
   protobuf_copy_message(*rsp_body.mutable_metadata(), trans->data_object.metadata());
 
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 int task_action_reject::on_success() { return get_result(); }

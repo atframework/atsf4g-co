@@ -33,7 +33,7 @@ task_action_player_get_info::result_type task_action_player_get_info::operator()
   if (!user) {
     FWLOGERROR("not logined.");
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 苹果审核模式
@@ -78,7 +78,7 @@ task_action_player_get_info::result_type task_action_player_get_info::operator()
     protobuf_copy_message(*rsp_body.mutable_player_options(), user->get_player_options().custom_options());
   }
 
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 int task_action_player_get_info::on_success() { return get_result(); }

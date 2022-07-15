@@ -12,6 +12,8 @@
 #include <memory>
 #include <vector>
 
+#include "rpc/rpc_common_types.h"
+
 class router_object_base;
 
 class task_action_router_close_manager_set : public task_action_no_req_base {
@@ -38,7 +40,7 @@ class task_action_router_close_manager_set : public task_action_no_req_base {
   int on_timeout() override;
 
  private:
-  void save_fallback();
+  rpc::result_code_type save_fallback();
 
  private:
   ctor_param_t param_;

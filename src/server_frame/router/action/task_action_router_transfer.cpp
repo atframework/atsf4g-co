@@ -35,7 +35,7 @@ task_action_router_transfer::result_type task_action_router_transfer::operator()
   router_manager_base* mgr = router_manager_set::me()->get_manager(req_body.object().object_type_id());
   if (nullptr == mgr) {
     FWLOGERROR("router manager {} invalid", req_body.object().object_type_id());
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   router_manager_base::key_t key(req_body.object().object_type_id(), req_body.object().object_zone_id(),
@@ -48,13 +48,13 @@ task_action_router_transfer::result_type task_action_router_transfer::operator()
       set_response_code(PROJECT_NAMESPACE_ID::err::EN_ROUTER_IN_OTHER_SERVER);
     }
 
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   auto res = RPC_AWAIT_CODE_RESULT(mgr->mutable_object(get_shared_context(), obj, key, nullptr));
   set_response_code(res);
 
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 int task_action_router_transfer::on_success() { return get_result(); }

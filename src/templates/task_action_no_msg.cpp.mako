@@ -32,7 +32,7 @@ const char *${task_class_name}::name() const {
 ${task_class_name}::result_type ${task_class_name}::operator()() {
   // Maybe need to call 
   // set_user_key(param_.user_id, param_.zone_id); 
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 int ${task_class_name}::on_success() { return get_result(); }

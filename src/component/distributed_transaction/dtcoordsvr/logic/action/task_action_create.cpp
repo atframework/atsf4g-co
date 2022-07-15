@@ -33,7 +33,7 @@ task_action_create::result_type task_action_create::operator()() {
   set_response_code(RPC_AWAIT_CODE_RESULT(
       transaction_manager::me()->create_transaction(get_shared_context(), std::move(*req_body.mutable_storage()))));
 
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 int task_action_create::on_success() { return get_result(); }

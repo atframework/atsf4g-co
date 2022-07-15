@@ -34,24 +34,24 @@ rpc_result<task_types::task_ptr_type, int> make_async_invoke_error(TARGS &&...ar
 }
 
 EXPLICIT_NODISCARD_ATTR rpc_result<task_types::task_ptr_type, int> async_invoke(
-    context &ctx, gsl::string_view name, std::function<task_action_base::result_type(context &)> fn,
+    context &ctx, gsl::string_view name, std::function<result_code_type(context &)> fn,
     std::chrono::system_clock::duration timeout = std::chrono::system_clock::duration::zero());
 
 template <class TREP, class TPERIOD>
 EXPLICIT_NODISCARD_ATTR inline rpc_result<task_types::task_ptr_type, int> async_invoke(
-    context &ctx, gsl::string_view name, std::function<task_action_base::result_type(context &)> fn,
+    context &ctx, gsl::string_view name, std::function<result_code_type(context &)> fn,
     std::chrono::duration<TREP, TPERIOD> timeout = std::chrono::duration<TREP, TPERIOD>::zero()) {
   return async_invoke(ctx, name, std::move(fn),
                       std::chrono::duration_cast<std::chrono::system_clock::duration>(timeout));
 }
 
 EXPLICIT_NODISCARD_ATTR rpc_result<task_types::task_ptr_type, int> async_invoke(
-    gsl::string_view caller_name, gsl::string_view name, std::function<task_action_base::result_type(context &)> fn,
+    gsl::string_view caller_name, gsl::string_view name, std::function<result_code_type(context &)> fn,
     std::chrono::system_clock::duration timeout = std::chrono::system_clock::duration::zero());
 
 template <class TREP, class TPERIOD>
 EXPLICIT_NODISCARD_ATTR inline rpc_result<task_types::task_ptr_type, int> async_invoke(
-    gsl::string_view caller_name, gsl::string_view name, std::function<task_action_base::result_type(context &)> fn,
+    gsl::string_view caller_name, gsl::string_view name, std::function<result_code_type(context &)> fn,
     std::chrono::duration<TREP, TPERIOD> timeout = std::chrono::duration<TREP, TPERIOD>::zero()) {
   return async_invoke(caller_name, name, std::move(fn),
                       std::chrono::duration_cast<std::chrono::system_clock::duration>(timeout));

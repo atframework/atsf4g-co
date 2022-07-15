@@ -62,16 +62,15 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
     }
 
     std::shared_ptr<status_data_t> status_data = status_data_;
-    auto invoke_task = rpc::async_invoke(
-        get_shared_context(), "task_action_auto_save_objects",
-        [status_data](rpc::context &ctx) -> task_action_base::result_type {
+    auto invoke_task =
+        rpc::async_invoke(get_shared_context(), "task_action_auto_save_objects", [status_data](rpc::context &ctx) {
           router_manager_set::pending_action_data auto_save =
               std::move(router_manager_set::me()->pending_action_list_.front());
           router_manager_set::me()->pending_action_list_.pop_front();
 
           // 如果已下线并且用户缓存失效则跳过
           if (!auto_save.object) {
-            return task_action_base::result_type(0);
+            RPC_RETURN_CODE(0);
           }
 
           if (debug_receive_stop_when_running) {
@@ -133,7 +132,7 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
                        auto_save.object->name(), auto_save.object->get_key().type_id,
                        auto_save.object->get_key().zone_id, auto_save.object->get_key().object_id);
             ++status_data->failed_count_;
-            return task_action_base::result_type(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+            RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
           }
 
           if (PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED == res) {
@@ -141,7 +140,7 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
                        auto_save.object->name(), auto_save.object->get_key().type_id,
                        auto_save.object->get_key().zone_id, auto_save.object->get_key().object_id);
             ++status_data->failed_count_;
-            return task_action_base::result_type(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+            RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
           }
 
           if (PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED == res) {
@@ -149,7 +148,7 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
                        auto_save.object->name(), auto_save.object->get_key().type_id,
                        auto_save.object->get_key().zone_id, auto_save.object->get_key().object_id);
             ++status_data->failed_count_;
-            return task_action_base::result_type(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+            RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
           }
 
           if (res < 0) {
@@ -164,7 +163,7 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
             ++status_data->success_count_;
           }
 
-          return task_action_base::result_type(0);
+          RPC_RETURN_CODE(0);
         });
     bool need_wait = false;
     if (invoke_task.is_success()) {
@@ -197,7 +196,7 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
     }
   }
 
-  return task_action_base::result_type(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 int task_action_auto_save_objects::on_success() {

@@ -24,8 +24,9 @@ task_action_async_invoke::~task_action_async_invoke() {}
 const char* task_action_async_invoke::name() const { return param_.name.c_str(); }
 
 task_action_async_invoke::result_type task_action_async_invoke::operator()() {
+  rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   if (param_.callable) {
-    return param_.callable(get_shared_context());
+    ret = RPC_AWAIT_CODE_RESULT(param_.callable(get_shared_context()));
   }
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  TASK_ACTION_RETURN_CODE(ret);
 }

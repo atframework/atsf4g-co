@@ -37,7 +37,7 @@ task_action_player_logout::result_type task_action_player_logout::operator()() {
     flag_guard.setup(*s, session::flag_t::EN_SESSION_FLAG_CLOSING);
     // 如果正在其他任务中执行移除流程，这里直接跳过即可
     if (!flag_guard) {
-      return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
 
     // 连接断开的时候需要保存一下数据
@@ -58,7 +58,7 @@ task_action_player_logout::result_type task_action_player_logout::operator()() {
         FWPLOGERROR(*user, "kickoff failed, res: {}({})", get_response_code(),
                     protobuf_mini_dumper_get_error_msg(get_response_code()));
 
-        return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+        TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
       }
 
       if (user_writeable && !user->has_session()) {
@@ -72,7 +72,7 @@ task_action_player_logout::result_type task_action_player_logout::operator()() {
     }
   }
 
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 int task_action_player_logout::on_success() { return get_result(); }

@@ -9,6 +9,8 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
+#include <std/explicit_declare.h>
+
 #include <design_pattern/singleton.h>
 
 #include <config/server_frame_build_feature.h>
@@ -34,25 +36,27 @@ class transaction_manager : public util::design_pattern::singleton<transaction_m
 
   inline void stop() { is_exiting_ = true; }
 
-  rpc::result_code_type save(rpc::context& ctx, transaction_ptr_type& data);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type save(rpc::context& ctx, transaction_ptr_type& data);
 
-  rpc::result_code_type create_transaction(rpc::context& ctx,
-                                           atframework::distributed_system::transaction_blob_storage&& storage);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_transaction(
+      rpc::context& ctx, atframework::distributed_system::transaction_blob_storage&& storage);
 
-  rpc::result_code_type mutable_transaction(rpc::context& ctx,
-                                            const atframework::distributed_system::transaction_metadata& metadata,
-                                            transaction_ptr_type& out);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_transaction(
+      rpc::context& ctx, const atframework::distributed_system::transaction_metadata& metadata,
+      transaction_ptr_type& out);
 
-  rpc::result_code_type try_commit(rpc::context& ctx, transaction_ptr_type& trans, const std::string& participator_key);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type try_commit(rpc::context& ctx, transaction_ptr_type& trans,
+                                                           const std::string& participator_key);
 
-  rpc::result_code_type try_reject(rpc::context& ctx, transaction_ptr_type& trans, const std::string& participator_key);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type try_reject(rpc::context& ctx, transaction_ptr_type& trans,
+                                                           const std::string& participator_key);
 
-  rpc::result_code_type try_commit(rpc::context& ctx, transaction_ptr_type& trans);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type try_commit(rpc::context& ctx, transaction_ptr_type& trans);
 
-  rpc::result_code_type try_reject(rpc::context& ctx, transaction_ptr_type& trans);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type try_reject(rpc::context& ctx, transaction_ptr_type& trans);
 
-  rpc::result_code_type try_remove(rpc::context& ctx,
-                                   const atframework::distributed_system::transaction_metadata& metadata);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type try_remove(
+      rpc::context& ctx, const atframework::distributed_system::transaction_metadata& metadata);
 
  private:
   bool is_exiting_;

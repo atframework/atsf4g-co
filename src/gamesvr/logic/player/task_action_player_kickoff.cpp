@@ -54,14 +54,14 @@ task_action_player_kickoff::result_type task_action_player_kickoff::operator()()
     if (res < 0) {
       FWLOGERROR("user {}({}:{}) try load login data failed.", player_open_id, player_zone_id, player_user_id);
       set_response_code(PROJECT_NAMESPACE_ID::err::EN_DB_REPLY_ERROR);
-      return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
 
     if (user_lg->router_server_id() != logic_config::me()->get_local_server_id()) {
       FWLOGERROR("user {}({}:{}) login pd error(expected: 0x{:x}, real: 0x{:x})", player_open_id, player_zone_id,
                  player_user_id, logic_config::me()->get_local_server_id(), user_lg->router_server_id());
       set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
-      return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
 
     user_lg->set_router_server_id(0);
@@ -69,17 +69,17 @@ task_action_player_kickoff::result_type task_action_player_kickoff::operator()()
     if (res < 0) {
       FWLOGERROR("user {}({}:{}) try load login data failed.", player_open_id, player_zone_id, player_user_id);
       set_response_code(PROJECT_NAMESPACE_ID::err::EN_DB_SEND_FAILED);
-      return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
 
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   set_response_code(RPC_AWAIT_CODE_RESULT(user->await_before_logout_tasks(get_shared_context())));
   if (get_response_code() < 0) {
     FWPLOGERROR(*user, "kickoff failed, res: {}({})", get_response_code(),
                 protobuf_mini_dumper_get_error_msg(get_response_code()));
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 仅在有session时才下发踢出消息
@@ -102,10 +102,10 @@ task_action_player_kickoff::result_type task_action_player_kickoff::operator()()
     FWLOGERROR("kickoff user {}({}:{}) failed, res: {}({})", user->get_open_id(), player_zone_id, user->get_user_id(),
                remove_res, protobuf_mini_dumper_get_error_msg(remove_res));
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 int task_action_player_kickoff::on_success() { return get_result(); }

@@ -31,7 +31,7 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
 
   // TODO ...
 
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 int task_action_login_auth::on_success() { return get_result(); }

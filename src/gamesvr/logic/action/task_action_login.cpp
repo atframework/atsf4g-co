@@ -56,20 +56,20 @@ task_action_login::result_type task_action_login::operator()() {
     res = RPC_AWAIT_CODE_RESULT(await_io_task(get_shared_context(), user));
     if (res < 0) {
       set_response_code(res);
-      return res;
+      TASK_ACTION_RETURN_CODE(res);
     }
   }
 
   if (user && user->get_login_info().login_code() == req_body.login_code() &&
       util::time::time_utility::get_now() <= static_cast<time_t>(user->get_login_info().login_code_expired()) &&
       user->is_writable()) {
-    replace_session(user);
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    RPC_AWAIT_IGNORE_RESULT(replace_session(user));
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   if (player_manager::me()->has_create_user_lock(req_body.user_id(), zone_id)) {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_OTHER_DEVICE);
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 如果有缓存要强制失效，因为可能其他地方登入了，这时候也不能复用缓存
@@ -82,28 +82,28 @@ task_action_login::result_type task_action_login::operator()() {
   if (res < 0) {
     FWLOGERROR("player {} not found", req_body.open_id());
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   if (req_body.user_id() != tb.user_id()) {
     FWLOGERROR("player {} expect user_id={}, but we got {} not found", req_body.open_id(), tb.user_id(),
                req_body.user_id());
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_USERID_NOT_MATCH);
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 2. 校验登入码
   if (util::time::time_utility::get_now() > tb.login_code_expired()) {
     FWLOGERROR("player {}({}:{}) login code expired", req_body.open_id(), zone_id, req_body.user_id());
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   if (0 != UTIL_STRFUNC_STRCMP(req_body.login_code().c_str(), tb.login_code().c_str())) {
     FWLOGERROR("player {}({}:{}) login code error(expected: {}, real: {})", req_body.open_id(), zone_id,
                req_body.user_id(), tb.login_code(), req_body.login_code());
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 3. 写入登入信息和登入信息续期会在路由系统中完成
@@ -119,7 +119,7 @@ task_action_login::result_type task_action_login::operator()() {
     } else {
       set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_USER_NOT_FOUND);
     }
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 4. 先读本地缓存
@@ -127,7 +127,7 @@ task_action_login::result_type task_action_login::operator()() {
   if (!my_sess) {
     FWLOGERROR("session not found");
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_NOT_LOGIN);
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   user->set_client_info(req_body.client_info());
@@ -140,14 +140,14 @@ task_action_login::result_type task_action_login::operator()() {
   if (!my_sess) {
     FWLOGERROR("session not found");
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_NOT_LOGIN);
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
 
   my_sess->set_player(user);
 
   FWPLOGDEBUG(*user, "login curr data version: {}", user->get_version());
 
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 int task_action_login::on_success() {
@@ -270,14 +270,14 @@ int task_action_login::on_failed() {
   return get_result();
 }
 
-task_action_login::result_type task_action_login::replace_session(std::shared_ptr<player> user) {
+rpc::result_code_type task_action_login::replace_session(std::shared_ptr<player> user) {
   FWPLOGDEBUG(*user, "relogin using login code: {}", get_request_body().login_code());
 
   // 获取当前Session
   std::shared_ptr<session> cur_sess = get_session();
   if (!cur_sess) {
     FWLOGERROR("session not found");
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 踢出前一个session
@@ -285,7 +285,7 @@ task_action_login::result_type task_action_login::replace_session(std::shared_pt
 
   // 重复的登入包直接接受
   if (cur_sess == old_sess) {
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   user->set_session(get_shared_context(), cur_sess);
@@ -298,7 +298,7 @@ task_action_login::result_type task_action_login::replace_session(std::shared_pt
 
   FWPLOGDEBUG(*user, "relogin curr data version: {}", user->get_version());
 
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 rpc::result_code_type task_action_login::await_io_task(rpc::context&, std::shared_ptr<player> user) {

@@ -31,9 +31,9 @@ class task_action_login
   int on_failed() override;
 
  private:
-  task_action_login::result_type replace_session(std::shared_ptr<player> user);
-  rpc::result_code_type await_io_task(rpc::context &ctx, std::shared_ptr<player> user);
-  
+  rpc::result_code_type replace_session(std::shared_ptr<player> user);
+  rpc::result_code_type await_io_task(rpc::context& ctx, std::shared_ptr<player> user);
+
  private:
   bool is_new_player_;
 };

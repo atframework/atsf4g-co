@@ -22,7 +22,7 @@
 
 namespace rpc {
 rpc_result<task_types::task_ptr_type, int> async_invoke(context &ctx, gsl::string_view name,
-                                                        std::function<task_action_base::result_type(context &)> fn,
+                                                        std::function<result_code_type(context &)> fn,
                                                         std::chrono::system_clock::duration timeout) {
   if (!fn) {
     return rpc_result<task_types::task_ptr_type, int>::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
@@ -60,36 +60,27 @@ rpc_result<task_types::task_ptr_type, int> async_invoke(context &ctx, gsl::strin
 }
 
 rpc_result<task_types::task_ptr_type, int> async_invoke(gsl::string_view caller_name, gsl::string_view name,
-                                                        std::function<task_action_base::result_type(context &)> fn,
+                                                        std::function<result_code_type(context &)> fn,
                                                         std::chrono::system_clock::duration timeout) {
   rpc::context ctx;
-  rpc::context::tracer tracer;
-  rpc::context::trace_option trace_option;
-  trace_option.dispatcher = nullptr;
-  trace_option.is_remote = false;
-  trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
-
-  ctx.setup_tracer(tracer, ::rpc::context::tracer::string_view{caller_name.data(), caller_name.size()},
-                   std::move(trace_option));
-
   return async_invoke(ctx, name, std::move(fn), timeout);
 }
 
 result_code_type wait_tasks(const std::vector<task_types::task_ptr_type> &tasks) {
   task_types::task_ptr_type self_task(task_manager::task_t::this_task());
   if (!self_task) {
-    return result_code_type(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
   }
 
   while (true) {
     if (self_task->is_timeout()) {
-      return result_code_type(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
     } else if (self_task->is_faulted()) {
-      return result_code_type(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
     } else if (self_task->is_canceled()) {
-      return result_code_type(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
     } else if (self_task->is_exiting()) {
-      return result_code_type(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING);
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING);
     }
 
     task_types::task_ptr_type last_task;
@@ -116,7 +107,7 @@ result_code_type wait_tasks(const std::vector<task_types::task_ptr_type> &tasks)
     self_task->await_task(last_task);
   }
 
-  return result_code_type(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 }  // namespace rpc

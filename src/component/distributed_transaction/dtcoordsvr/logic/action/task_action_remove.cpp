@@ -37,13 +37,13 @@ task_action_remove::result_type task_action_remove::operator()() {
     FWLOGERROR("try to find transaction uuid from request {} for {} failed.", "SSDistributeTransactionRemoveReq",
                "task_action_remove");
     set_response_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
   set_response_code(
       RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_remove(get_shared_context(), req_body.metadata())));
 
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 int task_action_remove::on_success() { return get_result(); }

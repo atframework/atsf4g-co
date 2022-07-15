@@ -43,7 +43,7 @@ task_action_ping::result_type task_action_ping::operator()() {
   if (!user) {
     FWLOGERROR("not logined.");
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 用户更新心跳信息
@@ -115,7 +115,7 @@ task_action_ping::result_type task_action_ping::operator()() {
     RPC_AWAIT_IGNORE_RESULT(player_manager::me()->remove(get_shared_context(), user));
   }
 
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 int task_action_ping::on_success() { return get_result(); }

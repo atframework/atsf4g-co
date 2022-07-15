@@ -19,24 +19,158 @@
 #include <list>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <utility>
+
+#ifdef __cpp_impl_three_way_comparison
+#  include <compare>
+#endif
 
 #include "dispatcher/dispatcher_type_defines.h"
 
-/**
- * action 默认结构
- * action rpc 接口
- * action rpc.1 记录+Dispatcher发送接口（出错则直接返回）
- * action rpc.2 检查回包+填充rsp包+返回调用者
- *
- * action rpc 启动（填充初始包+ operator()(void*) => operator()() ）
- */
-
 class player_cache;
 
-class task_action_base : public ::cotask::impl::task_action_impl {
+class task_action_result_type {
  public:
-  using result_type = int;
+  using value_type = int32_t;
+
+ private:
+  template <class T>
+  struct get_value_trait;
+
+  template <class T>
+  struct get_value_trait {
+    inline static value_type get_value(const T &value) { return value; }
+  };
+
+  template <class T>
+  struct convertiable_to_resule_type : public std::conditional<std::is_enum<T>::value || std::is_signed<T>::value,
+                                                               std::true_type, std::false_type>::type {};
+
+ public:
+  explicit inline task_action_result_type(value_type code) : result_code_(code) {}
+  inline task_action_result_type(const task_action_result_type &) = default;
+  inline task_action_result_type(task_action_result_type &&) = default;
+  inline task_action_result_type &operator=(const task_action_result_type &) = default;
+  inline task_action_result_type &operator=(task_action_result_type &&) = default;
+
+  inline operator value_type() const noexcept { return result_code_; }
+
+  template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
+  inline task_action_result_type &operator=(TOTHER &&other) noexcept {
+    result_code_ = get_value_trait<TOTHER>::get_value(other);
+    return *this;
+  }
+
+  inline friend bool operator==(const task_action_result_type &self, const task_action_result_type &other) noexcept {
+    return self.result_code_ == other.result_code_;
+  }
+
+  template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
+  inline friend bool operator==(const task_action_result_type &self, TOTHER &&other) noexcept {
+    return self.result_code_ == get_value_trait<TOTHER>::get_value(other);
+  }
+
+  template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
+  inline friend bool operator==(TOTHER &&other, const task_action_result_type &self) noexcept {
+    return get_value_trait<TOTHER>::get_value(other) == self.result_code_;
+  }
+
+#ifdef __cpp_impl_three_way_comparison
+  inline friend std::strong_ordering operator<=>(const task_action_result_type &self,
+                                                 const task_action_result_type &other) noexcept {
+    return self.result_code_ <=> other.result_code_;
+  }
+
+  template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
+  inline friend std::strong_ordering operator<=>(const task_action_result_type &self, TOTHER &&other) noexcept {
+    return self.result_code_ <=> get_value_trait<TOTHER>::get_value(other);
+  }
+
+  template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
+  inline friend std::strong_ordering operator<=>(TOTHER &&other, const task_action_result_type &self) noexcept {
+    return get_value_trait<TOTHER>::get_value(other) <=> self.result_code_;
+  }
+#else
+
+  inline friend bool operator!=(const task_action_result_type &self, const task_action_result_type &other) noexcept {
+    return self.result_code_ != other.result_code_;
+  }
+
+  template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
+  inline friend bool operator!=(const task_action_result_type &self, TOTHER &&other) noexcept {
+    return self.result_code_ != get_value_trait<TOTHER>::get_value(other);
+  }
+
+  template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
+  inline friend bool operator!=(TOTHER &&other, const task_action_result_type &self) noexcept {
+    return get_value_trait<TOTHER>::get_value(other) != self.result_code_;
+  }
+
+  inline friend bool operator<(const task_action_result_type &self, const task_action_result_type &other) noexcept {
+    return self.result_code_ < other.result_code_;
+  }
+
+  template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
+  inline friend bool operator<(const task_action_result_type &self, TOTHER &&other) noexcept {
+    return self.result_code_ < get_value_trait<TOTHER>::get_value(other);
+  }
+
+  template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
+  inline friend bool operator<(TOTHER &&other, const task_action_result_type &self) noexcept {
+    return get_value_trait<TOTHER>::get_value(other) < self.result_code_;
+  }
+
+  inline friend bool operator<=(const task_action_result_type &self, const task_action_result_type &other) noexcept {
+    return self.result_code_ <= other.result_code_;
+  }
+
+  template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
+  inline friend bool operator<=(const task_action_result_type &self, TOTHER &&other) noexcept {
+    return self.result_code_ <= get_value_trait<TOTHER>::get_value(other);
+  }
+
+  template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
+  inline friend bool operator<=(TOTHER &&other, const task_action_result_type &self) noexcept {
+    return get_value_trait<TOTHER>::get_value(other) <= self.result_code_;
+  }
+
+  inline friend bool operator>(const task_action_result_type &self, const task_action_result_type &other) noexcept {
+    return self.result_code_ > other.result_code_;
+  }
+
+  template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
+  inline friend bool operator>(const task_action_result_type &self, TOTHER &&other) noexcept {
+    return self.result_code_ > get_value_trait<TOTHER>::get_value(other);
+  }
+
+  template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
+  inline friend bool operator>(TOTHER &&other, const task_action_result_type &self) noexcept {
+    return get_value_trait<TOTHER>::get_value(other) > self.result_code_;
+  }
+
+  inline friend bool operator>=(const task_action_result_type &self, const task_action_result_type &other) noexcept {
+    return self.result_code_ >= other.result_code_;
+  }
+
+  template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
+  inline friend bool operator>=(const task_action_result_type &self, TOTHER &&other) noexcept {
+    return self.result_code_ >= get_value_trait<TOTHER>::get_value(other);
+  }
+
+  template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
+  inline friend bool operator>=(TOTHER &&other, const task_action_result_type &self) noexcept {
+    return get_value_trait<TOTHER>::get_value(other) >= self.result_code_;
+  }
+#endif
+
+ private:
+  value_type result_code_;
+};
+
+class task_action_base : public cotask::impl::task_action_impl {
+ public:
+  using result_type = task_action_result_type;
   using on_finished_callback_fn_t = std::function<void(const task_action_base &)>;
   using on_finished_callback_set_t = std::list<on_finished_callback_fn_t>;
   using on_finished_callback_handle_t = on_finished_callback_set_t::iterator;
@@ -230,4 +364,18 @@ struct formatter<T, typename std::enable_if<std::is_base_of<task_action_base, T>
     return LOG_WRAPPER_FWAPI_FORMAT_TO(ctx.out(), "task action {} [{:x}]", action.name(), action.get_task_id());
   }
 };
+
+template <class CharT>
+struct formatter<task_action_result_type, CharT> : formatter<task_action_result_type::value_type, CharT> {
+  template <class FormatContext>
+  auto format(task_action_result_type const &val, FormatContext &ctx) -> decltype(ctx.out()) {
+    return formatter<task_action_result_type::value_type, CharT>::format(
+        static_cast<task_action_result_type::value_type>(val), ctx);
+  }
+};
+
 }  // namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID
+
+// When using c++20 coroutine, declare TASK_ACTION_RETURN_CODE like this
+//   #define TASK_ACTION_RETURN_CODE(x) co_return (x)
+#define TASK_ACTION_RETURN_CODE(x) return task_action_result_type(static_cast<task_action_result_type::value_type>(x))

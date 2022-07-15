@@ -42,7 +42,7 @@ task_action_set_server_time::result_type task_action_set_server_time::operator()
   strftime(str, sizeof(str) - 1, "%Y-%m-%d %H:%M:%S", &tt);
   FWLOGWARNING("Current time: ", str);
 
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 int task_action_set_server_time::on_success() { return get_result(); }

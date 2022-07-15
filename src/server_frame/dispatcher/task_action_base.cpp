@@ -245,8 +245,11 @@ int task_action_base::operator()(void *priv_data) {
   }
 
   _notify_finished(*task);
-  tracer.return_code(result_);
-  return ret;
+
+  if (result_ >= 0) {
+    ret = result_;
+  }
+  return tracer.return_code(ret);
 }
 
 task_action_base::result_type task_action_base::hook_run() { return (*this)(); }

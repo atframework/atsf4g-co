@@ -52,7 +52,7 @@ task_action_ss_req_base::result_type task_action_ss_req_base::hook_run() {
     std::pair<bool, int> result;
     RPC_AWAIT_IGNORE_RESULT(filter_router_msg(mgr, obj, result));
     if (false == result.first) {
-      return result.second;
+      TASK_ACTION_RETURN_CODE(result.second);
     }
 
     auto trace_span = get_shared_context().get_trace_span();
@@ -70,7 +70,8 @@ task_action_ss_req_base::result_type task_action_ss_req_base::hook_run() {
       router_manager_set::me()->mark_fast_save(mgr, obj);
     }
   }
-  return ret;
+
+  TASK_ACTION_RETURN_CODE(ret);
 }
 
 uint64_t task_action_ss_req_base::get_request_bus_id() const {

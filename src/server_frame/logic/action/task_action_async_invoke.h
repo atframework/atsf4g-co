@@ -11,11 +11,13 @@
 #include <functional>
 #include <string>
 
+#include "rpc/rpc_common_types.h"
+
 class task_action_async_invoke : public task_action_no_req_base {
  public:
   struct ctor_param_t : public task_action_no_req_base::ctor_param_t {
     std::string name;
-    std::function<int(rpc::context &)> callable;
+    std::function<rpc::result_code_type(rpc::context &)> callable;
   };
 
  public:

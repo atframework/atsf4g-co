@@ -38,7 +38,7 @@ task_action_participator_resolve_transaction::result_type task_action_participat
   // set_user_key(param_.user_id, param_.zone_id);
 
   if (!param_.participantor) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
   auto this_task = task_manager::task_t::this_task();
@@ -47,7 +47,7 @@ task_action_participator_resolve_transaction::result_type task_action_participat
   bool is_writable = false;
   RPC_AWAIT_IGNORE_RESULT(param_.participantor->check_writable(get_shared_context(), is_writable));
   if (!is_writable) {
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 提交所有的已执行和已拒绝事务
@@ -105,7 +105,7 @@ task_action_participator_resolve_transaction::result_type task_action_participat
   // 重置下一次同步时间
   // 重置定时器
 
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 int task_action_participator_resolve_transaction::on_success() {

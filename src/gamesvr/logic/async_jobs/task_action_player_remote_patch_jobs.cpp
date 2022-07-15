@@ -83,7 +83,7 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
   need_restart_ = false;
   is_writable_ = false;
   if (!param_.user) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
   set_user_key(param_.user->get_user_id(), param_.user->get_zone_id());
   param_.user->refresh_feature_limit(get_shared_context());
@@ -94,17 +94,17 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
 
   // 缓存已被移除，当前player可能是上下文缓存，忽略patch
   if (!cache) {
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 缓存已被踢出，当前player是路由缓存，忽略patch
   if (!cache->is_writable()) {
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 注意这里会续期缓存生命周期，所以要确保前面判定都过后才能到这里
   if (!cache->is_object_equal(param_.user)) {
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
   is_writable_ = true;
   need_restart_ = false;
@@ -258,7 +258,7 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
   if (PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE == ret) {
     ret = 0;
   }
-  return ret;
+  TASK_ACTION_RETURN_CODE(ret);
 }
 
 int task_action_player_remote_patch_jobs::on_success() {

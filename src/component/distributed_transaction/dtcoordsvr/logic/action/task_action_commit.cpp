@@ -28,32 +28,32 @@ task_action_commit::~task_action_commit() {}
 const char* task_action_commit::name() const { return "task_action_commit"; }
 
 task_action_commit::result_type task_action_commit::operator()() {
-  EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
-  EXPLICIT_UNUSED_ATTR rpc_response_type& rsp_body = get_response_body();
+  const rpc_request_type& req_body = get_request_body();
+  rpc_response_type& rsp_body = get_response_body();
 
   if (req_body.metadata().transaction_uuid().empty()) {
     FWLOGERROR("try to find transaction id from request {} for {} failed.", "SSDistributeTransactionCommitReq",
                "task_action_commit");
     set_response_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
   transaction_manager::transaction_ptr_type trans;
   set_response_code(RPC_AWAIT_CODE_RESULT(
       transaction_manager::me()->mutable_transaction(get_shared_context(), req_body.metadata(), trans)));
   if (0 != get_response_code()) {
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   if (!trans) {
     set_response_code(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   set_response_code(RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(get_shared_context(), trans)));
   protobuf_copy_message(*rsp_body.mutable_metadata(), trans->data_object.metadata());
 
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 int task_action_commit::on_success() { return get_result(); }

@@ -54,7 +54,7 @@ ${task_class_name}::result_type ${task_class_name}::operator()() {
 
   // TODO ...
 
-  return ${project_namespace}::err::EN_SUCCESS;
+  TASK_ACTION_RETURN_CODE(${project_namespace}::err::EN_SUCCESS);
 }
 
 int ${task_class_name}::on_success() { return get_result(); }
