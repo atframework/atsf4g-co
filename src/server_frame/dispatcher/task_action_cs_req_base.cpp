@@ -61,7 +61,7 @@ task_action_cs_req_base::result_type task_action_cs_req_base::hook_run() {
     player_cache->refresh_feature_limit(get_shared_context());
   }
 
-  int ret = base_type::hook_run();
+  result_type::value_type ret = RPC_AWAIT_CODE_RESULT(base_type::hook_run());
 
   // 自动设置快队列保存
   do {

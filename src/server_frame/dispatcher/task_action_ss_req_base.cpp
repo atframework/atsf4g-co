@@ -64,7 +64,7 @@ task_action_ss_req_base::result_type task_action_ss_req_base::hook_run() {
   }
 
   // 自动设置快队列保存
-  int ret = base_type::hook_run();
+  result_type::value_type ret = RPC_AWAIT_CODE_RESULT(base_type::hook_run());
   if (nullptr != get_dispatcher_start_data().options && get_dispatcher_start_data().options->mark_fast_save()) {
     if (mgr && obj) {
       router_manager_set::me()->mark_fast_save(mgr, obj);
