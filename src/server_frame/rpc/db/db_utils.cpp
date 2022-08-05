@@ -133,7 +133,7 @@ bool result_type::is_error() const noexcept {
   return *ret < 0;
 }
 
-redis_args::redis_args(size_t argc) : used_(0), free_buffer_(::rpc::db::detail::get_pack_tls_buffer()) {
+redis_args::redis_args(size_t argc) : used_(0), free_buffer_(rpc::db::detail::get_pack_tls_buffer()) {
   segment_value_.resize(argc);
   segment_length_.resize(argc);
 }
@@ -147,7 +147,7 @@ char *redis_args::alloc(size_t sz) {
     return nullptr;
   }
 
-  size_t used_buf_len = free_buffer_ - ::rpc::db::detail::get_pack_tls_buffer();
+  size_t used_buf_len = free_buffer_ - rpc::db::detail::get_pack_tls_buffer();
   if (used_buf_len + sz > PROJECT_RPC_DB_BUFFER_LENGTH) {
     WLOGERROR("buffer length extended before padding");
     assert(false);

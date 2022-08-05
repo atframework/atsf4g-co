@@ -75,7 +75,7 @@ static int fetch_user_login_cache(rpc::context& ctx, uint64_t user_id, uint32_t 
   }
 
   std::string version;
-  int ret = ::rpc::db::login::get(ctx, std::to_string(user_id).c_str(), zone_id, rsp, version);
+  int ret = RPC_AWAIT_CODE_RESULT(rpc::db::login::get(ctx, std::to_string(user_id).c_str(), zone_id, rsp, version));
   if (0 == ret) {
     protobuf_copy_message(local_cache[key], rsp);
   }
@@ -83,7 +83,7 @@ static int fetch_user_login_cache(rpc::context& ctx, uint64_t user_id, uint32_t 
 }
 }  // namespace detail
 
-int get_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
+int get_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
              std::vector<async_jobs_record>& out) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid paronlineameters.(jobs_type={}, user_id={})", __FUNCTION__, jobs_type,
@@ -98,11 +98,11 @@ int get_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t 
   }
 
   // TODO db operation
-  // return rpc::db::TABLE_USER_ASYNC_JOBS_DEF::get_all(ctx, jobs_type, user_id, zone_id, out);
+  // return RPC_AWAIT_CODE_RESULT(rpc::db::TABLE_USER_ASYNC_JOBS_DEF::get_all(ctx, jobs_type, user_id, zone_id, out));
   return 0;
 }
 
-int del_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
+int del_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
              const std::vector<int64_t>& in) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={})", __FUNCTION__, jobs_type, user_id);
@@ -124,7 +124,7 @@ int del_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t 
   return 0;
 }
 
-int add_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
+int add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
              PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data& in) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
@@ -146,7 +146,7 @@ int add_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t 
   }
 
   if (in.action_uuid().empty()) {
-    in.set_action_uuid(::rpc::db::uuid::generate_short_uuid());
+    in.set_action_uuid(rpc::db::uuid::generate_short_uuid());
   }
   in.set_timepoint_ms(util::time::time_utility::get_now() * 1000 + util::time::time_utility::get_now_usec() / 1000);
 
@@ -163,7 +163,7 @@ int add_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t 
     PROJECT_NAMESPACE_ID::table_login* login_table = ctx.create<PROJECT_NAMESPACE_ID::table_login>();
     PROJECT_NAMESPACE_ID::SSPlayerAsyncJobsSync* req_body = ctx.create<PROJECT_NAMESPACE_ID::SSPlayerAsyncJobsSync>();
     if (nullptr == login_table || nullptr == req_body) {
-      FWLOGERROR("::rpc::db::login::get({}, {}) create table_login or SSPlayerAsyncJobsSync failed, ignore notify",
+      FWLOGERROR("rpc::db::login::get({}, {}) create table_login or SSPlayerAsyncJobsSync failed, ignore notify",
                  user_id, zone_id);
       break;
     }
@@ -171,9 +171,9 @@ int add_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t 
     int res = detail::fetch_user_login_cache(ctx, user_id, zone_id, *login_table);
     if (res < 0) {
       if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == res) {
-        FWLOGWARNING("::rpc::db::login::get({}, {}) but not found, maybe not created yet", user_id, zone_id);
+        FWLOGWARNING("rpc::db::login::get({}, {}) but not found, maybe not created yet", user_id, zone_id);
       } else {
-        FWLOGERROR("::rpc::db::login::get({}, {}) failed, res: {}", user_id, zone_id, res);
+        FWLOGERROR("rpc::db::login::get({}, {}) failed, res: {}", user_id, zone_id, res);
       }
       break;
     }
@@ -190,7 +190,7 @@ int add_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t 
   return ret;
 }
 
-int remove_all_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id) {
+int remove_all_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={})", __FUNCTION__, jobs_type, user_id);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
@@ -207,7 +207,7 @@ int remove_all_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, ui
   return 0;
 }
 
-int update_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
+int update_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
                 PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data& inout, int64_t record_index, int64_t* version) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
@@ -235,7 +235,7 @@ int update_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32
   }
 
   if (inout.action_uuid().empty()) {
-    inout.set_action_uuid(::rpc::db::uuid::generate_short_uuid());
+    inout.set_action_uuid(rpc::db::uuid::generate_short_uuid());
   }
 
   inout.set_timepoint_ms(util::time::time_utility::get_now() * 1000 + util::time::time_utility::get_now_usec() / 1000);
@@ -253,7 +253,7 @@ int update_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32
     PROJECT_NAMESPACE_ID::table_login* login_table = ctx.create<PROJECT_NAMESPACE_ID::table_login>();
     PROJECT_NAMESPACE_ID::SSPlayerAsyncJobsSync* req_body = ctx.create<PROJECT_NAMESPACE_ID::SSPlayerAsyncJobsSync>();
     if (nullptr == login_table || nullptr == req_body) {
-      FWLOGERROR("::rpc::db::login::get({}, {}) create TABLE_LOGIN_DEF or SSPlayerAsyncJobsSync failed, ignore notify",
+      FWLOGERROR("rpc::db::login::get({}, {}) create TABLE_LOGIN_DEF or SSPlayerAsyncJobsSync failed, ignore notify",
                  user_id, zone_id);
       break;
     }
@@ -261,9 +261,9 @@ int update_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32
     int res = detail::fetch_user_login_cache(ctx, user_id, zone_id, *login_table);
     if (res < 0) {
       if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == res) {
-        FWLOGWARNING("::rpc::db::login::get({}, {}) but not found, maybe not created yet", user_id, zone_id);
+        FWLOGWARNING("rpc::db::login::get({}, {}) but not found, maybe not created yet", user_id, zone_id);
       } else {
-        FWLOGERROR("::rpc::db::login::get({}, {}) failed, res: {}", user_id, zone_id, res);
+        FWLOGERROR("rpc::db::login::get({}, {}) failed, res: {}", user_id, zone_id, res);
       }
       break;
     }

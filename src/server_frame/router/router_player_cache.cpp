@@ -83,6 +83,7 @@ rpc::result_code_type router_player_cache::pull_cache(rpc::context &ctx, router_
   }
 
   // 设置路由ID
+  // 注意: 如果要改成同账号跨大区也不能多处登入（Login表跨大区），这里要判定当前zone_id是否和login表一致
   set_router_server_id(login_table_ptr->router_server_id(), login_table_ptr->router_version());
 
   obj->load_and_move_login_info(COPP_MACRO_STD_MOVE(*login_table_ptr), *local_login_ver_ptr);
@@ -122,6 +123,13 @@ rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, router
   if (!obj || !obj->can_be_writable()) {
     FWLOGERROR("pull_object for {}:{}:{} failed, error code: {}", get_key().type_id, get_key().zone_id,
                get_key().object_id, static_cast<int>(PROJECT_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY));
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY);
+  }
+
+  // 异常冲突保护，如果需要处理合服逻辑，这里要允许mapping的服务大区
+  if (get_key().zone_id != logic_config::me()->get_local_zone_id()) {
+    FWLOGERROR("pull_object for {}:{} failed, should not pulled on local zone {}", get_key().zone_id,
+               get_key().object_id, logic_config::me()->get_local_zone_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY);
   }
 
@@ -334,7 +342,7 @@ rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void *
       } else {
         set_router_server_id(obj->get_login_info().router_server_id(), obj->get_login_info().router_version());
       }
-    } else if (obj->get_session()) {  // 续期login code
+    } else {  // 续期login code
       uint64_t old_router_server_id = obj->get_login_info().router_server_id();
       uint64_t old_router_ver = obj->get_login_info().router_version();
 
@@ -344,9 +352,11 @@ rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void *
       }
 
       // 鉴权登入码续期
-      obj->get_login_info().set_login_code_expired(
-          util::time::time_utility::get_now() +
-          logic_config::me()->get_logic().session().login_code_valid_sec().seconds());
+      if (obj->get_session()) {
+        obj->get_login_info().set_login_code_expired(
+            util::time::time_utility::get_now() +
+            logic_config::me()->get_logic().session().login_code_valid_sec().seconds());
+      }
 
       res = RPC_AWAIT_CODE_RESULT(rpc::db::login::set(ctx, obj->get_open_id().c_str(), obj->get_zone_id(),
                                                       obj->get_login_info(), obj->get_login_version()));

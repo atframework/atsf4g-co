@@ -32,7 +32,7 @@ class result_type {
  public:
   result_type();
   explicit result_type(value_type code);
-  operator value_type() const noexcept;
+  explicit operator value_type() const noexcept;
 
   bool is_success() const noexcept;
   bool is_error() const noexcept;

@@ -212,6 +212,9 @@ atapp:
     watcher:
       retry_interval: ${project.get_server_or_global_option('etcd', 'watcher.retry_interval', '15s', 'SYSTEM_MACRO_CUSTOM_ETCD_WATCHER_RETRY_INTERVAL')}       # retry interval watch when previous request failed
       request_timeout: ${project.get_server_or_global_option('etcd', 'watcher.request_timeout', '1h', 'SYSTEM_MACRO_CUSTOM_ETCD_WATCHER_REQUEST_TIMEOUT')}       # request timeout for watching
+      get_request_timeout: ${project.get_server_or_global_option('etcd', 'watcher.get_request_timeout', '1h', 'SYSTEM_MACRO_CUSTOM_ETCD_WATCHER_GET_REQUEST_TIMEOUT')}
+      startup_random_delay_min: ${project.get_server_or_global_option('etcd', 'watcher.startup_random_delay_min', '1h', 'SYSTEM_MACRO_CUSTOM_ETCD_WATCHER_STARTUP_RANDOM_DELAY_MIN')}
+      startup_random_delay_max: ${project.get_server_or_global_option('etcd', 'watcher.startup_random_delay_max', '1h', 'SYSTEM_MACRO_CUSTOM_ETCD_WATCHER_STARTUP_RANDOM_DELAY_MAX')}
       by_id: true
       by_name: true
       # by_type_id: []

@@ -85,7 +85,7 @@ result_type set(rpc::context &ctx, const char *openid, uint32_t zone_id, const P
     RPC_DB_RETURN_CODE(res);
   }
 
-  return rpc::db::result_type(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 }  // namespace login
 }  // namespace db

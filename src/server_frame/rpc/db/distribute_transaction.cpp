@@ -86,7 +86,7 @@ result_type set(rpc::context &ctx, uint32_t zone_id, gsl::string_view transactio
     RPC_DB_RETURN_CODE(res);
   }
 
-  return rpc::db::result_type(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 result_type remove(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid) {
@@ -105,7 +105,7 @@ result_type remove(rpc::context &ctx, uint32_t zone_id, gsl::string_view transac
     RPC_DB_RETURN_CODE(res);
   }
 
-  return rpc::db::result_type(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 }  // namespace distribute_transaction

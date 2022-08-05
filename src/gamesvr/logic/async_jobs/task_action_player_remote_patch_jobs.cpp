@@ -66,7 +66,7 @@ static rpc::result_code_type save_player_data(rpc::context& ctx, router_player_c
 
   if (!complete_jobs_idx.empty()) {
     // 移除远程命令
-    ret = ::rpc::db::async_jobs::del_jobs(ctx, job_type, user_id, zone_id, complete_jobs_idx);
+    ret = RPC_AWAIT_CODE_RESULT(rpc::db::async_jobs::del_jobs(ctx, job_type, user_id, zone_id, complete_jobs_idx));
     if (ret < 0) {
       FWLOGERROR("delete async jobs for player {}({}:{}) failed, res: {}({})", openid, zone_id, user_id, ret,
                  protobuf_mini_dumper_get_error_msg(ret));
@@ -139,8 +139,8 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
     std::vector<rpc::db::async_jobs::async_jobs_record> job_list;
     std::vector<int64_t> complete_jobs_idx;
 
-    ret = ::rpc::db::async_jobs::get_jobs(get_shared_context(), val_desc->number(), param_.user->get_user_id(),
-                                          param_.user->get_zone_id(), job_list);
+    ret = RPC_AWAIT_CODE_RESULT(rpc::db::async_jobs::get_jobs(
+        get_shared_context(), val_desc->number(), param_.user->get_user_id(), param_.user->get_zone_id(), job_list));
     if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
       ret = 0;
       continue;

@@ -50,7 +50,8 @@ task_action_player_kickoff::result_type task_action_player_kickoff::operator()()
     // 尝试保存用户数据
     rpc::context::message_holder<PROJECT_NAMESPACE_ID::table_login> user_lg{get_shared_context()};
     std::string version;
-    int res = rpc::db::login::get(get_shared_context(), player_open_id.c_str(), player_zone_id, *user_lg, version);
+    int res = RPC_AWAIT_CODE_RESULT(
+        rpc::db::login::get(get_shared_context(), player_open_id.c_str(), player_zone_id, *user_lg, version));
     if (res < 0) {
       FWLOGERROR("user {}({}:{}) try load login data failed.", player_open_id, player_zone_id, player_user_id);
       set_response_code(PROJECT_NAMESPACE_ID::err::EN_DB_REPLY_ERROR);
@@ -65,7 +66,8 @@ task_action_player_kickoff::result_type task_action_player_kickoff::operator()()
     }
 
     user_lg->set_router_server_id(0);
-    res = rpc::db::login::set(get_shared_context(), player_open_id.c_str(), player_zone_id, *user_lg, version);
+    res = RPC_AWAIT_CODE_RESULT(
+        rpc::db::login::set(get_shared_context(), player_open_id.c_str(), player_zone_id, *user_lg, version));
     if (res < 0) {
       FWLOGERROR("user {}({}:{}) try load login data failed.", player_open_id, player_zone_id, player_user_id);
       set_response_code(PROJECT_NAMESPACE_ID::err::EN_DB_SEND_FAILED);

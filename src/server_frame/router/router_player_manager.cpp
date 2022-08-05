@@ -90,12 +90,12 @@ rpc::result_code_type router_player_manager::pull_online_server(rpc::context &ct
   PROJECT_NAMESPACE_ID::table_user  tbu;
 
   // ** 如果login表和user表的jey保持一致的话也可以直接从login表取
-  int ret = rpc::db::player::get_basic(key.object_id, key.zone_id, tbu);
+  int ret = RPC_AWAIT_CODE_RESULT(rpc::db::player::get_basic(key.object_id, key.zone_id, tbu));
   if (ret < 0) {
       return ret;
   }
 
-  ret = rpc::db::login::get(tbu.open_id().c_str(), key.zone_id, local_login_tb, local_login_ver);
+  ret = RPC_AWAIT_CODE_RESULT(rpc::db::login::get(tbu.open_id().c_str(), key.zone_id, local_login_tb, local_login_ver));
   if (ret < 0) {
       return ret;
   }

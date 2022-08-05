@@ -36,10 +36,10 @@ task_action_reload_remote_server_configure::result_type task_action_reload_remot
   int32_t local_version = 0;
 
 #if 0  // DB implementation
-  int res = rpc::db::TABLE_SERVICE_CONFIGURE_DEF::get(get_shared_context(), 0, global_conf, &global_version);
+  int res = RPC_AWAIT_CODE_RESULT(rpc::db::TABLE_SERVICE_CONFIGURE_DEF::get(get_shared_context(), 0, global_conf, &global_version));
   if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == res) {
-    rpc::db::TABLE_SERVICE_CONFIGURE_DEF::add(get_shared_context(), global_conf);
-    res = rpc::db::TABLE_SERVICE_CONFIGURE_DEF::get(get_shared_context(), 0, global_conf, &global_version);
+    RPC_AWAIT_IGNORE_RESULT(rpc::db::TABLE_SERVICE_CONFIGURE_DEF::add(get_shared_context(), global_conf));
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::TABLE_SERVICE_CONFIGURE_DEF::get(get_shared_context(), 0, global_conf, &global_version));
   }
 
   if (0 != res) {
@@ -48,13 +48,13 @@ task_action_reload_remote_server_configure::result_type task_action_reload_remot
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  res = rpc::db::TABLE_SERVICE_CONFIGURE_DEF::get(get_shared_context(), logic_config::me()->get_local_zone_id(),
-                                                  local_conf, &local_version);
+  res = RPC_AWAIT_CODE_RESULT(rpc::db::TABLE_SERVICE_CONFIGURE_DEF::get(get_shared_context(), logic_config::me()->get_local_zone_id(),
+                                                  local_conf, &local_version));
   if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == res) {
     local_conf.set_zone_id(logic_config::me()->get_local_zone_id());
-    rpc::db::TABLE_SERVICE_CONFIGURE_DEF::add(get_shared_context(), local_conf);
-    res = rpc::db::TABLE_SERVICE_CONFIGURE_DEF::get(get_shared_context(), logic_config::me()->get_local_zone_id(),
-                                                    local_conf, &local_version);
+    RPC_AWAIT_IGNORE_RESULT(rpc::db::TABLE_SERVICE_CONFIGURE_DEF::add(get_shared_context(), local_conf));
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::TABLE_SERVICE_CONFIGURE_DEF::get(get_shared_context(), logic_config::me()->get_local_zone_id(),
+                                                    local_conf, &local_version));
   }
 
   if (0 != res) {

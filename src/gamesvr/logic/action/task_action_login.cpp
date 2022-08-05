@@ -78,7 +78,8 @@ task_action_login::result_type task_action_login::operator()() {
 
   PROJECT_NAMESPACE_ID::table_login tb;
   std::string version;
-  res = rpc::db::login::get(get_shared_context(), req_body.open_id().c_str(), zone_id, tb, version);
+  res = RPC_AWAIT_CODE_RESULT(
+      rpc::db::login::get(get_shared_context(), req_body.open_id().c_str(), zone_id, tb, version));
   if (res < 0) {
     FWLOGERROR("player {} not found", req_body.open_id());
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);

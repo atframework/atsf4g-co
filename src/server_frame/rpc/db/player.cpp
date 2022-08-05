@@ -95,7 +95,7 @@ result_type set(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const PRO
     RPC_DB_RETURN_CODE(res);
   }
 
-  return rpc::db::result_type(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 }  // namespace player

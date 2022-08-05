@@ -58,8 +58,8 @@ task_action_ping::result_type task_action_ping::operator()() {
     PROJECT_NAMESPACE_ID::table_login tb;
     do {
       std::string login_ver;
-      int res =
-          rpc::db::login::get(get_shared_context(), user->get_open_id().c_str(), user->get_zone_id(), tb, login_ver);
+      int res = RPC_AWAIT_CODE_RESULT(
+          rpc::db::login::get(get_shared_context(), user->get_open_id().c_str(), user->get_zone_id(), tb, login_ver));
       if (res < 0) {
         WLOGERROR("call login rpc Get method failed, user %s, res: %d", user->get_open_id().c_str(), res);
         break;
@@ -91,7 +91,8 @@ task_action_ping::result_type task_action_ping::operator()() {
         set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_SPEED_WARNING);
       }
       // 保存封号结果
-      res = rpc::db::login::set(get_shared_context(), user->get_open_id().c_str(), user->get_zone_id(), tb, login_ver);
+      res = RPC_AWAIT_CODE_RESULT(
+          rpc::db::login::set(get_shared_context(), user->get_open_id().c_str(), user->get_zone_id(), tb, login_ver));
       if (res < 0) {
         WLOGERROR("call login rpc Set method failed, user %s, zone id: %u, res: %d", user->get_open_id().c_str(),
                   user->get_zone_id(), res);
