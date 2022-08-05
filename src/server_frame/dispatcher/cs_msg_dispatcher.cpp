@@ -150,6 +150,8 @@ void cs_msg_dispatcher::on_create_task_failed(start_data_t &start_data, int32_t 
   head->set_client_sequence(real_msg->head().client_sequence());
   if (PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND == error_code) {
     head->set_error_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+  } else if (error_code < 0) {
+    head->set_error_code(error_code);
   } else {
     head->set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN);
   }
