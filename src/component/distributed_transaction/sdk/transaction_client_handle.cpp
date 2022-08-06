@@ -78,7 +78,9 @@ rpc::result_code_type transaction_client_handle::create_transaction(rpc::context
   RPC_RETURN_CODE(child_tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
 }
 
-rpc::result_code_type transaction_client_handle::submit_transaction(rpc::context& ctx, storage_ptr_type& input) {
+rpc::result_code_type transaction_client_handle::submit_transaction(
+    rpc::context& ctx, storage_ptr_type& input, std::unordered_set<std::string>* output_prepared_participators,
+    std::unordered_set<std::string>* output_failed_participators) {
   if (!input) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
@@ -114,6 +116,12 @@ rpc::result_code_type transaction_client_handle::submit_transaction(rpc::context
 
   uint32_t retry_times = 0;
   std::unordered_set<std::string> prepared_participators;
+  if (nullptr == output_prepared_participators) {
+    output_prepared_participators = &prepared_participators;
+  } else {
+    output_prepared_participators->clear();
+  }
+  std::string failed_participator;
   for (auto now = util::time::time_utility::now();
        now < expired_time && retry_times <= input->configure().lock_retry_max_times();
        ++retry_times, now = util::time::time_utility::now()) {
@@ -130,15 +138,25 @@ rpc::result_code_type transaction_client_handle::submit_transaction(rpc::context
           retry_later = true;
           FWLOGWARNING("transaction {} prepare participator {} but resource preempted, we will retry soon later",
                        input->metadata().transaction_uuid(), participator.second.participator_key());
+
+          if (nullptr != output_failed_participators &&
+              ret == PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED) {
+            failed_participator = participator.second.participator_key();
+          }
           break;
         } else if (ret < 0) {
           FWLOGERROR("transaction {} prepare participator {} failed, error code: {}({})",
                      input->metadata().transaction_uuid(), participator.second.participator_key(), ret,
                      protobuf_mini_dumper_get_error_msg(ret));
+
+          if (nullptr != output_failed_participators) {
+            failed_participator = participator.second.participator_key();
+          }
           break;
         }
 
-        prepared_participators.insert(participator.second.participator_key());
+        output_prepared_participators->insert(participator.second.participator_key());
+        failed_participator.clear();
       }
     }
 
@@ -195,7 +213,7 @@ rpc::result_code_type transaction_client_handle::submit_transaction(rpc::context
                protobuf_mini_dumper_get_error_msg(ret));
     // 通知参与者否决提交
     if (vtable_ && vtable_->reject_participator) {
-      for (auto& participator_key : prepared_participators) {
+      for (auto& participator_key : *output_prepared_participators) {
         auto iter = input->participators().find(participator_key);
         if (iter == input->participators().end()) {
           continue;
@@ -220,6 +238,10 @@ rpc::result_code_type transaction_client_handle::submit_transaction(rpc::context
         FWLOGERROR("transaction {} remove failed, res: {}({})", input->metadata().transaction_uuid(), res,
                    protobuf_mini_dumper_get_error_msg(res));
       }
+    }
+
+    if (nullptr != output_failed_participators && !failed_participator.empty()) {
+      output_failed_participators->insert(std::move(failed_participator));
     }
   }
   RPC_RETURN_CODE(child_tracer.return_code(ret));

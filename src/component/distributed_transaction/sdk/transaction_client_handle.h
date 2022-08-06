@@ -30,6 +30,7 @@ class context;
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace atframework {
 namespace distributed_system {
@@ -118,7 +119,18 @@ class transaction_client_handle {
   rpc::result_code_type create_transaction(rpc::context& ctx, storage_ptr_type& output,
                                            const transaction_options& options = {});
 
-  rpc::result_code_type submit_transaction(rpc::context& ctx, storage_ptr_type& input);
+  /**
+   * @brief 执行事务
+   *
+   * @param ctx RPC context
+   * @param input 事务存储结构
+   * @param output_prepared_participators 输出prepare阶段完成的参与者
+   * @param output_failed_participators 输出prepare阶段失败的参与者
+   * @return future of 0 or error code
+   */
+  rpc::result_code_type submit_transaction(rpc::context& ctx, storage_ptr_type& input,
+                                           std::unordered_set<std::string>* output_prepared_participators = nullptr,
+                                           std::unordered_set<std::string>* output_failed_participators = nullptr);
 
   int32_t set_transaction_data(rpc::context& ctx, storage_ptr_type& input, google::protobuf::Message& data);
 
