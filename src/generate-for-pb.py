@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Copyright (c) 2022 atframework
+Copyright (c) 2022 Tencent
 """
 
 # Only support python implement
@@ -459,10 +459,12 @@ class PbDatabase(object):
     def __init__(self):
         from google.protobuf import descriptor_pb2 as pb2
         from google.protobuf import message_factory as _message_factory
+        from google.protobuf import descriptor_pool as _descriptor_pool
 
         self.raw_files = dict()
         self.raw_symbols = dict()
-        self.raw_factory = _message_factory.MessageFactory()
+        self.default_factory = _message_factory.MessageFactory(
+            _descriptor_pool.Default())
         self.extended_factory = _message_factory.MessageFactory()
         self._cache_files = dict()
         self._cache_messages = dict()
@@ -474,8 +476,18 @@ class PbDatabase(object):
             file_proto.name: file_proto
             for file_proto in file_protos
         }
+        added_file = set()
 
         def _AddFile(file_proto):
+            if file_proto.name in added_file:
+                return
+            added_file.add(file_proto.name)
+            try:
+                _already_exists = factory.pool.FindFileByName(file_proto.name)
+                return
+            except KeyError as _:
+                pass
+
             for dependency in file_proto.dependency:
                 if dependency in file_by_name:
                     # Remove from elements to be visited, in order to cut cycles.
@@ -585,9 +597,10 @@ class PbDatabase(object):
                     descriptor_pb2.FileDescriptorProto.FromString(
                         patch_inner_pb_data))
         pb_fds_patched.extend(pb_fds_inner)
-        msg_set = self._register_by_pb_fds(self.raw_factory, pb_fds_patched)
+        msg_set = self._register_by_pb_fds(self.default_factory,
+                                           pb_fds_patched)
 
-        # Use extensions in raw_factory to build extended_factory
+        # Use extensions in default_factory to build extended_factory
         try:
             pb_fds_clazz = msg_set["google.protobuf.FileDescriptorSet"]
         except Exception as e:
@@ -679,6 +692,18 @@ class PbDatabase(object):
         if file_obj is None:
             return None
         return PbEnum(file_obj, target_desc, self)
+
+    def get_extension(self, full_name):
+        if not full_name:
+            return None
+        if full_name in self._cache_enums:
+            return self._cache_enums[full_name]
+        # extension should find from default_factory
+        target_desc = self.default_factory.pool.FindExtensionByName(full_name)
+
+        if target_desc is None:
+            return None
+        return target_desc
 
 
 def parse_generate_rule(rule):
