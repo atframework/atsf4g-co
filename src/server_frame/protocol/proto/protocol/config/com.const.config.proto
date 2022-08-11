@@ -9,8 +9,8 @@ option cc_enable_arenas = true;
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 
-import "protocol/config/extensions/v3/xresloader.proto";
-import "protocol/config/extensions/v3/xresloader_ue.proto";
+import "protocol/common/extensions/v3/xresloader.proto";
+import "protocol/common/extensions/v3/xresloader_ue.proto";
 import "protocol/config/xrescode_extensions_v3.proto";
 
 package hello.config;
