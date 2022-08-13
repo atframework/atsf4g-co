@@ -217,20 +217,24 @@ static inline int __rpc_wait_and_unpack_response(rpc::context &__ctx, uint64_t r
 
   atframework::SSMsg& rsp_msg = *rsp_msg_ptr;
   int res = RPC_AWAIT_CODE_RESULT(rpc::wait(rsp_msg, rpc_sequence));
-  if (res < 0) {
-    return res;
-  }
 
   if (rsp_msg.head().rpc_response().type_url() != type_full_name) {
-    FWLOGERROR("rpc {} expect response message {}, but got {}", rpc_full_name, type_full_name,
-               rsp_msg.head().rpc_response().type_url());
+    if (res >= 0 || !rsp_msg.head().rpc_response().type_url().empty()) {
+      FWLOGERROR("rpc {} expect response message {}, but got {}", rpc_full_name, type_full_name,
+                 rsp_msg.head().rpc_response().type_url());
+    }
+  } else if (!rsp_msg.body_bin().empty()) {
+    return details::__unpack_rpc_body(rsp_body, rsp_msg.body_bin(), rpc_full_name, type_full_name);
   }
 
   if (!rsp_msg.body_bin().empty()) {
     return details::__unpack_rpc_body(rsp_body, rsp_msg.body_bin(), rpc_full_name, type_full_name);
   }
 
-  return rsp_msg.head().error_code();
+  if (rsp_msg.has_head() && rsp_msg.head().error_code() != 0) {
+    return rsp_msg.head().error_code();
+  }
+  return res;
 }
 % endif
 }  // namespace details
