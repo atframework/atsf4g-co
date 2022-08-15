@@ -159,12 +159,15 @@ actor_action_base::result_type actor_action_base::run(void *priv_data) {
   status_ = EN_AAS_FINISHED;
 
   _notify_finished();
+  if (result_ >= 0) {
+    ret = result_;
+  }
   return tracer.return_code(ret);
 }
 
-int actor_action_base::on_success() { return 0; }
+int actor_action_base::on_success() { return get_result(); }
 
-int actor_action_base::on_failed() { return 0; }
+int actor_action_base::on_failed() { return get_result(); }
 
 int actor_action_base::on_complete() { return 0; }
 

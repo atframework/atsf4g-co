@@ -254,9 +254,9 @@ int task_action_base::operator()(void *priv_data) {
 
 task_action_base::result_type task_action_base::hook_run() { return (*this)(); }
 
-int task_action_base::on_success() { return 0; }
+int task_action_base::on_success() { return get_result(); }
 
-int task_action_base::on_failed() { return 0; }
+int task_action_base::on_failed() { return get_result(); }
 
 int task_action_base::on_timeout() { return 0; }
 
