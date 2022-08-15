@@ -231,6 +231,7 @@ project_server_frame_create_protocol_target(
 
 add_custom_command(
   OUTPUT "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb"
+  COMMAND "${CMAKE_COMMAND}" -E remove -f "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb"
   COMMAND
     "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" --proto_path
     "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_COMMON_DIR}" --proto_path "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_CONFIG_DIR}"

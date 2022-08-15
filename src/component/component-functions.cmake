@@ -172,6 +172,11 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
       "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include"
       --proto_path
       "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include")
+  if(PROJECT_COMPONENT_PUBLIC_PROTO_PATH)
+    foreach(PROTO_PATH ${PROJECT_COMPONENT_PUBLIC_PROTO_PATH})
+      list(APPEND APPEND PROTOBUF_PROTO_PATHS "--proto_path" "${PROTO_PATH}")
+    endforeach()
+  endif()
   unset(PUBLIC_LINK_TARGETS)
   unset(INTERFACE_LINK_TARGETS)
   if(project_service_declare_protocol_USE_COMPONENTS)
