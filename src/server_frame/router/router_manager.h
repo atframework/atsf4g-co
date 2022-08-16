@@ -232,6 +232,7 @@ class router_manager : public router_manager_base {
         }
         if (out->is_object_available()) {
           // 触发拉取实体并命中cache时要取消移除缓存和降级的计划任务
+          out->unset_flag(router_object_base::flag_t::EN_ROFT_FORCE_REMOVE_OBJECT);
           out->unset_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_OBJECT);
           out->unset_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);

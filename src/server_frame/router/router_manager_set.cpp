@@ -583,7 +583,7 @@ int router_manager_set::tick_timer(time_t cache_expire, time_t object_expire, ti
       if (obj->check_flag(router_object_base::flag_t::EN_ROFT_IS_OBJECT)) {
         // 实体过期
         if (obj->get_last_visit_time() + object_expire < last_proc_time_ ||
-            obj->check_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_OBJECT)) {
+            obj->check_flag(router_object_base::flag_t::EN_ROFT_FORCE_REMOVE_OBJECT)) {
           pending_action_list_.push_back(pending_action_data());
           pending_action_data &auto_save = pending_action_list_.back();
           auto_save.object = obj;
@@ -591,6 +591,7 @@ int router_manager_set::tick_timer(time_t cache_expire, time_t object_expire, ti
           auto_save.action = EN_ASA_REMOVE_OBJECT;
 
           obj->set_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_OBJECT);
+          obj->unset_flag(router_object_base::flag_t::EN_ROFT_FORCE_REMOVE_OBJECT);
         } else if (obj->get_last_save_time() + object_save < last_proc_time_ ||
                    obj->check_flag(router_object_base::flag_t::EN_ROFT_FORCE_SAVE_OBJECT)) {  // 实体保存
           pending_action_list_.push_back(pending_action_data());

@@ -215,6 +215,7 @@ int router_object_base::upgrade() {
   unset_flag(flag_t::EN_ROFT_CACHE_REMOVED);
 
   // 升级操作要取消移除缓存和降级的计划任务
+  unset_flag(flag_t::EN_ROFT_FORCE_REMOVE_OBJECT);
   unset_flag(flag_t::EN_ROFT_SCHED_REMOVE_OBJECT);
   unset_flag(flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
   return 0;
@@ -396,6 +397,7 @@ rpc::result_code_type router_object_base::pull_cache_inner(rpc::context &ctx, vo
 
 rpc::result_code_type router_object_base::pull_object_inner(rpc::context &ctx, void *priv_data) {
   // 触发拉取实体时要取消移除缓存和降级的计划任务
+  unset_flag(flag_t::EN_ROFT_FORCE_REMOVE_OBJECT);
   unset_flag(flag_t::EN_ROFT_SCHED_REMOVE_OBJECT);
   unset_flag(flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
 

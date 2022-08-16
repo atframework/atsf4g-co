@@ -66,6 +66,7 @@ class router_object_base : public ::util::design_pattern::noncopyable {
       EN_ROFT_SCHED_REMOVE_OBJECT = 0x0100,  // 定时任务 - 实体降级计划任务是否有效
       EN_ROFT_SCHED_REMOVE_CACHE = 0x0200,   // 定时任务 - 移除缓存计划任务是否有效
       EN_ROFT_SCHED_SAVE_OBJECT = 0x0400,    // 定时任务 - 实体保存计划任务是否有效
+      EN_ROFT_FORCE_REMOVE_OBJECT = 0x0800,  // 下一次触发定时器时是否强制执行实体降级
     };
   };
 
