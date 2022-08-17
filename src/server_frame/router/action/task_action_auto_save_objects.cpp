@@ -96,7 +96,7 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
                     mgr->remove_object(ctx, auto_save.object->get_key(), auto_save.object, nullptr));
                 // 失败且期间未升级或mutable_object()，下次重试的时候也要走降级流程
                 if (result < 0 &&
-                    false == auto_save.object->check_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_OBJECT)) {
+                    auto_save.object->check_flag(router_object_base::flag_t::EN_ROFT_SCHED_REMOVE_OBJECT)) {
                   auto_save.object->set_flag(router_object_base::flag_t::EN_ROFT_FORCE_REMOVE_OBJECT);
                 }
               }
