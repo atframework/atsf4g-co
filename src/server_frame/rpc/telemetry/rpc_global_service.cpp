@@ -573,7 +573,7 @@ static opentelemetry::sdk::resource::ResourceAttributes _create_opentelemetry_ap
   }
 
   {
-    auto iter = app.get_metadata().labels().find("env");
+    auto iter = app.get_metadata().labels().find("deployment.environment");
     if (iter != app.get_metadata().labels().end()) {
       resource_values.SetAttribute("deployment.environment", iter->second);
     }
