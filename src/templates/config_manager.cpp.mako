@@ -311,8 +311,8 @@ int config_manager::reload() {
 
 int config_manager::reload_all(bool del_when_failed) {
   int ret = reload();
-  if (0 != ret) {
-    return 0;
+  if (ret < 0) {
+    return ret;
   }
 
   const config_group_ptr_t& cfg_group = get_current_config_group();
