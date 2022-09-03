@@ -36,7 +36,7 @@ else()
   include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/protobuf/protobuf.cmake")
   include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/grpc/import.cmake")
   #
-  # include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/telemetry/prometheus-cpp.cmake")
+  include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/telemetry/prometheus-cpp.cmake")
   if(MSVC AND MSVC_VERSION LESS 1920)
     message(STATUS "Opentelemetry-cpp only support Visual Studio 2019 and upper. Skip it for
   MSVC_VERSION=${MSVC_VERSION}")
@@ -58,13 +58,19 @@ include("${CMAKE_CURRENT_LIST_DIR}/xresloader/xresloader.cmake")
 set(PROJECT_THIRD_PARTY_PUBLIC_LINK_NAMES
     opentelemetry-cpp::otlp_http_exporter
     opentelemetry-cpp::otlp_grpc_exporter
+    opentelemetry-cpp::prometheus_exporter
+    opentelemetry-cpp::otlp_http_metric_exporter
+    opentelemetry-cpp::otlp_grpc_metrics_exporter
     opentelemetry-cpp::otlp_http_log_exporter
     opentelemetry-cpp::otlp_grpc_log_exporter
     opentelemetry-cpp::ostream_log_exporter
     opentelemetry-cpp::ostream_span_exporter
+    opentelemetry-cpp::ostream_metrics_exporter
     opentelemetry-cpp::resources
+    opentelemetry-cpp::metrics
     opentelemetry-cpp::sdk
     opentelemetry-cpp::api
+    ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROMETHEUS_CPP_LINK_NAME}
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_GRPC_LINK_NAME}
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_LINK_NAME}
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_FLAT_BUFFERS_LINK_NAME}

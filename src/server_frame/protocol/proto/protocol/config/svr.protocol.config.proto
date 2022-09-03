@@ -116,18 +116,28 @@ message logic_router_cfg {
   uint32 transfer_max_ttl = 113 [(atapp.protocol.CONFIGURE) = { default_value: "128" min_value: "1" }];
 }
 
+message opentelemetry_exporter_otlp_header {
+  string key = 1;
+  string value = 2;
+}
+
 message opentelemetry_exporter_otlp_grpc {
   string endpoint = 11;
   bool insecure = 12 [(atapp.protocol.CONFIGURE) = { default_value: "true" }];
   string ca_file = 13;
+  google.protobuf.Duration timeout = 14 [(atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "16ms" }];
+  repeated opentelemetry_exporter_otlp_header headers = 15;
 }
 
 message opentelemetry_exporter_otlp_http {
   string endpoint = 11;
   google.protobuf.Duration timeout = 12 [(atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "16ms" }];
+  repeated opentelemetry_exporter_otlp_header headers = 14;
+  uint32 max_concurrent_requests = 15;
+  uint32 max_requests_per_connection = 16;
 }
 
-message opentelemetry_exporter_cfg {
+message opentelemetry_trace_exporter_cfg {
   opentelemetry_exporter_otlp_grpc otlp_grpc = 1;
   opentelemetry_exporter_otlp_http otlp_http = 2;
   string ostream = 3;  // Just for debug
@@ -159,15 +169,51 @@ message opentelemetry_trace_cfg {
   string schema_url = 2 [(atapp.protocol.CONFIGURE) = { default_value: "https://opentelemetry.io/schemas/1.12.0" }];
   map<string, string> resource = 3;
 
-  opentelemetry_exporter_cfg exporters = 11;
+  opentelemetry_trace_exporter_cfg exporters = 11;
   opentelemetry_processor_cfg processors = 12;
   opentelemetry_sampler_cfg samplers = 13;
+}
+
+message opentelemetry_exporter_prometheus_pull {
+  string url = 1;
+}
+
+message opentelemetry_exporter_prometheus_push {
+  string host = 1;
+  string port = 2 [(atapp.protocol.CONFIGURE) = { default_value: "80" }];
+  string jobname = 3;
+  map<string, string> labels = 4;
+  string username = 5;
+  string password = 6;
+}
+
+message opentelemetry_metrics_exporter_cfg {
+  opentelemetry_exporter_otlp_grpc otlp_grpc = 1;
+  opentelemetry_exporter_otlp_http otlp_http = 2;
+  string ostream = 3;  // Just for debug
+
+  opentelemetry_exporter_prometheus_pull prometheus_pull = 11;
+  opentelemetry_exporter_prometheus_push prometheus_push = 12;
+}
+
+message opentelemetry_metrics_reader_cfg {
+  google.protobuf.Duration export_interval = 1 [(atapp.protocol.CONFIGURE) = { default_value: "1s" min_value: "16ms" }];
+  google.protobuf.Duration export_timeout = 2 [(atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "16ms" }];
 }
 
 message opentelemetry_metrics_cfg {
   string default_name = 1;
   string schema_url = 2 [(atapp.protocol.CONFIGURE) = { default_value: "https://opentelemetry.io/schemas/1.12.0" }];
   map<string, string> resource = 3;
+  opentelemetry_metrics_reader_cfg reader = 4;
+
+  opentelemetry_metrics_exporter_cfg exporters = 11;
+}
+
+message opentelemetry_logs_exporter_cfg {
+  opentelemetry_exporter_otlp_grpc otlp_grpc = 1;
+  opentelemetry_exporter_otlp_http otlp_http = 2;
+  string ostream = 3;  // Just for debug
 }
 
 message opentelemetry_logs_cfg {
@@ -175,7 +221,7 @@ message opentelemetry_logs_cfg {
   string schema_url = 2 [(atapp.protocol.CONFIGURE) = { default_value: "https://opentelemetry.io/schemas/1.12.0" }];
   map<string, string> resource = 3;
 
-  opentelemetry_exporter_cfg exporters = 11;
+  opentelemetry_logs_exporter_cfg exporters = 11;
   opentelemetry_processor_cfg processors = 12;
 }
 

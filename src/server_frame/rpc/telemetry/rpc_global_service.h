@@ -1,5 +1,6 @@
-// Copyright 2021 atframework
-// Created by owent on 2021-10-18.
+
+// Copyright 2022 atframework
+// Created by owent on 2021/10/18.
 //
 
 #pragma once
@@ -8,9 +9,8 @@
 
 #include <config/compiler/protobuf_prefix.h>
 
-#include <protocol/config/svr.protocol.config.pb.h>
-
 #include <opentelemetry/logs/logger.h>
+#include <opentelemetry/metrics/sync_instruments.h>
 #include <opentelemetry/trace/tracer.h>
 
 #include <config/compiler/protobuf_suffix.h>
@@ -23,9 +23,26 @@ namespace atapp {
 class app;
 }
 
+PROJECT_NAMESPACE_BEGIN
+namespace config {
+class logic_telemetry_cfg;
+}
+PROJECT_NAMESPACE_END
+
 namespace rpc {
 
 namespace telemetry {
+
+struct meter_instrument_key {
+  opentelemetry::nostd::string_view name;
+  opentelemetry::nostd::string_view description;
+  opentelemetry::nostd::string_view unit;
+
+  inline meter_instrument_key(opentelemetry::nostd::string_view input_name = "",
+                              opentelemetry::nostd::string_view input_description = "",
+                              opentelemetry::nostd::string_view input_unit = "")
+      : name(input_name), description(input_description), unit(input_unit) {}
+};
 
 class global_service {
  public:
@@ -46,6 +63,30 @@ class global_service {
       opentelemetry::nostd::string_view schema_url = "");
 
   /**
+   * @brief Get long counter
+   *
+   * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter>
+   */
+  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<long>> get_metrics_counter_long(
+      opentelemetry::nostd::string_view meter_name = "", meter_instrument_key key = {});
+
+  /**
+   * @brief Get long histogram
+   *
+   * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram>
+   */
+  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<long>> get_metrics_Histogram_long(
+      opentelemetry::nostd::string_view meter_name = "", meter_instrument_key key = {});
+
+  /**
+   * @brief Get long up down counter
+   *
+   * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter>
+   */
+  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<long>> get_metrics_up_down_counter_long(
+      opentelemetry::nostd::string_view meter_name = "", meter_instrument_key key = {});
+
+  /**
    * @brief Get the current default logger
    *
    * @return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>
@@ -55,7 +96,7 @@ class global_service {
   /**
    * @brief Get logger
    *
-   * @return opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>
+   * @return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>
    */
   static opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> get_logger(
       opentelemetry::nostd::string_view logger_name, opentelemetry::nostd::string_view options = "",

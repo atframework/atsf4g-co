@@ -103,9 +103,18 @@ logic:
         #  endpoint: "localhost:4317"
         #  insecure: true
         #  # ca_file: ""
+        #  timeout: 10s   # otlp http trace timeout
+        #  # headers:
+        #  #   - key:
+        #  #     value:
         # otlp_http:
         #   endpoint: "http://localhost:4318/v1/traces"
         #   timeout: 10s
+        #   max_concurrent_requests: 64
+        #   max_requests_per_connection: 8
+        #  # headers:
+        #  #   - key:
+        #  #     value:
         # ostream: "${project.get_log_dir()}/${project.get_server_full_name()}.debug-trace.telemetry.log"
         processors:
           batch:
@@ -115,6 +124,40 @@ logic:
         samplers:
           always_on: true
           # trace_id_ratio: 0.25
+      metrics:
+        # resource:
+        default_name: "default"
+        reader:
+          export_interval: 3s
+          export_timeout: 10s
+        exporters:
+        # otlp_grpc:
+        #  endpoint: "localhost:4317"
+        #  insecure: true
+        #  # ca_file: ""
+        #  timeout: 10s   # otlp http trace timeout
+        #  # headers:
+        #  #   - key:
+        #  #     value:
+        # otlp_http:
+        #   endpoint: "http://localhost:4318/v1/traces"
+        #   timeout: 10s
+        #   max_concurrent_requests: 64
+        #   max_requests_per_connection: 8
+        #  # headers:
+        #  #   - key:
+        #  #     value:
+        # prometheus_pull:
+        #   url: "http://localhost:9464"
+        # prometheus_push:
+        #     host: "localhost"
+        #     port: "80"
+        #     jobname: "jobname?tenant=id"
+        #     labels:
+        #       "key": "value"
+        #     username: ""
+        #     password: ""
+        # ostream: "${project.get_log_dir()}/${project.get_server_full_name()}.debug-trace.telemetry.log"
       logs:
         # resource:
         default_name: "${project.get_server_name()}"
@@ -123,9 +166,18 @@ logic:
         #  endpoint: "localhost:4317"
         #  insecure: true
         #  # ca_file: ""
+        #  timeout: 10s   # otlp http trace timeout
+        #  # headers:
+        #  #   - key:
+        #  #     value:
         # otlp_http:
         #   endpoint: "http://localhost:4318/v1/logs"
         #   timeout: 10s
+        #   max_concurrent_requests: 64
+        #   max_requests_per_connection: 8
+        #  # headers:
+        #  #   - key:
+        #  #     value:
         # ostream: "${project.get_log_dir()}/${project.get_server_full_name()}.debug-logs.telemetry.log"
         processors:
           batch:
