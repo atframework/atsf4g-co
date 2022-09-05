@@ -82,6 +82,22 @@ struct local_meter_info_t {
       up_down_counter_long;
 };
 
+template <class ProviderType>
+struct local_provider_handle_t {
+  using shutdown_callback_t = std::function<void (const opentelemetry::nostd::shared_ptr<ProviderType> &)>;
+  opentelemetry::nostd::shared_ptr<ProviderType> provider;
+  shutdown_callback_t shutdown_callback;
+
+  inline void reset_shutdown_callback() {
+    shutdown_callback = shutdown_callback_t();
+  }
+
+  inline void reset() {
+    provider = opentelemetry::nostd::shared_ptr<ProviderType>();
+    reset_shutdown_callback();
+  }
+};
+
 struct local_caller_info_t {
   uint64_t server_id;
   std::string server_id_string;
@@ -96,16 +112,16 @@ struct local_caller_info_t {
 
   util::log::log_wrapper::ptr_t internal_logger;
 
-  opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> tracer_provider;
+  local_provider_handle_t<opentelemetry::trace::TracerProvider> tracer_handle;
   opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> default_tracer;
   opentelemetry::nostd::shared_ptr<std::ofstream> debug_tracer_ostream_exportor;
 
-  opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider> metrics_provider;
+  local_provider_handle_t<opentelemetry::metrics::MeterProvider> metrics_handle;
   std::shared_ptr<local_meter_info_t> default_metrics_meter;
   std::unordered_map<std::string, std::shared_ptr<local_meter_info_t>> metrics_meters;
   opentelemetry::nostd::shared_ptr<std::ofstream> debug_metrics_ostream_exportor;
 
-  opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider> logs_provider;
+  local_provider_handle_t<opentelemetry::logs::LoggerProvider> logs_handle;
   opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> default_logger;
   opentelemetry::nostd::shared_ptr<std::ofstream> debug_logger_ostream_exportor;
 };
@@ -194,7 +210,7 @@ static std::shared_ptr<local_meter_info_t> get_meter_info(const opentelemetry::n
     return nullptr;
   }
 
-  if (!g_global_service_cache->metrics_provider) {
+  if (!g_global_service_cache->metrics_handle.provider) {
     return nullptr;
   }
 
@@ -209,7 +225,7 @@ static std::shared_ptr<local_meter_info_t> get_meter_info(const opentelemetry::n
   }
 
   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Meter> meter =
-      g_global_service_cache->metrics_provider->GetMeter(
+      g_global_service_cache->metrics_handle.provider->GetMeter(
           meter_name, g_global_service_cache->app_version,
           logic_config::me()->get_logic().telemetry().opentelemetry().metrics().schema_url());
   if (!meter) {
@@ -342,7 +358,7 @@ opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> global_service::ge
     return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
   }
 
-  if (!current_service_cache->logs_provider) {
+  if (!current_service_cache->logs_handle.provider) {
     return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
   }
 
@@ -356,8 +372,8 @@ opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> global_service::ge
     schema_url = logic_config::me()->get_cfg_telemetry().opentelemetry().logs().schema_url();
   }
 
-  return current_service_cache->logs_provider->GetLogger(logger_name, options, library_name, library_version,
-                                                         schema_url);
+  return current_service_cache->logs_handle.provider->GetLogger(logger_name, options, library_name, library_version,
+                                                                schema_url);
 }
 
 namespace {
@@ -475,17 +491,24 @@ static std::unique_ptr<opentelemetry::sdk::trace::Sampler> _opentelemetry_create
   }
 }
 
-static opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> _opentelemetry_create_trace_provider(
+static details::local_provider_handle_t<opentelemetry::trace::TracerProvider> _opentelemetry_create_trace_provider(
     std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanProcessor>> &&processors,
     std::unique_ptr<opentelemetry::sdk::trace::Sampler> &&sampler, opentelemetry::sdk::resource::Resource resource) {
-  opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> provider;
+  details::local_provider_handle_t<opentelemetry::trace::TracerProvider> ret;
   std::shared_ptr<opentelemetry::sdk::trace::TracerContext> context;
   context = std::make_shared<opentelemetry::sdk::trace::TracerContext>(
       std::move(processors), resource, std::move(sampler),
       std::unique_ptr<opentelemetry::sdk::trace::IdGenerator>(new opentelemetry::sdk::trace::RandomIdGenerator()));
-  provider = opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>(
+  ret.provider = opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>(
       new opentelemetry::sdk::trace::TracerProvider(context));
-  return provider;
+  ret.shutdown_callback = [](const opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> &provider) {
+    if (!provider) {
+      return;
+    }
+
+    static_cast<opentelemetry::sdk::trace::TracerProvider *>(provider.get())->Shutdown();
+  };
+  return ret;
 }
 
 static std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricExporter>> _opentelemetry_create_metrics_exporter(
@@ -614,21 +637,29 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricReader>> _
   return ret;
 }
 
-static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider> _opentelemetry_create_metrics_provider(
+static details::local_provider_handle_t<opentelemetry::metrics::MeterProvider> _opentelemetry_create_metrics_provider(
     std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricReader>> &&readers,
     const opentelemetry::sdk::resource::ResourceAttributes &metrics_resource_values) {
-  opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider> provider;
-  provider = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>(
+  details::local_provider_handle_t<opentelemetry::metrics::MeterProvider> ret;
+  ret.provider = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>(
       new opentelemetry::sdk::metrics::MeterProvider(
           std::unique_ptr<opentelemetry::sdk::metrics::ViewRegistry>(new opentelemetry::sdk::metrics::ViewRegistry()),
           opentelemetry::sdk::resource::Resource::Create(metrics_resource_values)));
 
-  if (provider) {
+  if (ret.provider) {
     for (auto &reader : readers) {
-      static_cast<opentelemetry::sdk::metrics::MeterProvider *>(provider.get())->AddMetricReader(std::move(reader));
+      static_cast<opentelemetry::sdk::metrics::MeterProvider *>(ret.provider.get())->AddMetricReader(std::move(reader));
     }
   }
-  return provider;
+
+  ret.shutdown_callback = [](const opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider> &provider) {
+    if (!provider) {
+      return;
+    }
+
+    static_cast<opentelemetry::sdk::metrics::MeterProvider *>(provider.get())->Shutdown();
+  };
+  return ret;
 }
 
 static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogExporter>> _opentelemetry_create_logs_exporter(
@@ -724,61 +755,56 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogProcessor>> _ope
   return ret;
 }
 
-static opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider> _opentelemetry_create_logs_provider(
+static details::local_provider_handle_t<opentelemetry::logs::LoggerProvider> _opentelemetry_create_logs_provider(
     std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogProcessor>> &&processors,
     opentelemetry::sdk::resource::Resource resource) {
-  opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider> provider;
+  details::local_provider_handle_t<opentelemetry::logs::LoggerProvider> ret;
   std::shared_ptr<opentelemetry::sdk::logs::LoggerContext> context;
 
   context = std::make_shared<opentelemetry::sdk::logs::LoggerContext>(std::move(processors), std::move(resource));
-  provider = opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>(
+  ret.provider = opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>(
       new opentelemetry::sdk::logs::LoggerProvider(context));
-  return provider;
+  ret.shutdown_callback = [context](const opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider> &provider) {
+    if (!provider) {
+      return;
+    }
+
+    // Patch for BUGs [#1591](https://github.com/open-telemetry/opentelemetry-cpp/issues/1591)
+    if(context) {
+      context->GetProcessor().Shutdown();
+    }
+    static_cast<opentelemetry::sdk::logs::LoggerProvider *>(provider.get())->Shutdown();
+  };
+  return ret;
 }
 
-static void _opentelemetry_cleanup_local_caller_info_t(
-    std::shared_ptr<details::local_caller_info_t> app_info_cache,
-    opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> tracer_provider,
-    opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider> meter_provider,
-    opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider> logs_provider) {
+static void _opentelemetry_cleanup_local_caller_info_t(std::shared_ptr<details::local_caller_info_t> app_info_cache) {
   if (app_info_cache) {
     // Provider must be destroy before logger
-    if (app_info_cache->logs_provider) {
-      static_cast<opentelemetry::sdk::logs::LoggerProvider *>(app_info_cache->logs_provider.get())->ForceFlush();
-      static_cast<opentelemetry::sdk::logs::LoggerProvider *>(app_info_cache->logs_provider.get())->Shutdown();
-      app_info_cache->logs_provider = opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>();
-    }
-    if (logs_provider) {
-      static_cast<opentelemetry::sdk::logs::LoggerProvider *>(logs_provider.get())->ForceFlush();
-      static_cast<opentelemetry::sdk::logs::LoggerProvider *>(logs_provider.get())->Shutdown();
-      logs_provider = opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>();
+    if (app_info_cache->logs_handle.provider) {
+      if (app_info_cache->logs_handle.shutdown_callback) {
+        (app_info_cache->logs_handle.shutdown_callback)(app_info_cache->logs_handle.provider);
+      }
+      app_info_cache->logs_handle.reset();
     }
     app_info_cache->default_logger = opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
 
     // Provider must be destroy before meter
-    if (app_info_cache->metrics_provider) {
-      static_cast<opentelemetry::sdk::metrics::MeterProvider *>(app_info_cache->metrics_provider.get())->ForceFlush();
-      static_cast<opentelemetry::sdk::metrics::MeterProvider *>(app_info_cache->metrics_provider.get())->Shutdown();
-      app_info_cache->metrics_provider = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>();
-    }
-    if (meter_provider) {
-      static_cast<opentelemetry::sdk::metrics::MeterProvider *>(meter_provider.get())->ForceFlush();
-      static_cast<opentelemetry::sdk::metrics::MeterProvider *>(meter_provider.get())->Shutdown();
-      meter_provider = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>();
+    if (app_info_cache->metrics_handle.provider) {
+      if (app_info_cache->metrics_handle.shutdown_callback) {
+        (app_info_cache->metrics_handle.shutdown_callback)(app_info_cache->metrics_handle.provider);
+      }
+      app_info_cache->metrics_handle.reset();
     }
     app_info_cache->default_metrics_meter.reset();
     app_info_cache->metrics_meters.clear();
 
     // Provider must be destroy before tracer
-    if (app_info_cache->tracer_provider) {
-      static_cast<opentelemetry::sdk::trace::TracerProvider *>(app_info_cache->tracer_provider.get())->ForceFlush();
-      static_cast<opentelemetry::sdk::trace::TracerProvider *>(app_info_cache->tracer_provider.get())->Shutdown();
-      app_info_cache->tracer_provider = opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>();
-    }
-    if (tracer_provider) {
-      static_cast<opentelemetry::sdk::trace::TracerProvider *>(tracer_provider.get())->ForceFlush();
-      static_cast<opentelemetry::sdk::trace::TracerProvider *>(tracer_provider.get())->Shutdown();
-      tracer_provider = opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>();
+    if (app_info_cache->tracer_handle.provider) {
+      if (app_info_cache->tracer_handle.shutdown_callback) {
+        (app_info_cache->tracer_handle.shutdown_callback)(app_info_cache->tracer_handle.provider);
+      }
+      app_info_cache->tracer_handle.reset();
     }
     app_info_cache->default_tracer = opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
   }
@@ -792,7 +818,7 @@ static void _opentelemetry_cleanup_global_provider(atapp::app &app) {
     details::g_global_service_cache.reset();
   }
 
-  // Hold provider in case of start another span again
+  // Hold provider in case of start another span/meter/logger again
   auto trace_provider = opentelemetry::trace::Provider::GetTracerProvider();
   auto metrics_provider = opentelemetry::metrics::Provider::GetMeterProvider();
   auto logs_provider = opentelemetry::logs::Provider::GetLoggerProvider();
@@ -817,42 +843,43 @@ static void _opentelemetry_cleanup_global_provider(atapp::app &app) {
     }
   }
 
-  _opentelemetry_cleanup_local_caller_info_t(std::move(current_service_cache), std::move(trace_provider),
-                                             std::move(metrics_provider), std::move(logs_provider));
+  _opentelemetry_cleanup_local_caller_info_t(std::move(current_service_cache));
 }
 
 static void _opentelemetry_set_global_provider(
     atapp::app &app, std::shared_ptr<details::local_caller_info_t> app_info_cache,
-    opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> tracer_provider,
+    details::local_provider_handle_t<opentelemetry::trace::TracerProvider> tracer_handle,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_trace_cfg &tracer_config,
-    opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider> metrics_provider,
+    details::local_provider_handle_t<opentelemetry::metrics::MeterProvider> metrics_handle,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_metrics_cfg &metrics_config,
-    opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider> logs_provider,
+    details::local_provider_handle_t<opentelemetry::logs::LoggerProvider> logs_handle,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_logs_cfg &logs_config) {
   // Default tracer
-  if (!tracer_provider) {
-    tracer_provider = opentelemetry::trace::Provider::GetTracerProvider();
+  if (!tracer_handle.provider) {
+    tracer_handle.provider = opentelemetry::trace::Provider::GetTracerProvider();
+    tracer_handle.reset_shutdown_callback();
   }
-  app_info_cache->tracer_provider = tracer_provider;
+  app_info_cache->tracer_handle = tracer_handle;
   if (!tracer_config.default_name().empty()) {
-    app_info_cache->default_tracer =
-        tracer_provider->GetTracer(tracer_config.default_name(), app.get_app_version(), tracer_config.schema_url());
+    app_info_cache->default_tracer = tracer_handle.provider->GetTracer(
+        tracer_config.default_name(), app.get_app_version(), tracer_config.schema_url());
   } else if (!app.get_type_name().empty()) {
     app_info_cache->default_tracer =
-        tracer_provider->GetTracer(app.get_type_name(), app.get_app_version(), tracer_config.schema_url());
+        tracer_handle.provider->GetTracer(app.get_type_name(), app.get_app_version(), tracer_config.schema_url());
   } else {
     app_info_cache->default_tracer =
-        tracer_provider->GetTracer(app.get_app_name(), app.get_app_version(), tracer_config.schema_url());
+        tracer_handle.provider->GetTracer(app.get_app_name(), app.get_app_version(), tracer_config.schema_url());
   }
 
   // Default meter
-  if (!metrics_provider) {
-    metrics_provider = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>{
+  if (!metrics_handle.provider) {
+    metrics_handle.provider = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>{
         new opentelemetry::metrics::NoopMeterProvider()};
+    metrics_handle.reset_shutdown_callback();
   }
-  app_info_cache->metrics_provider = metrics_provider;
+  app_info_cache->metrics_handle = metrics_handle;
   do {
-    if (!metrics_provider) {
+    if (!metrics_handle.provider) {
       break;
     }
 
@@ -865,8 +892,8 @@ static void _opentelemetry_set_global_provider(
       break;
     }
 
-    default_metrics_meter->meter =
-        metrics_provider->GetMeter(metrics_config.default_name(), app.get_app_version(), metrics_config.schema_url());
+    default_metrics_meter->meter = metrics_handle.provider->GetMeter(
+        metrics_config.default_name(), app.get_app_version(), metrics_config.schema_url());
 
     if (!default_metrics_meter->meter) {
       break;
@@ -877,20 +904,21 @@ static void _opentelemetry_set_global_provider(
   } while (false);
 
   // Default logger
-  if (!logs_provider) {
-    logs_provider = opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>{
+  if (!logs_handle.provider) {
+    logs_handle.provider = opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>{
         new opentelemetry::logs::NoopLoggerProvider()};
+    logs_handle.reset_shutdown_callback();
   }
-  app_info_cache->logs_provider = logs_provider;
+  app_info_cache->logs_handle = logs_handle;
   if (!logs_config.default_name().empty()) {
-    app_info_cache->default_logger = logs_provider->GetLogger(logs_config.default_name(), "", app.get_app_name(),
-                                                              app.get_app_version(), logs_config.schema_url());
+    app_info_cache->default_logger = logs_handle.provider->GetLogger(logs_config.default_name(), "", app.get_app_name(),
+                                                                     app.get_app_version(), logs_config.schema_url());
   } else if (!app.get_type_name().empty()) {
-    app_info_cache->default_logger = logs_provider->GetLogger(app.get_type_name(), "", app.get_app_name(),
-                                                              app.get_app_version(), logs_config.schema_url());
+    app_info_cache->default_logger = logs_handle.provider->GetLogger(app.get_type_name(), "", app.get_app_name(),
+                                                                     app.get_app_version(), logs_config.schema_url());
   } else {
-    app_info_cache->default_logger = logs_provider->GetLogger(app.get_app_name(), "", app.get_app_name(),
-                                                              app.get_app_version(), logs_config.schema_url());
+    app_info_cache->default_logger = logs_handle.provider->GetLogger(app.get_app_name(), "", app.get_app_name(),
+                                                                     app.get_app_version(), logs_config.schema_url());
   }
 
   // Internal Logger
@@ -908,16 +936,9 @@ static void _opentelemetry_set_global_provider(
 
   ::util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{details::g_global_service_lock};
   // Set the global trace/metrics provider and service cache.
-  opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> old_tracer_provider =
-      opentelemetry::trace::Provider::GetTracerProvider();
-  opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider> old_metrics_provider =
-      opentelemetry::metrics::Provider::GetMeterProvider();
-  opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider> old_logs_provider =
-      opentelemetry::logs::Provider::GetLoggerProvider();
-
-  opentelemetry::trace::Provider::SetTracerProvider(tracer_provider);
-  opentelemetry::metrics::Provider::SetMeterProvider(metrics_provider);
-  opentelemetry::logs::Provider::SetLoggerProvider(logs_provider);
+  opentelemetry::trace::Provider::SetTracerProvider(tracer_handle.provider);
+  opentelemetry::metrics::Provider::SetMeterProvider(metrics_handle.provider);
+  opentelemetry::logs::Provider::SetLoggerProvider(logs_handle.provider);
   if (!details::g_global_service_cache) {
     // Setup global log handle for opentelemetry for first startup
     opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogHandler(
@@ -932,19 +953,17 @@ static void _opentelemetry_set_global_provider(
     if (!app_info_cache) {
       break;
     }
-    if (app_info_cache->logs_provider == details::g_global_service_cache->logs_provider) {
-      app_info_cache->logs_provider = opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>();
+    if (app_info_cache->logs_handle.provider == details::g_global_service_cache->logs_handle.provider) {
+      app_info_cache->logs_handle.reset();
     }
-    if (app_info_cache->metrics_provider == details::g_global_service_cache->metrics_provider) {
-      app_info_cache->metrics_provider = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>();
+    if (app_info_cache->metrics_handle.provider == details::g_global_service_cache->metrics_handle.provider) {
+      app_info_cache->metrics_handle.reset();
     }
-    if (app_info_cache->tracer_provider == details::g_global_service_cache->tracer_provider) {
-      app_info_cache->tracer_provider = opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>();
+    if (app_info_cache->tracer_handle.provider == details::g_global_service_cache->tracer_handle.provider) {
+      app_info_cache->tracer_handle.reset();
     }
-    std::thread cleanup_thread([app_info_cache, old_tracer_provider, old_metrics_provider, old_logs_provider]() {
-      _opentelemetry_cleanup_local_caller_info_t(std::move(app_info_cache), std::move(old_tracer_provider),
-                                                 std::move(old_metrics_provider), std::move(old_logs_provider));
-    });
+    std::thread cleanup_thread(
+        [app_info_cache]() { _opentelemetry_cleanup_local_caller_info_t(std::move(app_info_cache)); });
     cleanup_thread.detach();
   } while (false);
 }
@@ -993,7 +1012,7 @@ static opentelemetry::sdk::resource::ResourceAttributes _create_opentelemetry_ap
   return resource_values;
 }
 
-static opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>
+static details::local_provider_handle_t<opentelemetry::trace::TracerProvider>
 _opentelemetry_create_opentelemetry_trace_provider(
     details::local_caller_info_t &app_info_cache,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_cfg &opentelemetry_cfg,
@@ -1002,7 +1021,10 @@ _opentelemetry_create_opentelemetry_trace_provider(
     auto exporter = _opentelemetry_create_trace_exporter(app_info_cache, opentelemetry_cfg.trace().exporters());
     auto sampler = _opentelemetry_create_trace_sampler(opentelemetry_cfg.trace().samplers());
     if (!sampler) {
-      return opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>();
+      details::local_provider_handle_t<opentelemetry::trace::TracerProvider> ret;
+      ret.provider = opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>();
+      ret.reset_shutdown_callback();
+      return ret;
     }
     auto processor = _opentelemetry_create_trace_processor(std::move(exporter), opentelemetry_cfg.trace().processors());
 
@@ -1017,10 +1039,13 @@ _opentelemetry_create_opentelemetry_trace_provider(
                                                 opentelemetry::sdk::resource::Resource::Create(trace_resource_values));
   }
 
-  return opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>();
+  details::local_provider_handle_t<opentelemetry::trace::TracerProvider> ret;
+  ret.provider = opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>();
+  ret.reset_shutdown_callback();
+  return ret;
 }
 
-static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>
+static details::local_provider_handle_t<opentelemetry::metrics::MeterProvider>
 _opentelemetry_create_opentelemetry_metrics_provider(
     details::local_caller_info_t &app_info_cache,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_cfg &opentelemetry_cfg,
@@ -1038,16 +1063,22 @@ _opentelemetry_create_opentelemetry_metrics_provider(
     }
 
     if (readers.empty()) {
-      return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>();
+      details::local_provider_handle_t<opentelemetry::metrics::MeterProvider> ret;
+      ret.provider = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>();
+      ret.reset_shutdown_callback();
+      return ret;
     }
 
     return _opentelemetry_create_metrics_provider(std::move(readers), metrics_resource_values);
   }
 
-  return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>();
+  details::local_provider_handle_t<opentelemetry::metrics::MeterProvider> ret;
+  ret.provider = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>();
+  ret.reset_shutdown_callback();
+  return ret;
 }
 
-static opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>
+static details::local_provider_handle_t<opentelemetry::logs::LoggerProvider>
 _opentelemetry_create_opentelemetry_logs_provider(
     details::local_caller_info_t &app_info_cache,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_cfg &opentelemetry_cfg,
@@ -1067,7 +1098,10 @@ _opentelemetry_create_opentelemetry_logs_provider(
                                                opentelemetry::sdk::resource::Resource::Create(logs_resource_values));
   }
 
-  return opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>();
+  details::local_provider_handle_t<opentelemetry::logs::LoggerProvider> ret;
+  ret.provider = opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>();
+  ret.reset_shutdown_callback();
+  return ret;
 }
 
 }  // namespace
@@ -1103,19 +1137,19 @@ void global_service::set_current_service(atapp::app &app,
   }
 
   // Trace
-  opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> tracer_provider =
+  details::local_provider_handle_t<opentelemetry::trace::TracerProvider> tracer_handle =
       _opentelemetry_create_opentelemetry_trace_provider(*app_info_cache, opentelemetry_cfg, resource_values);
 
   // Metrics
-  opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider> metrics_provider =
+  details::local_provider_handle_t<opentelemetry::metrics::MeterProvider> metrics_handle =
       _opentelemetry_create_opentelemetry_metrics_provider(*app_info_cache, opentelemetry_cfg, resource_values);
 
   // Logs
-  opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider> logs_provider =
+  details::local_provider_handle_t<opentelemetry::logs::LoggerProvider> logs_handle =
       _opentelemetry_create_opentelemetry_logs_provider(*app_info_cache, opentelemetry_cfg, resource_values);
 
-  _opentelemetry_set_global_provider(app, app_info_cache, tracer_provider, opentelemetry_cfg.trace(), metrics_provider,
-                                     opentelemetry_cfg.metrics(), logs_provider, opentelemetry_cfg.logs());
+  _opentelemetry_set_global_provider(app, app_info_cache, tracer_handle, opentelemetry_cfg.trace(), metrics_handle,
+                                     opentelemetry_cfg.metrics(), logs_handle, opentelemetry_cfg.logs());
 }
 
 }  // namespace telemetry
