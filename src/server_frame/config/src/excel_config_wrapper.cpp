@@ -130,7 +130,7 @@ int excel_config_wrapper_reload_all(bool is_init) {
           // TODO Remote remote(Metrics)
         });
 
-    int ret = excel::config_manager::me()->reload_all();
+    int ret = excel::config_manager::me()->reload_all(true);
     ::util::time::time_utility::update();
     return ret;
   }
