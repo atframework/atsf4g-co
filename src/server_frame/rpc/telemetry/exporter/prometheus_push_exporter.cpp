@@ -26,8 +26,21 @@ PrometheusPushExporter::PrometheusPushExporter(const PrometheusPushExporterOptio
 
 ::opentelemetry::sdk::metrics::AggregationTemporality PrometheusPushExporter::GetAggregationTemporality(
     ::opentelemetry::sdk::metrics::InstrumentType instrument_type) const noexcept {
-  // Prometheus exporter only support Cumulative
-  return ::opentelemetry::sdk::metrics::AggregationTemporality::kCumulative;
+  if (options_.aggregation_temporality == ::opentelemetry::sdk::metrics::AggregationTemporality::kCumulative) {
+    return options_.aggregation_temporality;
+  }
+
+  switch (instrument_type) {
+    case ::opentelemetry::sdk::metrics::InstrumentType::kCounter:
+    case ::opentelemetry::sdk::metrics::InstrumentType::kObservableCounter:
+    case ::opentelemetry::sdk::metrics::InstrumentType::kHistogram:
+    case ::opentelemetry::sdk::metrics::InstrumentType::kObservableGauge:
+      return ::opentelemetry::sdk::metrics::AggregationTemporality::kDelta;
+    case ::opentelemetry::sdk::metrics::InstrumentType::kUpDownCounter:
+    case ::opentelemetry::sdk::metrics::InstrumentType::kObservableUpDownCounter:
+      return ::opentelemetry::sdk::metrics::AggregationTemporality::kCumulative;
+  }
+  return ::opentelemetry::sdk::metrics::AggregationTemporality::kUnspecified;
 }
 
 /**

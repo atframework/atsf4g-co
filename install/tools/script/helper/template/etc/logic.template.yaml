@@ -128,7 +128,7 @@ logic:
         # resource:
         default_name: "default"
         reader:
-          export_interval: 3s
+          export_interval: 8s
           export_timeout: 10s
         exporters:
         # otlp_grpc:

@@ -1,4 +1,4 @@
-// Copyright 2021 atframework
+// Copyright 2022 atframework
 // Created by owent on 2018-05-01.
 //
 
@@ -86,6 +86,8 @@ class router_manager_set : public util::design_pattern::singleton<router_manager
 
   int tick_timer(time_t cache_expire, time_t object_expire, time_t object_save, std::list<timer_t> &timer_list,
                  bool is_fast);
+
+  void setup_metrics(size_t cache_count);
 
  private:
   struct timer_set_t {

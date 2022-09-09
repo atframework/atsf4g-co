@@ -1,4 +1,4 @@
-// Copyright 2021 atframework
+// Copyright 2022 atframework
 // Created by owent on 2021-07-13.
 //
 
@@ -10,6 +10,7 @@
 #include <protocol/config/svr.protocol.config.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
+#include <opentelemetry/common/timestamp.h>
 #include <opentelemetry/trace/span_context.h>
 
 #include <config/compiler/protobuf_suffix.h>
@@ -19,6 +20,7 @@
 #include <config/server_frame_build_feature.h>
 #include <utility/protobuf_mini_dumper.h>
 
+#include <chrono>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -41,7 +43,10 @@ tracer::tracer() : result_(0), trace_span_(nullptr) {}
 
 tracer::~tracer() {
   if (trace_span_) {
-    trace_span_->End();
+    std::chrono::steady_clock::time_point end_steady_timepoint = std::chrono::steady_clock::now();
+    opentelemetry::trace::EndSpanOptions end_options;
+    end_options.end_steady_time = opentelemetry::common::SteadyTimestamp(end_steady_timepoint);
+    trace_span_->End(end_options);
   }
 }
 
@@ -59,6 +64,11 @@ bool tracer::start(
   }
 
   opentelemetry::trace::StartSpanOptions span_options;
+  start_system_timepoint_ = std::chrono::system_clock::now();
+  start_steady_timepoint_ = std::chrono::steady_clock::now();
+  span_options.start_system_time = opentelemetry::common::SystemTimestamp(start_system_timepoint_);
+  span_options.start_steady_time = opentelemetry::common::SteadyTimestamp(start_steady_timepoint_);
+
   switch (options.kind) {
     case ::atframework::RpcTraceSpan::SPAN_KIND_INTERNAL:
       span_options.kind = opentelemetry::trace::SpanKind::kInternal;

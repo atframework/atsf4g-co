@@ -16,6 +16,7 @@
 #include <dispatcher/task_action_base.h>
 #include <dispatcher/task_manager.h>
 
+#include <atomic>
 #include <list>
 #include <memory>
 #include <sstream>
@@ -30,10 +31,7 @@
 #include "router/router_manager_set.h"
 #include "router/router_object_base.h"
 
-// #include "router_guild_manager.h"
-// #include "router_player_group_manager.h"
-// #include "router_player_manager.h"
-// #include "router_team_manager.h"
+#include "rpc/telemetry/rpc_global_service.h"
 
 router_manager_set::router_manager_set() : last_proc_time_(0), is_closing_(false), is_closed_(false) {
   memset(mgrs_, 0, sizeof(mgrs_));
@@ -60,6 +58,7 @@ int router_manager_set::tick() {
   // 每分钟打印一次统计数据
   if (last_proc_time_ / util::time::time_utility::MINITE_SECONDS !=
       ::util::time::time_utility::get_now() / util::time::time_utility::MINITE_SECONDS) {
+    size_t cache_count = 0;
     std::stringstream ss;
     ss << "[STAT] router manager set => now: " << ::util::time::time_utility::get_now() << std::endl;
     ss << "\tdefault timer count: " << timers_.default_timer_list.size() << ", next active timer: ";
@@ -77,11 +76,14 @@ int router_manager_set::tick() {
 
     for (int i = 0; i < PROJECT_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE; ++i) {
       if (mgrs_[i]) {
+        cache_count += mgrs_[i]->size();
         ss << "\t" << mgrs_[i]->name() << " has " << mgrs_[i]->size() << " cache(s)" << std::endl;
       }
     }
 
     FWLOGWARNING("{}", ss.str());
+
+    setup_metrics(cache_count);
   }
   last_proc_time_ = ::util::time::time_utility::get_now();
 
@@ -333,7 +335,7 @@ int router_manager_set::recycle_caches(int max_count) {
   std::list<timer_t>::iterator default_timer_iter = timers_.default_timer_list.begin();
   std::list<timer_t>::iterator fast_timer_iter = timers_.fast_timer_list.begin();
 
-  using recheck_list_t = std::list<std::pair<std::shared_ptr<router_object_base>, router_manager_base *> >;
+  using recheck_list_t = std::list<std::pair<std::shared_ptr<router_object_base>, router_manager_base *>>;
 
   recheck_list_t recheck_list;
   std::unordered_set<router_object_base::key_t> recheck_set;
@@ -633,4 +635,42 @@ int router_manager_set::tick_timer(time_t cache_expire, time_t object_expire, ti
   } while (true);
 
   return ret;
+}
+
+void router_manager_set::setup_metrics(size_t cache_count) {
+  static std::atomic<size_t> router_cache_count;
+  router_cache_count.store(cache_count, std::memory_order_release);
+
+  auto instrument = rpc::telemetry::global_service::get_metrics_observable("service.router.cache_count",
+                                                                           {"service.router.cache_count"});
+  if (instrument) {
+    return;
+  }
+
+  instrument = rpc::telemetry::global_service::mutable_metrics_observable_gauge_long("service.router.cache_count",
+                                                                                     {"service.router.cache_count"});
+  if (!instrument) {
+    return;
+  }
+
+  instrument->AddCallback(
+      [](opentelemetry::metrics::ObserverResult result, void *) {
+        auto value = router_cache_count.load(std::memory_order_acquire);
+        if (opentelemetry::nostd::holds_alternative<
+                opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<long>>>(result)) {
+          auto observer = opentelemetry::nostd::get<
+              opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<long>>>(result);
+          if (observer) {
+            observer->Observe(static_cast<long>(value), rpc::telemetry::global_service::get_metrics_labels());
+          }
+        } else if (opentelemetry::nostd::holds_alternative<
+                       opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) {
+          auto observer = opentelemetry::nostd::get<
+              opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result);
+          if (observer) {
+            observer->Observe(static_cast<double>(value), rpc::telemetry::global_service::get_metrics_labels());
+          }
+        }
+      },
+      nullptr);
 }

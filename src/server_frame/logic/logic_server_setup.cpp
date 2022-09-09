@@ -54,10 +54,12 @@
 #include "logic/action/task_action_reload_remote_server_configure.h"
 #include "logic/handle_ss_rpc_logiccommonservice.h"
 #include "logic/logic_server_macro.h"
+#include "rpc/telemetry/rpc_global_service.h"
 
 namespace detail {
 static logic_server_common_module *g_last_common_module = NULL;
-}
+static std::shared_ptr<logic_server_common_module::stats_data_t> g_last_common_module_stats;
+}  // namespace detail
 
 namespace {
 static int show_server_time(util::cli::callback_param params) {
@@ -292,12 +294,24 @@ logic_server_common_module::logic_server_common_module(const logic_server_common
       server_remote_conf_global_version_(0),
       server_remote_conf_zone_version_(0),
       server_remote_conf_next_update_time_(0) {
+  stats_ = std::make_shared<stats_data_t>();
+  memset(&stats_->last_checkpoint_usage, 0, sizeof(stats_->last_checkpoint_usage));
+  stats_->need_setup.store(true, std::memory_order_release);
+  stats_->collect_sequence.store(0, std::memory_order_release);
+
+  stats_->last_update_usage_timepoint = 0;
+  stats_->last_collect_sequence = 0;
+  stats_->last_checkpoint = util::time::time_utility::sys_now();
+  stats_->previous_tick_checkpoint = util::time::time_utility::sys_now();
+
   detail::g_last_common_module = this;
+  detail::g_last_common_module_stats = stats_;
 }
 
 logic_server_common_module::~logic_server_common_module() {
   if (detail::g_last_common_module == this) {
-    detail::g_last_common_module = NULL;
+    detail::g_last_common_module = nullptr;
+    detail::g_last_common_module_stats.reset();
   }
 }
 
@@ -334,7 +348,18 @@ int logic_server_common_module::init() {
   return ret;
 }
 
-void logic_server_common_module::ready() { FWLOGINFO("============ Server ready ============"); }
+void logic_server_common_module::ready() {
+  FWLOGINFO("============ Server ready ============");
+
+  memset(&stats_->last_checkpoint_usage, 0, sizeof(stats_->last_checkpoint_usage));
+  stats_->need_setup.store(true, std::memory_order_release);
+  stats_->collect_sequence.store(0, std::memory_order_release);
+  stats_->last_update_usage_timepoint = 0;
+  stats_->last_collect_sequence = 0;
+
+  stats_->last_checkpoint = util::time::time_utility::sys_now();
+  stats_->previous_tick_checkpoint = util::time::time_utility::sys_now();
+}
 
 int logic_server_common_module::reload() {
   FWLOGINFO("============ Server reload ============");
@@ -357,6 +382,7 @@ int logic_server_common_module::reload() {
     RELOAD_CALL(ret, task_manager);
   }
 
+  stats_->need_setup.store(true, std::memory_order_release);
   return ret;
 }
 
@@ -384,6 +410,7 @@ int logic_server_common_module::stop() {
   // can not use this module after stop
   if (0 == ret) {
     if (detail::g_last_common_module == this) {
+      detail::g_last_common_module_stats.reset();
       detail::g_last_common_module = nullptr;
     }
   }
@@ -399,6 +426,7 @@ int logic_server_common_module::timeout() {
 
   // can not use this module after stop
   if (detail::g_last_common_module == this) {
+    detail::g_last_common_module_stats.reset();
     detail::g_last_common_module = nullptr;
   }
   return 0;
@@ -451,6 +479,7 @@ int logic_server_common_module::tick() {
     }
   }
 
+  tick_stats();
   return ret;
 }
 
@@ -479,7 +508,7 @@ logic_server_common_module::etcd_keepalive_ptr_t logic_server_common_module::add
 }
 
 atapp::etcd_cluster *logic_server_common_module::get_etcd_cluster() {
-  std::shared_ptr< ::atapp::etcd_module> etcd_mod = get_etcd_module();
+  std::shared_ptr<::atapp::etcd_module> etcd_mod = get_etcd_module();
   if (!etcd_mod) {
     return nullptr;
   }
@@ -487,7 +516,7 @@ atapp::etcd_cluster *logic_server_common_module::get_etcd_cluster() {
   return &etcd_mod->get_raw_etcd_ctx();
 }
 
-std::shared_ptr< ::atapp::etcd_module> logic_server_common_module::get_etcd_module() {
+std::shared_ptr<::atapp::etcd_module> logic_server_common_module::get_etcd_module() {
   atapp::app *app = get_app();
   if (nullptr == app) {
     return nullptr;
@@ -525,7 +554,7 @@ static void logic_server_common_module_on_watch_battlesvr_callback(atapp::etcd_m
 }
 
 int logic_server_common_module::setup_battle_service_watcher() {
-  std::shared_ptr<atapp::etcd_module> etcd_mod = get_etcd_module();
+  std::shared_ptr<::atapp::etcd_module> etcd_mod = get_etcd_module();
 
   if (!static_conf_.enable_watch_battlesvr) {
     if (battle_service_watcher_) {
@@ -656,7 +685,7 @@ std::shared_ptr<atapp::etcd_discovery_node> logic_server_common_module::get_disc
 }
 
 std::shared_ptr<atapp::etcd_discovery_node> logic_server_common_module::get_discovery_by_name(
-    const std::string& name) const {
+    const std::string &name) const {
   if (nullptr == get_app()) {
     return nullptr;
   }
@@ -669,7 +698,7 @@ int logic_server_common_module::setup_etcd_event_handle() {
     return 0;
   }
 
-  std::shared_ptr< ::atapp::etcd_module> etcd_mod = get_etcd_module();
+  std::shared_ptr<::atapp::etcd_module> etcd_mod = get_etcd_module();
   if (!etcd_mod) {
     return 0;
   }
@@ -771,6 +800,165 @@ int logic_server_common_module::tick_update_remote_configures() {
 
   return 1;
 }
+
+void logic_server_common_module::tick_stats() {
+  if (nullptr == get_app()) {
+    return;
+  }
+
+  if (!get_app()->is_running()) {
+    return;
+  }
+
+  auto sys_now = util::time::time_utility::sys_now();
+  // Tick interval
+  {
+    auto tick_interval = sys_now - stats_->previous_tick_checkpoint;
+    int64_t max_tick_interval_us =
+        static_cast<int64_t>(std::chrono::duration_cast<std::chrono::microseconds>(tick_interval).count());
+    int64_t collect_max_tick_interval_us = stats_->collect_max_tick_interval_us.load(std::memory_order_acquire);
+    if (max_tick_interval_us > collect_max_tick_interval_us) {
+      stats_->collect_max_tick_interval_us.compare_exchange_strong(collect_max_tick_interval_us, max_tick_interval_us,
+                                                                   std::memory_order_acq_rel);
+    }
+    stats_->previous_tick_checkpoint = sys_now;
+  }
+
+  if (stats_->last_update_usage_timepoint == util::time::time_utility::get_sys_now()) {
+    return;
+  }
+  stats_->last_update_usage_timepoint = util::time::time_utility::get_sys_now();
+
+  bool rusage_has_offset = false;
+  do {
+    uv_rusage_t last_usage;
+    if (0 != uv_getrusage(&last_usage)) {
+      break;
+    }
+
+    // 首次tick，初始化
+    if (0 == stats_->last_checkpoint_usage.ru_utime.tv_sec || 0 == stats_->last_checkpoint_usage.ru_stime.tv_sec) {
+      stats_->last_checkpoint_usage = last_usage;
+      stats_->last_checkpoint = sys_now;
+      stats_->last_collect_sequence = stats_->collect_sequence.load(std::memory_order_acquire);
+      stats_->collect_max_tick_interval_us.store(0, std::memory_order_release);
+      break;
+    }
+
+    rusage_has_offset = true;
+
+    opentelemetry::context::Context telemetry_context;
+
+    auto offset_usr = last_usage.ru_utime.tv_sec - stats_->last_checkpoint_usage.ru_utime.tv_sec;
+    auto offset_sys = last_usage.ru_stime.tv_sec - stats_->last_checkpoint_usage.ru_stime.tv_sec;
+    offset_usr *= 1000000;
+    offset_sys *= 1000000;
+    offset_usr += last_usage.ru_utime.tv_usec - stats_->last_checkpoint_usage.ru_utime.tv_usec;
+    offset_sys += last_usage.ru_stime.tv_usec - stats_->last_checkpoint_usage.ru_stime.tv_usec;
+
+    auto checkpoint_offset =
+        std::chrono::duration_cast<std::chrono::microseconds>(sys_now - stats_->last_checkpoint).count();
+    if (checkpoint_offset <= 0) {
+      break;
+    }
+
+    stats_->collect_cpu_sys.store(offset_sys * 1000000 / checkpoint_offset, std::memory_order_release);
+    stats_->collect_cpu_user.store(offset_usr * 1000000 / checkpoint_offset, std::memory_order_release);
+    stats_->collect_memory_max_rss.store(last_usage.ru_maxrss, std::memory_order_release);
+    size_t memory_rss = 0;
+    if (0 == uv_resident_set_memory(&memory_rss)) {
+      stats_->collect_memory_rss.store(memory_rss, std::memory_order_release);
+    }
+
+    // 拉取过则重置周期性数据
+    uint64_t collect_sequence = stats_->collect_sequence.load(std::memory_order_acquire);
+    if (collect_sequence != stats_->last_collect_sequence) {
+      stats_->last_collect_sequence = collect_sequence;
+
+      stats_->collect_max_tick_interval_us.store(0, std::memory_order_release);
+      stats_->last_checkpoint_usage = last_usage;
+      stats_->last_checkpoint = sys_now;
+    }
+  } while (false);
+
+  // 最后才能setup，保证有差分数据
+  if (rusage_has_offset && true == stats_->need_setup.exchange(false, std::memory_order_acq_rel)) {
+    setup_metrics_tick();
+    setup_metrics_cpu_sys();
+    setup_metrics_cpu_user();
+    setup_metrics_memory_maxrss();
+    setup_metrics_memory_rss();
+  }
+}
+
+#define LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER(NAME, DESCRIPTION, UNIT, CREATE_ACTION, VAR_LOADER)                \
+  auto instrument = rpc::telemetry::global_service::get_metrics_observable(NAME, {NAME, DESCRIPTION, UNIT});         \
+  if (instrument) {                                                                                                  \
+    return;                                                                                                          \
+  }                                                                                                                  \
+                                                                                                                     \
+  instrument = rpc::telemetry::global_service::CREATE_ACTION(NAME, {NAME, DESCRIPTION, UNIT});                       \
+                                                                                                                     \
+  if (!instrument) {                                                                                                 \
+    return;                                                                                                          \
+  }                                                                                                                  \
+  instrument->AddCallback(                                                                                           \
+      [](opentelemetry::metrics::ObserverResult result, void *) {                                                    \
+        std::shared_ptr<stats_data_t> stats = detail::g_last_common_module_stats;                                    \
+        if (!stats) {                                                                                                \
+          return;                                                                                                    \
+        }                                                                                                            \
+                                                                                                                     \
+        auto value = stats->VAR_LOADER;                                                                              \
+        if (opentelemetry::nostd::holds_alternative<                                                                 \
+                opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<long>>>(result)) {          \
+          auto observer = opentelemetry::nostd::get<                                                                 \
+              opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<long>>>(result);              \
+          if (observer) {                                                                                            \
+            observer->Observe(static_cast<long>(value), rpc::telemetry::global_service::get_metrics_labels());       \
+                                                                                                                     \
+            ++stats->collect_sequence;                                                                               \
+          }                                                                                                          \
+        } else if (opentelemetry::nostd::holds_alternative<                                                          \
+                       opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) { \
+          auto observer = opentelemetry::nostd::get<                                                                 \
+              opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result);            \
+          if (observer) {                                                                                            \
+            observer->Observe(static_cast<double>(value), rpc::telemetry::global_service::get_metrics_labels());     \
+                                                                                                                     \
+            ++stats->collect_sequence;                                                                               \
+          }                                                                                                          \
+        }                                                                                                            \
+      },                                                                                                             \
+      nullptr);
+
+void logic_server_common_module::setup_metrics_tick() {
+  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.tick", "", "us", mutable_metrics_observable_gauge_long,
+                                            collect_max_tick_interval_us.load(std::memory_order_acquire));
+}
+
+void logic_server_common_module::setup_metrics_cpu_sys() {
+  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.rusage.cpu.sys", "", "%", mutable_metrics_observable_gauge_double,
+                                            collect_cpu_sys.load(std::memory_order_acquire) / 10000.0);
+}
+
+void logic_server_common_module::setup_metrics_cpu_user() {
+  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.rusage.cpu.user", "", "%", mutable_metrics_observable_gauge_double,
+                                            collect_cpu_user.load(std::memory_order_acquire) / 10000.0);
+}
+
+void logic_server_common_module::setup_metrics_memory_maxrss() {
+  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.rusage.memory.maxrss", "", "",
+                                            mutable_metrics_observable_gauge_long,
+                                            collect_memory_max_rss.load(std::memory_order_acquire));
+}
+
+void logic_server_common_module::setup_metrics_memory_rss() {
+  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.rusage.memory.rss", "", "", mutable_metrics_observable_gauge_long,
+                                            collect_memory_rss.load(std::memory_order_acquire));
+}
+
+#undef LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER
 
 void logic_server_common_module::add_service_type_id_index(const atapp::etcd_discovery_node::ptr_t &node) {
   uint64_t zone_id = node->get_discovery_info().area().zone_id();

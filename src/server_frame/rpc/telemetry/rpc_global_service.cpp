@@ -75,22 +75,32 @@ namespace details {
 struct local_meter_info_t {
   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Meter> meter;
 
-  std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<long>>> counter_long;
+  // sync instruments
+  std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<long>>>
+      sync_counter_long;
+  std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<double>>>
+      sync_counter_double;
   std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<long>>>
-      histogram_long;
+      sync_histogram_long;
+  std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<double>>>
+      sync_histogram_double;
   std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<long>>>
-      up_down_counter_long;
+      sync_up_down_counter_long;
+  std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<double>>>
+      sync_up_down_counter_double;
+
+  // async instruments
+  std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>>
+      async_instruments;
 };
 
 template <class ProviderType>
 struct local_provider_handle_t {
-  using shutdown_callback_t = std::function<void (const opentelemetry::nostd::shared_ptr<ProviderType> &)>;
+  using shutdown_callback_t = std::function<void(const opentelemetry::nostd::shared_ptr<ProviderType> &)>;
   opentelemetry::nostd::shared_ptr<ProviderType> provider;
   shutdown_callback_t shutdown_callback;
 
-  inline void reset_shutdown_callback() {
-    shutdown_callback = shutdown_callback_t();
-  }
+  inline void reset_shutdown_callback() { shutdown_callback = shutdown_callback_t(); }
 
   inline void reset() {
     provider = opentelemetry::nostd::shared_ptr<ProviderType>();
@@ -111,6 +121,10 @@ struct local_caller_info_t {
   atapp::protocol::atapp_metadata app_metadata;
 
   util::log::log_wrapper::ptr_t internal_logger;
+
+  opentelemetry::sdk::common::AttributeMap common_owned_attributes;
+  std::unordered_map<std::string, opentelemetry::common::AttributeValue> common_attributes;
+  std::unordered_map<std::string, opentelemetry::common::AttributeValue> metrics_attributes;
 
   local_provider_handle_t<opentelemetry::trace::TracerProvider> tracer_handle;
   opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> default_tracer;
@@ -241,7 +255,86 @@ static std::shared_ptr<local_meter_info_t> get_meter_info(const opentelemetry::n
 
   return ret;
 }
+
+static opentelemetry::common::AttributeValue rebuild_attributes_map_value(
+    const opentelemetry::sdk::common::OwnedAttributeValue &value) {
+  if (opentelemetry::nostd::holds_alternative<bool>(value)) {
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<bool>(value)};
+  } else if (opentelemetry::nostd::holds_alternative<int32_t>(value)) {
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<int32_t>(value)};
+  } else if (opentelemetry::nostd::holds_alternative<int64_t>(value)) {
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<int64_t>(value)};
+  } else if (opentelemetry::nostd::holds_alternative<uint32_t>(value)) {
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<uint32_t>(value)};
+  } else if (opentelemetry::nostd::holds_alternative<uint64_t>(value)) {
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<uint64_t>(value)};
+  } else if (opentelemetry::nostd::holds_alternative<double>(value)) {
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<double>(value)};
+  } else if (opentelemetry::nostd::holds_alternative<std::string>(value)) {
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<std::string>(value)};
+  } else if (opentelemetry::nostd::holds_alternative<std::vector<bool>>(value)) {
+    // 暂无低开销解决方案，目前公共属性中没有数组类型，故而不处理所有的数组类型也是没有问题的
+    // 参见 https://github.com/open-telemetry/opentelemetry-cpp/pull/1154 里的讨论
+    return opentelemetry::common::AttributeValue{};
+  } else if (opentelemetry::nostd::holds_alternative<std::vector<int32_t>>(value)) {
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<std::vector<int32_t>>(value)};
+  } else if (opentelemetry::nostd::holds_alternative<std::vector<uint32_t>>(value)) {
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<std::vector<uint32_t>>(value)};
+  } else if (opentelemetry::nostd::holds_alternative<std::vector<int64_t>>(value)) {
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<std::vector<int64_t>>(value)};
+  } else if (opentelemetry::nostd::holds_alternative<std::vector<uint64_t>>(value)) {
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<std::vector<uint64_t>>(value)};
+  } else if (opentelemetry::nostd::holds_alternative<std::vector<double>>(value)) {
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<std::vector<double>>(value)};
+  } else if (opentelemetry::nostd::holds_alternative<std::vector<std::string>>(value)) {
+    // 暂无低开销解决方案，目前公共属性中没有数组类型，故而不处理所有的数组类型也是没有问题的
+    // 参见 https://github.com/open-telemetry/opentelemetry-cpp/pull/1154 里的讨论
+    return opentelemetry::common::AttributeValue{};
+  }
+
+  return opentelemetry::common::AttributeValue{};
+}
+
+static void rebuild_attributes_map(const opentelemetry::sdk::common::AttributeMap &src,
+                                   std::unordered_map<std::string, opentelemetry::common::AttributeValue> &dst) {
+  dst.clear();
+  dst.reserve(src.size());
+  for (auto &kv : src) {
+    dst[kv.first] = rebuild_attributes_map_value(kv.second);
+  }
+}
+
 }  // namespace details
+
+const opentelemetry::sdk::common::AttributeMap &global_service::get_common_owned_attributes() {
+  util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{details::g_global_service_lock};
+  if (details::g_global_service_cache) {
+    return details::g_global_service_cache->common_owned_attributes;
+  }
+
+  static opentelemetry::sdk::common::AttributeMap empty;
+  return empty;
+}
+
+const std::unordered_map<std::string, opentelemetry::common::AttributeValue> &global_service::get_common_attributes() {
+  util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{details::g_global_service_lock};
+  if (details::g_global_service_cache) {
+    return details::g_global_service_cache->common_attributes;
+  }
+
+  static std::unordered_map<std::string, opentelemetry::common::AttributeValue> empty;
+  return empty;
+}
+
+const std::unordered_map<std::string, opentelemetry::common::AttributeValue> &global_service::get_metrics_labels() {
+  util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{details::g_global_service_lock};
+  if (details::g_global_service_cache) {
+    return details::g_global_service_cache->metrics_attributes;
+  }
+
+  static std::unordered_map<std::string, opentelemetry::common::AttributeValue> empty;
+  return empty;
+}
 
 opentelemetry::nostd::shared_ptr<::opentelemetry::trace::Tracer> global_service::get_current_default_tracer() {
   util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{details::g_global_service_lock};
@@ -279,62 +372,266 @@ opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> global_service::g
   return provider->GetTracer(library_name, library_version, schema_url);
 }
 
-opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<long>> global_service::get_metrics_counter_long(
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<long>> global_service::mutable_metrics_counter_long(
     opentelemetry::nostd::string_view meter_name, meter_instrument_key key) {
   auto meter_info = details::get_meter_info(meter_name);
   if (!meter_info) {
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<long>>();
   }
 
-  auto ret = details::optimize_search_in_hash_map(meter_info->counter_long, key.name);
+  auto ret = details::optimize_search_in_hash_map(meter_info->sync_counter_long, key.name);
   if (ret) {
     return ret;
   }
 
   ret = meter_info->meter->CreateLongCounter(key.name, key.description, key.unit);
   if (ret) {
-    meter_info->counter_long[static_cast<std::string>(key.name)] = ret;
+    meter_info->sync_counter_long[static_cast<std::string>(key.name)] = ret;
   }
 
   return ret;
 }
 
-opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<long>> global_service::get_metrics_Histogram_long(
-    opentelemetry::nostd::string_view meter_name, meter_instrument_key key) {
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<double>>
+global_service::mutable_metrics_counter_double(opentelemetry::nostd::string_view meter_name, meter_instrument_key key) {
+  auto meter_info = details::get_meter_info(meter_name);
+  if (!meter_info) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<double>>();
+  }
+
+  auto ret = details::optimize_search_in_hash_map(meter_info->sync_counter_double, key.name);
+  if (ret) {
+    return ret;
+  }
+
+  ret = meter_info->meter->CreateDoubleCounter(key.name, key.description, key.unit);
+  if (ret) {
+    meter_info->sync_counter_double[static_cast<std::string>(key.name)] = ret;
+  }
+
+  return ret;
+}
+
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<long>>
+global_service::mutable_metrics_histogram_long(opentelemetry::nostd::string_view meter_name, meter_instrument_key key) {
   auto meter_info = details::get_meter_info(meter_name);
   if (!meter_info) {
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<long>>();
   }
 
-  auto ret = details::optimize_search_in_hash_map(meter_info->histogram_long, key.name);
+  auto ret = details::optimize_search_in_hash_map(meter_info->sync_histogram_long, key.name);
   if (ret) {
     return ret;
   }
 
   ret = meter_info->meter->CreateLongHistogram(key.name, key.description, key.unit);
   if (ret) {
-    meter_info->histogram_long[static_cast<std::string>(key.name)] = ret;
+    meter_info->sync_histogram_long[static_cast<std::string>(key.name)] = ret;
+  }
+
+  return ret;
+}
+
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<double>>
+global_service::mutable_metrics_histogram_double(opentelemetry::nostd::string_view meter_name,
+                                                 meter_instrument_key key) {
+  auto meter_info = details::get_meter_info(meter_name);
+  if (!meter_info) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<double>>();
+  }
+
+  auto ret = details::optimize_search_in_hash_map(meter_info->sync_histogram_double, key.name);
+  if (ret) {
+    return ret;
+  }
+
+  ret = meter_info->meter->CreateDoubleHistogram(key.name, key.description, key.unit);
+  if (ret) {
+    meter_info->sync_histogram_double[static_cast<std::string>(key.name)] = ret;
   }
 
   return ret;
 }
 
 opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<long>>
-global_service::get_metrics_up_down_counter_long(opentelemetry::nostd::string_view meter_name,
-                                                 meter_instrument_key key) {
+global_service::mutable_metrics_up_down_counter_long(opentelemetry::nostd::string_view meter_name,
+                                                     meter_instrument_key key) {
   auto meter_info = details::get_meter_info(meter_name);
   if (!meter_info) {
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<long>>();
   }
 
-  auto ret = details::optimize_search_in_hash_map(meter_info->up_down_counter_long, key.name);
+  auto ret = details::optimize_search_in_hash_map(meter_info->sync_up_down_counter_long, key.name);
   if (ret) {
     return ret;
   }
 
   ret = meter_info->meter->CreateLongUpDownCounter(key.name, key.description, key.unit);
   if (ret) {
-    meter_info->up_down_counter_long[static_cast<std::string>(key.name)] = ret;
+    meter_info->sync_up_down_counter_long[static_cast<std::string>(key.name)] = ret;
+  }
+
+  return ret;
+}
+
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<double>>
+global_service::mutable_metrics_up_down_counter_double(opentelemetry::nostd::string_view meter_name,
+                                                       meter_instrument_key key) {
+  auto meter_info = details::get_meter_info(meter_name);
+  if (!meter_info) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<double>>();
+  }
+
+  auto ret = details::optimize_search_in_hash_map(meter_info->sync_up_down_counter_double, key.name);
+  if (ret) {
+    return ret;
+  }
+
+  ret = meter_info->meter->CreateDoubleUpDownCounter(key.name, key.description, key.unit);
+  if (ret) {
+    meter_info->sync_up_down_counter_double[static_cast<std::string>(key.name)] = ret;
+  }
+
+  return ret;
+}
+
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument> global_service::get_metrics_observable(
+    opentelemetry::nostd::string_view meter_name, meter_instrument_key key) {
+  auto meter_info = details::get_meter_info(meter_name);
+  if (!meter_info) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+  }
+
+  return details::optimize_search_in_hash_map(meter_info->async_instruments, key.name);
+}
+
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+global_service::mutable_metrics_observable_counter_long(opentelemetry::nostd::string_view meter_name,
+                                                        meter_instrument_key key) {
+  opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument> ret =
+      get_metrics_observable(meter_name, key);
+  if (ret) {
+    return ret;
+  }
+
+  auto meter_info = details::get_meter_info(meter_name);
+  if (!meter_info) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+  }
+
+  ret = meter_info->meter->CreateLongObservableCounter(key.name, key.description, key.unit);
+  if (ret) {
+    meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
+  }
+
+  return ret;
+}
+
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+global_service::mutable_metrics_observable_counter_double(opentelemetry::nostd::string_view meter_name,
+                                                          meter_instrument_key key) {
+  opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument> ret =
+      get_metrics_observable(meter_name, key);
+  if (ret) {
+    return ret;
+  }
+
+  auto meter_info = details::get_meter_info(meter_name);
+  if (!meter_info) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+  }
+
+  ret = meter_info->meter->CreateDoubleObservableCounter(key.name, key.description, key.unit);
+  if (ret) {
+    meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
+  }
+
+  return ret;
+}
+
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+global_service::mutable_metrics_observable_gauge_long(opentelemetry::nostd::string_view meter_name,
+                                                      meter_instrument_key key) {
+  opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument> ret =
+      get_metrics_observable(meter_name, key);
+  if (ret) {
+    return ret;
+  }
+
+  auto meter_info = details::get_meter_info(meter_name);
+  if (!meter_info) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+  }
+
+  ret = meter_info->meter->CreateLongObservableGauge(key.name, key.description, key.unit);
+  if (ret) {
+    meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
+  }
+
+  return ret;
+}
+
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+global_service::mutable_metrics_observable_gauge_double(opentelemetry::nostd::string_view meter_name,
+                                                        meter_instrument_key key) {
+  opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument> ret =
+      get_metrics_observable(meter_name, key);
+  if (ret) {
+    return ret;
+  }
+
+  auto meter_info = details::get_meter_info(meter_name);
+  if (!meter_info) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+  }
+
+  ret = meter_info->meter->CreateDoubleObservableGauge(key.name, key.description, key.unit);
+  if (ret) {
+    meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
+  }
+
+  return ret;
+}
+
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+global_service::mutable_metrics_observable_up_down_counter_long(opentelemetry::nostd::string_view meter_name,
+                                                                meter_instrument_key key) {
+  opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument> ret =
+      get_metrics_observable(meter_name, key);
+  if (ret) {
+    return ret;
+  }
+
+  auto meter_info = details::get_meter_info(meter_name);
+  if (!meter_info) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+  }
+
+  ret = meter_info->meter->CreateLongObservableUpDownCounter(key.name, key.description, key.unit);
+  if (ret) {
+    meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
+  }
+
+  return ret;
+}
+
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+global_service::mutable_metrics_observable_up_down_counter_double(opentelemetry::nostd::string_view meter_name,
+                                                                  meter_instrument_key key) {
+  opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument> ret =
+      get_metrics_observable(meter_name, key);
+  if (ret) {
+    return ret;
+  }
+
+  auto meter_info = details::get_meter_info(meter_name);
+  if (!meter_info) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+  }
+
+  ret = meter_info->meter->CreateDoubleObservableUpDownCounter(key.name, key.description, key.unit);
+  if (ret) {
+    meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
   }
 
   return ret;
@@ -764,17 +1061,18 @@ static details::local_provider_handle_t<opentelemetry::logs::LoggerProvider> _op
   context = std::make_shared<opentelemetry::sdk::logs::LoggerContext>(std::move(processors), std::move(resource));
   ret.provider = opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>(
       new opentelemetry::sdk::logs::LoggerProvider(context));
-  ret.shutdown_callback = [context](const opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider> &provider) {
-    if (!provider) {
-      return;
-    }
+  ret.shutdown_callback =
+      [context](const opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider> &provider) {
+        if (!provider) {
+          return;
+        }
 
-    // Patch for BUGs [#1591](https://github.com/open-telemetry/opentelemetry-cpp/issues/1591)
-    if(context) {
-      context->GetProcessor().Shutdown();
-    }
-    static_cast<opentelemetry::sdk::logs::LoggerProvider *>(provider.get())->Shutdown();
-  };
+        // Patch for BUGs [#1591](https://github.com/open-telemetry/opentelemetry-cpp/issues/1591)
+        if (context) {
+          context->GetProcessor().Shutdown();
+        }
+        static_cast<opentelemetry::sdk::logs::LoggerProvider *>(provider.get())->Shutdown();
+      };
   return ret;
 }
 
@@ -968,48 +1266,64 @@ static void _opentelemetry_set_global_provider(
   } while (false);
 }
 
-static opentelemetry::sdk::resource::ResourceAttributes _create_opentelemetry_app_resource(const atapp::app &app) {
+static opentelemetry::sdk::resource::ResourceAttributes _create_opentelemetry_app_resource(
+    details::local_caller_info_t &app_info_cache, const atapp::app &app) {
   // @see
   // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/resource/semantic_conventions/README.md
 
+  // metrics 维度不能保护无关属性
+  app_info_cache.metrics_attributes.clear();
+
   // basic
-  opentelemetry::sdk::resource::ResourceAttributes resource_values{
-      {"service.instance.id", app.get_id()},  {"service.instance.name", app.get_app_name()},
-      {"service.name", app.get_type_name()},  {"service.identity", app.get_app_identity()},
-      {"service.type_id", app.get_type_id()}, {"service.version", server_frame_project_get_version()},
-  };
+  app_info_cache.common_owned_attributes.SetAttribute("service.instance.id", app.get_id());
+  app_info_cache.common_owned_attributes.SetAttribute("service.instance.name", app.get_app_name());
+  app_info_cache.common_owned_attributes.SetAttribute("service.name", app.get_type_name());
+  app_info_cache.common_owned_attributes.SetAttribute("service.identity", app.get_app_identity());
+  app_info_cache.common_owned_attributes.SetAttribute("service.type_id", app.get_type_id());
+  app_info_cache.common_owned_attributes.SetAttribute("service.version", server_frame_project_get_version());
+
+  // metrics
+  app_info_cache.metrics_attributes["service.instance.name"] = app.get_app_name();
+  app_info_cache.metrics_attributes["service.name"] = app.get_type_name();
+  app_info_cache.metrics_attributes["service.version"] = server_frame_project_get_version();
 
   // area
   if (0 != app.get_area().zone_id()) {
-    resource_values.SetAttribute("service.area.zone_id", app.get_area().zone_id());
+    app_info_cache.common_owned_attributes.SetAttribute("service.area.zone_id", app.get_area().zone_id());
+    app_info_cache.metrics_attributes["service.area.zone_id"] = app.get_area().zone_id();
   }
   if (!app.get_area().region().empty()) {
-    resource_values.SetAttribute("service.area.region", app.get_area().region());
+    app_info_cache.common_owned_attributes.SetAttribute("service.area.region", app.get_area().region());
+    app_info_cache.metrics_attributes["service.area.region"] = app.get_area().region();
   }
   if (!app.get_area().district().empty()) {
-    resource_values.SetAttribute("service.area.district", app.get_area().district());
+    app_info_cache.common_owned_attributes.SetAttribute("service.area.district", app.get_area().district());
+    app_info_cache.metrics_attributes["service.area.district"] = app.get_area().district();
   }
 
   // metadata
   if (!app.get_metadata().namespace_name().empty()) {
-    resource_values.SetAttribute("service.namespace", app.get_metadata().namespace_name());
+    app_info_cache.common_owned_attributes.SetAttribute("service.namespace", app.get_metadata().namespace_name());
+    app_info_cache.metrics_attributes["service.namespace"] = app.get_metadata().namespace_name();
   }
 
   {
     auto iter = app.get_metadata().labels().find("deployment.environment");
     if (iter != app.get_metadata().labels().end()) {
-      resource_values.SetAttribute("deployment.environment", iter->second);
+      app_info_cache.common_owned_attributes.SetAttribute("deployment.environment", iter->second);
+      app_info_cache.metrics_attributes["deployment.environment"] = iter->second;
     }
   }
 
   // process
   // @see
   // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/resource/semantic_conventions/process.md
-  resource_values.SetAttribute("process.pid", atbus::node::get_pid());
+  app_info_cache.common_owned_attributes.SetAttribute("process.pid", atbus::node::get_pid());
 
   // Other common resource should be set by configure generator
 
-  return resource_values;
+  details::rebuild_attributes_map(app_info_cache.common_owned_attributes, app_info_cache.common_attributes);
+  return app_info_cache.common_owned_attributes;
 }
 
 static details::local_provider_handle_t<opentelemetry::trace::TracerProvider>
@@ -1127,7 +1441,8 @@ void global_service::set_current_service(atapp::app &app,
 
   // Setup telemetry
   auto &opentelemetry_cfg = telemetry.opentelemetry();
-  opentelemetry::sdk::resource::ResourceAttributes resource_values = _create_opentelemetry_app_resource(app);
+  opentelemetry::sdk::resource::ResourceAttributes resource_values =
+      _create_opentelemetry_app_resource(*app_info_cache, app);
 
   for (auto &ext_res : opentelemetry_cfg.resource()) {
     if (ext_res.second.empty()) {

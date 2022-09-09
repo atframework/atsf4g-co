@@ -1,4 +1,4 @@
-// Copyright 2021 atframework
+// Copyright 2022 atframework
 // Created by owent on 2018-05-01.
 //
 
@@ -31,6 +31,8 @@
 #include "router/router_manager_set.h"
 #include "router/router_object_base.h"
 
+#include "rpc/telemetry/rpc_global_service.h"
+
 bool task_action_auto_save_objects::debug_receive_stop_when_running = false;
 
 task_action_auto_save_objects::task_action_auto_save_objects(ctor_param_t &&param)
@@ -38,6 +40,9 @@ task_action_auto_save_objects::task_action_auto_save_objects(ctor_param_t &&para
   status_data_->success_count_ = 0;
   status_data_->failed_count_ = 0;
   status_data_->start_timepooint_ = 0;
+  status_data_->action_remove_object_count;
+  status_data_->action_remove_cache_count;
+  status_data_->action_save_count;
 }
 
 task_action_auto_save_objects::~task_action_auto_save_objects() {}
@@ -49,6 +54,9 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
   status_data_->success_count_ = 0;
   status_data_->failed_count_ = 0;
   status_data_->start_timepooint_ = util::time::time_utility::get_sys_now();
+  status_data_->action_remove_object_count;
+  status_data_->action_remove_cache_count;
+  status_data_->action_save_count;
   uint64_t left_action_count = logic_config::me()->get_cfg_router().pending_action_max_count();
   uint64_t pending_action_batch_count = logic_config::me()->get_cfg_router().pending_action_batch_count();
   std::vector<task_manager::task_ptr_t> pending_action_batch_tasks;
@@ -92,6 +100,8 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
 
               router_manager_base *mgr = router_manager_set::me()->get_manager(auto_save.type_id);
               if (nullptr != mgr) {
+                ++status_data->action_remove_object_count;
+
                 int result = RPC_AWAIT_CODE_RESULT(
                     mgr->remove_object(ctx, auto_save.object->get_key(), auto_save.object, nullptr));
                 // 失败且期间未升级或mutable_object()，下次重试的时候也要走降级流程
@@ -108,6 +118,7 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
                 break;
               }
 
+              ++status_data->action_save_count;
               res = RPC_AWAIT_CODE_RESULT(auto_save.object->save(ctx, nullptr));
 
               if (res >= 0) {
@@ -123,6 +134,8 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
 
               router_manager_base *mgr = router_manager_set::me()->get_manager(auto_save.type_id);
               if (nullptr != mgr) {
+                ++status_data->action_remove_cache_count;
+
                 RPC_AWAIT_IGNORE_RESULT(mgr->remove_cache(ctx, auto_save.object->get_key(), auto_save.object, nullptr));
               }
               break;
@@ -235,6 +248,37 @@ int task_action_auto_save_objects::on_timeout() {
 
   FWLOGWARNING("auto save task timeout(run {} seconds), we will continue on next round.",
                util::time::time_utility::get_sys_now() - status_data_->start_timepooint_);
+  return 0;
+}
+
+int task_action_auto_save_objects::on_complete() {
+  opentelemetry::context::Context telemetry_context;
+  if (status_data_->action_save_count > 0) {
+    auto instrument = rpc::telemetry::global_service::mutable_metrics_counter_long("service.router.auto_action.save",
+                                                                                   {"service.router.auto_action.save"});
+    if (instrument) {
+      instrument->Add(static_cast<long>(status_data_->action_save_count),
+                      rpc::telemetry::global_service::get_metrics_labels(), telemetry_context);
+    }
+  }
+
+  if (status_data_->action_remove_cache_count > 0) {
+    auto instrument = rpc::telemetry::global_service::mutable_metrics_counter_long(
+        "service.router.auto_action.remove_cache", {"service.router.auto_action.remove_cache"});
+    if (instrument) {
+      instrument->Add(static_cast<long>(status_data_->action_remove_cache_count),
+                      rpc::telemetry::global_service::get_metrics_labels(), telemetry_context);
+    }
+  }
+
+  if (status_data_->action_remove_object_count > 0) {
+    auto instrument = rpc::telemetry::global_service::mutable_metrics_counter_long(
+        "service.router.auto_action.remove_object", {"service.router.auto_action.remove_object"});
+    if (instrument) {
+      instrument->Add(static_cast<long>(status_data_->action_remove_object_count),
+                      rpc::telemetry::global_service::get_metrics_labels(), telemetry_context);
+    }
+  }
   return 0;
 }
 

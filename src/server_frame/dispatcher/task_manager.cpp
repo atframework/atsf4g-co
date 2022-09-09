@@ -19,9 +19,22 @@
 
 #include <config/logic_config.h>
 
+#include <atomic>
 #include <string>
 
 #include "dispatcher/task_action_base.h"
+#include "rpc/telemetry/rpc_global_service.h"
+
+namespace {
+struct task_manager_metrics_data_type {
+  std::atomic<bool> need_setup;
+  std::atomic<size_t> task_count;
+  std::atomic<size_t> tick_checkpoint_count;
+  std::atomic<size_t> pool_free_memory;
+  std::atomic<size_t> pool_used_memory;
+};
+
+static task_manager_metrics_data_type g_task_manager_metrics_data;
 
 static void log_wrapper_for_protobuf(::google::protobuf::LogLevel level, const char *filename, int line,
                                      const std::string &message) {
@@ -63,6 +76,7 @@ static void log_wrapper_for_protobuf(::google::protobuf::LogLevel level, const c
     WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->log(caller, "%s", message.c_str());
   }
 }
+}  // namespace
 
 task_manager::task_action_maker_base_t::task_action_maker_base_t(const atframework::DispatcherOptions *opt) {
   if (nullptr != opt) {
@@ -81,7 +95,13 @@ task_manager::actor_action_maker_base_t::actor_action_maker_base_t(const atframe
 task_manager::actor_action_maker_base_t::~actor_action_maker_base_t() {}
 
 task_manager::task_manager()
-    : stat_interval_(60), stat_last_checkpoint_(0), conf_busy_count_(0), conf_busy_warn_count_(0) {}
+    : stat_interval_(60), stat_last_checkpoint_(0), conf_busy_count_(0), conf_busy_warn_count_(0) {
+  g_task_manager_metrics_data.need_setup.store(true, std::memory_order_release);
+  g_task_manager_metrics_data.task_count.store(0, std::memory_order_release);
+  g_task_manager_metrics_data.tick_checkpoint_count.store(0, std::memory_order_release);
+  g_task_manager_metrics_data.pool_free_memory.store(0, std::memory_order_release);
+  g_task_manager_metrics_data.pool_used_memory.store(0, std::memory_order_release);
+}
 
 task_manager::~task_manager() {
   if (native_mgr_) {
@@ -142,6 +162,8 @@ int task_manager::reload() {
   conf_busy_count_ = logic_config::me()->get_cfg_task().stack().busy_count();
   conf_busy_warn_count_ = logic_config::me()->get_cfg_task().stack().busy_warn_count();
 
+  g_task_manager_metrics_data.need_setup.store(true, std::memory_order_release);
+
   return 0;
 }
 
@@ -189,6 +211,15 @@ int task_manager::tick(time_t sec, int nsec) {
       if (!native_mgr_->get_checkpoints().empty()) {
         first_checkpoint = native_mgr_->get_checkpoints().begin()->expired_time.tv_sec;
       }
+
+      g_task_manager_metrics_data.task_count.store(native_mgr_->get_task_size(), std::memory_order_release);
+      g_task_manager_metrics_data.tick_checkpoint_count.store(native_mgr_->get_tick_checkpoint_size(),
+                                                              std::memory_order_release);
+      g_task_manager_metrics_data.pool_free_memory.store(stack_pool_->get_limit().free_stack_size,
+                                                         std::memory_order_release);
+      g_task_manager_metrics_data.pool_used_memory.store(stack_pool_->get_limit().used_stack_size,
+                                                         std::memory_order_release);
+
       FWLOGWARNING(
           "[STATS] Coroutine stack stats:\n\tRuntime - Task Number: {}\n\tRuntime - Checkpoint Number: "
           "{}\n\tRuntime - Next Checkpoint: "
@@ -200,6 +231,10 @@ int task_manager::tick(time_t sec, int nsec) {
           stack_pool_->get_min_stack_number(), stack_pool_->get_min_stack_size(),
           stack_pool_->get_limit().used_stack_number, stack_pool_->get_limit().used_stack_size,
           stack_pool_->get_limit().free_stack_number, stack_pool_->get_limit().free_stack_size);
+
+      if (g_task_manager_metrics_data.need_setup.load(std::memory_order_acquire)) {
+        setup_metrics();
+      }
     }
   }
   return 0;
@@ -321,3 +356,59 @@ bool task_manager::check_sys_config() const {
 
   return true;
 }
+
+#define TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER(NAME, DESCRIPTION, UNIT, CREATE_ACTION, VAR_LOADER)                  \
+  {                                                                                                                    \
+    auto instrument = rpc::telemetry::global_service::get_metrics_observable(NAME, {NAME, DESCRIPTION, UNIT});         \
+    if (instrument) {                                                                                                  \
+      return;                                                                                                          \
+    }                                                                                                                  \
+                                                                                                                       \
+    instrument = rpc::telemetry::global_service::CREATE_ACTION(NAME, {NAME, DESCRIPTION, UNIT});                       \
+                                                                                                                       \
+    if (!instrument) {                                                                                                 \
+      return;                                                                                                          \
+    }                                                                                                                  \
+    instrument->AddCallback(                                                                                           \
+        [](opentelemetry::metrics::ObserverResult result, void *) {                                                    \
+          auto value = g_task_manager_metrics_data.VAR_LOADER;                                                         \
+          if (opentelemetry::nostd::holds_alternative<                                                                 \
+                  opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<long>>>(result)) {          \
+            auto observer = opentelemetry::nostd::get<                                                                 \
+                opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<long>>>(result);              \
+            if (observer) {                                                                                            \
+              observer->Observe(static_cast<long>(value), rpc::telemetry::global_service::get_metrics_labels());       \
+            }                                                                                                          \
+          } else if (opentelemetry::nostd::holds_alternative<                                                          \
+                         opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) { \
+            auto observer = opentelemetry::nostd::get<                                                                 \
+                opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result);            \
+            if (observer) {                                                                                            \
+              observer->Observe(static_cast<double>(value), rpc::telemetry::global_service::get_metrics_labels());     \
+            }                                                                                                          \
+          }                                                                                                            \
+        },                                                                                                             \
+        nullptr);                                                                                                      \
+  }
+
+void task_manager::setup_metrics() {
+  g_task_manager_metrics_data.need_setup.store(false, std::memory_order_release);
+
+  TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER("service.coroutine.task_count", "", "",
+                                            mutable_metrics_observable_gauge_long,
+                                            task_count.load(std::memory_order_acquire));
+
+  TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER("service.coroutine.tick_checkpoint_count", "", "",
+                                            mutable_metrics_observable_gauge_long,
+                                            tick_checkpoint_count.load(std::memory_order_acquire));
+
+  TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER("service.coroutine.pool_free_memory", "", "",
+                                            mutable_metrics_observable_gauge_long,
+                                            pool_free_memory.load(std::memory_order_acquire));
+
+  TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER("service.coroutine.pool_free_memory", "", "",
+                                            mutable_metrics_observable_gauge_long,
+                                            pool_used_memory.load(std::memory_order_acquire));
+}
+
+#undef TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER

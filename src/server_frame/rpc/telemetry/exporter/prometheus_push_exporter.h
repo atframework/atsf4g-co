@@ -39,6 +39,9 @@ struct PrometheusPushExporterOptions {
   ::prometheus::Labels labels;
   std::string username;
   std::string password;
+
+  opentelemetry::sdk::metrics::AggregationTemporality aggregation_temporality =
+      opentelemetry::sdk::metrics::AggregationTemporality::kDelta;
 };
 
 class PrometheusPushExporter : public ::opentelemetry::sdk::metrics::MetricExporter {

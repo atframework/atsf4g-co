@@ -270,6 +270,8 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
  private:
   bool check_sys_config() const;
 
+  void setup_metrics();
+
   /**
    * @brief 创建任务
    * @param task 协程任务

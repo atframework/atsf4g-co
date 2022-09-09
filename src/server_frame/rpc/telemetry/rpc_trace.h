@@ -1,4 +1,4 @@
-// Copyright 2021 atframework
+// Copyright 2022 atframework
 // Created by owent on 2021-07-13.
 //
 
@@ -16,6 +16,7 @@
 #include <config/compiler/protobuf_suffix.h>
 
 #include <stdint.h>
+#include <chrono>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -77,6 +78,8 @@ class tracer {
  private:
   friend class context;
   int32_t result_;
+  std::chrono::system_clock::time_point start_system_timepoint_;
+  std::chrono::steady_clock::time_point start_steady_timepoint_;
   span_ptr_type trace_span_;
   std::shared_ptr<dispatcher_implement> dispatcher_;
 };

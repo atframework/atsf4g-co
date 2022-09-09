@@ -3,6 +3,16 @@
 
 #pragma once
 
+#if defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
+#  ifndef WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+
+#  include <WinSock2.h>
+#endif
+
+#include <uv.h>
+
 #include <config/compiler_features.h>
 
 #include <gsl/select-gsl.h>
@@ -21,8 +31,11 @@
 
 #include <config/server_frame_build_feature.h>
 
+#include <opentelemetry/common/attribute_value.h>
+
 #include <stdint.h>
 
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <ctime>
@@ -91,6 +104,24 @@ class logic_server_common_module : public atapp::module_impl {
   using battle_service_set_t = std::unordered_set<battle_service_node_t, battle_service_node_hash_t>;
   using battle_service_version_map_t = std::unordered_map<std::string, battle_service_set_t>;
   using battle_service_id_map_t = std::unordered_map<uint64_t, battle_service_node_t>;
+
+  struct stats_data_t {
+    // cross thread
+    std::atomic<bool> need_setup;
+    std::atomic<uint64_t> collect_sequence;
+    std::atomic<int64_t> collect_max_tick_interval_us;
+    std::atomic<int64_t> collect_cpu_sys;
+    std::atomic<int64_t> collect_cpu_user;
+    std::atomic<uint64_t> collect_memory_max_rss;
+    std::atomic<size_t> collect_memory_rss;
+
+    // main thread
+    time_t last_update_usage_timepoint;
+    uint64_t last_collect_sequence;
+    uv_rusage_t last_checkpoint_usage;
+    std::chrono::system_clock::time_point last_checkpoint;
+    std::chrono::system_clock::time_point previous_tick_checkpoint;
+  };
 
  public:
   explicit logic_server_common_module(const logic_server_common_module_configure& static_conf);
@@ -163,6 +194,13 @@ class logic_server_common_module : public atapp::module_impl {
   int setup_etcd_event_handle();
 
   int tick_update_remote_configures();
+  void tick_stats();
+
+  void setup_metrics_tick();
+  void setup_metrics_cpu_sys();
+  void setup_metrics_cpu_user();
+  void setup_metrics_memory_maxrss();
+  void setup_metrics_memory_rss();
 
   void add_service_type_id_index(const atapp::etcd_discovery_node::ptr_t& node);
   void remove_service_type_id_index(const atapp::etcd_discovery_node::ptr_t& node);
@@ -175,6 +213,9 @@ class logic_server_common_module : public atapp::module_impl {
   logic_server_common_module_configure static_conf_;
   time_t stop_log_timepoint_;
   PROJECT_NAMESPACE_ID::config::logic_server_shared_component_cfg shared_component_;
+
+  // stat
+  std::shared_ptr<stats_data_t> stats_;
 
   battle_service_version_map_t battle_service_version_map_;
   battle_service_id_map_t battle_service_id_;

@@ -1,4 +1,4 @@
-// Copyright 2021 atframework
+// Copyright 2022 atframework
 // Created by owent on 2018-05-01.
 //
 
@@ -24,6 +24,7 @@ class task_action_auto_save_objects : public task_action_no_req_base {
   int on_success() override;
   int on_failed() override;
   int on_timeout() override;
+  int on_complete() override;
 
  public:
   static bool debug_receive_stop_when_running;
@@ -33,9 +34,13 @@ class task_action_auto_save_objects : public task_action_no_req_base {
 
  private:
   struct status_data_t {
-    int success_count_;
-    int failed_count_;
+    size_t success_count_;
+    size_t failed_count_;
     time_t start_timepooint_;
+
+    size_t action_remove_object_count;
+    size_t action_remove_cache_count;
+    size_t action_save_count;
   };
   std::shared_ptr<status_data_t> status_data_;
 };
