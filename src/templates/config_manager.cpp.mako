@@ -338,6 +338,7 @@ int config_manager::reload_all(bool del_when_failed) {
   if (del_when_failed && ret < 0) {
     ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh(config_group_lock_);
     config_group_list_.pop_back();
+    ++ reload_version_;
 
     if (on_group_destroyed_ && cfg_group) {
       on_group_destroyed_(cfg_group);
