@@ -42,6 +42,8 @@ class cs_msg_dispatcher : public dispatcher_implement, public util::design_patte
   virtual ~cs_msg_dispatcher();
   int32_t init() override;
 
+  const char *name() const override;
+
   /**
    * @brief 启动关闭命令
    * @note 如果有延时关闭，在本模块关闭返回0前会定期反复调用，直到某次返回值<=0为止

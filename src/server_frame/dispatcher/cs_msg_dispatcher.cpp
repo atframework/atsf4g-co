@@ -40,6 +40,8 @@ int32_t cs_msg_dispatcher::init() {
   return 0;
 }
 
+const char *cs_msg_dispatcher::name() const { return "cs_msg_dispatcher"; }
+
 int cs_msg_dispatcher::stop() {
   if (is_closing_) {
     return dispatcher_implement::stop();

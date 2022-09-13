@@ -81,6 +81,8 @@ class db_msg_dispatcher : public dispatcher_implement, public util::design_patte
 
   int32_t init() override;
 
+  const char *name() const override;
+
   /**
    * @brief run tick handle and return active action number
    * @return active action number or error code

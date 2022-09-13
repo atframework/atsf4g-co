@@ -47,6 +47,8 @@ int32_t ss_msg_dispatcher::init() {
   return 0;
 }
 
+const char *ss_msg_dispatcher::name() const { return "ss_msg_dispatcher"; }
+
 uint64_t ss_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
   atframework::SSMsg *real_msg = get_protobuf_msg<atframework::SSMsg>(raw_msg);
   if (nullptr == real_msg) {

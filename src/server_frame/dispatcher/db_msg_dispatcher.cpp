@@ -112,6 +112,8 @@ int32_t db_msg_dispatcher::init() {
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
+const char *db_msg_dispatcher::name() const { return "db_msg_dispatcher"; }
+
 int db_msg_dispatcher::tick() {
   tick_msg_count_ = 0;
   int prev_count = -1;

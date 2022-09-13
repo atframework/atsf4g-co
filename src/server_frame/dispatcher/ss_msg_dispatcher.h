@@ -47,6 +47,8 @@ class ss_msg_dispatcher : public dispatcher_implement, public util::design_patte
 
   int32_t init() override;
 
+  const char *name() const override;
+
   /**
    * @brief 获取任务信息
    * @param raw_msg 消息抽象结构
