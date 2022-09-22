@@ -15,22 +15,29 @@
 #include "utility/protobuf_mini_dumper.h"
 
 namespace rpc {
-result_code_type::result_code_type() {}
-result_code_type::result_code_type(int32_t code) : result_data_(code) {}
-result_code_type::operator int32_t() const noexcept {
-  if (!result_data_.is_ready()) {
+
+#if defined(RPC_AWAIT_USING_CXX_STD_COROUTINE) && RPC_AWAIT_USING_CXX_STD_COROUTINE
+
+int32_t rpc_error_code_transform::operator()(copp::promise_status in) const noexcept {
+  if (in < copp::promise_status::kDone) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL_NOT_READY;
   }
 
-  const int32_t* ret = result_data_.data();
-  if (nullptr == ret) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL;
+  if (in == copp::promise_status::kCancle) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
+  } else if (in == copp::promise_status::kKilled) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
+  } else if (in == copp::promise_status::kTimeout) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
   }
 
-  return *ret;
+  return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL;
 }
+
+#else
+int32_t rpc_get_not_ready_code() { return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL; }
 
 result_void_type::result_void_type() {}
 result_void_type::result_void_type(bool is_ready) : result_data_(is_ready) {}
-
+#endif
 }  // namespace rpc

@@ -9,6 +9,7 @@
 #include <string>
 
 #include "rpc/db/db_utils.h"
+#include "rpc/rpc_common_types.h"
 
 namespace rpc {
 class context;
@@ -57,8 +58,8 @@ EXPLICIT_NODISCARD_ATTR std::string generate_short_uuid();
  * @param patch_type 补充类型(不需要可填0)
  * @return 如果成功，返回一个自增ID（正数），失败返回错误码，错误码 <= 0，
  */
-EXPLICIT_NODISCARD_ATTR int64_t generate_global_increase_id(rpc::context &ctx, uint32_t major_type, uint32_t minor_type,
-                                                            uint32_t patch_type);
+EXPLICIT_NODISCARD_ATTR rpc_result<int64_t> generate_global_increase_id(rpc::context &ctx, uint32_t major_type,
+                                                                        uint32_t minor_type, uint32_t patch_type);
 
 /**
  * @biref 生成唯一ID
@@ -71,8 +72,8 @@ EXPLICIT_NODISCARD_ATTR int64_t generate_global_increase_id(rpc::context &ctx, u
  * @param patch_type 补充类型(不需要可填0)
  * @return 如果成功，返回一个自增ID（正数），失败返回错误码，错误码 <= 0，
  */
-EXPLICIT_NODISCARD_ATTR int64_t generate_global_unique_id(rpc::context &ctx, uint32_t major_type,
-                                                          uint32_t minor_type = 0, uint32_t patch_type = 0);
+EXPLICIT_NODISCARD_ATTR rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx, uint32_t major_type,
+                                                                      uint32_t minor_type = 0, uint32_t patch_type = 0);
 }  // namespace uuid
 
 }  // namespace db

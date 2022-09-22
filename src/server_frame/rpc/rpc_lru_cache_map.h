@@ -22,6 +22,7 @@
 #include <functional>
 #include <unordered_map>
 
+#include "rpc/rpc_async_invoke.h"
 #include "rpc/rpc_common_types.h"
 
 namespace rpc {
@@ -153,11 +154,10 @@ class rpc_lru_cache_map {
           // fallback, clear data, 理论上不会走到这个流程，前面就是reset掉
           out->pulling_task.reset();
         } else {
-          task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
-          self_task->await_task(out->pulling_task);
-          if (self_task->is_timeout()) {
+          int res = RPC_AWAIT_CODE_RESULT(rpc::wait_task(out->pulling_task));
+          if (res < 0) {
             out.reset();
-            RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+            RPC_RETURN_CODE(res);
           }
         }
         continue;
@@ -276,10 +276,9 @@ class rpc_lru_cache_map {
           // fallback, clear data, 理论上不会走到这个流程，前面就是reset掉
           inout->saving_task.reset();
         } else {
-          self_task->await_task(inout->saving_task);
-
-          if (self_task->is_timeout()) {
-            RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+          int res = RPC_AWAIT_CODE_RESULT(rpc::wait_task(inout->saving_task));
+          if (res < 0) {
+            RPC_RETURN_CODE(res);
           }
         }
       }

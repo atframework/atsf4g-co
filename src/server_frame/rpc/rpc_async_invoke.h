@@ -23,34 +23,36 @@
 namespace rpc {
 class context;
 
+using async_invoke_result = util::design_pattern::result_type<task_types::task_ptr_type, int>;
+
 template <class... TARGS>
-rpc_result<task_types::task_ptr_type, int> make_async_invoke_success(TARGS &&...args) {
-  return rpc_result<task_types::task_ptr_type, int>::make_success(std::forward<TARGS>(args)...);
+inline async_invoke_result make_async_invoke_success(TARGS &&...args) {
+  return async_invoke_result::make_success(std::forward<TARGS>(args)...);
 }
 
 template <class... TARGS>
-rpc_result<task_types::task_ptr_type, int> make_async_invoke_error(TARGS &&...args) {
-  return rpc_result<task_types::task_ptr_type, int>::make_error(std::forward<TARGS>(args)...);
+inline async_invoke_result make_async_invoke_error(TARGS &&...args) {
+  return async_invoke_result::make_error(std::forward<TARGS>(args)...);
 }
 
-EXPLICIT_NODISCARD_ATTR rpc_result<task_types::task_ptr_type, int> async_invoke(
-    context &ctx, gsl::string_view name, std::function<result_code_type(context &)> fn,
-    std::chrono::system_clock::duration timeout = std::chrono::system_clock::duration::zero());
+EXPLICIT_NODISCARD_ATTR async_invoke_result
+async_invoke(context &ctx, gsl::string_view name, std::function<result_code_type(context &)> fn,
+             std::chrono::system_clock::duration timeout = std::chrono::system_clock::duration::zero());
 
 template <class TREP, class TPERIOD>
-EXPLICIT_NODISCARD_ATTR inline rpc_result<task_types::task_ptr_type, int> async_invoke(
+EXPLICIT_NODISCARD_ATTR inline async_invoke_result async_invoke(
     context &ctx, gsl::string_view name, std::function<result_code_type(context &)> fn,
     std::chrono::duration<TREP, TPERIOD> timeout = std::chrono::duration<TREP, TPERIOD>::zero()) {
   return async_invoke(ctx, name, std::move(fn),
                       std::chrono::duration_cast<std::chrono::system_clock::duration>(timeout));
 }
 
-EXPLICIT_NODISCARD_ATTR rpc_result<task_types::task_ptr_type, int> async_invoke(
-    gsl::string_view caller_name, gsl::string_view name, std::function<result_code_type(context &)> fn,
-    std::chrono::system_clock::duration timeout = std::chrono::system_clock::duration::zero());
+EXPLICIT_NODISCARD_ATTR async_invoke_result
+async_invoke(gsl::string_view caller_name, gsl::string_view name, std::function<result_code_type(context &)> fn,
+             std::chrono::system_clock::duration timeout = std::chrono::system_clock::duration::zero());
 
 template <class TREP, class TPERIOD>
-EXPLICIT_NODISCARD_ATTR inline rpc_result<task_types::task_ptr_type, int> async_invoke(
+EXPLICIT_NODISCARD_ATTR inline async_invoke_result async_invoke(
     gsl::string_view caller_name, gsl::string_view name, std::function<result_code_type(context &)> fn,
     std::chrono::duration<TREP, TPERIOD> timeout = std::chrono::duration<TREP, TPERIOD>::zero()) {
   return async_invoke(caller_name, name, std::move(fn),
@@ -58,5 +60,7 @@ EXPLICIT_NODISCARD_ATTR inline rpc_result<task_types::task_ptr_type, int> async_
 }
 
 EXPLICIT_NODISCARD_ATTR result_code_type wait_tasks(const std::vector<task_types::task_ptr_type> &tasks);
+
+EXPLICIT_NODISCARD_ATTR result_code_type wait_task(const task_types::task_ptr_type &other_task);
 
 }  // namespace rpc

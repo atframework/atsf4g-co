@@ -21,11 +21,10 @@
 #include "rpc/rpc_utils.h"
 
 namespace rpc {
-rpc_result<task_types::task_ptr_type, int> async_invoke(context &ctx, gsl::string_view name,
-                                                        std::function<result_code_type(context &)> fn,
-                                                        std::chrono::system_clock::duration timeout) {
+async_invoke_result async_invoke(context &ctx, gsl::string_view name, std::function<result_code_type(context &)> fn,
+                                 std::chrono::system_clock::duration timeout) {
   if (!fn) {
-    return rpc_result<task_types::task_ptr_type, int>::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    return async_invoke_result::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
   task_types::task_ptr_type task_ptr;
@@ -45,7 +44,7 @@ rpc_result<task_types::task_ptr_type, int> async_invoke(context &ctx, gsl::strin
   }
   if (0 != res || !task_ptr) {
     FWLOGERROR("create task_action_async_invoke failed, res: {}({})", res, protobuf_mini_dumper_get_error_msg(res));
-    return rpc_result<task_types::task_ptr_type, int>::make_error(res);
+    return async_invoke_result::make_error(res);
   }
 
   task_manager::start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
@@ -53,15 +52,15 @@ rpc_result<task_types::task_ptr_type, int> async_invoke(context &ctx, gsl::strin
   if (0 != res) {
     FWLOGERROR("start task_action_async_invoke {} with name rpc.async_invoke:{} failed, res: {}({})",
                task_ptr->get_id(), name, res, protobuf_mini_dumper_get_error_msg(res));
-    return rpc_result<task_types::task_ptr_type, int>::make_error(res);
+    return async_invoke_result::make_error(res);
   }
 
-  return rpc_result<task_types::task_ptr_type, int>::make_success(std::move(task_ptr));
+  return async_invoke_result::make_success(std::move(task_ptr));
 }
 
-rpc_result<task_types::task_ptr_type, int> async_invoke(gsl::string_view caller_name, gsl::string_view name,
-                                                        std::function<result_code_type(context &)> fn,
-                                                        std::chrono::system_clock::duration timeout) {
+async_invoke_result async_invoke(gsl::string_view caller_name, gsl::string_view name,
+                                 std::function<result_code_type(context &)> fn,
+                                 std::chrono::system_clock::duration timeout) {
   rpc::context ctx;
   return async_invoke(ctx, name, std::move(fn), timeout);
 }
@@ -105,6 +104,41 @@ result_code_type wait_tasks(const std::vector<task_types::task_ptr_type> &tasks)
     }
 
     self_task->await_task(last_task);
+  }
+
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+}
+
+result_code_type wait_task(const task_types::task_ptr_type &other_task) {
+  if (!other_task) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  task_types::task_ptr_type self_task(task_manager::task_t::this_task());
+  if (!self_task) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
+  }
+
+  if (other_task == self_task) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  while (true) {
+    if (self_task->is_timeout()) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+    } else if (self_task->is_faulted()) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
+    } else if (self_task->is_canceled()) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
+    } else if (self_task->is_exiting()) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING);
+    }
+
+    if (other_task->is_exiting()) {
+      break;
+    }
+
+    self_task->await_task(other_task);
   }
 
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);

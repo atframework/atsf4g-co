@@ -17,6 +17,8 @@
 #include <config/logic_config.h>
 #include <data/player.h>
 
+#include <rpc/rpc_async_invoke.h>
+
 #include <utility>
 
 #include "logic/async_jobs/task_action_player_remote_patch_jobs.h"
@@ -136,29 +138,7 @@ rpc::result_code_type user_async_jobs_manager::wait_for_async_task(rpc::context&
     RPC_RETURN_CODE(0);
   }
 
-  task_manager::task_t* current = task_manager::task_t::this_task();
-  if (NULL == current) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
-
-  int res = current->await_task(remote_command_patch_task_);
-  if (current->is_timeout()) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
-  }
-
-  if (current->is_faulted()) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
-  }
-
-  if (current->is_canceled()) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
-  }
-
-  if (current->is_exiting()) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING);
-  }
-
-  RPC_RETURN_CODE(res);
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::wait_task(remote_command_patch_task_)));
 }
 
 void user_async_jobs_manager::reset_async_jobs_protect() {

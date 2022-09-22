@@ -23,6 +23,7 @@
 #include <config/logic_config.h>
 #include <proto_base.h>
 #include <rpc/db/player.h>
+#include <rpc/rpc_async_invoke.h>
 
 #include <router/router_player_manager.h>
 
@@ -324,14 +325,5 @@ rpc::result_code_type task_action_login::await_io_task(rpc::context&, std::share
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
 
-  task_manager::task_t* this_task = task_manager::task_t::this_task();
-  if (nullptr != this_task) {
-    FWPLOGDEBUG(*user, "current task {} start await last pull object task {}", this_task->get_id(),
-                last_pull_object_task_id);
-    RPC_AWAIT_IGNORE_RESULT(this_task->await_task(last_pull_object_task));
-
-    RPC_RETURN_CODE(task_manager::convert_task_status_to_error_code(*this_task));
-  }
-
-  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::wait_task(last_pull_object_task)));
 }

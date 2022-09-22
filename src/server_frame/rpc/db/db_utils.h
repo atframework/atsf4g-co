@@ -16,10 +16,18 @@
 #include <string>
 #include <vector>
 
+#include "rpc/rpc_common_types.h"
+
 extern "C" struct redisReply;
 
 namespace rpc {
 namespace db {
+
+#if defined(RPC_AWAIT_USING_CXX_STD_COROUTINE) && RPC_AWAIT_USING_CXX_STD_COROUTINE
+
+using result_type = result_code_type;
+
+#else
 
 /**
  * @brief 数据库接口统一返回结构
@@ -31,6 +39,10 @@ class result_type {
 
  public:
   result_type();
+
+  template <class TINPUT>
+  result_type(rpc_result_guard<TINPUT>&& guard) : result_data_(guard.get()) {}
+
   explicit result_type(value_type code);
   explicit operator value_type() const noexcept;
 
@@ -42,6 +54,7 @@ class result_type {
  private:
   copp::future::poller<value_type> result_data_;
 };
+#endif
 
 /**
  * allocate a buffer in specify buffer block and align address to type Ty
@@ -130,6 +143,4 @@ int pack_message(const ::google::protobuf::Message& msg, redis_args& args,
 }  // namespace db
 }  // namespace rpc
 
-// When using c++20 coroutine, declare RPC_AWAIT_CODE_RESULT like this
-//   #define RPC_DB_RETURN_CODE(x) co_return (x)
-#define RPC_DB_RETURN_CODE(x) return rpc::db::result_type(x)
+#define RPC_DB_RETURN_CODE(x) RPC_RETURN_TYPE(x)
