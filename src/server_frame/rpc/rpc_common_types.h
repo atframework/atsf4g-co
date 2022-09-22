@@ -168,7 +168,7 @@ struct _rpc_result_traits {
 
 template <class TRESULT>
 typename _rpc_result_traits<TRESULT>::value_type _get_rpc_result_value(TRESULT&& result) {
-  return static_cast<_rpc_result_traits<TRESULT>::value_type>(result);
+  return static_cast<typename _rpc_result_traits<TRESULT>::value_type>(result);
 }
 
 }  // namespace details
