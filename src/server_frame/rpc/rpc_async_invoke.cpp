@@ -110,20 +110,21 @@ result_code_type wait_tasks(const std::vector<task_types::task_ptr_type> &tasks)
 }
 
 result_code_type wait_task(const task_types::task_ptr_type &other_task) {
-  if (!other_task) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
-  }
-
   task_types::task_ptr_type self_task(task_manager::task_t::this_task());
   if (!self_task) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
   }
 
-  if (other_task == self_task) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
-  }
-
   while (true) {
+    // other_task mey be changed after await_task is returned
+    if (!other_task) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    }
+
+    if (other_task == self_task) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    }
+
     if (self_task->is_timeout()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
     } else if (self_task->is_faulted()) {

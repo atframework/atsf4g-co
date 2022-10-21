@@ -61,6 +61,7 @@ class transaction_client_handle {
                                         const participator_type&)>
         reject_participator;
   };
+  using on_destroy_callback_type = void (*)(transaction_client_handle*);
 
   struct transaction_options {
     uint32_t replication_read_count = 0;
@@ -96,6 +97,8 @@ class transaction_client_handle {
 
   inline void* get_private_data() const noexcept { return private_data_; }
   inline void set_private_data(void* ptr) noexcept { private_data_ = ptr; }
+  inline on_destroy_callback_type get_on_destroy_callback() const noexcept { return on_destroy_; }
+  inline void set_on_destroy_callback(on_destroy_callback_type fn) noexcept { on_destroy_ = fn; };
 
   /**
    * @brief Create a transaction object
@@ -139,6 +142,7 @@ class transaction_client_handle {
 
  private:
   void* private_data_;
+  on_destroy_callback_type on_destroy_;
   std::shared_ptr<vtable_type> vtable_;
 };
 

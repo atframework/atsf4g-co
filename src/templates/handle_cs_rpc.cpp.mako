@@ -10,6 +10,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 
 #include "handle_cs_rpc_${service.get_name_lower_rule()}.h"
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/svr.protocol.pb.h>
@@ -20,6 +21,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 % endif
 
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <dispatcher/cs_msg_dispatcher.h>
 

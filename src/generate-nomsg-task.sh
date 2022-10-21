@@ -34,18 +34,7 @@ fi
 
 "$PYTHON_BIN" "$SCRIPT_DIR/generate-for-pb.py" -o "$OUTPUT_DIR" \
   --no-overwrite \
-  --project-dir "$PROJECT_DIR" --protoc-bin "$PROTOBUF_BIN" \
-  --protoc-include "$SCRIPT_DIR/server_frame/protocol/config" \
-  --protoc-include "$SCRIPT_DIR/server_frame/protocol/pbdesc" \
-  --protoc-include "$PROTOBUF_INCLUDE_DIR" \
-  --protoc-include "$PROJECT_DIR/third_party/xres-code-generator/repo/pb_extension" \
-  --protoc-include "$PROJECT_DIR/atframework/libatapp/include" \
-  --protoc-include "$PROJECT_DIR/atframework/libatbus/include" \
-  --proto-files "$SCRIPT_DIR/server_frame/protocol/config/*.proto" \
-  --proto-files "$SCRIPT_DIR/server_frame/protocol/pbdesc/*.proto" \
-  --proto-files "$PROJECT_DIR/third_party/xres-code-generator/repo/pb_extension/xrescode_extensions_v3.proto" \
-  --proto-files "$PROJECT_DIR/atframework/libatapp/include/atframe/*.proto" \
-  --proto-files "$PROJECT_DIR/atframework/libatbus/include/*.proto" \
+  --project-dir "$PROJECT_DIR" --pb-file "D:/workspace/github/atframework/atsf4g-co/build_jobs_cmake_tools/publish/resource/pbdesc/network.pb" \
   --set "project_namespace=hello" --set "task_class_name=$TASK_NAME" \
   --add-path "$PROJECT_DIR/atframework/cmake-toolset/modules" \
   --add-package-prefix "$EXTERNAL_MODULE_PATH" \

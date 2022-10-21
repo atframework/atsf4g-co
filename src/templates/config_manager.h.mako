@@ -20,6 +20,7 @@ import time
 
 #include "lock/spin_rw_lock.h"
 
+// clang-format off
 #include "config/compiler/protobuf_prefix.h"
 
 #include "google/protobuf/descriptor.h"
@@ -28,6 +29,7 @@ import time
 #include "protocol/config/pb_header_v3.pb.h"
 
 #include "config/compiler/protobuf_suffix.h"
+// clang-format on
 
 % for block_file in pb_set.get_custom_blocks("custom_config_include"):
 // include custom_config_include: ${block_file}

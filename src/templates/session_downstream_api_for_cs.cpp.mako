@@ -13,6 +13,7 @@ result_clazz_name = service.get_name_lower_rule() + '_result_t'
 
 #include <log/log_wrapper.h>
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/com.const.pb.h>
@@ -25,6 +26,7 @@ result_clazz_name = service.get_name_lower_rule() + '_result_t'
 % endif
 
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <config/logic_config.h>
 #include <config/server_frame_build_feature.h>

@@ -15,6 +15,7 @@ rpc_is_stream_mode = rpc.is_request_stream() or rpc.is_response_stream()
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/com.const.pb.h>
@@ -26,6 +27,7 @@ rpc_is_stream_mode = rpc.is_request_stream() or rpc.is_response_stream()
 % endif
 
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <config/logic_config.h>
 #include <config/server_frame_build_feature.h>

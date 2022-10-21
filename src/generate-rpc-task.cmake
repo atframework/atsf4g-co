@@ -22,28 +22,28 @@ function(generate_for_pb_create_protocol_sandbox OUTPUT_DIR)
       PARENT_SCOPE)
 endfunction()
 
-generate_for_pb_add_proto_path("${CMAKE_CURRENT_BINARY_DIR}/_sandbox/generate-for-pb")
-if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/_sandbox/generate-for-pb")
-  file(REMOVE_RECURSE "${CMAKE_CURRENT_BINARY_DIR}/_sandbox/generate-for-pb")
+generate_for_pb_add_proto_path("${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb")
+if(EXISTS "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb")
+  file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb")
 endif()
 
 if(PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR
    AND EXISTS "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/extensions/v3/xresloader.proto")
   generate_for_pb_create_protocol_sandbox(
-    "${CMAKE_CURRENT_BINARY_DIR}/_sandbox/generate-for-pb/protocol/common/extensions/v3"
+    "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb/protocol/common/extensions/v3"
     "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/extensions/v3/xresloader.proto"
     "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/extensions/v3/xresloader_ue.proto")
   generate_for_pb_add_proto_file(
-    "${CMAKE_CURRENT_BINARY_DIR}/_sandbox/generate-for-pb/protocol/common/extensions/v3/xresloader.proto"
-    "${CMAKE_CURRENT_BINARY_DIR}/_sandbox/generate-for-pb/protocol/common/extensions/v3/xresloader_ue.proto")
+    "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb/protocol/common/extensions/v3/xresloader.proto"
+    "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb/protocol/common/extensions/v3/xresloader_ue.proto")
 endif()
 if(PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR
    AND EXISTS "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension/xrescode_extensions_v3.proto")
   generate_for_pb_create_protocol_sandbox(
-    "${CMAKE_CURRENT_BINARY_DIR}/_sandbox/generate-for-pb/protocol/config"
+    "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb/protocol/config"
     "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension/xrescode_extensions_v3.proto")
   generate_for_pb_add_proto_file(
-    "${CMAKE_CURRENT_BINARY_DIR}/_sandbox/generate-for-pb/protocol/config/xrescode_extensions_v3.proto")
+    "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb/protocol/config/xrescode_extensions_v3.proto")
 endif()
 
 # -----------------------------------------------------------------------------

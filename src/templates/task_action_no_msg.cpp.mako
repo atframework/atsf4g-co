@@ -6,11 +6,13 @@ import time
 
 #include "${task_class_name}.h"
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <std/explicit_declare.h>
 #include <log/log_wrapper.h>

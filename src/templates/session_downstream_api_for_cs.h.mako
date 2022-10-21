@@ -12,6 +12,7 @@ result_clazz_name = service.get_name_lower_rule() + '_result_t'
 
 #pragma once
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/com.protocol.pb.h>
@@ -22,6 +23,7 @@ result_clazz_name = service.get_name_lower_rule() + '_result_t'
 % endif
 
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <libcopp/future/poller.h>
 

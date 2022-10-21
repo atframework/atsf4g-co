@@ -39,9 +39,13 @@ static inline google::protobuf::Duration std_duration_to_protobuf_duration(std::
 }  // namespace
 
 transaction_client_handle::transaction_client_handle(const std::shared_ptr<vtable_type>& vtable)
-    : private_data_{nullptr}, vtable_{vtable} {}
+    : private_data_{nullptr}, on_destroy_{nullptr}, vtable_{vtable} {}
 
-transaction_client_handle::~transaction_client_handle() {}
+transaction_client_handle::~transaction_client_handle() {
+  if (nullptr != on_destroy_) {
+    (*on_destroy_)(this);
+  }
+}
 
 rpc::result_code_type transaction_client_handle::create_transaction(rpc::context& ctx, storage_ptr_type& output,
                                                                     const transaction_options& options) {

@@ -12,6 +12,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 #include <gsl/select-gsl.h>
 #include <log/log_wrapper.h>
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/com.const.pb.h>
@@ -26,6 +27,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 % endif
 
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <config/logic_config.h>
 #include <config/server_frame_build_feature.h>

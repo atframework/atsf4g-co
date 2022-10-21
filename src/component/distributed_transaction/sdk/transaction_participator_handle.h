@@ -75,6 +75,8 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
     std::function<rpc::result_code_type(rpc::context&, transaction_participator_handle&)> on_resolve_task_finished;
   };
 
+  using on_destroy_callback_type = void (*)(transaction_participator_handle*);
+
  private:
   transaction_participator_handle(const transaction_participator_handle&) = delete;
   transaction_participator_handle(transaction_participator_handle&&) = delete;
@@ -87,6 +89,9 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
 
   inline void* get_private_data() const noexcept { return private_data_; }
   inline void set_private_data(void* ptr) noexcept { private_data_ = ptr; }
+  inline on_destroy_callback_type get_on_destroy_callback() const noexcept { return on_destroy_; }
+  inline void set_on_destroy_callback(on_destroy_callback_type fn) noexcept { on_destroy_ = fn; };
+
   inline const std::string& get_participator_key() const noexcept { return participator_key_; }
 
   void load(const snapshot_type& storage);
@@ -289,6 +294,8 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
   };
 
   void* private_data_;
+  on_destroy_callback_type on_destroy_;
+
   std::string participator_key_;
   std::shared_ptr<vtable_type> vtable_;
   std::set<storage_resolve_timer_type> resolve_timers_;

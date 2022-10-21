@@ -21,12 +21,14 @@ import time
 
 #include "lock/spin_rw_lock.h"
 
+// clang-format off
 #include "config/compiler/protobuf_prefix.h"
 
 #include "${pb_set.pb_include_prefix}${loader.get_pb_header_path()}"
 #include "protocol/config/pb_header_v3.pb.h"
 
 #include "config/compiler/protobuf_suffix.h"
+// clang-format on
 
 ${pb_loader.CppNamespaceBegin(global_package)}
 ${loader.get_cpp_namespace_decl_begin()}

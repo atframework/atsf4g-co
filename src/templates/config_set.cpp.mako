@@ -33,6 +33,7 @@ pb_msg_class_name = loader.get_cpp_class_name()
 
 #endif
 
+// clang-format off
 #include "config/compiler/protobuf_prefix.h"
 
 #include "google/protobuf/arena.h"
@@ -46,6 +47,7 @@ pb_msg_class_name = loader.get_cpp_class_name()
 #include "google/protobuf/stubs/common.h"
 
 #include "config/compiler/protobuf_suffix.h"
+// clang-format on
 
 #include "lock/lock_holder.h"
 

@@ -24,11 +24,15 @@ namespace distributed_system {
 
 transaction_participator_handle::transaction_participator_handle(const std::shared_ptr<vtable_type>& vtable,
                                                                  gsl::string_view participator_key)
-    : private_data_{nullptr}, vtable_{vtable} {
+    : private_data_{nullptr}, on_destroy_{nullptr}, vtable_{vtable} {
   participator_key_.assign(participator_key.data(), participator_key.size());
 }
 
-transaction_participator_handle::~transaction_participator_handle() {}
+transaction_participator_handle::~transaction_participator_handle() {
+  if (nullptr != on_destroy_) {
+    (*on_destroy_)(this);
+  }
+}
 
 void transaction_participator_handle::load(const snapshot_type& storage) {
   resolve_timers_.clear();
