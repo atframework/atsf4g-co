@@ -246,18 +246,55 @@ file(GLOB PROJECT_RESOURCE_EXCEL_FILES "${PROJECT_THIRD_PARTY_XRESLOADER_EXCEL_D
 configure_file("${PROJECT_SOURCE_DIR}/resource/excel_xml/xresconv.xml.in" "${CMAKE_CURRENT_BINARY_DIR}/xresconv.xml"
                ESCAPE_QUOTES @ONLY)
 
-set(PROJECT_RESOURCE_EXCEL_COMMAND_ARGS "${Python3_EXECUTABLE}" "${PROJECT_THIRD_PARTY_XRESLOADER_CLI}")
+set(PROJECT_RESOURCE_EXCEL_COMMAND_ARGS "\"${Python3_EXECUTABLE}\" \"${PROJECT_THIRD_PARTY_XRESLOADER_CLI}\"")
 if(Java_JAVA_EXECUTABLE)
-  list(APPEND PROJECT_RESOURCE_EXCEL_COMMAND_ARGS "--java-path" "${Java_JAVA_EXECUTABLE}")
+  set(PROJECT_RESOURCE_EXCEL_COMMAND_ARGS
+      "${PROJECT_RESOURCE_EXCEL_COMMAND_ARGS} --java-path \"${Java_JAVA_EXECUTABLE}\"")
 endif()
-list(APPEND PROJECT_RESOURCE_EXCEL_COMMAND_ARGS "${CMAKE_CURRENT_BINARY_DIR}/xresconv.xml")
-add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/resource-config.log"
-  COMMAND ${PROJECT_RESOURCE_EXCEL_COMMAND_ARGS}
-  COMMAND "${CMAKE_COMMAND}" "-E" "touch" "${CMAKE_CURRENT_BINARY_DIR}/resource-config.log"
-  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-  DEPENDS "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb" ${PROJECT_RESOURCE_EXCEL_FILES}
-  COMMENT "Generate excel resources [@${CMAKE_CURRENT_BINARY_DIR}]")
+set(PROJECT_RESOURCE_EXCEL_COMMAND_ARGS
+    "${PROJECT_RESOURCE_EXCEL_COMMAND_ARGS} \"${CMAKE_CURRENT_BINARY_DIR}/xresconv.xml\"")
+
+project_build_tool_generate_load_env_powershell("${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1")
+
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.sh"
+     "#!/bin/bash${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.sh" "set -ex${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.sh"
+     "${PROJECT_RESOURCE_EXCEL_COMMAND_ARGS}${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.sh"
+     "\"${CMAKE_COMMAND}\" -E touch \"${CMAKE_CURRENT_BINARY_DIR}/resource-config.log\"")
+
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
+     "$PSDefaultParameterValues['*:Encoding'] = 'UTF-8'${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
+     "$OutputEncoding = [System.Text.UTF8Encoding]::new()${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
+     "$ErrorActionPreference = \"Stop\"${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
+     "Set-PSDebug -Trace 1${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
+     "& ${PROJECT_RESOURCE_EXCEL_COMMAND_ARGS}${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+file(
+  APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
+  "& \"${CMAKE_COMMAND}\" -E touch \"${CMAKE_CURRENT_BINARY_DIR}/resource-config.log\"${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+)
+
+if(NOT UNIX AND ATFRAMEWORK_CMAKE_TOOLSET_PWSH)
+  add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/resource-config.log"
+    COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_PWSH}" "-NoProfile" "-InputFormat" "None" "-ExecutionPolicy" "Bypass"
+            "-NonInteractive" "-NoLogo" "-File" "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    DEPENDS "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb" ${PROJECT_RESOURCE_EXCEL_FILES}
+    COMMENT "Generate excel resources [@${CMAKE_CURRENT_BINARY_DIR}]")
+else()
+  add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/resource-config.log"
+    COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_BASH}" "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.sh"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    DEPENDS "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb" ${PROJECT_RESOURCE_EXCEL_FILES}
+    COMMENT "Generate excel resources [@${CMAKE_CURRENT_BINARY_DIR}]")
+endif()
 
 add_custom_target(resource-config ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/resource-config.log")
 if(MSVC)
