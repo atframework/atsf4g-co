@@ -5,7 +5,6 @@ import sys
 import os
 import ctypes
 import platform
-import cgi
 import re
 
 console_encoding = sys.getfilesystemencoding()
@@ -205,10 +204,14 @@ class HtmlColor:
                 style.append(HtmlColor.COLOR_MAP[opt].format(""))
 
         if len(style) > 0:
-            sys.stdout.write('<span style="' + " ".join(style) + '">' +
-                             cgi.escape(text) + "</span>")
+            sys.stdout.write('<span style="' + " ".join(style) +
+                             '">' + text.replace('&', '&amp;').replace(
+                                 '<', '&lt;').replace('>', '&gt;') + "</span>")
         else:
-            sys.stdout.write(cgi.escape(text))
+            sys.stdout.write(
+                text.replace('&',
+                             '&amp;').replace('<',
+                                              '&lt;').replace('>', '&gt;'))
 
     def stderr_with_color(self, options, text):
         style = []
@@ -220,10 +223,14 @@ class HtmlColor:
                 style.append(HtmlColor.COLOR_MAP[opt].format(""))
 
         if len(style) > 0:
-            sys.stderr.write('<span style="' + " ".join(style) + '">' +
-                             cgi.escape(text) + "</span>")
+            sys.stderr.write('<span style="' + " ".join(style) +
+                             '">' + text.replace('&', '&amp;').replace(
+                                 '<', '&lt;').replace('>', '&gt;') + "</span>")
         else:
-            sys.stderr.write(cgi.escape(text))
+            sys.stderr.write(
+                text.replace('&',
+                             '&amp;').replace('<',
+                                              '&lt;').replace('>', '&gt;'))
 
 
 class NoneColor:
