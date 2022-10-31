@@ -18,4 +18,16 @@ const char* server_frame_vcs_get_commit_short_sha();
 const char* server_frame_vcs_get_server_branch();
 const char* server_frame_project_get_version();
 
+#ifndef OPENTELEMTRY_CPP_MAJOR_VERSION
+#  define OPENTELEMTRY_CPP_MAJOR_VERSION @opentelemetry-cpp_VERSION_MAJOR@
+#endif
+
+#ifndef OPENTELEMTRY_CPP_MINOR_VERSION
+#  define OPENTELEMTRY_CPP_MINOR_VERSION @opentelemetry-cpp_VERSION_MINOR@
+#endif
+
+#ifndef OPENTELEMTRY_CPP_PATCH_VERSION
+#  define OPENTELEMTRY_CPP_PATCH_VERSION @opentelemetry-cpp_VERSION_PATCH@
+#endif
+
 #endif // SERVER_FRAME_BUILD_FEATURE_H

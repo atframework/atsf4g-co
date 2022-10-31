@@ -357,43 +357,77 @@ bool task_manager::check_sys_config() const {
   return true;
 }
 
-#define TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER(NAME, DESCRIPTION, UNIT, CREATE_ACTION, VAR_LOADER)                  \
-  {                                                                                                                    \
-    auto instrument = rpc::telemetry::global_service::get_metrics_observable(NAME, {NAME, DESCRIPTION, UNIT});         \
-    if (instrument) {                                                                                                  \
-      return;                                                                                                          \
-    }                                                                                                                  \
-                                                                                                                       \
-    instrument = rpc::telemetry::global_service::CREATE_ACTION(NAME, {NAME, DESCRIPTION, UNIT});                       \
-                                                                                                                       \
-    if (!instrument) {                                                                                                 \
-      return;                                                                                                          \
-    }                                                                                                                  \
-    instrument->AddCallback(                                                                                           \
-        [](opentelemetry::metrics::ObserverResult result, void *) {                                                    \
-          auto value = g_task_manager_metrics_data.VAR_LOADER;                                                         \
-          if (opentelemetry::nostd::holds_alternative<                                                                 \
-                  opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<long>>>(result)) {          \
-            auto observer = opentelemetry::nostd::get<                                                                 \
-                opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<long>>>(result);              \
-            if (observer) {                                                                                            \
-              observer->Observe(static_cast<long>(value), rpc::telemetry::global_service::get_metrics_labels());       \
-            }                                                                                                          \
-          } else if (opentelemetry::nostd::holds_alternative<                                                          \
-                         opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) { \
-            auto observer = opentelemetry::nostd::get<                                                                 \
-                opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result);            \
-            if (observer) {                                                                                            \
-              observer->Observe(static_cast<double>(value), rpc::telemetry::global_service::get_metrics_labels());     \
-            }                                                                                                          \
-          }                                                                                                            \
-        },                                                                                                             \
-        nullptr);                                                                                                      \
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+#  define TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER_INT64(result, value)                                      \
+    if (opentelemetry::nostd::holds_alternative<                                                              \
+            opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {    \
+      auto observer = opentelemetry::nostd::get<                                                              \
+          opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result);        \
+      if (observer) {                                                                                         \
+        observer->Observe(static_cast<int64_t>(value), rpc::telemetry::global_service::get_metrics_labels()); \
+      }                                                                                                       \
+    }
+#else
+#  define TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER_INT64(result, value)                                              \
+    if (opentelemetry::nostd::holds_alternative<                                                                      \
+            opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<long>>>(result)) {               \
+      auto observer =                                                                                                 \
+          opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<long>>>( \
+              result);                                                                                                \
+      if (observer) {                                                                                                 \
+        observer->Observe(static_cast<long>(value), rpc::telemetry::global_service::get_metrics_labels());            \
+      }                                                                                                               \
+    }
+#endif
+
+#define TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER(NAME, DESCRIPTION, UNIT, CREATE_ACTION, VAR_LOADER)                \
+  {                                                                                                                  \
+    auto instrument = rpc::telemetry::global_service::get_metrics_observable(NAME, {NAME, DESCRIPTION, UNIT});       \
+    if (instrument) {                                                                                                \
+      return;                                                                                                        \
+    }                                                                                                                \
+                                                                                                                     \
+    instrument = rpc::telemetry::global_service::CREATE_ACTION(NAME, {NAME, DESCRIPTION, UNIT});                     \
+                                                                                                                     \
+    if (!instrument) {                                                                                               \
+      return;                                                                                                        \
+    }                                                                                                                \
+    instrument->AddCallback(                                                                                         \
+        [](opentelemetry::metrics::ObserverResult result, void *) {                                                  \
+          auto value = g_task_manager_metrics_data.VAR_LOADER;                                                       \
+          TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER_INT64(result, value)                                             \
+          else if (opentelemetry::nostd::holds_alternative<                                                          \
+                       opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) { \
+            auto observer = opentelemetry::nostd::get<                                                               \
+                opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result);          \
+            if (observer) {                                                                                          \
+              observer->Observe(static_cast<double>(value), rpc::telemetry::global_service::get_metrics_labels());   \
+            }                                                                                                        \
+          }                                                                                                          \
+        },                                                                                                           \
+        nullptr);                                                                                                    \
   }
 
 void task_manager::setup_metrics() {
   g_task_manager_metrics_data.need_setup.store(false, std::memory_order_release);
 
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+  TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER("service.coroutine.task_count", "", "",
+                                            mutable_metrics_observable_gauge_int64,
+                                            task_count.load(std::memory_order_acquire));
+
+  TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER("service.coroutine.tick_checkpoint_count", "", "",
+                                            mutable_metrics_observable_gauge_int64,
+                                            tick_checkpoint_count.load(std::memory_order_acquire));
+
+  TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER("service.coroutine.pool_free_memory", "", "",
+                                            mutable_metrics_observable_gauge_int64,
+                                            pool_free_memory.load(std::memory_order_acquire));
+
+  TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER("service.coroutine.pool_free_memory", "", "",
+                                            mutable_metrics_observable_gauge_int64,
+                                            pool_used_memory.load(std::memory_order_acquire));
+#else
   TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER("service.coroutine.task_count", "", "",
                                             mutable_metrics_observable_gauge_long,
                                             task_count.load(std::memory_order_acquire));
@@ -409,6 +443,7 @@ void task_manager::setup_metrics() {
   TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER("service.coroutine.pool_free_memory", "", "",
                                             mutable_metrics_observable_gauge_long,
                                             pool_used_memory.load(std::memory_order_acquire));
+#endif
 }
 
 #undef TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER

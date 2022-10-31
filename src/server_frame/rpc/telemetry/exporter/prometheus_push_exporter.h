@@ -11,13 +11,20 @@
 #  include <unistd.h>  // NOLINT
 #endif
 
+#include <config/server_frame_build_feature.h>
+
 #include <prometheus/gateway.h>
 
 #include <opentelemetry/exporters/prometheus/collector.h>
 #include <opentelemetry/nostd/span.h>
 #include <opentelemetry/sdk/common/env_variables.h>
-#include <opentelemetry/sdk/metrics/metric_exporter.h>
 #include <opentelemetry/version.h>
+
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+#  include <opentelemetry/sdk/metrics/push_metric_exporter.h>
+#else
+#  include <opentelemetry/sdk/metrics/metric_exporter.h>
+#endif
 
 #include <chrono>
 #include <memory>
@@ -44,7 +51,13 @@ struct PrometheusPushExporterOptions {
       opentelemetry::sdk::metrics::AggregationTemporality::kDelta;
 };
 
-class PrometheusPushExporter : public ::opentelemetry::sdk::metrics::MetricExporter {
+class PrometheusPushExporter : public
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+                               ::opentelemetry::sdk::metrics::PushMetricExporter
+#else
+                               ::opentelemetry::sdk::metrics::MetricExporter
+#endif
+{
  public:
   /**
    * Constructor - binds an exposer and collector to the exporter

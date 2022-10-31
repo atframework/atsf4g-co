@@ -76,16 +76,25 @@ struct local_meter_info_t {
   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Meter> meter;
 
   // sync instruments
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+  std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<uint64_t>>>
+      sync_counter_uint64;
+  std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<uint64_t>>>
+      sync_histogram_uint64;
+  std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<int64_t>>>
+      sync_up_down_counter_int64;
+#else
   std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<long>>>
       sync_counter_long;
-  std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<double>>>
-      sync_counter_double;
   std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<long>>>
       sync_histogram_long;
-  std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<double>>>
-      sync_histogram_double;
   std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<long>>>
       sync_up_down_counter_long;
+#endif
+  std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<double>>>
+      sync_counter_double;
+  std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<double>>>
+      sync_histogram_double;
   std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<double>>>
       sync_up_down_counter_double;
 
@@ -372,22 +381,41 @@ opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> global_service::g
   return provider->GetTracer(library_name, library_version, schema_url);
 }
 
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<uint64_t>>
+global_service::mutable_metrics_counter_uint64(opentelemetry::nostd::string_view meter_name, meter_instrument_key key) {
+#else
 opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<long>> global_service::mutable_metrics_counter_long(
     opentelemetry::nostd::string_view meter_name, meter_instrument_key key) {
+#endif
   auto meter_info = details::get_meter_info(meter_name);
   if (!meter_info) {
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<uint64_t>>();
+#else
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<long>>();
+#endif
   }
 
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+  auto ret = details::optimize_search_in_hash_map(meter_info->sync_counter_uint64, key.name);
+  if (ret) {
+    return ret;
+  }
+  ret = meter_info->meter->CreateUInt64Counter(key.name, key.description, key.unit);
+  if (ret) {
+    meter_info->sync_counter_uint64[static_cast<std::string>(key.name)] = ret;
+  }
+#else
   auto ret = details::optimize_search_in_hash_map(meter_info->sync_counter_long, key.name);
   if (ret) {
     return ret;
   }
-
   ret = meter_info->meter->CreateLongCounter(key.name, key.description, key.unit);
   if (ret) {
     meter_info->sync_counter_long[static_cast<std::string>(key.name)] = ret;
   }
+#endif
 
   return ret;
 }
@@ -412,22 +440,42 @@ global_service::mutable_metrics_counter_double(opentelemetry::nostd::string_view
   return ret;
 }
 
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<uint64_t>>
+global_service::mutable_metrics_histogram_uint64(opentelemetry::nostd::string_view meter_name,
+                                                 meter_instrument_key key) {
+#else
 opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<long>>
 global_service::mutable_metrics_histogram_long(opentelemetry::nostd::string_view meter_name, meter_instrument_key key) {
+#endif
   auto meter_info = details::get_meter_info(meter_name);
   if (!meter_info) {
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<uint64_t>>();
+#else
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<long>>();
+#endif
   }
 
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+  auto ret = details::optimize_search_in_hash_map(meter_info->sync_histogram_uint64, key.name);
+  if (ret) {
+    return ret;
+  }
+  ret = meter_info->meter->CreateUInt64Histogram(key.name, key.description, key.unit);
+  if (ret) {
+    meter_info->sync_histogram_uint64[static_cast<std::string>(key.name)] = ret;
+  }
+#else
   auto ret = details::optimize_search_in_hash_map(meter_info->sync_histogram_long, key.name);
   if (ret) {
     return ret;
   }
-
   ret = meter_info->meter->CreateLongHistogram(key.name, key.description, key.unit);
   if (ret) {
     meter_info->sync_histogram_long[static_cast<std::string>(key.name)] = ret;
   }
+#endif
 
   return ret;
 }
@@ -453,23 +501,43 @@ global_service::mutable_metrics_histogram_double(opentelemetry::nostd::string_vi
   return ret;
 }
 
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<int64_t>>
+global_service::mutable_metrics_up_down_counter_int64(opentelemetry::nostd::string_view meter_name,
+                                                      meter_instrument_key key) {
+#else
 opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<long>>
 global_service::mutable_metrics_up_down_counter_long(opentelemetry::nostd::string_view meter_name,
                                                      meter_instrument_key key) {
+#endif
   auto meter_info = details::get_meter_info(meter_name);
   if (!meter_info) {
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<int64_t>>();
+#else
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<long>>();
+#endif
   }
 
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+  auto ret = details::optimize_search_in_hash_map(meter_info->sync_up_down_counter_int64, key.name);
+  if (ret) {
+    return ret;
+  }
+  ret = meter_info->meter->CreateInt64UpDownCounter(key.name, key.description, key.unit);
+  if (ret) {
+    meter_info->sync_up_down_counter_int64[static_cast<std::string>(key.name)] = ret;
+  }
+#else
   auto ret = details::optimize_search_in_hash_map(meter_info->sync_up_down_counter_long, key.name);
   if (ret) {
     return ret;
   }
-
   ret = meter_info->meter->CreateLongUpDownCounter(key.name, key.description, key.unit);
   if (ret) {
     meter_info->sync_up_down_counter_long[static_cast<std::string>(key.name)] = ret;
   }
+#endif
 
   return ret;
 }
@@ -505,9 +573,15 @@ opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument> g
   return details::optimize_search_in_hash_map(meter_info->async_instruments, key.name);
 }
 
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+global_service::mutable_metrics_observable_counter_int64(opentelemetry::nostd::string_view meter_name,
+                                                         meter_instrument_key key) {
+#else
 opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
 global_service::mutable_metrics_observable_counter_long(opentelemetry::nostd::string_view meter_name,
                                                         meter_instrument_key key) {
+#endif
   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument> ret =
       get_metrics_observable(meter_name, key);
   if (ret) {
@@ -519,7 +593,11 @@ global_service::mutable_metrics_observable_counter_long(opentelemetry::nostd::st
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
   }
 
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+  ret = meter_info->meter->CreateInt64ObservableCounter(key.name, key.description, key.unit);
+#else
   ret = meter_info->meter->CreateLongObservableCounter(key.name, key.description, key.unit);
+#endif
   if (ret) {
     meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
   }
@@ -549,9 +627,15 @@ global_service::mutable_metrics_observable_counter_double(opentelemetry::nostd::
   return ret;
 }
 
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+global_service::mutable_metrics_observable_gauge_int64(opentelemetry::nostd::string_view meter_name,
+                                                       meter_instrument_key key) {
+#else
 opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
 global_service::mutable_metrics_observable_gauge_long(opentelemetry::nostd::string_view meter_name,
                                                       meter_instrument_key key) {
+#endif
   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument> ret =
       get_metrics_observable(meter_name, key);
   if (ret) {
@@ -563,7 +647,11 @@ global_service::mutable_metrics_observable_gauge_long(opentelemetry::nostd::stri
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
   }
 
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+  ret = meter_info->meter->CreateInt64ObservableGauge(key.name, key.description, key.unit);
+#else
   ret = meter_info->meter->CreateLongObservableGauge(key.name, key.description, key.unit);
+#endif
   if (ret) {
     meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
   }
@@ -593,9 +681,15 @@ global_service::mutable_metrics_observable_gauge_double(opentelemetry::nostd::st
   return ret;
 }
 
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+global_service::mutable_metrics_observable_up_down_counter_int64(opentelemetry::nostd::string_view meter_name,
+                                                                 meter_instrument_key key) {
+#else
 opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
 global_service::mutable_metrics_observable_up_down_counter_long(opentelemetry::nostd::string_view meter_name,
                                                                 meter_instrument_key key) {
+#endif
   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument> ret =
       get_metrics_observable(meter_name, key);
   if (ret) {
@@ -607,7 +701,11 @@ global_service::mutable_metrics_observable_up_down_counter_long(opentelemetry::n
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
   }
 
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+  ret = meter_info->meter->CreateInt64ObservableUpDownCounter(key.name, key.description, key.unit);
+#else
   ret = meter_info->meter->CreateLongObservableUpDownCounter(key.name, key.description, key.unit);
+#endif
   if (ret) {
     meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
   }
@@ -808,26 +906,31 @@ static details::local_provider_handle_t<opentelemetry::trace::TracerProvider> _o
   return ret;
 }
 
-static std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricExporter>> _opentelemetry_create_metrics_exporter(
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+using PushMetricExporter = opentelemetry::sdk::metrics::PushMetricExporter;
+#else
+using PushMetricExporter = opentelemetry::sdk::metrics::MetricExporter;
+#endif
+static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_metrics_exporter(
     ::rpc::telemetry::details::local_caller_info_t &caller,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_metrics_exporter_cfg &exporter_cfg) {
-  std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricExporter>> ret;
+  std::vector<std::unique_ptr<PushMetricExporter>> ret;
   ret.reserve(2);
 
   if (!exporter_cfg.ostream().empty()) {
     if (0 == UTIL_STRFUNC_STRCASE_CMP("stdout", exporter_cfg.ostream().c_str())) {
-      ret.emplace_back(std::unique_ptr<opentelemetry::sdk::metrics::MetricExporter>(
-          new opentelemetry::exporter::metrics::OStreamMetricExporter(std::cout)));
+      ret.emplace_back(
+          std::unique_ptr<PushMetricExporter>(new opentelemetry::exporter::metrics::OStreamMetricExporter(std::cout)));
     } else if (0 == UTIL_STRFUNC_STRCASE_CMP("stderr", exporter_cfg.ostream().c_str())) {
-      ret.emplace_back(std::unique_ptr<opentelemetry::sdk::metrics::MetricExporter>(
-          new opentelemetry::exporter::metrics::OStreamMetricExporter(std::cerr)));
+      ret.emplace_back(
+          std::unique_ptr<PushMetricExporter>(new opentelemetry::exporter::metrics::OStreamMetricExporter(std::cerr)));
     } else {
       ::opentelemetry::nostd::shared_ptr<std::ofstream> fout{
           new std::ofstream(exporter_cfg.ostream().c_str(), std::ios::out | std::ios::trunc | std::ios::binary)};
       if (fout && fout->is_open()) {
         caller.debug_metrics_ostream_exportor = fout;
-        ret.emplace_back(std::unique_ptr<opentelemetry::sdk::metrics::MetricExporter>(
-            new opentelemetry::exporter::metrics::OStreamMetricExporter(*fout)));
+        ret.emplace_back(
+            std::unique_ptr<PushMetricExporter>(new opentelemetry::exporter::metrics::OStreamMetricExporter(*fout)));
       }
     }
   }
@@ -851,8 +954,8 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricExporter>>
     }
     options.aggregation_temporality = opentelemetry::sdk::metrics::AggregationTemporality::kCumulative;
 
-    ret.emplace_back(std::unique_ptr<opentelemetry::sdk::metrics::MetricExporter>(
-        new opentelemetry::exporter::otlp::OtlpGrpcMetricExporter(options)));
+    ret.emplace_back(
+        std::unique_ptr<PushMetricExporter>(new opentelemetry::exporter::otlp::OtlpGrpcMetricExporter(options)));
   }
 
   if (exporter_cfg.has_otlp_http() && !exporter_cfg.otlp_http().endpoint().empty()) {
@@ -874,15 +977,15 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricExporter>>
     options.max_concurrent_requests = exporter_cfg.otlp_http().max_concurrent_requests();
     options.max_requests_per_connection = exporter_cfg.otlp_http().max_requests_per_connection();
 
-    ret.emplace_back(std::unique_ptr<opentelemetry::sdk::metrics::MetricExporter>(
-        new opentelemetry::exporter::otlp::OtlpHttpMetricExporter(options)));
+    ret.emplace_back(
+        std::unique_ptr<PushMetricExporter>(new opentelemetry::exporter::otlp::OtlpHttpMetricExporter(options)));
   }
 
   if (exporter_cfg.has_prometheus_pull() && !exporter_cfg.prometheus_pull().url().empty()) {
     opentelemetry::exporter::metrics::PrometheusExporterOptions options;
     options.url = exporter_cfg.prometheus_pull().url();
-    ret.emplace_back(std::unique_ptr<opentelemetry::sdk::metrics::MetricExporter>(
-        new opentelemetry::exporter::metrics::PrometheusExporter(options)));
+    ret.emplace_back(
+        std::unique_ptr<PushMetricExporter>(new opentelemetry::exporter::metrics::PrometheusExporter(options)));
   }
 
   if (exporter_cfg.has_prometheus_push() && !exporter_cfg.prometheus_push().host().empty() &&
@@ -897,15 +1000,14 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricExporter>>
     options.username = exporter_cfg.prometheus_push().username();
     options.password = exporter_cfg.prometheus_push().password();
 
-    ret.emplace_back(std::unique_ptr<opentelemetry::sdk::metrics::MetricExporter>(
-        new exporter::metrics::PrometheusPushExporter(options)));
+    ret.emplace_back(std::unique_ptr<PushMetricExporter>(new exporter::metrics::PrometheusPushExporter(options)));
   }
 
   return ret;
 }
 
 static std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricReader>> _opentelemetry_create_metrics_reader(
-    std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricExporter>> &&exporters,
+    std::vector<std::unique_ptr<PushMetricExporter>> &&exporters,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_metrics_reader_cfg &reader_cfg) {
   std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricReader>> ret;
   opentelemetry::sdk::metrics::PeriodicExportingMetricReaderOptions options;

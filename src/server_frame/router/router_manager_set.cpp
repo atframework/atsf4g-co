@@ -647,8 +647,13 @@ void router_manager_set::setup_metrics(size_t cache_count) {
     return;
   }
 
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+  instrument = rpc::telemetry::global_service::mutable_metrics_observable_gauge_int64("service.router.cache_count",
+                                                                                      {"service.router.cache_count"});
+#else
   instrument = rpc::telemetry::global_service::mutable_metrics_observable_gauge_long("service.router.cache_count",
                                                                                      {"service.router.cache_count"});
+#endif
   if (!instrument) {
     return;
   }
@@ -656,6 +661,16 @@ void router_manager_set::setup_metrics(size_t cache_count) {
   instrument->AddCallback(
       [](opentelemetry::metrics::ObserverResult result, void *) {
         auto value = router_cache_count.load(std::memory_order_acquire);
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+        if (opentelemetry::nostd::holds_alternative<
+                opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {
+          auto observer = opentelemetry::nostd::get<
+              opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result);
+          if (observer) {
+            observer->Observe(static_cast<int64_t>(value), rpc::telemetry::global_service::get_metrics_labels());
+          }
+        }
+#else
         if (opentelemetry::nostd::holds_alternative<
                 opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<long>>>(result)) {
           auto observer = opentelemetry::nostd::get<
@@ -663,8 +678,10 @@ void router_manager_set::setup_metrics(size_t cache_count) {
           if (observer) {
             observer->Observe(static_cast<long>(value), rpc::telemetry::global_service::get_metrics_labels());
           }
-        } else if (opentelemetry::nostd::holds_alternative<
-                       opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) {
+        }
+#endif
+        else if (opentelemetry::nostd::holds_alternative<
+                     opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) {
           auto observer = opentelemetry::nostd::get<
               opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result);
           if (observer) {
