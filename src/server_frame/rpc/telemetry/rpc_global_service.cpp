@@ -72,6 +72,26 @@ namespace telemetry {
 
 namespace details {
 
+template <class ElementType, class DeleterType>
+inline static opentelemetry::nostd::shared_ptr<ElementType> share_smart_ptr(
+    std::unique_ptr<ElementType, DeleterType> &&input) {
+  return opentelemetry::nostd::shared_ptr<ElementType>{input.release()};
+}
+
+template <class ElementType>
+inline static opentelemetry::nostd::shared_ptr<ElementType> share_smart_ptr(
+    opentelemetry::nostd::shared_ptr<ElementType> &&input) {
+  return input;
+}
+
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+template <class ElementType>
+inline static opentelemetry::nostd::shared_ptr<ElementType> share_smart_ptr(
+    opentelemetry::nostd::unique_ptr<ElementType> &&input) {
+  return opentelemetry::nostd::shared_ptr<ElementType>{input.release()};
+}
+#endif
+
 struct local_meter_info_t {
   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Meter> meter;
 
@@ -402,7 +422,7 @@ opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<long>> global_s
   if (ret) {
     return ret;
   }
-  ret = meter_info->meter->CreateUInt64Counter(key.name, key.description, key.unit);
+  ret = details::share_smart_ptr(meter_info->meter->CreateUInt64Counter(key.name, key.description, key.unit));
   if (ret) {
     meter_info->sync_counter_uint64[static_cast<std::string>(key.name)] = ret;
   }
@@ -411,7 +431,7 @@ opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<long>> global_s
   if (ret) {
     return ret;
   }
-  ret = meter_info->meter->CreateLongCounter(key.name, key.description, key.unit);
+  ret = details::share_smart_ptr(meter_info->meter->CreateLongCounter(key.name, key.description, key.unit));
   if (ret) {
     meter_info->sync_counter_long[static_cast<std::string>(key.name)] = ret;
   }
@@ -432,7 +452,7 @@ global_service::mutable_metrics_counter_double(opentelemetry::nostd::string_view
     return ret;
   }
 
-  ret = meter_info->meter->CreateDoubleCounter(key.name, key.description, key.unit);
+  ret = details::share_smart_ptr(meter_info->meter->CreateDoubleCounter(key.name, key.description, key.unit));
   if (ret) {
     meter_info->sync_counter_double[static_cast<std::string>(key.name)] = ret;
   }
@@ -462,7 +482,7 @@ global_service::mutable_metrics_histogram_long(opentelemetry::nostd::string_view
   if (ret) {
     return ret;
   }
-  ret = meter_info->meter->CreateUInt64Histogram(key.name, key.description, key.unit);
+  ret = details::share_smart_ptr(meter_info->meter->CreateUInt64Histogram(key.name, key.description, key.unit));
   if (ret) {
     meter_info->sync_histogram_uint64[static_cast<std::string>(key.name)] = ret;
   }
@@ -471,7 +491,7 @@ global_service::mutable_metrics_histogram_long(opentelemetry::nostd::string_view
   if (ret) {
     return ret;
   }
-  ret = meter_info->meter->CreateLongHistogram(key.name, key.description, key.unit);
+  ret = details::share_smart_ptr(meter_info->meter->CreateLongHistogram(key.name, key.description, key.unit));
   if (ret) {
     meter_info->sync_histogram_long[static_cast<std::string>(key.name)] = ret;
   }
@@ -493,7 +513,7 @@ global_service::mutable_metrics_histogram_double(opentelemetry::nostd::string_vi
     return ret;
   }
 
-  ret = meter_info->meter->CreateDoubleHistogram(key.name, key.description, key.unit);
+  ret = details::share_smart_ptr(meter_info->meter->CreateDoubleHistogram(key.name, key.description, key.unit));
   if (ret) {
     meter_info->sync_histogram_double[static_cast<std::string>(key.name)] = ret;
   }
@@ -524,7 +544,7 @@ global_service::mutable_metrics_up_down_counter_long(opentelemetry::nostd::strin
   if (ret) {
     return ret;
   }
-  ret = meter_info->meter->CreateInt64UpDownCounter(key.name, key.description, key.unit);
+  ret = details::share_smart_ptr(meter_info->meter->CreateInt64UpDownCounter(key.name, key.description, key.unit));
   if (ret) {
     meter_info->sync_up_down_counter_int64[static_cast<std::string>(key.name)] = ret;
   }
@@ -533,7 +553,7 @@ global_service::mutable_metrics_up_down_counter_long(opentelemetry::nostd::strin
   if (ret) {
     return ret;
   }
-  ret = meter_info->meter->CreateLongUpDownCounter(key.name, key.description, key.unit);
+  ret = details::share_smart_ptr(meter_info->meter->CreateLongUpDownCounter(key.name, key.description, key.unit));
   if (ret) {
     meter_info->sync_up_down_counter_long[static_cast<std::string>(key.name)] = ret;
   }
@@ -555,7 +575,7 @@ global_service::mutable_metrics_up_down_counter_double(opentelemetry::nostd::str
     return ret;
   }
 
-  ret = meter_info->meter->CreateDoubleUpDownCounter(key.name, key.description, key.unit);
+  ret = details::share_smart_ptr(meter_info->meter->CreateDoubleUpDownCounter(key.name, key.description, key.unit));
   if (ret) {
     meter_info->sync_up_down_counter_double[static_cast<std::string>(key.name)] = ret;
   }
@@ -594,9 +614,9 @@ global_service::mutable_metrics_observable_counter_long(opentelemetry::nostd::st
   }
 
 #if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
-  ret = meter_info->meter->CreateInt64ObservableCounter(key.name, key.description, key.unit);
+  ret = details::share_smart_ptr(meter_info->meter->CreateInt64ObservableCounter(key.name, key.description, key.unit));
 #else
-  ret = meter_info->meter->CreateLongObservableCounter(key.name, key.description, key.unit);
+  ret = details::share_smart_ptr(meter_info->meter->CreateLongObservableCounter(key.name, key.description, key.unit));
 #endif
   if (ret) {
     meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
@@ -619,7 +639,7 @@ global_service::mutable_metrics_observable_counter_double(opentelemetry::nostd::
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
   }
 
-  ret = meter_info->meter->CreateDoubleObservableCounter(key.name, key.description, key.unit);
+  ret = details::share_smart_ptr(meter_info->meter->CreateDoubleObservableCounter(key.name, key.description, key.unit));
   if (ret) {
     meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
   }
@@ -648,9 +668,9 @@ global_service::mutable_metrics_observable_gauge_long(opentelemetry::nostd::stri
   }
 
 #if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
-  ret = meter_info->meter->CreateInt64ObservableGauge(key.name, key.description, key.unit);
+  ret = details::share_smart_ptr(meter_info->meter->CreateInt64ObservableGauge(key.name, key.description, key.unit));
 #else
-  ret = meter_info->meter->CreateLongObservableGauge(key.name, key.description, key.unit);
+  ret = details::share_smart_ptr(meter_info->meter->CreateLongObservableGauge(key.name, key.description, key.unit));
 #endif
   if (ret) {
     meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
@@ -673,7 +693,7 @@ global_service::mutable_metrics_observable_gauge_double(opentelemetry::nostd::st
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
   }
 
-  ret = meter_info->meter->CreateDoubleObservableGauge(key.name, key.description, key.unit);
+  ret = details::share_smart_ptr(meter_info->meter->CreateDoubleObservableGauge(key.name, key.description, key.unit));
   if (ret) {
     meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
   }
@@ -702,9 +722,11 @@ global_service::mutable_metrics_observable_up_down_counter_long(opentelemetry::n
   }
 
 #if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
-  ret = meter_info->meter->CreateInt64ObservableUpDownCounter(key.name, key.description, key.unit);
+  ret = details::share_smart_ptr(
+      meter_info->meter->CreateInt64ObservableUpDownCounter(key.name, key.description, key.unit));
 #else
-  ret = meter_info->meter->CreateLongObservableUpDownCounter(key.name, key.description, key.unit);
+  ret = details::share_smart_ptr(
+      meter_info->meter->CreateLongObservableUpDownCounter(key.name, key.description, key.unit));
 #endif
   if (ret) {
     meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
@@ -727,7 +749,8 @@ global_service::mutable_metrics_observable_up_down_counter_double(opentelemetry:
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
   }
 
-  ret = meter_info->meter->CreateDoubleObservableUpDownCounter(key.name, key.description, key.unit);
+  ret = details::share_smart_ptr(
+      meter_info->meter->CreateDoubleObservableUpDownCounter(key.name, key.description, key.unit));
   if (ret) {
     meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
   }
