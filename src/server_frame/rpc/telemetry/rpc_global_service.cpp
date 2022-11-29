@@ -13,14 +13,11 @@
 #include <protocol/config/svr.protocol.config.pb.h>
 #include <protocol/pbdesc/atframework.pb.h>
 
-#include <opentelemetry/exporters/ostream/log_exporter.h>
 #include <opentelemetry/exporters/ostream/metric_exporter.h>
 #include <opentelemetry/exporters/ostream/span_exporter.h>
 #include <opentelemetry/exporters/otlp/otlp_grpc_exporter_factory.h>
-#include <opentelemetry/exporters/otlp/otlp_grpc_log_exporter_factory.h>
 #include <opentelemetry/exporters/otlp/otlp_grpc_metric_exporter.h>
 #include <opentelemetry/exporters/otlp/otlp_http_exporter_factory.h>
-#include <opentelemetry/exporters/otlp/otlp_http_log_exporter_factory.h>
 #include <opentelemetry/exporters/otlp/otlp_http_metric_exporter.h>
 #include <opentelemetry/exporters/prometheus/exporter.h>
 #include <opentelemetry/logs/logger_provider.h>
@@ -28,9 +25,7 @@
 #include <opentelemetry/logs/provider.h>
 #include <opentelemetry/metrics/provider.h>
 #include <opentelemetry/sdk/common/global_log_handler.h>
-#include <opentelemetry/sdk/logs/batch_log_processor.h>
 #include <opentelemetry/sdk/logs/logger_provider.h>
-#include <opentelemetry/sdk/logs/simple_log_processor.h>
 #include <opentelemetry/sdk/metrics/export/periodic_exporting_metric_reader.h>
 #include <opentelemetry/sdk/metrics/meter.h>
 #include <opentelemetry/sdk/metrics/meter_provider.h>
@@ -43,6 +38,20 @@
 #include <opentelemetry/sdk/trace/simple_processor.h>
 #include <opentelemetry/sdk/trace/tracer_provider.h>
 #include <opentelemetry/trace/provider.h>
+
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1008
+#  include <opentelemetry/exporters/ostream/log_record_exporter.h>
+#  include <opentelemetry/exporters/otlp/otlp_grpc_log_record_exporter_factory.h>
+#  include <opentelemetry/exporters/otlp/otlp_http_log_record_exporter_factory.h>
+#  include <opentelemetry/sdk/logs/batch_log_record_processor.h>
+#  include <opentelemetry/sdk/logs/simple_log_record_processor.h>
+#else
+#  include <opentelemetry/exporters/ostream/log_exporter.h>
+#  include <opentelemetry/exporters/otlp/otlp_grpc_log_exporter_factory.h>
+#  include <opentelemetry/exporters/otlp/otlp_http_log_exporter_factory.h>
+#  include <opentelemetry/sdk/logs/batch_log_processor.h>
+#  include <opentelemetry/sdk/logs/simple_log_processor.h>
+#endif
 
 #include <config/compiler/protobuf_suffix.h>
 
@@ -71,6 +80,34 @@ namespace rpc {
 namespace telemetry {
 
 namespace details {
+
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1008
+template <class U>
+using log_unique_ptr = opentelemetry::nostd::unique_ptr<U>;
+
+using LogRecordExporter = opentelemetry::sdk::logs::LogRecordExporter;
+using LogRecordProcessor = opentelemetry::sdk::logs::LogRecordProcessor;
+using SimpleLogRecordProcessor = opentelemetry::sdk::logs::SimpleLogRecordProcessor;
+using BatchLogRecordProcessor = opentelemetry::sdk::logs::BatchLogRecordProcessor;
+using OStreamLogRecordExporter = opentelemetry::exporter::logs::OStreamLogRecordExporter;
+using OtlpHttpLogRecordExporterOptions = opentelemetry::exporter::otlp::OtlpHttpLogRecordExporterOptions;
+using OtlpGrpcLogRecordExporterFactory = opentelemetry::exporter::otlp::OtlpGrpcLogRecordExporterFactory;
+using OtlpHttpLogRecordExporterFactory = opentelemetry::exporter::otlp::OtlpHttpLogRecordExporterFactory;
+
+#else
+template <class U>
+using log_unique_ptr = std::unique_ptr<U>;
+
+using LogRecordExporter = opentelemetry::sdk::logs::LogExporter;
+using LogRecordProcessor = opentelemetry::sdk::logs::LogProcessor;
+using SimpleLogRecordProcessor = opentelemetry::sdk::logs::SimpleLogProcessor;
+using BatchLogRecordProcessor = opentelemetry::sdk::logs::BatchLogProcessor;
+using OStreamLogRecordExporter = opentelemetry::exporter::logs::OStreamLogExporter;
+using OtlpHttpLogRecordExporterOptions = opentelemetry::exporter::otlp::OtlpHttpLogExporterOptions;
+using OtlpGrpcLogRecordExporterFactory = opentelemetry::exporter::otlp::OtlpGrpcLogExporterFactory;
+using OtlpHttpLogRecordExporterFactory = opentelemetry::exporter::otlp::OtlpHttpLogExporterFactory;
+
+#endif
 
 template <class ElementType, class DeleterType>
 inline static opentelemetry::nostd::shared_ptr<ElementType> share_smart_ptr(
@@ -1084,26 +1121,26 @@ static details::local_provider_handle_t<opentelemetry::metrics::MeterProvider> _
   return ret;
 }
 
-static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogExporter>> _opentelemetry_create_logs_exporter(
+static std::vector<details::log_unique_ptr<details::LogRecordExporter>> _opentelemetry_create_logs_exporter(
     ::rpc::telemetry::details::local_caller_info_t &caller,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_logs_exporter_cfg &exporter_cfg) {
-  std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogExporter>> ret;
+  std::vector<details::log_unique_ptr<details::LogRecordExporter>> ret;
   ret.reserve(2);
 
   if (!exporter_cfg.ostream().empty()) {
     if (0 == UTIL_STRFUNC_STRCASE_CMP("stdout", exporter_cfg.ostream().c_str())) {
-      ret.emplace_back(std::unique_ptr<opentelemetry::sdk::logs::LogExporter>(
-          new opentelemetry::exporter::logs::OStreamLogExporter(std::cout)));
+      ret.emplace_back(
+          details::log_unique_ptr<details::LogRecordExporter>(new details::OStreamLogRecordExporter(std::cout)));
     } else if (0 == UTIL_STRFUNC_STRCASE_CMP("stderr", exporter_cfg.ostream().c_str())) {
-      ret.emplace_back(std::unique_ptr<opentelemetry::sdk::logs::LogExporter>(
-          new opentelemetry::exporter::logs::OStreamLogExporter(std::cerr)));
+      ret.emplace_back(
+          details::log_unique_ptr<details::LogRecordExporter>(new details::OStreamLogRecordExporter(std::cerr)));
     } else {
       ::opentelemetry::nostd::shared_ptr<std::ofstream> fout{
           new std::ofstream(exporter_cfg.ostream().c_str(), std::ios::out | std::ios::trunc | std::ios::binary)};
       if (fout && fout->is_open()) {
         caller.debug_logger_ostream_exportor = fout;
-        ret.emplace_back(std::unique_ptr<opentelemetry::sdk::logs::LogExporter>(
-            new opentelemetry::exporter::logs::OStreamLogExporter(*fout)));
+        ret.emplace_back(
+            details::log_unique_ptr<details::LogRecordExporter>(new details::OStreamLogRecordExporter(*fout)));
       }
     }
   }
@@ -1126,11 +1163,11 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogExporter>> _open
       options.metadata.emplace(opentelemetry::exporter::otlp::OtlpHeaders::value_type(header.key(), header.value()));
     }
 
-    ret.emplace_back(opentelemetry::exporter::otlp::OtlpGrpcLogExporterFactory::Create(options));
+    ret.emplace_back(details::OtlpGrpcLogRecordExporterFactory::Create(options));
   }
 
   if (exporter_cfg.has_otlp_http() && !exporter_cfg.otlp_http().endpoint().empty()) {
-    opentelemetry::exporter::otlp::OtlpHttpLogExporterOptions options;
+    details::OtlpHttpLogRecordExporterOptions options;
     options.url = exporter_cfg.otlp_http().endpoint();
     options.timeout = std::chrono::duration_cast<std::chrono::system_clock::duration>(
         std::chrono::seconds(exporter_cfg.otlp_http().timeout().seconds()) +
@@ -1146,39 +1183,38 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogExporter>> _open
     options.max_concurrent_requests = exporter_cfg.otlp_http().max_concurrent_requests();
     options.max_requests_per_connection = exporter_cfg.otlp_http().max_requests_per_connection();
 
-    ret.emplace_back(opentelemetry::exporter::otlp::OtlpHttpLogExporterFactory::Create(options));
+    ret.emplace_back(details::OtlpHttpLogRecordExporterFactory::Create(options));
   }
 
   return ret;
 }
 
-static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogProcessor>> _opentelemetry_create_logs_processor(
-    std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogExporter>> &&exporters,
+static std::vector<details::log_unique_ptr<details::LogRecordProcessor>> _opentelemetry_create_logs_processor(
+    std::vector<details::log_unique_ptr<details::LogRecordExporter>> &&exporters,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_processor_cfg &processor_cfg) {
-  std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogProcessor>> ret;
+  std::vector<details::log_unique_ptr<details::LogRecordProcessor>> ret;
   ret.reserve(exporters.size());
   if (processor_cfg.has_simple() && !processor_cfg.has_batch()) {
     for (auto &exporter : exporters) {
-      ret.emplace_back(std::unique_ptr<opentelemetry::sdk::logs::LogProcessor>(
-          new opentelemetry::sdk::logs::SimpleLogProcessor(std::move(exporter))));
+      ret.emplace_back(details::log_unique_ptr<details::LogRecordProcessor>(
+          new details::SimpleLogRecordProcessor(std::move(exporter))));
     }
     return ret;
   }
 
   for (auto &exporter : exporters) {
-    ret.emplace_back(
-        std::unique_ptr<opentelemetry::sdk::logs::LogProcessor>(new opentelemetry::sdk::logs::BatchLogProcessor(
-            std::move(exporter), static_cast<size_t>(processor_cfg.batch().send_batch_size()),
-            std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::seconds(processor_cfg.batch().timeout().seconds()) +
-                std::chrono::nanoseconds(processor_cfg.batch().timeout().nanos())),
-            static_cast<size_t>(processor_cfg.batch().send_batch_max_size()))));
+    ret.emplace_back(details::log_unique_ptr<details::LogRecordProcessor>(new details::BatchLogRecordProcessor(
+        std::move(exporter), static_cast<size_t>(processor_cfg.batch().send_batch_size()),
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::seconds(processor_cfg.batch().timeout().seconds()) +
+            std::chrono::nanoseconds(processor_cfg.batch().timeout().nanos())),
+        static_cast<size_t>(processor_cfg.batch().send_batch_max_size()))));
   }
   return ret;
 }
 
 static details::local_provider_handle_t<opentelemetry::logs::LoggerProvider> _opentelemetry_create_logs_provider(
-    std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogProcessor>> &&processors,
+    std::vector<details::log_unique_ptr<details::LogRecordProcessor>> &&processors,
     opentelemetry::sdk::resource::Resource resource) {
   details::local_provider_handle_t<opentelemetry::logs::LoggerProvider> ret;
   std::shared_ptr<opentelemetry::sdk::logs::LoggerContext> context;
