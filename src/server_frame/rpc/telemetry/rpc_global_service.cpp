@@ -83,7 +83,8 @@ namespace details {
 
 #if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1008
 template <class U>
-using log_unique_ptr = opentelemetry::nostd::unique_ptr<U>;
+// using log_unique_ptr = opentelemetry::nostd::unique_ptr<U>;
+using log_unique_ptr = std::unique_ptr<U>;
 
 using LogRecordExporter = opentelemetry::sdk::logs::LogRecordExporter;
 using LogRecordProcessor = opentelemetry::sdk::logs::LogRecordProcessor;

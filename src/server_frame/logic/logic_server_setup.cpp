@@ -984,8 +984,13 @@ void logic_server_common_module::setup_metrics_memory_maxrss() {
 }
 
 void logic_server_common_module::setup_metrics_memory_rss() {
+#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.rusage.memory.rss", "", "", mutable_metrics_observable_gauge_int64,
+                                            collect_memory_rss.load(std::memory_order_acquire));
+#else
   LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.rusage.memory.rss", "", "", mutable_metrics_observable_gauge_long,
                                             collect_memory_rss.load(std::memory_order_acquire));
+#endif
 }
 
 #undef LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER

@@ -6,6 +6,13 @@
 
 #include "flatbuffers/flatbuffers.h"
 
+// Ensure the included flatbuffers.h is the same version as when this file was
+// generated, otherwise it may not be compatible.
+static_assert(FLATBUFFERS_VERSION_MAJOR == 22 &&
+              FLATBUFFERS_VERSION_MINOR == 11 &&
+              FLATBUFFERS_VERSION_REVISION == 23,
+             "Non-compatible flatbuffers version included");
+
 namespace atframe {
 namespace gw {
 namespace inner {
@@ -260,19 +267,19 @@ struct cs_msg_head FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   atframe::gw::inner::v1::cs_msg_type_t type() const {
     return static_cast<atframe::gw::inner::v1::cs_msg_type_t>(GetField<uint8_t>(VT_TYPE, 0));
   }
-  bool mutate_type(atframe::gw::inner::v1::cs_msg_type_t _type) {
+  bool mutate_type(atframe::gw::inner::v1::cs_msg_type_t _type = static_cast<atframe::gw::inner::v1::cs_msg_type_t>(0)) {
     return SetField<uint8_t>(VT_TYPE, static_cast<uint8_t>(_type), 0);
   }
   uint64_t sequence() const {
     return GetField<uint64_t>(VT_SEQUENCE, 0);
   }
-  bool mutate_sequence(uint64_t _sequence) {
+  bool mutate_sequence(uint64_t _sequence = 0) {
     return SetField<uint64_t>(VT_SEQUENCE, _sequence, 0);
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<uint8_t>(verifier, VT_TYPE) &&
-           VerifyField<uint64_t>(verifier, VT_SEQUENCE) &&
+           VerifyField<uint8_t>(verifier, VT_TYPE, 1) &&
+           VerifyField<uint64_t>(verifier, VT_SEQUENCE, 8) &&
            verifier.EndTable();
   }
 };
@@ -318,7 +325,7 @@ struct cs_body_post FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   uint64_t length() const {
     return GetField<uint64_t>(VT_LENGTH, 0);
   }
-  bool mutate_length(uint64_t _length) {
+  bool mutate_length(uint64_t _length = 0) {
     return SetField<uint64_t>(VT_LENGTH, _length, 0);
   }
   const flatbuffers::Vector<int8_t> *data() const {
@@ -329,7 +336,7 @@ struct cs_body_post FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<uint64_t>(verifier, VT_LENGTH) &&
+           VerifyField<uint64_t>(verifier, VT_LENGTH, 8) &&
            VerifyOffset(verifier, VT_DATA) &&
            verifier.VerifyVector(data()) &&
            verifier.EndTable();
@@ -386,12 +393,12 @@ struct cs_body_kickoff FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   int32_t reason() const {
     return GetField<int32_t>(VT_REASON, 0);
   }
-  bool mutate_reason(int32_t _reason) {
+  bool mutate_reason(int32_t _reason = 0) {
     return SetField<int32_t>(VT_REASON, _reason, 0);
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<int32_t>(verifier, VT_REASON) &&
+           VerifyField<int32_t>(verifier, VT_REASON, 4) &&
            verifier.EndTable();
   }
 };
@@ -443,19 +450,19 @@ struct cs_body_handshake FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   uint64_t session_id() const {
     return GetField<uint64_t>(VT_SESSION_ID, 0);
   }
-  bool mutate_session_id(uint64_t _session_id) {
+  bool mutate_session_id(uint64_t _session_id = 0) {
     return SetField<uint64_t>(VT_SESSION_ID, _session_id, 0);
   }
   atframe::gw::inner::v1::handshake_step_t step() const {
     return static_cast<atframe::gw::inner::v1::handshake_step_t>(GetField<uint8_t>(VT_STEP, 0));
   }
-  bool mutate_step(atframe::gw::inner::v1::handshake_step_t _step) {
+  bool mutate_step(atframe::gw::inner::v1::handshake_step_t _step = static_cast<atframe::gw::inner::v1::handshake_step_t>(0)) {
     return SetField<uint8_t>(VT_STEP, static_cast<uint8_t>(_step), 0);
   }
   atframe::gw::inner::v1::switch_secret_t switch_type() const {
     return static_cast<atframe::gw::inner::v1::switch_secret_t>(GetField<uint8_t>(VT_SWITCH_TYPE, 0));
   }
-  bool mutate_switch_type(atframe::gw::inner::v1::switch_secret_t _switch_type) {
+  bool mutate_switch_type(atframe::gw::inner::v1::switch_secret_t _switch_type = static_cast<atframe::gw::inner::v1::switch_secret_t>(0)) {
     return SetField<uint8_t>(VT_SWITCH_TYPE, static_cast<uint8_t>(_switch_type), 0);
   }
   const flatbuffers::String *crypt_type() const {
@@ -478,9 +485,9 @@ struct cs_body_handshake FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<uint64_t>(verifier, VT_SESSION_ID) &&
-           VerifyField<uint8_t>(verifier, VT_STEP) &&
-           VerifyField<uint8_t>(verifier, VT_SWITCH_TYPE) &&
+           VerifyField<uint64_t>(verifier, VT_SESSION_ID, 8) &&
+           VerifyField<uint8_t>(verifier, VT_STEP, 1) &&
+           VerifyField<uint8_t>(verifier, VT_SWITCH_TYPE, 1) &&
            VerifyOffset(verifier, VT_CRYPT_TYPE) &&
            verifier.VerifyString(crypt_type()) &&
            VerifyOffset(verifier, VT_CRYPT_PARAM) &&
@@ -572,12 +579,12 @@ struct cs_body_ping FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   int64_t timepoint() const {
     return GetField<int64_t>(VT_TIMEPOINT, 0);
   }
-  bool mutate_timepoint(int64_t _timepoint) {
+  bool mutate_timepoint(int64_t _timepoint = 0) {
     return SetField<int64_t>(VT_TIMEPOINT, _timepoint, 0);
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<int64_t>(verifier, VT_TIMEPOINT) &&
+           VerifyField<int64_t>(verifier, VT_TIMEPOINT, 8) &&
            verifier.EndTable();
   }
 };
@@ -648,7 +655,7 @@ struct cs_msg FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
     return VerifyTableStart(verifier) &&
            VerifyOffset(verifier, VT_HEAD) &&
            verifier.VerifyTable(head()) &&
-           VerifyField<uint8_t>(verifier, VT_BODY_TYPE) &&
+           VerifyField<uint8_t>(verifier, VT_BODY_TYPE, 1) &&
            VerifyOffset(verifier, VT_BODY) &&
            Verifycs_msg_body(verifier, body(), body_type()) &&
            verifier.EndTable();
@@ -756,6 +763,10 @@ inline cs_msg *GetMutablecs_msg(void *buf) {
   return flatbuffers::GetMutableRoot<cs_msg>(buf);
 }
 
+inline atframe::gw::inner::v1::cs_msg *GetMutableSizePrefixedcs_msg(void *buf) {
+  return flatbuffers::GetMutableSizePrefixedRoot<atframe::gw::inner::v1::cs_msg>(buf);
+}
+
 inline const char *cs_msgIdentifier() {
   return "ATGW";
 }
@@ -763,6 +774,11 @@ inline const char *cs_msgIdentifier() {
 inline bool cs_msgBufferHasIdentifier(const void *buf) {
   return flatbuffers::BufferHasIdentifier(
       buf, cs_msgIdentifier());
+}
+
+inline bool SizePrefixedcs_msgBufferHasIdentifier(const void *buf) {
+  return flatbuffers::BufferHasIdentifier(
+      buf, cs_msgIdentifier(), true);
 }
 
 inline bool Verifycs_msgBuffer(
