@@ -56,10 +56,10 @@ include("${CMAKE_CURRENT_LIST_DIR}/xresloader/xresloader.cmake")
 
 # =========== set dependency variables ===========
 # Changes in otel-cpp v1.8.0
-if(TARGET opentelemetry-cpp::opentelemetry_exporter_prometheus)
-  set(OPENTELEMETRY_CPP_PROMETHUS_EXPORTER_NAME opentelemetry-cpp::opentelemetry_exporter_prometheus)
-else()
+if(TARGET opentelemetry-cpp::prometheus_exporter)
   set(OPENTELEMETRY_CPP_PROMETHUS_EXPORTER_NAME opentelemetry-cpp::prometheus_exporter)
+else()
+  set(OPENTELEMETRY_CPP_PROMETHUS_EXPORTER_NAME opentelemetry-cpp::opentelemetry_exporter_prometheus)
 endif()
 if(TARGET opentelemetry-cpp::otlp_http_log_record_exporter)
   set(OPENTELEMETRY_CPP_LOG_RECORD_EXPORTER_NAME
