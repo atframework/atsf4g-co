@@ -175,16 +175,23 @@ typename _rpc_result_traits<TRESULT>::value_type _get_rpc_result_value(TRESULT&&
 
 #endif
 
+namespace details {
+template <class TRESULT>
+TRESULT _ignore_result(EXPLICIT_UNUSED_ATTR TRESULT&& result) {
+  return std::forward<TRESULT>(result);
+}
+}  // namespace details
+
 }  // namespace rpc
 
 // When using c++20 coroutine, declare RPC_AWAIT_CODE_RESULT like this
 #if defined(RPC_AWAIT_USING_CXX_STD_COROUTINE) && RPC_AWAIT_USING_CXX_STD_COROUTINE
-#  define RPC_AWAIT_IGNORE_RESULT(x) ((void)(co_await (x)))
+#  define RPC_AWAIT_IGNORE_RESULT(x) (::rpc::details::_ignore_result(co_await (x)))
 #  define RPC_AWAIT_TYPE_RESULT(...) (co_await (__VA_ARGS__))
 #  define RPC_RETURN_TYPE(...) co_return (__VA_ARGS__)
 #  define RPC_RETURN_VOID co_return
 #else
-#  define RPC_AWAIT_IGNORE_RESULT(x) ((void)(x))
+#  define RPC_AWAIT_IGNORE_RESULT(x) (::rpc::details::_ignore_result(x))
 #  define RPC_AWAIT_TYPE_RESULT(...) ::rpc::details::_get_rpc_result_value(__VA_ARGS__)
 #  define RPC_RETURN_VOID return ::rpc::result_void_type(true)
 #  define RPC_RETURN_TYPE(...) return ::rpc::details::_make_rpc_result_guard(__VA_ARGS__)
