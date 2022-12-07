@@ -99,6 +99,30 @@ template <class TVALUE>
 struct _rpc_result_not_ready<TVALUE, false> {
   inline static TVALUE not_ready_value() { return TVALUE(); }
 };
+
+template <class TVALUE, bool IS_LREFERENCE>
+struct rpc_result_guard_getter {};
+
+template <class TVALUE>
+struct rpc_result_guard_getter<TVALUE, true> {
+  using value_type = TVALUE;
+
+  template <class TINPUT>
+  inline static value_type get(TINPUT& data) noexcept {
+    return data;
+  }
+};
+
+template <class TVALUE>
+struct rpc_result_guard_getter<TVALUE, false> {
+  using value_type = typename std::add_rvalue_reference<TVALUE>::type;
+
+  template <class TINPUT>
+  inline static value_type get(TINPUT& data) noexcept {
+    return std::move(data);
+  }
+};
+
 }  // namespace details
 
 template <class TVALUE>
@@ -107,7 +131,10 @@ class rpc_result_guard {
   template <class TINPUT>
   rpc_result_guard(TINPUT&& input) : data_(input) {}
 
-  TVALUE get() noexcept { return data_; }
+  typename details::rpc_result_guard_getter<TVALUE, std::is_lvalue_reference<TVALUE>::value>::value_type
+  get() noexcept {
+    return details::rpc_result_guard_getter<TVALUE, std::is_lvalue_reference<TVALUE>::value>::template get(data_);
+  }
 
  private:
   TVALUE data_;
