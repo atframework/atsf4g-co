@@ -43,25 +43,30 @@ namespace db {
 namespace uuid {
 namespace detail {
 struct short_uuid_encoder {
-  short_uuid_encoder() { memcpy(keys, "M7Vy1DQnIj93B2kNPJCRxuoTYhvSpOgstKaZ0lrH8WmGdcXLbzeqwUE5F4i6Af", 62); }
+  constexpr static const size_t kKeyLength = 36;
+  short_uuid_encoder() {
+    // 有些外部平台不区分大小写，为了通用改成不区分大小写的混淆表
+    // memcpy(keys, "M7Vy1DQnIj93B2kNPJCRxuoTYhvSpOgstKaZ0lrH8WmGdcXLbzeqwUE5F4i6Af", 62);
+    memcpy(keys, "y102a3gq58zrjbovpm7w6ltiuesf9h4kxncd", kKeyLength);
+  }
 
   ::util::lock::seq_alloc_u32 seq_;
-  char keys[62];
+  char keys[kKeyLength];
   size_t operator()(char *in, size_t insz, uint64_t val) {
-    if (insz == 0 || nullptr == in) {
+    if (insz == 0 || NULL == in) {
       return 0;
     }
 
     size_t ret;
     for (ret = 1; val > 0 && ret < insz; ++ret) {
-      in[ret] = keys[val % 62];
-      val /= 62;
+      in[ret] = keys[val % kKeyLength];
+      val /= kKeyLength;
     }
 
-    if (ret < 62) {
+    if (ret < kKeyLength) {
       in[0] = keys[ret];
     } else {
-      in[0] = keys[61];
+      in[0] = keys[kKeyLength - 1];
     }
 
     return ret;
@@ -88,10 +93,10 @@ std::string generate_standard_uuid_binary() {
 }
 
 std::string generate_short_uuid() {
-  // bus_id:(timestamp-2018-01-01 00:00:00):sequence
-  // 2018-01-01 00:00:00 UTC => 1514764800
+  // bus_id:(timestamp-2022-01-01 00:00:00):sequence
+  // 2022-01-01 00:00:00 UTC => 1640995200
   uint64_t bus_id = logic_config::me()->get_local_server_id();
-  time_t time_param = util::time::time_utility::get_now() - 1514764800;
+  time_t time_param = util::time::time_utility::get_now() - 1640995200;
 
   // 第一个字符用S，表示服务器生成，这样如果客户端生成的用C开头，就不会和服务器冲突
   char bin_buffer[64] = {'S', 0};
