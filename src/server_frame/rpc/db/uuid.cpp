@@ -100,7 +100,7 @@ std::string generate_short_uuid() {
 
   // 第一个字符用S，表示服务器生成，这样如果客户端生成的用C开头，就不会和服务器冲突
   // 第二个字符表示版本号，以便后续变更算法可以和之前区分开来
-  char bin_buffer[64] = {'S1', 0};
+  char bin_buffer[64] = {'S', '1', 0};
   size_t start_index = 2;
   start_index += detail::short_uuid_encoder_(&bin_buffer[start_index], sizeof(bin_buffer) - start_index - 1, bus_id);
   start_index += detail::short_uuid_encoder_(&bin_buffer[start_index], sizeof(bin_buffer) - start_index - 1,
