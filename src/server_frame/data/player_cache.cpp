@@ -116,13 +116,14 @@ bool player_cache::gm_init() { return true; }
 
 bool player_cache::is_gm() const { return get_account_info().version_type() == PROJECT_NAMESPACE_ID::EN_VERSION_GM; }
 
-void player_cache::on_login(rpc::context &ctx) {}
+void player_cache::on_login(rpc::context &) {}
 
-void player_cache::on_logout(rpc::context &ctx) {}
+void player_cache::on_logout(rpc::context &) {}
 
-void player_cache::on_saved(rpc::context &ctx) {}
+void player_cache::on_saved(rpc::context &) {}
 
-void player_cache::on_update_session(const std::shared_ptr<session> &from, const std::shared_ptr<session> &to) {}
+void player_cache::on_update_session(rpc::context &, const std::shared_ptr<session> &,
+                                     const std::shared_ptr<session> &) {}
 
 void player_cache::init_from_table_data(rpc::context &, const PROJECT_NAMESPACE_ID::table_user &tb_player) {
   data_version_ = tb_player.data_version();
@@ -176,7 +177,7 @@ void player_cache::set_session(rpc::context &ctx, std::shared_ptr<session> sessi
   }
 
   session_ = session_ptr;
-  on_update_session(old_sess, session_ptr);
+  on_update_session(ctx, old_sess, session_ptr);
 
   // 如果为置空Session，则要加入登出缓存排队列表
   if (!session_ptr) {

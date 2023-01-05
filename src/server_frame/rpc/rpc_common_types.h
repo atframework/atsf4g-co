@@ -25,6 +25,9 @@
 // #define RPC_AWAIT_USING_CXX_STD_COROUTINE
 
 namespace rpc {
+
+bool is_exiting_error_code(int32_t code);
+
 #if defined(RPC_AWAIT_USING_CXX_STD_COROUTINE) && RPC_AWAIT_USING_CXX_STD_COROUTINE
 struct rpc_error_code_transform {
   int32_t operator()(copp::promise_status in) const noexcept;

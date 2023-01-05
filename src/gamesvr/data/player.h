@@ -197,7 +197,7 @@ class player : public player_cache {
   void on_saved(rpc::context &ctx) override;
 
   // 更新session事件
-  void on_update_session(const std::shared_ptr<session> &from, const std::shared_ptr<session> &to) override;
+  void on_update_session(rpc::context &ctx, const std::shared_ptr<session> &from, const std::shared_ptr<session> &to) override;
 
   // 从table数据初始化
   void init_from_table_data(rpc::context &ctx, const PROJECT_NAMESPACE_ID::table_user &) override;

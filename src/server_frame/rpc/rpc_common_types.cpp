@@ -6,6 +6,7 @@
 
 #include <config/compiler/protobuf_prefix.h>
 
+#include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
@@ -15,6 +16,19 @@
 #include "utility/protobuf_mini_dumper.h"
 
 namespace rpc {
+
+bool is_exiting_error_code(int32_t code) {
+  switch (code) {
+    case PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT:
+    case PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED:
+    case PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED:
+    case PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING:
+    case PROJECT_NAMESPACE_ID::EN_ERR_TIMEOUT:
+      return true;
+    default:
+      return false;
+  }
+}
 
 #if defined(RPC_AWAIT_USING_CXX_STD_COROUTINE) && RPC_AWAIT_USING_CXX_STD_COROUTINE
 

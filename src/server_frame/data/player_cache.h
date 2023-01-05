@@ -125,7 +125,8 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
   virtual void on_saved(rpc::context &ctx);
 
   // 更新session事件
-  virtual void on_update_session(const std::shared_ptr<session> &from, const std::shared_ptr<session> &to);
+  virtual void on_update_session(rpc::context &ctx, const std::shared_ptr<session> &from,
+                                 const std::shared_ptr<session> &to);
 
   // 从table数据初始化
   virtual void init_from_table_data(rpc::context &ctx, const PROJECT_NAMESPACE_ID::table_user &stTableplayer_cache);

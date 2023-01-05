@@ -11,6 +11,8 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
+#include <gsl/select-gsl.h>
+
 #include <stdint.h>
 #include <cstddef>
 #include <string>
@@ -45,7 +47,7 @@ std::string protobuf_mini_dumper_get_error_msg(int error_code, const ::google::p
  * @param dst 拷贝目标
  * @param src 拷贝源
  */
-template <typename TMsg>
+template <class TMsg>
 inline void protobuf_copy_message(TMsg &dst, const TMsg &src) {
   if (&src == &dst) {
     return;
@@ -53,7 +55,7 @@ inline void protobuf_copy_message(TMsg &dst, const TMsg &src) {
   dst.CopyFrom(src);
 }
 
-template <typename TField>
+template <class TField>
 inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst,
                                   const ::google::protobuf::RepeatedField<TField> &src) {
   if (&src == &dst) {
@@ -63,7 +65,7 @@ inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst
   dst.CopyFrom(src);
 }
 
-template <typename TField>
+template <class TField>
 inline void protobuf_copy_message(::google::protobuf::RepeatedPtrField<TField> &dst,
                                   const ::google::protobuf::RepeatedPtrField<TField> &src) {
   if (&src == &dst) {
@@ -73,6 +75,32 @@ inline void protobuf_copy_message(::google::protobuf::RepeatedPtrField<TField> &
   dst.CopyFrom(src);
 }
 
+#if defined(LIBATFRAME_UTILS_ENABLE_GSL_WITH_GSL_LITE) && LIBATFRAME_UTILS_ENABLE_GSL_WITH_GSL_LITE
+template <class TField, class TValue>
+inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst, gsl::span<TValue> src) {
+#else
+template <class TField, class TValue, size_t SpanExtent>
+inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst, gsl::span<TValue, SpanExtent> src) {
+#endif
+  if (dst.empty() && src.empty()) {
+    return;
+  }
+  if (src.empty()) {
+    dst.Clear();
+    return;
+  }
+
+  if (static_cast<size_t>(dst.size()) == src.size() && src.data() == dst.data()) {
+    return;
+  }
+
+  dst.Reserve(static_cast<int>(src.size()));
+  dst.Clear();
+  for (auto &element : src) {
+    dst.Add(element);
+  }
+}
+
 /**
  * @brief protobuf 数据移动，移动前检查Arena
  * @note 加这个接口是为了解决protobuf的CopyFrom重载了CopyFrom(const
@@ -80,7 +108,7 @@ inline void protobuf_copy_message(::google::protobuf::RepeatedPtrField<TField> &
  * @param dst 拷贝目标
  * @param src 拷贝源
  */
-template <typename TMsg>
+template <class TMsg>
 inline void protobuf_move_message(TMsg &dst, TMsg &&src) {
   if (&src == &dst) {
     return;
@@ -94,7 +122,7 @@ inline void protobuf_move_message(TMsg &dst, TMsg &&src) {
   src.Clear();
 }
 
-template <typename TField>
+template <class TField>
 inline void protobuf_move_message(::google::protobuf::RepeatedField<TField> &dst,
                                   ::google::protobuf::RepeatedField<TField> &&src) {
   if (&src == &dst) {
@@ -109,7 +137,7 @@ inline void protobuf_move_message(::google::protobuf::RepeatedField<TField> &dst
   src.Clear();
 }
 
-template <typename TField>
+template <class TField>
 inline void protobuf_move_message(::google::protobuf::RepeatedPtrField<TField> &dst,
                                   ::google::protobuf::RepeatedPtrField<TField> &&src) {
   if (&src == &dst) {
@@ -124,7 +152,7 @@ inline void protobuf_move_message(::google::protobuf::RepeatedPtrField<TField> &
   src.Clear();
 }
 
-template <typename TEle>
+template <class TEle>
 int protobuf_remove_repeated_at(::google::protobuf::RepeatedPtrField<TEle> &arr, int index) {
   if (index < 0 || index >= arr.size()) {
     return 0;
@@ -138,7 +166,7 @@ int protobuf_remove_repeated_at(::google::protobuf::RepeatedPtrField<TEle> &arr,
   return 1;
 }
 
-template <typename TEle, typename TCheckFn>
+template <class TEle, class TCheckFn>
 int protobuf_remove_repeated_if(::google::protobuf::RepeatedPtrField<TEle> &arr, const TCheckFn &fn) {
   int new_index = 0;
   int old_index = 0;

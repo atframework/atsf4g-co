@@ -276,8 +276,9 @@ void player::on_saved(rpc::context &ctx) {
   base_type::on_saved(ctx);
 }
 
-void player::on_update_session(const std::shared_ptr<session> &from, const std::shared_ptr<session> &to) {
-  base_type::on_update_session(from, to);
+void player::on_update_session(rpc::context &ctx, const std::shared_ptr<session> &from,
+                               const std::shared_ptr<session> &to) {
+  base_type::on_update_session(ctx, from, to);
 }
 
 void player::init_from_table_data(rpc::context &ctx, const PROJECT_NAMESPACE_ID::table_user &tb_player) {

@@ -14,7 +14,8 @@ import re
 import shutil
 import sysconfig
 import tempfile
-from subprocess import PIPE, Popen
+import threading
+from subprocess import PIPE, Popen, TimeoutExpired
 
 HANDLE_SPLIT_PBFIELD_RULE = re.compile("\\d+|_+|\\s+|\\-")
 HANDLE_SPLIT_MODULE_RULE = re.compile("\\.|\\/|\\\\")
@@ -44,7 +45,6 @@ def check_has_module(module_name):
 
 class MakoModuleTempDir:
     """ RAII: Auto remove tempory directory """
-
     def __init__(self, prefix_path):
         if not os.path.exists(prefix_path):
             os.makedirs(prefix_path)
@@ -124,7 +124,6 @@ class PbConvertRule:
 
 
 class PbObjectBase(object):
-
     def __init__(self, descriptor, refer_database):
         self.descriptor = descriptor
         self.refer_database = refer_database
@@ -266,7 +265,6 @@ class PbObjectBase(object):
 
 
 class PbFile(PbObjectBase):
-
     def __init__(self, descriptor, refer_database):
         super(PbFile, self).__init__(descriptor, refer_database)
         refer_database._cache_files[descriptor.name] = self
@@ -279,7 +277,6 @@ class PbFile(PbObjectBase):
 
 
 class PbField(PbObjectBase):
-
     def __init__(self, container_message, descriptor, refer_database):
         super(PbField, self).__init__(descriptor, refer_database)
         self.file = container_message.file
@@ -293,7 +290,6 @@ class PbField(PbObjectBase):
 
 
 class PbOneof(PbObjectBase):
-
     def __init__(self, container_message, fields, descriptor, refer_database):
         super(PbOneof, self).__init__(descriptor, refer_database)
         self.file = container_message.file
@@ -311,7 +307,6 @@ class PbOneof(PbObjectBase):
 
 
 class PbMessage(PbObjectBase):
-
     def __init__(self, file, descriptor, refer_database):
         super(PbMessage, self).__init__(descriptor, refer_database)
         refer_database._cache_messages[descriptor.full_name] = self
@@ -339,7 +334,6 @@ class PbMessage(PbObjectBase):
 
 
 class PbEnumValue(PbObjectBase):
-
     def __init__(self, container_enum, descriptor, refer_database):
         super(PbEnumValue, self).__init__(descriptor, refer_database)
         self.file = container_enum.file
@@ -354,7 +348,6 @@ class PbEnumValue(PbObjectBase):
 
 
 class PbEnum(PbObjectBase):
-
     def __init__(self, file, descriptor, refer_database):
         super(PbEnum, self).__init__(descriptor, refer_database)
         refer_database._cache_enums[descriptor.full_name] = self
@@ -372,7 +365,6 @@ class PbEnum(PbObjectBase):
 
 
 class PbRpc(PbObjectBase):
-
     def __init__(self, service, descriptor, refer_database):
         super(PbRpc, self).__init__(descriptor, refer_database)
 
@@ -438,7 +430,6 @@ class PbRpc(PbObjectBase):
 
 
 class PbService(PbObjectBase):
-
     def __init__(self, file, descriptor, refer_database):
         super(PbService, self).__init__(descriptor, refer_database)
         refer_database._cache_services[descriptor.full_name] = self
@@ -455,7 +446,6 @@ class PbService(PbObjectBase):
 
 
 class PbDatabase(object):
-
     def __init__(self):
         from google.protobuf import descriptor_pb2 as pb2
         from google.protobuf import message_factory as _message_factory
@@ -849,7 +839,6 @@ def get_yaml_configure_child(yaml_conf_item,
 
 
 class PbGroupGenerator(object):
-
     def __init__(self, database, project_dir, output_directory,
                  custom_variables, overwrite, outer_name, inner_name,
                  inner_set_name, inner_include_rule, inner_exclude_rule,
@@ -1149,7 +1138,6 @@ def generate_group(options, group):
 
 
 class PbGlobalGenerator(object):
-
     def __init__(
         self,
         database,
@@ -1638,6 +1626,14 @@ def main():
     )
     CmdArgsAddOption(
         parser,
+        "--console-encoding",
+        action="append",
+        help="try encoding of console output",
+        dest="console_encoding",
+        default=[],
+    )
+    CmdArgsAddOption(
+        parser,
         "--output-pb-file",
         action="store",
         help="set output pb file path",
@@ -1868,6 +1864,58 @@ def main():
         sys.path = prepend_paths
     add_package_prefix_paths(options.add_package_prefix)
 
+    if options.console_encoding:
+        console_encoding = options.console_encoding
+    else:
+        console_encoding = ['utf-8', 'utf-8-sig', 'GB18030']
+
+    def print_buffer_to_fd(fd, buffer):
+        if not buffer:
+            return
+
+        for try_encoding in console_encoding:
+            try:
+                fd.write(buffer.decode(try_encoding))
+                return
+            except Exception as _:
+                pass
+
+        # console_encoding = sys.getfilesystemencoding()
+        fd.buffer.write(buffer)
+
+    def print_stdout_func(pexec):
+        for output_line in pexec.stdout.readlines():
+            print_buffer_to_fd(sys.stdout, output_line)
+
+    def print_stderr_func(pexec):
+        for output_line in pexec.stderr.readlines():
+            print_buffer_to_fd(sys.stderr, output_line)
+
+    def wait_print_pexec(pexec, timeout=300):
+        if pexec.stdout:
+            worker_thd_print_stdout = threading.Thread(
+                target=print_stdout_func, args=[pexec])
+            worker_thd_print_stdout.start()
+        else:
+            worker_thd_print_stdout = None
+        if pexec.stderr:
+            worker_thd_print_stderr = threading.Thread(
+                target=print_stderr_func, args=[pexec])
+            worker_thd_print_stderr.start()
+        else:
+            worker_thd_print_stderr = None
+
+        try:
+            pexec.wait(timeout=timeout)
+        except TimeoutExpired:
+            pexec.kill()
+            pexec.wait()
+
+        if worker_thd_print_stdout:
+            worker_thd_print_stdout.join()
+        if worker_thd_print_stderr:
+            worker_thd_print_stderr.join()
+
     # Merge configure from YAML file
     if options.yaml_configure and not check_has_module("yaml"):
         sys.stderr.write(
@@ -2009,7 +2057,7 @@ def main():
                       stdout=None,
                       stderr=None,
                       shell=False)
-        pexec.wait()
+        wait_print_pexec(pexec)
 
     try:
         pb_db = get_pb_db_with_cache(tmp_pb_file)
