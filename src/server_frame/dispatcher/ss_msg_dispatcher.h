@@ -17,6 +17,7 @@
 #include <config/compiler/protobuf_suffix.h>
 
 #include <gsl/select-gsl.h>
+#include <mem_pool/lru_map.h>
 
 #include <string>
 
@@ -48,6 +49,10 @@ class ss_msg_dispatcher : public dispatcher_implement, public util::design_patte
   int32_t init() override;
 
   const char *name() const override;
+
+  int stop() override;
+
+  int tick() override;
 
   /**
    * @brief 获取任务信息
@@ -123,8 +128,26 @@ class ss_msg_dispatcher : public dispatcher_implement, public util::design_patte
   bool is_target_server_available(const std::string &node_name) const;
 
  private:
+  static void dns_lookup_callback(uv_getaddrinfo_t *req, int status, struct addrinfo *res) noexcept;
+
+ public:
+  void *get_dns_lookup_rpc_type() noexcept;
+  int32_t send_dns_lookup(gsl::string_view domain, uint64_t sequence, uint64_t task_id);
+
+ private:
   uint64_t sequence_allocator_;
-  const google::protobuf::OneofDescriptor *get_body_oneof_desc() const;
+
+  struct dns_lookup_async_data {
+    uint64_t task_id;
+    void *rpc_type_address;
+    uint64_t rpc_sequence;
+    std::string domain;
+    uv_getaddrinfo_t request;
+    time_t start_timepoint;
+    time_t timeout_timepoint;
+  };
+
+  util::mempool::lru_map<uint64_t, dns_lookup_async_data> running_dns_lookup_;
 };
 
 #endif  // ATF4G_CO_SS_MSG_DISPATCHER_H

@@ -236,6 +236,10 @@ message logic_telemetry_cfg {
   opentelemetry_cfg opentelemetry = 1;
 }
 
+message logic_dns_cfg {
+  google.protobuf.Duration lookup_timeout = 1 [(atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
+}
+
 message logic_localization_cfg {
   string lang = 1;
 }
@@ -261,6 +265,7 @@ message logic_section_cfg {
   google.protobuf.Duration remote_configure_update_interval = 24
       [(atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "60s" }];
 
+  logic_dns_cfg dns = 100;
   logic_server_cfg server = 102;
   logic_user_cfg user = 103;
   logic_session_cfg session = 104;

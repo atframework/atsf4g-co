@@ -3,6 +3,8 @@
 %>
 # =========== logic configure ===========
 logic:
+  dns:
+    lookup_timeout: 5s
   server:
     maintenance_mode: 0             # maintenance mode
     resource_path: ${project_install_prefix}/resource    # resource directory

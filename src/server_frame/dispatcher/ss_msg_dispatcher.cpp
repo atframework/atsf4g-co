@@ -24,6 +24,7 @@
 
 #include <utility/protobuf_mini_dumper.h>
 
+#include <rpc/dns/lookup.h>
 #include <rpc/rpc_utils.h>
 
 #include <config/logic_config.h>
@@ -48,6 +49,49 @@ int32_t ss_msg_dispatcher::init() {
 }
 
 const char *ss_msg_dispatcher::name() const { return "ss_msg_dispatcher"; }
+
+int ss_msg_dispatcher::stop() {
+  int ret = dispatcher_implement::stop();
+  if (!running_dns_lookup_.empty()) {
+    ret = 1;
+
+    for (auto &dns_request : running_dns_lookup_) {
+      if (dns_request.second) {
+        uv_cancel(reinterpret_cast<uv_req_t *>(&dns_request.second->request));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ss_msg_dispatcher::tick() {
+  int ret = dispatcher_implement::tick();
+  time_t sys_now = 0;
+
+  while (!running_dns_lookup_.empty()) {
+    if (sys_now == 0) {
+      sys_now = util::time::time_utility::get_sys_now();
+    }
+
+    if (!running_dns_lookup_.front().second) {
+      running_dns_lookup_.pop_front();
+      continue;
+    }
+
+    if (sys_now <= running_dns_lookup_.front().second->timeout_timepoint) {
+      break;
+    }
+
+    uv_cancel(reinterpret_cast<uv_req_t *>(&running_dns_lookup_.front().second->request));
+    running_dns_lookup_.pop_front();
+    if (ret >= 0) {
+      ++ret;
+    }
+  }
+
+  return ret;
+}
 
 uint64_t ss_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
   atframework::SSMsg *real_msg = get_protobuf_msg<atframework::SSMsg>(raw_msg);
@@ -363,3 +407,119 @@ void ss_msg_dispatcher::on_create_task_failed(start_data_t &start_data, int32_t 
 }
 
 uint64_t ss_msg_dispatcher::allocate_sequence() { return ++sequence_allocator_; }
+
+void ss_msg_dispatcher::dns_lookup_callback(uv_getaddrinfo_t *req, int status, struct addrinfo *result) noexcept {
+  std::shared_ptr<dns_lookup_async_data> *lifetime_ptr =
+      reinterpret_cast<std::shared_ptr<dns_lookup_async_data> *>(req->data);
+
+  do {
+    if (!ss_msg_dispatcher::is_instance_destroyed()) {
+      ss_msg_dispatcher::me()->running_dns_lookup_.erase((*lifetime_ptr)->rpc_sequence);
+    }
+
+    size_t count = 0;
+    struct addrinfo *begin = result;
+    while (nullptr != begin) {
+      ++count;
+      begin = begin->ai_next;
+    }
+
+    rpc::dns::details::callback_data_type records;
+    records.reserve(count);
+    for (begin = result; nullptr != begin; begin = begin->ai_next) {
+      rpc::dns::address_record record;
+      if (AF_INET == begin->ai_family) {
+        sockaddr_in *res_c = reinterpret_cast<sockaddr_in *>(begin->ai_addr);
+        char ip[18] = {0};
+        if (0 != uv_ip4_name(res_c, ip, sizeof(ip) - 1)) {
+          continue;
+        }
+
+        record.type = rpc::dns::address_type::kA;
+        record.address = ip;
+      } else if (AF_INET6 == begin->ai_family) {
+        sockaddr_in6 *res_c = reinterpret_cast<sockaddr_in6 *>(begin->ai_addr);
+        char ip[48] = {0};
+        if (0 != uv_ip6_name(res_c, ip, sizeof(ip) - 1)) {
+          continue;
+        }
+
+        record.type = rpc::dns::address_type::kAAAA;
+        record.address = ip;
+      } else {
+        continue;
+      }
+
+      records.emplace_back(std::move(record));
+    }
+
+    if (!task_manager::is_instance_destroyed()) {
+      auto task_ptr = task_manager::me()->get_task((*lifetime_ptr)->task_id);
+      if (task_ptr) {
+        rpc::custom_resume(*task_ptr, (*lifetime_ptr)->rpc_type_address, (*lifetime_ptr)->rpc_sequence,
+                           reinterpret_cast<void *>(&records));
+      }
+    }
+  } while (false);
+
+  if (nullptr != result) {
+    uv_freeaddrinfo(result);
+  }
+
+  if (nullptr != lifetime_ptr) {
+    delete lifetime_ptr;
+  }
+}
+
+void *ss_msg_dispatcher::get_dns_lookup_rpc_type() noexcept { return reinterpret_cast<void *>(&running_dns_lookup_); }
+
+int32_t ss_msg_dispatcher::send_dns_lookup(gsl::string_view domain, uint64_t sequence, uint64_t task_id) {
+  if (domain.empty() || 0 == task_id) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+
+  if (0 == sequence) {
+    sequence = allocate_sequence();
+  }
+
+  std::shared_ptr<dns_lookup_async_data> async_data = std::make_shared<dns_lookup_async_data>();
+  if (!async_data) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+  }
+
+  std::shared_ptr<dns_lookup_async_data> *lifetime_ptr = new std::shared_ptr<dns_lookup_async_data>(async_data);
+  if (nullptr == lifetime_ptr) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+  }
+
+  async_data->start_timepoint = util::time::time_utility::get_sys_now();
+  time_t timeout = logic_config::me()->get_logic().dns().lookup_timeout().seconds();
+  if (timeout <= 0) {
+    timeout = 5;
+  }
+  async_data->timeout_timepoint = async_data->start_timepoint + timeout;
+  async_data->domain = static_cast<std::string>(domain);
+  async_data->task_id = task_id;
+  async_data->rpc_type_address = get_dns_lookup_rpc_type();
+  async_data->rpc_sequence = sequence;
+  async_data->request.data = reinterpret_cast<void *>(lifetime_ptr);
+
+  uv_loop_t *loop = nullptr;
+  if (nullptr != get_app() && get_app()->get_bus_node()) {
+    loop = get_app()->get_bus_node()->get_evloop();
+  }
+  if (nullptr == loop) {
+    loop = uv_default_loop();
+  }
+
+  int uv_res =
+      uv_getaddrinfo(loop, &async_data->request, dns_lookup_callback, async_data->domain.c_str(), nullptr, nullptr);
+  if (0 != uv_res) {
+    FWLOGERROR("Try to get addrinfo of {} failed, libuv res: {}({})", async_data->domain, uv_res, uv_err_name(uv_res));
+    delete lifetime_ptr;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL;
+  }
+
+  running_dns_lookup_.insert_key_value(sequence, std::move(async_data));
+  return 0;
+}
