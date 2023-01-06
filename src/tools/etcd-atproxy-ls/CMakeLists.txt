@@ -22,6 +22,7 @@ source_group_by_dir(SRC_LIST)
 # these service will use atgateway protocol
 
 add_executable(${TOOL_SRC_BIN_NAME} ${SRC_LIST})
+project_tool_split_target_debug_sybmol("${TOOL_SRC_BIN_NAME}")
 
 if(MSVC)
   set_property(TARGET ${TOOL_SRC_BIN_NAME} PROPERTY FOLDER "${PROJECT_NAME}/tools")

@@ -19,6 +19,12 @@ option(PROJECT_ENABLE_COMPRESS_DEBUG_INFORMATION "Enable compress debug informat
 option(PROJECT_TOOL_REPORT_COMPILE_UNIT_TIME "Show compiling time of each unit" OFF)
 option(PROJECT_TOOL_REPORT_LINK_UNIT_TIME "Show linking time of each target." OFF)
 
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+  find_program(PROJECT_TOOL_OBJCOPY NAMES objcopy)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang")
+  find_program(PROJECT_TOOL_OBJCOPY NAMES llvm-objcopy)
+endif()
+
 # project name
 set(PROJECT_BUILD_NAME
     "publish"

@@ -21,6 +21,8 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
                                                                        OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY))
       add_library(${TARGET_FULL_NAME} SHARED ${project_component_declare_sdk_HRADERS}
                                              ${project_component_declare_sdk_SOURCES})
+
+      project_tool_split_target_debug_sybmol(${TARGET_FULL_NAME})
     else()
       add_library(${TARGET_FULL_NAME} STATIC ${project_component_declare_sdk_HRADERS}
                                              ${project_component_declare_sdk_SOURCES})
@@ -213,6 +215,8 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows|MinGW|WindowsStore" AND (BUILD_SHARED_LIBS
                                                                      OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY))
     add_library(${TARGET_FULL_NAME} SHARED ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
+
+    project_tool_split_target_debug_sybmol(${TARGET_FULL_NAME})
   else()
     add_library(${TARGET_FULL_NAME} STATIC ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
   endif()
@@ -289,6 +293,8 @@ function(project_component_declare_service TARGET_NAME SERVICE_ROOT_DIR)
   source_group_by_dir(project_component_declare_service_HRADERS project_component_declare_service_SOURCES)
   add_executable(${TARGET_FULL_NAME} ${project_component_declare_service_HRADERS}
                                      ${project_component_declare_service_SOURCES})
+
+  project_tool_split_target_debug_sybmol(${TARGET_FULL_NAME})
 
   target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
   if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)

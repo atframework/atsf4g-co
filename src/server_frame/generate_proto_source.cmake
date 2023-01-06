@@ -336,6 +336,8 @@ if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows|MinGW|WindowsStore" AND (BUILD_SHARED_
                                                                   ))
   add_library(${PROJECT_SERVER_FRAME_LIB_LINK}-protocol SHARED ${PROJECT_SERVER_FRAME_PROTO_GENERATED_HEADERS}
                                                                ${PROJECT_SERVER_FRAME_PROTO_GENERATED_SOURCES})
+
+  project_tool_split_target_debug_sybmol(${PROJECT_SERVER_FRAME_LIB_LINK}-protocol)
 else()
   add_library(${PROJECT_SERVER_FRAME_LIB_LINK}-protocol STATIC ${PROJECT_SERVER_FRAME_PROTO_GENERATED_HEADERS}
                                                                ${PROJECT_SERVER_FRAME_PROTO_GENERATED_SOURCES})

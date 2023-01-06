@@ -196,6 +196,8 @@ if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows|MinGW|WindowsStore" AND (BUILD_SHARED_
   add_library(${PROJECT_SERVER_FRAME_LIB_LINK}-config SHARED ${PROJECT_SERVER_FRAME_CONFIG_SRC_LIST})
   set_target_properties(${PROJECT_SERVER_FRAME_LIB_LINK}-config PROPERTIES VERSION "${PROJECT_VERSION}"
                                                                            SOVERSION "${PROJECT_VERSION}")
+
+  project_tool_split_target_debug_sybmol(${PROJECT_SERVER_FRAME_LIB_LINK}-config)
 else()
   add_library(${PROJECT_SERVER_FRAME_LIB_LINK}-config STATIC ${PROJECT_SERVER_FRAME_CONFIG_SRC_LIST})
   set_target_properties(${PROJECT_SERVER_FRAME_LIB_LINK}-config PROPERTIES VERSION "${PROJECT_VERSION}")

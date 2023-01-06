@@ -134,3 +134,19 @@ function(project_link_or_copy_files)
     endif()
   endforeach()
 endfunction()
+
+function(project_tool_split_target_debug_sybmol)
+  if(PROJECT_TOOL_OBJCOPY)
+    foreach(TARGET_NAME ${ARGN})
+      add_custom_command(
+        TARGET ${TARGET_NAME}
+        POST_BUILD
+        COMMAND "${PROJECT_TOOL_OBJCOPY}" --only-keep-debug "$<TARGET_FILE:${TARGET_NAME}>"
+                "$<TARGET_FILE:${TARGET_NAME}>.dbg"
+        COMMAND "${PROJECT_TOOL_OBJCOPY}" --strip-debug --strip-unneeded "$<TARGET_FILE:${TARGET_NAME}>"
+        COMMAND "${PROJECT_TOOL_OBJCOPY}" --add-gnu-debuglink "$<TARGET_FILE_NAME:${TARGET_NAME}>.dbg"
+                "$<TARGET_FILE:${TARGET_NAME}>"
+        WORKING_DIRECTORY "$<TARGET_FILE_DIR:${TARGET_NAME}>")
+    endforeach()
+  endif()
+endfunction()

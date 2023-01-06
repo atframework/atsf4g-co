@@ -45,6 +45,7 @@ endif()
 source_group_by_dir(SRC_LIST)
 
 add_executable(${SIMULATOR_SRC_BIN_NAME} ${SRC_LIST})
+project_tool_split_target_debug_sybmol("${SIMULATOR_SRC_BIN_NAME}")
 
 target_link_libraries(${SIMULATOR_SRC_BIN_NAME} ${PROJECT_SERVER_FRAME_LIB_LINK} ${EXPORT_LIBATGW_INNER_V1_C_BIN_NAME}
                       ${SIMULATOR_PRIVATE_LINK_NAMES})
