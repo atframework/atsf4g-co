@@ -37,7 +37,7 @@
 
 namespace rpc {
 
-context::context() : parent_mode_(parent_mode::kParent) {
+context::context() noexcept : parent_mode_(parent_mode::kParent) {
   task_manager::task_t *task = task_manager::task_t::this_task();
   if (task) {
     rpc::context *parent = task_manager::get_shared_context(*task);
@@ -47,7 +47,7 @@ context::context() : parent_mode_(parent_mode::kParent) {
   }
 }
 
-context::context(context &&other) : parent_mode_(parent_mode::kParent) {
+context::context(context &&other) noexcept : parent_mode_(parent_mode::kParent) {
   using std::swap;
 
   allocator_.swap(other.allocator_);
@@ -57,12 +57,18 @@ context::context(context &&other) : parent_mode_(parent_mode::kParent) {
   swap(parent_mode_, other.parent_mode_);
 }
 
-context::context(context &parent, parent_mode mode) {
+context::context(context &parent, inherit_options options) noexcept {
   // Set parent tracer and arena allocator
-  set_parent_context(parent, mode);
+  set_parent_context(parent, options);
 }
 
 context::~context() {}
+
+context context::create_temporary_child(inherit_options options) noexcept { return context{*this, options}; }
+
+std::shared_ptr<context> context::create_shared_child(inherit_options options) noexcept {
+  return std::make_shared<context>(*this, options);
+}
 
 void context::setup_tracer(
     tracer &tracer_instance, string_view name, trace_option &&options,
@@ -161,13 +167,13 @@ bool context::try_reuse_protobuf_arena(const std::shared_ptr<::google::protobuf:
   return true;
 }
 
-void context::set_parent_context(rpc::context &parent, parent_mode mode) noexcept {
-  if (nullptr == allocator_) {
+void context::set_parent_context(rpc::context &parent, inherit_options options) noexcept {
+  if (nullptr == allocator_ && options.inherit_allocator) {
     try_reuse_protobuf_arena(parent.mutable_protobuf_arena());
   }
 
   parent_span_ = parent.get_trace_span();
-  parent_mode_ = mode;
+  parent_mode_ = options.mode;
 }
 
 void context::add_link_span(const tracer::span_ptr_type &span_ptr) noexcept {
@@ -423,8 +429,7 @@ result_code_type custom_wait(const void *type_address, void **received, uint64_t
   return detail::wait(received, reinterpret_cast<uintptr_t>(type_address), check_sequence);
 }
 
-result_code_type custom_resume(task_types::task_type &task, const void *type_address, uint64_t sequence,
-                               void *received) {
+int32_t custom_resume(task_types::task_type &task, const void *type_address, uint64_t sequence, void *received) {
   dispatcher_resume_data_t resume_data = dispatcher_make_default<dispatcher_resume_data_t>();
   resume_data.message.msg_type = reinterpret_cast<uintptr_t>(type_address);
   resume_data.message.msg_addr = received;
@@ -433,10 +438,10 @@ result_code_type custom_resume(task_types::task_type &task, const void *type_add
   int res = task.resume(&resume_data);
   if (res < 0) {
     FWLOGERROR("resume task {} failed, res: {}.", task.get_id(), res);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
   }
 
-  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 }  // namespace rpc

@@ -66,6 +66,16 @@ class context {
     kLink = 1,
   };
 
+  struct inherit_options {
+    parent_mode mode;
+    bool inherit_allocator;
+
+    inline inherit_options() noexcept : mode(parent_mode::kParent), inherit_allocator(true){};
+    explicit inline inherit_options(parent_mode m) noexcept : mode(m), inherit_allocator(true){};
+    explicit inline inherit_options(parent_mode m, bool inherit_alloc) noexcept
+        : mode(m), inherit_allocator(inherit_alloc){};
+  };
+
   template <class TMsg>
   struct message_holder {
     explicit message_holder(context &ctx) : arena_msg_ptr_(ctx.create<TMsg>()) {}
@@ -125,10 +135,28 @@ class context {
   context &operator=(context &&) = delete;
 
  public:
-  context();
-  explicit context(context &&other);
-  explicit context(context &parent, parent_mode mode = parent_mode::kParent);
+  context() noexcept;
+  explicit context(context &&other) noexcept;
+  explicit context(context &parent, inherit_options options = {}) noexcept;
   ~context();
+
+  /**
+   * @brief 创建临时的子上下文，通常用于协程栈上需要加一层链路跟踪。
+   * @note 如果涉及异步调用和传递生命周期，请使用 create_shared_child
+   *
+   * @param options 继承选项
+   * @return context 创建的子上下文对象
+   */
+  context create_temporary_child(inherit_options options = {}) noexcept;
+
+  /**
+   * @brief 创建共享的子上下文，通常用于异步调用时保留链路信息。
+   * @note 如果不涉及异步调用和传递生命周期，请使用 create_temporary_child
+   *
+   * @param options 继承选项
+   * @return std::shared_ptr<context> 创建的子上下文智能指针
+   */
+  std::shared_ptr<context> create_shared_child(inherit_options options = {}) noexcept;
 
   void setup_tracer(
       tracer &, string_view name, trace_option &&options,
@@ -162,7 +190,7 @@ class context {
 
   inline const tracer::span_ptr_type &get_trace_span() const { return trace_span_; }
 
-  void set_parent_context(rpc::context &parent, parent_mode mode = parent_mode::kParent) noexcept;
+  void set_parent_context(rpc::context &parent, inherit_options options = {}) noexcept;
   void add_link_span(const tracer::span_ptr_type &span_ptr) noexcept;
 
   /**
@@ -245,6 +273,5 @@ result_code_type custom_wait(const void *type_address, void **received, uint64_t
  * @param received this will be assigned received in custom_wait
  * @return future of 0 or error code
  */
-result_code_type custom_resume(task_types::task_type &task, const void *type_address, uint64_t sequence,
-                               void *received);
+int32_t custom_resume(task_types::task_type &task, const void *type_address, uint64_t sequence, void *received);
 }  // namespace rpc

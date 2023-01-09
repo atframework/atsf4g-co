@@ -176,7 +176,7 @@ rpc::context::parent_mode actor_action_base::get_caller_mode() const noexcept {
 }
 
 void actor_action_base::set_caller_context(rpc::context &ctx) {
-  get_shared_context().set_parent_context(ctx, get_caller_mode());
+  get_shared_context().set_parent_context(ctx, rpc::context::inherit_options{get_caller_mode()});
 }
 
 void actor_action_base::_notify_finished() {

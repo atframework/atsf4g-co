@@ -159,7 +159,15 @@ player::ptr_t player::create(uint64_t user_id, uint32_t zone_id, const std::stri
   return ret;
 }
 
-rpc::result_code_type player::create_init(rpc::context &ctx, uint32_t version_type) {
+rpc::result_code_type player::create_init(rpc::context &parent_ctx, uint32_t version_type) {
+  rpc::context ctx = parent_ctx.create_temporary_child();
+  rpc::context::tracer trace;
+  rpc::context::trace_option trace_option;
+  trace_option.dispatcher = nullptr;
+  trace_option.is_remote = false;
+  trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+  ctx.setup_tracer(trace, "player.create_init", std::move(trace_option));
+
   auto res = RPC_AWAIT_CODE_RESULT(base_type::create_init(ctx, version_type));
   if (res < 0) {
     RPC_RETURN_CODE(res);
@@ -188,7 +196,15 @@ rpc::result_code_type player::create_init(rpc::context &ctx, uint32_t version_ty
   RPC_RETURN_CODE(res);
 }
 
-rpc::result_code_type player::login_init(rpc::context &ctx) {
+rpc::result_code_type player::login_init(rpc::context &parent_ctx) {
+  rpc::context ctx = parent_ctx.create_temporary_child();
+  rpc::context::tracer trace;
+  rpc::context::trace_option trace_option;
+  trace_option.dispatcher = nullptr;
+  trace_option.is_remote = false;
+  trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+  ctx.setup_tracer(trace, "player.login_init", std::move(trace_option));
+
   auto res = RPC_AWAIT_CODE_RESULT(base_type::login_init(ctx));
   if (res < 0) {
     RPC_RETURN_CODE(res);
@@ -258,18 +274,36 @@ void player::refresh_feature_limit(rpc::context &ctx) {
   }
 }
 
-void player::on_login(rpc::context &ctx) {
+void player::on_login(rpc::context &parent_ctx) {
   // Trigger by login_init()
   if (!is_inited()) {
     return;
   }
+
+  rpc::context ctx = parent_ctx.create_temporary_child();
+  rpc::context::tracer trace;
+  rpc::context::trace_option trace_option;
+  trace_option.dispatcher = nullptr;
+  trace_option.is_remote = false;
+  trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+  ctx.setup_tracer(trace, "player.on_login", std::move(trace_option));
 
   base_type::on_login(ctx);
 
   // TODO sync messages
 }
 
-void player::on_logout(rpc::context &ctx) { base_type::on_logout(ctx); }
+void player::on_logout(rpc::context &parent_ctx) {
+  rpc::context ctx = parent_ctx.create_temporary_child();
+  rpc::context::tracer trace;
+  rpc::context::trace_option trace_option;
+  trace_option.dispatcher = nullptr;
+  trace_option.is_remote = false;
+  trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+  ctx.setup_tracer(trace, "player.on_logout", std::move(trace_option));
+
+  base_type::on_logout(ctx);
+}
 
 void player::on_saved(rpc::context &ctx) {
   // at last call base on remove callback
@@ -281,7 +315,15 @@ void player::on_update_session(rpc::context &ctx, const std::shared_ptr<session>
   base_type::on_update_session(ctx, from, to);
 }
 
-void player::init_from_table_data(rpc::context &ctx, const PROJECT_NAMESPACE_ID::table_user &tb_player) {
+void player::init_from_table_data(rpc::context &parent_ctx, const PROJECT_NAMESPACE_ID::table_user &tb_player) {
+  rpc::context ctx = parent_ctx.create_temporary_child();
+  rpc::context::tracer trace;
+  rpc::context::trace_option trace_option;
+  trace_option.dispatcher = nullptr;
+  trace_option.is_remote = false;
+  trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+  ctx.setup_tracer(trace, "player.init_from_table_data", std::move(trace_option));
+
   base_type::init_from_table_data(ctx, tb_player);
 
   // TODO data patch, 这里用于版本升级时可能需要升级玩家数据库，做版本迁移
@@ -300,7 +342,15 @@ void player::init_from_table_data(rpc::context &ctx, const PROJECT_NAMESPACE_ID:
   }
 }
 
-int player::dump(rpc::context &ctx, PROJECT_NAMESPACE_ID::table_user &user, bool always) {
+int player::dump(rpc::context &parent_ctx, PROJECT_NAMESPACE_ID::table_user &user, bool always) {
+  rpc::context ctx = parent_ctx.create_temporary_child();
+  rpc::context::tracer trace;
+  rpc::context::trace_option trace_option;
+  trace_option.dispatcher = nullptr;
+  trace_option.is_remote = false;
+  trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+  ctx.setup_tracer(trace, "player.dump", std::move(trace_option));
+
   int ret = base_type::dump(ctx, user, always);
   if (ret < 0) {
     return ret;

@@ -275,7 +275,7 @@ task_action_base::on_finished_callback_handle_t task_action_base::add_on_on_fini
 void task_action_base::remove_on_finished(on_finished_callback_handle_t handle) { on_finished_callback_.erase(handle); }
 
 void task_action_base::set_caller_context(rpc::context &ctx) {
-  get_shared_context().set_parent_context(ctx, get_caller_mode());
+  get_shared_context().set_parent_context(ctx, rpc::context::inherit_options{get_caller_mode()});
 }
 
 void task_action_base::_notify_finished(cotask::impl::task_impl &task_inst) {
