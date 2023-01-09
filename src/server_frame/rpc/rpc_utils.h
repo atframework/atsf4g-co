@@ -137,7 +137,7 @@ class context {
  public:
   context() noexcept;
   explicit context(context &&other) noexcept;
-  explicit context(context &parent, inherit_options options = {}) noexcept;
+  context(context &parent, inherit_options options = {}) noexcept;
   ~context();
 
   /**
