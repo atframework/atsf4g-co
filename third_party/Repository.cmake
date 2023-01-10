@@ -95,6 +95,9 @@ include("${CMAKE_CURRENT_LIST_DIR}/python_env/python_env.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/xres-code-generator/xres-code-generator.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/xresloader/xresloader.cmake")
 
+# =========== third_party - cfssl ===========
+include("${CMAKE_CURRENT_LIST_DIR}/cfssl/cfssl.cmake")
+
 # =========== set dependency variables ===========
 # Changes in otel-cpp v1.8.0
 if(TARGET opentelemetry-cpp::prometheus_exporter)

@@ -30,26 +30,6 @@ include("${CMAKE_CURRENT_LIST_DIR}/atframework/Repository.cmake")
 # 导入工程工具
 include("${CMAKE_CURRENT_LIST_DIR}/project/cmake/ProjectTools.cmake")
 
-# Copy dynamic libraries and executables
-set(PROJECT_COPY_LIBRARY_RULES
-    "${PROJECT_THIRD_PARTY_INSTALL_DIR}/lib/*.so"
-    "${PROJECT_THIRD_PARTY_INSTALL_DIR}/lib/*.so.*"
-    "${PROJECT_THIRD_PARTY_INSTALL_DIR}/lib/*.dll"
-    "${PROJECT_THIRD_PARTY_INSTALL_DIR}/lib/*.dll.*"
-    "${PROJECT_THIRD_PARTY_INSTALL_DIR}/lib64/*.so"
-    "${PROJECT_THIRD_PARTY_INSTALL_DIR}/lib64/*.so.*"
-    "${PROJECT_THIRD_PARTY_INSTALL_DIR}/lib64/*.dll"
-    "${PROJECT_THIRD_PARTY_INSTALL_DIR}/lib64/*.dll.*")
-file(GLOB PROJECT_COPY_LIBRARIES ${PROJECT_COPY_LIBRARY_RULES})
-project_link_or_copy_files(${PROJECT_COPY_LIBRARIES} "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
-
-file(GLOB PROJECT_COPY_EXECUTABLES "${PROJECT_THIRD_PARTY_INSTALL_DIR}/bin/*")
-project_link_or_copy_files(${PROJECT_COPY_EXECUTABLES} "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
-
-unset(PROJECT_COPY_LIBRARY_RULES)
-unset(PROJECT_COPY_LIBRARIES)
-unset(PROJECT_COPY_EXECUTABLES)
-
 # installer directory
 if(NOT PROJECT_INSTALL_BAS_DIR)
   set(PROJECT_INSTALL_BAS_DIR "${PROJECT_BINARY_DIR}/${PROJECT_BUILD_NAME}")
@@ -67,6 +47,8 @@ file(MAKE_DIRECTORY "${PROJECT_INSTALL_TOOLS_DIR}/bin")
 
 file(MAKE_DIRECTORY ${PROJECT_INSTALL_SHARED_DIR})
 file(MAKE_DIRECTORY ${PROJECT_INSTALL_RES_PBD_DIR})
+
+include("${CMAKE_CURRENT_LIST_DIR}/third_party/ConfigureInstall.cmake")
 
 # ######################################################################################################################
 if(MINGW)
