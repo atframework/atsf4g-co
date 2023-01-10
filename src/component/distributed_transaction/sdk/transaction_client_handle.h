@@ -15,7 +15,7 @@
 #include <time/time_utility.h>
 
 #include <config/server_frame_build_feature.h>
-#include <dispatcher/task_type_defines.h>
+#include <dispatcher/task_type_traits.h>
 
 #include <rpc/rpc_common_types.h>
 

@@ -27,9 +27,6 @@ include(MaybePopulateSubmodule)
 include("${CMAKE_CURRENT_LIST_DIR}/third_party/Repository.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/atframework/Repository.cmake")
 
-# 导入工程工具
-include("${CMAKE_CURRENT_LIST_DIR}/project/cmake/ProjectTools.cmake")
-
 # installer directory
 if(NOT PROJECT_INSTALL_BAS_DIR)
   set(PROJECT_INSTALL_BAS_DIR "${PROJECT_BINARY_DIR}/${PROJECT_BUILD_NAME}")

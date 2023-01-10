@@ -43,8 +43,6 @@ class dispatcher_implement : public ::atapp::module_impl {
  public:
   using msg_op_type_t = PROJECT_NAMESPACE_ID::EnMsgOpType;
   using msg_raw_t = dispatcher_raw_message;
-  using resume_data_t = dispatcher_resume_data_t;
-  using start_data_t = dispatcher_start_data_t;
   using msg_type_t = uint32_t;
   using msg_task_action_set_t = std::unordered_map<msg_type_t, task_manager::task_action_creator_t>;
   using msg_actor_action_set_t = std::unordered_map<msg_type_t, task_manager::actor_action_creator_t>;
@@ -120,7 +118,7 @@ class dispatcher_implement : public ::atapp::module_impl {
    * @param start_data 启动数据
    * @param error_code 错误码
    */
-  virtual void on_create_task_failed(start_data_t &start_data, int32_t error_code);
+  virtual void on_create_task_failed(dispatcher_start_data_t &start_data, int32_t error_code);
 
   /**
    * @brief 数据解包
@@ -174,14 +172,14 @@ class dispatcher_implement : public ::atapp::module_impl {
    * @param task_id 相关的任务id
    * @return 返回错误码或0
    */
-  virtual int create_task(start_data_t &start_data, task_manager::id_t &task_id);
+  virtual int create_task(dispatcher_start_data_t &start_data, task_manager::id_t &task_id);
 
   /**
    * @brief 创建Actor
    * @param raw_msg 消息抽象结构
    * @return 返回错误码或0
    */
-  virtual task_manager::actor_action_ptr_t create_actor(start_data_t &start_data);
+  virtual task_manager::actor_action_ptr_t create_actor(dispatcher_start_data_t &start_data);
 
   /**
    * @brief 根据类型ID获取action或actor选项

@@ -69,6 +69,7 @@ task_action_base::task_action_base()
     : user_id_(0),
       zone_id_(0),
       task_id_(0),
+      private_data_(nullptr),
       result_(0),
       response_code_(0),
       response_message_disabled_(false),
@@ -79,6 +80,7 @@ task_action_base::task_action_base(rpc::context *caller_context)
     : user_id_(0),
       zone_id_(0),
       task_id_(0),
+      private_data_(nullptr),
       result_(0),
       response_code_(0),
       response_message_disabled_(false),
@@ -104,7 +106,11 @@ const char *task_action_base::name() const {
   return ret;
 }
 
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+int task_action_base::operator()(task_meta_data_type &&task_meta, void *priv_data) {
+#else
 int task_action_base::operator()(void *priv_data) {
+#endif
   detail::task_action_stat_guard stat(this);
 
   rpc::context::trace_option trace_option;
@@ -114,7 +120,7 @@ int task_action_base::operator()(void *priv_data) {
   trace_option.parent_network_span = nullptr;
 
   if (nullptr != priv_data) {
-    start_data_ = *reinterpret_cast<task_manager::start_data_t *>(priv_data);
+    start_data_ = *reinterpret_cast<dispatcher_start_data_t *>(priv_data);
 
     // Set parent context if not set by child type
     if (nullptr != start_data_.context) {
@@ -125,19 +131,29 @@ int task_action_base::operator()(void *priv_data) {
   rpc::context::tracer tracer;
   shared_context_.setup_tracer(tracer, name(), std::move(trace_option));
 
-  task_manager::task_t *task = cotask::this_task::get<task_manager::task_t>();
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+  private_data_ = task_meta.private_data;
+  task_id_ = task_meta.task_id;
+#else
+  task_type_trait::internal_task_type *task = cotask::this_task::get<task_type_trait::internal_task_type>();
   if (nullptr == task) {
     FWLOGERROR("task convert failed, must in task.");
     return tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_INIT);
   }
+  private_data_ = task_manager::get_private_data(*task);
+  task_id_ = task->get_id();
+#endif
 
-  task_manager::task_private_data_t *task_priv_data = task_manager::get_private_data(*task);
-  if (nullptr != task_priv_data) {
+  if (nullptr != private_data_) {
     // setup action
-    task_priv_data->action = this;
+    private_data_->action = this;
   }
 
-  task_id_ = task->get_id();
+  {
+    rpc::context::task_context_data rpc_task_context_data;
+    rpc_task_context_data.task_id = task_id_;
+    shared_context_.set_task_context(rpc_task_context_data);
+  }
 
   if (0 != get_user_id()) {
     FWLOGDEBUG("task {} [{}] for player {}:{} start to run\n", name(), get_task_id(), get_zone_id(), get_user_id());
@@ -297,10 +313,8 @@ void task_action_base::_notify_finished(cotask::impl::task_impl &task_inst) {
   }
   on_finished_callback_.clear();
 
-  task_manager::task_private_data_t *task_priv_data =
-      task_manager::get_private_data(*static_cast<task_manager::task_t *>(&task_inst));
-  if (nullptr != task_priv_data) {
+  if (nullptr != private_data_) {
     // setup action
-    task_priv_data->action = nullptr;
+    private_data_->action = nullptr;
   }
 }

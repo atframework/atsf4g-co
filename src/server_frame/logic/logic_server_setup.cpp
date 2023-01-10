@@ -790,7 +790,7 @@ int logic_server_common_module::tick_update_remote_configures() {
     return 0;
   }
 
-  task_manager::start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
+  dispatcher_start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
   res = task_manager::me()->start_task(task_id, start_data);
   if (0 != res) {
     FWLOGERROR("start task_action_reload_remote_server_configure {} failed, res: {}({})", task_id, res,

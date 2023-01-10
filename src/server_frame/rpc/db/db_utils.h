@@ -23,7 +23,7 @@ extern "C" struct redisReply;
 namespace rpc {
 namespace db {
 
-#if defined(RPC_AWAIT_USING_CXX_STD_COROUTINE) && RPC_AWAIT_USING_CXX_STD_COROUTINE
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
 
 using result_type = result_code_type;
 

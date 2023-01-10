@@ -116,7 +116,7 @@ task_manager::~task_manager() {
 
 int task_manager::init() {
   native_mgr_ = native_task_manager_type::create();
-  stack_pool_ = task_types::stack_pool_type::create();
+  stack_pool_ = task_type_trait::stack_pool_type::create();
 
   // setup logger for protobuf
   ::google::protobuf::SetLogHandler(log_wrapper_for_protobuf);
@@ -167,7 +167,7 @@ int task_manager::reload() {
   return 0;
 }
 
-int task_manager::start_task(id_t task_id, start_data_t &data) {
+int task_manager::start_task(id_t task_id, dispatcher_start_data_t &data) {
   int res = native_mgr_->start(task_id, &data);
   if (res < 0) {
     FWLOGERROR("start task {} failed.", task_id);
@@ -179,7 +179,7 @@ int task_manager::start_task(id_t task_id, start_data_t &data) {
   return 0;
 }
 
-int task_manager::resume_task(id_t task_id, resume_data_t &data) {
+int task_manager::resume_task(id_t task_id, dispatcher_resume_data_t &data) {
   int res = native_mgr_->resume(task_id, &data);
   if (res < 0) {
     if (copp::COPP_EC_NOT_FOUND == res) {
@@ -287,18 +287,18 @@ int task_manager::report_create_error(const char *fn_name) {
 
 bool task_manager::is_busy() const { return conf_busy_count_ > 0 && native_mgr_->get_task_size() > conf_busy_count_; }
 
-void task_manager::reset_private_data(task_private_data_t &priv_data) { priv_data.action = nullptr; }
+void task_manager::reset_private_data(task_private_data_type &priv_data) { priv_data.action = nullptr; }
 
-task_manager::task_private_data_t *task_manager::get_private_data(task_t &task) {
-  if (task.get_private_buffer_size() < sizeof(task_private_data_t)) {
+task_private_data_type *task_manager::get_private_data(task_t &task) {
+  if (task.get_private_buffer_size() < sizeof(task_private_data_type)) {
     return nullptr;
   }
 
-  return reinterpret_cast<task_private_data_t *>(task.get_private_buffer());
+  return reinterpret_cast<task_private_data_type *>(task.get_private_buffer());
 }
 
 rpc::context *task_manager::get_shared_context(task_t &task) {
-  task_private_data_t *task_priv_data = get_private_data(task);
+  task_private_data_type *task_priv_data = get_private_data(task);
   if (nullptr == task_priv_data) {
     return nullptr;
   }

@@ -155,7 +155,7 @@ int32_t transaction_participator_handle::tick(rpc::context& ctx, util::time::tim
     return res;
   }
 
-  task_manager::start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
+  dispatcher_start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
   res = task_manager::me()->start_task(auto_resolve_transaction_task_->get_id(), start_data);
   if (0 != res) {
     FWLOGERROR("start task_action_participator_resolve_transaction {} failed, res: {}({})",

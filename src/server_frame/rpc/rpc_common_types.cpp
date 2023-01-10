@@ -30,7 +30,7 @@ bool is_exiting_error_code(int32_t code) {
   }
 }
 
-#if defined(RPC_AWAIT_USING_CXX_STD_COROUTINE) && RPC_AWAIT_USING_CXX_STD_COROUTINE
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
 
 int32_t rpc_error_code_transform::operator()(copp::promise_status in) const noexcept {
   if (in < copp::promise_status::kDone) {

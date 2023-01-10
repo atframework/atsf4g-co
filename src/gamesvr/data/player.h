@@ -10,7 +10,7 @@
 
 #include <data/player_cache.h>
 
-#include <dispatcher/task_type_defines.h>
+#include <dispatcher/task_type_traits.h>
 
 #include <functional>
 #include <list>
@@ -129,10 +129,10 @@ class player : public player_cache {
   };
 
   struct task_queue_node {
-    task_types::task_ptr_type related_task;
+    task_type_trait::task_type related_task;
     bool is_waiting;
 
-    explicit task_queue_node(const task_types::task_ptr_type &t);
+    explicit task_queue_node(const task_type_trait::task_type &t);
   };
 
   /**

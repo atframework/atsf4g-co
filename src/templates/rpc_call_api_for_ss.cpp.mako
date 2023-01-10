@@ -155,10 +155,9 @@ static inline int __setup_rpc_stream_header(atframework::SSMsgHead &head, gsl::s
 }
 % endif
 % if rpc_common_codes_enable_request_header:
-static inline int __setup_rpc_request_header(atframework::SSMsgHead &head, task_manager::task_t &task,
-                                             gsl::string_view rpc_full_name,
-                                             const std::string &type_full_name) {
-  head.set_src_task_id(task.get_id());
+static inline int __setup_rpc_request_header(atframework::SSMsgHead &head, task_type_trait::id_type task_id,
+                                             gsl::string_view rpc_full_name, const std::string &type_full_name) {
+  head.set_src_task_id(task_id);
   head.set_op_type(${project_namespace}::EN_MSG_OP_TYPE_UNARY_REQUEST);
   atframework::RpcRequestMeta* request_meta = head.mutable_rpc_request();
   if (nullptr == request_meta) {
@@ -315,12 +314,8 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
 %   endif
 
 %   if rpc_is_router_api or not rpc_is_stream_mode:
-  task_manager::task_t *task = task_manager::task_t::this_task();
-  if (!task) {
-    FWLOGERROR("rpc {} must be called in a task",
-               "${rpc.get_full_name()}");
-    RPC_RETURN_CODE(${project_namespace}::err::EN_SYS_RPC_NO_TASK);
-  }
+  RPC_CHECK_TASK_ACTION_RETURN("rpc {} must be called in a task",
+    "${rpc.get_full_name()}")
 %   endif
 
   atframework::SSMsg* req_msg_ptr = __ctx.create<atframework::SSMsg>();
@@ -347,7 +342,8 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
 %   endif
 %   if not rpc_is_stream_mode:
   ${rpc_request_meta_pretty_prefix}res = details::__setup_rpc_request_header(
-    ${rpc_request_meta_pretty_prefix}*req_msg.mutable_head(), *task, "${rpc.get_full_name()}",
+    ${rpc_request_meta_pretty_prefix}*req_msg.mutable_head(), __ctx.get_task_context().task_id,
+    "${rpc.get_full_name()}",
     ${rpc_request_meta_pretty_prefix}${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()
   ${rpc_request_meta_pretty_prefix});
 %   endif

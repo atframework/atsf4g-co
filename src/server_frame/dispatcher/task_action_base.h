@@ -6,9 +6,6 @@
 
 #include <config/compiler_features.h>
 
-#include <libcopp/utils/features.h>
-#include <libcotask/task.h>
-
 #include <log/log_wrapper.h>
 
 #include <config/server_frame_build_feature.h>
@@ -27,6 +24,7 @@
 #endif
 
 #include "dispatcher/dispatcher_type_defines.h"
+#include "dispatcher/task_type_traits.h"
 
 class player_cache;
 
@@ -175,6 +173,13 @@ class task_action_base : public cotask::impl::task_action_impl {
   using on_finished_callback_set_t = std::list<on_finished_callback_fn_t>;
   using on_finished_callback_handle_t = on_finished_callback_set_t::iterator;
 
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+  struct task_meta_data_type {
+    task_type_trait::id_type task_id = 0;
+    task_private_data_type *private_data = nullptr;
+  };
+#endif
+
  protected:
   task_action_base();
   explicit task_action_base(rpc::context *caller_context);
@@ -189,7 +194,12 @@ class task_action_base : public cotask::impl::task_action_impl {
 
   virtual const char *name() const;
 
-  int operator()(void *priv_data);
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+  int operator()(task_meta_data_type &&task_meta, void *priv_data);
+#else
+  int operator()(void *priv_data) override;
+#endif
+
   virtual result_type hook_run();
 
   virtual result_type operator()() = 0;
@@ -300,6 +310,7 @@ class task_action_base : public cotask::impl::task_action_impl {
   uint64_t user_id_;
   uint32_t zone_id_;
   uint64_t task_id_;
+  task_private_data_type *private_data_;
   result_type result_;
   int32_t response_code_;
   bool response_message_disabled_;

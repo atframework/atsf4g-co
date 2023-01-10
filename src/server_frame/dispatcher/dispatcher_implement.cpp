@@ -86,7 +86,7 @@ dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_messa
       PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE == op_type) {
     ret.task_id = pick_msg_task_id(msg);
     if (ret.task_id > 0) {  // 如果是恢复任务则尝试切回协程任务
-      resume_data_t callback_data = dispatcher_make_default<resume_data_t>();
+      dispatcher_resume_data_t callback_data = dispatcher_make_default<dispatcher_resume_data_t>();
       callback_data.message = msg;
       callback_data.private_data = priv_data;
       callback_data.sequence = sequence;
@@ -105,7 +105,7 @@ dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_messa
     }
   }
 
-  start_data_t callback_data = dispatcher_make_default<dispatcher_start_data_t>();
+  dispatcher_start_data_t callback_data = dispatcher_make_default<dispatcher_start_data_t>();
   callback_data.message = msg;
   callback_data.private_data = priv_data;
   callback_data.context = &ctx;
@@ -154,7 +154,7 @@ dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_messa
 
 int32_t dispatcher_implement::on_send_message_failed(rpc::context &ctx, msg_raw_t &msg, int32_t error_code,
                                                      uint64_t sequence) {
-  resume_data_t callback_data = dispatcher_make_default<dispatcher_resume_data_t>();
+  dispatcher_resume_data_t callback_data = dispatcher_make_default<dispatcher_resume_data_t>();
   callback_data.message = msg;
   callback_data.sequence = sequence;
   callback_data.context = &ctx;
@@ -172,9 +172,9 @@ int32_t dispatcher_implement::on_send_message_failed(rpc::context &ctx, msg_raw_
   return 0;
 }
 
-void dispatcher_implement::on_create_task_failed(start_data_t &, int32_t) {}
+void dispatcher_implement::on_create_task_failed(dispatcher_start_data_t &, int32_t) {}
 
-int dispatcher_implement::create_task(start_data_t &start_data, task_manager::id_t &task_id) {
+int dispatcher_implement::create_task(dispatcher_start_data_t &start_data, task_manager::id_t &task_id) {
   task_id = 0;
 
   msg_type_t msg_type_id = pick_msg_type_id(start_data.message);
@@ -206,7 +206,7 @@ int dispatcher_implement::create_task(start_data_t &start_data, task_manager::id
   return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
 }
 
-task_manager::actor_action_ptr_t dispatcher_implement::create_actor(start_data_t &start_data) {
+task_manager::actor_action_ptr_t dispatcher_implement::create_actor(dispatcher_start_data_t &start_data) {
   msg_type_t msg_type_id = pick_msg_type_id(start_data.message);
   const std::string &rpc_name = pick_rpc_name(start_data.message);
   if (0 == msg_type_id && rpc_name.empty()) {

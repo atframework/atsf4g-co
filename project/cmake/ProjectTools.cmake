@@ -88,6 +88,42 @@ if(PROJECT_ENABLE_COMPRESS_DEBUG_INFORMATION AND CMAKE_CXX_COMPILER_ID MATCHES "
   endif()
 endif()
 
+# Try to use static libs for gcc
+if(PROJECT_STATIC_LINK_STANDARD_LIBRARIES AND ${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
+  include(CheckCXXSourceCompiles)
+  set(CMAKE_REQUIRED_LIBRARIES ${COMPILER_OPTION_EXTERN_CXX_LIBS})
+  unset(PROJECT_LINK_LIBS_TEST_STATIC_LIBGCC CACHE)
+  # 测试使用静态libgcc库
+  set(CMAKE_REQUIRED_LINK_OPTIONS "-static-libgcc")
+  check_cxx_source_compiles("#include<iostream>
+    int main() { std::cout<< 1<< std::endl; return 0; }" PROJECT_LINK_LIBS_TEST_STATIC_LIBGCC)
+  if(PROJECT_LINK_LIBS_TEST_STATIC_LIBGCC)
+    add_linker_flags_for_runtime("-static-libgcc")
+    set(PROJECT_LINK_STATIC_LIBS_LIBGCC ON)
+    message(STATUS "Using static libgcc")
+  else()
+    message(STATUS "Using dynamic libgcc")
+  endif()
+  # 测试使用静态libstdc++库
+  set(CMAKE_REQUIRED_LINK_OPTIONS "-static-libstdc++")
+  unset(PROJECT_LINK_LIBS_TEST_STATIC_LIBSTDCXX CACHE)
+  check_cxx_source_compiles("#include<iostream>
+    int main() { std::cout<< 1<< std::endl; return 0; }" PROJECT_LINK_LIBS_TEST_STATIC_LIBSTDCXX)
+  if(PROJECT_LINK_LIBS_TEST_STATIC_LIBSTDCXX)
+    add_linker_flags_for_runtime("-static-libstdc++")
+    set(PROJECT_LINK_STATIC_LIBS_LIBSTDCXX ON)
+    message(STATUS "Using static libstdc++")
+    list(APPEND COMPILER_OPTION_EXTERN_CXX_LIBS stdc++)
+  else()
+    message(STATUS "Using dynamic libstdc++")
+  endif()
+
+  unset(CMAKE_REQUIRED_LIBRARIES)
+  unset(CMAKE_REQUIRED_LINK_OPTIONS)
+  unset(PROJECT_LINK_LIBS_TEST_STATIC_LIBGCC CACHE)
+  unset(PROJECT_LINK_LIBS_TEST_STATIC_LIBSTDCXX CACHE)
+endif()
+
 function(project_link_or_copy_files)
   set(FILE_LIST ${ARGN})
   list(POP_BACK FILE_LIST DESTINATION)
@@ -135,17 +171,27 @@ function(project_link_or_copy_files)
   endforeach()
 endfunction()
 
+if(PROJECT_TOOL_ENABLE_SPLIT_DEBUG_SYMBOL_SUFFIX)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    find_program(PROJECT_TOOL_OBJCOPY NAMES objcopy)
+  elseif(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang")
+    find_program(PROJECT_TOOL_OBJCOPY NAMES llvm-objcopy)
+  endif()
+endif()
+
 function(project_tool_split_target_debug_sybmol)
-  if(PROJECT_TOOL_OBJCOPY)
+  if(PROJECT_TOOL_ENABLE_SPLIT_DEBUG_SYMBOL_SUFFIX AND PROJECT_TOOL_OBJCOPY)
     foreach(TARGET_NAME ${ARGN})
       add_custom_command(
         TARGET ${TARGET_NAME}
         POST_BUILD
         COMMAND "${PROJECT_TOOL_OBJCOPY}" --only-keep-debug "$<TARGET_FILE:${TARGET_NAME}>"
-                "$<TARGET_FILE:${TARGET_NAME}>.dbg"
+                "$<TARGET_FILE:${TARGET_NAME}>${PROJECT_TOOL_ENABLE_SPLIT_DEBUG_SYMBOL_SUFFIX}"
         COMMAND "${PROJECT_TOOL_OBJCOPY}" --strip-debug --strip-unneeded "$<TARGET_FILE:${TARGET_NAME}>"
-        COMMAND "${PROJECT_TOOL_OBJCOPY}" --add-gnu-debuglink "$<TARGET_FILE_NAME:${TARGET_NAME}>.dbg"
-                "$<TARGET_FILE:${TARGET_NAME}>"
+        COMMAND
+          "${PROJECT_TOOL_OBJCOPY}" --add-gnu-debuglink
+          "$<TARGET_FILE_NAME:${TARGET_NAME}>${PROJECT_TOOL_ENABLE_SPLIT_DEBUG_SYMBOL_SUFFIX}"
+          "$<TARGET_FILE:${TARGET_NAME}>"
         WORKING_DIRECTORY "$<TARGET_FILE_DIR:${TARGET_NAME}>")
     endforeach()
   endif()

@@ -37,27 +37,38 @@
 
 namespace rpc {
 
-context::context() noexcept : parent_mode_(parent_mode::kParent) {
+context::context() noexcept {
+  trace_context_.caller_mode = parent_mode::kParent;
   task_manager::task_t *task = task_manager::task_t::this_task();
   if (task) {
     rpc::context *parent = task_manager::get_shared_context(*task);
     if (parent) {
       set_parent_context(*parent);
     }
+
+    task_context_.task_id = task->get_id();
+  } else {
+    task_context_.task_id = 0;
   }
 }
 
-context::context(context &&other) noexcept : parent_mode_(parent_mode::kParent) {
+context::context(context &&other) noexcept {
+  trace_context_.caller_mode = parent_mode::kParent;
+  task_context_.task_id = 0;
   using std::swap;
 
   allocator_.swap(other.allocator_);
-  trace_span_.swap(other.trace_span_);
-  parent_span_.swap(other.parent_span_);
-  link_spans_.swap(other.link_spans_);
-  swap(parent_mode_, other.parent_mode_);
+  trace_context_.trace_span.swap(other.trace_context_.trace_span);
+  trace_context_.parent_span.swap(other.trace_context_.parent_span);
+  trace_context_.link_spans.swap(other.trace_context_.link_spans);
+  swap(trace_context_.caller_mode, other.trace_context_.caller_mode);
+
+  swap(task_context_.task_id, other.task_context_.task_id);
 }
 
 context::context(context &parent, inherit_options options) noexcept {
+  task_context_.task_id = 0;
+
   // Set parent tracer and arena allocator
   set_parent_context(parent, options);
 }
@@ -76,9 +87,9 @@ void context::setup_tracer(
         attributes) {
   tracer::links_type tracer_links;
   std::unique_ptr<opentelemetry::trace::SpanContext> parent_span_context;
-  tracer_links.reserve(link_spans_.size() + 1);
+  tracer_links.reserve(trace_context_.link_spans.size() + 1);
 
-  switch (parent_mode_) {
+  switch (trace_context_.caller_mode) {
     case parent_mode::kLink: {
       if (nullptr != options.parent_memory_span) {
         tracer_links.push_back(tracer::link_pair_type(options.parent_memory_span->GetContext(), {}));
@@ -104,8 +115,8 @@ void context::setup_tracer(
         }
       }
 
-      if (parent_span_) {
-        tracer_links.push_back(tracer::link_pair_type(parent_span_->GetContext(), {}));
+      if (trace_context_.parent_span) {
+        tracer_links.push_back(tracer::link_pair_type(trace_context_.parent_span->GetContext(), {}));
       }
 
       break;
@@ -116,8 +127,8 @@ void context::setup_tracer(
         break;
       }
 
-      if (parent_span_) {
-        options.parent_memory_span = parent_span_;
+      if (trace_context_.parent_span) {
+        options.parent_memory_span = trace_context_.parent_span;
         break;
       }
       break;
@@ -125,7 +136,7 @@ void context::setup_tracer(
   }
 
   // Add links
-  for (auto &link_span : link_spans_) {
+  for (auto &link_span : trace_context_.link_spans) {
     tracer_links.push_back(tracer::link_pair_type(link_span->GetContext(), {}));
   }
   if (!tracer_links.empty()) {
@@ -136,11 +147,11 @@ void context::setup_tracer(
     return;
   }
 
-  if (trace_span_) {
-    trace_span_->End();
-    trace_span_ = tracer::span_ptr_type();
+  if (trace_context_.trace_span) {
+    trace_context_.trace_span->End();
+    trace_context_.trace_span = tracer::span_ptr_type();
   }
-  trace_span_ = tracer_instance.get_trace_span();
+  trace_context_.trace_span = tracer_instance.get_trace_span();
 }
 
 std::shared_ptr<::google::protobuf::Arena> context::mutable_protobuf_arena() {
@@ -172,8 +183,10 @@ void context::set_parent_context(rpc::context &parent, inherit_options options) 
     try_reuse_protobuf_arena(parent.mutable_protobuf_arena());
   }
 
-  parent_span_ = parent.get_trace_span();
-  parent_mode_ = options.mode;
+  trace_context_.parent_span = parent.get_trace_span();
+  trace_context_.caller_mode = options.mode;
+
+  task_context_ = parent.task_context_;
 }
 
 void context::add_link_span(const tracer::span_ptr_type &span_ptr) noexcept {
@@ -181,12 +194,14 @@ void context::add_link_span(const tracer::span_ptr_type &span_ptr) noexcept {
     return;
   }
 
-  link_spans_.push_back(span_ptr);
+  trace_context_.link_spans.push_back(span_ptr);
 }
 
 void context::set_current_service(atapp::app &app, const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &telemetry) {
   telemetry::global_service::set_current_service(app, telemetry);
 }
+
+void context::set_task_context(const task_context_data &task_ctx) noexcept { task_context_ = task_ctx; }
 
 namespace detail {
 static result_code_type wait(void **output_msg, uintptr_t check_type, uint64_t check_sequence) {
@@ -429,7 +444,8 @@ result_code_type custom_wait(const void *type_address, void **received, uint64_t
   return detail::wait(received, reinterpret_cast<uintptr_t>(type_address), check_sequence);
 }
 
-int32_t custom_resume(task_types::task_type &task, const void *type_address, uint64_t sequence, void *received) {
+int32_t custom_resume(task_type_trait::internal_task_type &task, const void *type_address, uint64_t sequence,
+                      void *received) {
   dispatcher_resume_data_t resume_data = dispatcher_make_default<dispatcher_resume_data_t>();
   resume_data.message.msg_type = reinterpret_cast<uintptr_t>(type_address);
   resume_data.message.msg_addr = received;

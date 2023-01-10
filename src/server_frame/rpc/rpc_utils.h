@@ -34,7 +34,7 @@
 #include <utility>
 #include <vector>
 
-#include "dispatcher/task_type_defines.h"
+#include "dispatcher/task_type_traits.h"
 #include "rpc/rpc_common_types.h"
 #include "rpc/telemetry/rpc_trace.h"
 
@@ -74,6 +74,11 @@ class context {
     explicit inline inherit_options(parent_mode m) noexcept : mode(m), inherit_allocator(true){};
     explicit inline inherit_options(parent_mode m, bool inherit_alloc) noexcept
         : mode(m), inherit_allocator(inherit_alloc){};
+  };
+
+  struct task_context_data {
+    uint64_t task_id;
+    inline task_context_data() noexcept : task_id(0){};
   };
 
   template <class TMsg>
@@ -188,7 +193,7 @@ class context {
   const std::shared_ptr<::google::protobuf::Arena> &get_protobuf_arena() const;
   bool try_reuse_protobuf_arena(const std::shared_ptr<::google::protobuf::Arena> &arena) noexcept;
 
-  inline const tracer::span_ptr_type &get_trace_span() const { return trace_span_; }
+  inline const tracer::span_ptr_type &get_trace_span() const { return trace_context_.trace_span; }
 
   void set_parent_context(rpc::context &parent, inherit_options options = {}) noexcept;
   void add_link_span(const tracer::span_ptr_type &span_ptr) noexcept;
@@ -200,12 +205,19 @@ class context {
    */
   static void set_current_service(atapp::app &app, const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &telemetry);
 
+  void set_task_context(const task_context_data &task_ctx) noexcept;
+  inline const task_context_data &get_task_context() const noexcept { return task_context_; }
+
  private:
   std::shared_ptr<::google::protobuf::Arena> allocator_;
-  tracer::span_ptr_type trace_span_;
-  tracer::span_ptr_type parent_span_;
-  parent_mode parent_mode_;
-  std::vector<tracer::span_ptr_type> link_spans_;
+  struct trace_context_data {
+    tracer::span_ptr_type trace_span;
+    tracer::span_ptr_type parent_span;
+    parent_mode caller_mode;
+    std::vector<tracer::span_ptr_type> link_spans;
+  };
+  trace_context_data trace_context_;
+  task_context_data task_context_;
 };
 
 /**
@@ -273,5 +285,6 @@ result_code_type custom_wait(const void *type_address, void **received, uint64_t
  * @param received this will be assigned received in custom_wait
  * @return future of 0 or error code
  */
-int32_t custom_resume(task_types::task_type &task, const void *type_address, uint64_t sequence, void *received);
+int32_t custom_resume(task_type_trait::internal_task_type &task, const void *type_address, uint64_t sequence,
+                      void *received);
 }  // namespace rpc

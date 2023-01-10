@@ -27,7 +27,7 @@ async_invoke_result async_invoke(context &ctx, gsl::string_view name, std::funct
     return async_invoke_result::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  task_types::task_ptr_type task_ptr;
+  task_type_trait::task_type task_ptr;
   task_action_async_invoke::ctor_param_t params;
   params.caller_context = &ctx;
   params.callable = std::move(fn);
@@ -47,7 +47,7 @@ async_invoke_result async_invoke(context &ctx, gsl::string_view name, std::funct
     return async_invoke_result::make_error(res);
   }
 
-  task_manager::start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
+  dispatcher_start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
   res = task_manager::me()->start_task(task_ptr->get_id(), start_data);
   if (0 != res) {
     FWLOGERROR("start task_action_async_invoke {} with name rpc.async_invoke:{} failed, res: {}({})",
@@ -65,8 +65,8 @@ async_invoke_result async_invoke(gsl::string_view caller_name, gsl::string_view 
   return async_invoke(ctx, name, std::move(fn), timeout);
 }
 
-result_code_type wait_tasks(const std::vector<task_types::task_ptr_type> &tasks) {
-  task_types::task_ptr_type self_task(task_manager::task_t::this_task());
+result_code_type wait_tasks(const std::vector<task_type_trait::task_type> &tasks) {
+  task_type_trait::task_type self_task(task_manager::task_t::this_task());
   if (!self_task) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
   }
@@ -82,7 +82,7 @@ result_code_type wait_tasks(const std::vector<task_types::task_ptr_type> &tasks)
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING);
     }
 
-    task_types::task_ptr_type last_task;
+    task_type_trait::task_type last_task;
     for (auto &task : tasks) {
       if (!task || task == self_task) {
         continue;
@@ -109,8 +109,8 @@ result_code_type wait_tasks(const std::vector<task_types::task_ptr_type> &tasks)
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-result_code_type wait_task(const task_types::task_ptr_type &other_task) {
-  task_types::task_ptr_type self_task(task_manager::task_t::this_task());
+result_code_type wait_task(const task_type_trait::task_type &other_task) {
+  task_type_trait::task_type self_task(task_manager::task_t::this_task());
   if (!self_task) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
   }

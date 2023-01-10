@@ -23,7 +23,7 @@
 #include <utility>
 
 #include "dispatcher/dispatcher_type_defines.h"
-#include "dispatcher/task_type_defines.h"
+#include "dispatcher/task_type_traits.h"
 
 /**
  * @brief 协程任务和简单actor的管理创建manager类
@@ -32,31 +32,23 @@
  */
 class task_manager : public ::util::design_pattern::singleton<task_manager> {
  public:
-  using msg_raw_t = dispatcher_raw_message;
-  using resume_data_t = dispatcher_resume_data_t;
-  using start_data_t = dispatcher_start_data_t;
-
-  using task_t = task_types::task_type;
-  using id_t = task_types::id_type;
+  using task_t = task_type_trait::internal_task_type;
+  using id_t = task_type_trait::id_type;
 
   using actor_action_ptr_t = std::shared_ptr<actor_action_base>;
-
-  struct task_private_data_t {
-    task_action_base *action;
-  };
 
   struct task_action_maker_base_t {
     atframework::DispatcherOptions options;
     explicit task_action_maker_base_t(const atframework::DispatcherOptions *opt);
     virtual ~task_action_maker_base_t();
-    virtual int operator()(task_manager::id_t &task_id, start_data_t ctor_param) = 0;
+    virtual int operator()(task_manager::id_t &task_id, dispatcher_start_data_t ctor_param) = 0;
   };
 
   struct actor_action_maker_base_t {
     atframework::DispatcherOptions options;
     explicit actor_action_maker_base_t(const atframework::DispatcherOptions *opt);
     virtual ~actor_action_maker_base_t();
-    virtual actor_action_ptr_t operator()(start_data_t ctor_param) = 0;
+    virtual actor_action_ptr_t operator()(dispatcher_start_data_t ctor_param) = 0;
   };
 
   /// 协程任务创建器
@@ -66,7 +58,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
   template <typename TAction>
   struct task_action_maker_t : public task_action_maker_base_t {
     explicit task_action_maker_t(const atframework::DispatcherOptions *opt) : task_action_maker_base_t(opt) {}
-    int operator()(task_manager::id_t &task_id, start_data_t ctor_param) override {
+    int operator()(task_manager::id_t &task_id, dispatcher_start_data_t ctor_param) override {
       if (options.has_timeout() && (options.timeout().seconds() > 0 || options.timeout().nanos() > 0)) {
         return task_manager::me()->create_task_with_timeout<TAction>(
             task_id, options.timeout().seconds(), options.timeout().nanos(), COPP_MACRO_STD_MOVE(ctor_param));
@@ -79,24 +71,25 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
   template <typename TAction>
   struct actor_action_maker_t : public actor_action_maker_base_t {
     explicit actor_action_maker_t(const atframework::DispatcherOptions *opt) : actor_action_maker_base_t(opt) {}
-    actor_action_ptr_t operator()(start_data_t ctor_param) override {
+    actor_action_ptr_t operator()(dispatcher_start_data_t ctor_param) override {
       return task_manager::me()->create_actor<TAction>(COPP_MACRO_STD_MOVE(ctor_param));
     };
   };
 
  private:
 #if (LIBCOPP_VERSION_MAJOR * 1000000 + LIBCOPP_VERSION_MINOR * 1000 + LIBCOPP_VERSION_PATCH) >= 2000001
-  using native_task_manager_type = cotask::task_manager<task_types::task_type>;
+  using native_task_manager_type = cotask::task_manager<task_type_trait::internal_task_type>;
   using native_task_manager_ptr_type = typename native_task_manager_type::ptr_type;
 #else
   using native_task_container_t =
-      std::unordered_map<task_types::id_type, cotask::detail::task_manager_node<task_types::task_type> >;
-  using native_task_manager_type = cotask::task_manager<task_types::task_type, native_task_container_t>;
+      std::unordered_map<task_type_trait::id_type,
+                         cotask::detail::task_manager_node<task_type_trait::internal_task_type> >;
+  using native_task_manager_type = cotask::task_manager<task_type_trait::internal_task_type, native_task_container_t>;
   using native_task_manager_ptr_type = typename native_task_manager_type::ptr_t;
 #endif
 
  public:
-  using task_ptr_t = task_types::task_ptr_type;
+  using task_ptr_t = task_type_trait::task_type;
 
  protected:
   task_manager();
@@ -127,15 +120,15 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
       return PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
     }
 
-    task_types::task_macro_coroutine::stack_allocator_type alloc(stack_pool_);
+    task_type_trait::task_macro_coroutine::stack_allocator_type alloc(stack_pool_);
 
     task_instance = task_t::create_with_delegate<TAction>(COPP_MACRO_STD_FORWARD(TParams, args), alloc,
-                                                          get_stack_size(), sizeof(task_private_data_t));
+                                                          get_stack_size(), sizeof(task_private_data_type));
     if (!task_instance) {
       return report_create_error(__FUNCTION__);
     }
 
-    task_private_data_t *task_priv_data = get_private_data(*task_instance);
+    task_private_data_type *task_priv_data = get_private_data(*task_instance);
     if (nullptr != task_priv_data) {
       // initialize private data
       reset_private_data(*task_priv_data);
@@ -214,7 +207,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @param data 启动数据，operator()(void* priv_data)的priv_data指向这个对象的地址
    * @return 0或错误码
    */
-  int start_task(id_t task_id, start_data_t &data);
+  int start_task(id_t task_id, dispatcher_start_data_t &data);
 
   /**
    * @brief 恢复任务
@@ -222,7 +215,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @param data 恢复时透传的数据，yield返回的指针指向这个对象的地址
    * @return 0或错误码
    */
-  int resume_task(id_t task_id, resume_data_t &data);
+  int resume_task(id_t task_id, dispatcher_resume_data_t &data);
 
   /**
    * @brief 创建Actor
@@ -256,13 +249,13 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    */
   task_ptr_t get_task(id_t task_id);
 
-  inline const task_types::stack_pool_type::ptr_t &get_stack_pool() const { return stack_pool_; }
+  inline const task_type_trait::stack_pool_type::ptr_t &get_stack_pool() const { return stack_pool_; }
   inline const native_task_manager_ptr_type &get_native_manager() const { return native_mgr_; }
 
   bool is_busy() const;
 
-  static void reset_private_data(task_private_data_t &priv_data);
-  static task_private_data_t *get_private_data(task_t &task);
+  static void reset_private_data(task_private_data_type &priv_data);
+  static task_private_data_type *get_private_data(task_t &task);
   static rpc::context *get_shared_context(task_t &task);
 
   static int32_t convert_task_status_to_error_code(task_t &task) noexcept;
@@ -288,5 +281,5 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
   size_t conf_busy_count_;
   size_t conf_busy_warn_count_;
   native_task_manager_ptr_type native_mgr_;
-  task_types::stack_pool_type::ptr_t stack_pool_;
+  task_type_trait::stack_pool_type::ptr_t stack_pool_;
 };

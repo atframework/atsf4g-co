@@ -311,12 +311,12 @@ rpc::result_code_type task_action_login::await_io_task(rpc::context&, std::share
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
 
-  task_types::id_type last_pull_object_task_id = router_cache->get_last_pull_object_task_id();
+  task_type_trait::id_type last_pull_object_task_id = router_cache->get_last_pull_object_task_id();
   if (0 == last_pull_object_task_id) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
 
-  task_types::task_ptr_type last_pull_object_task = task_manager::me()->get_task(last_pull_object_task_id);
+  task_type_trait::task_type last_pull_object_task = task_manager::me()->get_task(last_pull_object_task_id);
   if (!last_pull_object_task) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }

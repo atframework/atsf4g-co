@@ -329,7 +329,7 @@ int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::messa
   return ret;
 }
 
-void ss_msg_dispatcher::on_create_task_failed(start_data_t &start_data, int32_t error_code) {
+void ss_msg_dispatcher::on_create_task_failed(dispatcher_start_data_t &start_data, int32_t error_code) {
   const std::string &rpc_name = pick_rpc_name(start_data.message);
   if (rpc_name.empty()) {
     return;

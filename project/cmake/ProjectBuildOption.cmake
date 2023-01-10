@@ -1,4 +1,6 @@
-﻿# 默认配置选项
+﻿include(CMakeDependentOption)
+
+# 默认配置选项
 #####################################################################
 
 option(ATFRAMEWORK_USE_DYNAMIC_LIBRARY "Build and linking with dynamic libraries." ON)
@@ -18,12 +20,7 @@ option(PROJECT_ENABLE_COMPRESS_DEBUG_INFORMATION "Enable compress debug informat
 
 option(PROJECT_TOOL_REPORT_COMPILE_UNIT_TIME "Show compiling time of each unit" OFF)
 option(PROJECT_TOOL_REPORT_LINK_UNIT_TIME "Show linking time of each target." OFF)
-
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-  find_program(PROJECT_TOOL_OBJCOPY NAMES objcopy)
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang")
-  find_program(PROJECT_TOOL_OBJCOPY NAMES llvm-objcopy)
-endif()
+set(PROJECT_TOOL_ENABLE_SPLIT_DEBUG_SYMBOL_SUFFIX ".dbg" CACHE STRING "Split debug symbols into standalone files.")
 
 # project name
 set(PROJECT_BUILD_NAME
@@ -39,6 +36,13 @@ set(ATFRAME_GATEWAY_MACRO_DATA_SMALL_SIZE
     CACHE STRING
           "small message buffer for atgateway connection(used to reduce memory copy when there are many small messages)"
 )
+
+option(PROJECT_SERVER_FRAME_USE_STD_COROUTINE "Using C++20 Coroutine" OFF)
+# cmake_dependent_option(PROJECT_SERVER_FRAME_USE_STD_COROUTINE "Using C++20 Coroutine" ON
+# "COMPILER_OPTIONS_TEST_STD_COROUTINE" OFF)
+
+option(PROJECT_SANTIZER_USE_ADDRESS "Enable -fsanitize=address -fno-omit-frame-pointer" OFF)
+option(PROJECT_STATIC_LINK_STANDARD_LIBRARIES "Use -static-libgcc and -static-libstdc++" OFF)
 
 # Patch for `FindGit.cmake` on windows
 find_program(GIT_EXECUTABLE NAMES git git.cmd)
@@ -137,6 +141,10 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/${CMAKE_INSTALL_BINDIR}")
 file(MAKE_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
 file(MAKE_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+
+# 导入工程工具
+include("${CMAKE_CURRENT_LIST_DIR}/ProjectTools.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/ProjectSantizerChecker.cmake")
 
 # Linker options
 unset(PROJECT_TRY_SET_LINKER)

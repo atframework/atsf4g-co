@@ -97,7 +97,7 @@ const atframework::DispatcherOptions *cs_msg_dispatcher::get_options_by_message_
   return nullptr;
 }
 
-void cs_msg_dispatcher::on_create_task_failed(start_data_t &start_data, int32_t error_code) {
+void cs_msg_dispatcher::on_create_task_failed(dispatcher_start_data_t &start_data, int32_t error_code) {
   const std::string &rpc_name = pick_rpc_name(start_data.message);
   if (rpc_name.empty()) {
     return;
@@ -340,7 +340,7 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
 
       ret = task_manager::me()->create_task<task_action_player_logout>(logout_task_id, COPP_MACRO_STD_MOVE(task_param));
       if (0 == ret) {
-        start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
+        dispatcher_start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
 
         ret = task_manager::me()->start_task(logout_task_id, start_data);
         if (0 != ret) {

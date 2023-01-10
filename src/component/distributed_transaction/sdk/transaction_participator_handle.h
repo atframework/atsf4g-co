@@ -15,7 +15,7 @@
 #include <time/time_utility.h>
 
 #include <config/server_frame_build_feature.h>
-#include <dispatcher/task_type_defines.h>
+#include <dispatcher/task_type_traits.h>
 
 #include <rpc/rpc_common_types.h>
 
@@ -303,7 +303,7 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
   std::unordered_map<std::string, storage_ptr_type> transaction_locks_;
   std::unordered_map<std::string, storage_ptr_type> finished_transactions_;
 
-  task_types::task_ptr_type auto_resolve_transaction_task_;
+  task_type_trait::task_type auto_resolve_transaction_task_;
 };
 
 }  // namespace distributed_system
