@@ -308,7 +308,7 @@ class router_manager : public router_manager_base {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
 
-    task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
+    task_type_trait::task_type self_task(task_manager::task_t::this_task());
     if (!self_task) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
     }

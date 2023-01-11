@@ -88,9 +88,6 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
   using native_task_manager_ptr_type = typename native_task_manager_type::ptr_t;
 #endif
 
- public:
-  using task_ptr_t = task_type_trait::task_type;
-
  protected:
   task_manager();
   ~task_manager();
@@ -247,7 +244,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @param task_id 任务id
    * @return 如果存在，返回协程任务的智能指针
    */
-  task_ptr_t get_task(id_t task_id);
+  task_type_trait::task_type get_task(id_t task_id);
 
   inline const task_type_trait::stack_pool_type::ptr_t &get_stack_pool() const { return stack_pool_; }
   inline const native_task_manager_ptr_type &get_native_manager() const { return native_mgr_; }

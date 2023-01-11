@@ -71,7 +71,7 @@ class user_async_jobs_manager {
  private:
   player* const owner_;
 
-  mutable task_manager::task_ptr_t remote_command_patch_task_;
+  mutable task_type_trait::task_type remote_command_patch_task_;
 
   bool is_dirty_;
   time_t remote_command_patch_task_next_timepoint_;

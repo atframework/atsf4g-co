@@ -59,7 +59,7 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
   status_data_->action_save_count;
   uint64_t left_action_count = logic_config::me()->get_cfg_router().pending_action_max_count();
   uint64_t pending_action_batch_count = logic_config::me()->get_cfg_router().pending_action_batch_count();
-  std::vector<task_manager::task_ptr_t> pending_action_batch_tasks;
+  std::vector<task_type_trait::task_type> pending_action_batch_tasks;
   pending_action_batch_tasks.reserve(pending_action_batch_count);
 
   while (left_action_count > 0) {

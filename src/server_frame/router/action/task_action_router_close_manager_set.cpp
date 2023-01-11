@@ -51,7 +51,7 @@ task_action_router_close_manager_set::result_type task_action_router_close_manag
   }
 
   size_t closing_action_batch_count = logic_config::me()->get_cfg_router().closing_action_batch_count();
-  std::vector<task_manager::task_ptr_t> pending_action_batch_tasks;
+  std::vector<task_type_trait::task_type> pending_action_batch_tasks;
   pending_action_batch_tasks.reserve(closing_action_batch_count);
 
   while (param_.pending_list && status_data_->current_idx_ < param_.pending_list->size()) {

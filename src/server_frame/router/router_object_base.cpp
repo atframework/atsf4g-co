@@ -261,7 +261,7 @@ rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
+  task_type_trait::task_type self_task(task_manager::task_t::this_task());
   if (!self_task) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
   }
@@ -285,7 +285,7 @@ void router_object_base::wakeup_io_task_awaiter() {
   io_task_.reset();
 
   while (!io_task_awaiter_.empty() && !io_task_) {
-    task_manager::task_ptr_t wake_task = io_task_awaiter_.front();
+    task_type_trait::task_type wake_task = io_task_awaiter_.front();
     if (wake_task && !wake_task->is_exiting()) {
       // iter will be erased in task
       rpc::custom_resume(*wake_task, reinterpret_cast<const void *>(&io_task_awaiter_), wake_task->get_id(), nullptr);
@@ -299,7 +299,7 @@ void router_object_base::wakeup_io_task_awaiter() {
   }
 }
 
-rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx, task_manager::task_ptr_t &self_task) {
+rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx, task_type_trait::task_type &self_task) {
   int ret = 0;
   while (io_task_ && self_task && self_task != io_task_) {
     ret = task_manager::convert_task_status_to_error_code(*self_task);
@@ -323,8 +323,8 @@ rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx, task_
   RPC_RETURN_CODE(ret);
 }
 
-rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx, task_manager::task_ptr_t &self_task,
-                                                        task_manager::task_ptr_t &other_task) {
+rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx, task_type_trait::task_type &self_task,
+                                                        task_type_trait::task_type &other_task) {
   if (!self_task || !other_task) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
   }
@@ -362,7 +362,7 @@ rpc::result_code_type router_object_base::pull_cache_inner(rpc::context &ctx, vo
   // 触发拉取缓存时要取消移除缓存的计划任务
   unset_flag(flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
 
-  task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
+  task_type_trait::task_type self_task(task_manager::task_t::this_task());
   if (!self_task) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
   }
@@ -401,7 +401,7 @@ rpc::result_code_type router_object_base::pull_object_inner(rpc::context &ctx, v
   unset_flag(flag_t::EN_ROFT_SCHED_REMOVE_OBJECT);
   unset_flag(flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
 
-  task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
+  task_type_trait::task_type self_task(task_manager::task_t::this_task());
   if (!self_task) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
   }
@@ -458,7 +458,7 @@ rpc::result_code_type router_object_base::save_object_inner(rpc::context &ctx, v
   // 排队写任务和并发写merge
   uint64_t this_saving_seq = ++saving_sequence_;
 
-  task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
+  task_type_trait::task_type self_task(task_manager::task_t::this_task());
   if (!self_task) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
   }
@@ -537,7 +537,7 @@ void router_object_base::unset_timer_ref() {
 }
 
 rpc::result_code_type router_object_base::await_io_schedule_order_task(rpc::context &ctx,
-                                                                       task_manager::task_ptr_t &self_task) {
+                                                                       task_type_trait::task_type &self_task) {
   if (io_schedule_order_.empty()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }

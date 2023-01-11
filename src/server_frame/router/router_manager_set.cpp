@@ -507,7 +507,7 @@ bool router_manager_set::mark_fast_save(router_manager_base *mgr, const std::sha
 }
 
 void router_manager_set::add_io_schedule_order_task(const std::shared_ptr<router_object_base> &obj,
-                                                    const task_manager::task_ptr_t &task) {
+                                                    const task_type_trait::task_type &task) {
   if (!task || !obj) {
     return;
   }

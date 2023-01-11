@@ -37,8 +37,8 @@ class rpc_lru_cache_map {
   enum { RPC_LRU_CACHE_MAP_DEFAULT_RETRY_TIMES = 3 };
 
   struct value_cache_type {
-    task_manager::task_ptr_t pulling_task;
-    task_manager::task_ptr_t saving_task;
+    task_type_trait::task_type pulling_task;
+    task_type_trait::task_type saving_task;
     key_type data_key;
     int64_t data_version;
     time_t last_visit_timepoint;
@@ -178,7 +178,7 @@ class rpc_lru_cache_map {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
     }
 
-    task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
+    task_type_trait::task_type self_task(task_manager::task_t::this_task());
     out = res.first->second;
     out->data_version = 0;
     out->last_visit_timepoint = util::time::time_utility::get_now();
@@ -270,7 +270,7 @@ class rpc_lru_cache_map {
         break;
       }
 
-      task_manager::task_ptr_t self_task(task_manager::task_t::this_task());
+      task_type_trait::task_type self_task(task_manager::task_t::this_task());
       if (inout->saving_task && inout->saving_task != self_task) {
         if (inout->saving_task->is_exiting()) {
           // fallback, clear data, 理论上不会走到这个流程，前面就是reset掉

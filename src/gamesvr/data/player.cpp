@@ -52,7 +52,7 @@ void player::internal_flag_guard_t::reset() {
   flag_ = internal_flag::EN_IFT_FEATURE_INVALID;
 }
 
-player::task_queue_node::task_queue_node(const task_manager::task_ptr_t &t) : related_task(t), is_waiting(false) {}
+player::task_queue_node::task_queue_node(const task_type_trait::task_type &t) : related_task(t), is_waiting(false) {}
 
 player::task_queue_lock_guard::task_queue_lock_guard(player &user)
     : lock_target_(&user), is_exiting_(false), queue_iter_(user.task_lock_queue_.end()) {

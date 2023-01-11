@@ -196,10 +196,10 @@ struct unique_id_key_t {
 };
 
 struct unique_id_value_t {
-  task_manager::task_ptr_t alloc_task;
+  task_type_trait::task_type alloc_task;
   util::lock::atomic_int_type<int64_t> unique_id_index;
   util::lock::atomic_int_type<int64_t> unique_id_base;
-  std::list<task_manager::task_ptr_t> wake_tasks;
+  std::list<task_type_trait::task_type> wake_tasks;
 
   unique_id_value_t() noexcept : alloc_task{nullptr}, unique_id_index{0}, unique_id_base{0} {}
 
@@ -258,7 +258,7 @@ struct unique_id_container_waker {
     return 0;
   }
 
-  static rpc::result_void_type insert_into_pool(unique_id_value_t &pool, task_manager::task_ptr_t task) {
+  static rpc::result_void_type insert_into_pool(unique_id_value_t &pool, task_type_trait::task_type task) {
     // Append to wake list and then custom_wait to switch out
     auto iter = pool.wake_tasks.insert(pool.wake_tasks.end(), task);
     RPC_AWAIT_IGNORE_RESULT(rpc::custom_wait(reinterpret_cast<const void *>(&pool), nullptr, task->get_id()));

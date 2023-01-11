@@ -240,9 +240,9 @@ int task_manager::tick(time_t sec, int nsec) {
   return 0;
 }
 
-task_manager::task_ptr_t task_manager::get_task(id_t task_id) {
+task_type_trait::task_type task_manager::get_task(id_t task_id) {
   if (!native_mgr_) {
-    return task_manager::task_ptr_t();
+    return task_type_trait::task_type();
   }
 
   if (stack_pool_) {
