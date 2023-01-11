@@ -448,16 +448,20 @@ result_code_type custom_wait(const void *type_address, void **received, uint64_t
   return detail::wait(received, reinterpret_cast<uintptr_t>(type_address), check_sequence);
 }
 
-int32_t custom_resume(task_type_trait::internal_task_type &task, const void *type_address, uint64_t sequence,
+int32_t custom_resume(const task_type_trait::task_type &task, const void *type_address, uint64_t sequence,
                       void *received) {
+  if (task_type_trait::empty(task)) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+
   dispatcher_resume_data_t resume_data = dispatcher_make_default<dispatcher_resume_data_t>();
   resume_data.message.msg_type = reinterpret_cast<uintptr_t>(type_address);
   resume_data.message.msg_addr = received;
   resume_data.sequence = sequence;
 
-  int res = task.resume(&resume_data);
+  int res = task->resume(&resume_data);
   if (res < 0) {
-    FWLOGERROR("resume task {} failed, res: {}.", task.get_id(), res);
+    FWLOGERROR("resume task {} failed, res: {}.", task_type_trait::get_task_id(task), res);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
   }
 

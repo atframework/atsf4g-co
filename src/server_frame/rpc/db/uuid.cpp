@@ -245,7 +245,7 @@ struct unique_id_container_waker {
       auto wake_task = *iter->second.wake_tasks.begin();
       if (wake_task && !wake_task->is_exiting()) {
         // iter will be erased in task
-        rpc::custom_resume(*wake_task, reinterpret_cast<const void *>(&iter->second), wake_task->get_id(), nullptr);
+        rpc::custom_resume(wake_task, reinterpret_cast<const void *>(&iter->second), wake_task->get_id(), nullptr);
       } else {
         // This should not be called
         if (wake_task) {

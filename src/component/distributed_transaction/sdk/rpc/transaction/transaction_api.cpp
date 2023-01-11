@@ -406,11 +406,8 @@ rpc::result_code_type initialize_new_transaction(rpc::context& ctx,
 rpc::result_code_type query_transaction(rpc::context& ctx,
                                         const atframework::distributed_system::transaction_metadata& metadata,
                                         atframework::distributed_system::transaction_blob_storage& out) {
-  task_manager::task_t* task = task_manager::task_t::this_task();
-  if (!task) {
-    FWLOGERROR("{} must be called in a task(transaction_uuid={})", __FUNCTION__, metadata.transaction_uuid());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("this function must be called in a task(transaction_uuid={})",
+                                       metadata.transaction_uuid());
 
   rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionQueryReq> req_body(ctx);
   rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionQueryRsp> rsp_body(ctx);
@@ -447,11 +444,8 @@ rpc::result_code_type query_transaction(rpc::context& ctx,
 
 rpc::result_code_type create_transaction(rpc::context& ctx,
                                          atframework::distributed_system::transaction_blob_storage& inout) {
-  task_manager::task_t* task = task_manager::task_t::this_task();
-  if (!task) {
-    FWLOGERROR("{} must be called in a task(transaction_uuid={})", __FUNCTION__, inout.metadata().transaction_uuid());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("this function must be called in a task(transaction_uuid={})",
+                                       inout.metadata().transaction_uuid());
 
   if (inout.configure().resolve_max_times() == 0 ||
       inout.metadata().status() != atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
@@ -500,11 +494,8 @@ rpc::result_code_type create_transaction(rpc::context& ctx,
 
 rpc::result_code_type commit_transaction(rpc::context& ctx,
                                          atframework::distributed_system::transaction_metadata& inout) {
-  task_manager::task_t* task = task_manager::task_t::this_task();
-  if (!task) {
-    FWLOGERROR("{} must be called in a task(transaction_uuid={})", __FUNCTION__, inout.transaction_uuid());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("this function must be called in a task(transaction_uuid={})",
+                                       inout.transaction_uuid());
 
   rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionCommitReq> req_body(ctx);
   rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionCommitRsp> rsp_body(ctx);
@@ -550,11 +541,8 @@ rpc::result_code_type commit_transaction(rpc::context& ctx,
 
 rpc::result_code_type reject_transaction(rpc::context& ctx,
                                          atframework::distributed_system::transaction_metadata& inout) {
-  task_manager::task_t* task = task_manager::task_t::this_task();
-  if (!task) {
-    FWLOGERROR("{} must be called in a task(transaction_uuid={})", __FUNCTION__, inout.transaction_uuid());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("this function must be called in a task(transaction_uuid={})",
+                                       inout.transaction_uuid());
 
   rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionRejectReq> req_body(ctx);
   rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionRejectRsp> rsp_body(ctx);
@@ -628,11 +616,8 @@ rpc::result_code_type remove_transaction_no_wait(
 rpc::result_code_type remove_transaction(rpc::context& ctx,
                                          const atframework::distributed_system::transaction_metadata& metadata,
                                          bool no_wait) {
-  task_manager::task_t* task = task_manager::task_t::this_task();
-  if (!task) {
-    FWLOGERROR("{} must be called in a task(transaction_uuid={})", __FUNCTION__, metadata.transaction_uuid());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("this function must be called in a task(transaction_uuid={})",
+                                       metadata.transaction_uuid());
 
   rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionRemoveReq> req_body(ctx);
   rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionRemoveRsp> rsp_body(ctx);
@@ -674,12 +659,8 @@ rpc::result_code_type remove_transaction(rpc::context& ctx,
 
 rpc::result_code_type commit_participator(rpc::context& ctx, const std::string& participator_key,
                                           atframework::distributed_system::transaction_metadata& inout) {
-  task_manager::task_t* task = task_manager::task_t::this_task();
-  if (!task) {
-    FWLOGERROR("{} must be called in a task(transaction_uuid={}, participator={})", __FUNCTION__,
-               inout.transaction_uuid(), participator_key);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("this function must be called in a task(transaction_uuid={}, participator={})",
+                                       inout.transaction_uuid(), participator_key);
 
   rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionCommitParticipatorReq> req_body(
       ctx);
@@ -729,12 +710,8 @@ rpc::result_code_type commit_participator(rpc::context& ctx, const std::string& 
 
 rpc::result_code_type reject_participator(rpc::context& ctx, const std::string& participator_key,
                                           atframework::distributed_system::transaction_metadata& inout) {
-  task_manager::task_t* task = task_manager::task_t::this_task();
-  if (!task) {
-    FWLOGERROR("{} must be called in a task(transaction_uuid={}, participator={})", __FUNCTION__,
-               inout.transaction_uuid(), participator_key);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("this function must be called in a task(transaction_uuid={}, participator={})",
+                                       inout.transaction_uuid(), participator_key);
 
   rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionRejectParticipatorReq> req_body(
       ctx);

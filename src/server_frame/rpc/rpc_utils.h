@@ -285,6 +285,6 @@ result_code_type custom_wait(const void *type_address, void **received, uint64_t
  * @param received this will be assigned received in custom_wait
  * @return future of 0 or error code
  */
-int32_t custom_resume(task_type_trait::internal_task_type &task, const void *type_address, uint64_t sequence,
+int32_t custom_resume(const task_type_trait::task_type &task, const void *type_address, uint64_t sequence,
                       void *received);
 }  // namespace rpc

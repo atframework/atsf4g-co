@@ -14,11 +14,7 @@ namespace rpc {
 namespace dns {
 
 rpc::result_code_type lookup(rpc::context& ctx, gsl::string_view domain, std::vector<address_record>& output) {
-  task_manager::task_t* task = task_manager::task_t::this_task();
-  if (!task) {
-    FWLOGERROR("rpc {} must be called in a task", "rpc::dns::lookup");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("rpc {} must be called in a task", "rpc::dns::lookup");
 
   rpc::context child_ctx(ctx);
   rpc::context::tracer tracer;
@@ -32,7 +28,7 @@ rpc::result_code_type lookup(rpc::context& ctx, gsl::string_view domain, std::ve
 
   uint64_t sequence = ss_msg_dispatcher::me()->allocate_sequence();
 
-  int32_t ret = ss_msg_dispatcher::me()->send_dns_lookup(domain, sequence, task->get_id());
+  int32_t ret = ss_msg_dispatcher::me()->send_dns_lookup(domain, sequence, ctx.get_task_context().task_id);
   if (ret < 0) {
     RPC_RETURN_CODE(ret);
   }

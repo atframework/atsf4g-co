@@ -456,7 +456,7 @@ void ss_msg_dispatcher::dns_lookup_callback(uv_getaddrinfo_t *req, int status, s
     if (!task_manager::is_instance_destroyed()) {
       auto task_ptr = task_manager::me()->get_task((*lifetime_ptr)->task_id);
       if (task_ptr) {
-        rpc::custom_resume(*task_ptr, (*lifetime_ptr)->rpc_type_address, (*lifetime_ptr)->rpc_sequence,
+        rpc::custom_resume(task_ptr, (*lifetime_ptr)->rpc_type_address, (*lifetime_ptr)->rpc_sequence,
                            reinterpret_cast<void *>(&records));
       }
     }

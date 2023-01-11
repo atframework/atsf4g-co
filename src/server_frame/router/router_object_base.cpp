@@ -288,7 +288,7 @@ void router_object_base::wakeup_io_task_awaiter() {
     task_type_trait::task_type wake_task = io_task_awaiter_.front();
     if (wake_task && !wake_task->is_exiting()) {
       // iter will be erased in task
-      rpc::custom_resume(*wake_task, reinterpret_cast<const void *>(&io_task_awaiter_), wake_task->get_id(), nullptr);
+      rpc::custom_resume(wake_task, reinterpret_cast<const void *>(&io_task_awaiter_), wake_task->get_id(), nullptr);
     } else {
       // This should not be called
       if (wake_task) {

@@ -34,6 +34,18 @@ struct task_type_trait {
 
   inline static bool empty(const task_type& task) noexcept { return !task.get_context(); }
 
+  inline static int32_t get_result(const task_type& task) noexcept {
+    if (task.get_context()) {
+      auto data_ptr = task.get_context()->data();
+      if (nullptr == data_ptr) {
+        return 0;
+      }
+      return *data_ptr;
+    }
+
+    return 0;
+  }
+
   template <class TVALUE, class TERROR_TRANSFORM>
   inline static bool is_exiting(const copp::callable_future<TVALUE, TERROR_TRANSFORM>& future) noexcept {
     return future.get_status() >= task_type_trait::task_type::task_status_type::kDone || future.is_ready();
@@ -56,7 +68,7 @@ struct task_type_trait {
 
   template <class TVALUE, class TPRIVATE_DATA, class TERROR_TRANSFORM>
   inline static bool is_exiting(const cotask::task_future<TVALUE, TPRIVATE_DATA, TERROR_TRANSFORM>& task) noexcept {
-    return task.is_exiting();
+    return empty(task) || task.is_exiting();
   }
 
   template <class TVALUE, class TPRIVATE_DATA, class TERROR_TRANSFORM>
@@ -113,6 +125,14 @@ struct task_type_trait {
   inline static void reset_task(task_type& task) noexcept { task.reset(); }
 
   inline static bool empty(const task_type& task) noexcept { return !task; }
+
+  inline static int32_t get_result(const task_type& task) noexcept {
+    if (!task) {
+      return 0;
+    }
+
+    return task->get_ret_code();
+  }
 
   inline static bool is_exiting(const task_type& task) noexcept {
     if (!task) {

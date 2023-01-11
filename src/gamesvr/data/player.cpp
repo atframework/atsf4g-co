@@ -109,7 +109,7 @@ player::task_queue_lock_guard::~task_queue_lock_guard() {
 
     // 如果下一个任务在等待解锁，则直接解锁。否则可能下一个任务已经解锁（timeout或被killed）但在等待其他RPC
     if (lock_target_->task_lock_queue_.front().is_waiting) {
-      rpc::custom_resume(*related_task, reinterpret_cast<const void *>(&lock_target_->task_lock_queue_),
+      rpc::custom_resume(related_task, reinterpret_cast<const void *>(&lock_target_->task_lock_queue_),
                          related_task->get_id(), nullptr);
     }
     break;
