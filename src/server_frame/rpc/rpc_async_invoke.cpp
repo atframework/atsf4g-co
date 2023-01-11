@@ -65,81 +65,83 @@ async_invoke_result async_invoke(gsl::string_view caller_name, gsl::string_view 
   return async_invoke(ctx, name, std::move(fn), timeout);
 }
 
-result_code_type wait_tasks(const std::vector<task_type_trait::task_type> &tasks) {
-  task_type_trait::task_type self_task(task_manager::task_t::this_task());
-  if (!self_task) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
+result_code_type wait_tasks(context &ctx, const std::vector<task_type_trait::task_type> &tasks) {
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{} should be called in a task", "rpc::wait_tasks");
 
   while (true) {
-    if (self_task->is_timeout()) {
+    if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
-    } else if (self_task->is_faulted()) {
+    } else if (TASK_COMPAT_CHECK_IS_FAULT()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
-    } else if (self_task->is_canceled()) {
+    } else if (TASK_COMPAT_CHECK_IS_CANCEL()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
-    } else if (self_task->is_exiting()) {
+    } else if (TASK_COMPAT_CHECK_IS_EXITING()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING);
     }
 
-    task_type_trait::task_type last_task;
+    const task_type_trait::task_type *last_task = nullptr;
     for (auto &task : tasks) {
-      if (!task || task == self_task) {
+      if (task_type_trait::empty(task) || task_type_trait::get_task_id(task) == ctx.get_task_context().task_id) {
         continue;
       }
 
-      if (!task) {
+      if (task_type_trait::empty(task)) {
         continue;
       }
 
-      if (task->is_exiting()) {
+      if (task_type_trait::is_exiting(task)) {
         continue;
       }
 
-      last_task = task;
+      last_task = &task;
     }
 
-    if (!last_task) {
+    if (last_task == nullptr || task_type_trait::empty(*last_task)) {
       break;
     }
 
-    self_task->await_task(last_task);
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+    co_await *last_task;
+#else
+    task_type_trait::internal_task_type::this_task()->await_task(task_type_trait::task_type{*last_task});
+#endif
   }
 
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-result_code_type wait_task(const task_type_trait::task_type &other_task) {
-  task_type_trait::task_type self_task(task_manager::task_t::this_task());
-  if (!self_task) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
+result_code_type wait_task(context &ctx, const task_type_trait::task_type &other_task) {
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{} should be called in a task", "rpc::wait_task");
 
   while (true) {
     // other_task mey be changed after await_task is returned
-    if (!other_task) {
+    if (task_type_trait::empty(other_task)) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
 
-    if (other_task == self_task) {
+    if (task_type_trait::get_task_id(other_task) == ctx.get_task_context().task_id) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
 
-    if (self_task->is_timeout()) {
+    if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
-    } else if (self_task->is_faulted()) {
+    } else if (TASK_COMPAT_CHECK_IS_FAULT()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
-    } else if (self_task->is_canceled()) {
+    } else if (TASK_COMPAT_CHECK_IS_CANCEL()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
-    } else if (self_task->is_exiting()) {
+    } else if (TASK_COMPAT_CHECK_IS_EXITING()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING);
     }
 
-    if (other_task->is_exiting()) {
+    if (task_type_trait::is_exiting(other_task)) {
       break;
     }
 
-    self_task->await_task(other_task);
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+    co_await other_task;
+#else
+    task_type_trait::internal_task_type::this_task()->await_task(other_task);
+#endif
   }
 
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);

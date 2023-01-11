@@ -221,22 +221,11 @@ TRESULT _ignore_result(EXPLICIT_UNUSED_ATTR TRESULT&& result) {
 #  define RPC_RETURN_TYPE(...) co_return (__VA_ARGS__)
 #  define RPC_RETURN_VOID co_return
 
-// Compatibility
-// C++20 coroutine use return type to check if it's in a coroutine, just do nothing here
-#  define RPC_CHECK_TASK_ACTION_RETURN(...)
-
 #else
 #  define RPC_AWAIT_IGNORE_RESULT(x) (::rpc::details::_ignore_result(x))
 #  define RPC_AWAIT_TYPE_RESULT(...) ::rpc::details::_get_rpc_result_value(__VA_ARGS__)
 #  define RPC_RETURN_VOID return ::rpc::result_void_type(true)
 #  define RPC_RETURN_TYPE(...) return ::rpc::details::_make_rpc_result_guard(__VA_ARGS__)
-
-// Compatibility
-#  define RPC_CHECK_TASK_ACTION_RETURN(...)                            \
-    if (nullptr == task_type_trait::internal_task_type::this_task()) { \
-      FWLOGERROR(__VA_ARGS__);                                         \
-      RPC_RETURN_TYPE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);  \
-    }
 
 #endif
 

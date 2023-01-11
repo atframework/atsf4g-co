@@ -314,7 +314,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
 %   endif
 
 %   if rpc_is_router_api or not rpc_is_stream_mode:
-  RPC_CHECK_TASK_ACTION_RETURN("rpc {} must be called in a task",
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("rpc {} must be called in a task",
     "${rpc.get_full_name()}")
 %   endif
 

@@ -139,7 +139,7 @@ task_action_router_close_manager_set::result_type task_action_router_close_manag
     }
 
     if (need_wait) {
-      auto wait_result = RPC_AWAIT_CODE_RESULT(rpc::wait_tasks(pending_action_batch_tasks));
+      auto wait_result = RPC_AWAIT_CODE_RESULT(rpc::wait_tasks(get_shared_context(), pending_action_batch_tasks));
       pending_action_batch_tasks.clear();
       if (wait_result < 0) {
         FWLOGERROR("Wait sub tasks to remove_object failed, result: {}({})", wait_result,
@@ -149,7 +149,7 @@ task_action_router_close_manager_set::result_type task_action_router_close_manag
   }
 
   if (!pending_action_batch_tasks.empty()) {
-    auto wait_result = RPC_AWAIT_CODE_RESULT(rpc::wait_tasks(pending_action_batch_tasks));
+    auto wait_result = RPC_AWAIT_CODE_RESULT(rpc::wait_tasks(get_shared_context(), pending_action_batch_tasks));
     pending_action_batch_tasks.clear();
     if (wait_result < 0) {
       FWLOGERROR("Wait sub tasks to remove_object failed, result: {}({})", wait_result,

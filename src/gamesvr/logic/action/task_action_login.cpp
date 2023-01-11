@@ -303,7 +303,7 @@ rpc::result_code_type task_action_login::replace_session(std::shared_ptr<player>
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type task_action_login::await_io_task(rpc::context&, std::shared_ptr<player> user) {
+rpc::result_code_type task_action_login::await_io_task(rpc::context& ctx, std::shared_ptr<player> user) {
   router_player_cache::key_t router_key(router_player_manager::me()->get_type_id(), user->get_zone_id(),
                                         user->get_user_id());
   router_player_cache::ptr_t router_cache = router_player_manager::me()->get_cache(router_key);
@@ -325,5 +325,5 @@ rpc::result_code_type task_action_login::await_io_task(rpc::context&, std::share
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
 
-  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::wait_task(last_pull_object_task)));
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, last_pull_object_task)));
 }

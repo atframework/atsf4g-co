@@ -59,8 +59,8 @@ EXPLICIT_NODISCARD_ATTR inline async_invoke_result async_invoke(
                       std::chrono::duration_cast<std::chrono::system_clock::duration>(timeout));
 }
 
-EXPLICIT_NODISCARD_ATTR result_code_type wait_tasks(const std::vector<task_type_trait::task_type> &tasks);
+EXPLICIT_NODISCARD_ATTR result_code_type wait_tasks(context &ctx, const std::vector<task_type_trait::task_type> &tasks);
 
-EXPLICIT_NODISCARD_ATTR result_code_type wait_task(const task_type_trait::task_type &other_task);
+EXPLICIT_NODISCARD_ATTR result_code_type wait_task(context &ctx, const task_type_trait::task_type &other_task);
 
 }  // namespace rpc

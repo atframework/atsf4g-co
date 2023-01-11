@@ -41,9 +41,6 @@ task_action_participator_resolve_transaction::result_type task_action_participat
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  auto this_task = task_manager::task_t::this_task();
-  assert(this_task);
-
   bool is_writable = false;
   RPC_AWAIT_IGNORE_RESULT(param_.participantor->check_writable(get_shared_context(), is_writable));
   if (!is_writable) {
@@ -66,7 +63,7 @@ task_action_participator_resolve_transaction::result_type task_action_participat
       operation_name = "reject";
     }
 
-    if (this_task->is_exiting()) {
+    if (TASK_COMPAT_CHECK_IS_EXITING()) {
       FWLOGERROR("participator {} try to {} transaction {} failed, exiting. {}({})",
                  param_.participantor->get_participator_key(), operation_name,
                  trans_data->metadata().transaction_uuid(), res, protobuf_mini_dumper_get_error_msg(res));
@@ -113,8 +110,8 @@ int task_action_participator_resolve_transaction::on_success() {
     FWLOGINFO("participator {} do task_action_participator_resolve_transaction success",
               param_.participantor->get_participator_key());
 
-    auto this_task = task_manager::task_t::this_task();
-    if (param_.participantor->auto_resolve_transaction_task_ == this_task) {
+    if (task_type_trait::get_task_id(param_.participantor->auto_resolve_transaction_task_) ==
+        get_shared_context().get_task_context().task_id) {
       param_.participantor->auto_resolve_transaction_task_.reset();
     }
 
@@ -132,8 +129,8 @@ int task_action_participator_resolve_transaction::on_failed() {
     FWLOGINFO("participator {} do task_action_participator_resolve_transaction success",
               param_.participantor->get_participator_key());
 
-    auto this_task = task_manager::task_t::this_task();
-    if (param_.participantor->auto_resolve_transaction_task_ == this_task) {
+    if (task_type_trait::get_task_id(param_.participantor->auto_resolve_transaction_task_) ==
+        get_shared_context().get_task_context().task_id) {
       param_.participantor->auto_resolve_transaction_task_.reset();
     }
     auto& vtable = param_.participantor->vtable_;

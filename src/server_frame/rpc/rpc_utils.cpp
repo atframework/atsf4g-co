@@ -39,6 +39,9 @@ namespace rpc {
 
 context::context() noexcept {
   trace_context_.caller_mode = parent_mode::kParent;
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+  task_context_.task_id = 0;
+#else
   task_manager::task_t *task = task_manager::task_t::this_task();
   if (task) {
     rpc::context *parent = task_manager::get_shared_context(*task);
@@ -50,6 +53,7 @@ context::context() noexcept {
   } else {
     task_context_.task_id = 0;
   }
+#endif
 }
 
 context::context(context &&other) noexcept {

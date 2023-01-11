@@ -138,7 +138,7 @@ rpc::result_code_type user_async_jobs_manager::wait_for_async_task(rpc::context&
     RPC_RETURN_CODE(0);
   }
 
-  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::wait_task(remote_command_patch_task_)));
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, remote_command_patch_task_)));
 }
 
 void user_async_jobs_manager::reset_async_jobs_protect() {

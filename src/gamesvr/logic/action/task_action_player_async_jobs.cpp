@@ -37,7 +37,7 @@ task_action_player_async_jobs::result_type task_action_player_async_jobs::operat
   // 不成功不应该影响逻辑和数据，而是仅影响某些不重要的缓存滞后。
 
   if (param_.after && !param_.after->is_exiting()) {
-    int ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(param_.after));
+    int ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(get_shared_context(), param_.after));
     if (ret < 0) {
       TASK_ACTION_RETURN_CODE(ret);
     }

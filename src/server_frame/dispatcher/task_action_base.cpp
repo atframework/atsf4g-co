@@ -178,7 +178,7 @@ int task_action_base::operator()(void *priv_data) {
       send_response();
     }
 
-    _notify_finished(*task);
+    _notify_finished();
     return tracer.return_code(result_);
   }
   // 响应OnSuccess(这时候任务的status还是running)
@@ -201,7 +201,7 @@ int task_action_base::operator()(void *priv_data) {
       send_response();
     }
 
-    _notify_finished(*task);
+    _notify_finished();
     return tracer.return_code(ret);
   }
 
@@ -260,7 +260,7 @@ int task_action_base::operator()(void *priv_data) {
     send_response();
   }
 
-  _notify_finished(*task);
+  _notify_finished();
 
   if (result_ >= 0) {
     ret = result_;
@@ -294,7 +294,7 @@ void task_action_base::set_caller_context(rpc::context &ctx) {
   get_shared_context().set_parent_context(ctx, rpc::context::inherit_options{get_caller_mode()});
 }
 
-void task_action_base::_notify_finished(cotask::impl::task_impl &task_inst) {
+void task_action_base::_notify_finished() {
   // Additional trace data
   auto trace_span = shared_context_.get_trace_span();
   if (trace_span) {

@@ -166,7 +166,11 @@ class task_action_result_type {
   value_type result_code_;
 };
 
-class task_action_base : public cotask::impl::task_action_impl {
+class task_action_base
+#if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
+    : public cotask::impl::task_action_impl
+#endif
+{
  public:
   using result_type = task_action_result_type;
   using on_finished_callback_fn_t = std::function<void(const task_action_base &)>;
@@ -304,7 +308,7 @@ class task_action_base : public cotask::impl::task_action_impl {
   void set_caller_context(rpc::context &ctx);
 
  private:
-  void _notify_finished(cotask::impl::task_impl &task_inst);
+  void _notify_finished();
 
  private:
   uint64_t user_id_;
