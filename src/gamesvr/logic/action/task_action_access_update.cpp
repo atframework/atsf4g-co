@@ -21,7 +21,7 @@
 
 #include <data/player.h>
 
-task_action_access_update::task_action_access_update(dispatcher_start_data_t&& param)
+task_action_access_update::task_action_access_update(dispatcher_start_data_type&& param)
     : base_type(COPP_MACRO_STD_MOVE(param)) {}
 task_action_access_update::~task_action_access_update() {}
 

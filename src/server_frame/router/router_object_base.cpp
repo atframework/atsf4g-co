@@ -288,7 +288,11 @@ void router_object_base::wakeup_io_task_awaiter() {
     task_type_trait::task_type wake_task = io_task_awaiter_.front();
     if (wake_task && !wake_task->is_exiting()) {
       // iter will be erased in task
-      rpc::custom_resume(wake_task, reinterpret_cast<const void *>(&io_task_awaiter_), wake_task->get_id(), nullptr);
+      dispatcher_resume_data_type callback_data = dispatcher_make_default<dispatcher_resume_data_type>();
+      callback_data.message.msg_type = reinterpret_cast<uintptr_t>(reinterpret_cast<const void *>(&io_task_awaiter_));
+      callback_data.sequence = wake_task->get_id();
+
+      rpc::custom_resume(wake_task, callback_data);
     } else {
       // This should not be called
       if (wake_task) {
@@ -315,8 +319,14 @@ rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx, task_
     FWLOGDEBUG("task {} start to await for task {} by router object/cache {}:{}:{}", self_task->get_id(),
                io_task_->get_id(), get_key().type_id, get_key().zone_id, get_key().object_id);
     auto awaiter_iter = io_task_awaiter_.insert(io_task_awaiter_.end(), self_task);
+
+    dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+    await_options.sequence = self_task->get_id();
+    await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(),
+                                                          std::chrono::seconds{6});
+
     RPC_AWAIT_IGNORE_RESULT(
-        rpc::custom_wait(reinterpret_cast<const void *>(&io_task_awaiter_), nullptr, self_task->get_id()));
+        rpc::custom_wait(reinterpret_cast<const void *>(&io_task_awaiter_), nullptr, await_options));
     io_task_awaiter_.erase(awaiter_iter);
   }
 

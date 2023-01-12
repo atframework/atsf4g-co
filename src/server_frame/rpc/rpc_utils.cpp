@@ -208,7 +208,7 @@ void context::set_current_service(atapp::app &app, const PROJECT_NAMESPACE_ID::c
 void context::set_task_context(const task_context_data &task_ctx) noexcept { task_context_ = task_ctx; }
 
 namespace detail {
-static result_code_type wait(void **output_msg, uintptr_t check_type, uint64_t check_sequence) {
+static result_code_type wait(void **output_msg, uintptr_t check_type, const dispatcher_await_options &options) {
   if (nullptr != output_msg) {
     *output_msg = nullptr;
   }
@@ -235,7 +235,7 @@ static result_code_type wait(void **output_msg, uintptr_t check_type, uint64_t c
     void *result = nullptr;
     task->yield(&result);
 
-    dispatcher_resume_data_t *resume_data = reinterpret_cast<dispatcher_resume_data_t *>(result);
+    dispatcher_resume_data_type *resume_data = reinterpret_cast<dispatcher_resume_data_type *>(result);
 
     // 协程 swap in
 
@@ -265,9 +265,9 @@ static result_code_type wait(void **output_msg, uintptr_t check_type, uint64_t c
       continue;
     }
 
-    if (0 != check_sequence && 0 != resume_data->sequence && check_sequence != resume_data->sequence) {
+    if (0 != options.sequence && 0 != resume_data->sequence && options.sequence != resume_data->sequence) {
       FWLOGINFO("task {} resume and expect message sequence {:#x} but real is {:#x}, ignore this message",
-                task->get_id(), check_sequence, resume_data->sequence);
+                task->get_id(), options.sequence, resume_data->sequence);
       is_continue = true;
       continue;
     }
@@ -306,7 +306,7 @@ static inline void wait_swap_message(TMSG &output, void *input) {
 }
 
 template <typename TMSG>
-static result_code_type wait(uintptr_t check_type, const std::unordered_set<uint64_t> &waiters,
+static result_code_type wait(uintptr_t check_type, const std::unordered_set<dispatcher_await_options> &waiters,
                              std::unordered_map<uint64_t, TMSG> &received, size_t wakeup_count) {
   task_manager::task_t *task = task_manager::task_t::this_task();
   if (!task) {
@@ -326,6 +326,7 @@ static result_code_type wait(uintptr_t check_type, const std::unordered_set<uint
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
   }
 
+  dispatcher_await_options one_wait_option = dispatcher_make_default<dispatcher_await_options>();
   std::unordered_set<uint64_t> received_sequences;
   received_sequences.reserve(waiters.size());
   received.reserve(waiters.size());
@@ -336,7 +337,7 @@ static result_code_type wait(uintptr_t check_type, const std::unordered_set<uint
     void *result = nullptr;
     task->yield(&result);
 
-    dispatcher_resume_data_t *resume_data = reinterpret_cast<dispatcher_resume_data_t *>(result);
+    dispatcher_resume_data_type *resume_data = reinterpret_cast<dispatcher_resume_data_type *>(result);
 
     // 协程 swap in
 
@@ -364,7 +365,8 @@ static result_code_type wait(uintptr_t check_type, const std::unordered_set<uint
       continue;
     }
 
-    auto rsp_iter = waiters.find(resume_data->sequence);
+    one_wait_option.sequence = resume_data->sequence;
+    auto rsp_iter = waiters.find(one_wait_option);
     if (rsp_iter == waiters.end()) {
       FWLOGINFO("task {} resume and with message sequence {} but not found in waiters, ignore this message",
                 task->get_id(), resume_data->sequence);
@@ -392,7 +394,7 @@ result_code_type wait(context &ctx, std::chrono::system_clock::duration timeout)
   }
   rpc::context child_ctx(ctx);
   rpc::context::tracer tracer;
-  ::rpc::context::trace_option trace_option;
+  rpc::context::trace_option trace_option;
   trace_option.dispatcher = nullptr;
   trace_option.is_remote = false;
   trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -401,12 +403,16 @@ result_code_type wait(context &ctx, std::chrono::system_clock::duration timeout)
   logic_server_timer timer;
   mod->insert_timer(task->get_id(), timeout, timer);
 
-  return detail::wait(nullptr, timer.message_type, timer.sequence);
+  dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+  await_options.sequence = timer.sequence;
+  await_options.timeout = timeout;
+
+  return detail::wait(nullptr, timer.message_type, await_options);
 }
 
-result_code_type wait(atframework::SSMsg &msg, uint64_t check_sequence) {
+result_code_type wait(atframework::SSMsg &msg, const dispatcher_await_options &options) {
   void *result = nullptr;
-  int ret = RPC_AWAIT_CODE_RESULT(detail::wait(&result, ss_msg_dispatcher::me()->get_instance_ident(), check_sequence));
+  int ret = RPC_AWAIT_CODE_RESULT(detail::wait(&result, ss_msg_dispatcher::me()->get_instance_ident(), options));
   if (0 != ret) {
     RPC_RETURN_CODE(ret);
   }
@@ -418,9 +424,9 @@ result_code_type wait(atframework::SSMsg &msg, uint64_t check_sequence) {
   RPC_RETURN_CODE(msg.head().error_code());
 }
 
-result_code_type wait(PROJECT_NAMESPACE_ID::table_all_message &msg, uint64_t check_sequence) {
+result_code_type wait(PROJECT_NAMESPACE_ID::table_all_message &msg, const dispatcher_await_options &options) {
   void *result = nullptr;
-  int ret = RPC_AWAIT_CODE_RESULT(detail::wait(&result, db_msg_dispatcher::me()->get_instance_ident(), check_sequence));
+  int ret = RPC_AWAIT_CODE_RESULT(detail::wait(&result, db_msg_dispatcher::me()->get_instance_ident(), options));
   if (0 != ret) {
     RPC_RETURN_CODE(ret);
   }
@@ -432,32 +438,26 @@ result_code_type wait(PROJECT_NAMESPACE_ID::table_all_message &msg, uint64_t che
   RPC_RETURN_CODE(msg.error_code());
 }
 
-result_code_type wait(const std::unordered_set<uint64_t> &waiters,
+result_code_type wait(const std::unordered_set<dispatcher_await_options> &waiters,
                       std::unordered_map<uint64_t, atframework::SSMsg> &received, size_t wakeup_count) {
   return detail::wait(ss_msg_dispatcher::me()->get_instance_ident(), waiters, received,
                       0 == wakeup_count ? waiters.size() : wakeup_count);
 }
 
-result_code_type wait(const std::unordered_set<uint64_t> &waiters,
+result_code_type wait(const std::unordered_set<dispatcher_await_options> &waiters,
                       std::unordered_map<uint64_t, atframework::SSMsg *> &received, size_t wakeup_count) {
   return detail::wait(ss_msg_dispatcher::me()->get_instance_ident(), waiters, received,
                       0 == wakeup_count ? waiters.size() : wakeup_count);
 }
 
-result_code_type custom_wait(const void *type_address, void **received, uint64_t check_sequence) {
-  return detail::wait(received, reinterpret_cast<uintptr_t>(type_address), check_sequence);
+result_code_type custom_wait(const void *type_address, void **received, const dispatcher_await_options &options) {
+  return detail::wait(received, reinterpret_cast<uintptr_t>(type_address), options);
 }
 
-int32_t custom_resume(const task_type_trait::task_type &task, const void *type_address, uint64_t sequence,
-                      void *received) {
+int32_t custom_resume(const task_type_trait::task_type &task, dispatcher_resume_data_type &resume_data) {
   if (task_type_trait::empty(task)) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
-
-  dispatcher_resume_data_t resume_data = dispatcher_make_default<dispatcher_resume_data_t>();
-  resume_data.message.msg_type = reinterpret_cast<uintptr_t>(type_address);
-  resume_data.message.msg_addr = received;
-  resume_data.sequence = sequence;
 
   int res = task->resume(&resume_data);
   if (res < 0) {
@@ -466,6 +466,21 @@ int32_t custom_resume(const task_type_trait::task_type &task, const void *type_a
   }
 
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+}
+
+int32_t custom_resume(task_type_trait::id_type task_id, dispatcher_resume_data_type &resume_data) {
+  if (0 == task_id) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+
+  auto task_obj = task_manager::me()->get_task(task_id);
+  if (task_type_trait::empty(task_obj)) {
+    FWLOGWARNING("resume task {} for type={}, sequence={} but not found, maybe already timeout or killed.", task_id,
+                 resume_data.message.msg_addr, resume_data.sequence);
+    return 0;
+  }
+
+  return custom_resume(task_obj, resume_data);
 }
 
 }  // namespace rpc

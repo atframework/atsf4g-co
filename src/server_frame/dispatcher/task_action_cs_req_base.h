@@ -44,7 +44,7 @@ class task_action_cs_req_base : public task_action_req_base<atframework::CSMsg> 
   using base_type::operator();
 
  public:
-  explicit task_action_cs_req_base(dispatcher_start_data_t &&start_param);
+  explicit task_action_cs_req_base(dispatcher_start_data_type &&start_param);
   virtual ~task_action_cs_req_base();
 
   result_type hook_run() override;
@@ -104,7 +104,7 @@ class task_action_cs_rpc_base : public task_action_cs_req_base {
   using base_type::operator();
 
  public:
-  explicit task_action_cs_rpc_base(dispatcher_start_data_t &&start_param)
+  explicit task_action_cs_rpc_base(dispatcher_start_data_type &&start_param)
       : base_type(COPP_MACRO_STD_MOVE(start_param)),
         has_unpack_request_(false),
         has_pack_response_(false),

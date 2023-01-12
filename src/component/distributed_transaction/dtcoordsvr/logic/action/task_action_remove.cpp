@@ -22,7 +22,7 @@
 
 #include "logic/transaction_manager.h"
 
-task_action_remove::task_action_remove(dispatcher_start_data_t&& param) : base_type(COPP_MACRO_STD_MOVE(param)) {}
+task_action_remove::task_action_remove(dispatcher_start_data_type&& param) : base_type(COPP_MACRO_STD_MOVE(param)) {}
 task_action_remove::~task_action_remove() {}
 
 const char* task_action_remove::name() const { return "task_action_remove"; }

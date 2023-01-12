@@ -24,7 +24,7 @@
 #include "router/router_manager_base.h"
 #include "router/router_manager_set.h"
 
-task_action_router_update_sync::task_action_router_update_sync(dispatcher_start_data_t&& param)
+task_action_router_update_sync::task_action_router_update_sync(dispatcher_start_data_type&& param)
     : base_type(COPP_MACRO_STD_MOVE(param)) {}
 task_action_router_update_sync::~task_action_router_update_sync() {}
 

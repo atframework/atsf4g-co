@@ -86,14 +86,14 @@ dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_messa
       PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE == op_type) {
     ret.task_id = pick_msg_task_id(msg);
     if (ret.task_id > 0) {  // 如果是恢复任务则尝试切回协程任务
-      dispatcher_resume_data_t callback_data = dispatcher_make_default<dispatcher_resume_data_t>();
+      // 查找并恢复已有task
+      dispatcher_resume_data_type callback_data = dispatcher_make_default<dispatcher_resume_data_type>();
       callback_data.message = msg;
       callback_data.private_data = priv_data;
       callback_data.sequence = sequence;
       callback_data.context = &ctx;
 
-      // 查找并恢复已有task
-      ret.result_code = task_manager::me()->resume_task(ret.task_id, callback_data);
+      ret.result_code = rpc::custom_resume(ret.task_id, callback_data);
       return ret;
     }
 
@@ -105,7 +105,7 @@ dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_messa
     }
   }
 
-  dispatcher_start_data_t callback_data = dispatcher_make_default<dispatcher_start_data_t>();
+  dispatcher_start_data_type callback_data = dispatcher_make_default<dispatcher_start_data_type>();
   callback_data.message = msg;
   callback_data.private_data = priv_data;
   callback_data.context = &ctx;
@@ -154,27 +154,27 @@ dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_messa
 
 int32_t dispatcher_implement::on_send_message_failed(rpc::context &ctx, msg_raw_t &msg, int32_t error_code,
                                                      uint64_t sequence) {
-  dispatcher_resume_data_t callback_data = dispatcher_make_default<dispatcher_resume_data_t>();
-  callback_data.message = msg;
-  callback_data.sequence = sequence;
-  callback_data.context = &ctx;
-
   // msg->set_rpc_result(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_SEND_FAILED);
   uint64_t task_id = pick_msg_task_id(msg);
   if (task_id > 0) {  // 如果是恢复任务则尝试切回协程任务
     FWLOGERROR("dispatcher {} send data failed with error code = {}, try to resume task {}", name(), error_code,
                task_id);
     // 查找并恢复已有task
-    return task_manager::me()->resume_task(task_id, callback_data);
+    dispatcher_resume_data_type callback_data = dispatcher_make_default<dispatcher_resume_data_type>();
+    callback_data.message = msg;
+    callback_data.sequence = sequence;
+    callback_data.context = &ctx;
+
+    return rpc::custom_resume(task_id, callback_data);
   }
 
   FWLOGERROR("send data failed with error code = {}", error_code);
   return 0;
 }
 
-void dispatcher_implement::on_create_task_failed(dispatcher_start_data_t &, int32_t) {}
+void dispatcher_implement::on_create_task_failed(dispatcher_start_data_type &, int32_t) {}
 
-int dispatcher_implement::create_task(dispatcher_start_data_t &start_data, task_manager::id_t &task_id) {
+int dispatcher_implement::create_task(dispatcher_start_data_type &start_data, task_manager::id_t &task_id) {
   task_id = 0;
 
   msg_type_t msg_type_id = pick_msg_type_id(start_data.message);
@@ -206,7 +206,7 @@ int dispatcher_implement::create_task(dispatcher_start_data_t &start_data, task_
   return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
 }
 
-task_manager::actor_action_ptr_t dispatcher_implement::create_actor(dispatcher_start_data_t &start_data) {
+task_manager::actor_action_ptr_t dispatcher_implement::create_actor(dispatcher_start_data_type &start_data) {
   msg_type_t msg_type_id = pick_msg_type_id(start_data.message);
   const std::string &rpc_name = pick_rpc_name(start_data.message);
   if (0 == msg_type_id && rpc_name.empty()) {

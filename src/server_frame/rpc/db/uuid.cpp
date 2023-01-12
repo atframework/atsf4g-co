@@ -159,7 +159,12 @@ rpc_result<int64_t> generate_global_increase_id(rpc::context &ctx, uint32_t majo
 
   PROJECT_NAMESPACE_ID::table_all_message msg;
   // 协程操作
-  res = RPC_AWAIT_CODE_RESULT(rpc::wait(msg, rpc_sequence));
+  dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+  await_options.sequence = rpc_sequence;
+  await_options.timeout =
+      rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(), std::chrono::seconds{6});
+
+  res = RPC_AWAIT_CODE_RESULT(rpc::wait(msg, await_options));
   if (res < 0) {
     RPC_RETURN_TYPE(tracer.return_code(res));
   }
@@ -245,7 +250,11 @@ struct unique_id_container_waker {
       auto wake_task = *iter->second.wake_tasks.begin();
       if (wake_task && !wake_task->is_exiting()) {
         // iter will be erased in task
-        rpc::custom_resume(wake_task, reinterpret_cast<const void *>(&iter->second), wake_task->get_id(), nullptr);
+        dispatcher_resume_data_type callback_data = dispatcher_make_default<dispatcher_resume_data_type>();
+        callback_data.message.msg_type = reinterpret_cast<uintptr_t>(reinterpret_cast<const void *>(&iter->second));
+        callback_data.sequence = wake_task->get_id();
+
+        rpc::custom_resume(wake_task, callback_data);
       } else {
         // This should not be called
         if (wake_task) {
@@ -261,7 +270,13 @@ struct unique_id_container_waker {
   static rpc::result_void_type insert_into_pool(unique_id_value_t &pool, task_type_trait::task_type task) {
     // Append to wake list and then custom_wait to switch out
     auto iter = pool.wake_tasks.insert(pool.wake_tasks.end(), task);
-    RPC_AWAIT_IGNORE_RESULT(rpc::custom_wait(reinterpret_cast<const void *>(&pool), nullptr, task->get_id()));
+
+    dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+    await_options.sequence = task->get_id();
+    await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(),
+                                                          std::chrono::seconds{6});
+
+    RPC_AWAIT_IGNORE_RESULT(rpc::custom_wait(reinterpret_cast<const void *>(&pool), nullptr, await_options));
     pool.wake_tasks.erase(iter);
 
     RPC_RETURN_VOID;

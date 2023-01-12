@@ -18,7 +18,7 @@ class task_action_ping
   using task_action_cs_req_base::operator();
 
  public:
-  explicit task_action_ping(dispatcher_start_data_t&& param);
+  explicit task_action_ping(dispatcher_start_data_type&& param);
   ~task_action_ping();
 
   const char* name() const override;

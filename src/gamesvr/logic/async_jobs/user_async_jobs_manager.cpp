@@ -119,7 +119,7 @@ bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
   } else {
     remote_command_patch_task_ = task_manager::me()->get_task(tid);
 
-    dispatcher_start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
+    dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
 
     int res = task_manager::me()->start_task(tid, start_data);
     if (res < 0) {

@@ -30,7 +30,7 @@
 
 #include <memory>
 
-task_action_ping::task_action_ping(dispatcher_start_data_t&& param) : base_type(COPP_MACRO_STD_MOVE(param)) {}
+task_action_ping::task_action_ping(dispatcher_start_data_type&& param) : base_type(COPP_MACRO_STD_MOVE(param)) {}
 task_action_ping::~task_action_ping() {}
 
 const char* task_action_ping::name() const { return "task_action_ping"; }

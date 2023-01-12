@@ -19,7 +19,7 @@
 
 #include <data/player.h>
 
-task_action_player_get_info::task_action_player_get_info(dispatcher_start_data_t&& param)
+task_action_player_get_info::task_action_player_get_info(dispatcher_start_data_type&& param)
     : base_type(COPP_MACRO_STD_MOVE(param)) {}
 task_action_player_get_info::~task_action_player_get_info() {}
 

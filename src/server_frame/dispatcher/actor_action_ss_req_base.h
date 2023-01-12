@@ -36,7 +36,7 @@ class actor_action_ss_req_base : public actor_action_req_base<atframework::SSMsg
   using base_type::operator();
 
  public:
-  explicit actor_action_ss_req_base(dispatcher_start_data_t&& start_param);
+  explicit actor_action_ss_req_base(dispatcher_start_data_type&& start_param);
   virtual ~actor_action_ss_req_base();
 
   uint64_t get_request_bus_id() const;

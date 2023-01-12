@@ -263,7 +263,7 @@ static rpc::result_code_type invoke_replication_rpc_call(
     rpc::context::message_holder<TRequest>& req_body, rpc::context::message_holder<TResponse>& rsp_body,
     gsl::string_view action_name, TRpcFn&& rpc_fn,
     std::function<void(uint64_t, const atframework::SSMsg&)> on_receive_message_fn, bool no_wait = false) {
-  std::unordered_set<uint64_t> waiters;
+  std::unordered_set<dispatcher_await_options> waiters;
   std::unordered_map<uint64_t, atframework::SSMsg> received;
   size_t wakeup_count = metadata.replicate_read_count();
   size_t send_success_count = 0;
@@ -271,15 +271,15 @@ static rpc::result_code_type invoke_replication_rpc_call(
   waiters.reserve(static_cast<size_t>(metadata.replicate_node_server_id_size()));
 
   for (uint64_t target_server_id : metadata.replicate_node_server_id()) {
-    uint64_t waiter_sequence_id = 0;
-    int32_t res =
-        RPC_AWAIT_CODE_RESULT(rpc_fn(ctx, target_server_id, *req_body, *rsp_body, no_wait, &waiter_sequence_id));
+    dispatcher_await_options waiter_options = dispatcher_make_default<dispatcher_await_options>();
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc_fn(ctx, target_server_id, *req_body, *rsp_body, no_wait, &waiter_options));
     if (res < 0) {
       FWLOGERROR("Try to {} transaction {} from server {:#x} failed, res: {}({})", action_name,
                  metadata.transaction_uuid(), target_server_id, res, protobuf_mini_dumper_get_error_msg(res));
       last_error_res = res;
     } else {
       ++send_success_count;
+      waiters.emplace(std::move(waiter_options));
     }
   }
   // No wait and send success should be treated as success
@@ -291,6 +291,7 @@ static rpc::result_code_type invoke_replication_rpc_call(
     }
   }
 
+  dispatcher_await_options one_waiter_options = dispatcher_make_default<dispatcher_await_options>();
   while (wakeup_count > 0) {
     if (send_success_count < wakeup_count) {
       RPC_RETURN_CODE(last_error_res);
@@ -307,7 +308,8 @@ static rpc::result_code_type invoke_replication_rpc_call(
       if (send_success_count > 0) {
         --send_success_count;
       }
-      waiters.erase(received_message.first);
+      one_waiter_options.sequence = received_message.first;
+      waiters.erase(one_waiter_options);
 
       if (received_message.second.body_bin().empty()) {
         continue;

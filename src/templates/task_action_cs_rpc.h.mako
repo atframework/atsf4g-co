@@ -33,7 +33,7 @@ class ${task_class_name} : public task_action_cs_rpc_base<${rpc.get_request().ge
   using task_action_cs_req_base::operator();
 
  public:
-  explicit ${task_class_name}(dispatcher_start_data_t&& param);
+  explicit ${task_class_name}(dispatcher_start_data_type&& param);
   ~${task_class_name}();
 
   const char *name() const override;

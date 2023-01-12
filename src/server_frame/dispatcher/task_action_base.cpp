@@ -74,7 +74,7 @@ task_action_base::task_action_base()
       response_code_(0),
       response_message_disabled_(false),
       event_disabled_(false),
-      start_data_(dispatcher_make_default<dispatcher_start_data_t>()) {}
+      start_data_(dispatcher_make_default<dispatcher_start_data_type>()) {}
 
 task_action_base::task_action_base(rpc::context *caller_context)
     : user_id_(0),
@@ -85,7 +85,7 @@ task_action_base::task_action_base(rpc::context *caller_context)
       response_code_(0),
       response_message_disabled_(false),
       event_disabled_(false),
-      start_data_(dispatcher_make_default<dispatcher_start_data_t>()) {
+      start_data_(dispatcher_make_default<dispatcher_start_data_type>()) {
   if (nullptr != caller_context) {
     set_caller_context(*caller_context);
   }
@@ -120,7 +120,7 @@ int task_action_base::operator()(void *priv_data) {
   trace_option.parent_network_span = nullptr;
 
   if (nullptr != priv_data) {
-    start_data_ = *reinterpret_cast<dispatcher_start_data_t *>(priv_data);
+    start_data_ = *reinterpret_cast<dispatcher_start_data_type *>(priv_data);
 
     // Set parent context if not set by child type
     if (nullptr != start_data_.context) {

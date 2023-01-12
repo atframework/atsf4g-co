@@ -19,7 +19,7 @@
 
 #include <config/extern_service_types.h>
 
-task_action_login_auth::task_action_login_auth(dispatcher_start_data_t&& param)
+task_action_login_auth::task_action_login_auth(dispatcher_start_data_type&& param)
     : base_type(COPP_MACRO_STD_MOVE(param)) {}
 task_action_login_auth::~task_action_login_auth() {}
 

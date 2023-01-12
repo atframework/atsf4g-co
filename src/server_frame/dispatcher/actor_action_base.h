@@ -119,7 +119,7 @@ class actor_action_base {
   /**
    * @brief 获取启动透传参数
    */
-  inline dispatcher_start_data_t &get_dispatcher_start_data() { return start_data_; }
+  inline dispatcher_start_data_type &get_dispatcher_start_data() { return start_data_; }
 
   /**
    * @brief Get the shared context object
@@ -154,7 +154,7 @@ class actor_action_base {
   bool response_message_disabled_;
   bool event_disabled_;
 
-  dispatcher_start_data_t start_data_;
+  dispatcher_start_data_type start_data_;
 
   // Additional events
   on_finished_callback_set_t on_finished_callback_;

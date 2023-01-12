@@ -268,9 +268,9 @@ int task_action_player_remote_patch_jobs::on_success() {
 
   // 尝试再启动一次，启动排队后的任务
   if (is_writable_ && param_.user) {
-    if (param_.user->get_user_async_jobs_manager().remote_command_patch_task_.get() ==
-        task_manager::task_t::this_task()) {
-      param_.user->get_user_async_jobs_manager().remote_command_patch_task_.reset();
+    if (task_type_trait::get_task_id(param_.user->get_user_async_jobs_manager().remote_command_patch_task_) ==
+        get_task_id()) {
+      task_type_trait::reset_task(param_.user->get_user_async_jobs_manager().remote_command_patch_task_);
     }
 
     if (need_restart_) {
@@ -303,9 +303,9 @@ int task_action_player_remote_patch_jobs::on_failed() {
 
   // 尝试再启动一次，启动排队后的任务
   if (is_writable_ && param_.user) {
-    if (param_.user->get_user_async_jobs_manager().remote_command_patch_task_.get() ==
-        task_manager::task_t::this_task()) {
-      param_.user->get_user_async_jobs_manager().remote_command_patch_task_.reset();
+    if (task_type_trait::get_task_id(param_.user->get_user_async_jobs_manager().remote_command_patch_task_) ==
+        get_task_id()) {
+      task_type_trait::reset_task(param_.user->get_user_async_jobs_manager().remote_command_patch_task_);
     }
 
     if (need_restart_) {

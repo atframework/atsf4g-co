@@ -19,7 +19,7 @@ class task_action_access_update
   using task_action_cs_req_base::operator();
 
  public:
-  explicit task_action_access_update(dispatcher_start_data_t&& param);
+  explicit task_action_access_update(dispatcher_start_data_type&& param);
   ~task_action_access_update();
 
   const char* name() const override;

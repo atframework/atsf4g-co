@@ -30,6 +30,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 #include <string>
 
 #include "rpc/rpc_common_types.h"
+#include "dispatcher/dispatcher_type_defines.h"
 
 namespace rpc {
 class context;
@@ -68,7 +69,7 @@ ${ns}
         rpc_param_docs.append('rsp_body       response body')
         if rpc.get_extension_field('rpc_options', lambda x: x.allow_no_wait, False):
             rpc_params.append('bool __no_wait = false')
-            rpc_params.append('uint64_t* __wait_later = nullptr')
+            rpc_params.append('dispatcher_await_options* __wait_later = nullptr')
             rpc_param_docs.append('__no_wait           set true if not need to wait response')
             rpc_param_docs.append('__wait_later        set not nullptr if caller want to wait this RPC later, and receive rpc sequence to wait here')
     if rpc_allow_ignore_discovery:

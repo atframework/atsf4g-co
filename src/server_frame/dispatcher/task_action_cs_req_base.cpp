@@ -27,7 +27,7 @@
 #include <memory>
 #include <utility>
 
-task_action_cs_req_base::task_action_cs_req_base(dispatcher_start_data_t &&start_param)
+task_action_cs_req_base::task_action_cs_req_base(dispatcher_start_data_type &&start_param)
     : has_sync_dirty_(false), recursive_sync_dirty_(false) {
   // 必须先设置共享的arena
   if (nullptr != start_param.context) {

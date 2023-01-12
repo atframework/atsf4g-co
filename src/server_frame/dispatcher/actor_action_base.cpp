@@ -62,7 +62,7 @@ actor_action_base::actor_action_base()
       status_(EN_AAS_CREATED),
       response_message_disabled_(false),
       event_disabled_(false),
-      start_data_(dispatcher_make_default<dispatcher_start_data_t>()) {}
+      start_data_(dispatcher_make_default<dispatcher_start_data_type>()) {}
 
 actor_action_base::actor_action_base(rpc::context *caller_context)
     : user_id_(0),
@@ -72,7 +72,7 @@ actor_action_base::actor_action_base(rpc::context *caller_context)
       status_(EN_AAS_CREATED),
       response_message_disabled_(false),
       event_disabled_(false),
-      start_data_(dispatcher_make_default<dispatcher_start_data_t>()) {
+      start_data_(dispatcher_make_default<dispatcher_start_data_type>()) {
   if (nullptr != caller_context) {
     set_caller_context(*caller_context);
   }
@@ -110,7 +110,7 @@ actor_action_base::result_type actor_action_base::run(void *priv_data) {
   trace_option.dispatcher = get_dispatcher();
   trace_option.parent_network_span = nullptr;
   if (nullptr != priv_data) {
-    start_data_ = *reinterpret_cast<dispatcher_start_data_t *>(priv_data);
+    start_data_ = *reinterpret_cast<dispatcher_start_data_type *>(priv_data);
 
     // Set parent context if not set by child type
     if (nullptr != start_data_.context) {

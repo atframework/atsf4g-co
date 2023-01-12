@@ -128,35 +128,6 @@ class player : public player_cache {
     gsl::string_view current_dirty_handle_name;
   };
 
-  struct task_queue_node {
-    task_type_trait::task_type related_task;
-    bool is_waiting;
-
-    explicit task_queue_node(const task_type_trait::task_type &t);
-  };
-
-  /**
-   * @brief 用于玩家的某些任务的排队机制。
-   *        如果是正常流程，所有创建这个lock_guard的任务排队执行
-   *        如果是异常流程，超时或被kill的任务不保证顺序，仍然有效的任务还是会按顺序执行
-   */
-  class task_queue_lock_guard {
-   public:
-    explicit task_queue_lock_guard(player &user);
-    ~task_queue_lock_guard();
-
-    inline operator bool() const { return false == is_exiting(); }
-    bool is_exiting() const;
-
-    UTIL_DESIGN_PATTERN_NOCOPYABLE(task_queue_lock_guard)
-    UTIL_DESIGN_PATTERN_NOMOVABLE(task_queue_lock_guard)
-
-   private:
-    player *lock_target_;
-    bool is_exiting_;
-    std::list<task_queue_node>::iterator queue_iter_;
-  };
-
  public:
   ptr_t shared_from_this() { return std::static_pointer_cast<player>(base_type::shared_from_this()); }
 
@@ -197,7 +168,8 @@ class player : public player_cache {
   void on_saved(rpc::context &ctx) override;
 
   // 更新session事件
-  void on_update_session(rpc::context &ctx, const std::shared_ptr<session> &from, const std::shared_ptr<session> &to) override;
+  void on_update_session(rpc::context &ctx, const std::shared_ptr<session> &from,
+                         const std::shared_ptr<session> &to) override;
 
   // 从table数据初始化
   void init_from_table_data(rpc::context &ctx, const PROJECT_NAMESPACE_ID::table_user &) override;
@@ -284,9 +256,6 @@ class player : public player_cache {
 
  private:
   mutable std::bitset<internal_flag::EN_IFT_MAX> internal_flags_;
-
-  friend class task_queue_lock_guard;
-  std::list<task_queue_node> task_lock_queue_;
 
   PROJECT_NAMESPACE_ID::DClientDeviceInfo client_info_;
   // =======================================================

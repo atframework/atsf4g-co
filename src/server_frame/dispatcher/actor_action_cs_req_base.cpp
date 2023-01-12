@@ -15,7 +15,7 @@
 
 #include <dispatcher/cs_msg_dispatcher.h>
 
-actor_action_cs_req_base::actor_action_cs_req_base(dispatcher_start_data_t &&start_param) : has_sync_dirty_(false) {
+actor_action_cs_req_base::actor_action_cs_req_base(dispatcher_start_data_type &&start_param) : has_sync_dirty_(false) {
   // 必须先设置共享的arena
   if (nullptr != start_param.context) {
     get_shared_context().try_reuse_protobuf_arena(start_param.context->mutable_protobuf_arena());

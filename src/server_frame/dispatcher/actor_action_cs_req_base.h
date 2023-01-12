@@ -40,7 +40,7 @@ class actor_action_cs_req_base : public actor_action_req_base<atframework::CSMsg
   using base_type::operator();
 
  public:
-  explicit actor_action_cs_req_base(dispatcher_start_data_t &&start_param);
+  explicit actor_action_cs_req_base(dispatcher_start_data_type &&start_param);
   virtual ~actor_action_cs_req_base();
 
   std::pair<uint64_t, uint64_t> get_gateway_info() const;

@@ -20,7 +20,7 @@
 
 #include "task_action_set_server_time.h"
 
-task_action_set_server_time::task_action_set_server_time(dispatcher_start_data_t&& param)
+task_action_set_server_time::task_action_set_server_time(dispatcher_start_data_type&& param)
     : base_type(COPP_MACRO_STD_MOVE(param)) {}
 task_action_set_server_time::~task_action_set_server_time() {}
 

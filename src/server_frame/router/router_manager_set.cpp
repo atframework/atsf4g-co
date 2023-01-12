@@ -106,7 +106,7 @@ int router_manager_set::tick() {
     if (0 == tid) {
       FWLOGERROR("create task_action_auto_save_objects failed");
     } else {
-      dispatcher_start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
+      dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
       if (0 == task_manager::me()->start_task(tid, start_data)) {
         pending_action_task_ = task_manager::me()->get_task(tid);
       }
@@ -180,7 +180,7 @@ int router_manager_set::stop() {
   if (0 == tid) {
     FWLOGERROR("create task_action_router_close_manager_set failed");
   } else {
-    dispatcher_start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
+    dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
 
     closing_task_ = task_manager::me()->get_task(tid);
     if (!closing_task_) {

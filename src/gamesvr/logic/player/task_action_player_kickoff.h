@@ -20,7 +20,7 @@ class task_action_player_kickoff : public task_action_ss_rpc_base<PROJECT_NAMESP
   using task_action_ss_req_base::operator();
 
  public:
-  explicit task_action_player_kickoff(dispatcher_start_data_t&& param);
+  explicit task_action_player_kickoff(dispatcher_start_data_type&& param);
   ~task_action_player_kickoff();
 
   bool is_stream_rpc() const override;

@@ -60,8 +60,13 @@ result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
     RPC_DB_RETURN_CODE(__tracer.return_code(res));
   }
 
+  dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+  await_options.sequence = rpc_sequence;
+  await_options.timeout =
+      rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(), std::chrono::seconds{6});
+
   // 协程操作
-  res = RPC_AWAIT_CODE_RESULT(rpc::wait(output, rpc_sequence));
+  res = RPC_AWAIT_CODE_RESULT(rpc::wait(output, await_options));
   if (res < 0) {
     RPC_DB_RETURN_CODE(__tracer.return_code(res));
   }
@@ -133,8 +138,13 @@ result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key, const
     RPC_DB_RETURN_CODE(__tracer.return_code(res));
   }
 
+  dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+  await_options.sequence = rpc_sequence;
+  await_options.timeout =
+      rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(), std::chrono::seconds{6});
+
   // 协程操作
-  res = RPC_AWAIT_CODE_RESULT(rpc::wait(output, rpc_sequence));
+  res = RPC_AWAIT_CODE_RESULT(rpc::wait(output, await_options));
   if (res < 0) {
     if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res && !output.version().empty()) {
       version.assign(output.version());
@@ -187,9 +197,14 @@ result_type remove_all(rpc::context &ctx, uint32_t channel, gsl::string_view key
     RPC_DB_RETURN_CODE(__tracer.return_code(res));
   }
 
+  dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+  await_options.sequence = rpc_sequence;
+  await_options.timeout =
+      rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(), std::chrono::seconds{6});
+
   // 协程操作
   PROJECT_NAMESPACE_ID::table_all_message output;
-  res = RPC_AWAIT_CODE_RESULT(rpc::wait(output, rpc_sequence));
+  res = RPC_AWAIT_CODE_RESULT(rpc::wait(output, await_options));
   FWLOGINFO("table [key={}] all data removed", key);
 
   RPC_DB_RETURN_CODE(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));

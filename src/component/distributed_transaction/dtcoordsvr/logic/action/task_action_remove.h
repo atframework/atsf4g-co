@@ -26,7 +26,7 @@ class task_action_remove
   using task_action_ss_req_base::operator();
 
  public:
-  explicit task_action_remove(dispatcher_start_data_t&& param);
+  explicit task_action_remove(dispatcher_start_data_type&& param);
   ~task_action_remove();
 
   const char* name() const override;

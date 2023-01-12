@@ -22,7 +22,7 @@
 
 #include "logic/transaction_manager.h"
 
-task_action_commit_participator::task_action_commit_participator(dispatcher_start_data_t&& param)
+task_action_commit_participator::task_action_commit_participator(dispatcher_start_data_type&& param)
     : base_type(COPP_MACRO_STD_MOVE(param)) {}
 task_action_commit_participator::~task_action_commit_participator() {}
 

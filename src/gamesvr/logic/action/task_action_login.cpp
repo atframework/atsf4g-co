@@ -34,7 +34,7 @@
 
 #include "logic/action/task_action_player_async_jobs.h"
 
-task_action_login::task_action_login(dispatcher_start_data_t&& param)
+task_action_login::task_action_login(dispatcher_start_data_type&& param)
     : base_type(COPP_MACRO_STD_MOVE(param)), is_new_player_(false) {}
 task_action_login::~task_action_login() {}
 
@@ -205,7 +205,7 @@ int task_action_login::on_success() {
     if (0 == tid) {
       FWLOGERROR("create task_action_player_async_jobs failed");
     } else {
-      dispatcher_start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
+      dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
 
       int res = task_manager::me()->start_task(tid, start_data);
       if (res < 0) {

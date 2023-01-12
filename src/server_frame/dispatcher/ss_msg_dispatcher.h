@@ -113,7 +113,7 @@ class ss_msg_dispatcher : public dispatcher_implement, public util::design_patte
    * @param start_data start data
    * @param error_code error code
    */
-  void on_create_task_failed(dispatcher_start_data_t &start_data, int32_t error_code) override;
+  void on_create_task_failed(dispatcher_start_data_type &start_data, int32_t error_code) override;
 
   /**
    * allocate a message sequence

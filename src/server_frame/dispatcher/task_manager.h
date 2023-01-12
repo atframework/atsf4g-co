@@ -41,14 +41,14 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
     atframework::DispatcherOptions options;
     explicit task_action_maker_base_t(const atframework::DispatcherOptions *opt);
     virtual ~task_action_maker_base_t();
-    virtual int operator()(task_manager::id_t &task_id, dispatcher_start_data_t ctor_param) = 0;
+    virtual int operator()(task_manager::id_t &task_id, dispatcher_start_data_type ctor_param) = 0;
   };
 
   struct actor_action_maker_base_t {
     atframework::DispatcherOptions options;
     explicit actor_action_maker_base_t(const atframework::DispatcherOptions *opt);
     virtual ~actor_action_maker_base_t();
-    virtual actor_action_ptr_t operator()(dispatcher_start_data_t ctor_param) = 0;
+    virtual actor_action_ptr_t operator()(dispatcher_start_data_type ctor_param) = 0;
   };
 
   /// 协程任务创建器
@@ -58,7 +58,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
   template <typename TAction>
   struct task_action_maker_t : public task_action_maker_base_t {
     explicit task_action_maker_t(const atframework::DispatcherOptions *opt) : task_action_maker_base_t(opt) {}
-    int operator()(task_manager::id_t &task_id, dispatcher_start_data_t ctor_param) override {
+    int operator()(task_manager::id_t &task_id, dispatcher_start_data_type ctor_param) override {
       if (options.has_timeout() && (options.timeout().seconds() > 0 || options.timeout().nanos() > 0)) {
         return task_manager::me()->create_task_with_timeout<TAction>(
             task_id, options.timeout().seconds(), options.timeout().nanos(), COPP_MACRO_STD_MOVE(ctor_param));
@@ -71,7 +71,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
   template <typename TAction>
   struct actor_action_maker_t : public actor_action_maker_base_t {
     explicit actor_action_maker_t(const atframework::DispatcherOptions *opt) : actor_action_maker_base_t(opt) {}
-    actor_action_ptr_t operator()(dispatcher_start_data_t ctor_param) override {
+    actor_action_ptr_t operator()(dispatcher_start_data_type ctor_param) override {
       return task_manager::me()->create_actor<TAction>(COPP_MACRO_STD_MOVE(ctor_param));
     };
   };
@@ -204,7 +204,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @param data 启动数据，operator()(void* priv_data)的priv_data指向这个对象的地址
    * @return 0或错误码
    */
-  int start_task(id_t task_id, dispatcher_start_data_t &data);
+  int start_task(id_t task_id, dispatcher_start_data_type &data);
 
   /**
    * @brief 恢复任务
@@ -212,7 +212,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @param data 恢复时透传的数据，yield返回的指针指向这个对象的地址
    * @return 0或错误码
    */
-  int resume_task(id_t task_id, dispatcher_resume_data_t &data);
+  int resume_task(id_t task_id, dispatcher_resume_data_type &data);
 
   /**
    * @brief 创建Actor

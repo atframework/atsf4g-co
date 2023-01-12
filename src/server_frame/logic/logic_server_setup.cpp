@@ -470,10 +470,11 @@ int logic_server_common_module::tick() {
       auto timer_data = task_timer_.top();
       task_timer_.pop();
 
-      auto resume_data = dispatcher_make_default<dispatcher_resume_data_t>();
-      resume_data.sequence = timer_data.sequence;
-      resume_data.message.msg_type = timer_data.message_type;
-      task_manager::me()->resume_task(timer_data.task_id, resume_data);
+      auto callback_data = dispatcher_make_default<dispatcher_resume_data_type>();
+      callback_data.sequence = timer_data.sequence;
+      callback_data.message.msg_type = timer_data.message_type;
+
+      rpc::custom_resume(timer_data.task_id, callback_data);
 
       ++ret;
     }
@@ -790,7 +791,7 @@ int logic_server_common_module::tick_update_remote_configures() {
     return 0;
   }
 
-  dispatcher_start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
+  dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
   res = task_manager::me()->start_task(task_id, start_data);
   if (0 != res) {
     FWLOGERROR("start task_action_reload_remote_server_configure {} failed, res: {}({})", task_id, res,

@@ -208,8 +208,9 @@ static inline bool __redirect_rpc_result_to_warning_log(TCode &origin_result, TC
 % endif
 % if rpc_common_codes_enable_wait_response:
 template<class TResponseBody>
-static inline int __rpc_wait_and_unpack_response(rpc::context &__ctx, uint64_t rpc_sequence, TResponseBody &rsp_body,
-                                            gsl::string_view rpc_full_name, const std::string &type_full_name) {
+static inline int __rpc_wait_and_unpack_response(rpc::context &__ctx, TResponseBody &rsp_body,
+                                            gsl::string_view rpc_full_name, const std::string &type_full_name,
+                                            dispatcher_await_options& await_options) {
   atframework::SSMsg* rsp_msg_ptr = __ctx.create<atframework::SSMsg>();
   if (nullptr == rsp_msg_ptr) {
     FWLOGERROR("rpc {} create response message failed", rpc_full_name);
@@ -217,7 +218,7 @@ static inline int __rpc_wait_and_unpack_response(rpc::context &__ctx, uint64_t r
   }
 
   atframework::SSMsg& rsp_msg = *rsp_msg_ptr;
-  int res = RPC_AWAIT_CODE_RESULT(rpc::wait(rsp_msg, rpc_sequence));
+  int res = RPC_AWAIT_CODE_RESULT(rpc::wait(rsp_msg, await_options));
 
   if (rsp_msg.head().rpc_response().type_url() != type_full_name) {
     if (res >= 0 || !rsp_msg.head().rpc_response().type_url().empty()) {
@@ -268,7 +269,7 @@ ${ns}
         rpc_params.append('{0} &rsp_body'.format(rpc.get_response().get_cpp_class_name()))
         if rpc_allow_no_wait:
             rpc_params.append('bool __no_wait')
-            rpc_params.append('uint64_t* __wait_later')
+            rpc_params.append('dispatcher_await_options* __wait_later')
     if rpc_allow_ignore_discovery:
       rpc_params.append('bool __ignore_discovery')
 %>
@@ -447,12 +448,27 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
   RPC_RETURN_CODE(__tracer.return_code(res));
 %   else:
   do {
-    uint64_t rpc_sequence = req_msg.head().sequence();
+    dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+    await_options.sequence = req_msg.head().sequence();
+    {
+      const google::protobuf::MethodDescriptor *method = ${service.get_cpp_class_name()}::descriptor()
+        ->FindMethodByName("${rpc.get_name()}");
+
+      if (nullptr != method && method->options().HasExtension(atframework::rpc_options)) {
+        await_options.timeout = rpc::make_duration_or_default(
+            method->options().GetExtension(atframework::rpc_options).timeout(),
+            rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(),
+                                          std::chrono::seconds{6}));
+      } else {
+        await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(),
+                                                              std::chrono::seconds{6});
+      }
+    }
 %     if rpc_allow_no_wait:
     if (__no_wait) {
       break;
     } else if (nullptr != __wait_later) {
-      *__wait_later = rpc_sequence;
+      *__wait_later = await_options;
       // need to call RPC_AWAIT_CODE_RESULT(rpc::wait(...)) to wait this rpc sequence later
       break;
     }
@@ -460,9 +476,8 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
     if (res < 0) {
       break;
     }
-    res = details::__rpc_wait_and_unpack_response(__ctx, rpc_sequence, rsp_body,
-        "${rpc.get_full_name()}",
-        ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
+    res = details::__rpc_wait_and_unpack_response(__ctx, rsp_body, "${rpc.get_full_name()}",
+        ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), await_options);
   } while (false);
 
   if (res < 0) {

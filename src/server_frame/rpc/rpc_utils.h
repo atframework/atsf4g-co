@@ -13,6 +13,7 @@
 #include <config/compiler/protobuf_prefix.h>
 
 #include <google/protobuf/arena.h>
+#include <google/protobuf/duration.pb.h>
 #include <google/protobuf/timestamp.pb.h>
 
 #include <protocol/pbdesc/atframework.pb.h>
@@ -34,6 +35,7 @@
 #include <utility>
 #include <vector>
 
+#include "dispatcher/dispatcher_type_defines.h"
 #include "dispatcher/task_type_traits.h"
 #include "rpc/rpc_common_types.h"
 #include "rpc/telemetry/rpc_trace.h"
@@ -220,6 +222,31 @@ class context {
   task_context_data task_context_;
 };
 
+UTIL_FORCEINLINE std::chrono::system_clock::duration make_duration(
+    const std::chrono::system_clock::duration &value) noexcept {
+  return value;
+}
+
+template <class Rep, class Period>
+inline std::chrono::system_clock::duration make_duration(const std::chrono::duration<Rep, Period> &value) noexcept {
+  return std::chrono::duration_cast<std::chrono::system_clock::duration>(value);
+}
+
+inline std::chrono::system_clock::duration make_duration(const google::protobuf::Duration &value) noexcept {
+  return std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::seconds{value.seconds()}) +
+         std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::nanoseconds{value.nanos()});
+}
+
+template <class Rep, class Period>
+inline std::chrono::system_clock::duration make_duration_or_default(
+    const google::protobuf::Duration &value, const std::chrono::duration<Rep, Period> &default_value) noexcept {
+  if (value.seconds() > 0 || value.nanos() > 0) {
+    return make_duration(value);
+  }
+
+  return make_duration(default_value);
+}
+
 /**
  * @brief sleep and wait a moment
  *
@@ -238,11 +265,11 @@ result_code_type wait(context &ctx, std::chrono::system_clock::duration timeout)
  */
 template <class Rep, class Period>
 inline result_code_type wait(context &ctx, std::chrono::duration<Rep, Period> timeout) {
-  return wait(ctx, std::chrono::duration_cast<std::chrono::system_clock::duration>(timeout));
+  return wait(ctx, make_duration(timeout));
 }
 
-result_code_type wait(atframework::SSMsg &msg, uint64_t check_sequence);
-result_code_type wait(PROJECT_NAMESPACE_ID::table_all_message &msg, uint64_t check_sequence);
+result_code_type wait(atframework::SSMsg &msg, const dispatcher_await_options &options);
+result_code_type wait(PROJECT_NAMESPACE_ID::table_all_message &msg, const dispatcher_await_options &options);
 
 /**
  * @brief wait for multiple messages
@@ -252,7 +279,7 @@ result_code_type wait(PROJECT_NAMESPACE_ID::table_all_message &msg, uint64_t che
  * @param wakeup_count wakeup and return after got this count of messages(0 means wait all)
  * @return future of 0 or error code
  */
-result_code_type wait(const std::unordered_set<uint64_t> &waiters,
+result_code_type wait(const std::unordered_set<dispatcher_await_options> &waiters,
                       std::unordered_map<uint64_t, atframework::SSMsg> &received, size_t wakeup_count = 0);
 
 /**
@@ -263,28 +290,34 @@ result_code_type wait(const std::unordered_set<uint64_t> &waiters,
  * @param wakeup_count wakeup and return after got this count of messages(0 means wait all)
  * @return future of 0 or error code
  */
-result_code_type wait(const std::unordered_set<uint64_t> &waiters,
+result_code_type wait(const std::unordered_set<dispatcher_await_options> &waiters,
                       std::unordered_map<uint64_t, atframework::SSMsg *> &received, size_t wakeup_count = 0);
 
 /**
  * @brief Custom wait for a message or resume
  *
  * @param type_address type object address, user should keep it unique for each message type
- * @param received where to store received data, pass nullptr to ignore it
- * @param check_sequence check sequence for this message type
+ * @param options await options
  * @return future of 0 or error code
  */
-result_code_type custom_wait(const void *type_address, void **received, uint64_t check_sequence);
+result_code_type custom_wait(const void *type_address, void **received, const dispatcher_await_options &options);
 
 /**
  * @brief Custom resume a waiter
  *
  * @param task task to resume
- * @param type_address type object address, user should keep it unique for each message type
- * @param sequence sequence for this message type and this resume
- * @param received this will be assigned received in custom_wait
- * @return future of 0 or error code
+ * @param resume_data resume data
+ * @return 0 or error code
  */
-int32_t custom_resume(const task_type_trait::task_type &task, const void *type_address, uint64_t sequence,
-                      void *received);
+int32_t custom_resume(const task_type_trait::task_type &task, dispatcher_resume_data_type &resume_data);
+
+/**
+ * @brief Custom resume a waiter
+ *
+ * @param task_id id of task to resume
+ * @param resume_data resume data
+ * @return 0 or error code
+ */
+int32_t custom_resume(task_type_trait::id_type task_id, dispatcher_resume_data_type &resume_data);
+
 }  // namespace rpc

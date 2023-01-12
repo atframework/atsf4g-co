@@ -47,7 +47,7 @@ async_invoke_result async_invoke(context &ctx, gsl::string_view name, std::funct
     return async_invoke_result::make_error(res);
   }
 
-  dispatcher_start_data_t start_data = dispatcher_make_default<dispatcher_start_data_t>();
+  dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
   res = task_manager::me()->start_task(task_ptr->get_id(), start_data);
   if (0 != res) {
     FWLOGERROR("start task_action_async_invoke {} with name rpc.async_invoke:{} failed, res: {}({})",

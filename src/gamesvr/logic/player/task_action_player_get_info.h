@@ -19,7 +19,7 @@ class task_action_player_get_info : public task_action_cs_rpc_base<PROJECT_NAMES
   using task_action_cs_req_base::operator();
 
  public:
-  explicit task_action_player_get_info(dispatcher_start_data_t&& param);
+  explicit task_action_player_get_info(dispatcher_start_data_type&& param);
   ~task_action_player_get_info();
 
   const char* name() const override;

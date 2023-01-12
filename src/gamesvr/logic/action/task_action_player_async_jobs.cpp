@@ -48,7 +48,6 @@ task_action_player_async_jobs::result_type task_action_player_async_jobs::operat
   // 某些数据拉取需要排队 一下等平台数据更新完
   // 启动玩家数据异步命令patch任务
   if (param_.user) {
-    player::task_queue_lock_guard lock_guard(*param_.user);
     param_.user->get_user_async_jobs_manager().try_async_jobs(get_shared_context());
   }
 

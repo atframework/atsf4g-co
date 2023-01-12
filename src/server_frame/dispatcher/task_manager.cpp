@@ -167,7 +167,7 @@ int task_manager::reload() {
   return 0;
 }
 
-int task_manager::start_task(id_t task_id, dispatcher_start_data_t &data) {
+int task_manager::start_task(id_t task_id, dispatcher_start_data_type &data) {
   int res = native_mgr_->start(task_id, &data);
   if (res < 0) {
     FWLOGERROR("start task {} failed.", task_id);
@@ -179,7 +179,7 @@ int task_manager::start_task(id_t task_id, dispatcher_start_data_t &data) {
   return 0;
 }
 
-int task_manager::resume_task(id_t task_id, dispatcher_resume_data_t &data) {
+int task_manager::resume_task(id_t task_id, dispatcher_resume_data_type &data) {
   int res = native_mgr_->resume(task_id, &data);
   if (res < 0) {
     if (copp::COPP_EC_NOT_FOUND == res) {
@@ -262,7 +262,8 @@ int task_manager::add_task(const task_t::ptr_t &task, time_t timeout_sec, time_t
   int res = 0;
   if (0 == timeout_sec && timeout_nsec == 0) {
     // read default timeout from configure
-    res = native_mgr_->add_task(task, logic_config::me()->get_cfg_task().csmsg().timeout().seconds(), 0);
+    res = native_mgr_->add_task(task, logic_config::me()->get_cfg_task().csmsg().timeout().seconds(),
+                                logic_config::me()->get_cfg_task().csmsg().timeout().nanos());
   } else {
     res = native_mgr_->add_task(task, timeout_sec, static_cast<int>(timeout_nsec));
   }
