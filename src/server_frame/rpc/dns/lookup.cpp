@@ -42,7 +42,7 @@ rpc::result_code_type lookup(rpc::context& ctx, gsl::string_view domain, std::ve
       rpc::make_duration_or_default(logic_config::me()->get_logic().dns().lookup_timeout(), std::chrono::seconds{5});
 
   ret = RPC_AWAIT_CODE_RESULT(
-      rpc::custom_wait(ss_msg_dispatcher::me()->get_dns_lookup_rpc_type(), &received_raw_ptr, await_options));
+      rpc::custom_wait(ctx, ss_msg_dispatcher::me()->get_dns_lookup_rpc_type(), &received_raw_ptr, await_options));
   if (received_raw_ptr != nullptr) {
     output.swap(*reinterpret_cast<details::callback_data_type*>(received_raw_ptr));
   }

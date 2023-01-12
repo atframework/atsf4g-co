@@ -268,8 +268,9 @@ inline result_code_type wait(context &ctx, std::chrono::duration<Rep, Period> ti
   return wait(ctx, make_duration(timeout));
 }
 
-result_code_type wait(atframework::SSMsg &msg, const dispatcher_await_options &options);
-result_code_type wait(PROJECT_NAMESPACE_ID::table_all_message &msg, const dispatcher_await_options &options);
+result_code_type wait(context &ctx, atframework::SSMsg &msg, const dispatcher_await_options &options);
+result_code_type wait(context &ctx, PROJECT_NAMESPACE_ID::table_all_message &msg,
+                      const dispatcher_await_options &options);
 
 /**
  * @brief wait for multiple messages
@@ -279,7 +280,7 @@ result_code_type wait(PROJECT_NAMESPACE_ID::table_all_message &msg, const dispat
  * @param wakeup_count wakeup and return after got this count of messages(0 means wait all)
  * @return future of 0 or error code
  */
-result_code_type wait(const std::unordered_set<dispatcher_await_options> &waiters,
+result_code_type wait(context &ctx, const std::unordered_set<dispatcher_await_options> &waiters,
                       std::unordered_map<uint64_t, atframework::SSMsg> &received, size_t wakeup_count = 0);
 
 /**
@@ -290,7 +291,7 @@ result_code_type wait(const std::unordered_set<dispatcher_await_options> &waiter
  * @param wakeup_count wakeup and return after got this count of messages(0 means wait all)
  * @return future of 0 or error code
  */
-result_code_type wait(const std::unordered_set<dispatcher_await_options> &waiters,
+result_code_type wait(context &ctx, const std::unordered_set<dispatcher_await_options> &waiters,
                       std::unordered_map<uint64_t, atframework::SSMsg *> &received, size_t wakeup_count = 0);
 
 /**
@@ -300,7 +301,8 @@ result_code_type wait(const std::unordered_set<dispatcher_await_options> &waiter
  * @param options await options
  * @return future of 0 or error code
  */
-result_code_type custom_wait(const void *type_address, void **received, const dispatcher_await_options &options);
+result_code_type custom_wait(context &ctx, const void *type_address, void **received,
+                             const dispatcher_await_options &options);
 
 /**
  * @brief Custom resume a waiter

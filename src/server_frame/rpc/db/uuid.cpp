@@ -164,7 +164,7 @@ rpc_result<int64_t> generate_global_increase_id(rpc::context &ctx, uint32_t majo
   await_options.timeout =
       rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(), std::chrono::seconds{6});
 
-  res = RPC_AWAIT_CODE_RESULT(rpc::wait(msg, await_options));
+  res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, msg, await_options));
   if (res < 0) {
     RPC_RETURN_TYPE(tracer.return_code(res));
   }
@@ -267,7 +267,8 @@ struct unique_id_container_waker {
     return 0;
   }
 
-  static rpc::result_void_type insert_into_pool(unique_id_value_t &pool, task_type_trait::task_type task) {
+  static rpc::result_void_type insert_into_pool(rpc::context &ctx, unique_id_value_t &pool,
+                                                task_type_trait::task_type task) {
     // Append to wake list and then custom_wait to switch out
     auto iter = pool.wake_tasks.insert(pool.wake_tasks.end(), task);
 
@@ -276,7 +277,7 @@ struct unique_id_container_waker {
     await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(),
                                                           std::chrono::seconds{6});
 
-    RPC_AWAIT_IGNORE_RESULT(rpc::custom_wait(reinterpret_cast<const void *>(&pool), nullptr, await_options));
+    RPC_AWAIT_IGNORE_RESULT(rpc::custom_wait(ctx, reinterpret_cast<const void *>(&pool), nullptr, await_options));
     pool.wake_tasks.erase(iter);
 
     RPC_RETURN_VOID;
@@ -350,7 +351,7 @@ static rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx, uint32_t
 
     // Queue to Allocate id pool
     if (alloc->alloc_task && !alloc->alloc_task->is_exiting() && alloc->alloc_task.get() != this_task) {
-      RPC_AWAIT_IGNORE_RESULT(unique_id_container_waker::insert_into_pool(*alloc, this_task));
+      RPC_AWAIT_IGNORE_RESULT(unique_id_container_waker::insert_into_pool(ctx, *alloc, this_task));
       ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_RETRY_TIMES_EXCEED;
       has_scheduled = true;
       continue;
@@ -367,7 +368,7 @@ static rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx, uint32_t
     if (0 == (ret >> bits_off) || 0 == (ret & bits_mask)) {
       // Keep order here
       if (!has_scheduled && !alloc->wake_tasks.empty()) {
-        RPC_AWAIT_IGNORE_RESULT(unique_id_container_waker::insert_into_pool(*alloc, this_task));
+        RPC_AWAIT_IGNORE_RESULT(unique_id_container_waker::insert_into_pool(ctx, *alloc, this_task));
         ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_RETRY_TIMES_EXCEED;
         has_scheduled = true;
         continue;

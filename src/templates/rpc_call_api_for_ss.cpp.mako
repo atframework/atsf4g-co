@@ -218,7 +218,7 @@ static inline int __rpc_wait_and_unpack_response(rpc::context &__ctx, TResponseB
   }
 
   atframework::SSMsg& rsp_msg = *rsp_msg_ptr;
-  int res = RPC_AWAIT_CODE_RESULT(rpc::wait(rsp_msg, await_options));
+  int res = RPC_AWAIT_CODE_RESULT(rpc::wait(__ctx, rsp_msg, await_options));
 
   if (rsp_msg.head().rpc_response().type_url() != type_full_name) {
     if (res >= 0 || !rsp_msg.head().rpc_response().type_url().empty()) {

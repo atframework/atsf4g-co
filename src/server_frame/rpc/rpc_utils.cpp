@@ -208,23 +208,22 @@ void context::set_current_service(atapp::app &app, const PROJECT_NAMESPACE_ID::c
 void context::set_task_context(const task_context_data &task_ctx) noexcept { task_context_ = task_ctx; }
 
 namespace detail {
-static result_code_type wait(void **output_msg, uintptr_t check_type, const dispatcher_await_options &options) {
+static result_code_type wait(context &ctx, void **output_msg, uintptr_t check_type,
+                             const dispatcher_await_options &options) {
   if (nullptr != output_msg) {
     *output_msg = nullptr;
   }
 
-  task_manager::task_t *task = task_manager::task_t::this_task();
-  if (!task) {
-    FWLOGERROR("current not in a task");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in a task");
 
-  if (task->is_timeout()) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
-  } else if (task->is_faulted()) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
-  } else if (task->is_canceled()) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
+  if (TASK_COMPAT_CHECK_IS_EXITING()) {
+    if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+    } else if (TASK_COMPAT_CHECK_IS_FAULT()) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
+    } else if (TASK_COMPAT_CHECK_IS_CANCEL()) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
+    }
   }
 
   bool is_continue = true;
@@ -233,33 +232,35 @@ static result_code_type wait(void **output_msg, uintptr_t check_type, const disp
     is_continue = false;
     // 协程 swap out
     void *result = nullptr;
-    task->yield(&result);
+    task_type_trait::internal_task_type::this_task()->yield(&result);
 
     dispatcher_resume_data_type *resume_data = reinterpret_cast<dispatcher_resume_data_type *>(result);
 
     // 协程 swap in
 
-    if (task->is_timeout()) {
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
-    }
+    if (TASK_COMPAT_CHECK_IS_EXITING()) {
+      if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+      }
 
-    if (task->is_faulted()) {
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
-    }
+      if (TASK_COMPAT_CHECK_IS_FAULT()) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
+      }
 
-    if (task->is_canceled()) {
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
+      if (TASK_COMPAT_CHECK_IS_CANCEL()) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
+      }
     }
 
     if (nullptr == resume_data) {
-      FWLOGINFO("task {} resume data is empty, maybe resumed by await_task", task->get_id());
+      FWLOGINFO("task {} resume data is empty, maybe resumed by await_task", ctx.get_task_context().task_id);
       is_continue = true;
       continue;
     }
 
     if (resume_data->message.msg_type != check_type) {
-      FWLOGINFO("task {} resume and expect message type {:#x} but real is {:#x}, ignore this message", task->get_id(),
-                check_type, resume_data->message.msg_type);
+      FWLOGINFO("task {} resume and expect message type {:#x} but real is {:#x}, ignore this message",
+                ctx.get_task_context().task_id, check_type, resume_data->message.msg_type);
 
       is_continue = true;
       continue;
@@ -267,7 +268,7 @@ static result_code_type wait(void **output_msg, uintptr_t check_type, const disp
 
     if (0 != options.sequence && 0 != resume_data->sequence && options.sequence != resume_data->sequence) {
       FWLOGINFO("task {} resume and expect message sequence {:#x} but real is {:#x}, ignore this message",
-                task->get_id(), options.sequence, resume_data->sequence);
+                ctx.get_task_context().task_id, options.sequence, resume_data->sequence);
       is_continue = true;
       continue;
     }
@@ -306,24 +307,19 @@ static inline void wait_swap_message(TMSG &output, void *input) {
 }
 
 template <typename TMSG>
-static result_code_type wait(uintptr_t check_type, const std::unordered_set<dispatcher_await_options> &waiters,
+static result_code_type wait(context &ctx, uintptr_t check_type,
+                             const std::unordered_set<dispatcher_await_options> &waiters,
                              std::unordered_map<uint64_t, TMSG> &received, size_t wakeup_count) {
-  task_manager::task_t *task = task_manager::task_t::this_task();
-  if (!task) {
-    FWLOGERROR("current not in a task");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in a task");
 
-  if (task->is_timeout()) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
-  }
-
-  if (task->is_faulted()) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
-  }
-
-  if (task->is_canceled()) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
+  if (TASK_COMPAT_CHECK_IS_EXITING()) {
+    if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+    } else if (TASK_COMPAT_CHECK_IS_FAULT()) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
+    } else if (TASK_COMPAT_CHECK_IS_CANCEL()) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
+    }
   }
 
   dispatcher_await_options one_wait_option = dispatcher_make_default<dispatcher_await_options>();
@@ -335,32 +331,34 @@ static result_code_type wait(uintptr_t check_type, const std::unordered_set<disp
        ++retry_times) {
     // 协程 swap out
     void *result = nullptr;
-    task->yield(&result);
+    task_type_trait::internal_task_type::this_task()->yield(&result);
 
     dispatcher_resume_data_type *resume_data = reinterpret_cast<dispatcher_resume_data_type *>(result);
 
     // 协程 swap in
 
-    if (task->is_timeout()) {
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
-    }
+    if (TASK_COMPAT_CHECK_IS_EXITING()) {
+      if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+      }
 
-    if (task->is_faulted()) {
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
-    }
+      if (TASK_COMPAT_CHECK_IS_FAULT()) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
+      }
 
-    if (task->is_canceled()) {
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
+      if (TASK_COMPAT_CHECK_IS_CANCEL()) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
+      }
     }
 
     if (nullptr == resume_data) {
-      FWLOGINFO("task {} resume data is empty, maybe resumed by await_task", task->get_id());
+      FWLOGINFO("task {} resume data is empty, maybe resumed by await_task", ctx.get_task_context().task_id);
       continue;
     }
 
     if (resume_data->message.msg_type != check_type) {
-      FWLOGINFO("task {} resume and expect message type {:#x} but real is {:#x}, ignore this message", task->get_id(),
-                check_type, resume_data->message.msg_type);
+      FWLOGINFO("task {} resume and expect message type {:#x} but real is {:#x}, ignore this message",
+                ctx.get_task_context().task_id, check_type, resume_data->message.msg_type);
 
       continue;
     }
@@ -369,7 +367,7 @@ static result_code_type wait(uintptr_t check_type, const std::unordered_set<disp
     auto rsp_iter = waiters.find(one_wait_option);
     if (rsp_iter == waiters.end()) {
       FWLOGINFO("task {} resume and with message sequence {} but not found in waiters, ignore this message",
-                task->get_id(), resume_data->sequence);
+                ctx.get_task_context().task_id, resume_data->sequence);
       continue;
     }
 
@@ -407,12 +405,12 @@ result_code_type wait(context &ctx, std::chrono::system_clock::duration timeout)
   await_options.sequence = timer.sequence;
   await_options.timeout = timeout;
 
-  return detail::wait(nullptr, timer.message_type, await_options);
+  return detail::wait(ctx, nullptr, timer.message_type, await_options);
 }
 
-result_code_type wait(atframework::SSMsg &msg, const dispatcher_await_options &options) {
+result_code_type wait(context &ctx, atframework::SSMsg &msg, const dispatcher_await_options &options) {
   void *result = nullptr;
-  int ret = RPC_AWAIT_CODE_RESULT(detail::wait(&result, ss_msg_dispatcher::me()->get_instance_ident(), options));
+  int ret = RPC_AWAIT_CODE_RESULT(detail::wait(ctx, &result, ss_msg_dispatcher::me()->get_instance_ident(), options));
   if (0 != ret) {
     RPC_RETURN_CODE(ret);
   }
@@ -424,9 +422,10 @@ result_code_type wait(atframework::SSMsg &msg, const dispatcher_await_options &o
   RPC_RETURN_CODE(msg.head().error_code());
 }
 
-result_code_type wait(PROJECT_NAMESPACE_ID::table_all_message &msg, const dispatcher_await_options &options) {
+result_code_type wait(context &ctx, PROJECT_NAMESPACE_ID::table_all_message &msg,
+                      const dispatcher_await_options &options) {
   void *result = nullptr;
-  int ret = RPC_AWAIT_CODE_RESULT(detail::wait(&result, db_msg_dispatcher::me()->get_instance_ident(), options));
+  int ret = RPC_AWAIT_CODE_RESULT(detail::wait(ctx, &result, db_msg_dispatcher::me()->get_instance_ident(), options));
   if (0 != ret) {
     RPC_RETURN_CODE(ret);
   }
@@ -438,20 +437,21 @@ result_code_type wait(PROJECT_NAMESPACE_ID::table_all_message &msg, const dispat
   RPC_RETURN_CODE(msg.error_code());
 }
 
-result_code_type wait(const std::unordered_set<dispatcher_await_options> &waiters,
+result_code_type wait(context &ctx, const std::unordered_set<dispatcher_await_options> &waiters,
                       std::unordered_map<uint64_t, atframework::SSMsg> &received, size_t wakeup_count) {
-  return detail::wait(ss_msg_dispatcher::me()->get_instance_ident(), waiters, received,
+  return detail::wait(ctx, ss_msg_dispatcher::me()->get_instance_ident(), waiters, received,
                       0 == wakeup_count ? waiters.size() : wakeup_count);
 }
 
-result_code_type wait(const std::unordered_set<dispatcher_await_options> &waiters,
+result_code_type wait(context &ctx, const std::unordered_set<dispatcher_await_options> &waiters,
                       std::unordered_map<uint64_t, atframework::SSMsg *> &received, size_t wakeup_count) {
-  return detail::wait(ss_msg_dispatcher::me()->get_instance_ident(), waiters, received,
+  return detail::wait(ctx, ss_msg_dispatcher::me()->get_instance_ident(), waiters, received,
                       0 == wakeup_count ? waiters.size() : wakeup_count);
 }
 
-result_code_type custom_wait(const void *type_address, void **received, const dispatcher_await_options &options) {
-  return detail::wait(received, reinterpret_cast<uintptr_t>(type_address), options);
+result_code_type custom_wait(context &ctx, const void *type_address, void **received,
+                             const dispatcher_await_options &options) {
+  return detail::wait(ctx, received, reinterpret_cast<uintptr_t>(type_address), options);
 }
 
 int32_t custom_resume(const task_type_trait::task_type &task, dispatcher_resume_data_type &resume_data) {

@@ -298,7 +298,7 @@ static rpc::result_code_type invoke_replication_rpc_call(
     }
     received.clear();
 
-    last_error_res = RPC_AWAIT_CODE_RESULT(rpc::wait(waiters, received, wakeup_count));
+    last_error_res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, waiters, received, wakeup_count));
     if (last_error_res < 0) {
       FWLOGERROR("Try to {} transaction {} and wait multiple response failed, res: {}({})", action_name,
                  metadata.transaction_uuid(), last_error_res, protobuf_mini_dumper_get_error_msg(last_error_res));
