@@ -290,16 +290,8 @@ bool task_manager::is_busy() const { return conf_busy_count_ > 0 && native_mgr_-
 
 void task_manager::reset_private_data(task_private_data_type &priv_data) { priv_data.action = nullptr; }
 
-task_private_data_type *task_manager::get_private_data(task_t &task) {
-  if (task.get_private_buffer_size() < sizeof(task_private_data_type)) {
-    return nullptr;
-  }
-
-  return reinterpret_cast<task_private_data_type *>(task.get_private_buffer());
-}
-
-rpc::context *task_manager::get_shared_context(task_t &task) {
-  task_private_data_type *task_priv_data = get_private_data(task);
+rpc::context *task_manager::get_shared_context(task_type_trait::task_type &task) {
+  task_private_data_type *task_priv_data = task_type_trait::get_private_data(task);
   if (nullptr == task_priv_data) {
     return nullptr;
   }

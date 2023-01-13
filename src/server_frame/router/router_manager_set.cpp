@@ -507,23 +507,26 @@ bool router_manager_set::mark_fast_save(router_manager_base *mgr, const std::sha
 }
 
 void router_manager_set::add_io_schedule_order_task(const std::shared_ptr<router_object_base> &obj,
-                                                    const task_type_trait::task_type &task) {
-  if (!task || !obj) {
+                                                    task_type_trait::task_type &task) {
+  if (task_type_trait::empty(task) || !obj) {
     return;
   }
 
-  if (cotask::EN_TS_RUNNING != task->get_status() && cotask::EN_TS_WAITING != task->get_status()) {
+  if (task_type_trait::is_exiting(task)) {
     return;
   }
 
-  auto task_data = task_manager::get_private_data(*task);
-  if (nullptr == task_data || nullptr == task_data->action) {
+  auto task_id = task_type_trait::get_task_id(task);
+  auto task_private_data = task_type_trait::get_private_data(task);
+  if (0 == task_id || nullptr == task_private_data) {
+    return;
+  }
+  if (nullptr == task_private_data->action) {
     return;
   }
 
-  auto task_id = task->get_id();
   obj->io_schedule_order_.insert(task_id);
-  task_data->action->add_on_on_finished(
+  task_private_data->action->add_on_on_finished(
       [obj, task_id](const task_action_base &) { obj->io_schedule_order_.erase(task_id); });
 }
 

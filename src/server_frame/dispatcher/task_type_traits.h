@@ -86,6 +86,14 @@ struct task_type_trait {
   inline static bool is_fault(const cotask::task_future<TVALUE, TPRIVATE_DATA, TERROR_TRANSFORM>& future) noexcept {
     return task.is_faulted();
   }
+
+  inline static task_private_data_type* get_private_data(task_type& task) noexcept {
+    if (empty(task)) {
+      return nullptr;
+    }
+
+    return task.get_private_data();
+  }
 };
 
 // Compatibility
@@ -175,6 +183,22 @@ struct task_type_trait {
     }
 
     return task->get_status();
+  }
+
+  inline static task_private_data_type* get_private_data(internal_task_type& task) noexcept {
+    if (task.get_private_buffer_size() < sizeof(task_private_data_type)) {
+      return nullptr;
+    }
+
+    return reinterpret_cast<task_private_data_type*>(task.get_private_buffer());
+  }
+
+  inline static task_private_data_type* get_private_data(task_type& task) noexcept {
+    if (!task) {
+      return nullptr;
+    }
+
+    return get_private_data(*task);
   }
 };
 

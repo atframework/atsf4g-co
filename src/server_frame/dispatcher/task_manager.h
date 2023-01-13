@@ -125,7 +125,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
       return report_create_error(__FUNCTION__);
     }
 
-    task_private_data_type *task_priv_data = get_private_data(*task_instance);
+    task_private_data_type *task_priv_data = task_type_trait::get_private_data(*task_instance);
     if (nullptr != task_priv_data) {
       // initialize private data
       reset_private_data(*task_priv_data);
@@ -252,8 +252,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
   bool is_busy() const;
 
   static void reset_private_data(task_private_data_type &priv_data);
-  static task_private_data_type *get_private_data(task_t &task);
-  static rpc::context *get_shared_context(task_t &task);
+  static rpc::context *get_shared_context(task_type_trait::task_type &task);
 
   static int32_t convert_task_status_to_error_code(task_type_trait::task_status task_status) noexcept;
 

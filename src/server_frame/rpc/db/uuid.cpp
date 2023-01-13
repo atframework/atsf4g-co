@@ -113,11 +113,7 @@ std::string generate_short_uuid() {
 
 rpc_result<int64_t> generate_global_increase_id(rpc::context &ctx, uint32_t major_type, uint32_t minor_type,
                                                 uint32_t patch_type) {
-  task_manager::task_t *task = task_manager::task_t::this_task();
-  if (!task) {
-    WLOGERROR("current not in a task");
-    RPC_RETURN_TYPE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in task");
 
   // 这个算法比许固定
   char keyvar[64];
@@ -149,7 +145,7 @@ rpc_result<int64_t> generate_global_increase_id(rpc::context &ctx, uint32_t majo
 
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
-      db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, keyvar, keylen, task->get_id(),
+      db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, keyvar, keylen, child_ctx.get_task_context().task_id,
       logic_config::me()->get_local_server_id(), rpc::db::detail::unpack_integer, rpc_sequence,
       static_cast<int>(args.size()), args.get_args_values(), args.get_args_lengths());
 
@@ -206,7 +202,16 @@ struct unique_id_value_t {
   util::lock::atomic_int_type<int64_t> unique_id_base;
   std::list<task_type_trait::task_type> wake_tasks;
 
-  unique_id_value_t() noexcept : alloc_task{nullptr}, unique_id_index{0}, unique_id_base{0} {}
+  unique_id_value_t() noexcept
+      :
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+        alloc_task{},
+#else
+        alloc_task{nullptr},
+#endif
+        unique_id_index{0},
+        unique_id_base{0} {
+  }
 
   unique_id_value_t(unique_id_value_t &&other) noexcept
       : alloc_task{std::move(other.alloc_task)},
@@ -230,7 +235,15 @@ static util::lock::spin_rw_lock g_unique_id_pool_locker;
 struct unique_id_container_waker {
   unique_id_key_t key;
   inline explicit unique_id_container_waker(unique_id_key_t k) : key(k) {}
-  int operator()(void *) {
+
+  int operator()(
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+      task_type_trait::internal_task_type::context_pointer_type &&
+#else
+      void *
+#endif
+  ) {
+
     using real_map_type = std::unordered_map<unique_id_key_t, unique_id_value_t, unique_id_container_helper>;
     real_map_type::iterator iter;
 
@@ -243,7 +256,7 @@ struct unique_id_container_waker {
     }
 
     while (!iter->second.wake_tasks.empty()) {
-      if (iter->second.alloc_task && !iter->second.alloc_task->is_exiting()) {
+      if (!task_type_trait::empty(iter->second.alloc_task) && !task_type_trait::is_exiting(iter->second.alloc_task)) {
         break;
       }
 
@@ -252,13 +265,14 @@ struct unique_id_container_waker {
         // iter will be erased in task
         dispatcher_resume_data_type callback_data = dispatcher_make_default<dispatcher_resume_data_type>();
         callback_data.message.msg_type = reinterpret_cast<uintptr_t>(reinterpret_cast<const void *>(&iter->second));
-        callback_data.sequence = wake_task->get_id();
+        callback_data.sequence = task_type_trait::get_task_id(wake_task);
 
         rpc::custom_resume(wake_task, callback_data);
       } else {
         // This should not be called
         if (wake_task) {
-          FWLOGERROR("Wake iterator of task {} should be removed by task action", wake_task->get_id());
+          FWLOGERROR("Wake iterator of task {} should be removed by task action",
+                     task_type_trait::get_task_id(wake_task));
         }
         iter->second.wake_tasks.pop_front();
       }
@@ -270,10 +284,10 @@ struct unique_id_container_waker {
   static rpc::result_void_type insert_into_pool(rpc::context &ctx, unique_id_value_t &pool,
                                                 task_type_trait::task_type task) {
     // Append to wake list and then custom_wait to switch out
-    auto iter = pool.wake_tasks.insert(pool.wake_tasks.end(), task);
+    auto iter = pool.wake_tasks.emplace(pool.wake_tasks.end(), std::move(task));
 
     dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
-    await_options.sequence = task->get_id();
+    await_options.sequence = task_type_trait::get_task_id(task);
     await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(),
                                                           std::chrono::seconds{6});
 
@@ -287,10 +301,7 @@ struct unique_id_container_waker {
 template <int64_t bits_off>
 static rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx, uint32_t major_type, uint32_t minor_type,
                                                      uint32_t patch_type) {
-  task_manager::task_t *this_task = task_manager::task_t::this_task();
-  if (nullptr == this_task) {
-    RPC_RETURN_TYPE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in task");
 
   // POOL => 1 | 50 | 13
   // constexpr int64_t bits_off   = 13;
@@ -331,27 +342,22 @@ static rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx, uint32_t
   bool should_wake_key = false;
   bool has_scheduled = false;
 
-  while (try_left-- > 0 && ret <= 0) {
-    // must in task, checked before
-    assert(this_task == task_manager::task_t::this_task());
+  auto self_task = task_manager::me()->get_task(ctx.get_task_context().task_id);
+  if (task_type_trait::empty(self_task)) {
+    RPC_RETURN_TYPE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_NOT_FOUND);
+  }
 
+  while (try_left-- > 0 && ret <= 0) {
     // 任务已经失败或者不在任务中
-    if (nullptr == this_task || this_task->is_exiting()) {
-      if (this_task->is_timeout()) {
-        ret = PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
-      } else if (this_task->is_faulted()) {
-        ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
-      } else if (this_task->is_canceled()) {
-        ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
-      } else {
-        ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING;
-      }
+    if (TASK_COMPAT_CHECK_IS_EXITING()) {
+      ret = task_manager::convert_task_status_to_error_code(TASK_COMPAT_GET_CURRENT_STATUS());
       break;
     }
 
     // Queue to Allocate id pool
-    if (alloc->alloc_task && !alloc->alloc_task->is_exiting() && alloc->alloc_task.get() != this_task) {
-      RPC_AWAIT_IGNORE_RESULT(unique_id_container_waker::insert_into_pool(ctx, *alloc, this_task));
+    if (!task_type_trait::empty(alloc->alloc_task) && !task_type_trait::is_exiting(alloc->alloc_task) &&
+        alloc->alloc_task != self_task) {
+      RPC_AWAIT_IGNORE_RESULT(unique_id_container_waker::insert_into_pool(ctx, *alloc, self_task));
       ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_RETRY_TIMES_EXCEED;
       has_scheduled = true;
       continue;
@@ -368,18 +374,18 @@ static rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx, uint32_t
     if (0 == (ret >> bits_off) || 0 == (ret & bits_mask)) {
       // Keep order here
       if (!has_scheduled && !alloc->wake_tasks.empty()) {
-        RPC_AWAIT_IGNORE_RESULT(unique_id_container_waker::insert_into_pool(ctx, *alloc, this_task));
+        RPC_AWAIT_IGNORE_RESULT(unique_id_container_waker::insert_into_pool(ctx, *alloc, self_task));
         ret = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_RETRY_TIMES_EXCEED;
         has_scheduled = true;
         continue;
       }
 
-      alloc->alloc_task = task_manager::me()->get_task(this_task->get_id());
+      alloc->alloc_task = self_task;
       int64_t res = RPC_AWAIT_TYPE_RESULT(generate_global_increase_id(ctx, major_type, minor_type, patch_type));
       // WLOGINFO("=====DEBUG===== generate uuid pool for (%u, %u, %u), val: %lld", major_type, minor_type, patch_type,
       // static_cast<long long>(res));
-      if (alloc->alloc_task.get() == this_task) {
-        alloc->alloc_task.reset();
+      if (alloc->alloc_task == self_task) {
+        task_type_trait::reset_task(alloc->alloc_task);
       }
       should_wake_key = true;
       if (res <= 0) {
@@ -394,8 +400,12 @@ static rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx, uint32_t
   }
 
   if (should_wake_key) {
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+    self_task.then(unique_id_container_waker(key));
+#else
     task_type_trait::task_macro_coroutine::stack_allocator_type stack_alloc(task_manager::me()->get_stack_pool());
-    this_task->next(unique_id_container_waker(key), stack_alloc);
+    self_task->next(unique_id_container_waker(key), stack_alloc);
+#endif
   }
 
   // WLOGINFO("=====DEBUG===== malloc uuid for (%u, %u, %u), val: %lld", major_type, minor_type, patch_type,

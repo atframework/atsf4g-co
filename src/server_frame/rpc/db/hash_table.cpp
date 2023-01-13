@@ -40,8 +40,7 @@ result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
 
   __child_ctx.setup_tracer(__tracer, "rpc.db.hash_table.get_all", std::move(__trace_option));
 
-  task_manager::task_t *task = task_manager::task_t::this_task();
-  if (!task) {
+  if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
     RPC_DB_RETURN_CODE(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK));
   }
@@ -51,10 +50,10 @@ result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
   args.push(key.data(), key.size());
 
   uint64_t rpc_sequence = 0;
-  int res = db_msg_dispatcher::me()->send_msg(static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(),
-                                              key.size(), task->get_id(), logic_config::me()->get_local_server_id(),
-                                              unpack_fn, rpc_sequence, static_cast<int>(args.size()),
-                                              args.get_args_values(), args.get_args_lengths());
+  int res = db_msg_dispatcher::me()->send_msg(
+      static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
+      logic_config::me()->get_local_server_id(), unpack_fn, rpc_sequence, static_cast<int>(args.size()),
+      args.get_args_values(), args.get_args_lengths());
 
   if (res < 0) {
     RPC_DB_RETURN_CODE(__tracer.return_code(res));
@@ -91,8 +90,7 @@ result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key, const
 
   __child_ctx.setup_tracer(__tracer, "rpc.db.hash_table.set", std::move(__trace_option));
 
-  task_manager::task_t *task = task_manager::task_t::this_task();
-  if (!task) {
+  if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
     RPC_DB_RETURN_CODE(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK));
   }
@@ -127,10 +125,10 @@ result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key, const
   FWLOGDEBUG("table [key={}] start to save data, expect version: {}", key, version);
 
   uint64_t rpc_sequence = 0;
-  res = db_msg_dispatcher::me()->send_msg(static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(),
-                                          key.size(), task->get_id(), logic_config::me()->get_local_server_id(),
-                                          unpack_fn, rpc_sequence, static_cast<int>(args.size()),
-                                          args.get_args_values(), args.get_args_lengths());
+  res = db_msg_dispatcher::me()->send_msg(
+      static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
+      logic_config::me()->get_local_server_id(), unpack_fn, rpc_sequence, static_cast<int>(args.size()),
+      args.get_args_values(), args.get_args_lengths());
 
   // args unavailable now
 
@@ -172,8 +170,7 @@ result_type remove_all(rpc::context &ctx, uint32_t channel, gsl::string_view key
 
   __child_ctx.setup_tracer(__tracer, "rpc.db.hash_table.remove_all", std::move(__trace_option));
 
-  task_manager::task_t *task = task_manager::task_t::this_task();
-  if (!task) {
+  if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
     RPC_DB_RETURN_CODE(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK));
   }
@@ -187,7 +184,7 @@ result_type remove_all(rpc::context &ctx, uint32_t channel, gsl::string_view key
 
   uint64_t rpc_sequence = 0;
   result_type::value_type res = db_msg_dispatcher::me()->send_msg(
-      static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), task->get_id(),
+      static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
       logic_config::me()->get_local_server_id(), nullptr, rpc_sequence, static_cast<int>(args.size()),
       args.get_args_values(), args.get_args_lengths());
 

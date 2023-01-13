@@ -42,9 +42,10 @@ context::context() noexcept {
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   task_context_.task_id = 0;
 #else
-  task_manager::task_t *task = task_manager::task_t::this_task();
+  task_type_trait::internal_task_type *task = task_type_trait::internal_task_type::this_task();
   if (task) {
-    rpc::context *parent = task_manager::get_shared_context(*task);
+    task_type_trait::task_type task_ptr(task);
+    rpc::context *parent = task_manager::get_shared_context(task_ptr);
     if (parent) {
       set_parent_context(*parent);
     }

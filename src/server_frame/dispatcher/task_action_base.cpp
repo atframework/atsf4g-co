@@ -68,7 +68,6 @@ rpc::context &task_action_base::task_action_helper_t::get_shared_context(task_ac
 task_action_base::task_action_base()
     : user_id_(0),
       zone_id_(0),
-      task_id_(0),
       private_data_(nullptr),
       result_(0),
       response_code_(0),
@@ -79,7 +78,6 @@ task_action_base::task_action_base()
 task_action_base::task_action_base(rpc::context *caller_context)
     : user_id_(0),
       zone_id_(0),
-      task_id_(0),
       private_data_(nullptr),
       result_(0),
       response_code_(0),
@@ -130,18 +128,19 @@ int task_action_base::operator()(void *priv_data) {
 
   rpc::context::tracer tracer;
   shared_context_.setup_tracer(tracer, name(), std::move(trace_option));
+  rpc::context::task_context_data rpc_task_context_data;
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   private_data_ = task_meta.private_data;
-  task_id_ = task_meta.task_id;
+  rpc_task_context_data.task_id = task_meta.task_id;
 #else
   task_type_trait::internal_task_type *task = cotask::this_task::get<task_type_trait::internal_task_type>();
   if (nullptr == task) {
     FWLOGERROR("task convert failed, must in task.");
     return tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_INIT);
   }
-  private_data_ = task_manager::get_private_data(*task);
-  task_id_ = task->get_id();
+  private_data_ = task_type_trait::get_private_data(*task);
+  rpc_task_context_data.task_id = task->get_id();
 #endif
 
   if (nullptr != private_data_) {
@@ -149,11 +148,7 @@ int task_action_base::operator()(void *priv_data) {
     private_data_->action = this;
   }
 
-  {
-    rpc::context::task_context_data rpc_task_context_data;
-    rpc_task_context_data.task_id = task_id_;
-    shared_context_.set_task_context(rpc_task_context_data);
-  }
+  shared_context_.set_task_context(rpc_task_context_data);
 
   if (0 != get_user_id()) {
     FWLOGDEBUG("task {} [{}] for player {}:{} start to run\n", name(), get_task_id(), get_zone_id(), get_user_id());
@@ -282,7 +277,7 @@ rpc::context::parent_mode task_action_base::get_caller_mode() const noexcept {
   return rpc::context::parent_mode::kLink;
 }
 
-uint64_t task_action_base::get_task_id() const { return task_id_; }
+uint64_t task_action_base::get_task_id() const { return get_shared_context().get_task_context().task_id; }
 
 task_action_base::on_finished_callback_handle_t task_action_base::add_on_on_finished(on_finished_callback_fn_t &&fn) {
   return on_finished_callback_.insert(on_finished_callback_.end(), std::move(fn));

@@ -77,7 +77,7 @@ class router_manager_set : public util::design_pattern::singleton<router_manager
   bool mark_fast_save(router_manager_base *mgr, const std::shared_ptr<router_object_base> &obj);
 
   void add_io_schedule_order_task(const std::shared_ptr<router_object_base> &obj,
-                                  const task_type_trait::task_type &task);
+                                  task_type_trait::task_type &task);
 
  private:
   bool is_save_task_running() const;

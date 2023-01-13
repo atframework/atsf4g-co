@@ -134,10 +134,7 @@ class rpc_lru_cache_map {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
     }
 
-    if (nullptr == cotask::this_task::get_task()) {
-      FWLOGERROR("{} must be called in a cotask", __FUNCTION__);
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-    }
+    TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in task");
 
     int retry_times = RPC_LRU_CACHE_MAP_DEFAULT_RETRY_TIMES + 1;
     while ((--retry_times) > 0) {
@@ -149,16 +146,17 @@ class rpc_lru_cache_map {
       }
 
       // 如果正在拉取，则排到拉取任务后面
-      if (out->pulling_task) {
-        if (out->pulling_task->is_exiting()) {
+      if (!task_type_trait::empty(out->pulling_task)) {
+        if (task_type_trait::is_exiting(out->pulling_task)) {
           // fallback, clear data, 理论上不会走到这个流程，前面就是reset掉
-          out->pulling_task.reset();
+          task_type_trait::reset_task(out->pulling_task);
         } else {
           int res = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, out->pulling_task));
           if (res < 0) {
             out.reset();
             RPC_RETURN_CODE(res);
           }
+          task_type_trait::reset_task(out->pulling_task);
         }
         continue;
       }
@@ -178,25 +176,41 @@ class rpc_lru_cache_map {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
     }
 
-    task_type_trait::task_type self_task(task_manager::task_t::this_task());
     out = res.first->second;
     out->data_version = 0;
     out->last_visit_timepoint = util::time::time_utility::get_now();
-    out->pulling_task = self_task;
 
-    int ret = RPC_AWAIT_CODE_RESULT(fn(ctx, key, out->data_object, &out->data_version));
+    auto invoke_result = rpc::async_invoke(
+        ctx, "rpc_lru_cache_map.await_fetch",
+        [out, key, fn = std::move(fn)](rpc::context &child_ctx) -> rpc::result_code_type {
+          int32_t ret = RPC_AWAIT_CODE_RESULT(fn(child_ctx, key, out->data_object, &out->data_version));
 
-    // 拉取结束，重置拉取任务
-    if (out->pulling_task == self_task) {
-      out->pulling_task.reset();
+          if (task_type_trait::get_task_id(out->pulling_task) == child_ctx.get_task_context().task_id) {
+            task_type_trait::reset_task(out->pulling_task);
+          }
+
+          RPC_RETURN_CODE(ret);
+        });
+    int32_t ret;
+    if (invoke_result.is_error()) {
+      ret = *invoke_result.get_error();
+    } else {
+      // 拉取结束，重置拉取任务
+      if (!task_type_trait::is_exiting(*invoke_result.get_success())) {
+        out->pulling_task = *invoke_result.get_success();
+      }
+      ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, *invoke_result.get_success()));
+      if (ret >= 0) {
+        ret = task_type_trait::get_result(*invoke_result.get_success());
+      }
     }
 
     if (0 == ret) {
       cache_ptr_type test_cache = get_cache(key);
       if (nullptr != test_cache) {
         // 可能前面的缓存被淘汰过，新起了拉取任务
-        if (test_cache->pulling_task == self_task) {
-          test_cache->pulling_task.reset();
+        if (task_type_trait::get_task_id(test_cache->pulling_task) == ctx.get_task_context().task_id) {
+          task_type_trait::reset_task(test_cache->pulling_task);
         }
 
         // 可能前面的缓存被淘汰过，新起了拉取任务，那么数据刷到最新即可
@@ -209,25 +223,12 @@ class rpc_lru_cache_map {
         set_cache(out);
       }
     } else {
-      if (self_task) {
-        auto private_data = task_manager::get_private_data(*self_task);
-        const char *action_name = "";
-        if (nullptr != private_data && nullptr != private_data->action) {
-          action_name = private_data->action->name();
-        }
-        if (PROJECT_NAMESPACE_ID ::err::EN_DB_RECORD_NOT_FOUND == ret) {
-          FWLOGWARNING("{} try to rpc fetch data failed and will remove lru cache(task: {} {}), res: {}",
-                       self_task->get_id(), action_name, ret);
-        } else {
-          FWLOGERROR("{} try to rpc fetch data failed and will remove lru cache(task: {} {}), res: {}",
-                     self_task->get_id(), action_name, ret);
-        }
+      if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == ret) {
+        FWLOGWARNING("{} try to rpc fetch data failed and will remove lru cache(task: {}), res: {}",
+                     ctx.get_task_context().task_id, ret);
       } else {
-        if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == ret) {
-          FWLOGWARNING("{} try to rpc fetch data failed and will remove lru cache, res: {}", ret);
-        } else {
-          FWLOGERROR("{} try to rpc fetch data failed and will remove lru cache, res: {}", ret);
-        }
+        FWLOGERROR("{} try to rpc fetch data failed and will remove lru cache(task: {}), res: {}",
+                   ctx.get_task_context().task_id, ret);
       }
       remove_cache(key);
     }
@@ -249,7 +250,7 @@ class rpc_lru_cache_map {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
     }
 
-    if (nullptr == fn) {
+    if (!fn) {
       FWLOGERROR("{} must be called with rpc function", "rpc_lru_cache_map<KEY,ALUE>.await_save");
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
     }
@@ -266,20 +267,20 @@ class rpc_lru_cache_map {
       }
 
       // 自己就是保存任务
-      if (!inout->saving_task) {
+      if (task_type_trait::empty(inout->saving_task)) {
         break;
       }
 
-      task_type_trait::task_type self_task(task_manager::task_t::this_task());
-      if (inout->saving_task && inout->saving_task != self_task) {
-        if (inout->saving_task->is_exiting()) {
+      if (task_type_trait::get_task_id(inout->saving_task) != ctx.get_task_context().task_id) {
+        if (task_type_trait::is_exiting(inout->saving_task)) {
           // fallback, clear data, 理论上不会走到这个流程，前面就是reset掉
-          inout->saving_task.reset();
+          task_type_trait::reset_task(inout->saving_task);
         } else {
           int res = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, inout->saving_task));
           if (res < 0) {
             RPC_RETURN_CODE(res);
           }
+          task_type_trait::reset_task(inout->saving_task);
         }
       }
     }
@@ -287,9 +288,30 @@ class rpc_lru_cache_map {
     // 实际保存序号，因为可能延时执行，所以实际保存得时候可能被merge了其他请求得数据
     uint64_t real_saving_seq = inout->saving_sequence;
 
-    inout->saving_task = task_manager::task_t::this_task();
-    int ret = RPC_AWAIT_CODE_RESULT(fn(ctx, inout->data_object, &inout->data_version));
-    inout->saving_task.reset();
+    auto invoke_result = rpc::async_invoke(
+        ctx, "rpc_lru_cache_map.await_save",
+        [inout, fn = std::move(fn)](rpc::context &child_ctx) -> rpc::result_code_type {
+          int32_t ret = RPC_AWAIT_CODE_RESULT(fn(child_ctx, inout->data_object, &inout->data_version));
+
+          if (task_type_trait::get_task_id(inout->saving_task) == child_ctx.get_task_context().task_id) {
+            task_type_trait::reset_task(inout->saving_task);
+          }
+
+          RPC_RETURN_CODE(ret);
+        });
+    int32_t ret;
+    if (invoke_result.is_error()) {
+      ret = *invoke_result.get_error();
+    } else {
+      // 拉取结束，重置拉取任务
+      if (!task_type_trait::is_exiting(*invoke_result.get_success())) {
+        inout->saving_task = *invoke_result.get_success();
+      }
+      ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, *invoke_result.get_success()));
+      if (ret >= 0) {
+        ret = task_type_trait::get_result(*invoke_result.get_success());
+      }
+    }
 
     if (0 == ret && real_saving_seq > inout->saved_sequence) {
       inout->saved_sequence = real_saving_seq;

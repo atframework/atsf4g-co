@@ -313,7 +313,6 @@ class task_action_base
  private:
   uint64_t user_id_;
   uint32_t zone_id_;
-  uint64_t task_id_;
   task_private_data_type *private_data_;
   result_type result_;
   int32_t response_code_;
