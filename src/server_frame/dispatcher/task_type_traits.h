@@ -115,7 +115,7 @@ struct task_type_trait {
   using internal_task_type = cotask::task<task_macro_coroutine>;
   using id_type = typename internal_task_type::id_t;
   using task_type = typename internal_task_type::ptr_t;
-  using task_status = typename cotask::EN_TASK_STATUS;
+  using task_status = cotask::EN_TASK_STATUS;
 
   inline static id_type get_task_id(const task_type& task) noexcept {
     if (!task) {
