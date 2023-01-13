@@ -229,7 +229,7 @@ int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
 
   uint64_t from_server_id = source.id;
 
-  rpc::context ctx;
+  rpc::context ctx{rpc::context::create_without_task()};
   atframework::SSMsg *ss_msg = ctx.create<atframework::SSMsg>();
   if (nullptr == ss_msg) {
     FWLOGERROR("{} create message instance failed", name());
@@ -298,7 +298,7 @@ int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::messa
   const void *buffer = msg.data;
   size_t len = msg.data_size;
 
-  rpc::context ctx;
+  rpc::context ctx{rpc::context::create_without_task()};
   atframework::SSMsg *ss_msg = ctx.create<atframework::SSMsg>();
   if (nullptr == ss_msg) {
     FWLOGERROR("{} create message instance failed", name());

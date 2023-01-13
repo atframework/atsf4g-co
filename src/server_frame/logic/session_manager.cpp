@@ -150,7 +150,7 @@ void session_manager::remove(sess_ptr_t sess, int reason) {
     sess->set_player(nullptr);
     sess_ptr_t check_session = u->get_session();
     if (!check_session || check_session == sess) {
-      rpc::context ctx;
+      rpc::context ctx{rpc::context::create_without_task()};
       u->set_session(ctx, nullptr);
       // TODO 统计日志
       // 如果是踢下线，则需要强制保存并移除GameUser对象
@@ -180,7 +180,7 @@ void session_manager::remove_all(int32_t reason) {
   session_counter_.clear();
 
   if (!all_sessions->empty()) {
-    rpc::context ctx;
+    rpc::context ctx{rpc::context::create_without_task()};
     auto remove_player_task = rpc::async_invoke(ctx, "session_manager.remove_all", [all_sessions](rpc::context &ctx) {
       for (auto &session : *all_sessions) {
         if (!session.second) {

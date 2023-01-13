@@ -277,7 +277,7 @@ int task_action_player_remote_patch_jobs::on_success() {
       param_.user->get_user_async_jobs_manager().reset_async_jobs_protect();
     }
 
-    rpc::context new_ctx;
+    rpc::context new_ctx{rpc::context::create_without_task()};
     rpc::context::tracer new_tracer;
     rpc::context::trace_option trace_option;
     trace_option.dispatcher = nullptr;
@@ -312,7 +312,7 @@ int task_action_player_remote_patch_jobs::on_failed() {
       param_.user->get_user_async_jobs_manager().reset_async_jobs_protect();
     }
 
-    rpc::context new_ctx;
+    rpc::context new_ctx{rpc::context::create_without_task()};
     rpc::context::tracer new_tracer;
     rpc::context::trace_option trace_option;
     trace_option.dispatcher = nullptr;

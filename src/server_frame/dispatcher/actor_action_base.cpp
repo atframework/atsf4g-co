@@ -62,7 +62,8 @@ actor_action_base::actor_action_base()
       status_(EN_AAS_CREATED),
       response_message_disabled_(false),
       event_disabled_(false),
-      start_data_(dispatcher_make_default<dispatcher_start_data_type>()) {}
+      start_data_(dispatcher_make_default<dispatcher_start_data_type>()),
+      shared_context_(rpc::context::create_without_task()) {}
 
 actor_action_base::actor_action_base(rpc::context *caller_context)
     : user_id_(0),
@@ -72,7 +73,8 @@ actor_action_base::actor_action_base(rpc::context *caller_context)
       status_(EN_AAS_CREATED),
       response_message_disabled_(false),
       event_disabled_(false),
-      start_data_(dispatcher_make_default<dispatcher_start_data_type>()) {
+      start_data_(dispatcher_make_default<dispatcher_start_data_type>()),
+      shared_context_(rpc::context::create_without_task()) {
   if (nullptr != caller_context) {
     set_caller_context(*caller_context);
   }

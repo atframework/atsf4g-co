@@ -131,7 +131,7 @@ int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
   assert(msg_buf_sz == sizeof(db_async_data_t));
   const db_async_data_t *req = reinterpret_cast<const db_async_data_t *>(msg_buf);
 
-  rpc::context ctx;
+  rpc::context ctx{rpc::context::create_without_task()};
   rpc::context *ctx_ptr = nullptr;
 
   if (0 != req->task_id) {

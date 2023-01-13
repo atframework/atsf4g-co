@@ -203,7 +203,7 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
     case ::atframe::gw::ss_msg_body::kPost: {
       const ::atframe::gw::ss_body_post &post = req_msg.body().post();
 
-      rpc::context ctx;
+      rpc::context ctx{rpc::context::create_without_task()};
       atframework::CSMsg *cs_msg = ctx.create<atframework::CSMsg>();
       if (nullptr == cs_msg) {
         FWLOGERROR("{} create message instance failed", name());

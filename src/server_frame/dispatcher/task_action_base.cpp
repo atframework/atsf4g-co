@@ -73,7 +73,8 @@ task_action_base::task_action_base()
       response_code_(0),
       response_message_disabled_(false),
       event_disabled_(false),
-      start_data_(dispatcher_make_default<dispatcher_start_data_type>()) {}
+      start_data_(dispatcher_make_default<dispatcher_start_data_type>()),
+      shared_context_(rpc::context::create_without_task()) {}
 
 task_action_base::task_action_base(rpc::context *caller_context)
     : user_id_(0),
@@ -83,7 +84,8 @@ task_action_base::task_action_base(rpc::context *caller_context)
       response_code_(0),
       response_message_disabled_(false),
       event_disabled_(false),
-      start_data_(dispatcher_make_default<dispatcher_start_data_type>()) {
+      start_data_(dispatcher_make_default<dispatcher_start_data_type>()),
+      shared_context_(rpc::context::create_without_task()) {
   if (nullptr != caller_context) {
     set_caller_context(*caller_context);
   }

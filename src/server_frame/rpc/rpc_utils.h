@@ -78,6 +78,8 @@ class context {
         : mode(m), inherit_allocator(inherit_alloc){};
   };
 
+  struct create_options {};
+
   struct task_context_data {
     uint64_t task_id;
     inline task_context_data() noexcept : task_id(0){};
@@ -141,11 +143,20 @@ class context {
   context &operator=(const context &) = delete;
   context &operator=(context &&) = delete;
 
- public:
   context() noexcept;
+
+ public:
   explicit context(context &&other) noexcept;
   context(context &parent, inherit_options options = {}) noexcept;
   ~context();
+
+  /**
+   * @brief 创建和任务无关的RPC上下文，通常用于记录链路跟踪关系。
+   *
+   * @param options 创建选项
+   * @return context 创建的子上下文对象
+   */
+  static context create_without_task(create_options options = {}) noexcept;
 
   /**
    * @brief 创建临时的子上下文，通常用于协程栈上需要加一层链路跟踪。
