@@ -11,6 +11,7 @@
 #include <config/compiler/protobuf_suffix.h>
 
 #include <config/compiler_features.h>
+#include <design_pattern/nomovable.h>
 #include <design_pattern/noncopyable.h>
 
 #include <config/server_frame_build_feature.h>
@@ -21,6 +22,7 @@
 #include <ctime>
 #include <functional>
 #include <list>
+#include <memory>
 #include <set>
 #include <string>
 #include <type_traits>
@@ -29,7 +31,10 @@
 
 #include "router/router_system_defs.h"
 
-class router_object_base : public ::util::design_pattern::noncopyable {
+class router_object_base : public std::enable_shared_from_this<router_object_base> {
+  UTIL_DESIGN_PATTERN_NOCOPYABLE(router_object_base)
+  UTIL_DESIGN_PATTERN_NOMOVABLE(router_object_base)
+
  public:
   struct key_t {
     uint32_t type_id;
@@ -263,9 +268,7 @@ class router_object_base : public ::util::design_pattern::noncopyable {
 
  protected:
   void wakeup_io_task_awaiter();
-  rpc::result_code_type await_io_task(rpc::context &ctx, task_type_trait::task_type &self_task);
-  rpc::result_code_type await_io_task(rpc::context &ctx, task_type_trait::task_type &self_task,
-                                      task_type_trait::task_type &other_task);
+  rpc::result_code_type await_io_task(rpc::context &ctx, task_type_trait::task_type &other_task);
 
   // 内部接口，拉取缓存。会排队读任务
   rpc::result_code_type pull_cache_inner(rpc::context &ctx, void *priv_data);
@@ -281,7 +284,7 @@ class router_object_base : public ::util::design_pattern::noncopyable {
                                   const std::list<router_system_timer_t>::iterator &it);
   void unset_timer_ref();
 
-  rpc::result_code_type await_io_schedule_order_task(rpc::context &ctx, task_type_trait::task_type &self_task);
+  rpc::result_code_type await_io_schedule_order_task(rpc::context &ctx);
 
  private:
   key_t key_;

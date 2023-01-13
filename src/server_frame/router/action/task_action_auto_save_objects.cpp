@@ -218,8 +218,9 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
 }
 
 int task_action_auto_save_objects::on_success() {
-  if (router_manager_set::me()->pending_action_task_.get() == task_manager::task_t::this_task()) {
-    router_manager_set::me()->pending_action_task_.reset();
+  if (task_type_trait::get_task_id(router_manager_set::me()->pending_action_task_) ==
+      get_shared_context().get_task_context().task_id) {
+    task_type_trait::reset_task(router_manager_set::me()->pending_action_task_);
   }
 
   FWLOGWARNING("auto save task done.(success save: {}, failed save: {})", status_data_->success_count_,
@@ -232,8 +233,9 @@ int task_action_auto_save_objects::on_success() {
 }
 
 int task_action_auto_save_objects::on_failed() {
-  if (router_manager_set::me()->pending_action_task_.get() == task_manager::task_t::this_task()) {
-    router_manager_set::me()->pending_action_task_.reset();
+  if (task_type_trait::get_task_id(router_manager_set::me()->pending_action_task_) ==
+      get_shared_context().get_task_context().task_id) {
+    task_type_trait::reset_task(router_manager_set::me()->pending_action_task_);
   }
 
   FWLOGERROR("auto save task failed.(success save: {}, failed save: {}) ret: {}", status_data_->success_count_,
@@ -242,8 +244,9 @@ int task_action_auto_save_objects::on_failed() {
 }
 
 int task_action_auto_save_objects::on_timeout() {
-  if (router_manager_set::me()->pending_action_task_.get() == task_manager::task_t::this_task()) {
-    router_manager_set::me()->pending_action_task_.reset();
+  if (task_type_trait::get_task_id(router_manager_set::me()->pending_action_task_) ==
+      get_shared_context().get_task_context().task_id) {
+    task_type_trait::reset_task(router_manager_set::me()->pending_action_task_);
   }
 
   FWLOGWARNING("auto save task timeout(run {} seconds), we will continue on next round.",

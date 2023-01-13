@@ -18,6 +18,7 @@
 #include <utility/random_engine.h>
 
 #include <rpc/router/routerservice.h>
+#include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_utils.h>
 
 #include <dispatcher/task_manager.h>
@@ -308,13 +309,8 @@ class router_manager : public router_manager_base {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
 
-    task_type_trait::task_type self_task(task_manager::task_t::this_task());
-    if (!self_task) {
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-    }
-
     // 先等待其他IO任务完成
-    auto ret = RPC_AWAIT_CODE_RESULT(obj->await_io_task(ctx, self_task));
+    auto ret = RPC_AWAIT_CODE_RESULT(obj->await_io_task(ctx));
     if (ret < 0) {
       RPC_RETURN_CODE(ret);
     }
@@ -358,30 +354,52 @@ class router_manager : public router_manager_base {
 
     if (0 != svr_id && need_notify) {
       // 如果目标不是0则通知目标服务器
-      PROJECT_NAMESPACE_ID::SSRouterTransferReq *req = ctx.create<PROJECT_NAMESPACE_ID::SSRouterTransferReq>();
-      PROJECT_NAMESPACE_ID::SSRouterTransferRsp *rsp = ctx.create<PROJECT_NAMESPACE_ID::SSRouterTransferRsp>();
-      if (nullptr == req || nullptr == rsp) {
-        ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+      uint32_t router_type_id = get_type_id();
+      auto invoke_result = rpc::async_invoke(
+          ctx, "router_manager.transfer",
+          [obj, router_type_id, svr_id](rpc::context &child_ctx) -> rpc::result_code_type {
+            int32_t ret;
+            PROJECT_NAMESPACE_ID::SSRouterTransferReq *req =
+                child_ctx.create<PROJECT_NAMESPACE_ID::SSRouterTransferReq>();
+            PROJECT_NAMESPACE_ID::SSRouterTransferRsp *rsp =
+                child_ctx.create<PROJECT_NAMESPACE_ID::SSRouterTransferRsp>();
+            if (nullptr == req || nullptr == rsp) {
+              ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+            } else {
+              atframework::SSRouterHead *router_head = req->mutable_object();
+              if (nullptr != router_head) {
+                router_head->set_router_src_bus_id(obj->get_router_server_id());
+                router_head->set_router_version(obj->get_router_version());
+
+                router_head->set_object_inst_id(obj->get_key().object_id);
+                router_head->set_object_type_id(router_type_id);
+                router_head->set_object_zone_id(obj->get_key().zone_id);
+
+                // 转移通知RPC也需要设置为IO任务，这样如果有其他的读写任务或者转移任务都会等本任务完成
+                ret = RPC_AWAIT_CODE_RESULT(rpc::router::router_transfer(child_ctx, svr_id, *req, *rsp));
+                obj->wakeup_io_task_awaiter();
+                if (ret < 0) {
+                  FWLOGERROR("transfer router object (type={},zone_id={}) {} failed, res: {}", router_type_id,
+                             obj->get_key().zone_id, obj->get_key().object_id, ret);
+                }
+              } else {
+                ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+              }
+            }
+
+            RPC_RETURN_CODE(ret);
+          });
+      if (invoke_result.is_error()) {
+        ret = *invoke_result.get_error();
       } else {
-        atframework::SSRouterHead *router_head = req->mutable_object();
-        if (nullptr != router_head) {
-          router_head->set_router_src_bus_id(obj->get_router_server_id());
-          router_head->set_router_version(obj->get_router_version());
+        if (!task_type_trait::is_exiting(*invoke_result.get_success())) {
+          obj->io_task_ = *invoke_result.get_success();
+        }
 
-          router_head->set_object_inst_id(obj->get_key().object_id);
-          router_head->set_object_type_id(get_type_id());
-          router_head->set_object_zone_id(obj->get_key().zone_id);
+        ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, *invoke_result.get_success()));
 
-          // 转移通知RPC也需要设置为IO任务，这样如果有其他的读写任务或者转移任务都会等本任务完成
-          obj->io_task_.swap(self_task);
-          ret = RPC_AWAIT_CODE_RESULT(rpc::router::router_transfer(ctx, svr_id, *req, *rsp));
-          obj->wakeup_io_task_awaiter();
-          if (ret < 0) {
-            FWLOGERROR("transfer router object (type={},zone_id={}) {} failed, res: {}", get_type_id(),
-                       obj->get_key().zone_id, obj->get_key().object_id, ret);
-          }
-        } else {
-          ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+        if (0 == ret) {
+          ret = task_type_trait::get_result(*invoke_result.get_success());
         }
       }
     }

@@ -20,6 +20,7 @@
 #include <dispatcher/ss_msg_dispatcher.h>
 #include <dispatcher/task_action_ss_req_base.h>
 
+#include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_utils.h>
 
 bool router_object_base::key_t::operator==(const key_t &r) const noexcept {
@@ -251,24 +252,6 @@ int router_object_base::send_transfer_msg_failed(atframework::SSMsg &&req) {
   return ss_msg_dispatcher::me()->send_to_proc(dst_pd, rsp_msg);
 }
 
-rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx) {
-  if (!io_task_) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
-  }
-
-  if (io_task_->is_exiting()) {
-    wakeup_io_task_awaiter();
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
-  }
-
-  task_type_trait::task_type self_task(task_manager::task_t::this_task());
-  if (!self_task) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
-
-  return await_io_task(ctx, self_task);
-}
-
 void router_object_base::trace_router(rpc::context &ctx, uint32_t type_id, uint32_t zone_id, uint64_t object_id) {
   auto &trace_span = ctx.get_trace_span();
   if (!trace_span) {
@@ -279,14 +262,14 @@ void router_object_base::trace_router(rpc::context &ctx, uint32_t type_id, uint3
 }
 
 void router_object_base::wakeup_io_task_awaiter() {
-  if (!io_task_) {
+  if (task_type_trait::empty(io_task_)) {
     return;
   }
-  io_task_.reset();
+  task_type_trait::reset_task(io_task_);
 
-  while (!io_task_awaiter_.empty() && !io_task_) {
+  while (!io_task_awaiter_.empty() && task_type_trait::empty(io_task_)) {
     task_type_trait::task_type wake_task = io_task_awaiter_.front();
-    if (wake_task && !wake_task->is_exiting()) {
+    if (!task_type_trait::empty(wake_task) && !task_type_trait::is_exiting(wake_task)) {
       // iter will be erased in task
       dispatcher_resume_data_type callback_data = dispatcher_make_default<dispatcher_resume_data_type>();
       callback_data.message.msg_type = reinterpret_cast<uintptr_t>(reinterpret_cast<const void *>(&io_task_awaiter_));
@@ -295,33 +278,43 @@ void router_object_base::wakeup_io_task_awaiter() {
       rpc::custom_resume(wake_task, callback_data);
     } else {
       // This should not be called
-      if (wake_task) {
-        FWLOGERROR("Wake iterator of task {} should be removed by task action", wake_task->get_id());
+      if (!task_type_trait::empty(wake_task)) {
+        FWLOGERROR("Wake iterator of task {} should be removed by task action",
+                   task_type_trait::get_task_id(wake_task));
       }
       io_task_awaiter_.pop_front();
     }
   }
 }
 
-rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx, task_type_trait::task_type &self_task) {
-  int ret = 0;
-  while (io_task_ && self_task && self_task != io_task_) {
-    ret = task_manager::convert_task_status_to_error_code(*self_task);
+rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx) {
+  int32_t ret = 0;
+  while (!task_type_trait::empty(io_task_) &&
+         ctx.get_task_context().task_id != task_type_trait::get_task_id(io_task_)) {
+    ret = task_manager::convert_task_status_to_error_code(TASK_COMPAT_GET_CURRENT_STATUS());
     if (ret < 0) {
       break;
     }
 
-    if (io_task_->is_exiting()) {
+    if (task_type_trait::is_exiting(io_task_)) {
       wakeup_io_task_awaiter();
       continue;
     }
 
-    FWLOGDEBUG("task {} start to await for task {} by router object/cache {}:{}:{}", self_task->get_id(),
-               io_task_->get_id(), get_key().type_id, get_key().zone_id, get_key().object_id);
-    auto awaiter_iter = io_task_awaiter_.insert(io_task_awaiter_.end(), self_task);
+    FWLOGDEBUG("task {} start to await for task {} by router object/cache {}:{}:{}", ctx.get_task_context().task_id,
+               task_type_trait::get_task_id(io_task_), get_key().type_id, get_key().zone_id, get_key().object_id);
+
+    std::list<task_type_trait::task_type>::iterator awaiter_iter;
+    {
+      task_type_trait::task_type self_task = task_manager::me()->get_task(ctx.get_task_context().task_id);
+      if (task_type_trait::empty(self_task)) {
+        break;
+      }
+      awaiter_iter = io_task_awaiter_.insert(io_task_awaiter_.end(), self_task);
+    }
 
     dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
-    await_options.sequence = self_task->get_id();
+    await_options.sequence = ctx.get_task_context().task_id;
     await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(),
                                                           std::chrono::seconds{6});
 
@@ -333,36 +326,40 @@ rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx, task_
   RPC_RETURN_CODE(ret);
 }
 
-rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx, task_type_trait::task_type &self_task,
-                                                        task_type_trait::task_type &other_task) {
-  if (!self_task || !other_task) {
+rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx, task_type_trait::task_type &other_task) {
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in task");
+  if (task_type_trait::empty(other_task)) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
   }
 
-  if (other_task == io_task_) {
-    return await_io_task(ctx, self_task);
+  if (ctx.get_task_context().task_id == task_type_trait::get_task_id(io_task_)) {
+    return await_io_task(ctx);
   }
 
   rpc::result_code_type::value_type ret = 0;
   while (true) {
-    ret = task_manager::convert_task_status_to_error_code(*self_task);
+    ret = task_manager::convert_task_status_to_error_code(TASK_COMPAT_GET_CURRENT_STATUS());
     if (ret < 0) {
       break;
     }
 
-    if (!other_task || other_task == self_task) {
+    if (task_type_trait::empty(other_task) ||
+        ctx.get_task_context().task_id == task_type_trait::get_task_id(other_task)) {
       break;
     }
 
-    if (other_task->is_exiting()) {
-      other_task.reset();
+    if (task_type_trait::is_exiting(other_task)) {
+      task_type_trait::reset_task(other_task);
       continue;
     }
 
-    FWLOGDEBUG("task {} start to await for task {} by router object/cache {}:{}:{}", self_task->get_id(),
-               other_task->get_id(), get_key().type_id, get_key().zone_id, get_key().object_id);
+    FWLOGDEBUG("task {} start to await for task {} by router object/cache {}:{}:{}", ctx.get_task_context().task_id,
+               task_type_trait::get_task_id(other_task), get_key().type_id, get_key().zone_id, get_key().object_id);
 
-    RPC_AWAIT_IGNORE_RESULT(self_task->await_task(other_task));
+    ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, other_task));
+    if (ret < 0) {
+      break;
+    }
   }
 
   RPC_RETURN_CODE(ret);
@@ -372,35 +369,52 @@ rpc::result_code_type router_object_base::pull_cache_inner(rpc::context &ctx, vo
   // 触发拉取缓存时要取消移除缓存的计划任务
   unset_flag(flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
 
-  task_type_trait::task_type self_task(task_manager::task_t::this_task());
-  if (!self_task) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in task");
 
-  rpc::result_code_type::value_type ret = RPC_AWAIT_CODE_RESULT(await_io_task(ctx, self_task));
+  rpc::result_code_type::value_type ret = RPC_AWAIT_CODE_RESULT(await_io_task(ctx));
   if (ret < 0) {
     RPC_RETURN_CODE(ret);
   }
 
-  // 先等待之前的任务完成再设置flag
-  flag_guard fg(*this, flag_t::EN_ROFT_PULLING_CACHE);
+  auto router_ptr = shared_from_this();
+  auto invoke_result = rpc::async_invoke(
+      ctx, "router_object.pull_cache", [router_ptr, priv_data](rpc::context &child_ctx) -> rpc::result_code_type {
+        // 先等待之前的任务完成再设置flag
+        flag_guard fg(*router_ptr, flag_t::EN_ROFT_PULLING_CACHE);
 
-  // 执行读任务
-  io_task_ = self_task;
-  io_last_pull_cache_task_id_ = io_task_->get_id();
-  ret = RPC_AWAIT_CODE_RESULT(await_io_schedule_order_task(ctx, self_task));
-  if (ret < 0) {
-    RPC_RETURN_CODE(ret);
+        rpc::result_code_type::value_type ret =
+            RPC_AWAIT_CODE_RESULT(router_ptr->await_io_schedule_order_task(child_ctx));
+        if (ret < 0) {
+          RPC_RETURN_CODE(ret);
+        }
+
+        ret = RPC_AWAIT_CODE_RESULT(router_ptr->pull_cache(child_ctx, priv_data));
+        router_ptr->wakeup_io_task_awaiter();
+
+        if (ret < 0) {
+          RPC_RETURN_CODE(ret);
+        }
+
+        // 拉取成功要refresh_save_time
+        router_ptr->refresh_save_time();
+
+        RPC_RETURN_CODE(ret);
+      });
+
+  if (invoke_result.is_error()) {
+    RPC_RETURN_CODE(*invoke_result.get_error());
+  } else {
+    // 执行读任务
+    io_last_pull_cache_task_id_ = task_type_trait::get_task_id(*invoke_result.get_success());
+    if (!task_type_trait::is_exiting(*invoke_result.get_success())) {
+      io_task_ = *invoke_result.get_success();
+    }
+
+    ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, *invoke_result.get_success()));
+    if (ret >= 0) {
+      ret = task_type_trait::get_result(*invoke_result.get_success());
+    }
   }
-  ret = RPC_AWAIT_CODE_RESULT(pull_cache(ctx, priv_data));
-  wakeup_io_task_awaiter();
-
-  if (ret < 0) {
-    RPC_RETURN_CODE(ret);
-  }
-
-  // 拉取成功要refresh_save_time
-  refresh_save_time();
 
   RPC_RETURN_CODE(ret);
 }
@@ -411,12 +425,9 @@ rpc::result_code_type router_object_base::pull_object_inner(rpc::context &ctx, v
   unset_flag(flag_t::EN_ROFT_SCHED_REMOVE_OBJECT);
   unset_flag(flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
 
-  task_type_trait::task_type self_task(task_manager::task_t::this_task());
-  if (!self_task) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in task");
 
-  auto ret = RPC_AWAIT_CODE_RESULT(await_io_task(ctx, self_task));
+  auto ret = RPC_AWAIT_CODE_RESULT(await_io_task(ctx));
   if (ret < 0) {
     RPC_RETURN_CODE(ret);
   }
@@ -426,39 +437,60 @@ rpc::result_code_type router_object_base::pull_object_inner(rpc::context &ctx, v
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
 
-  // 先等待之前的任务完成再设置flag
-  flag_guard fg(*this, flag_t::EN_ROFT_PULLING_OBJECT);
+  auto router_ptr = shared_from_this();
+  auto invoke_result = rpc::async_invoke(
+      ctx, "router_object.pull_object", [router_ptr, priv_data](rpc::context &child_ctx) -> rpc::result_code_type {
+        // 先等待之前的任务完成再设置flag
+        flag_guard fg(*router_ptr, flag_t::EN_ROFT_PULLING_OBJECT);
 
-  unset_flag(flag_t::EN_ROFT_CACHE_REMOVED);
-  unset_flag(flag_t::EN_ROFT_FORCE_PULL_OBJECT);
+        router_ptr->unset_flag(flag_t::EN_ROFT_CACHE_REMOVED);
+        router_ptr->unset_flag(flag_t::EN_ROFT_FORCE_PULL_OBJECT);
 
-  // 执行读任务
-  io_task_ = self_task;
-  io_last_pull_object_task_id_ = io_task_->get_id();
-  ret = RPC_AWAIT_CODE_RESULT(await_io_schedule_order_task(ctx, self_task));
-  if (ret < 0) {
-    wakeup_io_task_awaiter();
-    RPC_RETURN_CODE(ret);
-  }
-  ret = RPC_AWAIT_CODE_RESULT(pull_object(ctx, priv_data));
-  wakeup_io_task_awaiter();
+        // 执行读任务
+        auto ret = RPC_AWAIT_CODE_RESULT(router_ptr->await_io_schedule_order_task(child_ctx));
+        if (ret < 0) {
+          router_ptr->wakeup_io_task_awaiter();
+          RPC_RETURN_CODE(ret);
+        }
 
-  if (ret < 0) {
-    RPC_RETURN_CODE(ret);
-  }
+        ret = RPC_AWAIT_CODE_RESULT(router_ptr->pull_object(child_ctx, priv_data));
+        router_ptr->wakeup_io_task_awaiter();
 
-  // 拉取成功要refresh_save_time
-  refresh_save_time();
+        if (ret < 0) {
+          RPC_RETURN_CODE(ret);
+        }
 
-  if (0 != get_router_server_id()) {
-    if (logic_config::me()->get_local_server_id() != get_router_server_id()) {
-      // 可能某处的缓存过老，这是正常流程，返回错误码即可，不用打错误日志
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE);
+        // 拉取成功要refresh_save_time
+        router_ptr->refresh_save_time();
+
+        if (0 != router_ptr->get_router_server_id()) {
+          if (logic_config::me()->get_local_server_id() != router_ptr->get_router_server_id()) {
+            // 可能某处的缓存过老，这是正常流程，返回错误码即可，不用打错误日志
+            RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE);
+          }
+        }
+
+        // 升级为实体
+        router_ptr->upgrade();
+
+        RPC_RETURN_CODE(ret);
+      });
+
+  if (invoke_result.is_error()) {
+    RPC_RETURN_CODE(*invoke_result.get_error());
+  } else {
+    // 执行读任务
+    io_last_pull_object_task_id_ = task_type_trait::get_task_id(*invoke_result.get_success());
+    if (!task_type_trait::is_exiting(*invoke_result.get_success())) {
+      io_task_ = *invoke_result.get_success();
+    }
+
+    ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, *invoke_result.get_success()));
+    if (ret >= 0) {
+      ret = task_type_trait::get_result(*invoke_result.get_success());
     }
   }
 
-  // 升级为实体
-  upgrade();
   RPC_RETURN_CODE(ret);
 }
 
@@ -468,13 +500,10 @@ rpc::result_code_type router_object_base::save_object_inner(rpc::context &ctx, v
   // 排队写任务和并发写merge
   uint64_t this_saving_seq = ++saving_sequence_;
 
-  task_type_trait::task_type self_task(task_manager::task_t::this_task());
-  if (!self_task) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in task");
 
   // 如果有其他任务正在保存，需要等待那个任务结束
-  auto ret = RPC_AWAIT_CODE_RESULT(await_io_task(ctx, self_task));
+  auto ret = RPC_AWAIT_CODE_RESULT(await_io_task(ctx));
   if (ret < 0) {
     RPC_RETURN_CODE(ret);
   }
@@ -489,26 +518,46 @@ rpc::result_code_type router_object_base::save_object_inner(rpc::context &ctx, v
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  // 先等待之前的任务完成再设置flag
-  flag_guard fg(*this, flag_t::EN_ROFT_SAVING);
+  auto router_ptr = shared_from_this();
+  auto invoke_result = rpc::async_invoke(
+      ctx, "router_object.save_object", [router_ptr, priv_data](rpc::context &child_ctx) -> rpc::result_code_type {
+        // 先等待之前的任务完成再设置flag
+        flag_guard fg(*router_ptr, flag_t::EN_ROFT_SAVING);
 
-  uint64_t real_saving_seq = saving_sequence_;
-  ret = RPC_AWAIT_CODE_RESULT(await_io_schedule_order_task(ctx, self_task));
-  if (ret < 0) {
-    RPC_RETURN_CODE(ret);
+        uint64_t real_saving_seq = router_ptr->saving_sequence_;
+        auto ret = RPC_AWAIT_CODE_RESULT(router_ptr->await_io_schedule_order_task(child_ctx));
+        if (ret < 0) {
+          RPC_RETURN_CODE(ret);
+        }
+        ret = RPC_AWAIT_CODE_RESULT(router_ptr->save_object(child_ctx, priv_data));
+        router_ptr->wakeup_io_task_awaiter();
+
+        if (ret >= 0 && real_saving_seq > router_ptr->saved_sequence_) {
+          router_ptr->saved_sequence_ = real_saving_seq;
+        } else if (ret < 0) {
+          // 保存失败
+          RPC_RETURN_CODE(ret);
+        }
+
+        router_ptr->refresh_save_time();
+
+        RPC_RETURN_CODE(ret);
+      });
+
+  if (invoke_result.is_error()) {
+    RPC_RETURN_CODE(*invoke_result.get_error());
+  } else {
+    // 执行写任务
+    if (!task_type_trait::is_exiting(*invoke_result.get_success())) {
+      io_task_ = *invoke_result.get_success();
+    }
+
+    ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, *invoke_result.get_success()));
+    if (ret >= 0) {
+      ret = task_type_trait::get_result(*invoke_result.get_success());
+    }
   }
-  io_task_.swap(self_task);
-  ret = RPC_AWAIT_CODE_RESULT(save_object(ctx, priv_data));
-  wakeup_io_task_awaiter();
 
-  if (ret >= 0 && real_saving_seq > saved_sequence_) {
-    saved_sequence_ = real_saving_seq;
-  } else if (ret < 0) {
-    // 保存失败
-    RPC_RETURN_CODE(ret);
-  }
-
-  refresh_save_time();
   RPC_RETURN_CODE(ret);
 }
 
@@ -546,8 +595,7 @@ void router_object_base::unset_timer_ref() {
   timer_list_ = nullptr;
 }
 
-rpc::result_code_type router_object_base::await_io_schedule_order_task(rpc::context &ctx,
-                                                                       task_type_trait::task_type &self_task) {
+rpc::result_code_type router_object_base::await_io_schedule_order_task(rpc::context &ctx) {
   if (io_schedule_order_.empty()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -589,7 +637,7 @@ rpc::result_code_type router_object_base::await_io_schedule_order_task(rpc::cont
       continue;
     }
 
-    auto ret = RPC_AWAIT_CODE_RESULT(await_io_task(ctx, self_task, task));
+    auto ret = RPC_AWAIT_CODE_RESULT(await_io_task(ctx, task));
     if (ret < 0) {
       RPC_RETURN_CODE(ret);
     }

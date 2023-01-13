@@ -27,6 +27,7 @@ struct task_type_trait {
   using internal_task_type = cotask::task_future<int32_t, task_private_data_type>;
   using id_type = typename internal_task_type::id_type;
   using task_type = internal_task_type;
+  using task_status = typename internal_task_type::task_status_type;
 
   inline static id_type get_task_id(const task_type& task) noexcept { return task.get_id(); }
 
@@ -99,6 +100,7 @@ struct task_type_trait {
     ((co_yield copp::promise_base_type::pick_current_status()) == task_type_trait::task_type::task_status_type::kCancle)
 #  define TASK_COMPAT_CHECK_IS_FAULT() \
     ((co_yield copp::promise_base_type::pick_current_status()) >= task_type_trait::task_type::task_status_type::kKilled)
+#  define TASK_COMPAT_GET_CURRENT_STATUS() (co_yield copp::promise_base_type::pick_current_status())
 
 #else
 struct task_type_trait {
@@ -113,6 +115,7 @@ struct task_type_trait {
   using internal_task_type = cotask::task<task_macro_coroutine>;
   using id_type = typename internal_task_type::id_t;
   using task_type = typename internal_task_type::ptr_t;
+  using task_status = typename cotask::EN_TASK_STATUS;
 
   inline static id_type get_task_id(const task_type& task) noexcept {
     if (!task) {
@@ -165,6 +168,14 @@ struct task_type_trait {
 
     return task->is_faulted();
   }
+
+  inline static task_status get_status(const task_type& task) noexcept {
+    if (!task) {
+      return task_status::EN_TS_INVALID;
+    }
+
+    return task->get_status();
+  }
 };
 
 // Compatibility
@@ -178,5 +189,6 @@ struct task_type_trait {
 #  define TASK_COMPAT_CHECK_IS_TIMEOUT() task_type_trait::is_timeout(task_type_trait::internal_task_type::this_task())
 #  define TASK_COMPAT_CHECK_IS_CANCEL() task_type_trait::is_cancel(task_type_trait::internal_task_type::this_task())
 #  define TASK_COMPAT_CHECK_IS_FAULT() task_type_trait::is_fault(task_type_trait::internal_task_type::this_task())
+#  define TASK_COMPAT_GET_CURRENT_STATUS() task_type_trait::get_status(task_type_trait::internal_task_type::this_task())
 
 #endif

@@ -311,18 +311,50 @@ rpc::context *task_manager::get_shared_context(task_t &task) {
   return &task_action_base::task_action_helper_t::get_shared_context(*task_priv_data->action);
 }
 
-int32_t task_manager::convert_task_status_to_error_code(task_t &task) noexcept {
-  if (task.is_timeout()) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
-  } else if (task.is_faulted()) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
-  } else if (task.is_canceled()) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
-  } else if (task.is_exiting()) {
+int32_t task_manager::convert_task_status_to_error_code(task_type_trait::task_status task_status) noexcept {
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+  switch (task_status) {
+    case task_type_trait::task_status::kCancle: {
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
+    }
+    case task_type_trait::task_status::kKilled: {
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
+    }
+    case task_type_trait::task_status::kTimeout: {
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+    }
+    default: {
+      break;
+    }
+  }
+
+  if (task_status >= task_type_trait::task_status::kDone) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING;
   }
 
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+#else
+  switch (task_status) {
+    case cotask::EN_TS_CANCELED: {
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
+    }
+    case cotask::EN_TS_KILLED: {
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
+    }
+    case cotask::EN_TS_TIMEOUT: {
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+    }
+    default: {
+      break;
+    }
+  }
+
+  if (task_status >= cotask::EN_TS_DONE) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING;
+  }
+
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+#endif
 }
 
 bool task_manager::check_sys_config() const {

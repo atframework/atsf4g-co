@@ -44,12 +44,6 @@ task_action_router_close_manager_set::result_type task_action_router_close_manag
 
   util::time::time_utility::update();
 
-  task_manager::task_t *task = task_manager::task_t::this_task();
-  if (!task) {
-    FWLOGERROR("current not in a task");
-    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
-
   size_t closing_action_batch_count = logic_config::me()->get_cfg_router().closing_action_batch_count();
   std::vector<task_type_trait::task_type> pending_action_batch_tasks;
   pending_action_batch_tasks.reserve(closing_action_batch_count);
@@ -59,12 +53,6 @@ task_action_router_close_manager_set::result_type task_action_router_close_manag
     pending_list_ptr_t pending_list = param_.pending_list;
     auto invoke_task = rpc::async_invoke(
         get_shared_context(), "task_action_router_close_manager_set", [status_data, pending_list](rpc::context &ctx) {
-          task_manager::task_t *sub_task = task_manager::task_t::this_task();
-          if (!sub_task) {
-            FWLOGERROR("current not in a task");
-            RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-          }
-
           router_object_ptr_t obj = (*pending_list)[status_data->current_idx_];
           ++status_data->current_idx_;
 
@@ -94,21 +82,21 @@ task_action_router_close_manager_set::result_type task_action_router_close_manag
           // 降级的时候会保存
           auto res = RPC_AWAIT_CODE_RESULT(mgr->remove_object(ctx, obj->get_key(), obj, nullptr));
 
-          if (sub_task->is_timeout()) {
+          if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
             FWLOGERROR("router close task save router object {}({}:{}:{}) timeout", obj->name(), obj->get_key().type_id,
                        obj->get_key().zone_id, obj->get_key().object_id);
             ++status_data->failed_count_;
             RPC_RETURN_CODE(0);
           }
 
-          if (sub_task->is_canceled()) {
+          if (TASK_COMPAT_CHECK_IS_CANCEL()) {
             FWLOGERROR("router close task save router object {}({}:{}:{}) but cancelled", obj->name(),
                        obj->get_key().type_id, obj->get_key().zone_id, obj->get_key().object_id);
             ++status_data->failed_count_;
             RPC_RETURN_CODE(0);
           }
 
-          if (sub_task->is_faulted()) {
+          if (TASK_COMPAT_CHECK_IS_FAULT()) {
             FWLOGERROR("router close task save router object {}({}:{}:{}) but killed", obj->name(),
                        obj->get_key().type_id, obj->get_key().zone_id, obj->get_key().object_id);
             ++status_data->failed_count_;
@@ -158,7 +146,7 @@ task_action_router_close_manager_set::result_type task_action_router_close_manag
   }
 
   // 如果超时了可能被强杀，这时候要强制触发保存
-  if (task->is_exiting()) {
+  if (TASK_COMPAT_CHECK_IS_EXITING()) {
     RPC_AWAIT_IGNORE_RESULT(save_fallback());
   }
 
@@ -206,8 +194,9 @@ rpc::result_code_type task_action_router_close_manager_set::save_fallback() {
 }
 
 int task_action_router_close_manager_set::on_success() {
-  if (router_manager_set::me()->closing_task_.get() == task_manager::task_t::this_task()) {
-    router_manager_set::me()->closing_task_.reset();
+  if (task_type_trait::get_task_id(router_manager_set::me()->closing_task_) ==
+      get_shared_context().get_task_context().task_id) {
+    task_type_trait::reset_task(router_manager_set::me()->closing_task_);
   }
 
   FWLOGINFO("router close task done.(success save: {}, failed save: {})", status_data_->success_count_,
@@ -216,8 +205,9 @@ int task_action_router_close_manager_set::on_success() {
 }
 
 int task_action_router_close_manager_set::on_failed() {
-  if (router_manager_set::me()->closing_task_.get() == task_manager::task_t::this_task()) {
-    router_manager_set::me()->closing_task_.reset();
+  if (task_type_trait::get_task_id(router_manager_set::me()->closing_task_) ==
+      get_shared_context().get_task_context().task_id) {
+    task_type_trait::reset_task(router_manager_set::me()->closing_task_);
   }
 
   FWLOGERROR("router close task failed.(success save: {}, failed save: {}) ret: {}", status_data_->success_count_,
@@ -226,8 +216,9 @@ int task_action_router_close_manager_set::on_failed() {
 }
 
 int task_action_router_close_manager_set::on_timeout() {
-  if (router_manager_set::me()->closing_task_.get() == task_manager::task_t::this_task()) {
-    router_manager_set::me()->closing_task_.reset();
+  if (task_type_trait::get_task_id(router_manager_set::me()->closing_task_) ==
+      get_shared_context().get_task_context().task_id) {
+    task_type_trait::reset_task(router_manager_set::me()->closing_task_);
   }
 
   FWLOGWARNING("router close task timeout, we will continue on next round.");
