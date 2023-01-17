@@ -180,20 +180,29 @@ int router_manager_set::stop() {
   if (0 == tid) {
     FWLOGERROR("create task_action_router_close_manager_set failed");
   } else {
-    dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
-
     closing_task_ = task_manager::me()->get_task(tid);
-    if (!closing_task_) {
+    if (task_type_trait::empty(closing_task_)) {
       FWLOGERROR("task_action_router_close_manager_set should not be not found");
       return 0;
     }
 
-    if (is_save_task_running() && pending_action_task_) {
+    if (is_save_task_running() && !task_type_trait::empty(pending_action_task_)) {
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+      pending_action_task_.then([](task_type_trait::internal_task_type::context_pointer_type &&) {
+        if (task_manager::is_instance_destroyed()) {
+          return;
+        }
+        dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
+        task_manager::me()->start_task(tid, start_data);
+      })
+#else
       pending_action_task_->then(closing_task_);
+#endif
     } else {
+      dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
       int res = task_manager::me()->start_task(tid, start_data);
       if (res < 0) {
-        closing_task_.reset();
+        task_type_trait::reset_task(closing_task_);
         FWLOGERROR("start task_action_router_close_manager_set with task_id={} failed, res: {}", tid, res);
       }
     }
@@ -208,12 +217,16 @@ void router_manager_set::force_close() {
   }
 
   // 强制停止清理任务
-  if (is_closing_task_running() && closing_task_) {
+  if (is_closing_task_running() && !task_type_trait::empty(closing_task_)) {
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+    closing_task_.kill(true);
+#else
     closing_task_->kill();
+#endif
   }
 
-  if (closing_task_) {
-    closing_task_.reset();
+  if (!task_type_trait::empty(closing_task_)) {
+    task_type_trait::reset_task(closing_task_);
   }
 }
 
@@ -531,10 +544,12 @@ void router_manager_set::add_io_schedule_order_task(const std::shared_ptr<router
 }
 
 bool router_manager_set::is_save_task_running() const {
-  return pending_action_task_ && !pending_action_task_->is_exiting();
+  return !task_type_trait::empty(pending_action_task_) && !task_type_trait::is_exiting(pending_action_task_);
 }
 
-bool router_manager_set::is_closing_task_running() const { return closing_task_ && !closing_task_->is_exiting(); }
+bool router_manager_set::is_closing_task_running() const {
+  return !task_type_trait::empty(closing_task_) && !task_type_trait::is_exiting(closing_task_);
+}
 
 int router_manager_set::tick_timer(time_t cache_expire, time_t object_expire, time_t object_save,
                                    std::list<timer_t> &timer_list, bool is_fast) {

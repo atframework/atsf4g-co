@@ -95,7 +95,8 @@ rpc::result_code_type transaction_participator_handle::check_writable(rpc::conte
 }
 
 int32_t transaction_participator_handle::tick(rpc::context& ctx, util::time::time_utility::raw_time_t timepoint) {
-  if (auto_resolve_transaction_task_ && !auto_resolve_transaction_task_->is_exiting()) {
+  if (!task_type_trait::empty(auto_resolve_transaction_task_) &&
+      !task_type_trait::is_exiting(auto_resolve_transaction_task_)) {
     return 0;
   }
 
@@ -149,18 +150,19 @@ int32_t transaction_participator_handle::tick(rpc::context& ctx, util::time::tim
 
   int32_t res = task_manager::me()->create_task<task_action_participator_resolve_transaction>(
       auto_resolve_transaction_task_, std::move(params));
-  if (0 != res || !auto_resolve_transaction_task_) {
+  if (0 != res || task_type_trait::empty(auto_resolve_transaction_task_)) {
     FWLOGERROR("create task_action_friend_auto_resolve_transaction failed, res: {}({})", res,
                protobuf_mini_dumper_get_error_msg(res));
     return res;
   }
 
   dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
-  res = task_manager::me()->start_task(auto_resolve_transaction_task_->get_id(), start_data);
+  res = task_manager::me()->start_task(task_type_trait::get_task_id(auto_resolve_transaction_task_), start_data);
   if (0 != res) {
     FWLOGERROR("start task_action_participator_resolve_transaction {} failed, res: {}({})",
-               auto_resolve_transaction_task_->get_id(), res, protobuf_mini_dumper_get_error_msg(res));
-    auto_resolve_transaction_task_.reset();
+               task_type_trait::get_task_id(auto_resolve_transaction_task_), res,
+               protobuf_mini_dumper_get_error_msg(res));
+    task_type_trait::reset_task(auto_resolve_transaction_task_);
     return res;
   }
 

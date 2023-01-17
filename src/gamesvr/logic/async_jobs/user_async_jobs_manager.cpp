@@ -73,12 +73,12 @@ bool user_async_jobs_manager::is_dirty() const { return is_dirty_; }
 void user_async_jobs_manager::clear_dirty() { is_dirty_ = false; }
 
 bool user_async_jobs_manager::is_async_jobs_task_running() const {
-  if (!remote_command_patch_task_) {
+  if (task_type_trait::empty(remote_command_patch_task_)) {
     return false;
   }
 
-  if (remote_command_patch_task_->is_exiting()) {
-    remote_command_patch_task_.reset();
+  if (task_type_trait::is_exiting(remote_command_patch_task_)) {
+    task_type_trait::reset_task(remote_command_patch_task_);
     return false;
   }
 
@@ -125,7 +125,7 @@ bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
     if (res < 0) {
       FWPLOGERROR(*owner_, "start task_action_player_remote_patch_jobs failed, res: {}({})", res,
                   protobuf_mini_dumper_get_error_msg(res));
-      remote_command_patch_task_.reset();
+      task_type_trait::reset_task(remote_command_patch_task_);
       return false;
     }
   }

@@ -137,7 +137,7 @@ int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
   if (0 != req->task_id) {
     // Try to reuse context in task
     task_type_trait::task_type task = task_manager::me()->get_task(req->task_id);
-    if (task) {
+    if (!task_type_trait::empty(task)) {
       ctx_ptr = task_manager::get_shared_context(task);
     }
   }

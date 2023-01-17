@@ -317,7 +317,7 @@ rpc::result_code_type task_action_login::await_io_task(rpc::context& ctx, std::s
   }
 
   task_type_trait::task_type last_pull_object_task = task_manager::me()->get_task(last_pull_object_task_id);
-  if (!last_pull_object_task) {
+  if (task_type_trait::empty(last_pull_object_task)) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
 
