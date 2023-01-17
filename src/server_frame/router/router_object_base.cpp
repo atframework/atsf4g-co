@@ -627,12 +627,12 @@ rpc::result_code_type router_object_base::await_io_schedule_order_task(rpc::cont
 
     auto task = task_manager::me()->get_task(select_task_id);
     // Fix data
-    if (!task) {
+    if (task_type_trait::empty(task)) {
       io_schedule_order_.erase(select_task_id);
       continue;
     }
 
-    if (task->is_exiting()) {
+    if (task_type_trait::is_exiting(task)) {
       io_schedule_order_.erase(select_task_id);
       continue;
     }

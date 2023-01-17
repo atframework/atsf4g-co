@@ -179,7 +179,7 @@ int task_action_base::operator()(void *priv_data) {
     return tracer.return_code(result_);
   }
   // 响应OnSuccess(这时候任务的status还是running)
-  if (cotask::EN_TS_RUNNING == task->get_status() && result_ >= 0) {
+  if (!TASK_COMPAT_CHECK_IS_EXITING() && result_ >= 0) {
     int ret = 0;
     if (response_code_ < 0) {
       ret = on_failed();
@@ -203,13 +203,13 @@ int task_action_base::operator()(void *priv_data) {
   }
 
   if (PROJECT_NAMESPACE_ID::err::EN_SUCCESS == result_) {
-    if (task->is_timeout()) {
+    if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
       result_ = PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
-    } else if (task->is_faulted()) {
+    } else if (TASK_COMPAT_CHECK_IS_FAULT()) {
       result_ = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
-    } else if (task->is_canceled()) {
+    } else if (TASK_COMPAT_CHECK_IS_CANCEL()) {
       result_ = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
-    } else if (task->is_exiting()) {
+    } else if (TASK_COMPAT_CHECK_IS_EXITING()) {
       result_ = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING;
     } else {
       result_ = PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN;
@@ -217,13 +217,13 @@ int task_action_base::operator()(void *priv_data) {
   }
 
   if (PROJECT_NAMESPACE_ID::EN_SUCCESS == response_code_) {
-    if (task->is_timeout()) {
+    if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
       response_code_ = PROJECT_NAMESPACE_ID::EN_ERR_TIMEOUT;
-    } else if (task->is_faulted()) {
+    } else if (TASK_COMPAT_CHECK_IS_FAULT()) {
       response_code_ = PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
-    } else if (task->is_canceled()) {
+    } else if (TASK_COMPAT_CHECK_IS_CANCEL()) {
       response_code_ = PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
-    } else if (task->is_exiting()) {
+    } else if (TASK_COMPAT_CHECK_IS_EXITING()) {
       response_code_ = PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
     } else {
       response_code_ = PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN;
@@ -241,7 +241,7 @@ int task_action_base::operator()(void *priv_data) {
   }
 
   // 响应OnTimeout
-  if (cotask::EN_TS_TIMEOUT == task->get_status()) {
+  if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
     on_timeout();
   }
 

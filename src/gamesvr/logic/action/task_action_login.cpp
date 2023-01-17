@@ -321,7 +321,7 @@ rpc::result_code_type task_action_login::await_io_task(rpc::context& ctx, std::s
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
 
-  if (last_pull_object_task->is_exiting()) {
+  if (task_type_trait::is_exiting(last_pull_object_task)) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
 

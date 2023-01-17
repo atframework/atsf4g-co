@@ -185,7 +185,7 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
         });
     bool need_wait = false;
     if (invoke_task.is_success()) {
-      if (!(*invoke_task.get_success())->is_exiting()) {
+      if (!task_type_trait::is_exiting(*invoke_task.get_success())) {
         pending_action_batch_tasks.emplace_back(std::move(*invoke_task.get_success()));
       }
     } else {

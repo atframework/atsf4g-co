@@ -36,14 +36,14 @@ task_action_player_async_jobs::result_type task_action_player_async_jobs::operat
   // 这后面的都是玩家异步处理任务，一般用户刷新缓存和数据修复和数据patch。
   // 不成功不应该影响逻辑和数据，而是仅影响某些不重要的缓存滞后。
 
-  if (param_.after && !param_.after->is_exiting()) {
+  if (!task_type_trait::empty(param_.after) && !task_type_trait::is_exiting(param_.after)) {
     int ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(get_shared_context(), param_.after));
     if (ret < 0) {
       TASK_ACTION_RETURN_CODE(ret);
     }
   }
   // 这里必须reset，否则会循环引用然后泄漏
-  param_.after.reset();
+  task_type_trait::reset_task(param_.after);
 
   // 某些数据拉取需要排队 一下等平台数据更新完
   // 启动玩家数据异步命令patch任务

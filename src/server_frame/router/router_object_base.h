@@ -110,7 +110,9 @@ class router_object_base : public std::enable_shared_from_this<router_object_bas
            !check_flag(flag_t::EN_ROFT_CACHE_REMOVED);
   }
 
-  inline bool is_io_running() const { return io_task_ && !io_task_->is_exiting(); }
+  inline bool is_io_running() const {
+    return !task_type_trait::empty(io_task_) && task_type_trait::is_exiting(io_task_);
+  }
   inline bool is_pulling_cache() const { return check_flag(flag_t::EN_ROFT_PULLING_CACHE); }
   inline bool is_pulling_object() const { return check_flag(flag_t::EN_ROFT_PULLING_OBJECT); }
   inline bool is_transfering() const { return check_flag(flag_t::EN_ROFT_TRANSFERING); }
