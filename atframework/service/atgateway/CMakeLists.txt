@@ -55,12 +55,12 @@ add_custom_command(
 project_build_tools_patch_protobuf_sources("${CMAKE_CURRENT_LIST_DIR}/protocols/libatgw_server_config.pb.h"
                                            "${CMAKE_CURRENT_LIST_DIR}/protocols/libatgw_server_config.pb.cc")
 # ============ libatbus - src ============
-if(TARGET flatbuffers::flatc)
+if(ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_FLATC_EXECUTABLE)
   add_custom_command(
     OUTPUT "${CMAKE_CURRENT_LIST_DIR}/protocols/inner_v1/libatgw_proto_inner_generated.h"
     COMMAND
-      flatbuffers::flatc --cpp --allow-non-utf8 --gen-mutable -o "${CMAKE_CURRENT_LIST_DIR}/protocols/inner_v1" -I
-      "${CMAKE_CURRENT_LIST_DIR}/protocols/inner_v1"
+      "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_FLATC_EXECUTABLE}" --cpp --allow-non-utf8 --gen-mutable -o
+      "${CMAKE_CURRENT_LIST_DIR}/protocols/inner_v1" -I "${CMAKE_CURRENT_LIST_DIR}/protocols/inner_v1"
       "${CMAKE_CURRENT_LIST_DIR}/protocols/inner_v1/libatgw_proto_inner.fbs"
     DEPENDS "${CMAKE_CURRENT_LIST_DIR}/protocols/inner_v1/libatgw_proto_inner.fbs"
     COMMENT "Generate libatgw_proto_inner_generated.h")

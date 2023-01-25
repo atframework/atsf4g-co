@@ -8,9 +8,9 @@
 
 // Ensure the included flatbuffers.h is the same version as when this file was
 // generated, otherwise it may not be compatible.
-static_assert(FLATBUFFERS_VERSION_MAJOR == 22 &&
-              FLATBUFFERS_VERSION_MINOR == 11 &&
-              FLATBUFFERS_VERSION_REVISION == 23,
+static_assert(FLATBUFFERS_VERSION_MAJOR == 23 &&
+              FLATBUFFERS_VERSION_MINOR == 1 &&
+              FLATBUFFERS_VERSION_REVISION == 21,
              "Non-compatible flatbuffers version included");
 
 namespace atframe {
@@ -143,7 +143,7 @@ inline const char * const *EnumNamesswitch_secret_t() {
 }
 
 inline const char *EnumNameswitch_secret_t(switch_secret_t e) {
-  if (flatbuffers::IsOutRange(e, switch_secret_t_EN_SST_DIRECT, switch_secret_t_EN_SST_ECDH)) return "";
+  if (::flatbuffers::IsOutRange(e, switch_secret_t_EN_SST_DIRECT, switch_secret_t_EN_SST_ECDH)) return "";
   const size_t index = static_cast<size_t>(e);
   return EnumNamesswitch_secret_t()[index];
 }
@@ -191,7 +191,7 @@ inline const char * const *EnumNamescs_msg_type_t() {
 }
 
 inline const char *EnumNamecs_msg_type_t(cs_msg_type_t e) {
-  if (flatbuffers::IsOutRange(e, cs_msg_type_t_EN_MTT_UNKNOWN, cs_msg_type_t_EN_MTT_POST_KEY_ACK)) return "";
+  if (::flatbuffers::IsOutRange(e, cs_msg_type_t_EN_MTT_UNKNOWN, cs_msg_type_t_EN_MTT_POST_KEY_ACK)) return "";
   const size_t index = static_cast<size_t>(e);
   return EnumNamescs_msg_type_t()[index];
 }
@@ -230,7 +230,7 @@ inline const char * const *EnumNamescs_msg_body() {
 }
 
 inline const char *EnumNamecs_msg_body(cs_msg_body e) {
-  if (flatbuffers::IsOutRange(e, cs_msg_body_NONE, cs_msg_body_cs_body_handshake)) return "";
+  if (::flatbuffers::IsOutRange(e, cs_msg_body_NONE, cs_msg_body_cs_body_handshake)) return "";
   const size_t index = static_cast<size_t>(e);
   return EnumNamescs_msg_body()[index];
 }
@@ -255,10 +255,10 @@ template<> struct cs_msg_bodyTraits<atframe::gw::inner::v1::cs_body_handshake> {
   static const cs_msg_body enum_value = cs_msg_body_cs_body_handshake;
 };
 
-bool Verifycs_msg_body(flatbuffers::Verifier &verifier, const void *obj, cs_msg_body type);
-bool Verifycs_msg_bodyVector(flatbuffers::Verifier &verifier, const flatbuffers::Vector<flatbuffers::Offset<void>> *values, const flatbuffers::Vector<uint8_t> *types);
+bool Verifycs_msg_body(::flatbuffers::Verifier &verifier, const void *obj, cs_msg_body type);
+bool Verifycs_msg_bodyVector(::flatbuffers::Verifier &verifier, const ::flatbuffers::Vector<::flatbuffers::Offset<void>> *values, const ::flatbuffers::Vector<uint8_t> *types);
 
-struct cs_msg_head FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+struct cs_msg_head FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef cs_msg_headBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_TYPE = 4,
@@ -276,7 +276,7 @@ struct cs_msg_head FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   bool mutate_sequence(uint64_t _sequence = 0) {
     return SetField<uint64_t>(VT_SEQUENCE, _sequence, 0);
   }
-  bool Verify(flatbuffers::Verifier &verifier) const {
+  bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint8_t>(verifier, VT_TYPE, 1) &&
            VerifyField<uint64_t>(verifier, VT_SEQUENCE, 8) &&
@@ -286,27 +286,27 @@ struct cs_msg_head FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
 
 struct cs_msg_headBuilder {
   typedef cs_msg_head Table;
-  flatbuffers::FlatBufferBuilder &fbb_;
-  flatbuffers::uoffset_t start_;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
   void add_type(atframe::gw::inner::v1::cs_msg_type_t type) {
     fbb_.AddElement<uint8_t>(cs_msg_head::VT_TYPE, static_cast<uint8_t>(type), 0);
   }
   void add_sequence(uint64_t sequence) {
     fbb_.AddElement<uint64_t>(cs_msg_head::VT_SEQUENCE, sequence, 0);
   }
-  explicit cs_msg_headBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+  explicit cs_msg_headBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  flatbuffers::Offset<cs_msg_head> Finish() {
+  ::flatbuffers::Offset<cs_msg_head> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = flatbuffers::Offset<cs_msg_head>(end);
+    auto o = ::flatbuffers::Offset<cs_msg_head>(end);
     return o;
   }
 };
 
-inline flatbuffers::Offset<cs_msg_head> Createcs_msg_head(
-    flatbuffers::FlatBufferBuilder &_fbb,
+inline ::flatbuffers::Offset<cs_msg_head> Createcs_msg_head(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
     atframe::gw::inner::v1::cs_msg_type_t type = atframe::gw::inner::v1::cs_msg_type_t_EN_MTT_UNKNOWN,
     uint64_t sequence = 0) {
   cs_msg_headBuilder builder_(_fbb);
@@ -315,7 +315,7 @@ inline flatbuffers::Offset<cs_msg_head> Createcs_msg_head(
   return builder_.Finish();
 }
 
-struct cs_body_post FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+struct cs_body_post FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef cs_body_postBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_LENGTH = 4,
@@ -328,13 +328,13 @@ struct cs_body_post FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   bool mutate_length(uint64_t _length = 0) {
     return SetField<uint64_t>(VT_LENGTH, _length, 0);
   }
-  const flatbuffers::Vector<int8_t> *data() const {
-    return GetPointer<const flatbuffers::Vector<int8_t> *>(VT_DATA);
+  const ::flatbuffers::Vector<int8_t> *data() const {
+    return GetPointer<const ::flatbuffers::Vector<int8_t> *>(VT_DATA);
   }
-  flatbuffers::Vector<int8_t> *mutable_data() {
-    return GetPointer<flatbuffers::Vector<int8_t> *>(VT_DATA);
+  ::flatbuffers::Vector<int8_t> *mutable_data() {
+    return GetPointer<::flatbuffers::Vector<int8_t> *>(VT_DATA);
   }
-  bool Verify(flatbuffers::Verifier &verifier) const {
+  bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint64_t>(verifier, VT_LENGTH, 8) &&
            VerifyOffset(verifier, VT_DATA) &&
@@ -345,37 +345,37 @@ struct cs_body_post FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
 
 struct cs_body_postBuilder {
   typedef cs_body_post Table;
-  flatbuffers::FlatBufferBuilder &fbb_;
-  flatbuffers::uoffset_t start_;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
   void add_length(uint64_t length) {
     fbb_.AddElement<uint64_t>(cs_body_post::VT_LENGTH, length, 0);
   }
-  void add_data(flatbuffers::Offset<flatbuffers::Vector<int8_t>> data) {
+  void add_data(::flatbuffers::Offset<::flatbuffers::Vector<int8_t>> data) {
     fbb_.AddOffset(cs_body_post::VT_DATA, data);
   }
-  explicit cs_body_postBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+  explicit cs_body_postBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  flatbuffers::Offset<cs_body_post> Finish() {
+  ::flatbuffers::Offset<cs_body_post> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = flatbuffers::Offset<cs_body_post>(end);
+    auto o = ::flatbuffers::Offset<cs_body_post>(end);
     return o;
   }
 };
 
-inline flatbuffers::Offset<cs_body_post> Createcs_body_post(
-    flatbuffers::FlatBufferBuilder &_fbb,
+inline ::flatbuffers::Offset<cs_body_post> Createcs_body_post(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
     uint64_t length = 0,
-    flatbuffers::Offset<flatbuffers::Vector<int8_t>> data = 0) {
+    ::flatbuffers::Offset<::flatbuffers::Vector<int8_t>> data = 0) {
   cs_body_postBuilder builder_(_fbb);
   builder_.add_length(length);
   builder_.add_data(data);
   return builder_.Finish();
 }
 
-inline flatbuffers::Offset<cs_body_post> Createcs_body_postDirect(
-    flatbuffers::FlatBufferBuilder &_fbb,
+inline ::flatbuffers::Offset<cs_body_post> Createcs_body_postDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
     uint64_t length = 0,
     const std::vector<int8_t> *data = nullptr) {
   auto data__ = data ? _fbb.CreateVector<int8_t>(*data) : 0;
@@ -385,7 +385,7 @@ inline flatbuffers::Offset<cs_body_post> Createcs_body_postDirect(
       data__);
 }
 
-struct cs_body_kickoff FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+struct cs_body_kickoff FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef cs_body_kickoffBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_REASON = 4
@@ -396,7 +396,7 @@ struct cs_body_kickoff FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   bool mutate_reason(int32_t _reason = 0) {
     return SetField<int32_t>(VT_REASON, _reason, 0);
   }
-  bool Verify(flatbuffers::Verifier &verifier) const {
+  bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<int32_t>(verifier, VT_REASON, 4) &&
            verifier.EndTable();
@@ -405,24 +405,24 @@ struct cs_body_kickoff FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
 
 struct cs_body_kickoffBuilder {
   typedef cs_body_kickoff Table;
-  flatbuffers::FlatBufferBuilder &fbb_;
-  flatbuffers::uoffset_t start_;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
   void add_reason(int32_t reason) {
     fbb_.AddElement<int32_t>(cs_body_kickoff::VT_REASON, reason, 0);
   }
-  explicit cs_body_kickoffBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+  explicit cs_body_kickoffBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  flatbuffers::Offset<cs_body_kickoff> Finish() {
+  ::flatbuffers::Offset<cs_body_kickoff> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = flatbuffers::Offset<cs_body_kickoff>(end);
+    auto o = ::flatbuffers::Offset<cs_body_kickoff>(end);
     return o;
   }
 };
 
-inline flatbuffers::Offset<cs_body_kickoff> Createcs_body_kickoff(
-    flatbuffers::FlatBufferBuilder &_fbb,
+inline ::flatbuffers::Offset<cs_body_kickoff> Createcs_body_kickoff(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
     int32_t reason = 0) {
   cs_body_kickoffBuilder builder_(_fbb);
   builder_.add_reason(reason);
@@ -437,7 +437,7 @@ inline flatbuffers::Offset<cs_body_kickoff> Createcs_body_kickoff(
 ///     step=EN_HST_DH_PUBKEY_RSP|EN_HST_ECDH_PUBKEY_RSP, switch_type=EN_SST_DH : verify data prefix
 ///     step=EN_HST_START_RSP, switch_type=EN_SST_DIRECT                        : secret
 ///     step=EN_HST_VERIFY, switch_type=ANY                                     : verify data prefix + suffix
-struct cs_body_handshake FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+struct cs_body_handshake FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef cs_body_handshakeBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_SESSION_ID = 4,
@@ -465,25 +465,25 @@ struct cs_body_handshake FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   bool mutate_switch_type(atframe::gw::inner::v1::switch_secret_t _switch_type = static_cast<atframe::gw::inner::v1::switch_secret_t>(0)) {
     return SetField<uint8_t>(VT_SWITCH_TYPE, static_cast<uint8_t>(_switch_type), 0);
   }
-  const flatbuffers::String *crypt_type() const {
-    return GetPointer<const flatbuffers::String *>(VT_CRYPT_TYPE);
+  const ::flatbuffers::String *crypt_type() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_CRYPT_TYPE);
   }
-  flatbuffers::String *mutable_crypt_type() {
-    return GetPointer<flatbuffers::String *>(VT_CRYPT_TYPE);
+  ::flatbuffers::String *mutable_crypt_type() {
+    return GetPointer<::flatbuffers::String *>(VT_CRYPT_TYPE);
   }
-  const flatbuffers::Vector<int8_t> *crypt_param() const {
-    return GetPointer<const flatbuffers::Vector<int8_t> *>(VT_CRYPT_PARAM);
+  const ::flatbuffers::Vector<int8_t> *crypt_param() const {
+    return GetPointer<const ::flatbuffers::Vector<int8_t> *>(VT_CRYPT_PARAM);
   }
-  flatbuffers::Vector<int8_t> *mutable_crypt_param() {
-    return GetPointer<flatbuffers::Vector<int8_t> *>(VT_CRYPT_PARAM);
+  ::flatbuffers::Vector<int8_t> *mutable_crypt_param() {
+    return GetPointer<::flatbuffers::Vector<int8_t> *>(VT_CRYPT_PARAM);
   }
-  const flatbuffers::Vector<int8_t> *switch_param() const {
-    return GetPointer<const flatbuffers::Vector<int8_t> *>(VT_SWITCH_PARAM);
+  const ::flatbuffers::Vector<int8_t> *switch_param() const {
+    return GetPointer<const ::flatbuffers::Vector<int8_t> *>(VT_SWITCH_PARAM);
   }
-  flatbuffers::Vector<int8_t> *mutable_switch_param() {
-    return GetPointer<flatbuffers::Vector<int8_t> *>(VT_SWITCH_PARAM);
+  ::flatbuffers::Vector<int8_t> *mutable_switch_param() {
+    return GetPointer<::flatbuffers::Vector<int8_t> *>(VT_SWITCH_PARAM);
   }
-  bool Verify(flatbuffers::Verifier &verifier) const {
+  bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint64_t>(verifier, VT_SESSION_ID, 8) &&
            VerifyField<uint8_t>(verifier, VT_STEP, 1) &&
@@ -500,8 +500,8 @@ struct cs_body_handshake FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
 
 struct cs_body_handshakeBuilder {
   typedef cs_body_handshake Table;
-  flatbuffers::FlatBufferBuilder &fbb_;
-  flatbuffers::uoffset_t start_;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
   void add_session_id(uint64_t session_id) {
     fbb_.AddElement<uint64_t>(cs_body_handshake::VT_SESSION_ID, session_id, 0);
   }
@@ -511,34 +511,34 @@ struct cs_body_handshakeBuilder {
   void add_switch_type(atframe::gw::inner::v1::switch_secret_t switch_type) {
     fbb_.AddElement<uint8_t>(cs_body_handshake::VT_SWITCH_TYPE, static_cast<uint8_t>(switch_type), 0);
   }
-  void add_crypt_type(flatbuffers::Offset<flatbuffers::String> crypt_type) {
+  void add_crypt_type(::flatbuffers::Offset<::flatbuffers::String> crypt_type) {
     fbb_.AddOffset(cs_body_handshake::VT_CRYPT_TYPE, crypt_type);
   }
-  void add_crypt_param(flatbuffers::Offset<flatbuffers::Vector<int8_t>> crypt_param) {
+  void add_crypt_param(::flatbuffers::Offset<::flatbuffers::Vector<int8_t>> crypt_param) {
     fbb_.AddOffset(cs_body_handshake::VT_CRYPT_PARAM, crypt_param);
   }
-  void add_switch_param(flatbuffers::Offset<flatbuffers::Vector<int8_t>> switch_param) {
+  void add_switch_param(::flatbuffers::Offset<::flatbuffers::Vector<int8_t>> switch_param) {
     fbb_.AddOffset(cs_body_handshake::VT_SWITCH_PARAM, switch_param);
   }
-  explicit cs_body_handshakeBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+  explicit cs_body_handshakeBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  flatbuffers::Offset<cs_body_handshake> Finish() {
+  ::flatbuffers::Offset<cs_body_handshake> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = flatbuffers::Offset<cs_body_handshake>(end);
+    auto o = ::flatbuffers::Offset<cs_body_handshake>(end);
     return o;
   }
 };
 
-inline flatbuffers::Offset<cs_body_handshake> Createcs_body_handshake(
-    flatbuffers::FlatBufferBuilder &_fbb,
+inline ::flatbuffers::Offset<cs_body_handshake> Createcs_body_handshake(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
     uint64_t session_id = 0,
     atframe::gw::inner::v1::handshake_step_t step = atframe::gw::inner::v1::handshake_step_t_EN_HST_START_REQ,
     atframe::gw::inner::v1::switch_secret_t switch_type = atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT,
-    flatbuffers::Offset<flatbuffers::String> crypt_type = 0,
-    flatbuffers::Offset<flatbuffers::Vector<int8_t>> crypt_param = 0,
-    flatbuffers::Offset<flatbuffers::Vector<int8_t>> switch_param = 0) {
+    ::flatbuffers::Offset<::flatbuffers::String> crypt_type = 0,
+    ::flatbuffers::Offset<::flatbuffers::Vector<int8_t>> crypt_param = 0,
+    ::flatbuffers::Offset<::flatbuffers::Vector<int8_t>> switch_param = 0) {
   cs_body_handshakeBuilder builder_(_fbb);
   builder_.add_session_id(session_id);
   builder_.add_switch_param(switch_param);
@@ -549,8 +549,8 @@ inline flatbuffers::Offset<cs_body_handshake> Createcs_body_handshake(
   return builder_.Finish();
 }
 
-inline flatbuffers::Offset<cs_body_handshake> Createcs_body_handshakeDirect(
-    flatbuffers::FlatBufferBuilder &_fbb,
+inline ::flatbuffers::Offset<cs_body_handshake> Createcs_body_handshakeDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
     uint64_t session_id = 0,
     atframe::gw::inner::v1::handshake_step_t step = atframe::gw::inner::v1::handshake_step_t_EN_HST_START_REQ,
     atframe::gw::inner::v1::switch_secret_t switch_type = atframe::gw::inner::v1::switch_secret_t_EN_SST_DIRECT,
@@ -570,7 +570,7 @@ inline flatbuffers::Offset<cs_body_handshake> Createcs_body_handshakeDirect(
       switch_param__);
 }
 
-struct cs_body_ping FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+struct cs_body_ping FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef cs_body_pingBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_TIMEPOINT = 4
@@ -582,7 +582,7 @@ struct cs_body_ping FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   bool mutate_timepoint(int64_t _timepoint = 0) {
     return SetField<int64_t>(VT_TIMEPOINT, _timepoint, 0);
   }
-  bool Verify(flatbuffers::Verifier &verifier) const {
+  bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<int64_t>(verifier, VT_TIMEPOINT, 8) &&
            verifier.EndTable();
@@ -591,24 +591,24 @@ struct cs_body_ping FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
 
 struct cs_body_pingBuilder {
   typedef cs_body_ping Table;
-  flatbuffers::FlatBufferBuilder &fbb_;
-  flatbuffers::uoffset_t start_;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
   void add_timepoint(int64_t timepoint) {
     fbb_.AddElement<int64_t>(cs_body_ping::VT_TIMEPOINT, timepoint, 0);
   }
-  explicit cs_body_pingBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+  explicit cs_body_pingBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  flatbuffers::Offset<cs_body_ping> Finish() {
+  ::flatbuffers::Offset<cs_body_ping> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = flatbuffers::Offset<cs_body_ping>(end);
+    auto o = ::flatbuffers::Offset<cs_body_ping>(end);
     return o;
   }
 };
 
-inline flatbuffers::Offset<cs_body_ping> Createcs_body_ping(
-    flatbuffers::FlatBufferBuilder &_fbb,
+inline ::flatbuffers::Offset<cs_body_ping> Createcs_body_ping(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
     int64_t timepoint = 0) {
   cs_body_pingBuilder builder_(_fbb);
   builder_.add_timepoint(timepoint);
@@ -616,7 +616,7 @@ inline flatbuffers::Offset<cs_body_ping> Createcs_body_ping(
 }
 
 /// message
-struct cs_msg FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+struct cs_msg FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef cs_msgBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_HEAD = 4,
@@ -651,7 +651,7 @@ struct cs_msg FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   void *mutable_body() {
     return GetPointer<void *>(VT_BODY);
   }
-  bool Verify(flatbuffers::Verifier &verifier) const {
+  bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyOffset(verifier, VT_HEAD) &&
            verifier.VerifyTable(head()) &&
@@ -680,33 +680,33 @@ template<> inline const atframe::gw::inner::v1::cs_body_handshake *cs_msg::body_
 
 struct cs_msgBuilder {
   typedef cs_msg Table;
-  flatbuffers::FlatBufferBuilder &fbb_;
-  flatbuffers::uoffset_t start_;
-  void add_head(flatbuffers::Offset<atframe::gw::inner::v1::cs_msg_head> head) {
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_head(::flatbuffers::Offset<atframe::gw::inner::v1::cs_msg_head> head) {
     fbb_.AddOffset(cs_msg::VT_HEAD, head);
   }
   void add_body_type(atframe::gw::inner::v1::cs_msg_body body_type) {
     fbb_.AddElement<uint8_t>(cs_msg::VT_BODY_TYPE, static_cast<uint8_t>(body_type), 0);
   }
-  void add_body(flatbuffers::Offset<void> body) {
+  void add_body(::flatbuffers::Offset<void> body) {
     fbb_.AddOffset(cs_msg::VT_BODY, body);
   }
-  explicit cs_msgBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+  explicit cs_msgBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  flatbuffers::Offset<cs_msg> Finish() {
+  ::flatbuffers::Offset<cs_msg> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = flatbuffers::Offset<cs_msg>(end);
+    auto o = ::flatbuffers::Offset<cs_msg>(end);
     return o;
   }
 };
 
-inline flatbuffers::Offset<cs_msg> Createcs_msg(
-    flatbuffers::FlatBufferBuilder &_fbb,
-    flatbuffers::Offset<atframe::gw::inner::v1::cs_msg_head> head = 0,
+inline ::flatbuffers::Offset<cs_msg> Createcs_msg(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    ::flatbuffers::Offset<atframe::gw::inner::v1::cs_msg_head> head = 0,
     atframe::gw::inner::v1::cs_msg_body body_type = atframe::gw::inner::v1::cs_msg_body_NONE,
-    flatbuffers::Offset<void> body = 0) {
+    ::flatbuffers::Offset<void> body = 0) {
   cs_msgBuilder builder_(_fbb);
   builder_.add_body(body);
   builder_.add_head(head);
@@ -714,7 +714,7 @@ inline flatbuffers::Offset<cs_msg> Createcs_msg(
   return builder_.Finish();
 }
 
-inline bool Verifycs_msg_body(flatbuffers::Verifier &verifier, const void *obj, cs_msg_body type) {
+inline bool Verifycs_msg_body(::flatbuffers::Verifier &verifier, const void *obj, cs_msg_body type) {
   switch (type) {
     case cs_msg_body_NONE: {
       return true;
@@ -739,10 +739,10 @@ inline bool Verifycs_msg_body(flatbuffers::Verifier &verifier, const void *obj, 
   }
 }
 
-inline bool Verifycs_msg_bodyVector(flatbuffers::Verifier &verifier, const flatbuffers::Vector<flatbuffers::Offset<void>> *values, const flatbuffers::Vector<uint8_t> *types) {
+inline bool Verifycs_msg_bodyVector(::flatbuffers::Verifier &verifier, const ::flatbuffers::Vector<::flatbuffers::Offset<void>> *values, const ::flatbuffers::Vector<uint8_t> *types) {
   if (!values || !types) return !values && !types;
   if (values->size() != types->size()) return false;
-  for (flatbuffers::uoffset_t i = 0; i < values->size(); ++i) {
+  for (::flatbuffers::uoffset_t i = 0; i < values->size(); ++i) {
     if (!Verifycs_msg_body(
         verifier,  values->Get(i), types->GetEnum<cs_msg_body>(i))) {
       return false;
@@ -752,19 +752,19 @@ inline bool Verifycs_msg_bodyVector(flatbuffers::Verifier &verifier, const flatb
 }
 
 inline const atframe::gw::inner::v1::cs_msg *Getcs_msg(const void *buf) {
-  return flatbuffers::GetRoot<atframe::gw::inner::v1::cs_msg>(buf);
+  return ::flatbuffers::GetRoot<atframe::gw::inner::v1::cs_msg>(buf);
 }
 
 inline const atframe::gw::inner::v1::cs_msg *GetSizePrefixedcs_msg(const void *buf) {
-  return flatbuffers::GetSizePrefixedRoot<atframe::gw::inner::v1::cs_msg>(buf);
+  return ::flatbuffers::GetSizePrefixedRoot<atframe::gw::inner::v1::cs_msg>(buf);
 }
 
 inline cs_msg *GetMutablecs_msg(void *buf) {
-  return flatbuffers::GetMutableRoot<cs_msg>(buf);
+  return ::flatbuffers::GetMutableRoot<cs_msg>(buf);
 }
 
 inline atframe::gw::inner::v1::cs_msg *GetMutableSizePrefixedcs_msg(void *buf) {
-  return flatbuffers::GetMutableSizePrefixedRoot<atframe::gw::inner::v1::cs_msg>(buf);
+  return ::flatbuffers::GetMutableSizePrefixedRoot<atframe::gw::inner::v1::cs_msg>(buf);
 }
 
 inline const char *cs_msgIdentifier() {
@@ -772,22 +772,22 @@ inline const char *cs_msgIdentifier() {
 }
 
 inline bool cs_msgBufferHasIdentifier(const void *buf) {
-  return flatbuffers::BufferHasIdentifier(
+  return ::flatbuffers::BufferHasIdentifier(
       buf, cs_msgIdentifier());
 }
 
 inline bool SizePrefixedcs_msgBufferHasIdentifier(const void *buf) {
-  return flatbuffers::BufferHasIdentifier(
+  return ::flatbuffers::BufferHasIdentifier(
       buf, cs_msgIdentifier(), true);
 }
 
 inline bool Verifycs_msgBuffer(
-    flatbuffers::Verifier &verifier) {
+    ::flatbuffers::Verifier &verifier) {
   return verifier.VerifyBuffer<atframe::gw::inner::v1::cs_msg>(cs_msgIdentifier());
 }
 
 inline bool VerifySizePrefixedcs_msgBuffer(
-    flatbuffers::Verifier &verifier) {
+    ::flatbuffers::Verifier &verifier) {
   return verifier.VerifySizePrefixedBuffer<atframe::gw::inner::v1::cs_msg>(cs_msgIdentifier());
 }
 
@@ -796,14 +796,14 @@ inline const char *cs_msgExtension() {
 }
 
 inline void Finishcs_msgBuffer(
-    flatbuffers::FlatBufferBuilder &fbb,
-    flatbuffers::Offset<atframe::gw::inner::v1::cs_msg> root) {
+    ::flatbuffers::FlatBufferBuilder &fbb,
+    ::flatbuffers::Offset<atframe::gw::inner::v1::cs_msg> root) {
   fbb.Finish(root, cs_msgIdentifier());
 }
 
 inline void FinishSizePrefixedcs_msgBuffer(
-    flatbuffers::FlatBufferBuilder &fbb,
-    flatbuffers::Offset<atframe::gw::inner::v1::cs_msg> root) {
+    ::flatbuffers::FlatBufferBuilder &fbb,
+    ::flatbuffers::Offset<atframe::gw::inner::v1::cs_msg> root) {
   fbb.FinishSizePrefixed(root, cs_msgIdentifier());
 }
 

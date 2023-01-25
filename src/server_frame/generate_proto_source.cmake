@@ -120,7 +120,7 @@ function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OU
     APPEND
     PROTOC_PROTO_PATH_ARGS
     --proto_path
-    "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include"
+    "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}"
     --proto_path
     "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include"
     --proto_path
@@ -226,16 +226,16 @@ add_custom_command(
   COMMAND
     "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" --proto_path
     "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_COMMON_DIR}" --proto_path "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_CONFIG_DIR}"
-    --proto_path "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include" --proto_path "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include"
+    --proto_path "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}" --proto_path "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include"
     --proto_path "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include" -o "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb"
     # Protocol buffer files
     ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_CONFIG} ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_COMMON}
     "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include/atframe/atapp_conf.proto"
     "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include/libatbus_protocol.proto"
-    "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/any.proto"
-    "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/duration.proto"
-    "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/timestamp.proto"
-    "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/descriptor.proto"
+    "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/any.proto"
+    "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/duration.proto"
+    "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/timestamp.proto"
+    "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/descriptor.proto"
   WORKING_DIRECTORY "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_CONFIG_DIR}"
   DEPENDS ${PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_COMMON} ${PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_CONFIG}
   COMMENT "Generate [@${PROJECT_SERVER_FRAME_PROTO_SANDBOX_CONFIG_DIR}] ${PROJECT_INSTALL_RES_PBD_DIR}/config.pb")

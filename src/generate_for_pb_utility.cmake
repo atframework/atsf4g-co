@@ -332,7 +332,7 @@ function(generate_for_pb_run_generator)
     APPEND "${GENERATE_FOR_PB_PROTO_SH}"
     "\"${GENERATE_FOR_PB_PROROC_BIN}\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  -o \"${GENERATE_FOR_PB_OUT_PB}\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-    "  --proto_path \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --proto_path \"${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --proto_path \"${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --proto_path \"${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
   foreach(PROTO_PATH IN LISTS GENERATE_FOR_PB_PROTO_PATHS)
@@ -352,11 +352,11 @@ function(generate_for_pb_run_generator)
     APPEND "${GENERATE_FOR_PB_PROTO_SH}"
     "  \"${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include\"/*.proto \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  \"${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include/atframe\"/*.proto \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/any.proto\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/empty.proto\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/duration.proto\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/timestamp.proto\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/descriptor.proto\"")
+    "  \"${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/any.proto\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/empty.proto\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/duration.proto\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/timestamp.proto\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/descriptor.proto\"")
 
   if(ATFRAMEWORK_CMAKE_TOOLSET_BASH)
     file(
@@ -376,7 +376,7 @@ function(generate_for_pb_run_generator)
     APPEND "${GENERATE_FOR_PB_PROTO_PWSH}"
     "& \"${GENERATE_FOR_PB_PROROC_BIN}\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  -o \"${GENERATE_FOR_PB_OUT_PB}\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-    "  --proto_path \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  --proto_path \"${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --proto_path \"${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  --proto_path \"${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
   foreach(PROTO_PATH IN LISTS GENERATE_FOR_PB_PROTO_PATHS)
@@ -395,11 +395,11 @@ function(generate_for_pb_run_generator)
     APPEND "${GENERATE_FOR_PB_PROTO_PWSH}"
     "  \$(Get-ChildItem \"${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include/*.proto\") `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  \$(Get-ChildItem \"${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include/atframe/*.proto\") `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/any.proto\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/empty.proto\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/duration.proto\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/timestamp.proto\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-    "  \"${PROJECT_THIRD_PARTY_INSTALL_DIR}/include/google/protobuf/descriptor.proto\" ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/any.proto\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/empty.proto\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/duration.proto\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/timestamp.proto\" `${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "  \"${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/descriptor.proto\" ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "
 if ($LastExitCode -ne 0) {
   exit $LastExitCode
