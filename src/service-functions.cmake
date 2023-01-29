@@ -185,7 +185,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
       "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/proto"
       --proto_path
       --proto_path
-      "${PROJECT_THIRD_PARTY_INSTALL_DIR}/include"
+      "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}"
       --proto_path
       "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include"
       --proto_path
