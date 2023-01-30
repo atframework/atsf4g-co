@@ -211,12 +211,8 @@ void context::set_current_service(atapp::app &app, const PROJECT_NAMESPACE_ID::c
 void context::set_task_context(const task_context_data &task_ctx) noexcept { task_context_ = task_ctx; }
 
 namespace detail {
-static result_code_type wait(context &ctx, void **output_msg, uintptr_t check_type,
+static result_code_type wait(context &ctx, dispatcher_resume_data_type *output, uintptr_t check_type,
                              const dispatcher_await_options &options) {
-  if (nullptr != output_msg) {
-    *output_msg = nullptr;
-  }
-
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in a task");
 
   if (TASK_COMPAT_CHECK_IS_EXITING()) {
@@ -276,8 +272,8 @@ static result_code_type wait(context &ctx, void **output_msg, uintptr_t check_ty
       continue;
     }
 
-    if (nullptr != output_msg) {
-      *output_msg = resume_data->message.msg_addr;
+    if (nullptr != output) {
+      *output = *resume_data;
     }
   }
 
@@ -412,14 +408,14 @@ result_code_type wait(context &ctx, std::chrono::system_clock::duration timeout)
 }
 
 result_code_type wait(context &ctx, atframework::SSMsg &msg, const dispatcher_await_options &options) {
-  void *result = nullptr;
+  dispatcher_resume_data_type result = dispatcher_make_default<dispatcher_resume_data_type>();
   int ret = RPC_AWAIT_CODE_RESULT(detail::wait(ctx, &result, ss_msg_dispatcher::me()->get_instance_ident(), options));
   if (0 != ret) {
     RPC_RETURN_CODE(ret);
   }
 
-  if (nullptr != result) {
-    msg.Swap(reinterpret_cast<atframework::SSMsg *>(result));
+  if (nullptr != result.message.msg_addr) {
+    msg.Swap(reinterpret_cast<atframework::SSMsg *>(result.message.msg_addr));
   }
 
   RPC_RETURN_CODE(msg.head().error_code());
@@ -427,14 +423,14 @@ result_code_type wait(context &ctx, atframework::SSMsg &msg, const dispatcher_aw
 
 result_code_type wait(context &ctx, PROJECT_NAMESPACE_ID::table_all_message &msg,
                       const dispatcher_await_options &options) {
-  void *result = nullptr;
+  dispatcher_resume_data_type result = dispatcher_make_default<dispatcher_resume_data_type>();
   int ret = RPC_AWAIT_CODE_RESULT(detail::wait(ctx, &result, db_msg_dispatcher::me()->get_instance_ident(), options));
   if (0 != ret) {
     RPC_RETURN_CODE(ret);
   }
 
-  if (nullptr != result) {
-    msg.Swap(reinterpret_cast<PROJECT_NAMESPACE_ID::table_all_message *>(result));
+  if (nullptr != result.message.msg_addr) {
+    msg.Swap(reinterpret_cast<PROJECT_NAMESPACE_ID::table_all_message *>(result.message.msg_addr));
   }
 
   RPC_RETURN_CODE(msg.error_code());
@@ -452,7 +448,7 @@ result_code_type wait(context &ctx, const std::unordered_set<dispatcher_await_op
                       0 == wakeup_count ? waiters.size() : wakeup_count);
 }
 
-result_code_type custom_wait(context &ctx, const void *type_address, void **received,
+result_code_type custom_wait(context &ctx, const void *type_address, dispatcher_resume_data_type *received,
                              const dispatcher_await_options &options) {
   return detail::wait(ctx, received, reinterpret_cast<uintptr_t>(type_address), options);
 }

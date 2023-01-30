@@ -309,10 +309,11 @@ result_code_type wait(context &ctx, const std::unordered_set<dispatcher_await_op
  * @brief Custom wait for a message or resume
  *
  * @param type_address type object address, user should keep it unique for each message type
+ * @param received received raw data
  * @param options await options
  * @return future of 0 or error code
  */
-result_code_type custom_wait(context &ctx, const void *type_address, void **received,
+result_code_type custom_wait(context &ctx, const void *type_address, dispatcher_resume_data_type *received,
                              const dispatcher_await_options &options);
 
 /**
