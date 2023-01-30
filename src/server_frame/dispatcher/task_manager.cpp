@@ -167,7 +167,7 @@ int task_manager::reload() {
   return 0;
 }
 
-int task_manager::start_task(id_t task_id, dispatcher_start_data_type &data) {
+int task_manager::start_task(task_type_trait::id_type task_id, dispatcher_start_data_type &data) {
   int res = native_mgr_->start(task_id, &data);
   if (res < 0) {
     FWLOGERROR("start task {} failed.", task_id);
@@ -179,7 +179,7 @@ int task_manager::start_task(id_t task_id, dispatcher_start_data_type &data) {
   return 0;
 }
 
-int task_manager::resume_task(id_t task_id, dispatcher_resume_data_type &data) {
+int task_manager::resume_task(task_type_trait::id_type task_id, dispatcher_resume_data_type &data) {
   int res = native_mgr_->resume(task_id, &data);
   if (res < 0) {
     if (copp::COPP_EC_NOT_FOUND == res) {
@@ -240,7 +240,7 @@ int task_manager::tick(time_t sec, int nsec) {
   return 0;
 }
 
-task_type_trait::task_type task_manager::get_task(id_t task_id) {
+task_type_trait::task_type task_manager::get_task(task_type_trait::id_type task_id) {
   if (!native_mgr_) {
     return task_type_trait::task_type();
   }
@@ -254,7 +254,7 @@ task_type_trait::task_type task_manager::get_task(id_t task_id) {
 
 size_t task_manager::get_stack_size() const { return logic_config::me()->get_cfg_task().stack().size(); }
 
-int task_manager::add_task(const task_t::ptr_t &task, time_t timeout_sec, time_t timeout_nsec) {
+int task_manager::add_task(const task_type_trait::task_type &task, time_t timeout_sec, time_t timeout_nsec) {
   if (!native_mgr_) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
   }

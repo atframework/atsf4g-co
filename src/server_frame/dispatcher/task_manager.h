@@ -32,16 +32,13 @@
  */
 class task_manager : public ::util::design_pattern::singleton<task_manager> {
  public:
-  using task_t = task_type_trait::internal_task_type;
-  using id_t = task_type_trait::id_type;
-
   using actor_action_ptr_t = std::shared_ptr<actor_action_base>;
 
   struct task_action_maker_base_t {
     atframework::DispatcherOptions options;
     explicit task_action_maker_base_t(const atframework::DispatcherOptions *opt);
     virtual ~task_action_maker_base_t();
-    virtual int operator()(task_manager::id_t &task_id, dispatcher_start_data_type ctor_param) = 0;
+    virtual int operator()(task_type_trait::id_type &task_id, dispatcher_start_data_type ctor_param) = 0;
   };
 
   struct actor_action_maker_base_t {
@@ -58,7 +55,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
   template <typename TAction>
   struct task_action_maker_t : public task_action_maker_base_t {
     explicit task_action_maker_t(const atframework::DispatcherOptions *opt) : task_action_maker_base_t(opt) {}
-    int operator()(task_manager::id_t &task_id, dispatcher_start_data_type ctor_param) override {
+    int operator()(task_type_trait::id_type &task_id, dispatcher_start_data_type ctor_param) override {
       if (options.has_timeout() && (options.timeout().seconds() > 0 || options.timeout().nanos() > 0)) {
         return task_manager::me()->create_task_with_timeout<TAction>(
             task_id, options.timeout().seconds(), options.timeout().nanos(), COPP_MACRO_STD_MOVE(ctor_param));
@@ -77,16 +74,8 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
   };
 
  private:
-#if (LIBCOPP_VERSION_MAJOR * 1000000 + LIBCOPP_VERSION_MINOR * 1000 + LIBCOPP_VERSION_PATCH) >= 2000001
   using native_task_manager_type = cotask::task_manager<task_type_trait::internal_task_type>;
   using native_task_manager_ptr_type = typename native_task_manager_type::ptr_type;
-#else
-  using native_task_container_t =
-      std::unordered_map<task_type_trait::id_type,
-                         cotask::detail::task_manager_node<task_type_trait::internal_task_type> >;
-  using native_task_manager_type = cotask::task_manager<task_type_trait::internal_task_type, native_task_container_t>;
-  using native_task_manager_ptr_type = typename native_task_manager_type::ptr_t;
-#endif
 
  protected:
   task_manager();
@@ -111,7 +100,8 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @return 0或错误码
    */
   template <typename TAction, typename TParams>
-  int create_task_with_timeout(task_t::ptr_t &task_instance, time_t timeout_sec, time_t timeout_nsec, TParams &&args) {
+  int create_task_with_timeout(task_type_trait::task_type &task_instance, time_t timeout_sec, time_t timeout_nsec,
+                               TParams &&args) {
     if (!stack_pool_ || !native_mgr_) {
       task_instance = nullptr;
       return PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
@@ -119,9 +109,9 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
 
     task_type_trait::task_macro_coroutine::stack_allocator_type alloc(stack_pool_);
 
-    task_instance = task_t::create_with_delegate<TAction>(COPP_MACRO_STD_FORWARD(TParams, args), alloc,
-                                                          get_stack_size(), sizeof(task_private_data_type));
-    if (!task_instance) {
+    task_instance = task_type_trait::internal_task_type::create_with_delegate<TAction>(
+        COPP_MACRO_STD_FORWARD(TParams, args), alloc, get_stack_size(), sizeof(task_private_data_type));
+    if (task_type_trait::empty(task_instance)) {
       return report_create_error(__FUNCTION__);
     }
 
@@ -143,12 +133,13 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @return 0或错误码
    */
   template <typename TAction, typename TParams>
-  int create_task_with_timeout(id_t &task_id, time_t timeout_sec, time_t timeout_nsec, TParams &&args) {
-    task_t::ptr_t task_instance;
+  int create_task_with_timeout(task_type_trait::id_type &task_id, time_t timeout_sec, time_t timeout_nsec,
+                               TParams &&args) {
+    task_type_trait::task_type task_instance;
     int ret = create_task_with_timeout<TAction>(task_instance, timeout_sec, timeout_nsec,
                                                 COPP_MACRO_STD_FORWARD(TParams, args));
-    if (task_instance) {
-      task_id = task_instance->get_id();
+    if (!task_type_trait::empty(task_instance)) {
+      task_id = task_type_trait::get_task_id(task_instance);
     } else {
       task_id = 0;
     }
@@ -162,7 +153,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @return 0或错误码
    */
   template <typename TAction, typename TParams>
-  int create_task(task_t::ptr_t &task_instance, TParams &&args) {
+  int create_task(task_type_trait::task_type &task_instance, TParams &&args) {
     return create_task_with_timeout<TAction>(task_instance, 0, 0, COPP_MACRO_STD_FORWARD(TParams, args));
   }
 
@@ -173,7 +164,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @return 0或错误码
    */
   template <typename TAction, typename TParams>
-  int create_task(id_t &task_id, TParams &&args) {
+  int create_task(task_type_trait::id_type &task_id, TParams &&args) {
     return create_task_with_timeout<TAction>(task_id, 0, 0, COPP_MACRO_STD_FORWARD(TParams, args));
   }
 
@@ -185,7 +176,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @return 0或错误码
    */
   template <typename TAction, typename TParams>
-  inline int create_task_with_timeout(id_t &task_id, time_t timeout_sec, TParams &&args) {
+  inline int create_task_with_timeout(task_type_trait::id_type &task_id, time_t timeout_sec, TParams &&args) {
     return create_task_with_timeout<TAction>(task_id, timeout_sec, 0, COPP_MACRO_STD_FORWARD(TParams, args));
   }
 
@@ -204,7 +195,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @param data 启动数据，operator()(void* priv_data)的priv_data指向这个对象的地址
    * @return 0或错误码
    */
-  int start_task(id_t task_id, dispatcher_start_data_type &data);
+  int start_task(task_type_trait::id_type task_id, dispatcher_start_data_type &data);
 
   /**
    * @brief 恢复任务
@@ -212,7 +203,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @param data 恢复时透传的数据，yield返回的指针指向这个对象的地址
    * @return 0或错误码
    */
-  int resume_task(id_t task_id, dispatcher_resume_data_type &data);
+  int resume_task(task_type_trait::id_type task_id, dispatcher_resume_data_type &data);
 
   /**
    * @brief 创建Actor
@@ -244,7 +235,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @param task_id 任务id
    * @return 如果存在，返回协程任务的智能指针
    */
-  task_type_trait::task_type get_task(id_t task_id);
+  task_type_trait::task_type get_task(task_type_trait::id_type task_id);
 
   inline const task_type_trait::stack_pool_type::ptr_t &get_stack_pool() const { return stack_pool_; }
   inline const native_task_manager_ptr_type &get_native_manager() const { return native_mgr_; }
@@ -267,7 +258,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @param timeout 超时时间
    * @return 0或错误码
    */
-  int add_task(const task_t::ptr_t &task, time_t timeout_sec = 0, time_t timeout_nsec = 0);
+  int add_task(const task_type_trait::task_type &task, time_t timeout_sec = 0, time_t timeout_nsec = 0);
 
   int report_create_error(const char *fn_name);
 

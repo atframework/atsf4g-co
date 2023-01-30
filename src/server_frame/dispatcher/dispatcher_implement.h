@@ -172,7 +172,7 @@ class dispatcher_implement : public ::atapp::module_impl {
    * @param task_id 相关的任务id
    * @return 返回错误码或0
    */
-  virtual int create_task(dispatcher_start_data_type &start_data, task_manager::id_t &task_id);
+  virtual int create_task(dispatcher_start_data_type &start_data, task_type_trait::id_type &task_id);
 
   /**
    * @brief 创建Actor

@@ -105,7 +105,7 @@ bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
   remote_command_patch_task_next_timepoint_ =
       ::util::time::time_utility::get_now() + logic_config::me()->get_logic().user().async_job().interval().seconds();
 
-  task_manager::id_t tid = 0;
+  task_type_trait::id_type tid = 0;
   task_action_player_remote_patch_jobs::ctor_param_t params;
   params.user = owner_->shared_from_this();
   params.timeout_duration = logic_config::me()->get_logic().user().async_job().timeout().seconds();

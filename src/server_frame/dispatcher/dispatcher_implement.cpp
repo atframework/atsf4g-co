@@ -174,7 +174,7 @@ int32_t dispatcher_implement::on_send_message_failed(rpc::context &ctx, msg_raw_
 
 void dispatcher_implement::on_create_task_failed(dispatcher_start_data_type &, int32_t) {}
 
-int dispatcher_implement::create_task(dispatcher_start_data_type &start_data, task_manager::id_t &task_id) {
+int dispatcher_implement::create_task(dispatcher_start_data_type &start_data, task_type_trait::id_type &task_id) {
   task_id = 0;
 
   msg_type_t msg_type_id = pick_msg_type_id(start_data.message);

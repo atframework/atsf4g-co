@@ -603,7 +603,7 @@ rpc::result_code_type router_object_base::await_io_schedule_order_task(rpc::cont
   auto last_task_id = *io_schedule_order_.rbegin();
   // Waiting for all previous task finished
   while (!io_schedule_order_.empty()) {
-    task_manager::task_t::id_t select_task_id = 0;
+    task_type_trait::id_type select_task_id = 0;
 
     {
       auto iter = io_schedule_order_.lower_bound(last_task_id);

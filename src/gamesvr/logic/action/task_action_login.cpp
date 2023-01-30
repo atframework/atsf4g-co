@@ -196,7 +196,7 @@ int task_action_login::on_success() {
 
   // 自动启动异步任务
   {
-    task_manager::id_t tid = 0;
+    task_type_trait::id_type tid = 0;
     task_action_player_async_jobs::ctor_param_t params;
     params.user = user;
     params.caller_context = &get_shared_context();

@@ -333,7 +333,7 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
                 get_app()->convert_app_id_to_string(session_key.bus_id), session_key.session_id);
 
       // logout task
-      task_manager::id_t logout_task_id = 0;
+      task_type_trait::id_type logout_task_id = 0;
       task_action_player_logout::ctor_param_t task_param;
       task_param.atgateway_session_id = session_key.session_id;
       task_param.atgateway_bus_id = session_key.bus_id;

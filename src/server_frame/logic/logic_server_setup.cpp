@@ -783,7 +783,7 @@ int logic_server_common_module::tick_update_remote_configures() {
 
   task_action_reload_remote_server_configure::ctor_param_t params;
 
-  task_manager::id_t task_id;
+  task_type_trait::id_type task_id;
   int res = task_manager::me()->create_task<task_action_reload_remote_server_configure>(task_id, std::move(params));
   if (0 != res) {
     FWLOGERROR("create task_action_reload_remote_server_configure failed, res: {}({})", res,

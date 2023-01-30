@@ -99,7 +99,7 @@ int router_manager_set::tick() {
 
   if (!pending_action_list_.empty() && !is_closed() && false == is_save_task_running() &&
       false == is_closing_task_running()) {
-    task_manager::id_t tid = 0;
+    task_type_trait::id_type tid = 0;
     task_manager::me()->create_task_with_timeout<task_action_auto_save_objects>(
         tid, logic_config::me()->get_cfg_task().nomsg().timeout().seconds(),
         task_action_auto_save_objects::ctor_param_t());
@@ -130,7 +130,7 @@ int router_manager_set::stop() {
   // prepare to start cleanup task
 
   task_action_router_close_manager_set::ctor_param_t ctor_param;
-  task_manager::id_t tid = 0;
+  task_type_trait::id_type tid = 0;
 
   ctor_param.pending_list = std::make_shared<task_action_router_close_manager_set::pending_list_t>();
   if (ctor_param.pending_list) {

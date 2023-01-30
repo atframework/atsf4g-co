@@ -34,7 +34,7 @@ fi
 
 "$PYTHON_BIN" "$SCRIPT_DIR/generate-for-pb.py" -o "$OUTPUT_DIR" \
   --no-overwrite \
-  --project-dir "$PROJECT_DIR" --pb-file "D:/workspace/projs/github/atframework/atsf4g-co/build_jobs_cmake_tools/publish/resource/pbdesc/network.pb" \
+  --project-dir "$PROJECT_DIR" --pb-file "D:/workspace/github/atframework/atsf4g-co/build_jobs_cmake_tools/publish/resource/pbdesc/network.pb" \
   --set "project_namespace=hello" --set "task_class_name=$TASK_NAME" \
   --add-path "$PROJECT_DIR/atframework/cmake-toolset/modules" \
   --add-package-prefix "$EXTERNAL_MODULE_PATH" \
