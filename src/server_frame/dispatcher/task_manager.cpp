@@ -78,6 +78,50 @@ static void log_wrapper_for_protobuf(::google::protobuf::LogLevel level, const c
 }
 }  // namespace
 
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+std::pair<int32_t, dispatcher_start_data_type *> task_manager::start_error_transform::operator()(
+    copp::promise_status in) const noexcept {
+  switch (in) {
+    case copp::promise_status::kInvalid:
+    case copp::promise_status::kCreated:
+      return {PROJECT_NAMESPACE_ID::err::EN_SYS_INIT, nullptr};
+    case copp::promise_status::kRunning:
+      return {PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL_NOT_READY, nullptr};
+    case copp::promise_status::kDone:
+      return {0, nullptr};
+    case copp::promise_status::kCancle:
+      return {PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED, nullptr};
+    case copp::promise_status::kKilled:
+      return {PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED, nullptr};
+    case copp::promise_status::kTimeout:
+      return {PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT, nullptr};
+    default:
+      return {PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN, nullptr};
+  }
+}
+
+std::pair<int32_t, dispatcher_resume_data_type *> task_manager::resume_error_transform::operator()(
+    copp::promise_status in) const noexcept {
+  switch (in) {
+    case copp::promise_status::kInvalid:
+    case copp::promise_status::kCreated:
+      return {PROJECT_NAMESPACE_ID::err::EN_SYS_INIT, nullptr};
+    case copp::promise_status::kRunning:
+      return {PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL_NOT_READY, nullptr};
+    case copp::promise_status::kDone:
+      return {0, nullptr};
+    case copp::promise_status::kCancle:
+      return {PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED, nullptr};
+    case copp::promise_status::kKilled:
+      return {PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED, nullptr};
+    case copp::promise_status::kTimeout:
+      return {PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT, nullptr};
+    default:
+      return {PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN, nullptr};
+  }
+}
+#endif
+
 task_manager::task_action_maker_base_t::task_action_maker_base_t(const atframework::DispatcherOptions *opt) {
   if (nullptr != opt) {
     options.CopyFrom(*opt);
@@ -116,7 +160,9 @@ task_manager::~task_manager() {
 
 int task_manager::init() {
   native_mgr_ = native_task_manager_type::create();
+#if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
   stack_pool_ = task_type_trait::stack_pool_type::create();
+#endif
 
   // setup logger for protobuf
   ::google::protobuf::SetLogHandler(log_wrapper_for_protobuf);
@@ -151,6 +197,7 @@ int task_manager::reload() {
   if (stat_interval_ <= 0) {
     stat_interval_ = 60;
   }
+#if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
   if (stack_pool_) {
     stack_pool_->set_gc_once_number(logic_config::me()->get_cfg_task().stack().gc_once_number());
     stack_pool_->set_max_stack_number(logic_config::me()->get_cfg_task().stack().pool_max_count());
@@ -159,6 +206,7 @@ int task_manager::reload() {
       stack_pool_->set_stack_size(logic_config::me()->get_cfg_task().stack().size());
     }
   }
+#endif
   conf_busy_count_ = logic_config::me()->get_cfg_task().stack().busy_count();
   conf_busy_warn_count_ = logic_config::me()->get_cfg_task().stack().busy_warn_count();
 
@@ -168,6 +216,19 @@ int task_manager::reload() {
 }
 
 int task_manager::start_task(task_type_trait::id_type task_id, dispatcher_start_data_type &data) {
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+  auto iter = waiting_start_.find(task_id);
+  if (iter == waiting_start_.end()) {
+    FWLOGERROR("start task {} failed.", task_id);
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
+  }
+  auto generator = iter->second;
+  if (generator) {
+    generator->set_value(std::pair<int32_t, dispatcher_start_data_type *>{0, &data});
+  } else {
+    waiting_start_.erase(iter);
+  }
+#else
   int res = native_mgr_->start(task_id, &data);
   if (res < 0) {
     FWLOGERROR("start task {} failed.", task_id);
@@ -175,23 +236,49 @@ int task_manager::start_task(task_type_trait::id_type task_id, dispatcher_start_
     // 错误码
     return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
   }
-
+#endif
   return 0;
 }
 
 int task_manager::resume_task(task_type_trait::id_type task_id, dispatcher_resume_data_type &data) {
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+  generic_resume_index index{data.message.msg_type, data.sequence};
+  auto iter_index = waiting_resume_index_.find(index);
+  if (iter_index == waiting_resume_index_.end()) {
+    FWLOGINFO("resume task {}(message type={}, sequence={}) but generator index not found, ignored.", task_id,
+              data.message.msg_type, data.sequence);
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
+  }
+  generic_resume_key key = iter_index->second;
+  auto iter_key = waiting_resume_timer_.find(key);
+  if (iter_key == waiting_resume_timer_.end()) {
+    FWLOGERROR("resume task {}(message type={}, sequence={}) but generator timer not found, abort.", task_id,
+               data.message.msg_type, data.sequence);
+    waiting_resume_index_.erase(iter_index);
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
+  }
+  auto generator = iter_key->second;
+  if (generator) {
+    generator->set_value(std::pair<int32_t, dispatcher_resume_data_type *>{0, &data});
+  } else {
+    waiting_resume_index_.erase(iter_index);
+    waiting_resume_timer_.erase(iter_key);
+  }
+#else
   int res = native_mgr_->resume(task_id, &data);
   if (res < 0) {
     if (copp::COPP_EC_NOT_FOUND == res) {
-      FWLOGINFO("resume task {} but not found, ignored.", task_id);
+      FWLOGINFO("resume task {}(message type={}, sequence={}) but not found, ignored.", task_id, data.message.msg_type,
+                data.sequence);
       return 0;
     }
 
-    FWLOGERROR("resume task {} failed, res: {}.", task_id, res);
+    FWLOGERROR("resume task {}(message type={}, sequence={}) failed, res: {}.", task_id, data.message.msg_type,
+               data.sequence, res);
     // 错误码
     return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
   }
-
+#endif
   return 0;
 }
 
@@ -200,13 +287,15 @@ int task_manager::tick(time_t sec, int nsec) {
     native_mgr_->tick(sec, nsec);
   }
 
+#if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
   if (stack_pool_) {
     stack_pool_->gc();
   }
+#endif
 
   if (stat_last_checkpoint_ != sec / stat_interval_) {
     stat_last_checkpoint_ = sec / stat_interval_;
-    if (stack_pool_ && native_mgr_) {
+    if (native_mgr_) {
       size_t first_checkpoint = 0;
       if (!native_mgr_->get_checkpoints().empty()) {
         first_checkpoint = native_mgr_->get_checkpoints().begin()->expired_time.tv_sec;
@@ -215,27 +304,31 @@ int task_manager::tick(time_t sec, int nsec) {
       g_task_manager_metrics_data.task_count.store(native_mgr_->get_task_size(), std::memory_order_release);
       g_task_manager_metrics_data.tick_checkpoint_count.store(native_mgr_->get_tick_checkpoint_size(),
                                                               std::memory_order_release);
+
+      FWLOGWARNING(
+          "[STATS] Coroutine task stats:\n\tRuntime - Task Number: {}\n\tRuntime - Checkpoint Number: "
+          "{}\n\tRuntime - Next Checkpoint: "
+          "{}",
+          native_mgr_->get_task_size(), native_mgr_->get_tick_checkpoint_size(), first_checkpoint,
+          stack_pool_->get_gc_once_number());
+    }
+#if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
+    if (stack_pool_) {
       g_task_manager_metrics_data.pool_free_memory.store(stack_pool_->get_limit().free_stack_size,
                                                          std::memory_order_release);
       g_task_manager_metrics_data.pool_used_memory.store(stack_pool_->get_limit().used_stack_size,
                                                          std::memory_order_release);
-
       FWLOGWARNING(
-          "[STATS] Coroutine stack stats:\n\tRuntime - Task Number: {}\n\tRuntime - Checkpoint Number: "
-          "{}\n\tRuntime - Next Checkpoint: "
-          "{}\n\tConfigure - Max GC Number: {}\n\tConfigure - Stack Max: number {}, size {}\n\tConfigure - "
+          "[STATS] Coroutine stack stats:\n\tConfigure - Max GC Number: {}\n\tConfigure - Stack Max: number {}, size "
+          "{}\n\tConfigure - "
           "Stack Min: number {}, size "
           "{}\n\tRuntime - Stack Used: number {}, size {}\n\tRuntime - Stack Free: number {}, size {}",
-          native_mgr_->get_task_size(), native_mgr_->get_tick_checkpoint_size(), first_checkpoint,
           stack_pool_->get_gc_once_number(), stack_pool_->get_max_stack_number(), stack_pool_->get_max_stack_size(),
           stack_pool_->get_min_stack_number(), stack_pool_->get_min_stack_size(),
           stack_pool_->get_limit().used_stack_number, stack_pool_->get_limit().used_stack_size,
           stack_pool_->get_limit().free_stack_number, stack_pool_->get_limit().free_stack_size);
-
-      if (g_task_manager_metrics_data.need_setup.load(std::memory_order_acquire)) {
-        setup_metrics();
-      }
     }
+#endif
   }
   return 0;
 }
@@ -245,9 +338,11 @@ task_type_trait::task_type task_manager::get_task(task_type_trait::id_type task_
     return task_type_trait::task_type();
   }
 
+#if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
   if (stack_pool_) {
     stack_pool_->gc();
   }
+#endif
 
   return native_mgr_->find_task(task_id);
 }
@@ -285,6 +380,54 @@ int task_manager::report_create_error(const char *fn_name) {
   FWLOGERROR("[{}] create task failed. current task number={}", fn_name, native_mgr_->get_task_size());
   return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
 }
+
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+void task_manager::internal_insert_start_generator(task_type_trait::id_type task_id,
+                                                   generic_start_generator::context_pointer_type &&generator_context) {
+  if (!generator_context) {
+    return;
+  }
+
+  waiting_start_.emplace(std::pair<const task_type_trait::id_type, generic_start_generator::context_pointer_type>{
+      task_id, std::move(generator_context)});
+}
+
+void task_manager::internal_remove_start_generator(task_type_trait::id_type task_id,
+                                                   const generic_start_generator::context_type &) {
+  waiting_start_.erase(task_id);
+}
+
+void task_manager::internal_insert_resume_generator(
+    const generic_resume_key &key, generic_resume_generator::context_pointer_type &&generator_context) {
+  if (!generator_context) {
+    return;
+  }
+
+  generic_resume_index index{key.message_type, key.sequence};
+  if (waiting_resume_index_.end() != waiting_resume_index_.find(index)) {
+    return;
+  }
+
+  waiting_resume_timer_.emplace(std::pair<const generic_resume_key, generic_resume_generator::context_pointer_type>{
+      key, std::move(generator_context)});
+  waiting_resume_index_.emplace(std::pair<const generic_resume_index, generic_resume_key>{index, key});
+}
+
+void task_manager::internal_remove_resume_generator(const generic_resume_key &key,
+                                                    const generic_resume_generator::context_type &generator_context) {
+  auto iter = waiting_resume_timer_.find(key);
+  if (iter == waiting_resume_timer_.end()) {
+    return;
+  }
+
+  if (iter->second && iter->second.get() != &generator_context) {
+    return;
+  }
+
+  waiting_resume_index_.erase({generic_resume_index{key.message_type, key.sequence}});
+  waiting_resume_timer_.erase(iter);
+}
+#endif
 
 bool task_manager::is_busy() const { return conf_busy_count_ > 0 && native_mgr_->get_task_size() > conf_busy_count_; }
 
@@ -348,6 +491,52 @@ int32_t task_manager::convert_task_status_to_error_code(task_type_trait::task_st
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 #endif
 }
+
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+task_manager::generic_start_generator task_manager::make_start_generator(task_type_trait::id_type task_id) {
+  return {[task_id](generic_start_generator::context_pointer_type generator) {
+            if (task_manager::is_instance_destroyed()) {
+              return;
+            }
+
+            task_manager::me()->internal_insert_start_generator(task_id, std::move(generator));
+          },
+          [task_id](const generic_start_generator::context_type &generator) {
+            if (task_manager::is_instance_destroyed()) {
+              return;
+            }
+
+            task_manager::me()->internal_remove_start_generator(task_id, generator);
+          }};
+}
+
+std::pair<task_manager::generic_resume_key, task_manager::generic_resume_generator> task_manager::make_resume_generator(
+    uintptr_t message_type, const dispatcher_await_options &await_options) {
+  std::chrono::system_clock::duration timeout = await_options.timeout;
+  if (timeout <= std::chrono::system_clock::duration::zero()) {
+    timeout = std::chrono::duration_cast<std::chrono::system_clock::duration>(
+        std::chrono::seconds{logic_config::me()->get_cfg_task().csmsg().timeout().seconds()} +
+        std::chrono::nanoseconds{logic_config::me()->get_cfg_task().csmsg().timeout().nanos()});
+  }
+
+  generic_resume_key key{util::time::time_utility::now() + timeout, message_type, await_options.sequence};
+  return {key,
+          {[key](generic_resume_generator::context_pointer_type generator) {
+             if (task_manager::is_instance_destroyed()) {
+               return;
+             }
+
+             task_manager::me()->internal_insert_resume_generator(key, std::move(generator));
+           },
+           [key](const generic_resume_generator::context_type &generator) {
+             if (task_manager::is_instance_destroyed()) {
+               return;
+             }
+
+             task_manager::me()->internal_remove_resume_generator(key, generator);
+           }}};
+}
+#endif
 
 bool task_manager::check_sys_config() const {
   const char *vm_map_count_file = "/proc/sys/vm/max_map_count";

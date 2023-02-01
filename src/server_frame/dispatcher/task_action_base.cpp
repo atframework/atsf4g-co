@@ -107,7 +107,8 @@ const char *task_action_base::name() const {
 }
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-int task_action_base::operator()(task_meta_data_type &&task_meta, void *priv_data) {
+task_action_base::result_type task_action_base::operator()(task_meta_data_type &&task_meta,
+                                                           const dispatcher_start_data_type &start_data) {
 #else
 int task_action_base::operator()(void *priv_data) {
 #endif
@@ -119,13 +120,17 @@ int task_action_base::operator()(void *priv_data) {
   trace_option.dispatcher = get_dispatcher();
   trace_option.parent_network_span = nullptr;
 
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+  // Set parent context if not set by child type
+  start_data_ = start_data;
+#else
   if (nullptr != priv_data) {
     start_data_ = *reinterpret_cast<dispatcher_start_data_type *>(priv_data);
-
-    // Set parent context if not set by child type
-    if (nullptr != start_data_.context) {
-      set_caller_context(*start_data_.context);
-    }
+  }
+#endif
+  // Set parent context if not set by child type
+  if (nullptr != start_data_.context) {
+    set_caller_context(*start_data_.context);
   }
 
   rpc::context::tracer tracer;
@@ -135,6 +140,10 @@ int task_action_base::operator()(void *priv_data) {
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   private_data_ = task_meta.private_data;
   rpc_task_context_data.task_id = task_meta.task_id;
+  if (0 == task_meta.task_id) {
+    FWLOGERROR("task convert failed, must in task.");
+    co_return tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_INIT);
+  }
 #else
   task_type_trait::internal_task_type *task = cotask::this_task::get<task_type_trait::internal_task_type>();
   if (nullptr == task) {
@@ -176,7 +185,11 @@ int task_action_base::operator()(void *priv_data) {
     }
 
     _notify_finished();
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+    co_return tracer.return_code(result_);
+#else
     return tracer.return_code(result_);
+#endif
   }
   // 响应OnSuccess(这时候任务的status还是running)
   if (!TASK_COMPAT_CHECK_IS_EXITING() && result_ >= 0) {
@@ -199,7 +212,11 @@ int task_action_base::operator()(void *priv_data) {
     }
 
     _notify_finished();
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+    co_return tracer.return_code(ret);
+#else
     return tracer.return_code(ret);
+#endif
   }
 
   if (PROJECT_NAMESPACE_ID::err::EN_SUCCESS == result_) {
@@ -262,7 +279,11 @@ int task_action_base::operator()(void *priv_data) {
   if (result_ >= 0) {
     ret = result_;
   }
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+  co_return tracer.return_code(ret);
+#else
   return tracer.return_code(ret);
+#endif
 }
 
 task_action_base::result_type task_action_base::hook_run() { return (*this)(); }

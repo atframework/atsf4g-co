@@ -10,6 +10,7 @@
 
 #include <config/server_frame_build_feature.h>
 
+#include <rpc/rpc_common_types.h>
 #include <rpc/rpc_utils.h>
 
 #include <functional>
@@ -28,6 +29,9 @@
 
 class player_cache;
 
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+using task_action_result_type = rpc::result_code_type;
+#else
 class task_action_result_type {
  public:
   using value_type = int32_t;
@@ -74,7 +78,7 @@ class task_action_result_type {
     return get_value_trait<TOTHER>::get_value(other) == self.result_code_;
   }
 
-#ifdef __cpp_impl_three_way_comparison
+#  ifdef __cpp_impl_three_way_comparison
   inline friend std::strong_ordering operator<=>(const task_action_result_type &self,
                                                  const task_action_result_type &other) noexcept {
     return self.result_code_ <=> other.result_code_;
@@ -89,7 +93,7 @@ class task_action_result_type {
   inline friend std::strong_ordering operator<=>(TOTHER &&other, const task_action_result_type &self) noexcept {
     return get_value_trait<TOTHER>::get_value(other) <=> self.result_code_;
   }
-#else
+#  else
 
   inline friend bool operator!=(const task_action_result_type &self, const task_action_result_type &other) noexcept {
     return self.result_code_ != other.result_code_;
@@ -160,11 +164,12 @@ class task_action_result_type {
   inline friend bool operator>=(TOTHER &&other, const task_action_result_type &self) noexcept {
     return get_value_trait<TOTHER>::get_value(other) >= self.result_code_;
   }
-#endif
+#  endif
 
  private:
   value_type result_code_;
 };
+#endif
 
 class task_action_base
 #if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
@@ -199,7 +204,7 @@ class task_action_base
   virtual const char *name() const;
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-  int operator()(task_meta_data_type &&task_meta, void *priv_data);
+  result_type operator()(task_meta_data_type &&task_meta, const dispatcher_start_data_type &start_data);
 #else
   int operator()(void *priv_data) override;
 #endif
@@ -390,6 +395,8 @@ struct formatter<task_action_result_type, CharT> : formatter<task_action_result_
 
 }  // namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID
 
-// When using c++20 coroutine, declare TASK_ACTION_RETURN_CODE like this
-//   #define TASK_ACTION_RETURN_CODE(x) co_return (x)
-#define TASK_ACTION_RETURN_CODE(x) return task_action_result_type(static_cast<task_action_result_type::value_type>(x))
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+#  define TASK_ACTION_RETURN_CODE(x) co_return (x)
+#else
+#  define TASK_ACTION_RETURN_CODE(x) return task_action_result_type(static_cast<task_action_result_type::value_type>(x))
+#endif

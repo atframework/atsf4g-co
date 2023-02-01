@@ -13,10 +13,13 @@
 
 #include <design_pattern/singleton.h>
 
-#include <libcotask/task_manager.h>
-
 #include <config/server_frame_build_feature.h>
 #include <utility/environment_helper.h>
+
+#include <libcotask/task_manager.h>
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+#  include <libcopp/coroutine/generator_promise.h>
+#endif
 
 #include <memory>
 #include <unordered_map>
@@ -33,6 +36,215 @@
 class task_manager : public ::util::design_pattern::singleton<task_manager> {
  public:
   using actor_action_ptr_t = std::shared_ptr<actor_action_base>;
+
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+  struct start_error_transform {
+    std::pair<int32_t, dispatcher_start_data_type *> operator()(copp::promise_status in) const noexcept;
+  };
+
+  struct resume_error_transform {
+    std::pair<int32_t, dispatcher_resume_data_type *> operator()(copp::promise_status in) const noexcept;
+  };
+
+  using generic_start_generator =
+      copp::generator_future<std::pair<int32_t, dispatcher_start_data_type *>, start_error_transform>;
+  using generic_resume_generator =
+      copp::generator_future<std::pair<int32_t, dispatcher_resume_data_type *>, resume_error_transform>;
+  struct generic_resume_key {
+    std::chrono::system_clock::time_point timeout;
+    uintptr_t message_type;
+    uint64_t sequence;
+
+    inline explicit generic_resume_key(std::chrono::system_clock::time_point t, uintptr_t m, uint64_t s) noexcept
+        : timeout(t), message_type(m), sequence(s) {}
+
+    inline friend bool operator==(const generic_resume_key &self, const generic_resume_key &other) noexcept {
+      return self.timeout == other.timeout && self.message_type == other.message_type &&
+             self.sequence == other.sequence;
+    }
+
+#  ifdef __cpp_impl_three_way_comparison
+    inline friend std::strong_ordering operator<=>(const generic_resume_key &self,
+                                                   const generic_resume_key &other) noexcept {
+      if (self.timeout != other.timeout) {
+        return self.timeout <=> other.timeout;
+      }
+
+      if (self.message_type != other.message_type) {
+        return self.message_type <=> other.message_type;
+      }
+
+      return self.sequence <=> other.sequence;
+    }
+#  else
+
+    inline friend bool operator!=(const generic_resume_key &self, const generic_resume_key &other) noexcept {
+      return self.timeout != other.timeout || self.message_type != other.message_type ||
+             self.sequence != other.sequence;
+    }
+
+    inline friend bool operator<(const generic_resume_key &self, const generic_resume_key &other) noexcept {
+      if (self.timeout != other.timeout) {
+        return self.timeout < other.timeout;
+      }
+
+      if (self.message_type != other.message_type) {
+        return self.message_type < other.message_type;
+      }
+
+      return self.sequence < other.sequence;
+    }
+
+    inline friend bool operator<=(const generic_resume_key &self, const generic_resume_key &other) noexcept {
+      if (self.timeout != other.timeout) {
+        return self.timeout <= other.timeout;
+      }
+
+      if (self.message_type != other.message_type) {
+        return self.message_type <= other.message_type;
+      }
+
+      return self.sequence <= other.sequence;
+    }
+
+    inline friend bool operator>(const generic_resume_key &self, const generic_resume_key &other) noexcept {
+      if (self.timeout != other.timeout) {
+        return self.timeout > other.timeout;
+      }
+
+      if (self.message_type != other.message_type) {
+        return self.message_type > other.message_type;
+      }
+
+      return self.sequence > other.sequence;
+    }
+
+    inline friend bool operator>=(const generic_resume_key &self, const generic_resume_key &other) noexcept {
+      if (self.timeout != other.timeout) {
+        return self.timeout >= other.timeout;
+      }
+
+      if (self.message_type != other.message_type) {
+        return self.message_type >= other.message_type;
+      }
+
+      return self.sequence >= other.sequence;
+    }
+#  endif
+  };
+
+  struct generic_resume_index {
+    uintptr_t message_type;
+    uint64_t sequence;
+
+    inline explicit generic_resume_index(uintptr_t m, uint64_t s) noexcept : message_type(m), sequence(s) {}
+    inline explicit generic_resume_index(const generic_resume_key &key) noexcept
+        : message_type(key.message_type), sequence(key.sequence) {}
+
+    inline friend bool operator==(const generic_resume_index &self, const generic_resume_index &other) noexcept {
+      return self.message_type == other.message_type && self.sequence == other.sequence;
+    }
+
+#  ifdef __cpp_impl_three_way_comparison
+    inline friend std::strong_ordering operator<=>(const generic_resume_index &self,
+                                                   const generic_resume_index &other) noexcept {
+      if (self.message_type != other.message_type) {
+        return self.message_type <=> other.message_type;
+      }
+
+      return self.sequence <=> other.sequence;
+    }
+#  else
+
+    inline friend bool operator!=(const generic_resume_index &self, const generic_resume_index &other) noexcept {
+      return self.message_type != other.message_type || self.sequence != other.sequence;
+    }
+
+    inline friend bool operator<(const generic_resume_index &self, const generic_resume_index &other) noexcept {
+      if (self.message_type != other.message_type) {
+        return self.message_type < other.message_type;
+      }
+
+      return self.sequence < other.sequence;
+    }
+
+    inline friend bool operator<=(const generic_resume_index &self, const generic_resume_index &other) noexcept {
+      if (self.message_type != other.message_type) {
+        return self.message_type <= other.message_type;
+      }
+
+      return self.sequence <= other.sequence;
+    }
+
+    inline friend bool operator>(const generic_resume_index &self, const generic_resume_index &other) noexcept {
+      if (self.message_type != other.message_type) {
+        return self.message_type > other.message_type;
+      }
+
+      return self.sequence > other.sequence;
+    }
+
+    inline friend bool operator>=(const generic_resume_index &self, const generic_resume_index &other) noexcept {
+      if (self.message_type != other.message_type) {
+        return self.message_type >= other.message_type;
+      }
+
+      return self.sequence >= other.sequence;
+    }
+#  endif
+  };
+
+  struct generic_resume_hash {
+    template <typename T>
+    inline static void _hash_combine(size_t &seed, const T &val) noexcept {
+      seed ^= std::hash<T>()(val) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    }
+    template <typename... Types>
+    inline static size_t hash_combine(const Types &...args) noexcept {
+      size_t seed = 0;
+      (_hash_combine(seed, args), ...);  // create hash value with seed over all args
+      return seed;
+    }
+
+    std::size_t operator()(const generic_resume_index &index) const noexcept {
+      return hash_combine(index.message_type, index.sequence);
+    }
+
+    std::size_t operator()(const generic_resume_key &key) const noexcept {
+      return hash_combine(key.timeout.time_since_epoch().count(), key.message_type, key.sequence);
+    }
+  };
+
+  template <class TAction, class... TParams>
+  static typename task_type_trait::task_type internal_create_and_setup_task(TParams &&...args) {
+    using internal_task_type = typename task_type_trait::internal_task_type;
+    TAction action{std::forward<TParams>(args)...};
+
+    typename task_action_base::task_meta_data_type action_meta;
+    // Split the assignment to member and getting the return value of co_yield for GCC BUG
+    // @see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=108620
+    auto current_task_id = co_yield internal_task_type::yield_task_id();
+    auto private_data = co_yield internal_task_type::yield_private_data();
+    action_meta.task_id = current_task_id;
+    action_meta.private_data = private_data;
+    if (nullptr != action_meta.private_data) {
+      reset_private_data(*action_meta.private_data);
+    }
+
+    std::pair<int32_t, dispatcher_start_data_type *> wait_start{PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM, nullptr};
+    {
+      generic_start_generator start_generator = make_start_generator(action_meta.task_id);
+      wait_start = co_await start_generator;
+    }
+
+    if (wait_start.first < 0 || nullptr == wait_start.second) {
+      co_return wait_start.first;
+    }
+
+    int32_t result = co_await action(std::move(action_meta), *wait_start.second);
+    co_return result;
+  }
+#endif
 
   struct task_action_maker_base_t {
     atframework::DispatcherOptions options;
@@ -102,6 +314,17 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
   template <typename TAction, typename TParams>
   int create_task_with_timeout(task_type_trait::task_type &task_instance, time_t timeout_sec, time_t timeout_nsec,
                                TParams &&args) {
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+    if (!native_mgr_) {
+      task_instance.reset();
+      return PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
+    }
+
+    task_instance = internal_create_and_setup_task<TAction>(std::forward<TParams>(args));
+    if (!task_instance.get_context()) {
+      return report_create_error(__FUNCTION__);
+    }
+#else
     if (!stack_pool_ || !native_mgr_) {
       task_instance = nullptr;
       return PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
@@ -110,7 +333,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
     task_type_trait::task_macro_coroutine::stack_allocator_type alloc(stack_pool_);
 
     task_instance = task_type_trait::internal_task_type::create_with_delegate<TAction>(
-        COPP_MACRO_STD_FORWARD(TParams, args), alloc, get_stack_size(), sizeof(task_private_data_type));
+        std::forward<TParams>(args), alloc, get_stack_size(), sizeof(task_private_data_type));
     if (task_type_trait::empty(task_instance)) {
       return report_create_error(__FUNCTION__);
     }
@@ -120,6 +343,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
       // initialize private data
       reset_private_data(*task_priv_data);
     }
+#endif
 
     return add_task(task_instance, timeout_sec, timeout_nsec);
   }
@@ -136,8 +360,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
   int create_task_with_timeout(task_type_trait::id_type &task_id, time_t timeout_sec, time_t timeout_nsec,
                                TParams &&args) {
     task_type_trait::task_type task_instance;
-    int ret = create_task_with_timeout<TAction>(task_instance, timeout_sec, timeout_nsec,
-                                                COPP_MACRO_STD_FORWARD(TParams, args));
+    int ret = create_task_with_timeout<TAction>(task_instance, timeout_sec, timeout_nsec, std::forward<TParams>(args));
     if (!task_type_trait::empty(task_instance)) {
       task_id = task_type_trait::get_task_id(task_instance);
     } else {
@@ -154,7 +377,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    */
   template <typename TAction, typename TParams>
   int create_task(task_type_trait::task_type &task_instance, TParams &&args) {
-    return create_task_with_timeout<TAction>(task_instance, 0, 0, COPP_MACRO_STD_FORWARD(TParams, args));
+    return create_task_with_timeout<TAction>(task_instance, 0, 0, std::forward<TParams>(args));
   }
 
   /**
@@ -165,7 +388,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    */
   template <typename TAction, typename TParams>
   int create_task(task_type_trait::id_type &task_id, TParams &&args) {
-    return create_task_with_timeout<TAction>(task_id, 0, 0, COPP_MACRO_STD_FORWARD(TParams, args));
+    return create_task_with_timeout<TAction>(task_id, 0, 0, std::forward<TParams>(args));
   }
 
   /**
@@ -177,7 +400,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    */
   template <typename TAction, typename TParams>
   inline int create_task_with_timeout(task_type_trait::id_type &task_id, time_t timeout_sec, TParams &&args) {
-    return create_task_with_timeout<TAction>(task_id, timeout_sec, 0, COPP_MACRO_STD_FORWARD(TParams, args));
+    return create_task_with_timeout<TAction>(task_id, timeout_sec, 0, std::forward<TParams>(args));
   }
 
   /**
@@ -186,7 +409,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    */
   template <typename TAction>
   inline task_action_creator_t make_task_creator(const atframework::DispatcherOptions *opt) {
-    return std::make_shared<task_action_maker_t<TAction> >(opt);
+    return std::make_shared<task_action_maker_t<TAction>>(opt);
   }
 
   /**
@@ -213,7 +436,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    */
   template <typename TActor, typename... TParams>
   std::shared_ptr<TActor> create_actor(TParams &&...args) {
-    return std::make_shared<TActor>(COPP_MACRO_STD_FORWARD(TParams, args)...);
+    return std::make_shared<TActor>(std::forward<TParams>(args)...);
   }
 
   /**
@@ -222,7 +445,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    */
   template <typename TAction>
   inline actor_action_creator_t make_actor_creator(const atframework::DispatcherOptions *opt) {
-    return std::make_shared<actor_action_maker_t<TAction> >(opt);
+    return std::make_shared<actor_action_maker_t<TAction>>(opt);
   }
 
   /**
@@ -247,6 +470,12 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
 
   static int32_t convert_task_status_to_error_code(task_type_trait::task_status task_status) noexcept;
 
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+  static generic_start_generator make_start_generator(task_type_trait::id_type task_id);
+  static std::pair<generic_resume_key, generic_resume_generator> make_resume_generator(
+      uintptr_t message_type, const dispatcher_await_options &await_options);
+#endif
+
  private:
   bool check_sys_config() const;
 
@@ -262,11 +491,27 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
 
   int report_create_error(const char *fn_name);
 
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+  void internal_insert_start_generator(task_type_trait::id_type task_id,
+                                       generic_start_generator::context_pointer_type &&);
+  void internal_remove_start_generator(task_type_trait::id_type task_id, const generic_start_generator::context_type &);
+  void internal_insert_resume_generator(const generic_resume_key &key,
+                                        generic_resume_generator::context_pointer_type &&);
+  void internal_remove_resume_generator(const generic_resume_key &key, const generic_resume_generator::context_type &);
+#endif
+
  private:
   time_t stat_interval_;
   time_t stat_last_checkpoint_;
   size_t conf_busy_count_;
   size_t conf_busy_warn_count_;
   native_task_manager_ptr_type native_mgr_;
+
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+  std::unordered_map<task_type_trait::id_type, generic_start_generator::context_pointer_type> waiting_start_;
+  std::multimap<generic_resume_key, generic_resume_generator::context_pointer_type> waiting_resume_timer_;
+  std::unordered_map<generic_resume_index, generic_resume_key, generic_resume_hash> waiting_resume_index_;
+#else
   task_type_trait::stack_pool_type::ptr_t stack_pool_;
+#endif
 };
