@@ -68,9 +68,10 @@ rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_p
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  return lru_caches_.await_save(
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(lru_caches_.await_save(
       ctx, data,
-      [](rpc::context& ctx, const atframework::distributed_system::transaction_blob_storage& in, int64_t* out_version) {
+      [](rpc::context& ctx, const atframework::distributed_system::transaction_blob_storage& in,
+         int64_t* out_version) -> rpc::result_code_type {
         std::string data_version;
         if (nullptr != out_version) {
           data_version = util::log::format("{}", *out_version);
@@ -88,7 +89,7 @@ rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_p
         }
 
         RPC_RETURN_CODE(ret);
-      });
+      })));
 }
 
 rpc::result_code_type transaction_manager::create_transaction(
@@ -160,7 +161,8 @@ rpc::result_code_type transaction_manager::mutable_transaction(
     ret = RPC_AWAIT_CODE_RESULT(lru_caches_.await_fetch(
         ctx, metadata.transaction_uuid(), out,
         [zone_id](rpc::context& ctx, const std::string& key,
-                  atframework::distributed_system::transaction_blob_storage& output, int64_t* out_version) {
+                  atframework::distributed_system::transaction_blob_storage& output,
+                  int64_t* out_version) -> rpc::result_code_type {
           std::string data_version;
           rpc::context::message_holder<PROJECT_NAMESPACE_ID::table_distribute_transaction> storage{ctx};
           int ret =

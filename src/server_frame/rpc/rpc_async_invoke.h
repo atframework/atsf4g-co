@@ -7,7 +7,9 @@
 #include <gsl/select-gsl.h>
 #include <std/explicit_declare.h>
 
-#include <dispatcher/task_action_base.h>
+#include <log/log_wrapper.h>
+
+#include <dispatcher/dispatcher_type_defines.h>
 #include <dispatcher/task_type_traits.h>
 
 #include <stdint.h>
@@ -62,5 +64,56 @@ EXPLICIT_NODISCARD_ATTR inline async_invoke_result async_invoke(
 EXPLICIT_NODISCARD_ATTR result_code_type wait_tasks(context &ctx, const std::vector<task_type_trait::task_type> &tasks);
 
 EXPLICIT_NODISCARD_ATTR result_code_type wait_task(context &ctx, const task_type_trait::task_type &other_task);
+
+void async_then_start_task(context &ctx, gsl::string_view name, task_type_trait::task_type waiting,
+                           task_type_trait::id_type task_id);
+
+template <class TCALLABLE, class... TARGS>
+void async_then(context &ctx, gsl::string_view name, task_type_trait::task_type waiting, TCALLABLE &&callable,
+                TARGS &&...args) {
+  if (task_type_trait::empty(waiting) || task_type_trait::is_exiting(waiting)) {
+    callable(std::forward<TARGS>(args)...);
+    return;
+  }
+
+  async_invoke_result result = async_invoke(
+      ctx, name, [waiting = std::move(waiting), callable, args...](rpc::context &child_ctx) -> rpc::result_code_type {
+        auto ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(child_ctx, waiting));
+        callable(std::forward<TARGS>(args)...);
+        RPC_RETURN_CODE(ret);
+      });
+
+  if (result.is_success()) {
+    return;
+  }
+
+  FWLOGERROR("Try to invoke task({}) to wait task {} and then call callable failed, try to call it directly.", name,
+             task_type_trait::get_task_id(waiting));
+  callable(std::forward<TARGS>(args)...);
+}
+
+template <class TCALLABLE, class... TARGS>
+void async_then_with_context(context &ctx, gsl::string_view name, task_type_trait::task_type waiting,
+                             TCALLABLE &&callable, TARGS &&...args) {
+  if (task_type_trait::empty(waiting) || task_type_trait::is_exiting(waiting)) {
+    callable(ctx, std::forward<TARGS>(args)...);
+    return;
+  }
+
+  async_invoke_result result = async_invoke(
+      ctx, name, [waiting = std::move(waiting), callable, args...](rpc::context &child_ctx) -> rpc::result_code_type {
+        auto ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(child_ctx, waiting));
+        callable(child_ctx, std::forward<TARGS>(args)...);
+        RPC_RETURN_CODE(ret);
+      });
+
+  if (result.is_success()) {
+    return;
+  }
+
+  FWLOGERROR("Try to invoke task({}) to wait task {} and then call callable failed, try to call it directly.", name,
+             task_type_trait::get_task_id(waiting));
+  callable(ctx, std::forward<TARGS>(args)...);
+}
 
 }  // namespace rpc

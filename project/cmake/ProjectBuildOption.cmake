@@ -1,7 +1,7 @@
 ﻿include(CMakeDependentOption)
 
 # 默认配置选项
-#####################################################################
+# ######################################################################################################################
 
 option(ATFRAMEWORK_USE_DYNAMIC_LIBRARY "Build and linking with dynamic libraries." ON)
 
@@ -20,7 +20,9 @@ option(PROJECT_ENABLE_COMPRESS_DEBUG_INFORMATION "Enable compress debug informat
 
 option(PROJECT_TOOL_REPORT_COMPILE_UNIT_TIME "Show compiling time of each unit" OFF)
 option(PROJECT_TOOL_REPORT_LINK_UNIT_TIME "Show linking time of each target." OFF)
-set(PROJECT_TOOL_ENABLE_SPLIT_DEBUG_SYMBOL_SUFFIX ".dbg" CACHE STRING "Split debug symbols into standalone files.")
+set(PROJECT_TOOL_ENABLE_SPLIT_DEBUG_SYMBOL_SUFFIX
+    ".dbg"
+    CACHE STRING "Split debug symbols into standalone files.")
 
 # project name
 set(PROJECT_BUILD_NAME
@@ -36,10 +38,6 @@ set(ATFRAME_GATEWAY_MACRO_DATA_SMALL_SIZE
     CACHE STRING
           "small message buffer for atgateway connection(used to reduce memory copy when there are many small messages)"
 )
-
-option(PROJECT_SERVER_FRAME_USE_STD_COROUTINE "Using C++20 Coroutine" OFF)
-# cmake_dependent_option(PROJECT_SERVER_FRAME_USE_STD_COROUTINE "Using C++20 Coroutine" ON
-# "COMPILER_OPTIONS_TEST_STD_COROUTINE" OFF)
 
 option(PROJECT_SANTIZER_USE_ADDRESS "Enable -fsanitize=address -fno-omit-frame-pointer" OFF)
 option(PROJECT_STATIC_LINK_STANDARD_LIBRARIES "Use -static-libgcc and -static-libstdc++" OFF)
@@ -128,6 +126,11 @@ set(CMAKE_JOB_POOL_LINK "PROJECT_${PROJECT_BUILD_NAME}_LINK_JOB_POOL")
 include("${CMAKE_CURRENT_LIST_DIR}/FetchDependeny.cmake")
 include(IncludeDirectoryRecurse)
 include(EchoWithColor)
+
+# Options depend compile environments must be added after fetch cmake toolset
+# option(PROJECT_SERVER_FRAME_USE_STD_COROUTINE "Using C++20 Coroutine" OFF)
+cmake_dependent_option(PROJECT_SERVER_FRAME_USE_STD_COROUTINE "Using C++20 Coroutine" ON
+                       "COMPILER_OPTIONS_TEST_STD_COROUTINE" OFF)
 
 # Set output PATH
 if(NOT PROJECT_INSTALL_BAS_DIR)

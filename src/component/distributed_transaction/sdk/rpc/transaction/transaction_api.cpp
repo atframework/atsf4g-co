@@ -418,7 +418,7 @@ rpc::result_code_type query_transaction(rpc::context& ctx,
 
   // Read-Your-Writes 一致性实现
   if (is_replication_mode(metadata)) {
-    return invoke_replication_rpc_call(
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(invoke_replication_rpc_call(
         ctx, metadata, req_body, rsp_body, "query", rpc::transaction::query,
         [&out, &rsp_body](uint64_t, const atframework::SSMsg& received_message) {
           if (rpc::transaction::packer::unpack_query(received_message.body_bin(), *rsp_body)) {
@@ -426,7 +426,7 @@ rpc::result_code_type query_transaction(rpc::context& ctx,
               merge_transaction_storage(out, rsp_body->storage());
             }
           }
-        });
+        })));
   } else {
     uint64_t target_server_id = calculate_server_id(metadata.transaction_uuid());
     if (0 == target_server_id) {
@@ -506,7 +506,7 @@ rpc::result_code_type commit_transaction(rpc::context& ctx,
 
   // Read-Your-Writes 一致性实现
   if (is_replication_mode(inout)) {
-    return invoke_replication_rpc_call(
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(invoke_replication_rpc_call(
         ctx, inout, req_body, rsp_body, "commit", rpc::transaction::commit,
         [&inout, &rsp_body](uint64_t, const atframework::SSMsg& received_message) {
           if (rpc::transaction::packer::unpack_commit(received_message.body_bin(), *rsp_body)) {
@@ -514,7 +514,7 @@ rpc::result_code_type commit_transaction(rpc::context& ctx,
               merge_transaction_metadata(inout, rsp_body->metadata());
             }
           }
-        });
+        })));
   } else {
     int res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
     int left_retry_times = TRANSACTION_API_RETRY_TIMES;
@@ -553,7 +553,7 @@ rpc::result_code_type reject_transaction(rpc::context& ctx,
 
   // Read-Your-Writes 一致性实现
   if (is_replication_mode(inout)) {
-    return invoke_replication_rpc_call(
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(invoke_replication_rpc_call(
         ctx, inout, req_body, rsp_body, "reject", rpc::transaction::reject,
         [&inout, &rsp_body](uint64_t, const atframework::SSMsg& received_message) {
           if (rpc::transaction::packer::unpack_reject(received_message.body_bin(), *rsp_body)) {
@@ -561,7 +561,7 @@ rpc::result_code_type reject_transaction(rpc::context& ctx,
               merge_transaction_metadata(inout, rsp_body->metadata());
             }
           }
-        });
+        })));
   } else {
     int res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
     int left_retry_times = TRANSACTION_API_RETRY_TIMES;
@@ -602,8 +602,8 @@ rpc::result_code_type remove_transaction_no_wait(
 
   // Read-Your-Writes 一致性实现
   if (is_replication_mode(metadata)) {
-    return invoke_replication_rpc_call(ctx, metadata, req_body, rsp_body, "remove", rpc::transaction::remove, nullptr,
-                                       true);
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(invoke_replication_rpc_call(ctx, metadata, req_body, rsp_body, "remove",
+                                                                      rpc::transaction::remove, nullptr, true)));
   } else {
     uint64_t target_server_id = calculate_server_id(metadata.transaction_uuid());
     if (0 == target_server_id) {
@@ -611,7 +611,7 @@ rpc::result_code_type remove_transaction_no_wait(
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
     }
 
-    return rpc::transaction::remove(ctx, target_server_id, *req_body, *rsp_body, true);
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::transaction::remove(ctx, target_server_id, *req_body, *rsp_body, true)));
   }
 }
 
@@ -628,7 +628,8 @@ rpc::result_code_type remove_transaction(rpc::context& ctx,
 
   // Read-Your-Writes 一致性实现
   if (is_replication_mode(metadata)) {
-    return invoke_replication_rpc_call(ctx, metadata, req_body, rsp_body, "remove", rpc::transaction::remove, nullptr);
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+        invoke_replication_rpc_call(ctx, metadata, req_body, rsp_body, "remove", rpc::transaction::remove, nullptr)));
   } else {
     int res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
     int left_retry_times = TRANSACTION_API_RETRY_TIMES;
@@ -674,7 +675,7 @@ rpc::result_code_type commit_participator(rpc::context& ctx, const std::string& 
 
   // Read-Your-Writes 一致性实现
   if (is_replication_mode(inout)) {
-    return invoke_replication_rpc_call(
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(invoke_replication_rpc_call(
         ctx, inout, req_body, rsp_body, "commit_participator", rpc::transaction::commit_participator,
         [&inout, &rsp_body](uint64_t, const atframework::SSMsg& received_message) {
           if (rpc::transaction::packer::unpack_commit_participator(received_message.body_bin(), *rsp_body)) {
@@ -682,7 +683,7 @@ rpc::result_code_type commit_participator(rpc::context& ctx, const std::string& 
               merge_transaction_metadata(inout, rsp_body->metadata());
             }
           }
-        });
+        })));
   } else {
     int res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
     int left_retry_times = TRANSACTION_API_RETRY_TIMES;
@@ -725,7 +726,7 @@ rpc::result_code_type reject_participator(rpc::context& ctx, const std::string& 
 
   // Read-Your-Writes 一致性实现
   if (is_replication_mode(inout)) {
-    return invoke_replication_rpc_call(
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(invoke_replication_rpc_call(
         ctx, inout, req_body, rsp_body, "reject_participator", rpc::transaction::reject_participator,
         [&inout, &rsp_body](uint64_t, const atframework::SSMsg& received_message) {
           if (rpc::transaction::packer::unpack_reject_participator(received_message.body_bin(), *rsp_body)) {
@@ -733,7 +734,7 @@ rpc::result_code_type reject_participator(rpc::context& ctx, const std::string& 
               merge_transaction_metadata(inout, rsp_body->metadata());
             }
           }
-        });
+        })));
   } else {
     int res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
     int left_retry_times = TRANSACTION_API_RETRY_TIMES;

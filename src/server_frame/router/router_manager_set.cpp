@@ -31,6 +31,8 @@
 #include "router/router_manager_set.h"
 #include "router/router_object_base.h"
 
+#include "rpc/rpc_async_invoke.h"
+#include "rpc/rpc_utils.h"
 #include "rpc/telemetry/rpc_global_service.h"
 
 router_manager_set::router_manager_set() : last_proc_time_(0), is_closing_(false), is_closed_(false) {
@@ -187,17 +189,8 @@ int router_manager_set::stop() {
     }
 
     if (is_save_task_running() && !task_type_trait::empty(pending_action_task_)) {
-#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-      pending_action_task_.then([](task_type_trait::internal_task_type::context_pointer_type &&) {
-        if (task_manager::is_instance_destroyed()) {
-          return;
-        }
-        dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
-        task_manager::me()->start_task(tid, start_data);
-      })
-#else
-      pending_action_task_->then(closing_task_);
-#endif
+      rpc::context ctx{rpc::context::create_without_task()};
+      rpc::async_then_start_task(ctx, "router_manager_set.stop.wait_pending_action", pending_action_task_, tid);
     } else {
       dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
       int res = task_manager::me()->start_task(tid, start_data);

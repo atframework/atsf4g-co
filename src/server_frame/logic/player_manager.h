@@ -49,6 +49,23 @@ class player_manager : public util::design_pattern::singleton<player_manager> {
                                player_cache *check_user = nullptr);
 
   /**
+   * @brief 启动异步任务移除用户
+   * @param user_id user_id
+   * @param zone_id zone_id
+   * @param force_kickoff 强制移除，不进入离线缓存
+   */
+  void async_remove(rpc::context &ctx, player_ptr_t user, bool force_kickoff = false);
+
+  /**
+   * @brief 启动异步任务移除用户
+   * @param user_id user_id
+   * @param zone_id zone_id
+   * @param force_kickoff 强制移除，不进入离线缓存
+   */
+  void async_remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, bool force_kickoff = false,
+                    player_cache *check_user = nullptr);
+
+  /**
    * @brief 保存用户数据
    * @param user_id user_id
    */

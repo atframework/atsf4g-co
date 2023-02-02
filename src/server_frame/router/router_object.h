@@ -47,7 +47,7 @@ class router_object : public router_object_base {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE);
     }
 
-    return save_object_inner(ctx, priv_data);
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(save_object_inner(ctx, priv_data)));
   }
 
   // =========================== 子类需要实现以下接口 ===========================

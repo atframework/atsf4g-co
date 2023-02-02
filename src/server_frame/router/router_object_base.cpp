@@ -273,7 +273,7 @@ void router_object_base::wakeup_io_task_awaiter() {
       // iter will be erased in task
       dispatcher_resume_data_type callback_data = dispatcher_make_default<dispatcher_resume_data_type>();
       callback_data.message.msg_type = reinterpret_cast<uintptr_t>(reinterpret_cast<const void *>(&io_task_awaiter_));
-      callback_data.sequence = wake_task->get_id();
+      callback_data.sequence = task_type_trait::get_task_id(wake_task);
 
       rpc::custom_resume(wake_task, callback_data);
     } else {
@@ -333,7 +333,7 @@ rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx, task_
   }
 
   if (ctx.get_task_context().task_id == task_type_trait::get_task_id(io_task_)) {
-    return await_io_task(ctx);
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(await_io_task(ctx)));
   }
 
   rpc::result_code_type::value_type ret = 0;

@@ -152,7 +152,9 @@ task_manager::~task_manager() {
     native_mgr_->reset();
   }
   native_mgr_.reset();
+#if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
   stack_pool_.reset();
+#endif
 
   // free protobuf meta
   ::google::protobuf::ShutdownProtobufLibrary();
@@ -309,8 +311,7 @@ int task_manager::tick(time_t sec, int nsec) {
           "[STATS] Coroutine task stats:\n\tRuntime - Task Number: {}\n\tRuntime - Checkpoint Number: "
           "{}\n\tRuntime - Next Checkpoint: "
           "{}",
-          native_mgr_->get_task_size(), native_mgr_->get_tick_checkpoint_size(), first_checkpoint,
-          stack_pool_->get_gc_once_number());
+          native_mgr_->get_task_size(), native_mgr_->get_tick_checkpoint_size(), first_checkpoint);
     }
 #if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
     if (stack_pool_) {
@@ -338,13 +339,19 @@ task_type_trait::task_type task_manager::get_task(task_type_trait::id_type task_
     return task_type_trait::task_type();
   }
 
-#if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+  auto task_ptr = native_mgr_->find_task(task_id);
+  if (nullptr == task_ptr) {
+    return task_type_trait::task_type();
+  }
+  return *task_ptr;
+#else
   if (stack_pool_) {
     stack_pool_->gc();
   }
-#endif
 
   return native_mgr_->find_task(task_id);
+#endif
 }
 
 size_t task_manager::get_stack_size() const { return logic_config::me()->get_cfg_task().stack().size(); }

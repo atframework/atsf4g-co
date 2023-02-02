@@ -52,7 +52,8 @@ task_action_router_close_manager_set::result_type task_action_router_close_manag
     std::shared_ptr<status_data_t> status_data = status_data_;
     pending_list_ptr_t pending_list = param_.pending_list;
     auto invoke_task = rpc::async_invoke(
-        get_shared_context(), "task_action_router_close_manager_set", [status_data, pending_list](rpc::context &ctx) {
+        get_shared_context(), "task_action_router_close_manager_set",
+        [status_data, pending_list](rpc::context &ctx) -> rpc::result_code_type {
           router_object_ptr_t obj = (*pending_list)[status_data->current_idx_];
           ++status_data->current_idx_;
 

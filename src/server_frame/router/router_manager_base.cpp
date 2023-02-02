@@ -57,7 +57,7 @@ rpc::result_code_type router_manager_base::send_msg(rpc::context &ctx, const key
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
   }
 
-  return send_msg(ctx, *obj, std::move(msg), sequence);
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_msg(ctx, *obj, std::move(msg), sequence)));
 }
 
 rpc::result_code_type router_manager_base::send_msg_raw(rpc::context &ctx, router_object_base &obj,

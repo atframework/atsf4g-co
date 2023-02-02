@@ -91,7 +91,7 @@ rpc::result_code_type transaction_participator_handle::check_writable(rpc::conte
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  return vtable_->check_writable(ctx, *this, writable);
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(vtable_->check_writable(ctx, *this, writable)));
 }
 
 int32_t transaction_participator_handle::tick(rpc::context& ctx, util::time::time_utility::raw_time_t timepoint) {
@@ -286,7 +286,7 @@ rpc::result_code_type transaction_participator_handle::reject(rpc::context& ctx,
     RPC_RETURN_CODE(ret);
   }
 
-  return reject_transcation(ctx, request.transaction_uuid());
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(reject_transcation(ctx, request.transaction_uuid())));
 }
 
 rpc::result_code_type::value_type transaction_participator_handle::check_lock(
@@ -719,7 +719,7 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
   if (transaction_ptr->resolve_times() > transaction_ptr->configure().resolve_max_times()) {
     FWLOGERROR("participator {} resolve transaction {} for more than {} times, just remove it", get_participator_key(),
                transaction_uuid, transaction_ptr->configure().resolve_max_times());
-    return reject_transcation(child_ctx, transaction_uuid);
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(reject_transcation(child_ctx, transaction_uuid)));
   }
 
   rpc::context::message_holder<atframework::distributed_system::transaction_blob_storage> trans_data(child_ctx);

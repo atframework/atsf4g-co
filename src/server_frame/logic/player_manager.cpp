@@ -18,6 +18,7 @@
 #include <dispatcher/task_manager.h>
 #include <rpc/db/login.h>
 #include <rpc/db/player.h>
+#include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_utils.h>
 #include <utility/protobuf_mini_dumper.h>
 
@@ -31,7 +32,7 @@ rpc::result_code_type player_manager::remove(rpc::context &ctx, player_manager::
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
   }
 
-  return remove(ctx, u->get_user_id(), u->get_zone_id(), force_kickoff, u.get());
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove(ctx, u->get_user_id(), u->get_zone_id(), force_kickoff, u.get())));
 }
 
 rpc::result_code_type player_manager::remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, bool force_kickoff,
@@ -64,9 +65,34 @@ rpc::result_code_type player_manager::remove(rpc::context &ctx, uint64_t user_id
 
   // 这里会触发保存
   if (force_kickoff) {
-    return router_player_manager::me()->remove_player_cache(ctx, user_id, zone_id, cache, nullptr);
+    RPC_RETURN_CODE(
+        RPC_AWAIT_CODE_RESULT(router_player_manager::me()->remove_player_cache(ctx, user_id, zone_id, cache, nullptr)));
   } else {
-    return router_player_manager::me()->remove_player_object(ctx, user_id, zone_id, nullptr);
+    RPC_RETURN_CODE(
+        RPC_AWAIT_CODE_RESULT(router_player_manager::me()->remove_player_object(ctx, user_id, zone_id, nullptr)));
+  }
+}
+
+void player_manager::async_remove(rpc::context &ctx, player_ptr_t u, bool force_kickoff) {
+  if (!u) {
+    return;
+  }
+
+  async_remove(ctx, u->get_user_id(), u->get_zone_id(), force_kickoff, u.get());
+}
+
+void player_manager::async_remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, bool force_kickoff,
+                                  player_cache *check_user) {
+  auto invoke_result = rpc::async_invoke(
+      ctx, "player_manager.async_remove",
+      [user_id, zone_id, force_kickoff, check_user](rpc::context &child_ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+            player_manager::me()->remove(child_ctx, user_id, zone_id, force_kickoff, check_user)));
+      });
+
+  if (invoke_result.is_error()) {
+    FWLOGERROR("Invoke task to remove user {}:{} failed, res: {}({})", zone_id, user_id, *invoke_result.get_error(),
+               protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
   }
 }
 

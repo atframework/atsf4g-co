@@ -186,7 +186,7 @@ int task_action_login::on_success() {
 
   if (!user->is_inited()) {
     FWLOGWARNING("login success but user {}:{} not inited", get_zone_id(), req_body.user_id());
-    RPC_AWAIT_IGNORE_RESULT(player_manager::me()->remove(get_shared_context(), user, true));
+    player_manager::me()->async_remove(get_shared_context(), user, true);
     return get_result();
   }
 
@@ -237,7 +237,7 @@ int task_action_login::on_failed() {
     } else if (user && !user->is_inited()) {
       // 如果创建了未初始化的GameUser对象，则需要移除
       user->clear_dirty_cache();
-      RPC_AWAIT_IGNORE_RESULT(player_manager::me()->remove(get_shared_context(), user, true));
+      player_manager::me()->async_remove(get_shared_context(), user, true);
     }
   }
 

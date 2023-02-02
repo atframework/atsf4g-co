@@ -47,24 +47,32 @@ struct task_type_trait {
     return 0;
   }
 
+  inline static bool is_exiting(task_status status) noexcept { return status >= task_status::kDone; }
+
+  inline static bool is_timeout(task_status status) noexcept { return status == task_status::kTimeout; }
+
+  inline static bool is_cancel(task_status status) noexcept { return status == task_status::kCancle; }
+
+  inline static bool is_fault(task_status status) noexcept { return status >= task_status::kKilled; }
+
   template <class TVALUE, class TERROR_TRANSFORM>
   inline static bool is_exiting(const copp::callable_future<TVALUE, TERROR_TRANSFORM>& future) noexcept {
-    return future.get_status() >= task_type_trait::task_type::task_status_type::kDone || future.is_ready();
+    return is_exiting(future.get_status()) || future.is_ready();
   }
 
   template <class TVALUE, class TERROR_TRANSFORM>
   inline static bool is_timeout(const copp::callable_future<TVALUE, TERROR_TRANSFORM>& future) noexcept {
-    return future.get_status() == task_type_trait::task_type::task_status_type::kTimeout;
+    return is_timeout(future.get_status());
   }
 
   template <class TVALUE, class TERROR_TRANSFORM>
   inline static bool is_cancel(const copp::callable_future<TVALUE, TERROR_TRANSFORM>& future) noexcept {
-    return future.get_status() == task_type_trait::task_type::task_status_type::kCancle;
+    return is_cancel(future.get_status());
   }
 
   template <class TVALUE, class TERROR_TRANSFORM>
   inline static bool is_fault(const copp::callable_future<TVALUE, TERROR_TRANSFORM>& future) noexcept {
-    return future.get_status() >= task_type_trait::task_type::task_status_type::kKilled;
+    return is_fault(future.get_status());
   }
 
   template <class TVALUE, class TPRIVATE_DATA, class TERROR_TRANSFORM>
@@ -73,17 +81,17 @@ struct task_type_trait {
   }
 
   template <class TVALUE, class TPRIVATE_DATA, class TERROR_TRANSFORM>
-  inline static bool is_timeout(const cotask::task_future<TVALUE, TPRIVATE_DATA, TERROR_TRANSFORM>& future) noexcept {
+  inline static bool is_timeout(const cotask::task_future<TVALUE, TPRIVATE_DATA, TERROR_TRANSFORM>& task) noexcept {
     return task.is_timeout();
   }
 
   template <class TVALUE, class TPRIVATE_DATA, class TERROR_TRANSFORM>
-  inline static bool is_cancel(const cotask::task_future<TVALUE, TPRIVATE_DATA, TERROR_TRANSFORM>& future) noexcept {
-    return task.get_status() == task_type_trait::task_type::task_status_type::kCancle;
+  inline static bool is_cancel(const cotask::task_future<TVALUE, TPRIVATE_DATA, TERROR_TRANSFORM>& task) noexcept {
+    return is_cancel(task.get_status());
   }
 
   template <class TVALUE, class TPRIVATE_DATA, class TERROR_TRANSFORM>
-  inline static bool is_fault(const cotask::task_future<TVALUE, TPRIVATE_DATA, TERROR_TRANSFORM>& future) noexcept {
+  inline static bool is_fault(const cotask::task_future<TVALUE, TPRIVATE_DATA, TERROR_TRANSFORM>& task) noexcept {
     return task.is_faulted();
   }
 
@@ -100,14 +108,13 @@ struct task_type_trait {
 // C++20 coroutine use return type to check if it's in a coroutine, just do nothing here
 #  define TASK_COMPAT_CHECK_TASK_ACTION_RETURN(...)
 #  define TASK_COMPAT_CHECK_IS_EXITING() \
-    ((co_yield copp::promise_base_type::pick_current_status()) >= task_type_trait::task_type::task_status_type::kDone)
-#  define TASK_COMPAT_CHECK_IS_TIMEOUT()                          \
-    ((co_yield copp::promise_base_type::pick_current_status()) == \
-     task_type_trait::task_type::task_status_type::kTimeout)
+    task_type_trait::is_exiting(co_yield copp::promise_base_type::pick_current_status())
+#  define TASK_COMPAT_CHECK_IS_TIMEOUT() \
+    task_type_trait::is_timeout(co_yield copp::promise_base_type::pick_current_status())
 #  define TASK_COMPAT_CHECK_IS_CANCEL() \
-    ((co_yield copp::promise_base_type::pick_current_status()) == task_type_trait::task_type::task_status_type::kCancle)
+    task_type_trait::is_cancel(co_yield copp::promise_base_type::pick_current_status())
 #  define TASK_COMPAT_CHECK_IS_FAULT() \
-    ((co_yield copp::promise_base_type::pick_current_status()) >= task_type_trait::task_type::task_status_type::kKilled)
+    task_type_trait::is_fault(co_yield copp::promise_base_type::pick_current_status())
 #  define TASK_COMPAT_GET_CURRENT_STATUS() (co_yield copp::promise_base_type::pick_current_status())
 
 #else

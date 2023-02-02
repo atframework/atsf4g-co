@@ -12,6 +12,8 @@
 #include <string>
 #include <vector>
 
+#include "rpc/rpc_common_types.h"
+
 namespace rpc {
 class context;
 
@@ -24,7 +26,7 @@ namespace player {
  *       即便是大批玩家涌入比较极端的情况下，数据库访问30k/s时，能提供百万级的分配QPS。
  * @return allocated user id or error code(< 0)
  */
-int64_t alloc_user_id(::rpc::context &ctx);
+EXPLICIT_NODISCARD_ATTR rpc::rpc_result<int64_t> alloc_user_id(::rpc::context &ctx);
 
 /**
  * @brief 检测User ID是否合法

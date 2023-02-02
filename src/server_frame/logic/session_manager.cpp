@@ -154,10 +154,11 @@ void session_manager::remove(sess_ptr_t sess, int reason) {
       u->set_session(ctx, nullptr);
       // TODO 统计日志
       // 如果是踢下线，则需要强制保存并移除GameUser对象
-      auto remove_player_task = rpc::async_invoke(ctx, "session_manager.remove", [u, reason](rpc::context &ctx) {
-        auto ret = RPC_AWAIT_CODE_RESULT(player_manager::me()->remove(ctx, u, 0 != reason));
-        RPC_RETURN_CODE(ret);
-      });
+      auto remove_player_task =
+          rpc::async_invoke(ctx, "session_manager.remove", [u, reason](rpc::context &ctx) -> rpc::result_code_type {
+            auto ret = RPC_AWAIT_CODE_RESULT(player_manager::me()->remove(ctx, u, 0 != reason));
+            RPC_RETURN_CODE(ret);
+          });
       if (remove_player_task.is_error()) {
         FWLOGERROR("async_invoke task to remove player {}:{} failed, res: {}({})", u->get_zone_id(), u->get_user_id(),
                    *remove_player_task.get_error(),
@@ -181,24 +182,25 @@ void session_manager::remove_all(int32_t reason) {
 
   if (!all_sessions->empty()) {
     rpc::context ctx{rpc::context::create_without_task()};
-    auto remove_player_task = rpc::async_invoke(ctx, "session_manager.remove_all", [all_sessions](rpc::context &ctx) {
-      for (auto &session : *all_sessions) {
-        if (!session.second) {
-          continue;
-        }
-        player_cache::ptr_t u = session.second->get_player();
-        if (u) {
-          session.second->set_player(nullptr);
-          sess_ptr_t check_session = u->get_session();
-          if (!check_session || check_session == session.second) {
-            u->set_session(ctx, nullptr);
-            // 不能直接保存，不然如果玩家数很多依次保存会超时
-            player_manager::me()->add_save_schedule(u->get_user_id(), u->get_zone_id(), true);
+    auto remove_player_task = rpc::async_invoke(
+        ctx, "session_manager.remove_all", [all_sessions](rpc::context &ctx) -> rpc::result_code_type {
+          for (auto &session : *all_sessions) {
+            if (!session.second) {
+              continue;
+            }
+            player_cache::ptr_t u = session.second->get_player();
+            if (u) {
+              session.second->set_player(nullptr);
+              sess_ptr_t check_session = u->get_session();
+              if (!check_session || check_session == session.second) {
+                u->set_session(ctx, nullptr);
+                // 不能直接保存，不然如果玩家数很多依次保存会超时
+                player_manager::me()->add_save_schedule(u->get_user_id(), u->get_zone_id(), true);
+              }
+            }
           }
-        }
-      }
-      RPC_RETURN_CODE(0);
-    });
+          RPC_RETURN_CODE(0);
+        });
     if (remove_player_task.is_error()) {
       FWLOGERROR("async_invoke task to remove player failed, res: {}({})", *remove_player_task.get_error(),
                  protobuf_mini_dumper_get_error_msg(*remove_player_task.get_error()));

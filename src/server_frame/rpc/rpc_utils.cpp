@@ -24,6 +24,10 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+#  include <libcopp/coroutine/algorithm.h>
+#endif
+
 #include <rpc/db/uuid.h>
 
 #include <memory>
@@ -230,10 +234,18 @@ static result_code_type wait(context &ctx, dispatcher_resume_data_type *output, 
        ++retry_times) {
     is_continue = false;
     // 协程 swap out
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+    auto generator_kv = task_manager::make_resume_generator(check_type, options);
+    auto [await_rsult, resume_data] = co_await generator_kv.second;
+    if (await_rsult < 0) {
+      RPC_RETURN_CODE(await_rsult);
+    }
+#else
     void *result = nullptr;
     task_type_trait::internal_task_type::this_task()->yield(&result);
 
     dispatcher_resume_data_type *resume_data = reinterpret_cast<dispatcher_resume_data_type *>(result);
+#endif
 
     // 协程 swap in
 
@@ -325,17 +337,37 @@ static result_code_type wait(context &ctx, uintptr_t check_type,
   std::unordered_set<uint64_t> received_sequences;
   received_sequences.reserve(waiters.size());
   received.reserve(waiters.size());
-  for (size_t retry_times = 0; received_sequences.size() < wakeup_count &&
-                               retry_times < waiters.size() + PROJECT_NAMESPACE_ID::EN_SL_RPC_MAX_MISMATCH_RETRY_TIMES;
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+  std::vector<task_manager::generic_resume_generator> generators;
+  generators.reserve(waiters.size());
+  for (auto &waiter_option : waiters) {
+    generators.emplace_back(std::move(task_manager::make_resume_generator(check_type, waiter_option).second));
+  }
+#endif
+  for (size_t retry_times = 0;
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+       received_sequences.size() < wakeup_count &&
+       retry_times < PROJECT_NAMESPACE_ID::EN_SL_RPC_MAX_MISMATCH_RETRY_TIMES + 1;
+#else
+       received_sequences.size() < wakeup_count &&
+       retry_times < waiters.size() + PROJECT_NAMESPACE_ID::EN_SL_RPC_MAX_MISMATCH_RETRY_TIMES;
+#endif
        ++retry_times) {
     // 协程 swap out
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+    copp::some_ready<task_manager::generic_resume_generator>::type readys;
+    auto await_result = co_await copp::some(readys, wakeup_count - received_sequences.size(), generators);
+    if (await_result != copp::promise_status::kDone) {
+      RPC_RETURN_CODE(task_manager::convert_task_status_to_error_code(await_result));
+    }
+#else
     void *result = nullptr;
     task_type_trait::internal_task_type::this_task()->yield(&result);
 
     dispatcher_resume_data_type *resume_data = reinterpret_cast<dispatcher_resume_data_type *>(result);
+#endif
 
     // 协程 swap in
-
     if (TASK_COMPAT_CHECK_IS_EXITING()) {
       if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
         RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
@@ -350,28 +382,35 @@ static result_code_type wait(context &ctx, uintptr_t check_type,
       }
     }
 
-    if (nullptr == resume_data) {
-      FWLOGINFO("task {} resume data is empty, maybe resumed by await_task", ctx.get_task_context().task_id);
-      continue;
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+    for (auto &ready_generator : readys) {
+      dispatcher_resume_data_type *resume_data = ready_generator->get_context()->data()->second;
+#endif
+      if (nullptr == resume_data) {
+        FWLOGINFO("task {} resume data is empty, maybe resumed by await_task", ctx.get_task_context().task_id);
+        continue;
+      }
+
+      if (resume_data->message.msg_type != check_type) {
+        FWLOGINFO("task {} resume and expect message type {:#x} but real is {:#x}, ignore this message",
+                  ctx.get_task_context().task_id, check_type, resume_data->message.msg_type);
+
+        continue;
+      }
+
+      one_wait_option.sequence = resume_data->sequence;
+      auto rsp_iter = waiters.find(one_wait_option);
+      if (rsp_iter == waiters.end()) {
+        FWLOGINFO("task {} resume and with message sequence {} but not found in waiters, ignore this message",
+                  ctx.get_task_context().task_id, resume_data->sequence);
+        continue;
+      }
+
+      received_sequences.insert(resume_data->sequence);
+      wait_swap_message(received[resume_data->sequence], resume_data->message.msg_addr);
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
     }
-
-    if (resume_data->message.msg_type != check_type) {
-      FWLOGINFO("task {} resume and expect message type {:#x} but real is {:#x}, ignore this message",
-                ctx.get_task_context().task_id, check_type, resume_data->message.msg_type);
-
-      continue;
-    }
-
-    one_wait_option.sequence = resume_data->sequence;
-    auto rsp_iter = waiters.find(one_wait_option);
-    if (rsp_iter == waiters.end()) {
-      FWLOGINFO("task {} resume and with message sequence {} but not found in waiters, ignore this message",
-                ctx.get_task_context().task_id, resume_data->sequence);
-      continue;
-    }
-
-    received_sequences.insert(resume_data->sequence);
-    wait_swap_message(received[resume_data->sequence], resume_data->message.msg_addr);
+#endif
   }
 
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -384,11 +423,7 @@ result_code_type wait(context &ctx, std::chrono::system_clock::duration timeout)
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_COMMON_LOGIC_TIMER_NEED_COMMON_MODULE);
   }
 
-  task_type_trait::internal_task_type *task = task_type_trait::internal_task_type::this_task();
-  if (!task) {
-    FWLOGERROR("current not in a task");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
-  }
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in a task");
   rpc::context child_ctx(ctx);
   rpc::context::tracer tracer;
   rpc::context::trace_option trace_option;
@@ -398,13 +433,13 @@ result_code_type wait(context &ctx, std::chrono::system_clock::duration timeout)
   child_ctx.setup_tracer(tracer, "rpc.wait.timer", std::move(trace_option));
 
   logic_server_timer timer;
-  mod->insert_timer(task->get_id(), timeout, timer);
+  mod->insert_timer(ctx.get_task_context().task_id, timeout, timer);
 
   dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
   await_options.sequence = timer.sequence;
   await_options.timeout = timeout;
 
-  return detail::wait(ctx, nullptr, timer.message_type, await_options);
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(detail::wait(ctx, nullptr, timer.message_type, await_options)));
 }
 
 result_code_type wait(context &ctx, atframework::SSMsg &msg, const dispatcher_await_options &options) {
@@ -458,7 +493,7 @@ int32_t custom_resume(const task_type_trait::task_type &task, dispatcher_resume_
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
-  int res = task->resume(&resume_data);
+  int32_t res = task_manager::me()->resume_task(task_type_trait::get_task_id(task), resume_data);
   if (res < 0) {
     FWLOGERROR("resume task {} failed, res: {}.", task_type_trait::get_task_id(task), res);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
@@ -472,14 +507,7 @@ int32_t custom_resume(task_type_trait::id_type task_id, dispatcher_resume_data_t
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
-  auto task_obj = task_manager::me()->get_task(task_id);
-  if (task_type_trait::empty(task_obj)) {
-    FWLOGWARNING("resume task {} for type={}, sequence={} but not found, maybe already timeout or killed.", task_id,
-                 resume_data.message.msg_addr, resume_data.sequence);
-    return 0;
-  }
-
-  return custom_resume(task_obj, resume_data);
+  return task_manager::me()->resume_task(task_id, resume_data);
 }
 
 }  // namespace rpc

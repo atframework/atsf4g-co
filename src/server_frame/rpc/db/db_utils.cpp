@@ -92,6 +92,7 @@ char *get_pack_tls_buffer() {
 namespace rpc {
 namespace db {
 
+#if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
 result_type::result_type() {}
 result_type::result_type(int32_t code) : result_data_(code) {}
 result_type::operator int32_t() const noexcept {
@@ -132,6 +133,7 @@ bool result_type::is_error() const noexcept {
 
   return *ret < 0;
 }
+#endif
 
 redis_args::redis_args(size_t argc) : used_(0), free_buffer_(rpc::db::detail::get_pack_tls_buffer()) {
   segment_value_.resize(argc);

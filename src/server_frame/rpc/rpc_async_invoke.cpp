@@ -27,7 +27,7 @@ async_invoke_result async_invoke(context &ctx, gsl::string_view name, std::funct
     return async_invoke_result::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  task_type_trait::task_type task_ptr;
+  task_type_trait::task_type task_inst;
   task_action_async_invoke::ctor_param_t params;
   params.caller_context = &ctx;
   params.callable = std::move(fn);
@@ -36,26 +36,26 @@ async_invoke_result async_invoke(context &ctx, gsl::string_view name, std::funct
   if (timeout > std::chrono::system_clock::duration::zero()) {
     auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timeout);
     res = task_manager::me()->create_task_with_timeout<task_action_async_invoke>(
-        task_ptr, static_cast<time_t>(seconds.count()),
+        task_inst, static_cast<time_t>(seconds.count()),
         static_cast<time_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(timeout - seconds).count()),
         std::move(params));
   } else {
-    res = task_manager::me()->create_task<task_action_async_invoke>(task_ptr, std::move(params));
+    res = task_manager::me()->create_task<task_action_async_invoke>(task_inst, std::move(params));
   }
-  if (0 != res || !task_ptr) {
+  if (0 != res || task_type_trait::empty(task_inst)) {
     FWLOGERROR("create task_action_async_invoke failed, res: {}({})", res, protobuf_mini_dumper_get_error_msg(res));
     return async_invoke_result::make_error(res);
   }
 
   dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
-  res = task_manager::me()->start_task(task_ptr->get_id(), start_data);
+  res = task_manager::me()->start_task(task_type_trait::get_task_id(task_inst), start_data);
   if (0 != res) {
     FWLOGERROR("start task_action_async_invoke {} with name rpc.async_invoke:{} failed, res: {}({})",
-               task_ptr->get_id(), name, res, protobuf_mini_dumper_get_error_msg(res));
+               task_type_trait::get_task_id(task_inst), name, res, protobuf_mini_dumper_get_error_msg(res));
     return async_invoke_result::make_error(res);
   }
 
-  return async_invoke_result::make_success(std::move(task_ptr));
+  return async_invoke_result::make_success(std::move(task_inst));
 }
 
 async_invoke_result async_invoke(gsl::string_view caller_name, gsl::string_view name,
@@ -101,7 +101,8 @@ result_code_type wait_tasks(context &ctx, const std::vector<task_type_trait::tas
     }
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-    co_await *last_task;
+    task_type_trait::task_type copy_task{*last_task};
+    co_await copy_task;
 #else
     task_type_trait::internal_task_type::this_task()->await_task(task_type_trait::task_type{*last_task});
 #endif
@@ -138,13 +139,54 @@ result_code_type wait_task(context &ctx, const task_type_trait::task_type &other
     }
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-    co_await other_task;
+    task_type_trait::task_type copy_task{other_task};
+    co_await copy_task;
 #else
     task_type_trait::internal_task_type::this_task()->await_task(other_task);
 #endif
   }
 
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+}
+
+void async_then_start_task(context &ctx, gsl::string_view name, task_type_trait::task_type waiting,
+                           task_type_trait::id_type task_id) {
+  if (task_type_trait::empty(waiting) || task_type_trait::is_exiting(waiting)) {
+    if (task_manager::is_instance_destroyed()) {
+      return;
+    }
+    dispatcher_start_data_type data = dispatcher_make_default<dispatcher_start_data_type>();
+    data.context = &ctx;
+    task_manager::me()->start_task(task_id, data);
+    return;
+  }
+
+  async_invoke_result result = async_invoke(
+      ctx, name, [waiting = std::move(waiting), task_id](rpc::context &child_ctx) -> rpc::result_code_type {
+        auto ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(child_ctx, waiting));
+        if (task_manager::is_instance_destroyed()) {
+          RPC_RETURN_CODE(ret);
+        }
+
+        dispatcher_start_data_type data = dispatcher_make_default<dispatcher_start_data_type>();
+        data.context = &child_ctx;
+        task_manager::me()->start_task(task_id, data);
+        RPC_RETURN_CODE(ret);
+      });
+
+  if (result.is_success()) {
+    return;
+  }
+
+  FWLOGERROR("Try to invoke task({}) to wait task {} and then start task {} failed, try to start task directly.", name,
+             task_type_trait::get_task_id(waiting), task_id);
+
+  if (task_manager::is_instance_destroyed()) {
+    return;
+  }
+  dispatcher_start_data_type data = dispatcher_make_default<dispatcher_start_data_type>();
+  data.context = &ctx;
+  task_manager::me()->start_task(task_id, data);
 }
 
 }  // namespace rpc

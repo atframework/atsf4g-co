@@ -296,7 +296,7 @@ class router_manager : public router_manager_base {
       RPC_RETURN_CODE(ret);
     }
 
-    return transfer(ctx, obj, svr_id, need_notify, priv_data);
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(transfer(ctx, obj, svr_id, need_notify, priv_data)));
   }
 
   virtual rpc::result_code_type transfer(rpc::context &ctx, const ptr_t &obj, uint64_t svr_id, bool need_notify,
@@ -598,7 +598,7 @@ class router_manager : public router_manager_base {
   virtual rpc::result_code_type on_evt_remove_cache(rpc::context &ctx, const key_t &key, const ptr_t &cache,
                                                     priv_data_t priv_data) {
     if (handle_on_remove_cache_) {
-      return handle_on_remove_cache_(ctx, *this, key, cache, priv_data);
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle_on_remove_cache_(ctx, *this, key, cache, priv_data)));
     }
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -606,7 +606,7 @@ class router_manager : public router_manager_base {
   virtual rpc::result_code_type on_evt_cache_removed(rpc::context &ctx, const key_t &key, const ptr_t &cache,
                                                      priv_data_t priv_data) {
     if (handle_on_cache_removed_) {
-      return handle_on_cache_removed_(ctx, *this, key, cache, priv_data);
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle_on_cache_removed_(ctx, *this, key, cache, priv_data)));
     }
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -614,7 +614,7 @@ class router_manager : public router_manager_base {
   virtual rpc::result_code_type on_evt_remove_object(rpc::context &ctx, const key_t &key, const ptr_t &cache,
                                                      priv_data_t priv_data) {
     if (handle_on_remove_object_) {
-      return handle_on_remove_object_(ctx, *this, key, cache, priv_data);
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle_on_remove_object_(ctx, *this, key, cache, priv_data)));
     }
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -622,21 +622,21 @@ class router_manager : public router_manager_base {
   virtual rpc::result_code_type on_evt_object_removed(rpc::context &ctx, const key_t &key, const ptr_t &cache,
                                                       priv_data_t priv_data) {
     if (handle_on_object_removed_) {
-      return handle_on_object_removed_(ctx, *this, key, cache, priv_data);
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle_on_object_removed_(ctx, *this, key, cache, priv_data)));
     }
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   virtual rpc::result_code_type on_evt_pull_cache(rpc::context &ctx, const ptr_t &cache, priv_data_t priv_data) {
     if (handle_on_pull_cache_) {
-      return handle_on_pull_cache_(ctx, *this, cache, priv_data);
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle_on_pull_cache_(ctx, *this, cache, priv_data)));
     }
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   virtual rpc::result_code_type on_evt_pull_object(rpc::context &ctx, const ptr_t &cache, priv_data_t priv_data) {
     if (handle_on_pull_object_) {
-      return handle_on_pull_object_(ctx, *this, cache, priv_data);
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle_on_pull_object_(ctx, *this, cache, priv_data)));
     }
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }

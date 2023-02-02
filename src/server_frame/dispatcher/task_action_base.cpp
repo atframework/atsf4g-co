@@ -167,7 +167,7 @@ int task_action_base::operator()(void *priv_data) {
     FWLOGDEBUG("task {} [{}] start to run\n", name(), get_task_id());
   }
 
-  result_ = hook_run();
+  result_ = RPC_AWAIT_CODE_RESULT(hook_run());
 
   if (event_disabled_) {
     if (result_ < 0) {

@@ -70,8 +70,9 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
     }
 
     std::shared_ptr<status_data_t> status_data = status_data_;
-    auto invoke_task =
-        rpc::async_invoke(get_shared_context(), "task_action_auto_save_objects", [status_data](rpc::context &ctx) {
+    auto invoke_task = rpc::async_invoke(
+        get_shared_context(), "task_action_auto_save_objects",
+        [status_data](rpc::context &ctx) -> rpc::result_code_type {
           router_manager_set::pending_action_data auto_save =
               std::move(router_manager_set::me()->pending_action_list_.front());
           router_manager_set::me()->pending_action_list_.pop_front();
@@ -102,7 +103,7 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
               if (nullptr != mgr) {
                 ++status_data->action_remove_object_count;
 
-                int result = RPC_AWAIT_CODE_RESULT(
+                int32_t result = RPC_AWAIT_CODE_RESULT(
                     mgr->remove_object(ctx, auto_save.object->get_key(), auto_save.object, nullptr));
                 // 失败且期间未升级或mutable_object()，下次重试的时候也要走降级流程
                 if (result < 0 &&

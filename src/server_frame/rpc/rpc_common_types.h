@@ -206,10 +206,26 @@ typename _rpc_result_traits<TRESULT>::value_type _get_rpc_result_value(TRESULT&&
 #endif
 
 namespace details {
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
 template <class TRESULT>
 TRESULT _ignore_result(EXPLICIT_UNUSED_ATTR TRESULT&& result) {
   return std::forward<TRESULT>(result);
 }
+#else
+template <class TRESULT,
+          typename std::enable_if<!std::is_same<::rpc::result_void_type, typename std::decay<TRESULT>::type>::value,
+                                  int>::type* = nullptr>
+TRESULT _ignore_result(EXPLICIT_UNUSED_ATTR TRESULT&& result) {
+  return std::forward<TRESULT>(result);
+}
+
+template <class TRESULT,
+          typename std::enable_if<std::is_same<::rpc::result_void_type, typename std::decay<TRESULT>::type>::value,
+                                  int>::type* = nullptr>
+TRESULT _ignore_void(EXPLICIT_UNUSED_ATTR TRESULT&& result) {
+  return std::forward<TRESULT>(result);
+}
+#endif
 }  // namespace details
 
 }  // namespace rpc
@@ -217,12 +233,14 @@ TRESULT _ignore_result(EXPLICIT_UNUSED_ATTR TRESULT&& result) {
 // When using c++20 coroutine, declare RPC_AWAIT_CODE_RESULT like this
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
 #  define RPC_AWAIT_IGNORE_RESULT(x) (::rpc::details::_ignore_result(co_await (x)))
+#  define RPC_AWAIT_IGNORE_VOID(x) (co_await (x))
 #  define RPC_AWAIT_TYPE_RESULT(...) (co_await (__VA_ARGS__))
 #  define RPC_RETURN_TYPE(...) co_return (__VA_ARGS__)
 #  define RPC_RETURN_VOID co_return
 
 #else
 #  define RPC_AWAIT_IGNORE_RESULT(x) (::rpc::details::_ignore_result(x))
+#  define RPC_AWAIT_IGNORE_VOID(x) (::rpc::details::_ignore_void(x))
 #  define RPC_AWAIT_TYPE_RESULT(...) ::rpc::details::_get_rpc_result_value(__VA_ARGS__)
 #  define RPC_RETURN_VOID return ::rpc::result_void_type(true)
 #  define RPC_RETURN_TYPE(...) return ::rpc::details::_make_rpc_result_guard(__VA_ARGS__)

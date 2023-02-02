@@ -460,7 +460,9 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    */
   task_type_trait::task_type get_task(task_type_trait::id_type task_id);
 
+#if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
   inline const task_type_trait::stack_pool_type::ptr_t &get_stack_pool() const { return stack_pool_; }
+#endif
   inline const native_task_manager_ptr_type &get_native_manager() const { return native_mgr_; }
 
   bool is_busy() const;

@@ -241,7 +241,7 @@ class task_action_base
    * @see T_APP_SUCCESS
    * @return 返回码
    */
-  inline const result_type &get_result() const { return result_; }
+  inline int32_t get_result() const noexcept { return result_; }
 
   /**
    * @brief 获取回包返回码
@@ -319,7 +319,7 @@ class task_action_base
   uint64_t user_id_;
   uint32_t zone_id_;
   task_private_data_type *private_data_;
-  result_type result_;
+  int32_t result_;
   int32_t response_code_;
   bool response_message_disabled_;
   bool event_disabled_;

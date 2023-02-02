@@ -208,17 +208,17 @@ static inline bool __redirect_rpc_result_to_warning_log(TCode &origin_result, TC
 % endif
 % if rpc_common_codes_enable_wait_response:
 template<class TResponseBody>
-static inline int __rpc_wait_and_unpack_response(rpc::context &__ctx, TResponseBody &rsp_body,
+static inline rpc::result_code_type __rpc_wait_and_unpack_response(rpc::context &__ctx, TResponseBody &rsp_body,
                                             gsl::string_view rpc_full_name, const std::string &type_full_name,
                                             dispatcher_await_options& await_options) {
   atframework::SSMsg* rsp_msg_ptr = __ctx.create<atframework::SSMsg>();
   if (nullptr == rsp_msg_ptr) {
     FWLOGERROR("rpc {} create response message failed", rpc_full_name);
-    return ${project_namespace}::err::EN_SYS_MALLOC;
+    RPC_RETURN_CODE(${project_namespace}::err::EN_SYS_MALLOC);
   }
 
   atframework::SSMsg& rsp_msg = *rsp_msg_ptr;
-  int res = RPC_AWAIT_CODE_RESULT(rpc::wait(__ctx, rsp_msg, await_options));
+  rpc::result_code_type::value_type res = RPC_AWAIT_CODE_RESULT(rpc::wait(__ctx, rsp_msg, await_options));
 
   if (rsp_msg.head().rpc_response().type_url() != type_full_name) {
     if (res >= 0 || !rsp_msg.head().rpc_response().type_url().empty()) {
@@ -226,17 +226,17 @@ static inline int __rpc_wait_and_unpack_response(rpc::context &__ctx, TResponseB
                  rsp_msg.head().rpc_response().type_url());
     }
   } else if (!rsp_msg.body_bin().empty()) {
-    return details::__unpack_rpc_body(rsp_body, rsp_msg.body_bin(), rpc_full_name, type_full_name);
+    RPC_RETURN_CODE(details::__unpack_rpc_body(rsp_body, rsp_msg.body_bin(), rpc_full_name, type_full_name));
   }
 
   if (!rsp_msg.body_bin().empty()) {
-    return details::__unpack_rpc_body(rsp_body, rsp_msg.body_bin(), rpc_full_name, type_full_name);
+    RPC_RETURN_CODE(details::__unpack_rpc_body(rsp_body, rsp_msg.body_bin(), rpc_full_name, type_full_name));
   }
 
   if (rsp_msg.has_head() && rsp_msg.head().error_code() != 0) {
-    return rsp_msg.head().error_code();
+    RPC_RETURN_CODE(rsp_msg.head().error_code());
   }
-  return res;
+  RPC_RETURN_CODE(res);
 }
 % endif
 }  // namespace details
@@ -476,8 +476,9 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
     if (res < 0) {
       break;
     }
-    res = details::__rpc_wait_and_unpack_response(__ctx, rsp_body, "${rpc.get_full_name()}",
-        ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), await_options);
+    res = RPC_AWAIT_CODE_RESULT(details::__rpc_wait_and_unpack_response(__ctx, rsp_body,
+        "${rpc.get_full_name()}",
+        ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(), await_options));
   } while (false);
 
   if (res < 0) {
