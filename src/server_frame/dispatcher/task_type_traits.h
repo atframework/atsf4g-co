@@ -47,7 +47,9 @@ struct task_type_trait {
     return 0;
   }
 
-  inline static bool is_exiting(task_status status) noexcept { return status >= task_status::kDone; }
+  inline static bool is_exiting(task_status status) noexcept {
+    return status >= task_status::kDone || status == task_status::kInvalid;
+  }
 
   inline static bool is_timeout(task_status status) noexcept { return status == task_status::kTimeout; }
 
@@ -106,16 +108,25 @@ struct task_type_trait {
 
 // Compatibility
 // C++20 coroutine use return type to check if it's in a coroutine, just do nothing here
+// GCC Problems:
+//  + task_type_trait::is_timeout((co_yield task_type_trait::internal_pick_current_status())):
+//    no matching function for call to ‘task_type_trait::is_timeout(<unresolved overloaded function type>)’
+//    | We TASK_COMPAT_GET_CURRENT_STATUS(VAR_NAME) to get status and then use task_type_trait::is_XXX to check it
 #  define TASK_COMPAT_CHECK_TASK_ACTION_RETURN(...)
-#  define TASK_COMPAT_CHECK_IS_EXITING() \
-    task_type_trait::is_exiting(co_yield copp::promise_base_type::pick_current_status())
-#  define TASK_COMPAT_CHECK_IS_TIMEOUT() \
-    task_type_trait::is_timeout(co_yield copp::promise_base_type::pick_current_status())
-#  define TASK_COMPAT_CHECK_IS_CANCEL() \
-    task_type_trait::is_cancel(co_yield copp::promise_base_type::pick_current_status())
-#  define TASK_COMPAT_CHECK_IS_FAULT() \
-    task_type_trait::is_fault(co_yield copp::promise_base_type::pick_current_status())
-#  define TASK_COMPAT_GET_CURRENT_STATUS() (co_yield copp::promise_base_type::pick_current_status())
+#  define TASK_COMPAT_CHECK_IS_EXITING()                                                        \
+    auto __current_coroutine_status = co_yield task_type_trait::internal_pick_current_status(); \
+    task_type_trait::is_exiting(__current_coroutine_status)
+#  define TASK_COMPAT_CHECK_IS_TIMEOUT()                                                        \
+    auto __current_coroutine_status = co_yield task_type_trait::internal_pick_current_status(); \
+    task_type_trait::is_timeout(__current_coroutine_status)
+#  define TASK_COMPAT_CHECK_IS_CANCEL()                                                         \
+    auto __current_coroutine_status = co_yield task_type_trait::internal_pick_current_status(); \
+    task_type_trait::is_cancel(__current_coroutine_status)
+#  define TASK_COMPAT_CHECK_IS_FAULT()                                                          \
+    auto __current_coroutine_status = co_yield task_type_trait::internal_pick_current_status(); \
+    task_type_trait::is_fault(__current_coroutine_status)
+#  define TASK_COMPAT_GET_CURRENT_STATUS(VAR_NAME) \
+    task_type_trait::task_status VAR_NAME = co_yield task_type_trait::internal_pick_current_status()
 
 #else
 struct task_type_trait {
@@ -151,6 +162,16 @@ struct task_type_trait {
 
     return task->get_ret_code();
   }
+
+  inline static bool is_exiting(cotask::EN_TASK_STATUS status) noexcept {
+    return status >= cotask::EN_TS_DONE || status == task_status::EN_TS_INVALID;
+  }
+
+  inline static bool is_timeout(cotask::EN_TASK_STATUS status) noexcept { return status == cotask::EN_TS_TIMEOUT; }
+
+  inline static bool is_cancel(cotask::EN_TASK_STATUS status) noexcept { return status == cotask::EN_TS_CANCELED; }
+
+  inline static bool is_fault(cotask::EN_TASK_STATUS status) noexcept { return status >= cotask::EN_TS_KILLED; }
 
   inline static bool is_exiting(const task_type& task) noexcept {
     if (!task) {
@@ -220,6 +241,8 @@ struct task_type_trait {
 #  define TASK_COMPAT_CHECK_IS_TIMEOUT() task_type_trait::is_timeout(task_type_trait::internal_task_type::this_task())
 #  define TASK_COMPAT_CHECK_IS_CANCEL() task_type_trait::is_cancel(task_type_trait::internal_task_type::this_task())
 #  define TASK_COMPAT_CHECK_IS_FAULT() task_type_trait::is_fault(task_type_trait::internal_task_type::this_task())
-#  define TASK_COMPAT_GET_CURRENT_STATUS() task_type_trait::get_status(task_type_trait::internal_task_type::this_task())
+#  define TASK_COMPAT_GET_CURRENT_STATUS(VAR_NAME) \
+    task_type_trait::task_status VAR_NAME =        \
+        task_type_trait::get_status(task_type_trait::internal_task_type::this_task())
 
 #endif

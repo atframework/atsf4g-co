@@ -249,7 +249,7 @@ class task_action_base
    * @see Polar::EN_CS_SUCCESS
    * @return 回包返回码
    */
-  inline int32_t get_response_code() const { return response_code_; }
+  inline int32_t get_response_code() const noexcept { return response_code_; }
 
   on_finished_callback_handle_t add_on_on_finished(on_finished_callback_fn_t &&fn);
   void remove_on_finished(on_finished_callback_handle_t handle);
@@ -381,15 +381,6 @@ struct formatter<T, typename std::enable_if<std::is_base_of<task_action_base, T>
   template <class FormatContext>
   auto format(const task_action_base &action, FormatContext &ctx) {
     return LOG_WRAPPER_FWAPI_FORMAT_TO(ctx.out(), "task action {} [{:x}]", action.name(), action.get_task_id());
-  }
-};
-
-template <class CharT>
-struct formatter<task_action_result_type, CharT> : formatter<task_action_result_type::value_type, CharT> {
-  template <class FormatContext>
-  auto format(task_action_result_type const &val, FormatContext &ctx) -> decltype(ctx.out()) {
-    return formatter<task_action_result_type::value_type, CharT>::format(
-        static_cast<task_action_result_type::value_type>(val), ctx);
   }
 };
 
