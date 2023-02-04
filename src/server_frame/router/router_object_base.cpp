@@ -291,7 +291,7 @@ rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx) {
   int32_t ret = 0;
   while (!task_type_trait::empty(io_task_) &&
          ctx.get_task_context().task_id != task_type_trait::get_task_id(io_task_)) {
-    TASK_COMPAT_GET_CURRENT_STATUS(current_status);
+    TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_status);
     ret = task_manager::convert_task_status_to_error_code(current_status);
     if (ret < 0) {
       break;
@@ -339,7 +339,7 @@ rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx, task_
 
   rpc::result_code_type::value_type ret = 0;
   while (true) {
-    TASK_COMPAT_GET_CURRENT_STATUS(current_status);
+    TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_status);
     ret = task_manager::convert_task_status_to_error_code(current_status);
     if (ret < 0) {
       break;

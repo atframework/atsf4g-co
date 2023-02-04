@@ -219,13 +219,16 @@ static result_code_type wait(context &ctx, dispatcher_resume_data_type *output, 
                              const dispatcher_await_options &options) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in a task");
 
-  if (TASK_COMPAT_CHECK_IS_EXITING()) {
-    if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
-    } else if (TASK_COMPAT_CHECK_IS_FAULT()) {
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
-    } else if (TASK_COMPAT_CHECK_IS_CANCEL()) {
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
+  {
+    TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);
+    if (task_type_trait::is_exiting(current_task_status)) {
+      if (task_type_trait::is_timeout(current_task_status)) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+      } else if (task_type_trait::is_fault(current_task_status)) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
+      } else if (task_type_trait::is_cancel(current_task_status)) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
+      }
     }
   }
 
@@ -248,17 +251,17 @@ static result_code_type wait(context &ctx, dispatcher_resume_data_type *output, 
 #endif
 
     // 协程 swap in
-
-    if (TASK_COMPAT_CHECK_IS_EXITING()) {
-      if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
+    TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);
+    if (task_type_trait::is_exiting(current_task_status)) {
+      if (task_type_trait::is_timeout(current_task_status)) {
         RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
       }
 
-      if (TASK_COMPAT_CHECK_IS_FAULT()) {
+      if (task_type_trait::is_fault(current_task_status)) {
         RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
       }
 
-      if (TASK_COMPAT_CHECK_IS_CANCEL()) {
+      if (task_type_trait::is_cancel(current_task_status)) {
         RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
       }
     }
@@ -323,13 +326,16 @@ static result_code_type wait(context &ctx, uintptr_t check_type,
                              std::unordered_map<uint64_t, TMSG> &received, size_t wakeup_count) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in a task");
 
-  if (TASK_COMPAT_CHECK_IS_EXITING()) {
-    if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
-    } else if (TASK_COMPAT_CHECK_IS_FAULT()) {
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
-    } else if (TASK_COMPAT_CHECK_IS_CANCEL()) {
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
+  {
+    TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);
+    if (task_type_trait::is_exiting(current_task_status)) {
+      if (task_type_trait::is_timeout(current_task_status)) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+      } else if (task_type_trait::is_fault(current_task_status)) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
+      } else if (task_type_trait::is_cancel(current_task_status)) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
+      }
     }
   }
 
@@ -368,16 +374,17 @@ static result_code_type wait(context &ctx, uintptr_t check_type,
 #endif
 
     // 协程 swap in
-    if (TASK_COMPAT_CHECK_IS_EXITING()) {
-      if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
+    TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);
+    if (task_type_trait::is_exiting(current_task_status)) {
+      if (task_type_trait::is_timeout(current_task_status)) {
         RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
       }
 
-      if (TASK_COMPAT_CHECK_IS_FAULT()) {
+      if (task_type_trait::is_fault(current_task_status)) {
         RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
       }
 
-      if (TASK_COMPAT_CHECK_IS_CANCEL()) {
+      if (task_type_trait::is_cancel(current_task_status)) {
         RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
       }
     }

@@ -192,7 +192,8 @@ int task_action_base::operator()(void *priv_data) {
 #endif
   }
   // 响应OnSuccess(这时候任务的status还是running)
-  if (!TASK_COMPAT_CHECK_IS_EXITING() && result_ >= 0) {
+  TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);
+  if (!task_type_trait::is_exiting(current_task_status) && result_ >= 0) {
     int ret = 0;
     if (response_code_ < 0) {
       ret = on_failed();
@@ -220,13 +221,13 @@ int task_action_base::operator()(void *priv_data) {
   }
 
   if (PROJECT_NAMESPACE_ID::err::EN_SUCCESS == result_) {
-    if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
+    if (task_type_trait::is_timeout(current_task_status)) {
       result_ = PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
-    } else if (TASK_COMPAT_CHECK_IS_FAULT()) {
+    } else if (task_type_trait::is_fault(current_task_status)) {
       result_ = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED;
-    } else if (TASK_COMPAT_CHECK_IS_CANCEL()) {
+    } else if (task_type_trait::is_cancel(current_task_status)) {
       result_ = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED;
-    } else if (TASK_COMPAT_CHECK_IS_EXITING()) {
+    } else if (task_type_trait::is_exiting(current_task_status)) {
       result_ = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING;
     } else {
       result_ = PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN;
@@ -234,13 +235,13 @@ int task_action_base::operator()(void *priv_data) {
   }
 
   if (PROJECT_NAMESPACE_ID::EN_SUCCESS == response_code_) {
-    if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
+    if (task_type_trait::is_timeout(current_task_status)) {
       response_code_ = PROJECT_NAMESPACE_ID::EN_ERR_TIMEOUT;
-    } else if (TASK_COMPAT_CHECK_IS_FAULT()) {
+    } else if (task_type_trait::is_fault(current_task_status)) {
       response_code_ = PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
-    } else if (TASK_COMPAT_CHECK_IS_CANCEL()) {
+    } else if (task_type_trait::is_cancel(current_task_status)) {
       response_code_ = PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
-    } else if (TASK_COMPAT_CHECK_IS_EXITING()) {
+    } else if (task_type_trait::is_exiting(current_task_status)) {
       response_code_ = PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
     } else {
       response_code_ = PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN;
@@ -258,7 +259,7 @@ int task_action_base::operator()(void *priv_data) {
   }
 
   // 响应OnTimeout
-  if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
+  if (task_type_trait::is_timeout(current_task_status)) {
     on_timeout();
   }
 

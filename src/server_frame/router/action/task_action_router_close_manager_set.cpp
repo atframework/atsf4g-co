@@ -83,21 +83,22 @@ task_action_router_close_manager_set::result_type task_action_router_close_manag
           // 降级的时候会保存
           auto res = RPC_AWAIT_CODE_RESULT(mgr->remove_object(ctx, obj->get_key(), obj, nullptr));
 
-          if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
+          TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);
+          if (task_type_trait::is_timeout(current_task_status)) {
             FWLOGERROR("router close task save router object {}({}:{}:{}) timeout", obj->name(), obj->get_key().type_id,
                        obj->get_key().zone_id, obj->get_key().object_id);
             ++status_data->failed_count_;
             RPC_RETURN_CODE(0);
           }
 
-          if (TASK_COMPAT_CHECK_IS_CANCEL()) {
+          if (task_type_trait::is_cancel(current_task_status)) {
             FWLOGERROR("router close task save router object {}({}:{}:{}) but cancelled", obj->name(),
                        obj->get_key().type_id, obj->get_key().zone_id, obj->get_key().object_id);
             ++status_data->failed_count_;
             RPC_RETURN_CODE(0);
           }
 
-          if (TASK_COMPAT_CHECK_IS_FAULT()) {
+          if (task_type_trait::is_fault(current_task_status)) {
             FWLOGERROR("router close task save router object {}({}:{}:{}) but killed", obj->name(),
                        obj->get_key().type_id, obj->get_key().zone_id, obj->get_key().object_id);
             ++status_data->failed_count_;
@@ -147,7 +148,8 @@ task_action_router_close_manager_set::result_type task_action_router_close_manag
   }
 
   // 如果超时了可能被强杀，这时候要强制触发保存
-  if (TASK_COMPAT_CHECK_IS_EXITING()) {
+  TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);
+  if (task_type_trait::is_exiting(current_task_status)) {
     RPC_AWAIT_IGNORE_RESULT(save_fallback());
   }
 

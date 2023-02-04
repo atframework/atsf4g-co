@@ -69,13 +69,14 @@ result_code_type wait_tasks(context &ctx, const std::vector<task_type_trait::tas
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{} should be called in a task", "rpc::wait_tasks");
 
   while (true) {
-    if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
+    TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);
+    if (task_type_trait::is_timeout(current_task_status)) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
-    } else if (TASK_COMPAT_CHECK_IS_FAULT()) {
+    } else if (task_type_trait::is_fault(current_task_status)) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
-    } else if (TASK_COMPAT_CHECK_IS_CANCEL()) {
+    } else if (task_type_trait::is_cancel(current_task_status)) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
-    } else if (TASK_COMPAT_CHECK_IS_EXITING()) {
+    } else if (task_type_trait::is_exiting(current_task_status)) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING);
     }
 
@@ -124,13 +125,14 @@ result_code_type wait_task(context &ctx, const task_type_trait::task_type &other
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
 
-    if (TASK_COMPAT_CHECK_IS_TIMEOUT()) {
+    TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);
+    if (task_type_trait::is_timeout(current_task_status)) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
-    } else if (TASK_COMPAT_CHECK_IS_FAULT()) {
+    } else if (task_type_trait::is_fault(current_task_status)) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED);
-    } else if (TASK_COMPAT_CHECK_IS_CANCEL()) {
+    } else if (task_type_trait::is_cancel(current_task_status)) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_CANCELLED);
-    } else if (TASK_COMPAT_CHECK_IS_EXITING()) {
+    } else if (task_type_trait::is_exiting(current_task_status)) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING);
     }
 

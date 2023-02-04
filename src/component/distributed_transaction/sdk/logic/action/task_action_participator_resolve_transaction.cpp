@@ -64,7 +64,8 @@ task_action_participator_resolve_transaction::result_type task_action_participat
         operation_name = "reject";
       }
 
-      if (TASK_COMPAT_CHECK_IS_EXITING()) {
+      TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);
+      if (task_type_trait::is_exiting(current_task_status)) {
         FWLOGERROR("participator {} try to {} transaction {} failed, exiting. {}({})",
                    param_.participantor->get_participator_key(), operation_name,
                    trans_data->metadata().transaction_uuid(), res, protobuf_mini_dumper_get_error_msg(res));

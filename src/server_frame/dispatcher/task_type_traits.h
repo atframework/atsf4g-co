@@ -111,21 +111,9 @@ struct task_type_trait {
 // GCC Problems:
 //  + task_type_trait::is_timeout((co_yield task_type_trait::internal_pick_current_status())):
 //    no matching function for call to ‘task_type_trait::is_timeout(<unresolved overloaded function type>)’
-//    | We TASK_COMPAT_GET_CURRENT_STATUS(VAR_NAME) to get status and then use task_type_trait::is_XXX to check it
+//    | We TASK_COMPAT_ASSIGN_CURRENT_STATUS(VAR_NAME) to get status and then use task_type_trait::is_XXX to check it
 #  define TASK_COMPAT_CHECK_TASK_ACTION_RETURN(...)
-#  define TASK_COMPAT_CHECK_IS_EXITING()                                                        \
-    auto __current_coroutine_status = co_yield task_type_trait::internal_pick_current_status(); \
-    task_type_trait::is_exiting(__current_coroutine_status)
-#  define TASK_COMPAT_CHECK_IS_TIMEOUT()                                                        \
-    auto __current_coroutine_status = co_yield task_type_trait::internal_pick_current_status(); \
-    task_type_trait::is_timeout(__current_coroutine_status)
-#  define TASK_COMPAT_CHECK_IS_CANCEL()                                                         \
-    auto __current_coroutine_status = co_yield task_type_trait::internal_pick_current_status(); \
-    task_type_trait::is_cancel(__current_coroutine_status)
-#  define TASK_COMPAT_CHECK_IS_FAULT()                                                          \
-    auto __current_coroutine_status = co_yield task_type_trait::internal_pick_current_status(); \
-    task_type_trait::is_fault(__current_coroutine_status)
-#  define TASK_COMPAT_GET_CURRENT_STATUS(VAR_NAME) \
+#  define TASK_COMPAT_ASSIGN_CURRENT_STATUS(VAR_NAME) \
     task_type_trait::task_status VAR_NAME = co_yield task_type_trait::internal_pick_current_status()
 
 #else
@@ -237,12 +225,8 @@ struct task_type_trait {
       RPC_RETURN_TYPE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);  \
     }
 
-#  define TASK_COMPAT_CHECK_IS_EXITING() task_type_trait::is_exiting(task_type_trait::internal_task_type::this_task())
-#  define TASK_COMPAT_CHECK_IS_TIMEOUT() task_type_trait::is_timeout(task_type_trait::internal_task_type::this_task())
-#  define TASK_COMPAT_CHECK_IS_CANCEL() task_type_trait::is_cancel(task_type_trait::internal_task_type::this_task())
-#  define TASK_COMPAT_CHECK_IS_FAULT() task_type_trait::is_fault(task_type_trait::internal_task_type::this_task())
-#  define TASK_COMPAT_GET_CURRENT_STATUS(VAR_NAME) \
-    task_type_trait::task_status VAR_NAME =        \
+#  define TASK_COMPAT_ASSIGN_CURRENT_STATUS(VAR_NAME) \
+    task_type_trait::task_status VAR_NAME =           \
         task_type_trait::get_status(task_type_trait::internal_task_type::this_task())
 
 #endif

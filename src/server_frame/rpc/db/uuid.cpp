@@ -341,9 +341,9 @@ static rpc::rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx, uin
 
   while (try_left-- > 0 && ret <= 0) {
     // 任务已经失败或者不在任务中
-    if (TASK_COMPAT_CHECK_IS_EXITING()) {
-      TASK_COMPAT_GET_CURRENT_STATUS(current_status);
-      ret = task_manager::convert_task_status_to_error_code(current_status);
+    TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);
+    if (task_type_trait::is_exiting(current_task_status)) {
+      ret = task_manager::convert_task_status_to_error_code(current_task_status);
       break;
     }
 
