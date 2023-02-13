@@ -28,6 +28,47 @@ namespace rpc {
 
 bool is_exiting_error_code(int32_t code);
 
+template <class TVALUE>
+class always_ready;
+
+template <>
+class always_ready<void> {
+ public:
+  using value_type = void;
+
+ public:
+  always_ready() {}
+
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+  bool await_ready() const noexcept { return true; }
+  void await_suspend(LIBCOPP_MACRO_STD_COROUTINE_NAMESPACE coroutine_handle<>) const noexcept {}
+  void await_resume() const noexcept {}
+#endif
+};
+
+template <class TVALUE>
+class always_ready {
+ public:
+  using value_type = TVALUE;
+
+ public:
+  always_ready(value_type&& input) : result_data_(std::move(input)) {}
+
+  inline operator value_type() const noexcept { return result_data_; }
+
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+  bool await_ready() const noexcept { return true; }
+  void await_suspend(LIBCOPP_MACRO_STD_COROUTINE_NAMESPACE coroutine_handle<>) const noexcept {}
+  value_type await_resume() const noexcept { return result_data_; }
+#endif
+
+ private:
+  value_type result_data_;
+};
+
+using always_ready_code_type = always_ready<int32_t>;
+using always_ready_void_type = always_ready<void>;
+
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
 struct rpc_error_code_transform {
   int32_t operator()(copp::promise_status in) const noexcept;

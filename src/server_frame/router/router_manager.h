@@ -96,8 +96,8 @@ class router_manager : public router_manager_base {
     return iter->second;
   }
 
-  rpc::result_code_type mutable_cache(rpc::context &ctx, std::shared_ptr<router_object_base> &out, const key_t &key,
-                                      void *priv_data) override {
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_cache(
+      rpc::context &ctx, std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data) override {
     ptr_t outc;
     auto ret = RPC_AWAIT_CODE_RESULT(mutable_cache(ctx, outc, key, reinterpret_cast<priv_data_t>(priv_data)));
     out = std::dynamic_pointer_cast<router_object_base>(outc);
@@ -183,8 +183,9 @@ class router_manager : public router_manager_base {
    * @param priv_data
    * @return
    */
-  rpc::result_code_type renew_cache(rpc::context &ctx, store_ptr_t &in, ptr_t &out, const key_t &key,
-                                    priv_data_t priv_data) {
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type renew_cache(rpc::context &ctx, store_ptr_t &in,
+                                                                                ptr_t &out, const key_t &key,
+                                                                                priv_data_t priv_data) {
     if (!in.expired()) {
       out = in.lock();
     } else {
@@ -203,8 +204,8 @@ class router_manager : public router_manager_base {
     RPC_RETURN_CODE(ret);
   }
 
-  rpc::result_code_type mutable_object(rpc::context &ctx, std::shared_ptr<router_object_base> &out, const key_t &key,
-                                       void *priv_data) override {
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_object(
+      rpc::context &ctx, std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data) override {
     ptr_t outc;
     auto ret = RPC_AWAIT_CODE_RESULT(mutable_object(ctx, outc, key, reinterpret_cast<priv_data_t>(priv_data)));
     out = std::dynamic_pointer_cast<router_object_base>(outc);
@@ -436,8 +437,8 @@ class router_manager : public router_manager_base {
     RPC_RETURN_CODE(ret);
   }
 
-  rpc::result_code_type remove_cache(rpc::context &ctx, const key_t &key, std::shared_ptr<router_object_base> cache,
-                                     void *priv_data) override {
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_cache(
+      rpc::context &ctx, const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data) override {
     ptr_t cache_child;
     rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
     {
@@ -484,8 +485,8 @@ class router_manager : public router_manager_base {
     RPC_RETURN_CODE(ret);
   }
 
-  rpc::result_code_type remove_object(rpc::context &ctx, const key_t &key, std::shared_ptr<router_object_base> cache,
-                                      void *priv_data) override {
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_object(
+      rpc::context &ctx, const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data) override {
     ptr_t cache_child;
     if (!cache) {
       typename std::unordered_map<key_t, ptr_t>::iterator iter = caches_.find(key);

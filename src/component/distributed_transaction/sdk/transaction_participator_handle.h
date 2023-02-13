@@ -114,7 +114,7 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    * @param writable output if it's writable now
    * @return future of 0 or error code
    */
-  rpc::result_code_type check_writable(rpc::context& ctx, bool& writable);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type check_writable(rpc::context& ctx, bool& writable);
 
   /**
    * @brief Prepare for transaction
@@ -128,8 +128,9 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    *
    * @return future of 0 or error code
    */
-  rpc::result_code_type prepare(rpc::context& ctx, SSParticipatorTransactionPrepareReq&& request,
-                                SSParticipatorTransactionPrepareRsp& response, storage_ptr_type& output);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type prepare(
+      rpc::context& ctx, SSParticipatorTransactionPrepareReq&& request, SSParticipatorTransactionPrepareRsp& response,
+      storage_ptr_type& output);
 
   /**
    * @brief Notify to commit transaction
@@ -139,8 +140,9 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    *
    * @return future of 0 or error code
    */
-  rpc::result_code_type commit(rpc::context& ctx, const SSParticipatorTransactionCommitReq& request,
-                               SSParticipatorTransactionCommitRsp& response);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type commit(
+      rpc::context& ctx, const SSParticipatorTransactionCommitReq& request,
+      SSParticipatorTransactionCommitRsp& response);
 
   /**
    * @brief Notify to reject for transaction
@@ -150,8 +152,9 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    *
    * @return future of 0 or error code
    */
-  rpc::result_code_type reject(rpc::context& ctx, const SSParticipatorTransactionRejectReq& request,
-                               SSParticipatorTransactionRejectRsp& response);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject(
+      rpc::context& ctx, const SSParticipatorTransactionRejectReq& request,
+      SSParticipatorTransactionRejectRsp& response);
 
   /**
    * @brief Check if we can lock resource into specify transaction
@@ -182,8 +185,8 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    *
    * @return future of 0 or error code
    */
-  rpc::result_code_type lock(const storage_ptr_type& transaction_ptr,
-                             const google::protobuf::RepeatedPtrField<std::string>& resource_uuids);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type lock(
+      const storage_ptr_type& transaction_ptr, const google::protobuf::RepeatedPtrField<std::string>& resource_uuids);
 
   /**
    * @brief Unlock resource from specify transaction
@@ -247,21 +250,28 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
   const std::unordered_map<std::string, storage_ptr_type>& get_finished_transactions() const noexcept;
 
  private:
-  rpc::result_code_type add_running_transcation(rpc::context& ctx, storage_type&& storage, storage_ptr_type& output);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type add_running_transcation(rpc::context& ctx,
+                                                                                            storage_type&& storage,
+                                                                                            storage_ptr_type& output);
 
-  rpc::result_code_type remove_running_transaction(rpc::context& ctx, EnDistibutedTransactionStatus target_status,
-                                                   const std::string& transaction_uuid,
-                                                   storage_ptr_type* output = nullptr);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_running_transaction(
+      rpc::context& ctx, EnDistibutedTransactionStatus target_status, const std::string& transaction_uuid,
+      storage_ptr_type* output = nullptr);
 
-  rpc::result_code_type add_finished_transcation(rpc::context& ctx, const storage_ptr_type& transaction_ptr);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type add_finished_transcation(
+      rpc::context& ctx, const storage_ptr_type& transaction_ptr);
 
-  rpc::result_code_type remove_finished_transaction(rpc::context& ctx, const storage_ptr_type& transaction_ptr);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_finished_transaction(
+      rpc::context& ctx, const storage_ptr_type& transaction_ptr);
 
-  rpc::result_code_type resolve_transcation(rpc::context& ctx, const std::string& transaction_uuid);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type resolve_transcation(
+      rpc::context& ctx, const std::string& transaction_uuid);
 
-  rpc::result_code_type commit_transcation(rpc::context& ctx, const std::string& transaction_uuid);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type commit_transcation(
+      rpc::context& ctx, const std::string& transaction_uuid);
 
-  rpc::result_code_type reject_transcation(rpc::context& ctx, const std::string& transaction_uuid);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject_transcation(
+      rpc::context& ctx, const std::string& transaction_uuid);
 
  private:
   friend class task_action_participator_resolve_transaction;

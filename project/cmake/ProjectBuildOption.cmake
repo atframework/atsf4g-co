@@ -164,9 +164,11 @@ if(PROJECT_ENABLE_LINKER_MOLD)
     endif()
     set(PROJECT_TRY_SET_LINKER "${PROJECT_FIND_LINKER_MOLD}")
     # Some version of mold will have problems when linking objects, just ignore them.
+    #[[
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
       add_linker_flags_for_runtime_unique(-Wl,--unresolved-symbols,ignore-in-object-files)
     endif()
+    ]]
   endif()
 endif()
 if(NOT PROJECT_TRY_SET_LINKER

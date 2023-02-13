@@ -42,7 +42,7 @@ class router_object : public router_object_base {
    * @brief 保存到数据库，如果成功会更新最后保存时间
    * @return
    */
-  rpc::result_code_type save(rpc::context &ctx, void *priv_data) override {
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type save(rpc::context &ctx, void *priv_data) override {
     if (!is_writable()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE);
     }

@@ -146,7 +146,8 @@ class router_object_base : public std::enable_shared_from_this<router_object_bas
   /**
    * @brief 移除实体，降级为缓存
    */
-  rpc::result_code_type remove_object(rpc::context &ctx, void *priv_data, uint64_t transfer_to_svr_id);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_object(rpc::context &ctx, void *priv_data,
+                                                                                  uint64_t transfer_to_svr_id);
 
   /**
    * @brief 名字接口
@@ -252,7 +253,7 @@ class router_object_base : public std::enable_shared_from_this<router_object_bas
    */
   int send_transfer_msg_failed(atframework::SSMsg &&req);
 
-  rpc::result_code_type await_io_task(rpc::context &ctx);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(rpc::context &ctx);
 
   /**
    * @brief 设置链路跟踪信息到RPC上下文
@@ -270,14 +271,18 @@ class router_object_base : public std::enable_shared_from_this<router_object_bas
 
  protected:
   void wakeup_io_task_awaiter();
-  rpc::result_code_type await_io_task(rpc::context &ctx, task_type_trait::task_type &other_task);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(
+      rpc::context &ctx, task_type_trait::task_type &other_task);
 
   // 内部接口，拉取缓存。会排队读任务
-  rpc::result_code_type pull_cache_inner(rpc::context &ctx, void *priv_data);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_cache_inner(rpc::context &ctx,
+                                                                                     void *priv_data);
   // 内部接口，拉取实体。会排队读任务
-  rpc::result_code_type pull_object_inner(rpc::context &ctx, void *priv_data);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_object_inner(rpc::context &ctx,
+                                                                                      void *priv_data);
   // 内部接口，保存数据。会排队写任务
-  rpc::result_code_type save_object_inner(rpc::context &ctx, void *priv_data);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type save_object_inner(rpc::context &ctx,
+                                                                                      void *priv_data);
 
  private:
   void reset_timer_ref(std::list<router_system_timer_t> *timer_list,
@@ -286,7 +291,7 @@ class router_object_base : public std::enable_shared_from_this<router_object_bas
                                   const std::list<router_system_timer_t>::iterator &it);
   void unset_timer_ref();
 
-  rpc::result_code_type await_io_schedule_order_task(rpc::context &ctx);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_schedule_order_task(rpc::context &ctx);
 
  private:
   key_t key_;

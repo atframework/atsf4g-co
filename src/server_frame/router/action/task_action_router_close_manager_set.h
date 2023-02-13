@@ -40,7 +40,7 @@ class task_action_router_close_manager_set : public task_action_no_req_base {
   int on_timeout() override;
 
  private:
-  rpc::result_code_type save_fallback();
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type save_fallback();
 
  private:
   ctor_param_t param_;

@@ -41,9 +41,10 @@ class router_manager_base {
   virtual bool is_auto_mutable_cache() const;
   virtual uint64_t get_default_router_server_id(const key_t &key) const;
 
-  rpc::result_code_type send_msg(rpc::context &ctx, router_object_base &obj, atframework::SSMsg &&msg,
-                                 uint64_t &sequence);
-  rpc::result_code_type send_msg(rpc::context &ctx, const key_t &key, atframework::SSMsg &&msg, uint64_t &sequence);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_msg(rpc::context &ctx, router_object_base &obj,
+                                                         atframework::SSMsg &&msg, uint64_t &sequence);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_msg(rpc::context &ctx, const key_t &key, atframework::SSMsg &&msg,
+                                                         uint64_t &sequence);
 
   inline size_t size() const { return stat_size_; }
 
@@ -55,8 +56,8 @@ class router_manager_base {
                                                    uint64_t &router_svr_ver);
 
  protected:
-  rpc::result_code_type send_msg_raw(rpc::context &ctx, router_object_base &obj, atframework::SSMsg &&msg,
-                                     uint64_t &sequence);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_msg_raw(rpc::context &ctx, router_object_base &obj,
+                                                             atframework::SSMsg &&msg, uint64_t &sequence);
 
  protected:
   size_t stat_size_;

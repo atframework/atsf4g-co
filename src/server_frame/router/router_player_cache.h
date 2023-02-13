@@ -34,10 +34,15 @@ class router_player_cache : public router_object<player_cache, router_player_cac
 
   const char *name() const override;
 
-  rpc::result_code_type pull_cache(rpc::context &ctx, void *priv_data) override;
-  rpc::result_code_type pull_cache(rpc::context &ctx, router_player_private_type &priv_data);
-  rpc::result_code_type pull_object(rpc::context &ctx, void *priv_data) override;
-  rpc::result_code_type pull_object(rpc::context &ctx, router_player_private_type &priv_data);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_cache(rpc::context &ctx,
+                                                                               void *priv_data) override;
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_cache(rpc::context &ctx,
+                                                                               router_player_private_type &priv_data);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_object(rpc::context &ctx,
+                                                                                void *priv_data) override;
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_object(rpc::context &ctx,
+                                                                                router_player_private_type &priv_data);
 
-  rpc::result_code_type save_object(rpc::context &ctx, void *priv_data) override;
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type save_object(rpc::context &ctx,
+                                                                                void *priv_data) override;
 };

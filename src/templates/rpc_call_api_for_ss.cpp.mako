@@ -4,6 +4,13 @@ import time
 import os
 %><%
 module_name = service.get_extension_field("service_options", lambda x: x.module_name, service.get_name_lower_rule())
+def rpc_return_result_code_sentense(input):
+  return 'RPC_RETURN_CODE({});'.format(input)
+
+def rpc_return_always_ready_code_sentense(input):
+  return 'return {static_cast<rpc::always_ready_code_type::value_type>(' + input + ')};'
+
+
 %>// Copyright ${time.strftime("%Y", time.localtime()) } atframework
 // @brief Created by ${generator} for ${service.get_full_name()}, please don't edit it
 
@@ -272,6 +279,12 @@ ${ns}
             rpc_params.append('dispatcher_await_options* __wait_later')
     if rpc_allow_ignore_discovery:
       rpc_params.append('bool __ignore_discovery')
+    if not rpc_is_router_api and rpc_is_stream_mode:
+        rpc_return_type = 'rpc::always_ready_code_type'
+        rpc_return_sentense = rpc_return_always_ready_code_sentense
+    else:
+        rpc_return_type = 'rpc::result_code_type'
+        rpc_return_sentense = rpc_return_result_code_sentense
 %>
 // ============ ${rpc.get_full_name()} ============
 namespace packer {
@@ -303,14 +316,14 @@ bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_response().get
 % endif
 }  // namespace packer
 
-rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
+${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_params)}) {
 %   if rpc_is_router_api:
   if (object_id == 0 || type_id == 0) {
-    RPC_RETURN_CODE(${project_namespace}::err::EN_SYS_PARAM);
+    ${rpc_return_sentense(project_namespace + '::err::EN_SYS_PARAM')}
   }
 %   else:
   if (dst_bus_id == 0) {
-    RPC_RETURN_CODE(${project_namespace}::err::EN_SYS_PARAM);
+    ${rpc_return_sentense(project_namespace + '::err::EN_SYS_PARAM')}
   }
 %   endif
 
@@ -323,7 +336,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
   if (nullptr == req_msg_ptr) {
     FWLOGERROR("rpc {} create request message failed",
                "${rpc.get_full_name()}");
-    RPC_RETURN_CODE(${project_namespace}::err::EN_SYS_MALLOC);
+    ${rpc_return_sentense(project_namespace + '::err::EN_SYS_MALLOC')}
   }
 
   rpc::result_code_type::value_type res;
@@ -352,14 +365,14 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
   }
 %   endif
   if (res < 0) {
-    RPC_RETURN_CODE(res);
+    ${rpc_return_sentense('res')}
   }
 
   res = details::__pack_rpc_body(req_body, req_msg.mutable_body_bin(),
                                  "${rpc.get_full_name()}", 
                                  ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name());
   if (res < 0) {
-    RPC_RETURN_CODE(res);
+    ${rpc_return_sentense('res')}
   }
 
   rpc::context __child_ctx(__ctx);
@@ -429,7 +442,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
     if (details::__redirect_rpc_result_to_warning_log(res, warning_codes,
         "${rpc.get_full_name()}",
         ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name())) {
-        RPC_RETURN_CODE(__tracer.return_code(res));
+        ${rpc_return_sentense('__tracer.return_code(res)')}
   }
 %     endif
 %     if rpc.get_extension_field('rpc_options', lambda x: x.info_log_response_code, []):
@@ -437,7 +450,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
   if (details::__redirect_rpc_result_to_info_log(res, info_codes,
       "${rpc.get_full_name()}",
       ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name())) {
-    RPC_RETURN_CODE(__tracer.return_code(res));
+    ${rpc_return_sentense('__tracer.return_code(res)')}
   }
 %     endif
     FWLOGERROR("rpc {} call failed, res: {}({})",
@@ -445,7 +458,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
                res, protobuf_mini_dumper_get_error_msg(res)
     );
   }
-  RPC_RETURN_CODE(__tracer.return_code(res));
+  ${rpc_return_sentense('__tracer.return_code(res)')}
 %   else:
   do {
     dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
@@ -487,7 +500,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
     if (details::__redirect_rpc_result_to_warning_log(res, warning_codes,
         "${rpc.get_full_name()}",
         ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name())) {
-      RPC_RETURN_CODE(__tracer.return_code(res));
+      ${rpc_return_sentense('__tracer.return_code(res)')}
     }
 %     endif
 %     if warning_log_codes in rpc.get_extension_field('rpc_options', lambda x: x.info_log_response_code, []):
@@ -495,7 +508,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
     if (details::__redirect_rpc_result_to_info_log(res, info_codes,
         "${rpc.get_full_name()}",
         ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name())) {
-      RPC_RETURN_CODE(__tracer.return_code(res));
+      ${rpc_return_sentense('__tracer.return_code(res)')}
     }
 %     endif
       FWLOGERROR("rpc {} call failed, res: {}({})",
@@ -504,7 +517,7 @@ rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)}) {
       );
   }
 
-  RPC_RETURN_CODE(__tracer.return_code(res));
+  ${rpc_return_sentense('__tracer.return_code(res)')}
 %   endif
 }
 % endfor

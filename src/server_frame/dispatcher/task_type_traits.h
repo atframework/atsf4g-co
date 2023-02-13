@@ -29,6 +29,10 @@ struct task_type_trait {
   using task_type = internal_task_type;
   using task_status = typename internal_task_type::task_status_type;
 
+  inline static copp::promise_base_type::pick_promise_status_awaitable internal_pick_current_status() noexcept {
+    return copp::promise_base_type::pick_current_status();
+  }
+
   inline static id_type get_task_id(const task_type& task) noexcept { return task.get_id(); }
 
   inline static void reset_task(task_type& task) noexcept { task.reset(); }

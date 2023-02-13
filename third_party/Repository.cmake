@@ -43,7 +43,8 @@ endif()
 
 include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/compression/import.cmake")
 if(NOT ANDROID AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
-  include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/jemalloc/jemalloc.cmake")
+  include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/malloc/jemalloc.cmake")
+  include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/malloc/mimalloc.cmake")
   #[[
   # There is a BUG in gcc 4.6-4.8 and finxed in gcc 4.9
   #   @see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=58016

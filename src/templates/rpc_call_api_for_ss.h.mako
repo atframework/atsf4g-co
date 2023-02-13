@@ -75,6 +75,10 @@ ${ns}
     if rpc_allow_ignore_discovery:
         rpc_params.append('bool __ignore_discovery = false')
         rpc_param_docs.append('__ignore_discovery  set true if not need to wait response')
+    if not rpc_is_router_api and rpc_is_stream_mode:
+        rpc_return_type = 'rpc::always_ready_code_type'
+    else:
+        rpc_return_type = 'rpc::result_code_type'
 %>
 // ============ ${rpc.get_full_name()} ============
 namespace packer {
@@ -96,7 +100,7 @@ bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_response().get
 %   endfor
  * @return 0 or error code
  */
-EXPLICIT_NODISCARD_ATTR rpc::result_code_type ${rpc.get_name()}(${', '.join(rpc_params)});
+EXPLICIT_NODISCARD_ATTR ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_params)});
 % endfor
 % for ns in service.get_cpp_namespace_end(module_name, ''):
 ${ns}

@@ -70,8 +70,8 @@ class task_action_ss_req_base : public task_action_req_base<atframework::SSMsg> 
 
   virtual bool is_router_offline_ignored() const;  // 忽略路由对象不在线
 
-  rpc::result_code_type filter_router_msg(router_manager_base *&mgr, std::shared_ptr<router_object_base> &obj,
-                                          std::pair<bool, int> &filter_result);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type filter_router_msg(
+      router_manager_base *&mgr, std::shared_ptr<router_object_base> &obj, std::pair<bool, int> &filter_result);
 
  private:
   std::list<msg_type *> response_messages_;

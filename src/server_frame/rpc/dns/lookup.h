@@ -32,7 +32,8 @@ namespace details {
 using callback_data_type = std::vector<address_record>;
 }
 
-rpc::result_code_type lookup(rpc::context& ctx, gsl::string_view domain, std::vector<address_record>& output);
+EXPLICIT_NODISCARD_ATTR rpc::result_code_type lookup(rpc::context& ctx, gsl::string_view domain,
+                                                                         std::vector<address_record>& output);
 
 }  // namespace dns
 }  // namespace rpc

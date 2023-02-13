@@ -119,8 +119,8 @@ class transaction_client_handle {
    *
    * @return future of 0 or error code
    */
-  rpc::result_code_type create_transaction(rpc::context& ctx, storage_ptr_type& output,
-                                           const transaction_options& options = {});
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_transaction(
+      rpc::context& ctx, storage_ptr_type& output, const transaction_options& options = {});
 
   /**
    * @brief 执行事务
@@ -131,9 +131,10 @@ class transaction_client_handle {
    * @param output_failed_participators 输出prepare阶段失败的参与者
    * @return future of 0 or error code
    */
-  rpc::result_code_type submit_transaction(rpc::context& ctx, storage_ptr_type& input,
-                                           std::unordered_set<std::string>* output_prepared_participators = nullptr,
-                                           std::unordered_set<std::string>* output_failed_participators = nullptr);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type submit_transaction(
+      rpc::context& ctx, storage_ptr_type& input,
+      std::unordered_set<std::string>* output_prepared_participators = nullptr,
+      std::unordered_set<std::string>* output_failed_participators = nullptr);
 
   int32_t set_transaction_data(rpc::context& ctx, storage_ptr_type& input, google::protobuf::Message& data);
 
