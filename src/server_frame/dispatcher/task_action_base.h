@@ -190,8 +190,7 @@ class task_action_base
 #endif
 
  protected:
-  task_action_base();
-  explicit task_action_base(rpc::context *caller_context);
+  task_action_base(const dispatcher_start_data_type &start_param);
   virtual ~task_action_base();
 
  public:
@@ -204,7 +203,7 @@ class task_action_base
   virtual const char *name() const;
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-  result_type operator()(task_meta_data_type &&task_meta, const dispatcher_start_data_type &start_data);
+  result_type operator()(task_meta_data_type &&task_meta, dispatcher_start_data_type &&start_data);
 #else
   int operator()(void *priv_data) override;
 #endif
@@ -293,14 +292,11 @@ class task_action_base
   inline void enable_response_message() { response_message_disabled_ = false; }
 
   /**
-   * @brief 获取启动透传参数
+   * @brief 获取调度层设置
+   *
+   * @return const atframework::DispatcherOptions*
    */
-  inline const dispatcher_start_data_type &get_dispatcher_start_data() const { return start_data_; }
-
-  /**
-   * @brief 获取启动透传参数
-   */
-  inline dispatcher_start_data_type &get_dispatcher_start_data() { return start_data_; }
+  inline const atframework::DispatcherOptions *get_dispatcher_options() noexcept { return dispatcher_options_; }
 
   inline const rpc::context &get_shared_context() const { return shared_context_; }
   inline rpc::context &get_shared_context() { return shared_context_; }
@@ -323,7 +319,8 @@ class task_action_base
   int32_t response_code_;
   bool response_message_disabled_;
   bool event_disabled_;
-  dispatcher_start_data_type start_data_;
+
+  const atframework::DispatcherOptions *dispatcher_options_;
 
   // Additional events
   on_finished_callback_set_t on_finished_callback_;
@@ -338,7 +335,8 @@ class task_action_req_base : public task_action_base {
   using result_type = task_action_base::result_type;
 
  protected:
-  task_action_req_base() : request_msg_(nullptr) {}
+  task_action_req_base(const dispatcher_start_data_type &start_param)
+      : task_action_base(start_param), request_msg_(nullptr) {}
 
   inline TREQ &get_request() {
     if (nullptr != request_msg_) {

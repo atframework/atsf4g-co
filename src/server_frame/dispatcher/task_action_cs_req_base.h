@@ -105,7 +105,7 @@ class task_action_cs_rpc_base : public task_action_cs_req_base {
 
  public:
   explicit task_action_cs_rpc_base(dispatcher_start_data_type &&start_param)
-      : base_type(COPP_MACRO_STD_MOVE(start_param)),
+      : base_type(std::move(start_param)),
         has_unpack_request_(false),
         has_pack_response_(false),
         request_body_(nullptr),

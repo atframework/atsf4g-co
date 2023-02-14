@@ -11,7 +11,7 @@
 
 #include <rpc/db/uuid.h>
 
-actor_action_ss_req_base::actor_action_ss_req_base(dispatcher_start_data_type &&start_param) {
+actor_action_ss_req_base::actor_action_ss_req_base(dispatcher_start_data_type &&start_param): base_type(start_param) {
   // 必须先设置共享的arena
   if (nullptr != start_param.context) {
     get_shared_context().try_reuse_protobuf_arena(start_param.context->mutable_protobuf_arena());

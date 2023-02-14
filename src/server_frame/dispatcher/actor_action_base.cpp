@@ -54,7 +54,7 @@ struct actor_action_stat_guard {
 };
 }  // namespace detail
 
-actor_action_base::actor_action_base()
+actor_action_base::actor_action_base(const dispatcher_start_data_type &start_param)
     : user_id_(0),
       zone_id_(0),
       result_(0),
@@ -62,21 +62,10 @@ actor_action_base::actor_action_base()
       status_(EN_AAS_CREATED),
       response_message_disabled_(false),
       event_disabled_(false),
-      start_data_(dispatcher_make_default<dispatcher_start_data_type>()),
-      shared_context_(rpc::context::create_without_task()) {}
-
-actor_action_base::actor_action_base(rpc::context *caller_context)
-    : user_id_(0),
-      zone_id_(0),
-      result_(0),
-      response_code_(0),
-      status_(EN_AAS_CREATED),
-      response_message_disabled_(false),
-      event_disabled_(false),
-      start_data_(dispatcher_make_default<dispatcher_start_data_type>()),
+      dispatcher_options_(start_param.options),
       shared_context_(rpc::context::create_without_task()) {
-  if (nullptr != caller_context) {
-    set_caller_context(*caller_context);
+  if (nullptr != start_param.context) {
+    set_caller_context(*start_param.context);
   }
 }
 
@@ -103,7 +92,7 @@ const char *actor_action_base::name() const {
 
 actor_action_base::result_type actor_action_base::hook_run() { return (*this)(); }
 
-actor_action_base::result_type actor_action_base::run(void *priv_data) {
+actor_action_base::result_type actor_action_base::run(dispatcher_start_data_type &&start_data) {
   detail::actor_action_stat_guard stat(this);
 
   rpc::context::trace_option trace_option;
@@ -111,13 +100,14 @@ actor_action_base::result_type actor_action_base::run(void *priv_data) {
   trace_option.is_remote = true;
   trace_option.dispatcher = get_dispatcher();
   trace_option.parent_network_span = nullptr;
-  if (nullptr != priv_data) {
-    start_data_ = *reinterpret_cast<dispatcher_start_data_type *>(priv_data);
 
-    // Set parent context if not set by child type
-    if (nullptr != start_data_.context) {
-      set_caller_context(*start_data_.context);
-    }
+  // Set parent context if not set by child type
+  if (nullptr != start_data.context) {
+    set_caller_context(*start_data.context);
+  }
+
+  if (nullptr != start_data.options) {
+    dispatcher_options_ = start_data.options;
   }
 
   if (get_status() > EN_AAS_CREATED) {

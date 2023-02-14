@@ -14,7 +14,7 @@ class actor_action_no_req_base : public actor_action_base {
   struct ctor_param_t {
     rpc::context *caller_context;
 
-    ctor_param_t();
+    inline ctor_param_t() noexcept : caller_context(nullptr) {}
   };
 
  public:
@@ -26,7 +26,6 @@ class actor_action_no_req_base : public actor_action_base {
   using base_type::operator();
 
  public:
-  actor_action_no_req_base();
   explicit actor_action_no_req_base(const ctor_param_t &param);
   ~actor_action_no_req_base();
 
@@ -35,4 +34,7 @@ class actor_action_no_req_base : public actor_action_base {
 
  protected:
   void send_response() override;
+
+ private:
+  static dispatcher_start_data_type make_from_context(const ctor_param_t &param) noexcept;
 };

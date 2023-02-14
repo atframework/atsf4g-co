@@ -14,11 +14,8 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
-task_action_no_req_base::ctor_param_t::ctor_param_t() : caller_context(nullptr) {}
-
-task_action_no_req_base::task_action_no_req_base() {}
-
-task_action_no_req_base::task_action_no_req_base(const ctor_param_t& param) : task_action_base(param.caller_context) {}
+task_action_no_req_base::task_action_no_req_base(const ctor_param_t& param)
+    : task_action_base(make_from_context(param)) {}
 
 task_action_no_req_base::~task_action_no_req_base() {}
 
@@ -27,3 +24,10 @@ void task_action_no_req_base::send_response() {}
 std::shared_ptr<dispatcher_implement> task_action_no_req_base::get_dispatcher() const { return nullptr; }
 
 const char* task_action_no_req_base::get_type_name() const { return "background"; }
+
+dispatcher_start_data_type task_action_no_req_base::make_from_context(const ctor_param_t& param) noexcept {
+  dispatcher_start_data_type ret = dispatcher_make_default<dispatcher_start_data_type>();
+  ret.context = param.caller_context;
+
+  return ret;
+}

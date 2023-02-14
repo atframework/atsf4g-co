@@ -19,6 +19,8 @@
 
 #include <config/logic_config.h>
 
+#include <utility/protobuf_mini_dumper.h>
+
 #include <atomic>
 #include <string>
 
@@ -371,7 +373,7 @@ int task_manager::add_task(const task_type_trait::task_type &task, time_t timeou
   }
 
   if (res < 0) {
-    FWLOGERROR("add task failed, res: {}", res);
+    FWLOGERROR("add task failed, result: {}({})", res, protobuf_mini_dumper_get_error_msg(res));
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 

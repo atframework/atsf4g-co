@@ -23,7 +23,7 @@
 #include <rpc/db/uuid.h>
 #include <rpc/router/routerservice.h>
 
-task_action_ss_req_base::task_action_ss_req_base(dispatcher_start_data_type &&start_param) {
+task_action_ss_req_base::task_action_ss_req_base(dispatcher_start_data_type &&start_param) : base_type(start_param) {
   // 必须先设置共享的arena
   if (nullptr != start_param.context) {
     get_shared_context().try_reuse_protobuf_arena(start_param.context->mutable_protobuf_arena());
@@ -65,7 +65,7 @@ task_action_ss_req_base::result_type task_action_ss_req_base::hook_run() {
 
   // 自动设置快队列保存
   result_type::value_type ret = RPC_AWAIT_CODE_RESULT(base_type::hook_run());
-  if (nullptr != get_dispatcher_start_data().options && get_dispatcher_start_data().options->mark_fast_save()) {
+  if (nullptr != get_dispatcher_options() && get_dispatcher_options()->mark_fast_save()) {
     if (mgr && obj) {
       router_manager_set::me()->mark_fast_save(mgr, obj);
     }

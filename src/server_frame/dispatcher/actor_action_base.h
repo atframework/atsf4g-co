@@ -25,8 +25,7 @@ class actor_action_base {
   enum status_t { EN_AAS_CREATED = 0, EN_AAS_RUNNING, EN_AAS_FINISHED };
 
  protected:
-  actor_action_base();
-  explicit actor_action_base(rpc::context *caller_context);
+  explicit actor_action_base(const dispatcher_start_data_type &start_param);
   virtual ~actor_action_base();
 
  public:
@@ -46,7 +45,7 @@ class actor_action_base {
 
   virtual rpc::context::parent_mode get_caller_mode() const noexcept;
 
-  result_type run(void *priv_data);
+  result_type run(dispatcher_start_data_type &&start_data);
 
  protected:
   inline void set_user_key(uint64_t user_id, uint32_t zone_id) {
@@ -117,9 +116,11 @@ class actor_action_base {
   inline void enable_response_message() { response_message_disabled_ = false; }
 
   /**
-   * @brief 获取启动透传参数
+   * @brief 获取调度层设置
+   *
+   * @return const atframework::DispatcherOptions*
    */
-  inline dispatcher_start_data_type &get_dispatcher_start_data() { return start_data_; }
+  inline const atframework::DispatcherOptions *get_dispatcher_options() noexcept { return dispatcher_options_; }
 
   /**
    * @brief Get the shared context object
@@ -154,7 +155,7 @@ class actor_action_base {
   bool response_message_disabled_;
   bool event_disabled_;
 
-  dispatcher_start_data_type start_data_;
+  const atframework::DispatcherOptions *dispatcher_options_;
 
   // Additional events
   on_finished_callback_set_t on_finished_callback_;
@@ -166,6 +167,8 @@ template <typename TREQ>
 class actor_action_req_base : public actor_action_base {
  public:
   using msg_type = TREQ;
+
+  explicit actor_action_req_base(const dispatcher_start_data_type &start_param) : actor_action_base(start_param) {}
 
  protected:
   inline TREQ &get_request() { return request_msg_; }

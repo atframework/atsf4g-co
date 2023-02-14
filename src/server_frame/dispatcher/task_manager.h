@@ -218,6 +218,12 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
   template <class TAction, class... TParams>
   static typename task_type_trait::task_type internal_create_and_setup_task(TParams &&...args) {
     using internal_task_type = typename task_type_trait::internal_task_type;
+
+    // Should not be exiting, task will start immediately after created.
+    auto current_status = co_yield internal_task_type::yield_status();
+    if (task_type_trait::is_exiting(current_status)) {
+      co_return static_cast<int32_t>(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
+    }
     TAction action{std::forward<TParams>(args)...};
 
     typename task_action_base::task_meta_data_type action_meta;
@@ -241,7 +247,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
       co_return wait_start.first;
     }
 
-    int32_t result = co_await action(std::move(action_meta), *wait_start.second);
+    int32_t result = co_await action(std::move(action_meta), std::move(*wait_start.second));
     co_return result;
   }
 #endif
@@ -269,10 +275,10 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
     explicit task_action_maker_t(const atframework::DispatcherOptions *opt) : task_action_maker_base_t(opt) {}
     int operator()(task_type_trait::id_type &task_id, dispatcher_start_data_type ctor_param) override {
       if (options.has_timeout() && (options.timeout().seconds() > 0 || options.timeout().nanos() > 0)) {
-        return task_manager::me()->create_task_with_timeout<TAction>(
-            task_id, options.timeout().seconds(), options.timeout().nanos(), COPP_MACRO_STD_MOVE(ctor_param));
+        return task_manager::me()->create_task_with_timeout<TAction>(task_id, options.timeout().seconds(),
+                                                                     options.timeout().nanos(), std::move(ctor_param));
       } else {
-        return task_manager::me()->create_task<TAction>(task_id, COPP_MACRO_STD_MOVE(ctor_param));
+        return task_manager::me()->create_task<TAction>(task_id, std::move(ctor_param));
       }
     };
   };
@@ -281,7 +287,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
   struct actor_action_maker_t : public actor_action_maker_base_t {
     explicit actor_action_maker_t(const atframework::DispatcherOptions *opt) : actor_action_maker_base_t(opt) {}
     actor_action_ptr_t operator()(dispatcher_start_data_type ctor_param) override {
-      return task_manager::me()->create_actor<TAction>(COPP_MACRO_STD_MOVE(ctor_param));
+      return task_manager::me()->create_actor<TAction>(std::move(ctor_param));
     };
   };
 
@@ -321,9 +327,11 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
     }
 
     task_instance = internal_create_and_setup_task<TAction>(std::forward<TParams>(args));
-    if (!task_instance.get_context()) {
+    if (task_type_trait::empty(task_instance)) {
       return report_create_error(__FUNCTION__);
     }
+    // Start and use args to setup task action
+    task_instance.start();
 #else
     if (!stack_pool_ || !native_mgr_) {
       task_instance = nullptr;

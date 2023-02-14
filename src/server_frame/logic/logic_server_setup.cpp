@@ -240,19 +240,19 @@ int logic_server_setup_common(atapp::app &app, const logic_server_common_module_
     std::stringstream ss;
     ss << app.get_build_version() << std::endl;
     if (vcs_commit && *vcs_commit) {
-      ss << "VCS Commit    : " << vcs_commit << std::endl;
+      ss << "VCS Commit       : " << vcs_commit << std::endl;
       (*metadata.mutable_labels())["vcs_commit"] = vcs_commit;
     }
 
     if (vcs_version && *vcs_version) {
-      ss << "VCS Refer     : " << vcs_version << std::endl;
+      ss << "VCS Refer        : " << vcs_version << std::endl;
       (*metadata.mutable_labels())["vcs_version"] = vcs_version;
     }
 
     const char *vcs_server_branch = server_frame_vcs_get_server_branch();
 
     if (vcs_server_branch && *vcs_server_branch) {
-      ss << "Server Branch : " << vcs_server_branch << std::endl;
+      ss << "Server Branch    : " << vcs_server_branch << std::endl;
       (*metadata.mutable_labels())["server_branch"] = vcs_server_branch;
     }
 
@@ -260,6 +260,33 @@ int logic_server_setup_common(atapp::app &app, const logic_server_common_module_
     ss << "Module Build Time: " << __DATE__;
 #  ifdef __TIME__
     ss << " " << __TIME__;
+#  endif
+    ss << std::endl;
+#endif
+
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+    ss << "Coroutine mode   : C++20 coroutine";
+#  if defined(__cpp_impl_coroutine) || defined(__cpp_lib_coroutine)
+    ss << "(";
+#  endif
+#  if defined(__cpp_impl_coroutine)
+    ss << "Language/" << __cpp_impl_coroutine;
+#  endif
+#  if defined(__cpp_lib_coroutine)
+    ss << ", Library/" << __cpp_lib_coroutine;
+#  endif
+#  if defined(__cpp_impl_coroutine) || defined(__cpp_lib_coroutine)
+    ss << ")";
+#  endif
+    ss << std::endl;
+#else
+    ss << "Coroutine mode   : stackful";
+#  ifdef LIBCOPP_MACRO_SYS_POSIX
+    ss << "(mmap+pool)";
+#  elif defined(LIBCOPP_MACRO_SYS_WIN)
+    ss << "(VirtualAlloc+pool)";
+#  else
+    ss << "(pool)";
 #  endif
     ss << std::endl;
 #endif

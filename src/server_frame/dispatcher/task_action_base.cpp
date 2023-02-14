@@ -65,7 +65,7 @@ rpc::context &task_action_base::task_action_helper_t::get_shared_context(task_ac
   return action.get_shared_context();
 }
 
-task_action_base::task_action_base()
+task_action_base::task_action_base(const dispatcher_start_data_type &start_param)
     : user_id_(0),
       zone_id_(0),
       private_data_(nullptr),
@@ -73,21 +73,10 @@ task_action_base::task_action_base()
       response_code_(0),
       response_message_disabled_(false),
       event_disabled_(false),
-      start_data_(dispatcher_make_default<dispatcher_start_data_type>()),
-      shared_context_(rpc::context::create_without_task()) {}
-
-task_action_base::task_action_base(rpc::context *caller_context)
-    : user_id_(0),
-      zone_id_(0),
-      private_data_(nullptr),
-      result_(0),
-      response_code_(0),
-      response_message_disabled_(false),
-      event_disabled_(false),
-      start_data_(dispatcher_make_default<dispatcher_start_data_type>()),
+      dispatcher_options_(start_param.options),
       shared_context_(rpc::context::create_without_task()) {
-  if (nullptr != caller_context) {
-    set_caller_context(*caller_context);
+  if (nullptr != start_param.context) {
+    set_caller_context(*start_param.context);
   }
 }
 
@@ -108,7 +97,7 @@ const char *task_action_base::name() const {
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
 task_action_base::result_type task_action_base::operator()(task_meta_data_type &&task_meta,
-                                                           const dispatcher_start_data_type &start_data) {
+                                                           dispatcher_start_data_type &&start_data) {
 #else
 int task_action_base::operator()(void *priv_data) {
 #endif
@@ -121,16 +110,18 @@ int task_action_base::operator()(void *priv_data) {
   trace_option.parent_network_span = nullptr;
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-  // Set parent context if not set by child type
-  start_data_ = start_data;
+  {
 #else
   if (nullptr != priv_data) {
-    start_data_ = *reinterpret_cast<dispatcher_start_data_type *>(priv_data);
-  }
+    dispatcher_start_data_type &start_data = *reinterpret_cast<dispatcher_start_data_type *>(priv_data);
 #endif
-  // Set parent context if not set by child type
-  if (nullptr != start_data_.context) {
-    set_caller_context(*start_data_.context);
+    // Set parent context if not set by child type
+    if (nullptr != start_data.context) {
+      set_caller_context(*start_data.context);
+    }
+    if (start_data.options != nullptr) {
+      dispatcher_options_ = start_data.options;
+    }
   }
 
   rpc::context::tracer tracer;

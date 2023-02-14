@@ -121,7 +121,7 @@ dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_messa
       ret.options = callback_data.options;
       // actor 流程
       if (actor) {
-        ret.result_code = actor->run(&callback_data);
+        ret.result_code = actor->run(std::move(callback_data));
         return ret;
       }
     }
