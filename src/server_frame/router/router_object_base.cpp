@@ -333,7 +333,7 @@ rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx, task_
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK);
   }
 
-  if (ctx.get_task_context().task_id == task_type_trait::get_task_id(io_task_)) {
+  if (task_type_trait::get_task_id(other_task) == task_type_trait::get_task_id(io_task_)) {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(await_io_task(ctx)));
   }
 
@@ -635,6 +635,11 @@ rpc::result_code_type router_object_base::await_io_schedule_order_task(rpc::cont
     }
 
     if (task_type_trait::is_exiting(task)) {
+      io_schedule_order_.erase(select_task_id);
+      continue;
+    }
+
+    if (task_type_trait::get_task_id(task) == ctx.get_task_context().task_id) {
       io_schedule_order_.erase(select_task_id);
       continue;
     }

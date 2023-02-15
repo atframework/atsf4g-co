@@ -151,7 +151,10 @@ class rpc_lru_cache_map {
           // fallback, clear data, 理论上不会走到这个流程，前面就是reset掉
           task_type_trait::reset_task(out->pulling_task);
         } else {
-          int res = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, out->pulling_task));
+          if (task_type_trait::get_task_id(out->pulling_task) == ctx.get_task_context().task_id) {
+            break;
+          }
+          int32_t res = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, out->pulling_task));
           if (res < 0) {
             out.reset();
             RPC_RETURN_CODE(res);
@@ -276,7 +279,10 @@ class rpc_lru_cache_map {
           // fallback, clear data, 理论上不会走到这个流程，前面就是reset掉
           task_type_trait::reset_task(inout->saving_task);
         } else {
-          int res = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, inout->saving_task));
+          if (task_type_trait::get_task_id(inout->saving_task) == ctx.get_task_context().task_id) {
+            break;
+          }
+          int32_t res = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, inout->saving_task));
           if (res < 0) {
             RPC_RETURN_CODE(res);
           }

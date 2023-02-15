@@ -806,9 +806,8 @@ opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> global_service::ge
 }
 
 opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> global_service::get_logger(
-    opentelemetry::nostd::string_view logger_name, opentelemetry::nostd::string_view options,
-    opentelemetry::nostd::string_view library_name, opentelemetry::nostd::string_view library_version,
-    opentelemetry::nostd::string_view schema_url) {
+    opentelemetry::nostd::string_view logger_name, opentelemetry::nostd::string_view library_name,
+    opentelemetry::nostd::string_view library_version, opentelemetry::nostd::string_view schema_url) {
   auto current_service_cache = details::g_global_service_cache;
   if (!current_service_cache) {
     return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
@@ -828,8 +827,7 @@ opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> global_service::ge
     schema_url = logic_config::me()->get_cfg_telemetry().opentelemetry().logs().schema_url();
   }
 
-  return current_service_cache->logs_handle.provider->GetLogger(logger_name, options, library_name, library_version,
-                                                                schema_url);
+  return current_service_cache->logs_handle.provider->GetLogger(logger_name, library_name, library_version, schema_url);
 }
 
 namespace {
@@ -1371,13 +1369,13 @@ static void _opentelemetry_set_global_provider(
   }
   app_info_cache->logs_handle = logs_handle;
   if (!logs_config.default_name().empty()) {
-    app_info_cache->default_logger = logs_handle.provider->GetLogger(logs_config.default_name(), "", app.get_app_name(),
+    app_info_cache->default_logger = logs_handle.provider->GetLogger(logs_config.default_name(), app.get_app_name(),
                                                                      app.get_app_version(), logs_config.schema_url());
   } else if (!app.get_type_name().empty()) {
-    app_info_cache->default_logger = logs_handle.provider->GetLogger(app.get_type_name(), "", app.get_app_name(),
+    app_info_cache->default_logger = logs_handle.provider->GetLogger(app.get_type_name(), app.get_app_name(),
                                                                      app.get_app_version(), logs_config.schema_url());
   } else {
-    app_info_cache->default_logger = logs_handle.provider->GetLogger(app.get_app_name(), "", app.get_app_name(),
+    app_info_cache->default_logger = logs_handle.provider->GetLogger(app.get_app_name(), app.get_app_name(),
                                                                      app.get_app_version(), logs_config.schema_url());
   }
 

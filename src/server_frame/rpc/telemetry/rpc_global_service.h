@@ -235,9 +235,8 @@ class global_service {
    * @return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>
    */
   static opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> get_logger(
-      opentelemetry::nostd::string_view logger_name, opentelemetry::nostd::string_view options = "",
-      opentelemetry::nostd::string_view library_name = "", opentelemetry::nostd::string_view library_version = "",
-      opentelemetry::nostd::string_view schema_url = "");
+      opentelemetry::nostd::string_view logger_name, opentelemetry::nostd::string_view library_name = "",
+      opentelemetry::nostd::string_view library_version = "", opentelemetry::nostd::string_view schema_url = "");
 
   /**
    * @brief Set the current service object, it's used for tracer
