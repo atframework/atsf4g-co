@@ -15,10 +15,9 @@
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
-#include <dispatcher/task_manager.h>
-
 #include <dispatcher/ss_msg_dispatcher.h>
 #include <dispatcher/task_action_ss_req_base.h>
+#include <dispatcher/task_manager.h>
 
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_utils.h>
@@ -384,23 +383,23 @@ rpc::result_code_type router_object_base::pull_cache_inner(rpc::context &ctx, vo
         // 先等待之前的任务完成再设置flag
         flag_guard fg(*router_ptr, flag_t::EN_ROFT_PULLING_CACHE);
 
-        rpc::result_code_type::value_type ret =
+        rpc::result_code_type::value_type subret =
             RPC_AWAIT_CODE_RESULT(router_ptr->await_io_schedule_order_task(child_ctx));
-        if (ret < 0) {
-          RPC_RETURN_CODE(ret);
+        if (subret < 0) {
+          RPC_RETURN_CODE(subret);
         }
 
-        ret = RPC_AWAIT_CODE_RESULT(router_ptr->pull_cache(child_ctx, priv_data));
+        subret = RPC_AWAIT_CODE_RESULT(router_ptr->pull_cache(child_ctx, priv_data));
         router_ptr->wakeup_io_task_awaiter();
 
-        if (ret < 0) {
-          RPC_RETURN_CODE(ret);
+        if (subret < 0) {
+          RPC_RETURN_CODE(subret);
         }
 
         // 拉取成功要refresh_save_time
         router_ptr->refresh_save_time();
 
-        RPC_RETURN_CODE(ret);
+        RPC_RETURN_CODE(subret);
       });
 
   if (invoke_result.is_error()) {
@@ -449,17 +448,17 @@ rpc::result_code_type router_object_base::pull_object_inner(rpc::context &ctx, v
         router_ptr->unset_flag(flag_t::EN_ROFT_FORCE_PULL_OBJECT);
 
         // 执行读任务
-        auto ret = RPC_AWAIT_CODE_RESULT(router_ptr->await_io_schedule_order_task(child_ctx));
-        if (ret < 0) {
+        auto subret = RPC_AWAIT_CODE_RESULT(router_ptr->await_io_schedule_order_task(child_ctx));
+        if (subret < 0) {
           router_ptr->wakeup_io_task_awaiter();
-          RPC_RETURN_CODE(ret);
+          RPC_RETURN_CODE(subret);
         }
 
-        ret = RPC_AWAIT_CODE_RESULT(router_ptr->pull_object(child_ctx, priv_data));
+        subret = RPC_AWAIT_CODE_RESULT(router_ptr->pull_object(child_ctx, priv_data));
         router_ptr->wakeup_io_task_awaiter();
 
-        if (ret < 0) {
-          RPC_RETURN_CODE(ret);
+        if (subret < 0) {
+          RPC_RETURN_CODE(subret);
         }
 
         // 拉取成功要refresh_save_time
@@ -475,7 +474,7 @@ rpc::result_code_type router_object_base::pull_object_inner(rpc::context &ctx, v
         // 升级为实体
         router_ptr->upgrade();
 
-        RPC_RETURN_CODE(ret);
+        RPC_RETURN_CODE(subret);
       });
 
   if (invoke_result.is_error()) {
@@ -527,23 +526,23 @@ rpc::result_code_type router_object_base::save_object_inner(rpc::context &ctx, v
         flag_guard fg(*router_ptr, flag_t::EN_ROFT_SAVING);
 
         uint64_t real_saving_seq = router_ptr->saving_sequence_;
-        auto ret = RPC_AWAIT_CODE_RESULT(router_ptr->await_io_schedule_order_task(child_ctx));
-        if (ret < 0) {
-          RPC_RETURN_CODE(ret);
+        auto subret = RPC_AWAIT_CODE_RESULT(router_ptr->await_io_schedule_order_task(child_ctx));
+        if (subret < 0) {
+          RPC_RETURN_CODE(subret);
         }
-        ret = RPC_AWAIT_CODE_RESULT(router_ptr->save_object(child_ctx, priv_data));
+        subret = RPC_AWAIT_CODE_RESULT(router_ptr->save_object(child_ctx, priv_data));
         router_ptr->wakeup_io_task_awaiter();
 
-        if (ret >= 0 && real_saving_seq > router_ptr->saved_sequence_) {
+        if (subret >= 0 && real_saving_seq > router_ptr->saved_sequence_) {
           router_ptr->saved_sequence_ = real_saving_seq;
-        } else if (ret < 0) {
+        } else if (subret < 0) {
           // 保存失败
-          RPC_RETURN_CODE(ret);
+          RPC_RETURN_CODE(subret);
         }
 
         router_ptr->refresh_save_time();
 
-        RPC_RETURN_CODE(ret);
+        RPC_RETURN_CODE(subret);
       });
 
   if (invoke_result.is_error()) {

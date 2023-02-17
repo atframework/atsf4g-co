@@ -12,10 +12,10 @@
 
 #include <libcotask/task.h>
 
+#include <utility/random_engine.h>
+
 #include <config/logic_config.h>
 #include <log/log_wrapper.h>
-
-#include <utility/random_engine.h>
 
 #include <rpc/router/routerservice.h>
 #include <rpc/rpc_async_invoke.h>
@@ -96,8 +96,9 @@ class router_manager : public router_manager_base {
     return iter->second;
   }
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_cache(
-      rpc::context &ctx, std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data) override {
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_cache(rpc::context &ctx,
+                                                              std::shared_ptr<router_object_base> &out,
+                                                              const key_t &key, void *priv_data) override {
     ptr_t outc;
     auto ret = RPC_AWAIT_CODE_RESULT(mutable_cache(ctx, outc, key, reinterpret_cast<priv_data_t>(priv_data)));
     out = std::dynamic_pointer_cast<router_object_base>(outc);
@@ -183,9 +184,8 @@ class router_manager : public router_manager_base {
    * @param priv_data
    * @return
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type renew_cache(rpc::context &ctx, store_ptr_t &in,
-                                                                                ptr_t &out, const key_t &key,
-                                                                                priv_data_t priv_data) {
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type renew_cache(rpc::context &ctx, store_ptr_t &in, ptr_t &out,
+                                                            const key_t &key, priv_data_t priv_data) {
     if (!in.expired()) {
       out = in.lock();
     } else {
@@ -204,8 +204,9 @@ class router_manager : public router_manager_base {
     RPC_RETURN_CODE(ret);
   }
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_object(
-      rpc::context &ctx, std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data) override {
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_object(rpc::context &ctx,
+                                                               std::shared_ptr<router_object_base> &out,
+                                                               const key_t &key, void *priv_data) override {
     ptr_t outc;
     auto ret = RPC_AWAIT_CODE_RESULT(mutable_object(ctx, outc, key, reinterpret_cast<priv_data_t>(priv_data)));
     out = std::dynamic_pointer_cast<router_object_base>(outc);
@@ -359,13 +360,13 @@ class router_manager : public router_manager_base {
       auto invoke_result = rpc::async_invoke(
           ctx, "router_manager.transfer",
           [obj, router_type_id, svr_id](rpc::context &child_ctx) -> rpc::result_code_type {
-            int32_t ret;
+            int32_t subret;
             PROJECT_NAMESPACE_ID::SSRouterTransferReq *req =
                 child_ctx.create<PROJECT_NAMESPACE_ID::SSRouterTransferReq>();
             PROJECT_NAMESPACE_ID::SSRouterTransferRsp *rsp =
                 child_ctx.create<PROJECT_NAMESPACE_ID::SSRouterTransferRsp>();
             if (nullptr == req || nullptr == rsp) {
-              ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+              subret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
             } else {
               atframework::SSRouterHead *router_head = req->mutable_object();
               if (nullptr != router_head) {
@@ -377,18 +378,18 @@ class router_manager : public router_manager_base {
                 router_head->set_object_zone_id(obj->get_key().zone_id);
 
                 // 转移通知RPC也需要设置为IO任务，这样如果有其他的读写任务或者转移任务都会等本任务完成
-                ret = RPC_AWAIT_CODE_RESULT(rpc::router::router_transfer(child_ctx, svr_id, *req, *rsp));
+                subret = RPC_AWAIT_CODE_RESULT(rpc::router::router_transfer(child_ctx, svr_id, *req, *rsp));
                 obj->wakeup_io_task_awaiter();
-                if (ret < 0) {
+                if (subret < 0) {
                   FWLOGERROR("transfer router object (type={},zone_id={}) {} failed, res: {}", router_type_id,
-                             obj->get_key().zone_id, obj->get_key().object_id, ret);
+                             obj->get_key().zone_id, obj->get_key().object_id, subret);
                 }
               } else {
-                ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+                subret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
               }
             }
 
-            RPC_RETURN_CODE(ret);
+            RPC_RETURN_CODE(subret);
           });
       if (invoke_result.is_error()) {
         ret = *invoke_result.get_error();
@@ -437,8 +438,9 @@ class router_manager : public router_manager_base {
     RPC_RETURN_CODE(ret);
   }
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_cache(
-      rpc::context &ctx, const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data) override {
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_cache(rpc::context &ctx, const key_t &key,
+                                                             std::shared_ptr<router_object_base> cache,
+                                                             void *priv_data) override {
     ptr_t cache_child;
     rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
     {
@@ -485,8 +487,9 @@ class router_manager : public router_manager_base {
     RPC_RETURN_CODE(ret);
   }
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_object(
-      rpc::context &ctx, const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data) override {
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_object(rpc::context &ctx, const key_t &key,
+                                                              std::shared_ptr<router_object_base> cache,
+                                                              void *priv_data) override {
     ptr_t cache_child;
     if (!cache) {
       typename std::unordered_map<key_t, ptr_t>::iterator iter = caches_.find(key);

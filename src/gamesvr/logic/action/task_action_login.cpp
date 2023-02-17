@@ -169,7 +169,7 @@ int task_action_login::on_success() {
     FWLOGWARNING("login success but user {}:{} not found, maybe parrallel login", get_zone_id(), req_body.user_id());
     return get_result();
   }
-  rsp_body.set_zone_id(user->get_zone_id());
+  rsp_body.set_zone_id(static_cast<int32_t>(user->get_zone_id()));
   rsp_body.set_version_type(user->get_account_info().version_type());
 
   // TODO(owent) 断线重连，上次收包序号

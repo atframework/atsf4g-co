@@ -66,7 +66,7 @@ static const char* pick_number(TINT& out, const char* str) {
   // dec only
   while (str && *str >= '0' && *str <= '9') {
     out *= 10;
-    out += *str - '0';
+    out += static_cast<TINT>(*str - '0');
     ++str;
   }
 

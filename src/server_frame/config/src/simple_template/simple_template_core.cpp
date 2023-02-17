@@ -83,7 +83,7 @@ static std::string make_identify(const char* begin, const char* end) {
     ++begin;
     --end;
     std::string ret;
-    ret.reserve(end - begin);
+    ret.reserve(static_cast<size_t>(end - begin));
     for (const char* cur = begin; cur < end; ++cur) {
       // 转义符
       if (*cur == '\\') {
@@ -141,7 +141,8 @@ static std::pair<bool, const char*> take_identify(const char* const start, size_
     out.block_begin = start + 1;
     out.block_end = out.block_begin;
     while (*out.block_end && *out.block_end != strclose && false == is_convert) {
-      std::pair<bool, const char*> cres = take_utf8_char(out.block_end, sz - (out.block_end - start));
+      std::pair<bool, const char*> cres =
+          take_utf8_char(out.block_end, sz - static_cast<size_t>(out.block_end - start));
       if (is_eol(*out.block_end)) {
         // 兼容Windows换行符
         if (!(prechar == '\r' && *out.block_end == '\n')) {
@@ -170,7 +171,8 @@ static std::pair<bool, const char*> take_identify(const char* const start, size_
     }
   } else {
     while (out.block_end && *out.block_end) {
-      std::pair<bool, const char*> cres = take_utf8_char(out.block_end, sz - (out.block_end - start));
+      std::pair<bool, const char*> cres =
+          take_utf8_char(out.block_end, sz - static_cast<size_t>(out.block_end - start));
       if (!cres.first) {
         if (cres.second > out.block_end) {
           ++out.column;
@@ -211,7 +213,8 @@ static const char* take_block(const char* const start, size_t sz, std::string& e
   while (next_ident && *next_token) {
     next_token = take_blanks(next_token, segment);
 
-    std::pair<bool, const char*> ident_res = take_identify(next_token, sz - (next_token - start), segment);
+    std::pair<bool, const char*> ident_res =
+        take_identify(next_token, sz - static_cast<size_t>(next_token - start), segment);
     if (!ident_res.first || next_token >= ident_res.second) {
       errs << "Identify " << next_token << " end at line: " << segment.line << ", column: " << segment.column
            << " is not a valid" << std::endl;
@@ -248,7 +251,8 @@ static const char* take_block(const char* const start, size_t sz, std::string& e
     while (next_param && *next_token) {
       next_token = take_blanks(next_token, segment);
 
-      std::pair<bool, const char*> ident_res = take_identify(next_token, sz - (next_token - start), segment);
+      std::pair<bool, const char*> ident_res =
+          take_identify(next_token, sz - static_cast<size_t>(next_token - start), segment);
       if (!ident_res.first || next_token >= ident_res.second) {
         errs << "Parameter " << next_token << " end at line: " << segment.line << ", column: " << segment.column
              << " is not a valid UTF-8 string" << std::endl;
@@ -333,7 +337,8 @@ simple_template_core::ptr_t simple_template_core::compile(const char* const in, 
     char prechar = 0;
     const char* next_token = in;
     while (static_cast<size_t>(next_token - in) < insz) {
-      std::pair<bool, const char*> cres = details::take_utf8_char(next_token, insz - (next_token - in));
+      std::pair<bool, const char*> cres =
+          details::take_utf8_char(next_token, insz - static_cast<size_t>(next_token - in));
       if (!cres.first) {
         errmsg_ss << "Character " << next_token << " at line: " << token_position.line
                   << ", column: " << token_position.column << " is not a valid UTF-8 charater." << std::endl;
@@ -375,8 +380,8 @@ simple_template_core::ptr_t simple_template_core::compile(const char* const in, 
         std::vector<std::string> params;
         bool is_func = false;
         const char* token_start = next_token;
-        next_token =
-            take_block(next_token, insz - (next_token - in), expression, params, is_func, token_position, errmsg_ss);
+        next_token = take_block(next_token, insz - static_cast<size_t>(next_token - in), expression, params, is_func,
+                                token_position, errmsg_ss);
         std::string code = std::string(token_start, next_token);
         do {
           if (is_func) {
@@ -508,7 +513,7 @@ simple_template_core::print_const_string::print_const_string(const std::string& 
     : raw_block(r), line(l), col(c), data(s) {}
 
 bool simple_template_core::print_const_string::operator()(std::ostream& os, std::ostream& /*es*/, void*) {
-  os.write(data.c_str(), data.size());
+  os.write(data.c_str(), static_cast<std::streamsize>(data.size()));
   return true;
 }
 

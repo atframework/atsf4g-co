@@ -300,7 +300,7 @@ int task_manager::tick(time_t sec, int nsec) {
   if (stat_last_checkpoint_ != sec / stat_interval_) {
     stat_last_checkpoint_ = sec / stat_interval_;
     if (native_mgr_) {
-      size_t first_checkpoint = 0;
+      time_t first_checkpoint = 0;
       if (!native_mgr_->get_checkpoints().empty()) {
         first_checkpoint = native_mgr_->get_checkpoints().begin()->expired_time.tv_sec;
       }

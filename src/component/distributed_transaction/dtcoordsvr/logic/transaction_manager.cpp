@@ -70,20 +70,20 @@ rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_p
 
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(lru_caches_.await_save(
       ctx, data,
-      [](rpc::context& ctx, const atframework::distributed_system::transaction_blob_storage& in,
+      [](rpc::context& subctx, const atframework::distributed_system::transaction_blob_storage& in,
          int64_t* out_version) -> rpc::result_code_type {
         std::string data_version;
         if (nullptr != out_version) {
           data_version = util::log::format("{}", *out_version);
         }
-        rpc::context::message_holder<PROJECT_NAMESPACE_ID::table_distribute_transaction> storage{ctx};
+        rpc::context::message_holder<PROJECT_NAMESPACE_ID::table_distribute_transaction> storage{subctx};
         storage->set_transaction_uuid(in.metadata().transaction_uuid());
         if (false == storage->mutable_blob_data()->PackFrom(in)) {
           FWLOGERROR("Serialize transaction_blob_storage failed, {}", storage->blob_data().InitializationErrorString());
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PACK);
         }
         int ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::set(
-            ctx, storage->zone_id(), storage->transaction_uuid(), *storage, data_version));
+            subctx, storage->zone_id(), storage->transaction_uuid(), *storage, data_version));
         if (nullptr != out_version) {
           util::string::str2int(*out_version, data_version.c_str(), data_version.size());
         }
@@ -160,15 +160,15 @@ rpc::result_code_type transaction_manager::mutable_transaction(
   if (!metadata.memory_only()) {
     ret = RPC_AWAIT_CODE_RESULT(lru_caches_.await_fetch(
         ctx, metadata.transaction_uuid(), out,
-        [zone_id](rpc::context& ctx, const std::string& key,
+        [zone_id](rpc::context& subctx, const std::string& key,
                   atframework::distributed_system::transaction_blob_storage& output,
                   int64_t* out_version) -> rpc::result_code_type {
           std::string data_version;
-          rpc::context::message_holder<PROJECT_NAMESPACE_ID::table_distribute_transaction> storage{ctx};
-          int ret =
-              RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::get(ctx, zone_id, key, *storage, data_version));
-          if (ret < 0) {
-            RPC_RETURN_CODE(ret);
+          rpc::context::message_holder<PROJECT_NAMESPACE_ID::table_distribute_transaction> storage{subctx};
+          int sub_ret =
+              RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::get(subctx, zone_id, key, *storage, data_version));
+          if (sub_ret < 0) {
+            RPC_RETURN_CODE(sub_ret);
           }
 
           if (false == storage->blob_data().UnpackTo(&output)) {
@@ -181,7 +181,7 @@ rpc::result_code_type transaction_manager::mutable_transaction(
             util::string::str2int(*out_version, data_version.c_str(), data_version.size());
           }
 
-          RPC_RETURN_CODE(ret);
+          RPC_RETURN_CODE(sub_ret);
         }));
 
     if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {

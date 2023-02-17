@@ -85,7 +85,7 @@ class session {
     if (f & (f - 1)) {
       return false;
     }
-    return !!(flags_ & f);
+    return !!(flags_ & static_cast<uint32_t>(f));
   }
 
   inline void set_flag(flag_t::type f, bool v) noexcept {
@@ -95,7 +95,7 @@ class session {
     }
 
     if (v) {
-      flags_ |= f;
+      flags_ |= static_cast<uint32_t>(f);
     } else {
       flags_ &= ~static_cast<uint32_t>(f);
     }
