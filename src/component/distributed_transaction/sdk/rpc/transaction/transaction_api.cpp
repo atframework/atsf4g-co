@@ -335,7 +335,7 @@ static rpc::result_code_type invoke_replication_rpc_call(
 
 }  // namespace
 
-rpc::result_code_type initialize_new_transaction(rpc::context& ctx,
+rpc::result_code_type initialize_new_transaction(rpc::context&,
                                                  atframework::distributed_system::transaction_blob_storage& inout,
                                                  const google::protobuf::Duration& timeout,
                                                  uint32_t replication_read_count, uint32_t replication_total_count,
@@ -616,8 +616,7 @@ rpc::result_code_type remove_transaction_no_wait(
 }
 
 rpc::result_code_type remove_transaction(rpc::context& ctx,
-                                         const atframework::distributed_system::transaction_metadata& metadata,
-                                         bool no_wait) {
+                                         const atframework::distributed_system::transaction_metadata& metadata) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("this function must be called in a task(transaction_uuid={})",
                                        metadata.transaction_uuid());
 

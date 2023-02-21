@@ -52,12 +52,12 @@ int cs_msg_dispatcher::stop() {
   return dispatcher_implement::stop();
 }
 
-uint64_t cs_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
+uint64_t cs_msg_dispatcher::pick_msg_task_id(msg_raw_t &) {
   // cs msg not allow resume task
   return 0;
 }
 
-cs_msg_dispatcher::msg_type_t cs_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw_msg) { return 0; }
+cs_msg_dispatcher::msg_type_t cs_msg_dispatcher::pick_msg_type_id(msg_raw_t &) { return 0; }
 
 const std::string &cs_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
   atframework::CSMsg *real_msg = get_protobuf_msg<atframework::CSMsg>(raw_msg);
@@ -93,9 +93,7 @@ cs_msg_dispatcher::msg_op_type_t cs_msg_dispatcher::pick_msg_op_type(msg_raw_t &
   return static_cast<msg_op_type_t>(real_msg->head().op_type());
 }
 
-const atframework::DispatcherOptions *cs_msg_dispatcher::get_options_by_message_type(msg_type_t msg_type) {
-  return nullptr;
-}
+const atframework::DispatcherOptions *cs_msg_dispatcher::get_options_by_message_type(msg_type_t) { return nullptr; }
 
 void cs_msg_dispatcher::on_create_task_failed(dispatcher_start_data_type &start_data, int32_t error_code) {
   const std::string &rpc_name = pick_rpc_name(start_data.message);
@@ -439,8 +437,8 @@ int32_t cs_msg_dispatcher::broadcast_data(uint64_t bus_id, const void *buffer, s
   return send_data(bus_id, 0, buffer, len);
 }
 
-int32_t cs_msg_dispatcher::broadcast_data(uint64_t bus_id, const std::vector<uint64_t> &session_ids, const void *buffer,
-                                          size_t len) {
+int32_t cs_msg_dispatcher::broadcast_data(uint64_t bus_id, const std::vector<uint64_t> & /*session_ids*/,
+                                          const void *buffer, size_t len) {
   atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("not in a atapp");

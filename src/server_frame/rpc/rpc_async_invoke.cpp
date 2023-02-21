@@ -58,8 +58,7 @@ async_invoke_result async_invoke(context &ctx, gsl::string_view name, std::funct
   return async_invoke_result::make_success(std::move(task_inst));
 }
 
-async_invoke_result async_invoke(gsl::string_view caller_name, gsl::string_view name,
-                                 std::function<result_code_type(context &)> fn,
+async_invoke_result async_invoke(gsl::string_view, gsl::string_view name, std::function<result_code_type(context &)> fn,
                                  std::chrono::system_clock::duration timeout) {
   rpc::context ctx{rpc::context::create_without_task()};
   return async_invoke(ctx, name, std::move(fn), timeout);

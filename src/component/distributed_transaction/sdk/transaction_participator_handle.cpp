@@ -94,7 +94,7 @@ rpc::result_code_type transaction_participator_handle::check_writable(rpc::conte
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(vtable_->check_writable(ctx, *this, writable)));
 }
 
-int32_t transaction_participator_handle::tick(rpc::context& ctx, util::time::time_utility::raw_time_t timepoint) {
+int32_t transaction_participator_handle::tick(rpc::context&, util::time::time_utility::raw_time_t timepoint) {
   if (!task_type_trait::empty(auto_resolve_transaction_task_) &&
       !task_type_trait::is_exiting(auto_resolve_transaction_task_)) {
     return 0;
@@ -253,13 +253,13 @@ rpc::result_code_type transaction_participator_handle::prepare(rpc::context& ctx
 
 rpc::result_code_type transaction_participator_handle::commit(rpc::context& ctx,
                                                               const SSParticipatorTransactionCommitReq& request,
-                                                              SSParticipatorTransactionCommitRsp& response) {
+                                                              SSParticipatorTransactionCommitRsp&) {
   return commit_transcation(ctx, request.transaction_uuid());
 }
 
 rpc::result_code_type transaction_participator_handle::reject(rpc::context& ctx,
                                                               const SSParticipatorTransactionRejectReq& request,
-                                                              SSParticipatorTransactionRejectRsp& response) {
+                                                              SSParticipatorTransactionRejectRsp&) {
   if (request.has_storage() && request.storage().configure().force_commit()) {
     rpc::context child_ctx{ctx};
     rpc::context::tracer child_tracer;

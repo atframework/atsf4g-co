@@ -397,7 +397,7 @@ void player::clear_dirty_cache() {
 
 template <class TMSG, class TCONTAINER>
 static player::dirty_sync_handle_t _player_generate_dirty_handle(
-    gsl::string_view handle_name, TMSG *(PROJECT_NAMESPACE_ID::SCPlayerDirtyChgSync::*add_fn)(),
+    gsl::string_view /*handle_name*/, TMSG *(PROJECT_NAMESPACE_ID::SCPlayerDirtyChgSync::*add_fn)(),
     TCONTAINER player::cache_t::*get_mem) {
   player::dirty_sync_handle_t handle;
   handle.build_fn = [add_fn, get_mem](player &user, player::dirty_message_container &output) {

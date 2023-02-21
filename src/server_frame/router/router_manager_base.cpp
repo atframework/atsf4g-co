@@ -31,7 +31,7 @@ bool router_manager_base::is_auto_mutable_object() const { return false; }
 
 bool router_manager_base::is_auto_mutable_cache() const { return true; }
 
-uint64_t router_manager_base::get_default_router_server_id(const key_t &key) const { return 0; }
+uint64_t router_manager_base::get_default_router_server_id(const key_t &) const { return 0; }
 
 rpc::result_code_type router_manager_base::send_msg(rpc::context &ctx, router_object_base &obj,
                                                     atframework::SSMsg &&msg, uint64_t &sequence) {
@@ -119,7 +119,7 @@ rpc::result_code_type router_manager_base::send_msg_raw(rpc::context &ctx, route
 
 void router_manager_base::on_stop() { is_closing_ = false; }
 
-rpc::result_code_type router_manager_base::pull_online_server(rpc::context &ctx, const key_t &, uint64_t &router_svr_id,
+rpc::result_code_type router_manager_base::pull_online_server(rpc::context &, const key_t &, uint64_t &router_svr_id,
                                                               uint64_t &router_svr_ver) {
   router_svr_id = 0;
   router_svr_ver = 0;

@@ -79,8 +79,8 @@ rpc::result_code_type router_player_manager::on_evt_remove_object(rpc::context &
   return base_type::on_evt_remove_object(ctx, key, cache, priv_data);
 }
 
-rpc::result_code_type router_player_manager::pull_online_server(rpc::context &ctx, const key_t &key,
-                                                                uint64_t &router_svr_id, uint64_t &router_svr_ver) {
+rpc::result_code_type router_player_manager::pull_online_server(rpc::context &, const key_t &, uint64_t &router_svr_id,
+                                                                uint64_t &router_svr_ver) {
   router_svr_id = 0;
   router_svr_ver = 0;
 

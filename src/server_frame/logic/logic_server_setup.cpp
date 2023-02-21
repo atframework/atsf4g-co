@@ -72,7 +72,7 @@ static int show_server_time(util::cli::callback_param params) {
   return 0;
 }
 
-static int debug_receive_stop_when_running(util::cli::callback_param params) {
+static int debug_receive_stop_when_running(util::cli::callback_param) {
   task_action_auto_save_objects::debug_receive_stop_when_running = true;
   return 0;
 }
@@ -114,7 +114,7 @@ static int show_battlesvr_by_version(util::cli::callback_param params) {
   return 0;
 }
 
-static int app_default_handle_on_receive_request(atapp::app &app, const atapp::app::message_sender_t &source,
+static int app_default_handle_on_receive_request(atapp::app &, const atapp::app::message_sender_t &source,
                                                  const atapp::app::message_t &msg) {
   if (0 == source.id) {
     FWLOGERROR("receive a message from unknown source or invalid body case");
@@ -775,10 +775,10 @@ int logic_server_common_module::setup_etcd_event_handle() {
   }
 
   atapp::etcd_cluster &raw_ctx = etcd_mod->get_raw_etcd_ctx();
-  raw_ctx.add_on_event_down([this](atapp::etcd_cluster &ctx) { setup_battle_service_watcher(); }, true);
+  raw_ctx.add_on_event_up([this](atapp::etcd_cluster &) { setup_battle_service_watcher(); }, true);
 
   raw_ctx.add_on_event_down(
-      [this](atapp::etcd_cluster &ctx) {
+      [this](atapp::etcd_cluster &) {
         // clear cache, then watcher will be setup again when etcd is enabled in the future.
         battle_service_watcher_.reset();
       },

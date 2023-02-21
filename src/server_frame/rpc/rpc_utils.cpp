@@ -84,7 +84,7 @@ context::context(context &parent, inherit_options options) noexcept {
 
 context::~context() {}
 
-context context::create_without_task(create_options options) noexcept { return {}; }
+context context::create_without_task(create_options) noexcept { return {}; }
 
 context context::create_temporary_child(inherit_options options) noexcept { return {*this, options}; }
 

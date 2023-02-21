@@ -273,7 +273,7 @@ static rpc::result_code_type check_local_router_object(rpc::context &ctx, uint64
 }
 
 static rpc::result_code_type try_filter_router_msg(rpc::context &ctx, EXPLICIT_UNUSED_ATTR int retry_times,
-                                                   uint64_t request_bus_id, atframework::SSMsg &request_msg,
+                                                   uint64_t /*request_bus_id*/, atframework::SSMsg &request_msg,
                                                    router_manager_base &mgr, router_manager_base::key_t key,
                                                    std::shared_ptr<router_object_base> &obj,
                                                    filter_router_message_result_type &result) {

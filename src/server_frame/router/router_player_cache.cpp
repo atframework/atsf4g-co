@@ -242,7 +242,7 @@ rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, router
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void *priv_data) {
+rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void * /*priv_data*/) {
   // 保存数据
   player_cache::ptr_t obj = object();
   if (!obj || !obj->can_be_writable()) {

@@ -70,7 +70,7 @@ PrometheusPushExporter::PrometheusPushExporter(const PrometheusPushExporterOptio
   }
 }
 
-bool PrometheusPushExporter::ForceFlush(std::chrono::microseconds timeout) noexcept { return true; }
+bool PrometheusPushExporter::ForceFlush(std::chrono::microseconds) noexcept { return true; }
 
 /**
  * Shuts down the exporter and does cleanup.
@@ -79,7 +79,7 @@ bool PrometheusPushExporter::ForceFlush(std::chrono::microseconds timeout) noexc
  * collection to to client an HTTP request being sent,
  * so we flush the data.
  */
-bool PrometheusPushExporter::Shutdown(std::chrono::microseconds timeout) noexcept {
+bool PrometheusPushExporter::Shutdown(std::chrono::microseconds) noexcept {
   is_shutdown_ = true;
 
   collector_->GetCollection().clear();

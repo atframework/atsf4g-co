@@ -222,11 +222,11 @@ uint64_t db_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
   return real_msg->dst_task_id();
 }
 
-db_msg_dispatcher::msg_type_t db_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw_msg) { return 0; }
+db_msg_dispatcher::msg_type_t db_msg_dispatcher::pick_msg_type_id(msg_raw_t &) { return 0; }
 
-const std::string &db_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) { return get_empty_string(); }
+const std::string &db_msg_dispatcher::pick_rpc_name(msg_raw_t &) { return get_empty_string(); }
 
-db_msg_dispatcher::msg_op_type_t db_msg_dispatcher::pick_msg_op_type(msg_raw_t &raw_msg) {
+db_msg_dispatcher::msg_op_type_t db_msg_dispatcher::pick_msg_op_type(msg_raw_t &) {
   return PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP;
 }
 
@@ -515,6 +515,7 @@ int db_msg_dispatcher::cluster_send_msg(hiredis::happ::cluster &clu, const char 
     req.unpack_fn = fn;
     req.response = nullptr;
     req.sequence = allocate_sequence();
+    sequence = req.sequence;
 
     // 防止异步调用转同步调用，预先使用栈上的DBAsyncData
     cmd = clu.exec(ks, kl, cluster_request_callback, &req, argc, argv, argvlen);
@@ -620,7 +621,7 @@ void db_msg_dispatcher::raw_request_callback(hiredis::happ::cmd_exec *, struct r
   } while (false);
 }
 
-void db_msg_dispatcher::raw_on_connect(hiredis::happ::raw *c, hiredis::happ::connection *conn) {
+void db_msg_dispatcher::raw_on_connect(hiredis::happ::raw *, hiredis::happ::connection *conn) {
   assert(conn);
 
   // 加入事件池
@@ -661,6 +662,7 @@ int db_msg_dispatcher::raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_
     req.unpack_fn = fn;
     req.response = nullptr;
     req.sequence = allocate_sequence();
+    sequence = req.sequence;
 
     // 防止异步调用转同步调用，预先使用栈上的DBAsyncData
     cmd = raw_conn.exec(raw_request_callback, &req, argc, argv, argvlen);

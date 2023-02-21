@@ -19,7 +19,7 @@
 namespace rpc {
 namespace db {
 namespace detail {
-int32_t do_nothing(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *data) {
+int32_t do_nothing(PROJECT_NAMESPACE_ID::table_all_message &, const redisReply *) {
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 

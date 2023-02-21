@@ -102,7 +102,7 @@ uint64_t ss_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
   return real_msg->head().dst_task_id();
 }
 
-ss_msg_dispatcher::msg_type_t ss_msg_dispatcher::pick_msg_type_id(msg_raw_t &raw_msg) { return 0; }
+ss_msg_dispatcher::msg_type_t ss_msg_dispatcher::pick_msg_type_id(msg_raw_t &) { return 0; }
 
 const std::string &ss_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
   atframework::SSMsg *real_msg = get_protobuf_msg<atframework::SSMsg>(raw_msg);
@@ -138,9 +138,7 @@ ss_msg_dispatcher::msg_op_type_t ss_msg_dispatcher::pick_msg_op_type(msg_raw_t &
   return static_cast<msg_op_type_t>(real_msg->head().op_type());
 }
 
-const atframework::DispatcherOptions *ss_msg_dispatcher::get_options_by_message_type(msg_type_t msg_type) {
-  return nullptr;
-}
+const atframework::DispatcherOptions *ss_msg_dispatcher::get_options_by_message_type(msg_type_t) { return nullptr; }
 
 int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, atframework::SSMsg &ss_msg, bool ignore_discovery) {
   if (0 == ss_msg.head().sequence()) {
@@ -408,7 +406,7 @@ void ss_msg_dispatcher::on_create_task_failed(dispatcher_start_data_type &start_
 
 uint64_t ss_msg_dispatcher::allocate_sequence() { return ++sequence_allocator_; }
 
-void ss_msg_dispatcher::dns_lookup_callback(uv_getaddrinfo_t *req, int status, struct addrinfo *result) noexcept {
+void ss_msg_dispatcher::dns_lookup_callback(uv_getaddrinfo_t *req, int /*status*/, struct addrinfo *result) noexcept {
   std::shared_ptr<dns_lookup_async_data> *lifetime_ptr =
       reinterpret_cast<std::shared_ptr<dns_lookup_async_data> *>(req->data);
 

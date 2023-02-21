@@ -213,7 +213,7 @@ static util::lock::spin_rw_lock g_global_service_lock;
 class opentelemetry_internal_log_handler : public opentelemetry::sdk::common::internal_log::LogHandler {
  public:
   void Handle(opentelemetry::sdk::common::internal_log::LogLevel level, const char *file, int line, const char *msg,
-              const opentelemetry::sdk::common::AttributeMap &attributes) noexcept override {
+              const opentelemetry::sdk::common::AttributeMap &) noexcept override {
     util::log::log_wrapper::caller_info_t caller;
     caller.file_path = file;
     caller.func_name = nullptr;

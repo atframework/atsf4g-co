@@ -61,7 +61,7 @@ player_cache::ptr_t player_cache::create(uint64_t user_id, uint32_t zone_id, con
   return ret;
 }
 
-rpc::result_code_type player_cache::create_init(rpc::context &, uint32_t version_type) {
+rpc::result_code_type player_cache::create_init(rpc::context &, uint32_t /*version_type*/) {
   data_version_ = 0;
   version_.assign("0");
 
@@ -168,7 +168,7 @@ int player_cache::dump(rpc::context &, PROJECT_NAMESPACE_ID::table_user &user, b
 
 void player_cache::send_all_syn_msg(rpc::context &) {}
 
-rpc::result_code_type player_cache::await_before_logout_tasks(rpc::context &ctx) { RPC_RETURN_CODE(0); }
+rpc::result_code_type player_cache::await_before_logout_tasks(rpc::context &) { RPC_RETURN_CODE(0); }
 
 void player_cache::set_session(rpc::context &ctx, std::shared_ptr<session> session_ptr) {
   std::shared_ptr<session> old_sess = session_.lock();
