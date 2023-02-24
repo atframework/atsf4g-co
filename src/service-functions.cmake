@@ -258,21 +258,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
                BUILD_RPATH_USE_ORIGIN YES
                PORJECT_PROTOCOL_DIR "${PROTOCOL_DIR}")
 
-  set(PROJECT_PROTOCL_SOURCE_OPTIONS ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
-  if(MSVC)
-    list(APPEND PROJECT_PROTOCL_SOURCE_OPTIONS /wd4100 /wd4127)
-  else()
-    list(
-      REMOVE_ITEM
-      PROJECT_PROTOCL_SOURCE_OPTIONS
-      -Wunused-but-set-variable
-      -Wshadow
-      -Wfloat-equal
-      -Wdelete-non-virtual-dtor
-      -Wsign-conversion
-      -Woverloaded-virtual)
-  endif()
-  target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_PROTOCL_SOURCE_OPTIONS})
+  target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PROTOCOL_SOURCE_COMPILE_OPTIONS})
   if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
     target_link_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
   endif()

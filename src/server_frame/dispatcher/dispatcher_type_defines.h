@@ -117,5 +117,4 @@ inline dispatcher_await_options dispatcher_make_default<dispatcher_await_options
 }
 
 class task_action_base;
-class actor_action_base;
 class dispatcher_implement;

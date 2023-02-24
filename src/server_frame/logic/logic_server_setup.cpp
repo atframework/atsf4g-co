@@ -1368,12 +1368,12 @@ void logic_server_common_module::update_remote_server_configure(const std::strin
   // TODO(owent): 服务器配置数据变化事件
 }
 
-void logic_server_common_module::insert_timer(uint64_t task_id, std::chrono::system_clock::duration timeout,
+void logic_server_common_module::insert_timer(uint64_t task_id, std::chrono::system_clock::duration timeout_conf,
                                               logic_server_timer &output) {
   output.task_id = task_id;
   output.message_type = reinterpret_cast<uintptr_t>(&task_timer_);
   output.sequence = ss_msg_dispatcher::me()->allocate_sequence();
-  output.timeout = util::time::time_utility::sys_now() + timeout;
+  output.timeout = util::time::time_utility::sys_now() + timeout_conf;
 
   task_timer_.push(output);
 }

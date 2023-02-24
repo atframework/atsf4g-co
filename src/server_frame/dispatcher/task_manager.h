@@ -35,8 +35,6 @@
  */
 class task_manager : public ::util::design_pattern::singleton<task_manager> {
  public:
-  using actor_action_ptr_t = std::shared_ptr<actor_action_base>;
-
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   struct start_error_transform {
     std::pair<int32_t, dispatcher_start_data_type *> operator()(copp::promise_status in) const noexcept;
@@ -259,16 +257,8 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
     virtual int operator()(task_type_trait::id_type &task_id, dispatcher_start_data_type ctor_param) = 0;
   };
 
-  struct actor_action_maker_base_t {
-    atframework::DispatcherOptions options;
-    explicit actor_action_maker_base_t(const atframework::DispatcherOptions *opt);
-    virtual ~actor_action_maker_base_t();
-    virtual actor_action_ptr_t operator()(dispatcher_start_data_type ctor_param) = 0;
-  };
-
   /// 协程任务创建器
   using task_action_creator_t = std::shared_ptr<task_action_maker_base_t>;
-  using actor_action_creator_t = std::shared_ptr<actor_action_maker_base_t>;
 
   template <typename TAction>
   struct task_action_maker_t : public task_action_maker_base_t {
@@ -280,14 +270,6 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
       } else {
         return task_manager::me()->create_task<TAction>(task_id, std::move(ctor_param));
       }
-    };
-  };
-
-  template <typename TAction>
-  struct actor_action_maker_t : public actor_action_maker_base_t {
-    explicit actor_action_maker_t(const atframework::DispatcherOptions *opt) : actor_action_maker_base_t(opt) {}
-    actor_action_ptr_t operator()(dispatcher_start_data_type ctor_param) override {
-      return task_manager::me()->create_actor<TAction>(std::move(ctor_param));
     };
   };
 
@@ -435,26 +417,6 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @return 0或错误码
    */
   int resume_task(task_type_trait::id_type task_id, dispatcher_resume_data_type &data);
-
-  /**
-   * @brief 创建Actor
-   * @note 所有的actor必须使用组合的方式执行，不允许使用协程RPC操作
-   * @param args 传入构造函数的参数
-   * @return 0或错误码
-   */
-  template <typename TActor, typename... TParams>
-  std::shared_ptr<TActor> create_actor(TParams &&...args) {
-    return std::make_shared<TActor>(std::forward<TParams>(args)...);
-  }
-
-  /**
-   * @brief 创建Actor构造器
-   * @return Actor构造器
-   */
-  template <typename TAction>
-  inline actor_action_creator_t make_actor_creator(const atframework::DispatcherOptions *opt) {
-    return std::make_shared<actor_action_maker_t<TAction>>(opt);
-  }
 
   /**
    * @brief tick，可能会触发任务过期

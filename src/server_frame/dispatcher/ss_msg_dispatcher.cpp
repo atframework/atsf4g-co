@@ -494,11 +494,11 @@ int32_t ss_msg_dispatcher::send_dns_lookup(gsl::string_view domain, uint64_t seq
   }
 
   async_data->start_timepoint = util::time::time_utility::get_sys_now();
-  time_t timeout = logic_config::me()->get_logic().dns().lookup_timeout().seconds();
-  if (timeout <= 0) {
-    timeout = 5;
+  time_t timeout_conf = logic_config::me()->get_logic().dns().lookup_timeout().seconds();
+  if (timeout_conf <= 0) {
+    timeout_conf = 5;
   }
-  async_data->timeout_timepoint = async_data->start_timepoint + timeout;
+  async_data->timeout_timepoint = async_data->start_timepoint + timeout_conf;
   async_data->domain = static_cast<std::string>(domain);
   async_data->task_id = task_id;
   async_data->rpc_type_address = get_dns_lookup_rpc_type();

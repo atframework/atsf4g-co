@@ -359,8 +359,8 @@ rpc::result_code_type transaction_participator_handle::lock(
     if (&resource_uuids != &transaction_ptr->lock_resource()) {
       bool need_add_lock_resource = from_empty;
       if (!need_add_lock_resource) {
-        for (auto& lock : transaction_ptr->lock_resource()) {
-          if (lock == resource_uuid) {
+        for (auto& lock_uuid : transaction_ptr->lock_resource()) {
+          if (lock_uuid == resource_uuid) {
             need_add_lock_resource = false;
             break;
           }

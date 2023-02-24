@@ -1,22 +1,30 @@
-//
-// Created by owt50 on 2016/9/26.
+// Copyright 2023 atframework
+// Created by owent on 2016/9/26.
 //
 
-#include <typeinfo>
-
-#include "actor_action_base.h"
-#include "dispatcher_implement.h"
+#include "dispatcher/dispatcher_implement.h"
 
 #include <common/string_oprs.h>
 #include <log/log_wrapper.h>
 
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
+#include <rpc/rpc_utils.h>
 #include <utility/protobuf_mini_dumper.h>
 
 #if defined(__GLIBCXX__) || defined(_LIBCOPP_ABI_VERSION)
 #  include <cxxabi.h>
 #endif
+
+#include <typeinfo>
 
 int dispatcher_implement::init() { return 0; }
 
@@ -114,19 +122,6 @@ dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_messa
   int res = create_task(callback_data, ret.task_id);
   ret.options = callback_data.options;
 
-  if (res == PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND) {
-    task_manager::actor_action_ptr_t actor;
-    if (!actor_action_map_by_id_.empty()) {
-      actor = create_actor(callback_data);
-      ret.options = callback_data.options;
-      // actor 流程
-      if (actor) {
-        ret.result_code = actor->run(std::move(callback_data));
-        return ret;
-      }
-    }
-  }
-
   if (res < 0) {
     if (PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND == res) {
       FWLOGWARNING("{}(type={}) create task failed, task action or actor action not registered", name(),
@@ -206,36 +201,6 @@ int dispatcher_implement::create_task(dispatcher_start_data_type &start_data, ta
   return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
 }
 
-task_manager::actor_action_ptr_t dispatcher_implement::create_actor(dispatcher_start_data_type &start_data) {
-  msg_type_t msg_type_id = pick_msg_type_id(start_data.message);
-  const std::string &rpc_name = pick_rpc_name(start_data.message);
-  if (0 == msg_type_id && rpc_name.empty()) {
-    return nullptr;
-  }
-
-  if (actor_action_map_by_id_.empty() && actor_action_map_by_name_.empty()) {
-    return nullptr;
-  }
-
-  if (0 != msg_type_id) {
-    msg_actor_action_set_t::iterator iter = actor_action_map_by_id_.find(msg_type_id);
-    if (actor_action_map_by_id_.end() != iter && iter->second) {
-      start_data.options = &iter->second->options;
-      return (*iter->second)(start_data);
-    }
-  }
-
-  if (!rpc_name.empty()) {
-    rpc_actor_action_set_t::iterator iter = actor_action_map_by_name_.find(rpc_name);
-    if (actor_action_map_by_name_.end() != iter && iter->second) {
-      start_data.options = &iter->second->options;
-      return (*iter->second)(start_data);
-    }
-  }
-
-  return nullptr;
-}
-
 const atframework::DispatcherOptions *dispatcher_implement::get_options_by_message_type(msg_type_t) { return nullptr; }
 
 void dispatcher_implement::push_filter_to_front(msg_filter_handle_t fn) { msg_filter_list_.push_front(fn); }
@@ -280,17 +245,6 @@ int dispatcher_implement::_register_action(msg_type_t msg_type, task_manager::ta
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-int dispatcher_implement::_register_action(msg_type_t msg_type, task_manager::actor_action_creator_t action) {
-  msg_actor_action_set_t::iterator iter = actor_action_map_by_id_.find(msg_type);
-  if (actor_action_map_by_id_.end() != iter) {
-    FWLOGERROR("{} try to register more than one actor actions to type {}.", name(), msg_type);
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
-  }
-
-  actor_action_map_by_id_[msg_type] = action;
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
-}
-
 int dispatcher_implement::_register_action(const std::string &rpc_full_name,
                                            task_manager::task_action_creator_t action) {
   rpc_task_action_set_t::iterator iter = task_action_map_by_name_.find(rpc_full_name);
@@ -300,17 +254,5 @@ int dispatcher_implement::_register_action(const std::string &rpc_full_name,
   }
 
   task_action_map_by_name_[rpc_full_name] = action;
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
-}
-
-int dispatcher_implement::_register_action(const std::string &rpc_full_name,
-                                           task_manager::actor_action_creator_t action) {
-  rpc_actor_action_set_t::iterator iter = actor_action_map_by_name_.find(rpc_full_name);
-  if (actor_action_map_by_name_.end() != iter) {
-    FWLOGERROR("{} try to register more than one actor actions to rpc {}.", name(), rpc_full_name);
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
-  }
-
-  actor_action_map_by_name_[rpc_full_name] = action;
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }

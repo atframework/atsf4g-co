@@ -132,14 +132,6 @@ task_manager::task_action_maker_base_t::task_action_maker_base_t(const atframewo
 
 task_manager::task_action_maker_base_t::~task_action_maker_base_t() {}
 
-task_manager::actor_action_maker_base_t::actor_action_maker_base_t(const atframework::DispatcherOptions *opt) {
-  if (nullptr != opt) {
-    options.CopyFrom(*opt);
-  }
-}
-
-task_manager::actor_action_maker_base_t::~actor_action_maker_base_t() {}
-
 task_manager::task_manager()
     : stat_interval_(60), stat_last_checkpoint_(0), conf_busy_count_(0), conf_busy_warn_count_(0) {
   g_task_manager_metrics_data.need_setup.store(true, std::memory_order_release);

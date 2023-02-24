@@ -34,6 +34,7 @@ if(COMPILER_STRICT_RECOMMEND_EXTRA_CFLAGS)
 endif()
 if(MSVC)
   list(REMOVE_ITEM PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS /wd4100 /wd4127)
+  list(APPEND PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS /we6001 /we6244 /we6246)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
   list(REMOVE_ITEM PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS -Wunused-but-set-variable)
 endif()
@@ -93,7 +94,23 @@ if(PROJECT_ENABLE_COMPRESS_DEBUG_INFORMATION AND CMAKE_CXX_COMPILER_ID MATCHES "
     if(PROJECT_LINKER_CHECK_COMPRESS_DEBUG_SECTIONS_ZLIB)
       list(APPEND PROJECT_COMMON_PRIVATE_LINK_OPTIONS "-Wl,--compress-debug-sections=zlib")
     endif()
+
   endif()
+endif()
+
+set(PROJECT_COMMON_PROTOCOL_SOURCE_COMPILE_OPTIONS ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
+if(MSVC)
+  list(APPEND PROJECT_COMMON_PROTOCOL_SOURCE_COMPILE_OPTIONS /wd4100 /wd4127)
+else()
+  list(
+    REMOVE_ITEM
+    PROJECT_COMMON_PROTOCOL_SOURCE_COMPILE_OPTIONS
+    -Wunused-but-set-variable
+    -Wshadow
+    -Wfloat-equal
+    -Wdelete-non-virtual-dtor
+    -Wsign-conversion
+    -Woverloaded-virtual)
 endif()
 
 # Try to use static libs for gcc

@@ -45,9 +45,7 @@ class dispatcher_implement : public ::atapp::module_impl {
   using msg_raw_t = dispatcher_raw_message;
   using msg_type_t = uint32_t;
   using msg_task_action_set_t = std::unordered_map<msg_type_t, task_manager::task_action_creator_t>;
-  using msg_actor_action_set_t = std::unordered_map<msg_type_t, task_manager::actor_action_creator_t>;
   using rpc_task_action_set_t = std::unordered_map<std::string, task_manager::task_action_creator_t>;
-  using rpc_actor_action_set_t = std::unordered_map<std::string, task_manager::actor_action_creator_t>;
   using rpc_service_set_t =
       std::unordered_map<std::string, const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::ServiceDescriptor *>;
   using rpc_method_set_t =
@@ -175,13 +173,6 @@ class dispatcher_implement : public ::atapp::module_impl {
   virtual int create_task(dispatcher_start_data_type &start_data, task_type_trait::id_type &task_id);
 
   /**
-   * @brief 创建Actor
-   * @param raw_msg 消息抽象结构
-   * @return 返回错误码或0
-   */
-  virtual task_manager::actor_action_ptr_t create_actor(dispatcher_start_data_type &start_data);
-
-  /**
    * @brief 根据类型ID获取action或actor选项
    * @param raw_msg 消息抽象结构
    * @return 返回action或actor选项或NULL
@@ -243,60 +234,6 @@ class dispatcher_implement : public ::atapp::module_impl {
   }
 
   /**
-   * @brief 注册Action
-   * @param msg_type 消息类型ID
-   * @return 或错误码
-   */
-  template <typename TAction>
-  inline int register_actor(msg_type_t msg_type) {
-    const atframework::DispatcherOptions *options = get_options_by_message_type(msg_type);
-    return _register_action(msg_type, task_manager::me()->make_actor_creator<TAction>(options));
-  }
-
-  /**
-   * @brief 注册Action
-   * @param rpc_full_name 注册的RPC完整名称
-   * @return 或错误码
-   */
-  template <typename TAction>
-  int register_actor(const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::ServiceDescriptor *service_desc,
-                     const std::string &rpc_name) {
-    if (nullptr == service_desc) {
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
-    }
-    registered_service_[service_desc->full_name()] = service_desc;
-
-    std::string::size_type final_segment = rpc_name.find_last_of('.');
-    std::string rpc_short_name;
-    if (std::string::npos == final_segment) {
-      rpc_short_name = rpc_name;
-    } else {
-      rpc_short_name = rpc_name.substr(final_segment + 1);
-    }
-    const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::MethodDescriptor *method =
-        service_desc->FindMethodByName(rpc_short_name);
-    if (nullptr == method) {
-      FWLOGERROR("{} try to register rpc actor {} for service {} failed, not found", name(), rpc_name,
-                 service_desc->full_name());
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
-    }
-    registered_method_[method->full_name()] = method;
-
-    if (method->full_name() != rpc_name) {
-      FWLOGERROR("{} try to register rpc action {} for service {} failed, the real full name is {}", name(), rpc_name,
-                 service_desc->full_name(), method->full_name());
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
-    }
-
-    const atframework::DispatcherOptions *options = nullptr;
-    if (method->options().HasExtension(atframework::rpc_options)) {
-      options = &method->options().GetExtension(atframework::rpc_options);
-    }
-
-    return _register_action(method->full_name(), task_manager::me()->make_actor_creator<TAction>(options));
-  }
-
-  /**
    * @brief 添加前置过滤器
    * @param fn 函数或仿函数
    * @note 被添加的过滤器会先执行
@@ -335,15 +272,11 @@ class dispatcher_implement : public ::atapp::module_impl {
 
  private:
   int _register_action(msg_type_t msg_type, task_manager::task_action_creator_t action);
-  int _register_action(msg_type_t msg_type, task_manager::actor_action_creator_t action);
   int _register_action(const std::string &rpc_full_name, task_manager::task_action_creator_t action);
-  int _register_action(const std::string &rpc_full_name, task_manager::actor_action_creator_t action);
 
  private:
   msg_task_action_set_t task_action_map_by_id_;
-  msg_actor_action_set_t actor_action_map_by_id_;
   rpc_task_action_set_t task_action_map_by_name_;
-  rpc_actor_action_set_t actor_action_map_by_name_;
   rpc_service_set_t registered_service_;
   rpc_method_set_t registered_method_;
 
@@ -404,25 +337,11 @@ TMsg *dispatcher_implement::get_protobuf_msg(msg_raw_t &raw_msg, uintptr_t check
     ret = dispatcher::me()->register_action<act>(proto); \
   }
 
-#define REG_ACTOR_MSG_HANDLE(dispatcher, ret, act, proto) \
-  if (ret < 0) {                                          \
-    dispatcher::me()->register_actor<act>(proto);         \
-  } else {                                                \
-    ret = dispatcher::me()->register_actor<act>(proto);   \
-  }
-
 #define REG_TASK_RPC_HANDLE(dispatcher, ret, act, service_desc, rpc_name) \
   if (ret < 0) {                                                          \
     dispatcher::me()->register_action<act>(service_desc, rpc_name);       \
   } else {                                                                \
     ret = dispatcher::me()->register_action<act>(service_desc, rpc_name); \
-  }
-
-#define REG_ACTOR_RPC_HANDLE(dispatcher, ret, act, service_desc, rpc_name) \
-  if (ret < 0) {                                                           \
-    dispatcher::me()->register_actor<act>(service_desc, rpc_name);         \
-  } else {                                                                 \
-    ret = dispatcher::me()->register_actor<act>(service_desc, rpc_name);   \
   }
 
 #endif  // ATF4G_CO_DISPATCHER_IMPLEMENT_H
