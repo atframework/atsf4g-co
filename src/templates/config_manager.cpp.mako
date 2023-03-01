@@ -48,6 +48,72 @@ int e = errno
 
 #include "lock/lock_holder.h"
 
+#if defined(_REENTRANT)
+#  define EXCEL_CONFIG_TLS_USE_PTHREAD 1
+#elif defined(THREAD_TLS_ENABLED) && THREAD_TLS_ENABLED
+#  define EXCEL_CONFIG_TLS_USE_THREAD_LOCAL 1
+#  if defined(THREAD_TLS)
+#    define EXCEL_CONFIG_TLS_THREAD_LOCAL THREAD_TLS
+#  endif
+#else
+#  define EXCEL_CONFIG_TLS_USE_PTHREAD 1
+#endif
+
+// try to find TLS support
+#if !defined(EXCEL_CONFIG_TLS_THREAD_LOCAL)
+/**
+  * import cross-platform thread local support
+  * @see http://en.wikipedia.org/wiki/Thread-local_storage#C.2B.2B
+  * @note Do not support C++ Builder Compiler
+  */
+// IOS don't support tls
+#  if defined(__APPLE__)
+#    include <TargetConditionals.h>
+
+#    if TARGET_OS_IPHONE || TARGET_OS_EMBEDDED || TARGET_IPHONE_SIMULATOR
+#      define EXCEL_CONFIG_TLS_THREAD_LOCAL
+#    endif
+#  endif
+
+// android don't support tls
+#  if !defined(EXCEL_CONFIG_TLS_THREAD_LOCAL) && defined(__ANDROID__)
+#    define EXCEL_CONFIG_TLS_THREAD_LOCAL
+#  endif
+
+#  if !defined(EXCEL_CONFIG_TLS_THREAD_LOCAL) && defined(__clang__)
+#    if __has_feature(cxx_thread_local)
+#      define EXCEL_CONFIG_TLS_THREAD_LOCAL thread_local
+#    elif __has_feature(c_thread_local) || __has_extension(c_thread_local)
+#      define EXCEL_CONFIG_TLS_THREAD_LOCAL _Thread_local
+#    else
+#      define EXCEL_CONFIG_TLS_THREAD_LOCAL __thread
+#    endif
+#  endif
+
+#  if !defined(EXCEL_CONFIG_TLS_THREAD_LOCAL) && defined(__cplusplus) && __cplusplus >= 201103L
+#    define EXCEL_CONFIG_TLS_THREAD_LOCAL thread_local
+#  endif
+
+// MSVC
+#  if !defined(EXCEL_CONFIG_TLS_THREAD_LOCAL) && defined(_MSC_VER)
+#    if _MSC_VER >= 1900
+#      define EXCEL_CONFIG_TLS_THREAD_LOCAL thread_local
+#    elif _MSC_VER >= 1300
+#      define EXCEL_CONFIG_TLS_THREAD_LOCAL __declspec(thread)
+#    else
+#      define EXCEL_CONFIG_TLS_THREAD_LOCAL __thread
+#    endif
+
+#  elif !defined(EXCEL_CONFIG_TLS_THREAD_LOCAL) && (defined(__GNUC__) || defined(__clang__))
+// clang & gcc
+#    define EXCEL_CONFIG_TLS_THREAD_LOCAL __thread
+#  endif
+#endif
+
+#if !defined(EXCEL_CONFIG_TLS_THREAD_LOCAL) && !defined(EXCEL_CONFIG_TLS_USE_PTHREAD)
+#  define EXCEL_CONFIG_TLS_USE_PTHREAD 1
+#endif
+
 ${pb_loader.CppNamespaceBegin(global_package)}
 
 bool config_manager::is_destroyed_ = false;
@@ -102,12 +168,7 @@ struct thread_local_config_group_data {
   thread_local_config_group_data() : current_version(0) {}
 };
 
-#if defined(THREAD_TLS_ENABLED) && THREAD_TLS_ENABLED
-static thread_local_config_group_data& get_tls_config_group() {
-  static THREAD_TLS thread_local_config_group_data ret;
-  return ret;
-}
-#else
+#if defined(EXCEL_CONFIG_TLS_USE_PTHREAD) && EXCEL_CONFIG_TLS_USE_PTHREAD
 #  include <pthread.h>
 static pthread_once_t gt_thread_local_config_group_data_once = PTHREAD_ONCE_INIT;
 static pthread_key_t gt_thread_local_config_group_data_key;
@@ -134,7 +195,11 @@ static thread_local_config_group_data& get_tls_config_group() {
 
   return *ret;
 }
-
+#else
+static thread_local_config_group_data& get_tls_config_group() {
+  static THREAD_TLS thread_local_config_group_data ret;
+  return ret;
+}
 #endif
 }  // namespace details
 

@@ -8,20 +8,15 @@
 #  define ATBUS_MACRO_MSG_LIMIT 262144
 #endif
 
-#if !(defined(THREAD_TLS_USE_PTHREAD) && THREAD_TLS_USE_PTHREAD) && defined(THREAD_TLS_ENABLED) && THREAD_TLS_ENABLED
-namespace atframe {
-namespace gateway {
-namespace detail {
-static char *atgateway_get_msg_buffer(::atframe::gateway::proto_base::tls_buffer_t::type t) {
-  static THREAD_TLS char ret[::atframe::gateway::proto_base::tls_buffer_t::EN_TBT_MAX]
-                            [ATBUS_MACRO_MSG_LIMIT + 2 * sizeof(size_t)];  // in case of padding
-  return ret[t];
-}
-}  // namespace detail
-}  // namespace gateway
-}  // namespace atframe
+#if defined(_REENTRANT)
+#  define ATFRAMEWORK_ATGATEWAY_TLS_BUFFER_USE_PTHREAD 1
+#elif defined(THREAD_TLS_ENABLED) && THREAD_TLS_ENABLED
+#  define ATFRAMEWORK_ATGATEWAY_TLS_BUFFER_USE_THREAD_LOCAL 1
 #else
+#  define ATFRAMEWORK_ATGATEWAY_TLS_BUFFER_USE_PTHREAD 1
+#endif
 
+#if defined(ATFRAMEWORK_ATGATEWAY_TLS_BUFFER_USE_PTHREAD) && ATFRAMEWORK_ATGATEWAY_TLS_BUFFER_USE_PTHREAD
 #  include <pthread.h>
 namespace atframe {
 namespace gateway {
@@ -54,7 +49,18 @@ static char *atgateway_get_msg_buffer(::atframe::gateway::proto_base::tls_buffer
 }  // namespace detail
 }  // namespace gateway
 }  // namespace atframe
-
+#else
+namespace atframe {
+namespace gateway {
+namespace detail {
+static char *atgateway_get_msg_buffer(::atframe::gateway::proto_base::tls_buffer_t::type t) {
+  static THREAD_TLS char ret[::atframe::gateway::proto_base::tls_buffer_t::EN_TBT_MAX]
+                            [ATBUS_MACRO_MSG_LIMIT + 2 * sizeof(size_t)];  // in case of padding
+  return ret[t];
+}
+}  // namespace detail
+}  // namespace gateway
+}  // namespace atframe
 #endif
 
 namespace atframe {

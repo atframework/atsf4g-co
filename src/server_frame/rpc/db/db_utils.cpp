@@ -37,24 +37,19 @@
 #  undef GetMessage
 #endif
 
+#if defined(_REENTRANT)
+#  define ATFRAMEWORK_RPC_DB_UTILS_TLS_BUFFER_USE_PTHREAD 1
+#elif defined(THREAD_TLS_ENABLED) && THREAD_TLS_ENABLED
+#  define ATFRAMEWORK_RPC_DB_UTILS_TLS_BUFFER_USE_THREAD_LOCAL 1
+#else
+#  define ATFRAMEWORK_RPC_DB_UTILS_TLS_BUFFER_USE_PTHREAD 1
+#endif
+
 #ifndef PROJECT_RPC_DB_BUFFER_LENGTH
 #  define PROJECT_RPC_DB_BUFFER_LENGTH 131072
 #endif
 
-#if defined(THREAD_TLS_ENABLED) && 1 == THREAD_TLS_ENABLED
-namespace rpc {
-namespace db {
-namespace detail {
-char *get_pack_tls_buffer() {
-  static THREAD_TLS char ret[PROJECT_RPC_DB_BUFFER_LENGTH];
-  return ret;
-}
-}  // namespace detail
-}  // namespace db
-}  // namespace rpc
-
-#else
-
+#if defined(ATFRAMEWORK_RPC_DB_UTILS_TLS_BUFFER_USE_PTHREAD) && ATFRAMEWORK_RPC_DB_UTILS_TLS_BUFFER_USE_PTHREAD
 #  include <pthread.h>
 namespace rpc {
 namespace db {
@@ -83,7 +78,17 @@ char *get_pack_tls_buffer() {
 }  // namespace detail
 }  // namespace db
 }  // namespace rpc
-
+#else
+namespace rpc {
+namespace db {
+namespace detail {
+char *get_pack_tls_buffer() {
+  static THREAD_TLS char ret[PROJECT_RPC_DB_BUFFER_LENGTH];
+  return ret;
+}
+}  // namespace detail
+}  // namespace db
+}  // namespace rpc
 #endif
 
 #define RPC_DB_VERSION_NAME "__version"
