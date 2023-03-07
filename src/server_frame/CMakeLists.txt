@@ -41,6 +41,11 @@ source_group_by_dir(SRC_LIST)
 list(APPEND PROJECT_SERVER_FRAME_PUBLIC_LINK_NAMES ${ATFRAMEWORK_SERVICE_GATEWAY_LINK_NAME}
      ${ATFRAMEWORK_SERVICE_COMPONENT_LINK_NAME})
 
+find_package(Threads)
+if(TARGET Threads::Threads)
+  list(APPEND PROJECT_SERVER_FRAME_PUBLIC_LINK_NAMES Threads::Threads)
+endif()
+
 if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows|MinGW|WindowsStore" AND (BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY
                                                                   ))
   add_library(${PROJECT_SERVER_FRAME_LIB_LINK} SHARED ${SRC_LIST})
