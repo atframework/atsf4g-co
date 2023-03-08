@@ -140,13 +140,14 @@ if (MINGW)
     list(APPEND THIRD_PARTY_CRYPT_LINK_NAME gdi32)
 endif()
 
+set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 find_package(Threads)
-if (CMAKE_USE_PTHREADS_INIT)
-    set(THREAD_TLS_USE_PTHREAD 1)
-    if(TARGET Threads::Threads)
-      list(APPEND LIB_NAME_PUBLIC_LINK_NAMES Threads::Threads)
-    endif()
-endif ()
+if(CMAKE_USE_PTHREADS_INIT OR ATFRAMEWORK_CMAKE_TOOLSET_TEST_FLAG_PTHREAD)
+  set(THREAD_TLS_USE_PTHREAD 1)
+endif()
+if(TARGET Threads::Threads)
+  list(APPEND LIB_NAME_PUBLIC_LINK_NAMES Threads::Threads)
+endif()
 
 configure_file(
     "${CMAKE_CURRENT_LIST_DIR}/src/config/atframe_utils_build_feature.h.in"
