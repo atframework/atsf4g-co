@@ -964,7 +964,7 @@ void logic_server_common_module::tick_stats() {
           return;                                                                                                  \
         }                                                                                                          \
                                                                                                                    \
-        auto value = stats->VAR_LOADER;                                                                            \
+        auto value = VAR_LOADER;                                                                                   \
         LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER_INT64(result, value)                                             \
         else if (opentelemetry::nostd::holds_alternative<                                                          \
                      opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) { \
@@ -982,42 +982,44 @@ void logic_server_common_module::tick_stats() {
 void logic_server_common_module::setup_metrics_tick() {
 #if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
   LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.tick", "", "us", mutable_metrics_observable_gauge_int64,
-                                            collect_max_tick_interval_us.load(std::memory_order_acquire));
+                                            stats->collect_max_tick_interval_us.load(std::memory_order_acquire));
 #else
   LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.tick", "", "us", mutable_metrics_observable_gauge_long,
-                                            collect_max_tick_interval_us.load(std::memory_order_acquire));
+                                            stats->collect_max_tick_interval_us.load(std::memory_order_acquire));
 #endif
 }
 
 void logic_server_common_module::setup_metrics_cpu_sys() {
-  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.rusage.cpu.sys", "", "%", mutable_metrics_observable_gauge_double,
-                                            collect_cpu_sys.load(std::memory_order_acquire) / 10000.0);
+  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER(
+      "service.rusage.cpu.sys", "", "%", mutable_metrics_observable_gauge_double,
+      static_cast<double>(stats->collect_cpu_sys.load(std::memory_order_acquire)) / 10000.0);
 }
 
 void logic_server_common_module::setup_metrics_cpu_user() {
-  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.rusage.cpu.user", "", "%", mutable_metrics_observable_gauge_double,
-                                            collect_cpu_user.load(std::memory_order_acquire) / 10000.0);
+  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER(
+      "service.rusage.cpu.user", "", "%", mutable_metrics_observable_gauge_double,
+      static_cast<double>(stats->collect_cpu_user.load(std::memory_order_acquire)) / 10000.0);
 }
 
 void logic_server_common_module::setup_metrics_memory_maxrss() {
 #if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
   LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.rusage.memory.maxrss", "", "",
                                             mutable_metrics_observable_gauge_int64,
-                                            collect_memory_max_rss.load(std::memory_order_acquire));
+                                            stats->collect_memory_max_rss.load(std::memory_order_acquire));
 #else
   LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.rusage.memory.maxrss", "", "",
                                             mutable_metrics_observable_gauge_long,
-                                            collect_memory_max_rss.load(std::memory_order_acquire));
+                                            stats->collect_memory_max_rss.load(std::memory_order_acquire));
 #endif
 }
 
 void logic_server_common_module::setup_metrics_memory_rss() {
 #if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
   LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.rusage.memory.rss", "", "", mutable_metrics_observable_gauge_int64,
-                                            collect_memory_rss.load(std::memory_order_acquire));
+                                            stats->collect_memory_rss.load(std::memory_order_acquire));
 #else
   LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.rusage.memory.rss", "", "", mutable_metrics_observable_gauge_long,
-                                            collect_memory_rss.load(std::memory_order_acquire));
+                                            stats->collect_memory_rss.load(std::memory_order_acquire));
 #endif
 }
 

@@ -12,23 +12,24 @@ package hello;
 
 // 登录用户终端信息
 message DClientDeviceInfo {
-  uint32 system_id = 1;         // EnSystemID
-  string client_version = 2;    // 客户端版本号
-  string system_software = 3;   // 移动终端操作系统版本
-  string system_hardware = 4;   // 移动终端机型
-  string telecom_operator = 5;  // 运营商
-  string network = 6;           // WIFI/3G/2G
-  uint32 reg_channel = 7;       // 注册渠道
-  uint32 screen_width = 8;      // 显示屏宽度
-  uint32 screen_hight = 9;      // ScreenHight
-  float density = 10;           // 像素密度
-  string cpu_info = 11;         // 类型#核数#频率
-  uint32 memory = 12;           // 内存信息单位M
-  string glrender = 13;         // opengl render信息
-  string glversion = 14;        // opengl版本信息
-  string channel = 15;          // 登录渠道
-  string device_id = 16;        // 设备ID
-  uint32 version = 17;          // 客户端数字版本号
+  uint32 system_id = 1;                // EnSystemID
+  string client_version = 2;           // 客户端版本号
+  string system_software = 3;          // 移动终端操作系统版本
+  string system_hardware = 4;          // 移动终端机型
+  string telecom_operator = 5;         // 运营商
+  string network = 6;                  // WIFI/3G/2G
+  uint32 reg_channel = 7;              // 注册渠道
+  uint32 screen_width = 8;             // 显示屏宽度
+  uint32 screen_hight = 9;             // ScreenHight
+  float density = 10;                  // 像素密度
+  string cpu_info = 11;                // 类型#核数#频率
+  uint32 memory = 12;                  // 内存信息单位M
+  string glrender = 13;                // opengl render信息
+  string glversion = 14;               // opengl版本信息
+  string channel = 15;                 // 登录渠道
+  string device_id = 16;               // 设备ID
+  uint32 version = 17;                 // 客户端数字版本号
+  int32 well_known_simulator_id = 18;  // 模拟器ID
 }
 
 message DAppleGameCenter {

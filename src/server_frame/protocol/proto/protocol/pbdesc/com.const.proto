@@ -73,6 +73,12 @@ enum EnSystemID {
   /*EN_SYS_WINDOWS  = 3;*/
 }
 
+// 模拟器ID
+enum EnWellKnownSimulatorID {
+  EN_WKS_ID_NONE = 0;               // 未使用模拟器
+  EN_WKS_ID_TX_GAME_ASSISTANT = 1;  // 腾讯手游助手
+}
+
 // update type
 enum EnUpdateType {
   EN_UPDATE_NONE = 0;              // no upgrade

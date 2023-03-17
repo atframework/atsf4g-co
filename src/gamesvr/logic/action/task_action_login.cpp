@@ -298,6 +298,10 @@ rpc::result_code_type task_action_login::replace_session(std::shared_ptr<player>
   }
   cur_sess->set_player(user);
 
+  if (get_request_body().has_client_info()) {
+    user->set_client_info(get_request_body().client_info());
+  }
+
   FWPLOGDEBUG(*user, "relogin curr data version: {}", user->get_version());
 
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);

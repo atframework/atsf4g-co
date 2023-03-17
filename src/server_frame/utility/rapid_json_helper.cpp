@@ -1,4 +1,4 @@
-﻿// Copyright 2021 atframework
+﻿// Copyright 2023 atframework
 //
 
 #if defined(_WIN32)
@@ -23,10 +23,12 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
+#include <common/string_oprs.h>
 #include <string/tquerystring.h>
 
 #include <assert.h>
 
+#include <utility>
 #include <vector>
 
 #if defined(GetMessage)
@@ -86,11 +88,29 @@ static void load_field_item(rapidjson::Value& parent, const ::google::protobuf::
         rapidjson::Value ls;
         ls.SetArray();
         for (int i = 0; i < len; ++i) {
-          rapidsjon_helper_append_to_list(ls, src.GetReflection()->GetRepeatedInt64(src, fds, i), doc);
+          int64_t int_val = src.GetReflection()->GetRepeatedInt64(src, fds, i);
+          if (options.convert_large_number_to_string && int_val > std::numeric_limits<int32_t>::max()) {
+            char str_val[24] = {0};
+            util::string::int2str(str_val, sizeof(str_val) - 1, int_val);
+            rapidjson::Value v;
+            v.SetString(str_val, static_cast<rapidjson::SizeType>(strlen(str_val)), doc.GetAllocator());
+            rapidsjon_helper_append_to_list(ls, std::move(v), doc);
+          } else {
+            rapidsjon_helper_append_to_list(ls, int_val, doc);
+          }
         }
         rapidsjon_helper_mutable_set_member(parent, fds->name().c_str(), std::move(ls), doc);
       } else {
-        rapidsjon_helper_mutable_set_member(parent, fds->name().c_str(), src.GetReflection()->GetInt64(src, fds), doc);
+        int64_t int_val = src.GetReflection()->GetInt64(src, fds);
+        if (options.convert_large_number_to_string && int_val > std::numeric_limits<int32_t>::max()) {
+          char str_val[24] = {0};
+          util::string::int2str(str_val, sizeof(str_val) - 1, int_val);
+          rapidjson::Value v;
+          v.SetString(str_val, static_cast<rapidjson::SizeType>(strlen(str_val)), doc.GetAllocator());
+          rapidsjon_helper_mutable_set_member(parent, fds->name().c_str(), std::move(v), doc);
+        } else {
+          rapidsjon_helper_mutable_set_member(parent, fds->name().c_str(), int_val, doc);
+        }
       }
       break;
     };
@@ -100,11 +120,31 @@ static void load_field_item(rapidjson::Value& parent, const ::google::protobuf::
         rapidjson::Value ls;
         ls.SetArray();
         for (int i = 0; i < len; ++i) {
-          rapidsjon_helper_append_to_list(ls, src.GetReflection()->GetRepeatedUInt32(src, fds, i), doc);
+          uint32_t int_val = src.GetReflection()->GetRepeatedUInt32(src, fds, i);
+          if (options.convert_large_number_to_string &&
+              int_val > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
+            char str_val[24] = {0};
+            util::string::int2str(str_val, sizeof(str_val) - 1, int_val);
+            rapidjson::Value v;
+            v.SetString(str_val, static_cast<rapidjson::SizeType>(strlen(str_val)), doc.GetAllocator());
+            rapidsjon_helper_append_to_list(ls, std::move(v), doc);
+          } else {
+            rapidsjon_helper_append_to_list(ls, int_val, doc);
+          }
         }
         rapidsjon_helper_mutable_set_member(parent, fds->name().c_str(), std::move(ls), doc);
       } else {
-        rapidsjon_helper_mutable_set_member(parent, fds->name().c_str(), src.GetReflection()->GetUInt32(src, fds), doc);
+        uint32_t int_val = src.GetReflection()->GetUInt32(src, fds);
+        if (options.convert_large_number_to_string &&
+            int_val > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
+          char str_val[24] = {0};
+          util::string::int2str(str_val, sizeof(str_val) - 1, int_val);
+          rapidjson::Value v;
+          v.SetString(str_val, static_cast<rapidjson::SizeType>(strlen(str_val)), doc.GetAllocator());
+          rapidsjon_helper_mutable_set_member(parent, fds->name().c_str(), std::move(v), doc);
+        } else {
+          rapidsjon_helper_mutable_set_member(parent, fds->name().c_str(), int_val, doc);
+        }
       }
       break;
     };
@@ -114,11 +154,31 @@ static void load_field_item(rapidjson::Value& parent, const ::google::protobuf::
         rapidjson::Value ls;
         ls.SetArray();
         for (int i = 0; i < len; ++i) {
-          rapidsjon_helper_append_to_list(ls, src.GetReflection()->GetRepeatedUInt64(src, fds, i), doc);
+          uint64_t int_val = src.GetReflection()->GetRepeatedUInt64(src, fds, i);
+          if (options.convert_large_number_to_string &&
+              int_val > static_cast<uint64_t>(std::numeric_limits<int32_t>::max())) {
+            char str_val[24] = {0};
+            util::string::int2str(str_val, sizeof(str_val) - 1, int_val);
+            rapidjson::Value v;
+            v.SetString(str_val, static_cast<rapidjson::SizeType>(strlen(str_val)), doc.GetAllocator());
+            rapidsjon_helper_append_to_list(ls, std::move(v), doc);
+          } else {
+            rapidsjon_helper_append_to_list(ls, int_val, doc);
+          }
         }
         rapidsjon_helper_mutable_set_member(parent, fds->name().c_str(), std::move(ls), doc);
       } else {
-        rapidsjon_helper_mutable_set_member(parent, fds->name().c_str(), src.GetReflection()->GetUInt64(src, fds), doc);
+        uint64_t int_val = src.GetReflection()->GetUInt64(src, fds);
+        if (options.convert_large_number_to_string &&
+            int_val > static_cast<uint64_t>(std::numeric_limits<int32_t>::max())) {
+          char str_val[24] = {0};
+          util::string::int2str(str_val, sizeof(str_val) - 1, int_val);
+          rapidjson::Value v;
+          v.SetString(str_val, static_cast<rapidjson::SizeType>(strlen(str_val)), doc.GetAllocator());
+          rapidsjon_helper_mutable_set_member(parent, fds->name().c_str(), std::move(v), doc);
+        } else {
+          rapidsjon_helper_mutable_set_member(parent, fds->name().c_str(), int_val, doc);
+        }
       }
       break;
     };
@@ -255,7 +315,12 @@ static void dump_pick_field(const rapidjson::Value& val, ::google::protobuf::Mes
 
   switch (fds->cpp_type()) {
     case google::protobuf::FieldDescriptor::CPPTYPE_INT32: {
-      int32_t jval = val.IsInt() ? val.GetInt() : 0;
+      int32_t jval = 0;
+      if (val.IsInt()) {
+        jval = val.GetInt();
+      } else if (val.IsString() && options.convert_number_from_string) {
+        util::string::str2int(jval, val.GetString());
+      }
       if (fds->is_repeated()) {
         dst.GetReflection()->AddInt32(&dst, fds, jval);
       } else {
@@ -264,7 +329,12 @@ static void dump_pick_field(const rapidjson::Value& val, ::google::protobuf::Mes
       break;
     };
     case google::protobuf::FieldDescriptor::CPPTYPE_INT64: {
-      int64_t jval = val.IsInt64() ? val.GetInt64() : 0;
+      int64_t jval = 0;
+      if (val.IsInt64()) {
+        jval = val.GetInt64();
+      } else if (val.IsString() && options.convert_number_from_string) {
+        util::string::str2int(jval, val.GetString());
+      }
       if (fds->is_repeated()) {
         dst.GetReflection()->AddInt64(&dst, fds, jval);
       } else {
@@ -273,7 +343,12 @@ static void dump_pick_field(const rapidjson::Value& val, ::google::protobuf::Mes
       break;
     };
     case google::protobuf::FieldDescriptor::CPPTYPE_UINT32: {
-      uint32_t jval = val.IsUint() ? val.GetUint() : 0;
+      uint32_t jval = 0;
+      if (val.IsUint()) {
+        jval = val.GetUint();
+      } else if (val.IsString() && options.convert_number_from_string) {
+        util::string::str2int(jval, val.GetString());
+      }
       if (fds->is_repeated()) {
         dst.GetReflection()->AddUInt32(&dst, fds, jval);
       } else {
@@ -282,7 +357,12 @@ static void dump_pick_field(const rapidjson::Value& val, ::google::protobuf::Mes
       break;
     };
     case google::protobuf::FieldDescriptor::CPPTYPE_UINT64: {
-      uint64_t jval = val.IsUint64() ? val.GetUint64() : 0;
+      uint64_t jval = 0;
+      if (val.IsUint64()) {
+        jval = val.GetUint64();
+      } else if (val.IsString() && options.convert_number_from_string) {
+        util::string::str2int(jval, val.GetString());
+      }
       if (fds->is_repeated()) {
         dst.GetReflection()->AddUInt64(&dst, fds, jval);
       } else {
@@ -414,7 +494,7 @@ static void dump_field_item(const rapidjson::Value& src, ::google::protobuf::Mes
 
 std::string rapidsjon_helper_stringify(const rapidjson::Document& doc, size_t more_reserve_size) {
   // Stringify the DOM
-  rapidjson::StringBuffer buffer;
+  rapidjson::StringBuffer buffer{nullptr, 64 * 1024};
   rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
   doc.Accept(writer);
 
@@ -439,7 +519,7 @@ bool rapidsjon_helper_unstringify(rapidjson::Document& doc, const std::string& j
   return true;
 }
 
-const char* rapidsjon_helper_get_type_name(rapidjson::Type t) {
+gsl::string_view rapidsjon_helper_get_type_name(rapidjson::Type t) {
   switch (t) {
     case rapidjson::kNullType:
       return "null";
@@ -478,60 +558,46 @@ bool rapidsjon_helper_parse(::google::protobuf::Message& dst, const std::string&
   return true;
 }
 
-void rapidsjon_helper_mutable_set_member(rapidjson::Value& parent, const char* key, rapidjson::Value&& val,
+void rapidsjon_helper_mutable_set_member(rapidjson::Value& parent, gsl::string_view key, rapidjson::Value&& val,
                                          rapidjson::Document& doc) {
   if (!parent.IsObject()) {
     parent.SetObject();
   }
 
-  rapidjson::Value::MemberIterator iter = parent.FindMember(key);
+  rapidjson::Value::MemberIterator iter = parent.FindMember(key.data());
   if (iter != parent.MemberEnd()) {
     iter->value.Swap(val);
   } else {
     rapidjson::Value k;
     rapidjson::Value v;
-    k.SetString(key, doc.GetAllocator());
+    k.SetString(key.data(), static_cast<rapidjson::SizeType>(key.size()), doc.GetAllocator());
     v.Swap(val);
     parent.AddMember(k, v, doc.GetAllocator());
   }
 }
 
-void rapidsjon_helper_mutable_set_member(rapidjson::Value& parent, const char* key, const rapidjson::Value& val,
+void rapidsjon_helper_mutable_set_member(rapidjson::Value& parent, gsl::string_view key, const rapidjson::Value& val,
                                          rapidjson::Document& doc) {
   if (!parent.IsObject()) {
     parent.SetObject();
   }
 
-  rapidjson::Value::MemberIterator iter = parent.FindMember(key);
+  rapidjson::Value::MemberIterator iter = parent.FindMember(key.data());
   if (iter != parent.MemberEnd()) {
     iter->value.CopyFrom(val, doc.GetAllocator());
   } else {
     rapidjson::Value k;
     rapidjson::Value v;
-    k.SetString(key, doc.GetAllocator());
+    k.SetString(key.data(), static_cast<rapidjson::SizeType>(key.size()), doc.GetAllocator());
     v.CopyFrom(val, doc.GetAllocator());
     parent.AddMember(k, v, doc.GetAllocator());
   }
 }
 
-void rapidsjon_helper_mutable_set_member(rapidjson::Value& parent, const char* key, const std::string& val,
+void rapidsjon_helper_mutable_set_member(rapidjson::Value& parent, gsl::string_view key, gsl::string_view val,
                                          rapidjson::Document& doc) {
   rapidjson::Value v;
-  v.SetString(val.c_str(), static_cast<rapidjson::SizeType>(val.size()), doc.GetAllocator());
-  rapidsjon_helper_mutable_set_member(parent, key, std::move(v), doc);
-}
-
-void rapidsjon_helper_mutable_set_member(rapidjson::Value& parent, const char* key, std::string& val,
-                                         rapidjson::Document& doc) {
-  rapidjson::Value v;
-  v.SetString(val.c_str(), static_cast<rapidjson::SizeType>(val.size()), doc.GetAllocator());
-  rapidsjon_helper_mutable_set_member(parent, key, std::move(v), doc);
-}
-
-void rapidsjon_helper_mutable_set_member(rapidjson::Value& parent, const char* key, const char* val,
-                                         rapidjson::Document& doc) {
-  rapidjson::Value v;
-  v.SetString(val, doc.GetAllocator());
+  v.SetString(val.data(), static_cast<rapidjson::SizeType>(val.size()), doc.GetAllocator());
   rapidsjon_helper_mutable_set_member(parent, key, std::move(v), doc);
 }
 
@@ -547,9 +613,9 @@ void rapidsjon_helper_append_to_list(rapidjson::Value& list_parent, std::string&
   rapidsjon_helper_append_to_list(list_parent, std::move(v), doc);
 }
 
-void rapidsjon_helper_append_to_list(rapidjson::Value& list_parent, const char* val, rapidjson::Document& doc) {
+void rapidsjon_helper_append_to_list(rapidjson::Value& list_parent, gsl::string_view val, rapidjson::Document& doc) {
   rapidjson::Value v;
-  v.SetString(val, doc.GetAllocator());
+  v.SetString(val.data(), static_cast<rapidjson::SizeType>(val.size()), doc.GetAllocator());
   rapidsjon_helper_append_to_list(list_parent, std::move(v), doc);
 }
 
