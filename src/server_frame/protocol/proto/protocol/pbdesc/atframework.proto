@@ -47,12 +47,17 @@ message DispatcherOptions {
   bool allow_ignore_discovery = 310;                // RPC请求允许忽略服务发现
 }
 
+message JsonOptions {
+  string alias_key_name = 1;  // （反射）json key 别名
+}
+
 extend google.protobuf.MethodOptions {
   DispatcherOptions rpc_options = 3271;  // extension
 }
 
 extend google.protobuf.FieldOptions {
   DispatcherOptions dispatcher_options = 3271;  // 自定义配置
+  JsonOptions field_json_options = 3272;        // Json反射相关
 }
 
 message ServiceOptions {

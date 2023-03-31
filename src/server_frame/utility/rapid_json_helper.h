@@ -37,11 +37,17 @@ struct rapidsjon_helper_load_options {
   bool reserve_empty = false;
   bool convert_large_number_to_string = false;  // it's friendly to JSON.parse(...) in javascript
   rapidsjon_helper_string_mode::type string_mode = rapidsjon_helper_string_mode::RAW;
+
+  inline rapidsjon_helper_load_options()
+      : reserve_empty(false), convert_large_number_to_string(false), string_mode(rapidsjon_helper_string_mode::RAW) {}
 };
 
 struct rapidsjon_helper_dump_options {
   rapidsjon_helper_string_mode::type string_mode = rapidsjon_helper_string_mode::RAW;
   bool convert_number_from_string = false;  // it's friendly to JSON.parse(...) in javascript
+
+  inline rapidsjon_helper_dump_options()
+      : string_mode(rapidsjon_helper_string_mode::RAW), convert_number_from_string(false) {}
 };
 
 std::string rapidsjon_helper_stringify(const rapidjson::Document& doc, size_t more_reserve_size = 0);
