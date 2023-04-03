@@ -60,11 +60,11 @@ bool rapidsjon_helper_parse(::google::protobuf::Message& dst, const std::string&
                             const rapidsjon_helper_dump_options& options);
 
 void rapidsjon_helper_mutable_set_member(rapidjson::Value& parent, gsl::string_view key, rapidjson::Value&& val,
-                                         rapidjson::Document& doc);
+                                         rapidjson::Document& doc, bool overwrite = true);
 void rapidsjon_helper_mutable_set_member(rapidjson::Value& parent, gsl::string_view key, const rapidjson::Value& val,
-                                         rapidjson::Document& doc);
+                                         rapidjson::Document& doc, bool overwrite = true);
 void rapidsjon_helper_mutable_set_member(rapidjson::Value& parent, gsl::string_view key, gsl::string_view val,
-                                         rapidjson::Document& doc);
+                                         rapidjson::Document& doc, bool overwrite = true);
 
 template <class TVAL>
 void rapidsjon_helper_append_to_list(rapidjson::Value& list_parent, TVAL&& val, rapidjson::Document& doc);
@@ -90,14 +90,16 @@ void rapidsjon_helper_load_from(rapidjson::Value& dst, rapidjson::Document& doc,
 template <class TVAL, class = typename std::enable_if<
                           !std::is_convertible<typename std::decay<TVAL>::type, gsl::string_view>::value>::type>
 void rapidsjon_helper_mutable_set_member(rapidjson::Value& parent, gsl::string_view key, TVAL&& val,
-                                         rapidjson::Document& doc) {
+                                         rapidjson::Document& doc, bool overwrite = true) {
   if (!parent.IsObject()) {
     parent.SetObject();
   }
 
   rapidjson::Value::MemberIterator iter = parent.FindMember(key.data());
   if (iter != parent.MemberEnd()) {
-    iter->value.Set(std::forward<TVAL>(val), doc.GetAllocator());
+    if (overwrite) {
+      iter->value.Set(std::forward<TVAL>(val), doc.GetAllocator());
+    }
   } else {
     rapidjson::Value k;
     k.SetString(key.data(), static_cast<rapidjson::SizeType>(key.size()), doc.GetAllocator());
