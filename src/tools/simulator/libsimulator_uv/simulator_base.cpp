@@ -315,6 +315,7 @@ int simulator_base::init() {
   // register all protocol callbacks
   ::proto::detail::simulator_activitor::active_all(this);
 
+  on_inited();
   return 0;
 }
 
@@ -381,6 +382,8 @@ int simulator_base::run(int argc, const char *argv[]) {
 
   setup_signal();
   setup_timer();
+
+  on_start();
 
   // startup interactive thread
   uv_thread_create(&thd_cmd_, linenoise_thd_main, this);
@@ -815,6 +818,8 @@ void simulator_base::linenoise_thd_main(void *arg) {
   simulator_base *self = reinterpret_cast<simulator_base *>(arg);
   assert(self);
 
+  self->on_console_ready();
+
   if (!self->shell_opts_.cmds.empty()) {
     for (std::string &cmd : self->shell_opts_.cmds) {
       self->insert_cmd(self->cmd_player_, cmd);
@@ -911,3 +916,9 @@ void simulator_base::linenoise_thd_main(void *arg) {
     g_last_simulator->shell_opts_.no_interactive = true;
   }
 }
+
+void simulator_base::on_start() {}
+
+void simulator_base::on_console_ready() {}
+
+void simulator_base::on_inited() {}

@@ -185,6 +185,24 @@ class simulator_base {
     return std::dynamic_pointer_cast<util::cli::cmd_option_ci>(in);
   }
 
+ public:
+  /**
+   * @brief event callback before prepera to create subthread to run console commands
+   * @note this will be called in the main thread
+   */
+  virtual void on_start();
+
+  /**
+   * @brief event callback when console thread is ready(before inserting the commands from command line parameters)
+   * @note this will be called in the child thread
+   */
+  virtual void on_console_ready();
+
+  /**
+   * @brief event callback when inited
+   */
+  virtual void on_inited();
+
  private:
   static void libuv_on_sleep_timeout(uv_timer_t *handle);
 

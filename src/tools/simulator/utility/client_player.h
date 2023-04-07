@@ -91,6 +91,12 @@ class client_player : public simulator_player_impl {
 
   inline bool is_connecting() const { return is_connecting_; }
 
+  bool lua_run_code(const std::string &code);
+
+  bool lua_run_file(const std::string &file_path);
+
+  const std::string &mutable_lua_env_table();
+
  private:
   std::map<uint32_t, libatgw_inner_v1_c_context> proto_handles_;
   PROJECT_NAMESPACE_ID::DAccountData account_;
@@ -107,6 +113,8 @@ class client_player : public simulator_player_impl {
 
   std::vector<std::vector<unsigned char> > pending_msg_;
   bool is_connecting_;
+
+  std::string lua_env_path_;
 };
 
 #endif  // ATFRAMEWORK_LIBSIMULATOR_UTILITY_CLIENT_PLAYER_H

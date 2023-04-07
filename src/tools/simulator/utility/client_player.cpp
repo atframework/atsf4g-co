@@ -9,6 +9,13 @@
 #include <cli/shell_font.h>
 #include <libatgw_inner_v1_c.h>
 #include <proto_base.h>
+
+#include <lua/cpp/lua_engine/lua_binding_class.h>
+#include <lua/cpp/lua_engine/lua_binding_mgr.h>
+#include <lua/cpp/lua_engine/lua_binding_utils.h>
+#include <lua/cpp/lua_engine/lua_binding_wrapper.h>
+#include <lua/cpp/lua_engine/lua_engine.h>
+
 #include "client_player.h"
 #include "client_simulator.h"
 
@@ -128,6 +135,13 @@ client_player::~client_player() {
     libatgw_inner_v1_c_destroy(iter->second);
   }
   proto_handles_.clear();
+
+  if (!lua_env_path_.empty()) {
+    client_simulator *owner = static_cast<client_simulator *>(get_owner());
+    if (owner != NULL && owner->get_lua_engine()) {
+      owner->get_lua_engine()->remove_item(lua_env_path_);
+    }
+  }
 }
 
 int client_player::connect(const std::string &host, int port) {
@@ -278,4 +292,54 @@ void client_player::connect_done(libatgw_inner_v1_c_context ctx) {
 
   pending_msg_.clear();
   is_connecting_ = false;
+}
+
+bool client_player::lua_run_code(const std::string &code) {
+  client_simulator *owner = static_cast<client_simulator *>(get_owner());
+  if (owner == NULL || !owner->get_lua_engine()) {
+    return false;
+  }
+
+  lua_State *L = owner->get_lua_engine()->get_lua_state();
+  bool ret = ::script::lua::fn::exec_code_with_protected_env(L, code.c_str(), mutable_lua_env_table().c_str());
+  return ret;
+}
+
+bool client_player::lua_run_file(const std::string &file_path) {
+  client_simulator *owner = static_cast<client_simulator *>(get_owner());
+  if (owner == NULL || !owner->get_lua_engine()) {
+    return false;
+  }
+
+  lua_State *L = owner->get_lua_engine()->get_lua_state();
+  bool ret = ::script::lua::fn::exec_file_with_protected_env(L, file_path.c_str(), mutable_lua_env_table().c_str());
+  return ret;
+}
+
+const std::string &client_player::mutable_lua_env_table() {
+  if (lua_env_path_.empty()) {
+    char name_path[128] = {0};
+    UTIL_STRFUNC_SNPRINTF(name_path, sizeof(name_path) - 1, "_G.player_set.id_%llu_%p",
+                          static_cast<unsigned long long>(get_user_id()), this);
+    lua_env_path_ = name_path;
+  }
+
+  return lua_env_path_;
+}
+
+LUA_BIND_OBJECT(client_player, L) {
+  script::lua::lua_binding_class<client_player> clazz("client_player", "game", L);
+
+  // 函数
+  {
+    clazz.add_method("get_user_id", &client_player::get_user_id);
+    clazz.add_method("get_package_version", &client_player::get_package_version);
+    clazz.add_method("set_package_version", &client_player::set_package_version);
+    clazz.add_method("get_resource_version", &client_player::get_resource_version);
+    clazz.add_method("set_resource_version", &client_player::set_resource_version);
+    clazz.add_method("get_protocol_version", &client_player::get_protocol_version);
+    clazz.add_method("set_protocol_version", &client_player::set_protocol_version);
+    clazz.add_method("is_connecting", &client_player::is_connecting);
+    clazz.add_method("insert_cmd", &client_player::insert_cmd);
+  }
 }

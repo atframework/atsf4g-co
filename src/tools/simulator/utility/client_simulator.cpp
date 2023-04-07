@@ -4,7 +4,10 @@
 
 #include "utility/client_simulator.h"
 
+#include <common/file_system.h>
 #include <time/time_utility.h>
+
+#include <lua/cpp/lua_engine/lua_engine.h>
 
 #include <config/logic_config.h>
 
@@ -14,9 +17,74 @@
 #include <string>
 #include <vector>
 
-client_simulator::client_simulator() {}
+namespace detail {
+struct on_sys_cmd_lua_run_code {
+  client_simulator *owner;
+  explicit on_sys_cmd_lua_run_code(client_simulator *s) : owner(s) {}
+
+  void operator()(util::cli::callback_param params) {
+    if (!owner->get_lua_engine()) {
+      util::cli::shell_stream ss(std::cerr);
+      ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "Lua engine disabled." << std::endl;
+    } else {
+      for (size_t i = 0; i < params.get_params_number(); ++i) {
+        owner->get_lua_engine()->run_code(params[i]->to_string());
+      }
+    }
+  }
+};
+
+struct on_sys_cmd_lua_run_file {
+  client_simulator *owner;
+  explicit on_sys_cmd_lua_run_file(client_simulator *s) : owner(s) {}
+
+  void operator()(util::cli::callback_param params) {
+    if (!owner->get_lua_engine()) {
+      util::cli::shell_stream ss(std::cerr);
+      ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "Lua engine disabled." << std::endl;
+    } else {
+      for (size_t i = 0; i < params.get_params_number(); ++i) {
+        owner->get_lua_engine()->run_file(params[i]->to_string());
+      }
+    }
+  }
+};
+}  // namespace detail
+
+client_simulator::client_simulator() {
+  lua_engine_ = ::script::lua::lua_engine::create();
+  lua_engine_->init();
+}
 
 client_simulator::~client_simulator() {}
+
+void client_simulator::on_start() {
+  if (lua_engine_) {
+    std::string dirname;
+    ::util::file_system::dirname(get_exec(), 0, dirname);
+    dirname = ::util::file_system::get_abs_path(dirname.c_str());
+    dirname += ::util::file_system::DIRECTORY_SEPARATOR;
+    dirname += "lua";
+    std::string boostrap_script = (dirname + ::util::file_system::DIRECTORY_SEPARATOR) + "main.lua";
+    if (::util::file_system::is_exist(boostrap_script.c_str())) {
+      lua_engine_->add_search_path(dirname, true);
+      lua_engine_->run_file(boostrap_script.c_str());
+    } else {
+      util::cli::shell_stream ss(std::cerr);
+      ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "Lua bootstrap script " << boostrap_script
+           << " not found, just skip it." << std::endl;
+    }
+  }
+}
+
+void client_simulator::on_inited() {
+  if (lua_engine_) {
+    reg_req()["GlobalLua"]["RunCode"].bind(detail::on_sys_cmd_lua_run_code(this),
+                                           "[lua code...] run lua code without player");
+    reg_req()["GlobalLua"]["RunFile"].bind(detail::on_sys_cmd_lua_run_file(this),
+                                           "[lua file...] run lua file without player");
+  }
+}
 
 uint32_t client_simulator::pick_message_id(const msg_t &) const { return 0; }
 
@@ -90,7 +158,13 @@ int client_simulator::unpack_message(msg_t &msg, const void *buffer, size_t sz) 
   return 0;
 }
 
-int client_simulator::tick() { return 0; }
+int client_simulator::tick() {
+  if (lua_engine_) {
+    lua_engine_->proc();
+  }
+
+  return 0;
+}
 
 const PROJECT_NAMESPACE_ID::DConstSettingsType &client_simulator::get_const_settings() {
   static PROJECT_NAMESPACE_ID::DConstSettingsType ret;

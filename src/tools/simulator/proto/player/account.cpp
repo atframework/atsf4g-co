@@ -8,6 +8,10 @@
 
 #include <utility/protobuf_mini_dumper.h>
 
+#include <lua/cpp/lua_engine/lua_binding_utils.h>
+#include <lua/cpp/lua_engine/lua_binding_wrapper.h>
+#include <lua/cpp/lua_engine/lua_engine.h>
+
 #include <simulator_active.h>
 #include <utility/client_config.h>
 #include <utility/client_simulator.h>
@@ -156,6 +160,36 @@ void on_rsp_login(client_simulator::player_ptr_t player, client_simulator::msg_t
     player->close();
   } else {
     player->get_owner()->set_current_player(player);
+
+    do {
+      client_simulator *owner = static_cast<client_simulator *>(player->get_owner());
+      if (nullptr == owner) {
+        break;
+      }
+      if (nullptr == owner->get_lua_engine()) {
+        break;
+      }
+
+      lua_State *L = owner->get_lua_engine()->get_lua_state();
+      if (nullptr == L) {
+        break;
+      }
+
+      ::script::lua::lua_auto_block autoBlock(L);
+      if (::script::lua::fn::mutable_env_table(L, player->mutable_lua_env_table().c_str())) {
+        lua_pushliteral(L, "player");
+        ::script::lua::auto_push(L, player);
+        lua_settable(L, -3);
+      }
+    } while (false);
+
+    if (!client_config::lua_player_code.empty()) {
+      player->lua_run_code(client_config::lua_player_code);
+    }
+
+    if (!client_config::lua_player_file.empty()) {
+      player->lua_run_file(client_config::lua_player_file);
+    }
   }
 }
 

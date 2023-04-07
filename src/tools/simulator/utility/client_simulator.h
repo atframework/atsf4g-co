@@ -16,6 +16,12 @@
 
 #include "utility/client_player.h"
 
+namespace script {
+namespace lua {
+class lua_engine;
+}
+}  // namespace script
+
 class client_simulator : public simulator_msg_base<client_player, atframework::CSMsg> {
  public:
   using self_type = client_simulator;
@@ -28,6 +34,9 @@ class client_simulator : public simulator_msg_base<client_player, atframework::C
  public:
   client_simulator();
   virtual ~client_simulator();
+
+  void on_start() override;
+  void on_inited() override;
 
   uint32_t pick_message_id(const msg_t &msg) const override;
   std::string pick_message_name(const msg_t &msg) const override;
@@ -45,6 +54,11 @@ class client_simulator : public simulator_msg_base<client_player, atframework::C
   static cmd_sender_t &get_cmd_sender(util::cli::callback_param params);
   static msg_t &add_req(cmd_sender_t &sender);
   static msg_t &add_req(util::cli::callback_param params);
+
+  inline const std::shared_ptr<::script::lua::lua_engine> &get_lua_engine() const { return lua_engine_; }
+
+ private:
+  std::shared_ptr<::script::lua::lua_engine> lua_engine_;
 };
 
 #define SIMULATOR_CHECK_PLAYER_PARAMNUM(PARAM, N)                                             \
