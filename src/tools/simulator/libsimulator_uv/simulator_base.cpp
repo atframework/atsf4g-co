@@ -230,7 +230,7 @@ simulator_base::cmd_wrapper_t &simulator_base::cmd_wrapper_t::hint(std::string h
   return (*this);
 }
 
-simulator_base::simulator_base() : is_closing_(false), exec_path_(nullptr) {
+simulator_base::simulator_base() : is_closing_(false), exec_path_(nullptr), start_timepoint_(0) {
   uv_loop_init(&loop_);
   uv_async_init(&loop_, &async_cmd_, libuv_on_async_cmd);
   uv_mutex_init(&async_cmd_lock_);
@@ -244,6 +244,8 @@ simulator_base::simulator_base() : is_closing_(false), exec_path_(nullptr) {
   shell_opts_.history_file = ".simulator_history";
   shell_opts_.protocol_log = "protocol.log";
   shell_opts_.no_interactive = false;
+  shell_opts_.no_interactive_stdout = false;
+  shell_opts_.no_interactive_timeout = 600;
   shell_opts_.buffer_.resize(262144);
   shell_opts_.tick_timer_interval = 200;  // 200 ms for default
 
@@ -279,6 +281,14 @@ static void simulator_setup_signal_func(uv_signal_t *handle, int signum) {
       break;
     }
 
+#ifndef WIN32
+    case SIGTTIN: {
+      simulator_base *base = (simulator_base *)handle->data;
+      base->set_no_interactive();
+      break;
+    }
+#endif
+
     default: {
       break;
     }
@@ -294,6 +304,14 @@ int simulator_base::init() {
       ->set_help_msg("<file path> set protocol log file");
   args_mgr_->bind_cmd("-ni, --no-interactive", util::cli::phoenix::set_const(shell_opts_.no_interactive, true))
       ->set_help_msg("disable interactive mode");
+  args_mgr_
+      ->bind_cmd("-ni-enable-stdout, --no-interactive-enable-stdout",
+                 util::cli::phoenix::set_const(shell_opts_.no_interactive_stdout, true))
+      ->set_help_msg("enable stdout for no interactive mode");
+  args_mgr_
+      ->bind_cmd("-ni-timeout, --no-interactive-timeout",
+                 util::cli::phoenix::assign(shell_opts_.no_interactive_timeout))
+      ->set_help_msg("<timeout> set timeout in seconds for no interactive mode.(default: 600)");
   args_mgr_->bind_cmd("-f, --rf, --read-file", util::cli::phoenix::assign<std::string>(shell_opts_.read_file))
       ->set_help_msg("read from file");
   args_mgr_->bind_cmd("-c, --cmd", util::cli::phoenix::push_back(shell_opts_.cmds))
@@ -332,16 +350,22 @@ void simulator_base::setup_signal() {
   signals_.sigquit.data = this;
   signals_.sigterm.data = this;
 
+#ifndef WIN32
+  uv_signal_init(&loop_, &signals_.sigttin);
+  signals_.sigttin.data = this;
+#endif
+
   // block signals
   uv_signal_start(&signals_.sigint, simulator_setup_signal_func, SIGINT);
   uv_signal_start(&signals_.sigterm, simulator_setup_signal_func, SIGTERM);
 
 #ifndef WIN32
   uv_signal_start(&signals_.sigquit, simulator_setup_signal_func, SIGQUIT);
+  // Terminal input for background process
+  uv_signal_start(&signals_.sigttin, simulator_setup_signal_func, SIGTTIN);
   signal(SIGHUP, SIG_IGN);   // lost parent process
   signal(SIGPIPE, SIG_IGN);  // close stdin, stdout or stderr
   signal(SIGTSTP, SIG_IGN);  // close tty
-  signal(SIGTTIN, SIG_IGN);  // tty input
   signal(SIGTTOU, SIG_IGN);  // tty output
 #endif
 }
@@ -357,6 +381,10 @@ static void simulator_base_timer_cb(uv_timer_t *handle) {
   }
 
   self->tick();
+
+  if (self->is_global_timeout()) {
+    uv_timer_stop(handle);
+  }
 }
 
 void simulator_base::setup_timer() {
@@ -385,6 +413,9 @@ int simulator_base::run(int argc, const char *argv[]) {
 
   on_start();
 
+  util::time::time_utility::update();
+  start_timepoint_ = util::time::time_utility::get_sys_now();
+
   // startup interactive thread
   uv_thread_create(&thd_cmd_, linenoise_thd_main, this);
 
@@ -405,6 +436,11 @@ int simulator_base::run(int argc, const char *argv[]) {
 
     uv_signal_stop(&signals_.sigterm);
     uv_close((uv_handle_t *)&signals_.sigterm, nullptr);
+
+#ifndef WIN32
+    uv_signal_stop(&signals_.sigttin);
+    uv_close((uv_handle_t *)&signals_.sigttin, NULL);
+#endif
   }
 
   if (tick_timer_.is_used) {
@@ -556,6 +592,21 @@ bool simulator_base::sleep(time_t msec) {
   sleep_timer_.is_used = true;
   return true;
 }
+
+bool simulator_base::is_global_timeout() const noexcept {
+  if (!shell_opts_.no_interactive) {
+    return false;
+  }
+
+  util::time::time_utility::update();
+  if (util::time::time_utility::get_sys_now() > start_timepoint_ + shell_opts_.no_interactive_timeout) {
+    return true;
+  }
+
+  return false;
+}
+
+void simulator_base::set_no_interactive() noexcept { shell_opts_.no_interactive = true; }
 
 int simulator_base::insert_cmd(player_ptr_t player, const std::string &cmd) {
   if (is_closing()) {

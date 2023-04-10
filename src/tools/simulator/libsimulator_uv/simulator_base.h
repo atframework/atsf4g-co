@@ -110,6 +110,10 @@ class simulator_base {
 
   bool sleep(time_t msec);
 
+  bool is_global_timeout() const noexcept;
+
+  void set_no_interactive() noexcept;
+
   template <typename Ty>
   std::shared_ptr<Ty> create_player(const std::string &host, int port) {
     if (is_closing_) {
@@ -209,6 +213,7 @@ class simulator_base {
  private:
   bool is_closing_;
   const char *exec_path_;
+  time_t start_timepoint_;
   uv_loop_t loop_;
   uv_async_t async_cmd_;
   uv_mutex_t async_cmd_lock_;
@@ -220,6 +225,9 @@ class simulator_base {
     uv_signal_t sigint;
     uv_signal_t sigquit;
     uv_signal_t sigterm;
+#ifndef WIN32
+    uv_signal_t sigttin;
+#endif
   };
   signal_set_t signals_;
 
@@ -241,6 +249,8 @@ class simulator_base {
     std::string history_file;
     std::string protocol_log;
     bool no_interactive;
+    bool no_interactive_stdout;
+    time_t no_interactive_timeout;
     std::string read_file;
     std::vector<std::string> cmds;
     std::vector<unsigned char> buffer_;
@@ -304,7 +314,7 @@ class simulator_msg_base : public simulator_base {
       proto_file << text << std::endl;
     }
 
-    if (!shell_opts_.no_interactive) {
+    if (!shell_opts_.no_interactive && !shell_opts_.no_interactive_stdout) {
       if (incoming) {
         // std::cout << std::endl<< "<<<<<<<<<<<< " << pick_message_name(msg) << "(" << pick_message_id(msg) << ")"
         std::cout << std::endl << "<<<<<<<<<<<< " << text << std::endl;
