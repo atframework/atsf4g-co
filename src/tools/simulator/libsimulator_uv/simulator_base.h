@@ -314,7 +314,7 @@ class simulator_msg_base : public simulator_base {
       proto_file << text << std::endl;
     }
 
-    if (!shell_opts_.no_interactive && !shell_opts_.no_interactive_stdout) {
+    if (!shell_opts_.no_interactive || shell_opts_.no_interactive_stdout) {
       if (incoming) {
         // std::cout << std::endl<< "<<<<<<<<<<<< " << pick_message_name(msg) << "(" << pick_message_id(msg) << ")"
         std::cout << std::endl << "<<<<<<<<<<<< " << text << std::endl;
