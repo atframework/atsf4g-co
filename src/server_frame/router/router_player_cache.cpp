@@ -219,7 +219,8 @@ rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, router
     obj->get_login_info().set_router_version(old_router_ver + 1);
 
     // 新登入则设置登入时间
-    obj->get_login_info().set_login_time(util::time::time_utility::get_now());
+    obj->get_login_info().set_login_time(util::time::time_utility::get_sys_now());
+    obj->get_login_info().set_business_login_time(util::time::time_utility::get_now());
 
     auto ret = RPC_AWAIT_CODE_RESULT(rpc::db::login::set(ctx, obj->get_open_id().c_str(), obj->get_zone_id(),
                                                          obj->get_login_info(), obj->get_login_version()));
@@ -323,7 +324,8 @@ rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void *
 
       obj->get_login_info().set_router_server_id(0);
       obj->get_login_info().set_router_version(old_router_ver + 1);
-      obj->get_login_info().set_logout_time(util::time::time_utility::get_now());  // 登出时间
+      obj->get_login_info().set_logout_time(util::time::time_utility::get_sys_now());       // 登出时间
+      obj->get_login_info().set_business_logout_time(util::time::time_utility::get_now());  // 登出时间
 
       // RPC save to db
       res = RPC_AWAIT_CODE_RESULT(rpc::db::login::set(ctx, obj->get_open_id().c_str(), obj->get_zone_id(),
@@ -354,7 +356,7 @@ rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void *
       // 鉴权登入码续期
       if (obj->get_session()) {
         obj->get_login_info().set_login_code_expired(
-            util::time::time_utility::get_now() +
+            util::time::time_utility::get_sys_now() +
             logic_config::me()->get_logic().session().login_code_valid_sec().seconds());
       }
 

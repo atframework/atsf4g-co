@@ -58,6 +58,8 @@ player_cache::ptr_t player_cache::create(uint64_t user_id, uint32_t zone_id, con
     ret->init(user_id, zone_id, openid);
   }
 
+  login_info_.mutable_blob_data()->set_business_register_time(util::time::time_utility::get_now());
+
   return ret;
 }
 

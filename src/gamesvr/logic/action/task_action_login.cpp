@@ -62,7 +62,7 @@ task_action_login::result_type task_action_login::operator()() {
   }
 
   if (user && user->get_login_info().login_code() == req_body.login_code() &&
-      util::time::time_utility::get_now() <= static_cast<time_t>(user->get_login_info().login_code_expired()) &&
+      util::time::time_utility::get_sys_now() <= static_cast<time_t>(user->get_login_info().login_code_expired()) &&
       user->is_writable()) {
     RPC_AWAIT_IGNORE_RESULT(replace_session(user));
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -95,7 +95,7 @@ task_action_login::result_type task_action_login::operator()() {
   }
 
   // 2. 校验登入码
-  if (util::time::time_utility::get_now() > tb.login_code_expired()) {
+  if (util::time::time_utility::get_sys_now() > tb.login_code_expired()) {
     FWLOGERROR("player {}({}:{}) login code expired", req_body.open_id(), zone_id, req_body.user_id());
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);

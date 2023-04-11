@@ -34,8 +34,10 @@ message table_login {
   // 限制登入信息
   int64 ban_time = 21;  // 封号期限
 
-  // 注册信息
-  int64 register_time = 31;  // 注册时间
+  // 业务层登入注册信息
+  int64 business_register_time = 31;  // 业务层注册时间
+  int64 business_login_time = 32;     // 业务层登入时间
+  int64 business_logout_time = 33;    // 业务层登出时间
 
   account_information account = 41;  // 账号信息
   login_record last_login = 42;      // 上次登入的信息
@@ -85,8 +87,8 @@ message table_all_message {
 
   table_login login = 11;
   table_user user = 12;
-  string version = 13;            //透传版本
-  table_simple_info simple = 14;  //简单数据类型
+  string version = 13;            // 透传版本
+  table_simple_info simple = 14;  // 简单数据类型
   table_user_async_jobs_blob_data async_jobs = 15;
   table_distribute_transaction distribute_transaction = 16;
 }

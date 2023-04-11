@@ -54,15 +54,15 @@ int router_manager_set::tick() {
   int ret = 0;
 
   // 如果不是正在关闭，则每秒只需要判定一次
-  if (!is_closing() && last_proc_time_ == ::util::time::time_utility::get_now()) {
+  if (!is_closing() && last_proc_time_ == ::util::time::time_utility::get_sys_now()) {
     return ret;
   }
   // 每分钟打印一次统计数据
   if (last_proc_time_ / util::time::time_utility::MINITE_SECONDS !=
-      ::util::time::time_utility::get_now() / util::time::time_utility::MINITE_SECONDS) {
+      ::util::time::time_utility::get_sys_now() / util::time::time_utility::MINITE_SECONDS) {
     size_t cache_count = 0;
     std::stringstream ss;
-    ss << "[STAT] router manager set => now: " << ::util::time::time_utility::get_now() << std::endl;
+    ss << "[STAT] router manager set => now: " << ::util::time::time_utility::get_sys_now() << std::endl;
     ss << "\tdefault timer count: " << timers_.default_timer_list.size() << ", next active timer: ";
     if (timers_.default_timer_list.empty()) {
       ss << 0 << std::endl;
@@ -87,7 +87,7 @@ int router_manager_set::tick() {
 
     setup_metrics(cache_count);
   }
-  last_proc_time_ = ::util::time::time_utility::get_now();
+  last_proc_time_ = ::util::time::time_utility::get_sys_now();
 
   //  正在执行closing任务则不需要自动清理/保存了
   if (false == is_closing_task_running()) {
@@ -257,11 +257,11 @@ bool router_manager_set::insert_timer(router_manager_base *mgr, const std::share
   tm_inst->obj_watcher = obj;
   tm_inst->type_id = mgr->get_type_id();
   if (!is_fast) {
-    tm_inst->timeout =
-        util::time::time_utility::get_now() + logic_config::me()->get_cfg_router().default_timer_interval().seconds();
+    tm_inst->timeout = util::time::time_utility::get_sys_now() +
+                       logic_config::me()->get_cfg_router().default_timer_interval().seconds();
   } else {
     tm_inst->timeout =
-        util::time::time_utility::get_now() + logic_config::me()->get_cfg_router().fast_timer_interval().seconds();
+        util::time::time_utility::get_sys_now() + logic_config::me()->get_cfg_router().fast_timer_interval().seconds();
   }
   tm_inst->timer_sequence = obj->alloc_timer_sequence();
   obj->reset_timer_ref(tm_timer, tm_iter);

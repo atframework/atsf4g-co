@@ -306,7 +306,7 @@ void player::update_heartbeat() {
   time_t heartbeat_interval = logic_cfg.heartbeat().interval().seconds();
   time_t heartbeat_tolerance = logic_cfg.heartbeat().tolerance().seconds();
   time_t tol_dura = heartbeat_interval - heartbeat_tolerance;
-  time_t now_time = util::time::time_utility::get_now();
+  time_t now_time = util::time::time_utility::get_sys_now();
 
   // 小于容忍值得要统计错误次数
   if (now_time - heartbeat_data_.last_recv_time < tol_dura) {
