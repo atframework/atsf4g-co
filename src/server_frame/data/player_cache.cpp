@@ -58,8 +58,6 @@ player_cache::ptr_t player_cache::create(uint64_t user_id, uint32_t zone_id, con
     ret->init(user_id, zone_id, openid);
   }
 
-  login_info_.mutable_blob_data()->set_business_register_time(util::time::time_utility::get_now());
-
   return ret;
 }
 
@@ -70,6 +68,8 @@ rpc::result_code_type player_cache::create_init(rpc::context &, uint32_t /*versi
   // copy account information
   protobuf_copy_message(get_account_info(), get_login_info().account());
   login_info_.set_zone_id(get_zone_id());
+
+  login_info_.set_business_register_time(util::time::time_utility::get_now());
 
   RPC_RETURN_CODE(0);
 }
