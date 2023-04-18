@@ -344,15 +344,20 @@ static opentelemetry::common::AttributeValue rebuild_attributes_map_value(
     // 参见 https://github.com/open-telemetry/opentelemetry-cpp/pull/1154 里的讨论
     return opentelemetry::common::AttributeValue{};
   } else if (opentelemetry::nostd::holds_alternative<std::vector<int32_t>>(value)) {
-    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<std::vector<int32_t>>(value)};
+    const auto &data = opentelemetry::nostd::get<std::vector<int32_t>>(value);
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const int32_t>{data.data(), data.size()}};
   } else if (opentelemetry::nostd::holds_alternative<std::vector<uint32_t>>(value)) {
-    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<std::vector<uint32_t>>(value)};
+    const auto &data = opentelemetry::nostd::get<std::vector<uint32_t>>(value);
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const uint32_t>{data.data(), data.size()}};
   } else if (opentelemetry::nostd::holds_alternative<std::vector<int64_t>>(value)) {
-    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<std::vector<int64_t>>(value)};
+    const auto &data = opentelemetry::nostd::get<std::vector<int64_t>>(value);
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const int64_t>{data.data(), data.size()}};
   } else if (opentelemetry::nostd::holds_alternative<std::vector<uint64_t>>(value)) {
-    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<std::vector<uint64_t>>(value)};
+    const auto &data = opentelemetry::nostd::get<std::vector<uint64_t>>(value);
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const uint64_t>{data.data(), data.size()}};
   } else if (opentelemetry::nostd::holds_alternative<std::vector<double>>(value)) {
-    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<std::vector<double>>(value)};
+    const auto &data = opentelemetry::nostd::get<std::vector<double>>(value);
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const double>{data.data(), data.size()}};
   } else if (opentelemetry::nostd::holds_alternative<std::vector<std::string>>(value)) {
     // 暂无低开销解决方案，目前公共属性中没有数组类型，故而不处理所有的数组类型也是没有问题的
     // 参见 https://github.com/open-telemetry/opentelemetry-cpp/pull/1154 里的讨论
@@ -1040,13 +1045,6 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
         std::unique_ptr<PushMetricExporter>(new opentelemetry::exporter::otlp::OtlpHttpMetricExporter(options)));
   }
 
-  if (exporter_cfg.has_prometheus_pull() && !exporter_cfg.prometheus_pull().url().empty()) {
-    opentelemetry::exporter::metrics::PrometheusExporterOptions options;
-    options.url = exporter_cfg.prometheus_pull().url();
-    ret.emplace_back(
-        std::unique_ptr<PushMetricExporter>(new opentelemetry::exporter::metrics::PrometheusExporter(options)));
-  }
-
   if (exporter_cfg.has_prometheus_push() && !exporter_cfg.prometheus_push().host().empty() &&
       !exporter_cfg.prometheus_push().port().empty() && !exporter_cfg.prometheus_push().jobname().empty()) {
     exporter::metrics::PrometheusPushExporterOptions options;
@@ -1067,7 +1065,8 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
 
 static std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricReader>> _opentelemetry_create_metrics_reader(
     std::vector<std::unique_ptr<PushMetricExporter>> &&exporters,
-    const PROJECT_NAMESPACE_ID::config::opentelemetry_metrics_reader_cfg &reader_cfg) {
+    const PROJECT_NAMESPACE_ID::config::opentelemetry_metrics_reader_cfg &reader_cfg,
+    const PROJECT_NAMESPACE_ID::config::opentelemetry_metrics_exporter_cfg &exporter_cfg) {
   std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricReader>> ret;
   opentelemetry::sdk::metrics::PeriodicExportingMetricReaderOptions options;
   if (exporters.empty()) {
@@ -1086,10 +1085,17 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricReader>> _
         std::chrono::nanoseconds(reader_cfg.export_timeout().nanos()));
   }
 
-  ret.reserve(exporters.size());
+  ret.reserve(exporters.size() + 1);
   for (auto &exporter : exporters) {
     ret.emplace_back(std::unique_ptr<opentelemetry::sdk::metrics::MetricReader>(
         new opentelemetry::sdk::metrics::PeriodicExportingMetricReader(std::move(exporter), options)));
+  }
+
+  if (exporter_cfg.has_prometheus_pull() && !exporter_cfg.prometheus_pull().url().empty()) {
+    opentelemetry::exporter::metrics::PrometheusExporterOptions exporter_options;
+    exporter_options.url = exporter_cfg.prometheus_pull().url();
+    ret.emplace_back(std::unique_ptr<opentelemetry::sdk::metrics::MetricReader>(
+        new opentelemetry::exporter::metrics::PrometheusExporter(exporter_options)));
   }
 
   return ret;
@@ -1526,7 +1532,8 @@ _opentelemetry_create_opentelemetry_metrics_provider(
     const opentelemetry::sdk::resource::ResourceAttributes &resource_values) {
   if (opentelemetry_cfg.has_metrics()) {
     auto exporters = _opentelemetry_create_metrics_exporter(app_info_cache, opentelemetry_cfg.metrics().exporters());
-    auto readers = _opentelemetry_create_metrics_reader(std::move(exporters), opentelemetry_cfg.metrics().reader());
+    auto readers = _opentelemetry_create_metrics_reader(std::move(exporters), opentelemetry_cfg.metrics().reader(),
+                                                        opentelemetry_cfg.metrics().exporters());
 
     opentelemetry::sdk::resource::ResourceAttributes metrics_resource_values = resource_values;
     for (auto &ext_res : opentelemetry_cfg.metrics().resource()) {

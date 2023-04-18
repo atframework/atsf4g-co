@@ -15,7 +15,7 @@
 
 #include <prometheus/gateway.h>
 
-#include <opentelemetry/exporters/prometheus/collector.h>
+#include <opentelemetry/exporters/prometheus/exporter_utils.h>
 #include <opentelemetry/nostd/span.h>
 #include <opentelemetry/sdk/common/env_variables.h>
 #include <opentelemetry/version.h>
@@ -35,6 +35,8 @@ namespace rpc {
 namespace telemetry {
 namespace exporter {
 namespace metrics {
+
+class PrometheusPushCollector;
 
 /**
  * Struct to hold Prometheus exporter options.
@@ -98,9 +100,9 @@ class PrometheusPushExporter : public
 
   /**
    * @return: returns a shared_ptr to
-   * the PrometheusCollector instance
+   * the PrometheusPushCollector instance
    */
-  std::shared_ptr<::opentelemetry::exporter::metrics::PrometheusCollector> &GetCollector();
+  std::shared_ptr<PrometheusPushCollector> &GetCollector();
 
   /**
    * @return: Gets the shutdown status of the exporter
@@ -117,9 +119,9 @@ class PrometheusPushExporter : public
 
   /**
    * Pointer to a
-   * PrometheusCollector instance
+   * PrometheusPushCollector instance
    */
-  std::shared_ptr<::opentelemetry::exporter::metrics::PrometheusCollector> collector_;
+  std::shared_ptr<PrometheusPushCollector> collector_;
 
   /**
    * Pointer to an
