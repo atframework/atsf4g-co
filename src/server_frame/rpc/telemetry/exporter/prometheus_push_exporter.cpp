@@ -29,9 +29,7 @@ class PrometheusPushCollector : public ::prometheus::Collectable {
    * @return all metrics in the metricsToCollect snapshot
    */
   std::vector<::prometheus::MetricFamily> Collect() const override {
-    std::unique_lock<std::mutex> lock{collection_lock_, std::try_to_lock_t()};
-
-    if (!lock.try_lock()) {
+    if (!collection_lock_.try_lock()) {
       return {};
     }
 
@@ -40,7 +38,7 @@ class PrometheusPushCollector : public ::prometheus::Collectable {
     moved_data.swap(metrics_to_collect_);
     metrics_to_collect_.reserve(max_collection_size_);
 
-    lock.unlock();
+    collection_lock_.unlock();
 
     return moved_data;
   }
@@ -54,8 +52,7 @@ class PrometheusPushCollector : public ::prometheus::Collectable {
   void AddMetricData(const ::opentelemetry::sdk::metrics::ResourceMetrics &data) {
     auto translated = ::opentelemetry::exporter::metrics::PrometheusExporterUtils::TranslateToPrometheus(data);
 
-    std::unique_lock<std::mutex> lock{collection_lock_, std::try_to_lock_t()};
-    lock.lock();
+    collection_lock_.lock();
 
     for (auto &item : translated) {
       if (metrics_to_collect_.size() + 1 <= max_collection_size_) {
