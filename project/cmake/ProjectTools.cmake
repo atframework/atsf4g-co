@@ -223,3 +223,22 @@ function(project_tool_split_target_debug_sybmol)
     endforeach()
   endif()
 endfunction()
+
+function(project_tool_set_target_runtime_output_directory OUTPUT_DIR)
+  file(RELATIVE_PATH TARGET_OUTPUT_RELATIVE_PATH "${OUTPUT_DIR}" "${PROJECT_INSTALL_BAS_DIR}")
+  set_property(TARGET ${ARGN} PROPERTY RUNTIME_OUTPUT_DIRECTORY "${OUTPUT_DIR}")
+  if(UNIX AND NOT APPLE)
+    set_property(
+      TARGET ${ARGN}
+      APPEND
+      PROPERTY INSTALL_RPATH
+               "$ORIGIN/${TARGET_OUTPUT_RELATIVE_PATH}${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}")
+  elseif(APPLE)
+    set_property(
+      TARGET ${ARGN}
+      APPEND
+      PROPERTY INSTALL_RPATH
+               "@loader_path/${TARGET_OUTPUT_RELATIVE_PATH}${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}"
+    )
+  endif()
+endfunction()

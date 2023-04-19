@@ -4,7 +4,6 @@ set(TOOL_SRC_BIN_NAME "${TOOL_SRC_DIR_NAME}-cli")
 echowithcolor(COLOR GREEN "-- Configure ${TOOL_SRC_BIN_NAME} on ${CMAKE_CURRENT_LIST_DIR}")
 
 aux_source_directory(${CMAKE_CURRENT_LIST_DIR} SIMULATOR_SRC_LIST)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/tools/${TOOL_SRC_DIR_NAME}/bin")
 file(MAKE_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/tools/${TOOL_SRC_DIR_NAME}/bin")
 
 # build libserver_frame.so
@@ -23,6 +22,8 @@ source_group_by_dir(SRC_LIST)
 
 add_executable(${TOOL_SRC_BIN_NAME} ${SRC_LIST})
 project_tool_split_target_debug_sybmol("${TOOL_SRC_BIN_NAME}")
+project_tool_set_target_runtime_output_directory("${PROJECT_INSTALL_BAS_DIR}/tools/${TOOL_SRC_DIR_NAME}/bin"
+                                                 ${TOOL_SRC_BIN_NAME})
 
 if(MSVC)
   set_property(TARGET ${TOOL_SRC_BIN_NAME} PROPERTY FOLDER "${PROJECT_NAME}/tools")
