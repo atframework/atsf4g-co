@@ -52,7 +52,7 @@ class PrometheusPushCollector : public ::prometheus::Collectable {
   void AddMetricData(const ::opentelemetry::sdk::metrics::ResourceMetrics &data) {
     auto translated = ::opentelemetry::exporter::metrics::PrometheusExporterUtils::TranslateToPrometheus(data);
 
-    collection_lock_.lock();
+    std::lock_guard<std::mutex> guard{collection_lock_};
 
     for (auto &item : translated) {
       if (metrics_to_collect_.size() + 1 <= max_collection_size_) {
