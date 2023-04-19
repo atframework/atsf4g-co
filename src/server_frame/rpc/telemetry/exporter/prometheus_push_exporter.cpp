@@ -105,28 +105,15 @@ PrometheusPushExporter::PrometheusPushExporter(const PrometheusPushExporterOptio
     : options_(options), is_shutdown_(false) {
   gateway_ = std::unique_ptr<::prometheus::Gateway>(new ::prometheus::Gateway{
       options_.host, options_.port, options_.jobname, options_.labels, options_.username, options_.password});
-  collector_ = std::make_shared<PrometheusPushCollector>();
+  collector_ = std::make_shared<PrometheusPushCollector>(options.max_collection_size);
 
   gateway_->RegisterCollectable(collector_);
 }
 
 ::opentelemetry::sdk::metrics::AggregationTemporality PrometheusPushExporter::GetAggregationTemporality(
-    ::opentelemetry::sdk::metrics::InstrumentType instrument_type) const noexcept {
-  if (options_.aggregation_temporality == ::opentelemetry::sdk::metrics::AggregationTemporality::kCumulative) {
-    return options_.aggregation_temporality;
-  }
-
-  switch (instrument_type) {
-    case ::opentelemetry::sdk::metrics::InstrumentType::kCounter:
-    case ::opentelemetry::sdk::metrics::InstrumentType::kObservableCounter:
-    case ::opentelemetry::sdk::metrics::InstrumentType::kHistogram:
-    case ::opentelemetry::sdk::metrics::InstrumentType::kObservableGauge:
-      return ::opentelemetry::sdk::metrics::AggregationTemporality::kDelta;
-    case ::opentelemetry::sdk::metrics::InstrumentType::kUpDownCounter:
-    case ::opentelemetry::sdk::metrics::InstrumentType::kObservableUpDownCounter:
-      return ::opentelemetry::sdk::metrics::AggregationTemporality::kCumulative;
-  }
-  return ::opentelemetry::sdk::metrics::AggregationTemporality::kUnspecified;
+    ::opentelemetry::sdk::metrics::InstrumentType) const noexcept {
+  // Prometheus exporter only support Cumulative
+  return ::opentelemetry::sdk::metrics::AggregationTemporality::kCumulative;
 }
 
 /**
@@ -172,11 +159,7 @@ bool PrometheusPushExporter::Shutdown(std::chrono::microseconds) noexcept {
   return true;
 }
 
-/**
- * @return: returns a shared_ptr to
- * the PrometheusPushCollector instance
- */
-std::shared_ptr<PrometheusPushCollector> &PrometheusPushExporter::GetCollector() { return collector_; }
+std::size_t PrometheusPushExporter::GetMaxCollectionSize() const noexcept { return collector_->GetMaxCollectionSize(); }
 
 /**
  * @return: Gets the shutdown status of the exporter

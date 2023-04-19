@@ -49,8 +49,9 @@ struct PrometheusPushExporterOptions {
   std::string username;
   std::string password;
 
-  opentelemetry::sdk::metrics::AggregationTemporality aggregation_temporality =
-      opentelemetry::sdk::metrics::AggregationTemporality::kDelta;
+  std::size_t max_collection_size = 2000;
+
+  inline PrometheusPushExporterOptions() noexcept {}
 };
 
 class PrometheusPushExporter : public
@@ -98,11 +99,7 @@ class PrometheusPushExporter : public
    */
   bool Shutdown(std::chrono::microseconds timeout = std::chrono::microseconds(0)) noexcept override;
 
-  /**
-   * @return: returns a shared_ptr to
-   * the PrometheusPushCollector instance
-   */
-  std::shared_ptr<PrometheusPushCollector> &GetCollector();
+  std::size_t GetMaxCollectionSize() const noexcept;
 
   /**
    * @return: Gets the shutdown status of the exporter
