@@ -47,23 +47,33 @@
 namespace rpc {
 namespace transaction_api {
 namespace {
-static uint64_t calculate_server_id(const std::string& transaction_uuid) {
-  if (transaction_uuid.empty()) {
-    return 0;
-  }
-
+static uint64_t calculate_server_id(const atframework::distributed_system::transaction_metadata& metadata) {
   logic_server_common_module* common_mod = logic_server_last_common_module();
   if (nullptr == common_mod) {
     return 0;
   }
 
-  auto discovery = common_mod->get_discovery_index_by_type_zone(
-      atframe::component::logic_service_type::EN_LST_DTCOORDSVR, logic_config::me()->get_local_zone_id());
-  if (!discovery) {
+  for (int i = 0; i < metadata.replicate_node_server_id_size(); ++i) {
+    if (nullptr != common_mod->get_discovery_by_id(metadata.replicate_node_server_id(i))) {
+      return metadata.replicate_node_server_id(i);
+    }
+  }
+
+  if (metadata.transaction_uuid().empty()) {
     return 0;
   }
 
-  atapp::etcd_discovery_node::ptr_t node = discovery->get_node_by_consistent_hash(transaction_uuid);
+  auto discovery = common_mod->get_discovery_index_by_type_zone(
+      atframe::component::logic_service_type::EN_LST_DTCOORDSVR, logic_config::me()->get_local_zone_id());
+  if (!discovery || discovery->empty()) {
+    discovery = common_mod->get_discovery_index_by_type(atframe::component::logic_service_type::EN_LST_DTCOORDSVR);
+  }
+
+  if (!discovery || discovery->empty()) {
+    return 0;
+  }
+
+  atapp::etcd_discovery_node::ptr_t node = discovery->get_node_by_consistent_hash(metadata.transaction_uuid());
   if (!node) {
     return 0;
   }
@@ -82,7 +92,11 @@ static void initialize_replication_server_ids(atframework::distributed_system::t
 
   auto discovery = common_mod->get_discovery_index_by_type_zone(
       atframe::component::logic_service_type::EN_LST_DTCOORDSVR, logic_config::me()->get_local_zone_id());
-  if (!discovery) {
+  if (!discovery || discovery->empty()) {
+    discovery = common_mod->get_discovery_index_by_type(atframe::component::logic_service_type::EN_LST_DTCOORDSVR);
+  }
+
+  if (!discovery || discovery->empty()) {
     return;
   }
 
@@ -104,7 +118,7 @@ static void initialize_replication_server_ids(atframework::distributed_system::t
   size_t current_index = hash_out[0] % sorted_nodes.size();
   metadata.mutable_replicate_node_server_id()->Reserve(static_cast<int32_t>(replication_total_count));
   metadata.set_replicate_read_count(replication_read_count);
-  for (uint32_t i = 0; i < replication_total_count; ++i, ++current_index) {
+  for (uint32_t i = 0; i < replication_total_count || (replication_total_count <= 0 && i < 3); ++i, ++current_index) {
     if (current_index >= sorted_nodes.size()) {
       current_index = 0;
     }
@@ -428,7 +442,7 @@ rpc::result_code_type query_transaction(rpc::context& ctx,
           }
         })));
   } else {
-    uint64_t target_server_id = calculate_server_id(metadata.transaction_uuid());
+    uint64_t target_server_id = calculate_server_id(metadata);
     if (0 == target_server_id) {
       FWLOGERROR("{} can not find any available server for transaction {}", __FUNCTION__, metadata.transaction_uuid());
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
@@ -473,7 +487,7 @@ rpc::result_code_type create_transaction(rpc::context& ctx,
     res = RPC_AWAIT_CODE_RESULT(invoke_replication_rpc_call(ctx, inout.metadata(), req_body, rsp_body, "create",
                                                             rpc::transaction::create, nullptr));
   } else {
-    uint64_t target_server_id = calculate_server_id(inout.metadata().transaction_uuid());
+    uint64_t target_server_id = calculate_server_id(inout.metadata());
     if (0 == target_server_id) {
       FWLOGERROR("{} can not find any available server for transaction {}", __FUNCTION__,
                  inout.metadata().transaction_uuid());
@@ -520,7 +534,7 @@ rpc::result_code_type commit_transaction(rpc::context& ctx,
     int left_retry_times = TRANSACTION_API_RETRY_TIMES;
     // 如果事务服务器返回OLD_VERSION可能是发生了故障转移或者扩缩容，可以直接重试
     while (left_retry_times-- > 0) {
-      uint64_t target_server_id = calculate_server_id(inout.transaction_uuid());
+      uint64_t target_server_id = calculate_server_id(inout);
       if (0 == target_server_id) {
         RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
       }
@@ -567,7 +581,7 @@ rpc::result_code_type reject_transaction(rpc::context& ctx,
     int left_retry_times = TRANSACTION_API_RETRY_TIMES;
     // 如果事务服务器返回OLD_VERSION可能是发生了故障转移或者扩缩容，可以直接重试
     while (left_retry_times-- > 0) {
-      uint64_t target_server_id = calculate_server_id(inout.transaction_uuid());
+      uint64_t target_server_id = calculate_server_id(inout);
       if (0 == target_server_id) {
         FWLOGERROR("{} can not find any available server for transaction {}", __FUNCTION__, inout.transaction_uuid());
         RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
@@ -605,7 +619,7 @@ rpc::result_code_type remove_transaction_no_wait(
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(invoke_replication_rpc_call(ctx, metadata, req_body, rsp_body, "remove",
                                                                       rpc::transaction::remove, nullptr, true)));
   } else {
-    uint64_t target_server_id = calculate_server_id(metadata.transaction_uuid());
+    uint64_t target_server_id = calculate_server_id(metadata);
     if (0 == target_server_id) {
       FWLOGERROR("{} can not find any available server for transaction {}", __FUNCTION__, metadata.transaction_uuid());
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
@@ -634,7 +648,7 @@ rpc::result_code_type remove_transaction(rpc::context& ctx,
     int left_retry_times = TRANSACTION_API_RETRY_TIMES;
     // 如果事务服务器返回OLD_VERSION可能是发生了故障转移或者扩缩容，可以直接重试
     while (left_retry_times-- > 0) {
-      uint64_t target_server_id = calculate_server_id(metadata.transaction_uuid());
+      uint64_t target_server_id = calculate_server_id(metadata);
       if (0 == target_server_id) {
         FWLOGERROR("{} can not find any available server for transaction {}", __FUNCTION__,
                    metadata.transaction_uuid());
@@ -688,7 +702,7 @@ rpc::result_code_type commit_participator(rpc::context& ctx, const std::string& 
     int left_retry_times = TRANSACTION_API_RETRY_TIMES;
     // 如果事务服务器返回OLD_VERSION可能是发生了故障转移或者扩缩容，可以直接重试
     while (left_retry_times-- > 0) {
-      uint64_t target_server_id = calculate_server_id(inout.transaction_uuid());
+      uint64_t target_server_id = calculate_server_id(inout);
       if (0 == target_server_id) {
         RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
       }
@@ -739,7 +753,7 @@ rpc::result_code_type reject_participator(rpc::context& ctx, const std::string& 
     int left_retry_times = TRANSACTION_API_RETRY_TIMES;
     // 如果事务服务器返回OLD_VERSION可能是发生了故障转移或者扩缩容，可以直接重试
     while (left_retry_times-- > 0) {
-      uint64_t target_server_id = calculate_server_id(inout.transaction_uuid());
+      uint64_t target_server_id = calculate_server_id(inout);
       if (0 == target_server_id) {
         FWLOGERROR("{} can not find any available server for transaction {}", __FUNCTION__, inout.transaction_uuid());
         RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
