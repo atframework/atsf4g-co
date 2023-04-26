@@ -330,8 +330,10 @@ static void load_field_item(rapidjson::Value& parent, const ::google::protobuf::
         }
       } else {
         double double_val = src.GetReflection()->GetDouble(src, fds);
-        rapidsjon_helper_mutable_set_member(parent, key_name, double_val, doc,
-                                            std::abs(double_val - 0.0) > std::numeric_limits<float>::epsilon());
+        bool almost_equal_zero =
+            std::abs(double_val) <= std::numeric_limits<double>::epsilon() * std::abs(double_val) * 2 ||
+            std::abs(double_val) < std::numeric_limits<double>::min();
+        rapidsjon_helper_mutable_set_member(parent, key_name, double_val, doc, !almost_equal_zero);
       }
       break;
     };
@@ -343,8 +345,10 @@ static void load_field_item(rapidjson::Value& parent, const ::google::protobuf::
         }
       } else {
         float float_val = src.GetReflection()->GetFloat(src, fds);
-        rapidsjon_helper_mutable_set_member(parent, key_name, float_val, doc,
-                                            std::abs(float_val - 0.0) > std::numeric_limits<float>::epsilon());
+        bool almost_equal_zero =
+            std::abs(float_val) <= std::numeric_limits<float>::epsilon() * std::abs(float_val) * 2 ||
+            std::abs(float_val) < std::numeric_limits<float>::min();
+        rapidsjon_helper_mutable_set_member(parent, key_name, float_val, doc, !almost_equal_zero);
       }
       break;
     };

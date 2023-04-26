@@ -113,7 +113,13 @@ void logic_config::_load_db_hosts(PROJECT_NAMESPACE_ID::config::db_group_cfg &ou
 
 const PROJECT_NAMESPACE_ID::DConstSettingsType &logic_config::get_const_settings() {
   UTIL_LIKELY_IF(nullptr != const_settings_) { return *const_settings_; }
-  auto desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("com.const.proto");
+  auto desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("protocol/pbdesc/com.const.proto");
+  if (nullptr == desc) {
+    desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("pbdesc/com.const.proto");
+  }
+  if (nullptr == desc) {
+    desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("com.const.proto");
+  }
   if (nullptr != desc && desc->options().HasExtension(PROJECT_NAMESPACE_ID::CONST_SETTINGS)) {
     const_settings_ = &desc->options().GetExtension(PROJECT_NAMESPACE_ID::CONST_SETTINGS);
   }
@@ -127,7 +133,13 @@ const PROJECT_NAMESPACE_ID::DConstSettingsType &logic_config::get_const_settings
 
 const atframework::ConstSettingsType &logic_config::get_atframework_settings() {
   UTIL_LIKELY_IF(nullptr != atframe_settings_) { return *atframe_settings_; }
-  auto desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("atframework.proto");
+  auto desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("protocol/pbdesc/atframework.proto");
+  if (nullptr == desc) {
+    desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("pbdesc/atframework.proto");
+  }
+  if (nullptr == desc) {
+    desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("atframework.proto");
+  }
   if (nullptr != desc && desc->options().HasExtension(atframework::CONST_SETTINGS)) {
     atframe_settings_ = &desc->options().GetExtension(atframework::CONST_SETTINGS);
   }
