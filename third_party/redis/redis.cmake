@@ -1,4 +1,3 @@
-
 # Depend atframe_utils when BUILD_TESTING, need to be imported after atframe_utils
 if(NOT TARGET hiredis-happ)
   project_third_party_port_declare(hiredis_happ VERSION "main" GIT_URL "https://github.com/owent/hiredis-happ.git")
@@ -20,6 +19,10 @@ if(NOT TARGET hiredis-happ)
   if(NOT TARGET hiredis-happ)
     echowithcolor(COLOR RED "-- Dependency: hiredis-happ not found")
     message(FATAL_ERROR "hiredis-happ not found")
+  else()
+    if(MSVC)
+      set_property(TARGET hiredis-happ PROPERTY FOLDER "third_party")
+    endif()
   endif()
   set(ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_HIREDIS_HAPP_LINK_NAME hiredis-happ)
 endif()

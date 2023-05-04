@@ -100,7 +100,9 @@ add_executable(${ATSF4G_APP_NAME} ${ATSF4G_APP_SRC_LIST})
 
 if(MSVC)
   set_property(TARGET ${ATSF4G_APP_NAME} PROPERTY FOLDER "atframework/service")
+  set_property(TARGET ${ATFRAMEWORK_SERVICE_GATEWAY_LINK_NAME} PROPERTY FOLDER "atframework/service")
   add_target_properties(${ATSF4G_APP_NAME} LINK_FLAGS /NODEFAULTLIB:library)
+  add_target_properties(${ATFRAMEWORK_SERVICE_GATEWAY_LINK_NAME} LINK_FLAGS /NODEFAULTLIB:library)
 endif(MSVC)
 
 target_link_libraries(${ATSF4G_APP_NAME} ${ATFRAMEWORK_SERVICE_COMPONENT_LINK_NAME}

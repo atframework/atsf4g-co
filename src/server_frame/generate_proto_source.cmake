@@ -243,8 +243,12 @@ add_custom_command(
 # ============= Convert excel =============
 find_package(Java REQUIRED COMPONENTS Runtime)
 file(GLOB PROJECT_RESOURCE_EXCEL_FILES "${PROJECT_THIRD_PARTY_XRESLOADER_EXCEL_DIR}/*.xlsx")
-configure_file("${PROJECT_SOURCE_DIR}/resource/excel_xml/xresconv.xml.in" "${CMAKE_CURRENT_BINARY_DIR}/xresconv.xml"
-               ESCAPE_QUOTES @ONLY)
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml")
+configure_file("${PROJECT_SOURCE_DIR}/resource/excel_xml/xresconv.xml.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.gen.xml" ESCAPE_QUOTES @ONLY)
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.gen.xml"
+          "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.xml" COMMAND_ECHO STDOUT)
 
 set(PROJECT_RESOURCE_EXCEL_COMMAND_ARGS "\"${Python3_EXECUTABLE}\" \"${PROJECT_THIRD_PARTY_XRESLOADER_CLI}\"")
 if(Java_JAVA_EXECUTABLE)
@@ -252,7 +256,7 @@ if(Java_JAVA_EXECUTABLE)
       "${PROJECT_RESOURCE_EXCEL_COMMAND_ARGS} --java-path \"${Java_JAVA_EXECUTABLE}\"")
 endif()
 set(PROJECT_RESOURCE_EXCEL_COMMAND_ARGS
-    "${PROJECT_RESOURCE_EXCEL_COMMAND_ARGS} \"${CMAKE_CURRENT_BINARY_DIR}/xresconv.xml\"")
+    "${PROJECT_RESOURCE_EXCEL_COMMAND_ARGS} \"${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.xml\"")
 
 project_build_tool_generate_load_env_powershell("${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1")
 
@@ -285,14 +289,16 @@ if(NOT UNIX AND ATFRAMEWORK_CMAKE_TOOLSET_PWSH)
     COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_PWSH}" "-NoProfile" "-InputFormat" "None" "-ExecutionPolicy" "Bypass"
             "-NonInteractive" "-NoLogo" "-File" "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    DEPENDS "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb" ${PROJECT_RESOURCE_EXCEL_FILES}
+    DEPENDS "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb" "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.xml"
+            ${PROJECT_RESOURCE_EXCEL_FILES}
     COMMENT "Generate excel resources [@${CMAKE_CURRENT_BINARY_DIR}]")
 else()
   add_custom_command(
     OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/resource-config.log"
     COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_BASH}" "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.sh"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    DEPENDS "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb" ${PROJECT_RESOURCE_EXCEL_FILES}
+    DEPENDS "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb" "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.xml"
+            ${PROJECT_RESOURCE_EXCEL_FILES}
     COMMENT "Generate excel resources [@${CMAKE_CURRENT_BINARY_DIR}]")
 endif()
 

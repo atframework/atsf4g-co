@@ -3,8 +3,17 @@ echowithcolor(COLOR GREEN "-- Configure ${ATSF4G_APP_NAME} on ${CMAKE_CURRENT_LI
 
 set(ATFRAMEWORK_SERVICE_COMPONENT_VERSION "0.1.0")
 
+set(ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/_generated")
+file(MAKE_DIRECTORY "${ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR}/include/config")
+file(MAKE_DIRECTORY "${ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR}/temp")
+
 configure_file("${CMAKE_CURRENT_LIST_DIR}/config/atframe_services_build_feature.h.in"
-               "${CMAKE_CURRENT_LIST_DIR}/config/atframe_services_build_feature.h" @ONLY)
+               "${ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR}/temp/atframe_services_build_feature.h" @ONLY)
+execute_process(
+  COMMAND
+    "${CMAKE_COMMAND}" -E copy_if_different
+    "${ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR}/temp/atframe_services_build_feature.h"
+    "${ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR}/include/config")
 
 # ============ atproxy ============
 
@@ -53,8 +62,11 @@ target_link_libraries(
 
 target_compile_options(${ATSF4G_APP_NAME} PRIVATE ${ATFRAMEWORK_SREVICE_PRIVATE_OPTIONS})
 
-target_include_directories(${ATSF4G_APP_NAME} PUBLIC "$<BUILD_INTERFACE:${PROJECT_THIRD_PARTY_PUBLIC_INCLUDE_DIRS}>"
-                                                     "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>")
+target_include_directories(
+  ${ATSF4G_APP_NAME}
+  PUBLIC "$<BUILD_INTERFACE:${PROJECT_THIRD_PARTY_PUBLIC_INCLUDE_DIRS}>"
+         "$<BUILD_INTERFACE:${ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR}/include>"
+         "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>")
 
 install(
   TARGETS ${ATSF4G_APP_NAME}
@@ -72,3 +84,6 @@ install(
   EXPORT "${ATSF4G_APP_NAME}-target"
   NAMESPACE "atframework::"
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${ATSF4G_APP_NAME}")
+
+install(FILES "${ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR}/include/config/atframe_services_build_feature.h"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/config/")
