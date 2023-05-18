@@ -129,7 +129,8 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
   if(project_service_declare_protocol_OUTPUT_DIR)
     file(MAKE_DIRECTORY "${project_service_declare_protocol_OUTPUT_DIR}")
   else()
-    set(project_service_declare_protocol_OUTPUT_DIR "${PROTOCOL_DIR}")
+    set(project_service_declare_protocol_OUTPUT_DIR "${CMAKE_BINARY_DIR}/_generated/service/${TARGET_NAME}")
+    file(MAKE_DIRECTORY "${project_service_declare_protocol_OUTPUT_DIR}")
   endif()
 
   if(NOT project_service_declare_protocol_PROTOCOLS)
@@ -182,7 +183,9 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
       --proto_path
       "${PROTOCOL_DIR}"
       --proto_path
-      "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/proto"
+      "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private"
+      --proto_path
+      "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public"
       --proto_path
       --proto_path
       "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}"
@@ -275,7 +278,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
   target_include_directories(
     ${TARGET_FULL_NAME}
     PUBLIC "$<BUILD_INTERFACE:${project_service_declare_protocol_OUTPUT_DIR}>"
-           "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/include>"
+           "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PROTOCOL_SOURCE_DIR}/include>"
            "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 
   list(APPEND PUBLIC_LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol

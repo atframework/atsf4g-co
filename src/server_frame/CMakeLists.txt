@@ -70,7 +70,7 @@ target_link_libraries(
 target_include_directories(
   ${PROJECT_SERVER_FRAME_LIB_LINK}
   PUBLIC "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PUBLIC_INCLUDE_DIRS}>"
-         "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/include>"
+         "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PROTOCOL_SOURCE_DIR}/include>"
          "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/_generated/config/include>"
          "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/config/include>"
          "$<INSTALL_INTERFACE:include>")

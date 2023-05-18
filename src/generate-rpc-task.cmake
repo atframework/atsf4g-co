@@ -1,11 +1,22 @@
 include("${CMAKE_CURRENT_LIST_DIR}/generate_for_pb_utility.cmake")
 
 # -----------------------------------------------------------------------------
-generate_for_pb_add_proto_path("${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/proto")
+file(MAKE_DIRECTORY "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/common")
+file(MAKE_DIRECTORY "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/config")
+file(MAKE_DIRECTORY "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/pbdesc")
+file(MAKE_DIRECTORY "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/common")
+file(MAKE_DIRECTORY "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/config")
+file(MAKE_DIRECTORY "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/pbdesc")
+
+generate_for_pb_add_proto_path("${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private")
+generate_for_pb_add_proto_path("${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public")
 generate_for_pb_add_proto_file(
-  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/proto/protocol/common/*.proto"
-  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/proto/protocol/config/*.proto"
-  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/proto/protocol/pbdesc/*.proto")
+  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/common/*.proto"
+  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/config/*.proto"
+  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/pbdesc/*.proto"
+  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/pbdesc/*.proto"
+  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/pbdesc/*.proto"
+  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/pbdesc/*.proto")
 
 # Add additional proto files and paths
 function(generate_for_pb_create_protocol_sandbox OUTPUT_DIR)

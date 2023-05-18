@@ -5,7 +5,7 @@ project_component_declare_protocol(
 
 target_include_directories(
   ${PROJECT_COMPONENT_DISTRIBUTED_TRANSACTION_PROTOCOL}
-  PUBLIC "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/include>"
+  PUBLIC "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PROTOCOL_SOURCE_DIR}/include>"
          "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 
 add_subdirectory(sdk)

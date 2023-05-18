@@ -114,7 +114,8 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   if(project_component_declare_protocol_OUTPUT_DIR)
     file(MAKE_DIRECTORY "${project_component_declare_protocol_OUTPUT_DIR}")
   else()
-    set(project_component_declare_protocol_OUTPUT_DIR "${PROTOCOL_DIR}")
+    set(project_component_declare_protocol_OUTPUT_DIR "${CMAKE_BINARY_DIR}/_generated/component/${TARGET_NAME}")
+    file(MAKE_DIRECTORY "${project_service_declare_protocol_OUTPUT_DIR}")
   endif()
 
   if(NOT project_component_declare_protocol_PROTOCOLS)
@@ -167,7 +168,9 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
       --proto_path
       "${PROTOCOL_DIR}"
       --proto_path
-      "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/proto"
+      "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private"
+      --proto_path
+      "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public"
       --proto_path
       "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}"
       --proto_path
@@ -247,7 +250,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   target_include_directories(
     ${TARGET_FULL_NAME}
     PUBLIC "$<BUILD_INTERFACE:${project_component_declare_protocol_OUTPUT_DIR}>"
-    PRIVATE "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/include>")
+    PRIVATE "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PROTOCOL_SOURCE_DIR}/include>")
 
   list(APPEND PUBLIC_LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol)
   list(APPEND PUBLIC_LINK_TARGETS ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_LINK_NAME})

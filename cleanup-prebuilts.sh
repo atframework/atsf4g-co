@@ -16,3 +16,5 @@ done
 for CACHE_DIR in $(find . -name "__pycache__"); do
   rm -rf "$CACHE_DIR"
 done
+
+git submodule foreach --recursive git clean -dfx

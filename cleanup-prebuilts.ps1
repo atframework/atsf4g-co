@@ -20,3 +20,5 @@ foreach ($item in Get-ChildItem -Filter ".mako_modules*" -Recurse -Directory) {
 foreach ($item in Get-ChildItem -Filter "__pycache__" -Recurse -Directory) {
   Remove-Item -Recurse -Force $item
 }
+
+git submodule foreach --recursive git clean -dfx
