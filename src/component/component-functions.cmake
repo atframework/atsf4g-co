@@ -3,7 +3,7 @@ set(PROJECT_INSTALL_COMPONENT_EXPORT_FILE
     "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_NAME}/${PROJECT_INSTALL_COMPONENT_EXPORT_NAME}.cmake")
 
 function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
-  set(optionArgs "")
+  set(optionArgs "STATIC;SHARED")
   set(oneValueArgs INCLUDE_DIR OUTPUT_NAME OUTPUT_TARGET_NAME)
   set(multiValueArgs HRADERS SOURCES)
   cmake_parse_arguments(project_component_declare_sdk "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
@@ -17,8 +17,11 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
 
   if(project_component_declare_sdk_SOURCES)
     source_group_by_dir(project_component_declare_sdk_HRADERS project_component_declare_sdk_SOURCES)
-    if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows|MinGW|WindowsStore" AND (BUILD_SHARED_LIBS
-                                                                       OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY))
+    if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows|MinGW|WindowsStore"
+       AND NOT project_component_declare_sdk_STATIC
+       AND (BUILD_SHARED_LIBS
+            OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY
+            OR project_component_declare_sdk_SHARED))
       add_library(${TARGET_FULL_NAME} SHARED ${project_component_declare_sdk_HRADERS}
                                              ${project_component_declare_sdk_SOURCES})
 
