@@ -21,6 +21,7 @@ def rpc_return_always_ready_code_sentense(input):
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.pb.h>
@@ -33,6 +34,7 @@ def rpc_return_always_ready_code_sentense(input):
 %   endfor
 % endif
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
@@ -233,11 +235,10 @@ static inline rpc::result_code_type __rpc_wait_and_unpack_response(rpc::context 
                  rsp_msg.head().rpc_response().type_url());
     }
   } else if (!rsp_msg.body_bin().empty()) {
-    RPC_RETURN_CODE(details::__unpack_rpc_body(rsp_body, rsp_msg.body_bin(), rpc_full_name, type_full_name));
-  }
-
-  if (!rsp_msg.body_bin().empty()) {
-    RPC_RETURN_CODE(details::__unpack_rpc_body(rsp_body, rsp_msg.body_bin(), rpc_full_name, type_full_name));
+    res = details::__unpack_rpc_body(rsp_body, rsp_msg.body_bin(), rpc_full_name, type_full_name);
+    if(res < 0) {
+      RPC_RETURN_CODE(res);
+    }
   }
 
   if (rsp_msg.has_head() && rsp_msg.head().error_code() != 0) {

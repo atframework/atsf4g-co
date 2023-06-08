@@ -7,7 +7,9 @@
 
 #include <config/server_frame_build_feature.h>
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <opentelemetry/logs/logger.h>
 #include <opentelemetry/metrics/async_instruments.h>
@@ -15,7 +17,9 @@
 #include <opentelemetry/sdk/common/attribute_utils.h>
 #include <opentelemetry/trace/tracer.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <stdint.h>
 #include <memory>
@@ -61,6 +65,30 @@ class global_service {
    * @return * const std::unordered_map<std::string, opentelemetry::common::AttributeValue>&
    */
   static const std::unordered_map<std::string, opentelemetry::common::AttributeValue>& get_metrics_labels();
+
+  /**
+   * @brief Get the current trace exporter count
+   * @note it may be used to find out if trace is enabled
+   *
+   * @return current trace exporter count
+   */
+  static size_t get_trace_exporter_count() noexcept;
+
+  /**
+   * @brief Get the current metrics exporter count
+   * @note it may be used to find out if metrics is enabled
+   *
+   * @return current metrics exporter count
+   */
+  static size_t get_metrics_exporter_count() noexcept;
+
+  /**
+   * @brief Get the current logs exporter count
+   * @note it may be used to find out if logs is enabled
+   *
+   * @return current logs exporter count
+   */
+  static size_t get_logs_exporter_count() noexcept;
 
   /**
    * @brief Get the current default tracer

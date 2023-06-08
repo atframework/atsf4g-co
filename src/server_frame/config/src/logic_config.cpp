@@ -24,6 +24,7 @@ int logic_config::reload(atapp::app &app) {
   _load_server_cfg(app);
   _load_db();
 
+  readable_app_id_.clear();
   return 0;
 }
 
@@ -33,7 +34,7 @@ uint64_t logic_config::get_local_server_id() const noexcept {
     return 0;
   }
 
-  return static_cast<uint32_t>(app->get_app_id());
+  return static_cast<uint64_t>(app->get_app_id());
 }
 
 uint32_t logic_config::get_local_zone_id() const noexcept {
@@ -52,6 +53,20 @@ gsl::string_view logic_config::get_local_server_name() const noexcept {
   }
 
   return app->get_app_name();
+}
+
+gsl::string_view logic_config::get_local_server_id_readable() const noexcept {
+  if (!readable_app_id_.empty()) {
+    return readable_app_id_;
+  }
+
+  auto app = atapp::app::get_last_instance();
+  if (nullptr == app) {
+    return readable_app_id_;
+  }
+
+  const_cast<logic_config *>(this)->readable_app_id_ = app->convert_app_id_to_string(app->get_app_id());
+  return readable_app_id_;
 }
 
 gsl::string_view logic_config::get_deployment_environment_name() const noexcept {

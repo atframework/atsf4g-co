@@ -39,6 +39,7 @@ class logic_config : public util::design_pattern::singleton<logic_config> {
   uint64_t get_local_server_id() const noexcept;
   uint32_t get_local_zone_id() const noexcept;
   gsl::string_view get_local_server_name() const noexcept;
+  gsl::string_view get_local_server_id_readable() const noexcept;
 
   gsl::string_view get_deployment_environment_name() const noexcept;
 
@@ -76,4 +77,5 @@ class logic_config : public util::design_pattern::singleton<logic_config> {
   const atframework::ConstSettingsType *atframe_settings_;
 
   PROJECT_NAMESPACE_ID::config::server_cfg server_cfg_;
+  std::string readable_app_id_;
 };

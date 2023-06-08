@@ -196,15 +196,18 @@ struct local_caller_info_t {
   local_provider_handle_t<opentelemetry::trace::TracerProvider> tracer_handle;
   opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> default_tracer;
   opentelemetry::nostd::shared_ptr<std::ofstream> debug_tracer_ostream_exportor;
+  size_t tracer_exporter_count;
 
   local_provider_handle_t<opentelemetry::metrics::MeterProvider> metrics_handle;
   std::shared_ptr<local_meter_info_t> default_metrics_meter;
   std::unordered_map<std::string, std::shared_ptr<local_meter_info_t>> metrics_meters;
   opentelemetry::nostd::shared_ptr<std::ofstream> debug_metrics_ostream_exportor;
+  size_t metrics_exporter_count;
 
   local_provider_handle_t<opentelemetry::logs::LoggerProvider> logs_handle;
   opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> default_logger;
   opentelemetry::nostd::shared_ptr<std::ofstream> debug_logger_ostream_exportor;
+  size_t logger_exporter_count;
 };
 
 static std::shared_ptr<local_caller_info_t> g_global_service_cache;
@@ -355,6 +358,9 @@ static opentelemetry::common::AttributeValue rebuild_attributes_map_value(
   } else if (opentelemetry::nostd::holds_alternative<std::vector<uint64_t>>(value)) {
     const auto &data = opentelemetry::nostd::get<std::vector<uint64_t>>(value);
     return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const uint64_t>{data.data(), data.size()}};
+  } else if (opentelemetry::nostd::holds_alternative<std::vector<uint8_t>>(value)) {
+    const auto &data = opentelemetry::nostd::get<std::vector<uint8_t>>(value);
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const uint8_t>{data.data(), data.size()}};
   } else if (opentelemetry::nostd::holds_alternative<std::vector<double>>(value)) {
     const auto &data = opentelemetry::nostd::get<std::vector<double>>(value);
     return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const double>{data.data(), data.size()}};
@@ -406,6 +412,33 @@ const std::unordered_map<std::string, opentelemetry::common::AttributeValue> &gl
 
   static std::unordered_map<std::string, opentelemetry::common::AttributeValue> empty;
   return empty;
+}
+
+size_t global_service::get_trace_exporter_count() noexcept {
+  util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{details::g_global_service_lock};
+  if (details::g_global_service_cache) {
+    return details::g_global_service_cache->tracer_exporter_count;
+  }
+
+  return 0;
+}
+
+size_t global_service::get_metrics_exporter_count() noexcept {
+  util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{details::g_global_service_lock};
+  if (details::g_global_service_cache) {
+    return details::g_global_service_cache->metrics_exporter_count;
+  }
+
+  return 0;
+}
+
+size_t global_service::get_logs_exporter_count() noexcept {
+  util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{details::g_global_service_lock};
+  if (details::g_global_service_cache) {
+    return details::g_global_service_cache->logger_exporter_count;
+  }
+
+  return 0;
 }
 
 opentelemetry::nostd::shared_ptr<::opentelemetry::trace::Tracer> global_service::get_current_default_tracer() {
@@ -1506,6 +1539,7 @@ _opentelemetry_create_opentelemetry_trace_provider(
       ret.reset_shutdown_callback();
       return ret;
     }
+    app_info_cache.tracer_exporter_count = exporter.size();
     auto processor = _opentelemetry_create_trace_processor(std::move(exporter), opentelemetry_cfg.trace().processors());
 
     opentelemetry::sdk::resource::ResourceAttributes trace_resource_values = resource_values;
@@ -1532,6 +1566,7 @@ _opentelemetry_create_opentelemetry_metrics_provider(
     const opentelemetry::sdk::resource::ResourceAttributes &resource_values) {
   if (opentelemetry_cfg.has_metrics()) {
     auto exporters = _opentelemetry_create_metrics_exporter(app_info_cache, opentelemetry_cfg.metrics().exporters());
+    app_info_cache.metrics_exporter_count = exporters.size();
     auto readers = _opentelemetry_create_metrics_reader(std::move(exporters), opentelemetry_cfg.metrics().reader(),
                                                         opentelemetry_cfg.metrics().exporters());
 
@@ -1566,6 +1601,7 @@ _opentelemetry_create_opentelemetry_logs_provider(
     const opentelemetry::sdk::resource::ResourceAttributes &resource_values) {
   if (opentelemetry_cfg.has_logs()) {
     auto exporter = _opentelemetry_create_logs_exporter(app_info_cache, opentelemetry_cfg.logs().exporters());
+    app_info_cache.logger_exporter_count = exporter.size();
     auto processor = _opentelemetry_create_logs_processor(std::move(exporter), opentelemetry_cfg.logs().processors());
 
     opentelemetry::sdk::resource::ResourceAttributes logs_resource_values = resource_values;
@@ -1607,6 +1643,9 @@ void global_service::set_current_service(atapp::app &app,
   protobuf_copy_message(app_info_cache->app_metadata, app.get_metadata());
 
   // Setup telemetry
+  app_info_cache->tracer_exporter_count = 0;
+  app_info_cache->metrics_exporter_count = 0;
+  app_info_cache->logger_exporter_count = 0;
   auto &opentelemetry_cfg = telemetry.opentelemetry();
   opentelemetry::sdk::resource::ResourceAttributes resource_values =
       _create_opentelemetry_app_resource(*app_info_cache, app);
