@@ -23,12 +23,18 @@ import time
 
 // clang-format off
 #include "config/compiler/protobuf_prefix.h"
+// clang-format on
 
 #include "${pb_set.pb_include_prefix}${loader.get_pb_header_path()}"
 #include "protocol/config/pb_header_v3.pb.h"
 
+// clang-format off
 #include "config/compiler/protobuf_suffix.h"
 // clang-format on
+
+#ifndef EXCEL_CONFIG_LOADER_API
+#  define EXCEL_CONFIG_LOADER_API
+#endif
 
 ${pb_loader.CppNamespaceBegin(global_package)}
 ${loader.get_cpp_namespace_decl_begin()}
@@ -40,16 +46,16 @@ class ${loader.get_cpp_class_name()} {
   using item_ptr_type = std::shared_ptr<item_type>;
 
  public:
-  ${loader.get_cpp_class_name()}();
-  ~${loader.get_cpp_class_name()}();
+  EXCEL_CONFIG_LOADER_API ${loader.get_cpp_class_name()}();
+  EXCEL_CONFIG_LOADER_API ~${loader.get_cpp_class_name()}();
 
-  int on_inited();
+  EXCEL_CONFIG_LOADER_API int on_inited();
 
-  int load_all();
+  EXCEL_CONFIG_LOADER_API int load_all();
 
-  void clear();
+  EXCEL_CONFIG_LOADER_API void clear();
 
-  const std::list<org::xresloader::pb::xresloader_data_source>& get_data_source() const;
+  EXCEL_CONFIG_LOADER_API const std::list<org::xresloader::pb::xresloader_data_source>& get_data_source() const;
 
  private:
   int load_file(const std::string& file_path);
@@ -67,21 +73,21 @@ class ${loader.get_cpp_class_name()} {
  public:
 % if code_index.is_list():
   using ${code_index.name}_value_type = std::vector<item_ptr_type>;
-  const ${code_index.name}_value_type* get_list_by_${code_index.name}(${code_index.get_key_decl()});
-  item_ptr_type get_by_${code_index.name}(${code_index.get_key_decl()}, size_t index);
+  EXCEL_CONFIG_LOADER_API const ${code_index.name}_value_type* get_list_by_${code_index.name}(${code_index.get_key_decl()});
+  EXCEL_CONFIG_LOADER_API item_ptr_type get_by_${code_index.name}(${code_index.get_key_decl()}, size_t index);
  private:
   const ${code_index.name}_value_type* _get_list_by_${code_index.name}(${code_index.get_key_decl()});
  public:
 % else:
   using ${code_index.name}_value_type = item_ptr_type;
-  ${code_index.name}_value_type get_by_${code_index.name}(${code_index.get_key_decl()});
+  EXCEL_CONFIG_LOADER_API ${code_index.name}_value_type get_by_${code_index.name}(${code_index.get_key_decl()});
 % endif
 % if code_index.is_vector():
   using ${code_index.name}_container_type = std::vector<${code_index.name}_value_type>;
 % else:
   using ${code_index.name}_container_type = std::map<std::tuple<${code_index.get_key_type_list()}>, ${code_index.name}_value_type>;
 % endif
-  const ${code_index.name}_container_type& get_all_of_${code_index.name}() const;
+  EXCEL_CONFIG_LOADER_API const ${code_index.name}_container_type& get_all_of_${code_index.name}() const;
 
  private:
 % if code_index.is_vector():

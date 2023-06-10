@@ -115,13 +115,13 @@ static std::pair<const TCH *, size_t> trim(const TCH *str_begin, size_t sz) {
 }
 }
 
-${pb_msg_class_name}::${pb_msg_class_name}() {
+EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::${pb_msg_class_name}() {
 }
 
-${pb_msg_class_name}::~${pb_msg_class_name}(){
+EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::~${pb_msg_class_name}(){
 }
 
-int ${pb_msg_class_name}::on_inited() {
+EXCEL_CONFIG_LOADER_API int ${pb_msg_class_name}::on_inited() {
   ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh(load_file_lock_);
 
   file_status_.clear();
@@ -129,7 +129,7 @@ int ${pb_msg_class_name}::on_inited() {
   return reload_file_lists();
 }
 
-int ${pb_msg_class_name}::load_all() {
+EXCEL_CONFIG_LOADER_API int ${pb_msg_class_name}::load_all() {
   int ret = 0;
   ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh(load_file_lock_);
   for (std::unordered_map<std::string, bool>::iterator iter = file_status_.begin(); iter != file_status_.end(); ++ iter) {
@@ -148,7 +148,7 @@ int ${pb_msg_class_name}::load_all() {
   return ret;
 }
 
-void ${pb_msg_class_name}::clear() {
+EXCEL_CONFIG_LOADER_API void ${pb_msg_class_name}::clear() {
   ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh(load_file_lock_);
 % for code_index in loader.code.indexes:
   ${code_index.name}_data_.clear();
@@ -158,7 +158,7 @@ void ${pb_msg_class_name}::clear() {
   reload_file_lists();
 }
 
-const std::list<org::xresloader::pb::xresloader_data_source>& ${pb_msg_class_name}::get_data_source() const {
+EXCEL_CONFIG_LOADER_API const std::list<org::xresloader::pb::xresloader_data_source>& ${pb_msg_class_name}::get_data_source() const {
   return datasource_;
 }
 
@@ -337,12 +337,12 @@ void ${pb_msg_class_name}::merge_data(item_ptr_type item) {
 % for code_index in loader.code.indexes:
 // ------------------- index: ${code_index.name} APIs -------------------
 % if code_index.is_list():
-const ${pb_msg_class_name}::${code_index.name}_value_type* ${pb_msg_class_name}::get_list_by_${code_index.name}(${code_index.get_key_decl()}) {
+EXCEL_CONFIG_LOADER_API const ${pb_msg_class_name}::${code_index.name}_value_type* ${pb_msg_class_name}::get_list_by_${code_index.name}(${code_index.get_key_decl()}) {
   ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh(load_file_lock_);
   return _get_list_by_${code_index.name}(${code_index.get_key_params()});
 }
 
-${pb_msg_class_name}::item_ptr_type ${pb_msg_class_name}::get_by_${code_index.name}(${code_index.get_key_decl()}, size_t index) {
+EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::item_ptr_type ${pb_msg_class_name}::get_by_${code_index.name}(${code_index.get_key_decl()}, size_t index) {
   ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh(load_file_lock_);
   const ${pb_msg_class_name}::${code_index.name}_value_type* list_item = _get_list_by_${code_index.name}(${code_index.get_key_params()});
   if (nullptr == list_item) {
@@ -509,7 +509,7 @@ const ${pb_msg_class_name}::${code_index.name}_value_type* ${pb_msg_class_name}:
 }
 
 % else:
-${pb_msg_class_name}::${code_index.name}_value_type ${pb_msg_class_name}::get_by_${code_index.name}(${code_index.get_key_decl()}) {
+EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::${code_index.name}_value_type ${pb_msg_class_name}::get_by_${code_index.name}(${code_index.get_key_decl()}) {
 % if code_index.is_vector():
   size_t idx = 0;
 %   for idx_field in code_index.fields:
@@ -521,14 +521,14 @@ ${pb_msg_class_name}::${code_index.name}_value_type ${pb_msg_class_name}::get_by
     return nullptr;
   }
 %       endif
-idx = static_cast<size_t>(${idx_field.name});
+  idx = static_cast<size_t>(${idx_field.name});
 %   endfor
   if (${code_index.name}_data_.size() > idx && ${code_index.name}_data_[idx]) {
     return ${code_index.name}_data_[idx];
   }
 % else:
-::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh(load_file_lock_);
-${code_index.name}_container_type::iterator iter = ${code_index.name}_data_.find(std::make_tuple(${code_index.get_key_params()}));
+  ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh(load_file_lock_);
+  ${code_index.name}_container_type::iterator iter = ${code_index.name}_data_.find(std::make_tuple(${code_index.get_key_params()}));
   if (iter != ${code_index.name}_data_.end()) {
     return iter->second;
   }
@@ -615,7 +615,7 @@ ${code_index.name}_container_type::iterator iter = ${code_index.name}_data_.find
 }
 % endif
 
-const ${pb_msg_class_name}::${code_index.name}_container_type& ${pb_msg_class_name}::get_all_of_${code_index.name}() const {
+EXCEL_CONFIG_LOADER_API const ${pb_msg_class_name}::${code_index.name}_container_type& ${pb_msg_class_name}::get_all_of_${code_index.name}() const {
   return ${code_index.name}_data_;
 }
 % endfor

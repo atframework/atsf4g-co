@@ -203,9 +203,9 @@ static thread_local_config_group_data& get_tls_config_group() {
 #endif
 }  // namespace details
 
-config_manager::log_caller_info_t::log_caller_info_t(): level_id(log_level_t::LOG_LW_DISABLED), level_name(NULL), file_path(NULL), line_number(0), func_name(NULL) {}
+EXCEL_CONFIG_LOADER_API config_manager::log_caller_info_t::log_caller_info_t(): level_id(log_level_t::LOG_LW_DISABLED), level_name(NULL), file_path(NULL), line_number(0), func_name(NULL) {}
 
-config_manager::log_caller_info_t::log_caller_info_t(log_level_t::type lid, const char *lname, const char *fpath, uint32_t lnum, const char *fnname):
+EXCEL_CONFIG_LOADER_API config_manager::log_caller_info_t::log_caller_info_t(log_level_t::type lid, const char *lname, const char *fpath, uint32_t lnum, const char *fnname):
   level_id(lid), level_name(lname), file_path(fpath), line_number(lnum), func_name(fnname) {}
 
 config_manager::config_manager() :
@@ -216,7 +216,7 @@ config_manager::config_manager() :
   read_file_handle_(config_manager::default_buffer_loader), 
   read_version_handle_(default_version_loader) {}
 
-config_manager::config_manager(constructor_helper_t&) : 
+EXCEL_CONFIG_LOADER_API config_manager::config_manager(constructor_helper_t&) : 
   reload_version_(std::chrono::system_clock::now().time_since_epoch().count()),
   override_same_version_(false),
   max_group_number_(8),
@@ -224,11 +224,11 @@ config_manager::config_manager(constructor_helper_t&) :
   read_file_handle_(config_manager::default_buffer_loader), 
   read_version_handle_(default_version_loader) {}
 
-config_manager::~config_manager() {
+EXCEL_CONFIG_LOADER_API config_manager::~config_manager() {
   is_destroyed_ = true;
 }
 
-std::shared_ptr<config_manager> config_manager::me() {
+EXCEL_CONFIG_LOADER_API std::shared_ptr<config_manager> config_manager::me() {
   if (is_destroyed_) {
     return std::shared_ptr<config_manager>();
   }
@@ -248,11 +248,11 @@ std::shared_ptr<config_manager> config_manager::me() {
   return ret;
 }
 
-int config_manager::init() {
+EXCEL_CONFIG_LOADER_API int config_manager::init() {
   return 0;
 }
 
-int config_manager::init_new_group() {
+EXCEL_CONFIG_LOADER_API int config_manager::init_new_group() {
   std::string version;
   {
     ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh(handle_lock_);
@@ -338,7 +338,7 @@ int config_manager::init_new_group() {
   return ret;
 }
 
-void config_manager::reset() {
+EXCEL_CONFIG_LOADER_API void config_manager::reset() {
   {
     ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh(handle_lock_);
     max_group_number_ = 8;
@@ -354,12 +354,12 @@ void config_manager::reset() {
   clear();
 }
 
-void config_manager::clear() {
+EXCEL_CONFIG_LOADER_API void config_manager::clear() {
   ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh(config_group_lock_);
   config_group_list_.clear();
 }
 
-bool config_manager::load_file_data(std::string& write_to, const std::string& file_path) {
+EXCEL_CONFIG_LOADER_API bool config_manager::load_file_data(std::string& write_to, const std::string& file_path) {
   ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh(handle_lock_);
 
   if (!read_file_handle_) {
@@ -370,11 +370,11 @@ bool config_manager::load_file_data(std::string& write_to, const std::string& fi
   return read_file_handle_(write_to, file_path.c_str());
 }
 
-int config_manager::reload() {
+EXCEL_CONFIG_LOADER_API int config_manager::reload() {
   return init_new_group();
 }
 
-int config_manager::reload_all(bool del_when_failed) {
+EXCEL_CONFIG_LOADER_API int config_manager::reload_all(bool del_when_failed) {
   int ret = reload();
   if (ret < 0) {
     return ret;
@@ -418,31 +418,31 @@ int config_manager::reload_all(bool del_when_failed) {
   return ret;
 }
 
-config_manager::read_buffer_func_t config_manager::get_buffer_loader() const { 
+EXCEL_CONFIG_LOADER_API config_manager::read_buffer_func_t config_manager::get_buffer_loader() const { 
   ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh(handle_lock_);
   
   return read_file_handle_;
 }
 
-void config_manager::set_buffer_loader(read_buffer_func_t fn) { 
+EXCEL_CONFIG_LOADER_API void config_manager::set_buffer_loader(read_buffer_func_t fn) { 
   ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh(handle_lock_);
 
   read_file_handle_ = fn; 
 }
 
-config_manager::read_version_func_t config_manager::get_version_loader() const { 
+EXCEL_CONFIG_LOADER_API config_manager::read_version_func_t config_manager::get_version_loader() const { 
   ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh(handle_lock_);
 
   return read_version_handle_; 
 }
 
-void config_manager::set_version_loader(read_version_func_t fn) { 
+EXCEL_CONFIG_LOADER_API void config_manager::set_version_loader(read_version_func_t fn) { 
   ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh(handle_lock_);
 
   read_version_handle_ = fn; 
 }
 
-const config_manager::config_group_ptr_t& config_manager::get_current_config_group() {
+EXCEL_CONFIG_LOADER_API const config_manager::config_group_ptr_t& config_manager::get_current_config_group() {
   details::thread_local_config_group_data& tls_cache = details::get_tls_config_group();
   if (tls_cache.current_version == reload_version_.load(util::lock::memory_order_acquire) && tls_cache.current_group) {
     return tls_cache.current_group;
@@ -470,7 +470,34 @@ const config_manager::config_group_ptr_t& config_manager::get_current_config_gro
   return empty;
 }
 
-void config_manager::log(const log_caller_info_t &caller,
+EXCEL_CONFIG_LOADER_API void config_manager::set_override_same_version(bool v) { override_same_version_ = v; }
+EXCEL_CONFIG_LOADER_API bool config_manager::get_override_same_version() const { return override_same_version_; }
+
+EXCEL_CONFIG_LOADER_API void config_manager::set_group_number(size_t sz) { max_group_number_ = sz; }
+EXCEL_CONFIG_LOADER_API size_t config_manager::get_group_number() const { return max_group_number_; }
+
+EXCEL_CONFIG_LOADER_API void config_manager::set_on_group_created(on_load_func_t func) { on_group_created_ = func; }
+EXCEL_CONFIG_LOADER_API const config_manager::on_load_func_t& config_manager::get_n_group_created() const { return on_group_created_; }
+
+EXCEL_CONFIG_LOADER_API void config_manager::set_on_group_reload_all(on_load_func_t func) { on_group_reload_all_ = func; }
+EXCEL_CONFIG_LOADER_API const config_manager::on_load_func_t& config_manager::get_on_group_reload_all() const { return on_group_reload_all_; }
+
+EXCEL_CONFIG_LOADER_API void config_manager::set_on_group_destroyed(on_load_func_t func) { on_group_destroyed_ = func; }
+EXCEL_CONFIG_LOADER_API const config_manager::on_load_func_t& config_manager::get_on_group_destroyed() const { return on_group_destroyed_; }
+
+EXCEL_CONFIG_LOADER_API void config_manager::set_on_filter(on_filter_func_t func) { on_filter_ = func; }
+EXCEL_CONFIG_LOADER_API const config_manager::on_filter_func_t& config_manager::get_on_filter() const { return on_filter_; }
+
+EXCEL_CONFIG_LOADER_API void config_manager::set_on_group_filter(on_group_filter_func_t func) { on_group_filter_ = func; }
+EXCEL_CONFIG_LOADER_API const config_manager::on_group_filter_func_t& config_manager::get_on_group_filter() const { return on_group_filter_; }
+
+EXCEL_CONFIG_LOADER_API void config_manager::set_on_not_found(on_not_found_func_t func) { on_not_found_ = func; }
+EXCEL_CONFIG_LOADER_API const config_manager::on_not_found_func_t& config_manager::get_on_not_found() const { return on_not_found_; }
+
+EXCEL_CONFIG_LOADER_API void config_manager::set_on_log(on_log_func_t func) { on_log_ = func; }
+EXCEL_CONFIG_LOADER_API const config_manager::on_log_func_t& config_manager::get_on_log() const { return on_log_; }
+
+EXCEL_CONFIG_LOADER_API void config_manager::log(const log_caller_info_t &caller,
 #ifdef _MSC_VER
     _In_z_ _Printf_format_string_ const char *fmt, ...
 #else
