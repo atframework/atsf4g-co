@@ -1424,9 +1424,10 @@ static void _opentelemetry_set_global_provider(
   app.parse_log_configures_into(opentelemetry_log_conf,
                                 std::vector<gsl::string_view>{"logic", "telemetry", "opentelemetry", "app_log"},
                                 "ATAPP_LOGIC_TELEMETRY_OPENTELEMETRY_LOG");
+  util::log::log_formatter::level_t::type opentelemetry_log_level =
+      util::log::log_formatter::get_level_by_name(opentelemetry_log_conf.level().c_str());
   if (app_info_cache->internal_logger && opentelemetry_log_conf.category_size() > 0) {
-    app_info_cache->internal_logger->init(
-        util::log::log_formatter::get_level_by_name(opentelemetry_log_conf.level().c_str()));
+    app_info_cache->internal_logger->init(opentelemetry_log_level);
     app.setup_logger(*app_info_cache->internal_logger, opentelemetry_log_conf.level(),
                      opentelemetry_log_conf.category(0));
   }
@@ -1442,6 +1443,19 @@ static void _opentelemetry_set_global_provider(
         opentelemetry::nostd::shared_ptr<opentelemetry::sdk::common::internal_log::LogHandler>{
             new details::opentelemetry_internal_log_handler()});
     app.add_evt_on_finally(_opentelemetry_cleanup_global_provider);
+  }
+  if (opentelemetry_log_level <= util::log::log_formatter::level_t::LOG_LW_ERROR) {
+    opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogLevel(
+        opentelemetry::sdk::common::internal_log::LogLevel::Error);
+  } else if (opentelemetry_log_level <= util::log::log_formatter::level_t::LOG_LW_WARNING) {
+    opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogLevel(
+        opentelemetry::sdk::common::internal_log::LogLevel::Warning);
+  } else if (opentelemetry_log_level <= util::log::log_formatter::level_t::LOG_LW_INFO) {
+    opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogLevel(
+        opentelemetry::sdk::common::internal_log::LogLevel::Info);
+  } else {
+    opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogLevel(
+        opentelemetry::sdk::common::internal_log::LogLevel::Debug);
   }
   details::g_global_service_cache.swap(app_info_cache);
 

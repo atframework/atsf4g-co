@@ -23,7 +23,7 @@ const std::shared_ptr<config_group_t>& get_current_config_group() noexcept {
 
 % for pb_msg in pb_set.generate_message:
 %   for loader in pb_msg.loaders:
-  // ======================================== ${loader.code.class_name} ========================================
+// ======================================== ${loader.code.class_name} ========================================
 %     for code_index in loader.code.indexes:
 <%
 current_code_proto_ptr_type = 'std::shared_ptr<const ' + loader.get_pb_inner_class_name() + '>'
@@ -35,8 +35,7 @@ if code_index.is_vector():
   get_all_of_result = 'const std::vector<' + current_code_item_value_type + '>&'
 else:
   get_all_of_result = 'const std::map<std::tuple<' + code_index.get_key_type_list() + '>, ' + current_code_item_value_type + '>&'
-%>
-EXCEL_CONFIG_LOADER_API ${get_all_of_result}
+%>EXCEL_CONFIG_LOADER_API ${get_all_of_result}
   get_${loader.code.class_name}_all_of_${code_index.name}(const std::shared_ptr<config_group_t>& group) {
   static ${pb_loader.CppFullPath(global_package)}${loader.get_cpp_class_full_name()}::${code_index.name}_container_type empty;
   if (!group) {
