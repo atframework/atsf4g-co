@@ -15,6 +15,9 @@
 
 #include <std/explicit_declare.h>
 
+#if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+#  include <assert.h>
+#endif
 #include <stdint.h>
 #include <cstddef>
 #include <type_traits>
@@ -190,10 +193,33 @@ class rpc_result {
   using value_type = TVALUE;
 
  public:
-  rpc_result() {}
+  rpc_result()
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+      : awaited_(false)
+#  endif
+  {
+  }
 
   template <class TINPUT>
-  rpc_result(rpc_result_guard<TINPUT>&& input) : result_data_(input.get()) {}
+  rpc_result(rpc_result_guard<TINPUT>&& input)
+      : result_data_(input.get())
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+        ,
+        waited_(false)
+#  endif
+  {
+  }
+
+  rpc_result(rpc_result&&) = default;
+  rpc_result& operator=(rpc_result&&) = default;
+
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+  ~rpc_result() {
+    // rpc::result_XXX must be awaited with RPC_AWAIT_IGNORE_RESULT(...), RPC_AWAIT_IGNORE_VOID(...) or
+    // RPC_AWAIT_TYPE_RESULT(...)
+    assert(awaited_ || !result_data_.is_ready());
+  }
+#  endif
 
   // Remove this and implement co_yield to get the result in the future
   explicit inline operator value_type() const noexcept {
@@ -206,8 +232,14 @@ class rpc_result {
 
   inline bool is_ready() const noexcept { return result_data_.is_ready(); }
 
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+  inline void _internal_set_awaited() noexcept { awaited_ = true; }
+#  endif
  private:
   copp::future::poller<value_type> result_data_;
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+  bool awaited_;
+#  endif
 };
 
 using result_code_type = rpc_result<int32_t>;
@@ -216,11 +248,21 @@ class result_void_type {
  public:
   result_void_type();
   explicit result_void_type(bool is_ready);
+  ~result_void_type();
+
+  result_void_type(result_void_type&&) = default;
+  result_void_type& operator=(result_void_type&&) = default;
 
   inline bool is_ready() const noexcept { return result_data_.is_ready(); }
 
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+  inline void _internal_set_awaited() noexcept { awaited_ = true; }
+#  endif
  private:
   copp::future::poller<void> result_data_;
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+  bool awaited_;
+#  endif
 };
 
 namespace details {
@@ -239,6 +281,9 @@ struct _rpc_result_traits {
 
 template <class TRESULT>
 typename _rpc_result_traits<TRESULT>::value_type _get_rpc_result_value(TRESULT&& result) {
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+  result._internal_set_awaited();
+#  endif
   return static_cast<typename _rpc_result_traits<TRESULT>::value_type>(result);
 }
 
@@ -257,6 +302,9 @@ template <class TRESULT,
           typename std::enable_if<!std::is_same<::rpc::result_void_type, typename std::decay<TRESULT>::type>::value,
                                   int>::type* = nullptr>
 TRESULT _ignore_result(EXPLICIT_UNUSED_ATTR TRESULT&& result) {
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+  result._internal_set_awaited();
+#  endif
   return std::forward<TRESULT>(result);
 }
 
@@ -264,6 +312,9 @@ template <class TRESULT,
           typename std::enable_if<std::is_same<::rpc::result_void_type, typename std::decay<TRESULT>::type>::value,
                                   int>::type* = nullptr>
 TRESULT _ignore_void(EXPLICIT_UNUSED_ATTR TRESULT&& result) {
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+  result._internal_set_awaited();
+#  endif
   return std::forward<TRESULT>(result);
 }
 #endif

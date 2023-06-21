@@ -51,7 +51,27 @@ int32_t rpc_error_code_transform::operator()(copp::promise_status in) const noex
 #else
 int32_t rpc_get_not_ready_code() { return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL; }
 
-result_void_type::result_void_type() {}
-result_void_type::result_void_type(bool is_ready) : result_data_(is_ready) {}
+result_void_type::result_void_type()
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+    : awaited_(false)
+#  endif
+{
+}
+result_void_type::result_void_type(bool is_ready)
+    : result_data_(is_ready)
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+      ,
+      awaited_(false)
+#  endif
+{
+}
+
+result_void_type::~result_void_type() {
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+  // rpc::result_XXX must be awaited with RPC_AWAIT_IGNORE_RESULT(...), RPC_AWAIT_IGNORE_VOID(...) or
+  // RPC_AWAIT_TYPE_RESULT(...)
+  assert(awaited_ || !result_data_.is_ready());
+#  endif
+}
 #endif
 }  // namespace rpc
