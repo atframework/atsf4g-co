@@ -45,6 +45,7 @@ def check_has_module(module_name):
 
 class MakoModuleTempDir:
     """ RAII: Auto remove tempory directory """
+
     def __init__(self, prefix_path):
         if not os.path.exists(prefix_path):
             os.makedirs(prefix_path)
@@ -124,6 +125,7 @@ class PbConvertRule:
 
 
 class PbObjectBase(object):
+
     def __init__(self, descriptor, refer_database):
         self.descriptor = descriptor
         self.refer_database = refer_database
@@ -265,6 +267,7 @@ class PbObjectBase(object):
 
 
 class PbFile(PbObjectBase):
+
     def __init__(self, descriptor, refer_database):
         super(PbFile, self).__init__(descriptor, refer_database)
         refer_database._cache_files[descriptor.name] = self
@@ -275,8 +278,20 @@ class PbFile(PbObjectBase):
     def get_full_name(self):
         return self.get_name()
 
+    def is_valid(self, ignore_package):
+        if ignore_package:
+            if self.get_package() in ignore_package:
+                return False
+        return True
+
+    def get_file_path_without_ext(self):
+        full_name = self.get_full_name()
+        if full_name.endswith(".proto"):
+            return full_name[:-len(".proto")]
+        return full_name
 
 class PbField(PbObjectBase):
+
     def __init__(self, container_message, descriptor, refer_database):
         super(PbField, self).__init__(descriptor, refer_database)
         self.file = container_message.file
@@ -290,6 +305,7 @@ class PbField(PbObjectBase):
 
 
 class PbOneof(PbObjectBase):
+
     def __init__(self, container_message, fields, descriptor, refer_database):
         super(PbOneof, self).__init__(descriptor, refer_database)
         self.file = container_message.file
@@ -307,6 +323,7 @@ class PbOneof(PbObjectBase):
 
 
 class PbMessage(PbObjectBase):
+
     def __init__(self, file, descriptor, refer_database):
         super(PbMessage, self).__init__(descriptor, refer_database)
         refer_database._cache_messages[descriptor.full_name] = self
@@ -334,6 +351,7 @@ class PbMessage(PbObjectBase):
 
 
 class PbEnumValue(PbObjectBase):
+
     def __init__(self, container_enum, descriptor, refer_database):
         super(PbEnumValue, self).__init__(descriptor, refer_database)
         self.file = container_enum.file
@@ -348,6 +366,7 @@ class PbEnumValue(PbObjectBase):
 
 
 class PbEnum(PbObjectBase):
+
     def __init__(self, file, descriptor, refer_database):
         super(PbEnum, self).__init__(descriptor, refer_database)
         refer_database._cache_enums[descriptor.full_name] = self
@@ -365,6 +384,7 @@ class PbEnum(PbObjectBase):
 
 
 class PbRpc(PbObjectBase):
+
     def __init__(self, service, descriptor, refer_database):
         super(PbRpc, self).__init__(descriptor, refer_database)
 
@@ -430,6 +450,7 @@ class PbRpc(PbObjectBase):
 
 
 class PbService(PbObjectBase):
+
     def __init__(self, file, descriptor, refer_database):
         super(PbService, self).__init__(descriptor, refer_database)
         refer_database._cache_services[descriptor.full_name] = self
@@ -446,6 +467,7 @@ class PbService(PbObjectBase):
 
 
 class PbDatabase(object):
+
     def __init__(self):
         from google.protobuf import descriptor_pb2 as pb2
         from google.protobuf import message_factory as _message_factory
@@ -839,6 +861,7 @@ def get_yaml_configure_child(yaml_conf_item,
 
 
 class PbGroupGenerator(object):
+
     def __init__(self, database, project_dir, output_directory,
                  custom_variables, overwrite, outer_name, inner_name,
                  inner_set_name, inner_include_rule, inner_exclude_rule,
@@ -1138,6 +1161,7 @@ def generate_group(options, group):
 
 
 class PbGlobalGenerator(object):
+
     def __init__(
         self,
         database,
@@ -1527,6 +1551,81 @@ def generate_enum_group(pb_db, options, yaml_conf, project_dir, custom_vars):
             ),
         )
 
+def generate_file_group(pb_db, options, yaml_conf, project_dir, custom_vars):
+    values_by_name = None
+    if options.file_template:
+        values_by_name = dict()
+        for file_path in pb_db.raw_files:
+            file_inst = pb_db.get_file(file_path)
+            if file_inst:
+                values_by_name[file_path] = file_inst
+        generate_group(
+            options,
+            PbGroupGenerator(
+                database=pb_db,
+                project_dir=project_dir,
+                output_directory=options.output_dir,
+                custom_variables=custom_vars,
+                overwrite=None,
+                outer_name="file_descriptor_set",
+                inner_name="file",
+                inner_set_name="files",
+                inner_include_rule=options.file_include_rule,
+                inner_exclude_rule=options.file_exclude_rule,
+                outer_templates=None,
+                inner_templates=options.file_template,
+                outer_inst=pb_db,
+                inner_name_map=values_by_name,
+                inner_ignore_types=set(options.file_ignore_package),
+            ),
+        )
+
+    if not yaml_conf:
+        return
+
+    if "rules" not in yaml_conf:
+        return
+
+    for rule in yaml_conf["rules"]:
+        if "file" not in rule:
+            continue
+        if values_by_name is None:
+            values_by_name = dict()
+            for file_path in pb_db.raw_files:
+                file_inst = pb_db.get_file(file_path)
+                if file_inst:
+                    values_by_name[file_path] = file_inst
+        rule_yaml_item = rule["file"]
+        (
+            output_directory,
+            custom_variables,
+        ) = get_real_output_directory_and_custom_variables(
+            options, rule_yaml_item, custom_vars)
+        generate_group(
+            options,
+            PbGroupGenerator(
+                database=pb_db,
+                project_dir=project_dir,
+                output_directory=output_directory,
+                custom_variables=custom_variables,
+                overwrite=get_yaml_configure_child(rule_yaml_item, "overwrite",
+                                                   None),
+                outer_name="file_descriptor_set",
+                inner_name="file",
+                inner_set_name="files",
+                inner_include_rule=get_yaml_configure_child(
+                    rule_yaml_item, "file_include", None),
+                inner_exclude_rule=get_yaml_configure_child(
+                    rule_yaml_item, "file_exclude", None),
+                outer_templates=None,
+                inner_templates=get_yaml_configure_child(
+                    rule_yaml_item, "file_template", [], True),
+                outer_inst=pb_db,
+                inner_name_map=values_by_name,
+                inner_ignore_types=get_yaml_configure_child(
+                    rule_yaml_item, "file_ignore_package", False),
+            ),
+        )
 
 def main():
     # lizard forgives
@@ -1832,6 +1931,40 @@ def main():
         default=None,
     )
 
+    # For file
+    CmdArgsAddOption(
+        parser,
+        "--file-ignore-package",
+        action="append",
+        help="ignore file in of packages",
+        dest="file_ignore_package",
+        default=[],
+    )
+    CmdArgsAddOption(
+        parser,
+        "--file-template",
+        action="append",
+        help="add template rules for each file(<template PATH>:<output rule>)",
+        dest="file_template",
+        default=[],
+    )
+    CmdArgsAddOption(
+        parser,
+        "--file-include",
+        action="store",
+        help="select only file name match the include rule(by regex)",
+        dest="file_include_rule",
+        default=None,
+    )
+    CmdArgsAddOption(
+        parser,
+        "--file-exclude",
+        action="store",
+        help="skip file name match the exclude rule(by regex)",
+        dest="file_exclude_rule",
+        default=None,
+    )
+
     # For global templates
     CmdArgsAddOption(
         parser,
@@ -1856,7 +1989,7 @@ def main():
     (options, left_args) = CmdArgsParse(parser)
 
     if options.version:
-        print("1.1.0")
+        print("1.2.0")
         return 0
     if options.add_path:
         prepend_paths = [x for x in options.add_path]
@@ -2066,6 +2199,8 @@ def main():
         generate_message_group(pb_db, options, yaml_conf, project_dir,
                                custom_vars)
         generate_enum_group(pb_db, options, yaml_conf, project_dir,
+                            custom_vars)
+        generate_file_group(pb_db, options, yaml_conf, project_dir,
                             custom_vars)
         generate_global_templates(pb_db, options, yaml_conf, project_dir,
                                   custom_vars)
