@@ -74,7 +74,7 @@ class PrometheusPushCollector : public ::prometheus::Collectable {
    *
    * @return max collection size
    */
-  size_t GetMaxCollectionSize() const noexcept { return max_collection_size_; }
+  std::size_t GetMaxCollectionSize() const noexcept { return max_collection_size_; }
 
  private:
   /**
@@ -88,7 +88,7 @@ class PrometheusPushCollector : public ::prometheus::Collectable {
   /**
    * Maximum size of the metricsToCollect collection.
    */
-  size_t max_collection_size_;
+  std::size_t max_collection_size_;
 
   /*
    * Lock when operating the metricsToCollect collection

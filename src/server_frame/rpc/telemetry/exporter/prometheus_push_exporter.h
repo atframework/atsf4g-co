@@ -4,6 +4,14 @@
 
 #pragma once
 
+#ifndef WIN32_LEAN_AND_MEAN
+#  define WIN32_LEAN_AND_MEAN
+#endif
+
+#ifndef NOMINMAX
+#  define NOMINMAX
+#endif
+
 #ifdef _WIN32
 #  include <io.h>        // NOLINT
 #  include <winsock2.h>  // NOLINT
@@ -20,7 +28,8 @@
 #include <opentelemetry/sdk/common/env_variables.h>
 #include <opentelemetry/version.h>
 
-#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+#if defined(OPENTELEMETRY_VERSION_MAJOR) || \
+    (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
 #  include <opentelemetry/sdk/metrics/push_metric_exporter.h>
 #else
 #  include <opentelemetry/sdk/metrics/metric_exporter.h>
@@ -55,7 +64,8 @@ struct PrometheusPushExporterOptions {
 };
 
 class PrometheusPushExporter : public
-#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
+#if defined(OPENTELEMETRY_VERSION_MAJOR) || \
+    (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
                                ::opentelemetry::sdk::metrics::PushMetricExporter
 #else
                                ::opentelemetry::sdk::metrics::MetricExporter
@@ -99,6 +109,11 @@ class PrometheusPushExporter : public
    */
   bool Shutdown(std::chrono::microseconds timeout = std::chrono::microseconds(0)) noexcept override;
 
+  /**
+   * Gets the maximum size of the collection.
+   *
+   * @return max collection size
+   */
   std::size_t GetMaxCollectionSize() const noexcept;
 
   /**
