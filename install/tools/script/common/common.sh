@@ -394,6 +394,11 @@ function CheckLinuxPidAndExePath() {
     return 1
   fi
 
+  if [[ $2 -eq 0 ]]; then
+    echo "0"
+    return 0
+  fi
+
   EXPECT_EXE_PATH="$(readlink -f "$1")"
   if [[ ! -e "/proc/$2/exe" ]]; then
     echo "1"
