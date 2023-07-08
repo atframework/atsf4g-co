@@ -12,6 +12,22 @@ import time
 #include <string>
 #include <vector>
 
+#ifndef GOOGLE_PROTOBUF_VERSION
+#  define EXCEL_CONFIG_LOADER_EASY_API_CHECK_PROTOBUF_INCLUDE
+#endif
+
+% for block_file in pb_set.get_custom_blocks("custom_config_easy_api_include"):
+// include custom_config_easy_api_include: ${block_file}
+<%include file="${block_file}" />
+% endfor
+
+#ifdef EXCEL_CONFIG_LOADER_EASY_API_CHECK_PROTOBUF_INCLUDE
+#  ifdef GOOGLE_PROTOBUF_VERSION
+#    error "protobuf should not be included"
+#  endif
+#  undef EXCEL_CONFIG_LOADER_EASY_API_CHECK_PROTOBUF_INCLUDE
+#endif
+
 #ifndef EXCEL_CONFIG_LOADER_API
 #  define EXCEL_CONFIG_LOADER_API
 #endif

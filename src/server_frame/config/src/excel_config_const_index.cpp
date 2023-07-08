@@ -560,7 +560,7 @@ static bool reset_const_value(::PROJECT_NAMESPACE_ID::config::excel_const_config
 }
 }  // namespace detail
 
-void setup_const_config(config_group_t& group) {
+SERVER_FRAME_CONFIG_API void setup_const_config(config_group_t& group) {
   std::unordered_set<std::string> dumped_keys;
 
   // const data from string configure
@@ -596,7 +596,7 @@ void setup_const_config(config_group_t& group) {
   }
 }
 
-const ::PROJECT_NAMESPACE_ID::config::excel_const_config& get_const_config() {
+SERVER_FRAME_CONFIG_API const ::PROJECT_NAMESPACE_ID::config::excel_const_config& get_const_config() {
   auto group = config_manager::me()->get_current_config_group();
   if (!group) {
     return ::PROJECT_NAMESPACE_ID::config::excel_const_config::default_instance();
@@ -605,7 +605,11 @@ const ::PROJECT_NAMESPACE_ID::config::excel_const_config& get_const_config() {
   return group->const_settings;
 }
 
-void parse_timepoint(const std::string& in, google::protobuf::Timestamp& out) { detail::pick_const_data(in, out); }
+SERVER_FRAME_CONFIG_API void parse_timepoint(const std::string& in, google::protobuf::Timestamp& out) {
+  detail::pick_const_data(in, out);
+}
 
-void parse_duration(const std::string& in, google::protobuf::Duration& out) { detail::pick_const_data(in, out); }
+SERVER_FRAME_CONFIG_API void parse_duration(const std::string& in, google::protobuf::Duration& out) {
+  detail::pick_const_data(in, out);
+}
 }  // namespace excel

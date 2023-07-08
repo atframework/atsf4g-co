@@ -296,11 +296,16 @@ static const char* take_block(const char* const start, size_t sz, std::string& e
 }
 }  // namespace details
 
-simple_template_core::config_t::config_t() : enable_share_functions(true) {}
+SERVER_FRAME_CONFIG_API simple_template_core::config_t::config_t() : enable_share_functions(true) {}
+
+SERVER_FRAME_CONFIG_API void simple_template_core::config_t::clear_cache() {
+  var_getter_cache.clear();
+  func_call_cache.clear();
+}
 
 simple_template_core::simple_template_core() {}
 
-bool simple_template_core::render(void* priv_data, std::string& output, std::string* errmsg) {
+SERVER_FRAME_CONFIG_API bool simple_template_core::render(void* priv_data, std::string& output, std::string* errmsg) {
   bool ret = true;
   std::stringstream output_ss;
   std::stringstream errmsg_ss;
@@ -317,8 +322,9 @@ bool simple_template_core::render(void* priv_data, std::string& output, std::str
   return ret;
 }
 
-simple_template_core::ptr_t simple_template_core::compile(const char* const in, const size_t insz, config_t& conf,
-                                                          std::string* errmsg) {
+SERVER_FRAME_CONFIG_API simple_template_core::ptr_t simple_template_core::compile(const char* const in,
+                                                                                  const size_t insz, config_t& conf,
+                                                                                  std::string* errmsg) {
   std::stringstream errmsg_ss;
   ptr_t ret = ptr_t(new simple_template_core());
 

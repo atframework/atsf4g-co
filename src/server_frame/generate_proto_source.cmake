@@ -130,7 +130,7 @@ function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OU
     OUTPUT ${HEADERS} ${SOURCES}
     COMMAND
       "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" ${PROTOC_PROTO_PATH_ARGS} --cpp_out
-      "${SANDBOX_PATH}"
+      "dllexport_decl=SERVER_FRAME_PROTOCOL_API:${SANDBOX_PATH}"
       # Protocol buffer files
       ${project_server_frame_create_protocol_target_PROTOCOLS} ${ADDITIONAL_CMAKE_COMMANDS}
     COMMAND "${CMAKE_COMMAND}" -E remove -f ${TEMPORARY_CODE_FILES}
@@ -342,23 +342,25 @@ if(MSVC)
 endif()
 
 source_group_by_dir(PROJECT_SERVER_FRAME_PROTO_GENERATED_HEADERS PROJECT_SERVER_FRAME_PROTO_GENERATED_SOURCES)
-if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows|MinGW|WindowsStore" AND (BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY
-                                                                  ))
+if(BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY)
   add_library(${PROJECT_SERVER_FRAME_LIB_LINK}-protocol SHARED ${PROJECT_SERVER_FRAME_PROTO_GENERATED_HEADERS}
                                                                ${PROJECT_SERVER_FRAME_PROTO_GENERATED_SOURCES})
 
   project_tool_split_target_debug_sybmol(${PROJECT_SERVER_FRAME_LIB_LINK}-protocol)
+  project_build_tools_set_shared_library_declaration(SERVER_FRAME_PROTOCOL_API
+                                                     "${PROJECT_SERVER_FRAME_LIB_LINK}-protocol")
 else()
   add_library(${PROJECT_SERVER_FRAME_LIB_LINK}-protocol STATIC ${PROJECT_SERVER_FRAME_PROTO_GENERATED_HEADERS}
                                                                ${PROJECT_SERVER_FRAME_PROTO_GENERATED_SOURCES})
+  project_build_tools_set_static_library_declaration(SERVER_FRAME_PROTOCOL_API
+                                                     "${PROJECT_SERVER_FRAME_LIB_LINK}-protocol")
 endif()
 set_target_properties(
   ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol
-  PROPERTIES C_VISIBILITY_PRESET "default"
-             CXX_VISIBILITY_PRESET "default"
+  PROPERTIES C_VISIBILITY_PRESET "hidden"
+             CXX_VISIBILITY_PRESET "hidden"
              VERSION "${PROJECT_VERSION}"
-             SOVERSION "${PROJECT_VERSION}"
-             WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+             SOVERSION "${PROJECT_VERSION}")
 target_include_directories(
   ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol
   PUBLIC "$<BUILD_INTERFACE:${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include>"

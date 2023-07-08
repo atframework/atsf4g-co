@@ -12,12 +12,25 @@
 #include <sstream>
 #include <string>
 
-logic_config::logic_config() : const_settings_(nullptr), atframe_settings_(nullptr) {}
-logic_config::~logic_config() {}
+#if defined(SERVER_FRAME_CONFIG_DLL) && SERVER_FRAME_CONFIG_DLL
+#  if defined(SERVER_FRAME_CONFIG_NATIVE) && SERVER_FRAME_CONFIG_NATIVE
+UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(logic_config);
+#  else
+UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(logic_config);
+#  endif
+#else
+UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(logic_config);
+#endif
 
-int logic_config::init(uint64_t /*server_id*/, const std::string & /*server_name*/) { return 0; }
+SERVER_FRAME_CONFIG_API logic_config::logic_config() : const_settings_(nullptr), atframe_settings_(nullptr) {}
 
-int logic_config::reload(atapp::app &app) {
+SERVER_FRAME_CONFIG_API logic_config::~logic_config() {}
+
+SERVER_FRAME_CONFIG_API int logic_config::init(uint64_t /*server_id*/, const std::string & /*server_name*/) {
+  return 0;
+}
+
+SERVER_FRAME_CONFIG_API int logic_config::reload(atapp::app &app) {
   const_settings_ = nullptr;
   atframe_settings_ = nullptr;
 
@@ -28,7 +41,7 @@ int logic_config::reload(atapp::app &app) {
   return 0;
 }
 
-uint64_t logic_config::get_local_server_id() const noexcept {
+SERVER_FRAME_CONFIG_API uint64_t logic_config::get_local_server_id() const noexcept {
   auto app = atapp::app::get_last_instance();
   if (nullptr == app) {
     return 0;
@@ -37,7 +50,7 @@ uint64_t logic_config::get_local_server_id() const noexcept {
   return static_cast<uint64_t>(app->get_app_id());
 }
 
-uint32_t logic_config::get_local_zone_id() const noexcept {
+SERVER_FRAME_CONFIG_API uint32_t logic_config::get_local_zone_id() const noexcept {
   auto app = atapp::app::get_last_instance();
   if (nullptr == app) {
     return 0;
@@ -46,7 +59,7 @@ uint32_t logic_config::get_local_zone_id() const noexcept {
   return static_cast<uint32_t>(app->get_area().zone_id());
 }
 
-gsl::string_view logic_config::get_local_server_name() const noexcept {
+SERVER_FRAME_CONFIG_API gsl::string_view logic_config::get_local_server_name() const noexcept {
   auto app = atapp::app::get_last_instance();
   if (nullptr == app) {
     return gsl::string_view();
@@ -55,7 +68,7 @@ gsl::string_view logic_config::get_local_server_name() const noexcept {
   return app->get_app_name();
 }
 
-gsl::string_view logic_config::get_local_server_id_readable() const noexcept {
+SERVER_FRAME_CONFIG_API gsl::string_view logic_config::get_local_server_id_readable() const noexcept {
   if (!readable_app_id_.empty()) {
     return readable_app_id_;
   }
@@ -69,7 +82,7 @@ gsl::string_view logic_config::get_local_server_id_readable() const noexcept {
   return readable_app_id_;
 }
 
-gsl::string_view logic_config::get_deployment_environment_name() const noexcept {
+SERVER_FRAME_CONFIG_API gsl::string_view logic_config::get_deployment_environment_name() const noexcept {
   auto app = atapp::app::get_last_instance();
   if (nullptr == app) {
     return gsl::string_view();
@@ -126,7 +139,7 @@ void logic_config::_load_db_hosts(PROJECT_NAMESPACE_ID::config::db_group_cfg &ou
   }
 }
 
-const PROJECT_NAMESPACE_ID::DConstSettingsType &logic_config::get_const_settings() {
+SERVER_FRAME_CONFIG_API const PROJECT_NAMESPACE_ID::DConstSettingsType &logic_config::get_const_settings() {
   UTIL_LIKELY_IF(nullptr != const_settings_) { return *const_settings_; }
   auto desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("protocol/pbdesc/com.const.proto");
   if (nullptr == desc) {
@@ -146,7 +159,7 @@ const PROJECT_NAMESPACE_ID::DConstSettingsType &logic_config::get_const_settings
   return *const_settings_;
 }
 
-const atframework::ConstSettingsType &logic_config::get_atframework_settings() {
+SERVER_FRAME_CONFIG_API const atframework::ConstSettingsType &logic_config::get_atframework_settings() {
   UTIL_LIKELY_IF(nullptr != atframe_settings_) { return *atframe_settings_; }
   auto desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("protocol/pbdesc/atframework.proto");
   if (nullptr == desc) {

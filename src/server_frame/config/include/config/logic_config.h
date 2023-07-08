@@ -4,14 +4,19 @@
 
 #pragma once
 
+#include <config/compile_optimize.h>
+
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/config/svr.protocol.config.pb.h>
-
 #include <protocol/pbdesc/atframework.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <gsl/select-gsl.h>
 
@@ -26,43 +31,53 @@ namespace atapp {
 class app;
 }
 
-class logic_config : public util::design_pattern::singleton<logic_config> {
- protected:
-  logic_config();
-  ~logic_config();
+class logic_config {
+ private:
+  SERVER_FRAME_CONFIG_API logic_config();
+  SERVER_FRAME_CONFIG_API ~logic_config();
+
+#if defined(SERVER_FRAME_CONFIG_DLL) && SERVER_FRAME_CONFIG_DLL
+#  if defined(SERVER_FRAME_CONFIG_NATIVE) && SERVER_FRAME_CONFIG_NATIVE
+  UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(logic_config)
+#  else
+  UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(logic_config)
+#  endif
+#else
+  UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(logic_config)
+#endif
 
  public:
-  int init(uint64_t server_id, const std::string &server_name);
+  SERVER_FRAME_CONFIG_API int init(uint64_t server_id, const std::string &server_name);
 
-  int reload(atapp::app &app);
+  SERVER_FRAME_CONFIG_API int reload(atapp::app &app);
 
-  uint64_t get_local_server_id() const noexcept;
-  uint32_t get_local_zone_id() const noexcept;
-  gsl::string_view get_local_server_name() const noexcept;
-  gsl::string_view get_local_server_id_readable() const noexcept;
+  SERVER_FRAME_CONFIG_API uint64_t get_local_server_id() const noexcept;
+  SERVER_FRAME_CONFIG_API uint32_t get_local_zone_id() const noexcept;
+  SERVER_FRAME_CONFIG_API gsl::string_view get_local_server_name() const noexcept;
+  SERVER_FRAME_CONFIG_API gsl::string_view get_local_server_id_readable() const noexcept;
 
-  gsl::string_view get_deployment_environment_name() const noexcept;
+  SERVER_FRAME_CONFIG_API gsl::string_view get_deployment_environment_name() const noexcept;
 
-  const PROJECT_NAMESPACE_ID::DConstSettingsType &get_const_settings();
-  const atframework::ConstSettingsType &get_atframework_settings();
+  SERVER_FRAME_CONFIG_API const PROJECT_NAMESPACE_ID::DConstSettingsType &get_const_settings();
+  SERVER_FRAME_CONFIG_API const atframework::ConstSettingsType &get_atframework_settings();
 
-  inline const PROJECT_NAMESPACE_ID::config::server_cfg &get_server_cfg() const noexcept { return server_cfg_; }
-  inline PROJECT_NAMESPACE_ID::config::server_cfg *mutable_server_cfg() noexcept { return &server_cfg_; }
-  inline const PROJECT_NAMESPACE_ID::config::db_section_cfg &get_cfg_db() const noexcept { return server_cfg_.db(); }
-  inline const PROJECT_NAMESPACE_ID::config::logic_section_cfg &get_logic() const noexcept {
+  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::server_cfg &get_server_cfg() const noexcept { return server_cfg_; }
+  UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::config::server_cfg *mutable_server_cfg() noexcept { return &server_cfg_; }
+  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::db_section_cfg &get_cfg_db() const noexcept { return server_cfg_.db(); }
+  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_section_cfg &get_logic() const noexcept {
     return server_cfg_.logic();
   }
-  inline const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &get_cfg_telemetry() const noexcept {
+  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &get_cfg_telemetry() const noexcept {
     return get_logic().telemetry();
   }
-  inline const PROJECT_NAMESPACE_ID::config::logic_router_cfg &get_cfg_router() const noexcept {
+  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_router_cfg &get_cfg_router() const noexcept {
     return get_logic().router();
   }
-  inline const PROJECT_NAMESPACE_ID::config::logic_task_cfg &get_cfg_task() const noexcept {
+  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_task_cfg &get_cfg_task() const noexcept {
     return get_logic().task();
   }
 
-  inline const PROJECT_NAMESPACE_ID::config::loginsvr_cfg &get_cfg_loginsvr() const noexcept {
+  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::loginsvr_cfg &get_cfg_loginsvr() const noexcept {
     return get_server_cfg().loginsvr();
   }
 

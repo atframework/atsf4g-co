@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <config/compile_optimize.h>
+#include <design_pattern/nomovable.h>
 #include <design_pattern/noncopyable.h>
 
 #include <functional>
@@ -14,8 +16,10 @@
 #include <unordered_map>
 #include <vector>
 
+#include "config/server_frame_build_feature.h"
+
 namespace excel {
-class simple_template_core : public ::util::design_pattern::noncopyable {
+class simple_template_core {
  public:
   using ptr_t = std::unique_ptr<simple_template_core>;
   using getter_fn_t = std::function<bool(std::ostream&, void*)>;
@@ -36,21 +40,25 @@ class simple_template_core : public ::util::design_pattern::noncopyable {
     std::unordered_map<std::string, code_block_fn_ptr_t> var_getter_cache;
     std::unordered_map<std::string, code_block_fn_ptr_t> func_call_cache;
 
-    config_t();
+    SERVER_FRAME_CONFIG_API config_t();
 
-    inline void clear_cache() {
-      var_getter_cache.clear();
-      func_call_cache.clear();
-    }
+    SERVER_FRAME_CONFIG_API void clear_cache();
+
+    UTIL_DESIGN_PATTERN_NOCOPYABLE(config_t)
+    UTIL_DESIGN_PATTERN_NOMOVABLE(config_t)
   };
+
+  UTIL_DESIGN_PATTERN_NOCOPYABLE(simple_template_core)
+  UTIL_DESIGN_PATTERN_NOMOVABLE(simple_template_core)
 
  private:
   simple_template_core();
 
  public:
-  bool render(void* priv_data, std::string& output, std::string* errmsg = nullptr);
+  SERVER_FRAME_CONFIG_API bool render(void* priv_data, std::string& output, std::string* errmsg = nullptr);
 
-  static ptr_t compile(const char* const in, const size_t insz, config_t& conf, std::string* errmsg = nullptr);
+  SERVER_FRAME_CONFIG_API static ptr_t compile(const char* const in, const size_t insz, config_t& conf,
+                                               std::string* errmsg = nullptr);
 
  private:
   struct print_const_string {
@@ -84,7 +92,7 @@ class simple_template_core : public ::util::design_pattern::noncopyable {
 };
 
 template <typename TPRIVATE_DATA>
-class simple_template {
+class UTIL_SYMBOL_VISIBLE simple_template {
  public:
   using private_data_t = TPRIVATE_DATA;
   using self_type = simple_template<private_data_t>;

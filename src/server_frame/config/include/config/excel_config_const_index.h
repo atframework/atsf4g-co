@@ -21,11 +21,13 @@ class Duration;
 }  // namespace google
 
 namespace excel {
+
 struct config_group_t;
-void setup_const_config(config_group_t &group);
 
-const ::PROJECT_NAMESPACE_ID::config::excel_const_config &get_const_config();
+SERVER_FRAME_CONFIG_API void setup_const_config(config_group_t &group);
 
-void parse_timepoint(const std::string &in, google::protobuf::Timestamp &out);
-void parse_duration(const std::string &in, google::protobuf::Duration &out);
+SERVER_FRAME_CONFIG_API const ::PROJECT_NAMESPACE_ID::config::excel_const_config &get_const_config();
+
+SERVER_FRAME_CONFIG_API void parse_timepoint(const std::string &in, google::protobuf::Timestamp &out);
+SERVER_FRAME_CONFIG_API void parse_duration(const std::string &in, google::protobuf::Duration &out);
 }  // namespace excel

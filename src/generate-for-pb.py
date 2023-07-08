@@ -866,7 +866,7 @@ class PbGroupGenerator(object):
                  custom_variables, overwrite, outer_name, inner_name,
                  inner_set_name, inner_include_rule, inner_exclude_rule,
                  outer_templates, inner_templates, outer_inst, inner_name_map,
-                 inner_ignore_types):
+                 inner_ignore_types, outer_dllexport_decl, inner_dllexport_decl):
         self.database = database
         self.project_dir = project_dir
         self.outer_name = outer_name
@@ -882,6 +882,8 @@ class PbGroupGenerator(object):
         self.output_directory = output_directory
         self.custom_variables = custom_variables
         self.overwrite = overwrite
+        self.outer_dllexport_decl = outer_dllexport_decl
+        self.inner_dllexport_decl = inner_dllexport_decl
         self.local_vcs_user_name = try_read_vcs_username(project_dir)
 
 
@@ -978,6 +980,7 @@ def generate_group(options, group):
             "output_file_path": None,
             "output_render_path": None,
             "current_instance": group.outer_inst,
+            "dllexport_decl": group.outer_dllexport_decl,
             "PbConvertRule": PbConvertRule,
         }
         for k in group.custom_variables:
@@ -1070,6 +1073,7 @@ def generate_group(options, group):
             "output_file_path": None,
             "output_render_path": None,
             "current_instance": None,
+            "dllexport_decl": group.inner_dllexport_decl,
             "PbConvertRule": PbConvertRule,
         }
         for k in group.custom_variables:
@@ -1169,6 +1173,7 @@ class PbGlobalGenerator(object):
         output_directory,
         custom_variables,
         global_templates,
+        global_dllexport_decl,
     ):
         self.database = database
         self.project_dir = project_dir
@@ -1176,6 +1181,7 @@ class PbGlobalGenerator(object):
         self.output_directory = output_directory
         self.custom_variables = custom_variables
         self.local_vcs_user_name = try_read_vcs_username(project_dir)
+        self.global_dllexport_decl = global_dllexport_decl
 
 
 def generate_global(options, global_generator):
@@ -1204,6 +1210,7 @@ def generate_global(options, global_generator):
             "output_file_path": None,
             "output_render_path": None,
             "database": global_generator.database,
+            "dllexport_decl": self.global_dllexport_decl,
             "PbConvertRule": PbConvertRule,
         }
         for k in global_generator.custom_variables:
@@ -1287,6 +1294,9 @@ def generate_global(options, global_generator):
 
 def generate_global_templates(pb_db, options, yaml_conf, project_dir,
                               custom_vars):
+    outer_dllexport_decl = options.global_dllexport_decl
+    if not outer_dllexport_decl:
+        outer_dllexport_decl = options.dllexport_decl
     if options.global_template:
         generate_global(
             options,
@@ -1296,6 +1306,7 @@ def generate_global_templates(pb_db, options, yaml_conf, project_dir,
                 output_directory=options.output_dir,
                 custom_variables=custom_vars,
                 global_templates=options.global_template,
+                global_dllexport_decl = outer_dllexport_decl,
             ),
         )
 
@@ -1309,6 +1320,10 @@ def generate_global_templates(pb_db, options, yaml_conf, project_dir,
         if "global" not in rule:
             continue
         global_rule = rule["global"]
+        if "global_dllexport_decl" not in global_rule:
+            global_dllexport_decl = global_rule["global_dllexport_decl"]
+        else:
+            global_dllexport_decl = outer_dllexport_decl
         (
             output_directory,
             custom_variables,
@@ -1322,12 +1337,20 @@ def generate_global_templates(pb_db, options, yaml_conf, project_dir,
                 output_directory=output_directory,
                 custom_variables=custom_variables,
                 global_templates=[global_rule],
+                global_dllexport_decl=global_dllexport_decl,
             ),
         )
 
 
 def generate_service_group(pb_db, options, yaml_conf, project_dir,
                            custom_vars):
+    outer_dllexport_decl = options.service_dllexport_decl
+    if not outer_dllexport_decl:
+        outer_dllexport_decl = options.dllexport_decl
+    inner_dllexport_decl = options.rpc_dllexport_decl
+    if not inner_dllexport_decl:
+        inner_dllexport_decl = options.dllexport_decl
+    
     for service_name in options.service_name:
         selected_service = pb_db.get_service(service_name)
         if selected_service is None:
@@ -1351,6 +1374,8 @@ def generate_service_group(pb_db, options, yaml_conf, project_dir,
                 outer_inst=selected_service,
                 inner_name_map=selected_service.rpcs,
                 inner_ignore_types=set(options.rpc_ignore_request),
+                outer_dllexport_decl=outer_dllexport_decl,
+                inner_dllexport_decl=inner_dllexport_decl,
             ),
         )
 
@@ -1366,6 +1391,14 @@ def generate_service_group(pb_db, options, yaml_conf, project_dir,
         rule_yaml_item = rule["service"]
         if "name" not in rule_yaml_item:
             continue
+        if "service_dllexport_decl" in rule_yaml_item:
+            service_dllexport_decl = rule_yaml_item["service_dllexport_decl"]
+        else:
+            service_dllexport_decl = outer_dllexport_decl
+        if "rpc_dllexport_decl" in rule_yaml_item:
+            rpc_dllexport_decl = rule_yaml_item["rpc_dllexport_decl"]
+        else:
+            rpc_dllexport_decl = inner_dllexport_decl
         selected_service = pb_db.get_service(rule_yaml_item["name"])
         if selected_service is None:
             continue
@@ -1398,12 +1431,20 @@ def generate_service_group(pb_db, options, yaml_conf, project_dir,
                 inner_name_map=selected_service.rpcs,
                 inner_ignore_types=get_yaml_configure_child(
                     rule_yaml_item, "rpc_ignore_request", False),
+                outer_dllexport_decl=service_dllexport_decl,
+                inner_dllexport_decl=rpc_dllexport_decl,
             ),
         )
 
 
 def generate_message_group(pb_db, options, yaml_conf, project_dir,
                            custom_vars):
+    outer_dllexport_decl = options.message_dllexport_decl
+    if not outer_dllexport_decl:
+        outer_dllexport_decl = options.dllexport_decl
+    inner_dllexport_decl = options.field_dllexport_decl
+    if not inner_dllexport_decl:
+        inner_dllexport_decl = options.dllexport_decl
     for message_name in options.message_name:
         selected_message = pb_db.get_message(message_name)
         if selected_message is None:
@@ -1427,6 +1468,8 @@ def generate_message_group(pb_db, options, yaml_conf, project_dir,
                 outer_inst=selected_message,
                 inner_name_map=selected_message.fields_by_name,
                 inner_ignore_types=set(options.field_ignore_type),
+                outer_dllexport_decl=outer_dllexport_decl,
+                inner_dllexport_decl=inner_dllexport_decl,
             ),
         )
 
@@ -1442,6 +1485,14 @@ def generate_message_group(pb_db, options, yaml_conf, project_dir,
         rule_yaml_item = rule["message"]
         if "name" not in rule_yaml_item:
             continue
+        if "message_dllexport_decl" in rule_yaml_item:
+            message_dllexport_decl = rule_yaml_item["message_dllexport_decl"]
+        else:
+            message_dllexport_decl = outer_dllexport_decl
+        if "field_dllexport_decl" in rule_yaml_item:
+            field_dllexport_decl = rule_yaml_item["field_dllexport_decl"]
+        else:
+            field_dllexport_decl = inner_dllexport_decl
         selected_message = pb_db.get_message(rule_yaml_item["name"])
         if selected_message is None:
             continue
@@ -1474,11 +1525,19 @@ def generate_message_group(pb_db, options, yaml_conf, project_dir,
                 inner_name_map=selected_message.fields_by_name,
                 inner_ignore_types=get_yaml_configure_child(
                     rule_yaml_item, "field_ignore_type", False),
+                outer_dllexport_decl=message_dllexport_decl,
+                inner_dllexport_decl=field_dllexport_decl,
             ),
         )
 
 
 def generate_enum_group(pb_db, options, yaml_conf, project_dir, custom_vars):
+    outer_dllexport_decl = options.enum_dllexport_decl
+    if not outer_dllexport_decl:
+        outer_dllexport_decl = options.dllexport_decl
+    inner_dllexport_decl = options.enumvalue_dllexport_decl
+    if not inner_dllexport_decl:
+        inner_dllexport_decl = options.dllexport_decl
     for enum_name in options.enum_name:
         selected_enum = pb_db.get_enum(enum_name)
         if selected_enum is None:
@@ -1502,6 +1561,8 @@ def generate_enum_group(pb_db, options, yaml_conf, project_dir, custom_vars):
                 outer_inst=selected_enum,
                 inner_name_map=selected_enum.values_by_name,
                 inner_ignore_types=set(),
+                outer_dllexport_decl=outer_dllexport_decl,
+                inner_dllexport_decl=inner_dllexport_decl,
             ),
         )
 
@@ -1517,6 +1578,15 @@ def generate_enum_group(pb_db, options, yaml_conf, project_dir, custom_vars):
         rule_yaml_item = rule["enum"]
         if "name" not in rule_yaml_item:
             continue
+        if "enum_dllexport_decl" in rule_yaml_item:
+            enum_dllexport_decl = rule_yaml_item["enum_dllexport_decl"]
+        else:
+            enum_dllexport_decl = outer_dllexport_decl
+        if "enumvalue_dllexport_decl" in rule_yaml_item:
+            enumvalue_dllexport_decl = rule_yaml_item[
+                "enumvalue_dllexport_decl"]
+        else:
+            enumvalue_dllexport_decl = inner_dllexport_decl
         selected_enum = pb_db.get_enum(rule_yaml_item["name"])
         if selected_enum is None:
             continue
@@ -1548,10 +1618,18 @@ def generate_enum_group(pb_db, options, yaml_conf, project_dir, custom_vars):
                 outer_inst=selected_enum,
                 inner_name_map=selected_enum.values_by_name,
                 inner_ignore_types=set(),
+                outer_dllexport_decl=enum_dllexport_decl,
+                inner_dllexport_decl=enumvalue_dllexport_decl,
             ),
         )
 
 def generate_file_group(pb_db, options, yaml_conf, project_dir, custom_vars):
+    outer_dllexport_decl = options.file_dllexport_decl
+    if not outer_dllexport_decl:
+        outer_dllexport_decl = options.dllexport_decl
+    inner_dllexport_decl = options.file_dllexport_decl
+    if not inner_dllexport_decl:
+        inner_dllexport_decl = options.dllexport_decl
     values_by_name = None
     if options.file_template:
         values_by_name = dict()
@@ -1577,6 +1655,8 @@ def generate_file_group(pb_db, options, yaml_conf, project_dir, custom_vars):
                 outer_inst=pb_db,
                 inner_name_map=values_by_name,
                 inner_ignore_types=set(options.file_ignore_package),
+                outer_dllexport_decl=outer_dllexport_decl,
+                inner_dllexport_decl=inner_dllexport_decl,
             ),
         )
 
@@ -1596,6 +1676,10 @@ def generate_file_group(pb_db, options, yaml_conf, project_dir, custom_vars):
                 if file_inst:
                     values_by_name[file_path] = file_inst
         rule_yaml_item = rule["file"]
+        if "file_dllexport_decl" in rule_yaml_item:
+            file_dllexport_decl = rule_yaml_item["file_dllexport_decl"]
+        else:
+            file_dllexport_decl = inner_dllexport_decl
         (
             output_directory,
             custom_variables,
@@ -1624,6 +1708,8 @@ def generate_file_group(pb_db, options, yaml_conf, project_dir, custom_vars):
                 inner_name_map=values_by_name,
                 inner_ignore_types=get_yaml_configure_child(
                     rule_yaml_item, "file_ignore_package", False),
+                outer_dllexport_decl=file_dllexport_decl,
+                inner_dllexport_decl=file_dllexport_decl,
             ),
         )
 
@@ -1787,6 +1873,14 @@ def main():
         dest="set_vars",
         default=[],
     )
+    CmdArgsAddOption(
+        parser,
+        "--dllexport-decl",
+        action="store",
+        help="set definition for DLL exporting/importing.",
+        dest="dllexport_decl",
+        default="",
+    )
     # For service - rpc
     CmdArgsAddOption(
         parser,
@@ -1806,6 +1900,14 @@ def main():
     )
     CmdArgsAddOption(
         parser,
+        "--rpc-dllexport-decl",
+        action="store",
+        help="set definition for DLL exporting/importing for rpc.",
+        dest="rpc_dllexport_decl",
+        default=None,
+    )
+    CmdArgsAddOption(
+        parser,
         "--service-template",
         action="append",
         help="add template rules for service(<template PATH>:<output rule>)",
@@ -1820,6 +1922,14 @@ def main():
         help="add service name to generate",
         dest="service_name",
         default=[],
+    )
+    CmdArgsAddOption(
+        parser,
+        "--service-dllexport-decl",
+        action="store",
+        help="set definition for DLL exporting/importing for service.",
+        dest="service_dllexport_decl",
+        default=None,
     )
     CmdArgsAddOption(
         parser,
@@ -1849,6 +1959,14 @@ def main():
     )
     CmdArgsAddOption(
         parser,
+        "--field-dllexport-decl",
+        action="store",
+        help="set definition for DLL exporting/importing for field.",
+        dest="field_dllexport_decl",
+        default=None,
+    )
+    CmdArgsAddOption(
+        parser,
         "--message-template",
         action="append",
         help="add template rules for message(<template PATH>:<output rule>)",
@@ -1862,6 +1980,14 @@ def main():
         help="add message name tp generate",
         dest="message_name",
         default=[],
+    )
+    CmdArgsAddOption(
+        parser,
+        "--message-dllexport-decl",
+        action="store",
+        help="set definition for DLL exporting/importing for message.",
+        dest="message_dllexport_decl",
+        default=None,
     )
     CmdArgsAddOption(
         parser,
@@ -1900,6 +2026,14 @@ def main():
     )
     CmdArgsAddOption(
         parser,
+        "--enumvalue-dllexport-decl",
+        action="store",
+        help="set definition for DLL exporting/importing for enumvalue.",
+        dest="enumvalue_dllexport_decl",
+        default=None,
+    )
+    CmdArgsAddOption(
+        parser,
         "--enum-template",
         action="append",
         help="add template rules for enum(<template PATH>:<output rule>)",
@@ -1913,6 +2047,14 @@ def main():
         help="add enum name tp generate",
         dest="enum_name",
         default=[],
+    )
+    CmdArgsAddOption(
+        parser,
+        "--enum-dllexport-decl",
+        action="store",
+        help="set definition for DLL exporting/importing for enum.",
+        dest="enum_dllexport_decl",
+        default=None,
     )
     CmdArgsAddOption(
         parser,
@@ -1950,6 +2092,14 @@ def main():
     )
     CmdArgsAddOption(
         parser,
+        "--file-dllexport-decl",
+        action="store",
+        help="set definition for DLL exporting/importing for file.",
+        dest="file_dllexport_decl",
+        default=None,
+    )
+    CmdArgsAddOption(
+        parser,
         "--file-include",
         action="store",
         help="select only file name match the include rule(by regex)",
@@ -1973,6 +2123,14 @@ def main():
         help="add template rules for global(<template PATH>:<output rule>)",
         dest="global_template",
         default=[],
+    )
+    CmdArgsAddOption(
+        parser,
+        "--global-dllexport-decl",
+        action="store",
+        help="set definition for DLL exporting/importing for global.",
+        dest="global_dllexport_decl",
+        default=None,
     )
 
     # For yaml configures

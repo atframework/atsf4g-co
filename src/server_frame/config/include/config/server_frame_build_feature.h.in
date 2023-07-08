@@ -2,29 +2,55 @@
 
 #pragma once
 
+#include <config/compile_optimize.h>
+
 #cmakedefine01 SERVER_FRAME_ENABLE_GM_COMMAND
 #cmakedefine01 PROJECT_SERVER_FRAME_USE_STD_COROUTINE
 #cmakedefine01 PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
 
 #ifndef PROJECT_NAMESPACE
-#cmakedefine PROJECT_NAMESPACE "@PROJECT_NAMESPACE@"
+#  cmakedefine PROJECT_NAMESPACE "@PROJECT_NAMESPACE@"
 #endif
 #ifndef PROJECT_NAMESPACE_ID
-#cmakedefine PROJECT_NAMESPACE_ID @PROJECT_NAMESPACE_ID@
+#  cmakedefine PROJECT_NAMESPACE_ID @PROJECT_NAMESPACE_ID@
 #endif
 #ifndef PROJECT_NAMESPACE_BEGIN
-#cmakedefine PROJECT_NAMESPACE_BEGIN @PROJECT_NAMESPACE_BEGIN@
+#  cmakedefine PROJECT_NAMESPACE_BEGIN @PROJECT_NAMESPACE_BEGIN@
 #endif
 #ifndef PROJECT_NAMESPACE_END
-#cmakedefine PROJECT_NAMESPACE_END @PROJECT_NAMESPACE_END@
+#  cmakedefine PROJECT_NAMESPACE_END @PROJECT_NAMESPACE_END@
 #endif
 
-const char* server_frame_vcs_get_commit();
-const char* server_frame_vcs_get_version();
-const char* server_frame_vcs_get_commit_sha();
-const char* server_frame_vcs_get_commit_short_sha();
-const char* server_frame_vcs_get_server_branch();
-const char* server_frame_project_get_version();
+#if defined(SERVER_FRAME_CONFIG_NATIVE) && SERVER_FRAME_CONFIG_NATIVE
+#  if defined(SERVER_FRAME_CONFIG_DLL) && SERVER_FRAME_CONFIG_DLL
+#    define SERVER_FRAME_CONFIG_API UTIL_SYMBOL_EXPORT
+#  else
+#    define SERVER_FRAME_CONFIG_API
+#  endif
+#else
+#  if defined(SERVER_FRAME_CONFIG_DLL) && SERVER_FRAME_CONFIG_DLL
+#    define SERVER_FRAME_CONFIG_API UTIL_SYMBOL_IMPORT
+#  else
+#    define SERVER_FRAME_CONFIG_API
+#  endif
+#endif
+#define SERVER_FRAME_CONFIG_HEAD_ONLY UTIL_SYMBOL_VISIBLE
+
+#ifdef _WIN32
+#  define SERVER_FRAME_CONFIG_DECALRE_CLASS(TYPE, CLAZZ) TYPE SERVER_FRAME_CONFIG_API CLAZZ
+#else
+#  define SERVER_FRAME_CONFIG_DECALRE_CLASS(TYPE, CLAZZ) TYPE CLAZZ
+#endif
+
+SERVER_FRAME_CONFIG_API const char* server_frame_vcs_get_commit();
+SERVER_FRAME_CONFIG_API const char* server_frame_vcs_get_version();
+SERVER_FRAME_CONFIG_API const char* server_frame_vcs_get_commit_sha();
+SERVER_FRAME_CONFIG_API const char* server_frame_vcs_get_commit_short_sha();
+SERVER_FRAME_CONFIG_API const char* server_frame_vcs_get_server_branch();
+SERVER_FRAME_CONFIG_API const char* server_frame_project_get_version();
+
+#define EXCEL_CONFIG_LOADER_API SERVER_FRAME_CONFIG_API
+#define EXCEL_CONFIG_SYMBOL_VISIBLE UTIL_SYMBOL_VISIBLE
 
 #ifndef OPENTELEMTRY_CPP_MAJOR_VERSION
 #  define OPENTELEMTRY_CPP_MAJOR_VERSION @opentelemetry-cpp_VERSION_MAJOR@

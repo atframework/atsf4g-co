@@ -116,6 +116,9 @@ set(PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND
     "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND} '-c' 'custom_config_include:custom_include_fields.h.mako'"
 )
 set(PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND
+    "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND} '-c' 'custom_config_easy_api_include:custom_easy_api_include_fields.h.mako'"
+)
+set(PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND
     "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND} '--pb-include-prefix' 'protocol/config/'")
 if(CMAKE_HOST_WIN32 AND ATFRAMEWORK_CMAKE_TOOLSET_PWSH)
   file(
@@ -212,17 +215,27 @@ unset(SRC_DIRPATH_REALPATH)
 unset(PROJECT_SERVER_FRAME_CONFIG_SRC_ORIGIN)
 
 source_group_by_dir(PROJECT_SERVER_FRAME_CONFIG_SRC_LIST)
-if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows|MinGW|WindowsStore" AND (BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY
-                                                                  ))
+if(BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY)
   add_library(${PROJECT_SERVER_FRAME_LIB_LINK}-config SHARED ${PROJECT_SERVER_FRAME_CONFIG_SRC_LIST})
   set_target_properties(${PROJECT_SERVER_FRAME_LIB_LINK}-config PROPERTIES VERSION "${PROJECT_VERSION}"
                                                                            SOVERSION "${PROJECT_VERSION}")
 
   project_tool_split_target_debug_sybmol(${PROJECT_SERVER_FRAME_LIB_LINK}-config)
+  target_compile_definitions("${PROJECT_SERVER_FRAME_LIB_LINK}-config" PRIVATE SERVER_FRAME_CONFIG_NATIVE=1
+                                                                               SERVER_FRAME_CONFIG_DLL=1)
 else()
   add_library(${PROJECT_SERVER_FRAME_LIB_LINK}-config STATIC ${PROJECT_SERVER_FRAME_CONFIG_SRC_LIST})
   set_target_properties(${PROJECT_SERVER_FRAME_LIB_LINK}-config PROPERTIES VERSION "${PROJECT_VERSION}")
+  target_compile_definitions("${PROJECT_SERVER_FRAME_LIB_LINK}-config" PRIVATE SERVER_FRAME_CONFIG_NATIVE=1)
 endif()
+
+set_target_properties(
+  ${PROJECT_SERVER_FRAME_LIB_LINK}-config
+  PROPERTIES C_VISIBILITY_PRESET "hidden"
+             CXX_VISIBILITY_PRESET "hidden"
+             VERSION "${PROJECT_VERSION}"
+             BUILD_RPATH_USE_ORIGIN YES
+             PORJECT_PROTOCOL_DIR "${PROTOCOL_DIR}")
 
 if(MSVC)
   set_property(TARGET "${PROJECT_SERVER_FRAME_LIB_LINK}-config" PROPERTY FOLDER "${PROJECT_NAME}")
@@ -232,7 +245,6 @@ target_include_directories(
   ${PROJECT_SERVER_FRAME_LIB_LINK}-config
   PUBLIC "$<BUILD_INTERFACE:${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include>"
          "$<BUILD_INTERFACE:${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include>"
-         "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PROTOCOL_SOURCE_DIR}/include>"
          "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/config/include>"
          "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/_generated/config/include>"
          "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
@@ -242,10 +254,8 @@ if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
 endif()
 
 add_dependencies(${PROJECT_SERVER_FRAME_LIB_LINK}-config protocol config-loader)
-target_link_libraries(
-  ${PROJECT_SERVER_FRAME_LIB_LINK}-config
-  INTERFACE ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol
-  PUBLIC ${ATFRAMEWORK_SERVICE_COMPONENT_LINK_NAME})
+target_link_libraries(${PROJECT_SERVER_FRAME_LIB_LINK}-config PUBLIC ${ATFRAMEWORK_SERVICE_COMPONENT_LINK_NAME}
+                                                                     ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol)
 
 install(
   TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK}-config

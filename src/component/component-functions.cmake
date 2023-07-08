@@ -4,8 +4,8 @@ set(PROJECT_INSTALL_COMPONENT_EXPORT_FILE
 
 function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   set(optionArgs "STATIC;SHARED")
-  set(oneValueArgs INCLUDE_DIR OUTPUT_NAME OUTPUT_TARGET_NAME)
-  set(multiValueArgs HRADERS SOURCES)
+  set(oneValueArgs INCLUDE_DIR OUTPUT_NAME OUTPUT_TARGET_NAME DLLEXPORT_DECL)
+  set(multiValueArgs HRADERS SOURCES USE_COMPONENTS)
   cmake_parse_arguments(project_component_declare_sdk "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
   if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
@@ -14,6 +14,15 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
     set(TARGET_FULL_NAME "${PROJECT_NAME}-component-${TARGET_NAME}")
   endif()
   echowithcolor(COLOR GREEN "-- Configure components::${TARGET_NAME} on ${SDK_ROOT_DIR}")
+
+  if(NOT project_component_declare_sdk_DLLEXPORT_DECL)
+    string(REGEX REPLACE "[-\\.]" "_" project_component_declare_sdk_DLLEXPORT_DECL "${TARGET_NAME}")
+    string(REGEX REPLACE "[\\\$\\\\/]" "" project_component_declare_sdk_DLLEXPORT_DECL
+                         "${project_component_declare_sdk_DLLEXPORT_DECL}")
+    string(REPLACE "::" "_" project_component_declare_sdk_DLLEXPORT_DECL
+                   "${project_component_declare_sdk_DLLEXPORT_DECL}_API")
+    string(TOUPPER "${project_component_declare_sdk_DLLEXPORT_DECL}" project_component_declare_sdk_DLLEXPORT_DECL)
+  endif()
 
   if(project_component_declare_sdk_SOURCES)
     source_group_by_dir(project_component_declare_sdk_HRADERS project_component_declare_sdk_SOURCES)
@@ -26,16 +35,19 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
                                              ${project_component_declare_sdk_SOURCES})
 
       project_tool_split_target_debug_sybmol(${TARGET_FULL_NAME})
+      project_build_tools_set_shared_library_declaration(${project_component_declare_sdk_DLLEXPORT_DECL}
+                                                         "${TARGET_FULL_NAME}")
     else()
       add_library(${TARGET_FULL_NAME} STATIC ${project_component_declare_sdk_HRADERS}
                                              ${project_component_declare_sdk_SOURCES})
+      project_build_tools_set_static_library_declaration(${project_component_declare_sdk_DLLEXPORT_DECL}
+                                                         "${TARGET_FULL_NAME}")
     endif()
     set_target_properties(${TARGET_FULL_NAME} PROPERTIES BUILD_RPATH_USE_ORIGIN YES)
     target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
     if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
       target_link_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
     endif()
-
   else()
     add_library(${TARGET_FULL_NAME} INTERFACE)
   endif()
@@ -59,10 +71,18 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
     endif()
   endif()
 
+  unset(PUBLIC_LINK_TARGETS)
+  if(project_component_declare_sdk_USE_COMPONENTS)
+    foreach(USE_COMPONENT ${project_component_declare_sdk_USE_COMPONENTS})
+      list(APPEND PUBLIC_LINK_TARGETS "components::${USE_COMPONENT}")
+    endforeach()
+  endif()
+  list(APPEND PUBLIC_LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK})
+
   if(project_component_declare_sdk_SOURCES)
-    target_link_libraries(${TARGET_FULL_NAME} PUBLIC ${PROJECT_SERVER_FRAME_LIB_LINK})
+    target_link_libraries(${TARGET_FULL_NAME} PUBLIC ${PUBLIC_LINK_TARGETS})
   elseif(project_component_declare_sdk_HRADERS)
-    target_link_libraries(${TARGET_FULL_NAME} INTERFACE ${PROJECT_SERVER_FRAME_LIB_LINK})
+    target_link_libraries(${TARGET_FULL_NAME} INTERFACE ${PUBLIC_LINK_TARGETS})
   endif()
 
   install(
@@ -109,7 +129,7 @@ endfunction()
 
 function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   set(optionArgs "")
-  set(oneValueArgs OUTPUT_DIR OUTPUT_NAME OUTPUT_TARGET_NAME)
+  set(oneValueArgs OUTPUT_DIR OUTPUT_NAME OUTPUT_TARGET_NAME DLLEXPORT_DECL)
   set(multiValueArgs PROTOCOLS USE_COMPONENTS)
   cmake_parse_arguments(project_component_declare_protocol "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}"
                         ${ARGN})
@@ -125,6 +145,16 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
     message(FATAL_ERROR "PROTOCOLS is required for project_component_declare_protocol")
   endif()
   echowithcolor(COLOR GREEN "-- Configure components::${TARGET_NAME} on ${PROTOCOL_DIR}")
+
+  if(NOT project_component_declare_protocol_DLLEXPORT_DECL)
+    string(REGEX REPLACE "[-\\.]" "_" project_component_declare_protocol_DLLEXPORT_DECL "${TARGET_NAME}")
+    string(REGEX REPLACE "[\\\$\\\\/]" "" project_component_declare_protocol_DLLEXPORT_DECL
+                         "${project_component_declare_protocol_DLLEXPORT_DECL}")
+    string(REPLACE "::" "_" project_component_declare_protocol_DLLEXPORT_DECL
+                   "${project_component_declare_protocol_DLLEXPORT_DECL}_API")
+    string(TOUPPER "${project_component_declare_protocol_DLLEXPORT_DECL}"
+                   project_component_declare_protocol_DLLEXPORT_DECL)
+  endif()
 
   unset(FINAL_GENERATED_SOURCE_FILES)
   unset(FINAL_GENERATED_HEADER_FILES)
@@ -201,7 +231,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
     OUTPUT ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES}
     COMMAND
       "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" ${PROTOBUF_PROTO_PATHS} --cpp_out
-      "${CMAKE_CURRENT_BINARY_DIR}"
+      "dllexport_decl=${project_component_declare_protocol_DLLEXPORT_DECL}:${CMAKE_CURRENT_BINARY_DIR}"
       # Protocol buffer files
       ${project_component_declare_protocol_PROTOCOLS} ${FINAL_GENERATED_COPY_COMMANDS}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -223,15 +253,18 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
     add_library(${TARGET_FULL_NAME} SHARED ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
 
     project_tool_split_target_debug_sybmol(${TARGET_FULL_NAME})
+    project_build_tools_set_shared_library_declaration(${project_component_declare_protocol_DLLEXPORT_DECL}
+                                                       "${TARGET_FULL_NAME}")
   else()
     add_library(${TARGET_FULL_NAME} STATIC ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
+    project_build_tools_set_static_library_declaration(${project_component_declare_protocol_DLLEXPORT_DECL}
+                                                       "${TARGET_FULL_NAME}")
   endif()
   set_target_properties(
     ${TARGET_FULL_NAME}
-    PROPERTIES C_VISIBILITY_PRESET "default"
-               CXX_VISIBILITY_PRESET "default"
+    PROPERTIES C_VISIBILITY_PRESET "hidden"
+               CXX_VISIBILITY_PRESET "hidden"
                VERSION "${PROJECT_VERSION}"
-               WINDOWS_EXPORT_ALL_SYMBOLS TRUE
                BUILD_RPATH_USE_ORIGIN YES
                PORJECT_PROTOCOL_DIR "${PROTOCOL_DIR}")
 

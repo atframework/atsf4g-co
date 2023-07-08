@@ -29,9 +29,13 @@ static bool g_excel_config_manager_inited = false;
 static std::atomic<int64_t> g_excel_reporter_blocker(0);
 }  // namespace details
 
-excel_config_block_report_t::excel_config_block_report_t() { ++details::g_excel_reporter_blocker; }
+SERVER_FRAME_CONFIG_API excel_config_block_report_t::excel_config_block_report_t() {
+  ++details::g_excel_reporter_blocker;
+}
 
-excel_config_block_report_t::~excel_config_block_report_t() { --details::g_excel_reporter_blocker; }
+SERVER_FRAME_CONFIG_API excel_config_block_report_t::~excel_config_block_report_t() {
+  --details::g_excel_reporter_blocker;
+}
 
 static bool excel_config_callback_get_buffer(std::string& out, const char* path) {
   char file_path[util::file_system::MAX_PATH_LEN + 1];
@@ -84,7 +88,7 @@ static void excel_config_callback_on_reload_all(excel::config_manager::config_gr
   setup_const_config(*group);
 }
 
-int excel_config_wrapper_reload_all(bool is_init) {
+SERVER_FRAME_CONFIG_API int excel_config_wrapper_reload_all(bool is_init) {
   if (!details::g_excel_config_manager_inited && !is_init) {
     return 0;
   }
@@ -138,7 +142,7 @@ int excel_config_wrapper_reload_all(bool is_init) {
   return 0;
 }
 
-void excel_add_on_group_loaded_callback(std::function<void(excel::config_group_t&)> fn) {
+SERVER_FRAME_CONFIG_API void excel_add_on_group_loaded_callback(std::function<void(excel::config_group_t&)> fn) {
   if (fn) {
     details::g_excel_on_group_loaded_fns.push_back(fn);
   }
