@@ -34,13 +34,14 @@
 
 #include "logic/action/task_action_player_async_jobs.h"
 
-task_action_login::task_action_login(dispatcher_start_data_type&& param)
+GAMECLIENT_RPC_API task_action_login::task_action_login(dispatcher_start_data_type&& param)
     : base_type(COPP_MACRO_STD_MOVE(param)), is_new_player_(false) {}
-task_action_login::~task_action_login() {}
 
-const char* task_action_login::name() const { return "task_action_login"; }
+GAMECLIENT_RPC_API task_action_login::~task_action_login() {}
 
-task_action_login::result_type task_action_login::operator()() {
+GAMECLIENT_RPC_API const char* task_action_login::name() const { return "task_action_login"; }
+
+GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()() {
   const rpc_request_type& req_body = get_request_body();
 
   is_new_player_ = false;
@@ -152,7 +153,7 @@ task_action_login::result_type task_action_login::operator()() {
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-int task_action_login::on_success() {
+GAMECLIENT_RPC_API int task_action_login::on_success() {
   const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
   rsp_body.set_heartbeat_interval(logic_config::me()->get_logic().heartbeat().interval().seconds());
@@ -221,7 +222,7 @@ int task_action_login::on_success() {
   return get_result();
 }
 
-int task_action_login::on_failed() {
+GAMECLIENT_RPC_API int task_action_login::on_failed() {
   const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
   // 1. 包校验
@@ -272,7 +273,7 @@ int task_action_login::on_failed() {
   return get_result();
 }
 
-rpc::result_code_type task_action_login::replace_session(std::shared_ptr<player> user) {
+GAMECLIENT_RPC_API rpc::result_code_type task_action_login::replace_session(std::shared_ptr<player> user) {
   FWPLOGDEBUG(*user, "relogin using login code: {}", get_request_body().login_code());
 
   // 获取当前Session
@@ -307,7 +308,8 @@ rpc::result_code_type task_action_login::replace_session(std::shared_ptr<player>
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type task_action_login::await_io_task(rpc::context& ctx, std::shared_ptr<player> user) {
+GAMECLIENT_RPC_API rpc::result_code_type task_action_login::await_io_task(rpc::context& ctx,
+                                                                          std::shared_ptr<player> user) {
   router_player_cache::key_t router_key(router_player_manager::me()->get_type_id(), user->get_zone_id(),
                                         user->get_user_id());
   router_player_cache::ptr_t router_cache = router_player_manager::me()->get_cache(router_key);

@@ -11,8 +11,11 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 
 #pragma once
 
+#include <config/compile_optimize.h>
+
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.protocol.pb.h>
 % if include_headers:
@@ -21,6 +24,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 %   endfor
 % endif
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
@@ -31,6 +35,10 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 
 #include "rpc/rpc_common_types.h"
 #include "dispatcher/dispatcher_type_defines.h"
+
+#ifndef ${rpc_dllexport_decl}
+#  define ${rpc_dllexport_decl} UTIL_SYMBOL_VISIBLE
+#endif
 
 namespace rpc {
 class context;
@@ -82,11 +90,11 @@ ${ns}
 %>
 // ============ ${rpc.get_full_name()} ============
 namespace packer {
-bool pack_${rpc.get_name()}(std::string& output, const ${rpc.get_request().get_cpp_class_name()}& input);
-bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_request().get_cpp_class_name()}& output);
+${rpc_dllexport_decl} bool pack_${rpc.get_name()}(std::string& output, const ${rpc.get_request().get_cpp_class_name()}& input);
+${rpc_dllexport_decl} bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_request().get_cpp_class_name()}& output);
 % if not rpc_is_stream_mode:
-bool pack_${rpc.get_name()}(std::string& output, const ${rpc.get_response().get_cpp_class_name()}& input);
-bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_response().get_cpp_class_name()}& output);
+${rpc_dllexport_decl} bool pack_${rpc.get_name()}(std::string& output, const ${rpc.get_response().get_cpp_class_name()}& input);
+${rpc_dllexport_decl} bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_response().get_cpp_class_name()}& output);
 % endif
 }  // namespace packer
 
@@ -100,7 +108,7 @@ bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_response().get
 %   endfor
  * @return 0 or error code
  */
-EXPLICIT_NODISCARD_ATTR ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_params)});
+${rpc_dllexport_decl} EXPLICIT_NODISCARD_ATTR ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_params)});
 % endfor
 % for ns in service.get_cpp_namespace_end(module_name, ''):
 ${ns}

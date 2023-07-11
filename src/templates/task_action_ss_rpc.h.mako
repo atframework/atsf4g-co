@@ -9,19 +9,27 @@ task_class_name = os.path.splitext(os.path.basename(output_render_path))[0]
 
 #pragma once
 
+#include <config/compile_optimize.h>
+
 % if include_headers:
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 %   for include_header in include_headers:
 #include <${include_header}>
 %   endfor
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 % endif
 
 #include <dispatcher/task_action_ss_req_base.h>
+
+#ifndef ${service_dllexport_decl}
+#  define ${service_dllexport_decl} UTIL_SYMBOL_VISIBLE
+#endif
 
 class ${task_class_name} : public task_action_ss_rpc_base<${rpc.get_request().get_cpp_class_name()}, ${rpc.get_response().get_cpp_class_name()}> {
  public:
@@ -35,17 +43,17 @@ class ${task_class_name} : public task_action_ss_rpc_base<${rpc.get_request().ge
   using task_action_ss_req_base::operator();
 
  public:
-  explicit ${task_class_name}(dispatcher_start_data_type&& param);
-  ~${task_class_name}();
+  ${service_dllexport_decl} explicit ${task_class_name}(dispatcher_start_data_type&& param);
+  ${service_dllexport_decl} ~${task_class_name}();
 
-  const char *name() const override;
+  ${service_dllexport_decl} const char *name() const override;
 
-  result_type operator()() override;
+  ${service_dllexport_decl} result_type operator()() override;
 
-  int on_success() override;
-  int on_failed() override;
+  ${service_dllexport_decl} int on_success() override;
+  ${service_dllexport_decl} int on_failed() override;
 
 % if rpc.get_extension_field('rpc_options', lambda x: x.router_rpc, False) and rpc.get_extension_field('rpc_options', lambda x: x.router_ignore_offline, False):
-  bool is_router_offline_ignored() const override;
+  ${service_dllexport_decl} bool is_router_offline_ignored() const override;
 % endif
 };

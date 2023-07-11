@@ -57,8 +57,8 @@ result_void_type::result_void_type()
 #  endif
 {
 }
-result_void_type::result_void_type(bool is_ready)
-    : result_data_(is_ready)
+result_void_type::result_void_type(bool input_is_ready)
+    : result_data_(input_is_ready)
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
       ,
       awaited_(false)

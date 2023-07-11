@@ -71,7 +71,11 @@ generate_for_pb_add_ss_service(
   HANDLE_PATH_PREFIX
   "router"
   PROJECT_NAMESPACE
-  "${PROJECT_NAMESPACE}")
+  "${PROJECT_NAMESPACE}"
+  SERVICE_DLLEXPORT_DECL
+  SERVER_FRAME_API
+  RPC_DLLEXPORT_DECL
+  SERVER_FRAME_API)
 
 # add tool to binding logic rpcs
 generate_for_pb_add_ss_service(
@@ -82,7 +86,11 @@ generate_for_pb_add_ss_service(
   HANDLE_PATH_PREFIX
   "logic"
   PROJECT_NAMESPACE
-  "${PROJECT_NAMESPACE}")
+  "${PROJECT_NAMESPACE}"
+  SERVICE_DLLEXPORT_DECL
+  SERVER_FRAME_API
+  RPC_DLLEXPORT_DECL
+  SERVER_FRAME_API)
 
 # add tool to binding loginsvr rpcs
 generate_for_pb_add_cs_service(
@@ -94,7 +102,11 @@ generate_for_pb_add_cs_service(
   HANDLE_PATH_PREFIX
   "app"
   PROJECT_NAMESPACE
-  "${PROJECT_NAMESPACE}")
+  "${PROJECT_NAMESPACE}"
+  SERVICE_DLLEXPORT_DECL
+  GAMECLIENT_SERVICE_API
+  RPC_DLLEXPORT_DECL
+  GAMECLIENT_RPC_API)
 
 # add tool to binding gamesvr rpcs
 generate_for_pb_add_cs_service(
@@ -106,7 +118,11 @@ generate_for_pb_add_cs_service(
   HANDLE_PATH_PREFIX
   "app"
   PROJECT_NAMESPACE
-  "${PROJECT_NAMESPACE}")
+  "${PROJECT_NAMESPACE}"
+  SERVICE_DLLEXPORT_DECL
+  GAMECLIENT_SERVICE_API
+  RPC_DLLEXPORT_DECL
+  GAMECLIENT_RPC_API)
 
 generate_for_pb_add_ss_service(
   "${PROJECT_NAMESPACE}.GamesvrService"
@@ -116,16 +132,38 @@ generate_for_pb_add_ss_service(
   HANDLE_PATH_PREFIX
   "app"
   PROJECT_NAMESPACE
-  "${PROJECT_NAMESPACE}")
+  "${PROJECT_NAMESPACE}"
+  SERVICE_DLLEXPORT_DECL
+  SERVER_FRAME_API
+  RPC_DLLEXPORT_DECL
+  SERVER_FRAME_API)
 
 # add tool to generate simulator rpcs
 generate_for_pb_add_simulator_cs_api(
-  "${PROJECT_NAMESPACE}.LoginsvrClientService" "${CMAKE_CURRENT_LIST_DIR}/tools/simulator" RPC_IGNORE_EMPTY_REQUEST
-  PROJECT_NAMESPACE "${PROJECT_NAMESPACE}")
+  "${PROJECT_NAMESPACE}.LoginsvrClientService"
+  "${CMAKE_CURRENT_LIST_DIR}/tools/simulator"
+  RPC_IGNORE_EMPTY_REQUEST
+  SERVICE_DLLEXPORT_DECL
+  GAMECLIENT_SERVICE_API
+  RPC_DLLEXPORT_DECL
+  GAMECLIENT_RPC_API
+  PROJECT_NAMESPACE
+  "${PROJECT_NAMESPACE}"
+  SERVICE_DLLEXPORT_DECL
+  GAMECLIENT_SERVICE_API
+  RPC_DLLEXPORT_DECL
+  GAMECLIENT_RPC_API)
 
 generate_for_pb_add_simulator_cs_api(
-  "${PROJECT_NAMESPACE}.GamesvrClientService" "${CMAKE_CURRENT_LIST_DIR}/tools/simulator" RPC_IGNORE_EMPTY_REQUEST
-  PROJECT_NAMESPACE "${PROJECT_NAMESPACE}")
+  "${PROJECT_NAMESPACE}.GamesvrClientService"
+  "${CMAKE_CURRENT_LIST_DIR}/tools/simulator"
+  RPC_IGNORE_EMPTY_REQUEST
+  PROJECT_NAMESPACE
+  "${PROJECT_NAMESPACE}"
+  SERVICE_DLLEXPORT_DECL
+  GAMECLIENT_SERVICE_API
+  RPC_DLLEXPORT_DECL
+  GAMECLIENT_RPC_API)
 
 # Run generator finally
 generate_for_pb_run_generator()

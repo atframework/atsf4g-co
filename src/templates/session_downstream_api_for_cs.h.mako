@@ -12,8 +12,11 @@ result_clazz_name = service.get_name_lower_rule() + '_result_t'
 
 #pragma once
 
+#include <config/compile_optimize.h>
+
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/com.protocol.pb.h>
 % if include_headers:
@@ -22,15 +25,20 @@ result_clazz_name = service.get_name_lower_rule() + '_result_t'
 %   endfor
 % endif
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include <libcopp/future/poller.h>
+#include "rpc/rpc_common_types.h"
 
 #include <stdint.h>
 #include <cstddef>
 #include <cstring>
 #include <string>
+
+#ifndef ${service_dllexport_decl}
+#  define ${service_dllexport_decl} UTIL_SYMBOL_VISIBLE
+#endif
 
 class session;
 namespace rpc {
@@ -38,18 +46,6 @@ class context;
 % for ns in service.get_cpp_namespace_begin(module_name, ''):
 ${ns}
 % endfor
-struct ${result_clazz_name} {
-  ${result_clazz_name}();
-  explicit ${result_clazz_name}(int code);
-
-  // Remove this and implement co_yield to get the result in the future
-  explicit operator int() const noexcept;
-
-  bool is_success() const noexcept;
-  bool is_error() const noexcept;
-
-  copp::future::poller<int> result;
-};
 % for rpc in rpcs.values():
 <%
     # Only generate downstream calls
@@ -74,7 +70,7 @@ struct ${result_clazz_name} {
 %   endfor
  * @return 0 or error code
  */
-${result_clazz_name} send_${rpc.get_name()}(
+${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
   ${', '.join(rpc_params)}, session& __session);
 
 /**
@@ -90,7 +86,7 @@ ${result_clazz_name} send_${rpc.get_name()}(
 %   endfor
  * @return 0 or error code
  */
-${result_clazz_name} send_${rpc.get_name()}(
+${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
   ${', '.join(rpc_params)}, session& __session, uint64_t server_sequence);
 
 /**
@@ -105,7 +101,7 @@ ${result_clazz_name} send_${rpc.get_name()}(
 %   endfor
  * @return 0 or error code
  */
-${result_clazz_name} broadcast_${rpc.get_name()}(
+${service_dllexport_decl} rpc::always_ready_code_type broadcast_${rpc.get_name()}(
   ${', '.join(rpc_params)}, uint64_t service_id);
 % endfor
 % for ns in service.get_cpp_namespace_end(module_name, ''):

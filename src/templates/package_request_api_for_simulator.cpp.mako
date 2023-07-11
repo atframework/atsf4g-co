@@ -14,6 +14,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/com.protocol.pb.h>
@@ -23,6 +24,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 %   endfor
 % endif
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
@@ -112,7 +114,7 @@ ${ns}
     ]
 %>
 // ============ ${rpc.get_full_name()} ============
-int package_${rpc.get_name()}(${', '.join(rpc_params)}) {
+${rpc_dllexport_decl} int package_${rpc.get_name()}(${', '.join(rpc_params)}) {
 % if rpc.is_request_stream():
   int res = details::__setup_rpc_stream_header(
     *__output.mutable_head(), "${rpc.get_full_name()}",
@@ -134,7 +136,7 @@ int package_${rpc.get_name()}(${', '.join(rpc_params)}) {
   return res;
 }
 
-gsl::string_view get_full_name_of_${rpc.get_name()}() {
+${rpc_dllexport_decl} gsl::string_view get_full_name_of_${rpc.get_name()}() {
   return "${rpc.get_full_name()}";
 }
 

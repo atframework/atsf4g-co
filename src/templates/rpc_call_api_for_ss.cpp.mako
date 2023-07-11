@@ -289,26 +289,26 @@ ${ns}
 %>
 // ============ ${rpc.get_full_name()} ============
 namespace packer {
-bool pack_${rpc.get_name()}(std::string& output, const ${rpc.get_request().get_cpp_class_name()}& input) {
+${rpc_dllexport_decl} bool pack_${rpc.get_name()}(std::string& output, const ${rpc.get_request().get_cpp_class_name()}& input) {
   return ${project_namespace}::err::EN_SUCCESS == details::__pack_rpc_body(input, &output,
                                  "${rpc.get_full_name()}", 
                                  ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name());
 }
 
-bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_request().get_cpp_class_name()}& output) {
+${rpc_dllexport_decl} bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_request().get_cpp_class_name()}& output) {
   return ${project_namespace}::err::EN_SUCCESS == details::__unpack_rpc_body(output, input,
                                  "${rpc.get_full_name()}", 
                                  ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name());
 }
 
 % if not rpc_is_stream_mode:
-bool pack_${rpc.get_name()}(std::string& output, const ${rpc.get_response().get_cpp_class_name()}& input) {
+${rpc_dllexport_decl} bool pack_${rpc.get_name()}(std::string& output, const ${rpc.get_response().get_cpp_class_name()}& input) {
   return ${project_namespace}::err::EN_SUCCESS == details::__pack_rpc_body(input, &output,
                                  "${rpc.get_full_name()}", 
                                  ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name());
 }
 
-bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_response().get_cpp_class_name()}& output) {
+${rpc_dllexport_decl} bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_response().get_cpp_class_name()}& output) {
   return ${project_namespace}::err::EN_SUCCESS == details::__unpack_rpc_body(output, input,
                                  "${rpc.get_full_name()}", 
                                  ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name());
@@ -317,7 +317,7 @@ bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_response().get
 % endif
 }  // namespace packer
 
-${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_params)}) {
+${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_params)}) {
 %   if rpc_is_router_api:
   if (object_id == 0 || type_id == 0) {
     ${rpc_return_sentense(project_namespace + '::err::EN_SYS_PARAM')}

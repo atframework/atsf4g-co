@@ -12,6 +12,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.protocol.pb.h>
 % if include_headers:
@@ -20,6 +21,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 %   endfor
 % endif
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
@@ -39,7 +41,7 @@ namespace handle {
 % for ns in service.get_cpp_namespace_begin(module_name, ''):
 ${ns}
 % endfor
-int register_handles_for_${service.get_name_lower_rule()}() {
+${service_dllexport_decl} int register_handles_for_${service.get_name_lower_rule()}() {
   int ret = 0;
 % for rpc in rpcs.values():
 %   if not rpc.get_request_descriptor().full_name == "google.protobuf.Empty":

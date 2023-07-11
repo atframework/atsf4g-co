@@ -5,6 +5,8 @@ project_component_declare_sdk(
   PROJECT_COMPONENT_DISTRIBUTED_TRANSACTION_SDK
   INCLUDE_DIR
   "${CMAKE_CURRENT_LIST_DIR}"
+  DLLEXPORT_DECL
+  DISTRIBUTED_TRANSACTION_RPC_API
   HRADERS
   "${CMAKE_CURRENT_LIST_DIR}/rpc/transaction/dtcoordsvrservice.h"
   "${CMAKE_CURRENT_LIST_DIR}/rpc/transaction/transaction_api.h"

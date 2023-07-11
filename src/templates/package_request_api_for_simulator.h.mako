@@ -11,8 +11,11 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 
 #pragma once
 
+#include <config/compile_optimize.h>
+
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/com.protocol.pb.h>
 % if include_headers:
@@ -21,6 +24,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 %   endfor
 % endif
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
@@ -32,6 +36,10 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 #include <cstddef>
 #include <cstring>
 #include <string>
+
+#ifndef ${rpc_dllexport_decl}
+#  define ${rpc_dllexport_decl} UTIL_SYMBOL_VISIBLE
+#endif
 
 namespace rpc {
 % for ns in service.get_cpp_namespace_begin(module_name, ''):
@@ -63,13 +71,13 @@ ${ns}
 %   endfor
  * @return 0 or error code
  */
-int package_${rpc.get_name()}(${', '.join(rpc_params)});
+${rpc_dllexport_decl} int package_${rpc.get_name()}(${', '.join(rpc_params)});
 
 /**
  * @brief get full rpc name of ${rpc.get_name()}
  * @return full rpc name of ${rpc.get_name()}
  */
-gsl::string_view get_full_name_of_${rpc.get_name()}();
+${rpc_dllexport_decl} gsl::string_view get_full_name_of_${rpc.get_name()}();
 
 % endfor
 % for ns in service.get_cpp_namespace_end(module_name, ''):

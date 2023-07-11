@@ -15,6 +15,7 @@ result_clazz_name = service.get_name_lower_rule() + '_result_t'
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.pb.h>
@@ -25,6 +26,7 @@ result_clazz_name = service.get_name_lower_rule() + '_result_t'
 %   endfor
 % endif
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
@@ -90,46 +92,6 @@ static inline int __setup_rpc_stream_header(atframework::CSMsgHead &head, const 
 % for ns in service.get_cpp_namespace_begin(module_name, ''):
 ${ns}
 % endfor
-${result_clazz_name}::${result_clazz_name}() {}
-${result_clazz_name}::${result_clazz_name}(int code): result(code) {}
-${result_clazz_name}::operator int() const noexcept {
-  if (!result.is_ready()) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL_NOT_READY;
-  }
-
-  const int* ret = result.data();
-  if (nullptr == ret) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL;
-  }
-
-  return *ret;
-}
-
-bool ${result_clazz_name}::is_success() const noexcept {
-  if (!result.is_ready()) {
-    return false;
-  }
-
-  const int* ret = result.data();
-  if (nullptr == ret) {
-    return false;
-  }
-
-  return *ret >= 0;
-}
-
-bool ${result_clazz_name}::is_error() const noexcept {
-  if (!result.is_ready()) {
-    return false;
-  }
-
-  const int* ret = result.data();
-  if (nullptr == ret) {
-    return false;
-  }
-
-  return *ret < 0;
-}
 % for rpc in rpcs.values():
 <%
     if not rpc.is_response_stream():
@@ -138,7 +100,7 @@ bool ${result_clazz_name}::is_error() const noexcept {
     rpc_params = ['context& __ctx', '{0} &__body'.format(rpc.get_response().get_cpp_class_name())]
 %>
 // ============ ${rpc.get_full_name()} ============
-${result_clazz_name} send_${rpc.get_name()}(
+${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
   ${', '.join(rpc_params)}, session& __session) {
   atframework::CSMsg* msg_ptr = __ctx.create<atframework::CSMsg>();
   if (nullptr == msg_ptr) {
@@ -163,6 +125,9 @@ ${result_clazz_name} send_${rpc.get_name()}(
     return ${result_clazz_name}(res);
   }
 
+  if (!msg_ptr->has_head() || msg_ptr->head().timestamp() == 0) {
+    msg_ptr->mutable_head()->set_timestamp(::util::time::time_utility::get_now());
+  }
   __session.write_actor_log_body(__body, *msg_ptr->mutable_head());
   res = __session.send_msg_to_client(*msg_ptr);
   if (res < 0) {
@@ -175,14 +140,14 @@ ${result_clazz_name} send_${rpc.get_name()}(
   return ${result_clazz_name}(res);
 }
 
-${result_clazz_name} send_${rpc.get_name()}(
+${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
   ${', '.join(rpc_params)}, session& __session, uint64_t server_sequence) {
   atframework::CSMsg* msg_ptr = __ctx.create<atframework::CSMsg>();
   if (nullptr == msg_ptr) {
     FWLOGERROR("rpc {} create request message for session [{:#x}, {}] failed",
                "${rpc.get_full_name()}",
                __session.get_key().bus_id, __session.get_key().session_id);
-    return ${result_clazz_name}(${project_namespace}::err::EN_SYS_MALLOC);
+    return {static_cast<rpc::always_ready_code_type::value_type>(${project_namespace}::err::EN_SYS_MALLOC)};
   }
 
   int res = details::__setup_rpc_stream_header(
@@ -190,16 +155,19 @@ ${result_clazz_name} send_${rpc.get_name()}(
     ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
 
   if (res < 0) {
-    return ${result_clazz_name}(res);
+    return {static_cast<rpc::always_ready_code_type::value_type>(res)};
   }
 
   res = details::__pack_body(__body, msg_ptr->mutable_body_bin(),
                             "${rpc.get_full_name()}",
                             ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
   if (res < 0) {
-    return ${result_clazz_name}(res);
+    return {static_cast<rpc::always_ready_code_type::value_type>(res)};
   }
 
+  if (!msg_ptr->has_head() || msg_ptr->head().timestamp() == 0) {
+    msg_ptr->mutable_head()->set_timestamp(::util::time::time_utility::get_now());
+  }
   __session.write_actor_log_body(__body, *msg_ptr->mutable_head());
   res = __session.send_msg_to_client(*msg_ptr, server_sequence);
   if (res < 0) {
@@ -209,17 +177,17 @@ ${result_clazz_name} send_${rpc.get_name()}(
                res, protobuf_mini_dumper_get_error_msg(res));
   }
 
-  return ${result_clazz_name}(res);
+  return {static_cast<rpc::always_ready_code_type::value_type>(res)};
 }
 
 
-${result_clazz_name} broadcast_${rpc.get_name()}(
+${service_dllexport_decl} rpc::always_ready_code_type broadcast_${rpc.get_name()}(
   ${', '.join(rpc_params)}, uint64_t service_id) {
   atframework::CSMsg* msg_ptr = __ctx.create<atframework::CSMsg>();
   if (nullptr == msg_ptr) {
     FWLOGERROR("rpc {} create request message to broadcast failed",
                "${rpc.get_full_name()}");
-    return ${result_clazz_name}(${project_namespace}::err::EN_SYS_MALLOC);
+    return {static_cast<rpc::always_ready_code_type::value_type>(${project_namespace}::err::EN_SYS_MALLOC)};
   }
 
   int res = details::__setup_rpc_stream_header(
@@ -227,16 +195,19 @@ ${result_clazz_name} broadcast_${rpc.get_name()}(
     ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
 
   if (res < 0) {
-    return ${result_clazz_name}(res);
+    return {static_cast<rpc::always_ready_code_type::value_type>(res)};
   }
 
   res = details::__pack_body(__body, msg_ptr->mutable_body_bin(),
                             "${rpc.get_full_name()}",
                             ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
   if (res < 0) {
-    return ${result_clazz_name}(res);
+    return {static_cast<rpc::always_ready_code_type::value_type>(res)};
   }
 
+  if (!msg_ptr->has_head() || msg_ptr->head().timestamp() == 0) {
+    msg_ptr->mutable_head()->set_timestamp(::util::time::time_utility::get_now());
+  }
   res = session::broadcast_msg_to_client(service_id, *msg_ptr);
   if (res < 0) {
     FWLOGERROR("rpc {} broadcast message  failed, result: {}({})",
@@ -244,7 +215,7 @@ ${result_clazz_name} broadcast_${rpc.get_name()}(
                res, protobuf_mini_dumper_get_error_msg(res));
   }
 
-  return ${result_clazz_name}(res);
+  return {static_cast<rpc::always_ready_code_type::value_type>(res)};
 }
 
 % endfor

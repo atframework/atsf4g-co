@@ -24,10 +24,10 @@ namespace excel {
 
 struct config_group_t;
 
-SERVER_FRAME_CONFIG_API void setup_const_config(config_group_t &group);
+EXCEL_CONFIG_LOADER_API void setup_const_config(config_group_t &group);
 
-SERVER_FRAME_CONFIG_API const ::PROJECT_NAMESPACE_ID::config::excel_const_config &get_const_config();
+EXCEL_CONFIG_LOADER_API const ::PROJECT_NAMESPACE_ID::config::excel_const_config &get_const_config();
 
-SERVER_FRAME_CONFIG_API void parse_timepoint(const std::string &in, google::protobuf::Timestamp &out);
-SERVER_FRAME_CONFIG_API void parse_duration(const std::string &in, google::protobuf::Duration &out);
+EXCEL_CONFIG_LOADER_API void parse_timepoint(const std::string &in, google::protobuf::Timestamp &out);
+EXCEL_CONFIG_LOADER_API void parse_duration(const std::string &in, google::protobuf::Duration &out);
 }  // namespace excel

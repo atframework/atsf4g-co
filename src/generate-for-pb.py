@@ -980,7 +980,8 @@ def generate_group(options, group):
             "output_file_path": None,
             "output_render_path": None,
             "current_instance": group.outer_inst,
-            "dllexport_decl": group.outer_dllexport_decl,
+            group.outer_name + "_dllexport_decl": group.outer_dllexport_decl,
+            group.inner_name + "_dllexport_decl": group.inner_dllexport_decl,
             "PbConvertRule": PbConvertRule,
         }
         for k in group.custom_variables:
@@ -1073,7 +1074,8 @@ def generate_group(options, group):
             "output_file_path": None,
             "output_render_path": None,
             "current_instance": None,
-            "dllexport_decl": group.inner_dllexport_decl,
+            group.outer_name + "_dllexport_decl": group.outer_dllexport_decl,
+            group.inner_name + "_dllexport_decl": group.inner_dllexport_decl,
             "PbConvertRule": PbConvertRule,
         }
         for k in group.custom_variables:
@@ -1210,7 +1212,7 @@ def generate_global(options, global_generator):
             "output_file_path": None,
             "output_render_path": None,
             "database": global_generator.database,
-            "dllexport_decl": self.global_dllexport_decl,
+            "global_dllexport_decl": global_generator.global_dllexport_decl,
             "PbConvertRule": PbConvertRule,
         }
         for k in global_generator.custom_variables:

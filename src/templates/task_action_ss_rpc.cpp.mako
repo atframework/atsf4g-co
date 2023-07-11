@@ -17,6 +17,7 @@ rpc_is_stream_mode = rpc.is_request_stream() or rpc.is_response_stream()
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 % if include_headers:
@@ -25,6 +26,7 @@ rpc_is_stream_mode = rpc.is_request_stream() or rpc.is_response_stream()
 %   endfor
 % endif
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
@@ -33,14 +35,15 @@ rpc_is_stream_mode = rpc.is_request_stream() or rpc.is_response_stream()
 
 #include <config/extern_service_types.h>
 
-${task_class_name}::${task_class_name}(dispatcher_start_data_type&& param) : base_type(COPP_MACRO_STD_MOVE(param)) {}
-${task_class_name}::~${task_class_name}() {}
+${service_dllexport_decl} ${task_class_name}::${task_class_name}(dispatcher_start_data_type&& param) : base_type(COPP_MACRO_STD_MOVE(param)) {}
 
-const char *${task_class_name}::name() const {
+${service_dllexport_decl} ${task_class_name}::~${task_class_name}() {}
+
+${service_dllexport_decl} const char *${task_class_name}::name() const {
   return "${task_class_name}";
 }
 
-${task_class_name}::result_type ${task_class_name}::operator()() {
+${service_dllexport_decl} ${task_class_name}::result_type ${task_class_name}::operator()() {
   EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
 % if rpc.is_request_stream() or rpc.is_response_stream():
   // Stream request or stream response, just ignore auto response
@@ -59,10 +62,10 @@ ${task_class_name}::result_type ${task_class_name}::operator()() {
   TASK_ACTION_RETURN_CODE(${project_namespace}::err::EN_SUCCESS);
 }
 
-int ${task_class_name}::on_success() { return get_result(); }
+${service_dllexport_decl} int ${task_class_name}::on_success() { return get_result(); }
 
-int ${task_class_name}::on_failed() { return get_result(); }
+${service_dllexport_decl} int ${task_class_name}::on_failed() { return get_result(); }
 
 % if rpc.get_extension_field('rpc_options', lambda x: x.router_rpc, False) and rpc.get_extension_field('rpc_options', lambda x: x.router_ignore_offline, False):
-bool ${task_class_name}::is_router_offline_ignored() const { return true; }
+${service_dllexport_decl} bool ${task_class_name}::is_router_offline_ignored() const { return true; }
 % endif

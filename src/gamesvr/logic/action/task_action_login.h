@@ -3,7 +3,13 @@
 
 #pragma once
 
+#include <config/compile_optimize.h>
+
 #include <dispatcher/task_action_cs_req_base.h>
+
+#ifndef GAMECLIENT_RPC_API
+#  define GAMECLIENT_RPC_API UTIL_SYMBOL_VISIBLE
+#endif
 
 class player;
 
@@ -20,20 +26,20 @@ class task_action_login
   using task_action_cs_req_base::operator();
 
  public:
-  explicit task_action_login(dispatcher_start_data_type&& param);
-  ~task_action_login();
+  GAMECLIENT_RPC_API explicit task_action_login(dispatcher_start_data_type&& param);
+  GAMECLIENT_RPC_API ~task_action_login();
 
-  const char* name() const override;
+  GAMECLIENT_RPC_API const char* name() const override;
 
-  result_type operator()() override;
+  GAMECLIENT_RPC_API result_type operator()() override;
 
-  int on_success() override;
-  int on_failed() override;
+  GAMECLIENT_RPC_API int on_success() override;
+  GAMECLIENT_RPC_API int on_failed() override;
 
  private:
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type replace_session(std::shared_ptr<player> user);
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(rpc::context& ctx,
-                                                                                  std::shared_ptr<player> user);
+  GAMECLIENT_RPC_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type replace_session(std::shared_ptr<player> user);
+  GAMECLIENT_RPC_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(rpc::context& ctx,
+                                                                                 std::shared_ptr<player> user);
 
  private:
   bool is_new_player_;

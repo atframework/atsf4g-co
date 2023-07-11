@@ -11,13 +11,19 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 
 #pragma once
 
+#include <config/compile_optimize.h>
+
+#ifndef ${service_dllexport_decl}
+#  define ${service_dllexport_decl} UTIL_SYMBOL_VISIBLE
+#endif
+
 class dispatcher_implement;
 
 namespace handle {
 % for ns in service.get_cpp_namespace_begin(module_name, ''):
 ${ns}
 % endfor
-int register_handles_for_${service.get_name_lower_rule()}();
+${service_dllexport_decl} int register_handles_for_${service.get_name_lower_rule()}();
 % for ns in service.get_cpp_namespace_end(module_name, ''):
 ${ns}
 % endfor

@@ -56,9 +56,11 @@ if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows|MinGW|WindowsStore" AND (BUILD_SHARED_
                                                                                                  "${PROJECT_VERSION}")
 
   project_tool_split_target_debug_sybmol(${PROJECT_SERVER_FRAME_LIB_LINK})
+  project_build_tools_set_shared_library_declaration(SERVER_FRAME_API "${PROJECT_SERVER_FRAME_LIB_LINK}")
 else()
   add_library(${PROJECT_SERVER_FRAME_LIB_LINK} STATIC ${SRC_LIST})
   set_target_properties(${PROJECT_SERVER_FRAME_LIB_LINK} PROPERTIES VERSION "${PROJECT_VERSION}")
+  project_build_tools_set_static_library_declaration(SERVER_FRAME_API "${PROJECT_SERVER_FRAME_LIB_LINK}")
 endif()
 
 add_dependencies(${PROJECT_SERVER_FRAME_LIB_LINK} protocol config-loader)
