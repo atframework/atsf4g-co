@@ -46,56 +46,60 @@ namespace transaction_api {
  * @see https://en.wikipedia.org/wiki/Consistency_model#Client-centric_consistency_models
  * @return future of 0 or error code
  */
-EXPLICIT_NODISCARD_ATTR rpc::result_code_type initialize_new_transaction(
+DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type initialize_new_transaction(
     rpc::context& ctx, atframework::distributed_system::transaction_blob_storage& inout,
     const google::protobuf::Duration& timeout, uint32_t replication_read_count = 0,
     uint32_t replication_total_count = 0, bool memory_only = false, bool force_commit = false);
 
-EXPLICIT_NODISCARD_ATTR rpc::result_code_type query_transaction(
+DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type query_transaction(
     rpc::context& ctx, const atframework::distributed_system::transaction_metadata& metadata,
     atframework::distributed_system::transaction_blob_storage& out);
 
-EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_transaction(
+DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_transaction(
     rpc::context& ctx, atframework::distributed_system::transaction_blob_storage& inout);
 
-EXPLICIT_NODISCARD_ATTR rpc::result_code_type commit_transaction(
+DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type commit_transaction(
     rpc::context& ctx, atframework::distributed_system::transaction_metadata& inout);
 
-EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject_transaction(
+DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject_transaction(
     rpc::context& ctx, atframework::distributed_system::transaction_metadata& inout);
 
-EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_transaction_no_wait(
+DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_transaction_no_wait(
     rpc::context& ctx, const atframework::distributed_system::transaction_metadata& metadata);
 
-EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_transaction(
+DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_transaction(
     rpc::context& ctx, const atframework::distributed_system::transaction_metadata& metadata);
 
-EXPLICIT_NODISCARD_ATTR rpc::result_code_type commit_participator(
+DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type commit_participator(
     rpc::context& ctx, const std::string& participator_key,
     atframework::distributed_system::transaction_metadata& inout);
 
-EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject_participator(
+DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject_participator(
     rpc::context& ctx, const std::string& participator_key,
     atframework::distributed_system::transaction_metadata& inout);
 
-void merge_storage(atframework::distributed_system::transaction_blob_storage& output,
-                   const atframework::distributed_system::transaction_blob_storage& input);
+DISTRIBUTED_TRANSACTION_SDK_API void merge_storage(
+    atframework::distributed_system::transaction_blob_storage& output,
+    const atframework::distributed_system::transaction_blob_storage& input);
 
-void merge_storage(const std::string& participator_key,
-                   atframework::distributed_system::transaction_participator_storage& output,
-                   const atframework::distributed_system::transaction_blob_storage& input);
+DISTRIBUTED_TRANSACTION_SDK_API void merge_storage(
+    const std::string& participator_key, atframework::distributed_system::transaction_participator_storage& output,
+    const atframework::distributed_system::transaction_blob_storage& input);
 
-void pack_participator_request(atframework::distributed_system::SSParticipatorTransactionPrepareReq& output,
-                               const atframework::distributed_system::transaction_blob_storage& input_transaction,
-                               const atframework::distributed_system::transaction_participator& input_participator);
+DISTRIBUTED_TRANSACTION_SDK_API void pack_participator_request(
+    atframework::distributed_system::SSParticipatorTransactionPrepareReq& output,
+    const atframework::distributed_system::transaction_blob_storage& input_transaction,
+    const atframework::distributed_system::transaction_participator& input_participator);
 
-void pack_participator_request(atframework::distributed_system::SSParticipatorTransactionCommitReq& output,
-                               const atframework::distributed_system::transaction_blob_storage& input_transaction,
-                               const atframework::distributed_system::transaction_participator& input_participator);
+DISTRIBUTED_TRANSACTION_SDK_API void pack_participator_request(
+    atframework::distributed_system::SSParticipatorTransactionCommitReq& output,
+    const atframework::distributed_system::transaction_blob_storage& input_transaction,
+    const atframework::distributed_system::transaction_participator& input_participator);
 
-void pack_participator_request(atframework::distributed_system::SSParticipatorTransactionRejectReq& output,
-                               const atframework::distributed_system::transaction_blob_storage& input_transaction,
-                               const atframework::distributed_system::transaction_participator& input_participator);
+DISTRIBUTED_TRANSACTION_SDK_API void pack_participator_request(
+    atframework::distributed_system::SSParticipatorTransactionRejectReq& output,
+    const atframework::distributed_system::transaction_blob_storage& input_transaction,
+    const atframework::distributed_system::transaction_participator& input_participator);
 
 }  // namespace transaction_api
 }  // namespace rpc

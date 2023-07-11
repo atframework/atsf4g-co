@@ -38,17 +38,18 @@ static inline google::protobuf::Duration std_duration_to_protobuf_duration(std::
 }
 }  // namespace
 
-transaction_client_handle::transaction_client_handle(const std::shared_ptr<vtable_type>& vtable)
+DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle::transaction_client_handle(
+    const std::shared_ptr<vtable_type>& vtable)
     : private_data_{nullptr}, on_destroy_{nullptr}, vtable_{vtable} {}
 
-transaction_client_handle::~transaction_client_handle() {
+DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle::~transaction_client_handle() {
   if (nullptr != on_destroy_) {
     (*on_destroy_)(this);
   }
 }
 
-rpc::result_code_type transaction_client_handle::create_transaction(rpc::context& ctx, storage_ptr_type& output,
-                                                                    const transaction_options& options) {
+DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle::create_transaction(
+    rpc::context& ctx, storage_ptr_type& output, const transaction_options& options) {
   output = std::make_shared<storage_type>();
   if (!output) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
@@ -82,7 +83,7 @@ rpc::result_code_type transaction_client_handle::create_transaction(rpc::context
   RPC_RETURN_CODE(child_tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
 }
 
-rpc::result_code_type transaction_client_handle::submit_transaction(
+DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle::submit_transaction(
     rpc::context& ctx, storage_ptr_type& input, std::unordered_set<std::string>* output_prepared_participators,
     std::unordered_set<std::string>* output_failed_participators) {
   if (!input) {
@@ -251,8 +252,8 @@ rpc::result_code_type transaction_client_handle::submit_transaction(
   RPC_RETURN_CODE(child_tracer.return_code(ret));
 }
 
-int32_t transaction_client_handle::set_transaction_data(rpc::context&, storage_ptr_type& input,
-                                                        google::protobuf::Message& data) {
+DISTRIBUTED_TRANSACTION_SDK_API int32_t transaction_client_handle::set_transaction_data(
+    rpc::context&, storage_ptr_type& input, google::protobuf::Message& data) {
   if (!input) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
@@ -270,9 +271,10 @@ int32_t transaction_client_handle::set_transaction_data(rpc::context&, storage_p
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-int32_t transaction_client_handle::add_participator(rpc::context& ctx, storage_ptr_type& input,
-                                                    const std::string& participator_key,
-                                                    google::protobuf::Message& data) {
+DISTRIBUTED_TRANSACTION_SDK_API int32_t transaction_client_handle::add_participator(rpc::context& ctx,
+                                                                                    storage_ptr_type& input,
+                                                                                    const std::string& participator_key,
+                                                                                    google::protobuf::Message& data) {
   if (!input) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }

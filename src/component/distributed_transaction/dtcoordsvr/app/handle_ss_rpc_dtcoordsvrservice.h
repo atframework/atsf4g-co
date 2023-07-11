@@ -6,11 +6,17 @@
 
 #pragma once
 
+#include <config/compile_optimize.h>
+
+#ifndef DISTRIBUTED_TRANSACTION_SERVICE_API
+#  define DISTRIBUTED_TRANSACTION_SERVICE_API UTIL_SYMBOL_VISIBLE
+#endif
+
 class dispatcher_implement;
 
 namespace handle {
 namespace transaction {
-int register_handles_for_dtcoordsvrservice();
+DISTRIBUTED_TRANSACTION_SERVICE_API int register_handles_for_dtcoordsvrservice();
 }  // namespace transaction
 }
 

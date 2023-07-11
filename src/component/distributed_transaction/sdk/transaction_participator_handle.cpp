@@ -22,19 +22,19 @@
 namespace atframework {
 namespace distributed_system {
 
-transaction_participator_handle::transaction_participator_handle(const std::shared_ptr<vtable_type>& vtable,
-                                                                 gsl::string_view participator_key)
+DISTRIBUTED_TRANSACTION_SDK_API transaction_participator_handle::transaction_participator_handle(
+    const std::shared_ptr<vtable_type>& vtable, gsl::string_view participator_key)
     : private_data_{nullptr}, on_destroy_{nullptr}, vtable_{vtable} {
   participator_key_.assign(participator_key.data(), participator_key.size());
 }
 
-transaction_participator_handle::~transaction_participator_handle() {
+DISTRIBUTED_TRANSACTION_SDK_API transaction_participator_handle::~transaction_participator_handle() {
   if (nullptr != on_destroy_) {
     (*on_destroy_)(this);
   }
 }
 
-void transaction_participator_handle::load(const snapshot_type& storage) {
+DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::load(const snapshot_type& storage) {
   resolve_timers_.clear();
   running_transactions_.clear();
   transaction_locks_.clear();
@@ -69,7 +69,7 @@ void transaction_participator_handle::load(const snapshot_type& storage) {
   }
 }
 
-void transaction_participator_handle::dump(snapshot_type& storage) {
+DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::dump(snapshot_type& storage) {
   storage.Clear();
 
   for (auto& transaction : finished_transactions_) {
@@ -85,7 +85,8 @@ void transaction_participator_handle::dump(snapshot_type& storage) {
   }
 }
 
-rpc::result_code_type transaction_participator_handle::check_writable(rpc::context& ctx, bool& writable) {
+DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_handle::check_writable(rpc::context& ctx,
+                                                                                                      bool& writable) {
   if (!vtable_ || !vtable_->check_writable) {
     writable = true;
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -94,7 +95,8 @@ rpc::result_code_type transaction_participator_handle::check_writable(rpc::conte
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(vtable_->check_writable(ctx, *this, writable)));
 }
 
-int32_t transaction_participator_handle::tick(rpc::context&, util::time::time_utility::raw_time_t timepoint) {
+DISTRIBUTED_TRANSACTION_SDK_API int32_t
+transaction_participator_handle::tick(rpc::context&, util::time::time_utility::raw_time_t timepoint) {
   if (!task_type_trait::empty(auto_resolve_transaction_task_) &&
       !task_type_trait::is_exiting(auto_resolve_transaction_task_)) {
     return 0;
@@ -169,10 +171,9 @@ int32_t transaction_participator_handle::tick(rpc::context&, util::time::time_ut
   return 0;
 }
 
-rpc::result_code_type transaction_participator_handle::prepare(rpc::context& ctx,
-                                                               SSParticipatorTransactionPrepareReq&& request,
-                                                               SSParticipatorTransactionPrepareRsp& response,
-                                                               storage_ptr_type& output) {
+DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_handle::prepare(
+    rpc::context& ctx, SSParticipatorTransactionPrepareReq&& request, SSParticipatorTransactionPrepareRsp& response,
+    storage_ptr_type& output) {
   if (request.storage().metadata().transaction_uuid().empty()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
@@ -251,15 +252,13 @@ rpc::result_code_type transaction_participator_handle::prepare(rpc::context& ctx
   }
 }
 
-rpc::result_code_type transaction_participator_handle::commit(rpc::context& ctx,
-                                                              const SSParticipatorTransactionCommitReq& request,
-                                                              SSParticipatorTransactionCommitRsp&) {
+DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_handle::commit(
+    rpc::context& ctx, const SSParticipatorTransactionCommitReq& request, SSParticipatorTransactionCommitRsp&) {
   return commit_transcation(ctx, request.transaction_uuid());
 }
 
-rpc::result_code_type transaction_participator_handle::reject(rpc::context& ctx,
-                                                              const SSParticipatorTransactionRejectReq& request,
-                                                              SSParticipatorTransactionRejectRsp&) {
+DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_handle::reject(
+    rpc::context& ctx, const SSParticipatorTransactionRejectReq& request, SSParticipatorTransactionRejectRsp&) {
   if (request.has_storage() && request.storage().configure().force_commit()) {
     rpc::context child_ctx{ctx};
     rpc::context::tracer child_tracer;
@@ -289,7 +288,7 @@ rpc::result_code_type transaction_participator_handle::reject(rpc::context& ctx,
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(reject_transcation(ctx, request.transaction_uuid())));
 }
 
-rpc::result_code_type::value_type transaction_participator_handle::check_lock(
+DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type::value_type transaction_participator_handle::check_lock(
     const transaction_metadata& metadata, gsl::span<const std::string> resource_uuids,
     std::list<storage_const_ptr_type>& preemption_transaction) {
   if (metadata.transaction_uuid().empty()) {
@@ -342,7 +341,7 @@ rpc::result_code_type::value_type transaction_participator_handle::check_lock(
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-rpc::result_code_type transaction_participator_handle::lock(
+DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_handle::lock(
     const storage_ptr_type& transaction_ptr, const google::protobuf::RepeatedPtrField<std::string>& resource_uuids) {
   if (!transaction_ptr) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
@@ -381,8 +380,8 @@ rpc::result_code_type transaction_participator_handle::lock(
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-bool transaction_participator_handle::unlock(const storage_ptr_type& transaction_ptr,
-                                             const std::string& resource_uuid) noexcept {
+DISTRIBUTED_TRANSACTION_SDK_API bool transaction_participator_handle::unlock(
+    const storage_ptr_type& transaction_ptr, const std::string& resource_uuid) noexcept {
   if (!transaction_ptr) {
     return false;
   }
@@ -403,8 +402,8 @@ bool transaction_participator_handle::unlock(const storage_ptr_type& transaction
   return true;
 }
 
-bool transaction_participator_handle::unlock(const std::string& transaction_uuid,
-                                             const std::string& resource_uuid) noexcept {
+DISTRIBUTED_TRANSACTION_SDK_API bool transaction_participator_handle::unlock(
+    const std::string& transaction_uuid, const std::string& resource_uuid) noexcept {
   auto transaction_iter = running_transactions_.find(transaction_uuid);
   if (transaction_iter == running_transactions_.end()) {
     return false;
@@ -418,7 +417,8 @@ bool transaction_participator_handle::unlock(const std::string& transaction_uuid
   return unlock(transaction_iter->second, resource_uuid);
 }
 
-bool transaction_participator_handle::unlock(const storage_ptr_type& transaction_ptr) noexcept {
+DISTRIBUTED_TRANSACTION_SDK_API bool transaction_participator_handle::unlock(
+    const storage_ptr_type& transaction_ptr) noexcept {
   if (!transaction_ptr) {
     return false;
   }
@@ -438,7 +438,8 @@ bool transaction_participator_handle::unlock(const storage_ptr_type& transaction
   return true;
 }
 
-bool transaction_participator_handle::unlock(const std::string& transaction_uuid) noexcept {
+DISTRIBUTED_TRANSACTION_SDK_API bool transaction_participator_handle::unlock(
+    const std::string& transaction_uuid) noexcept {
   auto transaction_iter = running_transactions_.find(transaction_uuid);
   if (transaction_iter == running_transactions_.end()) {
     return false;
@@ -451,8 +452,8 @@ bool transaction_participator_handle::unlock(const std::string& transaction_uuid
   return unlock(transaction_iter->second);
 }
 
-transaction_participator_handle::storage_ptr_type transaction_participator_handle::get_locker(
-    const std::string& resource) const noexcept {
+DISTRIBUTED_TRANSACTION_SDK_API transaction_participator_handle::storage_ptr_type
+transaction_participator_handle::get_locker(const std::string& resource) const noexcept {
   auto iter = transaction_locks_.find(resource);
   if (iter == transaction_locks_.end()) {
     return nullptr;
@@ -466,13 +467,15 @@ transaction_participator_handle::storage_ptr_type transaction_participator_handl
   return iter->second;
 }
 
-const std::unordered_map<std::string, transaction_participator_handle::storage_ptr_type>&
-transaction_participator_handle::get_running_transactions() const noexcept {
+DISTRIBUTED_TRANSACTION_SDK_API const
+    std::unordered_map<std::string, transaction_participator_handle::storage_ptr_type>&
+    transaction_participator_handle::get_running_transactions() const noexcept {
   return running_transactions_;
 }
 
-const std::unordered_map<std::string, transaction_participator_handle::storage_ptr_type>&
-transaction_participator_handle::get_finished_transactions() const noexcept {
+DISTRIBUTED_TRANSACTION_SDK_API const
+    std::unordered_map<std::string, transaction_participator_handle::storage_ptr_type>&
+    transaction_participator_handle::get_finished_transactions() const noexcept {
   return finished_transactions_;
 }
 

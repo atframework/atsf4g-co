@@ -107,7 +107,7 @@ ${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
     FWLOGERROR("rpc {} create request message for session [{:#x}, {}] failed",
                "${rpc.get_full_name()}",
                __session.get_key().bus_id, __session.get_key().session_id);
-    return ${result_clazz_name}(${project_namespace}::err::EN_SYS_MALLOC);
+    return {static_cast<rpc::always_ready_code_type::value_type>(${project_namespace}::err::EN_SYS_MALLOC)};
   }
 
   int res = details::__setup_rpc_stream_header(
@@ -115,14 +115,14 @@ ${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
     ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
 
   if (res < 0) {
-    return ${result_clazz_name}(res);
+    return {static_cast<rpc::always_ready_code_type::value_type>(res)};
   }
 
   res = details::__pack_body(__body, msg_ptr->mutable_body_bin(),
                             "${rpc.get_full_name()}",
                             ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
   if (res < 0) {
-    return ${result_clazz_name}(res);
+    return {static_cast<rpc::always_ready_code_type::value_type>(res)};
   }
 
   if (!msg_ptr->has_head() || msg_ptr->head().timestamp() == 0) {
@@ -137,7 +137,7 @@ ${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
                res, protobuf_mini_dumper_get_error_msg(res));
   }
 
-  return ${result_clazz_name}(res);
+  return {static_cast<rpc::always_ready_code_type::value_type>(res)};
 }
 
 ${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(

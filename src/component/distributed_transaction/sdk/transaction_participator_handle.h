@@ -3,13 +3,18 @@
 
 #pragma once
 
+#include <config/compile_optimize.h>
 #include <config/compiler_features.h>
 
+// clanfg-format off
 #include <config/compiler/protobuf_prefix.h>
+// clanfg-format on
 
 #include <protocol/pbdesc/distributed_transaction.pb.h>
 
+// clanfg-format off
 #include <config/compiler/protobuf_suffix.h>
+// clanfg-format on
 
 #include <gsl/select-gsl.h>
 #include <time/time_utility.h>
@@ -44,7 +49,7 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
   using storage_ptr_type = std::shared_ptr<storage_type>;
   using storage_const_ptr_type = std::shared_ptr<const storage_type>;
 
-  struct vtable_type {
+  struct UTIL_SYMBOL_VISIBLE vtable_type {
     // 事务执行(Do)回调
     std::function<rpc::result_code_type(rpc::context&, transaction_participator_handle&, const storage_type&)> do_event;
 
@@ -84,19 +89,20 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
   transaction_participator_handle& operator=(transaction_participator_handle&&) = delete;
 
  public:
-  transaction_participator_handle(const std::shared_ptr<vtable_type>& vtable, gsl::string_view participator_key);
-  ~transaction_participator_handle();
+  DISTRIBUTED_TRANSACTION_SDK_API transaction_participator_handle(const std::shared_ptr<vtable_type>& vtable,
+                                                                  gsl::string_view participator_key);
+  DISTRIBUTED_TRANSACTION_SDK_API ~transaction_participator_handle();
 
-  inline void* get_private_data() const noexcept { return private_data_; }
-  inline void set_private_data(void* ptr) noexcept { private_data_ = ptr; }
-  inline on_destroy_callback_type get_on_destroy_callback() const noexcept { return on_destroy_; }
-  inline void set_on_destroy_callback(on_destroy_callback_type fn) noexcept { on_destroy_ = fn; };
+  UTIL_FORCEINLINE void* get_private_data() const noexcept { return private_data_; }
+  UTIL_FORCEINLINE void set_private_data(void* ptr) noexcept { private_data_ = ptr; }
+  UTIL_FORCEINLINE on_destroy_callback_type get_on_destroy_callback() const noexcept { return on_destroy_; }
+  UTIL_FORCEINLINE void set_on_destroy_callback(on_destroy_callback_type fn) noexcept { on_destroy_ = fn; };
 
-  inline const std::string& get_participator_key() const noexcept { return participator_key_; }
+  UTIL_FORCEINLINE const std::string& get_participator_key() const noexcept { return participator_key_; }
 
-  void load(const snapshot_type& storage);
+  DISTRIBUTED_TRANSACTION_SDK_API void load(const snapshot_type& storage);
 
-  void dump(snapshot_type& storage);
+  DISTRIBUTED_TRANSACTION_SDK_API void dump(snapshot_type& storage);
 
   /**
    * @brief Tick, this function should be called after prepare/commit/reject and interval
@@ -105,7 +111,7 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    * @param timepoint current timepoint
    * @return error code or transaction count to resolve
    */
-  int32_t tick(rpc::context& ctx, util::time::time_utility::raw_time_t timepoint);
+  DISTRIBUTED_TRANSACTION_SDK_API int32_t tick(rpc::context& ctx, util::time::time_utility::raw_time_t timepoint);
 
   /**
    * @brief Check writable of current transaction participator
@@ -114,7 +120,8 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    * @param writable output if it's writable now
    * @return future of 0 or error code
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type check_writable(rpc::context& ctx, bool& writable);
+  DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type check_writable(rpc::context& ctx,
+                                                                                               bool& writable);
 
   /**
    * @brief Prepare for transaction
@@ -128,7 +135,7 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    *
    * @return future of 0 or error code
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type prepare(
+  DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type prepare(
       rpc::context& ctx, SSParticipatorTransactionPrepareReq&& request, SSParticipatorTransactionPrepareRsp& response,
       storage_ptr_type& output);
 
@@ -140,7 +147,7 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    *
    * @return future of 0 or error code
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type commit(
+  DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type commit(
       rpc::context& ctx, const SSParticipatorTransactionCommitReq& request,
       SSParticipatorTransactionCommitRsp& response);
 
@@ -152,7 +159,7 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    *
    * @return future of 0 or error code
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject(
+  DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject(
       rpc::context& ctx, const SSParticipatorTransactionRejectReq& request,
       SSParticipatorTransactionRejectRsp& response);
 
@@ -169,9 +176,9 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    *
    * @return 0 or error code
    */
-  rpc::result_code_type::value_type check_lock(const transaction_metadata& metadata,
-                                               gsl::span<const std::string> resource_uuids,
-                                               std::list<storage_const_ptr_type>& preemption_transaction);
+  DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type::value_type check_lock(
+      const transaction_metadata& metadata, gsl::span<const std::string> resource_uuids,
+      std::list<storage_const_ptr_type>& preemption_transaction);
 
   /**
    * @brief Lock resource into specify transaction
@@ -185,7 +192,7 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    *
    * @return future of 0 or error code
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type lock(
+  DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type lock(
       const storage_ptr_type& transaction_ptr, const google::protobuf::RepeatedPtrField<std::string>& resource_uuids);
 
   /**
@@ -196,7 +203,8 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    *
    * @return true for success and false for failure or not found
    */
-  bool unlock(const storage_ptr_type& transaction_ptr, const std::string& resource_uuid) noexcept;
+  DISTRIBUTED_TRANSACTION_SDK_API bool unlock(const storage_ptr_type& transaction_ptr,
+                                              const std::string& resource_uuid) noexcept;
 
   /**
    * @brief Unlock resource from specify transaction
@@ -206,7 +214,8 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    *
    * @return true for success and false for failure or not found
    */
-  bool unlock(const std::string& transaction_uuid, const std::string& resource_uuid) noexcept;
+  DISTRIBUTED_TRANSACTION_SDK_API bool unlock(const std::string& transaction_uuid,
+                                              const std::string& resource_uuid) noexcept;
 
   /**
    * @brief Unlock all resource from specify transaction
@@ -215,7 +224,7 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    *
    * @return true for success and false for failure or not found
    */
-  bool unlock(const storage_ptr_type& transaction_ptr) noexcept;
+  DISTRIBUTED_TRANSACTION_SDK_API bool unlock(const storage_ptr_type& transaction_ptr) noexcept;
 
   /**
    * @brief Unlock all resource from specify transaction
@@ -224,7 +233,7 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    *
    * @return true for success and false for failure or not found
    */
-  bool unlock(const std::string& transaction_uuid) noexcept;
+  DISTRIBUTED_TRANSACTION_SDK_API bool unlock(const std::string& transaction_uuid) noexcept;
 
   /**
    * @brief Get the locker transaction by resource key
@@ -233,45 +242,47 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    *
    * @return The transaction by which this resource is locked, or nullptr if this resource is not locked
    */
-  storage_ptr_type get_locker(const std::string& resource) const noexcept;
+  DISTRIBUTED_TRANSACTION_SDK_API storage_ptr_type get_locker(const std::string& resource) const noexcept;
 
   /**
    * @brief Get all running transactions
    *
    * @return running transactions
    */
-  const std::unordered_map<std::string, storage_ptr_type>& get_running_transactions() const noexcept;
+  DISTRIBUTED_TRANSACTION_SDK_API const std::unordered_map<std::string, storage_ptr_type>& get_running_transactions()
+      const noexcept;
 
   /**
    * @brief Get all finished transactions which are not removed yet
    *
    * @return all finished transactions which are not removed yet
    */
-  const std::unordered_map<std::string, storage_ptr_type>& get_finished_transactions() const noexcept;
+  DISTRIBUTED_TRANSACTION_SDK_API const std::unordered_map<std::string, storage_ptr_type>& get_finished_transactions()
+      const noexcept;
 
  private:
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type add_running_transcation(rpc::context& ctx,
-                                                                                            storage_type&& storage,
-                                                                                            storage_ptr_type& output);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type add_running_transcation(rpc::context& ctx, storage_type&& storage,
+                                                                        storage_ptr_type& output);
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_running_transaction(
-      rpc::context& ctx, EnDistibutedTransactionStatus target_status, const std::string& transaction_uuid,
-      storage_ptr_type* output = nullptr);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_running_transaction(rpc::context& ctx,
+                                                                           EnDistibutedTransactionStatus target_status,
+                                                                           const std::string& transaction_uuid,
+                                                                           storage_ptr_type* output = nullptr);
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type add_finished_transcation(
-      rpc::context& ctx, const storage_ptr_type& transaction_ptr);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type add_finished_transcation(rpc::context& ctx,
+                                                                         const storage_ptr_type& transaction_ptr);
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_finished_transaction(
-      rpc::context& ctx, const storage_ptr_type& transaction_ptr);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_finished_transaction(rpc::context& ctx,
+                                                                            const storage_ptr_type& transaction_ptr);
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type resolve_transcation(
-      rpc::context& ctx, const std::string& transaction_uuid);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type resolve_transcation(rpc::context& ctx,
+                                                                    const std::string& transaction_uuid);
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type commit_transcation(
-      rpc::context& ctx, const std::string& transaction_uuid);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type commit_transcation(rpc::context& ctx,
+                                                                   const std::string& transaction_uuid);
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject_transcation(
-      rpc::context& ctx, const std::string& transaction_uuid);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject_transcation(rpc::context& ctx,
+                                                                   const std::string& transaction_uuid);
 
  private:
   friend class task_action_participator_resolve_transaction;

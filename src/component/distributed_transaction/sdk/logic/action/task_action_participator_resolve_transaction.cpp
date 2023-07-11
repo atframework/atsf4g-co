@@ -25,15 +25,19 @@
 namespace atframework {
 namespace distributed_system {
 
+DISTRIBUTED_TRANSACTION_SDK_API
 task_action_participator_resolve_transaction::task_action_participator_resolve_transaction(ctor_param_t&& param)
     : task_action_no_req_base(param), param_(param) {}
-task_action_participator_resolve_transaction::~task_action_participator_resolve_transaction() {}
 
-const char* task_action_participator_resolve_transaction::name() const {
+DISTRIBUTED_TRANSACTION_SDK_API
+    task_action_participator_resolve_transaction::~task_action_participator_resolve_transaction() {}
+
+DISTRIBUTED_TRANSACTION_SDK_API const char* task_action_participator_resolve_transaction::name() const {
   return "task_action_participator_resolve_transaction";
 }
 
-task_action_participator_resolve_transaction::result_type task_action_participator_resolve_transaction::operator()() {
+DISTRIBUTED_TRANSACTION_SDK_API task_action_participator_resolve_transaction::result_type
+task_action_participator_resolve_transaction::operator()() {
   // Maybe need to call
   // set_user_key(param_.user_id, param_.zone_id);
 
@@ -118,7 +122,7 @@ task_action_participator_resolve_transaction::result_type task_action_participat
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-int task_action_participator_resolve_transaction::on_success() {
+DISTRIBUTED_TRANSACTION_SDK_API int task_action_participator_resolve_transaction::on_success() {
   if (param_.participantor) {
     FWLOGINFO("participator {} do task_action_participator_resolve_transaction success",
               param_.participantor->get_participator_key());
@@ -127,7 +131,7 @@ int task_action_participator_resolve_transaction::on_success() {
   return get_result();
 }
 
-int task_action_participator_resolve_transaction::on_failed() {
+DISTRIBUTED_TRANSACTION_SDK_API int task_action_participator_resolve_transaction::on_failed() {
   if (param_.participantor) {
     FWLOGINFO("participator {} do task_action_participator_resolve_transaction success",
               param_.participantor->get_participator_key());

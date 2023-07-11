@@ -5,9 +5,11 @@
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.protocol.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 #include <protocol/pbdesc/distributed_transaction.pb.h>
@@ -24,7 +26,7 @@
 
 namespace handle {
 namespace transaction {
-int register_handles_for_dtcoordsvrservice() {
+DISTRIBUTED_TRANSACTION_SERVICE_API int register_handles_for_dtcoordsvrservice() {
   int ret = 0;
   REG_TASK_RPC_HANDLE(ss_msg_dispatcher, ret, task_action_query, atframework::distributed_system::DtcoordsvrService::descriptor(), "atframework.distributed_system.DtcoordsvrService.query");
   REG_TASK_RPC_HANDLE(ss_msg_dispatcher, ret, task_action_create, atframework::distributed_system::DtcoordsvrService::descriptor(), "atframework.distributed_system.DtcoordsvrService.create");

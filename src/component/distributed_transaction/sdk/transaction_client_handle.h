@@ -3,13 +3,18 @@
 
 #pragma once
 
+#include <config/compile_optimize.h>
 #include <config/compiler_features.h>
 
+// clanfg-format off
 #include <config/compiler/protobuf_prefix.h>
+// clanfg-format on
 
 #include <protocol/pbdesc/distributed_transaction.pb.h>
 
+// clanfg-format off
 #include <config/compiler/protobuf_suffix.h>
+// clanfg-format on
 
 #include <gsl/select-gsl.h>
 #include <time/time_utility.h>
@@ -46,7 +51,7 @@ class transaction_client_handle {
   using transaction_participator_failure_reason =
       atframework::distributed_system::transaction_participator_failure_reason;
 
-  struct vtable_type {
+  struct UTIL_SYMBOL_VISIBLE vtable_type {
     std::function<rpc::result_code_type(rpc::context&, transaction_client_handle&, const storage_type&,
                                         const participator_type&, transaction_participator_failure_reason&)>
         prepare_participator;
@@ -63,7 +68,7 @@ class transaction_client_handle {
   };
   using on_destroy_callback_type = void (*)(transaction_client_handle*);
 
-  struct transaction_options {
+  struct UTIL_SYMBOL_VISIBLE transaction_options {
     uint32_t replication_read_count = 0;
     uint32_t replication_total_count = 0;
     bool memory_only = false;
@@ -92,13 +97,13 @@ class transaction_client_handle {
   transaction_client_handle& operator=(transaction_client_handle&&) = delete;
 
  public:
-  transaction_client_handle(const std::shared_ptr<vtable_type>& vtable);
-  ~transaction_client_handle();
+  DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle(const std::shared_ptr<vtable_type>& vtable);
+  DISTRIBUTED_TRANSACTION_SDK_API ~transaction_client_handle();
 
-  inline void* get_private_data() const noexcept { return private_data_; }
-  inline void set_private_data(void* ptr) noexcept { private_data_ = ptr; }
-  inline on_destroy_callback_type get_on_destroy_callback() const noexcept { return on_destroy_; }
-  inline void set_on_destroy_callback(on_destroy_callback_type fn) noexcept { on_destroy_ = fn; };
+  UTIL_FORCEINLINE void* get_private_data() const noexcept { return private_data_; }
+  UTIL_FORCEINLINE void set_private_data(void* ptr) noexcept { private_data_ = ptr; }
+  UTIL_FORCEINLINE on_destroy_callback_type get_on_destroy_callback() const noexcept { return on_destroy_; }
+  UTIL_FORCEINLINE void set_on_destroy_callback(on_destroy_callback_type fn) noexcept { on_destroy_ = fn; };
 
   /**
    * @brief Create a transaction object
@@ -119,7 +124,7 @@ class transaction_client_handle {
    *
    * @return future of 0 or error code
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_transaction(
+  DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_transaction(
       rpc::context& ctx, storage_ptr_type& output, const transaction_options& options = {});
 
   /**
@@ -131,15 +136,17 @@ class transaction_client_handle {
    * @param output_failed_participators 输出prepare阶段失败的参与者
    * @return future of 0 or error code
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type submit_transaction(
+  DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type submit_transaction(
       rpc::context& ctx, storage_ptr_type& input,
       std::unordered_set<std::string>* output_prepared_participators = nullptr,
       std::unordered_set<std::string>* output_failed_participators = nullptr);
 
-  int32_t set_transaction_data(rpc::context& ctx, storage_ptr_type& input, google::protobuf::Message& data);
+  DISTRIBUTED_TRANSACTION_SDK_API int32_t set_transaction_data(rpc::context& ctx, storage_ptr_type& input,
+                                                               google::protobuf::Message& data);
 
-  int32_t add_participator(rpc::context& ctx, storage_ptr_type& input, const std::string& participator_key,
-                           google::protobuf::Message& data);
+  DISTRIBUTED_TRANSACTION_SDK_API int32_t add_participator(rpc::context& ctx, storage_ptr_type& input,
+                                                           const std::string& participator_key,
+                                                           google::protobuf::Message& data);
 
  private:
   void* private_data_;

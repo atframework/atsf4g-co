@@ -36,15 +36,15 @@ class task_action_participator_resolve_transaction : public task_action_no_req_b
   using task_action_no_req_base::operator();
 
  public:
-  explicit task_action_participator_resolve_transaction(ctor_param_t&& param);
-  ~task_action_participator_resolve_transaction();
+  DISTRIBUTED_TRANSACTION_SDK_API explicit task_action_participator_resolve_transaction(ctor_param_t&& param);
+  DISTRIBUTED_TRANSACTION_SDK_API ~task_action_participator_resolve_transaction();
 
-  const char* name() const override;
+  DISTRIBUTED_TRANSACTION_SDK_API const char* name() const override;
 
-  result_type operator()() override;
+  DISTRIBUTED_TRANSACTION_SDK_API result_type operator()() override;
 
-  int on_success() override;
-  int on_failed() override;
+  DISTRIBUTED_TRANSACTION_SDK_API int on_success() override;
+  DISTRIBUTED_TRANSACTION_SDK_API int on_failed() override;
 
  private:
   ctor_param_t param_;

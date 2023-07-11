@@ -22,8 +22,7 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
 
   if(project_service_declare_sdk_SOURCES)
     source_group_by_dir(project_service_declare_sdk_HRADERS project_service_declare_sdk_SOURCES)
-    if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows|MinGW|WindowsStore"
-       AND NOT project_service_declare_sdk_STATIC
+    if(NOT project_service_declare_sdk_STATIC
        AND (BUILD_SHARED_LIBS
             OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY
             OR project_service_declare_sdk_SHARED))
@@ -46,6 +45,15 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
     endif()
   else()
     add_library(${TARGET_FULL_NAME} INTERFACE)
+  endif()
+  if(project_component_declare_sdk_SOURCES)
+    set_target_properties(
+      ${TARGET_FULL_NAME}
+      PROPERTIES C_VISIBILITY_PRESET "hidden"
+                 CXX_VISIBILITY_PRESET "hidden"
+                 VERSION "${PROJECT_VERSION}"
+                 BUILD_RPATH_USE_ORIGIN YES
+                 PORJECT_PROTOCOL_DIR "${PROTOCOL_DIR}")
   endif()
 
   if(project_service_declare_sdk_OUTPUT_NAME)
@@ -269,8 +277,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
     set(TARGET_FULL_NAME "${PROJECT_NAME}-protocol-${TARGET_NAME}")
   endif()
   source_group_by_dir(FINAL_GENERATED_SOURCE_FILES FINAL_GENERATED_HEADER_FILES)
-  if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows|MinGW|WindowsStore" AND (BUILD_SHARED_LIBS
-                                                                     OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY))
+  if(BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY)
     add_library(${TARGET_FULL_NAME} SHARED ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
 
     project_tool_split_target_debug_sybmol(${TARGET_FULL_NAME})
