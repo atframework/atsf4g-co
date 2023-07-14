@@ -34,46 +34,56 @@ namespace atframework {
 class SSMsg;
 }
 
-class ss_msg_dispatcher : public dispatcher_implement, public util::design_pattern::singleton<ss_msg_dispatcher> {
+class ss_msg_dispatcher : public dispatcher_implement {
  public:
   using msg_op_type_t = dispatcher_implement::msg_op_type_t;
   using msg_raw_t = dispatcher_implement::msg_raw_t;
   using msg_type_t = dispatcher_implement::msg_type_t;
 
- protected:
-  ss_msg_dispatcher();
+#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
+#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
+  UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(ss_msg_dispatcher)
+#  else
+  UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(ss_msg_dispatcher)
+#  endif
+#else
+  UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(ss_msg_dispatcher)
+#endif
+
+ private:
+  SERVER_FRAME_API ss_msg_dispatcher();
 
  public:
-  virtual ~ss_msg_dispatcher();
+  SERVER_FRAME_API virtual ~ss_msg_dispatcher();
 
-  int32_t init() override;
+  SERVER_FRAME_API int32_t init() override;
 
-  const char *name() const override;
+  SERVER_FRAME_API const char *name() const override;
 
-  int stop() override;
+  SERVER_FRAME_API int stop() override;
 
-  int tick() override;
+  SERVER_FRAME_API int tick() override;
 
   /**
    * @brief 获取任务信息
    * @param raw_msg 消息抽象结构
    * @return 相关的任务id
    */
-  uint64_t pick_msg_task_id(msg_raw_t &raw_msg) override;
+  SERVER_FRAME_API uint64_t pick_msg_task_id(msg_raw_t &raw_msg) override;
 
   /**
    * @brief 获取消息名称
    * @param raw_msg 消息抽象结构
    * @return 消息类型ID
    */
-  msg_type_t pick_msg_type_id(msg_raw_t &raw_msg) override;
+  SERVER_FRAME_API msg_type_t pick_msg_type_id(msg_raw_t &raw_msg) override;
 
   /**
    * @brief 获取消息的RPC名字
    * @param raw_msg 消息抽象结构
    * @return 消息的RPC名字,如果不是RPC消息，返回空字符串
    */
-  const std::string &pick_rpc_name(msg_raw_t &raw_msg) override;
+  SERVER_FRAME_API const std::string &pick_rpc_name(msg_raw_t &raw_msg) override;
 
   /**
    * @brief 获取操作类型
@@ -81,14 +91,14 @@ class ss_msg_dispatcher : public dispatcher_implement, public util::design_patte
    * @note 这只是一个调度曾规范，不强制执行。详情 @see PROJECT_NAMESPACE_ID::EnMsgOpType
    * @return 消息操作类型
    */
-  msg_op_type_t pick_msg_op_type(msg_raw_t &raw_msg) override;
+  SERVER_FRAME_API msg_op_type_t pick_msg_op_type(msg_raw_t &raw_msg) override;
 
   /**
    * @brief 根据类型ID获取action或actor选项
    * @param raw_msg 消息抽象结构
    * @return 返回action或actor选项或NULL
    */
-  const atframework::DispatcherOptions *get_options_by_message_type(msg_type_t msg_type) override;
+  SERVER_FRAME_API const atframework::DispatcherOptions *get_options_by_message_type(msg_type_t msg_type) override;
 
   /**
    * deal with cs message data
@@ -96,7 +106,7 @@ class ss_msg_dispatcher : public dispatcher_implement, public util::design_patte
    * @param msg msg wrapper
    * @return 0 or error code
    */
-  int32_t dispatch(const atapp::app::message_sender_t &source, const atapp::app::message_t &msg);
+  SERVER_FRAME_API int32_t dispatch(const atapp::app::message_sender_t &source, const atapp::app::message_t &msg);
 
   /**
    * notify send failed
@@ -105,7 +115,7 @@ class ss_msg_dispatcher : public dispatcher_implement, public util::design_patte
    * @param error_code error code
    * @return 0 or error code
    */
-  int32_t on_receive_send_data_response(const atapp::app::message_sender_t &source, const atapp::app::message_t &msg,
+  SERVER_FRAME_API int32_t on_receive_send_data_response(const atapp::app::message_sender_t &source, const atapp::app::message_t &msg,
                                         int32_t error_code);
 
   /**
@@ -113,26 +123,26 @@ class ss_msg_dispatcher : public dispatcher_implement, public util::design_patte
    * @param start_data start data
    * @param error_code error code
    */
-  void on_create_task_failed(dispatcher_start_data_type &start_data, int32_t error_code) override;
+  SERVER_FRAME_API void on_create_task_failed(dispatcher_start_data_type &start_data, int32_t error_code) override;
 
   /**
    * allocate a message sequence
    * @return allocated sequence
    */
-  uint64_t allocate_sequence();
+  SERVER_FRAME_API uint64_t allocate_sequence();
 
  public:
-  int32_t send_to_proc(uint64_t bus_id, atframework::SSMsg &ss_msg, bool ignore_discovery = false);
-  int32_t send_to_proc(uint64_t bus_id, const void *msg_buf, size_t msg_len, bool ignore_discovery);
-  bool is_target_server_available(uint64_t bus_id) const;
-  bool is_target_server_available(const std::string &node_name) const;
+  SERVER_FRAME_API int32_t send_to_proc(uint64_t bus_id, atframework::SSMsg &ss_msg, bool ignore_discovery = false);
+  SERVER_FRAME_API int32_t send_to_proc(uint64_t bus_id, const void *msg_buf, size_t msg_len, bool ignore_discovery);
+  SERVER_FRAME_API bool is_target_server_available(uint64_t bus_id) const;
+  SERVER_FRAME_API bool is_target_server_available(const std::string &node_name) const;
 
  private:
   static void dns_lookup_callback(uv_getaddrinfo_t *req, int status, struct addrinfo *res) noexcept;
 
  public:
-  void *get_dns_lookup_rpc_type() noexcept;
-  int32_t send_dns_lookup(gsl::string_view domain, uint64_t sequence, uint64_t task_id);
+  SERVER_FRAME_API void *get_dns_lookup_rpc_type() noexcept;
+  SERVER_FRAME_API int32_t send_dns_lookup(gsl::string_view domain, uint64_t sequence, uint64_t task_id);
 
  private:
   uint64_t sequence_allocator_;

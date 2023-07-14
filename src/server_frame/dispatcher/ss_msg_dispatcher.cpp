@@ -36,10 +36,21 @@
 #include <utility>
 #include <vector>
 
-ss_msg_dispatcher::ss_msg_dispatcher() : sequence_allocator_(0) {}
-ss_msg_dispatcher::~ss_msg_dispatcher() {}
+#if defined(DS_BATTLE_SDK_DLL) && DS_BATTLE_SDK_DLL
+#  if defined(DS_BATTLE_SDK_NATIVE) && DS_BATTLE_SDK_NATIVE
+UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(ss_msg_dispatcher);
+#  else
+UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(ss_msg_dispatcher);
+#  endif
+#else
+UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(ss_msg_dispatcher);
+#endif
 
-int32_t ss_msg_dispatcher::init() {
+SERVER_FRAME_API ss_msg_dispatcher::ss_msg_dispatcher() : sequence_allocator_(0) {}
+
+SERVER_FRAME_API ss_msg_dispatcher::~ss_msg_dispatcher() {}
+
+SERVER_FRAME_API int32_t ss_msg_dispatcher::init() {
   sequence_allocator_ =
       static_cast<uint64_t>(
           (util::time::time_utility::get_sys_now() - PROJECT_NAMESPACE_ID::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET)
@@ -48,9 +59,9 @@ int32_t ss_msg_dispatcher::init() {
   return 0;
 }
 
-const char *ss_msg_dispatcher::name() const { return "ss_msg_dispatcher"; }
+SERVER_FRAME_API const char *ss_msg_dispatcher::name() const { return "ss_msg_dispatcher"; }
 
-int ss_msg_dispatcher::stop() {
+SERVER_FRAME_API int ss_msg_dispatcher::stop() {
   int ret = dispatcher_implement::stop();
   if (!running_dns_lookup_.empty()) {
     ret = 1;
@@ -65,7 +76,7 @@ int ss_msg_dispatcher::stop() {
   return ret;
 }
 
-int ss_msg_dispatcher::tick() {
+SERVER_FRAME_API int ss_msg_dispatcher::tick() {
   int ret = dispatcher_implement::tick();
   time_t sys_now = 0;
 
@@ -93,7 +104,7 @@ int ss_msg_dispatcher::tick() {
   return ret;
 }
 
-uint64_t ss_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
+SERVER_FRAME_API uint64_t ss_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
   atframework::SSMsg *real_msg = get_protobuf_msg<atframework::SSMsg>(raw_msg);
   if (nullptr == real_msg) {
     return 0;
@@ -102,9 +113,9 @@ uint64_t ss_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
   return real_msg->head().dst_task_id();
 }
 
-ss_msg_dispatcher::msg_type_t ss_msg_dispatcher::pick_msg_type_id(msg_raw_t &) { return 0; }
+SERVER_FRAME_API ss_msg_dispatcher::msg_type_t ss_msg_dispatcher::pick_msg_type_id(msg_raw_t &) { return 0; }
 
-const std::string &ss_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
+SERVER_FRAME_API const std::string &ss_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
   atframework::SSMsg *real_msg = get_protobuf_msg<atframework::SSMsg>(raw_msg);
   if (nullptr == real_msg) {
     return get_empty_string();
@@ -125,7 +136,7 @@ const std::string &ss_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
   return get_empty_string();
 }
 
-ss_msg_dispatcher::msg_op_type_t ss_msg_dispatcher::pick_msg_op_type(msg_raw_t &raw_msg) {
+SERVER_FRAME_API ss_msg_dispatcher::msg_op_type_t ss_msg_dispatcher::pick_msg_op_type(msg_raw_t &raw_msg) {
   atframework::SSMsg *real_msg = get_protobuf_msg<atframework::SSMsg>(raw_msg);
   if (nullptr == real_msg) {
     return PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP;
@@ -138,9 +149,12 @@ ss_msg_dispatcher::msg_op_type_t ss_msg_dispatcher::pick_msg_op_type(msg_raw_t &
   return static_cast<msg_op_type_t>(real_msg->head().op_type());
 }
 
-const atframework::DispatcherOptions *ss_msg_dispatcher::get_options_by_message_type(msg_type_t) { return nullptr; }
+SERVER_FRAME_API const atframework::DispatcherOptions *ss_msg_dispatcher::get_options_by_message_type(msg_type_t) {
+  return nullptr;
+}
 
-int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, atframework::SSMsg &ss_msg, bool ignore_discovery) {
+SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, atframework::SSMsg &ss_msg,
+                                                         bool ignore_discovery) {
   if (0 == ss_msg.head().sequence()) {
     ss_msg.mutable_head()->set_sequence(allocate_sequence());
   }
@@ -163,8 +177,8 @@ int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, atframework::SSMsg &ss_
   return send_to_proc(bus_id, buf_start, msg_buf_len, ignore_discovery);
 }
 
-int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, const void *msg_buf, size_t msg_len,
-                                        EXPLICIT_UNUSED_ATTR bool ignore_discovery) {
+SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, const void *msg_buf, size_t msg_len,
+                                                         EXPLICIT_UNUSED_ATTR bool ignore_discovery) {
   atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("module not attached to a atapp");
@@ -190,7 +204,7 @@ int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, const void *msg_buf, si
   return res;
 }
 
-bool ss_msg_dispatcher::is_target_server_available(uint64_t bus_id) const {
+SERVER_FRAME_API bool ss_msg_dispatcher::is_target_server_available(uint64_t bus_id) const {
   if (!is_enabled()) {
     return false;
   }
@@ -202,7 +216,7 @@ bool ss_msg_dispatcher::is_target_server_available(uint64_t bus_id) const {
   return !get_app()->get_discovery_node_by_id(bus_id);
 }
 
-bool ss_msg_dispatcher::is_target_server_available(const std::string &node_name) const {
+SERVER_FRAME_API bool ss_msg_dispatcher::is_target_server_available(const std::string &node_name) const {
   if (!is_enabled()) {
     return false;
   }
@@ -214,7 +228,8 @@ bool ss_msg_dispatcher::is_target_server_available(const std::string &node_name)
   return !get_app()->get_discovery_node_by_name(node_name);
 }
 
-int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, const atapp::app::message_t &msg) {
+SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source,
+                                                     const atapp::app::message_t &msg) {
   if (::atframe::component::message_type::EN_ATST_SS_MSG != msg.type) {
     FWLOGERROR("message type {} invalid", msg.type);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
@@ -269,8 +284,9 @@ int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
   return ret;
 }
 
-int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::message_sender_t &source,
-                                                         const atapp::app::message_t &msg, int32_t error_code) {
+SERVER_FRAME_API int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::message_sender_t &source,
+                                                                          const atapp::app::message_t &msg,
+                                                                          int32_t error_code) {
   if (::atframe::component::message_type::EN_ATST_SS_MSG != msg.type) {
     FWLOGERROR("message type {} invalid", msg.type);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
@@ -327,7 +343,8 @@ int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::messa
   return ret;
 }
 
-void ss_msg_dispatcher::on_create_task_failed(dispatcher_start_data_type &start_data, int32_t error_code) {
+SERVER_FRAME_API void ss_msg_dispatcher::on_create_task_failed(dispatcher_start_data_type &start_data,
+                                                               int32_t error_code) {
   const std::string &rpc_name = pick_rpc_name(start_data.message);
   if (rpc_name.empty()) {
     return;
@@ -404,9 +421,10 @@ void ss_msg_dispatcher::on_create_task_failed(dispatcher_start_data_type &start_
   }
 }
 
-uint64_t ss_msg_dispatcher::allocate_sequence() { return ++sequence_allocator_; }
+SERVER_FRAME_API uint64_t ss_msg_dispatcher::allocate_sequence() { return ++sequence_allocator_; }
 
-void ss_msg_dispatcher::dns_lookup_callback(uv_getaddrinfo_t *req, int /*status*/, struct addrinfo *result) noexcept {
+SERVER_FRAME_API void ss_msg_dispatcher::dns_lookup_callback(uv_getaddrinfo_t *req, int /*status*/,
+                                                             struct addrinfo *result) noexcept {
   std::shared_ptr<dns_lookup_async_data> *lifetime_ptr =
       reinterpret_cast<std::shared_ptr<dns_lookup_async_data> *>(req->data);
 
@@ -472,9 +490,12 @@ void ss_msg_dispatcher::dns_lookup_callback(uv_getaddrinfo_t *req, int /*status*
   }
 }
 
-void *ss_msg_dispatcher::get_dns_lookup_rpc_type() noexcept { return reinterpret_cast<void *>(&running_dns_lookup_); }
+SERVER_FRAME_API void *ss_msg_dispatcher::get_dns_lookup_rpc_type() noexcept {
+  return reinterpret_cast<void *>(&running_dns_lookup_);
+}
 
-int32_t ss_msg_dispatcher::send_dns_lookup(gsl::string_view domain, uint64_t sequence, uint64_t task_id) {
+SERVER_FRAME_API int32_t ss_msg_dispatcher::send_dns_lookup(gsl::string_view domain, uint64_t sequence,
+                                                            uint64_t task_id) {
   if (domain.empty() || 0 == task_id) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }

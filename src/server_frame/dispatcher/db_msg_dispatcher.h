@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <config/compile_optimize.h>
 #include <std/functional.h>
 
 #include <config/compiler_features.h>
@@ -45,7 +46,7 @@ namespace PROJECT_NAMESPACE_ID {
 class table_all_message;
 }
 
-class db_msg_dispatcher : public dispatcher_implement, public util::design_pattern::singleton<db_msg_dispatcher> {
+class db_msg_dispatcher : public dispatcher_implement {
  public:
   using msg_op_type_t = dispatcher_implement::msg_op_type_t;
   using msg_raw_t = dispatcher_implement::msg_raw_t;
@@ -53,7 +54,7 @@ class db_msg_dispatcher : public dispatcher_implement, public util::design_patte
   using unpack_fn_t = int32_t (*)(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply);
   using user_callback_t = std::function<int()>;
 
-  struct channel_t {
+  struct UTIL_SYMBOL_VISIBLE channel_t {
     enum type {
       CLUSTER_BOUND = 0,
       CLUSTER_DEFAULT,
@@ -73,42 +74,52 @@ class db_msg_dispatcher : public dispatcher_implement, public util::design_patte
     kMax  // Unused
   };
 
- protected:
-  db_msg_dispatcher();
+#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
+#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
+  UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(db_msg_dispatcher)
+#  else
+  UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(db_msg_dispatcher)
+#  endif
+#else
+  UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(db_msg_dispatcher)
+#endif
+
+ private:
+  SERVER_FRAME_API db_msg_dispatcher();
 
  public:
-  virtual ~db_msg_dispatcher();
+  SERVER_FRAME_API virtual ~db_msg_dispatcher();
 
-  int32_t init() override;
+  SERVER_FRAME_API int32_t init() override;
 
-  const char *name() const override;
+  SERVER_FRAME_API const char *name() const override;
 
   /**
    * @brief run tick handle and return active action number
    * @return active action number or error code
    */
-  int tick() override;
+  SERVER_FRAME_API int tick() override;
 
   /**
    * @brief 获取任务信息
    * @param raw_msg 消息抽象结构
    * @return 相关的任务id
    */
-  uint64_t pick_msg_task_id(msg_raw_t &raw_msg) override;
+  SERVER_FRAME_API uint64_t pick_msg_task_id(msg_raw_t &raw_msg) override;
 
   /**
    * @brief 获取消息名称
    * @param raw_msg 消息抽象结构
    * @return 消息类型ID
    */
-  msg_type_t pick_msg_type_id(msg_raw_t &raw_msg) override;
+  SERVER_FRAME_API msg_type_t pick_msg_type_id(msg_raw_t &raw_msg) override;
 
   /**
    * @brief 获取消息的RPC名字
    * @param raw_msg 消息抽象结构
    * @return 消息的RPC名字,如果不是RPC消息，返回空字符串
    */
-  const std::string &pick_rpc_name(msg_raw_t &raw_msg) override;
+  SERVER_FRAME_API const std::string &pick_rpc_name(msg_raw_t &raw_msg) override;
 
   /**
    * @brief 获取操作类型
@@ -116,9 +127,9 @@ class db_msg_dispatcher : public dispatcher_implement, public util::design_patte
    * @note 这只是一个调度曾规范，不强制执行。详情 @see PROJECT_NAMESPACE_ID::EnMsgOpType
    * @return 消息操作类型
    */
-  msg_op_type_t pick_msg_op_type(msg_raw_t &raw_msg) override;
+  SERVER_FRAME_API msg_op_type_t pick_msg_op_type(msg_raw_t &raw_msg) override;
 
-  int32_t dispatch(const void *req, size_t reqsz);
+  SERVER_FRAME_API int32_t dispatch(const void *req, size_t reqsz);
 
   /**
    * @brief 启动标准的DB数据发送流程
@@ -134,44 +145,44 @@ class db_msg_dispatcher : public dispatcher_implement, public util::design_patte
    * @param argvlen @see redisAsyncCommandArgv
    * @return 0或错误码
    */
-  int send_msg(channel_t::type t, const char *ks, size_t kl, uint64_t task_id, uint64_t pd, unpack_fn_t fn,
-               uint64_t &sequence, int argc, const char **argv, const size_t *argvlen);
+  SERVER_FRAME_API int send_msg(channel_t::type t, const char *ks, size_t kl, uint64_t task_id, uint64_t pd,
+                                unpack_fn_t fn, uint64_t &sequence, int argc, const char **argv, const size_t *argvlen);
 
   /**
    * @brief 获取用于protobuf序列化的临时缓冲区
    * @param 缓冲区长度
    * @return 缓冲区真实地址
    */
-  void *get_cache_buffer(size_t len);
+  SERVER_FRAME_API void *get_cache_buffer(size_t len);
 
   /**
    * @brief 数据库服务是否有效
    * @return 数据库服务有效返回true
    */
-  bool is_available(channel_t::type t) const;
+  SERVER_FRAME_API bool is_available(channel_t::type t) const;
 
   /*
    * @brief 获取表脚本SHA1
    */
-  const std::string &get_db_script_sha1(script_type type) const;
+  SERVER_FRAME_API const std::string &get_db_script_sha1(script_type type) const;
 
   /*
    * @brief 设置表脚本SHA1
    * @param 字符串指针
    * @param 字符串长度
    */
-  void set_db_script_sha1(script_type type, const char *str, int len);
+  SERVER_FRAME_API void set_db_script_sha1(script_type type, const char *str, int len);
 
   /*
    * @brief 连接完成时调用用户的设置的回调函数
    */
-  void set_on_connected(channel_t::type t, user_callback_t fn);
+  SERVER_FRAME_API void set_on_connected(channel_t::type t, user_callback_t fn);
 
   /**
    * allocate a message sequence
    * @return allocated sequence
    */
-  uint64_t allocate_sequence();
+  SERVER_FRAME_API uint64_t allocate_sequence();
 
  private:
   static void log_debug_fn(const char *content);

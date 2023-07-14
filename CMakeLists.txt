@@ -15,6 +15,9 @@ endif()
 if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.20.0")
   cmake_policy(SET CMP0117 NEW)
 endif()
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.22.0")
+  cmake_policy(SET CMP0128 NEW)
+endif()
 
 project(
   atf4g-co

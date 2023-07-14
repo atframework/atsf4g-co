@@ -33,37 +33,65 @@
  * @note 涉及异步处理的任务全部走协程任务，不涉及异步调用的模块可以直接使用actor。
  *       actor会比task少一次栈初始化开销（大约8us的CPU+栈所占用的内存）,在量大但是无异步调用的模块（比如地图同步行为）可以节省CPU和内存
  */
-class task_manager : public ::util::design_pattern::singleton<task_manager> {
+class task_manager {
  public:
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   struct start_error_transform {
-    std::pair<int32_t, dispatcher_start_data_type *> operator()(copp::promise_status in) const noexcept;
+    SERVER_FRAME_API start_error_transform();
+    SERVER_FRAME_API ~start_error_transform();
+
+    SERVER_FRAME_API start_error_transform(const start_error_transform &);
+    SERVER_FRAME_API start_error_transform(start_error_transform &&);
+    SERVER_FRAME_API start_error_transform &operator=(const start_error_transform &);
+    SERVER_FRAME_API start_error_transform &operator=(start_error_transform &&);
+
+    SERVER_FRAME_API std::pair<int32_t, dispatcher_start_data_type *> operator()(
+        copp::promise_status in) const noexcept;
   };
 
   struct resume_error_transform {
-    std::pair<int32_t, dispatcher_resume_data_type *> operator()(copp::promise_status in) const noexcept;
+    SERVER_FRAME_API resume_error_transform();
+    SERVER_FRAME_API ~resume_error_transform();
+
+    SERVER_FRAME_API resume_error_transform(const resume_error_transform &);
+    SERVER_FRAME_API resume_error_transform(resume_error_transform &&);
+    SERVER_FRAME_API resume_error_transform &operator=(const resume_error_transform &);
+    SERVER_FRAME_API resume_error_transform &operator=(resume_error_transform &&);
+
+    SERVER_FRAME_API std::pair<int32_t, dispatcher_resume_data_type *> operator()(
+        copp::promise_status in) const noexcept;
   };
 
   using generic_start_generator =
       copp::generator_future<std::pair<int32_t, dispatcher_start_data_type *>, start_error_transform>;
   using generic_resume_generator =
       copp::generator_future<std::pair<int32_t, dispatcher_resume_data_type *>, resume_error_transform>;
+
   struct generic_resume_key {
     std::chrono::system_clock::time_point timeout;
     uintptr_t message_type;
     uint64_t sequence;
 
-    inline explicit generic_resume_key(std::chrono::system_clock::time_point t, uintptr_t m, uint64_t s) noexcept
+    SERVER_FRAME_API generic_resume_key();
+    SERVER_FRAME_API ~generic_resume_key();
+
+    SERVER_FRAME_API generic_resume_key(const generic_resume_key &);
+    SERVER_FRAME_API generic_resume_key(generic_resume_key &&);
+    SERVER_FRAME_API generic_resume_key &operator=(const generic_resume_key &);
+    SERVER_FRAME_API generic_resume_key &operator=(generic_resume_key &&);
+
+    UTIL_FORCEINLINE explicit generic_resume_key(std::chrono::system_clock::time_point t, uintptr_t m,
+                                                 uint64_t s) noexcept
         : timeout(t), message_type(m), sequence(s) {}
 
-    inline friend bool operator==(const generic_resume_key &self, const generic_resume_key &other) noexcept {
+    UTIL_FORCEINLINE friend bool operator==(const generic_resume_key &self, const generic_resume_key &other) noexcept {
       return self.timeout == other.timeout && self.message_type == other.message_type &&
              self.sequence == other.sequence;
     }
 
 #  ifdef __cpp_impl_three_way_comparison
-    inline friend std::strong_ordering operator<=>(const generic_resume_key &self,
-                                                   const generic_resume_key &other) noexcept {
+    UTIL_FORCEINLINE friend std::strong_ordering operator<=>(const generic_resume_key &self,
+                                                             const generic_resume_key &other) noexcept {
       if (self.timeout != other.timeout) {
         return self.timeout <=> other.timeout;
       }
@@ -76,12 +104,12 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
     }
 #  else
 
-    inline friend bool operator!=(const generic_resume_key &self, const generic_resume_key &other) noexcept {
+    UTIL_FORCEINLINE friend bool operator!=(const generic_resume_key &self, const generic_resume_key &other) noexcept {
       return self.timeout != other.timeout || self.message_type != other.message_type ||
              self.sequence != other.sequence;
     }
 
-    inline friend bool operator<(const generic_resume_key &self, const generic_resume_key &other) noexcept {
+    UTIL_FORCEINLINE friend bool operator<(const generic_resume_key &self, const generic_resume_key &other) noexcept {
       if (self.timeout != other.timeout) {
         return self.timeout < other.timeout;
       }
@@ -93,7 +121,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
       return self.sequence < other.sequence;
     }
 
-    inline friend bool operator<=(const generic_resume_key &self, const generic_resume_key &other) noexcept {
+    UTIL_FORCEINLINE friend bool operator<=(const generic_resume_key &self, const generic_resume_key &other) noexcept {
       if (self.timeout != other.timeout) {
         return self.timeout <= other.timeout;
       }
@@ -105,7 +133,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
       return self.sequence <= other.sequence;
     }
 
-    inline friend bool operator>(const generic_resume_key &self, const generic_resume_key &other) noexcept {
+    UTIL_FORCEINLINE friend bool operator>(const generic_resume_key &self, const generic_resume_key &other) noexcept {
       if (self.timeout != other.timeout) {
         return self.timeout > other.timeout;
       }
@@ -117,7 +145,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
       return self.sequence > other.sequence;
     }
 
-    inline friend bool operator>=(const generic_resume_key &self, const generic_resume_key &other) noexcept {
+    UTIL_FORCEINLINE friend bool operator>=(const generic_resume_key &self, const generic_resume_key &other) noexcept {
       if (self.timeout != other.timeout) {
         return self.timeout >= other.timeout;
       }
@@ -135,17 +163,26 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
     uintptr_t message_type;
     uint64_t sequence;
 
-    inline explicit generic_resume_index(uintptr_t m, uint64_t s) noexcept : message_type(m), sequence(s) {}
-    inline explicit generic_resume_index(const generic_resume_key &key) noexcept
+    SERVER_FRAME_API generic_resume_index();
+    SERVER_FRAME_API ~generic_resume_index();
+
+    SERVER_FRAME_API generic_resume_index(const generic_resume_index &);
+    SERVER_FRAME_API generic_resume_index(generic_resume_index &&);
+    SERVER_FRAME_API generic_resume_index &operator=(const generic_resume_index &);
+    SERVER_FRAME_API generic_resume_index &operator=(generic_resume_index &&);
+
+    UTIL_FORCEINLINE explicit generic_resume_index(uintptr_t m, uint64_t s) noexcept : message_type(m), sequence(s) {}
+    UTIL_FORCEINLINE explicit generic_resume_index(const generic_resume_key &key) noexcept
         : message_type(key.message_type), sequence(key.sequence) {}
 
-    inline friend bool operator==(const generic_resume_index &self, const generic_resume_index &other) noexcept {
+    UTIL_FORCEINLINE friend bool operator==(const generic_resume_index &self,
+                                            const generic_resume_index &other) noexcept {
       return self.message_type == other.message_type && self.sequence == other.sequence;
     }
 
 #  ifdef __cpp_impl_three_way_comparison
-    inline friend std::strong_ordering operator<=>(const generic_resume_index &self,
-                                                   const generic_resume_index &other) noexcept {
+    UTIL_FORCEINLINE friend std::strong_ordering operator<=>(const generic_resume_index &self,
+                                                             const generic_resume_index &other) noexcept {
       if (self.message_type != other.message_type) {
         return self.message_type <=> other.message_type;
       }
@@ -154,11 +191,13 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
     }
 #  else
 
-    inline friend bool operator!=(const generic_resume_index &self, const generic_resume_index &other) noexcept {
+    UTIL_FORCEINLINE friend bool operator!=(const generic_resume_index &self,
+                                            const generic_resume_index &other) noexcept {
       return self.message_type != other.message_type || self.sequence != other.sequence;
     }
 
-    inline friend bool operator<(const generic_resume_index &self, const generic_resume_index &other) noexcept {
+    UTIL_FORCEINLINE friend bool operator<(const generic_resume_index &self,
+                                           const generic_resume_index &other) noexcept {
       if (self.message_type != other.message_type) {
         return self.message_type < other.message_type;
       }
@@ -166,7 +205,8 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
       return self.sequence < other.sequence;
     }
 
-    inline friend bool operator<=(const generic_resume_index &self, const generic_resume_index &other) noexcept {
+    UTIL_FORCEINLINE friend bool operator<=(const generic_resume_index &self,
+                                            const generic_resume_index &other) noexcept {
       if (self.message_type != other.message_type) {
         return self.message_type <= other.message_type;
       }
@@ -174,7 +214,8 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
       return self.sequence <= other.sequence;
     }
 
-    inline friend bool operator>(const generic_resume_index &self, const generic_resume_index &other) noexcept {
+    UTIL_FORCEINLINE friend bool operator>(const generic_resume_index &self,
+                                           const generic_resume_index &other) noexcept {
       if (self.message_type != other.message_type) {
         return self.message_type > other.message_type;
       }
@@ -182,7 +223,8 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
       return self.sequence > other.sequence;
     }
 
-    inline friend bool operator>=(const generic_resume_index &self, const generic_resume_index &other) noexcept {
+    UTIL_FORCEINLINE friend bool operator>=(const generic_resume_index &self,
+                                            const generic_resume_index &other) noexcept {
       if (self.message_type != other.message_type) {
         return self.message_type >= other.message_type;
       }
@@ -192,29 +234,38 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
 #  endif
   };
 
-  struct generic_resume_hash {
+  struct UTIL_SYMBOL_VISIBLE generic_resume_hash {
+    SERVER_FRAME_API generic_resume_hash();
+    SERVER_FRAME_API ~generic_resume_hash();
+
+    SERVER_FRAME_API generic_resume_hash(const generic_resume_hash &);
+    SERVER_FRAME_API generic_resume_hash(generic_resume_hash &&);
+    SERVER_FRAME_API generic_resume_hash &operator=(const generic_resume_hash &);
+    SERVER_FRAME_API generic_resume_hash &operator=(generic_resume_hash &&);
+
     template <typename T>
-    inline static void _hash_combine(size_t &seed, const T &val) noexcept {
+    UTIL_FORCEINLINE static void _hash_combine(size_t &seed, const T &val) noexcept {
       seed ^= std::hash<T>()(val) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
     }
+
     template <typename... Types>
-    inline static size_t hash_combine(const Types &...args) noexcept {
+    UTIL_FORCEINLINE static size_t hash_combine(const Types &...args) noexcept {
       size_t seed = 0;
       (_hash_combine(seed, args), ...);  // create hash value with seed over all args
       return seed;
     }
 
-    std::size_t operator()(const generic_resume_index &index) const noexcept {
+    UTIL_FORCEINLINE std::size_t operator()(const generic_resume_index &index) const noexcept {
       return hash_combine(index.message_type, index.sequence);
     }
 
-    std::size_t operator()(const generic_resume_key &key) const noexcept {
+    UTIL_FORCEINLINE std::size_t operator()(const generic_resume_key &key) const noexcept {
       return hash_combine(key.timeout.time_since_epoch().count(), key.message_type, key.sequence);
     }
   };
 
   template <class TAction, class... TParams>
-  static typename task_type_trait::task_type internal_create_and_setup_task(TParams &&...args) {
+  UTIL_SYMBOL_VISIBLE static typename task_type_trait::task_type internal_create_and_setup_task(TParams &&...args) {
     using internal_task_type = typename task_type_trait::internal_task_type;
 
     // Should not be exiting, task will start immediately after created.
@@ -250,10 +301,10 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
   }
 #endif
 
-  struct task_action_maker_base_t {
+  struct UTIL_SYMBOL_VISIBLE task_action_maker_base_t {
     atframework::DispatcherOptions options;
-    explicit task_action_maker_base_t(const atframework::DispatcherOptions *opt);
-    virtual ~task_action_maker_base_t();
+    SERVER_FRAME_API explicit task_action_maker_base_t(const atframework::DispatcherOptions *opt);
+    SERVER_FRAME_API virtual ~task_action_maker_base_t();
     virtual int operator()(task_type_trait::id_type &task_id, dispatcher_start_data_type ctor_param) = 0;
   };
 
@@ -261,7 +312,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
   using task_action_creator_t = std::shared_ptr<task_action_maker_base_t>;
 
   template <typename TAction>
-  struct task_action_maker_t : public task_action_maker_base_t {
+  struct UTIL_SYMBOL_VISIBLE task_action_maker_t : public task_action_maker_base_t {
     explicit task_action_maker_t(const atframework::DispatcherOptions *opt) : task_action_maker_base_t(opt) {}
     int operator()(task_type_trait::id_type &task_id, dispatcher_start_data_type ctor_param) override {
       if (options.has_timeout() && (options.timeout().seconds() > 0 || options.timeout().nanos() > 0)) {
@@ -277,19 +328,30 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
   using native_task_manager_type = cotask::task_manager<task_type_trait::internal_task_type>;
   using native_task_manager_ptr_type = typename native_task_manager_type::ptr_type;
 
- protected:
-  task_manager();
-  ~task_manager();
+#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
+#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
+  UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(task_manager)
+#  else
+  UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(task_manager)
+#  endif
+#else
+  UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(task_manager)
+#endif
+
+ private:
+  SERVER_FRAME_API task_manager();
 
  public:
-  int init();
+  SERVER_FRAME_API ~task_manager();
 
-  int reload();
+  SERVER_FRAME_API int init();
+
+  SERVER_FRAME_API int reload();
 
   /**
    * 获取栈大小
    */
-  size_t get_stack_size() const;
+  SERVER_FRAME_API size_t get_stack_size() const;
 
   /**
    * @brief 创建任务并指定超时时间
@@ -300,8 +362,8 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @return 0或错误码
    */
   template <typename TAction, typename TParams>
-  int create_task_with_timeout(task_type_trait::task_type &task_instance, time_t timeout_sec, time_t timeout_nsec,
-                               TParams &&args) {
+  UTIL_SYMBOL_VISIBLE int create_task_with_timeout(task_type_trait::task_type &task_instance, time_t timeout_sec,
+                                                   time_t timeout_nsec, TParams &&args) {
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
     if (!native_mgr_) {
       task_instance.reset();
@@ -347,8 +409,8 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @return 0或错误码
    */
   template <typename TAction, typename TParams>
-  int create_task_with_timeout(task_type_trait::id_type &task_id, time_t timeout_sec, time_t timeout_nsec,
-                               TParams &&args) {
+  UTIL_SYMBOL_VISIBLE int create_task_with_timeout(task_type_trait::id_type &task_id, time_t timeout_sec,
+                                                   time_t timeout_nsec, TParams &&args) {
     task_type_trait::task_type task_instance;
     int ret = create_task_with_timeout<TAction>(task_instance, timeout_sec, timeout_nsec, std::forward<TParams>(args));
     if (!task_type_trait::empty(task_instance)) {
@@ -366,7 +428,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @return 0或错误码
    */
   template <typename TAction, typename TParams>
-  int create_task(task_type_trait::task_type &task_instance, TParams &&args) {
+  UTIL_SYMBOL_VISIBLE int create_task(task_type_trait::task_type &task_instance, TParams &&args) {
     return create_task_with_timeout<TAction>(task_instance, 0, 0, std::forward<TParams>(args));
   }
 
@@ -377,7 +439,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @return 0或错误码
    */
   template <typename TAction, typename TParams>
-  int create_task(task_type_trait::id_type &task_id, TParams &&args) {
+  UTIL_SYMBOL_VISIBLE int create_task(task_type_trait::id_type &task_id, TParams &&args) {
     return create_task_with_timeout<TAction>(task_id, 0, 0, std::forward<TParams>(args));
   }
 
@@ -389,7 +451,8 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @return 0或错误码
    */
   template <typename TAction, typename TParams>
-  inline int create_task_with_timeout(task_type_trait::id_type &task_id, time_t timeout_sec, TParams &&args) {
+  UTIL_SYMBOL_VISIBLE UTIL_FORCEINLINE int create_task_with_timeout(task_type_trait::id_type &task_id,
+                                                                    time_t timeout_sec, TParams &&args) {
     return create_task_with_timeout<TAction>(task_id, timeout_sec, 0, std::forward<TParams>(args));
   }
 
@@ -398,7 +461,8 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @return 任务构造器
    */
   template <typename TAction>
-  inline task_action_creator_t make_task_creator(const atframework::DispatcherOptions *opt) {
+  UTIL_SYMBOL_VISIBLE UTIL_FORCEINLINE task_action_creator_t
+  make_task_creator(const atframework::DispatcherOptions *opt) {
     return std::make_shared<task_action_maker_t<TAction>>(opt);
   }
 
@@ -408,7 +472,7 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @param data 启动数据，operator()(void* priv_data)的priv_data指向这个对象的地址
    * @return 0或错误码
    */
-  int start_task(task_type_trait::id_type task_id, dispatcher_start_data_type &data);
+  SERVER_FRAME_API int start_task(task_type_trait::id_type task_id, dispatcher_start_data_type &data);
 
   /**
    * @brief 恢复任务
@@ -416,35 +480,35 @@ class task_manager : public ::util::design_pattern::singleton<task_manager> {
    * @param data 恢复时透传的数据，yield返回的指针指向这个对象的地址
    * @return 0或错误码
    */
-  int resume_task(task_type_trait::id_type task_id, dispatcher_resume_data_type &data);
+  SERVER_FRAME_API int resume_task(task_type_trait::id_type task_id, dispatcher_resume_data_type &data);
 
   /**
    * @brief tick，可能会触发任务过期
    */
-  int tick(time_t sec, int nsec);
+  SERVER_FRAME_API int tick(time_t sec, int nsec);
 
   /**
    * @brief tick，可能会触发任务过期
    * @param task_id 任务id
    * @return 如果存在，返回协程任务的智能指针
    */
-  task_type_trait::task_type get_task(task_type_trait::id_type task_id);
+  SERVER_FRAME_API task_type_trait::task_type get_task(task_type_trait::id_type task_id);
 
 #if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
-  inline const task_type_trait::stack_pool_type::ptr_t &get_stack_pool() const { return stack_pool_; }
+  UTIL_FORCEINLINE const task_type_trait::stack_pool_type::ptr_t &get_stack_pool() const { return stack_pool_; }
 #endif
-  inline const native_task_manager_ptr_type &get_native_manager() const { return native_mgr_; }
+  UTIL_FORCEINLINE const native_task_manager_ptr_type &get_native_manager() const { return native_mgr_; }
 
-  bool is_busy() const;
+  SERVER_FRAME_API bool is_busy() const;
 
-  static void reset_private_data(task_private_data_type &priv_data);
-  static rpc::context *get_shared_context(task_type_trait::task_type &task);
+  SERVER_FRAME_API static void reset_private_data(task_private_data_type &priv_data);
+  SERVER_FRAME_API static rpc::context *get_shared_context(task_type_trait::task_type &task);
 
-  static int32_t convert_task_status_to_error_code(task_type_trait::task_status task_status) noexcept;
+  SERVER_FRAME_API static int32_t convert_task_status_to_error_code(task_type_trait::task_status task_status) noexcept;
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-  static generic_start_generator make_start_generator(task_type_trait::id_type task_id);
-  static std::pair<generic_resume_key, generic_resume_generator> make_resume_generator(
+  SERVER_FRAME_API static generic_start_generator make_start_generator(task_type_trait::id_type task_id);
+  SERVER_FRAME_API static std::pair<generic_resume_key, generic_resume_generator> make_resume_generator(
       uintptr_t message_type, const dispatcher_await_options &await_options);
 #endif
 

@@ -15,6 +15,8 @@ PROJECT_NAMESPACE_END
 
 namespace google {
 namespace protobuf {
+class Message;
+class FieldDescriptor;
 class Timestamp;
 class Duration;
 }  // namespace protobuf
@@ -30,4 +32,7 @@ EXCEL_CONFIG_LOADER_API const ::PROJECT_NAMESPACE_ID::config::excel_const_config
 
 EXCEL_CONFIG_LOADER_API void parse_timepoint(const std::string &in, google::protobuf::Timestamp &out);
 EXCEL_CONFIG_LOADER_API void parse_duration(const std::string &in, google::protobuf::Duration &out);
+
+EXCEL_CONFIG_LOADER_API bool parse_message_field(const std::string &input, google::protobuf::Message &out,
+                                                 const ::google::protobuf::FieldDescriptor *fds);
 }  // namespace excel

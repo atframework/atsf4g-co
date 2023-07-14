@@ -32,17 +32,28 @@
 
 #include "dispatcher/task_manager.h"
 
-cs_msg_dispatcher::cs_msg_dispatcher() : is_closing_(false) {}
-cs_msg_dispatcher::~cs_msg_dispatcher() {}
+#if defined(DS_BATTLE_SDK_DLL) && DS_BATTLE_SDK_DLL
+#  if defined(DS_BATTLE_SDK_NATIVE) && DS_BATTLE_SDK_NATIVE
+UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(cs_msg_dispatcher);
+#  else
+UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(cs_msg_dispatcher);
+#  endif
+#else
+UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(cs_msg_dispatcher);
+#endif
 
-int32_t cs_msg_dispatcher::init() {
+SERVER_FRAME_API cs_msg_dispatcher::cs_msg_dispatcher() : is_closing_(false) {}
+
+SERVER_FRAME_API cs_msg_dispatcher::~cs_msg_dispatcher() {}
+
+SERVER_FRAME_API int32_t cs_msg_dispatcher::init() {
   is_closing_ = false;
   return 0;
 }
 
-const char *cs_msg_dispatcher::name() const { return "cs_msg_dispatcher"; }
+SERVER_FRAME_API const char *cs_msg_dispatcher::name() const { return "cs_msg_dispatcher"; }
 
-int cs_msg_dispatcher::stop() {
+SERVER_FRAME_API int cs_msg_dispatcher::stop() {
   if (is_closing_) {
     return dispatcher_implement::stop();
   }
@@ -52,14 +63,14 @@ int cs_msg_dispatcher::stop() {
   return dispatcher_implement::stop();
 }
 
-uint64_t cs_msg_dispatcher::pick_msg_task_id(msg_raw_t &) {
+SERVER_FRAME_API uint64_t cs_msg_dispatcher::pick_msg_task_id(msg_raw_t &) {
   // cs msg not allow resume task
   return 0;
 }
 
-cs_msg_dispatcher::msg_type_t cs_msg_dispatcher::pick_msg_type_id(msg_raw_t &) { return 0; }
+SERVER_FRAME_API cs_msg_dispatcher::msg_type_t cs_msg_dispatcher::pick_msg_type_id(msg_raw_t &) { return 0; }
 
-const std::string &cs_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
+SERVER_FRAME_API const std::string &cs_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
   atframework::CSMsg *real_msg = get_protobuf_msg<atframework::CSMsg>(raw_msg);
   if (nullptr == real_msg) {
     return get_empty_string();
@@ -80,7 +91,7 @@ const std::string &cs_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
   return get_empty_string();
 }
 
-cs_msg_dispatcher::msg_op_type_t cs_msg_dispatcher::pick_msg_op_type(msg_raw_t &raw_msg) {
+SERVER_FRAME_API cs_msg_dispatcher::msg_op_type_t cs_msg_dispatcher::pick_msg_op_type(msg_raw_t &raw_msg) {
   atframework::CSMsg *real_msg = get_protobuf_msg<atframework::CSMsg>(raw_msg);
   if (nullptr == real_msg) {
     return PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP;
@@ -93,9 +104,12 @@ cs_msg_dispatcher::msg_op_type_t cs_msg_dispatcher::pick_msg_op_type(msg_raw_t &
   return static_cast<msg_op_type_t>(real_msg->head().op_type());
 }
 
-const atframework::DispatcherOptions *cs_msg_dispatcher::get_options_by_message_type(msg_type_t) { return nullptr; }
+SERVER_FRAME_API const atframework::DispatcherOptions *cs_msg_dispatcher::get_options_by_message_type(msg_type_t) {
+  return nullptr;
+}
 
-void cs_msg_dispatcher::on_create_task_failed(dispatcher_start_data_type &start_data, int32_t error_code) {
+SERVER_FRAME_API void cs_msg_dispatcher::on_create_task_failed(dispatcher_start_data_type &start_data,
+                                                               int32_t error_code) {
   const std::string &rpc_name = pick_rpc_name(start_data.message);
   if (rpc_name.empty()) {
     return;
@@ -176,7 +190,8 @@ void cs_msg_dispatcher::on_create_task_failed(dispatcher_start_data_type &start_
   }
 }
 
-int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, const atapp::app::message_t &msg) {
+SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source,
+                                                     const atapp::app::message_t &msg) {
   if (::atframe::component::service_type::EN_ATST_GATEWAY != msg.type) {
     FWLOGERROR("message type {} invalid", msg.type);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
@@ -360,7 +375,7 @@ int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source, 
   return ret;
 }
 
-int32_t cs_msg_dispatcher::send_kickoff(uint64_t bus_id, uint64_t session_id, int32_t reason) {
+SERVER_FRAME_API int32_t cs_msg_dispatcher::send_kickoff(uint64_t bus_id, uint64_t session_id, int32_t reason) {
   atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("not in a atapp");
@@ -382,7 +397,8 @@ int32_t cs_msg_dispatcher::send_kickoff(uint64_t bus_id, uint64_t session_id, in
   return owner->get_bus_node()->send_data(bus_id, 0, packed_buffer.data(), packed_buffer.size());
 }
 
-int32_t cs_msg_dispatcher::send_data(uint64_t bus_id, uint64_t session_id, const void *buffer, size_t len) {
+SERVER_FRAME_API int32_t cs_msg_dispatcher::send_data(uint64_t bus_id, uint64_t session_id, const void *buffer,
+                                                      size_t len) {
   atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("not in a atapp");
@@ -433,12 +449,13 @@ int32_t cs_msg_dispatcher::send_data(uint64_t bus_id, uint64_t session_id, const
   return ret;
 }
 
-int32_t cs_msg_dispatcher::broadcast_data(uint64_t bus_id, const void *buffer, size_t len) {
+SERVER_FRAME_API int32_t cs_msg_dispatcher::broadcast_data(uint64_t bus_id, const void *buffer, size_t len) {
   return send_data(bus_id, 0, buffer, len);
 }
 
-int32_t cs_msg_dispatcher::broadcast_data(uint64_t bus_id, const std::vector<uint64_t> & /*session_ids*/,
-                                          const void *buffer, size_t len) {
+SERVER_FRAME_API int32_t cs_msg_dispatcher::broadcast_data(uint64_t bus_id,
+                                                           const std::vector<uint64_t> & /*session_ids*/,
+                                                           const void *buffer, size_t len) {
   atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("not in a atapp");

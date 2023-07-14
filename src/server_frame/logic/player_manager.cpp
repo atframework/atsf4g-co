@@ -27,7 +27,22 @@
 
 #include "logic/session_manager.h"
 
-rpc::result_code_type player_manager::remove(rpc::context &ctx, player_manager::player_ptr_t u, bool force_kickoff) {
+#if defined(DS_BATTLE_SDK_DLL) && DS_BATTLE_SDK_DLL
+#  if defined(DS_BATTLE_SDK_NATIVE) && DS_BATTLE_SDK_NATIVE
+UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(player_manager);
+#  else
+UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(player_manager);
+#  endif
+#else
+UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(player_manager);
+#endif
+
+SERVER_FRAME_CONFIG_API player_manager::player_manager() {}
+
+SERVER_FRAME_CONFIG_API player_manager::~player_manager() {}
+
+SERVER_FRAME_CONFIG_API rpc::result_code_type player_manager::remove(rpc::context &ctx, player_manager::player_ptr_t u,
+                                                                     bool force_kickoff) {
   if (!u) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
   }
@@ -35,8 +50,9 @@ rpc::result_code_type player_manager::remove(rpc::context &ctx, player_manager::
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove(ctx, u->get_user_id(), u->get_zone_id(), force_kickoff, u.get())));
 }
 
-rpc::result_code_type player_manager::remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, bool force_kickoff,
-                                             player_cache *check_user) {
+SERVER_FRAME_CONFIG_API rpc::result_code_type player_manager::remove(rpc::context &ctx, uint64_t user_id,
+                                                                     uint32_t zone_id, bool force_kickoff,
+                                                                     player_cache *check_user) {
   if (0 == user_id) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
@@ -73,7 +89,7 @@ rpc::result_code_type player_manager::remove(rpc::context &ctx, uint64_t user_id
   }
 }
 
-void player_manager::async_remove(rpc::context &ctx, player_ptr_t u, bool force_kickoff) {
+SERVER_FRAME_CONFIG_API void player_manager::async_remove(rpc::context &ctx, player_ptr_t u, bool force_kickoff) {
   if (!u) {
     return;
   }
@@ -81,8 +97,8 @@ void player_manager::async_remove(rpc::context &ctx, player_ptr_t u, bool force_
   async_remove(ctx, u->get_user_id(), u->get_zone_id(), force_kickoff, u.get());
 }
 
-void player_manager::async_remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, bool force_kickoff,
-                                  player_cache *check_user) {
+SERVER_FRAME_CONFIG_API void player_manager::async_remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
+                                                          bool force_kickoff, player_cache *check_user) {
   auto invoke_result = rpc::async_invoke(
       ctx, "player_manager.async_remove",
       [user_id, zone_id, force_kickoff, check_user](rpc::context &child_ctx) -> rpc::result_code_type {
@@ -96,8 +112,8 @@ void player_manager::async_remove(rpc::context &ctx, uint64_t user_id, uint32_t 
   }
 }
 
-rpc::result_code_type player_manager::save(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                           const player_cache *check_user) {
+SERVER_FRAME_CONFIG_API rpc::result_code_type player_manager::save(rpc::context &ctx, uint64_t user_id,
+                                                                   uint32_t zone_id, const player_cache *check_user) {
   router_player_cache::key_t key(router_player_manager::me()->get_type_id(), zone_id, user_id);
   router_player_cache::ptr_t cache = router_player_manager::me()->get_cache(key);
 
@@ -123,7 +139,7 @@ rpc::result_code_type player_manager::save(rpc::context &ctx, uint64_t user_id, 
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-bool player_manager::add_save_schedule(uint64_t user_id, uint32_t zone_id, bool kickoff) {
+SERVER_FRAME_CONFIG_API bool player_manager::add_save_schedule(uint64_t user_id, uint32_t zone_id, bool kickoff) {
   router_player_cache::key_t key(router_player_manager::me()->get_type_id(), zone_id, user_id);
   router_player_cache::ptr_t cache = router_player_manager::me()->get_cache(key);
 
@@ -138,8 +154,9 @@ bool player_manager::add_save_schedule(uint64_t user_id, uint32_t zone_id, bool 
   }
 }
 
-rpc::result_code_type player_manager::load(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                           player_manager::player_ptr_t &output, bool force) {
+SERVER_FRAME_CONFIG_API rpc::result_code_type player_manager::load(rpc::context &ctx, uint64_t user_id,
+                                                                   uint32_t zone_id,
+                                                                   player_manager::player_ptr_t &output, bool force) {
   router_player_cache::key_t key(router_player_manager::me()->get_type_id(), zone_id, user_id);
   router_player_cache::ptr_t cache = router_player_manager::me()->get_cache(key);
 
@@ -158,11 +175,13 @@ rpc::result_code_type player_manager::load(rpc::context &ctx, uint64_t user_id, 
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
 }
 
-size_t player_manager::size() const { return router_player_manager::me()->size(); }
+SERVER_FRAME_CONFIG_API size_t player_manager::size() const { return router_player_manager::me()->size(); }
 
-rpc::result_code_type player_manager::create(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                             const std::string &openid, PROJECT_NAMESPACE_ID::table_login &login_tb,
-                                             std::string &login_ver, player_manager::player_ptr_t &output) {
+SERVER_FRAME_CONFIG_API rpc::result_code_type player_manager::create(rpc::context &ctx, uint64_t user_id,
+                                                                     uint32_t zone_id, const std::string &openid,
+                                                                     PROJECT_NAMESPACE_ID::table_login &login_tb,
+                                                                     std::string &login_ver,
+                                                                     player_manager::player_ptr_t &output) {
   if (0 == user_id || openid.empty()) {
     FWLOGERROR("can not create player_cache without user id or open id");
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
@@ -246,7 +265,7 @@ rpc::result_code_type player_manager::create(rpc::context &ctx, uint64_t user_id
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-player_manager::player_ptr_t player_manager::find(uint64_t user_id, uint32_t zone_id) const {
+SERVER_FRAME_CONFIG_API player_manager::player_ptr_t player_manager::find(uint64_t user_id, uint32_t zone_id) const {
   router_player_cache::key_t key(router_player_manager::me()->get_type_id(), zone_id, user_id);
   router_player_cache::ptr_t cache = router_player_manager::me()->get_cache(key);
 
@@ -257,7 +276,7 @@ player_manager::player_ptr_t player_manager::find(uint64_t user_id, uint32_t zon
   return nullptr;
 }
 
-bool player_manager::has_create_user_lock(uint64_t user_id, uint32_t zone_id) const noexcept {
+SERVER_FRAME_CONFIG_API bool player_manager::has_create_user_lock(uint64_t user_id, uint32_t zone_id) const noexcept {
   PROJECT_NAMESPACE_ID::DPlayerIDKey user_key;
   user_key.set_user_id(user_id);
   user_key.set_zone_id(zone_id);

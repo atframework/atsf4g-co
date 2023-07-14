@@ -81,7 +81,25 @@ static void log_wrapper_for_protobuf(::google::protobuf::LogLevel level, const c
 }  // namespace
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-std::pair<int32_t, dispatcher_start_data_type *> task_manager::start_error_transform::operator()(
+SERVER_FRAME_API task_manager::start_error_transform::start_error_transform() {}
+
+SERVER_FRAME_API task_manager::start_error_transform::~start_error_transform() {}
+
+SERVER_FRAME_API task_manager::start_error_transform::start_error_transform(const start_error_transform &) {}
+
+SERVER_FRAME_API task_manager::start_error_transform::start_error_transform(start_error_transform &&) {}
+
+SERVER_FRAME_API task_manager::start_error_transform &task_manager::start_error_transform::operator=(
+    const start_error_transform &) {
+  return *this;
+}
+
+SERVER_FRAME_API task_manager::start_error_transform &task_manager::start_error_transform::operator=(
+    start_error_transform &&) {
+  return *this;
+}
+
+SERVER_FRAME_API std::pair<int32_t, dispatcher_start_data_type *> task_manager::start_error_transform::operator()(
     copp::promise_status in) const noexcept {
   switch (in) {
     case copp::promise_status::kInvalid:
@@ -102,7 +120,25 @@ std::pair<int32_t, dispatcher_start_data_type *> task_manager::start_error_trans
   }
 }
 
-std::pair<int32_t, dispatcher_resume_data_type *> task_manager::resume_error_transform::operator()(
+SERVER_FRAME_API task_manager::resume_error_transform::resume_error_transform() {}
+
+SERVER_FRAME_API task_manager::resume_error_transform::~resume_error_transform() {}
+
+SERVER_FRAME_API task_manager::resume_error_transform::resume_error_transform(const resume_error_transform &) {}
+
+SERVER_FRAME_API task_manager::resume_error_transform::resume_error_transform(resume_error_transform &&) {}
+
+SERVER_FRAME_API task_manager::resume_error_transform &task_manager::resume_error_transform::operator=(
+    const resume_error_transform &) {
+  return *this;
+}
+
+SERVER_FRAME_API task_manager::resume_error_transform &task_manager::resume_error_transform::operator=(
+    resume_error_transform &&) {
+  return *this;
+}
+
+SERVER_FRAME_API std::pair<int32_t, dispatcher_resume_data_type *> task_manager::resume_error_transform::operator()(
     copp::promise_status in) const noexcept {
   switch (in) {
     case copp::promise_status::kInvalid:
@@ -122,17 +158,97 @@ std::pair<int32_t, dispatcher_resume_data_type *> task_manager::resume_error_tra
       return {PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN, nullptr};
   }
 }
+
+SERVER_FRAME_API task_manager::generic_resume_key::generic_resume_key() {}
+
+SERVER_FRAME_API task_manager::generic_resume_key::~generic_resume_key() {}
+
+SERVER_FRAME_API task_manager::generic_resume_key::generic_resume_key(const generic_resume_key &other)
+    : timeout(other.timeout), message_type(other.message_type), sequence(other.sequence) {}
+
+SERVER_FRAME_API task_manager::generic_resume_key::generic_resume_key(generic_resume_key &&other)
+    : timeout(other.timeout), message_type(other.message_type), sequence(other.sequence) {}
+
+SERVER_FRAME_API task_manager::generic_resume_key &task_manager::generic_resume_key::operator=(
+    const generic_resume_key &other) {
+  timeout = other.timeout;
+  message_type = other.message_type;
+  sequence = other.sequence;
+  return *this;
+}
+
+SERVER_FRAME_API task_manager::generic_resume_key &task_manager::generic_resume_key::operator=(
+    generic_resume_key &&other) {
+  timeout = other.timeout;
+  message_type = other.message_type;
+  sequence = other.sequence;
+  return *this;
+}
+
+SERVER_FRAME_API task_manager::generic_resume_index::generic_resume_index() {}
+
+SERVER_FRAME_API task_manager::generic_resume_index::~generic_resume_index() {}
+
+SERVER_FRAME_API task_manager::generic_resume_index::generic_resume_index(const generic_resume_index &other)
+    : message_type(other.message_type), sequence(other.sequence) {}
+
+SERVER_FRAME_API task_manager::generic_resume_index::generic_resume_index(generic_resume_index &&other)
+    : message_type(other.message_type), sequence(other.sequence) {}
+
+SERVER_FRAME_API task_manager::generic_resume_index &task_manager::generic_resume_index::operator=(
+    const generic_resume_index &other) {
+  message_type = other.message_type;
+  sequence = other.sequence;
+  return *this;
+}
+
+SERVER_FRAME_API task_manager::generic_resume_index &task_manager::generic_resume_index::operator=(
+    generic_resume_index &&other) {
+  message_type = other.message_type;
+  sequence = other.sequence;
+  return *this;
+}
+
+SERVER_FRAME_API task_manager::generic_resume_hash::generic_resume_hash() {}
+
+SERVER_FRAME_API task_manager::generic_resume_hash::~generic_resume_hash() {}
+
+SERVER_FRAME_API task_manager::generic_resume_hash::generic_resume_hash(const generic_resume_hash &) {}
+
+SERVER_FRAME_API task_manager::generic_resume_hash::generic_resume_hash(generic_resume_hash &&) {}
+
+SERVER_FRAME_API task_manager::generic_resume_hash &task_manager::generic_resume_hash::operator=(
+    const generic_resume_hash &) {
+  return *this;
+}
+
+SERVER_FRAME_API task_manager::generic_resume_hash &task_manager::generic_resume_hash::operator=(
+    generic_resume_hash &&) {
+  return *this;
+}
+
 #endif
 
-task_manager::task_action_maker_base_t::task_action_maker_base_t(const atframework::DispatcherOptions *opt) {
+SERVER_FRAME_API task_manager::task_action_maker_base_t::task_action_maker_base_t(
+    const atframework::DispatcherOptions *opt) {
   if (nullptr != opt) {
     options.CopyFrom(*opt);
   }
 }
 
-task_manager::task_action_maker_base_t::~task_action_maker_base_t() {}
+SERVER_FRAME_API task_manager::task_action_maker_base_t::~task_action_maker_base_t() {}
 
-task_manager::task_manager()
+#if defined(DS_BATTLE_SDK_DLL) && DS_BATTLE_SDK_DLL
+#  if defined(DS_BATTLE_SDK_NATIVE) && DS_BATTLE_SDK_NATIVE
+UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(task_manager);
+#  else
+UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(task_manager);
+#  endif
+#else
+UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(task_manager);
+#endif
+
+SERVER_FRAME_API task_manager::task_manager()
     : stat_interval_(60), stat_last_checkpoint_(0), conf_busy_count_(0), conf_busy_warn_count_(0) {
   g_task_manager_metrics_data.need_setup.store(true, std::memory_order_release);
   g_task_manager_metrics_data.task_count.store(0, std::memory_order_release);
@@ -141,7 +257,7 @@ task_manager::task_manager()
   g_task_manager_metrics_data.pool_used_memory.store(0, std::memory_order_release);
 }
 
-task_manager::~task_manager() {
+SERVER_FRAME_API task_manager::~task_manager() {
   if (native_mgr_) {
     native_mgr_->reset();
   }
@@ -154,7 +270,7 @@ task_manager::~task_manager() {
   ::google::protobuf::ShutdownProtobufLibrary();
 }
 
-int task_manager::init() {
+SERVER_FRAME_API int task_manager::init() {
   native_mgr_ = native_task_manager_type::create();
 #if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
   stack_pool_ = task_type_trait::stack_pool_type::create();
@@ -188,7 +304,7 @@ int task_manager::init() {
   return 0;
 }
 
-int task_manager::reload() {
+SERVER_FRAME_API int task_manager::reload() {
   stat_interval_ = logic_config::me()->get_cfg_task().nomsg().timeout().seconds();
   if (stat_interval_ <= 0) {
     stat_interval_ = 60;
@@ -211,7 +327,7 @@ int task_manager::reload() {
   return 0;
 }
 
-int task_manager::start_task(task_type_trait::id_type task_id, dispatcher_start_data_type &data) {
+SERVER_FRAME_API int task_manager::start_task(task_type_trait::id_type task_id, dispatcher_start_data_type &data) {
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   auto iter = waiting_start_.find(task_id);
   if (iter == waiting_start_.end()) {
@@ -236,7 +352,7 @@ int task_manager::start_task(task_type_trait::id_type task_id, dispatcher_start_
   return 0;
 }
 
-int task_manager::resume_task(task_type_trait::id_type task_id, dispatcher_resume_data_type &data) {
+SERVER_FRAME_API int task_manager::resume_task(task_type_trait::id_type task_id, dispatcher_resume_data_type &data) {
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   generic_resume_index index{data.message.msg_type, data.sequence};
   auto iter_index = waiting_resume_index_.find(index);
@@ -278,7 +394,7 @@ int task_manager::resume_task(task_type_trait::id_type task_id, dispatcher_resum
   return 0;
 }
 
-int task_manager::tick(time_t sec, int nsec) {
+SERVER_FRAME_API int task_manager::tick(time_t sec, int nsec) {
   if (native_mgr_) {
     native_mgr_->tick(sec, nsec);
   }
@@ -328,7 +444,7 @@ int task_manager::tick(time_t sec, int nsec) {
   return 0;
 }
 
-task_type_trait::task_type task_manager::get_task(task_type_trait::id_type task_id) {
+SERVER_FRAME_API task_type_trait::task_type task_manager::get_task(task_type_trait::id_type task_id) {
   if (!native_mgr_) {
     return task_type_trait::task_type();
   }
@@ -348,7 +464,9 @@ task_type_trait::task_type task_manager::get_task(task_type_trait::id_type task_
 #endif
 }
 
-size_t task_manager::get_stack_size() const { return logic_config::me()->get_cfg_task().stack().size(); }
+SERVER_FRAME_API size_t task_manager::get_stack_size() const {
+  return logic_config::me()->get_cfg_task().stack().size();
+}
 
 int task_manager::add_task(const task_type_trait::task_type &task, time_t timeout_sec, time_t timeout_nsec) {
   if (!native_mgr_) {
@@ -430,11 +548,15 @@ void task_manager::internal_remove_resume_generator(const generic_resume_key &ke
 }
 #endif
 
-bool task_manager::is_busy() const { return conf_busy_count_ > 0 && native_mgr_->get_task_size() > conf_busy_count_; }
+SERVER_FRAME_API bool task_manager::is_busy() const {
+  return conf_busy_count_ > 0 && native_mgr_->get_task_size() > conf_busy_count_;
+}
 
-void task_manager::reset_private_data(task_private_data_type &priv_data) { priv_data.action = nullptr; }
+SERVER_FRAME_API void task_manager::reset_private_data(task_private_data_type &priv_data) {
+  priv_data.action = nullptr;
+}
 
-rpc::context *task_manager::get_shared_context(task_type_trait::task_type &task) {
+SERVER_FRAME_API rpc::context *task_manager::get_shared_context(task_type_trait::task_type &task) {
   task_private_data_type *task_priv_data = task_type_trait::get_private_data(task);
   if (nullptr == task_priv_data) {
     return nullptr;
@@ -447,7 +569,8 @@ rpc::context *task_manager::get_shared_context(task_type_trait::task_type &task)
   return &task_action_base::task_action_helper_t::get_shared_context(*task_priv_data->action);
 }
 
-int32_t task_manager::convert_task_status_to_error_code(task_type_trait::task_status task_status) noexcept {
+SERVER_FRAME_API int32_t
+task_manager::convert_task_status_to_error_code(task_type_trait::task_status task_status) noexcept {
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   switch (task_status) {
     case task_type_trait::task_status::kCancle: {
@@ -494,7 +617,8 @@ int32_t task_manager::convert_task_status_to_error_code(task_type_trait::task_st
 }
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-task_manager::generic_start_generator task_manager::make_start_generator(task_type_trait::id_type task_id) {
+SERVER_FRAME_API task_manager::generic_start_generator task_manager::make_start_generator(
+    task_type_trait::id_type task_id) {
   return {[task_id](generic_start_generator::context_pointer_type generator) {
             if (task_manager::is_instance_destroyed()) {
               return;
@@ -511,8 +635,8 @@ task_manager::generic_start_generator task_manager::make_start_generator(task_ty
           }};
 }
 
-std::pair<task_manager::generic_resume_key, task_manager::generic_resume_generator> task_manager::make_resume_generator(
-    uintptr_t message_type, const dispatcher_await_options &await_options) {
+SERVER_FRAME_API std::pair<task_manager::generic_resume_key, task_manager::generic_resume_generator>
+task_manager::make_resume_generator(uintptr_t message_type, const dispatcher_await_options &await_options) {
   std::chrono::system_clock::duration timeout = await_options.timeout;
   if (timeout <= std::chrono::system_clock::duration::zero()) {
     timeout = std::chrono::duration_cast<std::chrono::system_clock::duration>(

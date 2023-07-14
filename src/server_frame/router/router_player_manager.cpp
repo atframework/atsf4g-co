@@ -18,38 +18,55 @@
 #include <rpc/db/player.h>
 #include <rpc/rpc_utils.h>
 
-router_player_manager::router_player_manager() : base_type(PROJECT_NAMESPACE_ID::EN_ROT_PLAYER) {}
+#if defined(DS_BATTLE_SDK_DLL) && DS_BATTLE_SDK_DLL
+#  if defined(DS_BATTLE_SDK_NATIVE) && DS_BATTLE_SDK_NATIVE
+UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(router_player_manager);
+#  else
+UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(router_player_manager);
+#  endif
+#else
+UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(router_player_manager);
+#endif
 
-const char *router_player_manager::name() const { return "[player_cache router manager]"; }
+SERVER_FRAME_CONFIG_API router_player_manager::router_player_manager()
+    : base_type(PROJECT_NAMESPACE_ID::EN_ROT_PLAYER) {}
 
-rpc::result_code_type router_player_manager::remove_player_object(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                                                  priv_data_t priv_data) {
+SERVER_FRAME_CONFIG_API router_player_manager::~router_player_manager() {}
+
+SERVER_FRAME_CONFIG_API const char *router_player_manager::name() const { return "[player_cache router manager]"; }
+
+SERVER_FRAME_CONFIG_API rpc::result_code_type router_player_manager::remove_player_object(rpc::context &ctx,
+                                                                                          uint64_t user_id,
+                                                                                          uint32_t zone_id,
+                                                                                          priv_data_t priv_data) {
   return remove_player_object(ctx, user_id, zone_id, nullptr, priv_data);
 }
 
-rpc::result_code_type router_player_manager::remove_player_object(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                                                  std::shared_ptr<router_object_base> cache,
-                                                                  priv_data_t priv_data) {
+SERVER_FRAME_CONFIG_API rpc::result_code_type router_player_manager::remove_player_object(
+    rpc::context &ctx, uint64_t user_id, uint32_t zone_id, std::shared_ptr<router_object_base> cache,
+    priv_data_t priv_data) {
   key_t key(get_type_id(), zone_id, user_id);
   return remove_object(ctx, key, cache, priv_data);
 }
 
-rpc::result_code_type router_player_manager::remove_player_cache(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                                                 priv_data_t priv_data) {
+SERVER_FRAME_CONFIG_API rpc::result_code_type router_player_manager::remove_player_cache(rpc::context &ctx,
+                                                                                         uint64_t user_id,
+                                                                                         uint32_t zone_id,
+                                                                                         priv_data_t priv_data) {
   return remove_player_cache(ctx, user_id, zone_id, nullptr, priv_data);
 }
 
-rpc::result_code_type router_player_manager::remove_player_cache(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                                                 std::shared_ptr<router_object_base> cache,
-                                                                 priv_data_t priv_data) {
+SERVER_FRAME_CONFIG_API rpc::result_code_type router_player_manager::remove_player_cache(
+    rpc::context &ctx, uint64_t user_id, uint32_t zone_id, std::shared_ptr<router_object_base> cache,
+    priv_data_t priv_data) {
   key_t key(get_type_id(), zone_id, user_id);
   return remove_cache(ctx, key, cache, priv_data);
 }
 
-void router_player_manager::set_create_object_fn(create_object_fn_t fn) { create_fn_ = fn; }
+SERVER_FRAME_CONFIG_API void router_player_manager::set_create_object_fn(create_object_fn_t fn) { create_fn_ = fn; }
 
-router_player_cache::object_ptr_t router_player_manager::create_player_object(uint64_t user_id, uint32_t zone_id,
-                                                                              const std::string &openid) {
+SERVER_FRAME_CONFIG_API router_player_cache::object_ptr_t router_player_manager::create_player_object(
+    uint64_t user_id, uint32_t zone_id, const std::string &openid) {
   router_player_cache::object_ptr_t ret;
   if (create_fn_) {
     ret = create_fn_(user_id, zone_id, openid);
@@ -79,8 +96,9 @@ rpc::result_code_type router_player_manager::on_evt_remove_object(rpc::context &
   return base_type::on_evt_remove_object(ctx, key, cache, priv_data);
 }
 
-rpc::result_code_type router_player_manager::pull_online_server(rpc::context &, const key_t &, uint64_t &router_svr_id,
-                                                                uint64_t &router_svr_ver) {
+SERVER_FRAME_CONFIG_API rpc::result_code_type router_player_manager::pull_online_server(rpc::context &, const key_t &,
+                                                                                        uint64_t &router_svr_id,
+                                                                                        uint64_t &router_svr_ver) {
   router_svr_id = 0;
   router_svr_ver = 0;
 

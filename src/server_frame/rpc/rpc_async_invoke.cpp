@@ -21,8 +21,9 @@
 #include "rpc/rpc_utils.h"
 
 namespace rpc {
-async_invoke_result async_invoke(context &ctx, gsl::string_view name, std::function<result_code_type(context &)> fn,
-                                 std::chrono::system_clock::duration timeout) {
+SERVER_FRAME_API async_invoke_result async_invoke(context &ctx, gsl::string_view name,
+                                                  std::function<result_code_type(context &)> fn,
+                                                  std::chrono::system_clock::duration timeout) {
   if (!fn) {
     return async_invoke_result::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
@@ -58,13 +59,14 @@ async_invoke_result async_invoke(context &ctx, gsl::string_view name, std::funct
   return async_invoke_result::make_success(std::move(task_inst));
 }
 
-async_invoke_result async_invoke(gsl::string_view, gsl::string_view name, std::function<result_code_type(context &)> fn,
-                                 std::chrono::system_clock::duration timeout) {
+SERVER_FRAME_API async_invoke_result async_invoke(gsl::string_view, gsl::string_view name,
+                                                  std::function<result_code_type(context &)> fn,
+                                                  std::chrono::system_clock::duration timeout) {
   rpc::context ctx{rpc::context::create_without_task()};
   return async_invoke(ctx, name, std::move(fn), timeout);
 }
 
-result_code_type wait_tasks(context &ctx, const std::vector<task_type_trait::task_type> &tasks) {
+SERVER_FRAME_API result_code_type wait_tasks(context &ctx, const std::vector<task_type_trait::task_type> &tasks) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{} should be called in a task", "rpc::wait_tasks");
 
   while (true) {
@@ -111,7 +113,7 @@ result_code_type wait_tasks(context &ctx, const std::vector<task_type_trait::tas
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-result_code_type wait_task(context &ctx, const task_type_trait::task_type &other_task) {
+SERVER_FRAME_API result_code_type wait_task(context &ctx, const task_type_trait::task_type &other_task) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{} should be called in a task", "rpc::wait_task");
 
   while (true) {
@@ -150,8 +152,8 @@ result_code_type wait_task(context &ctx, const task_type_trait::task_type &other
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-void async_then_start_task(context &ctx, gsl::string_view name, task_type_trait::task_type waiting,
-                           task_type_trait::id_type task_id) {
+SERVER_FRAME_API void async_then_start_task(context &ctx, gsl::string_view name, task_type_trait::task_type waiting,
+                                            task_type_trait::id_type task_id) {
   if (task_type_trait::empty(waiting) || task_type_trait::is_exiting(waiting)) {
     if (task_manager::is_instance_destroyed()) {
       return;

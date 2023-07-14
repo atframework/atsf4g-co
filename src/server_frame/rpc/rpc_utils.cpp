@@ -41,7 +41,7 @@
 
 namespace rpc {
 
-context::context() noexcept {
+SERVER_FRAME_API context::context() noexcept {
   trace_context_.caller_mode = parent_mode::kParent;
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   task_context_.task_id = 0;
@@ -61,7 +61,7 @@ context::context() noexcept {
 #endif
 }
 
-context::context(context &&other) noexcept {
+SERVER_FRAME_API context::context(context &&other) noexcept {
   trace_context_.caller_mode = parent_mode::kParent;
   task_context_.task_id = 0;
   using std::swap;
@@ -75,24 +75,24 @@ context::context(context &&other) noexcept {
   swap(task_context_.task_id, other.task_context_.task_id);
 }
 
-context::context(context &parent, inherit_options options) noexcept {
+SERVER_FRAME_API context::context(context &parent, inherit_options options) noexcept {
   task_context_.task_id = 0;
 
   // Set parent tracer and arena allocator
   set_parent_context(parent, options);
 }
 
-context::~context() {}
+SERVER_FRAME_API context::~context() {}
 
-context context::create_without_task(create_options) noexcept { return {}; }
+SERVER_FRAME_API context context::create_without_task(create_options) noexcept { return {}; }
 
-context context::create_temporary_child(inherit_options options) noexcept { return {*this, options}; }
+SERVER_FRAME_API context context::create_temporary_child(inherit_options options) noexcept { return {*this, options}; }
 
-std::shared_ptr<context> context::create_shared_child(inherit_options options) noexcept {
+SERVER_FRAME_API std::shared_ptr<context> context::create_shared_child(inherit_options options) noexcept {
   return std::make_shared<context>(*this, options);
 }
 
-void context::setup_tracer(
+SERVER_FRAME_API void context::setup_tracer(
     tracer &tracer_instance, string_view name, trace_option &&options,
     std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
         attributes) {
@@ -165,7 +165,7 @@ void context::setup_tracer(
   trace_context_.trace_span = tracer_instance.get_trace_span();
 }
 
-std::shared_ptr<::google::protobuf::Arena> context::mutable_protobuf_arena() {
+SERVER_FRAME_API std::shared_ptr<::google::protobuf::Arena> context::mutable_protobuf_arena() {
   if (allocator_) {
     return allocator_;
   }
@@ -178,9 +178,12 @@ std::shared_ptr<::google::protobuf::Arena> context::mutable_protobuf_arena() {
   return allocator_;
 }
 
-const std::shared_ptr<::google::protobuf::Arena> &context::get_protobuf_arena() const { return allocator_; }
+SERVER_FRAME_API const std::shared_ptr<::google::protobuf::Arena> &context::get_protobuf_arena() const {
+  return allocator_;
+}
 
-bool context::try_reuse_protobuf_arena(const std::shared_ptr<::google::protobuf::Arena> &arena) noexcept {
+SERVER_FRAME_API bool context::try_reuse_protobuf_arena(
+    const std::shared_ptr<::google::protobuf::Arena> &arena) noexcept {
   if (!arena || allocator_) {
     return false;
   }
@@ -189,7 +192,7 @@ bool context::try_reuse_protobuf_arena(const std::shared_ptr<::google::protobuf:
   return true;
 }
 
-void context::set_parent_context(rpc::context &parent, inherit_options options) noexcept {
+SERVER_FRAME_API void context::set_parent_context(rpc::context &parent, inherit_options options) noexcept {
   if (nullptr == allocator_ && options.inherit_allocator) {
     try_reuse_protobuf_arena(parent.mutable_protobuf_arena());
   }
@@ -200,7 +203,7 @@ void context::set_parent_context(rpc::context &parent, inherit_options options) 
   task_context_ = parent.task_context_;
 }
 
-void context::add_link_span(const tracer::span_ptr_type &span_ptr) noexcept {
+SERVER_FRAME_API void context::add_link_span(const tracer::span_ptr_type &span_ptr) noexcept {
   if (!span_ptr) {
     return;
   }
@@ -208,11 +211,14 @@ void context::add_link_span(const tracer::span_ptr_type &span_ptr) noexcept {
   trace_context_.link_spans.push_back(span_ptr);
 }
 
-void context::set_current_service(atapp::app &app, const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &telemetry) {
+SERVER_FRAME_API void context::set_current_service(atapp::app &app,
+                                                   const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &telemetry) {
   telemetry::global_service::set_current_service(app, telemetry);
 }
 
-void context::set_task_context(const task_context_data &task_ctx) noexcept { task_context_ = task_ctx; }
+SERVER_FRAME_API void context::set_task_context(const task_context_data &task_ctx) noexcept {
+  task_context_ = task_ctx;
+}
 
 namespace detail {
 static result_code_type wait(context &ctx, dispatcher_resume_data_type *output, uintptr_t check_type,
@@ -424,7 +430,7 @@ static result_code_type wait(context &ctx, uintptr_t check_type,
 }
 }  // namespace detail
 
-result_code_type wait(context &ctx, std::chrono::system_clock::duration timeout) {
+SERVER_FRAME_API result_code_type wait(context &ctx, std::chrono::system_clock::duration timeout) {
   logic_server_common_module *mod = logic_server_last_common_module();
   if (nullptr == mod) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_COMMON_LOGIC_TIMER_NEED_COMMON_MODULE);
@@ -449,7 +455,7 @@ result_code_type wait(context &ctx, std::chrono::system_clock::duration timeout)
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(detail::wait(ctx, nullptr, timer.message_type, await_options)));
 }
 
-result_code_type wait(context &ctx, atframework::SSMsg &msg, const dispatcher_await_options &options) {
+SERVER_FRAME_API result_code_type wait(context &ctx, atframework::SSMsg &msg, const dispatcher_await_options &options) {
   dispatcher_resume_data_type result = dispatcher_make_default<dispatcher_resume_data_type>();
   int ret = RPC_AWAIT_CODE_RESULT(detail::wait(ctx, &result, ss_msg_dispatcher::me()->get_instance_ident(), options));
   if (0 != ret) {
@@ -463,8 +469,8 @@ result_code_type wait(context &ctx, atframework::SSMsg &msg, const dispatcher_aw
   RPC_RETURN_CODE(msg.head().error_code());
 }
 
-result_code_type wait(context &ctx, PROJECT_NAMESPACE_ID::table_all_message &msg,
-                      const dispatcher_await_options &options) {
+SERVER_FRAME_API result_code_type wait(context &ctx, PROJECT_NAMESPACE_ID::table_all_message &msg,
+                                       const dispatcher_await_options &options) {
   dispatcher_resume_data_type result = dispatcher_make_default<dispatcher_resume_data_type>();
   int ret = RPC_AWAIT_CODE_RESULT(detail::wait(ctx, &result, db_msg_dispatcher::me()->get_instance_ident(), options));
   if (0 != ret) {
@@ -478,24 +484,28 @@ result_code_type wait(context &ctx, PROJECT_NAMESPACE_ID::table_all_message &msg
   RPC_RETURN_CODE(msg.error_code());
 }
 
-result_code_type wait(context &ctx, const std::unordered_set<dispatcher_await_options> &waiters,
-                      std::unordered_map<uint64_t, atframework::SSMsg> &received, size_t wakeup_count) {
+SERVER_FRAME_API result_code_type wait(context &ctx, const std::unordered_set<dispatcher_await_options> &waiters,
+                                       std::unordered_map<uint64_t, atframework::SSMsg> &received,
+                                       size_t wakeup_count) {
   return detail::wait(ctx, ss_msg_dispatcher::me()->get_instance_ident(), waiters, received,
                       0 == wakeup_count ? waiters.size() : wakeup_count);
 }
 
-result_code_type wait(context &ctx, const std::unordered_set<dispatcher_await_options> &waiters,
-                      std::unordered_map<uint64_t, atframework::SSMsg *> &received, size_t wakeup_count) {
+SERVER_FRAME_API result_code_type wait(context &ctx, const std::unordered_set<dispatcher_await_options> &waiters,
+                                       std::unordered_map<uint64_t, atframework::SSMsg *> &received,
+                                       size_t wakeup_count) {
   return detail::wait(ctx, ss_msg_dispatcher::me()->get_instance_ident(), waiters, received,
                       0 == wakeup_count ? waiters.size() : wakeup_count);
 }
 
-result_code_type custom_wait(context &ctx, const void *type_address, dispatcher_resume_data_type *received,
-                             const dispatcher_await_options &options) {
+SERVER_FRAME_API result_code_type custom_wait(context &ctx, const void *type_address,
+                                              dispatcher_resume_data_type *received,
+                                              const dispatcher_await_options &options) {
   return detail::wait(ctx, received, reinterpret_cast<uintptr_t>(type_address), options);
 }
 
-int32_t custom_resume(const task_type_trait::task_type &task, dispatcher_resume_data_type &resume_data) {
+SERVER_FRAME_API int32_t custom_resume(const task_type_trait::task_type &task,
+                                       dispatcher_resume_data_type &resume_data) {
   if (task_type_trait::empty(task)) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
@@ -509,7 +519,7 @@ int32_t custom_resume(const task_type_trait::task_type &task, dispatcher_resume_
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-int32_t custom_resume(task_type_trait::id_type task_id, dispatcher_resume_data_type &resume_data) {
+SERVER_FRAME_API int32_t custom_resume(task_type_trait::id_type task_id, dispatcher_resume_data_type &resume_data) {
   if (0 == task_id) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }

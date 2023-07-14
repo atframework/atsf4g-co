@@ -27,9 +27,23 @@ class context;
 
 class player_cache;
 
-class player_manager : public util::design_pattern::singleton<player_manager> {
+class player_manager {
  public:
   using player_ptr_t = std::shared_ptr<player_cache>;
+
+#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
+#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
+  UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(player_manager)
+#  else
+  UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(player_manager)
+#  endif
+#else
+  UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(player_manager)
+#endif
+
+ private:
+  SERVER_FRAME_CONFIG_API player_manager();
+  SERVER_FRAME_CONFIG_API ~player_manager();
 
  public:
   /**
@@ -37,8 +51,8 @@ class player_manager : public util::design_pattern::singleton<player_manager> {
    * @param user user指针
    * @param force_kickoff 强制移除，不进入离线缓存
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove(rpc::context &ctx, player_ptr_t user,
-                                                                           bool force_kickoff = false);
+  SERVER_FRAME_CONFIG_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove(rpc::context &ctx, player_ptr_t user,
+                                                                               bool force_kickoff = false);
 
   /**
    * @brief 移除用户
@@ -46,9 +60,10 @@ class player_manager : public util::design_pattern::singleton<player_manager> {
    * @param zone_id zone_id
    * @param force_kickoff 强制移除，不进入离线缓存
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove(rpc::context &ctx, uint64_t user_id,
-                                                                           uint32_t zone_id, bool force_kickoff = false,
-                                                                           player_cache *check_user = nullptr);
+  SERVER_FRAME_CONFIG_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove(rpc::context &ctx, uint64_t user_id,
+                                                                               uint32_t zone_id,
+                                                                               bool force_kickoff = false,
+                                                                               player_cache *check_user = nullptr);
 
   /**
    * @brief 启动异步任务移除用户
@@ -56,7 +71,7 @@ class player_manager : public util::design_pattern::singleton<player_manager> {
    * @param zone_id zone_id
    * @param force_kickoff 强制移除，不进入离线缓存
    */
-  void async_remove(rpc::context &ctx, player_ptr_t user, bool force_kickoff = false);
+  SERVER_FRAME_CONFIG_API void async_remove(rpc::context &ctx, player_ptr_t user, bool force_kickoff = false);
 
   /**
    * @brief 启动异步任务移除用户
@@ -64,16 +79,16 @@ class player_manager : public util::design_pattern::singleton<player_manager> {
    * @param zone_id zone_id
    * @param force_kickoff 强制移除，不进入离线缓存
    */
-  void async_remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, bool force_kickoff = false,
-                    player_cache *check_user = nullptr);
+  SERVER_FRAME_CONFIG_API void async_remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
+                                            bool force_kickoff = false, player_cache *check_user = nullptr);
 
   /**
    * @brief 保存用户数据
    * @param user_id user_id
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type save(rpc::context &ctx, uint64_t user_id,
-                                                                         uint32_t zone_id,
-                                                                         const player_cache *check_user = nullptr);
+  SERVER_FRAME_CONFIG_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type save(rpc::context &ctx, uint64_t user_id,
+                                                                             uint32_t zone_id,
+                                                                             const player_cache *check_user = nullptr);
 
   /**
    * @brief 添加到计划保存队列
@@ -81,7 +96,7 @@ class player_manager : public util::design_pattern::singleton<player_manager> {
    * @param zone_id zone_id
    * @param kickoff kickoff true表示要下线，路由系统降执行降级操作
    */
-  bool add_save_schedule(uint64_t user_id, uint32_t zone_id, bool kickoff = false);
+  SERVER_FRAME_CONFIG_API bool add_save_schedule(uint64_t user_id, uint32_t zone_id, bool kickoff = false);
 
   /**
    * @brief 加载指定玩家数据。
@@ -91,19 +106,17 @@ class player_manager : public util::design_pattern::singleton<player_manager> {
    * @param user_id
    * @return null 或者 user指针
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type load(rpc::context &ctx, uint64_t user_id,
-                                                                         uint32_t zone_id, player_ptr_t &output,
-                                                                         bool force = false);
+  SERVER_FRAME_CONFIG_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type load(rpc::context &ctx, uint64_t user_id,
+                                                                             uint32_t zone_id, player_ptr_t &output,
+                                                                             bool force = false);
 
-  size_t size() const;
+  SERVER_FRAME_CONFIG_API size_t size() const;
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type create(rpc::context &ctx, uint64_t user_id,
-                                                                           uint32_t zone_id, const std::string &openid,
-                                                                           PROJECT_NAMESPACE_ID::table_login &login_tb,
-                                                                           std::string &login_ver,
-                                                                           player_ptr_t &output);
+  SERVER_FRAME_CONFIG_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type create(
+      rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const std::string &openid,
+      PROJECT_NAMESPACE_ID::table_login &login_tb, std::string &login_ver, player_ptr_t &output);
   template <typename TPLAYER>
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_as(
+  UTIL_SYMBOL_VISIBLE EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_as(
       rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const std::string &openid,
       PROJECT_NAMESPACE_ID::table_login &login_tb, std::string &login_ver, std::shared_ptr<TPLAYER> &output) {
     player_ptr_t output_base;
@@ -112,14 +125,14 @@ class player_manager : public util::design_pattern::singleton<player_manager> {
     RPC_RETURN_CODE(ret);
   }
 
-  player_ptr_t find(uint64_t user_id, uint32_t zone_id) const;
+  SERVER_FRAME_CONFIG_API player_ptr_t find(uint64_t user_id, uint32_t zone_id) const;
 
   template <typename TPLAYER>
-  const std::shared_ptr<TPLAYER> find_as(uint64_t user_id, uint32_t zone_id) const {
+  UTIL_SYMBOL_VISIBLE const std::shared_ptr<TPLAYER> find_as(uint64_t user_id, uint32_t zone_id) const {
     return std::static_pointer_cast<TPLAYER>(find(user_id, zone_id));
   }
 
-  bool has_create_user_lock(uint64_t user_id, uint32_t zone_id) const noexcept;
+  SERVER_FRAME_CONFIG_API bool has_create_user_lock(uint64_t user_id, uint32_t zone_id) const noexcept;
 
  private:
   std::unordered_set<PROJECT_NAMESPACE_ID::DPlayerIDKey, player_key_hash_t, player_key_equal_t> create_user_lock_;

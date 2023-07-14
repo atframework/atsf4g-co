@@ -21,42 +21,56 @@
 #include "router/router_system_defs.h"
 
 class task_action_auto_save_objects;
-class router_manager_set : public util::design_pattern::singleton<router_manager_set> {
+class router_manager_set {
  public:
   using timer_t = router_system_timer_t;
 
-  enum auto_save_action_t {
+  enum UTIL_SYMBOL_VISIBLE auto_save_action_t {
     EN_ASA_SAVE = 0,
     EN_ASA_REMOVE_OBJECT,
     EN_ASA_REMOVE_CACHE,
   };
 
-  struct pending_action_data {
+  struct UTIL_SYMBOL_VISIBLE pending_action_data {
     auto_save_action_t action;
     uint32_t type_id;
 
     std::shared_ptr<router_object_base> object;
   };
 
+#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
+#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
+  UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(router_manager_set)
+#  else
+  UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(router_manager_set)
+#  endif
+#else
+  UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(router_manager_set)
+#endif
+
+ private:
+  SERVER_FRAME_API router_manager_set();
+
  public:
-  router_manager_set();
+  SERVER_FRAME_API ~router_manager_set();
 
-  int init();
+  SERVER_FRAME_API int init();
 
-  int tick();
+  SERVER_FRAME_API int tick();
 
-  int stop();
+  SERVER_FRAME_API int stop();
 
-  void force_close();
+  SERVER_FRAME_API void force_close();
 
-  bool insert_timer(router_manager_base *mgr, const std::shared_ptr<router_object_base> &obj, bool is_fast = false);
+  SERVER_FRAME_API bool insert_timer(router_manager_base *mgr, const std::shared_ptr<router_object_base> &obj,
+                                     bool is_fast = false);
 
-  router_manager_base *get_manager(uint32_t type);
+  SERVER_FRAME_API router_manager_base *get_manager(uint32_t type);
 
-  int register_manager(router_manager_base *b);
-  int unregister_manager(router_manager_base *b);
+  SERVER_FRAME_API int register_manager(router_manager_base *b);
+  SERVER_FRAME_API int unregister_manager(router_manager_base *b);
 
-  size_t size() const;
+  SERVER_FRAME_API size_t size() const;
 
   /**
    * @brief 尝试回收缓存对象
@@ -66,18 +80,18 @@ class router_manager_set : public util::design_pattern::singleton<router_manager
    *       清理后缓存对象会被添加到快队列做复检，复检没问题后才会最终移除对象内存结构，这个延迟取决于快队列的tick间隔，一般是5秒左右。
    * @return 错误返回错误码(小于0)，成功返回回收数量，返回0表示没有对象要被清理。
    */
-  int recycle_caches(int max_count);
+  SERVER_FRAME_API int recycle_caches(int max_count);
 
-  inline bool is_closing() const { return is_closing_; }
+  UTIL_FORCEINLINE bool is_closing() const { return is_closing_; }
 
-  inline bool is_closed() const { return is_closed_; }
+  UTIL_FORCEINLINE bool is_closed() const { return is_closed_; }
 
-  bool add_save_schedule(const std::shared_ptr<router_object_base> &obj);
-  bool add_downgrade_schedule(const std::shared_ptr<router_object_base> &obj);
-  bool mark_fast_save(router_manager_base *mgr, const std::shared_ptr<router_object_base> &obj);
+  SERVER_FRAME_API bool add_save_schedule(const std::shared_ptr<router_object_base> &obj);
+  SERVER_FRAME_API bool add_downgrade_schedule(const std::shared_ptr<router_object_base> &obj);
+  SERVER_FRAME_API bool mark_fast_save(router_manager_base *mgr, const std::shared_ptr<router_object_base> &obj);
 
-  void add_io_schedule_order_task(const std::shared_ptr<router_object_base> &obj,
-                                  task_type_trait::task_type &task);
+  SERVER_FRAME_API void add_io_schedule_order_task(const std::shared_ptr<router_object_base> &obj,
+                                                   task_type_trait::task_type &task);
 
  private:
   bool is_save_task_running() const;

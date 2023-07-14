@@ -25,13 +25,24 @@
 #include "logic/player_manager.h"
 #include "logic/session_manager.h"
 
-session_manager::session_manager() : last_proc_timepoint_(util::time::time_utility::get_now()) {}
+#if defined(DS_BATTLE_SDK_DLL) && DS_BATTLE_SDK_DLL
+#  if defined(DS_BATTLE_SDK_NATIVE) && DS_BATTLE_SDK_NATIVE
+UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(session_manager);
+#  else
+UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(session_manager);
+#  endif
+#else
+UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(session_manager);
+#endif
 
-session_manager::~session_manager() {}
+SERVER_FRAME_CONFIG_API session_manager::session_manager()
+    : last_proc_timepoint_(util::time::time_utility::get_now()) {}
 
-int session_manager::init() { return 0; }
+SERVER_FRAME_CONFIG_API session_manager::~session_manager() {}
 
-int session_manager::proc() {
+SERVER_FRAME_CONFIG_API int session_manager::init() { return 0; }
+
+SERVER_FRAME_CONFIG_API int session_manager::proc() {
   // 写入时间可配,实时在线统计
   time_t proc_interval = logic_config::me()->get_logic().session().tick_sec().seconds();
 
@@ -51,7 +62,7 @@ int session_manager::proc() {
   return 0;
 }
 
-const session_manager::sess_ptr_t session_manager::find(const session::key_t &key) const {
+SERVER_FRAME_CONFIG_API const session_manager::sess_ptr_t session_manager::find(const session::key_t &key) const {
   session_index_t::const_iterator iter = all_sessions_.find(key);
   if (all_sessions_.end() == iter) {
     return sess_ptr_t();
@@ -60,7 +71,7 @@ const session_manager::sess_ptr_t session_manager::find(const session::key_t &ke
   return iter->second;
 }
 
-session_manager::sess_ptr_t session_manager::find(const session::key_t &key) {
+SERVER_FRAME_CONFIG_API session_manager::sess_ptr_t session_manager::find(const session::key_t &key) {
   session_index_t::iterator iter = all_sessions_.find(key);
   if (all_sessions_.end() == iter) {
     return sess_ptr_t();
@@ -69,7 +80,7 @@ session_manager::sess_ptr_t session_manager::find(const session::key_t &key) {
   return iter->second;
 }
 
-session_manager::sess_ptr_t session_manager::create(const session::key_t &key) {
+SERVER_FRAME_CONFIG_API session_manager::sess_ptr_t session_manager::create(const session::key_t &key) {
   if (find(key)) {
     FWLOGERROR("session registered, failed, bus id: {:#x}, session id: {}\n", key.bus_id, key.session_id);
 
@@ -99,9 +110,11 @@ session_manager::sess_ptr_t session_manager::create(const session::key_t &key) {
   return sess;
 }
 
-void session_manager::remove(const session::key_t &key, int reason) { remove(find(key), reason); }
+SERVER_FRAME_CONFIG_API void session_manager::remove(const session::key_t &key, int reason) {
+  remove(find(key), reason);
+}
 
-void session_manager::remove(sess_ptr_t sess, int reason) {
+SERVER_FRAME_CONFIG_API void session_manager::remove(sess_ptr_t sess, int reason) {
   if (!sess) {
     return;
   }
@@ -168,7 +181,7 @@ void session_manager::remove(sess_ptr_t sess, int reason) {
   }
 }
 
-void session_manager::remove_all(int32_t reason) {
+SERVER_FRAME_CONFIG_API void session_manager::remove_all(int32_t reason) {
   for (session_index_t::iterator iter = all_sessions_.begin(); iter != all_sessions_.end(); ++iter) {
     if (iter->second) {
       iter->second->set_flag(session::flag_t::EN_SESSION_FLAG_CLOSED, true);
@@ -208,9 +221,9 @@ void session_manager::remove_all(int32_t reason) {
   }
 }
 
-size_t session_manager::size() const { return all_sessions_.size(); }
+SERVER_FRAME_CONFIG_API size_t session_manager::size() const { return all_sessions_.size(); }
 
-int32_t session_manager::broadcast_msg_to_client(const atframework::CSMsg &msg) {
+SERVER_FRAME_CONFIG_API int32_t session_manager::broadcast_msg_to_client(const atframework::CSMsg &msg) {
   size_t msg_buf_len = msg.ByteSizeLong();
   size_t tls_buf_len =
       atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);

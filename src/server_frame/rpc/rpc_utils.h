@@ -68,7 +68,7 @@ class context {
     kLink = 1,
   };
 
-  struct inherit_options {
+  struct UTIL_SYMBOL_VISIBLE inherit_options {
     parent_mode mode;
     bool inherit_allocator;
 
@@ -78,15 +78,15 @@ class context {
         : mode(m), inherit_allocator(inherit_alloc){};
   };
 
-  struct create_options {};
+  struct UTIL_SYMBOL_VISIBLE create_options {};
 
-  struct task_context_data {
+  struct UTIL_SYMBOL_VISIBLE task_context_data {
     uint64_t task_id;
     inline task_context_data() noexcept : task_id(0){};
   };
 
   template <class TMsg>
-  struct message_holder {
+  struct UTIL_SYMBOL_VISIBLE message_holder {
     explicit message_holder(context &ctx) : arena_msg_ptr_(ctx.create<TMsg>()) {}
     explicit message_holder(message_holder &&other) : arena_msg_ptr_(nullptr) {
       using std::swap;
@@ -143,12 +143,12 @@ class context {
   context &operator=(const context &) = delete;
   context &operator=(context &&) = delete;
 
-  context() noexcept;
+  SERVER_FRAME_API context() noexcept;
 
  public:
-  explicit context(context &&other) noexcept;
-  context(context &parent, inherit_options options = {}) noexcept;
-  ~context();
+  SERVER_FRAME_API explicit context(context &&other) noexcept;
+  SERVER_FRAME_API context(context &parent, inherit_options options = {}) noexcept;
+  SERVER_FRAME_API ~context();
 
   /**
    * @brief 创建和任务无关的RPC上下文，通常用于记录链路跟踪关系。
@@ -156,7 +156,7 @@ class context {
    * @param options 创建选项
    * @return context 创建的子上下文对象
    */
-  static context create_without_task(create_options options = {}) noexcept;
+  SERVER_FRAME_API static context create_without_task(create_options options = {}) noexcept;
 
   /**
    * @brief 创建临时的子上下文，通常用于协程栈上需要加一层链路跟踪。
@@ -165,7 +165,7 @@ class context {
    * @param options 继承选项
    * @return context 创建的子上下文对象
    */
-  context create_temporary_child(inherit_options options = {}) noexcept;
+  SERVER_FRAME_API context create_temporary_child(inherit_options options = {}) noexcept;
 
   /**
    * @brief 创建共享的子上下文，通常用于异步调用时保留链路信息。
@@ -174,9 +174,9 @@ class context {
    * @param options 继承选项
    * @return std::shared_ptr<context> 创建的子上下文智能指针
    */
-  std::shared_ptr<context> create_shared_child(inherit_options options = {}) noexcept;
+  SERVER_FRAME_API std::shared_ptr<context> create_shared_child(inherit_options options = {}) noexcept;
 
-  void setup_tracer(
+  SERVER_FRAME_API void setup_tracer(
       tracer &, string_view name, trace_option &&options,
       std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
           attributes = {});
@@ -188,7 +188,7 @@ class context {
    * @return 在arena上分配的对象，失败返回nullptr
    */
   template <class TMSG>
-  TMSG *create() {
+  UTIL_SYMBOL_VISIBLE TMSG *create() {
     // 上面的分支减少一次atomic操作
     if (allocator_) {
       return ::google::protobuf::Arena::CreateMessage<TMSG>(allocator_.get());
@@ -202,24 +202,25 @@ class context {
     return ::google::protobuf::Arena::CreateMessage<TMSG>(arena.get());
   }
 
-  std::shared_ptr<::google::protobuf::Arena> mutable_protobuf_arena();
-  const std::shared_ptr<::google::protobuf::Arena> &get_protobuf_arena() const;
-  bool try_reuse_protobuf_arena(const std::shared_ptr<::google::protobuf::Arena> &arena) noexcept;
+  SERVER_FRAME_API std::shared_ptr<::google::protobuf::Arena> mutable_protobuf_arena();
+  SERVER_FRAME_API const std::shared_ptr<::google::protobuf::Arena> &get_protobuf_arena() const;
+  SERVER_FRAME_API bool try_reuse_protobuf_arena(const std::shared_ptr<::google::protobuf::Arena> &arena) noexcept;
 
-  inline const tracer::span_ptr_type &get_trace_span() const { return trace_context_.trace_span; }
+  UTIL_FORCEINLINE const tracer::span_ptr_type &get_trace_span() const { return trace_context_.trace_span; }
 
-  void set_parent_context(rpc::context &parent, inherit_options options = {}) noexcept;
-  void add_link_span(const tracer::span_ptr_type &span_ptr) noexcept;
+  SERVER_FRAME_API void set_parent_context(rpc::context &parent, inherit_options options = {}) noexcept;
+  SERVER_FRAME_API void add_link_span(const tracer::span_ptr_type &span_ptr) noexcept;
 
   /**
    * @brief Set the current service object, it's used for tracer
    * @param app atapp instance
    * @param telemetry telemetry configure
    */
-  static void set_current_service(atapp::app &app, const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &telemetry);
+  SERVER_FRAME_API static void set_current_service(atapp::app &app,
+                                                   const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &telemetry);
 
-  void set_task_context(const task_context_data &task_ctx) noexcept;
-  inline const task_context_data &get_task_context() const noexcept { return task_context_; }
+  SERVER_FRAME_API void set_task_context(const task_context_data &task_ctx) noexcept;
+  UTIL_FORCEINLINE const task_context_data &get_task_context() const noexcept { return task_context_; }
 
  private:
   std::shared_ptr<::google::protobuf::Arena> allocator_;
@@ -239,17 +240,18 @@ UTIL_FORCEINLINE std::chrono::system_clock::duration make_duration(
 }
 
 template <class Rep, class Period>
-inline std::chrono::system_clock::duration make_duration(const std::chrono::duration<Rep, Period> &value) noexcept {
+UTIL_FORCEINLINE std::chrono::system_clock::duration make_duration(
+    const std::chrono::duration<Rep, Period> &value) noexcept {
   return std::chrono::duration_cast<std::chrono::system_clock::duration>(value);
 }
 
-inline std::chrono::system_clock::duration make_duration(const google::protobuf::Duration &value) noexcept {
+UTIL_FORCEINLINE std::chrono::system_clock::duration make_duration(const google::protobuf::Duration &value) noexcept {
   return std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::seconds{value.seconds()}) +
          std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::nanoseconds{value.nanos()});
 }
 
 template <class Rep, class Period>
-inline std::chrono::system_clock::duration make_duration_or_default(
+UTIL_FORCEINLINE std::chrono::system_clock::duration make_duration_or_default(
     const google::protobuf::Duration &value, const std::chrono::duration<Rep, Period> &default_value) noexcept {
   if (value.seconds() > 0 || value.nanos() > 0) {
     return make_duration(value);
@@ -264,7 +266,7 @@ inline std::chrono::system_clock::duration make_duration_or_default(
  * @param timeout
  * @return future of 0 or error code
  */
-result_code_type wait(context &ctx, std::chrono::system_clock::duration timeout);
+SERVER_FRAME_API result_code_type wait(context &ctx, std::chrono::system_clock::duration timeout);
 
 /**
  * @brief sleep and wait a moment
@@ -275,13 +277,13 @@ result_code_type wait(context &ctx, std::chrono::system_clock::duration timeout)
  * @return future of 0 or error code
  */
 template <class Rep, class Period>
-inline result_code_type wait(context &ctx, std::chrono::duration<Rep, Period> timeout) {
+UTIL_FORCEINLINE result_code_type wait(context &ctx, std::chrono::duration<Rep, Period> timeout) {
   return wait(ctx, make_duration(timeout));
 }
 
-result_code_type wait(context &ctx, atframework::SSMsg &msg, const dispatcher_await_options &options);
-result_code_type wait(context &ctx, PROJECT_NAMESPACE_ID::table_all_message &msg,
-                      const dispatcher_await_options &options);
+SERVER_FRAME_API result_code_type wait(context &ctx, atframework::SSMsg &msg, const dispatcher_await_options &options);
+SERVER_FRAME_API result_code_type wait(context &ctx, PROJECT_NAMESPACE_ID::table_all_message &msg,
+                                       const dispatcher_await_options &options);
 
 /**
  * @brief wait for multiple messages
@@ -291,8 +293,9 @@ result_code_type wait(context &ctx, PROJECT_NAMESPACE_ID::table_all_message &msg
  * @param wakeup_count wakeup and return after got this count of messages(0 means wait all)
  * @return future of 0 or error code
  */
-result_code_type wait(context &ctx, const std::unordered_set<dispatcher_await_options> &waiters,
-                      std::unordered_map<uint64_t, atframework::SSMsg> &received, size_t wakeup_count = 0);
+SERVER_FRAME_API result_code_type wait(context &ctx, const std::unordered_set<dispatcher_await_options> &waiters,
+                                       std::unordered_map<uint64_t, atframework::SSMsg> &received,
+                                       size_t wakeup_count = 0);
 
 /**
  * @brief wait for multiple messages
@@ -302,8 +305,9 @@ result_code_type wait(context &ctx, const std::unordered_set<dispatcher_await_op
  * @param wakeup_count wakeup and return after got this count of messages(0 means wait all)
  * @return future of 0 or error code
  */
-result_code_type wait(context &ctx, const std::unordered_set<dispatcher_await_options> &waiters,
-                      std::unordered_map<uint64_t, atframework::SSMsg *> &received, size_t wakeup_count = 0);
+SERVER_FRAME_API result_code_type wait(context &ctx, const std::unordered_set<dispatcher_await_options> &waiters,
+                                       std::unordered_map<uint64_t, atframework::SSMsg *> &received,
+                                       size_t wakeup_count = 0);
 
 /**
  * @brief Custom wait for a message or resume
@@ -313,8 +317,9 @@ result_code_type wait(context &ctx, const std::unordered_set<dispatcher_await_op
  * @param options await options
  * @return future of 0 or error code
  */
-result_code_type custom_wait(context &ctx, const void *type_address, dispatcher_resume_data_type *received,
-                             const dispatcher_await_options &options);
+SERVER_FRAME_API result_code_type custom_wait(context &ctx, const void *type_address,
+                                              dispatcher_resume_data_type *received,
+                                              const dispatcher_await_options &options);
 
 /**
  * @brief Custom resume a waiter
@@ -323,7 +328,8 @@ result_code_type custom_wait(context &ctx, const void *type_address, dispatcher_
  * @param resume_data resume data
  * @return 0 or error code
  */
-int32_t custom_resume(const task_type_trait::task_type &task, dispatcher_resume_data_type &resume_data);
+SERVER_FRAME_API int32_t custom_resume(const task_type_trait::task_type &task,
+                                       dispatcher_resume_data_type &resume_data);
 
 /**
  * @brief Custom resume a waiter
@@ -332,6 +338,6 @@ int32_t custom_resume(const task_type_trait::task_type &task, dispatcher_resume_
  * @param resume_data resume data
  * @return 0 or error code
  */
-int32_t custom_resume(task_type_trait::id_type task_id, dispatcher_resume_data_type &resume_data);
+SERVER_FRAME_API int32_t custom_resume(task_type_trait::id_type task_id, dispatcher_resume_data_type &resume_data);
 
 }  // namespace rpc

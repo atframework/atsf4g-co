@@ -356,8 +356,8 @@ static void pick_const_data(const std::string& value, google::protobuf::Timestam
   timepoint.set_seconds(res);
 }
 
-static bool pick_const_data(::PROJECT_NAMESPACE_ID::config::excel_const_config& settings,
-                            const ::google::protobuf::FieldDescriptor* fds, const std::string& value) {
+static bool pick_const_data(::google::protobuf::Message& settings, const ::google::protobuf::FieldDescriptor* fds,
+                            const std::string& value) {
   if (NULL == fds) {
     return false;
   }
@@ -533,8 +533,8 @@ static bool pick_const_data(::PROJECT_NAMESPACE_ID::config::excel_const_config& 
   }
 }
 
-static bool reset_const_value(::PROJECT_NAMESPACE_ID::config::excel_const_config& settings,
-                              const ::google::protobuf::FieldDescriptor* fds, const std::string& value) {
+static bool reset_const_value(::google::protobuf::Message& settings, const ::google::protobuf::FieldDescriptor* fds,
+                              const std::string& value) {
   if (NULL == fds) {
     return false;
   }
@@ -612,4 +612,18 @@ SERVER_FRAME_CONFIG_API void parse_timepoint(const std::string& in, google::prot
 SERVER_FRAME_CONFIG_API void parse_duration(const std::string& in, google::protobuf::Duration& out) {
   detail::pick_const_data(in, out);
 }
+
+EXCEL_CONFIG_LOADER_API bool parse_message_field(const std::string& input, google::protobuf::Message& out,
+                                                 const ::google::protobuf::FieldDescriptor* fds) {
+  if (fds == nullptr) {
+    return false;
+  }
+
+  if (fds->containing_type() != out.GetDescriptor()) {
+    return false;
+  }
+
+  return detail::reset_const_value(out, fds, input);
+}
+
 }  // namespace excel

@@ -35,11 +35,23 @@
 #include "rpc/rpc_utils.h"
 #include "rpc/telemetry/rpc_global_service.h"
 
-router_manager_set::router_manager_set() : last_proc_time_(0), is_closing_(false), is_closed_(false) {
+#if defined(DS_BATTLE_SDK_DLL) && DS_BATTLE_SDK_DLL
+#  if defined(DS_BATTLE_SDK_NATIVE) && DS_BATTLE_SDK_NATIVE
+UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(router_manager_set);
+#  else
+UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(router_manager_set);
+#  endif
+#else
+UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(router_manager_set);
+#endif
+
+SERVER_FRAME_API router_manager_set::router_manager_set() : last_proc_time_(0), is_closing_(false), is_closed_(false) {
   memset(mgrs_, 0, sizeof(mgrs_));
 }
 
-int router_manager_set::init() {
+SERVER_FRAME_API router_manager_set::~router_manager_set() {}
+
+SERVER_FRAME_API int router_manager_set::init() {
   int ret = 0;
 
   // 注册路由系统的内部事件
@@ -50,7 +62,7 @@ int router_manager_set::init() {
   return ret;
 }
 
-int router_manager_set::tick() {
+SERVER_FRAME_API int router_manager_set::tick() {
   int ret = 0;
 
   // 如果不是正在关闭，则每秒只需要判定一次
@@ -122,7 +134,7 @@ int router_manager_set::tick() {
   return ret;
 }
 
-int router_manager_set::stop() {
+SERVER_FRAME_API int router_manager_set::stop() {
   if (is_closing()) {
     return 0;
   }
@@ -204,7 +216,7 @@ int router_manager_set::stop() {
   return 0;
 }
 
-void router_manager_set::force_close() {
+SERVER_FRAME_API void router_manager_set::force_close() {
   if (!is_closing() || is_closed()) {
     return;
   }
@@ -223,8 +235,8 @@ void router_manager_set::force_close() {
   }
 }
 
-bool router_manager_set::insert_timer(router_manager_base *mgr, const std::shared_ptr<router_object_base> &obj,
-                                      bool is_fast) {
+SERVER_FRAME_API bool router_manager_set::insert_timer(router_manager_base *mgr,
+                                                       const std::shared_ptr<router_object_base> &obj, bool is_fast) {
   if (last_proc_time_ <= 0) {
     FWLOGERROR("router_manager_set not actived");
   }
@@ -269,7 +281,7 @@ bool router_manager_set::insert_timer(router_manager_base *mgr, const std::share
   return true;
 }
 
-router_manager_base *router_manager_set::get_manager(uint32_t type) {
+SERVER_FRAME_API router_manager_base *router_manager_set::get_manager(uint32_t type) {
   if (type >= PROJECT_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE) {
     return nullptr;
   }
@@ -277,7 +289,7 @@ router_manager_base *router_manager_set::get_manager(uint32_t type) {
   return mgrs_[type];
 }
 
-int router_manager_set::register_manager(router_manager_base *b) {
+SERVER_FRAME_API int router_manager_set::register_manager(router_manager_base *b) {
   if (nullptr == b) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
@@ -302,7 +314,7 @@ int router_manager_set::register_manager(router_manager_base *b) {
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-int router_manager_set::unregister_manager(router_manager_base *b) {
+SERVER_FRAME_API int router_manager_set::unregister_manager(router_manager_base *b) {
   if (nullptr == b) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
@@ -320,7 +332,7 @@ int router_manager_set::unregister_manager(router_manager_base *b) {
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-size_t router_manager_set::size() const {
+SERVER_FRAME_API size_t router_manager_set::size() const {
   size_t ret = 0;
   for (int i = 0; i < PROJECT_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE; ++i) {
     if (nullptr != mgrs_[i]) {
@@ -331,7 +343,7 @@ size_t router_manager_set::size() const {
   return ret;
 }
 
-int router_manager_set::recycle_caches(int max_count) {
+SERVER_FRAME_API int router_manager_set::recycle_caches(int max_count) {
   if (max_count <= 0) {
     return 0;
   }
@@ -439,7 +451,7 @@ int router_manager_set::recycle_caches(int max_count) {
   return ret;
 }
 
-bool router_manager_set::add_save_schedule(const std::shared_ptr<router_object_base> &obj) {
+SERVER_FRAME_API bool router_manager_set::add_save_schedule(const std::shared_ptr<router_object_base> &obj) {
   if (!obj) {
     return false;
   }
@@ -463,7 +475,7 @@ bool router_manager_set::add_save_schedule(const std::shared_ptr<router_object_b
   return true;
 }
 
-bool router_manager_set::add_downgrade_schedule(const std::shared_ptr<router_object_base> &obj) {
+SERVER_FRAME_API bool router_manager_set::add_downgrade_schedule(const std::shared_ptr<router_object_base> &obj) {
   if (!obj) {
     return false;
   }
@@ -489,7 +501,8 @@ bool router_manager_set::add_downgrade_schedule(const std::shared_ptr<router_obj
   return true;
 }
 
-bool router_manager_set::mark_fast_save(router_manager_base *mgr, const std::shared_ptr<router_object_base> &obj) {
+SERVER_FRAME_API bool router_manager_set::mark_fast_save(router_manager_base *mgr,
+                                                         const std::shared_ptr<router_object_base> &obj) {
   if (!obj || !mgr) {
     return false;
   }
@@ -512,8 +525,8 @@ bool router_manager_set::mark_fast_save(router_manager_base *mgr, const std::sha
   return insert_timer(mgr, obj, true);
 }
 
-void router_manager_set::add_io_schedule_order_task(const std::shared_ptr<router_object_base> &obj,
-                                                    task_type_trait::task_type &task) {
+SERVER_FRAME_API void router_manager_set::add_io_schedule_order_task(const std::shared_ptr<router_object_base> &obj,
+                                                                     task_type_trait::task_type &task) {
   if (task_type_trait::empty(task) || !obj) {
     return;
   }

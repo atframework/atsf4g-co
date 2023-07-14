@@ -17,7 +17,7 @@
 
 namespace rpc {
 
-bool is_exiting_error_code(int32_t code) {
+SERVER_FRAME_API bool is_exiting_error_code(int32_t code) {
   switch (code) {
     case PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT:
     case PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_KILLED:
@@ -32,7 +32,7 @@ bool is_exiting_error_code(int32_t code) {
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
 
-int32_t rpc_error_code_transform::operator()(copp::promise_status in) const noexcept {
+SERVER_FRAME_API int32_t rpc_error_code_transform::operator()(copp::promise_status in) const noexcept {
   if (in < copp::promise_status::kDone) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL_NOT_READY;
   }
@@ -49,15 +49,16 @@ int32_t rpc_error_code_transform::operator()(copp::promise_status in) const noex
 }
 
 #else
-int32_t rpc_get_not_ready_code() { return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL; }
+SERVER_FRAME_API int32_t rpc_get_not_ready_code() { return PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL; }
 
-result_void_type::result_void_type()
+SERVER_FRAME_API result_void_type::result_void_type()
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
     : awaited_(false)
 #  endif
 {
 }
-result_void_type::result_void_type(bool input_is_ready)
+
+SERVER_FRAME_API result_void_type::result_void_type(bool input_is_ready)
     : result_data_(input_is_ready)
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
       ,
@@ -66,7 +67,7 @@ result_void_type::result_void_type(bool input_is_ready)
 {
 }
 
-result_void_type::~result_void_type() {
+SERVER_FRAME_API result_void_type::~result_void_type() {
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
   // rpc::result_XXX must be awaited with RPC_AWAIT_IGNORE_RESULT(...), RPC_AWAIT_IGNORE_VOID(...) or
   // RPC_AWAIT_TYPE_RESULT(...)

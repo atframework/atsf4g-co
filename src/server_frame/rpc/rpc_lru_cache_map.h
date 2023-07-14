@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <config/compile_optimize.h>
+
 #include <log/log_wrapper.h>
 #include <mem_pool/lru_map.h>
 #include <time/time_utility.h>
@@ -29,7 +31,7 @@ namespace rpc {
 class context;
 
 template <typename TKey, typename TObject>
-class rpc_lru_cache_map {
+class UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
  public:
   using key_type = TKey;
   using value_type = TObject;

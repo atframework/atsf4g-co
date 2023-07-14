@@ -1,6 +1,6 @@
 function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   set(optionArgs "STATIC;SHARED")
-  set(oneValueArgs INCLUDE_DIR OUTPUT_NAME OUTPUT_TARGET_NAME DLLEXPORT_DECL)
+  set(oneValueArgs INCLUDE_DIR OUTPUT_NAME OUTPUT_TARGET_NAME DLLEXPORT_DECL SHARED_LIBRARY_DECL NATIVE_CODE_DECL)
   set(multiValueArgs HRADERS SOURCES USE_COMPONENTS USE_SERVICE_SDK USE_SERVICE_PROTOCOL)
   cmake_parse_arguments(project_service_declare_sdk "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
@@ -32,11 +32,17 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
       project_tool_split_target_debug_sybmol(${TARGET_FULL_NAME})
       project_build_tools_set_shared_library_declaration(${project_service_declare_sdk_DLLEXPORT_DECL}
                                                          "${TARGET_FULL_NAME}")
+      if(project_service_declare_sdk_SHARED_LIBRARY_DECL)
+        target_compile_definitions(${TARGET_FULL_NAME} PUBLIC "${project_service_declare_sdk_SHARED_LIBRARY_DECL}=1")
+      endif()
     else()
       add_library(${TARGET_FULL_NAME} STATIC ${project_service_declare_sdk_HRADERS}
                                              ${project_service_declare_sdk_SOURCES})
       project_build_tools_set_static_library_declaration(${project_service_declare_sdk_DLLEXPORT_DECL}
                                                          "${TARGET_FULL_NAME}")
+    endif()
+    if(project_service_declare_sdk_NATIVE_CODE_DECL)
+      target_compile_definitions(${TARGET_FULL_NAME} PRIVATE "${project_service_declare_sdk_NATIVE_CODE_DECL}=1")
     endif()
     set_target_properties(${TARGET_FULL_NAME} PROPERTIES BUILD_RPATH_USE_ORIGIN YES)
     target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})

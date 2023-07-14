@@ -60,9 +60,20 @@ static_assert(std::is_trivial<db_async_data_t>::value,
               "buffer and will not call dtor fn");
 #endif
 
-db_msg_dispatcher::db_msg_dispatcher() : sequence_allocator_(0), tick_timer_(nullptr), tick_msg_count_(0) {}
+#if defined(DS_BATTLE_SDK_DLL) && DS_BATTLE_SDK_DLL
+#  if defined(DS_BATTLE_SDK_NATIVE) && DS_BATTLE_SDK_NATIVE
+UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(db_msg_dispatcher);
+#  else
+UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(db_msg_dispatcher);
+#  endif
+#else
+UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(db_msg_dispatcher);
+#endif
 
-db_msg_dispatcher::~db_msg_dispatcher() {
+SERVER_FRAME_API db_msg_dispatcher::db_msg_dispatcher()
+    : sequence_allocator_(0), tick_timer_(nullptr), tick_msg_count_(0) {}
+
+SERVER_FRAME_API db_msg_dispatcher::~db_msg_dispatcher() {
   if (nullptr != tick_timer_) {
     uv_timer_stop(tick_timer_);
     uv_close((uv_handle_t *)tick_timer_, _uv_close_and_free_callback);
@@ -70,7 +81,7 @@ db_msg_dispatcher::~db_msg_dispatcher() {
   }
 }
 
-int32_t db_msg_dispatcher::init() {
+SERVER_FRAME_API int32_t db_msg_dispatcher::init() {
   uv_loop_t *loop = uv_default_loop();
 
   if (nullptr == tick_timer_) {
@@ -112,9 +123,9 @@ int32_t db_msg_dispatcher::init() {
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-const char *db_msg_dispatcher::name() const { return "db_msg_dispatcher"; }
+SERVER_FRAME_API const char *db_msg_dispatcher::name() const { return "db_msg_dispatcher"; }
 
-int db_msg_dispatcher::tick() {
+SERVER_FRAME_API int db_msg_dispatcher::tick() {
   tick_msg_count_ = 0;
   int prev_count = -1;
 
@@ -127,7 +138,7 @@ int db_msg_dispatcher::tick() {
   return tick_msg_count_;
 }
 
-int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
+SERVER_FRAME_API int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
   assert(msg_buf_sz == sizeof(db_async_data_t));
   const db_async_data_t *req = reinterpret_cast<const db_async_data_t *>(msg_buf);
 
@@ -212,7 +223,7 @@ int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
   return ret;
 }
 
-uint64_t db_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
+SERVER_FRAME_API uint64_t db_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
   PROJECT_NAMESPACE_ID::table_all_message *real_msg =
       get_protobuf_msg<PROJECT_NAMESPACE_ID::table_all_message>(raw_msg);
   if (nullptr == real_msg) {
@@ -222,11 +233,11 @@ uint64_t db_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
   return real_msg->dst_task_id();
 }
 
-db_msg_dispatcher::msg_type_t db_msg_dispatcher::pick_msg_type_id(msg_raw_t &) { return 0; }
+SERVER_FRAME_API db_msg_dispatcher::msg_type_t db_msg_dispatcher::pick_msg_type_id(msg_raw_t &) { return 0; }
 
-const std::string &db_msg_dispatcher::pick_rpc_name(msg_raw_t &) { return get_empty_string(); }
+SERVER_FRAME_API const std::string &db_msg_dispatcher::pick_rpc_name(msg_raw_t &) { return get_empty_string(); }
 
-db_msg_dispatcher::msg_op_type_t db_msg_dispatcher::pick_msg_op_type(msg_raw_t &) {
+SERVER_FRAME_API db_msg_dispatcher::msg_op_type_t db_msg_dispatcher::pick_msg_op_type(msg_raw_t &) {
   return PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP;
 }
 
@@ -255,7 +266,7 @@ int db_msg_dispatcher::send_msg(channel_t::type t, const char *ks, size_t kl, ui
   return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
 }
 
-void *db_msg_dispatcher::get_cache_buffer(size_t len) {
+SERVER_FRAME_API void *db_msg_dispatcher::get_cache_buffer(size_t len) {
   if (pack_cache_.size() < len) {
     size_t sz = 1;
     while (sz < len) {
@@ -267,7 +278,7 @@ void *db_msg_dispatcher::get_cache_buffer(size_t len) {
   return &pack_cache_[0];
 }
 
-bool db_msg_dispatcher::is_available(channel_t::type t) const {
+SERVER_FRAME_API bool db_msg_dispatcher::is_available(channel_t::type t) const {
   if (t >= channel_t::RAW_DEFAULT && t < channel_t::RAW_BOUND) {
     return !!db_raw_conns_[t - channel_t::RAW_DEFAULT];
   } else {
@@ -275,7 +286,7 @@ bool db_msg_dispatcher::is_available(channel_t::type t) const {
   }
 }
 
-const std::string &db_msg_dispatcher::get_db_script_sha1(script_type type) const {
+SERVER_FRAME_API const std::string &db_msg_dispatcher::get_db_script_sha1(script_type type) const {
   if (type >= script_type::kMax) {
     return db_script_sha1_[0];
   }
@@ -283,7 +294,7 @@ const std::string &db_msg_dispatcher::get_db_script_sha1(script_type type) const
   return db_script_sha1_[static_cast<size_t>(type)];
 }
 
-void db_msg_dispatcher::set_db_script_sha1(script_type type, const char *str, int len) {
+SERVER_FRAME_API void db_msg_dispatcher::set_db_script_sha1(script_type type, const char *str, int len) {
   if (type >= script_type::kMax || type <= script_type::kInvalid) {
     return;
   }
@@ -291,7 +302,7 @@ void db_msg_dispatcher::set_db_script_sha1(script_type type, const char *str, in
   db_script_sha1_[static_cast<size_t>(type)].assign(str, len);
 }
 
-void db_msg_dispatcher::set_on_connected(channel_t::type t, user_callback_t fn) {
+SERVER_FRAME_API void db_msg_dispatcher::set_on_connected(channel_t::type t, user_callback_t fn) {
   if (t >= channel_t::MAX || t < 0) {
     return;
   }
@@ -303,7 +314,7 @@ void db_msg_dispatcher::log_debug_fn(const char *content) { WCLOGDEBUG(log_categ
 
 void db_msg_dispatcher::log_info_fn(const char *content) { WCLOGINFO(log_categorize_t::DB, "%s", content); }
 
-int db_msg_dispatcher::script_load(redisAsyncContext *c, script_type type) {
+SERVER_FRAME_API int db_msg_dispatcher::script_load(redisAsyncContext *c, script_type type) {
   // load lua script
   int status;
   std::string script;
@@ -682,4 +693,4 @@ int db_msg_dispatcher::raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-uint64_t db_msg_dispatcher::allocate_sequence() { return ++sequence_allocator_; }
+SERVER_FRAME_API uint64_t db_msg_dispatcher::allocate_sequence() { return ++sequence_allocator_; }
