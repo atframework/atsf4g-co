@@ -273,11 +273,7 @@ static void load_field_item(rapidjson::Value& parent, const ::google::protobuf::
           obj.SetObject();
 
           // 以后看需要是否优化
-          rapidjson::Value map_key;
           load_field_item(obj, data.Get(i, nullptr), map_key_fds, doc, options);
-          if (map_key.IsNull()) {
-            continue;
-          }
           load_field_item(obj, data.Get(i, nullptr), map_value_fds, doc, options);
           auto move_key_iter = obj.FindMember(map_key_fds->name().c_str());
           auto move_value_iter = obj.FindMember(map_value_fds->name().c_str());

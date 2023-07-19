@@ -212,7 +212,8 @@ static void opentelemetry_utility_protobuf_to_otel_attributes_message(
 }
 }  // namespace
 
-void opentelemetry_utility::protobuf_to_otel_attributes(const google::protobuf::Message& message,
-                                                        attributes_map_type& output, gsl::string_view key_prefix) {
+SERVER_FRAME_API void opentelemetry_utility::protobuf_to_otel_attributes(const google::protobuf::Message& message,
+                                                                         attributes_map_type& output,
+                                                                         gsl::string_view key_prefix) {
   opentelemetry_utility_protobuf_to_otel_attributes_message(message.GetReflection(), message, output, key_prefix);
 }

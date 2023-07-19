@@ -31,17 +31,9 @@ namespace rpc {
 
 namespace telemetry {
 
-trace_option::trace_option()
-    : dispatcher(nullptr),
-      kind(atframework::RpcTraceSpan::SPAN_KIND_INTERNAL),
-      is_remote(true),
-      parent_network_span(nullptr),
-      parent_memory_span(nullptr),
-      links(nullptr) {}
+SERVER_FRAME_API tracer::tracer() : result_(0), trace_span_(nullptr) {}
 
-tracer::tracer() : result_(0), trace_span_(nullptr) {}
-
-tracer::~tracer() {
+SERVER_FRAME_API tracer::~tracer() {
   if (trace_span_) {
     std::chrono::steady_clock::time_point end_steady_timepoint = std::chrono::steady_clock::now();
     opentelemetry::trace::EndSpanOptions end_options;
@@ -50,7 +42,7 @@ tracer::~tracer() {
   }
 }
 
-bool tracer::start(
+SERVER_FRAME_API bool tracer::start(
     string_view name, trace_option &&options,
     std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
         attributes) {
@@ -115,7 +107,7 @@ bool tracer::start(
   return !!trace_span_;
 }
 
-int tracer::return_code(int ret) {
+SERVER_FRAME_API int tracer::return_code(int ret) {
   result_ = ret;
   if (trace_span_) {
     switch (ret) {
@@ -139,7 +131,7 @@ int tracer::return_code(int ret) {
   return ret;
 }
 
-void tracer::update_trace_name(string_view name) {
+SERVER_FRAME_API void tracer::update_trace_name(string_view name) {
   if (trace_span_) {
     trace_span_->UpdateName(name);
   }

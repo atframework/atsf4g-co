@@ -4,7 +4,11 @@
 
 #pragma once
 
+#include <config/compile_optimize.h>
+
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <google/protobuf/timestamp.pb.h>
 
@@ -13,7 +17,9 @@
 #include <opentelemetry/trace/span.h>
 #include <opentelemetry/trace/tracer.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <stdint.h>
 #include <chrono>
@@ -29,7 +35,7 @@ namespace rpc {
 
 namespace telemetry {
 
-struct trace_option {
+struct UTIL_SYMBOL_VISIBLE trace_option {
   using string_view = opentelemetry::nostd::string_view;
   using span_ptr_type = opentelemetry::nostd::shared_ptr<opentelemetry::trace::Span>;
   using trace_id_span = opentelemetry::nostd::span<const uint8_t, opentelemetry::trace::TraceId::kSize>;
@@ -45,7 +51,13 @@ struct trace_option {
   span_ptr_type parent_memory_span;
   const links_type* links;
 
-  trace_option();
+  inline trace_option()
+      : dispatcher(nullptr),
+        kind(atframework::RpcTraceSpan::SPAN_KIND_INTERNAL),
+        is_remote(true),
+        parent_network_span(nullptr),
+        parent_memory_span(nullptr),
+        links(nullptr) {}
 };
 
 class tracer {
@@ -58,22 +70,23 @@ class tracer {
   using links_type = trace_option::links_type;
 
  public:
-  tracer();
-  ~tracer();
+  SERVER_FRAME_API tracer();
+  SERVER_FRAME_API ~tracer();
 
-  bool start(string_view name, trace_option&& options,
-             std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
-                 attributes = {});
-  int return_code(int ret);
+  SERVER_FRAME_API bool start(
+      string_view name, trace_option&& options,
+      std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
+          attributes = {});
+  SERVER_FRAME_API int return_code(int ret);
 
-  inline const tracer::span_ptr_type& get_trace_span() const { return trace_span_; }
+  UTIL_FORCEINLINE const tracer::span_ptr_type& get_trace_span() const { return trace_span_; }
 
   /**
    * @brief Set the trace name
    *
    * @param name
    */
-  void update_trace_name(string_view name);
+  SERVER_FRAME_API void update_trace_name(string_view name);
 
  private:
   friend class context;

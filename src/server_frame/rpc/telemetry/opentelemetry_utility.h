@@ -4,16 +4,21 @@
 
 #pragma once
 
+#include <config/compile_optimize.h>
 #include <config/server_frame_build_feature.h>
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <google/protobuf/message.h>
 
 #include <opentelemetry/common/attribute_value.h>
 #include <opentelemetry/sdk/common/attribute_utils.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <gsl/select-gsl.h>
 
@@ -25,7 +30,7 @@
 
 class opentelemetry_utility {
  public:
-  struct attributes_map_type {
+  struct UTIL_SYMBOL_VISIBLE attributes_map_type {
     using type = std::unordered_map<std::string, opentelemetry::common::AttributeValue>;
     using value_type = std::unordered_map<std::string, opentelemetry::sdk::common::OwnedAttributeValue>;
     using string_view_vec_type = std::vector<opentelemetry::nostd::string_view>;
@@ -38,6 +43,6 @@ class opentelemetry_utility {
   };
 
  public:
-  void protobuf_to_otel_attributes(const google::protobuf::Message& message, attributes_map_type& output,
+  SERVER_FRAME_API void protobuf_to_otel_attributes(const google::protobuf::Message& message, attributes_map_type& output,
                                    gsl::string_view key_prefix = "");
 };

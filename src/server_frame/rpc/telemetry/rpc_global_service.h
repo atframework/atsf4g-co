@@ -41,7 +41,7 @@ namespace rpc {
 
 namespace telemetry {
 
-struct meter_instrument_key {
+struct UTIL_SYMBOL_VISIBLE meter_instrument_key {
   opentelemetry::nostd::string_view name;
   opentelemetry::nostd::string_view description;
   opentelemetry::nostd::string_view unit;
@@ -54,9 +54,10 @@ struct meter_instrument_key {
 
 class global_service {
  public:
-  static const opentelemetry::sdk::common::AttributeMap& get_common_owned_attributes();
+  SERVER_FRAME_API static const opentelemetry::sdk::common::AttributeMap& get_common_owned_attributes();
 
-  static const std::unordered_map<std::string, opentelemetry::common::AttributeValue>& get_common_attributes();
+  SERVER_FRAME_API static const std::unordered_map<std::string, opentelemetry::common::AttributeValue>&
+  get_common_attributes();
 
   /**
    * @brief Get the metrics labels object
@@ -64,7 +65,8 @@ class global_service {
    *
    * @return * const std::unordered_map<std::string, opentelemetry::common::AttributeValue>&
    */
-  static const std::unordered_map<std::string, opentelemetry::common::AttributeValue>& get_metrics_labels();
+  SERVER_FRAME_API static const std::unordered_map<std::string, opentelemetry::common::AttributeValue>&
+  get_metrics_labels();
 
   /**
    * @brief Get the current trace exporter count
@@ -72,7 +74,7 @@ class global_service {
    *
    * @return current trace exporter count
    */
-  static size_t get_trace_exporter_count() noexcept;
+  SERVER_FRAME_API static size_t get_trace_exporter_count() noexcept;
 
   /**
    * @brief Get the current metrics exporter count
@@ -80,7 +82,7 @@ class global_service {
    *
    * @return current metrics exporter count
    */
-  static size_t get_metrics_exporter_count() noexcept;
+  SERVER_FRAME_API static size_t get_metrics_exporter_count() noexcept;
 
   /**
    * @brief Get the current logs exporter count
@@ -88,85 +90,70 @@ class global_service {
    *
    * @return current logs exporter count
    */
-  static size_t get_logs_exporter_count() noexcept;
+  SERVER_FRAME_API static size_t get_logs_exporter_count() noexcept;
 
   /**
    * @brief Get the current default tracer
    *
    * @return ::opentelemetry::nostd::shared_ptr<::opentelemetry::trace::Tracer>
    */
-  static opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> get_current_default_tracer();
+  SERVER_FRAME_API static opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> get_current_default_tracer();
 
   /**
    * @brief Get tracer
    *
    * @return ::opentelemetry::nostd::shared_ptr<::opentelemetry::trace::Tracer>
    */
-  static opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> get_tracer(
+  SERVER_FRAME_API static opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> get_tracer(
       opentelemetry::nostd::string_view library_name, opentelemetry::nostd::string_view library_version = "",
       opentelemetry::nostd::string_view schema_url = "");
 
-/**
- * @brief Get or create a counter
- *
- * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter>
- */
-#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
-  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<uint64_t>> mutable_metrics_counter_uint64(
-      opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
-#else
-  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<long>> mutable_metrics_counter_long(
-      opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
-#endif
+  /**
+   * @brief Get or create a counter
+   *
+   * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter>
+   */
+  SERVER_FRAME_API static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<uint64_t>>
+  mutable_metrics_counter_uint64(opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
 
   /**
    * @brief Get or create a double counter
    *
    * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter>
    */
-  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<double>> mutable_metrics_counter_double(
-      opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
+  SERVER_FRAME_API static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<double>>
+  mutable_metrics_counter_double(opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
 
-/**
- * @brief Get or create a histogram
- *
- * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram>
- */
-#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
-  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<uint64_t>> mutable_metrics_histogram_uint64(
-      opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
-#else
-  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<long>> mutable_metrics_histogram_long(
-      opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
-#endif
+  /**
+   * @brief Get or create a histogram
+   *
+   * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram>
+   */
+  SERVER_FRAME_API static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<uint64_t>>
+  mutable_metrics_histogram_uint64(opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
 
   /**
    * @brief Get or create a double histogram
    *
    * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram>
    */
-  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<double>> mutable_metrics_histogram_double(
-      opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
+  SERVER_FRAME_API static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<double>>
+  mutable_metrics_histogram_double(opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
 
-/**
- * @brief Get or create a up down counter
- *
- * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter>
- */
-#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
-  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<int64_t>>
+  /**
+   * @brief Get or create a up down counter
+   *
+   * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter>
+   */
+  SERVER_FRAME_API static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<int64_t>>
   mutable_metrics_up_down_counter_int64(opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
-#else
-  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<long>>
-  mutable_metrics_up_down_counter_long(opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
-#endif
 
   /**
    * @brief Get or create a double up down counter
    *
    * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter>
    */
-  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<double>>
+  SERVER_FRAME_API static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<double>>
   mutable_metrics_up_down_counter_double(opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
 
   /**
@@ -175,22 +162,17 @@ class global_service {
    *
    * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
    */
-  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument> get_metrics_observable(
-      opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
+  SERVER_FRAME_API static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+  get_metrics_observable(opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
 
-/**
- * @brief Get or create a observable counter
- * @note callback of observable instrument mey be called in a different thread
- *
- * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
- */
-#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
-  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+  /**
+   * @brief Get or create a observable counter
+   * @note callback of observable instrument mey be called in a different thread
+   *
+   * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+   */
+  SERVER_FRAME_API static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
   mutable_metrics_observable_counter_int64(opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
-#else
-  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
-  mutable_metrics_observable_counter_long(opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
-#endif
 
   /**
    * @brief Get or create a double observable counter
@@ -198,22 +180,17 @@ class global_service {
    *
    * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
    */
-  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+  SERVER_FRAME_API static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
   mutable_metrics_observable_counter_double(opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
 
-/**
- * @brief Get or create a long observable gauge
- * @note callback of observable instrument mey be called in a different thread
- *
- * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
- */
-#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
-  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+  /**
+   * @brief Get or create a long observable gauge
+   * @note callback of observable instrument mey be called in a different thread
+   *
+   * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+   */
+  SERVER_FRAME_API static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
   mutable_metrics_observable_gauge_int64(opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
-#else
-  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
-  mutable_metrics_observable_gauge_long(opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
-#endif
 
   /**
    * @brief Get or create a double observable gauge
@@ -221,24 +198,18 @@ class global_service {
    *
    * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
    */
-  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+  SERVER_FRAME_API static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
   mutable_metrics_observable_gauge_double(opentelemetry::nostd::string_view meter_name, meter_instrument_key key);
 
-/**
- * @brief Get or create a observable up down counter
- * @note callback of observable instrument mey be called in a different thread
- *
- * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
- */
-#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
-  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+  /**
+   * @brief Get or create a observable up down counter
+   * @note callback of observable instrument mey be called in a different thread
+   *
+   * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+   */
+  SERVER_FRAME_API static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
   mutable_metrics_observable_up_down_counter_int64(opentelemetry::nostd::string_view meter_name,
                                                    meter_instrument_key key);
-#else
-  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
-  mutable_metrics_observable_up_down_counter_long(opentelemetry::nostd::string_view meter_name,
-                                                  meter_instrument_key key);
-#endif
 
   /**
    * @brief Get or create a double observable up down counter
@@ -246,7 +217,7 @@ class global_service {
    *
    * @return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
    */
-  static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
+  SERVER_FRAME_API static opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>
   mutable_metrics_observable_up_down_counter_double(opentelemetry::nostd::string_view meter_name,
                                                     meter_instrument_key key);
 
@@ -255,14 +226,14 @@ class global_service {
    *
    * @return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>
    */
-  static opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> get_current_default_logger();
+  SERVER_FRAME_API static opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> get_current_default_logger();
 
   /**
    * @brief Get logger
    *
    * @return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>
    */
-  static opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> get_logger(
+  SERVER_FRAME_API static opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> get_logger(
       opentelemetry::nostd::string_view logger_name, opentelemetry::nostd::string_view library_name = "",
       opentelemetry::nostd::string_view library_version = "", opentelemetry::nostd::string_view schema_url = "");
 
@@ -271,7 +242,8 @@ class global_service {
    * @param app atapp instance
    * @param telemetry telemetry configure
    */
-  static void set_current_service(atapp::app& app, const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg& telemetry);
+  SERVER_FRAME_API static void set_current_service(atapp::app& app,
+                                                   const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg& telemetry);
 };
 
 }  // namespace telemetry
