@@ -40,9 +40,9 @@ task_action_auto_save_objects::task_action_auto_save_objects(ctor_param_t &&para
   status_data_->success_count_ = 0;
   status_data_->failed_count_ = 0;
   status_data_->start_timepooint_ = 0;
-  status_data_->action_remove_object_count;
-  status_data_->action_remove_cache_count;
-  status_data_->action_save_count;
+  status_data_->action_remove_object_count = 0;
+  status_data_->action_remove_cache_count = 0;
+  status_data_->action_save_count = 0;
 }
 
 task_action_auto_save_objects::~task_action_auto_save_objects() {}
@@ -54,9 +54,9 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
   status_data_->success_count_ = 0;
   status_data_->failed_count_ = 0;
   status_data_->start_timepooint_ = util::time::time_utility::get_sys_now();
-  status_data_->action_remove_object_count;
-  status_data_->action_remove_cache_count;
-  status_data_->action_save_count;
+  status_data_->action_remove_object_count = 0;
+  status_data_->action_remove_cache_count = 0;
+  status_data_->action_save_count = 0;
   uint64_t left_action_count = logic_config::me()->get_cfg_router().pending_action_max_count();
   uint64_t pending_action_batch_count = logic_config::me()->get_cfg_router().pending_action_batch_count();
   std::vector<task_type_trait::task_type> pending_action_batch_tasks;

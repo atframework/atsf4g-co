@@ -100,6 +100,7 @@ while getopts "ab:c:d:e:hltur:s-" OPTION; do
       if [[ $CMAKE_CLANG_ANALYZER -ne 0 ]]; then
         CCC_CC="$OPTARG"
         CCC_CXX="${CCC_CC/%clang/clang++}"
+        CCC_CXX="${CCC_CC/%clang++-cl/clang-cl}"
         CCC_CXX="${CCC_CXX/%gcc/g++}"
         export CCC_CC
         export CCC_CXX

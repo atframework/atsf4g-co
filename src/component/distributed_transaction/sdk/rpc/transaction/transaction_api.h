@@ -46,35 +46,35 @@ namespace transaction_api {
  * @see https://en.wikipedia.org/wiki/Consistency_model#Client-centric_consistency_models
  * @return future of 0 or error code
  */
-DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type initialize_new_transaction(
+EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type initialize_new_transaction(
     rpc::context& ctx, atframework::distributed_system::transaction_blob_storage& inout,
     const google::protobuf::Duration& timeout, uint32_t replication_read_count = 0,
     uint32_t replication_total_count = 0, bool memory_only = false, bool force_commit = false);
 
-DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type query_transaction(
+EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type query_transaction(
     rpc::context& ctx, const atframework::distributed_system::transaction_metadata& metadata,
     atframework::distributed_system::transaction_blob_storage& out);
 
-DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_transaction(
+EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type create_transaction(
     rpc::context& ctx, atframework::distributed_system::transaction_blob_storage& inout);
 
-DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type commit_transaction(
+EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type commit_transaction(
     rpc::context& ctx, atframework::distributed_system::transaction_metadata& inout);
 
-DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject_transaction(
+EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type reject_transaction(
     rpc::context& ctx, atframework::distributed_system::transaction_metadata& inout);
 
-DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_transaction_no_wait(
+EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type remove_transaction_no_wait(
     rpc::context& ctx, const atframework::distributed_system::transaction_metadata& metadata);
 
-DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_transaction(
+EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type remove_transaction(
     rpc::context& ctx, const atframework::distributed_system::transaction_metadata& metadata);
 
-DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type commit_participator(
+EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type commit_participator(
     rpc::context& ctx, const std::string& participator_key,
     atframework::distributed_system::transaction_metadata& inout);
 
-DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject_participator(
+EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type reject_participator(
     rpc::context& ctx, const std::string& participator_key,
     atframework::distributed_system::transaction_metadata& inout);
 

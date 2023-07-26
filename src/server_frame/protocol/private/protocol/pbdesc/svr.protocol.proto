@@ -105,6 +105,7 @@ service LogicCommonService {
       api_name: "设置服务器逻辑时间偏移"
       descriptions: "set server time offset"
       allow_no_wait: true
+      enable_broadcast: true
     };
   };
 }

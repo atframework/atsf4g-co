@@ -1383,6 +1383,15 @@ static opentelemetry::sdk::resource::ResourceAttributes _create_opentelemetry_ap
   // @see
   // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/resource/semantic_conventions/process.md
   app_info_cache.common_owned_attributes.SetAttribute("process.pid", atbus::node::get_pid());
+  {
+    if (!app.get_origin_configure().hostname().empty()) {
+      app_info_cache.common_owned_attributes.SetAttribute("host.name", app.get_origin_configure().hostname());
+      app_info_cache.metrics_attributes["host.name"] = app.get_origin_configure().hostname();
+    } else {
+      app_info_cache.common_owned_attributes.SetAttribute("host.name", atbus::node::get_hostname());
+      app_info_cache.metrics_attributes["host.name"] = atbus::node::get_hostname();
+    }
+  }
 
   // Other common resource should be set by configure generator
 
@@ -1488,8 +1497,8 @@ _opentelemetry_create_opentelemetry_logs_provider(
 
 }  // namespace
 
-SERVER_FRAME_API void global_service::set_current_service(atapp::app &app,
-                                         const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &telemetry) {
+SERVER_FRAME_API void global_service::set_current_service(
+    atapp::app &app, const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &telemetry) {
   std::shared_ptr<details::local_caller_info_t> app_info_cache = std::make_shared<details::local_caller_info_t>();
   if (!app_info_cache) {
     return;

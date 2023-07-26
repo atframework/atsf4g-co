@@ -42,6 +42,10 @@ class UTIL_SYMBOL_VISIBLE always_ready<void> {
  public:
   always_ready() {}
 
+#if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+  inline void _internal_set_awaited() noexcept {}
+#endif
+
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   bool await_ready() const noexcept { return true; }
   void await_suspend(LIBCOPP_MACRO_STD_COROUTINE_NAMESPACE coroutine_handle<>) const noexcept {}
@@ -56,6 +60,10 @@ class UTIL_SYMBOL_VISIBLE always_ready {
 
  public:
   always_ready(value_type&& input) : result_data_(std::move(input)) {}
+
+#if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+  inline void _internal_set_awaited() noexcept {}
+#endif
 
   UTIL_FORCEINLINE operator value_type() const noexcept { return result_data_; }
 

@@ -98,8 +98,30 @@ namespace rpc {
 namespace db {
 
 #if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
-result_type::result_type() {}
-result_type::result_type(int32_t code) : result_data_(code) {}
+result_type::result_type()
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+    : waited_(false)
+#  endif
+{
+}
+
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+result_type::~result_type() {
+  // rpc::result_XXX must be awaited with RPC_AWAIT_IGNORE_RESULT(...), RPC_AWAIT_IGNORE_VOID(...) or
+  // RPC_AWAIT_TYPE_RESULT(...)
+  assert(awaited_ || !result_data_.is_ready());
+}
+#  endif
+
+result_type::result_type(int32_t code)
+    : result_data_(code)
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+      ,
+      waited_(false)
+#  endif
+{
+}
+
 result_type::operator int32_t() const noexcept {
   if (!result_data_.is_ready()) {
     return 0;

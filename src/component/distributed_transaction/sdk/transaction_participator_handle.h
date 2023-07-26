@@ -120,7 +120,7 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    * @param writable output if it's writable now
    * @return future of 0 or error code
    */
-  DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type check_writable(rpc::context& ctx,
+EXPLICIT_NODISCARD_ATTR   DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type check_writable(rpc::context& ctx,
                                                                                                bool& writable);
 
   /**
@@ -135,7 +135,7 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    *
    * @return future of 0 or error code
    */
-  DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type prepare(
+EXPLICIT_NODISCARD_ATTR   DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type prepare(
       rpc::context& ctx, SSParticipatorTransactionPrepareReq&& request, SSParticipatorTransactionPrepareRsp& response,
       storage_ptr_type& output);
 
@@ -147,7 +147,7 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    *
    * @return future of 0 or error code
    */
-  DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type commit(
+EXPLICIT_NODISCARD_ATTR   DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type commit(
       rpc::context& ctx, const SSParticipatorTransactionCommitReq& request,
       SSParticipatorTransactionCommitRsp& response);
 
@@ -159,7 +159,7 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    *
    * @return future of 0 or error code
    */
-  DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject(
+EXPLICIT_NODISCARD_ATTR   DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type reject(
       rpc::context& ctx, const SSParticipatorTransactionRejectReq& request,
       SSParticipatorTransactionRejectRsp& response);
 
@@ -192,7 +192,7 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    *
    * @return future of 0 or error code
    */
-  DISTRIBUTED_TRANSACTION_SDK_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type lock(
+EXPLICIT_NODISCARD_ATTR   DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type lock(
       const storage_ptr_type& transaction_ptr, const google::protobuf::RepeatedPtrField<std::string>& resource_uuids);
 
   /**

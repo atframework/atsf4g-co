@@ -39,33 +39,33 @@ UTIL_SYMBOL_VISIBLE inline async_invoke_result make_async_invoke_error(TARGS &&.
   return async_invoke_result::make_error(std::forward<TARGS>(args)...);
 }
 
-SERVER_FRAME_API EXPLICIT_NODISCARD_ATTR async_invoke_result
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API async_invoke_result
 async_invoke(context &ctx, gsl::string_view name, std::function<result_code_type(context &)> fn,
              std::chrono::system_clock::duration timeout = std::chrono::system_clock::duration::zero());
 
 template <class TREP, class TPERIOD>
-UTIL_SYMBOL_VISIBLE EXPLICIT_NODISCARD_ATTR inline async_invoke_result async_invoke(
+EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE inline async_invoke_result async_invoke(
     context &ctx, gsl::string_view name, std::function<result_code_type(context &)> fn,
     std::chrono::duration<TREP, TPERIOD> timeout = std::chrono::duration<TREP, TPERIOD>::zero()) {
   return async_invoke(ctx, name, std::move(fn),
                       std::chrono::duration_cast<std::chrono::system_clock::duration>(timeout));
 }
 
-SERVER_FRAME_API EXPLICIT_NODISCARD_ATTR async_invoke_result
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API async_invoke_result
 async_invoke(gsl::string_view caller_name, gsl::string_view name, std::function<result_code_type(context &)> fn,
              std::chrono::system_clock::duration timeout = std::chrono::system_clock::duration::zero());
 
 template <class TREP, class TPERIOD>
-UTIL_SYMBOL_VISIBLE EXPLICIT_NODISCARD_ATTR inline async_invoke_result async_invoke(
+EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE inline async_invoke_result async_invoke(
     gsl::string_view caller_name, gsl::string_view name, std::function<result_code_type(context &)> fn,
     std::chrono::duration<TREP, TPERIOD> timeout = std::chrono::duration<TREP, TPERIOD>::zero()) {
   return async_invoke(caller_name, name, std::move(fn),
                       std::chrono::duration_cast<std::chrono::system_clock::duration>(timeout));
 }
 
-SERVER_FRAME_API EXPLICIT_NODISCARD_ATTR result_code_type wait_tasks(context &ctx, const std::vector<task_type_trait::task_type> &tasks);
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_code_type wait_tasks(context &ctx, const std::vector<task_type_trait::task_type> &tasks);
 
-SERVER_FRAME_API EXPLICIT_NODISCARD_ATTR result_code_type wait_task(context &ctx, const task_type_trait::task_type &other_task);
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_code_type wait_task(context &ctx, const task_type_trait::task_type &other_task);
 
 SERVER_FRAME_API void async_then_start_task(context &ctx, gsl::string_view name, task_type_trait::task_type waiting,
                            task_type_trait::id_type task_id);

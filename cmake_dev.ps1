@@ -251,8 +251,12 @@ if ($GeneratorToolset.Length -gt 0) {
 if ($Compiler.Length -gt 0) {
   $LastSearchGccIndex = $Compiler.LastIndexOf("gcc")
   $LastSearchClangIndex = $Compiler.LastIndexOf("clang")
+  $LastSearchClangClIndex = $Compiler.LastIndexOf("clang-cl")
   if ($LastSearchGccIndex -ge 0) {
     $CompilerCXX = $Compiler.Substring(0, $LastSearchGccIndex) + "g++" + $Compiler.Substring($LastSearchGccIndex + 3);
+  }
+  elseif ($LastSearchClangClIndex -ge 0) {
+    $CompilerCXX = $Compiler.Substring(0, $LastSearchClangIndex) + "clang-cl" + $Compiler.Substring($LastSearchClangIndex + 5);
   }
   elseif ($LastSearchClangIndex -ge 0) {
     $CompilerCXX = $Compiler.Substring(0, $LastSearchClangIndex) + "clang++" + $Compiler.Substring($LastSearchClangIndex + 5);

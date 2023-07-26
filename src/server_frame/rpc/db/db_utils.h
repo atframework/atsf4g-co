@@ -41,7 +41,19 @@ class result_type {
   result_type();
 
   template <class TINPUT>
-  result_type(rpc_result_guard<TINPUT>&& guard) : result_data_(guard.get()) {}
+  result_type(rpc_result_guard<TINPUT>&& guard)
+      : result_data_(guard.get()),
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+        ,
+        awaited_(false)
+#  endif
+  {
+  }
+
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+  ~result_type();
+  inline void _internal_set_awaited() noexcept { awaited_ = true; }
+#  endif
 
   explicit result_type(value_type code);
   explicit operator value_type() const noexcept;
@@ -53,6 +65,9 @@ class result_type {
 
  private:
   copp::future::poller<value_type> result_data_;
+  #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+  bool awaited_;
+#  endif
 };
 #endif
 

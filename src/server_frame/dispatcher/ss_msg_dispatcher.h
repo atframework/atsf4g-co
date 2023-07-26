@@ -27,12 +27,35 @@
 namespace atbus {
 namespace protocol {
 class msg;
-}
+}  // namespace protocol
 }  // namespace atbus
+
+namespace atapp {
+namespace protocol {
+class atapp_metadata;
+}  // namespace protocol
+}  // namespace atapp
 
 namespace atframework {
 class SSMsg;
 }
+
+struct UTIL_SYMBOL_VISIBLE ss_msg_logic_index {
+  uint64_t type_id;
+  gsl::string_view type_name;
+  uint64_t zone_id;
+
+  inline ss_msg_logic_index() noexcept : type_id(0), type_name(), zone_id(0) {}
+  inline ss_msg_logic_index(uint64_t input_type_id, uint64_t input_zone_id)
+      : type_id(input_type_id), type_name(), zone_id(input_zone_id) {}
+  inline ss_msg_logic_index(gsl::string_view input_type_name, uint64_t input_zone_id) noexcept
+      : type_id(0), type_name(input_type_name), zone_id(input_zone_id) {}
+
+  inline ss_msg_logic_index(const ss_msg_logic_index &) noexcept = default;
+  inline ss_msg_logic_index(ss_msg_logic_index &&) noexcept = default;
+  inline ss_msg_logic_index &operator=(const ss_msg_logic_index &) noexcept = default;
+  inline ss_msg_logic_index &operator=(ss_msg_logic_index &&) noexcept = default;
+};
 
 class ss_msg_dispatcher : public dispatcher_implement {
  public:
@@ -85,6 +108,8 @@ class ss_msg_dispatcher : public dispatcher_implement {
    */
   SERVER_FRAME_API const std::string &pick_rpc_name(msg_raw_t &raw_msg) override;
 
+  SERVER_FRAME_API const std::string &pick_rpc_name(const atframework::SSMsg &ss_msg);
+
   /**
    * @brief 获取操作类型
    * @param raw_msg 消息抽象结构
@@ -115,8 +140,8 @@ class ss_msg_dispatcher : public dispatcher_implement {
    * @param error_code error code
    * @return 0 or error code
    */
-  SERVER_FRAME_API int32_t on_receive_send_data_response(const atapp::app::message_sender_t &source, const atapp::app::message_t &msg,
-                                        int32_t error_code);
+  SERVER_FRAME_API int32_t on_receive_send_data_response(const atapp::app::message_sender_t &source,
+                                                         const atapp::app::message_t &msg, int32_t error_code);
 
   /**
    * @brief on create task failed
@@ -133,9 +158,25 @@ class ss_msg_dispatcher : public dispatcher_implement {
 
  public:
   SERVER_FRAME_API int32_t send_to_proc(uint64_t bus_id, atframework::SSMsg &ss_msg, bool ignore_discovery = false);
-  SERVER_FRAME_API int32_t send_to_proc(uint64_t bus_id, const void *msg_buf, size_t msg_len, bool ignore_discovery);
+  SERVER_FRAME_API int32_t send_to_proc(uint64_t bus_id, const void *msg_buf, size_t msg_len, uint64_t sequence,
+                                        bool ignore_discovery);
+  SERVER_FRAME_API int32_t send_to_proc(const atapp::etcd_discovery_node &node, atframework::SSMsg &ss_msg,
+                                        bool ignore_discovery = false);
+  SERVER_FRAME_API int32_t send_to_proc(const atapp::etcd_discovery_node &node, const void *msg_buf, size_t msg_len,
+                                        uint64_t sequence, bool ignore_discovery = false);
+
   SERVER_FRAME_API bool is_target_server_available(uint64_t bus_id) const;
   SERVER_FRAME_API bool is_target_server_available(const std::string &node_name) const;
+
+  /**
+   * @brief 广播消息
+   * @param ss_msg 要发送的消息
+   * @param index 逻辑索引
+   * @param metadata metadata匹配，传空为跳过这个筛选规则
+   * @return 所有成功返回0，否则返回第一个错误码
+   */
+  SERVER_FRAME_API int32_t broadcast(atframework::SSMsg &ss_msg, const ss_msg_logic_index &index,
+                                     ::atapp::protocol::atapp_metadata *metadata = nullptr);
 
  private:
   static void dns_lookup_callback(uv_getaddrinfo_t *req, int status, struct addrinfo *res) noexcept;

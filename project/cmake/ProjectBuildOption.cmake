@@ -131,7 +131,7 @@ include(EchoWithColor)
 # option(PROJECT_SERVER_FRAME_USE_STD_COROUTINE "Using C++20 Coroutine" OFF)
 cmake_dependent_option(PROJECT_SERVER_FRAME_USE_STD_COROUTINE "Using C++20 Coroutine" ON
                        "COMPILER_OPTIONS_TEST_STD_COROUTINE" OFF)
-option(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT ON)
+option(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT "Enable await checker for legacy coroutine" ON)
 
 # Set output PATH
 if(NOT PROJECT_INSTALL_BAS_DIR)

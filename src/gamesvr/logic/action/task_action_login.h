@@ -37,8 +37,8 @@ class task_action_login
   GAMECLIENT_RPC_API int on_failed() override;
 
  private:
-  GAMECLIENT_RPC_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type replace_session(std::shared_ptr<player> user);
-  GAMECLIENT_RPC_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(rpc::context& ctx,
+EXPLICIT_NODISCARD_ATTR   GAMECLIENT_RPC_API rpc::result_code_type replace_session(std::shared_ptr<player> user);
+EXPLICIT_NODISCARD_ATTR   GAMECLIENT_RPC_API rpc::result_code_type await_io_task(rpc::context& ctx,
                                                                                  std::shared_ptr<player> user);
 
  private:

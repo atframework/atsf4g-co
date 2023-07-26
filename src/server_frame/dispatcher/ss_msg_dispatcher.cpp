@@ -36,6 +36,8 @@
 #include <utility>
 #include <vector>
 
+#include "logic/logic_server_setup.h"
+
 #if defined(DS_BATTLE_SDK_DLL) && DS_BATTLE_SDK_DLL
 #  if defined(DS_BATTLE_SDK_NATIVE) && DS_BATTLE_SDK_NATIVE
 UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(ss_msg_dispatcher);
@@ -121,16 +123,20 @@ SERVER_FRAME_API const std::string &ss_msg_dispatcher::pick_rpc_name(msg_raw_t &
     return get_empty_string();
   }
 
-  if (!real_msg->has_head()) {
+  return pick_rpc_name(*real_msg);
+}
+
+SERVER_FRAME_API const std::string &ss_msg_dispatcher::pick_rpc_name(const atframework::SSMsg &ss_msg) {
+  if (!ss_msg.has_head()) {
     return get_empty_string();
   }
 
-  if (real_msg->head().has_rpc_request()) {
-    return real_msg->head().rpc_request().rpc_name();
+  if (ss_msg.head().has_rpc_request()) {
+    return ss_msg.head().rpc_request().rpc_name();
   }
 
-  if (real_msg->head().has_rpc_stream()) {
-    return real_msg->head().rpc_stream().rpc_name();
+  if (ss_msg.head().has_rpc_stream()) {
+    return ss_msg.head().rpc_stream().rpc_name();
   }
 
   return get_empty_string();
@@ -174,10 +180,11 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, atfram
   FWLOGDEBUG("send msg to proc [{:#x}: {}] {} bytes\n{}", bus_id, get_app()->convert_app_id_to_string(bus_id),
              msg_buf_len, protobuf_mini_dumper_get_readable(ss_msg));
 
-  return send_to_proc(bus_id, buf_start, msg_buf_len, ignore_discovery);
+  return send_to_proc(bus_id, buf_start, msg_buf_len, ss_msg.head().sequence(), ignore_discovery);
 }
 
 SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, const void *msg_buf, size_t msg_len,
+                                                         uint64_t sequence,
                                                          EXPLICIT_UNUSED_ATTR bool ignore_discovery) {
   atapp::app *owner = get_app();
   if (nullptr == owner) {
@@ -190,8 +197,11 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, const 
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
-  int res = owner->get_bus_node()->send_data(bus_id, atframe::component::message_type::EN_ATST_SS_MSG, msg_buf, msg_len,
-                                             false);
+  if (0 == sequence) {
+    sequence = owner->get_bus_node()->alloc_msg_seq();
+  }
+
+  int res = owner->send_message(bus_id, atframe::component::message_type::EN_ATST_SS_MSG, msg_buf, msg_len, &sequence);
 
   if (res < 0) {
     FWLOGERROR("send msg to proc [{:#x}: {}] {} bytes failed, res: {}", bus_id,
@@ -199,6 +209,58 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, const 
   } else {
     FWLOGDEBUG("send msg to proc [{:#x}: {}] {} bytes success", bus_id, get_app()->convert_app_id_to_string(bus_id),
                msg_len);
+  }
+
+  return res;
+}
+
+SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const atapp::etcd_discovery_node &node,
+                                                         atframework::SSMsg &ss_msg, bool ignore_discovery) {
+  if (node.get_discovery_info().id() != 0) {
+    return send_to_proc(node.get_discovery_info().id(), ss_msg, ignore_discovery);
+  }
+
+  if (0 == ss_msg.head().sequence()) {
+    ss_msg.mutable_head()->set_sequence(allocate_sequence());
+  }
+
+  size_t msg_buf_len = ss_msg.ByteSizeLong();
+  size_t tls_buf_len =
+      atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);
+  if (msg_buf_len > tls_buf_len) {
+    FWLOGERROR("send to proc {} failed: require {}, only have {}", node.get_discovery_info().name(), msg_buf_len,
+               tls_buf_len);
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
+  }
+
+  ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(
+      atframe::gateway::proto_base::get_tls_buffer(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM));
+  ss_msg.SerializeWithCachedSizesToArray(buf_start);
+  FWLOGDEBUG("send msg to proc {} {} bytes\n{}", node.get_discovery_info().name(), msg_buf_len,
+             protobuf_mini_dumper_get_readable(ss_msg));
+
+  return send_to_proc(node, buf_start, msg_buf_len, ss_msg.head().sequence(), ignore_discovery);
+}
+
+SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const atapp::etcd_discovery_node &node, const void *msg_buf,
+                                                         size_t msg_len, uint64_t sequence, bool ignore_discovery) {
+  if (node.get_discovery_info().id() != 0) {
+    return send_to_proc(node.get_discovery_info().id(), msg_buf, msg_len, sequence, ignore_discovery);
+  }
+
+  atapp::app *owner = get_app();
+  if (nullptr == owner) {
+    FWLOGERROR("module not attached to a atapp");
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
+  }
+
+  int res = owner->send_message(node.get_discovery_info().name(), atframe::component::message_type::EN_ATST_SS_MSG,
+                                msg_buf, msg_len, &sequence);
+  if (res < 0) {
+    FWLOGERROR("{} send msg to proc {} {} bytes failed, res: {}", name(), node.get_discovery_info().name(), msg_len,
+               res);
+  } else {
+    FWLOGDEBUG("{} send msg to proc {} {} bytes success", name(), node.get_discovery_info().name(), msg_len);
   }
 
   return res;
@@ -226,6 +288,92 @@ SERVER_FRAME_API bool ss_msg_dispatcher::is_target_server_available(const std::s
   }
 
   return !get_app()->get_discovery_node_by_name(node_name);
+}
+
+SERVER_FRAME_API int32_t ss_msg_dispatcher::broadcast(atframework::SSMsg &ss_msg, const ss_msg_logic_index &index,
+                                                      ::atapp::protocol::atapp_metadata *metadata) {
+  atapp::app *owner = get_app();
+  if (nullptr == owner) {
+    FWLOGERROR("module not attached to a atapp");
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
+  }
+
+  const atapp::etcd_discovery_set *discovery_set = nullptr;
+  atapp::etcd_discovery_set::ptr_t discovery_set_ptr_lifetime;
+  if (index.type_id == 0 && index.zone_id == 0 && index.type_name.empty()) {
+    discovery_set = &owner->get_global_discovery();
+  } else {
+    auto common_mod = logic_server_last_common_module();
+    if (nullptr == common_mod) {
+      FWLOGERROR("common module is required to broadcast");
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
+    }
+
+    if (index.type_id != 0 && index.zone_id != 0) {
+      discovery_set_ptr_lifetime = common_mod->get_discovery_index_by_type_zone(index.type_id, index.zone_id);
+    } else if (!index.type_name.empty() && index.zone_id != 0) {
+      discovery_set_ptr_lifetime =
+          common_mod->get_discovery_index_by_type_zone(static_cast<std::string>(index.type_name), index.zone_id);
+    } else if (index.type_id != 0) {
+      discovery_set_ptr_lifetime = common_mod->get_discovery_index_by_type(index.type_id);
+    } else if (index.zone_id != 0) {
+      discovery_set_ptr_lifetime = common_mod->get_discovery_index_by_zone(index.zone_id);
+    } else if (!index.type_name.empty()) {
+      discovery_set_ptr_lifetime = common_mod->get_discovery_index_by_type(static_cast<std::string>(index.type_name));
+    }
+    discovery_set = discovery_set_ptr_lifetime.get();
+  }
+
+  if (discovery_set == nullptr) {
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  }
+
+  if (discovery_set->empty()) {
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  }
+
+  auto &server_nodes = discovery_set->get_sorted_nodes(metadata);
+  if (server_nodes.empty()) {
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  }
+
+  if (0 == ss_msg.head().sequence()) {
+    ss_msg.mutable_head()->set_sequence(allocate_sequence());
+  }
+
+  size_t msg_buf_len = ss_msg.ByteSizeLong();
+  size_t tls_buf_len =
+      atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);
+  if (msg_buf_len > tls_buf_len) {
+    FWLOGERROR("broadcast message {} failed: require {}, only have {}", pick_rpc_name(ss_msg), msg_buf_len,
+               tls_buf_len);
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
+  }
+
+  ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(
+      atframe::gateway::proto_base::get_tls_buffer(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM));
+  ss_msg.SerializeWithCachedSizesToArray(buf_start);
+  FWLOGDEBUG("broadcast message {} to {} nodes with {} bytes\n{}", pick_rpc_name(ss_msg), server_nodes.size(),
+             msg_buf_len, protobuf_mini_dumper_get_readable(ss_msg));
+
+  int ret = 0;
+  for (auto &server_node : server_nodes) {
+    if (!server_node) {
+      continue;
+    }
+
+    int32_t res = send_to_proc(*server_node, buf_start, msg_buf_len, ss_msg.head().sequence(), false);
+    if (res < 0) {
+      if (ret >= 0) {
+        ret = res;
+      }
+      FWLOGERROR("broadcast message {} and send {} bytes to {}[{}] failed, error code: {}({})", pick_rpc_name(ss_msg),
+                 msg_buf_len, server_node->get_discovery_info().name(), server_node->get_discovery_info().id(), res,
+                 protobuf_mini_dumper_get_error_msg(res));
+    }
+  }
+
+  return ret;
 }
 
 SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source,

@@ -51,7 +51,7 @@ class player_manager {
    * @param user user指针
    * @param force_kickoff 强制移除，不进入离线缓存
    */
-  SERVER_FRAME_CONFIG_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove(rpc::context &ctx, player_ptr_t user,
+EXPLICIT_NODISCARD_ATTR   SERVER_FRAME_CONFIG_API rpc::result_code_type remove(rpc::context &ctx, player_ptr_t user,
                                                                                bool force_kickoff = false);
 
   /**
@@ -60,7 +60,7 @@ class player_manager {
    * @param zone_id zone_id
    * @param force_kickoff 强制移除，不进入离线缓存
    */
-  SERVER_FRAME_CONFIG_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove(rpc::context &ctx, uint64_t user_id,
+EXPLICIT_NODISCARD_ATTR   SERVER_FRAME_CONFIG_API rpc::result_code_type remove(rpc::context &ctx, uint64_t user_id,
                                                                                uint32_t zone_id,
                                                                                bool force_kickoff = false,
                                                                                player_cache *check_user = nullptr);
@@ -86,7 +86,7 @@ class player_manager {
    * @brief 保存用户数据
    * @param user_id user_id
    */
-  SERVER_FRAME_CONFIG_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type save(rpc::context &ctx, uint64_t user_id,
+EXPLICIT_NODISCARD_ATTR   SERVER_FRAME_CONFIG_API rpc::result_code_type save(rpc::context &ctx, uint64_t user_id,
                                                                              uint32_t zone_id,
                                                                              const player_cache *check_user = nullptr);
 
@@ -106,17 +106,17 @@ class player_manager {
    * @param user_id
    * @return null 或者 user指针
    */
-  SERVER_FRAME_CONFIG_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type load(rpc::context &ctx, uint64_t user_id,
+EXPLICIT_NODISCARD_ATTR   SERVER_FRAME_CONFIG_API rpc::result_code_type load(rpc::context &ctx, uint64_t user_id,
                                                                              uint32_t zone_id, player_ptr_t &output,
                                                                              bool force = false);
 
   SERVER_FRAME_CONFIG_API size_t size() const;
 
-  SERVER_FRAME_CONFIG_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type create(
+EXPLICIT_NODISCARD_ATTR   SERVER_FRAME_CONFIG_API rpc::result_code_type create(
       rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const std::string &openid,
       PROJECT_NAMESPACE_ID::table_login &login_tb, std::string &login_ver, player_ptr_t &output);
   template <typename TPLAYER>
-  UTIL_SYMBOL_VISIBLE EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_as(
+  EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE rpc::result_code_type create_as(
       rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const std::string &openid,
       PROJECT_NAMESPACE_ID::table_login &login_tb, std::string &login_ver, std::shared_ptr<TPLAYER> &output) {
     player_ptr_t output_base;

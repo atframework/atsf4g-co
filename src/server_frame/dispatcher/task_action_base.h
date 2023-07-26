@@ -50,6 +50,10 @@ class task_action_result_type {
                                                                std::true_type, std::false_type>::type {};
 
  public:
+ #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+  inline void _internal_set_awaited() noexcept { }
+#  endif
+
   explicit inline task_action_result_type(value_type code) : result_code_(code) {}
   inline task_action_result_type(const task_action_result_type &) = default;
   inline task_action_result_type(task_action_result_type &&) = default;

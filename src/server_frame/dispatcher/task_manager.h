@@ -451,8 +451,7 @@ class task_manager {
    * @return 0或错误码
    */
   template <typename TAction, typename TParams>
-  UTIL_SYMBOL_VISIBLE UTIL_FORCEINLINE int create_task_with_timeout(task_type_trait::id_type &task_id,
-                                                                    time_t timeout_sec, TParams &&args) {
+  UTIL_FORCEINLINE int create_task_with_timeout(task_type_trait::id_type &task_id, time_t timeout_sec, TParams &&args) {
     return create_task_with_timeout<TAction>(task_id, timeout_sec, 0, std::forward<TParams>(args));
   }
 
@@ -461,8 +460,7 @@ class task_manager {
    * @return 任务构造器
    */
   template <typename TAction>
-  UTIL_SYMBOL_VISIBLE UTIL_FORCEINLINE task_action_creator_t
-  make_task_creator(const atframework::DispatcherOptions *opt) {
+  UTIL_FORCEINLINE task_action_creator_t make_task_creator(const atframework::DispatcherOptions *opt) {
     return std::make_shared<task_action_maker_t<TAction>>(opt);
   }
 
