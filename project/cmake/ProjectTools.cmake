@@ -36,6 +36,11 @@ if(COMPILER_STRICT_RECOMMEND_REMOVE_CFLAGS)
   list(REMOVE_ITEM PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS ${COMPILER_STRICT_RECOMMEND_REMOVE_CFLAGS})
 endif()
 
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+  add_compiler_flags_to_inherit_var_unique(CMAKE_CXX_FLAGS "-pipe")
+  add_compiler_flags_to_inherit_var_unique(CMAKE_C_FLAGS "-pipe")
+endif()
+
 if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
   add_compiler_flags_to_inherit_var(CMAKE_CXX_FLAGS "-Wframe-larger-than=131072")
   if(PROJECT_ENABLE_SPLIT_DEBUG_INFORMATION
