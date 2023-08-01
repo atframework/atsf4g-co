@@ -25,7 +25,6 @@ def rpc_return_always_ready_code_sentense(input):
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
-#include <protocol/pbdesc/svr.local.table.pb.h>
 #include <protocol/pbdesc/svr.protocol.pb.h>
 % if include_headers:
 %   for include_header in include_headers:
@@ -36,6 +35,8 @@ def rpc_return_always_ready_code_sentense(input):
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
+
+#include <atframe/etcdcli/etcd_discovery.h>
 
 #include <config/logic_config.h>
 #include <config/server_frame_build_feature.h>
@@ -58,9 +59,12 @@ rpc_common_codes_enable_redirect_warning_log = False
 rpc_common_codes_enable_wait_response = False
 rpc_common_codes_enable_stream_header = False
 rpc_common_codes_enable_request_header = False
+rpc_common_codes_has_no_router_rpc = False
 rpc_common_codes_enable_common = len(rpcs.values()) > 0
 
 for rpc in rpcs.values():
+    if not rpc_common_codes_has_no_router_rpc and not rpc.get_extension_field('atframework.rpc_options', lambda x: x.router_rpc, False):
+        rpc_common_codes_has_no_router_rpc = True
     if not rpc_common_codes_enable_wait_response and not rpc.is_request_stream() and not rpc.is_response_stream():
         rpc_common_codes_enable_wait_response = True
     
@@ -82,8 +86,18 @@ for rpc in rpcs.values():
             rpc_common_codes_enable_request_header = True
 %>namespace details {
 % if rpc_common_codes_enable_common:
+%   if rpc_common_codes_has_no_router_rpc:
+UTIL_FORCEINLINE static bool __is_invalid_server_node(const atapp::etcd_discovery_node& destination_server) {
+  return destination_server.get_discovery_info().id() == 0 || destination_server.get_discovery_info().name().empty();
+}
+
+UTIL_FORCEINLINE static bool __is_invalid_server_node(uint64_t destination_server) {
+  return destination_server == 0;
+}
+%   endif
+
 template<class TBodyType>
-static inline int __pack_rpc_body(TBodyType &&input, std::string *output, gsl::string_view rpc_full_name,
+inline static int __pack_rpc_body(TBodyType &&input, std::string *output, gsl::string_view rpc_full_name,
                                 const std::string &type_full_name) {
   if (false == input.SerializeToString(output)) {
     FWLOGERROR("rpc {} serialize message {} failed, msg: {}", rpc_full_name, type_full_name,
@@ -97,7 +111,7 @@ static inline int __pack_rpc_body(TBodyType &&input, std::string *output, gsl::s
 }
 
 template<class TBodyType>
-static inline int __unpack_rpc_body(TBodyType &&output, const std::string& input,
+inline static int __unpack_rpc_body(TBodyType &&output, const std::string& input,
                                 gsl::string_view rpc_full_name,
                                 const std::string &type_full_name) {
   if (false == output.ParseFromString(input)) {
@@ -111,7 +125,7 @@ static inline int __unpack_rpc_body(TBodyType &&output, const std::string& input
   }
 }
 
-static inline rpc::context::tracer::span_ptr_type __setup_tracer(rpc::context &__child_ctx,
+inline static rpc::context::tracer::span_ptr_type __setup_tracer(rpc::context &__child_ctx,
                                   rpc::context::tracer &__tracer, atframework::SSMsgHead &head,
                                   gsl::string_view rpc_full_name, gsl::string_view service_full_name) {
   rpc::context::trace_option __trace_option;
@@ -148,7 +162,7 @@ static inline rpc::context::tracer::span_ptr_type __setup_tracer(rpc::context &_
 
 % endif
 % if rpc_common_codes_enable_stream_header:
-static inline int __setup_rpc_stream_header(atframework::SSMsgHead &head, gsl::string_view rpc_full_name,
+inline static int __setup_rpc_stream_header(atframework::SSMsgHead &head, gsl::string_view rpc_full_name,
                                             const std::string &type_full_name) {
   head.set_op_type(${project_namespace}::EN_MSG_OP_TYPE_STREAM);
   atframework::RpcStreamMeta* stream_meta = head.mutable_rpc_stream();
@@ -165,7 +179,7 @@ static inline int __setup_rpc_stream_header(atframework::SSMsgHead &head, gsl::s
 }
 % endif
 % if rpc_common_codes_enable_request_header:
-static inline int __setup_rpc_request_header(atframework::SSMsgHead &head, task_type_trait::id_type task_id,
+inline static int __setup_rpc_request_header(atframework::SSMsgHead &head, task_type_trait::id_type task_id,
                                              gsl::string_view rpc_full_name, const std::string &type_full_name) {
   head.set_src_task_id(task_id);
   head.set_op_type(${project_namespace}::EN_MSG_OP_TYPE_UNARY_REQUEST);
@@ -184,7 +198,7 @@ static inline int __setup_rpc_request_header(atframework::SSMsgHead &head, task_
 % endif
 % if rpc_common_codes_enable_redirect_info_log:
 template<class TCode, class TConvertList>
-static inline bool __redirect_rpc_result_to_info_log(TCode &origin_result, TConvertList&& convert_list, 
+inline static bool __redirect_rpc_result_to_info_log(TCode &origin_result, TConvertList&& convert_list, 
                                         gsl::string_view rpc_full_name, const std::string &type_full_name) {
   for (auto& check: convert_list) {
     if (origin_result == check) {
@@ -201,7 +215,7 @@ static inline bool __redirect_rpc_result_to_info_log(TCode &origin_result, TConv
 % endif
 % if rpc_common_codes_enable_redirect_warning_log:
 template<class TCode, class TConvertList>
-static inline bool __redirect_rpc_result_to_warning_log(TCode &origin_result, TConvertList&& convert_list, 
+inline static bool __redirect_rpc_result_to_warning_log(TCode &origin_result, TConvertList&& convert_list, 
                                         gsl::string_view rpc_full_name, const std::string &type_full_name) {
   for (auto& check: convert_list) {
     if (origin_result == check) {
@@ -218,7 +232,7 @@ static inline bool __redirect_rpc_result_to_warning_log(TCode &origin_result, TC
 % endif
 % if rpc_common_codes_enable_wait_response:
 template<class TResponseBody>
-static inline rpc::result_code_type __rpc_wait_and_unpack_response(rpc::context &__ctx, TResponseBody &response_body,
+inline static rpc::result_code_type __rpc_wait_and_unpack_response(rpc::context &__ctx, TResponseBody &response_body,
                                             gsl::string_view rpc_full_name, const std::string &type_full_name,
                                             dispatcher_await_options& await_options) {
   atframework::SSMsg* rsp_msg_ptr = __ctx.create<atframework::SSMsg>();
@@ -274,8 +288,8 @@ ${ns}
         rpc_unicast_params_decl.extend(['uint32_t type_id', 'uint32_t zone_id', 'uint64_t object_id'])
         rpc_unicast_params_forward.extend(['type_id', 'zone_id', 'object_id'])
     else:
-        rpc_unicast_params_decl.append('uint64_t destination_server_id')
-        rpc_unicast_params_forward.append('destination_server_id')
+        rpc_unicast_params_decl.append('TargetServerNode&& destination_server')
+        rpc_unicast_params_forward.append('destination_server')
         if rpc_is_user_rpc:
             rpc_unicast_params_decl.extend(['uint32_t zone_id', 'uint64_t user_id', "const std::string& open_id"])
             rpc_unicast_params_forward.extend(['zone_id', 'user_id', "open_id"])
@@ -301,6 +315,15 @@ ${ns}
     else:
         rpc_return_type = 'rpc::result_code_type'
         rpc_return_sentense = rpc_return_result_code_sentense
+    rpc_unicast_params_decl_modern = []
+    rpc_unicast_params_decl_legacy = []
+    for param in rpc_unicast_params_decl:
+        if 'TargetServerNode&& destination_server' == param:
+            rpc_unicast_params_decl_modern.append('const atapp::etcd_discovery_node& destination_server')
+            rpc_unicast_params_decl_legacy.append('uint64_t destination_server')
+        else:
+            rpc_unicast_params_decl_modern.append(param)
+            rpc_unicast_params_decl_legacy.append(param)
 %>
 // ============ ${rpc.get_full_name()} ============
 namespace packer {
@@ -333,7 +356,7 @@ ${rpc_dllexport_decl} bool unpack_${rpc.get_name()}(const std::string& input, ${
 }  // namespace packer
 % if rpc.get_extension_field('atframework.rpc_options', lambda x: x.enable_broadcast, False):
 namespace broadcast {
-EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
+${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
     ${', '.join(rpc_broadcast_params_decl)},
     const ss_msg_logic_index& index, ::atapp::protocol::atapp_metadata *metadata) {
   atframework::SSMsg* req_msg_ptr = __ctx.create<atframework::SSMsg>();
@@ -412,13 +435,20 @@ EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name(
 }  // namespace broadcast
 % endif
 namespace unicast {
-${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_unicast_params_decl)}) {
+%   if rpc_is_router_api:
+static ${rpc_return_type} __${rpc.get_name()}(
+  ${', '.join(rpc_unicast_params_decl_modern)}) {
+%   else:
+template<class TargetServerNode>
+static ${rpc_return_type} __${rpc.get_name()}(
+  ${', '.join(rpc_unicast_params_decl)}) {
+%   endif
 %   if rpc_is_router_api:
   if (object_id == 0 || type_id == 0) {
     ${rpc_return_sentense(project_namespace + '::err::EN_SYS_PARAM')}
   }
 %   else:
-  if (destination_server_id == 0) {
+  if (details::__is_invalid_server_node(destination_server)) {
     ${rpc_return_sentense(project_namespace + '::err::EN_SYS_PARAM')}
   }
 %   endif
@@ -526,9 +556,9 @@ ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_unicast_params_decl)}) {
   res = RPC_AWAIT_CODE_RESULT(router_manager->send_msg(__ctx, router_key, std::move(req_msg), rpc_sequence));
 %   else:
 %     if rpc_allow_ignore_discovery:
-  res = ss_msg_dispatcher::me()->send_to_proc(destination_server_id, req_msg, __ignore_discovery);
+  res = ss_msg_dispatcher::me()->send_to_proc(destination_server, req_msg, __ignore_discovery);
 %     else:
-  res = ss_msg_dispatcher::me()->send_to_proc(destination_server_id, req_msg);
+  res = ss_msg_dispatcher::me()->send_to_proc(destination_server, req_msg);
 %     endif
 %   endif
 %   if rpc_is_stream_mode:
@@ -616,13 +646,23 @@ ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_unicast_params_decl)}) {
   ${rpc_return_sentense('__tracer.return_code(res)')}
 %   endif
 }
+
+${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
+  ${', '.join(rpc_unicast_params_decl_modern)}) {
+%   if not rpc_is_router_api and rpc_is_stream_mode:
+  return __${rpc.get_name()}(${', '.join(rpc_unicast_params_forward)});
+%   else:
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(__${rpc.get_name()}(${', '.join(rpc_unicast_params_forward)})));
+%   endif
+}
 }  // namespace unicast
 
-${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_unicast_params_decl)}) {
+${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
+  ${', '.join(rpc_unicast_params_decl_legacy)}) {
 %   if not rpc_is_router_api and rpc_is_stream_mode:
-  return unicast::${rpc.get_name()}(${', '.join(rpc_unicast_params_forward)});
+  return unicast::__${rpc.get_name()}(${', '.join(rpc_unicast_params_forward)});
 %   else:
-  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(unicast::${rpc.get_name()}(${', '.join(rpc_unicast_params_forward)})));
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(unicast::__${rpc.get_name()}(${', '.join(rpc_unicast_params_forward)})));
 %   endif
 }
 

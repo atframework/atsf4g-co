@@ -81,32 +81,27 @@ def add_package_prefix_paths(packag_paths):
     """See https://docs.python.org/3/install/#how-installation-works"""
     append_paths = []
     for path in packag_paths:
-        add_package_bin_path = os.path.join(path, "bin")
-        if os.path.exists(add_package_bin_path):
-            if sys.platform.lower() == "win32":
-                os.environ[
-                    "PATH"] = add_package_bin_path + ";" + os.environ["PATH"]
-            else:
-                os.environ[
-                    "PATH"] = add_package_bin_path + ":" + os.environ["PATH"]
+        for add_package_bin_path in [
+            os.path.join(path, "bin"),
+            os.path.join(path, "local", "bin")
+        ]:
+            if os.path.exists(add_package_bin_path):
+                if sys.platform.lower() == "win32":
+                    os.environ[
+                        "PATH"] = add_package_bin_path + ";" + os.environ["PATH"]
+                else:
+                    os.environ[
+                        "PATH"] = add_package_bin_path + ":" + os.environ["PATH"]
 
-        add_package_lib_path = os.path.join(
-            path,
-            "lib",
-            "python{0}".format(sysconfig.get_python_version()),
-            "site-packages",
-        )
-        if os.path.exists(add_package_lib_path):
-            append_paths.append(add_package_lib_path)
-
-        add_package_lib64_path = os.path.join(
-            path,
-            "lib64",
-            "python{0}".format(sysconfig.get_python_version()),
-            "site-packages",
-        )
-        if os.path.exists(add_package_lib64_path):
-            append_paths.append(add_package_lib64_path)
+        python_version_path = "python{0}".format(sysconfig.get_python_version())
+        for add_package_lib_path in [
+            os.path.join(path, "lib", python_version_path, "site-packages"),
+            os.path.join(path, "local", "lib", python_version_path, "site-packages"),
+            os.path.join(path, "lib64", python_version_path, "site-packages"),
+            os.path.join(path, "local", "lib64", python_version_path, "site-packages"),
+        ]:
+            if os.path.exists(add_package_lib_path):
+                append_paths.append(add_package_lib_path)
 
         add_package_lib_path_for_win = os.path.join(path, "Lib",
                                                     "site-packages")

@@ -29,6 +29,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 #include <stdint.h>
 #include <cstddef>
 #include <cstring>
+#include <memory>
 #include <string>
 
 #include "rpc/rpc_common_types.h"
@@ -41,6 +42,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 struct ss_msg_logic_index;
 
 namespace atapp {
+class etcd_discovery_node;
 namespace protocol {
 class atapp_metadata;
 }  // namespace protocol
@@ -69,8 +71,8 @@ ${ns}
             'object_id           router object instance id'
         ])
     else:
-        rpc_unicast_params_decl.append('uint64_t destination_server_id')
-        rpc_unicast_params_docs.append('destination_server_id     target server bus id')
+        rpc_unicast_params_decl.append('const atapp::etcd_discovery_node& destination_server')
+        rpc_unicast_params_docs.append('destination_server  target server')
         if rpc_is_user_rpc:
             rpc_unicast_params_decl.extend(['uint32_t zone_id', 'uint64_t user_id', "const std::string& open_id"])
             rpc_unicast_params_docs.extend([
@@ -105,6 +107,12 @@ ${ns}
         rpc_return_type = 'rpc::always_ready_code_type'
     else:
         rpc_return_type = 'rpc::result_code_type'
+    rpc_unicast_params_decl_legacy = []
+    for param in rpc_unicast_params_decl:
+        if 'const atapp::etcd_discovery_node& destination_server' == param:
+            rpc_unicast_params_decl_legacy.append('uint64_t destination_server_id')
+        else:
+            rpc_unicast_params_decl_legacy.append(param)
 %>
 // ============ ${rpc.get_full_name()} ============
 namespace packer {
@@ -129,7 +137,8 @@ namespace broadcast {
 %   endfor
  * @return 0 or error code
  */
-EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
+EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type}
+  ${rpc.get_name()}(
     ${', '.join(rpc_broadcast_params_decl)},
     const ss_msg_logic_index& index, ::atapp::protocol::atapp_metadata *metadata = nullptr);
 }  // namespace broadcast
@@ -146,7 +155,9 @@ namespace unicast {
 %   endfor
  * @return 0 or error code
  */
-EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_unicast_params_decl)});
+EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type}
+  ${rpc.get_name()}(
+    ${', '.join(rpc_unicast_params_decl)});
 }  // namespace unicast
 
 /**
@@ -159,7 +170,9 @@ EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name(
 %   endfor
  * @return 0 or error code
  */
-EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_unicast_params_decl)});
+EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type}
+  ${rpc.get_name()}(
+    ${', '.join(rpc_unicast_params_decl_legacy)});
 % endfor
 % for ns in service.get_cpp_namespace_end(module_name, ''):
 ${ns}

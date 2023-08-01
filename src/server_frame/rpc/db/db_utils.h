@@ -51,6 +51,9 @@ class result_type {
   }
 
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+  result_type(result_type&&) = default;
+  result_type& operator=(result_type&&) = default;
+
   ~result_type();
   inline void _internal_set_awaited() noexcept { awaited_ = true; }
 #  endif
@@ -65,7 +68,7 @@ class result_type {
 
  private:
   copp::future::poller<value_type> result_data_;
-  #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
   bool awaited_;
 #  endif
 };
