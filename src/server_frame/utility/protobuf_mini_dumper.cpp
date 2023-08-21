@@ -12,16 +12,16 @@
 #include <config/compiler/protobuf_suffix.h>
 
 #include <common/string_oprs.h>
+#include <log/log_wrapper.h>
 
 #include <config/server_frame_build_feature.h>
 
 #include <sstream>
 
-#include "utility/environment_helper.h"
-
 #define MSG_DISPATCHER_DEBUG_PRINT_BOUND 4096
 
-const char *protobuf_mini_dumper_get_readable(const ::google::protobuf::Message &msg, uint8_t idx) {
+SERVER_FRAME_API gsl::string_view protobuf_mini_dumper_get_readable(const ::google::protobuf::Message &msg,
+                                                                    uint8_t idx) {
   //    static char msg_buffer[MSG_DISPATCHER_DEBUG_PRINT_BOUND] = {0};
   static std::string debug_string[256];
 
@@ -71,10 +71,10 @@ static std::string build_error_code_msg(const ::google::protobuf::EnumValueDescr
   return ss.str();
 }
 
-const char *protobuf_mini_dumper_get_error_msg(int error_code) {
+SERVER_FRAME_API gsl::string_view protobuf_mini_dumper_get_error_msg(int error_code) {
   const char *ret = "Unknown Error Code";
 
-  using error_code_desc_map_t = UTIL_ENV_AUTO_MAP(int, std::string);
+  using error_code_desc_map_t = std::unordered_map<int, std::string>;
   static error_code_desc_map_t cs_error_desc;
   static error_code_desc_map_t ss_error_desc;
 
@@ -110,8 +110,9 @@ const char *protobuf_mini_dumper_get_error_msg(int error_code) {
   return ret;
 }
 
-std::string protobuf_mini_dumper_get_error_msg(int error_code, const ::google::protobuf::EnumDescriptor *enum_desc,
-                                               bool fallback_common_errmsg) {
+SERVER_FRAME_API std::string protobuf_mini_dumper_get_error_msg(int error_code,
+                                                                const ::google::protobuf::EnumDescriptor *enum_desc,
+                                                                bool fallback_common_errmsg) {
   const ::google::protobuf::EnumValueDescriptor *desc = nullptr;
   if (nullptr != enum_desc) {
     desc = enum_desc->FindValueByNumber(error_code);
@@ -121,10 +122,25 @@ std::string protobuf_mini_dumper_get_error_msg(int error_code, const ::google::p
   }
 
   if (fallback_common_errmsg) {
-    return protobuf_mini_dumper_get_error_msg(error_code);
+    return static_cast<std::string>(protobuf_mini_dumper_get_error_msg(error_code));
   }
 
   std::stringstream ss;
   ss << "UNKNOWN(" << error_code << ")";
   return ss.str();
+}
+
+SERVER_FRAME_API gsl::string_view protobuf_mini_dumper_get_enum_name(
+    int32_t error_code, const ::google::protobuf::EnumDescriptor *enum_desc) {
+  const ::google::protobuf::EnumValueDescriptor *desc = nullptr;
+  if (nullptr != enum_desc) {
+    desc = enum_desc->FindValueByNumber(error_code);
+  }
+  if (nullptr != desc) {
+    return desc->full_name();
+  }
+
+  static char shared_buffer[40] = {0};
+  util::log::format_to_n(shared_buffer, sizeof(shared_buffer) - 1, "UNKNOWN({})", error_code);
+  return shared_buffer;
 }

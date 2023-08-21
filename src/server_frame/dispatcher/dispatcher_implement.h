@@ -28,7 +28,6 @@
 #include <atframe/atapp_module_impl.h>
 #include <libatbus_protocol.h>
 
-#include <utility/environment_helper.h>
 #include <utility/protobuf_mini_dumper.h>
 
 #include <list>

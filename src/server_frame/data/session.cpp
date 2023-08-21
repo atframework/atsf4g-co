@@ -16,7 +16,6 @@
 #include <dispatcher/cs_msg_dispatcher.h>
 #include <proto_base.h>
 
-#include <utility/environment_helper.h>
 #include <utility/protobuf_mini_dumper.h>
 
 #include <config/logic_config.h>

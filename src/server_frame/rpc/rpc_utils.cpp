@@ -165,6 +165,16 @@ SERVER_FRAME_API void context::setup_tracer(
   trace_context_.trace_span = tracer_instance.get_trace_span();
 }
 
+SERVER_FRAME_API context::tracer context::make_tracer(
+    string_view name, trace_option &&options,
+    std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
+        attributes) {
+  tracer ret;
+  setup_tracer(ret, name, std::move(options), attributes);
+
+  return tracer{std::move(ret)};
+}
+
 SERVER_FRAME_API std::shared_ptr<::google::protobuf::Arena> context::mutable_protobuf_arena() {
   if (allocator_) {
     return allocator_;
@@ -190,6 +200,18 @@ SERVER_FRAME_API bool context::try_reuse_protobuf_arena(
 
   allocator_ = arena;
   return true;
+}
+
+SERVER_FRAME_API const context::tracer::span_ptr_type &context::get_trace_span() const noexcept {
+  if (trace_context_.trace_span) {
+    return trace_context_.trace_span;
+  }
+
+  if (trace_context_.parent_span) {
+    return trace_context_.parent_span;
+  }
+
+  return trace_context_.trace_span;
 }
 
 SERVER_FRAME_API void context::set_parent_context(rpc::context &parent, inherit_options options) noexcept {
@@ -443,7 +465,8 @@ SERVER_FRAME_API result_code_type wait(context &ctx, std::chrono::system_clock::
   trace_option.dispatcher = nullptr;
   trace_option.is_remote = false;
   trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
-  child_ctx.setup_tracer(tracer, "rpc.wait.timer", std::move(trace_option));
+  child_ctx.setup_tracer(tracer, "rpc.wait.timer", std::move(trace_option),
+                         {{"rpc.system", "atrpc.timer"}, {"rpc.method", "rpc.wait"}});
 
   logic_server_timer timer;
   mod->insert_timer(ctx.get_task_context().task_id, timeout, timer);

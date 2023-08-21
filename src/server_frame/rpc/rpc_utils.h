@@ -10,7 +10,9 @@
 #include <gsl/select-gsl.h>
 #include <time/time_utility.h>
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <google/protobuf/arena.h>
 #include <google/protobuf/duration.pb.h>
@@ -18,11 +20,13 @@
 
 #include <protocol/pbdesc/atframework.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <config/server_frame_build_feature.h>
 
-#include <opentelemetry/trace/span.h>
+#include <std/explicit_declare.h>
 
 #include <stdint.h>
 #include <chrono>
@@ -182,6 +186,20 @@ class context {
           attributes = {});
 
   /**
+   * @brief 创建链路跟踪器信息。
+   * @note 如果不涉及异步调用和传递生命周期，请使用 create_temporary_child
+   *
+   * @param name 链路跟踪名称
+   * @param options 继承选项
+   * @param attributes 自定义属性
+   * @return 链路跟踪器
+   */
+  EXPLICIT_DEPRECATED_ATTR SERVER_FRAME_API tracer
+  make_tracer(string_view name, trace_option &&options,
+              std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
+                  attributes = {});
+
+  /**
    * @brief 使用内置的Arena创建protobuf对象。注意，该对象必须是局部变量，不允许转移给外部使用
    *
    * @tparam message类型
@@ -206,7 +224,7 @@ class context {
   SERVER_FRAME_API const std::shared_ptr<::google::protobuf::Arena> &get_protobuf_arena() const;
   SERVER_FRAME_API bool try_reuse_protobuf_arena(const std::shared_ptr<::google::protobuf::Arena> &arena) noexcept;
 
-  UTIL_FORCEINLINE const tracer::span_ptr_type &get_trace_span() const { return trace_context_.trace_span; }
+  SERVER_FRAME_API const tracer::span_ptr_type &get_trace_span() const noexcept;
 
   SERVER_FRAME_API void set_parent_context(rpc::context &parent, inherit_options options = {}) noexcept;
   SERVER_FRAME_API void add_link_span(const tracer::span_ptr_type &span_ptr) noexcept;

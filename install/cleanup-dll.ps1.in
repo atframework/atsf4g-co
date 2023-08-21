@@ -41,6 +41,12 @@ function Cleanup-Library-Directory {
                 Remove-Item -Recurse -Force -Path $DIR_PATH.FullName
             }
         }
+
+        $FILE_PATHS = Get-ChildItem -Path $LibraryDirectory -File
+        foreach ($FILE_PATH in $FILE_PATHS) {
+            Write-Output "Remove $FILE_PATH ..."
+            Remove-Item -Recurse -Force -Path $FILE_PATH.FullName
+        }
     }
 }
 

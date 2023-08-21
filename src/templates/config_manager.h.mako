@@ -17,6 +17,7 @@ import time
 #include <memory>
 #include <cstring>
 #include <type_traits>
+#include <unordered_map>
 
 #include "lock/spin_rw_lock.h"
 
@@ -209,6 +210,9 @@ public:
     const char *fmt, ...);
 #endif
 
+  EXCEL_CONFIG_LOADER_API void register_event_on_reset(void*, std::function<void()> fn);
+  EXCEL_CONFIG_LOADER_API void unregister_event_on_reset(void *);
+
 private:
   static bool default_buffer_loader(std::string&, const char* path);
   static bool default_version_loader(std::string&);
@@ -235,6 +239,9 @@ private:
   mutable util::lock::spin_rw_lock config_group_lock_;
 
   std::string log_buffer_;
+
+  util::lock::spin_rw_lock evt_lock_;
+  std::unordered_map<void*, std::function<void()>> on_evt_reset_;
 };
 ${pb_loader.CppNamespaceEnd(global_package)} // ${global_package}
 

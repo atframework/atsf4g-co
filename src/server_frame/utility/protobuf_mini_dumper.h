@@ -4,12 +4,18 @@
 
 #pragma once
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <google/protobuf/message.h>
 #include <google/protobuf/text_format.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
+#include <config/server_frame_build_feature.h>
 
 #include <gsl/select-gsl.h>
 
@@ -23,22 +29,32 @@
  * @param msg 要打印的message
  * @param ident 缩进层级
  */
-const char *protobuf_mini_dumper_get_readable(const ::google::protobuf::Message &msg, uint8_t idx = 0);
+SERVER_FRAME_API gsl::string_view protobuf_mini_dumper_get_readable(const ::google::protobuf::Message &msg,
+                                                                    uint8_t idx = 0);
 
 /**
  * @brief 返回错误码文本描述
  * @param error_code 错误码，需要定义在MTSvrErrorDefine或MTErrorDefine里
  * @return 错误码的文本描述，永远不会返回NULL
  */
-const char *protobuf_mini_dumper_get_error_msg(int error_code);
+SERVER_FRAME_API gsl::string_view protobuf_mini_dumper_get_error_msg(int error_code);
 
 /**
  * @brief 返回指定枚举类型的错误码文本描述
  * @param error_code 错误码
  * @return 错误码的文本描述，永远不会返回NULL
  */
-std::string protobuf_mini_dumper_get_error_msg(int error_code, const ::google::protobuf::EnumDescriptor *enum_desc,
-                                               bool fallback_common_errmsg);
+SERVER_FRAME_API std::string protobuf_mini_dumper_get_error_msg(int error_code,
+                                                                const ::google::protobuf::EnumDescriptor *enum_desc,
+                                                                bool fallback_common_errmsg);
+
+/**
+ * @brief 返回指定枚举类型的错误码文本描述
+ * @param error_code 错误码
+ * @return 错误码的文本描述
+ */
+SERVER_FRAME_API gsl::string_view protobuf_mini_dumper_get_enum_name(
+    int32_t error_code, const ::google::protobuf::EnumDescriptor *enum_desc);
 
 /**
  * @brief protobuf 数据拷贝
@@ -48,7 +64,7 @@ std::string protobuf_mini_dumper_get_error_msg(int error_code, const ::google::p
  * @param src 拷贝源
  */
 template <class TMsg>
-inline void protobuf_copy_message(TMsg &dst, const TMsg &src) {
+UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(TMsg &dst, const TMsg &src) {
   if (&src == &dst) {
     return;
   }
@@ -56,8 +72,8 @@ inline void protobuf_copy_message(TMsg &dst, const TMsg &src) {
 }
 
 template <class TField>
-inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst,
-                                  const ::google::protobuf::RepeatedField<TField> &src) {
+UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst,
+                                                      const ::google::protobuf::RepeatedField<TField> &src) {
   if (&src == &dst) {
     return;
   }
@@ -66,8 +82,8 @@ inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst
 }
 
 template <class TField>
-inline void protobuf_copy_message(::google::protobuf::RepeatedPtrField<TField> &dst,
-                                  const ::google::protobuf::RepeatedPtrField<TField> &src) {
+UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::RepeatedPtrField<TField> &dst,
+                                                      const ::google::protobuf::RepeatedPtrField<TField> &src) {
   if (&src == &dst) {
     return;
   }
@@ -80,7 +96,8 @@ template <class TField, class TValue>
 inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst, gsl::span<TValue> src) {
 #else
 template <class TField, class TValue, size_t SpanExtent>
-inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst, gsl::span<TValue, SpanExtent> src) {
+UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst,
+                                                      gsl::span<TValue, SpanExtent> src) {
 #endif
   if (dst.empty() && src.empty()) {
     return;
@@ -109,7 +126,7 @@ inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst
  * @param src 拷贝源
  */
 template <class TMsg>
-inline void protobuf_move_message(TMsg &dst, TMsg &&src) {
+UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(TMsg &dst, TMsg &&src) {
   if (&src == &dst) {
     return;
   }
@@ -123,8 +140,8 @@ inline void protobuf_move_message(TMsg &dst, TMsg &&src) {
 }
 
 template <class TField>
-inline void protobuf_move_message(::google::protobuf::RepeatedField<TField> &dst,
-                                  ::google::protobuf::RepeatedField<TField> &&src) {
+UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(::google::protobuf::RepeatedField<TField> &dst,
+                                                      ::google::protobuf::RepeatedField<TField> &&src) {
   if (&src == &dst) {
     return;
   }
@@ -138,8 +155,8 @@ inline void protobuf_move_message(::google::protobuf::RepeatedField<TField> &dst
 }
 
 template <class TField>
-inline void protobuf_move_message(::google::protobuf::RepeatedPtrField<TField> &dst,
-                                  ::google::protobuf::RepeatedPtrField<TField> &&src) {
+UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(::google::protobuf::RepeatedPtrField<TField> &dst,
+                                                      ::google::protobuf::RepeatedPtrField<TField> &&src) {
   if (&src == &dst) {
     return;
   }
@@ -153,7 +170,7 @@ inline void protobuf_move_message(::google::protobuf::RepeatedPtrField<TField> &
 }
 
 template <class TEle>
-int protobuf_remove_repeated_at(::google::protobuf::RepeatedPtrField<TEle> &arr, int index) {
+UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_at(::google::protobuf::RepeatedPtrField<TEle> &arr, int index) {
   if (index < 0 || index >= arr.size()) {
     return 0;
   }
@@ -167,7 +184,8 @@ int protobuf_remove_repeated_at(::google::protobuf::RepeatedPtrField<TEle> &arr,
 }
 
 template <class TEle, class TCheckFn>
-int protobuf_remove_repeated_if(::google::protobuf::RepeatedPtrField<TEle> &arr, const TCheckFn &fn) {
+UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_if(::google::protobuf::RepeatedPtrField<TEle> &arr,
+                                                    const TCheckFn &fn) {
   int new_index = 0;
   int old_index = 0;
   int ret = 0;
@@ -184,6 +202,27 @@ int protobuf_remove_repeated_if(::google::protobuf::RepeatedPtrField<TEle> &arr,
   while (arr.size() > new_index) {
     arr.RemoveLast();
     ++ret;
+  }
+
+  return ret;
+}
+
+template <class TEle, class TCheckFn>
+UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_if(::google::protobuf::RepeatedField<TEle> &arr, TCheckFn &&fn) {
+  int new_index = 0;
+  int old_index = 0;
+  int ret = 0;
+  for (; old_index < arr.size(); ++old_index, ++new_index) {
+    if (fn(*arr.Mutable(new_index))) {
+      --new_index;
+    } else if (new_index != old_index) {
+      *arr.Mutable(new_index) = *arr.Mutable(old_index);
+    }
+  }
+
+  if (arr.size() > new_index) {
+    ret = arr.size() - new_index;
+    arr.Truncate(new_index);
   }
 
   return ret;

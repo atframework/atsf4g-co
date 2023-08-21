@@ -82,11 +82,13 @@ static int show_configure_handler(util::cli::callback_param params) {
   auto app = atapp::app::get_last_instance();
   if (nullptr != app) {
     std::string app_configure =
-        std::string("atapp configure:\n") + protobuf_mini_dumper_get_readable(app->get_origin_configure());
+        std::string("atapp configure:\n") +
+        static_cast<std::string>(protobuf_mini_dumper_get_readable(app->get_origin_configure()));
     ::atapp::app::add_custom_command_rsp(params, app_configure);
   }
   std::string logic_configure =
-      std::string("logic configure:\n") + protobuf_mini_dumper_get_readable(logic_config::me()->get_server_cfg());
+      std::string("logic configure:\n") +
+      static_cast<std::string>(protobuf_mini_dumper_get_readable(logic_config::me()->get_server_cfg()));
   ::atapp::app::add_custom_command_rsp(params, logic_configure);
   return 0;
 }

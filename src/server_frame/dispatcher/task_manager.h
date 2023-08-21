@@ -14,7 +14,6 @@
 #include <design_pattern/singleton.h>
 
 #include <config/server_frame_build_feature.h>
-#include <utility/environment_helper.h>
 
 #include <libcotask/task_manager.h>
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE

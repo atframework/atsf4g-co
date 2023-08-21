@@ -60,6 +60,21 @@ task_action_cs_req_base::result_type task_action_cs_req_base::hook_run() {
   if (player_cache) {
     player_cache->refresh_feature_limit(get_shared_context());
   }
+  /**
+  do {
+    std::shared_ptr<session> sess = get_session();
+    if (!sess) {
+      break;
+    }
+    rpc::telemetry::tracer::span_ptr_type trace_span = get_shared_context().get_trace_span();
+    if (!trace_span) {
+      break;
+    }
+
+    trace_span->SetAttribute("client.address", sess->get_client_ip());
+    trace_span->SetAttribute("client.port", sess->get_client_port());
+  } while (false);
+  **/
 
   result_type::value_type ret = RPC_AWAIT_CODE_RESULT(base_type::hook_run());
 

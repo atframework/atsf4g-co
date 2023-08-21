@@ -25,6 +25,7 @@
 #include <functional>
 #include <utility>
 
+#include "dispatcher/dispatcher_implement.h"
 #include "dispatcher/task_manager.h"
 
 namespace detail {
@@ -125,7 +126,15 @@ int task_action_base::operator()(void *priv_data) {
   }
 
   rpc::context::tracer tracer;
-  shared_context_.setup_tracer(tracer, name(), std::move(trace_option));
+  if (trace_option.dispatcher) {
+    shared_context_.setup_tracer(tracer, name(), std::move(trace_option),
+                                 {{"rpc.system", "atrpc.dispatcher"},
+                                  {"rpc.service", rpc::context::string_view{trace_option.dispatcher->name()}},
+                                  {"rpc.method", rpc::context::string_view{name()}}});
+  } else {
+    shared_context_.setup_tracer(tracer, name(), std::move(trace_option),
+                                 {{"rpc.system", "atrpc.task"}, {"rpc.method", rpc::context::string_view{name()}}});
+  }
   rpc::context::task_context_data rpc_task_context_data;
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
@@ -312,7 +321,7 @@ void task_action_base::_notify_finished() {
       trace_span->SetAttribute("user_id", get_user_id());
       trace_span->SetAttribute("zone_id", get_zone_id());
     }
-    trace_span->SetAttribute("response_code", get_response_code());
+    trace_span->SetAttribute("rpc.atrpc.response_code", get_response_code());
   }
 
   // Callbacks

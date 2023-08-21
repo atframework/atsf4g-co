@@ -7,7 +7,6 @@
 #include <config/server_frame_build_feature.h>
 
 #include <data/session.h>
-#include <utility/environment_helper.h>
 
 #include <map>
 #include <unordered_map>
@@ -20,7 +19,7 @@ class CSMsg;
 class session_manager {
  public:
   using sess_ptr_t = session::ptr_t;
-  using session_index_t = UTIL_ENV_AUTO_MAP(session::key_t, sess_ptr_t, session::compare_callback);
+  using session_index_t = std::unordered_map<session::key_t, sess_ptr_t, session::compare_callback>;
   using session_counter_t = std::map<uint64_t, size_t>;
 
 #if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL

@@ -73,6 +73,9 @@ class tracer {
   SERVER_FRAME_API tracer();
   SERVER_FRAME_API ~tracer();
 
+  SERVER_FRAME_API tracer(tracer&& other);
+  SERVER_FRAME_API tracer& operator=(tracer&& other) noexcept;
+
   SERVER_FRAME_API bool start(
       string_view name, trace_option&& options,
       std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>

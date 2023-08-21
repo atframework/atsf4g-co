@@ -42,6 +42,23 @@ SERVER_FRAME_API tracer::~tracer() {
   }
 }
 
+SERVER_FRAME_API tracer::tracer(tracer &&other)
+    : result_(other.result_),
+      start_system_timepoint_(other.start_system_timepoint_),
+      start_steady_timepoint_(other.start_steady_timepoint_),
+      trace_span_(std::move(other.trace_span_)),
+      dispatcher_(std::move(other.dispatcher_)) {}
+
+SERVER_FRAME_API tracer &tracer::operator=(tracer &&other) noexcept {
+  result_ = other.result_;
+  start_system_timepoint_ = other.start_system_timepoint_;
+  start_steady_timepoint_ = other.start_steady_timepoint_;
+  trace_span_ = std::move(other.trace_span_);
+  dispatcher_ = std::move(other.dispatcher_);
+
+  return *this;
+}
+
 SERVER_FRAME_API bool tracer::start(
     string_view name, trace_option &&options,
     std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
@@ -114,12 +131,14 @@ SERVER_FRAME_API int tracer::return_code(int ret) {
       case PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND:
       case PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND:
       case PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION: {
-        trace_span_->SetStatus(opentelemetry::trace::StatusCode::kUnset, protobuf_mini_dumper_get_error_msg(ret));
+        gsl::string_view error_msg = protobuf_mini_dumper_get_error_msg(ret);
+        trace_span_->SetStatus(opentelemetry::trace::StatusCode::kUnset, {error_msg.data(), error_msg.size()});
         break;
       }
       default: {
         if (ret < 0) {
-          trace_span_->SetStatus(opentelemetry::trace::StatusCode::kError, protobuf_mini_dumper_get_error_msg(ret));
+          gsl::string_view error_msg = protobuf_mini_dumper_get_error_msg(ret);
+          trace_span_->SetStatus(opentelemetry::trace::StatusCode::kError, {error_msg.data(), error_msg.size()});
         } else {
           trace_span_->SetStatus(opentelemetry::trace::StatusCode::kOk, "success");
         }

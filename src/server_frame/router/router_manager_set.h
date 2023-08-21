@@ -11,8 +11,6 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
-#include <utility/environment_helper.h>
-
 #include <dispatcher/task_type_traits.h>
 
 #include <list>

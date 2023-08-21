@@ -165,7 +165,26 @@ struct thread_local_config_group_data {
   int64_t current_version;
   config_manager::config_group_ptr_t current_group;
 
-  thread_local_config_group_data() : current_version(0) {}
+  thread_local_config_group_data() : current_version(0) {
+    std::shared_ptr<config_manager> mgr = config_manager::me();
+    if (mgr) {
+      mgr->register_event_on_reset(this, [this]() {
+        this->current_version = 0;
+        this->current_group.reset();
+      });
+    }
+  }
+
+  ~thread_local_config_group_data() {
+    std::shared_ptr<config_manager> mgr = config_manager::me();
+    if (mgr) {
+      mgr->unregister_event_on_reset(this);
+    }
+  }
+
+  thread_local_config_group_data(const thread_local_config_group_data &) =
+      delete;
+  thread_local_config_group_data(thread_local_config_group_data &&) = delete;
 };
 
 #if defined(EXCEL_CONFIG_TLS_USE_PTHREAD) && EXCEL_CONFIG_TLS_USE_PTHREAD
@@ -226,6 +245,8 @@ EXCEL_CONFIG_LOADER_API config_manager::config_manager(constructor_helper_t&) :
 
 EXCEL_CONFIG_LOADER_API config_manager::~config_manager() {
   is_destroyed_ = true;
+
+  reset();
 }
 
 EXCEL_CONFIG_LOADER_API std::shared_ptr<config_manager> config_manager::me() {
@@ -339,6 +360,16 @@ EXCEL_CONFIG_LOADER_API int config_manager::init_new_group() {
 }
 
 EXCEL_CONFIG_LOADER_API void config_manager::reset() {
+  std::unordered_map<void *, std::function<void()>> on_evt_reset;
+  {
+    util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh(evt_lock_);
+    on_evt_reset_.swap(on_evt_reset);
+  }
+  for (auto &fn : on_evt_reset) {
+    if (fn.second) {
+      fn.second();
+    }
+  }
   {
     ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh(handle_lock_);
     max_group_number_ = 8;
@@ -528,6 +559,17 @@ EXCEL_CONFIG_LOADER_API void config_manager::log(const log_caller_info_t &caller
     // call event callback
     inst->on_log_(caller, &inst->log_buffer_[0]);
   }
+}
+
+EXCEL_CONFIG_LOADER_API void config_manager::register_event_on_reset(void* key, std::function<void()> fn) {
+  util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh(evt_lock_);
+  on_evt_reset_[key] = std::move(fn);
+}
+
+EXCEL_CONFIG_LOADER_API void
+config_manager::unregister_event_on_reset(void *key) {
+  util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh(evt_lock_);
+  on_evt_reset_.erase(key);
 }
 
 bool config_manager::default_buffer_loader(std::string& out, const char* path) {

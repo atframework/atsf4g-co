@@ -181,7 +181,7 @@ result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uin
 
     // 不在线则不用通知
     if (0 == login_table->router_server_id() ||
-        login_table->login_code_expired() <= ::util::time::time_utility::get_now()) {
+        login_table->login_code_expired() <= ::util::time::time_utility::get_sys_now()) {
       break;
     }
 
@@ -272,7 +272,7 @@ result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, 
 
     // 不在线则不用通知
     if (0 == login_table->router_server_id() ||
-        login_table->login_code_expired() <= ::util::time::time_utility::get_now()) {
+        login_table->login_code_expired() <= ::util::time::time_utility::get_sys_now()) {
       break;
     }
 

@@ -56,6 +56,8 @@
 .idea
 /cmake-build-*
 .mako_modules-*
+.cache
+/compile_commands.json
 
 # protocol
 /src/**/protocol/**/*.h
