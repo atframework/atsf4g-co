@@ -921,32 +921,18 @@ void logic_server_common_module::tick_stats() {
   }
 }
 
-#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
-#  define LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER_INT64(result, value)                                      \
-    if (opentelemetry::nostd::holds_alternative<                                                              \
-            opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {    \
-      auto observer = opentelemetry::nostd::get<                                                              \
-          opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result);        \
-      if (observer) {                                                                                         \
-        observer->Observe(static_cast<int64_t>(value), rpc::telemetry::global_service::get_metrics_labels()); \
-                                                                                                              \
-        ++stats->collect_sequence;                                                                            \
-      }                                                                                                       \
-    }
-#else
-#  define LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER_INT64(result, value)                                              \
-    if (opentelemetry::nostd::holds_alternative<                                                                      \
-            opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<long>>>(result)) {               \
-      auto observer =                                                                                                 \
-          opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<long>>>( \
-              result);                                                                                                \
-      if (observer) {                                                                                                 \
-        observer->Observe(static_cast<long>(value), rpc::telemetry::global_service::get_metrics_labels());            \
-                                                                                                                      \
-        ++stats->collect_sequence;                                                                                    \
-      }                                                                                                               \
-    }
-#endif
+#define LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER_INT64(result, value)                                                 \
+  if (opentelemetry::nostd::holds_alternative<                                                                         \
+          opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {               \
+    auto observer =                                                                                                    \
+        opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>( \
+            result);                                                                                                   \
+    if (observer) {                                                                                                    \
+      observer->Observe(static_cast<int64_t>(value), rpc::telemetry::global_service::get_metrics_labels());            \
+                                                                                                                       \
+      ++stats->collect_sequence;                                                                                       \
+    }                                                                                                                  \
+  }
 
 #define LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER(NAME, DESCRIPTION, UNIT, CREATE_ACTION, VAR_LOADER)              \
   auto instrument = rpc::telemetry::global_service::get_metrics_observable(NAME, {NAME, DESCRIPTION, UNIT});       \
@@ -982,47 +968,31 @@ void logic_server_common_module::tick_stats() {
       nullptr);
 
 void logic_server_common_module::setup_metrics_tick() {
-#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
-  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.tick", "", "us", mutable_metrics_observable_gauge_int64,
+  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service_tick", "", "us", mutable_metrics_observable_gauge_int64,
                                             stats->collect_max_tick_interval_us.load(std::memory_order_acquire));
-#else
-  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.tick", "", "us", mutable_metrics_observable_gauge_long,
-                                            stats->collect_max_tick_interval_us.load(std::memory_order_acquire));
-#endif
 }
 
 void logic_server_common_module::setup_metrics_cpu_sys() {
   LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER(
-      "service.rusage.cpu.sys", "", "%", mutable_metrics_observable_gauge_double,
+      "service_rusage_cpu_sys", "", "%", mutable_metrics_observable_gauge_double,
       static_cast<double>(stats->collect_cpu_sys.load(std::memory_order_acquire)) / 10000.0);
 }
 
 void logic_server_common_module::setup_metrics_cpu_user() {
   LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER(
-      "service.rusage.cpu.user", "", "%", mutable_metrics_observable_gauge_double,
+      "service_rusage_cpu_user", "", "%", mutable_metrics_observable_gauge_double,
       static_cast<double>(stats->collect_cpu_user.load(std::memory_order_acquire)) / 10000.0);
 }
 
 void logic_server_common_module::setup_metrics_memory_maxrss() {
-#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
-  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.rusage.memory.maxrss", "", "",
+  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service_rusage_memory_maxrss", "", "",
                                             mutable_metrics_observable_gauge_int64,
                                             stats->collect_memory_max_rss.load(std::memory_order_acquire));
-#else
-  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.rusage.memory.maxrss", "", "",
-                                            mutable_metrics_observable_gauge_long,
-                                            stats->collect_memory_max_rss.load(std::memory_order_acquire));
-#endif
 }
 
 void logic_server_common_module::setup_metrics_memory_rss() {
-#if (OPENTELEMTRY_CPP_MAJOR_VERSION * 1000 + OPENTELEMTRY_CPP_MINOR_VERSION) >= 1007
-  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.rusage.memory.rss", "", "", mutable_metrics_observable_gauge_int64,
+  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service_rusage_memory_rss", "", "", mutable_metrics_observable_gauge_int64,
                                             stats->collect_memory_rss.load(std::memory_order_acquire));
-#else
-  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service.rusage.memory.rss", "", "", mutable_metrics_observable_gauge_long,
-                                            stats->collect_memory_rss.load(std::memory_order_acquire));
-#endif
 }
 
 #undef LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER

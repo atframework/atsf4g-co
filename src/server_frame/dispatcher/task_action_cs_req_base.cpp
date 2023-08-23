@@ -133,6 +133,17 @@ std::shared_ptr<dispatcher_implement> task_action_cs_req_base::get_dispatcher() 
 
 const char *task_action_cs_req_base::get_type_name() const { return "client"; }
 
+rpc::context::trace_option task_action_cs_req_base::get_trace_option() const noexcept {
+  rpc::context::trace_option ret = task_action_base::get_trace_option();
+
+  auto &req_msg = get_request();
+  if (req_msg.has_head() && req_msg.head().has_rpc_trace() && !req_msg.head().rpc_trace().trace_id().empty()) {
+    ret.parent_network_span = &req_msg.head().rpc_trace();
+  }
+
+  return ret;
+}
+
 std::pair<uint64_t, uint64_t> task_action_cs_req_base::get_gateway_info() const {
   const msg_type &cs_msg = get_request();
   return std::pair<uint64_t, uint64_t>(cs_msg.head().session_bus_id(), cs_msg.head().session_id());

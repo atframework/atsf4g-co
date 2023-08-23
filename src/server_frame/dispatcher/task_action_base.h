@@ -50,8 +50,8 @@ class task_action_result_type {
                                                                std::true_type, std::false_type>::type {};
 
  public:
- #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
-  inline void _internal_set_awaited() noexcept { }
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+  inline void _internal_set_awaited() noexcept {}
 #  endif
 
   explicit inline task_action_result_type(value_type code) : result_code_(code) {}
@@ -226,7 +226,8 @@ class task_action_base
   virtual std::shared_ptr<dispatcher_implement> get_dispatcher() const = 0;
   virtual const char *get_type_name() const = 0;
 
-  virtual rpc::context::parent_mode get_caller_mode() const noexcept;
+  virtual rpc::context::inherit_options get_inherit_option() const noexcept;
+  virtual rpc::context::trace_option get_trace_option() const noexcept;
 
   uint64_t get_task_id() const;
 

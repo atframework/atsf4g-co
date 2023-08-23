@@ -136,13 +136,24 @@ std::shared_ptr<dispatcher_implement> task_action_ss_req_base::get_dispatcher() 
 
 const char *task_action_ss_req_base::get_type_name() const { return "inserver"; }
 
-rpc::context::parent_mode task_action_ss_req_base::get_caller_mode() const noexcept {
+rpc::context::inherit_options task_action_ss_req_base::get_inherit_option() const noexcept {
   auto &req_msg = get_request();
   if (req_msg.has_head() && req_msg.head().has_rpc_request() && 0 != req_msg.head().src_task_id()) {
-    return rpc::context::parent_mode::kParent;
+    return rpc::context::inherit_options{rpc::context::parent_mode::kParent, true, false};
   }
 
-  return rpc::context::parent_mode::kLink;
+  return rpc::context::inherit_options{rpc::context::parent_mode::kLink, true, false};
+}
+
+rpc::context::trace_option task_action_ss_req_base::get_trace_option() const noexcept {
+  rpc::context::trace_option ret = task_action_base::get_trace_option();
+
+  auto &req_msg = get_request();
+  if (req_msg.has_head() && req_msg.head().has_rpc_trace() && !req_msg.head().rpc_trace().trace_id().empty()) {
+    ret.parent_network_span = &req_msg.head().rpc_trace();
+  }
+
+  return ret;
 }
 
 void task_action_ss_req_base::send_response() {

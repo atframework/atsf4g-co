@@ -25,6 +25,10 @@ std::shared_ptr<dispatcher_implement> task_action_no_req_base::get_dispatcher() 
 
 const char* task_action_no_req_base::get_type_name() const { return "background"; }
 
+rpc::context::inherit_options task_action_no_req_base::get_inherit_option() const noexcept {
+  return rpc::context::inherit_options{rpc::context::parent_mode::kParent, true, true};
+}
+
 dispatcher_start_data_type task_action_no_req_base::make_from_context(const ctor_param_t& param) noexcept {
   dispatcher_start_data_type ret = dispatcher_make_default<dispatcher_start_data_type>();
   ret.context = param.caller_context;

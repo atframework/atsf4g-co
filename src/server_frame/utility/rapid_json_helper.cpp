@@ -735,8 +735,8 @@ SERVER_FRAME_API gsl::string_view rapidsjon_helper_get_type_name(rapidjson::Type
 
 SERVER_FRAME_API std::string rapidsjon_helper_stringify(const ::google::protobuf::Message& src,
                                                         const rapidsjon_helper_load_options& options) {
-  rapidjson::MemoryPoolAllocator allocator{tls_buffers_get_buffer(tls_buffers_type_t::EN_TBT_UTILITY),
-                                           tls_buffers_get_length(tls_buffers_type_t::EN_TBT_UTILITY)};
+  rapidjson::MemoryPoolAllocator<> allocator{tls_buffers_get_buffer(tls_buffers_type_t::EN_TBT_UTILITY),
+                                             tls_buffers_get_length(tls_buffers_type_t::EN_TBT_UTILITY)};
   rapidjson::Document doc{&allocator};
   rapidsjon_helper_load_from(doc, src, options);
   return rapidsjon_helper_stringify(doc);
@@ -744,8 +744,8 @@ SERVER_FRAME_API std::string rapidsjon_helper_stringify(const ::google::protobuf
 
 SERVER_FRAME_API bool rapidsjon_helper_parse(::google::protobuf::Message& dst, const std::string& src,
                                              const rapidsjon_helper_dump_options& options) {
-  rapidjson::MemoryPoolAllocator allocator{tls_buffers_get_buffer(tls_buffers_type_t::EN_TBT_UTILITY),
-                                           tls_buffers_get_length(tls_buffers_type_t::EN_TBT_UTILITY)};
+  rapidjson::MemoryPoolAllocator<> allocator{tls_buffers_get_buffer(tls_buffers_type_t::EN_TBT_UTILITY),
+                                             tls_buffers_get_length(tls_buffers_type_t::EN_TBT_UTILITY)};
   rapidjson::Document doc{&allocator};
   if (!rapidsjon_helper_unstringify(doc, src)) {
     return false;

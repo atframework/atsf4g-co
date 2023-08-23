@@ -104,12 +104,7 @@ int task_action_base::operator()(void *priv_data) {
 #endif
   detail::task_action_stat_guard stat(this);
 
-  rpc::context::trace_option trace_option;
-  trace_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
-  trace_option.is_remote = true;
-  trace_option.dispatcher = get_dispatcher();
-  trace_option.parent_network_span = nullptr;
-
+  rpc::context::trace_option trace_option = get_trace_option();
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   {
 #else
@@ -297,8 +292,19 @@ int task_action_base::on_timeout() { return 0; }
 
 int task_action_base::on_complete() { return 0; }
 
-rpc::context::parent_mode task_action_base::get_caller_mode() const noexcept {
-  return rpc::context::parent_mode::kLink;
+rpc::context::inherit_options task_action_base::get_inherit_option() const noexcept {
+  return rpc::context::inherit_options{rpc::context::parent_mode::kLink, true, false};
+}
+
+rpc::context::trace_option task_action_base::get_trace_option() const noexcept {
+  rpc::context::trace_option ret;
+  ret.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
+  ret.is_remote = true;
+  ret.dispatcher = get_dispatcher();
+  ret.parent_network_span = nullptr;
+  ret.parent_memory_span.reset();
+
+  return ret;
 }
 
 uint64_t task_action_base::get_task_id() const { return get_shared_context().get_task_context().task_id; }
@@ -310,7 +316,7 @@ task_action_base::on_finished_callback_handle_t task_action_base::add_on_on_fini
 void task_action_base::remove_on_finished(on_finished_callback_handle_t handle) { on_finished_callback_.erase(handle); }
 
 void task_action_base::set_caller_context(rpc::context &ctx) {
-  get_shared_context().set_parent_context(ctx, rpc::context::inherit_options{get_caller_mode()});
+  get_shared_context().set_parent_context(ctx, get_inherit_option());
 }
 
 void task_action_base::_notify_finished() {

@@ -35,6 +35,8 @@ class task_action_no_req_base : public task_action_base {
   std::shared_ptr<dispatcher_implement> get_dispatcher() const override;
   const char *get_type_name() const override;
 
+  rpc::context::inherit_options get_inherit_option() const noexcept override;
+
  protected:
   void send_response() override;
 

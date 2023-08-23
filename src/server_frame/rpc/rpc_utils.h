@@ -75,11 +75,16 @@ class context {
   struct UTIL_SYMBOL_VISIBLE inherit_options {
     parent_mode mode;
     bool inherit_allocator;
+    bool inherit_parent_span;
 
-    inline inherit_options() noexcept : mode(parent_mode::kParent), inherit_allocator(true){};
-    explicit inline inherit_options(parent_mode m) noexcept : mode(m), inherit_allocator(true){};
+    inline inherit_options() noexcept
+        : mode(parent_mode::kParent), inherit_allocator(true), inherit_parent_span(true) {}
+    explicit inline inherit_options(parent_mode m) noexcept
+        : mode(m), inherit_allocator(true), inherit_parent_span(true) {}
     explicit inline inherit_options(parent_mode m, bool inherit_alloc) noexcept
-        : mode(m), inherit_allocator(inherit_alloc){};
+        : mode(m), inherit_allocator(inherit_alloc), inherit_parent_span(true) {}
+    explicit inline inherit_options(parent_mode m, bool inherit_alloc, bool inherit_parent_trace_span) noexcept
+        : mode(m), inherit_allocator(inherit_alloc), inherit_parent_span(inherit_parent_trace_span) {}
   };
 
   struct UTIL_SYMBOL_VISIBLE create_options {};

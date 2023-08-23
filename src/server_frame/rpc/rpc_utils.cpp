@@ -219,7 +219,9 @@ SERVER_FRAME_API void context::set_parent_context(rpc::context &parent, inherit_
     try_reuse_protobuf_arena(parent.mutable_protobuf_arena());
   }
 
-  trace_context_.parent_span = parent.get_trace_span();
+  if (options.inherit_parent_span) {
+    trace_context_.parent_span = parent.get_trace_span();
+  }
   trace_context_.caller_mode = options.mode;
 
   task_context_ = parent.task_context_;
