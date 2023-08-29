@@ -285,17 +285,26 @@ class task_manager {
       reset_private_data(*action_meta.private_data);
     }
 
-    std::pair<int32_t, dispatcher_start_data_type *> wait_start{PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM, nullptr};
+    dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
+    std::pair<int32_t, dispatcher_start_data_type *> wait_start{PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM,
+                                                                &start_data};
     {
-      generic_start_generator start_generator = make_start_generator(action_meta.task_id);
+      generic_start_generator start_generator = make_start_generator(
+          action_meta.task_id,
+          [](const dispatcher_start_data_type *input_start_data, void *stack_data) {
+            if (nullptr != stack_data && nullptr != input_start_data) {
+              (*reinterpret_cast<dispatcher_start_data_type *>(stack_data)) = *input_start_data;
+            }
+          },
+          reinterpret_cast<void *>(&start_data));
       wait_start = co_await start_generator;
     }
 
-    if (wait_start.first < 0 || nullptr == wait_start.second) {
+    if (wait_start.first < 0) {
       co_return wait_start.first;
     }
 
-    int32_t result = co_await action(std::move(action_meta), std::move(*wait_start.second));
+    int32_t result = co_await action(std::move(action_meta), std::move(start_data));
     co_return result;
   }
 #endif
@@ -504,9 +513,12 @@ class task_manager {
   SERVER_FRAME_API static int32_t convert_task_status_to_error_code(task_type_trait::task_status task_status) noexcept;
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-  SERVER_FRAME_API static generic_start_generator make_start_generator(task_type_trait::id_type task_id);
+  SERVER_FRAME_API static generic_start_generator make_start_generator(
+      task_type_trait::id_type task_id, dispatcher_receive_start_data_callback receive_callback,
+      void *callback_private_data);
   SERVER_FRAME_API static std::pair<generic_resume_key, generic_resume_generator> make_resume_generator(
-      uintptr_t message_type, const dispatcher_await_options &await_options);
+      uintptr_t message_type, const dispatcher_await_options &await_options,
+      dispatcher_receive_resume_data_callback receive_callback, void *callback_private_data);
 #endif
 
  private:

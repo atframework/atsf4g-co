@@ -318,8 +318,7 @@ rpc::result_code_type router_object_base::await_io_task(rpc::context &ctx) {
     await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(),
                                                           std::chrono::seconds{6});
 
-    RPC_AWAIT_IGNORE_RESULT(
-        rpc::custom_wait(ctx, reinterpret_cast<const void *>(&io_task_awaiter_), nullptr, await_options));
+    RPC_AWAIT_IGNORE_RESULT(rpc::custom_wait(ctx, reinterpret_cast<const void *>(&io_task_awaiter_), await_options));
     io_task_awaiter_.erase(awaiter_iter);
   }
 

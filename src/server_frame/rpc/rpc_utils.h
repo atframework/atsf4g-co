@@ -34,6 +34,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -336,13 +337,55 @@ SERVER_FRAME_API result_code_type wait(context &ctx, const std::unordered_set<di
  * @brief Custom wait for a message or resume
  *
  * @param type_address type object address, user should keep it unique for each message type
- * @param received received raw data
  * @param options await options
+ * @param receive_callback callback to read data from dispatcher_resume_data_type
+ * @param receive_callback_private_data private data of receive_callback, should be alive before resumed
  * @return future of 0 or error code
  */
 SERVER_FRAME_API result_code_type custom_wait(context &ctx, const void *type_address,
-                                              dispatcher_resume_data_type *received,
-                                              const dispatcher_await_options &options);
+                                              const dispatcher_await_options &options,
+                                              dispatcher_receive_resume_data_callback receive_callback = nullptr,
+                                              void *receive_callback_private_data = nullptr);
+
+template <class TPTR>
+UTIL_FORCEINLINE const void *custom_wait_convert_ptr(TPTR &&input) {
+  return reinterpret_cast<void *>(input);
+}
+
+UTIL_FORCEINLINE const void *custom_wait_convert_ptr(const void *input) { return input; }
+
+UTIL_FORCEINLINE const void *custom_wait_convert_ptr(void *input) { return const_cast<void *>(input); }
+
+/**
+ * @brief Custom wait for a message or resume
+ *
+ * @param type_address type object address, user should keep it unique for each message type
+ * @param options await options
+ * @param real_callback callback to read data from dispatcher_resume_data_type
+ * @param real_private_data private data of receive_callback, should be alive before resumed
+ * @return future of 0 or error code
+ */
+template <class TPRIVATE_DATA, class TCALLBACK, class TPTR,
+          class = typename std::enable_if<std::is_pointer<typename std::remove_reference<TPTR>::type>::value>::type>
+UTIL_SYMBOL_VISIBLE result_code_type custom_wait(context &ctx, TPTR &&type_address,
+                                                 const dispatcher_await_options &options,
+                                                 TCALLBACK && real_callback,
+                                                 TPRIVATE_DATA &&real_private_data) {
+  auto callback_data = std::make_pair(real_callback, &real_private_data);
+  using callback_date_type = decltype(callback_data);
+
+  dispatcher_receive_resume_data_callback receive_callback = [](const dispatcher_resume_data_type *resume_data,
+                                                                void *stack_data) {
+    callback_date_type *restore_callback_data = reinterpret_cast<callback_date_type *>(stack_data);
+    if (nullptr != restore_callback_data && restore_callback_data->first &&
+        nullptr != restore_callback_data->second) {
+      (restore_callback_data->first)(resume_data, std::forward<TPRIVATE_DATA>(*restore_callback_data->second));
+    }
+  };
+
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(custom_wait(ctx, custom_wait_convert_ptr(type_address), options,
+                                                    receive_callback, reinterpret_cast<void *>(&callback_data))));
+}
 
 /**
  * @brief Custom resume a waiter

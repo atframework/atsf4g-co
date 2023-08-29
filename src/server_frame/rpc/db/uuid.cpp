@@ -283,7 +283,7 @@ struct unique_id_container_waker {
     await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(),
                                                           std::chrono::seconds{6});
 
-    RPC_AWAIT_IGNORE_RESULT(rpc::custom_wait(ctx, reinterpret_cast<const void *>(&pool), nullptr, await_options));
+    RPC_AWAIT_IGNORE_RESULT(rpc::custom_wait(ctx, reinterpret_cast<const void *>(&pool), await_options));
     pool.wake_tasks.erase(iter);
 
     RPC_RETURN_VOID;

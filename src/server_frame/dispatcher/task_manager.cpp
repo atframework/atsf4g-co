@@ -618,7 +618,8 @@ task_manager::convert_task_status_to_error_code(task_type_trait::task_status tas
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
 SERVER_FRAME_API task_manager::generic_start_generator task_manager::make_start_generator(
-    task_type_trait::id_type task_id) {
+    task_type_trait::id_type task_id, dispatcher_receive_start_data_callback receive_callback,
+    void *callback_private_data) {
   return {[task_id](generic_start_generator::context_pointer_type generator) {
             if (task_manager::is_instance_destroyed()) {
               return;
@@ -626,9 +627,14 @@ SERVER_FRAME_API task_manager::generic_start_generator task_manager::make_start_
 
             task_manager::me()->internal_insert_start_generator(task_id, std::move(generator));
           },
-          [task_id](const generic_start_generator::context_type &generator) {
+          [task_id, receive_callback, callback_private_data](const generic_start_generator::context_type &generator) {
             if (task_manager::is_instance_destroyed()) {
               return;
+            }
+
+            const task_manager::generic_start_generator::value_type *start_data = generator.data();
+            if (nullptr != receive_callback && nullptr != start_data) {
+              (*receive_callback)(start_data->second, callback_private_data);
             }
 
             task_manager::me()->internal_remove_start_generator(task_id, generator);
@@ -636,7 +642,9 @@ SERVER_FRAME_API task_manager::generic_start_generator task_manager::make_start_
 }
 
 SERVER_FRAME_API std::pair<task_manager::generic_resume_key, task_manager::generic_resume_generator>
-task_manager::make_resume_generator(uintptr_t message_type, const dispatcher_await_options &await_options) {
+task_manager::make_resume_generator(uintptr_t message_type, const dispatcher_await_options &await_options,
+                                    dispatcher_receive_resume_data_callback receive_callback,
+                                    void *callback_private_data) {
   std::chrono::system_clock::duration timeout = await_options.timeout;
   if (timeout <= std::chrono::system_clock::duration::zero()) {
     timeout = std::chrono::duration_cast<std::chrono::system_clock::duration>(
@@ -653,10 +661,33 @@ task_manager::make_resume_generator(uintptr_t message_type, const dispatcher_awa
 
              task_manager::me()->internal_insert_resume_generator(key, std::move(generator));
            },
-           [key](const generic_resume_generator::context_type &generator) {
+           [key, receive_callback, callback_private_data](const generic_resume_generator::context_type &generator) {
              if (task_manager::is_instance_destroyed()) {
                return;
              }
+
+             do {
+               const task_manager::generic_resume_generator::value_type *resume_data = generator.data();
+               if (nullptr == receive_callback || nullptr == resume_data) {
+                 break;
+               }
+               if (nullptr == resume_data->second) {
+                 (*receive_callback)(resume_data->second, callback_private_data);
+                 break;
+               }
+               if (resume_data->second->message.msg_type != key.message_type) {
+                 FWLOGINFO("resume and expect message type {:#x} but real is {:#x}, ignore this message",
+                           key.message_type, resume_data->second->message.msg_type);
+                 break;
+               }
+               if (0 != resume_data->second->sequence && 0 != key.sequence &&
+                   resume_data->second->sequence != key.sequence) {
+                 FWLOGINFO("resume and expect message sequence {:#x} but real is {:#x}, ignore this message",
+                           key.sequence, resume_data->second->sequence);
+                 break;
+               }
+               (*receive_callback)(resume_data->second, callback_private_data);
+             } while (false);
 
              task_manager::me()->internal_remove_resume_generator(key, generator);
            }}};

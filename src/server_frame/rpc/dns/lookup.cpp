@@ -15,7 +15,7 @@
 namespace rpc {
 namespace dns {
 
-rpc::result_code_type lookup(rpc::context& ctx, gsl::string_view domain, std::vector<address_record>& output) {
+rpc::result_code_type lookup(rpc::context &ctx, gsl::string_view domain, std::vector<address_record> &output) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("rpc {} must be called in a task", "rpc::dns::lookup");
 
   rpc::context child_ctx(ctx);
@@ -40,12 +40,20 @@ rpc::result_code_type lookup(rpc::context& ctx, gsl::string_view domain, std::ve
   await_options.timeout =
       rpc::make_duration_or_default(logic_config::me()->get_logic().dns().lookup_timeout(), std::chrono::seconds{5});
 
-  dispatcher_resume_data_type result = dispatcher_make_default<dispatcher_resume_data_type>();
-  ret = RPC_AWAIT_CODE_RESULT(
-      rpc::custom_wait(ctx, ss_msg_dispatcher::me()->get_dns_lookup_rpc_type(), &result, await_options));
-  if (result.message.msg_addr != nullptr) {
-    output.swap(*reinterpret_cast<details::callback_data_type*>(result.message.msg_addr));
-  }
+  ret = RPC_AWAIT_CODE_RESULT(rpc::custom_wait(
+      ctx, ss_msg_dispatcher::me()->get_dns_lookup_rpc_type(), await_options,
+      [](const dispatcher_resume_data_type *resume_data, std::vector<address_record> &stack_data) {
+        if (nullptr == resume_data) {
+          return;
+        }
+
+        if (nullptr == resume_data->message.msg_addr) {
+          return;
+        }
+
+        stack_data.swap(*reinterpret_cast<details::callback_data_type *>(resume_data->message.msg_addr));
+      },
+      output));
 
   RPC_RETURN_CODE(ret);
 }

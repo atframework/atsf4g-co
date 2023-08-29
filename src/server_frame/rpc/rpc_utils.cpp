@@ -230,8 +230,9 @@ SERVER_FRAME_API void context::set_task_context(const task_context_data &task_ct
 }
 
 namespace detail {
-static result_code_type wait(context &ctx, dispatcher_resume_data_type *output, uintptr_t check_type,
-                             const dispatcher_await_options &options) {
+static result_code_type wait(context &ctx, uintptr_t check_type, const dispatcher_await_options &options,
+                             dispatcher_receive_resume_data_callback receive_callback,
+                             void *receive_callback_private_data) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in a task");
 
   {
@@ -253,7 +254,8 @@ static result_code_type wait(context &ctx, dispatcher_resume_data_type *output, 
     is_continue = false;
     // 协程 swap out
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-    auto generator_kv = task_manager::make_resume_generator(check_type, options);
+    auto generator_kv =
+        task_manager::make_resume_generator(check_type, options, receive_callback, receive_callback_private_data);
     auto [await_rsult, resume_data] = co_await generator_kv.second;
     if (await_rsult < 0) {
       RPC_RETURN_CODE(await_rsult);
@@ -263,7 +265,6 @@ static result_code_type wait(context &ctx, dispatcher_resume_data_type *output, 
     task_type_trait::internal_task_type::this_task()->yield(&result);
 
     dispatcher_resume_data_type *resume_data = reinterpret_cast<dispatcher_resume_data_type *>(result);
-#endif
 
     // 协程 swap in
     TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);
@@ -302,9 +303,10 @@ static result_code_type wait(context &ctx, dispatcher_resume_data_type *output, 
       continue;
     }
 
-    if (nullptr != output) {
-      *output = *resume_data;
+    if (nullptr != receive_callback) {
+      (*receive_callback)(resume_data, receive_callback_private_data);
     }
+#endif
   }
 
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -336,6 +338,13 @@ static inline void wait_swap_message(TMSG &output, void *input) {
 }
 
 template <typename TMSG>
+struct UTIL_SYMBOL_LOCAL batch_wait_private_type {
+  const std::unordered_set<dispatcher_await_options> *waiters;
+  std::unordered_map<uint64_t, TMSG> *received;
+  std::unordered_set<uint64_t> *received_sequences;
+};
+
+template <typename TMSG>
 static result_code_type wait(context &ctx, uintptr_t check_type,
                              const std::unordered_set<dispatcher_await_options> &waiters,
                              std::unordered_map<uint64_t, TMSG> &received, size_t wakeup_count) {
@@ -354,15 +363,50 @@ static result_code_type wait(context &ctx, uintptr_t check_type,
     }
   }
 
-  dispatcher_await_options one_wait_option = dispatcher_make_default<dispatcher_await_options>();
   std::unordered_set<uint64_t> received_sequences;
   received_sequences.reserve(waiters.size());
   received.reserve(waiters.size());
+
+  using multiple_wait_private_type = batch_wait_private_type<TMSG>;
+
+  multiple_wait_private_type callback_private_data;
+  callback_private_data.waiters = &waiters;
+  callback_private_data.received = &received;
+  callback_private_data.received_sequences = &received_sequences;
+
+  void *receive_callback_private_data = reinterpret_cast<void *>(&callback_private_data);
+  dispatcher_receive_resume_data_callback receive_callback = [](const dispatcher_resume_data_type *resume_data,
+                                                                void *stack_data) {
+    multiple_wait_private_type *stack_received = reinterpret_cast<multiple_wait_private_type *>(stack_data);
+    if (nullptr == resume_data || nullptr == stack_received) {
+      return;
+    }
+    if (nullptr != stack_received->waiters) {
+      dispatcher_await_options one_wait_option = dispatcher_make_default<dispatcher_await_options>();
+      one_wait_option.sequence = resume_data->sequence;
+      if (stack_received->waiters->end() == stack_received->waiters->find(one_wait_option)) {
+        FWLOGINFO("resume and expect message type {:#x} but sequence not found, ignore this message",
+                  resume_data->message.msg_type, one_wait_option.sequence);
+        return;
+      }
+    }
+
+    if (nullptr != stack_received->received_sequences) {
+      stack_received->received_sequences->insert(resume_data->sequence);
+    }
+
+    if (nullptr != stack_received->received) {
+      wait_swap_message((*stack_received->received)[resume_data->sequence], resume_data->message.msg_addr);
+    }
+  };
+
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   std::vector<task_manager::generic_resume_generator> generators;
   generators.reserve(waiters.size());
   for (auto &waiter_option : waiters) {
-    generators.emplace_back(std::move(task_manager::make_resume_generator(check_type, waiter_option).second));
+    generators.emplace_back(std::move(
+        task_manager::make_resume_generator(check_type, waiter_option, receive_callback, receive_callback_private_data)
+            .second));
   }
 #endif
   for (size_t retry_times = 0;
@@ -386,7 +430,6 @@ static result_code_type wait(context &ctx, uintptr_t check_type,
     task_type_trait::internal_task_type::this_task()->yield(&result);
 
     dispatcher_resume_data_type *resume_data = reinterpret_cast<dispatcher_resume_data_type *>(result);
-#endif
 
     // 协程 swap in
     TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);
@@ -404,33 +447,20 @@ static result_code_type wait(context &ctx, uintptr_t check_type,
       }
     }
 
-#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-    for (auto &ready_generator : readys) {
-      dispatcher_resume_data_type *resume_data = ready_generator->get_context()->data()->second;
-#endif
-      if (nullptr == resume_data) {
-        FWLOGINFO("task {} resume data is empty, maybe resumed by await_task", ctx.get_task_context().task_id);
-        continue;
-      }
+    if (nullptr == resume_data) {
+      FWLOGINFO("task {} resume data is empty, maybe resumed by await_task", ctx.get_task_context().task_id);
+      continue;
+    }
 
-      if (resume_data->message.msg_type != check_type) {
-        FWLOGINFO("task {} resume and expect message type {:#x} but real is {:#x}, ignore this message",
-                  ctx.get_task_context().task_id, check_type, resume_data->message.msg_type);
+    if (resume_data->message.msg_type != check_type) {
+      FWLOGINFO("task {} resume and expect message type {:#x} but real is {:#x}, ignore this message",
+                ctx.get_task_context().task_id, check_type, resume_data->message.msg_type);
 
-        continue;
-      }
+      continue;
+    }
 
-      one_wait_option.sequence = resume_data->sequence;
-      auto rsp_iter = waiters.find(one_wait_option);
-      if (rsp_iter == waiters.end()) {
-        FWLOGINFO("task {} resume and with message sequence {} but not found in waiters, ignore this message",
-                  ctx.get_task_context().task_id, resume_data->sequence);
-        continue;
-      }
-
-      received_sequences.insert(resume_data->sequence);
-      wait_swap_message(received[resume_data->sequence], resume_data->message.msg_addr);
-#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+    if (nullptr != receive_callback) {
+      (*receive_callback)(resume_data, receive_callback_private_data);
     }
 #endif
   }
@@ -462,18 +492,23 @@ SERVER_FRAME_API result_code_type wait(context &ctx, std::chrono::system_clock::
   await_options.sequence = timer.sequence;
   await_options.timeout = timeout;
 
-  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(detail::wait(ctx, nullptr, timer.message_type, await_options)));
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(detail::wait(ctx, timer.message_type, await_options, nullptr, nullptr)));
 }
 
 SERVER_FRAME_API result_code_type wait(context &ctx, atframework::SSMsg &msg, const dispatcher_await_options &options) {
-  dispatcher_resume_data_type result = dispatcher_make_default<dispatcher_resume_data_type>();
-  int ret = RPC_AWAIT_CODE_RESULT(detail::wait(ctx, &result, ss_msg_dispatcher::me()->get_instance_ident(), options));
+  result_code_type::value_type ret = RPC_AWAIT_CODE_RESULT(detail::wait(
+      ctx, ss_msg_dispatcher::me()->get_instance_ident(), options,
+      [](const dispatcher_resume_data_type *resume_data, void *stack_data) {
+        atframework::SSMsg *stack_msg = reinterpret_cast<atframework::SSMsg *>(stack_data);
+        if (nullptr == stack_msg || nullptr == resume_data) {
+          return;
+        }
+
+        detail::wait_swap_message(stack_msg, resume_data->message.msg_addr);
+      },
+      reinterpret_cast<void *>(&msg)));
   if (0 != ret) {
     RPC_RETURN_CODE(ret);
-  }
-
-  if (nullptr != result.message.msg_addr) {
-    msg.Swap(reinterpret_cast<atframework::SSMsg *>(result.message.msg_addr));
   }
 
   RPC_RETURN_CODE(msg.head().error_code());
@@ -482,13 +517,20 @@ SERVER_FRAME_API result_code_type wait(context &ctx, atframework::SSMsg &msg, co
 SERVER_FRAME_API result_code_type wait(context &ctx, PROJECT_NAMESPACE_ID::table_all_message &msg,
                                        const dispatcher_await_options &options) {
   dispatcher_resume_data_type result = dispatcher_make_default<dispatcher_resume_data_type>();
-  int ret = RPC_AWAIT_CODE_RESULT(detail::wait(ctx, &result, db_msg_dispatcher::me()->get_instance_ident(), options));
+  int ret = RPC_AWAIT_CODE_RESULT(detail::wait(
+      ctx, db_msg_dispatcher::me()->get_instance_ident(), options,
+      [](const dispatcher_resume_data_type *resume_data, void *stack_data) {
+        PROJECT_NAMESPACE_ID::table_all_message *stack_msg =
+            reinterpret_cast<PROJECT_NAMESPACE_ID::table_all_message *>(stack_data);
+        if (nullptr == stack_msg || nullptr == resume_data) {
+          return;
+        }
+
+        detail::wait_swap_message(stack_msg, resume_data->message.msg_addr);
+      },
+      reinterpret_cast<void *>(&msg)));
   if (0 != ret) {
     RPC_RETURN_CODE(ret);
-  }
-
-  if (nullptr != result.message.msg_addr) {
-    msg.Swap(reinterpret_cast<PROJECT_NAMESPACE_ID::table_all_message *>(result.message.msg_addr));
   }
 
   RPC_RETURN_CODE(msg.error_code());
@@ -509,10 +551,11 @@ SERVER_FRAME_API result_code_type wait(context &ctx, const std::unordered_set<di
 }
 
 SERVER_FRAME_API result_code_type custom_wait(context &ctx, const void *type_address,
-                                              dispatcher_resume_data_type *received,
-                                              const dispatcher_await_options &options) {
-  RPC_RETURN_CODE(
-      RPC_AWAIT_CODE_RESULT(detail::wait(ctx, received, reinterpret_cast<uintptr_t>(type_address), options)));
+                                              const dispatcher_await_options &options,
+                                              dispatcher_receive_resume_data_callback receive_callback,
+                                              void *receive_callback_private_data) {
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(detail::wait(ctx, reinterpret_cast<uintptr_t>(type_address), options,
+                                                     receive_callback, receive_callback_private_data)));
 }
 
 SERVER_FRAME_API int32_t custom_resume(const task_type_trait::task_type &task,

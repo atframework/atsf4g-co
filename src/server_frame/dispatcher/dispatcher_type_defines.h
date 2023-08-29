@@ -119,3 +119,17 @@ UTIL_FORCEINLINE dispatcher_await_options dispatcher_make_default<dispatcher_awa
 
 class task_action_base;
 class dispatcher_implement;
+
+/**
+ * @brief This function will be used to receive callback data from dispatcher/executor into variable in stack.
+ *        Use the second parameter should point to a variable on stack.
+ *
+ */
+using dispatcher_receive_start_data_callback = void (*)(const dispatcher_start_data_type *, void *);
+
+/**
+ * @brief This function will be used to receive callback data from dispatcher/executor into variable in stack.
+ *        Use the second parameter should point to a variable on stack.
+ *
+ */
+using dispatcher_receive_resume_data_callback = void (*)(const dispatcher_resume_data_type *, void *);
