@@ -48,7 +48,7 @@ SERVER_FRAME_API tracer::tracer(tracer &&other)
       start_steady_timepoint_(other.start_steady_timepoint_),
       trace_span_(std::move(other.trace_span_)),
       dispatcher_(std::move(other.dispatcher_)) {
-  other.trace_span_.reset();
+  other.trace_span_ = span_ptr_type();
   other.dispatcher_.reset();
 }
 

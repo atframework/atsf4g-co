@@ -302,7 +302,7 @@ rpc::context::trace_option task_action_base::get_trace_option() const noexcept {
   ret.is_remote = true;
   ret.dispatcher = get_dispatcher();
   ret.parent_network_span = nullptr;
-  ret.parent_memory_span.reset();
+  ret.parent_memory_span = rpc::context::trace_option::span_ptr_type();
 
   return ret;
 }

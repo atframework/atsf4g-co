@@ -1,9 +1,6 @@
-// Copyright 2021 atframework
+// Copyright 2023 atframework
 // Created by owent on 2016/9/26.
 //
-
-#ifndef DISPATCHER_DISPATCHER_IMPLEMENT_H
-#define DISPATCHER_DISPATCHER_IMPLEMENT_H
 
 #pragma once
 
@@ -342,5 +339,3 @@ TMsg *dispatcher_implement::get_protobuf_msg(msg_raw_t &raw_msg, uintptr_t check
   } else {                                                                \
     ret = dispatcher::me()->register_action<act>(service_desc, rpc_name); \
   }
-
-#endif  // ATF4G_CO_DISPATCHER_IMPLEMENT_H

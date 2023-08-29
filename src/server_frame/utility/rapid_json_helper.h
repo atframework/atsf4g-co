@@ -27,7 +27,7 @@ class Message;
 }
 }  // namespace google
 
-struct UTIL_SYMBOL_VISIBLE rapidsjon_helper_string_mode {
+struct UTIL_SYMBOL_VISIBLE rapidjson_helper_string_mode {
   enum type {
     RAW = 0,
     URI,
@@ -35,70 +35,70 @@ struct UTIL_SYMBOL_VISIBLE rapidsjon_helper_string_mode {
   };
 };
 
-struct UTIL_SYMBOL_VISIBLE rapidsjon_helper_load_options {
+struct UTIL_SYMBOL_VISIBLE rapidjson_helper_load_options {
   bool reserve_empty = false;
   bool convert_large_number_to_string = false;  // it's friendly to JSON.parse(...) in javascript
-  rapidsjon_helper_string_mode::type string_mode = rapidsjon_helper_string_mode::RAW;
+  rapidjson_helper_string_mode::type string_mode = rapidjson_helper_string_mode::RAW;
 
-  inline rapidsjon_helper_load_options()
-      : reserve_empty(false), convert_large_number_to_string(false), string_mode(rapidsjon_helper_string_mode::RAW) {}
+  inline rapidjson_helper_load_options()
+      : reserve_empty(false), convert_large_number_to_string(false), string_mode(rapidjson_helper_string_mode::RAW) {}
 };
 
-struct UTIL_SYMBOL_VISIBLE rapidsjon_helper_dump_options {
-  rapidsjon_helper_string_mode::type string_mode = rapidsjon_helper_string_mode::RAW;
+struct UTIL_SYMBOL_VISIBLE rapidjson_helper_dump_options {
+  rapidjson_helper_string_mode::type string_mode = rapidjson_helper_string_mode::RAW;
   bool convert_number_from_string = false;  // it's friendly to JSON.parse(...) in javascript
 
-  inline rapidsjon_helper_dump_options()
-      : string_mode(rapidsjon_helper_string_mode::RAW), convert_number_from_string(false) {}
+  inline rapidjson_helper_dump_options()
+      : string_mode(rapidjson_helper_string_mode::RAW), convert_number_from_string(false) {}
 };
 
-SERVER_FRAME_API std::string rapidsjon_helper_stringify(const rapidjson::Document& doc, size_t more_reserve_size = 0);
-SERVER_FRAME_API bool rapidsjon_helper_unstringify(rapidjson::Document& doc, const std::string& json);
-SERVER_FRAME_API gsl::string_view rapidsjon_helper_get_type_name(rapidjson::Type t);
+SERVER_FRAME_API std::string rapidjson_helper_stringify(const rapidjson::Document& doc, size_t more_reserve_size = 0);
+SERVER_FRAME_API bool rapidjson_helper_unstringify(rapidjson::Document& doc, const std::string& json);
+SERVER_FRAME_API gsl::string_view rapidjson_helper_get_type_name(rapidjson::Type t);
 
-SERVER_FRAME_API std::string rapidsjon_helper_stringify(const ::google::protobuf::Message& src,
-                                                        const rapidsjon_helper_load_options& options);
-SERVER_FRAME_API bool rapidsjon_helper_parse(::google::protobuf::Message& dst, const std::string& src,
-                                             const rapidsjon_helper_dump_options& options);
+SERVER_FRAME_API std::string rapidjson_helper_stringify(const ::google::protobuf::Message& src,
+                                                        const rapidjson_helper_load_options& options);
+SERVER_FRAME_API bool rapidjson_helper_parse(::google::protobuf::Message& dst, const std::string& src,
+                                             const rapidjson_helper_dump_options& options);
 
-SERVER_FRAME_API void rapidsjon_helper_mutable_set_member(rapidjson::Value& parent, gsl::string_view key,
+SERVER_FRAME_API void rapidjson_helper_mutable_set_member(rapidjson::Value& parent, gsl::string_view key,
                                                           rapidjson::Value&& val, rapidjson::Document& doc,
                                                           bool overwrite = true);
-SERVER_FRAME_API void rapidsjon_helper_mutable_set_member(rapidjson::Value& parent, gsl::string_view key,
+SERVER_FRAME_API void rapidjson_helper_mutable_set_member(rapidjson::Value& parent, gsl::string_view key,
                                                           const rapidjson::Value& val, rapidjson::Document& doc,
                                                           bool overwrite = true);
-SERVER_FRAME_API void rapidsjon_helper_mutable_set_member(rapidjson::Value& parent, gsl::string_view key,
+SERVER_FRAME_API void rapidjson_helper_mutable_set_member(rapidjson::Value& parent, gsl::string_view key,
                                                           gsl::string_view val, rapidjson::Document& doc,
                                                           bool overwrite = true);
 
 template <class TVAL>
-void rapidsjon_helper_append_to_list(rapidjson::Value& list_parent, TVAL&& val, rapidjson::Document& doc);
+void rapidjson_helper_append_to_list(rapidjson::Value& list_parent, TVAL&& val, rapidjson::Document& doc);
 
-SERVER_FRAME_API void rapidsjon_helper_append_to_list(rapidjson::Value& list_parent, const std::string& val,
+SERVER_FRAME_API void rapidjson_helper_append_to_list(rapidjson::Value& list_parent, const std::string& val,
                                                       rapidjson::Document& doc);
-SERVER_FRAME_API void rapidsjon_helper_append_to_list(rapidjson::Value& list_parent, std::string& val,
+SERVER_FRAME_API void rapidjson_helper_append_to_list(rapidjson::Value& list_parent, std::string& val,
                                                       rapidjson::Document& doc);
-SERVER_FRAME_API void rapidsjon_helper_append_to_list(rapidjson::Value& list_parent, gsl::string_view val,
+SERVER_FRAME_API void rapidjson_helper_append_to_list(rapidjson::Value& list_parent, gsl::string_view val,
                                                       rapidjson::Document& doc);
 
-SERVER_FRAME_API void rapidsjon_helper_dump_to(const rapidjson::Document& src, ::google::protobuf::Message& dst,
-                                               const rapidsjon_helper_dump_options& options);
+SERVER_FRAME_API void rapidjson_helper_dump_to(const rapidjson::Document& src, ::google::protobuf::Message& dst,
+                                               const rapidjson_helper_dump_options& options);
 
-SERVER_FRAME_API void rapidsjon_helper_load_from(rapidjson::Document& dst, const ::google::protobuf::Message& src,
-                                                 const rapidsjon_helper_load_options& options);
+SERVER_FRAME_API void rapidjson_helper_load_from(rapidjson::Document& dst, const ::google::protobuf::Message& src,
+                                                 const rapidjson_helper_load_options& options);
 
-SERVER_FRAME_API void rapidsjon_helper_dump_to(const rapidjson::Value& src, ::google::protobuf::Message& dst,
-                                               const rapidsjon_helper_dump_options& options);
+SERVER_FRAME_API void rapidjson_helper_dump_to(const rapidjson::Value& src, ::google::protobuf::Message& dst,
+                                               const rapidjson_helper_dump_options& options);
 
-SERVER_FRAME_API void rapidsjon_helper_load_from(rapidjson::Value& dst, rapidjson::Document& doc,
+SERVER_FRAME_API void rapidjson_helper_load_from(rapidjson::Value& dst, rapidjson::Document& doc,
                                                  const ::google::protobuf::Message& src,
-                                                 const rapidsjon_helper_load_options& options);
+                                                 const rapidjson_helper_load_options& options);
 
 // ============ template implement ============
 
 template <class TVAL, class = typename std::enable_if<
                           !std::is_convertible<typename std::decay<TVAL>::type, gsl::string_view>::value>::type>
-UTIL_SYMBOL_VISIBLE void rapidsjon_helper_mutable_set_member(rapidjson::Value& parent, gsl::string_view key, TVAL&& val,
+UTIL_SYMBOL_VISIBLE void rapidjson_helper_mutable_set_member(rapidjson::Value& parent, gsl::string_view key, TVAL&& val,
                                                              rapidjson::Document& doc, bool overwrite = true) {
   if (!parent.IsObject()) {
     parent.SetObject();
@@ -117,12 +117,12 @@ UTIL_SYMBOL_VISIBLE void rapidsjon_helper_mutable_set_member(rapidjson::Value& p
 }
 
 template <class TVAL>
-UTIL_SYMBOL_VISIBLE void rapidsjon_helper_append_to_list(rapidjson::Value& list_parent, TVAL&& val,
+UTIL_SYMBOL_VISIBLE void rapidjson_helper_append_to_list(rapidjson::Value& list_parent, TVAL&& val,
                                                          rapidjson::Document& doc) {
   if (list_parent.IsArray()) {
     list_parent.PushBack(std::forward<TVAL>(val), doc.GetAllocator());
   } else {
-    FWLOGERROR("parent should be a array, but we got {}.", rapidsjon_helper_get_type_name(list_parent.GetType()));
+    FWLOGERROR("parent should be a array, but we got {}.", rapidjson_helper_get_type_name(list_parent.GetType()));
   }
 }
 

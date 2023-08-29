@@ -974,13 +974,13 @@ void logic_server_common_module::setup_metrics_tick() {
 
 void logic_server_common_module::setup_metrics_cpu_sys() {
   LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER(
-      "service_rusage_cpu_sys", "", "%", mutable_metrics_observable_gauge_double,
+      "service_rusage_cpu_sys", "", "percent", mutable_metrics_observable_gauge_double,
       static_cast<double>(stats->collect_cpu_sys.load(std::memory_order_acquire)) / 10000.0);
 }
 
 void logic_server_common_module::setup_metrics_cpu_user() {
   LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER(
-      "service_rusage_cpu_user", "", "%", mutable_metrics_observable_gauge_double,
+      "service_rusage_cpu_user", "", "percent", mutable_metrics_observable_gauge_double,
       static_cast<double>(stats->collect_cpu_user.load(std::memory_order_acquire)) / 10000.0);
 }
 
@@ -1332,10 +1332,10 @@ void logic_server_common_module::update_remote_server_configure(const std::strin
     return;
   }
 
-  rapidsjon_helper_dump_options default_dump_options;
+  rapidjson_helper_dump_options default_dump_options;
   PROJECT_NAMESPACE_ID::table_service_configure_data new_conf;
-  rapidsjon_helper_parse(new_conf, global_conf, default_dump_options);
-  rapidsjon_helper_parse(new_conf, zone_conf, default_dump_options);
+  rapidjson_helper_parse(new_conf, global_conf, default_dump_options);
+  rapidjson_helper_parse(new_conf, zone_conf, default_dump_options);
 
   server_remote_conf_.Swap(&new_conf);
 

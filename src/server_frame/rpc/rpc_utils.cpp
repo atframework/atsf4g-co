@@ -43,22 +43,7 @@ namespace rpc {
 
 SERVER_FRAME_API context::context() noexcept {
   trace_context_.caller_mode = parent_mode::kParent;
-#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   task_context_.task_id = 0;
-#else
-  task_type_trait::internal_task_type *task = task_type_trait::internal_task_type::this_task();
-  if (task) {
-    task_type_trait::task_type task_ptr(task);
-    rpc::context *parent = task_manager::get_shared_context(task_ptr);
-    if (parent) {
-      set_parent_context(*parent);
-    }
-
-    task_context_.task_id = task->get_id();
-  } else {
-    task_context_.task_id = 0;
-  }
-#endif
 }
 
 SERVER_FRAME_API context::context(context &&other) noexcept {
@@ -512,21 +497,22 @@ SERVER_FRAME_API result_code_type wait(context &ctx, PROJECT_NAMESPACE_ID::table
 SERVER_FRAME_API result_code_type wait(context &ctx, const std::unordered_set<dispatcher_await_options> &waiters,
                                        std::unordered_map<uint64_t, atframework::SSMsg> &received,
                                        size_t wakeup_count) {
-  return detail::wait(ctx, ss_msg_dispatcher::me()->get_instance_ident(), waiters, received,
-                      0 == wakeup_count ? waiters.size() : wakeup_count);
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(detail::wait(ctx, ss_msg_dispatcher::me()->get_instance_ident(), waiters,
+                                                     received, 0 == wakeup_count ? waiters.size() : wakeup_count)));
 }
 
 SERVER_FRAME_API result_code_type wait(context &ctx, const std::unordered_set<dispatcher_await_options> &waiters,
                                        std::unordered_map<uint64_t, atframework::SSMsg *> &received,
                                        size_t wakeup_count) {
-  return detail::wait(ctx, ss_msg_dispatcher::me()->get_instance_ident(), waiters, received,
-                      0 == wakeup_count ? waiters.size() : wakeup_count);
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(detail::wait(ctx, ss_msg_dispatcher::me()->get_instance_ident(), waiters,
+                                                     received, 0 == wakeup_count ? waiters.size() : wakeup_count)));
 }
 
 SERVER_FRAME_API result_code_type custom_wait(context &ctx, const void *type_address,
                                               dispatcher_resume_data_type *received,
                                               const dispatcher_await_options &options) {
-  return detail::wait(ctx, received, reinterpret_cast<uintptr_t>(type_address), options);
+  RPC_RETURN_CODE(
+      RPC_AWAIT_CODE_RESULT(detail::wait(ctx, received, reinterpret_cast<uintptr_t>(type_address), options)));
 }
 
 SERVER_FRAME_API int32_t custom_resume(const task_type_trait::task_type &task,
