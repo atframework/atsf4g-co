@@ -334,7 +334,9 @@ SERVER_FRAME_API int task_manager::start_task(task_type_trait::id_type task_id, 
     FWLOGERROR("start task {} failed.", task_id);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
   }
-  auto generator = iter->second;
+  auto generator = iter->second.generator_context;
+
+  internal_trigger_callback(iter->second, &data);
   if (generator) {
     generator->set_value(std::pair<int32_t, dispatcher_start_data_type *>{0, &data});
   } else {
@@ -354,22 +356,24 @@ SERVER_FRAME_API int task_manager::start_task(task_type_trait::id_type task_id, 
 
 SERVER_FRAME_API int task_manager::resume_task(task_type_trait::id_type task_id, dispatcher_resume_data_type &data) {
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-  generic_resume_index index{data.message.msg_type, data.sequence};
+  generic_resume_index index{data.message.message_type, data.sequence};
   auto iter_index = waiting_resume_index_.find(index);
   if (iter_index == waiting_resume_index_.end()) {
     FWLOGINFO("resume task {}(message type={}, sequence={}) but generator index not found, ignored.", task_id,
-              data.message.msg_type, data.sequence);
+              data.message.message_type, data.sequence);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
   }
   generic_resume_key key = iter_index->second;
   auto iter_key = waiting_resume_timer_.find(key);
   if (iter_key == waiting_resume_timer_.end()) {
     FWLOGERROR("resume task {}(message type={}, sequence={}) but generator timer not found, abort.", task_id,
-               data.message.msg_type, data.sequence);
+               data.message.message_type, data.sequence);
     waiting_resume_index_.erase(iter_index);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
   }
-  auto generator = iter_key->second;
+  auto generator = iter_key->second.generator_context;
+
+  internal_trigger_callback(iter_key->second, key, &data);
   if (generator) {
     generator->set_value(std::pair<int32_t, dispatcher_resume_data_type *>{0, &data});
   } else {
@@ -380,12 +384,12 @@ SERVER_FRAME_API int task_manager::resume_task(task_type_trait::id_type task_id,
   int res = native_mgr_->resume(task_id, &data);
   if (res < 0) {
     if (copp::COPP_EC_NOT_FOUND == res) {
-      FWLOGINFO("resume task {}(message type={}, sequence={}) but not found, ignored.", task_id, data.message.msg_type,
-                data.sequence);
+      FWLOGINFO("resume task {}(message type={}, sequence={}) but not found, ignored.", task_id,
+                data.message.message_type, data.sequence);
       return 0;
     }
 
-    FWLOGERROR("resume task {}(message type={}, sequence={}) failed, res: {}.", task_id, data.message.msg_type,
+    FWLOGERROR("resume task {}(message type={}, sequence={}) failed, res: {}.", task_id, data.message.message_type,
                data.sequence, res);
     // 错误码
     return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
@@ -502,22 +506,40 @@ int task_manager::report_create_error(const char *fn_name) {
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
 void task_manager::internal_insert_start_generator(task_type_trait::id_type task_id,
-                                                   generic_start_generator::context_pointer_type &&generator_context) {
+                                                   generic_start_generator::context_pointer_type &&generator_context,
+                                                   dispatcher_receive_start_data_callback callback,
+                                                   void *callback_private_data) {
   if (!generator_context) {
     return;
   }
 
-  waiting_start_.emplace(std::pair<const task_type_trait::id_type, generic_start_generator::context_pointer_type>{
-      task_id, std::move(generator_context)});
+  generic_start_generator_record record;
+  record.generator_context = std::move(generator_context);
+  record.callback = callback;
+  record.callback_private_data = callback_private_data;
+
+  waiting_start_.emplace(
+      std::pair<const task_type_trait::id_type, generic_start_generator_record>{task_id, std::move(record)});
 }
 
 void task_manager::internal_remove_start_generator(task_type_trait::id_type task_id,
-                                                   const generic_start_generator::context_type &) {
-  waiting_start_.erase(task_id);
+                                                   const generic_start_generator::context_type &generator_context) {
+  auto iter = waiting_start_.find(task_id);
+  if (iter == waiting_start_.end()) {
+    return;
+  }
+
+  if (nullptr != generator_context.data()) {
+    internal_trigger_callback(iter->second, generator_context.data()->second);
+  }
+
+  waiting_start_.erase(iter);
 }
 
-void task_manager::internal_insert_resume_generator(
-    const generic_resume_key &key, generic_resume_generator::context_pointer_type &&generator_context) {
+void task_manager::internal_insert_resume_generator(const generic_resume_key &key,
+                                                    generic_resume_generator::context_pointer_type &&generator_context,
+                                                    dispatcher_receive_resume_data_callback callback,
+                                                    void *callback_private_data) {
   if (!generator_context) {
     return;
   }
@@ -527,8 +549,13 @@ void task_manager::internal_insert_resume_generator(
     return;
   }
 
-  waiting_resume_timer_.emplace(std::pair<const generic_resume_key, generic_resume_generator::context_pointer_type>{
-      key, std::move(generator_context)});
+  generic_resume_generator_record record;
+  record.generator_context = std::move(generator_context);
+  record.callback = callback;
+  record.callback_private_data = callback_private_data;
+
+  waiting_resume_timer_.emplace(
+      std::pair<const generic_resume_key, generic_resume_generator_record>{key, std::move(record)});
   waiting_resume_index_.emplace(std::pair<const generic_resume_index, generic_resume_key>{index, key});
 }
 
@@ -539,13 +566,67 @@ void task_manager::internal_remove_resume_generator(const generic_resume_key &ke
     return;
   }
 
-  if (iter->second && iter->second.get() != &generator_context) {
+  if (iter->second.generator_context && iter->second.generator_context.get() != &generator_context) {
     return;
+  }
+
+  if (nullptr != generator_context.data()) {
+    internal_trigger_callback(iter->second, iter->first, generator_context.data()->second);
   }
 
   waiting_resume_index_.erase({generic_resume_index{key.message_type, key.sequence}});
   waiting_resume_timer_.erase(iter);
 }
+
+void task_manager::internal_trigger_callback(generic_start_generator_record &start_record,
+                                             const dispatcher_start_data_type *start_data) {
+  if (!start_record.callback) {
+    return;
+  }
+
+  dispatcher_receive_start_data_callback callback = start_record.callback;
+  void *callback_private_data = start_record.callback_private_data;
+  start_record.callback = nullptr;
+  start_record.callback_private_data = nullptr;
+
+  if (nullptr == start_data) {
+    (*callback)(start_data, callback_private_data);
+    return;
+  }
+
+  (*callback)(start_data, callback_private_data);
+}
+
+void task_manager::internal_trigger_callback(generic_resume_generator_record &resume_record,
+                                             const generic_resume_key &key,
+                                             const dispatcher_resume_data_type *resume_data) {
+  if (!resume_record.callback) {
+    return;
+  }
+
+  dispatcher_receive_resume_data_callback callback = resume_record.callback;
+  void *callback_private_data = resume_record.callback_private_data;
+  resume_record.callback = nullptr;
+  resume_record.callback_private_data = nullptr;
+
+  if (nullptr == resume_data) {
+    (*callback)(resume_data, callback_private_data);
+    return;
+  }
+
+  if (resume_data->message.message_type != key.message_type) {
+    FWLOGINFO("resume and expect message type {:#x} but real is {:#x}, ignore this message", key.message_type,
+              resume_data->message.message_type);
+    return;
+  }
+  if (0 != resume_data->sequence && 0 != key.sequence && resume_data->sequence != key.sequence) {
+    FWLOGINFO("resume and expect message sequence {:#x} but real is {:#x}, ignore this message", key.sequence,
+              resume_data->sequence);
+    return;
+  }
+  (*callback)(resume_data, callback_private_data);
+}
+
 #endif
 
 SERVER_FRAME_API bool task_manager::is_busy() const {
@@ -620,21 +701,17 @@ task_manager::convert_task_status_to_error_code(task_type_trait::task_status tas
 SERVER_FRAME_API task_manager::generic_start_generator task_manager::make_start_generator(
     task_type_trait::id_type task_id, dispatcher_receive_start_data_callback receive_callback,
     void *callback_private_data) {
-  return {[task_id](generic_start_generator::context_pointer_type generator) {
+  return {[task_id, receive_callback, callback_private_data](generic_start_generator::context_pointer_type generator) {
             if (task_manager::is_instance_destroyed()) {
               return;
             }
 
-            task_manager::me()->internal_insert_start_generator(task_id, std::move(generator));
+            task_manager::me()->internal_insert_start_generator(task_id, std::move(generator), receive_callback,
+                                                                callback_private_data);
           },
-          [task_id, receive_callback, callback_private_data](const generic_start_generator::context_type &generator) {
+          [task_id](const generic_start_generator::context_type &generator) {
             if (task_manager::is_instance_destroyed()) {
               return;
-            }
-
-            const task_manager::generic_start_generator::value_type *start_data = generator.data();
-            if (nullptr != receive_callback && nullptr != start_data) {
-              (*receive_callback)(start_data->second, callback_private_data);
             }
 
             task_manager::me()->internal_remove_start_generator(task_id, generator);
@@ -654,40 +731,18 @@ task_manager::make_resume_generator(uintptr_t message_type, const dispatcher_awa
 
   generic_resume_key key{util::time::time_utility::now() + timeout, message_type, await_options.sequence};
   return {key,
-          {[key](generic_resume_generator::context_pointer_type generator) {
+          {[key, receive_callback, callback_private_data](generic_resume_generator::context_pointer_type generator) {
              if (task_manager::is_instance_destroyed()) {
                return;
              }
 
-             task_manager::me()->internal_insert_resume_generator(key, std::move(generator));
+             task_manager::me()->internal_insert_resume_generator(key, std::move(generator), receive_callback,
+                                                                  callback_private_data);
            },
-           [key, receive_callback, callback_private_data](const generic_resume_generator::context_type &generator) {
+           [key](const generic_resume_generator::context_type &generator) {
              if (task_manager::is_instance_destroyed()) {
                return;
              }
-
-             do {
-               const task_manager::generic_resume_generator::value_type *resume_data = generator.data();
-               if (nullptr == receive_callback || nullptr == resume_data) {
-                 break;
-               }
-               if (nullptr == resume_data->second) {
-                 (*receive_callback)(resume_data->second, callback_private_data);
-                 break;
-               }
-               if (resume_data->second->message.msg_type != key.message_type) {
-                 FWLOGINFO("resume and expect message type {:#x} but real is {:#x}, ignore this message",
-                           key.message_type, resume_data->second->message.msg_type);
-                 break;
-               }
-               if (0 != resume_data->second->sequence && 0 != key.sequence &&
-                   resume_data->second->sequence != key.sequence) {
-                 FWLOGINFO("resume and expect message sequence {:#x} but real is {:#x}, ignore this message",
-                           key.sequence, resume_data->second->sequence);
-                 break;
-               }
-               (*receive_callback)(resume_data->second, callback_private_data);
-             } while (false);
 
              task_manager::me()->internal_remove_resume_generator(key, generator);
            }}};

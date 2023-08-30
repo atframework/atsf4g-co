@@ -232,7 +232,7 @@ int router_object_base::downgrade() {
 }
 
 int router_object_base::send_transfer_msg_failed(atframework::SSMsg &&req) {
-  task_action_ss_req_base::msg_type rsp_msg;
+  task_action_ss_req_base::message_type rsp_msg;
   uint64_t dst_pd = req.head().bus_id();
   if (req.head().has_router()) {
     dst_pd = req.head().router().router_src_bus_id();
@@ -271,7 +271,7 @@ void router_object_base::wakeup_io_task_awaiter() {
     if (!task_type_trait::empty(wake_task) && !task_type_trait::is_exiting(wake_task)) {
       // iter will be erased in task
       dispatcher_resume_data_type callback_data = dispatcher_make_default<dispatcher_resume_data_type>();
-      callback_data.message.msg_type = reinterpret_cast<uintptr_t>(reinterpret_cast<const void *>(&io_task_awaiter_));
+      callback_data.message.message_type = reinterpret_cast<uintptr_t>(reinterpret_cast<const void *>(&io_task_awaiter_));
       callback_data.sequence = task_type_trait::get_task_id(wake_task);
 
       rpc::custom_resume(wake_task, callback_data);

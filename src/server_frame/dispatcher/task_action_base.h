@@ -336,7 +336,7 @@ class task_action_base
 template <typename TREQ>
 class task_action_req_base : public task_action_base {
  public:
-  using msg_type = TREQ;
+  using message_type = TREQ;
   using result_type = task_action_base::result_type;
 
  protected:

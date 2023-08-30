@@ -230,7 +230,7 @@ SERVER_FRAME_API void context::set_task_context(const task_context_data &task_ct
 }
 
 namespace detail {
-static result_code_type wait(context &ctx, uintptr_t check_type, const dispatcher_await_options &options,
+static result_code_type wait(EXPLICIT_UNUSED_ATTR context &ctx, uintptr_t check_type, const dispatcher_await_options &options,
                              dispatcher_receive_resume_data_callback receive_callback,
                              void *receive_callback_private_data) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in a task");
@@ -288,9 +288,9 @@ static result_code_type wait(context &ctx, uintptr_t check_type, const dispatche
       continue;
     }
 
-    if (resume_data->message.msg_type != check_type) {
+    if (resume_data->message.message_type != check_type) {
       FWLOGINFO("task {} resume and expect message type {:#x} but real is {:#x}, ignore this message",
-                ctx.get_task_context().task_id, check_type, resume_data->message.msg_type);
+                ctx.get_task_context().task_id, check_type, resume_data->message.message_type);
 
       is_continue = true;
       continue;
@@ -338,14 +338,14 @@ static inline void wait_swap_message(TMSG &output, void *input) {
 }
 
 template <typename TMSG>
-struct UTIL_SYMBOL_LOCAL batch_wait_private_type {
+struct batch_wait_private_type {
   const std::unordered_set<dispatcher_await_options> *waiters;
   std::unordered_map<uint64_t, TMSG> *received;
   std::unordered_set<uint64_t> *received_sequences;
 };
 
 template <typename TMSG>
-static result_code_type wait(context &ctx, uintptr_t check_type,
+static result_code_type wait(EXPLICIT_UNUSED_ATTR context &ctx, uintptr_t check_type,
                              const std::unordered_set<dispatcher_await_options> &waiters,
                              std::unordered_map<uint64_t, TMSG> &received, size_t wakeup_count) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in a task");
@@ -386,7 +386,7 @@ static result_code_type wait(context &ctx, uintptr_t check_type,
       one_wait_option.sequence = resume_data->sequence;
       if (stack_received->waiters->end() == stack_received->waiters->find(one_wait_option)) {
         FWLOGINFO("resume and expect message type {:#x} but sequence not found, ignore this message",
-                  resume_data->message.msg_type, one_wait_option.sequence);
+                  resume_data->message.message_type, one_wait_option.sequence);
         return;
       }
     }
@@ -452,9 +452,9 @@ static result_code_type wait(context &ctx, uintptr_t check_type,
       continue;
     }
 
-    if (resume_data->message.msg_type != check_type) {
+    if (resume_data->message.message_type != check_type) {
       FWLOGINFO("task {} resume and expect message type {:#x} but real is {:#x}, ignore this message",
-                ctx.get_task_context().task_id, check_type, resume_data->message.msg_type);
+                ctx.get_task_context().task_id, check_type, resume_data->message.message_type);
 
       continue;
     }

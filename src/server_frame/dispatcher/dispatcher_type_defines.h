@@ -27,11 +27,16 @@ template <class T>
 T dispatcher_make_default() noexcept;
 
 struct UTIL_SYMBOL_VISIBLE dispatcher_raw_message {
-  uintptr_t msg_type;  // 建议对所有的消息体类型分配一个ID，用以检查回调类型转换。推荐时使用dispatcher单例的地址。
+  uintptr_t message_type;  // 建议对所有的消息体类型分配一个ID，用以检查回调类型转换。推荐时使用dispatcher单例的地址。
   void *msg_addr;
+  
+  UTIL_FORCEINLINE dispatcher_raw_message(const dispatcher_raw_message &) = default;
+  UTIL_FORCEINLINE dispatcher_raw_message(dispatcher_raw_message &&) = default;
+  UTIL_FORCEINLINE dispatcher_raw_message &operator=(const dispatcher_raw_message &) = default;
+  UTIL_FORCEINLINE dispatcher_raw_message &operator=(dispatcher_raw_message &&) = default;
 
  private:
-  UTIL_FORCEINLINE dispatcher_raw_message() noexcept : msg_type(0), msg_addr(nullptr) {}
+  UTIL_FORCEINLINE dispatcher_raw_message() noexcept : message_type(0), msg_addr(nullptr) {}
 
   template <class T>
   UTIL_SYMBOL_VISIBLE friend T dispatcher_make_default() noexcept;
@@ -48,6 +53,11 @@ struct UTIL_SYMBOL_VISIBLE dispatcher_resume_data_type {
   uint64_t sequence;  // 等待序号，通常和发送序号匹配。用于检测同类消息是否是发出的那个
 
   rpc::context *context;  // 上下文对象，用于优化pb消息的生命周期和链路跟踪
+
+  UTIL_FORCEINLINE dispatcher_resume_data_type(const dispatcher_resume_data_type &) = default;
+  UTIL_FORCEINLINE dispatcher_resume_data_type(dispatcher_resume_data_type &&) = default;
+  UTIL_FORCEINLINE dispatcher_resume_data_type &operator=(const dispatcher_resume_data_type &) = default;
+  UTIL_FORCEINLINE dispatcher_resume_data_type &operator=(dispatcher_resume_data_type &&) = default;
 
  private:
   UTIL_FORCEINLINE dispatcher_resume_data_type() noexcept
@@ -66,6 +76,11 @@ struct dispatcher_start_data_type {
   const atframework::DispatcherOptions *options;  // 调度协议层选项
 
   rpc::context *context;  // 上下文对象，用于优化pb消息的生命周期和链路跟踪
+
+  UTIL_FORCEINLINE dispatcher_start_data_type(const dispatcher_start_data_type &) = default;
+  UTIL_FORCEINLINE dispatcher_start_data_type(dispatcher_start_data_type &&) = default;
+  UTIL_FORCEINLINE dispatcher_start_data_type &operator=(const dispatcher_start_data_type &) = default;
+  UTIL_FORCEINLINE dispatcher_start_data_type &operator=(dispatcher_start_data_type &&) = default;
 
  private:
   UTIL_FORCEINLINE dispatcher_start_data_type() noexcept
@@ -91,6 +106,11 @@ UTIL_FORCEINLINE dispatcher_resume_data_type dispatcher_make_default<dispatcher_
 struct UTIL_SYMBOL_VISIBLE dispatcher_await_options {
   uint64_t sequence;
   std::chrono::system_clock::duration timeout;
+
+  UTIL_FORCEINLINE dispatcher_await_options(const dispatcher_await_options &) = default;
+  UTIL_FORCEINLINE dispatcher_await_options(dispatcher_await_options &&) = default;
+  UTIL_FORCEINLINE dispatcher_await_options &operator=(const dispatcher_await_options &) = default;
+  UTIL_FORCEINLINE dispatcher_await_options &operator=(dispatcher_await_options &&) = default;
 
  private:
   UTIL_FORCEINLINE dispatcher_await_options() noexcept : sequence(0), timeout(get_default_timeout()) {}

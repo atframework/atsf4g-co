@@ -173,17 +173,17 @@ class dispatcher_implement : public ::atapp::module_impl {
    * @param raw_msg 消息抽象结构
    * @return 返回action或actor选项或NULL
    */
-  virtual const atframework::DispatcherOptions *get_options_by_message_type(msg_type_t msg_type);
+  virtual const atframework::DispatcherOptions *get_options_by_message_type(msg_type_t message_type);
 
   /**
    * @brief 注册Action
-   * @param msg_type 消息类型ID
+   * @param message_type 消息类型ID
    * @return 或错误码
    */
   template <typename TAction>
-  inline int register_action(msg_type_t msg_type) {
-    const atframework::DispatcherOptions *options = get_options_by_message_type(msg_type);
-    return _register_action(msg_type, task_manager::me()->make_task_creator<TAction>(options));
+  inline int register_action(msg_type_t message_type) {
+    const atframework::DispatcherOptions *options = get_options_by_message_type(message_type);
+    return _register_action(message_type, task_manager::me()->make_task_creator<TAction>(options));
   }
 
   /**
@@ -267,7 +267,7 @@ class dispatcher_implement : public ::atapp::module_impl {
   const std::string &get_empty_string();
 
  private:
-  int _register_action(msg_type_t msg_type, task_manager::task_action_creator_t action);
+  int _register_action(msg_type_t message_type, task_manager::task_action_creator_t action);
   int _register_action(const std::string &rpc_full_name, task_manager::task_action_creator_t action);
 
  private:
@@ -284,7 +284,7 @@ template <typename TMsg>
 int32_t dispatcher_implement::unpack_protobuf_msg(TMsg &real_msg, msg_raw_t &raw_msg, const void *msg_buf,
                                                   size_t msg_size) {
   raw_msg.msg_addr = nullptr;
-  raw_msg.msg_type = get_instance_ident();
+  raw_msg.message_type = get_instance_ident();
 
   if (nullptr == msg_buf || 0 == msg_size) {
     FWLOGERROR("{} try to parameter error, nullptr == msg_buf or 0 == msg_size", name());
@@ -310,7 +310,7 @@ int32_t dispatcher_implement::unpack_protobuf_msg(TMsg &real_msg, msg_raw_t &raw
 
 template <typename TMsg>
 TMsg *dispatcher_implement::get_protobuf_msg(msg_raw_t &raw_msg) {
-  if (get_instance_ident() != raw_msg.msg_type) {
+  if (get_instance_ident() != raw_msg.message_type) {
     return nullptr;
   }
 
@@ -319,7 +319,7 @@ TMsg *dispatcher_implement::get_protobuf_msg(msg_raw_t &raw_msg) {
 
 template <typename TMsg>
 TMsg *dispatcher_implement::get_protobuf_msg(msg_raw_t &raw_msg, uintptr_t check_msg_type) {
-  if (0 != check_msg_type && check_msg_type != raw_msg.msg_type) {
+  if (0 != check_msg_type && check_msg_type != raw_msg.message_type) {
     return NULL;
   }
 

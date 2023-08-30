@@ -9,7 +9,7 @@ class task_action_ping
     : public task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSPingReq, PROJECT_NAMESPACE_ID::SCPongRsp> {
  public:
   using base_type = task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSPingReq, PROJECT_NAMESPACE_ID::SCPongRsp>;
-  using msg_type = base_type::msg_type;
+  using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;
   using rpc_request_type = base_type::rpc_request_type;

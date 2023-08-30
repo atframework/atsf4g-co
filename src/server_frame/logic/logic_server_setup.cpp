@@ -501,7 +501,7 @@ int logic_server_common_module::tick() {
 
       auto callback_data = dispatcher_make_default<dispatcher_resume_data_type>();
       callback_data.sequence = timer_data.sequence;
-      callback_data.message.msg_type = timer_data.message_type;
+      callback_data.message.message_type = timer_data.message_type;
 
       rpc::custom_resume(timer_data.task_id, callback_data);
 

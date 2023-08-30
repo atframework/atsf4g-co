@@ -216,7 +216,7 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t
 
   dispatcher_raw_message callback_msg = dispatcher_make_default<dispatcher_raw_message>();
   callback_msg.msg_addr = table_msg;
-  callback_msg.msg_type = get_instance_ident();
+  callback_msg.message_type = get_instance_ident();
 
   dispatcher_result_t res = on_receive_message(*ctx_ptr, callback_msg, req->response, req->sequence);
   ret = res.result_code;

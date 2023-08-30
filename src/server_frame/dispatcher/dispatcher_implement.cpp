@@ -68,8 +68,8 @@ dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_messa
     return ret;
   }
 
-  if (expect_msg_type != msg.msg_type) {
-    FWLOGERROR("msg.msg_type expected: {}, real: {}.", expect_msg_type, msg.msg_type);
+  if (expect_msg_type != msg.message_type) {
+    FWLOGERROR("msg.message_type expected: {}, real: {}.", expect_msg_type, msg.message_type);
     ret.result_code = PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
     return ret;
   }
@@ -234,14 +234,14 @@ const std::string &dispatcher_implement::get_empty_string() {
   return ret;
 }
 
-int dispatcher_implement::_register_action(msg_type_t msg_type, task_manager::task_action_creator_t action) {
-  msg_task_action_set_t::iterator iter = task_action_map_by_id_.find(msg_type);
+int dispatcher_implement::_register_action(msg_type_t message_type, task_manager::task_action_creator_t action) {
+  msg_task_action_set_t::iterator iter = task_action_map_by_id_.find(message_type);
   if (task_action_map_by_id_.end() != iter) {
-    FWLOGERROR("{} try to register more than one task actions to type {}.", name(), msg_type);
+    FWLOGERROR("{} try to register more than one task actions to type {}.", name(), message_type);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
-  task_action_map_by_id_[msg_type] = action;
+  task_action_map_by_id_[message_type] = action;
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 

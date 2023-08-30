@@ -14,7 +14,7 @@ class task_action_router_transfer : public task_action_ss_rpc_base<PROJECT_NAMES
  public:
   using base_type =
       task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRouterTransferReq, PROJECT_NAMESPACE_ID::SSRouterTransferRsp>;
-  using msg_type = base_type::msg_type;
+  using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;
   using rpc_request_type = base_type::rpc_request_type;

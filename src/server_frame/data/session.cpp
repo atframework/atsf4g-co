@@ -329,7 +329,7 @@ void session::write_actor_log_body(const google::protobuf::Message &msg, const a
                       "============ session: {:#x}:{}, rpc: {}, type: {} ============\n------------ "
                       "Head ------------\n{}------------ Body ------------\n{}",
                       get_key().bus_id, get_key().session_id, rpc_name, type_url,
-                      protobuf_mini_dumper_get_readable(head, 1), protobuf_mini_dumper_get_readable(msg, 2));
+                      protobuf_mini_dumper_get_readable(head), protobuf_mini_dumper_get_readable(msg));
 }
 
 ::util::log::log_wrapper *session::mutable_actor_log_writter() { return actor_log_writter_.get(); }

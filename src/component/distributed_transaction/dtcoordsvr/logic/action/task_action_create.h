@@ -21,7 +21,7 @@ class task_action_create
  public:
   using base_type = task_action_ss_rpc_base<atframework::distributed_system::SSDistributeTransactionCreateReq,
                                             atframework::distributed_system::SSDistributeTransactionCreateRsp>;
-  using msg_type = base_type::msg_type;
+  using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;
   using rpc_request_type = base_type::rpc_request_type;

@@ -34,7 +34,7 @@ task_action_cs_req_base::task_action_cs_req_base(dispatcher_start_data_type &&st
     get_shared_context().try_reuse_protobuf_arena(start_param.context->mutable_protobuf_arena());
   }
 
-  msg_type *cs_msg = cs_msg_dispatcher::me()->get_protobuf_msg<msg_type>(start_param.message);
+  message_type *cs_msg = cs_msg_dispatcher::me()->get_protobuf_msg<message_type>(start_param.message);
   if (nullptr != cs_msg) {
     get_request().Swap(cs_msg);
 
@@ -145,7 +145,7 @@ rpc::context::trace_option task_action_cs_req_base::get_trace_option() const noe
 }
 
 std::pair<uint64_t, uint64_t> task_action_cs_req_base::get_gateway_info() const {
-  const msg_type &cs_msg = get_request();
+  const message_type &cs_msg = get_request();
   return std::pair<uint64_t, uint64_t>(cs_msg.head().session_bus_id(), cs_msg.head().session_id());
 }
 
@@ -169,9 +169,9 @@ std::shared_ptr<player_cache> task_action_cs_req_base::get_player_cache() const 
 }
 
 task_action_cs_req_base::msg_ref_type task_action_cs_req_base::add_rsp_msg() {
-  msg_type *msg = get_shared_context().create<msg_type>();
+  message_type *msg = get_shared_context().create<message_type>();
   if (nullptr == msg) {
-    static msg_type empty_msg;
+    static message_type empty_msg;
     empty_msg.Clear();
     return empty_msg;
   }
@@ -189,9 +189,9 @@ task_action_cs_req_base::msg_ref_type task_action_cs_req_base::add_rsp_msg() {
   return *msg;
 }
 
-std::list<task_action_cs_req_base::msg_type *> &task_action_cs_req_base::get_rsp_list() { return response_messages_; }
+std::list<task_action_cs_req_base::message_type *> &task_action_cs_req_base::get_rsp_list() { return response_messages_; }
 
-const std::list<task_action_cs_req_base::msg_type *> &task_action_cs_req_base::get_rsp_list() const {
+const std::list<task_action_cs_req_base::message_type *> &task_action_cs_req_base::get_rsp_list() const {
   return response_messages_;
 }
 
@@ -212,7 +212,7 @@ void task_action_cs_req_base::send_response() {
     return;
   }
 
-  for (std::list<msg_type *>::iterator iter = response_messages_.begin(); iter != response_messages_.end(); ++iter) {
+  for (std::list<message_type *>::iterator iter = response_messages_.begin(); iter != response_messages_.end(); ++iter) {
     (*iter)->mutable_head()->set_error_code(get_response_code());
 
     // send message using session

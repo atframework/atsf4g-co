@@ -26,10 +26,10 @@ class player_cache;
 class task_action_cs_req_base : public task_action_req_base<atframework::CSMsg> {
  public:
   using base_type = task_action_req_base<atframework::CSMsg>;
-  using msg_type = base_type::msg_type;
+  using message_type = base_type::message_type;
   using result_type = base_type::result_type;
-  using msg_ref_type = msg_type &;
-  using msg_cref_type = const msg_type &;
+  using msg_ref_type = message_type &;
+  using msg_cref_type = const message_type &;
 
  protected:
   using base_type::get_request;
@@ -60,8 +60,8 @@ class task_action_cs_req_base : public task_action_req_base<atframework::CSMsg> 
 
   msg_ref_type add_rsp_msg();
 
-  std::list<msg_type *> &get_rsp_list();
-  const std::list<msg_type *> &get_rsp_list() const;
+  std::list<message_type *> &get_rsp_list();
+  const std::list<message_type *> &get_rsp_list() const;
 
   std::shared_ptr<player_cache> get_player_cache() const;
 
@@ -77,7 +77,7 @@ class task_action_cs_req_base : public task_action_req_base<atframework::CSMsg> 
 
  private:
   mutable std::shared_ptr<session> session_inst_;
-  std::list<msg_type *> response_messages_;
+  std::list<message_type *> response_messages_;
   bool has_sync_dirty_;
   bool recursive_sync_dirty_;
 };
@@ -86,10 +86,10 @@ template <class TReqType, class TRspType>
 class task_action_cs_rpc_base : public task_action_cs_req_base {
  public:
   using base_type = task_action_cs_req_base;
-  using msg_type = base_type::msg_type;
+  using message_type = base_type::message_type;
   using result_type = base_type::result_type;
-  using msg_ref_type = msg_type &;
-  using msg_cref_type = const msg_type &;
+  using msg_ref_type = message_type &;
+  using msg_cref_type = const message_type &;
   using rpc_request_type = TReqType;
   using rpc_response_type = TRspType;
 

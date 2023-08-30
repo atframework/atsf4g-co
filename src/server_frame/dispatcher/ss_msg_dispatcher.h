@@ -123,7 +123,7 @@ class ss_msg_dispatcher : public dispatcher_implement {
    * @param raw_msg 消息抽象结构
    * @return 返回action或actor选项或NULL
    */
-  SERVER_FRAME_API const atframework::DispatcherOptions *get_options_by_message_type(msg_type_t msg_type) override;
+  SERVER_FRAME_API const atframework::DispatcherOptions *get_options_by_message_type(msg_type_t message_type) override;
 
   /**
    * deal with cs message data

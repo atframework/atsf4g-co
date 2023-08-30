@@ -258,7 +258,7 @@ struct unique_id_container_waker {
       if (!task_type_trait::empty(wake_task) && !task_type_trait::is_exiting(wake_task)) {
         // iter will be erased in task
         dispatcher_resume_data_type callback_data = dispatcher_make_default<dispatcher_resume_data_type>();
-        callback_data.message.msg_type = reinterpret_cast<uintptr_t>(reinterpret_cast<const void *>(&iter->second));
+        callback_data.message.message_type = reinterpret_cast<uintptr_t>(reinterpret_cast<const void *>(&iter->second));
         callback_data.sequence = task_type_trait::get_task_id(wake_task);
 
         rpc::custom_resume(wake_task, callback_data);

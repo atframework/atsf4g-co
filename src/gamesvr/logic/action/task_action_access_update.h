@@ -10,7 +10,7 @@ class task_action_access_update
  public:
   using base_type =
       task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSAccessUpdateReq, PROJECT_NAMESPACE_ID::SCAccessUpdateRsp>;
-  using msg_type = base_type::msg_type;
+  using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;
   using rpc_request_type = base_type::rpc_request_type;

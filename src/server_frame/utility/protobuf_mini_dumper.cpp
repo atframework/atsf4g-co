@@ -14,16 +14,19 @@
 #include <common/string_oprs.h>
 #include <log/log_wrapper.h>
 
+#include <lock/lock_holder.h>
+#include <lock/spin_lock.h>
+
 #include <config/server_frame_build_feature.h>
 
 #include <sstream>
 
 #define MSG_DISPATCHER_DEBUG_PRINT_BOUND 4096
 
-SERVER_FRAME_API gsl::string_view protobuf_mini_dumper_get_readable(const ::google::protobuf::Message &msg,
-                                                                    uint8_t idx) {
-  //    static char msg_buffer[MSG_DISPATCHER_DEBUG_PRINT_BOUND] = {0};
-  static std::string debug_string[256];
+SERVER_FRAME_API std::string protobuf_mini_dumper_get_readable(const ::google::protobuf::Message &msg) {
+  std::string debug_string;
+  // 16K is in bin of tcache in jemalloc, and MEDIUM_PAGE in mimalloc
+  debug_string.reserve(16 * 1024);
 
   ::google::protobuf::TextFormat::Printer printer;
   printer.SetUseUtf8StringEscaping(true);
@@ -33,20 +36,10 @@ SERVER_FRAME_API gsl::string_view protobuf_mini_dumper_get_readable(const ::goog
   printer.SetTruncateStringFieldLongerThan(MSG_DISPATCHER_DEBUG_PRINT_BOUND);
   printer.SetPrintMessageFieldsInIndexOrder(false);
 
-  debug_string[idx].clear();
-  printer.PrintToString(msg, &debug_string[idx]);
+  printer.PrintToString(msg, &debug_string);
 
-  //    msg_buffer[0] = 0;
-  //    size_t sz = protobuf_mini_dumper_dump_readable(msg, msg_buffer, MSG_DISPATCHER_DEBUG_PRINT_BOUND - 1, 0);
-  //
-  //    if (sz > MSG_DISPATCHER_DEBUG_PRINT_BOUND - 5) {
-  //        msg_buffer[MSG_DISPATCHER_DEBUG_PRINT_BOUND - 5] = '.';
-  //        msg_buffer[MSG_DISPATCHER_DEBUG_PRINT_BOUND - 4] = '.';
-  //        msg_buffer[MSG_DISPATCHER_DEBUG_PRINT_BOUND - 3] = '.';
-  //        msg_buffer[MSG_DISPATCHER_DEBUG_PRINT_BOUND - 2] = '}';
-  //        msg_buffer[MSG_DISPATCHER_DEBUG_PRINT_BOUND - 1] = 0;
-  //    }
-  return debug_string[idx].c_str();
+  // Old implementation will use COW and the new compiler will use NRVO here.
+  return debug_string;
 }
 
 static std::string build_error_code_msg(const ::google::protobuf::EnumValueDescriptor &desc) {
@@ -81,6 +74,9 @@ SERVER_FRAME_API gsl::string_view protobuf_mini_dumper_get_error_msg(int error_c
   if (0 == error_code) {
     ret = "Success";
   }
+
+  static util::lock::spin_lock shared_desc_lock;
+  util::lock::lock_holder<util::lock::spin_lock> lock_guard{shared_desc_lock};
 
   error_code_desc_map_t::const_iterator iter = cs_error_desc.find(error_code);
   if (iter != cs_error_desc.end()) {

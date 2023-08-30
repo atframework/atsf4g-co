@@ -621,7 +621,7 @@ SERVER_FRAME_API void ss_msg_dispatcher::dns_lookup_callback(uv_getaddrinfo_t *r
       auto task_inst = task_manager::me()->get_task((*lifetime_ptr)->task_id);
       if (!task_type_trait::empty(task_inst)) {
         dispatcher_resume_data_type callback_data = dispatcher_make_default<dispatcher_resume_data_type>();
-        callback_data.message.msg_type = reinterpret_cast<uintptr_t>((*lifetime_ptr)->rpc_type_address);
+        callback_data.message.message_type = reinterpret_cast<uintptr_t>((*lifetime_ptr)->rpc_type_address);
         callback_data.message.msg_addr = reinterpret_cast<void *>(&records);
         callback_data.sequence = (*lifetime_ptr)->rpc_sequence;
         rpc::custom_resume(task_inst, callback_data);

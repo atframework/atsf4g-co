@@ -30,10 +30,10 @@ class router_object_base;
 class task_action_ss_req_base : public task_action_req_base<atframework::SSMsg> {
  public:
   using base_type = task_action_req_base<atframework::SSMsg>;
-  using msg_type = base_type::msg_type;
+  using message_type = base_type::message_type;
   using result_type = base_type::result_type;
-  using msg_ref_type = msg_type &;
-  using msg_cref_type = const msg_type &;
+  using msg_ref_type = message_type &;
+  using msg_cref_type = const message_type &;
 
  protected:
   using base_type::get_request;
@@ -76,17 +76,17 @@ class task_action_ss_req_base : public task_action_req_base<atframework::SSMsg> 
                                                                   std::pair<bool, int> &filter_result);
 
  private:
-  std::list<msg_type *> response_messages_;
+  std::list<message_type *> response_messages_;
 };
 
 template <class TReqType, class TRspType>
 class task_action_ss_rpc_base : public task_action_ss_req_base {
  public:
   using base_type = task_action_ss_req_base;
-  using msg_type = base_type::msg_type;
+  using message_type = base_type::message_type;
   using result_type = base_type::result_type;
-  using msg_ref_type = msg_type &;
-  using msg_cref_type = const msg_type &;
+  using msg_ref_type = message_type &;
+  using msg_cref_type = const message_type &;
   using rpc_request_type = TReqType;
   using rpc_response_type = TRspType;
 

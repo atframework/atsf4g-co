@@ -537,12 +537,31 @@ class task_manager {
   int report_create_error(const char *fn_name);
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+  struct generic_start_generator_record {
+    dispatcher_receive_start_data_callback callback;
+    void *callback_private_data;
+    generic_start_generator::context_pointer_type generator_context;
+  };
+
+  struct generic_resume_generator_record {
+    dispatcher_receive_resume_data_callback callback;
+    void *callback_private_data;
+    generic_resume_generator::context_pointer_type generator_context;
+  };
+
   void internal_insert_start_generator(task_type_trait::id_type task_id,
-                                       generic_start_generator::context_pointer_type &&);
+                                       generic_start_generator::context_pointer_type &&,
+                                       dispatcher_receive_start_data_callback callback, void *callback_private_data);
   void internal_remove_start_generator(task_type_trait::id_type task_id, const generic_start_generator::context_type &);
   void internal_insert_resume_generator(const generic_resume_key &key,
-                                        generic_resume_generator::context_pointer_type &&);
+                                        generic_resume_generator::context_pointer_type &&,
+                                        dispatcher_receive_resume_data_callback callback, void *callback_private_data);
   void internal_remove_resume_generator(const generic_resume_key &key, const generic_resume_generator::context_type &);
+
+  static void internal_trigger_callback(generic_start_generator_record &start_record,
+                                        const dispatcher_start_data_type *start_data);
+  static void internal_trigger_callback(generic_resume_generator_record &resume_record, const generic_resume_key &key,
+                                        const dispatcher_resume_data_type *resume_data);
 #endif
 
  private:
@@ -553,8 +572,8 @@ class task_manager {
   native_task_manager_ptr_type native_mgr_;
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-  std::unordered_map<task_type_trait::id_type, generic_start_generator::context_pointer_type> waiting_start_;
-  std::multimap<generic_resume_key, generic_resume_generator::context_pointer_type> waiting_resume_timer_;
+  std::unordered_map<task_type_trait::id_type, generic_start_generator_record> waiting_start_;
+  std::map<generic_resume_key, generic_resume_generator_record> waiting_resume_timer_;
   std::unordered_map<generic_resume_index, generic_resume_key, generic_resume_hash> waiting_resume_index_;
 #else
   task_type_trait::stack_pool_type::ptr_t stack_pool_;

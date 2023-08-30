@@ -29,7 +29,7 @@ task_action_ss_req_base::task_action_ss_req_base(dispatcher_start_data_type &&st
     get_shared_context().try_reuse_protobuf_arena(start_param.context->mutable_protobuf_arena());
   }
 
-  msg_type *ss_msg = ss_msg_dispatcher::me()->get_protobuf_msg<msg_type>(start_param.message);
+  message_type *ss_msg = ss_msg_dispatcher::me()->get_protobuf_msg<message_type>(start_param.message);
   if (nullptr != ss_msg) {
     get_request().Swap(ss_msg);
 
@@ -80,9 +80,9 @@ uint64_t task_action_ss_req_base::get_request_bus_id() const {
 }
 
 task_action_ss_req_base::msg_ref_type task_action_ss_req_base::add_rsp_msg(uint64_t dst_pd) {
-  msg_type *msg = get_shared_context().create<msg_type>();
+  message_type *msg = get_shared_context().create<message_type>();
   if (nullptr == msg) {
-    static msg_type empty_msg;
+    static message_type empty_msg;
     empty_msg.Clear();
     return empty_msg;
   }
@@ -161,7 +161,7 @@ void task_action_ss_req_base::send_response() {
     return;
   }
 
-  for (std::list<msg_type *>::iterator iter = response_messages_.begin(); iter != response_messages_.end(); ++iter) {
+  for (std::list<message_type *>::iterator iter = response_messages_.begin(); iter != response_messages_.end(); ++iter) {
     if (0 == (*iter)->head().bus_id()) {
       FWLOGERROR("task {} [{}] send message to unknown server", name(), get_task_id());
       continue;
