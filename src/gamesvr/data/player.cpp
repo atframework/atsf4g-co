@@ -96,15 +96,15 @@ player::ptr_t player::create(uint64_t user_id, uint32_t zone_id, const std::stri
 rpc::result_code_type player::create_init(rpc::context &parent_ctx, uint32_t version_type) {
   rpc::context ctx{parent_ctx.create_temporary_child()};
   rpc::context::tracer trace;
-  rpc::context::trace_option trace_option;
-  trace_option.dispatcher = nullptr;
-  trace_option.is_remote = false;
-  trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
-  ctx.setup_tracer(trace, "player.create_init", std::move(trace_option));
+  rpc::context::trace_start_option trace_start_option;
+  trace_start_option.dispatcher = nullptr;
+  trace_start_option.is_remote = false;
+  trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+  ctx.setup_tracer(trace, "player.create_init", std::move(trace_start_option));
 
   auto res = RPC_AWAIT_CODE_RESULT(base_type::create_init(ctx, version_type));
   if (res < 0) {
-    RPC_RETURN_CODE(res);
+    RPC_RETURN_CODE(trace.finish({res, {}}));
   }
 
   set_data_version(PLAYER_DATA_LOGIC_VERSION);
@@ -112,7 +112,7 @@ rpc::result_code_type player::create_init(rpc::context &parent_ctx, uint32_t ver
   //! === manager implement === 创建后事件回调，这时候还没进入数据库并且未执行login_init()
   res = RPC_AWAIT_CODE_RESULT(user_async_jobs_manager_->create_init(ctx, version_type));
   if (res < 0) {
-    RPC_RETURN_CODE(res);
+    RPC_RETURN_CODE(trace.finish({res, {}}));
   }
 
   // TODO init all interval checkpoint
@@ -127,21 +127,21 @@ rpc::result_code_type player::create_init(rpc::context &parent_ctx, uint32_t ver
   //     });
   // }
 
-  RPC_RETURN_CODE(res);
+  RPC_RETURN_CODE(trace.finish({res, {}}));
 }
 
 rpc::result_code_type player::login_init(rpc::context &parent_ctx) {
   rpc::context ctx{parent_ctx.create_temporary_child()};
   rpc::context::tracer trace;
-  rpc::context::trace_option trace_option;
-  trace_option.dispatcher = nullptr;
-  trace_option.is_remote = false;
-  trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
-  ctx.setup_tracer(trace, "player.login_init", std::move(trace_option));
+  rpc::context::trace_start_option trace_start_option;
+  trace_start_option.dispatcher = nullptr;
+  trace_start_option.is_remote = false;
+  trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+  ctx.setup_tracer(trace, "player.login_init", std::move(trace_start_option));
 
   auto res = RPC_AWAIT_CODE_RESULT(base_type::login_init(ctx));
   if (res < 0) {
-    RPC_RETURN_CODE(res);
+    RPC_RETURN_CODE(trace.finish({res, {}}));
   }
 
   // 由于对象缓存可以被复用，这个函数可能会被多次执行。这个阶段，新版本的 login_table 已载入
@@ -151,13 +151,13 @@ rpc::result_code_type player::login_init(rpc::context &parent_ctx) {
   // all module login init
   res = RPC_AWAIT_CODE_RESULT(user_async_jobs_manager_->login_init(ctx));
   if (res < 0) {
-    RPC_RETURN_CODE(res);
+    RPC_RETURN_CODE(trace.finish({res, {}}));
   }
 
   set_inited();
   on_login(ctx);
 
-  RPC_RETURN_CODE(res);
+  RPC_RETURN_CODE(trace.finish({res, {}}));
 }
 
 bool player::is_dirty() const {
@@ -216,27 +216,31 @@ void player::on_login(rpc::context &parent_ctx) {
 
   rpc::context ctx{parent_ctx.create_temporary_child()};
   rpc::context::tracer trace;
-  rpc::context::trace_option trace_option;
-  trace_option.dispatcher = nullptr;
-  trace_option.is_remote = false;
-  trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
-  ctx.setup_tracer(trace, "player.on_login", std::move(trace_option));
+  rpc::context::trace_start_option trace_start_option;
+  trace_start_option.dispatcher = nullptr;
+  trace_start_option.is_remote = false;
+  trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+  ctx.setup_tracer(trace, "player.on_login", std::move(trace_start_option));
 
   base_type::on_login(ctx);
 
   // TODO sync messages
+
+  trace.finish({0, {}});
 }
 
 void player::on_logout(rpc::context &parent_ctx) {
   rpc::context ctx{parent_ctx.create_temporary_child()};
   rpc::context::tracer trace;
-  rpc::context::trace_option trace_option;
-  trace_option.dispatcher = nullptr;
-  trace_option.is_remote = false;
-  trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
-  ctx.setup_tracer(trace, "player.on_logout", std::move(trace_option));
+  rpc::context::trace_start_option trace_start_option;
+  trace_start_option.dispatcher = nullptr;
+  trace_start_option.is_remote = false;
+  trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+  ctx.setup_tracer(trace, "player.on_logout", std::move(trace_start_option));
 
   base_type::on_logout(ctx);
+
+  trace.finish({0, {}});
 }
 
 void player::on_saved(rpc::context &ctx) {
@@ -252,11 +256,11 @@ void player::on_update_session(rpc::context &ctx, const std::shared_ptr<session>
 void player::init_from_table_data(rpc::context &parent_ctx, const PROJECT_NAMESPACE_ID::table_user &tb_player) {
   rpc::context ctx{parent_ctx.create_temporary_child()};
   rpc::context::tracer trace;
-  rpc::context::trace_option trace_option;
-  trace_option.dispatcher = nullptr;
-  trace_option.is_remote = false;
-  trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
-  ctx.setup_tracer(trace, "player.init_from_table_data", std::move(trace_option));
+  rpc::context::trace_start_option trace_start_option;
+  trace_start_option.dispatcher = nullptr;
+  trace_start_option.is_remote = false;
+  trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+  ctx.setup_tracer(trace, "player.init_from_table_data", std::move(trace_start_option));
 
   base_type::init_from_table_data(ctx, tb_player);
 
@@ -274,20 +278,22 @@ void player::init_from_table_data(rpc::context &parent_ctx, const PROJECT_NAMESP
   if (tb_player.has_async_jobs()) {
     user_async_jobs_manager_->init_from_table_data(ctx, tb_player);
   }
+
+  trace.finish({0, {}});
 }
 
 int player::dump(rpc::context &parent_ctx, PROJECT_NAMESPACE_ID::table_user &user, bool always) {
   rpc::context ctx{parent_ctx.create_temporary_child()};
   rpc::context::tracer trace;
-  rpc::context::trace_option trace_option;
-  trace_option.dispatcher = nullptr;
-  trace_option.is_remote = false;
-  trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
-  ctx.setup_tracer(trace, "player.dump", std::move(trace_option));
+  rpc::context::trace_start_option trace_start_option;
+  trace_start_option.dispatcher = nullptr;
+  trace_start_option.is_remote = false;
+  trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+  ctx.setup_tracer(trace, "player.dump", std::move(trace_start_option));
 
   int ret = base_type::dump(ctx, user, always);
   if (ret < 0) {
-    return ret;
+    return trace.finish({ret, {}});
   }
 
   //! === manager implement === 保存到数据库
@@ -295,10 +301,10 @@ int player::dump(rpc::context &parent_ctx, PROJECT_NAMESPACE_ID::table_user &use
   ret = user_async_jobs_manager_->dump(ctx, user);
   if (ret < 0) {
     FWPLOGERROR(*this, "dump async_jobs_manager_ failed, res: {}({})", ret, protobuf_mini_dumper_get_error_msg(ret));
-    return ret;
+    return trace.finish({ret, {}});
   }
 
-  return ret;
+  return trace.finish({ret, {}});
 }
 
 void player::update_heartbeat() {

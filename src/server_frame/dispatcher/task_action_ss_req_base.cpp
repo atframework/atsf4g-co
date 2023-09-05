@@ -145,8 +145,8 @@ rpc::context::inherit_options task_action_ss_req_base::get_inherit_option() cons
   return rpc::context::inherit_options{rpc::context::parent_mode::kLink, true, false};
 }
 
-rpc::context::trace_option task_action_ss_req_base::get_trace_option() const noexcept {
-  rpc::context::trace_option ret = task_action_base::get_trace_option();
+rpc::context::trace_start_option task_action_ss_req_base::get_trace_option() const noexcept {
+  rpc::context::trace_start_option ret = task_action_base::get_trace_option();
 
   auto &req_msg = get_request();
   if (req_msg.has_head() && req_msg.head().has_rpc_trace() && !req_msg.head().rpc_trace().trace_id().empty()) {

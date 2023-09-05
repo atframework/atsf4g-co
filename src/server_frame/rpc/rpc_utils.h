@@ -66,7 +66,7 @@ class context {
  public:
   using string_view = opentelemetry::nostd::string_view;
   using tracer = rpc::telemetry::tracer;
-  using trace_option = rpc::telemetry::trace_option;
+  using trace_start_option = rpc::telemetry::trace_start_option;
 
   enum class parent_mode : uint8_t {
     kParent = 0,
@@ -186,10 +186,7 @@ class context {
    */
   SERVER_FRAME_API std::shared_ptr<context> create_shared_child(inherit_options options = {}) noexcept;
 
-  SERVER_FRAME_API void setup_tracer(
-      tracer &, string_view name, trace_option &&options,
-      std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
-          attributes = {});
+  SERVER_FRAME_API void setup_tracer(tracer &, string_view name, trace_start_option &&options);
 
   /**
    * @brief 创建链路跟踪器信息。
@@ -200,10 +197,7 @@ class context {
    * @param attributes 自定义属性
    * @return 链路跟踪器
    */
-  EXPLICIT_DEPRECATED_ATTR SERVER_FRAME_API tracer
-  make_tracer(string_view name, trace_option &&options,
-              std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
-                  attributes = {});
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API tracer make_tracer(string_view name, trace_start_option &&options);
 
   /**
    * @brief 使用内置的Arena创建protobuf对象。注意，该对象必须是局部变量，不允许转移给外部使用
@@ -368,8 +362,7 @@ UTIL_FORCEINLINE const void *custom_wait_convert_ptr(void *input) { return const
 template <class TPRIVATE_DATA, class TCALLBACK, class TPTR,
           class = typename std::enable_if<std::is_pointer<typename std::remove_reference<TPTR>::type>::value>::type>
 UTIL_SYMBOL_VISIBLE result_code_type custom_wait(context &ctx, TPTR &&type_address,
-                                                 const dispatcher_await_options &options,
-                                                 TCALLBACK && real_callback,
+                                                 const dispatcher_await_options &options, TCALLBACK &&real_callback,
                                                  TPRIVATE_DATA &&real_private_data) {
   auto callback_data = std::make_pair(real_callback, &real_private_data);
   using callback_date_type = decltype(callback_data);
@@ -377,8 +370,7 @@ UTIL_SYMBOL_VISIBLE result_code_type custom_wait(context &ctx, TPTR &&type_addre
   dispatcher_receive_resume_data_callback receive_callback = [](const dispatcher_resume_data_type *resume_data,
                                                                 void *stack_data) {
     callback_date_type *restore_callback_data = reinterpret_cast<callback_date_type *>(stack_data);
-    if (nullptr != restore_callback_data && restore_callback_data->first &&
-        nullptr != restore_callback_data->second) {
+    if (nullptr != restore_callback_data && restore_callback_data->first && nullptr != restore_callback_data->second) {
       (restore_callback_data->first)(resume_data, std::forward<TPRIVATE_DATA>(*restore_callback_data->second));
     }
   };

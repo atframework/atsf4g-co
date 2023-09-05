@@ -19,14 +19,15 @@ rpc::result_code_type lookup(rpc::context &ctx, gsl::string_view domain, std::ve
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("rpc {} must be called in a task", "rpc::dns::lookup");
 
   rpc::context child_ctx(ctx);
-  rpc::context::tracer tracer;
-  rpc::context::trace_option trace_option;
-  trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());
-  trace_option.is_remote = true;
-  trace_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
+  rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
+      {"rpc.system", "atrpc.ss"}, {"rpc.service", "rpc.dns"}, {"rpc.method", "rpc.dns.lookup"}};
+  rpc::context::trace_start_option trace_start_option;
+  trace_start_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());
+  trace_start_option.is_remote = true;
+  trace_start_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
+  trace_start_option.attributes = trace_attributes;
 
-  child_ctx.setup_tracer(tracer, "rpc.dns.lookup", std::move(trace_option),
-                         {{"rpc.system", "atrpc.ss"}, {"rpc.service", "rpc.dns"}, {"rpc.method", "rpc.dns.lookup"}});
+  rpc::context::tracer tracer = child_ctx.make_tracer("rpc.dns.lookup", std::move(trace_start_option));
 
   uint64_t sequence = ss_msg_dispatcher::me()->allocate_sequence();
 

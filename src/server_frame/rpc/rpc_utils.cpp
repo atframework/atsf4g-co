@@ -34,8 +34,10 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "rpc/telemetry/rpc_global_service.h"
+#include "rpc/telemetry/rpc_trace.h"
 
 #include "logic/logic_server_setup.h"
 
@@ -77,18 +79,15 @@ SERVER_FRAME_API std::shared_ptr<context> context::create_shared_child(inherit_o
   return std::make_shared<context>(*this, options);
 }
 
-SERVER_FRAME_API void context::setup_tracer(
-    tracer &tracer_instance, string_view name, trace_option &&options,
-    std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
-        attributes) {
-  tracer::links_type tracer_links;
+SERVER_FRAME_API void context::setup_tracer(tracer &tracer_instance, string_view name, trace_start_option &&options) {
+  std::vector<telemetry::trace_link_pair_type> tracer_links;
   std::unique_ptr<opentelemetry::trace::SpanContext> parent_span_context;
-  tracer_links.reserve(trace_context_.link_spans.size() + 1);
+  tracer_links.reserve(trace_context_.link_spans.size() + options.links.size() + 1);
 
   switch (trace_context_.caller_mode) {
     case parent_mode::kLink: {
       if (nullptr != options.parent_memory_span) {
-        tracer_links.push_back(tracer::link_pair_type(options.parent_memory_span->GetContext(), {}));
+        tracer_links.emplace_back(telemetry::trace_link_pair_type(options.parent_memory_span->GetContext(), {}));
         options.parent_memory_span = tracer::span_ptr_type();
         break;
       }
@@ -105,14 +104,14 @@ SERVER_FRAME_API void context::setup_tracer(
             opentelemetry::trace::SpanId{tracer::span_id_span{parent_span_id, tracer::span_id_span::extent}},
             opentelemetry::trace::TraceFlags{opentelemetry::trace::TraceFlags::kIsSampled}, options.is_remote});
         if (parent_span_context) {
-          tracer_links.push_back(tracer::link_pair_type(*parent_span_context, {}));
+          tracer_links.emplace_back(telemetry::trace_link_pair_type(*parent_span_context, {}));
           options.parent_network_span = nullptr;
           break;
         }
       }
 
       if (trace_context_.parent_span) {
-        tracer_links.push_back(tracer::link_pair_type(trace_context_.parent_span->GetContext(), {}));
+        tracer_links.emplace_back(telemetry::trace_link_pair_type(trace_context_.parent_span->GetContext(), {}));
       }
 
       break;
@@ -133,13 +132,16 @@ SERVER_FRAME_API void context::setup_tracer(
 
   // Add links
   for (auto &link_span : trace_context_.link_spans) {
-    tracer_links.push_back(tracer::link_pair_type(link_span->GetContext(), {}));
+    tracer_links.emplace_back(telemetry::trace_link_pair_type(link_span->GetContext(), {}));
   }
   if (!tracer_links.empty()) {
-    options.links = &tracer_links;
+    for (auto &input_link : options.links) {
+      tracer_links.push_back(input_link);
+    }
+    options.links = tracer_links;
   }
 
-  if (!tracer_instance.start(name, std::move(options), attributes)) {
+  if (!tracer_instance.start(name, std::move(options))) {
     return;
   }
 
@@ -150,12 +152,9 @@ SERVER_FRAME_API void context::setup_tracer(
   trace_context_.trace_span = tracer_instance.get_trace_span();
 }
 
-SERVER_FRAME_API context::tracer context::make_tracer(
-    string_view name, trace_option &&options,
-    std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
-        attributes) {
+SERVER_FRAME_API context::tracer context::make_tracer(string_view name, trace_start_option &&options) {
   tracer ret;
-  setup_tracer(ret, name, std::move(options), attributes);
+  setup_tracer(ret, name, std::move(options));
 
   return tracer{std::move(ret)};
 }
@@ -230,7 +229,8 @@ SERVER_FRAME_API void context::set_task_context(const task_context_data &task_ct
 }
 
 namespace detail {
-static result_code_type wait(EXPLICIT_UNUSED_ATTR context &ctx, uintptr_t check_type, const dispatcher_await_options &options,
+static result_code_type wait(EXPLICIT_UNUSED_ATTR context &ctx, uintptr_t check_type,
+                             const dispatcher_await_options &options,
                              dispatcher_receive_resume_data_callback receive_callback,
                              void *receive_callback_private_data) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in a task");
@@ -477,13 +477,15 @@ SERVER_FRAME_API result_code_type wait(context &ctx, std::chrono::system_clock::
 
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in a task");
   rpc::context child_ctx(ctx);
-  rpc::context::tracer tracer;
-  rpc::context::trace_option trace_option;
-  trace_option.dispatcher = nullptr;
-  trace_option.is_remote = false;
-  trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
-  child_ctx.setup_tracer(tracer, "rpc.wait.timer", std::move(trace_option),
-                         {{"rpc.system", "atrpc.timer"}, {"rpc.method", "rpc.wait"}});
+  rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {{"rpc.system", "atrpc.timer"},
+                                                                  {"rpc.method", "rpc.wait"}};
+  rpc::context::trace_start_option trace_start_option;
+  trace_start_option.dispatcher = nullptr;
+  trace_start_option.is_remote = false;
+  trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+  trace_start_option.attributes = trace_attributes;
+
+  rpc::context::tracer tracer = child_ctx.make_tracer("rpc.wait.timer", std::move(trace_start_option));
 
   logic_server_timer timer;
   mod->insert_timer(ctx.get_task_context().task_id, timeout, timer);

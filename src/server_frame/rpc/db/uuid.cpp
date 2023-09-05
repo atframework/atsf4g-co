@@ -136,13 +136,13 @@ rpc_result<int64_t> generate_global_increase_id(rpc::context &ctx, uint32_t majo
   }
 
   rpc::context child_ctx(ctx);
-  rpc::context::tracer tracer;
-  rpc::context::trace_option trace_option;
-  trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
-  trace_option.is_remote = true;
-  trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
+  rpc::context::trace_start_option trace_start_option;
+  trace_start_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
+  trace_start_option.is_remote = true;
+  trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
 
-  child_ctx.setup_tracer(tracer, "rpc.db.uuid.generate_global_increase_id", std::move(trace_option));
+  rpc::context::tracer tracer =
+      child_ctx.make_tracer("rpc.db.uuid.generate_global_increase_id", std::move(trace_start_option));
 
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
@@ -151,7 +151,7 @@ rpc_result<int64_t> generate_global_increase_id(rpc::context &ctx, uint32_t majo
       static_cast<int>(args.size()), args.get_args_values(), args.get_args_lengths());
 
   if (res < 0) {
-    RPC_RETURN_TYPE(tracer.return_code(res));
+    RPC_RETURN_TYPE(tracer.finish({res, {}}));
   }
 
   PROJECT_NAMESPACE_ID::table_all_message msg;
@@ -163,14 +163,14 @@ rpc_result<int64_t> generate_global_increase_id(rpc::context &ctx, uint32_t majo
 
   res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, msg, await_options));
   if (res < 0) {
-    RPC_RETURN_TYPE(tracer.return_code(res));
+    RPC_RETURN_TYPE(tracer.finish({res, {}}));
   }
 
   if (!msg.has_simple()) {
-    RPC_RETURN_TYPE(tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND));
+    RPC_RETURN_TYPE(tracer.finish({PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, {}}));
   }
 
-  RPC_RETURN_TYPE(tracer.return_code(static_cast<int>(msg.simple().msg_i64())));
+  RPC_RETURN_TYPE(tracer.finish({static_cast<int>(msg.simple().msg_i64()), {}}));
 }
 
 struct unique_id_key_t {

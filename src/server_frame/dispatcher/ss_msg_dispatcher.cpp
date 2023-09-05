@@ -411,16 +411,16 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_s
   }
 
   rpc::context::tracer tracer;
-  rpc::context::trace_option trace_option;
-  trace_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
-  trace_option.is_remote = true;
-  trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());
+  rpc::context::trace_start_option trace_start_option;
+  trace_start_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
+  trace_start_option.is_remote = true;
+  trace_start_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());
   if (ss_msg->head().has_rpc_trace()) {
-    trace_option.parent_network_span = &ss_msg->head().rpc_trace();
+    trace_start_option.parent_network_span = &ss_msg->head().rpc_trace();
   } else {
-    trace_option.parent_network_span = nullptr;
+    trace_start_option.parent_network_span = nullptr;
   }
-  ctx.setup_tracer(tracer, "ss_msg_dispatcher", std::move(trace_option));
+  ctx.setup_tracer(tracer, "ss_msg_dispatcher", std::move(trace_start_option));
 
   dispatcher_result_t res = on_receive_message(ctx, callback_msg, nullptr, ss_msg->head().sequence());
   ret = res.result_code;
@@ -429,7 +429,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_s
                get_app()->convert_app_id_to_string(from_server_id), ret);
   }
 
-  return ret;
+  return tracer.finish({ret, {}});
 }
 
 SERVER_FRAME_API int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::message_sender_t &source,
@@ -516,12 +516,12 @@ SERVER_FRAME_API void ss_msg_dispatcher::on_create_task_failed(dispatcher_start_
   if (nullptr != start_data.context) {
     child_context.reset(new rpc::context(*start_data.context));
     if (child_context) {
-      rpc::context::trace_option trace_option;
-      trace_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
-      trace_option.is_remote = true;
-      trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());
-      trace_option.parent_network_span = &real_msg->head().rpc_trace();
-      child_context->setup_tracer(tracer, rpc_name, std::move(trace_option));
+      rpc::context::trace_start_option trace_start_option;
+      trace_start_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
+      trace_start_option.is_remote = true;
+      trace_start_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());
+      trace_start_option.parent_network_span = &real_msg->head().rpc_trace();
+      child_context->setup_tracer(tracer, rpc_name, std::move(trace_start_option));
     }
   }
 

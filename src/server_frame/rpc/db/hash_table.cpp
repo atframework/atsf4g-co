@@ -32,17 +32,22 @@ result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
                     PROJECT_NAMESPACE_ID::table_all_message &output,
                     int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply)) {
   rpc::context __child_ctx(ctx);
-  rpc::context::tracer __tracer;
-  rpc::context::trace_option __trace_option;
+  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {{"rpc.system", "atrpc.db"},
+                                                                    {"rpc.service", "rpc.db.redis"},
+                                                                    {"rpc.method", "rpc.db.hash_table.get"},
+                                                                    {"db.system", "redis"}};
+
+  rpc::context::trace_start_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
   __trace_option.is_remote = true;
   __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
+  __trace_option.attributes = __trace_attributes;
 
-  __child_ctx.setup_tracer(__tracer, "rpc.db.hash_table.get_all", std::move(__trace_option));
+  rpc::context::tracer __tracer = __child_ctx.make_tracer("rpc.db.hash_table.get_all", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
-    RPC_DB_RETURN_CODE(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK));
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
   }
 
   redis_args args(2);
@@ -56,7 +61,7 @@ result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
       args.get_args_values(), args.get_args_lengths());
 
   if (res < 0) {
-    RPC_DB_RETURN_CODE(__tracer.return_code(res));
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
   dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
@@ -67,32 +72,36 @@ result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
   // 协程操作
   res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, output, await_options));
   if (res < 0) {
-    RPC_DB_RETURN_CODE(__tracer.return_code(res));
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
   if (output.version().empty()) {
-    RPC_DB_RETURN_CODE(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND));
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, __trace_attributes}));
   }
 
   FWLOGINFO("table [key={}] get all data version: {}", key, output.version());
-  RPC_DB_RETURN_CODE(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
+  RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 
 result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key, const google::protobuf::Message &store,
                 std::string &version, PROJECT_NAMESPACE_ID::table_all_message &output,
                 int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply)) {
   rpc::context __child_ctx(ctx);
-  rpc::context::tracer __tracer;
-  rpc::context::trace_option __trace_option;
+  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {{"rpc.system", "atrpc.db"},
+                                                                    {"rpc.service", "rpc.db.redis"},
+                                                                    {"rpc.method", "rpc.db.hash_table.set"},
+                                                                    {"db.system", "redis"}};
+  rpc::context::trace_start_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
   __trace_option.is_remote = true;
   __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
+  __trace_option.attributes = __trace_attributes;
 
-  __child_ctx.setup_tracer(__tracer, "rpc.db.hash_table.set", std::move(__trace_option));
+  rpc::context::tracer __tracer = __child_ctx.make_tracer("rpc.db.hash_table.set", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
-    RPC_DB_RETURN_CODE(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK));
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
   }
 
   if (version.empty()) {
@@ -105,7 +114,7 @@ result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key, const
   const google::protobuf::Reflection *reflect = store.GetReflection();
   if (nullptr == reflect) {
     FWLOGERROR("pack message {} failed, get reflection failed", store.GetDescriptor()->full_name());
-    RPC_DB_RETURN_CODE(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PACK));
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PACK, __trace_attributes}));
   }
   reflect->ListFields(store, &fds);
   // version will take two segments
@@ -119,7 +128,7 @@ result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key, const
 
   int res = rpc::db::pack_message(store, args, fds, &version, &segs_debug_info);
   if (res < 0) {
-    RPC_DB_RETURN_CODE(__tracer.return_code(res));
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
   FWLOGDEBUG("table [key={}] start to save data, expect version: {}", key, version);
@@ -133,7 +142,7 @@ result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key, const
   // args unavailable now
 
   if (res < 0) {
-    RPC_DB_RETURN_CODE(__tracer.return_code(res));
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
   dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
@@ -147,32 +156,36 @@ result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key, const
     if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res && !output.version().empty()) {
       version.assign(output.version());
     }
-    RPC_DB_RETURN_CODE(__tracer.return_code(res));
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
   if (output.version().empty()) {
-    RPC_DB_RETURN_CODE(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND));
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, __trace_attributes}));
   }
 
   version.assign(output.version());
 
   FWLOGINFO("table [key={}] data saved, new version: {}, detail: {}", key, output.version(), segs_debug_info.str());
-  RPC_DB_RETURN_CODE(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
+  RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 
 result_type remove_all(rpc::context &ctx, uint32_t channel, gsl::string_view key) {
   rpc::context __child_ctx(ctx);
-  rpc::context::tracer __tracer;
-  rpc::context::trace_option __trace_option;
+  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {{"rpc.system", "atrpc.db"},
+                                                                    {"rpc.service", "rpc.db.redis"},
+                                                                    {"rpc.method", "rpc.db.hash_table.remove_all"},
+                                                                    {"db.system", "redis"}};
+  rpc::context::trace_start_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
   __trace_option.is_remote = true;
   __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
+  __trace_option.attributes = __trace_attributes;
 
-  __child_ctx.setup_tracer(__tracer, "rpc.db.hash_table.remove_all", std::move(__trace_option));
+  rpc::context::tracer __tracer = __child_ctx.make_tracer("rpc.db.hash_table.remove_all", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
-    RPC_DB_RETURN_CODE(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK));
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
   }
 
   redis_args args(4);
@@ -191,7 +204,7 @@ result_type remove_all(rpc::context &ctx, uint32_t channel, gsl::string_view key
   // args unavailable now
 
   if (res < 0) {
-    RPC_DB_RETURN_CODE(__tracer.return_code(res));
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
   dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
@@ -204,7 +217,7 @@ result_type remove_all(rpc::context &ctx, uint32_t channel, gsl::string_view key
   res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, output, await_options));
   FWLOGINFO("table [key={}] all data removed", key);
 
-  RPC_DB_RETURN_CODE(__tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
+  RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 
 }  // namespace hash_table

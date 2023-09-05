@@ -64,7 +64,7 @@ class task_action_ss_req_base : public task_action_req_base<atframework::SSMsg> 
   const char *get_type_name() const override;
 
   rpc::context::inherit_options get_inherit_option() const noexcept override;
-  rpc::context::trace_option get_trace_option() const noexcept override;
+  rpc::context::trace_start_option get_trace_option() const noexcept override;
 
  protected:
   void send_response() override;

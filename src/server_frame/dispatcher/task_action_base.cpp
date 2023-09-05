@@ -104,7 +104,7 @@ int task_action_base::operator()(void *priv_data) {
 #endif
   detail::task_action_stat_guard stat(this);
 
-  rpc::context::trace_option trace_option = get_trace_option();
+  rpc::context::trace_start_option trace_start_option = get_trace_option();
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   {
 #else
@@ -120,16 +120,13 @@ int task_action_base::operator()(void *priv_data) {
     }
   }
 
-  rpc::context::tracer tracer;
-  if (trace_option.dispatcher) {
-    shared_context_.setup_tracer(tracer, name(), std::move(trace_option),
-                                 {{"rpc.system", "atrpc.dispatcher"},
-                                  {"rpc.service", rpc::context::string_view{trace_option.dispatcher->name()}},
-                                  {"rpc.method", rpc::context::string_view{name()}}});
-  } else {
-    shared_context_.setup_tracer(tracer, name(), std::move(trace_option),
-                                 {{"rpc.system", "atrpc.task"}, {"rpc.method", rpc::context::string_view{name()}}});
-  }
+  rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
+      {"rpc.system", trace_start_option.dispatcher ? "atrpc.dispatcher" : "atrpc.task"},
+      {"rpc.service", trace_start_option.dispatcher ? rpc::context::string_view{trace_start_option.dispatcher->name()}
+                                                    : rpc::context::string_view{"no_dispatcher"}},
+      {"rpc.method", rpc::context::string_view{name()}}};
+  trace_start_option.attributes = trace_attributes;
+  rpc::context::tracer tracer = shared_context_.make_tracer(name(), std::move(trace_start_option));
   rpc::context::task_context_data rpc_task_context_data;
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
@@ -137,13 +134,13 @@ int task_action_base::operator()(void *priv_data) {
   rpc_task_context_data.task_id = task_meta.task_id;
   if (0 == task_meta.task_id) {
     FWLOGERROR("task convert failed, must in task.");
-    co_return tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_INIT);
+    co_return tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_INIT, trace_attributes});
   }
 #else
   task_type_trait::internal_task_type *task = cotask::this_task::get<task_type_trait::internal_task_type>();
   if (nullptr == task) {
     FWLOGERROR("task convert failed, must in task.");
-    return tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_INIT);
+    return tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_INIT, trace_attributes});
   }
   private_data_ = task_type_trait::get_private_data(*task);
   rpc_task_context_data.task_id = task->get_id();
@@ -181,9 +178,9 @@ int task_action_base::operator()(void *priv_data) {
 
     _notify_finished();
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-    co_return tracer.return_code(result_);
+    co_return tracer.finish({result_, trace_attributes});
 #else
-    return tracer.return_code(result_);
+    return tracer.finish({result_, trace_attributes});
 #endif
   }
   // 响应OnSuccess(这时候任务的status还是running)
@@ -209,9 +206,9 @@ int task_action_base::operator()(void *priv_data) {
 
     _notify_finished();
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-    co_return tracer.return_code(ret);
+    co_return tracer.finish({ret, trace_attributes});
 #else
-    return tracer.return_code(ret);
+    return tracer.finish({ret, trace_attributes});
 #endif
   }
 
@@ -276,9 +273,9 @@ int task_action_base::operator()(void *priv_data) {
     ret = result_;
   }
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-  co_return tracer.return_code(ret);
+  co_return tracer.finish({ret, trace_attributes});
 #else
-  return tracer.return_code(ret);
+  return tracer.finish({ret, trace_attributes});
 #endif
 }
 
@@ -296,13 +293,13 @@ rpc::context::inherit_options task_action_base::get_inherit_option() const noexc
   return rpc::context::inherit_options{rpc::context::parent_mode::kLink, true, false};
 }
 
-rpc::context::trace_option task_action_base::get_trace_option() const noexcept {
-  rpc::context::trace_option ret;
+rpc::context::trace_start_option task_action_base::get_trace_option() const noexcept {
+  rpc::context::trace_start_option ret;
   ret.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
   ret.is_remote = true;
   ret.dispatcher = get_dispatcher();
   ret.parent_network_span = nullptr;
-  ret.parent_memory_span = rpc::context::trace_option::span_ptr_type();
+  ret.parent_memory_span = rpc::context::trace_start_option::span_ptr_type();
 
   return ret;
 }

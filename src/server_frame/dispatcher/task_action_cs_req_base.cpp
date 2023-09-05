@@ -133,8 +133,8 @@ std::shared_ptr<dispatcher_implement> task_action_cs_req_base::get_dispatcher() 
 
 const char *task_action_cs_req_base::get_type_name() const { return "client"; }
 
-rpc::context::trace_option task_action_cs_req_base::get_trace_option() const noexcept {
-  rpc::context::trace_option ret = task_action_base::get_trace_option();
+rpc::context::trace_start_option task_action_cs_req_base::get_trace_option() const noexcept {
+  rpc::context::trace_start_option ret = task_action_base::get_trace_option();
 
   auto &req_msg = get_request();
   if (req_msg.has_head() && req_msg.head().has_rpc_trace() && !req_msg.head().rpc_trace().trace_id().empty()) {

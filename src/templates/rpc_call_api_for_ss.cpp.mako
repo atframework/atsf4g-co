@@ -127,19 +127,17 @@ inline static int __unpack_rpc_body(TBodyType &&output, const std::string& input
 
 inline static rpc::context::tracer::span_ptr_type __setup_tracer(rpc::context &__child_ctx,
                                   rpc::context::tracer &__tracer, atframework::SSMsgHead &head,
-                                  gsl::string_view rpc_full_name, gsl::string_view service_full_name) {
-  rpc::context::trace_option __trace_option;
+                                  gsl::string_view rpc_full_name,
+                                  rpc::telemetry::trace_attributes_type attributes) {
+  rpc::context::trace_start_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());
   __trace_option.is_remote = true;
   __trace_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
+  __trace_option.attributes = attributes;
 
   // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/semantic_conventions/README.md
   __child_ctx.setup_tracer(__tracer, rpc::context::string_view{rpc_full_name.data(), rpc_full_name.size()},
-    std::move(__trace_option), {
-    {"rpc.system", "atrpc.ss"},
-    {"rpc.service", rpc::context::string_view{service_full_name.data(), service_full_name.size()}},
-    {"rpc.method", rpc::context::string_view{rpc_full_name.data(), rpc_full_name.size()}}
-  });
+    std::move(__trace_option));
   rpc::context::tracer::span_ptr_type __child_trace_span = __child_ctx.get_trace_span();
   if (__child_trace_span) {
     auto trace_span_head = head.mutable_rpc_trace();
@@ -388,13 +386,18 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
 
   rpc::context __child_ctx(__ctx);
   rpc::context::tracer __tracer;
+  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
+    {"rpc.system", "atrpc.ss"},
+    {"rpc.service", "${rpc.get_full_name()}"},
+    {"rpc.method", "${rpc.get_service().get_full_name()}"}
+  };
 %   if rpc_is_user_rpc:
   auto __child_trace_span = details::__setup_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
 %   else:
   details::__setup_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
 %   endif
                           "${rpc.get_full_name()}",
-                          "${rpc.get_service().get_full_name()}");
+                          __trace_attributes);
 
 %   if rpc_is_user_rpc:
   req_msg.mutable_head()->set_player_user_id(user_id);
@@ -414,7 +417,7 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
     if (details::__redirect_rpc_result_to_warning_log(res, warning_codes,
         "${rpc.get_full_name()}",
         ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name())) {
-        ${rpc_return_always_ready_code_sentense('__tracer.return_code(res)')}
+        ${rpc_return_always_ready_code_sentense('__tracer.finish({res, __trace_attributes})')}
   }
 %     endif
 %     if rpc.get_extension_field('atframework.rpc_options', lambda x: x.info_log_response_code, []):
@@ -422,7 +425,7 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
   if (details::__redirect_rpc_result_to_info_log(res, info_codes,
       "${rpc.get_full_name()}",
       ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name())) {
-    ${rpc_return_always_ready_code_sentense('__tracer.return_code(res)')}
+    ${rpc_return_always_ready_code_sentense('__tracer.finish({res, __trace_attributes})')}
   }
 %     endif
     FWLOGERROR("rpc {} call failed, res: {}({})",
@@ -430,7 +433,7 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
                res, protobuf_mini_dumper_get_error_msg(res)
     );
   }
-  ${rpc_return_always_ready_code_sentense('__tracer.return_code(res)')}
+  ${rpc_return_always_ready_code_sentense('__tracer.finish({res, __trace_attributes})')}
 }
 }  // namespace broadcast
 % endif
@@ -503,13 +506,18 @@ static ${rpc_return_type} __${rpc.get_name()}(
 
   rpc::context __child_ctx(__ctx);
   rpc::context::tracer __tracer;
+  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
+    {"rpc.system", "atrpc.ss"},
+    {"rpc.service", "${rpc.get_full_name()}"},
+    {"rpc.method", "${rpc.get_service().get_full_name()}"}
+  };
 %   if rpc_is_user_rpc or rpc_is_router_api:
   auto __child_trace_span = details::__setup_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
 %   else:
   details::__setup_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
 %   endif
                           "${rpc.get_full_name()}",
-                          "${rpc.get_service().get_full_name()}");
+                          __trace_attributes);
 
 %   if rpc_is_user_rpc:
 %     if rpc_is_router_api:
@@ -549,7 +557,7 @@ static ${rpc_return_type} __${rpc.get_name()}(
   if (nullptr == router_manager) {
     FWLOGERROR("rpc {} can not get router manager of type {}",
                "${rpc.get_full_name()}", type_id);
-    RPC_RETURN_CODE(__tracer.return_code(${project_namespace}::err::EN_SYS_NOT_SUPPORT));
+    RPC_RETURN_CODE(__tracer.finish({${project_namespace}::err::EN_SYS_NOT_SUPPORT, __trace_attributes}));
   }
 
   uint64_t rpc_sequence = 0;
@@ -568,7 +576,7 @@ static ${rpc_return_type} __${rpc.get_name()}(
     if (details::__redirect_rpc_result_to_warning_log(res, warning_codes,
         "${rpc.get_full_name()}",
         ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name())) {
-        ${rpc_return_sentense('__tracer.return_code(res)')}
+        ${rpc_return_sentense('__tracer.finish({res , __trace_attributes})')}
   }
 %     endif
 %     if rpc.get_extension_field('atframework.rpc_options', lambda x: x.info_log_response_code, []):
@@ -576,7 +584,7 @@ static ${rpc_return_type} __${rpc.get_name()}(
   if (details::__redirect_rpc_result_to_info_log(res, info_codes,
       "${rpc.get_full_name()}",
       ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name())) {
-    ${rpc_return_sentense('__tracer.return_code(res)')}
+    ${rpc_return_sentense('__tracer.finish({res , __trace_attributes})')}
   }
 %     endif
     FWLOGERROR("rpc {} call failed, res: {}({})",
@@ -584,7 +592,7 @@ static ${rpc_return_type} __${rpc.get_name()}(
                res, protobuf_mini_dumper_get_error_msg(res)
     );
   }
-  ${rpc_return_sentense('__tracer.return_code(res)')}
+  ${rpc_return_sentense('__tracer.finish({res , __trace_attributes})')}
 %   else:
   do {
     dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
@@ -626,7 +634,7 @@ static ${rpc_return_type} __${rpc.get_name()}(
     if (details::__redirect_rpc_result_to_warning_log(res, warning_codes,
         "${rpc.get_full_name()}",
         ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name())) {
-      ${rpc_return_sentense('__tracer.return_code(res)')}
+      ${rpc_return_sentense('__tracer.finish({res , __trace_attributes})')}
     }
 %     endif
 %     if warning_log_codes in rpc.get_extension_field('atframework.rpc_options', lambda x: x.info_log_response_code, []):
@@ -634,7 +642,7 @@ static ${rpc_return_type} __${rpc.get_name()}(
     if (details::__redirect_rpc_result_to_info_log(res, info_codes,
         "${rpc.get_full_name()}",
         ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name())) {
-      ${rpc_return_sentense('__tracer.return_code(res)')}
+      ${rpc_return_sentense('__tracer.finish({res , __trace_attributes})')}
     }
 %     endif
       FWLOGERROR("rpc {} call failed, res: {}({})",
@@ -643,7 +651,7 @@ static ${rpc_return_type} __${rpc.get_name()}(
       );
   }
 
-  ${rpc_return_sentense('__tracer.return_code(res)')}
+  ${rpc_return_sentense('__tracer.finish({res , __trace_attributes})')}
 %   endif
 }
 

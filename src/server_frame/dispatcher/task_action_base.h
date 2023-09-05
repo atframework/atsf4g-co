@@ -227,7 +227,7 @@ class task_action_base
   virtual const char *get_type_name() const = 0;
 
   virtual rpc::context::inherit_options get_inherit_option() const noexcept;
-  virtual rpc::context::trace_option get_trace_option() const noexcept;
+  virtual rpc::context::trace_start_option get_trace_option() const noexcept;
 
   uint64_t get_task_id() const;
 

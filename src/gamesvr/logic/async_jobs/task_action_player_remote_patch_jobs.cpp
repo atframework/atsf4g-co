@@ -279,13 +279,15 @@ int task_action_player_remote_patch_jobs::on_success() {
 
     rpc::context new_ctx{rpc::context::create_without_task()};
     rpc::context::tracer new_tracer;
-    rpc::context::trace_option trace_option;
-    trace_option.dispatcher = nullptr;
-    trace_option.is_remote = true;
-    trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+    rpc::context::trace_start_option trace_start_option;
+    trace_start_option.dispatcher = nullptr;
+    trace_start_option.is_remote = true;
+    trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
 
-    new_ctx.setup_tracer(new_tracer, "task_action_player_remote_patch_jobs.on_success", std::move(trace_option));
+    new_ctx.setup_tracer(new_tracer, "task_action_player_remote_patch_jobs.on_success", std::move(trace_start_option));
     param_.user->get_user_async_jobs_manager().try_async_jobs(new_ctx);
+
+    new_tracer.finish({0, {}});
   }
 
   if (patched_job_number_ > 0) {
@@ -314,13 +316,15 @@ int task_action_player_remote_patch_jobs::on_failed() {
 
     rpc::context new_ctx{rpc::context::create_without_task()};
     rpc::context::tracer new_tracer;
-    rpc::context::trace_option trace_option;
-    trace_option.dispatcher = nullptr;
-    trace_option.is_remote = true;
-    trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+    rpc::context::trace_start_option trace_start_option;
+    trace_start_option.dispatcher = nullptr;
+    trace_start_option.is_remote = true;
+    trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
 
-    new_ctx.setup_tracer(new_tracer, "task_action_player_remote_patch_jobs.on_failed", std::move(trace_option));
+    new_ctx.setup_tracer(new_tracer, "task_action_player_remote_patch_jobs.on_failed", std::move(trace_start_option));
     param_.user->get_user_async_jobs_manager().try_async_jobs(new_ctx);
+
+    new_tracer.finish({0, {}});
   }
 
   if (patched_job_number_ > 0) {

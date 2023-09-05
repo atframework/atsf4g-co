@@ -1,5 +1,5 @@
-// Copyright 2022 atframework
-// Created by owent, on 2022-02-28
+// Copyright 2022 Tencent
+// Created by owentou, on 2022-02-28
 
 #include "transaction_participator_handle.h"
 
@@ -180,7 +180,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
 
   rpc::context child_ctx{ctx};
   rpc::context::tracer child_tracer;
-  rpc::context::trace_option child_trace_option;
+  rpc::context::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -191,8 +191,8 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
     rpc::result_code_type::value_type res = RPC_AWAIT_CODE_RESULT(
         vtable_->check_prepare(child_ctx, *this, *request.mutable_storage(), *response.mutable_reason()));
     if (res < 0) {
-      // TODO(owent): 通知被抢占的事务暂缓执行
-      RPC_RETURN_CODE(res);
+      // TODO(owentou): 通知被抢占的事务暂缓执行
+      RPC_RETURN_CODE(child_tracer.finish({res, {}}));
     }
   }
 
@@ -245,10 +245,11 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
                    protobuf_mini_dumper_get_error_msg(res));
       }
     }
-    RPC_RETURN_CODE(child_tracer.return_code(res));
+    RPC_RETURN_CODE(child_tracer.finish({res, {}}));
   } else {
-    RPC_RETURN_CODE(child_tracer.return_code(
-        RPC_AWAIT_CODE_RESULT(add_running_transcation(child_ctx, std::move(*request.mutable_storage()), output))));
+    RPC_RETURN_CODE(child_tracer.finish(
+        {RPC_AWAIT_CODE_RESULT(add_running_transcation(child_ctx, std::move(*request.mutable_storage()), output)),
+         {}}));
   }
 }
 
@@ -262,7 +263,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
   if (request.has_storage() && request.storage().configure().force_commit()) {
     rpc::context child_ctx{ctx};
     rpc::context::tracer child_tracer;
-    rpc::context::trace_option child_trace_option;
+    rpc::context::trace_start_option child_trace_option;
     child_trace_option.dispatcher = nullptr;
     child_trace_option.is_remote = false;
     child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -282,7 +283,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
       }
     }
 
-    RPC_RETURN_CODE(ret);
+    RPC_RETURN_CODE(child_tracer.finish({ret, {}}));
   }
 
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(reject_transcation(ctx, request.transaction_uuid())));
@@ -488,7 +489,7 @@ rpc::result_code_type transaction_participator_handle::add_running_transcation(r
 
   rpc::context child_ctx{ctx};
   rpc::context::tracer child_tracer;
-  rpc::context::trace_option child_trace_option;
+  rpc::context::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -505,7 +506,7 @@ rpc::result_code_type transaction_participator_handle::add_running_transcation(r
     unlock(transaction_ptr);
   }
   if (!transaction_ptr) {
-    RPC_RETURN_CODE(child_tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC));
+    RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC, {}}));
   }
   output = transaction_ptr;
 
@@ -531,7 +532,7 @@ rpc::result_code_type transaction_participator_handle::add_running_transcation(r
     }
   }
 
-  RPC_RETURN_CODE(child_tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
+  RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
 }
 
 rpc::result_code_type transaction_participator_handle::remove_running_transaction(
@@ -539,7 +540,7 @@ rpc::result_code_type transaction_participator_handle::remove_running_transactio
     storage_ptr_type* output) {
   rpc::context child_ctx{ctx};
   rpc::context::tracer child_tracer;
-  rpc::context::trace_option child_trace_option;
+  rpc::context::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -548,14 +549,14 @@ rpc::result_code_type transaction_participator_handle::remove_running_transactio
                          std::move(child_trace_option));
 
   if (target_status < atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
-    RPC_RETURN_CODE(child_tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM));
+    RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM, {}}));
   }
 
   auto iter = running_transactions_.find(transaction_uuid);
   if (iter == running_transactions_.end()) {
     FWLOGWARNING("participator {} try to remove transaction {} but not found", get_participator_key(),
                  transaction_uuid);
-    RPC_RETURN_CODE(child_tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
+    RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
   }
 
   auto transaction_ptr = iter->second;
@@ -600,7 +601,7 @@ rpc::result_code_type transaction_participator_handle::remove_running_transactio
     }
   }
 
-  RPC_RETURN_CODE(child_tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
+  RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
 }
 
 rpc::result_code_type transaction_participator_handle::add_finished_transcation(
@@ -614,7 +615,7 @@ rpc::result_code_type transaction_participator_handle::add_finished_transcation(
 
   rpc::context child_ctx{ctx};
   rpc::context::tracer child_tracer;
-  rpc::context::trace_option child_trace_option;
+  rpc::context::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -638,7 +639,7 @@ rpc::result_code_type transaction_participator_handle::add_finished_transcation(
     }
   }
 
-  RPC_RETURN_CODE(child_tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
+  RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
 }
 
 rpc::result_code_type transaction_participator_handle::remove_finished_transaction(
@@ -658,7 +659,7 @@ rpc::result_code_type transaction_participator_handle::remove_finished_transacti
 
   rpc::context child_ctx{ctx};
   rpc::context::tracer child_tracer;
-  rpc::context::trace_option child_trace_option;
+  rpc::context::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -670,7 +671,7 @@ rpc::result_code_type transaction_participator_handle::remove_finished_transacti
              transaction_ptr->metadata().transaction_uuid());
 
   finished_transactions_.erase(iter);
-  RPC_RETURN_CODE(child_tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
+  RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
 }
 
 rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::context& ctx,
@@ -692,7 +693,7 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
 
   rpc::context child_ctx{ctx};
   rpc::context::tracer child_tracer;
-  rpc::context::trace_option child_trace_option;
+  rpc::context::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -722,7 +723,7 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
   if (transaction_ptr->resolve_times() > transaction_ptr->configure().resolve_max_times()) {
     FWLOGERROR("participator {} resolve transaction {} for more than {} times, just remove it", get_participator_key(),
                transaction_uuid, transaction_ptr->configure().resolve_max_times());
-    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(reject_transcation(child_ctx, transaction_uuid)));
+    RPC_RETURN_CODE(child_tracer.finish({RPC_AWAIT_CODE_RESULT(reject_transcation(child_ctx, transaction_uuid)), {}}));
   }
 
   rpc::context::message_holder<atframework::distributed_system::transaction_blob_storage> trans_data(child_ctx);
@@ -731,15 +732,17 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
   if (res == PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND || res == PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_NOT_FOUND) {
     FWLOGWARNING("participator {} resolve transaction {} but not found, just remove it", get_participator_key(),
                  transaction_uuid);
-    RPC_RETURN_CODE(child_tracer.return_code(RPC_AWAIT_CODE_RESULT(remove_running_transaction(
-        child_ctx, atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING, transaction_uuid,
-        &transaction_ptr))));
+    RPC_RETURN_CODE(child_tracer.finish(
+        {RPC_AWAIT_CODE_RESULT(remove_running_transaction(
+             child_ctx, atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING, transaction_uuid,
+             &transaction_ptr)),
+         {}}));
   }
 
   if (res != 0) {
     FWLOGWARNING("participator {} resolve transaction {} failed, error code: {}({})", get_participator_key(),
                  transaction_uuid, res, protobuf_mini_dumper_get_error_msg(res));
-    RPC_RETURN_CODE(child_tracer.return_code(res));
+    RPC_RETURN_CODE(child_tracer.finish({res, {}}));
   }
 
   rpc::transaction_api::merge_storage(get_participator_key(), *transaction_ptr, *trans_data);
@@ -748,15 +751,15 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
           transaction_ptr->metadata().status() ||
       atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING ==
           transaction_ptr->metadata().status()) {
-    RPC_RETURN_CODE(child_tracer.return_code(RPC_AWAIT_CODE_RESULT(commit_transcation(child_ctx, transaction_uuid))));
+    RPC_RETURN_CODE(child_tracer.finish({RPC_AWAIT_CODE_RESULT(commit_transcation(child_ctx, transaction_uuid)), {}}));
   } else if (atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED ==
                  transaction_ptr->metadata().status() ||
              atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING ==
                  transaction_ptr->metadata().status()) {
-    RPC_RETURN_CODE(child_tracer.return_code(RPC_AWAIT_CODE_RESULT(reject_transcation(child_ctx, transaction_uuid))));
+    RPC_RETURN_CODE(child_tracer.finish({RPC_AWAIT_CODE_RESULT(reject_transcation(child_ctx, transaction_uuid)), {}}));
   }
 
-  RPC_RETURN_CODE(child_tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
+  RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
 }
 
 rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::context& ctx,
@@ -774,7 +777,7 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
 
   rpc::context child_ctx{ctx};
   rpc::context::tracer child_tracer;
-  rpc::context::trace_option child_trace_option;
+  rpc::context::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -821,7 +824,7 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
     tick(child_ctx, util::time::time_utility::now());
   }
 
-  RPC_RETURN_CODE(child_tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
+  RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
 }
 
 rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::context& ctx,
@@ -839,7 +842,7 @@ rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::c
 
   rpc::context child_ctx{ctx};
   rpc::context::tracer child_tracer;
-  rpc::context::trace_option child_trace_option;
+  rpc::context::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -876,7 +879,7 @@ rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::c
   if (5 == (finished_transactions_.size() & 15)) {
     tick(child_ctx, util::time::time_utility::now());
   }
-  RPC_RETURN_CODE(child_tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
+  RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
 }
 
 }  // namespace distributed_system

@@ -52,7 +52,7 @@ class task_action_cs_req_base : public task_action_req_base<atframework::CSMsg> 
   std::shared_ptr<dispatcher_implement> get_dispatcher() const override;
   const char *get_type_name() const override;
 
-  rpc::context::trace_option get_trace_option() const noexcept override;
+  rpc::context::trace_start_option get_trace_option() const noexcept override;
 
   std::pair<uint64_t, uint64_t> get_gateway_info() const;
 

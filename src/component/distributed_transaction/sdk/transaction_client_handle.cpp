@@ -1,5 +1,5 @@
-// Copyright 2022 atframework
-// Created by owent, on 2022-03-03
+// Copyright 2022 Tencent
+// Created by owentou, on 2022-03-03
 
 #include "transaction_client_handle.h"
 
@@ -57,7 +57,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
 
   rpc::context child_ctx{ctx};
   rpc::context::tracer child_tracer;
-  rpc::context::trace_option child_trace_option;
+  rpc::context::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -77,10 +77,10 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
       child_ctx, *output, std_duration_to_protobuf_duration(options.timeout), options.replication_read_count,
       options.replication_total_count, options.memory_only, options.force_commit));
   if (res < 0) {
-    RPC_RETURN_CODE(child_tracer.return_code(res));
+    RPC_RETURN_CODE(child_tracer.finish({res, {}}));
   }
 
-  RPC_RETURN_CODE(child_tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
+  RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle::submit_transaction(
@@ -97,7 +97,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
 
   rpc::context child_ctx{ctx};
   rpc::context::tracer child_tracer;
-  rpc::context::trace_option child_trace_option;
+  rpc::context::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -112,7 +112,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
     ret = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::create_transaction(child_ctx, *input));
     if (ret < 0) {
       input->mutable_metadata()->set_status(old_status);
-      RPC_RETURN_CODE(child_tracer.return_code(ret));
+      RPC_RETURN_CODE(child_tracer.finish({ret, {}}));
     }
   }
 
@@ -153,7 +153,6 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
           FWLOGERROR("transaction {} prepare participator {} failed, error code: {}({})",
                      input->metadata().transaction_uuid(), participator.second.participator_key(), ret,
                      protobuf_mini_dumper_get_error_msg(ret));
-
           if (nullptr != output_failed_participators) {
             failed_participator = participator.second.participator_key();
           }
@@ -249,7 +248,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
       output_failed_participators->insert(std::move(failed_participator));
     }
   }
-  RPC_RETURN_CODE(child_tracer.return_code(ret));
+  RPC_RETURN_CODE(child_tracer.finish({ret, {}}));
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API int32_t transaction_client_handle::set_transaction_data(
@@ -285,7 +284,7 @@ DISTRIBUTED_TRANSACTION_SDK_API int32_t transaction_client_handle::add_participa
 
   rpc::context child_ctx{ctx};
   rpc::context::tracer child_tracer;
-  rpc::context::trace_option child_trace_option;
+  rpc::context::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -298,7 +297,7 @@ DISTRIBUTED_TRANSACTION_SDK_API int32_t transaction_client_handle::add_participa
       FWLOGERROR("Pack transaction participator data from {} failed, message: {}",
                  protobuf_mini_dumper_get_readable(data), iter->second.participator_data().InitializationErrorString());
     }
-    return child_tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PACK);
+    return child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PACK, {}});
   }
 
   auto& participator = (*input->mutable_participators())[participator_key];
@@ -307,10 +306,10 @@ DISTRIBUTED_TRANSACTION_SDK_API int32_t transaction_client_handle::add_participa
   if (false == participator.mutable_participator_data()->PackFrom(data)) {
     FWLOGERROR("Pack transaction participator data from {} failed, message: {}",
                protobuf_mini_dumper_get_readable(data), participator.participator_data().InitializationErrorString());
-    return child_tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PACK);
+    return child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PACK, {}});
   }
 
-  return child_tracer.return_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  return child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}});
 }
 
 }  // namespace distributed_system
