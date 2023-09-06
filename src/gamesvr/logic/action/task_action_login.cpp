@@ -83,28 +83,29 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
   res = RPC_AWAIT_CODE_RESULT(
       rpc::db::login::get(get_shared_context(), req_body.open_id().c_str(), zone_id, tb, version));
   if (res < 0) {
-    FWLOGERROR("player {} not found", req_body.open_id());
+    FCTXLOGERROR(get_shared_context(), "player {} not found", req_body.open_id());
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   if (req_body.user_id() != tb.user_id()) {
-    FWLOGERROR("player {} expect user_id={}, but we got {} not found", req_body.open_id(), tb.user_id(),
-               req_body.user_id());
+    FCTXLOGERROR(get_shared_context(), "player {} expect user_id={}, but we got {} not found", req_body.open_id(),
+                 tb.user_id(), req_body.user_id());
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_USERID_NOT_MATCH);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 2. 校验登入码
   if (util::time::time_utility::get_sys_now() > tb.login_code_expired()) {
-    FWLOGERROR("player {}({}:{}) login code expired", req_body.open_id(), zone_id, req_body.user_id());
+    FCTXLOGERROR(get_shared_context(), "player {}({}:{}) login code expired", req_body.open_id(), zone_id,
+                 req_body.user_id());
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   if (0 != UTIL_STRFUNC_STRCMP(req_body.login_code().c_str(), tb.login_code().c_str())) {
-    FWLOGERROR("player {}({}:{}) login code error(expected: {}, real: {})", req_body.open_id(), zone_id,
-               req_body.user_id(), tb.login_code(), req_body.login_code());
+    FCTXLOGERROR(get_shared_context(), "player {}({}:{}) login code error(expected: {}, real: {})", req_body.open_id(),
+                 zone_id, req_body.user_id(), tb.login_code(), req_body.login_code());
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -128,7 +129,7 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
   // 4. 先读本地缓存
   std::shared_ptr<session> my_sess = get_session();
   if (!my_sess) {
-    FWLOGERROR("session not found");
+    FCTXLOGERROR(get_shared_context(), "{}", "session not found");
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_NOT_LOGIN);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -141,7 +142,7 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
 
   // 如果不存在则是登入过程中掉线了
   if (!my_sess) {
-    FWLOGERROR("session not found");
+    FCTXLOGERROR(get_shared_context(), "{}", "session not found");
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_NOT_LOGIN);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
@@ -167,7 +168,8 @@ GAMECLIENT_RPC_API int task_action_login::on_success() {
   // 1. 包校验
   player::ptr_t user = player_manager::me()->find_as<player>(req_body.user_id(), get_zone_id());
   if (!user) {
-    FWLOGWARNING("login success but user {}:{} not found, maybe parrallel login", get_zone_id(), req_body.user_id());
+    FCTXLOGWARNING(get_shared_context(), "login success but user {}:{} not found, maybe parrallel login", get_zone_id(),
+                   req_body.user_id());
     return get_result();
   }
   rsp_body.set_zone_id(static_cast<int32_t>(user->get_zone_id()));
@@ -186,7 +188,7 @@ GAMECLIENT_RPC_API int task_action_login::on_success() {
   }
 
   if (!user->is_inited()) {
-    FWLOGWARNING("login success but user {}:{} not inited", get_zone_id(), req_body.user_id());
+    FCTXLOGWARNING(get_shared_context(), "login success but user {}:{} not inited", get_zone_id(), req_body.user_id());
     player_manager::me()->async_remove(get_shared_context(), user, true);
     return get_result();
   }
@@ -204,7 +206,7 @@ GAMECLIENT_RPC_API int task_action_login::on_success() {
     task_manager::me()->create_task_with_timeout<task_action_player_async_jobs>(
         tid, logic_config::me()->get_cfg_task().nomsg().timeout().seconds(), COPP_MACRO_STD_MOVE(params));
     if (0 == tid) {
-      FWLOGERROR("create task_action_player_async_jobs failed");
+      FCTXLOGERROR(get_shared_context(), "{}", "create task_action_player_async_jobs failed");
     } else {
       dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
 
@@ -244,7 +246,8 @@ GAMECLIENT_RPC_API int task_action_login::on_failed() {
 
   // 登入过程中掉线了，直接退出
   if (!s) {
-    FWLOGWARNING("session [{},{}] not found", get_gateway_info().first, get_gateway_info().second);
+    FCTXLOGWARNING(get_shared_context(), "session [{},{}] not found", get_gateway_info().first,
+                   get_gateway_info().second);
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
@@ -252,13 +255,13 @@ GAMECLIENT_RPC_API int task_action_login::on_failed() {
     case PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_OTHER_DEVICE:
     case PROJECT_NAMESPACE_ID::EN_ERR_NOT_LOGIN:
     case PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_BAN: {
-      FWLOGWARNING("session [{},{}] login failed, rsp code: {}, ret code: {}", get_gateway_info().first,
-                   get_gateway_info().second, get_response_code(), get_result());
+      FCTXLOGWARNING(get_shared_context(), "session [{},{}] login failed, rsp code: {}, ret code: {}",
+                     get_gateway_info().first, get_gateway_info().second, get_response_code(), get_result());
       break;
     }
     default: {
-      FWLOGERROR("session [{},{}] login failed, rsp code: {}, ret code: {}", get_gateway_info().first,
-                 get_gateway_info().second, get_response_code(), get_result());
+      FCTXLOGERROR(get_shared_context(), "session [{},{}] login failed, rsp code: {}, ret code: {}",
+                   get_gateway_info().first, get_gateway_info().second, get_response_code(), get_result());
       break;
     }
   }
@@ -279,7 +282,7 @@ GAMECLIENT_RPC_API rpc::result_code_type task_action_login::replace_session(std:
   // 获取当前Session
   std::shared_ptr<session> cur_sess = get_session();
   if (!cur_sess) {
-    FWLOGERROR("session not found");
+    FCTXLOGERROR(get_shared_context(), "{}", "session not found");
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 

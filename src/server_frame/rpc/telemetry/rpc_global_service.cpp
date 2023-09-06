@@ -872,7 +872,8 @@ static details::local_provider_handle_t<opentelemetry::trace::TracerProvider> _o
 using PushMetricExporter = opentelemetry::sdk::metrics::PushMetricExporter;
 static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_metrics_exporter(
     ::rpc::telemetry::details::local_caller_info_t &caller,
-    const PROJECT_NAMESPACE_ID::config::opentelemetry_metrics_exporter_cfg &exporter_cfg) {
+    const PROJECT_NAMESPACE_ID::config::opentelemetry_metrics_exporter_cfg &exporter_cfg,
+    const opentelemetry::sdk::resource::ResourceAttributes &resource_values) {
   std::vector<std::unique_ptr<PushMetricExporter>> ret;
   ret.reserve(2);
 
@@ -944,6 +945,33 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
     for (auto &kv : exporter_cfg.prometheus_push().labels()) {
       options.labels[kv.first] = kv.second;
     }
+    for (auto &resource_kv : resource_values) {
+      if (opentelemetry::nostd::holds_alternative<std::string>(resource_kv.second)) {
+        options.labels[resource_kv.first] = opentelemetry::nostd::get<std::string>(resource_kv.second);
+      } else if (opentelemetry::nostd::holds_alternative<bool>(resource_kv.second)) {
+        if (opentelemetry::nostd::get<bool>(resource_kv.second)) {
+          options.labels[resource_kv.first] = "true";
+        } else {
+          options.labels[resource_kv.first] = "false";
+        }
+      } else if (opentelemetry::nostd::holds_alternative<int32_t>(resource_kv.second)) {
+        options.labels[resource_kv.first] =
+            util::log::format("{}", opentelemetry::nostd::get<int32_t>(resource_kv.second));
+      } else if (opentelemetry::nostd::holds_alternative<uint32_t>(resource_kv.second)) {
+        options.labels[resource_kv.first] =
+            util::log::format("{}", opentelemetry::nostd::get<uint32_t>(resource_kv.second));
+      } else if (opentelemetry::nostd::holds_alternative<int64_t>(resource_kv.second)) {
+        options.labels[resource_kv.first] =
+            util::log::format("{}", opentelemetry::nostd::get<int64_t>(resource_kv.second));
+      } else if (opentelemetry::nostd::holds_alternative<uint64_t>(resource_kv.second)) {
+        options.labels[resource_kv.first] =
+            util::log::format("{}", opentelemetry::nostd::get<uint64_t>(resource_kv.second));
+      } else if (opentelemetry::nostd::holds_alternative<double>(resource_kv.second)) {
+        options.labels[resource_kv.first] =
+            util::log::format("{}", opentelemetry::nostd::get<double>(resource_kv.second));
+      }
+    }
+
     options.username = exporter_cfg.prometheus_push().username();
     options.password = exporter_cfg.prometheus_push().password();
 
@@ -1439,7 +1467,8 @@ _opentelemetry_create_opentelemetry_metrics_provider(
     const PROJECT_NAMESPACE_ID::config::opentelemetry_cfg &opentelemetry_cfg,
     const opentelemetry::sdk::resource::ResourceAttributes &resource_values) {
   if (opentelemetry_cfg.has_metrics()) {
-    auto exporters = _opentelemetry_create_metrics_exporter(app_info_cache, opentelemetry_cfg.metrics().exporters());
+    auto exporters = _opentelemetry_create_metrics_exporter(app_info_cache, opentelemetry_cfg.metrics().exporters(),
+                                                            resource_values);
     app_info_cache.metrics_exporter_count = exporters.size();
     auto readers = _opentelemetry_create_metrics_reader(std::move(exporters), opentelemetry_cfg.metrics().reader(),
                                                         opentelemetry_cfg.metrics().exporters());

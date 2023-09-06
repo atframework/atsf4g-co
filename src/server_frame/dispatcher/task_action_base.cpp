@@ -4,12 +4,17 @@
 
 #include "dispatcher/task_action_base.h"
 
+//clang-format off
 #include <config/compiler/protobuf_prefix.h>
+//clang-format on
 
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
+#include <protocol/pbdesc/svr.protocol.pb.h>
 
+//clang-format off
 #include <config/compiler/protobuf_suffix.h>
+//clang-format on
 
 #include <config/extern_log_categorize.h>
 
@@ -151,6 +156,7 @@ int task_action_base::operator()(void *priv_data) {
     private_data_->action = this;
   }
 
+  rpc_task_context_data.task_name = name();
   shared_context_.set_task_context(rpc_task_context_data);
 
   if (0 != get_user_id()) {
@@ -305,6 +311,16 @@ rpc::context::trace_start_option task_action_base::get_trace_option() const noex
 }
 
 uint64_t task_action_base::get_task_id() const { return get_shared_context().get_task_context().task_id; }
+
+void task_action_base::set_user_key(uint64_t user_id, uint32_t zone_id) {
+  user_id_ = user_id;
+  zone_id_ = zone_id;
+  if (user_id != 0 && zone_id != 0 && shared_context_.get_task_context().reference_object_type_id == 0 &&
+      shared_context_.get_task_context().reference_object_zone_id == 0 &&
+      shared_context_.get_task_context().reference_object_instance_id == 0) {
+    shared_context_.update_task_context_reference_object(PROJECT_NAMESPACE_ID::EN_ROT_PLAYER, zone_id, user_id);
+  }
+}
 
 task_action_base::on_finished_callback_handle_t task_action_base::add_on_on_finished(on_finished_callback_fn_t &&fn) {
   return on_finished_callback_.insert(on_finished_callback_.end(), std::move(fn));

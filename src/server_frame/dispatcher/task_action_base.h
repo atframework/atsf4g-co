@@ -232,10 +232,7 @@ class task_action_base
   uint64_t get_task_id() const;
 
  protected:
-  inline void set_user_key(uint64_t user_id, uint32_t zone_id) {
-    user_id_ = user_id;
-    zone_id_ = zone_id;
-  }
+  void set_user_key(uint64_t user_id, uint32_t zone_id);
   virtual void send_response() = 0;
 
  public:

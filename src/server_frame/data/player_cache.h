@@ -264,9 +264,8 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
 #endif
 
 namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID {
-template <class T>
-struct formatter<T, typename std::enable_if<std::is_base_of<player_cache, T>::value, char>::type>
-    : formatter<std::string> {
+template <class CharT>
+struct formatter<player_cache, CharT> : formatter<std::string> {
   template <class FormatContext>
   auto format(const player_cache &user, FormatContext &ctx) {
     return LOG_WRAPPER_FWAPI_FORMAT_TO(ctx.out(), "player {}({}:{})", user.get_open_id(), user.get_zone_id(),

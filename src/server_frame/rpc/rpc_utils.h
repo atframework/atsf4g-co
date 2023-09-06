@@ -20,9 +20,14 @@
 
 #include <protocol/pbdesc/atframework.pb.h>
 
+#include <opentelemetry/trace/span_id.h>
+#include <opentelemetry/trace/trace_id.h>
+
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
+
+#include <log/log_wrapper.h>
 
 #include <config/server_frame_build_feature.h>
 
@@ -92,7 +97,12 @@ class context {
 
   struct UTIL_SYMBOL_VISIBLE task_context_data {
     uint64_t task_id;
-    inline task_context_data() noexcept : task_id(0){};
+    gsl::string_view task_name;
+    uint32_t reference_object_type_id;
+    uint32_t reference_object_zone_id;
+    uint64_t reference_object_instance_id;
+    inline task_context_data() noexcept
+        : task_id(0), reference_object_type_id(0), reference_object_zone_id(0), reference_object_instance_id(0) {}
   };
 
   template <class TMsg>
@@ -239,6 +249,12 @@ class context {
 
   SERVER_FRAME_API void set_task_context(const task_context_data &task_ctx) noexcept;
   UTIL_FORCEINLINE const task_context_data &get_task_context() const noexcept { return task_context_; }
+  UTIL_FORCEINLINE void update_task_context_reference_object(uint32_t type_id, uint32_t zone_id,
+                                                             uint64_t instance_id) noexcept {
+    task_context_.reference_object_type_id = type_id;
+    task_context_.reference_object_zone_id = zone_id;
+    task_context_.reference_object_instance_id = instance_id;
+  }
 
  private:
   std::shared_ptr<::google::protobuf::Arena> allocator_;
@@ -399,3 +415,73 @@ SERVER_FRAME_API int32_t custom_resume(const task_type_trait::task_type &task,
 SERVER_FRAME_API int32_t custom_resume(task_type_trait::id_type task_id, dispatcher_resume_data_type &resume_data);
 
 }  // namespace rpc
+
+namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID {
+template <class CharT>
+struct formatter<rpc::context, CharT> : formatter<std::string, CharT> {
+  template <class FormatContext>
+  auto format(const rpc::context &rpc_ctx, FormatContext &fmt_ctx) {
+    auto ret = LOG_WRAPPER_FWAPI_FORMAT_TO(fmt_ctx.out(), ": task_id={}", rpc_ctx.get_task_context().task_id);
+    if (!rpc_ctx.get_task_context().task_name.empty()) {
+      ret = LOG_WRAPPER_FWAPI_FORMAT_TO(ret, ", task_name={}", rpc_ctx.get_task_context().task_name);
+    }
+
+    if (rpc_ctx.get_task_context().reference_object_type_id != 0) {
+      ret = LOG_WRAPPER_FWAPI_FORMAT_TO(ret, ", object_type={}", rpc_ctx.get_task_context().reference_object_type_id);
+    }
+    if (rpc_ctx.get_task_context().reference_object_zone_id != 0) {
+      ret = LOG_WRAPPER_FWAPI_FORMAT_TO(ret, ", zone_id={}", rpc_ctx.get_task_context().reference_object_zone_id);
+    }
+    if (rpc_ctx.get_task_context().reference_object_instance_id != 0) {
+      ret = LOG_WRAPPER_FWAPI_FORMAT_TO(ret, ", object_instance_id={}",
+                                        rpc_ctx.get_task_context().reference_object_instance_id);
+    }
+    const ::rpc::context::tracer::span_ptr_type &trace_span = rpc_ctx.get_trace_span();
+    if (trace_span) {
+      auto trace_ctx = trace_span->GetContext();
+      char trace_id_buffer[opentelemetry::trace::TraceId::kSize * 2];
+      char span_id_buffer[opentelemetry::trace::SpanId::kSize * 2];
+      trace_ctx.trace_id().ToLowerBase16(trace_id_buffer);
+      trace_ctx.span_id().ToLowerBase16(span_id_buffer);
+      ret = LOG_WRAPPER_FWAPI_FORMAT_TO(ret, ", trace_id={}, span_id={}",
+                                        gsl::string_view{trace_id_buffer, sizeof(trace_id_buffer)},
+                                        gsl::string_view{span_id_buffer, sizeof(span_id_buffer)});
+    }
+    ret = LOG_WRAPPER_FWAPI_FORMAT_TO(ret, "", "\n\t");
+    return ret;
+  }
+};
+}  // namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID
+
+// 玩家日志输出工具
+#ifdef _MSC_VER
+#  define FCTXLOGTRACE(__CTX, fmt, ...) FWLOGTRACE("{}" fmt, (__CTX), __VA_ARGS__)
+#  define FCTXLOGDEBUG(__CTX, fmt, ...) FWLOGDEBUG("{}" fmt, (__CTX), __VA_ARGS__)
+#  define FCTXLOGNOTICE(__CTX, fmt, ...) FWLOGNOTICE("{}" fmt, (__CTX), __VA_ARGS__)
+#  define FCTXLOGINFO(__CTX, fmt, ...) FWLOGINFO("{}" fmt, (__CTX), __VA_ARGS__)
+#  define FCTXLOGWARNING(__CTX, fmt, ...) FWLOGWARNING("{}" fmt, (__CTX), __VA_ARGS__)
+#  define FCTXLOGERROR(__CTX, fmt, ...) FWLOGERROR("{}" fmt, (__CTX), __VA_ARGS__)
+#  define FCTXLOGFATAL(__CTX, fmt, ...) FWLOGFATAL("{}" fmt, (__CTX), __VA_ARGS__)
+#  define FCTXCLOGTRACE(__CAT, __CTX, fmt, ...) FWCLOGTRACE(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
+#  define FCTXCLOGDEBUG(__CAT, __CTX, fmt, ...) FWCLOGDEBUG(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
+#  define FCTXCLOGNOTICE(__CAT, __CTX, fmt, ...) FWCLOGNOTICE(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
+#  define FCTXCLOGINFO(__CAT, __CTX, fmt, ...) FWCLOGINFO(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
+#  define FCTXCLOGWARNING(__CAT, __CTX, fmt, ...) FWCLOGWARNING(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
+#  define FCTXCLOGERROR(__CAT, __CTX, fmt, ...) FWCLOGERROR(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
+#  define FCTXCLOGFATAL(__CAT, __CTX, fmt, ...) FWCLOGFATAL(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
+#else
+#  define FCTXLOGTRACE(__CTX, fmt, args...) FWLOGTRACE("{}" fmt, (__CTX), ##args)
+#  define FCTXLOGDEBUG(__CTX, fmt, args...) FWLOGDEBUG("{}" fmt, (__CTX), ##args)
+#  define FCTXLOGNOTICE(__CTX, fmt, args...) FWLOGNOTICE("{}" fmt, (__CTX), ##args)
+#  define FCTXLOGINFO(__CTX, fmt, args...) FWLOGINFO("{}" fmt, (__CTX), ##args)
+#  define FCTXLOGWARNING(__CTX, fmt, args...) FWLOGWARNING("{}" fmt, (__CTX), ##args)
+#  define FCTXLOGERROR(__CTX, fmt, args...) FWLOGERROR("{}" fmt, (__CTX), ##args)
+#  define FCTXLOGFATAL(__CTX, fmt, args...) FWLOGFATAL("{}" fmt, (__CTX), ##args)
+#  define FCTXCLOGTRACE(__CAT, __CTX, fmt, args...) FWCLOGTRACE(__CAT, "{}" fmt, (__CTX), ##args)
+#  define FCTXCLOGDEBUG(__CAT, __CTX, fmt, args...) FWCLOGDEBUG(__CAT, "{}" fmt, (__CTX), ##args)
+#  define FCTXCLOGNOTICE(__CAT, __CTX, fmt, args...) FWCLOGNOTICE(__CAT, "{}" fmt, (__CTX), ##args)
+#  define FCTXCLOGINFO(__CAT, __CTX, fmt, args...) FWCLOGINFO(__CAT, "{}" fmt, (__CTX), ##args)
+#  define FCTXCLOGWARNING(__CAT, __CTX, fmt, args...) FWCLOGWARNING(__CAT, "{}" fmt, (__CTX), ##args)
+#  define FCTXCLOGERROR(__CAT, __CTX, fmt, args...) FWCLOGERROR(__CAT, "{}" fmt, (__CTX), ##args)
+#  define FCTXCLOGFATAL(__CAT, __CTX, fmt, args...) FWCLOGFATAL(__CAT, "{}" fmt, (__CTX), ##args)
+#endif

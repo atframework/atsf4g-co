@@ -88,7 +88,12 @@ SERVER_FRAME_CONFIG_API gsl::string_view logic_config::get_deployment_environmen
     return gsl::string_view();
   }
 
-  return (*app->mutable_metadata().mutable_labels())["deployment.environment"];
+  auto iter = app->get_metadata().labels().find("deployment.environment");
+  if (iter == app->get_metadata().labels().end()) {
+    return "";
+  }
+
+  return iter->second;
 }
 
 void logic_config::_load_db() {
