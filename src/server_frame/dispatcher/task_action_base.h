@@ -11,7 +11,7 @@
 #include <config/server_frame_build_feature.h>
 
 #include <rpc/rpc_common_types.h>
-#include <rpc/rpc_utils.h>
+#include <rpc/rpc_context.h>
 
 #include <functional>
 #include <list>
@@ -311,7 +311,20 @@ class task_action_base
   void set_caller_context(rpc::context &ctx);
 
  private:
-  void _notify_finished();
+  enum class trace_attribute_type : size_t {
+    kRpcSystem = 0,
+    kRpcService = 1,
+    kRpcMethod = 2,
+    kAtRpcKind = 3,
+    kAtRpcSpanName = 4,
+    kTaskReturnCode = 5,
+    kTaskResponseCode = 6,
+    kMax = 7,
+  };
+  using task_trace_attributes =
+      rpc::telemetry::trace_attribute_pair_type[static_cast<size_t>(trace_attribute_type::kMax)];
+  result_type::value_type _notify_finished(int32_t final_result, rpc::context::tracer &tracer,
+                                           task_trace_attributes &attributes);
 
  private:
   uint64_t user_id_;

@@ -126,7 +126,8 @@ class tracer {
   SERVER_FRAME_API bool start(string_view name, trace_start_option&& options);
   SERVER_FRAME_API int32_t finish(trace_finish_option&& options);
 
-  UTIL_FORCEINLINE const tracer::span_ptr_type& get_trace_span() const { return trace_span_; }
+  UTIL_FORCEINLINE const tracer::span_ptr_type& get_trace_span() const noexcept { return trace_span_; }
+  UTIL_FORCEINLINE opentelemetry::nostd::string_view get_span_kind() const noexcept { return span_kind_; }
 
   /**
    * @brief Set the trace name

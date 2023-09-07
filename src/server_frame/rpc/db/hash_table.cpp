@@ -11,6 +11,8 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
+#include <opentelemetry/trace/semantic_conventions.h>
+
 #include <log/log_wrapper.h>
 
 #include <hiredis_happ.h>
@@ -32,10 +34,12 @@ result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
                     PROJECT_NAMESPACE_ID::table_all_message &output,
                     int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply)) {
   rpc::context __child_ctx(ctx);
-  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {{"rpc.system", "atrpc.db"},
-                                                                    {"rpc.service", "rpc.db.redis"},
-                                                                    {"rpc.method", "rpc.db.hash_table.get"},
-                                                                    {"db.system", "redis"}};
+  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
+      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.db"},
+      {opentelemetry::trace::SemanticConventions::kRpcService, "rpc.db.redis"},
+      {opentelemetry::trace::SemanticConventions::kRpcMethod, "rpc.db.hash_table.get"},
+      {opentelemetry::trace::SemanticConventions::kDbSystem,
+       opentelemetry::trace::SemanticConventions::DbSystemValues::kRedis}};
 
   rpc::context::trace_start_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
@@ -87,10 +91,12 @@ result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key, const
                 std::string &version, PROJECT_NAMESPACE_ID::table_all_message &output,
                 int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply)) {
   rpc::context __child_ctx(ctx);
-  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {{"rpc.system", "atrpc.db"},
-                                                                    {"rpc.service", "rpc.db.redis"},
-                                                                    {"rpc.method", "rpc.db.hash_table.set"},
-                                                                    {"db.system", "redis"}};
+  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
+      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.db"},
+      {opentelemetry::trace::SemanticConventions::kRpcService, "rpc.db.redis"},
+      {opentelemetry::trace::SemanticConventions::kRpcMethod, "rpc.db.hash_table.set"},
+      {opentelemetry::trace::SemanticConventions::kDbSystem,
+       opentelemetry::trace::SemanticConventions::DbSystemValues::kRedis}};
   rpc::context::trace_start_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
   __trace_option.is_remote = true;
@@ -171,10 +177,12 @@ result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key, const
 
 result_type remove_all(rpc::context &ctx, uint32_t channel, gsl::string_view key) {
   rpc::context __child_ctx(ctx);
-  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {{"rpc.system", "atrpc.db"},
-                                                                    {"rpc.service", "rpc.db.redis"},
-                                                                    {"rpc.method", "rpc.db.hash_table.remove_all"},
-                                                                    {"db.system", "redis"}};
+  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
+      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.db"},
+      {opentelemetry::trace::SemanticConventions::kRpcService, "rpc.db.redis"},
+      {opentelemetry::trace::SemanticConventions::kRpcMethod, "rpc.db.hash_table.remove_all"},
+      {opentelemetry::trace::SemanticConventions::kDbSystem,
+       opentelemetry::trace::SemanticConventions::DbSystemValues::kRedis}};
   rpc::context::trace_start_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
   __trace_option.is_remote = true;

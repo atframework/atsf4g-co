@@ -46,6 +46,7 @@
 #include <opentelemetry/sdk/metrics/export/periodic_exporting_metric_reader_options.h>
 #include <opentelemetry/sdk/metrics/meter.h>
 #include <opentelemetry/sdk/metrics/meter_provider.h>
+#include <opentelemetry/sdk/resource/semantic_conventions.h>
 #include <opentelemetry/sdk/trace/batch_span_processor_factory.h>
 #include <opentelemetry/sdk/trace/batch_span_processor_options.h>
 #include <opentelemetry/sdk/trace/exporter.h>
@@ -57,8 +58,8 @@
 #include <opentelemetry/sdk/trace/samplers/trace_id_ratio.h>
 #include <opentelemetry/sdk/trace/simple_processor_factory.h>
 #include <opentelemetry/sdk/trace/tracer_provider.h>
+#include <opentelemetry/sdk/trace/tracer_provider_factory.h>
 #include <opentelemetry/trace/provider.h>
-#include "opentelemetry/sdk/trace/tracer_provider_factory.h"
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
@@ -1367,17 +1368,22 @@ static opentelemetry::sdk::resource::ResourceAttributes _create_opentelemetry_ap
   app_info_cache.metrics_attributes.clear();
 
   // basic
-  app_info_cache.common_owned_attributes.SetAttribute("service.instance.id", app.get_id());
+  app_info_cache.common_owned_attributes.SetAttribute(
+      opentelemetry::sdk::resource::SemanticConventions::kServiceInstanceId, app.get_id());
   app_info_cache.common_owned_attributes.SetAttribute("service.instance.name", app.get_app_name());
-  app_info_cache.common_owned_attributes.SetAttribute("service.name", app.get_type_name());
+  app_info_cache.common_owned_attributes.SetAttribute(opentelemetry::sdk::resource::SemanticConventions::kServiceName,
+                                                      app.get_type_name());
   app_info_cache.common_owned_attributes.SetAttribute("service.identity", app.get_app_identity());
   app_info_cache.common_owned_attributes.SetAttribute("service.type_id", app.get_type_id());
-  app_info_cache.common_owned_attributes.SetAttribute("service.version", server_frame_project_get_version());
+  app_info_cache.common_owned_attributes.SetAttribute(
+      opentelemetry::sdk::resource::SemanticConventions::kServiceVersion, server_frame_project_get_version());
 
   // metrics
   app_info_cache.metrics_attributes["service.instance.name"] = app.get_app_name();
-  app_info_cache.metrics_attributes["service.name"] = app.get_type_name();
-  app_info_cache.metrics_attributes["service.version"] = server_frame_project_get_version();
+  app_info_cache.metrics_attributes[opentelemetry::sdk::resource::SemanticConventions::kServiceName] =
+      app.get_type_name();
+  app_info_cache.metrics_attributes[opentelemetry::sdk::resource::SemanticConventions::kServiceVersion] =
+      server_frame_project_get_version();
 
   // area
   if (0 != app.get_area().zone_id()) {
@@ -1395,29 +1401,39 @@ static opentelemetry::sdk::resource::ResourceAttributes _create_opentelemetry_ap
 
   // metadata
   if (!app.get_metadata().namespace_name().empty()) {
-    app_info_cache.common_owned_attributes.SetAttribute("service.namespace", app.get_metadata().namespace_name());
-    app_info_cache.metrics_attributes["service.namespace"] = app.get_metadata().namespace_name();
+    app_info_cache.common_owned_attributes.SetAttribute(
+        opentelemetry::sdk::resource::SemanticConventions::kServiceNamespace, app.get_metadata().namespace_name());
+    app_info_cache.metrics_attributes[opentelemetry::sdk::resource::SemanticConventions::kServiceNamespace] =
+        app.get_metadata().namespace_name();
   }
 
   {
-    auto iter = app.get_metadata().labels().find("deployment.environment");
+    auto iter =
+        app.get_metadata().labels().find(opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironment);
     if (iter != app.get_metadata().labels().end()) {
-      app_info_cache.common_owned_attributes.SetAttribute("deployment.environment", iter->second);
-      app_info_cache.metrics_attributes["deployment.environment"] = iter->second;
+      app_info_cache.common_owned_attributes.SetAttribute(
+          opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironment, iter->second);
+      app_info_cache.metrics_attributes[opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironment] =
+          iter->second;
     }
   }
 
   // process
   // @see
   // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/resource/semantic_conventions/process.md
-  app_info_cache.common_owned_attributes.SetAttribute("process.pid", atbus::node::get_pid());
+  app_info_cache.common_owned_attributes.SetAttribute(opentelemetry::sdk::resource::SemanticConventions::kProcessPid,
+                                                      atbus::node::get_pid());
   {
     if (!app.get_origin_configure().hostname().empty()) {
-      app_info_cache.common_owned_attributes.SetAttribute("host.name", app.get_origin_configure().hostname());
-      app_info_cache.metrics_attributes["host.name"] = app.get_origin_configure().hostname();
+      app_info_cache.common_owned_attributes.SetAttribute(opentelemetry::sdk::resource::SemanticConventions::kHostName,
+                                                          app.get_origin_configure().hostname());
+      app_info_cache.metrics_attributes[opentelemetry::sdk::resource::SemanticConventions::kHostName] =
+          app.get_origin_configure().hostname();
     } else {
-      app_info_cache.common_owned_attributes.SetAttribute("host.name", atbus::node::get_hostname());
-      app_info_cache.metrics_attributes["host.name"] = atbus::node::get_hostname();
+      app_info_cache.common_owned_attributes.SetAttribute(opentelemetry::sdk::resource::SemanticConventions::kHostName,
+                                                          atbus::node::get_hostname());
+      app_info_cache.metrics_attributes[opentelemetry::sdk::resource::SemanticConventions::kHostName] =
+          atbus::node::get_hostname();
     }
   }
 

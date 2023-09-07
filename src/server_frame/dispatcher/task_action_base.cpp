@@ -16,6 +16,8 @@
 #include <config/compiler/protobuf_suffix.h>
 //clang-format on
 
+#include <opentelemetry/trace/semantic_conventions.h>
+
 #include <config/extern_log_categorize.h>
 
 #include <log/log_wrapper.h>
@@ -125,13 +127,25 @@ int task_action_base::operator()(void *priv_data) {
     }
   }
 
-  rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
-      {"rpc.system", trace_start_option.dispatcher ? "atrpc.dispatcher" : "atrpc.task"},
-      {"rpc.service", trace_start_option.dispatcher ? rpc::context::string_view{trace_start_option.dispatcher->name()}
-                                                    : rpc::context::string_view{"no_dispatcher"}},
-      {"rpc.method", rpc::context::string_view{name()}}};
+  task_trace_attributes trace_attributes;
+  trace_attributes[static_cast<size_t>(trace_attribute_type::kRpcSystem)] = {
+      opentelemetry::trace::SemanticConventions::kRpcSystem,
+      trace_start_option.dispatcher ? "atrpc.dispatcher" : "atrpc.task"};
+  trace_attributes[static_cast<size_t>(trace_attribute_type::kRpcService)] = {
+      opentelemetry::trace::SemanticConventions::kRpcService,
+      trace_start_option.dispatcher ? rpc::context::string_view{trace_start_option.dispatcher->name()}
+                                    : rpc::context::string_view{"no_dispatcher"}};
+  trace_attributes[static_cast<size_t>(trace_attribute_type::kRpcMethod)] = {
+      opentelemetry::trace::SemanticConventions::kRpcMethod, rpc::context::string_view{name()}};
   trace_start_option.attributes = trace_attributes;
+
+  trace_start_option.attributes = rpc::telemetry::trace_attributes_type{
+      trace_attributes, static_cast<size_t>(trace_attribute_type::kTaskReturnCode)};
   rpc::context::tracer tracer = shared_context_.make_tracer(name(), std::move(trace_start_option));
+
+  trace_attributes[static_cast<size_t>(trace_attribute_type::kAtRpcKind)] = {"rpc.atrpc.kind", tracer.get_span_kind()};
+  trace_attributes[static_cast<size_t>(trace_attribute_type::kAtRpcSpanName)] = {"rpc.atrpc.span_name", name()};
+
   rpc::context::task_context_data rpc_task_context_data;
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
@@ -139,13 +153,17 @@ int task_action_base::operator()(void *priv_data) {
   rpc_task_context_data.task_id = task_meta.task_id;
   if (0 == task_meta.task_id) {
     FWLOGERROR("task convert failed, must in task.");
-    co_return tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_INIT, trace_attributes});
+    co_return tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_INIT,
+                             rpc::telemetry::trace_attributes_type{
+                                 trace_attributes, static_cast<size_t>(trace_attribute_type::kTaskReturnCode)}});
   }
 #else
   task_type_trait::internal_task_type *task = cotask::this_task::get<task_type_trait::internal_task_type>();
   if (nullptr == task) {
     FWLOGERROR("task convert failed, must in task.");
-    return tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_INIT, trace_attributes});
+    return tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_INIT,
+                          rpc::telemetry::trace_attributes_type{
+                              trace_attributes, static_cast<size_t>(trace_attribute_type::kTaskReturnCode)}});
   }
   private_data_ = task_type_trait::get_private_data(*task);
   rpc_task_context_data.task_id = task->get_id();
@@ -182,11 +200,10 @@ int task_action_base::operator()(void *priv_data) {
       send_response();
     }
 
-    _notify_finished();
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-    co_return tracer.finish({result_, trace_attributes});
+    co_return _notify_finished(result_, tracer, trace_attributes);
 #else
-    return tracer.finish({result_, trace_attributes});
+    return _notify_finished(result_, tracer, trace_attributes);
 #endif
   }
   // 响应OnSuccess(这时候任务的status还是running)
@@ -210,11 +227,10 @@ int task_action_base::operator()(void *priv_data) {
       send_response();
     }
 
-    _notify_finished();
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-    co_return tracer.finish({ret, trace_attributes});
+    co_return _notify_finished(ret, tracer, trace_attributes);
 #else
-    return tracer.finish({ret, trace_attributes});
+    return _notify_finished(ret, tracer, trace_attributes);
 #endif
   }
 
@@ -273,15 +289,13 @@ int task_action_base::operator()(void *priv_data) {
     send_response();
   }
 
-  _notify_finished();
-
   if (result_ >= 0) {
     ret = result_;
   }
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-  co_return tracer.finish({ret, trace_attributes});
+  co_return _notify_finished(ret, tracer, trace_attributes);
 #else
-  return tracer.finish({ret, trace_attributes});
+  return _notify_finished(ret, tracer, trace_attributes);
 #endif
 }
 
@@ -332,7 +346,13 @@ void task_action_base::set_caller_context(rpc::context &ctx) {
   get_shared_context().set_parent_context(ctx, get_inherit_option());
 }
 
-void task_action_base::_notify_finished() {
+task_action_base::result_type::value_type task_action_base::_notify_finished(int32_t final_result,
+                                                                             rpc::context::tracer &tracer,
+                                                                             task_trace_attributes &attributes) {
+  attributes[static_cast<size_t>(trace_attribute_type::kTaskReturnCode)] = {"rpc.atrpc.result_code", get_result()};
+  attributes[static_cast<size_t>(trace_attribute_type::kTaskResponseCode)] = {"rpc.atrpc.response_code",
+                                                                              get_response_code()};
+
   // Additional trace data
   auto trace_span = shared_context_.get_trace_span();
   if (trace_span) {
@@ -355,4 +375,6 @@ void task_action_base::_notify_finished() {
     // setup action
     private_data_->action = nullptr;
   }
+
+  return tracer.finish({final_result, attributes});
 }
