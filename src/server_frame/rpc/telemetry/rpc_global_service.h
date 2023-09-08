@@ -11,9 +11,12 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <opentelemetry/common/attribute_value.h>
 #include <opentelemetry/logs/logger.h>
 #include <opentelemetry/metrics/async_instruments.h>
 #include <opentelemetry/metrics/sync_instruments.h>
+#include <opentelemetry/nostd/span.h>
+#include <opentelemetry/nostd/string_view.h>
 #include <opentelemetry/sdk/common/attribute_utils.h>
 #include <opentelemetry/trace/tracer.h>
 
@@ -67,6 +70,16 @@ class global_service {
    */
   SERVER_FRAME_API static const std::unordered_map<std::string, opentelemetry::common::AttributeValue>&
   get_metrics_labels();
+
+  /**
+   * @brief Get the metrics labels span
+   * @note 指标数据维度(可用于Prometheus附加OTEL的Resouce数据)
+   *
+   * @return 附加的Metric维度信息视图
+   */
+  SERVER_FRAME_API static opentelemetry::nostd::span<
+      std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
+  get_metrics_labels_view();
 
   /**
    * @brief Get the current trace exporter count

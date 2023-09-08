@@ -140,7 +140,7 @@ int task_action_base::operator()(void *priv_data) {
   trace_start_option.attributes = trace_attributes;
 
   trace_start_option.attributes = rpc::telemetry::trace_attributes_type{
-      trace_attributes, static_cast<size_t>(trace_attribute_type::kTaskReturnCode)};
+      trace_attributes, static_cast<size_t>(trace_attribute_type::kTaskResponseCode)};
   rpc::context::tracer tracer = shared_context_.make_tracer(name(), std::move(trace_start_option));
 
   trace_attributes[static_cast<size_t>(trace_attribute_type::kAtRpcKind)] = {"rpc.atrpc.kind", tracer.get_span_kind()};
@@ -155,7 +155,7 @@ int task_action_base::operator()(void *priv_data) {
     FWLOGERROR("task convert failed, must in task.");
     co_return tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_INIT,
                              rpc::telemetry::trace_attributes_type{
-                                 trace_attributes, static_cast<size_t>(trace_attribute_type::kTaskReturnCode)}});
+                                 trace_attributes, static_cast<size_t>(trace_attribute_type::kTaskResponseCode)}});
   }
 #else
   task_type_trait::internal_task_type *task = cotask::this_task::get<task_type_trait::internal_task_type>();
@@ -163,7 +163,7 @@ int task_action_base::operator()(void *priv_data) {
     FWLOGERROR("task convert failed, must in task.");
     return tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_INIT,
                           rpc::telemetry::trace_attributes_type{
-                              trace_attributes, static_cast<size_t>(trace_attribute_type::kTaskReturnCode)}});
+                              trace_attributes, static_cast<size_t>(trace_attribute_type::kTaskResponseCode)}});
   }
   private_data_ = task_type_trait::get_private_data(*task);
   rpc_task_context_data.task_id = task->get_id();
@@ -349,7 +349,6 @@ void task_action_base::set_caller_context(rpc::context &ctx) {
 task_action_base::result_type::value_type task_action_base::_notify_finished(int32_t final_result,
                                                                              rpc::context::tracer &tracer,
                                                                              task_trace_attributes &attributes) {
-  attributes[static_cast<size_t>(trace_attribute_type::kTaskReturnCode)] = {"rpc.atrpc.result_code", get_result()};
   attributes[static_cast<size_t>(trace_attribute_type::kTaskResponseCode)] = {"rpc.atrpc.response_code",
                                                                               get_response_code()};
 

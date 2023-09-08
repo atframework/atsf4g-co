@@ -144,6 +144,8 @@ struct local_caller_info_t {
   opentelemetry::sdk::common::AttributeMap common_owned_attributes;
   std::unordered_map<std::string, opentelemetry::common::AttributeValue> common_attributes;
   std::unordered_map<std::string, opentelemetry::common::AttributeValue> metrics_attributes;
+  std::vector<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
+      metrics_attributes_view;
 
   local_provider_handle_t<opentelemetry::trace::TracerProvider> tracer_handle;
   opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> default_tracer;
@@ -366,6 +368,17 @@ global_service::get_metrics_labels() {
 
   static std::unordered_map<std::string, opentelemetry::common::AttributeValue> empty;
   return empty;
+}
+
+SERVER_FRAME_API
+opentelemetry::nostd::span<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
+global_service::get_metrics_labels_view() {
+  util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{details::g_global_service_lock};
+  if (details::g_global_service_cache) {
+    return details::g_global_service_cache->metrics_attributes_view;
+  }
+
+  return {};
 }
 
 SERVER_FRAME_API size_t global_service::get_trace_exporter_count() noexcept {
@@ -1438,8 +1451,13 @@ static opentelemetry::sdk::resource::ResourceAttributes _create_opentelemetry_ap
   }
 
   // Other common resource should be set by configure generator
-
   details::rebuild_attributes_map(app_info_cache.common_owned_attributes, app_info_cache.common_attributes);
+
+  app_info_cache.metrics_attributes_view.clear();
+  app_info_cache.metrics_attributes_view.reserve(app_info_cache.metrics_attributes.size());
+  for (auto &metric_data : app_info_cache.metrics_attributes) {
+    app_info_cache.metrics_attributes_view.push_back(metric_data);
+  }
   return app_info_cache.common_owned_attributes;
 }
 

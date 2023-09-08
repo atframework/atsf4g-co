@@ -20,7 +20,6 @@
 #include <functional>
 #include <memory>
 #include <utility>
-#include <vector>
 
 #include "rpc/rpc_common_types.h"
 
@@ -63,12 +62,19 @@ EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE inline async_invoke_result async_inv
                       std::chrono::duration_cast<std::chrono::system_clock::duration>(timeout));
 }
 
-EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_code_type wait_tasks(context &ctx, const std::vector<task_type_trait::task_type> &tasks);
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_code_type wait_tasks(context &ctx,
+                                                                     gsl::span<task_type_trait::task_type> tasks);
 
-EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_code_type wait_task(context &ctx, const task_type_trait::task_type &other_task);
+template <class ContainerType>
+EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE inline result_code_type wait_tasks(context &ctx, ContainerType &&tasks) {
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(wait_tasks(ctx, gsl::make_span(std::forward<ContainerType>(tasks)))));
+}
+
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_code_type wait_task(context &ctx,
+                                                                    const task_type_trait::task_type &other_task);
 
 SERVER_FRAME_API void async_then_start_task(context &ctx, gsl::string_view name, task_type_trait::task_type waiting,
-                           task_type_trait::id_type task_id);
+                                            task_type_trait::id_type task_id);
 
 template <class TCALLABLE, class... TARGS>
 UTIL_SYMBOL_VISIBLE void async_then(context &ctx, gsl::string_view name, task_type_trait::task_type waiting,

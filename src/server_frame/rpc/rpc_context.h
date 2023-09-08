@@ -256,8 +256,8 @@ struct formatter<rpc::context, CharT> : formatter<std::string, CharT> {
     const ::rpc::context::tracer::span_ptr_type &trace_span = rpc_ctx.get_trace_span();
     if (trace_span) {
       auto trace_ctx = trace_span->GetContext();
-      char trace_id_buffer[opentelemetry::trace::TraceId::kSize * 2];
-      char span_id_buffer[opentelemetry::trace::SpanId::kSize * 2];
+      char trace_id_buffer[static_cast<size_t>(opentelemetry::trace::TraceId::kSize) * 2];
+      char span_id_buffer[static_cast<size_t>(opentelemetry::trace::SpanId::kSize) * 2];
       trace_ctx.trace_id().ToLowerBase16(trace_id_buffer);
       trace_ctx.span_id().ToLowerBase16(span_id_buffer);
       ret = LOG_WRAPPER_FWAPI_FORMAT_TO(ret, ", trace_id={}, span_id={}",

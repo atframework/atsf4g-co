@@ -66,7 +66,7 @@ SERVER_FRAME_API async_invoke_result async_invoke(gsl::string_view, gsl::string_
   return async_invoke(ctx, name, std::move(fn), timeout);
 }
 
-SERVER_FRAME_API result_code_type wait_tasks(context &ctx, const std::vector<task_type_trait::task_type> &tasks) {
+SERVER_FRAME_API result_code_type wait_tasks(context &ctx, gsl::span<task_type_trait::task_type> tasks) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{} should be called in a task", "rpc::wait_tasks");
 
   while (true) {

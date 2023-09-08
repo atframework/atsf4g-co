@@ -4,12 +4,52 @@
 
 #include "rpc/telemetry/exporter/prometheus_push_exporter.h"
 
+#include <prometheus/labels.h>
+
 #include <mutex>
 
 namespace rpc {
 namespace telemetry {
 namespace exporter {
 namespace metrics {
+
+namespace {
+static std::string SanitizePrometheusNames(std::string name, bool label) {
+  constexpr const auto replacement = '_';
+  constexpr const auto replacement_dup = '=';
+
+  auto valid = label? [](size_t i, char c) {
+    if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9' && i > 0)) {
+      return true;
+    }
+    return false;
+  } : [](size_t i, char c) {
+    if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == ':' || (c >= '0' && c <= '9' && i > 0)) {
+      return true;
+    }
+    return false;
+  };
+
+  bool has_dup = false;
+  for (size_t i = 0; i < name.size(); ++i) {
+    if (valid(i, name[i])) {
+      continue;
+    }
+    if (i > 0 && (name[i - 1] == replacement || name[i - 1] == replacement_dup)) {
+      has_dup = true;
+      name[i] = replacement_dup;
+    } else {
+      name[i] = replacement;
+    }
+  }
+  if (has_dup) {
+    auto end = std::remove(name.begin(), name.end(), replacement_dup);
+    return std::string{name.begin(), end};
+  }
+
+  return name;
+}
+}  // namespace
 
 class UTIL_SYMBOL_LOCAL PrometheusPushCollector : public ::prometheus::Collectable {
  public:
@@ -98,8 +138,12 @@ class UTIL_SYMBOL_LOCAL PrometheusPushCollector : public ::prometheus::Collectab
 
 SERVER_FRAME_API PrometheusPushExporter::PrometheusPushExporter(const PrometheusPushExporterOptions &options)
     : options_(options), is_shutdown_(false) {
+  ::prometheus::Labels labels;
+  for (auto &label : options_.labels) {
+    labels[SanitizePrometheusNames(label.first, true)] = label.second;
+  }
   gateway_ = std::unique_ptr<::prometheus::Gateway>(new ::prometheus::Gateway{
-      options_.host, options_.port, options_.jobname, options_.labels, options_.username, options_.password});
+      options_.host, options_.port, options_.jobname, labels, options_.username, options_.password});
   collector_ = std::make_shared<PrometheusPushCollector>(options.max_collection_size);
 
   gateway_->RegisterCollectable(collector_);

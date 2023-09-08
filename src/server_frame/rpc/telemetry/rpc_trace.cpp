@@ -179,7 +179,8 @@ SERVER_FRAME_API int32_t tracer::finish(trace_finish_option &&options) {
         trace_attribute_pair_type result_attributes[] = {{"rpc.atrpc.result_code", options.result_code},
                                                          {"rpc.atrpc.kind", span_kind_},
                                                          {"rpc.atrpc.span_name", trace_span_name_}};
-        trace_attributes_type attributes_array[] = {options.attributes, result_attributes};
+        trace_attributes_type attributes_array[] = {rpc::telemetry::global_service::get_metrics_labels_view(),
+                                                    options.attributes, result_attributes};
         multiple_key_value_iterable_view<trace_attributes_type> concat_attributes{
             opentelemetry::nostd::span<const trace_attributes_type>{attributes_array}};
         trace_metric->Record(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(

@@ -317,9 +317,8 @@ class task_action_base
     kRpcMethod = 2,
     kAtRpcKind = 3,
     kAtRpcSpanName = 4,
-    kTaskReturnCode = 5,
-    kTaskResponseCode = 6,
-    kMax = 7,
+    kTaskResponseCode = 5,
+    kMax = 6,
   };
   using task_trace_attributes =
       rpc::telemetry::trace_attribute_pair_type[static_cast<size_t>(trace_attribute_type::kMax)];

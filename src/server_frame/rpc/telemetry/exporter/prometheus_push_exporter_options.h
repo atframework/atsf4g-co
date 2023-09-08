@@ -6,10 +6,9 @@
 
 #include <config/compile_optimize.h>
 
-#include <prometheus/labels.h>
-
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 
 namespace rpc {
 namespace telemetry {
@@ -23,7 +22,7 @@ struct UTIL_SYMBOL_VISIBLE PrometheusPushExporterOptions {
   std::string host;
   std::string port;
   std::string jobname;
-  ::prometheus::Labels labels;
+  std::unordered_map<std::string, std::string> labels;
   std::string username;
   std::string password;
 
