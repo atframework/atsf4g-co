@@ -161,6 +161,12 @@ SERVER_FRAME_API const atframework::DispatcherOptions *ss_msg_dispatcher::get_op
 
 SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, atframework::SSMsg &ss_msg,
                                                          bool ignore_discovery) {
+  atapp::app *owner = get_app();
+  if (nullptr == owner) {
+    FWLOGERROR("module not attached to a atapp, maybe not initialized or already closed");
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
+  }
+
   if (0 == ss_msg.head().sequence()) {
     ss_msg.mutable_head()->set_sequence(allocate_sequence());
   }
@@ -188,7 +194,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, const 
                                                          EXPLICIT_UNUSED_ATTR bool ignore_discovery) {
   atapp::app *owner = get_app();
   if (nullptr == owner) {
-    FWLOGERROR("module not attached to a atapp");
+    FWLOGERROR("module not attached to a atapp, maybe not initialized or already closed");
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
@@ -267,6 +273,10 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const atapp::etcd_disco
 }
 
 SERVER_FRAME_API bool ss_msg_dispatcher::is_target_server_available(uint64_t bus_id) const {
+  if (nullptr == get_app()) {
+    return false;
+  }
+
   if (!is_enabled()) {
     return false;
   }
@@ -279,6 +289,10 @@ SERVER_FRAME_API bool ss_msg_dispatcher::is_target_server_available(uint64_t bus
 }
 
 SERVER_FRAME_API bool ss_msg_dispatcher::is_target_server_available(const std::string &node_name) const {
+  if (nullptr == get_app()) {
+    return false;
+  }
+
   if (!is_enabled()) {
     return false;
   }
@@ -294,7 +308,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::broadcast(atframework::SSMsg &ss_msg
                                                       ::atapp::protocol::atapp_metadata *metadata) {
   atapp::app *owner = get_app();
   if (nullptr == owner) {
-    FWLOGERROR("module not attached to a atapp");
+    FWLOGERROR("module not attached to a atapp, maybe not initialized or already closed");
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 

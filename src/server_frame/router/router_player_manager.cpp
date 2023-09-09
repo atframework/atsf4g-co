@@ -39,28 +39,28 @@ SERVER_FRAME_CONFIG_API rpc::result_code_type router_player_manager::remove_play
                                                                                           uint64_t user_id,
                                                                                           uint32_t zone_id,
                                                                                           priv_data_t priv_data) {
-  return remove_player_object(ctx, user_id, zone_id, nullptr, priv_data);
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove_player_object(ctx, user_id, zone_id, nullptr, priv_data)));
 }
 
 SERVER_FRAME_CONFIG_API rpc::result_code_type router_player_manager::remove_player_object(
     rpc::context &ctx, uint64_t user_id, uint32_t zone_id, std::shared_ptr<router_object_base> cache,
     priv_data_t priv_data) {
   key_t key(get_type_id(), zone_id, user_id);
-  return remove_object(ctx, key, cache, priv_data);
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove_object(ctx, key, cache, priv_data)));
 }
 
 SERVER_FRAME_CONFIG_API rpc::result_code_type router_player_manager::remove_player_cache(rpc::context &ctx,
                                                                                          uint64_t user_id,
                                                                                          uint32_t zone_id,
                                                                                          priv_data_t priv_data) {
-  return remove_player_cache(ctx, user_id, zone_id, nullptr, priv_data);
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove_player_cache(ctx, user_id, zone_id, nullptr, priv_data)));
 }
 
 SERVER_FRAME_CONFIG_API rpc::result_code_type router_player_manager::remove_player_cache(
     rpc::context &ctx, uint64_t user_id, uint32_t zone_id, std::shared_ptr<router_object_base> cache,
     priv_data_t priv_data) {
   key_t key(get_type_id(), zone_id, user_id);
-  return remove_cache(ctx, key, cache, priv_data);
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove_cache(ctx, key, cache, priv_data)));
 }
 
 SERVER_FRAME_CONFIG_API void router_player_manager::set_create_object_fn(create_object_fn_t fn) { create_fn_ = fn; }
@@ -93,7 +93,7 @@ rpc::result_code_type router_player_manager::on_evt_remove_object(rpc::context &
     }
   }
 
-  return base_type::on_evt_remove_object(ctx, key, cache, priv_data);
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(base_type::on_evt_remove_object(ctx, key, cache, priv_data)));
 }
 
 SERVER_FRAME_CONFIG_API rpc::result_code_type router_player_manager::pull_online_server(rpc::context &, const key_t &,
