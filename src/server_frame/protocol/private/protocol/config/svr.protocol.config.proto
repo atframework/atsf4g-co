@@ -188,6 +188,15 @@ message opentelemetry_exporter_prometheus_push {
   string password = 6;
 }
 
+message opentelemetry_exporter_prometheus_file {
+  string file_pattern = 1;
+  string alias_pattern = 2;
+  google.protobuf.Duration flush_interval = 3 [(atapp.protocol.CONFIGURE) = { default_value: "1s" }];
+  uint64 flush_count = 4 [(atapp.protocol.CONFIGURE) = { default_value: "128" }];
+  uint64 file_size = 5 [(atapp.protocol.CONFIGURE) = { default_value: "20MB" size_mode: true }];
+  uint32 rotate_size = 6 [(atapp.protocol.CONFIGURE) = { default_value: "3" }];
+}
+
 message opentelemetry_metrics_exporter_cfg {
   opentelemetry_exporter_otlp_grpc otlp_grpc = 1;
   opentelemetry_exporter_otlp_http otlp_http = 2;
@@ -195,6 +204,7 @@ message opentelemetry_metrics_exporter_cfg {
 
   opentelemetry_exporter_prometheus_pull prometheus_pull = 11;
   opentelemetry_exporter_prometheus_push prometheus_push = 12;
+  opentelemetry_exporter_prometheus_file prometheus_file = 13;
 }
 
 message opentelemetry_metrics_reader_cfg {
@@ -233,8 +243,14 @@ message opentelemetry_cfg {
   opentelemetry_logs_cfg logs = 5;
 }
 
+message opentelemetry_group_cfg {
+  string name = 1;
+  opentelemetry_cfg configure = 2;
+}
+
 message logic_telemetry_cfg {
   opentelemetry_cfg opentelemetry = 1;
+  repeated opentelemetry_group_cfg group = 2;
 }
 
 message logic_dns_cfg {

@@ -6,7 +6,10 @@
 
 #include <prometheus/labels.h>
 
+#include <algorithm>
+#include <atomic>
 #include <mutex>
+#include <string>
 
 namespace rpc {
 namespace telemetry {
@@ -18,17 +21,22 @@ static std::string SanitizePrometheusNames(std::string name, bool label) {
   constexpr const auto replacement = '_';
   constexpr const auto replacement_dup = '=';
 
-  auto valid = label? [](size_t i, char c) {
-    if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9' && i > 0)) {
-      return true;
-    }
-    return false;
-  } : [](size_t i, char c) {
-    if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == ':' || (c >= '0' && c <= '9' && i > 0)) {
-      return true;
-    }
-    return false;
-  };
+  bool (*valid)(std::size_t, char);
+  if (label) {
+    valid = [](std::size_t i, char c) {
+      if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9' && i > 0)) {
+        return true;
+      }
+      return false;
+    };
+  } else {
+    valid = [](std::size_t i, char c) {
+      if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == ':' || (c >= '0' && c <= '9' && i > 0)) {
+        return true;
+      }
+      return false;
+    };
+  }
 
   bool has_dup = false;
   for (size_t i = 0; i < name.size(); ++i) {
@@ -60,7 +68,7 @@ class UTIL_SYMBOL_LOCAL PrometheusPushCollector : public ::prometheus::Collectab
    * in this class with default capacity
    */
   explicit PrometheusPushCollector(size_t max_collection_size = 2048) : max_collection_size_(max_collection_size) {
-    metrics_to_collect_.reserve(max_collection_size_);
+    metrics_to_collect_.reserve(max_collection_size_.load(std::memory_order_acquire));
   }
 
   /**
@@ -76,7 +84,7 @@ class UTIL_SYMBOL_LOCAL PrometheusPushCollector : public ::prometheus::Collectab
     // copy the intermediate collection, and then clear it
     std::vector<::prometheus::MetricFamily> moved_data;
     moved_data.swap(metrics_to_collect_);
-    metrics_to_collect_.reserve(max_collection_size_);
+    metrics_to_collect_.reserve(max_collection_size_.load(std::memory_order_acquire));
 
     collection_lock_.unlock();
 
@@ -95,7 +103,7 @@ class UTIL_SYMBOL_LOCAL PrometheusPushCollector : public ::prometheus::Collectab
     std::lock_guard<std::mutex> guard{collection_lock_};
 
     for (auto &item : translated) {
-      if (metrics_to_collect_.size() + 1 <= max_collection_size_) {
+      if (metrics_to_collect_.size() + 1 <= max_collection_size_.load(std::memory_order_acquire)) {
         // We can not use initializer lists here due to broken variadic capture on GCC 4.8.5
         metrics_to_collect_.emplace_back(std::move(item));
       }
@@ -114,7 +122,7 @@ class UTIL_SYMBOL_LOCAL PrometheusPushCollector : public ::prometheus::Collectab
    *
    * @return max collection size
    */
-  size_t GetMaxCollectionSize() const noexcept { return max_collection_size_; }
+  size_t GetMaxCollectionSize() const noexcept { return max_collection_size_.load(std::memory_order_acquire); }
 
  private:
   /**
@@ -128,7 +136,7 @@ class UTIL_SYMBOL_LOCAL PrometheusPushCollector : public ::prometheus::Collectab
   /**
    * Maximum size of the metricsToCollect collection.
    */
-  size_t max_collection_size_;
+  std::atomic<size_t> max_collection_size_;
 
   /*
    * Lock when operating the metricsToCollect collection

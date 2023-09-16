@@ -444,6 +444,10 @@ SERVER_FRAME_API int task_manager::tick(time_t sec, int nsec) {
           stack_pool_->get_limit().free_stack_number, stack_pool_->get_limit().free_stack_size);
     }
 #endif
+
+    if (g_task_manager_metrics_data.need_setup.load(std::memory_order_acquire)) {
+      setup_metrics();
+    }
   }
   return 0;
 }
@@ -782,25 +786,26 @@ bool task_manager::check_sys_config() const {
   return true;
 }
 
-#define TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER_INT64(result, value)                                                 \
+#define TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER_INT64(result, value, lifetime)                                       \
   if (opentelemetry::nostd::holds_alternative<                                                                         \
           opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {               \
     auto observer =                                                                                                    \
         opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>( \
             result);                                                                                                   \
     if (observer) {                                                                                                    \
-      observer->Observe(static_cast<int64_t>(value), rpc::telemetry::global_service::get_metrics_labels());            \
+      observer->Observe(static_cast<int64_t>(value), rpc::telemetry::global_service::get_metrics_labels(lifetime));    \
     }                                                                                                                  \
   }
 
-#define TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER(NAME, DESCRIPTION, UNIT, CREATE_ACTION, VAR_LOADER)                \
+#define TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER(NAME, DESCRIPTION, UNIT, CREATE_ACTION, VAR_LOADER, LIFETIME)      \
   {                                                                                                                  \
-    auto instrument = rpc::telemetry::global_service::get_metrics_observable(NAME, {NAME, DESCRIPTION, UNIT});       \
+    auto instrument =                                                                                                \
+        rpc::telemetry::global_service::get_metrics_observable(NAME, {NAME, DESCRIPTION, UNIT}, LIFETIME);           \
     if (instrument) {                                                                                                \
       return;                                                                                                        \
     }                                                                                                                \
                                                                                                                      \
-    instrument = rpc::telemetry::global_service::CREATE_ACTION(NAME, {NAME, DESCRIPTION, UNIT});                     \
+    instrument = rpc::telemetry::global_service::CREATE_ACTION(NAME, {NAME, DESCRIPTION, UNIT}, LIFETIME);           \
                                                                                                                      \
     if (!instrument) {                                                                                               \
       return;                                                                                                        \
@@ -808,13 +813,15 @@ bool task_manager::check_sys_config() const {
     instrument->AddCallback(                                                                                         \
         [](opentelemetry::metrics::ObserverResult result, void *) {                                                  \
           auto value = g_task_manager_metrics_data.VAR_LOADER;                                                       \
-          TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER_INT64(result, value)                                             \
+          std::shared_ptr<::rpc::telemetry::group_type> __lifetime;                                                  \
+          TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER_INT64(result, value, __lifetime)                                 \
           else if (opentelemetry::nostd::holds_alternative<                                                          \
                        opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) { \
             auto observer = opentelemetry::nostd::get<                                                               \
                 opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result);          \
             if (observer) {                                                                                          \
-              observer->Observe(static_cast<double>(value), rpc::telemetry::global_service::get_metrics_labels());   \
+              observer->Observe(static_cast<double>(value),                                                          \
+                                rpc::telemetry::global_service::get_metrics_labels(__lifetime));                     \
             }                                                                                                        \
           }                                                                                                          \
         },                                                                                                           \
@@ -823,22 +830,24 @@ bool task_manager::check_sys_config() const {
 
 void task_manager::setup_metrics() {
   g_task_manager_metrics_data.need_setup.store(false, std::memory_order_release);
+  std::shared_ptr<::rpc::telemetry::group_type> telemetry_lifetime =
+      rpc::telemetry::global_service::get_default_group();
 
   TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER("service_coroutine_task_count", "", "",
                                             mutable_metrics_observable_gauge_int64,
-                                            task_count.load(std::memory_order_acquire));
+                                            task_count.load(std::memory_order_acquire), telemetry_lifetime);
 
   TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER("service_coroutine_tick_checkpoint_count", "", "",
                                             mutable_metrics_observable_gauge_int64,
-                                            tick_checkpoint_count.load(std::memory_order_acquire));
+                                            tick_checkpoint_count.load(std::memory_order_acquire), telemetry_lifetime);
 
   TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER("service_coroutine_pool_free_memory", "", "",
                                             mutable_metrics_observable_gauge_int64,
-                                            pool_free_memory.load(std::memory_order_acquire));
+                                            pool_free_memory.load(std::memory_order_acquire), telemetry_lifetime);
 
   TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER("service_coroutine_pool_free_memory", "", "",
                                             mutable_metrics_observable_gauge_int64,
-                                            pool_used_memory.load(std::memory_order_acquire));
+                                            pool_used_memory.load(std::memory_order_acquire), telemetry_lifetime);
 }
 
 #undef TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER

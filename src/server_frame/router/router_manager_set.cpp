@@ -679,20 +679,23 @@ void router_manager_set::setup_metrics(size_t cache_count) {
 
   instrument->AddCallback(
       [](opentelemetry::metrics::ObserverResult result, void *) {
+        std::shared_ptr<::rpc::telemetry::group_type> telemetry_lifetime;
         auto value = router_cache_count.load(std::memory_order_acquire);
         if (opentelemetry::nostd::holds_alternative<
                 opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {
           auto observer = opentelemetry::nostd::get<
               opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result);
           if (observer) {
-            observer->Observe(static_cast<int64_t>(value), rpc::telemetry::global_service::get_metrics_labels());
+            observer->Observe(static_cast<int64_t>(value),
+                              rpc::telemetry::global_service::get_metrics_labels(telemetry_lifetime));
           }
         } else if (opentelemetry::nostd::holds_alternative<
                        opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) {
           auto observer = opentelemetry::nostd::get<
               opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result);
           if (observer) {
-            observer->Observe(static_cast<double>(value), rpc::telemetry::global_service::get_metrics_labels());
+            observer->Observe(static_cast<double>(value),
+                              rpc::telemetry::global_service::get_metrics_labels(telemetry_lifetime));
           }
         }
       },

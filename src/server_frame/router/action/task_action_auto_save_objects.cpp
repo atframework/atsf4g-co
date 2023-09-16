@@ -256,13 +256,14 @@ int task_action_auto_save_objects::on_timeout() {
 }
 
 int task_action_auto_save_objects::on_complete() {
+  std::shared_ptr<::rpc::telemetry::group_type> telemetry_lifetime;
   opentelemetry::context::Context telemetry_context;
   if (status_data_->action_save_count > 0) {
     auto instrument = rpc::telemetry::global_service::mutable_metrics_counter_uint64(
         "service_router_auto_action_save", {"service_router_auto_action_save"});
     if (instrument) {
       instrument->Add(static_cast<uint64_t>(status_data_->action_save_count),
-                      rpc::telemetry::global_service::get_metrics_labels(), telemetry_context);
+                      rpc::telemetry::global_service::get_metrics_labels(telemetry_lifetime), telemetry_context);
     }
   }
 
@@ -271,7 +272,7 @@ int task_action_auto_save_objects::on_complete() {
         "service_router_auto_action_remove_cache", {"service_router_auto_action_remove_cache"});
     if (instrument) {
       instrument->Add(static_cast<uint64_t>(status_data_->action_remove_cache_count),
-                      rpc::telemetry::global_service::get_metrics_labels(), telemetry_context);
+                      rpc::telemetry::global_service::get_metrics_labels(telemetry_lifetime), telemetry_context);
     }
   }
 
@@ -280,7 +281,7 @@ int task_action_auto_save_objects::on_complete() {
         "service_router_auto_action_remove_object", {"service_router_auto_action_remove_object"});
     if (instrument) {
       instrument->Add(static_cast<uint64_t>(status_data_->action_remove_object_count),
-                      rpc::telemetry::global_service::get_metrics_labels(), telemetry_context);
+                      rpc::telemetry::global_service::get_metrics_labels(telemetry_lifetime), telemetry_context);
     }
   }
   return 0;

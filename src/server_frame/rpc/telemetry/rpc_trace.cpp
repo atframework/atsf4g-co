@@ -176,11 +176,13 @@ SERVER_FRAME_API int32_t tracer::finish(trace_finish_option &&options) {
           rpc::telemetry::global_service::mutable_metrics_histogram_uint64(additional_metrics_name,
                                                                            {additional_metrics_name, "", "us"});
       if (trace_metric) {
+        std::shared_ptr<::rpc::telemetry::group_type> telemetry_lifetime;
         trace_attribute_pair_type result_attributes[] = {{"rpc.atrpc.result_code", options.result_code},
                                                          {"rpc.atrpc.kind", span_kind_},
                                                          {"rpc.atrpc.span_name", trace_span_name_}};
-        trace_attributes_type attributes_array[] = {rpc::telemetry::global_service::get_metrics_labels_view(),
-                                                    options.attributes, result_attributes};
+        trace_attributes_type attributes_array[] = {
+            rpc::telemetry::global_service::get_metrics_labels_view(telemetry_lifetime), options.attributes,
+            result_attributes};
         multiple_key_value_iterable_view<trace_attributes_type> concat_attributes{
             opentelemetry::nostd::span<const trace_attributes_type>{attributes_array}};
         trace_metric->Record(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
