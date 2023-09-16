@@ -12,7 +12,6 @@
 
 #include <google/protobuf/timestamp.pb.h>
 
-#include <opentelemetry/std/string_view.h>
 #include <protocol/config/svr.protocol.config.pb.h>
 #include <protocol/pbdesc/atframework.pb.h>
 
@@ -37,6 +36,7 @@
 #include <opentelemetry/logs/provider.h>
 #include <opentelemetry/metrics/noop.h>
 #include <opentelemetry/metrics/provider.h>
+#include <opentelemetry/nostd/string_view.h>
 #include <opentelemetry/sdk/common/global_log_handler.h>
 #include <opentelemetry/sdk/logs/batch_log_record_processor_factory.h>
 #include <opentelemetry/sdk/logs/batch_log_record_processor_options.h>
