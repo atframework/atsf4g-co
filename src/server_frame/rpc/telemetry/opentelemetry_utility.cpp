@@ -217,3 +217,50 @@ SERVER_FRAME_API void opentelemetry_utility::protobuf_to_otel_attributes(const g
                                                                          gsl::string_view key_prefix) {
   opentelemetry_utility_protobuf_to_otel_attributes_message(message.GetReflection(), message, output, key_prefix);
 }
+
+SERVER_FRAME_API opentelemetry::common::AttributeValue opentelemetry_utility::convert_attribute_value_wihtout_array(
+    const opentelemetry::sdk::common::OwnedAttributeValue& value) {
+  if (opentelemetry::nostd::holds_alternative<bool>(value)) {
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<bool>(value)};
+  } else if (opentelemetry::nostd::holds_alternative<int32_t>(value)) {
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<int32_t>(value)};
+  } else if (opentelemetry::nostd::holds_alternative<int64_t>(value)) {
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<int64_t>(value)};
+  } else if (opentelemetry::nostd::holds_alternative<uint32_t>(value)) {
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<uint32_t>(value)};
+  } else if (opentelemetry::nostd::holds_alternative<uint64_t>(value)) {
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<uint64_t>(value)};
+  } else if (opentelemetry::nostd::holds_alternative<double>(value)) {
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<double>(value)};
+  } else if (opentelemetry::nostd::holds_alternative<std::string>(value)) {
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<std::string>(value)};
+  } else if (opentelemetry::nostd::holds_alternative<std::vector<bool>>(value)) {
+    // 暂无低开销解决方案，目前公共属性中没有数组类型，故而不处理所有的数组类型也是没有问题的
+    // 参见 https://github.com/open-telemetry/opentelemetry-cpp/pull/1154 里的讨论
+    return opentelemetry::common::AttributeValue{};
+  } else if (opentelemetry::nostd::holds_alternative<std::vector<int32_t>>(value)) {
+    const auto& data = opentelemetry::nostd::get<std::vector<int32_t>>(value);
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const int32_t>{data.data(), data.size()}};
+  } else if (opentelemetry::nostd::holds_alternative<std::vector<uint32_t>>(value)) {
+    const auto& data = opentelemetry::nostd::get<std::vector<uint32_t>>(value);
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const uint32_t>{data.data(), data.size()}};
+  } else if (opentelemetry::nostd::holds_alternative<std::vector<int64_t>>(value)) {
+    const auto& data = opentelemetry::nostd::get<std::vector<int64_t>>(value);
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const int64_t>{data.data(), data.size()}};
+  } else if (opentelemetry::nostd::holds_alternative<std::vector<uint64_t>>(value)) {
+    const auto& data = opentelemetry::nostd::get<std::vector<uint64_t>>(value);
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const uint64_t>{data.data(), data.size()}};
+  } else if (opentelemetry::nostd::holds_alternative<std::vector<uint8_t>>(value)) {
+    const auto& data = opentelemetry::nostd::get<std::vector<uint8_t>>(value);
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const uint8_t>{data.data(), data.size()}};
+  } else if (opentelemetry::nostd::holds_alternative<std::vector<double>>(value)) {
+    const auto& data = opentelemetry::nostd::get<std::vector<double>>(value);
+    return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const double>{data.data(), data.size()}};
+  } else if (opentelemetry::nostd::holds_alternative<std::vector<std::string>>(value)) {
+    // 暂无低开销解决方案，目前公共属性中没有数组类型，故而不处理所有的数组类型也是没有问题的
+    // 参见 https://github.com/open-telemetry/opentelemetry-cpp/pull/1154 里的讨论
+    return opentelemetry::common::AttributeValue{};
+  }
+
+  return opentelemetry::common::AttributeValue{};
+}

@@ -1,5 +1,5 @@
 // Copyright 2023 atframework
-// Created by owent on 2023-09-14.
+// Created by owent on 2021/10/18.
 //
 
 #include "rpc/telemetry/rpc_global_service.h"
@@ -44,10 +44,15 @@
 #include <opentelemetry/sdk/logs/logger_provider_factory.h>
 #include <opentelemetry/sdk/logs/processor.h>
 #include <opentelemetry/sdk/logs/simple_log_record_processor_factory.h>
+#include <opentelemetry/sdk/metrics/aggregation/aggregation_config.h>
 #include <opentelemetry/sdk/metrics/export/periodic_exporting_metric_reader_factory.h>
 #include <opentelemetry/sdk/metrics/export/periodic_exporting_metric_reader_options.h>
+#include <opentelemetry/sdk/metrics/instruments.h>
 #include <opentelemetry/sdk/metrics/meter.h>
 #include <opentelemetry/sdk/metrics/meter_provider.h>
+#include <opentelemetry/sdk/metrics/view/instrument_selector_factory.h>
+#include <opentelemetry/sdk/metrics/view/meter_selector_factory.h>
+#include <opentelemetry/sdk/metrics/view/view_factory.h>
 #include <opentelemetry/sdk/resource/semantic_conventions.h>
 #include <opentelemetry/sdk/trace/batch_span_processor_factory.h>
 #include <opentelemetry/sdk/trace/batch_span_processor_options.h>
@@ -81,6 +86,7 @@
 #include <config/server_frame_build_feature.h>
 #include <utility/protobuf_mini_dumper.h>
 
+#include <chrono>
 #include <fstream>
 #include <initializer_list>
 #include <memory>
@@ -94,6 +100,7 @@
 #include "rpc/telemetry/exporter/prometheus_file_exporter_options.h"
 #include "rpc/telemetry/exporter/prometheus_push_exporter_factory.h"
 #include "rpc/telemetry/exporter/prometheus_push_exporter_options.h"
+#include "rpc/telemetry/opentelemetry_utility.h"
 
 namespace rpc {
 
@@ -148,6 +155,7 @@ struct group_type {
   uint64_t server_id = 0;
   std::string server_name;
   std::string app_version;
+  std::string group_name;
 
   std::string trace_default_library_name;
   std::string trace_default_library_version;
@@ -176,6 +184,7 @@ struct group_type {
 
   local_provider_handle_type<opentelemetry::trace::TracerProvider> tracer_handle;
   opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> default_tracer;
+  std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>> tracer_cache;
   opentelemetry::nostd::shared_ptr<std::ofstream> debug_tracer_ostream_exportor;
   size_t tracer_exporter_count = 0;
 
@@ -187,6 +196,7 @@ struct group_type {
 
   local_provider_handle_type<opentelemetry::logs::LoggerProvider> logs_handle;
   opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> default_logger;
+  std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>> logger_cache;
   opentelemetry::nostd::shared_ptr<std::ofstream> debug_logger_ostream_exportor;
   size_t logger_exporter_count = 0;
 
@@ -345,59 +355,12 @@ static std::shared_ptr<local_meter_info_type> get_meter_info(std::shared_ptr<gro
   }
 }
 
-static opentelemetry::common::AttributeValue rebuild_attributes_map_value(
-    const opentelemetry::sdk::common::OwnedAttributeValue &value) {
-  if (opentelemetry::nostd::holds_alternative<bool>(value)) {
-    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<bool>(value)};
-  } else if (opentelemetry::nostd::holds_alternative<int32_t>(value)) {
-    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<int32_t>(value)};
-  } else if (opentelemetry::nostd::holds_alternative<int64_t>(value)) {
-    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<int64_t>(value)};
-  } else if (opentelemetry::nostd::holds_alternative<uint32_t>(value)) {
-    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<uint32_t>(value)};
-  } else if (opentelemetry::nostd::holds_alternative<uint64_t>(value)) {
-    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<uint64_t>(value)};
-  } else if (opentelemetry::nostd::holds_alternative<double>(value)) {
-    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<double>(value)};
-  } else if (opentelemetry::nostd::holds_alternative<std::string>(value)) {
-    return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<std::string>(value)};
-  } else if (opentelemetry::nostd::holds_alternative<std::vector<bool>>(value)) {
-    // 暂无低开销解决方案，目前公共属性中没有数组类型，故而不处理所有的数组类型也是没有问题的
-    // 参见 https://github.com/open-telemetry/opentelemetry-cpp/pull/1154 里的讨论
-    return opentelemetry::common::AttributeValue{};
-  } else if (opentelemetry::nostd::holds_alternative<std::vector<int32_t>>(value)) {
-    const auto &data = opentelemetry::nostd::get<std::vector<int32_t>>(value);
-    return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const int32_t>{data.data(), data.size()}};
-  } else if (opentelemetry::nostd::holds_alternative<std::vector<uint32_t>>(value)) {
-    const auto &data = opentelemetry::nostd::get<std::vector<uint32_t>>(value);
-    return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const uint32_t>{data.data(), data.size()}};
-  } else if (opentelemetry::nostd::holds_alternative<std::vector<int64_t>>(value)) {
-    const auto &data = opentelemetry::nostd::get<std::vector<int64_t>>(value);
-    return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const int64_t>{data.data(), data.size()}};
-  } else if (opentelemetry::nostd::holds_alternative<std::vector<uint64_t>>(value)) {
-    const auto &data = opentelemetry::nostd::get<std::vector<uint64_t>>(value);
-    return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const uint64_t>{data.data(), data.size()}};
-  } else if (opentelemetry::nostd::holds_alternative<std::vector<uint8_t>>(value)) {
-    const auto &data = opentelemetry::nostd::get<std::vector<uint8_t>>(value);
-    return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const uint8_t>{data.data(), data.size()}};
-  } else if (opentelemetry::nostd::holds_alternative<std::vector<double>>(value)) {
-    const auto &data = opentelemetry::nostd::get<std::vector<double>>(value);
-    return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const double>{data.data(), data.size()}};
-  } else if (opentelemetry::nostd::holds_alternative<std::vector<std::string>>(value)) {
-    // 暂无低开销解决方案，目前公共属性中没有数组类型，故而不处理所有的数组类型也是没有问题的
-    // 参见 https://github.com/open-telemetry/opentelemetry-cpp/pull/1154 里的讨论
-    return opentelemetry::common::AttributeValue{};
-  }
-
-  return opentelemetry::common::AttributeValue{};
-}
-
 static void rebuild_attributes_map(const opentelemetry::sdk::common::AttributeMap &src,
                                    std::unordered_map<std::string, opentelemetry::common::AttributeValue> &dst) {
   dst.clear();
   dst.reserve(src.size());
   for (auto &kv : src) {
-    dst[kv.first] = rebuild_attributes_map_value(kv.second);
+    dst[kv.first] = opentelemetry_utility::convert_attribute_value_wihtout_array(kv.second);
   }
 }
 
@@ -408,7 +371,7 @@ static void set_attributes_map_item(const opentelemetry::sdk::common::AttributeM
   if (iter == src.GetAttributes().end()) {
     return;
   }
-  dst[iter->first] = rebuild_attributes_map_value(iter->second);
+  dst[iter->first] = opentelemetry_utility::convert_attribute_value_wihtout_array(iter->second);
 }
 
 }  // namespace
@@ -854,6 +817,15 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> 
     return opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
   }
 
+  std::string cache_key = util::log::format("{}:{}", gsl::string_view{library_name.data(), library_name.size()},
+                                            gsl::string_view{library_version.data(), library_version.size()});
+  {
+    auto iter = group->tracer_cache.find(cache_key);
+    if (iter != group->tracer_cache.end()) {
+      return iter->second;
+    }
+  }
+
   auto provider = group->tracer_handle.provider;
   if (!provider) {
     return opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
@@ -869,7 +841,12 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> 
     schema_url = logic_config::me()->get_cfg_telemetry().opentelemetry().logs().schema_url();
   }
 
-  return provider->GetTracer(library_name, library_version, schema_url);
+  opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> ret =
+      provider->GetTracer(library_name, library_version, schema_url);
+  if (ret) {
+    group->tracer_cache[cache_key] = ret;
+  }
+  return ret;
 }
 
 SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<uint64_t>>
@@ -1251,6 +1228,20 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> g
     group = current_service_cache->default_group;
   } while (false);
 
+  if (!group) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
+  }
+
+  std::string cache_key = util::log::format("{}:{}:{}", gsl::string_view{logger_name.data(), logger_name.size()},
+                                            gsl::string_view{library_name.data(), library_name.size()},
+                                            gsl::string_view{library_version.data(), library_version.size()});
+  {
+    auto iter = group->logger_cache.find(cache_key);
+    if (iter != group->logger_cache.end()) {
+      return iter->second;
+    }
+  }
+
   auto provider = group->logs_handle.provider;
 
   if (!provider) {
@@ -1267,7 +1258,12 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> g
     schema_url = logic_config::me()->get_cfg_telemetry().opentelemetry().logs().schema_url();
   }
 
-  return provider->GetLogger(logger_name, library_name, library_version, schema_url);
+  opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> ret =
+      provider->GetLogger(logger_name, library_name, library_version, schema_url);
+  if (ret) {
+    group->logger_cache[cache_key] = ret;
+  }
+  return ret;
 }
 
 namespace {
@@ -1497,6 +1493,8 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
     options.flush_interval = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::seconds{exporter_cfg.prometheus_file().flush_interval().seconds()} +
         std::chrono::nanoseconds{exporter_cfg.prometheus_file().flush_interval().nanos()});
+
+    ret.emplace_back(exporter::metrics::PrometheusFileExporterFactory::Create(options));
   }
 
   return ret;
@@ -1541,7 +1539,8 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricReader>> _
 
 static local_provider_handle_type<opentelemetry::metrics::MeterProvider> _opentelemetry_create_metrics_provider(
     std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricReader>> &&readers,
-    const opentelemetry::sdk::resource::ResourceAttributes &metrics_resource_values) {
+    const opentelemetry::sdk::resource::ResourceAttributes &metrics_resource_values,
+    opentelemetry::nostd::string_view trace_metrics_name) {
   local_provider_handle_type<opentelemetry::metrics::MeterProvider> ret;
   ret.provider = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>(
       new opentelemetry::sdk::metrics::MeterProvider(
@@ -1551,6 +1550,24 @@ static local_provider_handle_type<opentelemetry::metrics::MeterProvider> _opente
   if (ret.provider) {
     for (auto &reader : readers) {
       static_cast<opentelemetry::sdk::metrics::MeterProvider *>(ret.provider.get())->AddMetricReader(std::move(reader));
+    }
+
+    // Special trace view for default group
+    if (!trace_metrics_name.empty()) {
+      std::shared_ptr<opentelemetry::sdk::metrics::HistogramAggregationConfig> config(
+          new opentelemetry::sdk::metrics::HistogramAggregationConfig());
+      config->boundaries_ = {0,      1000,   4000,   8000,    16000,   32000,  6400,
+                             128000, 256000, 512000, 1024000, 3000000, 8000000};
+      std::unique_ptr<opentelemetry::sdk::metrics::View> view = opentelemetry::sdk::metrics::ViewFactory::Create(
+          static_cast<std::string>(trace_metrics_name) + "_view", "",
+          opentelemetry::sdk::metrics::AggregationType::kHistogram, config);
+      std::unique_ptr<opentelemetry::sdk::metrics::InstrumentSelector> instrument_selector =
+          opentelemetry::sdk::metrics::InstrumentSelectorFactory::Create(
+              opentelemetry::sdk::metrics::InstrumentType::kHistogram, "*");
+      std::unique_ptr<opentelemetry::sdk::metrics::MeterSelector> meter_selector =
+          opentelemetry::sdk::metrics::MeterSelectorFactory::Create(trace_metrics_name, "", "");
+      static_cast<opentelemetry::sdk::metrics::MeterProvider *>(ret.provider.get())
+          ->AddView(std::move(instrument_selector), std::move(meter_selector), std::move(view));
     }
   }
 
@@ -2198,7 +2215,11 @@ _opentelemetry_create_opentelemetry_metrics_provider(::rpc::telemetry::group_typ
       return ret;
     }
 
-    return _opentelemetry_create_metrics_provider(std::move(readers), metrics_resource_values);
+    opentelemetry::nostd::string_view trace_metrics_name;
+    if (group.group_name.empty()) {
+      trace_metrics_name = group.trace_configure.additional_metrics_name();
+    }
+    return _opentelemetry_create_metrics_provider(std::move(readers), metrics_resource_values, trace_metrics_name);
   }
 
   local_provider_handle_type<opentelemetry::metrics::MeterProvider> ret;
@@ -2239,6 +2260,7 @@ SERVER_FRAME_API void global_service::set_current_service(
 
   // Setup telemetry
   default_group->initialized = false;
+  default_group->group_name = "";
   default_group->tracer_exporter_count = 0;
   default_group->metrics_exporter_count = 0;
   default_group->logger_exporter_count = 0;
@@ -2278,6 +2300,7 @@ SERVER_FRAME_API void global_service::set_current_service(
 
     // Setup telemetry
     named_group->initialized = false;
+    default_group->group_name = named_group_cfg.name();
     named_group->tracer_exporter_count = 0;
     named_group->metrics_exporter_count = 0;
     named_group->logger_exporter_count = 0;

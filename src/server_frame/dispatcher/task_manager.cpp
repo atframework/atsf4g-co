@@ -29,8 +29,8 @@
 
 namespace {
 struct task_manager_metrics_data_type {
-  std::atomic<bool> need_setup;
   std::atomic<size_t> task_count;
+  std::atomic<size_t> task_max_count;
   std::atomic<size_t> tick_checkpoint_count;
   std::atomic<size_t> pool_free_memory;
   std::atomic<size_t> pool_used_memory;
@@ -250,8 +250,8 @@ UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(task_manager);
 
 SERVER_FRAME_API task_manager::task_manager()
     : stat_interval_(60), stat_last_checkpoint_(0), conf_busy_count_(0), conf_busy_warn_count_(0) {
-  g_task_manager_metrics_data.need_setup.store(true, std::memory_order_release);
   g_task_manager_metrics_data.task_count.store(0, std::memory_order_release);
+  g_task_manager_metrics_data.task_max_count.store(0, std::memory_order_release);
   g_task_manager_metrics_data.tick_checkpoint_count.store(0, std::memory_order_release);
   g_task_manager_metrics_data.pool_free_memory.store(0, std::memory_order_release);
   g_task_manager_metrics_data.pool_used_memory.store(0, std::memory_order_release);
@@ -301,6 +301,8 @@ SERVER_FRAME_API int task_manager::init() {
     });
   }
 
+  setup_metrics();
+
   return 0;
 }
 
@@ -321,8 +323,6 @@ SERVER_FRAME_API int task_manager::reload() {
 #endif
   conf_busy_count_ = logic_config::me()->get_cfg_task().stack().busy_count();
   conf_busy_warn_count_ = logic_config::me()->get_cfg_task().stack().busy_warn_count();
-
-  g_task_manager_metrics_data.need_setup.store(true, std::memory_order_release);
 
   return 0;
 }
@@ -444,10 +444,6 @@ SERVER_FRAME_API int task_manager::tick(time_t sec, int nsec) {
           stack_pool_->get_limit().free_stack_number, stack_pool_->get_limit().free_stack_size);
     }
 #endif
-
-    if (g_task_manager_metrics_data.need_setup.load(std::memory_order_acquire)) {
-      setup_metrics();
-    }
   }
   return 0;
 }
@@ -786,68 +782,81 @@ bool task_manager::check_sys_config() const {
   return true;
 }
 
-#define TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER_INT64(result, value, lifetime)                                       \
-  if (opentelemetry::nostd::holds_alternative<                                                                         \
-          opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {               \
-    auto observer =                                                                                                    \
-        opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>( \
-            result);                                                                                                   \
-    if (observer) {                                                                                                    \
-      observer->Observe(static_cast<int64_t>(value), rpc::telemetry::global_service::get_metrics_labels(lifetime));    \
-    }                                                                                                                  \
-  }
-
-#define TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER(NAME, DESCRIPTION, UNIT, CREATE_ACTION, VAR_LOADER, LIFETIME)      \
-  {                                                                                                                  \
-    auto instrument =                                                                                                \
-        rpc::telemetry::global_service::get_metrics_observable(NAME, {NAME, DESCRIPTION, UNIT}, LIFETIME);           \
-    if (instrument) {                                                                                                \
-      return;                                                                                                        \
-    }                                                                                                                \
-                                                                                                                     \
-    instrument = rpc::telemetry::global_service::CREATE_ACTION(NAME, {NAME, DESCRIPTION, UNIT}, LIFETIME);           \
-                                                                                                                     \
-    if (!instrument) {                                                                                               \
-      return;                                                                                                        \
-    }                                                                                                                \
-    instrument->AddCallback(                                                                                         \
-        [](opentelemetry::metrics::ObserverResult result, void *) {                                                  \
-          auto value = g_task_manager_metrics_data.VAR_LOADER;                                                       \
-          std::shared_ptr<::rpc::telemetry::group_type> __lifetime;                                                  \
-          TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER_INT64(result, value, __lifetime)                                 \
-          else if (opentelemetry::nostd::holds_alternative<                                                          \
-                       opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) { \
-            auto observer = opentelemetry::nostd::get<                                                               \
-                opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result);          \
-            if (observer) {                                                                                          \
-              observer->Observe(static_cast<double>(value),                                                          \
-                                rpc::telemetry::global_service::get_metrics_labels(__lifetime));                     \
-            }                                                                                                        \
-          }                                                                                                          \
-        },                                                                                                           \
-        nullptr);                                                                                                    \
-  }
-
-void task_manager::setup_metrics() {
-  g_task_manager_metrics_data.need_setup.store(false, std::memory_order_release);
+namespace {
+void setup_task_manager_metics(opentelemetry::nostd::string_view meter_name,
+                               opentelemetry::nostd::string_view metric_name,
+                               opentelemetry::nostd::string_view metric_description,
+                               opentelemetry::nostd::string_view metric_unit,
+                               int64_t (*fn)(task_manager_metrics_data_type &data)) {
   std::shared_ptr<::rpc::telemetry::group_type> telemetry_lifetime =
       rpc::telemetry::global_service::get_default_group();
+  auto instrument = rpc::telemetry::global_service::get_metrics_observable(
+      meter_name, {metric_name, metric_description, metric_unit}, telemetry_lifetime);
+  if (instrument) {
+    return;
+  }
 
-  TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER("service_coroutine_task_count", "", "",
-                                            mutable_metrics_observable_gauge_int64,
-                                            task_count.load(std::memory_order_acquire), telemetry_lifetime);
+  instrument = rpc::telemetry::global_service::mutable_metrics_observable_gauge_int64(
+      meter_name, {metric_name, metric_description, metric_unit}, telemetry_lifetime);
 
-  TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER("service_coroutine_tick_checkpoint_count", "", "",
-                                            mutable_metrics_observable_gauge_int64,
-                                            tick_checkpoint_count.load(std::memory_order_acquire), telemetry_lifetime);
+  if (!instrument) {
+    return;
+  }
 
-  TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER("service_coroutine_pool_free_memory", "", "",
-                                            mutable_metrics_observable_gauge_int64,
-                                            pool_free_memory.load(std::memory_order_acquire), telemetry_lifetime);
-
-  TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER("service_coroutine_pool_free_memory", "", "",
-                                            mutable_metrics_observable_gauge_int64,
-                                            pool_used_memory.load(std::memory_order_acquire), telemetry_lifetime);
+  instrument->AddCallback(
+      [](opentelemetry::metrics::ObserverResult result, void *callback) {
+        using callback_type = int64_t (*)(task_manager_metrics_data_type &data);
+        auto value = reinterpret_cast<callback_type>(callback)(g_task_manager_metrics_data);
+        std::shared_ptr<::rpc::telemetry::group_type> __lifetime;
+        if (opentelemetry::nostd::holds_alternative<
+                opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {
+          auto observer = opentelemetry::nostd::get<
+              opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result);
+          if (observer) {
+            observer->Observe(static_cast<int64_t>(value),
+                              rpc::telemetry::global_service::get_metrics_labels(__lifetime));
+          }
+        } else if (opentelemetry::nostd::holds_alternative<
+                       opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) {
+          auto observer = opentelemetry::nostd::get<
+              opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result);
+          if (observer) {
+            observer->Observe(static_cast<double>(value),
+                              rpc::telemetry::global_service::get_metrics_labels(__lifetime));
+          }
+        }
+      },
+      reinterpret_cast<void *>(fn));
 }
+}  // namespace
 
-#undef TASK_MANAGER_SETUP_METRICS_GAUGE_OBSERVER
+void task_manager::setup_metrics() {
+  rpc::telemetry::global_service::add_on_ready([]() {
+    setup_task_manager_metics("service_coroutine_task_count", "service_coroutine_task_count", "", "",
+                              [](task_manager_metrics_data_type &data) -> int64_t {
+                                return static_cast<int64_t>(data.task_count.load(std::memory_order_acquire));
+                              });
+
+    setup_task_manager_metics("service_coroutine_task_max_count", "service_coroutine_task_max_count", "", "",
+                              [](task_manager_metrics_data_type &data) -> int64_t {
+                                int64_t ret = static_cast<int64_t>(data.task_max_count.load(std::memory_order_acquire));
+                                data.task_max_count.store(0, std::memory_order_release);
+                                return ret;
+                              });
+
+    setup_task_manager_metics("service_coroutine_tick_checkpoint_count", "service_coroutine_tick_checkpoint_count", "",
+                              "", [](task_manager_metrics_data_type &data) -> int64_t {
+                                return static_cast<int64_t>(data.tick_checkpoint_count.load(std::memory_order_acquire));
+                              });
+
+    setup_task_manager_metics("service_coroutine_pool_free_memory", "service_coroutine_pool_free_memory", "", "",
+                              [](task_manager_metrics_data_type &data) -> int64_t {
+                                return static_cast<int64_t>(data.pool_free_memory.load(std::memory_order_acquire));
+                              });
+
+    setup_task_manager_metics("service_coroutine_pool_used_memory", "service_coroutine_pool_used_memory", "", "",
+                              [](task_manager_metrics_data_type &data) -> int64_t {
+                                return static_cast<int64_t>(data.pool_used_memory.load(std::memory_order_acquire));
+                              });
+  });
+}

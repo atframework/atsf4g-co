@@ -26,6 +26,7 @@
 #include <utility/protobuf_mini_dumper.h>
 
 #include <rpc/db/uuid.h>
+#include <rpc/telemetry/semantic_conventions.h>
 
 #include <config/logic_config.h>
 
@@ -130,11 +131,13 @@ int task_action_base::operator()(void *priv_data) {
   task_trace_attributes trace_attributes;
   trace_attributes[static_cast<size_t>(trace_attribute_type::kRpcSystem)] = {
       opentelemetry::trace::SemanticConventions::kRpcSystem,
-      trace_start_option.dispatcher ? "atrpc.dispatcher" : "atrpc.task"};
+      trace_start_option.dispatcher ? (rpc::telemetry::semantic_conventions::kRpcSystemValueAtRpcDistapcher)
+                                    : (rpc::telemetry::semantic_conventions::kRpcSystemValueAtRpcTask)};
   trace_attributes[static_cast<size_t>(trace_attribute_type::kRpcService)] = {
       opentelemetry::trace::SemanticConventions::kRpcService,
-      trace_start_option.dispatcher ? rpc::context::string_view{trace_start_option.dispatcher->name()}
-                                    : rpc::context::string_view{"no_dispatcher"}};
+      trace_start_option.dispatcher
+          ? rpc::context::string_view{trace_start_option.dispatcher->name()}
+          : rpc::context::string_view{rpc::telemetry::semantic_conventions::kRpcServiceValueNoDispatcher}};
   trace_attributes[static_cast<size_t>(trace_attribute_type::kRpcMethod)] = {
       opentelemetry::trace::SemanticConventions::kRpcMethod, rpc::context::string_view{name()}};
   trace_start_option.attributes = trace_attributes;
@@ -143,8 +146,10 @@ int task_action_base::operator()(void *priv_data) {
       trace_attributes, static_cast<size_t>(trace_attribute_type::kTaskResponseCode)};
   rpc::context::tracer tracer = shared_context_.make_tracer(name(), std::move(trace_start_option));
 
-  trace_attributes[static_cast<size_t>(trace_attribute_type::kAtRpcKind)] = {"rpc.atrpc.kind", tracer.get_span_kind()};
-  trace_attributes[static_cast<size_t>(trace_attribute_type::kAtRpcSpanName)] = {"rpc.atrpc.span_name", name()};
+  trace_attributes[static_cast<size_t>(trace_attribute_type::kAtRpcKind)] = {
+      rpc::telemetry::semantic_conventions::kAtRpcKind, tracer.get_span_kind()};
+  trace_attributes[static_cast<size_t>(trace_attribute_type::kAtRpcSpanName)] = {
+      rpc::telemetry::semantic_conventions::kAtRpcSpanName, name()};
 
   rpc::context::task_context_data rpc_task_context_data;
 
@@ -349,8 +354,8 @@ void task_action_base::set_caller_context(rpc::context &ctx) {
 task_action_base::result_type::value_type task_action_base::_notify_finished(int32_t final_result,
                                                                              rpc::context::tracer &tracer,
                                                                              task_trace_attributes &attributes) {
-  attributes[static_cast<size_t>(trace_attribute_type::kTaskResponseCode)] = {"rpc.atrpc.response_code",
-                                                                              get_response_code()};
+  attributes[static_cast<size_t>(trace_attribute_type::kTaskResponseCode)] = {
+      rpc::telemetry::semantic_conventions::kAtRpcResponseCode, get_response_code()};
 
   // Additional trace data
   auto trace_span = shared_context_.get_trace_span();
@@ -359,7 +364,7 @@ task_action_base::result_type::value_type task_action_base::_notify_finished(int
       trace_span->SetAttribute("user_id", get_user_id());
       trace_span->SetAttribute("zone_id", get_zone_id());
     }
-    trace_span->SetAttribute("rpc.atrpc.response_code", get_response_code());
+    trace_span->SetAttribute(rpc::telemetry::semantic_conventions::kAtRpcResponseCode, get_response_code());
   }
 
   // Callbacks

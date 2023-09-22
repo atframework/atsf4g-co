@@ -113,7 +113,8 @@ static std::tm GetLocalTime() {
   return ret;
 }
 
-static size_t FormatPath(char *buff, size_t bufz, opentelemetry::nostd::string_view fmt, std::size_t rotate_index) {
+static std::size_t FormatPath(char *buff, size_t bufz, opentelemetry::nostd::string_view fmt,
+                              std::size_t rotate_index) {
   if (nullptr == buff || 0 == bufz) {
     return 0;
   }
@@ -310,11 +311,11 @@ static size_t FormatPath(char *buff, size_t bufz, opentelemetry::nostd::string_v
       case 'n':
       case 'N': {
         std::size_t value = fmt[i] == 'n' ? rotate_index + 1 : rotate_index;
-        int res = PROMETHEUS_FILE_SNPRINTF(&buff[ret], bufz - ret, "%llu", static_cast<unsigned long long>(value));
+        auto res = PROMETHEUS_FILE_SNPRINTF(&buff[ret], bufz - ret, "%llu", static_cast<unsigned long long>(value));
         if (res < 0) {
           running = false;
         } else {
-          ret += static_cast<size_t>(res);
+          ret += static_cast<std::size_t>(res);
         }
         break;
       }
@@ -496,7 +497,7 @@ class UTIL_SYMBOL_LOCAL FileSystemUtil {
    */
   static int Link(const char *oldpath, const char *newpath,
                   int32_t options = static_cast<int32_t>(LinkOption::kDefault)) {
-    if ((options & static_cast<int32_t>(LinkOption::kDefault)) && IsExist(newpath)) {
+    if ((options & static_cast<int32_t>(LinkOption::kForceRewrite)) && IsExist(newpath)) {
       remove(newpath);
     }
 
@@ -930,7 +931,7 @@ class UTIL_SYMBOL_LOCAL PrometheusFileBackend {
       return;
     }
 
-    std::lock_guard<std::mutex> lock_guard{file_->background_thread_lock};
+    std::lock_guard<std::mutex> lock_guard_caller{file_->background_thread_lock};
     if (file_->background_flush_thread) {
       return;
     }
@@ -979,7 +980,7 @@ class UTIL_SYMBOL_LOCAL PrometheusFileBackend {
       // Detach running thread because it will exit soon
       std::unique_ptr<std::thread> background_flush_thread;
       {
-        std::lock_guard<std::mutex> lock_guard{concurrency_file->background_thread_lock};
+        std::lock_guard<std::mutex> lock_guard_inner{concurrency_file->background_thread_lock};
         background_flush_thread.swap(concurrency_file->background_flush_thread);
       }
       if (background_flush_thread && background_flush_thread->joinable()) {

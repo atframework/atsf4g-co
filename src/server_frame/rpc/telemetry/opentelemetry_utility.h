@@ -43,6 +43,10 @@ class opentelemetry_utility {
   };
 
  public:
-  SERVER_FRAME_API void protobuf_to_otel_attributes(const google::protobuf::Message& message, attributes_map_type& output,
-                                   gsl::string_view key_prefix = "");
+  SERVER_FRAME_API static void protobuf_to_otel_attributes(const google::protobuf::Message& message,
+                                                           attributes_map_type& output,
+                                                           gsl::string_view key_prefix = "");
+
+  SERVER_FRAME_API static opentelemetry::common::AttributeValue convert_attribute_value_wihtout_array(
+      const opentelemetry::sdk::common::OwnedAttributeValue& value);
 };

@@ -267,7 +267,8 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
     OUTPUT ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES}
     COMMAND
       "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" ${PROTOBUF_PROTO_PATHS} --cpp_out
-      "dllexport_decl=${project_service_declare_protocol_DLLEXPORT_DECL}:${CMAKE_CURRENT_BINARY_DIR}"
+      "dllexport_decl=${project_service_declare_protocol_DLLEXPORT_DECL}:${CMAKE_CURRENT_BINARY_DIR}" -o
+      "${PROJECT_INSTALL_RES_PBD_DIR}/service-${TARGET_NAME}.pb"
       # Protocol buffer files
       ${project_service_declare_protocol_PROTOCOLS} ${FINAL_GENERATED_COPY_COMMANDS}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}

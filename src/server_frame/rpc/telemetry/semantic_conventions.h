@@ -8,10 +8,19 @@ namespace rpc {
 
 namespace telemetry {
 
-class semantic_conventions {
+struct semantic_conventions {
   static constexpr const char *kGroupNameDefault = "";
   static constexpr const char *kGroupNameHpa = "hpa";
   static constexpr const char *kGroupNameDedicatedServer = "dedicated_server";
+
+  static constexpr const char *kAtRpcResultCode = "rpc.atrpc.result_code";
+  static constexpr const char *kAtRpcResponseCode = "rpc.atrpc.response_code";
+  static constexpr const char *kAtRpcKind = "rpc.atrpc.kind";
+  static constexpr const char *kAtRpcSpanName = "rpc.atrpc.span_name";
+
+  static constexpr const char *kRpcSystemValueAtRpcDistapcher = "atrpc.dispatcher";
+  static constexpr const char *kRpcSystemValueAtRpcTask = "atrpc.task";
+  static constexpr const char *kRpcServiceValueNoDispatcher = "no_dispatcher";
 };
 
 }  // namespace telemetry

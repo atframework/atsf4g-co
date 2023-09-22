@@ -169,6 +169,7 @@ message opentelemetry_trace_cfg {
   string schema_url = 2 [(atapp.protocol.CONFIGURE) = { default_value: "https://opentelemetry.io/schemas/1.12.0" }];
   map<string, string> resource = 3;
   string additional_metrics_name = 4;
+  bool enable_additional_metrics = 5;
 
   opentelemetry_trace_exporter_cfg exporters = 11;
   opentelemetry_processor_cfg processors = 12;
@@ -250,7 +251,8 @@ message opentelemetry_group_cfg {
 
 message logic_telemetry_cfg {
   opentelemetry_cfg opentelemetry = 1;
-  repeated opentelemetry_group_cfg group = 2;
+  opentelemetry_cfg agent = 2;
+  repeated opentelemetry_group_cfg group = 3;
 }
 
 message logic_dns_cfg {
