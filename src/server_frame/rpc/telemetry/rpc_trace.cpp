@@ -232,7 +232,7 @@ static void setup_trace_additional_metric(std::string additional_metrics_name) {
                   int64_t record_value = 0;
                   {
                     std::lock_guard<std::mutex> value_guard{report.second->record_lock};
-                    record_value = report.second->cost_cpu_time.second - report.second->cost_cpu_time.first;
+                    record_value = report.second->cost_cpu_time.second;
                     report.second->cost_cpu_time.first = report.second->cost_cpu_time.second;
                   }
 
@@ -244,7 +244,7 @@ static void setup_trace_additional_metric(std::string additional_metrics_name) {
                       report.second->attribute_vector, internal_attributes};
                   multiple_key_value_iterable_view<trace_attributes_type> concat_attributes{
                       opentelemetry::nostd::span<const trace_attributes_type>{attributes_array}};
-                  observer->Observe(record_value, rpc::telemetry::global_service::get_metrics_labels(lifetime));
+                  observer->Observe(record_value, concat_attributes);
                 }
               }
             } else if (opentelemetry::nostd::holds_alternative<
@@ -273,7 +273,7 @@ static void setup_trace_additional_metric(std::string additional_metrics_name) {
                       report.second->attribute_vector, internal_attributes};
                   multiple_key_value_iterable_view<trace_attributes_type> concat_attributes{
                       opentelemetry::nostd::span<const trace_attributes_type>{attributes_array}};
-                  observer->Observe(record_value, rpc::telemetry::global_service::get_metrics_labels(lifetime));
+                  observer->Observe(record_value, concat_attributes);
                 }
               }
             }
@@ -322,7 +322,7 @@ static void setup_trace_additional_metric(std::string additional_metrics_name) {
                   int64_t record_value = 0;
                   {
                     std::lock_guard<std::mutex> value_guard{report.second->record_lock};
-                    record_value = report.second->call_count.second - report.second->call_count.first;
+                    record_value = report.second->call_count.second;
                     report.second->call_count.first = report.second->call_count.second;
                   }
 
@@ -334,7 +334,7 @@ static void setup_trace_additional_metric(std::string additional_metrics_name) {
                       report.second->attribute_vector, internal_attributes};
                   multiple_key_value_iterable_view<trace_attributes_type> concat_attributes{
                       opentelemetry::nostd::span<const trace_attributes_type>{attributes_array}};
-                  observer->Observe(record_value, rpc::telemetry::global_service::get_metrics_labels(lifetime));
+                  observer->Observe(record_value, concat_attributes);
                 }
               }
             } else if (opentelemetry::nostd::holds_alternative<
@@ -363,7 +363,7 @@ static void setup_trace_additional_metric(std::string additional_metrics_name) {
                       report.second->attribute_vector, internal_attributes};
                   multiple_key_value_iterable_view<trace_attributes_type> concat_attributes{
                       opentelemetry::nostd::span<const trace_attributes_type>{attributes_array}};
-                  observer->Observe(record_value, rpc::telemetry::global_service::get_metrics_labels(lifetime));
+                  observer->Observe(record_value, concat_attributes);
                 }
               }
             }
@@ -415,7 +415,7 @@ static void setup_trace_additional_metric(std::string additional_metrics_name) {
                   std::lock_guard<std::mutex> value_guard{report.second->record_lock};
                   record_value.reserve(report.second->result_code_count.size());
                   for (auto &code_pair : report.second->result_code_count) {
-                    record_value[code_pair.first] = code_pair.second.second - code_pair.second.first;
+                    record_value[code_pair.first] = code_pair.second.second;
                     code_pair.second.first = code_pair.second.second;
                   }
                 }
@@ -431,7 +431,7 @@ static void setup_trace_additional_metric(std::string additional_metrics_name) {
                     opentelemetry::nostd::span<const trace_attributes_type>{attributes_array}};
                 for (auto &code_pair : record_value) {
                   internal_attributes[0].second = code_pair.first;
-                  observer->Observe(code_pair.second, rpc::telemetry::global_service::get_metrics_labels(lifetime));
+                  observer->Observe(code_pair.second, concat_attributes);
                 }
               }
             }
@@ -450,7 +450,7 @@ static void setup_trace_additional_metric(std::string additional_metrics_name) {
                   std::lock_guard<std::mutex> value_guard{report.second->record_lock};
                   record_value.reserve(report.second->result_code_count.size());
                   for (auto &code_pair : report.second->result_code_count) {
-                    record_value[code_pair.first] = code_pair.second.second - code_pair.second.first;
+                    record_value[code_pair.first] = code_pair.second.second;
                     code_pair.second.first = code_pair.second.second;
                   }
                 }
@@ -466,8 +466,7 @@ static void setup_trace_additional_metric(std::string additional_metrics_name) {
                     opentelemetry::nostd::span<const trace_attributes_type>{attributes_array}};
                 for (auto &code_pair : record_value) {
                   internal_attributes[0].second = code_pair.first;
-                  observer->Observe(static_cast<double>(code_pair.second),
-                                    rpc::telemetry::global_service::get_metrics_labels(lifetime));
+                  observer->Observe(static_cast<double>(code_pair.second), concat_attributes);
                 }
               }
             }
@@ -535,7 +534,7 @@ static void setup_trace_additional_metric(std::string additional_metrics_name) {
                     opentelemetry::nostd::span<const trace_attributes_type>{attributes_array}};
                 for (auto &code_pair : record_value) {
                   internal_attributes[0].second = code_pair.first;
-                  observer->Observe(code_pair.second, rpc::telemetry::global_service::get_metrics_labels(lifetime));
+                  observer->Observe(code_pair.second, concat_attributes);
                 }
               }
             }
@@ -570,8 +569,7 @@ static void setup_trace_additional_metric(std::string additional_metrics_name) {
                     opentelemetry::nostd::span<const trace_attributes_type>{attributes_array}};
                 for (auto &code_pair : record_value) {
                   internal_attributes[0].second = code_pair.first;
-                  observer->Observe(static_cast<double>(code_pair.second),
-                                    rpc::telemetry::global_service::get_metrics_labels(lifetime));
+                  observer->Observe(static_cast<double>(code_pair.second), concat_attributes);
                 }
               }
             }
@@ -597,7 +595,7 @@ static void record_trace_additional_metric_span(const std::string &span_name, op
   std::call_once(setup_function, setup_trace_additional_metric, additional_metrics_name);
 
   std::lock_guard<std::mutex> guard{span_metric->record_lock};
-  span_metric->call_count.second += static_cast<int64_t>(cost_cpu_time.count());
+  span_metric->cost_cpu_time.second += static_cast<int64_t>(cost_cpu_time.count());
   ++span_metric->call_count.second;
   {
     auto code_iter = span_metric->result_code_count.find(result_code);

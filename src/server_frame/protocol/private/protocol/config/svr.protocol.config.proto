@@ -244,14 +244,24 @@ message opentelemetry_cfg {
   opentelemetry_logs_cfg logs = 5;
 }
 
+message opentelemetry_agent_cfg {
+  bool enable_trace = 31;
+  opentelemetry_trace_exporter_cfg trace_exporters = 32;
+  bool enable_metrics = 41;
+  opentelemetry_metrics_exporter_cfg metrics_exporters = 42;
+  bool enable_logs = 51;
+  opentelemetry_logs_exporter_cfg logs_exporters = 52;
+}
+
 message opentelemetry_group_cfg {
   string name = 1;
   opentelemetry_cfg configure = 2;
+  opentelemetry_agent_cfg agent = 3;
 }
 
 message logic_telemetry_cfg {
   opentelemetry_cfg opentelemetry = 1;
-  opentelemetry_cfg agent = 2;
+  opentelemetry_agent_cfg agent = 2;
   repeated opentelemetry_group_cfg group = 3;
 }
 
