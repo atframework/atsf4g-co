@@ -10,15 +10,26 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
+#include <gsl/select-gsl.h>
 #include <log/log_wrapper.h>
 
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
+#include "rpc/telemetry/rpc_global_service.h"
+
 // Patch for Windows SDK
-#ifdef GetMessage
+#if defined(GetMessage)
 #  undef GetMessage
 #endif
 
+namespace rpc {
+
+namespace telemetry {
 namespace {
 static void opentelemetry_utility_protobuf_to_otel_attributes_message(
     const google::protobuf::Reflection* reflection, const google::protobuf::Message& message,
@@ -210,6 +221,31 @@ static void opentelemetry_utility_protobuf_to_otel_attributes_message(
     opentelemetry_utility_protobuf_to_otel_attributes_field(reflection, message, fds, output, key_prefix);
   }
 }
+
+template <class CallbackType>
+struct UTIL_SYMBOL_LOCAL opentelemetry_utility_global_metrics_item {
+  std::string key;
+  CallbackType fn;
+};
+
+struct UTIL_SYMBOL_LOCAL opentelemetry_utility_global_metrics_set {
+  std::unordered_map<std::string, std::shared_ptr<opentelemetry_utility_global_metrics_item<std::function<int64_t()>>>>
+      int64_observable_by_key;
+  std::unordered_map<void*, std::shared_ptr<opentelemetry_utility_global_metrics_item<std::function<int64_t()>>>>
+      int64_observable_by_pointer;
+
+  std::unordered_map<std::string, std::shared_ptr<opentelemetry_utility_global_metrics_item<std::function<double()>>>>
+      double_observable_by_key;
+  std::unordered_map<void*, std::shared_ptr<opentelemetry_utility_global_metrics_item<std::function<double()>>>>
+      double_observable_by_pointer;
+};
+
+static std::pair<std::recursive_mutex&, opentelemetry_utility_global_metrics_set&> get_global_metrics_set() {
+  static std::recursive_mutex lock;
+  static opentelemetry_utility_global_metrics_set ret;
+  return {lock, ret};
+}
+
 }  // namespace
 
 SERVER_FRAME_API void opentelemetry_utility::protobuf_to_otel_attributes(const google::protobuf::Message& message,
@@ -264,3 +300,200 @@ SERVER_FRAME_API opentelemetry::common::AttributeValue opentelemetry_utility::co
 
   return opentelemetry::common::AttributeValue{};
 }
+
+SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_int64(
+    metrics_observable_type type, opentelemetry::nostd::string_view meter_name, meter_instrument_key metrics_key,
+    std::function<int64_t()> fn) {
+  if (!fn) {
+    return false;
+  }
+
+  // opentelemetry only use metrics name as key of metric storage
+  std::string key = util::log::format("{}:{}", gsl::string_view{meter_name.data(), meter_name.size()},
+                                      gsl::string_view{metrics_key.name.data(), metrics_key.name.size()});
+
+  std::pair<std::recursive_mutex&, opentelemetry_utility_global_metrics_set&> data_set = get_global_metrics_set();
+  {
+    std::lock_guard<std::recursive_mutex> lock_guard{data_set.first};
+    if (data_set.second.int64_observable_by_key.end() != data_set.second.int64_observable_by_key.find(key)) {
+      return false;
+    }
+  }
+
+  std::shared_ptr<::rpc::telemetry::group_type> telemetry_lifetime =
+      rpc::telemetry::global_service::get_default_group();
+  auto instrument = rpc::telemetry::global_service::get_metrics_observable(meter_name, metrics_key, telemetry_lifetime);
+  if (instrument) {
+    return false;
+  }
+
+  if (type == metrics_observable_type::kGauge) {
+    instrument = rpc::telemetry::global_service::mutable_metrics_observable_gauge_int64(meter_name, metrics_key,
+                                                                                        telemetry_lifetime);
+  } else if (type == metrics_observable_type::kCounter) {
+    instrument = rpc::telemetry::global_service::mutable_metrics_observable_counter_int64(meter_name, metrics_key,
+                                                                                          telemetry_lifetime);
+  } else {
+    instrument = rpc::telemetry::global_service::mutable_metrics_observable_up_down_counter_int64(
+        meter_name, metrics_key, telemetry_lifetime);
+  }
+
+  if (!instrument) {
+    return false;
+  }
+
+  auto handle = std::make_shared<opentelemetry_utility_global_metrics_item<std::function<int64_t()>>>();
+  if (!handle) {
+    return false;
+  }
+  handle->key = key;
+  handle->fn = std::move(fn);
+  {
+    std::lock_guard<std::recursive_mutex> lock_guard{data_set.first};
+    data_set.second.int64_observable_by_key[key] = handle;
+    data_set.second.int64_observable_by_pointer[reinterpret_cast<void*>(handle.get())] = handle;
+  }
+
+  instrument->AddCallback(
+      [](opentelemetry::metrics::ObserverResult result, void* callback) {
+        std::shared_ptr<opentelemetry_utility_global_metrics_item<std::function<int64_t()>>> metrics_item;
+        {
+          std::pair<std::recursive_mutex&, opentelemetry_utility_global_metrics_set&> data_set =
+              get_global_metrics_set();
+          std::lock_guard<std::recursive_mutex> lock_guard{data_set.first};
+          auto iter = data_set.second.int64_observable_by_pointer.find(callback);
+          if (iter != data_set.second.int64_observable_by_pointer.end()) {
+            metrics_item = iter->second;
+          }
+        }
+        if (!metrics_item) {
+          return;
+        }
+        int64_t value = 0;
+        if (metrics_item->fn) {
+          value = metrics_item->fn();
+        }
+
+        std::shared_ptr<::rpc::telemetry::group_type> __lifetime;
+        if (opentelemetry::nostd::holds_alternative<
+                opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {
+          auto observer = opentelemetry::nostd::get<
+              opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result);
+          if (observer) {
+            observer->Observe(static_cast<int64_t>(value),
+                              rpc::telemetry::global_service::get_metrics_labels(__lifetime));
+          }
+        } else if (opentelemetry::nostd::holds_alternative<
+                       opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) {
+          auto observer = opentelemetry::nostd::get<
+              opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result);
+          if (observer) {
+            observer->Observe(static_cast<double>(value),
+                              rpc::telemetry::global_service::get_metrics_labels(__lifetime));
+          }
+        }
+      },
+      reinterpret_cast<void*>(handle.get()));
+
+  return true;
+}
+
+SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_double(
+    metrics_observable_type type, opentelemetry::nostd::string_view meter_name, meter_instrument_key metrics_key,
+    std::function<double()> fn) {
+  if (!fn) {
+    return false;
+  }
+
+  // opentelemetry only use metrics name as key of metric storage
+  std::string key = util::log::format("{}:{}", gsl::string_view{meter_name.data(), meter_name.size()},
+                                      gsl::string_view{metrics_key.name.data(), metrics_key.name.size()});
+
+  std::pair<std::recursive_mutex&, opentelemetry_utility_global_metrics_set&> data_set = get_global_metrics_set();
+  {
+    std::lock_guard<std::recursive_mutex> lock_guard{data_set.first};
+    if (data_set.second.double_observable_by_key.end() != data_set.second.double_observable_by_key.find(key)) {
+      return false;
+    }
+  }
+
+  std::shared_ptr<::rpc::telemetry::group_type> telemetry_lifetime =
+      rpc::telemetry::global_service::get_default_group();
+  auto instrument = rpc::telemetry::global_service::get_metrics_observable(meter_name, metrics_key, telemetry_lifetime);
+  if (instrument) {
+    return false;
+  }
+
+  if (type == metrics_observable_type::kGauge) {
+    instrument = rpc::telemetry::global_service::mutable_metrics_observable_gauge_double(meter_name, metrics_key,
+                                                                                         telemetry_lifetime);
+  } else if (type == metrics_observable_type::kCounter) {
+    instrument = rpc::telemetry::global_service::mutable_metrics_observable_counter_double(meter_name, metrics_key,
+                                                                                           telemetry_lifetime);
+  } else {
+    instrument = rpc::telemetry::global_service::mutable_metrics_observable_up_down_counter_double(
+        meter_name, metrics_key, telemetry_lifetime);
+  }
+
+  if (!instrument) {
+    return false;
+  }
+
+  auto handle = std::make_shared<opentelemetry_utility_global_metrics_item<std::function<double()>>>();
+  if (!handle) {
+    return false;
+  }
+  handle->key = key;
+  handle->fn = std::move(fn);
+  {
+    std::lock_guard<std::recursive_mutex> lock_guard{data_set.first};
+    data_set.second.double_observable_by_key[key] = handle;
+    data_set.second.double_observable_by_pointer[reinterpret_cast<void*>(handle.get())] = handle;
+  }
+
+  instrument->AddCallback(
+      [](opentelemetry::metrics::ObserverResult result, void* callback) {
+        std::shared_ptr<opentelemetry_utility_global_metrics_item<std::function<double()>>> metrics_item;
+        {
+          std::pair<std::recursive_mutex&, opentelemetry_utility_global_metrics_set&> data_set =
+              get_global_metrics_set();
+          std::lock_guard<std::recursive_mutex> lock_guard{data_set.first};
+          auto iter = data_set.second.double_observable_by_pointer.find(callback);
+          if (iter != data_set.second.double_observable_by_pointer.end()) {
+            metrics_item = iter->second;
+          }
+        }
+        if (!metrics_item) {
+          return;
+        }
+        double value = 0;
+        if (metrics_item->fn) {
+          value = metrics_item->fn();
+        }
+
+        std::shared_ptr<::rpc::telemetry::group_type> __lifetime;
+        if (opentelemetry::nostd::holds_alternative<
+                opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {
+          auto observer = opentelemetry::nostd::get<
+              opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result);
+          if (observer) {
+            observer->Observe(static_cast<int64_t>(value),
+                              rpc::telemetry::global_service::get_metrics_labels(__lifetime));
+          }
+        } else if (opentelemetry::nostd::holds_alternative<
+                       opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) {
+          auto observer = opentelemetry::nostd::get<
+              opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result);
+          if (observer) {
+            observer->Observe(static_cast<double>(value),
+                              rpc::telemetry::global_service::get_metrics_labels(__lifetime));
+          }
+        }
+      },
+      reinterpret_cast<void*>(handle.get()));
+
+  return true;
+}
+
+}  // namespace telemetry
+}  // namespace rpc

@@ -1,5 +1,5 @@
 // Copyright 2023 atframework
-// Created by owent on 2023-09-14.
+// Created by owent on 2021/10/18.
 //
 
 #pragma once
@@ -33,6 +33,8 @@
 #include <unordered_map>
 #include <utility>
 
+#include "rpc/telemetry/opentelemetry_types.h"
+
 namespace atapp {
 class app;
 }
@@ -49,17 +51,6 @@ PROJECT_NAMESPACE_END
 namespace rpc {
 
 namespace telemetry {
-
-struct UTIL_SYMBOL_VISIBLE meter_instrument_key {
-  opentelemetry::nostd::string_view name;
-  opentelemetry::nostd::string_view description;
-  opentelemetry::nostd::string_view unit;
-
-  inline meter_instrument_key(opentelemetry::nostd::string_view input_name = "",
-                              opentelemetry::nostd::string_view input_description = "",
-                              opentelemetry::nostd::string_view input_unit = "")
-      : name(input_name), description(input_description), unit(input_unit) {}
-};
 
 struct group_type;
 
@@ -144,22 +135,22 @@ class global_service {
    * @brief Get trace configure
    * @return trace configure
    */
-  SERVER_FRAME_API static const PROJECT_NAMESPACE_ID::config::opentelemetry_trace_cfg&
-  get_trace_configure(std::shared_ptr<group_type>& group);
+  SERVER_FRAME_API static const PROJECT_NAMESPACE_ID::config::opentelemetry_trace_cfg& get_trace_configure(
+      std::shared_ptr<group_type>& group);
 
   /**
    * @brief Get metrics configure
    * @return metrics configure
    */
-  SERVER_FRAME_API static const PROJECT_NAMESPACE_ID::config::opentelemetry_metrics_cfg&
-  get_metrics_configure(std::shared_ptr<group_type>& group);
+  SERVER_FRAME_API static const PROJECT_NAMESPACE_ID::config::opentelemetry_metrics_cfg& get_metrics_configure(
+      std::shared_ptr<group_type>& group);
 
   /**
    * @brief Get logs configure
    * @return logs configure
    */
-  SERVER_FRAME_API static const PROJECT_NAMESPACE_ID::config::opentelemetry_logs_cfg&
-  get_logs_configure(std::shared_ptr<group_type>& group);
+  SERVER_FRAME_API static const PROJECT_NAMESPACE_ID::config::opentelemetry_logs_cfg& get_logs_configure(
+      std::shared_ptr<group_type>& group);
 
   /**
    * @brief Get the current trace exporter count

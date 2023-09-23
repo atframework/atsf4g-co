@@ -277,8 +277,7 @@ class opentelemetry_internal_log_handler : public opentelemetry::sdk::common::in
 };
 
 template <class TValue>
-static TValue optimize_search_in_hash_map(std::unordered_map<std::string, TValue> &container,
-                                          const opentelemetry::nostd::string_view &key) {
+static TValue optimize_search_in_hash_map(std::unordered_map<std::string, TValue> &container, const std::string &key) {
   if (container.size() < 16) {
     for (auto &element : container) {
       if (element.first == key) {
@@ -286,13 +285,18 @@ static TValue optimize_search_in_hash_map(std::unordered_map<std::string, TValue
       }
     }
   } else {
-    auto iter = container.find(static_cast<std::string>(key));
+    auto iter = container.find(key);
     if (iter != container.end()) {
       return iter->second;
     }
   }
 
   return TValue();
+}
+
+static std::string get_metrics_key(meter_instrument_key metrics_key) {
+  // opentelemetry only use metrics name as key of metric storage
+  return {metrics_key.name.data(), metrics_key.name.size()};
 }
 
 static std::shared_ptr<local_meter_info_type> get_meter_info(std::shared_ptr<group_type> &group,
@@ -328,7 +332,7 @@ static std::shared_ptr<local_meter_info_type> get_meter_info(std::shared_ptr<gro
       return group->default_metrics_meter;
     }
 
-    auto ret = optimize_search_in_hash_map(group->metrics_meters, meter_name);
+    auto ret = optimize_search_in_hash_map(group->metrics_meters, static_cast<std::string>(meter_name));
     if (ret) {
       return ret;
     }
@@ -857,10 +861,11 @@ global_service::mutable_metrics_counter_uint64(opentelemetry::nostd::string_view
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<uint64_t>>();
   }
 
+  std::string metrics_storage_key = get_metrics_key(key);
   {
     util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
 
-    auto ret = optimize_search_in_hash_map(meter_info->sync_counter_uint64, key.name);
+    auto ret = optimize_search_in_hash_map(meter_info->sync_counter_uint64, metrics_storage_key);
     if (ret) {
       return ret;
     }
@@ -871,7 +876,7 @@ global_service::mutable_metrics_counter_uint64(opentelemetry::nostd::string_view
     auto ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<uint64_t>>(
         meter_info->meter->CreateUInt64Counter(key.name, key.description, key.unit));
     if (ret) {
-      meter_info->sync_counter_uint64[static_cast<std::string>(key.name)] = ret;
+      meter_info->sync_counter_uint64[metrics_storage_key] = ret;
     }
 
     return ret;
@@ -886,10 +891,11 @@ global_service::mutable_metrics_counter_double(opentelemetry::nostd::string_view
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<double>>();
   }
 
+  std::string metrics_storage_key = get_metrics_key(key);
   {
     util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
 
-    auto ret = optimize_search_in_hash_map(meter_info->sync_counter_double, key.name);
+    auto ret = optimize_search_in_hash_map(meter_info->sync_counter_double, metrics_storage_key);
     if (ret) {
       return ret;
     }
@@ -900,7 +906,7 @@ global_service::mutable_metrics_counter_double(opentelemetry::nostd::string_view
     auto ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<double>>(
         meter_info->meter->CreateDoubleCounter(key.name, key.description, key.unit));
     if (ret) {
-      meter_info->sync_counter_double[static_cast<std::string>(key.name)] = ret;
+      meter_info->sync_counter_double[metrics_storage_key] = ret;
     }
 
     return ret;
@@ -915,10 +921,11 @@ global_service::mutable_metrics_histogram_uint64(opentelemetry::nostd::string_vi
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<uint64_t>>();
   }
 
+  std::string metrics_storage_key = get_metrics_key(key);
   {
     util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
 
-    auto ret = optimize_search_in_hash_map(meter_info->sync_histogram_uint64, key.name);
+    auto ret = optimize_search_in_hash_map(meter_info->sync_histogram_uint64, metrics_storage_key);
     if (ret) {
       return ret;
     }
@@ -929,7 +936,7 @@ global_service::mutable_metrics_histogram_uint64(opentelemetry::nostd::string_vi
     auto ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<uint64_t>>(
         meter_info->meter->CreateUInt64Histogram(key.name, key.description, key.unit));
     if (ret) {
-      meter_info->sync_histogram_uint64[static_cast<std::string>(key.name)] = ret;
+      meter_info->sync_histogram_uint64[metrics_storage_key] = ret;
     }
 
     return ret;
@@ -944,10 +951,11 @@ global_service::mutable_metrics_histogram_double(opentelemetry::nostd::string_vi
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<double>>();
   }
 
+  std::string metrics_storage_key = get_metrics_key(key);
   {
     util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
 
-    auto ret = optimize_search_in_hash_map(meter_info->sync_histogram_double, key.name);
+    auto ret = optimize_search_in_hash_map(meter_info->sync_histogram_double, metrics_storage_key);
     if (ret) {
       return ret;
     }
@@ -958,7 +966,7 @@ global_service::mutable_metrics_histogram_double(opentelemetry::nostd::string_vi
     auto ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<double>>(
         meter_info->meter->CreateDoubleHistogram(key.name, key.description, key.unit));
     if (ret) {
-      meter_info->sync_histogram_double[static_cast<std::string>(key.name)] = ret;
+      meter_info->sync_histogram_double[metrics_storage_key] = ret;
     }
 
     return ret;
@@ -973,10 +981,11 @@ global_service::mutable_metrics_up_down_counter_int64(opentelemetry::nostd::stri
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<int64_t>>();
   }
 
+  std::string metrics_storage_key = get_metrics_key(key);
   {
     util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
 
-    auto ret = optimize_search_in_hash_map(meter_info->sync_up_down_counter_int64, key.name);
+    auto ret = optimize_search_in_hash_map(meter_info->sync_up_down_counter_int64, metrics_storage_key);
     if (ret) {
       return ret;
     }
@@ -987,7 +996,7 @@ global_service::mutable_metrics_up_down_counter_int64(opentelemetry::nostd::stri
     auto ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<int64_t>>(
         meter_info->meter->CreateInt64UpDownCounter(key.name, key.description, key.unit));
     if (ret) {
-      meter_info->sync_up_down_counter_int64[static_cast<std::string>(key.name)] = ret;
+      meter_info->sync_up_down_counter_int64[metrics_storage_key] = ret;
     }
 
     return ret;
@@ -1002,10 +1011,11 @@ global_service::mutable_metrics_up_down_counter_double(opentelemetry::nostd::str
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<double>>();
   }
 
+  std::string metrics_storage_key = get_metrics_key(key);
   {
     util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
 
-    auto ret = optimize_search_in_hash_map(meter_info->sync_up_down_counter_double, key.name);
+    auto ret = optimize_search_in_hash_map(meter_info->sync_up_down_counter_double, metrics_storage_key);
     if (ret) {
       return ret;
     }
@@ -1016,7 +1026,7 @@ global_service::mutable_metrics_up_down_counter_double(opentelemetry::nostd::str
     auto ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<double>>(
         meter_info->meter->CreateDoubleUpDownCounter(key.name, key.description, key.unit));
     if (ret) {
-      meter_info->sync_up_down_counter_double[static_cast<std::string>(key.name)] = ret;
+      meter_info->sync_up_down_counter_double[metrics_storage_key] = ret;
     }
 
     return ret;
@@ -1031,8 +1041,10 @@ global_service::get_metrics_observable(opentelemetry::nostd::string_view meter_n
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
   }
 
+  std::string metrics_storage_key = get_metrics_key(key);
+
   util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
-  return optimize_search_in_hash_map(meter_info->async_instruments, key.name);
+  return optimize_search_in_hash_map(meter_info->async_instruments, metrics_storage_key);
 }
 
 SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>

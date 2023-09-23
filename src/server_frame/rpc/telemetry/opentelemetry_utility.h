@@ -1,4 +1,4 @@
-// Copyright 2022 atframework
+// Copyright 2023 atframework
 // Created by owent on 2022-03-03.
 //
 
@@ -22,11 +22,23 @@
 
 #include <gsl/select-gsl.h>
 
+#include <functional>
 #include <list>
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#include "rpc/telemetry/opentelemetry_types.h"
+
+namespace rpc {
+
+namespace telemetry {
+enum class UTIL_SYMBOL_VISIBLE metrics_observable_type : int32_t {
+  kGauge = 0,
+  kCounter = 1,
+  kUnDownCounter = 2,
+};
 
 class opentelemetry_utility {
  public:
@@ -49,4 +61,16 @@ class opentelemetry_utility {
 
   SERVER_FRAME_API static opentelemetry::common::AttributeValue convert_attribute_value_wihtout_array(
       const opentelemetry::sdk::common::OwnedAttributeValue& value);
+
+  SERVER_FRAME_API static bool add_global_metics_observable_int64(metrics_observable_type type,
+                                                                  opentelemetry::nostd::string_view meter_name,
+                                                                  meter_instrument_key metrics_key,
+                                                                  std::function<int64_t()> fn);
+
+  SERVER_FRAME_API static bool add_global_metics_observable_double(metrics_observable_type type,
+                                                                   opentelemetry::nostd::string_view meter_name,
+                                                                   meter_instrument_key metrics_key,
+                                                                   std::function<double()> fn);
 };
+}  // namespace telemetry
+}  // namespace rpc
