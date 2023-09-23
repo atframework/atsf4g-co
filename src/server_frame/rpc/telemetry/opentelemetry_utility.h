@@ -14,6 +14,7 @@
 #include <google/protobuf/message.h>
 
 #include <opentelemetry/common/attribute_value.h>
+#include <opentelemetry/metrics/observer_result.h>
 #include <opentelemetry/sdk/common/attribute_utils.h>
 
 // clang-format off
@@ -27,14 +28,18 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "rpc/telemetry/opentelemetry_types.h"
+#include "rpc/telemetry/rpc_global_service.h"
 
 namespace rpc {
 
 namespace telemetry {
-enum class UTIL_SYMBOL_VISIBLE metrics_observable_type : int32_t {
+struct group_type;
+
+enum class metrics_observable_type : int32_t {
   kGauge = 0,
   kCounter = 1,
   kUnDownCounter = 2,
@@ -62,15 +67,58 @@ class opentelemetry_utility {
   SERVER_FRAME_API static opentelemetry::common::AttributeValue convert_attribute_value_wihtout_array(
       const opentelemetry::sdk::common::OwnedAttributeValue& value);
 
-  SERVER_FRAME_API static bool add_global_metics_observable_int64(metrics_observable_type type,
-                                                                  opentelemetry::nostd::string_view meter_name,
-                                                                  meter_instrument_key metrics_key,
-                                                                  std::function<int64_t()> fn);
+  SERVER_FRAME_API static bool add_global_metics_observable_int64(
+      metrics_observable_type type, opentelemetry::nostd::string_view meter_name, meter_instrument_key metrics_key,
+      std::function<void(opentelemetry::metrics::ObserverResult&)> fn);
 
-  SERVER_FRAME_API static bool add_global_metics_observable_double(metrics_observable_type type,
-                                                                   opentelemetry::nostd::string_view meter_name,
-                                                                   meter_instrument_key metrics_key,
-                                                                   std::function<double()> fn);
+  SERVER_FRAME_API static bool add_global_metics_observable_double(
+      metrics_observable_type type, opentelemetry::nostd::string_view meter_name, meter_instrument_key metrics_key,
+      std::function<void(opentelemetry::metrics::ObserverResult&)> fn);
+
+  template <class ValueType>
+  UTIL_SYMBOL_VISIBLE static void global_metics_observe_record(opentelemetry::metrics::ObserverResult& result,
+                                                               ValueType&& value) {
+    std::shared_ptr<::rpc::telemetry::group_type> __lifetime;
+    if (opentelemetry::nostd::holds_alternative<
+            opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {
+      auto observer =
+          opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(
+              result);
+      if (observer) {
+        observer->Observe(static_cast<int64_t>(value), rpc::telemetry::global_service::get_metrics_labels(__lifetime));
+      }
+    } else if (opentelemetry::nostd::holds_alternative<
+                   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) {
+      auto observer =
+          opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(
+              result);
+      if (observer) {
+        observer->Observe(static_cast<double>(value), rpc::telemetry::global_service::get_metrics_labels(__lifetime));
+      }
+    }
+  }
+
+  template <class ValueType, class AttributeType>
+  UTIL_SYMBOL_VISIBLE static void global_metics_observe_record(opentelemetry::metrics::ObserverResult& result,
+                                                               ValueType&& value, AttributeType&& attributes) {
+    if (opentelemetry::nostd::holds_alternative<
+            opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {
+      auto observer =
+          opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(
+              result);
+      if (observer) {
+        observer->Observe(static_cast<int64_t>(value), attributes);
+      }
+    } else if (opentelemetry::nostd::holds_alternative<
+                   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) {
+      auto observer =
+          opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(
+              result);
+      if (observer) {
+        observer->Observe(static_cast<double>(value), attributes);
+      }
+    }
+  }
 };
 }  // namespace telemetry
 }  // namespace rpc
