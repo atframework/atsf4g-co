@@ -1,6 +1,8 @@
 // Copyright 2021 atframework
-// Created by owent on 2018-05-01.
+// Created by owent on 2018/05/01.
 //
+
+#include "router/router_manager_set.h"
 
 #include <config/compiler/protobuf_prefix.h>
 
@@ -28,15 +30,15 @@
 
 #include "router/handle_ss_rpc_routerservice.h"
 #include "router/router_manager_base.h"
-#include "router/router_manager_set.h"
 #include "router/router_object_base.h"
 
 #include "rpc/rpc_async_invoke.h"
 #include "rpc/rpc_utils.h"
+#include "rpc/telemetry/opentelemetry_utility.h"
 #include "rpc/telemetry/rpc_global_service.h"
 
-#if defined(DS_BATTLE_SDK_DLL) && DS_BATTLE_SDK_DLL
-#  if defined(DS_BATTLE_SDK_NATIVE) && DS_BATTLE_SDK_NATIVE
+#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
+#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
 UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(router_manager_set);
 #  else
 UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(router_manager_set);
@@ -45,7 +47,8 @@ UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(router_manager_set);
 UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(router_manager_set);
 #endif
 
-SERVER_FRAME_API router_manager_set::router_manager_set() : last_proc_time_(0), is_closing_(false), is_closed_(false) {
+SERVER_FRAME_API router_manager_set::router_manager_set()
+    : last_proc_time_(0), is_closing_(false), is_closed_(false), is_pre_closing_(false), is_ready_(false) {
   memset(mgrs_, 0, sizeof(mgrs_));
 }
 
@@ -65,16 +68,21 @@ SERVER_FRAME_API int router_manager_set::init() {
 SERVER_FRAME_API int router_manager_set::tick() {
   int ret = 0;
 
+  if (!is_ready_) {
+    is_ready_ = true;
+
+    setup_metrics();
+  }
+
   // 如果不是正在关闭，则每秒只需要判定一次
-  if (!is_closing() && last_proc_time_ == ::util::time::time_utility::get_sys_now()) {
+  if (!is_closing() && !is_pre_closing_ && last_proc_time_ == ::util::time::time_utility::get_sys_now()) {
     return ret;
   }
   // 每分钟打印一次统计数据
   if (last_proc_time_ / util::time::time_utility::MINITE_SECONDS !=
       ::util::time::time_utility::get_sys_now() / util::time::time_utility::MINITE_SECONDS) {
-    size_t cache_count = 0;
     std::stringstream ss;
-    ss << "[STAT] router manager set => now: " << ::util::time::time_utility::get_sys_now() << std::endl;
+    ss << "[STATISTICS] router manager set => now: " << ::util::time::time_utility::get_sys_now() << std::endl;
     ss << "\tdefault timer count: " << timers_.default_timer_list.size() << ", next active timer: ";
     if (timers_.default_timer_list.empty()) {
       ss << 0 << std::endl;
@@ -90,14 +98,16 @@ SERVER_FRAME_API int router_manager_set::tick() {
 
     for (int i = 0; i < PROJECT_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE; ++i) {
       if (mgrs_[i]) {
-        cache_count += mgrs_[i]->size();
         ss << "\t" << mgrs_[i]->name() << " has " << mgrs_[i]->size() << " cache(s)" << std::endl;
       }
     }
 
-    FWLOGWARNING("{}", ss.str());
+    metrics_data_.default_timer_count.store(static_cast<int64_t>(timers_.default_timer_list.size()),
+                                            std::memory_order_release);
+    metrics_data_.fast_timer_count.store(static_cast<int64_t>(timers_.fast_timer_list.size()),
+                                         std::memory_order_release);
 
-    setup_metrics(cache_count);
+    FWLOGWARNING("{}", ss.str());
   }
   last_proc_time_ = ::util::time::time_utility::get_sys_now();
 
@@ -549,6 +559,56 @@ SERVER_FRAME_API void router_manager_set::add_io_schedule_order_task(const std::
       [obj, task_id](const task_action_base &) { obj->io_schedule_order_.erase(task_id); });
 }
 
+SERVER_FRAME_API std::shared_ptr<router_manager_metrics_data> router_manager_set::mutable_metrics_data(
+    const std::string &manager_name) {
+  std::shared_ptr<router_manager_metrics_data> ret;
+  do {
+    // 先上读锁，大部分情况下读锁是不会冲突的。除非交易行ID切换或区域变化
+    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{metrics_data_.metric_lock};
+    auto iter = metrics_data_.metric_data.find(manager_name);
+    if (iter == metrics_data_.metric_data.end()) {
+      break;
+    }
+
+    ret = iter->second;
+    if (ret) {
+      return ret;
+    }
+  } while (false);
+
+  // 如果不存在创建后上写锁添加
+  ret = std::make_shared<router_manager_metrics_data>();
+  if (!ret) {
+    return ret;
+  }
+  ret->pull_cache_count.store(0, std::memory_order_release);
+  ret->pull_object_count.store(0, std::memory_order_release);
+  ret->save_count.store(0, std::memory_order_release);
+  ret->cache_count.store(0, std::memory_order_release);
+
+  do {
+    // 先上写锁
+    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{metrics_data_.metric_lock};
+    auto &manager_metrics_data = metrics_data_.metric_data[manager_name];
+    if (!manager_metrics_data) {
+      manager_metrics_data = std::make_shared<router_manager_metrics_data>();
+    }
+
+    metrics_data_.metric_data[manager_name] = ret;
+  } while (false);
+
+  return ret;
+}
+
+SERVER_FRAME_API std::shared_ptr<router_manager_metrics_data> router_manager_set::mutable_metrics_data(uint32_t type) {
+  router_manager_base *mgr = get_manager(type);
+  if (nullptr == mgr) {
+    return nullptr;
+  }
+
+  return mutable_metrics_data(mgr->name());
+}
+
 bool router_manager_set::is_save_task_running() const {
   return !task_type_trait::empty(pending_action_task_) && !task_type_trait::is_exiting(pending_action_task_);
 }
@@ -661,43 +721,168 @@ int router_manager_set::tick_timer(time_t cache_expire, time_t object_expire, ti
   return ret;
 }
 
-void router_manager_set::setup_metrics(size_t cache_count) {
-  static std::atomic<size_t> router_cache_count;
-  router_cache_count.store(cache_count, std::memory_order_release);
-
-  auto instrument = rpc::telemetry::global_service::get_metrics_observable("service_router_cache_count",
-                                                                           {"service_router_cache_count"});
-  if (instrument) {
-    return;
-  }
-
-  instrument = rpc::telemetry::global_service::mutable_metrics_observable_gauge_int64("service_router_cache_count",
-                                                                                      {"service_router_cache_count"});
-  if (!instrument) {
-    return;
-  }
-
-  instrument->AddCallback(
-      [](opentelemetry::metrics::ObserverResult result, void *) {
-        std::shared_ptr<::rpc::telemetry::group_type> telemetry_lifetime;
-        auto value = router_cache_count.load(std::memory_order_acquire);
-        if (opentelemetry::nostd::holds_alternative<
-                opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {
-          auto observer = opentelemetry::nostd::get<
-              opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result);
-          if (observer) {
-            observer->Observe(static_cast<int64_t>(value),
-                              rpc::telemetry::global_service::get_metrics_labels(telemetry_lifetime));
+void router_manager_set::setup_metrics() {
+  rpc::telemetry::global_service::add_on_ready([]() {
+    // 默认定时器数量
+    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+        rpc::telemetry::metrics_observable_type::kGauge, "service_router",
+        {"service_router_system_default_timer_count", "", ""}, [](opentelemetry::metrics::ObserverResult &result) {
+          if (router_manager_set::is_instance_destroyed()) {
+            return;
           }
-        } else if (opentelemetry::nostd::holds_alternative<
-                       opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) {
-          auto observer = opentelemetry::nostd::get<
-              opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result);
-          if (observer) {
-            observer->Observe(static_cast<double>(value),
-                              rpc::telemetry::global_service::get_metrics_labels(telemetry_lifetime));
+          rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+              result, static_cast<int64_t>(
+                          router_manager_set::me()->metrics_data_.default_timer_count.load(std::memory_order_acquire)));
+        });
+
+    // 快速定时器数量
+    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+        rpc::telemetry::metrics_observable_type::kGauge, "service_router",
+        {"service_router_system_fast_timer_count", "", ""}, [](opentelemetry::metrics::ObserverResult &result) {
+          if (router_manager_set::is_instance_destroyed()) {
+            return;
           }
-        }
-      },
-      nullptr);
+          rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+              result, static_cast<int64_t>(
+                          router_manager_set::me()->metrics_data_.fast_timer_count.load(std::memory_order_acquire)));
+        });
+
+    // 缓存数
+    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+        rpc::telemetry::metrics_observable_type::kCounter, "service_router",
+        {"service_router_system_cache_count", "", ""}, [](opentelemetry::metrics::ObserverResult &result) {
+          if (router_manager_set::is_instance_destroyed()) {
+            return;
+          }
+
+          std::unordered_map<std::string, std::shared_ptr<router_manager_metrics_data>> copy_metrics_indexes;
+          {
+            util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{
+                router_manager_set::me()->metrics_data_.metric_lock};
+            copy_metrics_indexes = router_manager_set::me()->metrics_data_.metric_data;
+          }
+          std::shared_ptr<::rpc::telemetry::group_type> lifetime;
+
+          for (auto &manager_metrix_data : copy_metrics_indexes) {
+            if (!manager_metrix_data.second) {
+              continue;
+            }
+
+            rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
+                {"router_manager", manager_metrix_data.first}};
+            rpc::telemetry::trace_attributes_type attributes_array[] = {
+                rpc::telemetry::global_service::get_metrics_labels_view(lifetime), internal_attributes};
+            rpc::telemetry::multiple_key_value_iterable_view<rpc::telemetry::trace_attributes_type> concat_attributes{
+                opentelemetry::nostd::span<const rpc::telemetry::trace_attributes_type>{attributes_array}};
+
+            rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+                result, static_cast<int64_t>(manager_metrix_data.second->cache_count.load(std::memory_order_acquire)),
+                concat_attributes);
+          }
+        });
+
+    // IO - 拉取cache数
+    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+        rpc::telemetry::metrics_observable_type::kCounter, "service_router",
+        {"service_router_system_io_pull_cache_count", "", ""}, [](opentelemetry::metrics::ObserverResult &result) {
+          if (router_manager_set::is_instance_destroyed()) {
+            return;
+          }
+
+          std::unordered_map<std::string, std::shared_ptr<router_manager_metrics_data>> copy_metrics_indexes;
+          {
+            util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{
+                router_manager_set::me()->metrics_data_.metric_lock};
+            copy_metrics_indexes = router_manager_set::me()->metrics_data_.metric_data;
+          }
+          std::shared_ptr<::rpc::telemetry::group_type> lifetime;
+
+          for (auto &manager_metrix_data : copy_metrics_indexes) {
+            if (!manager_metrix_data.second) {
+              continue;
+            }
+
+            rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
+                {"router_manager", manager_metrix_data.first}};
+            rpc::telemetry::trace_attributes_type attributes_array[] = {
+                rpc::telemetry::global_service::get_metrics_labels_view(lifetime), internal_attributes};
+            rpc::telemetry::multiple_key_value_iterable_view<rpc::telemetry::trace_attributes_type> concat_attributes{
+                opentelemetry::nostd::span<const rpc::telemetry::trace_attributes_type>{attributes_array}};
+
+            rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+                result,
+                static_cast<int64_t>(manager_metrix_data.second->pull_cache_count.load(std::memory_order_acquire)),
+                concat_attributes);
+          }
+        });
+
+    // IO - 拉取object数
+    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+        rpc::telemetry::metrics_observable_type::kCounter, "service_router",
+        {"service_router_system_io_pull_object_count", "", ""}, [](opentelemetry::metrics::ObserverResult &result) {
+          if (router_manager_set::is_instance_destroyed()) {
+            return;
+          }
+
+          std::unordered_map<std::string, std::shared_ptr<router_manager_metrics_data>> copy_metrics_indexes;
+          {
+            util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{
+                router_manager_set::me()->metrics_data_.metric_lock};
+            copy_metrics_indexes = router_manager_set::me()->metrics_data_.metric_data;
+          }
+          std::shared_ptr<::rpc::telemetry::group_type> lifetime;
+
+          for (auto &manager_metrix_data : copy_metrics_indexes) {
+            if (!manager_metrix_data.second) {
+              continue;
+            }
+
+            rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
+                {"router_manager", manager_metrix_data.first}};
+            rpc::telemetry::trace_attributes_type attributes_array[] = {
+                rpc::telemetry::global_service::get_metrics_labels_view(lifetime), internal_attributes};
+            rpc::telemetry::multiple_key_value_iterable_view<rpc::telemetry::trace_attributes_type> concat_attributes{
+                opentelemetry::nostd::span<const rpc::telemetry::trace_attributes_type>{attributes_array}};
+
+            rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+                result,
+                static_cast<int64_t>(manager_metrix_data.second->pull_object_count.load(std::memory_order_acquire)),
+                concat_attributes);
+          }
+        });
+
+    // IO - save数
+    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+        rpc::telemetry::metrics_observable_type::kCounter, "service_router",
+        {"service_router_system_io_save_count", "", ""}, [](opentelemetry::metrics::ObserverResult &result) {
+          if (router_manager_set::is_instance_destroyed()) {
+            return;
+          }
+
+          std::unordered_map<std::string, std::shared_ptr<router_manager_metrics_data>> copy_metrics_indexes;
+          {
+            util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{
+                router_manager_set::me()->metrics_data_.metric_lock};
+            copy_metrics_indexes = router_manager_set::me()->metrics_data_.metric_data;
+          }
+          std::shared_ptr<::rpc::telemetry::group_type> lifetime;
+
+          for (auto &manager_metrix_data : copy_metrics_indexes) {
+            if (!manager_metrix_data.second) {
+              continue;
+            }
+
+            rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
+                {"router_manager", manager_metrix_data.first}};
+            rpc::telemetry::trace_attributes_type attributes_array[] = {
+                rpc::telemetry::global_service::get_metrics_labels_view(lifetime), internal_attributes};
+            rpc::telemetry::multiple_key_value_iterable_view<rpc::telemetry::trace_attributes_type> concat_attributes{
+                opentelemetry::nostd::span<const rpc::telemetry::trace_attributes_type>{attributes_array}};
+
+            rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+                result, static_cast<int64_t>(manager_metrix_data.second->save_count.load(std::memory_order_acquire)),
+                concat_attributes);
+          }
+        });
+  });
 }

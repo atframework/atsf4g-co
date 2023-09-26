@@ -23,6 +23,7 @@
 
 #include <dispatcher/task_manager.h>
 
+#include <atomic>
 #include <functional>
 #include <list>
 #include <memory>
@@ -477,6 +478,11 @@ class router_manager : public router_manager_base {
       iter = caches_.find(cache_child->get_key());
       if (iter != caches_.end() && cache_child == iter->second) {
         caches_.erase(iter);
+
+        std::shared_ptr<router_manager_metrics_data> metrics_data = mutable_metrics_data();
+        if (metrics_data) {
+          metrics_data->cache_count.store(static_cast<int64_t>(stat_size_), std::memory_order_release);
+        }
       }
     }
     stat_size_ = caches_.size();
@@ -594,6 +600,12 @@ class router_manager : public router_manager_base {
 
     caches_[key] = d;
     stat_size_ = caches_.size();
+
+    std::shared_ptr<router_manager_metrics_data> metrics_data = mutable_metrics_data();
+    if (metrics_data) {
+      metrics_data->cache_count.store(static_cast<int64_t>(stat_size_), std::memory_order_release);
+    }
+
     return true;
   }
 

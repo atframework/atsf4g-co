@@ -22,6 +22,8 @@
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_utils.h>
 
+#include "router/router_manager_set.h"
+
 bool router_object_base::key_t::operator==(const key_t &r) const noexcept {
   return object_id == r.object_id && zone_id == r.zone_id && type_id == r.type_id;
 }
@@ -390,6 +392,12 @@ rpc::result_code_type router_object_base::pull_cache_inner(rpc::context &ctx, vo
           RPC_RETURN_CODE(subret);
         }
 
+        std::shared_ptr<router_manager_metrics_data> metrics_data =
+            router_manager_set::me()->mutable_metrics_data(router_ptr->get_key().type_id);
+        if (metrics_data) {
+          ++metrics_data->pull_cache_count;
+        }
+
         subret = RPC_AWAIT_CODE_RESULT(router_ptr->pull_cache(child_ctx, priv_data));
         router_ptr->wakeup_io_task_awaiter();
 
@@ -453,6 +461,12 @@ rpc::result_code_type router_object_base::pull_object_inner(rpc::context &ctx, v
         if (subret < 0) {
           router_ptr->wakeup_io_task_awaiter();
           RPC_RETURN_CODE(subret);
+        }
+
+        std::shared_ptr<router_manager_metrics_data> metrics_data =
+            router_manager_set::me()->mutable_metrics_data(router_ptr->get_key().type_id);
+        if (metrics_data) {
+          ++metrics_data->pull_object_count;
         }
 
         subret = RPC_AWAIT_CODE_RESULT(router_ptr->pull_object(child_ctx, priv_data));
@@ -531,6 +545,13 @@ rpc::result_code_type router_object_base::save_object_inner(rpc::context &ctx, v
         if (subret < 0) {
           RPC_RETURN_CODE(subret);
         }
+
+        std::shared_ptr<router_manager_metrics_data> metrics_data =
+            router_manager_set::me()->mutable_metrics_data(router_ptr->get_key().type_id);
+        if (metrics_data) {
+          ++metrics_data->save_count;
+        }
+
         subret = RPC_AWAIT_CODE_RESULT(router_ptr->save_object(child_ctx, priv_data));
         router_ptr->wakeup_io_task_awaiter();
 

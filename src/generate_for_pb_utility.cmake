@@ -6,7 +6,7 @@ set(GENERATE_FOR_PB_PROTO_SH "${CMAKE_BINARY_DIR}/generate-for-pb-generate-pb.sh
 set(GENERATE_FOR_PB_PROTO_PWSH "${CMAKE_BINARY_DIR}/generate-for-pb-generate-pb.ps1")
 set(GENERATE_FOR_PB_OUT_CONF "${CMAKE_BINARY_DIR}/generate-for-pb-run.yaml")
 set(GENERATE_FOR_PB_OUT_LOG "${CMAKE_CURRENT_BINARY_DIR}/generate-for-pb-run.log")
-set(GENERATE_FOR_PB_OUT_PB "${PROJECT_INSTALL_RES_PBD_DIR}/network.pb")
+set(GENERATE_FOR_PB_OUT_PB "${PROJECT_GENERATED_PBD_DIR}/network.pb")
 unset(GENERATE_FOR_PB_PROTO_COMMAND)
 file(WRITE "${GENERATE_FOR_PB_OUT_LOG}" "# generate-for-pb-run")
 if(NOT PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR)
@@ -407,7 +407,12 @@ function(generate_for_pb_run_generator)
     "  \"${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/empty.proto\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  \"${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/duration.proto\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     "  \"${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/timestamp.proto\" \\${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
-    "  \"${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/descriptor.proto\"")
+    "  \"${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/descriptor.proto\"${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+  )
+  file(
+    APPEND "${GENERATE_FOR_PB_PROTO_SH}"
+    "\"${CMAKE_COMMAND}\" -E copy_if_different \"${GENERATE_FOR_PB_OUT_PB}\" \"${PROJECT_INSTALL_RES_PBD_DIR}\" ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+  )
 
   if(ATFRAMEWORK_CMAKE_TOOLSET_BASH)
     file(
@@ -456,6 +461,10 @@ if ($LastExitCode -ne 0) {
   exit $LastExitCode
 }
 ")
+  file(
+    APPEND "${GENERATE_FOR_PB_PROTO_PWSH}"
+    "& \"${CMAKE_COMMAND}\" -E copy_if_different \"${GENERATE_FOR_PB_OUT_PB}\" \"${PROJECT_INSTALL_RES_PBD_DIR}\" ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+  )
 
   if(ATFRAMEWORK_CMAKE_TOOLSET_PWSH)
     file(

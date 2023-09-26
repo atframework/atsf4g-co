@@ -223,13 +223,13 @@ project_server_frame_create_protocol_target(
   ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_CONFIG})
 
 add_custom_command(
-  OUTPUT "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb"
-  COMMAND "${CMAKE_COMMAND}" -E remove -f "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb"
+  OUTPUT "${PROJECT_GENERATED_PBD_DIR}/config.pb"
+  COMMAND "${CMAKE_COMMAND}" -E remove -f "${PROJECT_GENERATED_PBD_DIR}/config.pb"
   COMMAND
     "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" --proto_path
     "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_COMMON_DIR}" --proto_path "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_CONFIG_DIR}"
     --proto_path "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}" --proto_path "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include"
-    --proto_path "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include" -o "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb"
+    --proto_path "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include" -o "${PROJECT_GENERATED_PBD_DIR}/config.pb"
     # Protocol buffer files
     ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_CONFIG} ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_COMMON}
     "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include/atframe/atapp_conf.proto"
@@ -241,6 +241,14 @@ add_custom_command(
     "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/descriptor.proto"
   WORKING_DIRECTORY "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_CONFIG_DIR}"
   DEPENDS ${PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_COMMON} ${PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_CONFIG}
+  COMMENT "Generate [@${PROJECT_SERVER_FRAME_PROTO_SANDBOX_CONFIG_DIR}] ${PROJECT_GENERATED_PBD_DIR}/config.pb")
+
+add_custom_command(
+  OUTPUT "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb"
+  COMMAND "${CMAKE_COMMAND}" "-E" "copy_if_different" "${PROJECT_GENERATED_PBD_DIR}/config.pb"
+          "${PROJECT_INSTALL_RES_PBD_DIR}"
+  WORKING_DIRECTORY "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_CONFIG_DIR}"
+  DEPENDS "${PROJECT_GENERATED_PBD_DIR}/config.pb"
   COMMENT "Generate [@${PROJECT_SERVER_FRAME_PROTO_SANDBOX_CONFIG_DIR}] ${PROJECT_INSTALL_RES_PBD_DIR}/config.pb")
 
 # ============= Convert excel =============
@@ -355,6 +363,13 @@ else()
   project_build_tools_set_static_library_declaration(SERVER_FRAME_PROTOCOL_API
                                                      "${PROJECT_SERVER_FRAME_LIB_LINK}-protocol")
 endif()
+
+add_custom_command(
+  TARGET ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol
+  POST_BUILD
+  COMMAND "${CMAKE_COMMAND}" "-E" "copy_if_different" "${PROJECT_GENERATED_PBD_DIR}/config.pb"
+          "${PROJECT_INSTALL_RES_PBD_DIR}")
+
 set_target_properties(
   ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol
   PROPERTIES C_VISIBILITY_PRESET "hidden"

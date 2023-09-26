@@ -48,6 +48,10 @@ file(MAKE_DIRECTORY "${PROJECT_INSTALL_TOOLS_DIR}/bin")
 file(MAKE_DIRECTORY ${PROJECT_INSTALL_SHARED_DIR})
 file(MAKE_DIRECTORY ${PROJECT_INSTALL_RES_PBD_DIR})
 
+set(PROJECT_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/_generated")
+set(PROJECT_GENERATED_PBD_DIR "${PROJECT_GENERATED_DIR}/pbdesc")
+file(MAKE_DIRECTORY "${PROJECT_GENERATED_PBD_DIR}")
+
 include("${CMAKE_CURRENT_LIST_DIR}/third_party/ConfigureInstall.cmake")
 
 # ######################################################################################################################

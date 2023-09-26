@@ -246,7 +246,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
     COMMAND
       "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" ${PROTOBUF_PROTO_PATHS} --cpp_out
       "dllexport_decl=${project_component_declare_protocol_DLLEXPORT_DECL}:${CMAKE_CURRENT_BINARY_DIR}" -o
-      "${PROJECT_INSTALL_RES_PBD_DIR}/component-${TARGET_NAME}.pb"
+      "${PROJECT_GENERATED_PBD_DIR}/component-${TARGET_NAME}.pb"
       # Protocol buffer files
       ${project_component_declare_protocol_PROTOCOLS} ${FINAL_GENERATED_COPY_COMMANDS}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -274,6 +274,11 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
     project_build_tools_set_static_library_declaration(${project_component_declare_protocol_DLLEXPORT_DECL}
                                                        "${TARGET_FULL_NAME}")
   endif()
+  add_custom_command(
+    TARGET ${TARGET_FULL_NAME}
+    POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" "-E" "copy_if_different" "${PROJECT_GENERATED_PBD_DIR}/component-${TARGET_NAME}.pb"
+            "${PROJECT_INSTALL_RES_PBD_DIR}")
   set_target_properties(
     ${TARGET_FULL_NAME}
     PROPERTIES C_VISIBILITY_PRESET "hidden"

@@ -22,19 +22,21 @@
 #include "router/router_manager_set.h"
 #include "router/router_object_base.h"
 
-router_manager_base::router_manager_base(uint32_t type_id) : stat_size_(0), type_id_(type_id), is_closing_(false) {
+SERVER_FRAME_API router_manager_base::router_manager_base(uint32_t type_id)
+    : stat_size_(0), type_id_(type_id), is_closing_(false) {
   router_manager_set::me()->register_manager(this);
 }
-router_manager_base::~router_manager_base() { router_manager_set::me()->unregister_manager(this); }
 
-bool router_manager_base::is_auto_mutable_object() const { return false; }
+SERVER_FRAME_API router_manager_base::~router_manager_base() { router_manager_set::me()->unregister_manager(this); }
 
-bool router_manager_base::is_auto_mutable_cache() const { return true; }
+SERVER_FRAME_API bool router_manager_base::is_auto_mutable_object() const { return false; }
 
-uint64_t router_manager_base::get_default_router_server_id(const key_t &) const { return 0; }
+SERVER_FRAME_API bool router_manager_base::is_auto_mutable_cache() const { return true; }
 
-rpc::result_code_type router_manager_base::send_msg(rpc::context &ctx, router_object_base &obj,
-                                                    atframework::SSMsg &&msg, uint64_t &sequence) {
+SERVER_FRAME_API uint64_t router_manager_base::get_default_router_server_id(const key_t &) const { return 0; }
+
+SERVER_FRAME_API rpc::result_code_type router_manager_base::send_msg(rpc::context &ctx, router_object_base &obj,
+                                                                     atframework::SSMsg &&msg, uint64_t &sequence) {
   // 如果正在转移过程中，追加到pending列表
   if (obj.check_flag(router_object_base::flag_t::EN_ROFT_TRANSFERING)) {
     obj.get_transfer_pending_list().push_back(atframework::SSMsg());
@@ -44,8 +46,8 @@ rpc::result_code_type router_manager_base::send_msg(rpc::context &ctx, router_ob
   return send_msg_raw(ctx, obj, std::move(msg), sequence);
 }
 
-rpc::result_code_type router_manager_base::send_msg(rpc::context &ctx, const key_t &key, atframework::SSMsg &&msg,
-                                                    uint64_t &sequence) {
+SERVER_FRAME_API rpc::result_code_type router_manager_base::send_msg(rpc::context &ctx, const key_t &key,
+                                                                     atframework::SSMsg &&msg, uint64_t &sequence) {
   rpc::result_code_type::value_type res = 0;
   std::shared_ptr<router_object_base> obj;
   res = RPC_AWAIT_CODE_RESULT(mutable_cache(ctx, obj, key, nullptr));
@@ -60,8 +62,8 @@ rpc::result_code_type router_manager_base::send_msg(rpc::context &ctx, const key
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_msg(ctx, *obj, std::move(msg), sequence)));
 }
 
-rpc::result_code_type router_manager_base::send_msg_raw(rpc::context &ctx, router_object_base &obj,
-                                                        atframework::SSMsg &&msg, uint64_t &sequence) {
+SERVER_FRAME_API rpc::result_code_type router_manager_base::send_msg_raw(rpc::context &ctx, router_object_base &obj,
+                                                                         atframework::SSMsg &&msg, uint64_t &sequence) {
   // 这里必须直接发送
 
   atframework::SSRouterHead *router_head = msg.mutable_head()->mutable_router();
@@ -117,11 +119,16 @@ rpc::result_code_type router_manager_base::send_msg_raw(rpc::context &ctx, route
   RPC_RETURN_CODE(ret);
 }
 
-void router_manager_base::on_stop() { is_closing_ = false; }
+SERVER_FRAME_API void router_manager_base::on_stop() { is_closing_ = false; }
 
-rpc::result_code_type router_manager_base::pull_online_server(rpc::context &, const key_t &, uint64_t &router_svr_id,
-                                                              uint64_t &router_svr_ver) {
+SERVER_FRAME_API rpc::result_code_type router_manager_base::pull_online_server(rpc::context &, const key_t &,
+                                                                               uint64_t &router_svr_id,
+                                                                               uint64_t &router_svr_ver) {
   router_svr_id = 0;
   router_svr_ver = 0;
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+}
+
+SERVER_FRAME_API std::shared_ptr<router_manager_metrics_data> router_manager_base::mutable_metrics_data() {
+  return router_manager_set::me()->mutable_metrics_data(name());
 }

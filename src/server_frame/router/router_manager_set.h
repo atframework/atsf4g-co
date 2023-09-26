@@ -1,29 +1,44 @@
-// Copyright 2022 atframework
-// Created by owent on 2018-05-01.
+// Copyright 2021 atframework
+// Created by owent on 2018/05/01.
 //
 
 #pragma once
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.const.pb.h>
 #include <protocol/pbdesc/svr.protocol.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
+#include <lock/spin_rw_lock.h>
 
 #include <dispatcher/task_type_traits.h>
 
-#include <list>
-#include <memory>
+#include <string>
+#include <unordered_map>
 
 #include "router/router_system_defs.h"
 
 class task_action_auto_save_objects;
 class router_manager_set {
+#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
+#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
+  UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(router_manager_set)
+#  else
+  UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(router_manager_set)
+#  endif
+#else
+  UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(router_manager_set)
+#endif
  public:
   using timer_t = router_system_timer_t;
 
-  enum UTIL_SYMBOL_VISIBLE auto_save_action_t {
+  enum auto_save_action_t {
     EN_ASA_SAVE = 0,
     EN_ASA_REMOVE_OBJECT,
     EN_ASA_REMOVE_CACHE,
@@ -36,20 +51,8 @@ class router_manager_set {
     std::shared_ptr<router_object_base> object;
   };
 
-#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
-#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
-  UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(router_manager_set)
-#  else
-  UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(router_manager_set)
-#  endif
-#else
-  UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(router_manager_set)
-#endif
-
- private:
-  SERVER_FRAME_API router_manager_set();
-
  public:
+  SERVER_FRAME_API router_manager_set();
   SERVER_FRAME_API ~router_manager_set();
 
   SERVER_FRAME_API int init();
@@ -91,6 +94,11 @@ class router_manager_set {
   SERVER_FRAME_API void add_io_schedule_order_task(const std::shared_ptr<router_object_base> &obj,
                                                    task_type_trait::task_type &task);
 
+  UTIL_FORCEINLINE void set_pre_closing() { is_pre_closing_ = true; }
+
+  SERVER_FRAME_API std::shared_ptr<router_manager_metrics_data> mutable_metrics_data(const std::string &manager_name);
+  SERVER_FRAME_API std::shared_ptr<router_manager_metrics_data> mutable_metrics_data(uint32_t type);
+
  private:
   bool is_save_task_running() const;
 
@@ -99,7 +107,7 @@ class router_manager_set {
   int tick_timer(time_t cache_expire, time_t object_expire, time_t object_save, std::list<timer_t> &timer_list,
                  bool is_fast);
 
-  void setup_metrics(size_t cache_count);
+  void setup_metrics();
 
  private:
   struct timer_set_t {
@@ -114,6 +122,17 @@ class router_manager_set {
   task_type_trait::task_type closing_task_;
   bool is_closing_;
   bool is_closed_;
+  bool is_pre_closing_;
+  bool is_ready_;
+
+  struct metrics_set_data {
+    util::lock::spin_rw_lock metric_lock;
+    std::unordered_map<std::string, std::shared_ptr<router_manager_metrics_data>> metric_data;
+
+    std::atomic<int64_t> fast_timer_count;
+    std::atomic<int64_t> default_timer_count;
+  };
+  metrics_set_data metrics_data_;
 
   friend class task_action_auto_save_objects;
   friend class task_action_router_close_manager_set;
