@@ -230,7 +230,6 @@ class opentelemetry_internal_log_handler : public opentelemetry::sdk::common::in
               const opentelemetry::sdk::common::AttributeMap &) noexcept override {
     util::log::log_wrapper::caller_info_t caller;
     caller.file_path = file;
-    caller.func_name = nullptr;
     caller.line_number = static_cast<uint32_t>(line);
     caller.rotate_index = 0;
     switch (level) {
@@ -1452,7 +1451,11 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
 
       options.metadata.emplace(opentelemetry::exporter::otlp::OtlpHeaders::value_type(header.key(), header.value()));
     }
+#if (OPENTELEMETRY_VERSION_MAJOR * 1000 + OPENTELEMETRY_VERSION_MINOR) >= 1011
+    options.aggregation_temporality = opentelemetry::exporter::otlp::PreferredAggregationTemporality::kCumulative;
+#else
     options.aggregation_temporality = opentelemetry::sdk::metrics::AggregationTemporality::kCumulative;
+#endif
 
     ret.emplace_back(opentelemetry::exporter::otlp::OtlpGrpcMetricExporterFactory::Create(options));
   }
@@ -1471,7 +1474,11 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
       options.http_headers.emplace(
           opentelemetry::exporter::otlp::OtlpHeaders::value_type(header.key(), header.value()));
     }
+#if (OPENTELEMETRY_VERSION_MAJOR * 1000 + OPENTELEMETRY_VERSION_MINOR) >= 1011
+    options.aggregation_temporality = opentelemetry::exporter::otlp::PreferredAggregationTemporality::kCumulative;
+#else
     options.aggregation_temporality = opentelemetry::sdk::metrics::AggregationTemporality::kCumulative;
+#endif
 
     options.max_concurrent_requests = exporter_cfg.otlp_http().max_concurrent_requests();
     options.max_requests_per_connection = exporter_cfg.otlp_http().max_requests_per_connection();
@@ -1572,10 +1579,18 @@ static local_provider_handle_type<opentelemetry::metrics::MeterProvider> _opente
                              128000, 256000, 512000, 1024000, 3000000, 8000000};
       std::unique_ptr<opentelemetry::sdk::metrics::View> view = opentelemetry::sdk::metrics::ViewFactory::Create(
           static_cast<std::string>(trace_metrics_name) + "_view", "",
+#if (OPENTELEMETRY_VERSION_MAJOR * 1000 + OPENTELEMETRY_VERSION_MINOR) >= 1011
+          "us",
+#endif
           opentelemetry::sdk::metrics::AggregationType::kHistogram, config);
       std::unique_ptr<opentelemetry::sdk::metrics::InstrumentSelector> instrument_selector =
           opentelemetry::sdk::metrics::InstrumentSelectorFactory::Create(
-              opentelemetry::sdk::metrics::InstrumentType::kHistogram, "*");
+              opentelemetry::sdk::metrics::InstrumentType::kHistogram, "*"
+#if (OPENTELEMETRY_VERSION_MAJOR * 1000 + OPENTELEMETRY_VERSION_MINOR) >= 1011
+              ,
+              ""
+#endif
+          );
       std::unique_ptr<opentelemetry::sdk::metrics::MeterSelector> meter_selector =
           opentelemetry::sdk::metrics::MeterSelectorFactory::Create(trace_metrics_name, "", "");
       static_cast<opentelemetry::sdk::metrics::MeterProvider *>(ret.provider.get())

@@ -3,7 +3,11 @@
 # 默认配置选项
 # ######################################################################################################################
 
-option(ATFRAMEWORK_USE_DYNAMIC_LIBRARY "Build and linking with dynamic libraries." ON)
+if(UNIX)
+  option(ATFRAMEWORK_USE_DYNAMIC_LIBRARY "Build and linking with dynamic libraries." ON)
+else()
+  option(ATFRAMEWORK_USE_DYNAMIC_LIBRARY "Build and linking with dynamic libraries." OFF)
+endif()
 
 # 编译的组件
 option(PROJECT_ENABLE_SAMPLE "Enable build sample." OFF)

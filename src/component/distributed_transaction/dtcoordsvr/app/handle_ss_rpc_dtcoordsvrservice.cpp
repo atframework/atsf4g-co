@@ -9,10 +9,11 @@
 
 #include <protocol/pbdesc/svr.protocol.pb.h>
 
+#include <protocol/pbdesc/distributed_transaction.pb.h>
+
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
-#include <protocol/pbdesc/distributed_transaction.pb.h>
 
 #include <dispatcher/ss_msg_dispatcher.h>
 

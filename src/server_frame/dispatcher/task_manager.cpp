@@ -10,8 +10,12 @@
 
 #include <config/compiler/protobuf_prefix.h>
 
-#include <google/protobuf/stubs/logging.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
+#if GOOGLE_PROTOBUF_VERSION >= 4022000
+#  include <absl/log/internal/log_sink_set.h>
+#else
+#  include <google/protobuf/stubs/logging.h>
+#endif
 
 #include <config/compiler/protobuf_suffix.h>
 
@@ -42,6 +46,54 @@ static task_manager_metrics_data_type &get_task_manager_metrics_data() {
   return ret;
 }
 
+#if GOOGLE_PROTOBUF_VERSION >= 4022000
+class UTIL_SYMBOL_LOCAL absl_global_log_sink : public absl::LogSink {
+  void Send(const absl::LogEntry &entry) override {
+    util::log::log_wrapper::caller_info_t caller;
+    auto source_filename = entry.source_filename();
+    caller.file_path = gsl::string_view{source_filename.data(), source_filename.size()};
+    caller.line_number = static_cast<uint32_t>(entry.source_line());
+    caller.func_name = "protobuf";
+    caller.rotate_index = 0;
+
+    switch (entry.log_severity()) {
+      case ::absl::LogSeverity::kInfo:
+        caller.level_id = util::log::log_wrapper::level_t::LOG_LW_INFO;
+        caller.level_name = "Info";
+        break;
+
+      case ::absl::LogSeverity::kWarning:
+        caller.level_id = util::log::log_wrapper::level_t::LOG_LW_WARNING;
+        caller.level_name = "Warn";
+        break;
+
+      case ::absl::LogSeverity::kError:
+        caller.level_id = util::log::log_wrapper::level_t::LOG_LW_ERROR;
+        caller.level_name = "Error";
+        break;
+
+      case ::absl::LogSeverity::kFatal:
+        caller.level_id = util::log::log_wrapper::level_t::LOG_LW_FATAL;
+        caller.level_name = "Fatal";
+        break;
+
+      default:
+        caller.level_id = util::log::log_wrapper::level_t::LOG_LW_DEBUG;
+        caller.level_name = "Debug";
+        break;
+    }
+
+    if (util::log::log_wrapper::check_level(WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT),
+                                            caller.level_id)) {
+      auto text_message = entry.text_message();
+      WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT)
+          ->format_log(caller, "{}", gsl::string_view{text_message.data(), text_message.size()});
+    }
+  }
+
+  void Flush() override {}
+};
+#else
 static void log_wrapper_for_protobuf(::google::protobuf::LogLevel level, const char *filename, int line,
                                      const std::string &message) {
   util::log::log_wrapper::caller_info_t caller;
@@ -82,6 +134,7 @@ static void log_wrapper_for_protobuf(::google::protobuf::LogLevel level, const c
     WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->log(caller, "%s", message.c_str());
   }
 }
+#endif
 
 }  // namespace
 
@@ -271,6 +324,13 @@ SERVER_FRAME_API task_manager::~task_manager() {
   stack_pool_.reset();
 #endif
 
+#if GOOGLE_PROTOBUF_VERSION >= 4022000
+  if (absl_log_sink_) {
+    absl::log_internal::RemoveLogSink(absl_log_sink_.get());
+    absl_log_sink_.reset();
+  }
+#endif
+
   // free protobuf meta
   ::google::protobuf::ShutdownProtobufLibrary();
 }
@@ -281,8 +341,17 @@ SERVER_FRAME_API int task_manager::init() {
   stack_pool_ = task_type_trait::stack_pool_type::create();
 #endif
 
-  // setup logger for protobuf
+// setup logger for protobuf
+#if GOOGLE_PROTOBUF_VERSION >= 4022000
+  if (absl_log_sink_) {
+    absl::log_internal::RemoveLogSink(absl_log_sink_.get());
+    absl_log_sink_.reset();
+  }
+  absl_log_sink_.reset(new absl_global_log_sink());
+  absl::log_internal::AddLogSink(absl_log_sink_.get());
+#else
   ::google::protobuf::SetLogHandler(log_wrapper_for_protobuf);
+#endif
 
   // reload is called before init when atapp started
   reload();

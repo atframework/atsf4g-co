@@ -92,7 +92,7 @@ session::~session() {
 
   if (actor_log_writter_) {
     util::log::log_wrapper::caller_info_t caller = util::log::log_wrapper::caller_info_t(
-        util::log::log_formatter::level_t::LOG_LW_INFO, NULL, __FILE__, __LINE__, __FUNCTION__);
+        util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
     actor_log_writter_->format_log(caller, "------------ session: {:#x}:{} destroyed ------------", get_key().bus_id,
                                    get_key().session_id);
   }
@@ -134,7 +134,7 @@ void session::set_player(std::shared_ptr<player_cache> u) {
       actor_log_writter_->add_sink(file_sink);
 
       util::log::log_wrapper::caller_info_t caller = util::log::log_wrapper::caller_info_t(
-          util::log::log_formatter::level_t::LOG_LW_INFO, NULL, __FILE__, __LINE__, __FUNCTION__);
+          util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
       actor_log_writter_->format_log(caller, "============ user id: {}, session: {:#x}:{} created ============",
                                      u->get_user_id(), get_key().bus_id, get_key().session_id);
     }
@@ -285,7 +285,7 @@ void session::write_actor_log_head(const atframework::CSMsg &msg, size_t byte_si
   }
 
   util::log::log_wrapper::caller_info_t caller = util::log::log_wrapper::caller_info_t(
-      util::log::log_formatter::level_t::LOG_LW_INFO, NULL, __FILE__, __LINE__, __FUNCTION__);
+      util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
   if (is_input) {
     writter->format_log(caller, "<<<<<<<<<<<< receive {} bytes from player {}:{}, session: {:#x}:{}, rpc: {}, type: {}",
                         byte_size, player_zone_id, player_user_id, get_key().bus_id, get_key().session_id, rpc_name,
@@ -324,7 +324,7 @@ void session::write_actor_log_body(const google::protobuf::Message &msg, const a
       break;
   }
   util::log::log_wrapper::caller_info_t caller = util::log::log_wrapper::caller_info_t(
-      util::log::log_formatter::level_t::LOG_LW_INFO, NULL, __FILE__, __LINE__, __FUNCTION__);
+      util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
   writter->format_log(caller,
                       "============ session: {:#x}:{}, rpc: {}, type: {} ============\n------------ "
                       "Head ------------\n{}------------ Body ------------\n{}",

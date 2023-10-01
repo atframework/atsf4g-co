@@ -9,6 +9,10 @@
 #include <protocol/pbdesc/atframework.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 
+#if GOOGLE_PROTOBUF_VERSION >= 4022000
+#  include <absl/log/internal/log_sink_set.h>
+#endif
+
 #include <config/compiler/protobuf_suffix.h>
 
 #include <design_pattern/singleton.h>
@@ -577,5 +581,9 @@ class task_manager {
   std::unordered_map<generic_resume_index, generic_resume_key, generic_resume_hash> waiting_resume_index_;
 #else
   task_type_trait::stack_pool_type::ptr_t stack_pool_;
+#endif
+
+#if GOOGLE_PROTOBUF_VERSION >= 4022000
+  std::unique_ptr<absl::LogSink> absl_log_sink_;
 #endif
 };

@@ -41,10 +41,10 @@ endif()
 
 # ============ third party ============
 
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/compression/import.cmake")
+project_third_party_include_port("compression/import.cmake")
 if(NOT ANDROID AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
-  include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/malloc/jemalloc.cmake")
-  include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/malloc/mimalloc.cmake")
+  project_third_party_include_port("malloc/jemalloc.cmake")
+  project_third_party_include_port("malloc/mimalloc.cmake")
   #[[
   # There is a BUG in gcc 4.6-4.8 and finxed in gcc 4.9
   #   @see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=58016
@@ -52,41 +52,41 @@ if(NOT ANDROID AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
   #]]
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_VERSION
                                                                                          VERSION_GREATER_EQUAL "4.9"))
-    include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/libunwind/libunwind.cmake")
+    project_third_party_include_port("libunwind/libunwind.cmake")
   endif()
 endif()
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/algorithm/xxhash.cmake")
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/libuv/libuv.cmake")
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/lua/lua.cmake")
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/fmtlib/fmtlib.cmake")
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/yaml-cpp/yaml-cpp.cmake")
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/json/rapidjson.cmake")
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/json/nlohmann_json.cmake")
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/flatbuffers/flatbuffers.cmake")
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/ssl/port.cmake")
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/redis/hiredis.cmake")
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/cares/c-ares.cmake")
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/abseil-cpp/abseil-cpp.cmake")
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/re2/re2.cmake")
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/libcurl/libcurl.cmake")
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/web/civetweb.cmake")
-# include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/web/libwebsockets.cmake")
+project_third_party_include_port("algorithm/xxhash.cmake")
+project_third_party_include_port("libuv/libuv.cmake")
+project_third_party_include_port("lua/lua.cmake")
+project_third_party_include_port("fmtlib/fmtlib.cmake")
+project_third_party_include_port("yaml-cpp/yaml-cpp.cmake")
+project_third_party_include_port("json/rapidjson.cmake")
+project_third_party_include_port("json/nlohmann_json.cmake")
+project_third_party_include_port("flatbuffers/flatbuffers.cmake")
+project_third_party_include_port("ssl/port.cmake")
+project_third_party_include_port("redis/hiredis.cmake")
+project_third_party_include_port("cares/c-ares.cmake")
+project_third_party_include_port("abseil-cpp/abseil-cpp.cmake")
+project_third_party_include_port("re2/re2.cmake")
+project_third_party_include_port("libcurl/libcurl.cmake")
+project_third_party_include_port("web/civetweb.cmake")
+# project_third_party_include_port("web/libwebsockets.cmake")
 
 set(ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_ALLOW_SHARED_LIBS
     ON
     CACHE BOOL "Allow build protobuf as dynamic(May cause duplicate symbol[File already exists in database])")
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/protobuf/protobuf.cmake")
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/grpc/import.cmake")
+project_third_party_include_port("protobuf/protobuf.cmake")
+project_third_party_include_port("grpc/import.cmake")
 #
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/telemetry/prometheus-cpp.cmake")
+project_third_party_include_port("telemetry/prometheus-cpp.cmake")
 if(MSVC AND MSVC_VERSION LESS 1920)
   message(STATUS "Opentelemetry-cpp only support Visual Studio 2019 and upper. Skip it for
 MSVC_VERSION=${MSVC_VERSION}")
 else()
-  include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/telemetry/opentelemetry-cpp.cmake")
+  project_third_party_include_port("telemetry/opentelemetry-cpp.cmake")
 endif()
 
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/libcopp/libcopp.cmake")
+project_third_party_include_port("libcopp/libcopp.cmake")
 
 # =========== third_party - python_env ===========
 include("${CMAKE_CURRENT_LIST_DIR}/python_env/python_env.cmake")
@@ -147,6 +147,13 @@ set(PROJECT_THIRD_PARTY_PUBLIC_LINK_NAMES
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_GSL_LINK_NAME}
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_LZ4_LINK_NAME}
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_ZLIB_LINK_NAME})
+
+foreach(PROJECT_THIRD_PARTY_PUBLIC_LINK_ABSL_NAME "absl::string_view" "absl::strings" "absl::str_format")
+  if(TARGET ${PROJECT_THIRD_PARTY_PUBLIC_LINK_ABSL_NAME})
+    list(APPEND PROJECT_THIRD_PARTY_PUBLIC_LINK_NAMES ${PROJECT_THIRD_PARTY_PUBLIC_LINK_ABSL_NAME})
+  endif()
+endforeach()
+
 set(PROJECT_THIRD_PARTY_PUBLIC_INCLUDE_DIRS)
 
 # Write version
