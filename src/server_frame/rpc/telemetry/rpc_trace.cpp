@@ -194,7 +194,7 @@ static void setup_trace_additional_metric(std::string additional_metrics_name) {
     // CPU time
     do {
       auto metric = rpc::telemetry::global_service::mutable_metrics_observable_counter_int64(
-          additional_metrics_name + "_cost_cpu_time", {additional_metrics_name + "_cost_cpu_time", "", "us"});
+          additional_metrics_name, {additional_metrics_name + "_cost_cpu_time", "", "us"});
       if (!metric) {
         break;
       }
@@ -284,7 +284,7 @@ static void setup_trace_additional_metric(std::string additional_metrics_name) {
     // count
     do {
       auto metric = rpc::telemetry::global_service::mutable_metrics_observable_counter_int64(
-          additional_metrics_name + "_count", {additional_metrics_name + "_count", "", ""});
+          additional_metrics_name, {additional_metrics_name + "_count", "", ""});
       if (!metric) {
         break;
       }
@@ -375,7 +375,7 @@ static void setup_trace_additional_metric(std::string additional_metrics_name) {
   // result code
   do {
     auto metric = rpc::telemetry::global_service::mutable_metrics_observable_counter_int64(
-        additional_metrics_name + "_result_code", {additional_metrics_name + "_result_code", "", ""});
+        additional_metrics_name, {additional_metrics_name + "_result_code", "", ""});
     if (!metric) {
       break;
     }
@@ -478,7 +478,7 @@ static void setup_trace_additional_metric(std::string additional_metrics_name) {
   // response code
   do {
     auto metric = rpc::telemetry::global_service::mutable_metrics_observable_counter_int64(
-        additional_metrics_name + "_response_code", {additional_metrics_name + "_response_code", "", ""});
+        additional_metrics_name, {additional_metrics_name + "_response_code", "", ""});
     if (!metric) {
       break;
     }
@@ -518,7 +518,7 @@ static void setup_trace_additional_metric(std::string additional_metrics_name) {
                   std::lock_guard<std::mutex> value_guard{report.second->record_lock};
                   record_value.reserve(report.second->response_code_count.size());
                   for (auto &code_pair : report.second->response_code_count) {
-                    record_value[code_pair.first] = code_pair.second.second - code_pair.second.first;
+                    record_value[code_pair.first] = code_pair.second.second;
                     code_pair.second.first = code_pair.second.second;
                   }
                 }
@@ -553,7 +553,7 @@ static void setup_trace_additional_metric(std::string additional_metrics_name) {
                   std::lock_guard<std::mutex> value_guard{report.second->record_lock};
                   record_value.reserve(report.second->response_code_count.size());
                   for (auto &code_pair : report.second->response_code_count) {
-                    record_value[code_pair.first] = code_pair.second.second - code_pair.second.first;
+                    record_value[code_pair.first] = code_pair.second.second;
                     code_pair.second.first = code_pair.second.second;
                   }
                 }

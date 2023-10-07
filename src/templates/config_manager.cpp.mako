@@ -21,6 +21,7 @@ import time
 #include <cstdarg>
 #include <cstdio>
 #include <sstream>
+#include <mutex>
 
 #if (defined(_MSC_VER) && _MSC_VER >= 1600) || (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L)
 #define EXCEL_CONFIG_FS_OPEN(e, f, path, mode) errno_t e = fopen_s(&f, path, mode)

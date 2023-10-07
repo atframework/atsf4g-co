@@ -107,7 +107,6 @@ class logic_server_common_module : public atapp::module_impl {
 
   struct stats_data_t {
     // cross thread
-    std::atomic<bool> need_setup;
     std::atomic<uint64_t> collect_sequence;
     std::atomic<int64_t> collect_max_tick_interval_us;
     std::atomic<int64_t> collect_cpu_sys;
@@ -196,11 +195,7 @@ class logic_server_common_module : public atapp::module_impl {
   int tick_update_remote_configures();
   void tick_stats();
 
-  void setup_metrics_tick();
-  void setup_metrics_cpu_sys();
-  void setup_metrics_cpu_user();
-  void setup_metrics_memory_maxrss();
-  void setup_metrics_memory_rss();
+  void setup_metrics();
 
   void add_service_type_id_index(const atapp::etcd_discovery_node::ptr_t& node);
   void remove_service_type_id_index(const atapp::etcd_discovery_node::ptr_t& node);

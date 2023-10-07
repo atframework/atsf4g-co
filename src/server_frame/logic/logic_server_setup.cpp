@@ -55,6 +55,7 @@
 #include "logic/handle_ss_rpc_logiccommonservice.h"
 #include "logic/logic_server_macro.h"
 #include "rpc/rpc_utils.h"
+#include "rpc/telemetry/opentelemetry_utility.h"
 #include "rpc/telemetry/rpc_global_service.h"
 
 namespace detail {
@@ -326,7 +327,6 @@ logic_server_common_module::logic_server_common_module(const logic_server_common
       server_remote_conf_next_update_time_(0) {
   stats_ = std::make_shared<stats_data_t>();
   memset(&stats_->last_checkpoint_usage, 0, sizeof(stats_->last_checkpoint_usage));
-  stats_->need_setup.store(true, std::memory_order_release);
   stats_->collect_sequence.store(0, std::memory_order_release);
 
   stats_->last_update_usage_timepoint = 0;
@@ -382,13 +382,15 @@ void logic_server_common_module::ready() {
   FWLOGINFO("============ Server ready ============");
 
   memset(&stats_->last_checkpoint_usage, 0, sizeof(stats_->last_checkpoint_usage));
-  stats_->need_setup.store(true, std::memory_order_release);
   stats_->collect_sequence.store(0, std::memory_order_release);
   stats_->last_update_usage_timepoint = 0;
   stats_->last_collect_sequence = 0;
 
   stats_->last_checkpoint = util::time::time_utility::sys_now();
   stats_->previous_tick_checkpoint = util::time::time_utility::sys_now();
+
+  // Setup metrics
+  setup_metrics();
 }
 
 int logic_server_common_module::reload() {
@@ -412,7 +414,6 @@ int logic_server_common_module::reload() {
     RELOAD_CALL(ret, task_manager);
   }
 
-  stats_->need_setup.store(true, std::memory_order_release);
   return ret;
 }
 
@@ -911,107 +912,97 @@ void logic_server_common_module::tick_stats() {
       stats_->last_checkpoint = sys_now;
     }
   } while (false);
-
-  // 最后才能setup，保证有差分数据
-  if (rusage_has_offset && true == stats_->need_setup.exchange(false, std::memory_order_acq_rel)) {
-    setup_metrics_tick();
-    setup_metrics_cpu_sys();
-    setup_metrics_cpu_user();
-    setup_metrics_memory_maxrss();
-    setup_metrics_memory_rss();
-  }
 }
 
-#define LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER_INT64(result, value, lifetime)                                       \
-  if (opentelemetry::nostd::holds_alternative<                                                                         \
-          opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {               \
-    auto observer =                                                                                                    \
-        opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>( \
-            result);                                                                                                   \
-    if (observer) {                                                                                                    \
-      observer->Observe(static_cast<int64_t>(value), rpc::telemetry::global_service::get_metrics_labels(lifetime));    \
-                                                                                                                       \
-      ++stats->collect_sequence;                                                                                       \
-    }                                                                                                                  \
-  }
+void logic_server_common_module::setup_metrics() {
+  rpc::telemetry::global_service::add_on_ready([]() {
+    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+        rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_tick", "", "us"},
+        [](opentelemetry::metrics::ObserverResult &result) {
+          std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
+          if (!stats) {
+            return;
+          }
 
-#define LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER(NAME, DESCRIPTION, UNIT, CREATE_ACTION, VAR_LOADER, LIFETIME)        \
-  auto instrument = rpc::telemetry::global_service::get_metrics_observable(NAME, {NAME, DESCRIPTION, UNIT}, LIFETIME); \
-  if (instrument) {                                                                                                    \
-    return;                                                                                                            \
-  }                                                                                                                    \
-                                                                                                                       \
-  instrument = rpc::telemetry::global_service::CREATE_ACTION(NAME, {NAME, DESCRIPTION, UNIT}, LIFETIME);               \
-                                                                                                                       \
-  if (!instrument) {                                                                                                   \
-    return;                                                                                                            \
-  }                                                                                                                    \
-  instrument->AddCallback(                                                                                             \
-      [](opentelemetry::metrics::ObserverResult result, void *) {                                                      \
-        std::shared_ptr<stats_data_t> stats = detail::g_last_common_module_stats;                                      \
-        if (!stats) {                                                                                                  \
-          return;                                                                                                      \
-        }                                                                                                              \
-        std::shared_ptr<::rpc::telemetry::group_type> __lifetime;                                                      \
-                                                                                                                       \
-        auto value = VAR_LOADER;                                                                                       \
-        LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER_INT64(result, value, __lifetime)                                     \
-        else if (opentelemetry::nostd::holds_alternative<                                                              \
-                     opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) {     \
-          auto observer = opentelemetry::nostd::get<                                                                   \
-              opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result);              \
-          if (observer) {                                                                                              \
-            observer->Observe(static_cast<double>(value),                                                              \
-                              rpc::telemetry::global_service::get_metrics_labels(__lifetime));                         \
-                                                                                                                       \
-            ++stats->collect_sequence;                                                                                 \
-          }                                                                                                            \
-        }                                                                                                              \
-      },                                                                                                               \
-      nullptr);
+          rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+              result, stats->collect_max_tick_interval_us.load(std::memory_order_acquire));
 
-void logic_server_common_module::setup_metrics_tick() {
-  std::shared_ptr<::rpc::telemetry::group_type> telemetry_lifetime =
-      rpc::telemetry::global_service::get_default_group();
-  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service_tick", "", "us", mutable_metrics_observable_gauge_int64,
-                                            stats->collect_max_tick_interval_us.load(std::memory_order_acquire),
-                                            telemetry_lifetime);
+          ++stats->collect_sequence;
+        });
+
+    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_double(
+        rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_cpu_sys", "", "percent"},
+        [](opentelemetry::metrics::ObserverResult &result) {
+          std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
+          if (!stats) {
+            return;
+          }
+
+          rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+              result, static_cast<double>(stats->collect_cpu_sys.load(std::memory_order_acquire)) / 10000.0);
+
+          ++stats->collect_sequence;
+        });
+
+    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_double(
+        rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_cpu_user", "", "percent"},
+        [](opentelemetry::metrics::ObserverResult &result) {
+          std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
+          if (!stats) {
+            return;
+          }
+
+          rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+              result, static_cast<double>(stats->collect_cpu_user.load(std::memory_order_acquire)) / 10000.0);
+
+          ++stats->collect_sequence;
+        });
+
+    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_double(
+        rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_cpu_all", "", "percent"},
+        [](opentelemetry::metrics::ObserverResult &result) {
+          std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
+          if (!stats) {
+            return;
+          }
+
+          rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+              result, static_cast<double>(stats->collect_cpu_sys.load(std::memory_order_acquire) +
+                                          stats->collect_cpu_user.load(std::memory_order_acquire)) /
+                          10000.0);
+
+          ++stats->collect_sequence;
+        });
+
+    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+        rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_memory_maxrss", "", ""},
+        [](opentelemetry::metrics::ObserverResult &result) {
+          std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
+          if (!stats) {
+            return;
+          }
+
+          rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+              result, stats->collect_memory_max_rss.load(std::memory_order_acquire));
+
+          ++stats->collect_sequence;
+        });
+
+    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+        rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_memory_rss", "", ""},
+        [](opentelemetry::metrics::ObserverResult &result) {
+          std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
+          if (!stats) {
+            return;
+          }
+
+          rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+              result, stats->collect_memory_rss.load(std::memory_order_acquire));
+
+          ++stats->collect_sequence;
+        });
+  });
 }
-
-void logic_server_common_module::setup_metrics_cpu_sys() {
-  std::shared_ptr<::rpc::telemetry::group_type> telemetry_lifetime =
-      rpc::telemetry::global_service::get_default_group();
-  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER(
-      "service_rusage_cpu_sys", "", "percent", mutable_metrics_observable_gauge_double,
-      static_cast<double>(stats->collect_cpu_sys.load(std::memory_order_acquire)) / 10000.0, telemetry_lifetime);
-}
-
-void logic_server_common_module::setup_metrics_cpu_user() {
-  std::shared_ptr<::rpc::telemetry::group_type> telemetry_lifetime =
-      rpc::telemetry::global_service::get_default_group();
-  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER(
-      "service_rusage_cpu_user", "", "percent", mutable_metrics_observable_gauge_double,
-      static_cast<double>(stats->collect_cpu_user.load(std::memory_order_acquire)) / 10000.0, telemetry_lifetime);
-}
-
-void logic_server_common_module::setup_metrics_memory_maxrss() {
-  std::shared_ptr<::rpc::telemetry::group_type> telemetry_lifetime =
-      rpc::telemetry::global_service::get_default_group();
-  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER(
-      "service_rusage_memory_maxrss", "", "", mutable_metrics_observable_gauge_int64,
-      stats->collect_memory_max_rss.load(std::memory_order_acquire), telemetry_lifetime);
-}
-
-void logic_server_common_module::setup_metrics_memory_rss() {
-  std::shared_ptr<::rpc::telemetry::group_type> telemetry_lifetime =
-      rpc::telemetry::global_service::get_default_group();
-
-  LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER("service_rusage_memory_rss", "", "", mutable_metrics_observable_gauge_int64,
-                                            stats->collect_memory_rss.load(std::memory_order_acquire),
-                                            telemetry_lifetime);
-}
-
-#undef LOGIC_SERVER_SETUP_METRICS_GAUGE_OBSERVER
 
 void logic_server_common_module::add_service_type_id_index(const atapp::etcd_discovery_node::ptr_t &node) {
   uint64_t zone_id = node->get_discovery_info().area().zone_id();

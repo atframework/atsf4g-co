@@ -324,15 +324,15 @@ SERVER_FRAME_API task_manager::~task_manager() {
   stack_pool_.reset();
 #endif
 
+  // free protobuf meta
+  ::google::protobuf::ShutdownProtobufLibrary();
+
 #if GOOGLE_PROTOBUF_VERSION >= 4022000
   if (absl_log_sink_) {
     absl::log_internal::RemoveLogSink(absl_log_sink_.get());
     absl_log_sink_.reset();
   }
 #endif
-
-  // free protobuf meta
-  ::google::protobuf::ShutdownProtobufLibrary();
 }
 
 SERVER_FRAME_API int task_manager::init() {
