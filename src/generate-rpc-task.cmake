@@ -11,9 +11,9 @@ file(MAKE_DIRECTORY "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/pbdesc
 generate_for_pb_add_proto_path("${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private")
 generate_for_pb_add_proto_path("${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public")
 generate_for_pb_add_proto_file(
-  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/common/*.proto"
-  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/config/*.proto"
-  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/pbdesc/*.proto"
+  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/common/svr.*.proto"
+  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/config/svr.*.proto"
+  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/pbdesc/svr.*.proto"
   "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/pbdesc/*.proto"
   "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/pbdesc/*.proto"
   "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/pbdesc/*.proto")

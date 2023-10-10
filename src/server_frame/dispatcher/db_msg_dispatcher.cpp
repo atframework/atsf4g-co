@@ -295,11 +295,11 @@ SERVER_FRAME_API const std::string &db_msg_dispatcher::get_db_script_sha1(script
 }
 
 SERVER_FRAME_API void db_msg_dispatcher::set_db_script_sha1(script_type type, const char *str, int len) {
-  if (type >= script_type::kMax || type <= script_type::kInvalid) {
+  if (type >= script_type::kMax || type <= script_type::kInvalid || len <= 0) {
     return;
   }
 
-  db_script_sha1_[static_cast<size_t>(type)].assign(str, len);
+  db_script_sha1_[static_cast<size_t>(type)].assign(str, static_cast<size_t>(len));
 }
 
 SERVER_FRAME_API void db_msg_dispatcher::set_on_connected(channel_t::type t, user_callback_t fn) {

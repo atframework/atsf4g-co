@@ -42,6 +42,7 @@
 /third_party/xresloader/bin/xresloader.jar
 /third_party/xresloader/xresconv-cli
 
+.cache
 .mako_modules-*
 
 ## atframework

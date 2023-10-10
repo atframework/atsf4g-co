@@ -186,13 +186,6 @@ class task_action_base
   using on_finished_callback_set_t = std::list<on_finished_callback_fn_t>;
   using on_finished_callback_handle_t = on_finished_callback_set_t::iterator;
 
-#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-  struct task_meta_data_type {
-    task_type_trait::id_type task_id = 0;
-    task_private_data_type *private_data = nullptr;
-  };
-#endif
-
  protected:
   task_action_base(const dispatcher_start_data_type &start_param);
   virtual ~task_action_base();
@@ -207,7 +200,7 @@ class task_action_base
   virtual const char *name() const;
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-  result_type operator()(task_meta_data_type &&task_meta, dispatcher_start_data_type &&start_data);
+  result_type operator()(task_action_meta_data_type &&task_meta, dispatcher_start_data_type &&start_data);
 #else
   int operator()(void *priv_data) override;
 #endif

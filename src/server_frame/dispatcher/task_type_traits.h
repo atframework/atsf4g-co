@@ -110,6 +110,11 @@ struct task_type_trait {
   }
 };
 
+struct task_action_meta_data_type {
+  task_type_trait::id_type task_id = 0;
+  task_private_data_type* private_data = nullptr;
+};
+
 // Compatibility
 // C++20 coroutine use return type to check if it's in a coroutine, just do nothing here
 // GCC Problems:

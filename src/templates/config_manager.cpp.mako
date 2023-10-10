@@ -149,7 +149,7 @@ static bool get_file_content(std::string &out, const char *file_path) {
     std::stringstream ss;
     while (true) {
       size_t read_sz = fread(buf, 1, sizeof(buf), f);
-      ss.write(buf, read_sz);
+      ss.write(buf, static_cast<std::streamsize>(read_sz));
       if (read_sz < sizeof(buf)) {
         break;
       }
@@ -556,7 +556,7 @@ EXCEL_CONFIG_LOADER_API void config_manager::log(const log_caller_info_t &caller
     EXCEL_CONFIG_VSNPRINTF(&inst->log_buffer_[0], inst->log_buffer_.size() - 1, fmt, va_args);
   va_end(va_args);
   if (prt_res >= 0) {
-    inst->log_buffer_[prt_res] = 0;
+    inst->log_buffer_[static_cast<std::string::size_type>(prt_res)] = 0;
     // call event callback
     inst->on_log_(caller, &inst->log_buffer_[0]);
   }

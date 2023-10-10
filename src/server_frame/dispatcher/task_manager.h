@@ -278,7 +278,7 @@ class task_manager {
     }
     TAction action{std::forward<TParams>(args)...};
 
-    typename task_action_base::task_meta_data_type action_meta;
+    task_action_meta_data_type action_meta;
     // Split the assignment to member and getting the return value of co_yield for GCC BUG
     // @see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=108620
     auto current_task_id = co_yield internal_task_type::yield_task_id();

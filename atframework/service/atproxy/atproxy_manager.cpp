@@ -5,8 +5,10 @@
 #include <time/time_utility.h>
 
 #include <algorithm>
+#include <memory>
+#include <utility>
 
-#include "atproxy_manager.h"
+#include "atproxy_manager.h"  // NOLINT: build/include_subdir
 
 namespace atframe {
 namespace proxy {
@@ -56,7 +58,8 @@ int atproxy_manager::init() {
   }
 
   int ret = etcd_mod->add_watcher_by_type_name(
-      get_app()->get_type_name(), std::bind(&atproxy_manager::on_watcher_notify, this, std::placeholders::_1));
+      get_app()->get_type_name(),
+      [this](atapp::etcd_module::watcher_sender_one_t &sender) { this->on_watcher_notify(sender); });
 
   if (ret < 0) {
     FWLOGERROR("add watcher by type name {} failed, res: {}", get_app()->get_type_name(), ret);
@@ -166,7 +169,6 @@ int atproxy_manager::tick() {
       iter->second.next_action_time = ci.timeout_sec;
       check_list_.push_back(ci);
     }
-
   } while (true);
 
   return ret;

@@ -328,7 +328,6 @@ SERVER_FRAME_API result_code_type wait(context &ctx, atframework::SSMsg &msg, co
 
 SERVER_FRAME_API result_code_type wait(context &ctx, PROJECT_NAMESPACE_ID::table_all_message &msg,
                                        const dispatcher_await_options &options) {
-  dispatcher_resume_data_type result = dispatcher_make_default<dispatcher_resume_data_type>();
   int ret = RPC_AWAIT_CODE_RESULT(detail::wait(
       ctx, db_msg_dispatcher::me()->get_instance_ident(), options,
       [](const dispatcher_resume_data_type *resume_data, void *stack_data) {

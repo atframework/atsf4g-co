@@ -13,7 +13,6 @@
 
 #include <atframe/atapp.h>
 #include <libatbus.h>
-#include <libatbus_protocol.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -24,7 +23,7 @@
 #include <sstream>
 #include <vector>
 
-#include "session_manager.h"
+#include "session_manager.h"  // NOLINT: build/include_subdir
 
 static int app_handle_on_forward_response(atapp::app &app, const atapp::app::message_sender_t &source,
                                           const atapp::app::message_t &m, int32_t error_code) {
@@ -48,33 +47,43 @@ class gateway_module : public ::atapp::module_impl {
 
     int res = 0;
     if ("inner" == gw_mgr_.get_conf().origin_conf.listen().type()) {
-      using proto_ptr_t = std::unique_ptr<::atframe::gateway::proto_base>;
-      gw_mgr_.init(get_app()->get_bus_node().get(), std::bind<proto_ptr_t>(&gateway_module::create_proto_inner, this));
+      gw_mgr_.init(get_app()->get_bus_node().get(), [this]() { return this->gateway_module::create_proto_inner(); });
 
-      gw_mgr_.set_on_create_session(std::bind<int>(&gateway_module::proto_inner_callback_on_create_session, this,
-                                                   std::placeholders::_1, std::placeholders::_2));
+      gw_mgr_.set_on_create_session([this](::atframe::gateway::session *sess, uv_stream_t *handle) -> int {
+        return this->proto_inner_callback_on_create_session(sess, handle);
+      });
 
       // init callbacks
-      proto_callbacks_.write_fn =
-          std::bind<int>(&gateway_module::proto_inner_callback_on_write, this, std::placeholders::_1,
-                         std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
-      proto_callbacks_.message_fn = std::bind<int>(&gateway_module::proto_inner_callback_on_message, this,
-                                                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
-      proto_callbacks_.new_session_fn = std::bind<int>(&gateway_module::proto_inner_callback_on_new_session, this,
-                                                       std::placeholders::_1, std::placeholders::_2);
-      proto_callbacks_.reconnect_fn = std::bind<int>(&gateway_module::proto_inner_callback_on_reconnect, this,
-                                                     std::placeholders::_1, std::placeholders::_2);
-      proto_callbacks_.close_fn = std::bind<int>(&gateway_module::proto_inner_callback_on_close, this,
-                                                 std::placeholders::_1, std::placeholders::_2);
-      proto_callbacks_.on_handshake_done_fn = std::bind<int>(&gateway_module::proto_inner_callback_on_handshake_done,
-                                                             this, std::placeholders::_1, std::placeholders::_2);
+      proto_callbacks_.write_fn = [this](::atframe::gateway::proto_base *proto, void *buffer, size_t sz,
+                                         bool *is_done) -> int {
+        return this->proto_inner_callback_on_write(proto, buffer, sz, is_done);
+      };
 
-      proto_callbacks_.on_handshake_update_fn = std::bind<int>(&gateway_module::proto_inner_callback_on_update_done,
-                                                               this, std::placeholders::_1, std::placeholders::_2);
+      proto_callbacks_.message_fn = [this](::atframe::gateway::proto_base *proto, const void *buffer,
+                                           size_t sz) -> int {
+        return this->proto_inner_callback_on_message(proto, buffer, sz);
+      };
+      proto_callbacks_.new_session_fn = [this](::atframe::gateway::proto_base *proto, uint64_t &sess_id) -> int {
+        return this->proto_inner_callback_on_new_session(proto, sess_id);
+      };
+      proto_callbacks_.reconnect_fn = [this](::atframe::gateway::proto_base *proto, uint64_t sess_id) -> int {
+        return this->proto_inner_callback_on_reconnect(proto, sess_id);
+      };
+      proto_callbacks_.close_fn = [this](::atframe::gateway::proto_base *proto, int reason) -> int {
+        return this->proto_inner_callback_on_close(proto, reason);
+      };
+      proto_callbacks_.on_handshake_done_fn = [this](::atframe::gateway::proto_base *proto, int status) -> int {
+        return this->proto_inner_callback_on_handshake_done(proto, status);
+      };
 
-      proto_callbacks_.on_error_fn =
-          std::bind<int>(&gateway_module::proto_inner_callback_on_error, this, std::placeholders::_1,
-                         std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
+      proto_callbacks_.on_handshake_update_fn = [this](::atframe::gateway::proto_base *proto, int status) -> int {
+        return this->proto_inner_callback_on_update_done(proto, status);
+      };
+
+      proto_callbacks_.on_error_fn = [this](::atframe::gateway::proto_base *proto, const char *filename, int line,
+                                            int errcode, const char *errmsg) -> int {
+        return this->proto_inner_callback_on_error(proto, filename, line, errcode, errmsg);
+      };
 
     } else {
       FWLOGERROR("listen type {} not supported.", gw_mgr_.get_conf().origin_conf.listen().type());
@@ -276,7 +285,6 @@ class gateway_module : public ::atapp::module_impl {
         sess->set_flag(::atframe::gateway::session::flag_t::EN_FT_WRITING_FD, false);
         WLOGERROR("send data to proto %p failed, res: %d", proto, ret);
       }
-
     } while (false);
 
     if (nullptr != is_done) {
@@ -304,9 +312,8 @@ class gateway_module : public ::atapp::module_impl {
     }
 
     // send to router
-    WLOGDEBUG("session 0x%llx send %llu bytes data to server 0x%llx",
-              static_cast<unsigned long long>(sess_holder->get_id()), static_cast<unsigned long long>(sz),
-              static_cast<unsigned long long>(sess_holder->get_router()));
+    FWLOGDEBUG("session {:#x} send {} bytes data to server {:#x}", sess_holder->get_id(), sz,
+               sess_holder->get_router());
 
     return gw_mgr_.post_data(sess_holder->get_router(), post_msg);
   }

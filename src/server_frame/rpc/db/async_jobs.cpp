@@ -83,8 +83,8 @@ static rpc::result_code_type fetch_user_login_cache(rpc::context& ctx, uint64_t 
 }
 }  // namespace detail
 
-result_type get_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-                     std::vector<async_jobs_record>& out) {
+result_type get_jobs(rpc::context& /*ctx*/, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
+                     std::vector<async_jobs_record>& /*out*/) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid paronlineameters.(jobs_type={}, user_id={})", __FUNCTION__, jobs_type,
                user_id);
@@ -103,16 +103,18 @@ result_type get_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uin
   RPC_DB_RETURN_CODE(0);
 }
 
-result_type del_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
+result_type del_jobs(rpc::context& /*ctx*/, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
                      const std::vector<int64_t>& in) {
   if (0 == jobs_type || 0 == user_id) {
-    FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={})", __FUNCTION__, jobs_type, user_id);
+    FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, zone_id={}, user_id={})", __FUNCTION__, jobs_type,
+               zone_id, user_id);
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
   if (NULL ==
       PROJECT_NAMESPACE_ID::EnPlayerAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
-    FWLOGERROR("{} be called with unsupported type.(jobs_type={}, user_id={})", __FUNCTION__, jobs_type, user_id);
+    FWLOGERROR("{} be called with unsupported type.(jobs_type={}, zone_id={}, user_id={})", __FUNCTION__, jobs_type,
+               zone_id, user_id);
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
@@ -191,15 +193,17 @@ result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uin
   RPC_DB_RETURN_CODE(ret);
 }
 
-result_type remove_all_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id) {
+result_type remove_all_jobs(rpc::context& /*ctx*/, int32_t jobs_type, uint64_t user_id, uint32_t zone_id) {
   if (0 == jobs_type || 0 == user_id) {
-    FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={})", __FUNCTION__, jobs_type, user_id);
+    FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, zone_id={}, user_id={})", __FUNCTION__, jobs_type,
+               zone_id, user_id);
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
   if (NULL ==
       PROJECT_NAMESPACE_ID::EnPlayerAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
-    FWLOGERROR("{} be called with unsupported type.(jobs_type={}, user_id={})", __FUNCTION__, jobs_type, user_id);
+    FWLOGERROR("{} be called with unsupported type.(jobs_type={}, zone_id={}, user_id={})", __FUNCTION__, jobs_type,
+               zone_id, user_id);
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
@@ -210,7 +214,7 @@ result_type remove_all_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_
 
 result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
                         PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data& inout, int64_t record_index,
-                        int64_t* version) {
+                        int64_t* /*version*/) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
                user_id, zone_id);

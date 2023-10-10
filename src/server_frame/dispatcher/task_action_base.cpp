@@ -105,7 +105,7 @@ const char *task_action_base::name() const {
 }
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-task_action_base::result_type task_action_base::operator()(task_meta_data_type &&task_meta,
+task_action_base::result_type task_action_base::operator()(task_action_meta_data_type &&task_meta,
                                                            dispatcher_start_data_type &&start_data) {
 #else
 int task_action_base::operator()(void *priv_data) {
