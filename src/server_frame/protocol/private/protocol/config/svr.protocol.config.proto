@@ -249,6 +249,7 @@ message opentelemetry_agent_cfg {
   opentelemetry_trace_exporter_cfg trace_exporters = 32;
   bool enable_metrics = 41;
   opentelemetry_metrics_exporter_cfg metrics_exporters = 42;
+  opentelemetry_metrics_reader_cfg metrics_readers = 43;
   bool enable_logs = 51;
   opentelemetry_logs_exporter_cfg logs_exporters = 52;
 }

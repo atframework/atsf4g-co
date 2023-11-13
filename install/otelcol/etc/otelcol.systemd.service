@@ -1,0 +1,14 @@
+[Unit]
+Description=OpenTelemetry Collector Contrib
+After=network.target
+
+[Service]
+Restart=on-failure
+TimeoutStopSec=30
+ExecStart=/bin/bash otelcol/bin/start.sh
+KillMode=mixed
+Restart=on-failure
+Type=simple
+
+[Install]
+WantedBy=default.target

@@ -83,7 +83,7 @@ static rpc::result_code_type fetch_user_login_cache(rpc::context& ctx, uint64_t 
 }
 }  // namespace detail
 
-result_type get_jobs(rpc::context& /*ctx*/, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
+result_type get_jobs(rpc::context& /*ctx*/, int32_t jobs_type, uint64_t user_id, uint32_t /*zone_id*/,
                      std::vector<async_jobs_record>& /*out*/) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid paronlineameters.(jobs_type={}, user_id={})", __FUNCTION__, jobs_type,

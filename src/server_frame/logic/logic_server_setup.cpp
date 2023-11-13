@@ -861,7 +861,6 @@ void logic_server_common_module::tick_stats() {
   }
   stats_->last_update_usage_timepoint = util::time::time_utility::get_sys_now();
 
-  bool rusage_has_offset = false;
   do {
     uv_rusage_t last_usage;
     if (0 != uv_getrusage(&last_usage)) {
@@ -876,8 +875,6 @@ void logic_server_common_module::tick_stats() {
       stats_->collect_max_tick_interval_us.store(0, std::memory_order_release);
       break;
     }
-
-    rusage_has_offset = true;
 
     opentelemetry::context::Context telemetry_context;
 

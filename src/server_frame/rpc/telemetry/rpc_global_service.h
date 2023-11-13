@@ -42,6 +42,8 @@ class app;
 PROJECT_NAMESPACE_BEGIN
 namespace config {
 class logic_telemetry_cfg;
+class opentelemetry_cfg;
+class opentelemetry_agent_cfg;
 class opentelemetry_trace_cfg;
 class opentelemetry_metrics_cfg;
 class opentelemetry_logs_cfg;
@@ -130,6 +132,26 @@ class global_service {
   SERVER_FRAME_API static opentelemetry::nostd::span<
       std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
   get_metrics_labels_view(std::shared_ptr<group_type>& group);
+
+  /**
+   * @brief Get configure
+   * @return configure
+   */
+  SERVER_FRAME_API static const PROJECT_NAMESPACE_ID::config::opentelemetry_cfg& get_configure(
+      std::shared_ptr<group_type>& group);
+
+  /**
+   * @brief Get if group has agent configure
+   * @return true if group has agent configure
+   */
+  SERVER_FRAME_API static bool has_agent_configure(std::shared_ptr<group_type>& group);
+
+  /**
+   * @brief Get agent configure
+   * @return agent configure
+   */
+  SERVER_FRAME_API static const PROJECT_NAMESPACE_ID::config::opentelemetry_agent_cfg& get_agent_configure(
+      std::shared_ptr<group_type>& group);
 
   /**
    * @brief Get trace configure

@@ -10,7 +10,7 @@ set(GENERATE_FOR_PB_OUT_PB "${PROJECT_GENERATED_PBD_DIR}/network.pb")
 unset(GENERATE_FOR_PB_PROTO_COMMAND)
 file(WRITE "${GENERATE_FOR_PB_OUT_LOG}" "# generate-for-pb-run")
 if(NOT PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR)
-  set(PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR "${PROJECT_THIRD_PARTY_INSTALL_DIR }/.python_modules")
+  set(PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR "${PROJECT_THIRD_PARTY_INSTALL_DIR}/.python_modules")
 endif()
 if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.11.0")
   set(GENERATE_FOR_PB_PY_ENCODING ENCODING "UTF-8")
@@ -72,7 +72,7 @@ macro(generate_for_pb_add_proto_file)
 endmacro()
 
 function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
-  set(GENERATE_FOR_PB_ARGS_OPTIONS RPC_IGNORE_EMPTY_REQUEST)
+  set(GENERATE_FOR_PB_ARGS_OPTIONS RPC_IGNORE_EMPTY_REQUEST NO_RPC NO_SERVICE_TASK)
   set(GENERATE_FOR_PB_ARGS_ONE_VALUE TASK_PATH_PREFIX HANDLE_PATH_PREFIX PROJECT_NAMESPACE RPC_ROOT_DIR
                                      SERVICE_DLLEXPORT_DECL RPC_DLLEXPORT_DECL)
   set(GENERATE_FOR_PB_ARGS_MULTI_VALUE INCLUDE_HEADERS)
@@ -120,9 +120,10 @@ function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
     set(CUSTOM_INCLUDE_HEADERS "include_headers: [ ]")
   endif()
 
-  file(
-    APPEND "${GENERATE_FOR_PB_OUT_CONF}"
-    "  # ${SERVICE_NAME}
+  if(NOT GENERATE_FOR_PB_ARGS_NO_RPC)
+    file(
+      APPEND "${GENERATE_FOR_PB_OUT_CONF}"
+      "  # ${SERVICE_NAME} - rpc
   - service:
       name: '${SERVICE_NAME}'
       overwrite: true
@@ -140,6 +141,12 @@ function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
         - overwrite: true
           input: '${GENERATE_FOR_PB_WORK_DIR}/templates/rpc_call_api_for_ss.cpp.mako'
           output: 'rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.cpp'
+")
+  endif()
+  if(NOT GENERATE_FOR_PB_ARGS_NO_SERVICE_TASK)
+    file(
+      APPEND "${GENERATE_FOR_PB_OUT_CONF}"
+      "  # ${SERVICE_NAME} - task
   - service:
       name: '${SERVICE_NAME}'
       overwrite: false
@@ -166,6 +173,7 @@ function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
           input: '${GENERATE_FOR_PB_WORK_DIR}/templates/task_action_ss_rpc.cpp.mako'
           output: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.cpp'
 ")
+  endif()
 endfunction(generate_for_pb_add_ss_service)
 
 function(generate_for_pb_add_cs_service SERVICE_NAME SERVICE_ROOT_DIR)
@@ -461,6 +469,7 @@ if ($LastExitCode -ne 0) {
   exit $LastExitCode
 }
 ")
+
   file(
     APPEND "${GENERATE_FOR_PB_PROTO_PWSH}"
     "& \"${CMAKE_COMMAND}\" -E copy_if_different \"${GENERATE_FOR_PB_OUT_PB}\" \"${PROJECT_INSTALL_RES_PBD_DIR}\" ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"

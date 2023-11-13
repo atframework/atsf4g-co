@@ -1317,7 +1317,7 @@ def generate_global_templates(pb_db, options, yaml_conf, project_dir,
         if "global" not in rule:
             continue
         global_rule = rule["global"]
-        if "global_dllexport_decl" not in global_rule:
+        if "global_dllexport_decl" in global_rule:
             global_dllexport_decl = global_rule["global_dllexport_decl"]
         else:
             global_dllexport_decl = outer_dllexport_decl

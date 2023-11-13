@@ -155,26 +155,23 @@ struct group_type {
   uint64_t server_id = 0;
   std::string server_name;
   std::string app_version;
-  std::string group_name;
+  PROJECT_NAMESPACE_ID::config::opentelemetry_group_cfg group_configure;
 
   std::string trace_default_library_name;
   std::string trace_default_library_version;
   std::string trace_default_schema_url;
   std::unordered_map<std::string, std::string> trace_additional_resource;
-  PROJECT_NAMESPACE_ID::config::opentelemetry_trace_cfg trace_configure;
 
   std::string metrics_default_library_name;
   std::string metrics_default_library_version;
   std::string metrics_default_schema_url;
   std::unordered_map<std::string, std::string> metrics_additional_resource;
-  PROJECT_NAMESPACE_ID::config::opentelemetry_metrics_cfg metrics_configure;
 
   std::string logs_default_logger_name;
   std::string logs_default_library_name;
   std::string logs_default_library_version;
   std::string logs_default_schema_url;
   std::unordered_map<std::string, std::string> logs_additional_resource;
-  PROJECT_NAMESPACE_ID::config::opentelemetry_logs_cfg logs_configure;
 
   opentelemetry::sdk::common::AttributeMap common_owned_attributes;
   std::unordered_map<std::string, opentelemetry::common::AttributeValue> common_attributes;
@@ -631,8 +628,7 @@ global_service::get_metrics_labels_view(std::shared_ptr<group_type> &group) {
   return {};
 }
 
-SERVER_FRAME_API
-const PROJECT_NAMESPACE_ID::config::opentelemetry_trace_cfg &global_service::get_trace_configure(
+SERVER_FRAME_API const PROJECT_NAMESPACE_ID::config::opentelemetry_cfg &global_service::get_configure(
     std::shared_ptr<group_type> &group) {
   do {
     if (group) {
@@ -649,58 +645,73 @@ const PROJECT_NAMESPACE_ID::config::opentelemetry_trace_cfg &global_service::get
   } while (false);
 
   if (nullptr != group) {
-    return group->trace_configure;
+    return group->group_configure.configure();
   }
 
-  return PROJECT_NAMESPACE_ID::config::opentelemetry_trace_cfg::default_instance();
+  return PROJECT_NAMESPACE_ID::config::opentelemetry_cfg::default_instance();
+}
+
+SERVER_FRAME_API bool global_service::has_agent_configure(std::shared_ptr<group_type> &group) {
+  do {
+    if (group) {
+      break;
+    }
+
+    std::shared_ptr<global_service_data_type> current_service_cache = get_global_service_data();
+    if (!current_service_cache) {
+      break;
+    }
+
+    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    group = current_service_cache->default_group;
+  } while (false);
+
+  if (nullptr != group) {
+    return group->group_configure.has_agent();
+  }
+
+  return false;
+}
+
+SERVER_FRAME_API const PROJECT_NAMESPACE_ID::config::opentelemetry_agent_cfg &global_service::get_agent_configure(
+    std::shared_ptr<group_type> &group) {
+  do {
+    if (group) {
+      break;
+    }
+
+    std::shared_ptr<global_service_data_type> current_service_cache = get_global_service_data();
+    if (!current_service_cache) {
+      break;
+    }
+
+    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    group = current_service_cache->default_group;
+  } while (false);
+
+  if (nullptr != group) {
+    return group->group_configure.agent();
+  }
+
+  return PROJECT_NAMESPACE_ID::config::opentelemetry_agent_cfg::default_instance();
+}
+
+SERVER_FRAME_API
+const PROJECT_NAMESPACE_ID::config::opentelemetry_trace_cfg &global_service::get_trace_configure(
+    std::shared_ptr<group_type> &group) {
+  return get_configure(group).trace();
 }
 
 SERVER_FRAME_API
 const PROJECT_NAMESPACE_ID::config::opentelemetry_metrics_cfg &global_service::get_metrics_configure(
     std::shared_ptr<group_type> &group) {
-  do {
-    if (group) {
-      break;
-    }
-
-    std::shared_ptr<global_service_data_type> current_service_cache = get_global_service_data();
-    if (!current_service_cache) {
-      break;
-    }
-
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
-    group = current_service_cache->default_group;
-  } while (false);
-
-  if (nullptr != group) {
-    return group->metrics_configure;
-  }
-
-  return PROJECT_NAMESPACE_ID::config::opentelemetry_metrics_cfg::default_instance();
+  return get_configure(group).metrics();
 }
 
 SERVER_FRAME_API
 const PROJECT_NAMESPACE_ID::config::opentelemetry_logs_cfg &global_service::get_logs_configure(
     std::shared_ptr<group_type> &group) {
-  do {
-    if (group) {
-      break;
-    }
-
-    std::shared_ptr<global_service_data_type> current_service_cache = get_global_service_data();
-    if (!current_service_cache) {
-      break;
-    }
-
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
-    group = current_service_cache->default_group;
-  } while (false);
-
-  if (nullptr != group) {
-    return group->logs_configure;
-  }
-
-  return PROJECT_NAMESPACE_ID::config::opentelemetry_logs_cfg::default_instance();
+  return get_configure(group).logs();
 }
 
 SERVER_FRAME_API size_t global_service::get_trace_exporter_count(std::shared_ptr<group_type> group) noexcept {
@@ -1801,16 +1812,23 @@ static void _opentelemetry_cleanup_global_provider(atapp::app & /*app*/) {
 }
 
 static void _opentelemetry_prepare_group(
-    atapp::app &app, std::shared_ptr<group_type> group,
-    const PROJECT_NAMESPACE_ID::config::opentelemetry_trace_cfg &group_tracer_config,
+    atapp::app &app, std::shared_ptr<group_type> group, std::string group_name,
+    const PROJECT_NAMESPACE_ID::config::opentelemetry_cfg &group_config,
+    const PROJECT_NAMESPACE_ID::config::opentelemetry_agent_cfg *group_agent_config,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_trace_cfg &default_tracer_config,
-    const PROJECT_NAMESPACE_ID::config::opentelemetry_metrics_cfg &group_metrics_config,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_metrics_cfg &default_metrics_config,
-    const PROJECT_NAMESPACE_ID::config::opentelemetry_logs_cfg &group_logs_config,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_logs_cfg &default_logs_config) {
+  group->group_configure.set_name(group_name);
+  *group->group_configure.mutable_configure() = group_config;
+  if (nullptr != group_agent_config) {
+    *group->group_configure.mutable_agent() = *group_agent_config;
+  }
+
   // Trace
   {
-    group->trace_configure = group_tracer_config;
+    const PROJECT_NAMESPACE_ID::config::opentelemetry_trace_cfg &group_tracer_config =
+        group->group_configure.configure().trace();
+
     group->trace_default_library_name = group_tracer_config.default_name();
     if (group->trace_default_library_name.empty()) {
       group->trace_default_library_name = default_tracer_config.default_name();
@@ -1857,7 +1875,9 @@ static void _opentelemetry_prepare_group(
 
   // Metrics
   {
-    group->metrics_configure = group_metrics_config;
+    const PROJECT_NAMESPACE_ID::config::opentelemetry_metrics_cfg &group_metrics_config =
+        group->group_configure.configure().metrics();
+
     group->metrics_default_library_name = group_metrics_config.default_name();
     group->metrics_default_library_version = app.get_app_version();
     group->metrics_default_schema_url = group_metrics_config.schema_url();
@@ -1893,7 +1913,9 @@ static void _opentelemetry_prepare_group(
 
   // Logs
   {
-    group->logs_configure = group_logs_config;
+    const PROJECT_NAMESPACE_ID::config::opentelemetry_logs_cfg &group_logs_config =
+        group->group_configure.configure().logs();
+
     group->logs_default_logger_name = group_logs_config.default_name();
     if (group->logs_default_logger_name.empty()) {
       group->logs_default_logger_name = default_logs_config.default_name();
@@ -2196,9 +2218,16 @@ static void _create_opentelemetry_app_resource(
 
 static local_provider_handle_type<opentelemetry::trace::TracerProvider>
 _opentelemetry_create_opentelemetry_trace_provider(::rpc::telemetry::group_type &group) {
-  if (group.trace_configure.has_exporters() && group.trace_configure.has_processors()) {
-    auto exporter = _opentelemetry_create_trace_exporter(group, group.trace_configure.exporters());
-    auto sampler = _opentelemetry_create_trace_sampler(group.trace_configure.samplers());
+  if (group.group_configure.configure().trace().has_exporters() &&
+      group.group_configure.configure().trace().has_processors()) {
+    std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> exporter;
+    if (group.group_configure.has_agent() && group.group_configure.agent().enable_trace()) {
+      exporter = _opentelemetry_create_trace_exporter(group, group.group_configure.agent().trace_exporters());
+    }
+    if (exporter.empty()) {
+      exporter = _opentelemetry_create_trace_exporter(group, group.group_configure.configure().trace().exporters());
+    }
+    auto sampler = _opentelemetry_create_trace_sampler(group.group_configure.configure().trace().samplers());
     if (!sampler) {
       local_provider_handle_type<opentelemetry::trace::TracerProvider> ret;
       ret.provider = opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>();
@@ -2206,7 +2235,8 @@ _opentelemetry_create_opentelemetry_trace_provider(::rpc::telemetry::group_type 
       return ret;
     }
     group.tracer_exporter_count = exporter.size();
-    auto processor = _opentelemetry_create_trace_processor(std::move(exporter), group.trace_configure.processors());
+    auto processor = _opentelemetry_create_trace_processor(std::move(exporter),
+                                                           group.group_configure.configure().trace().processors());
 
     opentelemetry::sdk::resource::ResourceAttributes trace_resource_values = group.common_owned_attributes;
     for (auto &ext_res : group.trace_additional_resource) {
@@ -2224,11 +2254,29 @@ _opentelemetry_create_opentelemetry_trace_provider(::rpc::telemetry::group_type 
 
 static local_provider_handle_type<opentelemetry::metrics::MeterProvider>
 _opentelemetry_create_opentelemetry_metrics_provider(::rpc::telemetry::group_type &group) {
-  if (group.metrics_configure.has_exporters()) {
-    auto exporters = _opentelemetry_create_metrics_exporter(group, group.metrics_configure.exporters());
+  if (group.group_configure.configure().metrics().has_exporters()) {
+    std::vector<std::unique_ptr<PushMetricExporter>> exporters;
+    std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricReader>> readers;
+    const PROJECT_NAMESPACE_ID::config::opentelemetry_metrics_exporter_cfg *exporters_cfg =
+        &group.group_configure.configure().metrics().exporters();
+    if (group.group_configure.has_agent() && group.group_configure.agent().enable_metrics()) {
+      exporters = _opentelemetry_create_metrics_exporter(group, group.group_configure.agent().metrics_exporters());
+    }
+    if (exporters.empty()) {
+      exporters =
+          _opentelemetry_create_metrics_exporter(group, group.group_configure.configure().metrics().exporters());
+    } else {
+      exporters_cfg = &group.group_configure.agent().metrics_exporters();
+    }
     group.metrics_exporter_count = exporters.size();
-    auto readers = _opentelemetry_create_metrics_reader(std::move(exporters), group.metrics_configure.reader(),
-                                                        group.metrics_configure.exporters());
+    if (group.group_configure.has_agent() && group.group_configure.agent().enable_metrics()) {
+      readers = _opentelemetry_create_metrics_reader(std::move(exporters),
+                                                     group.group_configure.agent().metrics_readers(), *exporters_cfg);
+    }
+    if (readers.empty()) {
+      readers = _opentelemetry_create_metrics_reader(
+          std::move(exporters), group.group_configure.configure().metrics().reader(), *exporters_cfg);
+    }
 
     opentelemetry::sdk::resource::ResourceAttributes metrics_resource_values = group.common_owned_attributes;
     for (auto &ext_res : group.metrics_additional_resource) {
@@ -2243,8 +2291,8 @@ _opentelemetry_create_opentelemetry_metrics_provider(::rpc::telemetry::group_typ
     }
 
     opentelemetry::nostd::string_view trace_metrics_name;
-    if (group.group_name.empty()) {
-      trace_metrics_name = group.trace_configure.additional_metrics_name();
+    if (group.group_configure.name().empty()) {
+      trace_metrics_name = group.group_configure.configure().trace().additional_metrics_name();
     }
     return _opentelemetry_create_metrics_provider(std::move(readers), metrics_resource_values, trace_metrics_name);
   }
@@ -2257,10 +2305,17 @@ _opentelemetry_create_opentelemetry_metrics_provider(::rpc::telemetry::group_typ
 
 static local_provider_handle_type<opentelemetry::logs::LoggerProvider>
 _opentelemetry_create_opentelemetry_logs_provider(::rpc::telemetry::group_type &group) {
-  if (group.logs_configure.has_exporters()) {
-    auto exporter = _opentelemetry_create_logs_exporter(group, group.logs_configure.exporters());
+  if (group.group_configure.configure().logs().has_exporters()) {
+    std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogRecordExporter>> exporter;
+    if (group.group_configure.has_agent() && group.group_configure.agent().enable_logs()) {
+      exporter = _opentelemetry_create_logs_exporter(group, group.group_configure.agent().logs_exporters());
+    }
+    if (exporter.empty()) {
+      exporter = _opentelemetry_create_logs_exporter(group, group.group_configure.configure().logs().exporters());
+    }
     group.logger_exporter_count = exporter.size();
-    auto processor = _opentelemetry_create_logs_processor(std::move(exporter), group.logs_configure.processors());
+    auto processor = _opentelemetry_create_logs_processor(std::move(exporter),
+                                                          group.group_configure.configure().logs().processors());
 
     opentelemetry::sdk::resource::ResourceAttributes logs_resource_values = group.common_owned_attributes;
     for (auto &ext_res : group.logs_additional_resource) {
@@ -2287,16 +2342,15 @@ SERVER_FRAME_API void global_service::set_current_service(
 
   // Setup telemetry
   default_group->initialized = false;
-  default_group->group_name = "";
   default_group->tracer_exporter_count = 0;
   default_group->metrics_exporter_count = 0;
   default_group->logger_exporter_count = 0;
   auto &opentelemetry_cfg = telemetry.opentelemetry();
   _create_opentelemetry_app_resource(*default_group, app, {&opentelemetry_cfg.resource()});
 
-  _opentelemetry_prepare_group(app, default_group, opentelemetry_cfg.trace(), opentelemetry_cfg.trace(),
-                               opentelemetry_cfg.metrics(), opentelemetry_cfg.metrics(), opentelemetry_cfg.logs(),
-                               opentelemetry_cfg.logs());
+  _opentelemetry_prepare_group(app, default_group, "", opentelemetry_cfg,
+                               telemetry.has_agent() ? &telemetry.agent() : nullptr, opentelemetry_cfg.trace(),
+                               opentelemetry_cfg.metrics(), opentelemetry_cfg.logs());
 
   // Trace
   local_provider_handle_type<opentelemetry::trace::TracerProvider> tracer_handle =
@@ -2327,7 +2381,6 @@ SERVER_FRAME_API void global_service::set_current_service(
 
     // Setup telemetry
     named_group->initialized = false;
-    default_group->group_name = named_group_cfg.name();
     named_group->tracer_exporter_count = 0;
     named_group->metrics_exporter_count = 0;
     named_group->logger_exporter_count = 0;
@@ -2335,9 +2388,9 @@ SERVER_FRAME_API void global_service::set_current_service(
     _create_opentelemetry_app_resource(*named_group, app,
                                        {&opentelemetry_cfg.resource(), &named_group_cfg.configure().resource()});
 
-    _opentelemetry_prepare_group(app, named_group, named_group_cfg.configure().trace(), opentelemetry_cfg.trace(),
-                                 named_group_cfg.configure().metrics(), opentelemetry_cfg.metrics(),
-                                 named_group_cfg.configure().logs(), opentelemetry_cfg.logs());
+    _opentelemetry_prepare_group(app, named_group, named_group_cfg.name(), named_group_cfg.configure(),
+                                 named_group_cfg.has_agent() ? &named_group_cfg.agent() : nullptr,
+                                 opentelemetry_cfg.trace(), opentelemetry_cfg.metrics(), opentelemetry_cfg.logs());
     named_groups[named_group_cfg.name()] = named_group;
   }
 

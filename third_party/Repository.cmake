@@ -98,6 +98,9 @@ include("${CMAKE_CURRENT_LIST_DIR}/xresloader/xresloader.cmake")
 # =========== third_party - cfssl ===========
 include("${CMAKE_CURRENT_LIST_DIR}/cfssl/cfssl.cmake")
 
+# =========== third_party - otel ===========
+include("${CMAKE_CURRENT_LIST_DIR}/otel/otelcol-contrib.cmake")
+
 # =========== set dependency variables ===========
 # Changes in otel-cpp v1.8.0
 if(TARGET opentelemetry-cpp::prometheus_exporter)
@@ -148,11 +151,15 @@ set(PROJECT_THIRD_PARTY_PUBLIC_LINK_NAMES
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_LZ4_LINK_NAME}
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_ZLIB_LINK_NAME})
 
-foreach(PROJECT_THIRD_PARTY_PUBLIC_LINK_ABSL_NAME "absl::string_view" "absl::strings" "absl::str_format")
-  if(TARGET ${PROJECT_THIRD_PARTY_PUBLIC_LINK_ABSL_NAME})
-    list(APPEND PROJECT_THIRD_PARTY_PUBLIC_LINK_NAMES ${PROJECT_THIRD_PARTY_PUBLIC_LINK_ABSL_NAME})
-  endif()
-endforeach()
+if(TARGET absl::abseil_dll)
+  list(APPEND PROJECT_THIRD_PARTY_PUBLIC_LINK_NAMES absl::abseil_dll)
+else()
+  foreach(PROJECT_THIRD_PARTY_PUBLIC_LINK_ABSL_NAME "absl::string_view" "absl::strings" "absl::str_format")
+    if(TARGET ${PROJECT_THIRD_PARTY_PUBLIC_LINK_ABSL_NAME})
+      list(APPEND PROJECT_THIRD_PARTY_PUBLIC_LINK_NAMES ${PROJECT_THIRD_PARTY_PUBLIC_LINK_ABSL_NAME})
+    endif()
+  endforeach()
+endif()
 
 set(PROJECT_THIRD_PARTY_PUBLIC_INCLUDE_DIRS)
 

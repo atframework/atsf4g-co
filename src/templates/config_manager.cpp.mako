@@ -44,7 +44,7 @@ int e = errno
 #endif
 
 #else
-#define EXCEL_CONFIG_VSNPRINTF(buffer, bufsz, fmt, arg) vsnprintf(buffer, static_cast<int>(bufsz), fmt, arg)
+#define EXCEL_CONFIG_VSNPRINTF(buffer, bufsz, fmt, arg) vsnprintf(buffer, static_cast<size_t>(bufsz), fmt, arg)
 #endif
 
 #include "lock/lock_holder.h"

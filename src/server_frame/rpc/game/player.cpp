@@ -39,7 +39,7 @@ rpc::rpc_result<int64_t> alloc_user_id(::rpc::context &ctx) {
     suffix = (suffix >> 3) ^ (suffix & 0x07);
   }
 
-  int64_t out = (static_cast<uint64_t>(prefix_id) << 3) | static_cast<uint64_t>(suffix);
+  int64_t out = static_cast<int64_t>((static_cast<uint64_t>(prefix_id) << 3) | static_cast<uint64_t>(suffix));
   assert(is_valid_user_id(out));
   RPC_RETURN_CODE(out);
 }

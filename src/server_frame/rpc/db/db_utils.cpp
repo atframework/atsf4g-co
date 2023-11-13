@@ -171,14 +171,14 @@ redis_args::~redis_args() {}
 
 char *redis_args::alloc(size_t sz) {
   if (used_ >= segment_value_.size()) {
-    WLOGERROR("segment number extended");
+    FWLOGERROR("{}", "segment number extended");
     assert(false);
     return nullptr;
   }
 
-  size_t used_buf_len = free_buffer_ - rpc::db::detail::get_pack_tls_buffer();
+  size_t used_buf_len = static_cast<size_t>(free_buffer_ - rpc::db::detail::get_pack_tls_buffer());
   if (used_buf_len + sz > PROJECT_RPC_DB_BUFFER_LENGTH) {
-    WLOGERROR("buffer length extended before padding");
+    FWLOGERROR("{}", "buffer length extended before padding");
     assert(false);
     return nullptr;
   }
@@ -186,13 +186,13 @@ char *redis_args::alloc(size_t sz) {
   size_t free_buf_len = PROJECT_RPC_DB_BUFFER_LENGTH - used_buf_len;
   void *start_addr = reinterpret_cast<void *>(free_buffer_);
   if (nullptr == align_alloc<size_t>(start_addr, free_buf_len)) {
-    WLOGERROR("buffer length extended when padding");
+    FWLOGERROR("{}", "buffer length extended when padding");
     assert(false);
     return nullptr;
   }
 
   if (free_buf_len < sz) {
-    WLOGERROR("buffer length extended after padding");
+    FWLOGERROR("{}", "buffer length extended after padding");
     assert(false);
     return nullptr;
   }
@@ -242,11 +242,11 @@ bool redis_args::push(uint8_t v) {
   char td[12] = {0};
   int sz = UTIL_STRFUNC_SNPRINTF(td, sizeof(td), "%u", static_cast<unsigned int>(v));
   if (sz < 0) {
-    WLOGERROR("snprintf failed, res: %d", sz);
+    FWLOGERROR("snprintf failed, res: {}", sz);
     return false;
   }
 
-  char *d = alloc(sz);
+  char *d = alloc(static_cast<size_t>(sz));
   if (nullptr == d) {
     return false;
   }
@@ -258,11 +258,11 @@ bool redis_args::push(int8_t v) {
   char td[12] = {0};
   int sz = UTIL_STRFUNC_SNPRINTF(td, sizeof(td), "%d", static_cast<int>(v));
   if (sz < 0) {
-    WLOGERROR("snprintf failed, res: %d", sz);
+    FWLOGERROR("snprintf failed, res: {}", sz);
     return false;
   }
 
-  char *d = alloc(sz);
+  char *d = alloc(static_cast<size_t>(sz));
   if (nullptr == d) {
     return false;
   }
@@ -274,11 +274,11 @@ bool redis_args::push(uint16_t v) {
   char td[12] = {0};
   int sz = UTIL_STRFUNC_SNPRINTF(td, sizeof(td), "%u", static_cast<unsigned int>(v));
   if (sz < 0) {
-    WLOGERROR("snprintf failed, res: %d", sz);
+    FWLOGERROR("snprintf failed, res: {}", sz);
     return false;
   }
 
-  char *d = alloc(sz);
+  char *d = alloc(static_cast<size_t>(sz));
   if (nullptr == d) {
     return false;
   }
@@ -290,7 +290,7 @@ bool redis_args::push(int16_t v) {
   char td[12] = {0};
   int sz = UTIL_STRFUNC_SNPRINTF(td, sizeof(td), "%d", static_cast<int>(v));
   if (sz < 0) {
-    WLOGERROR("snprintf failed, res: %d", sz);
+    FWLOGERROR("snprintf failed, res: {}", sz);
     return false;
   }
 
@@ -306,11 +306,11 @@ bool redis_args::push(uint32_t v) {
   char td[12] = {0};
   int sz = UTIL_STRFUNC_SNPRINTF(td, sizeof(td), "%u", static_cast<unsigned int>(v));
   if (sz < 0) {
-    WLOGERROR("snprintf failed, res: %d", sz);
+    FWLOGERROR("snprintf failed, res: {}", sz);
     return false;
   }
 
-  char *d = alloc(sz);
+  char *d = alloc(static_cast<size_t>(sz));
   if (nullptr == d) {
     return false;
   }
@@ -322,11 +322,11 @@ bool redis_args::push(int32_t v) {
   char td[12] = {0};
   int sz = UTIL_STRFUNC_SNPRINTF(td, sizeof(td), "%d", static_cast<int>(v));
   if (sz < 0) {
-    WLOGERROR("snprintf failed, res: %d", sz);
+    FWLOGERROR("snprintf failed, res: {}", sz);
     return false;
   }
 
-  char *d = alloc(sz);
+  char *d = alloc(static_cast<size_t>(sz));
   if (nullptr == d) {
     return false;
   }
@@ -336,13 +336,13 @@ bool redis_args::push(int32_t v) {
 
 bool redis_args::push(uint64_t v) {
   char td[24] = {0};
-  int sz = UTIL_STRFUNC_SNPRINTF(td, sizeof(td), "%llu", static_cast<unsigned long long>(v));
+  int sz = UTIL_STRFUNC_SNPRINTF(td, sizeof(td), "%llu", static_cast<unsigned long long>(v));  // NOLINT: runtime/int
   if (sz < 0) {
-    WLOGERROR("snprintf failed, res: %d", sz);
+    FWLOGERROR("snprintf failed, res: {}", sz);
     return false;
   }
 
-  char *d = alloc(sz);
+  char *d = alloc(static_cast<size_t>(sz));
   if (nullptr == d) {
     return false;
   }
@@ -352,13 +352,13 @@ bool redis_args::push(uint64_t v) {
 
 bool redis_args::push(int64_t v) {
   char td[24] = {0};
-  int sz = UTIL_STRFUNC_SNPRINTF(td, sizeof(td), "%lld", static_cast<long long>(v));
+  int sz = UTIL_STRFUNC_SNPRINTF(td, sizeof(td), "%lld", static_cast<long long>(v));  // NOLINT: runtime/int
   if (sz < 0) {
-    WLOGERROR("snprintf failed, res: %d", sz);
+    FWLOGERROR("snprintf failed, res: {}", sz);
     return false;
   }
 
-  char *d = alloc(sz);
+  char *d = alloc(static_cast<size_t>(sz));
   if (nullptr == d) {
     return false;
   }
@@ -368,7 +368,7 @@ bool redis_args::push(int64_t v) {
 
 int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, std::string *version) {
   if (nullptr == reply) {
-    WLOGDEBUG("unpack message %s failed, data mot found.", msg.GetDescriptor()->full_name().c_str());
+    FWLOGDEBUG("unpack message {} failed, data mot found.", msg.GetDescriptor()->full_name());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
@@ -377,8 +377,8 @@ int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, st
   const google::protobuf::Descriptor *desc = msg.GetDescriptor();
 
   if (REDIS_REPLY_ARRAY != reply->type) {
-    WLOGDEBUG("unpack message %s failed, reply type %d is not a array.", msg.GetDescriptor()->full_name().c_str(),
-              reply->type);
+    FWLOGDEBUG("unpack message {} failed, reply type {} is not a array.", msg.GetDescriptor()->full_name(),
+               reply->type);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
   }
 
@@ -392,11 +392,11 @@ int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, st
 
     if (REDIS_REPLY_STRING != key->type || nullptr == key->str) {
       if (nullptr != key->str) {
-        WLOGDEBUG("unpack message %s failed, key(replay[%llu], %s) type %d is not a string.",
-                  msg.GetDescriptor()->full_name().c_str(), static_cast<unsigned long long>(i), key->str, key->type);
+        FWLOGDEBUG("unpack message {} failed, key(replay[{}], {}) type {} is not a string.",
+                   msg.GetDescriptor()->full_name(), i, key->str, key->type);
       } else {
-        WLOGDEBUG("unpack message %s failed, key(replay[%llu]) type %d is not a string.",
-                  msg.GetDescriptor()->full_name().c_str(), static_cast<unsigned long long>(i), key->type);
+        FWLOGDEBUG("unpack message {} failed, key(replay[{}]) type {} is not a string.",
+                   msg.GetDescriptor()->full_name(), i, key->type);
       }
       continue;
     }
@@ -420,8 +420,8 @@ int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, st
     // 老版本的服务器用新的数据
     if (nullptr == fd) {
       // has_failed = true;
-      WLOGERROR("unpack message %s failed, field name %s not found, maybe deleted",
-                msg.GetDescriptor()->full_name().c_str(), key->str);
+      FWLOGERROR("unpack message {} failed, field name {} not found, maybe deleted", msg.GetDescriptor()->full_name(),
+                 key->str);
       continue;
     }
 
@@ -437,10 +437,10 @@ int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, st
       util::string::str2int(v, value->str);                                                                      \
       reflect->func(&msg, fd, v);                                                                                \
     } else {                                                                                                     \
-      WLOGERROR(                                                                                                 \
-          "unpack message %s failed, type of %s in pb is a message, but the redis reply type is not string nor " \
-          "integer(reply type=%d).",                                                                             \
-          msg.GetDescriptor()->full_name().c_str(), key->str, value->type);                                      \
+      FWLOGERROR(                                                                                                \
+          "unpack message {} failed, type of {} in pb is a message, but the redis reply type is not string nor " \
+          "integer(reply type={}).",                                                                             \
+          msg.GetDescriptor()->full_name(), key->str, value->type);                                              \
       has_failed = true;                                                                                         \
     }                                                                                                            \
     break;                                                                                                       \
@@ -453,9 +453,9 @@ int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, st
         }
 
         if (REDIS_REPLY_STRING != value->type || nullptr == value->str) {
-          WLOGERROR(
-              "unpack message %s failed, type of %s in pb is a string, but the redis reply type is not(reply type=%d).",
-              msg.GetDescriptor()->full_name().c_str(), key->str, value->type);
+          FWLOGERROR(
+              "unpack message {} failed, type of {} in pb is a string, but the redis reply type is not(reply type={}).",
+              msg.GetDescriptor()->full_name(), key->str, value->type);
           has_failed = true;
         } else {
           reflect->SetString(&msg, fd, value->str);
@@ -468,23 +468,23 @@ int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, st
         }
 
         if (REDIS_REPLY_STRING != value->type || nullptr == value->str) {
-          WLOGERROR(
-              "unpack message %s failed, type of %s in pb is a message, but the redis reply type is not string(reply "
-              "type=%d).",
-              msg.GetDescriptor()->full_name().c_str(), key->str, value->type);
+          FWLOGERROR(
+              "unpack message {} failed, type of {} in pb is a message, but the redis reply type is not string(reply "
+              "type={}).",
+              msg.GetDescriptor()->full_name(), key->str, value->type);
           has_failed = true;
         } else {
           ::google::protobuf::Message *data_msg = reflect->MutableMessage(&msg, fd);
           if (nullptr == data_msg) {
             has_failed = true;
-            WLOGERROR("mutable message %s.%s failed", msg.GetDescriptor()->full_name().c_str(), key->str);
+            FWLOGERROR("mutable message {}.{} failed", msg.GetDescriptor()->full_name(), key->str);
             continue;
           }
 
           if (false == data_msg->ParseFromArray(value->str, static_cast<int>(value->len))) {
             has_failed = true;
-            WLOGERROR("message field [%s] unpack error failed", key->str);
-            WLOGDEBUG("%s", data_msg->InitializationErrorString().c_str());
+            FWLOGERROR("message field [{}] unpack error failed", key->str);
+            FWLOGDEBUG("{}", data_msg->InitializationErrorString());
           }
         }
 
@@ -500,8 +500,8 @@ int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, st
         CASE_REDIS_DATA_TO_PB_INT(google::protobuf::FieldDescriptor::CPPTYPE_ENUM, int, SetEnumValue)
 
       default: {
-        WLOGERROR("message %s field %s(type=%s) invalid", msg.GetDescriptor()->full_name().c_str(), fd->name().c_str(),
-                  fd->cpp_type_name());
+        FWLOGERROR("message {} field {}(type={}) invalid", msg.GetDescriptor()->full_name(), fd->name(),
+                   fd->cpp_type_name());
         break;
       }
     }
@@ -510,8 +510,8 @@ int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, st
 #undef CASE_REDIS_DATA_TO_PB_INT
 
   if (has_failed) {
-    WLOGERROR("unpack message %s finished, but not all data fields success: %s",
-              msg.GetDescriptor()->full_name().c_str(), msg.DebugString().c_str());
+    FWLOGERROR("unpack message {} finished, but not all data fields success: {}", msg.GetDescriptor()->full_name(),
+               msg.DebugString());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
   }
 
@@ -524,14 +524,14 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
   // 反射获取所有的字段
   const google::protobuf::Reflection *reflect = msg.GetReflection();
   if (nullptr == reflect) {
-    WLOGERROR("pack message %s failed, get reflection failed", msg.GetDescriptor()->full_name().c_str());
+    FWLOGERROR("pack message {} failed, get reflection failed", msg.GetDescriptor()->full_name());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
   }
 
   if (nullptr != version) {
     char *d = args.alloc(RPC_DB_VERSION_LENGTH);
     if (nullptr == d) {
-      WLOGERROR("pack message %s failed, alloc version key failed", msg.GetDescriptor()->full_name().c_str());
+      FWLOGERROR("pack message {} failed, alloc version key failed", msg.GetDescriptor()->full_name());
       return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
     }
     memcpy(d, RPC_DB_VERSION_NAME, RPC_DB_VERSION_LENGTH);
@@ -540,7 +540,7 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
     d = args.alloc(version->size());
     if (nullptr == d) {
       args.dealloc();
-      WLOGERROR("pack message %s failed, alloc version value failed", msg.GetDescriptor()->full_name().c_str());
+      FWLOGERROR("pack message {} failed, alloc version value failed", msg.GetDescriptor()->full_name());
       return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
     }
     memcpy(d, version->c_str(), version->size());
@@ -554,30 +554,29 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
 
     char *data_allocated = args.alloc(fds[i]->name().size());
     if (nullptr == data_allocated) {
-      WLOGERROR("pack message %s failed, alloc %s key failed", msg.GetDescriptor()->full_name().c_str(),
-                fds[i]->name().c_str());
+      FWLOGERROR("pack message {} failed, alloc {} key failed", msg.GetDescriptor()->full_name(), fds[i]->name());
       return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
     }
     memcpy(data_allocated, fds[i]->name().c_str(), fds[i]->name().size());
 
-#define CASE_PB_INT_TO_REDIS_DATA(pbtype, cpptype, cppformat, func)                                               \
-  case pbtype: {                                                                                                  \
-    cpptype vint = static_cast<cpptype>(reflect->func(msg, fds[i]));                                              \
-    char vstr[24] = {0};                                                                                          \
-    int intlen = UTIL_STRFUNC_SNPRINTF(vstr, sizeof(vstr), cppformat, vint);                                      \
-    data_allocated = args.alloc(static_cast<size_t>(intlen));                                                     \
-    if (nullptr == data_allocated || intlen < 0) {                                                                \
-      WLOGERROR("pack message %s failed, alloc %s,len=%d value failed", msg.GetDescriptor()->full_name().c_str(), \
-                fds[i]->name().c_str(), intlen);                                                                  \
-      args.dealloc();                                                                                             \
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;                                                            \
-    }                                                                                                             \
-    memcpy(data_allocated, vstr, static_cast<size_t>(intlen));                                                    \
-    stat_sum_len += static_cast<size_t>(intlen);                                                                  \
-    if (nullptr != debug_message) {                                                                               \
-      (*debug_message) << fds[i]->name() << "=" << vint << ",";                                                   \
-    }                                                                                                             \
-    break;                                                                                                        \
+#define CASE_PB_INT_TO_REDIS_DATA(pbtype, cpptype, cppformat, func)                                         \
+  case pbtype: {                                                                                            \
+    cpptype vint = static_cast<cpptype>(reflect->func(msg, fds[i]));                                        \
+    char vstr[24] = {0};                                                                                    \
+    int intlen = UTIL_STRFUNC_SNPRINTF(vstr, sizeof(vstr), cppformat, vint);                                \
+    data_allocated = args.alloc(static_cast<size_t>(intlen));                                               \
+    if (nullptr == data_allocated || intlen < 0) {                                                          \
+      FWLOGERROR("pack message {} failed, alloc {}, len={} value failed", msg.GetDescriptor()->full_name(), \
+                 fds[i]->name(), intlen);                                                                   \
+      args.dealloc();                                                                                       \
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;                                                      \
+    }                                                                                                       \
+    memcpy(data_allocated, vstr, static_cast<size_t>(intlen));                                              \
+    stat_sum_len += static_cast<size_t>(intlen);                                                            \
+    if (nullptr != debug_message) {                                                                         \
+      (*debug_message) << fds[i]->name() << "=" << vint << ",";                                             \
+    }                                                                                                       \
+    break;                                                                                                  \
   }
 
     switch (fds[i]->cpp_type()) {
@@ -594,8 +593,7 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
         // 再dump 字段内容
         data_allocated = args.alloc(seg_val->size());
         if (nullptr == data_allocated) {
-          WLOGERROR("pack message %s failed, alloc %s value failed", msg.GetDescriptor()->full_name().c_str(),
-                    fds[i]->name().c_str());
+          FWLOGERROR("pack message {} failed, alloc {} value failed", msg.GetDescriptor()->full_name(), fds[i]->name());
 
           args.dealloc();
           return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
@@ -616,8 +614,7 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
 
         data_allocated = args.alloc(dump_len);
         if (nullptr == data_allocated) {
-          WLOGERROR("pack message %s failed, alloc %s value failed", msg.GetDescriptor()->full_name().c_str(),
-                    fds[i]->name().c_str());
+          FWLOGERROR("pack message {} failed, alloc {} value failed", msg.GetDescriptor()->full_name(), fds[i]->name());
 
           args.dealloc();
           return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
@@ -642,8 +639,8 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
         CASE_PB_INT_TO_REDIS_DATA(google::protobuf::FieldDescriptor::CPPTYPE_ENUM, int, "%d", GetEnumValue)
 
       default: {
-        WLOGERROR("message %s field %s(type=%s) invalid", msg.GetDescriptor()->full_name().c_str(),
-                  fds[i]->name().c_str(), fds[i]->cpp_type_name());
+        FWLOGERROR("message {} field {}(type={}) invalid", msg.GetDescriptor()->full_name(), fds[i]->name(),
+                   fds[i]->cpp_type_name());
         args.dealloc();
         break;
       }

@@ -142,8 +142,8 @@ int task_action_base::operator()(void *priv_data) {
       opentelemetry::trace::SemanticConventions::kRpcMethod, rpc::context::string_view{name()}};
   trace_start_option.attributes = trace_attributes;
 
-  trace_start_option.attributes = rpc::telemetry::trace_attributes_type{
-      trace_attributes, static_cast<size_t>(trace_attribute_type::kTaskResponseCode)};
+  trace_start_option.attributes =
+      rpc::telemetry::trace_attributes_type{trace_attributes, static_cast<size_t>(trace_attribute_type::kAtRpcKind)};
   rpc::context::tracer tracer = shared_context_.make_tracer(name(), std::move(trace_start_option));
 
   trace_attributes[static_cast<size_t>(trace_attribute_type::kAtRpcKind)] = {
