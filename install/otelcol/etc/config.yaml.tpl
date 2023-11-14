@@ -52,6 +52,32 @@ exporters:
     timeout: "{{ .Values.telemetry.opentelemetry.trace.otlp.http_timeout | default "10s" }}"
   {{- end }}
 {{- end }}
+{{- if and (not (empty .Values.telemetry.opentelemetry.metrics.prometheus.pull)) (not (empty .Values.telemetry.opentelemetry.metrics.prometheus.pull.url)) }}
+  {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "prometheus" }}
+  prometheus:
+    endpoint: "{{ .Values.telemetry.opentelemetry.metrics.prometheus.pull.url }}"
+  {{- if not (empty .Values.telemetry.opentelemetry.metrics.prometheus.pull.tls) }}
+    tls:
+    {{- if not (empty .Values.telemetry.opentelemetry.metrics.prometheus.pull.tls.ca_file) }}
+      ca_file: "{{ .Values.telemetry.opentelemetry.metrics.prometheus.pull.tls.ca_file }}"
+    {{- end }}
+    {{- if not (empty .Values.telemetry.opentelemetry.metrics.prometheus.pull.tls.cert_file) }}
+      cert_file: "{{ .Values.telemetry.opentelemetry.metrics.prometheus.pull.tls.cert_file }}"
+    {{- end }}
+    {{- if not (empty .Values.telemetry.opentelemetry.metrics.prometheus.pull.tls.key_file) }}
+      key_file: "{{ .Values.telemetry.opentelemetry.metrics.prometheus.pull.tls.key_file }}"
+    {{- end }}
+  {{- end }}
+  {{- if not (empty .Values.telemetry.opentelemetry.metrics.prometheus.pull.namespace) }}
+    namespace: "{{ .Values.telemetry.opentelemetry.metrics.prometheus.pull.namespace }}"
+  {{- end }}
+  {{- if not (empty .Values.telemetry.opentelemetry.metrics.prometheus.pull.resource_to_telemetry_conversion) }}
+    resource_to_telemetry_conversion:
+    {{- if not (empty .Values.telemetry.opentelemetry.metrics.prometheus.pull.resource_to_telemetry_conversion.enabled) }}
+      enabled: "{{ .Values.telemetry.opentelemetry.metrics.prometheus.pull.resource_to_telemetry_conversion.enabled }}"
+    {{- end }}
+  {{- end }}
+{{- end }}
 {{- if and (not (empty .Values.telemetry.opentelemetry.metrics.prometheus.push)) (not (empty .Values.telemetry.opentelemetry.metrics.prometheus.push.host)) }}
   {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "prometheusremotewrite" }}
   prometheusremotewrite:

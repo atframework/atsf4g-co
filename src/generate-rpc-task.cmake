@@ -27,10 +27,6 @@ function(generate_for_pb_create_protocol_sandbox OUTPUT_DIR)
     file(CREATE_LINK "${PROTO_FILE}" "${OUTPUT_DIR}/${PROTO_NAME}" COPY_ON_ERROR SYMBOLIC)
     list(APPEND OUTPUT_FILES "${OUTPUT_DIR}/${PROTO_NAME}")
   endforeach()
-
-  set(${OUTPUT_VAR}
-      ${${OUTPUT_VAR}} ${OUTPUT_FILES}
-      PARENT_SCOPE)
 endfunction()
 
 generate_for_pb_add_proto_path("${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb")

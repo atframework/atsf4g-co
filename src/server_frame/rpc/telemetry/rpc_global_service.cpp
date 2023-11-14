@@ -2115,7 +2115,7 @@ static void _create_opentelemetry_app_resource(
     group_type &group, const atapp::app &app,
     std::initializer_list<const ::google::protobuf::Map<std::string, std::string> *> resource_configures) {
   // @see
-  // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/resource/semantic_conventions/README.md
+  // https://github.com/open-telemetry/semantic-conventions/blob/main/docs/resource/README.md
 
   // metrics 维度不能保护无关属性
   group.metrics_attributes.clear();
@@ -2130,14 +2130,6 @@ static void _create_opentelemetry_app_resource(
   group.common_owned_attributes.SetAttribute("service.type_id", app.get_type_id());
   group.common_owned_attributes.SetAttribute(opentelemetry::sdk::resource::SemanticConventions::kServiceVersion,
                                              server_frame_project_get_version());
-
-  // metrics
-  // TODO 1.11.0 及以前版本未设置属性值到 prometheus，之后版本这里可以移除
-  set_attributes_map_item(group.common_owned_attributes, group.metrics_attributes, "service.instance.name");
-  set_attributes_map_item(group.common_owned_attributes, group.metrics_attributes,
-                          opentelemetry::sdk::resource::SemanticConventions::kServiceName);
-  set_attributes_map_item(group.common_owned_attributes, group.metrics_attributes,
-                          opentelemetry::sdk::resource::SemanticConventions::kServiceVersion);
 
   // area
   if (0 != app.get_area().zone_id()) {
@@ -2174,7 +2166,7 @@ static void _create_opentelemetry_app_resource(
 
   // process
   // @see
-  // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/resource/semantic_conventions/process.md
+  // https://github.com/open-telemetry/semantic-conventions/blob/main/docs/resource/process.md#process
   group.common_owned_attributes.SetAttribute(opentelemetry::sdk::resource::SemanticConventions::kProcessPid,
                                              atbus::node::get_pid());
   {
