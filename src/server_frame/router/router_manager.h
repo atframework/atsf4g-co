@@ -371,7 +371,7 @@ class router_manager : public router_manager_base {
             } else {
               atframework::SSRouterHead *router_head = req->mutable_object();
               if (nullptr != router_head) {
-                router_head->set_router_src_bus_id(obj->get_router_server_id());
+                router_head->set_router_source_node_id(obj->get_router_server_id());
                 router_head->set_router_version(obj->get_router_version());
 
                 router_head->set_object_inst_id(obj->get_key().object_id);

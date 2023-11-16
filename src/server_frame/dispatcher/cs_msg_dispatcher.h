@@ -116,41 +116,41 @@ class cs_msg_dispatcher : public dispatcher_implement {
 
   /**
    * send kickoff message to atgateway
-   * @param bus_id bus id of atgateway
+   * @param node_id bus id of atgateway
    * @param session_id session id
    * @param reason kickoff reason
    * @return 0 or error code
    */
-  SERVER_FRAME_API int32_t send_kickoff(uint64_t bus_id, uint64_t session_id, int32_t reason);
+  SERVER_FRAME_API int32_t send_kickoff(uint64_t node_id, uint64_t session_id, int32_t reason);
 
   /**
    * send data to client
-   * @param bus_id bus id of atgateway
+   * @param node_id bus id of atgateway
    * @param session_id session id
    * @param buffer data buffer
    * @param len data length
    * @return 0 or error code
    */
-  SERVER_FRAME_API int32_t send_data(uint64_t bus_id, uint64_t session_id, const void *buffer, size_t len);
+  SERVER_FRAME_API int32_t send_data(uint64_t node_id, uint64_t session_id, const void *buffer, size_t len);
 
   /**
    * broadcast data to atgateway
-   * @param bus_id bus id of atgateway
+   * @param node_id bus id of atgateway
    * @param buffer data buffer
    * @param len data length
    * @return 0 or error code
    */
-  SERVER_FRAME_API int32_t broadcast_data(uint64_t bus_id, const void *buffer, size_t len);
+  SERVER_FRAME_API int32_t broadcast_data(uint64_t node_id, const void *buffer, size_t len);
 
   /**
    * broadcast data to multiple clients
-   * @param bus_id bus id of atgateway
+   * @param node_id bus id of atgateway
    * @param session_ids session id
    * @param buffer data buffer
    * @param len data length
    * @return 0 or error code
    */
-  SERVER_FRAME_API int32_t broadcast_data(uint64_t bus_id, const std::vector<uint64_t> &session_ids, const void *buffer, size_t len);
+  SERVER_FRAME_API int32_t broadcast_data(uint64_t node_id, const std::vector<uint64_t> &session_ids, const void *buffer, size_t len);
 
  private:
   bool is_closing_;

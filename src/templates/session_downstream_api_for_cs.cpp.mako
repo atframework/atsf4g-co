@@ -106,7 +106,7 @@ ${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
   if (nullptr == msg_ptr) {
     FWLOGERROR("rpc {} create request message for session [{:#x}, {}] failed",
                "${rpc.get_full_name()}",
-               __session.get_key().bus_id, __session.get_key().session_id);
+               __session.get_key().node_id, __session.get_key().session_id);
     return {static_cast<rpc::always_ready_code_type::value_type>(${project_namespace}::err::EN_SYS_MALLOC)};
   }
 
@@ -133,7 +133,7 @@ ${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
   if (res < 0) {
     FWLOGERROR("rpc {} send message to session [{:#x}, {}] failed, result: {}({})",
                "${rpc.get_full_name()}",
-               __session.get_key().bus_id, __session.get_key().session_id,
+               __session.get_key().node_id, __session.get_key().session_id,
                res, protobuf_mini_dumper_get_error_msg(res));
   }
 
@@ -146,7 +146,7 @@ ${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
   if (nullptr == msg_ptr) {
     FWLOGERROR("rpc {} create request message for session [{:#x}, {}] failed",
                "${rpc.get_full_name()}",
-               __session.get_key().bus_id, __session.get_key().session_id);
+               __session.get_key().node_id, __session.get_key().session_id);
     return {static_cast<rpc::always_ready_code_type::value_type>(${project_namespace}::err::EN_SYS_MALLOC)};
   }
 
@@ -173,7 +173,7 @@ ${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
   if (res < 0) {
     FWLOGERROR("rpc {} send message to session [{:#x}, {}] failed, result: {}({})",
                "${rpc.get_full_name()}",
-               __session.get_key().bus_id, __session.get_key().session_id,
+               __session.get_key().node_id, __session.get_key().session_id,
                res, protobuf_mini_dumper_get_error_msg(res));
   }
 

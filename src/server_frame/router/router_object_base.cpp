@@ -235,15 +235,15 @@ int router_object_base::downgrade() {
 
 int router_object_base::send_transfer_msg_failed(atframework::SSMsg &&req) {
   task_action_ss_req_base::message_type rsp_msg;
-  uint64_t dst_pd = req.head().bus_id();
+  uint64_t dst_pd = req.head().node_id();
   if (req.head().has_router()) {
-    dst_pd = req.head().router().router_src_bus_id();
+    dst_pd = req.head().router().router_source_node_id();
   }
 
   task_action_ss_req_base::init_msg(rsp_msg, dst_pd, req);
 
   // 如果没有task_id则要不复制路由信息，防止触发路由转发
-  if (0 == rsp_msg.head().dst_task_id()) {
+  if (0 == rsp_msg.head().destination_task_id()) {
     rsp_msg.mutable_head()->clear_router();
   }
 

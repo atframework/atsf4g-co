@@ -181,7 +181,7 @@ inline static int __setup_rpc_stream_header(atframework::SSMsgHead &head, gsl::s
 % if rpc_common_codes_enable_request_header:
 inline static int __setup_rpc_request_header(atframework::SSMsgHead &head, task_type_trait::id_type task_id,
                                              gsl::string_view rpc_full_name, const std::string &type_full_name) {
-  head.set_src_task_id(task_id);
+  head.set_source_task_id(task_id);
   head.set_op_type(${project_namespace}::EN_MSG_OP_TYPE_UNARY_REQUEST);
   atframework::RpcRequestMeta* request_meta = head.mutable_rpc_request();
   if (nullptr == request_meta) {

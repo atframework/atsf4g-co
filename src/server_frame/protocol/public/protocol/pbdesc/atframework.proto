@@ -222,7 +222,7 @@ message RpcTraceSpan {
 // ============================= Dispatchers =============================
 // -----------------------------    SSMsg    -----------------------------
 message SSRouterHead {
-  uint64 router_src_bus_id = 1;  // 路由协议原始发起者的BUS ID
+  uint64 router_source_node_id = 1;  // 路由协议原始发起者的BUS ID
   uint64 router_version = 2;
   uint32 router_transfer_ttl = 3;  // 路由消息转发条数
 
@@ -241,9 +241,9 @@ message SSMsgHead {
   int32 op_type = 4;
 
   // 通道和任务信息
-  uint64 bus_id = 11;
-  uint64 src_task_id = 12;
-  uint64 dst_task_id = 13;
+  uint64 node_id = 11;
+  uint64 source_task_id = 12;
+  uint64 destination_task_id = 13;
 
   // 路由系统信息
   SSRouterHead router = 21;
@@ -280,7 +280,7 @@ message CSMsgHead {
   int32 op_type = 6;
 
   // 通道和任务信息
-  uint64 session_bus_id = 11;
+  uint64 session_node_id = 11;
   uint64 session_id = 12;
 
   // 新RPC接口的meta信息

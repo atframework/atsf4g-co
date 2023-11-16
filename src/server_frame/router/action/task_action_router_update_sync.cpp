@@ -49,8 +49,8 @@ task_action_router_update_sync::result_type task_action_router_update_sync::oper
   }
 
   if (obj->get_router_version() < req_body.object().router_version()) {
-    // router_src_bus_id字段是复用的
-    obj->set_router_server_id(req_body.object().router_src_bus_id(), req_body.object().router_version());
+    // router_source_node_id字段是复用的
+    obj->set_router_server_id(req_body.object().router_source_node_id(), req_body.object().router_version());
   }
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);

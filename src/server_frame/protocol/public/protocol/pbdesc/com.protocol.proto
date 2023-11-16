@@ -130,7 +130,7 @@ message CSMsgHead {
   int32 op_type = 6;
 
   // 通道和任务信息
-  uint64 session_bus_id = 11;
+  uint64 session_node_id = 11;
   uint64 session_id = 12;
 
   // 新RPC接口的meta信息

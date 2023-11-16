@@ -82,7 +82,7 @@ SERVER_FRAME_CONFIG_API session_manager::sess_ptr_t session_manager::find(const 
 
 SERVER_FRAME_CONFIG_API session_manager::sess_ptr_t session_manager::create(const session::key_t &key) {
   if (find(key)) {
-    FWLOGERROR("session registered, failed, bus id: {:#x}, session id: {}\n", key.bus_id, key.session_id);
+    FWLOGERROR("session registered, failed, bus id: {:#x}, session id: {}\n", key.node_id, key.session_id);
 
     return sess_ptr_t();
   }
@@ -99,10 +99,10 @@ SERVER_FRAME_CONFIG_API session_manager::sess_ptr_t session_manager::create(cons
 
   if (is_new) {
     // gateway 统计
-    session_counter_t::iterator iter_counter = session_counter_.find(key.bus_id);
+    session_counter_t::iterator iter_counter = session_counter_.find(key.node_id);
     if (session_counter_.end() == iter_counter) {
-      FWLOGINFO("new gateway registered, bus id: {:#x}", key.bus_id);
-      session_counter_[key.bus_id] = 1;
+      FWLOGINFO("new gateway registered, bus id: {:#x}", key.node_id);
+      session_counter_[key.node_id] = 1;
     } else {
       ++iter_counter->second;
     }
@@ -128,22 +128,22 @@ SERVER_FRAME_CONFIG_API void session_manager::remove(sess_ptr_t sess, int reason
   }
 
   session::key_t key = sess->get_key();
-  FWLOGINFO("session {}({:#x}:{:#x}) removed", reinterpret_cast<const void *>(sess.get()), key.bus_id, key.session_id);
+  FWLOGINFO("session {}({:#x}:{:#x}) removed", reinterpret_cast<const void *>(sess.get()), key.node_id, key.session_id);
 
   {
     session_index_t::iterator iter = all_sessions_.find(key);
     if (all_sessions_.end() != iter && iter->second == sess) {
       // gateway 统计
       do {
-        session_counter_t::iterator iter_counter = session_counter_.find(key.bus_id);
+        session_counter_t::iterator iter_counter = session_counter_.find(key.node_id);
         if (session_counter_.end() == iter_counter) {
-          FWLOGERROR("gateway session removed, but gateway not found, bus id: {:#x}", key.bus_id);
+          FWLOGERROR("gateway session removed, but gateway not found, bus id: {:#x}", key.node_id);
           break;
         }
 
         --iter_counter->second;
         if (iter_counter->second <= 0) {
-          FWLOGINFO("gateway unregistered, bus id: {:#x}", key.bus_id);
+          FWLOGINFO("gateway unregistered, bus id: {:#x}", key.node_id);
           session_counter_.erase(iter_counter);
         }
       } while (false);

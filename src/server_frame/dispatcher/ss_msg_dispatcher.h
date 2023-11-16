@@ -157,15 +157,15 @@ class ss_msg_dispatcher : public dispatcher_implement {
   SERVER_FRAME_API uint64_t allocate_sequence();
 
  public:
-  SERVER_FRAME_API int32_t send_to_proc(uint64_t bus_id, atframework::SSMsg &ss_msg, bool ignore_discovery = false);
-  SERVER_FRAME_API int32_t send_to_proc(uint64_t bus_id, const void *msg_buf, size_t msg_len, uint64_t sequence,
+  SERVER_FRAME_API int32_t send_to_proc(uint64_t node_id, atframework::SSMsg &ss_msg, bool ignore_discovery = false);
+  SERVER_FRAME_API int32_t send_to_proc(uint64_t node_id, const void *msg_buf, size_t msg_len, uint64_t sequence,
                                         bool ignore_discovery);
   SERVER_FRAME_API int32_t send_to_proc(const atapp::etcd_discovery_node &node, atframework::SSMsg &ss_msg,
                                         bool ignore_discovery = false);
   SERVER_FRAME_API int32_t send_to_proc(const atapp::etcd_discovery_node &node, const void *msg_buf, size_t msg_len,
                                         uint64_t sequence, bool ignore_discovery = false);
 
-  SERVER_FRAME_API bool is_target_server_available(uint64_t bus_id) const;
+  SERVER_FRAME_API bool is_target_server_available(uint64_t node_id) const;
   SERVER_FRAME_API bool is_target_server_available(const std::string &node_name) const;
 
   /**

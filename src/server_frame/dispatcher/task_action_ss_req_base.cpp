@@ -74,9 +74,9 @@ task_action_ss_req_base::result_type task_action_ss_req_base::hook_run() {
   TASK_ACTION_RETURN_CODE(ret);
 }
 
-uint64_t task_action_ss_req_base::get_request_bus_id() const {
+uint64_t task_action_ss_req_base::get_request_node_id() const {
   msg_cref_type msg = get_request();
-  return msg.head().bus_id();
+  return msg.head().node_id();
 }
 
 task_action_ss_req_base::msg_ref_type task_action_ss_req_base::add_rsp_msg(uint64_t dst_pd) {
@@ -90,14 +90,14 @@ task_action_ss_req_base::msg_ref_type task_action_ss_req_base::add_rsp_msg(uint6
   response_messages_.push_back(msg);
 
   msg->mutable_head()->set_error_code(get_response_code());
-  dst_pd = 0 == dst_pd ? get_request_bus_id() : dst_pd;
+  dst_pd = 0 == dst_pd ? get_request_node_id() : dst_pd;
 
   init_msg(*msg, dst_pd, get_request());
   return *msg;
 }
 
 int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd) {
-  msg.mutable_head()->set_bus_id(dst_pd);
+  msg.mutable_head()->set_node_id(dst_pd);
   msg.mutable_head()->set_timestamp(util::time::time_utility::get_now());
 
   return 0;
@@ -108,16 +108,16 @@ int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd, msg
   init_msg(msg, dst_pd);
 
   // set task information
-  if (0 != req_msg.head().src_task_id()) {
-    msg.mutable_head()->set_dst_task_id(req_msg.head().src_task_id());
+  if (0 != req_msg.head().source_task_id()) {
+    msg.mutable_head()->set_destination_task_id(req_msg.head().source_task_id());
   } else {
-    msg.mutable_head()->set_dst_task_id(0);
+    msg.mutable_head()->set_destination_task_id(0);
   }
 
-  if (0 != req_msg.head().dst_task_id()) {
-    msg.mutable_head()->set_src_task_id(req_msg.head().dst_task_id());
+  if (0 != req_msg.head().destination_task_id()) {
+    msg.mutable_head()->set_source_task_id(req_msg.head().destination_task_id());
   } else {
-    msg.mutable_head()->set_src_task_id(0);
+    msg.mutable_head()->set_source_task_id(0);
   }
 
   msg.mutable_head()->set_sequence(req_msg.head().sequence());
@@ -138,7 +138,7 @@ const char *task_action_ss_req_base::get_type_name() const { return "inserver"; 
 
 rpc::context::inherit_options task_action_ss_req_base::get_inherit_option() const noexcept {
   auto &req_msg = get_request();
-  if (req_msg.has_head() && req_msg.head().has_rpc_request() && 0 != req_msg.head().src_task_id()) {
+  if (req_msg.has_head() && req_msg.head().has_rpc_request() && 0 != req_msg.head().source_task_id()) {
     return rpc::context::inherit_options{rpc::context::parent_mode::kParent, true, false};
   }
 
@@ -162,17 +162,17 @@ void task_action_ss_req_base::send_response() {
   }
 
   for (std::list<message_type *>::iterator iter = response_messages_.begin(); iter != response_messages_.end(); ++iter) {
-    if (0 == (*iter)->head().bus_id()) {
+    if (0 == (*iter)->head().node_id()) {
       FWLOGERROR("task {} [{}] send message to unknown server", name(), get_task_id());
       continue;
     }
     (*iter)->mutable_head()->set_error_code(get_response_code());
 
     // send message using ss dispatcher
-    int32_t res = ss_msg_dispatcher::me()->send_to_proc((*iter)->head().bus_id(), **iter);
+    int32_t res = ss_msg_dispatcher::me()->send_to_proc((*iter)->head().node_id(), **iter);
     if (res) {
       FWLOGERROR("task {} [{}] send message to server {:#x} failed, res: {}({})", name(), get_task_id(),
-                 (*iter)->head().bus_id(), res, protobuf_mini_dumper_get_error_msg(res));
+                 (*iter)->head().node_id(), res, protobuf_mini_dumper_get_error_msg(res));
     }
   }
 
@@ -210,7 +210,7 @@ static rpc::result_code_type try_fetch_router_cache(rpc::context &ctx, router_ma
   RPC_RETURN_CODE(res);
 }
 
-static rpc::result_code_type auto_mutable_router_object(rpc::context &ctx, uint64_t self_bus_id,
+static rpc::result_code_type auto_mutable_router_object(rpc::context &ctx, uint64_t self_node_id,
                                                         router_manager_base &mgr, router_manager_base::key_t key,
                                                         std::shared_ptr<router_object_base> &obj,
                                                         filter_router_message_result_type &result) {
@@ -234,9 +234,9 @@ static rpc::result_code_type auto_mutable_router_object(rpc::context &ctx, uint6
   }
 
   // Check log
-  if (self_bus_id != obj->get_router_server_id()) {
+  if (self_node_id != obj->get_router_server_id()) {
     FWLOGERROR("router object {}:{}:{} auto mutable object failed, expect server id 0x{:x}, real server id 0x{:x}",
-               key.type_id, key.zone_id, key.object_id, self_bus_id, obj->get_router_server_id());
+               key.type_id, key.zone_id, key.object_id, self_node_id, obj->get_router_server_id());
     if (0 == obj->get_router_server_id()) {
       result = filter_router_message_result_type(false, true);
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_IN_SERVER);
@@ -250,7 +250,7 @@ static rpc::result_code_type auto_mutable_router_object(rpc::context &ctx, uint6
   RPC_RETURN_CODE(res);
 }
 
-static rpc::result_code_type check_local_router_object(rpc::context &ctx, uint64_t self_bus_id,
+static rpc::result_code_type check_local_router_object(rpc::context &ctx, uint64_t self_node_id,
                                                        router_manager_base &mgr, router_manager_base::key_t key,
                                                        std::shared_ptr<router_object_base> &obj,
                                                        filter_router_message_result_type &result) {
@@ -273,9 +273,9 @@ static rpc::result_code_type check_local_router_object(rpc::context &ctx, uint64
   }
 
   // Check log
-  if (self_bus_id != obj->get_router_server_id()) {
+  if (self_node_id != obj->get_router_server_id()) {
     FWLOGERROR("router object {}:{}:{} repair object failed, expect server id 0x{:x}, real server id 0x{:x}",
-               key.type_id, key.zone_id, key.object_id, self_bus_id, obj->get_router_server_id());
+               key.type_id, key.zone_id, key.object_id, self_node_id, obj->get_router_server_id());
   }
 
   // 恢复成功，直接开始执行任务逻辑
@@ -284,7 +284,7 @@ static rpc::result_code_type check_local_router_object(rpc::context &ctx, uint64
 }
 
 static rpc::result_code_type try_filter_router_msg(rpc::context &ctx, EXPLICIT_UNUSED_ATTR int retry_times,
-                                                   uint64_t /*request_bus_id*/, atframework::SSMsg &request_msg,
+                                                   uint64_t /*request_node_id*/, atframework::SSMsg &request_msg,
                                                    router_manager_base &mgr, router_manager_base::key_t key,
                                                    std::shared_ptr<router_object_base> &obj,
                                                    filter_router_message_result_type &result) {
@@ -323,7 +323,7 @@ static rpc::result_code_type try_filter_router_msg(rpc::context &ctx, EXPLICIT_U
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
   }
 
-  uint64_t self_bus_id = logic_config::me()->get_local_server_id();
+  uint64_t self_node_id = logic_config::me()->get_local_server_id();
   // 可能本地缓存的路由信息过期，路由节点返回0的话说明最后一次登记时对象离线了，这时候只能尝试去数据库获取一次新的信息
   if (0 == obj->get_router_server_id() && !mgr.is_auto_mutable_object() && !obj->is_writable()) {
     uint64_t renew_router_server_id = 0;
@@ -346,7 +346,7 @@ static rpc::result_code_type try_filter_router_msg(rpc::context &ctx, EXPLICIT_U
 
   if (0 == obj->get_router_server_id()) {
     filter_router_message_result_type auto_res;
-    res = RPC_AWAIT_CODE_RESULT(auto_mutable_router_object(ctx, self_bus_id, mgr, key, obj, auto_res));
+    res = RPC_AWAIT_CODE_RESULT(auto_mutable_router_object(ctx, self_node_id, mgr, key, obj, auto_res));
     if (res < 0) {
       result = auto_res;
       RPC_RETURN_CODE(res);
@@ -354,8 +354,8 @@ static rpc::result_code_type try_filter_router_msg(rpc::context &ctx, EXPLICIT_U
   }
 
   // 如果和本地的路由缓存匹配则break直接开始消息处理
-  if (obj && self_bus_id == obj->get_router_server_id()) {
-    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(check_local_router_object(ctx, self_bus_id, mgr, key, obj, result)));
+  if (obj && self_node_id == obj->get_router_server_id()) {
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(check_local_router_object(ctx, self_node_id, mgr, key, obj, result)));
   }
 
   // 路由消息转发
@@ -411,7 +411,7 @@ rpc::result_code_type task_action_ss_req_base::filter_router_msg(router_manager_
   while ((++retry_times) <= 3) {
     detail::filter_router_message_result_type internal_filter_result;
     last_result =
-        RPC_AWAIT_CODE_RESULT(detail::try_filter_router_msg(get_shared_context(), retry_times, get_request_bus_id(),
+        RPC_AWAIT_CODE_RESULT(detail::try_filter_router_msg(get_shared_context(), retry_times, get_request_node_id(),
                                                             get_request(), *mgr, key, obj, internal_filter_result));
     if (internal_filter_result.is_on_current_server) {
       filter_result = std::make_pair(true, last_result);
@@ -437,7 +437,7 @@ rpc::result_code_type task_action_ss_req_base::filter_router_msg(router_manager_
     rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRouterUpdateSync> sync_msg{get_shared_context()};
     atframework::SSRouterHead *router_head = sync_msg->mutable_object();
     if (nullptr != router_head) {
-      router_head->set_router_src_bus_id(obj->get_router_server_id());
+      router_head->set_router_source_node_id(obj->get_router_server_id());
       router_head->set_router_version(obj->get_router_version());
       router_head->set_object_type_id(key.type_id);
       router_head->set_object_inst_id(key.object_id);
@@ -445,7 +445,7 @@ rpc::result_code_type task_action_ss_req_base::filter_router_msg(router_manager_
     }
 
     // 只通知直接来源
-    RPC_AWAIT_IGNORE_RESULT(rpc::router::router_update_sync(get_shared_context(), get_request_bus_id(), *sync_msg));
+    RPC_AWAIT_IGNORE_RESULT(rpc::router::router_update_sync(get_shared_context(), get_request_node_id(), *sync_msg));
   }
 
   // 失败则要回发转发失败

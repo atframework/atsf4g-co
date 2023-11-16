@@ -24,16 +24,16 @@
 
 #include "data/player_cache.h"
 
-session::key_t::key_t() : bus_id(0), session_id(0) {}
-session::key_t::key_t(const std::pair<uint64_t, uint64_t> &p) : bus_id(p.first), session_id(p.second) {}
+session::key_t::key_t() : node_id(0), session_id(0) {}
+session::key_t::key_t(const std::pair<uint64_t, uint64_t> &p) : node_id(p.first), session_id(p.second) {}
 
-bool session::key_t::operator==(const key_t &r) const { return bus_id == r.bus_id && session_id == r.session_id; }
+bool session::key_t::operator==(const key_t &r) const { return node_id == r.node_id && session_id == r.session_id; }
 
 bool session::key_t::operator!=(const key_t &r) const { return !((*this) == r); }
 
 bool session::key_t::operator<(const key_t &r) const {
-  if (bus_id != r.bus_id) {
-    return bus_id < r.bus_id;
+  if (node_id != r.node_id) {
+    return node_id < r.node_id;
   }
   return session_id < r.session_id;
 }
@@ -41,8 +41,8 @@ bool session::key_t::operator<(const key_t &r) const {
 bool session::key_t::operator<=(const key_t &r) const { return (*this) < r || (*this) == r; }
 
 bool session::key_t::operator>(const key_t &r) const {
-  if (bus_id != r.bus_id) {
-    return bus_id > r.bus_id;
+  if (node_id != r.node_id) {
+    return node_id > r.node_id;
   }
   return session_id > r.session_id;
 }
@@ -83,17 +83,17 @@ void session::flag_guard_t::reset() {
 }
 
 session::session() : flags_(0), login_task_id_(0), session_sequence_(0) {
-  id_.bus_id = 0;
+  id_.node_id = 0;
   id_.session_id = 0;
 }
 
 session::~session() {
-  FWLOGDEBUG("session [{:#x}, {}] destroyed", id_.bus_id, id_.session_id);
+  FWLOGDEBUG("session [{:#x}, {}] destroyed", id_.node_id, id_.session_id);
 
   if (actor_log_writter_) {
     util::log::log_wrapper::caller_info_t caller = util::log::log_wrapper::caller_info_t(
         util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
-    actor_log_writter_->format_log(caller, "------------ session: {:#x}:{} destroyed ------------", get_key().bus_id,
+    actor_log_writter_->format_log(caller, "------------ session: {:#x}:{} destroyed ------------", get_key().node_id,
                                    get_key().session_id);
   }
 }
@@ -136,7 +136,7 @@ void session::set_player(std::shared_ptr<player_cache> u) {
       util::log::log_wrapper::caller_info_t caller = util::log::log_wrapper::caller_info_t(
           util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
       actor_log_writter_->format_log(caller, "============ user id: {}, session: {:#x}:{} created ============",
-                                     u->get_user_id(), get_key().bus_id, get_key().session_id);
+                                     u->get_user_id(), get_key().node_id, get_key().session_id);
     }
   }
 }
@@ -164,7 +164,7 @@ int32_t session::send_msg_to_client(atframework::CSMsg &msg, uint64_t server_seq
   size_t tls_buf_len =
       atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);
   if (msg_buf_len > tls_buf_len) {
-    FWLOGERROR("send to gateway [{:#x}, {}] failed: require {}, only have {}", id_.bus_id, id_.session_id, msg_buf_len,
+    FWLOGERROR("send to gateway [{:#x}, {}] failed: require {}, only have {}", id_.node_id, id_.session_id, msg_buf_len,
                tls_buf_len);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
   }
@@ -174,7 +174,7 @@ int32_t session::send_msg_to_client(atframework::CSMsg &msg, uint64_t server_seq
   msg.SerializeWithCachedSizesToArray(buf_start);
   FWLOGDEBUG(
       "send msg to client:[{:#x}, {}] {} bytes.(session sequence: {}, client sequence: {}, server sequence: {})\n{}",
-      id_.bus_id, id_.session_id, msg_buf_len, msg.head().session_sequence(), msg.head().client_sequence(),
+      id_.node_id, id_.session_id, msg_buf_len, msg.head().session_sequence(), msg.head().client_sequence(),
       msg.head().server_sequence(), protobuf_mini_dumper_get_readable(msg));
 
   return send_msg_to_client(buf_start, msg_buf_len);
@@ -182,42 +182,42 @@ int32_t session::send_msg_to_client(atframework::CSMsg &msg, uint64_t server_seq
 
 int32_t session::send_msg_to_client(const void *msg_data, size_t msg_size) {
   // send data using dispatcher
-  return cs_msg_dispatcher::me()->send_data(get_key().bus_id, get_key().session_id, msg_data, msg_size);
+  return cs_msg_dispatcher::me()->send_data(get_key().node_id, get_key().session_id, msg_data, msg_size);
 }
 
-int32_t session::broadcast_msg_to_client(uint64_t bus_id, const atframework::CSMsg &msg) {
+int32_t session::broadcast_msg_to_client(uint64_t node_id, const atframework::CSMsg &msg) {
   size_t msg_buf_len = msg.ByteSizeLong();
   size_t tls_buf_len =
       atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);
   if (msg_buf_len > tls_buf_len) {
-    FWLOGERROR("broadcast to gateway [{:#x}] failed: require {}, only have {}", bus_id, msg_buf_len, tls_buf_len);
+    FWLOGERROR("broadcast to gateway [{:#x}] failed: require {}, only have {}", node_id, msg_buf_len, tls_buf_len);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
   }
 
   ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(
       atframe::gateway::proto_base::get_tls_buffer(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM));
   msg.SerializeWithCachedSizesToArray(buf_start);
-  FWLOGDEBUG("broadcast msg to gateway [{:#x}] {} bytes\n{}", bus_id, msg_buf_len,
+  FWLOGDEBUG("broadcast msg to gateway [{:#x}] {} bytes\n{}", node_id, msg_buf_len,
              protobuf_mini_dumper_get_readable(msg));
 
-  return broadcast_msg_to_client(bus_id, buf_start, msg_buf_len);
+  return broadcast_msg_to_client(node_id, buf_start, msg_buf_len);
 }
 
-int32_t session::broadcast_msg_to_client(uint64_t bus_id, const void *msg_data, size_t msg_size) {
+int32_t session::broadcast_msg_to_client(uint64_t node_id, const void *msg_data, size_t msg_size) {
   // broadcast data using dispatcher
-  return cs_msg_dispatcher::me()->broadcast_data(bus_id, msg_data, msg_size);
+  return cs_msg_dispatcher::me()->broadcast_data(node_id, msg_data, msg_size);
 }
 
 bool session::compare_callback::operator()(const key_t &l, const key_t &r) const {
-  if (l.bus_id != r.bus_id) {
+  if (l.node_id != r.node_id) {
     return l.session_id < r.session_id;
   }
-  return l.bus_id < r.bus_id;
+  return l.node_id < r.node_id;
 }
 
 size_t session::compare_callback::operator()(const key_t &hash_obj) const {
   // std::hash also use fnv1 hash algorithm, but fnv1a sometime has better random
-  return util::hash::hash_fnv1a<size_t>(&hash_obj.bus_id, sizeof(hash_obj.bus_id)) ^
+  return util::hash::hash_fnv1a<size_t>(&hash_obj.node_id, sizeof(hash_obj.node_id)) ^
          util::hash::hash_fnv1<size_t>(&hash_obj.session_id, sizeof(hash_obj.session_id));
 }
 
@@ -243,7 +243,7 @@ int32_t session::send_kickoff(int32_t reason) {
     return 0;
   }
   // send kickoff using dispatcher
-  return cs_msg_dispatcher::me()->send_kickoff(get_key().bus_id, get_key().session_id, reason);
+  return cs_msg_dispatcher::me()->send_kickoff(get_key().node_id, get_key().session_id, reason);
 }
 
 void session::write_actor_log_head(const atframework::CSMsg &msg, size_t byte_size, bool is_input) {
@@ -288,11 +288,11 @@ void session::write_actor_log_head(const atframework::CSMsg &msg, size_t byte_si
       util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
   if (is_input) {
     writter->format_log(caller, "<<<<<<<<<<<< receive {} bytes from player {}:{}, session: {:#x}:{}, rpc: {}, type: {}",
-                        byte_size, player_zone_id, player_user_id, get_key().bus_id, get_key().session_id, rpc_name,
+                        byte_size, player_zone_id, player_user_id, get_key().node_id, get_key().session_id, rpc_name,
                         type_url);
   } else {
     writter->format_log(caller, ">>>>>>>>>>>> send {} bytes to player {}:{}, session: {:#x}:{}, rpc: {}, type: {}",
-                        byte_size, player_zone_id, player_user_id, get_key().bus_id, get_key().session_id, rpc_name,
+                        byte_size, player_zone_id, player_user_id, get_key().node_id, get_key().session_id, rpc_name,
                         type_url);
   }
 }
@@ -328,7 +328,7 @@ void session::write_actor_log_body(const google::protobuf::Message &msg, const a
   writter->format_log(caller,
                       "============ session: {:#x}:{}, rpc: {}, type: {} ============\n------------ "
                       "Head ------------\n{}------------ Body ------------\n{}",
-                      get_key().bus_id, get_key().session_id, rpc_name, type_url,
+                      get_key().node_id, get_key().session_id, rpc_name, type_url,
                       protobuf_mini_dumper_get_readable(head), protobuf_mini_dumper_get_readable(msg));
 }
 

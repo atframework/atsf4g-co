@@ -53,7 +53,7 @@ class task_action_ss_req_base : public task_action_req_base<atframework::SSMsg> 
 
   result_type hook_run() override;
 
-  uint64_t get_request_bus_id() const;
+  uint64_t get_request_node_id() const;
 
   msg_ref_type add_rsp_msg(uint64_t dst_pd = 0);
 

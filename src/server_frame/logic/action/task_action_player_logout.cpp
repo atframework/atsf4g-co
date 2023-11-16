@@ -26,10 +26,10 @@ task_action_player_logout::task_action_player_logout(ctor_param_t&& param)
 task_action_player_logout::~task_action_player_logout() {}
 
 task_action_player_logout::result_type task_action_player_logout::operator()() {
-  FWLOGDEBUG("task_action_player_logout for session [{:#}, {}] start", ctor_param_.atgateway_bus_id,
+  FWLOGDEBUG("task_action_player_logout for session [{:#}, {}] start", ctor_param_.atgateway_node_id,
              ctor_param_.atgateway_session_id);
   session::key_t key;
-  key.bus_id = ctor_param_.atgateway_bus_id;
+  key.node_id = ctor_param_.atgateway_node_id;
   key.session_id = ctor_param_.atgateway_session_id;
   session::ptr_t s = session_manager::me()->find(key);
   session::flag_guard_t flag_guard;

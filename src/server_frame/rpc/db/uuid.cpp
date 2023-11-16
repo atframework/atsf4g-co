@@ -94,16 +94,16 @@ std::string generate_standard_uuid_binary() {
 }
 
 std::string generate_short_uuid() {
-  // bus_id:(timestamp-2022-01-01 00:00:00):sequence
+  // node_id:(timestamp-2022-01-01 00:00:00):sequence
   // 2022-01-01 00:00:00 UTC => 1640995200
-  uint64_t bus_id = logic_config::me()->get_local_server_id();
+  uint64_t node_id = logic_config::me()->get_local_server_id();
   time_t time_param = util::time::time_utility::get_now() - 1640995200;
 
   // 第一个字符用S，表示服务器生成，这样如果客户端生成的用C开头，就不会和服务器冲突
   // 第二个字符表示版本号，以便后续变更算法可以和之前区分开来
   char bin_buffer[64] = {'S', '1', 0};
   size_t start_index = 2;
-  start_index += detail::short_uuid_encoder_(&bin_buffer[start_index], sizeof(bin_buffer) - start_index - 1, bus_id);
+  start_index += detail::short_uuid_encoder_(&bin_buffer[start_index], sizeof(bin_buffer) - start_index - 1, node_id);
   start_index += detail::short_uuid_encoder_(&bin_buffer[start_index], sizeof(bin_buffer) - start_index - 1,
                                              time_param > 0 ? static_cast<uint64_t>(time_param) : 0);
   start_index += detail::short_uuid_encoder_(&bin_buffer[start_index], sizeof(bin_buffer) - start_index - 1);

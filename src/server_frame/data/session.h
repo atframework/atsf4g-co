@@ -30,7 +30,7 @@ class session {
  public:
   using ptr_t = std::shared_ptr<session>;
   struct key_t {
-    uint64_t bus_id;
+    uint64_t node_id;
     uint64_t session_id;
 
     key_t();
@@ -123,9 +123,9 @@ class session {
 
   int32_t send_msg_to_client(const void *msg_data, size_t msg_size);
 
-  static int32_t broadcast_msg_to_client(uint64_t bus_id, const atframework::CSMsg &msg);
+  static int32_t broadcast_msg_to_client(uint64_t node_id, const atframework::CSMsg &msg);
 
-  static int32_t broadcast_msg_to_client(uint64_t bus_id, const void *msg_data, size_t msg_size);
+  static int32_t broadcast_msg_to_client(uint64_t node_id, const void *msg_data, size_t msg_size);
 
   struct compare_callback {
     bool operator()(const key_t &l, const key_t &r) const;

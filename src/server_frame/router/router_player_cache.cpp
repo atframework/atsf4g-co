@@ -209,13 +209,13 @@ rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, router
     obj->init_from_table_data(ctx, tbu);
   }
 
-  uint64_t self_bus_id = logic_config::me()->get_local_server_id();
+  uint64_t self_node_id = logic_config::me()->get_local_server_id();
   // 如果router server id是0则设置为本地的登入地址
   if (0 == get_router_server_id()) {
     uint64_t old_router_server_id = obj->get_login_info().router_server_id();
     uint64_t old_router_ver = obj->get_login_info().router_version();
 
-    obj->get_login_info().set_router_server_id(self_bus_id);
+    obj->get_login_info().set_router_server_id(self_node_id);
     obj->get_login_info().set_router_version(old_router_ver + 1);
 
     // 新登入则设置登入时间
@@ -233,9 +233,9 @@ rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, router
     }
 
     set_router_server_id(obj->get_login_info().router_server_id(), obj->get_login_info().router_version());
-  } else if (self_bus_id != get_router_server_id()) {
+  } else if (self_node_id != get_router_server_id()) {
     // 不在这个进程上
-    FWPLOGERROR(*obj, "is in server {:#x} but try to pull in server {:#x}", get_router_server_id(), self_bus_id);
+    FWPLOGERROR(*obj, "is in server {:#x} but try to pull in server {:#x}", get_router_server_id(), self_node_id);
 
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_IN_OTHER_SERVER);
   }
@@ -252,7 +252,7 @@ rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void *
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY);
   }
 
-  uint64_t self_bus_id = logic_config::me()->get_local_server_id();
+  uint64_t self_node_id = logic_config::me()->get_local_server_id();
   // RPC read from DB(以后可以优化掉)
   int res = 0;
   // 异常的玩家数据记录，自动修复一下
@@ -269,7 +269,7 @@ rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void *
     }
 
     if (0 != get_router_server_id() && 0 != obj->get_login_info().router_server_id() &&
-        obj->get_login_info().router_server_id() != self_bus_id) {
+        obj->get_login_info().router_server_id() != self_node_id) {
       bad_data_kickoff = true;
     }
 
@@ -383,7 +383,7 @@ rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void *
   }
 
   if (bad_data_kickoff) {
-    FWPLOGERROR(*obj, "login pd error(expected: {:#x}, real: {:#x})", self_bus_id,
+    FWPLOGERROR(*obj, "login pd error(expected: {:#x}, real: {:#x})", self_node_id,
                 obj->get_login_info().router_server_id());
 
     // 在其他设备登入的要把这里的Session踢下线

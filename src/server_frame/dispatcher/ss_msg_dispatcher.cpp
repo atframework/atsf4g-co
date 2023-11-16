@@ -112,7 +112,7 @@ SERVER_FRAME_API uint64_t ss_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg
     return 0;
   }
 
-  return real_msg->head().dst_task_id();
+  return real_msg->head().destination_task_id();
 }
 
 SERVER_FRAME_API ss_msg_dispatcher::msg_type_t ss_msg_dispatcher::pick_msg_type_id(msg_raw_t &) { return 0; }
@@ -159,7 +159,7 @@ SERVER_FRAME_API const atframework::DispatcherOptions *ss_msg_dispatcher::get_op
   return nullptr;
 }
 
-SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, atframework::SSMsg &ss_msg,
+SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t node_id, atframework::SSMsg &ss_msg,
                                                          bool ignore_discovery) {
   atapp::app *owner = get_app();
   if (nullptr == owner) {
@@ -175,21 +175,21 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, atfram
   size_t tls_buf_len =
       atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);
   if (msg_buf_len > tls_buf_len) {
-    FWLOGERROR("send to proc [{:#x}: {}] failed: require {}, only have {}", bus_id,
-               get_app()->convert_app_id_to_string(bus_id), msg_buf_len, tls_buf_len);
+    FWLOGERROR("send to proc [{:#x}: {}] failed: require {}, only have {}", node_id,
+               get_app()->convert_app_id_to_string(node_id), msg_buf_len, tls_buf_len);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
   }
 
   ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(
       atframe::gateway::proto_base::get_tls_buffer(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM));
   ss_msg.SerializeWithCachedSizesToArray(buf_start);
-  FWLOGDEBUG("send msg to proc [{:#x}: {}] {} bytes\n{}", bus_id, get_app()->convert_app_id_to_string(bus_id),
+  FWLOGDEBUG("send msg to proc [{:#x}: {}] {} bytes\n{}", node_id, get_app()->convert_app_id_to_string(node_id),
              msg_buf_len, protobuf_mini_dumper_get_readable(ss_msg));
 
-  return send_to_proc(bus_id, buf_start, msg_buf_len, ss_msg.head().sequence(), ignore_discovery);
+  return send_to_proc(node_id, buf_start, msg_buf_len, ss_msg.head().sequence(), ignore_discovery);
 }
 
-SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, const void *msg_buf, size_t msg_len,
+SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t node_id, const void *msg_buf, size_t msg_len,
                                                          uint64_t sequence,
                                                          EXPLICIT_UNUSED_ATTR bool ignore_discovery) {
   atapp::app *owner = get_app();
@@ -207,13 +207,13 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t bus_id, const 
     sequence = owner->get_bus_node()->alloc_msg_seq();
   }
 
-  int res = owner->send_message(bus_id, atframe::component::message_type::EN_ATST_SS_MSG, msg_buf, msg_len, &sequence);
+  int res = owner->send_message(node_id, atframe::component::message_type::EN_ATST_SS_MSG, msg_buf, msg_len, &sequence);
 
   if (res < 0) {
-    FWLOGERROR("send msg to proc [{:#x}: {}] {} bytes failed, res: {}", bus_id,
-               get_app()->convert_app_id_to_string(bus_id), msg_len, res);
+    FWLOGERROR("send msg to proc [{:#x}: {}] {} bytes failed, res: {}", node_id,
+               get_app()->convert_app_id_to_string(node_id), msg_len, res);
   } else {
-    FWLOGDEBUG("send msg to proc [{:#x}: {}] {} bytes success", bus_id, get_app()->convert_app_id_to_string(bus_id),
+    FWLOGDEBUG("send msg to proc [{:#x}: {}] {} bytes success", node_id, get_app()->convert_app_id_to_string(node_id),
                msg_len);
   }
 
@@ -272,7 +272,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const atapp::etcd_disco
   return res;
 }
 
-SERVER_FRAME_API bool ss_msg_dispatcher::is_target_server_available(uint64_t bus_id) const {
+SERVER_FRAME_API bool ss_msg_dispatcher::is_target_server_available(uint64_t node_id) const {
   if (nullptr == get_app()) {
     return false;
   }
@@ -281,11 +281,11 @@ SERVER_FRAME_API bool ss_msg_dispatcher::is_target_server_available(uint64_t bus
     return false;
   }
 
-  if (bus_id == get_app()->get_id()) {
+  if (node_id == get_app()->get_id()) {
     return true;
   }
 
-  return !get_app()->get_discovery_node_by_id(bus_id);
+  return !get_app()->get_discovery_node_by_id(node_id);
 }
 
 SERVER_FRAME_API bool ss_msg_dispatcher::is_target_server_available(const std::string &node_name) const {
@@ -420,8 +420,8 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_s
     return ret;
   }
   // 不能改消息来源，可能是路由转发消息
-  if (0 == ss_msg->head().bus_id()) {
-    ss_msg->mutable_head()->set_bus_id(from_server_id);
+  if (0 == ss_msg->head().node_id()) {
+    ss_msg->mutable_head()->set_node_id(from_server_id);
   }
 
   rpc::context::tracer tracer;
@@ -490,10 +490,10 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::on_receive_send_data_response(const 
     return ret;
   }
 
-  ss_msg->mutable_head()->set_bus_id(source.id);
+  ss_msg->mutable_head()->set_node_id(source.id);
   // 转移要恢复的任务ID
-  ss_msg->mutable_head()->set_dst_task_id(ss_msg->head().src_task_id());
-  ss_msg->mutable_head()->set_src_task_id(0);
+  ss_msg->mutable_head()->set_destination_task_id(ss_msg->head().source_task_id());
+  ss_msg->mutable_head()->set_source_task_id(0);
   ss_msg->mutable_head()->set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_SEND_FAILED);
 
   ret = on_send_message_failed(ctx, callback_msg, error_code, msg.message_sequence);
@@ -521,7 +521,7 @@ SERVER_FRAME_API void ss_msg_dispatcher::on_create_task_failed(dispatcher_start_
     return;
   }
 
-  if (!real_msg->head().has_rpc_request() || 0 == real_msg->head().bus_id() || 0 == real_msg->head().src_task_id()) {
+  if (!real_msg->head().has_rpc_request() || 0 == real_msg->head().node_id() || 0 == real_msg->head().source_task_id()) {
     return;
   }
 
@@ -543,16 +543,16 @@ SERVER_FRAME_API void ss_msg_dispatcher::on_create_task_failed(dispatcher_start_
   atframework::SSMsgHead *head = rsp->mutable_head();
   if (nullptr == head) {
     FWLOGERROR("malloc header failed when pack response of {} (source task id: {})", rpc_name,
-               real_msg->head().src_task_id());
+               real_msg->head().source_task_id());
     return;
   }
 
-  head->set_src_task_id(0);
-  head->set_dst_task_id(real_msg->head().src_task_id());
+  head->set_source_task_id(0);
+  head->set_destination_task_id(real_msg->head().source_task_id());
   head->set_sequence(real_msg->head().sequence());
   head->set_error_code(error_code);
   head->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE);
-  head->set_bus_id(real_msg->head().bus_id());
+  head->set_node_id(real_msg->head().node_id());
   head->set_timestamp(util::time::time_utility::get_now());
 
   if (real_msg->head().has_router()) {
@@ -574,11 +574,11 @@ SERVER_FRAME_API void ss_msg_dispatcher::on_create_task_failed(dispatcher_start_
   head->set_player_open_id(real_msg->head().player_open_id());
   head->set_player_zone_id(real_msg->head().player_zone_id());
 
-  int res = send_to_proc(real_msg->head().bus_id(), *rsp);
+  int res = send_to_proc(real_msg->head().node_id(), *rsp);
   if (res < 0) {
     FWLOGERROR("Send create response failed of {} (source task id: {}) to [{:#x}: {}] failed, res: {}({})", rpc_name,
-               real_msg->head().src_task_id(), real_msg->head().bus_id(),
-               get_app()->convert_app_id_to_string(real_msg->head().bus_id()), res,
+               real_msg->head().source_task_id(), real_msg->head().node_id(),
+               get_app()->convert_app_id_to_string(real_msg->head().node_id()), res,
                protobuf_mini_dumper_get_error_msg(res));
   }
 }

@@ -9,7 +9,7 @@
 class task_action_player_logout : public task_action_no_req_base {
  public:
   struct ctor_param_t : public task_action_no_req_base::ctor_param_t {
-    uint64_t atgateway_bus_id;
+    uint64_t atgateway_node_id;
     uint64_t atgateway_session_id;
   };
 

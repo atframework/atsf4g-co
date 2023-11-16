@@ -44,7 +44,7 @@
 
 struct db_async_data_t {
   uint64_t task_id;
-  uint64_t bus_id;
+  uint64_t node_id;
   uint64_t sequence;
 
   redisReply *response;
@@ -210,8 +210,8 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t
     }
   }
 
-  table_msg->set_bus_id(req->bus_id);
-  table_msg->set_dst_task_id(req->task_id);
+  table_msg->set_node_id(req->node_id);
+  table_msg->set_destination_task_id(req->task_id);
   table_msg->set_error_code(ret);
 
   dispatcher_raw_message callback_msg = dispatcher_make_default<dispatcher_raw_message>();
@@ -230,7 +230,7 @@ SERVER_FRAME_API uint64_t db_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg
     return 0;
   }
 
-  return real_msg->dst_task_id();
+  return real_msg->destination_task_id();
 }
 
 SERVER_FRAME_API db_msg_dispatcher::msg_type_t db_msg_dispatcher::pick_msg_type_id(msg_raw_t &) { return 0; }
@@ -521,7 +521,7 @@ int db_msg_dispatcher::cluster_send_msg(hiredis::happ::cluster &clu, const char 
   } else {
     // 异步数据
     db_async_data_t req;
-    req.bus_id = pd;
+    req.node_id = pd;
     req.task_id = task_id;
     req.unpack_fn = fn;
     req.response = nullptr;
@@ -668,7 +668,7 @@ int db_msg_dispatcher::raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_
   } else {
     // 异步数据
     db_async_data_t req;
-    req.bus_id = pd;
+    req.node_id = pd;
     req.task_id = task_id;
     req.unpack_fn = fn;
     req.response = nullptr;

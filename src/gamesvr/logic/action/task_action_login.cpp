@@ -180,7 +180,7 @@ GAMECLIENT_RPC_API int task_action_login::on_success() {
 
   // Session更换，老session要下线
   if (user->get_session() != s) {
-    FWPLOGWARNING(*user, "login success but session changed , remove old session {}:{}", s->get_key().bus_id,
+    FWPLOGWARNING(*user, "login success but session changed , remove old session {}:{}", s->get_key().node_id,
                   s->get_key().session_id);
     session_manager::me()->remove(s, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_OTHER_DEVICE);
@@ -235,7 +235,7 @@ GAMECLIENT_RPC_API int task_action_login::on_failed() {
 
     // Session更换，直接老session下线即可
     if (user && user->get_session() != s) {
-      FWPLOGWARNING(*user, "login success but session changed , remove old session {}:{}", s->get_key().bus_id,
+      FWPLOGWARNING(*user, "login success but session changed , remove old session {}:{}", s->get_key().node_id,
                     s->get_key().session_id);
     } else if (user && !user->is_inited()) {
       // 如果创建了未初始化的GameUser对象，则需要移除

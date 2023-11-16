@@ -146,7 +146,7 @@ rpc::context::trace_start_option task_action_cs_req_base::get_trace_option() con
 
 std::pair<uint64_t, uint64_t> task_action_cs_req_base::get_gateway_info() const {
   const message_type &cs_msg = get_request();
-  return std::pair<uint64_t, uint64_t>(cs_msg.head().session_bus_id(), cs_msg.head().session_id());
+  return std::pair<uint64_t, uint64_t>(cs_msg.head().session_node_id(), cs_msg.head().session_id());
 }
 
 session::ptr_t task_action_cs_req_base::get_session() const {
@@ -223,7 +223,7 @@ void task_action_cs_req_base::send_response() {
                    get_zone_id(), get_user_id(), res);
       } else {
         FWLOGERROR("task {} [{}] send message to session [{:#x}, {}] failed, res: {}", name(), get_task_id(),
-                   sess->get_key().bus_id, sess->get_key().session_id, res);
+                   sess->get_key().node_id, sess->get_key().session_id, res);
       }
     }
   }

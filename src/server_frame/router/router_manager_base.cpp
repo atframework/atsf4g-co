@@ -67,7 +67,7 @@ SERVER_FRAME_API rpc::result_code_type router_manager_base::send_msg_raw(rpc::co
   // 这里必须直接发送
 
   atframework::SSRouterHead *router_head = msg.mutable_head()->mutable_router();
-  router_head->set_router_src_bus_id(logic_config::me()->get_local_server_id());  // 源BUS ID是自己
+  router_head->set_router_source_node_id(logic_config::me()->get_local_server_id());  // 源BUS ID是自己
   router_head->set_router_version(obj.get_router_version());
   router_head->set_object_type_id(obj.get_key().type_id);
   router_head->set_object_inst_id(obj.get_key().object_id);
