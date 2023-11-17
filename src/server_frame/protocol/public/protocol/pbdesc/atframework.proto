@@ -167,11 +167,11 @@ message AttributeValue {
     int64 int_value = 3;
     double double_value = 4;
     bytes bytes_value = 5;
-    AttributeStringList string_list = 6;
+    // AttributeStringList string_list = 6; // To reduce the low performance calls, disable string list here
     AttributeBoolList bool_list = 7;
     AttributeIntList int_list = 8;
     AttributeDoubleList double_list = 9;
-    AttributeBytesList bytes_list = 10;
+    // AttributeBytesList bytes_list = 10; // To reduce the low performance calls, disable bytes list here
   }
 }
 
