@@ -61,6 +61,8 @@ enum EnSysErrorType {
                               [(error_code.description) = "RPC调用未完成"];
   EN_SYS_SIGN_VERIFY = -1000031
                        [(error_code.description) = "签名校检失败"];
+  EN_SYS_RPC_ALREADY_HAS_RESPONSE = -1000032
+                                    [(error_code.description) = "RPC已经有回包"];
 
   EN_ROUTER_NOT_FOUND = -10000081
                         [(error_code.description) = "路由信息找不到"];

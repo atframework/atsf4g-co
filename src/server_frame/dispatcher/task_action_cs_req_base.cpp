@@ -144,6 +144,8 @@ rpc::context::trace_start_option task_action_cs_req_base::get_trace_option() con
   return ret;
 }
 
+bool task_action_cs_req_base::is_stream_rpc() const noexcept { return get_request().head().has_rpc_stream(); }
+
 std::pair<uint64_t, uint64_t> task_action_cs_req_base::get_gateway_info() const {
   const message_type &cs_msg = get_request();
   return std::pair<uint64_t, uint64_t>(cs_msg.head().session_node_id(), cs_msg.head().session_id());
@@ -168,7 +170,7 @@ std::shared_ptr<player_cache> task_action_cs_req_base::get_player_cache() const 
   return sess->get_player();
 }
 
-task_action_cs_req_base::msg_ref_type task_action_cs_req_base::add_rsp_msg() {
+task_action_cs_req_base::msg_ref_type task_action_cs_req_base::add_response_message() {
   message_type *msg = get_shared_context().create<message_type>();
   if (nullptr == msg) {
     static message_type empty_msg;
@@ -176,20 +178,39 @@ task_action_cs_req_base::msg_ref_type task_action_cs_req_base::add_rsp_msg() {
     return empty_msg;
   }
 
-  msg->mutable_head()->set_error_code(get_response_code());
-  msg->mutable_head()->set_timestamp(util::time::time_utility::get_now());
-  msg->mutable_head()->set_client_sequence(get_request().head().client_sequence());
+  atframework::CSMsgHead *head = msg->mutable_head();
+
+  head->set_error_code(get_response_code());
+  head->set_timestamp(util::time::time_utility::get_now());
+  head->set_client_sequence(get_request().head().client_sequence());
   if (get_request().head().op_type() == PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM) {
-    msg->mutable_head()->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM);
+    head->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM);
   } else {
-    msg->mutable_head()->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE);
+    head->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE);
+  }
+
+  if (get_request().head().has_rpc_request()) {
+    head->clear_rpc_request();
+    head->mutable_rpc_response()->set_version(logic_config::me()->get_atframework_settings().rpc_version());
+    head->mutable_rpc_response()->set_rpc_name(get_request().head().rpc_request().rpc_name());
+    head->mutable_rpc_response()->set_type_url(get_response_type_url());
+  } else {
+    head->clear_rpc_stream();
+    head->mutable_rpc_stream()->set_version(logic_config::me()->get_atframework_settings().rpc_version());
+    head->mutable_rpc_stream()->set_rpc_name(get_request().head().rpc_stream().rpc_name());
+    head->mutable_rpc_stream()->set_type_url(get_response_type_url());
+
+    head->mutable_rpc_stream()->set_caller(static_cast<std::string>(logic_config::me()->get_local_server_name()));
+    head->mutable_rpc_stream()->set_callee(get_request().head().rpc_stream().caller());
   }
 
   response_messages_.push_back(msg);
   return *msg;
 }
 
-std::list<task_action_cs_req_base::message_type *> &task_action_cs_req_base::get_rsp_list() { return response_messages_; }
+std::list<task_action_cs_req_base::message_type *> &task_action_cs_req_base::get_rsp_list() {
+  return response_messages_;
+}
 
 const std::list<task_action_cs_req_base::message_type *> &task_action_cs_req_base::get_rsp_list() const {
   return response_messages_;
@@ -212,7 +233,8 @@ void task_action_cs_req_base::send_response() {
     return;
   }
 
-  for (std::list<message_type *>::iterator iter = response_messages_.begin(); iter != response_messages_.end(); ++iter) {
+  for (std::list<message_type *>::iterator iter = response_messages_.begin(); iter != response_messages_.end();
+       ++iter) {
     (*iter)->mutable_head()->set_error_code(get_response_code());
 
     // send message using session

@@ -27,7 +27,7 @@ task_action_router_transfer::task_action_router_transfer(dispatcher_start_data_t
     : base_type(COPP_MACRO_STD_MOVE(param)) {}
 task_action_router_transfer::~task_action_router_transfer() {}
 
-bool task_action_router_transfer::is_stream_rpc() const { return false; }
+bool task_action_router_transfer::is_stream_rpc() const noexcept { return false; }
 
 task_action_router_transfer::result_type task_action_router_transfer::operator()() {
   const rpc_request_type& req_body = get_request_body();

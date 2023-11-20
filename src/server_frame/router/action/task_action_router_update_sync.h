@@ -25,7 +25,7 @@ class task_action_router_update_sync
   explicit task_action_router_update_sync(dispatcher_start_data_type&& param);
   ~task_action_router_update_sync();
 
-  bool is_stream_rpc() const override;
+  bool is_stream_rpc() const noexcept override;
 
   result_type operator()() override;
 

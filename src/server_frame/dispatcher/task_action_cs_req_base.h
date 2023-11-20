@@ -54,11 +54,17 @@ class task_action_cs_req_base : public task_action_req_base<atframework::CSMsg> 
 
   rpc::context::trace_start_option get_trace_option() const noexcept override;
 
+  virtual bool is_stream_rpc() const noexcept;
+
+  virtual const std::string &get_request_type_url() const noexcept = 0;
+
+  virtual const std::string &get_response_type_url() const noexcept = 0;
+
   std::pair<uint64_t, uint64_t> get_gateway_info() const;
 
   std::shared_ptr<session> get_session() const;
 
-  msg_ref_type add_rsp_msg();
+  msg_ref_type add_response_message();
 
   std::list<message_type *> &get_rsp_list();
   const std::list<message_type *> &get_rsp_list() const;
@@ -74,6 +80,8 @@ class task_action_cs_req_base : public task_action_req_base<atframework::CSMsg> 
   void send_response() override;
   void send_response(bool sync_dirty);
   void write_actor_log_body(const google::protobuf::Message &msg, const atframework::CSMsgHead &head);
+
+  inline bool has_response_message() const noexcept { return !response_messages_.empty(); }
 
  private:
   mutable std::shared_ptr<session> session_inst_;
@@ -109,7 +117,6 @@ class task_action_cs_rpc_base : public task_action_cs_req_base {
   explicit task_action_cs_rpc_base(dispatcher_start_data_type &&start_param)
       : base_type(std::move(start_param)),
         has_unpack_request_(false),
-        has_pack_response_(false),
         request_body_(nullptr),
         response_body_(nullptr) {}
 
@@ -142,15 +149,17 @@ class task_action_cs_rpc_base : public task_action_cs_req_base {
     return *response_body_;
   }
 
-  static const std::string &get_request_type_url() { return rpc_request_type::descriptor()->full_name(); }
+  const std::string &get_request_type_url() const noexcept override {
+    return rpc_request_type::descriptor()->full_name();
+  }
 
-  static const std::string &get_response_type_url() { return rpc_response_type::descriptor()->full_name(); }
-
-  virtual bool is_stream_rpc() const { return get_request().head().has_rpc_stream(); }
+  const std::string &get_response_type_url() const noexcept override {
+    return rpc_response_type::descriptor()->full_name();
+  }
 
  protected:
   void send_response() override {
-    if (!has_pack_response_ && !is_stream_rpc()) {
+    if (!is_stream_rpc() && !has_response_message() && is_response_message_enabled()) {
       pack_response();
     }
     base_type::send_response();
@@ -189,29 +198,7 @@ class task_action_cs_rpc_base : public task_action_cs_req_base {
   }
 
   void pack_response() {
-    has_pack_response_ = true;
-
-    atframework::CSMsg &rsp = add_rsp_msg();
-    atframework::CSMsgHead *head = rsp.mutable_head();
-    if (nullptr == head) {
-      FWLOGERROR("task {} [{}] pack response but malloc header failed", name(), get_task_id());
-      return;
-    }
-
-    if (get_request().head().has_rpc_request()) {
-      head->clear_rpc_request();
-      head->mutable_rpc_response()->set_version(logic_config::me()->get_atframework_settings().rpc_version());
-      head->mutable_rpc_response()->set_rpc_name(get_request().head().rpc_request().rpc_name());
-      head->mutable_rpc_response()->set_type_url(get_response_type_url());
-    } else {
-      head->clear_rpc_stream();
-      head->mutable_rpc_stream()->set_version(logic_config::me()->get_atframework_settings().rpc_version());
-      head->mutable_rpc_stream()->set_rpc_name(get_request().head().rpc_stream().rpc_name());
-      head->mutable_rpc_stream()->set_type_url(get_response_type_url());
-
-      head->mutable_rpc_stream()->set_caller(static_cast<std::string>(logic_config::me()->get_local_server_name()));
-      head->mutable_rpc_stream()->set_callee(get_request().head().rpc_stream().caller());
-    }
+    atframework::CSMsg &rsp = add_response_message();
 
     if (false == get_response_body().SerializeToString(rsp.mutable_body_bin())) {
       FWLOGERROR("task {} [{}] try to serialize message {} failed, msg: {}", name(), get_task_id(),
@@ -219,13 +206,12 @@ class task_action_cs_rpc_base : public task_action_cs_req_base {
     } else {
       FWLOGDEBUG("task {} [{}] serialize rpc response message {} success:\n{}", name(), get_task_id(),
                  get_response_type_url(), protobuf_mini_dumper_get_readable(get_response_body()));
-      write_actor_log_body(get_response_body(), *head);
+      write_actor_log_body(get_response_body(), rsp.head());
     }
   }
 
  private:
   bool has_unpack_request_;
-  bool has_pack_response_;
   rpc_request_type *request_body_;
   rpc_response_type *response_body_;
 };

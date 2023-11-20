@@ -34,7 +34,7 @@ task_action_player_kickoff::task_action_player_kickoff(dispatcher_start_data_typ
     : base_type(COPP_MACRO_STD_MOVE(param)) {}
 task_action_player_kickoff::~task_action_player_kickoff() {}
 
-bool task_action_player_kickoff::is_stream_rpc() const { return false; }
+bool task_action_player_kickoff::is_stream_rpc() const noexcept { return false; }
 
 task_action_player_kickoff::result_type task_action_player_kickoff::operator()() {
   msg_cref_type req_msg = get_request();

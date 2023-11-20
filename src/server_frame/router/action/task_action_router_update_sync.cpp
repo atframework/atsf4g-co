@@ -28,7 +28,7 @@ task_action_router_update_sync::task_action_router_update_sync(dispatcher_start_
     : base_type(COPP_MACRO_STD_MOVE(param)) {}
 task_action_router_update_sync::~task_action_router_update_sync() {}
 
-bool task_action_router_update_sync::is_stream_rpc() const { return true; }
+bool task_action_router_update_sync::is_stream_rpc() const noexcept { return true; }
 
 task_action_router_update_sync::result_type task_action_router_update_sync::operator()() {
   const rpc_request_type& req_body = get_request_body();

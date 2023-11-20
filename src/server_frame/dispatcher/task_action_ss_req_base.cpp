@@ -22,6 +22,7 @@
 
 #include <rpc/db/uuid.h>
 #include <rpc/router/routerservice.h>
+#include <rpc/rpc_utils.h>
 
 task_action_ss_req_base::task_action_ss_req_base(dispatcher_start_data_type &&start_param) : base_type(start_param) {
   // 必须先设置共享的arena
@@ -74,44 +75,59 @@ task_action_ss_req_base::result_type task_action_ss_req_base::hook_run() {
   TASK_ACTION_RETURN_CODE(ret);
 }
 
-uint64_t task_action_ss_req_base::get_request_node_id() const {
+uint64_t task_action_ss_req_base::get_request_node_id() const noexcept {
   msg_cref_type msg = get_request();
+  if (msg.head().has_rpc_forward() && msg.head().rpc_forward().transparent()) {
+    uint64_t node_id = msg.head().rpc_forward().forward_for_node_id();
+    if (node_id != 0) {
+      return node_id;
+    }
+  }
   return msg.head().node_id();
 }
 
-task_action_ss_req_base::msg_ref_type task_action_ss_req_base::add_rsp_msg(uint64_t dst_pd) {
-  message_type *msg = get_shared_context().create<message_type>();
-  if (nullptr == msg) {
-    static message_type empty_msg;
-    empty_msg.Clear();
-    return empty_msg;
+const std::string &task_action_ss_req_base::get_request_node_name() const noexcept {
+  msg_cref_type msg = get_request();
+  if (msg.head().has_rpc_forward() && msg.head().rpc_forward().transparent()) {
+    const std::string &node_name = msg.head().rpc_forward().forward_for_node_name();
+    if (!node_name.empty()) {
+      return node_name;
+    }
   }
 
-  response_messages_.push_back(msg);
-
-  msg->mutable_head()->set_error_code(get_response_code());
-  dst_pd = 0 == dst_pd ? get_request_node_id() : dst_pd;
-
-  init_msg(*msg, dst_pd, get_request());
-  return *msg;
+  return msg.head().node_name();
 }
 
-int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd) {
+int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd, gsl::string_view node_name) {
   msg.mutable_head()->set_node_id(dst_pd);
+  msg.mutable_head()->set_node_name(static_cast<std::string>(node_name));
   msg.mutable_head()->set_timestamp(util::time::time_utility::get_now());
 
   return 0;
 }
 
-int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd, msg_cref_type req_msg) {
+int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd, gsl::string_view node_name,
+                                          msg_cref_type req_msg) {
   protobuf_copy_message(*msg.mutable_head(), req_msg.head());
-  init_msg(msg, dst_pd);
-
+  init_msg(msg, dst_pd, node_name);
   // set task information
-  if (0 != req_msg.head().source_task_id()) {
-    msg.mutable_head()->set_destination_task_id(req_msg.head().source_task_id());
+  if (msg.head().has_rpc_forward() && msg.head().rpc_forward().transparent()) {
+    const atframework::RpcForward &forward_for = msg.head().rpc_forward();
+    if (0 != forward_for.forward_for_source_task_id()) {
+      msg.mutable_head()->set_destination_task_id(forward_for.forward_for_source_task_id());
+    } else {
+      msg.mutable_head()->set_destination_task_id(0);
+    }
+
+    msg.mutable_head()->set_sequence(forward_for.forward_for_sequence());
   } else {
-    msg.mutable_head()->set_destination_task_id(0);
+    if (0 != req_msg.head().source_task_id()) {
+      msg.mutable_head()->set_destination_task_id(req_msg.head().source_task_id());
+    } else {
+      msg.mutable_head()->set_destination_task_id(0);
+    }
+
+    msg.mutable_head()->set_sequence(req_msg.head().sequence());
   }
 
   if (0 != req_msg.head().destination_task_id()) {
@@ -120,7 +136,6 @@ int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd, msg
     msg.mutable_head()->set_source_task_id(0);
   }
 
-  msg.mutable_head()->set_sequence(req_msg.head().sequence());
   if (PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM == req_msg.head().op_type()) {
     msg.mutable_head()->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM);
   } else {
@@ -156,12 +171,271 @@ rpc::context::trace_start_option task_action_ss_req_base::get_trace_option() con
   return ret;
 }
 
+bool task_action_ss_req_base::is_stream_rpc() const noexcept { return get_request().head().has_rpc_stream(); }
+
+namespace {
+template <class ForwardTo>
+static rpc::result_code_type task_action_ss_action_forward_rpc(rpc::context &ctx, ForwardTo &&target, bool transparent,
+                                                               bool &ok, bool ignore_discovery,
+                                                               const atframework::SSMsg &request_message,
+                                                               atframework::SSMsg &forward_request,
+                                                               atframework::SSMsg &forward_response) {
+  const atframework::SSMsgHead &request_head = request_message.head();
+  if (request_head.has_rpc_forward() &&
+      request_head.rpc_forward().ttl() >= logic_config::me()->get_logic().router().transfer_max_ttl()) {
+    ok = false;
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_TTL_EXTEND);
+  }
+
+  protobuf_copy_message(*forward_request.mutable_head(), request_head);
+  atframework::RpcForward *forward_for_head = forward_request.mutable_head()->mutable_rpc_forward();
+  forward_for_head->set_transparent(transparent);
+  if (request_head.has_rpc_forward() && (0 != request_head.rpc_forward().forward_for_node_id() ||
+                                         !request_head.rpc_forward().forward_for_node_name().empty())) {
+    forward_for_head->set_ttl(request_head.rpc_forward().ttl() + 1);
+  }
+  bool origin_request_transparent_forward = request_head.has_rpc_forward() && request_head.rpc_forward().transparent();
+  if (origin_request_transparent_forward) {
+    forward_for_head->set_forward_for_node_id(request_head.rpc_forward().forward_for_node_id());
+    forward_for_head->set_forward_for_node_name(request_head.rpc_forward().forward_for_node_name());
+    forward_for_head->set_forward_for_source_task_id(request_head.rpc_forward().forward_for_source_task_id());
+    forward_for_head->set_forward_for_sequence(request_head.rpc_forward().forward_for_sequence());
+  } else {
+    forward_for_head->set_forward_for_node_id(request_head.node_id());
+    forward_for_head->set_forward_for_node_name(request_head.node_name());
+    forward_for_head->set_forward_for_source_task_id(request_head.source_task_id());
+    forward_for_head->set_forward_for_sequence(request_head.sequence());
+  }
+  {
+    auto forward_head = forward_request.mutable_head();
+    forward_head->set_sequence(ss_msg_dispatcher::me()->allocate_sequence());
+    forward_head->set_node_id(logic_config::me()->get_local_server_id());
+    forward_head->set_node_name(static_cast<std::string>(logic_config::me()->get_local_server_name()));
+    forward_head->set_timestamp(util::time::time_utility::get_now());
+    forward_head->set_source_task_id(ctx.get_task_context().task_id);
+  }
+  *forward_request.mutable_body_bin() = request_message.body_bin();
+
+  rpc::result_code_type::value_type ret =
+      ss_msg_dispatcher::me()->send_to_proc(std::forward<ForwardTo>(target), forward_request, ignore_discovery);
+  if (ret < 0) {
+    ok = false;
+    RPC_RETURN_CODE(ret);
+  }
+
+  if (!transparent) {
+    dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+    await_options.sequence = forward_request.head().sequence();
+    const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::MethodDescriptor *method =
+        ss_msg_dispatcher::me()->get_registered_method(request_head.has_rpc_request()
+                                                           ? request_head.rpc_request().rpc_name()
+                                                           : request_head.rpc_stream().rpc_name());
+    if (nullptr != method && method->options().HasExtension(atframework::rpc_options)) {
+      await_options.timeout = rpc::make_duration_or_default(
+          method->options().GetExtension(atframework::rpc_options).timeout(),
+          rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(),
+                                        std::chrono::seconds{6}));
+    } else {
+      await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(),
+                                                            std::chrono::seconds{6});
+    }
+
+    ret = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, forward_response, await_options));
+    if (ret < 0) {
+      ok = false;
+      RPC_RETURN_CODE(ret);
+    }
+  }
+
+  ok = true;
+  RPC_RETURN_CODE(ret);
+}
+
+template <class CloneTo>
+static rpc::result_code_type task_action_ss_action_clone_rpc(rpc::context &ctx, CloneTo &&target, bool ignore_discovery,
+                                                             const atframework::SSMsg &request_message,
+                                                             atframework::SSMsg *clone_response) {
+  const atframework::SSMsgHead &request_head = request_message.head();
+
+  rpc::context::message_holder<atframework::SSMsg> clone_request{ctx};
+  atframework::SSMsgHead &clone_head = *clone_request->mutable_head();
+
+  protobuf_copy_message(clone_head, request_head);
+  // Clone 请求要清理转发逻辑
+  clone_head.clear_rpc_forward();
+
+  bool need_wait_response = request_head.has_rpc_request() && nullptr != clone_response;
+  // 不需要回包则转为stream消息
+  if (!need_wait_response) {
+    if (clone_head.has_rpc_request()) {
+      std::string rpc_version;
+      std::string rpc_caller;
+      std::string rpc_callee;
+      std::string rpc_rpc_name;
+      std::string rpc_type_url;
+      clone_head.mutable_rpc_request()->mutable_version()->swap(rpc_version);
+      clone_head.mutable_rpc_request()->mutable_version()->swap(rpc_caller);
+      clone_head.mutable_rpc_request()->mutable_version()->swap(rpc_callee);
+      clone_head.mutable_rpc_request()->mutable_version()->swap(rpc_rpc_name);
+      clone_head.mutable_rpc_request()->mutable_version()->swap(rpc_type_url);
+      clone_head.clear_rpc_request();
+      clone_head.mutable_rpc_stream()->mutable_version()->swap(rpc_version);
+      clone_head.mutable_rpc_stream()->mutable_version()->swap(rpc_caller);
+      clone_head.mutable_rpc_stream()->mutable_version()->swap(rpc_callee);
+      clone_head.mutable_rpc_stream()->mutable_version()->swap(rpc_rpc_name);
+      clone_head.mutable_rpc_stream()->mutable_version()->swap(rpc_type_url);
+    }
+  }
+
+  rpc::result_code_type::value_type ret =
+      ss_msg_dispatcher::me()->send_to_proc(std::forward<CloneTo>(target), *clone_request, ignore_discovery);
+  if (ret < 0 || !need_wait_response) {
+    RPC_RETURN_CODE(ret);
+  }
+
+  dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+  await_options.sequence = clone_request->head().sequence();
+  const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::MethodDescriptor *method = ss_msg_dispatcher::me()->get_registered_method(
+      request_head.has_rpc_request() ? request_head.rpc_request().rpc_name() : request_head.rpc_stream().rpc_name());
+  if (nullptr != method && method->options().HasExtension(atframework::rpc_options)) {
+    await_options.timeout = rpc::make_duration_or_default(
+        method->options().GetExtension(atframework::rpc_options).timeout(),
+        rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(),
+                                      std::chrono::seconds{6}));
+  } else {
+    await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(),
+                                                          std::chrono::seconds{6});
+  }
+
+  ret = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, *clone_response, await_options));
+  if (ret < 0) {
+    RPC_RETURN_CODE(ret);
+  }
+
+  RPC_RETURN_CODE(ret);
+}
+}  // namespace
+
+rpc::result_code_type task_action_ss_req_base::forward_rpc(const atapp::etcd_discovery_node &node, bool transparent,
+                                                           bool &ok, bool ignore_discovery) {
+  if (has_response_message()) {
+    ok = false;
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_ALREADY_HAS_RESPONSE);
+  }
+
+  rpc::context::message_holder<atframework::SSMsg> forward_request{get_shared_context()};
+  rpc::context::message_holder<atframework::SSMsg> forward_response{get_shared_context()};
+
+  rpc::result_code_type::value_type ret = RPC_AWAIT_CODE_RESULT(
+      task_action_ss_action_forward_rpc(get_shared_context(), node, transparent, ok, ignore_discovery, get_request(),
+                                        *forward_request, *forward_response));
+  if (ret < 0) {
+    RPC_RETURN_CODE(ret);
+  }
+
+  if (ok) {
+    if (transparent) {
+      disable_response_message();
+    } else if (!is_stream_rpc() && !has_response_message() && is_response_message_enabled()) {
+      atframework::SSMsg &response_message = add_response_message();
+      response_message.mutable_head()->set_error_code(forward_response->head().error_code());
+      response_message.mutable_head()->set_player_user_id(forward_response->head().player_user_id());
+      response_message.mutable_head()->set_player_open_id(forward_response->head().player_open_id());
+      response_message.mutable_head()->set_player_zone_id(forward_response->head().player_zone_id());
+
+      // Swap body
+      response_message.mutable_body_bin()->swap(*forward_response->mutable_body_bin());
+    }
+  }
+
+  RPC_RETURN_CODE(ret);
+}
+
+rpc::result_code_type task_action_ss_req_base::forward_rpc(uint64_t node_id, bool transparent, bool &ok,
+                                                           bool ignore_discovery) {
+  if (has_response_message()) {
+    ok = false;
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_ALREADY_HAS_RESPONSE);
+  }
+
+  rpc::context::message_holder<atframework::SSMsg> forward_request{get_shared_context()};
+  rpc::context::message_holder<atframework::SSMsg> forward_response{get_shared_context()};
+
+  rpc::result_code_type::value_type ret = RPC_AWAIT_CODE_RESULT(
+      task_action_ss_action_forward_rpc(get_shared_context(), node_id, transparent, ok, ignore_discovery, get_request(),
+                                        *forward_request, *forward_response));
+  if (ret < 0) {
+    RPC_RETURN_CODE(ret);
+  }
+
+  if (ok) {
+    if (transparent) {
+      disable_response_message();
+    } else if (!is_stream_rpc() && !has_response_message() && is_response_message_enabled()) {
+      atframework::SSMsg &response_message = add_response_message();
+      response_message.mutable_head()->set_error_code(forward_response->head().error_code());
+      response_message.mutable_head()->set_player_user_id(forward_response->head().player_user_id());
+      response_message.mutable_head()->set_player_open_id(forward_response->head().player_open_id());
+      response_message.mutable_head()->set_player_zone_id(forward_response->head().player_zone_id());
+
+      // Swap body
+      response_message.mutable_body_bin()->swap(*forward_response->mutable_body_bin());
+    }
+  }
+
+  RPC_RETURN_CODE(ret);
+}
+
+rpc::result_code_type task_action_ss_req_base::clone_rpc(const atapp::etcd_discovery_node &node,
+                                                         atframework::SSMsg *response_message, bool ignore_discovery) {
+  rpc::result_code_type::value_type ret = RPC_AWAIT_CODE_RESULT(
+      task_action_ss_action_clone_rpc(get_shared_context(), node, ignore_discovery, get_request(), response_message));
+  RPC_RETURN_CODE(ret);
+}
+
+rpc::result_code_type task_action_ss_req_base::clone_rpc(uint64_t node_id, atframework::SSMsg *response_message,
+                                                         bool ignore_discovery) {
+  rpc::result_code_type::value_type ret = RPC_AWAIT_CODE_RESULT(task_action_ss_action_clone_rpc(
+      get_shared_context(), node_id, ignore_discovery, get_request(), response_message));
+  RPC_RETURN_CODE(ret);
+}
+
+atframework::SSMsg &task_action_ss_req_base::add_response_message() {
+  message_type *msg = get_shared_context().create<message_type>();
+  if (nullptr == msg) {
+    static message_type empty_msg;
+    empty_msg.Clear();
+    return empty_msg;
+  }
+
+  response_messages_.push_back(msg);
+
+  atframework::SSMsgHead *head = msg->mutable_head();
+  if (get_request().head().has_rpc_request()) {
+    head->clear_rpc_request();
+    head->mutable_rpc_response()->set_version(logic_config::me()->get_atframework_settings().rpc_version());
+    head->mutable_rpc_response()->set_rpc_name(get_request().head().rpc_request().rpc_name());
+    head->mutable_rpc_response()->set_type_url(get_response_type_url());
+  } else {
+    head->clear_rpc_stream();
+    head->mutable_rpc_stream()->set_version(logic_config::me()->get_atframework_settings().rpc_version());
+    head->mutable_rpc_stream()->set_rpc_name(get_request().head().rpc_stream().rpc_name());
+    head->mutable_rpc_stream()->set_type_url(get_response_type_url());
+
+    head->mutable_rpc_stream()->set_caller(static_cast<std::string>(logic_config::me()->get_local_server_name()));
+    head->mutable_rpc_stream()->set_callee(get_request().head().rpc_stream().caller());
+  }
+
+  return *msg;
+}
+
 void task_action_ss_req_base::send_response() {
   if (response_messages_.empty()) {
     return;
   }
 
-  for (std::list<message_type *>::iterator iter = response_messages_.begin(); iter != response_messages_.end(); ++iter) {
+  for (std::list<message_type *>::iterator iter = response_messages_.begin(); iter != response_messages_.end();
+       ++iter) {
     if (0 == (*iter)->head().node_id()) {
       FWLOGERROR("task {} [{}] send message to unknown server", name(), get_task_id());
       continue;
@@ -339,7 +613,8 @@ static rpc::result_code_type try_filter_router_msg(rpc::context &ctx, EXPLICIT_U
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_IN_SERVER);
     }
 
-    if (!obj->is_writable() && 0 == obj->get_router_server_id() && renew_router_version > obj->get_router_version()) {
+    if (!obj->is_writable() && 0 == obj->get_router_server_id() && obj->get_router_server_name().empty() &&
+        renew_router_version > obj->get_router_version()) {
       obj->set_router_server_id(renew_router_server_id, renew_router_version);
     }
   }
@@ -438,6 +713,7 @@ rpc::result_code_type task_action_ss_req_base::filter_router_msg(router_manager_
     atframework::SSRouterHead *router_head = sync_msg->mutable_object();
     if (nullptr != router_head) {
       router_head->set_router_source_node_id(obj->get_router_server_id());
+      router_head->set_router_source_node_name(obj->get_router_server_name());
       router_head->set_router_version(obj->get_router_version());
       router_head->set_object_type_id(key.type_id);
       router_head->set_object_inst_id(key.object_id);

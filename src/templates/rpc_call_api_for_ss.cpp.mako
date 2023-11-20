@@ -32,7 +32,7 @@ def rpc_return_always_ready_code_sentense(input):
 %   endfor
 % endif
 
-// clang-format off
+// clang-format offc
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
@@ -368,7 +368,8 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
 
   rpc::result_code_type::value_type res;
   atframework::SSMsg& req_msg = *req_msg_ptr;
-  task_action_ss_req_base::init_msg(req_msg, logic_config::me()->get_local_server_id());
+  task_action_ss_req_base::init_msg(req_msg, logic_config::me()->get_local_server_id(),
+    logic_config::me()->get_local_server_name());
 
   ${rpc_request_meta_pretty_prefix}res = details::__setup_rpc_stream_header(
     ${rpc_request_meta_pretty_prefix}*req_msg.mutable_head(), "${rpc.get_full_name()}", 
@@ -472,7 +473,8 @@ static ${rpc_return_type} __${rpc.get_name()}(
 
   rpc::result_code_type::value_type res;
   atframework::SSMsg& req_msg = *req_msg_ptr;
-  task_action_ss_req_base::init_msg(req_msg, logic_config::me()->get_local_server_id());
+  task_action_ss_req_base::init_msg(req_msg, logic_config::me()->get_local_server_id(),
+    logic_config::me()->get_local_server_name());
 %   if rpc_allow_no_wait:
   if (__no_wait) {
 %   endif

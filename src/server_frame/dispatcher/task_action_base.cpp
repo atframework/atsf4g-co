@@ -70,11 +70,11 @@ struct task_action_stat_guard {
 };
 }  // namespace detail
 
-rpc::context &task_action_base::task_action_helper_t::get_shared_context(task_action_base &action) {
+SERVER_FRAME_API rpc::context &task_action_base::task_action_helper_t::get_shared_context(task_action_base &action) {
   return action.get_shared_context();
 }
 
-task_action_base::task_action_base(const dispatcher_start_data_type &start_param)
+SERVER_FRAME_API task_action_base::task_action_base(const dispatcher_start_data_type &start_param)
     : user_id_(0),
       zone_id_(0),
       private_data_(nullptr),
@@ -89,9 +89,9 @@ task_action_base::task_action_base(const dispatcher_start_data_type &start_param
   }
 }
 
-task_action_base::~task_action_base() {}
+SERVER_FRAME_API task_action_base::~task_action_base() {}
 
-const char *task_action_base::name() const {
+SERVER_FRAME_API const char *task_action_base::name() const {
   const char *ret = typeid(*this).name();
   if (nullptr == ret) {
     return "RTTI Unavailable: task_action_base";
@@ -105,10 +105,10 @@ const char *task_action_base::name() const {
 }
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-task_action_base::result_type task_action_base::operator()(task_action_meta_data_type &&task_meta,
-                                                           dispatcher_start_data_type &&start_data) {
+SERVER_FRAME_API task_action_base::result_type task_action_base::operator()(task_action_meta_data_type &&task_meta,
+                                                                            dispatcher_start_data_type &&start_data) {
 #else
-int task_action_base::operator()(void *priv_data) {
+SERVER_FRAME_API int task_action_base::operator()(void *priv_data) {
 #endif
   detail::task_action_stat_guard stat(this);
 
@@ -304,21 +304,21 @@ int task_action_base::operator()(void *priv_data) {
 #endif
 }
 
-task_action_base::result_type task_action_base::hook_run() { return (*this)(); }
+SERVER_FRAME_API task_action_base::result_type task_action_base::hook_run() { return (*this)(); }
 
-int task_action_base::on_success() { return get_result(); }
+SERVER_FRAME_API int task_action_base::on_success() { return get_result(); }
 
-int task_action_base::on_failed() { return get_result(); }
+SERVER_FRAME_API int task_action_base::on_failed() { return get_result(); }
 
-int task_action_base::on_timeout() { return 0; }
+SERVER_FRAME_API int task_action_base::on_timeout() { return 0; }
 
-int task_action_base::on_complete() { return 0; }
+SERVER_FRAME_API int task_action_base::on_complete() { return 0; }
 
-rpc::context::inherit_options task_action_base::get_inherit_option() const noexcept {
+SERVER_FRAME_API rpc::context::inherit_options task_action_base::get_inherit_option() const noexcept {
   return rpc::context::inherit_options{rpc::context::parent_mode::kLink, true, false};
 }
 
-rpc::context::trace_start_option task_action_base::get_trace_option() const noexcept {
+SERVER_FRAME_API rpc::context::trace_start_option task_action_base::get_trace_option() const noexcept {
   rpc::context::trace_start_option ret;
   ret.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
   ret.is_remote = true;
@@ -329,9 +329,11 @@ rpc::context::trace_start_option task_action_base::get_trace_option() const noex
   return ret;
 }
 
-uint64_t task_action_base::get_task_id() const { return get_shared_context().get_task_context().task_id; }
+SERVER_FRAME_API uint64_t task_action_base::get_task_id() const {
+  return get_shared_context().get_task_context().task_id;
+}
 
-void task_action_base::set_user_key(uint64_t user_id, uint32_t zone_id) {
+SERVER_FRAME_API void task_action_base::set_user_key(uint64_t user_id, uint32_t zone_id) {
   user_id_ = user_id;
   zone_id_ = zone_id;
   if (user_id != 0 && zone_id != 0 && shared_context_.get_task_context().reference_object_type_id == 0 &&
@@ -341,13 +343,16 @@ void task_action_base::set_user_key(uint64_t user_id, uint32_t zone_id) {
   }
 }
 
-task_action_base::on_finished_callback_handle_t task_action_base::add_on_on_finished(on_finished_callback_fn_t &&fn) {
+SERVER_FRAME_API task_action_base::on_finished_callback_handle_t task_action_base::add_on_on_finished(
+    on_finished_callback_fn_t &&fn) {
   return on_finished_callback_.insert(on_finished_callback_.end(), std::move(fn));
 }
 
-void task_action_base::remove_on_finished(on_finished_callback_handle_t handle) { on_finished_callback_.erase(handle); }
+SERVER_FRAME_API void task_action_base::remove_on_finished(on_finished_callback_handle_t handle) {
+  on_finished_callback_.erase(handle);
+}
 
-void task_action_base::set_caller_context(rpc::context &ctx) {
+SERVER_FRAME_API void task_action_base::set_caller_context(rpc::context &ctx) {
   get_shared_context().set_parent_context(ctx, get_inherit_option());
 }
 

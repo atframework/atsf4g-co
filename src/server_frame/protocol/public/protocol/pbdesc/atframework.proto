@@ -219,12 +219,28 @@ message RpcTraceSpan {
   map<string, AttributeValue> attributes = 9;
 }
 
+message RpcForward {
+  // 转发跳数，用于控制回环。会使用路由系统的ttl控制
+  uint32 ttl = 1;
+  // 透明转发:
+  // 当启用透明转发时，转发目标获取的来源会是原始调用者，回包也会回给原始调用者。
+  // 否则转发目标获取的来源会是当前任务，回包也会回给当前任务，并由当前任务回包。
+  bool transparent = 2;
+
+  uint64 forward_for_node_id = 11;
+  string forward_for_node_name = 12;
+  uint64 forward_for_source_task_id = 13;
+  uint64 forward_for_sequence = 14;
+}
+
 // ============================= Dispatchers =============================
 // -----------------------------    SSMsg    -----------------------------
+
 message SSRouterHead {
-  uint64 router_source_node_id = 1;  // 路由协议原始发起者的BUS ID
-  uint64 router_version = 2;
-  uint32 router_transfer_ttl = 3;  // 路由消息转发条数
+  uint64 router_source_node_id = 1;    // 路由协议原始发起者的BUS ID
+  string router_source_node_name = 2;  // TODO: 暂未接入按服务实例名字路由，当前只是个hint
+  uint64 router_version = 3;
+  uint32 router_transfer_ttl = 4;  // 路由消息转发跳数
 
   // 路由对象信息
   uint32 object_type_id = 21;  // 每种路由对象都要有自己的类型ID（router_manager_set根据这个来区分走哪个路由对象管理器）
@@ -242,8 +258,9 @@ message SSMsgHead {
 
   // 通道和任务信息
   uint64 node_id = 11;
-  uint64 source_task_id = 12;
-  uint64 destination_task_id = 13;
+  string node_name = 12;
+  uint64 source_task_id = 13;
+  uint64 destination_task_id = 14;
 
   // 路由系统信息
   SSRouterHead router = 21;
@@ -255,6 +272,7 @@ message SSMsgHead {
     RpcStreamMeta rpc_stream = 33;
   }
   RpcTraceSpan rpc_trace = 34;  // 用于链路追踪
+  RpcForward rpc_forward = 35;  // RPC转发
 
   // 玩家标识
   uint64 player_user_id = 101;  // 如果涉及玩家此项必需
@@ -269,6 +287,7 @@ message SSMsg {
 }
 
 // -----------------------------    CSMsg    -----------------------------
+
 // 协议包头
 message CSMsgHead {
   // 通用结构
@@ -277,7 +296,7 @@ message CSMsgHead {
   uint64 client_sequence = 3;
   uint64 server_sequence = 4;   // 服务器生成的用户消息序号
   uint64 session_sequence = 5;  // 服务器生成的Session消息序号
-  int32 op_type = 6;
+  int32 op_type = 6;            // @see EnMsgOpType
 
   // 通道和任务信息
   uint64 session_node_id = 11;

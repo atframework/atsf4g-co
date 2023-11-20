@@ -237,7 +237,7 @@ namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID {
 template <class CharT>
 struct formatter<rpc::context, CharT> : formatter<std::string, CharT> {
   template <class FormatContext>
-  auto format(const rpc::context &rpc_ctx, FormatContext &fmt_ctx) {
+  auto format(const rpc::context &rpc_ctx, FormatContext &fmt_ctx) const {
     auto ret = LOG_WRAPPER_FWAPI_FORMAT_TO(fmt_ctx.out(), ": task_id={}", rpc_ctx.get_task_context().task_id);
     if (!rpc_ctx.get_task_context().task_name.empty()) {
       ret = LOG_WRAPPER_FWAPI_FORMAT_TO(ret, ", task_name={}", rpc_ctx.get_task_context().task_name);

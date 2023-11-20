@@ -23,7 +23,7 @@ class task_action_player_kickoff : public task_action_ss_rpc_base<PROJECT_NAMESP
   explicit task_action_player_kickoff(dispatcher_start_data_type&& param);
   ~task_action_player_kickoff();
 
-  bool is_stream_rpc() const override;
+  bool is_stream_rpc() const noexcept override;
 
   result_type operator()() override;
 

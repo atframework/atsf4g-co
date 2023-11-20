@@ -6,11 +6,13 @@
 
 #include <config/compiler/protobuf_prefix.h>
 
+#include <protocol/pbdesc/atframework.pb.h>
 #include <protocol/pbdesc/svr.protocol.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 
 #include <common/string_oprs.h>
+#include <gsl/select-gsl.h>
 #include <log/log_wrapper.h>
 
 #include <config/logic_config.h>
@@ -22,7 +24,12 @@
 
 #include "dispatcher/dispatcher_type_defines.h"
 #include "dispatcher/task_action_base.h"
+#include "rpc/rpc_common_types.h"
 #include "utility/protobuf_mini_dumper.h"
+
+namespace atapp {
+class etcd_discovery_node;
+}  // namespace atapp
 
 class router_manager_base;
 class router_object_base;
@@ -53,12 +60,12 @@ class task_action_ss_req_base : public task_action_req_base<atframework::SSMsg> 
 
   result_type hook_run() override;
 
-  uint64_t get_request_node_id() const;
+  uint64_t get_request_node_id() const noexcept;
 
-  msg_ref_type add_rsp_msg(uint64_t dst_pd = 0);
+  const std::string &get_request_node_name() const noexcept;
 
-  static int32_t init_msg(msg_ref_type msg, uint64_t dst_pd);
-  static int32_t init_msg(msg_ref_type msg, uint64_t dst_pd, msg_cref_type req_msg);
+  static int32_t init_msg(msg_ref_type msg, uint64_t dst_pd, gsl::string_view node_name);
+  static int32_t init_msg(msg_ref_type msg, uint64_t dst_pd, gsl::string_view node_name, msg_cref_type req_msg);
 
   std::shared_ptr<dispatcher_implement> get_dispatcher() const override;
   const char *get_type_name() const override;
@@ -66,7 +73,61 @@ class task_action_ss_req_base : public task_action_req_base<atframework::SSMsg> 
   rpc::context::inherit_options get_inherit_option() const noexcept override;
   rpc::context::trace_start_option get_trace_option() const noexcept override;
 
+  virtual bool is_stream_rpc() const noexcept;
+
+  virtual const std::string &get_request_type_url() const noexcept = 0;
+
+  virtual const std::string &get_response_type_url() const noexcept = 0;
+
+  /**
+   * @brief Forward RPC to another server node
+   *
+   * @param node target node
+   * @param transparent transparent forward
+   * @param ok If forward success, if ok returns true, task should exit with return code
+   * @param ignore_discovery ignore discovery
+   * @return EXPLICIT_NODISCARD_ATTR
+   */
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type forward_rpc(const atapp::etcd_discovery_node &node, bool transparent,
+                                                            bool &ok, bool ignore_discovery = false);
+
+  /**
+   * @brief Forward RPC to another server node
+   *
+   * @param node_id target node
+   * @param transparent transparent forward
+   * @param ok If forward success, if ok returns true, task should exit with return code
+   * @param ignore_discovery ignore discovery
+   * @return EXPLICIT_NODISCARD_ATTR
+   */
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type forward_rpc(uint64_t node_id, bool transparent, bool &ok,
+                                                            bool ignore_discovery = false);
+
+  /**
+   * @brief Clone RPC to another server node
+   *
+   * @param node target node
+   * @param response_message receive response message, set nullptr to ignore response
+   * @param ignore_discovery ignore discovery
+   * @return EXPLICIT_NODISCARD_ATTR
+   */
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type clone_rpc(const atapp::etcd_discovery_node &node,
+                                                          atframework::SSMsg *response_message,
+                                                          bool ignore_discovery = false);
+
+  /**
+   * @brief Clone RPC to another server node
+   *
+   * @param node_id target node
+   * @param response_message receive response message, set nullptr to ignore response
+   * @param ignore_discovery ignore discovery
+   * @return EXPLICIT_NODISCARD_ATTR
+   */
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type clone_rpc(uint64_t node_id, atframework::SSMsg *response_message,
+                                                          bool ignore_discovery = false);
+
  protected:
+  msg_ref_type add_response_message();
   void send_response() override;
 
   virtual bool is_router_offline_ignored() const;  // 忽略路由对象不在线
@@ -74,6 +135,8 @@ class task_action_ss_req_base : public task_action_req_base<atframework::SSMsg> 
   EXPLICIT_NODISCARD_ATTR rpc::result_code_type filter_router_msg(router_manager_base *&mgr,
                                                                   std::shared_ptr<router_object_base> &obj,
                                                                   std::pair<bool, int> &filter_result);
+
+  inline bool has_response_message() const noexcept { return !response_messages_.empty(); }
 
  private:
   std::list<message_type *> response_messages_;
@@ -106,7 +169,6 @@ class task_action_ss_rpc_base : public task_action_ss_req_base {
   explicit task_action_ss_rpc_base(dispatcher_start_data_type &&start_param)
       : base_type(std::move(start_param)),
         has_unpack_request_(false),
-        has_pack_response_(false),
         request_body_(nullptr),
         response_body_(nullptr) {}
 
@@ -139,15 +201,17 @@ class task_action_ss_rpc_base : public task_action_ss_req_base {
     return *response_body_;
   }
 
-  static const std::string &get_request_type_url() { return rpc_request_type::descriptor()->full_name(); }
+  const std::string &get_request_type_url() const noexcept override {
+    return rpc_request_type::descriptor()->full_name();
+  }
 
-  static const std::string &get_response_type_url() { return rpc_response_type::descriptor()->full_name(); }
-
-  virtual bool is_stream_rpc() const { return get_request().head().has_rpc_stream(); }
+  const std::string &get_response_type_url() const noexcept override {
+    return rpc_response_type::descriptor()->full_name();
+  }
 
  protected:
   void send_response() override {
-    if (!has_pack_response_ && !is_stream_rpc()) {
+    if (!is_stream_rpc() && !has_response_message() && is_response_message_enabled()) {
       pack_response();
     }
     base_type::send_response();
@@ -185,29 +249,9 @@ class task_action_ss_rpc_base : public task_action_ss_req_base {
   }
 
   void pack_response() {
-    has_pack_response_ = true;
-
-    atframework::SSMsg &rsp = add_rsp_msg();
-    atframework::SSMsgHead *head = rsp.mutable_head();
-    if (nullptr == head) {
-      FWLOGERROR("task {} [{}] pack response but malloc header failed", name(), get_task_id());
-      return;
-    }
-
-    if (get_request().head().has_rpc_request()) {
-      head->clear_rpc_request();
-      head->mutable_rpc_response()->set_version(logic_config::me()->get_atframework_settings().rpc_version());
-      head->mutable_rpc_response()->set_rpc_name(get_request().head().rpc_request().rpc_name());
-      head->mutable_rpc_response()->set_type_url(get_response_type_url());
-    } else {
-      head->clear_rpc_stream();
-      head->mutable_rpc_stream()->set_version(logic_config::me()->get_atframework_settings().rpc_version());
-      head->mutable_rpc_stream()->set_rpc_name(get_request().head().rpc_stream().rpc_name());
-      head->mutable_rpc_stream()->set_type_url(get_response_type_url());
-
-      head->mutable_rpc_stream()->set_caller(static_cast<std::string>(logic_config::me()->get_local_server_name()));
-      head->mutable_rpc_stream()->set_callee(get_request().head().rpc_stream().caller());
-    }
+    atframework::SSMsg &rsp = add_response_message();
+    rsp.mutable_head()->set_error_code(get_response_code());
+    init_msg(rsp, get_request_node_id(), get_request_node_name(), get_request());
 
     if (false == get_response_body().SerializeToString(rsp.mutable_body_bin())) {
       FWLOGERROR("task {} [{}] try to serialize message {} failed, msg: {}", name(), get_task_id(),
@@ -220,7 +264,6 @@ class task_action_ss_rpc_base : public task_action_ss_req_base {
 
  private:
   bool has_unpack_request_;
-  bool has_pack_response_;
   rpc_request_type *request_body_;
   rpc_response_type *response_body_;
 };

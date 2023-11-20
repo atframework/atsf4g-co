@@ -236,11 +236,13 @@ int router_object_base::downgrade() {
 int router_object_base::send_transfer_msg_failed(atframework::SSMsg &&req) {
   task_action_ss_req_base::message_type rsp_msg;
   uint64_t dst_pd = req.head().node_id();
+  gsl::string_view dst_node_name = req.head().node_name();
   if (req.head().has_router()) {
     dst_pd = req.head().router().router_source_node_id();
+    dst_node_name = req.head().router().router_source_node_name();
   }
 
-  task_action_ss_req_base::init_msg(rsp_msg, dst_pd, req);
+  task_action_ss_req_base::init_msg(rsp_msg, dst_pd, dst_node_name, req);
 
   // 如果没有task_id则要不复制路由信息，防止触发路由转发
   if (0 == rsp_msg.head().destination_task_id()) {
