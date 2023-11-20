@@ -261,6 +261,11 @@ static rpc::result_code_type task_action_ss_action_clone_rpc(rpc::context &ctx, 
   atframework::SSMsgHead &clone_head = *clone_request->mutable_head();
 
   protobuf_copy_message(clone_head, request_head);
+  clone_head.set_node_id(logic_config::me()->get_local_server_id());
+  clone_head.set_node_name(logic_config::me()->get_local_server_name());
+  clone_head.set_source_task_id(ctx.get_task_context().task_id);
+  clone_head.set_sequence(ss_msg_dispatcher::me()->allocate_sequence());
+
   // Clone 请求要清理转发逻辑
   clone_head.clear_rpc_forward();
 

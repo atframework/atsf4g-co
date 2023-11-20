@@ -91,7 +91,7 @@ class task_action_cs_req_base : public task_action_req_base<atframework::CSMsg> 
 };
 
 template <class TReqType, class TRspType>
-class task_action_cs_rpc_base : public task_action_cs_req_base {
+class UTIL_SYMBOL_VISIBLE task_action_cs_rpc_base : public task_action_cs_req_base {
  public:
   using base_type = task_action_cs_req_base;
   using message_type = base_type::message_type;
