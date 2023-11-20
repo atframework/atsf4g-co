@@ -8,7 +8,7 @@
 
 #include "dispatcher/task_action_base.h"
 
-class task_action_no_req_base : public task_action_base {
+class UTIL_SYMBOL_VISIBLE task_action_no_req_base : public task_action_base {
  public:
   using base_type = task_action_base;
   using result_type = base_type::result_type;
@@ -16,7 +16,7 @@ class task_action_no_req_base : public task_action_base {
   struct ctor_param_t {
     rpc::context *caller_context;
 
-    inline ctor_param_t() noexcept : caller_context(nullptr) {}
+    UTIL_FORCEINLINE ctor_param_t() noexcept : caller_context(nullptr) {}
   };
 
  public:
@@ -29,18 +29,18 @@ class task_action_no_req_base : public task_action_base {
   using base_type::operator();
 
  public:
-  explicit task_action_no_req_base(const ctor_param_t &param);
-  ~task_action_no_req_base();
+  SERVER_FRAME_API explicit task_action_no_req_base(const ctor_param_t &param);
+  SERVER_FRAME_API ~task_action_no_req_base();
 
-  std::shared_ptr<dispatcher_implement> get_dispatcher() const override;
-  const char *get_type_name() const override;
+  SERVER_FRAME_API std::shared_ptr<dispatcher_implement> get_dispatcher() const override;
+  SERVER_FRAME_API const char *get_type_name() const override;
 
-  rpc::context::inherit_options get_inherit_option() const noexcept override;
-  rpc::context::trace_start_option get_trace_option() const noexcept override;
+  SERVER_FRAME_API rpc::context::inherit_options get_inherit_option() const noexcept override;
+  SERVER_FRAME_API rpc::context::trace_start_option get_trace_option() const noexcept override;
 
  protected:
-  void send_response() override;
+  SERVER_FRAME_API void send_response() override;
 
  private:
-  static dispatcher_start_data_type make_from_context(const ctor_param_t &param) noexcept;
+  SERVER_FRAME_API static dispatcher_start_data_type make_from_context(const ctor_param_t &param) noexcept;
 };

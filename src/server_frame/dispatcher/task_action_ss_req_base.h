@@ -34,7 +34,7 @@ class etcd_discovery_node;
 class router_manager_base;
 class router_object_base;
 
-class task_action_ss_req_base : public task_action_req_base<atframework::SSMsg> {
+class UTIL_SYMBOL_VISIBLE task_action_ss_req_base : public task_action_req_base<atframework::SSMsg> {
  public:
   using base_type = task_action_req_base<atframework::SSMsg>;
   using message_type = base_type::message_type;
@@ -55,25 +55,26 @@ class task_action_ss_req_base : public task_action_req_base<atframework::SSMsg> 
   using base_type::operator();
 
  public:
-  explicit task_action_ss_req_base(dispatcher_start_data_type &&start_param);
-  virtual ~task_action_ss_req_base();
+  SERVER_FRAME_API explicit task_action_ss_req_base(dispatcher_start_data_type &&start_param);
+  SERVER_FRAME_API virtual ~task_action_ss_req_base();
 
-  result_type hook_run() override;
+  SERVER_FRAME_API result_type hook_run() override;
 
-  uint64_t get_request_node_id() const noexcept;
+  SERVER_FRAME_API uint64_t get_request_node_id() const noexcept;
 
-  const std::string &get_request_node_name() const noexcept;
+  SERVER_FRAME_API const std::string &get_request_node_name() const noexcept;
 
-  static int32_t init_msg(msg_ref_type msg, uint64_t dst_pd, gsl::string_view node_name);
-  static int32_t init_msg(msg_ref_type msg, uint64_t dst_pd, gsl::string_view node_name, msg_cref_type req_msg);
+  SERVER_FRAME_API static int32_t init_msg(msg_ref_type msg, uint64_t dst_pd, gsl::string_view node_name);
+  SERVER_FRAME_API static int32_t init_msg(msg_ref_type msg, uint64_t dst_pd, gsl::string_view node_name,
+                                           msg_cref_type req_msg);
 
-  std::shared_ptr<dispatcher_implement> get_dispatcher() const override;
-  const char *get_type_name() const override;
+  SERVER_FRAME_API std::shared_ptr<dispatcher_implement> get_dispatcher() const override;
+  SERVER_FRAME_API const char *get_type_name() const override;
 
-  rpc::context::inherit_options get_inherit_option() const noexcept override;
-  rpc::context::trace_start_option get_trace_option() const noexcept override;
+  SERVER_FRAME_API rpc::context::inherit_options get_inherit_option() const noexcept override;
+  SERVER_FRAME_API rpc::context::trace_start_option get_trace_option() const noexcept override;
 
-  virtual bool is_stream_rpc() const noexcept;
+  SERVER_FRAME_API virtual bool is_stream_rpc() const noexcept;
 
   virtual const std::string &get_request_type_url() const noexcept = 0;
 
@@ -88,8 +89,9 @@ class task_action_ss_req_base : public task_action_req_base<atframework::SSMsg> 
    * @param ignore_discovery ignore discovery
    * @return EXPLICIT_NODISCARD_ATTR
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type forward_rpc(const atapp::etcd_discovery_node &node, bool transparent,
-                                                            bool &ok, bool ignore_discovery = false);
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type forward_rpc(const atapp::etcd_discovery_node &node,
+                                                                             bool transparent, bool &ok,
+                                                                             bool ignore_discovery = false);
 
   /**
    * @brief Forward RPC to another server node
@@ -100,8 +102,8 @@ class task_action_ss_req_base : public task_action_req_base<atframework::SSMsg> 
    * @param ignore_discovery ignore discovery
    * @return EXPLICIT_NODISCARD_ATTR
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type forward_rpc(uint64_t node_id, bool transparent, bool &ok,
-                                                            bool ignore_discovery = false);
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type forward_rpc(uint64_t node_id, bool transparent,
+                                                                             bool &ok, bool ignore_discovery = false);
 
   /**
    * @brief Clone RPC to another server node
@@ -111,9 +113,9 @@ class task_action_ss_req_base : public task_action_req_base<atframework::SSMsg> 
    * @param ignore_discovery ignore discovery
    * @return EXPLICIT_NODISCARD_ATTR
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type clone_rpc(const atapp::etcd_discovery_node &node,
-                                                          atframework::SSMsg *response_message,
-                                                          bool ignore_discovery = false);
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type clone_rpc(const atapp::etcd_discovery_node &node,
+                                                                           atframework::SSMsg *response_message,
+                                                                           bool ignore_discovery = false);
 
   /**
    * @brief Clone RPC to another server node
@@ -123,20 +125,20 @@ class task_action_ss_req_base : public task_action_req_base<atframework::SSMsg> 
    * @param ignore_discovery ignore discovery
    * @return EXPLICIT_NODISCARD_ATTR
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type clone_rpc(uint64_t node_id, atframework::SSMsg *response_message,
-                                                          bool ignore_discovery = false);
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type clone_rpc(uint64_t node_id,
+                                                                           atframework::SSMsg *response_message,
+                                                                           bool ignore_discovery = false);
 
  protected:
-  msg_ref_type add_response_message();
-  void send_response() override;
+  SERVER_FRAME_API msg_ref_type add_response_message();
+  SERVER_FRAME_API void send_response() override;
 
-  virtual bool is_router_offline_ignored() const;  // 忽略路由对象不在线
+  SERVER_FRAME_API virtual bool is_router_offline_ignored() const;  // 忽略路由对象不在线
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type filter_router_msg(router_manager_base *&mgr,
-                                                                  std::shared_ptr<router_object_base> &obj,
-                                                                  std::pair<bool, int> &filter_result);
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type filter_router_msg(
+      router_manager_base *&mgr, std::shared_ptr<router_object_base> &obj, std::pair<bool, int> &filter_result);
 
-  inline bool has_response_message() const noexcept { return !response_messages_.empty(); }
+  UTIL_FORCEINLINE bool has_response_message() const noexcept { return !response_messages_.empty(); }
 
  private:
   std::list<message_type *> response_messages_;

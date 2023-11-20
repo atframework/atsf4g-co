@@ -24,7 +24,8 @@
 #include <rpc/router/routerservice.h>
 #include <rpc/rpc_utils.h>
 
-task_action_ss_req_base::task_action_ss_req_base(dispatcher_start_data_type &&start_param) : base_type(start_param) {
+SERVER_FRAME_API task_action_ss_req_base::task_action_ss_req_base(dispatcher_start_data_type &&start_param)
+    : base_type(start_param) {
   // 必须先设置共享的arena
   if (nullptr != start_param.context) {
     get_shared_context().try_reuse_protobuf_arena(start_param.context->mutable_protobuf_arena());
@@ -43,9 +44,9 @@ task_action_ss_req_base::task_action_ss_req_base(dispatcher_start_data_type &&st
   }
 }
 
-task_action_ss_req_base::~task_action_ss_req_base() {}
+SERVER_FRAME_API task_action_ss_req_base::~task_action_ss_req_base() {}
 
-task_action_ss_req_base::result_type task_action_ss_req_base::hook_run() {
+SERVER_FRAME_API task_action_ss_req_base::result_type task_action_ss_req_base::hook_run() {
   // 路由对象系统支持
   router_manager_base *mgr = nullptr;
   std::shared_ptr<router_object_base> obj;
@@ -75,7 +76,7 @@ task_action_ss_req_base::result_type task_action_ss_req_base::hook_run() {
   TASK_ACTION_RETURN_CODE(ret);
 }
 
-uint64_t task_action_ss_req_base::get_request_node_id() const noexcept {
+SERVER_FRAME_API uint64_t task_action_ss_req_base::get_request_node_id() const noexcept {
   msg_cref_type msg = get_request();
   if (msg.head().has_rpc_forward() && msg.head().rpc_forward().transparent()) {
     uint64_t node_id = msg.head().rpc_forward().forward_for_node_id();
@@ -86,7 +87,7 @@ uint64_t task_action_ss_req_base::get_request_node_id() const noexcept {
   return msg.head().node_id();
 }
 
-const std::string &task_action_ss_req_base::get_request_node_name() const noexcept {
+SERVER_FRAME_API const std::string &task_action_ss_req_base::get_request_node_name() const noexcept {
   msg_cref_type msg = get_request();
   if (msg.head().has_rpc_forward() && msg.head().rpc_forward().transparent()) {
     const std::string &node_name = msg.head().rpc_forward().forward_for_node_name();
@@ -98,16 +99,17 @@ const std::string &task_action_ss_req_base::get_request_node_name() const noexce
   return msg.head().node_name();
 }
 
-int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd, gsl::string_view node_name) {
+SERVER_FRAME_API int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd,
+                                                           gsl::string_view node_name) {
   msg.mutable_head()->set_node_id(dst_pd);
-  msg.mutable_head()->set_node_name(static_cast<std::string>(node_name));
+  msg.mutable_head()->set_node_name(node_name.data(), node_name.size());
   msg.mutable_head()->set_timestamp(util::time::time_utility::get_now());
 
   return 0;
 }
 
-int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd, gsl::string_view node_name,
-                                          msg_cref_type req_msg) {
+SERVER_FRAME_API int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd,
+                                                           gsl::string_view node_name, msg_cref_type req_msg) {
   protobuf_copy_message(*msg.mutable_head(), req_msg.head());
   init_msg(msg, dst_pd, node_name);
   // set task information
@@ -145,13 +147,13 @@ int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd, gsl
   return 0;
 }
 
-std::shared_ptr<dispatcher_implement> task_action_ss_req_base::get_dispatcher() const {
+SERVER_FRAME_API std::shared_ptr<dispatcher_implement> task_action_ss_req_base::get_dispatcher() const {
   return std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());
 }
 
-const char *task_action_ss_req_base::get_type_name() const { return "inserver"; }
+SERVER_FRAME_API const char *task_action_ss_req_base::get_type_name() const { return "inserver"; }
 
-rpc::context::inherit_options task_action_ss_req_base::get_inherit_option() const noexcept {
+SERVER_FRAME_API rpc::context::inherit_options task_action_ss_req_base::get_inherit_option() const noexcept {
   auto &req_msg = get_request();
   if (req_msg.has_head() && req_msg.head().has_rpc_request() && 0 != req_msg.head().source_task_id()) {
     return rpc::context::inherit_options{rpc::context::parent_mode::kParent, true, false};
@@ -160,7 +162,7 @@ rpc::context::inherit_options task_action_ss_req_base::get_inherit_option() cons
   return rpc::context::inherit_options{rpc::context::parent_mode::kLink, true, false};
 }
 
-rpc::context::trace_start_option task_action_ss_req_base::get_trace_option() const noexcept {
+SERVER_FRAME_API rpc::context::trace_start_option task_action_ss_req_base::get_trace_option() const noexcept {
   rpc::context::trace_start_option ret = task_action_base::get_trace_option();
 
   auto &req_msg = get_request();
@@ -171,7 +173,9 @@ rpc::context::trace_start_option task_action_ss_req_base::get_trace_option() con
   return ret;
 }
 
-bool task_action_ss_req_base::is_stream_rpc() const noexcept { return get_request().head().has_rpc_stream(); }
+SERVER_FRAME_API bool task_action_ss_req_base::is_stream_rpc() const noexcept {
+  return get_request().head().has_rpc_stream();
+}
 
 namespace {
 template <class ForwardTo>
@@ -210,7 +214,8 @@ static rpc::result_code_type task_action_ss_action_forward_rpc(rpc::context &ctx
     auto forward_head = forward_request.mutable_head();
     forward_head->set_sequence(ss_msg_dispatcher::me()->allocate_sequence());
     forward_head->set_node_id(logic_config::me()->get_local_server_id());
-    forward_head->set_node_name(static_cast<std::string>(logic_config::me()->get_local_server_name()));
+    auto local_server_name = logic_config::me()->get_local_server_name();
+    forward_head->set_node_name(local_server_name.data(), local_server_name.size());
     forward_head->set_timestamp(util::time::time_utility::get_now());
     forward_head->set_source_task_id(ctx.get_task_context().task_id);
   }
@@ -262,7 +267,8 @@ static rpc::result_code_type task_action_ss_action_clone_rpc(rpc::context &ctx, 
 
   protobuf_copy_message(clone_head, request_head);
   clone_head.set_node_id(logic_config::me()->get_local_server_id());
-  clone_head.set_node_name(logic_config::me()->get_local_server_name());
+  auto local_server_name = logic_config::me()->get_local_server_name();
+  clone_head.set_node_name(local_server_name.data(), local_server_name.size());
   clone_head.set_source_task_id(ctx.get_task_context().task_id);
   clone_head.set_sequence(ss_msg_dispatcher::me()->allocate_sequence());
 
@@ -321,8 +327,9 @@ static rpc::result_code_type task_action_ss_action_clone_rpc(rpc::context &ctx, 
 }
 }  // namespace
 
-rpc::result_code_type task_action_ss_req_base::forward_rpc(const atapp::etcd_discovery_node &node, bool transparent,
-                                                           bool &ok, bool ignore_discovery) {
+SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::forward_rpc(const atapp::etcd_discovery_node &node,
+                                                                            bool transparent, bool &ok,
+                                                                            bool ignore_discovery) {
   if (has_response_message()) {
     ok = false;
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_ALREADY_HAS_RESPONSE);
@@ -356,8 +363,8 @@ rpc::result_code_type task_action_ss_req_base::forward_rpc(const atapp::etcd_dis
   RPC_RETURN_CODE(ret);
 }
 
-rpc::result_code_type task_action_ss_req_base::forward_rpc(uint64_t node_id, bool transparent, bool &ok,
-                                                           bool ignore_discovery) {
+SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::forward_rpc(uint64_t node_id, bool transparent,
+                                                                            bool &ok, bool ignore_discovery) {
   if (has_response_message()) {
     ok = false;
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_ALREADY_HAS_RESPONSE);
@@ -391,21 +398,23 @@ rpc::result_code_type task_action_ss_req_base::forward_rpc(uint64_t node_id, boo
   RPC_RETURN_CODE(ret);
 }
 
-rpc::result_code_type task_action_ss_req_base::clone_rpc(const atapp::etcd_discovery_node &node,
-                                                         atframework::SSMsg *response_message, bool ignore_discovery) {
+SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::clone_rpc(const atapp::etcd_discovery_node &node,
+                                                                          atframework::SSMsg *response_message,
+                                                                          bool ignore_discovery) {
   rpc::result_code_type::value_type ret = RPC_AWAIT_CODE_RESULT(
       task_action_ss_action_clone_rpc(get_shared_context(), node, ignore_discovery, get_request(), response_message));
   RPC_RETURN_CODE(ret);
 }
 
-rpc::result_code_type task_action_ss_req_base::clone_rpc(uint64_t node_id, atframework::SSMsg *response_message,
-                                                         bool ignore_discovery) {
+SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::clone_rpc(uint64_t node_id,
+                                                                          atframework::SSMsg *response_message,
+                                                                          bool ignore_discovery) {
   rpc::result_code_type::value_type ret = RPC_AWAIT_CODE_RESULT(task_action_ss_action_clone_rpc(
       get_shared_context(), node_id, ignore_discovery, get_request(), response_message));
   RPC_RETURN_CODE(ret);
 }
 
-atframework::SSMsg &task_action_ss_req_base::add_response_message() {
+SERVER_FRAME_API atframework::SSMsg &task_action_ss_req_base::add_response_message() {
   message_type *msg = get_shared_context().create<message_type>();
   if (nullptr == msg) {
     static message_type empty_msg;
@@ -434,7 +443,7 @@ atframework::SSMsg &task_action_ss_req_base::add_response_message() {
   return *msg;
 }
 
-void task_action_ss_req_base::send_response() {
+SERVER_FRAME_API void task_action_ss_req_base::send_response() {
   if (response_messages_.empty()) {
     return;
   }
@@ -666,7 +675,7 @@ static rpc::result_code_type try_filter_router_msg(rpc::context &ctx, EXPLICIT_U
 }
 }  // namespace detail
 
-rpc::result_code_type task_action_ss_req_base::filter_router_msg(router_manager_base *&mgr,
+SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::filter_router_msg(router_manager_base *&mgr,
                                                                  std::shared_ptr<router_object_base> &obj,
                                                                  std::pair<bool, int> &filter_result) {
   // request 可能会被move走，所以这里copy一份
@@ -744,4 +753,4 @@ rpc::result_code_type task_action_ss_req_base::filter_router_msg(router_manager_
   RPC_RETURN_CODE(last_result);
 }
 
-bool task_action_ss_req_base::is_router_offline_ignored() const { return false; }
+SERVER_FRAME_API bool task_action_ss_req_base::is_router_offline_ignored() const { return false; }

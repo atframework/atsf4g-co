@@ -23,7 +23,7 @@
 class session;
 class player_cache;
 
-class task_action_cs_req_base : public task_action_req_base<atframework::CSMsg> {
+class UTIL_SYMBOL_VISIBLE task_action_cs_req_base : public task_action_req_base<atframework::CSMsg> {
  public:
   using base_type = task_action_req_base<atframework::CSMsg>;
   using message_type = base_type::message_type;
@@ -44,44 +44,44 @@ class task_action_cs_req_base : public task_action_req_base<atframework::CSMsg> 
   using base_type::operator();
 
  public:
-  explicit task_action_cs_req_base(dispatcher_start_data_type &&start_param);
-  virtual ~task_action_cs_req_base();
+  SERVER_FRAME_API explicit task_action_cs_req_base(dispatcher_start_data_type &&start_param);
+  SERVER_FRAME_API virtual ~task_action_cs_req_base();
 
-  result_type hook_run() override;
+  SERVER_FRAME_API result_type hook_run() override;
 
-  std::shared_ptr<dispatcher_implement> get_dispatcher() const override;
-  const char *get_type_name() const override;
+  SERVER_FRAME_API std::shared_ptr<dispatcher_implement> get_dispatcher() const override;
+  SERVER_FRAME_API const char *get_type_name() const override;
 
-  rpc::context::trace_start_option get_trace_option() const noexcept override;
+  SERVER_FRAME_API rpc::context::trace_start_option get_trace_option() const noexcept override;
 
-  virtual bool is_stream_rpc() const noexcept;
+  SERVER_FRAME_API virtual bool is_stream_rpc() const noexcept;
 
   virtual const std::string &get_request_type_url() const noexcept = 0;
 
   virtual const std::string &get_response_type_url() const noexcept = 0;
 
-  std::pair<uint64_t, uint64_t> get_gateway_info() const;
+  SERVER_FRAME_API std::pair<uint64_t, uint64_t> get_gateway_info() const;
 
-  std::shared_ptr<session> get_session() const;
+  SERVER_FRAME_API std::shared_ptr<session> get_session() const;
 
-  msg_ref_type add_response_message();
+  SERVER_FRAME_API msg_ref_type add_response_message();
 
-  std::list<message_type *> &get_rsp_list();
-  const std::list<message_type *> &get_rsp_list() const;
+  SERVER_FRAME_API std::list<message_type *> &get_rsp_list();
+  SERVER_FRAME_API const std::list<message_type *> &get_rsp_list() const;
 
-  std::shared_ptr<player_cache> get_player_cache() const;
+  SERVER_FRAME_API std::shared_ptr<player_cache> get_player_cache() const;
 
   template <typename TPLAYER>
-  std::shared_ptr<TPLAYER> get_player() const {
+  UTIL_FORCEINLINE std::shared_ptr<TPLAYER> get_player() const {
     return std::static_pointer_cast<TPLAYER>(get_player_cache());
   }
 
  protected:
-  void send_response() override;
-  void send_response(bool sync_dirty);
-  void write_actor_log_body(const google::protobuf::Message &msg, const atframework::CSMsgHead &head);
+  SERVER_FRAME_API void send_response() override;
+  SERVER_FRAME_API void send_response(bool sync_dirty);
+  SERVER_FRAME_API void write_actor_log_body(const google::protobuf::Message &msg, const atframework::CSMsgHead &head);
 
-  inline bool has_response_message() const noexcept { return !response_messages_.empty(); }
+  UTIL_FORCEINLINE bool has_response_message() const noexcept { return !response_messages_.empty(); }
 
  private:
   mutable std::shared_ptr<session> session_inst_;

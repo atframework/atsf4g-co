@@ -27,7 +27,7 @@
 #include <memory>
 #include <utility>
 
-task_action_cs_req_base::task_action_cs_req_base(dispatcher_start_data_type &&start_param)
+SERVER_FRAME_API task_action_cs_req_base::task_action_cs_req_base(dispatcher_start_data_type &&start_param)
     : base_type(start_param), has_sync_dirty_(false), recursive_sync_dirty_(false) {
   // 必须先设置共享的arena
   if (nullptr != start_param.context) {
@@ -53,9 +53,9 @@ task_action_cs_req_base::task_action_cs_req_base(dispatcher_start_data_type &&st
   }
 }
 
-task_action_cs_req_base::~task_action_cs_req_base() {}
+SERVER_FRAME_API task_action_cs_req_base::~task_action_cs_req_base() {}
 
-task_action_cs_req_base::result_type task_action_cs_req_base::hook_run() {
+SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::hook_run() {
   std::shared_ptr<player_cache> player_cache = get_player_cache();
   if (player_cache) {
     player_cache->refresh_feature_limit(get_shared_context());
@@ -127,13 +127,13 @@ task_action_cs_req_base::result_type task_action_cs_req_base::hook_run() {
   TASK_ACTION_RETURN_CODE(ret);
 }
 
-std::shared_ptr<dispatcher_implement> task_action_cs_req_base::get_dispatcher() const {
+SERVER_FRAME_API std::shared_ptr<dispatcher_implement> task_action_cs_req_base::get_dispatcher() const {
   return std::static_pointer_cast<dispatcher_implement>(cs_msg_dispatcher::me());
 }
 
-const char *task_action_cs_req_base::get_type_name() const { return "client"; }
+SERVER_FRAME_API const char *task_action_cs_req_base::get_type_name() const { return "client"; }
 
-rpc::context::trace_start_option task_action_cs_req_base::get_trace_option() const noexcept {
+SERVER_FRAME_API rpc::context::trace_start_option task_action_cs_req_base::get_trace_option() const noexcept {
   rpc::context::trace_start_option ret = task_action_base::get_trace_option();
 
   auto &req_msg = get_request();
@@ -144,14 +144,16 @@ rpc::context::trace_start_option task_action_cs_req_base::get_trace_option() con
   return ret;
 }
 
-bool task_action_cs_req_base::is_stream_rpc() const noexcept { return get_request().head().has_rpc_stream(); }
+SERVER_FRAME_API bool task_action_cs_req_base::is_stream_rpc() const noexcept {
+  return get_request().head().has_rpc_stream();
+}
 
-std::pair<uint64_t, uint64_t> task_action_cs_req_base::get_gateway_info() const {
+SERVER_FRAME_API std::pair<uint64_t, uint64_t> task_action_cs_req_base::get_gateway_info() const {
   const message_type &cs_msg = get_request();
   return std::pair<uint64_t, uint64_t>(cs_msg.head().session_node_id(), cs_msg.head().session_id());
 }
 
-session::ptr_t task_action_cs_req_base::get_session() const {
+SERVER_FRAME_API session::ptr_t task_action_cs_req_base::get_session() const {
   if (session_inst_) {
     return session_inst_;
   }
@@ -161,7 +163,7 @@ session::ptr_t task_action_cs_req_base::get_session() const {
   return session_inst_;
 }
 
-std::shared_ptr<player_cache> task_action_cs_req_base::get_player_cache() const {
+SERVER_FRAME_API std::shared_ptr<player_cache> task_action_cs_req_base::get_player_cache() const {
   std::shared_ptr<session> sess = get_session();
   if (!sess) {
     return nullptr;
@@ -170,7 +172,7 @@ std::shared_ptr<player_cache> task_action_cs_req_base::get_player_cache() const 
   return sess->get_player();
 }
 
-task_action_cs_req_base::msg_ref_type task_action_cs_req_base::add_response_message() {
+SERVER_FRAME_API task_action_cs_req_base::msg_ref_type task_action_cs_req_base::add_response_message() {
   message_type *msg = get_shared_context().create<message_type>();
   if (nullptr == msg) {
     static message_type empty_msg;
@@ -208,15 +210,16 @@ task_action_cs_req_base::msg_ref_type task_action_cs_req_base::add_response_mess
   return *msg;
 }
 
-std::list<task_action_cs_req_base::message_type *> &task_action_cs_req_base::get_rsp_list() {
+SERVER_FRAME_API std::list<task_action_cs_req_base::message_type *> &task_action_cs_req_base::get_rsp_list() {
   return response_messages_;
 }
 
-const std::list<task_action_cs_req_base::message_type *> &task_action_cs_req_base::get_rsp_list() const {
+SERVER_FRAME_API const std::list<task_action_cs_req_base::message_type *> &task_action_cs_req_base::get_rsp_list()
+    const {
   return response_messages_;
 }
 
-void task_action_cs_req_base::send_response() {
+SERVER_FRAME_API void task_action_cs_req_base::send_response() {
   if (!has_sync_dirty_) {
     send_response(true);
     return;
@@ -253,7 +256,7 @@ void task_action_cs_req_base::send_response() {
   response_messages_.clear();
 }
 
-void task_action_cs_req_base::send_response(bool sync_dirty) {
+SERVER_FRAME_API void task_action_cs_req_base::send_response(bool sync_dirty) {
   if (recursive_sync_dirty_) {
     return;
   }
@@ -287,8 +290,8 @@ void task_action_cs_req_base::send_response(bool sync_dirty) {
   send_response();
 }
 
-void task_action_cs_req_base::write_actor_log_body(const google::protobuf::Message &msg,
-                                                   const atframework::CSMsgHead &head) {
+SERVER_FRAME_API void task_action_cs_req_base::write_actor_log_body(const google::protobuf::Message &msg,
+                                                                    const atframework::CSMsgHead &head) {
   auto sess = get_session();
   if (sess) {
     sess->write_actor_log_body(msg, head);

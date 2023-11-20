@@ -54,7 +54,7 @@ class UTIL_SYMBOL_VISIBLE task_action_result_type {
   UTIL_FORCEINLINE void _internal_set_awaited() noexcept {}
 #  endif
 
-  explicit UTIL_FORCEINLINE task_action_result_type(value_type code) : result_code_(code) {}
+  UTIL_FORCEINLINE explicit task_action_result_type(value_type code) : result_code_(code) {}
   UTIL_FORCEINLINE task_action_result_type(const task_action_result_type &) = default;
   UTIL_FORCEINLINE task_action_result_type(task_action_result_type &&) = default;
   UTIL_FORCEINLINE task_action_result_type &operator=(const task_action_result_type &) = default;
@@ -297,7 +297,7 @@ class UTIL_SYMBOL_VISIBLE task_action_base
   /**
    * @brief 是否开启了自动回包
    */
-  UTIL_FORCEINLINE bool is_response_message_enabled() const noexcept { return response_message_disabled_; }
+  UTIL_FORCEINLINE bool is_response_message_enabled() const noexcept { return !response_message_disabled_; }
 
   /**
    * @brief 获取调度层设置
