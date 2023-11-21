@@ -110,38 +110,55 @@ SERVER_FRAME_API int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uin
 
 SERVER_FRAME_API int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd,
                                                            gsl::string_view node_name, msg_cref_type req_msg) {
-  protobuf_copy_message(*msg.mutable_head(), req_msg.head());
   init_msg(msg, dst_pd, node_name);
+  auto head = msg.mutable_head();
+  auto &request_head = req_msg.head();
+  if (request_head.has_router()) {
+    protobuf_copy_message(*head->mutable_router(), request_head.router());
+  }
+  if (request_head.has_rpc_trace()) {
+    protobuf_copy_message(*head->mutable_rpc_trace(), request_head.rpc_trace());
+  }
+  if (!request_head.player_open_id().empty()) {
+    head->set_player_open_id(request_head.player_open_id());
+  }
+  if (request_head.player_user_id() != 0) {
+    head->set_player_user_id(request_head.player_user_id());
+  }
+  if (request_head.player_zone_id() != 0) {
+    head->set_player_user_id(request_head.player_user_id());
+  }
+
   // set task information
-  if (msg.head().has_rpc_forward() && msg.head().rpc_forward().transparent()) {
-    const atframework::RpcForward &forward_for = msg.head().rpc_forward();
+  if (request_head.has_rpc_forward() && request_head.rpc_forward().transparent()) {
+    const atframework::RpcForward &forward_for = request_head.rpc_forward();
     if (0 != forward_for.forward_for_source_task_id()) {
-      msg.mutable_head()->set_destination_task_id(forward_for.forward_for_source_task_id());
+      head->set_destination_task_id(forward_for.forward_for_source_task_id());
     } else {
-      msg.mutable_head()->set_destination_task_id(0);
+      head->set_destination_task_id(0);
     }
 
-    msg.mutable_head()->set_sequence(forward_for.forward_for_sequence());
+    head->set_sequence(forward_for.forward_for_sequence());
   } else {
-    if (0 != req_msg.head().source_task_id()) {
-      msg.mutable_head()->set_destination_task_id(req_msg.head().source_task_id());
+    if (0 != request_head.source_task_id()) {
+      head->set_destination_task_id(request_head.source_task_id());
     } else {
-      msg.mutable_head()->set_destination_task_id(0);
+      head->set_destination_task_id(0);
     }
 
-    msg.mutable_head()->set_sequence(req_msg.head().sequence());
+    head->set_sequence(request_head.sequence());
   }
 
-  if (0 != req_msg.head().destination_task_id()) {
-    msg.mutable_head()->set_source_task_id(req_msg.head().destination_task_id());
+  if (0 != request_head.destination_task_id()) {
+    head->set_source_task_id(request_head.destination_task_id());
   } else {
-    msg.mutable_head()->set_source_task_id(0);
+    head->set_source_task_id(0);
   }
 
-  if (PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM == req_msg.head().op_type()) {
-    msg.mutable_head()->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM);
+  if (PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM == request_head.op_type()) {
+    head->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM);
   } else {
-    msg.mutable_head()->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE);
+    head->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE);
   }
 
   return 0;
@@ -285,18 +302,19 @@ static rpc::result_code_type task_action_ss_action_clone_rpc(rpc::context &ctx, 
       std::string rpc_rpc_name;
       std::string rpc_type_url;
       clone_head.mutable_rpc_request()->mutable_version()->swap(rpc_version);
-      clone_head.mutable_rpc_request()->mutable_version()->swap(rpc_caller);
-      clone_head.mutable_rpc_request()->mutable_version()->swap(rpc_callee);
-      clone_head.mutable_rpc_request()->mutable_version()->swap(rpc_rpc_name);
-      clone_head.mutable_rpc_request()->mutable_version()->swap(rpc_type_url);
+      clone_head.mutable_rpc_request()->mutable_caller()->swap(rpc_caller);
+      clone_head.mutable_rpc_request()->mutable_callee()->swap(rpc_callee);
+      clone_head.mutable_rpc_request()->mutable_rpc_name()->swap(rpc_rpc_name);
+      clone_head.mutable_rpc_request()->mutable_type_url()->swap(rpc_type_url);
       clone_head.clear_rpc_request();
       clone_head.mutable_rpc_stream()->mutable_version()->swap(rpc_version);
-      clone_head.mutable_rpc_stream()->mutable_version()->swap(rpc_caller);
-      clone_head.mutable_rpc_stream()->mutable_version()->swap(rpc_callee);
-      clone_head.mutable_rpc_stream()->mutable_version()->swap(rpc_rpc_name);
-      clone_head.mutable_rpc_stream()->mutable_version()->swap(rpc_type_url);
+      clone_head.mutable_rpc_stream()->mutable_caller()->swap(rpc_caller);
+      clone_head.mutable_rpc_stream()->mutable_callee()->swap(rpc_callee);
+      clone_head.mutable_rpc_stream()->mutable_rpc_name()->swap(rpc_rpc_name);
+      clone_head.mutable_rpc_stream()->mutable_type_url()->swap(rpc_type_url);
     }
   }
+  *clone_request->mutable_body_bin() = request_message.body_bin();
 
   rpc::result_code_type::value_type ret =
       ss_msg_dispatcher::me()->send_to_proc(std::forward<CloneTo>(target), *clone_request, ignore_discovery);
@@ -675,9 +693,8 @@ static rpc::result_code_type try_filter_router_msg(rpc::context &ctx, EXPLICIT_U
 }
 }  // namespace detail
 
-SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::filter_router_msg(router_manager_base *&mgr,
-                                                                 std::shared_ptr<router_object_base> &obj,
-                                                                 std::pair<bool, int> &filter_result) {
+SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::filter_router_msg(
+    router_manager_base *&mgr, std::shared_ptr<router_object_base> &obj, std::pair<bool, int> &filter_result) {
   // request 可能会被move走，所以这里copy一份
   atframework::SSRouterHead router;
   protobuf_copy_message(router, get_request().head().router());
