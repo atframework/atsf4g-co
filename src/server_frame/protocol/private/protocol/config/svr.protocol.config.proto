@@ -198,6 +198,11 @@ message opentelemetry_exporter_prometheus_file {
   uint32 rotate_size = 6 [(atapp.protocol.CONFIGURE) = { default_value: "3" }];
 }
 
+message opentelemetry_exporter_prometheus_http_api {
+  string url = 1;
+  repeated string headers = 2;
+}
+
 message opentelemetry_metrics_exporter_cfg {
   opentelemetry_exporter_otlp_grpc otlp_grpc = 1;
   opentelemetry_exporter_otlp_http otlp_http = 2;
@@ -206,6 +211,7 @@ message opentelemetry_metrics_exporter_cfg {
   opentelemetry_exporter_prometheus_pull prometheus_pull = 11;
   opentelemetry_exporter_prometheus_push prometheus_push = 12;
   opentelemetry_exporter_prometheus_file prometheus_file = 13;
+  opentelemetry_exporter_prometheus_http_api prometheus_http_api = 14;
 }
 
 message opentelemetry_metrics_reader_cfg {
@@ -266,6 +272,128 @@ message logic_telemetry_cfg {
   repeated opentelemetry_group_cfg group = 3;
 }
 
+// @see
+// https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/horizontal-pod-autoscaler-v1/#HorizontalPodAutoscalerSpec
+message logic_hpa_target {
+  string kind = 1;
+  string name = 2;
+  string api_version = 3;
+}
+
+message logic_hpa_metrics {
+  // 拉取指标的间隔
+  google.protobuf.Duration pull_interval = 1 [(atapp.protocol.CONFIGURE) = { default_value: "180s" min_value: "1s" }];
+  // 推送指标的间隔
+  google.protobuf.Duration push_interval = 2 [(atapp.protocol.CONFIGURE) = { default_value: "120s" min_value: "1s" }];
+
+  // 指标的公共附加写出标签
+  //   建议提取 workload的namespace和name作为写出标签以支持多版本和蓝绿发布
+  map<string, string> labels = 4;
+
+  // 指标的公共附加读规则标签
+  //   selector默认为=操作符，可以手动设置为 =,!=,=~或!~
+  //   详见: https://prometheus.io/docs/prometheus/latest/querying/basics/#instant-vector-selectors
+  //   建议提取 workload的namespace和name作为筛选标签以支持多版本和蓝绿发布
+  map<string, string> selectors = 5;
+
+  // 写出预期Pod数的指标名（External指标）
+  string metrics_name_expect_replicas = 11;
+
+  // 写出状态Pod Index的指标名（External指标）
+  string metrics_name_stateful_index = 12;
+}
+
+enum logic_hpa_policy_aggregation_operator {
+  EN_HPA_POLICY_AGGREGATION_SUM = 0;
+  EN_HPA_POLICY_AGGREGATION_AVG = 1;
+  EN_HPA_POLICY_AGGREGATION_COUNT = 2;
+  EN_HPA_POLICY_AGGREGATION_MIN = 3;
+  EN_HPA_POLICY_AGGREGATION_MAX = 4;
+}
+
+message logic_hpa_policy {
+  string metrics_name = 1;
+
+  logic_hpa_policy_aggregation_operator aggregation = 2;
+
+  // 扩容指标目标值
+  int64 scaling_up_value = 3;
+  // 缩容指标目标值（一般小于等于扩容指标目标值）
+  int64 scaling_down_value = 4;
+}
+
+message logic_hpa_scaling_configure {
+  // 稳定时间
+  google.protobuf.Duration stabilization_window = 1;
+  // 一次扩缩容最大变更节点数
+  int32 max_scaling_count = 2;
+}
+
+message logic_hpa_scaling_rule {
+  logic_hpa_scaling_configure scaling_up_configure = 1;
+  logic_hpa_scaling_configure scaling_down_configure = 2;
+
+  // CPU: 千分比
+  logic_hpa_policy cpu_permillage = 11;
+  // 内存: 字节
+  logic_hpa_policy memory = 12;
+
+  // 自定义指标
+  repeated logic_hpa_policy custom = 21;
+}
+
+// This is use to maintain configure status in ETCD or other storage system.
+message logic_hpa_status {
+  // 期望的副本数
+  int32 expect_replicas = 1;
+  // 期望的副本数据开始迁移时间
+  google.protobuf.Timestamp expect_replicate_start_timepoint = 2;
+  // 期望的副本数据结束迁移时间
+  google.protobuf.Timestamp expect_replicate_end_timepoint = 3;
+  // 期望的开始调整副本时间
+  google.protobuf.Timestamp expect_scaling_timepoint = 4;
+}
+
+message logic_hpa_controller {
+  // 按服务类型ID限定管理节点查找规则
+  uint64 type_id = 1;
+  // 按服务类型名限定管理节点查找规则
+  string type_name = 2;
+
+  // 选取管理节点的选取规则(K8S的目标仅仅能使用kind,name和apiVersion，建议只用这几项)
+  // 建议:
+  //   1. 上面 type_id/type_name 仅用于加速查找。实际workload控制仅仅使用 selector.name
+  //   2.1 对于无小区服务 selector.name = <type_name>-<版本号>,
+  //   2.2 对于有小区服务 selector.name = <type_name>-<zone_id>-<版本号>
+  logic_hpa_target target = 3;
+
+  // 发布场景:
+  //   蓝绿发布时，老版本可以通过外部指令通知controller把预期节点数强行写0。
+  //   服务器发现层设置非active状态排除后续状态数据迁入。
+  //   然后等待状态数据全部迁移完成后通知prometheus状态数变化。
+  // 节点迁移场景:
+  //   服务器发现层设置非active状态排除后续状态数据迁入。
+  //   然后等待状态数据全部迁移完成后直接本地停止，等同index的pod节点在新节点上拉起。
+  int32 min_replicas = 4;
+  int32 max_replicas = 5;
+
+  // 等待多久后开始副本迁移
+  google.protobuf.Duration replicate_start_delay = 11;
+  // 预期副本迁移时间
+  google.protobuf.Duration replicate_period = 12;
+  // 等待多久后开始节点变更（写入预期节点数）
+  google.protobuf.Duration scaling_delay = 13;
+}
+
+message logic_hpa_cfg {
+  // 指向ETCD配置的Key前缀，实际生效值应为 <configure_key>/<controller.selector.name>
+  // 写入的数据结构为 logic_hpa_status
+  string configure_key = 1;
+  logic_hpa_controller controller = 2;
+  logic_hpa_metrics metrics = 3;
+  logic_hpa_scaling_rule rule = 4;
+}
+
 message logic_dns_cfg {
   google.protobuf.Duration lookup_timeout = 1 [(atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
 }
@@ -291,6 +419,7 @@ message logic_excel_cfg {
 }
 
 message logic_section_cfg {
+  logic_hpa_cfg hpa = 3;
   logic_localization_cfg localization = 8;
   google.protobuf.Duration remote_configure_update_interval = 24
       [(atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "60s" }];

@@ -1,3 +1,28 @@
+<#
+.SYNOPSIS
+    .
+.PARAMETER Help
+    Print help message and exit
+.PARAMETER IgnoreRunningDynamicLibraryChecking
+    Ignore running dynamic library checking.
+.EXAMPLE
+    .
+    pwsh -File <this file> [options...]
+    Get-Help <this file> -detailed
+    Get-Help <this file> -full
+#>
+
+[CmdletBinding()]
+param (
+    [Parameter(ValueFromPipeline = $true,
+        ValueFromPipelineByPropertyName = $true)]
+    [switch]$Help,
+
+    [Parameter(ValueFromPipeline = $true,
+        ValueFromPipelineByPropertyName = $true)]
+    [switch]$IgnoreRunningDynamicLibraryChecking = $false
+)
+
 $PSDefaultParameterValues['*:Encoding'] = 'UTF-8'
 
 $OutputEncoding = [System.Text.UTF8Encoding]::new()
@@ -26,16 +51,22 @@ function Cleanup-Library-Directory {
                 continue
             }
     
-            $SO_PATHS = Get-ChildItem -Path $DIR_PATH.FullName -Filter "*.so*" -File
-            foreach ($SO_PATH in $SO_PATHS) {
-                & lsof $SO_PATH.FullName 2>/dev/null
-                if ($LASTEXITCODE -ne 0) {
-                    Write-Output "Remove $SO_PATH ..."
-                    Remove-Item -Force -Path $SO_PATH.FullName
-                }
+            if ($IgnoreRunningDynamicLibraryChecking) {
+                $SO_PATHS = $false
             }
-    
-            $SO_PATHS = Get-ChildItem -Path $DIR_PATH.FullName -Filter "*.so*" -File
+            else {
+                $SO_PATHS = Get-ChildItem -Path $DIR_PATH.FullName -Filter "*.so*" -File
+                foreach ($SO_PATH in $SO_PATHS) {
+                    & lsof $SO_PATH.FullName 2>/dev/null
+                    if ($LASTEXITCODE -ne 0) {
+                        Write-Output "Remove $SO_PATH ..."
+                        Remove-Item -Force -Path $SO_PATH.FullName
+                    }
+                }
+
+                $SO_PATHS = Get-ChildItem -Path $DIR_PATH.FullName -Filter "*.so*" -File
+            }
+            
             if (-Not $SO_PATHS) {
                 Write-Output "Remove $DIR_PATH ..."
                 Remove-Item -Recurse -Force -Path $DIR_PATH.FullName

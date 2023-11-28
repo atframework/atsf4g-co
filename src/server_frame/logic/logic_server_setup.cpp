@@ -539,6 +539,33 @@ logic_server_common_module::etcd_keepalive_ptr_t logic_server_common_module::add
   return ret;
 }
 
+bool logic_server_common_module::is_runtime_active() const noexcept {
+  std::shared_ptr<atapp::etcd_module> etcd_mod;
+
+  if (nullptr != get_app()) {
+    etcd_mod = get_app()->get_etcd_module();
+  }
+
+  if (!etcd_mod) {
+    return false;
+  }
+
+  auto node_ptr = etcd_mod->get_global_discovery().get_node_by_id(get_app_id());
+  if (!node_ptr) {
+    return false;
+  }
+
+  auto &labels = node_ptr->get_discovery_info().metadata().labels();
+  auto active_iter = labels.find("runtime_active");
+  if (active_iter == labels.end()) {
+    return true;
+  }
+
+  return !active_iter->second.empty() && active_iter->second != "0" &&
+         0 != UTIL_STRFUNC_STRNCASE_CMP(active_iter->second.c_str(), "no", 2) &&
+         0 != UTIL_STRFUNC_STRNCASE_CMP(active_iter->second.c_str(), "false", 5);
+}
+
 atapp::etcd_cluster *logic_server_common_module::get_etcd_cluster() {
   std::shared_ptr<::atapp::etcd_module> etcd_mod = get_etcd_module();
   if (!etcd_mod) {

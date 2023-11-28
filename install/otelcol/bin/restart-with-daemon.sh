@@ -2,6 +2,6 @@
 
 cd "$(dirname "$0")"
 
-bash ./stop-with-tcm.sh
+bash ./stop-with-daemon.sh
 
-bash ./start-with-tcm.sh
+bash ./start-with-daemon.sh

@@ -14,6 +14,8 @@
 #include <config/atframe_service_types.h>
 #include <config/extern_service_types.h>
 
+#include <opentelemetry/trace/semantic_conventions.h>
+
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
@@ -434,6 +436,11 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_s
   } else {
     trace_start_option.parent_network_span = nullptr;
   }
+  rpc::telemetry::trace_attribute_pair_type internal_rpc_trace_attributes[] = {
+      {opentelemetry::trace::SemanticConventions::kRpcSystem, "internal"},
+      {opentelemetry::trace::SemanticConventions::kRpcService, "ss_msg_dispatcher"},
+      {opentelemetry::trace::SemanticConventions::kRpcMethod, "ss_msg_dispatcher"}};
+  trace_start_option.attributes = internal_rpc_trace_attributes;
   ctx.setup_tracer(tracer, "ss_msg_dispatcher", std::move(trace_start_option));
 
   dispatcher_result_t res = on_receive_message(ctx, callback_msg, nullptr, ss_msg->head().sequence());
@@ -521,7 +528,8 @@ SERVER_FRAME_API void ss_msg_dispatcher::on_create_task_failed(dispatcher_start_
     return;
   }
 
-  if (!real_msg->head().has_rpc_request() || 0 == real_msg->head().node_id() || 0 == real_msg->head().source_task_id()) {
+  if (!real_msg->head().has_rpc_request() || 0 == real_msg->head().node_id() ||
+      0 == real_msg->head().source_task_id()) {
     return;
   }
 

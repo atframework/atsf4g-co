@@ -54,11 +54,11 @@ struct task_action_stat_guard {
     util::time::time_utility::raw_time_t end = util::time::time_utility::now();
     if (logic_config::me()->get_cfg_task().stats().enable_internal_pstat_log()) {
       if (0 != action->get_user_id()) {
-        FWCLOGINFO(log_categorize_t::PROTO_STAT, "{}|{}|{}us|{}|{}", action->name(), action->get_user_id(),
-                   std::chrono::duration_cast<std::chrono::microseconds>(end - start).count(), action->get_result(),
-                   action->get_response_code());
+        FWCLOGINFO(log_categorize_t::PROTO_STAT, "{}|{}|{}|{}us|{}|{}", action->name(), action->get_task_id(),
+                   action->get_user_id(), std::chrono::duration_cast<std::chrono::microseconds>(end - start).count(),
+                   action->get_result(), action->get_response_code());
       } else {
-        FWCLOGINFO(log_categorize_t::PROTO_STAT, "{}|NO PLAYER|{}us|{}|{}", action->name(),
+        FWCLOGINFO(log_categorize_t::PROTO_STAT, "{}|{}|NO PLAYER|{}us|{}|{}", action->name(), action->get_task_id(),
                    std::chrono::duration_cast<std::chrono::microseconds>(end - start).count(), action->get_result(),
                    action->get_response_code());
       }
@@ -183,20 +183,21 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data) {
   shared_context_.set_task_context(rpc_task_context_data);
 
   if (0 != get_user_id()) {
-    FWLOGDEBUG("task {} [{}] for player {}:{} start to run\n", name(), get_task_id(), get_zone_id(), get_user_id());
+    FCTXLOGDEBUG(get_shared_context(), "task {} [{}] for player {}:{} start to run\n", name(), get_task_id(),
+                 get_zone_id(), get_user_id());
   } else {
-    FWLOGDEBUG("task {} [{}] start to run\n", name(), get_task_id());
+    FCTXLOGDEBUG(get_shared_context(), "task {} [{}] start to run\n", name(), get_task_id());
   }
 
   result_ = RPC_AWAIT_CODE_RESULT(hook_run());
 
   if (event_disabled_) {
     if (result_ < 0) {
-      FWLOGERROR("task {} [{}] without evt ret code ({}){} rsp code ({}){}\n", name(), get_task_id(),
+      FCTXLOGERROR(get_shared_context(), "task {} [{}] without evt ret code ({}){} rsp code ({}){}\n", name(), get_task_id(),
                  protobuf_mini_dumper_get_error_msg(result_), result_,
                  protobuf_mini_dumper_get_error_msg(response_code_), response_code_);
     } else {
-      FWLOGDEBUG("task {} [{}] without evt ret code ({}){}, rsp code ({}){}\n", name(), get_task_id(),
+      FCTXLOGDEBUG(get_shared_context(), "task {} [{}] without evt ret code ({}){}, rsp code ({}){}\n", name(), get_task_id(),
                  protobuf_mini_dumper_get_error_msg(result_), result_,
                  protobuf_mini_dumper_get_error_msg(response_code_), response_code_);
     }
@@ -217,7 +218,7 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data) {
     int ret = 0;
     if (response_code_ < 0) {
       ret = on_failed();
-      FWLOGINFO("task {} [{}] finished success but response errorcode, rsp code: ({}){}\n", name(), get_task_id(),
+      FCTXLOGINFO(get_shared_context(), "task {} [{}] finished success but response errorcode, rsp code: ({}){}\n", name(), get_task_id(),
                 protobuf_mini_dumper_get_error_msg(response_code_), response_code_);
     } else {
       ret = on_success();
@@ -268,11 +269,11 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data) {
   }
 
   if (0 != get_user_id()) {
-    FWLOGERROR("task {} [{}] for player {}:{} ret code ({}){}, rsp code ({}){}\n", name(), get_task_id(), get_zone_id(),
+    FCTXLOGERROR(get_shared_context(), "task {} [{}] for player {}:{} ret code ({}){}, rsp code ({}){}\n", name(), get_task_id(), get_zone_id(),
                get_user_id(), protobuf_mini_dumper_get_error_msg(result_), result_,
                protobuf_mini_dumper_get_error_msg(response_code_), response_code_);
   } else {
-    FWLOGERROR("task {} [{}] ret code ({}){}, rsp code ({}){}\n", name(), get_task_id(),
+    FCTXLOGERROR(get_shared_context(), "task {} [{}] ret code ({}){}, rsp code ({}){}\n", name(), get_task_id(),
                protobuf_mini_dumper_get_error_msg(result_), result_, protobuf_mini_dumper_get_error_msg(response_code_),
                response_code_);
   }

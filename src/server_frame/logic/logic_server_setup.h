@@ -146,6 +146,8 @@ class logic_server_common_module : public atapp::module_impl {
 
   bool is_closing() const noexcept;
 
+  bool is_runtime_active() const noexcept;
+
   atapp::etcd_cluster* get_etcd_cluster();
   std::shared_ptr<::atapp::etcd_module> get_etcd_module();
 

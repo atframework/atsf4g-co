@@ -2,6 +2,28 @@
 
 cd "$(dirname "$0")";
 
+IGNORE_RUNNING_DYNAMIC_LIBRARIES=0
+
+while getopts "hi" OPTION; do
+  case $OPTION in
+    i)
+      IGNORE_RUNNING_DYNAMIC_LIBRARIES=1
+      ;;
+    h)
+      echo "usage: $0 [options...]"
+      echo "options:"
+      echo "-h                            help message."
+      echo "-i                            ignore running dynamic library checking."
+      exit 0
+      ;;
+    ?)
+      echo "unkonw argument detected"
+      exit 1
+      ;;
+  esac
+done
+
+
 function cleanup_dir() {
     if [[ ! -e $1 ]]; then
         return 0;
@@ -14,27 +36,33 @@ function cleanup_dir() {
         fi
 
         if [[ ! -d "$1/$DIR_NAME" ]]; then
-            rm -rfv "$1/$DIR_NAME";
-            continue;
+            echo "nohup rm -rf \"$1/$DIR_NAME\" &"
+            nohup rm -rf "$1/$DIR_NAME" &
+            continue
         fi
 
         which lsof > /dev/null 2>&1;
         if [[ ! $? -eq 0 ]]; then
-            rm -rfv "$1/$DIR_NAME";
-            continue;
+            echo "nohup rm -rf \"$1/$DIR_NAME\" &"
+            nohup rm -rf "$1/$DIR_NAME" &
+            continue
         fi
 
-        for SO_PATH in "$1/$DIR_NAME"/*.so* ; do
-            SO_NAME="$(basename "$SO_PATH")";
-            lsof "$1/$DIR_NAME/$SO_NAME" 2>/dev/null;
-            if [[ $? -ne 0 ]]; then
-                rm -rfv "$1/$DIR_NAME/$SO_NAME";
-            fi
-        done
-        HAS_SO=$(find "$1/$DIR_NAME" -name '*.so*' -type f | wc | awk '{print $1}') ;
+        if [[ $IGNORE_RUNNING_DYNAMIC_LIBRARIES -eq 0 ]]; then
+            for SO_PATH in "$1/$DIR_NAME"/*.so* ; do
+                SO_NAME="$(basename "$SO_PATH")";
+                lsof "$1/$DIR_NAME/$SO_NAME" 2>/dev/null;
+                if [[ $? -ne 0 ]]; then
+                    rm -rfv "$1/$DIR_NAME/$SO_NAME";
+                fi
+            done
+            HAS_SO=$(find "$1/$DIR_NAME" -name '*.so*' -type f | wc | awk '{print $1}') ;
+        else
+            HAS_SO=0
+        fi
         if [[ $HAS_SO -eq 0 ]]; then
-            echo "rm -rf \"$1/$DIR_NAME\"" ;
-            rm -rf "$1/$DIR_NAME";
+            echo "nohup rm -rf \"$1/$DIR_NAME\" &"
+            nohup rm -rf "$1/$DIR_NAME" &
         fi
     done
 }

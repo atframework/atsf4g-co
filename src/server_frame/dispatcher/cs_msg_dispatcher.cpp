@@ -16,6 +16,8 @@
 #include <libatgw_server_protocol.h>
 #include <proto_base.h>
 
+#include <opentelemetry/trace/semantic_conventions.h>
+
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/com.const.pb.h>
@@ -243,8 +245,8 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_s
                                 post.content().size());
       if (ret != 0) {
         FWLOGERROR("{} unpack received message from [{:#x}: {}], session id: {} failed, res: %d", name(),
-                   session_key.node_id, get_app()->convert_app_id_to_string(session_key.node_id), session_key.session_id,
-                   ret);
+                   session_key.node_id, get_app()->convert_app_id_to_string(session_key.node_id),
+                   session_key.session_id, ret);
         return ret;
       }
 
@@ -269,6 +271,11 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_s
       } else {
         trace_start_option.parent_network_span = nullptr;
       }
+      rpc::telemetry::trace_attribute_pair_type internal_rpc_trace_attributes[] = {
+          {opentelemetry::trace::SemanticConventions::kRpcSystem, "internal"},
+          {opentelemetry::trace::SemanticConventions::kRpcService, "cs_msg_dispatcher"},
+          {opentelemetry::trace::SemanticConventions::kRpcMethod, "cs_msg_dispatcher"}};
+      trace_start_option.attributes = internal_rpc_trace_attributes;
       ctx.setup_tracer(tracer, "cs_msg_dispatcher", std::move(trace_start_option));
 
       dispatcher_result_t res = on_receive_message(ctx, callback_msg, nullptr, cs_msg->head().client_sequence());

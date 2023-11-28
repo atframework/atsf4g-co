@@ -192,7 +192,6 @@ SERVER_FRAME_API task_action_cs_req_base::msg_ref_type task_action_cs_req_base::
   }
 
   if (get_request().head().has_rpc_request()) {
-    head->clear_rpc_request();
     head->mutable_rpc_response()->set_version(logic_config::me()->get_atframework_settings().rpc_version());
     head->mutable_rpc_response()->set_rpc_name(get_request().head().rpc_request().rpc_name());
     head->mutable_rpc_response()->set_type_url(get_response_type_url());

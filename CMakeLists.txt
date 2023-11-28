@@ -118,12 +118,14 @@ if(CYGWIN
    OR APPLE
    OR NOT ATFRAMEWORK_CMAKE_TOOLSET_PWSH)
   echowithcolor(COLOR GREEN "-- Cleanup old built libraries ...")
-  execute_process(COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_BASH}" "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.sh"
+  execute_process(COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_BASH}" "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.sh" "-i"
                   WORKING_DIRECTORY ${PROJECT_INSTALL_BAS_DIR})
 else()
   execute_process(
-    COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_PWSH}" "-NoProfile" "-InputFormat" "None" "-ExecutionPolicy" "Bypass"
-            "-NonInteractive" "-NoLogo" "-File" "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1"
+    COMMAND
+      "${ATFRAMEWORK_CMAKE_TOOLSET_PWSH}" "-NoProfile" "-InputFormat" "None" "-ExecutionPolicy" "Bypass"
+      "-NonInteractive" "-NoLogo" "-File" "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1"
+      "-IgnoreRunningDynamicLibraryChecking"
     WORKING_DIRECTORY ${PROJECT_INSTALL_BAS_DIR})
 endif()
 

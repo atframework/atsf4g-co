@@ -22,6 +22,7 @@ receivers:
   otlp:
     protocols:
       grpc:
+        endpoint: "127.0.0.1:4317"
 
 exporters:
   debug:
@@ -63,7 +64,7 @@ exporters:
   otlp/trace:
     endpoint: "{{ $otelcol_agent_data_source.trace.otlp.grpc_endpoint }}"
     tls:
-      insecure: "{{ $otelcol_agent_data_source.trace.otlp.grpc_insecure | default "true" }}"
+      insecure: {{ $otelcol_agent_data_source.trace.otlp.grpc_insecure | default "true" }}
       {{- if not (empty $otelcol_agent_data_source.trace.otlp.grpc_ca_file) }}
       ca_file: "{{ $otelcol_agent_data_source.trace.otlp.grpc_ca_file }}"
       {{- end }}
@@ -84,7 +85,7 @@ exporters:
   otlp/metrics:
     endpoint: "{{ $otelcol_agent_data_source.metrics.otlp.grpc_endpoint }}"
     tls:
-      insecure: "{{ $otelcol_agent_data_source.metrics.otlp.grpc_insecure | default "true" }}"
+      insecure: {{ $otelcol_agent_data_source.metrics.otlp.grpc_insecure | default "true" }}
       {{- if not (empty $otelcol_agent_data_source.metrics.otlp.grpc_ca_file) }}
       ca_file: "{{ $otelcol_agent_data_source.metrics.otlp.grpc_ca_file }}"
       {{- end }}
@@ -144,7 +145,7 @@ exporters:
   otlp/logs:
     endpoint: "{{ $otelcol_agent_data_source.logs.otlp.grpc_endpoint }}"
     tls:
-      insecure: "{{ $otelcol_agent_data_source.logs.otlp.grpc_insecure | default "true" }}"
+      insecure: {{ $otelcol_agent_data_source.logs.otlp.grpc_insecure | default "true" }}
       {{- if not (empty $otelcol_agent_data_source.logs.otlp.grpc_ca_file) }}
       ca_file: "{{ $otelcol_agent_data_source.logs.otlp.grpc_ca_file }}"
       {{- end }}
@@ -183,9 +184,9 @@ connectors:
       - name: rpc.method
         default: UNKNOWN
       - name: rpc.service
-        default: UNKNOWN
+        default: NONE
       - name: rpc.system
-        default: UNKNOWN
+        default: NONE
       - name: service.area.zone_id
         default: 0
       - name: service.instance.name
@@ -195,23 +196,44 @@ connectors:
       # - name: service.name
 
 service:
+  telemetry:
+    metrics:
+      address: "127.0.0.1:8888"
   extensions: [health_check, pprof, zpages]
   pipelines:
     traces:
       receivers: [otlp]
       processors: [batch]
+{{- if and (not (empty .Values.telemetry.agent.trace_exporters.file)) (not (empty .Values.telemetry.agent.trace_exporters.file.enable)) }}
+      # exporters: [{{ $otelcol_traces_exporters | join ", "}}]
+      {{- $otelcol_traces_exporters = append $otelcol_traces_exporters "file/rotation_trace" }}
+      exporters: [{{ $otelcol_traces_exporters | join ", "}}]
+{{- else }}
       exporters: [{{ $otelcol_traces_exporters | join ", "}}]
       {{- $otelcol_traces_exporters = append $otelcol_traces_exporters "file/rotation_trace" }}
       # exporters: [{{ $otelcol_traces_exporters | join ", "}}]
+{{- end }}
     metrics:
       receivers: [spanmetrics, otlp]
       processors: [batch]
+{{- if and (not (empty .Values.telemetry.agent.metrics_exporters.file)) (not (empty .Values.telemetry.agent.metrics_exporters.file.enable)) }}
+      # exporters: [{{ $otelcol_metrics_exporters | join ", "}}]
+      {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "file/rotation_metrics" }}
+      exporters: [{{ $otelcol_metrics_exporters | join ", "}}]
+{{- else }}
       exporters: [{{ $otelcol_metrics_exporters | join ", "}}]
       {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "file/rotation_metrics" }}
       # exporters: [{{ $otelcol_metrics_exporters | join ", "}}]
+{{- end }}
     logs:
       receivers: [otlp]
       processors: [batch]
+{{- if and (not (empty .Values.telemetry.agent.logs_exporters.file)) (not (empty .Values.telemetry.agent.logs_exporters.file.enable)) }}
+      # exporters: [{{ $otelcol_logs_exporters | join ", "}}]
+      {{- $otelcol_logs_exporters = append $otelcol_logs_exporters "file/rotation_logs" }}
+      exporters: [{{ $otelcol_logs_exporters | join ", "}}]
+{{- else }}
       exporters: [{{ $otelcol_logs_exporters | join ", "}}]
       {{- $otelcol_logs_exporters = append $otelcol_logs_exporters "file/rotation_logs" }}
       # exporters: [{{ $otelcol_logs_exporters | join ", "}}]
+{{- end }}
