@@ -145,11 +145,14 @@ struct local_provider_handle_type {
   }
 };
 
+static void _opentelemetry_initialize_group(const std::shared_ptr<group_type> &);
+
 }  // namespace
 
 struct group_type {
   util::lock::spin_rw_lock lock;
   bool initialized = false;
+  std::string group_name;
 
   // Replicate
   uint64_t server_id = 0;
@@ -309,11 +312,13 @@ static std::shared_ptr<local_meter_info_type> get_meter_info(std::shared_ptr<gro
 
     util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
-
   } while (false);
 
   if (!group) {
     return std::shared_ptr<local_meter_info_type>();
+  }
+  if (!group->initialized) {
+    _opentelemetry_initialize_group(group);
   }
 
   {
@@ -729,6 +734,10 @@ SERVER_FRAME_API size_t global_service::get_trace_exporter_count(std::shared_ptr
     group = current_service_cache->default_group;
   } while (false);
 
+  if (!group->initialized) {
+    _opentelemetry_initialize_group(group);
+  }
+
   if (group) {
     return group->tracer_exporter_count;
   }
@@ -750,6 +759,10 @@ SERVER_FRAME_API size_t global_service::get_metrics_exporter_count(std::shared_p
     util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
+
+  if (!group->initialized) {
+    _opentelemetry_initialize_group(group);
+  }
 
   if (group) {
     return group->metrics_exporter_count;
@@ -773,6 +786,10 @@ SERVER_FRAME_API size_t global_service::get_logs_exporter_count(std::shared_ptr<
     group = current_service_cache->default_group;
   } while (false);
 
+  if (!group->initialized) {
+    _opentelemetry_initialize_group(group);
+  }
+
   if (group) {
     return group->logger_exporter_count;
   }
@@ -795,6 +812,10 @@ global_service::get_current_default_tracer(std::shared_ptr<group_type> group) {
     util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
+
+  if (!group->initialized) {
+    _opentelemetry_initialize_group(group);
+  }
 
   if (group) {
     return group->default_tracer;
@@ -824,11 +845,14 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> 
 
     util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
-
   } while (false);
 
   if (!group) {
     return opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
+  }
+
+  if (!group->initialized) {
+    _opentelemetry_initialize_group(group);
   }
 
   std::string cache_key = util::log::format("{}:{}", gsl::string_view{library_name.data(), library_name.size()},
@@ -1219,6 +1243,10 @@ global_service::get_current_default_logger(std::shared_ptr<group_type> group) {
     group = current_service_cache->default_group;
   } while (false);
 
+  if (!group->initialized) {
+    _opentelemetry_initialize_group(group);
+  }
+
   if (group) {
     return group->default_logger;
   }
@@ -1252,6 +1280,10 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> g
 
   if (!group) {
     return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
+  }
+
+  if (!group->initialized) {
+    _opentelemetry_initialize_group(group);
   }
 
   std::string cache_key = util::log::format("{}:{}:{}", gsl::string_view{logger_name.data(), logger_name.size()},
@@ -1960,7 +1992,7 @@ static void _opentelemetry_prepare_group(
   }
 }
 
-static void _opentelemetry_setup_group(atapp::app &app, std::shared_ptr<group_type> group, gsl::string_view group_name,
+static void _opentelemetry_setup_group(atapp::app &app, std::shared_ptr<group_type> group,
                                        local_provider_handle_type<opentelemetry::trace::TracerProvider> tracer_handle,
                                        local_provider_handle_type<opentelemetry::metrics::MeterProvider> metrics_handle,
                                        local_provider_handle_type<opentelemetry::logs::LoggerProvider> logs_handle) {
@@ -2026,15 +2058,15 @@ static void _opentelemetry_setup_group(atapp::app &app, std::shared_ptr<group_ty
   }
 
   std::shared_ptr<group_type> previous_group = group;
-  if (group_name.empty()) {
+  if (group->group_name.empty()) {
     current_service_cache->default_group.swap(previous_group);
   } else {
-    current_service_cache->named_groups[static_cast<std::string>(group_name)].swap(previous_group);
+    current_service_cache->named_groups[group->group_name].swap(previous_group);
   }
 
   // Shutdown in another thread to avoid blocking
   do {
-    if (!previous_group) {
+    if (!previous_group && previous_group != group) {
       break;
     }
     if (previous_group->logs_handle.provider == group->logs_handle.provider) {
@@ -2064,7 +2096,7 @@ static void _opentelemetry_setup_group(atapp::app &app, std::shared_ptr<group_ty
   }
 
   // Skip set singlethon instance if it's not a default group
-  if (!group_name.empty()) {
+  if (!group->group_name.empty()) {
     return;
   }
 
@@ -2323,6 +2355,34 @@ _opentelemetry_create_opentelemetry_logs_provider(::rpc::telemetry::group_type &
   return ret;
 }
 
+static void _opentelemetry_initialize_group(const std::shared_ptr<group_type> &group) {
+  if (!group) {
+    return;
+  }
+  if (group->initialized) {
+    return;
+  }
+
+  atapp::app *app_inst = atapp::app::get_last_instance();
+  if (nullptr == app_inst) {
+    return;
+  }
+
+  // Trace
+  local_provider_handle_type<opentelemetry::trace::TracerProvider> tracer_handle =
+      _opentelemetry_create_opentelemetry_trace_provider(*group);
+
+  // Metrics
+  local_provider_handle_type<opentelemetry::metrics::MeterProvider> metrics_handle =
+      _opentelemetry_create_opentelemetry_metrics_provider(*group);
+
+  // Logs
+  local_provider_handle_type<opentelemetry::logs::LoggerProvider> logs_handle =
+      _opentelemetry_create_opentelemetry_logs_provider(*group);
+
+  _opentelemetry_setup_group(*app_inst, group, tracer_handle, metrics_handle, logs_handle);
+}
+
 }  // namespace
 
 SERVER_FRAME_API void global_service::set_current_service(
@@ -2356,7 +2416,7 @@ SERVER_FRAME_API void global_service::set_current_service(
   local_provider_handle_type<opentelemetry::logs::LoggerProvider> logs_handle =
       _opentelemetry_create_opentelemetry_logs_provider(*default_group);
 
-  _opentelemetry_setup_group(app, default_group, "", tracer_handle, metrics_handle, logs_handle);
+  _opentelemetry_setup_group(app, default_group, tracer_handle, metrics_handle, logs_handle);
 
   std::unordered_map<std::string, std::shared_ptr<group_type>> named_groups;
   named_groups.reserve(static_cast<std::size_t>(telemetry.group_size()));
@@ -2372,6 +2432,7 @@ SERVER_FRAME_API void global_service::set_current_service(
     }
 
     // Setup telemetry
+    named_group->group_name = named_group_cfg.name();
     named_group->initialized = false;
     named_group->tracer_exporter_count = 0;
     named_group->metrics_exporter_count = 0;
@@ -2442,28 +2503,6 @@ SERVER_FRAME_API std::shared_ptr<group_type> global_service::get_group(gsl::stri
     }
 
     ret = iter->second;
-  }
-
-  if (ret && !ret->initialized) {
-    atapp::app *app_inst = atapp::app::get_last_instance();
-    if (nullptr == app_inst) {
-      ret.reset();
-      return ret;
-    }
-
-    // Trace
-    local_provider_handle_type<opentelemetry::trace::TracerProvider> tracer_handle =
-        _opentelemetry_create_opentelemetry_trace_provider(*ret);
-
-    // Metrics
-    local_provider_handle_type<opentelemetry::metrics::MeterProvider> metrics_handle =
-        _opentelemetry_create_opentelemetry_metrics_provider(*ret);
-
-    // Logs
-    local_provider_handle_type<opentelemetry::logs::LoggerProvider> logs_handle =
-        _opentelemetry_create_opentelemetry_logs_provider(*ret);
-
-    _opentelemetry_setup_group(*app_inst, ret, group_name, tracer_handle, metrics_handle, logs_handle);
   }
 
   return ret;
