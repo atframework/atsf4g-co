@@ -2066,7 +2066,7 @@ static void _opentelemetry_setup_group(atapp::app &app, std::shared_ptr<group_ty
 
   // Shutdown in another thread to avoid blocking
   do {
-    if (!previous_group && previous_group != group) {
+    if (!previous_group || previous_group == group) {
       break;
     }
     if (previous_group->logs_handle.provider == group->logs_handle.provider) {
