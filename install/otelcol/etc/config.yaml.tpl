@@ -1,7 +1,9 @@
 {{- $otelcol_traces_exporters := list "spanmetrics" -}}
+{{- $otelcol_spanmetrics_exporters := list -}}
 {{- $otelcol_metrics_exporters := list -}}
 {{- $otelcol_logs_exporters := list -}}
 {{- $otelcol_agent_data_source := dict -}}
+{{- $otelcol_spanmetrics_processors := list -}}
 {{- if not (empty .Values.telemetry.agent.group_name) -}}
   {{- $otelcol_agent_data_source = get .Values.telemetry.group .Values.telemetry.agent.group_name -}}
   {{- if empty $otelcol_agent_data_source -}}
@@ -38,6 +40,15 @@ exporters:
       localtime: true
     format: json
     # compression: zstd
+  file/rotation_spanmetrics:
+    path: ../log/otelcol-spanmetrics.log
+    rotation:
+      max_megabytes: 10
+      max_days: 3
+      max_backups: 10
+      localtime: true
+    format: json
+    # compression: zstd
   file/rotation_metrics:
     path: ../log/otelcol-metrics.log
     rotation:
@@ -48,14 +59,14 @@ exporters:
     format: json
     # compression: zstd
   file/rotation_logs:
-    path: ../log/otelcol-logs.log.zst
+    path: ../log/otelcol-logs.log
     rotation:
       max_megabytes: 10
       max_days: 3
       max_backups: 10
       localtime: true
     format: json
-    compression: zstd
+    # compression: zstd
 
 {{- if not (empty $otelcol_agent_data_source.trace) }}    
   {{- if not (empty $otelcol_agent_data_source.trace.otlp) }}
@@ -82,7 +93,16 @@ exporters:
   {{- if not (empty $otelcol_agent_data_source.metrics.otlp) }}
     {{- if not (empty $otelcol_agent_data_source.metrics.otlp.grpc_endpoint) -}}
       {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "otlp/metrics" }}
+      {{- $otelcol_spanmetrics_exporters = append $otelcol_spanmetrics_exporters "otlp/spanmetrics" }}
   otlp/metrics:
+    endpoint: "{{ $otelcol_agent_data_source.metrics.otlp.grpc_endpoint }}"
+    tls:
+      insecure: {{ $otelcol_agent_data_source.metrics.otlp.grpc_insecure | default "true" }}
+      {{- if not (empty $otelcol_agent_data_source.metrics.otlp.grpc_ca_file) }}
+      ca_file: "{{ $otelcol_agent_data_source.metrics.otlp.grpc_ca_file }}"
+      {{- end }}
+    timeout: "{{ $otelcol_agent_data_source.metrics.otlp.grpc_timeout | default "10s" }}"
+  otlp/spanmetrics:
     endpoint: "{{ $otelcol_agent_data_source.metrics.otlp.grpc_endpoint }}"
     tls:
       insecure: {{ $otelcol_agent_data_source.metrics.otlp.grpc_insecure | default "true" }}
@@ -93,7 +113,11 @@ exporters:
     {{- end }}
     {{- if not (empty $otelcol_agent_data_source.metrics.otlp.http_endpoint) -}}
       {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "otlphttp/metrics" }}
+      {{- $otelcol_spanmetrics_exporters = append $otelcol_spanmetrics_exporters "otlphttp/spanmetrics" }}
   otlphttp/metrics:
+    endpoint: "{{ $otelcol_agent_data_source.metrics.otlp.http_endpoint }}"
+    timeout: "{{ $otelcol_agent_data_source.metrics.otlp.http_timeout | default "10s" }}"
+  otlphttp/spanmetrics:
     endpoint: "{{ $otelcol_agent_data_source.metrics.otlp.http_endpoint }}"
     timeout: "{{ $otelcol_agent_data_source.metrics.otlp.http_timeout | default "10s" }}"
     {{- end }}
@@ -160,10 +184,35 @@ exporters:
   {{- end }}
 {{- end }}
 processors:
-  batch:
+  batch/traces:
     send_batch_size: 512
-    send_batch_max_size: 2048
+    send_batch_max_size: 8192
     timeout: 10s
+  batch/spanmetrics:
+    send_batch_size: 512
+    send_batch_max_size: 8192
+    timeout: 10s
+  batch/metrics:
+    send_batch_size: 512
+    send_batch_max_size: 8192
+    timeout: 10s
+  batch/logs:
+    send_batch_size: 512
+    send_batch_max_size: 32768
+    timeout: 10s
+{{- if not (empty $otelcol_agent_data_source.metrics) }}
+  {{- if not (empty $otelcol_agent_data_source.metrics.resource) }}  
+  resource/spanmetrics:
+    attributes:
+      {{- range $label_key, $label_value := $otelcol_agent_data_source.metrics.resource }}
+      - key: "{{ $label_key }}"
+        value: "{{ $label_value }}"
+        action: upsert
+      {{- end }}
+    {{- $otelcol_spanmetrics_processors = append $otelcol_spanmetrics_processors "resource/spanmetrics" }}
+  {{- end }}
+{{- end }}
+{{- $otelcol_spanmetrics_processors = append $otelcol_spanmetrics_processors "batch/spanmetrics" }}
 
 connectors:
   spanmetrics:
@@ -172,6 +221,7 @@ connectors:
     histogram:
       explicit:
         buckets: [1ms, 2ms, 8ms, 16ms, 50ms, 80ms, 100ms, 250ms, 1s, 6s]
+    exclude_dimensions: ['service.identity', 'process.pid']
     dimensions:
       - name: deployment.environment
         default: UNSET
@@ -203,7 +253,7 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
+      processors: [batch/traces]
 {{- if and (not (empty .Values.telemetry.agent.trace_exporters.file)) (not (empty .Values.telemetry.agent.trace_exporters.file.enable)) }}
       # exporters: [{{ $otelcol_traces_exporters | join ", "}}]
       {{- $otelcol_traces_exporters = append $otelcol_traces_exporters "file/rotation_trace" }}
@@ -213,9 +263,21 @@ service:
       {{- $otelcol_traces_exporters = append $otelcol_traces_exporters "file/rotation_trace" }}
       # exporters: [{{ $otelcol_traces_exporters | join ", "}}]
 {{- end }}
+    metrics/spanmetrics:
+      receivers: [spanmetrics]
+      processors: [{{ $otelcol_spanmetrics_processors | join ", "}}]
+{{- if and (not (empty .Values.telemetry.agent.trace_exporters.file)) (not (empty .Values.telemetry.agent.trace_exporters.file.enable)) }}
+      # exporters: [{{ $otelcol_spanmetrics_exporters | join ", "}}]
+      {{- $otelcol_spanmetrics_exporters = append $otelcol_spanmetrics_exporters "file/rotation_spanmetrics" }}
+      exporters: [{{ $otelcol_spanmetrics_exporters | join ", "}}]
+{{- else }}
+      exporters: [{{ $otelcol_spanmetrics_exporters | join ", "}}]
+      {{- $otelcol_spanmetrics_exporters = append $otelcol_spanmetrics_exporters "file/rotation_spanmetrics" }}
+      # exporters: [{{ $otelcol_spanmetrics_exporters | join ", "}}]
+{{- end }}
     metrics:
-      receivers: [spanmetrics, otlp]
-      processors: [batch]
+      receivers: [otlp]
+      processors: [batch/metrics]
 {{- if and (not (empty .Values.telemetry.agent.metrics_exporters.file)) (not (empty .Values.telemetry.agent.metrics_exporters.file.enable)) }}
       # exporters: [{{ $otelcol_metrics_exporters | join ", "}}]
       {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "file/rotation_metrics" }}
@@ -227,7 +289,7 @@ service:
 {{- end }}
     logs:
       receivers: [otlp]
-      processors: [batch]
+      processors: [batch/logs]
 {{- if and (not (empty .Values.telemetry.agent.logs_exporters.file)) (not (empty .Values.telemetry.agent.logs_exporters.file.enable)) }}
       # exporters: [{{ $otelcol_logs_exporters | join ", "}}]
       {{- $otelcol_logs_exporters = append $otelcol_logs_exporters "file/rotation_logs" }}

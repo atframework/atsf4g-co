@@ -67,6 +67,9 @@ class opentelemetry_utility {
   SERVER_FRAME_API static opentelemetry::common::AttributeValue convert_attribute_value_wihtout_array(
       const opentelemetry::sdk::common::OwnedAttributeValue& value);
 
+  SERVER_FRAME_API static std::string convert_attribute_value_to_string(
+      const opentelemetry::common::AttributeValue& value);
+
   SERVER_FRAME_API static bool add_global_metics_observable_int64(
       metrics_observable_type type, opentelemetry::nostd::string_view meter_name, meter_instrument_key metrics_key,
       std::function<void(opentelemetry::metrics::ObserverResult&)> fn);

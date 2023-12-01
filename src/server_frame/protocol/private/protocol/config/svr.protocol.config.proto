@@ -296,6 +296,10 @@ message logic_hpa_metrics {
   //   建议提取 workload的namespace和name作为筛选标签以支持多版本和蓝绿发布
   map<string, string> selectors = 5;
 
+  // 以下selectors不自动追加,否则某些内置筛选规则会自动添加到选择器列表里
+  // （默认情况下会自动设置 job, deployment_environment, hpa_target_kind, hpa_target_name, hpa_target_api_version）
+  repeated string without_auto_selectors = 6;
+
   // 写出预期Pod数的指标名（External指标）
   string metrics_name_expect_replicas = 11;
 
@@ -304,22 +308,64 @@ message logic_hpa_metrics {
 }
 
 enum logic_hpa_policy_aggregation_operator {
-  EN_HPA_POLICY_AGGREGATION_SUM = 0;
-  EN_HPA_POLICY_AGGREGATION_AVG = 1;
-  EN_HPA_POLICY_AGGREGATION_COUNT = 2;
-  EN_HPA_POLICY_AGGREGATION_MIN = 3;
-  EN_HPA_POLICY_AGGREGATION_MAX = 4;
+  EN_HPA_POLICY_AGGREGATION_SUM = 0 [(atapp.protocol.ENUMVALUE) = { alias_name: "sum" }];
+  EN_HPA_POLICY_AGGREGATION_AVG = 1 [(atapp.protocol.ENUMVALUE) = { alias_name: "avg" }];
+  EN_HPA_POLICY_AGGREGATION_COUNT = 2 [(atapp.protocol.ENUMVALUE) = { alias_name: "count" }];
+  EN_HPA_POLICY_AGGREGATION_MIN = 3 [(atapp.protocol.ENUMVALUE) = { alias_name: "min" }];
+  EN_HPA_POLICY_AGGREGATION_MAX = 4 [(atapp.protocol.ENUMVALUE) = { alias_name: "max" }];
+  EN_HPA_POLICY_AGGREGATION_COUNT_VALUES = 5 [(atapp.protocol.ENUMVALUE) = { alias_name: "count_values" }];
+  EN_HPA_POLICY_AGGREGATION_TOPK = 11 [(atapp.protocol.ENUMVALUE) = { alias_name: "topk" }];
+  EN_HPA_POLICY_AGGREGATION_BOTTOMK = 12 [(atapp.protocol.ENUMVALUE) = { alias_name: "bottomk" }];
+}
+
+message logic_hpa_policy_aggregation_group_by {
+  repeated string labels = 1;
+}
+
+message logic_hpa_policy_aggregation_count_values {
+  string as = 1;
+  string target = 2;
+}
+
+message logic_hpa_policy_aggregation_parameter {
+  oneof aggregation_parameter_type {
+    logic_hpa_policy_aggregation_group_by by = 1;
+    logic_hpa_policy_aggregation_group_by without = 2;
+    int32 k = 3;
+    logic_hpa_policy_aggregation_count_values count_values = 4;
+  }
 }
 
 message logic_hpa_policy {
   string metrics_name = 1;
 
-  logic_hpa_policy_aggregation_operator aggregation = 2;
+  string metrics_unit = 2;
 
-  // 扩容指标目标值
-  int64 scaling_up_value = 3;
-  // 缩容指标目标值（一般小于等于扩容指标目标值）
-  int64 scaling_down_value = 4;
+  string metrics_description = 3;
+
+  logic_hpa_policy_aggregation_operator aggregation = 4;
+
+  logic_hpa_policy_aggregation_parameter aggregation_parameter = 5;
+
+  // 指标的额外附加写出标签
+  map<string, string> labels = 6;
+
+  // 指标的额外附加读规则标签
+  //   selector默认为=操作符，可以手动设置为 =,!=,=~或!~
+  //   详见: https://prometheus.io/docs/prometheus/latest/querying/basics/#instant-vector-selectors
+  map<string, string> selectors = 7;
+
+  // 以下selectors不自动追加,否则某些内置筛选规则会自动添加到选择器列表里
+  repeated string without_auto_selectors = 8;
+
+  // 不设置query时，由metrics_name和aggregation自动生成 query
+  string query = 9;
+
+  // 扩容指标目标值(0为不设置并由业务层自己控制)
+  int64 scaling_up_value = 11;
+
+  // 缩容指标目标值（一般小于等于扩容指标目标值,0为不设置并由业务层自己控制）
+  int64 scaling_down_value = 12;
 }
 
 message logic_hpa_scaling_configure {
@@ -362,9 +408,9 @@ message logic_hpa_controller {
 
   // 选取管理节点的选取规则(K8S的目标仅仅能使用kind,name和apiVersion，建议只用这几项)
   // 建议:
-  //   1. 上面 type_id/type_name 仅用于加速查找。实际workload控制仅仅使用 selector.name
-  //   2.1 对于无小区服务 selector.name = <type_name>-<版本号>,
-  //   2.2 对于有小区服务 selector.name = <type_name>-<zone_id>-<版本号>
+  //   1. 上面 type_id/type_name 仅用于加速查找。实际workload控制仅仅使用 selector.hpa_target_name
+  //   2.1 对于无小区服务 selector.hpa_target_name = <type_name>-<版本号>,
+  //   2.2 对于有小区服务 selector.hpa_target_name = <type_name>-<zone_id>-<版本号>
   logic_hpa_target target = 3;
 
   // 发布场景:

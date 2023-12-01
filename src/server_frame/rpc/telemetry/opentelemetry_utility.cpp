@@ -16,6 +16,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -294,6 +295,135 @@ SERVER_FRAME_API opentelemetry::common::AttributeValue opentelemetry_utility::co
   }
 
   return opentelemetry::common::AttributeValue{};
+}
+
+SERVER_FRAME_API std::string opentelemetry_utility::convert_attribute_value_to_string(
+    const opentelemetry::common::AttributeValue& value) {
+  if (opentelemetry::nostd::holds_alternative<bool>(value)) {
+    return opentelemetry::nostd::get<bool>(value) ? "true" : "false";
+  } else if (opentelemetry::nostd::holds_alternative<int32_t>(value)) {
+    return util::log::format("{}", opentelemetry::nostd::get<int32_t>(value));
+  } else if (opentelemetry::nostd::holds_alternative<int64_t>(value)) {
+    return util::log::format("{}", opentelemetry::nostd::get<int64_t>(value));
+  } else if (opentelemetry::nostd::holds_alternative<uint32_t>(value)) {
+    return util::log::format("{}", opentelemetry::nostd::get<uint32_t>(value));
+  } else if (opentelemetry::nostd::holds_alternative<uint64_t>(value)) {
+    return util::log::format("{}", opentelemetry::nostd::get<uint64_t>(value));
+  } else if (opentelemetry::nostd::holds_alternative<double>(value)) {
+    return util::log::format("{}", opentelemetry::nostd::get<double>(value));
+  } else if (opentelemetry::nostd::holds_alternative<const char*>(value)) {
+    return opentelemetry::nostd::get<const char*>(value);
+  } else if (opentelemetry::nostd::holds_alternative<opentelemetry::nostd::string_view>(value)) {
+    return static_cast<std::string>(opentelemetry::nostd::get<opentelemetry::nostd::string_view>(value));
+  } else if (opentelemetry::nostd::holds_alternative<opentelemetry::nostd::span<const bool>>(value)) {
+    std::stringstream ss;
+    ss << "[";
+    bool is_first = true;
+    for (auto& item : opentelemetry::nostd::get<opentelemetry::nostd::span<const bool>>(value)) {
+      if (!is_first) {
+        ss << ", ";
+      }
+      is_first = false;
+      ss << item;
+    }
+    ss << "]";
+    return ss.str();
+  } else if (opentelemetry::nostd::holds_alternative<opentelemetry::nostd::span<const int32_t>>(value)) {
+    std::stringstream ss;
+    ss << "[";
+    bool is_first = true;
+    for (auto& item : opentelemetry::nostd::get<opentelemetry::nostd::span<const int32_t>>(value)) {
+      if (!is_first) {
+        ss << ", ";
+      }
+      is_first = false;
+      ss << item;
+    }
+    ss << "]";
+    return ss.str();
+  } else if (opentelemetry::nostd::holds_alternative<opentelemetry::nostd::span<const int64_t>>(value)) {
+    std::stringstream ss;
+    ss << "[";
+    bool is_first = true;
+    for (auto& item : opentelemetry::nostd::get<opentelemetry::nostd::span<const int64_t>>(value)) {
+      if (!is_first) {
+        ss << ", ";
+      }
+      is_first = false;
+      ss << item;
+    }
+    ss << "]";
+    return ss.str();
+  } else if (opentelemetry::nostd::holds_alternative<opentelemetry::nostd::span<const uint32_t>>(value)) {
+    std::stringstream ss;
+    ss << "[";
+    bool is_first = true;
+    for (auto& item : opentelemetry::nostd::get<opentelemetry::nostd::span<const uint32_t>>(value)) {
+      if (!is_first) {
+        ss << ", ";
+      }
+      is_first = false;
+      ss << item;
+    }
+    ss << "]";
+    return ss.str();
+  } else if (opentelemetry::nostd::holds_alternative<opentelemetry::nostd::span<const uint64_t>>(value)) {
+    std::stringstream ss;
+    ss << "[";
+    bool is_first = true;
+    for (auto& item : opentelemetry::nostd::get<opentelemetry::nostd::span<const uint64_t>>(value)) {
+      if (!is_first) {
+        ss << ", ";
+      }
+      is_first = false;
+      ss << item;
+    }
+    ss << "]";
+    return ss.str();
+  } else if (opentelemetry::nostd::holds_alternative<opentelemetry::nostd::span<const double>>(value)) {
+    std::stringstream ss;
+    ss << "[";
+    bool is_first = true;
+    for (auto& item : opentelemetry::nostd::get<opentelemetry::nostd::span<const double>>(value)) {
+      if (!is_first) {
+        ss << ", ";
+      }
+      is_first = false;
+      ss << item;
+    }
+    ss << "]";
+    return ss.str();
+  } else if (opentelemetry::nostd::holds_alternative<opentelemetry::nostd::span<const uint8_t>>(value)) {
+    std::stringstream ss;
+    ss << "[";
+    bool is_first = true;
+    for (auto& item : opentelemetry::nostd::get<opentelemetry::nostd::span<const uint8_t>>(value)) {
+      if (!is_first) {
+        ss << ", ";
+      }
+      is_first = false;
+      ss << static_cast<uint32_t>(item);
+    }
+    ss << "]";
+    return ss.str();
+  } else if (opentelemetry::nostd::holds_alternative<
+                 opentelemetry::nostd::span<const opentelemetry::nostd::string_view>>(value)) {
+    std::stringstream ss;
+    ss << "[";
+    bool is_first = true;
+    for (auto& item :
+         opentelemetry::nostd::get<opentelemetry::nostd::span<const opentelemetry::nostd::string_view>>(value)) {
+      if (!is_first) {
+        ss << ", ";
+      }
+      is_first = false;
+      ss.write(item.data(), static_cast<std::streamsize>(item.size()));
+    }
+    ss << "]";
+    return ss.str();
+  }
+
+  return "";
 }
 
 SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_int64(

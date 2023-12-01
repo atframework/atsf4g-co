@@ -1061,7 +1061,7 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Observ
 global_service::mutable_metrics_observable_counter_int64(opentelemetry::nostd::string_view meter_name,
                                                          meter_instrument_key key, std::shared_ptr<group_type> group) {
   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument> ret =
-      get_metrics_observable(meter_name, key);
+      get_metrics_observable(meter_name, key, group);
   if (ret) {
     return ret;
   }
@@ -1085,7 +1085,7 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Observ
 global_service::mutable_metrics_observable_counter_double(opentelemetry::nostd::string_view meter_name,
                                                           meter_instrument_key key, std::shared_ptr<group_type> group) {
   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument> ret =
-      get_metrics_observable(meter_name, key);
+      get_metrics_observable(meter_name, key, group);
   if (ret) {
     return ret;
   }
@@ -1109,7 +1109,7 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Observ
 global_service::mutable_metrics_observable_gauge_int64(opentelemetry::nostd::string_view meter_name,
                                                        meter_instrument_key key, std::shared_ptr<group_type> group) {
   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument> ret =
-      get_metrics_observable(meter_name, key);
+      get_metrics_observable(meter_name, key, group);
   if (ret) {
     return ret;
   }
@@ -1133,7 +1133,7 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Observ
 global_service::mutable_metrics_observable_gauge_double(opentelemetry::nostd::string_view meter_name,
                                                         meter_instrument_key key, std::shared_ptr<group_type> group) {
   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument> ret =
-      get_metrics_observable(meter_name, key);
+      get_metrics_observable(meter_name, key, group);
   if (ret) {
     return ret;
   }
@@ -1158,7 +1158,7 @@ global_service::mutable_metrics_observable_up_down_counter_int64(opentelemetry::
                                                                  meter_instrument_key key,
                                                                  std::shared_ptr<group_type> group) {
   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument> ret =
-      get_metrics_observable(meter_name, key);
+      get_metrics_observable(meter_name, key, group);
   if (ret) {
     return ret;
   }
@@ -1183,7 +1183,7 @@ global_service::mutable_metrics_observable_up_down_counter_double(opentelemetry:
                                                                   meter_instrument_key key,
                                                                   std::shared_ptr<group_type> group) {
   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument> ret =
-      get_metrics_observable(meter_name, key);
+      get_metrics_observable(meter_name, key, group);
   if (ret) {
     return ret;
   }
