@@ -38,11 +38,14 @@
 namespace rpc {
 
 namespace detail {
-static result_code_type wait(EXPLICIT_UNUSED_ATTR context &ctx, uintptr_t check_type,
-                             const dispatcher_await_options &options,
+static result_code_type wait(context &ctx, uintptr_t check_type, const dispatcher_await_options &options,
                              dispatcher_receive_resume_data_callback receive_callback,
                              void *receive_callback_private_data) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in a task");
+  if (0 == options.sequence) {
+    FCTXLOGERROR(ctx, "can not wait for type {}, sequence {}", check_type, options.sequence);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
 
   {
     TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);
@@ -92,22 +95,22 @@ static result_code_type wait(EXPLICIT_UNUSED_ATTR context &ctx, uintptr_t check_
     }
 
     if (nullptr == resume_data) {
-      FWLOGINFO("task {} resume data is empty, maybe resumed by await_task", ctx.get_task_context().task_id);
+      FCTXLOGINFO(ctx, "task {} resume data is empty, maybe resumed by await_task", ctx.get_task_context().task_id);
       is_continue = true;
       continue;
     }
 
     if (resume_data->message.message_type != check_type) {
-      FWLOGINFO("task {} resume and expect message type {:#x} but real is {:#x}, ignore this message",
-                ctx.get_task_context().task_id, check_type, resume_data->message.message_type);
+      FCTXLOGINFO(ctx, "task {} resume and expect message type {:#x} but real is {:#x}, ignore this message",
+                  ctx.get_task_context().task_id, check_type, resume_data->message.message_type);
 
       is_continue = true;
       continue;
     }
 
-    if (0 != options.sequence && 0 != resume_data->sequence && options.sequence != resume_data->sequence) {
-      FWLOGINFO("task {} resume and expect message sequence {:#x} but real is {:#x}, ignore this message",
-                ctx.get_task_context().task_id, options.sequence, resume_data->sequence);
+    if (0 != resume_data->sequence && options.sequence != resume_data->sequence) {
+      FCTXLOGINFO(ctx, "task {} resume and expect message sequence {:#x} but real is {:#x}, ignore this message",
+                  ctx.get_task_context().task_id, options.sequence, resume_data->sequence);
       is_continue = true;
       continue;
     }
@@ -154,10 +157,17 @@ struct batch_wait_private_type {
 };
 
 template <typename TMSG>
-static result_code_type wait(EXPLICIT_UNUSED_ATTR context &ctx, uintptr_t check_type,
+static result_code_type wait(context &ctx, uintptr_t check_type,
                              const std::unordered_set<dispatcher_await_options> &waiters,
                              std::unordered_map<uint64_t, TMSG> &received, size_t wakeup_count) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in a task");
+  if (0 == check_type) {
+    FCTXLOGERROR(ctx, "can not wait for type {}", check_type);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
+  if (waiters.empty()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
 
   {
     TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);
@@ -213,9 +223,37 @@ static result_code_type wait(EXPLICIT_UNUSED_ATTR context &ctx, uintptr_t check_
   std::vector<task_manager::generic_resume_generator> generators;
   generators.reserve(waiters.size());
   for (auto &waiter_option : waiters) {
+    if (0 == waiter_option.sequence) {
+      FCTXLOGERROR(ctx, "can not wait for type {}, sequence {}", check_type, waiter_option.sequence);
+      continue;
+    }
+
     generators.emplace_back(std::move(
         task_manager::make_resume_generator(check_type, waiter_option, receive_callback, receive_callback_private_data)
             .second));
+  }
+  if (wakeup_count > generators.size()) {
+    wakeup_count = generators.size();
+  }
+  if (generators.empty()) {
+    FCTXLOGERROR(ctx, "can not wait for type {}, all waiter(s) have not valid sequence", check_type);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
+#else
+  size_t waiter_count = 0;
+  for (auto &waiter_option : waiters) {
+    if (0 == waiter_option.sequence) {
+      FCTXLOGERROR(ctx, "can not wait for type {}, sequence {}", check_type, waiter_option.sequence);
+      continue;
+    }
+    ++waiter_count;
+  }
+  if (wakeup_count > waiter_count) {
+    wakeup_count = waiter_count;
+  }
+  if (waiter_count <= 0) {
+    FCTXLOGERROR(ctx, "can not wait for type {}, all waiter(s) have not valid sequence", check_type);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 #endif
   for (size_t retry_times = 0;
@@ -224,7 +262,7 @@ static result_code_type wait(EXPLICIT_UNUSED_ATTR context &ctx, uintptr_t check_
        retry_times < PROJECT_NAMESPACE_ID::EN_SL_RPC_MAX_MISMATCH_RETRY_TIMES + 1;
 #else
        received_sequences.size() < wakeup_count &&
-       retry_times < waiters.size() + PROJECT_NAMESPACE_ID::EN_SL_RPC_MAX_MISMATCH_RETRY_TIMES;
+       retry_times < waiter_count + PROJECT_NAMESPACE_ID::EN_SL_RPC_MAX_MISMATCH_RETRY_TIMES;
 #endif
        ++retry_times) {
     // 协程 swap out
@@ -257,13 +295,13 @@ static result_code_type wait(EXPLICIT_UNUSED_ATTR context &ctx, uintptr_t check_
     }
 
     if (nullptr == resume_data) {
-      FWLOGINFO("task {} resume data is empty, maybe resumed by await_task", ctx.get_task_context().task_id);
+      FCTXLOGINFO(ctx, "task {} resume data is empty, maybe resumed by await_task", ctx.get_task_context().task_id);
       continue;
     }
 
     if (resume_data->message.message_type != check_type) {
-      FWLOGINFO("task {} resume and expect message type {:#x} but real is {:#x}, ignore this message",
-                ctx.get_task_context().task_id, check_type, resume_data->message.message_type);
+      FCTXLOGINFO(ctx, "task {} resume and expect message type {:#x} but real is {:#x}, ignore this message",
+                  ctx.get_task_context().task_id, check_type, resume_data->message.message_type);
 
       continue;
     }

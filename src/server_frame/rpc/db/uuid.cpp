@@ -249,19 +249,25 @@ struct unique_id_container_waker {
       }
     }
 
+    task_type_trait::task_type failed_task;
     while (!iter->second.wake_tasks.empty()) {
       if (!task_type_trait::empty(iter->second.alloc_task) && !task_type_trait::is_exiting(iter->second.alloc_task)) {
         break;
       }
 
       auto wake_task = *iter->second.wake_tasks.begin();
-      if (!task_type_trait::empty(wake_task) && !task_type_trait::is_exiting(wake_task)) {
+      if (!task_type_trait::empty(wake_task) && !task_type_trait::is_exiting(wake_task) &&
+          !task_type_trait::equal(failed_task, wake_task)) {
         // iter will be erased in task
         dispatcher_resume_data_type callback_data = dispatcher_make_default<dispatcher_resume_data_type>();
         callback_data.message.message_type = reinterpret_cast<uintptr_t>(reinterpret_cast<const void *>(&iter->second));
         callback_data.sequence = task_type_trait::get_task_id(wake_task);
 
-        rpc::custom_resume(wake_task, callback_data);
+        if (rpc::custom_resume(wake_task, callback_data) < 0) {
+          failed_task = wake_task;
+        } else {
+          task_type_trait::reset_task(failed_task);
+        }
       } else {
         // This should not be called
         if (!task_type_trait::empty(wake_task)) {

@@ -6,6 +6,8 @@
 
 #include <config/server_frame_build_feature.h>
 
+#include <config/compile_optimize.h>
+
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
 #  include <libcotask/task_promise.h>
 #else
@@ -14,8 +16,7 @@
 #  include <libcotask/task.h>
 #endif
 
-#include <stdint.h>
-#include <unordered_map>
+#include <cstdint>
 
 class task_action_base;
 struct task_private_data_type {
@@ -29,17 +30,20 @@ struct task_type_trait {
   using task_type = internal_task_type;
   using task_status = typename internal_task_type::task_status_type;
 
-  inline static copp::promise_base_type::pick_promise_status_awaitable internal_pick_current_status() noexcept {
+  UTIL_FORCEINLINE static copp::promise_base_type::pick_promise_status_awaitable
+  internal_pick_current_status() noexcept {
     return copp::promise_base_type::pick_current_status();
   }
 
-  inline static id_type get_task_id(const task_type& task) noexcept { return task.get_id(); }
+  UTIL_FORCEINLINE static id_type get_task_id(const task_type& task) noexcept { return task.get_id(); }
 
-  inline static void reset_task(task_type& task) noexcept { task.reset(); }
+  UTIL_FORCEINLINE static void reset_task(task_type& task) noexcept { task.reset(); }
 
-  inline static bool empty(const task_type& task) noexcept { return !task.get_context(); }
+  UTIL_FORCEINLINE static bool empty(const task_type& task) noexcept { return !task.get_context(); }
 
-  inline static int32_t get_result(const task_type& task) noexcept {
+  UTIL_FORCEINLINE static bool equal(const task_type& l, const task_type& r) noexcept { return l == r; }
+
+  UTIL_FORCEINLINE static int32_t get_result(const task_type& task) noexcept {
     if (task.get_context()) {
       auto data_ptr = task.get_context()->data();
       if (nullptr == data_ptr) {
@@ -51,57 +55,61 @@ struct task_type_trait {
     return 0;
   }
 
-  inline static bool is_exiting(task_status status) noexcept {
+  UTIL_FORCEINLINE static bool is_exiting(task_status status) noexcept {
     return status >= task_status::kDone || status == task_status::kInvalid;
   }
 
-  inline static bool is_timeout(task_status status) noexcept { return status == task_status::kTimeout; }
+  UTIL_FORCEINLINE static bool is_timeout(task_status status) noexcept { return status == task_status::kTimeout; }
 
-  inline static bool is_cancel(task_status status) noexcept { return status == task_status::kCancle; }
+  UTIL_FORCEINLINE static bool is_cancel(task_status status) noexcept { return status == task_status::kCancle; }
 
-  inline static bool is_fault(task_status status) noexcept { return status >= task_status::kKilled; }
+  UTIL_FORCEINLINE static bool is_fault(task_status status) noexcept { return status >= task_status::kKilled; }
 
   template <class TVALUE, class TERROR_TRANSFORM>
-  inline static bool is_exiting(const copp::callable_future<TVALUE, TERROR_TRANSFORM>& future) noexcept {
+  UTIL_FORCEINLINE static bool is_exiting(const copp::callable_future<TVALUE, TERROR_TRANSFORM>& future) noexcept {
     return is_exiting(future.get_status()) || future.is_ready();
   }
 
   template <class TVALUE, class TERROR_TRANSFORM>
-  inline static bool is_timeout(const copp::callable_future<TVALUE, TERROR_TRANSFORM>& future) noexcept {
+  UTIL_FORCEINLINE static bool is_timeout(const copp::callable_future<TVALUE, TERROR_TRANSFORM>& future) noexcept {
     return is_timeout(future.get_status());
   }
 
   template <class TVALUE, class TERROR_TRANSFORM>
-  inline static bool is_cancel(const copp::callable_future<TVALUE, TERROR_TRANSFORM>& future) noexcept {
+  UTIL_FORCEINLINE static bool is_cancel(const copp::callable_future<TVALUE, TERROR_TRANSFORM>& future) noexcept {
     return is_cancel(future.get_status());
   }
 
   template <class TVALUE, class TERROR_TRANSFORM>
-  inline static bool is_fault(const copp::callable_future<TVALUE, TERROR_TRANSFORM>& future) noexcept {
+  UTIL_FORCEINLINE static bool is_fault(const copp::callable_future<TVALUE, TERROR_TRANSFORM>& future) noexcept {
     return is_fault(future.get_status());
   }
 
   template <class TVALUE, class TPRIVATE_DATA, class TERROR_TRANSFORM>
-  inline static bool is_exiting(const cotask::task_future<TVALUE, TPRIVATE_DATA, TERROR_TRANSFORM>& task) noexcept {
+  UTIL_FORCEINLINE static bool is_exiting(
+      const cotask::task_future<TVALUE, TPRIVATE_DATA, TERROR_TRANSFORM>& task) noexcept {
     return empty(task) || task.is_exiting();
   }
 
   template <class TVALUE, class TPRIVATE_DATA, class TERROR_TRANSFORM>
-  inline static bool is_timeout(const cotask::task_future<TVALUE, TPRIVATE_DATA, TERROR_TRANSFORM>& task) noexcept {
+  UTIL_FORCEINLINE static bool is_timeout(
+      const cotask::task_future<TVALUE, TPRIVATE_DATA, TERROR_TRANSFORM>& task) noexcept {
     return task.is_timeout();
   }
 
   template <class TVALUE, class TPRIVATE_DATA, class TERROR_TRANSFORM>
-  inline static bool is_cancel(const cotask::task_future<TVALUE, TPRIVATE_DATA, TERROR_TRANSFORM>& task) noexcept {
+  UTIL_FORCEINLINE static bool is_cancel(
+      const cotask::task_future<TVALUE, TPRIVATE_DATA, TERROR_TRANSFORM>& task) noexcept {
     return is_cancel(task.get_status());
   }
 
   template <class TVALUE, class TPRIVATE_DATA, class TERROR_TRANSFORM>
-  inline static bool is_fault(const cotask::task_future<TVALUE, TPRIVATE_DATA, TERROR_TRANSFORM>& task) noexcept {
+  UTIL_FORCEINLINE static bool is_fault(
+      const cotask::task_future<TVALUE, TPRIVATE_DATA, TERROR_TRANSFORM>& task) noexcept {
     return task.is_faulted();
   }
 
-  inline static task_private_data_type* get_private_data(task_type& task) noexcept {
+  UTIL_FORCEINLINE static task_private_data_type* get_private_data(task_type& task) noexcept {
     if (empty(task)) {
       return nullptr;
     }
@@ -140,7 +148,7 @@ struct task_type_trait {
   using task_type = typename internal_task_type::ptr_t;
   using task_status = cotask::EN_TASK_STATUS;
 
-  inline static id_type get_task_id(const task_type& task) noexcept {
+  UTIL_FORCEINLINE static id_type get_task_id(const task_type& task) noexcept {
     if (!task) {
       return 0;
     }
@@ -148,11 +156,13 @@ struct task_type_trait {
     return task->get_id();
   }
 
-  inline static void reset_task(task_type& task) noexcept { task.reset(); }
+  UTIL_FORCEINLINE static void reset_task(task_type& task) noexcept { task.reset(); }
 
-  inline static bool empty(const task_type& task) noexcept { return !task; }
+  UTIL_FORCEINLINE static bool empty(const task_type& task) noexcept { return !task; }
 
-  inline static int32_t get_result(const task_type& task) noexcept {
+  UTIL_FORCEINLINE static bool equal(const task_type& l, const task_type& r) noexcept { return l == r; }
+
+  UTIL_FORCEINLINE static int32_t get_result(const task_type& task) noexcept {
     if (!task) {
       return 0;
     }
@@ -160,17 +170,23 @@ struct task_type_trait {
     return task->get_ret_code();
   }
 
-  inline static bool is_exiting(cotask::EN_TASK_STATUS status) noexcept {
+  UTIL_FORCEINLINE static bool is_exiting(cotask::EN_TASK_STATUS status) noexcept {
     return status >= cotask::EN_TS_DONE || status == task_status::EN_TS_INVALID;
   }
 
-  inline static bool is_timeout(cotask::EN_TASK_STATUS status) noexcept { return status == cotask::EN_TS_TIMEOUT; }
+  UTIL_FORCEINLINE static bool is_timeout(cotask::EN_TASK_STATUS status) noexcept {
+    return status == cotask::EN_TS_TIMEOUT;
+  }
 
-  inline static bool is_cancel(cotask::EN_TASK_STATUS status) noexcept { return status == cotask::EN_TS_CANCELED; }
+  UTIL_FORCEINLINE static bool is_cancel(cotask::EN_TASK_STATUS status) noexcept {
+    return status == cotask::EN_TS_CANCELED;
+  }
 
-  inline static bool is_fault(cotask::EN_TASK_STATUS status) noexcept { return status >= cotask::EN_TS_KILLED; }
+  UTIL_FORCEINLINE static bool is_fault(cotask::EN_TASK_STATUS status) noexcept {
+    return status >= cotask::EN_TS_KILLED;
+  }
 
-  inline static bool is_exiting(const task_type& task) noexcept {
+  UTIL_FORCEINLINE static bool is_exiting(const task_type& task) noexcept {
     if (!task) {
       return true;
     }
@@ -178,7 +194,7 @@ struct task_type_trait {
     return task->is_exiting();
   }
 
-  inline static bool is_timeout(const task_type& task) noexcept {
+  UTIL_FORCEINLINE static bool is_timeout(const task_type& task) noexcept {
     if (!task) {
       return false;
     }
@@ -186,7 +202,7 @@ struct task_type_trait {
     return task->is_timeout();
   }
 
-  inline static bool is_cancel(const task_type& task) noexcept {
+  UTIL_FORCEINLINE static bool is_cancel(const task_type& task) noexcept {
     if (!task) {
       return false;
     }
@@ -194,7 +210,7 @@ struct task_type_trait {
     return task->is_canceled();
   }
 
-  inline static bool is_fault(const task_type& task) noexcept {
+  UTIL_FORCEINLINE static bool is_fault(const task_type& task) noexcept {
     if (!task) {
       return false;
     }
@@ -202,7 +218,7 @@ struct task_type_trait {
     return task->is_faulted();
   }
 
-  inline static task_status get_status(const task_type& task) noexcept {
+  UTIL_FORCEINLINE static task_status get_status(const task_type& task) noexcept {
     if (!task) {
       return task_status::EN_TS_INVALID;
     }
@@ -210,7 +226,7 @@ struct task_type_trait {
     return task->get_status();
   }
 
-  inline static task_private_data_type* get_private_data(internal_task_type& task) noexcept {
+  UTIL_FORCEINLINE static task_private_data_type* get_private_data(internal_task_type& task) noexcept {
     if (task.get_private_buffer_size() < sizeof(task_private_data_type)) {
       return nullptr;
     }
@@ -218,7 +234,7 @@ struct task_type_trait {
     return reinterpret_cast<task_private_data_type*>(task.get_private_buffer());
   }
 
-  inline static task_private_data_type* get_private_data(task_type& task) noexcept {
+  UTIL_FORCEINLINE static task_private_data_type* get_private_data(task_type& task) noexcept {
     if (!task) {
       return nullptr;
     }

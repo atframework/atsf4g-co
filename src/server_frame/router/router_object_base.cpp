@@ -271,16 +271,22 @@ void router_object_base::wakeup_io_task_awaiter() {
   }
   task_type_trait::reset_task(io_task_);
 
+  task_type_trait::task_type failed_task;
   while (!io_task_awaiter_.empty() && task_type_trait::empty(io_task_)) {
     task_type_trait::task_type wake_task = io_task_awaiter_.front();
-    if (!task_type_trait::empty(wake_task) && !task_type_trait::is_exiting(wake_task)) {
+    if (!task_type_trait::empty(wake_task) && !task_type_trait::is_exiting(wake_task) &&
+        !task_type_trait::equal(failed_task, wake_task)) {
       // iter will be erased in task
       dispatcher_resume_data_type callback_data = dispatcher_make_default<dispatcher_resume_data_type>();
       callback_data.message.message_type =
           reinterpret_cast<uintptr_t>(reinterpret_cast<const void *>(&io_task_awaiter_));
       callback_data.sequence = task_type_trait::get_task_id(wake_task);
 
-      rpc::custom_resume(wake_task, callback_data);
+      if (rpc::custom_resume(wake_task, callback_data) < 0) {
+        failed_task = wake_task;
+      } else {
+        task_type_trait::reset_task(failed_task);
+      }
     } else {
       // This should not be called
       if (!task_type_trait::empty(wake_task)) {

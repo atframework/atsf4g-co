@@ -200,7 +200,7 @@ message opentelemetry_exporter_prometheus_file {
 
 message opentelemetry_exporter_prometheus_http_api {
   string url = 1;
-  repeated string headers = 2;
+  repeated opentelemetry_exporter_otlp_header headers = 2;
 }
 
 message opentelemetry_metrics_exporter_cfg {
@@ -336,6 +336,18 @@ message logic_hpa_policy_aggregation_parameter {
   }
 }
 
+// @see https://prometheus.io/docs/prometheus/latest/querying/functions/
+message logic_hpa_policy_simple_function {
+  oneof function_type {
+    // https://prometheus.io/docs/prometheus/latest/querying/functions/#rate
+    google.protobuf.Duration rate = 1;
+    // https://prometheus.io/docs/prometheus/latest/querying/functions/#irate
+    google.protobuf.Duration irate = 2;
+    // https://prometheus.io/docs/prometheus/latest/querying/functions/#increase
+    google.protobuf.Duration increase = 3;
+  }
+}
+
 message logic_hpa_policy {
   string metrics_name = 1;
 
@@ -347,19 +359,21 @@ message logic_hpa_policy {
 
   logic_hpa_policy_aggregation_parameter aggregation_parameter = 5;
 
+  repeated logic_hpa_policy_simple_function simple_function = 6;
+
   // 指标的额外附加写出标签
-  map<string, string> labels = 6;
+  map<string, string> labels = 7;
 
   // 指标的额外附加读规则标签
   //   selector默认为=操作符，可以手动设置为 =,!=,=~或!~
   //   详见: https://prometheus.io/docs/prometheus/latest/querying/basics/#instant-vector-selectors
-  map<string, string> selectors = 7;
+  map<string, string> selectors = 8;
 
   // 以下selectors不自动追加,否则某些内置筛选规则会自动添加到选择器列表里
-  repeated string without_auto_selectors = 8;
+  repeated string without_auto_selectors = 9;
 
   // 不设置query时，由metrics_name和aggregation自动生成 query
-  string query = 9;
+  string query = 10;
 
   // 扩容指标目标值(0为不设置并由业务层自己控制)
   int64 scaling_up_value = 11;
