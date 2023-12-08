@@ -237,8 +237,18 @@ struct UTIL_SYMBOL_LOCAL opentelemetry_utility_global_metrics_set {
 };
 
 static std::pair<std::recursive_mutex&, opentelemetry_utility_global_metrics_set&> get_global_metrics_set() {
+  static std::shared_ptr<::rpc::telemetry::group_type> default_group;
   static std::recursive_mutex lock;
   static opentelemetry_utility_global_metrics_set ret;
+
+  // Cleanup after reload
+  if (default_group != rpc::telemetry::global_service::get_default_group()) {
+    default_group = rpc::telemetry::global_service::get_default_group();
+    ret.int64_observable_by_key.clear();
+    ret.int64_observable_by_pointer.clear();
+    ret.double_observable_by_key.clear();
+    ret.double_observable_by_pointer.clear();
+  }
   return {lock, ret};
 }
 

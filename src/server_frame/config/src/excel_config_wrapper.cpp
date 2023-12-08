@@ -88,6 +88,43 @@ static void excel_config_callback_on_reload_all(excel::config_manager::config_gr
   setup_const_config(*group);
 }
 
+static void excel_config_callback_logger(const excel::config_manager::log_caller_info_t& caller, const char* content) {
+  // switch(caller.)
+  util::log::log_wrapper::caller_info_t log_caller;
+  log_caller.file_path = caller.file_path;
+  log_caller.func_name = caller.func_name;
+  log_caller.level_name = caller.level_name;
+  log_caller.line_number = caller.line_number;
+  log_caller.rotate_index = 0;
+  switch (caller.level_id) {
+    case excel::config_manager::log_level_t::LOG_LW_DISABLED: {
+      log_caller.level_id = util::log::log_wrapper::level_t::LOG_LW_DISABLED;
+      break;
+    }
+    case excel::config_manager::log_level_t::LOG_LW_ERROR: {
+      log_caller.level_id = util::log::log_wrapper::level_t::LOG_LW_ERROR;
+      break;
+    }
+    case excel::config_manager::log_level_t::LOG_LW_WARNING: {
+      log_caller.level_id = util::log::log_wrapper::level_t::LOG_LW_WARNING;
+      break;
+    }
+    case excel::config_manager::log_level_t::LOG_LW_INFO: {
+      log_caller.level_id = util::log::log_wrapper::level_t::LOG_LW_INFO;
+      break;
+    }
+    default: {
+      log_caller.level_id = util::log::log_wrapper::level_t::LOG_LW_DEBUG;
+      break;
+    }
+  }
+
+  if (util::log::log_wrapper::check_level(WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT),
+                                          log_caller.level_id)) {
+    WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->write_log(log_caller, content, strlen(content));
+  }
+}
+
 SERVER_FRAME_CONFIG_API int excel_config_wrapper_reload_all(bool is_init) {
   if (!details::g_excel_config_manager_inited && !is_init) {
     return 0;
@@ -103,6 +140,7 @@ SERVER_FRAME_CONFIG_API int excel_config_wrapper_reload_all(bool is_init) {
 
       excel::config_manager::me()->set_buffer_loader(excel_config_callback_get_buffer);
       excel::config_manager::me()->set_version_loader(excel_config_callback_get_version);
+      excel::config_manager::me()->set_on_log(excel_config_callback_logger);
 
       excel::config_manager::on_load_func_t origin_reload_callback =
           excel::config_manager::me()->get_on_group_reload_all();

@@ -281,13 +281,13 @@ struct unique_id_container_waker {
 
   static rpc::result_void_type insert_into_pool(rpc::context &ctx, unique_id_value_t &pool,
                                                 task_type_trait::task_type task) {
-    // Append to wake list and then custom_wait to switch out
-    auto iter = pool.wake_tasks.emplace(pool.wake_tasks.end(), std::move(task));
-
     dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
     await_options.sequence = task_type_trait::get_task_id(task);
     await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(),
                                                           std::chrono::seconds{6});
+
+    // Append to wake list and then custom_wait to switch out
+    auto iter = pool.wake_tasks.emplace(pool.wake_tasks.end(), std::move(task));
 
     RPC_AWAIT_IGNORE_RESULT(rpc::custom_wait(ctx, reinterpret_cast<const void *>(&pool), await_options));
     pool.wake_tasks.erase(iter);
