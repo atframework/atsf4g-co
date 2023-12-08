@@ -264,7 +264,7 @@ struct formatter<rpc::context, CharT> : formatter<std::string, CharT> {
                                         gsl::string_view{trace_id_buffer, sizeof(trace_id_buffer)},
                                         gsl::string_view{span_id_buffer, sizeof(span_id_buffer)});
     }
-    ret = LOG_WRAPPER_FWAPI_FORMAT_TO(ret, "", "\n\t");
+    ret = LOG_WRAPPER_FWAPI_FORMAT_TO(ret, "{}", "\n\t");
     return ret;
   }
 };

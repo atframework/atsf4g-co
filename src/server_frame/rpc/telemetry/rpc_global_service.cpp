@@ -1777,6 +1777,8 @@ static local_provider_handle_type<opentelemetry::logs::LoggerProvider> _opentele
 
 static void _opentelemetry_cleanup_group(std::shared_ptr<::rpc::telemetry::group_type> group,
                                          const std::shared_ptr<global_service_data_type> &current_service_cache) {
+  std::list<std::shared_ptr<std::thread>> shutdown_threads;
+
   if (current_service_cache && group && group->initialized) {
     util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{
         current_service_cache->on_group_destroy_callback_lock};
@@ -1793,7 +1795,9 @@ static void _opentelemetry_cleanup_group(std::shared_ptr<::rpc::telemetry::group
     // Provider must be destroy before logger
     if (group->logs_handle.provider) {
       if (group->logs_handle.shutdown_callback) {
-        (group->logs_handle.shutdown_callback)(group->logs_handle.provider);
+        auto handle = group->logs_handle;
+        shutdown_threads.push_back(
+            std::make_shared<std::thread>([handle]() { handle.shutdown_callback(handle.provider); }));
       }
       group->logs_handle.reset();
     }
@@ -1802,7 +1806,9 @@ static void _opentelemetry_cleanup_group(std::shared_ptr<::rpc::telemetry::group
     // Provider must be destroy before meter
     if (group->metrics_handle.provider) {
       if (group->metrics_handle.shutdown_callback) {
-        (group->metrics_handle.shutdown_callback)(group->metrics_handle.provider);
+        auto handle = group->metrics_handle;
+        shutdown_threads.push_back(
+            std::make_shared<std::thread>([handle]() { handle.shutdown_callback(handle.provider); }));
       }
       group->metrics_handle.reset();
     }
@@ -1812,17 +1818,35 @@ static void _opentelemetry_cleanup_group(std::shared_ptr<::rpc::telemetry::group
     // Provider must be destroy before tracer
     if (group->tracer_handle.provider) {
       if (group->tracer_handle.shutdown_callback) {
-        (group->tracer_handle.shutdown_callback)(group->tracer_handle.provider);
+        auto handle = group->tracer_handle;
+        shutdown_threads.push_back(
+            std::make_shared<std::thread>([handle]() { handle.shutdown_callback(handle.provider); }));
       }
       group->tracer_handle.reset();
     }
 
     group->default_tracer = opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
   }
+
+  while (!shutdown_threads.empty()) {
+    if (!shutdown_threads.front()) {
+      shutdown_threads.pop_front();
+      continue;
+    }
+
+    if (!shutdown_threads.front()->joinable()) {
+      shutdown_threads.pop_front();
+      continue;
+    }
+
+    shutdown_threads.front()->join();
+    shutdown_threads.pop_front();
+  }
 }
 
 static void _opentelemetry_cleanup_global_provider(atapp::app & /*app*/) {
   std::shared_ptr<global_service_data_type> current_service_cache = get_global_service_data();
+  std::list<std::shared_ptr<std::thread>> cleanup_threads;
   if (current_service_cache) {
     std::shared_ptr<group_type> default_group;
     std::unordered_map<std::string, std::shared_ptr<group_type>> named_groups;
@@ -1833,13 +1857,35 @@ static void _opentelemetry_cleanup_global_provider(atapp::app & /*app*/) {
       named_groups.swap(current_service_cache->named_groups);
     }
 
-    _opentelemetry_cleanup_group(default_group, current_service_cache);
+    cleanup_threads.push_back(std::make_shared<std::thread>([default_group, current_service_cache]() {
+      _opentelemetry_cleanup_group(default_group, current_service_cache);
+    }));
+
     for (auto &named_group : named_groups) {
-      _opentelemetry_cleanup_group(named_group.second, current_service_cache);
-      if (!named_group.second) {
+      std::shared_ptr<group_type> named_group_ptr = named_group.second;
+      if (!named_group_ptr) {
         continue;
       }
+
+      cleanup_threads.push_back(std::make_shared<std::thread>([named_group_ptr, current_service_cache]() {
+        _opentelemetry_cleanup_group(named_group_ptr, current_service_cache);
+      }));
     }
+  }
+
+  while (!cleanup_threads.empty()) {
+    if (!cleanup_threads.front()) {
+      cleanup_threads.pop_front();
+      continue;
+    }
+
+    if (!cleanup_threads.front()->joinable()) {
+      cleanup_threads.pop_front();
+      continue;
+    }
+
+    cleanup_threads.front()->join();
+    cleanup_threads.pop_front();
   }
 }
 

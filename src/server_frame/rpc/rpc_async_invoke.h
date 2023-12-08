@@ -63,6 +63,9 @@ EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE inline async_invoke_result async_inv
 }
 
 EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_code_type wait_tasks(context &ctx,
+                                                                     gsl::span<const task_type_trait::task_type> tasks);
+
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_code_type wait_tasks(context &ctx,
                                                                      gsl::span<task_type_trait::task_type> tasks);
 
 template <class ContainerType>
