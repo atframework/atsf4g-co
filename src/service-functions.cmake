@@ -152,7 +152,7 @@ endfunction()
 
 function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
   set(optionArgs "")
-  set(oneValueArgs OUTPUT_DIR OUTPUT_NAME OUTPUT_TARGET_NAME DLLEXPORT_DECL)
+  set(oneValueArgs OUTPUT_DIR OUTPUT_NAME OUTPUT_TARGET_NAME DLLEXPORT_DECL OUTPUT_PBFILE_PATH)
   set(multiValueArgs PROTOCOLS USE_COMPONENTS USE_SERVICE_PROTOCOL)
   cmake_parse_arguments(project_service_declare_protocol "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
@@ -263,8 +263,15 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
     endforeach()
   endif()
 
+  if(project_component_declare_protocol_OUTPUT_PBFILE_PATH)
+    set(${project_component_declare_protocol_OUTPUT_PBFILE_PATH}
+        "${PROJECT_GENERATED_PBD_DIR}/service-${TARGET_NAME}.pb"
+        PARENT_SCOPE)
+  endif()
+
   add_custom_command(
     OUTPUT ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES}
+           "${PROJECT_GENERATED_PBD_DIR}/service-${TARGET_NAME}.pb"
     COMMAND
       "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" ${PROTOBUF_PROTO_PATHS} --cpp_out
       "dllexport_decl=${project_service_declare_protocol_DLLEXPORT_DECL}:${CMAKE_CURRENT_BINARY_DIR}" -o

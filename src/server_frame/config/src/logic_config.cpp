@@ -9,6 +9,8 @@
 
 #include <atframe/atapp.h>
 
+#include <opentelemetry/sdk/resource/semantic_conventions.h>
+
 #include <sstream>
 #include <string>
 
@@ -88,7 +90,8 @@ SERVER_FRAME_CONFIG_API gsl::string_view logic_config::get_deployment_environmen
     return gsl::string_view();
   }
 
-  auto iter = app->get_metadata().labels().find("deployment.environment");
+  auto iter =
+      app->get_metadata().labels().find(opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironment);
   if (iter == app->get_metadata().labels().end()) {
     return "";
   }

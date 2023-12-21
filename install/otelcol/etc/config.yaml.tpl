@@ -68,7 +68,7 @@ exporters:
     format: json
     # compression: zstd
 
-{{- if not (empty $otelcol_agent_data_source.trace) }}    
+{{- if not (empty $otelcol_agent_data_source.trace) }}
   {{- if not (empty $otelcol_agent_data_source.trace.otlp) }}
     {{- if not (empty $otelcol_agent_data_source.trace.otlp.grpc_endpoint) -}}
       {{- $otelcol_traces_exporters = append $otelcol_traces_exporters "otlp/trace" }}
@@ -89,7 +89,7 @@ exporters:
     {{- end }}
   {{- end }}
 {{- end }}
-{{- if not (empty $otelcol_agent_data_source.metrics) }}    
+{{- if not (empty $otelcol_agent_data_source.metrics) }}
   {{- if not (empty $otelcol_agent_data_source.metrics.otlp) }}
     {{- if not (empty $otelcol_agent_data_source.metrics.otlp.grpc_endpoint) -}}
       {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "otlp/metrics" }}
@@ -162,7 +162,7 @@ exporters:
       enabled: true
   {{- end }}
 {{- end }}
-{{- if not (empty $otelcol_agent_data_source.logs) }}    
+{{- if not (empty $otelcol_agent_data_source.logs) }}
   {{- if not (empty $otelcol_agent_data_source.logs.otlp) }}
     {{- if not (empty $otelcol_agent_data_source.logs.otlp.grpc_endpoint) -}}
       {{- $otelcol_logs_exporters = append $otelcol_logs_exporters "otlp/logs" }}
@@ -201,7 +201,7 @@ processors:
     send_batch_max_size: 32768
     timeout: 10s
 {{- if not (empty $otelcol_agent_data_source.metrics) }}
-  {{- if not (empty $otelcol_agent_data_source.metrics.resource) }}  
+  {{- if not (empty $otelcol_agent_data_source.metrics.resource) }}
   resource/spanmetrics:
     attributes:
       {{- range $label_key, $label_value := $otelcol_agent_data_source.metrics.resource }}
@@ -244,6 +244,7 @@ connectors:
       # - name: rpc.atrpc.kind
       # - name: span.name
       # - name: service.name
+    aggregation_temporality: "AGGREGATION_TEMPORALITY_DELTA"
 
 service:
   telemetry:

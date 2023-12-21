@@ -1635,7 +1635,8 @@ static local_provider_handle_type<opentelemetry::metrics::MeterProvider> _opente
 #endif
           );
       std::unique_ptr<opentelemetry::sdk::metrics::MeterSelector> meter_selector =
-          opentelemetry::sdk::metrics::MeterSelectorFactory::Create(trace_metrics_name, "", "");
+          opentelemetry::sdk::metrics::MeterSelectorFactory::Create(static_cast<std::string>(trace_metrics_name), "",
+                                                                    "");
       static_cast<opentelemetry::sdk::metrics::MeterProvider *>(ret.provider.get())
           ->AddView(std::move(instrument_selector), std::move(meter_selector), std::move(view));
     }
@@ -1683,7 +1684,11 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogRecordExporter>>
   }
 
   if (exporter_cfg.has_otlp_grpc() && !exporter_cfg.otlp_grpc().endpoint().empty()) {
+#if (OPENTELEMETRY_VERSION_MAJOR * 1000 + OPENTELEMETRY_VERSION_MINOR) >= 1013
+    opentelemetry::exporter::otlp::OtlpGrpcLogRecordExporterOptions options;
+#else
     opentelemetry::exporter::otlp::OtlpGrpcExporterOptions options;
+#endif
     options.endpoint = exporter_cfg.otlp_grpc().endpoint();
     options.use_ssl_credentials = !exporter_cfg.otlp_grpc().insecure();
     options.ssl_credentials_cacert_path = exporter_cfg.otlp_grpc().ca_file();
