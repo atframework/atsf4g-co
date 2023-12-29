@@ -35,11 +35,17 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
       if(project_service_declare_sdk_SHARED_LIBRARY_DECL)
         target_compile_definitions(${TARGET_FULL_NAME} PUBLIC "${project_service_declare_sdk_SHARED_LIBRARY_DECL}=1")
       endif()
+
+      project_setup_runtime_post_build_bash(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_DYNAMIC_LIBRARY_BASH)
+      project_setup_runtime_post_build_pwsh(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_DYNAMIC_LIBRARY_PWSH)
     else()
       add_library(${TARGET_FULL_NAME} STATIC ${project_service_declare_sdk_HRADERS}
                                              ${project_service_declare_sdk_SOURCES})
       project_build_tools_set_static_library_declaration(${project_service_declare_sdk_DLLEXPORT_DECL}
                                                          "${TARGET_FULL_NAME}")
+
+      project_setup_runtime_post_build_bash(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_BASH)
+      project_setup_runtime_post_build_pwsh(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_PWSH)
     endif()
     if(project_service_declare_sdk_NATIVE_CODE_DECL)
       target_compile_definitions(${TARGET_FULL_NAME} PRIVATE "${project_service_declare_sdk_NATIVE_CODE_DECL}=1")
@@ -297,10 +303,16 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
     project_tool_split_target_debug_sybmol(${TARGET_FULL_NAME})
     project_build_tools_set_shared_library_declaration(${project_service_declare_protocol_DLLEXPORT_DECL}
                                                        "${TARGET_FULL_NAME}")
+
+    project_setup_runtime_post_build_bash(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_DYNAMIC_LIBRARY_BASH)
+    project_setup_runtime_post_build_pwsh(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_DYNAMIC_LIBRARY_PWSH)
   else()
     add_library(${TARGET_FULL_NAME} STATIC ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
     project_build_tools_set_static_library_declaration(${project_service_declare_protocol_DLLEXPORT_DECL}
                                                        "${TARGET_FULL_NAME}")
+
+    project_setup_runtime_post_build_bash(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_BASH)
+    project_setup_runtime_post_build_pwsh(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_PWSH)
   endif()
   add_custom_command(
     TARGET ${TARGET_FULL_NAME}
@@ -438,6 +450,9 @@ function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
   if(MSVC)
     set_property(TARGET "${TARGET_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/service/server")
   endif()
+
+  project_setup_runtime_post_build_bash(${TARGET_NAME} PROJECT_RUNTIME_POST_BUILD_EXECUTABLE_LIBRARY_BASH)
+  project_setup_runtime_post_build_pwsh(${TARGET_NAME} PROJECT_RUNTIME_POST_BUILD_EXECUTABLE_LIBRARY_PWSH)
 
   install(
     TARGETS ${TARGET_NAME}

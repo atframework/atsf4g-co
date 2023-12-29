@@ -26,3 +26,47 @@ file(MAKE_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/otelcol/bin")
 project_link_or_copy_files(${PROJECT_THIRD_PARTY_OTELCOL_BIN_FILES} "${PROJECT_INSTALL_BAS_DIR}/otelcol/bin")
 project_link_or_copy_files("${PROJECT_THIRD_PARTY_OTELCOL_ROOT_DIR}/otelcol.version"
                            "${PROJECT_INSTALL_BAS_DIR}/otelcol")
+
+# post build script
+function(project_setup_runtime_post_build_bash TARGET_NAME SCRIPTS_VAR_NAME)
+  if(${SCRIPTS_VAR_NAME})
+    unset(POST_BUILD_SCRIPTS)
+    foreach(POST_BUILD_SCRIPT ${${SCRIPTS_VAR_NAME}})
+      list(
+        APPEND
+        POST_BUILD_SCRIPTS
+        COMMAND
+        "${ATFRAMEWORK_CMAKE_TOOLSET_BASH}"
+        "${POST_BUILD_SCRIPT}"
+        "$<TARGET_FILE:${TARGET_NAME}>"
+        "${PROJECT_INSTALL_BAS_DIR}")
+    endforeach()
+    add_custom_command(
+      TARGET ${TARGET_NAME}
+      POST_BUILD
+      COMMAND ${POST_BUILD_SCRIPTS}
+      COMMENT "Run(bash) post build of $<TARGET_FILE:${TARGET_NAME}>: ${${SCRIPTS_VAR_NAME}}")
+  endif()
+endfunction()
+
+function(project_setup_runtime_post_build_pwsh TARGET_NAME SCRIPTS_VAR_NAME)
+  if(ATFRAMEWORK_CMAKE_TOOLSET_PWSH AND ${SCRIPTS_VAR_NAME})
+    unset(POST_BUILD_SCRIPTS)
+    foreach(POST_BUILD_SCRIPT ${${SCRIPTS_VAR_NAME}})
+      list(
+        APPEND
+        POST_BUILD_SCRIPTS
+        COMMAND
+        "${ATFRAMEWORK_CMAKE_TOOLSET_PWSH}"
+        "-File"
+        "${POST_BUILD_SCRIPT}"
+        "$<TARGET_FILE:${TARGET_FULL_NAME}>"
+        "${PROJECT_INSTALL_BAS_DIR}")
+    endforeach()
+    add_custom_command(
+      TARGET ${TARGET_FULL_NAME}
+      POST_BUILD
+      COMMAND ${POST_BUILD_SCRIPTS}
+      COMMENT "Run(pwsh) post build of $<TARGET_FILE:${TARGET_NAME}>: ${${SCRIPTS_VAR_NAME}}")
+  endif()
+endfunction()

@@ -472,21 +472,24 @@ message logic_hpa_scaling_rule {
 
 // This is use to maintain configure status in ETCD or other storage system.
 message logic_hpa_status {
+  // 当前副本数
+  int32 current_replicas = 1;
   // 期望的副本数
-  int32 expect_replicas = 1;
+  int32 expect_replicas = 2;
   // 期望的副本数据开始迁移时间
-  google.protobuf.Timestamp expect_replicate_start_timepoint = 2;
+  google.protobuf.Timestamp expect_replicate_start_timepoint = 3;
   // 期望的副本数据结束迁移时间
-  google.protobuf.Timestamp expect_replicate_end_timepoint = 3;
+  google.protobuf.Timestamp expect_replicate_end_timepoint = 4;
   // 期望的开始调整副本时间
-  google.protobuf.Timestamp expect_scaling_timepoint = 4;
+  google.protobuf.Timestamp expect_scaling_timepoint = 5;
 }
 
 message logic_hpa_controller {
   // 只有开启了这里还有 metrics.enable 才会启用HPA控制管理模块
   bool enable = 1;
 
-  // 指向ETCD配置的Key前缀，实际生效值应为 <configure_key>/<controller.selector.name>
+  // 指向ETCD配置的Key前缀，实际生效值应为
+  // <configure_key>/<controller.selector.hpa_target_kind>/<controller.selector.hpa_target_api_version>/<controller.selector.hpa_target_name>
   // 写入的数据结构为 logic_hpa_status
   string configure_key = 2;
 

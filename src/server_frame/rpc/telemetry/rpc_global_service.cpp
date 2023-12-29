@@ -734,6 +734,10 @@ SERVER_FRAME_API size_t global_service::get_trace_exporter_count(std::shared_ptr
     group = current_service_cache->default_group;
   } while (false);
 
+  if (!group) {
+    return 0;
+  }
+
   if (!group->initialized) {
     _opentelemetry_initialize_group(group);
   }
@@ -759,6 +763,10 @@ SERVER_FRAME_API size_t global_service::get_metrics_exporter_count(std::shared_p
     util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
+
+  if (!group) {
+    return 0;
+  }
 
   if (!group->initialized) {
     _opentelemetry_initialize_group(group);
@@ -786,6 +794,10 @@ SERVER_FRAME_API size_t global_service::get_logs_exporter_count(std::shared_ptr<
     group = current_service_cache->default_group;
   } while (false);
 
+  if (!group) {
+    return 0;
+  }
+
   if (!group->initialized) {
     _opentelemetry_initialize_group(group);
   }
@@ -812,6 +824,10 @@ global_service::get_current_default_tracer(std::shared_ptr<group_type> group) {
     util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
+
+  if (!group) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
+  }
 
   if (!group->initialized) {
     _opentelemetry_initialize_group(group);
@@ -1242,6 +1258,10 @@ global_service::get_current_default_logger(std::shared_ptr<group_type> group) {
     util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
+
+  if (!group) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
+  }
 
   if (!group->initialized) {
     _opentelemetry_initialize_group(group);

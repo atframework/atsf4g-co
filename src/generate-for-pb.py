@@ -932,6 +932,7 @@ def generate_group(options, group):
             str(e),
             traceback.format_exc(),
         )
+        raise
     inner_exclude_rule = None
     try:
         if group.inner_exclude_rule is not None:
@@ -951,6 +952,7 @@ def generate_group(options, group):
             str(e),
             traceback.format_exc(),
         )
+        raise
 
     selected_inner_items = dict()
     for inner_key in group.inner_name_map:
@@ -1057,6 +1059,7 @@ def generate_group(options, group):
                 str(e),
                 traceback.format_exc(),
             )
+            raise
 
     # generate per inner templates
     for inner_rule in group.inner_templates:
@@ -1159,6 +1162,7 @@ def generate_group(options, group):
                     str(e),
                     traceback.format_exc(),
                 )
+                raise
 
 
 class PbGlobalGenerator(object):
@@ -1287,6 +1291,7 @@ def generate_global(options, global_generator):
                 str(e),
                 traceback.format_exc(),
             )
+            raise
 
 
 def generate_global_templates(pb_db, options, yaml_conf, project_dir,
@@ -1347,7 +1352,7 @@ def generate_service_group(pb_db, options, yaml_conf, project_dir,
     inner_dllexport_decl = options.rpc_dllexport_decl
     if not inner_dllexport_decl:
         inner_dllexport_decl = options.dllexport_decl
-    
+
     for service_name in options.service_name:
         selected_service = pb_db.get_service(service_name)
         if selected_service is None:
