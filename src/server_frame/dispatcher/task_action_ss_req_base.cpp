@@ -622,8 +622,12 @@ static rpc::result_code_type try_filter_router_msg(rpc::context &ctx, EXPLICIT_U
 
   // 如果本地版本号低于来源服务器，刷新一次路由表。正常情况下这里不可能走到，如果走到了。需要删除缓存再来一次
   if (obj->get_router_version() < router.router_version()) {
-    FWLOGERROR("router object {}:{}:{} has invalid router version, refresh cache", key.type_id, key.zone_id,
-               key.object_id);
+    if (obj->is_writable()) {
+      FWLOGERROR("router object {}:{}:{} has invalid router version, refresh cache", key.type_id, key.zone_id,
+                 key.object_id);
+    } else {
+      FWLOGINFO("router object {}:{}:{} reroute object, refresh cache", key.type_id, key.zone_id, key.object_id);
+    }
     RPC_AWAIT_IGNORE_RESULT(mgr.remove_cache(ctx, key, obj, nullptr));
     result = filter_router_message_result_type(false, true);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);

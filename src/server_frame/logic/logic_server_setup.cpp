@@ -17,11 +17,17 @@
 
 #include <config/logic_config.h>
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
+#include <opentelemetry/sdk/resource/semantic_conventions.h>
 
 #include <utility/rapid_json_helper.h>
 
@@ -210,7 +216,8 @@ int logic_server_setup_common(atapp::app &app, const logic_server_common_module_
                      return;
                    }
 
-                   (*app.mutable_metadata().mutable_labels())["deployment.environment"] = params[0]->to_cpp_string();
+                   app.set_metadata_label(opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironment,
+                                          params[0]->to_cpp_string());
                  })
       ->set_help_msg("-env [text]                            set a env name.");
 
@@ -240,24 +247,23 @@ int logic_server_setup_common(atapp::app &app, const logic_server_common_module_
     vcs_commit = server_frame_vcs_get_commit_sha();
   }
   if ((vcs_commit && *vcs_commit) || (vcs_version && *vcs_version)) {
-    auto &metadata = app.mutable_metadata();
     std::stringstream ss;
     ss << app.get_build_version() << std::endl;
     if (vcs_commit && *vcs_commit) {
       ss << "VCS Commit       : " << vcs_commit << std::endl;
-      (*metadata.mutable_labels())["vcs_commit"] = vcs_commit;
+      app.set_metadata_label("vcs_commit", vcs_commit);
     }
 
     if (vcs_version && *vcs_version) {
       ss << "VCS Refer        : " << vcs_version << std::endl;
-      (*metadata.mutable_labels())["vcs_version"] = vcs_version;
+      app.set_metadata_label("vcs_version", vcs_version);
     }
 
     const char *vcs_server_branch = server_frame_vcs_get_server_branch();
 
     if (vcs_server_branch && *vcs_server_branch) {
       ss << "Server Branch    : " << vcs_server_branch << std::endl;
-      (*metadata.mutable_labels())["server_branch"] = vcs_server_branch;
+      app.set_metadata_label("server_branch", vcs_server_branch);
     }
 
 #ifdef __DATE__

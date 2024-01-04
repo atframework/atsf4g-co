@@ -505,6 +505,9 @@ message logic_hpa_controller {
   //   2.2 对于有小区服务 selector.hpa_target_name = <type_name>-<zone_id>-<版本号>
   logic_hpa_target target = 5;
 
+  // 服务发现层的附加标签(也会写入指标)
+  map<string, string> discovery_labels = 6;
+
   // 发布场景:
   //   蓝绿发布时，老版本可以通过外部指令通知controller把预期节点数强行写0。
   //   服务器发现层设置非active状态排除后续状态数据迁入。
@@ -512,8 +515,8 @@ message logic_hpa_controller {
   // 节点迁移场景:
   //   服务器发现层设置非active状态排除后续状态数据迁入。
   //   然后等待状态数据全部迁移完成后直接本地停止，等同index的pod节点在新节点上拉起。
-  int32 min_replicas = 6;
-  int32 max_replicas = 7;
+  int32 min_replicas = 7;
+  int32 max_replicas = 8;
 
   // 等待多久后开始副本迁移(此时间后如果节点即将下线，设置 hpa_scaling_target="false", 保持 hpa_ready="true")
   google.protobuf.Duration replicate_start_delay = 11;
