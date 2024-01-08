@@ -234,6 +234,14 @@ const std::string &dispatcher_implement::get_empty_string() {
   return ret;
 }
 
+int32_t dispatcher_implement::convert_from_atapp_error_code(int32_t code) {
+  if (code >= 0 || code <= EN_ATBUS_ERR_MIN) {
+    return code;
+  }
+
+  return PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_BEGIN + code;
+}
+
 int dispatcher_implement::_register_action(msg_type_t message_type, task_manager::task_action_creator_t action) {
   msg_task_action_set_t::iterator iter = task_action_map_by_id_.find(message_type);
   if (task_action_map_by_id_.end() != iter) {

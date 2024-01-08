@@ -266,6 +266,8 @@ class dispatcher_implement : public ::atapp::module_impl {
  protected:
   const std::string &get_empty_string();
 
+  int32_t convert_from_atapp_error_code(int32_t code);
+
  private:
   int _register_action(msg_type_t message_type, task_manager::task_action_creator_t action);
   int _register_action(const std::string &rpc_full_name, task_manager::task_action_creator_t action);

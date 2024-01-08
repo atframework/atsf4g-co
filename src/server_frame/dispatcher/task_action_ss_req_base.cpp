@@ -22,7 +22,8 @@
 
 #include <rpc/db/uuid.h>
 #include <rpc/router/routerservice.h>
-#include <rpc/rpc_utils.h>
+#include "rpc/rpc_common_types.h"
+#include "rpc/rpc_utils.h"
 
 SERVER_FRAME_API task_action_ss_req_base::task_action_ss_req_base(dispatcher_start_data_type &&start_param)
     : base_type(start_param) {
@@ -38,7 +39,7 @@ SERVER_FRAME_API task_action_ss_req_base::task_action_ss_req_base(dispatcher_sta
     set_user_key(get_request().head().player_user_id(), get_request().head().player_zone_id());
   }
 
-  // 最后设置 caller
+  // 最后设置caller
   if (nullptr != start_param.context) {
     set_caller_context(*start_param.context);
   }
@@ -51,17 +52,17 @@ SERVER_FRAME_API task_action_ss_req_base::result_type task_action_ss_req_base::h
   router_manager_base *mgr = nullptr;
   std::shared_ptr<router_object_base> obj;
   if (get_request().head().has_router()) {
-    std::pair<bool, int> result;
-    RPC_AWAIT_IGNORE_RESULT(filter_router_msg(mgr, obj, result));
-    if (false == result.first) {
-      TASK_ACTION_RETURN_CODE(result.second);
-    }
-
     auto trace_span = get_shared_context().get_trace_span();
     if (trace_span) {
       trace_span->SetAttribute("router_object.type_id", get_request().head().router().object_type_id());
       trace_span->SetAttribute("router_object.zone_id", get_request().head().router().object_zone_id());
       trace_span->SetAttribute("router_object.instance_id", get_request().head().router().object_inst_id());
+    }
+
+    std::pair<bool, int> result;
+    RPC_AWAIT_IGNORE_RESULT(filter_router_msg(mgr, obj, result));
+    if (false == result.first) {
+      TASK_ACTION_RETURN_CODE(result.second);
     }
   }
 
@@ -72,7 +73,6 @@ SERVER_FRAME_API task_action_ss_req_base::result_type task_action_ss_req_base::h
       router_manager_set::me()->mark_fast_save(mgr, obj);
     }
   }
-
   TASK_ACTION_RETURN_CODE(ret);
 }
 
@@ -468,17 +468,22 @@ SERVER_FRAME_API void task_action_ss_req_base::send_response() {
 
   for (std::list<message_type *>::iterator iter = response_messages_.begin(); iter != response_messages_.end();
        ++iter) {
-    if (0 == (*iter)->head().node_id()) {
-      FWLOGERROR("task {} [{}] send message to unknown server", name(), get_task_id());
+    if (0 == (*iter)->head().node_id() && (*iter)->head().node_name().empty()) {
+      FCTXLOGERROR(get_shared_context(), "{}", "send message to unknown server");
       continue;
     }
     (*iter)->mutable_head()->set_error_code(get_response_code());
 
     // send message using ss dispatcher
-    int32_t res = ss_msg_dispatcher::me()->send_to_proc((*iter)->head().node_id(), **iter);
+    int32_t res;
+    if (0 != (*iter)->head().node_id()) {
+      res = ss_msg_dispatcher::me()->send_to_proc((*iter)->head().node_id(), **iter, true);
+    } else {
+      res = ss_msg_dispatcher::me()->send_to_proc((*iter)->head().node_name(), **iter, true);
+    }
     if (res) {
-      FWLOGERROR("task {} [{}] send message to server {:#x} failed, res: {}({})", name(), get_task_id(),
-                 (*iter)->head().node_id(), res, protobuf_mini_dumper_get_error_msg(res));
+      FCTXLOGERROR(get_shared_context(), "send message to server {:#x} failed, res: {}({})", (*iter)->head().node_id(),
+                   res, protobuf_mini_dumper_get_error_msg(res));
     }
   }
 
@@ -507,8 +512,15 @@ static rpc::result_code_type try_fetch_router_cache(rpc::context &ctx, router_ma
     }
     res = RPC_AWAIT_CODE_RESULT(mgr.mutable_cache(ctx, obj, key, nullptr));
     if (res < 0 || !obj) {
-      FWLOGERROR("router object {}:{}:{} fetch cache failed, res: {}({})", key.type_id, key.zone_id, key.object_id, res,
-                 protobuf_mini_dumper_get_error_msg(res));
+      FCTXLOGERROR(ctx, "router object {}:{}:{} fetch cache failed, res: {}({})", key.type_id, key.zone_id,
+                   key.object_id, res, protobuf_mini_dumper_get_error_msg(res));
+      RPC_RETURN_CODE(res);
+    }
+  } else {
+    res = RPC_AWAIT_CODE_RESULT(obj->await_io_task(ctx));
+    if (res < 0 || !obj) {
+      FCTXLOGERROR(ctx, "router object {}:{}:{} await_io_task, res: {}({})", key.type_id, key.zone_id, key.object_id,
+                   res, protobuf_mini_dumper_get_error_msg(res));
       RPC_RETURN_CODE(res);
     }
   }
@@ -522,16 +534,16 @@ static rpc::result_code_type auto_mutable_router_object(rpc::context &ctx, uint6
                                                         filter_router_message_result_type &result) {
   // 如果开启了自动拉取object，尝试拉取object
   if (!mgr.is_auto_mutable_object()) {
-    FWLOGINFO("router object key={}:{}:{} not found and not auto mutable object", key.type_id, key.zone_id,
-              key.object_id);
+    FCTXLOGINFO(ctx, "router object key={}:{}:{} not found and not auto mutable object", key.type_id, key.zone_id,
+                key.object_id);
     result = filter_router_message_result_type(false, false);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_IN_SERVER);
   }
 
   auto res = RPC_AWAIT_CODE_RESULT(mgr.mutable_object(ctx, obj, key, nullptr));
   if (res < 0) {
-    FWLOGERROR("router object {}:{}:{} repair object failed, res: {}({})", key.type_id, key.zone_id, key.object_id, res,
-               protobuf_mini_dumper_get_error_msg(res));
+    FCTXLOGERROR(ctx, "router object {}:{}:{} repair object failed, res: {}({})", key.type_id, key.zone_id,
+                 key.object_id, res, protobuf_mini_dumper_get_error_msg(res));
     // 失败则删除缓存重试
     RPC_AWAIT_IGNORE_RESULT(mgr.remove_cache(ctx, key, obj, nullptr));
 
@@ -541,8 +553,9 @@ static rpc::result_code_type auto_mutable_router_object(rpc::context &ctx, uint6
 
   // Check log
   if (self_node_id != obj->get_router_server_id()) {
-    FWLOGERROR("router object {}:{}:{} auto mutable object failed, expect server id 0x{:x}, real server id 0x{:x}",
-               key.type_id, key.zone_id, key.object_id, self_node_id, obj->get_router_server_id());
+    FCTXLOGERROR(ctx,
+                 "router object {}:{}:{} auto mutable object failed, expect server id 0x{:x}, real server id 0x{:x}",
+                 key.type_id, key.zone_id, key.object_id, self_node_id, obj->get_router_server_id());
     if (0 == obj->get_router_server_id()) {
       result = filter_router_message_result_type(false, true);
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_IN_SERVER);
@@ -569,8 +582,8 @@ static rpc::result_code_type check_local_router_object(rpc::context &ctx, uint64
   // 这里可能是服务器崩溃过，导致数据库记录对象在本机上，但实际上没有。所以这里升级一次做个数据修复
   auto res = RPC_AWAIT_CODE_RESULT(mgr.mutable_object(ctx, obj, key, nullptr));
   if (res < 0) {
-    FWLOGERROR("router object {}:{}:{} repair object failed, res: {}({})", key.type_id, key.zone_id, key.object_id, res,
-               protobuf_mini_dumper_get_error_msg(res));
+    FCTXLOGERROR(ctx, "router object {}:{}:{} repair object failed, res: {}({})", key.type_id, key.zone_id,
+                 key.object_id, res, protobuf_mini_dumper_get_error_msg(res));
     // 失败则删除缓存重试
     RPC_AWAIT_IGNORE_RESULT(mgr.remove_cache(ctx, key, obj, nullptr));
 
@@ -580,8 +593,8 @@ static rpc::result_code_type check_local_router_object(rpc::context &ctx, uint64
 
   // Check log
   if (self_node_id != obj->get_router_server_id()) {
-    FWLOGERROR("router object {}:{}:{} repair object failed, expect server id 0x{:x}, real server id 0x{:x}",
-               key.type_id, key.zone_id, key.object_id, self_node_id, obj->get_router_server_id());
+    FCTXLOGERROR(ctx, "router object {}:{}:{} repair object failed, expect server id 0x{:x}, real server id 0x{:x}",
+                 key.type_id, key.zone_id, key.object_id, self_node_id, obj->get_router_server_id());
   }
 
   // 恢复成功，直接开始执行任务逻辑
@@ -609,6 +622,9 @@ static rpc::result_code_type try_filter_router_msg(rpc::context &ctx, EXPLICIT_U
     }
     result = filter_router_message_result_type(false, false);
     RPC_RETURN_CODE(res);
+  } else if (res < 0) {
+    result = filter_router_message_result_type(obj->is_writable(), true);
+    RPC_RETURN_CODE(res);
   }
 
   // 如果正在迁移，追加到pending队列，本task直接退出
@@ -623,10 +639,11 @@ static rpc::result_code_type try_filter_router_msg(rpc::context &ctx, EXPLICIT_U
   // 如果本地版本号低于来源服务器，刷新一次路由表。正常情况下这里不可能走到，如果走到了。需要删除缓存再来一次
   if (obj->get_router_version() < router.router_version()) {
     if (obj->is_writable()) {
-      FWLOGERROR("router object {}:{}:{} has invalid router version, refresh cache", key.type_id, key.zone_id,
-                 key.object_id);
+      FCTXLOGERROR(ctx, "router object {}:{}:{} has invalid router version, refresh cache. local: {}, remote: {}",
+                   key.type_id, key.zone_id, key.object_id, obj->get_router_version(), router.router_version());
     } else {
-      FWLOGINFO("router object {}:{}:{} reroute object, refresh cache", key.type_id, key.zone_id, key.object_id);
+      FCTXLOGINFO(ctx, "router object {}:{}:{} reroute object, refresh cache. local: {}, remote: {}", key.type_id,
+                  key.zone_id, key.object_id, obj->get_router_version(), router.router_version());
     }
     RPC_AWAIT_IGNORE_RESULT(mgr.remove_cache(ctx, key, obj, nullptr));
     result = filter_router_message_result_type(false, true);
@@ -682,8 +699,9 @@ static rpc::result_code_type try_filter_router_msg(rpc::context &ctx, EXPLICIT_U
 
     // 如果路由转发成功，需要禁用掉回包和通知事件，也不需要走逻辑处理了
     if (res < 0) {
-      FWLOGERROR("try to transfer router object {}:{}:{} to 0x{:x} failed, res: {}({})", key.type_id, key.zone_id,
-                 key.object_id, obj->get_router_server_id(), res, protobuf_mini_dumper_get_error_msg(res));
+      FCTXLOGERROR(ctx, "try to transfer router object {}:{}:{} to 0x{:x} failed, res: {}({})", key.type_id,
+                   key.zone_id, key.object_id, obj->get_router_server_id(), res,
+                   protobuf_mini_dumper_get_error_msg(res));
     }
 
     result = filter_router_message_result_type(false, false);
@@ -691,7 +709,7 @@ static rpc::result_code_type try_filter_router_msg(rpc::context &ctx, EXPLICIT_U
   }
 
   // 这个分支理论上也不会跑到，前面已经枚举了所有流程分支了
-  FWLOGERROR("miss router object {}:{}:{} prediction code", key.type_id, key.zone_id, key.object_id);
+  FCTXLOGERROR(ctx, "miss router object {}:{}:{} prediction code", key.type_id, key.zone_id, key.object_id);
   result = filter_router_message_result_type(false, true);
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_IN_SERVER);
 }
@@ -706,7 +724,7 @@ SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::filter_router_ms
   // find router manager in router set
   mgr = router_manager_set::me()->get_manager(router.object_type_id());
   if (nullptr == mgr) {
-    FWLOGERROR("router manager {} not found", router.object_type_id());
+    FCTXLOGERROR(get_shared_context(), "router manager {} not found", router.object_type_id());
     filter_result = std::make_pair(false, PROJECT_NAMESPACE_ID::err::EN_ROUTER_TYPE_INVALID);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_TYPE_INVALID);
   }
@@ -768,7 +786,7 @@ SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::filter_router_ms
   }
 
   if (obj && last_result < 0) {
-    obj->send_transfer_msg_failed(COPP_MACRO_STD_MOVE(get_request()));
+    obj->send_transfer_msg_failed(std::move(get_request()));
   }
   filter_result = std::make_pair(false, last_result);
   RPC_RETURN_CODE(last_result);

@@ -160,6 +160,8 @@ class ss_msg_dispatcher : public dispatcher_implement {
   SERVER_FRAME_API int32_t send_to_proc(uint64_t node_id, atframework::SSMsg &ss_msg, bool ignore_discovery = false);
   SERVER_FRAME_API int32_t send_to_proc(uint64_t node_id, const void *msg_buf, size_t msg_len, uint64_t sequence,
                                         bool ignore_discovery);
+  SERVER_FRAME_API int32_t send_to_proc(const std::string& node_name, atframework::SSMsg &ss_msg,
+                                        bool ignore_discovery = false);
   SERVER_FRAME_API int32_t send_to_proc(const atapp::etcd_discovery_node &node, atframework::SSMsg &ss_msg,
                                         bool ignore_discovery = false);
   SERVER_FRAME_API int32_t send_to_proc(const atapp::etcd_discovery_node &node, const void *msg_buf, size_t msg_len,

@@ -209,8 +209,8 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t node_id, const
     sequence = owner->get_bus_node()->alloc_msg_seq();
   }
 
-  int res = owner->send_message(node_id, atframe::component::message_type::EN_ATST_SS_MSG, msg_buf, msg_len, &sequence);
-
+  int res = convert_from_atapp_error_code(
+      owner->send_message(node_id, atframe::component::message_type::EN_ATST_SS_MSG, msg_buf, msg_len, &sequence));
   if (res < 0) {
     FWLOGERROR("send msg to proc [{:#x}: {}] {} bytes failed, res: {}", node_id,
                get_app()->convert_app_id_to_string(node_id), msg_len, res);
@@ -220,6 +220,23 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t node_id, const
   }
 
   return res;
+}
+
+SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const std::string &node_name, atframework::SSMsg &ss_msg,
+                                                         bool ignore_discovery) {
+  atapp::app *owner = get_app();
+  if (nullptr == owner) {
+    FWLOGERROR("module not attached to a atapp");
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
+  }
+
+  atapp::etcd_discovery_node::ptr_t node_ptr = owner->get_discovery_node_by_name(node_name);
+  if (!node_ptr) {
+    FWLOGERROR("send msg to proc {} failed: not found", node_name);
+    return PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_ATNODE_NOT_FOUND;
+  }
+
+  return send_to_proc(*node_ptr, ss_msg, ignore_discovery);
 }
 
 SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const atapp::etcd_discovery_node &node,
@@ -262,8 +279,8 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const atapp::etcd_disco
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
-  int res = owner->send_message(node.get_discovery_info().name(), atframe::component::message_type::EN_ATST_SS_MSG,
-                                msg_buf, msg_len, &sequence);
+  int res = convert_from_atapp_error_code(owner->send_message(node.get_discovery_info().name(), atframe::component::message_type::EN_ATST_SS_MSG,
+                                msg_buf, msg_len, &sequence));
   if (res < 0) {
     FWLOGERROR("{} send msg to proc {} {} bytes failed, res: {}", name(), node.get_discovery_info().name(), msg_len,
                res);
