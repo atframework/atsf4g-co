@@ -576,7 +576,7 @@ static ${rpc_return_type} __${rpc.get_name()}(
 %   if rpc_is_stream_mode:
 %     if rpc_is_router_api:
   if (res == PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND || res == PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_IN_SERVER) {
-    FWFLOGWARNING("rpc {} call ignored for router cache {},{},{}: {}({})",
+    FWLOGWARNING("rpc {} call ignored for router cache {},{},{}: {}({})",
                "${rpc.get_full_name()}",
                router_key.type_id, router_key.zone_id, router_key.object_id,
                res, protobuf_mini_dumper_get_error_msg(res)
