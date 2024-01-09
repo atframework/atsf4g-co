@@ -69,7 +69,7 @@ for rpc in rpcs.values():
         rpc_common_codes_has_no_router_rpc = True
     if not rpc_common_codes_enable_wait_response and not rpc.is_request_stream() and not rpc.is_response_stream():
         rpc_common_codes_enable_wait_response = True
-    
+
     if not rpc_common_codes_enable_redirect_warning_log and rpc.get_extension_field('atframework.rpc_options', lambda x: x.warning_log_response_code, []):
         rpc_common_codes_enable_redirect_warning_log = True
 
@@ -198,7 +198,7 @@ inline static int __setup_rpc_request_header(atframework::SSMsgHead &head, task_
 % endif
 % if rpc_common_codes_enable_redirect_info_log:
 template<class TCode, class TConvertList>
-inline static bool __redirect_rpc_result_to_info_log(TCode &origin_result, TConvertList&& convert_list, 
+inline static bool __redirect_rpc_result_to_info_log(TCode &origin_result, TConvertList&& convert_list,
                                         gsl::string_view rpc_full_name, const std::string &type_full_name) {
   for (auto& check: convert_list) {
     if (origin_result == check) {
@@ -215,7 +215,7 @@ inline static bool __redirect_rpc_result_to_info_log(TCode &origin_result, TConv
 % endif
 % if rpc_common_codes_enable_redirect_warning_log:
 template<class TCode, class TConvertList>
-inline static bool __redirect_rpc_result_to_warning_log(TCode &origin_result, TConvertList&& convert_list, 
+inline static bool __redirect_rpc_result_to_warning_log(TCode &origin_result, TConvertList&& convert_list,
                                         gsl::string_view rpc_full_name, const std::string &type_full_name) {
   for (auto& check: convert_list) {
     if (origin_result == check) {
@@ -329,26 +329,26 @@ ${ns}
 namespace packer {
 ${rpc_dllexport_decl} bool pack_${rpc.get_name()}(std::string& output, const ${rpc.get_request().get_cpp_class_name()}& input) {
   return ${project_namespace}::err::EN_SUCCESS == details::__pack_rpc_body(input, &output,
-                                 "${rpc.get_full_name()}", 
+                                 "${rpc.get_full_name()}",
                                  ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name());
 }
 
 ${rpc_dllexport_decl} bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_request().get_cpp_class_name()}& output) {
   return ${project_namespace}::err::EN_SUCCESS == details::__unpack_rpc_body(output, input,
-                                 "${rpc.get_full_name()}", 
+                                 "${rpc.get_full_name()}",
                                  ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name());
 }
 
 % if not rpc_is_stream_mode:
 ${rpc_dllexport_decl} bool pack_${rpc.get_name()}(std::string& output, const ${rpc.get_response().get_cpp_class_name()}& input) {
   return ${project_namespace}::err::EN_SUCCESS == details::__pack_rpc_body(input, &output,
-                                 "${rpc.get_full_name()}", 
+                                 "${rpc.get_full_name()}",
                                  ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
 }
 
 ${rpc_dllexport_decl} bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_response().get_cpp_class_name()}& output) {
   return ${project_namespace}::err::EN_SUCCESS == details::__unpack_rpc_body(output, input,
-                                 "${rpc.get_full_name()}", 
+                                 "${rpc.get_full_name()}",
                                  ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
 }
 
@@ -372,16 +372,16 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
     logic_config::me()->get_local_server_name());
 
   ${rpc_request_meta_pretty_prefix}res = details::__setup_rpc_stream_header(
-    ${rpc_request_meta_pretty_prefix}*req_msg.mutable_head(), "${rpc.get_full_name()}", 
+    ${rpc_request_meta_pretty_prefix}*req_msg.mutable_head(), "${rpc.get_full_name()}",
     ${rpc_request_meta_pretty_prefix}${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()
   ${rpc_request_meta_pretty_prefix});
-  
+
   if (res < 0) {
     ${rpc_return_always_ready_code_sentense('res')}
   }
 
   res = details::__pack_rpc_body(request_body, req_msg.mutable_body_bin(),
-                                 "${rpc.get_full_name()}", 
+                                 "${rpc.get_full_name()}",
                                  ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name());
   if (res < 0) {
     ${rpc_return_always_ready_code_sentense('res')}
@@ -480,7 +480,7 @@ static ${rpc_return_type} __${rpc.get_name()}(
 %   endif
 %   if rpc_is_stream_mode or rpc_allow_no_wait:
   ${rpc_request_meta_pretty_prefix}res = details::__setup_rpc_stream_header(
-    ${rpc_request_meta_pretty_prefix}*req_msg.mutable_head(), "${rpc.get_full_name()}", 
+    ${rpc_request_meta_pretty_prefix}*req_msg.mutable_head(), "${rpc.get_full_name()}",
     ${rpc_request_meta_pretty_prefix}${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()
   ${rpc_request_meta_pretty_prefix});
 %   endif
@@ -502,7 +502,7 @@ static ${rpc_return_type} __${rpc.get_name()}(
   }
 
   res = details::__pack_rpc_body(request_body, req_msg.mutable_body_bin(),
-                                 "${rpc.get_full_name()}", 
+                                 "${rpc.get_full_name()}",
                                  ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name());
   if (res < 0) {
     ${rpc_return_sentense('res')}
@@ -574,7 +574,17 @@ static ${rpc_return_type} __${rpc.get_name()}(
 %     endif
 %   endif
 %   if rpc_is_stream_mode:
+%     if rpc_is_router_api:
+  if (res == PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND || res == PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_IN_SERVER) {
+    FWFLOGWARNING("rpc {} call ignored for router cache {},{},{}: {}({})",
+               "${rpc.get_full_name()}",
+               router_key.type_id, router_key.zone_id, router_key.object_id,
+               res, protobuf_mini_dumper_get_error_msg(res)
+    );
+  } else if (res < 0) {
+%     else:
   if (res < 0) {
+%     endif
 %     if rpc.get_extension_field('atframework.rpc_options', lambda x: x.warning_log_response_code, []):
     const int warning_codes[] = {${', '.join(rpc.get_extension_field('atframework.rpc_options', lambda x: x.warning_log_response_code, []))}};
     if (details::__redirect_rpc_result_to_warning_log(res, warning_codes,

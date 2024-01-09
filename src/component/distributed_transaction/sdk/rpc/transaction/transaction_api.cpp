@@ -39,6 +39,7 @@
 #include <utility/protobuf_mini_dumper.h>
 
 #include <string>
+#include <utility>
 
 #include "rpc/transaction/dtcoordsvrservice.h"
 
@@ -735,7 +736,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type reject_participator(
   rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionRejectParticipatorRsp> rsp_body(
       ctx);
 
-  protobuf_move_message(inout, std::move(*rsp_body->mutable_metadata()));
+  protobuf_copy_message(*req_body->mutable_metadata(), inout);
   req_body->set_participator_key(participator_key);
 
   // Read-Your-Writes 一致性实现

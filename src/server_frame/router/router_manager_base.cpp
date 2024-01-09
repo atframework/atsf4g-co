@@ -101,7 +101,7 @@ SERVER_FRAME_API rpc::result_code_type router_manager_base::send_msg_raw(rpc::co
     }
 
     if (0 == target_server_id) {
-      FWLOGERROR("router object (type={}) {}:{}:{} has no valid router server", get_type_id(), obj.get_key().type_id,
+      FWLOGWARNING("router object (type={}) {}:{}:{} has no valid router server", get_type_id(), obj.get_key().type_id,
                  obj.get_key().zone_id, obj.get_key().object_id);
       ret = PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_IN_SERVER;
       break;
