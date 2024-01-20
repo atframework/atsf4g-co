@@ -101,15 +101,15 @@ session::~session() {
   }
 
   if (actor_log_otel_) {
+    std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue> attributes[] = {
+        {"gateway.node_id", get_key().node_id},
+        {"user.id", cached_user_id_},
+        {"user.zone_id", cached_zone_id_},
+        {"session.event", "destroy"},
+        {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id}};
     actor_log_otel_->Info(util::log::format("------------ session: {:#x}:{} destroyed ------------", get_key().node_id,
                                             get_key().session_id),
-                          opentelemetry::common::MakeAttributes({
-                              {"gateway.node_id", get_key().node_id},
-                              {"user.id", cached_user_id_},
-                              {"user.zone_id", cached_zone_id_},
-                              {"session.event", "destroy"},
-                              {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id},
-                          }));
+                          opentelemetry::common::MakeAttributes(attributes));
   }
 }
 
@@ -270,16 +270,16 @@ void session::create_actor_log_writter() {
     }
   }
   if (actor_log_otel_) {
+    std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue> attributes[] = {
+        {"gateway.node_id", get_key().node_id},
+        {"session.event", "create"},
+        {"user.id", cached_user_id_},
+        {"user.zone_id", cached_zone_id_},
+        {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id}};
     actor_log_otel_->Info(
         util::log::format("============ user: {}:{}, session: {:#x}:{}, client: {}:{} created ============",
                           cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id),
-        opentelemetry::common::MakeAttributes({
-            {"gateway.node_id", get_key().node_id},
-            {"session.event", "create"},
-            {"user.id", cached_user_id_},
-            {"user.zone_id", cached_zone_id_},
-            {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id},
-        }));
+        opentelemetry::common::MakeAttributes(attributes));
   }
 }
 
@@ -335,18 +335,17 @@ void session::write_actor_log_head(const atframework::CSMsg &msg, size_t byte_si
     actor_log_writter_->write_log(caller, hint_text.c_str(), hint_text.size());
   }
   if (actor_log_otel_) {
-    actor_log_otel_->Info(hint_text,
-                          opentelemetry::common::MakeAttributes({
-                              {"tconnd.node_id", get_key().node_id},
-                              {"session.event", is_input ? "receive_hint" : "send_hint"},
-                              {"user.id", cached_user_id_},
-                              {"user.zone_id", cached_zone_id_},
-                              {opentelemetry::trace::SemanticConventions::kRpcMethod, rpc_name},
-                              {opentelemetry::trace::SemanticConventions::kMessageId, head.server_sequence()},
-                              {opentelemetry::trace::SemanticConventions::kMessageType, rpc_name},
-                              {opentelemetry::trace::SemanticConventions::kMessageUncompressedSize, byte_size},
-                              {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id},
-                          }));
+    std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue> attributes[] = {
+        {"tconnd.node_id", get_key().node_id},
+        {"session.event", is_input ? "receive_hint" : "send_hint"},
+        {"user.id", cached_user_id_},
+        {"user.zone_id", cached_zone_id_},
+        {opentelemetry::trace::SemanticConventions::kRpcMethod, rpc_name},
+        {opentelemetry::trace::SemanticConventions::kMessageId, head.server_sequence()},
+        {opentelemetry::trace::SemanticConventions::kMessageType, rpc_name},
+        {opentelemetry::trace::SemanticConventions::kMessageUncompressedSize, byte_size},
+        {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id}};
+    actor_log_otel_->Info(hint_text, opentelemetry::common::MakeAttributes(attributes));
   }
 }
 
@@ -388,16 +387,15 @@ void session::write_actor_log_body(const google::protobuf::Message &msg, const a
                                    get_key().node_id, get_key().session_id, rpc_name, type_url, head_text, body_text);
   }
   if (actor_log_otel_) {
-    actor_log_otel_->Info(body_text,
-                          opentelemetry::common::MakeAttributes({
-                              {"tconnd.node_id", get_key().node_id},
-                              {"session.event", is_input ? "receive_message" : "send_message"},
-                              {"user.id", cached_user_id_},
-                              {"user.zone_id", cached_zone_id_},
-                              {opentelemetry::trace::SemanticConventions::kRpcMethod, rpc_name},
-                              {opentelemetry::trace::SemanticConventions::kMessageId, head.server_sequence()},
-                              {opentelemetry::trace::SemanticConventions::kMessageType, rpc_name},
-                              {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id},
-                          }));
+    std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue> attributes[] = {
+        {"tconnd.node_id", get_key().node_id},
+        {"session.event", is_input ? "receive_message" : "send_message"},
+        {"user.id", cached_user_id_},
+        {"user.zone_id", cached_zone_id_},
+        {opentelemetry::trace::SemanticConventions::kRpcMethod, rpc_name},
+        {opentelemetry::trace::SemanticConventions::kMessageId, head.server_sequence()},
+        {opentelemetry::trace::SemanticConventions::kMessageType, rpc_name},
+        {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id}};
+    actor_log_otel_->Info(body_text, opentelemetry::common::MakeAttributes(attributes));
   }
 }
