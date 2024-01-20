@@ -290,9 +290,9 @@ SERVER_FRAME_API void task_action_cs_req_base::send_response(bool sync_dirty) {
 }
 
 SERVER_FRAME_API void task_action_cs_req_base::write_actor_log_body(const google::protobuf::Message &msg,
-                                                                    const atframework::CSMsgHead &head) {
+                                                                    const atframework::CSMsgHead &head, bool is_input) {
   auto sess = get_session();
   if (sess) {
-    sess->write_actor_log_body(msg, head);
+    sess->write_actor_log_body(msg, head, is_input);
   }
 }

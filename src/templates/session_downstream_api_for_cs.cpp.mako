@@ -128,7 +128,7 @@ ${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
   if (!msg_ptr->has_head() || msg_ptr->head().timestamp() == 0) {
     msg_ptr->mutable_head()->set_timestamp(::util::time::time_utility::get_now());
   }
-  __session.write_actor_log_body(__body, *msg_ptr->mutable_head());
+  __session.write_actor_log_body(__body, *msg_ptr->mutable_head(), false);
   res = __session.send_msg_to_client(*msg_ptr);
   if (res < 0) {
     FWLOGERROR("rpc {} send message to session [{:#x}, {}] failed, result: {}({})",
@@ -168,7 +168,7 @@ ${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
   if (!msg_ptr->has_head() || msg_ptr->head().timestamp() == 0) {
     msg_ptr->mutable_head()->set_timestamp(::util::time::time_utility::get_now());
   }
-  __session.write_actor_log_body(__body, *msg_ptr->mutable_head());
+  __session.write_actor_log_body(__body, *msg_ptr->mutable_head(), false);
   res = __session.send_msg_to_client(*msg_ptr, server_sequence);
   if (res < 0) {
     FWLOGERROR("rpc {} send message to session [{:#x}, {}] failed, result: {}({})",

@@ -212,27 +212,33 @@ rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, router
   uint64_t self_node_id = logic_config::me()->get_local_server_id();
   // 如果router server id是0则设置为本地的登入地址
   if (0 == get_router_server_id()) {
-    uint64_t old_router_server_id = obj->get_login_info().router_server_id();
-    uint64_t old_router_ver = obj->get_login_info().router_version();
+    PROJECT_NAMESPACE_ID::table_login &login_blob_data = obj->get_login_info();
 
-    obj->get_login_info().set_router_server_id(self_node_id);
-    obj->get_login_info().set_router_version(old_router_ver + 1);
+    uint64_t old_router_server_id = login_blob_data.router_server_id();
+    uint64_t old_router_ver = login_blob_data.router_version();
+
+    login_blob_data.set_router_server_id(self_node_id);
+    login_blob_data.set_router_version(old_router_ver + 1);
 
     // 新登入则设置登入时间
-    obj->get_login_info().set_login_time(util::time::time_utility::get_sys_now());
-    obj->get_login_info().set_business_login_time(util::time::time_utility::get_now());
+    auto old_logout_time = login_blob_data.logout_time();
+    auto old_business_logout_time = login_blob_data.business_logout_time();
+    login_blob_data.set_login_time(util::time::time_utility::get_sys_now());
+    login_blob_data.set_business_login_time(util::time::time_utility::get_now());
 
     auto ret = RPC_AWAIT_CODE_RESULT(rpc::db::login::set(ctx, obj->get_open_id().c_str(), obj->get_zone_id(),
-                                                         obj->get_login_info(), obj->get_login_version()));
+                                                         login_blob_data, obj->get_login_version()));
     if (ret < 0) {
-      FWPLOGERROR(*obj, "save login data failed, msg:\n{}", obj->get_login_info().DebugString());
+      FWPLOGERROR(*obj, "save login data failed, msg:\n{}", login_blob_data.DebugString());
       // 失败则恢复路由信息
-      obj->get_login_info().set_router_server_id(old_router_server_id);
-      obj->get_login_info().set_router_version(old_router_ver);
+      login_blob_data.set_logout_time(old_logout_time);                    // 恢复登出时间
+      login_blob_data.set_business_logout_time(old_business_logout_time);  // 恢复登出时间
+      login_blob_data.set_router_server_id(old_router_server_id);
+      login_blob_data.set_router_version(old_router_ver);
       RPC_RETURN_CODE(ret);
     }
 
-    set_router_server_id(obj->get_login_info().router_server_id(), obj->get_login_info().router_version());
+    set_router_server_id(login_blob_data.router_server_id(), login_blob_data.router_version());
   } else if (self_node_id != get_router_server_id()) {
     // 不在这个进程上
     FWPLOGERROR(*obj, "is in server {:#x} but try to pull in server {:#x}", get_router_server_id(), self_node_id);

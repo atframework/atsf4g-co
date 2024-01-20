@@ -193,13 +193,13 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data) {
 
   if (event_disabled_) {
     if (result_ < 0) {
-      FCTXLOGERROR(get_shared_context(), "task {} [{}] without evt ret code ({}){} rsp code ({}){}\n", name(), get_task_id(),
-                 protobuf_mini_dumper_get_error_msg(result_), result_,
-                 protobuf_mini_dumper_get_error_msg(response_code_), response_code_);
+      FCTXLOGERROR(get_shared_context(), "task {} [{}] without evt ret code ({}){} rsp code ({}){}\n", name(),
+                   get_task_id(), protobuf_mini_dumper_get_error_msg(result_), result_,
+                   protobuf_mini_dumper_get_error_msg(response_code_), response_code_);
     } else {
-      FCTXLOGDEBUG(get_shared_context(), "task {} [{}] without evt ret code ({}){}, rsp code ({}){}\n", name(), get_task_id(),
-                 protobuf_mini_dumper_get_error_msg(result_), result_,
-                 protobuf_mini_dumper_get_error_msg(response_code_), response_code_);
+      FCTXLOGDEBUG(get_shared_context(), "task {} [{}] without evt ret code ({}){}, rsp code ({}){}\n", name(),
+                   get_task_id(), protobuf_mini_dumper_get_error_msg(result_), result_,
+                   protobuf_mini_dumper_get_error_msg(response_code_), response_code_);
     }
 
     if (!response_message_disabled_) {
@@ -218,8 +218,8 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data) {
     int ret = 0;
     if (response_code_ < 0) {
       ret = on_failed();
-      FCTXLOGINFO(get_shared_context(), "task {} [{}] finished success but response errorcode, rsp code: ({}){}\n", name(), get_task_id(),
-                protobuf_mini_dumper_get_error_msg(response_code_), response_code_);
+      FCTXLOGINFO(get_shared_context(), "task {} [{}] finished success but response errorcode, rsp code: ({}){}\n",
+                  name(), get_task_id(), protobuf_mini_dumper_get_error_msg(response_code_), response_code_);
     } else {
       ret = on_success();
     }
@@ -269,13 +269,13 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data) {
   }
 
   if (0 != get_user_id()) {
-    FCTXLOGERROR(get_shared_context(), "task {} [{}] for player {}:{} ret code ({}){}, rsp code ({}){}\n", name(), get_task_id(), get_zone_id(),
-               get_user_id(), protobuf_mini_dumper_get_error_msg(result_), result_,
-               protobuf_mini_dumper_get_error_msg(response_code_), response_code_);
+    FCTXLOGERROR(get_shared_context(), "task {} [{}] for player {}:{} ret code ({}){}, rsp code ({}){}\n", name(),
+                 get_task_id(), get_zone_id(), get_user_id(), protobuf_mini_dumper_get_error_msg(result_), result_,
+                 protobuf_mini_dumper_get_error_msg(response_code_), response_code_);
   } else {
     FCTXLOGERROR(get_shared_context(), "task {} [{}] ret code ({}){}, rsp code ({}){}\n", name(), get_task_id(),
-               protobuf_mini_dumper_get_error_msg(result_), result_, protobuf_mini_dumper_get_error_msg(response_code_),
-               response_code_);
+                 protobuf_mini_dumper_get_error_msg(result_), result_,
+                 protobuf_mini_dumper_get_error_msg(response_code_), response_code_);
   }
 
   // 响应OnTimeout
@@ -344,7 +344,7 @@ SERVER_FRAME_API void task_action_base::set_user_key(uint64_t user_id, uint32_t 
   }
 }
 
-SERVER_FRAME_API task_action_base::on_finished_callback_handle_t task_action_base::add_on_on_finished(
+SERVER_FRAME_API task_action_base::on_finished_callback_handle_t task_action_base::add_on_finished(
     on_finished_callback_fn_t &&fn) {
   return on_finished_callback_.insert(on_finished_callback_.end(), std::move(fn));
 }

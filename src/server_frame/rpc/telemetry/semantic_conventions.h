@@ -12,6 +12,7 @@ struct semantic_conventions {
   static constexpr const char *kGroupNameDefault = "";
   static constexpr const char *kGroupNameHpa = "hpa";
   static constexpr const char *kGroupNameDedicatedServer = "dedicated_server";
+  static constexpr const char *kGroupNameCsActor = "cs_actor";
 
   static constexpr const char *kAtRpcResultCode = "rpc.atrpc.result_code";
   static constexpr const char *kAtRpcResponseCode = "rpc.atrpc.response_code";

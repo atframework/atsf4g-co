@@ -20,6 +20,9 @@
 
 #include <config/logic_config.h>
 
+#include <opentelemetry/trace/semantic_conventions.h>
+#include <rpc/telemetry/semantic_conventions.h>
+
 #include <utility>
 
 #include "data/player_cache.h"
@@ -82,7 +85,7 @@ void session::flag_guard_t::reset() {
   flag_ = flag_t::EN_SESSION_FLAG_NONE;
 }
 
-session::session() : flags_(0), login_task_id_(0), session_sequence_(0) {
+session::session() : flags_(0), login_task_id_(0), session_sequence_(0), cached_zone_id_(0), cached_user_id_(0) {
   id_.node_id = 0;
   id_.session_id = 0;
 }
@@ -95,6 +98,18 @@ session::~session() {
         util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
     actor_log_writter_->format_log(caller, "------------ session: {:#x}:{} destroyed ------------", get_key().node_id,
                                    get_key().session_id);
+  }
+
+  if (actor_log_otel_) {
+    actor_log_otel_->Info(util::log::format("------------ session: {:#x}:{} destroyed ------------", get_key().node_id,
+                                            get_key().session_id),
+                          opentelemetry::common::MakeAttributes({
+                              {"gateway.node_id", get_key().node_id},
+                              {"user.id", cached_user_id_},
+                              {"user.zone_id", cached_zone_id_},
+                              {"session.event", "destroy"},
+                              {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id},
+                          }));
   }
 }
 
@@ -110,34 +125,13 @@ bool session::is_valid() const noexcept {
 void session::set_player(std::shared_ptr<player_cache> u) {
   player_ = u;
 
-  if (u && !actor_log_writter_ && logic_config::me()->get_logic().session().enable_actor_log() &&
-      logic_config::me()->get_logic().session().actor_log_size() > 0 &&
-      logic_config::me()->get_logic().session().actor_log_rotate() > 0) {
-    actor_log_writter_ = util::log::log_wrapper::create_user_logger();
-    if (actor_log_writter_) {
-      actor_log_writter_->init(util::log::log_formatter::level_t::LOG_LW_INFO);
-      actor_log_writter_->set_stacktrace_level(util::log::log_formatter::level_t::LOG_LW_DISABLED,
-                                               util::log::log_formatter::level_t::LOG_LW_DISABLED);
-      actor_log_writter_->set_prefix_format("[%F %T.%f]: ");
+  if (u) {
+    cached_zone_id_ = u->get_zone_id();
+    cached_user_id_ = u->get_user_id();
+  }
 
-      std::stringstream ss_path;
-      std::stringstream ss_alias;
-      ss_path << logic_config::me()->get_logic().server().log_path() << "/cs-actor/%Y-%m-%d/" << u->get_user_id()
-              << ".%N.log";
-      ss_alias << logic_config::me()->get_logic().server().log_path() << "/cs-actor/%Y-%m-%d/" << u->get_user_id()
-               << ".log";
-      ::util::log::log_sink_file_backend file_sink(ss_path.str());
-      file_sink.set_writing_alias_pattern(ss_alias.str());
-      file_sink.set_flush_interval(1);  // flush every 1 second
-      file_sink.set_max_file_size(logic_config::me()->get_logic().session().actor_log_size());
-      file_sink.set_rotate_size(static_cast<uint32_t>(logic_config::me()->get_logic().session().actor_log_rotate()));
-      actor_log_writter_->add_sink(file_sink);
-
-      util::log::log_wrapper::caller_info_t caller = util::log::log_wrapper::caller_info_t(
-          util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
-      actor_log_writter_->format_log(caller, "============ user id: {}, session: {:#x}:{} created ============",
-                                     u->get_user_id(), get_key().node_id, get_key().session_id);
-    }
+  if (u && logic_config::me()->get_logic().session().enable_actor_log()) {
+    create_actor_log_writter();
   }
 }
 
@@ -238,6 +232,57 @@ void session::alloc_session_sequence(atframework::CSMsg &msg) {
   } while (false);
 }
 
+void session::create_actor_log_writter() {
+  if (!actor_log_writter_ && logic_config::me()->get_logic().session().actor_log_size() > 0 &&
+      logic_config::me()->get_logic().session().actor_log_rotate() > 0) {
+    actor_log_writter_ = util::log::log_wrapper::create_user_logger();
+    if (actor_log_writter_) {
+      actor_log_writter_->init(util::log::log_formatter::level_t::LOG_LW_INFO);
+      actor_log_writter_->set_stacktrace_level(util::log::log_formatter::level_t::LOG_LW_DISABLED,
+                                               util::log::log_formatter::level_t::LOG_LW_DISABLED);
+      actor_log_writter_->set_prefix_format("[%F %T.%f]: ");
+
+      std::stringstream ss_path;
+      std::stringstream ss_alias;
+      ss_path << logic_config::me()->get_logic().server().log_path() << "/cs-actor/%Y-%m-%d/" << cached_user_id_
+              << ".%N.log";
+      ss_alias << logic_config::me()->get_logic().server().log_path() << "/cs-actor/%Y-%m-%d/" << cached_user_id_
+               << ".log";
+      ::util::log::log_sink_file_backend file_sink(ss_path.str());
+      file_sink.set_writing_alias_pattern(ss_alias.str());
+      file_sink.set_flush_interval(1);  // flush every 1 second
+      file_sink.set_max_file_size(logic_config::me()->get_logic().session().actor_log_size());
+      file_sink.set_rotate_size(static_cast<uint32_t>(logic_config::me()->get_logic().session().actor_log_rotate()));
+      actor_log_writter_->add_sink(file_sink);
+
+      util::log::log_wrapper::caller_info_t caller = util::log::log_wrapper::caller_info_t(
+          util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
+      actor_log_writter_->format_log(caller, "============ user: {}:{}, session: {:#x}:{} created ============",
+                                     cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id);
+    }
+  }
+
+  if (!actor_log_otel_ && logic_config::me()->get_logic().session().enable_actor_otel_log()) {
+    auto telemetry_group =
+        rpc::telemetry::global_service::get_group(rpc::telemetry::semantic_conventions::kGroupNameCsActor);
+    if (telemetry_group) {
+      actor_log_otel_ = rpc::telemetry::global_service::get_current_default_logger(telemetry_group);
+    }
+  }
+  if (actor_log_otel_) {
+    actor_log_otel_->Info(
+        util::log::format("============ user: {}:{}, session: {:#x}:{}, client: {}:{} created ============",
+                          cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id),
+        opentelemetry::common::MakeAttributes({
+            {"gateway.node_id", get_key().node_id},
+            {"session.event", "create"},
+            {"user.id", cached_user_id_},
+            {"user.zone_id", cached_zone_id_},
+            {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id},
+        }));
+  }
+}
+
 int32_t session::send_kickoff(int32_t reason) {
   if (check_flag(flag_t::EN_SESSION_FLAG_GATEWAY_REMOVED)) {
     return 0;
@@ -247,19 +292,8 @@ int32_t session::send_kickoff(int32_t reason) {
 }
 
 void session::write_actor_log_head(const atframework::CSMsg &msg, size_t byte_size, bool is_input) {
-  ::util::log::log_wrapper *writter = mutable_actor_log_writter();
-  if (nullptr == writter) {
+  if (!actor_log_writter_ && !actor_log_otel_) {
     return;
-  }
-
-  uint64_t player_user_id = 0;
-  uint32_t player_zone_id = 0;
-  {
-    std::shared_ptr<player_cache> user = get_player();
-    if (user) {
-      player_user_id = user->get_user_id();
-      player_zone_id = user->get_zone_id();
-    }
   }
 
   gsl::string_view rpc_name;
@@ -286,20 +320,39 @@ void session::write_actor_log_head(const atframework::CSMsg &msg, size_t byte_si
 
   util::log::log_wrapper::caller_info_t caller = util::log::log_wrapper::caller_info_t(
       util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
+  std::string hint_text;
   if (is_input) {
-    writter->format_log(caller, "<<<<<<<<<<<< receive {} bytes from player {}:{}, session: {:#x}:{}, rpc: {}, type: {}",
-                        byte_size, player_zone_id, player_user_id, get_key().node_id, get_key().session_id, rpc_name,
-                        type_url);
+    hint_text = util::log::format(
+        "<<<<<<<<<<<< receive {} bytes from player {}:{}, session: {:#x}:{}, rpc: {}, type: {}", byte_size,
+        cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id, rpc_name, type_url);
+
   } else {
-    writter->format_log(caller, ">>>>>>>>>>>> send {} bytes to player {}:{}, session: {:#x}:{}, rpc: {}, type: {}",
-                        byte_size, player_zone_id, player_user_id, get_key().node_id, get_key().session_id, rpc_name,
-                        type_url);
+    hint_text = util::log::format(">>>>>>>>>>>> send {} bytes to player {}:{}, session: {:#x}:{}, rpc: {}, type: {}",
+                                  byte_size, cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id,
+                                  rpc_name, type_url);
+  }
+  if (actor_log_writter_) {
+    actor_log_writter_->write_log(caller, hint_text.c_str(), hint_text.size());
+  }
+  if (actor_log_otel_) {
+    actor_log_otel_->Info(hint_text,
+                          opentelemetry::common::MakeAttributes({
+                              {"tconnd.node_id", get_key().node_id},
+                              {"session.event", is_input ? "receive_hint" : "send_hint"},
+                              {"user.id", cached_user_id_},
+                              {"user.zone_id", cached_zone_id_},
+                              {opentelemetry::trace::SemanticConventions::kRpcMethod, rpc_name},
+                              {opentelemetry::trace::SemanticConventions::kMessageId, head.server_sequence()},
+                              {opentelemetry::trace::SemanticConventions::kMessageType, rpc_name},
+                              {opentelemetry::trace::SemanticConventions::kMessageUncompressedSize, byte_size},
+                              {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id},
+                          }));
   }
 }
 
-void session::write_actor_log_body(const google::protobuf::Message &msg, const atframework::CSMsgHead &head) {
-  ::util::log::log_wrapper *writter = mutable_actor_log_writter();
-  if (nullptr == writter) {
+void session::write_actor_log_body(const google::protobuf::Message &msg, const atframework::CSMsgHead &head,
+                                   bool is_input) {
+  if (!actor_log_writter_ && !actor_log_otel_) {
     return;
   }
 
@@ -325,11 +378,26 @@ void session::write_actor_log_body(const google::protobuf::Message &msg, const a
   }
   util::log::log_wrapper::caller_info_t caller = util::log::log_wrapper::caller_info_t(
       util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
-  writter->format_log(caller,
-                      "============ session: {:#x}:{}, rpc: {}, type: {} ============\n------------ "
-                      "Head ------------\n{}------------ Body ------------\n{}",
-                      get_key().node_id, get_key().session_id, rpc_name, type_url,
-                      protobuf_mini_dumper_get_readable(head), protobuf_mini_dumper_get_readable(msg));
-}
 
-::util::log::log_wrapper *session::mutable_actor_log_writter() { return actor_log_writter_.get(); }
+  std::string head_text = protobuf_mini_dumper_get_readable(head);
+  std::string body_text = protobuf_mini_dumper_get_readable(msg);
+  if (actor_log_writter_) {
+    actor_log_writter_->format_log(caller,
+                                   "============ session: {:#x}:{}, rpc: {}, type: {} ============\n------------ "
+                                   "Head ------------\n{}------------ Body ------------\n{}",
+                                   get_key().node_id, get_key().session_id, rpc_name, type_url, head_text, body_text);
+  }
+  if (actor_log_otel_) {
+    actor_log_otel_->Info(body_text,
+                          opentelemetry::common::MakeAttributes({
+                              {"tconnd.node_id", get_key().node_id},
+                              {"session.event", is_input ? "receive_message" : "send_message"},
+                              {"user.id", cached_user_id_},
+                              {"user.zone_id", cached_zone_id_},
+                              {opentelemetry::trace::SemanticConventions::kRpcMethod, rpc_name},
+                              {opentelemetry::trace::SemanticConventions::kMessageId, head.server_sequence()},
+                              {opentelemetry::trace::SemanticConventions::kMessageType, rpc_name},
+                              {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id},
+                          }));
+  }
+}

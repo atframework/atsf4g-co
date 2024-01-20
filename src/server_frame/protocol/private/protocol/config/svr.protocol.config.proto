@@ -47,9 +47,10 @@ message logic_session_cfg {
   google.protobuf.Duration login_ban_time = 103 [(atapp.protocol.CONFIGURE) = { default_value: "3h" }];
   google.protobuf.Duration tick_sec = 104 [(atapp.protocol.CONFIGURE) = { default_value: "60s" }];
   bool enable_actor_log = 105 [(atapp.protocol.CONFIGURE) = { default_value: "false" }];
-  bool remove_player_cache_when_stop = 106 [(atapp.protocol.CONFIGURE) = { default_value: "true" }];
-  uint64 actor_log_size = 107 [(atapp.protocol.CONFIGURE) = { default_value: "1MB" size_mode: true }];
-  uint64 actor_log_rotate = 108 [(atapp.protocol.CONFIGURE) = { default_value: "3" min_value: "1" }];
+  bool enable_actor_otel_log = 106 [(atapp.protocol.CONFIGURE) = { default_value: "false" }];
+  bool remove_player_cache_when_stop = 107 [(atapp.protocol.CONFIGURE) = { default_value: "true" }];
+  uint64 actor_log_size = 108 [(atapp.protocol.CONFIGURE) = { default_value: "1MB" size_mode: true }];
+  uint64 actor_log_rotate = 109 [(atapp.protocol.CONFIGURE) = { default_value: "3" min_value: "1" }];
 }
 
 message logic_task_stack_cfg {

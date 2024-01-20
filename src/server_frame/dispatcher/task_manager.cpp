@@ -872,9 +872,10 @@ void task_manager::setup_metrics() {
     rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
         rpc::telemetry::metrics_observable_type::kGauge, "service_coroutine",
         {"service_coroutine_task_max_count", "", ""}, [](opentelemetry::metrics::ObserverResult &result) {
-          int64_t ret =
-              static_cast<int64_t>(get_task_manager_metrics_data().task_max_count.load(std::memory_order_acquire));
-          get_task_manager_metrics_data().task_max_count.store(0, std::memory_order_release);
+          auto &metrics_data = get_task_manager_metrics_data();
+          int64_t ret = static_cast<int64_t>(metrics_data.task_max_count.load(std::memory_order_acquire));
+          metrics_data.task_max_count.store(metrics_data.task_count.load(std::memory_order_acquire),
+                                            std::memory_order_release);
           rpc::telemetry::opentelemetry_utility::global_metics_observe_record(result, ret);
         });
 

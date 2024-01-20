@@ -555,7 +555,7 @@ SERVER_FRAME_API void router_manager_set::add_io_schedule_order_task(const std::
   }
 
   obj->io_schedule_order_.insert(task_id);
-  task_private_data->action->add_on_on_finished(
+  task_private_data->action->add_on_finished(
       [obj, task_id](const task_action_base &) { obj->io_schedule_order_.erase(task_id); });
 }
 

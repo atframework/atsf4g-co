@@ -625,7 +625,7 @@ rpc::result_code_type transaction_participator_handle::add_finished_transcation(
 
   finished_transactions_[transaction_ptr->metadata().transaction_uuid()] = transaction_ptr;
 
-  FWLOGDEBUG("participator {} start finished transaction {}", get_participator_key(),
+  FWLOGDEBUG("participator {} add finished transaction {}", get_participator_key(),
              transaction_ptr->metadata().transaction_uuid());
 
   // event callback

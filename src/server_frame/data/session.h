@@ -15,6 +15,8 @@
 
 #include <config/server_frame_build_feature.h>
 
+#include <rpc/telemetry/rpc_global_service.h>
+
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -135,14 +137,14 @@ class session {
   int32_t send_kickoff(int32_t reason);
 
   void write_actor_log_head(const atframework::CSMsg &msg, size_t byte_size, bool is_input);
-  void write_actor_log_body(const google::protobuf::Message &msg, const atframework::CSMsgHead &head);
+  void write_actor_log_body(const google::protobuf::Message &msg, const atframework::CSMsgHead &head, bool is_input);
 
   void alloc_session_sequence(atframework::CSMsg &msg);
 
   inline uint64_t get_last_session_sequence() const { return session_sequence_; }
 
  private:
-  ::util::log::log_wrapper *mutable_actor_log_writter();
+  void create_actor_log_writter();
 
  private:
   key_t id_;
@@ -150,6 +152,9 @@ class session {
   std::weak_ptr<player_cache> player_;
   uint64_t login_task_id_;
   uint64_t session_sequence_;
+  uint32_t cached_zone_id_;
+  uint64_t cached_user_id_;
 
   std::shared_ptr<util::log::log_wrapper> actor_log_writter_;
+  opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> actor_log_otel_;
 };

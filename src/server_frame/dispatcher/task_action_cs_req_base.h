@@ -79,7 +79,8 @@ class UTIL_SYMBOL_VISIBLE task_action_cs_req_base : public task_action_req_base<
  protected:
   SERVER_FRAME_API void send_response() override;
   SERVER_FRAME_API void send_response(bool sync_dirty);
-  SERVER_FRAME_API void write_actor_log_body(const google::protobuf::Message &msg, const atframework::CSMsgHead &head);
+  SERVER_FRAME_API void write_actor_log_body(const google::protobuf::Message &msg, const atframework::CSMsgHead &head,
+                                             bool is_input);
 
   UTIL_FORCEINLINE bool has_response_message() const noexcept { return !response_messages_.empty(); }
 
@@ -193,7 +194,7 @@ class UTIL_SYMBOL_VISIBLE task_action_cs_rpc_base : public task_action_cs_req_ba
     } else {
       FWLOGDEBUG("task {} [{}] parse rpc request message {} success:\n{}", name(), get_task_id(),
                  get_request_type_url(), protobuf_mini_dumper_get_readable(*request_body_));
-      write_actor_log_body(*request_body_, get_request().head());
+      write_actor_log_body(*request_body_, get_request().head(), true);
     }
   }
 
@@ -206,7 +207,7 @@ class UTIL_SYMBOL_VISIBLE task_action_cs_rpc_base : public task_action_cs_req_ba
     } else {
       FWLOGDEBUG("task {} [{}] serialize rpc response message {} success:\n{}", name(), get_task_id(),
                  get_response_type_url(), protobuf_mini_dumper_get_readable(get_response_body()));
-      write_actor_log_body(get_response_body(), rsp.head());
+      write_actor_log_body(get_response_body(), rsp.head(), false);
     }
   }
 

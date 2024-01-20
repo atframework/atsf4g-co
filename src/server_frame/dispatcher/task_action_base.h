@@ -253,7 +253,7 @@ class UTIL_SYMBOL_VISIBLE task_action_base
    */
   UTIL_FORCEINLINE int32_t get_response_code() const noexcept { return response_code_; }
 
-  SERVER_FRAME_API on_finished_callback_handle_t add_on_on_finished(on_finished_callback_fn_t &&fn);
+  SERVER_FRAME_API on_finished_callback_handle_t add_on_finished(on_finished_callback_fn_t &&fn);
   SERVER_FRAME_API void remove_on_finished(on_finished_callback_handle_t handle);
 
  protected:
