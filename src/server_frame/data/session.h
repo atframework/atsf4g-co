@@ -15,6 +15,7 @@
 
 #include <config/server_frame_build_feature.h>
 
+#include <rpc/rpc_common_types.h>
 #include <rpc/telemetry/rpc_global_service.h>
 
 #include <memory>
@@ -25,6 +26,10 @@
 namespace atframework {
 class CSMsg;
 }
+
+namespace rpc {
+class context;
+};
 
 class player_cache;
 
@@ -120,8 +125,8 @@ class session {
   std::shared_ptr<player_cache> get_player() const;
 
   // 下行post包
-  int32_t send_msg_to_client(atframework::CSMsg &msg);
-  int32_t send_msg_to_client(atframework::CSMsg &msg, uint64_t server_sequence);
+  int32_t send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg);
+  int32_t send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg, uint64_t server_sequence);
 
   int32_t send_msg_to_client(const void *msg_data, size_t msg_size);
 
@@ -136,8 +141,8 @@ class session {
 
   int32_t send_kickoff(int32_t reason);
 
-  void write_actor_log_head(const atframework::CSMsg &msg, size_t byte_size, bool is_input);
-  void write_actor_log_body(const google::protobuf::Message &msg, const atframework::CSMsgHead &head, bool is_input);
+  void write_actor_log_head(rpc::context &ctx, const atframework::CSMsg &msg, size_t byte_size, bool is_input);
+  void write_actor_log_body(rpc::context &ctx, const google::protobuf::Message &msg, const atframework::CSMsgHead &head, bool is_input);
 
   void alloc_session_sequence(atframework::CSMsg &msg);
 

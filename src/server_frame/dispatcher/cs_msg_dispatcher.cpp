@@ -145,15 +145,15 @@ SERVER_FRAME_API void cs_msg_dispatcher::on_create_task_failed(dispatcher_start_
   std::unique_ptr<rpc::context> child_context;
   if (nullptr != start_data.context) {
     child_context.reset(new rpc::context(*start_data.context));
-    if (child_context) {
-      rpc::context::trace_start_option trace_start_option;
-      trace_start_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
-      trace_start_option.is_remote = true;
-      trace_start_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(cs_msg_dispatcher::me());
-      trace_start_option.parent_network_span = &real_msg->head().rpc_trace();
-      child_context->setup_tracer(tracer, rpc_name, std::move(trace_start_option));
-    }
+  } else {
+    child_context.reset(new rpc::context(rpc::context::create_without_task()));
   }
+  rpc::context::trace_start_option trace_start_option;
+  trace_start_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
+  trace_start_option.is_remote = true;
+  trace_start_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(cs_msg_dispatcher::me());
+  trace_start_option.parent_network_span = &real_msg->head().rpc_trace();
+  child_context->setup_tracer(tracer, rpc_name, std::move(trace_start_option));
 
   rpc::context::message_holder<atframework::CSMsg> rsp{*child_context};
   atframework::CSMsgHead *head = rsp->mutable_head();
@@ -183,7 +183,7 @@ SERVER_FRAME_API void cs_msg_dispatcher::on_create_task_failed(dispatcher_start_
     head->mutable_rpc_response()->set_type_url(method->output_type()->full_name());
   }
 
-  int res = sess->send_msg_to_client(*rsp);
+  int res = sess->send_msg_to_client(*child_context, *rsp);
   if (res < 0) {
     FWLOGERROR("Send rpc response failed of {} (session: [{:#x}, {}]) to [{:#x}: {}] failed, res: {}({})", rpc_name,
                real_msg->head().session_node_id(), real_msg->head().session_id(), real_msg->head().session_node_id(),
@@ -253,9 +253,11 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_s
       cs_msg->mutable_head()->set_session_node_id(session_key.node_id);
       cs_msg->mutable_head()->set_session_id(session_key.session_id);
 
+      sess->write_actor_log_head(ctx, *cs_msg, post.content().size(), true);
+
       if (task_manager::me()->is_busy()) {
         cs_msg->mutable_head()->set_error_code(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM_BUSY);
-        sess->send_msg_to_client(*cs_msg);
+        sess->send_msg_to_client(ctx, *cs_msg);
         FWLOGINFO("server busy and send msg back to session [{:#x}: {}, {}]", session_key.node_id,
                   get_app()->convert_app_id_to_string(session_key.node_id), session_key.session_id);
         break;

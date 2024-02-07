@@ -498,7 +498,12 @@ class task_manager {
   SERVER_FRAME_API int tick(time_t sec, int nsec);
 
   /**
-   * @brief tick，可能会触发任务过期
+   * @brief Kill 所有尚未完成的任务
+   */
+  SERVER_FRAME_API void kill_all();
+
+  /**
+   * @brief 按ID获取任务
    * @param task_id 任务id
    * @return 如果存在，返回协程任务的智能指针
    */

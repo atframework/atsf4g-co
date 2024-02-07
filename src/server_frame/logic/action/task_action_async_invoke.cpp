@@ -28,5 +28,7 @@ task_action_async_invoke::result_type task_action_async_invoke::operator()() {
   if (param_.callable) {
     ret = RPC_AWAIT_CODE_RESULT(param_.callable(get_shared_context()));
   }
+
+  set_response_code(ret);
   TASK_ACTION_RETURN_CODE(ret);
 }

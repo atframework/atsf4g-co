@@ -231,22 +231,22 @@ class UTIL_SYMBOL_VISIBLE task_action_ss_rpc_base : public task_action_ss_req_ba
     // Check message type
     if (get_request().head().has_rpc_request()) {
       if (get_request_type_url() != get_request().head().rpc_request().type_url()) {
-        FWLOGERROR("task {} [{}] except message {}, real got {}", name(), get_task_id(), get_request_type_url(),
-                   get_request().head().rpc_request().type_url());
+        FCTXLOGERROR(get_shared_context(), "Except message {}, real got {}", get_request_type_url(),
+                     get_request().head().rpc_request().type_url());
       }
     } else if (get_request().head().has_rpc_stream()) {
       if (get_request_type_url() != get_request().head().rpc_stream().type_url()) {
-        FWLOGERROR("task {} [{}] except message {}, real got {}", name(), get_task_id(), get_request_type_url(),
-                   get_request().head().rpc_stream().type_url());
+        FCTXLOGERROR(get_shared_context(), "Except message {}, real got {}", get_request_type_url(),
+                     get_request().head().rpc_stream().type_url());
       }
     }
 
     if (false == request_body_->ParseFromString(get_request().body_bin())) {
-      FWLOGERROR("task {} [{}] try to parse message {} failed, msg: {}", name(), get_task_id(), get_request_type_url(),
-                 request_body_->InitializationErrorString());
+      FCTXLOGERROR(get_shared_context(), "Try to parse message {} failed, msg: {}", get_request_type_url(),
+                   request_body_->InitializationErrorString());
     } else {
-      FWLOGDEBUG("task {} [{}] parse rpc request message {} success:\n{}", name(), get_task_id(),
-                 get_request_type_url(), protobuf_mini_dumper_get_readable(*request_body_));
+      FCTXLOGDEBUG(get_shared_context(), "Parse rpc request message {} success:\n{}", get_request_type_url(),
+                   protobuf_mini_dumper_get_readable(*request_body_));
     }
   }
 
@@ -256,11 +256,11 @@ class UTIL_SYMBOL_VISIBLE task_action_ss_rpc_base : public task_action_ss_req_ba
     init_msg(rsp, get_request_node_id(), get_request_node_name(), get_request());
 
     if (false == get_response_body().SerializeToString(rsp.mutable_body_bin())) {
-      FWLOGERROR("task {} [{}] try to serialize message {} failed, msg: {}", name(), get_task_id(),
-                 get_response_type_url(), get_response_body().InitializationErrorString());
+      FCTXLOGERROR(get_shared_context(), "Try to serialize message {} failed, msg: {}", get_response_type_url(),
+                   get_response_body().InitializationErrorString());
     } else {
-      FWLOGDEBUG("task {} [{}] serialize rpc response message {} success:\n{}", name(), get_task_id(),
-                 get_response_type_url(), protobuf_mini_dumper_get_readable(get_response_body()));
+      FCTXLOGDEBUG(get_shared_context(), "Serialize rpc response message {} success:\n{}", get_response_type_url(),
+                   protobuf_mini_dumper_get_readable(get_response_body()));
     }
   }
 

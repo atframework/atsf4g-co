@@ -21,6 +21,7 @@
 #include <config/logic_config.h>
 
 #include <opentelemetry/trace/semantic_conventions.h>
+#include <rpc/rpc_context.h>
 #include <rpc/telemetry/semantic_conventions.h>
 
 #include <utility>
@@ -137,17 +138,17 @@ void session::set_player(std::shared_ptr<player_cache> u) {
 
 std::shared_ptr<player_cache> session::get_player() const { return player_.lock(); }
 
-int32_t session::send_msg_to_client(atframework::CSMsg &msg) {
+int32_t session::send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg) {
   if (0 == msg.head().server_sequence()) {
     std::shared_ptr<player_cache> user = get_player();
     if (user) {
-      return send_msg_to_client(msg, user->alloc_server_sequence());
+      return send_msg_to_client(ctx, msg, user->alloc_server_sequence());
     }
   }
-  return send_msg_to_client(msg, msg.head().server_sequence());
+  return send_msg_to_client(ctx, msg, msg.head().server_sequence());
 }
 
-int32_t session::send_msg_to_client(atframework::CSMsg &msg, uint64_t server_sequence) {
+int32_t session::send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg, uint64_t server_sequence) {
   if (!msg.has_head() || msg.head().timestamp() == 0) {
     msg.mutable_head()->set_timestamp(::util::time::time_utility::get_now());
   }
@@ -170,6 +171,8 @@ int32_t session::send_msg_to_client(atframework::CSMsg &msg, uint64_t server_seq
       "send msg to client:[{:#x}, {}] {} bytes.(session sequence: {}, client sequence: {}, server sequence: {})\n{}",
       id_.node_id, id_.session_id, msg_buf_len, msg.head().session_sequence(), msg.head().client_sequence(),
       msg.head().server_sequence(), protobuf_mini_dumper_get_readable(msg));
+
+  write_actor_log_head(ctx, msg, msg_buf_len, false);
 
   return send_msg_to_client(buf_start, msg_buf_len);
 }
@@ -291,7 +294,7 @@ int32_t session::send_kickoff(int32_t reason) {
   return cs_msg_dispatcher::me()->send_kickoff(get_key().node_id, get_key().session_id, reason);
 }
 
-void session::write_actor_log_head(const atframework::CSMsg &msg, size_t byte_size, bool is_input) {
+void session::write_actor_log_head(rpc::context &ctx, const atframework::CSMsg &msg, size_t byte_size, bool is_input) {
   if (!actor_log_writter_ && !actor_log_otel_) {
     return;
   }
@@ -340,17 +343,24 @@ void session::write_actor_log_head(const atframework::CSMsg &msg, size_t byte_si
         {"session.event", is_input ? "receive_hint" : "send_hint"},
         {"user.id", cached_user_id_},
         {"user.zone_id", cached_zone_id_},
-        {opentelemetry::trace::SemanticConventions::kRpcMethod, rpc_name},
-        {opentelemetry::trace::SemanticConventions::kMessageId, head.server_sequence()},
-        {opentelemetry::trace::SemanticConventions::kMessageType, rpc_name},
+        {opentelemetry::trace::SemanticConventions::kRpcMethod,
+         opentelemetry::nostd::string_view{rpc_name.data(), rpc_name.size()}},
+        {opentelemetry::trace::SemanticConventions::kMessageId, head.client_sequence()},
+        {opentelemetry::trace::SemanticConventions::kMessageType,
+         opentelemetry::nostd::string_view{type_url.data(), type_url.size()}},
         {opentelemetry::trace::SemanticConventions::kMessageUncompressedSize, byte_size},
         {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id}};
-    actor_log_otel_->Info(hint_text, opentelemetry::common::MakeAttributes(attributes));
+    if (ctx.get_trace_span()) {
+      actor_log_otel_->Info(hint_text, opentelemetry::common::MakeAttributes(attributes),
+                            ctx.get_trace_span()->GetContext());
+    } else {
+      actor_log_otel_->Info(hint_text, opentelemetry::common::MakeAttributes(attributes));
+    }
   }
 }
 
-void session::write_actor_log_body(const google::protobuf::Message &msg, const atframework::CSMsgHead &head,
-                                   bool is_input) {
+void session::write_actor_log_body(rpc::context &ctx, const google::protobuf::Message &msg,
+                                   const atframework::CSMsgHead &head, bool is_input) {
   if (!actor_log_writter_ && !actor_log_otel_) {
     return;
   }
@@ -389,13 +399,43 @@ void session::write_actor_log_body(const google::protobuf::Message &msg, const a
   if (actor_log_otel_) {
     std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue> attributes[] = {
         {"tconnd.node_id", get_key().node_id},
-        {"session.event", is_input ? "receive_message" : "send_message"},
+
         {"user.id", cached_user_id_},
         {"user.zone_id", cached_zone_id_},
-        {opentelemetry::trace::SemanticConventions::kRpcMethod, rpc_name},
-        {opentelemetry::trace::SemanticConventions::kMessageId, head.server_sequence()},
-        {opentelemetry::trace::SemanticConventions::kMessageType, rpc_name},
-        {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id}};
-    actor_log_otel_->Info(body_text, opentelemetry::common::MakeAttributes(attributes));
+        {opentelemetry::trace::SemanticConventions::kRpcMethod,
+         opentelemetry::nostd::string_view{rpc_name.data(), rpc_name.size()}},
+        {opentelemetry::trace::SemanticConventions::kMessageId, head.client_sequence()},
+        {opentelemetry::trace::SemanticConventions::kMessageType,
+         opentelemetry::nostd::string_view{type_url.data(), type_url.size()}},
+        {"message.result_code", head.error_code()},
+        {"message.business_time", head.timestamp()},
+        {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id},
+        {"session.event", is_input ? "receive_head" : "send_head"},
+    };
+    if (ctx.get_trace_span()) {
+      actor_log_otel_->Info(head_text, opentelemetry::common::MakeAttributes(attributes),
+                            ctx.get_trace_span()->GetContext());
+    } else {
+      actor_log_otel_->Info(head_text, opentelemetry::common::MakeAttributes(attributes));
+    }
+
+    attributes[std::extent<decltype(attributes)>::value - 1].second = is_input ? "receive_body" : "send_body";
+    opentelemetry::nostd::string_view body_view =
+        opentelemetry::nostd::string_view{body_text.c_str(), body_text.size()};
+    if (body_view.empty()) {
+      if (is_input) {
+        body_view = "[EMPTY REQUEST]";
+      } else if (head.error_code() < 0) {
+        body_view = "[ERROR RESPONSE]";
+      } else {
+        body_view = "[EMPTY RESPONSE]";
+      }
+    }
+    if (ctx.get_trace_span()) {
+      actor_log_otel_->Info(body_view, opentelemetry::common::MakeAttributes(attributes),
+                            ctx.get_trace_span()->GetContext());
+    } else {
+      actor_log_otel_->Info(body_view, opentelemetry::common::MakeAttributes(attributes));
+    }
   }
 }

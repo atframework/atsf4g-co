@@ -225,6 +225,9 @@ rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, router
     auto old_business_logout_time = login_blob_data.business_logout_time();
     login_blob_data.set_login_time(util::time::time_utility::get_sys_now());
     login_blob_data.set_business_login_time(util::time::time_utility::get_now());
+    if (login_blob_data.business_logout_time() >= login_blob_data.business_login_time()) {
+      login_blob_data.set_business_logout_time(login_blob_data.business_login_time() - 1);
+    }
 
     auto ret = RPC_AWAIT_CODE_RESULT(rpc::db::login::set(ctx, obj->get_open_id().c_str(), obj->get_zone_id(),
                                                          login_blob_data, obj->get_login_version()));

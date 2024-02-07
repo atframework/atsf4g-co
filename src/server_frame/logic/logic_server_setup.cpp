@@ -470,6 +470,8 @@ int logic_server_common_module::timeout() {
 }
 
 void logic_server_common_module::cleanup() {
+  task_manager::me()->kill_all();
+
   if (!service_index_handle_) {
     std::shared_ptr<atapp::etcd_module> etcd_mod = get_etcd_module();
     if (etcd_mod) {

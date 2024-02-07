@@ -522,6 +522,16 @@ SERVER_FRAME_API int task_manager::tick(time_t sec, int nsec) {
   return 0;
 }
 
+SERVER_FRAME_API void task_manager::kill_all() {
+  if (!native_mgr_) {
+    return;
+  }
+
+  while (native_mgr_->get_task_size() > 0) {
+    native_mgr_->reset();
+  }
+}
+
 SERVER_FRAME_API task_type_trait::task_type task_manager::get_task(task_type_trait::id_type task_id) {
   if (!native_mgr_) {
     return task_type_trait::task_type();

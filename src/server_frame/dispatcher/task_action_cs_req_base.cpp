@@ -240,7 +240,7 @@ SERVER_FRAME_API void task_action_cs_req_base::send_response() {
     (*iter)->mutable_head()->set_error_code(get_response_code());
 
     // send message using session
-    int32_t res = sess->send_msg_to_client(**iter);
+    int32_t res = sess->send_msg_to_client(get_shared_context(), **iter);
     if (res) {
       if (get_user_id() != 0) {
         FWLOGERROR("task {} [{}] send message to player_cache {}:{} failed, res: {}", name(), get_task_id(),
@@ -293,6 +293,6 @@ SERVER_FRAME_API void task_action_cs_req_base::write_actor_log_body(const google
                                                                     const atframework::CSMsgHead &head, bool is_input) {
   auto sess = get_session();
   if (sess) {
-    sess->write_actor_log_body(msg, head, is_input);
+    sess->write_actor_log_body(get_shared_context(), msg, head, is_input);
   }
 }
