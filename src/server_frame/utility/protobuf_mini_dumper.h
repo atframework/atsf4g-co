@@ -8,8 +8,10 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <google/protobuf/duration.pb.h>
 #include <google/protobuf/message.h>
 #include <google/protobuf/text_format.h>
+#include <google/protobuf/timestamp.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
@@ -20,6 +22,7 @@
 #include <gsl/select-gsl.h>
 
 #include <stdint.h>
+#include <chrono>
 #include <cstddef>
 #include <string>
 
@@ -223,5 +226,45 @@ UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_if(::google::protobuf::Repeated
     arr.Truncate(new_index);
   }
 
+  return ret;
+}
+
+/**
+ * @brief Prototbuf well known 时间点类型转系统时间
+ * @param tp 时间点
+ * @return 系统时间
+ */
+SERVER_FRAME_API std::chrono::system_clock::time_point protobuf_to_system_clock(const google::protobuf::Timestamp &tp);
+
+/**
+ * @brief 系统时间转Prototbuf well known 时间点类型
+ * @param tp 时间点
+ * @return Prototbuf well known 时间点类型
+ */
+SERVER_FRAME_API google::protobuf::Timestamp protobuf_from_system_clock(std::chrono::system_clock::time_point tp);
+
+/**
+ * @brief Prototbuf well known 时间周期类型转标准时间
+ * @param dur 时间周期
+ * @return 标准时间周期
+ */
+template <class DurationType = std::chrono::system_clock::duration>
+UTIL_SYMBOL_VISIBLE DurationType protobuf_to_chrono_duration(const google::protobuf::Duration &dur) {
+  return std::chrono::duration_cast<DurationType>(std::chrono::seconds{dur.seconds()}) +
+         std::chrono::duration_cast<DurationType>(std::chrono::nanoseconds{dur.nanos()});
+}
+
+/**
+ * @brief 标准时间转Prototbuf well known 时间周期类型
+ * @param dur 时间周期
+ * @return Prototbuf well known 时间周期类型
+ */
+template <class DurationType = std::chrono::system_clock::duration>
+UTIL_SYMBOL_VISIBLE google::protobuf::Timestamp protobuf_from_chrono_duration(DurationType dur) {
+  google::protobuf::Timestamp ret;
+  ret.set_seconds(static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(dur).count()));
+  ret.set_nanos(static_cast<int32_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(dur - std::chrono::seconds{ret.seconds()}).count() %
+      1000000000));
   return ret;
 }

@@ -140,3 +140,19 @@ SERVER_FRAME_API gsl::string_view protobuf_mini_dumper_get_enum_name(
   util::log::format_to_n(shared_buffer, sizeof(shared_buffer) - 1, "UNKNOWN({})", error_code);
   return shared_buffer;
 }
+
+SERVER_FRAME_API std::chrono::system_clock::time_point protobuf_to_system_clock(const google::protobuf::Timestamp &tp) {
+  std::chrono::system_clock::time_point ret = std::chrono::system_clock::from_time_t(tp.seconds());
+  ret += std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::nanoseconds{tp.nanos()});
+  return ret;
+}
+
+SERVER_FRAME_API google::protobuf::Timestamp protobuf_from_system_clock(std::chrono::system_clock::time_point tp) {
+  google::protobuf::Timestamp ret;
+  ret.set_seconds(std::chrono::system_clock::to_time_t(tp));
+  ret.set_nanos(static_cast<int32_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(tp - std::chrono::system_clock::from_time_t(ret.seconds()))
+          .count() %
+      1000000000));
+  return ret;
+}

@@ -27,6 +27,61 @@
     {{- end -}}
   {{- end -}}
 {{- end -}}
+{{- define "otelcol.config.otlp_agent.grpc.yaml" -}}
+  {{- $otelcol_current_config := deepCopy .shared_options | default (dict ) -}}
+  {{- if not (empty .private_options.grpc_endpoint) }}
+    {{- $otelcol_current_config := set $otelcol_current_config "endpoint" .private_options.grpc_endpoint -}}
+  {{- end }}
+  {{- if not (empty .private_options.grpc_timeout) }}
+    {{- $otelcol_current_config := set $otelcol_current_config "timeout" .private_options.grpc_timeout -}}
+  {{- end }}
+  {{- $otelcol_current_config := merge $otelcol_current_config (dict "tls" (dict "insecure" (.private_options.grpc_insecure | default "true"))) -}}
+  {{- if not (empty .private_options.grpc_ca_file) }}
+    {{- $otelcol_current_config := merge $otelcol_current_config (dict "tls" (dict "ca_file" .private_options.grpc_ca_file)) -}}
+  {{- end }}
+  {{- if not (empty .private_options.grpc_cert_file) }}
+    {{- $otelcol_current_config := merge $otelcol_current_config (dict "tls" (dict "cert_file" .private_options.grpc_cert_file)) -}}
+  {{- end }}
+  {{- if not (empty .private_options.grpc_key_file) }}
+    {{- $otelcol_current_config := merge $otelcol_current_config (dict "tls" (dict "key_file" .private_options.grpc_key_file)) -}}
+  {{- end }}
+  {{- toYaml $otelcol_current_config }}
+{{- end -}}
+{{- define "otelcol.config.otlp_agent.http.yaml" -}}
+  {{- $otelcol_current_config := deepCopy .shared_options | default (dict ) -}}
+  {{- if not (empty .private_options.http_endpoint) }}
+    {{- $otelcol_current_config := set $otelcol_current_config "endpoint" .private_options.http_endpoint -}}
+  {{- end }}
+  {{- if not (empty .private_options.http_timeout) }}
+    {{- $otelcol_current_config := set $otelcol_current_config "timeout" .private_options.http_timeout -}}
+  {{- end }}
+  {{- toYaml $otelcol_current_config }}
+{{- end -}}
+{{- define "otelcol.config.prometheus_agent.pull.yaml" -}}
+  {{- $otelcol_current_config := deepCopy .shared_options | default (dict ) -}}
+  {{- if not (empty .private_options.url) }}
+    {{- $otelcol_current_config := set $otelcol_current_config "endpoint" .private_options.url -}}
+  {{- end }}
+  {{- if not (empty .private_options.tls) }}
+    {{- $otelcol_current_config := merge $otelcol_current_config (dict "tls" .private_options.tls) -}}
+  {{- end }}
+  {{- if not (empty .private_options.namespace) }}
+    {{- $otelcol_current_config := set $otelcol_current_config "namespace" .private_options.namespace -}}
+  {{- end }}
+  {{- if not (empty .private_options.resource_to_telemetry_conversion) }}
+    {{- $otelcol_current_config := merge $otelcol_current_config (dict "resource_to_telemetry_conversion" .private_options.resource_to_telemetry_conversion) -}}
+  {{- end }}
+  {{- toYaml $otelcol_current_config }}
+{{- end -}}
+{{- define "otelcol.config.prometheus_agent.push.yaml" -}}
+  {{- $otelcol_current_config := deepCopy .shared_options | default (dict ) -}}
+  {{- if empty .private_options.port }}
+    {{- $otelcol_current_config := set $otelcol_current_config "endpoint" .private_options.host -}}
+  {{- else }}
+    {{- $otelcol_current_config := set $otelcol_current_config "endpoint" (printf "%v:%v" .private_options.host .private_options.port) -}}
+  {{- end }}
+  {{- toYaml $otelcol_current_config }}
+{{- end -}}
 
 extensions:
   health_check:
@@ -103,21 +158,14 @@ exporters:
         {{- $otelcol_traces_exporters = append $otelcol_traces_exporters "otlp/trace" }}
       {{- end }}
   otlp/trace:
-    endpoint: "{{ $otelcol_agent_data_source.trace.otlp.grpc_endpoint }}"
-    tls:
-      insecure: {{ $otelcol_agent_data_source.trace.otlp.grpc_insecure | default "true" }}
-      {{- if not (empty $otelcol_agent_data_source.trace.otlp.grpc_ca_file) }}
-      ca_file: "{{ $otelcol_agent_data_source.trace.otlp.grpc_ca_file }}"
-      {{- end }}
-    timeout: "{{ $otelcol_agent_data_source.trace.otlp.grpc_timeout | default "10s" }}"
+      {{- include "otelcol.config.otlp_agent.grpc.yaml" (dict "shared_options" (dig "shared_options" "otlp" "grpc" (dict) .Values.telemetry.agent ) "private_options" $otelcol_agent_data_source.trace.otlp) | trim | nindent 4 }}
     {{- end }}
     {{- if not (empty $otelcol_agent_data_source.trace.otlp.http_endpoint) -}}
       {{- if empty .Values.telemetry.agent.trace_exporters.trace_blackhole }}
         {{- $otelcol_traces_exporters = append $otelcol_traces_exporters "otlphttp/trace" }}
       {{- end }}
   otlphttp/trace:
-    endpoint: "{{ $otelcol_agent_data_source.trace.otlp.http_endpoint }}"
-    timeout: "{{ $otelcol_agent_data_source.trace.otlp.http_timeout | default "10s" }}"
+      {{- include "otelcol.config.otlp_agent.http.yaml" (dict "shared_options" (dig "shared_options" "otlp" "http" (dict) .Values.telemetry.agent ) "private_options" $otelcol_agent_data_source.trace.otlp) | trim | nindent 4 }}
     {{- end }}
   {{- end }}
 {{- end }}
@@ -127,71 +175,28 @@ exporters:
       {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "otlp/metrics" }}
       {{- $otelcol_spanmetrics_exporters = append $otelcol_spanmetrics_exporters "otlp/spanmetrics" }}
   otlp/metrics:
-    endpoint: "{{ $otelcol_agent_data_source.metrics.otlp.grpc_endpoint }}"
-    tls:
-      insecure: {{ $otelcol_agent_data_source.metrics.otlp.grpc_insecure | default "true" }}
-      {{- if not (empty $otelcol_agent_data_source.metrics.otlp.grpc_ca_file) }}
-      ca_file: "{{ $otelcol_agent_data_source.metrics.otlp.grpc_ca_file }}"
-      {{- end }}
-    timeout: "{{ $otelcol_agent_data_source.metrics.otlp.grpc_timeout | default "10s" }}"
+      {{- include "otelcol.config.otlp_agent.grpc.yaml" (dict "shared_options" (dig "shared_options" "otlp" "grpc" (dict) .Values.telemetry.agent ) "private_options" $otelcol_agent_data_source.metrics.otlp) | trim | nindent 4 }}
   otlp/spanmetrics:
-    endpoint: "{{ $otelcol_agent_data_source.metrics.otlp.grpc_endpoint }}"
-    tls:
-      insecure: {{ $otelcol_agent_data_source.metrics.otlp.grpc_insecure | default "true" }}
-      {{- if not (empty $otelcol_agent_data_source.metrics.otlp.grpc_ca_file) }}
-      ca_file: "{{ $otelcol_agent_data_source.metrics.otlp.grpc_ca_file }}"
-      {{- end }}
-    timeout: "{{ $otelcol_agent_data_source.metrics.otlp.grpc_timeout | default "10s" }}"
+      {{- include "otelcol.config.otlp_agent.grpc.yaml" (dict "shared_options" (dig "shared_options" "otlp" "grpc" (dict) .Values.telemetry.agent ) "private_options" $otelcol_agent_data_source.metrics.otlp) | trim | nindent 4 }}
     {{- end }}
     {{- if not (empty $otelcol_agent_data_source.metrics.otlp.http_endpoint) -}}
       {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "otlphttp/metrics" }}
       {{- $otelcol_spanmetrics_exporters = append $otelcol_spanmetrics_exporters "otlphttp/spanmetrics" }}
   otlphttp/metrics:
-    endpoint: "{{ $otelcol_agent_data_source.metrics.otlp.http_endpoint }}"
-    timeout: "{{ $otelcol_agent_data_source.metrics.otlp.http_timeout | default "10s" }}"
+      {{- include "otelcol.config.otlp_agent.http.yaml" (dict "shared_options" (dig "shared_options" "otlp" "http" (dict) .Values.telemetry.agent ) "private_options" $otelcol_agent_data_source.metrics.otlp) | trim | nindent 4 }}
   otlphttp/spanmetrics:
-    endpoint: "{{ $otelcol_agent_data_source.metrics.otlp.http_endpoint }}"
-    timeout: "{{ $otelcol_agent_data_source.metrics.otlp.http_timeout | default "10s" }}"
+      {{- include "otelcol.config.otlp_agent.http.yaml" (dict "shared_options" (dig "shared_options" "otlp" "http" (dict) .Values.telemetry.agent ) "private_options" $otelcol_agent_data_source.metrics.otlp) | trim | nindent 4 }}
     {{- end }}
   {{- end }}
   {{- if and (not (empty $otelcol_agent_data_source.metrics.prometheus.pull)) (not (empty $otelcol_agent_data_source.metrics.prometheus.pull.url)) }}
     {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "prometheus" }}
   prometheus:
-    endpoint: "{{ $otelcol_agent_data_source.metrics.prometheus.pull.url }}"
-    {{- if not (empty $otelcol_agent_data_source.metrics.prometheus.pull.tls) }}
-    tls:
-      {{- if not (empty $otelcol_agent_data_source.metrics.prometheus.pull.tls.ca_file) }}
-      ca_file: "{{ $otelcol_agent_data_source.metrics.prometheus.pull.tls.ca_file }}"
-      {{- end }}
-      {{- if not (empty $otelcol_agent_data_source.metrics.prometheus.pull.tls.cert_file) }}
-      cert_file: "{{ $otelcol_agent_data_source.metrics.prometheus.pull.tls.cert_file }}"
-      {{- end }}
-      {{- if not (empty $otelcol_agent_data_source.metrics.prometheus.pull.tls.key_file) }}
-      key_file: "{{ $otelcol_agent_data_source.metrics.prometheus.pull.tls.key_file }}"
-      {{- end }}
-    {{- end }}
-    {{- if not (empty $otelcol_agent_data_source.metrics.prometheus.pull.namespace) }}
-    namespace: "{{ $otelcol_agent_data_source.metrics.prometheus.pull.namespace }}"
-    {{- end }}
-    {{- if not (empty $otelcol_agent_data_source.metrics.prometheus.pull.resource_to_telemetry_conversion) }}
-    resource_to_telemetry_conversion:
-      {{- if not (empty $otelcol_agent_data_source.metrics.prometheus.pull.resource_to_telemetry_conversion.enabled) }}
-      enabled: "{{ $otelcol_agent_data_source.metrics.prometheus.pull.resource_to_telemetry_conversion.enabled }}"
-      {{- end }}
-    {{- end }}
+    {{- include "otelcol.config.prometheus_agent.pull.yaml" (dict "shared_options" (dig "shared_options" "prometheus" "pull" (dict) .Values.telemetry.agent ) "private_options" $otelcol_agent_data_source.metrics.prometheus.pull) | trim | nindent 4 }}
   {{- end }}
   {{- if and (not (empty $otelcol_agent_data_source.metrics.prometheus.push)) (not (empty $otelcol_agent_data_source.metrics.prometheus.push.host)) }}
     {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "prometheusremotewrite" }}
   prometheusremotewrite:
-    {{- if empty $otelcol_agent_data_source.metrics.prometheus.push.host }}
-    endpoint: "{{ $otelcol_agent_data_source.metrics.prometheus.push.host }}"
-    {{- else }}
-    endpoint: "{{ $otelcol_agent_data_source.metrics.prometheus.push.host }}:{{ $otelcol_agent_data_source.metrics.prometheus.push.port | default "" }}"
-    {{- end }}
-    tls:
-      insecure: true
-    target_info:
-      enabled: true
+    {{- include "otelcol.config.prometheus_agent.push.yaml" (dict "shared_options" (dig "shared_options" "prometheus" "push" (dict) .Values.telemetry.agent ) "private_options" $otelcol_agent_data_source.metrics.prometheus.push) | trim | nindent 4 }}
   {{- end }}
 {{- end }}
 {{- if not (empty $otelcol_agent_data_source.logs) }}
@@ -199,19 +204,12 @@ exporters:
     {{- if not (empty $otelcol_agent_data_source.logs.otlp.grpc_endpoint) -}}
       {{- $otelcol_logs_exporters = append $otelcol_logs_exporters "otlp/logs" }}
   otlp/logs:
-    endpoint: "{{ $otelcol_agent_data_source.logs.otlp.grpc_endpoint }}"
-    tls:
-      insecure: {{ $otelcol_agent_data_source.logs.otlp.grpc_insecure | default "true" }}
-      {{- if not (empty $otelcol_agent_data_source.logs.otlp.grpc_ca_file) }}
-      ca_file: "{{ $otelcol_agent_data_source.logs.otlp.grpc_ca_file }}"
-      {{- end }}
-    timeout: "{{ $otelcol_agent_data_source.logs.otlp.grpc_timeout | default "10s" }}"
+      {{- include "otelcol.config.otlp_agent.grpc.yaml" (dict "shared_options" (dig "shared_options" "otlp" "grpc" (dict) .Values.telemetry.agent ) "private_options" $otelcol_agent_data_source.logs.otlp) | trim | nindent 4 }}
     {{- end }}
     {{- if not (empty $otelcol_agent_data_source.logs.otlp.http_endpoint) -}}
       {{- $otelcol_logs_exporters = append $otelcol_logs_exporters "otlphttp/logs" }}
   otlphttp/logs:
-    endpoint: "{{ $otelcol_agent_data_source.logs.otlp.http_endpoint }}"
-    timeout: "{{ $otelcol_agent_data_source.logs.otlp.http_timeout | default "10s" }}"
+      {{- include "otelcol.config.otlp_agent.http.yaml" (dict "shared_options" (dig "shared_options" "otlp" "http" (dict) .Values.telemetry.agent ) "private_options" $otelcol_agent_data_source.logs.otlp) | trim | nindent 4 }}
     {{- end }}
   {{- end }}
 {{- end }}
@@ -220,19 +218,12 @@ exporters:
     {{- if not (empty $otelcol_agent_cs_actor_data_source.logs.otlp.grpc_endpoint) -}}
       {{- $otelcol_logs_cs_actor_exporters = append $otelcol_logs_cs_actor_exporters "otlp/logs_cs_actor" }}
   otlp/logs_cs_actor:
-    endpoint: "{{ $otelcol_agent_cs_actor_data_source.logs.otlp.grpc_endpoint }}"
-    tls:
-      insecure: {{ $otelcol_agent_cs_actor_data_source.logs.otlp.grpc_insecure | default "true" }}
-      {{- if not (empty $otelcol_agent_cs_actor_data_source.logs.otlp.grpc_ca_file) }}
-      ca_file: "{{ $otelcol_agent_cs_actor_data_source.logs.otlp.grpc_ca_file }}"
-      {{- end }}
-    timeout: "{{ $otelcol_agent_cs_actor_data_source.logs.otlp.grpc_timeout | default "10s" }}"
+      {{- include "otelcol.config.otlp_agent.grpc.yaml" (dict "shared_options" (dig "shared_options" "otlp" "grpc" (dict) .Values.telemetry.agent ) "private_options" $otelcol_agent_cs_actor_data_source.logs.otlp) | trim | nindent 4 }}
     {{- end }}
     {{- if not (empty $otelcol_agent_cs_actor_data_source.logs.otlp.http_endpoint) -}}
       {{- $otelcol_logs_cs_actor_exporters = append $otelcol_logs_cs_actor_exporters "otlphttp/logs_cs_actor" }}
   otlphttp/logs_cs_actor:
-    endpoint: "{{ $otelcol_agent_cs_actor_data_source.logs.otlp.http_endpoint }}"
-    timeout: "{{ $otelcol_agent_cs_actor_data_source.logs.otlp.http_timeout | default "10s" }}"
+      {{- include "otelcol.config.otlp_agent.http.yaml" (dict "shared_options" (dig "shared_options" "otlp" "http" (dict) .Values.telemetry.agent ) "private_options" $otelcol_agent_cs_actor_data_source.logs.otlp) | trim | nindent 4 }}
     {{- end }}
   {{- end }}
 {{- end }}
@@ -240,19 +231,19 @@ exporters:
 processors:
   batch/traces:
     send_batch_size: 512
-    send_batch_max_size: 8192
+    send_batch_max_size: 32768
     timeout: 10s
   batch/spanmetrics:
     send_batch_size: 512
-    send_batch_max_size: 8192
+    send_batch_max_size: 16384
     timeout: 10s
   batch/metrics:
     send_batch_size: 512
-    send_batch_max_size: 8192
+    send_batch_max_size: 16384
     timeout: 10s
   batch/logs:
     send_batch_size: 512
-    send_batch_max_size: 32768
+    send_batch_max_size: 65536
     timeout: 10s
   batch/logs_cs_actor:
     send_batch_size: 16
@@ -361,4 +352,18 @@ service:
       exporters: [{{ $otelcol_logs_exporters | join ", "}}]
       {{- $otelcol_logs_exporters = append $otelcol_logs_exporters "file/rotation_logs" }}
       # exporters: [{{ $otelcol_logs_exporters | join ", "}}]
+{{- end }}
+{{- if not (empty $otelcol_logs_cs_actor_exporters) }}
+    logs/cs_actor:
+      receivers: [otlp/cs_actor]
+      processors: [batch/logs_cs_actor]
+  {{- if $otelcol_agent_cs_actor_enable_file }}
+      # exporters: [{{ $otelcol_logs_cs_actor_exporters | join ", "}}]
+      {{- $otelcol_logs_cs_actor_exporters = append $otelcol_logs_cs_actor_exporters "file/rotation_logs_cs_actor" }}
+      exporters: [{{ $otelcol_logs_cs_actor_exporters | join ", "}}]
+  {{- else }}
+      exporters: [{{ $otelcol_logs_cs_actor_exporters | join ", "}}]
+      {{- $otelcol_logs_cs_actor_exporters = append $otelcol_logs_cs_actor_exporters "file/rotation_logs_cs_actor" }}
+      # exporters: [{{ $otelcol_logs_cs_actor_exporters | join ", "}}]
+  {{- end }}
 {{- end }}

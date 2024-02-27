@@ -1,4 +1,4 @@
-set(PROJECT_THIRD_PARTY_OTELCOL_VERSION "0.89.0")
+set(PROJECT_THIRD_PARTY_OTELCOL_VERSION "0.95.0")
 
 set(PROJECT_THIRD_PARTY_OTELCOL_LINUX_URL
     "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${PROJECT_THIRD_PARTY_OTELCOL_VERSION}/otelcol-contrib_${PROJECT_THIRD_PARTY_OTELCOL_VERSION}_linux_amd64.tar.gz"
