@@ -35,6 +35,7 @@ pb_msg_class_name = loader.get_cpp_class_name()
 
 // clang-format off
 #include "config/compiler/protobuf_prefix.h"
+// clang-format on
 
 #include "google/protobuf/arena.h"
 #include "google/protobuf/arenastring.h"
@@ -46,6 +47,7 @@ pb_msg_class_name = loader.get_cpp_class_name()
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/stubs/common.h"
 
+// clang-format off
 #include "config/compiler/protobuf_suffix.h"
 // clang-format on
 
@@ -115,14 +117,20 @@ static std::pair<const TCH *, size_t> trim(const TCH *str_begin, size_t sz) {
 }
 }
 
-EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::${pb_msg_class_name}() {
+EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::${pb_msg_class_name}()
+  : all_loaded_(false), enable_multithread_lock_(true) {
 }
 
 EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::~${pb_msg_class_name}(){
 }
 
-EXCEL_CONFIG_LOADER_API int ${pb_msg_class_name}::on_inited() {
-  ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh(load_file_lock_);
+EXCEL_CONFIG_LOADER_API int ${pb_msg_class_name}::on_inited(bool enable_multithread_lock) {
+  enable_multithread_lock_ = enable_multithread_lock;
+
+  ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh;
+  if (enable_multithread_lock_) {
+    wlh = ::util::lock::write_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+  }
 
   file_status_.clear();
   datasource_.clear();
@@ -131,7 +139,14 @@ EXCEL_CONFIG_LOADER_API int ${pb_msg_class_name}::on_inited() {
 
 EXCEL_CONFIG_LOADER_API int ${pb_msg_class_name}::load_all() {
   int ret = 0;
-  ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh(load_file_lock_);
+  if (all_loaded_) {
+    return ret;
+  }
+
+  ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh;
+  if (enable_multithread_lock_) {
+    wlh = ::util::lock::write_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+  }
   for (std::unordered_map<std::string, bool>::iterator iter = file_status_.begin(); iter != file_status_.end(); ++ iter) {
     if (!iter->second) {
       int res = load_file(iter->first);
@@ -145,21 +160,38 @@ EXCEL_CONFIG_LOADER_API int ${pb_msg_class_name}::load_all() {
     }
   }
 
+  all_loaded_ = true;
   return ret;
 }
 
 EXCEL_CONFIG_LOADER_API void ${pb_msg_class_name}::clear() {
-  ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh(load_file_lock_);
+  ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh;
+  if (enable_multithread_lock_) {
+    wlh = ::util::lock::write_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+  }
+
 % for code_index in loader.code.indexes:
   ${code_index.name}_data_.clear();
 % endfor
   file_status_.clear();
   datasource_.clear();
   reload_file_lists();
+  all_data_.clear();
 }
 
 EXCEL_CONFIG_LOADER_API const std::list<org::xresloader::pb::xresloader_data_source>& ${pb_msg_class_name}::get_data_source() const {
   return datasource_;
+}
+
+EXCEL_CONFIG_LOADER_API const std::string& ${pb_msg_class_name}::get_data_hash_code_verison() const noexcept {
+  return hash_code_verison_;
+}
+
+EXCEL_CONFIG_LOADER_API const std::vector<${pb_msg_class_name}::item_ptr_type>& ${pb_msg_class_name}::get_all_data() const noexcept {
+  if (!all_loaded_) {
+    const_cast<${pb_msg_class_name}*>(this)->load_all();
+  }
+  return all_data_;
 }
 
 int ${pb_msg_class_name}::load_file(const std::string& file_path) {
@@ -274,6 +306,7 @@ int ${pb_msg_class_name}::load_list(const char* file_list_path) {
 }
 
 int ${pb_msg_class_name}::reload_file_lists() {
+  all_loaded_ = false;
 % if loader.code.file_list:
   return load_list("${loader.code.file_list}");
 % else:
@@ -287,6 +320,8 @@ void ${pb_msg_class_name}::merge_data(item_ptr_type item) {
     EXCEL_CONFIG_MANAGER_LOGERROR("[EXCEL] merge_data(nullptr) is not allowed for %s", "${pb_msg_class_name}");
     return;
   }
+
+  all_data_.push_back(item);
 
 % for code_index in loader.code.indexes:
 // index: ${code_index.name}
@@ -323,7 +358,7 @@ void ${pb_msg_class_name}::merge_data(item_ptr_type item) {
 %   else:
     std::tuple<${code_index.get_key_type_list()}> key = std::make_tuple(${code_index.get_key_value_list("item->")});
     if (${code_index.name}_data_.end() != ${code_index.name}_data_.find(key)) {
-      EXCEL_CONFIG_MANAGER_LOGERROR("[EXCEL] merge_data() with key=<${code_index.get_key_fmt_list()}> for %s is already exists, we will cover it with the newer value", 
+      EXCEL_CONFIG_MANAGER_LOGERROR("[EXCEL] merge_data() with key=<${code_index.get_key_fmt_list()}> for %s is already exists, we will cover it with the newer value",
         ${code_index.get_key_fmt_value_list("item->")}, "${pb_msg_class_name}");
     }
     ${code_index.name}_data_[key] = item;
@@ -338,17 +373,25 @@ void ${pb_msg_class_name}::merge_data(item_ptr_type item) {
 // ------------------- index: ${code_index.name} APIs -------------------
 % if code_index.is_list():
 EXCEL_CONFIG_LOADER_API const ${pb_msg_class_name}::${code_index.name}_value_type* ${pb_msg_class_name}::get_list_by_${code_index.name}(${code_index.get_key_decl()}) {
-  ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh(load_file_lock_);
+  ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh;
+  if (enable_multithread_lock_) {
+    rlh = ::util::lock::read_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+  }
+
   return _get_list_by_${code_index.name}(${code_index.get_key_params()});
 }
 
 EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::item_ptr_type ${pb_msg_class_name}::get_by_${code_index.name}(${code_index.get_key_decl()}, size_t index) {
-  ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh(load_file_lock_);
+  ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh;
+  if (enable_multithread_lock_) {
+    rlh = ::util::lock::read_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+  }
+
   const ${pb_msg_class_name}::${code_index.name}_value_type* list_item = _get_list_by_${code_index.name}(${code_index.get_key_params()});
   if (nullptr == list_item) {
 %   if not code_index.allow_not_found:
     EXCEL_CONFIG_MANAGER_LOGERROR("[EXCEL] load index %s with key=<${code_index.get_key_fmt_list()}>, index=%llu for %s failed, list not found",
-      "${code_index.name}", ${code_index.get_key_params_fmt_value_list()}, 
+      "${code_index.name}", ${code_index.get_key_params_fmt_value_list()},
       static_cast<unsigned long long>(index), "${pb_msg_class_name}"
     );
     if (config_manager::me()->get_on_not_found()) {
@@ -376,7 +419,7 @@ EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::item_ptr_type ${pb_msg_class_name}
   if (list_item->size() <= index) {
 %   if not code_index.allow_not_found:
     EXCEL_CONFIG_MANAGER_LOGERROR("[EXCEL] load index %s with key=<${code_index.get_key_fmt_list()}>, index=%llu for %s failed, index entend %llu",
-      "${code_index.name}", ${code_index.get_key_params_fmt_value_list()}, 
+      "${code_index.name}", ${code_index.get_key_params_fmt_value_list()},
       static_cast<unsigned long long>(index), "${pb_msg_class_name}", static_cast<unsigned long long>(list_item->size())
     );
     if (config_manager::me()->get_on_not_found()) {
@@ -527,7 +570,11 @@ EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::${code_index.name}_value_type ${pb
     return ${code_index.name}_data_[idx];
   }
 % else:
-  ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh(load_file_lock_);
+  ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh;
+  if (enable_multithread_lock_) {
+    rlh = ::util::lock::read_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+  }
+
   ${code_index.name}_container_type::iterator iter = ${code_index.name}_data_.find(std::make_tuple(${code_index.get_key_params()}));
   if (iter != ${code_index.name}_data_.end()) {
     return iter->second;
@@ -616,6 +663,9 @@ EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::${code_index.name}_value_type ${pb
 % endif
 
 EXCEL_CONFIG_LOADER_API const ${pb_msg_class_name}::${code_index.name}_container_type& ${pb_msg_class_name}::get_all_of_${code_index.name}() const {
+  if (!all_loaded_) {
+    const_cast<${pb_msg_class_name}*>(this)->load_all();
+  }
   return ${code_index.name}_data_;
 }
 % endfor

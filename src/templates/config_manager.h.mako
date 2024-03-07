@@ -12,6 +12,7 @@ import time
 #include <cstddef>
 #include <cstdio>
 #include <functional>
+#include <iostream>
 #include <list>
 #include <string>
 #include <memory>
@@ -23,12 +24,14 @@ import time
 
 // clang-format off
 #include "config/compiler/protobuf_prefix.h"
+// clang-format on
 
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/message.h"
 
 #include "protocol/config/pb_header_v3.pb.h"
 
+// clang-format off
 #include "config/compiler/protobuf_suffix.h"
 // clang-format on
 
@@ -118,7 +121,7 @@ public:
   static EXCEL_CONFIG_LOADER_API std::shared_ptr<config_manager> me();
   static inline std::shared_ptr<config_manager> instance() { return me(); };
 
-  EXCEL_CONFIG_LOADER_API int init();
+  EXCEL_CONFIG_LOADER_API int init(bool enable_multithread_lock);
 
   EXCEL_CONFIG_LOADER_API int init_new_group();
 
@@ -171,7 +174,7 @@ public:
   EXCEL_CONFIG_LOADER_API void set_on_not_found(on_not_found_func_t func);
   EXCEL_CONFIG_LOADER_API const on_not_found_func_t& get_on_not_found() const;
 
-  template <class INNER_MSG_TYPE, 
+  template <class INNER_MSG_TYPE,
     typename std::enable_if<
      std::is_base_of<::google::protobuf::Message, INNER_MSG_TYPE>::value,
     int>::type = 0>
@@ -183,7 +186,7 @@ public:
     return on_filter_(outer_msg, INNER_MSG_TYPE::descriptor(), file_path);
   }
 
-  template <class INNER_MSG_TYPE, 
+  template <class INNER_MSG_TYPE,
     typename std::enable_if<
      !std::is_base_of<::google::protobuf::Message, INNER_MSG_TYPE>::value,
     int>::type = 0>
@@ -210,6 +213,8 @@ public:
     const char *fmt, ...);
 #endif
 
+  EXCEL_CONFIG_LOADER_API static bool dump_table(std::ostream& out, config_group_ptr_t group, const std::string& table_name);
+
   EXCEL_CONFIG_LOADER_API void register_event_on_reset(void*, std::function<void()> fn);
   EXCEL_CONFIG_LOADER_API void unregister_event_on_reset(void *);
 
@@ -222,6 +227,7 @@ private:
   static bool is_destroyed_;
   util::lock::atomic_int_type<int64_t> reload_version_;
   bool override_same_version_;
+  bool enable_multithread_lock_;
   size_t max_group_number_;
   on_load_func_t on_group_created_;
   on_load_func_t on_group_reload_all_;

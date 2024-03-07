@@ -132,7 +132,7 @@ SERVER_FRAME_CONFIG_API int excel_config_wrapper_reload_all(bool is_init) {
 
   if (logic_config::me()->get_logic().excel().enable()) {
     if (!details::g_excel_config_manager_inited) {
-      int res = ::excel::config_manager::me()->init();
+      int res = ::excel::config_manager::me()->init(false);
       if (res < 0) {
         FWLOGERROR("excel::config_manager init failed, res: {}", res);
         return res;

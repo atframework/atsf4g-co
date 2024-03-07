@@ -54,13 +54,17 @@ class ${loader.get_cpp_class_name()} {
   EXCEL_CONFIG_LOADER_API ${loader.get_cpp_class_name()}();
   EXCEL_CONFIG_LOADER_API ~${loader.get_cpp_class_name()}();
 
-  EXCEL_CONFIG_LOADER_API int on_inited();
+  EXCEL_CONFIG_LOADER_API int on_inited(bool enable_multithread_lock);
 
   EXCEL_CONFIG_LOADER_API int load_all();
 
   EXCEL_CONFIG_LOADER_API void clear();
 
   EXCEL_CONFIG_LOADER_API const std::list<org::xresloader::pb::xresloader_data_source>& get_data_source() const;
+
+  EXCEL_CONFIG_LOADER_API const std::string& get_data_hash_code_verison() const noexcept;
+
+  EXCEL_CONFIG_LOADER_API const std::vector<item_ptr_type>& get_all_data() const noexcept;
 
  private:
   int load_file(const std::string& file_path);
@@ -72,6 +76,11 @@ class ${loader.get_cpp_class_name()} {
   ::util::lock::spin_rw_lock           load_file_lock_;
   std::unordered_map<std::string, bool> file_status_; // true: already loaded
   std::list<org::xresloader::pb::xresloader_data_source> datasource_;
+
+  bool all_loaded_;
+  bool enable_multithread_lock_;
+  std::string hash_code_verison_;
+  std::vector<item_ptr_type> all_data_;
 
 % for code_index in loader.code.indexes:
   // ------------------------- index: ${code_index.name} -------------------------
