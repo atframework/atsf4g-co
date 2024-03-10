@@ -279,10 +279,9 @@ void session::create_actor_log_writter() {
         {"user.id", cached_user_id_},
         {"user.zone_id", cached_zone_id_},
         {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id}};
-    actor_log_otel_->Info(
-        util::log::format("============ user: {}:{}, session: {:#x}:{}, client: {}:{} created ============",
-                          cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id),
-        opentelemetry::common::MakeAttributes(attributes));
+    actor_log_otel_->Info(util::log::format("============ user: {}:{}, session: {:#x}:{} created ============",
+                                            cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id),
+                          opentelemetry::common::MakeAttributes(attributes));
   }
 }
 
