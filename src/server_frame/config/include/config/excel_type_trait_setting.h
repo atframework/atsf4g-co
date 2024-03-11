@@ -10,11 +10,6 @@
 
 namespace excel {
 
-#ifndef EXCEL_CONFIG_LOADER_TRAITS
-#  define EXCEL_CONFIG_LOADER_TRAITS
-using excel_config_type_traits = ::excel::traits::config_traits<::excel::traits::type_guard>;
-#endif
-
 namespace traits {
 template <>
 struct EXCEL_CONFIG_SYMBOL_VISIBLE config_traits<type_guard> : public type_guard {
@@ -31,5 +26,12 @@ struct EXCEL_CONFIG_SYMBOL_VISIBLE config_traits<type_guard> : public type_guard
     return util::memory::const_pointer_cast<Y>(std::forward<Args>(args)...);
   }
 };
+
 }  // namespace traits
+
+#ifndef EXCEL_CONFIG_LOADER_TRAITS
+#  define EXCEL_CONFIG_LOADER_TRAITS
+using excel_config_type_traits = ::excel::traits::config_traits<::excel::traits::type_guard>;
+#endif
+
 }  // namespace excel
