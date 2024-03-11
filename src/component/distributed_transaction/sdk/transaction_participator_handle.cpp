@@ -23,7 +23,7 @@ namespace atframework {
 namespace distributed_system {
 
 DISTRIBUTED_TRANSACTION_SDK_API transaction_participator_handle::transaction_participator_handle(
-    const std::shared_ptr<vtable_type>& vtable, gsl::string_view participator_key)
+    const util::memory::strong_rc_ptr<vtable_type>& vtable, gsl::string_view participator_key)
     : private_data_{nullptr}, on_destroy_{nullptr}, vtable_{vtable} {
   participator_key_.assign(participator_key.data(), participator_key.size());
 }
@@ -41,7 +41,7 @@ DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::load(const
   finished_transactions_.clear();
 
   for (auto& transaction : storage.running_transaction()) {
-    auto transaction_ptr = std::make_shared<storage_type>();
+    auto transaction_ptr = util::memory::make_strong_rc<storage_type>();
     if (!transaction_ptr) {
       FWLOGERROR("participator {} malloc transaction storage failed", get_participator_key());
       continue;
@@ -58,7 +58,7 @@ DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::load(const
   }
 
   for (auto& transaction : storage.finished_transaction()) {
-    auto transaction_ptr = std::make_shared<storage_type>();
+    auto transaction_ptr = util::memory::make_strong_rc<storage_type>();
     if (!transaction_ptr) {
       FWLOGERROR("participator {} malloc transaction storage failed", get_participator_key());
       continue;
@@ -330,7 +330,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type::value_type transaction_pa
         is_preempted = old_holder->second->metadata().transaction_uuid() < metadata.transaction_uuid();
       }
       if (is_preempted) {
-        preemption_transaction.push_back(std::const_pointer_cast<const storage_type>(old_holder->second));
+        preemption_transaction.push_back(util::memory::const_pointer_cast<const storage_type>(old_holder->second));
       }
     } while (false);
   }
@@ -500,7 +500,7 @@ rpc::result_code_type transaction_participator_handle::add_running_transcation(r
   bool trigger_event = false;
   auto& transaction_ptr = running_transactions_[storage.metadata().transaction_uuid()];
   if (!transaction_ptr) {
-    transaction_ptr = std::make_shared<storage_type>(std::move(storage));
+    transaction_ptr = util::memory::make_strong_rc<storage_type>(std::move(storage));
     trigger_event = true;
   } else {
     unlock(transaction_ptr);

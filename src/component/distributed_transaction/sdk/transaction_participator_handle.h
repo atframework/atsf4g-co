@@ -24,6 +24,7 @@
 
 #include <rpc/rpc_common_types.h>
 
+#include <memory/rc_ptr.h>
 #include <functional>
 #include <list>
 #include <memory>
@@ -40,14 +41,15 @@ namespace distributed_system {
 
 class task_action_participator_resolve_transaction;
 
-class transaction_participator_handle : public std::enable_shared_from_this<transaction_participator_handle> {
+class transaction_participator_handle
+    : public util::memory::enable_shared_rc_from_this<transaction_participator_handle> {
  public:
   using storage_type = atframework::distributed_system::transaction_participator_storage;
   using metadata_type = atframework::distributed_system::transaction_metadata;
   using configure_type = atframework::distributed_system::transaction_configure;
   using snapshot_type = atframework::distributed_system::transaction_participator_snapshot;
-  using storage_ptr_type = std::shared_ptr<storage_type>;
-  using storage_const_ptr_type = std::shared_ptr<const storage_type>;
+  using storage_ptr_type = util::memory::strong_rc_ptr<storage_type>;
+  using storage_const_ptr_type = util::memory::strong_rc_ptr<const storage_type>;
 
   struct UTIL_SYMBOL_VISIBLE vtable_type {
     // 事务执行(Do)回调
@@ -89,8 +91,8 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
   transaction_participator_handle& operator=(transaction_participator_handle&&) = delete;
 
  public:
-  DISTRIBUTED_TRANSACTION_SDK_API transaction_participator_handle(const std::shared_ptr<vtable_type>& vtable,
-                                                                  gsl::string_view participator_key);
+  DISTRIBUTED_TRANSACTION_SDK_API transaction_participator_handle(
+      const util::memory::strong_rc_ptr<vtable_type>& vtable, gsl::string_view participator_key);
   DISTRIBUTED_TRANSACTION_SDK_API ~transaction_participator_handle();
 
   UTIL_FORCEINLINE void* get_private_data() const noexcept { return private_data_; }
@@ -120,7 +122,7 @@ class transaction_participator_handle : public std::enable_shared_from_this<tran
    * @param writable output if it's writable now
    * @return future of 0 or error code
    */
-EXPLICIT_NODISCARD_ATTR   DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type check_writable(rpc::context& ctx,
+  EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type check_writable(rpc::context& ctx,
                                                                                                bool& writable);
 
   /**
@@ -135,7 +137,7 @@ EXPLICIT_NODISCARD_ATTR   DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type 
    *
    * @return future of 0 or error code
    */
-EXPLICIT_NODISCARD_ATTR   DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type prepare(
+  EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type prepare(
       rpc::context& ctx, SSParticipatorTransactionPrepareReq&& request, SSParticipatorTransactionPrepareRsp& response,
       storage_ptr_type& output);
 
@@ -147,7 +149,7 @@ EXPLICIT_NODISCARD_ATTR   DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type 
    *
    * @return future of 0 or error code
    */
-EXPLICIT_NODISCARD_ATTR   DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type commit(
+  EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type commit(
       rpc::context& ctx, const SSParticipatorTransactionCommitReq& request,
       SSParticipatorTransactionCommitRsp& response);
 
@@ -159,7 +161,7 @@ EXPLICIT_NODISCARD_ATTR   DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type 
    *
    * @return future of 0 or error code
    */
-EXPLICIT_NODISCARD_ATTR   DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type reject(
+  EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type reject(
       rpc::context& ctx, const SSParticipatorTransactionRejectReq& request,
       SSParticipatorTransactionRejectRsp& response);
 
@@ -192,7 +194,7 @@ EXPLICIT_NODISCARD_ATTR   DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type 
    *
    * @return future of 0 or error code
    */
-EXPLICIT_NODISCARD_ATTR   DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type lock(
+  EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type lock(
       const storage_ptr_type& transaction_ptr, const google::protobuf::RepeatedPtrField<std::string>& resource_uuids);
 
   /**
@@ -318,7 +320,7 @@ EXPLICIT_NODISCARD_ATTR   DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type 
   on_destroy_callback_type on_destroy_;
 
   std::string participator_key_;
-  std::shared_ptr<vtable_type> vtable_;
+  util::memory::strong_rc_ptr<vtable_type> vtable_;
   std::set<storage_resolve_timer_type> resolve_timers_;
   std::unordered_map<std::string, storage_ptr_type> running_transactions_;
   std::unordered_map<std::string, storage_ptr_type> transaction_locks_;

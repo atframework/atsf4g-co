@@ -39,7 +39,7 @@ static inline google::protobuf::Duration std_duration_to_protobuf_duration(std::
 }  // namespace
 
 DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle::transaction_client_handle(
-    const std::shared_ptr<vtable_type>& vtable)
+    const util::memory::strong_rc_ptr<vtable_type>& vtable)
     : private_data_{nullptr}, on_destroy_{nullptr}, vtable_{vtable} {}
 
 DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle::~transaction_client_handle() {
@@ -50,7 +50,7 @@ DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle::~transaction_client_h
 
 DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle::create_transaction(
     rpc::context& ctx, storage_ptr_type& output, const transaction_options& options) {
-  output = std::make_shared<storage_type>();
+  output = util::memory::make_strong_rc<storage_type>();
   if (!output) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
   }

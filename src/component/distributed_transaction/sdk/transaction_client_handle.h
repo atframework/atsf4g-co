@@ -28,6 +28,7 @@ namespace rpc {
 class context;
 }
 
+#include <memory/rc_ptr.h>
 #include <chrono>
 #include <functional>
 #include <list>
@@ -45,8 +46,8 @@ class transaction_client_handle {
   using storage_type = atframework::distributed_system::transaction_blob_storage;
   using metadata_type = atframework::distributed_system::transaction_metadata;
   using configure_type = atframework::distributed_system::transaction_configure;
-  using storage_ptr_type = std::shared_ptr<storage_type>;
-  using storage_const_ptr_type = std::shared_ptr<const storage_type>;
+  using storage_ptr_type = util::memory::strong_rc_ptr<storage_type>;
+  using storage_const_ptr_type = util::memory::strong_rc_ptr<const storage_type>;
   using participator_type = atframework::distributed_system::transaction_participator;
   using transaction_participator_failure_reason =
       atframework::distributed_system::transaction_participator_failure_reason;
@@ -97,7 +98,7 @@ class transaction_client_handle {
   transaction_client_handle& operator=(transaction_client_handle&&) = delete;
 
  public:
-  DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle(const std::shared_ptr<vtable_type>& vtable);
+  DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle(const util::memory::strong_rc_ptr<vtable_type>& vtable);
   DISTRIBUTED_TRANSACTION_SDK_API ~transaction_client_handle();
 
   UTIL_FORCEINLINE void* get_private_data() const noexcept { return private_data_; }
@@ -124,7 +125,7 @@ class transaction_client_handle {
    *
    * @return future of 0 or error code
    */
-EXPLICIT_NODISCARD_ATTR   DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type create_transaction(
+  EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type create_transaction(
       rpc::context& ctx, storage_ptr_type& output, const transaction_options& options = {});
 
   /**
@@ -136,7 +137,7 @@ EXPLICIT_NODISCARD_ATTR   DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type 
    * @param output_failed_participators 输出prepare阶段失败的参与者
    * @return future of 0 or error code
    */
-EXPLICIT_NODISCARD_ATTR   DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type submit_transaction(
+  EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type submit_transaction(
       rpc::context& ctx, storage_ptr_type& input,
       std::unordered_set<std::string>* output_prepared_participators = nullptr,
       std::unordered_set<std::string>* output_failed_participators = nullptr);
@@ -151,7 +152,7 @@ EXPLICIT_NODISCARD_ATTR   DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type 
  private:
   void* private_data_;
   on_destroy_callback_type on_destroy_;
-  std::shared_ptr<vtable_type> vtable_;
+  util::memory::strong_rc_ptr<vtable_type> vtable_;
 };
 
 }  // namespace distributed_system
