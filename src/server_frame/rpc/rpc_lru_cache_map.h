@@ -57,7 +57,9 @@ class UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
     value_cache_type &operator=(value_cache_type &&) = default;
   };
 
-  using lru_map_type = util::mempool::lru_map<key_type, value_cache_type>;
+  using lru_map_type =
+      util::mempool::lru_map<key_type, value_cache_type, std::hash<key_type>, std::equal_to<key_type>,
+                             util::memory::lru_map_option<util::memory::compat_strong_ptr_mode::kStrongRc>>;
   using cache_ptr_type = typename lru_map_type::store_type;
   using iterator = typename lru_map_type::iterator;
   using const_iterator = typename lru_map_type::const_iterator;
