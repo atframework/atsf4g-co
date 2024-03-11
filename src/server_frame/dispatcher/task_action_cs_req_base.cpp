@@ -57,9 +57,6 @@ SERVER_FRAME_API task_action_cs_req_base::~task_action_cs_req_base() {}
 
 SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::hook_run() {
   std::shared_ptr<player_cache> player_cache = get_player_cache();
-  if (player_cache) {
-    player_cache->refresh_feature_limit(get_shared_context());
-  }
   /**
   do {
     std::shared_ptr<session> sess = get_session();
@@ -75,6 +72,23 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
     trace_span->SetAttribute("client.port", sess->get_client_port());
   } while (false);
   **/
+
+  router_player_manager::ptr_t router_obj;
+  do {
+    if (player_cache == nullptr) {
+      break;
+    }
+
+    player_cache->refresh_feature_limit(get_shared_context());
+
+    router_obj = router_player_manager::me()->get_cache(router_player_manager::key_t(
+        router_player_manager::me()->get_type_id(), player_cache->get_zone_id(), player_cache->get_user_id()));
+    if (router_obj && (!router_obj->is_writable() || !router_obj->is_object_equal(player_cache))) {
+      router_obj.reset();
+    } else {
+      router_obj->trace_router(get_shared_context());
+    }
+  } while (false);
 
   result_type::value_type ret = RPC_AWAIT_CODE_RESULT(base_type::hook_run());
 
@@ -101,16 +115,9 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
       }
     }
 
-    if (!player_cache) {
+    if (!player_cache || !router_obj) {
       break;
     }
-
-    router_player_manager::ptr_t obj = router_player_manager::me()->get_cache(router_player_manager::key_t(
-        router_player_manager::me()->get_type_id(), player_cache->get_zone_id(), player_cache->get_user_id()));
-    if (!obj || !obj->is_writable() || !obj->is_object_equal(player_cache)) {
-      break;
-    }
-    obj->trace_router(get_shared_context());
 
     if (dispatcher_options->mark_wait_save()) {
       ret = RPC_AWAIT_CODE_RESULT(player_manager::me()->save(get_shared_context(), player_cache->get_user_id(),
@@ -120,7 +127,7 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
                    ret, protobuf_mini_dumper_get_error_msg(ret));
       }
     } else {
-      router_manager_set::me()->mark_fast_save(mgr, obj);
+      router_manager_set::me()->mark_fast_save(mgr, router_obj);
     }
   } while (false);
 

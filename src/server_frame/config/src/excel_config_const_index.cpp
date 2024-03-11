@@ -2,35 +2,42 @@
 
 #include "config/excel_config_const_index.h"
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <google/protobuf/duration.pb.h>
 #include <google/protobuf/message.h>
 #include <google/protobuf/timestamp.pb.h>
 #include <protocol/config/com.const.config.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <std/explicit_declare.h>
 
 #include <common/string_oprs.h>
 #include <log/log_wrapper.h>
+#include <memory/rc_ptr.h>
 #include <time/time_utility.h>
 
 #include <cli/cmd_option.h>
 
 #include <algorithm>
-#include <map>
 #include <sstream>
 #include <string>
-#include <tuple>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "config/excel/config_manager.h"
 
 namespace excel {
+
+static_assert(std::is_same<PROJECT_NAMESPACE_ID::config::config_set_excel_origin_const_config::item_ptr_type,
+                           ::util::memory::strong_rc_ptr<
+                               PROJECT_NAMESPACE_ID::config::config_set_excel_origin_const_config::item_type>>::value,
+              "config smart pointer checking");
 
 namespace detail {
 static const char* skip_space(const char* str) {
