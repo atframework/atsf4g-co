@@ -16,9 +16,16 @@ class context;
 
 namespace db {
 namespace uuid {
+
+enum class standard_uuid_type {
+  kV1,
+  kV4,
+};
+
 /**
  * @brief 生成标准UUID
  * @param remove_minus 是否移除减号(存hex模式输出)
+ * @param type UUID类型（v1: 基于时间和mac地址，v4: 随机）
  * @note 符合RFC4122标准，变种 1: 基于本地MAC地址和时间，时间周期为100纳秒，随机数部分为14位
  *       如果本地存在libuuid会复用libuuid的clock缓存文件: /var/lib/libuuid/clock.txt
  *       如果clock缓存文件不存在，100纳秒内分配N个uuid则有 (1-1/2^14)^(N-1) 的概率不冲突
@@ -28,10 +35,12 @@ namespace uuid {
  * @see https://en.wikipedia.org/wiki/Universally_unique_identifier#Version_1_(date-time_and_MAC_address)
  * @return 生成的UUID
  */
-EXPLICIT_NODISCARD_ATTR std::string generate_standard_uuid(bool remove_minus = false);
+EXPLICIT_NODISCARD_ATTR std::string generate_standard_uuid(bool remove_minus = false,
+                                                           standard_uuid_type type = standard_uuid_type::kV1);
 
 /**
  * @brief 生成标准UUID,返回二进制
+ * @param type UUID类型（v1: 基于时间和mac地址，v4: 随机）
  * @note 符合RFC4122标准，变种 1: 基于本地MAC地址和时间，时间周期为100纳秒，随机数部分为14位
  *       如果本地存在libuuid会复用libuuid的clock缓存文件: /var/lib/libuuid/clock.txt
  *       如果clock缓存文件不存在，100纳秒内分配N个uuid则有 (1-1/2^14)^(N-1) 的概率不冲突
@@ -41,7 +50,7 @@ EXPLICIT_NODISCARD_ATTR std::string generate_standard_uuid(bool remove_minus = f
  * @see https://en.wikipedia.org/wiki/Universally_unique_identifier#Version_1_(date-time_and_MAC_address)
  * @return 生成的UUID,返回二进制
  */
-EXPLICIT_NODISCARD_ATTR std::string generate_standard_uuid_binary();
+EXPLICIT_NODISCARD_ATTR std::string generate_standard_uuid_binary(standard_uuid_type type = standard_uuid_type::kV1);
 
 /**
  * 生成短UUID,和server id相关

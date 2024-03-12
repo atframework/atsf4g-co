@@ -85,12 +85,20 @@ struct short_uuid_encoder {
 static short_uuid_encoder short_uuid_encoder_;
 }  // namespace detail
 
-std::string generate_standard_uuid(bool remove_minus) {
-  return util::random::uuid_generator::generate_string_time(remove_minus);
+std::string generate_standard_uuid(bool remove_minus, standard_uuid_type type) {
+  if (type == standard_uuid_type::kV1) {
+    return util::random::uuid_generator::generate_string_time(remove_minus);
+  } else {
+    return util::random::uuid_generator::generate_string_random(remove_minus);
+  }
 }
 
-std::string generate_standard_uuid_binary() {
-  return util::random::uuid_generator::uuid_to_binary(util::random::uuid_generator::generate_time());
+std::string generate_standard_uuid_binary(standard_uuid_type type) {
+  if (type == standard_uuid_type::kV1) {
+    return util::random::uuid_generator::uuid_to_binary(util::random::uuid_generator::generate_time());
+  } else {
+    return util::random::uuid_generator::uuid_to_binary(util::random::uuid_generator::generate_random());
+  }
 }
 
 std::string generate_short_uuid() {
