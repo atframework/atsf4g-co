@@ -13,6 +13,8 @@
 
 struct client_config {
   static std::string host;
+  static std::string lua_player_code;
+  static std::string lua_player_file;
   static int port;
 };
 

@@ -294,7 +294,7 @@ bool redis_args::push(int16_t v) {
     return false;
   }
 
-  char *d = alloc(sz);
+  char *d = alloc(static_cast<size_t>(sz));
   if (nullptr == d) {
     return false;
   }

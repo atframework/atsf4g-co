@@ -494,6 +494,12 @@ int auto_call(lua_State *L, const std::string &path, TParams &&...params) {
   return res ? res : (lua_gettop(L) - top);
 };
 
+template <typename... TParams>
+int auto_push(lua_State *L, TParams &&...params) {
+  return detail::wraper_bat_cmd::wraper_bat_count(L, std::forward_as_tuple(params...),
+                                                  typename detail::build_args_index<TParams...>::index_seq_type());
+}
+
 template <typename TParams>
 int push_into_stack(lua_State *L, TParams &&params) {
   return detail::wraper_var<typename std::remove_cv<typename std::remove_reference<

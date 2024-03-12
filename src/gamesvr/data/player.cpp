@@ -451,7 +451,7 @@ PROJECT_NAMESPACE_ID::DItem &player::mutable_dirty_item(const PROJECT_NAMESPACE_
                                           &player::cache_t::dirty_item_by_type);
                                     });
 
-  PROJECT_NAMESPACE_ID::DItem &ret = cache_data_.dirty_item_by_type[in.type_id()];
+  PROJECT_NAMESPACE_ID::DItem &ret = cache_data_.dirty_item_by_type[static_cast<int32_t>(in.type_id())];
   ret = in;
   return ret;
 }

@@ -6,3 +6,5 @@
 
 std::string client_config::host = "127.0.0.1";
 int client_config::port = 9001;
+std::string client_config::lua_player_code = "";
+std::string client_config::lua_player_file = "";
