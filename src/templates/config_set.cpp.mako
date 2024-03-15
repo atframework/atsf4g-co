@@ -359,14 +359,25 @@ void ${pb_msg_class_name}::merge_data(item_ptr_type item) {
     }
 
 %   if code_index.is_list():
-    excel_config_type_traits::const_pointer_cast<std::vector<item_ptr_type> >(${code_index.name}_data_[idx])->push_back(item);
+    excel_config_type_traits::shared_ptr<std::vector<item_ptr_type> > data_set = excel_config_type_traits::const_pointer_cast<std::vector<item_ptr_type> >(${code_index.name}_data_[idx]);
+    if (!data_set) {
+      data_set = excel_config_type_traits::make_shared<std::vector<item_ptr_type> >();
+      ${code_index.name}_data_[idx] = excel_config_type_traits::const_pointer_cast<const std::vector<item_ptr_type> >(data_set);
+    }
+    data_set->push_back(item);
 %   else:
     ${code_index.name}_data_[idx] = item;
 %   endif
 % else:
 %   if code_index.is_list():
-    excel_config_type_traits::const_pointer_cast<std::vector<item_ptr_type> >(${code_index.name}_data_
-      [std::make_tuple(${code_index.get_key_value_list("item->")})])->push_back(item);
+    excel_config_type_traits::shared_ptr<std::vector<item_ptr_type> > data_set = excel_config_type_traits::const_pointer_cast<std::vector<item_ptr_type> >(${code_index.name}_data_
+      [std::make_tuple(${code_index.get_key_value_list("item->")})]);
+    if (!data_set) {
+      data_set = excel_config_type_traits::make_shared<std::vector<item_ptr_type> >();
+      ${code_index.name}_data_[std::make_tuple(${code_index.get_key_value_list("item->")})] =
+        excel_config_type_traits::const_pointer_cast<const std::vector<item_ptr_type> >(data_set);
+    }
+    data_set->push_back(item);
 %   else:
     std::tuple<${code_index.get_key_type_list()}> key = std::make_tuple(${code_index.get_key_value_list("item->")});
     if (${code_index.name}_data_.end() != ${code_index.name}_data_.find(key)) {
@@ -386,21 +397,11 @@ void ${pb_msg_class_name}::merge_data(item_ptr_type item) {
 % if code_index.is_list():
 EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::${code_index.name}_value_type
   ${pb_msg_class_name}::get_list_by_${code_index.name}(${code_index.get_key_decl()}) {
-  ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh;
-  if (enable_multithread_lock_) {
-    rlh = ::util::lock::read_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
-  }
-
   return _get_list_by_${code_index.name}(${code_index.get_key_params()});
 }
 
 EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::item_ptr_type
   ${pb_msg_class_name}::get_by_${code_index.name}(${code_index.get_key_decl()}, size_t index) {
-  ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh;
-  if (enable_multithread_lock_) {
-    rlh = ::util::lock::read_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
-  }
-
   ${pb_msg_class_name}::${code_index.name}_value_type list_item = _get_list_by_${code_index.name}(${code_index.get_key_params()});
   if (nullptr == list_item) {
 %   if not code_index.allow_not_found:
@@ -463,6 +464,11 @@ EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::item_ptr_type
 
 ${pb_msg_class_name}::${code_index.name}_value_type
   ${pb_msg_class_name}::_get_list_by_${code_index.name}(${code_index.get_key_decl()}) {
+  ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh;
+  if (enable_multithread_lock_) {
+    rlh = ::util::lock::read_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+  }
+
 % if code_index.is_vector():
   size_t idx = 0;
 %   for idx_field in code_index.fields:
@@ -487,24 +493,35 @@ ${pb_msg_class_name}::${code_index.name}_value_type
 % endif
 
   int res;
+  {
+    rlh.reset();
+    ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh;
+    if (enable_multithread_lock_) {
+      wlh = ::util::lock::write_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+    }
 %   if loader.code.file_list and code_index.file_mapping:
 %       for code_line in code_index.get_load_file_code("file_path"):
-  ${code_line}
+    ${code_line}
 %       endfor
-  res = load_file(file_path);
-  if (res < 0) {
-    EXCEL_CONFIG_MANAGER_LOGERROR("[EXCEL] load file %s for %s failed, res: %d", file_path.c_str(), "${pb_msg_class_name}", res);
-    return nullptr;
-  }
-%   else:
-  for (auto& file_path : file_status_) {
-    res = load_file(file_path.first);
+    res = load_file(file_path);
     if (res < 0) {
-      EXCEL_CONFIG_MANAGER_LOGERROR("[EXCEL] load file %s for %s failed, res: %d", file_path.first.c_str(), "${pb_msg_class_name}", res);
+      EXCEL_CONFIG_MANAGER_LOGERROR("[EXCEL] load file %s for %s failed, res: %d", file_path.c_str(), "${pb_msg_class_name}", res);
       return nullptr;
     }
-  }
+%   else:
+    for (auto& file_path : file_status_) {
+      res = load_file(file_path.first);
+      if (res < 0) {
+        EXCEL_CONFIG_MANAGER_LOGERROR("[EXCEL] load file %s for %s failed, res: %d", file_path.first.c_str(), "${pb_msg_class_name}", res);
+        return nullptr;
+      }
+    }
 %   endif
+    wlh.reset();
+    if (enable_multithread_lock_) {
+      rlh = ::util::lock::read_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+    }
+  }
 
 % if code_index.is_vector():
   if (${code_index.name}_data_.size() > idx && ${code_index.name}_data_[idx]) {
@@ -623,25 +640,36 @@ EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::${code_index.name}_value_type
 % endif
 
   int res;
+  {
+    rlh.reset();
+    ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh;
+    if (enable_multithread_lock_) {
+      wlh = ::util::lock::write_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+    }
 %   if loader.code.file_list and code_index.file_mapping:
 %       for code_line in code_index.get_load_file_code("file_path"):
-  ${code_line}
+    ${code_line}
 %       endfor
-  res = load_file(file_path);
-  if (res < 0) {
-    EXCEL_CONFIG_MANAGER_LOGERROR("[EXCEL] load file %s for %s failed, res: %d",
-        file_path.c_str(), "${pb_msg_class_name}", res);
-    return nullptr;
-  }
-%   else:
-  for (auto& file_path : file_status_) {
-    res = load_file(file_path.first);
+    res = load_file(file_path);
     if (res < 0) {
-      EXCEL_CONFIG_MANAGER_LOGERROR("[EXCEL] load file %s for %s failed, res: %d", file_path.first.c_str(), "${pb_msg_class_name}", res);
+      EXCEL_CONFIG_MANAGER_LOGERROR("[EXCEL] load file %s for %s failed, res: %d",
+          file_path.c_str(), "${pb_msg_class_name}", res);
       return nullptr;
     }
-  }
+%   else:
+    for (auto& file_path : file_status_) {
+      res = load_file(file_path.first);
+      if (res < 0) {
+        EXCEL_CONFIG_MANAGER_LOGERROR("[EXCEL] load file %s for %s failed, res: %d", file_path.first.c_str(), "${pb_msg_class_name}", res);
+        return nullptr;
+      }
+    }
 %   endif
+    wlh.reset();
+    if (enable_multithread_lock_) {
+      rlh = ::util::lock::read_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+    }
+  }
 
 % if code_index.is_vector():
   if (${code_index.name}_data_.size() > idx && ${code_index.name}_data_[idx]) {
