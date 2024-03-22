@@ -569,6 +569,7 @@ class UTIL_SYMBOL_LOCAL PrometheusFileBackend {
 
   ~PrometheusFileBackend() {
     if (file_) {
+      file_->background_thread_waker_cv.notify_all();
       if (file_->background_flush_thread) {
         std::unique_ptr<std::thread> background_flush_thread;
         {
@@ -647,7 +648,6 @@ class UTIL_SYMBOL_LOCAL PrometheusFileBackend {
     while (timeout >= std::chrono::microseconds::zero()) {
       // No more metrics to flush
       {
-        std::lock_guard<std::mutex> lock_guard{file_->file_lock};
         if (file_->flushed_metric_family_count.load(std::memory_order_acquire) >= current_wait_for_flush_count) {
           break;
         }
@@ -660,7 +660,7 @@ class UTIL_SYMBOL_LOCAL PrometheusFileBackend {
         if (!file_->background_flush_thread) {
           break;
         }
-        file_->background_thread_waker_cv.notify_one();
+        file_->background_thread_waker_cv.notify_all();
       }
 
       // Wait result
