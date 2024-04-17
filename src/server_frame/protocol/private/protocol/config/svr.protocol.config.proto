@@ -216,8 +216,9 @@ message opentelemetry_metrics_exporter_cfg {
 }
 
 message opentelemetry_metrics_reader_cfg {
-  google.protobuf.Duration export_interval = 1 [(atapp.protocol.CONFIGURE) = { default_value: "1s" min_value: "16ms" }];
-  google.protobuf.Duration export_timeout = 2 [(atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "16ms" }];
+  google.protobuf.Duration export_interval = 1
+      [(atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "16ms" }];
+  google.protobuf.Duration export_timeout = 2 [(atapp.protocol.CONFIGURE) = { default_value: "8s" min_value: "16ms" }];
 }
 
 message opentelemetry_metrics_cfg {

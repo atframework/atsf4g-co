@@ -9,6 +9,8 @@ namespace rpc {
 namespace telemetry {
 
 #if !((defined(__cplusplus) && __cplusplus >= 201703L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L))
+constexpr const char *semantic_conventions::kEventDomain;
+
 constexpr const char *semantic_conventions::kGroupNameDefault;
 constexpr const char *semantic_conventions::kGroupNameHpa;
 constexpr const char *semantic_conventions::kGroupNameDedicatedServer;

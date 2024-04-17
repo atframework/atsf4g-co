@@ -8,7 +8,9 @@
 #include <common/string_oprs.h>
 #include <log/log_wrapper.h>
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 #if GOOGLE_PROTOBUF_VERSION >= 4022000
@@ -17,7 +19,11 @@
 #  include <google/protobuf/stubs/logging.h>
 #endif
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
+#include <grpc/grpc.h>
 
 #include <atframe/atapp.h>
 
@@ -25,6 +31,7 @@
 
 #include <utility/protobuf_mini_dumper.h>
 
+#include <assert.h>
 #include <atomic>
 #include <string>
 
@@ -313,6 +320,9 @@ SERVER_FRAME_API task_manager::task_manager()
   get_task_manager_metrics_data().tick_checkpoint_count.store(0, std::memory_order_release);
   get_task_manager_metrics_data().pool_free_memory.store(0, std::memory_order_release);
   get_task_manager_metrics_data().pool_used_memory.store(0, std::memory_order_release);
+
+  // task_manager 必须在全局变量之后构造。并且进入析构阶段不允许再创建
+  assert(nullptr != atapp::app::get_last_instance());
 }
 
 SERVER_FRAME_API task_manager::~task_manager() {
@@ -324,7 +334,7 @@ SERVER_FRAME_API task_manager::~task_manager() {
   stack_pool_.reset();
 #endif
 
-  // free protobuf meta
+  // Free protobuf meta
   ::google::protobuf::ShutdownProtobufLibrary();
 
 #if GOOGLE_PROTOBUF_VERSION >= 4022000

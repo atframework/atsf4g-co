@@ -743,7 +743,7 @@ atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index
   return iter->second;
 }
 
-std::shared_ptr<atapp::etcd_discovery_node> logic_server_common_module::get_discovery_by_id(uint64_t id) const {
+util::memory::strong_rc_ptr<atapp::etcd_discovery_node> logic_server_common_module::get_discovery_by_id(uint64_t id) const {
   if (nullptr == get_app()) {
     return nullptr;
   }
@@ -751,7 +751,7 @@ std::shared_ptr<atapp::etcd_discovery_node> logic_server_common_module::get_disc
   return get_app()->get_global_discovery().get_node_by_id(id);
 }
 
-std::shared_ptr<atapp::etcd_discovery_node> logic_server_common_module::get_discovery_by_name(
+util::memory::strong_rc_ptr<atapp::etcd_discovery_node> logic_server_common_module::get_discovery_by_name(
     const std::string &name) const {
   if (nullptr == get_app()) {
     return nullptr;
@@ -1041,7 +1041,7 @@ void logic_server_common_module::add_service_type_id_index(const atapp::etcd_dis
   uint64_t type_id = node->get_discovery_info().type_id();
   logic_server_type_discovery_set_t &type_index = service_type_id_index_[type_id];
   if (!type_index.all_index) {
-    type_index.all_index = std::make_shared<atapp::etcd_discovery_set>();
+    type_index.all_index = util::memory::make_strong_rc<atapp::etcd_discovery_set>();
   }
 
   if (!type_index.all_index) {
@@ -1058,7 +1058,7 @@ void logic_server_common_module::add_service_type_id_index(const atapp::etcd_dis
 
   atapp::etcd_discovery_set::ptr_t &zone_index = type_index.zone_index[zone_id];
   if (!zone_index) {
-    zone_index = std::make_shared<atapp::etcd_discovery_set>();
+    zone_index = util::memory::make_strong_rc<atapp::etcd_discovery_set>();
   }
 
   if (!zone_index) {
@@ -1122,7 +1122,7 @@ void logic_server_common_module::add_service_type_name_index(const atapp::etcd_d
   const std::string &type_name = node->get_discovery_info().type_name();
   logic_server_type_discovery_set_t &type_index = service_type_name_index_[type_name];
   if (!type_index.all_index) {
-    type_index.all_index = std::make_shared<atapp::etcd_discovery_set>();
+    type_index.all_index = util::memory::make_strong_rc<atapp::etcd_discovery_set>();
   }
 
   if (!type_index.all_index) {
@@ -1139,7 +1139,7 @@ void logic_server_common_module::add_service_type_name_index(const atapp::etcd_d
 
   atapp::etcd_discovery_set::ptr_t &zone_index = type_index.zone_index[zone_id];
   if (!zone_index) {
-    zone_index = std::make_shared<atapp::etcd_discovery_set>();
+    zone_index = util::memory::make_strong_rc<atapp::etcd_discovery_set>();
   }
 
   if (!zone_index) {
@@ -1202,7 +1202,7 @@ void logic_server_common_module::add_service_zone_index(const atapp::etcd_discov
   uint64_t zone_id = node->get_discovery_info().area().zone_id();
   atapp::etcd_discovery_set::ptr_t &zone_index = service_zone_index_[zone_id];
   if (!zone_index) {
-    zone_index = std::make_shared<atapp::etcd_discovery_set>();
+    zone_index = util::memory::make_strong_rc<atapp::etcd_discovery_set>();
   }
 
   if (!zone_index) {

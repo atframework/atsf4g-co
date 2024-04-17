@@ -9,6 +9,8 @@ namespace rpc {
 namespace telemetry {
 
 struct semantic_conventions {
+  static constexpr const char *kEventDomain = "event.domain";
+
   static constexpr const char *kGroupNameDefault = "";
   static constexpr const char *kGroupNameHpa = "hpa";
   static constexpr const char *kGroupNameDedicatedServer = "dedicated_server";

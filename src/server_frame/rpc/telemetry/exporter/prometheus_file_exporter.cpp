@@ -570,15 +570,13 @@ class UTIL_SYMBOL_LOCAL PrometheusFileBackend {
   ~PrometheusFileBackend() {
     if (file_) {
       file_->background_thread_waker_cv.notify_all();
-      if (file_->background_flush_thread) {
-        std::unique_ptr<std::thread> background_flush_thread;
-        {
-          std::lock_guard<std::mutex> lock_guard{file_->background_thread_lock};
-          file_->background_flush_thread.swap(background_flush_thread);
-        }
-        if (background_flush_thread->joinable()) {
-          background_flush_thread->join();
-        }
+      std::unique_ptr<std::thread> background_flush_thread;
+      {
+        std::lock_guard<std::mutex> lock_guard{file_->background_thread_lock};
+        file_->background_flush_thread.swap(background_flush_thread);
+      }
+      if (background_flush_thread && background_flush_thread->joinable()) {
+        background_flush_thread->join();
       }
     }
   }
