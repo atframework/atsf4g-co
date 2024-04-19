@@ -128,7 +128,7 @@ result_type del_jobs(rpc::context& /*ctx*/, int32_t jobs_type, uint64_t user_id,
 }
 
 result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-                     PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data& in) {
+                     PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data& in, bool notify_player) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
                user_id, zone_id);
@@ -162,6 +162,9 @@ result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uin
 
   // 尝试通知在线玩家, 失败则放弃。只是会延迟到账，不影响逻辑。
   do {
+    if (!notify_player) {
+      break;
+    }
     // 不走路由系统，异步任务允许任意节点发送，但是有些服务不需要拉缓存对象
     PROJECT_NAMESPACE_ID::table_login* login_table = ctx.create<PROJECT_NAMESPACE_ID::table_login>();
     PROJECT_NAMESPACE_ID::SSPlayerAsyncJobsSync* req_body = ctx.create<PROJECT_NAMESPACE_ID::SSPlayerAsyncJobsSync>();
@@ -191,6 +194,15 @@ result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uin
                                                               LOG_WRAPPER_FWAPI_FORMAT("{}", user_id), *req_body));
   } while (false);
   RPC_DB_RETURN_CODE(ret);
+}
+
+result_code_type add_jobs_with_retry(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
+                                     PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data& inout, bool notify_player) {
+  if (inout.left_retry_times() <= 0) {
+    inout.set_left_retry_times(logic_config::me()->get_logic().user().async_job().default_retry_times());
+  }
+
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(add_jobs(ctx, jobs_type, user_id, zone_id, inout, notify_player)));
 }
 
 result_type remove_all_jobs(rpc::context& /*ctx*/, int32_t jobs_type, uint64_t user_id, uint32_t zone_id) {

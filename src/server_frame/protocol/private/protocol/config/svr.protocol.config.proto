@@ -33,6 +33,12 @@ message logic_server_cfg {
 message logic_user_async_job_cfg {
   google.protobuf.Duration timeout = 101 [(atapp.protocol.CONFIGURE) = { default_value: "30s" min_value: "5" }];
   google.protobuf.Duration interval = 102 [(atapp.protocol.CONFIGURE) = { default_value: "10m" min_value: "60" }];
+
+  google.protobuf.Duration conflict_checking_timeout = 201
+      [(atapp.protocol.CONFIGURE) = { default_value: "30m" min_value: "5" }];
+  uint32 conflict_checking_queue_size = 202 [(atapp.protocol.CONFIGURE) = { default_value: "1000" min_value: "1" }];
+  uint32 retry_queue_size = 203 [(atapp.protocol.CONFIGURE) = { default_value: "100" min_value: "1" }];
+  int32 default_retry_times = 204 [(atapp.protocol.CONFIGURE) = { default_value: "3" min_value: "0" }];
 }
 
 message logic_user_cfg {

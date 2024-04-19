@@ -49,6 +49,29 @@ message table_login {
   uint32 stat_login_failed_times = 53;   // 失败登入次数
 }
 
+message table_user_async_jobs_blob_data {
+  // action的 唯一ID，用于容灾
+  string action_uuid = 1;
+  int64 timepoint_ms = 2;
+
+  // 如果失败了，内置的剩余重试次数
+  int32 left_retry_times = 3;
+
+  oneof action {
+    user_async_job_debug_message debug_message = 101;  // 调试消息
+  }
+}
+
+message table_user_async_jobs_cache_blob_data {
+  player_async_jobs_data async_jobs = 1;  // 异步任务缓存
+
+  message retry_job_data {
+    int32 job_type = 1;
+    table_user_async_jobs_blob_data job_data = 2;
+  };
+  repeated retry_job_data retry_jobs = 11;
+}
+
 message table_user {
   string open_id = 1;
   uint64 user_id = 2;
@@ -61,16 +84,7 @@ message table_user {
   player_options options = 21;  // 玩家选项
 
   // 以下是服务器内部数据
-  player_async_jobs_data async_jobs = 101;  // 异步任务缓存
-}
-
-message table_user_async_jobs_blob_data {
-  string action_uuid = 1;  // action的 唯一ID，用于容灾
-  int64 timepoint_ms = 2;
-
-  oneof action {
-    user_async_job_debug_message debug_message = 101;  // 调试消息
-  }
+  table_user_async_jobs_cache_blob_data async_job_blob_data = 101;  // 异步任务缓存
 }
 
 message table_distribute_transaction {

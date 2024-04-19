@@ -4,6 +4,9 @@
 
 #pragma once
 
+#include <memory/lru_map.h>
+#include <memory/rc_ptr.h>
+
 #include <dispatcher/task_manager.h>
 
 #include <rpc/rpc_async_invoke.h>
@@ -12,11 +15,21 @@
 #include <cstddef>
 #include <cstring>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace hello {
 class table_user;
 }
+
+namespace rpc {
+class context;
+}
+
+PROJECT_NAMESPACE_BEGIN
+class table_user_async_jobs_blob_data;
+PROJECT_NAMESPACE_END
 
 class player;
 
@@ -26,8 +39,7 @@ class user_async_jobs_manager {
   ~user_async_jobs_manager();
 
   // 创建默认角色数据
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_init(rpc::context& ctx,
-                                                                                uint32_t version_type);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_init(rpc::context& ctx, uint32_t version_type);
 
   // 登入读取用户数据
   EXPLICIT_NODISCARD_ATTR rpc::result_code_type login_init(rpc::context& ctx);
@@ -62,9 +74,14 @@ class user_async_jobs_manager {
    */
   void reset_async_jobs_protect();
 
-  void clear_job_uuids();
-  void add_job_uuid(const std::string& uuid);
-  bool is_job_uuid_exists(const std::string& uuid) const;
+  void clear_job_uuids(int32_t job_type);
+  void add_job_uuid(int32_t job_type, const std::string& uuid);
+  bool is_job_uuid_exists(int32_t job_type, const std::string& uuid);
+
+  void add_retry_job(int32_t job_type, const PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data& job_data);
+  void remove_retry_job(int32_t job_type, const std::string& uuid);
+  std::vector<util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>> get_retry_jobs(
+      int32_t job_type) const;
 
  private:
   friend class task_action_player_remote_patch_jobs;
@@ -76,5 +93,18 @@ class user_async_jobs_manager {
 
   bool is_dirty_;
   time_t remote_command_patch_task_next_timepoint_;
-  std::unordered_set<std::string> lastest_uuids_;
+
+  struct history_item {
+    int64_t timeout = 3;
+  };
+  using history_map_type =
+      util::memory::lru_map<std::string, history_item, std::hash<std::string>, std::equal_to<std::string>,
+                            util::memory::lru_map_option<util::memory::compat_strong_ptr_mode::kStrongRc>>;
+  std::unordered_map<int32_t, history_map_type> history_uuids_;
+  std::unordered_set<int32_t> force_async_job_type_;
+
+  std::unordered_map<
+      int32_t, std::unordered_map<std::string,
+                                  util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>>>
+      retry_jobs_;
 };

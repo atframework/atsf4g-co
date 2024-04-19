@@ -908,10 +908,9 @@ def generate_group(options, group):
 
     make_module_cache_dir = os.path.join(
         group.project_dir,
-        ".mako_modules-{0}.{1}.{2}".format(sys.version_info[0],
-                                           sys.version_info[1],
-                                           sys.version_info[2]),
+        ".mako_modules/group/{0}".format(os.path.relpath(os.getcwd(), group.project_dir)),
     )
+    os.makedirs(make_module_cache_dir, mode=0o777, exist_ok=True)
 
     inner_include_rule = None
     try:
@@ -986,21 +985,21 @@ def generate_group(options, group):
 
         try:
             (
-                intput_template,
+                input_template,
                 output_rule,
                 output_render,
                 rewrite_overwrite,
             ) = parse_generate_rule(outer_rule)
-            if not os.path.exists(intput_template):
+            if not os.path.exists(input_template):
                 cprintf_stderr(
                     [print_style.FC_RED, print_style.FW_BOLD],
                     "[INFO]: template file {0} not found.\n",
-                    intput_template,
+                    input_template,
                 )
                 continue
 
             lookup = TemplateLookup(
-                directories=[os.path.dirname(intput_template)],
+                directories=[os.path.dirname(input_template)],
                 module_directory=make_module_cache_dir,
             )
             if output_render:
@@ -1030,13 +1029,13 @@ def generate_group(options, group):
                                 [print_style.FC_YELLOW, print_style.FW_BOLD],
                                 "[INFO]: file {0} is already exists, we will ignore generating template {1} to it.\n",
                                 output_file,
-                                intput_template,
+                                input_template,
                             )
                         continue
 
                 render_args["output_file_path"] = output_file
                 source_tmpl = lookup.get_template(
-                    os.path.basename(intput_template))
+                    os.path.basename(input_template))
                 final_output_dir = os.path.dirname(output_file)
                 if final_output_dir and not os.path.exists(final_output_dir):
                     os.makedirs(final_output_dir, 0o777)
@@ -1047,7 +1046,7 @@ def generate_group(options, group):
                     cprintf_stdout(
                         [print_style.FC_GREEN, print_style.FW_BOLD],
                         "[INFO]: generate {0} to {1} success.\n",
-                        intput_template,
+                        input_template,
                         output_file,
                     )
         except Exception as e:
@@ -1080,20 +1079,20 @@ def generate_group(options, group):
             render_args[k] = group.custom_variables[k]
 
         (
-            intput_template,
+            input_template,
             output_rule,
             output_render,
             rewrite_overwrite,
         ) = parse_generate_rule(inner_rule)
-        if not os.path.exists(intput_template):
+        if not os.path.exists(input_template):
             cprintf_stderr(
                 [print_style.FC_RED, print_style.FW_BOLD],
                 "[INFO]: template file {0} not found.\n",
-                intput_template,
+                input_template,
             )
             continue
         lookup = TemplateLookup(
-            directories=[os.path.dirname(intput_template)],
+            directories=[os.path.dirname(input_template)],
             module_directory=make_module_cache_dir,
         )
 
@@ -1132,13 +1131,13 @@ def generate_group(options, group):
                                     ],
                                     "[INFO]: file {0} is already exists, we will ignore generating template {1} to it.\n",
                                     output_file,
-                                    intput_template,
+                                    input_template,
                                 )
                             continue
 
                     render_args["output_file_path"] = output_file
                     source_tmpl = lookup.get_template(
-                        os.path.basename(intput_template))
+                        os.path.basename(input_template))
                     final_output_dir = os.path.dirname(output_file)
                     if final_output_dir and not os.path.exists(
                             final_output_dir):
@@ -1150,7 +1149,7 @@ def generate_group(options, group):
                         cprintf_stdout(
                             [print_style.FC_GREEN, print_style.FW_BOLD],
                             "[INFO]: generate {0} to {1} success.\n",
-                            intput_template,
+                            input_template,
                             output_file,
                         )
             except Exception as e:
@@ -1198,10 +1197,9 @@ def generate_global(options, global_generator):
 
     make_module_cache_dir = os.path.join(
         global_generator.project_dir,
-        ".mako_modules-{0}.{1}.{2}".format(sys.version_info[0],
-                                           sys.version_info[1],
-                                           sys.version_info[2]),
+        ".mako_modules/global/{0}".format(os.path.relpath(os.getcwd(), global_generator.project_dir)),
     )
+    os.makedirs(make_module_cache_dir, mode=0o777, exist_ok=True)
 
     # generate global templates
     for global_rule in global_generator.global_templates:
@@ -1219,21 +1217,21 @@ def generate_global(options, global_generator):
 
         try:
             (
-                intput_template,
+                input_template,
                 output_rule,
                 output_render,
                 rewrite_overwrite,
             ) = parse_generate_rule(global_rule)
-            if not os.path.exists(intput_template):
+            if not os.path.exists(input_template):
                 cprintf_stderr(
                     [print_style.FC_RED, print_style.FW_BOLD],
                     "[INFO]: template file {0} not found.\n",
-                    intput_template,
+                    input_template,
                 )
                 continue
 
             lookup = TemplateLookup(
-                directories=[os.path.dirname(intput_template)],
+                directories=[os.path.dirname(input_template)],
                 module_directory=make_module_cache_dir,
             )
             if output_render:
@@ -1262,13 +1260,13 @@ def generate_global(options, global_generator):
                                 [print_style.FC_YELLOW, print_style.FW_BOLD],
                                 "[INFO]: file {0} is already exists, we will ignore generating template {1} to it.\n",
                                 output_file,
-                                intput_template,
+                                input_template,
                             )
                         continue
 
                 render_args["output_file_path"] = output_file
                 source_tmpl = lookup.get_template(
-                    os.path.basename(intput_template))
+                    os.path.basename(input_template))
                 final_output_dir = os.path.dirname(output_file)
                 if final_output_dir and not os.path.exists(final_output_dir):
                     os.makedirs(final_output_dir, 0o777)
@@ -1279,7 +1277,7 @@ def generate_global(options, global_generator):
                     cprintf_stdout(
                         [print_style.FC_GREEN, print_style.FW_BOLD],
                         "[INFO]: generate {0} to {1} success.\n",
-                        intput_template,
+                        input_template,
                         output_file,
                     )
         except Exception as e:

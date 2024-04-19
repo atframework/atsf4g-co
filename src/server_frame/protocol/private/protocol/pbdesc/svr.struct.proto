@@ -67,6 +67,11 @@ message user_async_job_debug_message {
 }
 
 message player_async_jobs_data {
-  repeated string lasted_action_uuids = 1;  // 上一轮处理的UUID列表
-  int64 next_task_active_time = 2;          // 下一次异步任务的启动时间
+  message history_job_meta {
+    int32 job_type = 1;
+    string action_uuid = 2;
+    int64 timeout = 3;
+  }
+  repeated history_job_meta history = 1;  // 上一轮处理的UUID列表
+  int64 next_task_active_time = 2;        // 下一次异步任务的启动时间
 }

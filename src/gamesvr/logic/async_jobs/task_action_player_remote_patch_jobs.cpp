@@ -7,12 +7,16 @@
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/pbdesc/svr.const.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <utility/protobuf_mini_dumper.h>
 
@@ -136,18 +140,28 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
       continue;
     }
 
+    if (!param_.async_job_type.empty() &&
+        param_.async_job_type.find(val_desc->number()) == param_.async_job_type.end()) {
+      continue;
+    }
+
+    FWPLOGDEBUG(*param_.user, "task_action_player_remote_patch_jobs load from get_jobs type {}", val_desc->number());
+
     std::vector<rpc::db::async_jobs::async_jobs_record> job_list;
     std::vector<int64_t> complete_jobs_idx;
 
     ret = RPC_AWAIT_CODE_RESULT(rpc::db::async_jobs::get_jobs(
         get_shared_context(), val_desc->number(), param_.user->get_user_id(), param_.user->get_zone_id(), job_list));
     if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
+      param_.user->get_user_async_jobs_manager().clear_job_uuids(val_desc->number());
       ret = 0;
       continue;
     }
 
     complete_jobs_idx.reserve(PROJECT_NAMESPACE_ID::EN_SL_PLAYER_ASYNC_JOBS_BATCH_NUMBER);
     size_t batch_job_number = 0;
+
+    // 优先执行数据库存量
     for (size_t i = 0; i < job_list.size(); ++i) {
       // 如果拉取完玩家下线了，中断后续任务
       is_writable_ = cache->is_writable();
@@ -157,29 +171,32 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
 
       complete_jobs_idx.push_back(job_list[i].record_index);
 
-      if (param_.user->get_user_async_jobs_manager().is_job_uuid_exists(job_list[i].action_blob.action_uuid())) {
+      if (param_.user->get_user_async_jobs_manager().is_job_uuid_exists(val_desc->number(),
+                                                                        job_list[i].action_blob.action_uuid())) {
         // 已执行则跳过
         continue;
       }
-      param_.user->get_user_async_jobs_manager().add_job_uuid(job_list[i].action_blob.action_uuid());
+      param_.user->get_user_async_jobs_manager().add_job_uuid(val_desc->number(),
+                                                              job_list[i].action_blob.action_uuid());
 
       ++batch_job_number;
-      int async_job_res = 0;
-      switch (job_list[i].action_blob.action_case()) {
-        case PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data::kDebugMessage:
-          FWPLOGINFO(*param_.user, "[TODO] do async action {}, msg: {}",
-                     static_cast<int>(job_list[i].action_blob.action_case()), job_list[i].action_blob.DebugString());
-          break;
-        default:
-          FWPLOGERROR(*param_.user, "do invalid async action {}, msg: {}",
-                      static_cast<int>(job_list[i].action_blob.action_case()), job_list[i].action_blob.DebugString());
-          break;
-      }
-
+      int async_job_res = do_job(val_desc->number(), job_list[i].action_blob);
       if (async_job_res < 0) {
         FWPLOGERROR(*param_.user, "do async action {}, msg: {} failed, res: {}({})",
                     static_cast<int>(job_list[i].action_blob.action_case()), job_list[i].action_blob.DebugString(),
                     async_job_res, protobuf_mini_dumper_get_error_msg(async_job_res));
+
+        // 添加重试队列
+        if (job_list[i].action_blob.left_retry_times() > 0) {
+          param_.user->get_user_async_jobs_manager().add_retry_job(val_desc->number(), job_list[i].action_blob);
+        } else {
+          param_.user->get_user_async_jobs_manager().remove_retry_job(val_desc->number(),
+                                                                      job_list[i].action_blob.action_uuid());
+        }
+      } else {
+        // 移除重试队列
+        param_.user->get_user_async_jobs_manager().remove_retry_job(val_desc->number(),
+                                                                    job_list[i].action_blob.action_uuid());
       }
 
       if (batch_job_number >= PROJECT_NAMESPACE_ID::EN_SL_PLAYER_ASYNC_JOBS_BATCH_NUMBER) {
@@ -199,7 +216,61 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
 
         patched_job_number_ += batch_job_number;
         batch_job_number = 0;
-        param_.user->get_user_async_jobs_manager().clear_job_uuids();
+        param_.user->get_user_async_jobs_manager().clear_job_uuids(val_desc->number());
+      }
+    }
+
+    // 再执行retry队列
+    for (auto& job_data_ptr : param_.user->get_user_async_jobs_manager().get_retry_jobs(val_desc->number())) {
+      if (pending_to_logout || need_restart_) {
+        break;
+      }
+      // 如果拉取完玩家下线了，中断后续任务
+      is_writable_ = cache->is_writable();
+      if (!is_writable_) {
+        break;
+      }
+
+      if (!job_data_ptr) {
+        continue;
+      }
+
+      ++batch_job_number;
+      int async_job_res = do_job(val_desc->number(), *job_data_ptr);
+      if (async_job_res < 0) {
+        FWPLOGERROR(*param_.user, "do async action {}, msg: {} failed, res: {}({})",
+                    static_cast<int>(job_data_ptr->action_case()), job_data_ptr->DebugString(), async_job_res,
+                    protobuf_mini_dumper_get_error_msg(async_job_res));
+
+        // 添加重试队列
+        if (job_data_ptr->left_retry_times() > 0) {
+          param_.user->get_user_async_jobs_manager().add_retry_job(val_desc->number(), *job_data_ptr);
+        } else {
+          param_.user->get_user_async_jobs_manager().remove_retry_job(val_desc->number(), job_data_ptr->action_uuid());
+        }
+      } else {
+        // 移除重试队列
+        param_.user->get_user_async_jobs_manager().remove_retry_job(val_desc->number(), job_data_ptr->action_uuid());
+      }
+
+      if (batch_job_number >= PROJECT_NAMESPACE_ID::EN_SL_PLAYER_ASYNC_JOBS_BATCH_NUMBER) {
+        // 如果拉取完玩家下线了，中断后续任务
+        is_writable_ = cache->is_writable();
+        if (!is_writable_) {
+          break;
+        }
+
+        // 保存玩家数据
+        ret = RPC_AWAIT_CODE_RESULT(save_player_data(get_shared_context(), cache, batch_job_number, complete_jobs_idx,
+                                                     val_desc->number(), param_.user->get_user_id(),
+                                                     param_.user->get_zone_id(), param_.user->get_open_id()));
+        if (ret < 0) {
+          break;
+        }
+
+        patched_job_number_ += batch_job_number;
+        batch_job_number = 0;
+        param_.user->get_user_async_jobs_manager().clear_job_uuids(val_desc->number());
       }
     }
 
@@ -223,7 +294,7 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
 
       patched_job_number_ += batch_job_number;
       batch_job_number = 0;
-      param_.user->get_user_async_jobs_manager().clear_job_uuids();
+      param_.user->get_user_async_jobs_manager().clear_job_uuids(val_desc->number());
 
       // 如果对象被踢出（不可写），则放弃后续流程
       is_writable_ = cache->is_writable();
@@ -333,4 +404,38 @@ int task_action_player_remote_patch_jobs::on_failed() {
   }
 
   return get_result();
+}
+
+void task_action_player_remote_patch_jobs::register_callbacks(std::unordered_map<int32_t, callback_type>& callbacks) {
+  callbacks[static_cast<int32_t>(PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data::kDebugMessage)] =
+      [](task_action_player_remote_patch_jobs& /*task_action_inst*/, player& user, int32_t /*job_type*/,
+         const PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data& job_data) -> int32_t {
+    FWPLOGINFO(user, "[TODO] do async action {}, message: {}", static_cast<int32_t>(job_data.action_case()),
+               job_data.DebugString());
+    return 0;
+  };
+}
+
+int32_t task_action_player_remote_patch_jobs::do_job(
+    int32_t job_type, const PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data& job_data) {
+  static std::unordered_map<int32_t, callback_type> callbacks;
+
+  if (callbacks.empty()) {
+    register_callbacks(callbacks);
+  }
+
+  auto iter = callbacks.find(static_cast<int32_t>(job_data.action_case()));
+  if (iter == callbacks.end()) {
+    FWPLOGERROR(*param_.user, "do invalid async action {}, message: {}", static_cast<int>(job_data.action_case()),
+                job_data.DebugString());
+    return 0;
+  }
+
+  if (!iter->second) {
+    FWPLOGERROR(*param_.user, "do invalid async action {}, message: {}", static_cast<int>(job_data.action_case()),
+                job_data.DebugString());
+    return 0;
+  }
+
+  return iter->second(*this, *param_.user, job_type, job_data);
 }

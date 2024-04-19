@@ -275,7 +275,7 @@ void player::init_from_table_data(rpc::context &parent_ctx, const PROJECT_NAMESP
   // }
 
   //! === manager implement === 从数据库读取，注意本接口可能被调用多次，需要清理老数据
-  if (tb_player.has_async_jobs()) {
+  if (tb_player.has_async_job_blob_data()) {
     user_async_jobs_manager_->init_from_table_data(ctx, tb_player);
   }
 
