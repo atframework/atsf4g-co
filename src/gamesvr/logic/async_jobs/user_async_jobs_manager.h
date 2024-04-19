@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <cstddef>
 #include <cstring>
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -34,6 +35,9 @@ PROJECT_NAMESPACE_END
 class player;
 
 class user_async_jobs_manager {
+ public:
+  using async_job_ptr_type = util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>;
+
  public:
   explicit user_async_jobs_manager(player& owner);
   ~user_async_jobs_manager();
@@ -78,10 +82,9 @@ class user_async_jobs_manager {
   void add_job_uuid(int32_t job_type, const std::string& uuid);
   bool is_job_uuid_exists(int32_t job_type, const std::string& uuid);
 
-  void add_retry_job(int32_t job_type, const PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data& job_data);
+  void add_retry_job(int32_t job_type, const async_job_ptr_type& job_data);
   void remove_retry_job(int32_t job_type, const std::string& uuid);
-  std::vector<util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>> get_retry_jobs(
-      int32_t job_type) const;
+  std::vector<async_job_ptr_type> get_retry_jobs(int32_t job_type) const;
 
  private:
   friend class task_action_player_remote_patch_jobs;
@@ -103,8 +106,5 @@ class user_async_jobs_manager {
   std::unordered_map<int32_t, history_map_type> history_uuids_;
   std::unordered_set<int32_t> force_async_job_type_;
 
-  std::unordered_map<
-      int32_t, std::unordered_map<std::string,
-                                  util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>>>
-      retry_jobs_;
+  std::unordered_map<int32_t, std::unordered_map<std::string, async_job_ptr_type>> retry_jobs_;
 };

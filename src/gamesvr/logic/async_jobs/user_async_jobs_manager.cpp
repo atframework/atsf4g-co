@@ -305,17 +305,19 @@ bool user_async_jobs_manager::is_job_uuid_exists(int32_t job_type, const std::st
   return false;
 }
 
-void user_async_jobs_manager::add_retry_job(int32_t job_type,
-                                            const PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data& job_data) {
-  if (job_type <= 0 || job_data.action_uuid().empty()) {
+void user_async_jobs_manager::add_retry_job(int32_t job_type, const async_job_ptr_type& job_data) {
+  if (job_type <= 0 || !job_data) {
+    return;
+  }
+  if (job_data->action_uuid().empty()) {
     return;
   }
 
   auto& job_set = retry_jobs_[job_type];
 
-  auto& job_ptr = job_set[job_data.action_uuid()];
+  auto& job_ptr = job_set[job_data->action_uuid()];
   if (!job_ptr) {
-    job_ptr = util::memory::make_strong_rc<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>(job_data);
+    job_ptr = job_data;
   } else {
     job_ptr->set_left_retry_times(job_ptr->left_retry_times() - 1);
   }
@@ -330,9 +332,9 @@ void user_async_jobs_manager::remove_retry_job(int32_t job_type, const std::stri
   iter_retry_job->second.erase(uuid);
 }
 
-std::vector<util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>>
-user_async_jobs_manager::get_retry_jobs(int32_t job_type) const {
-  std::vector<util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>> ret;
+std::vector<user_async_jobs_manager::async_job_ptr_type> user_async_jobs_manager::get_retry_jobs(
+    int32_t job_type) const {
+  std::vector<async_job_ptr_type> ret;
 
   auto iter_retry_job = retry_jobs_.find(job_type);
   if (iter_retry_job == retry_jobs_.end()) {

@@ -162,7 +162,7 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
     size_t batch_job_number = 0;
 
     // 优先执行数据库存量
-    for (size_t i = 0; i < job_list.size(); ++i) {
+    for (size_t i = 0; i < job_list.size() && !pending_to_logout && false == need_restart_; ++i) {
       // 如果拉取完玩家下线了，中断后续任务
       is_writable_ = cache->is_writable();
       if (!is_writable_) {
@@ -179,24 +179,26 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
       param_.user->get_user_async_jobs_manager().add_job_uuid(val_desc->number(),
                                                               job_list[i].action_blob.action_uuid());
 
+      async_job_ptr_type job_data_ptr =
+          util::memory::make_strong_rc<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>(
+              std::move(job_list[i].action_blob));
+
       ++batch_job_number;
-      int async_job_res = do_job(val_desc->number(), job_list[i].action_blob);
+      int async_job_res = do_job(val_desc->number(), job_data_ptr);
       if (async_job_res < 0) {
         FWPLOGERROR(*param_.user, "do async action {}, msg: {} failed, res: {}({})",
-                    static_cast<int>(job_list[i].action_blob.action_case()), job_list[i].action_blob.DebugString(),
-                    async_job_res, protobuf_mini_dumper_get_error_msg(async_job_res));
+                    static_cast<int>(job_data_ptr->action_case()), job_data_ptr->DebugString(), async_job_res,
+                    protobuf_mini_dumper_get_error_msg(async_job_res));
 
         // 添加重试队列
-        if (job_list[i].action_blob.left_retry_times() > 0) {
-          param_.user->get_user_async_jobs_manager().add_retry_job(val_desc->number(), job_list[i].action_blob);
+        if (job_data_ptr->left_retry_times() > 0) {
+          param_.user->get_user_async_jobs_manager().add_retry_job(val_desc->number(), job_data_ptr);
         } else {
-          param_.user->get_user_async_jobs_manager().remove_retry_job(val_desc->number(),
-                                                                      job_list[i].action_blob.action_uuid());
+          param_.user->get_user_async_jobs_manager().remove_retry_job(val_desc->number(), job_data_ptr->action_uuid());
         }
       } else {
         // 移除重试队列
-        param_.user->get_user_async_jobs_manager().remove_retry_job(val_desc->number(),
-                                                                    job_list[i].action_blob.action_uuid());
+        param_.user->get_user_async_jobs_manager().remove_retry_job(val_desc->number(), job_data_ptr->action_uuid());
       }
 
       if (batch_job_number >= PROJECT_NAMESPACE_ID::EN_SL_PLAYER_ASYNC_JOBS_BATCH_NUMBER) {
@@ -204,6 +206,18 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
         is_writable_ = cache->is_writable();
         if (!is_writable_) {
           break;
+        }
+
+        if (!sub_tasks_.empty() && PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT != ret &&
+            PROJECT_NAMESPACE_ID::EN_ERR_TIMEOUT != ret) {
+          auto await_res = RPC_AWAIT_CODE_RESULT(rpc::wait_tasks(get_shared_context(), sub_tasks_));
+          if (await_res < 0) {
+            if (ret > 0) {
+              ret = await_res;
+            }
+            break;
+          }
+          sub_tasks_.clear();
         }
 
         // 保存玩家数据
@@ -236,7 +250,7 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
       }
 
       ++batch_job_number;
-      int async_job_res = do_job(val_desc->number(), *job_data_ptr);
+      int async_job_res = do_job(val_desc->number(), job_data_ptr);
       if (async_job_res < 0) {
         FWPLOGERROR(*param_.user, "do async action {}, msg: {} failed, res: {}({})",
                     static_cast<int>(job_data_ptr->action_case()), job_data_ptr->DebugString(), async_job_res,
@@ -244,7 +258,7 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
 
         // 添加重试队列
         if (job_data_ptr->left_retry_times() > 0) {
-          param_.user->get_user_async_jobs_manager().add_retry_job(val_desc->number(), *job_data_ptr);
+          param_.user->get_user_async_jobs_manager().add_retry_job(val_desc->number(), job_data_ptr);
         } else {
           param_.user->get_user_async_jobs_manager().remove_retry_job(val_desc->number(), job_data_ptr->action_uuid());
         }
@@ -258,6 +272,18 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
         is_writable_ = cache->is_writable();
         if (!is_writable_) {
           break;
+        }
+
+        if (!sub_tasks_.empty() && PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT != ret &&
+            PROJECT_NAMESPACE_ID::EN_ERR_TIMEOUT != ret) {
+          auto await_res = RPC_AWAIT_CODE_RESULT(rpc::wait_tasks(get_shared_context(), sub_tasks_));
+          if (await_res < 0) {
+            if (ret > 0) {
+              ret = await_res;
+            }
+            break;
+          }
+          sub_tasks_.clear();
         }
 
         // 保存玩家数据
@@ -282,6 +308,18 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
     is_writable_ = cache->is_writable();
     if (!is_writable_) {
       break;
+    }
+
+    if (!sub_tasks_.empty() && PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT != ret &&
+        PROJECT_NAMESPACE_ID::EN_ERR_TIMEOUT != ret) {
+      auto await_res = RPC_AWAIT_CODE_RESULT(rpc::wait_tasks(get_shared_context(), sub_tasks_));
+      if (await_res < 0) {
+        if (ret > 0) {
+          ret = await_res;
+        }
+        break;
+      }
+      sub_tasks_.clear();
     }
 
     if (batch_job_number > 0 || !complete_jobs_idx.empty()) {
@@ -406,36 +444,71 @@ int task_action_player_remote_patch_jobs::on_failed() {
   return get_result();
 }
 
-void task_action_player_remote_patch_jobs::register_callbacks(std::unordered_map<int32_t, callback_type>& callbacks) {
-  callbacks[static_cast<int32_t>(PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data::kDebugMessage)] =
+void task_action_player_remote_patch_jobs::register_callbacks(
+    std::unordered_map<int32_t, sync_callback_type>& sync_callbacks,
+    std::unordered_map<int32_t, async_callback_type>& /*async_callbacks*/) {
+  sync_callbacks[static_cast<int32_t>(PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data::kDebugMessage)] =
       [](task_action_player_remote_patch_jobs& /*task_action_inst*/, player& user, int32_t /*job_type*/,
-         const PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data& job_data) -> int32_t {
-    FWPLOGINFO(user, "[TODO] do async action {}, message: {}", static_cast<int32_t>(job_data.action_case()),
-               job_data.DebugString());
+         async_job_ptr_type job_data) -> int32_t {
+    FWPLOGINFO(user, "[TODO] do async action {}, message: {}", static_cast<int32_t>(job_data->action_case()),
+               job_data->DebugString());
     return 0;
   };
 }
 
-int32_t task_action_player_remote_patch_jobs::do_job(
-    int32_t job_type, const PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data& job_data) {
-  static std::unordered_map<int32_t, callback_type> callbacks;
-
-  if (callbacks.empty()) {
-    register_callbacks(callbacks);
-  }
-
-  auto iter = callbacks.find(static_cast<int32_t>(job_data.action_case()));
-  if (iter == callbacks.end()) {
-    FWPLOGERROR(*param_.user, "do invalid async action {}, message: {}", static_cast<int>(job_data.action_case()),
-                job_data.DebugString());
+int32_t task_action_player_remote_patch_jobs::do_job(int32_t job_type, const async_job_ptr_type& job_data) {
+  if (!job_data) {
     return 0;
   }
 
-  if (!iter->second) {
-    FWPLOGERROR(*param_.user, "do invalid async action {}, message: {}", static_cast<int>(job_data.action_case()),
-                job_data.DebugString());
+  static std::unordered_map<int32_t, sync_callback_type> sync_callbacks;
+  static std::unordered_map<int32_t, async_callback_type> async_callbacks;
+
+  if (sync_callbacks.empty() && async_callbacks.empty()) {
+    register_callbacks(sync_callbacks, async_callbacks);
+  }
+
+  auto iter_sync = sync_callbacks.find(static_cast<int32_t>(job_data->action_case()));
+  if (iter_sync != sync_callbacks.end() && iter_sync->second) {
+    return iter_sync->second(*this, *param_.user, job_type, job_data);
+  }
+
+  auto iter_async = async_callbacks.find(static_cast<int32_t>(job_data->action_case()));
+  if (iter_async != async_callbacks.end() && iter_async->second) {
+    auto fds = PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data::descriptor()->FindFieldByNumber(
+        static_cast<int32_t>(job_data->action_case()));
+    std::string sub_job_name;
+    if (nullptr == fds) {
+      sub_job_name =
+          util::log::format("task_action_player_remote_patch_jobs.{}", static_cast<int32_t>(job_data->action_case()));
+    } else {
+      sub_job_name = util::log::format("task_action_player_remote_patch_jobs.{}", fds->name());
+    }
+    auto fn = iter_async->second;
+    auto user_ptr = param_.user;
+    auto ret = rpc::async_invoke(get_shared_context(), sub_job_name,
+                                 [user_ptr, job_type, job_data, fn](rpc::context& child_ctx) -> rpc::result_code_type {
+                                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(fn(child_ctx, *user_ptr, job_type, job_data)));
+                                 });
+
+    if (ret.is_error()) {
+      return *ret.get_error();
+    } else {
+      append_sub_task(*ret.get_success());
+    }
+
     return 0;
   }
 
-  return iter->second(*this, *param_.user, job_type, job_data);
+  FWPLOGERROR(*param_.user, "do invalid async action {}, message: {}", static_cast<int>(job_data->action_case()),
+              job_data->DebugString());
+  return 0;
+}
+
+void task_action_player_remote_patch_jobs::append_sub_task(task_type_trait::task_type task_inst) {
+  if (task_type_trait::empty(task_inst) || task_type_trait::is_exiting(task_inst)) {
+    return;
+  }
+
+  sub_tasks_.emplace_back(std::move(task_inst));
 }
