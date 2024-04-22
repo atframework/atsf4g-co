@@ -409,6 +409,28 @@ function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
     set(project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY "${TARGET_NAME}/bin")
   endif()
 
+  if(BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY)
+    set(project_service_declare_instance_USE_SHARED_LIBRARY TRUE)
+  else()
+    set(project_service_declare_instance_USE_SHARED_LIBRARY FALSE)
+  endif()
+  file(
+    GENERATE
+    OUTPUT "${PROJECT_INSTALL_BAS_DIR}/${project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY}/package-version.txt"
+    CONTENT
+      "project_service_name: ${TARGET_NAME}
+project_service_output_directory: ${project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY}
+project_service_output_path: ${project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY}/$<TARGET_FILE_BASE_NAME:${TARGET_NAME}>
+project_package_version: ${SERVER_FRAME_PROJECT_CONFIGURE_VERSION}
+project_bussiness_version: ${SERVER_FRAME_PROJECT_USER_BUSSINESS_VERSION}
+vcs_short_sha: ${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}
+vcs_commit_sha: ${SERVER_FRAME_VCS_COMMIT_SHA}
+vcs_user_name: ${PROJECT_GIT_REPO_USER_NAME}
+vcs_branch: ${SERVER_FRAME_VCS_SERVER_BRANCH}
+vcs_commit: ${SERVER_FRAME_VCS_COMMIT}
+vcs_branch: ${SERVER_FRAME_VCS_VERSION}
+use_shared_library: ${project_service_declare_instance_USE_SHARED_LIBRARY}
+")
   set_target_properties(
     ${TARGET_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY
@@ -460,6 +482,9 @@ function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
     RUNTIME DESTINATION "${project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}"
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}")
+  install(
+    FILES "${PROJECT_INSTALL_BAS_DIR}/${project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY}/package-version.txt"
+    DESTINATION "${project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY}")
 
   if(project_service_declare_instance_RESOURCE_DIRECTORIES)
     foreach(RESOURCE_DIRECTORY ${project_service_declare_instance_RESOURCE_DIRECTORIES})

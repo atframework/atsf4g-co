@@ -48,6 +48,7 @@ SERVER_FRAME_CONFIG_API const char* server_frame_vcs_get_commit_sha();
 SERVER_FRAME_CONFIG_API const char* server_frame_vcs_get_commit_short_sha();
 SERVER_FRAME_CONFIG_API const char* server_frame_vcs_get_server_branch();
 SERVER_FRAME_CONFIG_API const char* server_frame_project_get_version();
+SERVER_FRAME_CONFIG_API const char* server_frame_get_user_bussiness_version();
 
 #define EXCEL_CONFIG_LOADER_API SERVER_FRAME_CONFIG_API
 #define EXCEL_CONFIG_SYMBOL_VISIBLE UTIL_SYMBOL_VISIBLE

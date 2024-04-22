@@ -8,6 +8,7 @@
 #cmakedefine SERVER_FRAME_VCS_COMMIT_SHORT_SHA u8"@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@"
 #cmakedefine SERVER_FRAME_VCS_SERVER_BRANCH u8"@SERVER_FRAME_VCS_SERVER_BRANCH@"
 #cmakedefine SERVER_FRAME_PROJECT_CONFIGURE_VERSION u8"@SERVER_FRAME_PROJECT_CONFIGURE_VERSION@"
+#cmakedefine SERVER_FRAME_PROJECT_USER_BUSSINESS_VERSION u8"@SERVER_FRAME_PROJECT_USER_BUSSINESS_VERSION@"
 
 #ifdef SERVER_FRAME_VCS_COMMIT
 SERVER_FRAME_CONFIG_API const char* server_frame_vcs_get_commit() { return (const char*)SERVER_FRAME_VCS_COMMIT; }
@@ -57,4 +58,12 @@ SERVER_FRAME_CONFIG_API const char* server_frame_project_get_version() {
 }
 #else
 SERVER_FRAME_CONFIG_API const char* server_frame_project_get_version() { return (const char*)u8"0.1.0"; }
+#endif
+
+#ifdef SERVER_FRAME_PROJECT_USER_BUSSINESS_VERSION
+SERVER_FRAME_CONFIG_API const char* server_frame_get_user_bussiness_version() {
+  return (const char*)SERVER_FRAME_PROJECT_USER_BUSSINESS_VERSION;
+}
+#else
+SERVER_FRAME_CONFIG_API const char* server_frame_get_user_bussiness_version() { return (const char*)u8"0.0.0.0"; }
 #endif
