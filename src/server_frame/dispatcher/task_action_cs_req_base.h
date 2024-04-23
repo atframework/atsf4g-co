@@ -77,6 +77,7 @@ class UTIL_SYMBOL_VISIBLE task_action_cs_req_base : public task_action_req_base<
   }
 
  protected:
+  SERVER_FRAME_API void write_actor_log_head();
   SERVER_FRAME_API void send_response() override;
   SERVER_FRAME_API void send_response(bool sync_dirty);
   SERVER_FRAME_API void write_actor_log_body(const google::protobuf::Message &msg, const atframework::CSMsgHead &head,

@@ -30,6 +30,7 @@ class context;
 }
 
 class session;
+class task_action_cs_req_base;
 
 /**
  * @brief 用户数据包装，自动标记写脏
@@ -148,6 +149,9 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
    * @brief 等待登出前需要结算完的任务
    */
   virtual rpc::result_code_type await_before_logout_tasks(rpc::context &ctx);
+
+  virtual int32_t client_rpc_filter(rpc::context &ctx, task_action_cs_req_base &cs_task_action,
+                                    const atframework::DispatcherOptions *dispatcher_options);
 
   /**
    * @brief 监视关联的Session

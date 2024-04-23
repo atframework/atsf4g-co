@@ -593,7 +593,8 @@ class UTIL_SYMBOL_LOCAL PrometheusFileBackend {
     }
 
     std::vector<::prometheus::MetricFamily> translated =
-        ::opentelemetry::exporter::metrics::PrometheusExporterUtils::TranslateToPrometheus(data);
+        ::opentelemetry::exporter::metrics::PrometheusExporterUtils::TranslateToPrometheus(
+            data, options_.populate_target_info, options_.without_otel_scope);
 
     if (file_->written_size > 0 && file_->written_size >= options_.file_size) {
       RotateLog();

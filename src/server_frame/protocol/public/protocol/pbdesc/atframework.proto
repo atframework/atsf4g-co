@@ -25,9 +25,10 @@ option (CONST_SETTINGS) = {
 };
 
 message DispatcherOptions {
-  string module_name = 101;            // module name
-  string api_name = 102;               // api name
-  repeated string descriptions = 103;  // descriptions
+  string module_name = 101;                     // module name
+  string api_name = 102;                        // api name
+  repeated string descriptions = 103;           // descriptions
+  repeated string bussiness_module_name = 104;  // bussiness module name used by specific service instance
 
   google.protobuf.Duration timeout = 201;  // custom timeout
 

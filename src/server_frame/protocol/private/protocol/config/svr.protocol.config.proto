@@ -128,20 +128,50 @@ message opentelemetry_exporter_otlp_header {
   string value = 2;
 }
 
+enum opentelemetry_aggregation_type {
+  EN_OPENTELEMETRY_AGGREGATION_UNSPECIFIED = 0 [(atapp.protocol.ENUMVALUE) = { alias_name: "unspecified" }];
+  EN_OPENTELEMETRY_AGGREGATION_DELTA = 1 [(atapp.protocol.ENUMVALUE) = { alias_name: "delta" }];
+  EN_OPENTELEMETRY_AGGREGATION_CUMULATIVE = 2 [(atapp.protocol.ENUMVALUE) = { alias_name: "cumulative" }];
+  EN_OPENTELEMETRY_AGGREGATION_LOW_MEMORY = 3 [(atapp.protocol.ENUMVALUE) = { alias_name: "low_memory" }];
+}
+
 message opentelemetry_exporter_otlp_grpc {
   string endpoint = 11;
   bool insecure = 12 [(atapp.protocol.CONFIGURE) = { default_value: "true" }];
-  string ca_file = 13;
+  string user_agent = 13;
   google.protobuf.Duration timeout = 14 [(atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "16ms" }];
   repeated opentelemetry_exporter_otlp_header headers = 15;
+
+  uint32 max_concurrent_requests = 16 [(atapp.protocol.CONFIGURE) = { default_value: "64" }];
+  opentelemetry_aggregation_type aggregation_temporality = 17;
+
+  string ssl_ca_cert_path = 21;
+  string ssl_ca_cert_string = 22;
+  string ssl_client_key_path = 23;
+  string ssl_client_key_string = 24;
+  string ssl_client_cert_path = 25;
+  string ssl_client_cert_string = 26;
 }
 
 message opentelemetry_exporter_otlp_http {
   string endpoint = 11;
   google.protobuf.Duration timeout = 12 [(atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "16ms" }];
+  bool insecure = 13 [(atapp.protocol.CONFIGURE) = { default_value: "true" }];
   repeated opentelemetry_exporter_otlp_header headers = 14;
-  uint32 max_concurrent_requests = 15;
-  uint32 max_requests_per_connection = 16;
+  uint32 max_concurrent_requests = 15 [(atapp.protocol.CONFIGURE) = { default_value: "64" }];
+  uint32 max_requests_per_connection = 16 [(atapp.protocol.CONFIGURE) = { default_value: "16" }];
+  opentelemetry_aggregation_type aggregation_temporality = 17;
+
+  string ssl_ca_cert_path = 21;
+  string ssl_ca_cert_string = 22;
+  string ssl_client_key_path = 23;
+  string ssl_client_key_string = 24;
+  string ssl_client_cert_path = 25;
+  string ssl_client_cert_string = 26;
+  string ssl_min_tls = 27;
+  string ssl_max_tls = 28;
+  string ssl_cipher = 29;
+  string ssl_cipher_suite = 30;
 }
 
 message opentelemetry_trace_exporter_cfg {
@@ -185,6 +215,9 @@ message opentelemetry_trace_cfg {
 
 message opentelemetry_exporter_prometheus_pull {
   string url = 1;
+
+  bool populate_target_info = 11 [(atapp.protocol.CONFIGURE) = { default_value: "true" }];
+  bool without_otel_scope = 12;
 }
 
 message opentelemetry_exporter_prometheus_push {
@@ -194,6 +227,9 @@ message opentelemetry_exporter_prometheus_push {
   map<string, string> labels = 4;
   string username = 5;
   string password = 6;
+
+  bool populate_target_info = 11 [(atapp.protocol.CONFIGURE) = { default_value: "true" }];
+  bool without_otel_scope = 12;
 }
 
 message opentelemetry_exporter_prometheus_file {
@@ -203,6 +239,9 @@ message opentelemetry_exporter_prometheus_file {
   uint64 flush_count = 4 [(atapp.protocol.CONFIGURE) = { default_value: "128" }];
   uint64 file_size = 5 [(atapp.protocol.CONFIGURE) = { default_value: "20MB" size_mode: true }];
   uint32 rotate_size = 6 [(atapp.protocol.CONFIGURE) = { default_value: "3" }];
+
+  bool populate_target_info = 11 [(atapp.protocol.CONFIGURE) = { default_value: "true" }];
+  bool without_otel_scope = 12;
 }
 
 message opentelemetry_exporter_prometheus_http_api {

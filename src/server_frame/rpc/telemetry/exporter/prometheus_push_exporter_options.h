@@ -28,6 +28,12 @@ struct UTIL_SYMBOL_VISIBLE PrometheusPushExporterOptions {
 
   std::size_t max_collection_size = 2000;
 
+  // Populating target_info
+  bool populate_target_info = true;
+
+  // Populating otel_scope_name/otel_scope_labels attributes
+  bool without_otel_scope = false;
+
   inline PrometheusPushExporterOptions() noexcept {}
 };
 

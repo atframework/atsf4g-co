@@ -1366,7 +1366,9 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> _op
     opentelemetry::exporter::otlp::OtlpGrpcExporterOptions options;
     options.endpoint = exporter_cfg.otlp_grpc().endpoint();
     options.use_ssl_credentials = !exporter_cfg.otlp_grpc().insecure();
-    options.ssl_credentials_cacert_path = exporter_cfg.otlp_grpc().ca_file();
+    if (!exporter_cfg.otlp_grpc().user_agent().empty()) {
+      options.user_agent = exporter_cfg.otlp_grpc().user_agent();
+    }
     if (exporter_cfg.otlp_grpc().timeout().seconds() > 0 || exporter_cfg.otlp_grpc().timeout().nanos() > 0) {
       options.timeout = std::chrono::duration_cast<std::chrono::system_clock::duration>(
           std::chrono::seconds(exporter_cfg.otlp_grpc().timeout().seconds()) +
@@ -1378,6 +1380,28 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> _op
       }
       options.metadata.emplace(opentelemetry::exporter::otlp::OtlpHeaders::value_type(header.key(), header.value()));
     }
+
+    options.max_concurrent_requests = exporter_cfg.otlp_grpc().max_concurrent_requests();
+    if (!exporter_cfg.otlp_grpc().ssl_ca_cert_path().empty()) {
+      options.ssl_credentials_cacert_path = exporter_cfg.otlp_grpc().ssl_ca_cert_path();
+    }
+    if (!exporter_cfg.otlp_grpc().ssl_ca_cert_string().empty()) {
+      options.ssl_credentials_cacert_as_string = exporter_cfg.otlp_grpc().ssl_ca_cert_string();
+    }
+#if defined(ENABLE_OTLP_GRPC_SSL_MTLS_PREVIEW)
+    if (!exporter_cfg.otlp_grpc().ssl_client_key_path().empty()) {
+      options.ssl_client_key_path = exporter_cfg.otlp_grpc().ssl_client_key_path();
+    }
+    if (!exporter_cfg.otlp_grpc().ssl_client_key_string().empty()) {
+      options.ssl_client_key_string = exporter_cfg.otlp_grpc().ssl_client_key_string();
+    }
+    if (!exporter_cfg.otlp_grpc().ssl_client_cert_path().empty()) {
+      options.ssl_client_cert_path = exporter_cfg.otlp_grpc().ssl_client_cert_path();
+    }
+    if (!exporter_cfg.otlp_grpc().ssl_client_cert_string().empty()) {
+      options.ssl_client_cert_string = exporter_cfg.otlp_grpc().ssl_client_cert_string();
+    }
+#endif
 
     ret.emplace_back(opentelemetry::exporter::otlp::OtlpGrpcExporterFactory::Create(options));
   }
@@ -1398,6 +1422,37 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> _op
     }
     options.max_concurrent_requests = exporter_cfg.otlp_http().max_concurrent_requests();
     options.max_requests_per_connection = exporter_cfg.otlp_http().max_requests_per_connection();
+
+    if (!exporter_cfg.otlp_http().ssl_ca_cert_path().empty()) {
+      options.ssl_ca_cert_path = exporter_cfg.otlp_http().ssl_ca_cert_path();
+    }
+    if (!exporter_cfg.otlp_http().ssl_ca_cert_string().empty()) {
+      options.ssl_ca_cert_string = exporter_cfg.otlp_http().ssl_ca_cert_string();
+    }
+    if (!exporter_cfg.otlp_http().ssl_client_key_path().empty()) {
+      options.ssl_client_key_path = exporter_cfg.otlp_http().ssl_client_key_path();
+    }
+    if (!exporter_cfg.otlp_http().ssl_client_key_string().empty()) {
+      options.ssl_client_key_string = exporter_cfg.otlp_http().ssl_client_key_string();
+    }
+    if (!exporter_cfg.otlp_http().ssl_client_cert_path().empty()) {
+      options.ssl_client_cert_path = exporter_cfg.otlp_http().ssl_client_cert_path();
+    }
+    if (!exporter_cfg.otlp_http().ssl_client_cert_string().empty()) {
+      options.ssl_client_cert_string = exporter_cfg.otlp_http().ssl_client_cert_string();
+    }
+    if (!exporter_cfg.otlp_http().ssl_min_tls().empty()) {
+      options.ssl_min_tls = exporter_cfg.otlp_http().ssl_min_tls();
+    }
+    if (!exporter_cfg.otlp_http().ssl_max_tls().empty()) {
+      options.ssl_max_tls = exporter_cfg.otlp_http().ssl_max_tls();
+    }
+    if (!exporter_cfg.otlp_http().ssl_cipher().empty()) {
+      options.ssl_cipher = exporter_cfg.otlp_http().ssl_cipher();
+    }
+    if (!exporter_cfg.otlp_http().ssl_cipher_suite().empty()) {
+      options.ssl_cipher_suite = exporter_cfg.otlp_http().ssl_cipher_suite();
+    }
 
     ret.emplace_back(opentelemetry::exporter::otlp::OtlpHttpExporterFactory::Create(options));
   }
@@ -1501,7 +1556,9 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
     opentelemetry::exporter::otlp::OtlpGrpcMetricExporterOptions options;
     options.endpoint = exporter_cfg.otlp_grpc().endpoint();
     options.use_ssl_credentials = !exporter_cfg.otlp_grpc().insecure();
-    options.ssl_credentials_cacert_path = exporter_cfg.otlp_grpc().ca_file();
+    if (!exporter_cfg.otlp_grpc().user_agent().empty()) {
+      options.user_agent = exporter_cfg.otlp_grpc().user_agent();
+    }
     if (exporter_cfg.otlp_grpc().timeout().seconds() > 0 || exporter_cfg.otlp_grpc().timeout().nanos() > 0) {
       options.timeout = std::chrono::duration_cast<std::chrono::system_clock::duration>(
           std::chrono::seconds(exporter_cfg.otlp_grpc().timeout().seconds()) +
@@ -1514,10 +1571,48 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
 
       options.metadata.emplace(opentelemetry::exporter::otlp::OtlpHeaders::value_type(header.key(), header.value()));
     }
-#if (OPENTELEMETRY_VERSION_MAJOR * 1000 + OPENTELEMETRY_VERSION_MINOR) >= 1011
-    options.aggregation_temporality = opentelemetry::exporter::otlp::PreferredAggregationTemporality::kCumulative;
-#else
-    options.aggregation_temporality = opentelemetry::sdk::metrics::AggregationTemporality::kCumulative;
+    switch (exporter_cfg.otlp_grpc().aggregation_temporality()) {
+      case PROJECT_NAMESPACE_ID::config::EN_OPENTELEMETRY_AGGREGATION_UNSPECIFIED: {
+        options.aggregation_temporality = opentelemetry::exporter::otlp::PreferredAggregationTemporality::kUnspecified;
+        break;
+      }
+      case PROJECT_NAMESPACE_ID::config::EN_OPENTELEMETRY_AGGREGATION_DELTA: {
+        options.aggregation_temporality = opentelemetry::exporter::otlp::PreferredAggregationTemporality::kDelta;
+        break;
+      }
+      case PROJECT_NAMESPACE_ID::config::EN_OPENTELEMETRY_AGGREGATION_CUMULATIVE: {
+        options.aggregation_temporality = opentelemetry::exporter::otlp::PreferredAggregationTemporality::kCumulative;
+        break;
+      }
+      case PROJECT_NAMESPACE_ID::config::EN_OPENTELEMETRY_AGGREGATION_LOW_MEMORY: {
+        options.aggregation_temporality = opentelemetry::exporter::otlp::PreferredAggregationTemporality::kLowMemory;
+        break;
+      }
+      default: {
+        break;
+      }
+    }
+
+    options.max_concurrent_requests = exporter_cfg.otlp_grpc().max_concurrent_requests();
+    if (!exporter_cfg.otlp_grpc().ssl_ca_cert_path().empty()) {
+      options.ssl_credentials_cacert_path = exporter_cfg.otlp_grpc().ssl_ca_cert_path();
+    }
+    if (!exporter_cfg.otlp_grpc().ssl_ca_cert_string().empty()) {
+      options.ssl_credentials_cacert_as_string = exporter_cfg.otlp_grpc().ssl_ca_cert_string();
+    }
+#if defined(ENABLE_OTLP_GRPC_SSL_MTLS_PREVIEW)
+    if (!exporter_cfg.otlp_grpc().ssl_client_key_path().empty()) {
+      options.ssl_client_key_path = exporter_cfg.otlp_grpc().ssl_client_key_path();
+    }
+    if (!exporter_cfg.otlp_grpc().ssl_client_key_string().empty()) {
+      options.ssl_client_key_string = exporter_cfg.otlp_grpc().ssl_client_key_string();
+    }
+    if (!exporter_cfg.otlp_grpc().ssl_client_cert_path().empty()) {
+      options.ssl_client_cert_path = exporter_cfg.otlp_grpc().ssl_client_cert_path();
+    }
+    if (!exporter_cfg.otlp_grpc().ssl_client_cert_string().empty()) {
+      options.ssl_client_cert_string = exporter_cfg.otlp_grpc().ssl_client_cert_string();
+    }
 #endif
 
     ret.emplace_back(opentelemetry::exporter::otlp::OtlpGrpcMetricExporterFactory::Create(options));
@@ -1537,11 +1632,58 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
       options.http_headers.emplace(
           opentelemetry::exporter::otlp::OtlpHeaders::value_type(header.key(), header.value()));
     }
-#if (OPENTELEMETRY_VERSION_MAJOR * 1000 + OPENTELEMETRY_VERSION_MINOR) >= 1011
-    options.aggregation_temporality = opentelemetry::exporter::otlp::PreferredAggregationTemporality::kCumulative;
-#else
-    options.aggregation_temporality = opentelemetry::sdk::metrics::AggregationTemporality::kCumulative;
-#endif
+    switch (exporter_cfg.otlp_http().aggregation_temporality()) {
+      case PROJECT_NAMESPACE_ID::config::EN_OPENTELEMETRY_AGGREGATION_UNSPECIFIED: {
+        options.aggregation_temporality = opentelemetry::exporter::otlp::PreferredAggregationTemporality::kUnspecified;
+        break;
+      }
+      case PROJECT_NAMESPACE_ID::config::EN_OPENTELEMETRY_AGGREGATION_DELTA: {
+        options.aggregation_temporality = opentelemetry::exporter::otlp::PreferredAggregationTemporality::kDelta;
+        break;
+      }
+      case PROJECT_NAMESPACE_ID::config::EN_OPENTELEMETRY_AGGREGATION_CUMULATIVE: {
+        options.aggregation_temporality = opentelemetry::exporter::otlp::PreferredAggregationTemporality::kCumulative;
+        break;
+      }
+      case PROJECT_NAMESPACE_ID::config::EN_OPENTELEMETRY_AGGREGATION_LOW_MEMORY: {
+        options.aggregation_temporality = opentelemetry::exporter::otlp::PreferredAggregationTemporality::kLowMemory;
+        break;
+      }
+      default: {
+        break;
+      }
+    }
+
+    if (!exporter_cfg.otlp_http().ssl_ca_cert_path().empty()) {
+      options.ssl_ca_cert_path = exporter_cfg.otlp_http().ssl_ca_cert_path();
+    }
+    if (!exporter_cfg.otlp_http().ssl_ca_cert_string().empty()) {
+      options.ssl_ca_cert_string = exporter_cfg.otlp_http().ssl_ca_cert_string();
+    }
+    if (!exporter_cfg.otlp_http().ssl_client_key_path().empty()) {
+      options.ssl_client_key_path = exporter_cfg.otlp_http().ssl_client_key_path();
+    }
+    if (!exporter_cfg.otlp_http().ssl_client_key_string().empty()) {
+      options.ssl_client_key_string = exporter_cfg.otlp_http().ssl_client_key_string();
+    }
+    if (!exporter_cfg.otlp_http().ssl_client_cert_path().empty()) {
+      options.ssl_client_cert_path = exporter_cfg.otlp_http().ssl_client_cert_path();
+    }
+    if (!exporter_cfg.otlp_http().ssl_client_cert_string().empty()) {
+      options.ssl_client_cert_string = exporter_cfg.otlp_http().ssl_client_cert_string();
+    }
+    if (!exporter_cfg.otlp_http().ssl_min_tls().empty()) {
+      options.ssl_min_tls = exporter_cfg.otlp_http().ssl_min_tls();
+    }
+    if (!exporter_cfg.otlp_http().ssl_max_tls().empty()) {
+      options.ssl_max_tls = exporter_cfg.otlp_http().ssl_max_tls();
+    }
+    if (!exporter_cfg.otlp_http().ssl_cipher().empty()) {
+      options.ssl_cipher = exporter_cfg.otlp_http().ssl_cipher();
+    }
+    if (!exporter_cfg.otlp_http().ssl_cipher_suite().empty()) {
+      options.ssl_cipher_suite = exporter_cfg.otlp_http().ssl_cipher_suite();
+    }
 
     options.max_concurrent_requests = exporter_cfg.otlp_http().max_concurrent_requests();
     options.max_requests_per_connection = exporter_cfg.otlp_http().max_requests_per_connection();
@@ -1562,6 +1704,9 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
     options.username = exporter_cfg.prometheus_push().username();
     options.password = exporter_cfg.prometheus_push().password();
 
+    options.populate_target_info = exporter_cfg.prometheus_push().populate_target_info();
+    options.without_otel_scope = exporter_cfg.prometheus_push().without_otel_scope();
+
     ret.emplace_back(exporter::metrics::PrometheusPushExporterFactory::Create(options));
   }
 
@@ -1575,6 +1720,9 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
     options.flush_interval = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::seconds{exporter_cfg.prometheus_file().flush_interval().seconds()} +
         std::chrono::nanoseconds{exporter_cfg.prometheus_file().flush_interval().nanos()});
+
+    options.populate_target_info = exporter_cfg.prometheus_push().populate_target_info();
+    options.without_otel_scope = exporter_cfg.prometheus_push().without_otel_scope();
 
     ret.emplace_back(exporter::metrics::PrometheusFileExporterFactory::Create(options));
   }
@@ -1613,6 +1761,8 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricReader>> _
   if (exporter_cfg.has_prometheus_pull() && !exporter_cfg.prometheus_pull().url().empty()) {
     opentelemetry::exporter::metrics::PrometheusExporterOptions exporter_options;
     exporter_options.url = exporter_cfg.prometheus_pull().url();
+    exporter_options.populate_target_info = exporter_cfg.prometheus_push().populate_target_info();
+    exporter_options.without_otel_scope = exporter_cfg.prometheus_push().without_otel_scope();
     ret.emplace_back(opentelemetry::exporter::metrics::PrometheusExporterFactory::Create(exporter_options));
   }
 
@@ -1711,7 +1861,9 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogRecordExporter>>
 #endif
     options.endpoint = exporter_cfg.otlp_grpc().endpoint();
     options.use_ssl_credentials = !exporter_cfg.otlp_grpc().insecure();
-    options.ssl_credentials_cacert_path = exporter_cfg.otlp_grpc().ca_file();
+    if (!exporter_cfg.otlp_grpc().user_agent().empty()) {
+      options.user_agent = exporter_cfg.otlp_grpc().user_agent();
+    }
     if (exporter_cfg.otlp_grpc().timeout().seconds() > 0 || exporter_cfg.otlp_grpc().timeout().nanos() > 0) {
       options.timeout = std::chrono::duration_cast<std::chrono::system_clock::duration>(
           std::chrono::seconds(exporter_cfg.otlp_grpc().timeout().seconds()) +
@@ -1724,6 +1876,28 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogRecordExporter>>
 
       options.metadata.emplace(opentelemetry::exporter::otlp::OtlpHeaders::value_type(header.key(), header.value()));
     }
+
+    options.max_concurrent_requests = exporter_cfg.otlp_grpc().max_concurrent_requests();
+    if (!exporter_cfg.otlp_grpc().ssl_ca_cert_path().empty()) {
+      options.ssl_credentials_cacert_path = exporter_cfg.otlp_grpc().ssl_ca_cert_path();
+    }
+    if (!exporter_cfg.otlp_grpc().ssl_ca_cert_string().empty()) {
+      options.ssl_credentials_cacert_as_string = exporter_cfg.otlp_grpc().ssl_ca_cert_string();
+    }
+#if defined(ENABLE_OTLP_GRPC_SSL_MTLS_PREVIEW)
+    if (!exporter_cfg.otlp_grpc().ssl_client_key_path().empty()) {
+      options.ssl_client_key_path = exporter_cfg.otlp_grpc().ssl_client_key_path();
+    }
+    if (!exporter_cfg.otlp_grpc().ssl_client_key_string().empty()) {
+      options.ssl_client_key_string = exporter_cfg.otlp_grpc().ssl_client_key_string();
+    }
+    if (!exporter_cfg.otlp_grpc().ssl_client_cert_path().empty()) {
+      options.ssl_client_cert_path = exporter_cfg.otlp_grpc().ssl_client_cert_path();
+    }
+    if (!exporter_cfg.otlp_grpc().ssl_client_cert_string().empty()) {
+      options.ssl_client_cert_string = exporter_cfg.otlp_grpc().ssl_client_cert_string();
+    }
+#endif
 
     ret.emplace_back(opentelemetry::exporter::otlp::OtlpGrpcLogRecordExporterFactory::Create(options));
   }
@@ -1744,6 +1918,37 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogRecordExporter>>
     }
     options.max_concurrent_requests = exporter_cfg.otlp_http().max_concurrent_requests();
     options.max_requests_per_connection = exporter_cfg.otlp_http().max_requests_per_connection();
+
+    if (!exporter_cfg.otlp_http().ssl_ca_cert_path().empty()) {
+      options.ssl_ca_cert_path = exporter_cfg.otlp_http().ssl_ca_cert_path();
+    }
+    if (!exporter_cfg.otlp_http().ssl_ca_cert_string().empty()) {
+      options.ssl_ca_cert_string = exporter_cfg.otlp_http().ssl_ca_cert_string();
+    }
+    if (!exporter_cfg.otlp_http().ssl_client_key_path().empty()) {
+      options.ssl_client_key_path = exporter_cfg.otlp_http().ssl_client_key_path();
+    }
+    if (!exporter_cfg.otlp_http().ssl_client_key_string().empty()) {
+      options.ssl_client_key_string = exporter_cfg.otlp_http().ssl_client_key_string();
+    }
+    if (!exporter_cfg.otlp_http().ssl_client_cert_path().empty()) {
+      options.ssl_client_cert_path = exporter_cfg.otlp_http().ssl_client_cert_path();
+    }
+    if (!exporter_cfg.otlp_http().ssl_client_cert_string().empty()) {
+      options.ssl_client_cert_string = exporter_cfg.otlp_http().ssl_client_cert_string();
+    }
+    if (!exporter_cfg.otlp_http().ssl_min_tls().empty()) {
+      options.ssl_min_tls = exporter_cfg.otlp_http().ssl_min_tls();
+    }
+    if (!exporter_cfg.otlp_http().ssl_max_tls().empty()) {
+      options.ssl_max_tls = exporter_cfg.otlp_http().ssl_max_tls();
+    }
+    if (!exporter_cfg.otlp_http().ssl_cipher().empty()) {
+      options.ssl_cipher = exporter_cfg.otlp_http().ssl_cipher();
+    }
+    if (!exporter_cfg.otlp_http().ssl_cipher_suite().empty()) {
+      options.ssl_cipher_suite = exporter_cfg.otlp_http().ssl_cipher_suite();
+    }
 
     ret.emplace_back(opentelemetry::exporter::otlp::OtlpHttpLogRecordExporterFactory::Create(options));
   }

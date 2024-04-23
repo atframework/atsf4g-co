@@ -172,6 +172,11 @@ void player_cache::send_all_syn_msg(rpc::context &) {}
 
 rpc::result_code_type player_cache::await_before_logout_tasks(rpc::context &) { RPC_RETURN_CODE(0); }
 
+int32_t player_cache::client_rpc_filter(rpc::context &/*ctx*/, task_action_cs_req_base & /*cs_task_action*/,
+                                        const atframework::DispatcherOptions * /*dispatcher_options*/) {
+  return 0;
+}
+
 void player_cache::set_session(rpc::context &ctx, std::shared_ptr<session> session_ptr) {
   std::shared_ptr<session> old_sess = session_.lock();
   if (old_sess == session_ptr) {

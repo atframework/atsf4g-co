@@ -43,6 +43,12 @@ struct UTIL_SYMBOL_VISIBLE PrometheusFileExporterOptions {
   std::size_t file_size = 20 * 1024 * 1024;
   std::size_t rotate_size = 3;
 
+  // Populating target_info
+  bool populate_target_info = true;
+
+  // Populating otel_scope_name/otel_scope_labels attributes
+  bool without_otel_scope = false;
+
   inline PrometheusFileExporterOptions() noexcept {}
 };
 

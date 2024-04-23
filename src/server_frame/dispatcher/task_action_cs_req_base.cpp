@@ -90,6 +90,20 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
     }
   } while (false);
 
+  // 用户层消息过滤
+  do {
+    if (player_cache == nullptr) {
+      break;
+    }
+
+    int32_t result = player_cache->client_rpc_filter(get_shared_context(), *this, get_dispatcher_options());
+    if (result < 0) {
+      write_actor_log_head();
+      set_response_code(result);
+      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    }
+  } while (false);
+
   result_type::value_type ret = RPC_AWAIT_CODE_RESULT(base_type::hook_run());
 
   // 自动设置快队列保存
@@ -223,6 +237,14 @@ SERVER_FRAME_API std::list<task_action_cs_req_base::message_type *> &task_action
 SERVER_FRAME_API const std::list<task_action_cs_req_base::message_type *> &task_action_cs_req_base::get_rsp_list()
     const {
   return response_messages_;
+}
+
+SERVER_FRAME_API void task_action_cs_req_base::write_actor_log_head() {
+  std::shared_ptr<session> sess = get_session();
+  if (sess) {
+    google::protobuf::Empty empty;
+    sess->write_actor_log_body(get_shared_context(), empty, get_request().head(), true);
+  }
 }
 
 SERVER_FRAME_API void task_action_cs_req_base::send_response() {

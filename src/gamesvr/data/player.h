@@ -145,8 +145,7 @@ class player : public player_cache {
   static ptr_t create(uint64_t user_id, uint32_t zone_id, const std::string &openid);
 
   // 创建默认角色数据
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_init(rpc::context &ctx,
-                                                                                uint32_t version_type) override;
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_init(rpc::context &ctx, uint32_t version_type) override;
 
   // 登入读取用户数据
   EXPLICIT_NODISCARD_ATTR rpc::result_code_type login_init(rpc::context &ctx) override;
@@ -227,8 +226,7 @@ class player : public player_cache {
    * @brief 下发同步消息
    */
   void send_all_syn_msg(rpc::context &ctx) override;
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_before_logout_tasks(
-      rpc::context &ctx) override;
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_before_logout_tasks(rpc::context &ctx) override;
   void clear_dirty_cache();
 
   PROJECT_NAMESPACE_ID::DItem &mutable_dirty_item(const PROJECT_NAMESPACE_ID::DItem &in);
@@ -267,3 +265,8 @@ class player : public player_cache {
 
   REG_PLAYER_MGR_PTR_DEF(user_async_jobs_manager)
 };
+
+namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID {
+template <class CharT>
+struct formatter<player, CharT> : formatter<player_cache, CharT> {};
+}  // namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID
