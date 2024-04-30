@@ -1,4 +1,4 @@
-#!/bin/bash                                                                                                                                                                 
+#!/bin/bash
 
 cd "$(dirname "$0")";
 
@@ -23,6 +23,17 @@ while getopts "hi" OPTION; do
   esac
 done
 
+DEPLOYED_SHORT_SHA=($(find . -name "package-version.txt" | xargs grep vcs_short_sha | awk '{print $NF}' | sort -u))
+
+function has_deploy_sha() {
+    for SHORT_SHA in ${DEPLOYED_SHORT_SHA[@]}; do
+        if [ "$SHORT_SHA" == "$1" ]; then
+            echo "1"
+            return
+        fi
+    done
+    echo "0"
+}
 
 function cleanup_dir() {
     if [[ ! -e $1 ]]; then
@@ -32,6 +43,10 @@ function cleanup_dir() {
     for DIR_PATH in "$1"/* ; do
         DIR_NAME="$(basename "$DIR_PATH")";
         if [[ "$DIR_NAME" == "@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@" ]]; then
+            continue;
+        fi
+
+        if [ $(has_deploy_sha $DIR_NAME) == "1" ]; then
             continue;
         fi
 

@@ -67,3 +67,7 @@ SERVER_FRAME_CONFIG_API const char* server_frame_get_user_bussiness_version() {
 #else
 SERVER_FRAME_CONFIG_API const char* server_frame_get_user_bussiness_version() { return (const char*)u8"0.0.0.0"; }
 #endif
+
+SERVER_FRAME_CONFIG_API const char* server_frame_get_library_rpath() {
+  return (const char*)u8"@CMAKE_INSTALL_LIBDIR@/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@";
+}

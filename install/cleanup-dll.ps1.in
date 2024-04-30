@@ -31,6 +31,14 @@ $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
 Set-Location $SCRIPT_DIR
 
+$DeployedShortSha = New-Object System.Collections.Generic.HashSet[string]
+
+Get-ChildItem -Recurse -File "package-version.txt" | ForEach-Object {
+    Get-Content $_ | Where-Object { $_ -match "vcs_short_sha" } | ForEach-Object { ($_ -split "\s+")[-1] }
+} | ForEach-Object {
+    $DeployedShortSha.Add($_) | Out-Null
+}
+
 function Cleanup-Library-Directory {
     param (
         [string] $LibraryDirectory
@@ -44,13 +52,21 @@ function Cleanup-Library-Directory {
             if ($DIR_PATH.Name -eq "@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@") {
                 continue
             }
-    
+
+            if ($DeployedShortSha.Contains($DIR_PATH.Name)) {
+                continue
+            }
+
+            if ($DIR_PATH.Name -eq "runtime") {
+                continue
+            }
+
             if ($IsWindows) {
                 Write-Output "Remove $DIR_PATH ..."
                 Remove-Item -Recurse -Force -Path $DIR_PATH.FullName
                 continue
             }
-    
+
             if ($IgnoreRunningDynamicLibraryChecking) {
                 $SO_PATHS = $false
             }
@@ -66,7 +82,7 @@ function Cleanup-Library-Directory {
 
                 $SO_PATHS = Get-ChildItem -Path $DIR_PATH.FullName -Filter "*.so*" -File
             }
-            
+
             if (-Not $SO_PATHS) {
                 Write-Output "Remove $DIR_PATH ..."
                 Remove-Item -Recurse -Force -Path $DIR_PATH.FullName
