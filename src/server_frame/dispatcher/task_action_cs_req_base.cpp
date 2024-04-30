@@ -204,6 +204,12 @@ SERVER_FRAME_API task_action_cs_req_base::msg_ref_type task_action_cs_req_base::
   atframework::CSMsgHead *head = msg->mutable_head();
 
   head->set_error_code(get_response_code());
+  if (0 != get_external_response_code()) {
+    head->set_external_error_code(get_response_code());
+  }
+  if (!get_external_response_message().empty()) {
+    head->set_external_error_message(get_external_response_message());
+  }
   head->set_timestamp(util::time::time_utility::get_now());
   head->set_client_sequence(get_request().head().client_sequence());
   if (get_request().head().op_type() == PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM) {
@@ -266,7 +272,14 @@ SERVER_FRAME_API void task_action_cs_req_base::send_response() {
 
   for (std::list<message_type *>::iterator iter = response_messages_.begin(); iter != response_messages_.end();
        ++iter) {
-    (*iter)->mutable_head()->set_error_code(get_response_code());
+    atframework::CSMsgHead *head = (*iter)->mutable_head();
+    head->set_error_code(get_response_code());
+    if (0 != get_external_response_code()) {
+      head->set_external_error_code(get_response_code());
+    }
+    if (!get_external_response_message().empty()) {
+      head->set_external_error_message(get_external_response_message());
+    }
 
     // send message using session
     int32_t res = sess->send_msg_to_client(get_shared_context(), **iter);

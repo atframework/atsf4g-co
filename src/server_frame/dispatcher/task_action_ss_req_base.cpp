@@ -368,10 +368,17 @@ SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::forward_rpc(cons
       disable_response_message();
     } else if (!is_stream_rpc() && !has_response_message() && is_response_message_enabled()) {
       atframework::SSMsg &response_message = add_response_message();
-      response_message.mutable_head()->set_error_code(forward_response->head().error_code());
-      response_message.mutable_head()->set_player_user_id(forward_response->head().player_user_id());
-      response_message.mutable_head()->set_player_open_id(forward_response->head().player_open_id());
-      response_message.mutable_head()->set_player_zone_id(forward_response->head().player_zone_id());
+      atframework::SSMsgHead *head = response_message.mutable_head();
+      head->set_error_code(forward_response->head().error_code());
+      if (0 != forward_response->head().external_error_code()) {
+        head->set_external_error_code(forward_response->head().external_error_code());
+      }
+      if (!forward_response->head().external_error_message().empty()) {
+        head->set_external_error_message(forward_response->head().external_error_message());
+      }
+      head->set_player_user_id(forward_response->head().player_user_id());
+      head->set_player_open_id(forward_response->head().player_open_id());
+      head->set_player_zone_id(forward_response->head().player_zone_id());
 
       // Swap body
       response_message.mutable_body_bin()->swap(*forward_response->mutable_body_bin());
@@ -403,10 +410,17 @@ SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::forward_rpc(uint
       disable_response_message();
     } else if (!is_stream_rpc() && !has_response_message() && is_response_message_enabled()) {
       atframework::SSMsg &response_message = add_response_message();
-      response_message.mutable_head()->set_error_code(forward_response->head().error_code());
-      response_message.mutable_head()->set_player_user_id(forward_response->head().player_user_id());
-      response_message.mutable_head()->set_player_open_id(forward_response->head().player_open_id());
-      response_message.mutable_head()->set_player_zone_id(forward_response->head().player_zone_id());
+      atframework::SSMsgHead *head = response_message.mutable_head();
+      head->set_error_code(forward_response->head().error_code());
+      if (0 != forward_response->head().external_error_code()) {
+        head->set_external_error_code(forward_response->head().external_error_code());
+      }
+      if (!forward_response->head().external_error_message().empty()) {
+        head->set_external_error_message(forward_response->head().external_error_message());
+      }
+      head->set_player_user_id(forward_response->head().player_user_id());
+      head->set_player_open_id(forward_response->head().player_open_id());
+      head->set_player_zone_id(forward_response->head().player_zone_id());
 
       // Swap body
       response_message.mutable_body_bin()->swap(*forward_response->mutable_body_bin());
@@ -472,18 +486,26 @@ SERVER_FRAME_API void task_action_ss_req_base::send_response() {
       FCTXLOGERROR(get_shared_context(), "{}", "send message to unknown server");
       continue;
     }
-    (*iter)->mutable_head()->set_error_code(get_response_code());
+
+    atframework::SSMsgHead *head = (*iter)->mutable_head();
+    head->set_error_code(get_response_code());
+    if (0 != get_external_response_code()) {
+      head->set_external_error_code(get_response_code());
+    }
+    if (!get_external_response_message().empty()) {
+      head->set_external_error_message(get_external_response_message());
+    }
 
     // send message using ss dispatcher
     int32_t res;
-    if (0 != (*iter)->head().node_id()) {
-      res = ss_msg_dispatcher::me()->send_to_proc((*iter)->head().node_id(), **iter, true);
+    if (0 != head->node_id()) {
+      res = ss_msg_dispatcher::me()->send_to_proc(head->node_id(), **iter, true);
     } else {
-      res = ss_msg_dispatcher::me()->send_to_proc((*iter)->head().node_name(), **iter, true);
+      res = ss_msg_dispatcher::me()->send_to_proc(head->node_name(), **iter, true);
     }
     if (res) {
-      FCTXLOGERROR(get_shared_context(), "send message to server {:#x} failed, res: {}({})", (*iter)->head().node_id(),
-                   res, protobuf_mini_dumper_get_error_msg(res));
+      FCTXLOGERROR(get_shared_context(), "send message to server {:#x} failed, res: {}({})", head->node_id(), res,
+                   protobuf_mini_dumper_get_error_msg(res));
     }
   }
 

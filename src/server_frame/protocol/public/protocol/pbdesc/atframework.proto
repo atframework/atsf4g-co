@@ -257,6 +257,9 @@ message SSMsgHead {
   uint64 sequence = 3;
   int32 op_type = 4;
 
+  sint64 external_error_code = 8;
+  string external_error_message = 9;
+
   // 通道和任务信息
   uint64 node_id = 11;
   string node_name = 12;
@@ -298,6 +301,9 @@ message CSMsgHead {
   uint64 server_sequence = 4;   // 服务器生成的用户消息序号
   uint64 session_sequence = 5;  // 服务器生成的Session消息序号
   int32 op_type = 6;            // @see EnMsgOpType
+
+  sint64 external_error_code = 8;
+  string external_error_message = 9;
 
   // 通道和任务信息
   uint64 session_node_id = 11;

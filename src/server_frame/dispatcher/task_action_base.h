@@ -253,6 +253,18 @@ class UTIL_SYMBOL_VISIBLE task_action_base
    */
   UTIL_FORCEINLINE int32_t get_response_code() const noexcept { return response_code_; }
 
+  /**
+   * @brief 获取外部模块返回码
+   * @return 回包返回码
+   */
+  UTIL_FORCEINLINE int64_t get_external_response_code() const noexcept { return external_error_code_; }
+
+  /**
+   * @brief 获取外部模块返回消息
+   * @return 回包返回码
+   */
+  UTIL_FORCEINLINE const std::string &get_external_response_message() const noexcept { return external_error_message_; }
+
   SERVER_FRAME_API on_finished_callback_handle_t add_on_finished(on_finished_callback_fn_t &&fn);
   SERVER_FRAME_API void remove_on_finished(on_finished_callback_handle_t handle);
 
@@ -271,8 +283,11 @@ class UTIL_SYMBOL_VISIBLE task_action_base
    * @brief 设置回包返回码
    * @note 用于临时存储回包返回码
    * @param rsp_code 回包返回码
+   * @param external_error_code 外部模块返回码
+   * @param external_error_message 外部模块返回消息
    */
-  UTIL_FORCEINLINE void set_response_code(int32_t rsp_code) { response_code_ = rsp_code; }
+  SERVER_FRAME_API void set_response_code(int32_t rsp_code, int64_t external_error_code = 0,
+                                          gsl::string_view external_error_message = {});
 
   /**
    * @brief 禁用结束事件响应
@@ -341,6 +356,9 @@ class UTIL_SYMBOL_VISIBLE task_action_base
   int32_t response_code_;
   bool response_message_disabled_;
   bool event_disabled_;
+
+  int64_t external_error_code_;
+  std::string external_error_message_;
 
   const atframework::DispatcherOptions *dispatcher_options_;
 

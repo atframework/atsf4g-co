@@ -174,10 +174,20 @@ message opentelemetry_exporter_otlp_http {
   string ssl_cipher_suite = 30;
 }
 
+message opentelemetry_exporter_otlp_file {
+  string file_pattern = 1;
+  string alias_pattern = 2;
+  google.protobuf.Duration flush_interval = 3;
+  uint32 flush_count = 4 [(atapp.protocol.CONFIGURE) = { default_value: "256" }];
+  uint64 file_size = 5 [(atapp.protocol.CONFIGURE) = { default_value: "20MB" min_value: "1s" size_mode: true }];
+  uint32 rotate_size = 6 [(atapp.protocol.CONFIGURE) = { default_value: "3" }];
+}
+
 message opentelemetry_trace_exporter_cfg {
   opentelemetry_exporter_otlp_grpc otlp_grpc = 1;
   opentelemetry_exporter_otlp_http otlp_http = 2;
   string ostream = 3;  // Just for debug
+  opentelemetry_exporter_otlp_file otlp_file = 4;
 }
 
 message opentelemetry_simple_processor_cfg {}
@@ -253,6 +263,7 @@ message opentelemetry_metrics_exporter_cfg {
   opentelemetry_exporter_otlp_grpc otlp_grpc = 1;
   opentelemetry_exporter_otlp_http otlp_http = 2;
   string ostream = 3;  // Just for debug
+  opentelemetry_exporter_otlp_file otlp_file = 4;
 
   opentelemetry_exporter_prometheus_pull prometheus_pull = 11;
   opentelemetry_exporter_prometheus_push prometheus_push = 12;
@@ -279,6 +290,7 @@ message opentelemetry_logs_exporter_cfg {
   opentelemetry_exporter_otlp_grpc otlp_grpc = 1;
   opentelemetry_exporter_otlp_http otlp_http = 2;
   string ostream = 3;  // Just for debug
+  opentelemetry_exporter_otlp_file otlp_file = 4;
 }
 
 message opentelemetry_logs_cfg {

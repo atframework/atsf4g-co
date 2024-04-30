@@ -82,6 +82,7 @@ SERVER_FRAME_API task_action_base::task_action_base(const dispatcher_start_data_
       response_code_(0),
       response_message_disabled_(false),
       event_disabled_(false),
+      external_error_code_(0),
       dispatcher_options_(start_param.options),
       shared_context_(rpc::context::create_without_task()) {
   if (nullptr != start_param.context) {
@@ -351,6 +352,18 @@ SERVER_FRAME_API task_action_base::on_finished_callback_handle_t task_action_bas
 
 SERVER_FRAME_API void task_action_base::remove_on_finished(on_finished_callback_handle_t handle) {
   on_finished_callback_.erase(handle);
+}
+
+SERVER_FRAME_API void task_action_base::set_response_code(int32_t rsp_code, int64_t external_error_code,
+                                                          gsl::string_view external_error_message) {
+  response_code_ = rsp_code;
+
+  external_error_code_ = external_error_code;
+  if (external_error_message.empty()) {
+    external_error_message_.clear();
+  } else {
+    external_error_message_ = static_cast<std::string>(external_error_message);
+  }
 }
 
 SERVER_FRAME_API void task_action_base::set_caller_context(rpc::context &ctx) {

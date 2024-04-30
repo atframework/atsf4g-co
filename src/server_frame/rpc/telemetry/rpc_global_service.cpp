@@ -18,6 +18,11 @@
 #include <opentelemetry/exporters/ostream/log_record_exporter.h>
 #include <opentelemetry/exporters/ostream/metric_exporter_factory.h>
 #include <opentelemetry/exporters/ostream/span_exporter_factory.h>
+#include <opentelemetry/exporters/otlp/otlp_file_exporter_factory.h>
+#include <opentelemetry/exporters/otlp/otlp_file_exporter_options.h>
+#include <opentelemetry/exporters/otlp/otlp_file_log_record_exporter_factory.h>
+#include <opentelemetry/exporters/otlp/otlp_file_metric_exporter_factory.h>
+#include <opentelemetry/exporters/otlp/otlp_file_metric_exporter_options.h>
 #include <opentelemetry/exporters/otlp/otlp_grpc_exporter_factory.h>
 #include <opentelemetry/exporters/otlp/otlp_grpc_exporter_options.h>
 #include <opentelemetry/exporters/otlp/otlp_grpc_log_record_exporter_factory.h>
@@ -1457,6 +1462,29 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> _op
     ret.emplace_back(opentelemetry::exporter::otlp::OtlpHttpExporterFactory::Create(options));
   }
 
+  if (exporter_cfg.has_otlp_file() && !exporter_cfg.otlp_file().file_pattern().empty()) {
+    opentelemetry::exporter::otlp::OtlpFileExporterOptions options;
+    if (exporter_cfg.otlp_file().file_pattern() == "@stdout") {
+      options.backend_options = std::ref(std::cout);
+    } else if (exporter_cfg.otlp_file().file_pattern() == "@stderr") {
+      options.backend_options = std::ref(std::cerr);
+    } else {
+      opentelemetry::exporter::otlp::OtlpFileClientFileSystemOptions file_backend;
+      file_backend.file_pattern = exporter_cfg.otlp_file().file_pattern();
+      file_backend.alias_pattern = exporter_cfg.otlp_file().alias_pattern();
+      file_backend.flush_interval =
+          std::chrono::microseconds{exporter_cfg.otlp_file().flush_interval().seconds() * 1000000};
+      file_backend.flush_interval += std::chrono::duration_cast<std::chrono::microseconds>(
+          std::chrono::nanoseconds{exporter_cfg.otlp_file().flush_interval().nanos()});
+      file_backend.file_size = exporter_cfg.otlp_file().file_size();
+      file_backend.rotate_size = exporter_cfg.otlp_file().rotate_size();
+
+      options.backend_options = std::move(file_backend);
+    }
+
+    ret.emplace_back(opentelemetry::exporter::otlp::OtlpFileExporterFactory::Create(options));
+  }
+
   return ret;
 }
 
@@ -1689,6 +1717,29 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
     options.max_requests_per_connection = exporter_cfg.otlp_http().max_requests_per_connection();
 
     ret.emplace_back(opentelemetry::exporter::otlp::OtlpHttpMetricExporterFactory::Create(options));
+  }
+
+  if (exporter_cfg.has_otlp_file() && !exporter_cfg.otlp_file().file_pattern().empty()) {
+    opentelemetry::exporter::otlp::OtlpFileMetricExporterOptions options;
+    if (exporter_cfg.otlp_file().file_pattern() == "@stdout") {
+      options.backend_options = std::ref(std::cout);
+    } else if (exporter_cfg.otlp_file().file_pattern() == "@stderr") {
+      options.backend_options = std::ref(std::cerr);
+    } else {
+      opentelemetry::exporter::otlp::OtlpFileClientFileSystemOptions file_backend;
+      file_backend.file_pattern = exporter_cfg.otlp_file().file_pattern();
+      file_backend.alias_pattern = exporter_cfg.otlp_file().alias_pattern();
+      file_backend.flush_interval =
+          std::chrono::microseconds{exporter_cfg.otlp_file().flush_interval().seconds() * 1000000};
+      file_backend.flush_interval += std::chrono::duration_cast<std::chrono::microseconds>(
+          std::chrono::nanoseconds{exporter_cfg.otlp_file().flush_interval().nanos()});
+      file_backend.file_size = exporter_cfg.otlp_file().file_size();
+      file_backend.rotate_size = exporter_cfg.otlp_file().rotate_size();
+
+      options.backend_options = std::move(file_backend);
+    }
+
+    ret.emplace_back(opentelemetry::exporter::otlp::OtlpFileMetricExporterFactory::Create(options));
   }
 
   if (exporter_cfg.has_prometheus_push() && !exporter_cfg.prometheus_push().host().empty() &&
@@ -1951,6 +2002,29 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogRecordExporter>>
     }
 
     ret.emplace_back(opentelemetry::exporter::otlp::OtlpHttpLogRecordExporterFactory::Create(options));
+  }
+
+  if (exporter_cfg.has_otlp_file() && !exporter_cfg.otlp_file().file_pattern().empty()) {
+    opentelemetry::exporter::otlp::OtlpFileLogRecordExporterOptions options;
+    if (exporter_cfg.otlp_file().file_pattern() == "@stdout") {
+      options.backend_options = std::ref(std::cout);
+    } else if (exporter_cfg.otlp_file().file_pattern() == "@stderr") {
+      options.backend_options = std::ref(std::cerr);
+    } else {
+      opentelemetry::exporter::otlp::OtlpFileClientFileSystemOptions file_backend;
+      file_backend.file_pattern = exporter_cfg.otlp_file().file_pattern();
+      file_backend.alias_pattern = exporter_cfg.otlp_file().alias_pattern();
+      file_backend.flush_interval =
+          std::chrono::microseconds{exporter_cfg.otlp_file().flush_interval().seconds() * 1000000};
+      file_backend.flush_interval += std::chrono::duration_cast<std::chrono::microseconds>(
+          std::chrono::nanoseconds{exporter_cfg.otlp_file().flush_interval().nanos()});
+      file_backend.file_size = exporter_cfg.otlp_file().file_size();
+      file_backend.rotate_size = exporter_cfg.otlp_file().rotate_size();
+
+      options.backend_options = std::move(file_backend);
+    }
+
+    ret.emplace_back(opentelemetry::exporter::otlp::OtlpFileLogRecordExporterFactory::Create(options));
   }
 
   return ret;
