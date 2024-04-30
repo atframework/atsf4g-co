@@ -111,7 +111,7 @@ endif()
 if(TARGET opentelemetry-cpp::otlp_http_log_record_exporter)
   set(OPENTELEMETRY_CPP_LOG_RECORD_EXPORTER_NAME
       opentelemetry-cpp::otlp_http_log_record_exporter opentelemetry-cpp::otlp_grpc_log_record_exporter
-      opentelemetry-cpp::ostream_log_record_exporter)
+      opentelemetry-cpp::otlp_file_log_record_exporter opentelemetry-cpp::ostream_log_record_exporter)
 else()
   set(OPENTELEMETRY_CPP_LOG_RECORD_EXPORTER_NAME
       opentelemetry-cpp::otlp_http_log_exporter opentelemetry-cpp::otlp_grpc_log_exporter
@@ -121,10 +121,12 @@ endif()
 set(PROJECT_THIRD_PARTY_PUBLIC_LINK_NAMES
     opentelemetry-cpp::otlp_http_exporter
     opentelemetry-cpp::otlp_grpc_exporter
+    opentelemetry-cpp::otlp_file_exporter
     ${OPENTELEMETRY_CPP_PROMETHUS_EXPORTER_NAME}
     ${OPENTELEMETRY_CPP_LOG_RECORD_EXPORTER_NAME}
     opentelemetry-cpp::otlp_http_metric_exporter
     opentelemetry-cpp::otlp_grpc_metrics_exporter
+    opentelemetry-cpp::otlp_file_metric_exporter
     opentelemetry-cpp::ostream_span_exporter
     opentelemetry-cpp::ostream_metrics_exporter
     opentelemetry-cpp::resources
