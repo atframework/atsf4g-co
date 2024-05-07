@@ -1,17 +1,20 @@
 #!/bin/bash
 
-cd "$(dirname "$0")";
-
+DEPLOY_BASE_DIR="$(dirname "$0")"
 IGNORE_RUNNING_DYNAMIC_LIBRARIES=0
 
-while getopts "hi" OPTION; do
+while getopts "d:hi" OPTION; do
   case $OPTION in
+    d)
+      DEPLOY_BASE_DIR="$OPTARG"
+      ;;
     i)
       IGNORE_RUNNING_DYNAMIC_LIBRARIES=1
       ;;
     h)
       echo "usage: $0 [options...]"
       echo "options:"
+      echo "-d                            deploy base directory."
       echo "-h                            help message."
       echo "-i                            ignore running dynamic library checking."
       exit 0
@@ -22,6 +25,8 @@ while getopts "hi" OPTION; do
       ;;
   esac
 done
+
+cd "$DEPLOY_BASE_DIR"
 
 DEPLOYED_SHORT_SHA=($(find . -name "package-version.txt" | xargs grep vcs_short_sha | awk '{print $NF}' | sort -u))
 
@@ -50,37 +55,40 @@ function cleanup_dir() {
             continue;
         fi
 
-        if [[ ! -d "$1/$DIR_NAME" ]]; then
-            echo "nohup rm -rf \"$1/$DIR_NAME\" &"
-            nohup rm -rf "$1/$DIR_NAME" &
-            continue
+        if ([ "$DIR_NAME" == "runtime" ] && [ "$DIR_BASE_NAME" != "runtime" ]) || ([ "$DIR_NAME" == "archive" ] && [ "$DIR_BASE_NAME" != "archive" ]); then
+            continue;
         fi
 
-        which lsof > /dev/null 2>&1;
-        if [[ ! $? -eq 0 ]]; then
-            echo "nohup rm -rf \"$1/$DIR_NAME\" &"
-            nohup rm -rf "$1/$DIR_NAME" &
-            continue
-        fi
-
-        if [[ $IGNORE_RUNNING_DYNAMIC_LIBRARIES -eq 0 ]]; then
-            for SO_PATH in "$1/$DIR_NAME"/*.so* ; do
-                SO_NAME="$(basename "$SO_PATH")";
-                lsof "$1/$DIR_NAME/$SO_NAME" 2>/dev/null;
-                if [[ $? -ne 0 ]]; then
-                    rm -rfv "$1/$DIR_NAME/$SO_NAME";
-                fi
-            done
-            HAS_SO=$(find "$1/$DIR_NAME" -name '*.so*' -type f | wc | awk '{print $1}') ;
-        else
-            HAS_SO=0
-        fi
-        if [[ $HAS_SO -eq 0 ]]; then
-            echo "nohup rm -rf \"$1/$DIR_NAME\" &"
-            nohup rm -rf "$1/$DIR_NAME" &
-        fi
+        rm -rf "$DIR_PATH"
+        # which lsof > /dev/null 2>&1;
+        # if [[ ! $? -eq 0 ]]; then
+        #     echo "nohup rm -rf \"$1/$DIR_NAME\" &"
+        #     nohup rm -rf "$1/$DIR_NAME" &
+        #     continue;
+        # fi
+        #
+        # if [[ $IGNORE_RUNNING_DYNAMIC_LIBRARIES -eq 0 ]]; then
+        #     for SO_PATH in "$1/$DIR_NAME"/*.so* ; do
+        #         SO_NAME="$(basename "$SO_PATH")";
+        #         lsof "$1/$DIR_NAME/$SO_NAME" 2>/dev/null;
+        #         if [[ $? -ne 0 ]]; then
+        #             rm -rfv "$1/$DIR_NAME/$SO_NAME";
+        #         fi
+        #     done
+        #     HAS_SO=$(find "$1/$DIR_NAME" -name '*.so*' -type f | wc | awk '{print $1}') ;
+        # else
+        #     HAS_SO=0
+        # fi
+        # if [[ $HAS_SO -eq 0 ]]; then
+        #     echo "nohup rm -rf \"$1/$DIR_NAME\" &"
+        #     nohup rm -rf "$1/$DIR_NAME" &
+        # fi
     done
 }
 
-cleanup_dir lib ;
-cleanup_dir lib64 ;
+cleanup_dir lib
+cleanup_dir lib64
+cleanup_dir lib/runtime
+cleanup_dir lib64/runtime
+cleanup_dir lib/archive
+cleanup_dir lib64/archive

@@ -53,7 +53,9 @@ file(MAKE_DIRECTORY ${PROJECT_INSTALL_RES_PBD_DIR})
 
 set(PROJECT_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/_generated")
 set(PROJECT_GENERATED_PBD_DIR "${PROJECT_GENERATED_DIR}/pbdesc")
+set(PROJECT_GENERATED_TOOLS_DIR "${PROJECT_GENERATED_DIR}/tools")
 file(MAKE_DIRECTORY "${PROJECT_GENERATED_PBD_DIR}")
+file(MAKE_DIRECTORY "${PROJECT_GENERATED_TOOLS_DIR}")
 
 include("${CMAKE_CURRENT_LIST_DIR}/third_party/ConfigureInstall.cmake")
 
@@ -83,14 +85,45 @@ endif()
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH YES)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH YES)
 set(CMAKE_BUILD_RPATH_USE_ORIGIN YES)
+
 if(UNIX AND NOT APPLE)
-  list(APPEND CMAKE_INSTALL_RPATH
-       "$ORIGIN/../../${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}")
-  set(CMAKE_INSTALL_RPATH_USE_LINK_PATH YES)
+  set(PROJECT_RPATH_ORIGIN "$ORIGIN")
 elseif(APPLE)
-  list(APPEND CMAKE_INSTALL_RPATH
-       "@loader_path/../../${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}")
-  set(CMAKE_INSTALL_RPATH_USE_LINK_PATH YES)
+  set(PROJECT_RPATH_ORIGIN "@loader_path")
+endif()
+set(PROJECT_INSTALL_RPATH
+    "${PROJECT_RPATH_ORIGIN}/../../${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}"
+)
+list(APPEND CMAKE_INSTALL_RPATH "${PROJECT_INSTALL_RPATH}")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH YES)
+
+# 自动生成的工具脚本
+configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/prepare-dependency-dll.sh.in"
+               "${PROJECT_GENERATED_TOOLS_DIR}/prepare-dependency-dll.sh" ESCAPE_QUOTES @ONLY)
+configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/prepare-archive.sh.in"
+               "${PROJECT_GENERATED_TOOLS_DIR}/prepare-archive.sh" ESCAPE_QUOTES @ONLY)
+add_custom_target(
+  "tools-prepare-dependency" ALL
+  COMMAND "${CMAKE_COMMAND}" "-E" "copy_if_different" "${PROJECT_GENERATED_TOOLS_DIR}/prepare-dependency-dll.sh"
+          "${PROJECT_INSTALL_TOOLS_DIR}/script/"
+  BYPRODUCTS "${PROJECT_INSTALL_TOOLS_DIR}/script/prepare-dependency-dll.sh")
+add_custom_target(
+  "tools-prepare-archive" ALL
+  COMMAND "${CMAKE_COMMAND}" "-E" "copy_if_different" "${PROJECT_GENERATED_TOOLS_DIR}/prepare-archive.sh"
+          "${PROJECT_INSTALL_TOOLS_DIR}/script/"
+  BYPRODUCTS "${PROJECT_INSTALL_TOOLS_DIR}/script/prepare-archive.sh")
+
+if(MSVC)
+  set_property(TARGET "tools-prepare-dependency" PROPERTY FOLDER "${PROJECT_NAME}/tools")
+  set_property(TARGET "tools-prepare-archive" PROPERTY FOLDER "${PROJECT_NAME}/tools")
+endif()
+
+if(ATFRAMEWORK_CMAKE_TOOLSET_TARGET_IS_LINUX)
+  configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/copy-dependency-dll.sh.in"
+                 "${PROJECT_GENERATED_TOOLS_DIR}/copy-dependency-dll.sh" ESCAPE_QUOTES @ONLY)
+  list(APPEND PROJECT_RUNTIME_POST_BUILD_DYNAMIC_LIBRARY_BASH "${PROJECT_GENERATED_TOOLS_DIR}/copy-dependency-dll.sh")
+  list(APPEND PROJECT_RUNTIME_POST_BUILD_EXECUTABLE_LIBRARY_BASH
+       "${PROJECT_GENERATED_TOOLS_DIR}/copy-dependency-dll.sh")
 endif()
 
 # 导入所有工程项目
@@ -102,33 +135,53 @@ if(PROJECT_ENABLE_SAMPLE)
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/sample")
 endif()
 
-# copy 资源
+# Copy 资源和执行清理流程
 file(
   GLOB PROJECT_INSTALL_DST_LIST
   LIST_DIRECTORIES TRUE
   "${CMAKE_CURRENT_LIST_DIR}/install/*")
 project_link_or_copy_files(${PROJECT_INSTALL_DST_LIST} "${PROJECT_INSTALL_BAS_DIR}")
 
-configure_file("${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.sh.in" "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.sh" ESCAPE_QUOTES
-               @ONLY)
-
-configure_file("${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1.in" "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1"
+configure_file("${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.sh.in" "${PROJECT_GENERATED_TOOLS_DIR}/cleanup-dll.sh"
                ESCAPE_QUOTES @ONLY)
+
+configure_file("${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1.in" "${PROJECT_GENERATED_TOOLS_DIR}/cleanup-dll.ps1"
+               ESCAPE_QUOTES @ONLY)
+
+add_custom_target(
+  "tools-cleanup-dll" ALL
+  COMMAND "${CMAKE_COMMAND}" "-E" "copy_if_different" "${PROJECT_GENERATED_TOOLS_DIR}/cleanup-dll.sh"
+          "${PROJECT_GENERATED_TOOLS_DIR}/cleanup-dll.ps1" "${PROJECT_INSTALL_BAS_DIR}"
+  BYPRODUCTS "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.sh" "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1")
+
+add_custom_target("run-cleanup-dll" ALL DEPENDS "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.sh"
+                                                "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1")
+if(MSVC)
+  set_property(TARGET "tools-cleanup-dll" PROPERTY FOLDER "${PROJECT_NAME}/tools")
+  set_property(TARGET "run-cleanup-dll" PROPERTY FOLDER "${PROJECT_NAME}/tools")
+endif()
 
 if(CYGWIN
    OR UNIX
    OR APPLE
    OR NOT ATFRAMEWORK_CMAKE_TOOLSET_PWSH)
-  echowithcolor(COLOR GREEN "-- Cleanup old built libraries ...")
-  execute_process(COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_BASH}" "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.sh" "-i"
-                  WORKING_DIRECTORY ${PROJECT_INSTALL_BAS_DIR})
+  add_custom_command(
+    TARGET "run-cleanup-dll"
+    POST_BUILD
+    COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_BASH}" "${PROJECT_GENERATED_TOOLS_DIR}/cleanup-dll.sh" "-i" "-d"
+            "${PROJECT_INSTALL_BAS_DIR}"
+    WORKING_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}"
+    COMMENT "Cleanup old dlls...")
 else()
-  execute_process(
+  add_custom_command(
+    TARGET "run-cleanup-dll"
+    POST_BUILD
     COMMAND
       "${ATFRAMEWORK_CMAKE_TOOLSET_PWSH}" "-NoProfile" "-InputFormat" "None" "-ExecutionPolicy" "Bypass"
-      "-NonInteractive" "-NoLogo" "-File" "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1"
-      "-IgnoreRunningDynamicLibraryChecking"
-    WORKING_DIRECTORY ${PROJECT_INSTALL_BAS_DIR})
+      "-NonInteractive" "-NoLogo" "-File" "${PROJECT_GENERATED_TOOLS_DIR}/cleanup-dll.ps1"
+      "-IgnoreRunningDynamicLibraryChecking" "-DeployBaseDirectory" "${PROJECT_INSTALL_BAS_DIR}"
+    WORKING_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}"
+    COMMENT "Cleanup old dlls...")
 endif()
 
 # 安装目录

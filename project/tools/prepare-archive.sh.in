@@ -1,0 +1,30 @@
+#!/bin/bash
+
+function prepare_dir_recursive() {
+  if [ ! -e "$1" ]; then
+    return 0
+  fi
+
+  mkdir -p "$2"
+
+  for LINK_OR_COPY_PATH in "$1"/* ; do
+    if [ -d "$LINK_OR_COPY_PATH" ]; then
+      prepare_dir_recursive "$LINK_OR_COPY_PATH" "$2/$(basename "$LINK_OR_COPY_PATH")"
+    else
+      mv -f "$LINK_OR_COPY_PATH" "$2/" || cp -rf "$LINK_OR_COPY_PATH" "$2/"
+    fi
+  done
+}
+
+function prepare_dir() {
+  if [ ! -e "$1/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@" ]; then
+    return 0
+  fi
+
+  prepare_dir_recursive "$1/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@" "$1/archive/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@"
+
+  rm -rf "$1/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@"
+}
+
+prepare_dir "$1/lib"
+prepare_dir "$1/lib64"

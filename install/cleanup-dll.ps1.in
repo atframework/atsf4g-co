@@ -3,6 +3,8 @@
     .
 .PARAMETER Help
     Print help message and exit
+.PARAMETER DeployBaseDirectory
+    Deploy base directory.
 .PARAMETER IgnoreRunningDynamicLibraryChecking
     Ignore running dynamic library checking.
 .EXAMPLE
@@ -20,6 +22,11 @@ param (
 
     [Parameter(ValueFromPipeline = $true,
         ValueFromPipelineByPropertyName = $true)]
+    [string]$DeployBaseDirectory = (Split-Path -Parent $MyInvocation.MyCommand.Definition),
+
+
+    [Parameter(ValueFromPipeline = $true,
+        ValueFromPipelineByPropertyName = $true)]
     [switch]$IgnoreRunningDynamicLibraryChecking = $false
 )
 
@@ -27,9 +34,7 @@ $PSDefaultParameterValues['*:Encoding'] = 'UTF-8'
 
 $OutputEncoding = [System.Text.UTF8Encoding]::new()
 
-$SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Definition
-
-Set-Location $SCRIPT_DIR
+Set-Location $DeployBaseDirectory
 
 $DeployedShortSha = New-Object System.Collections.Generic.HashSet[string]
 
@@ -57,36 +62,38 @@ function Cleanup-Library-Directory {
                 continue
             }
 
-            if ($DIR_PATH.Name -eq "runtime") {
+            if ((($DIR_PATH.Directory.Name -ne "runtime") -and ($DIR_PATH.Name -eq "runtime")) -or (($DIR_PATH.Directory.Name -ne "archive") -and ($DIR_PATH.Name -eq "archive"))) {
                 continue
             }
 
-            if ($IsWindows) {
-                Write-Output "Remove $DIR_PATH ..."
-                Remove-Item -Recurse -Force -Path $DIR_PATH.FullName
-                continue
-            }
-
-            if ($IgnoreRunningDynamicLibraryChecking) {
-                $SO_PATHS = $false
-            }
-            else {
-                $SO_PATHS = Get-ChildItem -Path $DIR_PATH.FullName -Filter "*.so*" -File
-                foreach ($SO_PATH in $SO_PATHS) {
-                    & lsof $SO_PATH.FullName 2>/dev/null
-                    if ($LASTEXITCODE -ne 0) {
-                        Write-Output "Remove $SO_PATH ..."
-                        Remove-Item -Force -Path $SO_PATH.FullName
-                    }
-                }
-
-                $SO_PATHS = Get-ChildItem -Path $DIR_PATH.FullName -Filter "*.so*" -File
-            }
-
-            if (-Not $SO_PATHS) {
-                Write-Output "Remove $DIR_PATH ..."
-                Remove-Item -Recurse -Force -Path $DIR_PATH.FullName
-            }
+            Write-Output "Remove $DIR_PATH ..."
+            Remove-Item -Recurse -Force -Path $DIR_PATH.FullName
+            # if ($IsWindows) {
+            #     Write-Output "Remove $DIR_PATH ..."
+            #     Remove-Item -Recurse -Force -Path $DIR_PATH.FullName
+            #     continue
+            # }
+            #
+            # if ($IgnoreRunningDynamicLibraryChecking) {
+            #     $SO_PATHS = $false
+            # }
+            # else {
+            #     $SO_PATHS = Get-ChildItem -Path $DIR_PATH.FullName -Filter "*.so*" -File
+            #     foreach ($SO_PATH in $SO_PATHS) {
+            #         & lsof $SO_PATH.FullName 2>/dev/null
+            #         if ($LASTEXITCODE -ne 0) {
+            #             Write-Output "Remove $SO_PATH ..."
+            #             Remove-Item -Force -Path $SO_PATH.FullName
+            #         }
+            #     }
+            #
+            #     $SO_PATHS = Get-ChildItem -Path $DIR_PATH.FullName -Filter "*.so*" -File
+            # }
+            #
+            # if (-Not $SO_PATHS) {
+            #     Write-Output "Remove $DIR_PATH ..."
+            #     Remove-Item -Recurse -Force -Path $DIR_PATH.FullName
+            # }
         }
 
         $FILE_PATHS = Get-ChildItem -Path $LibraryDirectory -File
@@ -97,5 +104,9 @@ function Cleanup-Library-Directory {
     }
 }
 
-Cleanup-Library-Directory lib ;
-Cleanup-Library-Directory lib64 ;
+Cleanup-Library-Directory lib
+Cleanup-Library-Directory lib64
+Cleanup-Library-Directory "lib/runtime"
+Cleanup-Library-Directory "lib64/runtime"
+Cleanup-Library-Directory "lib/archive"
+Cleanup-Library-Directory "lib64/archive"

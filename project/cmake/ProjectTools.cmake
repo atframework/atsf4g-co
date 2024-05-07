@@ -240,22 +240,45 @@ endfunction()
 
 function(project_tool_set_target_runtime_output_directory OUTPUT_DIR)
   file(RELATIVE_PATH TARGET_OUTPUT_RELATIVE_PATH "${OUTPUT_DIR}" "${PROJECT_INSTALL_BAS_DIR}")
-  set_property(TARGET ${ARGN} PROPERTY RUNTIME_OUTPUT_DIRECTORY "${OUTPUT_DIR}")
+  cmake_parse_arguments(project_tool_set_target_runtime_output_directory "WITH_TARGET_RPATH;WITH_ARCHIVE_RPATH" "" ""
+                        ${ARGN})
+  set(project_tool_set_target_runtime_output_directory_APPEND_RPATH)
   if(UNIX AND NOT APPLE)
-    set_property(
-      TARGET ${ARGN}
+    set(ORIGIN_VAR "$ORIGIN")
+  else()
+    set(ORIGIN_VAR "@loader_path")
+  endif()
+  if(project_tool_set_target_runtime_output_directory_WITH_TARGET_RPATH)
+    list(
       APPEND
-      PROPERTY
-        INSTALL_RPATH
-        "$ORIGIN/${TARGET_OUTPUT_RELATIVE_PATH}${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}"
-    )
-  elseif(APPLE)
-    set_property(
-      TARGET ${ARGN}
-      APPEND
-      PROPERTY
-        INSTALL_RPATH
-        "@loader_path/${TARGET_OUTPUT_RELATIVE_PATH}${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}"
+      project_tool_set_target_runtime_output_directory_APPEND_RPATH
+      "${ORIGIN_VAR}/${TARGET_OUTPUT_RELATIVE_PATH}${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${TARGET_NAME}/${CMAKE_INSTALL_LIBDIR}"
     )
   endif()
+  list(
+    APPEND
+    project_tool_set_target_runtime_output_directory_APPEND_RPATH
+    "${ORIGIN_VAR}/${TARGET_OUTPUT_RELATIVE_PATH}${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}"
+  )
+  if(project_tool_set_target_runtime_output_directory_WITH_TARGET_RPATH
+     AND project_tool_set_target_runtime_output_directory_WITH_ARCHIVE_RPATH)
+    list(
+      APPEND
+      project_tool_set_target_runtime_output_directory_APPEND_RPATH
+      "${ORIGIN_VAR}/${TARGET_OUTPUT_RELATIVE_PATH}${CMAKE_INSTALL_LIBDIR}/archive/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${TARGET_NAME}/${CMAKE_INSTALL_LIBDIR}"
+    )
+  endif()
+  if(project_tool_set_target_runtime_output_directory_WITH_ARCHIVE_RPATH)
+    list(
+      APPEND
+      project_tool_set_target_runtime_output_directory_APPEND_RPATH
+      "${ORIGIN_VAR}/${TARGET_OUTPUT_RELATIVE_PATH}${CMAKE_INSTALL_LIBDIR}/archive/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}"
+    )
+  endif()
+
+  set_property(TARGET ${TARGET_NAME} PROPERTY RUNTIME_OUTPUT_DIRECTORY "${OUTPUT_DIR}")
+  set_property(
+    TARGET ${TARGET_NAME}
+    APPEND
+    PROPERTY INSTALL_RPATH "${project_tool_set_target_runtime_output_directory_APPEND_RPATH}")
 endfunction()

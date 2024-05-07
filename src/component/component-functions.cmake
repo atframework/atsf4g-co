@@ -65,11 +65,15 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   if(project_component_declare_sdk_SOURCES)
     set_target_properties(
       ${TARGET_FULL_NAME}
-      PROPERTIES C_VISIBILITY_PRESET "hidden"
-                 CXX_VISIBILITY_PRESET "hidden"
-                 VERSION "${PROJECT_VERSION}"
-                 BUILD_RPATH_USE_ORIGIN YES
-                 PORJECT_PROTOCOL_DIR "${PROTOCOL_DIR}")
+      PROPERTIES
+        C_VISIBILITY_PRESET "hidden"
+        CXX_VISIBILITY_PRESET "hidden"
+        VERSION "${PROJECT_VERSION}"
+        BUILD_RPATH_USE_ORIGIN YES
+        PORJECT_PROTOCOL_DIR "${PROTOCOL_DIR}"
+        INSTALL_RPATH
+        "${PROJECT_RPATH_ORIGIN};${PROJECT_RPATH_ORIGIN}/../../${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${TARGET_NAME}/${CMAKE_INSTALL_LIBDIR};${PROJECT_INSTALL_RPATH}"
+    )
   endif()
 
   if(project_component_declare_sdk_OUTPUT_NAME)
@@ -300,11 +304,15 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
             "${PROJECT_INSTALL_RES_PBD_DIR}")
   set_target_properties(
     ${TARGET_FULL_NAME}
-    PROPERTIES C_VISIBILITY_PRESET "hidden"
-               CXX_VISIBILITY_PRESET "hidden"
-               VERSION "${PROJECT_VERSION}"
-               BUILD_RPATH_USE_ORIGIN YES
-               PORJECT_PROTOCOL_DIR "${PROTOCOL_DIR}")
+    PROPERTIES
+      C_VISIBILITY_PRESET "hidden"
+      CXX_VISIBILITY_PRESET "hidden"
+      VERSION "${PROJECT_VERSION}"
+      BUILD_RPATH_USE_ORIGIN YES
+      PORJECT_PROTOCOL_DIR "${PROTOCOL_DIR}"
+      INSTALL_RPATH
+      "${PROJECT_RPATH_ORIGIN};${PROJECT_RPATH_ORIGIN}/../../${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${TARGET_NAME}/${CMAKE_INSTALL_LIBDIR};${PROJECT_INSTALL_RPATH}"
+  )
 
   target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PROTOCOL_SOURCE_COMPILE_OPTIONS})
   if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
@@ -387,6 +395,9 @@ function(project_component_declare_service TARGET_NAME SERVICE_ROOT_DIR)
   if(NOT project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY)
     set(project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY "component/${TARGET_NAME}/bin")
   endif()
+  file(RELATIVE_PATH project_component_declare_service_RELATIVE_PATH
+       "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
+       "${PROJECT_INSTALL_BAS_DIR}")
 
   if(BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY)
     set(project_service_declare_service_USE_SHARED_LIBRARY TRUE)
@@ -410,13 +421,21 @@ vcs_branch: ${SERVER_FRAME_VCS_SERVER_BRANCH}
 vcs_commit: ${SERVER_FRAME_VCS_COMMIT}
 vcs_branch: ${SERVER_FRAME_VCS_VERSION}
 use_shared_library: ${project_service_declare_service_USE_SHARED_LIBRARY}
+shared_rpath: ${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}
+private_rpath: ${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${TARGET_NAME}/${CMAKE_INSTALL_LIBDIR}
 ")
+  set(TARGET_RPATH
+      "${PROJECT_RPATH_ORIGIN}"
+      "${PROJECT_RPATH_ORIGIN}/${project_component_declare_service_RELATIVE_PATH}${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${TARGET_NAME}/${CMAKE_INSTALL_LIBDIR}"
+      "${PROJECT_RPATH_ORIGIN}/${project_component_declare_service_RELATIVE_PATH}${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}"
+  )
   set_target_properties(
     ${TARGET_FULL_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
                PDB_OUTPUT_DIRECTORY
-               "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}")
+               "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
+               INSTALL_RPATH "${TARGET_RPATH}")
 
   if(project_component_declare_service_OUTPUT_TARGET_NAME)
     set(${project_component_declare_service_OUTPUT_TARGET_NAME}

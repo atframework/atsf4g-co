@@ -1,0 +1,53 @@
+#!/bin/bash
+
+EXECUTABLE_PATH="$1"
+TARGET_PATH="@PROJECT_INSTALL_BAS_DIR@/@CMAKE_INSTALL_LIBDIR@/runtime/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@"
+
+if [[ -z "$EXECUTABLE_PATH" ]]; then
+  echo "usage: $0 <target path>"
+  exit 1
+fi
+
+if [[ ! -e "$EXECUTABLE_PATH" ]]; then
+  exit 0
+fi
+
+mkdir -p "$TARGET_PATH"
+
+function copy_symbolic_link() {
+  SOLIB_NAME="$(basename "$1")"
+  SOLIB_DIR="$(dirname "$1")"
+  FOLLOW_PATH=$(readlink "$1")
+  FOLLOW_NAME=$(basename "$FOLLOW_PATH")
+
+  cd "$2"
+
+  if [[ ! -z "$FOLLOW_PATH" ]]; then
+    if [[ -L "$FOLLOW_PATH" ]]; then
+      copy_symbolic_link "$FOLLOW_PATH" "$2"
+    elif [[ -L "$SOLIB_DIR/$FOLLOW_NAME" ]]; then
+      copy_symbolic_link "$SOLIB_DIR/$FOLLOW_NAME" "$2"
+    elif [[ ! -e "$2/$FOLLOW_NAME" ]]; then
+      if [[ -f "$FOLLOW_PATH" ]]; then
+        ln "$FOLLOW_PATH" "$2/$FOLLOW_NAME" 2>/dev/null || cp -f "$FOLLOW_PATH" "$2/$FOLLOW_NAME"
+      else
+        ln "$SOLIB_DIR/$FOLLOW_NAME" "$2/$FOLLOW_NAME" 2>/dev/null || cp -f "$SOLIB_DIR/$FOLLOW_NAME" "$2/$FOLLOW_NAME"
+      fi
+    fi
+  fi
+
+  if [[ ! -z "$FOLLOW_NAME" ]] && [[ ! -e "$2/$SOLIB_NAME" ]]; then
+    ln -s "./$FOLLOW_NAME" "$2/$SOLIB_NAME"
+  fi
+}
+
+for SOLIB_PATH in $(ldd "$EXECUTABLE_PATH" | grep -E '=>[[:space:]]*/opt/' | awk '{print $3}'); do
+  SOLIB_NAME="$(basename "$SOLIB_PATH")"
+
+  if [[ -L "$SOLIB_PATH" ]]; then
+    copy_symbolic_link "$SOLIB_PATH" "$TARGET_PATH"
+  else
+    ln "$SOLIB_PATH" "$TARGET_PATH/$SOLIB_NAME" 2>/dev/null || cp -f "$SOLIB_PATH" "$TARGET_PATH/$SOLIB_NAME"
+  fi
+  chmod +x "$TARGET_PATH/$SOLIB_NAME"
+done

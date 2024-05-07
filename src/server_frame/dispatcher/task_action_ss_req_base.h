@@ -171,6 +171,7 @@ class UTIL_SYMBOL_VISIBLE task_action_ss_rpc_base : public task_action_ss_req_ba
   explicit task_action_ss_rpc_base(dispatcher_start_data_type &&start_param)
       : base_type(std::move(start_param)),
         has_unpack_request_(false),
+        has_pack_response_(false),
         request_body_(nullptr),
         response_body_(nullptr) {}
 
@@ -213,7 +214,7 @@ class UTIL_SYMBOL_VISIBLE task_action_ss_rpc_base : public task_action_ss_req_ba
 
  protected:
   void send_response() override {
-    if (!is_stream_rpc() && !has_response_message() && is_response_message_enabled()) {
+    if (!has_pack_response_ && !is_stream_rpc() && !has_response_message() && is_response_message_enabled()) {
       pack_response();
     }
     base_type::send_response();
@@ -251,6 +252,8 @@ class UTIL_SYMBOL_VISIBLE task_action_ss_rpc_base : public task_action_ss_req_ba
   }
 
   void pack_response() {
+    has_pack_response_ = true;
+
     atframework::SSMsg &rsp = add_response_message();
     rsp.mutable_head()->set_error_code(get_response_code());
     init_msg(rsp, get_request_node_id(), get_request_node_name(), get_request());
@@ -266,6 +269,7 @@ class UTIL_SYMBOL_VISIBLE task_action_ss_rpc_base : public task_action_ss_req_ba
 
  private:
   bool has_unpack_request_;
+  bool has_pack_response_;
   rpc_request_type *request_body_;
   rpc_response_type *response_body_;
 };
