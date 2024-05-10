@@ -1,0 +1,201 @@
+include_guard(GLOBAL)
+
+# ASAN_OPTIONS=sleep_before_dying=3:abort_on_error=1:halt_on_error=1:disable_coredump=0:disable_core=0:unmap_shadow_on_exit=1:detect_leaks=1:atexit=1:log_path=process_name.asan.log
+# ASAN_OPTIONS=set windows_hook_rtl_allocators=true
+
+unset(PROJECT_SANTIZER_COMPILE_FLAGS)
+unset(PROJECT_SANTIZER_RUNTIME_LINK_FLAGS)
+
+if(PROJECT_SANTIZER_USE_ADDRESS OR PROJECT_SANTIZER_USE_THREAD)
+  include(CheckCXXSourceCompiles)
+  include(CheckIncludeFile)
+  include(CMakePushCheckState)
+
+  cmake_push_check_state()
+endif()
+
+if(PROJECT_SANTIZER_USE_ADDRESS)
+  # 低版本的编译器对coredump不友好，所以还是禁用掉吧
+  if((CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "7.0.0")
+     OR CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
+    list(APPEND CMAKE_REQUIRED_LINK_OPTIONS "-fsanitize=address")
+    list(APPEND CMAKE_REQUIRED_LIBRARIES ${COMPILER_OPTION_EXTERN_CXX_LIBS})
+    project_build_tools_append_space_flags_to_var(CMAKE_REQUIRED_FLAGS "-fsanitize=address")
+
+    find_package(Threads)
+    if(CMAKE_USE_PTHREADS_INIT)
+      list(APPEND CMAKE_REQUIRED_LIBRARIES Threads::Threads)
+      if(CMAKE_USE_PTHREADS_INIT)
+        set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -pthread")
+      endif()
+    endif()
+
+    unset(PROJECT_SANTIZER_TEST_ADDRESS CACHE)
+    check_cxx_source_compiles("#include<iostream>
+        int main() { return 0; }" PROJECT_SANTIZER_TEST_ADDRESS)
+    if(PROJECT_SANTIZER_TEST_ADDRESS)
+      set(SERVER_FRAME_ENABLE_SANITIZER_ADDRESS 1)
+      list(APPEND PROJECT_SANTIZER_RUNTIME_LINK_FLAGS "-fsanitize=address")
+      set(PROJECT_SANTIZER_COMPILE_FLAGS "-fsanitize=address")
+
+      # Check -fsanitize-recover=address
+      set(CMAKE_REQUIRED_FLAGS_BACKUP "${CMAKE_REQUIRED_FLAGS}")
+      set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -fsanitize-recover=address")
+      unset(PROJECT_SANTIZER_TEST_RECOVER_ADDRESS CACHE)
+      check_cxx_source_compiles("#include<iostream>
+            int main() { return 0; }" PROJECT_SANTIZER_TEST_RECOVER_ADDRESS)
+      if(PROJECT_SANTIZER_TEST_RECOVER_ADDRESS)
+        set(PROJECT_SANTIZER_COMPILE_FLAGS "${PROJECT_SANTIZER_COMPILE_FLAGS} -fsanitize-recover=address")
+      else()
+        set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS_BACKUP}")
+      endif()
+      unset(CMAKE_REQUIRED_FLAGS_BACKUP)
+
+      # Check -static-libasan
+      if(PROJECT_SANTIZER_ENABLE_STATIC)
+        list(APPEND CMAKE_REQUIRED_LINK_OPTIONS "-static-libasan")
+        unset(PROJECT_SANTIZER_TEST_STATIC_LIBASAN CACHE)
+        check_cxx_source_compiles("#include<iostream>
+            int main() { return 0; }" PROJECT_SANTIZER_TEST_STATIC_LIBASAN)
+        if(PROJECT_SANTIZER_TEST_STATIC_LIBASAN)
+          list(APPEND PROJECT_SANTIZER_RUNTIME_LINK_FLAGS "-static-libasan")
+        endif()
+      endif()
+    else()
+      echowithcolor(COLOR RED "-- Check -fsanitize=address failed")
+      message(FATAL_ERROR "Current compiler do not support a modern version of AddressSsanitizer")
+    endif()
+    unset(PROJECT_SANTIZER_TEST_ADDRESS CACHE)
+    unset(PROJECT_SANTIZER_TEST_RECOVER_ADDRESS CACHE)
+    unset(PROJECT_SANTIZER_TEST_STATIC_LIBASAN CACHE)
+  elseif(MSVC)
+    if((MSVC_VERSION GREATER_EQUAL 1924) AND CMAKE_SIZEOF_VOID_P MATCHES 4)
+      # https://devblogs.microsoft.com/cppblog/addresssanitizer-asan-for-windows-with-msvc/ Require to link asan library
+      # with /wholearchive:<library to link>
+      include(CheckCXXSourceCompiles)
+      # list(APPEND CMAKE_REQUIRED_LIBRARIES ${COMPILER_OPTION_EXTERN_CXX_LIBS} "clang_rt.asan_cxx-i386") # For /MT,/MTd
+      # list(APPEND CMAKE_REQUIRED_LIBRARIES ${COMPILER_OPTION_EXTERN_CXX_LIBS} "clang_rt.asan_dll_thunk-i386") # For
+      # /MT,/MTd list(APPEND CMAKE_REQUIRED_LIBRARIES ${COMPILER_OPTION_EXTERN_CXX_LIBS} "clang_rt.asan_dynamic-i386") #
+      # For /MD,/MDd list(APPEND CMAKE_REQUIRED_LIBRARIES ${COMPILER_OPTION_EXTERN_CXX_LIBS}
+      # "clang_rt.asan_dynamic_runtime_thunk-i386") # For /MD,/MDd
+      project_build_tools_append_space_flags_to_var(CMAKE_REQUIRED_FLAGS "/fsanitize=address")
+
+      unset(PROJECT_SANTIZER_TEST_ADDRESS CACHE)
+      check_cxx_source_compiles("#include<iostream>
+            int main() { return 0; }" PROJECT_SANTIZER_TEST_ADDRESS)
+      if(PROJECT_SANTIZER_TEST_ADDRESS)
+        set(SERVER_FRAME_ENABLE_SANITIZER_ADDRESS 1)
+        set(PROJECT_SANTIZER_COMPILE_FLAGS "/fsanitize=address")
+        echowithcolor(COLOR RED "-- Check /fsanitize=address failed")
+      endif()
+
+      unset(PROJECT_SANTIZER_TEST_ADDRESS CACHE)
+    else()
+      message(FATAL_ERROR "Current compiler do not support a modern version of AddressSsanitizer")
+    endif()
+  else()
+    message(FATAL_ERROR "Current compiler do not support a modern version of AddressSsanitizer")
+  endif()
+elseif(PROJECT_SANTIZER_USE_THREAD)
+  # 低版本的编译器对coredump不友好，所以还是禁用掉吧
+  if((CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "7.0.0")
+     OR CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
+    list(APPEND CMAKE_REQUIRED_LINK_OPTIONS "-fsanitize=thread")
+    list(APPEND CMAKE_REQUIRED_LIBRARIES ${COMPILER_OPTION_EXTERN_CXX_LIBS})
+    project_build_tools_append_space_flags_to_var(CMAKE_REQUIRED_FLAGS "-fsanitize=thread -DTHREAD_SANITIZER")
+
+    find_package(Threads)
+    if(CMAKE_USE_PTHREADS_INIT)
+      list(APPEND CMAKE_REQUIRED_LIBRARIES Threads::Threads)
+      if(CMAKE_USE_PTHREADS_INIT)
+        set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -pthread")
+      endif()
+    endif()
+
+    unset(PROJECT_SANTIZER_TEST_THREAD CACHE)
+    check_cxx_source_compiles("#include<iostream>
+        int main() { return 0; }" PROJECT_SANTIZER_TEST_THREAD)
+    if(PROJECT_SANTIZER_TEST_THREAD)
+      set(SERVER_FRAME_ENABLE_SANITIZER_THREAD 1)
+      list(APPEND PROJECT_SANTIZER_RUNTIME_LINK_FLAGS "-fsanitize=thread")
+      set(PROJECT_SANTIZER_COMPILE_FLAGS "-fsanitize=thread -DTHREAD_SANITIZER")
+      if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        set(PROJECT_SANTIZER_COMPILE_FLAGS "${PROJECT_SANTIZER_COMPILE_FLAGS} -Wno-error=tsan")
+      endif()
+
+      # Check -static-libtsan
+      if(PROJECT_SANTIZER_ENABLE_STATIC)
+        list(APPEND CMAKE_REQUIRED_LINK_OPTIONS "-static-libtsan")
+        unset(PROJECT_SANTIZER_TEST_STATIC_LIBTSAN CACHE)
+        check_cxx_source_compiles("#include<iostream>
+            int main() { return 0; }" PROJECT_SANTIZER_TEST_STATIC_LIBTSAN)
+        if(PROJECT_SANTIZER_TEST_STATIC_LIBTSAN)
+          list(APPEND PROJECT_SANTIZER_RUNTIME_LINK_FLAGS "-static-libtsan")
+        endif()
+      endif()
+    else()
+      echowithcolor(COLOR RED "-- Check -fsanitize=thread failed")
+      message(FATAL_ERROR "Current compiler do not support a modern version of ThreadSsanitizer")
+    endif()
+    unset(PROJECT_SANTIZER_TEST_THREAD CACHE)
+    unset(PROJECT_SANTIZER_TEST_STATIC_LIBTSAN CACHE)
+  else()
+    message(FATAL_ERROR "Current compiler do not support a modern version of ThreadSsanitizer")
+  endif()
+endif()
+
+if(PROJECT_SANTIZER_USE_ADDRESS OR PROJECT_SANTIZER_USE_THREAD)
+  cmake_pop_check_state()
+endif()
+
+# 临时Patch，后续改成 add_linker_flags_for_runtime_inherit
+macro(project_add_linker_flags_for_runtime_inherit)
+  foreach(def ${ARGN})
+    if(CMAKE_EXE_LINKER_FLAGS)
+      set(COMPILER_OPTION_INHERIT_CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${def}")
+    else()
+      set(COMPILER_OPTION_INHERIT_CMAKE_EXE_LINKER_FLAGS "${def}")
+    endif()
+    if(CMAKE_MODULE_LINKER_FLAGS)
+      set(COMPILER_OPTION_INHERIT_CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${def}")
+    else()
+      set(COMPILER_OPTION_INHERIT_CMAKE_MODULE_LINKER_FLAGS "${def}")
+    endif()
+    if(CMAKE_SHARED_LINKER_FLAGS)
+      set(COMPILER_OPTION_INHERIT_CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${def}")
+    else()
+      set(COMPILER_OPTION_INHERIT_CMAKE_SHARED_LINKER_FLAGS "${def}")
+    endif()
+  endforeach()
+endmacro()
+
+if(PROJECT_SANTIZER_COMPILE_FLAGS)
+  add_compiler_flags_to_inherit_var(CMAKE_C_FLAGS "${PROJECT_SANTIZER_COMPILE_FLAGS}")
+  add_compiler_flags_to_inherit_var(CMAKE_CXX_FLAGS "${PROJECT_SANTIZER_COMPILE_FLAGS}")
+  echowithcolor(COLOR YELLOW "-- Enable santizer flags: ${PROJECT_SANTIZER_COMPILE_FLAGS}")
+
+  if(PROJECT_SANTIZER_USE_ADDRESS)
+    check_include_file("sanitizer/asan_interface.h" SERVER_FRAME_ENABLE_SANITIZER_ASAN_INTERFACE_TEST)
+    if(SERVER_FRAME_ENABLE_SANITIZER_ASAN_INTERFACE_TEST)
+      set(SERVER_FRAME_ENABLE_SANITIZER_ASAN_INTERFACE 1)
+    endif()
+    unset(SERVER_FRAME_ENABLE_SANITIZER_ASAN_INTERFACE_TEST CACHE)
+
+    set(SERVER_FRAME_ENABLE_SANITIZER_NAME "address")
+  elseif(PROJECT_SANTIZER_USE_THREAD)
+    check_include_file("sanitizer/tsan_interface.h" SERVER_FRAME_ENABLE_SANITIZER_TSAN_INTERFACE_TEST)
+    if(SERVER_FRAME_ENABLE_SANITIZER_TSAN_INTERFACE_TEST)
+      set(SERVER_FRAME_ENABLE_SANITIZER_TSAN_INTERFACE 1)
+    endif()
+    unset(SERVER_FRAME_ENABLE_SANITIZER_TSAN_INTERFACE_TEST CACHE)
+
+    set(SERVER_FRAME_ENABLE_SANITIZER_NAME "thread")
+  endif()
+endif()
+if(PROJECT_SANTIZER_RUNTIME_LINK_FLAGS)
+  project_add_linker_flags_for_runtime_inherit(${PROJECT_SANTIZER_RUNTIME_LINK_FLAGS})
+  echowithcolor(COLOR YELLOW "-- Enable santizer linker flags: ${PROJECT_SANTIZER_RUNTIME_LINK_FLAGS}")
+endif()
+
+unset(PROJECT_SANTIZER_COMPILE_FLAGS)
+unset(PROJECT_SANTIZER_RUNTIME_LINK_FLAGS)

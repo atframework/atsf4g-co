@@ -44,7 +44,10 @@ set(ATFRAME_GATEWAY_MACRO_DATA_SMALL_SIZE
 )
 
 option(PROJECT_SANTIZER_USE_ADDRESS "Enable -fsanitize=address -fno-omit-frame-pointer" OFF)
+option(PROJECT_SANTIZER_USE_THREAD "Enable -fsanitize=thread -fno-omit-frame-pointer -DTHREAD_SANITIZER" OFF)
+option(PROJECT_SANTIZER_ENABLE_STATIC "Enable link static library for sanitizer" OFF)
 option(PROJECT_STATIC_LINK_STANDARD_LIBRARIES "Use -static-libgcc and -static-libstdc++" OFF)
+option(PROJECT_OPTIMIZE_OPTIONS_NO_OMIT_FRAME_POINTER "Use -fno-omit-frame-pointer" ON)
 
 # Patch for `FindGit.cmake` on windows
 find_program(GIT_EXECUTABLE NAMES git git.cmd)

@@ -31,8 +31,10 @@
 
 #include <utility/rapid_json_helper.h>
 
-#if defined(SERVER_FRAME_ENABLE_SANITIZER_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_INTERFACE
+#if defined(SERVER_FRAME_ENABLE_SANITIZER_ASAN_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_ASAN_INTERFACE
 #  include <sanitizer/asan_interface.h>
+#elif defined(SERVER_FRAME_ENABLE_SANITIZER_TSAN_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_TSAN_INTERFACE
+#  include <sanitizer/tsan_interface.h>
 #endif
 
 #include <config/excel/config_manager.h>
@@ -192,14 +194,16 @@ static int app_default_handle_on_disconnected(atapp::app &, atbus::endpoint &ep,
 logic_server_common_module_configure::logic_server_common_module_configure() : enable_watch_battlesvr(false) {}
 
 int logic_server_setup_common(atapp::app &app, const logic_server_common_module_configure &conf) {
-#if defined(SERVER_FRAME_ENABLE_SANITIZER_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_INTERFACE
+#if defined(SERVER_FRAME_ENABLE_SANITIZER_ASAN_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_ASAN_INTERFACE
   // @see
   // https://github.com/gcc-mirror/gcc/blob/releases/gcc-4.8.5/libsanitizer/include/sanitizer/asan_interface.h
-  __asan_set_death_callback([]() { FWLOGINFO("[SANITIZE=ADDRESS]: Exit"); });
+  __sanitizer_set_death_callback([]() { FWLOGINFO("[SANITIZE=ADDRESS]: Exit"); });
   __asan_set_error_report_callback([](const char *content) {
     // Sanitizer report
-    FWLOGERROR("[SANITIZE=ADDRESS]: Report: {}", content);
+    FWLOGWARNING("[SANITIZE=ADDRESS]: Report: {}", content);
   });
+#elif defined(SERVER_FRAME_ENABLE_SANITIZER_TSAN_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_TSAN_INTERFACE
+  __sanitizer_set_death_callback([]() { FWLOGINFO("[SANITIZE=THREAD]: Exit"); });
 #endif
 
   // setup options
@@ -299,6 +303,12 @@ int logic_server_setup_common(atapp::app &app, const logic_server_common_module_
     ss << "(pool)";
 #  endif
     ss << std::endl;
+#endif
+
+#if defined(SERVER_FRAME_ENABLE_SANITIZER_ASAN_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_ASAN_INTERFACE
+    ss << "Sanitizer        : address";
+#elif defined(SERVER_FRAME_ENABLE_SANITIZER_TSAN_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_TSAN_INTERFACE
+    ss << "Sanitizer        : thread";
 #endif
 
     app.set_build_version(ss.str());
@@ -743,7 +753,8 @@ atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index
   return iter->second;
 }
 
-util::memory::strong_rc_ptr<atapp::etcd_discovery_node> logic_server_common_module::get_discovery_by_id(uint64_t id) const {
+util::memory::strong_rc_ptr<atapp::etcd_discovery_node> logic_server_common_module::get_discovery_by_id(
+    uint64_t id) const {
   if (nullptr == get_app()) {
     return nullptr;
   }

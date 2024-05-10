@@ -41,8 +41,18 @@ endif()
 if(COMPILER_STRICT_RECOMMEND_REMOVE_CFLAGS)
   list(REMOVE_ITEM PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS ${COMPILER_STRICT_RECOMMEND_REMOVE_CFLAGS})
 endif()
+if((PROJECT_OPTIMIZE_OPTIONS_NO_OMIT_FRAME_POINTER
+    OR PROJECT_SANTIZER_USE_ADDRESS
+    OR PROJECT_SANTIZER_USE_THREAD)
+   AND ATFRAMEWORK_CMAKE_TOOLSET_TARGET_IS_LINUX
+   AND NOT "-fno-omit-frame-pointer" IN_LIST PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS)
+  list(APPEND PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS -fno-omit-frame-pointer)
+endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+  if(NOT "-Wconversion" IN_LIST PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS)
+    list(APPEND PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS -Wconversion)
+  endif()
   add_compiler_flags_to_inherit_var_unique(CMAKE_CXX_FLAGS "-pipe")
   add_compiler_flags_to_inherit_var_unique(CMAKE_C_FLAGS "-pipe")
 endif()
@@ -274,6 +284,21 @@ function(project_tool_set_target_runtime_output_directory OUTPUT_DIR)
       project_tool_set_target_runtime_output_directory_APPEND_RPATH
       "${ORIGIN_VAR}/${TARGET_OUTPUT_RELATIVE_PATH}${CMAKE_INSTALL_LIBDIR}/archive/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}"
     )
+  endif()
+
+  if(project_tool_set_target_runtime_output_directory_WITH_TARGET_RPATH)
+    list(
+      APPEND
+      project_tool_set_target_runtime_output_directory_APPEND_RPATH
+      "${ORIGIN_VAR}/${TARGET_OUTPUT_RELATIVE_PATH}${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/__shared/${CMAKE_INSTALL_LIBDIR}"
+    )
+    if(project_tool_set_target_runtime_output_directory_WITH_ARCHIVE_RPATH)
+      list(
+        APPEND
+        project_tool_set_target_runtime_output_directory_APPEND_RPATH
+        "${ORIGIN_VAR}/${TARGET_OUTPUT_RELATIVE_PATH}${CMAKE_INSTALL_LIBDIR}/archive/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/__shared/${CMAKE_INSTALL_LIBDIR}"
+      )
+    endif()
   endif()
 
   set_property(TARGET ${TARGET_NAME} PROPERTY RUNTIME_OUTPUT_DIRECTORY "${OUTPUT_DIR}")
