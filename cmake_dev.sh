@@ -127,7 +127,7 @@ while getopts "ab:c:d:e:hln:tur:s-" OPTION; do
       echo "-d <distcc path>              try to use specify distcc to speed up building."
       echo "-e <ccache path>              try to use specify ccache to speed up building."
       echo "-h                            help message."
-      echo "-n <sanitizer>                usung sanitizer(address or thread)."
+      echo "-n <sanitizer>                using sanitizer(address, thread, leak, hwaddress or undefined)."
       echo "-t                            enable clang-tidy."
       echo "-u                            enable unit test."
       echo "-s                            enable sample."
@@ -145,8 +145,23 @@ while getopts "ab:c:d:e:hln:tur:s-" OPTION; do
         if [[ $BUILD_DIR_SET -eq 0 ]]; then
           BUILD_DIR="${BUILD_DIR}_tsan"
         fi
+      elif [[ "x$OPTARG" == "xleak" ]] || [[ "x$OPTARG" == "xlsan" ]]; then
+        CMAKE_OPTIONS="$CMAKE_OPTIONS -DPROJECT_SANTIZER_USE_LEAK=YES"
+        if [[ $BUILD_DIR_SET -eq 0 ]]; then
+          BUILD_DIR="${BUILD_DIR}_lsan"
+        fi
+      elif [[ "x$OPTARG" == "xhwaddress" ]] || [[ "x$OPTARG" == "xhwasan" ]]; then
+        CMAKE_OPTIONS="$CMAKE_OPTIONS -DPROJECT_SANTIZER_USE_HWADDRESS=YES"
+        if [[ $BUILD_DIR_SET -eq 0 ]]; then
+          BUILD_DIR="${BUILD_DIR}_hwasan"
+        fi
+      elif [[ "x$OPTARG" == "xundefined" ]] || [[ "x$OPTARG" == "xubsan" ]]; then
+        CMAKE_OPTIONS="$CMAKE_OPTIONS -DPROJECT_SANTIZER_USE_UNDEFINED=YES"
+        if [[ $BUILD_DIR_SET -eq 0 ]]; then
+          BUILD_DIR="${BUILD_DIR}_ubsan"
+        fi
       else
-        echo "Only address and thread sanitizers are available now"
+        echo "Only address, thread, leak, hwaddress and undefined sanitizers are available now"
         exit 1
       fi
       ;;

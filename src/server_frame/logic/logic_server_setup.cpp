@@ -35,6 +35,13 @@
 #  include <sanitizer/asan_interface.h>
 #elif defined(SERVER_FRAME_ENABLE_SANITIZER_TSAN_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_TSAN_INTERFACE
 #  include <sanitizer/tsan_interface.h>
+#elif defined(SERVER_FRAME_ENABLE_SANITIZER_LSAN_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_LSAN_INTERFACE
+#  include <sanitizer/lsan_interface.h>
+#elif defined(SERVER_FRAME_ENABLE_SANITIZER_UBSAN_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_UBSAN_INTERFACE
+#  include <sanitizer/ubsan_interface.h>
+#elif defined(SERVER_FRAME_ENABLE_SANITIZER_HWASAN_INTERFACE_TEST) && \
+    SERVER_FRAME_ENABLE_SANITIZER_HWASAN_INTERFACE_TEST
+#  include <sanitizer/hwasan_interface.h>
 #endif
 
 #include <config/excel/config_manager.h>
@@ -204,6 +211,16 @@ int logic_server_setup_common(atapp::app &app, const logic_server_common_module_
   });
 #elif defined(SERVER_FRAME_ENABLE_SANITIZER_TSAN_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_TSAN_INTERFACE
   __sanitizer_set_death_callback([]() { FWLOGINFO("[SANITIZE=THREAD]: Exit"); });
+#elif defined(SERVER_FRAME_ENABLE_SANITIZER_LSAN_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_LSAN_INTERFACE
+  __sanitizer_set_death_callback([]() { FWLOGINFO("[SANITIZE=LEAK]: Exit"); });
+#elif defined(SERVER_FRAME_ENABLE_SANITIZER_UBSAN_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_UBSAN_INTERFACE
+  __sanitizer_set_death_callback([]() { FWLOGINFO("[SANITIZE=UB]: Exit"); });
+#elif defined(SERVER_FRAME_ENABLE_SANITIZER_HWASAN_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_HWASAN_INTERFACE
+  __sanitizer_set_death_callback([]() { FWLOGINFO("[SANITIZE=HWADDRESS]: Exit"); });
+  __hwasan_set_error_report_callback([](const char *content) {
+    // Sanitizer report
+    FWLOGWARNING("[SANITIZE=HWADDRESS]: Report: {}", content);
+  });
 #endif
 
   // setup options
@@ -305,11 +322,12 @@ int logic_server_setup_common(atapp::app &app, const logic_server_common_module_
     ss << std::endl;
 #endif
 
-#if defined(SERVER_FRAME_ENABLE_SANITIZER_ASAN_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_ASAN_INTERFACE
-    ss << "Sanitizer        : address";
-#elif defined(SERVER_FRAME_ENABLE_SANITIZER_TSAN_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_TSAN_INTERFACE
-    ss << "Sanitizer        : thread";
-#endif
+    {
+      auto sanitizer_name = server_frame_get_sanitizer_name();
+      if (nullptr != sanitizer_name && *sanitizer_name) {
+        ss << "Sanitizer        : " << sanitizer_name;
+      }
+    }
 
     app.set_build_version(ss.str());
   }
