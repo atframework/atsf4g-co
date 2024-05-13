@@ -27,4 +27,12 @@ if(NOT EXISTS "${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/Import.cmake")
       CACHE PATH "PATH to cmake-toolset" FORCE)
 endif()
 
-include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/Import.cmake")
+# Import all tools except ports/Configure.cmake
+list(APPEND CMAKE_MODULE_PATH "${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/modules")
+
+include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/CompilerOption.cmake")
+include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/TargetOption.cmake")
+
+# Port configure must be imported after TargetOption.cmake
+include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/modules/EchoWithColor.cmake")
+include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/modules/FindConfigurePackage.cmake")

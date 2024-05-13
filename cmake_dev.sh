@@ -24,6 +24,7 @@ CMAKE_CLANG_TIDY=""
 CMAKE_CLANG_ANALYZER=0
 CMAKE_CLANG_ANALYZER_PATH=""
 BUILD_DIR=$(echo "build_jobs_$SYS_NAME" | tr '[:upper:]' '[:lower:]')
+BUILD_DIR_SET=0
 CMAKE_BUILD_TYPE=Debug
 PROJECT_NAME="$(basename "$0")"
 
@@ -42,7 +43,7 @@ else
   CHECK_MSYS=""
 fi
 
-while getopts "ab:c:d:e:hltur:s-" OPTION; do
+while getopts "ab:c:d:e:hln:tur:s-" OPTION; do
   case $OPTION in
     a)
       echo "Ready to check ccc-analyzer and c++-analyzer, please do not use -c to change the compiler when using clang-analyzer."
@@ -91,7 +92,9 @@ while getopts "ab:c:d:e:hltur:s-" OPTION; do
       echo "c++-analyzer=$CXX"
       echo "clang-analyzer setup completed."
       CMAKE_CLANG_ANALYZER=1
-      BUILD_DIR="${BUILD_DIR}_analyzer"
+      if [[ $BUILD_DIR_SET -eq 0 ]]; then
+        BUILD_DIR="${BUILD_DIR}_analyzer"
+      fi
       ;;
     b)
       CMAKE_BUILD_TYPE="$OPTARG"
@@ -124,11 +127,28 @@ while getopts "ab:c:d:e:hltur:s-" OPTION; do
       echo "-d <distcc path>              try to use specify distcc to speed up building."
       echo "-e <ccache path>              try to use specify ccache to speed up building."
       echo "-h                            help message."
+      echo "-n <sanitizer>                usung sanitizer(address or thread)."
       echo "-t                            enable clang-tidy."
       echo "-u                            enable unit test."
       echo "-s                            enable sample."
       echo "-l                            enable tools."
       exit 0
+      ;;
+    n)
+      if [[ "x$OPTARG" == "xaddress" ]]; then
+        CMAKE_OPTIONS="$CMAKE_OPTIONS -DPROJECT_SANTIZER_USE_ADDRESS=YES"
+        if [[ $BUILD_DIR_SET -eq 0 ]]; then
+          BUILD_DIR="${BUILD_DIR}_asan"
+        fi
+      elif [[ "x$OPTARG" == "xthread" ]]; then
+        CMAKE_OPTIONS="$CMAKE_OPTIONS -DPROJECT_SANTIZER_USE_THREAD=YES"
+        if [[ $BUILD_DIR_SET -eq 0 ]]; then
+          BUILD_DIR="${BUILD_DIR}_tsan"
+        fi
+      else
+        echo "Only address and thread sanitizers are available now"
+        exit 1
+      fi
       ;;
     t)
       CMAKE_CLANG_TIDY="-D -checks=* --"
@@ -138,6 +158,7 @@ while getopts "ab:c:d:e:hltur:s-" OPTION; do
       ;;
     r)
       BUILD_DIR="$OPTARG"
+      BUILD_DIR_SET=1
       ;;
     s)
       CMAKE_OPTIONS="$CMAKE_OPTIONS -DPROJECT_ENABLE_SAMPLE=YES"

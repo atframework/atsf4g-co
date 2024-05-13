@@ -160,6 +160,9 @@ file(MAKE_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 include("${CMAKE_CURRENT_LIST_DIR}/ProjectTools.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/ProjectSantizerChecker.cmake")
 
+# 导入第三方库工具
+include("${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/ports/Configure.cmake")
+
 # Linker options
 unset(PROJECT_TRY_SET_LINKER)
 if(PROJECT_ENABLE_LINKER_MOLD)

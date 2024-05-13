@@ -29,6 +29,10 @@
     Enable Test: yes|no|true|false|1|0
 .PARAMETER EnableTools
     Enable Tools: yes|no|true|false|1|0
+.PARAMETER EnableAdderssSanitizer
+    Enable Adderss Sanitizer: yes|no|true|false|1|0
+.PARAMETER EnableThreadSanitizer
+    Enable Thread Sanitizer: yes|no|true|false|1|0
 .PARAMETER CMakeOptions
     CMake options(pwsh -File <this file> [options...] --% [cmake options])
 .EXAMPLE
@@ -100,6 +104,14 @@ param (
   [string]$EnableTools = "true",
 
   [Parameter(ValueFromPipeline = $true,
+    ValueFromPipelineByPropertyName = $true)]
+  [string]$EnableAdderssSanitizer = "false",
+
+  [Parameter(ValueFromPipeline = $true,
+    ValueFromPipelineByPropertyName = $true)]
+  [string]$EnableThreadSanitizer = "false",
+
+  [Parameter(ValueFromPipeline = $true,
     ValueFromPipelineByPropertyName = $true,
     ValueFromRemainingArguments = $true,
     HelpMessage = "CMake options(pwsh -File <this file> [options...] --% [cmake options])")]
@@ -126,7 +138,7 @@ function Test-RegistryValue {
     [String]$Name
     ,
     [Switch]$PassThru
-  ) 
+  )
 
   process {
     if (Test-Path $Path) {
@@ -234,18 +246,18 @@ if ($Generator.Length -eq 0) {
 }
 
 if ($Generator.Length -gt 0) {
-  $CMakeGeneratorArgs = @("-G", $Generator) 
+  $CMakeGeneratorArgs = @("-G", $Generator)
 }
 else {
-  $CMakeGeneratorArgs = @() 
+  $CMakeGeneratorArgs = @()
 }
 
 if ($GeneratorPlatform.Length -gt 0) {
-  $CMakeGeneratorArgs += @("-A", $GeneratorPlatform) 
+  $CMakeGeneratorArgs += @("-A", $GeneratorPlatform)
 }
 
 if ($GeneratorToolset.Length -gt 0) {
-  $CMakeGeneratorArgs += @("-T", $GeneratorToolset) 
+  $CMakeGeneratorArgs += @("-T", $GeneratorToolset)
 }
 
 if ($Compiler.Length -gt 0) {
@@ -333,7 +345,7 @@ if ($IsWindows) {
     Write-Output "  - $sdk"
   }
 
-  $CMakeGeneratorArgs += @("-DCMAKE_SYSTEM_VERSION=$SelectWinSDKVersion") 
+  $CMakeGeneratorArgs += @("-DCMAKE_SYSTEM_VERSION=$SelectWinSDKVersion")
 }
 
 if (($null -ne $VsInstallationPath) -and ($VcVarArchitecture.Length -gt 0)) {
@@ -341,9 +353,11 @@ if (($null -ne $VsInstallationPath) -and ($VcVarArchitecture.Length -gt 0)) {
   Invoke-Environment "call ""$VsInstallationPath/VC/Auxiliary/Build/vcvarsall.bat"" ""$VcVarArchitecture"""
 }
 
+$BuildDirectorySet = $true
 if ($BuildDirectory.Length -eq 0) {
   $BuildDirectorySystemSuffix = [System.Environment]::OSVersion.Platform.ToString().ToLower()
   $BuildDirectory = "build_jobs_$BuildDirectorySystemSuffix"
+  $BuildDirectorySet = $false
 }
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
@@ -362,6 +376,18 @@ if ((Check-BooleanString "$EnableTest")) {
 }
 if ((Check-BooleanString "$EnableTools")) {
   $CMakeGeneratorArgs += @("-DPROJECT_ENABLE_TOOLS=ON")
+}
+if ((Check-BooleanString $EnableAdderssSanitizer)) {
+  $CMakeGeneratorArgs += @("-DPROJECT_SANTIZER_USE_ADDRESS=ON")
+  if (-Not $BuildDirectorySet) {
+    $BuildDirectory = "${BuildDirectory}_asan"
+  }
+}
+elseif ((Check-BooleanString $EnableThreadSanitizer)) {
+  $CMakeGeneratorArgs += @("-DPROJECT_SANTIZER_USE_THREAD=ON")
+  if (-Not $BuildDirectorySet) {
+    $BuildDirectory = "${BuildDirectory}_tsan"
+  }
 }
 
 if (($null -ne $CMakeOptions) -and ($CMakeOptions.Count -gt 0)) {
