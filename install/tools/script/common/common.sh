@@ -295,13 +295,23 @@ function CheckProcessRunning() {
     PROC_EXPECT_PID=""
   fi
 
+  if [[ $# -gt 2 ]]; then
+    PROC_STARTUP_ERROR_FILE="$3"
+  else
+    PROC_STARTUP_ERROR_FILE=""
+  fi
+
+  if [[ "x$PROC_STARTUP_ERROR_FILE" != "x" ]] && [[ -e "$PROC_STARTUP_ERROR_FILE" ]]; then
+    return 2
+  fi
+
   if [[ ! -f "$PID_FILE" ]]; then
     return 0
   fi
 
   PROC_PID=$(cat "$PID_FILE" 2>/dev/null)
 
-  if [[ "x$PROC_PID" != "x" ]] && [[ $PROC_PID -le 0 ]]; then
+  if [[ "x$PROC_STARTUP_ERROR_FILE" == "x" ]] && [[ "x$PROC_PID" != "x" ]] && [[ $PROC_PID -le 0 ]]; then
     return 2
   fi
 
@@ -321,7 +331,7 @@ function CheckProcessRunning() {
 }
 
 function WaitProcessStarted() {
-  # parameters: <pid file> [wait time] [except pid]
+  # parameters: <pid file> [wait time] [except pid] [startup error file]
   if [[ $# -lt 1 ]]; then
     return 1
   fi
@@ -339,8 +349,14 @@ function WaitProcessStarted() {
     PROC_EXPECT_PID=""
   fi
 
+  if [[ $# -gt 3 ]]; then
+    PROC_STARTUP_ERROR_FILE="$4"
+  else
+    PROC_STARTUP_ERROR_FILE=""
+  fi
+
   while [[ $WAIT_TIME -gt 0 ]]; do
-    CheckProcessRunning "$PID_FILE" "$PROC_EXPECT_PID"
+    CheckProcessRunning "$PID_FILE" "$PROC_EXPECT_PID" "$PROC_STARTUP_ERROR_FILE"
     CheckResult=$?
     if [[ 1 -eq $CheckResult ]]; then
       return 0

@@ -5,14 +5,32 @@ import "google/protobuf/descriptor.proto";
 package org.xresloader.ue;
 
 extend google.protobuf.FieldOptions {
-    optional int64 key_tag           = 1101; // key字段映射的系数
-    optional string ue_type_name     = 1102; // UE内部类型(比如: UTexture, 会生成字段类型为 TSoftObjectPtr<UTexture>)
-                                             //   特殊的，当字段类型是Map时，这个插件仅影响Value类型
-    optional bool   ue_type_is_class = 1103; // UE内部类型是否是Class(如果为true，会生成: TSoftClassPtr<T> 而不是 TSoftObjectPtr<T>)
-                                             //   特殊的，当字段类型是Map时，这个插件仅影响Value类型
+    optional int64 key_tag = 1101; // key字段映射的系数
+
+    // UE内部类型(比如: UTexture, 会生成字段类型为
+    // TSoftObjectPtr<UTexture>) 特殊的，当字段类型是Map时，这个插件仅影响Value类型
+    optional string ue_type_name = 1102;
+
+    // UE内部类型是否是Class(如果为true，会生成: TSoftClassPtr<T> 而不是
+    // TSoftObjectPtr<T>) 特殊的，当字段类型是Map时，这个插件仅影响Value类型
+    optional bool ue_type_is_class = 1103;
+
+    // 使用UE内部类型原始类型
+    optional string ue_origin_type_name = 1104;
+
+    // 使用UE内部类型原始类型时的默认值
+    optional string ue_origin_type_default_value = 1105;
+}
+
+enum loader_mode {
+    EN_LOADER_MODE_DEFAULT = 0;
+    EN_LOADER_MODE_ENABLE  = 1;
+    EN_LOADER_MODE_DISABLE = 2;
 }
 
 extend google.protobuf.MessageOptions {
-    optional string helper       = 1101; // 辅助函数的类名
-    optional bool not_data_table = 1102; // 不是DataTable，helper类里不生成加载代码
+    optional string      helper         = 1101; // 辅助函数的类名
+    optional bool        not_data_table = 1102; // 不是DataTable，helper类里不生成加载代码
+    optional loader_mode default_loader = 1103; // 默认Loader模式
+    repeated string      include_header = 1104; // 额外的包含头文件
 }

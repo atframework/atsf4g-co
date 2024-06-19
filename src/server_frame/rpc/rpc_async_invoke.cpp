@@ -169,6 +169,8 @@ SERVER_FRAME_API void async_then_start_task(context &ctx, gsl::string_view name,
     return;
   }
 
+  task_type_trait::id_type waiting_task_id = task_type_trait::get_task_id(waiting);
+
   async_invoke_result result = async_invoke(
       ctx, name, [waiting = std::move(waiting), task_id](rpc::context &child_ctx) -> rpc::result_code_type {
         auto ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(child_ctx, waiting));
@@ -187,7 +189,7 @@ SERVER_FRAME_API void async_then_start_task(context &ctx, gsl::string_view name,
   }
 
   FWLOGERROR("Try to invoke task({}) to wait task {} and then start task {} failed, try to start task directly.", name,
-             task_type_trait::get_task_id(waiting), task_id);
+             waiting_task_id, task_id);
 
   if (task_manager::is_instance_destroyed()) {
     return;

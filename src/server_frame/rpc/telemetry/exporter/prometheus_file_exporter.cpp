@@ -606,10 +606,10 @@ class UTIL_SYMBOL_LOCAL PrometheusFileBackend {
       return;
     }
 
-    serializer_.Serialize(*out, translated);
-
     {
       std::lock_guard<std::mutex> lock_guard{file_->file_lock};
+
+      serializer_.Serialize(*out, translated);
 
       file_->metric_family_count += translated.size();
 

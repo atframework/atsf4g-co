@@ -1,11 +1,12 @@
-set(GENERATE_FOR_PB_PY "${CMAKE_CURRENT_LIST_DIR}/generate-for-pb.py")
-set(GENERATE_FOR_PB_WORK_DIR "${CMAKE_CURRENT_LIST_DIR}")
+set(GENERATE_FOR_PB_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}")
+set(GENERATE_FOR_PB_PY "${GENERATE_FOR_PB_SOURCE_DIR}/generate-for-pb.py")
+set(GENERATE_FOR_PB_WORK_DIR "${CMAKE_BINARY_DIR}")
 set(GENERATE_FOR_PB_OUT_SH "${CMAKE_BINARY_DIR}/generate-for-pb-run.sh")
 set(GENERATE_FOR_PB_OUT_PWSH "${CMAKE_BINARY_DIR}/generate-for-pb-run.ps1")
 set(GENERATE_FOR_PB_PROTO_SH "${CMAKE_BINARY_DIR}/generate-for-pb-generate-pb.sh")
 set(GENERATE_FOR_PB_PROTO_PWSH "${CMAKE_BINARY_DIR}/generate-for-pb-generate-pb.ps1")
 set(GENERATE_FOR_PB_OUT_CONF "${CMAKE_BINARY_DIR}/generate-for-pb-run.yaml")
-set(GENERATE_FOR_PB_OUT_LOG "${CMAKE_CURRENT_BINARY_DIR}/generate-for-pb-run.log")
+set(GENERATE_FOR_PB_OUT_LOG "${CMAKE_BINARY_DIR}/generate-for-pb-run.log")
 set(GENERATE_FOR_PB_OUT_PB "${PROJECT_GENERATED_PBD_DIR}/network.pb")
 unset(GENERATE_FOR_PB_PROTO_COMMAND)
 file(WRITE "${GENERATE_FOR_PB_OUT_LOG}" "# generate-for-pb-run")
@@ -206,10 +207,10 @@ function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
         ${CUSTOM_INCLUDE_HEADERS}
       service_template:
         - overwrite: true
-          input: '${GENERATE_FOR_PB_WORK_DIR}/templates/rpc_call_api_for_ss.h.mako'
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/rpc_call_api_for_ss.h.mako'
           output: 'rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.h'
         - overwrite: true
-          input: '${GENERATE_FOR_PB_WORK_DIR}/templates/rpc_call_api_for_ss.cpp.mako'
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/rpc_call_api_for_ss.cpp.mako'
           output: 'rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.cpp'
 ")
   endif()
@@ -229,18 +230,18 @@ function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
         ${CUSTOM_INCLUDE_HEADERS}
       service_template:
         - overwrite: true
-          input: '${GENERATE_FOR_PB_WORK_DIR}/templates/handle_ss_rpc.h.mako'
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/handle_ss_rpc.h.mako'
           output: '${HANDLE_PATH_PREFIX}handle_ss_rpc_\${service.get_name_lower_rule()}.h'
         - overwrite: true
-          input: '${GENERATE_FOR_PB_WORK_DIR}/templates/handle_ss_rpc.cpp.mako'
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/handle_ss_rpc.cpp.mako'
           output: '${HANDLE_PATH_PREFIX}handle_ss_rpc_\${service.get_name_lower_rule()}.cpp'
       ${GENERATE_FOR_PB_RPC_IGNORE_EMPTY_REQUEST}
       rpc_template:
         - overwrite: false
-          input: '${GENERATE_FOR_PB_WORK_DIR}/templates/task_action_ss_rpc.h.mako'
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/task_action_ss_rpc.h.mako'
           output: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.h'
         - overwrite: false
-          input: '${GENERATE_FOR_PB_WORK_DIR}/templates/task_action_ss_rpc.cpp.mako'
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/task_action_ss_rpc.cpp.mako'
           output: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.cpp'
 ")
   endif()
@@ -307,16 +308,16 @@ function(generate_for_pb_add_cs_service SERVICE_NAME SERVICE_ROOT_DIR)
         ${CUSTOM_INCLUDE_HEADERS}
       service_template:
         - overwrite: true
-          input: '${GENERATE_FOR_PB_WORK_DIR}/templates/session_downstream_api_for_cs.h.mako'
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/session_downstream_api_for_cs.h.mako'
           output: 'rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.h'
         - overwrite: true
-          input: '${GENERATE_FOR_PB_WORK_DIR}/templates/session_downstream_api_for_cs.cpp.mako'
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/session_downstream_api_for_cs.cpp.mako'
           output: 'rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.cpp'
         - overwrite: true
-          input: '${GENERATE_FOR_PB_WORK_DIR}/templates/handle_cs_rpc.h.mako'
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/handle_cs_rpc.h.mako'
           output: '${HANDLE_PATH_PREFIX}handle_cs_rpc_\${service.get_name_lower_rule()}.h'
         - overwrite: true
-          input: '${GENERATE_FOR_PB_WORK_DIR}/templates/handle_cs_rpc.cpp.mako'
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/handle_cs_rpc.cpp.mako'
           output: '${HANDLE_PATH_PREFIX}handle_cs_rpc_\${service.get_name_lower_rule()}.cpp'
   - service:
       name: '${SERVICE_NAME}'
@@ -331,10 +332,10 @@ function(generate_for_pb_add_cs_service SERVICE_NAME SERVICE_ROOT_DIR)
       ${GENERATE_FOR_PB_RPC_IGNORE_EMPTY_REQUEST}
       rpc_template:
         - overwrite: false
-          input: '${GENERATE_FOR_PB_WORK_DIR}/templates/task_action_cs_rpc.h.mako'
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/task_action_cs_rpc.h.mako'
           output: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.h'
         - overwrite: false
-          input: '${GENERATE_FOR_PB_WORK_DIR}/templates/task_action_cs_rpc.cpp.mako'
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/task_action_cs_rpc.cpp.mako'
           output: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.cpp'
 ")
 endfunction(generate_for_pb_add_cs_service)
@@ -391,10 +392,10 @@ function(generate_for_pb_add_simulator_cs_api SERVICE_NAME SERVICE_ROOT_DIR)
         ${CUSTOM_INCLUDE_HEADERS}
       service_template:
         - overwrite: true
-          input: '${GENERATE_FOR_PB_WORK_DIR}/templates/package_request_api_for_simulator.h.mako'
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/package_request_api_for_simulator.h.mako'
           output: 'rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.h'
         - overwrite: true
-          input: '${GENERATE_FOR_PB_WORK_DIR}/templates/package_request_api_for_simulator.cpp.mako'
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/package_request_api_for_simulator.cpp.mako'
           output: 'rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.cpp'
       ${GENERATE_FOR_PB_RPC_IGNORE_EMPTY_REQUEST}
 ")

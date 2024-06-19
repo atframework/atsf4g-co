@@ -8,6 +8,8 @@
 #include <gsl/select-gsl.h>
 #include <log/log_wrapper.h>
 
+#include <memory/rc_ptr.h>
+
 #include <config/compile_optimize.h>
 
 #include <opentelemetry/trace/span.h>
@@ -15,6 +17,11 @@
 #include <opentelemetry/trace/trace_id.h>
 
 #include <config/server_frame_build_feature.h>
+
+#include <list>
+#include <memory>
+#include <string>
+#include <vector>
 
 #include "rpc/rpc_common_types.h"
 #include "rpc/telemetry/rpc_trace.h"
@@ -92,25 +99,33 @@ class context {
     }
 
     inline const TMsg *operator->() const {
-      UTIL_UNLIKELY_IF(nullptr == arena_msg_ptr_) { return &local_msg_; }
+      if UTIL_UNLIKELY_CONDITION (nullptr == arena_msg_ptr_) {
+        return &local_msg_;
+      }
 
       return arena_msg_ptr_;
     }
 
     inline TMsg *operator->() {
-      UTIL_UNLIKELY_IF(nullptr == arena_msg_ptr_) { return &local_msg_; }
+      if UTIL_UNLIKELY_CONDITION (nullptr == arena_msg_ptr_) {
+        return &local_msg_;
+      }
 
       return arena_msg_ptr_;
     }
 
     inline const TMsg &operator*() const {
-      UTIL_UNLIKELY_IF(nullptr == arena_msg_ptr_) { return local_msg_; }
+      if UTIL_UNLIKELY_CONDITION (nullptr == arena_msg_ptr_) {
+        return local_msg_;
+      }
 
       return *arena_msg_ptr_;
     }
 
     inline TMsg &operator*() {
-      UTIL_UNLIKELY_IF(nullptr == arena_msg_ptr_) { return local_msg_; }
+      if UTIL_UNLIKELY_CONDITION (nullptr == arena_msg_ptr_) {
+        return local_msg_;
+      }
 
       return *arena_msg_ptr_;
     }
@@ -194,9 +209,10 @@ class context {
     return ::google::protobuf::Arena::CreateMessage<TMSG>(arena.get());
   }
 
-  SERVER_FRAME_API std::shared_ptr<::google::protobuf::Arena> mutable_protobuf_arena();
-  SERVER_FRAME_API const std::shared_ptr<::google::protobuf::Arena> &get_protobuf_arena() const;
-  SERVER_FRAME_API bool try_reuse_protobuf_arena(const std::shared_ptr<::google::protobuf::Arena> &arena) noexcept;
+  SERVER_FRAME_API util::memory::strong_rc_ptr<::google::protobuf::Arena> mutable_protobuf_arena();
+  SERVER_FRAME_API const util::memory::strong_rc_ptr<::google::protobuf::Arena> &get_protobuf_arena() const;
+  SERVER_FRAME_API bool try_reuse_protobuf_arena(
+      const util::memory::strong_rc_ptr<::google::protobuf::Arena> &arena) noexcept;
 
   SERVER_FRAME_API const tracer::span_ptr_type &get_trace_span() const noexcept;
 
@@ -221,7 +237,9 @@ class context {
   }
 
  private:
-  std::shared_ptr<::google::protobuf::Arena> allocator_;
+  util::memory::strong_rc_ptr<::google::protobuf::Arena> allocator_;
+  std::list<util::memory::strong_rc_ptr<::google::protobuf::Arena>> used_allocators_;
+
   struct trace_context_data {
     tracer::span_ptr_type trace_span;
     tracer::span_ptr_type parent_span;

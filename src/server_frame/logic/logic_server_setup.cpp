@@ -281,10 +281,20 @@ int logic_server_setup_common(atapp::app &app, const logic_server_common_module_
     }
 
     const char *vcs_server_branch = server_frame_vcs_get_server_branch();
+    const char *package_version = server_frame_project_get_version();
+    const char *bussiness_version = server_frame_get_user_bussiness_version();
 
     if (vcs_server_branch && *vcs_server_branch) {
       ss << "Server Branch    : " << vcs_server_branch << std::endl;
       app.set_metadata_label("server_branch", vcs_server_branch);
+    }
+
+    if (package_version && *package_version) {
+      ss << "Package Version  : " << package_version << std::endl;
+    }
+
+    if (bussiness_version && *bussiness_version) {
+      ss << "Bussness Version : " << bussiness_version << std::endl;
     }
 
 #ifdef __DATE__

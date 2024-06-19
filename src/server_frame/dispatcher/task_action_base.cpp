@@ -85,8 +85,8 @@ SERVER_FRAME_API task_action_base::task_action_base(const dispatcher_start_data_
       external_error_code_(0),
       dispatcher_options_(start_param.options),
       shared_context_(rpc::context::create_without_task()) {
-  if (nullptr != start_param.context) {
-    set_caller_context(*start_param.context);
+  if (start_param.context) {
+    get_shared_context().try_reuse_protobuf_arena(start_param.context->mutable_protobuf_arena());
   }
 }
 

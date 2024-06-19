@@ -24,7 +24,14 @@ function(generate_for_pb_create_protocol_sandbox OUTPUT_DIR)
   unset(OUTPUT_FILES)
   foreach(PROTO_FILE ${ARGN})
     get_filename_component(PROTO_NAME "${PROTO_FILE}" NAME)
-    file(CREATE_LINK "${PROTO_FILE}" "${OUTPUT_DIR}/${PROTO_NAME}" COPY_ON_ERROR SYMBOLIC)
+    file(
+      CREATE_LINK "${PROTO_FILE}" "${OUTPUT_DIR}/${PROTO_NAME}"
+      RESULT LINK_RESULT
+      SYMBOLIC)
+    if(NOT LINK_RESULT EQUAL 0 OR NOT IS_SYMLINK "${OUTPUT_DIR}/${PROTO_NAME}")
+      execute_process(COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROTO_FILE}" "${OUTPUT_DIR}/${PROTO_NAME}"
+                              ${ATFRAMEWORK_CMAKE_TOOLSET_EXECUTE_PROCESS_OUTPUT_OPTIONS})
+    endif()
     list(APPEND OUTPUT_FILES "${OUTPUT_DIR}/${PROTO_NAME}")
   endforeach()
 endfunction()

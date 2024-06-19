@@ -59,6 +59,9 @@ class opentelemetry_utility {
     std::list<std::unique_ptr<bool[]>> bool_view_storages;
   };
 
+  using attribute_pair_type = std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>;
+  using attribute_span_type = opentelemetry::nostd::span<const attribute_pair_type>;
+
  public:
   SERVER_FRAME_API static void protobuf_to_otel_attributes(const google::protobuf::Message& message,
                                                            attributes_map_type& output,
@@ -119,6 +122,35 @@ class opentelemetry_utility {
               result);
       if (observer) {
         observer->Observe(static_cast<double>(value), attributes);
+      }
+    }
+  }
+
+  template <class ValueType>
+  UTIL_SYMBOL_VISIBLE static void global_metics_observe_record_extend_attrubutes(
+      opentelemetry::metrics::ObserverResult& result, ValueType&& value,
+      std::shared_ptr<::rpc::telemetry::group_type>& __lifetime, attribute_span_type extend_attributes) {
+    attribute_span_type attributes_array[] = {rpc::telemetry::global_service::get_metrics_labels_view(__lifetime),
+                                              extend_attributes};
+
+    rpc::telemetry::multiple_key_value_iterable_view<attribute_span_type> concat_attributes{
+        opentelemetry::nostd::span<const attribute_span_type>{attributes_array}};
+
+    if (opentelemetry::nostd::holds_alternative<
+            opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {
+      auto observer =
+          opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(
+              result);
+      if (observer) {
+        observer->Observe(static_cast<int64_t>(value), concat_attributes);
+      }
+    } else if (opentelemetry::nostd::holds_alternative<
+                   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) {
+      auto observer =
+          opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(
+              result);
+      if (observer) {
+        observer->Observe(static_cast<double>(value), concat_attributes);
       }
     }
   }

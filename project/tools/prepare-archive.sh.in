@@ -17,14 +17,17 @@ function prepare_dir_recursive() {
 }
 
 function prepare_dir() {
-  if [ ! -e "$1/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@" ]; then
+  if [ ! -e "$1/$2/@CMAKE_INSTALL_LIBDIR@" ]; then
     return 0
   fi
 
-  prepare_dir_recursive "$1/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@" "$1/archive/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@"
-
-  rm -rf "$1/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@"
+  prepare_dir_recursive "$1/$2/@CMAKE_INSTALL_LIBDIR@" "$1/archive/$2/@CMAKE_INSTALL_LIBDIR@"
 }
 
-prepare_dir "$1/lib"
-prepare_dir "$1/lib64"
+VCS_COMMIT_SHORT_SHA="@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@"
+if [ $# -gt 1 ] && [ "x$2" != "x" ]; then
+  VCS_COMMIT_SHORT_SHA="$2"
+fi
+
+prepare_dir "$1/lib" "$VCS_COMMIT_SHORT_SHA"
+prepare_dir "$1/lib64" "$VCS_COMMIT_SHORT_SHA"

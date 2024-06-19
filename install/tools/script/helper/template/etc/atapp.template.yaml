@@ -46,6 +46,11 @@ atapp:
     tick_interval: 16ms # 32ms for tick active
     stop_timeout: 10s # 10s for stop operation
     stop_interval: 256ms
+    message_timeout: 8s
+    initialize_timeout: 30s
+    reserve_interval_min: 250us
+    reserve_interval_max: 1s
+    reserve_permille: 25
   # =========== log configure ===========
   log:
     level: ${project.get_log_level()}  # log active level(disable/disabled, fatal, error, warn/warning, info, notice, debug)

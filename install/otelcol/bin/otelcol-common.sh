@@ -66,7 +66,7 @@ function CheckProcessRunning() {
 }
 
 function WaitProcessStarted() {
-  # parameters: <pid file> [wait time] [except pid]
+  # parameters: <pid file> [wait time] [except pid] [startup error file]
   if [[ $# -lt 1 ]]; then
     return 1
   fi
@@ -84,8 +84,14 @@ function WaitProcessStarted() {
     PROC_EXPECT_PID=""
   fi
 
+  if [[ $# -gt 3 ]]; then
+    PROC_STARTUP_ERROR_FILE="$4"
+  else
+    PROC_STARTUP_ERROR_FILE=""
+  fi
+
   while [[ $WAIT_TIME -gt 0 ]]; do
-    CheckProcessRunning "$PID_FILE" "$PROC_EXPECT_PID"
+    CheckProcessRunning "$PID_FILE" "$PROC_EXPECT_PID" "$PROC_STARTUP_ERROR_FILE"
     CheckResult=$?
     if [[ 1 -eq $CheckResult ]]; then
       return 0

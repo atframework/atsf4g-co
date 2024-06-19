@@ -196,6 +196,14 @@ SCRIPT_DIR="$(cd $(dirname $0) && pwd)"
 mkdir -p "$SCRIPT_DIR/$BUILD_DIR"
 cd "$SCRIPT_DIR/$BUILD_DIR"
 
+# If use -stdlib=libstdc++ with clang
+# if [[ $CMAKE_CLANG_ANALYZER -ne 0 ]]; then
+#   export LDFLAGS="$LDFLAGS -lstdc++ -lc++abi -ldl -lm -lgcc_s"
+#   echo "$CCC_CC" | grep clang >/dev/null 2>&1 && CMAKE_OPTIONS="$CMAKE_OPTIONS -DCOMPILER_OPTION_CLANG_ENABLE_LIBCXX=OFF -DCMAKE_CXX_FLAGS=-stdlib=libstdc++ -DCMAKE_CXX_STANDARD=20"
+# else
+#   echo "$CC" | grep clang >/dev/null 2>&1 && CMAKE_OPTIONS="$CMAKE_OPTIONS -DCOMPILER_OPTION_CLANG_ENABLE_LIBCXX=OFF -DCMAKE_CXX_FLAGS=-stdlib=libstdc++ -DCMAKE_CXX_STANDARD=20"
+# fi
+
 if [[ ! -z "$DISTCC" ]] && [[ "$DISTCC" != "disable" ]] && [[ "$DISTCC" != "disabled" ]] && [[ "$DISTCC" != "no" ]] && [[ "$DISTCC" != "false" ]] && [[ -e "$DISTCC" ]]; then
   CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_C_COMPILER_LAUNCHER=$DISTCC -DCMAKE_CXX_COMPILER_LAUNCHER=$DISTCC -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX"
 elif [[ ! -z "$CCACHE" ]] && [[ "$CCACHE" != "disable" ]] && [[ "$CCACHE" != "disabled" ]] && [[ "$CCACHE" != "no" ]] && [[ "$CCACHE" != "false" ]] && [[ -e "$CCACHE" ]]; then
@@ -221,7 +229,7 @@ fi
 
 if [[ 1 -eq $CMAKE_CLANG_ANALYZER ]]; then
   echo "========================================================================================================="
-  CMAKE_CLANG_ANALYZER_OPTIONS="--exclude ../third_party --exclude ../src/server_frame/protocol"
+  CMAKE_CLANG_ANALYZER_OPTIONS="--exclude ../third_party --exclude ../src/server_frame/protocol -analyzer-config aggressive-binary-operation-simplification=true"
   if [[ -e "$SCRIPT_DIR/.scan-build.enable" ]]; then
     for OPT in $(cat "$SCRIPT_DIR/.scan-build.enable"); do
       CMAKE_CLANG_ANALYZER_OPTIONS="$CMAKE_CLANG_ANALYZER_OPTIONS -enable-checker $OPT"
@@ -239,16 +247,17 @@ if [[ 1 -eq $CMAKE_CLANG_ANALYZER ]]; then
   done
 
   for TEST_DIRS in $(find ../atframework -name test); do
-    CMAKE_CLANG_ANALYZER_OPTIONS="$CMAKE_CLANG_ANALYZER_OPTIONS --exclude $BUILD_JOBS_DIRS"
+    CMAKE_CLANG_ANALYZER_OPTIONS="$CMAKE_CLANG_ANALYZER_OPTIONS --exclude $TEST_DIRS"
   done
+  CMAKE_CLANG_ANALYZER_OPTIONS="$CMAKE_CLANG_ANALYZER_OPTIONS --exclude ../src/tools/simulator/libsimulator_uv/linenoise.c"
 
   echo "#!/bin/bash
 cd '$SCRIPT_DIR/$BUILD_DIR';
 " >run-scan-build.sh
   if [[ -z "$CMAKE_CLANG_ANALYZER_PATH" ]]; then
-    echo "env CCC_CC=\"$CCC_CC\" CCC_CXX=\"$CCC_CXX\" scan-build -o report --html-title='$PROJECT_NAME static analysis' $CMAKE_CLANG_ANALYZER_OPTIONS cmake --build . -j $@" >>run-scan-build.sh
+    echo "env CCC_CC=\"$CCC_CC\" CCC_CXX=\"$CCC_CXX\" scan-build -o report --html-title='$PROJECT_NAME static analysis' $CMAKE_CLANG_ANALYZER_OPTIONS cmake --build . -j \$@" >>run-scan-build.sh
   else
-    echo "env PATH=\"\$PATH:$CMAKE_CLANG_ANALYZER_PATH\" CCC_CC=\"$CCC_CC\" CCC_CXX=\"$CCC_CXX\" scan-build -o report --html-title='libmt_core static analysis' $CMAKE_CLANG_ANALYZER_OPTIONS cmake --build . -j $@" >>run-scan-build.sh
+    echo "env PATH=\"\$PATH:$CMAKE_CLANG_ANALYZER_PATH\" CCC_CC=\"$CCC_CC\" CCC_CXX=\"$CCC_CXX\" scan-build -o report --html-title='$PROJECT_NAME static analysis' $CMAKE_CLANG_ANALYZER_OPTIONS cmake --build . -j \$@" >>run-scan-build.sh
   fi
   chmod +x run-scan-build.sh
   echo "Now, you can run $PWD/run-scan-build.sh to build a static analysis report"

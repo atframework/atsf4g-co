@@ -333,15 +333,15 @@ UTIL_SYMBOL_VISIBLE TRESULT _ignore_void(EXPLICIT_UNUSED_ATTR TRESULT&& result) 
 
 // When using c++20 coroutine, declare RPC_AWAIT_CODE_RESULT like this
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-#  define RPC_AWAIT_IGNORE_RESULT(x) (::rpc::details::_ignore_result(co_await (x)))
-#  define RPC_AWAIT_IGNORE_VOID(x) (co_await (x))
+#  define RPC_AWAIT_IGNORE_RESULT(...) (::rpc::details::_ignore_result(co_await (__VA_ARGS__)))
+#  define RPC_AWAIT_IGNORE_VOID(...) (co_await (__VA_ARGS__))
 #  define RPC_AWAIT_TYPE_RESULT(...) (co_await (__VA_ARGS__))
 #  define RPC_RETURN_TYPE(...) co_return (__VA_ARGS__)
 #  define RPC_RETURN_VOID co_return
 
 #else
-#  define RPC_AWAIT_IGNORE_RESULT(x) (::rpc::details::_ignore_result(x))
-#  define RPC_AWAIT_IGNORE_VOID(x) (::rpc::details::_ignore_void(x))
+#  define RPC_AWAIT_IGNORE_RESULT(...) (::rpc::details::_ignore_result(__VA_ARGS__))
+#  define RPC_AWAIT_IGNORE_VOID(...) (::rpc::details::_ignore_void(__VA_ARGS__))
 #  define RPC_AWAIT_TYPE_RESULT(...) ::rpc::details::_get_rpc_result_value(__VA_ARGS__)
 #  define RPC_RETURN_VOID return ::rpc::result_void_type(true)
 #  define RPC_RETURN_TYPE(...) return ::rpc::details::_make_rpc_result_guard(__VA_ARGS__)
@@ -349,7 +349,7 @@ UTIL_SYMBOL_VISIBLE TRESULT _ignore_void(EXPLICIT_UNUSED_ATTR TRESULT&& result) 
 #endif
 
 #define RPC_AWAIT_CODE_RESULT(...) RPC_AWAIT_TYPE_RESULT(__VA_ARGS__)
-#define RPC_RETURN_CODE(x) RPC_RETURN_TYPE(x)
+#define RPC_RETURN_CODE(...) RPC_RETURN_TYPE(__VA_ARGS__)
 
 #define RPC_RESULT_TYPE_DECL(...) EXPLICIT_NODISCARD_ATTR ::rpc::rpc_result<__VA_ARGS__>
 #define RPC_RESULT_CODE_DECL EXPLICIT_NODISCARD_ATTR ::rpc::result_code_type

@@ -3,16 +3,21 @@
 
 #include "transaction_client_handle.h"
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <log/log_wrapper.h>
 
 #include <time/time_utility.h>
 
+#include <opentelemetry/trace/semantic_conventions.h>
 #include <utility/random_engine.h>
 
 #include <utility/protobuf_mini_dumper.h>
@@ -55,12 +60,19 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
   }
 
+  rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
+      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
+      {opentelemetry::trace::SemanticConventions::kRpcService, "atframework.transaction_client_handle"},
+      {opentelemetry::trace::SemanticConventions::kRpcMethod,
+       "atframework.transaction_client_handle.create_transaction"}};
+
   rpc::context child_ctx{ctx};
   rpc::context::tracer child_tracer;
   rpc::context::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+  child_trace_option.attributes = trace_attributes;
 
   child_ctx.setup_tracer(child_tracer, "transaction_client_handle.create_transaction", std::move(child_trace_option));
 
@@ -95,12 +107,19 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_ALREADY_RUN);
   }
 
+  rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
+      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
+      {opentelemetry::trace::SemanticConventions::kRpcService, "atframework.transaction_client_handle"},
+      {opentelemetry::trace::SemanticConventions::kRpcMethod,
+       "atframework.transaction_client_handle.submit_transaction"}};
+
   rpc::context child_ctx{ctx};
   rpc::context::tracer child_tracer;
   rpc::context::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+  child_trace_option.attributes = trace_attributes;
 
   child_ctx.setup_tracer(child_tracer, "transaction_client_handle.submit_transaction", std::move(child_trace_option));
 
@@ -282,12 +301,19 @@ DISTRIBUTED_TRANSACTION_SDK_API int32_t transaction_client_handle::add_participa
     return PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_ALREADY_RUN;
   }
 
+  rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
+      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
+      {opentelemetry::trace::SemanticConventions::kRpcService, "atframework.transaction_client_handle"},
+      {opentelemetry::trace::SemanticConventions::kRpcMethod,
+       "atframework.transaction_client_handle.add_participator"}};
+
   rpc::context child_ctx{ctx};
   rpc::context::tracer child_tracer;
   rpc::context::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+  child_trace_option.attributes = trace_attributes;
 
   child_ctx.setup_tracer(child_tracer, "transaction_client_handle.add_participator", std::move(child_trace_option));
 

@@ -28,52 +28,57 @@ function copy_symbolic_link() {
 }
 
 function prepare_dir() {
-    if [[ -e "$1/runtime/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@" ]]; then
-      for SOLIB_PATH in "$1/runtime/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@"/*.so* ; do
+    if [[ -e "$1/runtime/$2/@CMAKE_INSTALL_LIBDIR@" ]]; then
+      for SOLIB_PATH in "$1/runtime/$2/@CMAKE_INSTALL_LIBDIR@"/*.so* ; do
           SOLIB_NAME="$(basename "$SOLIB_PATH")"
           if [[ ! -f "$SOLIB_PATH" ]] && [[ ! -h "$SOLIB_PATH" ]]; then
               continue
           fi
 
-          if [[ -e "$1/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@/$SOLIB_NAME" ]]; then
+          if [[ -e "$1/$2/@CMAKE_INSTALL_LIBDIR@/$SOLIB_NAME" ]]; then
               continue
           fi
 
-          mkdir -p "$1/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@"
+          mkdir -p "$1/$2/@CMAKE_INSTALL_LIBDIR@"
 
           if [[ -L "$SOLIB_PATH" ]]; then
-              copy_symbolic_link "$SOLIB_PATH" "$1/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@"
+              copy_symbolic_link "$SOLIB_PATH" "$1/$2/@CMAKE_INSTALL_LIBDIR@"
           else
-              ln "$SOLIB_PATH" "$1/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@/$SOLIB_NAME" 2>/dev/null || cp -f "$SOLIB_PATH" "$1/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@/$SOLIB_NAME"
+              cp "$SOLIB_PATH" "$1/$2/@CMAKE_INSTALL_LIBDIR@/$SOLIB_NAME"
           fi
 
-          chmod +x "$1/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@/$SOLIB_NAME"
+          chmod +x "$1/$2/@CMAKE_INSTALL_LIBDIR@/$SOLIB_NAME"
       done
     fi
 
-    if [[ -e "$1/archive/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@" ]]; then
-      for SOLIB_PATH in "$1/archive/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@"/*.so* ; do
+    if [[ -e "$1/archive/$2/@CMAKE_INSTALL_LIBDIR@" ]]; then
+      for SOLIB_PATH in "$1/archive/$2/@CMAKE_INSTALL_LIBDIR@"/*.so* ; do
           SOLIB_NAME="$(basename "$SOLIB_PATH")"
           if [[ ! -f "$SOLIB_PATH" ]] && [[ ! -h "$SOLIB_PATH" ]]; then
               continue
           fi
 
-          if [[ -e "$1/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@/$SOLIB_NAME" ]]; then
+          if [[ -e "$1/$2/@CMAKE_INSTALL_LIBDIR@/$SOLIB_NAME" ]]; then
               continue
           fi
 
-          mkdir -p "$1/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@"
+          mkdir -p "$1/$2/@CMAKE_INSTALL_LIBDIR@"
 
           if [[ -L "$SOLIB_PATH" ]]; then
-              copy_symbolic_link "$SOLIB_PATH" "$1/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@"
+              copy_symbolic_link "$SOLIB_PATH" "$1/$2/@CMAKE_INSTALL_LIBDIR@"
           else
-              ln "$SOLIB_PATH" "$1/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@/$SOLIB_NAME" 2>/dev/null || cp -f "$SOLIB_PATH" "$1/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@/$SOLIB_NAME"
+              cp "$SOLIB_PATH" "$1/$2/@CMAKE_INSTALL_LIBDIR@/$SOLIB_NAME"
           fi
 
-          chmod +x "$1/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@/$SOLIB_NAME"
+          chmod +x "$1/$2/@CMAKE_INSTALL_LIBDIR@/$SOLIB_NAME"
       done
     fi
 }
 
-prepare_dir "$(readlink -f "$1/lib")"
-prepare_dir "$(readlink -f "$1/lib64")"
+VCS_COMMIT_SHORT_SHA="@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@"
+if [[ $# -gt 1 ]] && [[ ! -z "$2" ]]; then
+  VCS_COMMIT_SHORT_SHA="$2"
+fi
+
+prepare_dir "$(readlink -f "$1/lib")" "$VCS_COMMIT_SHORT_SHA"
+prepare_dir "$(readlink -f "$1/lib64")" "$VCS_COMMIT_SHORT_SHA"

@@ -50,12 +50,14 @@ if(NOT ANDROID AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
   #   @see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=58016
   #   @see https://gcc.gnu.org/gcc-4.9/changes.html
   #]]
-  if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_VERSION
-                                                                                         VERSION_GREATER_EQUAL "4.9"))
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux"
+     AND NOT PROJECT_COMPILER_OPTIONS_TARGET_USE_SANITIZER
+     AND (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "4.9"))
     project_third_party_include_port("libunwind/libunwind.cmake")
   endif()
 endif()
 project_third_party_include_port("algorithm/xxhash.cmake")
+project_third_party_include_port("algorithm/tbb.cmake")
 project_third_party_include_port("libuv/libuv.cmake")
 project_third_party_include_port("lua/lua.cmake")
 project_third_party_include_port("fmtlib/fmtlib.cmake")
@@ -69,6 +71,9 @@ project_third_party_include_port("cares/c-ares.cmake")
 project_third_party_include_port("abseil-cpp/abseil-cpp.cmake")
 project_third_party_include_port("re2/re2.cmake")
 project_third_party_include_port("libcurl/libcurl.cmake")
+
+# Set stack size to 512KB, the default value is 100K and will overflow with asan
+set(ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_CIVETWEB_THREAD_STACK_SIZE "524288")
 project_third_party_include_port("web/civetweb.cmake")
 # project_third_party_include_port("web/libwebsockets.cmake")
 

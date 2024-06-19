@@ -29,45 +29,13 @@
 #include <utility>
 #include <vector>
 
+#include "rpc/telemetry/opentelemetry_types.h"
+
 class dispatcher_implement;
 
 namespace rpc {
 
 namespace telemetry {
-
-template <class T>
-class UTIL_SYMBOL_VISIBLE multiple_key_value_iterable_view final : public opentelemetry::common::KeyValueIterable {
- public:
-  explicit multiple_key_value_iterable_view(opentelemetry::nostd::span<const T> containers) noexcept
-      : containers_{containers} {}
-
-  // KeyValueIterable
-  bool ForEachKeyValue(
-      opentelemetry::nostd::function_ref<bool(opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue)>
-          callback) const noexcept override {
-    for (auto& container : containers_) {
-      auto element_iter = std::begin(container);
-      auto element_last = std::end(container);
-      for (; element_iter != element_last; ++element_iter) {
-        if (!callback(element_iter->first, element_iter->second)) {
-          return false;
-        }
-      }
-    }
-    return true;
-  }
-
-  size_t size() const noexcept override {
-    size_t ret = 0;
-    for (auto& container : containers_) {
-      ret += opentelemetry::nostd::size(container);
-    }
-    return ret;
-  }
-
- private:
-  opentelemetry::nostd::span<const T> containers_;
-};
 
 using trace_link_pair_type = std::pair<
     opentelemetry::trace::SpanContext,

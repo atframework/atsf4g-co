@@ -1,5 +1,5 @@
 set(PROJECT_THIRD_PARTY_XRESLOADER_JAR_URL
-    "https://github.com/xresloader/xresloader/releases/download/v2.11.0-rc2/xresloader-2.11.0-rc2.jar")
+    "https://github.com/xresloader/xresloader/releases/download/v2.16.0/xresloader-2.16.0.jar")
 
 get_filename_component(PROJECT_THIRD_PARTY_XRESLOADER_JAR_BASENAME "${PROJECT_THIRD_PARTY_XRESLOADER_JAR_URL}" NAME)
 set(PROJECT_THIRD_PARTY_XRESLOADER_JAR

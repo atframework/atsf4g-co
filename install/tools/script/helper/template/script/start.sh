@@ -27,7 +27,14 @@ if [[ $PROC_PID -gt 0 ]]; then
   cp -f "$SERVER_PID_FILE_NAME" "$SERVER_PID_FILE_NAME.old"
 fi
 
-${valgrind_tool}./$SERVERD_NAME -id $SERVER_BUS_ID -c ../etc/$SERVER_FULL_NAME.yaml -p $SERVER_PID_FILE_NAME start "$@" &
+SERVER_STARTUP_ERROR_FILE_NAME="${SERVER_PID_FILE_NAME/.pid/}.startup-error"
+if [ -e "$SERVER_STARTUP_ERROR_FILE_NAME" ]; then
+  rm -f "$SERVER_STARTUP_ERROR_FILE_NAME"
+fi
+
+${valgrind_tool}./$SERVERD_NAME -id $SERVER_BUS_ID -c ../etc/$SERVER_FULL_NAME.yaml -p $SERVER_PID_FILE_NAME --startup-error-file "$SERVER_STARTUP_ERROR_FILE_NAME" start "$@" &
+
+RUNNING_EXE_PID=$!
 
 export LD_PRELOAD=;
 
@@ -36,7 +43,7 @@ if [ $? -ne 0 ]; then
 	exit $?;
 fi
 
-WaitProcessStarted "$SERVER_PID_FILE_NAME" ;
+WaitProcessStarted "$SERVER_PID_FILE_NAME" 30000 $RUNNING_EXE_PID "$SERVER_STARTUP_ERROR_FILE_NAME"
 
 if [ $? -ne 0 ]; then
 	ErrorMsg "start $SERVER_FULL_NAME failed.";

@@ -3,8 +3,9 @@ syntax = "proto3";
 package org.xresloader.pb;
 
 message xresloader_data_source {
-    string file         = 1;
-    string sheet        = 2;
+    string file  = 1;
+    string sheet = 2;
+    int32  count = 3;
 }
 
 message xresloader_header {
@@ -18,7 +19,7 @@ message xresloader_header {
 }
 
 message xresloader_datablocks {
-    xresloader_header               header            = 1;
-    repeated bytes                  data_block        = 2;
-    string                          data_message_type = 3;
+    xresloader_header header            = 1;
+    repeated bytes    data_block        = 2;
+    string            data_message_type = 3;
 }
