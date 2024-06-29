@@ -52,9 +52,7 @@ else()
   target_compile_definitions(${ATSF4G_APP_NAME} PRIVATE ATFRAME_SERVICE_COMPONENT_MACRO_API_NATIVE=1)
 endif()
 
-if(MSVC)
-  set_property(TARGET ${ATSF4G_APP_NAME} PROPERTY FOLDER "atframework/service")
-endif(MSVC)
+set_property(TARGET ${ATSF4G_APP_NAME} PROPERTY FOLDER "atframework/service")
 
 target_link_libraries(
   ${ATSF4G_APP_NAME} PUBLIC ${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME} ${ATFRAMEWORK_LIBATBUS_LINK_NAME}

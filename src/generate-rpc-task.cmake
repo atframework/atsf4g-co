@@ -1,9 +1,11 @@
 include("${CMAKE_CURRENT_LIST_DIR}/generate_for_pb_utility.cmake")
 
 # -----------------------------------------------------------------------------
+file(MAKE_DIRECTORY "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/extension")
 file(MAKE_DIRECTORY "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/common")
 file(MAKE_DIRECTORY "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/config")
 file(MAKE_DIRECTORY "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/pbdesc")
+file(MAKE_DIRECTORY "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/extension")
 file(MAKE_DIRECTORY "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/common")
 file(MAKE_DIRECTORY "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/config")
 file(MAKE_DIRECTORY "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/pbdesc")
@@ -11,9 +13,11 @@ file(MAKE_DIRECTORY "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/pbdesc
 generate_for_pb_add_proto_path("${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private")
 generate_for_pb_add_proto_path("${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public")
 generate_for_pb_add_proto_file(
+  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/extension/svr.*.proto"
   "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/common/svr.*.proto"
   "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/config/svr.*.proto"
   "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/pbdesc/svr.*.proto"
+  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/extension/*.proto"
   "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/pbdesc/*.proto"
   "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/pbdesc/*.proto"
   "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/pbdesc/*.proto")
@@ -54,10 +58,10 @@ endif()
 if(PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR
    AND EXISTS "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension/xrescode_extensions_v3.proto")
   generate_for_pb_create_protocol_sandbox(
-    "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb/protocol/config"
+    "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb/protocol/common"
     "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension/xrescode_extensions_v3.proto")
   generate_for_pb_add_proto_file(
-    "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb/protocol/config/xrescode_extensions_v3.proto")
+    "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb/protocol/common/xrescode_extensions_v3.proto")
 endif()
 
 # -----------------------------------------------------------------------------

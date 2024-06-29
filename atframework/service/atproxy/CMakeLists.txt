@@ -17,8 +17,8 @@ endif()
 
 add_executable(${ATSF4G_APP_NAME} ${ATSF4G_APP_SRC_LIST})
 
+set_property(TARGET ${ATSF4G_APP_NAME} PROPERTY FOLDER "atframework/service")
 if(MSVC)
-  set_property(TARGET ${ATSF4G_APP_NAME} PROPERTY FOLDER "atframework/service")
   add_target_properties(${ATSF4G_APP_NAME} LINK_FLAGS /NODEFAULTLIB:library)
 endif(MSVC)
 

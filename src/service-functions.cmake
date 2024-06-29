@@ -50,13 +50,11 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
     if(project_service_declare_sdk_NATIVE_CODE_DECL)
       target_compile_definitions(${TARGET_FULL_NAME} PRIVATE "${project_service_declare_sdk_NATIVE_CODE_DECL}=1")
     endif()
-
     set(TARGET_INSTALL_RPATH
         "${PROJECT_RPATH_ORIGIN}"
         "${PROJECT_RPATH_ORIGIN}/../../${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${TARGET_NAME}/${CMAKE_INSTALL_LIBDIR}"
         ${PROJECT_INSTALL_RPATH}
         "${PROJECT_RPATH_ORIGIN}/../../../${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/__shared/${CMAKE_INSTALL_LIBDIR}")
-
     set_target_properties(${TARGET_FULL_NAME} PROPERTIES BUILD_RPATH_USE_ORIGIN YES INSTALL_RPATH
                                                                                     "${TARGET_INSTALL_RPATH}")
     target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
@@ -66,6 +64,7 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   else()
     add_library(${TARGET_FULL_NAME} INTERFACE)
   endif()
+  #[[ 迁移完之后可以打开hidden
   if(project_component_declare_sdk_SOURCES)
     set_target_properties(
       ${TARGET_FULL_NAME}
@@ -75,6 +74,7 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
                  BUILD_RPATH_USE_ORIGIN YES
                  PORJECT_PROTOCOL_DIR "${PROTOCOL_DIR}")
   endif()
+  ]]
 
   if(project_service_declare_sdk_OUTPUT_NAME)
     set_target_properties(${TARGET_FULL_NAME} PROPERTIES OUTPUT_NAME "${project_service_declare_sdk_OUTPUT_NAME}")
@@ -141,9 +141,7 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
 
   add_library("sdk::${TARGET_NAME}" ALIAS "${TARGET_FULL_NAME}")
 
-  if(MSVC)
-    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/service/sdk")
-  endif()
+  set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/service/sdk")
 endfunction()
 
 function(project_service_force_optimize_sources)
@@ -240,7 +238,6 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
       --proto_path
       "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public"
       --proto_path
-      --proto_path
       "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}"
       --proto_path
       "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include"
@@ -333,7 +330,6 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
       "${PROJECT_RPATH_ORIGIN}/../../${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${TARGET_NAME}/${CMAKE_INSTALL_LIBDIR}"
       ${PROJECT_INSTALL_RPATH}
       "${PROJECT_RPATH_ORIGIN}/../../../${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/__shared/${CMAKE_INSTALL_LIBDIR}")
-
   set_target_properties(
     ${TARGET_FULL_NAME}
     PROPERTIES C_VISIBILITY_PRESET "hidden"
@@ -360,7 +356,6 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
   target_include_directories(
     ${TARGET_FULL_NAME}
     PUBLIC "$<BUILD_INTERFACE:${project_service_declare_protocol_OUTPUT_DIR}>"
-           "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PROTOCOL_SOURCE_DIR}/include>"
            "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 
   list(APPEND PUBLIC_LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol
@@ -386,9 +381,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
     PATTERN ".git" EXCLUDE)
 
   add_library("protocol::${TARGET_NAME}" ALIAS "${TARGET_FULL_NAME}")
-  if(MSVC)
-    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/service/protocol")
-  endif()
+  set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/service/protocol")
 endfunction()
 
 function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
@@ -470,6 +463,7 @@ private_rpath: ${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${TA
 ${SERVER_FRAME_PACKAGE_COMPILER_FIELD}
 ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
 ")
+
   set(TARGET_INSTALL_RPATH
       "${PROJECT_RPATH_ORIGIN}"
       "${PROJECT_RPATH_ORIGIN}/${project_service_declare_instance_RELATIVE_PATH}${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${TARGET_NAME}/${CMAKE_INSTALL_LIBDIR}"
@@ -516,9 +510,7 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
   list(APPEND LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK})
   target_link_libraries(${TARGET_NAME} PRIVATE ${LINK_TARGETS})
 
-  if(MSVC)
-    set_property(TARGET "${TARGET_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/service/server")
-  endif()
+  set_property(TARGET "${TARGET_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/service/server")
 
   project_setup_runtime_post_build_bash(${TARGET_NAME} PROJECT_RUNTIME_POST_BUILD_EXECUTABLE_LIBRARY_BASH)
   project_setup_runtime_post_build_pwsh(${TARGET_NAME} PROJECT_RUNTIME_POST_BUILD_EXECUTABLE_LIBRARY_PWSH)

@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "google/protobuf/descriptor.proto";
+
+package atframework;
+
+message logic_discovery_options {
+  string alias_name = 1;
+}
+
+extend google.protobuf.FieldOptions {
+  logic_discovery_options logic_discovery = 3301;  // 自定义服务发现层配置
+}

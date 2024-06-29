@@ -59,8 +59,10 @@
 {{- end -}}
 {{- define "otelcol.config.prometheus_agent.pull.yaml" -}}
   {{- $otelcol_current_config := deepCopy .shared_options | default (dict ) -}}
-  {{- if not (empty .private_options.url) }}
-    {{- $otelcol_current_config := set $otelcol_current_config "endpoint" .private_options.url -}}
+  {{- if empty (dig "endpoint" false $otelcol_current_config) }}
+    {{- if not (empty .private_options.url) }}
+      {{- $otelcol_current_config := set $otelcol_current_config "endpoint" .private_options.url -}}
+    {{- end }}
   {{- end }}
   {{- if not (empty .private_options.tls) }}
     {{- $otelcol_current_config := merge $otelcol_current_config (dict "tls" .private_options.tls) -}}
@@ -75,10 +77,18 @@
 {{- end -}}
 {{- define "otelcol.config.prometheus_agent.push.yaml" -}}
   {{- $otelcol_current_config := deepCopy .shared_options | default (dict ) -}}
-  {{- if empty .private_options.port }}
-    {{- $otelcol_current_config := set $otelcol_current_config "endpoint" .private_options.host -}}
-  {{- else }}
-    {{- $otelcol_current_config := set $otelcol_current_config "endpoint" (printf "%v:%v" .private_options.host .private_options.port) -}}
+  {{- if empty (dig "endpoint" false $otelcol_current_config) }}
+    {{- if empty .private_options.port }}
+      {{- $otelcol_current_config := set $otelcol_current_config "endpoint" .private_options.host -}}
+    {{- else }}
+      {{- $otelcol_current_config := set $otelcol_current_config "endpoint" (printf "%v:%v/api/v1/push" .private_options.host .private_options.port) -}}
+    {{- end }}
+  {{- end }}
+  {{- if not (empty .private_options.namespace) }}
+    {{- $otelcol_current_config := set $otelcol_current_config "namespace" .private_options.namespace -}}
+  {{- end }}
+  {{- if not (empty .private_options.resource_to_telemetry_conversion) }}
+    {{- $otelcol_current_config := merge $otelcol_current_config (dict "resource_to_telemetry_conversion" .private_options.resource_to_telemetry_conversion) -}}
   {{- end }}
   {{- toYaml $otelcol_current_config }}
 {{- end -}}
@@ -188,15 +198,15 @@ exporters:
       {{- include "otelcol.config.otlp_agent.http.yaml" (dict "shared_options" (dig "shared_options" "otlp" "http" (dict) .Values.telemetry.agent ) "private_options" $otelcol_agent_data_source.metrics.otlp) | trim | nindent 4 }}
     {{- end }}
   {{- end }}
-  {{- if and (not (empty $otelcol_agent_data_source.metrics.prometheus.pull)) (not (empty $otelcol_agent_data_source.metrics.prometheus.pull.url)) }}
+  {{- if or (dig "shared_options" "prometheus" "pull" "endpoint" false .Values.telemetry.agent) (dig "metrics" "prometheus" "pull" "url" false $otelcol_agent_data_source) }}
     {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "prometheus" }}
   prometheus:
-    {{- include "otelcol.config.prometheus_agent.pull.yaml" (dict "shared_options" (dig "shared_options" "prometheus" "pull" (dict) .Values.telemetry.agent ) "private_options" $otelcol_agent_data_source.metrics.prometheus.pull) | trim | nindent 4 }}
+    {{- include "otelcol.config.prometheus_agent.pull.yaml" (dict "shared_options" (dig "shared_options" "prometheus" "pull" (dict) .Values.telemetry.agent ) "private_options" (dig "metrics" "prometheus" "pull" (dict) $otelcol_agent_data_source)) | trim | nindent 4 }}
   {{- end }}
-  {{- if and (not (empty $otelcol_agent_data_source.metrics.prometheus.push)) (not (empty $otelcol_agent_data_source.metrics.prometheus.push.host)) }}
+  {{- if or (dig "shared_options" "prometheus" "push" "endpoint" false .Values.telemetry.agent) (dig "metrics" "prometheus" "push" "host" false $otelcol_agent_data_source) }}
     {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "prometheusremotewrite" }}
   prometheusremotewrite:
-    {{- include "otelcol.config.prometheus_agent.push.yaml" (dict "shared_options" (dig "shared_options" "prometheus" "push" (dict) .Values.telemetry.agent ) "private_options" $otelcol_agent_data_source.metrics.prometheus.push) | trim | nindent 4 }}
+    {{- include "otelcol.config.prometheus_agent.push.yaml" (dict "shared_options" (dig "shared_options" "prometheus" "push" (dict) .Values.telemetry.agent ) "private_options" (dig "metrics" "prometheus" "push" (dict) $otelcol_agent_data_source)) | trim | nindent 4 }}
   {{- end }}
 {{- end }}
 {{- if not (empty $otelcol_agent_data_source.logs) }}
@@ -249,17 +259,24 @@ processors:
     send_batch_size: 16
     send_batch_max_size: 65536
     timeout: 30s
+{{- $otelcol_agent_data_source_metrics_resource_attributes := dict -}}
 {{- if not (empty $otelcol_agent_data_source.metrics) }}
   {{- if not (empty $otelcol_agent_data_source.metrics.resource) }}
+    {{- $otelcol_agent_data_source_metrics_resource_attributes := merge $otelcol_agent_data_source_metrics_resource_attributes $otelcol_agent_data_source.metrics.resource -}}
+  {{- end }}
+{{- end }}
+{{- if not (empty $otelcol_agent_data_source.resource) }}
+  {{- $otelcol_agent_data_source_metrics_resource_attributes := merge $otelcol_agent_data_source_metrics_resource_attributes $otelcol_agent_data_source.resource -}}
+{{- end }}
+{{- if not (empty $otelcol_agent_data_source_metrics_resource_attributes) }}
   resource/spanmetrics:
     attributes:
-      {{- range $label_key, $label_value := $otelcol_agent_data_source.metrics.resource }}
+    {{- range $label_key, $label_value := $otelcol_agent_data_source_metrics_resource_attributes }}
       - key: "{{ $label_key }}"
         value: "{{ $label_value }}"
         action: upsert
-      {{- end }}
-    {{- $otelcol_spanmetrics_processors = append $otelcol_spanmetrics_processors "resource/spanmetrics" }}
-  {{- end }}
+    {{- end }}
+  {{- $otelcol_spanmetrics_processors = append $otelcol_spanmetrics_processors "resource/spanmetrics" }}
 {{- end }}
 {{- $otelcol_spanmetrics_processors = append $otelcol_spanmetrics_processors "batch/spanmetrics" }}
 
@@ -271,6 +288,10 @@ connectors:
       explicit:
         buckets: [1ms, 2ms, 8ms, 16ms, 50ms, 80ms, 100ms, 250ms, 1s, 6s]
     exclude_dimensions: ['service.identity', 'process.pid']
+    dimensions_cache_size: 4096
+    resource_metrics_cache_size: 4096
+    exemplars:
+      enabled: true
     dimensions:
       - name: deployment.environment
         default: UNSET
@@ -296,9 +317,10 @@ connectors:
     aggregation_temporality: "AGGREGATION_TEMPORALITY_DELTA"
 
 service:
+{{- if and .Values.telemetry.agent.otelcol (not (empty .Values.telemetry.agent.otelcol.service.telemetry)) }}
   telemetry:
-    metrics:
-      address: "127.0.0.1:8888"
+    {{- toYaml .Values.telemetry.agent.otelcol.service.telemetry | trim | nindent 4 }}
+{{- end }}
   extensions: [health_check, pprof, zpages]
   pipelines:
 {{- if or (empty .Values.telemetry.agent.trace_exporters.trace_blackhole) (empty .Values.telemetry.agent.trace_exporters.spanmetrics_blackhole) }}

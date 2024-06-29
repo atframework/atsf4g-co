@@ -35,8 +35,6 @@ if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
   target_link_options(${SERVER_INST_SRC_BIN_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
 endif()
 
-if(MSVC)
-  set_property(TARGET ${SERVER_INST_SRC_BIN_NAME} PROPERTY FOLDER "${PROJECT_NAME}/service/server")
-endif()
+set_property(TARGET ${SERVER_INST_SRC_BIN_NAME} PROPERTY FOLDER "${PROJECT_NAME}/service/server")
 
 project_install_and_export_targets(${SERVER_INST_SRC_BIN_NAME})

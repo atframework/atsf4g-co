@@ -131,9 +131,7 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
 
   add_library("components::${TARGET_NAME}" ALIAS "${TARGET_FULL_NAME}")
 
-  if(MSVC)
-    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/component/sdk")
-  endif()
+  set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/component/sdk")
 endfunction()
 
 function(project_component_force_optimize_sources)
@@ -338,8 +336,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
 
   target_include_directories(
     ${TARGET_FULL_NAME}
-    PUBLIC "$<BUILD_INTERFACE:${project_component_declare_protocol_OUTPUT_DIR}>"
-    PRIVATE "$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PROTOCOL_SOURCE_DIR}/include>")
+    PUBLIC "$<BUILD_INTERFACE:${project_component_declare_protocol_OUTPUT_DIR}>")
 
   list(APPEND PUBLIC_LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol)
   list(APPEND PUBLIC_LINK_TARGETS ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_LINK_NAME})
@@ -364,9 +361,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
     PATTERN ".git" EXCLUDE)
 
   add_library("components::${TARGET_NAME}" ALIAS "${TARGET_FULL_NAME}")
-  if(MSVC)
-    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/component/protocol")
-  endif()
+  set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/component/protocol")
 endfunction()
 
 function(project_component_declare_service TARGET_NAME SERVICE_ROOT_DIR)
@@ -520,7 +515,5 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
 
   add_executable("components::${TARGET_NAME}" ALIAS "${TARGET_FULL_NAME}")
 
-  if(MSVC)
-    set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/component/service")
-  endif()
+  set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/component/service")
 endfunction()

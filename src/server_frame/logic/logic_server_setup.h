@@ -22,12 +22,16 @@
 #include <atframe/etcdcli/etcd_discovery.h>
 #include <atframe/modules/etcd_module.h>
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/config/svr.protocol.config.pb.h>
 #include <protocol/pbdesc/svr.global.table.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <config/server_frame_build_feature.h>
 

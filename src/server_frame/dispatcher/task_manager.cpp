@@ -506,7 +506,7 @@ SERVER_FRAME_API int task_manager::tick(time_t sec, int nsec) {
                                                                   std::memory_order_release);
 
       FWLOGWARNING(
-          "[STATS] Coroutine task stats:\n\tRuntime - Task Number: {}\n\tRuntime - Checkpoint Number: "
+          "[STATISTICS] Coroutine task stats:\n\tRuntime - Task Number: {}\n\tRuntime - Checkpoint Number: "
           "{}\n\tRuntime - Next Checkpoint: "
           "{}",
           native_mgr_->get_task_size(), native_mgr_->get_tick_checkpoint_size(), first_checkpoint);
@@ -518,7 +518,7 @@ SERVER_FRAME_API int task_manager::tick(time_t sec, int nsec) {
       get_task_manager_metrics_data().pool_used_memory.store(stack_pool_->get_limit().used_stack_size,
                                                              std::memory_order_release);
       FWLOGWARNING(
-          "[STATS] Coroutine stack stats:\n\tConfigure - Max GC Number: {}\n\tConfigure - Stack Max: number {}, size "
+          "[STATISTICS] Coroutine stack stats:\n\tConfigure - Max GC Number: {}\n\tConfigure - Stack Max: number {}, size "
           "{}\n\tConfigure - "
           "Stack Min: number {}, size "
           "{}\n\tRuntime - Stack Used: number {}, size {}\n\tRuntime - Stack Free: number {}, size {}",
