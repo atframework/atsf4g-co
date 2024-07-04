@@ -23,5 +23,12 @@
 #    endif
 #  endif
 #endif
+
 #define ATFRAME_SERVICE_COMPONENT_MACRO_API_HEAD_ONLY UTIL_SYMBOL_VISIBLE
 #define ATFRAME_SERVICE_COMPONENT_MACRO_API_C(R) extern "C" ATFRAME_SERVICE_COMPONENT_MACRO_API R __cdecl
+
+#ifndef ATFRAMEWORK_NAMESPACE_SHORT_ALIAS
+#  define ATFRAMEWORK_NAMESPACE_SHORT_ALIAS
+namespace atframework {}
+namespace atfw = atframework;
+#endif

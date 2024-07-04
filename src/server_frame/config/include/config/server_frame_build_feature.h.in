@@ -72,3 +72,9 @@ SERVER_FRAME_CONFIG_API const char* server_frame_get_sanitizer_name();
 #ifndef OPENTELEMTRY_CPP_PATCH_VERSION
 #  define OPENTELEMTRY_CPP_PATCH_VERSION @opentelemetry-cpp_VERSION_PATCH@
 #endif
+
+#ifndef ATFRAMEWORK_NAMESPACE_SHORT_ALIAS
+#  define ATFRAMEWORK_NAMESPACE_SHORT_ALIAS
+namespace atframework {}
+namespace atfw = atframework;
+#endif
