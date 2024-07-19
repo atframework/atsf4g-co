@@ -36,23 +36,65 @@ template <class T>
 struct object_allocator_backend : public object_allocator_default_backend<T> {};
 
 class object_allocator_manager {
- private:
-  template <class T>
-  struct UTIL_SYMBOL_VISIBLE deletor {
-    inline deletor() noexcept {}
+ public:
+  template <class T, class BackendDelete = ::std::default_delete<T>>
+  struct UTIL_SYMBOL_VISIBLE deletor;
 
-    void operator()(T* ptr) {
+  template <class T>
+  struct UTIL_SYMBOL_VISIBLE deletor<T, ::std::default_delete<T>> {
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor() noexcept {}
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(const deletor&) = default;
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(deletor&&) = default;
+
+    template <class Up, class = util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
+    ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(const ::std::default_delete<Up>&) noexcept {}
+
+    template <class Up, class = util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
+    ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(const deletor<Up, ::std::default_delete<Up>>&) noexcept {}
+
+    void operator()(T* ptr) const {
       if (nullptr != ptr) {
         object_allocator_metrics_controller::add_destructor_counter(
             object_allocator_metrics_controller::helper<T>::get_instance(), reinterpret_cast<void*>(ptr));
         object_allocator_metrics_controller::add_deallocate_counter(
             object_allocator_metrics_controller::helper<T>::get_instance(), 1);
       }
-      delete ptr;
+
+      ::std::default_delete<T> backend_delete;
+      backend_delete(ptr);
     }
   };
 
- public:
+  template <class T, class BackendDelete>
+  struct UTIL_SYMBOL_VISIBLE deletor {
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor() noexcept {}
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(const deletor&) = default;
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(deletor&&) = default;
+
+    template <class D>
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(D&& d) noexcept : backend_delete_(std::forward<D>(d)) {}
+
+    template <class Up, class UpBackendDelete, class = util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
+    ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(const deletor<Up, UpBackendDelete>& other) noexcept
+        : backend_delete_(other.backend_delete_) {}
+
+    template <class Up, class UpBackendDelete, class = util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
+    ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(deletor<Up, UpBackendDelete>&& other) noexcept
+        : backend_delete_(std::move(other.backend_delete_)) {}
+
+    void operator()(T* ptr) const {
+      if (nullptr != ptr) {
+        object_allocator_metrics_controller::add_destructor_counter(
+            object_allocator_metrics_controller::helper<T>::get_instance(), reinterpret_cast<void*>(ptr));
+        object_allocator_metrics_controller::add_deallocate_counter(
+            object_allocator_metrics_controller::helper<T>::get_instance(), 1);
+      }
+      backend_delete_(ptr);
+    }
+
+    BackendDelete backend_delete_;
+  };
+
   template <class T, class BackendAllocator = ::std::allocator<T>>
   struct allocator {
     using background_allocator_type = BackendAllocator;
@@ -163,6 +205,13 @@ class object_allocator_manager {
 
       object_allocator_metrics_controller::add_deallocate_counter_template<T>(n);
       backend_allocator_.deallocate(p, n);
+    }
+
+    UTIL_SYMBOL_VISIBLE inline bool operator==(const allocator&) const noexcept { return true; }
+
+    template <class U, class UBackendAllocator>
+    UTIL_SYMBOL_VISIBLE inline bool operator==(const allocator<U, UBackendAllocator>&) const noexcept {
+      return false;
     }
 
     background_allocator_type backend_allocator_;
@@ -276,14 +325,33 @@ class object_allocator_manager {
 
   template <class T, class... Args>
   UTIL_SYMBOL_VISIBLE inline static util::memory::strong_rc_ptr<T> make_strong_rc(Args&&... args) {
-    ::std::unique_ptr<T> ptr{new T(std::forward<Args>(args)...)};
+    allocator<T, typename object_allocator_backend<T>::allocator> alloc;
+    util::memory::strong_rc_ptr<T> ret = util::memory::allocate_strong_rc<T>(alloc, std::forward<Args>(args)...);
 
-    object_allocator_metrics_controller::add_constructor_counter(
-        object_allocator_metrics_controller::helper<T>::get_instance(), reinterpret_cast<void*>(ptr.get()));
-    object_allocator_metrics_controller::add_allocate_counter(
-        object_allocator_metrics_controller::helper<T>::get_instance(), 1);
+    if (ret) {
+      object_allocator_metrics_controller::add_constructor_counter(
+          object_allocator_metrics_controller::helper<T>::get_instance(), reinterpret_cast<void*>(ret.get()));
+      object_allocator_metrics_controller::add_allocate_counter(
+          object_allocator_metrics_controller::helper<T>::get_instance(), 1);
+    }
 
-    return util::memory::strong_rc_ptr<T>{ptr.release(), deletor<T>()};
+    return ret;
+  }
+
+  template <class T, class Alloc, class... Args>
+  UTIL_SYMBOL_VISIBLE inline static util::memory::strong_rc_ptr<type_traits::non_array<T>> allocate_strong_rc(
+      const Alloc& backend_alloc, Args&&... args) {
+    allocator<T, Alloc> alloc{backend_alloc};
+    util::memory::strong_rc_ptr<T> ret = util::memory::allocate_strong_rc<T>(alloc, std::forward<Args>(args)...);
+
+    if (ret) {
+      object_allocator_metrics_controller::add_constructor_counter(
+          object_allocator_metrics_controller::helper<T>::get_instance(), reinterpret_cast<void*>(ret.get()));
+      object_allocator_metrics_controller::add_allocate_counter(
+          object_allocator_metrics_controller::helper<T>::get_instance(), 1);
+    }
+
+    return ret;
   }
 };
 

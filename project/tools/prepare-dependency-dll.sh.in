@@ -80,5 +80,22 @@ if [[ $# -gt 1 ]] && [[ ! -z "$2" ]]; then
   VCS_COMMIT_SHORT_SHA="$2"
 fi
 
-prepare_dir "$(readlink -f "$1/lib")" "$VCS_COMMIT_SHORT_SHA"
-prepare_dir "$(readlink -f "$1/lib64")" "$VCS_COMMIT_SHORT_SHA"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(readlink -f $SCRIPT_DIR)"
+
+# Skip if already prepared
+if [[ -e "$SCRIPT_DIR/prepare-package.done" ]]; then
+  DONE_VERSION=$(cat "$SCRIPT_DIR/prepare-package.done")
+  if [[ "x$DONE_VERSION" == "x$VCS_COMMIT_SHORT_SHA" ]]; then
+    exit 0
+  fi
+fi
+
+PREPARE_DONE=1
+
+prepare_dir "$(readlink -f "$1/lib")" "$VCS_COMMIT_SHORT_SHA" || PREPARE_DONE=0
+prepare_dir "$(readlink -f "$1/lib64")" "$VCS_COMMIT_SHORT_SHA" || PREPARE_DONE=0
+
+if [[ $PREPARE_DONE -ne 0 ]]; then
+  echo "$VCS_COMMIT_SHORT_SHA" > "$SCRIPT_DIR/prepare-package.done"
+fi

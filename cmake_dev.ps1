@@ -311,12 +311,14 @@ if ($Compiler -match "clang") {
     }
   }
 
-  if (($Distcc.Length -gt 0) -and (Test-Path $Distcc)) {
-    $CMakeCompilerArgs += @("-DCMAKE_C_COMPILER_LAUNCHER=$Distcc", "-DCMAKE_CXX_COMPILER_LAUNCHER=$Distcc")
-  }
-
   if (($CCache.Length -gt 0) -and (Test-Path $CCache)) {
     $CMakeCompilerArgs += @("-DCMAKE_C_COMPILER_LAUNCHER=$CCache", "-DCMAKE_CXX_COMPILER_LAUNCHER=$CCache")
+    if (($Distcc.Length -gt 0) -and (Test-Path $Distcc)) {
+      $ENV:CCACHE_PREFIX = "$Distcc"
+    }
+  }
+  elseif (($Distcc.Length -gt 0) -and (Test-Path $Distcc)) {
+    $CMakeCompilerArgs += @("-DCMAKE_C_COMPILER_LAUNCHER=$Distcc", "-DCMAKE_CXX_COMPILER_LAUNCHER=$Distcc")
   }
 }
 

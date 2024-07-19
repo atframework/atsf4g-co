@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <utility>
 
 #include "memory/object_allocator_manager.h"
 #include "memory/object_allocator_type_traits.h"
@@ -24,8 +25,11 @@ class object_allocator {
   template <class... Args>
   using allocator = object_allocator_manager::allocator<Args...>;
 
-  template <class T>
-  using deletor = object_allocator_manager::deletor<T>;
+  template <class Key, class Value, class BackendAllocator = ::std::allocator<std::pair<const Key, Value>>>
+  using map_allocator = allocator<std::pair<const Key, Value>, BackendAllocator>;
+
+  template <class T, class BackendDelete = ::std::default_delete<T>>
+  using deletor = object_allocator_manager::deletor<T, BackendDelete>;
 
  public:
   template <class T, class... Args>
@@ -42,7 +46,40 @@ class object_allocator {
   UTIL_FORCEINLINE static util::memory::strong_rc_ptr<T> make_strong_rc(Args&&... args) {
     return object_allocator_manager::make_strong_rc<T>(std::forward<Args>(args)...);
   }
+
+  template <class T, class... Args>
+  UTIL_FORCEINLINE static util::memory::strong_rc_ptr<T> allocate_strong_rc(Args&&... args) {
+    return object_allocator_manager::allocate_strong_rc<T>(std::forward<Args>(args)...);
+  }
 };
+
+namespace stl {
+template <class... Args>
+using allocator = object_allocator_manager::allocator<Args...>;
+
+template <class T, class BackendDelete = ::std::default_delete<T>>
+using deletor = object_allocator_manager::deletor<T, BackendDelete>;
+
+template <class T, class... Args>
+UTIL_FORCEINLINE static std::shared_ptr<T> make_shared(Args&&... args) {
+  return object_allocator_manager::make_shared<T>(std::forward<Args>(args)...);
+}
+
+template <class T, class... Args>
+UTIL_FORCEINLINE static std::shared_ptr<T> allocate_shared(Args&&... args) {
+  return object_allocator_manager::allocate_shared<T>(std::forward<Args>(args)...);
+}
+
+template <class T, class... Args>
+UTIL_FORCEINLINE static util::memory::strong_rc_ptr<T> make_strong_rc(Args&&... args) {
+  return object_allocator_manager::make_strong_rc<T>(std::forward<Args>(args)...);
+}
+
+template <class T, class... Args>
+UTIL_FORCEINLINE static util::memory::strong_rc_ptr<T> allocate_strong_rc(Args&&... args) {
+  return object_allocator_manager::allocate_strong_rc<T>(std::forward<Args>(args)...);
+}
+}  // namespace stl
 
 }  // namespace memory
 }  // namespace atframework

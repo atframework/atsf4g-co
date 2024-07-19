@@ -189,8 +189,9 @@ class opentelemetry_utility {
       opentelemetry::metrics::ObserverResult& result, ValueType&& value,
       std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
           extend_attributes) {
-    global_metics_observe_record_extend_attrubutes(result, std::forward<ValueType>(value),
-                                                   attribute_span_type{extend_attributes});
+    global_metics_observe_record_extend_attrubutes(
+        result, std::forward<ValueType>(value),
+        attribute_span_type{extend_attributes.begin(), extend_attributes.end()});
   }
 
   template <class ValueType>
@@ -199,8 +200,9 @@ class opentelemetry_utility {
       std::shared_ptr<::rpc::telemetry::group_type>& __lifetime,
       std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
           extend_attributes) {
-    global_metics_observe_record_extend_attrubutes(result, std::forward<ValueType>(value), __lifetime,
-                                                   attribute_span_type{extend_attributes});
+    global_metics_observe_record_extend_attrubutes(
+        result, std::forward<ValueType>(value), __lifetime,
+        attribute_span_type{extend_attributes.begin(), extend_attributes.end()});
   }
 };
 }  // namespace telemetry

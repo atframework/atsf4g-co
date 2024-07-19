@@ -28,6 +28,8 @@
 
 #include <std/explicit_declare.h>
 
+#include <memory/object_stl_unordered_map.h>
+
 #include <stdint.h>
 #include <chrono>
 #include <cstddef>

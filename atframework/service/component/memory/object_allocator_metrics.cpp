@@ -3,6 +3,7 @@
 
 #include "memory/object_allocator_metrics.h"
 
+#include <design_pattern/singleton.h>
 #include <log/log_wrapper.h>
 
 // for demangle
@@ -14,24 +15,43 @@
 #  define USING_LIBCXX_ABI 1
 #endif
 
+#include <atomic>
 #include <mutex>
 #include <unordered_map>
 
 namespace atframework {
 namespace memory {
 
-namespace {
+struct object_allocator_metrics_controller::object_allocator_metrics_storage {
+  std::string raw_name;
+  std::string demangle_name;
+  size_t unit_size = 0;
+  bool* destroy_flag = nullptr;
 
-struct UTIL_SYMBOL_LOCAL object_allocator_metrics_global_cache {
-  std::mutex lock;
+  std::atomic<size_t> allocate_counter;
+  std::atomic<size_t> deallocate_counter;
+  std::atomic<size_t> constructor_counter;
+  std::atomic<size_t> destructor_counter;
 
-  std::unordered_map<std::string, object_allocator_metrics> allocator_metrics;
+  UTIL_FORCEINLINE object_allocator_metrics_storage() noexcept {
+    allocate_counter.store(0);
+    deallocate_counter.store(0);
+    constructor_counter.store(0);
+    destructor_counter.store(0);
+  }
+
+  ~object_allocator_metrics_storage();
 };
 
-static object_allocator_metrics_global_cache& get_statistics_set() {
-  static object_allocator_metrics_global_cache global_instance;
-  return global_instance;
-}
+namespace {
+
+struct UTIL_SYMBOL_LOCAL object_allocator_metrics_global_cache
+    : public util::design_pattern::local_singleton<object_allocator_metrics_global_cache> {
+  std::recursive_mutex lock;
+
+  std::unordered_map<std::string, object_allocator_metrics_controller::object_allocator_metrics_storage>
+      allocator_metrics;
+};
 
 static const char* skip_space(const char* input) {
   if (nullptr == input) {
@@ -58,6 +78,19 @@ static const char* find_char(const char* input, const char c) {
 }
 
 }  // namespace
+
+object_allocator_metrics_controller::object_allocator_metrics_storage::~object_allocator_metrics_storage() {
+  if (nullptr != destroy_flag) {
+    (*destroy_flag) = true;
+  }
+
+  if (!object_allocator_metrics_global_cache::is_instance_destroyed()) {
+    auto& statistics_data = object_allocator_metrics_global_cache::get_instance();
+    std::lock_guard<std::recursive_mutex> lock_guard{statistics_data.lock};
+
+    statistics_data.allocator_metrics.erase(raw_name);
+  }
+}
 
 ATFRAME_SERVICE_COMPONENT_MACRO_API ::std::string object_allocator_metrics_controller::try_parse_raw_name(
     const char* input) {
@@ -142,10 +175,14 @@ ATFRAME_SERVICE_COMPONENT_MACRO_API ::std::string object_allocator_metrics_contr
   return fallback;
 }
 
-ATFRAME_SERVICE_COMPONENT_MACRO_API object_allocator_metrics*
+ATFRAME_SERVICE_COMPONENT_MACRO_API object_allocator_metrics_controller::object_allocator_metrics_storage*
 object_allocator_metrics_controller::mutable_object_allocator_metrics_for_type(::std::string raw_name,
                                                                                ::std::string demangle_name,
-                                                                               size_t unit_size) {
+                                                                               size_t unit_size, bool& destroyed_flag) {
+  if (object_allocator_metrics_global_cache::is_instance_destroyed()) {
+    return nullptr;
+  }
+
   if (raw_name.empty() && !demangle_name.empty()) {
     raw_name = demangle_name;
   } else if (demangle_name.empty() && !raw_name.empty()) {
@@ -168,65 +205,80 @@ object_allocator_metrics_controller::mutable_object_allocator_metrics_for_type(:
     raw_name = demangle_name;
   }
 
-  auto& statistics_data = get_statistics_set();
-  std::lock_guard<std::mutex> lock_guard{statistics_data.lock};
+  auto& statistics_data = object_allocator_metrics_global_cache::get_instance();
+  std::lock_guard<std::recursive_mutex> lock_guard{statistics_data.lock};
 
   auto iter = statistics_data.allocator_metrics.find(raw_name);
   if (iter != statistics_data.allocator_metrics.end()) {
     return &iter->second;
   }
 
-  object_allocator_metrics& ret = statistics_data.allocator_metrics[raw_name];
+  object_allocator_metrics_storage& ret = statistics_data.allocator_metrics[raw_name];
   ret.raw_name = raw_name;
   ret.demangle_name = demangle_name;
   ret.unit_size = unit_size;
+  ret.destroy_flag = &destroyed_flag;
 
   return &ret;
 }
 
 ATFRAME_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::add_constructor_counter(
-    object_allocator_metrics* target, void*) {
+    object_allocator_metrics_storage* target, void*) {
   if (nullptr == target) {
     return;
   }
 
-  target->constructor_counter += 1;
+  target->constructor_counter.fetch_add(1, std::memory_order_release);
 }
 
 ATFRAME_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::add_allocate_counter(
-    object_allocator_metrics* target, size_t count) {
+    object_allocator_metrics_storage* target, size_t count) {
   if (nullptr == target) {
     return;
   }
 
-  target->allocate_counter += count;
+  target->allocate_counter.fetch_add(count, std::memory_order_release);
 }
 
 ATFRAME_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::add_destructor_counter(
-    object_allocator_metrics* target, void*) {
+    object_allocator_metrics_storage* target, void*) {
   if (nullptr == target) {
     return;
   }
 
-  target->destructor_counter += 1;
+  target->destructor_counter.fetch_add(1, std::memory_order_release);
 }
 
 ATFRAME_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::add_deallocate_counter(
-    object_allocator_metrics* target, size_t count) {
+    object_allocator_metrics_storage* target, size_t count) {
   if (nullptr == target) {
     return;
   }
 
-  target->deallocate_counter += count;
+  target->deallocate_counter.fetch_add(count, std::memory_order_release);
 }
 
 ATFRAME_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::foreach_object_statistics(
     util::nostd::function_ref<void(const object_allocator_metrics&)> fn) {
-  auto& statistics_data = get_statistics_set();
-  std::lock_guard<std::mutex> lock_guard{statistics_data.lock};
+  if (object_allocator_metrics_global_cache::is_instance_destroyed()) {
+    return;
+  }
 
-  for (auto& data : statistics_data.allocator_metrics) {
-    fn(data.second);
+  auto& statistics_data = object_allocator_metrics_global_cache::get_instance();
+  std::lock_guard<std::recursive_mutex> lock_guard{statistics_data.lock};
+
+  for (auto& data_storage : statistics_data.allocator_metrics) {
+    object_allocator_metrics data_param;
+    data_param.raw_name = data_storage.second.raw_name;
+    data_param.demangle_name = data_storage.second.demangle_name;
+    data_param.unit_size = data_storage.second.unit_size;
+
+    data_param.allocate_counter = data_storage.second.allocate_counter.load(std::memory_order_acquire);
+    data_param.deallocate_counter = data_storage.second.deallocate_counter.load(std::memory_order_acquire);
+    data_param.constructor_counter = data_storage.second.constructor_counter.load(std::memory_order_acquire);
+    data_param.destructor_counter = data_storage.second.destructor_counter.load(std::memory_order_acquire);
+
+    fn(data_param);
   }
 }
 

@@ -14,7 +14,6 @@
 
 #include <config/atframe_services_build_feature.h>
 
-#include <atomic>
 #include <string>
 
 #if defined(LIBATFRAME_UTILS_ENABLE_RTTI) && LIBATFRAME_UTILS_ENABLE_RTTI
@@ -32,8 +31,8 @@ namespace atframework {
 namespace memory {
 
 struct UTIL_SYMBOL_VISIBLE object_allocator_metrics {
-  std::string raw_name;
-  std::string demangle_name;
+  gsl::string_view raw_name;
+  gsl::string_view demangle_name;
   size_t unit_size = 0;
 
   size_t allocate_counter = 0;
@@ -45,6 +44,9 @@ struct UTIL_SYMBOL_VISIBLE object_allocator_metrics {
 };
 
 class object_allocator_metrics_controller {
+ public:
+  struct object_allocator_metrics_storage;
+
  private:
   template <class T>
   UTIL_FORCEINLINE static const char* guess_raw_name() {
@@ -73,27 +75,36 @@ class object_allocator_metrics_controller {
   ATFRAME_SERVICE_COMPONENT_MACRO_API static ::std::string try_parse_raw_name(const char* input);
   ATFRAME_SERVICE_COMPONENT_MACRO_API static ::std::string try_parse_demangle_name(const char* input);
 
-  ATFRAME_SERVICE_COMPONENT_MACRO_API static object_allocator_metrics* mutable_object_allocator_metrics_for_type(
-      ::std::string raw_name, ::std::string demangle_name, size_t unit_size);
+  ATFRAME_SERVICE_COMPONENT_MACRO_API static object_allocator_metrics_storage*
+  mutable_object_allocator_metrics_for_type(::std::string raw_name, ::std::string demangle_name, size_t unit_size,
+                                            bool& destroyed_flag);
 
  public:
   template <class T>
   struct UTIL_SYMBOL_VISIBLE helper {
-    static object_allocator_metrics* get_instance() {
-      static object_allocator_metrics* object_statistics_inst = mutable_object_allocator_metrics_for_type(
+    static object_allocator_metrics_storage* get_instance() {
+      static bool object_statistics_destroyed = false;
+      static object_allocator_metrics_storage* object_statistics_inst = mutable_object_allocator_metrics_for_type(
           try_parse_raw_name(
               guess_raw_name<typename ::std::remove_reference<typename ::std::remove_cv<T>::type>::type>()),
           try_parse_demangle_name(
               guess_pretty_name<typename ::std::remove_reference<typename ::std::remove_cv<T>::type>::type>()),
-          sizeof(typename ::std::remove_reference<typename ::std::remove_cv<T>::type>::type));
+          sizeof(typename ::std::remove_reference<typename ::std::remove_cv<T>::type>::type),
+          object_statistics_destroyed);
+      if (object_statistics_destroyed) {
+        return nullptr;
+      }
       return object_statistics_inst;
     }
   };
 
-  ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_constructor_counter(object_allocator_metrics* target, void*);
-  ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_allocate_counter(object_allocator_metrics* target, size_t count);
-  ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_destructor_counter(object_allocator_metrics* target, void*);
-  ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_deallocate_counter(object_allocator_metrics* target,
+  ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_constructor_counter(object_allocator_metrics_storage* target,
+                                                                          void*);
+  ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_allocate_counter(object_allocator_metrics_storage* target,
+                                                                       size_t count);
+  ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_destructor_counter(object_allocator_metrics_storage* target,
+                                                                         void*);
+  ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_deallocate_counter(object_allocator_metrics_storage* target,
                                                                          size_t count);
 
   template <class U>

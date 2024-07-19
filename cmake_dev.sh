@@ -204,11 +204,14 @@ cd "$SCRIPT_DIR/$BUILD_DIR"
 #   echo "$CC" | grep clang >/dev/null 2>&1 && CMAKE_OPTIONS="$CMAKE_OPTIONS -DCOMPILER_OPTION_CLANG_ENABLE_LIBCXX=OFF -DCMAKE_CXX_FLAGS=-stdlib=libstdc++ -DCMAKE_CXX_STANDARD=20"
 # fi
 
-if [[ ! -z "$DISTCC" ]] && [[ "$DISTCC" != "disable" ]] && [[ "$DISTCC" != "disabled" ]] && [[ "$DISTCC" != "no" ]] && [[ "$DISTCC" != "false" ]] && [[ -e "$DISTCC" ]]; then
-  CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_C_COMPILER_LAUNCHER=$DISTCC -DCMAKE_CXX_COMPILER_LAUNCHER=$DISTCC -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX"
-elif [[ ! -z "$CCACHE" ]] && [[ "$CCACHE" != "disable" ]] && [[ "$CCACHE" != "disabled" ]] && [[ "$CCACHE" != "no" ]] && [[ "$CCACHE" != "false" ]] && [[ -e "$CCACHE" ]]; then
+if [[ ! -z "$CCACHE" ]] && [[ "$CCACHE" != "disable" ]] && [[ "$CCACHE" != "disabled" ]] && [[ "$CCACHE" != "no" ]] && [[ "$CCACHE" != "false" ]] && [[ -e "$CCACHE" ]]; then
   #CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_C_COMPILER=$CCACHE -DCMAKE_CXX_COMPILER=$CCACHE -DCMAKE_C_COMPILER_ARG1=$CC -DCMAKE_CXX_COMPILER_ARG1=$CXX";
   CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX"
+  if [[ ! -z "$DISTCC" ]] && [[ "$DISTCC" != "disable" ]] && [[ "$DISTCC" != "disabled" ]] && [[ "$DISTCC" != "no" ]] && [[ "$DISTCC" != "false" ]] && [[ -e "$DISTCC" ]]; then
+    export CCACHE_PREFIX="$DISTCC"
+  fi
+elif [[ ! -z "$DISTCC" ]] && [[ "$DISTCC" != "disable" ]] && [[ "$DISTCC" != "disabled" ]] && [[ "$DISTCC" != "no" ]] && [[ "$DISTCC" != "false" ]] && [[ -e "$DISTCC" ]]; then
+  CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_C_COMPILER_LAUNCHER=$DISTCC -DCMAKE_CXX_COMPILER_LAUNCHER=$DISTCC -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX"
 else
   CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX"
 fi

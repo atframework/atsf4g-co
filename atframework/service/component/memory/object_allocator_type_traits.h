@@ -274,16 +274,16 @@ struct UTIL_SYMBOL_VISIBLE
 
   template <typename U, typename... _Args>
   UTIL_FORCEINLINE static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR
-      typename ::std::enable_if<__construct_helper<U, _Args...>::value, void>::type
-      _S_construct(allocator_type& __a, U* __p, _Args&&... __args) {
+      util::nostd::enable_if_t<__construct_helper<U, _Args...>::value, void>
+      _S_construct(allocator_type& __a, U* __p,
+                   _Args&&... __args) noexcept(noexcept(__a.construct(__p, std::forward<_Args>(__args)...))) {
     __a.construct(__p, std::forward<_Args>(__args)...);
   }
 
   template <typename U, typename... _Args>
-  UTIL_FORCEINLINE static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR
-      typename ::std::enable_if<!__construct_helper<U, _Args...>::value && ::std::is_constructible<U, _Args...>::value,
-                                void>::type
-      _S_construct(allocator_type&, U* __p, _Args&&... __args) {
+  UTIL_FORCEINLINE static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR util::nostd::enable_if_t<
+      !__construct_helper<U, _Args...>::value && ::std::is_constructible<U, _Args...>::value, void>
+  _S_construct(allocator_type&, U* __p, _Args&&... __args) noexcept(std::is_nothrow_constructible<U, _Args...>::value) {
     ::atfw::memory::object_allocator_metrics_controller::add_constructor_counter_template<value_type>(
         reinterpret_cast<void*>(__p));
 

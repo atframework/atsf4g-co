@@ -53,7 +53,7 @@ struct player_key_equal_t {
 
 // 如果短期内发生太多次针对同一玩家得在线表拉取，则直接用缓存。这可以优化短期频繁拉取login表，并且异步任务就算过期也只是回延后触发，不影响逻辑
 static rpc::result_code_type fetch_user_login_cache(rpc::context& ctx, uint64_t user_id, uint32_t zone_id,
-                                                    PROJECT_NAMESPACE_ID::table_login& rsp) {
+                                                    PROJECT_NAMESPACE_ID::table_login& rsp, bool ignore_cache) {
   static std::unordered_map<PROJECT_NAMESPACE_ID::DPlayerIDKey, PROJECT_NAMESPACE_ID::table_login, player_key_hash_t,
                             player_key_equal_t>
       local_cache;
@@ -68,10 +68,12 @@ static rpc::result_code_type fetch_user_login_cache(rpc::context& ctx, uint64_t 
   key.set_user_id(user_id);
   key.set_zone_id(zone_id);
 
-  auto iter_cache = local_cache.find(key);
-  if (iter_cache != local_cache.end()) {
-    protobuf_copy_message(rsp, iter_cache->second);
-    RPC_RETURN_CODE(0);
+  if (!ignore_cache) {
+    auto iter_cache = local_cache.find(key);
+    if (iter_cache != local_cache.end()) {
+      protobuf_copy_message(rsp, iter_cache->second);
+      RPC_RETURN_CODE(0);
+    }
   }
 
   std::string version;
@@ -128,7 +130,7 @@ result_type del_jobs(rpc::context& /*ctx*/, int32_t jobs_type, uint64_t user_id,
 }
 
 result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-                     PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data& in, bool notify_player) {
+                     PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data& in, action_options options) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
                user_id, zone_id);
@@ -162,7 +164,7 @@ result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uin
 
   // 尝试通知在线玩家, 失败则放弃。只是会延迟到账，不影响逻辑。
   do {
-    if (!notify_player) {
+    if (!options.notify_player) {
       break;
     }
     // 不走路由系统，异步任务允许任意节点发送，但是有些服务不需要拉缓存对象
@@ -174,7 +176,8 @@ result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uin
       break;
     }
 
-    auto res = RPC_AWAIT_CODE_RESULT(detail::fetch_user_login_cache(ctx, user_id, zone_id, *login_table));
+    auto res = RPC_AWAIT_CODE_RESULT(
+        detail::fetch_user_login_cache(ctx, user_id, zone_id, *login_table, options.ignore_router_cache));
     if (res < 0) {
       if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == res) {
         FWLOGWARNING("rpc::db::login::get({}, {}) but not found, maybe not created yet", user_id, zone_id);
@@ -197,12 +200,13 @@ result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uin
 }
 
 result_code_type add_jobs_with_retry(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-                                     PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data& inout, bool notify_player) {
+                                     PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data& inout,
+                                     action_options options) {
   if (inout.left_retry_times() <= 0) {
     inout.set_left_retry_times(logic_config::me()->get_logic().user().async_job().default_retry_times());
   }
 
-  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(add_jobs(ctx, jobs_type, user_id, zone_id, inout, notify_player)));
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(add_jobs(ctx, jobs_type, user_id, zone_id, inout, options)));
 }
 
 result_type remove_all_jobs(rpc::context& /*ctx*/, int32_t jobs_type, uint64_t user_id, uint32_t zone_id) {
@@ -226,7 +230,7 @@ result_type remove_all_jobs(rpc::context& /*ctx*/, int32_t jobs_type, uint64_t u
 
 result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
                         PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data& inout, int64_t record_index,
-                        int64_t* /*version*/) {
+                        int64_t* /*version*/, action_options options) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
                user_id, zone_id);
@@ -267,6 +271,9 @@ result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, 
 
   // 尝试通知在线玩家, 失败则放弃。只是会延迟到账，不影响逻辑。
   do {
+    if (!options.notify_player) {
+      break;
+    }
     // 不走路由系统，异步任务允许任意节点发送，但是有些服务不需要拉缓存对象
     PROJECT_NAMESPACE_ID::table_login* login_table = ctx.create<PROJECT_NAMESPACE_ID::table_login>();
     PROJECT_NAMESPACE_ID::SSPlayerAsyncJobsSync* req_body = ctx.create<PROJECT_NAMESPACE_ID::SSPlayerAsyncJobsSync>();
@@ -276,7 +283,8 @@ result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, 
       break;
     }
 
-    auto res = RPC_AWAIT_CODE_RESULT(detail::fetch_user_login_cache(ctx, user_id, zone_id, *login_table));
+    auto res = RPC_AWAIT_CODE_RESULT(
+        detail::fetch_user_login_cache(ctx, user_id, zone_id, *login_table, options.ignore_router_cache));
     if (res < 0) {
       if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == res) {
         FWLOGWARNING("rpc::db::login::get({}, {}) but not found, maybe not created yet", user_id, zone_id);
