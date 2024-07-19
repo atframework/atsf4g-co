@@ -17,6 +17,7 @@ def rpc_return_always_ready_code_sentense(input):
 
 #include <gsl/select-gsl.h>
 #include <log/log_wrapper.h>
+#include <time/time_utility.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -174,6 +175,8 @@ inline static int __setup_rpc_stream_header(atframework::SSMsgHead &head, gsl::s
   stream_meta->set_callee("${service.get_full_name()}");
   stream_meta->set_rpc_name(static_cast<std::string>(rpc_full_name));
   stream_meta->set_type_url(type_full_name);
+  stream_meta->mutable_caller_timestamp()->set_seconds(util::time::time_utility::get_sys_now());
+  stream_meta->mutable_caller_timestamp()->set_nanos(util::time::time_utility::get_now_nanos());
 
   return ${project_namespace}::err::EN_SUCCESS;
 }
@@ -192,6 +195,8 @@ inline static int __setup_rpc_request_header(atframework::SSMsgHead &head, task_
   request_meta->set_callee("${service.get_full_name()}");
   request_meta->set_rpc_name(static_cast<std::string>(rpc_full_name));
   request_meta->set_type_url(type_full_name);
+  request_meta->mutable_caller_timestamp()->set_seconds(util::time::time_utility::get_sys_now());
+  request_meta->mutable_caller_timestamp()->set_nanos(util::time::time_utility::get_now_nanos());
 
   return ${project_namespace}::err::EN_SUCCESS;
 }

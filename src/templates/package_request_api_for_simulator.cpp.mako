@@ -11,6 +11,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 #include "${service.get_name_lower_rule()}.h"
 
 #include <log/log_wrapper.h>
+#include <time/time_utility.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -75,6 +76,8 @@ static inline int __setup_rpc_stream_header(atframework::CSMsgHead &head, const 
   stream_meta->set_callee("${service.get_full_name()}");
   stream_meta->set_rpc_name(rpc_full_name);
   stream_meta->set_type_url(type_full_name);
+  stream_meta->mutable_caller_timestamp()->set_seconds(util::time::time_utility::get_sys_now());
+  stream_meta->mutable_caller_timestamp()->set_nanos(util::time::time_utility::get_now_nanos());
 
   return ${project_namespace}::EN_SUCCESS;
 

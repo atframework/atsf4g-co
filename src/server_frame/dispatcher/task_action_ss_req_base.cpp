@@ -301,17 +301,33 @@ static rpc::result_code_type task_action_ss_action_clone_rpc(rpc::context &ctx, 
       std::string rpc_callee;
       std::string rpc_rpc_name;
       std::string rpc_type_url;
-      clone_head.mutable_rpc_request()->mutable_version()->swap(rpc_version);
-      clone_head.mutable_rpc_request()->mutable_caller()->swap(rpc_caller);
-      clone_head.mutable_rpc_request()->mutable_callee()->swap(rpc_callee);
-      clone_head.mutable_rpc_request()->mutable_rpc_name()->swap(rpc_rpc_name);
-      clone_head.mutable_rpc_request()->mutable_type_url()->swap(rpc_type_url);
-      clone_head.clear_rpc_request();
-      clone_head.mutable_rpc_stream()->mutable_version()->swap(rpc_version);
-      clone_head.mutable_rpc_stream()->mutable_caller()->swap(rpc_caller);
-      clone_head.mutable_rpc_stream()->mutable_callee()->swap(rpc_callee);
-      clone_head.mutable_rpc_stream()->mutable_rpc_name()->swap(rpc_rpc_name);
-      clone_head.mutable_rpc_stream()->mutable_type_url()->swap(rpc_type_url);
+      google::protobuf::Timestamp caller_timespamp;
+      protobuf_copy_message(caller_timespamp, clone_head.rpc_request().caller_timestamp());
+
+      do {
+        auto rpc_request = clone_head.mutable_rpc_request();
+        if (nullptr == rpc_request) {
+          break;
+        }
+        rpc_request->mutable_version()->swap(rpc_version);
+        rpc_request->mutable_caller()->swap(rpc_caller);
+        rpc_request->mutable_callee()->swap(rpc_callee);
+        rpc_request->mutable_rpc_name()->swap(rpc_rpc_name);
+        rpc_request->mutable_type_url()->swap(rpc_type_url);
+        clone_head.clear_rpc_request();
+      } while (false);
+      do {
+        auto rpc_stream = clone_head.mutable_rpc_stream();
+        if (nullptr == rpc_stream) {
+          break;
+        }
+        rpc_stream->mutable_version()->swap(rpc_version);
+        rpc_stream->mutable_caller()->swap(rpc_caller);
+        rpc_stream->mutable_callee()->swap(rpc_callee);
+        rpc_stream->mutable_rpc_name()->swap(rpc_rpc_name);
+        rpc_stream->mutable_type_url()->swap(rpc_type_url);
+        protobuf_copy_message(*rpc_stream->mutable_caller_timestamp(), caller_timespamp);
+      } while (false);
     }
   }
   *clone_request->mutable_body_bin() = request_message.body_bin();
@@ -459,17 +475,34 @@ SERVER_FRAME_API atframework::SSMsg &task_action_ss_req_base::add_response_messa
   atframework::SSMsgHead *head = msg->mutable_head();
   if (get_request().head().has_rpc_request()) {
     head->clear_rpc_request();
-    head->mutable_rpc_response()->set_version(logic_config::me()->get_atframework_settings().rpc_version());
-    head->mutable_rpc_response()->set_rpc_name(get_request().head().rpc_request().rpc_name());
-    head->mutable_rpc_response()->set_type_url(get_response_type_url());
+    do {
+      auto rpc_response = head->mutable_rpc_response();
+      if (nullptr == rpc_response) {
+        break;
+      }
+      rpc_response->set_version(logic_config::me()->get_atframework_settings().rpc_version());
+      rpc_response->set_rpc_name(get_request().head().rpc_request().rpc_name());
+      rpc_response->set_type_url(get_response_type_url());
+      rpc_response->set_caller_node_id(get_request_node_id());
+      rpc_response->set_caller_node_name(get_request_node_name());
+      protobuf_copy_message(*rpc_response->mutable_caller_timestamp(),
+                            get_request().head().rpc_request().caller_timestamp());
+    } while (false);
   } else {
     head->clear_rpc_stream();
-    head->mutable_rpc_stream()->set_version(logic_config::me()->get_atframework_settings().rpc_version());
-    head->mutable_rpc_stream()->set_rpc_name(get_request().head().rpc_stream().rpc_name());
-    head->mutable_rpc_stream()->set_type_url(get_response_type_url());
-
-    head->mutable_rpc_stream()->set_caller(static_cast<std::string>(logic_config::me()->get_local_server_name()));
-    head->mutable_rpc_stream()->set_callee(get_request().head().rpc_stream().caller());
+    do {
+      auto rpc_stream = head->mutable_rpc_stream();
+      if (nullptr == rpc_stream) {
+        break;
+      }
+      rpc_stream->set_version(logic_config::me()->get_atframework_settings().rpc_version());
+      rpc_stream->set_rpc_name(get_request().head().rpc_stream().rpc_name());
+      rpc_stream->set_type_url(get_response_type_url());
+      rpc_stream->set_caller(static_cast<std::string>(logic_config::me()->get_local_server_name()));
+      rpc_stream->set_callee(get_request().head().rpc_stream().caller());
+      protobuf_copy_message(*rpc_stream->mutable_caller_timestamp(),
+                            get_request().head().rpc_request().caller_timestamp());
+    } while (false);
   }
 
   return *msg;

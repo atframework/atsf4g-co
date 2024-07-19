@@ -87,6 +87,8 @@ class ss_msg_dispatcher : public dispatcher_implement {
 
   SERVER_FRAME_API int tick() override;
 
+  SERVER_FRAME_API void ready() override final;
+
   /**
    * @brief 获取任务信息
    * @param raw_msg 消息抽象结构
@@ -181,6 +183,8 @@ class ss_msg_dispatcher : public dispatcher_implement {
                                      ::atapp::protocol::atapp_metadata *metadata = nullptr);
 
  private:
+ void setup_metrics();
+
   static void dns_lookup_callback(uv_getaddrinfo_t *req, int status, struct addrinfo *res) noexcept;
 
  public:

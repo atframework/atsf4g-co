@@ -8,6 +8,7 @@ option cc_enable_arenas = true;
 
 package atframework;
 
+import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/descriptor.proto";
 
@@ -81,6 +82,8 @@ message RpcRequestMeta {
 
   string rpc_name = 21;  // 调度分发名称: <ServiceFullName>.<MethodName>
   string type_url = 22;  // 类型地址
+
+  google.protobuf.Timestamp caller_timestamp = 33;
 }
 
 message RpcResponseMeta {
@@ -88,6 +91,10 @@ message RpcResponseMeta {
 
   string rpc_name = 21;  // 调度分发名称: <ServiceFullName>.<MethodName>
   string type_url = 22;  // 类型地址
+
+  uint64 caller_node_id = 31;
+  string caller_node_name = 32;
+  google.protobuf.Timestamp caller_timestamp = 33;
 }
 
 message RpcStreamMeta {
@@ -98,6 +105,8 @@ message RpcStreamMeta {
 
   string rpc_name = 21;  // 调度分发名称: <ServiceFullName>.<MethodName>
   string type_url = 22;  // 类型地址
+
+  google.protobuf.Timestamp caller_timestamp = 33;
 }
 
 // RpcTraceSpan follows opentracing and opentelemetry.

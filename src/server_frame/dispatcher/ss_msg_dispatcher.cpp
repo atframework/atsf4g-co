@@ -4,6 +4,7 @@
 
 #include "dispatcher/ss_msg_dispatcher.h"
 
+#include <design_pattern/singleton.h>
 #include <log/log_wrapper.h>
 
 #include <atframe/atapp.h>
@@ -28,17 +29,121 @@
 
 #include <rpc/dns/lookup.h>
 #include <rpc/rpc_utils.h>
+#include <rpc/telemetry/opentelemetry_utility.h>
 
 #include <config/logic_config.h>
 
+#include <chrono>
 #include <memory>
-#include <sstream>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "logic/logic_server_setup.h"
+
+namespace {
+
+struct UTIL_SYMBOL_LOCAL ss_rpc_mertrics_item {
+  std::string rpc_name;
+
+  std::chrono::microseconds min_delay;
+  std::chrono::microseconds max_delay;
+  std::chrono::microseconds total_delay;
+  size_t total_bytes;
+  size_t total_count;
+};
+
+struct UTIL_SYMBOL_LOCAL ss_rpc_mertrics_group {
+  std::unordered_map<std::string, ss_rpc_mertrics_item> rpc_metrics;
+};
+
+struct UTIL_SYMBOL_LOCAL ss_rpc_mertrics_manager
+    : public util::design_pattern::local_singleton<ss_rpc_mertrics_manager> {
+  std::mutex lock;
+
+  std::shared_ptr<ss_rpc_mertrics_group> current_group;
+  std::shared_ptr<ss_rpc_mertrics_group> report_group;
+
+  size_t max_collect_version = 0;
+  size_t collect_version_min_delay = 0;
+  size_t collect_version_max_delay = 0;
+  size_t collect_version_avg_delay = 0;
+  size_t collect_version_total_size = 0;
+  size_t collect_version_total_count = 0;
+
+  ss_rpc_mertrics_manager() {}
+};
+
+static void rpc_metrics_mutable_record_rpc(const std::string &rpc_name, std::chrono::microseconds delay, size_t size) {
+  if (ss_rpc_mertrics_manager::is_instance_destroyed()) {
+    return;
+  }
+
+  if (rpc_name.empty()) {
+    return;
+  }
+
+  ss_rpc_mertrics_manager &mgr = ss_rpc_mertrics_manager::get_instance();
+  std::lock_guard<std::mutex> lock_guard{mgr.lock};
+
+  if (!mgr.current_group) {
+    mgr.current_group = std::make_shared<ss_rpc_mertrics_group>();
+  }
+  if (!mgr.current_group) {
+    return;
+  }
+
+  auto iter = mgr.current_group->rpc_metrics.find(rpc_name);
+  if (iter != mgr.current_group->rpc_metrics.end()) {
+    auto &record = iter->second;
+    if (delay < record.min_delay) {
+      record.min_delay = delay;
+    }
+    if (delay > record.max_delay) {
+      record.max_delay = delay;
+    }
+    record.total_delay += delay;
+    record.total_bytes += size;
+    ++record.total_count;
+  } else {
+    auto &record = mgr.current_group->rpc_metrics[rpc_name];
+    record.rpc_name = rpc_name;
+    record.min_delay = delay;
+    record.max_delay = delay;
+    record.total_delay = delay;
+    record.total_bytes = size;
+    record.total_count = 1;
+  }
+}
+
+static std::shared_ptr<ss_rpc_mertrics_group> rpc_metrics_get_rpc_metric_report(
+    size_t(ss_rpc_mertrics_manager::*version_member)) {
+  if (ss_rpc_mertrics_manager::is_instance_destroyed()) {
+    return nullptr;
+  }
+
+  std::shared_ptr<ss_rpc_mertrics_group> swap_out;
+  std::shared_ptr<ss_rpc_mertrics_group> ret;
+  {
+    ss_rpc_mertrics_manager &mgr = ss_rpc_mertrics_manager::get_instance();
+    std::lock_guard<std::mutex> lock_guard{mgr.lock};
+
+    ++(mgr.*version_member);
+    if (mgr.current_group && (mgr.*version_member) > mgr.max_collect_version) {
+      mgr.max_collect_version = (mgr.*version_member);
+      mgr.report_group.swap(mgr.current_group);
+      mgr.current_group.swap(swap_out);
+    }
+
+    ret = mgr.report_group;
+  }
+
+  return ret;
+}
+
+}  // namespace
 
 #if defined(DS_BATTLE_SDK_DLL) && DS_BATTLE_SDK_DLL
 #  if defined(DS_BATTLE_SDK_NATIVE) && DS_BATTLE_SDK_NATIVE
@@ -78,6 +183,11 @@ SERVER_FRAME_API int ss_msg_dispatcher::stop() {
   }
 
   return ret;
+}
+
+SERVER_FRAME_API void ss_msg_dispatcher::ready() {
+  // setup metrics
+  setup_metrics();
 }
 
 SERVER_FRAME_API int ss_msg_dispatcher::tick() {
@@ -279,8 +389,8 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const atapp::etcd_disco
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
-  int res = convert_from_atapp_error_code(owner->send_message(node.get_discovery_info().name(), atframe::component::message_type::EN_ATST_SS_MSG,
-                                msg_buf, msg_len, &sequence));
+  int res = convert_from_atapp_error_code(owner->send_message(
+      node.get_discovery_info().name(), atframe::component::message_type::EN_ATST_SS_MSG, msg_buf, msg_len, &sequence));
   if (res < 0) {
     FWLOGERROR("{} send msg to proc {} {} bytes failed, res: {}", name(), node.get_discovery_info().name(), msg_len,
                res);
@@ -443,6 +553,34 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_s
     ss_msg->mutable_head()->set_node_id(from_server_id);
   }
 
+  // Metrics RPC from response
+  do {
+    if (!ss_msg->head().has_rpc_response()) {
+      break;
+    }
+
+    auto &rpc_response = ss_msg->head().rpc_response();
+    if (!rpc_response.has_caller_timestamp()) {
+      break;
+    }
+
+    if (rpc_response.caller_timestamp().seconds() <= 0) {
+      break;
+    }
+
+    util::time::time_utility::update();
+    auto delay = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::seconds{util::time::time_utility::get_sys_now() - rpc_response.caller_timestamp().seconds()} +
+        std::chrono::nanoseconds{util::time::time_utility::get_now_nanos() - rpc_response.caller_timestamp().nanos()});
+
+    // Unexcepted duration is ignored
+    if (delay < std::chrono::microseconds::zero()) {
+      break;
+    }
+
+    rpc_metrics_mutable_record_rpc(rpc_response.rpc_name(), delay, ss_msg->body_bin().size());
+  } while (false);
+
   rpc::context::tracer tracer;
   rpc::context::trace_start_option trace_start_option;
   trace_start_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
@@ -580,6 +718,36 @@ SERVER_FRAME_API void ss_msg_dispatcher::on_create_task_failed(dispatcher_start_
   head->set_node_id(real_msg->head().node_id());
   head->set_timestamp(util::time::time_utility::get_now());
 
+  do {
+    auto rpc_response = head->mutable_rpc_response();
+    if (nullptr == rpc_response) {
+      break;
+    }
+    rpc_response->set_version(logic_config::me()->get_atframework_settings().rpc_version());
+    rpc_response->set_rpc_name(rpc_name);
+    const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::MethodDescriptor *method = get_registered_method(rpc_name);
+    if (nullptr != method) {
+      rpc_response->set_type_url(method->output_type()->full_name());
+    }
+    rpc_response->set_caller_node_id(real_msg->head().node_id());
+    if (real_msg->head().has_rpc_forward() && real_msg->head().rpc_forward().transparent()) {
+      uint64_t node_id = real_msg->head().rpc_forward().forward_for_node_id();
+      if (node_id != 0) {
+        rpc_response->set_caller_node_id(node_id);
+      }
+    }
+    if (real_msg->head().has_rpc_forward() && real_msg->head().rpc_forward().transparent()) {
+      if (!real_msg->head().rpc_forward().forward_for_node_name().empty()) {
+        rpc_response->set_caller_node_name(real_msg->head().rpc_forward().forward_for_node_name());
+      }
+    }
+    if (rpc_response->caller_node_name().empty()) {
+      rpc_response->set_caller_node_name(real_msg->head().node_name());
+    }
+
+    protobuf_copy_message(*rpc_response->mutable_caller_timestamp(), real_msg->head().rpc_request().caller_timestamp());
+  } while (false);
+
   if (real_msg->head().has_router()) {
     protobuf_copy_message(*head->mutable_router(), real_msg->head().router());
   }
@@ -609,6 +777,136 @@ SERVER_FRAME_API void ss_msg_dispatcher::on_create_task_failed(dispatcher_start_
 }
 
 SERVER_FRAME_API uint64_t ss_msg_dispatcher::allocate_sequence() { return ++sequence_allocator_; }
+
+void ss_msg_dispatcher::setup_metrics() {
+  rpc::telemetry::global_service::add_on_ready([]() {
+    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+        rpc::telemetry::metrics_observable_type::kGauge, "atframework_inserver_rpc",
+        {"atframework_inserver_rpc_delay_min", "", "us"}, [](opentelemetry::metrics::ObserverResult &result) {
+          auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_min_delay);
+          if (!report) {
+            return;
+          }
+
+          for (auto &method : report->rpc_metrics) {
+            auto service_end = method.second.rpc_name.find_last_of('.');
+            opentelemetry::nostd::string_view service_name = "UNKNOWN";
+            if (service_end != std::string::npos) {
+              service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
+            }
+            rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
+                {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
+                {opentelemetry::trace::SemanticConventions::kRpcService, service_name},
+                {opentelemetry::trace::SemanticConventions::kRpcMethod, method.second.rpc_name}};
+
+            rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
+                result, static_cast<int64_t>(method.second.min_delay.count()), internal_attributes);
+          }
+        });
+
+    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+        rpc::telemetry::metrics_observable_type::kGauge, "atframework_inserver_rpc",
+        {"atframework_inserver_rpc_delay_max", "", "us"}, [](opentelemetry::metrics::ObserverResult &result) {
+          auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_min_delay);
+          if (!report) {
+            return;
+          }
+
+          for (auto &method : report->rpc_metrics) {
+            auto service_end = method.second.rpc_name.find_last_of('.');
+            opentelemetry::nostd::string_view service_name = "UNKNOWN";
+            if (service_end != std::string::npos) {
+              service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
+            }
+            rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
+                {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
+                {opentelemetry::trace::SemanticConventions::kRpcService, service_name},
+                {opentelemetry::trace::SemanticConventions::kRpcMethod, method.second.rpc_name}};
+
+            rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
+                result, static_cast<int64_t>(method.second.max_delay.count()), internal_attributes);
+          }
+        });
+
+    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+        rpc::telemetry::metrics_observable_type::kGauge, "atframework_inserver_rpc",
+        {"atframework_inserver_rpc_delay_avg", "", "us"}, [](opentelemetry::metrics::ObserverResult &result) {
+          auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_min_delay);
+          if (!report) {
+            return;
+          }
+
+          for (auto &method : report->rpc_metrics) {
+            if (method.second.total_count <= 0) {
+              continue;
+            }
+            auto service_end = method.second.rpc_name.find_last_of('.');
+            opentelemetry::nostd::string_view service_name = "UNKNOWN";
+            if (service_end != std::string::npos) {
+              service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
+            }
+            rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
+                {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
+                {opentelemetry::trace::SemanticConventions::kRpcService, service_name},
+                {opentelemetry::trace::SemanticConventions::kRpcMethod, method.second.rpc_name}};
+
+            rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
+                result,
+                static_cast<int64_t>(method.second.total_delay.count()) /
+                    static_cast<int64_t>(method.second.total_count),
+                internal_attributes);
+          }
+        });
+
+    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+        rpc::telemetry::metrics_observable_type::kGauge, "atframework_inserver_rpc",
+        {"atframework_inserver_rpc_count", "", ""}, [](opentelemetry::metrics::ObserverResult &result) {
+          auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_min_delay);
+          if (!report) {
+            return;
+          }
+
+          for (auto &method : report->rpc_metrics) {
+            auto service_end = method.second.rpc_name.find_last_of('.');
+            opentelemetry::nostd::string_view service_name = "UNKNOWN";
+            if (service_end != std::string::npos) {
+              service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
+            }
+            rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
+                {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
+                {opentelemetry::trace::SemanticConventions::kRpcService, service_name},
+                {opentelemetry::trace::SemanticConventions::kRpcMethod, method.second.rpc_name}};
+
+            rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
+                result, static_cast<int64_t>(method.second.total_count), internal_attributes);
+          }
+        });
+
+    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+        rpc::telemetry::metrics_observable_type::kGauge, "atframework_inserver_rpc",
+        {"atframework_inserver_rpc_size", "", ""}, [](opentelemetry::metrics::ObserverResult &result) {
+          auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_min_delay);
+          if (!report) {
+            return;
+          }
+
+          for (auto &method : report->rpc_metrics) {
+            auto service_end = method.second.rpc_name.find_last_of('.');
+            opentelemetry::nostd::string_view service_name = "UNKNOWN";
+            if (service_end != std::string::npos) {
+              service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
+            }
+            rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
+                {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
+                {opentelemetry::trace::SemanticConventions::kRpcService, service_name},
+                {opentelemetry::trace::SemanticConventions::kRpcMethod, method.second.rpc_name}};
+
+            rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
+                result, static_cast<int64_t>(method.second.total_bytes), internal_attributes);
+          }
+        });
+  });
+}
 
 SERVER_FRAME_API void ss_msg_dispatcher::dns_lookup_callback(uv_getaddrinfo_t *req, int /*status*/,
                                                              struct addrinfo *result) noexcept {
