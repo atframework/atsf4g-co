@@ -73,6 +73,8 @@ class user_async_jobs_manager {
 
   EXPLICIT_NODISCARD_ATTR rpc::result_code_type wait_for_async_task(rpc::context& ctx);
 
+  void force_async_job(int32_t jobs_type);
+
   /**
    * @brief 重置远程命令任务的定时间隔
    */

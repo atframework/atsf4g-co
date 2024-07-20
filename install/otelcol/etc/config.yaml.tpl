@@ -35,7 +35,7 @@
   {{- if not (empty .private_options.grpc_timeout) }}
     {{- $otelcol_current_config := set $otelcol_current_config "timeout" .private_options.grpc_timeout -}}
   {{- end }}
-  {{- $otelcol_current_config := merge $otelcol_current_config (dict "tls" (dict "insecure" (.private_options.grpc_insecure | default "true"))) -}}
+  {{- $otelcol_current_config := merge $otelcol_current_config (dict "tls" (dict "insecure" (.private_options.grpc_insecure | default true))) -}}
   {{- if not (empty .private_options.grpc_ca_file) }}
     {{- $otelcol_current_config := merge $otelcol_current_config (dict "tls" (dict "ca_file" .private_options.grpc_ca_file)) -}}
   {{- end }}
@@ -298,9 +298,9 @@ connectors:
       - name: host.name
         default: localhost
       - name: rpc.atrpc.result_code
-        default: 0
+        default: "0"
       - name: rpc.atrpc.response_code
-        default: 0
+        default: "0"
       - name: rpc.method
         default: UNKNOWN
       - name: rpc.service
@@ -308,7 +308,7 @@ connectors:
       - name: rpc.system
         default: NONE
       - name: service.area.zone_id
-        default: 0
+        default: "0"
       - name: service.instance.name
         default: UNKNOWN
       # - name: rpc.atrpc.kind

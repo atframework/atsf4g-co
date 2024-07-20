@@ -147,8 +147,13 @@ bool user_async_jobs_manager::is_async_jobs_task_running() const {
 }
 
 bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
+    if (!owner_->is_inited()) {
+    return false;
+  }
+
   // 保护时间
-  if (::util::time::time_utility::get_now() <= remote_command_patch_task_next_timepoint_) {
+  if (::util::time::time_utility::get_now() <= remote_command_patch_task_next_timepoint_ &&
+      force_async_job_type_.empty()) {
     return false;
   }
 
@@ -163,8 +168,11 @@ bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
   }
 
   is_dirty_ = true;
-  remote_command_patch_task_next_timepoint_ =
-      ::util::time::time_utility::get_now() + logic_config::me()->get_logic().user().async_job().interval().seconds();
+  if (::util::time::time_utility::get_now() > remote_command_patch_task_next_timepoint_) {
+    force_async_job_type_.clear();
+    remote_command_patch_task_next_timepoint_ =
+        ::util::time::time_utility::get_now() + logic_config::me()->get_logic().user().async_job().interval().seconds();
+  }
 
   task_type_trait::id_type tid = 0;
   task_action_player_remote_patch_jobs::ctor_param_t params;
@@ -172,6 +180,7 @@ bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
   params.timeout_duration = logic_config::me()->get_logic().user().async_job().timeout().seconds();
   params.timeout_timepoint = util::time::time_utility::get_now() + params.timeout_duration;
   params.caller_context = &ctx;
+  params.async_job_type.swap(force_async_job_type_);
   task_manager::me()->create_task_with_timeout<task_action_player_remote_patch_jobs>(tid, params.timeout_duration,
                                                                                      COPP_MACRO_STD_MOVE(params));
 
@@ -200,6 +209,15 @@ rpc::result_code_type user_async_jobs_manager::wait_for_async_task(rpc::context&
   }
 
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, remote_command_patch_task_)));
+}
+
+void user_async_jobs_manager::force_async_job(int32_t jobs_type) {
+  if (!owner_->is_inited()) {
+    return;
+  }
+
+  force_async_job_type_.insert(jobs_type);
+  is_dirty_ = true;
 }
 
 void user_async_jobs_manager::reset_async_jobs_protect() {

@@ -17,13 +17,17 @@
 
 #include <opentelemetry/trace/semantic_conventions.h>
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/pbdesc/svr.const.pb.h>
 #include <protocol/pbdesc/svr.protocol.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <utility/protobuf_mini_dumper.h>
 
