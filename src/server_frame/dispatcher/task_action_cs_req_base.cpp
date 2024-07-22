@@ -25,7 +25,18 @@
 
 #include <list>
 #include <memory>
+#include <mutex>
 #include <utility>
+
+namespace {
+static std::recursive_mutex &get_handle_lock() {
+  static std::recursive_mutex ret;
+  return ret;
+}
+}  // namespace
+
+std::list<rpc::result_code_type (*)(rpc::context &, task_action_cs_req_base &)>
+    task_action_cs_req_base::prepare_handles_;
 
 SERVER_FRAME_API task_action_cs_req_base::task_action_cs_req_base(dispatcher_start_data_type &&start_param)
     : base_type(start_param), has_sync_dirty_(false), recursive_sync_dirty_(false) {
@@ -72,6 +83,17 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
     trace_span->SetAttribute("client.port", sess->get_client_port());
   } while (false);
   **/
+
+  // prepare handle
+  {
+    std::lock_guard<std::recursive_mutex> lock_guard{get_handle_lock()};
+    for (auto &fn : prepare_handles_) {
+      auto res = RPC_AWAIT_CODE_RESULT(fn(get_shared_context(), *this));
+      if (res < 0) {
+        TASK_ACTION_RETURN_CODE(res);
+      }
+    }
+  }
 
   router_player_manager::ptr_t router_obj;
   do {
@@ -153,6 +175,16 @@ SERVER_FRAME_API std::shared_ptr<dispatcher_implement> task_action_cs_req_base::
 }
 
 SERVER_FRAME_API const char *task_action_cs_req_base::get_type_name() const { return "client"; }
+
+SERVER_FRAME_API void task_action_cs_req_base::add_prepare_handle(
+    rpc::result_code_type (*fn)(rpc::context &, task_action_cs_req_base &)) {
+  if (fn == nullptr) {
+    return;
+  }
+
+  std::lock_guard<std::recursive_mutex> lock_guard{get_handle_lock()};
+  prepare_handles_.push_back(fn);
+}
 
 SERVER_FRAME_API rpc::context::trace_start_option task_action_cs_req_base::get_trace_option() const noexcept {
   rpc::context::trace_start_option ret = task_action_base::get_trace_option();

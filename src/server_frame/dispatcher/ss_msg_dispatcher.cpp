@@ -811,7 +811,7 @@ void ss_msg_dispatcher::setup_metrics() {
     rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
         rpc::telemetry::metrics_observable_type::kGauge, "atframework_inserver_rpc",
         {"atframework_inserver_rpc_delay_max", "", "us"}, [](opentelemetry::metrics::ObserverResult &result) {
-          auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_min_delay);
+          auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_max_delay);
           if (!report) {
             return;
           }
@@ -835,7 +835,7 @@ void ss_msg_dispatcher::setup_metrics() {
     rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
         rpc::telemetry::metrics_observable_type::kGauge, "atframework_inserver_rpc",
         {"atframework_inserver_rpc_delay_avg", "", "us"}, [](opentelemetry::metrics::ObserverResult &result) {
-          auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_min_delay);
+          auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_avg_delay);
           if (!report) {
             return;
           }
@@ -865,7 +865,7 @@ void ss_msg_dispatcher::setup_metrics() {
     rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
         rpc::telemetry::metrics_observable_type::kGauge, "atframework_inserver_rpc",
         {"atframework_inserver_rpc_count", "", ""}, [](opentelemetry::metrics::ObserverResult &result) {
-          auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_min_delay);
+          auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_total_count);
           if (!report) {
             return;
           }
@@ -889,7 +889,7 @@ void ss_msg_dispatcher::setup_metrics() {
     rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
         rpc::telemetry::metrics_observable_type::kGauge, "atframework_inserver_rpc",
         {"atframework_inserver_rpc_size", "", ""}, [](opentelemetry::metrics::ObserverResult &result) {
-          auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_min_delay);
+          auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_total_size);
           if (!report) {
             return;
           }

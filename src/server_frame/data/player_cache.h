@@ -2,15 +2,18 @@
 
 #pragma once
 
+#include <config/compiler_features.h>
+#include <design_pattern/noncopyable.h>
+
+#include <gsl/select-gsl.h>
+#include <std/explicit_declare.h>
+
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/com.protocol.pb.h>
 #include <protocol/pbdesc/svr.local.table.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
-
-#include <config/compiler_features.h>
-#include <design_pattern/noncopyable.h>
 
 #include <utility/protobuf_mini_dumper.h>
 
@@ -23,6 +26,7 @@
 #include <string>
 
 #include "data/player_key_hash_helper.h"
+#include "dispatcher/task_type_traits.h"
 #include "rpc/rpc_common_types.h"
 
 namespace rpc {
@@ -72,6 +76,27 @@ class player_cache_dirty_wrapper {
  private:
   value_type real_data_;
   bool dirty_;
+};
+
+class player_cache;
+
+class initialization_task_lock_guard {
+ public:
+  SERVER_FRAME_CONFIG_API ~initialization_task_lock_guard();
+  SERVER_FRAME_CONFIG_API initialization_task_lock_guard(std::shared_ptr<player_cache> user,
+                                                         task_type_trait::id_type task_id) noexcept;
+
+  SERVER_FRAME_CONFIG_API initialization_task_lock_guard(initialization_task_lock_guard &&) noexcept;
+  SERVER_FRAME_CONFIG_API initialization_task_lock_guard &operator=(initialization_task_lock_guard &&) noexcept;
+
+  SERVER_FRAME_CONFIG_API bool has_value() const noexcept;
+
+ private:
+  initialization_task_lock_guard(const initialization_task_lock_guard &) = delete;
+  initialization_task_lock_guard &operator=(const initialization_task_lock_guard &) = delete;
+
+ private:
+  std::shared_ptr<player_cache> guard_;
 };
 
 class player_cache : public std::enable_shared_from_this<player_cache> {
@@ -201,6 +226,9 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
 
   void set_quick_save() const;
 
+  SERVER_FRAME_CONFIG_API bool has_initialization_task_id() const noexcept;
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_CONFIG_API rpc::result_code_type await_initialization_task(rpc::context &ctx);
+
  private:
   inline PROJECT_NAMESPACE_ID::player_data &mutable_player_data() { return player_data_.ref(); }
 
@@ -208,6 +236,8 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
   inline void set_data_version(uint32_t ver) { data_version_ = ver; }
 
  private:
+  friend class initialization_task_lock_guard;
+
   std::string openid_id_;
   uint64_t user_id_;
   uint32_t zone_id_;
@@ -219,6 +249,8 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
 
   std::weak_ptr<session> session_;
   uint64_t server_sequence_;
+
+  task_type_trait::id_type initialization_task_id_;
 
   player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::account_information> account_info_;
   player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::player_data> player_data_;

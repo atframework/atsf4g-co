@@ -15,16 +15,61 @@
 #include <config/logic_config.h>
 #include <time/time_utility.h>
 
+#include <dispatcher/task_manager.h>
 #include <logic/player_manager.h>
 
 #include <router/router_manager_base.h>
 #include <router/router_manager_set.h>
 
+#include <memory>
 #include <string>
+#include <utility>
 
 #include "data/session.h"
+#include "rpc/rpc_async_invoke.h"
+#include "rpc/rpc_common_types.h"
 
-player_cache::player_cache(fake_constructor &) : user_id_(0), zone_id_(0), data_version_(0) {
+SERVER_FRAME_CONFIG_API initialization_task_lock_guard::~initialization_task_lock_guard() {
+  if (!guard_) {
+    return;
+  }
+
+  guard_->initialization_task_id_ = 0;
+}
+
+SERVER_FRAME_CONFIG_API initialization_task_lock_guard::initialization_task_lock_guard(
+    std::shared_ptr<player_cache> user, task_type_trait::id_type task_id) noexcept
+    : guard_(user) {
+  if (!guard_) {
+    return;
+  }
+
+  if (0 != guard_->initialization_task_id_) {
+    guard_.reset();
+    return;
+  }
+
+  guard_->initialization_task_id_ = task_id;
+}
+
+SERVER_FRAME_CONFIG_API initialization_task_lock_guard::initialization_task_lock_guard(
+    initialization_task_lock_guard &&other) noexcept
+    : guard_(std::move(other.guard_)) {
+  other.guard_.reset();
+}
+
+SERVER_FRAME_CONFIG_API initialization_task_lock_guard &initialization_task_lock_guard::operator=(
+    initialization_task_lock_guard &&other) noexcept {
+  guard_.swap(other.guard_);
+  other.guard_.reset();
+
+  return *this;
+}
+
+SERVER_FRAME_CONFIG_API bool initialization_task_lock_guard::has_value() const noexcept { return !!guard_; }
+
+player_cache::player_cache(fake_constructor &)
+    : user_id_(0), zone_id_(0), data_version_(0), initialization_task_id_(0) {
   server_sequence_ =
       static_cast<uint64_t>(
           (util::time::time_utility::get_sys_now() - PROJECT_NAMESPACE_ID::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET)
@@ -172,7 +217,7 @@ void player_cache::send_all_syn_msg(rpc::context &) {}
 
 rpc::result_code_type player_cache::await_before_logout_tasks(rpc::context &) { RPC_RETURN_CODE(0); }
 
-int32_t player_cache::client_rpc_filter(rpc::context &/*ctx*/, task_action_cs_req_base & /*cs_task_action*/,
+int32_t player_cache::client_rpc_filter(rpc::context & /*ctx*/, task_action_cs_req_base & /*cs_task_action*/,
                                         const atframework::DispatcherOptions * /*dispatcher_options*/) {
   return 0;
 }
@@ -227,4 +272,27 @@ void player_cache::set_quick_save() const {
   }
 
   router_manager_set::me()->mark_fast_save(mgr, obj);
+}
+
+SERVER_FRAME_CONFIG_API bool player_cache::has_initialization_task_id() const noexcept {
+  return 0 != initialization_task_id_;
+}
+
+SERVER_FRAME_CONFIG_API rpc::result_code_type player_cache::await_initialization_task(rpc::context &ctx) {
+  task_type_trait::task_type t = task_manager::me()->get_task(initialization_task_id_);
+  if (task_type_trait::empty(t)) {
+    initialization_task_id_ = 0;
+    RPC_RETURN_CODE(0);
+  }
+
+  if (task_type_trait::is_exiting(t)) {
+    initialization_task_id_ = 0;
+    RPC_RETURN_CODE(0);
+  }
+
+  rpc::result_code_type::value_type ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, t));
+  if (task_type_trait::is_exiting(t)) {
+    initialization_task_id_ = 0;
+  }
+  RPC_RETURN_CODE(ret);
 }

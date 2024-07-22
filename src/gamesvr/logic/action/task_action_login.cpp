@@ -48,7 +48,7 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
   uint32_t zone_id = logic_config::me()->get_local_zone_id();
   set_user_key(req_body.user_id(), zone_id);
 
-  int res = 0;
+  rpc::result_code_type::value_type res = 0;
 
   // 先查找用户缓存，使用缓存。如果缓存正确则不需要拉取login表和user表
   player::ptr_t user = player_manager::me()->find_as<player>(req_body.user_id(), zone_id);
@@ -58,6 +58,13 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
     res = RPC_AWAIT_CODE_RESULT(await_io_task(get_shared_context(), user));
     if (res < 0) {
       set_response_code(res);
+      TASK_ACTION_RETURN_CODE(res);
+    }
+  }
+
+  if (user && user->has_initialization_task_id()) {
+    res = RPC_AWAIT_CODE_RESULT(user->await_initialization_task(get_shared_context()));
+    if (res < 0) {
       TASK_ACTION_RETURN_CODE(res);
     }
   }
@@ -125,6 +132,9 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
     }
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
+
+  // 设置初始化任务，其他任务需要等待玩家初始化完成才能继续
+  initialization_task_lock_guard initialization_guard{std::static_pointer_cast<player_cache>(user), get_task_id()};
 
   // 4. 先读本地缓存
   std::shared_ptr<session> my_sess = get_session();

@@ -71,6 +71,9 @@ class UTIL_SYMBOL_VISIBLE task_action_ss_req_base : public task_action_req_base<
   SERVER_FRAME_API std::shared_ptr<dispatcher_implement> get_dispatcher() const override;
   SERVER_FRAME_API const char *get_type_name() const override;
 
+  SERVER_FRAME_API static void add_prepare_handle(rpc::result_code_type (*fn)(rpc::context &,
+                                                                              task_action_ss_req_base &));
+
   SERVER_FRAME_API rpc::context::inherit_options get_inherit_option() const noexcept override;
   SERVER_FRAME_API rpc::context::trace_start_option get_trace_option() const noexcept override;
 
@@ -142,6 +145,7 @@ class UTIL_SYMBOL_VISIBLE task_action_ss_req_base : public task_action_req_base<
 
  private:
   std::list<message_type *> response_messages_;
+  static std::list<rpc::result_code_type (*)(rpc::context &, task_action_ss_req_base &)> prepare_handles_;
 };
 
 template <class TReqType, class TRspType>
