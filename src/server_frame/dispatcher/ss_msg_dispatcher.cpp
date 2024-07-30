@@ -93,7 +93,7 @@ static void rpc_metrics_mutable_record_rpc(const std::string &rpc_name, std::chr
   std::lock_guard<std::mutex> lock_guard{mgr.lock};
 
   if (!mgr.current_group) {
-    mgr.current_group = std::make_shared<ss_rpc_mertrics_group>();
+    mgr.current_group = atfw::memory::stl::make_shared<ss_rpc_mertrics_group>();
   }
   if (!mgr.current_group) {
     return;
@@ -993,7 +993,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_dns_lookup(gsl::string_view dom
     sequence = allocate_sequence();
   }
 
-  std::shared_ptr<dns_lookup_async_data> async_data = std::make_shared<dns_lookup_async_data>();
+  std::shared_ptr<dns_lookup_async_data> async_data = atfw::memory::stl::make_shared<dns_lookup_async_data>();
   if (!async_data) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }

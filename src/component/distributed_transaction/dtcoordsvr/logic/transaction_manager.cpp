@@ -9,6 +9,8 @@
 
 #include <config/logic_config.h>
 
+#include <memory/object_allocator.h>
+
 #include <utility/protobuf_mini_dumper.h>
 
 #include <rpc/db/distribute_transaction.h>
@@ -140,7 +142,7 @@ rpc::result_code_type transaction_manager::create_transaction(
   }
 
   transaction_lru_map_type::cache_ptr_type transaction_cache_ptr =
-      util::memory::make_strong_rc<transaction_lru_map_type::value_cache_type>(db_data->transaction_uuid());
+      atfw::memory::stl::make_strong_rc<transaction_lru_map_type::value_cache_type>(db_data->transaction_uuid());
   protobuf_move_message(transaction_cache_ptr->data_object, std::move(storage));
   lru_caches_.set_cache(transaction_cache_ptr);
 

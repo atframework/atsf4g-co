@@ -19,6 +19,8 @@
 
 #include <opentelemetry/trace/semantic_conventions.h>
 
+#include <memory/object_allocator.h>
+
 #include <dispatcher/task_manager.h>
 #include <rpc/rpc_utils.h>
 
@@ -48,7 +50,7 @@ DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::load(const
   finished_transactions_.clear();
 
   for (auto& transaction : storage.running_transaction()) {
-    auto transaction_ptr = util::memory::make_strong_rc<storage_type>();
+    auto transaction_ptr = atfw::memory::stl::make_strong_rc<storage_type>();
     if (!transaction_ptr) {
       FWLOGERROR("participator {} malloc transaction storage failed", get_participator_key());
       continue;
@@ -65,7 +67,7 @@ DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::load(const
   }
 
   for (auto& transaction : storage.finished_transaction()) {
-    auto transaction_ptr = util::memory::make_strong_rc<storage_type>();
+    auto transaction_ptr = atfw::memory::stl::make_strong_rc<storage_type>();
     if (!transaction_ptr) {
       FWLOGERROR("participator {} malloc transaction storage failed", get_participator_key());
       continue;
@@ -526,7 +528,7 @@ rpc::result_code_type transaction_participator_handle::add_running_transcation(r
   bool trigger_event = false;
   auto& transaction_ptr = running_transactions_[storage.metadata().transaction_uuid()];
   if (!transaction_ptr) {
-    transaction_ptr = util::memory::make_strong_rc<storage_type>(std::move(storage));
+    transaction_ptr = atfw::memory::stl::make_strong_rc<storage_type>(std::move(storage));
     trigger_event = true;
   } else {
     unlock(transaction_ptr);

@@ -6,6 +6,8 @@
 
 #include <prometheus/labels.h>
 
+#include <memory/object_allocator.h>
+
 #include <algorithm>
 #include <atomic>
 #include <mutex>
@@ -154,7 +156,7 @@ SERVER_FRAME_API PrometheusPushExporter::PrometheusPushExporter(const Prometheus
   }
   gateway_ = std::unique_ptr<::prometheus::Gateway>(new ::prometheus::Gateway{
       options_.host, options_.port, options_.jobname, labels, options_.username, options_.password});
-  collector_ = std::make_shared<PrometheusPushCollector>(options.max_collection_size);
+  collector_ = atfw::memory::stl::make_shared<PrometheusPushCollector>(options.max_collection_size);
 
   gateway_->RegisterCollectable(collector_);
 }

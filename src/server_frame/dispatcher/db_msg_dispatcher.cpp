@@ -410,7 +410,7 @@ int db_msg_dispatcher::cluster_init(const PROJECT_NAMESPACE_ID::config::db_group
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
-  conn = std::make_shared<hiredis::happ::cluster>();
+  conn = atfw::memory::stl::make_shared<hiredis::happ::cluster>();
   int32_t conn_idx = util::random_engine::random_between<int32_t>(0, conns.gateways_size());
 
   // 初始化
@@ -562,7 +562,7 @@ int db_msg_dispatcher::raw_init(const PROJECT_NAMESPACE_ID::config::db_group_cfg
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
-  conn = std::make_shared<hiredis::happ::raw>();
+  conn = atfw::memory::stl::make_shared<hiredis::happ::raw>();
 
   // 初始化- raw入口唯一
   conn->init(conns.gateways(0).host(), static_cast<uint16_t>(conns.gateways(0).port()));

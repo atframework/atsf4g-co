@@ -24,6 +24,8 @@
 #  include <libcopp/coroutine/generator_promise.h>
 #endif
 
+#include <memory/object_allocator.h>
+
 #include <memory>
 #include <unordered_map>
 #include <utility>
@@ -473,7 +475,7 @@ class task_manager {
    */
   template <typename TAction>
   UTIL_FORCEINLINE task_action_creator_t make_task_creator(const atframework::DispatcherOptions *opt) {
-    return std::make_shared<task_action_maker_t<TAction>>(opt);
+    return atfw::memory::stl::make_shared<task_action_maker_t<TAction>>(opt);
   }
 
   /**

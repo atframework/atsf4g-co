@@ -89,6 +89,30 @@ static int show_server_time(util::cli::callback_param params) {
   return 0;
 }
 
+static int send_notification(util::cli::callback_param params) {
+  if (params.get_params_number() < 3) {
+    ::atapp::app::add_custom_command_rsp(params,
+                                         "send-notification <level> <event name> <event message>    send notification "
+                                         "message(level: crirical,error,warn,notice");
+    return 0;
+  }
+
+  rpc::telemetry::notification_domain domain = rpc::telemetry::notification_domain::kNotice;
+  if (0 == UTIL_STRFUNC_STRNCASE_CMP("crirical", params[0]->to_string(), 8)) {
+    domain = rpc::telemetry::notification_domain::kCritical;
+  } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("error", params[0]->to_string(), 5)) {
+    domain = rpc::telemetry::notification_domain::kError;
+  } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("warn", params[0]->to_string(), 4)) {
+    domain = rpc::telemetry::notification_domain::kWarning;
+  }
+
+  rpc::context ctx{rpc::context::create_without_task()};
+  rpc::telemetry::opentelemetry_utility::send_notification_event(ctx, domain, params[1]->to_cpp_string(),
+                                                                 params[2]->to_cpp_string(), {{"source", "command"}});
+  ::atapp::app::add_custom_command_rsp(params, "success");
+  return 0;
+}
+
 static int debug_receive_stop_when_running(util::cli::callback_param) {
   task_action_auto_save_objects::debug_receive_stop_when_running = true;
   return 0;
@@ -240,21 +264,24 @@ int logic_server_setup_common(atapp::app &app, const logic_server_common_module_
                    app.set_metadata_label(opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironment,
                                           params[0]->to_cpp_string());
                  })
-      ->set_help_msg("-env [text]                            set a env name.");
+      ->set_help_msg("-env [text]                                               set a env name.");
 
   util::cli::cmd_option_ci::ptr_type cmd_mgr = app.get_command_manager();
   cmd_mgr->bind_cmd("show-configure", show_configure_handler)
-      ->set_help_msg("show-configure                         show service configure");
+      ->set_help_msg("show-configure                                            show service configure");
   cmd_mgr->bind_cmd("debug-stop-when-running-auto-save", debug_receive_stop_when_running)
-      ->set_help_msg(
-          "debug-stop-when-running-auto-save debug stop when running "
-          "task_action_auto_save_objects");
+      ->set_help_msg("debug-stop-when-running-auto-save debug stop when running task_action_auto_save_objects");
   cmd_mgr->bind_cmd("show-server-time", show_server_time)
-      ->set_help_msg("show-server-time                       show server's local time");
+      ->set_help_msg("show-server-time                                          show server's local time");
+  cmd_mgr->bind_cmd("send-notification", send_notification)
+      ->set_help_msg(
+          "send-notification <level> <event name> <event message>    send notification message(level: "
+          "crirical,error,warn,notice)");
   cmd_mgr->bind_cmd("list-battlesvr", show_battlesvr_by_version)
-      ->set_help_msg("list-battlesvr                         list all ");
+      ->set_help_msg("list-battlesvr                                            list all ");
 
-  std::shared_ptr<logic_server_common_module> logic_mod = std::make_shared<logic_server_common_module>(conf);
+  std::shared_ptr<logic_server_common_module> logic_mod =
+      atfw::memory::stl::make_shared<logic_server_common_module>(conf);
   if (!logic_mod) {
     fprintf(stderr, "create logic_server_common_module failed\n");
     return -1;
@@ -369,7 +396,7 @@ logic_server_common_module::logic_server_common_module(const logic_server_common
       server_remote_conf_global_version_(0),
       server_remote_conf_zone_version_(0),
       server_remote_conf_next_update_time_(0) {
-  stats_ = std::make_shared<stats_data_t>();
+  stats_ = atfw::memory::stl::make_shared<stats_data_t>();
   memset(&stats_->last_checkpoint_usage, 0, sizeof(stats_->last_checkpoint_usage));
   stats_->collect_sequence.store(0, std::memory_order_release);
 
@@ -1080,7 +1107,7 @@ void logic_server_common_module::add_service_type_id_index(const atapp::etcd_dis
   uint64_t type_id = node->get_discovery_info().type_id();
   logic_server_type_discovery_set_t &type_index = service_type_id_index_[type_id];
   if (!type_index.all_index) {
-    type_index.all_index = util::memory::make_strong_rc<atapp::etcd_discovery_set>();
+    type_index.all_index = atfw::memory::stl::make_strong_rc<atapp::etcd_discovery_set>();
   }
 
   if (!type_index.all_index) {
@@ -1097,7 +1124,7 @@ void logic_server_common_module::add_service_type_id_index(const atapp::etcd_dis
 
   atapp::etcd_discovery_set::ptr_t &zone_index = type_index.zone_index[zone_id];
   if (!zone_index) {
-    zone_index = util::memory::make_strong_rc<atapp::etcd_discovery_set>();
+    zone_index = atfw::memory::stl::make_strong_rc<atapp::etcd_discovery_set>();
   }
 
   if (!zone_index) {
@@ -1161,7 +1188,7 @@ void logic_server_common_module::add_service_type_name_index(const atapp::etcd_d
   const std::string &type_name = node->get_discovery_info().type_name();
   logic_server_type_discovery_set_t &type_index = service_type_name_index_[type_name];
   if (!type_index.all_index) {
-    type_index.all_index = util::memory::make_strong_rc<atapp::etcd_discovery_set>();
+    type_index.all_index = atfw::memory::stl::make_strong_rc<atapp::etcd_discovery_set>();
   }
 
   if (!type_index.all_index) {
@@ -1178,7 +1205,7 @@ void logic_server_common_module::add_service_type_name_index(const atapp::etcd_d
 
   atapp::etcd_discovery_set::ptr_t &zone_index = type_index.zone_index[zone_id];
   if (!zone_index) {
-    zone_index = util::memory::make_strong_rc<atapp::etcd_discovery_set>();
+    zone_index = atfw::memory::stl::make_strong_rc<atapp::etcd_discovery_set>();
   }
 
   if (!zone_index) {
@@ -1241,7 +1268,7 @@ void logic_server_common_module::add_service_zone_index(const atapp::etcd_discov
   uint64_t zone_id = node->get_discovery_info().area().zone_id();
   atapp::etcd_discovery_set::ptr_t &zone_index = service_zone_index_[zone_id];
   if (!zone_index) {
-    zone_index = util::memory::make_strong_rc<atapp::etcd_discovery_set>();
+    zone_index = atfw::memory::stl::make_strong_rc<atapp::etcd_discovery_set>();
   }
 
   if (!zone_index) {

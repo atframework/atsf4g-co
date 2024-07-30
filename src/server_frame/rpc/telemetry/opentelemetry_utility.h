@@ -36,6 +36,8 @@
 
 namespace rpc {
 
+class context;
+
 namespace telemetry {
 struct group_type;
 
@@ -43,6 +45,13 @@ enum class metrics_observable_type : int32_t {
   kGauge = 0,
   kCounter = 1,
   kUnDownCounter = 2,
+};
+
+enum class notification_domain : int32_t {
+  kNotice = 0,
+  kWarning = 1,
+  kError = 2,
+  kCritical = 3,
 };
 
 class opentelemetry_utility {
@@ -204,6 +213,15 @@ class opentelemetry_utility {
         result, std::forward<ValueType>(value), __lifetime,
         attribute_span_type{extend_attributes.begin(), extend_attributes.end()});
   }
+
+  SERVER_FRAME_API static void send_notification_event(rpc::context& ctx, notification_domain event_domain,
+                                                       gsl::string_view event_name, gsl::string_view message,
+                                                       attribute_span_type attrbites = {});
+
+  SERVER_FRAME_API static void send_notification_event(
+      rpc::context& ctx, notification_domain event_domain, gsl::string_view event_name, gsl::string_view message,
+      std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
+          attrbites);
 };
 }  // namespace telemetry
 }  // namespace rpc

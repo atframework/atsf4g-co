@@ -4,8 +4,14 @@
 
 #include "rpc/telemetry/exporter/prometheus_file_exporter.h"
 
+#include <config/atframe_utils_build_feature.h>
+
+#include <log/log_wrapper.h>
+
 #include <prometheus/labels.h>
 #include <prometheus/text_serializer.h>
+
+#include <memory/object_allocator.h>
 
 #include <opentelemetry/common/macros.h>
 #include <opentelemetry/nostd/string_view.h>
@@ -23,6 +29,9 @@
 #include <ostream>
 #include <string>
 #include <vector>
+#if LIBATFRAME_UTILS_ENABLE_EXCEPTION
+#  include <exception>
+#endif
 
 #if !defined(__CYGWIN__) && defined(_WIN32)
 #  ifndef WIN32_LEAN_AND_MEAN
@@ -557,7 +566,7 @@ class UTIL_SYMBOL_LOCAL PrometheusFileBackend {
    */
   explicit PrometheusFileBackend(const PrometheusFileExporterOptions &options)
       : options_(options), is_initialized_{false}, check_file_path_interval_{0} {
-    file_ = std::make_shared<FileStats>();
+    file_ = atfw::memory::stl::make_shared<FileStats>();
     file_->is_shutdown.store(false);
     file_->rotate_index = 0;
     file_->written_size = 0;
@@ -774,7 +783,7 @@ class UTIL_SYMBOL_LOCAL PrometheusFileBackend {
     }
     file_path[file_path_size] = 0;
 
-    std::shared_ptr<std::ofstream> of = std::make_shared<std::ofstream>();
+    std::shared_ptr<std::ofstream> of = atfw::memory::stl::make_shared<std::ofstream>();
 
     std::string directory_name = FileSystemUtil::DirName(file_path);
     if (!directory_name.empty() && !FileSystemUtil::IsExist(directory_name.c_str())) {
@@ -921,62 +930,73 @@ class UTIL_SYMBOL_LOCAL PrometheusFileBackend {
       return;
     }
 
-    std::lock_guard<std::mutex> lock_guard_caller{file_->background_thread_lock};
-    if (file_->background_flush_thread) {
-      return;
+#if LIBATFRAME_UTILS_ENABLE_EXCEPTION
+    try {
+#endif
+
+      std::lock_guard<std::mutex> lock_guard_caller{file_->background_thread_lock};
+      if (file_->background_flush_thread) {
+        return;
+      }
+
+      std::shared_ptr<FileStats> concurrency_file = file_;
+      std::chrono::microseconds flush_interval = options_.flush_interval;
+      file_->background_flush_thread.reset(new std::thread([concurrency_file, flush_interval]() {
+        std::chrono::system_clock::time_point last_free_job_timepoint = std::chrono::system_clock::now();
+        std::size_t last_metric_family_count = 0;
+
+        while (true) {
+          std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+          // Exit flush thread if there is not data to flush more than one minute.
+          if (now - last_free_job_timepoint > std::chrono::minutes{1}) {
+            break;
+          }
+
+          if (concurrency_file->is_shutdown.load(std::memory_order_acquire)) {
+            break;
+          }
+
+          {
+            std::unique_lock<std::mutex> lk(concurrency_file->background_thread_waker_lock);
+            concurrency_file->background_thread_waker_cv.wait_for(lk, flush_interval);
+          }
+
+          {
+            std::size_t current_metric_family_count =
+                concurrency_file->metric_family_count.load(std::memory_order_acquire);
+            std::lock_guard<std::mutex> lock_guard{concurrency_file->file_lock};
+            if (current_metric_family_count != last_metric_family_count) {
+              last_metric_family_count = current_metric_family_count;
+              last_free_job_timepoint = std::chrono::system_clock::now();
+            }
+
+            if (concurrency_file->current_file) {
+              concurrency_file->current_file->flush();
+            }
+
+            concurrency_file->flushed_metric_family_count.store(current_metric_family_count, std::memory_order_release);
+          }
+
+          concurrency_file->background_thread_waiter_cv.notify_all();
+        }
+
+        // Detach running thread because it will exit soon
+        std::unique_ptr<std::thread> background_flush_thread;
+        {
+          std::lock_guard<std::mutex> lock_guard_inner{concurrency_file->background_thread_lock};
+          background_flush_thread.swap(concurrency_file->background_flush_thread);
+        }
+        if (background_flush_thread && background_flush_thread->joinable()) {
+          background_flush_thread->detach();
+        }
+      }));
+#if LIBATFRAME_UTILS_ENABLE_EXCEPTION
+    } catch (std::exception &e) {
+      FWLOGERROR("SpawnBackgroundWorkThread for PrometheusFileExporter but got exception: {}", e.what());
+    } catch (...) {
+      FWLOGERROR("{}", "SpawnBackgroundWorkThread for PrometheusFileExporter but got unknown exception");
     }
-
-    std::shared_ptr<FileStats> concurrency_file = file_;
-    std::chrono::microseconds flush_interval = options_.flush_interval;
-    file_->background_flush_thread.reset(new std::thread([concurrency_file, flush_interval]() {
-      std::chrono::system_clock::time_point last_free_job_timepoint = std::chrono::system_clock::now();
-      std::size_t last_metric_family_count = 0;
-
-      while (true) {
-        std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
-        // Exit flush thread if there is not data to flush more than one minute.
-        if (now - last_free_job_timepoint > std::chrono::minutes{1}) {
-          break;
-        }
-
-        if (concurrency_file->is_shutdown.load(std::memory_order_acquire)) {
-          break;
-        }
-
-        {
-          std::unique_lock<std::mutex> lk(concurrency_file->background_thread_waker_lock);
-          concurrency_file->background_thread_waker_cv.wait_for(lk, flush_interval);
-        }
-
-        {
-          std::size_t current_metric_family_count =
-              concurrency_file->metric_family_count.load(std::memory_order_acquire);
-          std::lock_guard<std::mutex> lock_guard{concurrency_file->file_lock};
-          if (current_metric_family_count != last_metric_family_count) {
-            last_metric_family_count = current_metric_family_count;
-            last_free_job_timepoint = std::chrono::system_clock::now();
-          }
-
-          if (concurrency_file->current_file) {
-            concurrency_file->current_file->flush();
-          }
-
-          concurrency_file->flushed_metric_family_count.store(current_metric_family_count, std::memory_order_release);
-        }
-
-        concurrency_file->background_thread_waiter_cv.notify_all();
-      }
-
-      // Detach running thread because it will exit soon
-      std::unique_ptr<std::thread> background_flush_thread;
-      {
-        std::lock_guard<std::mutex> lock_guard_inner{concurrency_file->background_thread_lock};
-        background_flush_thread.swap(concurrency_file->background_flush_thread);
-      }
-      if (background_flush_thread && background_flush_thread->joinable()) {
-        background_flush_thread->detach();
-      }
-    }));
+#endif
   }
 
  private:
@@ -1009,7 +1029,9 @@ class UTIL_SYMBOL_LOCAL PrometheusFileBackend {
 };
 
 SERVER_FRAME_API PrometheusFileExporter::PrometheusFileExporter(const PrometheusFileExporterOptions &options)
-    : options_(options), is_shutdown_(false), backend_{std::make_shared<PrometheusFileBackend>(options)} {}
+    : options_(options),
+      is_shutdown_(false),
+      backend_{atfw::memory::stl::make_shared<PrometheusFileBackend>(options)} {}
 
 SERVER_FRAME_API ::opentelemetry::sdk::metrics::AggregationTemporality
 PrometheusFileExporter::GetAggregationTemporality(::opentelemetry::sdk::metrics::InstrumentType) const noexcept {

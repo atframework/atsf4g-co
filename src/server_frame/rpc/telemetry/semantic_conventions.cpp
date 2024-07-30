@@ -15,6 +15,7 @@ constexpr const char *semantic_conventions::kGroupNameDefault;
 constexpr const char *semantic_conventions::kGroupNameHpa;
 constexpr const char *semantic_conventions::kGroupNameDedicatedServer;
 constexpr const char *semantic_conventions::kGroupNameCsActor;
+constexpr const char *semantic_conventions::kGroupNameNotification;
 
 constexpr const char *semantic_conventions::kAtRpcResultCode;
 constexpr const char *semantic_conventions::kAtRpcResponseCode;

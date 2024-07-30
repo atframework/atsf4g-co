@@ -16,6 +16,8 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <memory/object_allocator.h>
+
 #include <utility/protobuf_mini_dumper.h>
 
 #include <config/logic_config.h>
@@ -63,7 +65,8 @@ void user_async_jobs_manager::init_from_table_data(rpc::context&,
     for (int i = 0; i < player_table.async_job_blob_data().retry_jobs_size(); ++i) {
       auto& retry_job = player_table.async_job_blob_data().retry_jobs(i);
       retry_jobs_[retry_job.job_type()][retry_job.job_data().action_uuid()] =
-          util::memory::make_strong_rc<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>(retry_job.job_data());
+          atfw::memory::stl::make_strong_rc<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>(
+              retry_job.job_data());
     }
 
     std::unordered_set<int32_t> cleanup_queue;
@@ -147,7 +150,7 @@ bool user_async_jobs_manager::is_async_jobs_task_running() const {
 }
 
 bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
-    if (!owner_->is_inited()) {
+  if (!owner_->is_inited()) {
     return false;
   }
 

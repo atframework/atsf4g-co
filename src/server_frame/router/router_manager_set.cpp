@@ -156,7 +156,7 @@ SERVER_FRAME_API int router_manager_set::stop() {
   task_action_router_close_manager_set::ctor_param_t ctor_param;
   task_type_trait::id_type tid = 0;
 
-  ctor_param.pending_list = std::make_shared<task_action_router_close_manager_set::pending_list_t>();
+  ctor_param.pending_list = atfw::memory::stl::make_shared<task_action_router_close_manager_set::pending_list_t>();
   if (ctor_param.pending_list) {
     std::unordered_set<router_object_base::key_t> recheck_set;
     ctor_param.pending_list->reserve(timers_.default_timer_list.size() + timers_.fast_timer_list.size());
@@ -577,7 +577,7 @@ SERVER_FRAME_API std::shared_ptr<router_manager_metrics_data> router_manager_set
   } while (false);
 
   // 如果不存在创建后上写锁添加
-  ret = std::make_shared<router_manager_metrics_data>();
+  ret = atfw::memory::stl::make_shared<router_manager_metrics_data>();
   if (!ret) {
     return ret;
   }
@@ -591,7 +591,7 @@ SERVER_FRAME_API std::shared_ptr<router_manager_metrics_data> router_manager_set
     util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{metrics_data_.metric_lock};
     auto &manager_metrics_data = metrics_data_.metric_data[manager_name];
     if (!manager_metrics_data) {
-      manager_metrics_data = std::make_shared<router_manager_metrics_data>();
+      manager_metrics_data = atfw::memory::stl::make_shared<router_manager_metrics_data>();
     }
 
     metrics_data_.metric_data[manager_name] = ret;

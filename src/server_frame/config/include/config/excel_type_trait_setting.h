@@ -6,6 +6,8 @@
 
 #include "memory/rc_ptr.h"
 
+#include "memory/object_allocator.h"
+
 #include "config/server_frame_build_feature.h"
 
 #include "config/excel/config_traits.h"
@@ -20,7 +22,7 @@ struct EXCEL_CONFIG_SYMBOL_VISIBLE config_traits<type_guard> : public type_guard
 
   template <class Y, class... Args>
   inline static util::memory::strong_rc_ptr<Y> make_shared(Args&&... args) {
-    return util::memory::make_strong_rc<Y>(std::forward<Args>(args)...);
+    return atfw::memory::stl::make_strong_rc<Y>(std::forward<Args>(args)...);
   }
 
   template <class Y, class... Args>

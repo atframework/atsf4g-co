@@ -112,7 +112,7 @@ class router_manager : public router_manager_base {
       int res;
       out = get_cache(key);
       if (!out) {
-        out = std::make_shared<cache_t>(key);
+        out = atfw::memory::stl::make_shared<cache_t>(key);
         if (!out) {
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
         }
@@ -220,7 +220,7 @@ class router_manager : public router_manager_base {
       rpc::result_code_type::value_type res;
       out = get_cache(key);
       if (!out) {
-        out = std::make_shared<cache_t>(key);
+        out = atfw::memory::stl::make_shared<cache_t>(key);
         if (!out) {
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
         }

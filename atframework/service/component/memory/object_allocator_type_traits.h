@@ -240,7 +240,7 @@ struct UTIL_SYMBOL_VISIBLE
   template <typename U>
   using rebind_traits = allocator_traits<rebind_alloc<U>>;
 
-  EXPLICIT_NODISCARD_ATTR UTIL_FORCEINLINE static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR pointer
+  EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR pointer
   allocate(allocator_type& a, size_type n) {
     return a.allocate(n);
   }
@@ -248,13 +248,13 @@ struct UTIL_SYMBOL_VISIBLE
  private:
   // allocate
   template <typename AllocOther>
-  UTIL_FORCEINLINE static auto _S_allocate(AllocOther& __a, size_type __n, const_void_pointer __hint,
+  UTIL_SYMBOL_VISIBLE inline static auto _S_allocate(AllocOther& __a, size_type __n, const_void_pointer __hint,
                                            int) -> decltype(__a.allocate(__n, __hint)) {
     return __a.allocate(__n, __hint);
   }
 
   template <typename AllocOther>
-  UTIL_FORCEINLINE static pointer _S_allocate(AllocOther& __a, size_type __n, ...) {
+  UTIL_SYMBOL_VISIBLE inline static pointer _S_allocate(AllocOther& __a, size_type __n, ...) {
     return __a.allocate(__n);
   }
 
@@ -273,7 +273,7 @@ struct UTIL_SYMBOL_VISIBLE
   };
 
   template <typename U, typename... _Args>
-  UTIL_FORCEINLINE static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR
+  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR
       util::nostd::enable_if_t<__construct_helper<U, _Args...>::value, void>
       _S_construct(allocator_type& __a, U* __p,
                    _Args&&... __args) noexcept(noexcept(__a.construct(__p, std::forward<_Args>(__args)...))) {
@@ -281,7 +281,7 @@ struct UTIL_SYMBOL_VISIBLE
   }
 
   template <typename U, typename... _Args>
-  UTIL_FORCEINLINE static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR util::nostd::enable_if_t<
+  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR util::nostd::enable_if_t<
       !__construct_helper<U, _Args...>::value && ::std::is_constructible<U, _Args...>::value, void>
   _S_construct(allocator_type&, U* __p, _Args&&... __args) noexcept(std::is_nothrow_constructible<U, _Args...>::value) {
     ::atfw::memory::object_allocator_metrics_controller::add_constructor_counter_template<value_type>(
@@ -296,13 +296,13 @@ struct UTIL_SYMBOL_VISIBLE
 
   // destroy
   template <typename AllocatorOther, typename U>
-  UTIL_FORCEINLINE static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR auto _S_destroy(
+  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR auto _S_destroy(
       AllocatorOther& __a, U* __p, int) noexcept(noexcept(__a.destroy(__p))) -> decltype(__a.destroy(__p)) {
     __a.destroy(__p);
   }
 
   template <typename AllocatorOther, typename U>
-  UTIL_FORCEINLINE static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR void _S_destroy(AllocatorOther&, U* __p, ...) noexcept(
+  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR void _S_destroy(AllocatorOther&, U* __p, ...) noexcept(
       std::is_nothrow_destructible<U>::value) {
     ::atfw::memory::object_allocator_metrics_controller::add_destructor_counter_template<value_type>(
         reinterpret_cast<void*>(__p));
@@ -316,64 +316,64 @@ struct UTIL_SYMBOL_VISIBLE
 
   // max_size
   template <typename AllocOther>
-  UTIL_FORCEINLINE static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR auto _S_max_size(AllocOther& __a,
+  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR auto _S_max_size(AllocOther& __a,
                                                                                   int) -> decltype(__a.max_size()) {
     return __a.max_size();
   }
 
   template <typename AllocOther>
-  UTIL_FORCEINLINE static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR size_type _S_max_size(AllocOther&, ...) {
+  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR size_type _S_max_size(AllocOther&, ...) {
     return ::std::numeric_limits<size_type>::max();
   }
 
   // select_on_container_copy_construction
   template <typename AllocOther>
-  UTIL_FORCEINLINE static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR auto _S_select(AllocOther& __a, int)
+  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR auto _S_select(AllocOther& __a, int)
       -> decltype(__a.select_on_container_copy_construction()) {
     return __a.select_on_container_copy_construction();
   }
 
   template <typename AllocOther>
-  UTIL_FORCEINLINE static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR AllocOther _S_select(AllocOther& __a, ...) {
+  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR AllocOther _S_select(AllocOther& __a, ...) {
     return __a;
   }
 
  public:
-  EXPLICIT_NODISCARD_ATTR UTIL_FORCEINLINE static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR pointer
+  EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR pointer
   allocate(allocator_type& a, size_type n, const_void_pointer hint) {
     return _S_allocate(a, n, hint, 0);
   }
 
 #if ((defined(__cplusplus) && __cplusplus >= 202302L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 202302L)) && \
     defined(__cpp_lib_allocate_at_least)
-  EXPLICIT_NODISCARD_ATTR UTIL_FORCEINLINE static UTIL_CONFIG_CONSTEXPR ::std::allocation_result<pointer, size_type>
+  EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE inline static UTIL_CONFIG_CONSTEXPR ::std::allocation_result<pointer, size_type>
   allocate_at_least(allocator_type& a, size_type n) {
     return a.allocate_at_least(n);
   }
 #endif
 
-  UTIL_FORCEINLINE static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR void deallocate(allocator_type& a, pointer p,
+  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR void deallocate(allocator_type& a, pointer p,
                                                                                  size_type n) {
     a.deallocate(p, n);
   }
 
   template <class T, class... Args>
-  UTIL_FORCEINLINE static UTIL_CONFIG_CONSTEXPR void construct(allocator_type& a, T* p, Args&&... args) noexcept(
+  UTIL_SYMBOL_VISIBLE inline static UTIL_CONFIG_CONSTEXPR void construct(allocator_type& a, T* p, Args&&... args) noexcept(
       noexcept(_S_construct(a, p, std::forward<Args>(args)...))) {
     _S_construct(a, p, std::forward<Args>(args)...);
   }
 
   template <class T>
-  UTIL_FORCEINLINE static UTIL_CONFIG_CONSTEXPR void destroy(allocator_type& a,
+  UTIL_SYMBOL_VISIBLE inline static UTIL_CONFIG_CONSTEXPR void destroy(allocator_type& a,
                                                              T* p) noexcept(noexcept(_S_destroy(a, p, 0))) {
     _S_destroy(a, p, 0);
   }
 
-  UTIL_FORCEINLINE static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR size_type max_size(allocator_type& a) noexcept {
+  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR size_type max_size(allocator_type& a) noexcept {
     return _S_max_size(a, 0);
   }
 
-  UTIL_FORCEINLINE static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator_type
+  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator_type
   select_on_container_copy_construction(const allocator_type& a) {
     return _S_select(a, 0);
   }

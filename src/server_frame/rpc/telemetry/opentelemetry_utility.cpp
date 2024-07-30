@@ -4,14 +4,23 @@
 
 #include "rpc/telemetry/opentelemetry_utility.h"
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <google/protobuf/reflection.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
+#include <opentelemetry/trace/semantic_conventions.h>
 
 #include <gsl/select-gsl.h>
 #include <log/log_wrapper.h>
+#include <time/time_utility.h>
+
+#include <memory/object_allocator.h>
 
 #include <functional>
 #include <memory>
@@ -21,7 +30,9 @@
 #include <unordered_map>
 #include <vector>
 
+#include "rpc/rpc_context.h"
 #include "rpc/telemetry/rpc_global_service.h"
+#include "rpc/telemetry/semantic_conventions.h"
 
 // Patch for Windows SDK
 #if defined(GetMessage)
@@ -31,7 +42,48 @@
 namespace rpc {
 
 namespace telemetry {
+
+static constexpr const char* kNotificationNotice = "atframework.notifaction.notice";
+static constexpr const char* kkNotificationWarning = "atframework.notifaction.warning";
+static constexpr const char* kkNotificationError = "atframework.notifaction.error";
+static constexpr const char* kkNotificationCritical = "atframework.notifaction.critial";
+
 namespace {
+
+static opentelemetry::nostd::string_view get_notification_event_log_domain(notification_domain domain) {
+  switch (domain) {
+    case notification_domain::kCritical: {
+      return kkNotificationCritical;
+    }
+    case notification_domain::kError: {
+      return kkNotificationError;
+    }
+    case notification_domain::kWarning: {
+      return kkNotificationWarning;
+    }
+    default: {
+      return kNotificationNotice;
+    }
+  }
+}
+
+static opentelemetry::logs::Severity get_notification_log_level(notification_domain domain) {
+  switch (domain) {
+    case notification_domain::kCritical: {
+      return opentelemetry::logs::Severity::kFatal;
+    }
+    case notification_domain::kError: {
+      return opentelemetry::logs::Severity::kError;
+    }
+    case notification_domain::kWarning: {
+      return opentelemetry::logs::Severity::kWarn;
+    }
+    default: {
+      return opentelemetry::logs::Severity::kInfo;
+    }
+  }
+}
+
 static void opentelemetry_utility_protobuf_to_otel_attributes_message(
     const google::protobuf::Reflection* reflection, const google::protobuf::Message& message,
     opentelemetry_utility::attributes_map_type& output, gsl::string_view key_prefix);
@@ -477,7 +529,7 @@ SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_int64(
     return false;
   }
 
-  auto handle = std::make_shared<opentelemetry_utility_global_metrics_item>();
+  auto handle = atfw::memory::stl::make_shared<opentelemetry_utility_global_metrics_item>();
   if (!handle) {
     return false;
   }
@@ -554,7 +606,7 @@ SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_double
     return false;
   }
 
-  auto handle = std::make_shared<opentelemetry_utility_global_metrics_item>();
+  auto handle = atfw::memory::stl::make_shared<opentelemetry_utility_global_metrics_item>();
   if (!handle) {
     return false;
   }
@@ -588,6 +640,52 @@ SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_double
       reinterpret_cast<void*>(handle.get()));
 
   return true;
+}
+
+SERVER_FRAME_API void opentelemetry_utility::send_notification_event(rpc::context& ctx,
+                                                                     notification_domain event_domain,
+                                                                     gsl::string_view event_name,
+                                                                     gsl::string_view message,
+                                                                     attribute_span_type attrbites) {
+  if (event_name.empty()) {
+    return;
+  }
+
+  auto try_group =
+      rpc::telemetry::global_service::get_group(rpc::telemetry::semantic_conventions::kGroupNameNotification);
+  if (!try_group) {
+    try_group = rpc::telemetry::global_service::get_default_group();
+  }
+  auto logger = rpc::telemetry::global_service::get_logger(try_group, "notification");
+  if (!logger) {
+    return;
+  }
+
+  attribute_pair_type standard_attributes[2] = {
+      attribute_pair_type{rpc::telemetry::semantic_conventions::kEventDomain,
+                          get_notification_event_log_domain(event_domain)},
+      attribute_pair_type{opentelemetry::trace::SemanticConventions::kEventName,
+                          opentelemetry::common::AttributeValue{
+                              opentelemetry::nostd::string_view{event_name.data(), event_name.size()}}}};
+
+  auto& trace_span = ctx.get_trace_span();
+  if (trace_span) {
+    logger->EmitLogRecord(get_notification_log_level(event_domain), trace_span->GetContext(), attrbites,
+                          attribute_span_type(standard_attributes), util::time::time_utility::sys_now(),
+                          opentelemetry::nostd::string_view{message.data(), message.size()});
+  } else {
+    logger->EmitLogRecord(get_notification_log_level(event_domain), attrbites, attribute_span_type(standard_attributes),
+                          util::time::time_utility::sys_now(),
+                          opentelemetry::nostd::string_view{message.data(), message.size()});
+  }
+}
+
+SERVER_FRAME_API void opentelemetry_utility::send_notification_event(
+    rpc::context& ctx, notification_domain event_domain, gsl::string_view event_name, gsl::string_view message,
+    std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
+        attrbites) {
+  send_notification_event(ctx, event_domain, event_name, message,
+                          attribute_span_type{attrbites.begin(), attrbites.end()});
 }
 
 }  // namespace telemetry

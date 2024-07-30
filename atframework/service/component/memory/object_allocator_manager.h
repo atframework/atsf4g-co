@@ -26,7 +26,7 @@ namespace memory {
 
 template <class T>
 struct object_allocator_default_backend {
-  using allocator = ::std::allocator<T>;
+  using allocator = ::std::allocator<util::nostd::remove_cv_t<T>>;
 };
 
 template <class T>
@@ -36,6 +36,17 @@ template <class T>
 struct object_allocator_backend : public object_allocator_default_backend<T> {};
 
 class object_allocator_manager {
+ private:
+  template <class T, class = util::nostd::enable_if_t<!std::is_const<T>::value>>
+  UTIL_SYMBOL_VISIBLE inline static T* to_mutable_address(T* in) noexcept {
+    return in;
+  }
+
+  template <class T, class = util::nostd::enable_if_t<std::is_const<T>::value>>
+  UTIL_SYMBOL_VISIBLE inline static util::nostd::remove_const_t<T>* to_mutable_address(T* in) noexcept {
+    return const_cast<util::nostd::remove_const_t<T>*>(in);
+  }
+
  public:
   template <class T, class BackendDelete = ::std::default_delete<T>>
   struct UTIL_SYMBOL_VISIBLE deletor;
@@ -67,20 +78,32 @@ class object_allocator_manager {
 
   template <class T, class BackendDelete>
   struct UTIL_SYMBOL_VISIBLE deletor {
-    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor() noexcept {}
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor() noexcept(
+        std::is_nothrow_constructible<BackendDelete>::value) {}
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(const deletor&) = default;
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(deletor&&) = default;
 
     template <class D>
-    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(D&& d) noexcept : backend_delete_(std::forward<D>(d)) {}
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(D&& d) noexcept(
+        std::is_nothrow_constructible<BackendDelete, D>::value) {
+      new (backend_deletor_buffer()) BackendDelete(::std::forward<D>(d));
+    }
 
     template <class Up, class UpBackendDelete, class = util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
-    ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(const deletor<Up, UpBackendDelete>& other) noexcept
-        : backend_delete_(other.backend_delete_) {}
+    ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(const deletor<Up, UpBackendDelete>& other) noexcept(
+        std::is_nothrow_constructible<BackendDelete, UpBackendDelete>::value) {
+      new (backend_deletor_buffer()) BackendDelete(other.backend_delete_);
+    }
 
     template <class Up, class UpBackendDelete, class = util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
-    ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(deletor<Up, UpBackendDelete>&& other) noexcept
-        : backend_delete_(std::move(other.backend_delete_)) {}
+    ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(deletor<Up, UpBackendDelete>&& other) noexcept(
+        std::is_nothrow_constructible<BackendDelete, UpBackendDelete>::value) {
+      new (backend_deletor_buffer()) BackendDelete(std::move(other.backend_delete_));
+    }
+
+    inline ~deletor() noexcept(std::is_nothrow_destructible<BackendDelete>::value) {
+      backend_deletor()->~BackendDelete();
+    }
 
     void operator()(T* ptr) const {
       if (nullptr != ptr) {
@@ -89,14 +112,32 @@ class object_allocator_manager {
         object_allocator_metrics_controller::add_deallocate_counter(
             object_allocator_metrics_controller::helper<T>::get_instance(), 1);
       }
-      backend_delete_(ptr);
+      (*backend_deletor())(ptr);
     }
 
-    BackendDelete backend_delete_;
+   private:
+    template <class, class>
+    friend struct UTIL_SYMBOL_VISIBLE deletor;
+
+    inline void* backend_deletor_buffer() noexcept { return reinterpret_cast<void*>(&backend_delete_buffer_); }
+
+    inline const void* backend_deletor_buffer() const noexcept {
+      return reinterpret_cast<const void*>(&backend_delete_buffer_);
+    }
+
+    inline BackendDelete* backend_deletor() noexcept {
+      return reinterpret_cast<BackendDelete*>(backend_deletor_buffer());
+    }
+
+    inline const BackendDelete* backend_deletor() const noexcept {
+      return reinterpret_cast<const BackendDelete*>(backend_deletor_buffer());
+    }
+
+    util::nostd::aligned_storage_t<sizeof(BackendDelete), alignof(BackendDelete)> backend_delete_buffer_;
   };
 
   template <class T, class BackendAllocator = ::std::allocator<T>>
-  struct allocator {
+  struct UTIL_SYMBOL_VISIBLE allocator {
     using background_allocator_type = BackendAllocator;
     using value_type = T;
     using size_type = std::size_t;
@@ -104,16 +145,26 @@ class object_allocator_manager {
     using propagate_on_container_move_assignment = std::true_type;
 
     // constructors
-    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator() noexcept {}
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator() noexcept(
+        std::is_nothrow_constructible<background_allocator_type>::value) {}
 
-    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator(const BackendAllocator& backend) noexcept
-        : backend_allocator_{backend} {}
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator(const BackendAllocator& backend) noexcept(
+        std::is_nothrow_constructible<background_allocator_type, BackendAllocator>::value) {
+      new (backend_allocator_buffer()) background_allocator_type(backend);
+    }
 
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator(const allocator&) = default;
 
     template <class U, class UBackendAllocator>
-    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator(const allocator<U, UBackendAllocator>& other) noexcept
-        : backend_allocator_(other.backend_allocator_) {}
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator(const allocator<U, UBackendAllocator>& other) noexcept(
+        std::is_nothrow_constructible<background_allocator_type, UBackendAllocator>::value) {
+      new (backend_allocator_buffer()) background_allocator_type(*other.backend_allocator());
+    }
+
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR ~allocator() noexcept(
+        std::is_nothrow_destructible<background_allocator_type>::value) {
+      backend_allocator()->~background_allocator_type();
+    }
 
     // STL wiil rebind rebind_alloc to allocator<U, BackendAllocator>, in which BackendAllocator may not be right
     // So we always use rebind<U>::other to support allocator rebinding
@@ -133,31 +184,34 @@ class object_allocator_manager {
 
     inline pointer address(reference x) const noexcept { return &x; }
 
-    inline const_pointer address(const_reference x) const noexcept { return &x; }
+    template <class = util::nostd::enable_if_t<!std::is_const<pointer>::value>>
+    inline const_pointer address(const_reference x) const noexcept {
+      return &x;
+    }
 
 #  if ((defined(__cplusplus) && __cplusplus <= 201103L) || (defined(_MSVC_LANG) && _MSVC_LANG <= 201103L))
-    inline size_type max_size() const { return backend_allocator_.max_size(); }
+    inline size_type max_size() const { return backend_allocator()->max_size(); }
 #  else
-    inline size_type max_size() const noexcept { return backend_allocator_.max_size(); }
+    inline size_type max_size() const noexcept { return backend_allocator()->max_size(); }
 #  endif
 
     template <class U, class... Args>
     inline void construct(U* p, Args&&... args) {
-      backend_allocator_.construct(p, std::forward<Args>(args)...);
-      object_allocator_metrics_controller::add_constructor_counter_template<T>(reinterpret_cast<void*>(p));
+      backend_allocator()->construct(p, std::forward<Args>(args)...);
+      object_allocator_metrics_controller::add_constructor_counter_template<T>(to_mutable_address(p));
     }
 
     template <class U, class... Args>
     inline void destroy(U* p) {
-      object_allocator_metrics_controller::add_destructor_counter_template<T>(reinterpret_cast<void*>(p));
-      backend_allocator_.destroy(p);
+      object_allocator_metrics_controller::add_destructor_counter_template<T>(to_mutable_address(p));
+      backend_allocator()->destroy(p);
     }
 #endif
 
 #if ((defined(__cplusplus) && __cplusplus >= 202302L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 202302L)) && \
     defined(__cpp_lib_allocate_at_least)
     EXPLICIT_NODISCARD_ATTR UTIL_CONFIG_CONSTEXPR std::allocation_result<T*, size_type> allocate_at_least(size_type n) {
-      auto ret = backend_allocator_.allocate_at_least(n);
+      auto ret = backend_allocator()->allocate_at_least(n);
       object_allocator_metrics_controller::add_allocate_counter_template<T>(ret.second);
       return ret;
     }
@@ -165,7 +219,7 @@ class object_allocator_manager {
 
 #if ((defined(__cplusplus) && __cplusplus >= 202002L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L))
     EXPLICIT_NODISCARD_ATTR inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR T* allocate(size_type n) {
-      auto ret = backend_allocator_.allocate(n);
+      auto ret = backend_allocator()->allocate(n);
       if (nullptr != ret) {
         object_allocator_metrics_controller::add_allocate_counter_template<T>(n);
       }
@@ -173,7 +227,7 @@ class object_allocator_manager {
     }
 #elif ((defined(__cplusplus) && __cplusplus >= 201703L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L))
     inline T* allocate(size_type n) {
-      auto ret = backend_allocator_.allocate(n);
+      auto ret = backend_allocator()->allocate(n);
       if (nullptr != ret) {
         object_allocator_metrics_controller::add_allocate_counter_template<T>(n);
       }
@@ -181,7 +235,7 @@ class object_allocator_manager {
     }
 
     inline T* allocate(size_type n, const void* hint) {
-      auto ret = backend_allocator_.allocate(n, hint);
+      auto ret = backend_allocator()->allocate(n, hint);
       if (nullptr != ret) {
         object_allocator_metrics_controller::add_allocate_counter_template<T>(n);
       }
@@ -190,7 +244,7 @@ class object_allocator_manager {
 
 #else
     inline T* allocate(size_type n, const void* hint = nullptr) {
-      auto ret = backend_allocator_.allocate(n, hint);
+      auto ret = backend_allocator()->allocate(n, hint);
       if (nullptr != ret) {
         object_allocator_metrics_controller::add_allocate_counter_template<T>(n);
       }
@@ -204,17 +258,36 @@ class object_allocator_manager {
       }
 
       object_allocator_metrics_controller::add_deallocate_counter_template<T>(n);
-      backend_allocator_.deallocate(p, n);
+      backend_allocator()->deallocate(p, n);
     }
 
-    UTIL_SYMBOL_VISIBLE inline bool operator==(const allocator&) const noexcept { return true; }
+    inline bool operator==(const allocator&) const noexcept { return true; }
 
     template <class U, class UBackendAllocator>
-    UTIL_SYMBOL_VISIBLE inline bool operator==(const allocator<U, UBackendAllocator>&) const noexcept {
+    inline bool operator==(const allocator<U, UBackendAllocator>&) const noexcept {
       return false;
     }
 
-    background_allocator_type backend_allocator_;
+   private:
+    template <class, class>
+    friend struct UTIL_SYMBOL_VISIBLE allocator;
+
+    inline void* backend_allocator_buffer() noexcept { return reinterpret_cast<void*>(&backend_allocator_buffer_); }
+
+    inline const void* backend_allocator_buffer() const noexcept {
+      return reinterpret_cast<const void*>(&backend_allocator_buffer_);
+    }
+
+    inline background_allocator_type* backend_allocator() noexcept {
+      return reinterpret_cast<background_allocator_type*>(backend_allocator_buffer());
+    }
+
+    inline const background_allocator_type* backend_allocator() const noexcept {
+      return reinterpret_cast<const background_allocator_type*>(backend_allocator_buffer());
+    }
+
+    util::nostd::aligned_storage_t<sizeof(background_allocator_type), alignof(background_allocator_type)>
+        backend_allocator_buffer_;
   };
 
  public:
@@ -225,7 +298,7 @@ class object_allocator_manager {
 
     if (ret) {
       object_allocator_metrics_controller::add_constructor_counter(
-          object_allocator_metrics_controller::helper<T>::get_instance(), reinterpret_cast<void*>(ret.get()));
+          object_allocator_metrics_controller::helper<T>::get_instance(), to_mutable_address(ret.get()));
       object_allocator_metrics_controller::add_allocate_counter(
           object_allocator_metrics_controller::helper<T>::get_instance(), 1);
     }
@@ -241,7 +314,7 @@ class object_allocator_manager {
 
     if (ret) {
       object_allocator_metrics_controller::add_constructor_counter(
-          object_allocator_metrics_controller::helper<T>::get_instance(), reinterpret_cast<void*>(ret.get()));
+          object_allocator_metrics_controller::helper<T>::get_instance(), to_mutable_address(ret.get()));
       object_allocator_metrics_controller::add_allocate_counter(
           object_allocator_metrics_controller::helper<T>::get_instance(), 1);
     }
@@ -259,7 +332,7 @@ class object_allocator_manager {
     if (ret) {
       for (auto& ptr : *ret) {
         object_allocator_metrics_controller::add_constructor_counter(
-            object_allocator_metrics_controller::helper<T>::get_instance(), reinterpret_cast<void*>(ptr));
+            object_allocator_metrics_controller::helper<T>::get_instance(), to_mutable_address(ptr));
       }
       object_allocator_metrics_controller::add_allocate_counter(
           object_allocator_metrics_controller::helper<T>::get_instance(), N);
@@ -277,7 +350,7 @@ class object_allocator_manager {
     if (ret) {
       for (auto& ptr : *ret) {
         object_allocator_metrics_controller::add_constructor_counter(
-            object_allocator_metrics_controller::helper<T>::get_instance(), reinterpret_cast<void*>(ptr));
+            object_allocator_metrics_controller::helper<T>::get_instance(), to_mutable_address(ptr));
       }
       object_allocator_metrics_controller::add_allocate_counter(
           object_allocator_metrics_controller::helper<T>::get_instance(), ::std::extent<T>::value);
@@ -295,7 +368,7 @@ class object_allocator_manager {
     if (ret) {
       for (auto& ptr : *ret) {
         object_allocator_metrics_controller::add_constructor_counter(
-            object_allocator_metrics_controller::helper<T>::get_instance(), reinterpret_cast<void*>(ptr));
+            object_allocator_metrics_controller::helper<T>::get_instance(), to_mutable_address(ptr));
       }
       object_allocator_metrics_controller::add_allocate_counter(
           object_allocator_metrics_controller::helper<T>::get_instance(), N);
@@ -313,7 +386,7 @@ class object_allocator_manager {
     if (ret) {
       for (auto& ptr : *ret) {
         object_allocator_metrics_controller::add_constructor_counter(
-            object_allocator_metrics_controller::helper<T>::get_instance(), reinterpret_cast<void*>(ptr));
+            object_allocator_metrics_controller::helper<T>::get_instance(), to_mutable_address(ptr));
       }
       object_allocator_metrics_controller::add_allocate_counter(
           object_allocator_metrics_controller::helper<T>::get_instance(), ::std::extent<T>::value);
@@ -330,7 +403,7 @@ class object_allocator_manager {
 
     if (ret) {
       object_allocator_metrics_controller::add_constructor_counter(
-          object_allocator_metrics_controller::helper<T>::get_instance(), reinterpret_cast<void*>(ret.get()));
+          object_allocator_metrics_controller::helper<T>::get_instance(), to_mutable_address(ret.get()));
       object_allocator_metrics_controller::add_allocate_counter(
           object_allocator_metrics_controller::helper<T>::get_instance(), 1);
     }
@@ -346,7 +419,7 @@ class object_allocator_manager {
 
     if (ret) {
       object_allocator_metrics_controller::add_constructor_counter(
-          object_allocator_metrics_controller::helper<T>::get_instance(), reinterpret_cast<void*>(ret.get()));
+          object_allocator_metrics_controller::helper<T>::get_instance(), to_mutable_address(ret.get()));
       object_allocator_metrics_controller::add_allocate_counter(
           object_allocator_metrics_controller::helper<T>::get_instance(), 1);
     }

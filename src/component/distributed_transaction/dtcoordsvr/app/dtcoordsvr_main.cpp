@@ -13,6 +13,8 @@
 #include <atframe/atapp.h>
 #include <libatbus_protocol.h>
 
+#include <memory/object_allocator.h>
+
 #include <config/atframe_service_types.h>
 #include <config/extern_service_types.h>
 #include <config/server_frame_build_feature.h>
@@ -69,7 +71,7 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  app.add_module(std::make_shared<main_service_module>());
+  app.add_module(atfw::memory::stl::make_shared<main_service_module>());
   app.add_module(ss_msg_dispatcher::me());
   app.add_module(db_msg_dispatcher::me());
 

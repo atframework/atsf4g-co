@@ -4,13 +4,19 @@
 
 #include <log/log_wrapper.h>
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/com.protocol.pb.h>
 #include <protocol/pbdesc/svr.const.pb.h>
 #include <protocol/pbdesc/svr.local.table.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
+#include <memory/object_allocator.h>
 
 #include <config/logic_config.h>
 #include <time/time_utility.h>
@@ -98,7 +104,7 @@ void player_cache::init(uint64_t user_id, uint32_t zone_id, const std::string &o
 
 player_cache::ptr_t player_cache::create(uint64_t user_id, uint32_t zone_id, const std::string &openid) {
   fake_constructor ctorp;
-  ptr_t ret = std::make_shared<player_cache>(ctorp);
+  ptr_t ret = atfw::memory::stl::make_shared<player_cache>(ctorp);
   if (ret) {
     ret->init(user_id, zone_id, openid);
   }

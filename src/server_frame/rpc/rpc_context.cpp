@@ -7,6 +7,8 @@
 #include <atframe/atapp.h>
 #include <atframe/atapp_conf_rapidjson.h>
 
+#include <memory/object_allocator.h>
+
 #include "rpc/telemetry/rpc_global_service.h"
 #include "rpc/telemetry/rpc_trace.h"
 
@@ -45,7 +47,7 @@ SERVER_FRAME_API context context::create_without_task(create_options) noexcept {
 SERVER_FRAME_API context context::create_temporary_child(inherit_options options) noexcept { return {*this, options}; }
 
 SERVER_FRAME_API std::shared_ptr<context> context::create_shared_child(inherit_options options) noexcept {
-  return std::make_shared<context>(*this, options);
+  return atfw::memory::stl::make_shared<context>(*this, options);
 }
 
 SERVER_FRAME_API void context::setup_tracer(tracer &tracer_instance, string_view name, trace_start_option &&options) {
@@ -137,7 +139,7 @@ SERVER_FRAME_API util::memory::strong_rc_ptr<::google::protobuf::Arena> context:
   arena_options.start_block_size = 512;  // 链路跟踪可能就占了200字节，起始可以大一点
   arena_options.max_block_size = 65536;  // 数据库的数据块比较大。最大值可以大一点
 
-  allocator_ = util::memory::make_strong_rc<::google::protobuf::Arena>(arena_options);
+  allocator_ = atfw::memory::stl::make_strong_rc<::google::protobuf::Arena>(arena_options);
   return allocator_;
 }
 

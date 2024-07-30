@@ -4,6 +4,8 @@
 
 #include "rpc/telemetry/exporter/prometheus_utility.h"
 
+#include <memory/object_allocator.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <string>

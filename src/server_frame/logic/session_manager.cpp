@@ -89,7 +89,7 @@ SERVER_FRAME_CONFIG_API session_manager::sess_ptr_t session_manager::create(cons
 
   sess_ptr_t &sess = all_sessions_[key];
   bool is_new = !sess;
-  sess = std::make_shared<session>();
+  sess = atfw::memory::stl::make_shared<session>();
   if (!sess) {
     FWLOGERROR("malloc failed");
     return sess;
@@ -189,7 +189,7 @@ SERVER_FRAME_CONFIG_API void session_manager::remove_all(int32_t reason) {
     }
   }
 
-  std::shared_ptr<session_index_t> all_sessions = std::make_shared<session_index_t>();
+  std::shared_ptr<session_index_t> all_sessions = atfw::memory::stl::make_shared<session_index_t>();
   all_sessions_.swap(*all_sessions);
   session_counter_.clear();
 

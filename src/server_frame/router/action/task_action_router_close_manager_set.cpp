@@ -29,7 +29,7 @@
 #include "router/router_object_base.h"
 
 task_action_router_close_manager_set::task_action_router_close_manager_set(ctor_param_t &&param)
-    : task_action_no_req_base(param), param_(param), status_data_(std::make_shared<status_data_t>()) {
+    : task_action_no_req_base(param), param_(param), status_data_(atfw::memory::stl::make_shared<status_data_t>()) {
   status_data_->success_count_ = 0;
   status_data_->failed_count_ = 0;
   status_data_->current_idx_ = 0;

@@ -36,7 +36,7 @@
 bool task_action_auto_save_objects::debug_receive_stop_when_running = false;
 
 task_action_auto_save_objects::task_action_auto_save_objects(ctor_param_t &&param)
-    : task_action_no_req_base(param), status_data_(std::make_shared<status_data_t>()) {
+    : task_action_no_req_base(param), status_data_(atfw::memory::stl::make_shared<status_data_t>()) {
   status_data_->success_count_ = 0;
   status_data_->failed_count_ = 0;
   status_data_->start_timepooint_ = 0;

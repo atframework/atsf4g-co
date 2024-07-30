@@ -87,6 +87,8 @@
 #include <lock/spin_rw_lock.h>
 #include <log/log_wrapper.h>
 
+#include <memory/object_allocator.h>
+
 #include <config/logic_config.h>
 #include <config/server_frame_build_feature.h>
 #include <utility/protobuf_mini_dumper.h>
@@ -225,7 +227,7 @@ struct global_service_data_type {
 };
 
 static std::shared_ptr<global_service_data_type> get_global_service_data() {
-  static std::shared_ptr<global_service_data_type> ret = std::make_shared<global_service_data_type>();
+  static std::shared_ptr<global_service_data_type> ret = atfw::memory::stl::make_shared<global_service_data_type>();
   return ret;
 }
 
@@ -325,6 +327,10 @@ static std::shared_ptr<local_meter_info_type> get_meter_info(std::shared_ptr<gro
   if (!group->initialized) {
     _opentelemetry_initialize_group(group);
   }
+  // It will not be initialized when closing
+  if (!group->initialized) {
+    return std::shared_ptr<local_meter_info_type>();
+  }
 
   {
     util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{group->lock};
@@ -354,7 +360,7 @@ static std::shared_ptr<local_meter_info_type> get_meter_info(std::shared_ptr<gro
       return nullptr;
     }
 
-    auto ret = std::make_shared<local_meter_info_type>();
+    auto ret = atfw::memory::stl::make_shared<local_meter_info_type>();
     if (!ret) {
       return ret;
     }
@@ -837,6 +843,10 @@ global_service::get_current_default_tracer(std::shared_ptr<group_type> group) {
   if (!group->initialized) {
     _opentelemetry_initialize_group(group);
   }
+  // It will not be initialized when closing
+  if (!group->initialized) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
+  }
 
   if (group) {
     return group->default_tracer;
@@ -874,6 +884,10 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> 
 
   if (!group->initialized) {
     _opentelemetry_initialize_group(group);
+  }
+  // It will not be initialized when closing
+  if (!group->initialized) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
   }
 
   std::string cache_key = util::log::format("{}:{}", gsl::string_view{library_name.data(), library_name.size()},
@@ -1271,6 +1285,10 @@ global_service::get_current_default_logger(std::shared_ptr<group_type> group) {
   if (!group->initialized) {
     _opentelemetry_initialize_group(group);
   }
+  // It will not be initialized when closing
+  if (!group->initialized) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
+  }
 
   if (group) {
     return group->default_logger;
@@ -1309,6 +1327,10 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> g
 
   if (!group->initialized) {
     _opentelemetry_initialize_group(group);
+  }
+  // It will not be initialized when closing
+  if (!group->initialized) {
+    return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
   }
 
   std::string cache_key = util::log::format("{}:{}:{}", gsl::string_view{logger_name.data(), logger_name.size()},
@@ -2101,7 +2123,7 @@ static void _opentelemetry_cleanup_group(std::shared_ptr<::rpc::telemetry::group
       if (group->logs_handle.shutdown_callback) {
         auto handle = group->logs_handle;
         shutdown_threads.push_back(
-            std::make_shared<std::thread>([handle]() { handle.shutdown_callback(handle.provider); }));
+            atfw::memory::stl::make_shared<std::thread>([handle]() { handle.shutdown_callback(handle.provider); }));
       }
       group->logs_handle.reset();
     }
@@ -2112,7 +2134,7 @@ static void _opentelemetry_cleanup_group(std::shared_ptr<::rpc::telemetry::group
       if (group->metrics_handle.shutdown_callback) {
         auto handle = group->metrics_handle;
         shutdown_threads.push_back(
-            std::make_shared<std::thread>([handle]() { handle.shutdown_callback(handle.provider); }));
+            atfw::memory::stl::make_shared<std::thread>([handle]() { handle.shutdown_callback(handle.provider); }));
       }
       group->metrics_handle.reset();
     }
@@ -2124,7 +2146,7 @@ static void _opentelemetry_cleanup_group(std::shared_ptr<::rpc::telemetry::group
       if (group->tracer_handle.shutdown_callback) {
         auto handle = group->tracer_handle;
         shutdown_threads.push_back(
-            std::make_shared<std::thread>([handle]() { handle.shutdown_callback(handle.provider); }));
+            atfw::memory::stl::make_shared<std::thread>([handle]() { handle.shutdown_callback(handle.provider); }));
       }
       group->tracer_handle.reset();
     }
@@ -2161,7 +2183,7 @@ static void _opentelemetry_cleanup_global_provider(atapp::app & /*app*/) {
       named_groups.swap(current_service_cache->named_groups);
     }
 
-    cleanup_threads.push_back(std::make_shared<std::thread>([default_group, current_service_cache]() {
+    cleanup_threads.push_back(atfw::memory::stl::make_shared<std::thread>([default_group, current_service_cache]() {
       _opentelemetry_cleanup_group(default_group, current_service_cache);
     }));
 
@@ -2171,7 +2193,7 @@ static void _opentelemetry_cleanup_global_provider(atapp::app & /*app*/) {
         continue;
       }
 
-      cleanup_threads.push_back(std::make_shared<std::thread>([named_group_ptr, current_service_cache]() {
+      cleanup_threads.push_back(atfw::memory::stl::make_shared<std::thread>([named_group_ptr, current_service_cache]() {
         _opentelemetry_cleanup_group(named_group_ptr, current_service_cache);
       }));
     }
@@ -2346,7 +2368,7 @@ static void _opentelemetry_setup_group(atapp::app &app, std::shared_ptr<group_ty
                                        local_provider_handle_type<opentelemetry::trace::TracerProvider> tracer_handle,
                                        local_provider_handle_type<opentelemetry::metrics::MeterProvider> metrics_handle,
                                        local_provider_handle_type<opentelemetry::logs::LoggerProvider> logs_handle) {
-  if (group->initialized) {
+  if (group->initialized || app.is_closing()) {
     return;
   }
 
@@ -2375,7 +2397,7 @@ static void _opentelemetry_setup_group(atapp::app &app, std::shared_ptr<group_ty
       break;
     }
 
-    auto default_metrics_meter = std::make_shared<local_meter_info_type>();
+    auto default_metrics_meter = atfw::memory::stl::make_shared<local_meter_info_type>();
     if (!default_metrics_meter) {
       break;
     }
@@ -2717,6 +2739,9 @@ static void _opentelemetry_initialize_group(const std::shared_ptr<group_type> &g
   if (nullptr == app_inst) {
     return;
   }
+  if (app_inst->is_closing()) {
+    return;
+  }
 
   // Trace
   local_provider_handle_type<opentelemetry::trace::TracerProvider> tracer_handle =
@@ -2737,8 +2762,8 @@ static void _opentelemetry_initialize_group(const std::shared_ptr<group_type> &g
 
 SERVER_FRAME_API void global_service::set_current_service(
     atapp::app &app, const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &telemetry) {
-  std::shared_ptr<group_type> default_group = std::make_shared<group_type>();
-  if (!default_group) {
+  std::shared_ptr<group_type> default_group = atfw::memory::stl::make_shared<group_type>();
+  if (!default_group || app.is_closing()) {
     return;
   }
 
@@ -2776,7 +2801,7 @@ SERVER_FRAME_API void global_service::set_current_service(
       continue;
     }
 
-    std::shared_ptr<group_type> named_group = std::make_shared<group_type>();
+    std::shared_ptr<group_type> named_group = atfw::memory::stl::make_shared<group_type>();
     if (!named_group) {
       continue;
     }

@@ -44,6 +44,7 @@ atapp:
   # =========== timer ===========
   timer:
     tick_interval: 16ms # 32ms for tick active
+    tick_round_timeout: 128ms
     stop_timeout: 10s # 10s for stop operation
     stop_interval: 256ms
     message_timeout: 8s

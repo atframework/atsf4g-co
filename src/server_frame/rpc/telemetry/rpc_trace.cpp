@@ -19,6 +19,8 @@
 
 #include <atframe/atapp.h>
 
+#include <memory/object_allocator.h>
+
 #include <config/server_frame_build_feature.h>
 #include <utility/protobuf_mini_dumper.h>
 
@@ -97,7 +99,7 @@ static std::shared_ptr<trace_additional_metric_span> mutable_trace_additional_me
     return ret;
   }
 
-  ret = std::make_shared<trace_additional_metric_span>();
+  ret = atfw::memory::stl::make_shared<trace_additional_metric_span>();
   if (!ret) {
     return ret;
   }
@@ -167,7 +169,7 @@ static std::shared_ptr<trace_additional_metric_report> prepare_trace_additional_
   data_set.result_code_count_need_report = true;
   data_set.response_code_count_need_report = true;
   data_set.current_report.swap(previous);
-  data_set.current_report = std::make_shared<trace_additional_metric_report>();
+  data_set.current_report = atfw::memory::stl::make_shared<trace_additional_metric_report>();
 
   if (data_set.current_report) {
     std::lock_guard<std::mutex> guard{data_set.pending_to_report_lock};

@@ -15,6 +15,8 @@
 
 #include <log/log_wrapper.h>
 
+#include <memory/object_allocator.h>
+
 #include <time/time_utility.h>
 
 #include <opentelemetry/trace/semantic_conventions.h>
@@ -55,7 +57,7 @@ DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle::~transaction_client_h
 
 DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle::create_transaction(
     rpc::context& ctx, storage_ptr_type& output, const transaction_options& options) {
-  output = util::memory::make_strong_rc<storage_type>();
+  output = atfw::memory::stl::make_strong_rc<storage_type>();
   if (!output) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
   }

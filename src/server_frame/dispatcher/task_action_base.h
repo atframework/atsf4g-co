@@ -8,6 +8,8 @@
 
 #include <log/log_wrapper.h>
 
+#include <memory/object_allocator.h>
+
 #include <config/server_frame_build_feature.h>
 
 #include <rpc/rpc_common_types.h>

@@ -6,6 +6,8 @@
 
 #include <string/utf8_char_t.h>
 
+#include <memory/object_allocator.h>
+
 #include <sstream>
 #include <utility>
 
@@ -374,7 +376,7 @@ SERVER_FRAME_CONFIG_API simple_template_core::ptr_t simple_template_core::compil
         if (token_position.block_end > token_position.block_begin + 2) {
           std::string code =
               std::string(token_position.block_begin, token_position.block_end - 2);  // block_end[-2:0] is "{{"
-          ret->blocks_.push_back(std::make_shared<code_block_fn_t>(
+          ret->blocks_.push_back(atfw::memory::stl::make_shared<code_block_fn_t>(
               print_const_string(code, previous_block_line, previous_block_column, code)));
         }
 
@@ -414,7 +416,7 @@ SERVER_FRAME_CONFIG_API simple_template_core::ptr_t simple_template_core::compil
             if (!conf.call_creator_fn) {
               errmsg_ss << "Function creator is undefined, we just use the code \"" << code
                         << "\" at line: " << previous_block_line << ", column: " << previous_block_column << std::endl;
-              ret->blocks_.push_back(std::make_shared<code_block_fn_t>(
+              ret->blocks_.push_back(atfw::memory::stl::make_shared<code_block_fn_t>(
                   print_const_string(code, previous_block_line, previous_block_column, code)));
               break;
             }
@@ -424,12 +426,12 @@ SERVER_FRAME_CONFIG_API simple_template_core::ptr_t simple_template_core::compil
               errmsg_ss << "Function \"" << expression
                         << "\" is not supported by now, we just use the raw data for fallback with code \"" << code
                         << "\" at line: " << previous_block_line << ", column: " << previous_block_column << std::endl;
-              ret->blocks_.push_back(std::make_shared<code_block_fn_t>(
+              ret->blocks_.push_back(atfw::memory::stl::make_shared<code_block_fn_t>(
                   print_const_string(code, previous_block_line, previous_block_column, code)));
               break;
             }
 
-            code_block_fn_ptr_t block_fn = std::make_shared<code_block_fn_t>(
+            code_block_fn_ptr_t block_fn = atfw::memory::stl::make_shared<code_block_fn_t>(
                 call_fn_wrapper(code, previous_block_line, previous_block_column, fn));
             ret->blocks_.push_back(block_fn);
 
@@ -449,7 +451,7 @@ SERVER_FRAME_CONFIG_API simple_template_core::ptr_t simple_template_core::compil
             if (!conf.getter_fn_creator) {
               errmsg_ss << "Variable getter creator is undefined, we just use the code \"" << code
                         << "\" at line: " << previous_block_line << ", column: " << previous_block_column << std::endl;
-              ret->blocks_.push_back(std::make_shared<code_block_fn_t>(
+              ret->blocks_.push_back(atfw::memory::stl::make_shared<code_block_fn_t>(
                   print_const_string(code, previous_block_line, previous_block_column, code)));
               break;
             }
@@ -459,12 +461,12 @@ SERVER_FRAME_CONFIG_API simple_template_core::ptr_t simple_template_core::compil
               errmsg_ss << "Variable getter \"" << expression
                         << "\" is not supported by now, we just use the raw data for fallback with code \"" << code
                         << "\" at line: " << previous_block_line << ", column: " << previous_block_column << std::endl;
-              ret->blocks_.push_back(std::make_shared<code_block_fn_t>(
+              ret->blocks_.push_back(atfw::memory::stl::make_shared<code_block_fn_t>(
                   print_const_string(code, previous_block_line, previous_block_column, code)));
               break;
             }
 
-            code_block_fn_ptr_t block_fn = std::make_shared<code_block_fn_t>(
+            code_block_fn_ptr_t block_fn = atfw::memory::stl::make_shared<code_block_fn_t>(
                 getter_fn_wrapper(code, previous_block_line, previous_block_column, fn));
             ret->blocks_.push_back(block_fn);
 
@@ -502,7 +504,7 @@ SERVER_FRAME_CONFIG_API simple_template_core::ptr_t simple_template_core::compil
     token_position.block_end = next_token;
     if (token_position.block_end > token_position.block_begin) {
       std::string code = std::string(token_position.block_begin, token_position.block_end);
-      ret->blocks_.push_back(std::make_shared<code_block_fn_t>(
+      ret->blocks_.push_back(atfw::memory::stl::make_shared<code_block_fn_t>(
           print_const_string(code, previous_block_line, previous_block_column, code)));
     }
   } while (false);

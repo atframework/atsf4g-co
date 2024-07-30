@@ -180,7 +180,7 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
                                                               job_list[i].action_blob.action_uuid());
 
       async_job_ptr_type job_data_ptr =
-          util::memory::make_strong_rc<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>(
+          atfw::memory::stl::make_strong_rc<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>(
               std::move(job_list[i].action_blob));
 
       ++batch_job_number;

@@ -13,6 +13,8 @@
 
 #include <gsl/select-gsl.h>
 
+#include <memory/object_allocator.h>
+
 #include <config/logic_config.h>
 #include <time/time_utility.h>
 
@@ -85,7 +87,7 @@ void player::init(uint64_t user_id, uint32_t zone_id, const std::string &openid)
 
 player::ptr_t player::create(uint64_t user_id, uint32_t zone_id, const std::string &openid) {
   fake_constructor ctorp;
-  ptr_t ret = std::make_shared<player>(ctorp);
+  ptr_t ret = atfw::memory::stl::make_shared<player>(ctorp);
   if (ret) {
     ret->init(user_id, zone_id, openid);
   }
