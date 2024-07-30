@@ -82,6 +82,8 @@ class object_allocator_manager {
         std::is_nothrow_constructible<BackendDelete>::value) {}
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(const deletor&) = default;
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(deletor&&) = default;
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor& operator=(const deletor&) = default;
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor& operator=(deletor&&) = default;
 
     template <class D>
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(D&& d) noexcept(
@@ -91,14 +93,28 @@ class object_allocator_manager {
 
     template <class Up, class UpBackendDelete, class = util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
     ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(const deletor<Up, UpBackendDelete>& other) noexcept(
-        std::is_nothrow_constructible<BackendDelete, UpBackendDelete>::value) {
-      new (backend_deletor_buffer()) BackendDelete(other.backend_delete_);
+        std::is_nothrow_constructible<BackendDelete, const UpBackendDelete&>::value) {
+      new (backend_deletor_buffer()) BackendDelete(*other.backend_deletor());
     }
 
     template <class Up, class UpBackendDelete, class = util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
     ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(deletor<Up, UpBackendDelete>&& other) noexcept(
-        std::is_nothrow_constructible<BackendDelete, UpBackendDelete>::value) {
-      new (backend_deletor_buffer()) BackendDelete(std::move(other.backend_delete_));
+        std::is_nothrow_constructible<BackendDelete, UpBackendDelete&&>::value) {
+      new (backend_deletor_buffer()) BackendDelete(std::move(*other.backend_deletor()));
+    }
+
+    template <class Up, class UpBackendDelete, class = util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
+    ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor& operator=(const deletor<Up, UpBackendDelete>& other) noexcept(
+        std::is_nothrow_assignable<BackendDelete, const UpBackendDelete&>::value) {
+      *backend_deletor() = *other.backend_deletor();
+      return *this;
+    }
+
+    template <class Up, class UpBackendDelete, class = util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
+    ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor& operator=(deletor<Up, UpBackendDelete>&& other) noexcept(
+        std::is_nothrow_assignable<BackendDelete, UpBackendDelete&&>::value) {
+      *backend_deletor() = std::move(*other.backend_deletor());
+      return *this;
     }
 
     inline ~deletor() noexcept(std::is_nothrow_destructible<BackendDelete>::value) {
@@ -149,16 +165,41 @@ class object_allocator_manager {
         std::is_nothrow_constructible<background_allocator_type>::value) {}
 
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator(const BackendAllocator& backend) noexcept(
-        std::is_nothrow_constructible<background_allocator_type, BackendAllocator>::value) {
+        std::is_nothrow_constructible<background_allocator_type, const BackendAllocator&>::value) {
       new (backend_allocator_buffer()) background_allocator_type(backend);
     }
 
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator(const allocator&) = default;
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator(allocator&&) = default;
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator& operator=(const allocator&) = default;
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator& operator=(allocator&&) = default;
 
     template <class U, class UBackendAllocator>
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator(const allocator<U, UBackendAllocator>& other) noexcept(
-        std::is_nothrow_constructible<background_allocator_type, UBackendAllocator>::value) {
+        std::is_nothrow_constructible<background_allocator_type, const UBackendAllocator&>::value) {
       new (backend_allocator_buffer()) background_allocator_type(*other.backend_allocator());
+    }
+
+    template <class U, class UBackendAllocator>
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator(allocator<U, UBackendAllocator>&& other) noexcept(
+        std::is_nothrow_constructible<background_allocator_type, UBackendAllocator&&>::value) {
+      new (backend_allocator_buffer()) background_allocator_type(std::move(*other.backend_allocator()));
+    }
+
+    template <class U, class UBackendAllocator>
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator&
+    operator=(const allocator<U, UBackendAllocator>& other) noexcept(
+        std::is_nothrow_assignable<BackendAllocator, const UBackendAllocator&>::value) {
+      *backend_allocator() = *other.backend_allocator();
+      return *this;
+    }
+
+    template <class U, class UBackendAllocator>
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator&
+    operator=(allocator<U, UBackendAllocator>&& other) noexcept(
+        std::is_nothrow_assignable<BackendAllocator, UBackendAllocator&&>::value) {
+      *backend_allocator() = std::move(*other.backend_allocator());
+      return *this;
     }
 
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR ~allocator() noexcept(
@@ -261,11 +302,28 @@ class object_allocator_manager {
       backend_allocator()->deallocate(p, n);
     }
 
-    inline bool operator==(const allocator&) const noexcept { return true; }
+    friend inline bool operator==(const allocator& self,
+                                  const allocator& other) noexcept(noexcept(*self.backend_allocator() ==
+                                                                            *other.backend_allocator())) {
+      return *self.backend_allocator() == *other.backend_allocator();
+    }
 
     template <class U, class UBackendAllocator>
-    inline bool operator==(const allocator<U, UBackendAllocator>&) const noexcept {
-      return false;
+    friend inline bool operator==(const allocator& self, const allocator<U, UBackendAllocator>& other) noexcept(
+        noexcept(*self.backend_allocator() == *other.backend_allocator())) {
+      return *self.backend_allocator() == *other.backend_allocator();
+    }
+
+    friend inline bool operator!=(const allocator& self,
+                                  const allocator& other) noexcept(noexcept(*self.backend_allocator() !=
+                                                                            *other.backend_allocator())) {
+      return *self.backend_allocator() != *other.backend_allocator();
+    }
+
+    template <class U, class UBackendAllocator>
+    friend inline bool operator!=(const allocator& self, const allocator<U, UBackendAllocator>& other) noexcept(
+        noexcept(*self.backend_allocator() != *other.backend_allocator())) {
+      return *self.backend_allocator() != *other.backend_allocator();
     }
 
    private:

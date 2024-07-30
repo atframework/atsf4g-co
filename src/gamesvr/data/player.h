@@ -6,6 +6,8 @@
 #include <design_pattern/noncopyable.h>
 #include <gsl/select-gsl.h>
 
+#include <memory/object_stl_unordered_map.h>
+
 #include <config/server_frame_build_feature.h>
 
 #include <data/player_cache.h>
@@ -122,9 +124,9 @@ class player : public player_cache {
     time_t refresh_feature_limit_hour;
     // PROJECT_NAMESPACE_ID::SCPlayerLevelupSyn player_level_up_syn;
 
-    std::unordered_map<int32_t, PROJECT_NAMESPACE_ID::DItem> dirty_item_by_type;
+    atfw::memory::stl::unordered_map<int32_t, PROJECT_NAMESPACE_ID::DItem> dirty_item_by_type;
 
-    std::unordered_map<uintptr_t, dirty_sync_handle_t> dirty_handles;
+    atfw::memory::stl::unordered_map<uintptr_t, dirty_sync_handle_t> dirty_handles;
     gsl::string_view current_dirty_handle_name;
   };
 

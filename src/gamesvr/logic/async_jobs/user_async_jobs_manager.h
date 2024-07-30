@@ -7,6 +7,9 @@
 #include <memory/lru_map.h>
 #include <memory/rc_ptr.h>
 
+#include <memory/object_atfw_memory_lru_map.h>
+#include <memory/object_stl_unordered_map.h>
+
 #include <dispatcher/task_manager.h>
 
 #include <rpc/rpc_async_invoke.h>
@@ -103,9 +106,8 @@ class user_async_jobs_manager {
     int64_t timeout = 3;
   };
   using history_map_type =
-      util::memory::lru_map<std::string, history_item, std::hash<std::string>, std::equal_to<std::string>,
-                            util::memory::lru_map_option<util::memory::compat_strong_ptr_mode::kStrongRc>>;
-  std::unordered_map<int32_t, history_map_type> history_uuids_;
+      atfw::memory::util::lru_map_st<std::string, history_item, std::hash<std::string>, std::equal_to<std::string>>;
+  atfw::memory::stl::unordered_map<int32_t, history_map_type> history_uuids_;
   std::unordered_set<int32_t> force_async_job_type_;
 
   std::unordered_map<int32_t, std::unordered_map<std::string, async_job_ptr_type>> retry_jobs_;

@@ -249,7 +249,7 @@ struct UTIL_SYMBOL_VISIBLE
   // allocate
   template <typename AllocOther>
   UTIL_SYMBOL_VISIBLE inline static auto _S_allocate(AllocOther& __a, size_type __n, const_void_pointer __hint,
-                                           int) -> decltype(__a.allocate(__n, __hint)) {
+                                                     int) -> decltype(__a.allocate(__n, __hint)) {
     return __a.allocate(__n, __hint);
   }
 
@@ -302,8 +302,8 @@ struct UTIL_SYMBOL_VISIBLE
   }
 
   template <typename AllocatorOther, typename U>
-  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR void _S_destroy(AllocatorOther&, U* __p, ...) noexcept(
-      std::is_nothrow_destructible<U>::value) {
+  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR void _S_destroy(
+      AllocatorOther&, U* __p, ...) noexcept(std::is_nothrow_destructible<U>::value) {
     ::atfw::memory::object_allocator_metrics_controller::add_destructor_counter_template<value_type>(
         reinterpret_cast<void*>(__p));
 
@@ -316,13 +316,14 @@ struct UTIL_SYMBOL_VISIBLE
 
   // max_size
   template <typename AllocOther>
-  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR auto _S_max_size(AllocOther& __a,
-                                                                                  int) -> decltype(__a.max_size()) {
+  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR auto _S_max_size(const AllocOther& __a, int)
+      -> decltype(__a.max_size()) {
     return __a.max_size();
   }
 
   template <typename AllocOther>
-  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR size_type _S_max_size(AllocOther&, ...) {
+  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR size_type _S_max_size(const AllocOther&,
+                                                                                                 ...) {
     return ::std::numeric_limits<size_type>::max();
   }
 
@@ -346,30 +347,32 @@ struct UTIL_SYMBOL_VISIBLE
 
 #if ((defined(__cplusplus) && __cplusplus >= 202302L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 202302L)) && \
     defined(__cpp_lib_allocate_at_least)
-  EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE inline static UTIL_CONFIG_CONSTEXPR ::std::allocation_result<pointer, size_type>
+  EXPLICIT_NODISCARD_ATTR
+  UTIL_SYMBOL_VISIBLE inline static UTIL_CONFIG_CONSTEXPR ::std::allocation_result<pointer, size_type>
   allocate_at_least(allocator_type& a, size_type n) {
     return a.allocate_at_least(n);
   }
 #endif
 
   UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR void deallocate(allocator_type& a, pointer p,
-                                                                                 size_type n) {
+                                                                                           size_type n) {
     a.deallocate(p, n);
   }
 
   template <class T, class... Args>
-  UTIL_SYMBOL_VISIBLE inline static UTIL_CONFIG_CONSTEXPR void construct(allocator_type& a, T* p, Args&&... args) noexcept(
-      noexcept(_S_construct(a, p, std::forward<Args>(args)...))) {
+  UTIL_SYMBOL_VISIBLE inline static UTIL_CONFIG_CONSTEXPR void construct(
+      allocator_type& a, T* p, Args&&... args) noexcept(noexcept(_S_construct(a, p, std::forward<Args>(args)...))) {
     _S_construct(a, p, std::forward<Args>(args)...);
   }
 
   template <class T>
   UTIL_SYMBOL_VISIBLE inline static UTIL_CONFIG_CONSTEXPR void destroy(allocator_type& a,
-                                                             T* p) noexcept(noexcept(_S_destroy(a, p, 0))) {
+                                                                       T* p) noexcept(noexcept(_S_destroy(a, p, 0))) {
     _S_destroy(a, p, 0);
   }
 
-  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR size_type max_size(allocator_type& a) noexcept {
+  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR size_type
+  max_size(const allocator_type& a) noexcept {
     return _S_max_size(a, 0);
   }
 
