@@ -306,7 +306,9 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data) {
 #endif
 }
 
-SERVER_FRAME_API task_action_base::result_type task_action_base::hook_run() { return (*this)(); }
+SERVER_FRAME_API task_action_base::result_type task_action_base::hook_run() {
+  TASK_ACTION_RETURN_CODE(RPC_AWAIT_CODE_RESULT((*this)()));
+}
 
 SERVER_FRAME_API int task_action_base::on_success() { return get_result(); }
 

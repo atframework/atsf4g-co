@@ -263,10 +263,10 @@ struct UTIL_SYMBOL_VISIBLE
   struct __construct_helper {
     template <typename AllocOther,
               typename = decltype(std::declval<AllocOther*>()->construct(std::declval<U*>(), std::declval<_Args>()...))>
-    static true_type __test(int);
+    static ::std::true_type __test(int);
 
     template <typename>
-    static false_type __test(...);
+    static ::std::false_type __test(...);
 
     using type = decltype(__test<allocator_type>(0));
     static UTIL_CONFIG_CONSTEXPR const bool value = type::value;

@@ -237,6 +237,7 @@ function(project_tool_split_target_debug_sybmol)
         COMMAND "${PROJECT_TOOL_OBJCOPY}" --only-keep-debug "$<TARGET_FILE:${TARGET_NAME}>"
                 "$<TARGET_FILE:${TARGET_NAME}>${PROJECT_TOOL_ENABLE_SPLIT_DEBUG_SYMBOL_SUFFIX}"
         COMMAND "${PROJECT_TOOL_OBJCOPY}" --strip-debug --strip-unneeded "$<TARGET_FILE:${TARGET_NAME}>"
+        COMMAND "${PROJECT_TOOL_OBJCOPY}" --remove-section ".gnu_debuglink" "$<TARGET_FILE:${TARGET_NAME}>"
         COMMAND
           "${PROJECT_TOOL_OBJCOPY}" --add-gnu-debuglink
           "$<TARGET_FILE_NAME:${TARGET_NAME}>${PROJECT_TOOL_ENABLE_SPLIT_DEBUG_SYMBOL_SUFFIX}"

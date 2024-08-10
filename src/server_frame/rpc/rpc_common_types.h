@@ -59,7 +59,8 @@ class UTIL_SYMBOL_VISIBLE always_ready {
   using value_type = TVALUE;
 
  public:
-  always_ready(value_type&& input) : result_data_(std::move(input)) {}
+  always_ready(value_type&& input)  // NOLINT: runtime/explicit
+      : result_data_(std::move(input)) {}
 
 #if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
   inline void _internal_set_awaited() noexcept {}
@@ -184,7 +185,8 @@ template <class TVALUE>
 class UTIL_SYMBOL_VISIBLE rpc_result_guard {
  public:
   template <class TINPUT>
-  rpc_result_guard(TINPUT&& input) : data_(input) {}
+  rpc_result_guard(TINPUT&& input)  // NOLINT: runtime/explicit
+      : data_(input) {}
 
   typename details::rpc_result_guard_getter<TVALUE, std::is_lvalue_reference<TVALUE>::value>::value_type
   get() noexcept {
@@ -209,7 +211,7 @@ class UTIL_SYMBOL_VISIBLE rpc_result {
   }
 
   template <class TINPUT>
-  rpc_result(rpc_result_guard<TINPUT>&& input)
+  rpc_result(rpc_result_guard<TINPUT>&& input)  // NOLINT: runtime/explicit
       : result_data_(input.get())
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
         ,
@@ -243,6 +245,7 @@ class UTIL_SYMBOL_VISIBLE rpc_result {
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
   inline void _internal_set_awaited() noexcept { awaited_ = true; }
 #  endif
+
  private:
   copp::future::poller<value_type> result_data_;
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT

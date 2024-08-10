@@ -95,7 +95,7 @@ player::ptr_t player::create(uint64_t user_id, uint32_t zone_id, const std::stri
   return ret;
 }
 
-rpc::result_code_type player::create_init(rpc::context &parent_ctx, uint32_t version_type) {
+void player::create_init(rpc::context &parent_ctx, uint32_t version_type) {
   rpc::context ctx{parent_ctx.create_temporary_child()};
   rpc::context::tracer trace;
   rpc::context::trace_start_option trace_start_option;
@@ -104,18 +104,12 @@ rpc::result_code_type player::create_init(rpc::context &parent_ctx, uint32_t ver
   trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
   ctx.setup_tracer(trace, "player.create_init", std::move(trace_start_option));
 
-  auto res = RPC_AWAIT_CODE_RESULT(base_type::create_init(ctx, version_type));
-  if (res < 0) {
-    RPC_RETURN_CODE(trace.finish({res, {}}));
-  }
+  base_type::create_init(ctx, version_type);
 
   set_data_version(PLAYER_DATA_LOGIC_VERSION);
 
   //! === manager implement === 创建后事件回调，这时候还没进入数据库并且未执行login_init()
-  res = RPC_AWAIT_CODE_RESULT(user_async_jobs_manager_->create_init(ctx, version_type));
-  if (res < 0) {
-    RPC_RETURN_CODE(trace.finish({res, {}}));
-  }
+  user_async_jobs_manager_->create_init(ctx, version_type);
 
   // TODO init all interval checkpoint
 
@@ -129,10 +123,10 @@ rpc::result_code_type player::create_init(rpc::context &parent_ctx, uint32_t ver
   //     });
   // }
 
-  RPC_RETURN_CODE(trace.finish({res, {}}));
+  trace.finish({0, {}});
 }
 
-rpc::result_code_type player::login_init(rpc::context &parent_ctx) {
+void player::login_init(rpc::context &parent_ctx) {
   rpc::context ctx{parent_ctx.create_temporary_child()};
   rpc::context::tracer trace;
   rpc::context::trace_start_option trace_start_option;
@@ -141,25 +135,19 @@ rpc::result_code_type player::login_init(rpc::context &parent_ctx) {
   trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
   ctx.setup_tracer(trace, "player.login_init", std::move(trace_start_option));
 
-  auto res = RPC_AWAIT_CODE_RESULT(base_type::login_init(ctx));
-  if (res < 0) {
-    RPC_RETURN_CODE(trace.finish({res, {}}));
-  }
+  base_type::login_init(ctx);
 
   // 由于对象缓存可以被复用，这个函数可能会被多次执行。这个阶段，新版本的 login_table 已载入
 
   //! === manager implement === 登入成功后事件回调，新用户也会触发
 
   // all module login init
-  res = RPC_AWAIT_CODE_RESULT(user_async_jobs_manager_->login_init(ctx));
-  if (res < 0) {
-    RPC_RETURN_CODE(trace.finish({res, {}}));
-  }
+  user_async_jobs_manager_->login_init(ctx);
 
   set_inited();
   on_login(ctx);
 
-  RPC_RETURN_CODE(trace.finish({res, {}}));
+  trace.finish({0, {}});
 }
 
 bool player::is_dirty() const {

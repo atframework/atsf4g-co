@@ -146,11 +146,11 @@ class player : public player_cache {
 
   static ptr_t create(uint64_t user_id, uint32_t zone_id, const std::string &openid);
 
-  // 创建默认角色数据
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_init(rpc::context &ctx, uint32_t version_type) override;
+  // 创建默认角色数据，不允许异步，不允许失败
+  void create_init(rpc::context &ctx, uint32_t version_type) override;
 
-  // 登入读取用户数据
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type login_init(rpc::context &ctx) override;
+  // 登入读取用户数据后初始化，不允许异步，不允许失败
+  void login_init(rpc::context &ctx) override;
 
   bool is_dirty() const override;
 

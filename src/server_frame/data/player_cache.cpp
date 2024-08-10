@@ -112,7 +112,7 @@ player_cache::ptr_t player_cache::create(uint64_t user_id, uint32_t zone_id, con
   return ret;
 }
 
-rpc::result_code_type player_cache::create_init(rpc::context &, uint32_t /*version_type*/) {
+void player_cache::create_init(rpc::context &, uint32_t /*version_type*/) {
   data_version_ = 0;
   version_.assign("0");
 
@@ -121,11 +121,9 @@ rpc::result_code_type player_cache::create_init(rpc::context &, uint32_t /*versi
   login_info_.set_zone_id(get_zone_id());
 
   login_info_.set_business_register_time(util::time::time_utility::get_now());
-
-  RPC_RETURN_CODE(0);
 }
 
-rpc::result_code_type player_cache::login_init(rpc::context &) {
+void player_cache::login_init(rpc::context &) {
   // 由于对象缓存可以被复用，这个函数可能会被多次执行。这个阶段，新版本的 login_table 已载入
 
   // refresh account parameters，这里只刷新部分数据
@@ -141,8 +139,6 @@ rpc::result_code_type player_cache::login_init(rpc::context &) {
   }
 
   login_info_.set_zone_id(get_zone_id());
-
-  RPC_RETURN_CODE(0);
 }
 
 bool player_cache::is_dirty() const {

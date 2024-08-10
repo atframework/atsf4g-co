@@ -35,15 +35,9 @@ user_async_jobs_manager::user_async_jobs_manager(player& owner)
 
 user_async_jobs_manager::~user_async_jobs_manager() {}
 
-rpc::result_code_type user_async_jobs_manager::create_init(rpc::context&, uint32_t) {
-  // do nothing
-  RPC_RETURN_CODE(0);
-}
+void user_async_jobs_manager::create_init(rpc::context&, uint32_t) {}
 
-rpc::result_code_type user_async_jobs_manager::login_init(rpc::context&) {
-  reset_async_jobs_protect();
-  RPC_RETURN_CODE(0);
-}
+void user_async_jobs_manager::login_init(rpc::context&) { reset_async_jobs_protect(); }
 
 void user_async_jobs_manager::refresh_feature_limit(rpc::context& ctx) { try_async_jobs(ctx); }
 

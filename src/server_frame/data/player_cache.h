@@ -121,10 +121,10 @@ class player_cache : public std::enable_shared_from_this<player_cache> {
   static ptr_t create(uint64_t user_id, uint32_t zone_id, const std::string &openid);
 
   // 创建默认角色数据
-  virtual rpc::result_code_type create_init(rpc::context &ctx, uint32_t version_type);
+  virtual void create_init(rpc::context &ctx, uint32_t version_type);
 
   // 登入读取用户数据
-  virtual rpc::result_code_type login_init(rpc::context &ctx);
+  virtual void login_init(rpc::context &ctx);
 
   // 是否脏（有数据变更）
   virtual bool is_dirty() const;

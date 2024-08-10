@@ -240,10 +240,9 @@ SERVER_FRAME_CONFIG_API rpc::result_code_type player_manager::create(rpc::contex
   if (0 == output->get_data_version()) {
     // manager 创建初始化
     if (output->get_login_info().account().version_type() >= PROJECT_NAMESPACE_ID::EN_VERSION_INNER) {
-      res = RPC_AWAIT_CODE_RESULT(output->create_init(ctx, PROJECT_NAMESPACE_ID::EN_VERSION_DEFAULT));
+      output->create_init(ctx, PROJECT_NAMESPACE_ID::EN_VERSION_DEFAULT);
     } else {
-      res = RPC_AWAIT_CODE_RESULT(
-          output->create_init(ctx, static_cast<uint32_t>(output->get_login_info().account().version_type())));
+      output->create_init(ctx, static_cast<uint32_t>(output->get_login_info().account().version_type()));
     }
     if (res < 0) {
       FWLOGERROR("save create {}:{} object failed, res: {}({})", zone_id, user_id, res,
