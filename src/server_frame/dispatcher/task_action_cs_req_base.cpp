@@ -126,6 +126,12 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
     }
   } while (false);
 
+  // Check request body
+  if (!unpack_request()) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM_BAD_PACKAGE);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+
   result_type::value_type ret = RPC_AWAIT_CODE_RESULT(base_type::hook_run());
 
   // 自动设置快队列保存

@@ -230,6 +230,10 @@ else
   ${CMAKE_BIN[@]} .. -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE $CMAKE_OPTIONS "$@"
 fi
 
+if [[ $? -ne 0 ]]; then
+  exit 1
+fi
+
 if [[ 1 -eq $CMAKE_CLANG_ANALYZER ]]; then
   echo "========================================================================================================="
   CMAKE_CLANG_ANALYZER_OPTIONS="--exclude ../third_party --exclude ../src/server_frame/protocol -analyzer-config aggressive-binary-operation-simplification=true"

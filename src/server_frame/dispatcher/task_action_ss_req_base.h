@@ -79,6 +79,8 @@ class UTIL_SYMBOL_VISIBLE task_action_ss_req_base : public task_action_req_base<
 
   SERVER_FRAME_API virtual bool is_stream_rpc() const noexcept;
 
+  virtual bool unpack_request() noexcept = 0;
+
   virtual const std::string &get_request_type_url() const noexcept = 0;
 
   virtual const std::string &get_response_type_url() const noexcept = 0;
@@ -225,12 +227,16 @@ class UTIL_SYMBOL_VISIBLE task_action_ss_rpc_base : public task_action_ss_req_ba
   }
 
  private:
-  void unpack_request() {
-    has_unpack_request_ = true;
+  bool unpack_request() noexcept override {
+    if (has_unpack_request_) {
+      return true;
+    }
 
-    request_body_ = get_shared_context().template create<rpc_request_type>();
     if (nullptr == request_body_) {
-      return;
+      request_body_ = get_shared_context().template create<rpc_request_type>();
+    }
+    if (nullptr == request_body_) {
+      return false;
     }
 
     // Check message type
@@ -238,21 +244,27 @@ class UTIL_SYMBOL_VISIBLE task_action_ss_rpc_base : public task_action_ss_req_ba
       if (get_request_type_url() != get_request().head().rpc_request().type_url()) {
         FCTXLOGERROR(get_shared_context(), "Except message {}, real got {}", get_request_type_url(),
                      get_request().head().rpc_request().type_url());
+        return false;
       }
     } else if (get_request().head().has_rpc_stream()) {
       if (get_request_type_url() != get_request().head().rpc_stream().type_url()) {
         FCTXLOGERROR(get_shared_context(), "Except message {}, real got {}", get_request_type_url(),
                      get_request().head().rpc_stream().type_url());
+        return false;
       }
     }
 
     if (false == request_body_->ParseFromString(get_request().body_bin())) {
       FCTXLOGERROR(get_shared_context(), "Try to parse message {} failed, msg: {}", get_request_type_url(),
                    request_body_->InitializationErrorString());
+      return false;
     } else {
       FCTXLOGDEBUG(get_shared_context(), "Parse rpc request message {} success:\n{}", get_request_type_url(),
                    protobuf_mini_dumper_get_readable(*request_body_));
     }
+
+    has_unpack_request_ = true;
+    return true;
   }
 
   void pack_response() {
