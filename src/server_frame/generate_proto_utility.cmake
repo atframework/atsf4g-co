@@ -18,6 +18,13 @@ function(project_build_tools_optimize_sources)
   endif()
 endfunction()
 
+function(project_build_tools_target_precompile_headers TARGET_NAME)
+  if(FALSE AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.16")
+    target_precompile_headers(${TARGET_NAME} PRIVATE ${ARGN})
+    target_precompile_headers(${TARGET_NAME} INTERFACE "$<BUILD_INTERFACE:${ARGN}>")
+  endif()
+endfunction()
+
 function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OUTPUT_LIBRARY_TARGET_NAME)
   set(optionArgs "")
   set(oneValueArgs "")
@@ -180,6 +187,8 @@ function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OU
     project_build_tools_set_static_library_declaration(${CURRENT_API_MACRO}
                                                        "${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME}")
   endif()
+  project_build_tools_target_precompile_headers(${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME} ${HEADERS})
+
   add_dependencies(${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME} ${TARGET_NAME})
 
   if(project_server_frame_create_protocol_target_PRIVATE_LINK_LIBRARIES)

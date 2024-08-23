@@ -152,6 +152,13 @@ function(project_component_force_optimize_sources)
   endif()
 endfunction()
 
+function(project_component_target_precompile_headers TARGET_NAME)
+  if(FALSE AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.16")
+    target_precompile_headers(${TARGET_NAME} PRIVATE ${ARGN})
+    target_precompile_headers(${TARGET_NAME} INTERFACE "$<BUILD_INTERFACE:${ARGN}>")
+  endif()
+endfunction()
+
 function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   set(optionArgs "")
   set(oneValueArgs OUTPUT_DIR OUTPUT_NAME OUTPUT_TARGET_NAME DLLEXPORT_DECL OUTPUT_PBFILE_PATH)
@@ -298,6 +305,8 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
     project_setup_runtime_post_build_bash(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_BASH)
     project_setup_runtime_post_build_pwsh(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_PWSH)
   endif()
+  project_component_target_precompile_headers(${TARGET_FULL_NAME} ${FINAL_GENERATED_HEADER_FILES})
+
   add_custom_command(
     TARGET ${TARGET_FULL_NAME}
     POST_BUILD
@@ -334,9 +343,8 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
         PARENT_SCOPE)
   endif()
 
-  target_include_directories(
-    ${TARGET_FULL_NAME}
-    PUBLIC "$<BUILD_INTERFACE:${project_component_declare_protocol_OUTPUT_DIR}>")
+  target_include_directories(${TARGET_FULL_NAME}
+                             PUBLIC "$<BUILD_INTERFACE:${project_component_declare_protocol_OUTPUT_DIR}>")
 
   list(APPEND PUBLIC_LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol)
   list(APPEND PUBLIC_LINK_TARGETS ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_LINK_NAME})
