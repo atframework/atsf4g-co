@@ -82,6 +82,7 @@
 
 #include <atframe/atapp.h>
 
+#include <design_pattern/singleton.h>
 #include <gsl/select-gsl.h>
 #include <lock/lock_holder.h>
 #include <lock/spin_rw_lock.h>
@@ -211,7 +212,7 @@ struct group_type {
 };
 
 namespace {
-struct global_service_data_type {
+struct global_service_data_type : public util::design_pattern::local_singleton<global_service_data_type> {
   util::log::log_wrapper::ptr_t internal_logger;
 
   std::list<global_service::group_event_callback_type> on_group_destroy_callbacks;
@@ -224,11 +225,21 @@ struct global_service_data_type {
   util::lock::spin_rw_lock group_lock;
   std::shared_ptr<group_type> default_group;
   std::unordered_map<std::string, std::shared_ptr<group_type>> named_groups;
+
+  bool shutdown = false;
+  inline global_service_data_type() {}
 };
 
 static std::shared_ptr<global_service_data_type> get_global_service_data() {
-  static std::shared_ptr<global_service_data_type> ret = atfw::memory::stl::make_shared<global_service_data_type>();
-  return ret;
+  if (global_service_data_type::is_instance_destroyed()) {
+    return nullptr;
+  }
+
+  if (global_service_data_type::me()->shutdown) {
+    return nullptr;
+  }
+
+  return global_service_data_type::me();
 }
 
 class opentelemetry_internal_log_handler : public opentelemetry::sdk::common::internal_log::LogHandler {
@@ -1559,24 +1570,52 @@ static local_provider_handle_type<opentelemetry::trace::TracerProvider> _opentel
     std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanProcessor>> &&processors,
     std::unique_ptr<opentelemetry::sdk::trace::Sampler> &&sampler, opentelemetry::sdk::resource::Resource resource) {
   local_provider_handle_type<opentelemetry::trace::TracerProvider> ret;
+  auto processors_ptr = atfw::memory::stl::make_shared<std::vector<opentelemetry::sdk::trace::SpanProcessor *>>();
+  if (processors_ptr) {
+    processors_ptr->reserve(processors.size());
+    for (auto &processor : processors) {
+      if (processor) {
+        processors_ptr->push_back(processor.get());
+      }
+    }
+  }
+
   ret.provider = opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>(
       opentelemetry::sdk::trace::TracerProviderFactory::Create(
           std::move(processors), resource, std::move(sampler),
           std::unique_ptr<opentelemetry::sdk::trace::IdGenerator>(new opentelemetry::sdk::trace::RandomIdGenerator())));
-  ret.shutdown_callback = [](const opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> &provider) {
-    if (!provider) {
-      return;
-    }
+  ret.shutdown_callback =
+      [processors_ptr](const opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> &provider) {
+        if (!provider) {
+          return;
+        }
 
-    auto trace_provider = opentelemetry::trace::Provider::GetTracerProvider();
-    if (trace_provider == provider) {
-      opentelemetry::trace::Provider::SetTracerProvider(
-          opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>(
-              new opentelemetry::trace::NoopTracerProvider()));
-    }
+        auto trace_provider = opentelemetry::trace::Provider::GetTracerProvider();
+        if (trace_provider == provider) {
+          opentelemetry::trace::Provider::SetTracerProvider(
+              opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>(
+                  new opentelemetry::trace::NoopTracerProvider()));
+        }
 
-    static_cast<opentelemetry::sdk::trace::TracerProvider *>(provider.get())->Shutdown();
-  };
+        // 处理优雅退出时无限等待的问题
+        if (processors_ptr && !processors_ptr->empty()) {
+          std::chrono::microseconds timeout =
+              std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::seconds{10});
+          auto app = atapp::app::get_last_instance();
+          if (nullptr != app) {
+            timeout = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::seconds{app->get_origin_configure().timer().stop_timeout().seconds() / 2});
+            timeout += std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::nanoseconds{app->get_origin_configure().timer().stop_timeout().nanos() / 2});
+          }
+          for (auto &processor : *processors_ptr) {
+            processor->Shutdown(timeout);
+          }
+          processors_ptr->clear();
+        }
+
+        static_cast<opentelemetry::sdk::trace::TracerProvider *>(provider.get())->Shutdown();
+      };
   return ret;
 }
 
@@ -1847,6 +1886,16 @@ static local_provider_handle_type<opentelemetry::metrics::MeterProvider> _opente
     const opentelemetry::sdk::resource::ResourceAttributes &metrics_resource_values,
     opentelemetry::nostd::string_view trace_metrics_name) {
   local_provider_handle_type<opentelemetry::metrics::MeterProvider> ret;
+  auto readers_ptr = atfw::memory::stl::make_shared<std::vector<opentelemetry::sdk::metrics::MetricReader *>>();
+  if (readers_ptr) {
+    readers_ptr->reserve(readers.size());
+    for (auto &reader : readers) {
+      if (reader) {
+        readers_ptr->push_back(reader.get());
+      }
+    }
+  }
+
   ret.provider = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>(
       new opentelemetry::sdk::metrics::MeterProvider(
           std::unique_ptr<opentelemetry::sdk::metrics::ViewRegistry>(new opentelemetry::sdk::metrics::ViewRegistry()),
@@ -1861,8 +1910,7 @@ static local_provider_handle_type<opentelemetry::metrics::MeterProvider> _opente
     if (!trace_metrics_name.empty()) {
       std::shared_ptr<opentelemetry::sdk::metrics::HistogramAggregationConfig> config(
           new opentelemetry::sdk::metrics::HistogramAggregationConfig());
-      config->boundaries_ = {0,      1000,   4000,   8000,    16000,   32000,  6400,
-                             128000, 256000, 512000, 1024000, 3000000, 8000000};
+      config->boundaries_ = {0, 2000, 8000, 16000, 32000, 128000, 1024000, 3000000, 8000000};
       std::unique_ptr<opentelemetry::sdk::metrics::View> view = opentelemetry::sdk::metrics::ViewFactory::Create(
           static_cast<std::string>(trace_metrics_name) + "_view", "",
 #if (OPENTELEMETRY_VERSION_MAJOR * 1000 + OPENTELEMETRY_VERSION_MINOR) >= 1011
@@ -1885,20 +1933,38 @@ static local_provider_handle_type<opentelemetry::metrics::MeterProvider> _opente
     }
   }
 
-  ret.shutdown_callback = [](const opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider> &provider) {
-    if (!provider) {
-      return;
-    }
+  ret.shutdown_callback =
+      [readers_ptr](const opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider> &provider) {
+        if (!provider) {
+          return;
+        }
 
-    auto metrics_provider = opentelemetry::metrics::Provider::GetMeterProvider();
-    if (metrics_provider == provider) {
-      opentelemetry::metrics::Provider::SetMeterProvider(
-          opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>(
-              new opentelemetry::metrics::NoopMeterProvider()));
-    }
+        auto metrics_provider = opentelemetry::metrics::Provider::GetMeterProvider();
+        if (metrics_provider == provider) {
+          opentelemetry::metrics::Provider::SetMeterProvider(
+              opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>(
+                  new opentelemetry::metrics::NoopMeterProvider()));
+        }
 
-    static_cast<opentelemetry::sdk::metrics::MeterProvider *>(provider.get())->Shutdown();
-  };
+        // 处理优雅退出时无限等待的问题
+        if (readers_ptr && !readers_ptr->empty()) {
+          std::chrono::microseconds timeout =
+              std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::seconds{10});
+          auto app = atapp::app::get_last_instance();
+          if (nullptr != app) {
+            timeout = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::seconds{app->get_origin_configure().timer().stop_timeout().seconds() / 2});
+            timeout += std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::nanoseconds{app->get_origin_configure().timer().stop_timeout().nanos() / 2});
+          }
+          for (auto &reader : *readers_ptr) {
+            reader->Shutdown(timeout);
+          }
+          readers_ptr->clear();
+        }
+
+        static_cast<opentelemetry::sdk::metrics::MeterProvider *>(provider.get())->Shutdown();
+      };
   return ret;
 }
 
@@ -2081,23 +2147,50 @@ static local_provider_handle_type<opentelemetry::logs::LoggerProvider> _opentele
     std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogRecordProcessor>> &&processors,
     opentelemetry::sdk::resource::Resource resource) {
   local_provider_handle_type<opentelemetry::logs::LoggerProvider> ret;
+  auto processors_ptr = atfw::memory::stl::make_shared<std::vector<opentelemetry::sdk::logs::LogRecordProcessor *>>();
+  if (processors_ptr) {
+    processors_ptr->reserve(processors.size());
+    for (auto &processor : processors) {
+      if (processor) {
+        processors_ptr->push_back(processor.get());
+      }
+    }
+  }
 
   ret.provider = opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>(
       opentelemetry::sdk::logs::LoggerProviderFactory::Create(std::move(processors), std::move(resource)));
-  ret.shutdown_callback = [](const opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider> &provider) {
-    if (!provider) {
-      return;
-    }
+  ret.shutdown_callback =
+      [processors_ptr](const opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider> &provider) {
+        if (!provider) {
+          return;
+        }
 
-    auto logs_provider = opentelemetry::logs::Provider::GetLoggerProvider();
-    if (logs_provider == provider) {
-      opentelemetry::logs::Provider::SetLoggerProvider(
-          opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>(
-              new opentelemetry::logs::NoopLoggerProvider()));
-    }
+        auto logs_provider = opentelemetry::logs::Provider::GetLoggerProvider();
+        if (logs_provider == provider) {
+          opentelemetry::logs::Provider::SetLoggerProvider(
+              opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>(
+                  new opentelemetry::logs::NoopLoggerProvider()));
+        }
 
-    static_cast<opentelemetry::sdk::logs::LoggerProvider *>(provider.get())->Shutdown();
-  };
+        // 处理优雅退出时无限等待的问题
+        if (processors_ptr && !processors_ptr->empty()) {
+          std::chrono::microseconds timeout =
+              std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::seconds{10});
+          auto app = atapp::app::get_last_instance();
+          if (nullptr != app) {
+            timeout = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::seconds{app->get_origin_configure().timer().stop_timeout().seconds() / 2});
+            timeout += std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::nanoseconds{app->get_origin_configure().timer().stop_timeout().nanos() / 2});
+          }
+          for (auto &processor : *processors_ptr) {
+            processor->Shutdown(timeout);
+          }
+          processors_ptr->clear();
+        }
+
+        static_cast<opentelemetry::sdk::logs::LoggerProvider *>(provider.get())->Shutdown();
+      };
   return ret;
 }
 
@@ -2174,6 +2267,8 @@ static void _opentelemetry_cleanup_global_provider(atapp::app & /*app*/) {
   std::shared_ptr<global_service_data_type> current_service_cache = get_global_service_data();
   std::list<std::shared_ptr<std::thread>> cleanup_threads;
   if (current_service_cache) {
+    current_service_cache->shutdown = true;
+
     std::shared_ptr<group_type> default_group;
     std::unordered_map<std::string, std::shared_ptr<group_type>> named_groups;
 

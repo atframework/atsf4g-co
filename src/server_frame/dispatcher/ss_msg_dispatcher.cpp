@@ -247,12 +247,18 @@ SERVER_FRAME_API const std::string &ss_msg_dispatcher::pick_rpc_name(const atfra
     return get_empty_string();
   }
 
-  if (ss_msg.head().has_rpc_request()) {
-    return ss_msg.head().rpc_request().rpc_name();
-  }
-
-  if (ss_msg.head().has_rpc_stream()) {
-    return ss_msg.head().rpc_stream().rpc_name();
+  switch (ss_msg.head().rpc_type_case()) {
+    case atframework::SSMsgHead::kRpcRequest: {
+      return ss_msg.head().rpc_request().rpc_name();
+    }
+    case atframework::SSMsgHead::kRpcStream: {
+      return ss_msg.head().rpc_stream().rpc_name();
+    }
+    case atframework::SSMsgHead::kRpcResponse: {
+      return ss_msg.head().rpc_response().rpc_name();
+    }
+    default:
+      break;
   }
 
   return get_empty_string();

@@ -82,12 +82,18 @@ SERVER_FRAME_API const std::string &cs_msg_dispatcher::pick_rpc_name(msg_raw_t &
     return get_empty_string();
   }
 
-  if (real_msg->head().has_rpc_request()) {
-    return real_msg->head().rpc_request().rpc_name();
-  }
-
-  if (real_msg->head().has_rpc_stream()) {
-    return real_msg->head().rpc_stream().rpc_name();
+  switch (real_msg->head().rpc_type_case()) {
+    case atframework::CSMsgHead::kRpcRequest: {
+      return real_msg->head().rpc_request().rpc_name();
+    }
+    case atframework::CSMsgHead::kRpcStream: {
+      return real_msg->head().rpc_stream().rpc_name();
+    }
+    case atframework::CSMsgHead::kRpcResponse: {
+      return real_msg->head().rpc_response().rpc_name();
+    }
+    default:
+      break;
   }
 
   return get_empty_string();

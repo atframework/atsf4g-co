@@ -9,6 +9,7 @@
 #include <google/protobuf/duration.pb.h>
 #include <google/protobuf/message.h>
 #include <google/protobuf/timestamp.pb.h>
+#include <protocol/common/xresloader.pb.h>
 #include <protocol/config/com.const.config.pb.h>
 
 // clang-format off
@@ -84,6 +85,63 @@ static const char* pick_number(TINT& out, const char* str) {
   return str;
 }
 
+static int32_t pick_enum_number_from_string(const char* str, size_t sz, const google::protobuf::EnumDescriptor* eds) {
+  if (!*str || sz <= 0) {
+    return 0;
+  }
+
+  if (nullptr == eds || (*str >= '0' && *str <= '9')) {
+    int32_t ret = 0;
+    pick_number(ret, str);
+    return ret;
+  }
+
+  static std::unordered_map<std::string, std::unordered_map<std::string, int32_t>> cached_alias;
+  auto& cache = cached_alias[eds->full_name()];
+  if (cache.empty()) {
+    for (int i = 0; i < eds->value_count(); ++i) {
+      auto edv = eds->value(i);
+      cache[edv->name()] = edv->number();
+      cache[edv->full_name()] = edv->number();
+      if (edv->options().ExtensionSize(org::xresloader::enum_alias) > 0) {
+        for (auto& elasa_name : edv->options().GetRepeatedExtension(org::xresloader::enum_alias)) {
+          cache[elasa_name] = edv->number();
+        }
+      }
+    }
+  }
+
+  auto iter = cache.find(std::string{str, sz});
+  if (iter == cache.end()) {
+    int32_t ret = 0;
+    pick_number(ret, str);
+    return ret;
+  }
+
+  return iter->second;
+}
+
+template <typename TINT>
+static const char* pick_enum_number(TINT& out, const char* str, const google::protobuf::EnumDescriptor* eds) {
+  str = skip_space(str);
+  if (nullptr == str || *str == 0) {
+    out = 0;
+    return str;
+  }
+
+  if (nullptr == eds) {
+    return pick_number(out, str);
+  }
+
+  const char* ret = str;
+  while (*ret && !::util::string::is_space(*ret)) {
+    ++ret;
+  }
+
+  out = pick_enum_number_from_string(str, static_cast<size_t>(ret - str), eds);
+  return ret;
+}
+
 static bool protobuf_field_cmp_fn(const ::google::protobuf::FieldDescriptor* l,
                                   const ::google::protobuf::FieldDescriptor* r) {
   int lv = (NULL == l) ? 0 : l->number();
@@ -137,7 +195,7 @@ static const char* pick_const_data_auto_parse(const char* in, google::protobuf::
       }
       case ::google::protobuf::FieldDescriptor::CPPTYPE_ENUM: {
         int val = 0;
-        in = pick_number(val, in);
+        in = pick_enum_number(val, in, fds[i]->enum_type());
         reflect->SetEnumValue(&msg, fds[i], val);
         break;
       }
@@ -517,8 +575,8 @@ static bool pick_const_data(::google::protobuf::Message& settings, const ::googl
       return true;
     };
     case google::protobuf::FieldDescriptor::CPPTYPE_ENUM: {
-      int val = ::util::string::to_int<int>(value.c_str());
       const google::protobuf::EnumDescriptor* eds = fds->enum_type();
+      int32_t val = pick_enum_number_from_string(value.c_str(), value.size(), eds);
       const google::protobuf::EnumValueDescriptor* evs = eds->FindValueByNumber(val);
       if (NULL == evs) {
         FWLOGERROR("{} in ConstSettings has value {}, but is invalid in it's type {}", fds->name(), value,
