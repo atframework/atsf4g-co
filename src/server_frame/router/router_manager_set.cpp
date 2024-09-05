@@ -125,7 +125,7 @@ SERVER_FRAME_API int router_manager_set::tick() {
       false == is_closing_task_running()) {
     task_type_trait::id_type tid = 0;
     task_manager::me()->create_task_with_timeout<task_action_auto_save_objects>(
-        tid, logic_config::me()->get_cfg_task().nomsg().timeout().seconds(),
+        tid, logic_config::me()->get_cfg_task().nomsg().timeout(),
         task_action_auto_save_objects::ctor_param_t());
     if (0 == tid) {
       FWLOGERROR("create task_action_auto_save_objects failed");
@@ -200,7 +200,7 @@ SERVER_FRAME_API int router_manager_set::stop() {
   }
 
   task_manager::me()->create_task_with_timeout<task_action_router_close_manager_set>(
-      tid, logic_config::me()->get_cfg_task().stats().interval().seconds(), COPP_MACRO_STD_MOVE(ctor_param));
+      tid, logic_config::me()->get_cfg_task().stats().interval(), COPP_MACRO_STD_MOVE(ctor_param));
   if (0 == tid) {
     FWLOGERROR("create task_action_router_close_manager_set failed");
   } else {

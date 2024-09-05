@@ -32,6 +32,7 @@
 
 #include "dispatcher/dispatcher_type_defines.h"
 #include "dispatcher/task_type_traits.h"
+#include "utility/protobuf_mini_dumper.h"
 
 /**
  * @brief 协程任务和简单actor的管理创建manager类
@@ -330,10 +331,16 @@ class task_manager {
     explicit task_action_maker_t(const atframework::DispatcherOptions *opt) : task_action_maker_base_t(opt) {}
     int operator()(task_type_trait::id_type &task_id, dispatcher_start_data_type ctor_param) override {
       if (options.has_timeout() && (options.timeout().seconds() > 0 || options.timeout().nanos() > 0)) {
-        return task_manager::me()->create_task_with_timeout<TAction>(task_id, options.timeout().seconds(),
-                                                                     options.timeout().nanos(), std::move(ctor_param));
+        auto timeout = make_timeout_duration(options.timeout());
+        timeout += make_timeout_duration(options.timeout_offset());
+        return task_manager::me()->create_task_with_timeout<TAction>(task_id, timeout, std::move(ctor_param));
       } else {
-        return task_manager::me()->create_task<TAction>(task_id, std::move(ctor_param));
+        auto timeout = get_default_timeout();
+        if (options.timeout_default_multiple() > 0) {
+          timeout *= options.timeout_default_multiple();
+        }
+        timeout += make_timeout_duration(options.timeout_offset());
+        return task_manager::me()->create_task_with_timeout<TAction>(task_id, timeout, std::move(ctor_param));
       }
     };
   };
@@ -362,6 +369,24 @@ class task_manager {
 
   SERVER_FRAME_API int reload();
 
+  UTIL_FORCEINLINE static std::chrono::system_clock::duration make_timeout_duration(
+      const ::google::protobuf::Duration &dur) {
+    return protobuf_to_chrono_duration<std::chrono::system_clock::duration>(dur);
+  }
+
+  UTIL_FORCEINLINE static std::chrono::system_clock::duration make_timeout_duration(
+      const std::chrono::system_clock::duration &dur) {
+    return dur;
+  }
+
+  template <typename Rep, typename Period>
+  UTIL_FORCEINLINE static std::chrono::system_clock::duration make_timeout_duration(
+      const std::chrono::duration<Rep, Period> &timeout) {
+    return std::chrono::duration_cast<std::chrono::system_clock::duration>(timeout);
+  }
+
+  SERVER_FRAME_API static std::chrono::system_clock::duration get_default_timeout();
+
   /**
    * 获取栈大小
    */
@@ -370,14 +395,13 @@ class task_manager {
   /**
    * @brief 创建任务并指定超时时间
    * @param task_instance 协程任务
-   * @param timeout_sec 超时时间(秒)
-   * @param timeout_nsec 超时时间(纳秒), 0-999999999
+   * @param timeout 超时时间
    * @param args 传入构造函数的参数
    * @return 0或错误码
    */
-  template <typename TAction, typename TParams>
-  UTIL_SYMBOL_VISIBLE int create_task_with_timeout(task_type_trait::task_type &task_instance, time_t timeout_sec,
-                                                   time_t timeout_nsec, TParams &&args) {
+  template <typename TAction, typename TParams, typename Duration>
+  UTIL_SYMBOL_VISIBLE int create_task_with_timeout(task_type_trait::task_type &task_instance, Duration &&timeout,
+                                                   TParams &&args) {
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
     if (!native_mgr_) {
       task_instance.reset();
@@ -411,22 +435,22 @@ class task_manager {
     }
 #endif
 
-    return add_task(task_instance, timeout_sec, timeout_nsec);
+    return add_task(task_instance, make_timeout_duration(std::forward<Duration>(timeout)));
   }
 
   /**
    * @brief 创建任务并指定超时时间
    * @param task_id 协程任务的ID
-   * @param timeout_sec 超时时间(秒)
-   * @param timeout_nsec 超时时间(纳秒), 0-999999999
+   * @param timeout 超时时间
    * @param args 传入构造函数的参数
    * @return 0或错误码
    */
-  template <typename TAction, typename TParams>
-  UTIL_SYMBOL_VISIBLE int create_task_with_timeout(task_type_trait::id_type &task_id, time_t timeout_sec,
-                                                   time_t timeout_nsec, TParams &&args) {
+  template <typename TAction, typename TParams, typename Duration>
+  UTIL_SYMBOL_VISIBLE int create_task_with_timeout(task_type_trait::id_type &task_id, Duration &&timeout,
+                                                   TParams &&args) {
     task_type_trait::task_type task_instance;
-    int ret = create_task_with_timeout<TAction>(task_instance, timeout_sec, timeout_nsec, std::forward<TParams>(args));
+    int ret =
+        create_task_with_timeout<TAction>(task_instance, std::forward<Duration>(timeout), std::forward<TParams>(args));
     if (!task_type_trait::empty(task_instance)) {
       task_id = task_type_trait::get_task_id(task_instance);
     } else {
@@ -443,7 +467,8 @@ class task_manager {
    */
   template <typename TAction, typename TParams>
   UTIL_SYMBOL_VISIBLE int create_task(task_type_trait::task_type &task_instance, TParams &&args) {
-    return create_task_with_timeout<TAction>(task_instance, 0, 0, std::forward<TParams>(args));
+    return create_task_with_timeout<TAction>(task_instance, std::chrono::system_clock::duration::zero(),
+                                             std::forward<TParams>(args));
   }
 
   /**
@@ -454,19 +479,8 @@ class task_manager {
    */
   template <typename TAction, typename TParams>
   UTIL_SYMBOL_VISIBLE int create_task(task_type_trait::id_type &task_id, TParams &&args) {
-    return create_task_with_timeout<TAction>(task_id, 0, 0, std::forward<TParams>(args));
-  }
-
-  /**
-   * @brief 创建任务并指定超时时间
-   * @param task_id 协程任务的ID
-   * @param timeout_sec 超时时间(秒)
-   * @param args 传入构造函数的参数
-   * @return 0或错误码
-   */
-  template <typename TAction, typename TParams>
-  UTIL_FORCEINLINE int create_task_with_timeout(task_type_trait::id_type &task_id, time_t timeout_sec, TParams &&args) {
-    return create_task_with_timeout<TAction>(task_id, timeout_sec, 0, std::forward<TParams>(args));
+    return create_task_with_timeout<TAction>(task_id, std::chrono::system_clock::duration::zero(),
+                                             std::forward<TParams>(args));
   }
 
   /**
@@ -543,7 +557,8 @@ class task_manager {
    * @param timeout 超时时间
    * @return 0或错误码
    */
-  int add_task(const task_type_trait::task_type &task, time_t timeout_sec = 0, time_t timeout_nsec = 0);
+  int add_task(const task_type_trait::task_type &task,
+               std::chrono::system_clock::duration timeout = std::chrono::system_clock::duration::zero());
 
   int report_create_error(const char *fn_name);
 

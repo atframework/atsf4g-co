@@ -35,11 +35,7 @@ SERVER_FRAME_API async_invoke_result async_invoke(context &ctx, gsl::string_view
   params.name = util::log::format("rpc.async_invoke:{}", name);
   int res;
   if (timeout > std::chrono::system_clock::duration::zero()) {
-    auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timeout);
-    res = task_manager::me()->create_task_with_timeout<task_action_async_invoke>(
-        task_inst, static_cast<time_t>(seconds.count()),
-        static_cast<time_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(timeout - seconds).count()),
-        std::move(params));
+    res = task_manager::me()->create_task_with_timeout<task_action_async_invoke>(task_inst, timeout, std::move(params));
   } else {
     res = task_manager::me()->create_task<task_action_async_invoke>(task_inst, std::move(params));
   }

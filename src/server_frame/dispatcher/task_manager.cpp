@@ -518,7 +518,8 @@ SERVER_FRAME_API int task_manager::tick(time_t sec, int nsec) {
       get_task_manager_metrics_data().pool_used_memory.store(stack_pool_->get_limit().used_stack_size,
                                                              std::memory_order_release);
       FWLOGWARNING(
-          "[STATISTICS] Coroutine stack stats:\n\tConfigure - Max GC Number: {}\n\tConfigure - Stack Max: number {}, size "
+          "[STATISTICS] Coroutine stack stats:\n\tConfigure - Max GC Number: {}\n\tConfigure - Stack Max: number {}, "
+          "size "
           "{}\n\tConfigure - "
           "Stack Min: number {}, size "
           "{}\n\tRuntime - Stack Used: number {}, size {}\n\tRuntime - Stack Free: number {}, size {}",
@@ -562,22 +563,33 @@ SERVER_FRAME_API task_type_trait::task_type task_manager::get_task(task_type_tra
 #endif
 }
 
+SERVER_FRAME_API std::chrono::system_clock::duration task_manager::get_default_timeout() {
+  auto ret = make_timeout_duration(logic_config::me()->get_cfg_task().csmsg().timeout());
+  if (ret <= ret.zero()) {
+    ret = make_timeout_duration(std::chrono::seconds{8});
+  }
+  return ret;
+}
+
 SERVER_FRAME_API size_t task_manager::get_stack_size() const {
   return logic_config::me()->get_cfg_task().stack().size();
 }
 
-int task_manager::add_task(const task_type_trait::task_type &task, time_t timeout_sec, time_t timeout_nsec) {
+int task_manager::add_task(const task_type_trait::task_type &task, std::chrono::system_clock::duration timeout) {
   if (!native_mgr_) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
   int res = 0;
-  if (0 == timeout_sec && timeout_nsec == 0) {
+  if (timeout <= std::chrono::system_clock::duration::zero()) {
     // read default timeout from configure
     res = native_mgr_->add_task(task, logic_config::me()->get_cfg_task().csmsg().timeout().seconds(),
                                 logic_config::me()->get_cfg_task().csmsg().timeout().nanos());
   } else {
-    res = native_mgr_->add_task(task, timeout_sec, static_cast<int>(timeout_nsec));
+    time_t timeout_sec = static_cast<time_t>(std::chrono::duration_cast<std::chrono::seconds>(timeout).count());
+    int timeout_nsec = static_cast<int>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(timeout - std::chrono::seconds{timeout_sec}).count());
+    res = native_mgr_->add_task(task, timeout_sec, timeout_nsec);
   }
 
   if (res < 0) {

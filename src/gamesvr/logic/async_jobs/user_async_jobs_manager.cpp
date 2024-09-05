@@ -174,8 +174,9 @@ bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
   task_type_trait::id_type tid = 0;
   task_action_player_remote_patch_jobs::ctor_param_t params;
   params.user = owner_->shared_from_this();
-  params.timeout_duration = logic_config::me()->get_logic().user().async_job().timeout().seconds();
-  params.timeout_timepoint = util::time::time_utility::get_now() + params.timeout_duration;
+  params.timeout_duration =
+      task_manager::make_timeout_duration(logic_config::me()->get_logic().user().async_job().timeout());
+  params.timeout_timepoint = util::time::time_utility::now() + params.timeout_duration;
   params.caller_context = &ctx;
   params.async_job_type.swap(force_async_job_type_);
   task_manager::me()->create_task_with_timeout<task_action_player_remote_patch_jobs>(tid, params.timeout_duration,

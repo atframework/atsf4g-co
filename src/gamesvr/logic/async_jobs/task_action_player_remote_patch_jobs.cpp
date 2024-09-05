@@ -342,7 +342,7 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
     }
 
     // 执行时间过长则中断，下一次再启动流程
-    need_restart_ = param_.timeout_timepoint - util::time::time_utility::get_now() < param_.timeout_duration / 2;
+    need_restart_ = (param_.timeout_timepoint - util::time::time_utility::now()) < param_.timeout_duration / 2;
 
     // 如果玩家离线和正在准备登出则停止异步任务流程，下次登入再继续
     {

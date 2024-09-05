@@ -31,7 +31,9 @@ message DispatcherOptions {
   repeated string descriptions = 103;           // descriptions
   repeated string bussiness_module_name = 104;  // bussiness module name used by specific service instance
 
-  google.protobuf.Duration timeout = 201;  // custom timeout
+  google.protobuf.Duration timeout = 201;         // custom timeout
+  google.protobuf.Duration timeout_offset = 202;  // custom timeout offset
+  int32 timeout_default_multiple = 203;           // custom timeout multiple
 
   // functional
   // 标记把涉及的路由对象转移到快队列并触发保存(需要dispatcher层和task_action_base层支持)

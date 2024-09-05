@@ -214,7 +214,7 @@ GAMECLIENT_RPC_API int task_action_login::on_success() {
     params.user = user;
     params.caller_context = &get_shared_context();
     task_manager::me()->create_task_with_timeout<task_action_player_async_jobs>(
-        tid, logic_config::me()->get_cfg_task().nomsg().timeout().seconds(), COPP_MACRO_STD_MOVE(params));
+        tid, logic_config::me()->get_cfg_task().nomsg().timeout(), COPP_MACRO_STD_MOVE(params));
     if (0 == tid) {
       FCTXLOGERROR(get_shared_context(), "{}", "create task_action_player_async_jobs failed");
     } else {
