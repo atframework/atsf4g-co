@@ -24,6 +24,7 @@
 #include <rpc/router/routerservice.h>
 #include <rpc/rpc_common_types.h>
 #include <rpc/rpc_utils.h>
+#include <rpc/telemetry/semantic_conventions.h>
 
 #include <chrono>
 #include <list>
@@ -69,9 +70,12 @@ SERVER_FRAME_API task_action_ss_req_base::result_type task_action_ss_req_base::h
   if (get_request().head().has_router()) {
     auto trace_span = get_shared_context().get_trace_span();
     if (trace_span) {
-      trace_span->SetAttribute("router_object.type_id", get_request().head().router().object_type_id());
-      trace_span->SetAttribute("router_object.zone_id", get_request().head().router().object_zone_id());
-      trace_span->SetAttribute("router_object.instance_id", get_request().head().router().object_inst_id());
+      trace_span->SetAttribute(rpc::telemetry::semantic_conventions::kRpcRouterObjectTypeID,
+                               get_request().head().router().object_type_id());
+      trace_span->SetAttribute(rpc::telemetry::semantic_conventions::kRpcRouterObjectZoneID,
+                               get_request().head().router().object_zone_id());
+      trace_span->SetAttribute(rpc::telemetry::semantic_conventions::kRpcRouterObjectInstanceID,
+                               get_request().head().router().object_inst_id());
     }
 
     std::pair<bool, int> result;

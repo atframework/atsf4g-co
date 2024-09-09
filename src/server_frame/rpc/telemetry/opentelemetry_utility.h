@@ -222,6 +222,36 @@ class opentelemetry_utility {
       rpc::context& ctx, notification_domain event_domain, gsl::string_view event_name, gsl::string_view message,
       std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
           attrbites);
+
+  SERVER_FRAME_API static void send_log_to_default_group(rpc::context& ctx, gsl::string_view event_domain,
+                                                         gsl::string_view event_name, gsl::string_view message,
+                                                         attribute_span_type attrbites = {});
+
+  SERVER_FRAME_API static void send_log_to_default_group(
+      rpc::context& ctx, gsl::string_view event_domain, gsl::string_view event_name, gsl::string_view message,
+      std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
+          attrbites);
+
+  SERVER_FRAME_API static void send_log_to_default_group(rpc::context& ctx, opentelemetry::logs::Severity severity,
+                                                         gsl::string_view event_domain, gsl::string_view event_name,
+                                                         gsl::string_view message, attribute_span_type attrbites = {});
+
+  SERVER_FRAME_API static void send_log_to_default_group(
+      rpc::context& ctx, opentelemetry::logs::Severity severity, gsl::string_view event_domain,
+      gsl::string_view event_name, gsl::string_view message,
+      std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
+          attrbites);
+
+  SERVER_FRAME_API static void send_log_to_default_group(rpc::context& ctx, gsl::string_view logger_name,
+                                                         opentelemetry::logs::Severity severity,
+                                                         gsl::string_view event_domain, gsl::string_view event_name,
+                                                         gsl::string_view message, attribute_span_type attrbites = {});
+
+  SERVER_FRAME_API static void send_log_to_default_group(
+      rpc::context& ctx, gsl::string_view logger_name, opentelemetry::logs::Severity severity,
+      gsl::string_view event_domain, gsl::string_view event_name, gsl::string_view message,
+      std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
+          attrbites);
 };
 }  // namespace telemetry
 }  // namespace rpc

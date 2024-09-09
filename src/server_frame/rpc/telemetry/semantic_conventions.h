@@ -25,6 +25,10 @@ struct semantic_conventions {
   static constexpr const char *kRpcSystemValueAtRpcDistapcher = "atrpc.dispatcher";
   static constexpr const char *kRpcSystemValueAtRpcTask = "atrpc.task";
   static constexpr const char *kRpcServiceValueNoDispatcher = "no_dispatcher";
+
+  static constexpr const char *kRpcRouterObjectTypeID = "router_object.type_id";
+  static constexpr const char *kRpcRouterObjectZoneID = "router_object.zone_id";
+  static constexpr const char *kRpcRouterObjectInstanceID = "router_object.instance_id";
 };
 
 }  // namespace telemetry

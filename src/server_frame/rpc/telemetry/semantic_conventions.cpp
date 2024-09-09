@@ -25,6 +25,10 @@ constexpr const char *semantic_conventions::kAtRpcSpanName;
 constexpr const char *semantic_conventions::kRpcSystemValueAtRpcDistapcher;
 constexpr const char *semantic_conventions::kRpcSystemValueAtRpcTask;
 constexpr const char *semantic_conventions::kRpcServiceValueNoDispatcher;
+
+constexpr const char *semantic_conventions::kRpcRouterObjectTypeID;
+constexpr const char *semantic_conventions::kRpcRouterObjectZoneID;
+constexpr const char *semantic_conventions::kRpcRouterObjectInstanceID;
 #endif
 
 }  // namespace telemetry
