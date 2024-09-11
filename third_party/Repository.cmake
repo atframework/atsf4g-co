@@ -39,8 +39,19 @@ if(ATFRAMEWORK_CMAKE_TOOLSET_NEED_UPGRADE)
   endif()
 endif()
 
-# ============ third party ============
+# ============ third party mirror ============
+if(PROJECT_GIT_USE_MIRROR AND PROJECT_GITHUB_GIT_HTTP_MIRROR)
+  execute_process(
+    COMMAND ${GIT_EXECUTABLE} config --local --unset-all "url.${PROJECT_GITHUB_GIT_HTTP_MIRROR}.insteadOf"
+    COMMAND ${GIT_EXECUTABLE} config --add --local "url.${PROJECT_GITHUB_GIT_HTTP_MIRROR}:.insteadOf"
+            "https://github.com/"
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+else()
+  execute_process(COMMAND ${GIT_EXECUTABLE} config --local --unset-all "url.${PROJECT_GITHUB_GIT_HTTP_MIRROR}.insteadOf"
+                  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+endif()
 
+# ============ third party ============
 project_third_party_include_port("compression/import.cmake")
 if(NOT ANDROID AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
   project_third_party_include_port("malloc/jemalloc.cmake")

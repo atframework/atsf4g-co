@@ -39,8 +39,8 @@
 /3rd_party/install
 /third_party/install
 /third_party/packages
-/third_party/xresloader/bin/xresloader.jar
 /third_party/xresloader/xresconv-cli
+/third_party/xresloader/package
 
 .cache
 .mako_modules-*
