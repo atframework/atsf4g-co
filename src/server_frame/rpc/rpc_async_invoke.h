@@ -78,6 +78,8 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_code_type wait_task(context &ctx
 
 SERVER_FRAME_API void async_then_start_task(context &ctx, gsl::string_view name, task_type_trait::task_type waiting,
                                             task_type_trait::id_type task_id);
+SERVER_FRAME_API void async_then_start_task(context &ctx, gsl::string_view name, task_type_trait::task_type waiting,
+                                            task_type_trait::task_type then_task);
 
 template <class TCALLABLE, class... TARGS>
 UTIL_SYMBOL_VISIBLE void async_then(context &ctx, gsl::string_view name, task_type_trait::task_type waiting,

@@ -29,6 +29,9 @@
 #include <memory>
 #include <unordered_map>
 #include <utility>
+#if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+#  include <map>
+#endif
 
 #include "dispatcher/dispatcher_type_defines.h"
 #include "dispatcher/task_type_traits.h"
@@ -320,7 +323,7 @@ class task_manager {
     atframework::DispatcherOptions options;
     SERVER_FRAME_API explicit task_action_maker_base_t(const atframework::DispatcherOptions *opt);
     SERVER_FRAME_API virtual ~task_action_maker_base_t();
-    virtual int operator()(task_type_trait::id_type &task_id, dispatcher_start_data_type ctor_param) = 0;
+    virtual int operator()(task_type_trait::task_type &task_inst, dispatcher_start_data_type ctor_param) = 0;
   };
 
   /// 协程任务创建器
@@ -329,18 +332,18 @@ class task_manager {
   template <typename TAction>
   struct UTIL_SYMBOL_VISIBLE task_action_maker_t : public task_action_maker_base_t {
     explicit task_action_maker_t(const atframework::DispatcherOptions *opt) : task_action_maker_base_t(opt) {}
-    int operator()(task_type_trait::id_type &task_id, dispatcher_start_data_type ctor_param) override {
+    int operator()(task_type_trait::task_type &task_inst, dispatcher_start_data_type ctor_param) override {
       if (options.has_timeout() && (options.timeout().seconds() > 0 || options.timeout().nanos() > 0)) {
         auto timeout = make_timeout_duration(options.timeout());
         timeout += make_timeout_duration(options.timeout_offset());
-        return task_manager::me()->create_task_with_timeout<TAction>(task_id, timeout, std::move(ctor_param));
+        return task_manager::me()->create_task_with_timeout<TAction>(task_inst, timeout, std::move(ctor_param));
       } else {
         auto timeout = get_default_timeout();
         if (options.timeout_default_multiple() > 0) {
           timeout *= options.timeout_default_multiple();
         }
         timeout += make_timeout_duration(options.timeout_offset());
-        return task_manager::me()->create_task_with_timeout<TAction>(task_id, timeout, std::move(ctor_param));
+        return task_manager::me()->create_task_with_timeout<TAction>(task_inst, timeout, std::move(ctor_param));
       }
     };
   };
@@ -439,27 +442,6 @@ class task_manager {
   }
 
   /**
-   * @brief 创建任务并指定超时时间
-   * @param task_id 协程任务的ID
-   * @param timeout 超时时间
-   * @param args 传入构造函数的参数
-   * @return 0或错误码
-   */
-  template <typename TAction, typename TParams, typename Duration>
-  UTIL_SYMBOL_VISIBLE int create_task_with_timeout(task_type_trait::id_type &task_id, Duration &&timeout,
-                                                   TParams &&args) {
-    task_type_trait::task_type task_instance;
-    int ret =
-        create_task_with_timeout<TAction>(task_instance, std::forward<Duration>(timeout), std::forward<TParams>(args));
-    if (!task_type_trait::empty(task_instance)) {
-      task_id = task_type_trait::get_task_id(task_instance);
-    } else {
-      task_id = 0;
-    }
-    return ret;
-  }
-
-  /**
    * @brief 创建任务
    * @param task_instance 协程任务
    * @param args 传入构造函数的参数
@@ -468,18 +450,6 @@ class task_manager {
   template <typename TAction, typename TParams>
   UTIL_SYMBOL_VISIBLE int create_task(task_type_trait::task_type &task_instance, TParams &&args) {
     return create_task_with_timeout<TAction>(task_instance, std::chrono::system_clock::duration::zero(),
-                                             std::forward<TParams>(args));
-  }
-
-  /**
-   * @brief 创建任务
-   * @param task_id 协程任务的ID
-   * @param args 传入构造函数的参数
-   * @return 0或错误码
-   */
-  template <typename TAction, typename TParams>
-  UTIL_SYMBOL_VISIBLE int create_task(task_type_trait::id_type &task_id, TParams &&args) {
-    return create_task_with_timeout<TAction>(task_id, std::chrono::system_clock::duration::zero(),
                                              std::forward<TParams>(args));
   }
 
@@ -499,6 +469,7 @@ class task_manager {
    * @return 0或错误码
    */
   SERVER_FRAME_API int start_task(task_type_trait::id_type task_id, dispatcher_start_data_type &data);
+  SERVER_FRAME_API int start_task(task_type_trait::task_type &task_instance, dispatcher_start_data_type &data);
 
   /**
    * @brief 恢复任务
@@ -507,6 +478,7 @@ class task_manager {
    * @return 0或错误码
    */
   SERVER_FRAME_API int resume_task(task_type_trait::id_type task_id, dispatcher_resume_data_type &data);
+  SERVER_FRAME_API int resume_task(task_type_trait::task_type &task_instance, dispatcher_resume_data_type &data);
 
   /**
    * @brief tick，可能会触发任务过期

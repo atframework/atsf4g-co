@@ -915,8 +915,8 @@ int logic_server_common_module::tick_update_remote_configures() {
 
   task_action_reload_remote_server_configure::ctor_param_t params;
 
-  task_type_trait::id_type task_id;
-  int res = task_manager::me()->create_task<task_action_reload_remote_server_configure>(task_id, std::move(params));
+  task_type_trait::task_type task_inst;
+  int res = task_manager::me()->create_task<task_action_reload_remote_server_configure>(task_inst, std::move(params));
   if (0 != res) {
     FWLOGERROR("create task_action_reload_remote_server_configure failed, res: {}({})", res,
                protobuf_mini_dumper_get_error_msg(res));
@@ -924,10 +924,10 @@ int logic_server_common_module::tick_update_remote_configures() {
   }
 
   dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
-  res = task_manager::me()->start_task(task_id, start_data);
+  res = task_manager::me()->start_task(task_inst, start_data);
   if (0 != res) {
-    FWLOGERROR("start task_action_reload_remote_server_configure {} failed, res: {}({})", task_id, res,
-               protobuf_mini_dumper_get_error_msg(res));
+    FWLOGERROR("start task_action_reload_remote_server_configure {} failed, res: {}({})",
+               task_type_trait::get_task_id(task_inst), res, protobuf_mini_dumper_get_error_msg(res));
     return 0;
   }
 

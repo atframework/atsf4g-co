@@ -167,6 +167,7 @@ SERVER_FRAME_API void async_then_start_task(context &ctx, gsl::string_view name,
 
   task_type_trait::id_type waiting_task_id = task_type_trait::get_task_id(waiting);
 
+  // 使用 task_id 关联，避免生命周期引用
   async_invoke_result result = async_invoke(
       ctx, name, [waiting = std::move(waiting), task_id](rpc::context &child_ctx) -> rpc::result_code_type {
         auto ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(child_ctx, waiting));
@@ -193,6 +194,11 @@ SERVER_FRAME_API void async_then_start_task(context &ctx, gsl::string_view name,
   dispatcher_start_data_type data = dispatcher_make_default<dispatcher_start_data_type>();
   data.context = &ctx;
   task_manager::me()->start_task(task_id, data);
+}
+
+SERVER_FRAME_API void async_then_start_task(context &ctx, gsl::string_view name, task_type_trait::task_type waiting,
+                                            task_type_trait::task_type then_task) {
+  async_then_start_task(ctx, name, waiting, task_type_trait::get_task_id(then_task));
 }
 
 }  // namespace rpc

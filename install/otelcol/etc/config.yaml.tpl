@@ -1,9 +1,13 @@
-{{- $otelcol_traces_exporters := list "spanmetrics" -}}
-{{- $otelcol_spanmetrics_exporters := list -}}
+{{- $otelcol_traces_exporters := list -}}
+{{- $otelcol_spanmetrics_exporters_default := list -}}
+{{- $otelcol_spanmetrics_exporters_prometheus := list -}}
+{{- $otelcol_spanmetrics_service_default := dict -}}
+{{- $otelcol_spanmetrics_service_prometheus := dict -}}
 {{- $otelcol_metrics_exporters := list -}}
 {{- $otelcol_logs_exporters := list -}}
 {{- $otelcol_agent_data_source := dict -}}
-{{- $otelcol_spanmetrics_processors := list -}}
+{{- $otelcol_spanmetrics_processors_default := list -}}
+{{- $otelcol_spanmetrics_processors_prometheus := list -}}
 {{- if not (empty .Values.telemetry.agent.group_name) -}}
   {{- $otelcol_agent_data_source = get .Values.telemetry.group .Values.telemetry.agent.group_name -}}
   {{- if empty $otelcol_agent_data_source -}}
@@ -164,14 +168,14 @@ exporters:
 {{- if not (empty $otelcol_agent_data_source.trace) }}
   {{- if not (empty $otelcol_agent_data_source.trace.otlp) }}
     {{- if not (empty $otelcol_agent_data_source.trace.otlp.grpc_endpoint) -}}
-      {{- if empty .Values.telemetry.agent.trace_exporters.trace_blackhole }}
+      {{- if not (dig "trace_exporters" "trace_blackhole" false .Values.telemetry.agent) }}
         {{- $otelcol_traces_exporters = append $otelcol_traces_exporters "otlp/trace" }}
       {{- end }}
   otlp/trace:
       {{- include "otelcol.config.otlp_agent.grpc.yaml" (dict "shared_options" (dig "shared_options" "otlp" "grpc" (dict) .Values.telemetry.agent ) "private_options" $otelcol_agent_data_source.trace.otlp) | trim | nindent 4 }}
     {{- end }}
     {{- if not (empty $otelcol_agent_data_source.trace.otlp.http_endpoint) -}}
-      {{- if empty .Values.telemetry.agent.trace_exporters.trace_blackhole }}
+      {{- if not (dig "trace_exporters" "trace_blackhole" false .Values.telemetry.agent) }}
         {{- $otelcol_traces_exporters = append $otelcol_traces_exporters "otlphttp/trace" }}
       {{- end }}
   otlphttp/trace:
@@ -183,7 +187,7 @@ exporters:
   {{- if not (empty $otelcol_agent_data_source.metrics.otlp) }}
     {{- if not (empty $otelcol_agent_data_source.metrics.otlp.grpc_endpoint) -}}
       {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "otlp/metrics" }}
-      {{- $otelcol_spanmetrics_exporters = append $otelcol_spanmetrics_exporters "otlp/spanmetrics" }}
+      {{- $otelcol_spanmetrics_exporters_default = append $otelcol_spanmetrics_exporters_default "otlp/spanmetrics" }}
   otlp/metrics:
       {{- include "otelcol.config.otlp_agent.grpc.yaml" (dict "shared_options" (dig "shared_options" "otlp" "grpc" (dict) .Values.telemetry.agent ) "private_options" $otelcol_agent_data_source.metrics.otlp) | trim | nindent 4 }}
   otlp/spanmetrics:
@@ -191,7 +195,7 @@ exporters:
     {{- end }}
     {{- if not (empty $otelcol_agent_data_source.metrics.otlp.http_endpoint) -}}
       {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "otlphttp/metrics" }}
-      {{- $otelcol_spanmetrics_exporters = append $otelcol_spanmetrics_exporters "otlphttp/spanmetrics" }}
+      {{- $otelcol_spanmetrics_exporters_default = append $otelcol_spanmetrics_exporters_default "otlphttp/spanmetrics" }}
   otlphttp/metrics:
       {{- include "otelcol.config.otlp_agent.http.yaml" (dict "shared_options" (dig "shared_options" "otlp" "http" (dict) .Values.telemetry.agent ) "private_options" $otelcol_agent_data_source.metrics.otlp) | trim | nindent 4 }}
   otlphttp/spanmetrics:
@@ -199,13 +203,19 @@ exporters:
     {{- end }}
   {{- end }}
   {{- if or (dig "shared_options" "prometheus" "pull" "endpoint" false .Values.telemetry.agent) (dig "metrics" "prometheus" "pull" "url" false $otelcol_agent_data_source) }}
-    {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "prometheus" }}
-  prometheus:
+    {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "prometheus/metrics" }}
+    {{- $otelcol_spanmetrics_exporters_prometheus = append $otelcol_spanmetrics_exporters_prometheus "prometheus/spanmetrics" }}
+  prometheus/metrics:
+    {{- include "otelcol.config.prometheus_agent.pull.yaml" (dict "shared_options" (dig "shared_options" "prometheus" "pull" (dict) .Values.telemetry.agent ) "private_options" (dig "metrics" "prometheus" "pull" (dict) $otelcol_agent_data_source)) | trim | nindent 4 }}
+  prometheus/spanmetrics:
     {{- include "otelcol.config.prometheus_agent.pull.yaml" (dict "shared_options" (dig "shared_options" "prometheus" "pull" (dict) .Values.telemetry.agent ) "private_options" (dig "metrics" "prometheus" "pull" (dict) $otelcol_agent_data_source)) | trim | nindent 4 }}
   {{- end }}
   {{- if or (dig "shared_options" "prometheus" "push" "endpoint" false .Values.telemetry.agent) (dig "metrics" "prometheus" "push" "host" false $otelcol_agent_data_source) }}
-    {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "prometheusremotewrite" }}
-  prometheusremotewrite:
+    {{- $otelcol_metrics_exporters = append $otelcol_metrics_exporters "prometheusremotewrite/metrics" }}
+    {{- $otelcol_spanmetrics_exporters_prometheus = append $otelcol_spanmetrics_exporters_prometheus "prometheusremotewrite/spanmetrics" }}
+  prometheusremotewrite/metrics:
+    {{- include "otelcol.config.prometheus_agent.push.yaml" (dict "shared_options" (dig "shared_options" "prometheus" "push" (dict) .Values.telemetry.agent ) "private_options" (dig "metrics" "prometheus" "push" (dict) $otelcol_agent_data_source)) | trim | nindent 4 }}
+  prometheusremotewrite/spanmetrics:
     {{- include "otelcol.config.prometheus_agent.push.yaml" (dict "shared_options" (dig "shared_options" "prometheus" "push" (dict) .Values.telemetry.agent ) "private_options" (dig "metrics" "prometheus" "push" (dict) $otelcol_agent_data_source)) | trim | nindent 4 }}
   {{- end }}
 {{- end }}
@@ -240,24 +250,28 @@ exporters:
 
 processors:
   batch/traces:
-    send_batch_size: 512
-    send_batch_max_size: 32768
-    timeout: 10s
-  batch/spanmetrics:
-    send_batch_size: 512
+    send_batch_size: 256
     send_batch_max_size: 16384
+    timeout: 10s
+  batch/spanmetrics_default:
+    send_batch_size: 256
+    send_batch_max_size: 2048
+    timeout: 10s
+  batch/spanmetrics_prometheus:
+    send_batch_size: 256
+    send_batch_max_size: 2048
     timeout: 10s
   batch/metrics:
-    send_batch_size: 512
-    send_batch_max_size: 16384
+    send_batch_size: 256
+    send_batch_max_size: 4096
     timeout: 10s
   batch/logs:
-    send_batch_size: 512
-    send_batch_max_size: 65536
+    send_batch_size: 256
+    send_batch_max_size: 8192
     timeout: 10s
   batch/logs_cs_actor:
     send_batch_size: 16
-    send_batch_max_size: 65536
+    send_batch_max_size: 8192
     timeout: 30s
 {{- $otelcol_agent_data_source_metrics_resource_attributes := dict -}}
 {{- if not (empty $otelcol_agent_data_source.metrics) }}
@@ -269,25 +283,58 @@ processors:
   {{- $otelcol_agent_data_source_metrics_resource_attributes := merge $otelcol_agent_data_source_metrics_resource_attributes $otelcol_agent_data_source.resource -}}
 {{- end }}
 {{- if not (empty $otelcol_agent_data_source_metrics_resource_attributes) }}
-  resource/spanmetrics:
-    attributes:
+  {{- $otelcol_agent_spanmetrics_ignore_resources := dig "spanmetrics" "default" "ignore_resources" (list) .Values.telemetry.agent }}
+  {{- $otelcol_agent_spanmetrics_default_resources_list := list }}
     {{- range $label_key, $label_value := $otelcol_agent_data_source_metrics_resource_attributes }}
-      - key: "{{ $label_key }}"
-        value: "{{ $label_value }}"
-        action: upsert
+      {{- if not (has $label_key $otelcol_agent_spanmetrics_ignore_resources) }}
+        {{- $otelcol_agent_spanmetrics_default_resources_list = append $otelcol_agent_spanmetrics_default_resources_list (dict "key" $label_key "value" $label_value "action" "upsert") }}
+      {{- end }}
     {{- end }}
-  {{- $otelcol_spanmetrics_processors = append $otelcol_spanmetrics_processors "resource/spanmetrics" }}
+    {{- if not (empty $otelcol_agent_spanmetrics_default_resources_list) }}
+      {{- $otelcol_spanmetrics_processors_default = append $otelcol_spanmetrics_processors_default "resource/spanmetrics_default" }}
+  resource/spanmetrics_default:
+      {{- toYaml (dict "attributes" $otelcol_agent_spanmetrics_default_resources_list ) | trim | nindent 4}}
+    {{- end }}
+  {{- $otelcol_agent_spanmetrics_ignore_resources := dig "spanmetrics" "prometheus" "ignore_resources" (list) .Values.telemetry.agent }}
+  {{- $otelcol_agent_spanmetrics_prometheus_resources_list := list }}
+    {{- range $label_key, $label_value := $otelcol_agent_data_source_metrics_resource_attributes }}
+      {{- if not (has $label_key $otelcol_agent_spanmetrics_ignore_resources) }}
+        {{- $otelcol_agent_spanmetrics_prometheus_resources_list = append $otelcol_agent_spanmetrics_prometheus_resources_list (dict "key" $label_key "value" $label_value "action" "upsert") }}
+      {{- end }}
+    {{- end }}
+    {{- if not (empty $otelcol_agent_spanmetrics_prometheus_resources_list) }}
+      {{- $otelcol_spanmetrics_processors_prometheus = append $otelcol_spanmetrics_processors_prometheus "resource/spanmetrics_prometheus" }}
+  resource/spanmetrics_prometheus:
+      {{- toYaml (dict "attributes" $otelcol_agent_spanmetrics_prometheus_resources_list ) | trim | nindent 4}}
+    {{- end }}
 {{- end }}
-{{- $otelcol_spanmetrics_processors = append $otelcol_spanmetrics_processors "batch/spanmetrics" }}
+{{- $otelcol_spanmetrics_processors_default = append $otelcol_spanmetrics_processors_default "batch/spanmetrics_default" }}
+{{- $otelcol_spanmetrics_processors_prometheus = append $otelcol_spanmetrics_processors_prometheus "batch/spanmetrics_prometheus" }}
 
+{{- if not (dig "spanmetrics" "blackhole" false .Values.telemetry.agent.trace_exporters) }}
+  {{- if and (not (empty $otelcol_spanmetrics_exporters_default)) (not (dig "spanmetrics" "default" "blackhole" false .Values.telemetry.agent.trace_exporters)) }}
+    {{- $otelcol_spanmetrics_service_default = dict "processors" $otelcol_spanmetrics_processors_default }}
+    {{- if and (not (empty .Values.telemetry.agent.trace_exporters.file)) (not (empty .Values.telemetry.agent.trace_exporters.file.enable)) }}
+      {{- $otelcol_spanmetrics_exporters_default = append $otelcol_spanmetrics_exporters_default "file/rotation_spanmetrics" }}
+    {{- end }}
+    {{- $otelcol_spanmetrics_service_default = set $otelcol_spanmetrics_service_default "exporters" $otelcol_spanmetrics_exporters_default }}
+  {{- end }}
+  {{- if and (not (empty $otelcol_spanmetrics_exporters_prometheus)) (not (dig "spanmetrics" "prometheus" "blackhole" false .Values.telemetry.agent.trace_exporters)) }}
+    {{- $otelcol_spanmetrics_service_prometheus = dict "processors" $otelcol_spanmetrics_processors_prometheus "exporters" $otelcol_spanmetrics_exporters_prometheus }}
+  {{- end }}
+{{- end }}
+
+{{- if or (not (empty $otelcol_spanmetrics_exporters_default)) (not (empty $otelcol_spanmetrics_service_prometheus)) }}
 connectors:
-  spanmetrics:
+  {{- if (not (empty $otelcol_spanmetrics_exporters_default)) }}
+    {{- $otelcol_traces_exporters = append $otelcol_traces_exporters "spanmetrics/default" }}
+  spanmetrics/default:
     namespace: "{{ $otelcol_agent_data_source.additional_metrics_name | default "trace.metrics" }}"
-    metrics_flush_interval: 15s
+    metrics_flush_interval: 45s
     histogram:
       explicit:
-        buckets: [1ms, 2ms, 8ms, 16ms, 50ms, 80ms, 100ms, 250ms, 1s, 6s]
-    exclude_dimensions: ['service.identity', 'process.pid']
+        buckets: [2ms, 8ms, 16ms, 64ms, 256ms, 1s, 8s]
+    exclude_dimensions: ['service.identity', 'process.pid', 'bk.data.token']
     dimensions_cache_size: 4096
     resource_metrics_cache_size: 4096
     exemplars:
@@ -315,6 +362,45 @@ connectors:
       # - name: span.name
       # - name: service.name
     aggregation_temporality: "AGGREGATION_TEMPORALITY_DELTA"
+  {{- end }}
+  {{- if (not (empty $otelcol_spanmetrics_service_prometheus)) }}
+    {{- $otelcol_traces_exporters = append $otelcol_traces_exporters "spanmetrics/prometheus" }}
+  spanmetrics/prometheus:
+    namespace: "{{ $otelcol_agent_data_source.additional_metrics_name | default "trace.metrics" }}"
+    metrics_flush_interval: 45s
+    histogram:
+      explicit:
+        buckets: [2ms, 8ms, 16ms, 64ms, 256ms, 1s, 8s]
+    exclude_dimensions: ['service.identity', 'process.pid', 'bk.data.token']
+    dimensions_cache_size: 4096
+    resource_metrics_cache_size: 4096
+    exemplars:
+      enabled: true
+    dimensions:
+      - name: deployment.environment
+        default: UNSET
+      - name: host.name
+        default: localhost
+      - name: rpc.atrpc.result_code
+        default: 0
+      - name: rpc.atrpc.response_code
+        default: 0
+      - name: rpc.method
+        default: UNKNOWN
+      - name: rpc.service
+        default: NONE
+      - name: rpc.system
+        default: NONE
+      - name: service.area.zone_id
+        default: 0
+      - name: service.instance.name
+        default: UNKNOWN
+      # - name: rpc.atrpc.kind
+      # - name: span.name
+      # - name: service.name
+    aggregation_temporality: "AGGREGATION_TEMPORALITY_CUMULATIVE"
+  {{- end }}
+{{- end }}
 
 service:
 {{- if and .Values.telemetry.agent.otelcol (not (empty .Values.telemetry.agent.otelcol.service.telemetry)) }}
@@ -323,32 +409,27 @@ service:
 {{- end }}
   extensions: [health_check, pprof, zpages]
   pipelines:
-{{- if or (empty .Values.telemetry.agent.trace_exporters.trace_blackhole) (empty .Values.telemetry.agent.trace_exporters.spanmetrics_blackhole) }}
+{{- if not (dig "trace_exporters" "trace_blackhole" false .Values.telemetry.agent) }}
+  {{- if dig "trace_exporters" "file" "enable" false .Values.telemetry.agent }}
+    {{- $otelcol_traces_exporters = append $otelcol_traces_exporters "file/rotation_trace" }}
+  {{- end }}
+{{- end }}
+{{- if not (empty $otelcol_traces_exporters) }}
     traces:
       receivers: [otlp]
       processors: [batch/traces]
-  {{- if and (not (empty .Values.telemetry.agent.trace_exporters.file)) (not (empty .Values.telemetry.agent.trace_exporters.file.enable)) }}
-      # exporters: [{{ $otelcol_traces_exporters | join ", "}}]
-      {{- $otelcol_traces_exporters = append $otelcol_traces_exporters "file/rotation_trace" }}
       exporters: [{{ $otelcol_traces_exporters | join ", "}}]
-  {{- else }}
-      exporters: [{{ $otelcol_traces_exporters | join ", "}}]
-      {{- $otelcol_traces_exporters = append $otelcol_traces_exporters "file/rotation_trace" }}
-      # exporters: [{{ $otelcol_traces_exporters | join ", "}}]
-  {{- end }}
 {{- end }}
-{{- if empty .Values.telemetry.agent.trace_exporters.spanmetrics_blackhole }}
-    metrics/spanmetrics:
-      receivers: [spanmetrics]
-      processors: [{{ $otelcol_spanmetrics_processors | join ", "}}]
-  {{- if and (not (empty .Values.telemetry.agent.trace_exporters.file)) (not (empty .Values.telemetry.agent.trace_exporters.file.enable)) }}
-      # exporters: [{{ $otelcol_spanmetrics_exporters | join ", "}}]
-      {{- $otelcol_spanmetrics_exporters = append $otelcol_spanmetrics_exporters "file/rotation_spanmetrics" }}
-      exporters: [{{ $otelcol_spanmetrics_exporters | join ", "}}]
-  {{- else }}
-      exporters: [{{ $otelcol_spanmetrics_exporters | join ", "}}]
-      {{- $otelcol_spanmetrics_exporters = append $otelcol_spanmetrics_exporters "file/rotation_spanmetrics" }}
-      # exporters: [{{ $otelcol_spanmetrics_exporters | join ", "}}]
+{{- if or (not (empty $otelcol_spanmetrics_service_default)) (not (empty $otelcol_spanmetrics_service_prometheus)) }}
+  {{- if not (empty $otelcol_spanmetrics_service_default) }}
+    metrics/spanmetrics_default:
+      receivers: [spanmetrics/default]
+      {{- toYaml $otelcol_spanmetrics_service_default | trim | nindent 6 }}
+  {{- end }}
+  {{- if not (empty $otelcol_spanmetrics_service_prometheus) }}
+    metrics/spanmetrics_prometheus:
+      receivers: [spanmetrics/prometheus]
+      {{- toYaml $otelcol_spanmetrics_service_prometheus | trim | nindent 6 }}
   {{- end }}
 {{- end }}
     metrics:

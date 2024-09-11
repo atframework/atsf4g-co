@@ -163,10 +163,10 @@ class dispatcher_implement : public ::atapp::module_impl {
   /**
    * @brief 创建协程任务
    * @param raw_msg 消息抽象结构
-   * @param task_id 相关的任务id
+   * @param task_inst 相关的任务id
    * @return 返回错误码或0
    */
-  virtual int create_task(dispatcher_start_data_type &start_data, task_type_trait::id_type &task_id);
+  virtual int create_task(dispatcher_start_data_type &start_data, task_type_trait::task_type &task_inst);
 
   /**
    * @brief 根据类型ID获取action或actor选项

@@ -119,7 +119,9 @@ dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_messa
   callback_data.context = &ctx;
 
   // 先尝试使用task 模块
-  int res = create_task(callback_data, ret.task_id);
+  task_type_trait::task_type task_inst;
+  int res = create_task(callback_data, task_inst);
+  ret.task_id = task_type_trait::get_task_id(task_inst);
   ret.options = callback_data.options;
 
   if (res < 0) {
@@ -143,7 +145,7 @@ dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_messa
   }
 
   // 再启动
-  ret.result_code = task_manager::me()->start_task(ret.task_id, callback_data);
+  ret.result_code = task_manager::me()->start_task(task_inst, callback_data);
   return ret;
 }
 
@@ -169,8 +171,8 @@ int32_t dispatcher_implement::on_send_message_failed(rpc::context &ctx, msg_raw_
 
 void dispatcher_implement::on_create_task_failed(dispatcher_start_data_type &, int32_t) {}
 
-int dispatcher_implement::create_task(dispatcher_start_data_type &start_data, task_type_trait::id_type &task_id) {
-  task_id = 0;
+int dispatcher_implement::create_task(dispatcher_start_data_type &start_data, task_type_trait::task_type &task_inst) {
+  task_type_trait::reset_task(task_inst);
 
   msg_type_t msg_type_id = pick_msg_type_id(start_data.message);
   const std::string &rpc_name = pick_rpc_name(start_data.message);
@@ -186,7 +188,7 @@ int dispatcher_implement::create_task(dispatcher_start_data_type &start_data, ta
     msg_task_action_set_t::iterator iter = task_action_map_by_id_.find(msg_type_id);
     if (task_action_map_by_id_.end() != iter && iter->second) {
       start_data.options = &iter->second->options;
-      return (*iter->second)(task_id, start_data);
+      return (*iter->second)(task_inst, start_data);
     }
   }
 
@@ -194,7 +196,7 @@ int dispatcher_implement::create_task(dispatcher_start_data_type &start_data, ta
     rpc_task_action_set_t::iterator iter = task_action_map_by_name_.find(rpc_name);
     if (task_action_map_by_name_.end() != iter && iter->second) {
       start_data.options = &iter->second->options;
-      return (*iter->second)(task_id, start_data);
+      return (*iter->second)(task_inst, start_data);
     }
   }
 

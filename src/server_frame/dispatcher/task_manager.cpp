@@ -437,6 +437,11 @@ SERVER_FRAME_API int task_manager::start_task(task_type_trait::id_type task_id, 
   return 0;
 }
 
+SERVER_FRAME_API int task_manager::start_task(task_type_trait::task_type &task_instance,
+                                              dispatcher_start_data_type &data) {
+  return start_task(task_type_trait::get_task_id(task_instance), data);
+}
+
 SERVER_FRAME_API int task_manager::resume_task(task_type_trait::id_type task_id, dispatcher_resume_data_type &data) {
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   generic_resume_index index{data.message.message_type, data.sequence};
@@ -480,6 +485,11 @@ SERVER_FRAME_API int task_manager::resume_task(task_type_trait::id_type task_id,
 #endif
 
   return 0;
+}
+
+SERVER_FRAME_API int task_manager::resume_task(task_type_trait::task_type &task_instance,
+                                               dispatcher_resume_data_type &data) {
+  return resume_task(task_type_trait::get_task_id(task_instance), data);
 }
 
 SERVER_FRAME_API int task_manager::tick(time_t sec, int nsec) {

@@ -171,7 +171,7 @@ bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
         ::util::time::time_utility::get_now() + logic_config::me()->get_logic().user().async_job().interval().seconds();
   }
 
-  task_type_trait::id_type tid = 0;
+  task_type_trait::task_type task_inst;
   task_action_player_remote_patch_jobs::ctor_param_t params;
   params.user = owner_->shared_from_this();
   params.timeout_duration =
@@ -179,17 +179,17 @@ bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
   params.timeout_timepoint = util::time::time_utility::now() + params.timeout_duration;
   params.caller_context = &ctx;
   params.async_job_type.swap(force_async_job_type_);
-  task_manager::me()->create_task_with_timeout<task_action_player_remote_patch_jobs>(tid, params.timeout_duration,
+  task_manager::me()->create_task_with_timeout<task_action_player_remote_patch_jobs>(task_inst, params.timeout_duration,
                                                                                      COPP_MACRO_STD_MOVE(params));
 
-  if (0 == tid) {
+  if (task_type_trait::empty(task_inst)) {
     FWLOGERROR("create task_action_player_remote_patch_jobs failed");
   } else {
-    remote_command_patch_task_ = task_manager::me()->get_task(tid);
+    remote_command_patch_task_ = task_inst;
 
     dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
 
-    int res = task_manager::me()->start_task(tid, start_data);
+    int res = task_manager::me()->start_task(task_inst, start_data);
     if (res < 0) {
       FWPLOGERROR(*owner_, "start task_action_player_remote_patch_jobs failed, res: {}({})", res,
                   protobuf_mini_dumper_get_error_msg(res));

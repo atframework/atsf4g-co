@@ -123,16 +123,15 @@ SERVER_FRAME_API int router_manager_set::tick() {
 
   if (!pending_action_list_.empty() && !is_closed() && false == is_save_task_running() &&
       false == is_closing_task_running()) {
-    task_type_trait::id_type tid = 0;
+    task_type_trait::task_type task_inst;
     task_manager::me()->create_task_with_timeout<task_action_auto_save_objects>(
-        tid, logic_config::me()->get_cfg_task().nomsg().timeout(),
-        task_action_auto_save_objects::ctor_param_t());
-    if (0 == tid) {
+        task_inst, logic_config::me()->get_cfg_task().nomsg().timeout(), task_action_auto_save_objects::ctor_param_t());
+    if (task_type_trait::empty(task_inst)) {
       FWLOGERROR("create task_action_auto_save_objects failed");
     } else {
       dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
-      if (0 == task_manager::me()->start_task(tid, start_data)) {
-        pending_action_task_ = task_manager::me()->get_task(tid);
+      if (0 == task_manager::me()->start_task(task_inst, start_data)) {
+        pending_action_task_ = task_inst;
       }
     }
   }
@@ -154,7 +153,7 @@ SERVER_FRAME_API int router_manager_set::stop() {
   // prepare to start cleanup task
 
   task_action_router_close_manager_set::ctor_param_t ctor_param;
-  task_type_trait::id_type tid = 0;
+  task_type_trait::task_type task_inst;
 
   ctor_param.pending_list = atfw::memory::stl::make_shared<task_action_router_close_manager_set::pending_list_t>();
   if (ctor_param.pending_list) {
@@ -200,11 +199,11 @@ SERVER_FRAME_API int router_manager_set::stop() {
   }
 
   task_manager::me()->create_task_with_timeout<task_action_router_close_manager_set>(
-      tid, logic_config::me()->get_cfg_task().stats().interval(), COPP_MACRO_STD_MOVE(ctor_param));
-  if (0 == tid) {
+      task_inst, logic_config::me()->get_cfg_task().stats().interval(), COPP_MACRO_STD_MOVE(ctor_param));
+  if (task_type_trait::empty(task_inst)) {
     FWLOGERROR("create task_action_router_close_manager_set failed");
   } else {
-    closing_task_ = task_manager::me()->get_task(tid);
+    closing_task_ = task_inst;
     if (task_type_trait::empty(closing_task_)) {
       FWLOGERROR("task_action_router_close_manager_set should not be not found");
       return 0;
@@ -212,13 +211,15 @@ SERVER_FRAME_API int router_manager_set::stop() {
 
     if (is_save_task_running() && !task_type_trait::empty(pending_action_task_)) {
       rpc::context ctx{rpc::context::create_without_task()};
-      rpc::async_then_start_task(ctx, "router_manager_set.stop.wait_pending_action", pending_action_task_, tid);
+      rpc::async_then_start_task(ctx, "router_manager_set.stop.wait_pending_action", pending_action_task_,
+                                 task_type_trait::get_task_id(pending_action_task_));
     } else {
       dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
-      int res = task_manager::me()->start_task(tid, start_data);
+      int res = task_manager::me()->start_task(task_inst, start_data);
       if (res < 0) {
         task_type_trait::reset_task(closing_task_);
-        FWLOGERROR("start task_action_router_close_manager_set with task_id={} failed, res: {}", tid, res);
+        FWLOGERROR("start task_action_router_close_manager_set with task_id={} failed, res: {}",
+                   task_type_trait::get_task_id(task_inst), res);
       }
     }
   }

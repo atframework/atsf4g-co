@@ -362,16 +362,16 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_s
                 get_app()->convert_app_id_to_string(session_key.node_id), session_key.session_id);
 
       // logout task
-      task_type_trait::id_type logout_task_id = 0;
+      task_type_trait::task_type task_inst;
       task_action_player_logout::ctor_param_t task_param;
       task_param.atgateway_session_id = session_key.session_id;
       task_param.atgateway_node_id = session_key.node_id;
 
-      ret = task_manager::me()->create_task<task_action_player_logout>(logout_task_id, COPP_MACRO_STD_MOVE(task_param));
+      ret = task_manager::me()->create_task<task_action_player_logout>(task_inst, COPP_MACRO_STD_MOVE(task_param));
       if (0 == ret) {
         dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
 
-        ret = task_manager::me()->start_task(logout_task_id, start_data);
+        ret = task_manager::me()->start_task(task_inst, start_data);
         if (0 != ret) {
           FWLOGERROR("run logout task failed, res: {}", ret);
           session_manager::me()->remove(session_key);
