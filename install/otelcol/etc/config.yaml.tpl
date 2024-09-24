@@ -254,12 +254,12 @@ processors:
     send_batch_max_size: 16384
     timeout: 10s
   batch/spanmetrics_default:
-    send_batch_size: 256
-    send_batch_max_size: 2048
+    send_batch_size: 128
+    send_batch_max_size: 1024
     timeout: 10s
   batch/spanmetrics_prometheus:
-    send_batch_size: 256
-    send_batch_max_size: 2048
+    send_batch_size: 128
+    send_batch_max_size: 1024
     timeout: 10s
   batch/metrics:
     send_batch_size: 256
