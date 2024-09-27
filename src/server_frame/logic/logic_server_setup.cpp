@@ -1013,93 +1013,91 @@ void logic_server_common_module::tick_stats() {
 }
 
 void logic_server_common_module::setup_metrics() {
-  rpc::telemetry::global_service::add_on_ready([]() {
-    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
-        rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_tick", "", "us"},
-        [](opentelemetry::metrics::ObserverResult &result) {
-          std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
-          if (!stats) {
-            return;
-          }
+  rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+      rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_tick", "", "us"},
+      [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
+        std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
+        if (!stats) {
+          return;
+        }
 
-          rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
-              result, stats->collect_max_tick_interval_us.load(std::memory_order_acquire));
+        rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+            result, stats->collect_max_tick_interval_us.load(std::memory_order_acquire));
 
-          ++stats->collect_sequence;
-        });
+        ++stats->collect_sequence;
+      });
 
-    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_double(
-        rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_cpu_sys", "", "percent"},
-        [](opentelemetry::metrics::ObserverResult &result) {
-          std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
-          if (!stats) {
-            return;
-          }
+  rpc::telemetry::opentelemetry_utility::add_global_metics_observable_double(
+      rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_cpu_sys", "", "percent"},
+      [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
+        std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
+        if (!stats) {
+          return;
+        }
 
-          rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
-              result, static_cast<double>(stats->collect_cpu_sys.load(std::memory_order_acquire)) / 10000.0);
+        rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+            result, static_cast<double>(stats->collect_cpu_sys.load(std::memory_order_acquire)) / 10000.0);
 
-          ++stats->collect_sequence;
-        });
+        ++stats->collect_sequence;
+      });
 
-    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_double(
-        rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_cpu_user", "", "percent"},
-        [](opentelemetry::metrics::ObserverResult &result) {
-          std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
-          if (!stats) {
-            return;
-          }
+  rpc::telemetry::opentelemetry_utility::add_global_metics_observable_double(
+      rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_cpu_user", "", "percent"},
+      [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
+        std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
+        if (!stats) {
+          return;
+        }
 
-          rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
-              result, static_cast<double>(stats->collect_cpu_user.load(std::memory_order_acquire)) / 10000.0);
+        rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+            result, static_cast<double>(stats->collect_cpu_user.load(std::memory_order_acquire)) / 10000.0);
 
-          ++stats->collect_sequence;
-        });
+        ++stats->collect_sequence;
+      });
 
-    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_double(
-        rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_cpu_all", "", "percent"},
-        [](opentelemetry::metrics::ObserverResult &result) {
-          std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
-          if (!stats) {
-            return;
-          }
+  rpc::telemetry::opentelemetry_utility::add_global_metics_observable_double(
+      rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_cpu_all", "", "percent"},
+      [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
+        std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
+        if (!stats) {
+          return;
+        }
 
-          rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
-              result, static_cast<double>(stats->collect_cpu_sys.load(std::memory_order_acquire) +
-                                          stats->collect_cpu_user.load(std::memory_order_acquire)) /
-                          10000.0);
+        rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+            result, static_cast<double>(stats->collect_cpu_sys.load(std::memory_order_acquire) +
+                                        stats->collect_cpu_user.load(std::memory_order_acquire)) /
+                        10000.0);
 
-          ++stats->collect_sequence;
-        });
+        ++stats->collect_sequence;
+      });
 
-    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
-        rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_memory_maxrss", "", ""},
-        [](opentelemetry::metrics::ObserverResult &result) {
-          std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
-          if (!stats) {
-            return;
-          }
+  rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+      rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_memory_maxrss", "", ""},
+      [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
+        std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
+        if (!stats) {
+          return;
+        }
 
-          rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
-              result, stats->collect_memory_max_rss.load(std::memory_order_acquire));
+        rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+            result, static_cast<int64_t>(stats->collect_memory_max_rss.load(std::memory_order_acquire)));
 
-          ++stats->collect_sequence;
-        });
+        ++stats->collect_sequence;
+      });
 
-    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
-        rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_memory_rss", "", ""},
-        [](opentelemetry::metrics::ObserverResult &result) {
-          std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
-          if (!stats) {
-            return;
-          }
+  rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+      rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_memory_rss", "", ""},
+      [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
+        std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
+        if (!stats) {
+          return;
+        }
 
-          rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
-              result, stats->collect_memory_rss.load(std::memory_order_acquire));
+        rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+            result, static_cast<int64_t>(stats->collect_memory_rss.load(std::memory_order_acquire)));
 
-          ++stats->collect_sequence;
-        });
-  });
+        ++stats->collect_sequence;
+      });
 }
 
 void logic_server_common_module::add_service_type_id_index(const atapp::etcd_discovery_node::ptr_t &node) {

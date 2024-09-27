@@ -903,46 +903,48 @@ bool task_manager::check_sys_config() const {
 }
 
 void task_manager::setup_metrics() {
-  rpc::telemetry::global_service::add_on_ready([]() {
-    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
-        rpc::telemetry::metrics_observable_type::kGauge, "service_coroutine", {"service_coroutine_task_count", "", ""},
-        [](opentelemetry::metrics::ObserverResult &result) {
-          rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
-              result, static_cast<int64_t>(get_task_manager_metrics_data().task_count.load(std::memory_order_acquire)));
-        });
+  rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+      rpc::telemetry::metrics_observable_type::kGauge, "service_coroutine", {"service_coroutine_task_count", "", ""},
+      [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
+        rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+            result, static_cast<int64_t>(get_task_manager_metrics_data().task_count.load(std::memory_order_acquire)));
+      });
 
-    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
-        rpc::telemetry::metrics_observable_type::kGauge, "service_coroutine",
-        {"service_coroutine_task_max_count", "", ""}, [](opentelemetry::metrics::ObserverResult &result) {
-          auto &metrics_data = get_task_manager_metrics_data();
-          int64_t ret = static_cast<int64_t>(metrics_data.task_max_count.load(std::memory_order_acquire));
-          metrics_data.task_max_count.store(metrics_data.task_count.load(std::memory_order_acquire),
-                                            std::memory_order_release);
-          rpc::telemetry::opentelemetry_utility::global_metics_observe_record(result, ret);
-        });
+  rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+      rpc::telemetry::metrics_observable_type::kGauge, "service_coroutine",
+      {"service_coroutine_task_max_count", "", ""},
+      [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
+        auto &metrics_data = get_task_manager_metrics_data();
+        int64_t ret = static_cast<int64_t>(metrics_data.task_max_count.load(std::memory_order_acquire));
+        metrics_data.task_max_count.store(metrics_data.task_count.load(std::memory_order_acquire),
+                                          std::memory_order_release);
+        rpc::telemetry::opentelemetry_utility::global_metics_observe_record(result, ret);
+      });
 
-    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
-        rpc::telemetry::metrics_observable_type::kGauge, "service_coroutine",
-        {"service_coroutine_tick_checkpoint_count", "", ""}, [](opentelemetry::metrics::ObserverResult &result) {
-          rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
-              result, static_cast<int64_t>(
-                          get_task_manager_metrics_data().tick_checkpoint_count.load(std::memory_order_acquire)));
-        });
+  rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+      rpc::telemetry::metrics_observable_type::kGauge, "service_coroutine",
+      {"service_coroutine_tick_checkpoint_count", "", ""},
+      [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
+        rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+            result, static_cast<int64_t>(
+                        get_task_manager_metrics_data().tick_checkpoint_count.load(std::memory_order_acquire)));
+      });
 
-    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
-        rpc::telemetry::metrics_observable_type::kGauge, "service_coroutine",
-        {"service_coroutine_pool_free_memory", "", ""}, [](opentelemetry::metrics::ObserverResult &result) {
-          rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
-              result,
-              static_cast<int64_t>(get_task_manager_metrics_data().pool_free_memory.load(std::memory_order_acquire)));
-        });
+  rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+      rpc::telemetry::metrics_observable_type::kGauge, "service_coroutine",
+      {"service_coroutine_pool_free_memory", "", ""},
+      [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
+        rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+            result,
+            static_cast<int64_t>(get_task_manager_metrics_data().pool_free_memory.load(std::memory_order_acquire)));
+      });
 
-    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
-        rpc::telemetry::metrics_observable_type::kGauge, "service_coroutine",
-        {"service_coroutine_pool_used_memory", "", ""}, [](opentelemetry::metrics::ObserverResult &result) {
-          rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
-              result,
-              static_cast<int64_t>(get_task_manager_metrics_data().pool_used_memory.load(std::memory_order_acquire)));
-        });
-  });
+  rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+      rpc::telemetry::metrics_observable_type::kGauge, "service_coroutine",
+      {"service_coroutine_pool_used_memory", "", ""},
+      [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
+        rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
+            result,
+            static_cast<int64_t>(get_task_manager_metrics_data().pool_used_memory.load(std::memory_order_acquire)));
+      });
 }

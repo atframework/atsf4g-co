@@ -789,133 +789,133 @@ SERVER_FRAME_API void ss_msg_dispatcher::on_create_task_failed(dispatcher_start_
 SERVER_FRAME_API uint64_t ss_msg_dispatcher::allocate_sequence() { return ++sequence_allocator_; }
 
 void ss_msg_dispatcher::setup_metrics() {
-  rpc::telemetry::global_service::add_on_ready([]() {
-    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
-        rpc::telemetry::metrics_observable_type::kGauge, "atframework_inserver_rpc",
-        {"atframework_inserver_rpc_delay_min", "", "us"}, [](opentelemetry::metrics::ObserverResult &result) {
-          auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_min_delay);
-          if (!report) {
-            return;
+  rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+      rpc::telemetry::metrics_observable_type::kGauge, "atframework_inserver_rpc",
+      {"atframework_inserver_rpc_delay_min", "", "us"},
+      [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
+        auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_min_delay);
+        if (!report) {
+          return;
+        }
+
+        for (auto &method : report->rpc_metrics) {
+          auto service_end = method.second.rpc_name.find_last_of('.');
+          opentelemetry::nostd::string_view service_name = "UNKNOWN";
+          if (service_end != std::string::npos) {
+            service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
           }
+          rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
+              {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
+              {opentelemetry::trace::SemanticConventions::kRpcService, service_name},
+              {opentelemetry::trace::SemanticConventions::kRpcMethod, method.second.rpc_name}};
 
-          for (auto &method : report->rpc_metrics) {
-            auto service_end = method.second.rpc_name.find_last_of('.');
-            opentelemetry::nostd::string_view service_name = "UNKNOWN";
-            if (service_end != std::string::npos) {
-              service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
-            }
-            rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
-                {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-                {opentelemetry::trace::SemanticConventions::kRpcService, service_name},
-                {opentelemetry::trace::SemanticConventions::kRpcMethod, method.second.rpc_name}};
+          rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
+              result, static_cast<int64_t>(method.second.min_delay.count()), internal_attributes);
+        }
+      });
 
-            rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
-                result, static_cast<int64_t>(method.second.min_delay.count()), internal_attributes);
+  rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+      rpc::telemetry::metrics_observable_type::kGauge, "atframework_inserver_rpc",
+      {"atframework_inserver_rpc_delay_max", "", "us"},
+      [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
+        auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_max_delay);
+        if (!report) {
+          return;
+        }
+
+        for (auto &method : report->rpc_metrics) {
+          auto service_end = method.second.rpc_name.find_last_of('.');
+          opentelemetry::nostd::string_view service_name = "UNKNOWN";
+          if (service_end != std::string::npos) {
+            service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
           }
-        });
+          rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
+              {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
+              {opentelemetry::trace::SemanticConventions::kRpcService, service_name},
+              {opentelemetry::trace::SemanticConventions::kRpcMethod, method.second.rpc_name}};
 
-    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
-        rpc::telemetry::metrics_observable_type::kGauge, "atframework_inserver_rpc",
-        {"atframework_inserver_rpc_delay_max", "", "us"}, [](opentelemetry::metrics::ObserverResult &result) {
-          auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_max_delay);
-          if (!report) {
-            return;
+          rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
+              result, static_cast<int64_t>(method.second.max_delay.count()), internal_attributes);
+        }
+      });
+
+  rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+      rpc::telemetry::metrics_observable_type::kGauge, "atframework_inserver_rpc",
+      {"atframework_inserver_rpc_delay_avg", "", "us"},
+      [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
+        auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_avg_delay);
+        if (!report) {
+          return;
+        }
+
+        for (auto &method : report->rpc_metrics) {
+          if (method.second.total_count <= 0) {
+            continue;
           }
-
-          for (auto &method : report->rpc_metrics) {
-            auto service_end = method.second.rpc_name.find_last_of('.');
-            opentelemetry::nostd::string_view service_name = "UNKNOWN";
-            if (service_end != std::string::npos) {
-              service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
-            }
-            rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
-                {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-                {opentelemetry::trace::SemanticConventions::kRpcService, service_name},
-                {opentelemetry::trace::SemanticConventions::kRpcMethod, method.second.rpc_name}};
-
-            rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
-                result, static_cast<int64_t>(method.second.max_delay.count()), internal_attributes);
+          auto service_end = method.second.rpc_name.find_last_of('.');
+          opentelemetry::nostd::string_view service_name = "UNKNOWN";
+          if (service_end != std::string::npos) {
+            service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
           }
-        });
+          rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
+              {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
+              {opentelemetry::trace::SemanticConventions::kRpcService, service_name},
+              {opentelemetry::trace::SemanticConventions::kRpcMethod, method.second.rpc_name}};
 
-    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
-        rpc::telemetry::metrics_observable_type::kGauge, "atframework_inserver_rpc",
-        {"atframework_inserver_rpc_delay_avg", "", "us"}, [](opentelemetry::metrics::ObserverResult &result) {
-          auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_avg_delay);
-          if (!report) {
-            return;
+          rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
+              result,
+              static_cast<int64_t>(method.second.total_delay.count()) / static_cast<int64_t>(method.second.total_count),
+              internal_attributes);
+        }
+      });
+
+  rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+      rpc::telemetry::metrics_observable_type::kGauge, "atframework_inserver_rpc",
+      {"atframework_inserver_rpc_count", "", ""}, [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
+        auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_total_count);
+        if (!report) {
+          return;
+        }
+
+        for (auto &method : report->rpc_metrics) {
+          auto service_end = method.second.rpc_name.find_last_of('.');
+          opentelemetry::nostd::string_view service_name = "UNKNOWN";
+          if (service_end != std::string::npos) {
+            service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
           }
+          rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
+              {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
+              {opentelemetry::trace::SemanticConventions::kRpcService, service_name},
+              {opentelemetry::trace::SemanticConventions::kRpcMethod, method.second.rpc_name}};
 
-          for (auto &method : report->rpc_metrics) {
-            if (method.second.total_count <= 0) {
-              continue;
-            }
-            auto service_end = method.second.rpc_name.find_last_of('.');
-            opentelemetry::nostd::string_view service_name = "UNKNOWN";
-            if (service_end != std::string::npos) {
-              service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
-            }
-            rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
-                {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-                {opentelemetry::trace::SemanticConventions::kRpcService, service_name},
-                {opentelemetry::trace::SemanticConventions::kRpcMethod, method.second.rpc_name}};
+          rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
+              result, static_cast<int64_t>(method.second.total_count), internal_attributes);
+        }
+      });
 
-            rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
-                result,
-                static_cast<int64_t>(method.second.total_delay.count()) /
-                    static_cast<int64_t>(method.second.total_count),
-                internal_attributes);
+  rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
+      rpc::telemetry::metrics_observable_type::kGauge, "atframework_inserver_rpc",
+      {"atframework_inserver_rpc_size", "", ""}, [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
+        auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_total_size);
+        if (!report) {
+          return;
+        }
+
+        for (auto &method : report->rpc_metrics) {
+          auto service_end = method.second.rpc_name.find_last_of('.');
+          opentelemetry::nostd::string_view service_name = "UNKNOWN";
+          if (service_end != std::string::npos) {
+            service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
           }
-        });
+          rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
+              {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
+              {opentelemetry::trace::SemanticConventions::kRpcService, service_name},
+              {opentelemetry::trace::SemanticConventions::kRpcMethod, method.second.rpc_name}};
 
-    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
-        rpc::telemetry::metrics_observable_type::kGauge, "atframework_inserver_rpc",
-        {"atframework_inserver_rpc_count", "", ""}, [](opentelemetry::metrics::ObserverResult &result) {
-          auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_total_count);
-          if (!report) {
-            return;
-          }
-
-          for (auto &method : report->rpc_metrics) {
-            auto service_end = method.second.rpc_name.find_last_of('.');
-            opentelemetry::nostd::string_view service_name = "UNKNOWN";
-            if (service_end != std::string::npos) {
-              service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
-            }
-            rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
-                {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-                {opentelemetry::trace::SemanticConventions::kRpcService, service_name},
-                {opentelemetry::trace::SemanticConventions::kRpcMethod, method.second.rpc_name}};
-
-            rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
-                result, static_cast<int64_t>(method.second.total_count), internal_attributes);
-          }
-        });
-
-    rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
-        rpc::telemetry::metrics_observable_type::kGauge, "atframework_inserver_rpc",
-        {"atframework_inserver_rpc_size", "", ""}, [](opentelemetry::metrics::ObserverResult &result) {
-          auto report = rpc_metrics_get_rpc_metric_report(&ss_rpc_mertrics_manager::collect_version_total_size);
-          if (!report) {
-            return;
-          }
-
-          for (auto &method : report->rpc_metrics) {
-            auto service_end = method.second.rpc_name.find_last_of('.');
-            opentelemetry::nostd::string_view service_name = "UNKNOWN";
-            if (service_end != std::string::npos) {
-              service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
-            }
-            rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
-                {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-                {opentelemetry::trace::SemanticConventions::kRpcService, service_name},
-                {opentelemetry::trace::SemanticConventions::kRpcMethod, method.second.rpc_name}};
-
-            rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
-                result, static_cast<int64_t>(method.second.total_bytes), internal_attributes);
-          }
-        });
-  });
+          rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
+              result, static_cast<int64_t>(method.second.total_bytes), internal_attributes);
+        }
+      });
 }
 
 SERVER_FRAME_API void ss_msg_dispatcher::dns_lookup_callback(uv_getaddrinfo_t *req, int /*status*/,

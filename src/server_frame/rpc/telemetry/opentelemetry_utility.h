@@ -22,6 +22,8 @@
 // clang-format on
 
 #include <gsl/select-gsl.h>
+#include <memory/rc_ptr.h>
+#include <nostd/type_traits.h>
 
 #include <functional>
 #include <list>
@@ -56,6 +58,10 @@ enum class notification_domain : int32_t {
 
 class opentelemetry_utility {
  public:
+  struct UTIL_SYMBOL_VISIBLE metrics_attributes_with_lifetime;
+  struct UTIL_SYMBOL_VISIBLE metrics_record;
+  struct UTIL_SYMBOL_VISIBLE metrics_observer;
+
   struct UTIL_SYMBOL_VISIBLE attributes_map_type {
     using type = std::unordered_map<std::string, opentelemetry::common::AttributeValue>;
     using value_type = std::unordered_map<std::string, opentelemetry::sdk::common::OwnedAttributeValue>;
@@ -71,7 +77,61 @@ class opentelemetry_utility {
   using attribute_pair_type = std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>;
   using attribute_span_type = opentelemetry::nostd::span<const attribute_pair_type>;
 
+ private:
+  UTIL_FORCEINLINE static opentelemetry::nostd::variant<int64_t, double> global_metics_observe_record_parse_value(
+      const opentelemetry::nostd::variant<int64_t, double>& value) noexcept {
+    return value;
+  }
+
+  template <bool>
+  struct global_metics_observe_record_parser;
+
+  template <>
+  struct global_metics_observe_record_parser<true> {
+    template <class ValueType>
+    UTIL_FORCEINLINE static int64_t parse(const ValueType& value) {
+      return static_cast<int64_t>(value);
+    }
+  };
+
+  template <>
+  struct global_metics_observe_record_parser<false> {
+    template <class ValueType>
+    UTIL_FORCEINLINE static double parse(const ValueType& value) {
+      return static_cast<double>(value);
+    }
+  };
+
+  template <class ValueType>
+  UTIL_FORCEINLINE static opentelemetry::nostd::variant<int64_t, double> global_metics_observe_record_parse_value(
+      const ValueType& value) noexcept {
+    return global_metics_observe_record_parser<std::is_integral<ValueType>::value>::template parse(value);
+  }
+
  public:
+  SERVER_FRAME_API static void setup();
+
+  SERVER_FRAME_API static int tick();
+
+  SERVER_FRAME_API static void stop();
+
+  SERVER_FRAME_API static util::memory::strong_rc_ptr<metrics_attributes_with_lifetime>
+  create_attributes_with_lifetime();
+
+  SERVER_FRAME_API static const std::unordered_map<std::string, opentelemetry::common::AttributeValue>& get_attributes(
+      const metrics_attributes_with_lifetime& source);
+
+  SERVER_FRAME_API static void populate_attributes(metrics_attributes_with_lifetime& target,
+                                                   const opentelemetry::common::KeyValueIterable& attributes);
+
+  SERVER_FRAME_API static void populate_attributes(metrics_attributes_with_lifetime& target,
+                                                   attribute_span_type attributes);
+
+  SERVER_FRAME_API static void populate_attributes(
+      metrics_attributes_with_lifetime& target,
+      std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
+          attributes);
+
   SERVER_FRAME_API static void protobuf_to_otel_attributes(const google::protobuf::Message& message,
                                                            attributes_map_type& output,
                                                            gsl::string_view key_prefix = "");
@@ -82,62 +142,40 @@ class opentelemetry_utility {
   SERVER_FRAME_API static std::string convert_attribute_value_to_string(
       const opentelemetry::common::AttributeValue& value);
 
-  SERVER_FRAME_API static bool add_global_metics_observable_int64(
-      metrics_observable_type type, opentelemetry::nostd::string_view meter_name, meter_instrument_key metrics_key,
-      std::function<void(opentelemetry::metrics::ObserverResult&)> fn);
+  SERVER_FRAME_API static bool add_global_metics_observable_int64(metrics_observable_type type,
+                                                                  opentelemetry::nostd::string_view meter_name,
+                                                                  meter_instrument_key metrics_key,
+                                                                  std::function<void(metrics_observer&)> fn);
 
-  SERVER_FRAME_API static bool add_global_metics_observable_double(
-      metrics_observable_type type, opentelemetry::nostd::string_view meter_name, meter_instrument_key metrics_key,
-      std::function<void(opentelemetry::metrics::ObserverResult&)> fn);
+  SERVER_FRAME_API static bool add_global_metics_observable_double(metrics_observable_type type,
+                                                                   opentelemetry::nostd::string_view meter_name,
+                                                                   meter_instrument_key metrics_key,
+                                                                   std::function<void(metrics_observer&)> fn);
+
+  SERVER_FRAME_API static void global_metics_observe_record(metrics_observer& observer,
+                                                            opentelemetry::nostd::variant<int64_t, double> value,
+                                                            const opentelemetry::common::KeyValueIterable& attributes);
 
   template <class ValueType>
-  UTIL_SYMBOL_VISIBLE static void global_metics_observe_record(opentelemetry::metrics::ObserverResult& result,
-                                                               ValueType&& value) {
+  UTIL_SYMBOL_VISIBLE static void global_metics_observe_record(metrics_observer& observer, ValueType&& value) {
     std::shared_ptr<::rpc::telemetry::group_type> __lifetime;
-    if (opentelemetry::nostd::holds_alternative<
-            opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {
-      auto observer =
-          opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(
-              result);
-      if (observer) {
-        observer->Observe(static_cast<int64_t>(value), rpc::telemetry::global_service::get_metrics_labels(__lifetime));
-      }
-    } else if (opentelemetry::nostd::holds_alternative<
-                   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) {
-      auto observer =
-          opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(
-              result);
-      if (observer) {
-        observer->Observe(static_cast<double>(value), rpc::telemetry::global_service::get_metrics_labels(__lifetime));
-      }
-    }
+    global_metics_observe_record(
+        observer, global_metics_observe_record_parse_value(value),
+        opentelemetry::common::MakeAttributes(rpc::telemetry::global_service::get_metrics_labels(__lifetime)));
   }
 
-  template <class ValueType, class AttributeType>
-  UTIL_SYMBOL_VISIBLE static void global_metics_observe_record(opentelemetry::metrics::ObserverResult& result,
-                                                               ValueType&& value, AttributeType&& attributes) {
-    if (opentelemetry::nostd::holds_alternative<
-            opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {
-      auto observer =
-          opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(
-              result);
-      if (observer) {
-        observer->Observe(static_cast<int64_t>(value), attributes);
-      }
-    } else if (opentelemetry::nostd::holds_alternative<
-                   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) {
-      auto observer =
-          opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(
-              result);
-      if (observer) {
-        observer->Observe(static_cast<double>(value), attributes);
-      }
-    }
+  template <class ValueType, class AttributeType,
+            class = util::nostd::enable_if_t<
+                !std::is_base_of<opentelemetry::common::KeyValueIterable, util::nostd::decay_t<AttributeType>>::value>>
+  UTIL_SYMBOL_VISIBLE static void global_metics_observe_record(metrics_observer& observer, ValueType&& value,
+                                                               AttributeType&& attributes) {
+    global_metics_observe_record(observer, global_metics_observe_record_parse_value(value),
+                                 opentelemetry::common::MakeAttributes(attributes));
   }
 
   template <class ValueType>
   UTIL_SYMBOL_VISIBLE static void global_metics_observe_record_extend_attrubutes(
-      opentelemetry::metrics::ObserverResult& result, ValueType&& value, attribute_span_type extend_attributes) {
+      metrics_observer& observer, ValueType&& value, attribute_span_type extend_attributes) {
     std::shared_ptr<::rpc::telemetry::group_type> __lifetime;
     attribute_span_type attributes_array[] = {rpc::telemetry::global_service::get_metrics_labels_view(__lifetime),
                                               extend_attributes};
@@ -145,72 +183,39 @@ class opentelemetry_utility {
     rpc::telemetry::multiple_key_value_iterable_view<attribute_span_type> concat_attributes{
         opentelemetry::nostd::span<const attribute_span_type>{attributes_array}};
 
-    if (opentelemetry::nostd::holds_alternative<
-            opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {
-      auto observer =
-          opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(
-              result);
-      if (observer) {
-        observer->Observe(static_cast<int64_t>(value), concat_attributes);
-      }
-    } else if (opentelemetry::nostd::holds_alternative<
-                   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) {
-      auto observer =
-          opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(
-              result);
-      if (observer) {
-        observer->Observe(static_cast<double>(value), concat_attributes);
-      }
-    }
+    global_metics_observe_record(observer, global_metics_observe_record_parse_value(value), concat_attributes);
   }
 
   template <class ValueType>
   UTIL_SYMBOL_VISIBLE static void global_metics_observe_record_extend_attrubutes(
-      opentelemetry::metrics::ObserverResult& result, ValueType&& value,
-      std::shared_ptr<::rpc::telemetry::group_type>& __lifetime, attribute_span_type extend_attributes) {
+      metrics_observer& observer, ValueType&& value, std::shared_ptr<::rpc::telemetry::group_type>& __lifetime,
+      attribute_span_type extend_attributes) {
     attribute_span_type attributes_array[] = {rpc::telemetry::global_service::get_metrics_labels_view(__lifetime),
                                               extend_attributes};
 
     rpc::telemetry::multiple_key_value_iterable_view<attribute_span_type> concat_attributes{
         opentelemetry::nostd::span<const attribute_span_type>{attributes_array}};
 
-    if (opentelemetry::nostd::holds_alternative<
-            opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {
-      auto observer =
-          opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(
-              result);
-      if (observer) {
-        observer->Observe(static_cast<int64_t>(value), concat_attributes);
-      }
-    } else if (opentelemetry::nostd::holds_alternative<
-                   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) {
-      auto observer =
-          opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(
-              result);
-      if (observer) {
-        observer->Observe(static_cast<double>(value), concat_attributes);
-      }
-    }
+    global_metics_observe_record(observer, global_metics_observe_record_parse_value(value), concat_attributes);
   }
 
   template <class ValueType>
   UTIL_SYMBOL_VISIBLE static void global_metics_observe_record_extend_attrubutes(
-      opentelemetry::metrics::ObserverResult& result, ValueType&& value,
+      metrics_observer& observer, ValueType&& value,
       std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
           extend_attributes) {
     global_metics_observe_record_extend_attrubutes(
-        result, std::forward<ValueType>(value),
+        observer, global_metics_observe_record_parse_value(value),
         attribute_span_type{extend_attributes.begin(), extend_attributes.end()});
   }
 
   template <class ValueType>
   UTIL_SYMBOL_VISIBLE static void global_metics_observe_record_extend_attrubutes(
-      opentelemetry::metrics::ObserverResult& result, ValueType&& value,
-      std::shared_ptr<::rpc::telemetry::group_type>& __lifetime,
+      metrics_observer& observer, ValueType&& value, std::shared_ptr<::rpc::telemetry::group_type>& __lifetime,
       std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
           extend_attributes) {
     global_metics_observe_record_extend_attrubutes(
-        result, std::forward<ValueType>(value), __lifetime,
+        observer, std::forward<ValueType>(value), __lifetime,
         attribute_span_type{extend_attributes.begin(), extend_attributes.end()});
   }
 
