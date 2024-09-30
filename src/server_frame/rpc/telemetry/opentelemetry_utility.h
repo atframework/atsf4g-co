@@ -83,29 +83,10 @@ class opentelemetry_utility {
     return value;
   }
 
-  template <bool>
-  struct global_metics_observe_record_parser;
-
-  template <>
-  struct global_metics_observe_record_parser<true> {
-    template <class ValueType>
-    UTIL_FORCEINLINE static int64_t parse(const ValueType& value) {
-      return static_cast<int64_t>(value);
-    }
-  };
-
-  template <>
-  struct global_metics_observe_record_parser<false> {
-    template <class ValueType>
-    UTIL_FORCEINLINE static double parse(const ValueType& value) {
-      return static_cast<double>(value);
-    }
-  };
-
   template <class ValueType>
   UTIL_FORCEINLINE static opentelemetry::nostd::variant<int64_t, double> global_metics_observe_record_parse_value(
       const ValueType& value) noexcept {
-    return global_metics_observe_record_parser<std::is_integral<ValueType>::value>::template parse(value);
+    return static_cast<typename std::conditional<std::is_integral<ValueType>::value, int64_t, double>::type>(value);
   }
 
  public:

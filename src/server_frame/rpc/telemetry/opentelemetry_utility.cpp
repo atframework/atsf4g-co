@@ -77,18 +77,23 @@ struct UTIL_SYMBOL_VISIBLE opentelemetry_utility::metrics_observer {
   opentelemetry::nostd::string_view meter_instrument_description;
   opentelemetry::nostd::string_view meter_instrument_unit;
 
-  opentelemetry::metrics::ObservableCallbackPtr origin_callback = nullptr;
+  opentelemetry::metrics::ObservableCallbackPtr origin_callback;
 
   std::function<void(metrics_observer&)> callback;
 
   tbb::concurrent_queue<util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record>> records;
 
-  std::atomic<size_t> collect_version = 0;
-  std::atomic<size_t> export_version = 0;
+  std::atomic<size_t> collect_version;
+  std::atomic<size_t> export_version;
 
-  std::atomic<size_t> stat_push_record_counter_sum = 0;
+  std::atomic<size_t> stat_push_record_counter_sum;
 
-  inline metrics_observer() {}
+  inline metrics_observer()
+      : type(metrics_observable_type::kGauge),
+        origin_callback(nullptr),
+        collect_version(0),
+        export_version(0),
+        stat_push_record_counter_sum(0) {}
 };
 
 namespace {
@@ -472,8 +477,11 @@ static bool internal_add_global_metrics_observable_int64(opentelemetry_utility::
   auto instrument =
       rpc::telemetry::global_service::get_metrics_observable(observer.meter_name, metrics_key, telemetry_lifetime);
   if (instrument) {
-    FWLOGERROR("Add metrics observable int64 {}(instrument={}, {}, {}) failed, already exists", observer.meter_name,
-               observer.meter_instrument_name, observer.meter_instrument_description, observer.meter_instrument_unit);
+    FWLOGERROR(
+        "Add metrics observable int64 {}(instrument={}, {}, {}) failed, already exists", observer.meter_name,
+        gsl::string_view{observer.meter_instrument_name.data(), observer.meter_instrument_name.size()},
+        gsl::string_view{observer.meter_instrument_description.data(), observer.meter_instrument_description.size()},
+        gsl::string_view{observer.meter_instrument_unit.data(), observer.meter_instrument_unit.size()});
     return false;
   }
 
@@ -489,8 +497,11 @@ static bool internal_add_global_metrics_observable_int64(opentelemetry_utility::
   }
 
   if (!instrument) {
-    FWLOGERROR("Malloc metrics observable int64 {}(instrument={}, {}, {}) failed", observer.meter_name,
-               observer.meter_instrument_name, observer.meter_instrument_description, observer.meter_instrument_unit);
+    FWLOGERROR(
+        "Malloc metrics observable int64 {}(instrument={}, {}, {}) failed", observer.meter_name,
+        gsl::string_view{observer.meter_instrument_name.data(), observer.meter_instrument_name.size()},
+        gsl::string_view{observer.meter_instrument_description.data(), observer.meter_instrument_description.size()},
+        gsl::string_view{observer.meter_instrument_unit.data(), observer.meter_instrument_unit.size()});
     return false;
   }
 
@@ -525,19 +536,19 @@ static bool internal_add_global_metrics_observable_int64(opentelemetry_utility::
 
       if (opentelemetry::nostd::holds_alternative<
               opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {
-        auto observer = opentelemetry::nostd::get<
+        auto real_observer = opentelemetry::nostd::get<
             opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result);
-        if (observer) {
-          observer->Observe(get_opentelemetry_utility_metrics_record_value_as_int64(record->value),
-                            opentelemetry_utility::get_attributes(record->attributes));
+        if (real_observer) {
+          real_observer->Observe(get_opentelemetry_utility_metrics_record_value_as_int64(record->value),
+                                 opentelemetry_utility::get_attributes(record->attributes));
         }
       } else if (opentelemetry::nostd::holds_alternative<
                      opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) {
-        auto observer = opentelemetry::nostd::get<
+        auto real_observer = opentelemetry::nostd::get<
             opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result);
-        if (observer) {
-          observer->Observe(get_opentelemetry_utility_metrics_record_value_as_double(record->value),
-                            opentelemetry_utility::get_attributes(record->attributes));
+        if (real_observer) {
+          real_observer->Observe(get_opentelemetry_utility_metrics_record_value_as_double(record->value),
+                                 opentelemetry_utility::get_attributes(record->attributes));
         }
       }
 
@@ -559,8 +570,11 @@ static bool internal_add_global_metrics_observable_double(opentelemetry_utility:
   auto instrument =
       rpc::telemetry::global_service::get_metrics_observable(observer.meter_name, metrics_key, telemetry_lifetime);
   if (instrument) {
-    FWLOGERROR("Add metrics observable double {}(instrument={}, {}, {}) failed, already exists", observer.meter_name,
-               observer.meter_instrument_name, observer.meter_instrument_description, observer.meter_instrument_unit);
+    FWLOGERROR(
+        "Add metrics observable double {}(instrument={}, {}, {}) failed, already exists", observer.meter_name,
+        gsl::string_view{observer.meter_instrument_name.data(), observer.meter_instrument_name.size()},
+        gsl::string_view{observer.meter_instrument_description.data(), observer.meter_instrument_description.size()},
+        gsl::string_view{observer.meter_instrument_unit.data(), observer.meter_instrument_unit.size()});
     return false;
   }
 
@@ -576,8 +590,11 @@ static bool internal_add_global_metrics_observable_double(opentelemetry_utility:
   }
 
   if (!instrument) {
-    FWLOGERROR("Malloc metrics observable double {}(instrument={}, {}, {}) failed", observer.meter_name,
-               observer.meter_instrument_name, observer.meter_instrument_description, observer.meter_instrument_unit);
+    FWLOGERROR(
+        "Malloc metrics observable double {}(instrument={}, {}, {}) failed", observer.meter_name,
+        gsl::string_view{observer.meter_instrument_name.data(), observer.meter_instrument_name.size()},
+        gsl::string_view{observer.meter_instrument_description.data(), observer.meter_instrument_description.size()},
+        gsl::string_view{observer.meter_instrument_unit.data(), observer.meter_instrument_unit.size()});
     return false;
   }
 
@@ -613,19 +630,19 @@ static bool internal_add_global_metrics_observable_double(opentelemetry_utility:
 
       if (opentelemetry::nostd::holds_alternative<
               opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {
-        auto observer = opentelemetry::nostd::get<
+        auto real_observer = opentelemetry::nostd::get<
             opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result);
-        if (observer) {
-          observer->Observe(get_opentelemetry_utility_metrics_record_value_as_int64(record->value),
-                            opentelemetry_utility::get_attributes(record->attributes));
+        if (real_observer) {
+          real_observer->Observe(get_opentelemetry_utility_metrics_record_value_as_int64(record->value),
+                                 opentelemetry_utility::get_attributes(record->attributes));
         }
       } else if (opentelemetry::nostd::holds_alternative<
                      opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result)) {
-        auto observer = opentelemetry::nostd::get<
+        auto real_observer = opentelemetry::nostd::get<
             opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(result);
-        if (observer) {
-          observer->Observe(get_opentelemetry_utility_metrics_record_value_as_double(record->value),
-                            opentelemetry_utility::get_attributes(record->attributes));
+        if (real_observer) {
+          real_observer->Observe(get_opentelemetry_utility_metrics_record_value_as_double(record->value),
+                                 opentelemetry_utility::get_attributes(record->attributes));
         }
       }
 
