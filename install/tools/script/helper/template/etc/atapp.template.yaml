@@ -12,7 +12,7 @@ atapp:
   hostname: "${project.get_hostname()[0]}"   # hostname, any host should has a unique name. if empty, we wil try to use the mac address
   metadata:
     labels:
-      "deployment.environment": "${project.get_global_option('global', 'deployment_environment', '')}" # formal/dev/test/qa
+      "deployment.environment.name": "${project.get_global_option('global', 'deployment_environment', '')}" # formal/dev/test/qa
   bus:
     listen:
 % for bus_listen in project.get_server_atbus_listen():

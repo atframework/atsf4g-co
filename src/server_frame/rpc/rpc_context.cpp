@@ -130,7 +130,7 @@ SERVER_FRAME_API context::tracer context::make_tracer(string_view name, trace_st
   return tracer{std::move(ret)};
 }
 
-SERVER_FRAME_API util::memory::strong_rc_ptr<::google::protobuf::Arena> context::mutable_protobuf_arena() {
+SERVER_FRAME_API std::shared_ptr<::google::protobuf::Arena> context::mutable_protobuf_arena() {
   if (allocator_) {
     return allocator_;
   }
@@ -139,16 +139,16 @@ SERVER_FRAME_API util::memory::strong_rc_ptr<::google::protobuf::Arena> context:
   arena_options.start_block_size = 512;  // 链路跟踪可能就占了200字节，起始可以大一点
   arena_options.max_block_size = 65536;  // 数据库的数据块比较大。最大值可以大一点
 
-  allocator_ = atfw::memory::stl::make_strong_rc<::google::protobuf::Arena>(arena_options);
+  allocator_ = std::make_shared<::google::protobuf::Arena>(arena_options);
   return allocator_;
 }
 
-SERVER_FRAME_API const util::memory::strong_rc_ptr<::google::protobuf::Arena> &context::get_protobuf_arena() const {
+SERVER_FRAME_API const std::shared_ptr<::google::protobuf::Arena> &context::get_protobuf_arena() const {
   return allocator_;
 }
 
 SERVER_FRAME_API bool context::try_reuse_protobuf_arena(
-    const util::memory::strong_rc_ptr<::google::protobuf::Arena> &arena) noexcept {
+    const std::shared_ptr<::google::protobuf::Arena> &arena) noexcept {
   if (!arena || allocator_) {
     return false;
   }

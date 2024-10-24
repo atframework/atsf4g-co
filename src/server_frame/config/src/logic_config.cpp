@@ -91,7 +91,7 @@ SERVER_FRAME_CONFIG_API gsl::string_view logic_config::get_deployment_environmen
   }
 
   auto iter =
-      app->get_metadata().labels().find(opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironment);
+      app->get_metadata().labels().find(opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName);
   if (iter == app->get_metadata().labels().end()) {
     return "";
   }
@@ -236,7 +236,7 @@ void logic_config::_load_server_cfg(atapp::app &app) {
         continue;
       }
 
-      (*metadata->mutable_labels())[opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironment] =
+      (*metadata->mutable_labels())[opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName] =
           static_cast<std::string>(get_deployment_environment_name());
     }
   } while (false);

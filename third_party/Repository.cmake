@@ -43,7 +43,7 @@ endif()
 if(PROJECT_GIT_USE_MIRROR AND PROJECT_GITHUB_GIT_HTTP_MIRROR)
   execute_process(
     COMMAND ${GIT_EXECUTABLE} config --local --unset-all "url.${PROJECT_GITHUB_GIT_HTTP_MIRROR}.insteadOf"
-    COMMAND ${GIT_EXECUTABLE} config --add --local "url.${PROJECT_GITHUB_GIT_HTTP_MIRROR}:.insteadOf"
+    COMMAND ${GIT_EXECUTABLE} config --add --local "url.${PROJECT_GITHUB_GIT_HTTP_MIRROR}.insteadOf"
             "https://github.com/"
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
 else()

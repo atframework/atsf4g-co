@@ -64,7 +64,7 @@ class context {
         : mode(m), inherit_allocator(inherit_alloc), inherit_parent_span(inherit_parent_trace_span) {}
   };
 
-  struct UTIL_SYMBOL_VISIBLE create_options {};
+  struct UTIL_SYMBOL_VISIBLE create_options{};
 
   struct UTIL_SYMBOL_VISIBLE task_context_data {
     uint64_t task_id;
@@ -83,7 +83,11 @@ class context {
       using std::swap;
 
       if (other->GetArena() != nullptr) {
+#if defined(PROTOBUF_VERSION) && PROTOBUF_VERSION >= 5027000
+        arena_msg_ptr_ = ::google::protobuf::Arena::Create<TMsg>(other->GetArena());
+#else
         arena_msg_ptr_ = ::google::protobuf::Arena::CreateMessage<TMsg>(other->GetArena());
+#endif
       }
       swap(arena_msg_ptr_, other.arena_msg_ptr_);
       local_msg_.Swap(&other.local_msg_);
@@ -198,7 +202,11 @@ class context {
   UTIL_SYMBOL_VISIBLE TMSG *create() {
     // 上面的分支减少一次atomic操作
     if (allocator_) {
+#if defined(PROTOBUF_VERSION) && PROTOBUF_VERSION >= 5027000
+      return ::google::protobuf::Arena::Create<TMSG>(allocator_.get());
+#else
       return ::google::protobuf::Arena::CreateMessage<TMSG>(allocator_.get());
+#endif
     }
 
     auto arena = mutable_protobuf_arena();
@@ -206,13 +214,17 @@ class context {
       return nullptr;
     }
 
+#if defined(PROTOBUF_VERSION) && PROTOBUF_VERSION >= 5027000
+    return ::google::protobuf::Arena::Create<TMSG>(arena.get());
+#else
     return ::google::protobuf::Arena::CreateMessage<TMSG>(arena.get());
+#endif
   }
 
-  SERVER_FRAME_API util::memory::strong_rc_ptr<::google::protobuf::Arena> mutable_protobuf_arena();
-  SERVER_FRAME_API const util::memory::strong_rc_ptr<::google::protobuf::Arena> &get_protobuf_arena() const;
+  SERVER_FRAME_API std::shared_ptr<::google::protobuf::Arena> mutable_protobuf_arena();
+  SERVER_FRAME_API const std::shared_ptr<::google::protobuf::Arena> &get_protobuf_arena() const;
   SERVER_FRAME_API bool try_reuse_protobuf_arena(
-      const util::memory::strong_rc_ptr<::google::protobuf::Arena> &arena) noexcept;
+      const std::shared_ptr<::google::protobuf::Arena> &arena) noexcept;
 
   SERVER_FRAME_API const tracer::span_ptr_type &get_trace_span() const noexcept;
 
@@ -229,6 +241,11 @@ class context {
 
   SERVER_FRAME_API void set_task_context(const task_context_data &task_ctx) noexcept;
   UTIL_FORCEINLINE const task_context_data &get_task_context() const noexcept { return task_context_; }
+  UTIL_FORCEINLINE void update_task_instance(uint64_t task_id, gsl::string_view task_name) noexcept {
+    task_context_.task_id = task_id;
+    task_context_.task_name = task_name;
+  }
+
   UTIL_FORCEINLINE void update_task_context_reference_object(uint32_t type_id, uint32_t zone_id,
                                                              uint64_t instance_id) noexcept {
     task_context_.reference_object_type_id = type_id;
@@ -237,8 +254,8 @@ class context {
   }
 
  private:
-  util::memory::strong_rc_ptr<::google::protobuf::Arena> allocator_;
-  std::list<util::memory::strong_rc_ptr<::google::protobuf::Arena>> used_allocators_;
+  std::shared_ptr<::google::protobuf::Arena> allocator_;
+  std::list<std::shared_ptr<::google::protobuf::Arena>> used_allocators_;
 
   struct trace_context_data {
     tracer::span_ptr_type trace_span;

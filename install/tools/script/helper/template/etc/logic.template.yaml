@@ -74,6 +74,8 @@ logic:
     closing_action_batch_count: 500 # max action count when in closing task of router system
     transfer_max_ttl: 128           # max TTL when transfer router messages
   telemetry:
+    executor:
+      max_metric_record_per_loop: 1000
     opentelemetry:
       app_log:
         level: debug

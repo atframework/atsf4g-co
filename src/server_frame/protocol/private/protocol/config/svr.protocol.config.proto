@@ -325,10 +325,15 @@ message opentelemetry_group_cfg {
   opentelemetry_agent_cfg agent = 3;
 }
 
+message logic_telemetry_executor_cfg {
+  int32 max_metric_record_per_loop = 1 [(atapp.protocol.CONFIGURE) = { default_value: "1000" min_value: "1" }];
+}
+
 message logic_telemetry_cfg {
   opentelemetry_cfg opentelemetry = 1;
   opentelemetry_agent_cfg agent = 2;
   repeated opentelemetry_group_cfg group = 3;
+  logic_telemetry_executor_cfg executor = 5;
 }
 
 message logic_discovery_selector_cfg {

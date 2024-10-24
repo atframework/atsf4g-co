@@ -26,6 +26,8 @@
 
 #include <atframe/atapp.h>
 
+#include <config/logic_config.h>
+
 #include <atomic>
 #include <functional>
 #include <limits>
@@ -73,9 +75,9 @@ struct UTIL_SYMBOL_VISIBLE opentelemetry_utility::metrics_observer {
   metrics_observable_type type;
 
   std::string meter_name;
-  opentelemetry::nostd::string_view meter_instrument_name;
-  opentelemetry::nostd::string_view meter_instrument_description;
-  opentelemetry::nostd::string_view meter_instrument_unit;
+  std::string meter_instrument_name;
+  std::string meter_instrument_description;
+  std::string meter_instrument_unit;
 
   opentelemetry::metrics::ObservableCallbackPtr origin_callback;
 
@@ -452,18 +454,8 @@ struct UTIL_SYMBOL_LOCAL opentelemetry_utility_global_metrics_set {
 };
 
 static std::pair<std::recursive_mutex&, opentelemetry_utility_global_metrics_set&> get_global_metrics_set() {
-  static std::shared_ptr<::rpc::telemetry::group_type> default_group;
   static std::recursive_mutex lock;
   static opentelemetry_utility_global_metrics_set ret;
-
-  // Cleanup after reload
-  if (default_group != rpc::telemetry::global_service::get_default_group()) {
-    default_group = rpc::telemetry::global_service::get_default_group();
-    ret.int64_observable_by_key.clear();
-    ret.int64_observable_by_pointer.clear();
-    ret.double_observable_by_key.clear();
-    ret.double_observable_by_pointer.clear();
-  }
 
   return {lock, ret};
 }
@@ -524,7 +516,11 @@ static bool internal_add_global_metrics_observable_int64(opentelemetry_utility::
       callback_data_set.second.collecting_version.fetch_add(1, std::memory_order_release);
     }
 
+    size_t export_record_count = 0;
     if (metrics_item->records.empty()) {
+      FWLOGDEBUG("[Telemetry]: Export metric meter instrument {}(@{}) with {} record(s) to version {}",
+                 metrics_item->key, callback, export_record_count,
+                 metrics_item->export_version.load(std::memory_order_acquire));
       return;
     }
 
@@ -533,6 +529,7 @@ static bool internal_add_global_metrics_observable_int64(opentelemetry_utility::
       if (!record) {
         continue;
       }
+      ++export_record_count;
 
       if (opentelemetry::nostd::holds_alternative<
               opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {
@@ -554,6 +551,8 @@ static bool internal_add_global_metrics_observable_int64(opentelemetry_utility::
 
       record.reset();
     }
+    FWLOGDEBUG("[Telemetry]: Export metric meter instrument {}(@{}) with {} record(s) to version {}", metrics_item->key,
+               callback, export_record_count, metrics_item->export_version.load(std::memory_order_acquire));
   };
 
   instrument->AddCallback(observer.origin_callback, reinterpret_cast<void*>(&observer));
@@ -618,7 +617,11 @@ static bool internal_add_global_metrics_observable_double(opentelemetry_utility:
       callback_data_set.second.collecting_version.fetch_add(1, std::memory_order_release);
     }
 
+    size_t export_record_count = 0;
     if (metrics_item->records.empty()) {
+      FWLOGDEBUG("[Telemetry]: Export metric meter instrument {}(@{}) with {} record(s) to version {}",
+                 metrics_item->key, callback, export_record_count,
+                 metrics_item->export_version.load(std::memory_order_acquire));
       return;
     }
 
@@ -627,6 +630,7 @@ static bool internal_add_global_metrics_observable_double(opentelemetry_utility:
       if (!record) {
         continue;
       }
+      ++export_record_count;
 
       if (opentelemetry::nostd::holds_alternative<
               opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<int64_t>>>(result)) {
@@ -648,6 +652,9 @@ static bool internal_add_global_metrics_observable_double(opentelemetry_utility:
 
       record.reset();
     }
+
+    FWLOGDEBUG("[Telemetry]: Export metric meter instrument {}(@{}) with {} record(s) to version {}", metrics_item->key,
+               callback, export_record_count, metrics_item->export_version.load(std::memory_order_acquire));
   };
 
   instrument->AddCallback(observer.origin_callback, reinterpret_cast<void*>(&observer));
@@ -706,19 +713,18 @@ SERVER_FRAME_API int opentelemetry_utility::tick() {
     return ret;
   }
 
-  int32_t max_event_per_loop = 0;
+  int32_t max_record_per_loop = logic_config::me()->get_logic().telemetry().executor().max_metric_record_per_loop();
   std::chrono::system_clock::duration max_tick_time_per_loop = std::chrono::system_clock::duration::zero();
 
   atapp::app* app_inst = atapp::app::get_last_instance();
   if (nullptr != app_inst) {
-    max_event_per_loop = app_inst->get_origin_configure().bus().loop_times();
     max_tick_time_per_loop = std::chrono::duration_cast<std::chrono::system_clock::duration>(
         std::chrono::seconds(app_inst->get_origin_configure().timer().tick_interval().seconds()) +
         std::chrono::nanoseconds(app_inst->get_origin_configure().timer().tick_interval().nanos()));
   }
 
-  if (max_event_per_loop <= 0) {
-    max_event_per_loop = 256;
+  if (max_record_per_loop <= 0) {
+    max_record_per_loop = 1024;
   }
 
   if (max_tick_time_per_loop < std::chrono::milliseconds{4}) {
@@ -730,72 +736,102 @@ SERVER_FRAME_API int opentelemetry_utility::tick() {
 
   std::lock_guard<std::recursive_mutex> lock_guard{callback_data_set.first};
   bool all_collected = true;
+  size_t exported_metric_count = 0;
+  size_t exporting_metric_count = 0;
   for (auto& observable : callback_data_set.second.int64_observable_by_pointer) {
     if (!observable.second) {
+      ++exported_metric_count;
       continue;
     }
 
     if (!observable.second->callback) {
+      ++exported_metric_count;
       continue;
     }
 
     // 有数据未导出，不需要再导出一次
-    if (observable.second->export_version.load(std::memory_order_acquire) !=
-        observable.second->collect_version.load(std::memory_order_acquire)) {
-      observable.second->collect_version.store(collecting_version, std::memory_order_release);
+    size_t export_version = observable.second->export_version.load(std::memory_order_acquire);
+    if (export_version == collecting_version ||
+        export_version != observable.second->collect_version.load(std::memory_order_acquire)) {
+      ++exported_metric_count;
       continue;
     }
 
+    util::time::time_utility::update();
     auto end_time = std::chrono::system_clock::now();
-    if (ret >= max_event_per_loop || end_time - start_time >= max_tick_time_per_loop) {
+    if (ret >= max_record_per_loop || end_time - start_time >= max_tick_time_per_loop) {
       all_collected = false;
       break;
     }
 
-    ++ret;
     size_t old_record_count = observable.second->stat_push_record_counter_sum.load(std::memory_order_acquire);
     observable.second->callback(*observable.second);
     size_t new_record_count = observable.second->stat_push_record_counter_sum.load(std::memory_order_acquire);
     if (new_record_count > old_record_count) {
       ret += static_cast<int32_t>(new_record_count - old_record_count);
     }
+
+    ++exporting_metric_count;
+    ++exported_metric_count;
+    FWLOGDEBUG("[Telemetry]: Collect metric meter instrument {}(@{}) with {} record(s) from version {} to {}",
+               observable.second->key, observable.first, new_record_count - old_record_count, export_version,
+               collecting_version);
     observable.second->collect_version.store(collecting_version, std::memory_order_release);
   }
 
   for (auto& observable : callback_data_set.second.double_observable_by_pointer) {
     if (!observable.second) {
+      ++exported_metric_count;
       continue;
     }
 
     if (!observable.second->callback) {
+      ++exported_metric_count;
       continue;
     }
 
     // 有数据未导出，不需要再导出一次
-    if (observable.second->export_version.load(std::memory_order_acquire) !=
-        observable.second->collect_version.load(std::memory_order_acquire)) {
-      observable.second->collect_version.store(collecting_version, std::memory_order_release);
+    size_t export_version = observable.second->export_version.load(std::memory_order_acquire);
+    if (export_version == collecting_version ||
+        export_version != observable.second->collect_version.load(std::memory_order_acquire)) {
+      ++exported_metric_count;
       continue;
     }
 
+    util::time::time_utility::update();
     auto end_time = std::chrono::system_clock::now();
-    if (ret >= max_event_per_loop || end_time - start_time >= max_tick_time_per_loop) {
+    if (ret >= max_record_per_loop || end_time - start_time >= max_tick_time_per_loop) {
       all_collected = false;
       break;
     }
 
-    ++ret;
     size_t old_record_count = observable.second->stat_push_record_counter_sum.load(std::memory_order_acquire);
     observable.second->callback(*observable.second);
     size_t new_record_count = observable.second->stat_push_record_counter_sum.load(std::memory_order_acquire);
     if (new_record_count > old_record_count) {
       ret += static_cast<int32_t>(new_record_count - old_record_count);
     }
+
+    ++exporting_metric_count;
+    ++exported_metric_count;
+    FWLOGDEBUG("[Telemetry]: Collect metric meter instrument {}(@{}) with {} record(s) from version {} to {}",
+               observable.second->key, observable.first, new_record_count - old_record_count, export_version,
+               collecting_version);
     observable.second->collect_version.store(collecting_version, std::memory_order_release);
   }
 
   if (all_collected) {
     callback_data_set.second.collected_version.store(collecting_version, std::memory_order_release);
+  }
+
+  if (ret > 0 || all_collected) {
+    FWLOGINFO(
+        "[Telemetry]: Export {} record(s) in {}/{}/{} metric meter instrument(s), all collected: {}, cost {}us", ret,
+        exporting_metric_count, exported_metric_count,
+        callback_data_set.second.int64_observable_by_pointer.size() +
+            callback_data_set.second.double_observable_by_pointer.size(),
+        all_collected,
+        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start_time).count());
   }
 
   return ret;

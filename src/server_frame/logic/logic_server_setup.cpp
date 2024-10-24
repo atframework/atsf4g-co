@@ -261,7 +261,7 @@ int logic_server_setup_common(atapp::app &app, const logic_server_common_module_
                      return;
                    }
 
-                   app.set_metadata_label(opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironment,
+                   app.set_metadata_label(opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName,
                                           params[0]->to_cpp_string());
                  })
       ->set_help_msg("-env [text]                                               set a env name.");

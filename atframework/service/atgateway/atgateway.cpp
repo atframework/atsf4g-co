@@ -545,8 +545,12 @@ struct app_handle_on_recv {
     ::google::protobuf::ArenaOptions arena_options;
     arena_options.initial_block_size = (message.data_size + 256) & 255;
     ::google::protobuf::Arena arena(arena_options);
+#if defined(PROTOBUF_VERSION) && PROTOBUF_VERSION >= 5027000
+    ::atframe::gw::ss_msg *msg = ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::Arena::Create<::atframe::gw::ss_msg>(&arena);
+#else
     ::atframe::gw::ss_msg *msg =
         ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::Arena::CreateMessage<::atframe::gw::ss_msg>(&arena);
+#endif
     assert(msg);
 
     if (false == msg->ParseFromArray(message.data, static_cast<int>(message.data_size))) {

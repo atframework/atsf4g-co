@@ -33,8 +33,10 @@
 #include <functional>
 #include <utility>
 
+#include "config/server_frame_build_feature.h"
+
 #include "dispatcher/dispatcher_implement.h"
-#include "dispatcher/task_manager.h"
+#include "rpc/rpc_context.h"
 
 namespace detail {
 struct task_action_stat_guard {
@@ -152,11 +154,10 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data) {
   trace_attributes[static_cast<size_t>(trace_attribute_type::kAtRpcSpanName)] = {
       rpc::telemetry::semantic_conventions::kAtRpcSpanName, name()};
 
-  rpc::context::task_context_data rpc_task_context_data;
-
+  task_type_trait::id_type current_task_id;
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   private_data_ = task_meta.private_data;
-  rpc_task_context_data.task_id = task_meta.task_id;
+  current_task_id = task_meta.task_id;
   if (0 == task_meta.task_id) {
     FWLOGERROR("task convert failed, must in task.");
     co_return tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_INIT,
@@ -172,7 +173,7 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data) {
                               trace_attributes, static_cast<size_t>(trace_attribute_type::kTaskResponseCode)}});
   }
   private_data_ = task_type_trait::get_private_data(*task);
-  rpc_task_context_data.task_id = task->get_id();
+  current_task_id = task->get_id();
 #endif
 
   if (nullptr != private_data_) {
@@ -180,8 +181,7 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data) {
     private_data_->action = this;
   }
 
-  rpc_task_context_data.task_name = name();
-  shared_context_.set_task_context(rpc_task_context_data);
+  shared_context_.update_task_instance(current_task_id, name());
 
   if (0 != get_user_id()) {
     FCTXLOGDEBUG(get_shared_context(), "task {} [{}] for player {}:{} start to run\n", name(), get_task_id(),

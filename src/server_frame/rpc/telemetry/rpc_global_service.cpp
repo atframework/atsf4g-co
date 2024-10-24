@@ -155,6 +155,57 @@ struct local_provider_handle_type {
 
 static void _opentelemetry_initialize_group(const std::shared_ptr<group_type> &);
 
+static bool _opentelemetry_validate_meter_instrument_name(opentelemetry::nostd::string_view name) {
+  // @see InstrumentMetaDataValidator::ValidateName in
+  // <opentelemetry-cpp>/sdk/src/metrics/instrument_metadata_validator.cc
+
+  using std::isalnum;
+  using std::isalpha;
+
+  const size_t kMaxSize = 255;
+  // size atmost 255 chars
+  if (name.size() > kMaxSize) {
+    return false;
+  }
+
+  if (name.empty()) {
+    return false;
+  }
+
+  // first char should be alpha
+  if (!isalpha(name[0])) {
+    return false;
+  }
+  // subsequent chars should be either of alphabets, digits, underscore,
+  // minus, dot, slash
+  return !std::any_of(std::next(name.begin()), name.end(),
+                      [](char c) { return !isalnum(c) && (c != '-') && (c != '_') && (c != '.') && (c != '/'); });
+}
+
+static bool _opentelemetry_validate_meter_instrument_unit(opentelemetry::nostd::string_view unit) {
+  // @see InstrumentMetaDataValidator::ValidateUnit in
+  // <opentelemetry-cpp>/sdk/src/metrics/instrument_metadata_validator.cc
+  const size_t kMaxSize = 63;
+  // length atmost 63 chars
+  if (unit.size() > kMaxSize) {
+    return false;
+  }
+  // all should be ascii chars.
+  return !std::any_of(unit.begin(), unit.end(), [](char c) { return static_cast<unsigned char>(c) > 127; });
+}
+
+static bool _opentelemetry_validate_meter_instrument_description(opentelemetry::nostd::string_view /*desc*/) {
+  // @see InstrumentMetaDataValidator::ValidateDescription in
+  // <opentelemetry-cpp>/sdk/src/metrics/instrument_metadata_validator.cc
+  return true;
+}
+
+static bool _opentelemetry_validate_meter_instrument_key(const meter_instrument_key &key) {
+  return _opentelemetry_validate_meter_instrument_name(key.name) &&
+         _opentelemetry_validate_meter_instrument_unit(key.unit) &&
+         _opentelemetry_validate_meter_instrument_description(key.description);
+}
+
 }  // namespace
 
 struct group_type {
@@ -295,7 +346,7 @@ class opentelemetry_internal_log_handler : public opentelemetry::sdk::common::in
 
 template <class TValue>
 static TValue optimize_search_in_hash_map(std::unordered_map<std::string, TValue> &container, const std::string &key) {
-  if (container.size() < 16) {
+  if (container.size() < 4) {
     for (auto &element : container) {
       if (element.first == key) {
         return element.second;
@@ -951,6 +1002,16 @@ global_service::mutable_metrics_counter_uint64(opentelemetry::nostd::string_view
     }
   }
 
+  if (!_opentelemetry_validate_meter_instrument_key(key)) {
+    FWLOGERROR("Create metrics counter {}(instrument={}, {}, {}) failed, invalid instrument key",
+               gsl::string_view{meter_name.data(), meter_name.size()},
+               gsl::string_view{key.name.data(), key.name.size()}, gsl::string_view{key.unit.data(), key.unit.size()},
+               gsl::string_view{key.description.data(), key.description.size()}
+
+    );
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<uint64_t>>();
+  }
+
   {
     util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
     auto ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<uint64_t>>(
@@ -979,6 +1040,16 @@ global_service::mutable_metrics_counter_double(opentelemetry::nostd::string_view
     if (ret) {
       return ret;
     }
+  }
+
+  if (!_opentelemetry_validate_meter_instrument_key(key)) {
+    FWLOGERROR("Create metrics counter {}(instrument={}, {}, {}) failed, invalid instrument key",
+               gsl::string_view{meter_name.data(), meter_name.size()},
+               gsl::string_view{key.name.data(), key.name.size()}, gsl::string_view{key.unit.data(), key.unit.size()},
+               gsl::string_view{key.description.data(), key.description.size()}
+
+    );
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<double>>();
   }
 
   {
@@ -1011,6 +1082,16 @@ global_service::mutable_metrics_histogram_uint64(opentelemetry::nostd::string_vi
     }
   }
 
+  if (!_opentelemetry_validate_meter_instrument_key(key)) {
+    FWLOGERROR("Create metrics histogram {}(instrument={}, {}, {}) failed, invalid instrument key",
+               gsl::string_view{meter_name.data(), meter_name.size()},
+               gsl::string_view{key.name.data(), key.name.size()}, gsl::string_view{key.unit.data(), key.unit.size()},
+               gsl::string_view{key.description.data(), key.description.size()}
+
+    );
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<uint64_t>>();
+  }
+
   {
     util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
     auto ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<uint64_t>>(
@@ -1039,6 +1120,16 @@ global_service::mutable_metrics_histogram_double(opentelemetry::nostd::string_vi
     if (ret) {
       return ret;
     }
+  }
+
+  if (!_opentelemetry_validate_meter_instrument_key(key)) {
+    FWLOGERROR("Create metrics histogram {}(instrument={}, {}, {}) failed, invalid instrument key",
+               gsl::string_view{meter_name.data(), meter_name.size()},
+               gsl::string_view{key.name.data(), key.name.size()}, gsl::string_view{key.unit.data(), key.unit.size()},
+               gsl::string_view{key.description.data(), key.description.size()}
+
+    );
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<double>>();
   }
 
   {
@@ -1071,6 +1162,16 @@ global_service::mutable_metrics_up_down_counter_int64(opentelemetry::nostd::stri
     }
   }
 
+  if (!_opentelemetry_validate_meter_instrument_key(key)) {
+    FWLOGERROR("Create metrics up_down_counter {}(instrument={}, {}, {}) failed, invalid instrument key",
+               gsl::string_view{meter_name.data(), meter_name.size()},
+               gsl::string_view{key.name.data(), key.name.size()}, gsl::string_view{key.unit.data(), key.unit.size()},
+               gsl::string_view{key.description.data(), key.description.size()}
+
+    );
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<int64_t>>();
+  }
+
   {
     util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
     auto ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<int64_t>>(
@@ -1099,6 +1200,16 @@ global_service::mutable_metrics_up_down_counter_double(opentelemetry::nostd::str
     if (ret) {
       return ret;
     }
+  }
+
+  if (!_opentelemetry_validate_meter_instrument_key(key)) {
+    FWLOGERROR("Create metrics up_down_counter {}(instrument={}, {}, {}) failed, invalid instrument key",
+               gsl::string_view{meter_name.data(), meter_name.size()},
+               gsl::string_view{key.name.data(), key.name.size()}, gsl::string_view{key.unit.data(), key.unit.size()},
+               gsl::string_view{key.description.data(), key.description.size()}
+
+    );
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<double>>();
   }
 
   {
@@ -1141,11 +1252,31 @@ global_service::mutable_metrics_observable_counter_int64(opentelemetry::nostd::s
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
   }
 
+  std::string metrics_storage_key = static_cast<std::string>(key.name);
+  {
+    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+
+    ret = optimize_search_in_hash_map(meter_info->async_instruments, metrics_storage_key);
+    if (ret) {
+      return ret;
+    }
+  }
+
+  if (!_opentelemetry_validate_meter_instrument_key(key)) {
+    FWLOGERROR("Create metrics observable {}(instrument={}, {}, {}) failed, invalid instrument key",
+               gsl::string_view{meter_name.data(), meter_name.size()},
+               gsl::string_view{key.name.data(), key.name.size()}, gsl::string_view{key.unit.data(), key.unit.size()},
+               gsl::string_view{key.description.data(), key.description.size()}
+
+    );
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+  }
+
   util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
   ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>(
       meter_info->meter->CreateInt64ObservableCounter(key.name, key.description, key.unit));
   if (ret) {
-    meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
+    meter_info->async_instruments[metrics_storage_key] = ret;
   }
 
   return ret;
@@ -1165,11 +1296,31 @@ global_service::mutable_metrics_observable_counter_double(opentelemetry::nostd::
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
   }
 
+  std::string metrics_storage_key = static_cast<std::string>(key.name);
+  {
+    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+
+    ret = optimize_search_in_hash_map(meter_info->async_instruments, metrics_storage_key);
+    if (ret) {
+      return ret;
+    }
+  }
+
+  if (!_opentelemetry_validate_meter_instrument_key(key)) {
+    FWLOGERROR("Create metrics observable {}(instrument={}, {}, {}) failed, invalid instrument key",
+               gsl::string_view{meter_name.data(), meter_name.size()},
+               gsl::string_view{key.name.data(), key.name.size()}, gsl::string_view{key.unit.data(), key.unit.size()},
+               gsl::string_view{key.description.data(), key.description.size()}
+
+    );
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+  }
+
   util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
   ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>(
       meter_info->meter->CreateDoubleObservableCounter(key.name, key.description, key.unit));
   if (ret) {
-    meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
+    meter_info->async_instruments[metrics_storage_key] = ret;
   }
 
   return ret;
@@ -1189,11 +1340,31 @@ global_service::mutable_metrics_observable_gauge_int64(opentelemetry::nostd::str
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
   }
 
+  std::string metrics_storage_key = static_cast<std::string>(key.name);
+  {
+    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+
+    ret = optimize_search_in_hash_map(meter_info->async_instruments, metrics_storage_key);
+    if (ret) {
+      return ret;
+    }
+  }
+
+  if (!_opentelemetry_validate_meter_instrument_key(key)) {
+    FWLOGERROR("Create metrics observable {}(instrument={}, {}, {}) failed, invalid instrument key",
+               gsl::string_view{meter_name.data(), meter_name.size()},
+               gsl::string_view{key.name.data(), key.name.size()}, gsl::string_view{key.unit.data(), key.unit.size()},
+               gsl::string_view{key.description.data(), key.description.size()}
+
+    );
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+  }
+
   util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
   ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>(
       meter_info->meter->CreateInt64ObservableGauge(key.name, key.description, key.unit));
   if (ret) {
-    meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
+    meter_info->async_instruments[metrics_storage_key] = ret;
   }
 
   return ret;
@@ -1213,11 +1384,31 @@ global_service::mutable_metrics_observable_gauge_double(opentelemetry::nostd::st
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
   }
 
+  std::string metrics_storage_key = static_cast<std::string>(key.name);
+  {
+    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+
+    ret = optimize_search_in_hash_map(meter_info->async_instruments, metrics_storage_key);
+    if (ret) {
+      return ret;
+    }
+  }
+
+  if (!_opentelemetry_validate_meter_instrument_key(key)) {
+    FWLOGERROR("Create metrics observable {}(instrument={}, {}, {}) failed, invalid instrument key",
+               gsl::string_view{meter_name.data(), meter_name.size()},
+               gsl::string_view{key.name.data(), key.name.size()}, gsl::string_view{key.unit.data(), key.unit.size()},
+               gsl::string_view{key.description.data(), key.description.size()}
+
+    );
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+  }
+
   util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
   ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>(
       meter_info->meter->CreateDoubleObservableGauge(key.name, key.description, key.unit));
   if (ret) {
-    meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
+    meter_info->async_instruments[metrics_storage_key] = ret;
   }
 
   return ret;
@@ -1238,11 +1429,31 @@ global_service::mutable_metrics_observable_up_down_counter_int64(opentelemetry::
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
   }
 
+  std::string metrics_storage_key = static_cast<std::string>(key.name);
+  {
+    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+
+    ret = optimize_search_in_hash_map(meter_info->async_instruments, metrics_storage_key);
+    if (ret) {
+      return ret;
+    }
+  }
+
+  if (!_opentelemetry_validate_meter_instrument_key(key)) {
+    FWLOGERROR("Create metrics observable {}(instrument={}, {}, {}) failed, invalid instrument key",
+               gsl::string_view{meter_name.data(), meter_name.size()},
+               gsl::string_view{key.name.data(), key.name.size()}, gsl::string_view{key.unit.data(), key.unit.size()},
+               gsl::string_view{key.description.data(), key.description.size()}
+
+    );
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+  }
+
   util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
   ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>(
       meter_info->meter->CreateInt64ObservableUpDownCounter(key.name, key.description, key.unit));
   if (ret) {
-    meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
+    meter_info->async_instruments[metrics_storage_key] = ret;
   }
 
   return ret;
@@ -1263,11 +1474,31 @@ global_service::mutable_metrics_observable_up_down_counter_double(opentelemetry:
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
   }
 
+  std::string metrics_storage_key = static_cast<std::string>(key.name);
+  {
+    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+
+    ret = optimize_search_in_hash_map(meter_info->async_instruments, metrics_storage_key);
+    if (ret) {
+      return ret;
+    }
+  }
+
+  if (!_opentelemetry_validate_meter_instrument_key(key)) {
+    FWLOGERROR("Create metrics observable {}(instrument={}, {}, {}) failed, invalid instrument key",
+               gsl::string_view{meter_name.data(), meter_name.size()},
+               gsl::string_view{key.name.data(), key.name.size()}, gsl::string_view{key.unit.data(), key.unit.size()},
+               gsl::string_view{key.description.data(), key.description.size()}
+
+    );
+    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+  }
+
   util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
   ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>(
       meter_info->meter->CreateDoubleObservableUpDownCounter(key.name, key.description, key.unit));
   if (ret) {
-    meter_info->async_instruments[static_cast<std::string>(key.name)] = ret;
+    meter_info->async_instruments[metrics_storage_key] = ret;
   }
 
   return ret;
@@ -1583,7 +1814,8 @@ static local_provider_handle_type<opentelemetry::trace::TracerProvider> _opentel
   ret.provider = opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>(
       opentelemetry::sdk::trace::TracerProviderFactory::Create(
           std::move(processors), resource, std::move(sampler),
-          std::unique_ptr<opentelemetry::sdk::trace::IdGenerator>(new opentelemetry::sdk::trace::RandomIdGenerator())));
+          std::unique_ptr<opentelemetry::sdk::trace::IdGenerator>(new opentelemetry::sdk::trace::RandomIdGenerator()))
+          .release());
   ret.shutdown_callback =
       [processors_ptr](const opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider> &provider) {
         if (!provider) {
@@ -2158,7 +2390,7 @@ static local_provider_handle_type<opentelemetry::logs::LoggerProvider> _opentele
   }
 
   ret.provider = opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>(
-      opentelemetry::sdk::logs::LoggerProviderFactory::Create(std::move(processors), std::move(resource)));
+      opentelemetry::sdk::logs::LoggerProviderFactory::Create(std::move(processors), std::move(resource)).release());
   ret.shutdown_callback =
       [processors_ptr](const opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider> &provider) {
         if (!provider) {
@@ -2654,12 +2886,12 @@ static void _create_opentelemetry_app_resource(
 
   {
     auto iter =
-        app.get_metadata().labels().find(opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironment);
+        app.get_metadata().labels().find(opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName);
     if (iter != app.get_metadata().labels().end()) {
       group.common_owned_attributes.SetAttribute(
-          opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironment, iter->second);
+          opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName, iter->second);
       set_attributes_map_item(group.common_owned_attributes, group.metrics_attributes,
-                              opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironment);
+                              opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName);
     }
   }
 
@@ -2761,8 +2993,8 @@ _opentelemetry_create_opentelemetry_metrics_provider(::rpc::telemetry::group_typ
     }
     group.metrics_exporter_count = exporters.size();
     if (group.group_configure.has_agent() && group.group_configure.agent().enable_metrics()) {
-      readers = _opentelemetry_create_metrics_reader(std::move(exporters),
-                                                     group.group_configure.agent().metrics_readers(), *exporters_cfg);
+      readers = _opentelemetry_create_metrics_reader(
+          std::move(exporters), group.group_configure.configure().metrics().reader(), *exporters_cfg);
     }
     if (readers.empty()) {
       readers = _opentelemetry_create_metrics_reader(
