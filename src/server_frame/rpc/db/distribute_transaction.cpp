@@ -36,7 +36,7 @@ static int32_t unpack_table_distribute_transaction(PROJECT_NAMESPACE_ID::table_a
                                                    const redisReply *reply) {
   if (nullptr == reply) {
     FWLOGDEBUG("{}", "data not found.");
-    //数据找不到，直接成功结束，外层会判断为无数据
+    // 数据找不到，直接成功结束，外层会判断为无数据
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
@@ -45,7 +45,7 @@ static int32_t unpack_table_distribute_transaction(PROJECT_NAMESPACE_ID::table_a
 }  // namespace detail
 
 result_type get(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid,
-                PROJECT_NAMESPACE_ID::table_distribute_transaction &output, std::string &version) {
+                rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> &output, std::string &version) {
   table_key_type user_key;
   size_t user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, transaction_uuid, zone_id);
   if (user_key_len <= 0) {
@@ -53,7 +53,7 @@ result_type get(rpc::context &ctx, uint32_t zone_id, gsl::string_view transactio
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_DB_SEND_FAILED);
   }
 
-  PROJECT_NAMESPACE_ID::table_all_message table_container;
+  rpc::shared_message<PROJECT_NAMESPACE_ID::table_all_message> table_container{ctx};
   // 协程操作
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::get_all(
       ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, gsl::string_view{user_key, user_key_len}, table_container,
@@ -62,14 +62,15 @@ result_type get(rpc::context &ctx, uint32_t zone_id, gsl::string_view transactio
     RPC_DB_RETURN_CODE(res);
   }
 
-  version.assign(table_container.version());
-  output.Swap(table_container.mutable_distribute_transaction());
+  version.assign(table_container->version());
+  output->Swap(table_container->mutable_distribute_transaction());
 
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 result_type set(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid,
-                const PROJECT_NAMESPACE_ID::table_distribute_transaction &store, std::string &version) {
+                const rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> &store,
+                std::string &version) {
   table_key_type user_key;
   size_t user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, transaction_uuid, zone_id);
   if (user_key_len <= 0) {
@@ -78,7 +79,7 @@ result_type set(rpc::context &ctx, uint32_t zone_id, gsl::string_view transactio
   }
 
   // args unavailable now
-  PROJECT_NAMESPACE_ID::table_all_message output;
+  rpc::shared_message<PROJECT_NAMESPACE_ID::table_all_message> output{ctx};
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::set(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
                                                             gsl::string_view{user_key, user_key_len}, store, version,
                                                             output, detail::unpack_table_distribute_transaction));

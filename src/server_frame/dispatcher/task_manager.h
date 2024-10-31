@@ -529,10 +529,11 @@ class task_manager {
    * @param timeout 超时时间
    * @return 0或错误码
    */
-  int add_task(const task_type_trait::task_type &task,
-               std::chrono::system_clock::duration timeout = std::chrono::system_clock::duration::zero());
+  SERVER_FRAME_API int add_task(
+      const task_type_trait::task_type &task,
+      std::chrono::system_clock::duration timeout = std::chrono::system_clock::duration::zero());
 
-  int report_create_error(const char *fn_name);
+  SERVER_FRAME_API int report_create_error(const char *fn_name);
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   struct generic_start_generator_record {

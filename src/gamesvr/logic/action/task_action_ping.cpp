@@ -55,7 +55,7 @@ task_action_ping::result_type task_action_ping::operator()() {
 
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_BAN);
     int kick_off_reason = PROJECT_NAMESPACE_ID::EN_CRT_LOGIN_BAN;
-    PROJECT_NAMESPACE_ID::table_login tb;
+    rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> tb{get_shared_context()};
     do {
       std::string login_ver;
       int res = RPC_AWAIT_CODE_RESULT(
@@ -65,25 +65,25 @@ task_action_ping::result_type task_action_ping::operator()() {
         break;
       }
 
-      if (!tb.has_except()) {
-        tb.mutable_except()->set_last_except_time(0);
-        tb.mutable_except()->set_except_con_times(0);
-        tb.mutable_except()->set_except_sum_times(0);
+      if (!tb->has_except()) {
+        tb->mutable_except()->set_last_except_time(0);
+        tb->mutable_except()->set_except_con_times(0);
+        tb->mutable_except()->set_except_sum_times(0);
       }
-      tb.mutable_except()->set_except_sum_times(tb.except().except_sum_times() + 1);
-      if (0 != tb.except().last_except_time() &&
-          util::time::time_utility::get_now() - tb.except().last_except_time() <=
+      tb->mutable_except()->set_except_sum_times(tb->except().except_sum_times() + 1);
+      if (0 != tb->except().last_except_time() &&
+          util::time::time_utility::get_now() - tb->except().last_except_time() <=
               logic_config::me()->get_logic().heartbeat().ban_time_bound().seconds()) {
-        tb.mutable_except()->set_except_con_times(tb.except().except_con_times() + 1);
+        tb->mutable_except()->set_except_con_times(tb->except().except_con_times() + 1);
       } else {
-        tb.mutable_except()->set_except_con_times(1);
+        tb->mutable_except()->set_except_con_times(1);
       }
 
-      tb.mutable_except()->set_last_except_time(util::time::time_utility::get_now());
+      tb->mutable_except()->set_last_except_time(util::time::time_utility::get_now());
 
-      if (tb.except().except_con_times() >= logic_config::me()->get_logic().heartbeat().ban_error_times()) {
-        tb.set_ban_time(static_cast<uint32_t>(util::time::time_utility::get_now() +
-                                              logic_config::me()->get_logic().session().login_ban_time().seconds()));
+      if (tb->except().except_con_times() >= logic_config::me()->get_logic().heartbeat().ban_error_times()) {
+        tb->set_ban_time(static_cast<uint32_t>(util::time::time_utility::get_now() +
+                                               logic_config::me()->get_logic().session().login_ban_time().seconds()));
         kick_off_reason = PROJECT_NAMESPACE_ID::EN_CRT_LOGIN_BAN;
         set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_BAN);
       } else {
@@ -97,7 +97,7 @@ task_action_ping::result_type task_action_ping::operator()() {
         WLOGERROR("call login rpc Set method failed, user %s, zone id: %u, res: %d", user->get_open_id().c_str(),
                   user->get_zone_id(), res);
       } else {
-        user->load_and_move_login_info(COPP_MACRO_STD_MOVE(tb), login_ver);
+        user->load_and_move_login_info(std::move(*tb), login_ver);
       }
     } while (false);
 

@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "rpc/db/db_utils.h"
+#include "rpc/rpc_shared_message.h"
 
 namespace rpc {
 class context;
@@ -31,10 +32,12 @@ namespace player {
  * @return 0或错误码
  */
 EXPLICIT_NODISCARD_ATTR result_type get_all(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                            PROJECT_NAMESPACE_ID::table_user &rsp, std::string &version);
+                                            shared_message<PROJECT_NAMESPACE_ID::table_user> &rsp,
+                                            std::string &version);
 
 EXPLICIT_NODISCARD_ATTR result_type get_basic(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                              PROJECT_NAMESPACE_ID::table_user &rsp, std::string *version = nullptr);
+                                              shared_message<PROJECT_NAMESPACE_ID::table_user> &rsp,
+                                              std::string *version = nullptr);
 
 /**
  * @brief 设置用户表的rpc操作
@@ -44,7 +47,8 @@ EXPLICIT_NODISCARD_ATTR result_type get_basic(rpc::context &ctx, uint64_t user_i
  * @return 0或错误码
  */
 EXPLICIT_NODISCARD_ATTR result_type set(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                        const PROJECT_NAMESPACE_ID::table_user &store, std::string &version);
+                                        const shared_message<PROJECT_NAMESPACE_ID::table_user> &store,
+                                        std::string &version);
 
 }  // namespace player
 }  // namespace db

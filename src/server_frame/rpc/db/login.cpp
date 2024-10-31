@@ -35,7 +35,7 @@ namespace detail {
 static int32_t unpack_login(PROJECT_NAMESPACE_ID::table_all_message &table_msg, const redisReply *reply) {
   if (nullptr == reply) {
     FWLOGDEBUG("{}", "data not found.");
-    //数据找不到，直接成功结束，外层会判断为无数据
+    // 数据找不到，直接成功结束，外层会判断为无数据
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
@@ -43,8 +43,8 @@ static int32_t unpack_login(PROJECT_NAMESPACE_ID::table_all_message &table_msg, 
 }
 }  // namespace detail
 
-result_type get(rpc::context &ctx, const char *openid, uint32_t zone_id, PROJECT_NAMESPACE_ID::table_login &rsp,
-                std::string &version) {
+result_type get(rpc::context &ctx, const char *openid, uint32_t zone_id,
+                shared_message<PROJECT_NAMESPACE_ID::table_login> &rsp, std::string &version) {
   table_key_type user_key;
   size_t user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, openid, zone_id);
   if (user_key_len <= 0) {
@@ -52,7 +52,7 @@ result_type get(rpc::context &ctx, const char *openid, uint32_t zone_id, PROJECT
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_DB_SEND_FAILED);
   }
 
-  PROJECT_NAMESPACE_ID::table_all_message output;
+  shared_message<PROJECT_NAMESPACE_ID::table_all_message> output{ctx};
   // 协程操作
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::get_all(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
                                                                 gsl::string_view{user_key, user_key_len}, output,
@@ -61,14 +61,14 @@ result_type get(rpc::context &ctx, const char *openid, uint32_t zone_id, PROJECT
     RPC_DB_RETURN_CODE(res);
   }
 
-  version.assign(output.version());
-  rsp.Swap(output.mutable_login());
+  version.assign(output->version());
+  rsp->Swap(output->mutable_login());
 
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-result_type set(rpc::context &ctx, const char *openid, uint32_t zone_id, const PROJECT_NAMESPACE_ID::table_login &store,
-                std::string &version) {
+result_type set(rpc::context &ctx, const char *openid, uint32_t zone_id,
+                const shared_message<PROJECT_NAMESPACE_ID::table_login> &store, std::string &version) {
   table_key_type user_key;
   size_t user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, openid, zone_id);
   if (user_key_len <= 0) {
@@ -77,7 +77,7 @@ result_type set(rpc::context &ctx, const char *openid, uint32_t zone_id, const P
   }
 
   // args unavailable now
-  PROJECT_NAMESPACE_ID::table_all_message output;
+  shared_message<PROJECT_NAMESPACE_ID::table_all_message> output{ctx};
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::set(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
                                                             gsl::string_view{user_key, user_key_len}, store, version,
                                                             output, detail::unpack_login));

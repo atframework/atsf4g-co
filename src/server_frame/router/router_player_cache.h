@@ -6,15 +6,17 @@
 
 #include <data/player_cache.h>
 
+#include <rpc/rpc_shared_message.h>
+
 #include <string>
 
 #include "router/router_object.h"
 
 struct router_player_private_type {
   router_player_private_type();
-  router_player_private_type(PROJECT_NAMESPACE_ID::table_login *tb, std::string *ver);
+  router_player_private_type(rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> *tb, std::string *ver);
 
-  PROJECT_NAMESPACE_ID::table_login *login_tb;
+  rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> *login_tb;
   std::string *login_ver;
 };
 
@@ -34,15 +36,10 @@ class router_player_cache : public router_object<player_cache, router_player_cac
 
   const char *name() const override;
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_cache(rpc::context &ctx,
-                                                                               void *priv_data) override;
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_cache(rpc::context &ctx,
-                                                                               router_player_private_type &priv_data);
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_object(rpc::context &ctx,
-                                                                                void *priv_data) override;
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_object(rpc::context &ctx,
-                                                                                router_player_private_type &priv_data);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_cache(rpc::context &ctx, void *priv_data) override;
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_cache(rpc::context &ctx, router_player_private_type &priv_data);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_object(rpc::context &ctx, void *priv_data) override;
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_object(rpc::context &ctx, router_player_private_type &priv_data);
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type save_object(rpc::context &ctx,
-                                                                                void *priv_data) override;
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type save_object(rpc::context &ctx, void *priv_data) override;
 };

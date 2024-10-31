@@ -103,7 +103,7 @@ SERVER_FRAME_CONFIG_API rpc::result_code_type router_player_manager::pull_online
   router_svr_ver = 0;
 
   /**
-  PROJECT_NAMESPACE_ID::table_login local_login_tb;
+  rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> local_login_tb{ctx};
   std::string        local_login_ver;
   PROJECT_NAMESPACE_ID::table_user  tbu;
 

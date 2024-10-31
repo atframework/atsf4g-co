@@ -85,7 +85,7 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
   RPC_AWAIT_IGNORE_RESULT(player_manager::me()->remove(get_shared_context(), req_body.user_id(), zone_id, true));
   user.reset();
 
-  PROJECT_NAMESPACE_ID::table_login tb;
+  rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> tb{get_shared_context()};
   std::string version;
   res = RPC_AWAIT_CODE_RESULT(
       rpc::db::login::get(get_shared_context(), req_body.open_id().c_str(), zone_id, tb, version));
@@ -95,24 +95,24 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  if (req_body.user_id() != tb.user_id()) {
+  if (req_body.user_id() != tb->user_id()) {
     FCTXLOGERROR(get_shared_context(), "player {} expect user_id={}, but we got {} not found", req_body.open_id(),
-                 tb.user_id(), req_body.user_id());
+                 tb->user_id(), req_body.user_id());
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_USERID_NOT_MATCH);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 2. 校验登入码
-  if (util::time::time_utility::get_sys_now() > tb.login_code_expired()) {
+  if (util::time::time_utility::get_sys_now() > tb->login_code_expired()) {
     FCTXLOGERROR(get_shared_context(), "player {}({}:{}) login code expired", req_body.open_id(), zone_id,
                  req_body.user_id());
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  if (0 != UTIL_STRFUNC_STRCMP(req_body.login_code().c_str(), tb.login_code().c_str())) {
+  if (0 != UTIL_STRFUNC_STRCMP(req_body.login_code().c_str(), tb->login_code().c_str())) {
     FCTXLOGERROR(get_shared_context(), "player {}({}:{}) login code error(expected: {}, real: {})", req_body.open_id(),
-                 zone_id, req_body.user_id(), tb.login_code(), req_body.login_code());
+                 zone_id, req_body.user_id(), tb->login_code(), req_body.login_code());
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }

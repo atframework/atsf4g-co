@@ -172,16 +172,14 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
       complete_jobs_idx.push_back(job_list[i].record_index);
 
       if (param_.user->get_user_async_jobs_manager().is_job_uuid_exists(val_desc->number(),
-                                                                        job_list[i].action_blob.action_uuid())) {
+                                                                        job_list[i].action_blob->action_uuid())) {
         // 已执行则跳过
         continue;
       }
       param_.user->get_user_async_jobs_manager().add_job_uuid(val_desc->number(),
-                                                              job_list[i].action_blob.action_uuid());
+                                                              job_list[i].action_blob->action_uuid());
 
-      async_job_ptr_type job_data_ptr =
-          atfw::memory::stl::make_strong_rc<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>(
-              std::move(job_list[i].action_blob));
+      async_job_ptr_type job_data_ptr = job_list[i].action_blob.share_instance();
 
       ++batch_job_number;
       int async_job_res = do_job(val_desc->number(), job_data_ptr);

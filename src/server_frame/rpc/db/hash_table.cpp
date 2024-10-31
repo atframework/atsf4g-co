@@ -31,7 +31,7 @@ namespace db {
 namespace hash_table {
 
 result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
-                    PROJECT_NAMESPACE_ID::table_all_message &output,
+                    shared_message<PROJECT_NAMESPACE_ID::table_all_message> &output,
                     int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply)) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
@@ -74,21 +74,22 @@ result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
       rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(), std::chrono::seconds{6});
 
   // 协程操作
-  res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, output, await_options));
+  res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, *output, await_options));
   if (res < 0) {
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
-  if (output.version().empty()) {
+  if (output->version().empty()) {
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, __trace_attributes}));
   }
 
-  FWLOGINFO("table [key={}] get all data version: {}", key, output.version());
+  FWLOGINFO("table [key={}] get all data version: {}", key, output->version());
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 
-result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key, const google::protobuf::Message &store,
-                std::string &version, PROJECT_NAMESPACE_ID::table_all_message &output,
+result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key,
+                const shared_message<google::protobuf::Message> &store, std::string &version,
+                shared_message<PROJECT_NAMESPACE_ID::table_all_message> &output,
                 int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply)) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
@@ -117,12 +118,12 @@ result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key, const
   std::stringstream segs_debug_info;
 
   std::vector<const ::google::protobuf::FieldDescriptor *> fds;
-  const google::protobuf::Reflection *reflect = store.GetReflection();
+  const google::protobuf::Reflection *reflect = store->GetReflection();
   if (nullptr == reflect) {
-    FWLOGERROR("pack message {} failed, get reflection failed", store.GetDescriptor()->full_name());
+    FWLOGERROR("pack message {} failed, get reflection failed", store->GetDescriptor()->full_name());
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PACK, __trace_attributes}));
   }
-  reflect->ListFields(store, &fds);
+  reflect->ListFields(*store, &fds);
   // version will take two segments
   // each fd will take key segment and value segment
   redis_args args(fds.size() * 2 + 6);
@@ -132,7 +133,7 @@ result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key, const
   args.push(1);
   args.push(key.data(), key.size());
 
-  int res = rpc::db::pack_message(store, args, fds, &version, &segs_debug_info);
+  int res = rpc::db::pack_message(*store, args, fds, &version, &segs_debug_info);
   if (res < 0) {
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
@@ -157,21 +158,21 @@ result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key, const
       rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(), std::chrono::seconds{6});
 
   // 协程操作
-  res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, output, await_options));
+  res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, *output, await_options));
   if (res < 0) {
-    if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res && !output.version().empty()) {
-      version.assign(output.version());
+    if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res && !output->version().empty()) {
+      version.assign(output->version());
     }
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
-  if (output.version().empty()) {
+  if (output->version().empty()) {
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, __trace_attributes}));
   }
 
-  version.assign(output.version());
+  version.assign(output->version());
 
-  FWLOGINFO("table [key={}] data saved, new version: {}, detail: {}", key, output.version(), segs_debug_info.str());
+  FWLOGINFO("table [key={}] data saved, new version: {}, detail: {}", key, output->version(), segs_debug_info.str());
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 
@@ -221,8 +222,8 @@ result_type remove_all(rpc::context &ctx, uint32_t channel, gsl::string_view key
       rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(), std::chrono::seconds{6});
 
   // 协程操作
-  PROJECT_NAMESPACE_ID::table_all_message output;
-  res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, output, await_options));
+  shared_message<PROJECT_NAMESPACE_ID::table_all_message> output{ctx};
+  res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, *output, await_options));
   FWLOGINFO("table [key={}] all data removed", key);
 
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));

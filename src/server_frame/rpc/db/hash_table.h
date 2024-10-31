@@ -19,6 +19,7 @@
 
 #include "rpc/db/db_macros.h"
 #include "rpc/db/db_utils.h"
+#include "rpc/rpc_shared_message.h"
 
 namespace rpc {
 class context;
@@ -34,7 +35,7 @@ namespace hash_table {
  * @return future of 0 or error code
  */
 EXPLICIT_NODISCARD_ATTR result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
-                                            PROJECT_NAMESPACE_ID::table_all_message &output,
+                                            shared_message<PROJECT_NAMESPACE_ID::table_all_message> &output,
                                             int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg,
                                                                  const redisReply *reply));
 
@@ -50,8 +51,8 @@ EXPLICIT_NODISCARD_ATTR result_type get_all(rpc::context &ctx, uint32_t channel,
  * @return future of 0 or error code
  */
 EXPLICIT_NODISCARD_ATTR result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key,
-                                        const google::protobuf::Message &store, std::string &version,
-                                        PROJECT_NAMESPACE_ID::table_all_message &output,
+                                        const shared_message<google::protobuf::Message> &store, std::string &version,
+                                        shared_message<PROJECT_NAMESPACE_ID::table_all_message> &output,
                                         int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg,
                                                              const redisReply *reply));
 

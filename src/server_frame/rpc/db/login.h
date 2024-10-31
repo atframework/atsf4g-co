@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "rpc/db/db_utils.h"
+#include "rpc/rpc_shared_message.h"
 
 namespace rpc {
 class context;
@@ -32,7 +33,7 @@ namespace login {
  * @return 0或错误码
  */
 EXPLICIT_NODISCARD_ATTR result_type get(rpc::context &ctx, const char *openid, uint32_t zone_id,
-                                        PROJECT_NAMESPACE_ID::table_login &rsp, std::string &version);
+                                        shared_message<PROJECT_NAMESPACE_ID::table_login> &rsp, std::string &version);
 
 /**
  * @brief 设置登入表的rpc操作
@@ -42,7 +43,7 @@ EXPLICIT_NODISCARD_ATTR result_type get(rpc::context &ctx, const char *openid, u
  * @return 0或错误码
  */
 EXPLICIT_NODISCARD_ATTR result_type set(rpc::context &ctx, const char *openid, uint32_t zone_id,
-                                        const PROJECT_NAMESPACE_ID::table_login &store, std::string &version);
+                                        const shared_message<PROJECT_NAMESPACE_ID::table_login> &store, std::string &version);
 }  // namespace login
 }  // namespace db
 }  // namespace rpc

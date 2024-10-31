@@ -19,6 +19,7 @@
 
 #include "data/player_key_hash_helper.h"
 #include "rpc/rpc_common_types.h"
+#include "rpc/rpc_shared_message.h"
 
 namespace rpc {
 class context;
@@ -113,11 +114,12 @@ class player_manager {
 
   EXPLICIT_NODISCARD_ATTR SERVER_FRAME_CONFIG_API rpc::result_code_type create(
       rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const std::string &openid,
-      PROJECT_NAMESPACE_ID::table_login &login_tb, std::string &login_ver, player_ptr_t &output);
+      rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> &login_tb, std::string &login_ver, player_ptr_t &output);
   template <typename TPLAYER>
   EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE rpc::result_code_type create_as(
       rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const std::string &openid,
-      PROJECT_NAMESPACE_ID::table_login &login_tb, std::string &login_ver, std::shared_ptr<TPLAYER> &output) {
+      rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> &login_tb, std::string &login_ver,
+      std::shared_ptr<TPLAYER> &output) {
     player_ptr_t output_base;
     auto ret = RPC_AWAIT_CODE_RESULT(create(ctx, user_id, zone_id, openid, login_tb, login_ver, output_base));
     output = std::static_pointer_cast<TPLAYER>(output_base);

@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "rpc/db/db_utils.h"
+#include "rpc/rpc_shared_message.h"
 
 namespace rpc {
 class context;
@@ -46,7 +47,7 @@ struct UTIL_SYMBOL_VISIBLE action_options {
 struct UTIL_SYMBOL_VISIBLE async_jobs_record {
   int64_t record_index;
   int64_t version;
-  PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data action_blob;
+  shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data> action_blob;
 };
 
 /**
@@ -84,7 +85,8 @@ EXPLICIT_NODISCARD_ATTR result_type del_jobs(::rpc::context &ctx, int32_t jobs_t
  * @return 0或错误码
  */
 EXPLICIT_NODISCARD_ATTR result_type add_jobs(::rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-                                             PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data &in, action_options options = {});
+                                             shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data> &in,
+                                             action_options options = {});
 
 /**
  * @brief 添加用户异步任务操作,自动补全重试次数
@@ -96,9 +98,9 @@ EXPLICIT_NODISCARD_ATTR result_type add_jobs(::rpc::context &ctx, int32_t jobs_t
  * @note 最大异步任务数量配置在tcaplus的list表中。采用tcaplus的自动覆盖老记录的策略
  * @return 0或错误码
  */
-EXPLICIT_NODISCARD_ATTR result_code_type
-add_jobs_with_retry(rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-                    PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data &inout, action_options options = {});
+EXPLICIT_NODISCARD_ATTR result_code_type add_jobs_with_retry(
+    rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
+    shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>& inout, action_options options = {});
 
 /**
  * @brief 删除用户异步任务表所有数据的rpc操作
@@ -122,10 +124,10 @@ EXPLICIT_NODISCARD_ATTR result_type remove_all_jobs(::rpc::context &ctx, int32_t
  * @param version 版本号
  * @return 0或错误码
  */
-EXPLICIT_NODISCARD_ATTR result_type update_jobs(::rpc::context &ctx, int32_t jobs_type, uint64_t user_id,
-                                                uint32_t zone_id,
-                                                PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data &inout,
-                                                int64_t record_index, int64_t *version = nullptr, action_options options = {});
+EXPLICIT_NODISCARD_ATTR result_type
+update_jobs(::rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
+            shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>& inout, int64_t record_index,
+            int64_t *version = nullptr, action_options options = {});
 }  // namespace async_jobs
 }  // namespace db
 }  // namespace rpc

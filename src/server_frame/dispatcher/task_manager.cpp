@@ -585,7 +585,8 @@ SERVER_FRAME_API size_t task_manager::get_stack_size() const {
   return logic_config::me()->get_cfg_task().stack().size();
 }
 
-int task_manager::add_task(const task_type_trait::task_type &task, std::chrono::system_clock::duration timeout) {
+SERVER_FRAME_API int task_manager::add_task(const task_type_trait::task_type &task,
+                                            std::chrono::system_clock::duration timeout) {
   if (!native_mgr_) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
   }
@@ -619,7 +620,7 @@ int task_manager::add_task(const task_type_trait::task_type &task, std::chrono::
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-int task_manager::report_create_error(const char *fn_name) {
+SERVER_FRAME_API int task_manager::report_create_error(const char *fn_name) {
   FWLOGERROR("[{}] create task failed. current task number={}", fn_name, native_mgr_->get_task_size());
   return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
 }

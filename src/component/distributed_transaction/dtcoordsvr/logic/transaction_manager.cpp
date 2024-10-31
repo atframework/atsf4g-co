@@ -78,14 +78,14 @@ rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_p
         if (nullptr != out_version) {
           data_version = util::log::format("{}", *out_version);
         }
-        rpc::context::message_holder<PROJECT_NAMESPACE_ID::table_distribute_transaction> storage{subctx};
+        rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> storage{subctx};
         storage->set_transaction_uuid(in.metadata().transaction_uuid());
         if (false == storage->mutable_blob_data()->PackFrom(in)) {
           FWLOGERROR("Serialize transaction_blob_storage failed, {}", storage->blob_data().InitializationErrorString());
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PACK);
         }
         int ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::set(
-            subctx, storage->zone_id(), storage->transaction_uuid(), *storage, data_version));
+            subctx, storage->zone_id(), storage->transaction_uuid(), storage, data_version));
         if (nullptr != out_version) {
           util::string::str2int(*out_version, data_version.c_str(), data_version.size());
         }
@@ -122,7 +122,7 @@ rpc::result_code_type transaction_manager::create_transaction(
   }
 
   std::string db_version;
-  rpc::context::message_holder<PROJECT_NAMESPACE_ID::table_distribute_transaction> db_data{ctx};
+  rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> db_data{ctx};
   db_data->set_transaction_uuid(storage.metadata().transaction_uuid());
   if (false == db_data->mutable_blob_data()->PackFrom(storage)) {
     FWLOGERROR("Serialize transaction_blob_storage failed, {}", db_data->blob_data().InitializationErrorString());
@@ -131,8 +131,8 @@ rpc::result_code_type transaction_manager::create_transaction(
 
   rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   if (!storage.metadata().memory_only()) {
-    ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::set(
-        ctx, db_data->zone_id(), db_data->transaction_uuid(), *db_data, db_version));
+    ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::set(ctx, db_data->zone_id(),
+                                                                     db_data->transaction_uuid(), db_data, db_version));
 
     if (ret < 0) {
       FWLOGERROR("rpc::db::distribute_transaction::add({}) failed, res: {}({})", storage.metadata().transaction_uuid(),
@@ -166,9 +166,9 @@ rpc::result_code_type transaction_manager::mutable_transaction(
                   atframework::distributed_system::transaction_blob_storage& output,
                   int64_t* out_version) -> rpc::result_code_type {
           std::string data_version;
-          rpc::context::message_holder<PROJECT_NAMESPACE_ID::table_distribute_transaction> storage{subctx};
+          rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> storage{subctx};
           int sub_ret =
-              RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::get(subctx, zone_id, key, *storage, data_version));
+              RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::get(subctx, zone_id, key, storage, data_version));
           if (sub_ret < 0) {
             RPC_RETURN_CODE(sub_ret);
           }

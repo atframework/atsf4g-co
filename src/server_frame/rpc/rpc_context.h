@@ -78,67 +78,74 @@ class context {
 
   template <class TMsg>
   struct UTIL_SYMBOL_VISIBLE message_holder {
-    explicit message_holder(context &ctx) : arena_msg_ptr_(ctx.create<TMsg>()) {}
-    explicit message_holder(message_holder &&other) : arena_msg_ptr_(nullptr) {
+    explicit message_holder(context &ctx) : arena_message_ptr_(ctx.create<TMsg>()) {}
+    explicit message_holder(message_holder &&other) : arena_message_ptr_(nullptr) {
       using std::swap;
 
       if (other->GetArena() != nullptr) {
 #if defined(PROTOBUF_VERSION) && PROTOBUF_VERSION >= 5027000
-        arena_msg_ptr_ = ::google::protobuf::Arena::Create<TMsg>(other->GetArena());
+        arena_message_ptr_ = ::google::protobuf::Arena::Create<TMsg>(other->GetArena());
 #else
-        arena_msg_ptr_ = ::google::protobuf::Arena::CreateMessage<TMsg>(other->GetArena());
+        arena_message_ptr_ = ::google::protobuf::Arena::CreateMessage<TMsg>(other->GetArena());
 #endif
       }
-      swap(arena_msg_ptr_, other.arena_msg_ptr_);
-      local_msg_.Swap(&other.local_msg_);
+      swap(arena_message_ptr_, other.arena_message_ptr_);
+      local_message_.swap(other.local_message_);
     }
 
     message_holder &operator=(message_holder &&other) {
       using std::swap;
 
-      swap(arena_msg_ptr_, other.arena_msg_ptr_);
-      local_msg_.Swap(&other.local_msg_);
+      swap(arena_message_ptr_, other.arena_message_ptr_);
+      local_message_.swap(other.local_message_);
 
       return *this;
     }
 
     inline const TMsg *operator->() const {
-      if UTIL_UNLIKELY_CONDITION (nullptr == arena_msg_ptr_) {
-        return &local_msg_;
+      if UTIL_UNLIKELY_CONDITION (nullptr == arena_message_ptr_) {
+        return &mutable_local_instance();
       }
 
-      return arena_msg_ptr_;
+      return arena_message_ptr_;
     }
 
     inline TMsg *operator->() {
-      if UTIL_UNLIKELY_CONDITION (nullptr == arena_msg_ptr_) {
-        return &local_msg_;
+      if UTIL_UNLIKELY_CONDITION (nullptr == arena_message_ptr_) {
+        return &mutable_local_instance();
       }
 
-      return arena_msg_ptr_;
+      return arena_message_ptr_;
     }
 
     inline const TMsg &operator*() const {
-      if UTIL_UNLIKELY_CONDITION (nullptr == arena_msg_ptr_) {
-        return local_msg_;
+      if UTIL_UNLIKELY_CONDITION (nullptr == arena_message_ptr_) {
+        return mutable_local_instance();
       }
 
-      return *arena_msg_ptr_;
+      return *arena_message_ptr_;
     }
 
     inline TMsg &operator*() {
-      if UTIL_UNLIKELY_CONDITION (nullptr == arena_msg_ptr_) {
-        return local_msg_;
+      if UTIL_UNLIKELY_CONDITION (nullptr == arena_message_ptr_) {
+        return mutable_local_instance();
       }
 
-      return *arena_msg_ptr_;
+      return *arena_message_ptr_;
     }
 
     UTIL_DESIGN_PATTERN_NOCOPYABLE(message_holder)
 
    private:
-    TMsg *arena_msg_ptr_;
-    TMsg local_msg_;
+    inline TMsg &mutable_local_instance() noexcept {
+      if (!local_message_) {
+        local_message_.reset(new TMsg());
+      }
+      return *local_message_;
+    }
+
+    TMsg *arena_message_ptr_;
+    mutable std::unique_ptr<TMsg> local_message_;
   };
 
  private:
@@ -223,8 +230,7 @@ class context {
 
   SERVER_FRAME_API std::shared_ptr<::google::protobuf::Arena> mutable_protobuf_arena();
   SERVER_FRAME_API const std::shared_ptr<::google::protobuf::Arena> &get_protobuf_arena() const;
-  SERVER_FRAME_API bool try_reuse_protobuf_arena(
-      const std::shared_ptr<::google::protobuf::Arena> &arena) noexcept;
+  SERVER_FRAME_API bool try_reuse_protobuf_arena(const std::shared_ptr<::google::protobuf::Arena> &arena) noexcept;
 
   SERVER_FRAME_API const tracer::span_ptr_type &get_trace_span() const noexcept;
 
