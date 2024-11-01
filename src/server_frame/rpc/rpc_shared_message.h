@@ -7,6 +7,7 @@
 #include <config/compile_optimize.h>
 
 #include <memory/rc_ptr.h>
+#include <nostd/nullability.h>
 #include <nostd/type_traits.h>
 
 // clang-format off
@@ -126,7 +127,8 @@ class UTIL_SYMBOL_VISIBLE __shared_message_shared_base {
 
     if (arena) {
       instance = util::memory::strong_rc_ptr<type>(
-#if defined(PROTOBUF_VERSION) && PROTOBUF_VERSION >= 5027000
+#if (defined(PROTOBUF_VERSION) && PROTOBUF_VERSION >= 5027000) || \
+    (defined(GOOGLE_PROTOBUF_VERSION) && GOOGLE_PROTOBUF_VERSION >= 5027000)
           ::google::protobuf::Arena::Create<type>(arena.get(), std::forward<Args>(args)...)
 #else
           ::google::protobuf::Arena::CreateMessage<type>(arena.get(), std::forward<Args>(args)...)
@@ -171,6 +173,11 @@ class UTIL_SYMBOL_VISIBLE __shared_message_base<MessageType, Allocator, true>
     }
   }
 
+  template <class T>
+  UTIL_FORCEINLINE static T &&__move_member(T &t) noexcept {
+    return static_cast<T &&>(t);
+  }
+
   UTIL_FORCEINLINE static void __ctor_make_default_instance(
       const arena_pointer & /*arena*/, element_pointer & /*instance*/,
       const Allocator & /*alloc*/) noexcept(std::is_nothrow_constructible<type>::value) {}
@@ -201,6 +208,11 @@ class UTIL_SYMBOL_VISIBLE __shared_message_base<MessageType, Allocator, false>
   UTIL_FORCEINLINE static void __lazy_make_default_instance(
       const arena_pointer & /*arena*/,
       element_pointer & /*instance*/) noexcept(std::is_nothrow_constructible<type>::value) {}
+
+  template <class T>
+  UTIL_FORCEINLINE static T &__move_member(T &t) noexcept {
+    return static_cast<T &>(t);
+  }
 
   UTIL_FORCEINLINE static void __ctor_make_default_instance(
       const arena_pointer &arena, element_pointer &instance,
@@ -241,6 +253,7 @@ class UTIL_SYMBOL_VISIBLE shared_message final
   using base_type::__ctor_make_default_instance;
   using base_type::__lazy_make_default_instance;
   using base_type::__make_instance;
+  using base_type::__move_member;
 
   template <class>
   struct __internal_types_checker;
@@ -256,14 +269,34 @@ class UTIL_SYMBOL_VISIBLE shared_message final
 
  public:
   // This object can not pointer to a empty data, so disable move constructor and move assignment
-  shared_message(shared_message &&) = delete;
-  shared_message &operator=(shared_message &&) = delete;
+  inline shared_message(shared_message &&other) noexcept  // NOLINT: runtime/explicit
+      : arena_(__move_member(other.arena_)), instance_(__move_member(other.instance_)) {}
+
+  inline shared_message &operator=(shared_message &&other) noexcept {
+    arena_ = __move_member(other.arena_);
+    instance_ = __move_member(other.instance_);
+    return *this;
+  }
+
+  template <
+      class OtherMessageType, class OtherAllocatorType,
+      class = util::nostd::enable_if_t<std::is_base_of<type, util::nostd::remove_cvref_t<OtherMessageType>>::value>>
+  inline shared_message(shared_message<OtherMessageType, OtherAllocatorType> &&other)  // NOLINT: runtime/explicit
+      noexcept
+      : arena_(__move_member(other.arena_)), instance_(__move_member(other.instance_)) {}
+
+  template <
+      class OtherMessageType, class OtherAllocatorType,
+      class = util::nostd::enable_if_t<std::is_base_of<type, util::nostd::remove_cvref_t<OtherMessageType>>::value>>
+  inline shared_message &operator=(shared_message<OtherMessageType, OtherAllocatorType> &&other) noexcept {
+    arena_ = other.arena_;
+    instance_ = __move_member(other.instance_);
+    return *this;
+  }
 
   inline shared_message(const shared_message &other)  // NOLINT: runtime/explicit
       noexcept(std::is_nothrow_constructible<type>::value)
-      : arena_(other.arena_), instance_(other.share_instance()) {
-    return *this;
-  }
+      : arena_(other.arena_), instance_(other.share_instance()) {}
 
   inline shared_message &operator=(const shared_message &other) noexcept(std::is_nothrow_constructible<type>::value) {
     arena_ = other.arena_;
@@ -402,14 +435,22 @@ class UTIL_SYMBOL_VISIBLE shared_message final
   }
 
   // Other member functions
-  inline const pointer operator->() const noexcept(std::is_nothrow_constructible<type>::value) {
+  inline util::nostd::nonnull<const pointer> get() const noexcept(std::is_nothrow_constructible<type>::value) {
     __lazy_make_default_instance(arena_, instance_);
     return instance_.get();
   }
 
-  inline pointer operator->() noexcept(std::is_nothrow_constructible<type>::value) {
+  inline util::nostd::nonnull<pointer> get() noexcept(std::is_nothrow_constructible<type>::value) {
     __lazy_make_default_instance(arena_, instance_);
     return instance_.get();
+  }
+
+  inline util::nostd::nonnull<const pointer> operator->() const noexcept(std::is_nothrow_constructible<type>::value) {
+    return get();
+  }
+
+  inline util::nostd::nonnull<pointer> operator->() noexcept(std::is_nothrow_constructible<type>::value) {
+    return get();
   }
 
   inline const type &operator*() const noexcept(std::is_nothrow_constructible<type>::value) {
@@ -424,7 +465,8 @@ class UTIL_SYMBOL_VISIBLE shared_message final
 
   inline const arena_pointer &share_arena() const noexcept { return arena_; }
 
-  inline const element_pointer &share_instance() const noexcept(std::is_nothrow_constructible<type>::value) {
+  inline const util::nostd::nonnull<element_pointer> &share_instance() const
+      noexcept(std::is_nothrow_constructible<type>::value) {
     __lazy_make_default_instance(arena_, instance_);
     return instance_;
   }
@@ -457,7 +499,8 @@ class UTIL_SYMBOL_VISIBLE shared_message final
 
     if (arena_) {
       instance_ = util::memory::strong_rc_ptr<type>(
-#if defined(PROTOBUF_VERSION) && PROTOBUF_VERSION >= 5027000
+#if (defined(PROTOBUF_VERSION) && PROTOBUF_VERSION >= 5027000) || \
+    (defined(GOOGLE_PROTOBUF_VERSION) && GOOGLE_PROTOBUF_VERSION >= 5027000)
           ::google::protobuf::Arena::Create<type>(arena_.get(), std::forward<Args>(args)...)
 #else
           ::google::protobuf::Arena::CreateMessage<type>(arena_.get(), std::forward<Args>(args)...)
