@@ -57,7 +57,7 @@ SERVER_FRAME_CONFIG_API const char* server_frame_project_get_version() {
   return (const char*)SERVER_FRAME_PROJECT_CONFIGURE_VERSION;
 }
 #else
-SERVER_FRAME_CONFIG_API const char* server_frame_project_get_version() { return (const char*)u8"0.1.0"; }
+SERVER_FRAME_CONFIG_API const char* server_frame_project_get_version() { return (const char*)u8"@PROJECT_VERSION@"; }
 #endif
 
 #ifdef SERVER_FRAME_PROJECT_USER_BUSSINESS_VERSION

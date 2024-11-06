@@ -49,9 +49,9 @@ EXPLICIT_NODISCARD_ATTR result_type get(rpc::context &ctx, uint32_t zone_id, gsl
  *
  * @return 0或错误码
  */
-EXPLICIT_NODISCARD_ATTR result_type
-set(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid,
-    const rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> &store, std::string &version);
+EXPLICIT_NODISCARD_ATTR result_type set(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid,
+                                        rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> &&store,
+                                        std::string &version);
 
 /**
  * @brief 分布式事务表的rpc操作 - 删除

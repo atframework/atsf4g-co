@@ -67,7 +67,7 @@ task_action_player_kickoff::result_type task_action_player_kickoff::operator()()
 
     user_lg->set_router_server_id(0);
     res = RPC_AWAIT_CODE_RESULT(
-        rpc::db::login::set(get_shared_context(), player_open_id.c_str(), player_zone_id, user_lg, version));
+        rpc::db::login::set(get_shared_context(), player_open_id.c_str(), player_zone_id, std::move(user_lg), version));
     if (res < 0) {
       FWLOGERROR("user {}({}:{}) try load login data failed.", player_open_id, player_zone_id, player_user_id);
       set_response_code(PROJECT_NAMESPACE_ID::err::EN_DB_SEND_FAILED);

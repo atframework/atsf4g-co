@@ -214,9 +214,6 @@ struct group_type {
   std::string group_name;
 
   // Replicate
-  uint64_t server_id = 0;
-  std::string server_name;
-  std::string app_version;
   PROJECT_NAMESPACE_ID::config::opentelemetry_group_cfg group_configure;
 
   std::string trace_default_library_name;
@@ -246,18 +243,21 @@ struct group_type {
   std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>> tracer_cache;
   opentelemetry::nostd::shared_ptr<std::ofstream> debug_tracer_ostream_exportor;
   size_t tracer_exporter_count = 0;
+  util::lock::spin_rw_lock tracer_lock;
 
   local_provider_handle_type<opentelemetry::metrics::MeterProvider> metrics_handle;
   std::shared_ptr<local_meter_info_type> default_metrics_meter;
   std::unordered_map<std::string, std::shared_ptr<local_meter_info_type>> metrics_meters;
   opentelemetry::nostd::shared_ptr<std::ofstream> debug_metrics_ostream_exportor;
   size_t metrics_exporter_count = 0;
+  util::lock::spin_rw_lock metrics_lock;
 
   local_provider_handle_type<opentelemetry::logs::LoggerProvider> logs_handle;
   opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> default_logger;
   std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>> logger_cache;
   opentelemetry::nostd::shared_ptr<std::ofstream> debug_logger_ostream_exportor;
   size_t logger_exporter_count = 0;
+  util::lock::spin_rw_lock logger_lock;
 
   group_type() {}
 };
@@ -395,7 +395,7 @@ static std::shared_ptr<local_meter_info_type> get_meter_info(std::shared_ptr<gro
   }
 
   {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{group->lock};
+    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{group->metrics_lock};
 
     if (!group->metrics_handle.provider) {
       return nullptr;
@@ -413,10 +413,10 @@ static std::shared_ptr<local_meter_info_type> get_meter_info(std::shared_ptr<gro
   }
 
   {
-    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->lock};
+    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->metrics_lock};
 
     opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Meter> meter = group->metrics_handle.provider->GetMeter(
-        meter_name, group->app_version,
+        meter_name, group->metrics_default_library_version,
         logic_config::me()->get_logic().telemetry().opentelemetry().metrics().schema_url());
     if (!meter) {
       return nullptr;
@@ -955,6 +955,7 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> 
   std::string cache_key = util::log::format("{}:{}", gsl::string_view{library_name.data(), library_name.size()},
                                             gsl::string_view{library_version.data(), library_version.size()});
   {
+    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{group->tracer_lock};
     auto iter = group->tracer_cache.find(cache_key);
     if (iter != group->tracer_cache.end()) {
       return iter->second;
@@ -967,9 +968,9 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> 
   }
 
   if (library_name.empty()) {
-    library_name = group->server_name;
+    library_name = group->trace_default_library_name;
     if (library_version.empty()) {
-      library_version = group->app_version;
+      library_version = group->trace_default_library_version;
     }
   }
   if (schema_url.empty()) {
@@ -979,6 +980,7 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> 
   opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> ret =
       provider->GetTracer(library_name, library_version, schema_url);
   if (ret) {
+    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->tracer_lock};
     group->tracer_cache[cache_key] = ret;
   }
   return ret;
@@ -1579,6 +1581,7 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> g
                                             gsl::string_view{library_name.data(), library_name.size()},
                                             gsl::string_view{library_version.data(), library_version.size()});
   {
+    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{group->logger_lock};
     auto iter = group->logger_cache.find(cache_key);
     if (iter != group->logger_cache.end()) {
       return iter->second;
@@ -1592,9 +1595,9 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> g
   }
 
   if (library_name.empty()) {
-    library_name = group->server_name;
+    library_name = group->logs_default_library_name;
     if (library_version.empty()) {
-      library_version = group->app_version;
+      library_version = group->logs_default_library_version;
     }
   }
   if (schema_url.empty()) {
@@ -1604,6 +1607,7 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> g
   opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> ret =
       provider->GetLogger(logger_name, library_name, library_version, schema_url);
   if (ret) {
+    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->logger_lock};
     group->logger_cache[cache_key] = ret;
   }
   return ret;
@@ -2444,39 +2448,48 @@ static void _opentelemetry_cleanup_group(std::shared_ptr<::rpc::telemetry::group
 
   if (group) {
     // Provider must be destroy before logger
-    if (group->logs_handle.provider) {
-      if (group->logs_handle.shutdown_callback) {
-        auto handle = group->logs_handle;
-        shutdown_threads.push_back(
-            atfw::memory::stl::make_shared<std::thread>([handle]() { handle.shutdown_callback(handle.provider); }));
+    {
+      util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->logger_lock};
+      if (group->logs_handle.provider) {
+        if (group->logs_handle.shutdown_callback) {
+          auto handle = group->logs_handle;
+          shutdown_threads.push_back(
+              atfw::memory::stl::make_shared<std::thread>([handle]() { handle.shutdown_callback(handle.provider); }));
+        }
+        group->logs_handle.reset();
       }
-      group->logs_handle.reset();
+      group->default_logger = opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
     }
-    group->default_logger = opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
 
     // Provider must be destroy before meter
-    if (group->metrics_handle.provider) {
-      if (group->metrics_handle.shutdown_callback) {
-        auto handle = group->metrics_handle;
-        shutdown_threads.push_back(
-            atfw::memory::stl::make_shared<std::thread>([handle]() { handle.shutdown_callback(handle.provider); }));
+    {
+      util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->metrics_lock};
+      if (group->metrics_handle.provider) {
+        if (group->metrics_handle.shutdown_callback) {
+          auto handle = group->metrics_handle;
+          shutdown_threads.push_back(
+              atfw::memory::stl::make_shared<std::thread>([handle]() { handle.shutdown_callback(handle.provider); }));
+        }
+        group->metrics_handle.reset();
       }
-      group->metrics_handle.reset();
+      group->default_metrics_meter.reset();
+      group->metrics_meters.clear();
     }
-    group->default_metrics_meter.reset();
-    group->metrics_meters.clear();
 
     // Provider must be destroy before tracer
-    if (group->tracer_handle.provider) {
-      if (group->tracer_handle.shutdown_callback) {
-        auto handle = group->tracer_handle;
-        shutdown_threads.push_back(
-            atfw::memory::stl::make_shared<std::thread>([handle]() { handle.shutdown_callback(handle.provider); }));
+    {
+      util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->tracer_lock};
+      if (group->tracer_handle.provider) {
+        if (group->tracer_handle.shutdown_callback) {
+          auto handle = group->tracer_handle;
+          shutdown_threads.push_back(
+              atfw::memory::stl::make_shared<std::thread>([handle]() { handle.shutdown_callback(handle.provider); }));
+        }
+        group->tracer_handle.reset();
       }
-      group->tracer_handle.reset();
-    }
 
-    group->default_tracer = opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
+      group->default_tracer = opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
+    }
   }
 
   while (!shutdown_threads.empty()) {
@@ -2571,7 +2584,7 @@ static void _opentelemetry_prepare_group(
       group->trace_default_library_name = app.get_app_name();
     }
 
-    group->trace_default_library_version = app.get_app_version();
+    group->trace_default_library_version = server_frame_project_get_version();
 
     group->trace_default_schema_url = group_tracer_config.schema_url();
     if (group->trace_default_schema_url.empty()) {
@@ -2610,7 +2623,16 @@ static void _opentelemetry_prepare_group(
         group->group_configure.configure().metrics();
 
     group->metrics_default_library_name = group_metrics_config.default_name();
-    group->metrics_default_library_version = app.get_app_version();
+    if (group->metrics_default_library_name.empty()) {
+      group->metrics_default_library_name = default_metrics_config.default_name();
+    }
+    if (group->metrics_default_library_name.empty()) {
+      group->metrics_default_library_name = app.get_type_name();
+    }
+    if (group->metrics_default_library_name.empty()) {
+      group->metrics_default_library_name = app.get_app_name();
+    }
+    group->metrics_default_library_version = server_frame_project_get_version();
     group->metrics_default_schema_url = group_metrics_config.schema_url();
     if (group->metrics_default_schema_url.empty()) {
       group->metrics_default_schema_url = default_metrics_config.schema_url();
@@ -2657,8 +2679,12 @@ static void _opentelemetry_prepare_group(
     if (group->logs_default_logger_name.empty()) {
       group->logs_default_logger_name = app.get_app_name();
     }
-    group->logs_default_library_name = app.get_app_name();
-    group->logs_default_library_version = app.get_app_version();
+    group->logs_default_library_name = app.get_type_name();
+    if (group->logs_default_library_name.empty()) {
+      group->logs_default_library_name = app.get_app_name();
+    }
+
+    group->logs_default_library_version = server_frame_project_get_version();
     group->logs_default_schema_url = group_logs_config.schema_url();
     if (group->logs_default_schema_url.empty()) {
       group->logs_default_schema_url = default_logs_config.schema_url();
@@ -2700,56 +2726,66 @@ static void _opentelemetry_setup_group(atapp::app &app, std::shared_ptr<group_ty
   }
 
   // Default tracer
-  if (!tracer_handle.provider) {
-    tracer_handle.provider = opentelemetry::trace::Provider::GetTracerProvider();
-    tracer_handle.reset_shutdown_callback();
+  {
+    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->tracer_lock};
+    if (!tracer_handle.provider) {
+      tracer_handle.provider = opentelemetry::trace::Provider::GetTracerProvider();
+      tracer_handle.reset_shutdown_callback();
+    }
+    group->tracer_handle = tracer_handle;
+    group->default_tracer = tracer_handle.provider->GetTracer(
+        group->trace_default_library_name, group->trace_default_library_version, group->trace_default_schema_url);
   }
-  group->tracer_handle = tracer_handle;
-  group->default_tracer = tracer_handle.provider->GetTracer(
-      group->trace_default_library_name, group->trace_default_library_version, group->trace_default_schema_url);
 
   // Default meter
-  if (!metrics_handle.provider) {
-    metrics_handle.provider = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>{
-        new opentelemetry::metrics::NoopMeterProvider()};
-    metrics_handle.reset_shutdown_callback();
-  }
-  group->metrics_handle = metrics_handle;
-  do {
+  {
+    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->metrics_lock};
     if (!metrics_handle.provider) {
-      break;
+      metrics_handle.provider = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>{
+          new opentelemetry::metrics::NoopMeterProvider()};
+      metrics_handle.reset_shutdown_callback();
     }
+    group->metrics_handle = metrics_handle;
+    do {
+      if (!metrics_handle.provider) {
+        break;
+      }
 
-    if (group->metrics_default_library_name.empty()) {
-      break;
-    }
+      if (group->metrics_default_library_name.empty()) {
+        break;
+      }
 
-    auto default_metrics_meter = atfw::memory::stl::make_shared<local_meter_info_type>();
-    if (!default_metrics_meter) {
-      break;
-    }
+      auto default_metrics_meter = atfw::memory::stl::make_shared<local_meter_info_type>();
+      if (!default_metrics_meter) {
+        break;
+      }
 
-    default_metrics_meter->meter = metrics_handle.provider->GetMeter(
-        group->metrics_default_library_name, group->metrics_default_library_version, group->metrics_default_schema_url);
+      default_metrics_meter->meter =
+          metrics_handle.provider->GetMeter(group->metrics_default_library_name, group->metrics_default_library_version,
+                                            group->metrics_default_schema_url);
 
-    if (!default_metrics_meter->meter) {
-      break;
-    }
+      if (!default_metrics_meter->meter) {
+        break;
+      }
 
-    group->default_metrics_meter = default_metrics_meter;
-    group->metrics_meters[group->metrics_default_library_name] = default_metrics_meter;
-  } while (false);
+      group->default_metrics_meter = default_metrics_meter;
+      group->metrics_meters[group->metrics_default_library_name] = default_metrics_meter;
+    } while (false);
+  }
 
   // Default logger
-  if (!logs_handle.provider) {
-    logs_handle.provider = opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>{
-        new opentelemetry::logs::NoopLoggerProvider()};
-    logs_handle.reset_shutdown_callback();
+  {
+    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->logger_lock};
+    if (!logs_handle.provider) {
+      logs_handle.provider = opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>{
+          new opentelemetry::logs::NoopLoggerProvider()};
+      logs_handle.reset_shutdown_callback();
+    }
+    group->logs_handle = logs_handle;
+    group->default_logger =
+        logs_handle.provider->GetLogger(group->logs_default_logger_name, group->logs_default_library_name,
+                                        group->logs_default_library_version, group->logs_default_schema_url);
   }
-  group->logs_handle = logs_handle;
-  group->default_logger =
-      logs_handle.provider->GetLogger(group->logs_default_logger_name, group->logs_default_library_name,
-                                      group->logs_default_library_version, group->logs_default_schema_url);
 
   std::shared_ptr<global_service_data_type> current_service_cache = get_global_service_data();
   if (!current_service_cache) {
@@ -3058,6 +3094,13 @@ static void _opentelemetry_initialize_group(const std::shared_ptr<group_type> &g
   if (!group) {
     return;
   }
+  if (group->initialized) {
+    return;
+  }
+
+  util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->lock};
+
+  // Double check
   if (group->initialized) {
     return;
   }

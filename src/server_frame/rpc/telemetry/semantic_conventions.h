@@ -21,6 +21,7 @@ struct semantic_conventions {
   static constexpr const char *kAtRpcResponseCode = "rpc.atrpc.response_code";
   static constexpr const char *kAtRpcKind = "rpc.atrpc.kind";
   static constexpr const char *kAtRpcSpanName = "rpc.atrpc.span_name";
+  static constexpr const char *kAtRpcStacktrace = "rpc.atrpc.stacktrace";
 
   static constexpr const char *kRpcSystemValueAtRpcDistapcher = "atrpc.dispatcher";
   static constexpr const char *kRpcSystemValueAtRpcTask = "atrpc.task";

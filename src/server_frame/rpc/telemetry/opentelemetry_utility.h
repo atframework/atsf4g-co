@@ -54,6 +54,13 @@ enum class notification_domain : int32_t {
   kWarning = 1,
   kError = 2,
   kCritical = 3,
+
+  // stack trace flag = 0x100
+  kStackTraceBitFlag = 256,       // 0x100
+  kNoticeWithStackTrace = 256,    // 0x100
+  kWarningWithStackTrace = 257,   // 0x101
+  kErrorWithStackTrace = 258,     // 0x102
+  kCriticalWithStackTrace = 259,  // 0x103
 };
 
 class opentelemetry_utility {

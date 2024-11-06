@@ -43,7 +43,8 @@ EXPLICIT_NODISCARD_ATTR result_type get(rpc::context &ctx, const char *openid, u
  * @return 0或错误码
  */
 EXPLICIT_NODISCARD_ATTR result_type set(rpc::context &ctx, const char *openid, uint32_t zone_id,
-                                        const shared_message<PROJECT_NAMESPACE_ID::table_login> &store, std::string &version);
+                                        shared_message<PROJECT_NAMESPACE_ID::table_login> &&store,
+                                        std::string &version);
 }  // namespace login
 }  // namespace db
 }  // namespace rpc

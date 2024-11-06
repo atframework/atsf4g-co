@@ -91,8 +91,9 @@ task_action_ping::result_type task_action_ping::operator()() {
         set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_SPEED_WARNING);
       }
       // 保存封号结果
-      res = RPC_AWAIT_CODE_RESULT(
-          rpc::db::login::set(get_shared_context(), user->get_open_id().c_str(), user->get_zone_id(), tb, login_ver));
+      res = RPC_AWAIT_CODE_RESULT(rpc::db::login::set(
+          get_shared_context(), user->get_open_id().c_str(), user->get_zone_id(),
+          rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_login>(get_shared_context(), tb), login_ver));
       if (res < 0) {
         WLOGERROR("call login rpc Set method failed, user %s, zone id: %u, res: %d", user->get_open_id().c_str(),
                   user->get_zone_id(), res);

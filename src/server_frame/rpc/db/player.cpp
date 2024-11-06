@@ -78,7 +78,7 @@ result_type get_basic(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
 }
 
 result_type set(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                const shared_message<PROJECT_NAMESPACE_ID::table_user> &store, std::string &version) {
+                shared_message<PROJECT_NAMESPACE_ID::table_user> &&store, std::string &version) {
   table_key_type user_key;
   size_t user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, user_id, zone_id);
   if (user_key_len <= 0) {
@@ -88,9 +88,9 @@ result_type set(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
 
   // args unavailable now
   shared_message<PROJECT_NAMESPACE_ID::table_all_message> output{ctx};
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::set(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
-                                                            gsl::string_view{user_key, user_key_len}, store, version,
-                                                            output, detail::unpack_user));
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::set(
+      ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, gsl::string_view{user_key, user_key_len},
+      shared_message<google::protobuf::Message>{std::move(store)}, version, output, detail::unpack_user));
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
   }

@@ -17,6 +17,7 @@
 #include <opentelemetry/trace/semantic_conventions.h>
 
 #include <gsl/select-gsl.h>
+#include <log/log_stacktrace.h>
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
@@ -27,6 +28,8 @@
 #include <atframe/atapp.h>
 
 #include <config/logic_config.h>
+
+#include <utility/tls_buffers.h>
 
 #include <atomic>
 #include <functional>
@@ -214,13 +217,16 @@ struct UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_converter {
 
 static opentelemetry::nostd::string_view get_notification_event_log_domain(notification_domain domain) {
   switch (domain) {
-    case notification_domain::kCritical: {
+    case notification_domain::kCritical:
+    case notification_domain::kCriticalWithStackTrace: {
       return kkNotificationCritical;
     }
-    case notification_domain::kError: {
+    case notification_domain::kError:
+    case notification_domain::kErrorWithStackTrace: {
       return kkNotificationError;
     }
-    case notification_domain::kWarning: {
+    case notification_domain::kWarning:
+    case notification_domain::kWarningWithStackTrace: {
       return kkNotificationWarning;
     }
     default: {
@@ -231,13 +237,16 @@ static opentelemetry::nostd::string_view get_notification_event_log_domain(notif
 
 static opentelemetry::logs::Severity get_notification_log_level(notification_domain domain) {
   switch (domain) {
-    case notification_domain::kCritical: {
+    case notification_domain::kCritical:
+    case notification_domain::kCriticalWithStackTrace: {
       return opentelemetry::logs::Severity::kFatal;
     }
-    case notification_domain::kError: {
+    case notification_domain::kError:
+    case notification_domain::kErrorWithStackTrace: {
       return opentelemetry::logs::Severity::kError;
     }
-    case notification_domain::kWarning: {
+    case notification_domain::kWarning:
+    case notification_domain::kWarningWithStackTrace: {
       return opentelemetry::logs::Severity::kWarn;
     }
     default: {
@@ -1245,10 +1254,11 @@ SERVER_FRAME_API void opentelemetry_utility::send_notification_event(rpc::contex
   }
   auto logger = rpc::telemetry::global_service::get_logger(try_group, "notification");
   if (!logger) {
+    FWLOGWARNING("Can not get logger and ignore notification domain: {}, message: {}", event_name, message);
     return;
   }
 
-  attribute_pair_type standard_attributes[6] = {
+  attribute_pair_type standard_attributes[7] = {
       attribute_pair_type{rpc::telemetry::semantic_conventions::kEventDomain,
                           get_notification_event_log_domain(event_domain)},
       attribute_pair_type{opentelemetry::trace::SemanticConventions::kEventName,
@@ -1275,17 +1285,38 @@ SERVER_FRAME_API void opentelemetry_utility::send_notification_event(rpc::contex
                             ctx.get_task_context().reference_object_type_id};
   }
 
+  opentelemetry::nostd::string_view body{message.data(), message.size()};
+  if (0 != (static_cast<int32_t>(event_domain) & static_cast<int32_t>(notification_domain::kStackTraceBitFlag))) {
+    char* buffer = reinterpret_cast<char*>(tls_buffers_get_buffer(tls_buffers_type_t::EN_TBT_DEFAULT));
+    size_t buffer_size = tls_buffers_get_length(tls_buffers_type_t::EN_TBT_DEFAULT);
+
+    if (message.size() + 16 < buffer_size) {
+      size_t written = util::log::stacktrace_write(buffer + message.size() + 13, buffer_size - 13 - message.size());
+      if (written > 0) {
+        memcpy(buffer, message.data(), message.size());
+        memcpy(buffer + message.size(), "\nStacktrace:\n", 13);
+
+        written += message.size() + 13;
+        if (written < buffer_size) {
+          buffer[written] = 0;
+          body = opentelemetry::nostd::string_view{buffer, written};
+        } else {
+          buffer[buffer_size - 1] = 0;
+          body = opentelemetry::nostd::string_view{buffer, buffer_size - 1};
+        }
+      }
+    }
+  }
+
   auto& trace_span = ctx.get_trace_span();
   if (trace_span) {
     logger->EmitLogRecord(get_notification_log_level(event_domain), trace_span->GetContext(), attrbites,
                           attribute_span_type(&standard_attributes[0], attribute_pair_size),
-                          util::time::time_utility::sys_now(),
-                          opentelemetry::nostd::string_view{message.data(), message.size()});
+                          util::time::time_utility::sys_now(), body);
   } else {
     logger->EmitLogRecord(get_notification_log_level(event_domain), attrbites,
                           attribute_span_type(&standard_attributes[0], attribute_pair_size),
-                          util::time::time_utility::sys_now(),
-                          opentelemetry::nostd::string_view{message.data(), message.size()});
+                          util::time::time_utility::sys_now(), body);
   }
 }
 
@@ -1341,6 +1372,8 @@ SERVER_FRAME_API void opentelemetry_utility::send_log_to_default_group(rpc::cont
   auto logger = rpc::telemetry::global_service::get_logger(
       opentelemetry::nostd::string_view{logger_name.data(), logger_name.size()});
   if (!logger) {
+    FWLOGWARNING("Can not get logger {} and ignore otel-logs domain: {}, message: {}", logger_name, event_name,
+                 message);
     return;
   }
 

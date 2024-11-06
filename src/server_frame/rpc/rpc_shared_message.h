@@ -120,7 +120,7 @@ class UTIL_SYMBOL_VISIBLE __shared_message_shared_base {
 
   template <class Alloc, class... Args>
   inline static void __make_instance(const arena_pointer &arena, element_pointer &instance, const Alloc &alloc,
-                                     Args &&...args) noexcept(std::is_nothrow_constructible<type>::value) {
+                                     Args &&...args) noexcept(std::is_nothrow_constructible<type, Args...>::value) {
     if UTIL_UNLIKELY_CONDITION (instance) {
       return;
     }
@@ -166,7 +166,8 @@ class UTIL_SYMBOL_VISIBLE __shared_message_base<MessageType, Allocator, true>
   using base_type::__make_instance;
 
   UTIL_FORCEINLINE static void __lazy_make_default_instance(
-      const arena_pointer &arena, element_pointer &instance) noexcept(std::is_nothrow_constructible<type>::value) {
+      const arena_pointer &arena,
+      element_pointer &instance) noexcept(std::is_nothrow_default_constructible<type>::value) {
     if UTIL_UNLIKELY_CONDITION (!instance) {
       Allocator alloc;
       __make_instance(arena, instance, alloc);
@@ -180,11 +181,11 @@ class UTIL_SYMBOL_VISIBLE __shared_message_base<MessageType, Allocator, true>
 
   UTIL_FORCEINLINE static void __ctor_make_default_instance(
       const arena_pointer & /*arena*/, element_pointer & /*instance*/,
-      const Allocator & /*alloc*/) noexcept(std::is_nothrow_constructible<type>::value) {}
+      const Allocator & /*alloc*/) noexcept(std::is_nothrow_default_constructible<type>::value) {}
 
   UTIL_FORCEINLINE static void __ctor_make_default_instance(
       const arena_pointer & /*arena*/,
-      element_pointer & /*instance*/) noexcept(std::is_nothrow_constructible<type>::value) {}
+      element_pointer & /*instance*/) noexcept(std::is_nothrow_default_constructible<type>::value) {}
 };
 
 template <class MessageType, class Allocator>
@@ -207,7 +208,7 @@ class UTIL_SYMBOL_VISIBLE __shared_message_base<MessageType, Allocator, false>
 
   UTIL_FORCEINLINE static void __lazy_make_default_instance(
       const arena_pointer & /*arena*/,
-      element_pointer & /*instance*/) noexcept(std::is_nothrow_constructible<type>::value) {}
+      element_pointer & /*instance*/) noexcept(std::is_nothrow_default_constructible<type>::value) {}
 
   template <class T>
   UTIL_FORCEINLINE static T &__move_member(T &t) noexcept {
@@ -216,14 +217,15 @@ class UTIL_SYMBOL_VISIBLE __shared_message_base<MessageType, Allocator, false>
 
   UTIL_FORCEINLINE static void __ctor_make_default_instance(
       const arena_pointer &arena, element_pointer &instance,
-      const Allocator &alloc) noexcept(std::is_nothrow_constructible<type>::value) {
+      const Allocator &alloc) noexcept(std::is_nothrow_default_constructible<type>::value) {
     if UTIL_UNLIKELY_CONDITION (!instance) {
       __make_instance(arena, instance, alloc);
     }
   }
 
   UTIL_FORCEINLINE static void __ctor_make_default_instance(
-      const arena_pointer &arena, element_pointer &instance) noexcept(std::is_nothrow_constructible<type>::value) {
+      const arena_pointer &arena,
+      element_pointer &instance) noexcept(std::is_nothrow_default_constructible<type>::value) {
     if UTIL_UNLIKELY_CONDITION (!instance) {
       Allocator alloc;
       __make_instance(arena, instance, alloc);
@@ -295,10 +297,11 @@ class UTIL_SYMBOL_VISIBLE shared_message final
   }
 
   inline shared_message(const shared_message &other)  // NOLINT: runtime/explicit
-      noexcept(std::is_nothrow_constructible<type>::value)
+      noexcept(std::is_nothrow_default_constructible<type>::value)
       : arena_(other.arena_), instance_(other.share_instance()) {}
 
-  inline shared_message &operator=(const shared_message &other) noexcept(std::is_nothrow_constructible<type>::value) {
+  inline shared_message &operator=(const shared_message &other) noexcept(
+      std::is_nothrow_default_constructible<type>::value) {
     arena_ = other.arena_;
     instance_ = other.share_instance();
     return *this;
@@ -308,14 +311,14 @@ class UTIL_SYMBOL_VISIBLE shared_message final
       class OtherMessageType, class OtherAllocatorType,
       class = util::nostd::enable_if_t<std::is_base_of<type, util::nostd::remove_cvref_t<OtherMessageType>>::value>>
   inline shared_message(const shared_message<OtherMessageType, OtherAllocatorType> &other)  // NOLINT: runtime/explicit
-      noexcept(std::is_nothrow_constructible<OtherAllocatorType>::value)
+      noexcept(std::is_nothrow_default_constructible<OtherAllocatorType>::value)
       : arena_(other.arena_), instance_(other.share_instance()) {}
 
   template <
       class OtherMessageType, class OtherAllocatorType,
       class = util::nostd::enable_if_t<std::is_base_of<type, util::nostd::remove_cvref_t<OtherMessageType>>::value>>
   inline shared_message &operator=(const shared_message<OtherMessageType, OtherAllocatorType> &other) noexcept(
-      std::is_nothrow_constructible<OtherAllocatorType>::value) {
+      std::is_nothrow_default_constructible<OtherAllocatorType>::value) {
     arena_ = other.arena_;
     instance_ = other.share_instance();
     return *this;
@@ -323,7 +326,7 @@ class UTIL_SYMBOL_VISIBLE shared_message final
 
   // Construct with default allocator
   template <class = util::nostd::enable_if_t<std::is_default_constructible<type>::value>>
-  inline shared_message() noexcept(std::is_nothrow_constructible<type>::value) {
+  inline shared_message() noexcept(std::is_nothrow_default_constructible<type>::value) {
     __ctor_make_default_instance(arena_, instance_);
   }
 
@@ -331,7 +334,7 @@ class UTIL_SYMBOL_VISIBLE shared_message final
             class = util::nostd::enable_if_t<std::is_default_constructible<type>::value &&
                                              !__shared_message_internal_tag_types<ArenaSourceType>::value>>
   inline shared_message(__shared_message_default_tag,
-                        ArenaSourceType &&arena_source) noexcept(std::is_nothrow_constructible<type>::value)
+                        ArenaSourceType &&arena_source) noexcept(std::is_nothrow_default_constructible<type>::value)
       : arena_(get_arena_from(std::forward<ArenaSourceType>(arena_source))) {
     __ctor_make_default_instance(arena_, instance_);
   }
@@ -339,12 +342,14 @@ class UTIL_SYMBOL_VISIBLE shared_message final
             class = util::nostd::enable_if_t<std::is_default_constructible<type>::value &&
                                              !__shared_message_internal_tag_types<ArenaSourceType>::value>>
   inline shared_message(ArenaSourceType &&arena_source)  // NOLINT: runtime/explicit
+      noexcept(std::is_nothrow_default_constructible<type>::value)
       : shared_message(__shared_message_default_tag{}, std::forward<ArenaSourceType>(arena_source)) {}
 
   template <class ArenaSourceType,
             class = util::nostd::enable_if_t<std::is_move_constructible<type>::value &&
                                              !__shared_message_internal_tag_types<ArenaSourceType>::value>>
-  inline shared_message(__shared_message_default_tag, ArenaSourceType &&arena_source, type &&message)
+  inline shared_message(__shared_message_default_tag, ArenaSourceType &&arena_source,
+                        type &&message) noexcept(std::is_nothrow_move_constructible<type>::value)
       : arena_(get_arena_from(std::forward<ArenaSourceType>(arena_source))) {
     if (message.GetArena() == nullptr) {
       allocator alloc;
@@ -359,14 +364,16 @@ class UTIL_SYMBOL_VISIBLE shared_message final
   template <class ArenaSourceType,
             class = util::nostd::enable_if_t<std::is_move_constructible<type>::value &&
                                              !__shared_message_internal_tag_types<ArenaSourceType>::value>>
-  inline shared_message(ArenaSourceType &&arena_source, type &&message)
+  inline shared_message(ArenaSourceType &&arena_source,
+                        type &&message) noexcept(std::is_nothrow_move_constructible<type>::value)
       : shared_message(__shared_message_default_tag{}, std::forward<ArenaSourceType>(arena_source),
                        std::move(message)) {}
 
   template <class ArenaSourceType,
             class = util::nostd::enable_if_t<std::is_copy_constructible<type>::value &&
                                              !__shared_message_internal_tag_types<ArenaSourceType>::value>>
-  inline shared_message(__shared_message_copy_tag, ArenaSourceType &&arena_source, const type &message)
+  inline shared_message(__shared_message_copy_tag, ArenaSourceType &&arena_source,
+                        const type &message) noexcept(std::is_nothrow_copy_constructible<type>::value)
       : arena_(get_arena_from(std::forward<ArenaSourceType>(arena_source))) {
     if (message.GetArena() == nullptr) {
       allocator alloc;
@@ -376,6 +383,13 @@ class UTIL_SYMBOL_VISIBLE shared_message final
       make_instance(alloc, message);
     }
   }
+
+  template <class ArenaSourceType,
+            class = util::nostd::enable_if_t<std::is_copy_constructible<type>::value &&
+                                             !__shared_message_internal_tag_types<ArenaSourceType>::value>>
+  inline shared_message(__shared_message_copy_tag tag, ArenaSourceType &&arena_source,
+                        const shared_message &message) noexcept(std::is_nothrow_copy_constructible<type>::value)
+      : shared_message(tag, std::forward<ArenaSourceType>(arena_source), *message) {}
 
   template <class ArenaSourceType, class Arg0, class... Args>
   inline shared_message(util::nostd::enable_if_t<!__internal_types<Arg0>::value &&
@@ -392,7 +406,7 @@ class UTIL_SYMBOL_VISIBLE shared_message final
             class = util::nostd::enable_if_t<std::is_default_constructible<type>::value &&
                                              !__shared_message_internal_tag_types<ArenaSourceType>::value>>
   inline shared_message(__shared_message_allocator_tag, const Alloc &alloc,
-                        ArenaSourceType &&arena_source) noexcept(std::is_nothrow_constructible<type>::value)
+                        ArenaSourceType &&arena_source) noexcept(std::is_nothrow_default_constructible<type>::value)
       : arena_(get_arena_from(std::forward<ArenaSourceType>(arena_source))) {
     __ctor_make_default_instance(arena_, instance_, __convert_allocator(alloc));
   }
@@ -401,7 +415,7 @@ class UTIL_SYMBOL_VISIBLE shared_message final
             class = util::nostd::enable_if_t<std::is_move_constructible<type>::value &&
                                              !__shared_message_internal_tag_types<ArenaSourceType>::value>>
   inline shared_message(__shared_message_allocator_tag, const Alloc &alloc, ArenaSourceType &&arena_source,
-                        type &&message)
+                        type &&message) noexcept(std::is_nothrow_move_constructible<type>::value)
       : arena_(get_arena_from(std::forward<ArenaSourceType>(arena_source))) {
     if (message.GetArena() == nullptr) {
       instance_ = util::memory::allocate_strong_rc<type>(__convert_allocator(alloc), std::move(message));
@@ -416,7 +430,7 @@ class UTIL_SYMBOL_VISIBLE shared_message final
             class = util::nostd::enable_if_t<std::is_copy_constructible<type>::value &&
                                              !__shared_message_internal_tag_types<ArenaSourceType>::value>>
   inline shared_message(__shared_message_allocator_copy_tag, const Alloc &alloc, ArenaSourceType &&arena_source,
-                        const type &message)
+                        const type &message) noexcept(std::is_nothrow_copy_constructible<type>::value)
       : arena_(get_arena_from(std::forward<ArenaSourceType>(arena_source))) {
     if (message.GetArena() == nullptr) {
       instance_ = util::memory::allocate_strong_rc<type>(__convert_allocator(alloc), message);
@@ -424,6 +438,13 @@ class UTIL_SYMBOL_VISIBLE shared_message final
       make_instance(alloc, message);
     }
   }
+
+  template <class Alloc, class ArenaSourceType,
+            class = util::nostd::enable_if_t<std::is_copy_constructible<type>::value &&
+                                             !__shared_message_internal_tag_types<ArenaSourceType>::value>>
+  inline shared_message(__shared_message_allocator_copy_tag tag, const Alloc &alloc, ArenaSourceType &&arena_source,
+                        const shared_message &message) noexcept(std::is_nothrow_copy_constructible<type>::value)
+      : shared_message(tag, alloc, std::forward<ArenaSourceType>(arena_source), *message) {}
 
   template <class Alloc, class ArenaSourceType, class Arg0, class... Args>
   inline shared_message(util::nostd::enable_if_t<!__shared_message_internal_types<Arg0>::value &&
@@ -435,30 +456,31 @@ class UTIL_SYMBOL_VISIBLE shared_message final
   }
 
   // Other member functions
-  inline util::nostd::nonnull<const pointer> get() const noexcept(std::is_nothrow_constructible<type>::value) {
+  inline util::nostd::nonnull<const pointer> get() const noexcept(std::is_nothrow_default_constructible<type>::value) {
     __lazy_make_default_instance(arena_, instance_);
     return instance_.get();
   }
 
-  inline util::nostd::nonnull<pointer> get() noexcept(std::is_nothrow_constructible<type>::value) {
+  inline util::nostd::nonnull<pointer> get() noexcept(std::is_nothrow_default_constructible<type>::value) {
     __lazy_make_default_instance(arena_, instance_);
     return instance_.get();
   }
 
-  inline util::nostd::nonnull<const pointer> operator->() const noexcept(std::is_nothrow_constructible<type>::value) {
+  inline util::nostd::nonnull<const pointer> operator->() const
+      noexcept(std::is_nothrow_default_constructible<type>::value) {
     return get();
   }
 
-  inline util::nostd::nonnull<pointer> operator->() noexcept(std::is_nothrow_constructible<type>::value) {
+  inline util::nostd::nonnull<pointer> operator->() noexcept(std::is_nothrow_default_constructible<type>::value) {
     return get();
   }
 
-  inline const type &operator*() const noexcept(std::is_nothrow_constructible<type>::value) {
+  inline const type &operator*() const noexcept(std::is_nothrow_default_constructible<type>::value) {
     __lazy_make_default_instance(arena_, instance_);
     return *instance_;
   }
 
-  inline type &operator*() noexcept(std::is_nothrow_constructible<type>::value) {
+  inline type &operator*() noexcept(std::is_nothrow_default_constructible<type>::value) {
     __lazy_make_default_instance(arena_, instance_);
     return *instance_;
   }
@@ -466,7 +488,7 @@ class UTIL_SYMBOL_VISIBLE shared_message final
   inline const arena_pointer &share_arena() const noexcept { return arena_; }
 
   inline const util::nostd::nonnull<element_pointer> &share_instance() const
-      noexcept(std::is_nothrow_constructible<type>::value) {
+      noexcept(std::is_nothrow_default_constructible<type>::value) {
     __lazy_make_default_instance(arena_, instance_);
     return instance_;
   }
@@ -474,6 +496,22 @@ class UTIL_SYMBOL_VISIBLE shared_message final
   inline void swap(shared_message &other) noexcept {
     arena_.swap(other.arena_);
     instance_.swap(other.instance_);
+  }
+
+  template <class ArenaSourceType>
+  UTIL_FORCEINLINE shared_message clone(ArenaSourceType &&arena_source) noexcept(
+      std::is_nothrow_constructible<shared_message, __shared_message_copy_tag, ArenaSourceType,
+                                    const shared_message &>::value) {
+    return shared_message{__shared_message_copy_tag{}, std::forward<ArenaSourceType>(arena_source), *this};
+  }
+
+  template <class ArenaSourceType, class Alloc>
+  UTIL_FORCEINLINE shared_message<type, Alloc>
+  allocate_clone(const Alloc &alloc, ArenaSourceType &&arena_source) noexcept(
+      std::is_nothrow_constructible<shared_message, __shared_message_allocator_copy_tag, const Alloc &,
+                                    const shared_message &>::value) {
+    return shared_message<type, Alloc>{__shared_message_allocator_copy_tag{}, alloc,
+                                       std::forward<ArenaSourceType>(arena_source), *this};
   }
 
  private:
@@ -523,28 +561,37 @@ class UTIL_SYMBOL_VISIBLE shared_message final
 };
 
 template <class MessageType, class ArenaSourceType, class... Args>
-UTIL_FORCEINLINE shared_message<MessageType> make_shared_message(ArenaSourceType &&arena_source, Args &&...args) {
+UTIL_FORCEINLINE shared_message<MessageType> make_shared_message(
+    ArenaSourceType &&arena_source,
+    Args &&...args) noexcept(std::is_nothrow_constructible<shared_message<MessageType>, __shared_message_default_tag,
+                                                           ArenaSourceType, Args...>::value) {
   return shared_message<MessageType>(__shared_message_default_tag{}, std::forward<ArenaSourceType>(arena_source),
                                      std::forward<Args>(args)...);
 }
 
 template <class MessageType, class ArenaSourceType, class Alloc, class... Args>
-UTIL_FORCEINLINE shared_message<MessageType> allocate_shared_message(const Alloc &alloc, ArenaSourceType &&arena_source,
-                                                                     Args &&...args) {
+UTIL_FORCEINLINE shared_message<MessageType> allocate_shared_message(
+    const Alloc &alloc, ArenaSourceType &&arena_source,
+    Args &&...args) noexcept(std::is_nothrow_constructible<shared_message<MessageType>, __shared_message_allocator_tag,
+                                                           const Alloc &, ArenaSourceType, Args...>::value) {
   return shared_message<MessageType, Alloc>(__shared_message_allocator_tag{}, alloc,
                                             std::forward<ArenaSourceType>(arena_source), std::forward<Args>(args)...);
 }
 
 template <class MessageType, class ArenaSourceType, class... Args>
-UTIL_FORCEINLINE shared_message<MessageType> clone_shared_message(ArenaSourceType &&arena_source, Args &&...args) {
+UTIL_FORCEINLINE shared_message<MessageType> clone_shared_message(
+    ArenaSourceType &&arena_source,
+    Args &&...args) noexcept(std::is_nothrow_constructible<shared_message<MessageType>, __shared_message_copy_tag,
+                                                           ArenaSourceType, Args...>::value) {
   return shared_message<MessageType>(__shared_message_copy_tag{}, std::forward<ArenaSourceType>(arena_source),
                                      std::forward<Args>(args)...);
 }
 
 template <class MessageType, class ArenaSourceType, class Alloc, class... Args>
-UTIL_FORCEINLINE shared_message<MessageType> allocate_clone_shared_message(const Alloc &alloc,
-                                                                           ArenaSourceType &&arena_source,
-                                                                           Args &&...args) {
+UTIL_FORCEINLINE shared_message<MessageType>
+allocate_clone_shared_message(const Alloc &alloc, ArenaSourceType &&arena_source, Args &&...args) noexcept(
+    std::is_nothrow_constructible<shared_message<MessageType>, __shared_message_allocator_copy_tag, const Alloc &,
+                                  ArenaSourceType, Args...>::value) {
   return shared_message<MessageType, Alloc>(__shared_message_allocator_copy_tag{}, alloc,
                                             std::forward<ArenaSourceType>(arena_source), std::forward<Args>(args)...);
 }

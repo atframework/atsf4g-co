@@ -235,7 +235,7 @@ rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, router
 
     auto save_login_blob_data = rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_login>(ctx, login_blob_data);
     auto ret = RPC_AWAIT_CODE_RESULT(rpc::db::login::set(ctx, obj->get_open_id().c_str(), obj->get_zone_id(),
-                                                         save_login_blob_data, obj->get_login_version()));
+                                                         std::move(save_login_blob_data), obj->get_login_version()));
     if (ret < 0) {
       FWPLOGERROR(*obj, "save login data failed, msg:\n{}", login_blob_data.DebugString());
       // 失败则恢复路由信息
@@ -302,7 +302,7 @@ rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void *
       auto save_login_blob_data =
           rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_login>(ctx, obj->get_login_info());
       res = RPC_AWAIT_CODE_RESULT(rpc::db::login::set(ctx, obj->get_open_id().c_str(), obj->get_zone_id(),
-                                                      save_login_blob_data, obj->get_login_version()));
+                                                      std::move(save_login_blob_data), obj->get_login_version()));
       if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res) {
         obj->get_login_info().set_router_server_id(old_router_server_id);
         obj->get_login_info().set_router_version(old_router_ver);
@@ -350,7 +350,7 @@ rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void *
       auto save_login_blob_data =
           rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_login>(ctx, obj->get_login_info());
       res = RPC_AWAIT_CODE_RESULT(rpc::db::login::set(ctx, obj->get_open_id().c_str(), obj->get_zone_id(),
-                                                      save_login_blob_data, obj->get_login_version()));
+                                                      std::move(save_login_blob_data), obj->get_login_version()));
       if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res) {
         obj->get_login_info().set_router_server_id(old_router_server_id);
         obj->get_login_info().set_router_version(old_router_ver);
@@ -384,7 +384,7 @@ rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void *
       auto save_login_blob_data =
           rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_login>(ctx, obj->get_login_info());
       res = RPC_AWAIT_CODE_RESULT(rpc::db::login::set(ctx, obj->get_open_id().c_str(), obj->get_zone_id(),
-                                                      save_login_blob_data, obj->get_login_version()));
+                                                      std::move(save_login_blob_data), obj->get_login_version()));
       if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res) {
         obj->get_login_info().set_router_server_id(old_router_server_id);
         obj->get_login_info().set_router_version(old_router_ver);
@@ -419,21 +419,26 @@ rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void *
   }
 
   // 尝试保存用户数据
-  rpc::shared_message<PROJECT_NAMESPACE_ID::table_user> user_tb{ctx};
-  obj->dump(ctx, *user_tb, true);
+  {
+    rpc::shared_message<PROJECT_NAMESPACE_ID::table_user> user_tb{ctx};
+    obj->dump(ctx, *user_tb, true);
+    FWPLOGDEBUG(*obj, "save curr data version: {}", obj->get_version());
 
-  FWPLOGDEBUG(*obj, "save curr data version: {}", obj->get_version());
-
-  // RPC save to DB
-  res = RPC_AWAIT_CODE_RESULT(
-      rpc::db::player::set(ctx, obj->get_user_id(), obj->get_zone_id(), user_tb, obj->get_version()));
+    // RPC save to DB
+    res = RPC_AWAIT_CODE_RESULT(
+        rpc::db::player::set(ctx, obj->get_user_id(), obj->get_zone_id(), std::move(user_tb), obj->get_version()));
+  }
 
   // CAS 序号错误（可能是先超时再返回成功）,重试一次
   // 前面已经确认了当前用户在此处登入并且已经更新了版本号到版本信息
   // RPC save to DB again
   if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res) {
+    rpc::shared_message<PROJECT_NAMESPACE_ID::table_user> user_tb{ctx};
+    obj->dump(ctx, *user_tb, true);
+    FWPLOGINFO(*obj, "force save curr data version: {}", obj->get_version());
+
     res = RPC_AWAIT_CODE_RESULT(
-        rpc::db::player::set(ctx, obj->get_user_id(), obj->get_zone_id(), user_tb, obj->get_version()));
+        rpc::db::player::set(ctx, obj->get_user_id(), obj->get_zone_id(), std::move(user_tb), obj->get_version()));
   }
 
   if (res < 0) {

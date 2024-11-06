@@ -21,6 +21,7 @@ constexpr const char *semantic_conventions::kAtRpcResultCode;
 constexpr const char *semantic_conventions::kAtRpcResponseCode;
 constexpr const char *semantic_conventions::kAtRpcKind;
 constexpr const char *semantic_conventions::kAtRpcSpanName;
+constexpr const char *semantic_conventions::kAtRpcStacktrace;
 
 constexpr const char *semantic_conventions::kRpcSystemValueAtRpcDistapcher;
 constexpr const char *semantic_conventions::kRpcSystemValueAtRpcTask;
