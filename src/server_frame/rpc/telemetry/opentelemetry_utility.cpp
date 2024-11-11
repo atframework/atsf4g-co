@@ -215,6 +215,104 @@ struct UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_converter {
   }
 };
 
+struct UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_value_to_string_converter{
+    std::string operator()(bool v){return util::log::format("{}", v);
+}  // namespace
+std::string operator()(int32_t v) { return util::log::format("{}", v); }
+std::string operator()(uint32_t v) { return util::log::format("{}", v); }
+std::string operator()(int64_t v) { return util::log::format("{}", v); }
+std::string operator()(uint64_t v) { return util::log::format("{}", v); }
+std::string operator()(double v) { return util::log::format("{}", v); }
+std::string operator()(opentelemetry::nostd::string_view v) { return static_cast<std::string>(v); }
+std::string operator()(const char* v) { return v == nullptr ? "" : v; }
+
+template <class T>
+inline void dump_array_value(std::ostream& os, const T& v) {
+  os << v;
+}
+inline void dump_array_value(std::ostream& os, const opentelemetry::nostd::string_view& v) {
+  os.write(v.data(), static_cast<std::streamsize>(v.size()));
+}
+
+template <class T>
+std::string to_array(opentelemetry::nostd::span<const T> v) {
+  if (v.empty()) {
+    return "[]";
+  }
+
+  std::stringstream ss;
+  ss << "[";
+  dump_array_value(ss, v[0]);
+
+  for (size_t i = 1; i < v.size(); ++i) {
+    ss << ", ";
+    dump_array_value(ss, v[i]);
+  }
+
+  ss << "]";
+
+  return ss.str();
+}
+
+std::string operator()(opentelemetry::nostd::span<const uint8_t> v) { return to_array(v); }
+std::string operator()(opentelemetry::nostd::span<const bool> v) { return to_array(v); }
+std::string operator()(opentelemetry::nostd::span<const int32_t> v) { return to_array(v); }
+std::string operator()(opentelemetry::nostd::span<const uint32_t> v) { return to_array(v); }
+std::string operator()(opentelemetry::nostd::span<const int64_t> v) { return to_array(v); }
+std::string operator()(opentelemetry::nostd::span<const uint64_t> v) { return to_array(v); }
+std::string operator()(opentelemetry::nostd::span<const double> v) { return to_array(v); }
+std::string operator()(opentelemetry::nostd::span<const opentelemetry::nostd::string_view> v) { return to_array(v); }
+};  // namespace telemetry
+
+struct UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_owned_value_to_string_converter{
+    std::string operator()(bool v){return util::log::format("{}", v);
+}  // namespace rpc
+std::string operator()(int32_t v) { return util::log::format("{}", v); }
+std::string operator()(uint32_t v) { return util::log::format("{}", v); }
+std::string operator()(int64_t v) { return util::log::format("{}", v); }
+std::string operator()(uint64_t v) { return util::log::format("{}", v); }
+std::string operator()(double v) { return util::log::format("{}", v); }
+std::string operator()(const std::string& v) { return static_cast<std::string>(v); }
+
+template <class T>
+inline void dump_array_value(std::ostream& os, const T& v) {
+  os << v;
+}
+inline void dump_array_value(std::ostream& os, const std::string& v) {
+  os.write(v.data(), static_cast<std::streamsize>(v.size()));
+}
+
+template <class T>
+std::string to_array(const std::vector<T>& v) {
+  if (v.empty()) {
+    return "[]";
+  }
+
+  std::stringstream ss;
+  ss << "[";
+  dump_array_value(ss, v[0]);
+
+  for (size_t i = 1; i < v.size(); ++i) {
+    ss << ", ";
+    dump_array_value(ss, v[i]);
+  }
+
+  ss << "]";
+
+  return ss.str();
+}
+
+std::string operator()(const std::vector<bool>& v) { return to_array(v); }
+std::string operator()(const std::vector<int32_t>& v) { return to_array(v); }
+std::string operator()(const std::vector<uint32_t>& v) { return to_array(v); }
+std::string operator()(const std::vector<int64_t>& v) { return to_array(v); }
+std::string operator()(const std::vector<uint64_t>& v) { return to_array(v); }
+std::string operator()(const std::vector<double>& v) { return to_array(v); }
+std::string operator()(const std::vector<std::string>& v) { return to_array(v); }
+std::string operator()(const std::vector<uint8_t>& v) { return to_array(v); }
+}
+;
+
 static opentelemetry::nostd::string_view get_notification_event_log_domain(notification_domain domain) {
   switch (domain) {
     case notification_domain::kCritical:
@@ -1005,131 +1103,14 @@ SERVER_FRAME_API opentelemetry::common::AttributeValue opentelemetry_utility::co
 
 SERVER_FRAME_API std::string opentelemetry_utility::convert_attribute_value_to_string(
     const opentelemetry::common::AttributeValue& value) {
-  if (opentelemetry::nostd::holds_alternative<bool>(value)) {
-    return opentelemetry::nostd::get<bool>(value) ? "true" : "false";
-  } else if (opentelemetry::nostd::holds_alternative<int32_t>(value)) {
-    return util::log::format("{}", opentelemetry::nostd::get<int32_t>(value));
-  } else if (opentelemetry::nostd::holds_alternative<int64_t>(value)) {
-    return util::log::format("{}", opentelemetry::nostd::get<int64_t>(value));
-  } else if (opentelemetry::nostd::holds_alternative<uint32_t>(value)) {
-    return util::log::format("{}", opentelemetry::nostd::get<uint32_t>(value));
-  } else if (opentelemetry::nostd::holds_alternative<uint64_t>(value)) {
-    return util::log::format("{}", opentelemetry::nostd::get<uint64_t>(value));
-  } else if (opentelemetry::nostd::holds_alternative<double>(value)) {
-    return util::log::format("{}", opentelemetry::nostd::get<double>(value));
-  } else if (opentelemetry::nostd::holds_alternative<const char*>(value)) {
-    return opentelemetry::nostd::get<const char*>(value);
-  } else if (opentelemetry::nostd::holds_alternative<opentelemetry::nostd::string_view>(value)) {
-    return static_cast<std::string>(opentelemetry::nostd::get<opentelemetry::nostd::string_view>(value));
-  } else if (opentelemetry::nostd::holds_alternative<opentelemetry::nostd::span<const bool>>(value)) {
-    std::stringstream ss;
-    ss << "[";
-    bool is_first = true;
-    for (auto& item : opentelemetry::nostd::get<opentelemetry::nostd::span<const bool>>(value)) {
-      if (!is_first) {
-        ss << ", ";
-      }
-      is_first = false;
-      ss << item;
-    }
-    ss << "]";
-    return ss.str();
-  } else if (opentelemetry::nostd::holds_alternative<opentelemetry::nostd::span<const int32_t>>(value)) {
-    std::stringstream ss;
-    ss << "[";
-    bool is_first = true;
-    for (auto& item : opentelemetry::nostd::get<opentelemetry::nostd::span<const int32_t>>(value)) {
-      if (!is_first) {
-        ss << ", ";
-      }
-      is_first = false;
-      ss << item;
-    }
-    ss << "]";
-    return ss.str();
-  } else if (opentelemetry::nostd::holds_alternative<opentelemetry::nostd::span<const int64_t>>(value)) {
-    std::stringstream ss;
-    ss << "[";
-    bool is_first = true;
-    for (auto& item : opentelemetry::nostd::get<opentelemetry::nostd::span<const int64_t>>(value)) {
-      if (!is_first) {
-        ss << ", ";
-      }
-      is_first = false;
-      ss << item;
-    }
-    ss << "]";
-    return ss.str();
-  } else if (opentelemetry::nostd::holds_alternative<opentelemetry::nostd::span<const uint32_t>>(value)) {
-    std::stringstream ss;
-    ss << "[";
-    bool is_first = true;
-    for (auto& item : opentelemetry::nostd::get<opentelemetry::nostd::span<const uint32_t>>(value)) {
-      if (!is_first) {
-        ss << ", ";
-      }
-      is_first = false;
-      ss << item;
-    }
-    ss << "]";
-    return ss.str();
-  } else if (opentelemetry::nostd::holds_alternative<opentelemetry::nostd::span<const uint64_t>>(value)) {
-    std::stringstream ss;
-    ss << "[";
-    bool is_first = true;
-    for (auto& item : opentelemetry::nostd::get<opentelemetry::nostd::span<const uint64_t>>(value)) {
-      if (!is_first) {
-        ss << ", ";
-      }
-      is_first = false;
-      ss << item;
-    }
-    ss << "]";
-    return ss.str();
-  } else if (opentelemetry::nostd::holds_alternative<opentelemetry::nostd::span<const double>>(value)) {
-    std::stringstream ss;
-    ss << "[";
-    bool is_first = true;
-    for (auto& item : opentelemetry::nostd::get<opentelemetry::nostd::span<const double>>(value)) {
-      if (!is_first) {
-        ss << ", ";
-      }
-      is_first = false;
-      ss << item;
-    }
-    ss << "]";
-    return ss.str();
-  } else if (opentelemetry::nostd::holds_alternative<opentelemetry::nostd::span<const uint8_t>>(value)) {
-    std::stringstream ss;
-    ss << "[";
-    bool is_first = true;
-    for (auto& item : opentelemetry::nostd::get<opentelemetry::nostd::span<const uint8_t>>(value)) {
-      if (!is_first) {
-        ss << ", ";
-      }
-      is_first = false;
-      ss << static_cast<uint32_t>(item);
-    }
-    ss << "]";
-    return ss.str();
-  } else if (opentelemetry::nostd::holds_alternative<
-                 opentelemetry::nostd::span<const opentelemetry::nostd::string_view>>(value)) {
-    std::stringstream ss;
-    ss << "[";
-    bool is_first = true;
-    for (auto& item :
-         opentelemetry::nostd::get<opentelemetry::nostd::span<const opentelemetry::nostd::string_view>>(value)) {
-      if (!is_first) {
-        ss << ", ";
-      }
-      is_first = false;
-      ss.write(item.data(), static_cast<std::streamsize>(item.size()));
-    }
-    ss << "]";
-    return ss.str();
-  }
+  opentelemetry_utility_attribute_value_to_string_converter converter;
+  return opentelemetry::nostd::visit(converter, value);
+}
 
-  return "";
+SERVER_FRAME_API std::string opentelemetry_utility::convert_attribute_value_to_string(
+    const opentelemetry::sdk::common::OwnedAttributeValue& value) {
+  opentelemetry_utility_attribute_owned_value_to_string_converter converter;
+  return opentelemetry::nostd::visit(converter, value);
 }
 
 SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_int64(

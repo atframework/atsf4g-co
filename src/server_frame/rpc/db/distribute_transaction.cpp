@@ -81,7 +81,7 @@ result_type set(rpc::context &ctx, uint32_t zone_id, gsl::string_view transactio
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_all_message> output{ctx};
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::set(
       ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, gsl::string_view{user_key, user_key_len},
-      shared_message<google::protobuf::Message>{std::move(store)}, version, output,
+      shared_abstract_message<google::protobuf::Message>{std::move(store)}, version, output,
       detail::unpack_table_distribute_transaction));
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
