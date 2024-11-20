@@ -402,7 +402,7 @@ connectors:
     exemplars:
       enabled: true
     dimensions:
-      - name: deployment.environment
+      - name: deployment.environment.name
         default: UNSET
       - name: host.name
         default: localhost
@@ -439,7 +439,7 @@ connectors:
     exemplars:
       enabled: true
     dimensions:
-      - name: deployment.environment
+      - name: deployment.environment.name
         default: UNSET
       - name: host.name
         default: localhost

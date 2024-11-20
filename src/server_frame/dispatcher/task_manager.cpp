@@ -581,6 +581,10 @@ SERVER_FRAME_API std::chrono::system_clock::duration task_manager::get_default_t
   return ret;
 }
 
+SERVER_FRAME_API size_t task_manager::get_metrics_task_recently_max_size() {
+  return get_task_manager_metrics_data().task_max_count.load(std::memory_order_acquire);
+}
+
 SERVER_FRAME_API size_t task_manager::get_stack_size() const {
   return logic_config::me()->get_cfg_task().stack().size();
 }

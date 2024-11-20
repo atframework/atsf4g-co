@@ -1272,7 +1272,13 @@ SERVER_FRAME_API void opentelemetry_utility::send_notification_event(rpc::contex
     size_t buffer_size = tls_buffers_get_length(tls_buffers_type_t::EN_TBT_DEFAULT);
 
     if (message.size() + 16 < buffer_size) {
-      size_t written = util::log::stacktrace_write(buffer + message.size() + 13, buffer_size - 13 - message.size());
+      util::log::stacktrace_options options;
+      options.skip_start_frames = 1;
+      options.skip_end_frames = 1;
+      options.max_frames = 0;
+
+      size_t written =
+          util::log::stacktrace_write(buffer + message.size() + 13, buffer_size - 13 - message.size(), &options);
       if (written > 0) {
         memcpy(buffer, message.data(), message.size());
         memcpy(buffer + message.size(), "\nStacktrace:\n", 13);

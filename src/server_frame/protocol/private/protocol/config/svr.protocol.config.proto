@@ -529,6 +529,10 @@ message logic_hpa_scaling_rule {
   logic_hpa_policy cpu_permillage = 11;
   // 内存: 字节
   logic_hpa_policy memory = 12;
+  // 近期最大任务数
+  logic_hpa_policy recent_max_task_count = 13;
+  // 控制器状态
+  logic_hpa_policy controller_status = 14;
 
   // 自定义指标
   repeated logic_hpa_policy custom = 21;

@@ -113,10 +113,8 @@ add_custom_target(
           "${PROJECT_INSTALL_TOOLS_DIR}/script/"
   BYPRODUCTS "${PROJECT_INSTALL_TOOLS_DIR}/script/prepare-archive.sh")
 
-if(MSVC)
-  set_property(TARGET "tools-prepare-dependency" PROPERTY FOLDER "${PROJECT_NAME}/tools")
-  set_property(TARGET "tools-prepare-archive" PROPERTY FOLDER "${PROJECT_NAME}/tools")
-endif()
+set_property(TARGET "tools-prepare-dependency" PROPERTY FOLDER "${PROJECT_NAME}/tools")
+set_property(TARGET "tools-prepare-archive" PROPERTY FOLDER "${PROJECT_NAME}/tools")
 
 if(ATFRAMEWORK_CMAKE_TOOLSET_TARGET_IS_LINUX)
   configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/copy-dependency-dll.sh.in"
@@ -156,10 +154,9 @@ add_custom_target(
 
 add_custom_target("run-cleanup-dll" ALL DEPENDS "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.sh"
                                                 "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1")
-if(MSVC)
-  set_property(TARGET "tools-cleanup-dll" PROPERTY FOLDER "${PROJECT_NAME}/tools")
-  set_property(TARGET "run-cleanup-dll" PROPERTY FOLDER "${PROJECT_NAME}/tools")
-endif()
+
+set_property(TARGET "tools-cleanup-dll" PROPERTY FOLDER "${PROJECT_NAME}/tools")
+set_property(TARGET "run-cleanup-dll" PROPERTY FOLDER "${PROJECT_NAME}/tools")
 
 if(CYGWIN
    OR UNIX

@@ -67,7 +67,7 @@ SERVER_FRAME_API task_action_no_req_base::result_type task_action_no_req_base::h
 }
 
 SERVER_FRAME_API rpc::context::inherit_options task_action_no_req_base::get_inherit_option() const noexcept {
-  return rpc::context::inherit_options{rpc::context::parent_mode::kParent, true, true};
+  return rpc::context::inherit_options{rpc::context::parent_mode::kParent, false, true};
 }
 
 SERVER_FRAME_API rpc::context::trace_start_option task_action_no_req_base::get_trace_option() const noexcept {

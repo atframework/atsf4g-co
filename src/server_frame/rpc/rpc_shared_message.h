@@ -21,6 +21,8 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <memory/object_allocator_metrics.h>
+
 #include <config/server_frame_build_feature.h>
 
 #include <memory>
@@ -53,6 +55,12 @@ struct UTIL_SYMBOL_VISIBLE __shared_message_copy_tag{};
 struct UTIL_SYMBOL_VISIBLE __shared_message_allocator_tag{};
 
 struct UTIL_SYMBOL_VISIBLE __shared_message_allocator_copy_tag{};
+
+template <class MessageType, class Allocator>
+class UTIL_SYMBOL_VISIBLE __shared_message_shared_base;
+
+template <class MessageType, class Allocator, bool EnableLazyMakeInstance>
+class UTIL_SYMBOL_VISIBLE __shared_message_base;
 
 template <class MessageType, class Allocator, bool WithDefaultConstructor>
 class UTIL_SYMBOL_VISIBLE __shared_message;
@@ -118,7 +126,38 @@ template <class T>
 struct __shared_message_internal_tag_types
     : public __shared_message_internal_tag_types_checker<util::nostd::remove_cvref_t<T>> {};
 
+template <class T>
+struct __shared_message_internal_is_shared_message;
+
+template <class MessageType, class Allocator, bool WithDefaultConstructor>
+struct __shared_message_internal_is_shared_message<__shared_message<MessageType, Allocator, WithDefaultConstructor>>
+    : public ::std::true_type {};
+
+template <class MessageType, class Allocator>
+struct __shared_message_internal_is_shared_message<__shared_message_shared_base<MessageType, Allocator>>
+    : public ::std::true_type {};
+
+template <class MessageType, class Allocator, bool EnableLazyMakeInstance>
+struct __shared_message_internal_is_shared_message<
+    __shared_message_base<MessageType, Allocator, EnableLazyMakeInstance>> : public ::std::true_type {};
+
+template <class>
+struct __shared_message_internal_is_shared_message : public ::std::false_type {};
+
 SERVER_FRAME_API const std::shared_ptr<::google::protobuf::Arena> &get_shared_arena(const context &);
+
+SERVER_FRAME_API void report_shared_message_defer_after_moved(const std::string &demangle_name);
+
+enum __shared_message_flag : uint32_t {
+  kDefault = 0,
+  kMoved = 0x01,
+};
+
+struct UTIL_SYMBOL_VISIBLE __shared_message_meta {
+  uint32_t flags = static_cast<uint32_t>(__shared_message_flag::kDefault);
+
+  inline __shared_message_meta() noexcept {}
+};
 
 template <class MessageType, class Allocator>
 class UTIL_SYMBOL_VISIBLE __shared_message_shared_base {
@@ -143,6 +182,12 @@ class UTIL_SYMBOL_VISIBLE __shared_message_shared_base {
 
  public:
   inline const arena_pointer &share_arena() const noexcept { return arena_; }
+
+  inline void mark_moved() noexcept { meta_.flags |= static_cast<uint32_t>(__shared_message_flag::kMoved); }
+
+  inline bool is_moved() const noexcept {
+    return 0 != (meta_.flags & static_cast<uint32_t>(__shared_message_flag::kMoved));
+  }
 
  protected:
   struct arena_deletor {
@@ -227,10 +272,8 @@ class UTIL_SYMBOL_VISIBLE __shared_message_shared_base {
 
   arena_pointer arena_;
   mutable element_pointer instance_;
+  __shared_message_meta meta_;
 };
-
-template <class MessageType, class Allocator, bool EnableLazyMakeInstance>
-class UTIL_SYMBOL_VISIBLE __shared_message_base;
 
 template <class MessageType, class Allocator>
 class UTIL_SYMBOL_VISIBLE __shared_message_base<MessageType, Allocator, true>
@@ -245,6 +288,8 @@ class UTIL_SYMBOL_VISIBLE __shared_message_base<MessageType, Allocator, true>
   using arena_pointer = typename base_type::arena_pointer;
   using element_pointer = typename base_type::element_pointer;
 
+  using base_type::is_moved;
+  using base_type::mark_moved;
   using base_type::share_arena;
 
  protected:
@@ -254,6 +299,7 @@ class UTIL_SYMBOL_VISIBLE __shared_message_base<MessageType, Allocator, true>
   using base_type::__make_instance;
   using base_type::arena_;
   using base_type::instance_;
+  using base_type::meta_;
 
   __shared_message_base() noexcept {}
 
@@ -287,6 +333,8 @@ class UTIL_SYMBOL_VISIBLE __shared_message_base<MessageType, Allocator, false>
   using arena_pointer = typename base_type::arena_pointer;
   using element_pointer = typename base_type::element_pointer;
 
+  using base_type::is_moved;
+  using base_type::mark_moved;
   using base_type::share_arena;
 
  protected:
@@ -296,6 +344,7 @@ class UTIL_SYMBOL_VISIBLE __shared_message_base<MessageType, Allocator, false>
   using base_type::__make_instance;
   using base_type::arena_;
   using base_type::instance_;
+  using base_type::meta_;
 
   __shared_message_base() noexcept {}
 
@@ -320,6 +369,8 @@ class UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, false>
   using arena_pointer = typename base_type::arena_pointer;
   using element_pointer = typename base_type::element_pointer;
 
+  using base_type::is_moved;
+  using base_type::mark_moved;
   using base_type::share_arena;
 
  private:
@@ -329,6 +380,7 @@ class UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, false>
   using base_type::__make_instance;
   using base_type::arena_;
   using base_type::instance_;
+  using base_type::meta_;
 
  public:
   // This object can not pointer to a empty data, so disable move constructor and move assignment
@@ -339,15 +391,23 @@ class UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, false>
   inline __shared_message(
       __shared_message<OtherMessageType, OtherAllocatorType, true> &&other)  // NOLINT: runtime/explicit
       noexcept
-      : base_type(std::move(other.arena_), std::move(other.share_instance())) {}
+      : base_type(std::move(other.arena_), std::move(other.instance_)) {
+    other.mark_moved();
+  }
 
   template <
       class OtherMessageType, class OtherAllocatorType,
       class = util::nostd::enable_if_t<__shared_message_default_constructible<OtherMessageType>::value &&
                                        std::is_base_of<type, util::nostd::remove_cvref_t<OtherMessageType>>::value>>
   inline __shared_message &operator=(__shared_message<OtherMessageType, OtherAllocatorType, true> &&other) noexcept {
+    if UTIL_UNLIKELY_CONDITION (this == &other) {
+      return *this;
+    }
+
     arena_ = std::move(other.arena_);
-    instance_ = std::move(other.share_instance());
+    instance_ = std::move(other.instance_);
+
+    other.mark_moved();
     return *this;
   }
 
@@ -357,6 +417,10 @@ class UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, false>
 
   inline __shared_message &operator=(const __shared_message &other) noexcept(
       std::is_nothrow_default_constructible<type>::value) {
+    if UTIL_UNLIKELY_CONDITION (this == &other) {
+      return *this;
+    }
+
     arena_ = other.arena_;
     instance_ = other.share_instance();
     return *this;
@@ -376,6 +440,10 @@ class UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, false>
   inline __shared_message &
   operator=(const __shared_message<OtherMessageType, OtherAllocatorType, OtherWithDefaultConstructor> &other) noexcept(
       std::is_nothrow_default_constructible<OtherAllocatorType>::value) {
+    if UTIL_UNLIKELY_CONDITION (this == &other) {
+      return *this;
+    }
+
     arena_ = other.arena_;
     instance_ = other.share_instance();
     return *this;
@@ -485,10 +553,20 @@ class UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, false>
 
   // Other member functions
   inline util::nostd::nonnull<const pointer> get() const noexcept(std::is_nothrow_default_constructible<type>::value) {
+    if UTIL_UNLIKELY_CONDITION (is_moved()) {
+      report_shared_message_defer_after_moved(
+          ::atfw::memory::object_allocator_metrics_controller::parse_demangle_name<type>());
+    }
+
     return instance_.get();
   }
 
   inline util::nostd::nonnull<pointer> get() noexcept(std::is_nothrow_default_constructible<type>::value) {
+    if UTIL_UNLIKELY_CONDITION (is_moved()) {
+      report_shared_message_defer_after_moved(
+          ::atfw::memory::object_allocator_metrics_controller::parse_demangle_name<type>());
+    }
+
     return instance_.get();
   }
 
@@ -502,10 +580,22 @@ class UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, false>
   }
 
   inline const type &operator*() const noexcept(std::is_nothrow_default_constructible<type>::value) {
+    if UTIL_UNLIKELY_CONDITION (is_moved()) {
+      report_shared_message_defer_after_moved(
+          ::atfw::memory::object_allocator_metrics_controller::parse_demangle_name<type>());
+    }
+
     return *instance_;
   }
 
-  inline type &operator*() noexcept(std::is_nothrow_default_constructible<type>::value) { return *instance_; }
+  inline type &operator*() noexcept(std::is_nothrow_default_constructible<type>::value) {
+    if UTIL_UNLIKELY_CONDITION (is_moved()) {
+      report_shared_message_defer_after_moved(
+          ::atfw::memory::object_allocator_metrics_controller::parse_demangle_name<type>());
+    }
+
+    return *instance_;
+  }
 
   inline const util::nostd::nonnull<element_pointer> &share_instance() const
       noexcept(std::is_nothrow_default_constructible<type>::value) {
@@ -513,8 +603,11 @@ class UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, false>
   }
 
   inline void swap(__shared_message &other) noexcept {
+    using std::swap;
+
     arena_.swap(other.arena_);
     instance_.swap(other.instance_);
+    swap(meta_, other.meta_);
   }
 
   template <class ArenaSourceType>
@@ -551,6 +644,8 @@ class UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, true>
   using arena_pointer = typename base_type::arena_pointer;
   using element_pointer = typename base_type::element_pointer;
 
+  using base_type::is_moved;
+  using base_type::mark_moved;
   using base_type::share_arena;
 
  private:
@@ -561,6 +656,7 @@ class UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, true>
   using base_type::__make_instance;
   using base_type::arena_;
   using base_type::instance_;
+  using base_type::meta_;
 
   // Members that same as __shared_message<MessageType, Allocator, false>
  public:
@@ -571,15 +667,23 @@ class UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, true>
   inline __shared_message(
       __shared_message<OtherMessageType, OtherAllocatorType, true> &&other)  // NOLINT: runtime/explicit
       noexcept
-      : base_type(std::move(other.arena_), std::move(other.share_instance())) {}
+      : base_type(std::move(other.arena_), std::move(other.instance_)) {
+    other.mark_moved();
+  }
 
   template <
       class OtherMessageType, class OtherAllocatorType,
       class = util::nostd::enable_if_t<__shared_message_default_constructible<OtherMessageType>::value &&
                                        std::is_base_of<type, util::nostd::remove_cvref_t<OtherMessageType>>::value>>
   inline __shared_message &operator=(__shared_message<OtherMessageType, OtherAllocatorType, true> &&other) noexcept {
+    if UTIL_UNLIKELY_CONDITION (this == &other) {
+      return *this;
+    }
+
     arena_ = std::move(other.arena_);
-    instance_ = std::move(other.share_instance());
+    instance_ = std::move(other.instance_);
+
+    other.mark_moved();
     return *this;
   }
 
@@ -589,6 +693,10 @@ class UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, true>
 
   inline __shared_message &operator=(const __shared_message &other) noexcept(
       std::is_nothrow_default_constructible<type>::value) {
+    if UTIL_UNLIKELY_CONDITION (this == &other) {
+      return *this;
+    }
+
     arena_ = other.arena_;
     instance_ = other.share_instance();
     return *this;
@@ -608,6 +716,10 @@ class UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, true>
   inline __shared_message &
   operator=(const __shared_message<OtherMessageType, OtherAllocatorType, OtherWithDefaultConstructor> &other) noexcept(
       std::is_nothrow_default_constructible<OtherAllocatorType>::value) {
+    if UTIL_UNLIKELY_CONDITION (this == &other) {
+      return *this;
+    }
+
     arena_ = other.arena_;
     instance_ = other.share_instance();
     return *this;
@@ -717,11 +829,21 @@ class UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, true>
 
   // Other member functions
   inline util::nostd::nonnull<const pointer> get() const noexcept(std::is_nothrow_default_constructible<type>::value) {
+    if UTIL_UNLIKELY_CONDITION (is_moved()) {
+      report_shared_message_defer_after_moved(
+          ::atfw::memory::object_allocator_metrics_controller::parse_demangle_name<type>());
+    }
+
     __lazy_make_default_instance(arena_, instance_);
     return instance_.get();
   }
 
   inline util::nostd::nonnull<pointer> get() noexcept(std::is_nothrow_default_constructible<type>::value) {
+    if UTIL_UNLIKELY_CONDITION (is_moved()) {
+      report_shared_message_defer_after_moved(
+          ::atfw::memory::object_allocator_metrics_controller::parse_demangle_name<type>());
+    }
+
     __lazy_make_default_instance(arena_, instance_);
     return instance_.get();
   }
@@ -736,11 +858,21 @@ class UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, true>
   }
 
   inline const type &operator*() const noexcept(std::is_nothrow_default_constructible<type>::value) {
+    if UTIL_UNLIKELY_CONDITION (is_moved()) {
+      report_shared_message_defer_after_moved(
+          ::atfw::memory::object_allocator_metrics_controller::parse_demangle_name<type>());
+    }
+
     __lazy_make_default_instance(arena_, instance_);
     return *instance_;
   }
 
   inline type &operator*() noexcept(std::is_nothrow_default_constructible<type>::value) {
+    if UTIL_UNLIKELY_CONDITION (is_moved()) {
+      report_shared_message_defer_after_moved(
+          ::atfw::memory::object_allocator_metrics_controller::parse_demangle_name<type>());
+    }
+
     __lazy_make_default_instance(arena_, instance_);
     return *instance_;
   }
@@ -752,8 +884,12 @@ class UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, true>
   }
 
   inline void swap(__shared_message &other) noexcept {
+    using std::swap;
+
     arena_.swap(other.arena_);
     instance_.swap(other.instance_);
+
+    swap(meta_, other.meta_);
   }
 
   template <class ArenaSourceType>
@@ -777,19 +913,26 @@ class UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, true>
   inline __shared_message() noexcept(std::is_nothrow_default_constructible<type>::value) {}
 
   template <class ArenaSourceType,
-            class = util::nostd::enable_if_t<!__shared_message_internal_tag_types<ArenaSourceType>::value>>
+            class = util::nostd::enable_if_t<
+                !__shared_message_internal_tag_types<ArenaSourceType>::value &&
+                !__shared_message_internal_is_shared_message<util::nostd::remove_cvref_t<ArenaSourceType>>::value>>
   inline __shared_message(__shared_message_default_tag,
                           ArenaSourceType &&arena_source) noexcept(std::is_nothrow_default_constructible<type>::value)
       : base_type(__get_arena_from(std::forward<ArenaSourceType>(arena_source))) {}
+
   template <class ArenaSourceType,
-            class = util::nostd::enable_if_t<!__shared_message_internal_tag_types<ArenaSourceType>::value>>
+            class = util::nostd::enable_if_t<
+                !__shared_message_internal_tag_types<ArenaSourceType>::value &&
+                !__shared_message_internal_is_shared_message<util::nostd::remove_cvref_t<ArenaSourceType>>::value>>
   inline __shared_message(ArenaSourceType &&arena_source)  // NOLINT: runtime/explicit
       noexcept(std::is_nothrow_default_constructible<type>::value)
       : __shared_message(__shared_message_default_tag{}, std::forward<ArenaSourceType>(arena_source)) {}
 
   // Construct with specify allocator
   template <class Alloc, class ArenaSourceType,
-            class = util::nostd::enable_if_t<!__shared_message_internal_tag_types<ArenaSourceType>::value>>
+            class = util::nostd::enable_if_t<
+                !__shared_message_internal_tag_types<ArenaSourceType>::value &&
+                !__shared_message_internal_is_shared_message<util::nostd::remove_cvref_t<ArenaSourceType>>::value>>
   inline __shared_message(__shared_message_allocator_tag, const Alloc & /*alloc*/,
                           ArenaSourceType &&arena_source) noexcept(std::is_nothrow_default_constructible<type>::value)
       : base_type(__get_arena_from(std::forward<ArenaSourceType>(arena_source))) {}
@@ -799,15 +942,15 @@ class UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, true>
   friend class __shared_message;
 };
 
-template <class MessageType, class ArenaSourceType = ::std::allocator<util::nostd::remove_cvref_t<MessageType>>>
-using shared_abstract_message = __shared_message<MessageType, ArenaSourceType, false>;
+template <class MessageType, class Allocator = ::std::allocator<util::nostd::remove_cvref_t<MessageType>>>
+using shared_abstract_message = __shared_message<MessageType, Allocator, false>;
 
-template <class MessageType, class ArenaSourceType = ::std::allocator<util::nostd::remove_cvref_t<MessageType>>>
-using shared_message = __shared_message<MessageType, ArenaSourceType, true>;
+template <class MessageType, class Allocator = ::std::allocator<util::nostd::remove_cvref_t<MessageType>>>
+using shared_message = __shared_message<MessageType, Allocator, true>;
 
-template <class MessageType, class ArenaSourceType = ::std::allocator<util::nostd::remove_cvref_t<MessageType>>>
+template <class MessageType, class Allocator = ::std::allocator<util::nostd::remove_cvref_t<MessageType>>>
 using shared_auto_message =
-    __shared_message<MessageType, ArenaSourceType, __shared_message_default_constructible<MessageType>::value>;
+    __shared_message<MessageType, Allocator, __shared_message_default_constructible<MessageType>::value>;
 
 template <class MessageType, class ArenaSourceType, class... Args>
 UTIL_FORCEINLINE shared_auto_message<MessageType>

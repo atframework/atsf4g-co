@@ -1877,6 +1877,42 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
     }
   }
 
+  if (exporter_cfg.has_prometheus_push() && !exporter_cfg.prometheus_push().host().empty() &&
+      !exporter_cfg.prometheus_push().port().empty() && !exporter_cfg.prometheus_push().jobname().empty()) {
+    exporter::metrics::PrometheusPushExporterOptions options;
+    options.host = exporter_cfg.prometheus_push().host();
+    options.port = exporter_cfg.prometheus_push().port();
+    options.jobname = exporter_cfg.prometheus_push().jobname();
+    for (auto &kv : exporter_cfg.prometheus_push().labels()) {
+      options.labels[kv.first] = kv.second;
+    }
+
+    options.username = exporter_cfg.prometheus_push().username();
+    options.password = exporter_cfg.prometheus_push().password();
+
+    options.populate_target_info = exporter_cfg.prometheus_push().populate_target_info();
+    options.without_otel_scope = exporter_cfg.prometheus_push().without_otel_scope();
+
+    ret.emplace_back(exporter::metrics::PrometheusPushExporterFactory::Create(options));
+  }
+
+  if (exporter_cfg.has_prometheus_file() && !exporter_cfg.prometheus_file().file_pattern().empty()) {
+    exporter::metrics::PrometheusFileExporterOptions options;
+    options.file_pattern = exporter_cfg.prometheus_file().file_pattern();
+    options.alias_pattern = exporter_cfg.prometheus_file().alias_pattern();
+    options.file_size = static_cast<std::size_t>(exporter_cfg.prometheus_file().file_size());
+    options.rotate_size = static_cast<std::size_t>(exporter_cfg.prometheus_file().rotate_size());
+    options.flush_count = static_cast<std::size_t>(exporter_cfg.prometheus_file().flush_count());
+    options.flush_interval = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::seconds{exporter_cfg.prometheus_file().flush_interval().seconds()} +
+        std::chrono::nanoseconds{exporter_cfg.prometheus_file().flush_interval().nanos()});
+
+    options.populate_target_info = exporter_cfg.prometheus_push().populate_target_info();
+    options.without_otel_scope = exporter_cfg.prometheus_push().without_otel_scope();
+
+    ret.emplace_back(exporter::metrics::PrometheusFileExporterFactory::Create(options));
+  }
+
   if (exporter_cfg.has_otlp_grpc() && !exporter_cfg.otlp_grpc().endpoint().empty()) {
     opentelemetry::exporter::otlp::OtlpGrpcMetricExporterOptions options;
     options.endpoint = exporter_cfg.otlp_grpc().endpoint();
@@ -2037,42 +2073,6 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
     }
 
     ret.emplace_back(opentelemetry::exporter::otlp::OtlpFileMetricExporterFactory::Create(options));
-  }
-
-  if (exporter_cfg.has_prometheus_push() && !exporter_cfg.prometheus_push().host().empty() &&
-      !exporter_cfg.prometheus_push().port().empty() && !exporter_cfg.prometheus_push().jobname().empty()) {
-    exporter::metrics::PrometheusPushExporterOptions options;
-    options.host = exporter_cfg.prometheus_push().host();
-    options.port = exporter_cfg.prometheus_push().port();
-    options.jobname = exporter_cfg.prometheus_push().jobname();
-    for (auto &kv : exporter_cfg.prometheus_push().labels()) {
-      options.labels[kv.first] = kv.second;
-    }
-
-    options.username = exporter_cfg.prometheus_push().username();
-    options.password = exporter_cfg.prometheus_push().password();
-
-    options.populate_target_info = exporter_cfg.prometheus_push().populate_target_info();
-    options.without_otel_scope = exporter_cfg.prometheus_push().without_otel_scope();
-
-    ret.emplace_back(exporter::metrics::PrometheusPushExporterFactory::Create(options));
-  }
-
-  if (exporter_cfg.has_prometheus_file() && !exporter_cfg.prometheus_file().file_pattern().empty()) {
-    exporter::metrics::PrometheusFileExporterOptions options;
-    options.file_pattern = exporter_cfg.prometheus_file().file_pattern();
-    options.alias_pattern = exporter_cfg.prometheus_file().alias_pattern();
-    options.file_size = static_cast<std::size_t>(exporter_cfg.prometheus_file().file_size());
-    options.rotate_size = static_cast<std::size_t>(exporter_cfg.prometheus_file().rotate_size());
-    options.flush_count = static_cast<std::size_t>(exporter_cfg.prometheus_file().flush_count());
-    options.flush_interval = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::seconds{exporter_cfg.prometheus_file().flush_interval().seconds()} +
-        std::chrono::nanoseconds{exporter_cfg.prometheus_file().flush_interval().nanos()});
-
-    options.populate_target_info = exporter_cfg.prometheus_push().populate_target_info();
-    options.without_otel_scope = exporter_cfg.prometheus_push().without_otel_scope();
-
-    ret.emplace_back(exporter::metrics::PrometheusFileExporterFactory::Create(options));
   }
 
   return ret;

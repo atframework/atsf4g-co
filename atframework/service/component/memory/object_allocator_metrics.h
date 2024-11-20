@@ -81,59 +81,65 @@ class object_allocator_metrics_controller {
 
  public:
   template <class T>
-  struct UTIL_SYMBOL_VISIBLE helper {
-    static object_allocator_metrics_storage* get_instance() {
-      static bool object_statistics_destroyed = false;
-      static object_allocator_metrics_storage* object_statistics_inst = mutable_object_allocator_metrics_for_type(
-          try_parse_raw_name(
-              guess_raw_name<typename ::std::remove_reference<typename ::std::remove_cv<T>::type>::type>()),
-          try_parse_demangle_name(
-              guess_pretty_name<typename ::std::remove_reference<typename ::std::remove_cv<T>::type>::type>()),
-          sizeof(typename ::std::remove_reference<typename ::std::remove_cv<T>::type>::type),
-          object_statistics_destroyed);
-      if (object_statistics_destroyed) {
-        return nullptr;
-      }
-      return object_statistics_inst;
-    }
-  };
+  UTIL_FORCEINLINE static ::std::string parse_raw_name() {
+    return try_parse_raw_name(
+        guess_raw_name<typename ::std::remove_reference<typename ::std::remove_cv<T>::type>::type>());
+  }
 
-  ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_constructor_counter(object_allocator_metrics_storage* target,
-                                                                          void*);
-  ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_allocate_counter(object_allocator_metrics_storage* target,
+  template <class T>
+  UTIL_FORCEINLINE static ::std::string parse_demangle_name() {
+    return try_parse_demangle_name(
+        guess_raw_name<typename ::std::remove_reference<typename ::std::remove_cv<T>::type>::type>());
+  }
+
+  template <class T>
+  struct UTIL_SYMBOL_VISIBLE helper{static object_allocator_metrics_storage *
+                                    get_instance(){static bool object_statistics_destroyed = false;
+  static object_allocator_metrics_storage* object_statistics_inst = mutable_object_allocator_metrics_for_type(
+      parse_raw_name<T>(), parse_demangle_name<T>(),
+      sizeof(typename ::std::remove_reference<typename ::std::remove_cv<T>::type>::type), object_statistics_destroyed);
+  if (object_statistics_destroyed) {
+    return nullptr;
+  }
+  return object_statistics_inst;
+}
+};  // namespace memory
+
+ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_constructor_counter(object_allocator_metrics_storage* target,
+                                                                        void*);
+ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_allocate_counter(object_allocator_metrics_storage* target,
+                                                                     size_t count);
+ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_destructor_counter(object_allocator_metrics_storage* target, void*);
+ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_deallocate_counter(object_allocator_metrics_storage* target,
                                                                        size_t count);
-  ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_destructor_counter(object_allocator_metrics_storage* target,
-                                                                         void*);
-  ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_deallocate_counter(object_allocator_metrics_storage* target,
-                                                                         size_t count);
 
-  template <class U>
-  UTIL_FORCEINLINE static void add_constructor_counter_template(void* p) {
-    if (nullptr != p) {
-      add_constructor_counter(helper<U>::get_instance(), p);
-    }
+template <class U>
+UTIL_FORCEINLINE static void add_constructor_counter_template(void* p) {
+  if (nullptr != p) {
+    add_constructor_counter(helper<U>::get_instance(), p);
   }
+}
 
-  template <class U>
-  UTIL_FORCEINLINE static void add_allocate_counter_template(size_t count) {
-    add_allocate_counter(helper<U>::get_instance(), count);
+template <class U>
+UTIL_FORCEINLINE static void add_allocate_counter_template(size_t count) {
+  add_allocate_counter(helper<U>::get_instance(), count);
+}
+
+template <class U>
+UTIL_FORCEINLINE static void add_destructor_counter_template(void* p) {
+  if (nullptr != p) {
+    add_destructor_counter(helper<U>::get_instance(), p);
   }
+}
 
-  template <class U>
-  UTIL_FORCEINLINE static void add_destructor_counter_template(void* p) {
-    if (nullptr != p) {
-      add_destructor_counter(helper<U>::get_instance(), p);
-    }
-  }
+template <class U>
+UTIL_FORCEINLINE static void add_deallocate_counter_template(size_t count) {
+  add_deallocate_counter(helper<U>::get_instance(), count);
+}
 
-  template <class U>
-  UTIL_FORCEINLINE static void add_deallocate_counter_template(size_t count) {
-    add_deallocate_counter(helper<U>::get_instance(), count);
-  }
-
-  ATFRAME_SERVICE_COMPONENT_MACRO_API static void foreach_object_statistics(
-      util::nostd::function_ref<void(const object_allocator_metrics&)> fn);
-};
+ATFRAME_SERVICE_COMPONENT_MACRO_API static void foreach_object_statistics(
+    util::nostd::function_ref<void(const object_allocator_metrics&)> fn);
+};  // namespace atframework
 
 }  // namespace memory
 }  // namespace atframework

@@ -178,7 +178,7 @@ endif()
 
 add_custom_target(resource-config ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/resource-config.log")
 
-set_property(TARGET "resource-config" PROPERTY FOLDER "${PROJECT_NAME}")
+set_property(TARGET "resource-config" PROPERTY FOLDER "${PROJECT_NAME}/config")
 
 # ============= network protocols ==============
 file(GLOB PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_PBDESC
@@ -211,7 +211,7 @@ foreach(PROJECT_SERVER_FRAME_PROTO_SUB_TARGET protocol-extension protocol-common
   add_dependencies(protocol ${PROJECT_SERVER_FRAME_PROTO_SUB_TARGET})
 endforeach()
 
-set_property(TARGET protocol PROPERTY FOLDER "${PROJECT_NAME}")
+set_property(TARGET protocol PROPERTY FOLDER "${PROJECT_NAME}/protocol")
 
 add_library(${PROJECT_SERVER_FRAME_LIB_LINK}-protocol INTERFACE)
 target_link_libraries(
@@ -220,8 +220,8 @@ target_link_libraries(
             ${PROJECT_SERVER_FRAME_PROTO_LIBRARY_CONFIG} ${PROJECT_SERVER_FRAME_PROTO_LIBRARY_NET}
             ${PROJECT_SERVER_FRAME_PROTO_GENERATED_LOG})
 
-set_property(TARGET protocol PROPERTY FOLDER "${PROJECT_NAME}")
-set_property(TARGET ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol PROPERTY FOLDER "${PROJECT_NAME}")
+set_property(TARGET protocol PROPERTY FOLDER "${PROJECT_NAME}/protocol")
+set_property(TARGET ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol PROPERTY FOLDER "${PROJECT_NAME}/protocol")
 
 add_custom_command(
   TARGET resource-config

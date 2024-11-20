@@ -390,6 +390,8 @@ class task_manager {
 
   SERVER_FRAME_API static std::chrono::system_clock::duration get_default_timeout();
 
+  SERVER_FRAME_API static size_t get_metrics_task_recently_max_size();
+
   /**
    * 获取栈大小
    */
