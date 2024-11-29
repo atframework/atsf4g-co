@@ -29,6 +29,7 @@
 
 #include <config/logic_config.h>
 
+#include <utility/protobuf_mini_dumper.h>
 #include <utility/tls_buffers.h>
 
 #include <atomic>
@@ -88,6 +89,10 @@ struct UTIL_SYMBOL_VISIBLE opentelemetry_utility::metrics_observer {
 
   tbb::concurrent_queue<util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record>> records;
 
+  std::chrono::system_clock::duration collect_interval;
+  std::chrono::system_clock::time_point collected_timepoint;
+  std::recursive_mutex collected_lock;
+  std::list<util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record>> collected_records;
   std::atomic<size_t> collect_version;
   std::atomic<size_t> export_version;
 
@@ -96,6 +101,8 @@ struct UTIL_SYMBOL_VISIBLE opentelemetry_utility::metrics_observer {
   inline metrics_observer()
       : type(metrics_observable_type::kGauge),
         origin_callback(nullptr),
+        collect_interval(std::chrono::seconds{15}),
+        collected_timepoint(std::chrono::system_clock::from_time_t(0)),
         collect_version(0),
         export_version(0),
         stat_push_record_counter_sum(0) {}
@@ -606,6 +613,7 @@ static bool internal_add_global_metrics_observable_int64(opentelemetry_utility::
 
   observer.origin_callback = [](opentelemetry::metrics::ObserverResult result, void* callback) {
     std::shared_ptr<opentelemetry_utility::metrics_observer> metrics_item;
+    auto now = std::chrono::system_clock::now();
     {
       std::pair<std::recursive_mutex&, opentelemetry_utility_global_metrics_set&> callback_data_set =
           get_global_metrics_set();
@@ -618,21 +626,34 @@ static bool internal_add_global_metrics_observable_int64(opentelemetry_utility::
         return;
       }
 
-      metrics_item->export_version.store(metrics_item->collect_version.load(std::memory_order_acquire),
-                                         std::memory_order_release);
-      callback_data_set.second.collecting_version.fetch_add(1, std::memory_order_release);
+      if (now - metrics_item->collected_timepoint > metrics_item->collect_interval) {
+        metrics_item->export_version.store(metrics_item->collect_version.load(std::memory_order_acquire),
+                                           std::memory_order_release);
+        callback_data_set.second.collecting_version.fetch_add(1, std::memory_order_release);
+
+        metrics_item->collected_timepoint = now;
+
+        std::lock_guard<std::recursive_mutex> collected_lock_guard{metrics_item->collected_lock};
+        metrics_item->collected_records.clear();
+      } else if (now < metrics_item->collected_timepoint) {
+        metrics_item->collected_timepoint = now;
+      }
     }
 
     size_t export_record_count = 0;
-    if (metrics_item->records.empty()) {
-      FWLOGDEBUG("[Telemetry]: Export metric meter instrument {}(@{}) with {} record(s) to version {}",
-                 metrics_item->key, callback, export_record_count,
-                 metrics_item->export_version.load(std::memory_order_acquire));
-      return;
+    std::lock_guard<std::recursive_mutex> collected_lock_guard{metrics_item->collected_lock};
+    {
+      util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record> record;
+      while (metrics_item->records.try_pop(record)) {
+        if (!record) {
+          continue;
+        }
+
+        metrics_item->collected_records.emplace_back(std::move(record));
+      }
     }
 
-    util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record> record;
-    while (metrics_item->records.try_pop(record)) {
+    for (auto& record : metrics_item->collected_records) {
       if (!record) {
         continue;
       }
@@ -655,9 +676,8 @@ static bool internal_add_global_metrics_observable_int64(opentelemetry_utility::
                                  opentelemetry_utility::get_attributes(record->attributes));
         }
       }
-
-      record.reset();
     }
+
     FWLOGDEBUG("[Telemetry]: Export metric meter instrument {}(@{}) with {} record(s) to version {}", metrics_item->key,
                callback, export_record_count, metrics_item->export_version.load(std::memory_order_acquire));
   };
@@ -706,6 +726,7 @@ static bool internal_add_global_metrics_observable_double(opentelemetry_utility:
 
   observer.origin_callback = [](opentelemetry::metrics::ObserverResult result, void* callback) {
     std::shared_ptr<opentelemetry_utility::metrics_observer> metrics_item;
+    auto now = std::chrono::system_clock::now();
     {
       std::pair<std::recursive_mutex&, opentelemetry_utility_global_metrics_set&> callback_data_set =
           get_global_metrics_set();
@@ -719,9 +740,18 @@ static bool internal_add_global_metrics_observable_double(opentelemetry_utility:
         return;
       }
 
-      metrics_item->export_version.store(metrics_item->collect_version.load(std::memory_order_acquire),
-                                         std::memory_order_release);
-      callback_data_set.second.collecting_version.fetch_add(1, std::memory_order_release);
+      if (now - metrics_item->collected_timepoint > metrics_item->collect_interval) {
+        metrics_item->export_version.store(metrics_item->collect_version.load(std::memory_order_acquire),
+                                           std::memory_order_release);
+        callback_data_set.second.collecting_version.fetch_add(1, std::memory_order_release);
+
+        metrics_item->collected_timepoint = now;
+
+        std::lock_guard<std::recursive_mutex> collected_lock_guard{metrics_item->collected_lock};
+        metrics_item->collected_records.clear();
+      } else if (now < metrics_item->collected_timepoint) {
+        metrics_item->collected_timepoint = now;
+      }
     }
 
     size_t export_record_count = 0;
@@ -732,8 +762,19 @@ static bool internal_add_global_metrics_observable_double(opentelemetry_utility:
       return;
     }
 
-    util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record> record;
-    while (metrics_item->records.try_pop(record)) {
+    std::lock_guard<std::recursive_mutex> collected_lock_guard{metrics_item->collected_lock};
+    {
+      util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record> record;
+      while (metrics_item->records.try_pop(record)) {
+        if (!record) {
+          continue;
+        }
+
+        metrics_item->collected_records.emplace_back(std::move(record));
+      }
+    }
+
+    for (auto& record : metrics_item->collected_records) {
       if (!record) {
         continue;
       }
@@ -883,6 +924,7 @@ SERVER_FRAME_API int opentelemetry_utility::tick() {
     FWLOGDEBUG("[Telemetry]: Collect metric meter instrument {}(@{}) with {} record(s) from version {} to {}",
                observable.second->key, observable.first, new_record_count - old_record_count, export_version,
                collecting_version);
+
     observable.second->collect_version.store(collecting_version, std::memory_order_release);
   }
 
@@ -909,6 +951,7 @@ SERVER_FRAME_API int opentelemetry_utility::tick() {
     auto end_time = std::chrono::system_clock::now();
     if (ret >= max_record_per_loop || end_time - start_time >= max_tick_time_per_loop) {
       all_collected = false;
+      ++exported_metric_count;
       break;
     }
 
@@ -1144,6 +1187,13 @@ SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_int64(
   handle->meter_instrument_name = static_cast<std::string>(metrics_key.name);
   handle->meter_instrument_description = static_cast<std::string>(metrics_key.description);
   handle->meter_instrument_unit = static_cast<std::string>(metrics_key.unit);
+  handle->collect_interval = protobuf_to_chrono_duration<>(
+      logic_config::me()->get_logic().telemetry().opentelemetry().metrics().reader().export_interval());
+  if (handle->collect_interval < std::chrono::seconds{2}) {
+    handle->collect_interval = std::chrono::seconds{15};
+  } else {
+    handle->collect_interval -= std::chrono::seconds{1};
+  }
   handle->callback = std::move(fn);
   handle->origin_callback = nullptr;
   if (false == data_set.second.initialized.load(std::memory_order_acquire) ||
@@ -1188,6 +1238,13 @@ SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_double
   handle->meter_instrument_name = static_cast<std::string>(metrics_key.name);
   handle->meter_instrument_description = static_cast<std::string>(metrics_key.description);
   handle->meter_instrument_unit = static_cast<std::string>(metrics_key.unit);
+  handle->collect_interval = protobuf_to_chrono_duration<>(
+      logic_config::me()->get_logic().telemetry().opentelemetry().metrics().reader().export_interval());
+  if (handle->collect_interval < std::chrono::seconds{2}) {
+    handle->collect_interval = std::chrono::seconds{15};
+  } else {
+    handle->collect_interval -= std::chrono::seconds{1};
+  }
   handle->callback = std::move(fn);
   handle->origin_callback = nullptr;
   if (false == data_set.second.initialized.load(std::memory_order_acquire) ||
@@ -1239,7 +1296,7 @@ SERVER_FRAME_API void opentelemetry_utility::send_notification_event(rpc::contex
     return;
   }
 
-  attribute_pair_type standard_attributes[7] = {
+  attribute_pair_type standard_attributes[6] = {
       attribute_pair_type{rpc::telemetry::semantic_conventions::kEventDomain,
                           get_notification_event_log_domain(event_domain)},
       attribute_pair_type{opentelemetry::trace::SemanticConventions::kEventName,
@@ -1265,7 +1322,6 @@ SERVER_FRAME_API void opentelemetry_utility::send_notification_event(rpc::contex
         attribute_pair_type{rpc::telemetry::semantic_conventions::kRpcRouterObjectInstanceID,
                             ctx.get_task_context().reference_object_type_id};
   }
-
   opentelemetry::nostd::string_view body{message.data(), message.size()};
   if (0 != (static_cast<int32_t>(event_domain) & static_cast<int32_t>(notification_domain::kStackTraceBitFlag))) {
     char* buffer = reinterpret_cast<char*>(tls_buffers_get_buffer(tls_buffers_type_t::EN_TBT_DEFAULT));

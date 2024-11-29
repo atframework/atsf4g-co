@@ -390,6 +390,12 @@ message logic_hpa_pull_request {
   string no_proxy = 9;
   string proxy_user_name = 10;
   string proxy_password = 11;
+  string method = 12;  // GET,POST,PUT,DELETE,TRACE
+}
+
+enum logic_hpa_pull_metrics_name_mode {
+  EN_LOGIC_HPA_PULL_METRICS_NAME_WITH_NAME_AND_UNIT = 0 [(atapp.protocol.ENUMVALUE) = { alias_name: "name_and_unit" }];
+  EN_LOGIC_HPA_PULL_METRICS_NAME_WITH_NAME_ONLY = 1 [(atapp.protocol.ENUMVALUE) = { alias_name: "name_only" }];
 }
 
 message logic_hpa_metrics {
@@ -398,25 +404,29 @@ message logic_hpa_metrics {
 
   // 拉取指标的间隔
   google.protobuf.Duration pull_interval = 2 [(atapp.protocol.CONFIGURE) = { default_value: "180s" min_value: "1s" }];
+  google.protobuf.Duration pull_retry_interval = 3
+      [(atapp.protocol.CONFIGURE) = { default_value: "30s" min_value: "1s" }];
   // 拉取指标的请求配置
-  logic_hpa_pull_request pull_request = 3;
+  logic_hpa_pull_request pull_request = 4;
   // 拉取指标的SSL配置
-  logic_hpa_ssl pull_ssl = 4;
+  logic_hpa_ssl pull_ssl = 5;
+  // 拉取指标名的组成规则
+  logic_hpa_pull_metrics_name_mode pull_metrics_name_mode = 6;
 
   // 指标的公共附加写出标签
   //   建议提取 workload的namespace和name作为写出标签以支持多版本和蓝绿发布
-  map<string, string> labels = 5;
+  map<string, string> labels = 7;
 
   // 指标的公共附加读规则标签
   //   selector默认为=操作符，可以手动设置为 =,!=,=~或!~
   //   详见: https://prometheus.io/docs/prometheus/latest/querying/basics/#instant-vector-selectors
   //   建议提取 workload的namespace和name作为筛选标签以支持多版本和蓝绿发布
-  map<string, string> selectors = 6;
+  map<string, string> selectors = 8;
 
   // 以下selectors不自动追加,否则某些内置筛选规则会自动添加到选择器列表里
   // （默认情况下会自动设置 service_namespace, service_name, deployment_environment, hpa_target_kind, hpa_target_name,
   // hpa_target_api_version 。job属性由于会被exporter重置所以不作为自动添加属性）
-  repeated string without_auto_selectors = 7;
+  repeated string without_auto_selectors = 9;
 
   // 写出预期Pod数的指标名（External指标）
   string metrics_name_expect_replicas = 11;
@@ -527,12 +537,13 @@ message logic_hpa_scaling_rule {
 
   // CPU: 千分比
   logic_hpa_policy cpu_permillage = 11;
+  logic_hpa_policy main_thread_cpu_permillage = 12;
   // 内存: 字节
-  logic_hpa_policy memory = 12;
+  logic_hpa_policy memory = 13;
   // 近期最大任务数
-  logic_hpa_policy recent_max_task_count = 13;
+  logic_hpa_policy recent_max_task_count = 14;
   // 控制器状态
-  logic_hpa_policy controller_status = 14;
+  logic_hpa_policy controller_status = 15;
 
   // 自定义指标
   repeated logic_hpa_policy custom = 21;
@@ -597,7 +608,7 @@ message logic_hpa_controller {
 // HPA相关的策略路由选择器
 message logic_hpa_discovery_group_cfg {
   // 就绪状态的HPA选择器（对应标签: hpa_ready="true"，初始节点总是ready状态）
-  logic_discovery_selector_cfg ready = 1;
+  logic_discovery_selector_cfg scaling_ready = 1;
   // 下一次Scaling后仍在线的HPA选择器（对应标签:
   // hpa_scaling_target="true"。如果Scaling后节点即将离线，hpa_scaling_target="false"）
   logic_discovery_selector_cfg scaling_target = 2;
