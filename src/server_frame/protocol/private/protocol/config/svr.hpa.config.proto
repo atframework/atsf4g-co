@@ -1,0 +1,308 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+package hello.config;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+import "atframe/atapp_conf.proto";
+
+import "protocol/extension/svr.config.extension.proto";
+
+message logic_discovery_selector_cfg {
+  atapp.protocol.atapp_metadata dtcoordsvr = 270;
+}
+
+// @see
+// https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/horizontal-pod-autoscaler-v1/#HorizontalPodAutoscalerSpec
+message logic_hpa_target {
+  string kind = 1;
+  string name = 2;
+  string api_version = 3;
+}
+
+message logic_hpa_ssl {
+  // @see https://curl.haxx.se/libcurl/c/curl_easy_setopt.html
+  bool enable_alpn = 1;  // CURLOPT_SSL_ENABLE_ALPN
+  bool verify_peer = 2;  // CURLOPT_SSL_VERIFYPEER, CURLOPT_SSL_VERIFYHOST, CURLOPT_SSL_VERIFYSTATUS
+                         // and CURLOPT_PROXY_SSL_VERIFYPEER, CURLOPT_PROXY_SSL_VERIFYHOST
+
+  string ssl_min_version = 101;  // CURLOPT_SSLVERSION and CURLOPT_PROXY_SSLVERSION
+
+  string ssl_client_cert = 111;              // CURLOPT_SSLCERT
+  string ssl_client_cert_type = 112;         // CURLOPT_SSLCERTTYPE: PEM or DER
+  string ssl_client_key = 113;               // CURLOPT_SSLKEY
+  string ssl_client_key_type = 114;          // CURLOPT_SSLKEYTYPE: PEM, DER or ENG
+  string ssl_client_key_passwd = 115;        // CURLOPT_KEYPASSWD or CURLOPT_SSLCERTPASSWD
+  string ssl_ca_cert = 116;                  // CURLOPT_CAINFO
+  string ssl_client_tlsauth_username = 117;  // CURLOPT_TLSAUTH_USERNAME
+  string ssl_client_tlsauth_password = 118;  // CURLOPT_TLSAUTH_PASSWORD
+
+  string ssl_proxy_cert = 121;              // CURLOPT_PROXY_SSLCERT
+  string ssl_proxy_cert_type = 122;         // CURLOPT_PROXY_SSLCERTTYPE: PEM or DER
+  string ssl_proxy_key = 123;               // CURLOPT_PROXY_SSLKEY
+  string ssl_proxy_key_type = 124;          // CURLOPT_PROXY_SSLKEYTYPE: PEM, DER or ENG
+  string ssl_proxy_key_passwd = 125;        // CURLOPT_PROXY_KEYPASSWD or CURLOPT_PROXY_SSLCERTPASSWD
+  string ssl_proxy_ca_cert = 126;           // CURLOPT_PROXY_CAINFO
+  string ssl_proxy_tlsauth_username = 127;  // CURLOPT_PROXY_TLSAUTH_USERNAME
+  string ssl_proxy_tlsauth_password = 128;  // CURLOPT_PROXY_TLSAUTH_PASSWORD
+
+  string ssl_cipher_list = 201;        // CURLOPT_SSL_CIPHER_LIST
+  string ssl_cipher_list_tls13 = 202;  // CURLOPT_TLS13_CIPHERS
+}
+
+message logic_hpa_pull_request {
+  bool debug_mode = 1;
+  google.protobuf.Duration timeout = 2 [(atapp.protocol.CONFIGURE) = { default_value: "10s" }];
+  google.protobuf.Duration keepalive_timeout = 3 [(atapp.protocol.CONFIGURE) = { default_value: "600s" }];
+  google.protobuf.Duration connect_timeout = 4 [(atapp.protocol.CONFIGURE) = { default_value: "0ms" }];
+  google.protobuf.Duration dns_cache_timeout = 5 [(atapp.protocol.CONFIGURE) = { default_value: "900s" }];
+  string dns_servers = 6;
+  string user_agent = 7 [(atapp.protocol.CONFIGURE) = { default_value: "Atapp HPA module/1.0" }];
+  string proxy = 8;
+  string no_proxy = 9;
+  string proxy_user_name = 10;
+  string proxy_password = 11;
+  string method = 12;  // GET,POST,PUT,DELETE,TRACE
+}
+
+enum logic_hpa_pull_metrics_name_mode {
+  EN_LOGIC_HPA_PULL_METRICS_NAME_WITH_NAME_AND_UNIT = 0 [(atapp.protocol.ENUMVALUE) = { alias_name: "name_and_unit" }];
+  EN_LOGIC_HPA_PULL_METRICS_NAME_WITH_NAME_ONLY = 1 [(atapp.protocol.ENUMVALUE) = { alias_name: "name_only" }];
+}
+
+message logic_hpa_metrics {
+  // 只有开启了才会启用HPA控制管理模块
+  bool enable = 1;
+
+  // 拉取指标的间隔
+  google.protobuf.Duration pull_interval = 2 [(atapp.protocol.CONFIGURE) = { default_value: "180s" min_value: "1s" }];
+  google.protobuf.Duration pull_retry_interval = 3
+      [(atapp.protocol.CONFIGURE) = { default_value: "30s" min_value: "1s" }];
+  // 拉取指标的请求配置
+  logic_hpa_pull_request pull_request = 4;
+  // 拉取指标的SSL配置
+  logic_hpa_ssl pull_ssl = 5;
+  // 拉取指标名的组成规则
+  logic_hpa_pull_metrics_name_mode pull_metrics_name_mode = 6;
+
+  // 指标的公共附加写出标签
+  //   建议提取 workload的namespace和name作为写出标签以支持多版本和蓝绿发布
+  map<string, string> labels = 7;
+
+  // 指标的公共附加读规则标签
+  //   selector默认为=操作符，可以手动设置为 =,!=,=~或!~
+  //   详见: https://prometheus.io/docs/prometheus/latest/querying/basics/#instant-vector-selectors
+  //   建议提取 workload的namespace和name作为筛选标签以支持多版本和蓝绿发布
+  map<string, string> selectors = 8;
+
+  // 以下selectors不自动追加,否则某些内置筛选规则会自动添加到选择器列表里
+  // （默认情况下会自动设置 service_namespace, service_name, deployment_environment, hpa_target_kind, hpa_target_name,
+  // hpa_target_api_version 。job属性由于会被exporter重置所以不作为自动添加属性）
+  repeated string without_auto_selectors = 9;
+
+  // 写出预期Pod数的指标名（External指标）
+  string metrics_name_expect_replicas = 11;
+
+  // 写出状态Pod Index的指标名（External指标）
+  string metrics_name_stateful_index = 12;
+}
+
+enum logic_hpa_policy_aggregation_operator {
+  EN_HPA_POLICY_AGGREGATION_NONE = 0 [(atapp.protocol.ENUMVALUE) = { alias_name: "none" }];
+  EN_HPA_POLICY_AGGREGATION_SUM = 1 [(atapp.protocol.ENUMVALUE) = { alias_name: "sum" }];
+  EN_HPA_POLICY_AGGREGATION_AVG = 2 [(atapp.protocol.ENUMVALUE) = { alias_name: "avg" }];
+  EN_HPA_POLICY_AGGREGATION_COUNT = 3 [(atapp.protocol.ENUMVALUE) = { alias_name: "count" }];
+  EN_HPA_POLICY_AGGREGATION_MIN = 4 [(atapp.protocol.ENUMVALUE) = { alias_name: "min" }];
+  EN_HPA_POLICY_AGGREGATION_MAX = 5 [(atapp.protocol.ENUMVALUE) = { alias_name: "max" }];
+  EN_HPA_POLICY_AGGREGATION_COUNT_VALUES = 6 [(atapp.protocol.ENUMVALUE) = { alias_name: "count_values" }];
+  EN_HPA_POLICY_AGGREGATION_TOPK = 11 [(atapp.protocol.ENUMVALUE) = { alias_name: "topk" }];
+  EN_HPA_POLICY_AGGREGATION_BOTTOMK = 12 [(atapp.protocol.ENUMVALUE) = { alias_name: "bottomk" }];
+}
+
+message logic_hpa_policy_aggregation_group_by {
+  repeated string labels = 1;
+}
+
+message logic_hpa_policy_aggregation_count_values {
+  string as = 1;
+}
+
+message logic_hpa_policy_aggregation_parameter {
+  oneof aggregation_parameter_type {
+    logic_hpa_policy_aggregation_group_by by = 1;
+    logic_hpa_policy_aggregation_group_by without = 2;
+    int32 k = 3;
+    logic_hpa_policy_aggregation_count_values count_values = 4;
+  }
+}
+
+// @see https://prometheus.io/docs/prometheus/latest/querying/functions/
+message logic_hpa_policy_simple_function {
+  oneof function_type {
+    // https://prometheus.io/docs/prometheus/latest/querying/functions/#rate
+    google.protobuf.Duration rate = 1;
+    // https://prometheus.io/docs/prometheus/latest/querying/functions/#irate
+    google.protobuf.Duration irate = 2;
+    // https://prometheus.io/docs/prometheus/latest/querying/functions/#increase
+    google.protobuf.Duration increase = 3;
+    // https://prometheus.io/docs/prometheus/latest/querying/functions/#aggregation_over_time
+    google.protobuf.Duration avg_over_time = 11;
+    google.protobuf.Duration min_over_time = 12;
+    google.protobuf.Duration max_over_time = 13;
+    google.protobuf.Duration sum_over_time = 14;
+    google.protobuf.Duration count_over_time = 15;
+    google.protobuf.Duration last_over_time = 16;
+  }
+}
+
+enum logic_hpa_policy_metrics_type {
+  EN_HPA_POLICY_METRICS_TYPE_GAUGE = 0 [(atapp.protocol.ENUMVALUE) = { alias_name: "gauge" }];
+  EN_HPA_POLICY_METRICS_TYPE_COUNTER = 1 [(atapp.protocol.ENUMVALUE) = { alias_name: "counter" }];
+}
+
+message logic_hpa_policy {
+  string metrics_name = 1;
+
+  string metrics_unit = 2;
+
+  string metrics_description = 3;
+
+  logic_hpa_policy_metrics_type metrics_type = 4;
+
+  logic_hpa_policy_aggregation_operator aggregation = 11;
+
+  logic_hpa_policy_aggregation_parameter aggregation_parameter = 12;
+
+  repeated logic_hpa_policy_simple_function simple_function = 13;
+
+  // 指标的额外附加写出标签
+  map<string, string> labels = 14;
+
+  // 指标的额外附加读规则标签
+  //   selector默认为=操作符，可以手动设置为 =,!=,=~或!~
+  //   详见: https://prometheus.io/docs/prometheus/latest/querying/basics/#instant-vector-selectors
+  map<string, string> selectors = 15;
+
+  // 以下selectors不自动追加,否则某些内置筛选规则会自动添加到选择器列表里
+  repeated string without_auto_selectors = 16;
+
+  // 不设置query时，由metrics_name,aggregation,aggregation_parameter和selectors自动生成 query
+  string query = 21;
+
+  // 扩容指标目标值(0为不设置并由业务层自己控制)
+  int64 scaling_up_value = 31;
+
+  // 缩容指标目标值（一般小于等于扩容指标目标值,0为不设置并由业务层自己控制）
+  int64 scaling_down_value = 32;
+}
+
+message logic_hpa_scaling_configure {
+  // 稳定时间
+  google.protobuf.Duration stabilization_window = 1;
+  // 一次扩缩容最大变更节点数
+  int32 max_scaling_count = 2;
+}
+
+message logic_hpa_scaling_rule {
+  // 是否禁用自动设置ready标签
+  bool set_scaling_label = 1 [(atapp.protocol.CONFIGURE) = { default_value: "true" }];
+  logic_hpa_scaling_configure scaling_up_configure = 3;
+  logic_hpa_scaling_configure scaling_down_configure = 4;
+
+  // CPU: 千分比
+  logic_hpa_policy cpu_permillage = 11;
+  logic_hpa_policy main_thread_cpu_permillage = 12;
+  // 内存: 字节
+  logic_hpa_policy memory = 13;
+  // 近期最大任务数
+  logic_hpa_policy recent_max_task_count = 14;
+  // 控制器状态
+  logic_hpa_policy controller_status = 15;
+
+  // 自定义指标
+  repeated logic_hpa_policy custom = 21;
+}
+
+// This is use to maintain configure status in ETCD or other storage system.
+message logic_hpa_status {
+  // 当前副本数
+  int32 current_replicas = 1;
+  // 期望的副本数
+  int32 expect_replicas = 2;
+  // 期望的副本数据开始迁移时间
+  google.protobuf.Timestamp expect_replicate_start_timepoint = 3;
+  // 期望的副本数据结束迁移时间
+  google.protobuf.Timestamp expect_replicate_end_timepoint = 4;
+  // 期望的开始调整副本时间
+  google.protobuf.Timestamp expect_scaling_timepoint = 5;
+
+  // controller node id
+  uint64 controller_node_id = 11;
+  // controller node name
+  string controller_node_name = 12;
+}
+
+message logic_hpa_controller {
+  // 只有开启了这里还有 metrics.enable 才会启用HPA控制管理模块
+  bool enable = 1;
+
+  // 指向ETCD配置的Key前缀，实际生效值应为
+  // <configure_key>/<controller.selector.hpa_target_kind>/<controller.selector.hpa_target_api_version>/<controller.selector.hpa_target_name>
+  // 写入的数据结构为 logic_hpa_status
+  string configure_key = 2;
+
+  // 按服务类型ID限定管理节点查找规则
+  uint64 type_id = 3;
+  // 按服务类型名限定管理节点查找规则
+  string type_name = 4;
+  // 选取管理节点的选取规则(K8S的目标仅仅能使用kind,name和apiVersion，建议只用这几项)
+  // 建议:
+  //   1. 上面 type_id/type_name 仅用于加速查找。实际workload控制仅仅使用 selector.hpa_target_name
+  //   2.1 对于无小区服务 selector.hpa_target_name = <type_name>-<版本号>,
+  //   2.2 对于有小区服务 selector.hpa_target_name = <type_name>-<zone_id>-<版本号>
+  logic_hpa_target target = 5;
+
+  // 服务发现层的附加标签(也会写入指标)
+  map<string, string> discovery_labels = 6;
+
+  // 发布场景:
+  //   蓝绿发布时，老版本可以通过外部指令通知controller把预期节点数强行写0。
+  //   服务器发现层设置非active状态排除后续状态数据迁入。
+  //   然后等待状态数据全部迁移完成后通知prometheus状态数变化。
+  // 节点迁移场景:
+  //   服务器发现层设置非active状态排除后续状态数据迁入。
+  //   然后等待状态数据全部迁移完成后直接本地停止，等同index的pod节点在新节点上拉起。
+  int32 min_replicas = 7;
+  int32 max_replicas = 8;
+
+  // 等待多久后开始副本迁移(此时间后如果节点即将下线，设置 hpa_scaling_target="false", 保持 hpa_ready="true")
+  google.protobuf.Duration replicate_start_delay = 11;
+  // 预期副本迁移时间(此时间后如果节点即将下线，设置 hpa_ready="false"，可以清空本地数据，后续RPC全部透明转发）
+  google.protobuf.Duration replicate_period = 12;
+  // 等待多久后开始节点变更(此时间后如果节点即将下线，开始stop流程)
+  google.protobuf.Duration scaling_delay = 13;
+}
+
+// HPA相关的策略路由选择器
+message logic_hpa_discovery_group_cfg {
+  // 就绪状态的HPA选择器（对应标签: hpa_ready="true"，初始节点总是ready状态）
+  logic_discovery_selector_cfg scaling_ready = 1;
+  // 下一次Scaling后仍在线的HPA选择器（对应标签:
+  // hpa_scaling_target="true"。如果Scaling后节点即将离线，hpa_scaling_target="false"）
+  logic_discovery_selector_cfg scaling_target = 2;
+}
+
+message logic_hpa_cfg {
+  logic_hpa_controller controller = 2;
+  logic_hpa_metrics metrics = 3;
+  logic_hpa_scaling_rule rule = 4;
+
+  // 以下数据为内存模块中设置，不接受配置修改
+  logic_hpa_discovery_group_cfg discovery = 101;
+}

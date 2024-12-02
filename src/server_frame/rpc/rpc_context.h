@@ -32,7 +32,7 @@ class app;
 
 PROJECT_NAMESPACE_BEGIN
 namespace config {
-class logic_telemetry_cfg;
+class logic_section_cfg;
 }
 PROJECT_NAMESPACE_END
 
@@ -243,7 +243,7 @@ class context {
    * @param telemetry telemetry configure
    */
   SERVER_FRAME_API static void set_current_service(atapp::app &app,
-                                                   const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &telemetry);
+                                                   const PROJECT_NAMESPACE_ID::config::logic_section_cfg &telemetry);
 
   SERVER_FRAME_API void set_task_context(const task_context_data &task_ctx) noexcept;
   UTIL_FORCEINLINE const task_context_data &get_task_context() const noexcept { return task_context_; }

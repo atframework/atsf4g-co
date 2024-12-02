@@ -471,7 +471,7 @@ int logic_server_common_module::reload() {
   RELOAD_CALL(ret, logic_config, *get_app());
 
   // Update rpc caller context data
-  rpc::context::set_current_service(*get_app(), logic_config::me()->get_logic().telemetry());
+  rpc::context::set_current_service(*get_app(), logic_config::me()->get_logic());
 
   if (get_app() && get_app()->is_running()) {
     ret = setup_battle_service_watcher();

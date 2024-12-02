@@ -41,11 +41,11 @@
 
 namespace {
 struct task_manager_metrics_data_type {
-  std::atomic<size_t> task_count;
+  size_t task_count;
   std::atomic<size_t> task_max_count;
-  std::atomic<size_t> tick_checkpoint_count;
-  std::atomic<size_t> pool_free_memory;
-  std::atomic<size_t> pool_used_memory;
+  size_t tick_checkpoint_count;
+  size_t pool_free_memory;
+  size_t pool_used_memory;
 };
 
 static task_manager_metrics_data_type &get_task_manager_metrics_data() {
@@ -315,11 +315,11 @@ SERVER_FRAME_API task_manager::task_action_maker_base_t::~task_action_maker_base
 
 SERVER_FRAME_API task_manager::task_manager()
     : stat_interval_(60), stat_last_checkpoint_(0), conf_busy_count_(0), conf_busy_warn_count_(0) {
-  get_task_manager_metrics_data().task_count.store(0, std::memory_order_release);
-  get_task_manager_metrics_data().task_max_count.store(0, std::memory_order_release);
-  get_task_manager_metrics_data().tick_checkpoint_count.store(0, std::memory_order_release);
-  get_task_manager_metrics_data().pool_free_memory.store(0, std::memory_order_release);
-  get_task_manager_metrics_data().pool_used_memory.store(0, std::memory_order_release);
+  get_task_manager_metrics_data().task_count = 0;
+  get_task_manager_metrics_data().task_max_count.store(0, std::memory_order_relaxed);
+  get_task_manager_metrics_data().tick_checkpoint_count = 0;
+  get_task_manager_metrics_data().pool_free_memory = 0;
+  get_task_manager_metrics_data().pool_used_memory = 0;
 
   // task_manager 必须在全局变量之后构造。并且进入析构阶段不允许再创建
   assert(nullptr != atapp::app::get_last_instance());
@@ -511,9 +511,8 @@ SERVER_FRAME_API int task_manager::tick(time_t sec, int nsec) {
         first_checkpoint = native_mgr_->get_checkpoints().begin()->expired_time.tv_sec;
       }
 
-      get_task_manager_metrics_data().task_count.store(native_mgr_->get_task_size(), std::memory_order_release);
-      get_task_manager_metrics_data().tick_checkpoint_count.store(native_mgr_->get_tick_checkpoint_size(),
-                                                                  std::memory_order_release);
+      get_task_manager_metrics_data().task_count = native_mgr_->get_task_size();
+      get_task_manager_metrics_data().tick_checkpoint_count = native_mgr_->get_tick_checkpoint_size();
 
       FWLOGWARNING(
           "[STATISTICS] Coroutine task stats:\n\tRuntime - Task Number: {}\n\tRuntime - Checkpoint Number: "
@@ -523,10 +522,10 @@ SERVER_FRAME_API int task_manager::tick(time_t sec, int nsec) {
     }
 #if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
     if (stack_pool_) {
-      get_task_manager_metrics_data().pool_free_memory.store(stack_pool_->get_limit().free_stack_size,
-                                                             std::memory_order_release);
-      get_task_manager_metrics_data().pool_used_memory.store(stack_pool_->get_limit().used_stack_size,
-                                                             std::memory_order_release);
+      get_task_manager_metrics_data().pool_free_memory = stack_pool_->get_limit().free_stack_size,
+      std::memory_order_release;
+      get_task_manager_metrics_data().pool_used_memory = stack_pool_->get_limit().used_stack_size,
+      std::memory_order_release;
       FWLOGWARNING(
           "[STATISTICS] Coroutine stack stats:\n\tConfigure - Max GC Number: {}\n\tConfigure - Stack Max: number {}, "
           "size "
@@ -582,7 +581,7 @@ SERVER_FRAME_API std::chrono::system_clock::duration task_manager::get_default_t
 }
 
 SERVER_FRAME_API size_t task_manager::get_metrics_task_recently_max_size() {
-  return get_task_manager_metrics_data().task_max_count.load(std::memory_order_acquire);
+  return get_task_manager_metrics_data().task_max_count.load(std::memory_order_relaxed);
 }
 
 SERVER_FRAME_API size_t task_manager::get_stack_size() const {
@@ -617,8 +616,8 @@ SERVER_FRAME_API int task_manager::add_task(const task_type_trait::task_type &ta
     FWLOGWARNING("task number {} extend {}", native_mgr_->get_task_size(), conf_busy_warn_count_);
   }
 
-  if (native_mgr_->get_task_size() > get_task_manager_metrics_data().task_max_count.load(std::memory_order_acquire)) {
-    get_task_manager_metrics_data().task_max_count.store(native_mgr_->get_task_size(), std::memory_order_release);
+  if (native_mgr_->get_task_size() > get_task_manager_metrics_data().task_max_count.load(std::memory_order_relaxed)) {
+    get_task_manager_metrics_data().task_max_count.store(native_mgr_->get_task_size(), std::memory_order_relaxed);
   }
 
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
@@ -912,7 +911,7 @@ void task_manager::setup_metrics() {
       rpc::telemetry::metrics_observable_type::kGauge, "service_coroutine", {"service_coroutine_task_count", "", ""},
       [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
         rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
-            result, static_cast<int64_t>(get_task_manager_metrics_data().task_count.load(std::memory_order_acquire)));
+            result, static_cast<int64_t>(get_task_manager_metrics_data().task_count));
       });
 
   rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
@@ -920,9 +919,8 @@ void task_manager::setup_metrics() {
       {"service_coroutine_task_max_count", "", ""},
       [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
         auto &metrics_data = get_task_manager_metrics_data();
-        int64_t ret = static_cast<int64_t>(metrics_data.task_max_count.load(std::memory_order_acquire));
-        metrics_data.task_max_count.store(metrics_data.task_count.load(std::memory_order_acquire),
-                                          std::memory_order_release);
+        int64_t ret = static_cast<int64_t>(metrics_data.task_max_count.load(std::memory_order_relaxed));
+        metrics_data.task_max_count.store(metrics_data.task_count, std::memory_order_relaxed);
         rpc::telemetry::opentelemetry_utility::global_metics_observe_record(result, ret);
       });
 
@@ -931,8 +929,7 @@ void task_manager::setup_metrics() {
       {"service_coroutine_tick_checkpoint_count", "", ""},
       [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
         rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
-            result, static_cast<int64_t>(
-                        get_task_manager_metrics_data().tick_checkpoint_count.load(std::memory_order_acquire)));
+            result, static_cast<int64_t>(get_task_manager_metrics_data().tick_checkpoint_count));
       });
 
   rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
@@ -940,8 +937,7 @@ void task_manager::setup_metrics() {
       {"service_coroutine_pool_free_memory", "", ""},
       [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
         rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
-            result,
-            static_cast<int64_t>(get_task_manager_metrics_data().pool_free_memory.load(std::memory_order_acquire)));
+            result, static_cast<int64_t>(get_task_manager_metrics_data().pool_free_memory));
       });
 
   rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
@@ -949,7 +945,6 @@ void task_manager::setup_metrics() {
       {"service_coroutine_pool_used_memory", "", ""},
       [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
         rpc::telemetry::opentelemetry_utility::global_metics_observe_record(
-            result,
-            static_cast<int64_t>(get_task_manager_metrics_data().pool_used_memory.load(std::memory_order_acquire)));
+            result, static_cast<int64_t>(get_task_manager_metrics_data().pool_used_memory));
       });
 }

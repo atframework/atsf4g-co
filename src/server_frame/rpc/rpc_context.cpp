@@ -9,6 +9,16 @@
 
 #include <memory/object_allocator.h>
 
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
+#include <protocol/config/svr.protocol.config.pb.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
 #include "rpc/telemetry/rpc_global_service.h"
 #include "rpc/telemetry/rpc_trace.h"
 
@@ -213,8 +223,8 @@ SERVER_FRAME_API void context::add_link_span(const tracer::span_ptr_type &span_p
 }
 
 SERVER_FRAME_API void context::set_current_service(atapp::app &app,
-                                                   const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &telemetry) {
-  telemetry::global_service::set_current_service(app, telemetry);
+                                                   const PROJECT_NAMESPACE_ID::config::logic_section_cfg &logic_cfg) {
+  telemetry::global_service::set_current_service(app, logic_cfg.telemetry());
 }
 
 SERVER_FRAME_API void context::set_task_context(const task_context_data &task_ctx) noexcept {
