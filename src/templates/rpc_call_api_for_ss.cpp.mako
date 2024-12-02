@@ -141,24 +141,31 @@ inline static rpc::context::tracer::span_ptr_type __setup_tracer(rpc::context &_
   // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/semantic_conventions/README.md
   __child_ctx.setup_tracer(__tracer, rpc::context::string_view{rpc_full_name.data(), rpc_full_name.size()},
     std::move(__trace_option));
-  rpc::context::tracer::span_ptr_type __child_trace_span = __child_ctx.get_trace_span();
-  if (__child_trace_span) {
+  if (__tracer.is_recording()) {
+    rpc::context::tracer::span_ptr_type __child_trace_span = __child_ctx.get_trace_span();
+    if (__child_trace_span) {
+      auto trace_span_head = head.mutable_rpc_trace();
+      if (trace_span_head) {
+        auto trace_context = __child_trace_span->GetContext();
+        rpc::context::tracer::trace_id_span trace_id = trace_context.trace_id().Id();
+        rpc::context::tracer::span_id_span span_id = trace_context.span_id().Id();
+
+        trace_span_head->mutable_trace_id()->assign(reinterpret_cast<const char *>(trace_id.data()), trace_id.size());
+        trace_span_head->mutable_span_id()->assign(reinterpret_cast<const char *>(span_id.data()), span_id.size());
+        trace_span_head->set_kind(__trace_option.kind);
+        trace_span_head->set_name(static_cast<std::string>(rpc_full_name));
+      }
+    }
+
+    return __child_trace_span;
+  } else {
     auto trace_span_head = head.mutable_rpc_trace();
     if (trace_span_head) {
-      auto trace_context = __child_trace_span->GetContext();
-      rpc::context::tracer::trace_id_span trace_id = trace_context.trace_id().Id();
-      rpc::context::tracer::span_id_span span_id = trace_context.span_id().Id();
-
-      trace_span_head->mutable_trace_id()->assign(reinterpret_cast<const char *>(trace_id.data()), trace_id.size());
-      trace_span_head->mutable_span_id()->assign(reinterpret_cast<const char *>(span_id.data()), span_id.size());
-      trace_span_head->set_kind(__trace_option.kind);
-      trace_span_head->set_name(static_cast<std::string>(rpc_full_name));
-
-      // trace_context.IsSampled();
+      trace_span_head->set_dynamic_ignore(true);
     }
-  }
 
-  return __child_trace_span;
+    return rpc::context::tracer::span_ptr_type();
+  }
 }
 
 % endif

@@ -377,15 +377,16 @@ task_action_base::result_type::value_type task_action_base::_notify_finished(int
                                                                              task_trace_attributes &attributes) {
   attributes[static_cast<size_t>(trace_attribute_type::kTaskResponseCode)] = {
       rpc::telemetry::semantic_conventions::kAtRpcResponseCode, get_response_code()};
-
   // Additional trace data
-  auto trace_span = shared_context_.get_trace_span();
-  if (trace_span) {
-    if (0 != get_user_id() && 0 != get_zone_id()) {
-      trace_span->SetAttribute("user_id", get_user_id());
-      trace_span->SetAttribute("zone_id", get_zone_id());
+  if (rpc::context::trace_dynamic_policy::kDrop != shared_context_.get_trace_policy()) {
+    auto trace_span = shared_context_.get_trace_span();
+    if (trace_span) {
+      if (0 != get_user_id() && 0 != get_zone_id()) {
+        trace_span->SetAttribute("user_id", get_user_id());
+        trace_span->SetAttribute("zone_id", get_zone_id());
+      }
+      trace_span->SetAttribute(rpc::telemetry::semantic_conventions::kAtRpcResponseCode, get_response_code());
     }
-    trace_span->SetAttribute(rpc::telemetry::semantic_conventions::kAtRpcResponseCode, get_response_code());
   }
 
   // Callbacks

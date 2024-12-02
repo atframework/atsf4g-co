@@ -4,7 +4,9 @@
 
 #include "rpc/telemetry/rpc_trace.h"
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <google/protobuf/util/time_util.h>
 #include <protocol/config/svr.protocol.config.pb.h>
@@ -13,9 +15,12 @@
 #include <opentelemetry/common/timestamp.h>
 #include <opentelemetry/trace/span_context.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <opentelemetry/sdk/common/attribute_utils.h>
+#include <opentelemetry/trace/noop.h>
 
 #include <atframe/atapp.h>
 
@@ -24,9 +29,7 @@
 #include <config/server_frame_build_feature.h>
 #include <utility/protobuf_mini_dumper.h>
 
-#include <atomic>
 #include <chrono>
-#include <fstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -659,6 +662,16 @@ SERVER_FRAME_API bool tracer::start(string_view name, trace_start_option &&optio
     return true;
   }
 
+  if (options.parent_memory_span) {
+    if (!options.parent_memory_span->IsRecording()) {
+      return false;
+    }
+  } else if (options.parent_network_span) {
+    if (options.parent_network_span->dynamic_ignore()) {
+      return false;
+    }
+  }
+
   auto tracer_obj = global_service::get_current_default_tracer();
   if (!tracer_obj) {
     return false;
@@ -701,10 +714,14 @@ SERVER_FRAME_API bool tracer::start(string_view name, trace_start_option &&optio
       options.parent_network_span->span_id().size() == span_id_span::extent) {
     const uint8_t *parent_trace_id = reinterpret_cast<const uint8_t *>(options.parent_network_span->trace_id().c_str());
     const uint8_t *parent_span_id = reinterpret_cast<const uint8_t *>(options.parent_network_span->span_id().c_str());
+    uint8_t trace_flags = opentelemetry::trace::TraceFlags::kIsRandom;
+    if (!options.parent_network_span->dynamic_ignore()) {
+      trace_flags |= opentelemetry::trace::TraceFlags::kIsSampled;
+    }
     span_options.parent = opentelemetry::trace::SpanContext{
         opentelemetry::trace::TraceId{trace_id_span{parent_trace_id, trace_id_span::extent}},
         opentelemetry::trace::SpanId{span_id_span{parent_span_id, span_id_span::extent}},
-        opentelemetry::trace::TraceFlags{opentelemetry::trace::TraceFlags::kIsSampled}, options.is_remote};
+        opentelemetry::trace::TraceFlags{trace_flags}, options.is_remote};
   } else if (options.parent_memory_span) {
     if (!options.parent_memory_span->IsRecording()) {
       return false;
@@ -726,52 +743,70 @@ SERVER_FRAME_API bool tracer::start(string_view name, trace_start_option &&optio
 }
 
 SERVER_FRAME_API int32_t tracer::finish(trace_finish_option &&options) {
-  if (trace_span_) {
-    switch (options.result_code) {
-      case PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND:
-      case PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND:
-      case PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION: {
-        gsl::string_view error_msg = protobuf_mini_dumper_get_error_msg(options.result_code);
-        trace_span_->SetStatus(opentelemetry::trace::StatusCode::kUnset, {error_msg.data(), error_msg.size()});
-        break;
-      }
-      default: {
-        if (options.result_code < 0) {
-          gsl::string_view error_msg = protobuf_mini_dumper_get_error_msg(options.result_code);
-          trace_span_->SetStatus(opentelemetry::trace::StatusCode::kError, {error_msg.data(), error_msg.size()});
-        } else {
-          trace_span_->SetStatus(opentelemetry::trace::StatusCode::kOk, "success");
-        }
-        break;
-      }
-    }
-    trace_span_->SetAttribute(rpc::telemetry::semantic_conventions::kAtRpcResultCode, options.result_code);
-
-    std::chrono::steady_clock::time_point end_steady_timepoint = std::chrono::steady_clock::now();
-    opentelemetry::trace::EndSpanOptions end_options;
-    end_options.end_steady_time = opentelemetry::common::SteadyTimestamp(end_steady_timepoint);
-    trace_span_->End(end_options);
-
-    auto &trace_configure = logic_config::me()->get_logic().telemetry().opentelemetry().trace();
-    const std::string &additional_metrics_name = trace_configure.additional_metrics_name();
-    if (!additional_metrics_name.empty() && !trace_span_name_.empty() && trace_configure.enable_additional_metrics()) {
-      record_trace_additional_metric_span(
-          trace_span_name_, span_kind_, options.result_code, options.attributes,
-          std::chrono::duration_cast<std::chrono::microseconds>(end_steady_timepoint - start_steady_timepoint_),
-          additional_metrics_name);
-    }
-
-    trace_span_ = span_ptr_type();
+  if (!trace_span_) {
+    return options.result_code;
   }
 
+  switch (options.result_code) {
+    case PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND:
+    case PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND:
+    case PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION: {
+      gsl::string_view error_msg = protobuf_mini_dumper_get_error_msg(options.result_code);
+      trace_span_->SetStatus(opentelemetry::trace::StatusCode::kUnset, {error_msg.data(), error_msg.size()});
+      break;
+    }
+    default: {
+      if (options.result_code < 0) {
+        gsl::string_view error_msg = protobuf_mini_dumper_get_error_msg(options.result_code);
+        trace_span_->SetStatus(opentelemetry::trace::StatusCode::kError, {error_msg.data(), error_msg.size()});
+      } else {
+        trace_span_->SetStatus(opentelemetry::trace::StatusCode::kOk, "success");
+      }
+      break;
+    }
+  }
+  trace_span_->SetAttribute(rpc::telemetry::semantic_conventions::kAtRpcResultCode, options.result_code);
+
+  std::chrono::steady_clock::time_point end_steady_timepoint = std::chrono::steady_clock::now();
+  opentelemetry::trace::EndSpanOptions end_options;
+  end_options.end_steady_time = opentelemetry::common::SteadyTimestamp(end_steady_timepoint);
+
+  // trace_span_->End will destroy recording status, so get it before End()
+  bool is_span_recording = trace_span_->IsRecording();
+
+  trace_span_->End(end_options);
+
+  auto &trace_configure = logic_config::me()->get_logic().telemetry().opentelemetry().trace();
+  const std::string &additional_metrics_name = trace_configure.additional_metrics_name();
+  if (is_span_recording && !additional_metrics_name.empty() && !trace_span_name_.empty() &&
+      trace_configure.enable_additional_metrics()) {
+    record_trace_additional_metric_span(
+        trace_span_name_, span_kind_, options.result_code, options.attributes,
+        std::chrono::duration_cast<std::chrono::microseconds>(end_steady_timepoint - start_steady_timepoint_),
+        additional_metrics_name);
+  }
+
+  trace_span_ = span_ptr_type();
   return options.result_code;
 }
+
+SERVER_FRAME_API bool tracer::is_recording() const noexcept { return trace_span_ && trace_span_->IsRecording(); }
 
 SERVER_FRAME_API void tracer::update_trace_name(string_view name) {
   if (trace_span_) {
     trace_span_->UpdateName(name);
     trace_span_name_ = static_cast<std::string>(name);
   }
+}
+
+SERVER_FRAME_API const tracer::span_ptr_type &tracer::get_shared_noop_trace_span() {
+  static tracer::span_ptr_type ret;
+  if (!ret) {
+    static auto noop_tracer = std::make_shared<opentelemetry::trace::NoopTracer>();
+    ret = static_cast<opentelemetry::trace::Tracer *>(noop_tracer.get())->StartSpan("noop");
+  }
+
+  return ret;
 }
 
 }  // namespace telemetry

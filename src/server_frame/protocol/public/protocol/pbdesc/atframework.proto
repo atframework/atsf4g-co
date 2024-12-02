@@ -229,6 +229,9 @@ message RpcTraceSpan {
   SpanKind kind = 6;
 
   map<string, AttributeValue> attributes = 9;
+
+  // Ignore this trace by dynamic policy of user
+  bool dynamic_ignore = 10;
 }
 
 message RpcForward {

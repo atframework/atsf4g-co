@@ -49,6 +49,12 @@ class context {
     kLink = 1,
   };
 
+  enum trace_dynamic_policy : uint8_t {
+    kUnset = 0,
+    kDrop,
+    kRecording,
+  };
+
   struct UTIL_SYMBOL_VISIBLE inherit_options {
     parent_mode mode;
     bool inherit_allocator;
@@ -234,6 +240,8 @@ class context {
 
   SERVER_FRAME_API const tracer::span_ptr_type &get_trace_span() const noexcept;
 
+  SERVER_FRAME_API trace_dynamic_policy get_trace_policy() noexcept;
+
   SERVER_FRAME_API void set_parent_context(rpc::context &parent, inherit_options options = {}) noexcept;
   SERVER_FRAME_API void add_link_span(const tracer::span_ptr_type &span_ptr) noexcept;
 
@@ -243,7 +251,7 @@ class context {
    * @param telemetry telemetry configure
    */
   SERVER_FRAME_API static void set_current_service(atapp::app &app,
-                                                   const PROJECT_NAMESPACE_ID::config::logic_section_cfg &telemetry);
+                                                   const PROJECT_NAMESPACE_ID::config::logic_section_cfg &logic_cfg);
 
   SERVER_FRAME_API void set_task_context(const task_context_data &task_ctx) noexcept;
   UTIL_FORCEINLINE const task_context_data &get_task_context() const noexcept { return task_context_; }
@@ -264,9 +272,10 @@ class context {
   std::list<std::shared_ptr<::google::protobuf::Arena>> used_allocators_;
 
   struct trace_context_data {
+    trace_dynamic_policy dynamic_policy;
+    parent_mode caller_mode;
     tracer::span_ptr_type trace_span;
     tracer::span_ptr_type parent_span;
-    parent_mode caller_mode;
     std::vector<tracer::span_ptr_type> link_spans;
   };
   trace_context_data trace_context_;

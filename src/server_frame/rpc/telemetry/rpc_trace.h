@@ -94,6 +94,8 @@ class tracer {
   SERVER_FRAME_API bool start(string_view name, trace_start_option&& options);
   SERVER_FRAME_API int32_t finish(trace_finish_option&& options);
 
+  SERVER_FRAME_API bool is_recording() const noexcept;
+
   UTIL_FORCEINLINE const tracer::span_ptr_type& get_trace_span() const noexcept { return trace_span_; }
   UTIL_FORCEINLINE opentelemetry::nostd::string_view get_span_kind() const noexcept { return span_kind_; }
 
@@ -103,6 +105,8 @@ class tracer {
    * @param name
    */
   SERVER_FRAME_API void update_trace_name(string_view name);
+
+  SERVER_FRAME_API static const tracer::span_ptr_type& get_shared_noop_trace_span();
 
  private:
   friend class context;
