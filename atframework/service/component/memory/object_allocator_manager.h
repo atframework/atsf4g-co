@@ -174,17 +174,34 @@ class object_allocator_manager {
 
     // constructors
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator() noexcept(
-        std::is_nothrow_constructible<background_allocator_type>::value) {}
+        std::is_nothrow_constructible<background_allocator_type>::value) {
+      new (backend_allocator_buffer()) background_allocator_type();
+    }
 
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator(const BackendAllocator& backend) noexcept(
         std::is_nothrow_constructible<background_allocator_type, const BackendAllocator&>::value) {
       new (backend_allocator_buffer()) background_allocator_type(backend);
     }
 
-    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator(const allocator&) = default;
-    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator(allocator&&) = default;
-    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator& operator=(const allocator&) = default;
-    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator& operator=(allocator&&) = default;
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator(const allocator& other) noexcept(
+        std::is_nothrow_copy_constructible<background_allocator_type>::value) {
+      new (backend_allocator_buffer()) background_allocator_type(*other.backend_allocator());
+    }
+
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator(allocator&& other) noexcept(
+        std::is_nothrow_move_constructible<background_allocator_type>::value) {
+      new (backend_allocator_buffer()) background_allocator_type(std::move(*other.backend_allocator()));
+    }
+
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator& operator=(const allocator& other) noexcept(
+        std::is_nothrow_copy_assignable<background_allocator_type>::value) {
+      *backend_allocator() = *other.backend_allocator();
+    }
+
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator& operator=(allocator&& other) noexcept(
+        std::is_nothrow_move_assignable<background_allocator_type>::value) {
+      *backend_allocator() = std::move(*other.backend_allocator());
+    }
 
     template <class U, class UBackendAllocator>
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator(const allocator<U, UBackendAllocator>& other) noexcept(

@@ -128,7 +128,7 @@ static bool should_sample_trace_span() {
     return true;
   }
 
-  return util::random_engine::fast_random_between<int64_t>(0, metrics_data.sample_rate) < metrics_data.sample_rate;
+  return util::random_engine::fast_random_between<int64_t>(0, 0x1000000) < metrics_data.sample_rate;
 }
 
 }  // namespace
@@ -336,7 +336,7 @@ SERVER_FRAME_API const context::tracer::span_ptr_type &context::get_trace_span()
 }
 
 SERVER_FRAME_API context::trace_dynamic_policy context::get_trace_policy() noexcept {
-  // TODO(owentou): 动态策略
+  // 动态策略
   if (trace_dynamic_policy::kUnset == trace_context_.dynamic_policy) {
     if (should_sample_trace_span()) {
       trace_context_.dynamic_policy = trace_dynamic_policy::kRecording;

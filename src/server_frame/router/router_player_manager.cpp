@@ -96,6 +96,23 @@ rpc::result_code_type router_player_manager::on_evt_remove_object(rpc::context &
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(base_type::on_evt_remove_object(ctx, key, cache, priv_data)));
 }
 
+rpc::result_code_type router_player_manager::on_evt_object_removed(rpc::context &ctx, const key_t &key,
+                                                                   const ptr_t &cache, priv_data_t priv_data) {
+  player_cache::ptr_t obj = cache->get_object();
+  // 释放本地数据, 下线相关Session
+  session::ptr_t s = obj->get_session();
+  if (s) {
+    obj->set_session(ctx, nullptr);
+    std::shared_ptr<player_cache> check_binded_user = s->get_player();
+    if (!check_binded_user || check_binded_user == obj) {
+      s->set_player(nullptr);
+      session_manager::me()->remove(s, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
+    }
+  }
+
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(base_type::on_evt_object_removed(ctx, key, cache, priv_data)));
+}
+
 SERVER_FRAME_CONFIG_API rpc::result_code_type router_player_manager::pull_online_server(rpc::context &, const key_t &,
                                                                                         uint64_t &router_svr_id,
                                                                                         uint64_t &router_svr_ver) {

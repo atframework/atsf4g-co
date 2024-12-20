@@ -219,6 +219,16 @@ class global_service {
       std::shared_ptr<group_type> group, opentelemetry::nostd::string_view library_name,
       opentelemetry::nostd::string_view library_version = "", opentelemetry::nostd::string_view schema_url = "");
 
+#if OPENTELEMETRY_ABI_VERSION_NO >= 2
+  /**
+   * @brief Remove a counter
+   *
+   * @return true if meter is found and removed
+   */
+  SERVER_FRAME_API static bool remove_metrics_meter(opentelemetry::nostd::string_view meter_name,
+                                                    std::shared_ptr<group_type> group = nullptr);
+#endif
+
   /**
    * @brief Get or create a counter
    *

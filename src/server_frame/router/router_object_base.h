@@ -72,6 +72,8 @@ class router_object_base : public std::enable_shared_from_this<router_object_bas
       EN_ROFT_SCHED_REMOVE_CACHE = 0x0200,   // 定时任务 - 移除缓存计划任务是否有效
       EN_ROFT_SCHED_SAVE_OBJECT = 0x0400,    // 定时任务 - 实体保存计划任务是否有效
       EN_ROFT_FORCE_REMOVE_OBJECT = 0x0800,  // 下一次触发定时器时是否强制执行实体降级
+      EN_ROFT_REMOVING_CACHE = 0x1000,       // 是否正在移除对象缓存
+      EN_ROFT_REMOVING_OBJECT = 0x2000,      // 是否正在移除对象实体
     };
   };
 
@@ -192,7 +194,7 @@ class router_object_base : public std::enable_shared_from_this<router_object_bas
    * @brief 启动保存实体的流程(这个接口不会设置状态)
    * @param priv_data 外部传入的私有数据
    * @note
-   *        * 这个接口里不能使用get_object接口，因为这回导致缓存被续期，不能让定时保存机制无限续期缓存
+   *        * 这个接口里不能使用get_object接口，因为这会导致缓存被续期，不能让定时保存机制无限续期缓存
    *        * 这个接口成功后最好调用一次refresh_save_time，可以减少保存次数
    *        * 如果路由节点发生变化，则必须保证刷新了路由版本号（版本号+1）（调用set_router_server_id）
    *        * 注意get_router_version()的返回值可能在外部被更改，所以不能依赖它做CAS

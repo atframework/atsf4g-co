@@ -433,6 +433,45 @@ static std::shared_ptr<local_meter_info_type> get_meter_info(std::shared_ptr<gro
   }
 }
 
+#if OPENTELEMETRY_ABI_VERSION_NO >= 2
+static bool remove_meter_info(std::shared_ptr<group_type> &group, const opentelemetry::nostd::string_view &meter_name) {
+  do {
+    if (group) {
+      break;
+    }
+
+    std::shared_ptr<global_service_data_type> current_service_cache = get_global_service_data();
+    if (!current_service_cache) {
+      break;
+    }
+
+    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    group = current_service_cache->default_group;
+  } while (false);
+
+  if (!group) {
+    return false;
+  }
+
+  // It's not initialized so no meters now
+  if (!group->initialized) {
+    return false;
+  }
+
+  bool ret = group->metrics_meters.erase(static_cast<std::string>(meter_name)) > 0;
+
+  if (ret) {
+    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->metrics_lock};
+
+    opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Meter> meter = group->metrics_handle.provider->RemoveMeter(
+        meter_name, group->metrics_default_library_version,
+        logic_config::me()->get_logic().telemetry().opentelemetry().metrics().schema_url());
+  }
+
+  return ret;
+}
+#endif
+
 static void rebuild_attributes_map(const opentelemetry::sdk::common::AttributeMap &src,
                                    std::unordered_map<std::string, opentelemetry::common::AttributeValue> &dst) {
   dst.clear();
@@ -985,6 +1024,13 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> 
   }
   return ret;
 }
+
+#if OPENTELEMETRY_ABI_VERSION_NO >= 2
+SERVER_FRAME_API bool global_service::remove_metrics_meter(opentelemetry::nostd::string_view meter_name,
+                                                           std::shared_ptr<group_type> group) {
+  return remove_meter_info(group, meter_name);
+}
+#endif
 
 SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<uint64_t>>
 global_service::mutable_metrics_counter_uint64(opentelemetry::nostd::string_view meter_name, meter_instrument_key key,
@@ -1651,7 +1697,11 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> _op
       if (header.key().empty()) {
         continue;
       }
-      options.metadata.emplace(opentelemetry::exporter::otlp::OtlpHeaders::value_type(header.key(), header.value()));
+
+      std::string header_key = header.key();
+      std::transform(header_key.begin(), header_key.end(), header_key.begin(), util::string::tolower<char>);
+      options.metadata.emplace(
+          opentelemetry::exporter::otlp::OtlpHeaders::value_type(std::move(header_key), header.value()));
     }
 
     options.max_concurrent_requests = exporter_cfg.otlp_grpc().max_concurrent_requests();
@@ -1930,7 +1980,10 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
         continue;
       }
 
-      options.metadata.emplace(opentelemetry::exporter::otlp::OtlpHeaders::value_type(header.key(), header.value()));
+      std::string header_key = header.key();
+      std::transform(header_key.begin(), header_key.end(), header_key.begin(), util::string::tolower<char>);
+      options.metadata.emplace(
+          opentelemetry::exporter::otlp::OtlpHeaders::value_type(std::move(header_key), header.value()));
     }
     switch (exporter_cfg.otlp_grpc().aggregation_temporality()) {
       case PROJECT_NAMESPACE_ID::config::EN_OPENTELEMETRY_AGGREGATION_UNSPECIFIED: {
@@ -2249,7 +2302,10 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogRecordExporter>>
         continue;
       }
 
-      options.metadata.emplace(opentelemetry::exporter::otlp::OtlpHeaders::value_type(header.key(), header.value()));
+      std::string header_key = header.key();
+      std::transform(header_key.begin(), header_key.end(), header_key.begin(), util::string::tolower<char>);
+      options.metadata.emplace(
+          opentelemetry::exporter::otlp::OtlpHeaders::value_type(std::move(header_key), header.value()));
     }
 
     options.max_concurrent_requests = exporter_cfg.otlp_grpc().max_concurrent_requests();
@@ -2889,8 +2945,7 @@ static void _create_opentelemetry_app_resource(
 
   // basic
   group.common_owned_attributes.SetAttribute(opentelemetry::sdk::resource::SemanticConventions::kServiceInstanceId,
-                                             app.get_id());
-  group.common_owned_attributes.SetAttribute("service.instance.name", app.get_app_name());
+                                             app.get_app_name());
   group.common_owned_attributes.SetAttribute(opentelemetry::sdk::resource::SemanticConventions::kServiceName,
                                              app.get_type_name());
   group.common_owned_attributes.SetAttribute("service.identity", app.get_app_identity());

@@ -102,7 +102,7 @@ message logic_hpa_metrics {
   map<string, string> selectors = 8;
 
   // 以下selectors不自动追加,否则某些内置筛选规则会自动添加到选择器列表里
-  // （默认情况下会自动设置 service_namespace, service_name, deployment_environment, hpa_target_kind, hpa_target_name,
+  // （默认情况下会自动设置 service_namespace, service_name, deployment_environment_name, hpa_target_kind, hpa_target_name,
   // hpa_target_api_version 。job属性由于会被exporter重置所以不作为自动添加属性）
   repeated string without_auto_selectors = 9;
 
