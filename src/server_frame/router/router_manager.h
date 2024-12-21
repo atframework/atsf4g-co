@@ -14,6 +14,8 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <nostd/function_ref.h>
+
 #include <libcotask/task.h>
 
 #include <utility/random_engine.h>
@@ -38,6 +40,13 @@
 #include "router/router_manager_base.h"
 #include "router/router_manager_set.h"
 
+/**
+ * @brief 路由管理器类模板
+ *
+ * @tparam TCache 缓存类型
+ * @tparam TObj 对象类型
+ * @tparam TPrivData 私有数据类型
+ */
 template <typename TCache, typename TObj, typename TPrivData>
 class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
  public:
@@ -56,12 +65,18 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
   using store_ptr_t = std::weak_ptr<cache_t>;
 
  public:
+  /**
+   * @brief 构造函数
+   *
+   * @param type_id 类型ID
+   */
   SERVER_FRAME_API explicit router_manager(uint32_t type_id) : router_manager_base(type_id) {}
 
   /**
-   * @brief 拉取缓存对象，如果不存在返回空
-   * @param key
-   * @return 缓存对象
+   * @brief 获取基础缓存对象，如果不存在返回空
+   *
+   * @param key 缓存对象的键
+   * @return std::shared_ptr<router_object_base> 缓存对象
    */
   SERVER_FRAME_API std::shared_ptr<router_object_base> get_base_cache(const key_t &key) const override {
     typename std::unordered_map<key_t, ptr_t>::const_iterator iter = caches_.find(key);
@@ -72,6 +87,9 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
     return std::static_pointer_cast<router_object_base>(get_cache(key));
   }
 
+  /**
+   * @brief 停止路由管理器
+   */
   SERVER_FRAME_API void on_stop() override {
     router_manager_base::on_stop();
 
@@ -83,6 +101,12 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
     }
   }
 
+  /**
+   * @brief 获取缓存对象
+   *
+   * @param key 缓存对象的键
+   * @return ptr_t 缓存对象指针
+   */
   SERVER_FRAME_API ptr_t get_cache(const key_t &key) const {
     typename std::unordered_map<key_t, ptr_t>::const_iterator iter = caches_.find(key);
     if (iter == caches_.end()) {
@@ -92,6 +116,12 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
     return iter->second;
   }
 
+  /**
+   * @brief 获取可写的对象
+   *
+   * @param key 对象的键
+   * @return ptr_t 对象指针
+   */
   SERVER_FRAME_API ptr_t get_object(const key_t &key) const {
     typename std::unordered_map<key_t, ptr_t>::const_iterator iter = caches_.find(key);
     if (iter == caches_.end() || !iter->second->is_writable()) {
@@ -103,6 +133,16 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
 
   using router_manager_base::mutable_cache;
 
+  /**
+   * @brief 获取可变缓存对象
+   *
+   * @param ctx RPC上下文
+   * @param out 输出缓存对象
+   * @param key 缓存对象的键
+   * @param priv_data 私有数据
+   * @param io_guard IO任务保护
+   * @return rpc::result_code_type 结果代码
+   */
   EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type mutable_cache(
       rpc::context &ctx, std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data,
       router_object_base::io_task_guard &io_guard) override {
@@ -112,6 +152,15 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
     RPC_RETURN_CODE(ret);
   }
 
+  /**
+   * @brief 获取可变缓存对象
+   *
+   * @param ctx RPC上下文
+   * @param out 输出缓存对象
+   * @param key 缓存对象的键
+   * @param priv_data 私有数据
+   * @return rpc::result_code_type 结果代码
+   */
   EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type mutable_cache(rpc::context &ctx, ptr_t &out,
                                                                                const key_t &key,
                                                                                priv_data_t priv_data) {
@@ -120,6 +169,16 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
     RPC_RETURN_CODE(ret);
   }
 
+  /**
+   * @brief 获取可变缓存对象
+   *
+   * @param ctx RPC上下文
+   * @param out 输出缓存对象
+   * @param key 缓存对象的键
+   * @param priv_data 私有数据
+   * @param io_guard IO任务保护
+   * @return rpc::result_code_type 结果代码
+   */
   EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type mutable_cache(
       rpc::context &ctx, ptr_t &out, const key_t &key, priv_data_t priv_data,
       router_object_base::io_task_guard &io_guard) {
@@ -195,11 +254,13 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
 
   /**
    * @brief 检查缓存是否有效，如果过期则尝试拉取一次
-   * @param in 输入保存的对象,如果有更新并且更新成功，会自动重设这个变量
-   * @param key 重新拉取缓存时的key
+   *
+   * @param ctx RPC上下文
+   * @param in 输入保存的对象
    * @param out 输出对象指针
-   * @param priv_data
-   * @return
+   * @param key 重新拉取缓存时的键
+   * @param priv_data 私有数据
+   * @return rpc::result_code_type 结果代码
    */
   EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type renew_cache(rpc::context &ctx, store_ptr_t &in,
                                                                              ptr_t &out, const key_t &key,
@@ -224,6 +285,16 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
 
   using router_manager_base::mutable_object;
 
+  /**
+   * @brief 获取可变对象
+   *
+   * @param ctx RPC上下文
+   * @param out 输出对象
+   * @param key 对象的键
+   * @param priv_data 私有数据
+   * @param io_guard IO任务保护
+   * @return rpc::result_code_type 结果代码
+   */
   EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type mutable_object(
       rpc::context &ctx, std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data,
       router_object_base::io_task_guard &io_guard) override {
@@ -234,6 +305,15 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
     RPC_RETURN_CODE(ret);
   }
 
+  /**
+   * @brief 获取可变对象
+   *
+   * @param ctx RPC上下文
+   * @param out 输出对象
+   * @param key 对象的键
+   * @param priv_data 私有数据
+   * @return rpc::result_code_type 结果代码
+   */
   EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type mutable_object(rpc::context &ctx, ptr_t &out,
                                                                                 const key_t &key,
                                                                                 priv_data_t priv_data) {
@@ -242,6 +322,16 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
     RPC_RETURN_CODE(ret);
   }
 
+  /**
+   * @brief 获取可变对象
+   *
+   * @param ctx RPC上下文
+   * @param out 输出对象
+   * @param key 对象的键
+   * @param priv_data 私有数据
+   * @param io_guard IO任务保护
+   * @return rpc::result_code_type 结果代码
+   */
   EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type mutable_object(
       rpc::context &ctx, ptr_t &out, const key_t &key, priv_data_t priv_data,
       router_object_base::io_task_guard &io_guard) {
@@ -322,6 +412,16 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_TTL_EXTEND);
   }
 
+  /**
+   * @brief 转移对象
+   *
+   * @param ctx RPC上下文
+   * @param key 对象的键
+   * @param svr_id 服务器ID
+   * @param need_notify 是否需要通知
+   * @param priv_data 私有数据
+   * @return rpc::result_code_type 结果代码
+   */
   EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE virtual rpc::result_code_type transfer(rpc::context &ctx,
                                                                                      const key_t &key, uint64_t svr_id,
                                                                                      bool need_notify,
@@ -335,6 +435,16 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(transfer(ctx, obj, svr_id, need_notify, priv_data)));
   }
 
+  /**
+   * @brief 转移对象
+   *
+   * @param ctx RPC上下文
+   * @param obj 对象指针
+   * @param svr_id 服务器ID
+   * @param need_notify 是否需要通知
+   * @param priv_data 私有数据
+   * @return rpc::result_code_type 结果代码
+   */
   EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE virtual rpc::result_code_type transfer(rpc::context &ctx,
                                                                                      const ptr_t &obj, uint64_t svr_id,
                                                                                      bool need_notify,
@@ -455,6 +565,17 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
   }
 
   using router_manager_base::remove_cache;
+
+  /**
+   * @brief 移除缓存
+   *
+   * @param ctx RPC上下文
+   * @param key 缓存的键
+   * @param cache 缓存对象
+   * @param priv_data 私有数据
+   * @param io_guard IO任务保护
+   * @return rpc::result_code_type 结果代码
+   */
   EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE rpc::result_code_type remove_cache(
       rpc::context &ctx, const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data,
       router_object_base::io_task_guard &io_guard) override {
@@ -521,6 +642,17 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
   }
 
   using router_manager_base::remove_object;
+
+  /**
+   * @brief 移除对象
+   *
+   * @param ctx RPC上下文
+   * @param key 对象的键
+   * @param cache 缓存对象
+   * @param priv_data 私有数据
+   * @param io_guard IO任务保护
+   * @return rpc::result_code_type 结果代码
+   */
   EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE rpc::result_code_type remove_object(
       rpc::context &ctx, const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data,
       router_object_base::io_task_guard &io_guard) override {
@@ -562,29 +694,96 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
     RPC_RETURN_CODE(ret);
   }
 
-  UTIL_FORCEINLINE void set_on_remove_object(remove_fn_t &&fn) { handle_on_remove_object_ = fn; }
+  /**
+   * @brief 设置移除对象事件处理函数
+   *
+   * @param fn 事件处理函数
+   */
+  UTIL_FORCEINLINE void set_on_remove_object(remove_fn_t &&fn) { handle_on_remove_object_ = std::move(fn); }
+
+  /**
+   * @brief 设置移除对象事件处理函数
+   *
+   * @param fn 事件处理函数
+   */
   UTIL_FORCEINLINE void set_on_remove_object(const remove_fn_t &fn) { handle_on_remove_object_ = fn; }
 
-  UTIL_FORCEINLINE void set_on_object_removed(remove_fn_t &&fn) { handle_on_object_removed_ = fn; }
+  /**
+   * @brief 设置对象移除完成事件处理函数
+   *
+   * @param fn 事件处理函数
+   */
+  UTIL_FORCEINLINE void set_on_object_removed(remove_fn_t &&fn) { handle_on_object_removed_ = std::move(fn); }
+
+  /**
+   * @brief 设置对象移除完成事件处理函数
+   *
+   * @param fn 事件处理函数
+   */
   UTIL_FORCEINLINE void set_on_object_removed(const remove_fn_t &fn) { handle_on_object_removed_ = fn; }
 
-  UTIL_FORCEINLINE void set_on_cache_removed(remove_fn_t &&fn) { handle_on_cache_removed_ = fn; }
+  /**
+   * @brief 设置缓存移除完成事件处理函数
+   *
+   * @param fn 事件处理函数
+   */
+  UTIL_FORCEINLINE void set_on_cache_removed(remove_fn_t &&fn) { handle_on_cache_removed_ = std::move(fn); }
+
+  /**
+   * @brief 设置缓存移除完成事件处理函数
+   *
+   * @param fn 事件处理函数
+   */
   UTIL_FORCEINLINE void set_on_cache_removed(const remove_fn_t &fn) { handle_on_cache_removed_ = fn; }
 
-  UTIL_FORCEINLINE void set_on_remove_cache(remove_fn_t &&fn) { handle_on_remove_cache_ = fn; }
+  /**
+   * @brief 设置移除缓存事件处理函数
+   *
+   * @param fn 事件处理函数
+   */
+  UTIL_FORCEINLINE void set_on_remove_cache(remove_fn_t &&fn) { handle_on_remove_cache_ = std::move(fn); }
+
+  /**
+   * @brief 设置移除缓存事件处理函数
+   *
+   * @param fn 事件处理函数
+   */
   UTIL_FORCEINLINE void set_on_remove_cache(const remove_fn_t &fn) { handle_on_remove_cache_ = fn; }
 
-  UTIL_FORCEINLINE void set_on_pull_object(pull_fn_t &&fn) { handle_on_pull_object_ = fn; }
+  /**
+   * @brief 设置拉取对象事件处理函数
+   *
+   * @param fn 事件处理函数
+   */
+  UTIL_FORCEINLINE void set_on_pull_object(pull_fn_t &&fn) { handle_on_pull_object_ = std::move(fn); }
+
+  /**
+   * @brief 设置拉取对象事件处理函数
+   *
+   * @param fn 事件处理函数
+   */
   UTIL_FORCEINLINE void set_on_pull_object(const pull_fn_t &fn) { handle_on_pull_object_ = fn; }
 
-  UTIL_FORCEINLINE void set_on_pull_cache(pull_fn_t &&fn) { handle_on_pull_cache_ = fn; }
+  /**
+   * @brief 设置拉取缓存事件处理函数
+   *
+   * @param fn 事件处理函数
+   */
+  UTIL_FORCEINLINE void set_on_pull_cache(pull_fn_t &&fn) { handle_on_pull_cache_ = std::move(fn); }
+
+  /**
+   * @brief 设置拉取缓存事件处理函数
+   *
+   * @param fn 事件处理函数
+   */
   UTIL_FORCEINLINE void set_on_pull_cache(const pull_fn_t &fn) { handle_on_pull_cache_ = fn; }
 
-  UTIL_SYMBOL_VISIBLE void foreach_cache(const std::function<bool(const ptr_t &)> fn) {
-    if (!fn) {
-      return;
-    }
-
+  /**
+   * @brief 遍历所有缓存对象
+   *
+   * @param fn 遍历函数
+   */
+  UTIL_SYMBOL_VISIBLE void foreach_cache(util::nostd::function_ref<bool(const ptr_t &)> fn) {
     // 先复制出所有的只能指针，防止回掉过程中成员变化带来问题
     std::vector<ptr_t> res;
     res.reserve(caches_.size());
@@ -601,11 +800,12 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
     }
   }
 
-  void foreach_object(const std::function<bool(const ptr_t &)> fn) {
-    if (!fn) {
-      return;
-    }
-
+  /**
+   * @brief 遍历所有对象
+   *
+   * @param fn 遍历函数
+   */
+  void foreach_object(util::nostd::function_ref<bool(const ptr_t &)> fn) {
     // 先复制出所有的只能指针，防止回掉过程中成员变化带来问题
     std::vector<ptr_t> res;
     res.reserve(caches_.size());
@@ -623,6 +823,14 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
   }
 
  private:
+  /**
+   * @brief 插入缓存对象
+   *
+   * @param key 缓存对象的键
+   * @param d 缓存对象指针
+   * @return true 插入成功
+   * @return false 插入失败
+   */
   bool insert(const key_t &key, const ptr_t &d) {
     if (!d || caches_.find(key) != caches_.end()) {
       return false;
@@ -645,7 +853,15 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
   }
 
  protected:
-  // =============== event =================
+  /**
+   * @brief 移除缓存事件处理函数
+   *
+   * @param ctx RPC上下文
+   * @param key 缓存对象的键
+   * @param cache 缓存对象指针
+   * @param priv_data 私有数据
+   * @return rpc::result_code_type 结果代码
+   */
   EXPLICIT_NODISCARD_ATTR virtual rpc::result_code_type on_evt_remove_cache(rpc::context &ctx, const key_t &key,
                                                                             const ptr_t &cache, priv_data_t priv_data) {
     if (handle_on_remove_cache_) {
@@ -654,6 +870,15 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
+  /**
+   * @brief 缓存移除完成事件处理函数
+   *
+   * @param ctx RPC上下文
+   * @param key 缓存对象的键
+   * @param cache 缓存对象指针
+   * @param priv_data 私有数据
+   * @return rpc::result_code_type 结果代码
+   */
   EXPLICIT_NODISCARD_ATTR virtual rpc::result_code_type on_evt_cache_removed(rpc::context &ctx, const key_t &key,
                                                                              const ptr_t &cache,
                                                                              priv_data_t priv_data) {
@@ -663,6 +888,15 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
+  /**
+   * @brief 移除对象事件处理函数
+   *
+   * @param ctx RPC上下文
+   * @param key 对象的键
+   * @param cache 缓存对象指针
+   * @param priv_data 私有数据
+   * @return rpc::result_code_type 结果代码
+   */
   EXPLICIT_NODISCARD_ATTR virtual rpc::result_code_type on_evt_remove_object(rpc::context &ctx, const key_t &key,
                                                                              const ptr_t &cache,
                                                                              priv_data_t priv_data) {
@@ -672,6 +906,15 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
+  /**
+   * @brief 对象移除完成事件处理函数
+   *
+   * @param ctx RPC上下文
+   * @param key 对象的键
+   * @param cache 缓存对象指针
+   * @param priv_data 私有数据
+   * @return rpc::result_code_type 结果代码
+   */
   EXPLICIT_NODISCARD_ATTR virtual rpc::result_code_type on_evt_object_removed(rpc::context &ctx, const key_t &key,
                                                                               const ptr_t &cache,
                                                                               priv_data_t priv_data) {
@@ -681,6 +924,14 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
+  /**
+   * @brief 拉取缓存事件处理函数
+   *
+   * @param ctx RPC上下文
+   * @param cache 缓存对象指针
+   * @param priv_data 私有数据
+   * @return rpc::result_code_type 结果代码
+   */
   EXPLICIT_NODISCARD_ATTR virtual rpc::result_code_type on_evt_pull_cache(rpc::context &ctx, const ptr_t &cache,
                                                                           priv_data_t priv_data) {
     if (handle_on_pull_cache_) {
@@ -689,6 +940,14 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
+  /**
+   * @brief 拉取对象事件处理函数
+   *
+   * @param ctx RPC上下文
+   * @param cache 缓存对象指针
+   * @param priv_data 私有数据
+   * @return rpc::result_code_type 结果代码
+   */
   EXPLICIT_NODISCARD_ATTR virtual rpc::result_code_type on_evt_pull_object(rpc::context &ctx, const ptr_t &cache,
                                                                            priv_data_t priv_data) {
     if (handle_on_pull_object_) {

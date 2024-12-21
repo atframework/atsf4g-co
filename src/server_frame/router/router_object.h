@@ -19,6 +19,12 @@
 
 #include "router/router_object_base.h"
 
+/**
+ * @brief 路由对象模板类
+ *
+ * @tparam TObj 对象类型
+ * @tparam TChild 子类类型
+ */
 template <typename TObj, typename TChild>
 class UTIL_SYMBOL_VISIBLE router_object : public router_object_base {
  public:
@@ -31,17 +37,50 @@ class UTIL_SYMBOL_VISIBLE router_object : public router_object_base {
   using flag_guard = typename router_object_base::flag_guard;
 
  public:
+  /**
+   * @brief 构造函数
+   *
+   * @param data 对象数据指针
+   * @param k 键值
+   */
   UTIL_FORCEINLINE explicit router_object(const object_ptr_t &data, const key_t &k)
       : router_object_base(k), obj_(data) {
     assert(obj_);
   }
+
+  /**
+   * @brief 构造函数
+   *
+   * @param data 对象数据指针
+   * @param k 键值
+   */
   UTIL_FORCEINLINE explicit router_object(const object_ptr_t &data, key_t &&k) : router_object_base(k), obj_(data) {
     assert(obj_);
   }
 
+  /**
+   * @brief 检查对象是否相等
+   *
+   * @param checked 被检查的对象指针
+   * @return true 如果相等
+   * @return false 如果不相等
+   */
   UTIL_FORCEINLINE bool is_object_equal(const object_ptr_t &checked) const { return checked == obj_; }
+
+  /**
+   * @brief 检查对象是否相等
+   *
+   * @param checked 被检查的对象
+   * @return true 如果相等
+   * @return false 如果不相等
+   */
   UTIL_FORCEINLINE bool is_object_equal(const value_type &checked) const { return &checked == obj_.get(); }
 
+  /**
+   * @brief 获取对象指针
+   *
+   * @return const object_ptr_t& 对象指针
+   */
   UTIL_FORCEINLINE const object_ptr_t &get_object() {
     refresh_visit_time();
     return obj_;
@@ -51,7 +90,11 @@ class UTIL_SYMBOL_VISIBLE router_object : public router_object_base {
 
   /**
    * @brief 保存到数据库，如果成功会更新最后保存时间
-   * @return
+   *
+   * @param ctx RPC上下文
+   * @param priv_data 私有数据
+   * @param guard IO任务保护
+   * @return rpc::result_code_type 结果代码
    */
   EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type save(rpc::context &ctx, void *priv_data,
                                                                       io_task_guard &guard) override {
@@ -73,8 +116,13 @@ class UTIL_SYMBOL_VISIBLE router_object : public router_object_base {
   // EXPLICIT_NODISCARD_ATTR rpc::result_code_type save_object(rpc::context& ctx, void *priv_data) override;
 
  protected:
+  /**
+   * @brief 获取对象指针（常量版本）
+   *
+   * @return const object_ptr_t& 对象指针
+   */
   UTIL_FORCEINLINE const object_ptr_t &object() const { return obj_; }
 
  private:
-  object_ptr_t obj_;
+  object_ptr_t obj_;  ///< 对象数据指针
 };
