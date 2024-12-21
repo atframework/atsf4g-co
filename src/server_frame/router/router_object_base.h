@@ -1,14 +1,18 @@
 // Copyright 2021 atframework
-// Created by owent on 2018-05-07.
+// Created by owent on 2018/05/07.
 //
 
 #pragma once
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.protocol.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <config/compiler_features.h>
 #include <design_pattern/nomovable.h>
@@ -31,32 +35,32 @@
 
 #include "router/router_system_defs.h"
 
-class router_object_base : public std::enable_shared_from_this<router_object_base> {
+class UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_from_this<router_object_base> {
   UTIL_DESIGN_PATTERN_NOCOPYABLE(router_object_base)
   UTIL_DESIGN_PATTERN_NOMOVABLE(router_object_base)
 
  public:
-  struct key_t {
+  struct UTIL_SYMBOL_VISIBLE key_t {
     uint32_t type_id;
     uint32_t zone_id;
     uint64_t object_id;
 
-    key_t() : type_id(0), zone_id(0), object_id(0) {}
-    key_t(uint32_t tid, uint32_t zid, uint64_t oid) : type_id(tid), zone_id(zid), object_id(oid) {}
+    UTIL_FORCEINLINE key_t() : type_id(0), zone_id(0), object_id(0) {}
+    UTIL_FORCEINLINE key_t(uint32_t tid, uint32_t zid, uint64_t oid) : type_id(tid), zone_id(zid), object_id(oid) {}
 
-    bool operator==(const key_t &r) const noexcept;
-    bool operator!=(const key_t &r) const noexcept;
-    bool operator<(const key_t &r) const noexcept;
-    bool operator<=(const key_t &r) const noexcept;
-    bool operator>(const key_t &r) const noexcept;
-    bool operator>=(const key_t &r) const noexcept;
+    SERVER_FRAME_API bool operator==(const key_t &r) const noexcept;
+    SERVER_FRAME_API bool operator!=(const key_t &r) const noexcept;
+    SERVER_FRAME_API bool operator<(const key_t &r) const noexcept;
+    SERVER_FRAME_API bool operator<=(const key_t &r) const noexcept;
+    SERVER_FRAME_API bool operator>(const key_t &r) const noexcept;
+    SERVER_FRAME_API bool operator>=(const key_t &r) const noexcept;
   };
 
   /**
    * @note 基类flag范围是0x00000001-0x00008000
    * @note 子类flag范围是0x00010000-0x40000000
    */
-  struct flag_t {
+  struct UTIL_SYMBOL_VISIBLE flag_t {
     enum type {
       EN_ROFT_FORCE_PULL_OBJECT = 0x0001,  // 下一次mutable_object时是否强制执行数据拉取
       EN_ROFT_IS_OBJECT = 0x0002,          // 当前对象是否时实体（可写）
@@ -77,85 +81,105 @@ class router_object_base : public std::enable_shared_from_this<router_object_bas
     };
   };
 
-  class flag_guard {
+  class UTIL_SYMBOL_VISIBLE flag_guard {
    public:
-    flag_guard(router_object_base &owner, int f);
-    ~flag_guard();
+    SERVER_FRAME_API flag_guard(router_object_base &owner, int f);
+    SERVER_FRAME_API ~flag_guard();
 
-    inline operator bool() { return !!f_; }
+    UTIL_FORCEINLINE operator bool() { return !!f_; }
 
    private:
     router_object_base *owner_;
     int f_;
   };
 
+  class UTIL_SYMBOL_VISIBLE io_task_guard {
+   public:
+    SERVER_FRAME_API io_task_guard();
+    SERVER_FRAME_API ~io_task_guard();
+
+    UTIL_FORCEINLINE operator bool() { return !owner_.expired() && 0 != await_task_id_; }
+
+    SERVER_FRAME_API rpc::result_code_type take(rpc::context &ctx, router_object_base &owner) noexcept;
+
+   private:
+    friend class router_object_base;
+
+    std::weak_ptr<router_object_base> owner_;
+    task_type_trait::id_type await_task_id_;
+  };
+
  protected:
-  explicit router_object_base(const key_t &k);
-  explicit router_object_base(key_t &&k);
-  virtual ~router_object_base();
+  SERVER_FRAME_API explicit router_object_base(const key_t &k);
+  SERVER_FRAME_API explicit router_object_base(key_t &&k);
+  SERVER_FRAME_API virtual ~router_object_base();
 
  public:
-  void refresh_visit_time();
-  void refresh_save_time();
+  SERVER_FRAME_API void refresh_visit_time();
+  SERVER_FRAME_API void refresh_save_time();
 
-  inline const key_t &get_key() const { return key_; }
-  inline bool check_flag(int32_t v) const { return (flags_ & v) == v; }
-  inline void set_flag(int32_t v) { flags_ |= v; }
-  inline void unset_flag(int32_t v) { flags_ &= ~v; }
-  inline int32_t get_flags() const { return flags_; }
+  UTIL_FORCEINLINE const key_t &get_key() const { return key_; }
+  UTIL_FORCEINLINE bool check_flag(int32_t v) const { return (flags_ & v) == v; }
+  UTIL_FORCEINLINE void set_flag(int32_t v) { flags_ |= v; }
+  UTIL_FORCEINLINE void unset_flag(int32_t v) { flags_ &= ~v; }
+  UTIL_FORCEINLINE int32_t get_flags() const { return flags_; }
 
-  inline uint32_t alloc_timer_sequence() { return ++timer_sequence_; }
-  inline bool check_timer_sequence(uint32_t seq) const { return seq == timer_sequence_; }
+  UTIL_FORCEINLINE uint32_t alloc_timer_sequence() { return ++timer_sequence_; }
+  UTIL_FORCEINLINE bool check_timer_sequence(uint32_t seq) const { return seq == timer_sequence_; }
 
-  inline bool is_writable() const {
+  UTIL_FORCEINLINE bool is_writable() const {
     return check_flag(flag_t::EN_ROFT_IS_OBJECT) && !check_flag(flag_t::EN_ROFT_FORCE_PULL_OBJECT) &&
            !check_flag(flag_t::EN_ROFT_CACHE_REMOVED);
   }
 
-  inline bool is_io_running() const {
-    return !task_type_trait::empty(io_task_) && task_type_trait::is_exiting(io_task_);
+  UTIL_FORCEINLINE bool is_io_running() const { return 0 != io_task_id_; }
+
+  UTIL_FORCEINLINE bool is_pulling_cache() const { return check_flag(flag_t::EN_ROFT_PULLING_CACHE); }
+  UTIL_FORCEINLINE bool is_pulling_object() const { return check_flag(flag_t::EN_ROFT_PULLING_OBJECT); }
+  UTIL_FORCEINLINE bool is_transfering() const { return check_flag(flag_t::EN_ROFT_TRANSFERING); }
+
+  UTIL_FORCEINLINE time_t get_last_visit_time() const { return last_visit_time_; }
+  UTIL_FORCEINLINE time_t get_last_save_time() const { return last_save_time_; }
+
+  UTIL_FORCEINLINE task_type_trait::id_type get_last_pull_cache_task_id() const noexcept {
+    return io_last_pull_cache_task_id_;
   }
-  inline bool is_pulling_cache() const { return check_flag(flag_t::EN_ROFT_PULLING_CACHE); }
-  inline bool is_pulling_object() const { return check_flag(flag_t::EN_ROFT_PULLING_OBJECT); }
-  inline bool is_transfering() const { return check_flag(flag_t::EN_ROFT_TRANSFERING); }
-
-  inline time_t get_last_visit_time() const { return last_visit_time_; }
-  inline time_t get_last_save_time() const { return last_save_time_; }
-
-  inline task_type_trait::id_type get_last_pull_cache_task_id() { return io_last_pull_cache_task_id_; }
-  inline task_type_trait::id_type get_last_pull_object_task_id() { return io_last_pull_object_task_id_; }
+  UTIL_FORCEINLINE task_type_trait::id_type get_last_pull_object_task_id() const noexcept {
+    return io_last_pull_object_task_id_;
+  }
 
   /**
    * @brief 获取缓存是否有效
    * @note 如果缓存过期或正在拉取缓存，则缓存无效
    * @return 缓存是否有效
    */
-  bool is_cache_available() const;
+  SERVER_FRAME_API bool is_cache_available() const;
 
   /**
    * @brief 获取实体是否有效
    * @note 如果没有实体或实体要强制拉取或正在拉取实体，则实体无效
    * @return 实体是否有效
    */
-  bool is_object_available() const;
+  SERVER_FRAME_API bool is_object_available() const;
 
   /**
    * @brief 获取路由节点ID
    * @return 路由节点ID
    */
-  inline uint64_t get_router_server_id() const { return router_svr_id_; }
+  UTIL_FORCEINLINE uint64_t get_router_server_id() const { return router_svr_id_; }
 
   /**
    * @brief 获取路由节点名称（尚未接入）
    * @return 路由节点名称
    */
-  inline const std::string &get_router_server_name() const { return router_svr_name_; }
+  UTIL_FORCEINLINE const std::string &get_router_server_name() const { return router_svr_name_; }
 
   /**
    * @brief 移除实体，降级为缓存
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_object(rpc::context &ctx, void *priv_data,
-                                                              uint64_t transfer_to_svr_id);
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_object(rpc::context &ctx, void *priv_data,
+                                                                               uint64_t transfer_to_svr_id,
+                                                                               io_task_guard &guard);
 
   /**
    * @brief 名字接口
@@ -175,7 +199,7 @@ class router_object_base : public std::enable_shared_from_this<router_object_bas
    *       如果需要处理容灾也可以保存时间并忽略过长时间的不匹配路由信息
    * @return 0或错误码
    */
-  virtual rpc::result_code_type pull_cache(rpc::context &ctx, void *priv_data);
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type pull_cache(rpc::context &ctx, void *priv_data);
 
   /**
    * @brief 启动拉取实体流程
@@ -188,7 +212,8 @@ class router_object_base : public std::enable_shared_from_this<router_object_bas
    *       如果需要处理容灾也可以保存时间并忽略过长时间的不匹配路由信息
    * @return 0或错误码
    */
-  virtual rpc::result_code_type pull_object(rpc::context &ctx, void *priv_data) = 0;
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type pull_object(rpc::context &ctx,
+                                                                                     void *priv_data) = 0;
 
   /**
    * @brief 启动保存实体的流程(这个接口不会设置状态)
@@ -201,14 +226,23 @@ class router_object_base : public std::enable_shared_from_this<router_object_bas
    *        * 可以保存执行时间用以处理容灾时的过期数据（按需）
    * @return 0或错误码
    */
-  virtual rpc::result_code_type save_object(rpc::context &ctx, void *priv_data) = 0;
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type save_object(rpc::context &ctx,
+                                                                                     void *priv_data) = 0;
 
   /**
    * @brief 启动保存实体的流程(这个接口会设置状态,被router_object<TObj, TChild>覆盖)
    * @param priv_data 外部传入的私有数据
    * @return 0或错误码
    */
-  virtual rpc::result_code_type save(rpc::context &ctx, void *priv_data) = 0;
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type save(rpc::context &ctx, void *priv_data,
+                                                                              io_task_guard &guard) = 0;
+
+  /**
+   * @brief 启动保存实体的流程,不继承IO task保护(这个接口会设置状态,被router_object<TObj, TChild>覆盖)
+   * @param priv_data 外部传入的私有数据
+   * @return 0或错误码
+   */
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type save(rpc::context &ctx, void *priv_data);
 
   /**
    * @brief 启动拉取缓存流程
@@ -217,28 +251,27 @@ class router_object_base : public std::enable_shared_from_this<router_object_bas
    *          路由BUS ID
    * @return 0或错误码
    */
-  // virtual int load(atframework::SSMsg& msg_set) = 0;
+  // SERVER_FRAME_API virtual int load(atframework::SSMsg& msg_set) = 0;
 
   /**
    * @brief 缓存升级为实体
    * @return 0或错误码
    */
-  virtual int upgrade();
+  SERVER_FRAME_API virtual int upgrade();
 
   /**
    * @brief 为实体降级为缓存
    * @return 0或错误码
    */
-  virtual int downgrade();
+  SERVER_FRAME_API virtual int downgrade();
 
   /**
    * @brief 获取路由版本号
    * @return 路由版本号
    */
-  inline uint64_t get_router_version() const noexcept { return router_svr_ver_; }
+  UTIL_FORCEINLINE uint64_t get_router_version() const noexcept { return router_svr_ver_; }
 
-  // TODO: ROUTER支持服务名路由后去掉默认参数
-  inline void set_router_server_id(uint64_t r, uint64_t v, std::string node_name = "") noexcept {
+  UTIL_FORCEINLINE void set_router_server_id(uint64_t r, uint64_t v, std::string node_name = "") noexcept {
     router_svr_id_ = r;
     router_svr_ver_ = v;
     router_svr_name_ = std::move(node_name);
@@ -246,24 +279,26 @@ class router_object_base : public std::enable_shared_from_this<router_object_bas
 
   /**
   template <typename TR, typename TV>
-  inline void set_router_server_id(TR r, TV v) {
+  UTIL_FORCEINLINE void set_router_server_id(TR r, TV v) {
       router_svr_id_  = r;
       router_svr_ver_ = v;
       static_assert(std::is_same<TR, uint64_t>::value && std::is_same<TV, uint64_t>::value, "invalid call");
   }
   **/
 
-  inline std::list<atframework::SSMsg> &get_transfer_pending_list() noexcept { return transfer_pending_; }
-  inline const std::list<atframework::SSMsg> &get_transfer_pending_list() const noexcept { return transfer_pending_; }
+  UTIL_FORCEINLINE std::list<atframework::SSMsg> &get_transfer_pending_list() noexcept { return transfer_pending_; }
+  UTIL_FORCEINLINE const std::list<atframework::SSMsg> &get_transfer_pending_list() const noexcept {
+    return transfer_pending_;
+  }
 
   /**
    * @brief 根据请求包回发转发失败回包
    * @param req 请求包，在这个接口调用后req的内容将被移入到rsp包。req内容不再可用
    * @return 0或错误码
    */
-  int send_transfer_msg_failed(atframework::SSMsg &&req);
+  SERVER_FRAME_API int send_transfer_msg_failed(atframework::SSMsg &&req);
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(rpc::context &ctx);
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type await_io_task(rpc::context &ctx);
 
   /**
    * @brief 设置链路跟踪信息到RPC上下文
@@ -273,23 +308,28 @@ class router_object_base : public std::enable_shared_from_this<router_object_bas
    * @param zone_id
    * @param object_id
    */
-  static void trace_router(rpc::context &ctx, uint32_t type_id, uint32_t zone_id, uint64_t object_id);
-  static inline void trace_router(rpc::context &ctx, const key_t &key) {
+  SERVER_FRAME_API static void trace_router(rpc::context &ctx, uint32_t type_id, uint32_t zone_id, uint64_t object_id);
+  UTIL_FORCEINLINE static void trace_router(rpc::context &ctx, const key_t &key) {
     trace_router(ctx, key.type_id, key.zone_id, key.object_id);
   }
-  inline void trace_router(rpc::context &ctx) { trace_router(ctx, get_key()); }
+  UTIL_FORCEINLINE void trace_router(rpc::context &ctx) { trace_router(ctx, get_key()); }
 
  protected:
-  void wakeup_io_task_awaiter();
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(rpc::context &ctx,
-                                                              task_type_trait::task_type &other_task);
+  SERVER_FRAME_API void wakeup_io_task_awaiter();
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type await_io_task(rpc::context &ctx,
+                                                                               task_type_trait::task_type &other_task);
 
   // 内部接口，拉取缓存。会排队读任务
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_cache_inner(rpc::context &ctx, void *priv_data);
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type internal_pull_cache(rpc::context &ctx, void *priv_data,
+                                                                                     io_task_guard &guard);
   // 内部接口，拉取实体。会排队读任务
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_object_inner(rpc::context &ctx, void *priv_data);
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type internal_pull_object(rpc::context &ctx,
+                                                                                      void *priv_data,
+                                                                                      io_task_guard &guard);
   // 内部接口，保存数据。会排队写任务
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type save_object_inner(rpc::context &ctx, void *priv_data);
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type internal_save_object(rpc::context &ctx,
+                                                                                      void *priv_data,
+                                                                                      io_task_guard &guard);
 
  private:
   void reset_timer_ref(std::list<router_system_timer_t> *timer_list,
@@ -312,7 +352,8 @@ class router_object_base : public std::enable_shared_from_this<router_object_bas
   std::list<router_system_timer_t>::iterator timer_iter_;
 
   // 新版排队系统
-  task_type_trait::task_type io_task_;
+  task_type_trait::id_type io_task_id_;
+
   uint64_t saving_sequence_;
   uint64_t saved_sequence_;
   std::set<task_type_trait::id_type> io_schedule_order_;
@@ -323,6 +364,7 @@ class router_object_base : public std::enable_shared_from_this<router_object_bas
   int32_t flags_;
   std::list<atframework::SSMsg> transfer_pending_;
 
+  friend class io_task_guard;
   friend class router_manager_base;
   template <typename TCache, typename TObj, typename TPrivData>
   friend class router_manager;
@@ -331,8 +373,8 @@ class router_object_base : public std::enable_shared_from_this<router_object_bas
 
 namespace std {
 template <>
-struct hash<router_object_base::key_t> {
-  size_t operator()(const router_object_base::key_t &k) const noexcept {
+struct UTIL_SYMBOL_VISIBLE hash<router_object_base::key_t> {
+  UTIL_FORCEINLINE size_t operator()(const router_object_base::key_t &k) const noexcept {
     size_t first = hash<uint64_t>()((static_cast<uint64_t>(k.type_id) << 32) | k.zone_id);
     size_t second = hash<uint64_t>()(k.object_id);
     return first ^ (second << 1);

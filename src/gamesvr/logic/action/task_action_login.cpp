@@ -52,10 +52,26 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
 
   // 先查找用户缓存，使用缓存。如果缓存正确则不需要拉取login表和user表
   player::ptr_t user = player_manager::me()->find_as<player>(req_body.user_id(), zone_id);
+
+  // 正在登出则要等登出结束重新获取
+  if (user && user->is_writable()) {
+    res = RPC_AWAIT_CODE_RESULT(await_logout_io_task(get_shared_context(), user));
+    if (res < 0) {
+      if (res == PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT) {
+        set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TIMEOUT);
+      } else {
+        set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
+      }
+      TASK_ACTION_RETURN_CODE(res);
+    }
+
+    user = player_manager::me()->find_as<player>(req_body.user_id(), zone_id);
+  }
+
   // 如果先前的login还在执行中，需要等待路由系统的io任务完成，否则前一个登入尚未设置router对象为writable
   // 后面的remove不会等待IO事件，而本次的login写表时会冲突。最终导致两个登入都失败
   if (user && !user->is_writable()) {
-    res = RPC_AWAIT_CODE_RESULT(await_io_task(get_shared_context(), user));
+    res = RPC_AWAIT_CODE_RESULT(await_login_io_task(get_shared_context(), user));
     if (res < 0) {
       set_response_code(res);
       TASK_ACTION_RETURN_CODE(res);
@@ -321,8 +337,8 @@ GAMECLIENT_RPC_API rpc::result_code_type task_action_login::replace_session(std:
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-GAMECLIENT_RPC_API rpc::result_code_type task_action_login::await_io_task(rpc::context& ctx,
-                                                                          std::shared_ptr<player> user) {
+GAMECLIENT_RPC_API rpc::result_code_type task_action_login::await_login_io_task(rpc::context& ctx,
+                                                                                std::shared_ptr<player> user) {
   router_player_cache::key_t router_key(router_player_manager::me()->get_type_id(), user->get_zone_id(),
                                         user->get_user_id());
   router_player_cache::ptr_t router_cache = router_player_manager::me()->get_cache(router_key);
@@ -345,4 +361,20 @@ GAMECLIENT_RPC_API rpc::result_code_type task_action_login::await_io_task(rpc::c
   }
 
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, last_pull_object_task)));
+}
+
+GAMECLIENT_RPC_API rpc::result_code_type task_action_login::await_logout_io_task(rpc::context& ctx,
+                                                                                 std::shared_ptr<player> user) {
+  router_player_cache::key_t router_key(router_player_manager::me()->get_type_id(), user->get_zone_id(),
+                                        user->get_user_id());
+  router_player_cache::ptr_t router_cache = router_player_manager::me()->get_cache(router_key);
+  if (!router_cache) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+
+  if (router_cache->check_flag(router_object_base::flag_t::EN_ROFT_REMOVING_OBJECT) && router_cache->is_io_running()) {
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(router_cache->await_io_task(ctx)));
+  }
+
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
 }
