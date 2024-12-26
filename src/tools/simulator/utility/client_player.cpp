@@ -60,15 +60,15 @@ static int proto_inner_callback_on_reconnect(libatgw_inner_v1_c_context ctx, uin
 }
 
 static int proto_inner_callback_on_close(libatgw_inner_v1_c_context ctx, int32_t reason) {
-  util::cli::shell_stream ss(std::cout);
+  atfw::util::cli::shell_stream ss(std::cout);
 
   if ((reason < 0 || reason > 0x10000) && ::atframe::gateway::close_reason_t::EN_CRT_EOF != reason) {
     GTCLI2PLAYER(ctx).close();
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_YELLOW << "player " << GTCLI2PLAYER(ctx).get_id() << "("
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_YELLOW << "player " << GTCLI2PLAYER(ctx).get_id() << "("
          << GTCLI2PLAYER(ctx).get_user_id() << ") closed for reason " << reason << std::endl;
   } else {
     GTCLI2PLAYER(ctx).close_net(GTCLI2PLAYER(ctx).find_network(ctx));
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_YELLOW << "player " << GTCLI2PLAYER(ctx).get_id() << "("
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_YELLOW << "player " << GTCLI2PLAYER(ctx).get_id() << "("
          << GTCLI2PLAYER(ctx).get_user_id() << ") closed for reason " << reason << ", we will reconnect soon."
          << std::endl;
   }
@@ -86,8 +86,8 @@ static int proto_inner_callback_on_handshake(libatgw_inner_v1_c_context ctx, int
     libatgw_inner_v1_c_get_info(ctx, msg, sizeof(msg));
     ss_pack << (char *)msg;
 
-    util::cli::shell_stream ss(std::cerr);
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << ss_pack.str() << std::endl;
+    atfw::util::cli::shell_stream ss(std::cerr);
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << ss_pack.str() << std::endl;
     GTCLI2PLAYER(ctx).close_net(GTCLI2PLAYER(ctx).find_network(ctx));
     return -1;
   }
@@ -99,8 +99,8 @@ static int proto_inner_callback_on_handshake_update(libatgw_inner_v1_c_context c
 
 static int proto_inner_callback_on_error(libatgw_inner_v1_c_context ctx, const char *filename, int line, int errcode,
                                          const char *errmsg) {
-  util::cli::shell_stream ss(std::cerr);
-  ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "[Error][" << filename << ":" << line
+  atfw::util::cli::shell_stream ss(std::cerr);
+  ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "[Error][" << filename << ":" << line
        << "]: error code: " << errcode << ", msg: " << errmsg << std::endl;
   return 0;
 }
@@ -168,8 +168,8 @@ int client_player::on_connected(libuv_ptr_t net, int status) {
 
   int32_t res = libatgw_inner_v1_c_start_session(proto_handle, all_avail_types.c_str());
   if (res < 0) {
-    util::cli::shell_stream ss(std::cerr);
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "start session failed, res" << res << std::endl;
+    atfw::util::cli::shell_stream ss(std::cerr);
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "start session failed, res" << res << std::endl;
     is_connecting_ = false;
     close_net(net);
     destroy_proto_context(net);
@@ -199,8 +199,8 @@ void client_player::on_read_data(libuv_ptr_t net, ssize_t nread, const uv_buf_t 
 void client_player::on_read_message(libuv_ptr_t net, const void *buffer, size_t sz) {
   client_simulator *owner = client_simulator::cast(get_owner());
   if (nullptr == owner) {
-    util::cli::shell_stream ss(std::cerr);
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "player " << get_id() << " already removed."
+    atfw::util::cli::shell_stream ss(std::cerr);
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "player " << get_id() << " already removed."
          << std::endl;
     return;
   }

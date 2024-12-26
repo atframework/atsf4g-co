@@ -52,20 +52,22 @@ class simulator_activitor {
     }                                                                                             \
   }
 
-#define SIMULATOR_CHECK_PARAMNUM(PARAM, N)                                                               \
-                                                                                                         \
-  if (PARAM.get_params_number() < N) {                                                                   \
-    util::cli::shell_stream(std::cerr)() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED            \
-                                         << "this command require " << N << " parameters. but only got " \
-                                         << PARAM.get_params_number() << std::endl;                      \
-    SIMULATOR_PRINT_PARAM_HELPER(PARAM, std::cerr);                                                      \
-    return;                                                                                              \
+#define SIMULATOR_CHECK_PARAMNUM(PARAM, N)                                                         \
+                                                                                                   \
+  if (PARAM.get_params_number() < N) {                                                             \
+    atfw::util::cli::shell_stream(std::cerr)()                                                     \
+        << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "this command require " << N \
+        << " parameters. but only got " << PARAM.get_params_number() << std::endl;                 \
+    SIMULATOR_PRINT_PARAM_HELPER(PARAM, std::cerr);                                                \
+    return;                                                                                        \
   }
 
-#define SIMULATOR_ERR_MSG() util::cli::shell_stream(std::cerr)() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED
-#define SIMULATOR_INFO_MSG() util::cli::shell_stream(std::cout)() << util::cli::shell_font_style::SHELL_FONT_COLOR_GREEN
+#define SIMULATOR_ERR_MSG() \
+  atfw::util::cli::shell_stream(std::cerr)() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED
+#define SIMULATOR_INFO_MSG() \
+  atfw::util::cli::shell_stream(std::cout)() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_GREEN
 #define SIMULATOR_WARN_MSG() \
-  util::cli::shell_stream(std::cout)() << util::cli::shell_font_style::SHELL_FONT_COLOR_YELLOW
+  atfw::util::cli::shell_stream(std::cout)() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_YELLOW
 #define SIMULATOR_TRACE_MSG() std::cout
 
 #endif  // ATFRAMEWORK_LIBSIMULATOR_SIMULATOR_ACTIVE_H

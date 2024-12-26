@@ -31,12 +31,12 @@ task_action_set_server_time::result_type task_action_set_server_time::operator()
   // Stream request or stream response, just ignore auto response
   disable_response_message();
 
-  ::util::time::time_utility::set_global_now_offset(std::chrono::duration_cast<std::chrono::system_clock::duration>(
+  atfw::util::time::time_utility::set_global_now_offset(std::chrono::duration_cast<std::chrono::system_clock::duration>(
       std::chrono::seconds(req_body.global_now_offset())));
 
   FWLOGINFO("Reset global time offset to {}", req_body.global_now_offset());
   struct tm tt;
-  time_t now = ::util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
   UTIL_STRFUNC_LOCALTIME_S(&now, &tt);
   char str[256] = {0};
   strftime(str, sizeof(str) - 1, "%Y-%m-%d %H:%M:%S", &tt);

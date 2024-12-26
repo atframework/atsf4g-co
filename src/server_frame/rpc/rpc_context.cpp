@@ -83,8 +83,8 @@ static void calculate_trace_span_permillage(time_t now) {
   metrics_data.last_second_timepoint_drop_trace_span_count = metrics_data.total_drop_trace_span_count;
   metrics_data.last_second_timepoint_sample_trace_span_count = metrics_data.total_sample_trace_span_count;
 
-  if (metrics_data.last_collect_per_minute_timepoint / util::time::time_utility::MINITE_SECONDS ==
-      now / util::time::time_utility::MINITE_SECONDS) {
+  if (metrics_data.last_collect_per_minute_timepoint / atfw::util::time::time_utility::MINITE_SECONDS ==
+      now / atfw::util::time::time_utility::MINITE_SECONDS) {
     return;
   }
 
@@ -105,7 +105,7 @@ static void calculate_trace_span_permillage(time_t now) {
 }
 
 static bool should_sample_trace_span() {
-  time_t now = util::time::time_utility::get_sys_now();
+  time_t now = atfw::util::time::time_utility::get_sys_now();
 
   auto &metrics_data = get_rpc_context_mertrics_data();
   if (now != metrics_data.last_collect_per_second_timepoint) {
@@ -128,7 +128,7 @@ static bool should_sample_trace_span() {
     return true;
   }
 
-  return util::random_engine::fast_random_between<int64_t>(0, 0x1000000) < metrics_data.sample_rate;
+  return atfw::util::random_engine::fast_random_between<int64_t>(0, 0x1000000) < metrics_data.sample_rate;
 }
 
 }  // namespace

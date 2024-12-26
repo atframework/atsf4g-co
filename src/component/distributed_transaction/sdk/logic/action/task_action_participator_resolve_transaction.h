@@ -25,10 +25,10 @@ class transaction_participator_handle;
 class task_action_participator_resolve_transaction : public task_action_no_req_base {
  public:
   using storage_type = atframework::distributed_system::transaction_participator_storage;
-  using storage_ptr_type = util::memory::strong_rc_ptr<storage_type>;
+  using storage_ptr_type = atfw::util::memory::strong_rc_ptr<storage_type>;
 
   struct ctor_param_t : public task_action_no_req_base::ctor_param_t {
-    util::memory::strong_rc_ptr<transaction_participator_handle> participantor;
+    atfw::util::memory::strong_rc_ptr<transaction_participator_handle> participantor;
     std::list<std::string> pending_transactions;
     std::vector<storage_ptr_type> submmit_transactions;
   };

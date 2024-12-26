@@ -46,16 +46,16 @@ class lua_binding_class_mgr_base {
 
 template <typename TC>
 class lua_binding_class_mgr_inst : public lua_binding_class_mgr_base,
-                                   public util::design_pattern::singleton<lua_binding_class_mgr_inst<TC> > {
+                                   public atfw::util::design_pattern::singleton<lua_binding_class_mgr_inst<TC> > {
  public:
   int proc(lua_State *L) override {
     if (nullptr == L) {
-      ::util::lock::write_lock_holder< ::util::lock::spin_rw_lock> wlh(cache_lock_);
+      atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh(cache_lock_);
       cache_maps_.clear();
       return 0;
     }
 
-    ::util::lock::read_lock_holder< ::util::lock::spin_rw_lock> rlh(cache_lock_);
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> rlh(cache_lock_);
     intptr_t index = reinterpret_cast<intptr_t>(L);
     auto iter = cache_maps_.find(index);
     if (cache_maps_.end() == iter) {
@@ -71,7 +71,7 @@ class lua_binding_class_mgr_inst : public lua_binding_class_mgr_base,
       return false;
     }
 
-    ::util::lock::read_lock_holder< ::util::lock::spin_rw_lock> rlh(cache_lock_);
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> rlh(cache_lock_);
 
     intptr_t index = reinterpret_cast<intptr_t>(L);
     auto iter = cache_maps_.find(index);
@@ -84,14 +84,14 @@ class lua_binding_class_mgr_inst : public lua_binding_class_mgr_base,
   }
 
   void add_lua_state(lua_State *L) override {
-    ::util::lock::write_lock_holder< ::util::lock::spin_rw_lock> wlh(cache_lock_);
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh(cache_lock_);
 
     intptr_t index = reinterpret_cast<intptr_t>(L);
     cache_maps_[index];
   }
 
   void remove_lua_state(lua_State *L) override {
-    ::util::lock::write_lock_holder< ::util::lock::spin_rw_lock> wlh(cache_lock_);
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh(cache_lock_);
 
     intptr_t index = reinterpret_cast<intptr_t>(L);
     cache_maps_.erase(index);
@@ -99,10 +99,10 @@ class lua_binding_class_mgr_inst : public lua_binding_class_mgr_base,
 
  private:
   std::map<intptr_t, std::list<std::shared_ptr<TC> > > cache_maps_;
-  ::util::lock::spin_rw_lock cache_lock_;
+  atfw::util::lock::spin_rw_lock cache_lock_;
 };
 
-class lua_binding_mgr : public util::design_pattern::singleton<lua_binding_mgr> {
+class lua_binding_mgr : public atfw::util::design_pattern::singleton<lua_binding_mgr> {
  public:
   using func_type = std::function<void(lua_State *)>;
 

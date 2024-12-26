@@ -93,7 +93,7 @@ struct lua_profile_call_data {
   prof_key_t key;
 };
 
-class lua_profile : public util::design_pattern::singleton<lua_profile> {
+class lua_profile : public atfw::util::design_pattern::singleton<lua_profile> {
  public:
   using prof_key_t = lua_profile_call_data::prof_key_t;
   using prof_ptr = lua_profile_call_data::stats_ptr;

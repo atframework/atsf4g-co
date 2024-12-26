@@ -24,8 +24,8 @@ struct on_sys_cmd_lua_run_code {
 
   void operator()(util::cli::callback_param params) {
     if (!owner->get_lua_engine()) {
-      util::cli::shell_stream ss(std::cerr);
-      ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "Lua engine disabled." << std::endl;
+      atfw::util::cli::shell_stream ss(std::cerr);
+      ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "Lua engine disabled." << std::endl;
     } else {
       for (size_t i = 0; i < params.get_params_number(); ++i) {
         owner->get_lua_engine()->run_code(params[i]->to_string());
@@ -40,8 +40,8 @@ struct on_sys_cmd_lua_run_file {
 
   void operator()(util::cli::callback_param params) {
     if (!owner->get_lua_engine()) {
-      util::cli::shell_stream ss(std::cerr);
-      ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "Lua engine disabled." << std::endl;
+      atfw::util::cli::shell_stream ss(std::cerr);
+      ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "Lua engine disabled." << std::endl;
     } else {
       for (size_t i = 0; i < params.get_params_number(); ++i) {
         owner->get_lua_engine()->run_file(params[i]->to_string());
@@ -61,17 +61,17 @@ client_simulator::~client_simulator() {}
 void client_simulator::on_start() {
   if (lua_engine_) {
     std::string dirname;
-    ::util::file_system::dirname(get_exec(), 0, dirname);
-    dirname = ::util::file_system::get_abs_path(dirname.c_str());
-    dirname += ::util::file_system::DIRECTORY_SEPARATOR;
+    atfw::util::file_system::dirname(get_exec(), 0, dirname);
+    dirname = atfw::util::file_system::get_abs_path(dirname.c_str());
+    dirname += atfw::util::file_system::DIRECTORY_SEPARATOR;
     dirname += "lua";
-    std::string boostrap_script = (dirname + ::util::file_system::DIRECTORY_SEPARATOR) + "main.lua";
+    std::string boostrap_script = (dirname + atfw::util::file_system::DIRECTORY_SEPARATOR) + "main.lua";
     if (::util::file_system::is_exist(boostrap_script.c_str())) {
       lua_engine_->add_search_path(dirname, true);
       lua_engine_->run_file(boostrap_script.c_str());
     } else {
-      util::cli::shell_stream ss(std::cerr);
-      ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "Lua bootstrap script " << boostrap_script
+      atfw::util::cli::shell_stream ss(std::cerr);
+      ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "Lua bootstrap script " << boostrap_script
            << " not found, just skip it." << std::endl;
     }
   }
@@ -136,8 +136,8 @@ std::string client_simulator::dump_message(const msg_t &msg) {
 int client_simulator::pack_message(const msg_t &msg, void *buffer, size_t &sz) const {
   size_t msz = msg.ByteSizeLong();
   if (sz < msz) {
-    util::cli::shell_stream ss(std::cerr);
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "package message require " << msz
+    atfw::util::cli::shell_stream ss(std::cerr);
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "package message require " << msz
          << " bytes, but only has " << sz << " bytes" << std::endl;
     return -1;
   }
@@ -149,8 +149,8 @@ int client_simulator::pack_message(const msg_t &msg, void *buffer, size_t &sz) c
 
 int client_simulator::unpack_message(msg_t &msg, const void *buffer, size_t sz) const {
   if (false == msg.ParseFromArray(buffer, static_cast<int>(sz))) {
-    util::cli::shell_stream ss(std::cerr);
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "unpackage message failed, "
+    atfw::util::cli::shell_stream ss(std::cerr);
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "unpackage message failed, "
          << msg.InitializationErrorString() << std::endl;
     return -1;
   }

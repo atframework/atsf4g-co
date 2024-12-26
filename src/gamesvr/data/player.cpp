@@ -179,20 +179,20 @@ void player::refresh_feature_limit(rpc::context &ctx) {
   // all modules refresh limit
   user_async_jobs_manager_->refresh_feature_limit(ctx);
 
-  time_t now = util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
   if (now != cache_data_.refresh_feature_limit_second) {
     cache_data_.refresh_feature_limit_second = now;
     // 每秒仅需要执行一次的refresh_feature_limit
   }
-  if (now >= cache_data_.refresh_feature_limit_minute + util::time::time_utility::MINITE_SECONDS ||
+  if (now >= cache_data_.refresh_feature_limit_minute + atfw::util::time::time_utility::MINITE_SECONDS ||
       now < cache_data_.refresh_feature_limit_minute) {
-    cache_data_.refresh_feature_limit_minute = now - now % util::time::time_utility::MINITE_SECONDS;
+    cache_data_.refresh_feature_limit_minute = now - now % atfw::util::time::time_utility::MINITE_SECONDS;
 
     // 每分钟仅需要执行一次的refresh_feature_limit
   }
-  if (now >= cache_data_.refresh_feature_limit_hour + util::time::time_utility::HOUR_SECONDS ||
+  if (now >= cache_data_.refresh_feature_limit_hour + atfw::util::time::time_utility::HOUR_SECONDS ||
       now < cache_data_.refresh_feature_limit_hour) {
-    cache_data_.refresh_feature_limit_hour = now - now % util::time::time_utility::HOUR_SECONDS;
+    cache_data_.refresh_feature_limit_hour = now - now % atfw::util::time::time_utility::HOUR_SECONDS;
 
     // 每小时仅需要执行一次的refresh_feature_limit
   }
@@ -302,7 +302,7 @@ void player::update_heartbeat() {
   time_t heartbeat_interval = logic_cfg.heartbeat().interval().seconds();
   time_t heartbeat_tolerance = logic_cfg.heartbeat().tolerance().seconds();
   time_t tol_dura = heartbeat_interval - heartbeat_tolerance;
-  time_t now_time = util::time::time_utility::get_sys_now();
+  time_t now_time = atfw::util::time::time_utility::get_sys_now();
 
   // 小于容忍值得要统计错误次数
   if (now_time - heartbeat_data_.last_recv_time < tol_dura) {

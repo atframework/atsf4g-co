@@ -162,7 +162,7 @@ class ss_msg_dispatcher : public dispatcher_implement {
   SERVER_FRAME_API int32_t send_to_proc(uint64_t node_id, atframework::SSMsg &ss_msg, bool ignore_discovery = false);
   SERVER_FRAME_API int32_t send_to_proc(uint64_t node_id, const void *msg_buf, size_t msg_len, uint64_t sequence,
                                         bool ignore_discovery);
-  SERVER_FRAME_API int32_t send_to_proc(const std::string& node_name, atframework::SSMsg &ss_msg,
+  SERVER_FRAME_API int32_t send_to_proc(const std::string &node_name, atframework::SSMsg &ss_msg,
                                         bool ignore_discovery = false);
   SERVER_FRAME_API int32_t send_to_proc(const atapp::etcd_discovery_node &node, atframework::SSMsg &ss_msg,
                                         bool ignore_discovery = false);
@@ -183,7 +183,7 @@ class ss_msg_dispatcher : public dispatcher_implement {
                                      ::atapp::protocol::atapp_metadata *metadata = nullptr);
 
  private:
- void setup_metrics();
+  void setup_metrics();
 
   static void dns_lookup_callback(uv_getaddrinfo_t *req, int status, struct addrinfo *res) noexcept;
 
@@ -204,7 +204,7 @@ class ss_msg_dispatcher : public dispatcher_implement {
     time_t timeout_timepoint;
   };
 
-  util::mempool::lru_map<uint64_t, dns_lookup_async_data> running_dns_lookup_;
+  atfw::util::mempool::lru_map<uint64_t, dns_lookup_async_data> running_dns_lookup_;
 };
 
 #endif  // ATF4G_CO_SS_MSG_DISPATCHER_H

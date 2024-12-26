@@ -64,7 +64,7 @@ struct UTIL_SYMBOL_LOCAL ss_rpc_mertrics_group {
 };
 
 struct UTIL_SYMBOL_LOCAL ss_rpc_mertrics_manager
-    : public util::design_pattern::local_singleton<ss_rpc_mertrics_manager> {
+    : public atfw::util::design_pattern::local_singleton<ss_rpc_mertrics_manager> {
   std::mutex lock;
 
   std::shared_ptr<ss_rpc_mertrics_group> current_group;
@@ -200,7 +200,7 @@ SERVER_FRAME_API int ss_msg_dispatcher::tick() {
 
   while (!running_dns_lookup_.empty()) {
     if (sys_now == 0) {
-      sys_now = util::time::time_utility::get_sys_now();
+      sys_now = atfw::util::time::time_utility::get_sys_now();
     }
 
     if (!running_dns_lookup_.front().second) {
@@ -578,7 +578,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_s
       break;
     }
 
-    util::time::time_utility::update();
+    atfw::util::time::time_utility::update();
     auto delay = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::seconds{util::time::time_utility::get_sys_now() - rpc_response.caller_timestamp().seconds()} +
         std::chrono::nanoseconds{util::time::time_utility::get_now_nanos() - rpc_response.caller_timestamp().nanos()});
@@ -1009,7 +1009,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_dns_lookup(gsl::string_view dom
     return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
 
-  async_data->start_timepoint = util::time::time_utility::get_sys_now();
+  async_data->start_timepoint = atfw::util::time::time_utility::get_sys_now();
   time_t timeout_conf = logic_config::me()->get_logic().dns().lookup_timeout().seconds();
   if (timeout_conf <= 0) {
     timeout_conf = 5;

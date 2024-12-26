@@ -22,7 +22,7 @@ void lua_auto_block::null_call() {}
 
 #if !(defined(LIBATFRAME_UTILS_ENABLE_RTTI) && LIBATFRAME_UTILS_ENABLE_RTTI)
 std::string lua_binding_userdata_generate_metatable_name() {
-  static util::lock::atomic_int_type<size_t> clazz_idx(0);
+  static atfw::util::lock::atomic_int_type<size_t> clazz_idx(0);
   std::stringstream ss;
   ss << "lua metatable " << (++clazz_idx);
   return ss.str();

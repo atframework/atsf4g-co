@@ -16,8 +16,8 @@ simulator_player_impl::simulator_player_impl() : is_closing_(false), owner_(null
 
 simulator_player_impl::~simulator_player_impl() {
   assert(nullptr == owner_);
-  util::cli::shell_stream ss(std::cerr);
-  ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_GREEN << "player " << id_ << " destroyed" << std::endl;
+  atfw::util::cli::shell_stream ss(std::cerr);
+  ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_GREEN << "player " << id_ << " destroyed" << std::endl;
 }
 
 bool simulator_player_impl::set_id(const std::string &id) {
@@ -34,9 +34,9 @@ bool simulator_player_impl::set_id(const std::string &id) {
   old_id.swap(id_);
   if (!id_.empty() && false == owner_->insert_player(watcher_.lock())) {
     id_.swap(old_id);
-    util::cli::shell_stream ss(std::cerr);
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << util::cli::shell_font_style::SHELL_FONT_SPEC_BOLD
-         << "insert player " << id << " failed" << std::endl;
+    atfw::util::cli::shell_stream ss(std::cerr);
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED
+         << atfw::util::cli::shell_font_style::SHELL_FONT_SPEC_BOLD << "insert player " << id << " failed" << std::endl;
 
     return false;
   }
@@ -60,7 +60,7 @@ void simulator_player_impl::libuv_on_alloc(uv_handle_t *handle, size_t suggested
 }
 
 void simulator_player_impl::libuv_on_read_data(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
-  util::time::time_utility::update(nullptr);
+  atfw::util::time::time_utility::update(nullptr);
 
   simulator_player_impl *self = reinterpret_cast<simulator_player_impl *>(stream->data);
   assert(self);
@@ -84,7 +84,7 @@ void simulator_player_impl::libuv_on_read_data(uv_stream_t *stream, ssize_t nrea
 
 // ================= connect ==================
 void simulator_player_impl::libuv_on_connected(uv_connect_t *req, int status) {
-  util::time::time_utility::update(nullptr);
+  atfw::util::time::time_utility::update(nullptr);
 
   ptr_t *self_sptr = reinterpret_cast<ptr_t *>(req->data);
   assert(self_sptr);
@@ -93,8 +93,8 @@ void simulator_player_impl::libuv_on_connected(uv_connect_t *req, int status) {
 
   libuv_ptr_t net = self->find_network(req);
   if (0 != status || !net) {
-    util::cli::shell_stream ss(std::cerr);
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED
+    atfw::util::cli::shell_stream ss(std::cerr);
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED
          << "libuv_on_connected callback failed, msg: " << uv_strerror(status) << std::endl;
     fprintf(stderr, "libuv_tcp_connect_callback callback failed, msg: %s\n", uv_strerror(status));
 
@@ -112,9 +112,9 @@ void simulator_player_impl::libuv_on_connected(uv_connect_t *req, int status) {
 
   int res = self->on_connected(net, status);
   if (res < 0) {
-    util::cli::shell_stream ss(std::cerr);
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "player on_connected callback failed, ret: " << res
-         << std::endl;
+    atfw::util::cli::shell_stream ss(std::cerr);
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED
+         << "player on_connected callback failed, ret: " << res << std::endl;
 
     uv_read_stop(req->handle);
     net->tcp_sock.data = self.get();
@@ -125,7 +125,7 @@ void simulator_player_impl::libuv_on_connected(uv_connect_t *req, int status) {
 }
 
 void simulator_player_impl::libuv_on_dns_callback(uv_getaddrinfo_t *req, int status, struct addrinfo *res) {
-  util::time::time_utility::update(nullptr);
+  atfw::util::time::time_utility::update(nullptr);
 
   ptr_t *self_sptr = reinterpret_cast<ptr_t *>(req->data);
   assert(self_sptr);
@@ -135,8 +135,8 @@ void simulator_player_impl::libuv_on_dns_callback(uv_getaddrinfo_t *req, int sta
   libuv_ptr_t net = self->find_network(req);
   do {
     if (0 != status || !net) {
-      util::cli::shell_stream ss(std::cerr);
-      ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "uv_getaddrinfo callback failed, "
+      atfw::util::cli::shell_stream ss(std::cerr);
+      ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "uv_getaddrinfo callback failed, "
            << uv_strerror(status) << std::endl;
       break;
     }
@@ -160,8 +160,8 @@ void simulator_player_impl::libuv_on_dns_callback(uv_getaddrinfo_t *req, int sta
       uv_ip6_name(res_c, ip, sizeof(ip));
       uv_ip6_addr(ip, net->port, (struct sockaddr_in6 *)&real_addr);
     } else {
-      util::cli::shell_stream ss(std::cerr);
-      ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED
+      atfw::util::cli::shell_stream ss(std::cerr);
+      ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED
            << "uv_tcp_connect failed, ai_family not supported: " << res->ai_family << std::endl;
 
       self->close_net(net);
@@ -173,9 +173,9 @@ void simulator_player_impl::libuv_on_dns_callback(uv_getaddrinfo_t *req, int sta
     assert(*self_sptr);
     int res_code = uv_tcp_connect(&net->connect_req, &net->tcp_sock, (struct sockaddr *)&real_addr, libuv_on_connected);
     if (0 != res_code) {
-      util::cli::shell_stream ss(std::cerr);
-      ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "uv_tcp_connect failed, " << uv_strerror(res_code)
-           << std::endl;
+      atfw::util::cli::shell_stream ss(std::cerr);
+      ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "uv_tcp_connect failed, "
+           << uv_strerror(res_code) << std::endl;
 
       net->connect_req.data = nullptr;
       self->close_net(net);
@@ -199,11 +199,11 @@ void simulator_player_impl::on_close() {}
 void simulator_player_impl::on_closed() {}
 
 int simulator_player_impl::connect(const std::string &host, int port) {
-  util::time::time_utility::update(nullptr);
+  atfw::util::time::time_utility::update(nullptr);
 
   if (is_closing_ || nullptr == owner_) {
-    util::cli::shell_stream ss(std::cerr);
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "player connect to " << host << ":" << port
+    atfw::util::cli::shell_stream ss(std::cerr);
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "player connect to " << host << ":" << port
          << " failed, " << (is_closing_ ? "is closing" : "has not owner") << std::endl;
     return -1;
   }
@@ -217,8 +217,8 @@ int simulator_player_impl::connect(const std::string &host, int port) {
 
   int ret = uv_getaddrinfo(owner_->get_loop(), &net->dns_req, libuv_on_dns_callback, host.c_str(), nullptr, nullptr);
   if (0 != ret) {
-    util::cli::shell_stream ss(std::cerr);
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "player connect to " << host << ":" << port
+    atfw::util::cli::shell_stream ss(std::cerr);
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "player connect to " << host << ":" << port
          << " failed, " << uv_strerror(ret) << std::endl;
 
     delete (ptr_t *)net->dns_req.data;
@@ -247,22 +247,22 @@ void simulator_player_impl::libuv_on_written_data(uv_write_t *req, int status) {
 
 int simulator_player_impl::write_message(libuv_ptr_t net, void *buffer, uint64_t sz) {
   if (is_closing_) {
-    util::cli::shell_stream ss(std::cerr);
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "closed or closing player " << id_
+    atfw::util::cli::shell_stream ss(std::cerr);
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "closed or closing player " << id_
          << " can not send any data" << std::endl;
     return -1;
   }
 
   if (!net || nullptr == net->tcp_sock.data) {
-    util::cli::shell_stream ss(std::cerr);
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "player " << id_ << " socket not available"
+    atfw::util::cli::shell_stream ss(std::cerr);
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "player " << id_ << " socket not available"
          << std::endl;
     return -1;
   }
 
   if (net->holder) {
-    util::cli::shell_stream ss(std::cerr);
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "player " << id_
+    atfw::util::cli::shell_stream ss(std::cerr);
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "player " << id_
          << " write data failed, another writhing is running." << std::endl;
     return -1;
   }
@@ -275,8 +275,8 @@ int simulator_player_impl::write_message(libuv_ptr_t net, void *buffer, uint64_t
     net->write_req.data = nullptr;
     net->holder.reset();
 
-    util::cli::shell_stream ss(std::cerr);
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "player " << id_ << " write data failed,"
+    atfw::util::cli::shell_stream ss(std::cerr);
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "player " << id_ << " write data failed,"
          << uv_strerror(ret) << std::endl;
   }
 
@@ -285,15 +285,15 @@ int simulator_player_impl::write_message(libuv_ptr_t net, void *buffer, uint64_t
 
 int simulator_player_impl::read_message(const void *buffer, uint64_t sz) {
   if (is_closing_) {
-    util::cli::shell_stream ss(std::cout);
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_YELLOW << "closed or closing player " << id_
+    atfw::util::cli::shell_stream ss(std::cout);
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_YELLOW << "closed or closing player " << id_
          << " do not deal with any message any more" << std::endl;
     return -1;
   }
 
   if (nullptr == owner_) {
-    util::cli::shell_stream ss(std::cout);
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_YELLOW << "player " << id_
+    atfw::util::cli::shell_stream ss(std::cout);
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_YELLOW << "player " << id_
          << " without simulator manager can not deal with any message" << std::endl;
     return -1;
   }
@@ -447,16 +447,18 @@ bool simulator_player_impl::close_net(libuv_ptr_t net) {
 // this function must be thread-safe
 int simulator_player_impl::insert_cmd(const std::string &cmd) {
   if (is_closing_) {
-    util::cli::shell_stream ss(std::cerr);
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << util::cli::shell_font_style::SHELL_FONT_SPEC_BOLD
-         << "insert cmd into closed or closing player " << id_ << " failed" << std::endl;
+    atfw::util::cli::shell_stream ss(std::cerr);
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED
+         << atfw::util::cli::shell_font_style::SHELL_FONT_SPEC_BOLD << "insert cmd into closed or closing player "
+         << id_ << " failed" << std::endl;
     return -1;
   }
 
   if (nullptr == owner_) {
-    util::cli::shell_stream ss(std::cerr);
-    ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << util::cli::shell_font_style::SHELL_FONT_SPEC_BOLD
-         << "insert cmd into player " << id_ << " without simulator manager failed" << std::endl;
+    atfw::util::cli::shell_stream ss(std::cerr);
+    ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED
+         << atfw::util::cli::shell_font_style::SHELL_FONT_SPEC_BOLD << "insert cmd into player " << id_
+         << " without simulator manager failed" << std::endl;
     return -1;
   }
 

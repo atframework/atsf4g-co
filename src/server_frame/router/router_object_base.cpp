@@ -183,14 +183,14 @@ SERVER_FRAME_API router_object_base::~router_object_base() {
 }
 
 SERVER_FRAME_API void router_object_base::refresh_visit_time() {
-  last_visit_time_ = util::time::time_utility::get_sys_now();
+  last_visit_time_ = atfw::util::time::time_utility::get_sys_now();
 
   // 刷新访问事件要取消移除缓存的计划任务
   unset_flag(flag_t::EN_ROFT_SCHED_REMOVE_CACHE);
 }
 
 SERVER_FRAME_API void router_object_base::refresh_save_time() {
-  last_save_time_ = util::time::time_utility::get_sys_now();
+  last_save_time_ = atfw::util::time::time_utility::get_sys_now();
 }
 
 SERVER_FRAME_API rpc::result_code_type router_object_base::remove_object(rpc::context &ctx, void *priv_data,
@@ -240,7 +240,7 @@ SERVER_FRAME_API bool router_object_base::is_cache_available() const {
   }
 
   if (last_save_time_ + logic_config::me()->get_cfg_router().cache_update_interval().seconds() <
-      util::time::time_utility::get_sys_now()) {
+      atfw::util::time::time_utility::get_sys_now()) {
     return false;
   }
 

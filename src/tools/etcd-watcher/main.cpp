@@ -14,7 +14,7 @@
 static bool is_run = true;
 static int wait_for_close = 0;
 static void tick_timer_callback(uv_timer_t *handle) {
-  util::time::time_utility::update();
+  atfw::util::time::time_utility::update();
 
   atapp::etcd_cluster *ec = reinterpret_cast<atapp::etcd_cluster *>(handle->data);
   ec->tick();
@@ -27,7 +27,7 @@ static void signal_callback(uv_signal_t *handle, int signum) {
 
 static void close_callback(uv_handle_t *handle) { --wait_for_close; }
 
-static void log_callback(const util::log::log_wrapper::caller_info_t &caller, const char *content,
+static void log_callback(const atfw::util::log::log_wrapper::caller_info_t &caller, const char *content,
                          size_t content_size) {
   puts(content);
 }
@@ -67,15 +67,15 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
-  util::time::time_utility::update();
+  atfw::util::time::time_utility::update();
   WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->init();
   WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->set_prefix_format("[%L][%F %T.%f][%k:%n(%C)]: ");
   WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->add_sink(log_callback);
   WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)
       ->set_stacktrace_level(util::log::log_formatter::level_t::LOG_LW_ERROR);
 
-  util::network::http_request::curl_m_bind_ptr_t curl_mgr;
-  util::network::http_request::create_curl_multi(uv_default_loop(), curl_mgr);
+  atfw::util::network::http_request::curl_m_bind_ptr_t curl_mgr;
+  atfw::util::network::http_request::create_curl_multi(uv_default_loop(), curl_mgr);
   atapp::etcd_cluster ec;
   ec.init(curl_mgr);
   std::vector<std::string> hosts;
@@ -119,7 +119,7 @@ int main(int argc, char *argv[]) {
   uv_signal_stop(&sig);
   uv_close((uv_handle_t *)&sig, close_callback);
 
-  util::network::http_request::destroy_curl_multi(curl_mgr);
+  atfw::util::network::http_request::destroy_curl_multi(curl_mgr);
 
   while (wait_for_close > 0) {
     uv_run(uv_default_loop(), UV_RUN_ONCE);

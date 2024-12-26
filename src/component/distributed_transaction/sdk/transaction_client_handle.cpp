@@ -46,7 +46,7 @@ static inline google::protobuf::Duration std_duration_to_protobuf_duration(std::
 }  // namespace
 
 DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle::transaction_client_handle(
-    const util::memory::strong_rc_ptr<vtable_type>& vtable)
+    const atfw::util::memory::strong_rc_ptr<vtable_type>& vtable)
     : private_data_{nullptr}, on_destroy_{nullptr}, vtable_{vtable} {}
 
 DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle::~transaction_client_handle() {
@@ -148,9 +148,9 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
     output_prepared_participators->clear();
   }
   std::string failed_participator;
-  for (auto now = util::time::time_utility::now();
+  for (auto now = atfw::util::time::time_utility::now();
        now < expired_time && retry_times <= input->configure().lock_retry_max_times();
-       ++retry_times, now = util::time::time_utility::now()) {
+       ++retry_times, now = atfw::util::time::time_utility::now()) {
     // 参与者准备
     bool retry_later = false;
     if (vtable_ && vtable_->prepare_participator) {
@@ -197,8 +197,8 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
         ret = RPC_AWAIT_CODE_RESULT(rpc::wait(child_ctx, delay_min));
       } else {
         ret = RPC_AWAIT_CODE_RESULT(
-            rpc::wait(child_ctx, std::chrono::system_clock::duration{
-                                     util::random_engine::fast_random_between(delay_min.count(), delay_max.count())}));
+            rpc::wait(child_ctx, std::chrono::system_clock::duration{atfw::util::random_engine::fast_random_between(
+                                     delay_min.count(), delay_max.count())}));
       }
 
       if (ret >= 0) {

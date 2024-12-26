@@ -340,7 +340,7 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
     }
 
     // 执行时间过长则中断，下一次再启动流程
-    need_restart_ = (param_.timeout_timepoint - util::time::time_utility::now()) < param_.timeout_duration / 2;
+    need_restart_ = (param_.timeout_timepoint - atfw::util::time::time_utility::now()) < param_.timeout_duration / 2;
 
     // 如果玩家离线和正在准备登出则停止异步任务流程，下次登入再继续
     {
@@ -477,10 +477,10 @@ int32_t task_action_player_remote_patch_jobs::do_job(int32_t job_type, const asy
         static_cast<int32_t>(job_data->action_case()));
     std::string sub_job_name;
     if (nullptr == fds) {
-      sub_job_name =
-          util::log::format("task_action_player_remote_patch_jobs.{}", static_cast<int32_t>(job_data->action_case()));
+      sub_job_name = atfw::util::log::format("task_action_player_remote_patch_jobs.{}",
+                                             static_cast<int32_t>(job_data->action_case()));
     } else {
-      sub_job_name = util::log::format("task_action_player_remote_patch_jobs.{}", fds->name());
+      sub_job_name = atfw::util::log::format("task_action_player_remote_patch_jobs.{}", fds->name());
     }
     auto fn = iter_async->second;
     auto user_ptr = param_.user;

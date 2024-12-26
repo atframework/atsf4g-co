@@ -26,7 +26,7 @@
 namespace rpc {
 class context;
 
-using async_invoke_result = util::design_pattern::result_type<task_type_trait::task_type, int>;
+using async_invoke_result = atfw::util::design_pattern::result_type<task_type_trait::task_type, int>;
 
 template <class... TARGS>
 UTIL_SYMBOL_VISIBLE inline async_invoke_result make_async_invoke_success(TARGS &&...args) {

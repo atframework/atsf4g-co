@@ -191,8 +191,8 @@ class logic_server_common_module : public atapp::module_impl {
     return service_zone_index_;
   }
 
-  util::memory::strong_rc_ptr<atapp::etcd_discovery_node> get_discovery_by_id(uint64_t id) const;
-  util::memory::strong_rc_ptr<atapp::etcd_discovery_node> get_discovery_by_name(const std::string& name) const;
+  atfw::util::memory::strong_rc_ptr<atapp::etcd_discovery_node> get_discovery_by_id(uint64_t id) const;
+  atfw::util::memory::strong_rc_ptr<atapp::etcd_discovery_node> get_discovery_by_name(const std::string& name) const;
 
  private:
   int setup_battle_service_watcher();

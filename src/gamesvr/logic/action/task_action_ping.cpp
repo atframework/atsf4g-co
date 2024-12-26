@@ -72,7 +72,7 @@ task_action_ping::result_type task_action_ping::operator()() {
       }
       tb->mutable_except()->set_except_sum_times(tb->except().except_sum_times() + 1);
       if (0 != tb->except().last_except_time() &&
-          util::time::time_utility::get_now() - tb->except().last_except_time() <=
+          atfw::util::time::time_utility::get_now() - tb->except().last_except_time() <=
               logic_config::me()->get_logic().heartbeat().ban_time_bound().seconds()) {
         tb->mutable_except()->set_except_con_times(tb->except().except_con_times() + 1);
       } else {

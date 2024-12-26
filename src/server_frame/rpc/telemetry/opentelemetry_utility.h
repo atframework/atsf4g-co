@@ -103,7 +103,7 @@ class opentelemetry_utility {
 
   SERVER_FRAME_API static void stop();
 
-  SERVER_FRAME_API static util::memory::strong_rc_ptr<metrics_attributes_with_lifetime>
+  SERVER_FRAME_API static atfw::util::memory::strong_rc_ptr<metrics_attributes_with_lifetime>
   create_attributes_with_lifetime();
 
   SERVER_FRAME_API static const std::unordered_map<std::string, opentelemetry::common::AttributeValue>& get_attributes(
@@ -156,8 +156,8 @@ class opentelemetry_utility {
   }
 
   template <class ValueType, class AttributeType,
-            class = util::nostd::enable_if_t<
-                !std::is_base_of<opentelemetry::common::KeyValueIterable, util::nostd::decay_t<AttributeType>>::value>>
+            class = atfw::util::nostd::enable_if_t<!std::is_base_of<opentelemetry::common::KeyValueIterable,
+                                                                    atfw::util::nostd::decay_t<AttributeType>>::value>>
   UTIL_SYMBOL_VISIBLE static void global_metics_observe_record(metrics_observer& observer, ValueType&& value,
                                                                AttributeType&& attributes) {
     global_metics_observe_record(observer, global_metics_observe_record_parse_value(value),

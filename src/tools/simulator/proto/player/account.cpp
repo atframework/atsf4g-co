@@ -92,7 +92,7 @@ void on_rsp_login_auth(client_simulator::player_ptr_t player, client_simulator::
 
   int index = 0;
   if (0 == player->get_gamesvr_index()) {
-    util::random::mt19937_64 rnd_engine;
+    atfw::util::random::mt19937_64 rnd_engine;
     index = rnd_engine.random_between<int>(0, sz);
   } else if (player->get_gamesvr_index() > 0) {
     index = (player->get_gamesvr_index() - 1) % sz;
@@ -133,7 +133,7 @@ void on_cmd_login(util::cli::callback_param params) {
   std::string gamesvr_ip = url.substr(0, p);
   std::string gamesvr_port = url.substr(p + 1, url.size() - p - 1);
   int port = 0;
-  util::string::str2int(port, gamesvr_port.c_str());
+  atfw::util::string::str2int(port, gamesvr_port.c_str());
   int res = sender.player->connect(gamesvr_ip.c_str(), port);
   if (res) {
     SIMULATOR_ERR_MSG() << "LoginGame connect to " << gamesvr_ip << ":" << gamesvr_port << " error, ret:" << res

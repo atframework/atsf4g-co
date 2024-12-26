@@ -36,7 +36,7 @@ class user_async_jobs_manager;
  * @note 注意只能用作局部变量
  */
 template <typename Ty>
-class player_cache_ptr_holder : public util::design_pattern::noncopyable {
+class player_cache_ptr_holder : public atfw::util::design_pattern::noncopyable {
  public:
   using value_type = Ty;
   using pointer_type = value_type *;

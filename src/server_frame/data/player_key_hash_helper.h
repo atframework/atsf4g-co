@@ -17,7 +17,7 @@ struct player_key_hash_t {
   size_t operator()(const PROJECT_NAMESPACE_ID::DPlayerIDKey& key) const {
     uint64_t out[2] = {0};
     uint64_t val = key.user_id();
-    util::hash::murmur_hash3_x64_128(&val, static_cast<int>(sizeof(val)), key.zone_id(), out);
+    atfw::util::hash::murmur_hash3_x64_128(&val, static_cast<int>(sizeof(val)), key.zone_id(), out);
     return out[0];
   }
 };

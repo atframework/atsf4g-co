@@ -51,11 +51,11 @@ class simulator_base {
 
   struct cmd_wrapper_t {
     using ptr_t = std::shared_ptr<cmd_wrapper_t>;
-    using value_type = std::map<util::cli::cmd_option_ci_string, ptr_t>;
+    using value_type = std::map<atfw::util::cli::cmd_option_ci_string, ptr_t>;
     value_type children;
     cmd_wrapper_t *parent;
     std::string name;
-    std::shared_ptr<util::cli::cmd_option_ci> cmd_node;
+    std::shared_ptr<atfw::util::cli::cmd_option_ci> cmd_node;
 
     std::string hint_;
     std::bitset<cmd_autocomplete_flag_t::EN_CACF_MAX> autocomplete_;
@@ -66,7 +66,7 @@ class simulator_base {
     cmd_wrapper_t &operator[](const std::string &name);
 
     // bind a cmd handle
-    std::shared_ptr<util::cli::cmd_option_ci> parent_node();
+    std::shared_ptr<atfw::util::cli::cmd_option_ci> parent_node();
 
     // bind a cmd handle
     cmd_wrapper_t &bind(cmd_fn_t fn, const std::string &description);
@@ -157,8 +157,8 @@ class simulator_base {
   inline cmd_wrapper_t &reg_req() { return *root_; }
   inline uv_loop_t *get_loop() { return &loop_; }
   inline const char *get_exec() const { return exec_path_; }
-  inline std::shared_ptr<util::cli::cmd_option> get_option_manager() { return args_mgr_; }
-  inline std::shared_ptr<util::cli::cmd_option_ci> get_cmd_manager() { return cmd_mgr_; }
+  inline std::shared_ptr<atfw::util::cli::cmd_option> get_option_manager() { return args_mgr_; }
+  inline std::shared_ptr<atfw::util::cli::cmd_option_ci> get_cmd_manager() { return cmd_mgr_; }
   inline std::vector<unsigned char> &get_msg_buffer() { return shell_opts_.buffer_; }
 
   // this must be thread-safe
@@ -185,8 +185,8 @@ class simulator_base {
   static linenoise_helper_t &linenoise_build_complete(const char *buf, bool complete, bool hint);
   static void linenoise_thd_main(void *arg);
 
-  static inline util::cli::cmd_option_ci::ptr_type conv_cmd_mgr(util::cli::cmd_option_ci::func_ptr_t in) {
-    return std::dynamic_pointer_cast<util::cli::cmd_option_ci>(in);
+  static inline atfw::util::cli::cmd_option_ci::ptr_type conv_cmd_mgr(util::cli::cmd_option_ci::func_ptr_t in) {
+    return std::dynamic_pointer_cast<atfw::util::cli::cmd_option_ci>(in);
   }
 
  public:
@@ -240,8 +240,8 @@ class simulator_base {
 
   std::map<std::string, player_ptr_t> players_;
   std::set<player_ptr_t> connecting_players_;
-  std::shared_ptr<util::cli::cmd_option_ci> cmd_mgr_;
-  std::shared_ptr<util::cli::cmd_option> args_mgr_;
+  std::shared_ptr<atfw::util::cli::cmd_option_ci> cmd_mgr_;
+  std::shared_ptr<atfw::util::cli::cmd_option> args_mgr_;
   std::shared_ptr<cmd_wrapper_t> root_;
 
  protected:
@@ -259,7 +259,7 @@ class simulator_base {
   shell_cmd_opts_t shell_opts_;
 
   struct shell_cmd_data_t {
-    util::lock::spin_lock lock;
+    atfw::util::lock::spin_lock lock;
     std::list<std::pair<player_ptr_t, std::string> > cmds;
     std::fstream read_file_ios;
   };
@@ -372,13 +372,13 @@ class simulator_msg_base : public simulator_base {
           write_protocol(*iter, false);
           int res = sender.player->on_write_message(p->last_network(), &get_msg_buffer()[0], msg_len);
           if (res < 0) {
-            util::cli::shell_stream ss(std::cerr);
-            ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "player " << sender.player->get_id()
+            atfw::util::cli::shell_stream ss(std::cerr);
+            ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "player " << sender.player->get_id()
                  << " try to send data failed, res: " << res << std::endl;
           }
         } else {
-          util::cli::shell_stream ss(std::cerr);
-          ss() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "player " << sender.player->get_id()
+          atfw::util::cli::shell_stream ss(std::cerr);
+          ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "player " << sender.player->get_id()
                << " try to send msg " << pick_message_name(*iter) << "(" << pick_message_id(*iter)
                << ") failed, packaged data too large." << std::endl;
         }

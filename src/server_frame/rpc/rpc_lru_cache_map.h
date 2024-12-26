@@ -57,9 +57,9 @@ class UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
     value_cache_type &operator=(value_cache_type &&) = default;
   };
 
-  using lru_map_type =
-      util::mempool::lru_map<key_type, value_cache_type, std::hash<key_type>, std::equal_to<key_type>,
-                             util::memory::lru_map_option<util::memory::compat_strong_ptr_mode::kStrongRc>>;
+  using lru_map_type = atfw::util::mempool::lru_map<
+      key_type, value_cache_type, std::hash<key_type>, std::equal_to<key_type>,
+      atfw::util::memory::lru_map_option<atfw::util::memory::compat_strong_ptr_mode::kStrongRc>>;
   using cache_ptr_type = typename lru_map_type::store_type;
   using iterator = typename lru_map_type::iterator;
   using const_iterator = typename lru_map_type::const_iterator;
@@ -70,7 +70,7 @@ class UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
     auto iter = pool_.find(key);
     if (iter != pool_.end()) {
       if (iter->second) {
-        iter->second->last_visit_timepoint = util::time::time_utility::get_now();
+        iter->second->last_visit_timepoint = atfw::util::time::time_utility::get_now();
         return iter->second;
       }
     }
@@ -91,7 +91,7 @@ class UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
       pool_.erase(iter);
     }
 
-    cache->last_visit_timepoint = util::time::time_utility::get_now();
+    cache->last_visit_timepoint = atfw::util::time::time_utility::get_now();
     pool_.insert_key_value(cache->data_key, cache);
   }
 
@@ -185,7 +185,7 @@ class UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
 
     out = res.first->second;
     out->data_version = 0;
-    out->last_visit_timepoint = util::time::time_utility::get_now();
+    out->last_visit_timepoint = atfw::util::time::time_utility::get_now();
 
     auto invoke_result = rpc::async_invoke(
         ctx, "rpc_lru_cache_map.await_fetch",

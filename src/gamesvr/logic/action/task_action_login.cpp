@@ -86,7 +86,8 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
   }
 
   if (user && user->get_login_info().login_code() == req_body.login_code() &&
-      util::time::time_utility::get_sys_now() <= static_cast<time_t>(user->get_login_info().login_code_expired()) &&
+      atfw::util::time::time_utility::get_sys_now() <=
+          static_cast<time_t>(user->get_login_info().login_code_expired()) &&
       user->is_writable()) {
     RPC_AWAIT_IGNORE_RESULT(replace_session(user));
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);

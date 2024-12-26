@@ -42,7 +42,7 @@ task_action_router_close_manager_set::result_type task_action_router_close_manag
   status_data_->success_count_ = 0;
   status_data_->failed_count_ = 0;
 
-  util::time::time_utility::update();
+  atfw::util::time::time_utility::update();
 
   size_t closing_action_batch_count = logic_config::me()->get_cfg_router().closing_action_batch_count();
   std::vector<task_type_trait::task_type> pending_action_batch_tasks;

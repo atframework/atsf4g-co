@@ -40,7 +40,7 @@ struct player_key_hash_t {
   size_t operator()(const PROJECT_NAMESPACE_ID::DPlayerIDKey& key) const {
     uint64_t out[2] = {0};
     uint64_t val = key.user_id();
-    util::hash::murmur_hash3_x64_128(&val, static_cast<int>(sizeof(val)), key.zone_id(), out);
+    atfw::util::hash::murmur_hash3_x64_128(&val, static_cast<int>(sizeof(val)), key.zone_id(), out);
     return out[0];
   }
 };
@@ -56,11 +56,11 @@ static rpc::result_code_type fetch_user_login_cache(rpc::context& ctx, uint64_t 
                                                     shared_message<PROJECT_NAMESPACE_ID::table_login>& rsp,
                                                     bool ignore_cache) {
   static std::unordered_map<PROJECT_NAMESPACE_ID::DPlayerIDKey,
-                            util::memory::strong_rc_ptr<shared_message<PROJECT_NAMESPACE_ID::table_login>>,
+                            atfw::util::memory::strong_rc_ptr<shared_message<PROJECT_NAMESPACE_ID::table_login>>,
                             player_key_hash_t, player_key_equal_t>
       local_cache;
   static time_t local_cache_timepoint = 0;
-  time_t now = util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
   if (now != local_cache_timepoint) {
     local_cache_timepoint = now;
     local_cache.clear();
@@ -81,7 +81,7 @@ static rpc::result_code_type fetch_user_login_cache(rpc::context& ctx, uint64_t 
   std::string version;
   int ret = RPC_AWAIT_CODE_RESULT(rpc::db::login::get(ctx, std::to_string(user_id).c_str(), zone_id, rsp, version));
   if (0 == ret) {
-    local_cache[key] = util::memory::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::table_login>>(rsp);
+    local_cache[key] = atfw::util::memory::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::table_login>>(rsp);
   }
   RPC_RETURN_CODE(ret);
 }
@@ -156,7 +156,8 @@ result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uin
   if (in->action_uuid().empty()) {
     in->set_action_uuid(rpc::db::uuid::generate_short_uuid());
   }
-  in->set_timepoint_ms(util::time::time_utility::get_now() * 1000 + util::time::time_utility::get_now_usec() / 1000);
+  in->set_timepoint_ms(util::time::time_utility::get_now() * 1000 +
+                       atfw::util::time::time_utility::get_now_usec() / 1000);
 
   // TODO db operation
   // auto ret = RPC_AWAIT_CODE_RESULT(rpc::db::TABLE_USER_ASYNC_JOBS_DEF::add(ctx, in, nullptr, nullptr));
@@ -187,12 +188,12 @@ result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uin
 
     // 不在线则不用通知
     if (0 == login_table->router_server_id() ||
-        login_table->login_code_expired() <= ::util::time::time_utility::get_sys_now()) {
+        login_table->login_code_expired() <= atfw::util::time::time_utility::get_sys_now()) {
       break;
     }
 
     RPC_AWAIT_IGNORE_RESULT(rpc::game::player_async_jobs_sync(ctx, login_table->router_server_id(), zone_id, user_id,
-                                                              util::log::format("{}", user_id), *req_body));
+                                                              atfw::util::log::format("{}", user_id), *req_body));
   } while (false);
   RPC_DB_RETURN_CODE(ret);
 }
@@ -258,7 +259,8 @@ result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, 
     inout->set_action_uuid(rpc::db::uuid::generate_short_uuid());
   }
 
-  inout->set_timepoint_ms(util::time::time_utility::get_now() * 1000 + util::time::time_utility::get_now_usec() / 1000);
+  inout->set_timepoint_ms(util::time::time_utility::get_now() * 1000 +
+                          atfw::util::time::time_utility::get_now_usec() / 1000);
 
   // TODO db operation
   // auto ret = RPC_AWAIT_CODE_RESULT(rpc::db::TABLE_USER_ASYNC_JOBS_DEF::replace(ctx, inout, record_index, version));
@@ -289,12 +291,12 @@ result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, 
 
     // 不在线则不用通知
     if (0 == login_table->router_server_id() ||
-        login_table->login_code_expired() <= ::util::time::time_utility::get_sys_now()) {
+        login_table->login_code_expired() <= atfw::util::time::time_utility::get_sys_now()) {
       break;
     }
 
     RPC_AWAIT_IGNORE_RESULT(rpc::game::player_async_jobs_sync(ctx, login_table->router_server_id(), zone_id, user_id,
-                                                              util::log::format("{}", user_id), *req_body));
+                                                              atfw::util::log::format("{}", user_id), *req_body));
   } while (false);
 
   RPC_DB_RETURN_CODE(ret);

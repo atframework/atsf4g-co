@@ -113,9 +113,9 @@ static void initialize_replication_server_ids(atframework::distributed_system::t
     replication_read_count = replication_total_count;
   }
   uint64_t hash_out[2];
-  util::hash::murmur_hash3_x64_128(metadata.transaction_uuid().c_str(),
-                                   static_cast<int>(metadata.transaction_uuid().size()),
-                                   LIBATAPP_MACRO_HASH_MAGIC_NUMBER, hash_out);
+  atfw::util::hash::murmur_hash3_x64_128(metadata.transaction_uuid().c_str(),
+                                         static_cast<int>(metadata.transaction_uuid().size()),
+                                         LIBATAPP_MACRO_HASH_MAGIC_NUMBER, hash_out);
   size_t current_index = hash_out[0] % sorted_nodes.size();
   metadata.mutable_replicate_node_server_id()->Reserve(static_cast<int32_t>(replication_total_count));
   metadata.set_replicate_read_count(replication_read_count);
@@ -355,7 +355,8 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type initialize_new_transaction
     const google::protobuf::Duration& timeout, uint32_t replication_read_count, uint32_t replication_total_count,
     bool memory_only, bool force_commit) {
   std::string trans_uuid;
-  util::base64_encode(trans_uuid, rpc::db::uuid::generate_standard_uuid_binary(), util::base64_mode_t::EN_BMT_UTF7);
+  atfw::util::base64_encode(trans_uuid, rpc::db::uuid::generate_standard_uuid_binary(),
+                            atfw::util::base64_mode_t::EN_BMT_UTF7);
   if (trans_uuid.empty()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
   }

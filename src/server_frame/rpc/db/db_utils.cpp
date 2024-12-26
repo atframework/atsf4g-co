@@ -434,7 +434,7 @@ int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, st
       reflect->func(&msg, fd, static_cast<cpptype>(value->integer));                                             \
     } else if (REDIS_REPLY_STRING == value->type && nullptr != value->str) {                                     \
       cpptype v = 0;                                                                                             \
-      util::string::str2int(v, value->str);                                                                      \
+      atfw::util::string::str2int(v, value->str);                                                                \
       reflect->func(&msg, fd, v);                                                                                \
     } else {                                                                                                     \
       FWLOGERROR(                                                                                                \

@@ -46,8 +46,8 @@ class transaction_client_handle {
   using storage_type = atframework::distributed_system::transaction_blob_storage;
   using metadata_type = atframework::distributed_system::transaction_metadata;
   using configure_type = atframework::distributed_system::transaction_configure;
-  using storage_ptr_type = util::memory::strong_rc_ptr<storage_type>;
-  using storage_const_ptr_type = util::memory::strong_rc_ptr<const storage_type>;
+  using storage_ptr_type = atfw::util::memory::strong_rc_ptr<storage_type>;
+  using storage_const_ptr_type = atfw::util::memory::strong_rc_ptr<const storage_type>;
   using participator_type = atframework::distributed_system::transaction_participator;
   using transaction_participator_failure_reason =
       atframework::distributed_system::transaction_participator_failure_reason;
@@ -98,7 +98,8 @@ class transaction_client_handle {
   transaction_client_handle& operator=(transaction_client_handle&&) = delete;
 
  public:
-  DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle(const util::memory::strong_rc_ptr<vtable_type>& vtable);
+  DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle(
+      const atfw::util::memory::strong_rc_ptr<vtable_type>& vtable);
   DISTRIBUTED_TRANSACTION_SDK_API ~transaction_client_handle();
 
   UTIL_FORCEINLINE void* get_private_data() const noexcept { return private_data_; }
@@ -152,7 +153,7 @@ class transaction_client_handle {
  private:
   void* private_data_;
   on_destroy_callback_type on_destroy_;
-  util::memory::strong_rc_ptr<vtable_type> vtable_;
+  atfw::util::memory::strong_rc_ptr<vtable_type> vtable_;
 };
 
 }  // namespace distributed_system

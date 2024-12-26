@@ -15,7 +15,7 @@
 #include "config/server_frame_build_feature.h"
 
 struct SERVER_FRAME_CONFIG_HEAD_ONLY log_categorize_t {
-  enum type { DEFAULT = ::util::log::log_wrapper::categorize_t::DEFAULT, DB, PROTO_STAT, PAY, MAX };
+  enum type { DEFAULT = atfw::util::log::log_wrapper::categorize_t::DEFAULT, DB, PROTO_STAT, PAY, MAX };
 };
 
 UTIL_CONFIG_STATIC_ASSERT_MSG(((int)log_categorize_t::MAX) <= ((int)::util::log::log_wrapper::categorize_t::MAX),

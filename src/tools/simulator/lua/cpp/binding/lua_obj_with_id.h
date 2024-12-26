@@ -21,7 +21,7 @@ class lua_obj_with_id {
 
  protected:
   lua_obj_with_id() {
-    ::util::lock::lock_holder slh(id_locker_);
+    atfw::util::lock::lock_holder slh(id_locker_);
 
     while (true) {
       id_ = ++id_alloc_;
@@ -36,7 +36,7 @@ class lua_obj_with_id {
   }
 
   virtual ~lua_obj_with_id() {
-    ::util::lock::lock_holder slh(id_locker_);
+    atfw::util::lock::lock_holder slh(id_locker_);
 
     id_mgr_.erase(id_);
   }
@@ -45,7 +45,7 @@ class lua_obj_with_id {
   uint64_t id() const { return id_; }
 
   static object_type *findByID(uint64_t id) {
-    ::util::lock::lock_holder slh(id_locker_);
+    atfw::util::lock::lock_holder slh(id_locker_);
 
     typename std::map<uint64_t, value_type>::iterator iter = id_mgr_.find(id);
     if (id_mgr_.end() == iter) return nullptr;
@@ -55,7 +55,7 @@ class lua_obj_with_id {
 
  private:
   uint64_t id_;
-  static ::util::lock::spin_lock id_locker_;
+  static atfw::util::lock::spin_lock id_locker_;
   static uint64_t id_alloc_;
   static std::map<uint64_t, value_type> id_mgr_;
 };

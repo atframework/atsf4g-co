@@ -116,7 +116,7 @@ namespace telemetry {
 
 namespace {
 struct local_meter_info_type {
-  util::lock::spin_rw_lock lock;
+  atfw::util::lock::spin_rw_lock lock;
 
   opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Meter> meter;
 
@@ -209,7 +209,7 @@ static bool _opentelemetry_validate_meter_instrument_key(const meter_instrument_
 }  // namespace
 
 struct group_type {
-  util::lock::spin_rw_lock lock;
+  atfw::util::lock::spin_rw_lock lock;
   bool initialized = false;
   std::string group_name;
 
@@ -243,37 +243,37 @@ struct group_type {
   std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>> tracer_cache;
   opentelemetry::nostd::shared_ptr<std::ofstream> debug_tracer_ostream_exportor;
   size_t tracer_exporter_count = 0;
-  util::lock::spin_rw_lock tracer_lock;
+  atfw::util::lock::spin_rw_lock tracer_lock;
 
   local_provider_handle_type<opentelemetry::metrics::MeterProvider> metrics_handle;
   std::shared_ptr<local_meter_info_type> default_metrics_meter;
   std::unordered_map<std::string, std::shared_ptr<local_meter_info_type>> metrics_meters;
   opentelemetry::nostd::shared_ptr<std::ofstream> debug_metrics_ostream_exportor;
   size_t metrics_exporter_count = 0;
-  util::lock::spin_rw_lock metrics_lock;
+  atfw::util::lock::spin_rw_lock metrics_lock;
 
   local_provider_handle_type<opentelemetry::logs::LoggerProvider> logs_handle;
   opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> default_logger;
   std::unordered_map<std::string, opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>> logger_cache;
   opentelemetry::nostd::shared_ptr<std::ofstream> debug_logger_ostream_exportor;
   size_t logger_exporter_count = 0;
-  util::lock::spin_rw_lock logger_lock;
+  atfw::util::lock::spin_rw_lock logger_lock;
 
   group_type() {}
 };
 
 namespace {
-struct global_service_data_type : public util::design_pattern::local_singleton<global_service_data_type> {
-  util::log::log_wrapper::ptr_t internal_logger;
+struct global_service_data_type : public atfw::util::design_pattern::local_singleton<global_service_data_type> {
+  atfw::util::log::log_wrapper::ptr_t internal_logger;
 
   std::list<global_service::group_event_callback_type> on_group_destroy_callbacks;
-  util::lock::spin_rw_lock on_group_destroy_callback_lock;
+  atfw::util::lock::spin_rw_lock on_group_destroy_callback_lock;
   std::list<global_service::group_event_callback_type> on_group_create_callbacks;
-  util::lock::spin_rw_lock on_group_create_callback_lock;
+  atfw::util::lock::spin_rw_lock on_group_create_callback_lock;
   std::list<global_service::global_event_callback_type> on_ready_callbacks;
-  util::lock::spin_rw_lock on_ready_callback_lock;
+  atfw::util::lock::spin_rw_lock on_ready_callback_lock;
 
-  util::lock::spin_rw_lock group_lock;
+  atfw::util::lock::spin_rw_lock group_lock;
   std::shared_ptr<group_type> default_group;
   std::unordered_map<std::string, std::shared_ptr<group_type>> named_groups;
 
@@ -297,33 +297,33 @@ class opentelemetry_internal_log_handler : public opentelemetry::sdk::common::in
  public:
   void Handle(opentelemetry::sdk::common::internal_log::LogLevel level, const char *file, int line, const char *msg,
               const opentelemetry::sdk::common::AttributeMap &) noexcept override {
-    util::log::log_wrapper::caller_info_t caller;
+    atfw::util::log::log_wrapper::caller_info_t caller;
     caller.file_path = file;
     caller.line_number = static_cast<uint32_t>(line);
     caller.rotate_index = 0;
     switch (level) {
       case opentelemetry::sdk::common::internal_log::LogLevel::Error: {
-        caller.level_id = util::log::log_wrapper::level_t::LOG_LW_ERROR;
+        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_ERROR;
         caller.level_name = "Error";
         break;
       }
       case opentelemetry::sdk::common::internal_log::LogLevel::Warning: {
-        caller.level_id = util::log::log_wrapper::level_t::LOG_LW_WARNING;
+        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_WARNING;
         caller.level_name = "Warning";
         break;
       }
       case opentelemetry::sdk::common::internal_log::LogLevel::Info: {
-        caller.level_id = util::log::log_wrapper::level_t::LOG_LW_INFO;
+        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_INFO;
         caller.level_name = "Info";
         break;
       }
       case opentelemetry::sdk::common::internal_log::LogLevel::Debug: {
-        caller.level_id = util::log::log_wrapper::level_t::LOG_LW_DEBUG;
+        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_DEBUG;
         caller.level_name = "Debug";
         break;
       }
       default: {
-        caller.level_id = util::log::log_wrapper::level_t::LOG_LW_DEBUG;
+        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_DEBUG;
         caller.level_name = "Debug";
         break;
       }
@@ -379,7 +379,7 @@ static std::shared_ptr<local_meter_info_type> get_meter_info(std::shared_ptr<gro
       break;
     }
 
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
 
@@ -395,7 +395,7 @@ static std::shared_ptr<local_meter_info_type> get_meter_info(std::shared_ptr<gro
   }
 
   {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{group->metrics_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{group->metrics_lock};
 
     if (!group->metrics_handle.provider) {
       return nullptr;
@@ -413,7 +413,7 @@ static std::shared_ptr<local_meter_info_type> get_meter_info(std::shared_ptr<gro
   }
 
   {
-    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->metrics_lock};
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{group->metrics_lock};
 
     opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Meter> meter = group->metrics_handle.provider->GetMeter(
         meter_name, group->metrics_default_library_version,
@@ -445,7 +445,7 @@ static bool remove_meter_info(std::shared_ptr<group_type> &group, const opentele
       break;
     }
 
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
 
@@ -461,7 +461,7 @@ static bool remove_meter_info(std::shared_ptr<group_type> &group, const opentele
   bool ret = group->metrics_meters.erase(static_cast<std::string>(meter_name)) > 0;
 
   if (ret) {
-    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->metrics_lock};
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{group->metrics_lock};
 
     opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Meter> meter = group->metrics_handle.provider->RemoveMeter(
         meter_name, group->metrics_default_library_version,
@@ -661,7 +661,7 @@ SERVER_FRAME_API const opentelemetry::sdk::common::AttributeMap &global_service:
       break;
     }
 
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
 
@@ -685,7 +685,7 @@ global_service::get_common_attributes(std::shared_ptr<group_type> &group) {
       break;
     }
 
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
 
@@ -709,7 +709,7 @@ global_service::get_metrics_labels(std::shared_ptr<group_type> &group) {
       break;
     }
 
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
 
@@ -734,7 +734,7 @@ global_service::get_metrics_labels_view(std::shared_ptr<group_type> &group) {
       break;
     }
 
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
 
@@ -757,7 +757,7 @@ SERVER_FRAME_API const PROJECT_NAMESPACE_ID::config::opentelemetry_cfg &global_s
       break;
     }
 
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
 
@@ -779,7 +779,7 @@ SERVER_FRAME_API bool global_service::has_agent_configure(std::shared_ptr<group_
       break;
     }
 
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
 
@@ -802,7 +802,7 @@ SERVER_FRAME_API const PROJECT_NAMESPACE_ID::config::opentelemetry_agent_cfg &gl
       break;
     }
 
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
 
@@ -842,7 +842,7 @@ SERVER_FRAME_API size_t global_service::get_trace_exporter_count(std::shared_ptr
       break;
     }
 
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
 
@@ -872,7 +872,7 @@ SERVER_FRAME_API size_t global_service::get_metrics_exporter_count(std::shared_p
       break;
     }
 
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
 
@@ -902,7 +902,7 @@ SERVER_FRAME_API size_t global_service::get_logs_exporter_count(std::shared_ptr<
       break;
     }
 
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
 
@@ -933,7 +933,7 @@ global_service::get_current_default_tracer(std::shared_ptr<group_type> group) {
       break;
     }
 
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
 
@@ -975,7 +975,7 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> 
       break;
     }
 
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
 
@@ -991,10 +991,10 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> 
     return opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
   }
 
-  std::string cache_key = util::log::format("{}:{}", gsl::string_view{library_name.data(), library_name.size()},
-                                            gsl::string_view{library_version.data(), library_version.size()});
+  std::string cache_key = atfw::util::log::format("{}:{}", gsl::string_view{library_name.data(), library_name.size()},
+                                                  gsl::string_view{library_version.data(), library_version.size()});
   {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{group->tracer_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{group->tracer_lock};
     auto iter = group->tracer_cache.find(cache_key);
     if (iter != group->tracer_cache.end()) {
       return iter->second;
@@ -1019,7 +1019,7 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> 
   opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> ret =
       provider->GetTracer(library_name, library_version, schema_url);
   if (ret) {
-    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->tracer_lock};
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{group->tracer_lock};
     group->tracer_cache[cache_key] = ret;
   }
   return ret;
@@ -1042,7 +1042,7 @@ global_service::mutable_metrics_counter_uint64(opentelemetry::nostd::string_view
 
   std::string metrics_storage_key = get_metrics_key(key);
   {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
 
     auto ret = optimize_search_in_hash_map(meter_info->sync_counter_uint64, metrics_storage_key);
     if (ret) {
@@ -1061,7 +1061,7 @@ global_service::mutable_metrics_counter_uint64(opentelemetry::nostd::string_view
   }
 
   {
-    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
     auto ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<uint64_t>>(
         meter_info->meter->CreateUInt64Counter(key.name, key.description, key.unit));
     if (ret) {
@@ -1082,7 +1082,7 @@ global_service::mutable_metrics_counter_double(opentelemetry::nostd::string_view
 
   std::string metrics_storage_key = get_metrics_key(key);
   {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
 
     auto ret = optimize_search_in_hash_map(meter_info->sync_counter_double, metrics_storage_key);
     if (ret) {
@@ -1101,7 +1101,7 @@ global_service::mutable_metrics_counter_double(opentelemetry::nostd::string_view
   }
 
   {
-    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
     auto ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<double>>(
         meter_info->meter->CreateDoubleCounter(key.name, key.description, key.unit));
     if (ret) {
@@ -1122,7 +1122,7 @@ global_service::mutable_metrics_histogram_uint64(opentelemetry::nostd::string_vi
 
   std::string metrics_storage_key = get_metrics_key(key);
   {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
 
     auto ret = optimize_search_in_hash_map(meter_info->sync_histogram_uint64, metrics_storage_key);
     if (ret) {
@@ -1141,7 +1141,7 @@ global_service::mutable_metrics_histogram_uint64(opentelemetry::nostd::string_vi
   }
 
   {
-    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
     auto ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<uint64_t>>(
         meter_info->meter->CreateUInt64Histogram(key.name, key.description, key.unit));
     if (ret) {
@@ -1162,7 +1162,7 @@ global_service::mutable_metrics_histogram_double(opentelemetry::nostd::string_vi
 
   std::string metrics_storage_key = get_metrics_key(key);
   {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
 
     auto ret = optimize_search_in_hash_map(meter_info->sync_histogram_double, metrics_storage_key);
     if (ret) {
@@ -1181,7 +1181,7 @@ global_service::mutable_metrics_histogram_double(opentelemetry::nostd::string_vi
   }
 
   {
-    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
     auto ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Histogram<double>>(
         meter_info->meter->CreateDoubleHistogram(key.name, key.description, key.unit));
     if (ret) {
@@ -1202,7 +1202,7 @@ global_service::mutable_metrics_up_down_counter_int64(opentelemetry::nostd::stri
 
   std::string metrics_storage_key = get_metrics_key(key);
   {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
 
     auto ret = optimize_search_in_hash_map(meter_info->sync_up_down_counter_int64, metrics_storage_key);
     if (ret) {
@@ -1221,7 +1221,7 @@ global_service::mutable_metrics_up_down_counter_int64(opentelemetry::nostd::stri
   }
 
   {
-    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
     auto ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<int64_t>>(
         meter_info->meter->CreateInt64UpDownCounter(key.name, key.description, key.unit));
     if (ret) {
@@ -1242,7 +1242,7 @@ global_service::mutable_metrics_up_down_counter_double(opentelemetry::nostd::str
 
   std::string metrics_storage_key = get_metrics_key(key);
   {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
 
     auto ret = optimize_search_in_hash_map(meter_info->sync_up_down_counter_double, metrics_storage_key);
     if (ret) {
@@ -1261,7 +1261,7 @@ global_service::mutable_metrics_up_down_counter_double(opentelemetry::nostd::str
   }
 
   {
-    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
     auto ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::UpDownCounter<double>>(
         meter_info->meter->CreateDoubleUpDownCounter(key.name, key.description, key.unit));
     if (ret) {
@@ -1282,7 +1282,7 @@ global_service::get_metrics_observable(opentelemetry::nostd::string_view meter_n
 
   std::string metrics_storage_key = get_metrics_key(key);
 
-  util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+  atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
   return optimize_search_in_hash_map(meter_info->async_instruments, metrics_storage_key);
 }
 
@@ -1302,7 +1302,7 @@ global_service::mutable_metrics_observable_counter_int64(opentelemetry::nostd::s
 
   std::string metrics_storage_key = static_cast<std::string>(key.name);
   {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
 
     ret = optimize_search_in_hash_map(meter_info->async_instruments, metrics_storage_key);
     if (ret) {
@@ -1320,7 +1320,7 @@ global_service::mutable_metrics_observable_counter_int64(opentelemetry::nostd::s
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
   }
 
-  util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
   ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>(
       meter_info->meter->CreateInt64ObservableCounter(key.name, key.description, key.unit));
   if (ret) {
@@ -1346,7 +1346,7 @@ global_service::mutable_metrics_observable_counter_double(opentelemetry::nostd::
 
   std::string metrics_storage_key = static_cast<std::string>(key.name);
   {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
 
     ret = optimize_search_in_hash_map(meter_info->async_instruments, metrics_storage_key);
     if (ret) {
@@ -1364,7 +1364,7 @@ global_service::mutable_metrics_observable_counter_double(opentelemetry::nostd::
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
   }
 
-  util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
   ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>(
       meter_info->meter->CreateDoubleObservableCounter(key.name, key.description, key.unit));
   if (ret) {
@@ -1390,7 +1390,7 @@ global_service::mutable_metrics_observable_gauge_int64(opentelemetry::nostd::str
 
   std::string metrics_storage_key = static_cast<std::string>(key.name);
   {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
 
     ret = optimize_search_in_hash_map(meter_info->async_instruments, metrics_storage_key);
     if (ret) {
@@ -1408,7 +1408,7 @@ global_service::mutable_metrics_observable_gauge_int64(opentelemetry::nostd::str
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
   }
 
-  util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
   ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>(
       meter_info->meter->CreateInt64ObservableGauge(key.name, key.description, key.unit));
   if (ret) {
@@ -1434,7 +1434,7 @@ global_service::mutable_metrics_observable_gauge_double(opentelemetry::nostd::st
 
   std::string metrics_storage_key = static_cast<std::string>(key.name);
   {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
 
     ret = optimize_search_in_hash_map(meter_info->async_instruments, metrics_storage_key);
     if (ret) {
@@ -1452,7 +1452,7 @@ global_service::mutable_metrics_observable_gauge_double(opentelemetry::nostd::st
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
   }
 
-  util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
   ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>(
       meter_info->meter->CreateDoubleObservableGauge(key.name, key.description, key.unit));
   if (ret) {
@@ -1479,7 +1479,7 @@ global_service::mutable_metrics_observable_up_down_counter_int64(opentelemetry::
 
   std::string metrics_storage_key = static_cast<std::string>(key.name);
   {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
 
     ret = optimize_search_in_hash_map(meter_info->async_instruments, metrics_storage_key);
     if (ret) {
@@ -1497,7 +1497,7 @@ global_service::mutable_metrics_observable_up_down_counter_int64(opentelemetry::
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
   }
 
-  util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
   ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>(
       meter_info->meter->CreateInt64ObservableUpDownCounter(key.name, key.description, key.unit));
   if (ret) {
@@ -1524,7 +1524,7 @@ global_service::mutable_metrics_observable_up_down_counter_double(opentelemetry:
 
   std::string metrics_storage_key = static_cast<std::string>(key.name);
   {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
 
     ret = optimize_search_in_hash_map(meter_info->async_instruments, metrics_storage_key);
     if (ret) {
@@ -1542,7 +1542,7 @@ global_service::mutable_metrics_observable_up_down_counter_double(opentelemetry:
     return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
   }
 
-  util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{meter_info->lock};
+  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
   ret = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>(
       meter_info->meter->CreateDoubleObservableUpDownCounter(key.name, key.description, key.unit));
   if (ret) {
@@ -1564,7 +1564,7 @@ global_service::get_current_default_logger(std::shared_ptr<group_type> group) {
       break;
     }
 
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
 
@@ -1607,7 +1607,7 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> g
       break;
     }
 
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     group = current_service_cache->default_group;
   } while (false);
 
@@ -1623,11 +1623,11 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> g
     return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
   }
 
-  std::string cache_key = util::log::format("{}:{}:{}", gsl::string_view{logger_name.data(), logger_name.size()},
-                                            gsl::string_view{library_name.data(), library_name.size()},
-                                            gsl::string_view{library_version.data(), library_version.size()});
+  std::string cache_key = atfw::util::log::format("{}:{}:{}", gsl::string_view{logger_name.data(), logger_name.size()},
+                                                  gsl::string_view{library_name.data(), library_name.size()},
+                                                  gsl::string_view{library_version.data(), library_version.size()});
   {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{group->logger_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{group->logger_lock};
     auto iter = group->logger_cache.find(cache_key);
     if (iter != group->logger_cache.end()) {
       return iter->second;
@@ -1653,7 +1653,7 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> g
   opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> ret =
       provider->GetLogger(logger_name, library_name, library_version, schema_url);
   if (ret) {
-    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->logger_lock};
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{group->logger_lock};
     group->logger_cache[cache_key] = ret;
   }
   return ret;
@@ -1699,7 +1699,7 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> _op
       }
 
       std::string header_key = header.key();
-      std::transform(header_key.begin(), header_key.end(), header_key.begin(), util::string::tolower<char>);
+      std::transform(header_key.begin(), header_key.end(), header_key.begin(), atfw::util::string::tolower<char>);
       options.metadata.emplace(
           opentelemetry::exporter::otlp::OtlpHeaders::value_type(std::move(header_key), header.value()));
     }
@@ -1981,7 +1981,7 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
       }
 
       std::string header_key = header.key();
-      std::transform(header_key.begin(), header_key.end(), header_key.begin(), util::string::tolower<char>);
+      std::transform(header_key.begin(), header_key.end(), header_key.begin(), atfw::util::string::tolower<char>);
       options.metadata.emplace(
           opentelemetry::exporter::otlp::OtlpHeaders::value_type(std::move(header_key), header.value()));
     }
@@ -2303,7 +2303,7 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogRecordExporter>>
       }
 
       std::string header_key = header.key();
-      std::transform(header_key.begin(), header_key.end(), header_key.begin(), util::string::tolower<char>);
+      std::transform(header_key.begin(), header_key.end(), header_key.begin(), atfw::util::string::tolower<char>);
       options.metadata.emplace(
           opentelemetry::exporter::otlp::OtlpHeaders::value_type(std::move(header_key), header.value()));
     }
@@ -2491,7 +2491,7 @@ static void _opentelemetry_cleanup_group(std::shared_ptr<::rpc::telemetry::group
   std::list<std::shared_ptr<std::thread>> shutdown_threads;
 
   if (current_service_cache && group && group->initialized) {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{
         current_service_cache->on_group_destroy_callback_lock};
     for (auto &callback_fn : current_service_cache->on_group_destroy_callbacks) {
       if (callback_fn) {
@@ -2505,7 +2505,7 @@ static void _opentelemetry_cleanup_group(std::shared_ptr<::rpc::telemetry::group
   if (group) {
     // Provider must be destroy before logger
     {
-      util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->logger_lock};
+      atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{group->logger_lock};
       if (group->logs_handle.provider) {
         if (group->logs_handle.shutdown_callback) {
           auto handle = group->logs_handle;
@@ -2519,7 +2519,7 @@ static void _opentelemetry_cleanup_group(std::shared_ptr<::rpc::telemetry::group
 
     // Provider must be destroy before meter
     {
-      util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->metrics_lock};
+      atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{group->metrics_lock};
       if (group->metrics_handle.provider) {
         if (group->metrics_handle.shutdown_callback) {
           auto handle = group->metrics_handle;
@@ -2534,7 +2534,7 @@ static void _opentelemetry_cleanup_group(std::shared_ptr<::rpc::telemetry::group
 
     // Provider must be destroy before tracer
     {
-      util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->tracer_lock};
+      atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{group->tracer_lock};
       if (group->tracer_handle.provider) {
         if (group->tracer_handle.shutdown_callback) {
           auto handle = group->tracer_handle;
@@ -2574,7 +2574,7 @@ static void _opentelemetry_cleanup_global_provider(atapp::app & /*app*/) {
     std::unordered_map<std::string, std::shared_ptr<group_type>> named_groups;
 
     {
-      util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+      atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
       default_group.swap(current_service_cache->default_group);
       named_groups.swap(current_service_cache->named_groups);
     }
@@ -2783,7 +2783,7 @@ static void _opentelemetry_setup_group(atapp::app &app, std::shared_ptr<group_ty
 
   // Default tracer
   {
-    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->tracer_lock};
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{group->tracer_lock};
     if (!tracer_handle.provider) {
       tracer_handle.provider = opentelemetry::trace::Provider::GetTracerProvider();
       tracer_handle.reset_shutdown_callback();
@@ -2795,7 +2795,7 @@ static void _opentelemetry_setup_group(atapp::app &app, std::shared_ptr<group_ty
 
   // Default meter
   {
-    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->metrics_lock};
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{group->metrics_lock};
     if (!metrics_handle.provider) {
       metrics_handle.provider = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>{
           new opentelemetry::metrics::NoopMeterProvider()};
@@ -2831,7 +2831,7 @@ static void _opentelemetry_setup_group(atapp::app &app, std::shared_ptr<group_ty
 
   // Default logger
   {
-    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->logger_lock};
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{group->logger_lock};
     if (!logs_handle.provider) {
       logs_handle.provider = opentelemetry::nostd::shared_ptr<opentelemetry::logs::LoggerProvider>{
           new opentelemetry::logs::NoopLoggerProvider()};
@@ -2877,7 +2877,7 @@ static void _opentelemetry_setup_group(atapp::app &app, std::shared_ptr<group_ty
 
   group->initialized = true;
   {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{
         current_service_cache->on_group_create_callback_lock};
     for (auto &callback_fn : current_service_cache->on_group_create_callbacks) {
       if (callback_fn) {
@@ -2892,13 +2892,13 @@ static void _opentelemetry_setup_group(atapp::app &app, std::shared_ptr<group_ty
   }
 
   // Internal Logger
-  current_service_cache->internal_logger = util::log::log_wrapper::create_user_logger();
+  current_service_cache->internal_logger = atfw::util::log::log_wrapper::create_user_logger();
   ::atapp::protocol::atapp_log opentelemetry_log_conf;
   app.parse_log_configures_into(opentelemetry_log_conf,
                                 std::vector<gsl::string_view>{"logic", "telemetry", "opentelemetry", "app_log"},
                                 "ATAPP_LOGIC_TELEMETRY_OPENTELEMETRY_LOG");
-  util::log::log_formatter::level_t::type opentelemetry_log_level =
-      util::log::log_formatter::get_level_by_name(opentelemetry_log_conf.level().c_str());
+  atfw::util::log::log_formatter::level_t::type opentelemetry_log_level =
+      atfw::util::log::log_formatter::get_level_by_name(opentelemetry_log_conf.level().c_str());
   if (current_service_cache->internal_logger && opentelemetry_log_conf.category_size() > 0) {
     current_service_cache->internal_logger->init(opentelemetry_log_level);
     app.setup_logger(*current_service_cache->internal_logger, opentelemetry_log_conf.level(),
@@ -2919,13 +2919,13 @@ static void _opentelemetry_setup_group(atapp::app &app, std::shared_ptr<group_ty
   opentelemetry::metrics::Provider::SetMeterProvider(metrics_handle.provider);
   opentelemetry::logs::Provider::SetLoggerProvider(logs_handle.provider);
 
-  if (opentelemetry_log_level <= util::log::log_formatter::level_t::LOG_LW_ERROR) {
+  if (opentelemetry_log_level <= atfw::util::log::log_formatter::level_t::LOG_LW_ERROR) {
     opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogLevel(
         opentelemetry::sdk::common::internal_log::LogLevel::Error);
-  } else if (opentelemetry_log_level <= util::log::log_formatter::level_t::LOG_LW_WARNING) {
+  } else if (opentelemetry_log_level <= atfw::util::log::log_formatter::level_t::LOG_LW_WARNING) {
     opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogLevel(
         opentelemetry::sdk::common::internal_log::LogLevel::Warning);
-  } else if (opentelemetry_log_level <= util::log::log_formatter::level_t::LOG_LW_INFO) {
+  } else if (opentelemetry_log_level <= atfw::util::log::log_formatter::level_t::LOG_LW_INFO) {
     opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogLevel(
         opentelemetry::sdk::common::internal_log::LogLevel::Info);
   } else {
@@ -3153,7 +3153,7 @@ static void _opentelemetry_initialize_group(const std::shared_ptr<group_type> &g
     return;
   }
 
-  util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{group->lock};
+  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{group->lock};
 
   // Double check
   if (group->initialized) {
@@ -3254,7 +3254,7 @@ SERVER_FRAME_API void global_service::set_current_service(
     }
 
     {
-      util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+      atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
       named_groups.swap(current_service_cache->named_groups);
     }
 
@@ -3271,7 +3271,8 @@ SERVER_FRAME_API void global_service::set_current_service(
 
     // Retrigger ready callbacks
     {
-      util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->on_ready_callback_lock};
+      atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{
+          current_service_cache->on_ready_callback_lock};
       for (auto &callback_fn : current_service_cache->on_ready_callbacks) {
         if (callback_fn) {
           callback_fn();
@@ -3288,7 +3289,7 @@ SERVER_FRAME_API std::shared_ptr<group_type> global_service::get_group(gsl::stri
   }
 
   if (group_name.empty()) {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     return current_service_cache->default_group;
   }
 
@@ -3296,7 +3297,7 @@ SERVER_FRAME_API std::shared_ptr<group_type> global_service::get_group(gsl::stri
 
   std::shared_ptr<group_type> ret;
   {
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{current_service_cache->group_lock};
     auto iter = current_service_cache->named_groups.find(group_name_string);
     if (iter == current_service_cache->named_groups.end()) {
       return ret;

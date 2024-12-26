@@ -51,7 +51,7 @@ SERVER_FRAME_CONFIG_API int session_manager::proc() {
     return 0;
   }
 
-  time_t cur_time = util::time::time_utility::get_now();
+  time_t cur_time = atfw::util::time::time_utility::get_now();
   cur_time = cur_time - cur_time % proc_interval;
   if (cur_time > last_proc_timepoint_) {
     last_proc_timepoint_ = cur_time;

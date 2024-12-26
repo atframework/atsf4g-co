@@ -85,7 +85,7 @@ int user_async_jobs_manager::dump(rpc::context&, PROJECT_NAMESPACE_ID::table_use
     return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
 
-  time_t now = util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
 
   jobs_data->set_next_task_active_time(static_cast<int64_t>(remote_command_patch_task_next_timepoint_));
   for (auto& job_type : const_cast<user_async_jobs_manager*>(this)->history_uuids_) {
@@ -167,8 +167,8 @@ bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
   is_dirty_ = true;
   if (::util::time::time_utility::get_now() > remote_command_patch_task_next_timepoint_) {
     force_async_job_type_.clear();
-    remote_command_patch_task_next_timepoint_ =
-        ::util::time::time_utility::get_now() + logic_config::me()->get_logic().user().async_job().interval().seconds();
+    remote_command_patch_task_next_timepoint_ = atfw::util::time::time_utility::get_now() +
+                                                logic_config::me()->get_logic().user().async_job().interval().seconds();
   }
 
   task_type_trait::task_type task_inst;
@@ -176,7 +176,7 @@ bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
   params.user = owner_->shared_from_this();
   params.timeout_duration =
       task_manager::make_timeout_duration(logic_config::me()->get_logic().user().async_job().timeout());
-  params.timeout_timepoint = util::time::time_utility::now() + params.timeout_duration;
+  params.timeout_timepoint = atfw::util::time::time_utility::now() + params.timeout_duration;
   params.caller_context = &ctx;
   params.async_job_type.swap(force_async_job_type_);
   task_manager::me()->create_task_with_timeout<task_action_player_remote_patch_jobs>(task_inst, params.timeout_duration,
@@ -242,7 +242,7 @@ void user_async_jobs_manager::clear_job_uuids(int32_t job_type) {
     conflict_checking_queue_size = 1000;
   }
 
-  time_t now = util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
   while (!iter->second.empty()) {
     auto& top = iter->second.front();
     if (!top.second) {
@@ -279,7 +279,7 @@ void user_async_jobs_manager::add_job_uuid(int32_t job_type, const std::string& 
     conflict_checking_timeout = 1800;
   }
 
-  time_t now = util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
   history_item item;
   item.timeout = now + conflict_checking_timeout;
 

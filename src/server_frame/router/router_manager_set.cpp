@@ -75,14 +75,14 @@ SERVER_FRAME_API int router_manager_set::tick() {
   }
 
   // 如果不是正在关闭，则每秒只需要判定一次
-  if (!is_closing() && !is_pre_closing_ && last_proc_time_ == ::util::time::time_utility::get_sys_now()) {
+  if (!is_closing() && !is_pre_closing_ && last_proc_time_ == atfw::util::time::time_utility::get_sys_now()) {
     return ret;
   }
   // 每分钟打印一次统计数据
-  if (last_proc_time_ / util::time::time_utility::MINITE_SECONDS !=
-      ::util::time::time_utility::get_sys_now() / util::time::time_utility::MINITE_SECONDS) {
+  if (last_proc_time_ / atfw::util::time::time_utility::MINITE_SECONDS !=
+      atfw::util::time::time_utility::get_sys_now() / atfw::util::time::time_utility::MINITE_SECONDS) {
     std::stringstream ss;
-    ss << "[STATISTICS] router manager set => now: " << ::util::time::time_utility::get_sys_now() << std::endl;
+    ss << "[STATISTICS] router manager set => now: " << atfw::util::time::time_utility::get_sys_now() << std::endl;
     ss << "\tdefault timer count: " << timers_.default_timer_list.size() << ", next active timer: ";
     if (timers_.default_timer_list.empty()) {
       ss << 0 << std::endl;
@@ -109,7 +109,7 @@ SERVER_FRAME_API int router_manager_set::tick() {
 
     FWLOGWARNING("{}", ss.str());
   }
-  last_proc_time_ = ::util::time::time_utility::get_sys_now();
+  last_proc_time_ = atfw::util::time::time_utility::get_sys_now();
 
   //  正在执行closing任务则不需要自动清理/保存了
   if (false == is_closing_task_running()) {
@@ -280,11 +280,11 @@ SERVER_FRAME_API bool router_manager_set::insert_timer(router_manager_base *mgr,
   tm_inst->obj_watcher = obj;
   tm_inst->type_id = mgr->get_type_id();
   if (!is_fast) {
-    tm_inst->timeout = util::time::time_utility::get_sys_now() +
+    tm_inst->timeout = atfw::util::time::time_utility::get_sys_now() +
                        logic_config::me()->get_cfg_router().default_timer_interval().seconds();
   } else {
-    tm_inst->timeout =
-        util::time::time_utility::get_sys_now() + logic_config::me()->get_cfg_router().fast_timer_interval().seconds();
+    tm_inst->timeout = atfw::util::time::time_utility::get_sys_now() +
+                       logic_config::me()->get_cfg_router().fast_timer_interval().seconds();
   }
   tm_inst->timer_sequence = obj->alloc_timer_sequence();
   obj->reset_timer_ref(tm_timer, tm_iter);
@@ -565,7 +565,7 @@ SERVER_FRAME_API std::shared_ptr<router_manager_metrics_data> router_manager_set
   std::shared_ptr<router_manager_metrics_data> ret;
   do {
     // 先上读锁，大部分情况下读锁是不会冲突的。除非交易行ID切换或区域变化
-    util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{metrics_data_.metric_lock};
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{metrics_data_.metric_lock};
     auto iter = metrics_data_.metric_data.find(manager_name);
     if (iter == metrics_data_.metric_data.end()) {
       break;
@@ -589,7 +589,7 @@ SERVER_FRAME_API std::shared_ptr<router_manager_metrics_data> router_manager_set
 
   do {
     // 先上写锁
-    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard{metrics_data_.metric_lock};
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{metrics_data_.metric_lock};
     auto &manager_metrics_data = metrics_data_.metric_data[manager_name];
     if (!manager_metrics_data) {
       manager_metrics_data = atfw::memory::stl::make_shared<router_manager_metrics_data>();
@@ -760,7 +760,7 @@ void router_manager_set::setup_metrics() {
 
         std::unordered_map<std::string, std::shared_ptr<router_manager_metrics_data>> copy_metrics_indexes;
         {
-          util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{
+          atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{
               router_manager_set::me()->metrics_data_.metric_lock};
           copy_metrics_indexes = router_manager_set::me()->metrics_data_.metric_data;
         }
@@ -795,7 +795,7 @@ void router_manager_set::setup_metrics() {
 
         std::unordered_map<std::string, std::shared_ptr<router_manager_metrics_data>> copy_metrics_indexes;
         {
-          util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{
+          atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{
               router_manager_set::me()->metrics_data_.metric_lock};
           copy_metrics_indexes = router_manager_set::me()->metrics_data_.metric_data;
         }
@@ -831,7 +831,7 @@ void router_manager_set::setup_metrics() {
 
         std::unordered_map<std::string, std::shared_ptr<router_manager_metrics_data>> copy_metrics_indexes;
         {
-          util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{
+          atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{
               router_manager_set::me()->metrics_data_.metric_lock};
           copy_metrics_indexes = router_manager_set::me()->metrics_data_.metric_data;
         }
@@ -867,7 +867,7 @@ void router_manager_set::setup_metrics() {
 
         std::unordered_map<std::string, std::shared_ptr<router_manager_metrics_data>> copy_metrics_indexes;
         {
-          util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard{
+          atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{
               router_manager_set::me()->metrics_data_.metric_lock};
           copy_metrics_indexes = router_manager_set::me()->metrics_data_.metric_data;
         }

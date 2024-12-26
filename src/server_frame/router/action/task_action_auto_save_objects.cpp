@@ -49,11 +49,11 @@ task_action_auto_save_objects::~task_action_auto_save_objects() {}
 
 task_action_auto_save_objects::result_type task_action_auto_save_objects::operator()() {
   FWLOGINFO("auto save task started");
-  util::time::time_utility::update();
+  atfw::util::time::time_utility::update();
 
   status_data_->success_count_ = 0;
   status_data_->failed_count_ = 0;
-  status_data_->start_timepooint_ = util::time::time_utility::get_sys_now();
+  status_data_->start_timepooint_ = atfw::util::time::time_utility::get_sys_now();
   status_data_->action_remove_object_count = 0;
   status_data_->action_remove_cache_count = 0;
   status_data_->action_save_count = 0;
@@ -64,7 +64,7 @@ task_action_auto_save_objects::result_type task_action_auto_save_objects::operat
 
   while (left_action_count > 0) {
     --left_action_count;
-    util::time::time_utility::update();
+    atfw::util::time::time_utility::update();
     if (router_manager_set::me()->pending_action_list_.empty()) {
       break;
     }
@@ -251,7 +251,7 @@ int task_action_auto_save_objects::on_timeout() {
   }
 
   FWLOGWARNING("auto save task timeout(run {} seconds), we will continue on next round.",
-               util::time::time_utility::get_sys_now() - status_data_->start_timepooint_);
+               atfw::util::time::time_utility::get_sys_now() - status_data_->start_timepooint_);
   return 0;
 }
 

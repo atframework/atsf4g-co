@@ -42,14 +42,14 @@ namespace distributed_system {
 class task_action_participator_resolve_transaction;
 
 class transaction_participator_handle
-    : public util::memory::enable_shared_rc_from_this<transaction_participator_handle> {
+    : public atfw::util::memory::enable_shared_rc_from_this<transaction_participator_handle> {
  public:
   using storage_type = atframework::distributed_system::transaction_participator_storage;
   using metadata_type = atframework::distributed_system::transaction_metadata;
   using configure_type = atframework::distributed_system::transaction_configure;
   using snapshot_type = atframework::distributed_system::transaction_participator_snapshot;
-  using storage_ptr_type = util::memory::strong_rc_ptr<storage_type>;
-  using storage_const_ptr_type = util::memory::strong_rc_ptr<const storage_type>;
+  using storage_ptr_type = atfw::util::memory::strong_rc_ptr<storage_type>;
+  using storage_const_ptr_type = atfw::util::memory::strong_rc_ptr<const storage_type>;
 
   struct UTIL_SYMBOL_VISIBLE vtable_type {
     // 事务执行(Do)回调
@@ -92,7 +92,7 @@ class transaction_participator_handle
 
  public:
   DISTRIBUTED_TRANSACTION_SDK_API transaction_participator_handle(
-      const util::memory::strong_rc_ptr<vtable_type>& vtable, gsl::string_view participator_key);
+      const atfw::util::memory::strong_rc_ptr<vtable_type>& vtable, gsl::string_view participator_key);
   DISTRIBUTED_TRANSACTION_SDK_API ~transaction_participator_handle();
 
   UTIL_FORCEINLINE void* get_private_data() const noexcept { return private_data_; }
@@ -113,7 +113,7 @@ class transaction_participator_handle
    * @param timepoint current timepoint
    * @return error code or transaction count to resolve
    */
-  DISTRIBUTED_TRANSACTION_SDK_API int32_t tick(rpc::context& ctx, util::time::time_utility::raw_time_t timepoint);
+  DISTRIBUTED_TRANSACTION_SDK_API int32_t tick(rpc::context& ctx, atfw::util::time::time_utility::raw_time_t timepoint);
 
   /**
    * @brief Check writable of current transaction participator
@@ -312,7 +312,7 @@ class transaction_participator_handle
       return l.timepoint != r.timepoint || l.transaction_uuid != r.transaction_uuid;
     }
 
-    util::time::time_utility::raw_time_t timepoint;
+    atfw::util::time::time_utility::raw_time_t timepoint;
     std::string transaction_uuid;
   };
 
@@ -320,7 +320,7 @@ class transaction_participator_handle
   on_destroy_callback_type on_destroy_;
 
   std::string participator_key_;
-  util::memory::strong_rc_ptr<vtable_type> vtable_;
+  atfw::util::memory::strong_rc_ptr<vtable_type> vtable_;
   std::set<storage_resolve_timer_type> resolve_timers_;
   std::unordered_map<std::string, storage_ptr_type> running_transactions_;
   std::unordered_map<std::string, storage_ptr_type> transaction_locks_;

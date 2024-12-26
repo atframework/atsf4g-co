@@ -34,9 +34,9 @@ static uint32_t get_transaction_zone_id(const atframework::distributed_system::t
 transaction_manager::transaction_manager() : is_exiting_(false), last_stat_timepoint_(0) {}
 
 int transaction_manager::tick() {
-  time_t now = util::time::time_utility::get_now();
-  if (last_stat_timepoint_ != now / util::time::time_utility::MINITE_SECONDS) {
-    last_stat_timepoint_ = now / util::time::time_utility::MINITE_SECONDS;
+  time_t now = atfw::util::time::time_utility::get_now();
+  if (last_stat_timepoint_ != now / atfw::util::time::time_utility::MINITE_SECONDS) {
+    last_stat_timepoint_ = now / atfw::util::time::time_utility::MINITE_SECONDS;
     FWLOGWARNING("[STATISTICS]: current transition cache count: {}", lru_caches_.size());
   }
 
@@ -76,7 +76,7 @@ rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_p
          int64_t* out_version) -> rpc::result_code_type {
         std::string data_version;
         if (nullptr != out_version) {
-          data_version = util::log::format("{}", *out_version);
+          data_version = atfw::util::log::format("{}", *out_version);
         }
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> storage{subctx};
         storage->set_zone_id(get_transaction_zone_id(in.metadata()));
@@ -88,7 +88,7 @@ rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_p
         int ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::set(
             subctx, storage->zone_id(), storage->transaction_uuid(), std::move(storage), data_version));
         if (nullptr != out_version) {
-          util::string::str2int(*out_version, data_version.c_str(), data_version.size());
+          atfw::util::string::str2int(*out_version, data_version.c_str(), data_version.size());
         }
 
         RPC_RETURN_CODE(ret);
@@ -101,7 +101,7 @@ rpc::result_code_type transaction_manager::create_transaction(
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  time_t now = util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
   int32_t now_nanos = static_cast<int32_t>(util::time::time_utility::get_now_usec() * 1000);
   storage.mutable_metadata()->mutable_prepare_timepoint()->set_seconds(now);
   storage.mutable_metadata()->mutable_prepare_timepoint()->set_nanos(now_nanos);
@@ -189,7 +189,7 @@ rpc::result_code_type transaction_manager::mutable_transaction(
           }
 
           if (nullptr != out_version) {
-            util::string::str2int(*out_version, data_version.c_str(), data_version.size());
+            atfw::util::string::str2int(*out_version, data_version.c_str(), data_version.size());
           }
 
           RPC_RETURN_CODE(sub_ret);

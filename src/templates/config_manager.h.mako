@@ -237,7 +237,7 @@ private:
 
 private:
   static bool is_destroyed_;
-  util::lock::atomic_int_type<int64_t> reload_version_;
+  atfw::util::lock::atomic_int_type<int64_t> reload_version_;
   bool override_same_version_;
   bool enable_multithread_lock_;
   size_t max_group_number_;
@@ -251,14 +251,14 @@ private:
 
   read_buffer_func_t read_file_handle_;
   read_version_func_t read_version_handle_;
-  mutable util::lock::spin_rw_lock handle_lock_;
+  mutable atfw::util::lock::spin_rw_lock handle_lock_;
 
   std::list<config_group_ptr_t> config_group_list_;
-  mutable util::lock::spin_rw_lock config_group_lock_;
+  mutable atfw::util::lock::spin_rw_lock config_group_lock_;
 
   std::string log_buffer_;
 
-  util::lock::spin_rw_lock evt_lock_;
+  atfw::util::lock::spin_rw_lock evt_lock_;
   std::unordered_map<void*, std::function<void()>> on_evt_reset_;
 };
 ${pb_loader.CppNamespaceEnd(global_package)} // ${global_package}

@@ -36,9 +36,9 @@ static simulator_base *g_last_simulator = nullptr;
 namespace detail {
 // 绑定的输出函数
 static void help_func(util::cli::callback_param stParams, simulator_base *self) {
-  util::cli::shell_stream(std::cout)() << util::cli::shell_font_style::SHELL_FONT_COLOR_YELLOW
-                                       << util::cli::shell_font_style::SHELL_FONT_SPEC_BOLD
-                                       << "Usage: " << self->get_exec() << " [options...]" << std::endl;
+  atfw::util::cli::shell_stream(std::cout)() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_YELLOW
+                                             << atfw::util::cli::shell_font_style::SHELL_FONT_SPEC_BOLD
+                                             << "Usage: " << self->get_exec() << " [options...]" << std::endl;
   self->get_option_manager()->set_help_cmd_style(
       static_cast<int>(util::cli::shell_font_style::SHELL_FONT_COLOR_MAGENTA) |
       static_cast<int>(util::cli::shell_font_style::SHELL_FONT_SPEC_BOLD));
@@ -111,10 +111,10 @@ struct on_sys_cmd_sleep {
   void operator()(util::cli::callback_param params) {
     time_t msec = 1000;
     if (params.get_params_number() > 0) {
-      util::config::ini_value val;
+      atfw::util::config::ini_value val;
       val.add(params[0]->to_cpp_string());
 
-      util::config::duration_value dur = val.as_duration();
+      atfw::util::config::duration_value dur = val.as_duration();
       msec = dur.sec * 1000 + dur.nsec / 1000000;
     }
 
@@ -138,13 +138,13 @@ struct on_sys_cmd_unknown {
 };
 
 struct on_default_cmd_error {
-  util::cli::cmd_option_ci *owner;
+  atfw::util::cli::cmd_option_ci *owner;
   on_default_cmd_error(util::cli::cmd_option_ci *s) : owner(s) {}
 
   void operator()(util::cli::callback_param params) {
-    util::cli::shell_stream(std::cout)() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "Cmd Error."
-                                         << std::endl;
-    const typename util::cli::cmd_option_list::cmd_array_type &cmd_arr = params.get_cmd_array();
+    atfw::util::cli::shell_stream(std::cout)()
+        << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "Cmd Error." << std::endl;
+    const typename atfw::util::cli::cmd_option_list::cmd_array_type &cmd_arr = params.get_cmd_array();
     size_t arr_sz = cmd_arr.size();
     if (arr_sz < 2) {
       owner->dump(std::cout, "") << std::endl;
@@ -167,7 +167,7 @@ simulator_base::cmd_wrapper_t::cmd_wrapper_t(const std::string &n) : parent(null
 
 // create a child node
 simulator_base::cmd_wrapper_t &simulator_base::cmd_wrapper_t::operator[](const std::string &nm) {
-  std::vector<std::string> cmds = util::cli::cmd_option_ci::split_cmd(nm.c_str());
+  std::vector<std::string> cmds = atfw::util::cli::cmd_option_ci::split_cmd(nm.c_str());
   if (cmds.empty()) {
     return *this;
   }
@@ -187,7 +187,7 @@ simulator_base::cmd_wrapper_t &simulator_base::cmd_wrapper_t::operator[](const s
 
   if (!child) {
     child = std::make_shared<cmd_wrapper_t>(nm);
-    child->cmd_node = util::cli::cmd_option_ci::create();
+    child->cmd_node = atfw::util::cli::cmd_option_ci::create();
     assert(child->cmd_node->empty());
     child->parent = this;
   }
@@ -199,7 +199,7 @@ simulator_base::cmd_wrapper_t &simulator_base::cmd_wrapper_t::operator[](const s
   return *child;
 }
 
-std::shared_ptr<util::cli::cmd_option_ci> simulator_base::cmd_wrapper_t::parent_node() {
+std::shared_ptr<atfw::util::cli::cmd_option_ci> simulator_base::cmd_wrapper_t::parent_node() {
   if (nullptr == parent) {
     assert(cmd_node.get());
     return cmd_node;
@@ -209,7 +209,7 @@ std::shared_ptr<util::cli::cmd_option_ci> simulator_base::cmd_wrapper_t::parent_
     return parent->cmd_node;
   } else {
     // initialize parent binder
-    std::shared_ptr<util::cli::cmd_option_ci> ppmgr = parent->parent_node();
+    std::shared_ptr<atfw::util::cli::cmd_option_ci> ppmgr = parent->parent_node();
 
     parent->cmd_node->bind_cmd("@OnError", detail::on_default_cmd_error(parent->cmd_node.get()));
     assert(!parent->cmd_node->empty());
@@ -236,8 +236,8 @@ simulator_base::simulator_base() : is_closing_(false), exec_path_(nullptr), star
   uv_mutex_init(&async_cmd_lock_);
   async_cmd_.data = this;
 
-  cmd_mgr_ = util::cli::cmd_option_ci::create();
-  args_mgr_ = util::cli::cmd_option::create();
+  cmd_mgr_ = atfw::util::cli::cmd_option_ci::create();
+  args_mgr_ = atfw::util::cli::cmd_option::create();
   root_ = std::make_shared<cmd_wrapper_t>(std::string());
   root_->cmd_node = cmd_mgr_;
 
@@ -298,25 +298,25 @@ static void simulator_setup_signal_func(uv_signal_t *handle, int signum) {
 int simulator_base::init() {
   // register inner cmd and helper msg
   args_mgr_->bind_cmd("?, -h, --help, help", detail::help_func, this)->set_help_msg("show help message and exit");
-  args_mgr_->bind_cmd("--history, --history-file", util::cli::phoenix::assign(shell_opts_.history_file))
+  args_mgr_->bind_cmd("--history, --history-file", atfw::util::cli::phoenix::assign(shell_opts_.history_file))
       ->set_help_msg("<file path> set command history file");
-  args_mgr_->bind_cmd("--protocol, --protocol-log", util::cli::phoenix::assign(shell_opts_.protocol_log))
+  args_mgr_->bind_cmd("--protocol, --protocol-log", atfw::util::cli::phoenix::assign(shell_opts_.protocol_log))
       ->set_help_msg("<file path> set protocol log file");
-  args_mgr_->bind_cmd("-ni, --no-interactive", util::cli::phoenix::set_const(shell_opts_.no_interactive, true))
+  args_mgr_->bind_cmd("-ni, --no-interactive", atfw::util::cli::phoenix::set_const(shell_opts_.no_interactive, true))
       ->set_help_msg("disable interactive mode");
   args_mgr_
       ->bind_cmd("-ni-enable-stdout, --no-interactive-enable-stdout",
-                 util::cli::phoenix::set_const(shell_opts_.no_interactive_stdout, true))
+                 atfw::util::cli::phoenix::set_const(shell_opts_.no_interactive_stdout, true))
       ->set_help_msg("enable stdout for no interactive mode");
   args_mgr_
       ->bind_cmd("-ni-timeout, --no-interactive-timeout",
-                 util::cli::phoenix::assign(shell_opts_.no_interactive_timeout))
+                 atfw::util::cli::phoenix::assign(shell_opts_.no_interactive_timeout))
       ->set_help_msg("<timeout> set timeout in seconds for no interactive mode.(default: 600)");
-  args_mgr_->bind_cmd("-f, --rf, --read-file", util::cli::phoenix::assign<std::string>(shell_opts_.read_file))
+  args_mgr_->bind_cmd("-f, --rf, --read-file", atfw::util::cli::phoenix::assign<std::string>(shell_opts_.read_file))
       ->set_help_msg("read from file");
-  args_mgr_->bind_cmd("-c, --cmd", util::cli::phoenix::push_back(shell_opts_.cmds))
+  args_mgr_->bind_cmd("-c, --cmd", atfw::util::cli::phoenix::push_back(shell_opts_.cmds))
       ->set_help_msg("[cmd ...] add cmd to run");
-  args_mgr_->bind_cmd("-t, --timer-interval", util::cli::phoenix::assign(shell_opts_.tick_timer_interval))
+  args_mgr_->bind_cmd("-t, --timer-interval", atfw::util::cli::phoenix::assign(shell_opts_.tick_timer_interval))
       ->set_help_msg("<timer interval> set timer interval in miliseconds");
 
   reg_req()["!, sh"]
@@ -399,7 +399,7 @@ void simulator_base::setup_timer() {
 }
 
 int simulator_base::run(int argc, const char *argv[]) {
-  util::time::time_utility::update(nullptr);
+  atfw::util::time::time_utility::update(nullptr);
   if (argc > 0) {
     exec_path_ = argv[0];
   }
@@ -413,8 +413,8 @@ int simulator_base::run(int argc, const char *argv[]) {
 
   on_start();
 
-  util::time::time_utility::update();
-  start_timepoint_ = util::time::time_utility::get_sys_now();
+  atfw::util::time::time_utility::update();
+  start_timepoint_ = atfw::util::time::time_utility::get_sys_now();
 
   // startup interactive thread
   uv_thread_create(&thd_cmd_, linenoise_thd_main, this);
@@ -489,7 +489,7 @@ int simulator_base::stop() {
 int simulator_base::tick() { return 0; }
 
 bool simulator_base::insert_player(player_ptr_t player) {
-  util::time::time_utility::update(nullptr);
+  atfw::util::time::time_utility::update(nullptr);
   if (is_closing_) {
     return false;
   }
@@ -517,7 +517,7 @@ bool simulator_base::insert_player(player_ptr_t player) {
 }
 
 void simulator_base::remove_player(const std::string &id, bool is_close) {
-  util::time::time_utility::update(nullptr);
+  atfw::util::time::time_utility::update(nullptr);
   // will do it in stop function
   if (is_closing_) {
     return;
@@ -540,7 +540,7 @@ void simulator_base::remove_player(const std::string &id, bool is_close) {
 }
 
 void simulator_base::remove_player(player_ptr_t player) {
-  util::time::time_utility::update(nullptr);
+  atfw::util::time::time_utility::update(nullptr);
   // will do it in stop function
   if (is_closing_ || !player) {
     return;
@@ -598,7 +598,7 @@ bool simulator_base::is_global_timeout() const noexcept {
     return false;
   }
 
-  util::time::time_utility::update();
+  atfw::util::time::time_utility::update();
   if (util::time::time_utility::get_sys_now() > start_timepoint_ + shell_opts_.no_interactive_timeout) {
     return true;
   }
@@ -614,7 +614,7 @@ int simulator_base::insert_cmd(player_ptr_t player, const std::string &cmd) {
   }
 
   // must be thread-safe
-  util::lock::lock_holder<util::lock::spin_lock> holder(shell_cmd_manager_.lock);
+  atfw::util::lock::lock_holder<atfw::util::lock::spin_lock> holder(shell_cmd_manager_.lock);
   shell_cmd_manager_.cmds.push_back(std::pair<player_ptr_t, std::string>(player, cmd));
   uv_async_send(&async_cmd_);
   return 0;
@@ -645,7 +645,7 @@ void simulator_base::libuv_on_async_cmd(uv_async_t *handle) {
   assert(self);
 
   while (true) {
-    util::time::time_utility::update(nullptr);
+    atfw::util::time::time_utility::update(nullptr);
     // sleeping skip running
     if (self->sleep_timer_.is_used) {
       return;
@@ -653,7 +653,7 @@ void simulator_base::libuv_on_async_cmd(uv_async_t *handle) {
 
     std::pair<player_ptr_t, std::string> cmd;
     {
-      util::lock::lock_holder<util::lock::spin_lock> holder(self->shell_cmd_manager_.lock);
+      atfw::util::lock::lock_holder<atfw::util::lock::spin_lock> holder(self->shell_cmd_manager_.lock);
       if (self->shell_cmd_manager_.cmds.empty()) {
         break;
       }
@@ -733,7 +733,7 @@ simulator_base::linenoise_helper_t &simulator_base::linenoise_build_complete(con
   const char *curr_matched = line;
   std::string ident;
   while (curr_matched && *curr_matched) {
-    curr_matched = util::cli::cmd_option_ci::get_segment(curr_matched, ident);
+    curr_matched = atfw::util::cli::cmd_option_ci::get_segment(curr_matched, ident);
     if (ident.empty()) {
       break;
     }
@@ -790,7 +790,7 @@ simulator_base::linenoise_helper_t &simulator_base::linenoise_build_complete(con
       std::string prefix, dir, next_ident;
       while (curr_matched && *curr_matched) {
         const char *prev_matched = curr_matched;
-        curr_matched = util::cli::cmd_option_ci::get_segment(curr_matched, next_ident);
+        curr_matched = atfw::util::cli::cmd_option_ci::get_segment(curr_matched, next_ident);
         if (!next_ident.empty()) {
           ident = next_ident;
           last_matched = prev_matched;
@@ -809,10 +809,10 @@ simulator_base::linenoise_helper_t &simulator_base::linenoise_build_complete(con
         dir = prefix;
       } else {
         // 枚举文件前缀
-        util::file_system::dirname(prefix.c_str(), prefix.size(), dir);
+        atfw::util::file_system::dirname(prefix.c_str(), prefix.size(), dir);
       }
 
-      util::file_system::scan_dir(dir.c_str(), fls);
+      atfw::util::file_system::scan_dir(dir.c_str(), fls);
       for (std::string &fl : fls) {
         if (0 == UTIL_STRFUNC_STRNCASE_CMP(prefix.c_str(), fl.c_str(), prefix.size())) {
           rule.assign(line, last_matched);
@@ -844,7 +844,7 @@ simulator_base::linenoise_helper_t &simulator_base::linenoise_build_complete(con
       // file system
       if (parent->autocomplete_.test(cmd_autocomplete_flag_t::EN_CACF_FILES)) {
         std::list<std::string> fls;
-        util::file_system::scan_dir(nullptr, fls);
+        atfw::util::file_system::scan_dir(nullptr, fls);
         for (std::string &fl : fls) {
           rule.assign(line, last_matched);
           if (!rule.empty() && rule.back() != ' ' && rule.back() != '\t') {

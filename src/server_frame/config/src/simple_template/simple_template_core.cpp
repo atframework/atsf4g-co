@@ -68,7 +68,7 @@ static std::pair<bool, const char*> take_utf8_char(const char* start, size_t sz)
     }
   }
 
-  size_t len = ::util::string::utf8_char_t::length(start);
+  size_t len = atfw::util::string::utf8_char_t::length(start);
   if (len > sz) {
     return std::make_pair(false, start + sz);
   }

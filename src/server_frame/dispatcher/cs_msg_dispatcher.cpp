@@ -356,7 +356,7 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_s
       }
 
       // session 移除前强制update一次，用以处理debug调试断点导致task_action_player_logout被立刻认为超时
-      util::time::time_utility::update();
+      atfw::util::time::time_utility::update();
 
       FWLOGINFO("remove session [{:#x}: {}, {}]", session_key.node_id,
                 get_app()->convert_app_id_to_string(session_key.node_id), session_key.session_id);

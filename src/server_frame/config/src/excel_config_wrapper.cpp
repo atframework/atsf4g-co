@@ -41,8 +41,8 @@ static bool excel_config_callback_get_buffer(std::string& out, const char* path)
   char file_path[util::file_system::MAX_PATH_LEN + 1];
   int res = UTIL_STRFUNC_SNPRINTF(file_path, sizeof(file_path) - 1, "%s%c%s",
                                   logic_config::me()->get_logic().excel().bindir().c_str(),
-                                  util::file_system::DIRECTORY_SEPARATOR, path);
-  if (res > 0 && static_cast<size_t>(res) < util::file_system::MAX_PATH_LEN) {
+                                  atfw::util::file_system::DIRECTORY_SEPARATOR, path);
+  if (res > 0 && static_cast<size_t>(res) < atfw::util::file_system::MAX_PATH_LEN) {
     file_path[res] = 0;
   } else {
     return false;
@@ -52,15 +52,15 @@ static bool excel_config_callback_get_buffer(std::string& out, const char* path)
     return false;
   }
 
-  return util::file_system::get_file_content(out, file_path, true);
+  return atfw::util::file_system::get_file_content(out, file_path, true);
 }
 
 static bool excel_config_callback_get_version(std::string& out) {
   char file_path[util::file_system::MAX_PATH_LEN + 1];
   int res = UTIL_STRFUNC_SNPRINTF(file_path, sizeof(file_path) - 1, "%s%c%s",
                                   logic_config::me()->get_logic().excel().bindir().c_str(),
-                                  util::file_system::DIRECTORY_SEPARATOR, "version.txt");
-  if (res > 0 && static_cast<size_t>(res) < util::file_system::MAX_PATH_LEN) {
+                                  atfw::util::file_system::DIRECTORY_SEPARATOR, "version.txt");
+  if (res > 0 && static_cast<size_t>(res) < atfw::util::file_system::MAX_PATH_LEN) {
     file_path[res] = 0;
   } else {
     return false;
@@ -70,7 +70,7 @@ static bool excel_config_callback_get_version(std::string& out) {
   if (util::file_system::is_exist(file_path)) {
     std::string buffer;
     if (util::file_system::get_file_content(buffer, file_path, true)) {
-      std::pair<const char*, size_t> ver = util::string::trim(buffer.c_str(), buffer.size());
+      std::pair<const char*, size_t> ver = atfw::util::string::trim(buffer.c_str(), buffer.size());
       out.assign(ver.first, ver.second);
     }
   }
@@ -90,7 +90,7 @@ static void excel_config_callback_on_reload_all(excel::config_manager::config_gr
 
 static void excel_config_callback_logger(const excel::config_manager::log_caller_info_t& caller, const char* content) {
   // switch(caller.)
-  util::log::log_wrapper::caller_info_t log_caller;
+  atfw::util::log::log_wrapper::caller_info_t log_caller;
   log_caller.file_path = caller.file_path;
   log_caller.func_name = caller.func_name;
   log_caller.level_name = caller.level_name;
@@ -98,23 +98,23 @@ static void excel_config_callback_logger(const excel::config_manager::log_caller
   log_caller.rotate_index = 0;
   switch (caller.level_id) {
     case excel::config_manager::log_level_t::LOG_LW_DISABLED: {
-      log_caller.level_id = util::log::log_wrapper::level_t::LOG_LW_DISABLED;
+      log_caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_DISABLED;
       break;
     }
     case excel::config_manager::log_level_t::LOG_LW_ERROR: {
-      log_caller.level_id = util::log::log_wrapper::level_t::LOG_LW_ERROR;
+      log_caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_ERROR;
       break;
     }
     case excel::config_manager::log_level_t::LOG_LW_WARNING: {
-      log_caller.level_id = util::log::log_wrapper::level_t::LOG_LW_WARNING;
+      log_caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_WARNING;
       break;
     }
     case excel::config_manager::log_level_t::LOG_LW_INFO: {
-      log_caller.level_id = util::log::log_wrapper::level_t::LOG_LW_INFO;
+      log_caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_INFO;
       break;
     }
     default: {
-      log_caller.level_id = util::log::log_wrapper::level_t::LOG_LW_DEBUG;
+      log_caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_DEBUG;
       break;
     }
   }
@@ -173,7 +173,7 @@ SERVER_FRAME_CONFIG_API int excel_config_wrapper_reload_all(bool is_init) {
         });
 
     int ret = excel::config_manager::me()->reload_all(true);
-    ::util::time::time_utility::update();
+    atfw::util::time::time_utility::update();
     return ret;
   }
 

@@ -75,8 +75,8 @@ SERVER_FRAME_API gsl::string_view protobuf_mini_dumper_get_error_msg(int error_c
     ret = "Success";
   }
 
-  static util::lock::spin_lock shared_desc_lock;
-  util::lock::lock_holder<util::lock::spin_lock> lock_guard{shared_desc_lock};
+  static atfw::util::lock::spin_lock shared_desc_lock;
+  atfw::util::lock::lock_holder<atfw::util::lock::spin_lock> lock_guard{shared_desc_lock};
 
   error_code_desc_map_t::const_iterator iter = cs_error_desc.find(error_code);
   if (iter != cs_error_desc.end()) {
@@ -137,7 +137,7 @@ SERVER_FRAME_API gsl::string_view protobuf_mini_dumper_get_enum_name(
   }
 
   static char shared_buffer[40] = {0};
-  util::log::format_to_n(shared_buffer, sizeof(shared_buffer) - 1, "UNKNOWN({})", error_code);
+  atfw::util::log::format_to_n(shared_buffer, sizeof(shared_buffer) - 1, "UNKNOWN({})", error_code);
   return shared_buffer;
 }
 

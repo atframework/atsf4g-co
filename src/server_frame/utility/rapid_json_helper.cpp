@@ -51,12 +51,12 @@ static void load_field_string_filter(const std::string& input, rapidjson::Value&
                                      const rapidjson_helper_load_options& options) {
   switch (options.string_mode) {
     case rapidjson_helper_string_mode::URI: {
-      std::string strv = util::uri::encode_uri(input.c_str(), input.size());
+      std::string strv = atfw::util::uri::encode_uri(input.c_str(), input.size());
       output.SetString(strv.c_str(), static_cast<rapidjson::SizeType>(strv.size()), doc.GetAllocator());
       break;
     }
     case rapidjson_helper_string_mode::URI_COMPONENT: {
-      std::string strv = util::uri::encode_uri_component(input.c_str(), input.size());
+      std::string strv = atfw::util::uri::encode_uri_component(input.c_str(), input.size());
       output.SetString(strv.c_str(), static_cast<rapidjson::SizeType>(strv.size()), doc.GetAllocator());
       break;
     }
@@ -86,42 +86,42 @@ static rapidjson::Value load_field_item_to_map_string(const ::google::protobuf::
   char integer_string[24] = {0};
   switch (fds->cpp_type()) {
     case google::protobuf::FieldDescriptor::CPPTYPE_INT32: {
-      size_t str_len =
-          util::string::int2str(integer_string, sizeof(integer_string) - 1, src.GetReflection()->GetInt32(src, fds));
+      size_t str_len = atfw::util::string::int2str(integer_string, sizeof(integer_string) - 1,
+                                                   src.GetReflection()->GetInt32(src, fds));
       ret.SetString(integer_string, static_cast<rapidjson::SizeType>(str_len), doc.GetAllocator());
       break;
     }
     case google::protobuf::FieldDescriptor::CPPTYPE_UINT32: {
-      size_t str_len =
-          util::string::int2str(integer_string, sizeof(integer_string) - 1, src.GetReflection()->GetUInt32(src, fds));
+      size_t str_len = atfw::util::string::int2str(integer_string, sizeof(integer_string) - 1,
+                                                   src.GetReflection()->GetUInt32(src, fds));
       ret.SetString(integer_string, static_cast<rapidjson::SizeType>(str_len), doc.GetAllocator());
       break;
     }
     case google::protobuf::FieldDescriptor::CPPTYPE_INT64: {
-      size_t str_len =
-          util::string::int2str(integer_string, sizeof(integer_string) - 1, src.GetReflection()->GetInt64(src, fds));
+      size_t str_len = atfw::util::string::int2str(integer_string, sizeof(integer_string) - 1,
+                                                   src.GetReflection()->GetInt64(src, fds));
       ret.SetString(integer_string, static_cast<rapidjson::SizeType>(str_len), doc.GetAllocator());
       break;
     }
     case google::protobuf::FieldDescriptor::CPPTYPE_UINT64: {
-      size_t str_len =
-          util::string::int2str(integer_string, sizeof(integer_string) - 1, src.GetReflection()->GetUInt64(src, fds));
+      size_t str_len = atfw::util::string::int2str(integer_string, sizeof(integer_string) - 1,
+                                                   src.GetReflection()->GetUInt64(src, fds));
       ret.SetString(integer_string, static_cast<rapidjson::SizeType>(str_len), doc.GetAllocator());
       break;
     }
     case google::protobuf::FieldDescriptor::CPPTYPE_FLOAT: {
-      std::string float_string = util::log::format("{}", src.GetReflection()->GetFloat(src, fds));
+      std::string float_string = atfw::util::log::format("{}", src.GetReflection()->GetFloat(src, fds));
       ret.SetString(float_string.c_str(), static_cast<rapidjson::SizeType>(float_string.size()), doc.GetAllocator());
       break;
     }
     case google::protobuf::FieldDescriptor::CPPTYPE_DOUBLE: {
-      std::string double_string = util::log::format("{}", src.GetReflection()->GetDouble(src, fds));
+      std::string double_string = atfw::util::log::format("{}", src.GetReflection()->GetDouble(src, fds));
       ret.SetString(double_string.c_str(), static_cast<rapidjson::SizeType>(double_string.size()), doc.GetAllocator());
       break;
     }
     case google::protobuf::FieldDescriptor::CPPTYPE_ENUM: {
-      size_t str_len = util::string::int2str(integer_string, sizeof(integer_string) - 1,
-                                             src.GetReflection()->GetEnumValue(src, fds));
+      size_t str_len = atfw::util::string::int2str(integer_string, sizeof(integer_string) - 1,
+                                                   src.GetReflection()->GetEnumValue(src, fds));
       ret.SetString(integer_string, static_cast<rapidjson::SizeType>(str_len), doc.GetAllocator());
       break;
     }
@@ -197,7 +197,7 @@ static void load_field_item(rapidjson::Value& parent, const ::google::protobuf::
           int64_t int_val = src.GetReflection()->GetRepeatedInt64(src, fds, i);
           if (options.convert_large_number_to_string && int_val > std::numeric_limits<int32_t>::max()) {
             char str_val[24] = {0};
-            util::string::int2str(str_val, sizeof(str_val) - 1, int_val);
+            atfw::util::string::int2str(str_val, sizeof(str_val) - 1, int_val);
             rapidjson::Value v;
             v.SetString(str_val, static_cast<rapidjson::SizeType>(strlen(str_val)), doc.GetAllocator());
             rapidjson_helper_append_to_list(*array_value, std::move(v), doc);
@@ -209,7 +209,7 @@ static void load_field_item(rapidjson::Value& parent, const ::google::protobuf::
         int64_t int_val = src.GetReflection()->GetInt64(src, fds);
         if (options.convert_large_number_to_string && int_val > std::numeric_limits<int32_t>::max()) {
           char str_val[24] = {0};
-          util::string::int2str(str_val, sizeof(str_val) - 1, int_val);
+          atfw::util::string::int2str(str_val, sizeof(str_val) - 1, int_val);
           rapidjson::Value v;
           v.SetString(str_val, static_cast<rapidjson::SizeType>(strlen(str_val)), doc.GetAllocator());
           rapidjson_helper_mutable_set_member(parent, key_name, std::move(v), doc, int_val != 0);
@@ -227,7 +227,7 @@ static void load_field_item(rapidjson::Value& parent, const ::google::protobuf::
           if (options.convert_large_number_to_string &&
               int_val > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
             char str_val[24] = {0};
-            util::string::int2str(str_val, sizeof(str_val) - 1, int_val);
+            atfw::util::string::int2str(str_val, sizeof(str_val) - 1, int_val);
             rapidjson::Value v;
             v.SetString(str_val, static_cast<rapidjson::SizeType>(strlen(str_val)), doc.GetAllocator());
             rapidjson_helper_append_to_list(*array_value, std::move(v), doc);
@@ -240,7 +240,7 @@ static void load_field_item(rapidjson::Value& parent, const ::google::protobuf::
         if (options.convert_large_number_to_string &&
             int_val > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
           char str_val[24] = {0};
-          util::string::int2str(str_val, sizeof(str_val) - 1, int_val);
+          atfw::util::string::int2str(str_val, sizeof(str_val) - 1, int_val);
           rapidjson::Value v;
           v.SetString(str_val, static_cast<rapidjson::SizeType>(strlen(str_val)), doc.GetAllocator());
           rapidjson_helper_mutable_set_member(parent, key_name, std::move(v), doc, int_val != 0);
@@ -258,7 +258,7 @@ static void load_field_item(rapidjson::Value& parent, const ::google::protobuf::
           if (options.convert_large_number_to_string &&
               int_val > static_cast<uint64_t>(std::numeric_limits<int32_t>::max())) {
             char str_val[24] = {0};
-            util::string::int2str(str_val, sizeof(str_val) - 1, int_val);
+            atfw::util::string::int2str(str_val, sizeof(str_val) - 1, int_val);
             rapidjson::Value v;
             v.SetString(str_val, static_cast<rapidjson::SizeType>(strlen(str_val)), doc.GetAllocator());
             rapidjson_helper_append_to_list(*array_value, std::move(v), doc);
@@ -271,7 +271,7 @@ static void load_field_item(rapidjson::Value& parent, const ::google::protobuf::
         if (options.convert_large_number_to_string &&
             int_val > static_cast<uint64_t>(std::numeric_limits<int32_t>::max())) {
           char str_val[24] = {0};
-          util::string::int2str(str_val, sizeof(str_val) - 1, int_val);
+          atfw::util::string::int2str(str_val, sizeof(str_val) - 1, int_val);
           rapidjson::Value v;
           v.SetString(str_val, static_cast<rapidjson::SizeType>(strlen(str_val)), doc.GetAllocator());
           rapidjson_helper_mutable_set_member(parent, key_name, std::move(v), doc, int_val != 0);
@@ -462,9 +462,9 @@ static std::string dump_pick_field_string_filter(const rapidjson::Value& val,
 
   switch (options.string_mode) {
     case rapidjson_helper_string_mode::URI:
-      return util::uri::decode_uri(val.GetString(), val.GetStringLength());
+      return atfw::util::uri::decode_uri(val.GetString(), val.GetStringLength());
     case rapidjson_helper_string_mode::URI_COMPONENT:
-      return util::uri::decode_uri_component(val.GetString(), val.GetStringLength());
+      return atfw::util::uri::decode_uri_component(val.GetString(), val.GetStringLength());
     default:
       return std::string(val.GetString(), val.GetStringLength());
   }
@@ -483,7 +483,7 @@ static void dump_pick_field(const rapidjson::Value& val, ::google::protobuf::Mes
       if (val.IsInt()) {
         jval = val.GetInt();
       } else if (val.IsString() && options.convert_number_from_string) {
-        util::string::str2int(jval, val.GetString());
+        atfw::util::string::str2int(jval, val.GetString());
       }
       if (fds->is_repeated()) {
         dst.GetReflection()->AddInt32(&dst, fds, jval);
@@ -497,7 +497,7 @@ static void dump_pick_field(const rapidjson::Value& val, ::google::protobuf::Mes
       if (val.IsInt64()) {
         jval = val.GetInt64();
       } else if (val.IsString() && options.convert_number_from_string) {
-        util::string::str2int(jval, val.GetString());
+        atfw::util::string::str2int(jval, val.GetString());
       }
       if (fds->is_repeated()) {
         dst.GetReflection()->AddInt64(&dst, fds, jval);
@@ -511,7 +511,7 @@ static void dump_pick_field(const rapidjson::Value& val, ::google::protobuf::Mes
       if (val.IsUint()) {
         jval = val.GetUint();
       } else if (val.IsString() && options.convert_number_from_string) {
-        util::string::str2int(jval, val.GetString());
+        atfw::util::string::str2int(jval, val.GetString());
       }
       if (fds->is_repeated()) {
         dst.GetReflection()->AddUInt32(&dst, fds, jval);
@@ -525,7 +525,7 @@ static void dump_pick_field(const rapidjson::Value& val, ::google::protobuf::Mes
       if (val.IsUint64()) {
         jval = val.GetUint64();
       } else if (val.IsString() && options.convert_number_from_string) {
-        util::string::str2int(jval, val.GetString());
+        atfw::util::string::str2int(jval, val.GetString());
       }
       if (fds->is_repeated()) {
         dst.GetReflection()->AddUInt64(&dst, fds, jval);

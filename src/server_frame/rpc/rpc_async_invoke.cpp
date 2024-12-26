@@ -32,7 +32,7 @@ SERVER_FRAME_API async_invoke_result async_invoke(context &ctx, gsl::string_view
   task_action_async_invoke::ctor_param_t params;
   params.caller_context = &ctx;
   params.callable = std::move(fn);
-  params.name = util::log::format("rpc.async_invoke:{}", name);
+  params.name = atfw::util::log::format("rpc.async_invoke:{}", name);
   int res;
   if (timeout > std::chrono::system_clock::duration::zero()) {
     res = task_manager::me()->create_task_with_timeout<task_action_async_invoke>(task_inst, timeout, std::move(params));

@@ -32,7 +32,7 @@ namespace atframework {
 namespace distributed_system {
 
 DISTRIBUTED_TRANSACTION_SDK_API transaction_participator_handle::transaction_participator_handle(
-    const util::memory::strong_rc_ptr<vtable_type>& vtable, gsl::string_view participator_key)
+    const atfw::util::memory::strong_rc_ptr<vtable_type>& vtable, gsl::string_view participator_key)
     : private_data_{nullptr}, on_destroy_{nullptr}, vtable_{vtable} {
   participator_key_.assign(participator_key.data(), participator_key.size());
 }
@@ -105,7 +105,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API int32_t
-transaction_participator_handle::tick(rpc::context&, util::time::time_utility::raw_time_t timepoint) {
+transaction_participator_handle::tick(rpc::context&, atfw::util::time::time_utility::raw_time_t timepoint) {
   if (!task_type_trait::empty(auto_resolve_transaction_task_) &&
       !task_type_trait::is_exiting(auto_resolve_transaction_task_)) {
     return 0;
@@ -759,7 +759,7 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
 
   // Reset timer
   resolve_timers_.erase(storage_resolve_timer_type{*transaction_ptr});
-  int64_t now_seconds = util::time::time_utility::get_now();
+  int64_t now_seconds = atfw::util::time::time_utility::get_now();
   int32_t now_nanos = static_cast<int32_t>(util::time::time_utility::get_now_usec() * 1000);
   if (now_nanos + transaction_ptr->configure().resolve_retry_interval().nanos() > 1000000000) {
     transaction_ptr->mutable_resolve_timepoint()->set_seconds(
@@ -884,7 +884,7 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
 
   // 每16个事务强制启动一次刷新操作
   if (5 == (finished_transactions_.size() & 15)) {
-    tick(child_ctx, util::time::time_utility::now());
+    tick(child_ctx, atfw::util::time::time_utility::now());
   }
 
   RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
@@ -947,7 +947,7 @@ rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::c
 
   // 每16个事务强制启动一次刷新操作
   if (5 == (finished_transactions_.size() & 15)) {
-    tick(child_ctx, util::time::time_utility::now());
+    tick(child_ctx, atfw::util::time::time_utility::now());
   }
   RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
 }

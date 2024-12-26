@@ -128,9 +128,9 @@ EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::~${pb_msg_class_name}(){
 EXCEL_CONFIG_LOADER_API int ${pb_msg_class_name}::on_inited(bool enable_multithread_lock) {
   enable_multithread_lock_ = enable_multithread_lock;
 
-  ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh;
+  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
   if (enable_multithread_lock_) {
-    wlh = ::util::lock::write_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+    wlh = atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock>{load_file_lock_};
   }
 
   file_status_.clear();
@@ -144,9 +144,9 @@ EXCEL_CONFIG_LOADER_API int ${pb_msg_class_name}::load_all() {
     return ret;
   }
 
-  ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh;
+  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
   if (enable_multithread_lock_) {
-    wlh = ::util::lock::write_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+    wlh = atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock>{load_file_lock_};
   }
   for (std::unordered_map<std::string, bool>::iterator iter = file_status_.begin(); iter != file_status_.end(); ++ iter) {
     if (!iter->second) {
@@ -166,9 +166,9 @@ EXCEL_CONFIG_LOADER_API int ${pb_msg_class_name}::load_all() {
 }
 
 EXCEL_CONFIG_LOADER_API void ${pb_msg_class_name}::clear() {
-  ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh;
+  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
   if (enable_multithread_lock_) {
-    wlh = ::util::lock::write_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+    wlh = atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock>{load_file_lock_};
   }
 
 % for code_index in loader.code.indexes:
@@ -464,9 +464,9 @@ EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::item_ptr_type
 
 ${pb_msg_class_name}::${code_index.name}_value_type
   ${pb_msg_class_name}::_get_list_by_${code_index.name}(${code_index.get_key_decl()}) {
-  ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh;
+  atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> rlh;
   if (enable_multithread_lock_) {
-    rlh = ::util::lock::read_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+    rlh = atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock>{load_file_lock_};
   }
 
 % if code_index.is_vector():
@@ -495,9 +495,9 @@ ${pb_msg_class_name}::${code_index.name}_value_type
   int res;
   {
     rlh.reset();
-    ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh;
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
     if (enable_multithread_lock_) {
-      wlh = ::util::lock::write_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+      wlh = atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock>{load_file_lock_};
     }
 %   if loader.code.file_list and code_index.file_mapping:
 %       for code_line in code_index.get_load_file_code("file_path"):
@@ -519,7 +519,7 @@ ${pb_msg_class_name}::${code_index.name}_value_type
 %   endif
     wlh.reset();
     if (enable_multithread_lock_) {
-      rlh = ::util::lock::read_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+      rlh = atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock>{load_file_lock_};
     }
   }
 
@@ -628,9 +628,9 @@ EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::${code_index.name}_value_type
     return ${code_index.name}_data_[idx];
   }
 % else:
-  ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh;
+  atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> rlh;
   if (enable_multithread_lock_) {
-    rlh = ::util::lock::read_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+    rlh = atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock>{load_file_lock_};
   }
 
   ${code_index.name}_container_type::iterator iter = ${code_index.name}_data_.find(std::make_tuple(${code_index.get_key_params()}));
@@ -642,9 +642,9 @@ EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::${code_index.name}_value_type
   int res;
   {
     rlh.reset();
-    ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh;
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
     if (enable_multithread_lock_) {
-      wlh = ::util::lock::write_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+      wlh = atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock>{load_file_lock_};
     }
 %   if loader.code.file_list and code_index.file_mapping:
 %       for code_line in code_index.get_load_file_code("file_path"):
@@ -667,7 +667,7 @@ EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::${code_index.name}_value_type
 %   endif
     wlh.reset();
     if (enable_multithread_lock_) {
-      rlh = ::util::lock::read_lock_holder<::util::lock::spin_rw_lock>{load_file_lock_};
+      rlh = atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock>{load_file_lock_};
     }
   }
 

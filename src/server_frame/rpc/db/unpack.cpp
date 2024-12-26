@@ -33,7 +33,7 @@ int32_t unpack_integer(PROJECT_NAMESPACE_ID::table_all_message &msg, const redis
   if (REDIS_REPLY_STRING == data->type) {
     // 坑爹的redis的数据库回包可能回字符串类型
     int64_t d = 0;
-    util::string::str2int(d, data->str);
+    atfw::util::string::str2int(d, data->str);
     msg.mutable_simple()->set_msg_i64(d);
   } else if (REDIS_REPLY_INTEGER == data->type) {
     msg.mutable_simple()->set_msg_i64(data->integer);

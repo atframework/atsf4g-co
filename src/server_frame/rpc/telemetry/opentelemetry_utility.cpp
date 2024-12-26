@@ -87,12 +87,12 @@ struct UTIL_SYMBOL_VISIBLE opentelemetry_utility::metrics_observer {
 
   std::function<void(metrics_observer&)> callback;
 
-  tbb::concurrent_queue<util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record>> records;
+  tbb::concurrent_queue<atfw::util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record>> records;
 
   std::chrono::system_clock::duration collect_interval;
   std::chrono::system_clock::time_point collected_timepoint;
   std::recursive_mutex collected_lock;
-  std::list<util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record>> collected_records;
+  std::list<atfw::util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record>> collected_records;
   std::atomic<size_t> collect_version;
   std::atomic<size_t> export_version;
 
@@ -158,7 +158,7 @@ struct UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_converter {
     return opentelemetry::nostd::string_view{*record->lifetime_string.rbegin()};
   }
 
-  template <class T, class = util::nostd::enable_if_t<
+  template <class T, class = atfw::util::nostd::enable_if_t<
 #if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201402L)) || \
     (defined(__cplusplus) && __cplusplus >= 201402L &&  \
      !(!defined(__clang__) && defined(__GNUC__) && defined(__GNUC_MINOR__) && __GNUC__ * 100 + __GNUC_MINOR__ <= 409))
@@ -223,13 +223,13 @@ struct UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_converter {
 };
 
 struct UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_value_to_string_converter{
-    std::string operator()(bool v){return util::log::format("{}", v);
+    std::string operator()(bool v){return atfw::util::log::format("{}", v);
 }  // namespace
-std::string operator()(int32_t v) { return util::log::format("{}", v); }
-std::string operator()(uint32_t v) { return util::log::format("{}", v); }
-std::string operator()(int64_t v) { return util::log::format("{}", v); }
-std::string operator()(uint64_t v) { return util::log::format("{}", v); }
-std::string operator()(double v) { return util::log::format("{}", v); }
+std::string operator()(int32_t v) { return atfw::util::log::format("{}", v); }
+std::string operator()(uint32_t v) { return atfw::util::log::format("{}", v); }
+std::string operator()(int64_t v) { return atfw::util::log::format("{}", v); }
+std::string operator()(uint64_t v) { return atfw::util::log::format("{}", v); }
+std::string operator()(double v) { return atfw::util::log::format("{}", v); }
 std::string operator()(opentelemetry::nostd::string_view v) { return static_cast<std::string>(v); }
 std::string operator()(const char* v) { return v == nullptr ? "" : v; }
 
@@ -272,13 +272,13 @@ std::string operator()(opentelemetry::nostd::span<const opentelemetry::nostd::st
 };  // namespace telemetry
 
 struct UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_owned_value_to_string_converter{
-    std::string operator()(bool v){return util::log::format("{}", v);
+    std::string operator()(bool v){return atfw::util::log::format("{}", v);
 }  // namespace rpc
-std::string operator()(int32_t v) { return util::log::format("{}", v); }
-std::string operator()(uint32_t v) { return util::log::format("{}", v); }
-std::string operator()(int64_t v) { return util::log::format("{}", v); }
-std::string operator()(uint64_t v) { return util::log::format("{}", v); }
-std::string operator()(double v) { return util::log::format("{}", v); }
+std::string operator()(int32_t v) { return atfw::util::log::format("{}", v); }
+std::string operator()(uint32_t v) { return atfw::util::log::format("{}", v); }
+std::string operator()(int64_t v) { return atfw::util::log::format("{}", v); }
+std::string operator()(uint64_t v) { return atfw::util::log::format("{}", v); }
+std::string operator()(double v) { return atfw::util::log::format("{}", v); }
 std::string operator()(const std::string& v) { return static_cast<std::string>(v); }
 
 template <class T>
@@ -423,7 +423,7 @@ static void opentelemetry_utility_protobuf_to_otel_attributes_field(const google
     case google::protobuf::FieldDescriptor::CPPTYPE_INT32: {
       if (fds->is_repeated()) {
         opentelemetry_utility_protobuf_to_otel_attributes_assign_vector<int32_t>(
-            util::log::format("{}{}", key_prefix, fds->name()), output,
+            atfw::util::log::format("{}{}", key_prefix, fds->name()), output,
             reflection->GetRepeatedFieldRef<google::protobuf::int32>(message, fds));
       } else {
         output.attributes[util::log::format("{}{}", key_prefix, fds->name())] = reflection->GetInt32(message, fds);
@@ -433,7 +433,7 @@ static void opentelemetry_utility_protobuf_to_otel_attributes_field(const google
     case google::protobuf::FieldDescriptor::CPPTYPE_INT64: {
       if (fds->is_repeated()) {
         opentelemetry_utility_protobuf_to_otel_attributes_assign_vector<int64_t>(
-            util::log::format("{}{}", key_prefix, fds->name()), output,
+            atfw::util::log::format("{}{}", key_prefix, fds->name()), output,
             reflection->GetRepeatedFieldRef<google::protobuf::int64>(message, fds));
       } else {
         output.attributes[util::log::format("{}{}", key_prefix, fds->name())] = reflection->GetInt64(message, fds);
@@ -443,7 +443,7 @@ static void opentelemetry_utility_protobuf_to_otel_attributes_field(const google
     case google::protobuf::FieldDescriptor::CPPTYPE_UINT32: {
       if (fds->is_repeated()) {
         opentelemetry_utility_protobuf_to_otel_attributes_assign_vector<uint32_t>(
-            util::log::format("{}{}", key_prefix, fds->name()), output,
+            atfw::util::log::format("{}{}", key_prefix, fds->name()), output,
             reflection->GetRepeatedFieldRef<google::protobuf::uint32>(message, fds));
       } else {
         output.attributes[util::log::format("{}{}", key_prefix, fds->name())] = reflection->GetUInt32(message, fds);
@@ -453,7 +453,7 @@ static void opentelemetry_utility_protobuf_to_otel_attributes_field(const google
     case google::protobuf::FieldDescriptor::CPPTYPE_UINT64: {
       if (fds->is_repeated()) {
         opentelemetry_utility_protobuf_to_otel_attributes_assign_vector<uint64_t>(
-            util::log::format("{}{}", key_prefix, fds->name()), output,
+            atfw::util::log::format("{}{}", key_prefix, fds->name()), output,
             reflection->GetRepeatedFieldRef<google::protobuf::uint64>(message, fds));
       } else {
         output.attributes[util::log::format("{}{}", key_prefix, fds->name())] = reflection->GetUInt64(message, fds);
@@ -463,7 +463,7 @@ static void opentelemetry_utility_protobuf_to_otel_attributes_field(const google
     case google::protobuf::FieldDescriptor::CPPTYPE_STRING: {
       if (fds->is_repeated()) {
         opentelemetry_utility_protobuf_to_otel_attributes_assign_vector(
-            util::log::format("{}{}", key_prefix, fds->name()), output,
+            atfw::util::log::format("{}{}", key_prefix, fds->name()), output,
             reflection->GetRepeatedFieldRef<std::string>(message, fds));
       } else {
         std::string empty;
@@ -479,13 +479,14 @@ static void opentelemetry_utility_protobuf_to_otel_attributes_field(const google
           auto& sub_message = reflection->GetRepeatedMessage(message, fds, i);
           opentelemetry_utility_protobuf_to_otel_attributes_message(
               sub_message.GetReflection(), sub_message, output,
-              util::log::format("{}{}[{}].", key_prefix, fds->name(), i));
+              atfw::util::log::format("{}{}[{}].", key_prefix, fds->name(), i));
         }
       } else {
         if (reflection->HasField(message, fds)) {
           auto& sub_message = reflection->GetMessage(message, fds);
           opentelemetry_utility_protobuf_to_otel_attributes_message(
-              sub_message.GetReflection(), sub_message, output, util::log::format("{}{}.", key_prefix, fds->name()));
+              sub_message.GetReflection(), sub_message, output,
+              atfw::util::log::format("{}{}.", key_prefix, fds->name()));
         }
       }
       break;
@@ -493,7 +494,7 @@ static void opentelemetry_utility_protobuf_to_otel_attributes_field(const google
     case google::protobuf::FieldDescriptor::CPPTYPE_DOUBLE: {
       if (fds->is_repeated()) {
         opentelemetry_utility_protobuf_to_otel_attributes_assign_vector<double>(
-            util::log::format("{}{}", key_prefix, fds->name()), output,
+            atfw::util::log::format("{}{}", key_prefix, fds->name()), output,
             reflection->GetRepeatedFieldRef<double>(message, fds));
       } else {
         output.attributes[util::log::format("{}{}", key_prefix, fds->name())] = reflection->GetDouble(message, fds);
@@ -503,7 +504,7 @@ static void opentelemetry_utility_protobuf_to_otel_attributes_field(const google
     case google::protobuf::FieldDescriptor::CPPTYPE_FLOAT: {
       if (fds->is_repeated()) {
         opentelemetry_utility_protobuf_to_otel_attributes_assign_vector<double>(
-            util::log::format("{}{}", key_prefix, fds->name()), output,
+            atfw::util::log::format("{}{}", key_prefix, fds->name()), output,
             reflection->GetRepeatedFieldRef<float>(message, fds));
       } else {
         output.attributes[util::log::format("{}{}", key_prefix, fds->name())] = reflection->GetFloat(message, fds);
@@ -513,7 +514,7 @@ static void opentelemetry_utility_protobuf_to_otel_attributes_field(const google
     case google::protobuf::FieldDescriptor::CPPTYPE_BOOL: {
       if (fds->is_repeated()) {
         opentelemetry_utility_protobuf_to_otel_attributes_assign_vector(
-            util::log::format("{}{}", key_prefix, fds->name()), output,
+            atfw::util::log::format("{}{}", key_prefix, fds->name()), output,
             reflection->GetRepeatedFieldRef<bool>(message, fds));
       } else {
         output.attributes[util::log::format("{}{}", key_prefix, fds->name())] = reflection->GetBool(message, fds);
@@ -523,7 +524,7 @@ static void opentelemetry_utility_protobuf_to_otel_attributes_field(const google
     case google::protobuf::FieldDescriptor::CPPTYPE_ENUM: {
       if (fds->is_repeated()) {
         opentelemetry_utility_protobuf_to_otel_attributes_assign_vector<int32_t>(
-            util::log::format("{}{}", key_prefix, fds->name()), output,
+            atfw::util::log::format("{}{}", key_prefix, fds->name()), output,
             reflection->GetRepeatedFieldRef<int32_t>(message, fds));
       } else {
         output.attributes[util::log::format("{}{}", key_prefix, fds->name())] = reflection->GetEnumValue(message, fds);
@@ -643,7 +644,7 @@ static bool internal_add_global_metrics_observable_int64(opentelemetry_utility::
     size_t export_record_count = 0;
     std::lock_guard<std::recursive_mutex> collected_lock_guard{metrics_item->collected_lock};
     {
-      util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record> record;
+      atfw::util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record> record;
       while (metrics_item->records.try_pop(record)) {
         if (!record) {
           continue;
@@ -764,7 +765,7 @@ static bool internal_add_global_metrics_observable_double(opentelemetry_utility:
 
     std::lock_guard<std::recursive_mutex> collected_lock_guard{metrics_item->collected_lock};
     {
-      util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record> record;
+      atfw::util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record> record;
       while (metrics_item->records.try_pop(record)) {
         if (!record) {
           continue;
@@ -879,7 +880,7 @@ SERVER_FRAME_API int opentelemetry_utility::tick() {
     max_tick_time_per_loop =
         std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::milliseconds{4});
   }
-  util::time::time_utility::update();
+  atfw::util::time::time_utility::update();
   auto start_time = std::chrono::system_clock::now();
 
   std::lock_guard<std::recursive_mutex> lock_guard{callback_data_set.first};
@@ -905,7 +906,7 @@ SERVER_FRAME_API int opentelemetry_utility::tick() {
       continue;
     }
 
-    util::time::time_utility::update();
+    atfw::util::time::time_utility::update();
     auto end_time = std::chrono::system_clock::now();
     if (ret >= max_record_per_loop || end_time - start_time >= max_tick_time_per_loop) {
       all_collected = false;
@@ -947,7 +948,7 @@ SERVER_FRAME_API int opentelemetry_utility::tick() {
       continue;
     }
 
-    util::time::time_utility::update();
+    atfw::util::time::time_utility::update();
     auto end_time = std::chrono::system_clock::now();
     if (ret >= max_record_per_loop || end_time - start_time >= max_tick_time_per_loop) {
       all_collected = false;
@@ -1047,9 +1048,9 @@ SERVER_FRAME_API void opentelemetry_utility::stop() {
   }
 }
 
-SERVER_FRAME_API util::memory::strong_rc_ptr<opentelemetry_utility::metrics_attributes_with_lifetime>
+SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<opentelemetry_utility::metrics_attributes_with_lifetime>
 opentelemetry_utility::create_attributes_with_lifetime() {
-  return util::memory::make_strong_rc<metrics_attributes_with_lifetime>();
+  return atfw::util::memory::make_strong_rc<metrics_attributes_with_lifetime>();
 }
 
 SERVER_FRAME_API const std::unordered_map<std::string, opentelemetry::common::AttributeValue>&
@@ -1164,8 +1165,8 @@ SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_int64(
   }
 
   // opentelemetry only use metrics name as key of metric storage
-  std::string key = util::log::format("{}:{}", gsl::string_view{meter_name.data(), meter_name.size()},
-                                      gsl::string_view{metrics_key.name.data(), metrics_key.name.size()});
+  std::string key = atfw::util::log::format("{}:{}", gsl::string_view{meter_name.data(), meter_name.size()},
+                                            gsl::string_view{metrics_key.name.data(), metrics_key.name.size()});
 
   std::pair<std::recursive_mutex&, opentelemetry_utility_global_metrics_set&> data_set = get_global_metrics_set();
   {
@@ -1216,8 +1217,8 @@ SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_double
   }
 
   // opentelemetry only use metrics name as key of metric storage
-  std::string key = util::log::format("{}:{}", gsl::string_view{meter_name.data(), meter_name.size()},
-                                      gsl::string_view{metrics_key.name.data(), metrics_key.name.size()});
+  std::string key = atfw::util::log::format("{}:{}", gsl::string_view{meter_name.data(), meter_name.size()},
+                                            gsl::string_view{metrics_key.name.data(), metrics_key.name.size()});
   std::pair<std::recursive_mutex&, opentelemetry_utility_global_metrics_set&> data_set = get_global_metrics_set();
   {
     std::lock_guard<std::recursive_mutex> lock_guard{data_set.first};
@@ -1262,8 +1263,8 @@ SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_double
 SERVER_FRAME_API void opentelemetry_utility::global_metics_observe_record(
     metrics_observer& observer, opentelemetry::nostd::variant<int64_t, double> value,
     const opentelemetry::common::KeyValueIterable& attributes) {
-  util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record> record =
-      util::memory::make_strong_rc<opentelemetry_utility::metrics_record>();
+  atfw::util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record> record =
+      atfw::util::memory::make_strong_rc<opentelemetry_utility::metrics_record>();
   if (!record) {
     return;
   }
@@ -1328,13 +1329,13 @@ SERVER_FRAME_API void opentelemetry_utility::send_notification_event(rpc::contex
     size_t buffer_size = tls_buffers_get_length(tls_buffers_type_t::EN_TBT_DEFAULT);
 
     if (message.size() + 16 < buffer_size) {
-      util::log::stacktrace_options options;
+      atfw::util::log::stacktrace_options options;
       options.skip_start_frames = 1;
       options.skip_end_frames = 1;
       options.max_frames = 0;
 
       size_t written =
-          util::log::stacktrace_write(buffer + message.size() + 13, buffer_size - 13 - message.size(), &options);
+          atfw::util::log::stacktrace_write(buffer + message.size() + 13, buffer_size - 13 - message.size(), &options);
       if (written > 0) {
         memcpy(buffer, message.data(), message.size());
         memcpy(buffer + message.size(), "\nStacktrace:\n", 13);
@@ -1355,11 +1356,11 @@ SERVER_FRAME_API void opentelemetry_utility::send_notification_event(rpc::contex
   if (trace_span) {
     logger->EmitLogRecord(get_notification_log_level(event_domain), trace_span->GetContext(), attrbites,
                           attribute_span_type(&standard_attributes[0], attribute_pair_size),
-                          util::time::time_utility::sys_now(), body);
+                          atfw::util::time::time_utility::sys_now(), body);
   } else {
     logger->EmitLogRecord(get_notification_log_level(event_domain), attrbites,
                           attribute_span_type(&standard_attributes[0], attribute_pair_size),
-                          util::time::time_utility::sys_now(), body);
+                          atfw::util::time::time_utility::sys_now(), body);
   }
 }
 
@@ -1453,11 +1454,11 @@ SERVER_FRAME_API void opentelemetry_utility::send_log_to_default_group(rpc::cont
     logger->EmitLogRecord(
         severity, opentelemetry::nostd::string_view{event_domain.data(), event_domain.size()}, trace_span->GetContext(),
         attrbites, attribute_span_type(&standard_attributes[0], attribute_pair_size),
-        util::time::time_utility::sys_now(), opentelemetry::nostd::string_view{message.data(), message.size()});
+        atfw::util::time::time_utility::sys_now(), opentelemetry::nostd::string_view{message.data(), message.size()});
   } else {
     logger->EmitLogRecord(severity, opentelemetry::nostd::string_view{event_domain.data(), event_domain.size()},
                           attrbites, attribute_span_type(&standard_attributes[0], attribute_pair_size),
-                          util::time::time_utility::sys_now(),
+                          atfw::util::time::time_utility::sys_now(),
                           opentelemetry::nostd::string_view{message.data(), message.size()});
   }
 }

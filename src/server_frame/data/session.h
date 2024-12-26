@@ -142,7 +142,8 @@ class session {
   int32_t send_kickoff(int32_t reason);
 
   void write_actor_log_head(rpc::context &ctx, const atframework::CSMsg &msg, size_t byte_size, bool is_input);
-  void write_actor_log_body(rpc::context &ctx, const google::protobuf::Message &msg, const atframework::CSMsgHead &head, bool is_input);
+  void write_actor_log_body(rpc::context &ctx, const google::protobuf::Message &msg, const atframework::CSMsgHead &head,
+                            bool is_input);
 
   void alloc_session_sequence(atframework::CSMsg &msg);
 
@@ -160,6 +161,6 @@ class session {
   uint32_t cached_zone_id_;
   uint64_t cached_user_id_;
 
-  std::shared_ptr<util::log::log_wrapper> actor_log_writter_;
+  std::shared_ptr<atfw::util::log::log_wrapper> actor_log_writter_;
   opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> actor_log_otel_;
 };

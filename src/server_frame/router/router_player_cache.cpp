@@ -187,12 +187,12 @@ rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, router
   // 冲突检测
   {
     int64_t expect_table_user_version =
-        util::string::to_int<int64_t>(login_table_ptr->expect_table_user_db_version().c_str());
-    int64_t real_table_user_version = util::string::to_int<int64_t>(tbu_version.c_str());
+        atfw::util::string::to_int<int64_t>(login_table_ptr->expect_table_user_db_version().c_str());
+    int64_t real_table_user_version = atfw::util::string::to_int<int64_t>(tbu_version.c_str());
     if (expect_table_user_version > 0 && real_table_user_version > 0 &&
         expect_table_user_version >= real_table_user_version) {
       // Check timeout
-      auto sys_now = util::time::time_utility::sys_now();
+      auto sys_now = atfw::util::time::time_utility::sys_now();
       auto timeout = std::chrono::system_clock::from_time_t(login_table_ptr->expect_table_user_db_timeout().seconds()) +
                      std::chrono::nanoseconds(login_table_ptr->expect_table_user_db_timeout().nanos());
       if (timeout >= sys_now) {
@@ -323,7 +323,7 @@ rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void *
     // 冲突检测的版本号设置
     {
       obj->get_login_info().set_expect_table_user_db_version(obj->get_version());
-      time_t timeout_sec = util::time::time_utility::get_sys_now();
+      time_t timeout_sec = atfw::util::time::time_utility::get_sys_now();
       int32_t timeout_nano = static_cast<int32_t>(util::time::time_utility::get_now_usec() * 1000);
       timeout_sec += logic_config::me()->get_cfg_task().csmsg().timeout().seconds();
       timeout_nano += logic_config::me()->get_cfg_task().csmsg().timeout().nanos();
@@ -377,7 +377,7 @@ rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void *
       // 鉴权登入码续期
       if (obj->get_session()) {
         obj->get_login_info().set_login_code_expired(
-            util::time::time_utility::get_sys_now() +
+            atfw::util::time::time_utility::get_sys_now() +
             logic_config::me()->get_logic().session().login_code_valid_sec().seconds());
       }
 

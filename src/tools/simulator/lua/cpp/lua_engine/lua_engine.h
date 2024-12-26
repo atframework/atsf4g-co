@@ -35,7 +35,7 @@ struct lua_auto_stats {
   // std::chrono::system_clock::time_point end_clock_;
 };
 
-class lua_engine : public ::util::design_pattern::noncopyable {
+class lua_engine : public atfw::util::design_pattern::noncopyable {
  public:
   using ptr_t = std::shared_ptr<lua_engine>;
 

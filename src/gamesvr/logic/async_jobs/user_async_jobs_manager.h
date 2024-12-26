@@ -39,7 +39,7 @@ class player;
 
 class user_async_jobs_manager {
  public:
-  using async_job_ptr_type = util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>;
+  using async_job_ptr_type = atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>;
 
  public:
   explicit user_async_jobs_manager(player& owner);

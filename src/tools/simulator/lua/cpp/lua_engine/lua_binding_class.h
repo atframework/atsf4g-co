@@ -57,7 +57,7 @@ struct convert_proxy_to_class<TClass, TProxy, false> {
  * @date    2014/10/25
  */
 template <typename TClass, typename TProxy = TClass>
-class lua_binding_class : public ::util::design_pattern::noncopyable {
+class lua_binding_class : public atfw::util::design_pattern::noncopyable {
  public:
   using value_type = TClass;
   using proxy_type = TProxy;
@@ -320,9 +320,9 @@ class lua_binding_class : public ::util::design_pattern::noncopyable {
 #if LUA_VERSION_NUM >= 502
     auto len = lua_rawlen(L, -1);
 #else
-    lua_rawlen(L, -1);                    // Stack +2 : (matetable["__inherits"], #matetable["__inherits"])
+    lua_rawlen(L, -1);  // Stack +2 : (matetable["__inherits"], #matetable["__inherits"])
     auto len = lua_tointeger(L, -1);
-    lua_pop(L, 1);                                  // Stack +1 : (matetable["__inherits"])
+    lua_pop(L, 1);  // Stack +1 : (matetable["__inherits"])
 #endif
 
     const char *parent_metatable_name = lua_binding_metatable_info<TParent>::get_lua_metatable_name();

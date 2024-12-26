@@ -29,8 +29,8 @@ enum class standard_uuid_type {
  * @note 符合RFC4122标准，变种 1: 基于本地MAC地址和时间，时间周期为100纳秒，随机数部分为14位
  *       如果本地存在libuuid会复用libuuid的clock缓存文件: /var/lib/libuuid/clock.txt
  *       如果clock缓存文件不存在，100纳秒内分配N个uuid则有 (1-1/2^14)^(N-1) 的概率不冲突
- *       性能数据请参考 util::random::generate_string_time 的注解
- * @see util::random::generate_string_time
+ *       性能数据请参考 atfw::util::random::generate_string_time 的注解
+ * @see atfw::util::random::generate_string_time
  * @see https://tools.ietf.org/html/rfc4122
  * @see https://en.wikipedia.org/wiki/Universally_unique_identifier#Version_1_(date-time_and_MAC_address)
  * @return 生成的UUID
@@ -44,8 +44,8 @@ EXPLICIT_NODISCARD_ATTR std::string generate_standard_uuid(bool remove_minus = f
  * @note 符合RFC4122标准，变种 1: 基于本地MAC地址和时间，时间周期为100纳秒，随机数部分为14位
  *       如果本地存在libuuid会复用libuuid的clock缓存文件: /var/lib/libuuid/clock.txt
  *       如果clock缓存文件不存在，100纳秒内分配N个uuid则有 (1-1/2^14)^(N-1) 的概率不冲突
- *       性能数据请参考 util::random::generate_string_time 的注解
- * @see util::random::generate_string_time
+ *       性能数据请参考 atfw::util::random::generate_string_time 的注解
+ * @see atfw::util::random::generate_string_time
  * @see https://tools.ietf.org/html/rfc4122
  * @see https://en.wikipedia.org/wiki/Universally_unique_identifier#Version_1_(date-time_and_MAC_address)
  * @return 生成的UUID,返回二进制

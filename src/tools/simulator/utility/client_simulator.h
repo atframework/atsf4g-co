@@ -61,13 +61,13 @@ class client_simulator : public simulator_msg_base<client_player, atframework::C
   std::shared_ptr<::script::lua::lua_engine> lua_engine_;
 };
 
-#define SIMULATOR_CHECK_PLAYER_PARAMNUM(PARAM, N)                                             \
-  if (!client_simulator::get_cmd_sender(PARAM).player) {                                      \
-    util::cli::shell_stream(std::cerr)() << util::cli::shell_font_style::SHELL_FONT_COLOR_RED \
-                                         << "this command require a player." << std::endl;    \
-    SIMULATOR_PRINT_PARAM_HELPER(PARAM, std::cerr);                                           \
-    return;                                                                                   \
-  }                                                                                           \
+#define SIMULATOR_CHECK_PLAYER_PARAMNUM(PARAM, N)                                                                    \
+  if (!client_simulator::get_cmd_sender(PARAM).player) {                                                             \
+    atfw::util::cli::shell_stream(std::cerr)()                                                                       \
+        << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "this command require a player." << std::endl; \
+    SIMULATOR_PRINT_PARAM_HELPER(PARAM, std::cerr);                                                                  \
+    return;                                                                                                          \
+  }                                                                                                                  \
   SIMULATOR_CHECK_PARAMNUM(PARAM, N)
 
 #endif  // ATFRAMEWORK_LIBSIMULATOR_UTILITY_CLIENT_SIMULATOR_H

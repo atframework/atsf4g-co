@@ -42,7 +42,7 @@ class task_action_player_remote_patch_jobs : public task_action_no_req_base {
   int on_failed() override;
 
  private:
-  using async_job_ptr_type = util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>;
+  using async_job_ptr_type = atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>;
   using sync_callback_type = int32_t (*)(task_action_player_remote_patch_jobs&, player&, int32_t, async_job_ptr_type);
   using async_callback_type = rpc::result_code_type (*)(rpc::context&, player&, int32_t, async_job_ptr_type);
 

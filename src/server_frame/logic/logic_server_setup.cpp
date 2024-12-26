@@ -81,7 +81,7 @@ static std::shared_ptr<logic_server_common_module::stats_data_t> g_last_common_m
 namespace {
 static int show_server_time(util::cli::callback_param params) {
   struct tm tt;
-  time_t now = ::util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
   UTIL_STRFUNC_LOCALTIME_S(&now, &tt);
   char str[64] = {0};
   strftime(str, sizeof(str) - 1, "%Y-%m-%d %H:%M:%S", &tt);
@@ -141,7 +141,7 @@ static int show_battlesvr_by_version(util::cli::callback_param params) {
     return 0;
   }
   struct tm tt;
-  time_t now = ::util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
   UTIL_STRFUNC_LOCALTIME_S(&now, &tt);
   char str[64] = {0};
   strftime(str, sizeof(str) - 1, "%Y-%m-%d %H:%M:%S", &tt);
@@ -248,7 +248,7 @@ int logic_server_setup_common(atapp::app &app, const logic_server_common_module_
 #endif
 
   // setup options
-  util::cli::cmd_option::ptr_type opt_mgr = app.get_option_manager();
+  atfw::util::cli::cmd_option::ptr_type opt_mgr = app.get_option_manager();
   // show help and exit
   opt_mgr
       ->bind_cmd("-env",
@@ -266,7 +266,7 @@ int logic_server_setup_common(atapp::app &app, const logic_server_common_module_
                  })
       ->set_help_msg("-env [text]                                               set a env name.");
 
-  util::cli::cmd_option_ci::ptr_type cmd_mgr = app.get_command_manager();
+  atfw::util::cli::cmd_option_ci::ptr_type cmd_mgr = app.get_command_manager();
   cmd_mgr->bind_cmd("show-configure", show_configure_handler)
       ->set_help_msg("show-configure                                            show service configure");
   cmd_mgr->bind_cmd("debug-stop-when-running-auto-save", debug_receive_stop_when_running)
@@ -402,8 +402,8 @@ logic_server_common_module::logic_server_common_module(const logic_server_common
 
   stats_->last_update_usage_timepoint = 0;
   stats_->last_collect_sequence = 0;
-  stats_->last_checkpoint = util::time::time_utility::sys_now();
-  stats_->previous_tick_checkpoint = util::time::time_utility::sys_now();
+  stats_->last_checkpoint = atfw::util::time::time_utility::sys_now();
+  stats_->previous_tick_checkpoint = atfw::util::time::time_utility::sys_now();
 
   detail::g_last_common_module = this;
   detail::g_last_common_module_stats = stats_;
@@ -457,8 +457,8 @@ void logic_server_common_module::ready() {
   stats_->last_update_usage_timepoint = 0;
   stats_->last_collect_sequence = 0;
 
-  stats_->last_checkpoint = util::time::time_utility::sys_now();
-  stats_->previous_tick_checkpoint = util::time::time_utility::sys_now();
+  stats_->last_checkpoint = atfw::util::time::time_utility::sys_now();
+  stats_->previous_tick_checkpoint = atfw::util::time::time_utility::sys_now();
 
   // Setup metrics
   setup_metrics();
@@ -489,7 +489,7 @@ int logic_server_common_module::reload() {
 }
 
 int logic_server_common_module::stop() {
-  time_t now = util::time::time_utility::get_sys_now();
+  time_t now = atfw::util::time::time_utility::get_sys_now();
   if (now != stop_log_timepoint_) {
     stop_log_timepoint_ = now;
     FWLOGINFO("============ Server stop ============");
@@ -554,7 +554,7 @@ int logic_server_common_module::tick() {
   ret += tick_update_remote_configures();
   if (shared_component_.task_manager()) {
     ret += task_manager::me()->tick(util::time::time_utility::get_sys_now(),
-                                    static_cast<int>(1000 * util::time::time_utility::get_now_usec()));
+                                    static_cast<int>(1000 * atfw::util::time::time_utility::get_now_usec()));
   }
   if (shared_component_.session_manager()) {
     ret += session_manager::me()->proc();
@@ -564,7 +564,7 @@ int logic_server_common_module::tick() {
   }
 
   if (!task_timer_.empty()) {
-    auto now = util::time::time_utility::sys_now();
+    auto now = atfw::util::time::time_utility::sys_now();
     int left_timer_per_tick = 4096;
     while (!task_timer_.empty() && left_timer_per_tick-- > 0) {
       if (task_timer_.top().timeout >= now) {
@@ -902,7 +902,7 @@ int logic_server_common_module::tick_update_remote_configures() {
     return 0;
   }
 
-  time_t sys_now = util::time::time_utility::get_sys_now();
+  time_t sys_now = atfw::util::time::time_utility::get_sys_now();
   if (sys_now <= server_remote_conf_next_update_time_) {
     return 0;
   }
@@ -943,7 +943,7 @@ void logic_server_common_module::tick_stats() {
     return;
   }
 
-  auto sys_now = util::time::time_utility::sys_now();
+  auto sys_now = atfw::util::time::time_utility::sys_now();
   // Tick interval
   {
     auto tick_interval = sys_now - stats_->previous_tick_checkpoint;
@@ -957,10 +957,10 @@ void logic_server_common_module::tick_stats() {
     stats_->previous_tick_checkpoint = sys_now;
   }
 
-  if (stats_->last_update_usage_timepoint == util::time::time_utility::get_sys_now()) {
+  if (stats_->last_update_usage_timepoint == atfw::util::time::time_utility::get_sys_now()) {
     return;
   }
-  stats_->last_update_usage_timepoint = util::time::time_utility::get_sys_now();
+  stats_->last_update_usage_timepoint = atfw::util::time::time_utility::get_sys_now();
 
   do {
     uv_rusage_t last_usage;
@@ -1343,7 +1343,7 @@ std::string logic_server_common_module::make_battle_etcd_version_path(const std:
   }
 
   char server_id_str[24] = {0};
-  util::string::int2str(server_id_str, 23, get_app_id());
+  atfw::util::string::int2str(server_id_str, 23, get_app_id());
   ret += &server_id_str[0];
 
   return ret;
@@ -1352,7 +1352,7 @@ std::string logic_server_common_module::make_battle_etcd_version_path(const std:
 bool logic_server_common_module::parse_battle_etcd_version_path(const std::string &path, std::string &version,
                                                                 uint64_t &svr_id) {
   std::vector<std::string> segments;
-  if (false == util::file_system::split_path(segments, path.c_str(), true)) {
+  if (false == atfw::util::file_system::split_path(segments, path.c_str(), true)) {
     return false;
   }
 
@@ -1361,7 +1361,7 @@ bool logic_server_common_module::parse_battle_etcd_version_path(const std::strin
   }
 
   svr_id = 0;
-  util::string::str2int(svr_id, segments[segments.size() - 1].c_str());
+  atfw::util::string::str2int(svr_id, segments[segments.size() - 1].c_str());
   version.swap(segments[segments.size() - 2]);
 
   return svr_id != 0 && !version.empty();
@@ -1450,7 +1450,7 @@ void logic_server_common_module::insert_timer(uint64_t task_id, std::chrono::sys
   output.task_id = task_id;
   output.message_type = reinterpret_cast<uintptr_t>(&task_timer_);
   output.sequence = ss_msg_dispatcher::me()->allocate_sequence();
-  output.timeout = util::time::time_utility::sys_now() + timeout_conf;
+  output.timeout = atfw::util::time::time_utility::sys_now() + timeout_conf;
 
   task_timer_.push(output);
 }

@@ -95,8 +95,8 @@ session::~session() {
   FWLOGDEBUG("session [{:#x}, {}] destroyed", id_.node_id, id_.session_id);
 
   if (actor_log_writter_) {
-    util::log::log_wrapper::caller_info_t caller = util::log::log_wrapper::caller_info_t(
-        util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
+    atfw::util::log::log_wrapper::caller_info_t caller = atfw::util::log::log_wrapper::caller_info_t(
+        atfw::util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
     actor_log_writter_->format_log(caller, "------------ session: {:#x}:{} destroyed ------------", get_key().node_id,
                                    get_key().session_id);
   }
@@ -214,8 +214,8 @@ bool session::compare_callback::operator()(const key_t &l, const key_t &r) const
 
 size_t session::compare_callback::operator()(const key_t &hash_obj) const {
   // std::hash also use fnv1 hash algorithm, but fnv1a sometime has better random
-  return util::hash::hash_fnv1a<size_t>(&hash_obj.node_id, sizeof(hash_obj.node_id)) ^
-         util::hash::hash_fnv1<size_t>(&hash_obj.session_id, sizeof(hash_obj.session_id));
+  return atfw::util::hash::hash_fnv1a<size_t>(&hash_obj.node_id, sizeof(hash_obj.node_id)) ^
+         atfw::util::hash::hash_fnv1<size_t>(&hash_obj.session_id, sizeof(hash_obj.session_id));
 }
 
 void session::alloc_session_sequence(atframework::CSMsg &msg) {
@@ -238,11 +238,11 @@ void session::alloc_session_sequence(atframework::CSMsg &msg) {
 void session::create_actor_log_writter() {
   if (!actor_log_writter_ && logic_config::me()->get_logic().session().actor_log_size() > 0 &&
       logic_config::me()->get_logic().session().actor_log_rotate() > 0) {
-    actor_log_writter_ = util::log::log_wrapper::create_user_logger();
+    actor_log_writter_ = atfw::util::log::log_wrapper::create_user_logger();
     if (actor_log_writter_) {
       actor_log_writter_->init(util::log::log_formatter::level_t::LOG_LW_INFO);
       actor_log_writter_->set_stacktrace_level(util::log::log_formatter::level_t::LOG_LW_DISABLED,
-                                               util::log::log_formatter::level_t::LOG_LW_DISABLED);
+                                               atfw::util::log::log_formatter::level_t::LOG_LW_DISABLED);
       actor_log_writter_->set_prefix_format("[%F %T.%f]: ");
 
       std::stringstream ss_path;
@@ -251,15 +251,15 @@ void session::create_actor_log_writter() {
               << ".%N.log";
       ss_alias << logic_config::me()->get_logic().server().log_path() << "/cs-actor/%Y-%m-%d/" << cached_user_id_
                << ".log";
-      ::util::log::log_sink_file_backend file_sink(ss_path.str());
+      atfw::util::log::log_sink_file_backend file_sink(ss_path.str());
       file_sink.set_writing_alias_pattern(ss_alias.str());
       file_sink.set_flush_interval(1);  // flush every 1 second
       file_sink.set_max_file_size(logic_config::me()->get_logic().session().actor_log_size());
       file_sink.set_rotate_size(static_cast<uint32_t>(logic_config::me()->get_logic().session().actor_log_rotate()));
       actor_log_writter_->add_sink(file_sink);
 
-      util::log::log_wrapper::caller_info_t caller = util::log::log_wrapper::caller_info_t(
-          util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
+      atfw::util::log::log_wrapper::caller_info_t caller = atfw::util::log::log_wrapper::caller_info_t(
+          atfw::util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
       actor_log_writter_->format_log(caller, "============ user: {}:{}, session: {:#x}:{} created ============",
                                      cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id);
     }
@@ -320,18 +320,18 @@ void session::write_actor_log_head(rpc::context &ctx, const atframework::CSMsg &
       break;
   }
 
-  util::log::log_wrapper::caller_info_t caller = util::log::log_wrapper::caller_info_t(
-      util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
+  atfw::util::log::log_wrapper::caller_info_t caller = atfw::util::log::log_wrapper::caller_info_t(
+      atfw::util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
   std::string hint_text;
   if (is_input) {
-    hint_text = util::log::format(
+    hint_text = atfw::util::log::format(
         "<<<<<<<<<<<< receive {} bytes from player {}:{}, session: {:#x}:{}, rpc: {}, type: {}", byte_size,
         cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id, rpc_name, type_url);
 
   } else {
-    hint_text = util::log::format(">>>>>>>>>>>> send {} bytes to player {}:{}, session: {:#x}:{}, rpc: {}, type: {}",
-                                  byte_size, cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id,
-                                  rpc_name, type_url);
+    hint_text = atfw::util::log::format(
+        ">>>>>>>>>>>> send {} bytes to player {}:{}, session: {:#x}:{}, rpc: {}, type: {}", byte_size, cached_zone_id_,
+        cached_user_id_, get_key().node_id, get_key().session_id, rpc_name, type_url);
   }
   if (actor_log_writter_) {
     actor_log_writter_->write_log(caller, hint_text.c_str(), hint_text.size());
@@ -384,8 +384,8 @@ void session::write_actor_log_body(rpc::context &ctx, const google::protobuf::Me
       type_url = "UNKNOWN TYPE";
       break;
   }
-  util::log::log_wrapper::caller_info_t caller = util::log::log_wrapper::caller_info_t(
-      util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
+  atfw::util::log::log_wrapper::caller_info_t caller = atfw::util::log::log_wrapper::caller_info_t(
+      atfw::util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
 
   std::string head_text = protobuf_mini_dumper_get_readable(head);
   std::string body_text = protobuf_mini_dumper_get_readable(msg);

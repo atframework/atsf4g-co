@@ -289,9 +289,9 @@ EXCEL_CONFIG_LOADER_API int config_manager::init(bool enable_multithread_lock) {
 EXCEL_CONFIG_LOADER_API int config_manager::init_new_group() {
   std::string version;
   {
-    ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh;
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> rlh;
     if (enable_multithread_lock_) {
-      rlh = ::util::lock::read_lock_holder<::util::lock::spin_rw_lock>{handle_lock_};
+      rlh = atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock>{handle_lock_};
     }
     if (!read_version_handle_) {
       EXCEL_CONFIG_MANAGER_LOGERROR("[EXCEL] config_manager version handle not set");
@@ -306,9 +306,9 @@ EXCEL_CONFIG_LOADER_API int config_manager::init_new_group() {
 
   do {
     // 检查版本号
-    ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> wlh;
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
     if (enable_multithread_lock_) {
-      wlh = ::util::lock::read_lock_holder<::util::lock::spin_rw_lock>{config_group_lock_};
+      wlh = atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock>{config_group_lock_};
     }
     if (config_group_list_.empty()) {
       break;
@@ -358,9 +358,9 @@ EXCEL_CONFIG_LOADER_API int config_manager::init_new_group() {
 % endfor
 
   if (ret >= 0) {
-    ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh;
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
     if (enable_multithread_lock_) {
-      wlh = ::util::lock::write_lock_holder<::util::lock::spin_rw_lock>{config_group_lock_};
+      wlh = atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock>{config_group_lock_};
     }
     ++ reload_version_;
     config_group_list_.push_back(cfg_group);
@@ -384,9 +384,9 @@ EXCEL_CONFIG_LOADER_API int config_manager::init_new_group() {
 EXCEL_CONFIG_LOADER_API void config_manager::reset() {
   std::unordered_map<void *, std::function<void()>> on_evt_reset;
   {
-    util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh;
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
     if (enable_multithread_lock_) {
-      wlh = util::lock::write_lock_holder<::util::lock::spin_rw_lock>{evt_lock_};
+      wlh = atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock>{evt_lock_};
     }
     on_evt_reset_.swap(on_evt_reset);
   }
@@ -396,9 +396,9 @@ EXCEL_CONFIG_LOADER_API void config_manager::reset() {
     }
   }
   {
-    ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh;
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
     if (enable_multithread_lock_) {
-      wlh = ::util::lock::write_lock_holder<::util::lock::spin_rw_lock>{handle_lock_};
+      wlh = atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock>{handle_lock_};
     }
     max_group_number_ = 8;
     override_same_version_ = false;
@@ -414,17 +414,17 @@ EXCEL_CONFIG_LOADER_API void config_manager::reset() {
 }
 
 EXCEL_CONFIG_LOADER_API void config_manager::clear() {
-  ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh;
+  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
   if (enable_multithread_lock_) {
-    wlh = ::util::lock::write_lock_holder<::util::lock::spin_rw_lock>{config_group_lock_};
+    wlh = atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock>{config_group_lock_};
   }
   config_group_list_.clear();
 }
 
 EXCEL_CONFIG_LOADER_API bool config_manager::load_file_data(std::string& write_to, const std::string& file_path) {
-  ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh;
+  atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> rlh;
   if (enable_multithread_lock_) {
-    rlh = ::util::lock::read_lock_holder<::util::lock::spin_rw_lock>{handle_lock_};
+    rlh = atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock>{handle_lock_};
   }
 
   if (!read_file_handle_) {
@@ -466,9 +466,9 @@ EXCEL_CONFIG_LOADER_API int config_manager::reload_all(bool del_when_failed) {
 % endfor
 
   if (del_when_failed && ret < 0) {
-    ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh;
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
     if (enable_multithread_lock_) {
-      wlh = ::util::lock::write_lock_holder<::util::lock::spin_rw_lock>{config_group_lock_};
+      wlh = atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock>{config_group_lock_};
     }
     config_group_list_.pop_back();
     ++ reload_version_;
@@ -487,36 +487,36 @@ EXCEL_CONFIG_LOADER_API int config_manager::reload_all(bool del_when_failed) {
 }
 
 EXCEL_CONFIG_LOADER_API config_manager::read_buffer_func_t config_manager::get_buffer_loader() const {
-  ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh;
+  atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> rlh;
   if (enable_multithread_lock_) {
-    rlh = ::util::lock::read_lock_holder<::util::lock::spin_rw_lock>{handle_lock_};
+    rlh = atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock>{handle_lock_};
   }
 
   return read_file_handle_;
 }
 
 EXCEL_CONFIG_LOADER_API void config_manager::set_buffer_loader(read_buffer_func_t fn) {
-  ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh;
+  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
   if (enable_multithread_lock_) {
-    wlh = ::util::lock::write_lock_holder<::util::lock::spin_rw_lock>{handle_lock_};
+    wlh = atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock>{handle_lock_};
   }
 
   read_file_handle_ = fn;
 }
 
 EXCEL_CONFIG_LOADER_API config_manager::read_version_func_t config_manager::get_version_loader() const {
-  ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh;
+  atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> rlh;
   if (enable_multithread_lock_) {
-    rlh = ::util::lock::read_lock_holder<::util::lock::spin_rw_lock>{handle_lock_};
+    rlh = atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock>{handle_lock_};
   }
 
   return read_version_handle_;
 }
 
 EXCEL_CONFIG_LOADER_API void config_manager::set_version_loader(read_version_func_t fn) {
-  ::util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh;
+  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
   if (enable_multithread_lock_) {
-    wlh = ::util::lock::write_lock_holder<::util::lock::spin_rw_lock>{handle_lock_};
+    wlh = atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock>{handle_lock_};
   }
 
   read_version_handle_ = fn;
@@ -529,9 +529,9 @@ EXCEL_CONFIG_LOADER_API const config_manager::config_group_ptr_t& config_manager
   }
 
   {
-    ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh;
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> rlh;
     if (enable_multithread_lock_) {
-      rlh = ::util::lock::read_lock_holder<::util::lock::spin_rw_lock>{config_group_lock_};
+      rlh = atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock>{config_group_lock_};
     }
     if (!config_group_list_.empty()) {
       tls_cache.current_version = reload_version_.load(util::lock::memory_order_acquire);
@@ -541,9 +541,9 @@ EXCEL_CONFIG_LOADER_API const config_manager::config_group_ptr_t& config_manager
   }
 
   if (0 == init_new_group()) {
-    ::util::lock::read_lock_holder<::util::lock::spin_rw_lock> rlh;
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> rlh;
     if (enable_multithread_lock_) {
-      rlh = ::util::lock::read_lock_holder<::util::lock::spin_rw_lock>{config_group_lock_};
+      rlh = atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock>{config_group_lock_};
     }
     if (!config_group_list_.empty()) {
       tls_cache.current_version = reload_version_.load(util::lock::memory_order_acquire);
@@ -653,9 +653,9 @@ EXCEL_CONFIG_LOADER_API bool config_manager::dump_table(std::ostream& out, confi
 }
 
 EXCEL_CONFIG_LOADER_API void config_manager::register_event_on_reset(void* key, std::function<void()> fn) {
-  util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh;
+  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
   if (enable_multithread_lock_) {
-    wlh = util::lock::write_lock_holder<::util::lock::spin_rw_lock>{evt_lock_};
+    wlh = atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock>{evt_lock_};
   }
 
   on_evt_reset_[key] = std::move(fn);
@@ -663,9 +663,9 @@ EXCEL_CONFIG_LOADER_API void config_manager::register_event_on_reset(void* key, 
 
 EXCEL_CONFIG_LOADER_API void
 config_manager::unregister_event_on_reset(void *key) {
-  util::lock::write_lock_holder<::util::lock::spin_rw_lock> wlh;
+  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
   if (enable_multithread_lock_) {
-    wlh = util::lock::write_lock_holder<::util::lock::spin_rw_lock>{evt_lock_};
+    wlh = atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock>{evt_lock_};
   }
 
   on_evt_reset_.erase(key);

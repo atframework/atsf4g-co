@@ -51,7 +51,7 @@ struct short_uuid_encoder {
     memcpy(keys, "y102a3gq58zrjbovpm7w6ltiuesf9h4kxncd", kKeyLength);
   }
 
-  ::util::lock::seq_alloc_u32 seq_;
+  atfw::util::lock::seq_alloc_u32 seq_;
   char keys[kKeyLength];
   size_t operator()(char *in, size_t insz, uint64_t val) {
     if (insz == 0 || NULL == in) {
@@ -87,17 +87,17 @@ static short_uuid_encoder short_uuid_encoder_;
 
 std::string generate_standard_uuid(bool remove_minus, standard_uuid_type type) {
   if (type == standard_uuid_type::kV1) {
-    return util::random::uuid_generator::generate_string_time(remove_minus);
+    return atfw::util::random::uuid_generator::generate_string_time(remove_minus);
   } else {
-    return util::random::uuid_generator::generate_string_random(remove_minus);
+    return atfw::util::random::uuid_generator::generate_string_random(remove_minus);
   }
 }
 
 std::string generate_standard_uuid_binary(standard_uuid_type type) {
   if (type == standard_uuid_type::kV1) {
-    return util::random::uuid_generator::uuid_to_binary(util::random::uuid_generator::generate_time());
+    return atfw::util::random::uuid_generator::uuid_to_binary(util::random::uuid_generator::generate_time());
   } else {
-    return util::random::uuid_generator::uuid_to_binary(util::random::uuid_generator::generate_random());
+    return atfw::util::random::uuid_generator::uuid_to_binary(util::random::uuid_generator::generate_random());
   }
 }
 
@@ -105,7 +105,7 @@ std::string generate_short_uuid() {
   // node_id:(timestamp-2022-01-01 00:00:00):sequence
   // 2022-01-01 00:00:00 UTC => 1640995200
   uint64_t node_id = logic_config::me()->get_local_server_id();
-  time_t time_param = util::time::time_utility::get_now() - 1640995200;
+  time_t time_param = atfw::util::time::time_utility::get_now() - 1640995200;
 
   // 第一个字符用S，表示服务器生成，这样如果客户端生成的用C开头，就不会和服务器冲突
   // 第二个字符表示版本号，以便后续变更算法可以和之前区分开来
@@ -207,8 +207,8 @@ struct unique_id_key_t {
 
 struct unique_id_value_t {
   task_type_trait::task_type alloc_task;
-  util::lock::atomic_int_type<int64_t> unique_id_index;
-  util::lock::atomic_int_type<int64_t> unique_id_base;
+  atfw::util::lock::atomic_int_type<int64_t> unique_id_index;
+  atfw::util::lock::atomic_int_type<int64_t> unique_id_base;
   std::list<task_type_trait::task_type> wake_tasks;
 
   unique_id_value_t() noexcept
@@ -233,13 +233,13 @@ struct unique_id_container_helper {
   std::size_t operator()(unique_id_key_t const &v) const noexcept {
     uint32_t data[3] = {v.major_type, v.minor_type, v.patch_type};
     uint64_t out[2];
-    util::hash::murmur_hash3_x64_128(data, sizeof(data), 0, out);
+    atfw::util::hash::murmur_hash3_x64_128(data, sizeof(data), 0, out);
     return static_cast<std::size_t>(out[0]);
   }
 };
 
 static std::unordered_map<unique_id_key_t, unique_id_value_t, unique_id_container_helper> g_unique_id_pools;
-static util::lock::spin_rw_lock g_unique_id_pool_locker;
+static atfw::util::lock::spin_rw_lock g_unique_id_pool_locker;
 
 struct unique_id_container_waker {
   unique_id_key_t key;
@@ -250,7 +250,7 @@ struct unique_id_container_waker {
     real_map_type::iterator iter;
 
     {
-      util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard(g_unique_id_pool_locker);
+      atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard(g_unique_id_pool_locker);
       iter = g_unique_id_pools.find(key);
       if (iter == g_unique_id_pools.end()) {
         return;
@@ -325,7 +325,7 @@ static rpc::rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx, uin
     real_map_type::iterator iter;
 
     {
-      util::lock::read_lock_holder<util::lock::spin_rw_lock> lock_guard(g_unique_id_pool_locker);
+      atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard(g_unique_id_pool_locker);
       iter = g_unique_id_pools.find(key);
       if (g_unique_id_pools.end() != iter) {
         alloc = &iter->second;
@@ -333,7 +333,7 @@ static rpc::rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx, uin
       }
     }
 
-    util::lock::write_lock_holder<util::lock::spin_rw_lock> lock_guard(g_unique_id_pool_locker);
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard(g_unique_id_pool_locker);
     iter = g_unique_id_pools.insert(real_map_type::value_type(key, unique_id_value_t{})).first;
 
     if (g_unique_id_pools.end() == iter) {
@@ -399,7 +399,7 @@ static rpc::rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx, uin
         ret = res;
         continue;
       }
-      unique_id_base.store(res, util::lock::memory_order_release);
+      unique_id_base.store(res, atfw::util::lock::memory_order_release);
       unique_id_index.store(0);
     }
 

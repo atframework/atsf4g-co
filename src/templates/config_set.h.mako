@@ -84,7 +84,7 @@ class ${loader.get_cpp_class_name()} {
   void merge_data(item_ptr_type);
 
  private:
-  ::util::lock::spin_rw_lock           load_file_lock_;
+  atfw::util::lock::spin_rw_lock           load_file_lock_;
   std::unordered_map<std::string, bool> file_status_; // true: already loaded
   std::list<org::xresloader::pb::xresloader_data_source> datasource_;
 

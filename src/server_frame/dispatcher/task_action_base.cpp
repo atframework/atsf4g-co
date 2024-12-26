@@ -42,8 +42,8 @@ namespace detail {
 struct task_action_stat_guard {
   explicit task_action_stat_guard(task_action_base *act) : action(act) {
     if (nullptr != action) {
-      util::time::time_utility::update();
-      start = util::time::time_utility::now();
+      atfw::util::time::time_utility::update();
+      start = atfw::util::time::time_utility::now();
     }
   }
 
@@ -52,8 +52,8 @@ struct task_action_stat_guard {
       return;
     }
 
-    util::time::time_utility::update();
-    util::time::time_utility::raw_time_t end = util::time::time_utility::now();
+    atfw::util::time::time_utility::update();
+    atfw::util::time::time_utility::raw_time_t end = atfw::util::time::time_utility::now();
     if (logic_config::me()->get_cfg_task().stats().enable_internal_pstat_log()) {
       if (0 != action->get_user_id()) {
         FWCLOGINFO(log_categorize_t::PROTO_STAT, "{}|{}|{}|{}us|{}|{}", action->name(), action->get_task_id(),
@@ -67,7 +67,7 @@ struct task_action_stat_guard {
     }
   }
 
-  util::time::time_utility::raw_time_t start;
+  atfw::util::time::time_utility::raw_time_t start;
   task_action_base *action;
 };
 }  // namespace detail

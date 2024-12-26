@@ -143,12 +143,12 @@ int main(int argc, char *argv[]) {
   // project directory
   {
     std::string proj_dir;
-    util::file_system::dirname(__FILE__, 0, proj_dir, 4);
-    util::log::log_formatter::set_project_directory(proj_dir.c_str(), proj_dir.size());
+    atfw::util::file_system::dirname(__FILE__, 0, proj_dir, 4);
+    atfw::util::log::log_formatter::set_project_directory(proj_dir.c_str(), proj_dir.size());
   }
 
   // setup cmd
-  util::cli::cmd_option_ci::ptr_type cmgr = app.get_command_manager();
+  atfw::util::cli::cmd_option_ci::ptr_type cmgr = app.get_command_manager();
   cmgr->bind_cmd("kickoff", app_command_handler_kickoff(&app, &gws))
       ->set_help_msg("kickoff <session id>                   kickoff a client.");
 

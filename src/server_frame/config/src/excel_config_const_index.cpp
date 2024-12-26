@@ -36,7 +36,7 @@
 namespace excel {
 
 static_assert(std::is_same<PROJECT_NAMESPACE_ID::config::config_set_excel_origin_const_config::item_ptr_type,
-                           ::util::memory::strong_rc_ptr<
+                           atfw::util::memory::strong_rc_ptr<
                                PROJECT_NAMESPACE_ID::config::config_set_excel_origin_const_config::item_type>>::value,
               "config smart pointer checking");
 
@@ -265,7 +265,7 @@ static void pick_const_data(const std::string& value, google::protobuf::Duration
   std::string unit;
   if (word_begin && word_end && word_end > word_begin) {
     unit.assign(word_begin, word_end);
-    std::transform(unit.begin(), unit.end(), unit.begin(), ::util::string::tolower<char>);
+    std::transform(unit.begin(), unit.end(), unit.begin(), atfw::util::string::tolower<char>);
   }
 
   bool fallback = true;
@@ -396,9 +396,9 @@ static void pick_const_data(const std::string& value, google::protobuf::Timestam
   time_t res = mktime(&t);
 
   if (*word_begin == 'Z') {  // UTC timezone
-    res -= ::util::time::time_utility::get_sys_zone_offset();
+    res -= atfw::util::time::time_utility::get_sys_zone_offset();
   } else if (*word_begin == '+') {
-    res -= ::util::time::time_utility::get_sys_zone_offset();
+    res -= atfw::util::time::time_utility::get_sys_zone_offset();
     time_t offset = 0;
     word_begin = pick_number(offset, word_begin + 1);
     res -= offset * 60;
@@ -408,7 +408,7 @@ static void pick_const_data(const std::string& value, google::protobuf::Timestam
     }
     timepoint.set_seconds(timepoint.seconds() - offset);
   } else if (*word_begin == '-') {
-    res -= ::util::time::time_utility::get_sys_zone_offset();
+    res -= atfw::util::time::time_utility::get_sys_zone_offset();
     time_t offset = 0;
     word_begin = pick_number(offset, word_begin + 1);
     res += offset * 60;
@@ -430,33 +430,33 @@ static bool pick_const_data(::google::protobuf::Message& settings, const ::googl
   switch (fds->cpp_type()) {
     case google::protobuf::FieldDescriptor::CPPTYPE_INT32: {
       if (fds->is_repeated()) {
-        settings.GetReflection()->AddInt32(&settings, fds, ::util::string::to_int<int32_t>(value.c_str()));
+        settings.GetReflection()->AddInt32(&settings, fds, atfw::util::string::to_int<int32_t>(value.c_str()));
       } else {
-        settings.GetReflection()->SetInt32(&settings, fds, ::util::string::to_int<int32_t>(value.c_str()));
+        settings.GetReflection()->SetInt32(&settings, fds, atfw::util::string::to_int<int32_t>(value.c_str()));
       }
       return true;
     };
     case google::protobuf::FieldDescriptor::CPPTYPE_INT64: {
       if (fds->is_repeated()) {
-        settings.GetReflection()->AddInt64(&settings, fds, ::util::string::to_int<int64_t>(value.c_str()));
+        settings.GetReflection()->AddInt64(&settings, fds, atfw::util::string::to_int<int64_t>(value.c_str()));
       } else {
-        settings.GetReflection()->SetInt64(&settings, fds, ::util::string::to_int<int64_t>(value.c_str()));
+        settings.GetReflection()->SetInt64(&settings, fds, atfw::util::string::to_int<int64_t>(value.c_str()));
       }
       return true;
     };
     case google::protobuf::FieldDescriptor::CPPTYPE_UINT32: {
       if (fds->is_repeated()) {
-        settings.GetReflection()->AddUInt32(&settings, fds, ::util::string::to_int<uint32_t>(value.c_str()));
+        settings.GetReflection()->AddUInt32(&settings, fds, atfw::util::string::to_int<uint32_t>(value.c_str()));
       } else {
-        settings.GetReflection()->SetUInt32(&settings, fds, ::util::string::to_int<uint32_t>(value.c_str()));
+        settings.GetReflection()->SetUInt32(&settings, fds, atfw::util::string::to_int<uint32_t>(value.c_str()));
       }
       return true;
     };
     case google::protobuf::FieldDescriptor::CPPTYPE_UINT64: {
       if (fds->is_repeated()) {
-        settings.GetReflection()->AddUInt64(&settings, fds, ::util::string::to_int<uint64_t>(value.c_str()));
+        settings.GetReflection()->AddUInt64(&settings, fds, atfw::util::string::to_int<uint64_t>(value.c_str()));
       } else {
-        settings.GetReflection()->SetUInt64(&settings, fds, ::util::string::to_int<uint64_t>(value.c_str()));
+        settings.GetReflection()->SetUInt64(&settings, fds, atfw::util::string::to_int<uint64_t>(value.c_str()));
       }
       return true;
     };
@@ -613,7 +613,7 @@ static bool reset_const_value(::google::protobuf::Message& settings, const ::goo
   // 分离指令,多个值
   while (*start) {
     std::string splited_val;
-    start = util::cli::cmd_option::get_segment(start, splited_val);
+    start = atfw::util::cli::cmd_option::get_segment(start, splited_val);
     if (pick_const_data(settings, fds, splited_val)) {
       any_success = true;
     } else {
@@ -630,7 +630,7 @@ SERVER_FRAME_CONFIG_API void setup_const_config(config_group_t& group) {
 
   // const data from string configure
   for (auto& kv : group.excel_origin_const_config.get_all_of_key()) {
-    auto trimed_key = ::util::string::trim(kv.second->key().c_str(), kv.second->key().size());
+    auto trimed_key = atfw::util::string::trim(kv.second->key().c_str(), kv.second->key().size());
     if (trimed_key.second == 0 || !trimed_key.first || !*trimed_key.first) {
       continue;
     }

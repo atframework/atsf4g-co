@@ -14,7 +14,7 @@ namespace login {
 void generate_login_code(char *code, size_t sz) {
   if (sz > 0) {
     for (size_t i = 0; i < sz - 1; ++i) {
-      code[i] = util::random_engine::random_between<char>(33, 127);
+      code[i] = atfw::util::random_engine::random_between<char>(33, 127);
     }
     code[sz - 1] = 0;
   }

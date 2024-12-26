@@ -356,8 +356,8 @@ SERVER_FRAME_API int db_msg_dispatcher::script_load(redisAsyncContext *c, script
 }
 
 void db_msg_dispatcher::on_timer_proc(uv_timer_t *handle) {
-  time_t sec = util::time::time_utility::get_now();
-  time_t usec = util::time::time_utility::get_now_usec();
+  time_t sec = atfw::util::time::time_utility::get_now();
+  time_t usec = atfw::util::time::time_utility::get_now_usec();
 
   db_msg_dispatcher *dispatcher = reinterpret_cast<db_msg_dispatcher *>(handle->data);
   assert(dispatcher);
@@ -411,7 +411,7 @@ int db_msg_dispatcher::cluster_init(const PROJECT_NAMESPACE_ID::config::db_group
   }
 
   conn = atfw::memory::stl::make_shared<hiredis::happ::cluster>();
-  int32_t conn_idx = util::random_engine::random_between<int32_t>(0, conns.gateways_size());
+  int32_t conn_idx = atfw::util::random_engine::random_between<int32_t>(0, conns.gateways_size());
 
   // 初始化
   conn->init(conns.gateways(conn_idx).host(), static_cast<uint16_t>(conns.gateways(conn_idx).port()));
@@ -421,7 +421,7 @@ int db_msg_dispatcher::cluster_init(const PROJECT_NAMESPACE_ID::config::db_group
     hiredis::happ::cluster::log_fn_t info_fn = db_msg_dispatcher::log_info_fn;
     hiredis::happ::cluster::log_fn_t debug_fn = db_msg_dispatcher::log_debug_fn;
 
-    util::log::log_wrapper *wrapper = WLOG_GETCAT(log_categorize_t::DB);
+    atfw::util::log::log_wrapper *wrapper = WLOG_GETCAT(log_categorize_t::DB);
     if (!wrapper->check_level(util::log::log_wrapper::level_t::LOG_LW_DEBUG)) {
       debug_fn = nullptr;
     }
@@ -572,7 +572,7 @@ int db_msg_dispatcher::raw_init(const PROJECT_NAMESPACE_ID::config::db_group_cfg
     hiredis::happ::raw::log_fn_t info_fn = db_msg_dispatcher::log_info_fn;
     hiredis::happ::raw::log_fn_t debug_fn = db_msg_dispatcher::log_debug_fn;
 
-    util::log::log_wrapper *wrapper = WLOG_GETCAT(log_categorize_t::DB);
+    atfw::util::log::log_wrapper *wrapper = WLOG_GETCAT(log_categorize_t::DB);
     if (!wrapper->check_level(util::log::log_wrapper::level_t::LOG_LW_DEBUG)) {
       debug_fn = nullptr;
     }

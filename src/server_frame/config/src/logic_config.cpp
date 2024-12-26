@@ -131,8 +131,8 @@ void logic_config::_load_db_hosts(PROJECT_NAMESPACE_ID::config::db_group_cfg &ou
       } else {
         // IP:begin_port-end_port
         int32_t begin_port = 0, end_port = 0;
-        util::string::str2int(begin_port, &host[fn + 1]);
-        util::string::str2int(end_port, &host[minu_pos + 1]);
+        atfw::util::string::str2int(begin_port, &host[fn + 1]);
+        atfw::util::string::str2int(end_port, &host[minu_pos + 1]);
 
         for (int32_t port = begin_port; port < end_port; ++port) {
           PROJECT_NAMESPACE_ID::config::db_group_gateway_cfg *db_gateway = out.add_gateways();
@@ -195,7 +195,7 @@ void logic_config::_load_server_cfg(atapp::app &app) {
   server_cfg_.Clear();
   app.parse_configures_into(server_cfg_, std::string(), "ATAPP");
 
-  util::time::time_utility::update();
+  atfw::util::time::time_utility::update();
   auto reload_timepoint = server_cfg_.mutable_logic()->mutable_server()->mutable_reload_timepoint();
   reload_timepoint->set_seconds(util::time::time_utility::get_sys_now());
   reload_timepoint->set_nanos(static_cast<int32_t>(util::time::time_utility::get_now_usec() * 1000));

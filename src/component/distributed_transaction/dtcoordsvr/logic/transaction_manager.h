@@ -22,7 +22,7 @@
 #include <memory>
 #include <unordered_map>
 
-class transaction_manager : public util::design_pattern::singleton<transaction_manager> {
+class transaction_manager : public atfw::util::design_pattern::singleton<transaction_manager> {
  public:
   using transaction_lru_map_type =
       rpc::rpc_lru_cache_map<std::string, atframework::distributed_system::transaction_blob_storage>;

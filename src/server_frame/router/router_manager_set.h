@@ -126,7 +126,7 @@ class router_manager_set {
   bool is_ready_;
 
   struct metrics_set_data {
-    util::lock::spin_rw_lock metric_lock;
+    atfw::util::lock::spin_rw_lock metric_lock;
     std::unordered_map<std::string, std::shared_ptr<router_manager_metrics_data>> metric_data;
 
     std::atomic<int64_t> fast_timer_count;

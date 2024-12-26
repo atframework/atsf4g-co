@@ -56,7 +56,7 @@ static task_manager_metrics_data_type &get_task_manager_metrics_data() {
 #if GOOGLE_PROTOBUF_VERSION >= 4022000
 class UTIL_SYMBOL_LOCAL absl_global_log_sink : public absl::LogSink {
   void Send(const absl::LogEntry &entry) override {
-    util::log::log_wrapper::caller_info_t caller;
+    atfw::util::log::log_wrapper::caller_info_t caller;
     auto source_filename = entry.source_filename();
     caller.file_path = gsl::string_view{source_filename.data(), source_filename.size()};
     caller.line_number = static_cast<uint32_t>(entry.source_line());
@@ -65,27 +65,27 @@ class UTIL_SYMBOL_LOCAL absl_global_log_sink : public absl::LogSink {
 
     switch (entry.log_severity()) {
       case ::absl::LogSeverity::kInfo:
-        caller.level_id = util::log::log_wrapper::level_t::LOG_LW_INFO;
+        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_INFO;
         caller.level_name = "Info";
         break;
 
       case ::absl::LogSeverity::kWarning:
-        caller.level_id = util::log::log_wrapper::level_t::LOG_LW_WARNING;
+        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_WARNING;
         caller.level_name = "Warn";
         break;
 
       case ::absl::LogSeverity::kError:
-        caller.level_id = util::log::log_wrapper::level_t::LOG_LW_ERROR;
+        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_ERROR;
         caller.level_name = "Error";
         break;
 
       case ::absl::LogSeverity::kFatal:
-        caller.level_id = util::log::log_wrapper::level_t::LOG_LW_FATAL;
+        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_FATAL;
         caller.level_name = "Fatal";
         break;
 
       default:
-        caller.level_id = util::log::log_wrapper::level_t::LOG_LW_DEBUG;
+        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_DEBUG;
         caller.level_name = "Debug";
         break;
     }
@@ -103,7 +103,7 @@ class UTIL_SYMBOL_LOCAL absl_global_log_sink : public absl::LogSink {
 #else
 static void log_wrapper_for_protobuf(::google::protobuf::LogLevel level, const char *filename, int line,
                                      const std::string &message) {
-  util::log::log_wrapper::caller_info_t caller;
+  atfw::util::log::log_wrapper::caller_info_t caller;
   caller.file_path = filename;
   caller.line_number = static_cast<uint32_t>(line);
   caller.func_name = "protobuf";
@@ -111,27 +111,27 @@ static void log_wrapper_for_protobuf(::google::protobuf::LogLevel level, const c
 
   switch (level) {
     case ::google::protobuf::LOGLEVEL_INFO:
-      caller.level_id = util::log::log_wrapper::level_t::LOG_LW_INFO;
+      caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_INFO;
       caller.level_name = "Info";
       break;
 
     case ::google::protobuf::LOGLEVEL_WARNING:
-      caller.level_id = util::log::log_wrapper::level_t::LOG_LW_WARNING;
+      caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_WARNING;
       caller.level_name = "Warn";
       break;
 
     case ::google::protobuf::LOGLEVEL_ERROR:
-      caller.level_id = util::log::log_wrapper::level_t::LOG_LW_ERROR;
+      caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_ERROR;
       caller.level_name = "Error";
       break;
 
     case ::google::protobuf::LOGLEVEL_FATAL:
-      caller.level_id = util::log::log_wrapper::level_t::LOG_LW_FATAL;
+      caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_FATAL;
       caller.level_name = "Fatal";
       break;
 
     default:
-      caller.level_id = util::log::log_wrapper::level_t::LOG_LW_DEBUG;
+      caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_DEBUG;
       caller.level_name = "Debug";
       break;
   }
@@ -878,8 +878,8 @@ bool task_manager::check_sys_config() const {
 
   if (util::file_system::is_exist(vm_map_count_file)) {
     std::string content;
-    util::file_system::get_file_content(content, vm_map_count_file);
-    uint64_t sys_mmap_count = util::string::to_int<uint64_t>(content.c_str());
+    atfw::util::file_system::get_file_content(content, vm_map_count_file);
+    uint64_t sys_mmap_count = atfw::util::string::to_int<uint64_t>(content.c_str());
     if (logic_config::me()->get_cfg_task().stack().mmap_count() > sys_mmap_count) {
       FWLOGERROR("mmap_count {} is greater than /proc/sys/vm/max_map_count {}",
                  logic_config::me()->get_cfg_task().stack().mmap_count(), sys_mmap_count);
