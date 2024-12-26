@@ -240,14 +240,15 @@ int session_manager::reset() {
 }
 
 int session_manager::tick() {
-  time_t now = util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
   // 每秒只需要判定一次
   if (last_tick_time_ == now) {
     return 0;
   }
 
   // 每分钟打印一次统计数据
-  if (last_tick_time_ / util::time::time_utility::MINITE_SECONDS != now / util::time::time_utility::MINITE_SECONDS) {
+  if (last_tick_time_ / atfw::util::time::time_utility::MINITE_SECONDS !=
+      now / atfw::util::time::time_utility::MINITE_SECONDS) {
 #if defined(__cpluscplus) && __cpluscplus >= 201103L
     // std::list 在C++11以前可能是O(n)复杂度
     WLOGINFO(
@@ -331,7 +332,8 @@ int session_manager::close(session::id_t sess_id, int reason, bool allow_reconne
     reconnect_timeout_.push_back(session_timeout_t());
     session_timeout_t &sess_timer = reconnect_timeout_.back();
     sess_timer.s = iter->second;
-    sess_timer.timeout = util::time::time_utility::get_now() + conf_.origin_conf.client().reconnect_timeout().seconds();
+    sess_timer.timeout =
+        atfw::util::time::time_utility::get_now() + conf_.origin_conf.client().reconnect_timeout().seconds();
 
     reconnect_cache_[sess_timer.s->get_id()] = sess_timer.s;
     FWLOGINFO("session {:#x}({}) closed and setup reconnect timeout {}(+{})", sess_timer.s->get_id(),
@@ -573,14 +575,14 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   sess_timeout.s = sess;
   if (mgr->conf_.origin_conf.client().first_idle_timeout().seconds() > 0) {
     sess_timeout.timeout =
-        util::time::time_utility::get_now() + mgr->conf_.origin_conf.client().first_idle_timeout().seconds();
+        atfw::util::time::time_utility::get_now() + mgr->conf_.origin_conf.client().first_idle_timeout().seconds();
   } else {
-    sess_timeout.timeout = util::time::time_utility::get_now() + 1;
+    sess_timeout.timeout = atfw::util::time::time_utility::get_now() + 1;
   }
   WLOGINFO("accept a tcp socket(%s:%d), create sesson %p and to wait for handshake now, expired time is %lld(+%lld)",
            sess->get_peer_host().c_str(), sess->get_peer_port(), sess.get(),
            static_cast<long long>(sess_timeout.timeout),
-           static_cast<long long>(sess_timeout.timeout - util::time::time_utility::get_now()));
+           static_cast<long long>(sess_timeout.timeout - atfw::util::time::time_utility::get_now()));
 }
 
 void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
@@ -651,9 +653,9 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
   sess_timeout.s = sess;
   if (mgr->conf_.origin_conf.client().first_idle_timeout().seconds() > 0) {
     sess_timeout.timeout =
-        util::time::time_utility::get_now() + mgr->conf_.origin_conf.client().first_idle_timeout().seconds();
+        atfw::util::time::time_utility::get_now() + mgr->conf_.origin_conf.client().first_idle_timeout().seconds();
   } else {
-    sess_timeout.timeout = util::time::time_utility::get_now() + 1;
+    sess_timeout.timeout = atfw::util::time::time_utility::get_now() + 1;
   }
 }
 

@@ -66,8 +66,8 @@ int main(int argc, char *argv[]) {
   // project directory
   {
     std::string proj_dir;
-    util::file_system::dirname(__FILE__, 0, proj_dir, 4);
-    util::log::log_formatter::set_project_directory(proj_dir.c_str(), proj_dir.size());
+    atfw::util::file_system::dirname(__FILE__, 0, proj_dir, 4);
+    atfw::util::log::log_formatter::set_project_directory(proj_dir.c_str(), proj_dir.size());
   }
 
   // setup module

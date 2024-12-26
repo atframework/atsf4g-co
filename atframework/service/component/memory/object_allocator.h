@@ -55,12 +55,12 @@ class object_allocator {
   }
 
   template <class T, class... Args>
-  UTIL_FORCEINLINE static util::memory::strong_rc_ptr<T> make_strong_rc(Args&&... args) {
+  UTIL_FORCEINLINE static atfw::util::memory::strong_rc_ptr<T> make_strong_rc(Args&&... args) {
     return object_allocator_manager::make_strong_rc<T>(std::forward<Args>(args)...);
   }
 
   template <class T, class... Args>
-  UTIL_FORCEINLINE static util::memory::strong_rc_ptr<T> allocate_strong_rc(Args&&... args) {
+  UTIL_FORCEINLINE static atfw::util::memory::strong_rc_ptr<T> allocate_strong_rc(Args&&... args) {
     return object_allocator_manager::allocate_strong_rc<T>(std::forward<Args>(args)...);
   }
 };
@@ -83,12 +83,12 @@ UTIL_FORCEINLINE static std::shared_ptr<T> allocate_shared(Args&&... args) {
 }
 
 template <class T, class... Args>
-UTIL_FORCEINLINE static util::memory::strong_rc_ptr<T> make_strong_rc(Args&&... args) {
+UTIL_FORCEINLINE static atfw::util::memory::strong_rc_ptr<T> make_strong_rc(Args&&... args) {
   return object_allocator_manager::make_strong_rc<T>(std::forward<Args>(args)...);
 }
 
 template <class T, class... Args>
-UTIL_FORCEINLINE static util::memory::strong_rc_ptr<T> allocate_strong_rc(Args&&... args) {
+UTIL_FORCEINLINE static atfw::util::memory::strong_rc_ptr<T> allocate_strong_rc(Args&&... args) {
   return object_allocator_manager::allocate_strong_rc<T>(std::forward<Args>(args)...);
 }
 }  // namespace stl

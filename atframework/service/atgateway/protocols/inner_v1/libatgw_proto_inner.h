@@ -77,7 +77,7 @@ class libatgw_proto_inner_v1 : public proto_base {
     int generate_secret(int &libres);
     int swap_secret(std::vector<unsigned char> &in, int &libres);
 
-    util::crypto::cipher cipher;
+    atfw::util::crypto::cipher cipher;
     bool is_inited_;
   };
   using crypt_session_ptr_t = std::shared_ptr<crypt_session_t>;
@@ -194,7 +194,7 @@ class libatgw_proto_inner_v1 : public proto_base {
     int switch_secret_type;
     bool has_data;
     const void *ext_data;
-    util::crypto::dh dh_ctx;
+    atfw::util::crypto::dh dh_ctx;
   };
   handshake_t handshake_;
 };

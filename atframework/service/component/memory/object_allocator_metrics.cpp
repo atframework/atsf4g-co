@@ -46,7 +46,7 @@ struct object_allocator_metrics_controller::object_allocator_metrics_storage {
 namespace {
 
 struct UTIL_SYMBOL_LOCAL object_allocator_metrics_global_cache
-    : public util::design_pattern::local_singleton<object_allocator_metrics_global_cache> {
+    : public atfw::util::design_pattern::local_singleton<object_allocator_metrics_global_cache> {
   std::recursive_mutex lock;
 
   std::unordered_map<std::string, object_allocator_metrics_controller::object_allocator_metrics_storage>
@@ -201,7 +201,7 @@ object_allocator_metrics_controller::mutable_object_allocator_metrics_for_type(:
   }
 
   if (raw_name.empty() && demangle_name.empty()) {
-    demangle_name = util::log::format("<UNKNOWN TYPE> of size {}", unit_size);
+    demangle_name = atfw::util::log::format("<UNKNOWN TYPE> of size {}", unit_size);
     raw_name = demangle_name;
   }
 
@@ -259,7 +259,7 @@ ATFRAME_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::ad
 }
 
 ATFRAME_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::foreach_object_statistics(
-    util::nostd::function_ref<void(const object_allocator_metrics&)> fn) {
+    atfw::util::nostd::function_ref<void(const object_allocator_metrics&)> fn) {
   if (object_allocator_metrics_global_cache::is_instance_destroyed()) {
     return;
   }

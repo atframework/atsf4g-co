@@ -8,14 +8,15 @@
 
 #include <random/random_generator.h>
 
+namespace atframework {
 namespace util {
 class random_engine {
  private:
   random_engine();
   ~random_engine();
 
-  static ATFRAME_SERVICE_COMPONENT_MACRO_API ::util::random::mt19937_64 &_get_common_generator();
-  static ATFRAME_SERVICE_COMPONENT_MACRO_API ::util::random::taus88 &_get_fast_generator();
+  static ATFRAME_SERVICE_COMPONENT_MACRO_API atfw::util::random::mt19937_64 &_get_common_generator();
+  static ATFRAME_SERVICE_COMPONENT_MACRO_API atfw::util::random::taus88 &_get_fast_generator();
 
  public:
   /**
@@ -73,3 +74,4 @@ class random_engine {
   }
 };
 }  // namespace util
+}  // namespace atframework

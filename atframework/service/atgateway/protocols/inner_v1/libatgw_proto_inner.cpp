@@ -45,7 +45,7 @@ TCH tolower(TCH c) {
 }
 
 static uint64_t alloc_seq() {
-  static ::util::lock::seq_alloc_u64 seq_alloc;
+  static atfw::util::lock::seq_alloc_u64 seq_alloc;
   uint64_t ret = seq_alloc.inc();
   while (0 == ret) {
     ret = seq_alloc.inc();
@@ -57,7 +57,7 @@ struct crypt_global_configure_t {
   using ptr_t = std::shared_ptr<crypt_global_configure_t>;
 
   crypt_global_configure_t(const libatgw_proto_inner_v1::crypt_conf_t &conf) : conf_(conf), inited_(false) {
-    shared_dh_context_ = util::crypto::dh::shared_context::create();
+    shared_dh_context_ = atfw::util::crypto::dh::shared_context::create();
   }
   ~crypt_global_configure_t() { close(); }
 
@@ -100,13 +100,13 @@ struct crypt_global_configure_t {
       res.first = res.second = conf_.type.c_str();
 
       LIBATGW_ENV_AUTO_SET(std::string) all_supported_type_set;
-      const std::vector<std::string> &all_supported_type_list = util::crypto::cipher::get_all_cipher_names();
+      const std::vector<std::string> &all_supported_type_list = atfw::util::crypto::cipher::get_all_cipher_names();
       for (size_t i = 0; i < all_supported_type_list.size(); ++i) {
         all_supported_type_set.insert(all_supported_type_list[i]);
       }
 
       while (nullptr != res.second) {
-        res = util::crypto::cipher::ciphertok(res.second);
+        res = atfw::util::crypto::cipher::ciphertok(res.second);
 
         if (nullptr != res.first && nullptr != res.second) {
           std::string cipher_type;
@@ -152,7 +152,7 @@ struct crypt_global_configure_t {
   libatgw_proto_inner_v1::crypt_conf_t conf_;
   bool inited_;
   LIBATGW_ENV_AUTO_SET(std::string) available_types_;
-  util::crypto::dh::shared_context::ptr_t shared_dh_context_;
+  atfw::util::crypto::dh::shared_context::ptr_t shared_dh_context_;
 
   static ptr_t &current() {
     static ptr_t ret;
@@ -249,7 +249,7 @@ int libatgw_proto_inner_v1::crypt_session_t::swap_secret(std::vector<unsigned ch
 // DEBUG CIPHER PROGRESS
 #ifdef LIBATFRAME_ATGATEWAY_ENABLE_CIPHER_DEBUG
   debuger_fout << &cipher << " => swap_secret: ";
-  util::string::dumphex(&in[0], in.size(), debuger_fout);
+  atfw::util::string::dumphex(&in[0], in.size(), debuger_fout);
   debuger_fout << " , res: " << cipher.get_last_errno() << std::endl;
 #endif
   if (ret < 0) {
@@ -351,7 +351,7 @@ void libatgw_proto_inner_v1::read(int /*ssz*/, const char * /*buff*/, size_t nre
       // directly dispatch small message
       if (buff_left_len >= msg_header_len + msg_len) {
         uint32_t check_hash =
-            util::hash::murmur_hash3_x86_32(buff_start + msg_header_len, static_cast<int>(msg_len), 0);
+            atfw::util::hash::murmur_hash3_x86_32(buff_start + msg_header_len, static_cast<int>(msg_len), 0);
         uint32_t expect_hash;
         memcpy(&expect_hash, buff_start, sizeof(uint32_t));
 
@@ -403,8 +403,8 @@ void libatgw_proto_inner_v1::read(int /*ssz*/, const char * /*buff*/, size_t nre
     data = reinterpret_cast<char *>(data) - sread;
 
     // 32bits hash code
-    uint32_t check_hash = util::hash::murmur_hash3_x86_32(reinterpret_cast<char *>(data) + msg_header_len,
-                                                          static_cast<int>(sread - msg_header_len), 0);
+    uint32_t check_hash = atfw::util::hash::murmur_hash3_x86_32(reinterpret_cast<char *>(data) + msg_header_len,
+                                                                static_cast<int>(sread - msg_header_len), 0);
     uint32_t expect_hash;
     memcpy(&expect_hash, data, sizeof(uint32_t));
     size_t msg_len = sread - msg_header_len;
@@ -638,7 +638,7 @@ int libatgw_proto_inner_v1::dispatch_handshake_start_req(
     std::pair<const char *, const char *> res;
     res.first = res.second = crypt_type.c_str();
     while (nullptr != res.second) {
-      res = util::crypto::cipher::ciphertok(res.second);
+      res = atfw::util::crypto::cipher::ciphertok(res.second);
 
       if (nullptr != res.first && nullptr != res.second) {
         std::string cipher_type;
@@ -951,7 +951,7 @@ int libatgw_proto_inner_v1::dispatch_handshake_dh_pubkey_req(
         int res = crypt_handshake_->shared_conf->shared_dh_context_->random(reinterpret_cast<void *>(verify_text),
                                                                             secret_len);
         if (0 == res) {
-          util::string::dumphex(verify_text, secret_len, verify_text + secret_len);
+          atfw::util::string::dumphex(verify_text, secret_len, verify_text + secret_len);
           ret = encrypt_data(*crypt_handshake_, verify_text + secret_len, secret_len << 1, outbuf, outsz);
         } else {
           ATFRAME_GATEWAY_ON_ERROR(res, "generate verify text failed");
@@ -1446,7 +1446,8 @@ int libatgw_proto_inner_v1::write_msg(flatbuffers::FlatBufferBuilder &builder) {
     char *buff_start = reinterpret_cast<char *>(data) + write_header_offset_;
 
     // 32bits hash
-    uint32_t hash32 = util::hash::murmur_hash3_x86_32(reinterpret_cast<const char *>(buf), static_cast<int>(len), 0);
+    uint32_t hash32 =
+        atfw::util::hash::murmur_hash3_x86_32(reinterpret_cast<const char *>(buf), static_cast<int>(len), 0);
     memcpy(buff_start, &hash32, sizeof(uint32_t));
 
     // length
@@ -1715,7 +1716,7 @@ std::string libatgw_proto_inner_v1::get_info() const {
       ss << "    " << name << " handle: crypt type=";                            \
       ss << (h->type.empty() ? "NONE" : h->type.c_str());                        \
       ss << ", crypt keybits=" << h->cipher.get_key_bits() << ", crypt secret="; \
-      util::string::dumphex(h->secret.data(), h->secret.size(), ss);             \
+      atfw::util::string::dumphex(h->secret.data(), h->secret.size(), ss);       \
       ss << std::endl;                                                           \
     }                                                                            \
   } else {                                                                       \
@@ -2096,10 +2097,10 @@ int libatgw_proto_inner_v1::encrypt_data(crypt_session_t &crypt_info, const void
 // DEBUG CIPHER PROGRESS
 #ifdef LIBATFRAME_ATGATEWAY_ENABLE_CIPHER_DEBUG
   debuger_fout << &crypt_info.cipher << " => encrypt_data - before: ";
-  util::string::dumphex(in, insz, debuger_fout);
+  atfw::util::string::dumphex(in, insz, debuger_fout);
   debuger_fout << std::endl;
   debuger_fout << &crypt_info.cipher << " => encrypt_data - after: ";
-  util::string::dumphex(buffer, len, debuger_fout);
+  atfw::util::string::dumphex(buffer, len, debuger_fout);
   debuger_fout << std::endl;
 #endif
   if (res < 0) {
@@ -2144,10 +2145,10 @@ int libatgw_proto_inner_v1::decrypt_data(crypt_session_t &crypt_info, const void
 // DEBUG CIPHER PROGRESS
 #ifdef LIBATFRAME_ATGATEWAY_ENABLE_CIPHER_DEBUG
   debuger_fout << &crypt_info.cipher << " => decrypt_data - before: ";
-  util::string::dumphex(in, insz, debuger_fout);
+  atfw::util::string::dumphex(in, insz, debuger_fout);
   debuger_fout << std::endl;
   debuger_fout << &crypt_info.cipher << " => decrypt_data - after: ";
-  util::string::dumphex(buffer, len, debuger_fout);
+  atfw::util::string::dumphex(buffer, len, debuger_fout);
   debuger_fout << std::endl;
 #endif
   if (res < 0) {
@@ -2164,8 +2165,8 @@ int libatgw_proto_inner_v1::decrypt_data(crypt_session_t &crypt_info, const void
 
 int libatgw_proto_inner_v1::global_reload(crypt_conf_t &crypt_conf) {
   // spin_lock
-  static ::util::lock::spin_lock global_proto_lock;
-  ::util::lock::lock_holder< ::util::lock::spin_lock> lh(global_proto_lock);
+  static atfw::util::lock::spin_lock global_proto_lock;
+  atfw::util::lock::lock_holder<atfw::util::lock::spin_lock> lh(global_proto_lock);
 
   detail::crypt_global_configure_t::ptr_t inst = std::make_shared<detail::crypt_global_configure_t>(crypt_conf);
   if (!inst) {

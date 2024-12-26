@@ -38,7 +38,7 @@ namespace memory {
 
 template <class T>
 struct object_allocator_default_backend {
-  using allocator = ::std::allocator<util::nostd::remove_cv_t<T>>;
+  using allocator = ::std::allocator<atfw::util::nostd::remove_cv_t<T>>;
 };
 
 template <class T>
@@ -49,14 +49,14 @@ struct object_allocator_backend : public object_allocator_default_backend<T> {};
 
 class object_allocator_manager {
  private:
-  template <class T, class = util::nostd::enable_if_t<!std::is_const<T>::value>>
+  template <class T, class = atfw::util::nostd::enable_if_t<!std::is_const<T>::value>>
   UTIL_SYMBOL_VISIBLE inline static T* to_mutable_address(T* in) noexcept {
     return in;
   }
 
-  template <class T, class = util::nostd::enable_if_t<std::is_const<T>::value>>
-  UTIL_SYMBOL_VISIBLE inline static util::nostd::remove_const_t<T>* to_mutable_address(T* in) noexcept {
-    return const_cast<util::nostd::remove_const_t<T>*>(in);
+  template <class T, class = atfw::util::nostd::enable_if_t<std::is_const<T>::value>>
+  UTIL_SYMBOL_VISIBLE inline static atfw::util::nostd::remove_const_t<T>* to_mutable_address(T* in) noexcept {
+    return const_cast<atfw::util::nostd::remove_const_t<T>*>(in);
   }
 
  public:
@@ -69,10 +69,10 @@ class object_allocator_manager {
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(const deletor&) = default;
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(deletor&&) = default;
 
-    template <class Up, class = util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
+    template <class Up, class = atfw::util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
     ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(const ::std::default_delete<Up>&) noexcept {}
 
-    template <class Up, class = util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
+    template <class Up, class = atfw::util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
     ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(const deletor<Up, ::std::default_delete<Up>>&) noexcept {}
 
     void operator()(T* ptr) const {
@@ -103,26 +103,30 @@ class object_allocator_manager {
       new (backend_deletor_buffer()) BackendDelete(::std::forward<D>(d));
     }
 
-    template <class Up, class UpBackendDelete, class = util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
+    template <class Up, class UpBackendDelete,
+              class = atfw::util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
     ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(const deletor<Up, UpBackendDelete>& other) noexcept(
         std::is_nothrow_constructible<BackendDelete, const UpBackendDelete&>::value) {
       new (backend_deletor_buffer()) BackendDelete(*other.backend_deletor());
     }
 
-    template <class Up, class UpBackendDelete, class = util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
+    template <class Up, class UpBackendDelete,
+              class = atfw::util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
     ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(deletor<Up, UpBackendDelete>&& other) noexcept(
         std::is_nothrow_constructible<BackendDelete, UpBackendDelete&&>::value) {
       new (backend_deletor_buffer()) BackendDelete(std::move(*other.backend_deletor()));
     }
 
-    template <class Up, class UpBackendDelete, class = util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
+    template <class Up, class UpBackendDelete,
+              class = atfw::util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
     ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor& operator=(const deletor<Up, UpBackendDelete>& other) noexcept(
         std::is_nothrow_assignable<BackendDelete, const UpBackendDelete&>::value) {
       *backend_deletor() = *other.backend_deletor();
       return *this;
     }
 
-    template <class Up, class UpBackendDelete, class = util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
+    template <class Up, class UpBackendDelete,
+              class = atfw::util::nostd::enable_if_t<::std::is_convertible<Up*, T*>::value>>
     ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor& operator=(deletor<Up, UpBackendDelete>&& other) noexcept(
         std::is_nothrow_assignable<BackendDelete, UpBackendDelete&&>::value) {
       *backend_deletor() = std::move(*other.backend_deletor());
@@ -161,7 +165,7 @@ class object_allocator_manager {
       return reinterpret_cast<const BackendDelete*>(backend_deletor_buffer());
     }
 
-    util::nostd::aligned_storage_t<sizeof(BackendDelete), alignof(BackendDelete)> backend_delete_buffer_;
+    atfw::util::nostd::aligned_storage_t<sizeof(BackendDelete), alignof(BackendDelete)> backend_delete_buffer_;
   };
 
   template <class T, class BackendAllocator = ::std::allocator<T>>
@@ -254,7 +258,7 @@ class object_allocator_manager {
 
     inline pointer address(reference x) const noexcept { return &x; }
 
-    template <class = util::nostd::enable_if_t<!std::is_const<pointer>::value>>
+    template <class = atfw::util::nostd::enable_if_t<!std::is_const<pointer>::value>>
     inline const_pointer address(const_reference x) const noexcept {
       return &x;
     }
@@ -373,7 +377,7 @@ class object_allocator_manager {
       return reinterpret_cast<const background_allocator_type*>(backend_allocator_buffer());
     }
 
-    util::nostd::aligned_storage_t<sizeof(background_allocator_type), alignof(background_allocator_type)>
+    atfw::util::nostd::aligned_storage_t<sizeof(background_allocator_type), alignof(background_allocator_type)>
         backend_allocator_buffer_;
   };
 
@@ -484,9 +488,10 @@ class object_allocator_manager {
 #endif
 
   template <class T, class... Args>
-  UTIL_SYMBOL_VISIBLE inline static util::memory::strong_rc_ptr<T> make_strong_rc(Args&&... args) {
+  UTIL_SYMBOL_VISIBLE inline static atfw::util::memory::strong_rc_ptr<T> make_strong_rc(Args&&... args) {
     allocator<T, typename object_allocator_backend<T>::allocator> alloc;
-    util::memory::strong_rc_ptr<T> ret = util::memory::allocate_strong_rc<T>(alloc, std::forward<Args>(args)...);
+    atfw::util::memory::strong_rc_ptr<T> ret =
+        atfw::util::memory::allocate_strong_rc<T>(alloc, std::forward<Args>(args)...);
 
     if (ret) {
       object_allocator_metrics_controller::add_constructor_counter(
@@ -499,10 +504,11 @@ class object_allocator_manager {
   }
 
   template <class T, class Alloc, class... Args>
-  UTIL_SYMBOL_VISIBLE inline static util::memory::strong_rc_ptr<type_traits::non_array<T>> allocate_strong_rc(
+  UTIL_SYMBOL_VISIBLE inline static atfw::util::memory::strong_rc_ptr<type_traits::non_array<T>> allocate_strong_rc(
       const Alloc& backend_alloc, Args&&... args) {
     allocator<T, Alloc> alloc{backend_alloc};
-    util::memory::strong_rc_ptr<T> ret = util::memory::allocate_strong_rc<T>(alloc, std::forward<Args>(args)...);
+    atfw::util::memory::strong_rc_ptr<T> ret =
+        atfw::util::memory::allocate_strong_rc<T>(alloc, std::forward<Args>(args)...);
 
     if (ret) {
       object_allocator_metrics_controller::add_constructor_counter(

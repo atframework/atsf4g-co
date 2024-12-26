@@ -467,11 +467,11 @@ class gateway_module : public ::atapp::module_impl {
 
   int proto_inner_callback_on_error(::atframe::gateway::proto_base *, const char *filename, int line, int errcode,
                                     const char *errmsg) {
-    if (::util::log::log_wrapper::check_level(WDTLOGGETCAT(::util::log::log_wrapper::categorize_t::DEFAULT),
-                                              ::util::log::log_wrapper::level_t::LOG_LW_ERROR)) {
-      WDTLOGGETCAT(::util::log::log_wrapper::categorize_t::DEFAULT)
-          ->log(::util::log::log_wrapper::caller_info_t(::util::log::log_wrapper::level_t::LOG_LW_ERROR, "Error",
-                                                        filename, line, "anonymous"),
+    if (atfw::util::log::log_wrapper::check_level(WDTLOGGETCAT(atfw::util::log::log_wrapper::categorize_t::DEFAULT),
+                                                  atfw::util::log::log_wrapper::level_t::LOG_LW_ERROR)) {
+      WDTLOGGETCAT(atfw::util::log::log_wrapper::categorize_t::DEFAULT)
+          ->log(atfw::util::log::log_wrapper::caller_info_t(atfw::util::log::log_wrapper::level_t::LOG_LW_ERROR,
+                                                            "Error", filename, line, "anonymous"),
                 "error code %d, msg: %s", errcode, errmsg);
     }
     return 0;
@@ -485,11 +485,11 @@ class gateway_module : public ::atapp::module_impl {
     }
 
     ::atframe::gateway::session::id_t sess_id = 0;
-    util::string::str2int(sess_id, params[0]->to_string());
+    atfw::util::string::str2int(sess_id, params[0]->to_string());
 
     int reason = ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF;
     if (params.get_params_number() > 1) {
-      util::string::str2int(reason, params[1]->to_string());
+      atfw::util::string::str2int(reason, params[1]->to_string());
     }
 
     // do not allow reconnect
@@ -510,11 +510,11 @@ class gateway_module : public ::atapp::module_impl {
     }
 
     ::atframe::gateway::session::id_t sess_id = 0;
-    util::string::str2int(sess_id, params[0]->to_string());
+    atfw::util::string::str2int(sess_id, params[0]->to_string());
 
     int reason = ::atframe::gateway::close_reason_t::EN_CRT_RESET;
     if (params.get_params_number() > 1) {
-      util::string::str2int(reason, params[1]->to_string());
+      atfw::util::string::str2int(reason, params[1]->to_string());
     }
 
     // do not allow reconnect
@@ -664,18 +664,18 @@ int main(int argc, char *argv[]) {
   // project directory
   {
     std::string proj_dir;
-    util::file_system::dirname(__FILE__, 0, proj_dir, 4);
-    util::log::log_formatter::set_project_directory(proj_dir.c_str(), proj_dir.size());
+    atfw::util::file_system::dirname(__FILE__, 0, proj_dir, 4);
+    atfw::util::log::log_formatter::set_project_directory(proj_dir.c_str(), proj_dir.size());
   }
 
   // setup crypt algorithms
-  util::crypto::cipher::init_global_algorithm();
+  atfw::util::crypto::cipher::init_global_algorithm();
 
   // setup module
   app.add_module(gw_mod);
 
   // setup cmd
-  util::cli::cmd_option_ci::ptr_type cmgr = app.get_command_manager();
+  atfw::util::cli::cmd_option_ci::ptr_type cmgr = app.get_command_manager();
   cmgr->bind_cmd("kickoff", &gateway_module::cmd_on_kickoff, gw_mod.get())
       ->set_help_msg(
           "kickoff <session id> [reason]          kickoff a session, session can not be reconnected anymore.");
@@ -691,7 +691,7 @@ int main(int argc, char *argv[]) {
   int ret = app.run(uv_default_loop(), argc, (const char **)argv, nullptr);
 
   // cleanup crypt algorithms
-  util::crypto::cipher::cleanup_global_algorithm();
+  atfw::util::crypto::cipher::cleanup_global_algorithm();
 
   return ret;
 }

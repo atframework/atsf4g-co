@@ -248,8 +248,8 @@ struct UTIL_SYMBOL_VISIBLE
  private:
   // allocate
   template <typename AllocOther>
-  UTIL_SYMBOL_VISIBLE inline static auto _S_allocate(AllocOther& __a, size_type __n, const_void_pointer __hint,
-                                                     int) -> decltype(__a.allocate(__n, __hint)) {
+  UTIL_SYMBOL_VISIBLE inline static auto _S_allocate(AllocOther& __a, size_type __n, const_void_pointer __hint, int)
+      -> decltype(__a.allocate(__n, __hint)) {
     return __a.allocate(__n, __hint);
   }
 
@@ -274,14 +274,14 @@ struct UTIL_SYMBOL_VISIBLE
 
   template <typename U, typename... _Args>
   UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR
-      util::nostd::enable_if_t<__construct_helper<U, _Args...>::value, void>
+      atfw::util::nostd::enable_if_t<__construct_helper<U, _Args...>::value, void>
       _S_construct(allocator_type& __a, U* __p,
                    _Args&&... __args) noexcept(noexcept(__a.construct(__p, std::forward<_Args>(__args)...))) {
     __a.construct(__p, std::forward<_Args>(__args)...);
   }
 
   template <typename U, typename... _Args>
-  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR util::nostd::enable_if_t<
+  UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR atfw::util::nostd::enable_if_t<
       !__construct_helper<U, _Args...>::value && ::std::is_constructible<U, _Args...>::value, void>
   _S_construct(allocator_type&, U* __p, _Args&&... __args) noexcept(std::is_nothrow_constructible<U, _Args...>::value) {
     ::atfw::memory::object_allocator_metrics_controller::add_constructor_counter_template<value_type>(

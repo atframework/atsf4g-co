@@ -25,7 +25,7 @@ class ATFRAME_SERVICE_COMPONENT_MACRO_API_HEAD_ONLY timestamp_id_allocator {
   static constexpr const value_type npos = 0; /** invalid key **/
  public:
   value_type allocate() noexcept {
-    static util::lock::atomic_int_type<value_type> seq_alloc(255);
+    static atfw::util::lock::atomic_int_type<value_type> seq_alloc(255);
 
     static constexpr const size_t seq_bits = sizeof(value_type) * 4;
     static constexpr const value_type time_mask =

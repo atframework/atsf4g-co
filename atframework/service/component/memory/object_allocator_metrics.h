@@ -138,7 +138,7 @@ UTIL_FORCEINLINE static void add_deallocate_counter_template(size_t count) {
 }
 
 ATFRAME_SERVICE_COMPONENT_MACRO_API static void foreach_object_statistics(
-    util::nostd::function_ref<void(const object_allocator_metrics&)> fn);
+    atfw::util::nostd::function_ref<void(const object_allocator_metrics&)> fn);
 };  // namespace atframework
 
 }  // namespace memory

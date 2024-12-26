@@ -81,36 +81,38 @@ message logic_hpa_metrics {
   bool enable = 1;
 
   // 拉取指标的间隔
-  google.protobuf.Duration pull_interval = 2 [(atapp.protocol.CONFIGURE) = { default_value: "180s" min_value: "1s" }];
-  google.protobuf.Duration pull_retry_interval = 3
+  google.protobuf.Duration pull_interval = 11 [(atapp.protocol.CONFIGURE) = { default_value: "180s" min_value: "1s" }];
+  google.protobuf.Duration pull_retry_interval = 12
       [(atapp.protocol.CONFIGURE) = { default_value: "30s" min_value: "1s" }];
   // 拉取指标的请求配置
-  logic_hpa_pull_request pull_request = 4;
+  logic_hpa_pull_request pull_request = 13;
   // 拉取指标的SSL配置
-  logic_hpa_ssl pull_ssl = 5;
+  logic_hpa_ssl pull_ssl = 14;
   // 拉取指标名的组成规则
-  logic_hpa_pull_metrics_name_mode pull_metrics_name_mode = 6;
+  logic_hpa_pull_metrics_name_mode pull_metrics_name_mode = 15;
+  // 拉取默认的时间范围倍率(千分率,考虑service->本地agent->远程agent->PodMonitor/ServiceMonitor链路中，每层都有可能有间隔延迟)
+  int32 pull_default_time_range_multiplying_factor = 16 [(atapp.protocol.CONFIGURE) = { default_value: "4500" }];
 
   // 指标的公共附加写出标签
   //   建议提取 workload的namespace和name作为写出标签以支持多版本和蓝绿发布
-  map<string, string> labels = 7;
+  map<string, string> labels = 21;
 
   // 指标的公共附加读规则标签
   //   selector默认为=操作符，可以手动设置为 =,!=,=~或!~
   //   详见: https://prometheus.io/docs/prometheus/latest/querying/basics/#instant-vector-selectors
   //   建议提取 workload的namespace和name作为筛选标签以支持多版本和蓝绿发布
-  map<string, string> selectors = 8;
+  map<string, string> selectors = 22;
 
   // 以下selectors不自动追加,否则某些内置筛选规则会自动添加到选择器列表里
-  // （默认情况下会自动设置 service_namespace, service_name, deployment_environment_name, hpa_target_kind, hpa_target_name,
-  // hpa_target_api_version 。job属性由于会被exporter重置所以不作为自动添加属性）
-  repeated string without_auto_selectors = 9;
+  // （默认情况下会自动设置 service_namespace, service_name, deployment_environment_name, hpa_target_kind,
+  // hpa_target_name, hpa_target_api_version 。job属性由于会被exporter重置所以不作为自动添加属性）
+  repeated string without_auto_selectors = 23;
 
   // 写出预期Pod数的指标名（External指标）
-  string metrics_name_expect_replicas = 11;
+  string metrics_name_expect_replicas = 31;
 
   // 写出状态Pod Index的指标名（External指标）
-  string metrics_name_stateful_index = 12;
+  string metrics_name_stateful_index = 32;
 }
 
 enum logic_hpa_policy_aggregation_operator {

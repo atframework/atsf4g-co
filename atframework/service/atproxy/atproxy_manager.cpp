@@ -72,7 +72,7 @@ int atproxy_manager::init() {
 }
 
 int atproxy_manager::tick() {
-  time_t now = util::time::time_utility::get_sys_now();
+  time_t now = atfw::util::time::time_utility::get_sys_now();
 
   int ret = 0;
   do {
@@ -179,7 +179,7 @@ const char *atproxy_manager::name() const { return "atproxy manager"; }
 int atproxy_manager::set(atapp::etcd_module::node_info_t &etcd_node) {
   // TODO Support name only node
   check_info_t ci;
-  ci.timeout_sec = util::time::time_utility::get_sys_now();
+  ci.timeout_sec = atfw::util::time::time_utility::get_sys_now();
   ci.proxy_id = etcd_node.node_discovery.id();
 
   proxy_set_t::iterator iter = proxy_set_.find(etcd_node.node_discovery.id());
@@ -226,7 +226,7 @@ int atproxy_manager::reset(node_list_t &all_proxys) {
     }
 
     check_info_t ci;
-    ci.timeout_sec = util::time::time_utility::get_sys_now();
+    ci.timeout_sec = atfw::util::time::time_utility::get_sys_now();
     ci.proxy_id = iter->etcd_node.node_discovery.id();
     (*iter).next_action_time = ci.timeout_sec;
     (*iter).is_available = check_available((*iter).etcd_node);
@@ -251,12 +251,12 @@ int atproxy_manager::on_disconnected(const ::atapp::app &app, ::atapp::app::app_
     // when stoping bus noe may be unavailable
     if (!app.check_flag(::atapp::app::flag_t::STOPING)) {
       if (app.get_bus_node() && app.get_bus_node()->get_conf().retry_interval > 0) {
-        ci.timeout_sec = util::time::time_utility::get_sys_now() + app.get_bus_node()->get_conf().retry_interval;
+        ci.timeout_sec = atfw::util::time::time_utility::get_sys_now() + app.get_bus_node()->get_conf().retry_interval;
       } else {
-        ci.timeout_sec = util::time::time_utility::get_sys_now() + 1;
+        ci.timeout_sec = atfw::util::time::time_utility::get_sys_now() + 1;
       }
     } else {
-      ci.timeout_sec = util::time::time_utility::get_sys_now() - 1;
+      ci.timeout_sec = atfw::util::time::time_utility::get_sys_now() - 1;
     }
 
     if (iter->second.next_action_time < ci.timeout_sec) {
