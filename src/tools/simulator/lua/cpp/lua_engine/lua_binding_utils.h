@@ -35,7 +35,7 @@ class lua_auto_block {
   int stack_top_;
 };
 
-#if !(defined(LIBATFRAME_UTILS_ENABLE_RTTI) && LIBATFRAME_UTILS_ENABLE_RTTI)
+#if !(defined(ATFRAMEWORK_UTILS_ENABLE_RTTI) && ATFRAMEWORK_UTILS_ENABLE_RTTI)
 std::string lua_binding_userdata_generate_metatable_name();
 #endif
 
@@ -43,7 +43,7 @@ template <typename TClass>
 struct lua_binding_metatable_info {
   using value_type = TClass;
   static const char *get_lua_metatable_name() {
-#if defined(LIBATFRAME_UTILS_ENABLE_RTTI) && LIBATFRAME_UTILS_ENABLE_RTTI
+#if defined(ATFRAMEWORK_UTILS_ENABLE_RTTI) && ATFRAMEWORK_UTILS_ENABLE_RTTI
     return typeid(value_type).name();
 #else
     if (!metatable_name_.empty()) {
@@ -55,12 +55,12 @@ struct lua_binding_metatable_info {
 #endif
   }
 
-#if !(defined(LIBATFRAME_UTILS_ENABLE_RTTI) && LIBATFRAME_UTILS_ENABLE_RTTI)
+#if !(defined(ATFRAMEWORK_UTILS_ENABLE_RTTI) && ATFRAMEWORK_UTILS_ENABLE_RTTI)
   static std::string metatable_name_;
 #endif
 };
 
-#if !(defined(LIBATFRAME_UTILS_ENABLE_RTTI) && LIBATFRAME_UTILS_ENABLE_RTTI)
+#if !(defined(ATFRAMEWORK_UTILS_ENABLE_RTTI) && ATFRAMEWORK_UTILS_ENABLE_RTTI)
 template <typename TClass>
 std::string lua_binding_metatable_info<TClass>::metatable_name_;
 #endif

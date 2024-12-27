@@ -29,7 +29,7 @@
 #include <ostream>
 #include <string>
 #include <vector>
-#if LIBATFRAME_UTILS_ENABLE_EXCEPTION
+#if ATFRAMEWORK_UTILS_ENABLE_EXCEPTION
 #  include <exception>
 #endif
 
@@ -930,7 +930,7 @@ class UTIL_SYMBOL_LOCAL PrometheusFileBackend {
       return;
     }
 
-#if LIBATFRAME_UTILS_ENABLE_EXCEPTION
+#if ATFRAMEWORK_UTILS_ENABLE_EXCEPTION
     try {
 #endif
 
@@ -990,7 +990,7 @@ class UTIL_SYMBOL_LOCAL PrometheusFileBackend {
           background_flush_thread->detach();
         }
       }));
-#if LIBATFRAME_UTILS_ENABLE_EXCEPTION
+#if ATFRAMEWORK_UTILS_ENABLE_EXCEPTION
     } catch (std::exception &e) {
       FWLOGERROR("SpawnBackgroundWorkThread for PrometheusFileExporter but got exception: {}", e.what());
     } catch (...) {

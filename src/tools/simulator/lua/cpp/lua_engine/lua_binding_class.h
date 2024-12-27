@@ -31,7 +31,7 @@ struct convert_proxy_to_class;
 template <typename TClass, typename TProxy>
 struct convert_proxy_to_class<TClass, TProxy, true> {
   static TClass *convert(TProxy &proxy_object) {
-#if defined(LIBATFRAME_UTILS_ENABLE_RTTI) && LIBATFRAME_UTILS_ENABLE_RTTI
+#if defined(ATFRAMEWORK_UTILS_ENABLE_RTTI) && ATFRAMEWORK_UTILS_ENABLE_RTTI
     return dynamic_cast<TClass *>(&proxy_object);
 #else
     return static_cast<TClass *>(&proxy_object);
@@ -42,7 +42,7 @@ struct convert_proxy_to_class<TClass, TProxy, true> {
 template <typename TClass, typename TProxy>
 struct convert_proxy_to_class<TClass, TProxy, false> {
   static TClass *convert(TProxy &proxy_object) {
-#if defined(LIBATFRAME_UTILS_ENABLE_RTTI) && LIBATFRAME_UTILS_ENABLE_RTTI
+#if defined(ATFRAMEWORK_UTILS_ENABLE_RTTI) && ATFRAMEWORK_UTILS_ENABLE_RTTI
     return dynamic_cast<TClass *>(proxy_object());
 #else
     return static_cast<TClass *>(proxy_object());
@@ -228,7 +228,7 @@ class lua_binding_class : public atfw::util::design_pattern::noncopyable {
 
     member_proxy_method_t *fn_ptr = lua_binding_placement_new_and_delete<member_proxy_method_t>::create(state);
     *fn_ptr = [fn](lua_State *L, value_type *pobj) {
-#if defined(LIBATFRAME_UTILS_ENABLE_RTTI) && LIBATFRAME_UTILS_ENABLE_RTTI
+#if defined(ATFRAMEWORK_UTILS_ENABLE_RTTI) && ATFRAMEWORK_UTILS_ENABLE_RTTI
       return detail::unwraper_member_fn<R, TClassIn, TParam...>::LuaCFunction(L, dynamic_cast<TClassIn *>(pobj), fn);
 #else
       return detail::unwraper_member_fn<R, TClassIn, TParam...>::LuaCFunction(L, static_cast<TClassIn *>(pobj), fn);
@@ -259,7 +259,7 @@ class lua_binding_class : public atfw::util::design_pattern::noncopyable {
 
     member_proxy_method_t *fn_ptr = lua_binding_placement_new_and_delete<member_proxy_method_t>::create(state);
     *fn_ptr = [fn](lua_State *L, const value_type *pobj) {
-#if defined(LIBATFRAME_UTILS_ENABLE_RTTI) && LIBATFRAME_UTILS_ENABLE_RTTI
+#if defined(ATFRAMEWORK_UTILS_ENABLE_RTTI) && ATFRAMEWORK_UTILS_ENABLE_RTTI
       return detail::unwraper_member_fn<R, TClassIn, TParam...>::LuaCFunction(L, dynamic_cast<const TClassIn *>(pobj),
                                                                               fn);
 #else

@@ -92,7 +92,7 @@ UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::Repeat
   dst.CopyFrom(src);
 }
 
-#if defined(LIBATFRAME_UTILS_ENABLE_GSL_WITH_GSL_LITE) && LIBATFRAME_UTILS_ENABLE_GSL_WITH_GSL_LITE
+#if defined(ATFRAMEWORK_UTILS_ENABLE_GSL_WITH_GSL_LITE) && ATFRAMEWORK_UTILS_ENABLE_GSL_WITH_GSL_LITE
 template <class TField, class TValue>
 inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst, gsl::span<TValue> src) {
 #else
