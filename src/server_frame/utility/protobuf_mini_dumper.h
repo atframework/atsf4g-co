@@ -34,14 +34,14 @@
 SERVER_FRAME_API std::string protobuf_mini_dumper_get_readable(const ::google::protobuf::Message &msg);
 
 /**
- * @brief 返回错误码文本描述
- * @param error_code 错误码，需要定义在MTSvrErrorDefine或MTErrorDefine里
+ * @brief 返回错误码文本描述,自动组装插件描述
+ * @param error_code 错误码，需要定义在 EnSysErrorType 或 EnErrorCode 里
  * @return 错误码的文本描述，永远不会返回NULL
  */
 SERVER_FRAME_API gsl::string_view protobuf_mini_dumper_get_error_msg(int error_code);
 
 /**
- * @brief 返回指定枚举类型的错误码文本描述
+ * @brief 返回指定枚举类型的错误码文本描述,自动组装插件描述
  * @param error_code 错误码
  * @return 错误码的文本描述，永远不会返回NULL
  */
@@ -50,7 +50,7 @@ SERVER_FRAME_API std::string protobuf_mini_dumper_get_error_msg(int error_code,
                                                                 bool fallback_common_errmsg);
 
 /**
- * @brief 返回指定枚举类型的错误码文本描述
+ * @brief 返回指定枚举类型的错误码文本描述,自动组装插件描述
  * @param error_code 错误码
  * @return 错误码的文本描述
  */
@@ -58,9 +58,17 @@ SERVER_FRAME_API gsl::string_view protobuf_mini_dumper_get_enum_name(
     int32_t error_code, const ::google::protobuf::EnumDescriptor *enum_desc);
 
 /**
+ * @brief 返回错误码文本描述,自动组装插件描述
+ * @param error_code 错误码，需要定义在 EnSysErrorType 或 EnErrorCode 里
+ * @return 错误码的文本描述
+ */
+SERVER_FRAME_API gsl::string_view protobuf_mini_dumper_get_close_reason(int reason);
+
+/**
  * @brief protobuf 数据拷贝
- * @note 加这个接口是为了解决protobuf的CopyFrom重载了CopyFrom(const
- * Message&)。如果类型不匹配只能在运行时发现抛异常。加一层这个接口是为了提到编译期
+ * @note 加这个接口是为了解决protobuf的CopyFrom重载了CopyFrom(const Message&)。
+         如果类型不匹配只能在运行时发现抛异常。加一层这个接口是为了提到编译期。
+         同时抹平Message, RepeatedField 和 RepeatedPtrField 的差异
  * @param dst 拷贝目标
  * @param src 拷贝源
  */
@@ -94,12 +102,14 @@ UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::Repeat
 
 #if defined(ATFRAMEWORK_UTILS_ENABLE_GSL_WITH_GSL_LITE) && ATFRAMEWORK_UTILS_ENABLE_GSL_WITH_GSL_LITE
 template <class TField, class TValue>
-inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst, gsl::span<TValue> src) {
+UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst,
+                                                      gsl::span<TValue> src)
 #else
 template <class TField, class TValue, size_t SpanExtent>
 UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst,
-                                                      gsl::span<TValue, SpanExtent> src) {
+                                                      gsl::span<TValue, SpanExtent> src)
 #endif
+{
   if (dst.empty() && src.empty()) {
     return;
   }
@@ -119,10 +129,20 @@ UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::Repeat
   }
 }
 
+template <class TKeyField, class TValueField>
+UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::Map<TKeyField, TValueField> &dst,
+                                                      const ::google::protobuf::Map<TKeyField, TValueField> &src) {
+  if (&src == &dst) {
+    return;
+  }
+  dst = src;
+}
+
 /**
  * @brief protobuf 数据移动，移动前检查Arena
- * @note 加这个接口是为了解决protobuf的CopyFrom重载了CopyFrom(const
- * Message&)。如果类型不匹配只能在运行时发现抛异常。加一层这个接口是为了提到编译期
+ * @note 加这个接口是为了解决protobuf的CopyFrom重载了CopyFrom(const Message&)。
+         如果类型不匹配只能在运行时发现抛异常。加一层这个接口是为了提到编译期。
+         同时抹平Message, RepeatedField 和 RepeatedPtrField 的差异
  * @param dst 拷贝目标
  * @param src 拷贝源
  */
@@ -155,6 +175,12 @@ UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(::google::protobuf::Repeat
   src.Clear();
 }
 
+/**
+ * @brief protobuf 数据移动，移动前检查Arena
+ * @note 自动处理跨Arena移动，同时抹平Message, RepeatedField 和 RepeatedPtrField 的差异
+ * @param dst 拷贝目标
+ * @param src 拷贝源
+ */
 template <class TField>
 UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(::google::protobuf::RepeatedPtrField<TField> &dst,
                                                       ::google::protobuf::RepeatedPtrField<TField> &&src) {
@@ -170,6 +196,23 @@ UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(::google::protobuf::Repeat
   src.Clear();
 }
 
+template <class TKeyField, class TValueField>
+UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(::google::protobuf::Map<TKeyField, TValueField> &dst,
+                                                      ::google::protobuf::Map<TKeyField, TValueField> &&src) {
+  if (&src == &dst) {
+    return;
+  }
+  dst = std::move(src);
+}
+
+/**
+ * @brief 按下标移除元素，和 DeleteSubrange 的区别是这里会快速移动，可能会改变元素顺序。但会减少元素移动
+ * @note 复杂度：最高 O(n)
+ *
+ * @param arr 容器
+ * @param index 下标
+ * @return 删除的元素个数
+ */
 template <class TEle>
 UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_at(::google::protobuf::RepeatedPtrField<TEle> &arr, int index) {
   if (index < 0 || index >= arr.size()) {
@@ -184,9 +227,16 @@ UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_at(::google::protobuf::Repeated
   return 1;
 }
 
+/**
+ * @brief 按条件移除元素，和 DeleteSubrange 的区别是这里会快速移动，可能会改变元素顺序。但会减少元素移动
+ * @note 复杂度：最高 O(n)
+ *
+ * @param arr 容器
+ * @param fn 条件函数
+ * @return 删除的元素个数
+ */
 template <class TEle, class TCheckFn>
-UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_if(::google::protobuf::RepeatedPtrField<TEle> &arr,
-                                                    const TCheckFn &fn) {
+UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_if(::google::protobuf::RepeatedPtrField<TEle> &arr, TCheckFn &&fn) {
   int new_index = 0;
   int old_index = 0;
   int ret = 0;
@@ -208,6 +258,14 @@ UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_if(::google::protobuf::Repeated
   return ret;
 }
 
+/**
+ * @brief 按条件移除元素，和 DeleteSubrange 的区别是这里会快速移动，可能会改变元素顺序。但会减少元素移动
+ * @note 复杂度：最高 O(n)
+ *
+ * @param arr 容器
+ * @param fn 条件函数
+ * @return 删除的元素个数
+ */
 template <class TEle, class TCheckFn>
 UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_if(::google::protobuf::RepeatedField<TEle> &arr, TCheckFn &&fn) {
   int new_index = 0;
@@ -249,7 +307,7 @@ SERVER_FRAME_API google::protobuf::Timestamp protobuf_from_system_clock(std::chr
  * @return 标准时间周期
  */
 template <class DurationType = std::chrono::system_clock::duration>
-UTIL_SYMBOL_VISIBLE DurationType protobuf_to_chrono_duration(const google::protobuf::Duration &dur) {
+UTIL_SYMBOL_VISIBLE inline DurationType protobuf_to_chrono_duration(const google::protobuf::Duration &dur) {
   return std::chrono::duration_cast<DurationType>(std::chrono::seconds{dur.seconds()}) +
          std::chrono::duration_cast<DurationType>(std::chrono::nanoseconds{dur.nanos()});
 }
@@ -260,7 +318,7 @@ UTIL_SYMBOL_VISIBLE DurationType protobuf_to_chrono_duration(const google::proto
  * @return Prototbuf well known 时间周期类型
  */
 template <class DurationType = std::chrono::system_clock::duration>
-UTIL_SYMBOL_VISIBLE google::protobuf::Timestamp protobuf_from_chrono_duration(DurationType dur) {
+UTIL_SYMBOL_VISIBLE inline google::protobuf::Timestamp protobuf_from_chrono_duration(DurationType dur) {
   google::protobuf::Timestamp ret;
   ret.set_seconds(static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(dur).count()));
   ret.set_nanos(static_cast<int32_t>(
