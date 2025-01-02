@@ -33,6 +33,7 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <config/extern_service_types.h>
 #include <config/server_frame_build_feature.h>
 
 #include <opentelemetry/common/attribute_value.h>
@@ -43,33 +44,35 @@
 #include <chrono>
 #include <cstddef>
 #include <ctime>
-#include <functional>
 #include <list>
 #include <memory>
 #include <queue>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 class logic_server_common_module;
 
-struct logic_server_common_module_configure {
-  bool enable_watch_battlesvr;
-
-  logic_server_common_module_configure();
-};
-
-int logic_server_setup_common(atapp::app& app, const logic_server_common_module_configure& conf);
+struct UTIL_SYMBOL_VISIBLE logic_server_common_module_configure{
+    inline logic_server_common_module_configure() noexcept {}};
 
 /**
- * @brief 获取共用模块
+ * @brief 初始化公共模块
+ *
+ * @param app 要插入的atapp实例
+ * @param conf 配置选项
+ * @return SERVER_FRAME_API
+ */
+SERVER_FRAME_API int logic_server_setup_common(atapp::app& app, const logic_server_common_module_configure& conf);
+
+/**
+ * @brief 获取公共模块
  * @note 使用前一定要判NULL,在进程stop过程中，模块将会被关闭．此时该函数返回 NULL
  * @return 初始化后,stop前,返回模块地址,否则返回NULL
  */
-logic_server_common_module* logic_server_last_common_module();
+SERVER_FRAME_API logic_server_common_module* logic_server_last_common_module();
 
-struct logic_server_timer {
+struct UTIL_SYMBOL_VISIBLE logic_server_timer {
   std::chrono::system_clock::time_point timeout;
   uint64_t task_id;
   uintptr_t message_type;
@@ -94,21 +97,6 @@ class logic_server_common_module : public atapp::module_impl {
   using etcd_keepalive_ptr_t = std::shared_ptr<atapp::etcd_keepalive>;
   using etcd_watcher_ptr_t = std::shared_ptr<atapp::etcd_watcher>;
 
-  struct battle_service_node_t {
-    uint64_t server_id;
-    std::string version;
-
-    bool operator==(const battle_service_node_t& other) const;
-  };
-
-  struct battle_service_node_hash_t {
-    size_t operator()(const battle_service_node_t& in) const;
-  };
-
-  using battle_service_set_t = std::unordered_set<battle_service_node_t, battle_service_node_hash_t>;
-  using battle_service_version_map_t = std::unordered_map<std::string, battle_service_set_t>;
-  using battle_service_id_map_t = std::unordered_map<uint64_t, battle_service_node_t>;
-
   struct stats_data_t {
     // cross thread
     std::atomic<uint64_t> collect_sequence;
@@ -127,33 +115,34 @@ class logic_server_common_module : public atapp::module_impl {
   };
 
  public:
-  explicit logic_server_common_module(const logic_server_common_module_configure& static_conf);
-  ~logic_server_common_module();
+  SERVER_FRAME_API explicit logic_server_common_module(const logic_server_common_module_configure& static_conf);
+  SERVER_FRAME_API ~logic_server_common_module();
 
-  int init() override;
+  SERVER_FRAME_API int init() override;
 
-  void ready() override;
+  SERVER_FRAME_API void ready() override;
 
-  int reload() override;
+  SERVER_FRAME_API int reload() override;
 
-  int stop() override;
+  SERVER_FRAME_API int stop() override;
 
-  int timeout() override;
+  SERVER_FRAME_API int timeout() override;
 
-  void cleanup() override;
+  SERVER_FRAME_API void cleanup() override;
 
-  const char* name() const override;
+  SERVER_FRAME_API const char* name() const override;
 
-  int tick() override;
+  SERVER_FRAME_API int tick() override;
 
-  int debug_stop_app();
+  SERVER_FRAME_API int debug_stop_app();
 
-  bool is_closing() const noexcept;
+  SERVER_FRAME_API bool is_closing() const noexcept;
 
-  bool is_runtime_active() const noexcept;
+  SERVER_FRAME_API bool is_runtime_active() const noexcept;
 
-  atapp::etcd_cluster* get_etcd_cluster();
-  std::shared_ptr<::atapp::etcd_module> get_etcd_module();
+  SERVER_FRAME_API atapp::etcd_cluster* get_etcd_cluster();
+
+  SERVER_FRAME_API std::shared_ptr<::atapp::etcd_module> get_etcd_module();
 
   /**
    * @brief 添加自定义的etcd keepalive 数据
@@ -161,41 +150,45 @@ class logic_server_common_module : public atapp::module_impl {
    * @param value 值，如果留空则会填入服务器信息，并传出
    * @return 成功返回keepalive对象，失败返回 nullptr
    */
-  etcd_keepalive_ptr_t add_keepalive(const std::string& path, std::string& value);
+  SERVER_FRAME_API etcd_keepalive_ptr_t add_keepalive(const std::string& path, std::string& value);
 
-  std::string make_battle_etcd_version_path(const std::string& version) const;
-  static bool parse_battle_etcd_version_path(const std::string& path, std::string& version, uint64_t& svr_id);
+  /**
+   * @brief 获取指定服务类型的服务发现版本号（本地）
+   *
+   * @param service_type_id 服务类型ID
+   * @return （本地）服务发现版本号
+   */
+  SERVER_FRAME_API int64_t
+  get_service_discovery_version(atframe::component::logic_service_type::type service_type_id) const noexcept;
 
-  void add_battlesvr_index(const battle_service_node_t& node);
-  void remove_battlesvr_index(uint64_t server_id);
-  const battle_service_set_t* get_battlesvr_set_by_version(const std::string& version) const;
-  inline const battle_service_id_map_t& get_battlesvr_set_all() const { return battle_service_id_; }
-  const battle_service_version_map_t& get_battlesvr_set_all_by_version() const { return battle_service_version_map_; }
-  inline int64_t get_cachesvr_discovery_version() const { return cachesvr_discovery_version_; }
+  SERVER_FRAME_API void update_remote_server_configure(const std::string& global_conf, int32_t global_version,
+                                                       const std::string& zone_conf, int32_t zone_version);
 
-  void update_remote_server_configure(const std::string& global_conf, int32_t global_version,
-                                      const std::string& zone_conf, int32_t zone_version);
-  inline const PROJECT_NAMESPACE_ID::table_service_configure_data& get_remote_server_configure() const noexcept {
+  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::table_service_configure_data& get_remote_server_configure()
+      const noexcept {
     return server_remote_conf_;
   }
 
-  void insert_timer(uint64_t task_id, std::chrono::system_clock::duration timeout, logic_server_timer& output);
+  SERVER_FRAME_API void insert_timer(uint64_t task_id, std::chrono::system_clock::duration timeout,
+                                     logic_server_timer& output);
 
-  atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type(uint64_t type_id) const;
-  atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type(const std::string& type_name) const;
-  atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type_zone(uint64_t type_id, uint64_t zone_id) const;
-  atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type_zone(const std::string& type_name,
-                                                                    uint64_t zone_id) const;
-  atapp::etcd_discovery_set::ptr_t get_discovery_index_by_zone(uint64_t zone_id) const;
-  inline const std::unordered_map<uint64_t, atapp::etcd_discovery_set::ptr_t>& get_origin_zone_index() const noexcept {
+  SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type(uint64_t type_id) const;
+  SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type(const std::string& type_name) const;
+  SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type_zone(uint64_t type_id,
+                                                                                     uint64_t zone_id) const;
+  SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type_zone(const std::string& type_name,
+                                                                                     uint64_t zone_id) const;
+  SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t get_discovery_index_by_zone(uint64_t zone_id) const;
+  UTIL_FORCEINLINE const std::unordered_map<uint64_t, atapp::etcd_discovery_set::ptr_t>& get_origin_zone_index()
+      const noexcept {
     return service_zone_index_;
   }
 
-  atfw::util::memory::strong_rc_ptr<atapp::etcd_discovery_node> get_discovery_by_id(uint64_t id) const;
-  atfw::util::memory::strong_rc_ptr<atapp::etcd_discovery_node> get_discovery_by_name(const std::string& name) const;
+  SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<atapp::etcd_discovery_node> get_discovery_by_id(uint64_t id) const;
+  SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<atapp::etcd_discovery_node> get_discovery_by_name(
+      const std::string& name) const;
 
  private:
-  int setup_battle_service_watcher();
   int setup_etcd_event_handle();
 
   int tick_update_remote_configures();
@@ -218,11 +211,7 @@ class logic_server_common_module : public atapp::module_impl {
   // stat
   std::shared_ptr<stats_data_t> stats_;
 
-  battle_service_version_map_t battle_service_version_map_;
-  battle_service_id_map_t battle_service_id_;
-  etcd_watcher_ptr_t battle_service_watcher_;
-  bool etcd_event_handle_registered_;
-  int64_t cachesvr_discovery_version_;
+  mutable std::unordered_map<int32_t, int64_t> service_discovery_version_;
 
   std::unordered_map<uint64_t, logic_server_type_discovery_set_t> service_type_id_index_;
   std::unordered_map<std::string, logic_server_type_discovery_set_t> service_type_name_index_;

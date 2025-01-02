@@ -56,7 +56,6 @@ int main(int argc, char *argv[]) {
 
   // Common logic
   logic_server_common_module_configure logic_mod_conf;
-  logic_mod_conf.enable_watch_battlesvr = false;
   if (logic_server_setup_common(app, logic_mod_conf) < 0) {
     return -1;
   }

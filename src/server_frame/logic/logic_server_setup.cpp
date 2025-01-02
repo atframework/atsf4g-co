@@ -52,6 +52,7 @@
 #include <router/router_manager_set.h>
 
 #include <dispatcher/cs_msg_dispatcher.h>
+#include <dispatcher/db_msg_dispatcher.h>
 #include <dispatcher/ss_msg_dispatcher.h>
 #include <dispatcher/task_manager.h>
 #include <logic/session_manager.h>
@@ -134,29 +135,6 @@ static int show_configure_handler(util::cli::callback_param params) {
   return 0;
 }
 
-static int show_battlesvr_by_version(util::cli::callback_param params) {
-  logic_server_common_module *mod = logic_server_last_common_module();
-  if (nullptr == mod) {
-    ::atapp::app::add_custom_command_rsp(params, "logic_server_common_module destroyed.");
-    return 0;
-  }
-  struct tm tt;
-  time_t now = atfw::util::time::time_utility::get_now();
-  UTIL_STRFUNC_LOCALTIME_S(&now, &tt);
-  char str[64] = {0};
-  strftime(str, sizeof(str) - 1, "%Y-%m-%d %H:%M:%S", &tt);
-  ::atapp::app::add_custom_command_rsp(params, &str[0]);
-  for (auto &battlesvr_by_version : mod->get_battlesvr_set_all_by_version()) {
-    ::atapp::app::add_custom_command_rsp(params,
-                                         LOG_WRAPPER_FWAPI_FORMAT("battle version: {}", battlesvr_by_version.first));
-    for (auto &node : battlesvr_by_version.second) {
-      atapp::app::add_custom_command_rsp(
-          params, LOG_WRAPPER_FWAPI_FORMAT("  node -> {:#x}({})", node.server_id, node.server_id));
-    }
-  }
-  return 0;
-}
-
 static int app_default_handle_on_receive_request(atapp::app &, const atapp::app::message_sender_t &source,
                                                  const atapp::app::message_t &msg) {
   if (0 == source.id) {
@@ -222,9 +200,7 @@ static int app_default_handle_on_disconnected(atapp::app &, atbus::endpoint &ep,
 
 }  // namespace
 
-logic_server_common_module_configure::logic_server_common_module_configure() : enable_watch_battlesvr(false) {}
-
-int logic_server_setup_common(atapp::app &app, const logic_server_common_module_configure &conf) {
+SERVER_FRAME_API int logic_server_setup_common(atapp::app &app, const logic_server_common_module_configure &conf) {
 #if defined(SERVER_FRAME_ENABLE_SANITIZER_ASAN_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_ASAN_INTERFACE
   // @see
   // https://github.com/gcc-mirror/gcc/blob/releases/gcc-4.8.5/libsanitizer/include/sanitizer/asan_interface.h
@@ -277,8 +253,6 @@ int logic_server_setup_common(atapp::app &app, const logic_server_common_module_
       ->set_help_msg(
           "send-notification <level> <event name> <event message>    send notification message(level: "
           "crirical,error,warn,notice)");
-  cmd_mgr->bind_cmd("list-battlesvr", show_battlesvr_by_version)
-      ->set_help_msg("list-battlesvr                                            list all ");
 
   std::shared_ptr<logic_server_common_module> logic_mod =
       atfw::memory::stl::make_shared<logic_server_common_module>(conf);
@@ -378,21 +352,12 @@ int logic_server_setup_common(atapp::app &app, const logic_server_common_module_
   return 0;
 }
 
-logic_server_common_module *logic_server_last_common_module() { return detail::g_last_common_module; }
+SERVER_FRAME_API logic_server_common_module *logic_server_last_common_module() { return detail::g_last_common_module; }
 
-bool logic_server_common_module::battle_service_node_t::operator==(const battle_service_node_t &other) const {
-  return server_id == other.server_id;
-}
-
-size_t logic_server_common_module::battle_service_node_hash_t::operator()(const battle_service_node_t &in) const {
-  return std::hash<uint64_t>()(in.server_id);
-}
-
-logic_server_common_module::logic_server_common_module(const logic_server_common_module_configure &static_conf)
+SERVER_FRAME_API logic_server_common_module::logic_server_common_module(
+    const logic_server_common_module_configure &static_conf)
     : static_conf_(static_conf),
       stop_log_timepoint_(0),
-      etcd_event_handle_registered_(false),
-      cachesvr_discovery_version_(0),
       server_remote_conf_global_version_(0),
       server_remote_conf_zone_version_(0),
       server_remote_conf_next_update_time_(0) {
@@ -409,14 +374,14 @@ logic_server_common_module::logic_server_common_module(const logic_server_common
   detail::g_last_common_module_stats = stats_;
 }
 
-logic_server_common_module::~logic_server_common_module() {
+SERVER_FRAME_API logic_server_common_module::~logic_server_common_module() {
   if (detail::g_last_common_module == this) {
     detail::g_last_common_module = nullptr;
     detail::g_last_common_module_stats.reset();
   }
 }
 
-int logic_server_common_module::init() {
+SERVER_FRAME_API int logic_server_common_module::init() {
   FWLOGINFO("============ Server initialize ============");
   FWLOGINFO("[Server startup]: {}\n{}", get_app()->get_app_version(), get_app()->get_build_version());
 
@@ -444,12 +409,31 @@ int logic_server_common_module::init() {
     FWLOGERROR("Setup LogicCommonService failed, result: {}({})", ret, protobuf_mini_dumper_get_error_msg(ret));
   }
 
-  ret = setup_battle_service_watcher();
   setup_etcd_event_handle();
+
+  // 注册控制依赖模块的退出挂起
+  // 设置依赖，阻止数据库和ss通信模块在chat_channel_manager前退出
+  auto suspend_stop_callback = []() -> bool {
+    logic_server_common_module *self = logic_server_last_common_module();
+    if (nullptr == self) {
+      return false;
+    }
+
+    if (self->is_enabled() && self->is_actived()) {
+      return true;
+    }
+
+    return false;
+  };
+  auto suspend_timeout = protobuf_to_chrono_duration<std::chrono::system_clock::duration>(
+      get_app()->get_origin_configure().timer().stop_timeout());
+  ss_msg_dispatcher::me()->suspend_stop(suspend_timeout, suspend_stop_callback);
+  cs_msg_dispatcher::me()->suspend_stop(suspend_timeout, suspend_stop_callback);
+  db_msg_dispatcher::me()->suspend_stop(suspend_timeout, suspend_stop_callback);
   return ret;
 }
 
-void logic_server_common_module::ready() {
+SERVER_FRAME_API void logic_server_common_module::ready() {
   FWLOGINFO("============ Server ready ============");
 
   memset(&stats_->last_checkpoint_usage, 0, sizeof(stats_->last_checkpoint_usage));
@@ -464,7 +448,7 @@ void logic_server_common_module::ready() {
   setup_metrics();
 }
 
-int logic_server_common_module::reload() {
+SERVER_FRAME_API int logic_server_common_module::reload() {
   FWLOGINFO("============ Server reload ============");
   int ret = 0;
 
@@ -474,7 +458,6 @@ int logic_server_common_module::reload() {
   rpc::context::set_current_service(*get_app(), logic_config::me()->get_logic());
 
   if (get_app() && get_app()->is_running()) {
-    ret = setup_battle_service_watcher();
     setup_etcd_event_handle();
   }
 
@@ -488,7 +471,7 @@ int logic_server_common_module::reload() {
   return ret;
 }
 
-int logic_server_common_module::stop() {
+SERVER_FRAME_API int logic_server_common_module::stop() {
   time_t now = atfw::util::time::time_utility::get_sys_now();
   if (now != stop_log_timepoint_) {
     stop_log_timepoint_ = now;
@@ -520,7 +503,7 @@ int logic_server_common_module::stop() {
   return ret;
 }
 
-int logic_server_common_module::timeout() {
+SERVER_FRAME_API int logic_server_common_module::timeout() {
   FWLOGINFO("============ Server module timeout ============");
   if (shared_component_.router_manager_set()) {
     router_manager_set::me()->force_close();
@@ -534,7 +517,7 @@ int logic_server_common_module::timeout() {
   return 0;
 }
 
-void logic_server_common_module::cleanup() {
+SERVER_FRAME_API void logic_server_common_module::cleanup() {
   task_manager::me()->kill_all();
 
   if (!service_index_handle_) {
@@ -546,9 +529,9 @@ void logic_server_common_module::cleanup() {
   }
 }
 
-const char *logic_server_common_module::name() const { return "logic_server_common_module"; }
+SERVER_FRAME_API const char *logic_server_common_module::name() const { return "logic_server_common_module"; }
 
-int logic_server_common_module::tick() {
+SERVER_FRAME_API int logic_server_common_module::tick() {
   int ret = 0;
 
   ret += tick_update_remote_configures();
@@ -588,12 +571,12 @@ int logic_server_common_module::tick() {
   return ret;
 }
 
-int logic_server_common_module::debug_stop_app() { return get_app()->stop(); }
+SERVER_FRAME_API int logic_server_common_module::debug_stop_app() { return get_app()->stop(); }
 
-bool logic_server_common_module::is_closing() const noexcept { return get_app()->is_closing(); }
+SERVER_FRAME_API bool logic_server_common_module::is_closing() const noexcept { return get_app()->is_closing(); }
 
-logic_server_common_module::etcd_keepalive_ptr_t logic_server_common_module::add_keepalive(const std::string &path,
-                                                                                           std::string &value) {
+SERVER_FRAME_API logic_server_common_module::etcd_keepalive_ptr_t logic_server_common_module::add_keepalive(
+    const std::string &path, std::string &value) {
   std::shared_ptr<atapp::etcd_module> etcd_mod;
 
   if (NULL != get_app()) {
@@ -612,7 +595,7 @@ logic_server_common_module::etcd_keepalive_ptr_t logic_server_common_module::add
   return ret;
 }
 
-bool logic_server_common_module::is_runtime_active() const noexcept {
+SERVER_FRAME_API bool logic_server_common_module::is_runtime_active() const noexcept {
   std::shared_ptr<atapp::etcd_module> etcd_mod;
 
   if (nullptr != get_app()) {
@@ -639,7 +622,7 @@ bool logic_server_common_module::is_runtime_active() const noexcept {
          0 != UTIL_STRFUNC_STRNCASE_CMP(active_iter->second.c_str(), "false", 5);
 }
 
-atapp::etcd_cluster *logic_server_common_module::get_etcd_cluster() {
+SERVER_FRAME_API atapp::etcd_cluster *logic_server_common_module::get_etcd_cluster() {
   std::shared_ptr<::atapp::etcd_module> etcd_mod = get_etcd_module();
   if (!etcd_mod) {
     return nullptr;
@@ -648,7 +631,7 @@ atapp::etcd_cluster *logic_server_common_module::get_etcd_cluster() {
   return &etcd_mod->get_raw_etcd_ctx();
 }
 
-std::shared_ptr<::atapp::etcd_module> logic_server_common_module::get_etcd_module() {
+SERVER_FRAME_API std::shared_ptr<::atapp::etcd_module> logic_server_common_module::get_etcd_module() {
   atapp::app *app = get_app();
   if (nullptr == app) {
     return nullptr;
@@ -657,100 +640,8 @@ std::shared_ptr<::atapp::etcd_module> logic_server_common_module::get_etcd_modul
   return app->get_etcd_module();
 }
 
-static void logic_server_common_module_on_watch_battlesvr_callback(atapp::etcd_module::watcher_sender_one_t &evt) {
-  logic_server_common_module *current_mod = logic_server_last_common_module();
-  const char *method_name;
-  if (evt.event.get().evt_type == atapp::etcd_watch_event::EN_WEVT_PUT) {
-    method_name = "PUT";
-  } else {
-    method_name = "DELETE";
-  }
-
-  logic_server_common_module::battle_service_node_t node;
-  if (!logic_server_common_module::parse_battle_etcd_version_path(evt.event.get().kv.key, node.version,
-                                                                  node.server_id)) {
-    node.server_id = evt.node.get().node_discovery.id();  // TODO maybe using name instead
-  }
-
-  if (nullptr == current_mod) {
-    FWLOGERROR("Got battlesvr event {} for {}:{} after logic_server_common_module closed", method_name, node.server_id,
-               node.version.c_str());
-    return;
-  }
-
-  if (evt.event.get().evt_type == atapp::etcd_watch_event::EN_WEVT_PUT) {
-    current_mod->add_battlesvr_index(node);
-  } else {
-    current_mod->remove_battlesvr_index(node.server_id);
-  }
-}
-
-int logic_server_common_module::setup_battle_service_watcher() {
-  std::shared_ptr<::atapp::etcd_module> etcd_mod = get_etcd_module();
-
-  if (!static_conf_.enable_watch_battlesvr) {
-    if (battle_service_watcher_) {
-      if (etcd_mod) {
-        if (etcd_mod->get_raw_etcd_ctx().remove_watcher(battle_service_watcher_)) {
-          FWLOGINFO("Remove battlesvr watcher to {}", battle_service_watcher_->get_path());
-        }
-      }
-      battle_service_watcher_.reset();
-    }
-
-    return 0;
-  }
-
-  if (!etcd_mod) {
-    FWLOGERROR("Etcd module is required");
-    return -1;
-  }
-
-  const std::string &battle_version_prefix = logic_config::me()->get_logic().battle().etcd_version_path();
-  std::string watch_path;
-  watch_path.reserve(etcd_mod->get_configure().path().size() + battle_version_prefix.size() + 1);
-  watch_path = etcd_mod->get_configure().path();
-  if (watch_path.empty() || watch_path[watch_path.size() - 1] != '/') {
-    watch_path += '/';
-  }
-
-  if (battle_version_prefix.empty()) {
-    watch_path += "by_battle_version";
-  } else if (battle_version_prefix[0] == '/') {
-    watch_path += battle_version_prefix.c_str() + 1;
-  } else {
-    watch_path += battle_version_prefix;
-  }
-
-  while (!watch_path.empty() && watch_path[watch_path.size() - 1] == '/') {
-    watch_path.pop_back();
-  }
-
-  // check watch path change
-  if (battle_service_watcher_ && battle_service_watcher_->get_path() == watch_path) {
-    return 0;
-  }
-
-  if (battle_service_watcher_) {
-    if (etcd_mod) {
-      if (etcd_mod->get_raw_etcd_ctx().remove_watcher(battle_service_watcher_)) {
-        FWLOGINFO("Remove battlesvr watcher to {}", battle_service_watcher_->get_path());
-      }
-    }
-    battle_service_watcher_.reset();
-  }
-
-  battle_service_watcher_ =
-      etcd_mod->add_watcher_by_custom_path(watch_path, logic_server_common_module_on_watch_battlesvr_callback);
-  if (!battle_service_watcher_) {
-    FWLOGERROR("Etcd create battlesvr watcher to {} failed.", watch_path);
-    return -1;
-  }
-
-  return 0;
-}
-
-atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type(uint64_t type_id) const {
+SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type(
+    uint64_t type_id) const {
   auto iter = service_type_id_index_.find(type_id);
   if (iter == service_type_id_index_.end()) {
     return nullptr;
@@ -759,7 +650,7 @@ atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index
   return iter->second.all_index;
 }
 
-atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type(
+SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type(
     const std::string &type_name) const {
   auto iter = service_type_name_index_.find(type_name);
   if (iter == service_type_name_index_.end()) {
@@ -769,8 +660,8 @@ atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index
   return iter->second.all_index;
 }
 
-atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type_zone(uint64_t type_id,
-                                                                                              uint64_t zone_id) const {
+SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type_zone(
+    uint64_t type_id, uint64_t zone_id) const {
   auto type_iter = service_type_id_index_.find(type_id);
   if (type_iter == service_type_id_index_.end()) {
     return nullptr;
@@ -784,7 +675,7 @@ atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index
   return zone_iter->second;
 }
 
-atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type_zone(
+SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type_zone(
     const std::string &type_name, uint64_t zone_id) const {
   auto type_iter = service_type_name_index_.find(type_name);
   if (type_iter == service_type_name_index_.end()) {
@@ -799,7 +690,8 @@ atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index
   return zone_iter->second;
 }
 
-atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_zone(uint64_t zone_id) const {
+SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_zone(
+    uint64_t zone_id) const {
   auto iter = service_zone_index_.find(zone_id);
   if (iter == service_zone_index_.end()) {
     return nullptr;
@@ -808,8 +700,8 @@ atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index
   return iter->second;
 }
 
-util::memory::strong_rc_ptr<atapp::etcd_discovery_node> logic_server_common_module::get_discovery_by_id(
-    uint64_t id) const {
+SERVER_FRAME_API util::memory::strong_rc_ptr<atapp::etcd_discovery_node>
+logic_server_common_module::get_discovery_by_id(uint64_t id) const {
   if (nullptr == get_app()) {
     return nullptr;
   }
@@ -817,8 +709,8 @@ util::memory::strong_rc_ptr<atapp::etcd_discovery_node> logic_server_common_modu
   return get_app()->get_global_discovery().get_node_by_id(id);
 }
 
-util::memory::strong_rc_ptr<atapp::etcd_discovery_node> logic_server_common_module::get_discovery_by_name(
-    const std::string &name) const {
+SERVER_FRAME_API util::memory::strong_rc_ptr<atapp::etcd_discovery_node>
+logic_server_common_module::get_discovery_by_name(const std::string &name) const {
   if (nullptr == get_app()) {
     return nullptr;
   }
@@ -827,10 +719,6 @@ util::memory::strong_rc_ptr<atapp::etcd_discovery_node> logic_server_common_modu
 }
 
 int logic_server_common_module::setup_etcd_event_handle() {
-  if (etcd_event_handle_registered_) {
-    return 0;
-  }
-
   std::shared_ptr<::atapp::etcd_module> etcd_mod = get_etcd_module();
   if (!etcd_mod) {
     return 0;
@@ -876,20 +764,11 @@ int logic_server_common_module::setup_etcd_event_handle() {
             default:
               break;
           }
+
+          ++service_discovery_version_[static_cast<int32_t>(node->get_discovery_info().type_id())];
         });
   }
 
-  atapp::etcd_cluster &raw_ctx = etcd_mod->get_raw_etcd_ctx();
-  raw_ctx.add_on_event_up([this](atapp::etcd_cluster &) { setup_battle_service_watcher(); }, true);
-
-  raw_ctx.add_on_event_down(
-      [this](atapp::etcd_cluster &) {
-        // clear cache, then watcher will be setup again when etcd is enabled in the future.
-        battle_service_watcher_.reset();
-      },
-      true);
-
-  etcd_event_handle_registered_ = true;
   return 0;
 }
 
@@ -1307,130 +1186,24 @@ void logic_server_common_module::remove_service_zone_index(const atapp::etcd_dis
             node->get_discovery_info().area().zone_id());
 }
 
-std::string logic_server_common_module::make_battle_etcd_version_path(const std::string &version) const {
-  std::string ret;
-  std::shared_ptr<atapp::etcd_module> etcd_mod;
-  if (NULL != get_app()) {
-    etcd_mod = get_app()->get_etcd_module();
-  }
-  if (!etcd_mod) {
-    return ret;
+SERVER_FRAME_API int64_t logic_server_common_module::get_service_discovery_version(
+    atframe::component::logic_service_type::type service_type_id) const noexcept {
+  int32_t type_id = static_cast<int32_t>(service_type_id);
+  auto iter = service_discovery_version_.find(type_id);
+  if (iter != service_discovery_version_.end()) {
+    return iter->second;
   }
 
-  const std::string &battle_version_prefix = logic_config::me()->get_logic().battle().etcd_version_path();
-  ret.reserve(etcd_mod->get_configure().path().size() + battle_version_prefix.size() + version.size() + 32);
-  ret = etcd_mod->get_configure().path();
-  if (ret.empty() || ret[ret.size() - 1] != '/') {
-    ret += '/';
-  }
-
-  if (battle_version_prefix.empty()) {
-    ret += "by_battle_version/";
-  } else if (battle_version_prefix[0] == '/') {
-    ret += battle_version_prefix.c_str() + 1;
-  } else {
-    ret += battle_version_prefix;
-  }
-
-  if (ret[ret.size() - 1] != '/') {
-    ret += '/';
-  }
-
-  ret += version;
-
-  if (ret[ret.size() - 1] != '/') {
-    ret += '/';
-  }
-
-  char server_id_str[24] = {0};
-  atfw::util::string::int2str(server_id_str, 23, get_app_id());
-  ret += &server_id_str[0];
-
-  return ret;
+  int64_t local_version =
+      atfw::util::time::time_utility::get_sys_now() * 1000 + atfw::util::time::time_utility::get_now_usec() / 1000;
+  service_discovery_version_[type_id] = local_version;
+  return local_version;
 }
 
-bool logic_server_common_module::parse_battle_etcd_version_path(const std::string &path, std::string &version,
-                                                                uint64_t &svr_id) {
-  std::vector<std::string> segments;
-  if (false == atfw::util::file_system::split_path(segments, path.c_str(), true)) {
-    return false;
-  }
-
-  if (segments.size() < 2) {
-    return false;
-  }
-
-  svr_id = 0;
-  atfw::util::string::str2int(svr_id, segments[segments.size() - 1].c_str());
-  version.swap(segments[segments.size() - 2]);
-
-  return svr_id != 0 && !version.empty();
-}
-
-void logic_server_common_module::add_battlesvr_index(const battle_service_node_t &node) {
-  if (0 == node.server_id || node.version.empty()) {
-    return;
-  }
-
-  // Closing
-  if (nullptr == get_app()) {
-    return;
-  }
-
-  auto id_iter = battle_service_id_.find(node.server_id);
-  if (id_iter != battle_service_id_.end() && id_iter->second.version == node.version) {
-    return;
-  }
-
-  remove_battlesvr_index(node.server_id);
-
-  battle_service_id_[node.server_id] = node;
-  battle_service_version_map_[node.version].insert(node);
-
-  FWLOGINFO("Etcd event: add battlesvr {:#x}({}), version: {}", node.server_id,
-            get_app()->convert_app_id_to_string(node.server_id), node.version);
-}
-
-void logic_server_common_module::remove_battlesvr_index(uint64_t server_id) {
-  auto id_iter = battle_service_id_.find(server_id);
-  if (id_iter == battle_service_id_.end()) {
-    return;
-  }
-
-  // Closing
-  if (nullptr == get_app()) {
-    return;
-  }
-
-  FWLOGINFO("Etcd event: remove battlesvr {:#x}({}), version: %s", server_id,
-            get_app()->convert_app_id_to_string(server_id), id_iter->second.version);
-
-  {
-    auto ver_iter = battle_service_version_map_.find(id_iter->second.version);
-    if (ver_iter != battle_service_version_map_.end()) {
-      ver_iter->second.erase(id_iter->second);
-
-      if (ver_iter->second.empty()) {
-        battle_service_version_map_.erase(ver_iter);
-      }
-    }
-  }
-
-  battle_service_id_.erase(id_iter);
-}
-
-const logic_server_common_module::battle_service_set_t *logic_server_common_module::get_battlesvr_set_by_version(
-    const std::string &version) const {
-  auto ver_iter = battle_service_version_map_.find(version);
-  if (ver_iter != battle_service_version_map_.end()) {
-    return &ver_iter->second;
-  }
-
-  return nullptr;
-}
-
-void logic_server_common_module::update_remote_server_configure(const std::string &global_conf, int32_t global_version,
-                                                                const std::string &zone_conf, int32_t zone_version) {
+SERVER_FRAME_API void logic_server_common_module::update_remote_server_configure(const std::string &global_conf,
+                                                                                 int32_t global_version,
+                                                                                 const std::string &zone_conf,
+                                                                                 int32_t zone_version) {
   if (server_remote_conf_global_version_ == global_version && server_remote_conf_zone_version_ == zone_version) {
     return;
   }
@@ -1445,8 +1218,9 @@ void logic_server_common_module::update_remote_server_configure(const std::strin
   // TODO(owent): 服务器配置数据变化事件
 }
 
-void logic_server_common_module::insert_timer(uint64_t task_id, std::chrono::system_clock::duration timeout_conf,
-                                              logic_server_timer &output) {
+SERVER_FRAME_API void logic_server_common_module::insert_timer(uint64_t task_id,
+                                                               std::chrono::system_clock::duration timeout_conf,
+                                                               logic_server_timer &output) {
   output.task_id = task_id;
   output.message_type = reinterpret_cast<uintptr_t>(&task_timer_);
   output.sequence = ss_msg_dispatcher::me()->allocate_sequence();

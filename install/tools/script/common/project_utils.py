@@ -496,11 +496,11 @@ def get_server_atbus_tcp():
 
 def get_server_atbus_unix():
     h = hashlib.sha1(__file__.encode('utf-8')).hexdigest()
-    if os.path.exists('/tmp'):
-        default_base = '/tmp/atapp/{0}/'.format(h)
-    elif os.path.exists('/run/tmp'):
+    if os.path.exists('/run/tmp'):
         default_base = '/run/tmp/atapp/{0}/'.format(h)
-    elif os.path.exists('/'):
+    elif os.path.exists('/run'):
+        default_base = '/run/atapp/{0}/'.format(h)
+    elif os.path.exists('/tmp'):
         default_base = '/tmp/atapp/{0}/'.format(h)
     else:
         default_base = './'
