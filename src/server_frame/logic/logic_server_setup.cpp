@@ -74,6 +74,8 @@
 #include "rpc/telemetry/opentelemetry_utility.h"
 #include "rpc/telemetry/rpc_global_service.h"
 
+#include "logic/hpa/logic_hpa_controller.h"
+
 namespace detail {
 static logic_server_common_module *g_last_common_module = NULL;
 static std::shared_ptr<logic_server_common_module::stats_data_t> g_last_common_module_stats;
@@ -261,6 +263,7 @@ SERVER_FRAME_API int logic_server_setup_common(atapp::app &app, const logic_serv
     return -1;
   }
   app.add_module(logic_mod);
+  logic_mod->setup_hpa_controller();
 
   // set VCS version info
   const char *vcs_commit = server_frame_vcs_get_commit();
@@ -411,6 +414,11 @@ SERVER_FRAME_API int logic_server_common_module::init() {
 
   setup_etcd_event_handle();
 
+  setup_hpa_controller();
+  if (hpa_controller_) {
+    hpa_controller_->init();
+  }
+
   // 注册控制依赖模块的退出挂起
   // 设置依赖，阻止数据库和ss通信模块在chat_channel_manager前退出
   auto suspend_stop_callback = []() -> bool {
@@ -468,6 +476,13 @@ SERVER_FRAME_API int logic_server_common_module::reload() {
     RELOAD_CALL(ret, task_manager);
   }
 
+  if (!hpa_controller_) {
+    hpa_controller_ = atfw::memory::stl::make_shared<logic_hpa_controller>(*get_app());
+  }
+  if (hpa_controller_) {
+    hpa_controller_->reload();
+  }
+
   return ret;
 }
 
@@ -488,6 +503,12 @@ SERVER_FRAME_API int logic_server_common_module::stop() {
 
     // 保存任务未完成，需要继续等待
     if (!router_manager_set::me()->is_closed()) {
+      ret = 1;
+    }
+  }
+
+  if (0 == ret && hpa_controller_) {
+    if (hpa_controller_->stop(false) > 0) {
       ret = 1;
     }
   }
@@ -527,6 +548,10 @@ SERVER_FRAME_API void logic_server_common_module::cleanup() {
     }
     service_index_handle_.reset();
   }
+
+  if (hpa_controller_) {
+    hpa_controller_->cleanup();
+  }
 }
 
 SERVER_FRAME_API const char *logic_server_common_module::name() const { return "logic_server_common_module"; }
@@ -544,6 +569,9 @@ SERVER_FRAME_API int logic_server_common_module::tick() {
   }
   if (shared_component_.router_manager_set()) {
     ret += router_manager_set::me()->tick();
+  }
+  if (hpa_controller_) {
+    ret += hpa_controller_->tick();
   }
 
   if (!task_timer_.empty()) {
@@ -596,30 +624,17 @@ SERVER_FRAME_API logic_server_common_module::etcd_keepalive_ptr_t logic_server_c
 }
 
 SERVER_FRAME_API bool logic_server_common_module::is_runtime_active() const noexcept {
-  std::shared_ptr<atapp::etcd_module> etcd_mod;
-
-  if (nullptr != get_app()) {
-    etcd_mod = get_app()->get_etcd_module();
-  }
-
-  if (!etcd_mod) {
+  if (!hpa_controller_) {
     return false;
   }
 
-  auto node_ptr = etcd_mod->get_global_discovery().get_node_by_id(get_app_id());
-  if (!node_ptr) {
-    return false;
-  }
+  return hpa_controller_->get_discovery_ready_tag();
+}
 
-  auto &labels = node_ptr->get_discovery_info().metadata().labels();
-  auto active_iter = labels.find("runtime_active");
-  if (active_iter == labels.end()) {
-    return true;
+void logic_server_common_module::setup_hpa_controller() {
+  if (!hpa_controller_) {
+    hpa_controller_ = atfw::memory::stl::make_shared<logic_hpa_controller>(*get_app());
   }
-
-  return !active_iter->second.empty() && active_iter->second != "0" &&
-         0 != UTIL_STRFUNC_STRNCASE_CMP(active_iter->second.c_str(), "no", 2) &&
-         0 != UTIL_STRFUNC_STRNCASE_CMP(active_iter->second.c_str(), "false", 5);
 }
 
 SERVER_FRAME_API atapp::etcd_cluster *logic_server_common_module::get_etcd_cluster() {

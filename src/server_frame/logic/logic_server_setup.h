@@ -52,6 +52,7 @@
 #include <vector>
 
 class logic_server_common_module;
+class logic_hpa_controller;
 
 struct UTIL_SYMBOL_VISIBLE logic_server_common_module_configure{
     inline logic_server_common_module_configure() noexcept {}};
@@ -140,6 +141,8 @@ class logic_server_common_module : public atapp::module_impl {
 
   SERVER_FRAME_API bool is_runtime_active() const noexcept;
 
+  SERVER_FRAME_API void setup_hpa_controller();
+
   SERVER_FRAME_API atapp::etcd_cluster* get_etcd_cluster();
 
   SERVER_FRAME_API std::shared_ptr<::atapp::etcd_module> get_etcd_module();
@@ -188,6 +191,13 @@ class logic_server_common_module : public atapp::module_impl {
   SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<atapp::etcd_discovery_node> get_discovery_by_name(
       const std::string& name) const;
 
+  /**
+   * @brief 获取HPA控制器
+   *
+   * @return HPA控制器
+   */
+  UTIL_FORCEINLINE const std::shared_ptr<logic_hpa_controller>& get_hpa_controller() { return hpa_controller_; }
+
  private:
   int setup_etcd_event_handle();
 
@@ -224,4 +234,5 @@ class logic_server_common_module : public atapp::module_impl {
   time_t server_remote_conf_next_update_time_;
 
   std::priority_queue<logic_server_timer> task_timer_;
+  std::shared_ptr<logic_hpa_controller> hpa_controller_;
 };

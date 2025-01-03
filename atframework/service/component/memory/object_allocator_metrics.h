@@ -89,7 +89,7 @@ class object_allocator_metrics_controller {
   template <class T>
   UTIL_FORCEINLINE static ::std::string parse_demangle_name() {
     return try_parse_demangle_name(
-        guess_raw_name<typename ::std::remove_reference<typename ::std::remove_cv<T>::type>::type>());
+        guess_pretty_name<typename ::std::remove_reference<typename ::std::remove_cv<T>::type>::type>());
   }
 
   template <class T>
