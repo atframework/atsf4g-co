@@ -758,7 +758,7 @@ def parse_generate_rule(rule):
         dot_pos = rule.find(":")
         if dot_pos <= 0 or dot_pos > len(rule):
             temp_path = rule
-            rule = remove_well_known_template_suffix(temp_path)
+            rule = remove_well_known_template_suffix(os.path.basename(temp_path))
         else:
             temp_path = rule[0:dot_pos]
             rule = rule[(dot_pos + 1):]
@@ -776,7 +776,7 @@ def parse_generate_rule(rule):
     if "output" in rule and rule["output"]:
         output = rule["output"]
     else:
-        output = remove_well_known_template_suffix(input)
+        output = remove_well_known_template_suffix(os.path.basename(input))
     dolar_pos = output.find("$")
     if dolar_pos >= 0 and dolar_pos < len(output):
         output_render = True
