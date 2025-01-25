@@ -549,7 +549,7 @@ class PbDatabase(object):
         for service in file_proto.service:
             self._extended_raw_service(file_proto.package, service)
 
-    def load(self, pb_file_path):
+    def load(self, pb_file_path, external_pb_files):
         pb_file_buffer = open(pb_file_path, "rb").read()
         from google.protobuf import (
             descriptor_pb2,
@@ -568,6 +568,22 @@ class PbDatabase(object):
 
         pb_fds = descriptor_pb2.FileDescriptorSet.FromString(pb_file_buffer)
         pb_fds_patched = [x for x in pb_fds.file]
+
+        # Load external pb files
+        external_pb_file_buffers = []
+        if external_pb_files:
+            pb_fds_loaded = set([x.name for x in pb_fds_patched])
+            for external_pb_file in external_pb_files:
+                external_pb_file_buffer = open(external_pb_file, "rb").read()
+                external_pb_file_buffers.append(external_pb_file_buffer)
+                external_pb_fds = descriptor_pb2.FileDescriptorSet.FromString(external_pb_file_buffer)
+                for x in external_pb_fds.file:
+                    if x.name in pb_fds_loaded:
+                        continue
+                    pb_fds_patched.append(x.name)
+                    pb_fds_loaded.add(x.name)
+
+
         pb_fds_inner = []
         protobuf_inner_descriptors = dict({
             descriptor_pb2.DESCRIPTOR.name:
@@ -633,6 +649,17 @@ class PbDatabase(object):
             self.raw_files[file_proto.name] = file_proto
             self._extended_raw_file(file_proto)
         pb_fds_patched = [x for x in pb_fds.file]
+        # Load external pb files to extended_factory
+        if external_pb_file_buffers:
+            pb_fds_loaded = set([x.name for x in pb_fds_patched])
+            for external_pb_file_buffer in external_pb_file_buffers:
+                external_pb_fds = pb_fds_clazz.FromString(external_pb_file_buffer)
+                for x in external_pb_fds.file:
+                    if x.name in pb_fds_loaded:
+                        continue
+                    pb_fds_patched.append(x.name)
+                    pb_fds_loaded.add(x.name)
+
         pb_fds_patched.extend(pb_fds_inner)
         self._register_by_pb_fds(self.extended_factory, pb_fds_patched)
 
@@ -713,16 +740,24 @@ class PbDatabase(object):
         return target_desc
 
 
+def remove_well_known_template_suffix(name):
+    while True:
+        if name.endswith(".template"):
+            name = name[0:len(name) - 9]
+        elif name.endswith(".tpl"):
+            name = name[0:len(name) - 4]
+        elif name.endswith(".mako"):
+            name = name[0:len(name) - 5]
+        else:
+            break
+
 def parse_generate_rule(rule):
     # rules from program options
     if type(rule) is str:
         dot_pos = rule.find(":")
         if dot_pos <= 0 or dot_pos > len(rule):
             temp_path = rule
-            if temp_path.endswith(".mako"):
-                rule = os.path.basename(temp_path[0:len(temp_path) - 5])
-            else:
-                rule = os.path.basename(temp_path)
+            rule = remove_well_known_template_suffix(temp_path)
         else:
             temp_path = rule[0:dot_pos]
             rule = rule[(dot_pos + 1):]
@@ -740,10 +775,7 @@ def parse_generate_rule(rule):
     if "output" in rule and rule["output"]:
         output = rule["output"]
     else:
-        if input.endswith(".mako"):
-            output = os.path.basename(input[0:len(input) - 5])
-        else:
-            output = os.path.basename(input)
+        output = remove_well_known_template_suffix(input)
     dolar_pos = output.find("$")
     if dolar_pos >= 0 and dolar_pos < len(output):
         output_render = True
@@ -809,14 +841,14 @@ def try_read_vcs_username(project_dir):
     return local_vcs_user_name
 
 
-def get_pb_db_with_cache(pb_file):
+def get_pb_db_with_cache(pb_file, external_pb_files):
     global LOCAL_PB_DB_CACHE
     pb_file = os.path.realpath(pb_file)
     if pb_file in LOCAL_PB_DB_CACHE:
         ret = LOCAL_PB_DB_CACHE[pb_file]
         return ret
     ret = PbDatabase()
-    ret.load(pb_file)
+    ret.load(pb_file, external_pb_files)
     LOCAL_PB_DB_CACHE[pb_file] = ret
     return ret
 
@@ -906,10 +938,22 @@ def generate_group(options, group):
     from mako.template import Template
     from mako.lookup import TemplateLookup
 
-    make_module_cache_dir = os.path.join(
-        group.project_dir,
-        ".mako_modules/group/{0}".format(os.path.relpath(os.getcwd(), group.project_dir)),
-    )
+    if options.module_directory:
+        if os.path.isabs(options.module_directory):
+            make_module_cache_dir = os.path.join(
+                options.module_directory,
+                "group/{0}".format(os.path.relpath(os.getcwd(), group.project_dir)),
+            )
+        else:
+            make_module_cache_dir = os.path.join(
+                group.project_dir, options.module_directory,
+                "group/{0}".format(os.path.relpath(os.getcwd(), group.project_dir)),
+            )
+    else:
+        make_module_cache_dir = os.path.join(
+            group.project_dir,
+            ".mako_modules/group/{0}".format(os.path.relpath(os.getcwd(), group.project_dir)),
+        )
     os.makedirs(make_module_cache_dir, mode=0o777, exist_ok=True)
 
     inner_include_rule = None
@@ -932,6 +976,7 @@ def generate_group(options, group):
             traceback.format_exc(),
         )
         raise
+
     inner_exclude_rule = None
     try:
         if group.inner_exclude_rule is not None:
@@ -1195,10 +1240,22 @@ def generate_global(options, global_generator):
     from mako.template import Template
     from mako.lookup import TemplateLookup
 
-    make_module_cache_dir = os.path.join(
-        global_generator.project_dir,
-        ".mako_modules/global/{0}".format(os.path.relpath(os.getcwd(), global_generator.project_dir)),
-    )
+    if options.module_directory:
+        if os.path.isabs(options.module_directory):
+            make_module_cache_dir = os.path.join(
+                options.module_directory,
+                "group/{0}".format(os.path.relpath(os.getcwd(), global_generator.project_dir)),
+            )
+        else:
+            make_module_cache_dir = os.path.join(
+                global_generator.project_dir, options.module_directory,
+                "group/{0}".format(os.path.relpath(os.getcwd(), global_generator.project_dir)),
+            )
+    else:
+        make_module_cache_dir = os.path.join(
+            global_generator.project_dir,
+            ".mako_modules/group/{0}".format(os.path.relpath(os.getcwd(), global_generator.project_dir)),
+        )
     os.makedirs(make_module_cache_dir, mode=0o777, exist_ok=True)
 
     # generate global templates
@@ -1742,6 +1799,14 @@ def main():
     )
     CmdArgsAddOption(
         parser,
+        "--module-directory",
+        action="store",
+        help="set module directory",
+        dest="module_directory",
+        default=None,
+    )
+    CmdArgsAddOption(
+        parser,
         "--add-path",
         action="append",
         help=
@@ -1800,6 +1865,15 @@ def main():
         "set and using pb file instead of generate it with -P/--proto-files",
         dest="pb_file",
         default=None,
+    )
+    CmdArgsAddOption(
+        parser,
+        "--external-pb-files",
+        action="append",
+        help=
+        "append external pb files to load",
+        dest="external_pb_files",
+        default=[],
     )
     CmdArgsAddOption(
         parser,
@@ -2257,6 +2331,8 @@ def main():
                 options.proto_files.extend(globla_setting["protocol_files"])
             if "protocol_input_pb_file" in globla_setting:
                 options.pb_file = globla_setting["protocol_input_pb_file"]
+            if "protocol_external_pb_files" in globla_setting:
+                options.external_pb_files.extend(globla_setting["protocol_external_pb_files"])
             if "protocol_output_pb_file" in globla_setting:
                 options.output_pb_file = globla_setting[
                     "protocol_output_pb_file"]
@@ -2351,7 +2427,7 @@ def main():
         wait_print_pexec(pexec)
 
     try:
-        pb_db = get_pb_db_with_cache(tmp_pb_file)
+        pb_db = get_pb_db_with_cache(tmp_pb_file, options.external_pb_files)
         generate_service_group(pb_db, options, yaml_conf, project_dir,
                                custom_vars)
         generate_message_group(pb_db, options, yaml_conf, project_dir,

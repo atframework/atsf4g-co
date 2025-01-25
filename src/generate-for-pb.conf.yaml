@@ -11,6 +11,7 @@ configure:
   protocol_input_pb_file: 'path of input pb file'
   protocol_output_pb_file: 'path of output pb file'
   protocol_project_directory: 'path of project'
+  protocol_external_pb_files: [] # external pb fils to load
   custom_variables:
     key: 'value' # custom variables of "key"
 
