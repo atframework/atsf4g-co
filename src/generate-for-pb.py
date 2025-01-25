@@ -750,6 +750,7 @@ def remove_well_known_template_suffix(name):
             name = name[0:len(name) - 5]
         else:
             break
+    return name
 
 def parse_generate_rule(rule):
     # rules from program options
