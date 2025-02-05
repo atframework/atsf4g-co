@@ -210,6 +210,12 @@ function(project_link_or_copy_files)
   endforeach()
 endfunction()
 
+if(PROJECT_ENABLE_PRECOMPILE_HEADERS)
+  if(MSVC)
+    add_compiler_flags_to_var_unique(CMAKE_CXX_FLAGS "/wd4702")
+  endif()
+endif()
+
 if(PROJECT_TOOL_ENABLE_SPLIT_DEBUG_SYMBOL_SUFFIX)
   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     find_program(PROJECT_TOOL_OBJCOPY NAMES objcopy)

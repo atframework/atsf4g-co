@@ -2,6 +2,12 @@ set(PROJECT_INSTALL_COMPONENT_EXPORT_NAME "${PROJECT_NAME}-component-target")
 set(PROJECT_INSTALL_COMPONENT_EXPORT_FILE
     "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_NAME}/${PROJECT_INSTALL_COMPONENT_EXPORT_NAME}.cmake")
 
+function(project_component_target_precompile_headers TARGET_NAME)
+  if(PROJECT_ENABLE_PRECOMPILE_HEADERS AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.16")
+    target_precompile_headers(${TARGET_NAME} ${ARGN})
+  endif()
+endfunction()
+
 function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   set(optionArgs "STATIC;SHARED")
   set(oneValueArgs INCLUDE_DIR OUTPUT_NAME OUTPUT_TARGET_NAME DLLEXPORT_DECL SHARED_LIBRARY_DECL NATIVE_CODE_DECL)
@@ -96,6 +102,25 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
       target_include_directories(${TARGET_FULL_NAME}
                                  INTERFACE "$<BUILD_INTERFACE:${project_component_declare_sdk_INCLUDE_DIR}>")
     endif()
+
+    set(FINAL_GENERATED_PCH_HEADER_FILES)
+    foreach(HEADER_FILE ${project_component_declare_sdk_HRADERS})
+      if(IS_ABSOLUTE "${HEADER_FILE}")
+        file(RELATIVE_PATH RELATIVE_HEADER_FILE "${project_component_declare_sdk_INCLUDE_DIR}" "${HEADER_FILE}")
+      else()
+        set(RELATIVE_HEADER_FILE "${HEADER_FILE}")
+      endif()
+      list(APPEND FINAL_GENERATED_PCH_HEADER_FILES "\"${RELATIVE_HEADER_FILE}\"")
+    endforeach()
+
+    if(project_component_declare_sdk_SOURCES)
+      project_component_target_precompile_headers(
+        ${TARGET_FULL_NAME} PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${FINAL_GENERATED_PCH_HEADER_FILES}>>")
+    else()
+      project_component_target_precompile_headers(
+        ${TARGET_FULL_NAME} INTERFACE
+        "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${FINAL_GENERATED_PCH_HEADER_FILES}>>")
+    endif()
   endif()
 
   unset(PUBLIC_LINK_TARGETS)
@@ -152,13 +177,6 @@ function(project_component_force_optimize_sources)
   endif()
 endfunction()
 
-function(project_component_target_precompile_headers TARGET_NAME)
-  if(FALSE AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.16")
-    target_precompile_headers(${TARGET_NAME} PRIVATE ${ARGN})
-    target_precompile_headers(${TARGET_NAME} INTERFACE "$<BUILD_INTERFACE:${ARGN}>")
-  endif()
-endfunction()
-
 function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   set(optionArgs "")
   set(oneValueArgs OUTPUT_DIR OUTPUT_NAME OUTPUT_TARGET_NAME DLLEXPORT_DECL OUTPUT_PBFILE_PATH)
@@ -190,6 +208,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
 
   unset(FINAL_GENERATED_SOURCE_FILES)
   unset(FINAL_GENERATED_HEADER_FILES)
+  unset(FINAL_GENERATED_PCH_HEADER_FILES)
   set(FINAL_GENERATED_LAST_CREATED_DIR ".")
   unset(FINAL_GENERATED_COPY_COMMANDS)
   list(SORT project_component_declare_protocol_PROTOCOLS)
@@ -198,6 +217,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
     string(REGEX REPLACE "\\.proto$" "" RELATIVE_FILE_PREFIX "${RELATIVE_FILE_PATH}")
     list(APPEND FINAL_GENERATED_HEADER_FILES
          "${project_component_declare_protocol_OUTPUT_DIR}/${RELATIVE_FILE_PREFIX}.pb.h")
+    list(APPEND FINAL_GENERATED_PCH_HEADER_FILES "\"${RELATIVE_FILE_PREFIX}.pb.h\"")
     list(APPEND FINAL_GENERATED_SOURCE_FILES
          "${project_component_declare_protocol_OUTPUT_DIR}/${RELATIVE_FILE_PREFIX}.pb.cc")
     get_filename_component(FINAL_GENERATED_SOURCE_DIR
@@ -280,7 +300,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
     COMMENT "Generate [@${CMAKE_CURRENT_BINARY_DIR}] ${FINAL_GENERATED_SOURCE_FILES};${FINAL_GENERATED_HEADER_FILES}")
 
   project_build_tools_patch_protobuf_sources(${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
-  project_component_force_optimize_sources(${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
+  # project_component_force_optimize_sources(${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
 
   if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
     set(TARGET_FULL_NAME "pc-${TARGET_NAME}")
@@ -305,7 +325,15 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
     project_setup_runtime_post_build_bash(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_BASH)
     project_setup_runtime_post_build_pwsh(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_PWSH)
   endif()
-  project_component_target_precompile_headers(${TARGET_FULL_NAME} ${FINAL_GENERATED_HEADER_FILES})
+  project_component_target_precompile_headers(
+    ${TARGET_FULL_NAME}
+    PUBLIC
+    "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${FINAL_GENERATED_PCH_HEADER_FILES}>>"
+    PRIVATE
+    "<limits>"
+    "<string>"
+    "<type_traits>"
+    "<utility>")
 
   add_custom_command(
     TARGET ${TARGET_FULL_NAME}

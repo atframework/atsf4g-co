@@ -12,6 +12,8 @@ endif()
 # 编译的组件
 option(PROJECT_ENABLE_SAMPLE "Enable build sample." OFF)
 option(PROJECT_ENABLE_UNITTEST "Enable build unit test." OFF)
+option(PROJECT_ENABLE_PRECOMPILE_HEADERS "Enable precompile headers." ON)
+
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "12.1.0")
   option(PROJECT_ENABLE_LINKER_MOLD "Enable use mold as linker." ON)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang")

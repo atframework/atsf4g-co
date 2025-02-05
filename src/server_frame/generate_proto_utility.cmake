@@ -19,9 +19,8 @@ function(project_build_tools_optimize_sources)
 endfunction()
 
 function(project_build_tools_target_precompile_headers TARGET_NAME)
-  if(FALSE AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.16")
-    target_precompile_headers(${TARGET_NAME} PRIVATE ${ARGN})
-    target_precompile_headers(${TARGET_NAME} INTERFACE "$<BUILD_INTERFACE:${ARGN}>")
+  if(PROJECT_ENABLE_PRECOMPILE_HEADERS AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.16")
+    target_precompile_headers(${TARGET_NAME} ${ARGN})
   endif()
 endfunction()
 
@@ -34,6 +33,7 @@ function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OU
   list(SORT project_server_frame_create_protocol_target_PROTOCOLS)
   unset(HEADERS)
   unset(SOURCES)
+  unset(PCH_HEADER_FILES)
 
   # proto -> headers/sources
   unset(LAST_CREATED_DIRECTORY)
@@ -107,6 +107,7 @@ function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OU
     list(APPEND LAST_DIRECTORY_HEADERS "${SANDBOX_PATH}/${FILE_RELATIVE_BASE}.pb.h")
     list(APPEND LAST_DIRECTORY_SOURCES "${SANDBOX_PATH}/${FILE_RELATIVE_BASE}.pb.cc")
     list(APPEND HEADERS "${CURRENT_GENERATED_DIR}/include/${FILE_RELATIVE_BASE}.pb.h")
+    list(APPEND PCH_HEADER_FILES "\"${FILE_RELATIVE_BASE}.pb.h\"")
     list(APPEND SOURCES "${CURRENT_GENERATED_DIR}/src/${FILE_RELATIVE_BASE}.pb.cc")
   endforeach()
 
@@ -172,7 +173,7 @@ function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OU
     SOURCES ${HEADERS} ${SOURCES})
 
   project_build_tools_patch_protobuf_sources(${HEADERS} ${SOURCES})
-  project_build_tools_optimize_sources(${HEADERS} ${SOURCES})
+  # project_build_tools_optimize_sources(${HEADERS} ${SOURCES})
 
   source_group_by_dir(HEADERS SOURCES)
 
@@ -187,7 +188,15 @@ function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OU
     project_build_tools_set_static_library_declaration(${CURRENT_API_MACRO}
                                                        "${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME}")
   endif()
-  project_build_tools_target_precompile_headers(${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME} ${HEADERS})
+  project_build_tools_target_precompile_headers(
+    ${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME}
+    PUBLIC
+    "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${PCH_HEADER_FILES}>>"
+    PRIVATE
+    "<limits>"
+    "<string>"
+    "<type_traits>"
+    "<utility>")
 
   add_dependencies(${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME} ${TARGET_NAME})
 
