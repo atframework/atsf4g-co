@@ -2,6 +2,11 @@ unset(PROJECT_SERVER_FRAME_PUBLIC_LINK_NAMES)
 unset(PROJECT_SERVER_FRAME_PUBLIC_INCLUDE_DIRS)
 unset(PROJECT_SERVER_FRAME_PUBLIC_COMPILE_OPTIONS)
 
+set(PROJECT_SERVER_FRAME_PRECOMPILE_HEADERS
+    [["dispatcher/task_type_traits.h"]] [["dispatcher/task_action_ss_req_base.h"]]
+    [["dispatcher/task_action_no_req_base.h"]] [["rpc/rpc_shared_message.h"]] [["rpc/rpc_common_types.h"]]
+    [["utility/protobuf_mini_dumper.h"]])
+
 list(APPEND PROJECT_SERVER_FRAME_PUBLIC_INCLUDE_DIRS ${PROJECT_SERVER_FRAME_INC_DIR})
 
 # build libserver_frame.so
@@ -94,6 +99,10 @@ endif()
 if(PROJECT_SERVER_FRAME_PUBLIC_COMPILE_OPTIONS)
   target_compile_options(${PROJECT_SERVER_FRAME_LIB_LINK} PUBLIC ${PROJECT_SERVER_FRAME_PUBLIC_COMPILE_OPTIONS})
 endif()
+
+project_build_tools_target_precompile_headers(
+  ${PROJECT_SERVER_FRAME_LIB_LINK} PUBLIC
+  "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PRECOMPILE_HEADERS}>>")
 
 set_property(TARGET ${PROJECT_SERVER_FRAME_LIB_LINK} PROPERTY FOLDER "${PROJECT_NAME}/framework")
 

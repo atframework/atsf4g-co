@@ -580,7 +580,7 @@ class PbDatabase(object):
                 for x in external_pb_fds.file:
                     if x.name in pb_fds_loaded:
                         continue
-                    pb_fds_patched.append(x.name)
+                    pb_fds_patched.append(x)
                     pb_fds_loaded.add(x.name)
 
 
@@ -657,7 +657,7 @@ class PbDatabase(object):
                 for x in external_pb_fds.file:
                     if x.name in pb_fds_loaded:
                         continue
-                    pb_fds_patched.append(x.name)
+                    pb_fds_patched.append(x)
                     pb_fds_loaded.add(x.name)
 
         pb_fds_patched.extend(pb_fds_inner)

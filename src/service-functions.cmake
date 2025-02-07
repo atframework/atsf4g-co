@@ -430,7 +430,8 @@ function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
       RESOURCE_FILES
       USE_COMPONENTS
       USE_SERVICE_SDK
-      USE_SERVICE_PROTOCOL)
+      USE_SERVICE_PROTOCOL
+      PRECOMPILE_HEADERS)
   cmake_parse_arguments(project_service_declare_instance "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
   echowithcolor(COLOR GREEN "-- Configure service ${TARGET_NAME} on ${SERVICE_ROOT_DIR}")
@@ -527,6 +528,42 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
                                PRIVATE "$<BUILD_INTERFACE:${project_service_declare_instance_INCLUDE_DIR}>")
   endif()
 
+  # Precompile headers
+  set(project_service_declare_instance_PCH_FILES)
+  if(project_service_declare_instance_PRECOMPILE_HEADERS)
+    foreach(PRECOMPILE_HEADER ${project_service_declare_instance_PRECOMPILE_HEADERS})
+      if(PRECOMPILE_HEADER MATCHES "^\"|<")
+        list(APPEND project_service_declare_instance_PCH_FILES "${PRECOMPILE_HEADER}")
+      elseif(NOT IS_ABSOLUTE "${PRECOMPILE_HEADER}" AND EXISTS "${SERVICE_ROOT_DIR}/${PRECOMPILE_HEADER}")
+        list(APPEND project_service_declare_instance_PCH_FILES "${PRECOMPILE_HEADER}")
+      else()
+        list(APPEND project_service_declare_instance_PCH_FILES "\"${PRECOMPILE_HEADER}\"")
+      endif()
+    endforeach()
+  else()
+    foreach(PRECOMPILE_HEADER ${project_component_declare_service_HRADERS})
+      if(IS_ABSOLUTE "${PRECOMPILE_HEADER}")
+        file(RELATIVE_PATH RELATIVE_HEADER_FILE "${SERVICE_ROOT_DIR}" "${PRECOMPILE_HEADER}")
+      else()
+        set(RELATIVE_HEADER_FILE "${PRECOMPILE_HEADER}")
+      endif()
+
+      if(PRECOMPILE_HEADER MATCHES "^app/")
+        continue()
+      endif()
+      get_filename_component(PRECOMPILE_HEADER_BASENAME "${PRECOMPILE_HEADER}" NAME)
+      if(PRECOMPILE_HEADER_BASENAME MATCHES "^task_action_")
+        continue()
+      endif()
+      list(APPEND project_service_declare_instance_PCH_FILES "\"${RELATIVE_HEADER_FILE}\"")
+    endforeach()
+  endif()
+  if(project_service_declare_instance_PCH_FILES)
+    project_service_target_precompile_headers(
+      ${TARGET_NAME} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${project_service_declare_instance_PCH_FILES}>")
+  endif()
+
+  # Links
   unset(LINK_TARGETS)
   if(project_service_declare_instance_USE_COMPONENTS)
     foreach(USE_COMPONENT ${project_service_declare_instance_USE_COMPONENTS})
