@@ -1,5 +1,7 @@
 set(GENERATE_FOR_PB_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}")
-set(GENERATE_FOR_PB_PY "${GENERATE_FOR_PB_SOURCE_DIR}/generate-for-pb.py")
+set(GENERATE_FOR_PB_MAKO_PY "${GENERATE_FOR_PB_SOURCE_DIR}/tools/generate-for-pb/mako-generator.py")
+set(GENERATE_FOR_PB_JINJA2_PY "${GENERATE_FOR_PB_SOURCE_DIR}/tools/generate-for-pb/jinja2-generator.py")
+set(GENERATE_FOR_PB_PY "${GENERATE_FOR_PB_MAKO_PY}")
 set(GENERATE_FOR_PB_WORK_DIR "${CMAKE_BINARY_DIR}")
 set(GENERATE_FOR_PB_OUT_SH "${CMAKE_BINARY_DIR}/generate-for-pb-run.sh")
 set(GENERATE_FOR_PB_OUT_PWSH "${CMAKE_BINARY_DIR}/generate-for-pb-run.ps1")
