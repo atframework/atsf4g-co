@@ -315,402 +315,401 @@ struct UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data {
         schedule_shutdown_timepoint(0) {}
 };
 
-struct UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor{
-    static void assign_main_controller_expect_from_status(logic_hpa_controller::hpa_discovery_data & output,
-                                                          const PROJECT_NAMESPACE_ID::config::logic_hpa_status& input){
-        output.main_controller_expect_replicas.store(input.expect_replicas(), std::memory_order_release);
-output.main_controller_expect_scaling_timepoint.store(input.expect_scaling_timepoint().seconds(),
-                                                      std::memory_order_release);
-}
-
-static void reset_controller_metrics_status(logic_hpa_controller::hpa_discovery_data& output) {
-  auto now = util::time::time_utility::sys_now();
-
-  // 状态指标，用于监控
-  int64_t value = 0;
-  if (output.main_controller_flag_cache == main_controller_flag::kYes) {
-    value |= static_cast<int64_t>(controller_status_metrics_gauge::kMainController);
+struct UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor {
+  static void assign_main_controller_expect_from_status(logic_hpa_controller::hpa_discovery_data& output,
+                                                        const PROJECT_NAMESPACE_ID::config::logic_hpa_status& input) {
+    output.main_controller_expect_replicas.store(input.expect_replicas(), std::memory_order_release);
+    output.main_controller_expect_scaling_timepoint.store(input.expect_scaling_timepoint().seconds(),
+                                                          std::memory_order_release);
   }
 
-  if (output.main_controller_flag_mode == main_controller_mode::kCloudNative) {
-    value |= static_cast<int64_t>(controller_status_metrics_gauge::kCloudNative);
-  }
+  static void reset_controller_metrics_status(logic_hpa_controller::hpa_discovery_data& output) {
+    auto now = util::time::time_utility::sys_now();
 
-  if (output.current_hpa_label_ready) {
-    value |= static_cast<int64_t>(controller_status_metrics_gauge::kLabelReady);
-  }
-
-  if (output.current_hpa_label_target) {
-    value |= static_cast<int64_t>(controller_status_metrics_gauge::kLabelTarget);
-  }
-
-  if (now >= protobuf_to_system_clock(output.current_setting.expect_scaling_timepoint())) {
-    value |= static_cast<int64_t>(controller_status_metrics_gauge::kScalingDone);
-  } else if (now >= protobuf_to_system_clock(output.current_setting.expect_replicate_end_timepoint())) {
-    value |= static_cast<int64_t>(controller_status_metrics_gauge::kScalingPending);
-  } else if (now >= protobuf_to_system_clock(output.current_setting.expect_replicate_start_timepoint())) {
-    value |= static_cast<int64_t>(controller_status_metrics_gauge::kReplicateRunning);
-  } else {
-    value |= static_cast<int64_t>(controller_status_metrics_gauge::kReplicatePending);
-  }
-
-  output.controller_metrics_status.store(value, std::memory_order_relaxed);
-}
-
-static void command_show_hpa_controller_configure(
-    util::cli::callback_param params,
-    std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
-  if (hpa_discovery_data_ptr->with_type_id != 0) {
-    ::atapp::app::add_custom_command_rsp(
-        params, util::log::format("HPA Controller Discovery with type id: {}", hpa_discovery_data_ptr->with_type_id));
-  }
-
-  if (!hpa_discovery_data_ptr->with_type_name.empty()) {
-    ::atapp::app::add_custom_command_rsp(params, util::log::format("HPA Controller Discovery with type name: {}",
-                                                                   hpa_discovery_data_ptr->with_type_name));
-  }
-
-  auto& hpa_configure = logic_config::me()->get_logic().hpa();
-  ::atapp::app::add_custom_command_rsp(
-      params,
-      util::log::format("HPA metrics configure:\n{}", protobuf_mini_dumper_get_readable(hpa_configure.metrics())));
-
-  ::atapp::app::add_custom_command_rsp(
-      params, util::log::format("HPA Controller configure:\n{}",
-                                protobuf_mini_dumper_get_readable(hpa_configure.controller())));
-
-  ::atapp::app::add_custom_command_rsp(
-      params, util::log::format("HPA Controller Discovery filter:\n{}",
-                                protobuf_mini_dumper_get_readable(hpa_discovery_data_ptr->discovery_filter)));
-}
-
-static void command_show_hpa_controller_status(
-    util::cli::callback_param params,
-    std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
-  ::atapp::app::add_custom_command_rsp(
-      params, util::log::format("HPA Controller stateful index: {}",
-                                hpa_discovery_data_ptr->controller_stateful_index.load(std::memory_order_acquire)));
-
-  ::atapp::app::add_custom_command_rsp(
-      params,
-      util::log::format("HPA Controller current replicas: {}",
-                        hpa_discovery_data_ptr->main_controller_current_replicas.load(std::memory_order_acquire)));
-
-  ::atapp::app::add_custom_command_rsp(
-      params,
-      util::log::format("HPA Controller expect replicas: {}",
-                        hpa_discovery_data_ptr->main_controller_expect_replicas.load(std::memory_order_acquire)));
-
-  {
-    time_t expect_scaling_timepoint =
-        hpa_discovery_data_ptr->main_controller_expect_scaling_timepoint.load(std::memory_order_acquire);
-    std::tm c_tm;
-    char local_time_str[32] = {0};
-    UTIL_STRFUNC_LOCALTIME_S(&expect_scaling_timepoint, &c_tm);
-    std::strftime(local_time_str, sizeof(local_time_str) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
-
-    ::atapp::app::add_custom_command_rsp(
-        params, util::log::format("HPA Controller expect scaling timepoint: {}(local time: {})",
-                                  expect_scaling_timepoint, local_time_str));
-  }
-
-  const char* is_main;
-  if (hpa_discovery_data_ptr->main_controller_flag_cache == main_controller_flag::kYes) {
-    is_main = "yes";
-  } else if (hpa_discovery_data_ptr->main_controller_flag_cache == main_controller_flag::kNo) {
-    is_main = "no";
-  } else {
-    is_main = "unset";
-  }
-
-  ::atapp::app::add_custom_command_rsp(params, util::log::format("HPA Controller is main: {}", is_main));
-  ::atapp::app::add_custom_command_rsp(
-      params, util::log::format("HPA Controller ready label: {}", hpa_discovery_data_ptr->current_hpa_label_ready));
-  ::atapp::app::add_custom_command_rsp(
-      params, util::log::format("HPA Controller target label: {}", hpa_discovery_data_ptr->current_hpa_label_target));
-
-  // 主控节点额外输出提交信息
-  if (hpa_discovery_data_ptr->main_controller_flag_cache == main_controller_flag::kYes) {
-    time_t next_submit_timepoint = hpa_discovery_data_ptr->default_hpa_discovery_next_submit_timepoint;
-    std::tm c_tm;
-    char local_time_str[32] = {0};
-    UTIL_STRFUNC_LOCALTIME_S(&next_submit_timepoint, &c_tm);
-    std::strftime(local_time_str, sizeof(local_time_str) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
-    ::atapp::app::add_custom_command_rsp(
-        params, util::log::format("HPA Controller next submit time: {}(local time: {})", next_submit_timepoint,
-                                  local_time_str));
-
-    time_t scaling_up_stabilization_end_timepoint =
-        hpa_discovery_data_ptr->default_hpa_discovery_scaling_up_stabilization_end_timepoint;
-    if (scaling_up_stabilization_end_timepoint > 0) {
-      UTIL_STRFUNC_LOCALTIME_S(&scaling_up_stabilization_end_timepoint, &c_tm);
-      std::strftime(local_time_str, sizeof(local_time_str) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
-      ::atapp::app::add_custom_command_rsp(
-          params, util::log::format("HPA Controller scaling up stabilization end time: {}(local time: {})",
-                                    scaling_up_stabilization_end_timepoint, local_time_str));
-      ::atapp::app::add_custom_command_rsp(
-          params, util::log::format("HPA Controller scaling up target replicas: {}",
-                                    hpa_discovery_data_ptr->default_hpa_discovery_scaling_up_target_replicas));
-    } else {
-      ::atapp::app::add_custom_command_rsp(params, "HPA Controller scaling up stabilization end time: NA");
+    // 状态指标，用于监控
+    int64_t value = 0;
+    if (output.main_controller_flag_cache == main_controller_flag::kYes) {
+      value |= static_cast<int64_t>(controller_status_metrics_gauge::kMainController);
     }
-    ::atapp::app::add_custom_command_rsp(
-        params, util::log::format("HPA Controller scaling up expect replicas: {}",
-                                  hpa_discovery_data_ptr->default_hpa_discovery_scaling_up_expect_replicas));
 
-    time_t scaling_down_stabilization_end_timepoint =
-        hpa_discovery_data_ptr->default_hpa_discovery_scaling_down_stabilization_end_timepoint;
-    if (scaling_down_stabilization_end_timepoint > 0) {
-      UTIL_STRFUNC_LOCALTIME_S(&scaling_down_stabilization_end_timepoint, &c_tm);
+    if (output.main_controller_flag_mode == main_controller_mode::kCloudNative) {
+      value |= static_cast<int64_t>(controller_status_metrics_gauge::kCloudNative);
+    }
+
+    if (output.current_hpa_label_ready) {
+      value |= static_cast<int64_t>(controller_status_metrics_gauge::kLabelReady);
+    }
+
+    if (output.current_hpa_label_target) {
+      value |= static_cast<int64_t>(controller_status_metrics_gauge::kLabelTarget);
+    }
+
+    if (now >= protobuf_to_system_clock(output.current_setting.expect_scaling_timepoint())) {
+      value |= static_cast<int64_t>(controller_status_metrics_gauge::kScalingDone);
+    } else if (now >= protobuf_to_system_clock(output.current_setting.expect_replicate_end_timepoint())) {
+      value |= static_cast<int64_t>(controller_status_metrics_gauge::kScalingPending);
+    } else if (now >= protobuf_to_system_clock(output.current_setting.expect_replicate_start_timepoint())) {
+      value |= static_cast<int64_t>(controller_status_metrics_gauge::kReplicateRunning);
+    } else {
+      value |= static_cast<int64_t>(controller_status_metrics_gauge::kReplicatePending);
+    }
+
+    output.controller_metrics_status.store(value, std::memory_order_relaxed);
+  }
+
+  static void command_show_hpa_controller_configure(
+      util::cli::callback_param params,
+      std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
+    if (hpa_discovery_data_ptr->with_type_id != 0) {
+      ::atapp::app::add_custom_command_rsp(
+          params, util::log::format("HPA Controller Discovery with type id: {}", hpa_discovery_data_ptr->with_type_id));
+    }
+
+    if (!hpa_discovery_data_ptr->with_type_name.empty()) {
+      ::atapp::app::add_custom_command_rsp(params, util::log::format("HPA Controller Discovery with type name: {}",
+                                                                     hpa_discovery_data_ptr->with_type_name));
+    }
+
+    auto& hpa_configure = logic_config::me()->get_logic().hpa();
+    ::atapp::app::add_custom_command_rsp(
+        params,
+        util::log::format("HPA metrics configure:\n{}", protobuf_mini_dumper_get_readable(hpa_configure.metrics())));
+
+    ::atapp::app::add_custom_command_rsp(
+        params, util::log::format("HPA Controller configure:\n{}",
+                                  protobuf_mini_dumper_get_readable(hpa_configure.controller())));
+
+    ::atapp::app::add_custom_command_rsp(
+        params, util::log::format("HPA Controller Discovery filter:\n{}",
+                                  protobuf_mini_dumper_get_readable(hpa_discovery_data_ptr->discovery_filter)));
+  }
+
+  static void command_show_hpa_controller_status(
+      util::cli::callback_param params,
+      std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
+    ::atapp::app::add_custom_command_rsp(
+        params, util::log::format("HPA Controller stateful index: {}",
+                                  hpa_discovery_data_ptr->controller_stateful_index.load(std::memory_order_acquire)));
+
+    ::atapp::app::add_custom_command_rsp(
+        params,
+        util::log::format("HPA Controller current replicas: {}",
+                          hpa_discovery_data_ptr->main_controller_current_replicas.load(std::memory_order_acquire)));
+
+    ::atapp::app::add_custom_command_rsp(
+        params,
+        util::log::format("HPA Controller expect replicas: {}",
+                          hpa_discovery_data_ptr->main_controller_expect_replicas.load(std::memory_order_acquire)));
+
+    {
+      time_t expect_scaling_timepoint =
+          hpa_discovery_data_ptr->main_controller_expect_scaling_timepoint.load(std::memory_order_acquire);
+      std::tm c_tm;
+      char local_time_str[32] = {0};
+      UTIL_STRFUNC_LOCALTIME_S(&expect_scaling_timepoint, &c_tm);
+      std::strftime(local_time_str, sizeof(local_time_str) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
+
+      ::atapp::app::add_custom_command_rsp(
+          params, util::log::format("HPA Controller expect scaling timepoint: {}(local time: {})",
+                                    expect_scaling_timepoint, local_time_str));
+    }
+
+    const char* is_main;
+    if (hpa_discovery_data_ptr->main_controller_flag_cache == main_controller_flag::kYes) {
+      is_main = "yes";
+    } else if (hpa_discovery_data_ptr->main_controller_flag_cache == main_controller_flag::kNo) {
+      is_main = "no";
+    } else {
+      is_main = "unset";
+    }
+
+    ::atapp::app::add_custom_command_rsp(params, util::log::format("HPA Controller is main: {}", is_main));
+    ::atapp::app::add_custom_command_rsp(
+        params, util::log::format("HPA Controller ready label: {}", hpa_discovery_data_ptr->current_hpa_label_ready));
+    ::atapp::app::add_custom_command_rsp(
+        params, util::log::format("HPA Controller target label: {}", hpa_discovery_data_ptr->current_hpa_label_target));
+
+    // 主控节点额外输出提交信息
+    if (hpa_discovery_data_ptr->main_controller_flag_cache == main_controller_flag::kYes) {
+      time_t next_submit_timepoint = hpa_discovery_data_ptr->default_hpa_discovery_next_submit_timepoint;
+      std::tm c_tm;
+      char local_time_str[32] = {0};
+      UTIL_STRFUNC_LOCALTIME_S(&next_submit_timepoint, &c_tm);
       std::strftime(local_time_str, sizeof(local_time_str) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
       ::atapp::app::add_custom_command_rsp(
-          params, util::log::format("HPA Controller scaling down stabilization end time: {}(local time: {})",
-                                    scaling_down_stabilization_end_timepoint, local_time_str));
+          params, util::log::format("HPA Controller next submit time: {}(local time: {})", next_submit_timepoint,
+                                    local_time_str));
+
+      time_t scaling_up_stabilization_end_timepoint =
+          hpa_discovery_data_ptr->default_hpa_discovery_scaling_up_stabilization_end_timepoint;
+      if (scaling_up_stabilization_end_timepoint > 0) {
+        UTIL_STRFUNC_LOCALTIME_S(&scaling_up_stabilization_end_timepoint, &c_tm);
+        std::strftime(local_time_str, sizeof(local_time_str) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
+        ::atapp::app::add_custom_command_rsp(
+            params, util::log::format("HPA Controller scaling up stabilization end time: {}(local time: {})",
+                                      scaling_up_stabilization_end_timepoint, local_time_str));
+        ::atapp::app::add_custom_command_rsp(
+            params, util::log::format("HPA Controller scaling up target replicas: {}",
+                                      hpa_discovery_data_ptr->default_hpa_discovery_scaling_up_target_replicas));
+      } else {
+        ::atapp::app::add_custom_command_rsp(params, "HPA Controller scaling up stabilization end time: NA");
+      }
       ::atapp::app::add_custom_command_rsp(
-          params, util::log::format("HPA Controller scaling down target replicas: {}",
-                                    hpa_discovery_data_ptr->default_hpa_discovery_scaling_down_target_replicas));
+          params, util::log::format("HPA Controller scaling up expect replicas: {}",
+                                    hpa_discovery_data_ptr->default_hpa_discovery_scaling_up_expect_replicas));
+
+      time_t scaling_down_stabilization_end_timepoint =
+          hpa_discovery_data_ptr->default_hpa_discovery_scaling_down_stabilization_end_timepoint;
+      if (scaling_down_stabilization_end_timepoint > 0) {
+        UTIL_STRFUNC_LOCALTIME_S(&scaling_down_stabilization_end_timepoint, &c_tm);
+        std::strftime(local_time_str, sizeof(local_time_str) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
+        ::atapp::app::add_custom_command_rsp(
+            params, util::log::format("HPA Controller scaling down stabilization end time: {}(local time: {})",
+                                      scaling_down_stabilization_end_timepoint, local_time_str));
+        ::atapp::app::add_custom_command_rsp(
+            params, util::log::format("HPA Controller scaling down target replicas: {}",
+                                      hpa_discovery_data_ptr->default_hpa_discovery_scaling_down_target_replicas));
+      } else {
+        ::atapp::app::add_custom_command_rsp(params, "HPA Controller scaling down stabilization end time: NA");
+      }
+      ::atapp::app::add_custom_command_rsp(
+          params, util::log::format("HPA Controller scaling down expect replicas: {}",
+                                    hpa_discovery_data_ptr->default_hpa_discovery_scaling_down_expect_replicas));
+
+      // 输出所有策略的评估值
+      if (hpa_discovery_data_ptr->default_hpa_discovery) {
+        ::atapp::app::add_custom_command_rsp(params, "HPA Controller policy:");
+        hpa_discovery_data_ptr->default_hpa_discovery->foreach_policy(
+            [&params](const logic_hpa_policy& policy, int64_t last_value,
+                      std::chrono::system_clock::time_point last_update_time) -> bool {
+              time_t last_update_unix_timestamp = std::chrono::system_clock::to_time_t(last_update_time);
+              char local_policy_time_str[32] = {0};
+              if (last_update_unix_timestamp <= 0) {
+                memcpy(local_policy_time_str, "Not pulled yet", 14);
+              } else {
+                std::tm policy_c_tm;
+                UTIL_STRFUNC_LOCALTIME_S(&last_update_unix_timestamp, &policy_c_tm);
+                std::strftime(local_policy_time_str, sizeof(local_policy_time_str) - 1, "%Y-%m-%d %H:%M:%S",
+                              &policy_c_tm);
+              }
+
+              ::atapp::app::add_custom_command_rsp(
+                  params,
+                  util::log::format("\t Policy {} : Scaling up target: {}, , Scaling down target: {}, Last value: {}, "
+                                    "Last update time: {}",
+                                    policy.get_metrics_name(), policy.get_configure_scaling_up_value(),
+                                    policy.get_configure_scaling_down_value(), last_value, local_policy_time_str));
+              return true;
+            });
+      }
     } else {
+      ::atapp::app::add_custom_command_rsp(params, "HPA Controller next submit time: NA");
+      ::atapp::app::add_custom_command_rsp(params, "HPA Controller scaling up stabilization end time: NA");
       ::atapp::app::add_custom_command_rsp(params, "HPA Controller scaling down stabilization end time: NA");
     }
-    ::atapp::app::add_custom_command_rsp(
-        params, util::log::format("HPA Controller scaling down expect replicas: {}",
-                                  hpa_discovery_data_ptr->default_hpa_discovery_scaling_down_expect_replicas));
-
-    // 输出所有策略的评估值
-    if (hpa_discovery_data_ptr->default_hpa_discovery) {
-      ::atapp::app::add_custom_command_rsp(params, "HPA Controller policy:");
-      hpa_discovery_data_ptr->default_hpa_discovery->foreach_policy([&params](const logic_hpa_policy& policy,
-                                                                              int64_t last_value,
-                                                                              std::chrono::system_clock::time_point
-                                                                                  last_update_time) -> bool {
-        time_t last_update_unix_timestamp = std::chrono::system_clock::to_time_t(last_update_time);
-        char local_policy_time_str[32] = {0};
-        if (last_update_unix_timestamp <= 0) {
-          memcpy(local_policy_time_str, "Not pulled yet", 14);
-        } else {
-          std::tm policy_c_tm;
-          UTIL_STRFUNC_LOCALTIME_S(&last_update_unix_timestamp, &policy_c_tm);
-          std::strftime(local_policy_time_str, sizeof(local_policy_time_str) - 1, "%Y-%m-%d %H:%M:%S", &policy_c_tm);
-        }
-
-        ::atapp::app::add_custom_command_rsp(
-            params,
-            util::log::format(
-                "\t Policy {} : Scaling up target: {}, , Scaling down target: {}, Last value: {}, Last update time: {}",
-                policy.get_metrics_name(), policy.get_configure_scaling_up_value(),
-                policy.get_configure_scaling_down_value(), last_value, local_policy_time_str));
-        return true;
-      });
-    }
-  } else {
-    ::atapp::app::add_custom_command_rsp(params, "HPA Controller next submit time: NA");
-    ::atapp::app::add_custom_command_rsp(params, "HPA Controller scaling up stabilization end time: NA");
-    ::atapp::app::add_custom_command_rsp(params, "HPA Controller scaling down stabilization end time: NA");
-  }
-
-  ::atapp::app::add_custom_command_rsp(
-      params, util::log::format("HPA Controller current setting:\n{}",
-                                protobuf_mini_dumper_get_readable(hpa_discovery_data_ptr->current_setting)));
-
-  if (is_main) {
-    ::atapp::app::add_custom_command_rsp(
-        params, util::log::format("HPA Controller expect setting:\n{}",
-                                  protobuf_mini_dumper_get_readable(hpa_discovery_data_ptr->expect_setting)));
-  }
-}
-
-static void command_show_hpa_controller_discovery(
-    util::cli::callback_param params,
-    std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
-  if (!hpa_discovery_data_ptr->discovery_set) {
-    return;
-  }
-
-  auto& hpa_configure = logic_config::me()->get_logic().hpa();
-  ::atapp::app::add_custom_command_rsp(params,
-                                       util::log::format("HPA Controller Discovery configure: {}",
-                                                         protobuf_mini_dumper_get_readable(hpa_configure.discovery())));
-
-  for (auto& node : hpa_discovery_data_ptr->discovery_set->get_sorted_nodes()) {
-    if (!node) {
-      continue;
-    }
 
     ::atapp::app::add_custom_command_rsp(
-        params, util::log::format("HPA Controller Discovery node: {}",
-                                  protobuf_mini_dumper_get_readable(node->get_discovery_info())));
-  }
-}
+        params, util::log::format("HPA Controller current setting:\n{}",
+                                  protobuf_mini_dumper_get_readable(hpa_discovery_data_ptr->current_setting)));
 
-static void command_schedule_hpa_node_shutdown(
-    util::cli::callback_param params,
-    std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
-  if (!hpa_discovery_data_ptr->discovery_set) {
-    return;
-  }
-
-  time_t offset = 0;
-  if (params.get_params_number() > 0) {
-    offset = params[0]->to_int32();
-    if (offset < 0) {
-      offset = 0;
+    if (is_main) {
+      ::atapp::app::add_custom_command_rsp(
+          params, util::log::format("HPA Controller expect setting:\n{}",
+                                    protobuf_mini_dumper_get_readable(hpa_discovery_data_ptr->expect_setting)));
     }
   }
 
-  // 手动控制预期下线
-  offset = util::time::time_utility::get_sys_now() + offset;
-  hpa_discovery_data_ptr->schedule_shutdown_timepoint = offset;
+  static void command_show_hpa_controller_discovery(
+      util::cli::callback_param params,
+      std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
+    if (!hpa_discovery_data_ptr->discovery_set) {
+      return;
+    }
 
-  std::tm c_tm;
-  char local_time_str[32] = {0};
-  UTIL_STRFUNC_LOCALTIME_S(&offset, &c_tm);
-  std::strftime(local_time_str, sizeof(local_time_str) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
+    auto& hpa_configure = logic_config::me()->get_logic().hpa();
+    ::atapp::app::add_custom_command_rsp(
+        params, util::log::format("HPA Controller Discovery configure: {}",
+                                  protobuf_mini_dumper_get_readable(hpa_configure.discovery())));
 
-  std::string response_message =
-      util::log::format("HPA Controller schedule shutdown at: {}(local time: {})", offset, local_time_str);
-  ::atapp::app::add_custom_command_rsp(params, response_message);
+    for (auto& node : hpa_discovery_data_ptr->discovery_set->get_sorted_nodes()) {
+      if (!node) {
+        continue;
+      }
 
-  FWLOGINFO("[HPA]: Controller receive command: {}\n{}", "schedule-hpa-node-shutdown", response_message);
-}
-
-static void command_schedule_hpa_expect_scaling(
-    util::cli::callback_param params,
-    std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
-  if (!hpa_discovery_data_ptr->discovery_set) {
-    return;
+      ::atapp::app::add_custom_command_rsp(
+          params, util::log::format("HPA Controller Discovery node: {}",
+                                    protobuf_mini_dumper_get_readable(node->get_discovery_info())));
+    }
   }
 
-  // 手动控制预期扩缩容时间
-  time_t sys_now = util::time::time_utility::get_sys_now();
-  hpa_discovery_data_ptr->schedule_scaling.with_action = true;
-  hpa_discovery_data_ptr->default_hpa_discovery_next_submit_timepoint = sys_now;
-  hpa_discovery_data_ptr->default_hpa_discovery_scaling_up_stabilization_end_timepoint = sys_now;
-  hpa_discovery_data_ptr->default_hpa_discovery_scaling_down_stabilization_end_timepoint = sys_now;
+  static void command_schedule_hpa_node_shutdown(
+      util::cli::callback_param params,
+      std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
+    if (!hpa_discovery_data_ptr->discovery_set) {
+      return;
+    }
 
-  if (params.get_params_number() > 0) {
-    hpa_discovery_data_ptr->schedule_scaling.replicate_start = sys_now + params[0]->to_int32();
-  } else {
-    hpa_discovery_data_ptr->schedule_scaling.replicate_start = sys_now;
+    time_t offset = 0;
+    if (params.get_params_number() > 0) {
+      offset = params[0]->to_int32();
+      if (offset < 0) {
+        offset = 0;
+      }
+    }
+
+    // 手动控制预期下线
+    offset = util::time::time_utility::get_sys_now() + offset;
+    hpa_discovery_data_ptr->schedule_shutdown_timepoint = offset;
+
+    std::tm c_tm;
+    char local_time_str[32] = {0};
+    UTIL_STRFUNC_LOCALTIME_S(&offset, &c_tm);
+    std::strftime(local_time_str, sizeof(local_time_str) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
+
+    std::string response_message =
+        util::log::format("HPA Controller schedule shutdown at: {}(local time: {})", offset, local_time_str);
+    ::atapp::app::add_custom_command_rsp(params, response_message);
+
+    FWLOGINFO("[HPA]: Controller receive command: {}\n{}", "schedule-hpa-node-shutdown", response_message);
   }
 
-  if (params.get_params_number() > 1) {
-    hpa_discovery_data_ptr->schedule_scaling.replicate_end =
-        hpa_discovery_data_ptr->schedule_scaling.replicate_start + params[1]->to_int32();
-  } else {
-    hpa_discovery_data_ptr->schedule_scaling.replicate_end = hpa_discovery_data_ptr->schedule_scaling.replicate_start;
-  }
+  static void command_schedule_hpa_expect_scaling(
+      util::cli::callback_param params,
+      std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
+    if (!hpa_discovery_data_ptr->discovery_set) {
+      return;
+    }
 
-  if (params.get_params_number() > 2) {
-    hpa_discovery_data_ptr->schedule_scaling.expect_scaling =
-        hpa_discovery_data_ptr->schedule_scaling.replicate_end + params[2]->to_int32();
-  } else {
-    hpa_discovery_data_ptr->schedule_scaling.expect_scaling = hpa_discovery_data_ptr->schedule_scaling.replicate_end;
-  }
+    // 手动控制预期扩缩容时间
+    time_t sys_now = util::time::time_utility::get_sys_now();
+    hpa_discovery_data_ptr->schedule_scaling.with_action = true;
+    hpa_discovery_data_ptr->default_hpa_discovery_next_submit_timepoint = sys_now;
+    hpa_discovery_data_ptr->default_hpa_discovery_scaling_up_stabilization_end_timepoint = sys_now;
+    hpa_discovery_data_ptr->default_hpa_discovery_scaling_down_stabilization_end_timepoint = sys_now;
 
-  std::tm c_tm;
-  char local_time_replicate_start[32] = {0};
-  char local_time_replicate_end[32] = {0};
-  char local_time_replicate_scaling[32] = {0};
-  time_t tp_replicate_start = hpa_discovery_data_ptr->schedule_scaling.replicate_start;
-  time_t tp_replicate_end = hpa_discovery_data_ptr->schedule_scaling.replicate_end;
-  time_t tp_expect_scaling = hpa_discovery_data_ptr->schedule_scaling.expect_scaling;
-  UTIL_STRFUNC_LOCALTIME_S(&tp_replicate_start, &c_tm);
-  std::strftime(local_time_replicate_start, sizeof(local_time_replicate_start) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
-  UTIL_STRFUNC_LOCALTIME_S(&tp_replicate_end, &c_tm);
-  std::strftime(local_time_replicate_end, sizeof(local_time_replicate_start) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
-  UTIL_STRFUNC_LOCALTIME_S(&tp_expect_scaling, &c_tm);
-  std::strftime(local_time_replicate_scaling, sizeof(local_time_replicate_start) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
-
-  std::string response_message = util::log::format(
-      "HPA Controller schedule scaling\n\treplicate start at: {}(local time: {})\n\treplicate "
-      "end at: {}(local time: {})\n\treplicate scaling at: {}(local time: {})",
-      tp_replicate_start, local_time_replicate_start, tp_replicate_end, local_time_replicate_end, tp_expect_scaling,
-      local_time_replicate_scaling);
-
-  ::atapp::app::add_custom_command_rsp(params, response_message);
-
-  FWLOGINFO("[HPA]: Controller receive command: {}\n{}", "schedule-hpa-expect-scaling", response_message);
-}
-
-static void command_debug_hpa_set_expect_replicas(
-    util::cli::callback_param params,
-    std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
-  if (!hpa_discovery_data_ptr->discovery_set) {
-    return;
-  }
-
-  // 测试用，手动控制预期副本数
-  if (params.get_params_number() > 0) {
-    hpa_discovery_data_ptr->main_controller_debug_expect_replicas = params[0]->to_int32();
-  } else {
-    hpa_discovery_data_ptr->main_controller_debug_expect_replicas = 0;
-  }
-
-  std::string response_message = util::log::format("debug-hpa-set-expect-replicas {}",
-                                                   hpa_discovery_data_ptr->main_controller_debug_expect_replicas);
-  ::atapp::app::add_custom_command_rsp(params, response_message);
-
-  FWLOGINFO("[HPA]: Controller receive command: {}", response_message);
-}
-
-static void command_debug_hpa_fake_cpu_permillage(
-    util::cli::callback_param params,
-    std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
-  if (!hpa_discovery_data_ptr->discovery_set) {
-    return;
-  }
-
-  // 测试用，虚拟控制CPU占用上报千分比
-  if (params.get_params_number() > 0) {
-    hpa_discovery_data_ptr->controller_debug_cpu_permillage_offset.store(params[0]->to_int64(),
-                                                                         std::memory_order_relaxed);
-    if (params.get_params_number() > 1) {
-      hpa_discovery_data_ptr->controller_debug_cpu_permillage_end_time.store(
-          static_cast<int64_t>(util::time::time_utility::get_sys_now()) + params[1]->to_int64(),
-          std::memory_order_relaxed);
+    if (params.get_params_number() > 0) {
+      hpa_discovery_data_ptr->schedule_scaling.replicate_start = sys_now + params[0]->to_int32();
     } else {
-      hpa_discovery_data_ptr->controller_debug_cpu_permillage_end_time.store(
-          static_cast<int64_t>(util::time::time_utility::get_sys_now()) + 600, std::memory_order_relaxed);
+      hpa_discovery_data_ptr->schedule_scaling.replicate_start = sys_now;
     }
-  } else {
-    hpa_discovery_data_ptr->controller_debug_cpu_permillage_offset.store(0, std::memory_order_relaxed);
-    hpa_discovery_data_ptr->controller_debug_cpu_permillage_end_time.store(
-        static_cast<int64_t>(util::time::time_utility::get_sys_now() - 1), std::memory_order_relaxed);
+
+    if (params.get_params_number() > 1) {
+      hpa_discovery_data_ptr->schedule_scaling.replicate_end =
+          hpa_discovery_data_ptr->schedule_scaling.replicate_start + params[1]->to_int32();
+    } else {
+      hpa_discovery_data_ptr->schedule_scaling.replicate_end = hpa_discovery_data_ptr->schedule_scaling.replicate_start;
+    }
+
+    if (params.get_params_number() > 2) {
+      hpa_discovery_data_ptr->schedule_scaling.expect_scaling =
+          hpa_discovery_data_ptr->schedule_scaling.replicate_end + params[2]->to_int32();
+    } else {
+      hpa_discovery_data_ptr->schedule_scaling.expect_scaling = hpa_discovery_data_ptr->schedule_scaling.replicate_end;
+    }
+
+    std::tm c_tm;
+    char local_time_replicate_start[32] = {0};
+    char local_time_replicate_end[32] = {0};
+    char local_time_replicate_scaling[32] = {0};
+    time_t tp_replicate_start = hpa_discovery_data_ptr->schedule_scaling.replicate_start;
+    time_t tp_replicate_end = hpa_discovery_data_ptr->schedule_scaling.replicate_end;
+    time_t tp_expect_scaling = hpa_discovery_data_ptr->schedule_scaling.expect_scaling;
+    UTIL_STRFUNC_LOCALTIME_S(&tp_replicate_start, &c_tm);
+    std::strftime(local_time_replicate_start, sizeof(local_time_replicate_start) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
+    UTIL_STRFUNC_LOCALTIME_S(&tp_replicate_end, &c_tm);
+    std::strftime(local_time_replicate_end, sizeof(local_time_replicate_start) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
+    UTIL_STRFUNC_LOCALTIME_S(&tp_expect_scaling, &c_tm);
+    std::strftime(local_time_replicate_scaling, sizeof(local_time_replicate_start) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
+
+    std::string response_message = util::log::format(
+        "HPA Controller schedule scaling\n\treplicate start at: {}(local time: {})\n\treplicate "
+        "end at: {}(local time: {})\n\treplicate scaling at: {}(local time: {})",
+        tp_replicate_start, local_time_replicate_start, tp_replicate_end, local_time_replicate_end, tp_expect_scaling,
+        local_time_replicate_scaling);
+
+    ::atapp::app::add_custom_command_rsp(params, response_message);
+
+    FWLOGINFO("[HPA]: Controller receive command: {}\n{}", "schedule-hpa-expect-scaling", response_message);
   }
 
-  std::tm c_tm;
-  char local_time_end_time[32] = {0};
-  time_t tp_end_time = static_cast<int64_t>(
-      hpa_discovery_data_ptr->controller_debug_cpu_permillage_end_time.load(std::memory_order_relaxed));
-  UTIL_STRFUNC_LOCALTIME_S(&tp_end_time, &c_tm);
-  std::strftime(local_time_end_time, sizeof(local_time_end_time) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
+  static void command_debug_hpa_set_expect_replicas(
+      util::cli::callback_param params,
+      std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
+    if (!hpa_discovery_data_ptr->discovery_set) {
+      return;
+    }
 
-  std::string response_message = util::log::format(
-      "debug-hpa-fake-cpu-permillage set offset: {}, end time: {}(local time: {})",
-      hpa_discovery_data_ptr->controller_debug_cpu_permillage_offset.load(std::memory_order_relaxed),
-      hpa_discovery_data_ptr->controller_debug_cpu_permillage_end_time.load(std::memory_order_relaxed),
-      local_time_end_time);
-  ::atapp::app::add_custom_command_rsp(params, response_message);
+    // 测试用，手动控制预期副本数
+    if (params.get_params_number() > 0) {
+      hpa_discovery_data_ptr->main_controller_debug_expect_replicas = params[0]->to_int32();
+    } else {
+      hpa_discovery_data_ptr->main_controller_debug_expect_replicas = 0;
+    }
 
-  FWLOGINFO("[HPA]: Controller receive command: {}", response_message);
-}
+    std::string response_message = util::log::format("debug-hpa-set-expect-replicas {}",
+                                                     hpa_discovery_data_ptr->main_controller_debug_expect_replicas);
+    ::atapp::app::add_custom_command_rsp(params, response_message);
 
-static void set_main_hpa_controller_flag(hpa_discovery_data& target, main_controller_flag flag_cache,
-                                         main_controller_mode mode) noexcept {
-  target.main_controller_flag_cache = flag_cache;
-  target.main_controller_flag_mode = mode;
-
-  if (flag_cache == main_controller_flag::kNo) {
-    target.default_hpa_discovery_scaling_up_stabilization_end_timepoint = 0;
-    target.default_hpa_discovery_scaling_up_target_replicas = 0;
-    target.default_hpa_discovery_scaling_up_expect_replicas = 0;
-    target.default_hpa_discovery_scaling_down_stabilization_end_timepoint = 0;
-    target.default_hpa_discovery_scaling_down_target_replicas = 0;
-    target.default_hpa_discovery_scaling_down_expect_replicas = 0;
+    FWLOGINFO("[HPA]: Controller receive command: {}", response_message);
   }
-}
-}
-;
+
+  static void command_debug_hpa_fake_cpu_permillage(
+      util::cli::callback_param params,
+      std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
+    if (!hpa_discovery_data_ptr->discovery_set) {
+      return;
+    }
+
+    // 测试用，虚拟控制CPU占用上报千分比
+    if (params.get_params_number() > 0) {
+      hpa_discovery_data_ptr->controller_debug_cpu_permillage_offset.store(params[0]->to_int64(),
+                                                                           std::memory_order_relaxed);
+      if (params.get_params_number() > 1) {
+        hpa_discovery_data_ptr->controller_debug_cpu_permillage_end_time.store(
+            static_cast<int64_t>(util::time::time_utility::get_sys_now()) + params[1]->to_int64(),
+            std::memory_order_relaxed);
+      } else {
+        hpa_discovery_data_ptr->controller_debug_cpu_permillage_end_time.store(
+            static_cast<int64_t>(util::time::time_utility::get_sys_now()) + 600, std::memory_order_relaxed);
+      }
+    } else {
+      hpa_discovery_data_ptr->controller_debug_cpu_permillage_offset.store(0, std::memory_order_relaxed);
+      hpa_discovery_data_ptr->controller_debug_cpu_permillage_end_time.store(
+          static_cast<int64_t>(util::time::time_utility::get_sys_now() - 1), std::memory_order_relaxed);
+    }
+
+    std::tm c_tm;
+    char local_time_end_time[32] = {0};
+    time_t tp_end_time = static_cast<int64_t>(
+        hpa_discovery_data_ptr->controller_debug_cpu_permillage_end_time.load(std::memory_order_relaxed));
+    UTIL_STRFUNC_LOCALTIME_S(&tp_end_time, &c_tm);
+    std::strftime(local_time_end_time, sizeof(local_time_end_time) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
+
+    std::string response_message = util::log::format(
+        "debug-hpa-fake-cpu-permillage set offset: {}, end time: {}(local time: {})",
+        hpa_discovery_data_ptr->controller_debug_cpu_permillage_offset.load(std::memory_order_relaxed),
+        hpa_discovery_data_ptr->controller_debug_cpu_permillage_end_time.load(std::memory_order_relaxed),
+        local_time_end_time);
+    ::atapp::app::add_custom_command_rsp(params, response_message);
+
+    FWLOGINFO("[HPA]: Controller receive command: {}", response_message);
+  }
+
+  static void set_main_hpa_controller_flag(hpa_discovery_data& target, main_controller_flag flag_cache,
+                                           main_controller_mode mode) noexcept {
+    target.main_controller_flag_cache = flag_cache;
+    target.main_controller_flag_mode = mode;
+
+    if (flag_cache == main_controller_flag::kNo) {
+      target.default_hpa_discovery_scaling_up_stabilization_end_timepoint = 0;
+      target.default_hpa_discovery_scaling_up_target_replicas = 0;
+      target.default_hpa_discovery_scaling_up_expect_replicas = 0;
+      target.default_hpa_discovery_scaling_down_stabilization_end_timepoint = 0;
+      target.default_hpa_discovery_scaling_down_target_replicas = 0;
+      target.default_hpa_discovery_scaling_down_expect_replicas = 0;
+    }
+  }
+};
 
 SERVER_FRAME_API logic_hpa_controller::logic_hpa_controller(atapp::app& owner_app)
     : owner_app_(&owner_app),
@@ -3323,8 +3322,10 @@ int32_t logic_hpa_controller::apply_default_hpa_scaling_up_expect_replicas(
   if (scaling_up_target > expect_replicas) {
     // 稳定阶段，转冷静期
     if (hpa_discovery_data_->default_hpa_discovery_scaling_up_stabilization_end_timepoint <= 0) {
-      time_t start_time = std::max(sys_now, hpa_discovery_data_->current_setting.expect_scaling_timepoint().seconds());
-      start_time = std::max(start_time, hpa_discovery_data_->expect_setting.expect_scaling_timepoint().seconds());
+      time_t start_time = std::max(
+          sys_now, static_cast<time_t>(hpa_discovery_data_->current_setting.expect_scaling_timepoint().seconds()));
+      start_time = std::max(
+          start_time, static_cast<time_t>(hpa_discovery_data_->expect_setting.expect_scaling_timepoint().seconds()));
       hpa_discovery_data_->default_hpa_discovery_scaling_up_stabilization_end_timepoint =
           start_time + hpa_configure.rule().scaling_up_configure().stabilization_window().seconds();
       hpa_discovery_data_->default_hpa_discovery_scaling_up_target_replicas = scaling_up_target;
@@ -3414,8 +3415,10 @@ int32_t logic_hpa_controller::apply_default_hpa_scaling_down_expect_replicas(
   if (scaling_down_target < expect_replicas) {
     // 稳定阶段，转冷静期
     if (hpa_discovery_data_->default_hpa_discovery_scaling_down_stabilization_end_timepoint <= 0) {
-      time_t start_time = std::max(sys_now, hpa_discovery_data_->current_setting.expect_scaling_timepoint().seconds());
-      start_time = std::max(start_time, hpa_discovery_data_->expect_setting.expect_scaling_timepoint().seconds());
+      time_t start_time = std::max(
+          sys_now, static_cast<time_t>(hpa_discovery_data_->current_setting.expect_scaling_timepoint().seconds()));
+      start_time = std::max(
+          start_time, static_cast<time_t>(hpa_discovery_data_->expect_setting.expect_scaling_timepoint().seconds()));
       hpa_discovery_data_->default_hpa_discovery_scaling_down_stabilization_end_timepoint =
           start_time + hpa_configure.rule().scaling_down_configure().stabilization_window().seconds();
 

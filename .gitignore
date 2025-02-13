@@ -92,4 +92,5 @@
 /src/server_frame/rpc/logic/logiccommonservice.h
 /src/server_frame/rpc/logic/logiccommonservice.cpp
 /src/component/distributed_transaction/sdk/rpc/transaction/dtcoordsvrservice.*
+/src/component/distributed_transaction/dtcoordsvr/app/handle_ss_rpc_dtcoordsvrservice.*
 /src/tools/simulator/rpc

@@ -74,3 +74,15 @@ rules:
           output: 'output path rule'
       value_include: 'regex rule'
       value_exclude: 'regex rule'
+  - file:
+      overwrite: false # overwrite configure.overwrite
+      output_directory: "overwrite configure.output_directory"
+      custom_variables:
+        key: "value" # overwrite configure.custom_variables.key
+      file_template:
+        - overwrite: false
+          input: "input template path"
+          output: "output path rule"
+      file_include: "regex rule"
+      file_exclude: "regex rule"
+      file_ignore_package: [] # ignore files by package

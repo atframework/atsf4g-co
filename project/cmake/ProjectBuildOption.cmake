@@ -3,7 +3,8 @@
 # 默认配置选项
 # ######################################################################################################################
 
-if(UNIX)
+# gRPC在macOS上符号可见性设置有兼容性问题
+if(UNIX AND NOT APPLE)
   option(ATFRAMEWORK_USE_DYNAMIC_LIBRARY "Build and linking with dynamic libraries." ON)
 else()
   option(ATFRAMEWORK_USE_DYNAMIC_LIBRARY "Build and linking with dynamic libraries." OFF)
