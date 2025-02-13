@@ -112,6 +112,16 @@ def add_package_prefix_paths(packag_paths):
 
 
 class PbConvertRule:
+    """
+    PbConvertRule is a class that defines constants for different naming conversion rules.
+
+    Attributes:
+        CONVERT_NAME_NOT_CHANGE (int): No change to the name.
+        CONVERT_NAME_LOWERCASE (int): Convert the name to lowercase.
+        CONVERT_NAME_UPPERCASE (int): Convert the name to uppercase.
+        CONVERT_NAME_CAMEL_FIRST_LOWERCASE (int): Convert the name to camel case with the first letter in lowercase.
+        CONVERT_NAME_CAMEL_CAMEL (int): Convert the name to camel case.
+    """
     CONVERT_NAME_NOT_CHANGE = 0
     CONVERT_NAME_LOWERCASE = 1
     CONVERT_NAME_UPPERCASE = 2
@@ -122,6 +132,13 @@ class PbConvertRule:
 class PbObjectBase(object):
 
     def __init__(self, descriptor, refer_database):
+        """
+        Initialize the generator with the given descriptor and reference database.
+
+        Args:
+            descriptor: The descriptor containing definitions and configuration.
+            refer_database: The database or registry used for cross-references.
+        """
         self.descriptor = descriptor
         self.refer_database = refer_database
         self._reflect_extensions = None
