@@ -506,7 +506,7 @@ function(generate_for_pb_run_generator)
   endif()
   file(
     APPEND "${GENERATE_FOR_PB_OUT_SH}"
-    "\"${Python3_EXECUTABLE}\" \"${GENERATE_FOR_PB_PY}\" --add-package-prefix \"${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}\" -c \"${GENERATE_FOR_PB_OUT_CONF}\" \"$@\" ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    "\"${Python3_EXECUTABLE}\" \"${GENERATE_FOR_PB_PY}\" --add-package-prefix \"${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}\" --clang-format-path \"${PROJECT_TOOL_CLANG_FORMAT}\" -c \"${GENERATE_FOR_PB_OUT_CONF}\" \"$@\" ${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
   )
 
   file(
@@ -564,7 +564,7 @@ if ($LastExitCode -ne 0) {
 if ($LastExitCode -ne 0) {
   exit $LastExitCode
 }${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}
-& \"${Python3_EXECUTABLE}\" \"${GENERATE_FOR_PB_PY}\" --add-package-prefix \"${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}\" -c \"${GENERATE_FOR_PB_OUT_CONF}\" $args
+& \"${Python3_EXECUTABLE}\" \"${GENERATE_FOR_PB_PY}\" --add-package-prefix \"${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}\" --clang-format-path \"${PROJECT_TOOL_CLANG_FORMAT}\" -c \"${GENERATE_FOR_PB_OUT_CONF}\" $args
 if ($LastExitCode -ne 0) {
   exit $LastExitCode
 }${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
