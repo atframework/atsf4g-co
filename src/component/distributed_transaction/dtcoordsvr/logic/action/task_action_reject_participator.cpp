@@ -23,7 +23,7 @@
 #include "logic/transaction_manager.h"
 
 task_action_reject_participator::task_action_reject_participator(dispatcher_start_data_type&& param)
-    : base_type(COPP_MACRO_STD_MOVE(param)) {}
+    : base_type(std::move(param)) {}
 task_action_reject_participator::~task_action_reject_participator() {}
 
 const char* task_action_reject_participator::name() const { return "task_action_reject_participator"; }

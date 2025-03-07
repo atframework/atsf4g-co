@@ -35,7 +35,7 @@
 #include "logic/action/task_action_player_async_jobs.h"
 
 GAMECLIENT_RPC_API task_action_login::task_action_login(dispatcher_start_data_type&& param)
-    : base_type(COPP_MACRO_STD_MOVE(param)), is_new_player_(false) {}
+    : base_type(std::move(param)), is_new_player_(false) {}
 
 GAMECLIENT_RPC_API task_action_login::~task_action_login() {}
 
@@ -231,7 +231,7 @@ GAMECLIENT_RPC_API int task_action_login::on_success() {
     params.user = user;
     params.caller_context = &get_shared_context();
     task_manager::me()->create_task_with_timeout<task_action_player_async_jobs>(
-        task_inst, logic_config::me()->get_cfg_task().nomsg().timeout(), COPP_MACRO_STD_MOVE(params));
+        task_inst, logic_config::me()->get_cfg_task().nomsg().timeout(), std::move(params));
     if (task_type_trait::empty(task_inst)) {
       FCTXLOGERROR(get_shared_context(), "{}", "create task_action_player_async_jobs failed");
     } else {

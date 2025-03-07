@@ -22,7 +22,7 @@
 
 #include "logic/transaction_manager.h"
 
-task_action_commit::task_action_commit(dispatcher_start_data_type&& param) : base_type(COPP_MACRO_STD_MOVE(param)) {}
+task_action_commit::task_action_commit(dispatcher_start_data_type&& param) : base_type(std::move(param)) {}
 task_action_commit::~task_action_commit() {}
 
 const char* task_action_commit::name() const { return "task_action_commit"; }

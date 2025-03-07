@@ -31,7 +31,7 @@
 #include <string>
 
 task_action_player_kickoff::task_action_player_kickoff(dispatcher_start_data_type&& param)
-    : base_type(COPP_MACRO_STD_MOVE(param)) {}
+    : base_type(std::move(param)) {}
 task_action_player_kickoff::~task_action_player_kickoff() {}
 
 bool task_action_player_kickoff::is_stream_rpc() const noexcept { return false; }

@@ -35,7 +35,7 @@ rpc_is_stream_mode = rpc.is_request_stream() or rpc.is_response_stream()
 
 #include <config/extern_service_types.h>
 
-${service_dllexport_decl} ${task_class_name}::${task_class_name}(dispatcher_start_data_type&& param) : base_type(COPP_MACRO_STD_MOVE(param)) {}
+${service_dllexport_decl} ${task_class_name}::${task_class_name}(dispatcher_start_data_type&& param) : base_type(std::move(param)) {}
 
 ${service_dllexport_decl} ${task_class_name}::~${task_class_name}() {}
 

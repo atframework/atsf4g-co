@@ -367,7 +367,7 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_s
       task_param.atgateway_session_id = session_key.session_id;
       task_param.atgateway_node_id = session_key.node_id;
 
-      ret = task_manager::me()->create_task<task_action_player_logout>(task_inst, COPP_MACRO_STD_MOVE(task_param));
+      ret = task_manager::me()->create_task<task_action_player_logout>(task_inst, std::move(task_param));
       if (0 == ret) {
         dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
 

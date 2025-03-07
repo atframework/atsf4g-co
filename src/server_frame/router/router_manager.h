@@ -494,7 +494,7 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
         all_msgs.swap(obj->get_transfer_pending_list());
 
         for (atframework::SSMsg &msg : all_msgs) {
-          obj->send_transfer_msg_failed(COPP_MACRO_STD_MOVE(msg));
+          obj->send_transfer_msg_failed(std::move(msg));
         }
       }
 
@@ -545,7 +545,7 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
             FWLOGERROR("transfer router object (type={},zone_id={}) {} message failed, res: {}", get_type_id(),
                        obj->get_key().zone_id, obj->get_key().object_id, res);
           } else {
-            obj->send_transfer_msg_failed(COPP_MACRO_STD_MOVE(msg));
+            obj->send_transfer_msg_failed(std::move(msg));
           }
         }
       }
@@ -556,7 +556,7 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
         all_msgs.swap(obj->get_transfer_pending_list());
 
         for (atframework::SSMsg &msg : all_msgs) {
-          obj->send_transfer_msg_failed(COPP_MACRO_STD_MOVE(msg));
+          obj->send_transfer_msg_failed(std::move(msg));
         }
       }
     }

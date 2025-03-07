@@ -25,7 +25,7 @@
 #include "router/router_manager_set.h"
 
 task_action_router_update_sync::task_action_router_update_sync(dispatcher_start_data_type&& param)
-    : base_type(COPP_MACRO_STD_MOVE(param)) {}
+    : base_type(std::move(param)) {}
 task_action_router_update_sync::~task_action_router_update_sync() {}
 
 bool task_action_router_update_sync::is_stream_rpc() const noexcept { return true; }

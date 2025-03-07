@@ -199,7 +199,7 @@ SERVER_FRAME_API int router_manager_set::stop() {
   }
 
   task_manager::me()->create_task_with_timeout<task_action_router_close_manager_set>(
-      task_inst, logic_config::me()->get_cfg_task().stats().interval(), COPP_MACRO_STD_MOVE(ctor_param));
+      task_inst, logic_config::me()->get_cfg_task().stats().interval(), std::move(ctor_param));
   if (task_type_trait::empty(task_inst)) {
     FWLOGERROR("create task_action_router_close_manager_set failed");
   } else {

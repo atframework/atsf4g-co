@@ -25,7 +25,7 @@
 #include "logic/async_jobs/user_async_jobs_manager.h"
 
 task_action_player_async_jobs_sync::task_action_player_async_jobs_sync(dispatcher_start_data_type&& param)
-    : base_type(COPP_MACRO_STD_MOVE(param)) {}
+    : base_type(std::move(param)) {}
 task_action_player_async_jobs_sync::~task_action_player_async_jobs_sync() {}
 
 const char* task_action_player_async_jobs_sync::name() const { return "task_action_player_async_jobs_sync"; }

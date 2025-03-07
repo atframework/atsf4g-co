@@ -87,7 +87,7 @@ rpc::result_code_type router_player_cache::pull_cache(rpc::context &ctx, router_
   // 注意: 如果要改成同账号跨大区也不能多处登入（Login表跨大区），这里要判定当前zone_id是否和login表一致
   set_router_server_id(login_table_ptr->router_server_id(), login_table_ptr->router_version());
 
-  obj->load_and_move_login_info(COPP_MACRO_STD_MOVE(*login_table_ptr), *local_login_ver_ptr);
+  obj->load_and_move_login_info(std::move(*login_table_ptr), *local_login_ver_ptr);
   login_table_ptr->set_user_id(0);
   login_table_ptr->set_zone_id(0);
 
@@ -204,7 +204,7 @@ rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, router
   // 拉取玩家数据
   // 设置路由ID
   set_router_server_id(login_table_ptr->router_server_id(), login_table_ptr->router_version());
-  obj->load_and_move_login_info(COPP_MACRO_STD_MOVE(*login_table_ptr), *local_login_ver_ptr);
+  obj->load_and_move_login_info(std::move(*login_table_ptr), *local_login_ver_ptr);
   login_table_ptr->set_user_id(0);
   login_table_ptr->set_zone_id(0);
 

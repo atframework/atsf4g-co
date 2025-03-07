@@ -180,7 +180,7 @@ bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
   params.caller_context = &ctx;
   params.async_job_type.swap(force_async_job_type_);
   task_manager::me()->create_task_with_timeout<task_action_player_remote_patch_jobs>(task_inst, params.timeout_duration,
-                                                                                     COPP_MACRO_STD_MOVE(params));
+                                                                                     std::move(params));
 
   if (task_type_trait::empty(task_inst)) {
     FWLOGERROR("create task_action_player_remote_patch_jobs failed");
