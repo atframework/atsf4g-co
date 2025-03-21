@@ -12,7 +12,7 @@
 struct logic_hpa_pull_internal_prometheus_record_data;
 struct logic_hpa_pull_internal_prometheus_result_data;
 
-class UTIL_SYMBOL_VISIBLE logic_hpa_pull_instant_record_prometheus : public logic_hpa_pull_instant_record {
+class ATFW_UTIL_SYMBOL_VISIBLE logic_hpa_pull_instant_record_prometheus : public logic_hpa_pull_instant_record {
   UTIL_DESIGN_PATTERN_NOCOPYABLE(logic_hpa_pull_instant_record_prometheus);
   UTIL_DESIGN_PATTERN_NOMOVABLE(logic_hpa_pull_instant_record_prometheus);
 
@@ -32,7 +32,7 @@ class UTIL_SYMBOL_VISIBLE logic_hpa_pull_instant_record_prometheus : public logi
   atfw::util::memory::strong_rc_ptr<logic_hpa_pull_internal_prometheus_record_data> internal_data_;
 };
 
-class UTIL_SYMBOL_VISIBLE logic_hpa_pull_range_record_prometheus : public logic_hpa_pull_range_record {
+class ATFW_UTIL_SYMBOL_VISIBLE logic_hpa_pull_range_record_prometheus : public logic_hpa_pull_range_record {
   UTIL_DESIGN_PATTERN_NOCOPYABLE(logic_hpa_pull_range_record_prometheus);
 
   UTIL_DESIGN_PATTERN_NOMOVABLE(logic_hpa_pull_range_record_prometheus);
@@ -68,7 +68,7 @@ class UTIL_SYMBOL_VISIBLE logic_hpa_pull_range_record_prometheus : public logic_
 //   "warnings": ["<string>"]
 // }
 
-class UTIL_SYMBOL_VISIBLE logic_hpa_pull_result_prometheus : public logic_hpa_pull_result {
+class ATFW_UTIL_SYMBOL_VISIBLE logic_hpa_pull_result_prometheus : public logic_hpa_pull_result {
   UTIL_DESIGN_PATTERN_NOCOPYABLE(logic_hpa_pull_result_prometheus);
 
   UTIL_DESIGN_PATTERN_NOMOVABLE(logic_hpa_pull_result_prometheus);

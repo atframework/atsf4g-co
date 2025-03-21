@@ -18,7 +18,7 @@ namespace metrics {
 /**
  * Struct to hold Prometheus exporter options.
  */
-struct UTIL_SYMBOL_VISIBLE PrometheusPushExporterOptions {
+struct ATFW_UTIL_SYMBOL_VISIBLE PrometheusPushExporterOptions {
   std::string host;
   std::string port;
   std::string jobname;

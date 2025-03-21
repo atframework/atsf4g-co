@@ -14,7 +14,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 #include <config/compile_optimize.h>
 
 #ifndef ${service_dllexport_decl}
-#  define ${service_dllexport_decl} UTIL_SYMBOL_VISIBLE
+#  define ${service_dllexport_decl} ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
 class dispatcher_implement;

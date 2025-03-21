@@ -11,10 +11,10 @@
 #include <log/log_wrapper.h>
 
 #include <atframe/atapp.h>
+#include <atgateway/protocols/libatgw_protocol_api.h>
+#include <atgateway/protocols/libatgw_server_protocol.h>
 #include <config/atframe_service_types.h>
 #include <libatbus_protocol.h>
-#include <libatgw_server_protocol.h>
-#include <proto_base.h>
 
 #include <opentelemetry/trace/semantic_conventions.h>
 
@@ -60,7 +60,7 @@ SERVER_FRAME_API int cs_msg_dispatcher::stop() {
     return dispatcher_implement::stop();
   }
 
-  session_manager::me()->remove_all(atframe::gateway::close_reason_t::EN_CRT_SERVER_CLOSED);
+  session_manager::me()->remove_all(atframework::gateway::close_reason_t::EN_CRT_SERVER_CLOSED);
   is_closing_ = true;
   return dispatcher_implement::stop();
 }
@@ -133,17 +133,19 @@ SERVER_FRAME_API void cs_msg_dispatcher::on_create_task_failed(dispatcher_start_
   }
 
   if (!real_msg->head().has_rpc_request() || 0 == real_msg->head().session_id() ||
-      0 == real_msg->head().session_node_id()) {
+      (0 == real_msg->head().session_node_id() && real_msg->head().session_node_name().empty())) {
     return;
   }
 
   session::key_t session_key;
   session_key.node_id = real_msg->head().session_node_id();
+  session_key.node_name = real_msg->head().session_node_name();
   session_key.session_id = real_msg->head().session_id();
   std::shared_ptr<session> sess = session_manager::me()->find(session_key);
   if (!sess) {
-    FWLOGWARNING("session: [{:#x}, {}] may already be closing or already closed when receive rpc {}",
-                 real_msg->head().session_node_id(), real_msg->head().session_id(), rpc_name);
+    FWLOGWARNING("session: [{}({}), {}] may already be closing or already closed when receive rpc {}",
+                 real_msg->head().session_node_id(), real_msg->head().session_node_name(),
+                 real_msg->head().session_id(), rpc_name);
     return;
   }
 
@@ -180,6 +182,7 @@ SERVER_FRAME_API void cs_msg_dispatcher::on_create_task_failed(dispatcher_start_
   head->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE);
   head->set_session_id(real_msg->head().session_id());
   head->set_session_node_id(real_msg->head().session_node_id());
+  head->set_session_node_name(real_msg->head().session_node_name());
   head->set_timestamp(util::time::time_utility::get_now());
 
   head->mutable_rpc_response()->set_version(logic_config::me()->get_atframework_settings().rpc_version());
@@ -200,7 +203,7 @@ SERVER_FRAME_API void cs_msg_dispatcher::on_create_task_failed(dispatcher_start_
 
 SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source,
                                                      const atapp::app::message_t &msg) {
-  if (::atframe::component::service_type::EN_ATST_GATEWAY != msg.type) {
+  if (::atframework::component::service_type::EN_ATST_GATEWAY != msg.type) {
     FWLOGERROR("message type {} invalid", msg.type);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
@@ -212,7 +215,7 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_s
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
-  ::atframe::gw::ss_msg req_msg;
+  ::atframework::gw::ss_msg req_msg;
   if (false == req_msg.ParseFromArray(msg.data, static_cast<int>(msg.data_size))) {
     FWLOGERROR("receive msg of {} bytes from [{:#x}: {}] parse failed: {}", msg.data_size, from_server_id,
                get_app()->convert_app_id_to_string(from_server_id), req_msg.InitializationErrorString());
@@ -221,8 +224,8 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_s
 
   int ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   switch (req_msg.body().cmd_case()) {
-    case ::atframe::gw::ss_msg_body::kPost: {
-      const ::atframe::gw::ss_body_post &post = req_msg.body().post();
+    case ::atframework::gw::ss_msg_body::kPost: {
+      const ::atframework::gw::ss_body_post &post = req_msg.body().post();
 
       rpc::context ctx{rpc::context::create_without_task()};
       atframework::CSMsg *cs_msg = ctx.create<atframework::CSMsg>();
@@ -257,6 +260,7 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_s
       }
 
       cs_msg->mutable_head()->set_session_node_id(session_key.node_id);
+      cs_msg->mutable_head()->set_session_node_name(session_key.node_name);
       cs_msg->mutable_head()->set_session_id(session_key.session_id);
 
       sess->write_actor_log_head(ctx, *cs_msg, post.content().size(), true);
@@ -295,8 +299,8 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_s
       tracer.finish({ret, {}});
       break;
     }
-    case ::atframe::gw::ss_msg_body::kAddSession: {
-      const ::atframe::gw::ss_body_session &sess_data = req_msg.body().add_session();
+    case ::atframework::gw::ss_msg_body::kAddSession: {
+      const ::atframework::gw::ss_body_session &sess_data = req_msg.body().add_session();
 
       session::key_t session_key;
       session_key.node_id = from_server_id;
@@ -308,7 +312,7 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_s
                      get_app()->convert_app_id_to_string(session_key.node_id), session_key.session_id);
         ret = PROJECT_NAMESPACE_ID::err::EN_SYS_SERVER_SHUTDOWN;
         send_kickoff(session_key.node_id, session_key.session_id,
-                     ::atframe::gateway::close_reason_t::EN_CRT_SERVER_CLOSED);
+                     ::atframework::gateway::close_reason_t::EN_CRT_SERVER_CLOSED);
         break;
       }
 
@@ -319,14 +323,14 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_s
       session_manager::sess_ptr_t sess = session_manager::me()->find(session_key);
       if (sess) {
         if (sess->check_flag(session::flag_t::EN_SESSION_FLAG_CLOSING)) {
-          session_manager::me()->remove(sess, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
+          session_manager::me()->remove(sess, ::atframework::gateway::close_reason_t::EN_CRT_KICKOFF);
         } else {
           FWLOGWARNING("session [{:#x}: {}, {}] already exists, address: {}:{}", session_key.node_id,
                        get_app()->convert_app_id_to_string(session_key.node_id), session_key.session_id,
                        sess_data.client_ip(), sess_data.client_port());
           ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
           send_kickoff(session_key.node_id, session_key.session_id,
-                       ::atframe::gateway::close_reason_t::EN_CRT_SERVER_BUSY);
+                       ::atframework::gateway::close_reason_t::EN_CRT_SERVER_BUSY);
           break;
         }
       }
@@ -335,13 +339,13 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_s
         FWLOGERROR("malloc failed");
         ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
         send_kickoff(session_key.node_id, session_key.session_id,
-                     ::atframe::gateway::close_reason_t::EN_CRT_SERVER_BUSY);
+                     ::atframework::gateway::close_reason_t::EN_CRT_SERVER_BUSY);
         break;
       }
 
       break;
     }
-    case ::atframe::gw::ss_msg_body::kRemoveSession: {
+    case ::atframework::gw::ss_msg_body::kRemoveSession: {
       session::key_t session_key;
       session_key.node_id = from_server_id;
       session_key.session_id = req_msg.head().session_id();
@@ -398,7 +402,7 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::send_kickoff(uint64_t node_id, uint6
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
-  ::atframe::gw::ss_msg msg;
+  ::atframework::gw::ss_msg msg;
   msg.mutable_head()->set_session_id(session_id);
   msg.mutable_head()->set_error_code(reason);
 
@@ -425,10 +429,10 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::send_data(uint64_t node_id, uint64_t
     return 0;
   }
 
-  ::atframe::gw::ss_msg msg;
+  ::atframework::gw::ss_msg msg;
   msg.mutable_head()->set_session_id(session_id);
 
-  ::atframe::gw::ss_body_post *post = msg.mutable_body()->mutable_post();
+  ::atframework::gw::ss_body_post *post = msg.mutable_body()->mutable_post();
 
   if (nullptr == post) {
     if (0 == session_id) {
@@ -450,7 +454,7 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::send_data(uint64_t node_id, uint64_t
     return 0;
   }
 
-  int ret = owner->get_bus_node()->send_data(node_id, ::atframe::component::service_type::EN_ATST_GATEWAY,
+  int ret = owner->get_bus_node()->send_data(node_id, ::atframework::component::service_type::EN_ATST_GATEWAY,
                                              packed_buffer.data(), packed_buffer.size());
   if (ret < 0) {
     if (0 == session_id) {
@@ -482,10 +486,10 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::broadcast_data(uint64_t node_id,
     return 0;
   }
 
-  ::atframe::gw::ss_msg msg;
+  ::atframework::gw::ss_msg msg;
   msg.mutable_head()->set_session_id(0);
 
-  ::atframe::gw::ss_body_post *post = msg.mutable_body()->mutable_post();
+  ::atframework::gw::ss_body_post *post = msg.mutable_body()->mutable_post();
 
   if (nullptr == post) {
     FWLOGERROR("broadcast {} bytes data to atgateway [{:#x}: {}] failed when malloc post", len, node_id,
@@ -501,7 +505,7 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::broadcast_data(uint64_t node_id,
     return 0;
   }
 
-  int ret = owner->get_bus_node()->send_data(node_id, ::atframe::component::service_type::EN_ATST_GATEWAY,
+  int ret = owner->get_bus_node()->send_data(node_id, ::atframework::component::service_type::EN_ATST_GATEWAY,
                                              packed_buffer.data(), packed_buffer.size());
   if (ret < 0) {
     FWLOGERROR("broadcast data to atgateway [{:#x}: {}] failed, res: {}", node_id,

@@ -29,7 +29,7 @@
 namespace rpc {
 
 namespace {
-struct UTIL_SYMBOL_LOCAL rpc_context_mertrics_data {
+struct ATFW_UTIL_SYMBOL_LOCAL rpc_context_mertrics_data {
   bool metrics_installed = false;
   int64_t sample_rate = 0;
 

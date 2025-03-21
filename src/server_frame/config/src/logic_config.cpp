@@ -148,7 +148,7 @@ void logic_config::_load_db_hosts(PROJECT_NAMESPACE_ID::config::db_group_cfg &ou
 }
 
 SERVER_FRAME_CONFIG_API const PROJECT_NAMESPACE_ID::DConstSettingsType &logic_config::get_const_settings() {
-  UTIL_LIKELY_IF (nullptr != const_settings_) {
+  if ATFW_UTIL_LIKELY_CONDITION (nullptr != const_settings_) {
     return *const_settings_;
   }
   auto desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("protocol/pbdesc/com.const.proto");
@@ -170,7 +170,7 @@ SERVER_FRAME_CONFIG_API const PROJECT_NAMESPACE_ID::DConstSettingsType &logic_co
 }
 
 SERVER_FRAME_CONFIG_API const atframework::ConstSettingsType &logic_config::get_atframework_settings() {
-  UTIL_LIKELY_IF (nullptr != atframe_settings_) {
+  if ATFW_UTIL_LIKELY_CONDITION (nullptr != atframe_settings_) {
     return *atframe_settings_;
   }
   auto desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("protocol/pbdesc/atframework.proto");

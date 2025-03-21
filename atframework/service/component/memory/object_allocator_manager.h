@@ -50,21 +50,21 @@ struct object_allocator_backend : public object_allocator_default_backend<T> {};
 class object_allocator_manager {
  private:
   template <class T, class = atfw::util::nostd::enable_if_t<!std::is_const<T>::value>>
-  UTIL_SYMBOL_VISIBLE inline static T* to_mutable_address(T* in) noexcept {
+  ATFW_UTIL_SYMBOL_VISIBLE inline static T* to_mutable_address(T* in) noexcept {
     return in;
   }
 
   template <class T, class = atfw::util::nostd::enable_if_t<std::is_const<T>::value>>
-  UTIL_SYMBOL_VISIBLE inline static atfw::util::nostd::remove_const_t<T>* to_mutable_address(T* in) noexcept {
+  ATFW_UTIL_SYMBOL_VISIBLE inline static atfw::util::nostd::remove_const_t<T>* to_mutable_address(T* in) noexcept {
     return const_cast<atfw::util::nostd::remove_const_t<T>*>(in);
   }
 
  public:
   template <class T, class BackendDelete = ::std::default_delete<T>>
-  struct UTIL_SYMBOL_VISIBLE deletor;
+  struct ATFW_UTIL_SYMBOL_VISIBLE deletor;
 
   template <class T>
-  struct UTIL_SYMBOL_VISIBLE deletor<T, ::std::default_delete<T>> {
+  struct ATFW_UTIL_SYMBOL_VISIBLE deletor<T, ::std::default_delete<T>> {
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor() noexcept {}
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(const deletor&) = default;
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(deletor&&) = default;
@@ -89,7 +89,7 @@ class object_allocator_manager {
   };
 
   template <class T, class BackendDelete>
-  struct UTIL_SYMBOL_VISIBLE deletor {
+  struct ATFW_UTIL_SYMBOL_VISIBLE deletor {
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor() noexcept(
         std::is_nothrow_constructible<BackendDelete>::value) {}
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(const deletor&) = default;
@@ -149,7 +149,7 @@ class object_allocator_manager {
 
    private:
     template <class, class>
-    friend struct UTIL_SYMBOL_VISIBLE deletor;
+    friend struct ATFW_UTIL_SYMBOL_VISIBLE deletor;
 
     inline void* backend_deletor_buffer() noexcept { return reinterpret_cast<void*>(&backend_delete_buffer_); }
 
@@ -169,7 +169,7 @@ class object_allocator_manager {
   };
 
   template <class T, class BackendAllocator = ::std::allocator<T>>
-  struct UTIL_SYMBOL_VISIBLE allocator {
+  struct ATFW_UTIL_SYMBOL_VISIBLE allocator {
     using background_allocator_type = BackendAllocator;
     using value_type = T;
     using size_type = std::size_t;
@@ -361,7 +361,7 @@ class object_allocator_manager {
 
    private:
     template <class, class>
-    friend struct UTIL_SYMBOL_VISIBLE allocator;
+    friend struct ATFW_UTIL_SYMBOL_VISIBLE allocator;
 
     inline void* backend_allocator_buffer() noexcept { return reinterpret_cast<void*>(&backend_allocator_buffer_); }
 
@@ -383,7 +383,7 @@ class object_allocator_manager {
 
  public:
   template <class T, class... Args>
-  UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<T> make_shared(Args&&... args) {
+  ATFW_UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<T> make_shared(Args&&... args) {
     allocator<T, typename object_allocator_backend<T>::allocator> alloc;
     ::std::shared_ptr<T> ret = ::std::allocate_shared<T>(alloc, std::forward<Args>(args)...);
 
@@ -398,7 +398,7 @@ class object_allocator_manager {
   }
 
   template <class T, class Alloc, class... Args>
-  UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<type_traits::non_array<T>> allocate_shared(
+  ATFW_UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<type_traits::non_array<T>> allocate_shared(
       const Alloc& backend_alloc, Args&&... args) {
     allocator<T, Alloc> alloc{backend_alloc};
     ::std::shared_ptr<T> ret = ::std::allocate_shared<T>(alloc, std::forward<Args>(args)...);
@@ -415,7 +415,7 @@ class object_allocator_manager {
 
 #if ((defined(__cplusplus) && __cplusplus >= 202002L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L))
   template <class T, class Alloc>
-  UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<type_traits::unbounded_array<T>> allocate_shared(
+  ATFW_UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<type_traits::unbounded_array<T>> allocate_shared(
       const Alloc& backend_alloc, ::std::size_t N) {
     allocator<T, Alloc> alloc{backend_alloc};
     ::std::shared_ptr<T> ret = ::std::allocate_shared<T>(alloc, N);
@@ -433,7 +433,7 @@ class object_allocator_manager {
   }
 
   template <class T, class Alloc>
-  UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<type_traits::bounded_array<T>> allocate_shared(
+  ATFW_UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<type_traits::bounded_array<T>> allocate_shared(
       const Alloc& backend_alloc) {
     allocator<T, Alloc> alloc{backend_alloc};
     ::std::shared_ptr<T> ret = ::std::allocate_shared<T>(alloc);
@@ -451,7 +451,7 @@ class object_allocator_manager {
   }
 
   template <class T, class Alloc>
-  UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<type_traits::unbounded_array<T>> allocate_shared(
+  ATFW_UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<type_traits::unbounded_array<T>> allocate_shared(
       const Alloc& backend_alloc, ::std::size_t N, const std::remove_extent_t<T>& u) {
     allocator<T, Alloc> alloc{backend_alloc};
     ::std::shared_ptr<T> ret = ::std::allocate_shared<T>(alloc, N, u);
@@ -469,7 +469,7 @@ class object_allocator_manager {
   }
 
   template <class T, class Alloc>
-  UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<type_traits::bounded_array<T>> allocate_shared(
+  ATFW_UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<type_traits::bounded_array<T>> allocate_shared(
       const Alloc& backend_alloc, const std::remove_extent_t<T>& u) {
     allocator<T, Alloc> alloc{backend_alloc};
     ::std::shared_ptr<T> ret = ::std::allocate_shared<T>(alloc, u);
@@ -488,7 +488,7 @@ class object_allocator_manager {
 #endif
 
   template <class T, class... Args>
-  UTIL_SYMBOL_VISIBLE inline static atfw::util::memory::strong_rc_ptr<T> make_strong_rc(Args&&... args) {
+  ATFW_UTIL_SYMBOL_VISIBLE inline static atfw::util::memory::strong_rc_ptr<T> make_strong_rc(Args&&... args) {
     allocator<T, typename object_allocator_backend<T>::allocator> alloc;
     atfw::util::memory::strong_rc_ptr<T> ret =
         atfw::util::memory::allocate_strong_rc<T>(alloc, std::forward<Args>(args)...);
@@ -504,8 +504,8 @@ class object_allocator_manager {
   }
 
   template <class T, class Alloc, class... Args>
-  UTIL_SYMBOL_VISIBLE inline static atfw::util::memory::strong_rc_ptr<type_traits::non_array<T>> allocate_strong_rc(
-      const Alloc& backend_alloc, Args&&... args) {
+  ATFW_UTIL_SYMBOL_VISIBLE inline static atfw::util::memory::strong_rc_ptr<type_traits::non_array<T>>
+  allocate_strong_rc(const Alloc& backend_alloc, Args&&... args) {
     allocator<T, Alloc> alloc{backend_alloc};
     atfw::util::memory::strong_rc_ptr<T> ret =
         atfw::util::memory::allocate_strong_rc<T>(alloc, std::forward<Args>(args)...);

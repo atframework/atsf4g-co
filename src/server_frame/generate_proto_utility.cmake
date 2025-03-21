@@ -276,8 +276,7 @@ function(project_server_frame_create_protocol_sandbox OUTPUT_DIR OUTPUT_VAR)
       RESULT LINK_RESULT
       SYMBOLIC)
     if(NOT LINK_RESULT EQUAL 0 OR NOT IS_SYMLINK "${OUTPUT_DIR}/${PROTO_NAME}")
-      execute_process(COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROTO_FILE}" "${OUTPUT_DIR}/${PROTO_NAME}"
-                              ${ATFRAMEWORK_CMAKE_TOOLSET_EXECUTE_PROCESS_OUTPUT_OPTIONS})
+      execute_process(COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROTO_FILE}" "${OUTPUT_DIR}/${PROTO_NAME}")
     endif()
     list(APPEND OUTPUT_FILES "${OUTPUT_DIR}/${PROTO_NAME}")
   endforeach()

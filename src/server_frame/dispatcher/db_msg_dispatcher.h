@@ -54,7 +54,7 @@ class db_msg_dispatcher : public dispatcher_implement {
   using unpack_fn_t = int32_t (*)(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply);
   using user_callback_t = std::function<int()>;
 
-  struct UTIL_SYMBOL_VISIBLE channel_t {
+  struct ATFW_UTIL_SYMBOL_VISIBLE channel_t {
     enum type {
       CLUSTER_BOUND = 0,
       CLUSTER_DEFAULT,

@@ -39,7 +39,7 @@ struct app_command_handler_kickoff {
       FWLOGINFO("kickoff {}", sess_id);
     }
 
-    ::atframe::gw::ss_msg msg;
+    ::atframework::gw::ss_msg msg;
     msg.mutable_head()->set_session_id(sess_id);
 
     msg.mutable_body()->mutable_kickoff_session();
@@ -60,8 +60,8 @@ struct app_handle_on_msg {
 
   int operator()(atapp::app &app, const atapp::app::message_sender_t &source, const atapp::app::message_t &msg) {
     switch (msg.type) {
-      case ::atframe::component::service_type::EN_ATST_GATEWAY: {
-        ::atframe::gw::ss_msg req_msg;
+      case ::atframework::component::service_type::EN_ATST_GATEWAY: {
+        ::atframework::gw::ss_msg req_msg;
         if (false == req_msg.ParseFromArray(msg.data, static_cast<int>(msg.data_size))) {
           FWLOGERROR("receive msg of {} bytes from {:#x} parse failed: {}", msg.data_size, source.id,
                      req_msg.InitializationErrorString());
@@ -69,7 +69,7 @@ struct app_handle_on_msg {
         }
 
         switch (req_msg.body().cmd_case()) {
-          case ::atframe::gw::ss_msg_body::kPost: {
+          case ::atframework::gw::ss_msg_body::kPost: {
             // keep all data not changed and send back
             int res = app.get_bus_node()->send_data(source.id, 0, msg.data, msg.data_size);
             if (res < 0) {
@@ -80,7 +80,7 @@ struct app_handle_on_msg {
             }
             break;
           }
-          case ::atframe::gw::ss_msg_body::kAddSession: {
+          case ::atframework::gw::ss_msg_body::kAddSession: {
             FWLOGINFO("create new session {}, address: {}:{}", req_msg.head().session_id(),
                       req_msg.body().add_session().client_ip(), req_msg.body().add_session().client_port());
 
@@ -89,7 +89,7 @@ struct app_handle_on_msg {
             }
             break;
           }
-          case ::atframe::gw::ss_msg_body::kRemoveSession: {
+          case ::atframework::gw::ss_msg_body::kRemoveSession: {
             FWLOGINFO("remove session {}", req_msg.head().session_id());
 
             gw_->erase(req_msg.head().session_id());

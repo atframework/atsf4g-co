@@ -4,11 +4,17 @@
 
 #pragma once
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
-#include <protocols/libatgw_server_config.pb.h>
+#include <atgateway/protocols/libatgw_server_config.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
+#include <atframe/atapp.h>
 
 #include <functional>
 #include <list>
@@ -17,29 +23,29 @@
 
 #include "session.h"
 
-namespace atframe {
+namespace atframework {
 namespace gateway {
 class session_manager {
  public:
-  using crypt_conf_t = ::atframe::gateway::libatgw_proto_inner_v1::crypt_conf_t;
+  using crypt_conf_t = ::atframework::gateway::libatgw_protocol_sdk::crypt_conf_t;
 
   struct conf_t {
     size_t version;
 
-    atframe::gw::atgateway_cfg origin_conf;
+    atframework::gw::atgateway_cfg origin_conf;
 
     crypt_conf_t crypt;
   };
 
   using session_map_t = std::unordered_map<session::id_t, session::ptr_t>;
-  using create_proto_fn_t = std::function<std::unique_ptr< ::atframe::gateway::proto_base>()>;
+  using create_proto_fn_t = std::function<std::unique_ptr< ::atframework::gateway::libatgw_protocol_api>()>;
   using on_create_session_fn_t = std::function<int(session *, uv_stream_t *)>;
 
  public:
   session_manager();
   ~session_manager();
 
-  int init(::atbus::node *bus_node, create_proto_fn_t fn);
+  int init(::atapp::app *app_inst, create_proto_fn_t fn);
   /**
    * @brief listen all address in configure
    * @return the number of listened address
@@ -49,18 +55,24 @@ class session_manager {
   int reset();
   int tick();
   int close(session::id_t sess_id, int reason, bool allow_reconnect = false);
+  void cleanup();
 
   inline void *get_private_data() const { return private_data_; }
   inline void set_private_data(void *priv_data) { private_data_ = priv_data; }
 
-  int post_data(::atbus::node::bus_id_t tid, ::atframe::gw::ss_msg &msg);
-  int post_data(::atbus::node::bus_id_t tid, int type, ::atframe::gw::ss_msg &msg);
+  int post_data(::atbus::node::bus_id_t tid, ::atframework::gw::ss_msg &msg);
+  int post_data(::atbus::node::bus_id_t tid, int type, ::atframework::gw::ss_msg &msg);
   int post_data(::atbus::node::bus_id_t tid, int type, const void *buffer, size_t s);
+
+  int post_data(const std::string &tname, ::atframework::gw::ss_msg &msg);
+  int post_data(const std::string &tname, int type, ::atframework::gw::ss_msg &msg);
+  int post_data(const std::string &tname, int type, const void *buffer, size_t s);
 
   int push_data(session::id_t sess_id, const void *buffer, size_t s);
   int broadcast_data(const void *buffer, size_t s);
 
-  int set_session_router(session::id_t sess_id, ::atbus::node::bus_id_t router);
+  int set_session_router(session::id_t sess_id, ::atbus::node::bus_id_t router_node_id,
+                         const std::string &router_node_name);
 
   inline conf_t &get_conf() { return conf_; }
   inline const conf_t &get_conf() const { return conf_; }
@@ -71,6 +83,8 @@ class session_manager {
   int reconnect(session &new_sess, session::id_t old_sess_id);
 
   int active_session(session::ptr_t sess);
+
+  void assign_default_router(session &sess) const;
 
  private:
   static void on_evt_accept_tcp(uv_stream_t *server, int status);
@@ -85,7 +99,7 @@ class session_manager {
   };
 
   uv_loop_t *evloop_;
-  ::atbus::node *app_node_;
+  ::atapp::app *app_;
   conf_t conf_;
 
   create_proto_fn_t create_proto_fn_;
@@ -101,4 +115,4 @@ class session_manager {
   void *private_data_;
 };
 }  // namespace gateway
-}  // namespace atframe
+}  // namespace atframework

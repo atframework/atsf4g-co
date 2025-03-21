@@ -15,7 +15,7 @@
 #include <string>
 #include <vector>
 
-namespace atframe {
+namespace atframework {
 namespace proxy {
 class atproxy_manager : public ::atapp::module_impl {
  public:
@@ -68,4 +68,4 @@ class atproxy_manager : public ::atapp::module_impl {
   proxy_set_t proxy_set_;
 };
 }  // namespace proxy
-}  // namespace atframe
+}  // namespace atframework

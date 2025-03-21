@@ -31,7 +31,8 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   endif()
 
   if(project_component_declare_sdk_SOURCES)
-    source_group_by_dir(project_component_declare_sdk_HRADERS project_component_declare_sdk_SOURCES)
+    source_group(TREE ${SDK_ROOT_DIR} FILES ${project_component_declare_sdk_HRADERS}
+                                            ${project_component_declare_sdk_SOURCES})
     if(NOT project_component_declare_sdk_STATIC
        AND (BUILD_SHARED_LIBS
             OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY
@@ -141,6 +142,7 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   install(
     TARGETS ${TARGET_FULL_NAME}
     EXPORT ${PROJECT_INSTALL_COMPONENT_EXPORT_NAME}
+    COMPONENT ${TARGET_NAME}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}"
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}")
@@ -149,8 +151,9 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
     install(
       DIRECTORY ${project_component_declare_sdk_INCLUDE_DIR}
       TYPE INCLUDE
+      COMPONENT ${TARGET_NAME}
       USE_SOURCE_PERMISSIONS FILES_MATCHING
-      REGEX ".+\\.h(pp)?$"
+      REGEX ".+\\.h(pp|xx)?$"
       PATTERN ".svn" EXCLUDE
       PATTERN ".git" EXCLUDE)
   endif()
@@ -308,7 +311,8 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   else()
     set(TARGET_FULL_NAME "${PROJECT_NAME}-component-${TARGET_NAME}")
   endif()
-  source_group_by_dir(FINAL_GENERATED_SOURCE_FILES FINAL_GENERATED_HEADER_FILES)
+  source_group(TREE ${project_component_declare_protocol_OUTPUT_DIR} FILES ${FINAL_GENERATED_SOURCE_FILES}
+                                                                           ${FINAL_GENERATED_HEADER_FILES})
   if(BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY)
     add_library(${TARGET_FULL_NAME} SHARED ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
 
@@ -386,6 +390,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   install(
     TARGETS ${TARGET_FULL_NAME}
     EXPORT ${PROJECT_INSTALL_COMPONENT_EXPORT_NAME}
+    COMPONENT ${TARGET_NAME}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}"
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}")
@@ -393,6 +398,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   install(
     DIRECTORY ${project_component_declare_protocol_OUTPUT_DIR}
     TYPE INCLUDE
+    COMPONENT ${TARGET_NAME}
     USE_SOURCE_PERMISSIONS FILES_MATCHING
     REGEX ".+\\.pb\\.h?$"
     PATTERN ".svn" EXCLUDE
@@ -415,7 +421,8 @@ function(project_component_declare_service TARGET_NAME SERVICE_ROOT_DIR)
   endif()
   echowithcolor(COLOR GREEN "-- Configure components::${TARGET_NAME} on ${SERVICE_ROOT_DIR}")
 
-  source_group_by_dir(project_component_declare_service_HRADERS project_component_declare_service_SOURCES)
+  source_group(TREE ${SERVICE_ROOT_DIR} FILES ${project_component_declare_service_HRADERS}
+                                              ${project_component_declare_service_SOURCES})
   add_executable(${TARGET_FULL_NAME} ${project_component_declare_service_HRADERS}
                                      ${project_component_declare_service_SOURCES})
 
@@ -488,8 +495,7 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
       "${PROJECT_RPATH_ORIGIN}/${project_component_declare_service_RELATIVE_PATH}${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}"
       "${PROJECT_RPATH_ORIGIN}/${project_component_declare_service_RELATIVE_PATH}../${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}"
       "${PROJECT_RPATH_ORIGIN}/${project_component_declare_service_RELATIVE_PATH}${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/__shared/${CMAKE_INSTALL_LIBDIR}"
-      ${PROJECT_EXTERNAL_RPATH}
-  )
+      ${PROJECT_EXTERNAL_RPATH})
   set_target_properties(
     ${TARGET_FULL_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY
@@ -561,12 +567,14 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
   install(
     TARGETS ${TARGET_FULL_NAME}
     EXPORT ${PROJECT_INSTALL_COMPONENT_EXPORT_NAME}
+    COMPONENT ${TARGET_NAME}
     RUNTIME DESTINATION "${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}"
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}")
   install(
     FILES "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}/package-version.txt"
-    DESTINATION "${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}")
+    DESTINATION "${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
+    COMPONENT ${TARGET_NAME})
 
   if(project_component_declare_service_RESOURCE_DIRECTORIES)
     foreach(RESOURCE_DIRECTORY ${project_component_declare_service_RESOURCE_DIRECTORIES})
@@ -576,6 +584,7 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
       install(
         DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/${RESOURCE_DIRECTORY}"
         DESTINATION "${RESOURCE_DIRECTORY}"
+        COMPONENT ${TARGET_NAME}
         USE_SOURCE_PERMISSIONS FILES_MATCHING
         PATTERN ".svn" EXCLUDE
         PATTERN ".git" EXCLUDE)
@@ -584,7 +593,10 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
   if(project_component_declare_service_RESOURCE_FILES)
     foreach(RESOURCE_FILE ${project_component_declare_service_RESOURCE_FILES})
       get_filename_component(RESOURCE_FILE_DIR "${RESOURCE_FILE}" DIRECTORY)
-      install(FILES "${PROJECT_INSTALL_BAS_DIR}/${RESOURCE_FILE}" DESTINATION "${RESOURCE_FILE_DIR}")
+      install(
+        FILES "${PROJECT_INSTALL_BAS_DIR}/${RESOURCE_FILE}"
+        DESTINATION "${RESOURCE_FILE_DIR}"
+        COMPONENT ${TARGET_NAME})
     endforeach()
   endif()
 

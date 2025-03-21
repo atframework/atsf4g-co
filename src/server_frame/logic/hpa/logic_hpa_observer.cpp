@@ -10,7 +10,7 @@
 #include "logic/hpa/logic_hpa_data_type.h"
 
 namespace {
-class UTIL_SYMBOL_LOCAL logic_hpa_policy_observer_key_value_view final
+class ATFW_UTIL_SYMBOL_LOCAL logic_hpa_policy_observer_key_value_view final
     : public opentelemetry::common::KeyValueIterable {
  public:
   explicit logic_hpa_policy_observer_key_value_view(

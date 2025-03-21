@@ -10,7 +10,7 @@
 
 #include <cstddef>
 
-struct UTIL_SYMBOL_VISIBLE tls_buffers_type_t {
+struct ATFW_UTIL_SYMBOL_VISIBLE tls_buffers_type_t {
   enum type {
     EN_TBT_DEFAULT = 0,
     EN_TBT_MESSAGE,

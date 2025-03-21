@@ -27,7 +27,7 @@ class Message;
 }
 }  // namespace google
 
-struct UTIL_SYMBOL_VISIBLE rapidjson_helper_string_mode {
+struct ATFW_UTIL_SYMBOL_VISIBLE rapidjson_helper_string_mode {
   enum type {
     RAW = 0,
     URI,
@@ -35,7 +35,7 @@ struct UTIL_SYMBOL_VISIBLE rapidjson_helper_string_mode {
   };
 };
 
-struct UTIL_SYMBOL_VISIBLE rapidjson_helper_load_options {
+struct ATFW_UTIL_SYMBOL_VISIBLE rapidjson_helper_load_options {
   bool reserve_empty = false;
   bool convert_large_number_to_string = false;  // it's friendly to JSON.parse(...) in javascript
   rapidjson_helper_string_mode::type string_mode = rapidjson_helper_string_mode::RAW;
@@ -44,7 +44,7 @@ struct UTIL_SYMBOL_VISIBLE rapidjson_helper_load_options {
       : reserve_empty(false), convert_large_number_to_string(false), string_mode(rapidjson_helper_string_mode::RAW) {}
 };
 
-struct UTIL_SYMBOL_VISIBLE rapidjson_helper_dump_options {
+struct ATFW_UTIL_SYMBOL_VISIBLE rapidjson_helper_dump_options {
   rapidjson_helper_string_mode::type string_mode = rapidjson_helper_string_mode::RAW;
   bool convert_number_from_string = false;  // it's friendly to JSON.parse(...) in javascript
 
@@ -98,8 +98,9 @@ SERVER_FRAME_API void rapidjson_helper_load_from(rapidjson::Value& dst, rapidjso
 
 template <class TVAL, class = typename std::enable_if<
                           !std::is_convertible<typename std::decay<TVAL>::type, gsl::string_view>::value>::type>
-UTIL_SYMBOL_VISIBLE void rapidjson_helper_mutable_set_member(rapidjson::Value& parent, gsl::string_view key, TVAL&& val,
-                                                             rapidjson::Document& doc, bool overwrite = true) {
+ATFW_UTIL_SYMBOL_VISIBLE void rapidjson_helper_mutable_set_member(rapidjson::Value& parent, gsl::string_view key,
+                                                                  TVAL&& val, rapidjson::Document& doc,
+                                                                  bool overwrite = true) {
   if (!parent.IsObject()) {
     parent.SetObject();
   }
@@ -117,8 +118,8 @@ UTIL_SYMBOL_VISIBLE void rapidjson_helper_mutable_set_member(rapidjson::Value& p
 }
 
 template <class TVAL>
-UTIL_SYMBOL_VISIBLE void rapidjson_helper_append_to_list(rapidjson::Value& list_parent, TVAL&& val,
-                                                         rapidjson::Document& doc) {
+ATFW_UTIL_SYMBOL_VISIBLE void rapidjson_helper_append_to_list(rapidjson::Value& list_parent, TVAL&& val,
+                                                              rapidjson::Document& doc) {
   if (list_parent.IsArray()) {
     list_parent.PushBack(std::forward<TVAL>(val), doc.GetAllocator());
   } else {

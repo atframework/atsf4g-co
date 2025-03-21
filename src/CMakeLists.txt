@@ -14,13 +14,12 @@ configure_file("${CMAKE_CURRENT_LIST_DIR}/generate-nomsg-task.sh.in" "${CMAKE_CU
 set(PROJECT_COMPONENT_PUBLIC_PROTO_PATH "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_COMMON_DIR}")
 # set(PROJECT_SERVICE_PUBLIC_PROTO_PATH)
 
-add_subdirectory(echosvr)
-
 add_subdirectory(server_frame)
 add_subdirectory(component)
 
 include("${CMAKE_CURRENT_LIST_DIR}/service-functions.cmake")
 
+add_subdirectory(echosvr)
 add_subdirectory(loginsvr)
 add_subdirectory(gamesvr)
 

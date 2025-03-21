@@ -31,7 +31,7 @@ namespace rpc {
 class context;
 
 template <typename TKey, typename TObject>
-class UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
+class ATFW_UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
  public:
   using key_type = TKey;
   using value_type = TObject;

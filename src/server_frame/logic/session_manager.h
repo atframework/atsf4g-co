@@ -33,28 +33,28 @@ class session_manager {
 #endif
 
  private:
-  SERVER_FRAME_CONFIG_API session_manager();
+  SERVER_FRAME_API session_manager();
 
  public:
-  SERVER_FRAME_CONFIG_API ~session_manager();
+  SERVER_FRAME_API ~session_manager();
 
-  SERVER_FRAME_CONFIG_API int init();
+  SERVER_FRAME_API int init();
 
-  SERVER_FRAME_CONFIG_API int proc();
+  SERVER_FRAME_API int proc();
 
-  SERVER_FRAME_CONFIG_API const sess_ptr_t find(const session::key_t& key) const;
-  SERVER_FRAME_CONFIG_API sess_ptr_t find(const session::key_t& key);
+  SERVER_FRAME_API const sess_ptr_t find(const session::key_t& key) const;
+  SERVER_FRAME_API sess_ptr_t find(const session::key_t& key);
 
-  SERVER_FRAME_CONFIG_API sess_ptr_t create(const session::key_t& key);
+  SERVER_FRAME_API sess_ptr_t create(const session::key_t& key);
 
-  SERVER_FRAME_CONFIG_API void remove(const session::key_t& key, int reason = 0);
-  SERVER_FRAME_CONFIG_API void remove(sess_ptr_t sess, int reason = 0);
+  SERVER_FRAME_API void remove(const session::key_t& key, int reason = 0);
+  SERVER_FRAME_API void remove(sess_ptr_t sess, int reason = 0);
 
-  SERVER_FRAME_CONFIG_API void remove_all(int32_t reason);
+  SERVER_FRAME_API void remove_all(int32_t reason);
 
-  SERVER_FRAME_CONFIG_API size_t size() const;
+  SERVER_FRAME_API size_t size() const;
 
-  SERVER_FRAME_CONFIG_API int32_t broadcast_msg_to_client(const atframework::CSMsg& msg);
+  SERVER_FRAME_API int32_t broadcast_msg_to_client(const atframework::CSMsg& msg);
 
  private:
   session_counter_t session_counter_;

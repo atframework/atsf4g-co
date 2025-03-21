@@ -48,7 +48,7 @@
  * @tparam TPrivData 私有数据类型
  */
 template <typename TCache, typename TObj, typename TPrivData>
-class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
+class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
  public:
   using cache_t = TCache;
   using priv_data_t = TPrivData;
@@ -422,10 +422,8 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param priv_data 私有数据
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE virtual rpc::result_code_type transfer(rpc::context &ctx,
-                                                                                     const key_t &key, uint64_t svr_id,
-                                                                                     bool need_notify,
-                                                                                     priv_data_t priv_data) {
+  EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE virtual rpc::result_code_type transfer(
+      rpc::context &ctx, const key_t &key, uint64_t svr_id, bool need_notify, priv_data_t priv_data) {
     ptr_t obj;
     auto ret = RPC_AWAIT_CODE_RESULT(mutable_object(ctx, obj, key, priv_data));
     if (ret < 0 || !obj) {
@@ -445,10 +443,8 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param priv_data 私有数据
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE virtual rpc::result_code_type transfer(rpc::context &ctx,
-                                                                                     const ptr_t &obj, uint64_t svr_id,
-                                                                                     bool need_notify,
-                                                                                     priv_data_t priv_data) {
+  EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE virtual rpc::result_code_type transfer(
+      rpc::context &ctx, const ptr_t &obj, uint64_t svr_id, bool need_notify, priv_data_t priv_data) {
     if (!obj) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
     }
@@ -576,7 +572,7 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param io_guard IO任务保护
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE rpc::result_code_type remove_cache(
+  EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE rpc::result_code_type remove_cache(
       rpc::context &ctx, const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data,
       router_object_base::io_task_guard &io_guard) override {
     ptr_t cache_child;
@@ -653,7 +649,7 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param io_guard IO任务保护
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE rpc::result_code_type remove_object(
+  EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE rpc::result_code_type remove_object(
       rpc::context &ctx, const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data,
       router_object_base::io_task_guard &io_guard) override {
     ptr_t cache_child;
@@ -699,91 +695,91 @@ class UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    *
    * @param fn 事件处理函数
    */
-  UTIL_FORCEINLINE void set_on_remove_object(remove_fn_t &&fn) { handle_on_remove_object_ = std::move(fn); }
+  ATFW_UTIL_FORCEINLINE void set_on_remove_object(remove_fn_t &&fn) { handle_on_remove_object_ = std::move(fn); }
 
   /**
    * @brief 设置移除对象事件处理函数
    *
    * @param fn 事件处理函数
    */
-  UTIL_FORCEINLINE void set_on_remove_object(const remove_fn_t &fn) { handle_on_remove_object_ = fn; }
+  ATFW_UTIL_FORCEINLINE void set_on_remove_object(const remove_fn_t &fn) { handle_on_remove_object_ = fn; }
 
   /**
    * @brief 设置对象移除完成事件处理函数
    *
    * @param fn 事件处理函数
    */
-  UTIL_FORCEINLINE void set_on_object_removed(remove_fn_t &&fn) { handle_on_object_removed_ = std::move(fn); }
+  ATFW_UTIL_FORCEINLINE void set_on_object_removed(remove_fn_t &&fn) { handle_on_object_removed_ = std::move(fn); }
 
   /**
    * @brief 设置对象移除完成事件处理函数
    *
    * @param fn 事件处理函数
    */
-  UTIL_FORCEINLINE void set_on_object_removed(const remove_fn_t &fn) { handle_on_object_removed_ = fn; }
+  ATFW_UTIL_FORCEINLINE void set_on_object_removed(const remove_fn_t &fn) { handle_on_object_removed_ = fn; }
 
   /**
    * @brief 设置缓存移除完成事件处理函数
    *
    * @param fn 事件处理函数
    */
-  UTIL_FORCEINLINE void set_on_cache_removed(remove_fn_t &&fn) { handle_on_cache_removed_ = std::move(fn); }
+  ATFW_UTIL_FORCEINLINE void set_on_cache_removed(remove_fn_t &&fn) { handle_on_cache_removed_ = std::move(fn); }
 
   /**
    * @brief 设置缓存移除完成事件处理函数
    *
    * @param fn 事件处理函数
    */
-  UTIL_FORCEINLINE void set_on_cache_removed(const remove_fn_t &fn) { handle_on_cache_removed_ = fn; }
+  ATFW_UTIL_FORCEINLINE void set_on_cache_removed(const remove_fn_t &fn) { handle_on_cache_removed_ = fn; }
 
   /**
    * @brief 设置移除缓存事件处理函数
    *
    * @param fn 事件处理函数
    */
-  UTIL_FORCEINLINE void set_on_remove_cache(remove_fn_t &&fn) { handle_on_remove_cache_ = std::move(fn); }
+  ATFW_UTIL_FORCEINLINE void set_on_remove_cache(remove_fn_t &&fn) { handle_on_remove_cache_ = std::move(fn); }
 
   /**
    * @brief 设置移除缓存事件处理函数
    *
    * @param fn 事件处理函数
    */
-  UTIL_FORCEINLINE void set_on_remove_cache(const remove_fn_t &fn) { handle_on_remove_cache_ = fn; }
+  ATFW_UTIL_FORCEINLINE void set_on_remove_cache(const remove_fn_t &fn) { handle_on_remove_cache_ = fn; }
 
   /**
    * @brief 设置拉取对象事件处理函数
    *
    * @param fn 事件处理函数
    */
-  UTIL_FORCEINLINE void set_on_pull_object(pull_fn_t &&fn) { handle_on_pull_object_ = std::move(fn); }
+  ATFW_UTIL_FORCEINLINE void set_on_pull_object(pull_fn_t &&fn) { handle_on_pull_object_ = std::move(fn); }
 
   /**
    * @brief 设置拉取对象事件处理函数
    *
    * @param fn 事件处理函数
    */
-  UTIL_FORCEINLINE void set_on_pull_object(const pull_fn_t &fn) { handle_on_pull_object_ = fn; }
+  ATFW_UTIL_FORCEINLINE void set_on_pull_object(const pull_fn_t &fn) { handle_on_pull_object_ = fn; }
 
   /**
    * @brief 设置拉取缓存事件处理函数
    *
    * @param fn 事件处理函数
    */
-  UTIL_FORCEINLINE void set_on_pull_cache(pull_fn_t &&fn) { handle_on_pull_cache_ = std::move(fn); }
+  ATFW_UTIL_FORCEINLINE void set_on_pull_cache(pull_fn_t &&fn) { handle_on_pull_cache_ = std::move(fn); }
 
   /**
    * @brief 设置拉取缓存事件处理函数
    *
    * @param fn 事件处理函数
    */
-  UTIL_FORCEINLINE void set_on_pull_cache(const pull_fn_t &fn) { handle_on_pull_cache_ = fn; }
+  ATFW_UTIL_FORCEINLINE void set_on_pull_cache(const pull_fn_t &fn) { handle_on_pull_cache_ = fn; }
 
   /**
    * @brief 遍历所有缓存对象
    *
    * @param fn 遍历函数
    */
-  UTIL_SYMBOL_VISIBLE void foreach_cache(util::nostd::function_ref<bool(const ptr_t &)> fn) {
+  ATFW_UTIL_SYMBOL_VISIBLE void foreach_cache(util::nostd::function_ref<bool(const ptr_t &)> fn) {
     // 先复制出所有的只能指针，防止回掉过程中成员变化带来问题
     std::vector<ptr_t> res;
     res.reserve(caches_.size());

@@ -4,15 +4,20 @@
 
 #include "router/router_player_manager.h"
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/pbdesc/svr.const.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
+#include <atgateway/protocols/libatgw_protocol_api.h>
 
 #include <logic/session_manager.h>
-#include <proto_base.h>
 
 #include <rpc/db/login.h>
 #include <rpc/db/player.h>
@@ -28,44 +33,41 @@ UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(router_player_manager);
 UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(router_player_manager);
 #endif
 
-SERVER_FRAME_CONFIG_API router_player_manager::router_player_manager()
-    : base_type(PROJECT_NAMESPACE_ID::EN_ROT_PLAYER) {}
+SERVER_FRAME_API router_player_manager::router_player_manager() : base_type(PROJECT_NAMESPACE_ID::EN_ROT_PLAYER) {}
 
-SERVER_FRAME_CONFIG_API router_player_manager::~router_player_manager() {}
+SERVER_FRAME_API router_player_manager::~router_player_manager() {}
 
-SERVER_FRAME_CONFIG_API const char *router_player_manager::name() const { return "[player_cache router manager]"; }
+SERVER_FRAME_API const char *router_player_manager::name() const { return "[player_cache router manager]"; }
 
-SERVER_FRAME_CONFIG_API rpc::result_code_type router_player_manager::remove_player_object(rpc::context &ctx,
-                                                                                          uint64_t user_id,
-                                                                                          uint32_t zone_id,
-                                                                                          priv_data_t priv_data) {
+SERVER_FRAME_API rpc::result_code_type router_player_manager::remove_player_object(rpc::context &ctx, uint64_t user_id,
+                                                                                   uint32_t zone_id,
+                                                                                   priv_data_t priv_data) {
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove_player_object(ctx, user_id, zone_id, nullptr, priv_data)));
 }
 
-SERVER_FRAME_CONFIG_API rpc::result_code_type router_player_manager::remove_player_object(
+SERVER_FRAME_API rpc::result_code_type router_player_manager::remove_player_object(
     rpc::context &ctx, uint64_t user_id, uint32_t zone_id, std::shared_ptr<router_object_base> cache,
     priv_data_t priv_data) {
   key_t key(get_type_id(), zone_id, user_id);
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove_object(ctx, key, cache, priv_data)));
 }
 
-SERVER_FRAME_CONFIG_API rpc::result_code_type router_player_manager::remove_player_cache(rpc::context &ctx,
-                                                                                         uint64_t user_id,
-                                                                                         uint32_t zone_id,
-                                                                                         priv_data_t priv_data) {
+SERVER_FRAME_API rpc::result_code_type router_player_manager::remove_player_cache(rpc::context &ctx, uint64_t user_id,
+                                                                                  uint32_t zone_id,
+                                                                                  priv_data_t priv_data) {
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove_player_cache(ctx, user_id, zone_id, nullptr, priv_data)));
 }
 
-SERVER_FRAME_CONFIG_API rpc::result_code_type router_player_manager::remove_player_cache(
+SERVER_FRAME_API rpc::result_code_type router_player_manager::remove_player_cache(
     rpc::context &ctx, uint64_t user_id, uint32_t zone_id, std::shared_ptr<router_object_base> cache,
     priv_data_t priv_data) {
   key_t key(get_type_id(), zone_id, user_id);
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove_cache(ctx, key, cache, priv_data)));
 }
 
-SERVER_FRAME_CONFIG_API void router_player_manager::set_create_object_fn(create_object_fn_t fn) { create_fn_ = fn; }
+SERVER_FRAME_API void router_player_manager::set_create_object_fn(create_object_fn_t fn) { create_fn_ = fn; }
 
-SERVER_FRAME_CONFIG_API router_player_cache::object_ptr_t router_player_manager::create_player_object(
+SERVER_FRAME_API router_player_cache::object_ptr_t router_player_manager::create_player_object(
     uint64_t user_id, uint32_t zone_id, const std::string &openid) {
   router_player_cache::object_ptr_t ret;
   if (create_fn_) {
@@ -89,7 +91,7 @@ rpc::result_code_type router_player_manager::on_evt_remove_object(rpc::context &
     std::shared_ptr<player_cache> check_binded_user = s->get_player();
     if (!check_binded_user || check_binded_user == obj) {
       s->set_player(nullptr);
-      session_manager::me()->remove(s, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
+      session_manager::me()->remove(s, ::atframework::gateway::close_reason_t::EN_CRT_KICKOFF);
     }
   }
 
@@ -106,16 +108,16 @@ rpc::result_code_type router_player_manager::on_evt_object_removed(rpc::context 
     std::shared_ptr<player_cache> check_binded_user = s->get_player();
     if (!check_binded_user || check_binded_user == obj) {
       s->set_player(nullptr);
-      session_manager::me()->remove(s, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
+      session_manager::me()->remove(s, ::atframework::gateway::close_reason_t::EN_CRT_KICKOFF);
     }
   }
 
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(base_type::on_evt_object_removed(ctx, key, cache, priv_data)));
 }
 
-SERVER_FRAME_CONFIG_API rpc::result_code_type router_player_manager::pull_online_server(rpc::context &, const key_t &,
-                                                                                        uint64_t &router_svr_id,
-                                                                                        uint64_t &router_svr_ver) {
+SERVER_FRAME_API rpc::result_code_type router_player_manager::pull_online_server(rpc::context &, const key_t &,
+                                                                                 uint64_t &router_svr_id,
+                                                                                 uint64_t &router_svr_ver) {
   router_svr_id = 0;
   router_svr_ver = 0;
 

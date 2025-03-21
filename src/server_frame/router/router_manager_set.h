@@ -44,7 +44,7 @@ class router_manager_set {
     EN_ASA_REMOVE_CACHE,
   };
 
-  struct UTIL_SYMBOL_VISIBLE pending_action_data {
+  struct ATFW_UTIL_SYMBOL_VISIBLE pending_action_data {
     auto_save_action_t action;
     uint32_t type_id;
 
@@ -83,9 +83,9 @@ class router_manager_set {
    */
   SERVER_FRAME_API int recycle_caches(int max_count);
 
-  UTIL_FORCEINLINE bool is_closing() const { return is_closing_; }
+  ATFW_UTIL_FORCEINLINE bool is_closing() const { return is_closing_; }
 
-  UTIL_FORCEINLINE bool is_closed() const { return is_closed_; }
+  ATFW_UTIL_FORCEINLINE bool is_closed() const { return is_closed_; }
 
   SERVER_FRAME_API bool add_save_schedule(const std::shared_ptr<router_object_base> &obj);
   SERVER_FRAME_API bool add_downgrade_schedule(const std::shared_ptr<router_object_base> &obj);
@@ -94,7 +94,7 @@ class router_manager_set {
   SERVER_FRAME_API void add_io_schedule_order_task(const std::shared_ptr<router_object_base> &obj,
                                                    task_type_trait::task_type &task);
 
-  UTIL_FORCEINLINE void set_pre_closing() { is_pre_closing_ = true; }
+  ATFW_UTIL_FORCEINLINE void set_pre_closing() { is_pre_closing_ = true; }
 
   SERVER_FRAME_API std::shared_ptr<router_manager_metrics_data> mutable_metrics_data(const std::string &manager_name);
   SERVER_FRAME_API std::shared_ptr<router_manager_metrics_data> mutable_metrics_data(uint32_t type);

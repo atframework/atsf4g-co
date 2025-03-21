@@ -56,7 +56,8 @@ namespace {
  * @brief 用于实现 otel-cpp 多容器接入KeyValueIterable时，不需要拷贝数据
  *
  */
-class UTIL_SYMBOL_LOCAL logic_hpa_policy_local_key_value_view final : public opentelemetry::common::KeyValueIterable {
+class ATFW_UTIL_SYMBOL_LOCAL logic_hpa_policy_local_key_value_view final
+    : public opentelemetry::common::KeyValueIterable {
  public:
   explicit logic_hpa_policy_local_key_value_view(
       const std::unordered_map<std::string, opentelemetry::common::AttributeValue>& shared,

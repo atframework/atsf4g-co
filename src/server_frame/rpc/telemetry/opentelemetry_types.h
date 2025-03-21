@@ -15,7 +15,7 @@
 namespace rpc {
 
 namespace telemetry {
-struct UTIL_SYMBOL_VISIBLE meter_instrument_key {
+struct ATFW_UTIL_SYMBOL_VISIBLE meter_instrument_key {
   opentelemetry::nostd::string_view name;
   opentelemetry::nostd::string_view description;
   opentelemetry::nostd::string_view unit;
@@ -27,7 +27,7 @@ struct UTIL_SYMBOL_VISIBLE meter_instrument_key {
 };
 
 template <class T>
-class UTIL_SYMBOL_VISIBLE multiple_key_value_iterable_view final : public opentelemetry::common::KeyValueIterable {
+class ATFW_UTIL_SYMBOL_VISIBLE multiple_key_value_iterable_view final : public opentelemetry::common::KeyValueIterable {
  public:
   explicit multiple_key_value_iterable_view(opentelemetry::nostd::span<const T> containers) noexcept
       : containers_{containers} {}

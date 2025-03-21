@@ -9,7 +9,7 @@
 
 #include "dispatcher/task_action_base.h"
 
-class UTIL_SYMBOL_VISIBLE task_action_no_req_base : public task_action_base {
+class ATFW_UTIL_SYMBOL_VISIBLE task_action_no_req_base : public task_action_base {
  public:
   using base_type = task_action_base;
   using result_type = base_type::result_type;
@@ -17,7 +17,7 @@ class UTIL_SYMBOL_VISIBLE task_action_no_req_base : public task_action_base {
   struct ctor_param_t {
     rpc::context *caller_context;
 
-    UTIL_FORCEINLINE ctor_param_t() noexcept : caller_context(nullptr) {}
+    ATFW_UTIL_FORCEINLINE ctor_param_t() noexcept : caller_context(nullptr) {}
   };
 
  public:

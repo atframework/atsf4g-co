@@ -90,11 +90,11 @@ for rpc in rpcs.values():
 %>namespace details {
 % if rpc_common_codes_enable_common:
 %   if rpc_common_codes_has_no_router_rpc:
-UTIL_FORCEINLINE static bool __is_invalid_server_node(const atapp::etcd_discovery_node& destination_server) {
+ATFW_UTIL_FORCEINLINE static bool __is_invalid_server_node(const atapp::etcd_discovery_node& destination_server) {
   return destination_server.get_discovery_info().id() == 0 || destination_server.get_discovery_info().name().empty();
 }
 
-UTIL_FORCEINLINE static bool __is_invalid_server_node(uint64_t destination_server) {
+ATFW_UTIL_FORCEINLINE static bool __is_invalid_server_node(uint64_t destination_server) {
   return destination_server == 0;
 }
 %   endif

@@ -209,7 +209,8 @@ SERVER_FRAME_API bool task_action_cs_req_base::is_stream_rpc() const noexcept {
 
 SERVER_FRAME_API std::pair<uint64_t, uint64_t> task_action_cs_req_base::get_gateway_info() const {
   const message_type &cs_msg = get_request();
-  return std::pair<uint64_t, uint64_t>(cs_msg.head().session_node_id(), cs_msg.head().session_id());
+  return std::pair<uint64_t, uint64_t>(cs_msg.head().session_node_id(), cs_msg.head().session_node_name(),
+                                       cs_msg.head().session_id());
 }
 
 SERVER_FRAME_API session::ptr_t task_action_cs_req_base::get_session() const {

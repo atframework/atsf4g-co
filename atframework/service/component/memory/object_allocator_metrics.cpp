@@ -33,7 +33,7 @@ struct object_allocator_metrics_controller::object_allocator_metrics_storage {
   std::atomic<size_t> constructor_counter;
   std::atomic<size_t> destructor_counter;
 
-  UTIL_FORCEINLINE object_allocator_metrics_storage() noexcept {
+  ATFW_UTIL_FORCEINLINE object_allocator_metrics_storage() noexcept {
     allocate_counter.store(0);
     deallocate_counter.store(0);
     constructor_counter.store(0);
@@ -45,7 +45,7 @@ struct object_allocator_metrics_controller::object_allocator_metrics_storage {
 
 namespace {
 
-struct UTIL_SYMBOL_LOCAL object_allocator_metrics_global_cache
+struct ATFW_UTIL_SYMBOL_LOCAL object_allocator_metrics_global_cache
     : public atfw::util::design_pattern::local_singleton<object_allocator_metrics_global_cache> {
   std::recursive_mutex lock;
 

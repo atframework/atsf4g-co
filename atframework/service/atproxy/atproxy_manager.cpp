@@ -10,7 +10,7 @@
 
 #include "atproxy_manager.h"  // NOLINT: build/include_subdir
 
-namespace atframe {
+namespace atframework {
 namespace proxy {
 static const atapp::protocol::atapp_gateway *next_listen_address(atproxy_manager::node_info_t &node_info) {
   if (node_info.round_robin_index < 0) {
@@ -293,8 +293,8 @@ bool atproxy_manager::check_available(const atapp::etcd_module::node_info_t &nod
   uint64_t atbus_protocol_version = 0;
   uint64_t atbus_protocol_min_version = 0;
   if (get_app() && get_app()->get_bus_node()) {
-    atbus_protocol_version = get_app()->get_bus_node()->get_protocol_version();
-    atbus_protocol_min_version = get_app()->get_bus_node()->get_protocol_minimal_version();
+    atbus_protocol_version = static_cast<uint64_t>(get_app()->get_bus_node()->get_protocol_version());
+    atbus_protocol_min_version = static_cast<uint64_t>(get_app()->get_bus_node()->get_protocol_minimal_version());
   } else {
     atbus_protocol_version = atbus::protocol::ATBUS_PROTOCOL_VERSION;
     atbus_protocol_min_version = atbus::protocol::ATBUS_PROTOCOL_MINIMAL_VERSION;
@@ -304,4 +304,4 @@ bool atproxy_manager::check_available(const atapp::etcd_module::node_info_t &nod
          atbus_protocol_version >= node_event.node_discovery.atbus_protocol_min_version();
 }
 }  // namespace proxy
-}  // namespace atframe
+}  // namespace atframework

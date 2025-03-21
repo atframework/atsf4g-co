@@ -146,12 +146,12 @@ static int app_default_handle_on_receive_request(atapp::app &, const atapp::app:
 
   int ret = 0;
   switch (msg.type) {
-    case ::atframe::component::service_type::EN_ATST_GATEWAY: {
+    case ::atframework::component::service_type::EN_ATST_GATEWAY: {
       ret = cs_msg_dispatcher::me()->dispatch(source, msg);
       break;
     }
 
-    case ::atframe::component::message_type::EN_ATST_SS_MSG: {
+    case ::atframework::component::message_type::EN_ATST_SS_MSG: {
       ret = ss_msg_dispatcher::me()->dispatch(source, msg);
       break;
     }
@@ -177,7 +177,7 @@ static int app_default_handle_on_forward_response(atapp::app &app, const atapp::
 
   int ret = 0;
   switch (msg.type) {
-    case ::atframe::component::message_type::EN_ATST_SS_MSG: {
+    case ::atframework::component::message_type::EN_ATST_SS_MSG: {
       ret = ss_msg_dispatcher::me()->on_receive_send_data_response(source, msg, error_code);
       break;
     }
@@ -1202,7 +1202,7 @@ void logic_server_common_module::remove_service_zone_index(const atapp::etcd_dis
 }
 
 SERVER_FRAME_API int64_t logic_server_common_module::get_service_discovery_version(
-    atframe::component::logic_service_type::type service_type_id) const noexcept {
+    atframework::component::logic_service_type::type service_type_id) const noexcept {
   int32_t type_id = static_cast<int32_t>(service_type_id);
   auto iter = service_discovery_version_.find(type_id);
   if (iter != service_discovery_version_.end()) {

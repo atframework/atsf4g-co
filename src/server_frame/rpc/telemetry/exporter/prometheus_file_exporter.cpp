@@ -347,7 +347,7 @@ static std::size_t FormatPath(char *buff, size_t bufz, opentelemetry::nostd::str
   return ret;
 }
 
-class UTIL_SYMBOL_LOCAL FileSystemUtil {
+class ATFW_UTIL_SYMBOL_LOCAL FileSystemUtil {
  public:
   // When LongPathsEnabled on Windows, it allow 32767 characters in a absolute path.But it still only allow 260
   // characters in a relative path.
@@ -556,7 +556,7 @@ class UTIL_SYMBOL_LOCAL FileSystemUtil {
 };
 }  // namespace
 
-class UTIL_SYMBOL_LOCAL PrometheusFileBackend {
+class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
  public:
   /**
    * Default Constructor.

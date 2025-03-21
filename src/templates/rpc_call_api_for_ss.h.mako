@@ -36,7 +36,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 #include "dispatcher/dispatcher_type_defines.h"
 
 #ifndef ${rpc_dllexport_decl}
-#  define ${rpc_dllexport_decl} UTIL_SYMBOL_VISIBLE
+#  define ${rpc_dllexport_decl} ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
 struct ss_msg_logic_index;

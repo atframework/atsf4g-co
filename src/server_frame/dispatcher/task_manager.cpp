@@ -54,7 +54,7 @@ static task_manager_metrics_data_type &get_task_manager_metrics_data() {
 }
 
 #if GOOGLE_PROTOBUF_VERSION >= 4022000
-class UTIL_SYMBOL_LOCAL absl_global_log_sink : public absl::LogSink {
+class ATFW_UTIL_SYMBOL_LOCAL absl_global_log_sink : public absl::LogSink {
   void Send(const absl::LogEntry &entry) override {
     atfw::util::log::log_wrapper::caller_info_t caller;
     auto source_filename = entry.source_filename();

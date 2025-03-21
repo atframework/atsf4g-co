@@ -8,9 +8,9 @@
 #include <log/log_wrapper.h>
 
 #include <atframe/atapp.h>
+#include <atgateway/protocols/libatgw_protocol_api.h>
 #include <libatbus.h>
 #include <libatbus_protocol.h>
-#include <proto_base.h>
 
 #include <config/atframe_service_types.h>
 #include <config/extern_service_types.h>
@@ -49,7 +49,7 @@
 
 namespace {
 
-struct UTIL_SYMBOL_LOCAL ss_rpc_mertrics_item {
+struct ATFW_UTIL_SYMBOL_LOCAL ss_rpc_mertrics_item {
   std::string rpc_name;
 
   std::chrono::microseconds min_delay;
@@ -59,11 +59,11 @@ struct UTIL_SYMBOL_LOCAL ss_rpc_mertrics_item {
   size_t total_count;
 };
 
-struct UTIL_SYMBOL_LOCAL ss_rpc_mertrics_group {
+struct ATFW_UTIL_SYMBOL_LOCAL ss_rpc_mertrics_group {
   std::unordered_map<std::string, ss_rpc_mertrics_item> rpc_metrics;
 };
 
-struct UTIL_SYMBOL_LOCAL ss_rpc_mertrics_manager
+struct ATFW_UTIL_SYMBOL_LOCAL ss_rpc_mertrics_manager
     : public atfw::util::design_pattern::local_singleton<ss_rpc_mertrics_manager> {
   std::mutex lock;
 
@@ -294,16 +294,17 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t node_id, atfra
   }
 
   size_t msg_buf_len = ss_msg.ByteSizeLong();
-  size_t tls_buf_len =
-      atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);
+  size_t tls_buf_len = atfw::gateway::libatgw_protocol_api::get_tls_length(
+      atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM);
   if (msg_buf_len > tls_buf_len) {
     FWLOGERROR("send to proc [{:#x}: {}] failed: require {}, only have {}", node_id,
                get_app()->convert_app_id_to_string(node_id), msg_buf_len, tls_buf_len);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
   }
 
-  ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(
-      atframe::gateway::proto_base::get_tls_buffer(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM));
+  ::google::protobuf::uint8 *buf_start =
+      reinterpret_cast< ::google::protobuf::uint8 *>(atfw::gateway::libatgw_protocol_api::get_tls_buffer(
+          atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM));
   ss_msg.SerializeWithCachedSizesToArray(buf_start);
   FWLOGDEBUG("send msg to proc [{:#x}: {}] {} bytes\n{}", node_id, get_app()->convert_app_id_to_string(node_id),
              msg_buf_len, protobuf_mini_dumper_get_readable(ss_msg));
@@ -330,7 +331,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t node_id, const
   }
 
   int res = convert_from_atapp_error_code(
-      owner->send_message(node_id, atframe::component::message_type::EN_ATST_SS_MSG, msg_buf, msg_len, &sequence));
+      owner->send_message(node_id, atframework::component::message_type::EN_ATST_SS_MSG, msg_buf, msg_len, &sequence));
   if (res < 0) {
     FWLOGERROR("send msg to proc [{:#x}: {}] {} bytes failed, res: {}", node_id,
                get_app()->convert_app_id_to_string(node_id), msg_len, res);
@@ -370,16 +371,17 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const atapp::etcd_disco
   }
 
   size_t msg_buf_len = ss_msg.ByteSizeLong();
-  size_t tls_buf_len =
-      atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);
+  size_t tls_buf_len = atfw::gateway::libatgw_protocol_api::get_tls_length(
+      atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM);
   if (msg_buf_len > tls_buf_len) {
     FWLOGERROR("send to proc {} failed: require {}, only have {}", node.get_discovery_info().name(), msg_buf_len,
                tls_buf_len);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
   }
 
-  ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(
-      atframe::gateway::proto_base::get_tls_buffer(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM));
+  ::google::protobuf::uint8 *buf_start =
+      reinterpret_cast< ::google::protobuf::uint8 *>(atfw::gateway::libatgw_protocol_api::get_tls_buffer(
+          atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM));
   ss_msg.SerializeWithCachedSizesToArray(buf_start);
   FWLOGDEBUG("send msg to proc {} {} bytes\n{}", node.get_discovery_info().name(), msg_buf_len,
              protobuf_mini_dumper_get_readable(ss_msg));
@@ -399,8 +401,9 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const atapp::etcd_disco
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
-  int res = convert_from_atapp_error_code(owner->send_message(
-      node.get_discovery_info().name(), atframe::component::message_type::EN_ATST_SS_MSG, msg_buf, msg_len, &sequence));
+  int res = convert_from_atapp_error_code(owner->send_message(node.get_discovery_info().name(),
+                                                              atframework::component::message_type::EN_ATST_SS_MSG,
+                                                              msg_buf, msg_len, &sequence));
   if (res < 0) {
     FWLOGERROR("{} send msg to proc {} {} bytes failed, res: {}", name(), node.get_discovery_info().name(), msg_len,
                res);
@@ -495,16 +498,17 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::broadcast(atframework::SSMsg &ss_msg
   }
 
   size_t msg_buf_len = ss_msg.ByteSizeLong();
-  size_t tls_buf_len =
-      atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);
+  size_t tls_buf_len = atfw::gateway::libatgw_protocol_api::get_tls_length(
+      atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM);
   if (msg_buf_len > tls_buf_len) {
     FWLOGERROR("broadcast message {} failed: require {}, only have {}", pick_rpc_name(ss_msg), msg_buf_len,
                tls_buf_len);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
   }
 
-  ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(
-      atframe::gateway::proto_base::get_tls_buffer(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM));
+  ::google::protobuf::uint8 *buf_start =
+      reinterpret_cast< ::google::protobuf::uint8 *>(atfw::gateway::libatgw_protocol_api::get_tls_buffer(
+          atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM));
   ss_msg.SerializeWithCachedSizesToArray(buf_start);
   FWLOGDEBUG("broadcast message {} to {} nodes with {} bytes\n{}", pick_rpc_name(ss_msg), server_nodes.size(),
              msg_buf_len, protobuf_mini_dumper_get_readable(ss_msg));
@@ -531,7 +535,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::broadcast(atframework::SSMsg &ss_msg
 
 SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source,
                                                      const atapp::app::message_t &msg) {
-  if (::atframe::component::message_type::EN_ATST_SS_MSG != msg.type) {
+  if (::atframework::component::message_type::EN_ATST_SS_MSG != msg.type) {
     FWLOGERROR("message type {} invalid", msg.type);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
@@ -621,7 +625,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_s
 SERVER_FRAME_API int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::message_sender_t &source,
                                                                           const atapp::app::message_t &msg,
                                                                           int32_t error_code) {
-  if (::atframe::component::message_type::EN_ATST_SS_MSG != msg.type) {
+  if (::atframework::component::message_type::EN_ATST_SS_MSG != msg.type) {
     FWLOGERROR("message type {} invalid", msg.type);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }

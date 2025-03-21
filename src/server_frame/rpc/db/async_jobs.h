@@ -26,7 +26,7 @@ class context;
 namespace db {
 namespace async_jobs {
 
-struct UTIL_SYMBOL_VISIBLE action_options {
+struct ATFW_UTIL_SYMBOL_VISIBLE action_options {
   /**
    * @brief 通知玩家
    */
@@ -38,13 +38,13 @@ struct UTIL_SYMBOL_VISIBLE action_options {
    */
   bool ignore_router_cache = false;
 
-  UTIL_FORCEINLINE action_options() noexcept {}
-  UTIL_FORCEINLINE action_options(bool in_notify_player) noexcept
+  ATFW_UTIL_FORCEINLINE action_options() noexcept {}
+  ATFW_UTIL_FORCEINLINE action_options(bool in_notify_player) noexcept
       : notify_player(in_notify_player)  // NOLINT: explicit
   {}
 };
 
-struct UTIL_SYMBOL_VISIBLE async_jobs_record {
+struct ATFW_UTIL_SYMBOL_VISIBLE async_jobs_record {
   int64_t record_index;
   int64_t version;
   shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data> action_blob;
@@ -100,7 +100,7 @@ EXPLICIT_NODISCARD_ATTR result_type add_jobs(::rpc::context &ctx, int32_t jobs_t
  */
 EXPLICIT_NODISCARD_ATTR result_code_type add_jobs_with_retry(
     rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-    shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>& inout, action_options options = {});
+    shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data> &inout, action_options options = {});
 
 /**
  * @brief 删除用户异步任务表所有数据的rpc操作
@@ -126,7 +126,7 @@ EXPLICIT_NODISCARD_ATTR result_type remove_all_jobs(::rpc::context &ctx, int32_t
  */
 EXPLICIT_NODISCARD_ATTR result_type
 update_jobs(::rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-            shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>& inout, int64_t record_index,
+            shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data> &inout, int64_t record_index,
             int64_t *version = nullptr, action_options options = {});
 }  // namespace async_jobs
 }  // namespace db

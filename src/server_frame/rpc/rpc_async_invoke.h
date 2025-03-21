@@ -29,12 +29,12 @@ class context;
 using async_invoke_result = atfw::util::design_pattern::result_type<task_type_trait::task_type, int>;
 
 template <class... TARGS>
-UTIL_SYMBOL_VISIBLE inline async_invoke_result make_async_invoke_success(TARGS &&...args) {
+ATFW_UTIL_SYMBOL_VISIBLE inline async_invoke_result make_async_invoke_success(TARGS &&...args) {
   return async_invoke_result::make_success(std::forward<TARGS>(args)...);
 }
 
 template <class... TARGS>
-UTIL_SYMBOL_VISIBLE inline async_invoke_result make_async_invoke_error(TARGS &&...args) {
+ATFW_UTIL_SYMBOL_VISIBLE inline async_invoke_result make_async_invoke_error(TARGS &&...args) {
   return async_invoke_result::make_error(std::forward<TARGS>(args)...);
 }
 
@@ -43,7 +43,7 @@ async_invoke(context &ctx, gsl::string_view name, std::function<result_code_type
              std::chrono::system_clock::duration timeout = std::chrono::system_clock::duration::zero());
 
 template <class TREP, class TPERIOD>
-EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE inline async_invoke_result async_invoke(
+EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE inline async_invoke_result async_invoke(
     context &ctx, gsl::string_view name, std::function<result_code_type(context &)> fn,
     std::chrono::duration<TREP, TPERIOD> timeout = std::chrono::duration<TREP, TPERIOD>::zero()) {
   return async_invoke(ctx, name, std::move(fn),
@@ -55,7 +55,7 @@ async_invoke(gsl::string_view caller_name, gsl::string_view name, std::function<
              std::chrono::system_clock::duration timeout = std::chrono::system_clock::duration::zero());
 
 template <class TREP, class TPERIOD>
-EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE inline async_invoke_result async_invoke(
+EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE inline async_invoke_result async_invoke(
     gsl::string_view caller_name, gsl::string_view name, std::function<result_code_type(context &)> fn,
     std::chrono::duration<TREP, TPERIOD> timeout = std::chrono::duration<TREP, TPERIOD>::zero()) {
   return async_invoke(caller_name, name, std::move(fn),
@@ -69,7 +69,8 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_code_type wait_tasks(context &ct
                                                                      gsl::span<task_type_trait::task_type> tasks);
 
 template <class ContainerType>
-EXPLICIT_NODISCARD_ATTR UTIL_SYMBOL_VISIBLE inline result_code_type wait_tasks(context &ctx, ContainerType &&tasks) {
+EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE inline result_code_type wait_tasks(context &ctx,
+                                                                                    ContainerType &&tasks) {
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(wait_tasks(ctx, gsl::make_span(std::forward<ContainerType>(tasks)))));
 }
 
@@ -82,8 +83,8 @@ SERVER_FRAME_API void async_then_start_task(context &ctx, gsl::string_view name,
                                             task_type_trait::task_type then_task);
 
 template <class TCALLABLE, class... TARGS>
-UTIL_SYMBOL_VISIBLE void async_then(context &ctx, gsl::string_view name, task_type_trait::task_type waiting,
-                                    TCALLABLE &&callable, TARGS &&...args) {
+ATFW_UTIL_SYMBOL_VISIBLE void async_then(context &ctx, gsl::string_view name, task_type_trait::task_type waiting,
+                                         TCALLABLE &&callable, TARGS &&...args) {
   if (task_type_trait::empty(waiting) || task_type_trait::is_exiting(waiting)) {
     callable(std::forward<TARGS>(args)...);
     return;
@@ -106,9 +107,9 @@ UTIL_SYMBOL_VISIBLE void async_then(context &ctx, gsl::string_view name, task_ty
 }
 
 template <class TCALLABLE, class... TARGS>
-UTIL_SYMBOL_VISIBLE void async_then_with_context(context &ctx, gsl::string_view name,
-                                                 task_type_trait::task_type waiting, TCALLABLE &&callable,
-                                                 TARGS &&...args) {
+ATFW_UTIL_SYMBOL_VISIBLE void async_then_with_context(context &ctx, gsl::string_view name,
+                                                      task_type_trait::task_type waiting, TCALLABLE &&callable,
+                                                      TARGS &&...args) {
   if (task_type_trait::empty(waiting) || task_type_trait::is_exiting(waiting)) {
     callable(ctx, std::forward<TARGS>(args)...);
     return;

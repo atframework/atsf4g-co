@@ -1,5 +1,5 @@
-//
-// Created by owt50 on 2016-10-11.
+// Copyright 2025 atframework
+// Created by owent on 2016-10-11.
 //
 
 #include <limits.h>
@@ -7,8 +7,7 @@
 #include <iostream>
 
 #include <cli/shell_font.h>
-#include <libatgw_inner_v1_c.h>
-#include <proto_base.h>
+#include <libatgw_v1_c.h>
 
 #include <lua/cpp/lua_engine/lua_binding_class.h>
 #include <lua/cpp/lua_engine/lua_binding_mgr.h>
@@ -62,7 +61,7 @@ static int proto_inner_callback_on_reconnect(libatgw_inner_v1_c_context ctx, uin
 static int proto_inner_callback_on_close(libatgw_inner_v1_c_context ctx, int32_t reason) {
   atfw::util::cli::shell_stream ss(std::cout);
 
-  if ((reason < 0 || reason > 0x10000) && ::atframe::gateway::close_reason_t::EN_CRT_EOF != reason) {
+  if ((reason < 0 || reason > 0x10000) && LIBATGW_V1_C_EN_CLOSE_REASON_EOF != reason) {
     GTCLI2PLAYER(ctx).close();
     ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_YELLOW << "player " << GTCLI2PLAYER(ctx).get_id() << "("
          << GTCLI2PLAYER(ctx).get_user_id() << ") closed for reason " << reason << std::endl;

@@ -20,7 +20,7 @@
 
 #include "session_manager.h"
 
-namespace atframe {
+namespace atframework {
 namespace gateway {
 #if defined(UTIL_CONFIG_COMPILER_CXX_STATIC_ASSERT) && UTIL_CONFIG_COMPILER_CXX_STATIC_ASSERT
 #  if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201402L)) ||                       \
@@ -35,7 +35,7 @@ UTIL_CONFIG_STATIC_ASSERT(std::is_pod<session::limit_t>::value);
 #  endif
 #endif
 
-session::session() : id_(0), router_(0), owner_(nullptr), flags_(0), peer_port_(0), private_data_(nullptr) {
+session::session() : id_(0), router_node_id_(0), owner_(nullptr), flags_(0), peer_port_(0), private_data_(nullptr) {
   memset(&limit_, 0, sizeof(limit_));
   raw_handle_.data = this;
 }
@@ -52,7 +52,8 @@ void session::set_flag(flag_t::type t, bool v) {
   }
 }
 
-session::ptr_t session::create(session_manager *mgr, std::unique_ptr<proto_base> &proto) {
+session::ptr_t session::create(session_manager *mgr,
+                               std::unique_ptr<atframework::gateway::libatgw_protocol_api> &proto) {
   ptr_t ret = std::make_shared<session>();
   if (!ret) {
     return ret;
@@ -71,24 +72,24 @@ session::ptr_t session::create(session_manager *mgr, std::unique_ptr<proto_base>
 
 int session::accept_tcp(uv_stream_t *server) {
   if (check_flag(flag_t::EN_FT_CLOSING)) {
-    WLOGERROR("session 0x%p already closed or is closing, can not accept again", this);
+    FWLOGERROR("session {} already closed or is closing, can not accept again", reinterpret_cast<const void *>(this));
     return error_code_t::EN_ECT_CLOSING;
   }
 
   if (check_flag(flag_t::EN_FT_HAS_FD)) {
-    WLOGERROR("session 0x%p already has fd, can not accept again", this);
+    FWLOGERROR("session {} already has fd, can not accept again", reinterpret_cast<const void *>(this));
     return error_code_t::EN_ECT_ALREADY_HAS_FD;
   }
 
   int errcode = 0;
   if (0 != (errcode = uv_tcp_init(server->loop, &tcp_handle_))) {
-    WLOGERROR("session 0x%p init tcp sock failed, error code: %d", this, errcode);
+    FWLOGERROR("session {} init tcp sock failed, error code: {}", reinterpret_cast<const void *>(this), errcode);
     return error_code_t::EN_ECT_NETWORK;
   }
   set_flag(flag_t::EN_FT_HAS_FD, true);
 
   if (0 != (errcode = uv_accept(server, &stream_handle_))) {
-    WLOGERROR("session 0x%p accept tcp failed, error code: %d", this, errcode);
+    FWLOGERROR("session {} accept tcp failed, error code: {}", reinterpret_cast<const void *>(this), errcode);
     return error_code_t::EN_ECT_NETWORK;
   }
 
@@ -118,24 +119,24 @@ int session::accept_tcp(uv_stream_t *server) {
 
 int session::accept_pipe(uv_stream_t *server) {
   if (check_flag(flag_t::EN_FT_CLOSING)) {
-    WLOGERROR("session 0x%p already closed or is closing, can not accept again", this);
+    FWLOGERROR("session {} already closed or is closing, can not accept again", reinterpret_cast<const void *>(this));
     return error_code_t::EN_ECT_CLOSING;
   }
 
   if (check_flag(flag_t::EN_FT_HAS_FD)) {
-    WLOGERROR("session 0x%p already has fd, can not accept again", this);
+    FWLOGERROR("session {} already has fd, can not accept again", reinterpret_cast<const void *>(this));
     return error_code_t::EN_ECT_ALREADY_HAS_FD;
   }
 
   int errcode = 0;
   if (0 != (errcode = uv_pipe_init(server->loop, &unix_handle_, 1))) {
-    WLOGERROR("session 0x%p init unix sock failed, error code: %d", this, errcode);
+    FWLOGERROR("session {} init unix sock failed, error code: {}", reinterpret_cast<const void *>(this), errcode);
     return error_code_t::EN_ECT_NETWORK;
   }
   set_flag(flag_t::EN_FT_HAS_FD, true);
 
   if (0 != (errcode = uv_accept(server, &stream_handle_))) {
-    WLOGERROR("session 0x%p accept unix failed, error code: %d", this, errcode);
+    FWLOGERROR("session {} accept unix failed, error code: {}", reinterpret_cast<const void *>(this), errcode);
     return error_code_t::EN_ECT_NETWORK;
   }
 
@@ -156,11 +157,12 @@ int session::accept_pipe(uv_stream_t *server) {
   return 0;
 }
 
-int session::init_new_session(::atbus::node::bus_id_t router) {
-  static ::atframe::component::timestamp_id_allocator<id_t> id_alloc;
+int session::init_new_session() {
+  static ::atframework::component::timestamp_id_allocator<id_t> id_alloc;
   // alloc id
   id_ = id_alloc.allocate();
-  router_ = router;
+  router_node_id_ = 0;
+  router_node_name_.clear();
   limit_.update_handshake_timepoint =
       atfw::util::time::time_utility::get_now() + owner_->get_conf().crypt.update_interval;
 
@@ -171,7 +173,8 @@ int session::init_new_session(::atbus::node::bus_id_t router) {
 int session::init_reconnect(session &sess) {
   // copy id
   id_ = sess.id_;
-  router_ = sess.router_;
+  router_node_id_ = sess.router_node_id_;
+  router_node_name_ = sess.router_node_name_;
   limit_ = sess.limit_;
   limit_.update_handshake_timepoint =
       atfw::util::time::time_utility::get_now() + owner_->get_conf().crypt.update_interval;
@@ -192,10 +195,10 @@ int session::send_new_session() {
   }
 
   // send new msg
-  ::atframe::gw::ss_msg msg;
+  ::atframework::gw::ss_msg msg;
   msg.mutable_head()->set_session_id(id_);
 
-  ::atframe::gw::ss_body_session *sess = msg.mutable_body()->mutable_add_session();
+  ::atframework::gw::ss_body_session *sess = msg.mutable_body()->mutable_add_session();
   if (nullptr != sess) {
     sess->set_client_ip(peer_ip_);
     sess->set_client_port(peer_port_);
@@ -204,11 +207,10 @@ int session::send_new_session() {
   int ret = send_to_server(msg);
   if (0 == ret) {
     set_flag(flag_t::EN_FT_REGISTERED, true);
-    WLOGINFO("session 0x%llx send register notify to 0x%llx success", static_cast<unsigned long long>(id_),
-             static_cast<unsigned long long>(router_));
+    FWLOGINFO("session {} send register notify to {}({}) success", id_, router_node_id_, router_node_name_);
   } else {
-    WLOGERROR("session 0x%llx send register notify to 0x%llx failed, res: %d", static_cast<unsigned long long>(id_),
-              static_cast<unsigned long long>(router_), ret);
+    FWLOGERROR("session {} send register notify to {}({}) failed, res: {}", id_, router_node_id_, router_node_name_,
+               ret);
   }
 
   return ret;
@@ -222,10 +224,10 @@ int session::send_remove_session(session_manager *mgr) {
   }
 
   // send remove msg
-  ::atframe::gw::ss_msg msg;
+  ::atframework::gw::ss_msg msg;
   msg.mutable_head()->set_session_id(id_);
 
-  ::atframe::gw::ss_body_session *sess = msg.mutable_body()->mutable_remove_session();
+  ::atframework::gw::ss_body_session *sess = msg.mutable_body()->mutable_remove_session();
   if (nullptr != sess) {
     sess->set_client_ip(get_peer_host());
     sess->set_client_port(get_peer_port());
@@ -234,11 +236,9 @@ int session::send_remove_session(session_manager *mgr) {
   int ret = send_to_server(msg, mgr);
   if (0 == ret) {
     set_flag(flag_t::EN_FT_REGISTERED, false);
-    WLOGINFO("session 0x%llx send remove notify to 0x%llx success", static_cast<unsigned long long>(id_),
-             static_cast<unsigned long long>(router_));
+    FWLOGINFO("session {} send remove notify to {}({}) success", id_, router_node_id_, router_node_name_);
   } else {
-    WLOGERROR("session 0x%llx send remove notify to 0x%llx failed, res: %d", static_cast<unsigned long long>(id_),
-              static_cast<unsigned long long>(router_), ret);
+    FWLOGERROR("session {} send remove notify to {}({}) failed, res: {}", id_, router_node_id_, router_node_name_, ret);
   }
 
   return ret;
@@ -249,7 +249,7 @@ void session::on_alloc_read(size_t suggested_size, char *&out_buf, size_t &out_l
     proto_->alloc_recv_buffer(suggested_size, out_buf, out_len);
 
     if (nullptr == out_buf && 0 == out_len) {
-      close_fd(::atframe::gateway::close_reason_t::EN_CRT_INVALID_DATA);
+      close_fd(::atframework::gateway::close_reason_t::EN_CRT_INVALID_DATA);
     }
   }
 }
@@ -260,8 +260,8 @@ void session::on_read(int ssz, const char *buff, size_t len) {
     proto_->read(ssz, buff, len, errcode);
 
     if (errcode < 0) {
-      WLOGERROR("session %s:%d read data length=%llu failed and will be closed, res: %d", peer_ip_.c_str(), peer_port_,
-                static_cast<unsigned long long>(len), errcode);
+      FWLOGERROR("session {}:{} read data length={} failed and will be closed, res: {}", peer_ip_, peer_port_, len,
+                 errcode);
       close(close_reason_t::EN_CRT_INVALID_DATA);
     }
   }
@@ -271,8 +271,9 @@ int session::on_write_done(int status) {
   if (proto_) {
     int ret = proto_->write_done(status);
 
-    // if about to closing and all data transfered, shutdown the socket
-    if (check_flag(flag_t::EN_FT_CLOSING_FD) && proto_->check_flag(proto_base::flag_t::EN_PFT_CLOSED)) {
+    // if about to closing and all data transferred, shutdown the socket
+    if (check_flag(flag_t::EN_FT_CLOSING_FD) &&
+        proto_->check_flag(atframework::gateway::libatgw_protocol_api::flag_t::EN_PFT_CLOSED)) {
       uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
     }
 
@@ -319,11 +320,11 @@ int session::close_fd(int reason) {
 
     // if writing, wait all data written an then shutdown it
     set_flag(flag_t::EN_FT_CLOSING_FD, true);
-    if (!proto_ || proto_->check_flag(proto_base::flag_t::EN_PFT_CLOSED)) {
+    if (!proto_ || proto_->check_flag(atframework::gateway::libatgw_protocol_api::flag_t::EN_PFT_CLOSED)) {
       uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
     }
 
-    WLOGINFO("session 0x%llx(%p) lost fd", static_cast<unsigned long long>(id_), this);
+    FWLOGINFO("session {}({}) lost fd", id_, reinterpret_cast<const void *>(this));
   }
 
   return 0;
@@ -340,7 +341,7 @@ int session::send_to_client(const void *data, size_t len) {
   }
 
   if (!proto_) {
-    WLOGERROR("sesseion %llx lost protocol handle when send to client", static_cast<unsigned long long>(id_));
+    FWLOGERROR("session {} lost protocol handle when send to client", id_);
     return error_code_t::EN_ECT_BAD_PROTOCOL;
   }
 
@@ -361,12 +362,12 @@ int session::send_to_client(const void *data, size_t len) {
   return ret;
 }
 
-int session::send_to_server(::atframe::gw::ss_msg &msg) { return send_to_server(msg, owner_); }
+int session::send_to_server(::atframework::gw::ss_msg &msg) { return send_to_server(msg, owner_); }
 
-int session::send_to_server(::atframe::gw::ss_msg &msg, session_manager *mgr) {
+int session::send_to_server(::atframework::gw::ss_msg &msg, session_manager *mgr) {
   // send to router_
-  if (0 == router_) {
-    WLOGERROR("sesseion %llx has not configure router", static_cast<unsigned long long>(id_));
+  if (0 == router_node_id_ && router_node_name_.empty()) {
+    FWLOGERROR("session {} has not configure router", id_);
     return error_code_t::EN_ECT_INVALID_ROUTER;
   }
 
@@ -375,16 +376,14 @@ int session::send_to_server(::atframe::gw::ss_msg &msg, session_manager *mgr) {
   }
 
   if (nullptr == mgr) {
-    WLOGERROR("sesseion %llx has lost manager and can not send ss message any more",
-              static_cast<unsigned long long>(id_));
+    FWLOGERROR("session {} has lost manager and can not send ss message any more", id_);
     return error_code_t::EN_ECT_LOST_MANAGER;
   }
 
-  // send to server with type = ::atframe::component::service_type::EN_ATST_GATEWAY
+  // send to server with type = ::atframework::component::service_type::EN_ATST_GATEWAY
   std::string packed_buffer;
   if (false == msg.SerializeToString(&packed_buffer)) {
-    WLOGERROR("sesseion %llx serialize failed and can not send ss message: %s", static_cast<unsigned long long>(id_),
-              msg.InitializationErrorString().c_str());
+    FWLOGERROR("session {} serialize failed and can not send ss message: {}", id_, msg.InitializationErrorString());
     return error_code_t::EN_ECT_BAD_DATA;
   }
 
@@ -397,7 +396,14 @@ int session::send_to_server(::atframe::gw::ss_msg &msg, session_manager *mgr) {
   ++limit_.hour_recv_times;
   ++limit_.total_recv_times;
 
-  int ret = mgr->post_data(router_, ::atframe::component::service_type::EN_ATST_GATEWAY, packed_buffer.data(), len);
+  int ret;
+  if (0 != router_node_id_) {
+    ret = mgr->post_data(router_node_id_, ::atframework::component::service_type::EN_ATST_GATEWAY, packed_buffer.data(),
+                         len);
+  } else {
+    ret = mgr->post_data(router_node_name_, ::atframework::component::service_type::EN_ATST_GATEWAY,
+                         packed_buffer.data(), len);
+  }
 
   check_hour_limit(true, false);
   check_minute_limit(true, false);
@@ -406,8 +412,8 @@ int session::send_to_server(::atframe::gw::ss_msg &msg, session_manager *mgr) {
   return ret;
 }
 
-proto_base *session::get_protocol_handle() { return proto_.get(); }
-const proto_base *session::get_protocol_handle() const { return proto_.get(); }
+atframework::gateway::libatgw_protocol_api *session::get_protocol_handle() { return proto_.get(); }
+const atframework::gateway::libatgw_protocol_api *session::get_protocol_handle() const { return proto_.get(); }
 
 uv_stream_t *session::get_uv_stream() { return &stream_handle_; }
 const uv_stream_t *session::get_uv_stream() const { return &stream_handle_; }
@@ -523,7 +529,7 @@ void session::check_minute_limit(bool check_recv, bool check_send) {
     if (limit_.update_handshake_timepoint < atfw::util::time::time_utility::get_now()) {
       limit_.update_handshake_timepoint =
           atfw::util::time::time_utility::get_now() + owner_->get_conf().crypt.update_interval;
-      proto_base *proto = get_protocol_handle();
+      atframework::gateway::libatgw_protocol_api *proto = get_protocol_handle();
       if (nullptr != proto) {
         proto->handshake_update();
       }
@@ -561,4 +567,4 @@ void session::check_total_limit(bool check_recv, bool check_send) {
   }
 }
 }  // namespace gateway
-}  // namespace atframe
+}  // namespace atframework

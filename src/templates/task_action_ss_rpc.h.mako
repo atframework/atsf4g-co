@@ -28,7 +28,7 @@ task_class_name = os.path.splitext(os.path.basename(output_render_path))[0]
 #include <dispatcher/task_action_ss_req_base.h>
 
 #ifndef ${service_dllexport_decl}
-#  define ${service_dllexport_decl} UTIL_SYMBOL_VISIBLE
+#  define ${service_dllexport_decl} ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
 class ${task_class_name} : public task_action_ss_rpc_base<${rpc.get_request().get_cpp_class_name()}, ${rpc.get_response().get_cpp_class_name()}> {

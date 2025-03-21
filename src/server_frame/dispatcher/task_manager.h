@@ -89,18 +89,19 @@ class task_manager {
     SERVER_FRAME_API generic_resume_key &operator=(const generic_resume_key &);
     SERVER_FRAME_API generic_resume_key &operator=(generic_resume_key &&);
 
-    UTIL_FORCEINLINE explicit generic_resume_key(std::chrono::system_clock::time_point t, uintptr_t m,
-                                                 uint64_t s) noexcept
+    ATFW_UTIL_FORCEINLINE explicit generic_resume_key(std::chrono::system_clock::time_point t, uintptr_t m,
+                                                      uint64_t s) noexcept
         : timeout(t), message_type(m), sequence(s) {}
 
-    UTIL_FORCEINLINE friend bool operator==(const generic_resume_key &self, const generic_resume_key &other) noexcept {
+    ATFW_UTIL_FORCEINLINE friend bool operator==(const generic_resume_key &self,
+                                                 const generic_resume_key &other) noexcept {
       return self.timeout == other.timeout && self.message_type == other.message_type &&
              self.sequence == other.sequence;
     }
 
 #  ifdef __cpp_impl_three_way_comparison
-    UTIL_FORCEINLINE friend std::strong_ordering operator<=>(const generic_resume_key &self,
-                                                             const generic_resume_key &other) noexcept {
+    ATFW_UTIL_FORCEINLINE friend std::strong_ordering operator<=>(const generic_resume_key &self,
+                                                                  const generic_resume_key &other) noexcept {
       if (self.timeout != other.timeout) {
         return self.timeout <=> other.timeout;
       }
@@ -113,12 +114,14 @@ class task_manager {
     }
 #  else
 
-    UTIL_FORCEINLINE friend bool operator!=(const generic_resume_key &self, const generic_resume_key &other) noexcept {
+    ATFW_UTIL_FORCEINLINE friend bool operator!=(const generic_resume_key &self,
+                                                 const generic_resume_key &other) noexcept {
       return self.timeout != other.timeout || self.message_type != other.message_type ||
              self.sequence != other.sequence;
     }
 
-    UTIL_FORCEINLINE friend bool operator<(const generic_resume_key &self, const generic_resume_key &other) noexcept {
+    ATFW_UTIL_FORCEINLINE friend bool operator<(const generic_resume_key &self,
+                                                const generic_resume_key &other) noexcept {
       if (self.timeout != other.timeout) {
         return self.timeout < other.timeout;
       }
@@ -130,7 +133,8 @@ class task_manager {
       return self.sequence < other.sequence;
     }
 
-    UTIL_FORCEINLINE friend bool operator<=(const generic_resume_key &self, const generic_resume_key &other) noexcept {
+    ATFW_UTIL_FORCEINLINE friend bool operator<=(const generic_resume_key &self,
+                                                 const generic_resume_key &other) noexcept {
       if (self.timeout != other.timeout) {
         return self.timeout <= other.timeout;
       }
@@ -142,7 +146,8 @@ class task_manager {
       return self.sequence <= other.sequence;
     }
 
-    UTIL_FORCEINLINE friend bool operator>(const generic_resume_key &self, const generic_resume_key &other) noexcept {
+    ATFW_UTIL_FORCEINLINE friend bool operator>(const generic_resume_key &self,
+                                                const generic_resume_key &other) noexcept {
       if (self.timeout != other.timeout) {
         return self.timeout > other.timeout;
       }
@@ -154,7 +159,8 @@ class task_manager {
       return self.sequence > other.sequence;
     }
 
-    UTIL_FORCEINLINE friend bool operator>=(const generic_resume_key &self, const generic_resume_key &other) noexcept {
+    ATFW_UTIL_FORCEINLINE friend bool operator>=(const generic_resume_key &self,
+                                                 const generic_resume_key &other) noexcept {
       if (self.timeout != other.timeout) {
         return self.timeout >= other.timeout;
       }
@@ -180,18 +186,19 @@ class task_manager {
     SERVER_FRAME_API generic_resume_index &operator=(const generic_resume_index &);
     SERVER_FRAME_API generic_resume_index &operator=(generic_resume_index &&);
 
-    UTIL_FORCEINLINE explicit generic_resume_index(uintptr_t m, uint64_t s) noexcept : message_type(m), sequence(s) {}
-    UTIL_FORCEINLINE explicit generic_resume_index(const generic_resume_key &key) noexcept
+    ATFW_UTIL_FORCEINLINE explicit generic_resume_index(uintptr_t m, uint64_t s) noexcept
+        : message_type(m), sequence(s) {}
+    ATFW_UTIL_FORCEINLINE explicit generic_resume_index(const generic_resume_key &key) noexcept
         : message_type(key.message_type), sequence(key.sequence) {}
 
-    UTIL_FORCEINLINE friend bool operator==(const generic_resume_index &self,
-                                            const generic_resume_index &other) noexcept {
+    ATFW_UTIL_FORCEINLINE friend bool operator==(const generic_resume_index &self,
+                                                 const generic_resume_index &other) noexcept {
       return self.message_type == other.message_type && self.sequence == other.sequence;
     }
 
 #  ifdef __cpp_impl_three_way_comparison
-    UTIL_FORCEINLINE friend std::strong_ordering operator<=>(const generic_resume_index &self,
-                                                             const generic_resume_index &other) noexcept {
+    ATFW_UTIL_FORCEINLINE friend std::strong_ordering operator<=>(const generic_resume_index &self,
+                                                                  const generic_resume_index &other) noexcept {
       if (self.message_type != other.message_type) {
         return self.message_type <=> other.message_type;
       }
@@ -200,13 +207,13 @@ class task_manager {
     }
 #  else
 
-    UTIL_FORCEINLINE friend bool operator!=(const generic_resume_index &self,
-                                            const generic_resume_index &other) noexcept {
+    ATFW_UTIL_FORCEINLINE friend bool operator!=(const generic_resume_index &self,
+                                                 const generic_resume_index &other) noexcept {
       return self.message_type != other.message_type || self.sequence != other.sequence;
     }
 
-    UTIL_FORCEINLINE friend bool operator<(const generic_resume_index &self,
-                                           const generic_resume_index &other) noexcept {
+    ATFW_UTIL_FORCEINLINE friend bool operator<(const generic_resume_index &self,
+                                                const generic_resume_index &other) noexcept {
       if (self.message_type != other.message_type) {
         return self.message_type < other.message_type;
       }
@@ -214,8 +221,8 @@ class task_manager {
       return self.sequence < other.sequence;
     }
 
-    UTIL_FORCEINLINE friend bool operator<=(const generic_resume_index &self,
-                                            const generic_resume_index &other) noexcept {
+    ATFW_UTIL_FORCEINLINE friend bool operator<=(const generic_resume_index &self,
+                                                 const generic_resume_index &other) noexcept {
       if (self.message_type != other.message_type) {
         return self.message_type <= other.message_type;
       }
@@ -223,8 +230,8 @@ class task_manager {
       return self.sequence <= other.sequence;
     }
 
-    UTIL_FORCEINLINE friend bool operator>(const generic_resume_index &self,
-                                           const generic_resume_index &other) noexcept {
+    ATFW_UTIL_FORCEINLINE friend bool operator>(const generic_resume_index &self,
+                                                const generic_resume_index &other) noexcept {
       if (self.message_type != other.message_type) {
         return self.message_type > other.message_type;
       }
@@ -232,8 +239,8 @@ class task_manager {
       return self.sequence > other.sequence;
     }
 
-    UTIL_FORCEINLINE friend bool operator>=(const generic_resume_index &self,
-                                            const generic_resume_index &other) noexcept {
+    ATFW_UTIL_FORCEINLINE friend bool operator>=(const generic_resume_index &self,
+                                                 const generic_resume_index &other) noexcept {
       if (self.message_type != other.message_type) {
         return self.message_type >= other.message_type;
       }
@@ -243,7 +250,7 @@ class task_manager {
 #  endif
   };
 
-  struct UTIL_SYMBOL_VISIBLE generic_resume_hash {
+  struct ATFW_UTIL_SYMBOL_VISIBLE generic_resume_hash {
     SERVER_FRAME_API generic_resume_hash();
     SERVER_FRAME_API ~generic_resume_hash();
 
@@ -253,28 +260,29 @@ class task_manager {
     SERVER_FRAME_API generic_resume_hash &operator=(generic_resume_hash &&);
 
     template <typename T>
-    UTIL_FORCEINLINE static void _hash_combine(size_t &seed, const T &val) noexcept {
+    ATFW_UTIL_FORCEINLINE static void _hash_combine(size_t &seed, const T &val) noexcept {
       seed ^= std::hash<T>()(val) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
     }
 
     template <typename... Types>
-    UTIL_FORCEINLINE static size_t hash_combine(const Types &...args) noexcept {
+    ATFW_UTIL_FORCEINLINE static size_t hash_combine(const Types &...args) noexcept {
       size_t seed = 0;
       (_hash_combine(seed, args), ...);  // create hash value with seed over all args
       return seed;
     }
 
-    UTIL_FORCEINLINE std::size_t operator()(const generic_resume_index &index) const noexcept {
+    ATFW_UTIL_FORCEINLINE std::size_t operator()(const generic_resume_index &index) const noexcept {
       return hash_combine(index.message_type, index.sequence);
     }
 
-    UTIL_FORCEINLINE std::size_t operator()(const generic_resume_key &key) const noexcept {
+    ATFW_UTIL_FORCEINLINE std::size_t operator()(const generic_resume_key &key) const noexcept {
       return hash_combine(key.timeout.time_since_epoch().count(), key.message_type, key.sequence);
     }
   };
 
   template <class TAction, class... TParams>
-  UTIL_SYMBOL_VISIBLE static typename task_type_trait::task_type internal_create_and_setup_task(TParams &&...args) {
+  ATFW_UTIL_SYMBOL_VISIBLE static typename task_type_trait::task_type internal_create_and_setup_task(
+      TParams &&...args) {
     using internal_task_type = typename task_type_trait::internal_task_type;
 
     // Should not be exiting, task will start immediately after created.
@@ -319,7 +327,7 @@ class task_manager {
   }
 #endif
 
-  struct UTIL_SYMBOL_VISIBLE task_action_maker_base_t {
+  struct ATFW_UTIL_SYMBOL_VISIBLE task_action_maker_base_t {
     atframework::DispatcherOptions options;
     SERVER_FRAME_API explicit task_action_maker_base_t(const atframework::DispatcherOptions *opt);
     SERVER_FRAME_API virtual ~task_action_maker_base_t();
@@ -330,7 +338,7 @@ class task_manager {
   using task_action_creator_t = std::shared_ptr<task_action_maker_base_t>;
 
   template <typename TAction>
-  struct UTIL_SYMBOL_VISIBLE task_action_maker_t : public task_action_maker_base_t {
+  struct ATFW_UTIL_SYMBOL_VISIBLE task_action_maker_t : public task_action_maker_base_t {
     explicit task_action_maker_t(const atframework::DispatcherOptions *opt) : task_action_maker_base_t(opt) {}
     int operator()(task_type_trait::task_type &task_inst, dispatcher_start_data_type ctor_param) override {
       if (options.has_timeout() && (options.timeout().seconds() > 0 || options.timeout().nanos() > 0)) {
@@ -372,18 +380,18 @@ class task_manager {
 
   SERVER_FRAME_API int reload();
 
-  UTIL_FORCEINLINE static std::chrono::system_clock::duration make_timeout_duration(
+  ATFW_UTIL_FORCEINLINE static std::chrono::system_clock::duration make_timeout_duration(
       const ::google::protobuf::Duration &dur) {
     return protobuf_to_chrono_duration<std::chrono::system_clock::duration>(dur);
   }
 
-  UTIL_FORCEINLINE static std::chrono::system_clock::duration make_timeout_duration(
+  ATFW_UTIL_FORCEINLINE static std::chrono::system_clock::duration make_timeout_duration(
       const std::chrono::system_clock::duration &dur) {
     return dur;
   }
 
   template <typename Rep, typename Period>
-  UTIL_FORCEINLINE static std::chrono::system_clock::duration make_timeout_duration(
+  ATFW_UTIL_FORCEINLINE static std::chrono::system_clock::duration make_timeout_duration(
       const std::chrono::duration<Rep, Period> &timeout) {
     return std::chrono::duration_cast<std::chrono::system_clock::duration>(timeout);
   }
@@ -405,8 +413,8 @@ class task_manager {
    * @return 0或错误码
    */
   template <typename TAction, typename TParams, typename Duration>
-  UTIL_SYMBOL_VISIBLE int create_task_with_timeout(task_type_trait::task_type &task_instance, Duration &&timeout,
-                                                   TParams &&args) {
+  ATFW_UTIL_SYMBOL_VISIBLE int create_task_with_timeout(task_type_trait::task_type &task_instance, Duration &&timeout,
+                                                        TParams &&args) {
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
     if (!native_mgr_) {
       task_instance.reset();
@@ -450,7 +458,7 @@ class task_manager {
    * @return 0或错误码
    */
   template <typename TAction, typename TParams>
-  UTIL_SYMBOL_VISIBLE int create_task(task_type_trait::task_type &task_instance, TParams &&args) {
+  ATFW_UTIL_SYMBOL_VISIBLE int create_task(task_type_trait::task_type &task_instance, TParams &&args) {
     return create_task_with_timeout<TAction>(task_instance, std::chrono::system_clock::duration::zero(),
                                              std::forward<TParams>(args));
   }
@@ -460,7 +468,7 @@ class task_manager {
    * @return 任务构造器
    */
   template <typename TAction>
-  UTIL_FORCEINLINE task_action_creator_t make_task_creator(const atframework::DispatcherOptions *opt) {
+  ATFW_UTIL_FORCEINLINE task_action_creator_t make_task_creator(const atframework::DispatcherOptions *opt) {
     return atfw::memory::stl::make_shared<task_action_maker_t<TAction>>(opt);
   }
 
@@ -500,9 +508,9 @@ class task_manager {
   SERVER_FRAME_API task_type_trait::task_type get_task(task_type_trait::id_type task_id);
 
 #if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
-  UTIL_FORCEINLINE const task_type_trait::stack_pool_type::ptr_t &get_stack_pool() const { return stack_pool_; }
+  ATFW_UTIL_FORCEINLINE const task_type_trait::stack_pool_type::ptr_t &get_stack_pool() const { return stack_pool_; }
 #endif
-  UTIL_FORCEINLINE const native_task_manager_ptr_type &get_native_manager() const { return native_mgr_; }
+  ATFW_UTIL_FORCEINLINE const native_task_manager_ptr_type &get_native_manager() const { return native_mgr_; }
 
   SERVER_FRAME_API bool is_busy() const;
 

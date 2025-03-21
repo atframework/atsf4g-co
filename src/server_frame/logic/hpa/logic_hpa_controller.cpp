@@ -98,7 +98,7 @@ static constexpr const uint64_t kIgnoreInaccuracyBoundHrTime = 1000000000;
 static constexpr const int64_t kIgnoreInaccuracyBoundMicroseconds = 1000000;
 
 // 资源型指标的记录缓存, 用于计算增量和解决多puller多次拉取时的数据刷新问题
-struct UTIL_SYMBOL_LOCAL cpu_permillage_metrics_timeval_record {
+struct ATFW_UTIL_SYMBOL_LOCAL cpu_permillage_metrics_timeval_record {
   uv_timeval_t ru_utime; /* user CPU time used */
   uv_timeval_t ru_stime; /* system CPU time used */
   int64_t last_report_value;
@@ -107,7 +107,7 @@ struct UTIL_SYMBOL_LOCAL cpu_permillage_metrics_timeval_record {
 };
 
 // CPU hrtime记录缓存, 用于计算增量和解决多puller多次拉取时的数据刷新问题
-struct UTIL_SYMBOL_LOCAL cpu_permillage_metrics_hrtime_record {
+struct ATFW_UTIL_SYMBOL_LOCAL cpu_permillage_metrics_hrtime_record {
   uint64_t idle_time;
   int64_t last_report_value;
 
@@ -115,7 +115,7 @@ struct UTIL_SYMBOL_LOCAL cpu_permillage_metrics_hrtime_record {
 };
 
 // 简单值类型记录缓存, 用于计算增量和解决多puller多次拉取时的数据刷新问题
-struct UTIL_SYMBOL_LOCAL simple_metrics_int64_record {
+struct ATFW_UTIL_SYMBOL_LOCAL simple_metrics_int64_record {
   int64_t last_report_value = 0;
 
   std::chrono::system_clock::time_point previous_report_time = std::chrono::system_clock::from_time_t(0);
@@ -209,7 +209,7 @@ enum class controller_status_metrics_gauge : int64_t {
   kScalingDone = 0x0800,       /// 扩缩容完成(稳定状态)
 };
 
-struct UTIL_SYMBOL_LOCAL hpa_discovery_schedule_scaling_data {
+struct ATFW_UTIL_SYMBOL_LOCAL hpa_discovery_schedule_scaling_data {
   bool with_action = false;     // 指令控制扩缩容
   time_t replicate_start = -1;  // 指令控制同步开始时间
   time_t replicate_end = -1;    // 指令控制同步结束时间
@@ -218,14 +218,14 @@ struct UTIL_SYMBOL_LOCAL hpa_discovery_schedule_scaling_data {
   inline hpa_discovery_schedule_scaling_data() noexcept {}
 };
 
-struct UTIL_SYMBOL_LOCAL logic_hpa_discovery_with_event {
+struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_discovery_with_event {
   std::shared_ptr<logic_hpa_discovery> instance;
   std::function<void(logic_hpa_discovery&, logic_hpa_discovery_setup_policy_accessor&)> setup_callback;
 };
 
 }  // namespace
 
-struct UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data {
+struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data {
   bool reload_controller;
   bool stoping;
   time_t stoping_hpa_label_ready_timepoint;
@@ -315,7 +315,7 @@ struct UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data {
         schedule_shutdown_timepoint(0) {}
 };
 
-struct UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor {
+struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor {
   static void assign_main_controller_expect_from_status(logic_hpa_controller::hpa_discovery_data& output,
                                                         const PROJECT_NAMESPACE_ID::config::logic_hpa_status& input) {
     output.main_controller_expect_replicas.store(input.expect_replicas(), std::memory_order_release);

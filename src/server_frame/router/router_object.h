@@ -26,7 +26,7 @@
  * @tparam TChild 子类类型
  */
 template <typename TObj, typename TChild>
-class UTIL_SYMBOL_VISIBLE router_object : public router_object_base {
+class ATFW_UTIL_SYMBOL_VISIBLE router_object : public router_object_base {
  public:
   using key_t = router_object_base::key_t;
   using flag_t = router_object_base::flag_t;
@@ -43,7 +43,7 @@ class UTIL_SYMBOL_VISIBLE router_object : public router_object_base {
    * @param data 对象数据指针
    * @param k 键值
    */
-  UTIL_FORCEINLINE explicit router_object(const object_ptr_t &data, const key_t &k)
+  ATFW_UTIL_FORCEINLINE explicit router_object(const object_ptr_t &data, const key_t &k)
       : router_object_base(k), obj_(data) {
     assert(obj_);
   }
@@ -54,7 +54,8 @@ class UTIL_SYMBOL_VISIBLE router_object : public router_object_base {
    * @param data 对象数据指针
    * @param k 键值
    */
-  UTIL_FORCEINLINE explicit router_object(const object_ptr_t &data, key_t &&k) : router_object_base(k), obj_(data) {
+  ATFW_UTIL_FORCEINLINE explicit router_object(const object_ptr_t &data, key_t &&k)
+      : router_object_base(k), obj_(data) {
     assert(obj_);
   }
 
@@ -65,7 +66,7 @@ class UTIL_SYMBOL_VISIBLE router_object : public router_object_base {
    * @return true 如果相等
    * @return false 如果不相等
    */
-  UTIL_FORCEINLINE bool is_object_equal(const object_ptr_t &checked) const { return checked == obj_; }
+  ATFW_UTIL_FORCEINLINE bool is_object_equal(const object_ptr_t &checked) const { return checked == obj_; }
 
   /**
    * @brief 检查对象是否相等
@@ -74,14 +75,14 @@ class UTIL_SYMBOL_VISIBLE router_object : public router_object_base {
    * @return true 如果相等
    * @return false 如果不相等
    */
-  UTIL_FORCEINLINE bool is_object_equal(const value_type &checked) const { return &checked == obj_.get(); }
+  ATFW_UTIL_FORCEINLINE bool is_object_equal(const value_type &checked) const { return &checked == obj_.get(); }
 
   /**
    * @brief 获取对象指针
    *
    * @return const object_ptr_t& 对象指针
    */
-  UTIL_FORCEINLINE const object_ptr_t &get_object() {
+  ATFW_UTIL_FORCEINLINE const object_ptr_t &get_object() {
     refresh_visit_time();
     return obj_;
   }
@@ -121,7 +122,7 @@ class UTIL_SYMBOL_VISIBLE router_object : public router_object_base {
    *
    * @return const object_ptr_t& 对象指针
    */
-  UTIL_FORCEINLINE const object_ptr_t &object() const { return obj_; }
+  ATFW_UTIL_FORCEINLINE const object_ptr_t &object() const { return obj_; }
 
  private:
   object_ptr_t obj_;  ///< 对象数据指针

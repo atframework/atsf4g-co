@@ -11,7 +11,7 @@
 /**
  * @brief 路由管理器基类
  */
-class UTIL_SYMBOL_VISIBLE router_manager_base {
+class ATFW_UTIL_SYMBOL_VISIBLE router_manager_base {
  public:
   /**
    * @brief 路由对象的键类型
@@ -41,7 +41,7 @@ class UTIL_SYMBOL_VISIBLE router_manager_base {
    * @brief 获取路由管理器类型ID
    * @return 路由管理器类型ID
    */
-  UTIL_FORCEINLINE uint32_t get_type_id() const { return type_id_; }
+  ATFW_UTIL_FORCEINLINE uint32_t get_type_id() const { return type_id_; }
 
   /**
    * @brief 获取基础缓存
@@ -193,13 +193,13 @@ class UTIL_SYMBOL_VISIBLE router_manager_base {
    * @brief 获取路由管理器大小
    * @return 路由管理器大小
    */
-  UTIL_FORCEINLINE size_t size() const { return stat_size_; }
+  ATFW_UTIL_FORCEINLINE size_t size() const { return stat_size_; }
 
   /**
    * @brief 判断是否正在关闭
    * @return 是否正在关闭
    */
-  UTIL_FORCEINLINE bool is_closing() const { return is_closing_; }
+  ATFW_UTIL_FORCEINLINE bool is_closing() const { return is_closing_; }
 
   /**
    * @brief 停止路由管理器

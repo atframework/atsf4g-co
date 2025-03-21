@@ -37,7 +37,7 @@ result_clazz_name = service.get_name_lower_rule() + '_result_t'
 #include <string>
 
 #ifndef ${service_dllexport_decl}
-#  define ${service_dllexport_decl} UTIL_SYMBOL_VISIBLE
+#  define ${service_dllexport_decl} ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
 class session;

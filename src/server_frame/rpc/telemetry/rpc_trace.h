@@ -44,7 +44,7 @@ using trace_links_type = opentelemetry::nostd::span<const trace_link_pair_type>;
 using trace_attribute_pair_type = std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>;
 using trace_attributes_type = opentelemetry::nostd::span<const trace_attribute_pair_type>;
 
-struct UTIL_SYMBOL_VISIBLE trace_start_option {
+struct ATFW_UTIL_SYMBOL_VISIBLE trace_start_option {
   using string_view = opentelemetry::nostd::string_view;
   using span_ptr_type = opentelemetry::nostd::shared_ptr<opentelemetry::trace::Span>;
   using trace_id_span = opentelemetry::nostd::span<const uint8_t, opentelemetry::trace::TraceId::kSize>;
@@ -68,7 +68,7 @@ struct UTIL_SYMBOL_VISIBLE trace_start_option {
         attributes({}) {}
 };
 
-struct UTIL_SYMBOL_VISIBLE trace_finish_option {
+struct ATFW_UTIL_SYMBOL_VISIBLE trace_finish_option {
   int32_t result_code;
   trace_attributes_type attributes;
 
@@ -96,8 +96,8 @@ class tracer {
 
   SERVER_FRAME_API bool is_recording() const noexcept;
 
-  UTIL_FORCEINLINE const tracer::span_ptr_type& get_trace_span() const noexcept { return trace_span_; }
-  UTIL_FORCEINLINE opentelemetry::nostd::string_view get_span_kind() const noexcept { return span_kind_; }
+  ATFW_UTIL_FORCEINLINE const tracer::span_ptr_type& get_trace_span() const noexcept { return trace_span_; }
+  ATFW_UTIL_FORCEINLINE opentelemetry::nostd::string_view get_span_kind() const noexcept { return span_kind_; }
 
   /**
    * @brief Set the trace name

@@ -92,7 +92,7 @@ class simple_template_core {
 };
 
 template <typename TPRIVATE_DATA>
-class UTIL_SYMBOL_VISIBLE simple_template {
+class ATFW_UTIL_SYMBOL_VISIBLE simple_template {
  public:
   using private_data_t = TPRIVATE_DATA;
   using self_type = simple_template<private_data_t>;

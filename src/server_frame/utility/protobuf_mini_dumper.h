@@ -73,7 +73,7 @@ SERVER_FRAME_API gsl::string_view protobuf_mini_dumper_get_close_reason(int reas
  * @param src 拷贝源
  */
 template <class TMsg>
-UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(TMsg &dst, const TMsg &src) {
+ATFW_UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(TMsg &dst, const TMsg &src) {
   if (&src == &dst) {
     return;
   }
@@ -81,8 +81,8 @@ UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(TMsg &dst, const TMsg &src
 }
 
 template <class TField>
-UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst,
-                                                      const ::google::protobuf::RepeatedField<TField> &src) {
+ATFW_UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst,
+                                                           const ::google::protobuf::RepeatedField<TField> &src) {
   if (&src == &dst) {
     return;
   }
@@ -91,8 +91,8 @@ UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::Repeat
 }
 
 template <class TField>
-UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::RepeatedPtrField<TField> &dst,
-                                                      const ::google::protobuf::RepeatedPtrField<TField> &src) {
+ATFW_UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::RepeatedPtrField<TField> &dst,
+                                                           const ::google::protobuf::RepeatedPtrField<TField> &src) {
   if (&src == &dst) {
     return;
   }
@@ -102,12 +102,12 @@ UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::Repeat
 
 #if defined(ATFRAMEWORK_UTILS_ENABLE_GSL_WITH_GSL_LITE) && ATFRAMEWORK_UTILS_ENABLE_GSL_WITH_GSL_LITE
 template <class TField, class TValue>
-UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst,
-                                                      gsl::span<TValue> src)
+ATFW_UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst,
+                                                           gsl::span<TValue> src)
 #else
 template <class TField, class TValue, size_t SpanExtent>
-UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst,
-                                                      gsl::span<TValue, SpanExtent> src)
+ATFW_UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::RepeatedField<TField> &dst,
+                                                           gsl::span<TValue, SpanExtent> src)
 #endif
 {
   if (dst.empty() && src.empty()) {
@@ -130,8 +130,8 @@ UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::Repeat
 }
 
 template <class TKeyField, class TValueField>
-UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::Map<TKeyField, TValueField> &dst,
-                                                      const ::google::protobuf::Map<TKeyField, TValueField> &src) {
+ATFW_UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::Map<TKeyField, TValueField> &dst,
+                                                           const ::google::protobuf::Map<TKeyField, TValueField> &src) {
   if (&src == &dst) {
     return;
   }
@@ -147,7 +147,7 @@ UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::Map<TK
  * @param src 拷贝源
  */
 template <class TMsg>
-UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(TMsg &dst, TMsg &&src) {
+ATFW_UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(TMsg &dst, TMsg &&src) {
   if (&src == &dst) {
     return;
   }
@@ -161,8 +161,8 @@ UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(TMsg &dst, TMsg &&src) {
 }
 
 template <class TField>
-UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(::google::protobuf::RepeatedField<TField> &dst,
-                                                      ::google::protobuf::RepeatedField<TField> &&src) {
+ATFW_UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(::google::protobuf::RepeatedField<TField> &dst,
+                                                           ::google::protobuf::RepeatedField<TField> &&src) {
   if (&src == &dst) {
     return;
   }
@@ -182,8 +182,8 @@ UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(::google::protobuf::Repeat
  * @param src 拷贝源
  */
 template <class TField>
-UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(::google::protobuf::RepeatedPtrField<TField> &dst,
-                                                      ::google::protobuf::RepeatedPtrField<TField> &&src) {
+ATFW_UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(::google::protobuf::RepeatedPtrField<TField> &dst,
+                                                           ::google::protobuf::RepeatedPtrField<TField> &&src) {
   if (&src == &dst) {
     return;
   }
@@ -197,8 +197,8 @@ UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(::google::protobuf::Repeat
 }
 
 template <class TKeyField, class TValueField>
-UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(::google::protobuf::Map<TKeyField, TValueField> &dst,
-                                                      ::google::protobuf::Map<TKeyField, TValueField> &&src) {
+ATFW_UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(::google::protobuf::Map<TKeyField, TValueField> &dst,
+                                                           ::google::protobuf::Map<TKeyField, TValueField> &&src) {
   if (&src == &dst) {
     return;
   }
@@ -214,7 +214,7 @@ UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(::google::protobuf::Map<TK
  * @return 删除的元素个数
  */
 template <class TEle>
-UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_at(::google::protobuf::RepeatedPtrField<TEle> &arr, int index) {
+ATFW_UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_at(::google::protobuf::RepeatedPtrField<TEle> &arr, int index) {
   if (index < 0 || index >= arr.size()) {
     return 0;
   }
@@ -236,7 +236,8 @@ UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_at(::google::protobuf::Repeated
  * @return 删除的元素个数
  */
 template <class TEle, class TCheckFn>
-UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_if(::google::protobuf::RepeatedPtrField<TEle> &arr, TCheckFn &&fn) {
+ATFW_UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_if(::google::protobuf::RepeatedPtrField<TEle> &arr,
+                                                         TCheckFn &&fn) {
   int new_index = 0;
   int old_index = 0;
   int ret = 0;
@@ -267,7 +268,7 @@ UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_if(::google::protobuf::Repeated
  * @return 删除的元素个数
  */
 template <class TEle, class TCheckFn>
-UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_if(::google::protobuf::RepeatedField<TEle> &arr, TCheckFn &&fn) {
+ATFW_UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_if(::google::protobuf::RepeatedField<TEle> &arr, TCheckFn &&fn) {
   int new_index = 0;
   int old_index = 0;
   int ret = 0;
@@ -307,7 +308,7 @@ SERVER_FRAME_API google::protobuf::Timestamp protobuf_from_system_clock(std::chr
  * @return 标准时间周期
  */
 template <class DurationType = std::chrono::system_clock::duration>
-UTIL_SYMBOL_VISIBLE inline DurationType protobuf_to_chrono_duration(const google::protobuf::Duration &dur) {
+ATFW_UTIL_SYMBOL_VISIBLE inline DurationType protobuf_to_chrono_duration(const google::protobuf::Duration &dur) {
   return std::chrono::duration_cast<DurationType>(std::chrono::seconds{dur.seconds()}) +
          std::chrono::duration_cast<DurationType>(std::chrono::nanoseconds{dur.nanos()});
 }
@@ -318,7 +319,7 @@ UTIL_SYMBOL_VISIBLE inline DurationType protobuf_to_chrono_duration(const google
  * @return Prototbuf well known 时间周期类型
  */
 template <class DurationType = std::chrono::system_clock::duration>
-UTIL_SYMBOL_VISIBLE inline google::protobuf::Timestamp protobuf_from_chrono_duration(DurationType dur) {
+ATFW_UTIL_SYMBOL_VISIBLE inline google::protobuf::Timestamp protobuf_from_chrono_duration(DurationType dur) {
   google::protobuf::Timestamp ret;
   ret.set_seconds(static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(dur).count()));
   ret.set_nanos(static_cast<int32_t>(

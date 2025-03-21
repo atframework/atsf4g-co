@@ -36,22 +36,23 @@
 #include "router/router_system_defs.h"
 
 // 路由对象基类，支持共享指针
-class UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_from_this<router_object_base> {
+class ATFW_UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_from_this<router_object_base> {
   // 禁止拷贝构造和赋值操作
   UTIL_DESIGN_PATTERN_NOCOPYABLE(router_object_base)
   UTIL_DESIGN_PATTERN_NOMOVABLE(router_object_base)
 
  public:
   // 键的结构体，包含类型、区域和对象ID
-  struct UTIL_SYMBOL_VISIBLE key_t {
+  struct ATFW_UTIL_SYMBOL_VISIBLE key_t {
     uint32_t type_id;    // 类型ID
     uint32_t zone_id;    // 区域ID
     uint64_t object_id;  // 对象ID
 
     // 默认构造函数
-    UTIL_FORCEINLINE key_t() : type_id(0), zone_id(0), object_id(0) {}
+    ATFW_UTIL_FORCEINLINE key_t() : type_id(0), zone_id(0), object_id(0) {}
     // 带参数的构造函数
-    UTIL_FORCEINLINE key_t(uint32_t tid, uint32_t zid, uint64_t oid) : type_id(tid), zone_id(zid), object_id(oid) {}
+    ATFW_UTIL_FORCEINLINE key_t(uint32_t tid, uint32_t zid, uint64_t oid)
+        : type_id(tid), zone_id(zid), object_id(oid) {}
 
     SERVER_FRAME_API bool operator==(const key_t &r) const noexcept;
     SERVER_FRAME_API bool operator!=(const key_t &r) const noexcept;
@@ -65,7 +66,7 @@ class UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_from_th
    * @note 基类flag范围是0x00000001-0x00008000
    * @note 子类flag范围是0x00010000-0x40000000
    */
-  struct UTIL_SYMBOL_VISIBLE flag_t {
+  struct ATFW_UTIL_SYMBOL_VISIBLE flag_t {
     // 定义各种标志位类型
     enum type {
       EN_ROFT_FORCE_PULL_OBJECT = 0x0001,  // 下一次mutable_object时是否强制执行数据拉取
@@ -88,13 +89,13 @@ class UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_from_th
   };
 
   // 标志位的保护类，自动管理标志位的设置和清除
-  class UTIL_SYMBOL_VISIBLE flag_guard {
+  class ATFW_UTIL_SYMBOL_VISIBLE flag_guard {
    public:
     SERVER_FRAME_API flag_guard(router_object_base &owner, int f);
     SERVER_FRAME_API ~flag_guard();
 
     // 转换为bool类型检测标志位是否为真
-    UTIL_FORCEINLINE operator bool() { return !!f_; }
+    ATFW_UTIL_FORCEINLINE operator bool() { return !!f_; }
 
    private:
     router_object_base *owner_;
@@ -102,12 +103,12 @@ class UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_from_th
   };
 
   // IO任务的保护类，自动管理IO任务的生命周期
-  class UTIL_SYMBOL_VISIBLE io_task_guard {
+  class ATFW_UTIL_SYMBOL_VISIBLE io_task_guard {
    public:
     SERVER_FRAME_API io_task_guard();
     SERVER_FRAME_API ~io_task_guard();
 
-    UTIL_FORCEINLINE operator bool() { return !owner_.expired() && 0 != await_task_id_; }
+    ATFW_UTIL_FORCEINLINE operator bool() { return !owner_.expired() && 0 != await_task_id_; }
 
     SERVER_FRAME_API rpc::result_code_type take(rpc::context &ctx, router_object_base &owner) noexcept;
 
@@ -131,48 +132,48 @@ class UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_from_th
   SERVER_FRAME_API void refresh_save_time();
 
   // 获取对象键
-  UTIL_FORCEINLINE const key_t &get_key() const { return key_; }
+  ATFW_UTIL_FORCEINLINE const key_t &get_key() const { return key_; }
   // 检查某个标志位是否被设置
-  UTIL_FORCEINLINE bool check_flag(int32_t v) const { return (flags_ & v) == v; }
+  ATFW_UTIL_FORCEINLINE bool check_flag(int32_t v) const { return (flags_ & v) == v; }
   // 设置某个标志位
-  UTIL_FORCEINLINE void set_flag(int32_t v) { flags_ |= v; }
+  ATFW_UTIL_FORCEINLINE void set_flag(int32_t v) { flags_ |= v; }
   // 清除某个标志位
-  UTIL_FORCEINLINE void unset_flag(int32_t v) { flags_ &= ~v; }
+  ATFW_UTIL_FORCEINLINE void unset_flag(int32_t v) { flags_ &= ~v; }
   // 获取所有标志位
-  UTIL_FORCEINLINE int32_t get_flags() const { return flags_; }
+  ATFW_UTIL_FORCEINLINE int32_t get_flags() const { return flags_; }
 
   // 分配定时器序列号
-  UTIL_FORCEINLINE uint32_t alloc_timer_sequence() { return ++timer_sequence_; }
+  ATFW_UTIL_FORCEINLINE uint32_t alloc_timer_sequence() { return ++timer_sequence_; }
   // 检查定时器序列号是否匹配
-  UTIL_FORCEINLINE bool check_timer_sequence(uint32_t seq) const { return seq == timer_sequence_; }
+  ATFW_UTIL_FORCEINLINE bool check_timer_sequence(uint32_t seq) const { return seq == timer_sequence_; }
 
   // 判断对象是否可写
-  UTIL_FORCEINLINE bool is_writable() const {
+  ATFW_UTIL_FORCEINLINE bool is_writable() const {
     return check_flag(flag_t::EN_ROFT_IS_OBJECT) && !check_flag(flag_t::EN_ROFT_FORCE_PULL_OBJECT) &&
            !check_flag(flag_t::EN_ROFT_CACHE_REMOVED);
   }
 
   // 判断是否有IO任务正在运行
-  UTIL_FORCEINLINE bool is_io_running() const { return 0 != io_task_id_; }
+  ATFW_UTIL_FORCEINLINE bool is_io_running() const { return 0 != io_task_id_; }
 
   // 判断是否正在拉取缓存
-  UTIL_FORCEINLINE bool is_pulling_cache() const { return check_flag(flag_t::EN_ROFT_PULLING_CACHE); }
+  ATFW_UTIL_FORCEINLINE bool is_pulling_cache() const { return check_flag(flag_t::EN_ROFT_PULLING_CACHE); }
   // 判断是否正在拉取对象
-  UTIL_FORCEINLINE bool is_pulling_object() const { return check_flag(flag_t::EN_ROFT_PULLING_OBJECT); }
+  ATFW_UTIL_FORCEINLINE bool is_pulling_object() const { return check_flag(flag_t::EN_ROFT_PULLING_OBJECT); }
   // 判断是否正在进行数据转移
-  UTIL_FORCEINLINE bool is_transfering() const { return check_flag(flag_t::EN_ROFT_TRANSFERING); }
+  ATFW_UTIL_FORCEINLINE bool is_transfering() const { return check_flag(flag_t::EN_ROFT_TRANSFERING); }
 
   // 获取最后一次访问时间
-  UTIL_FORCEINLINE time_t get_last_visit_time() const { return last_visit_time_; }
+  ATFW_UTIL_FORCEINLINE time_t get_last_visit_time() const { return last_visit_time_; }
   // 获取最后一次保存时间
-  UTIL_FORCEINLINE time_t get_last_save_time() const { return last_save_time_; }
+  ATFW_UTIL_FORCEINLINE time_t get_last_save_time() const { return last_save_time_; }
 
   // 获取最后一次拉取缓存的任务ID
-  UTIL_FORCEINLINE task_type_trait::id_type get_last_pull_cache_task_id() const noexcept {
+  ATFW_UTIL_FORCEINLINE task_type_trait::id_type get_last_pull_cache_task_id() const noexcept {
     return io_last_pull_cache_task_id_;
   }
   // 获取最后一次拉取对象的任务ID
-  UTIL_FORCEINLINE task_type_trait::id_type get_last_pull_object_task_id() const noexcept {
+  ATFW_UTIL_FORCEINLINE task_type_trait::id_type get_last_pull_object_task_id() const noexcept {
     return io_last_pull_object_task_id_;
   }
 
@@ -194,13 +195,13 @@ class UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_from_th
    * @brief 获取路由节点ID
    * @return 路由节点ID
    */
-  UTIL_FORCEINLINE uint64_t get_router_server_id() const { return router_svr_id_; }
+  ATFW_UTIL_FORCEINLINE uint64_t get_router_server_id() const { return router_svr_id_; }
 
   /**
    * @brief 获取路由节点名称（尚未接入）
    * @return 路由节点名称
    */
-  UTIL_FORCEINLINE const std::string &get_router_server_name() const { return router_svr_name_; }
+  ATFW_UTIL_FORCEINLINE const std::string &get_router_server_name() const { return router_svr_name_; }
 
   /**
    * @brief 移除实体，降级为缓存
@@ -311,7 +312,7 @@ class UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_from_th
    * @brief 获取路由版本号
    * @return 路由版本号
    */
-  UTIL_FORCEINLINE uint64_t get_router_version() const noexcept { return router_svr_ver_; }
+  ATFW_UTIL_FORCEINLINE uint64_t get_router_version() const noexcept { return router_svr_ver_; }
 
   /**
    * @brief 设置路由服务器ID和版本号
@@ -319,7 +320,7 @@ class UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_from_th
    * @param v 路由版本号
    * @param node_name 节点名称
    */
-  UTIL_FORCEINLINE void set_router_server_id(uint64_t r, uint64_t v, std::string node_name = "") noexcept {
+  ATFW_UTIL_FORCEINLINE void set_router_server_id(uint64_t r, uint64_t v, std::string node_name = "") noexcept {
     router_svr_id_ = r;
     router_svr_ver_ = v;
     router_svr_name_ = std::move(node_name);
@@ -329,8 +330,10 @@ class UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_from_th
    * @brief 获取转发待处理列表
    * @return 转发待处理消息列表
    */
-  UTIL_FORCEINLINE std::list<atframework::SSMsg> &get_transfer_pending_list() noexcept { return transfer_pending_; }
-  UTIL_FORCEINLINE const std::list<atframework::SSMsg> &get_transfer_pending_list() const noexcept {
+  ATFW_UTIL_FORCEINLINE std::list<atframework::SSMsg> &get_transfer_pending_list() noexcept {
+    return transfer_pending_;
+  }
+  ATFW_UTIL_FORCEINLINE const std::list<atframework::SSMsg> &get_transfer_pending_list() const noexcept {
     return transfer_pending_;
   }
 
@@ -352,10 +355,10 @@ class UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_from_th
    * @param object_id 对象ID
    */
   SERVER_FRAME_API static void trace_router(rpc::context &ctx, uint32_t type_id, uint32_t zone_id, uint64_t object_id);
-  UTIL_FORCEINLINE static void trace_router(rpc::context &ctx, const key_t &key) {
+  ATFW_UTIL_FORCEINLINE static void trace_router(rpc::context &ctx, const key_t &key) {
     trace_router(ctx, key.type_id, key.zone_id, key.object_id);
   }
-  UTIL_FORCEINLINE void trace_router(rpc::context &ctx) { trace_router(ctx, get_key()); }
+  ATFW_UTIL_FORCEINLINE void trace_router(rpc::context &ctx) { trace_router(ctx, get_key()); }
 
  protected:
   /**
@@ -469,8 +472,8 @@ class UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_from_th
 // 哈希函数的模板特化，用于计算router_object_base::key_t的哈希值
 namespace std {
 template <>
-struct UTIL_SYMBOL_VISIBLE hash<router_object_base::key_t> {
-  UTIL_FORCEINLINE size_t operator()(const router_object_base::key_t &k) const noexcept {
+struct ATFW_UTIL_SYMBOL_VISIBLE hash<router_object_base::key_t> {
+  ATFW_UTIL_FORCEINLINE size_t operator()(const router_object_base::key_t &k) const noexcept {
     size_t first = hash<uint64_t>()((static_cast<uint64_t>(k.type_id) << 32) | k.zone_id);
     size_t second = hash<uint64_t>()(k.object_id);
     return first ^ (second << 1);

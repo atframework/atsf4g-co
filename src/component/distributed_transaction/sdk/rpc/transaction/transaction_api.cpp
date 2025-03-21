@@ -65,9 +65,9 @@ static uint64_t calculate_server_id(const atframework::distributed_system::trans
   }
 
   auto discovery = common_mod->get_discovery_index_by_type_zone(
-      atframe::component::logic_service_type::EN_LST_DTCOORDSVR, logic_config::me()->get_local_zone_id());
+      atframework::component::logic_service_type::EN_LST_DTCOORDSVR, logic_config::me()->get_local_zone_id());
   if (!discovery || discovery->empty()) {
-    discovery = common_mod->get_discovery_index_by_type(atframe::component::logic_service_type::EN_LST_DTCOORDSVR);
+    discovery = common_mod->get_discovery_index_by_type(atframework::component::logic_service_type::EN_LST_DTCOORDSVR);
   }
 
   if (!discovery || discovery->empty()) {
@@ -92,9 +92,9 @@ static void initialize_replication_server_ids(atframework::distributed_system::t
   }
 
   auto discovery = common_mod->get_discovery_index_by_type_zone(
-      atframe::component::logic_service_type::EN_LST_DTCOORDSVR, logic_config::me()->get_local_zone_id());
+      atframework::component::logic_service_type::EN_LST_DTCOORDSVR, logic_config::me()->get_local_zone_id());
   if (!discovery || discovery->empty()) {
-    discovery = common_mod->get_discovery_index_by_type(atframe::component::logic_service_type::EN_LST_DTCOORDSVR);
+    discovery = common_mod->get_discovery_index_by_type(atframework::component::logic_service_type::EN_LST_DTCOORDSVR);
   }
 
   if (!discovery || discovery->empty()) {

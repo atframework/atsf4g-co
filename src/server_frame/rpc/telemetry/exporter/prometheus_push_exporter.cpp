@@ -61,7 +61,7 @@ static std::string SanitizePrometheusNames(std::string name, bool label) {
 }
 }  // namespace
 
-class UTIL_SYMBOL_LOCAL PrometheusPushCollector : public ::prometheus::Collectable {
+class ATFW_UTIL_SYMBOL_LOCAL PrometheusPushCollector : public ::prometheus::Collectable {
  public:
   /**
    * Default Constructor.

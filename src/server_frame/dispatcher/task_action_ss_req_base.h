@@ -34,7 +34,7 @@ class etcd_discovery_node;
 class router_manager_base;
 class router_object_base;
 
-class UTIL_SYMBOL_VISIBLE task_action_ss_req_base : public task_action_req_base<atframework::SSMsg> {
+class ATFW_UTIL_SYMBOL_VISIBLE task_action_ss_req_base : public task_action_req_base<atframework::SSMsg> {
  public:
   using base_type = task_action_req_base<atframework::SSMsg>;
   using message_type = base_type::message_type;
@@ -143,7 +143,7 @@ class UTIL_SYMBOL_VISIBLE task_action_ss_req_base : public task_action_req_base<
   EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type filter_router_msg(
       router_manager_base *&mgr, std::shared_ptr<router_object_base> &obj, std::pair<bool, int> &filter_result);
 
-  UTIL_FORCEINLINE bool has_response_message() const noexcept { return !response_messages_.empty(); }
+  ATFW_UTIL_FORCEINLINE bool has_response_message() const noexcept { return !response_messages_.empty(); }
 
  private:
   std::list<message_type *> response_messages_;
@@ -151,7 +151,7 @@ class UTIL_SYMBOL_VISIBLE task_action_ss_req_base : public task_action_req_base<
 };
 
 template <class TReqType, class TRspType>
-class UTIL_SYMBOL_VISIBLE task_action_ss_rpc_base : public task_action_ss_req_base {
+class ATFW_UTIL_SYMBOL_VISIBLE task_action_ss_rpc_base : public task_action_ss_req_base {
  public:
   using base_type = task_action_ss_req_base;
   using message_type = base_type::message_type;

@@ -21,7 +21,6 @@
 #include <logic/session_manager.h>
 
 #include <config/logic_config.h>
-#include <proto_base.h>
 #include <rpc/db/player.h>
 #include <rpc/rpc_async_invoke.h>
 
@@ -209,7 +208,7 @@ GAMECLIENT_RPC_API int task_action_login::on_success() {
   if (user->get_session() != s) {
     FWPLOGWARNING(*user, "login success but session changed , remove old session {}:{}", s->get_key().node_id,
                   s->get_key().session_id);
-    session_manager::me()->remove(s, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
+    session_manager::me()->remove(s, ::atframework::gateway::close_reason_t::EN_CRT_KICKOFF);
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_OTHER_DEVICE);
     return get_result();
   }
@@ -299,7 +298,7 @@ GAMECLIENT_RPC_API int task_action_login::on_failed() {
   // 手动发包并无情地踢下线
   send_response();
 
-  session_manager::me()->remove(s, ::atframe::gateway::close_reason_t::EN_CRT_FIRST_IDLE);
+  session_manager::me()->remove(s, ::atframework::gateway::close_reason_t::EN_CRT_FIRST_IDLE);
   return get_result();
 }
 
@@ -325,7 +324,7 @@ GAMECLIENT_RPC_API rpc::result_code_type task_action_login::replace_session(std:
   if (old_sess) {
     // 下发踢下线包，防止循环重连互踢
     old_sess->set_player(nullptr);
-    session_manager::me()->remove(old_sess, ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
+    session_manager::me()->remove(old_sess, ::atframework::gateway::close_reason_t::EN_CRT_KICKOFF);
   }
   cur_sess->set_player(user);
 

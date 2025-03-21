@@ -40,7 +40,7 @@ namespace atframework {
 class SSMsg;
 }
 
-struct UTIL_SYMBOL_VISIBLE ss_msg_logic_index {
+struct ATFW_UTIL_SYMBOL_VISIBLE ss_msg_logic_index {
   uint64_t type_id;
   gsl::string_view type_name;
   uint64_t zone_id;

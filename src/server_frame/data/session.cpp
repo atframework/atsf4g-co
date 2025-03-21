@@ -6,15 +6,20 @@
 #include <log/log_sink_file_backend.h>
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
+#include <xxhash.h>
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
+#include <atgateway/protocols/libatgw_protocol_api.h>
 #include <dispatcher/cs_msg_dispatcher.h>
-#include <proto_base.h>
 
 #include <utility/protobuf_mini_dumper.h>
 
@@ -28,35 +33,83 @@
 
 #include "data/player_cache.h"
 
-session::key_t::key_t() : node_id(0), session_id(0) {}
-session::key_t::key_t(const std::pair<uint64_t, uint64_t> &p) : node_id(p.first), session_id(p.second) {}
+namespace {
+constexpr const XXH64_hash_t kSessionKeyHashMagicNumber = static_cast<XXH64_hash_t>(11400714785074694791ULL);
 
-bool session::key_t::operator==(const key_t &r) const { return node_id == r.node_id && session_id == r.session_id; }
+static uint64_t _session_hash_combine(XXH64_hash_t l, XXH64_hash_t r) noexcept {
+  uint64_t lu = static_cast<uint64_t>(l);
+  uint64_t ru = static_cast<uint64_t>(r);
+  lu ^= ru + 0x9e3779b9 + (lu << 6) + (lu >> 2);
+  return lu;
+}
 
-bool session::key_t::operator!=(const key_t &r) const { return !((*this) == r); }
+}  // namespace
 
-bool session::key_t::operator<(const key_t &r) const {
+SERVER_FRAME_API session::key_t::key_t() : node_id(0), session_id(0) {}
+
+SERVER_FRAME_API session::key_t::key_t(uint64_t input_node_id, gsl::string_view input_node_name,
+                                       uint64_t input_session_id)
+    : node_name(input_node_name), node_id(input_node_id), session_id(input_session_id) {}
+
+SERVER_FRAME_API session::key_t::~key_t() {}
+
+SERVER_FRAME_API bool session::key_t::operator==(const key_t &r) const noexcept {
+  if (node_id != 0 || r.node_id != 0) {
+    return node_id == r.node_id && session_id == r.session_id;
+  }
+  return session_id == r.session_id && node_name == r.node_name;
+}
+
+#if defined(__cpp_impl_three_way_comparison)
+SERVER_FRAME_API std::strong_ordering session::key_t::operator<=>(const key_t &r) const noexcept {
+  if (session_id != r.session_id) {
+    return session_id <=> r.session_id;
+  }
+
+  if (node_id != r.node_id) {
+    return node_id <=> r.node_id;
+  }
+
+  return node_name <=> r.node_name;
+}
+#else
+SERVER_FRAME_API bool session::key_t::operator!=(const key_t &r) const noexcept { return !((*this) == r); }
+
+SERVER_FRAME_API bool session::key_t::operator<(const key_t &r) const noexcept {
+  if (session_id != r.session_id) {
+    return session_id < r.session_id;
+  }
+
   if (node_id != r.node_id) {
     return node_id < r.node_id;
   }
-  return session_id < r.session_id;
+
+  return node_name < r.node_name;
 }
 
-bool session::key_t::operator<=(const key_t &r) const { return (*this) < r || (*this) == r; }
+SERVER_FRAME_API bool session::key_t::operator<=(const key_t &r) const noexcept { return (*this) < r || (*this) == r; }
 
-bool session::key_t::operator>(const key_t &r) const {
+SERVER_FRAME_API bool session::key_t::operator>(const key_t &r) const noexcept {
+  if (session_id != r.session_id) {
+    return session_id > r.session_id;
+  }
+
   if (node_id != r.node_id) {
     return node_id > r.node_id;
   }
-  return session_id > r.session_id;
+
+  return node_name > r.node_name;
 }
 
-bool session::key_t::operator>=(const key_t &r) const { return (*this) > r || (*this) == r; }
+SERVER_FRAME_API bool session::key_t::operator>=(const key_t &r) const noexcept { return (*this) > r || (*this) == r; }
+#endif
 
-session::flag_guard_t::flag_guard_t() : flag_(flag_t::EN_SESSION_FLAG_NONE), owner_(nullptr) {}
-session::flag_guard_t::~flag_guard_t() { reset(); }
+SERVER_FRAME_API session::flag_guard_t::flag_guard_t() noexcept
+    : flag_(flag_t::EN_SESSION_FLAG_NONE), owner_(nullptr) {}
 
-void session::flag_guard_t::setup(session &owner, flag_t::type f) {
+SERVER_FRAME_API session::flag_guard_t::~flag_guard_t() { reset(); }
+
+SERVER_FRAME_API void session::flag_guard_t::setup(session &owner, flag_t::type f) noexcept {
   if (flag_t::EN_SESSION_FLAG_NONE == f) {
     return;
   }
@@ -77,7 +130,7 @@ void session::flag_guard_t::setup(session &owner, flag_t::type f) {
   owner_->set_flag(flag_, true);
 }
 
-void session::flag_guard_t::reset() {
+SERVER_FRAME_API void session::flag_guard_t::reset() noexcept {
   if (owner_ && flag_t::EN_SESSION_FLAG_NONE != flag_) {
     owner_->set_flag(flag_, false);
   }
@@ -86,12 +139,13 @@ void session::flag_guard_t::reset() {
   flag_ = flag_t::EN_SESSION_FLAG_NONE;
 }
 
-session::session() : flags_(0), login_task_id_(0), session_sequence_(0), cached_zone_id_(0), cached_user_id_(0) {
+SERVER_FRAME_API session::session() noexcept
+    : flags_(0), login_task_id_(0), session_sequence_(0), cached_zone_id_(0), cached_user_id_(0) {
   id_.node_id = 0;
   id_.session_id = 0;
 }
 
-session::~session() {
+SERVER_FRAME_API session::~session() {
   FWLOGDEBUG("session [{:#x}, {}] destroyed", id_.node_id, id_.session_id);
 
   if (actor_log_writter_) {
@@ -114,16 +168,16 @@ session::~session() {
   }
 }
 
-bool session::is_closing() const noexcept { return check_flag(flag_t::EN_SESSION_FLAG_CLOSING); }
+SERVER_FRAME_API bool session::is_closing() const noexcept { return check_flag(flag_t::EN_SESSION_FLAG_CLOSING); }
 
-bool session::is_closed() const noexcept { return check_flag(flag_t::EN_SESSION_FLAG_CLOSED); }
+SERVER_FRAME_API bool session::is_closed() const noexcept { return check_flag(flag_t::EN_SESSION_FLAG_CLOSED); }
 
-bool session::is_valid() const noexcept {
+SERVER_FRAME_API bool session::is_valid() const noexcept {
   return 0 == (flags_ & (flag_t::EN_SESSION_FLAG_CLOSING | flag_t::EN_SESSION_FLAG_CLOSED |
                          flag_t::EN_SESSION_FLAG_GATEWAY_REMOVED));
 }
 
-void session::set_player(std::shared_ptr<player_cache> u) {
+SERVER_FRAME_API void session::set_player(std::shared_ptr<player_cache> u) noexcept {
   player_ = u;
 
   if (u) {
@@ -136,9 +190,9 @@ void session::set_player(std::shared_ptr<player_cache> u) {
   }
 }
 
-std::shared_ptr<player_cache> session::get_player() const { return player_.lock(); }
+SERVER_FRAME_API std::shared_ptr<player_cache> session::get_player() const noexcept { return player_.lock(); }
 
-int32_t session::send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg) {
+SERVER_FRAME_API int32_t session::send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg) {
   if (0 == msg.head().server_sequence()) {
     std::shared_ptr<player_cache> user = get_player();
     if (user) {
@@ -148,7 +202,8 @@ int32_t session::send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg) 
   return send_msg_to_client(ctx, msg, msg.head().server_sequence());
 }
 
-int32_t session::send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg, uint64_t server_sequence) {
+SERVER_FRAME_API int32_t session::send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg,
+                                                     uint64_t server_sequence) {
   if (!msg.has_head() || msg.head().timestamp() == 0) {
     msg.mutable_head()->set_timestamp(::util::time::time_utility::get_now());
   }
@@ -156,16 +211,17 @@ int32_t session::send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg, 
   alloc_session_sequence(msg);
 
   size_t msg_buf_len = msg.ByteSizeLong();
-  size_t tls_buf_len =
-      atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);
+  size_t tls_buf_len = atfw::gateway::libatgw_protocol_api::get_tls_length(
+      atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM);
   if (msg_buf_len > tls_buf_len) {
     FWLOGERROR("send to gateway [{:#x}, {}] failed: require {}, only have {}", id_.node_id, id_.session_id, msg_buf_len,
                tls_buf_len);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
   }
 
-  ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(
-      atframe::gateway::proto_base::get_tls_buffer(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM));
+  ::google::protobuf::uint8 *buf_start =
+      reinterpret_cast< ::google::protobuf::uint8 *>(atfw::gateway::libatgw_protocol_api::get_tls_buffer(
+          atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM));
   msg.SerializeWithCachedSizesToArray(buf_start);
   FWLOGDEBUG(
       "send msg to client:[{:#x}, {}] {} bytes.(session sequence: {}, client sequence: {}, server sequence: {})\n{}",
@@ -177,22 +233,23 @@ int32_t session::send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg, 
   return send_msg_to_client(buf_start, msg_buf_len);
 }
 
-int32_t session::send_msg_to_client(const void *msg_data, size_t msg_size) {
+SERVER_FRAME_API int32_t session::send_msg_to_client(const void *msg_data, size_t msg_size) {
   // send data using dispatcher
   return cs_msg_dispatcher::me()->send_data(get_key().node_id, get_key().session_id, msg_data, msg_size);
 }
 
-int32_t session::broadcast_msg_to_client(uint64_t node_id, const atframework::CSMsg &msg) {
+SERVER_FRAME_API int32_t session::broadcast_msg_to_client(uint64_t node_id, const atframework::CSMsg &msg) {
   size_t msg_buf_len = msg.ByteSizeLong();
-  size_t tls_buf_len =
-      atframe::gateway::proto_base::get_tls_length(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM);
+  size_t tls_buf_len = atfw::gateway::libatgw_protocol_api::get_tls_length(
+      atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM);
   if (msg_buf_len > tls_buf_len) {
     FWLOGERROR("broadcast to gateway [{:#x}] failed: require {}, only have {}", node_id, msg_buf_len, tls_buf_len);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
   }
 
-  ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(
-      atframe::gateway::proto_base::get_tls_buffer(atframe::gateway::proto_base::tls_buffer_t::EN_TBT_CUSTOM));
+  ::google::protobuf::uint8 *buf_start =
+      reinterpret_cast< ::google::protobuf::uint8 *>(atfw::gateway::libatgw_protocol_api::get_tls_buffer(
+          atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM));
   msg.SerializeWithCachedSizesToArray(buf_start);
   FWLOGDEBUG("broadcast msg to gateway [{:#x}] {} bytes\n{}", node_id, msg_buf_len,
              protobuf_mini_dumper_get_readable(msg));
@@ -200,92 +257,31 @@ int32_t session::broadcast_msg_to_client(uint64_t node_id, const atframework::CS
   return broadcast_msg_to_client(node_id, buf_start, msg_buf_len);
 }
 
-int32_t session::broadcast_msg_to_client(uint64_t node_id, const void *msg_data, size_t msg_size) {
+SERVER_FRAME_API int32_t session::broadcast_msg_to_client(uint64_t node_id, const void *msg_data, size_t msg_size) {
   // broadcast data using dispatcher
   return cs_msg_dispatcher::me()->broadcast_data(node_id, msg_data, msg_size);
 }
 
-bool session::compare_callback::operator()(const key_t &l, const key_t &r) const {
-  if (l.node_id != r.node_id) {
-    return l.session_id < r.session_id;
-  }
-  return l.node_id < r.node_id;
+SERVER_FRAME_API bool session::compare_callback::operator()(const key_t &l, const key_t &r) const noexcept {
+  return l < r;
 }
 
-size_t session::compare_callback::operator()(const key_t &hash_obj) const {
+SERVER_FRAME_API size_t session::compare_callback::operator()(const key_t &hash_obj) const noexcept {
   // std::hash also use fnv1 hash algorithm, but fnv1a sometime has better random
-  return atfw::util::hash::hash_fnv1a<size_t>(&hash_obj.node_id, sizeof(hash_obj.node_id)) ^
-         atfw::util::hash::hash_fnv1<size_t>(&hash_obj.session_id, sizeof(hash_obj.session_id));
-}
-
-void session::alloc_session_sequence(atframework::CSMsg &msg) {
-  do {
-    // has already alloc sequence, do nothing
-    if (msg.head().session_sequence() != 0) {
-      break;
-    }
-
-    // if the current player's session is no longer valid and
-    // has not marked as no cache, sequence will be set to zero
-    if (!is_valid()) {
-      break;
-    }
-
-    msg.mutable_head()->set_session_sequence(++session_sequence_);
-  } while (false);
-}
-
-void session::create_actor_log_writter() {
-  if (!actor_log_writter_ && logic_config::me()->get_logic().session().actor_log_size() > 0 &&
-      logic_config::me()->get_logic().session().actor_log_rotate() > 0) {
-    actor_log_writter_ = atfw::util::log::log_wrapper::create_user_logger();
-    if (actor_log_writter_) {
-      actor_log_writter_->init(util::log::log_formatter::level_t::LOG_LW_INFO);
-      actor_log_writter_->set_stacktrace_level(util::log::log_formatter::level_t::LOG_LW_DISABLED,
-                                               atfw::util::log::log_formatter::level_t::LOG_LW_DISABLED);
-      actor_log_writter_->set_prefix_format("[%F %T.%f]: ");
-
-      std::stringstream ss_path;
-      std::stringstream ss_alias;
-      ss_path << logic_config::me()->get_logic().server().log_path() << "/cs-actor/%Y-%m-%d/" << cached_user_id_
-              << ".%N.log";
-      ss_alias << logic_config::me()->get_logic().server().log_path() << "/cs-actor/%Y-%m-%d/" << cached_user_id_
-               << ".log";
-      atfw::util::log::log_sink_file_backend file_sink(ss_path.str());
-      file_sink.set_writing_alias_pattern(ss_alias.str());
-      file_sink.set_flush_interval(1);  // flush every 1 second
-      file_sink.set_max_file_size(logic_config::me()->get_logic().session().actor_log_size());
-      file_sink.set_rotate_size(static_cast<uint32_t>(logic_config::me()->get_logic().session().actor_log_rotate()));
-      actor_log_writter_->add_sink(file_sink);
-
-      atfw::util::log::log_wrapper::caller_info_t caller = atfw::util::log::log_wrapper::caller_info_t(
-          atfw::util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
-      actor_log_writter_->format_log(caller, "============ user: {}:{}, session: {:#x}:{} created ============",
-                                     cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id);
-    }
-  }
-
-  if (!actor_log_otel_ && logic_config::me()->get_logic().session().enable_actor_otel_log()) {
-    auto telemetry_group =
-        rpc::telemetry::global_service::get_group(rpc::telemetry::semantic_conventions::kGroupNameCsActor);
-    if (telemetry_group) {
-      actor_log_otel_ = rpc::telemetry::global_service::get_current_default_logger(telemetry_group);
-    }
-  }
-  if (actor_log_otel_) {
-    std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue> attributes[] = {
-        {"gateway.node_id", get_key().node_id},
-        {"session.event", "create"},
-        {"user.id", cached_user_id_},
-        {"user.zone_id", cached_zone_id_},
-        {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id}};
-    actor_log_otel_->Info(util::log::format("============ user: {}:{}, session: {:#x}:{} created ============",
-                                            cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id),
-                          opentelemetry::common::MakeAttributes(attributes));
+  if (hash_obj.node_id != 0) {
+    return static_cast<size_t>(
+        _session_hash_combine(XXH64(&hash_obj.node_id, sizeof(hash_obj.node_id), kSessionKeyHashMagicNumber),
+                              XXH64(&hash_obj.session_id, sizeof(hash_obj.session_id), kSessionKeyHashMagicNumber)));
+  } else if (!hash_obj.node_name.empty()) {
+    return static_cast<size_t>(
+        _session_hash_combine(XXH64(hash_obj.node_name.c_str(), hash_obj.node_name.size(), kSessionKeyHashMagicNumber),
+                              XXH64(&hash_obj.session_id, sizeof(hash_obj.session_id), kSessionKeyHashMagicNumber)));
+  } else {
+    return static_cast<size_t>(XXH64(&hash_obj.session_id, sizeof(hash_obj.session_id), kSessionKeyHashMagicNumber));
   }
 }
 
-int32_t session::send_kickoff(int32_t reason) {
+SERVER_FRAME_API int32_t session::send_kickoff(int32_t reason) {
   if (check_flag(flag_t::EN_SESSION_FLAG_GATEWAY_REMOVED)) {
     return 0;
   }
@@ -293,7 +289,8 @@ int32_t session::send_kickoff(int32_t reason) {
   return cs_msg_dispatcher::me()->send_kickoff(get_key().node_id, get_key().session_id, reason);
 }
 
-void session::write_actor_log_head(rpc::context &ctx, const atframework::CSMsg &msg, size_t byte_size, bool is_input) {
+SERVER_FRAME_API void session::write_actor_log_head(rpc::context &ctx, const atframework::CSMsg &msg, size_t byte_size,
+                                                    bool is_input) {
   if (!actor_log_writter_ && !actor_log_otel_) {
     return;
   }
@@ -358,8 +355,8 @@ void session::write_actor_log_head(rpc::context &ctx, const atframework::CSMsg &
   }
 }
 
-void session::write_actor_log_body(rpc::context &ctx, const google::protobuf::Message &msg,
-                                   const atframework::CSMsgHead &head, bool is_input) {
+SERVER_FRAME_API void session::write_actor_log_body(rpc::context &ctx, const google::protobuf::Message &msg,
+                                                    const atframework::CSMsgHead &head, bool is_input) {
   if (!actor_log_writter_ && !actor_log_otel_) {
     return;
   }
@@ -436,5 +433,72 @@ void session::write_actor_log_body(rpc::context &ctx, const google::protobuf::Me
     } else {
       actor_log_otel_->Info(body_view, opentelemetry::common::MakeAttributes(attributes));
     }
+  }
+}
+
+SERVER_FRAME_API void session::alloc_session_sequence(atframework::CSMsg &msg) {
+  do {
+    // has already alloc sequence, do nothing
+    if (msg.head().session_sequence() != 0) {
+      break;
+    }
+
+    // if the current player's session is no longer valid and
+    // has not marked as no cache, sequence will be set to zero
+    if (!is_valid()) {
+      break;
+    }
+
+    msg.mutable_head()->set_session_sequence(++session_sequence_);
+  } while (false);
+}
+
+void session::create_actor_log_writter() {
+  if (!actor_log_writter_ && logic_config::me()->get_logic().session().actor_log_size() > 0 &&
+      logic_config::me()->get_logic().session().actor_log_rotate() > 0) {
+    actor_log_writter_ = atfw::util::log::log_wrapper::create_user_logger();
+    if (actor_log_writter_) {
+      actor_log_writter_->init(util::log::log_formatter::level_t::LOG_LW_INFO);
+      actor_log_writter_->set_stacktrace_level(util::log::log_formatter::level_t::LOG_LW_DISABLED,
+                                               atfw::util::log::log_formatter::level_t::LOG_LW_DISABLED);
+      actor_log_writter_->set_prefix_format("[%F %T.%f]: ");
+
+      std::stringstream ss_path;
+      std::stringstream ss_alias;
+      ss_path << logic_config::me()->get_logic().server().log_path() << "/cs-actor/%Y-%m-%d/" << cached_user_id_
+              << ".%N.log";
+      ss_alias << logic_config::me()->get_logic().server().log_path() << "/cs-actor/%Y-%m-%d/" << cached_user_id_
+               << ".log";
+      atfw::util::log::log_sink_file_backend file_sink(ss_path.str());
+      file_sink.set_writing_alias_pattern(ss_alias.str());
+      file_sink.set_flush_interval(1);  // flush every 1 second
+      file_sink.set_max_file_size(logic_config::me()->get_logic().session().actor_log_size());
+      file_sink.set_rotate_size(static_cast<uint32_t>(logic_config::me()->get_logic().session().actor_log_rotate()));
+      actor_log_writter_->add_sink(file_sink);
+
+      atfw::util::log::log_wrapper::caller_info_t caller = atfw::util::log::log_wrapper::caller_info_t(
+          atfw::util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
+      actor_log_writter_->format_log(caller, "============ user: {}:{}, session: {:#x}:{} created ============",
+                                     cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id);
+    }
+  }
+
+  if (!actor_log_otel_ && logic_config::me()->get_logic().session().enable_actor_otel_log()) {
+    auto telemetry_group =
+        rpc::telemetry::global_service::get_group(rpc::telemetry::semantic_conventions::kGroupNameCsActor);
+    if (telemetry_group) {
+      actor_log_otel_ = rpc::telemetry::global_service::get_current_default_logger(telemetry_group);
+    }
+  }
+  if (actor_log_otel_) {
+    std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue> attributes[] = {
+        {"gateway.node_id", get_key().node_id},
+        {"session.event", "create"},
+        {"user.id", cached_user_id_},
+        {"user.zone_id", cached_zone_id_},
+        {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id}};
+    actor_log_otel_->Info(util::log::format("============ user: {}:{}, session: {:#x}:{} created ============",
+                                            cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id),
+                          opentelemetry::common::MakeAttributes(attributes));
   }
 }

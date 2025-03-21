@@ -34,7 +34,7 @@ class player_cache;
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
 using task_action_result_type = rpc::result_code_type;
 #else
-class UTIL_SYMBOL_VISIBLE task_action_result_type {
+class ATFW_UTIL_SYMBOL_VISIBLE task_action_result_type {
  public:
   using value_type = int32_t;
 
@@ -44,7 +44,7 @@ class UTIL_SYMBOL_VISIBLE task_action_result_type {
 
   template <class T>
   struct get_value_trait {
-    UTIL_FORCEINLINE static value_type get_value(const T &value) { return value; }
+    ATFW_UTIL_FORCEINLINE static value_type get_value(const T &value) { return value; }
   };
 
   template <class T>
@@ -53,129 +53,129 @@ class UTIL_SYMBOL_VISIBLE task_action_result_type {
 
  public:
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
-  UTIL_FORCEINLINE void _internal_set_awaited() noexcept {}
+  ATFW_UTIL_FORCEINLINE void _internal_set_awaited() noexcept {}
 #  endif
 
-  UTIL_FORCEINLINE explicit task_action_result_type(value_type code) : result_code_(code) {}
-  UTIL_FORCEINLINE task_action_result_type(const task_action_result_type &) = default;
-  UTIL_FORCEINLINE task_action_result_type(task_action_result_type &&) = default;
-  UTIL_FORCEINLINE task_action_result_type &operator=(const task_action_result_type &) = default;
-  UTIL_FORCEINLINE task_action_result_type &operator=(task_action_result_type &&) = default;
+  ATFW_UTIL_FORCEINLINE explicit task_action_result_type(value_type code) : result_code_(code) {}
+  ATFW_UTIL_FORCEINLINE task_action_result_type(const task_action_result_type &) = default;
+  ATFW_UTIL_FORCEINLINE task_action_result_type(task_action_result_type &&) = default;
+  ATFW_UTIL_FORCEINLINE task_action_result_type &operator=(const task_action_result_type &) = default;
+  ATFW_UTIL_FORCEINLINE task_action_result_type &operator=(task_action_result_type &&) = default;
 
-  UTIL_FORCEINLINE operator value_type() const noexcept { return result_code_; }
+  ATFW_UTIL_FORCEINLINE operator value_type() const noexcept { return result_code_; }
 
   template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
-  UTIL_FORCEINLINE task_action_result_type &operator=(TOTHER &&other) noexcept {
+  ATFW_UTIL_FORCEINLINE task_action_result_type &operator=(TOTHER &&other) noexcept {
     result_code_ = get_value_trait<TOTHER>::get_value(other);
     return *this;
   }
 
-  UTIL_FORCEINLINE friend bool operator==(const task_action_result_type &self,
-                                          const task_action_result_type &other) noexcept {
+  ATFW_UTIL_FORCEINLINE friend bool operator==(const task_action_result_type &self,
+                                               const task_action_result_type &other) noexcept {
     return self.result_code_ == other.result_code_;
   }
 
   template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
-  UTIL_FORCEINLINE friend bool operator==(const task_action_result_type &self, TOTHER &&other) noexcept {
+  ATFW_UTIL_FORCEINLINE friend bool operator==(const task_action_result_type &self, TOTHER &&other) noexcept {
     return self.result_code_ == get_value_trait<TOTHER>::get_value(other);
   }
 
   template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
-  UTIL_FORCEINLINE friend bool operator==(TOTHER &&other, const task_action_result_type &self) noexcept {
+  ATFW_UTIL_FORCEINLINE friend bool operator==(TOTHER &&other, const task_action_result_type &self) noexcept {
     return get_value_trait<TOTHER>::get_value(other) == self.result_code_;
   }
 
 #  ifdef __cpp_impl_three_way_comparison
-  UTIL_FORCEINLINE friend std::strong_ordering operator<=>(const task_action_result_type &self,
-                                                           const task_action_result_type &other) noexcept {
+  ATFW_UTIL_FORCEINLINE friend std::strong_ordering operator<=>(const task_action_result_type &self,
+                                                                const task_action_result_type &other) noexcept {
     return self.result_code_ <=> other.result_code_;
   }
 
   template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
-  UTIL_FORCEINLINE friend std::strong_ordering operator<=>(const task_action_result_type &self,
-                                                           TOTHER &&other) noexcept {
+  ATFW_UTIL_FORCEINLINE friend std::strong_ordering operator<=>(const task_action_result_type &self,
+                                                                TOTHER &&other) noexcept {
     return self.result_code_ <=> get_value_trait<TOTHER>::get_value(other);
   }
 
   template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
-  UTIL_FORCEINLINE friend std::strong_ordering operator<=>(TOTHER &&other,
-                                                           const task_action_result_type &self) noexcept {
+  ATFW_UTIL_FORCEINLINE friend std::strong_ordering operator<=>(TOTHER &&other,
+                                                                const task_action_result_type &self) noexcept {
     return get_value_trait<TOTHER>::get_value(other) <=> self.result_code_;
   }
 #  else
 
-  UTIL_FORCEINLINE friend bool operator!=(const task_action_result_type &self,
-                                          const task_action_result_type &other) noexcept {
+  ATFW_UTIL_FORCEINLINE friend bool operator!=(const task_action_result_type &self,
+                                               const task_action_result_type &other) noexcept {
     return self.result_code_ != other.result_code_;
   }
 
   template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
-  UTIL_FORCEINLINE friend bool operator!=(const task_action_result_type &self, TOTHER &&other) noexcept {
+  ATFW_UTIL_FORCEINLINE friend bool operator!=(const task_action_result_type &self, TOTHER &&other) noexcept {
     return self.result_code_ != get_value_trait<TOTHER>::get_value(other);
   }
 
   template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
-  UTIL_FORCEINLINE friend bool operator!=(TOTHER &&other, const task_action_result_type &self) noexcept {
+  ATFW_UTIL_FORCEINLINE friend bool operator!=(TOTHER &&other, const task_action_result_type &self) noexcept {
     return get_value_trait<TOTHER>::get_value(other) != self.result_code_;
   }
 
-  UTIL_FORCEINLINE friend bool operator<(const task_action_result_type &self,
-                                         const task_action_result_type &other) noexcept {
+  ATFW_UTIL_FORCEINLINE friend bool operator<(const task_action_result_type &self,
+                                              const task_action_result_type &other) noexcept {
     return self.result_code_ < other.result_code_;
   }
 
   template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
-  UTIL_FORCEINLINE friend bool operator<(const task_action_result_type &self, TOTHER &&other) noexcept {
+  ATFW_UTIL_FORCEINLINE friend bool operator<(const task_action_result_type &self, TOTHER &&other) noexcept {
     return self.result_code_ < get_value_trait<TOTHER>::get_value(other);
   }
 
   template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
-  UTIL_FORCEINLINE friend bool operator<(TOTHER &&other, const task_action_result_type &self) noexcept {
+  ATFW_UTIL_FORCEINLINE friend bool operator<(TOTHER &&other, const task_action_result_type &self) noexcept {
     return get_value_trait<TOTHER>::get_value(other) < self.result_code_;
   }
 
-  UTIL_FORCEINLINE friend bool operator<=(const task_action_result_type &self,
-                                          const task_action_result_type &other) noexcept {
+  ATFW_UTIL_FORCEINLINE friend bool operator<=(const task_action_result_type &self,
+                                               const task_action_result_type &other) noexcept {
     return self.result_code_ <= other.result_code_;
   }
 
   template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
-  UTIL_FORCEINLINE friend bool operator<=(const task_action_result_type &self, TOTHER &&other) noexcept {
+  ATFW_UTIL_FORCEINLINE friend bool operator<=(const task_action_result_type &self, TOTHER &&other) noexcept {
     return self.result_code_ <= get_value_trait<TOTHER>::get_value(other);
   }
 
   template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
-  UTIL_FORCEINLINE friend bool operator<=(TOTHER &&other, const task_action_result_type &self) noexcept {
+  ATFW_UTIL_FORCEINLINE friend bool operator<=(TOTHER &&other, const task_action_result_type &self) noexcept {
     return get_value_trait<TOTHER>::get_value(other) <= self.result_code_;
   }
 
-  UTIL_FORCEINLINE friend bool operator>(const task_action_result_type &self,
-                                         const task_action_result_type &other) noexcept {
+  ATFW_UTIL_FORCEINLINE friend bool operator>(const task_action_result_type &self,
+                                              const task_action_result_type &other) noexcept {
     return self.result_code_ > other.result_code_;
   }
 
   template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
-  UTIL_FORCEINLINE friend bool operator>(const task_action_result_type &self, TOTHER &&other) noexcept {
+  ATFW_UTIL_FORCEINLINE friend bool operator>(const task_action_result_type &self, TOTHER &&other) noexcept {
     return self.result_code_ > get_value_trait<TOTHER>::get_value(other);
   }
 
   template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
-  UTIL_FORCEINLINE friend bool operator>(TOTHER &&other, const task_action_result_type &self) noexcept {
+  ATFW_UTIL_FORCEINLINE friend bool operator>(TOTHER &&other, const task_action_result_type &self) noexcept {
     return get_value_trait<TOTHER>::get_value(other) > self.result_code_;
   }
 
-  UTIL_FORCEINLINE friend bool operator>=(const task_action_result_type &self,
-                                          const task_action_result_type &other) noexcept {
+  ATFW_UTIL_FORCEINLINE friend bool operator>=(const task_action_result_type &self,
+                                               const task_action_result_type &other) noexcept {
     return self.result_code_ >= other.result_code_;
   }
 
   template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
-  UTIL_FORCEINLINE friend bool operator>=(const task_action_result_type &self, TOTHER &&other) noexcept {
+  ATFW_UTIL_FORCEINLINE friend bool operator>=(const task_action_result_type &self, TOTHER &&other) noexcept {
     return self.result_code_ >= get_value_trait<TOTHER>::get_value(other);
   }
 
   template <class TOTHER, class = typename convertiable_to_resule_type<typename std::decay<TOTHER>::type>::type>
-  UTIL_FORCEINLINE friend bool operator>=(TOTHER &&other, const task_action_result_type &self) noexcept {
+  ATFW_UTIL_FORCEINLINE friend bool operator>=(TOTHER &&other, const task_action_result_type &self) noexcept {
     return get_value_trait<TOTHER>::get_value(other) >= self.result_code_;
   }
 #  endif
@@ -185,7 +185,7 @@ class UTIL_SYMBOL_VISIBLE task_action_result_type {
 };
 #endif
 
-class UTIL_SYMBOL_VISIBLE task_action_base
+class ATFW_UTIL_SYMBOL_VISIBLE task_action_base
 #if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
     : public cotask::impl::task_action_impl
 #endif
@@ -218,8 +218,8 @@ class UTIL_SYMBOL_VISIBLE task_action_base
   SERVER_FRAME_API virtual result_type hook_run();
 
   virtual result_type operator()() = 0;
-  UTIL_FORCEINLINE uint64_t get_user_id() const { return user_id_; }
-  UTIL_FORCEINLINE uint32_t get_zone_id() const { return zone_id_; }
+  ATFW_UTIL_FORCEINLINE uint64_t get_user_id() const { return user_id_; }
+  ATFW_UTIL_FORCEINLINE uint32_t get_zone_id() const { return zone_id_; }
 
   SERVER_FRAME_API virtual int on_success();
   SERVER_FRAME_API virtual int on_failed();
@@ -245,7 +245,7 @@ class UTIL_SYMBOL_VISIBLE task_action_base
    * @see T_APP_SUCCESS
    * @return 返回码
    */
-  UTIL_FORCEINLINE int32_t get_result() const noexcept { return result_; }
+  ATFW_UTIL_FORCEINLINE int32_t get_result() const noexcept { return result_; }
 
   /**
    * @brief 获取回包返回码
@@ -253,19 +253,21 @@ class UTIL_SYMBOL_VISIBLE task_action_base
    * @see Polar::EN_CS_SUCCESS
    * @return 回包返回码
    */
-  UTIL_FORCEINLINE int32_t get_response_code() const noexcept { return response_code_; }
+  ATFW_UTIL_FORCEINLINE int32_t get_response_code() const noexcept { return response_code_; }
 
   /**
    * @brief 获取外部模块返回码
    * @return 回包返回码
    */
-  UTIL_FORCEINLINE int64_t get_external_response_code() const noexcept { return external_error_code_; }
+  ATFW_UTIL_FORCEINLINE int64_t get_external_response_code() const noexcept { return external_error_code_; }
 
   /**
    * @brief 获取外部模块返回消息
    * @return 回包返回码
    */
-  UTIL_FORCEINLINE const std::string &get_external_response_message() const noexcept { return external_error_message_; }
+  ATFW_UTIL_FORCEINLINE const std::string &get_external_response_message() const noexcept {
+    return external_error_message_;
+  }
 
   SERVER_FRAME_API on_finished_callback_handle_t add_on_finished(on_finished_callback_fn_t &&fn);
   SERVER_FRAME_API void remove_on_finished(on_finished_callback_handle_t handle);
@@ -277,7 +279,7 @@ class UTIL_SYMBOL_VISIBLE task_action_base
    * @param result 返回码
    */
   template <class TArg>
-  UTIL_FORCEINLINE void set_result(TArg &&result) {
+  ATFW_UTIL_FORCEINLINE void set_result(TArg &&result) {
     result_ = std::forward<TArg>(result);
   }
 
@@ -294,39 +296,39 @@ class UTIL_SYMBOL_VISIBLE task_action_base
   /**
    * @brief 禁用结束事件响应
    */
-  UTIL_FORCEINLINE void disable_finish_event() { event_disabled_ = true; }
+  ATFW_UTIL_FORCEINLINE void disable_finish_event() { event_disabled_ = true; }
 
   /**
    * @brief 开启结束事件响应
    */
-  UTIL_FORCEINLINE void enable_finish_event() { event_disabled_ = false; }
+  ATFW_UTIL_FORCEINLINE void enable_finish_event() { event_disabled_ = false; }
 
   /**
    * @brief 禁用自动回包
    */
-  UTIL_FORCEINLINE void disable_response_message() { response_message_disabled_ = true; }
+  ATFW_UTIL_FORCEINLINE void disable_response_message() { response_message_disabled_ = true; }
 
   /**
    * @brief 开启自动回包
    */
-  UTIL_FORCEINLINE void enable_response_message() { response_message_disabled_ = false; }
+  ATFW_UTIL_FORCEINLINE void enable_response_message() { response_message_disabled_ = false; }
 
   /**
    * @brief 是否开启了自动回包
    */
-  UTIL_FORCEINLINE bool is_response_message_enabled() const noexcept { return !response_message_disabled_; }
+  ATFW_UTIL_FORCEINLINE bool is_response_message_enabled() const noexcept { return !response_message_disabled_; }
 
   /**
    * @brief 获取调度层设置
    *
    * @return const atframework::DispatcherOptions*
    */
-  UTIL_FORCEINLINE const atframework::DispatcherOptions *get_dispatcher_options() noexcept {
+  ATFW_UTIL_FORCEINLINE const atframework::DispatcherOptions *get_dispatcher_options() noexcept {
     return dispatcher_options_;
   }
 
-  UTIL_FORCEINLINE const rpc::context &get_shared_context() const { return shared_context_; }
-  UTIL_FORCEINLINE rpc::context &get_shared_context() { return shared_context_; }
+  ATFW_UTIL_FORCEINLINE const rpc::context &get_shared_context() const { return shared_context_; }
+  ATFW_UTIL_FORCEINLINE rpc::context &get_shared_context() { return shared_context_; }
 
   /**
    * @brief Set caller rpc context, we will try to reuse arena allocator and set trace parent data
@@ -371,7 +373,7 @@ class UTIL_SYMBOL_VISIBLE task_action_base
 };
 
 template <typename TREQ>
-class UTIL_SYMBOL_VISIBLE task_action_req_base : public task_action_base {
+class ATFW_UTIL_SYMBOL_VISIBLE task_action_req_base : public task_action_base {
  public:
   using message_type = TREQ;
   using result_type = task_action_base::result_type;
@@ -416,8 +418,8 @@ class UTIL_SYMBOL_VISIBLE task_action_req_base : public task_action_base {
 
 namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID {
 template <class T>
-struct UTIL_SYMBOL_VISIBLE
-    formatter<T, typename std::enable_if<std::is_base_of<task_action_base, T>::value, char>::type>
+struct ATFW_UTIL_SYMBOL_VISIBLE
+formatter<T, typename std::enable_if<std::is_base_of<task_action_base, T>::value, char>::type>
     : formatter<std::string> {
   template <class FormatContext>
   auto format(const task_action_base &action, FormatContext &ctx) {

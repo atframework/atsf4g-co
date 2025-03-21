@@ -54,8 +54,9 @@
 class logic_server_common_module;
 class logic_hpa_controller;
 
-struct UTIL_SYMBOL_VISIBLE logic_server_common_module_configure{
-    inline logic_server_common_module_configure() noexcept {}};
+struct ATFW_UTIL_SYMBOL_VISIBLE logic_server_common_module_configure {
+  inline logic_server_common_module_configure() noexcept {}
+};
 
 /**
  * @brief 初始化公共模块
@@ -73,7 +74,7 @@ SERVER_FRAME_API int logic_server_setup_common(atapp::app& app, const logic_serv
  */
 SERVER_FRAME_API logic_server_common_module* logic_server_last_common_module();
 
-struct UTIL_SYMBOL_VISIBLE logic_server_timer {
+struct ATFW_UTIL_SYMBOL_VISIBLE logic_server_timer {
   std::chrono::system_clock::time_point timeout;
   uint64_t task_id;
   uintptr_t message_type;
@@ -162,12 +163,12 @@ class logic_server_common_module : public atapp::module_impl {
    * @return （本地）服务发现版本号
    */
   SERVER_FRAME_API int64_t
-  get_service_discovery_version(atframe::component::logic_service_type::type service_type_id) const noexcept;
+  get_service_discovery_version(atframework::component::logic_service_type::type service_type_id) const noexcept;
 
   SERVER_FRAME_API void update_remote_server_configure(const std::string& global_conf, int32_t global_version,
                                                        const std::string& zone_conf, int32_t zone_version);
 
-  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::table_service_configure_data& get_remote_server_configure()
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::table_service_configure_data& get_remote_server_configure()
       const noexcept {
     return server_remote_conf_;
   }
@@ -182,7 +183,7 @@ class logic_server_common_module : public atapp::module_impl {
   SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type_zone(const std::string& type_name,
                                                                                      uint64_t zone_id) const;
   SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t get_discovery_index_by_zone(uint64_t zone_id) const;
-  UTIL_FORCEINLINE const std::unordered_map<uint64_t, atapp::etcd_discovery_set::ptr_t>& get_origin_zone_index()
+  ATFW_UTIL_FORCEINLINE const std::unordered_map<uint64_t, atapp::etcd_discovery_set::ptr_t>& get_origin_zone_index()
       const noexcept {
     return service_zone_index_;
   }
@@ -196,7 +197,7 @@ class logic_server_common_module : public atapp::module_impl {
    *
    * @return HPA控制器
    */
-  UTIL_FORCEINLINE const std::shared_ptr<logic_hpa_controller>& get_hpa_controller() { return hpa_controller_; }
+  ATFW_UTIL_FORCEINLINE const std::shared_ptr<logic_hpa_controller>& get_hpa_controller() { return hpa_controller_; }
 
  private:
   int setup_etcd_event_handle();

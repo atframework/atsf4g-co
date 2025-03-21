@@ -61,23 +61,27 @@ class logic_config {
   SERVER_FRAME_CONFIG_API const PROJECT_NAMESPACE_ID::DConstSettingsType &get_const_settings();
   SERVER_FRAME_CONFIG_API const atframework::ConstSettingsType &get_atframework_settings();
 
-  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::server_cfg &get_server_cfg() const noexcept { return server_cfg_; }
-  UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::config::server_cfg *mutable_server_cfg() noexcept { return &server_cfg_; }
-  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::db_section_cfg &get_cfg_db() const noexcept { return server_cfg_.db(); }
-  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_section_cfg &get_logic() const noexcept {
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::server_cfg &get_server_cfg() const noexcept {
+    return server_cfg_;
+  }
+  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::config::server_cfg *mutable_server_cfg() noexcept { return &server_cfg_; }
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::db_section_cfg &get_cfg_db() const noexcept {
+    return server_cfg_.db();
+  }
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_section_cfg &get_logic() const noexcept {
     return server_cfg_.logic();
   }
-  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &get_cfg_telemetry() const noexcept {
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &get_cfg_telemetry() const noexcept {
     return get_logic().telemetry();
   }
-  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_router_cfg &get_cfg_router() const noexcept {
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_router_cfg &get_cfg_router() const noexcept {
     return get_logic().router();
   }
-  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_task_cfg &get_cfg_task() const noexcept {
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_task_cfg &get_cfg_task() const noexcept {
     return get_logic().task();
   }
 
-  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::loginsvr_cfg &get_cfg_loginsvr() const noexcept {
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::loginsvr_cfg &get_cfg_loginsvr() const noexcept {
     return get_server_cfg().loginsvr();
   }
 

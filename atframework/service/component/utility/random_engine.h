@@ -16,7 +16,7 @@ class random_engine {
   ~random_engine();
 
   static ATFRAME_SERVICE_COMPONENT_MACRO_API atfw::util::random::mt19937_64 &_get_common_generator();
-  static ATFRAME_SERVICE_COMPONENT_MACRO_API atfw::util::random::taus88 &_get_fast_generator();
+  static ATFRAME_SERVICE_COMPONENT_MACRO_API atfw::util::random::xoshiro256_starstar &_get_fast_generator();
 
  public:
   /**
@@ -43,7 +43,7 @@ class random_engine {
    * 标准随机数
    * @return 随机数
    */
-  static ATFRAME_SERVICE_COMPONENT_MACRO_API uint32_t random();
+  static ATFRAME_SERVICE_COMPONENT_MACRO_API uint64_t random();
 
   /**
    * 标准随机区间
@@ -60,7 +60,7 @@ class random_engine {
    * 快速随机数
    * @return 随机数
    */
-  static ATFRAME_SERVICE_COMPONENT_MACRO_API uint32_t fast_random();
+  static ATFRAME_SERVICE_COMPONENT_MACRO_API uint64_t fast_random();
 
   /**
    * 快速随机区间

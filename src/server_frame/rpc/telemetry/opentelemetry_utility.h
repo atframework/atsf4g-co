@@ -65,11 +65,11 @@ enum class notification_domain : int32_t {
 
 class opentelemetry_utility {
  public:
-  struct UTIL_SYMBOL_VISIBLE metrics_attributes_with_lifetime;
-  struct UTIL_SYMBOL_VISIBLE metrics_record;
-  struct UTIL_SYMBOL_VISIBLE metrics_observer;
+  struct ATFW_UTIL_SYMBOL_VISIBLE metrics_attributes_with_lifetime;
+  struct ATFW_UTIL_SYMBOL_VISIBLE metrics_record;
+  struct ATFW_UTIL_SYMBOL_VISIBLE metrics_observer;
 
-  struct UTIL_SYMBOL_VISIBLE attributes_map_type {
+  struct ATFW_UTIL_SYMBOL_VISIBLE attributes_map_type {
     using type = std::unordered_map<std::string, opentelemetry::common::AttributeValue>;
     using value_type = std::unordered_map<std::string, opentelemetry::sdk::common::OwnedAttributeValue>;
     using string_view_vec_type = std::vector<opentelemetry::nostd::string_view>;
@@ -85,13 +85,13 @@ class opentelemetry_utility {
   using attribute_span_type = opentelemetry::nostd::span<const attribute_pair_type>;
 
  private:
-  UTIL_FORCEINLINE static opentelemetry::nostd::variant<int64_t, double> global_metics_observe_record_parse_value(
+  ATFW_UTIL_FORCEINLINE static opentelemetry::nostd::variant<int64_t, double> global_metics_observe_record_parse_value(
       const opentelemetry::nostd::variant<int64_t, double>& value) noexcept {
     return value;
   }
 
   template <class ValueType>
-  UTIL_FORCEINLINE static opentelemetry::nostd::variant<int64_t, double> global_metics_observe_record_parse_value(
+  ATFW_UTIL_FORCEINLINE static opentelemetry::nostd::variant<int64_t, double> global_metics_observe_record_parse_value(
       const ValueType& value) noexcept {
     return static_cast<typename std::conditional<std::is_integral<ValueType>::value, int64_t, double>::type>(value);
   }
@@ -148,7 +148,7 @@ class opentelemetry_utility {
                                                             const opentelemetry::common::KeyValueIterable& attributes);
 
   template <class ValueType>
-  UTIL_SYMBOL_VISIBLE static void global_metics_observe_record(metrics_observer& observer, ValueType&& value) {
+  ATFW_UTIL_SYMBOL_VISIBLE static void global_metics_observe_record(metrics_observer& observer, ValueType&& value) {
     std::shared_ptr<::rpc::telemetry::group_type> __lifetime;
     global_metics_observe_record(
         observer, global_metics_observe_record_parse_value(value),
@@ -158,14 +158,14 @@ class opentelemetry_utility {
   template <class ValueType, class AttributeType,
             class = atfw::util::nostd::enable_if_t<!std::is_base_of<opentelemetry::common::KeyValueIterable,
                                                                     atfw::util::nostd::decay_t<AttributeType>>::value>>
-  UTIL_SYMBOL_VISIBLE static void global_metics_observe_record(metrics_observer& observer, ValueType&& value,
-                                                               AttributeType&& attributes) {
+  ATFW_UTIL_SYMBOL_VISIBLE static void global_metics_observe_record(metrics_observer& observer, ValueType&& value,
+                                                                    AttributeType&& attributes) {
     global_metics_observe_record(observer, global_metics_observe_record_parse_value(value),
                                  opentelemetry::common::MakeAttributes(attributes));
   }
 
   template <class ValueType>
-  UTIL_SYMBOL_VISIBLE static void global_metics_observe_record_extend_attrubutes(
+  ATFW_UTIL_SYMBOL_VISIBLE static void global_metics_observe_record_extend_attrubutes(
       metrics_observer& observer, ValueType&& value, attribute_span_type extend_attributes) {
     std::shared_ptr<::rpc::telemetry::group_type> __lifetime;
     attribute_span_type attributes_array[] = {rpc::telemetry::global_service::get_metrics_labels_view(__lifetime),
@@ -178,7 +178,7 @@ class opentelemetry_utility {
   }
 
   template <class ValueType>
-  UTIL_SYMBOL_VISIBLE static void global_metics_observe_record_extend_attrubutes(
+  ATFW_UTIL_SYMBOL_VISIBLE static void global_metics_observe_record_extend_attrubutes(
       metrics_observer& observer, ValueType&& value, std::shared_ptr<::rpc::telemetry::group_type>& __lifetime,
       attribute_span_type extend_attributes) {
     attribute_span_type attributes_array[] = {rpc::telemetry::global_service::get_metrics_labels_view(__lifetime),
@@ -191,7 +191,7 @@ class opentelemetry_utility {
   }
 
   template <class ValueType>
-  UTIL_SYMBOL_VISIBLE static void global_metics_observe_record_extend_attrubutes(
+  ATFW_UTIL_SYMBOL_VISIBLE static void global_metics_observe_record_extend_attrubutes(
       metrics_observer& observer, ValueType&& value,
       std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
           extend_attributes) {
@@ -201,7 +201,7 @@ class opentelemetry_utility {
   }
 
   template <class ValueType>
-  UTIL_SYMBOL_VISIBLE static void global_metics_observe_record_extend_attrubutes(
+  ATFW_UTIL_SYMBOL_VISIBLE static void global_metics_observe_record_extend_attrubutes(
       metrics_observer& observer, ValueType&& value, std::shared_ptr<::rpc::telemetry::group_type>& __lifetime,
       std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
           extend_attributes) {

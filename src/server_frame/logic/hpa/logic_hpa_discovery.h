@@ -68,7 +68,7 @@ class logic_hpa_discovery_setup_policy_accessor {
 
 class logic_hpa_discovery {
  public:
-  struct UTIL_SYMBOL_VISIBLE data_header {
+  struct ATFW_UTIL_SYMBOL_VISIBLE data_header {
     gsl::string_view subkey;
     int64_t create_revision;
     int64_t mod_revision;
@@ -78,13 +78,13 @@ class logic_hpa_discovery {
   using event_callback_on_ready = std::function<void(logic_hpa_discovery&)>;
   using event_callback_on_changed = std::function<void(logic_hpa_discovery&, const data_header&, const std::string&)>;
 
-  struct UTIL_SYMBOL_VISIBLE data_change_listener {
+  struct ATFW_UTIL_SYMBOL_VISIBLE data_change_listener {
     event_callback_on_changed callback;
     std::string subkey;
   };
 
   template <class CallbackType>
-  struct UTIL_SYMBOL_VISIBLE event_callback_data {
+  struct ATFW_UTIL_SYMBOL_VISIBLE event_callback_data {
     CallbackType callback;
     logic_hpa_event_active_type active;
 
@@ -94,22 +94,22 @@ class logic_hpa_discovery {
   };
 
   template <class CallbackDataType>
-  struct UTIL_SYMBOL_VISIBLE event_callback_handle {
+  struct ATFW_UTIL_SYMBOL_VISIBLE event_callback_handle {
     typename std::list<event_callback_data<CallbackDataType>>::iterator iterator;
     int64_t version;
 
-    UTIL_FORCEINLINE event_callback_handle(typename std::list<event_callback_data<CallbackDataType>>::iterator it,
-                                           int64_t v)
+    ATFW_UTIL_FORCEINLINE event_callback_handle(typename std::list<event_callback_data<CallbackDataType>>::iterator it,
+                                                int64_t v)
         : iterator(it), version(v) {}
 
     event_callback_handle(const event_callback_handle&) = delete;
-    UTIL_FORCEINLINE event_callback_handle(event_callback_handle&& other) noexcept
+    ATFW_UTIL_FORCEINLINE event_callback_handle(event_callback_handle&& other) noexcept
         : iterator(other.iterator), version(other.version) {
       other.version = 0;
     }
 
     event_callback_handle& operator=(const event_callback_handle&) = delete;
-    UTIL_FORCEINLINE event_callback_handle& operator=(event_callback_handle&& other) noexcept {
+    ATFW_UTIL_FORCEINLINE event_callback_handle& operator=(event_callback_handle&& other) noexcept {
       iterator = other.iterator;
       version = other.version;
       other.version = 0;
@@ -139,14 +139,14 @@ class logic_hpa_discovery {
 
   SERVER_FRAME_API void stop();
 
-  UTIL_FORCEINLINE bool is_stoping() const noexcept { return stoping_; }
+  ATFW_UTIL_FORCEINLINE bool is_stoping() const noexcept { return stoping_; }
 
   SERVER_FRAME_API bool is_stopped() const noexcept;
 
-  UTIL_FORCEINLINE bool is_ready() const noexcept { return ready_; }
+  ATFW_UTIL_FORCEINLINE bool is_ready() const noexcept { return ready_; }
 
   // 内联函数，检查是否所有的策略都拉取到过数据
-  UTIL_FORCEINLINE bool is_all_policies_pulled() const noexcept { return pull_policy_waiting_counter_ <= 0; }
+  ATFW_UTIL_FORCEINLINE bool is_all_policies_pulled() const noexcept { return pull_policy_waiting_counter_ <= 0; }
 
   // 内部接口: 添加一个拉取策略，由配置生成，不需要手动调用
   SERVER_FRAME_API void add_pull_policy(std::shared_ptr<logic_hpa_policy> policy,
@@ -209,10 +209,10 @@ class logic_hpa_discovery {
    *
    * @return 上报路径PATH
    */
-  UTIL_FORCEINLINE const std::string& get_etcd_path() const noexcept { return etcd_path_; }
+  ATFW_UTIL_FORCEINLINE const std::string& get_etcd_path() const noexcept { return etcd_path_; }
 
-  UTIL_FORCEINLINE const logic_hpa_controller& get_controller() const noexcept { return *controller_; }
-  UTIL_FORCEINLINE logic_hpa_controller& get_controller() noexcept { return *controller_; }
+  ATFW_UTIL_FORCEINLINE const logic_hpa_controller& get_controller() const noexcept { return *controller_; }
+  ATFW_UTIL_FORCEINLINE logic_hpa_controller& get_controller() noexcept { return *controller_; }
 
   // =================== 事件监听接口 - begin ===================
 
@@ -272,7 +272,7 @@ class logic_hpa_discovery {
    */
   template <class Provider, class = atfw::util::nostd::enable_if_t<std::is_base_of<
                                 logic_hpa_discovery_provider, atfw::util::nostd::decay_t<Provider>>::value>>
-  UTIL_FORCEINLINE void add_custom_provider(const std::shared_ptr<Provider>& ptr) {
+  ATFW_UTIL_FORCEINLINE void add_custom_provider(const std::shared_ptr<Provider>& ptr) {
     add_custom_provider(std::static_pointer_cast<logic_hpa_discovery_provider>(ptr));
   }
 
@@ -290,7 +290,7 @@ class logic_hpa_discovery {
    */
   template <class Provider, class = atfw::util::nostd::enable_if_t<std::is_base_of<
                                 logic_hpa_discovery_provider, atfw::util::nostd::decay_t<Provider>>::value>>
-  UTIL_FORCEINLINE void remove_custom_provider(const std::shared_ptr<Provider>& ptr) {
+  ATFW_UTIL_FORCEINLINE void remove_custom_provider(const std::shared_ptr<Provider>& ptr) {
     remove_custom_provider(std::static_pointer_cast<logic_hpa_discovery_provider>(ptr));
   }
 
@@ -341,7 +341,7 @@ class logic_hpa_discovery {
     std::list<event_callback_data<CallbackType>> callbacks;
     int64_t version = 0;
 
-    UTIL_FORCEINLINE event_callback_set() {}
+    ATFW_UTIL_FORCEINLINE event_callback_set() {}
   };
   using event_on_ready_callback_set = event_callback_set<event_callback_on_ready>;
 

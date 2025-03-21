@@ -41,34 +41,34 @@ class task_action_cs_req_base;
  * @note 能够隐式转换到只读类型，手动使用get或ref函数提取数据会视为即将写脏
  */
 template <typename Ty>
-class UTIL_SYMBOL_VISIBLE player_cache_dirty_wrapper {
+class ATFW_UTIL_SYMBOL_VISIBLE player_cache_dirty_wrapper {
  public:
   using value_type = Ty;
 
-  UTIL_FORCEINLINE player_cache_dirty_wrapper() : dirty_(false) {}
+  ATFW_UTIL_FORCEINLINE player_cache_dirty_wrapper() : dirty_(false) {}
 
-  UTIL_FORCEINLINE bool is_dirty() const { return dirty_; }
+  ATFW_UTIL_FORCEINLINE bool is_dirty() const { return dirty_; }
 
-  UTIL_FORCEINLINE void mark_dirty() { dirty_ = true; }
+  ATFW_UTIL_FORCEINLINE void mark_dirty() { dirty_ = true; }
 
-  UTIL_FORCEINLINE void clear_dirty() { dirty_ = false; }
+  ATFW_UTIL_FORCEINLINE void clear_dirty() { dirty_ = false; }
 
-  UTIL_FORCEINLINE const value_type *operator->() const noexcept { return &real_data_; }
+  ATFW_UTIL_FORCEINLINE const value_type *operator->() const noexcept { return &real_data_; }
 
-  UTIL_FORCEINLINE operator const value_type &() const noexcept { return real_data_; }
+  ATFW_UTIL_FORCEINLINE operator const value_type &() const noexcept { return real_data_; }
 
-  UTIL_FORCEINLINE const value_type &operator*() const noexcept { return real_data_; }
+  ATFW_UTIL_FORCEINLINE const value_type &operator*() const noexcept { return real_data_; }
 
-  UTIL_FORCEINLINE const value_type *get() const { return &real_data_; }
+  ATFW_UTIL_FORCEINLINE const value_type *get() const { return &real_data_; }
 
-  UTIL_FORCEINLINE value_type *get() {
+  ATFW_UTIL_FORCEINLINE value_type *get() {
     mark_dirty();
     return &real_data_;
   }
 
-  UTIL_FORCEINLINE const value_type &ref() const { return real_data_; }
+  ATFW_UTIL_FORCEINLINE const value_type &ref() const { return real_data_; }
 
-  UTIL_FORCEINLINE value_type &ref() {
+  ATFW_UTIL_FORCEINLINE value_type &ref() {
     mark_dirty();
     return real_data_;
   }
@@ -80,7 +80,7 @@ class UTIL_SYMBOL_VISIBLE player_cache_dirty_wrapper {
 
 class player_cache;
 
-class UTIL_SYMBOL_VISIBLE initialization_task_lock_guard {
+class ATFW_UTIL_SYMBOL_VISIBLE initialization_task_lock_guard {
  public:
   SERVER_FRAME_API ~initialization_task_lock_guard();
   SERVER_FRAME_API initialization_task_lock_guard(std::shared_ptr<player_cache> user,
@@ -99,13 +99,13 @@ class UTIL_SYMBOL_VISIBLE initialization_task_lock_guard {
   std::shared_ptr<player_cache> guard_;
 };
 
-class UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_this<player_cache> {
+class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_this<player_cache> {
  public:
   using ptr_t = std::shared_ptr<player_cache>;
   friend class player_manager;
 
  protected:
-  struct UTIL_SYMBOL_VISIBLE fake_constructor{};
+  struct ATFW_UTIL_SYMBOL_VISIBLE fake_constructor {};
 
  public:
   SERVER_FRAME_API explicit player_cache(fake_constructor &);
@@ -193,35 +193,41 @@ class UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_this<pla
 
   SERVER_FRAME_API bool has_session() const;
 
-  UTIL_FORCEINLINE const std::string &get_open_id() const { return openid_id_; }
-  UTIL_FORCEINLINE uint64_t get_user_id() const { return user_id_; }
-  UTIL_FORCEINLINE unsigned long long get_user_id_llu() const { return static_cast<unsigned long long>(get_user_id()); }
+  ATFW_UTIL_FORCEINLINE const std::string &get_open_id() const { return openid_id_; }
+  ATFW_UTIL_FORCEINLINE uint64_t get_user_id() const { return user_id_; }
+  ATFW_UTIL_FORCEINLINE unsigned long long get_user_id_llu() const {
+    return static_cast<unsigned long long>(get_user_id());
+  }
 
-  UTIL_FORCEINLINE const std::string &get_version() const { return version_; }
-  UTIL_FORCEINLINE std::string &get_version() { return version_; }
-  UTIL_FORCEINLINE void set_version(const std::string &version) { version_ = version; }
+  ATFW_UTIL_FORCEINLINE const std::string &get_version() const { return version_; }
+  ATFW_UTIL_FORCEINLINE std::string &get_version() { return version_; }
+  ATFW_UTIL_FORCEINLINE void set_version(const std::string &version) { version_ = version; }
 
   /**
    * @brief 获取大区号
    */
-  UTIL_FORCEINLINE uint32_t get_zone_id() const { return zone_id_; }
+  ATFW_UTIL_FORCEINLINE uint32_t get_zone_id() const { return zone_id_; }
 
-  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::table_login &get_login_info() const { return login_info_; }
-  UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::table_login &get_login_info() { return login_info_; }
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::table_login &get_login_info() const { return login_info_; }
+  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::table_login &get_login_info() { return login_info_; }
   SERVER_FRAME_API void load_and_move_login_info(PROJECT_NAMESPACE_ID::table_login &&lg, const std::string &ver);
 
-  UTIL_FORCEINLINE const std::string &get_login_version() const { return login_info_version_; }
-  UTIL_FORCEINLINE std::string &get_login_version() { return login_info_version_; }
+  ATFW_UTIL_FORCEINLINE const std::string &get_login_version() const { return login_info_version_; }
+  ATFW_UTIL_FORCEINLINE std::string &get_login_version() { return login_info_version_; }
 
-  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::account_information &get_account_info() const { return account_info_; }
-  UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::account_information &get_account_info() { return account_info_.ref(); }
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::account_information &get_account_info() const {
+    return account_info_;
+  }
+  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::account_information &get_account_info() { return account_info_.ref(); }
 
-  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::player_options &get_player_options() const { return player_options_; }
-  UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::player_options &get_player_options() { return player_options_.ref(); }
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::player_options &get_player_options() const {
+    return player_options_;
+  }
+  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::player_options &get_player_options() { return player_options_.ref(); }
 
-  UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::player_data &get_player_data() const { return player_data_; }
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::player_data &get_player_data() const { return player_data_; }
 
-  UTIL_FORCEINLINE uint32_t get_data_version() const { return data_version_; }
+  ATFW_UTIL_FORCEINLINE uint32_t get_data_version() const { return data_version_; }
 
   SERVER_FRAME_API uint64_t alloc_server_sequence();
 
@@ -231,10 +237,10 @@ class UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_this<pla
   EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type await_initialization_task(rpc::context &ctx);
 
  private:
-  UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::player_data &mutable_player_data() { return player_data_.ref(); }
+  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::player_data &mutable_player_data() { return player_data_.ref(); }
 
  protected:
-  UTIL_FORCEINLINE void set_data_version(uint32_t ver) { data_version_ = ver; }
+  ATFW_UTIL_FORCEINLINE void set_data_version(uint32_t ver) { data_version_ = ver; }
 
  private:
   friend class initialization_task_lock_guard;
@@ -302,7 +308,7 @@ class UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_this<pla
 
 namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID {
 template <class CharT>
-struct formatter<player_cache, CharT> : formatter<std::string> {
+struct ATFW_UTIL_SYMBOL_VISIBLE formatter<player_cache, CharT> : formatter<std::string> {
   template <class FormatContext>
   auto format(const player_cache &user, FormatContext &ctx) {
     return LOG_WRAPPER_FWAPI_FORMAT_TO(ctx.out(), "player {}({}:{})", user.get_open_id(), user.get_zone_id(),

@@ -35,7 +35,7 @@ template <class TVALUE>
 class always_ready;
 
 template <>
-class UTIL_SYMBOL_VISIBLE always_ready<void> {
+class ATFW_UTIL_SYMBOL_VISIBLE always_ready<void> {
  public:
   using value_type = void;
 
@@ -54,7 +54,7 @@ class UTIL_SYMBOL_VISIBLE always_ready<void> {
 };
 
 template <class TVALUE>
-class UTIL_SYMBOL_VISIBLE always_ready {
+class ATFW_UTIL_SYMBOL_VISIBLE always_ready {
  public:
   using value_type = TVALUE;
 
@@ -66,7 +66,7 @@ class UTIL_SYMBOL_VISIBLE always_ready {
   inline void _internal_set_awaited() noexcept {}
 #endif
 
-  UTIL_FORCEINLINE operator value_type() const noexcept { return result_data_; }
+  ATFW_UTIL_FORCEINLINE operator value_type() const noexcept { return result_data_; }
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   bool await_ready() const noexcept { return true; }
@@ -82,7 +82,7 @@ using always_ready_code_type = always_ready<int32_t>;
 using always_ready_void_type = always_ready<void>;
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-struct UTIL_SYMBOL_VISIBLE rpc_error_code_transform {
+struct ATFW_UTIL_SYMBOL_VISIBLE rpc_error_code_transform {
   SERVER_FRAME_API int32_t operator()(copp::promise_status in) const noexcept;
 };
 
@@ -90,10 +90,10 @@ template <class TVALUE>
 struct rpc_error_code_transform_wrapper;
 
 template <>
-struct UTIL_SYMBOL_VISIBLE rpc_error_code_transform_wrapper<int32_t> : public rpc_error_code_transform {};
+struct ATFW_UTIL_SYMBOL_VISIBLE rpc_error_code_transform_wrapper<int32_t> : public rpc_error_code_transform {};
 
 template <class TVALUE>
-struct UTIL_SYMBOL_VISIBLE rpc_error_code_transform_wrapper {
+struct ATFW_UTIL_SYMBOL_VISIBLE rpc_error_code_transform_wrapper {
   TVALUE operator()(copp::promise_status in) const noexcept {
     return static_cast<TVALUE>(rpc_error_code_transform()(in));
   }
@@ -113,31 +113,31 @@ SERVER_FRAME_API int32_t rpc_get_not_ready_code();
 
 namespace details {
 template <class TVALUE>
-struct UTIL_SYMBOL_VISIBLE _rpc_result_guard_enum_padding_underlying_type {
+struct ATFW_UTIL_SYMBOL_VISIBLE _rpc_result_guard_enum_padding_underlying_type {
   using type = typename std::conditional<sizeof(TVALUE) <= sizeof(int32_t), int32_t, TVALUE>::type;
 };
 
 template <class TVALUE, bool IS_INTEGER, bool IS_ENUM>
-struct UTIL_SYMBOL_VISIBLE _rpc_result_guard_value;
+struct ATFW_UTIL_SYMBOL_VISIBLE _rpc_result_guard_value;
 
 template <class TVALUE, bool IS_INTEGER>
-struct UTIL_SYMBOL_VISIBLE _rpc_result_guard_value<TVALUE, IS_INTEGER, true> {
+struct ATFW_UTIL_SYMBOL_VISIBLE _rpc_result_guard_value<TVALUE, IS_INTEGER, true> {
   using type =
       typename _rpc_result_guard_enum_padding_underlying_type<typename std::underlying_type<TVALUE>::type>::type;
 };
 
 template <class TVALUE>
-struct UTIL_SYMBOL_VISIBLE _rpc_result_guard_value<TVALUE, true, false> {
+struct ATFW_UTIL_SYMBOL_VISIBLE _rpc_result_guard_value<TVALUE, true, false> {
   using type = typename std::decay<TVALUE>::type;
 };
 
 template <class TVALUE>
-struct UTIL_SYMBOL_VISIBLE _rpc_result_guard_value<TVALUE, false, false> {
+struct ATFW_UTIL_SYMBOL_VISIBLE _rpc_result_guard_value<TVALUE, false, false> {
   using type = TVALUE;
 };
 
 template <class TVALUE>
-struct UTIL_SYMBOL_VISIBLE _rpc_result_guard_traits {
+struct ATFW_UTIL_SYMBOL_VISIBLE _rpc_result_guard_traits {
   using decay_type = typename std::decay<TVALUE>::type;
   using type = typename _rpc_result_guard_value<TVALUE, std::is_integral<decay_type>::value,
                                                 std::is_enum<decay_type>::value>::type;
@@ -147,20 +147,20 @@ template <class TVALUE, bool>
 struct _rpc_result_not_ready;
 
 template <class TVALUE>
-struct UTIL_SYMBOL_VISIBLE _rpc_result_not_ready<TVALUE, true> {
+struct ATFW_UTIL_SYMBOL_VISIBLE _rpc_result_not_ready<TVALUE, true> {
   inline static TVALUE not_ready_value() noexcept { return static_cast<TVALUE>(rpc_get_not_ready_code()); }
 };
 
 template <class TVALUE>
-struct UTIL_SYMBOL_VISIBLE _rpc_result_not_ready<TVALUE, false> {
+struct ATFW_UTIL_SYMBOL_VISIBLE _rpc_result_not_ready<TVALUE, false> {
   inline static TVALUE not_ready_value() { return TVALUE(); }
 };
 
 template <class TVALUE, bool IS_LREFERENCE>
-struct UTIL_SYMBOL_VISIBLE rpc_result_guard_getter {};
+struct ATFW_UTIL_SYMBOL_VISIBLE rpc_result_guard_getter {};
 
 template <class TVALUE>
-struct UTIL_SYMBOL_VISIBLE rpc_result_guard_getter<TVALUE, true> {
+struct ATFW_UTIL_SYMBOL_VISIBLE rpc_result_guard_getter<TVALUE, true> {
   using value_type = TVALUE;
 
   template <class TINPUT>
@@ -170,7 +170,7 @@ struct UTIL_SYMBOL_VISIBLE rpc_result_guard_getter<TVALUE, true> {
 };
 
 template <class TVALUE>
-struct UTIL_SYMBOL_VISIBLE rpc_result_guard_getter<TVALUE, false> {
+struct ATFW_UTIL_SYMBOL_VISIBLE rpc_result_guard_getter<TVALUE, false> {
   using value_type = typename std::add_rvalue_reference<TVALUE>::type;
 
   template <class TINPUT>
@@ -182,7 +182,7 @@ struct UTIL_SYMBOL_VISIBLE rpc_result_guard_getter<TVALUE, false> {
 }  // namespace details
 
 template <class TVALUE>
-class UTIL_SYMBOL_VISIBLE rpc_result_guard {
+class ATFW_UTIL_SYMBOL_VISIBLE rpc_result_guard {
  public:
   template <class TINPUT>
   rpc_result_guard(TINPUT&& input)  // NOLINT: runtime/explicit
@@ -198,7 +198,7 @@ class UTIL_SYMBOL_VISIBLE rpc_result_guard {
 };
 
 template <class TVALUE>
-class UTIL_SYMBOL_VISIBLE rpc_result {
+class ATFW_UTIL_SYMBOL_VISIBLE rpc_result {
  public:
   using value_type = TVALUE;
 
@@ -255,7 +255,7 @@ class UTIL_SYMBOL_VISIBLE rpc_result {
 
 using result_code_type = rpc_result<int32_t>;
 
-class UTIL_SYMBOL_VISIBLE result_void_type {
+class ATFW_UTIL_SYMBOL_VISIBLE result_void_type {
  public:
   SERVER_FRAME_API result_void_type();
   SERVER_FRAME_API explicit result_void_type(bool input_is_ready);
@@ -280,19 +280,19 @@ namespace details {
 // Make enum as integer error code, when used with lambda, we need all return values be detected as the same type.
 // So we ensure the underlying_type is at least int32_t here to let all legacy enum TYPE {} be treated as int32_t
 template <class TVALUE>
-UTIL_SYMBOL_VISIBLE rpc_result_guard<typename details::_rpc_result_guard_traits<TVALUE>::type> _make_rpc_result_guard(
-    TVALUE&& input) {
+ATFW_UTIL_SYMBOL_VISIBLE rpc_result_guard<typename details::_rpc_result_guard_traits<TVALUE>::type>
+_make_rpc_result_guard(TVALUE&& input) {
   return rpc_result_guard<typename details::_rpc_result_guard_traits<TVALUE>::type>(std::forward<TVALUE>(input));
 }
 
 template <class TRESULT>
-struct UTIL_SYMBOL_VISIBLE _rpc_result_traits {
+struct ATFW_UTIL_SYMBOL_VISIBLE _rpc_result_traits {
   using decay_type = typename std::decay<TRESULT>::type;
   using value_type = typename decay_type::value_type;
 };
 
 template <class TRESULT>
-UTIL_SYMBOL_VISIBLE typename _rpc_result_traits<TRESULT>::value_type _get_rpc_result_value(TRESULT&& result) {
+ATFW_UTIL_SYMBOL_VISIBLE typename _rpc_result_traits<TRESULT>::value_type _get_rpc_result_value(TRESULT&& result) {
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
   result._internal_set_awaited();
 #  endif
@@ -306,14 +306,14 @@ UTIL_SYMBOL_VISIBLE typename _rpc_result_traits<TRESULT>::value_type _get_rpc_re
 namespace details {
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
 template <class TRESULT>
-UTIL_SYMBOL_VISIBLE TRESULT _ignore_result(EXPLICIT_UNUSED_ATTR TRESULT&& result) {
+ATFW_UTIL_SYMBOL_VISIBLE TRESULT _ignore_result(EXPLICIT_UNUSED_ATTR TRESULT&& result) {
   return std::forward<TRESULT>(result);
 }
 #else
 template <class TRESULT,
           typename std::enable_if<!std::is_same<::rpc::result_void_type, typename std::decay<TRESULT>::type>::value,
                                   int>::type* = nullptr>
-UTIL_SYMBOL_VISIBLE TRESULT _ignore_result(EXPLICIT_UNUSED_ATTR TRESULT&& result) {
+ATFW_UTIL_SYMBOL_VISIBLE TRESULT _ignore_result(EXPLICIT_UNUSED_ATTR TRESULT&& result) {
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
   result._internal_set_awaited();
 #  endif
@@ -323,7 +323,7 @@ UTIL_SYMBOL_VISIBLE TRESULT _ignore_result(EXPLICIT_UNUSED_ATTR TRESULT&& result
 template <class TRESULT,
           typename std::enable_if<std::is_same<::rpc::result_void_type, typename std::decay<TRESULT>::type>::value,
                                   int>::type* = nullptr>
-UTIL_SYMBOL_VISIBLE TRESULT _ignore_void(EXPLICIT_UNUSED_ATTR TRESULT&& result) {
+ATFW_UTIL_SYMBOL_VISIBLE TRESULT _ignore_void(EXPLICIT_UNUSED_ATTR TRESULT&& result) {
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
   result._internal_set_awaited();
 #  endif

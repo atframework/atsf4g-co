@@ -13,7 +13,7 @@
 
 #include <config/server_frame_build_feature.h>
 
-struct player_key_hash_t {
+struct ATFW_UTIL_SYMBOL_VISIBLE player_key_hash_t {
   size_t operator()(const PROJECT_NAMESPACE_ID::DPlayerIDKey& key) const {
     uint64_t out[2] = {0};
     uint64_t val = key.user_id();
@@ -22,7 +22,7 @@ struct player_key_hash_t {
   }
 };
 
-struct player_key_equal_t {
+struct ATFW_UTIL_SYMBOL_VISIBLE player_key_equal_t {
   bool operator()(const PROJECT_NAMESPACE_ID::DPlayerIDKey& l, const PROJECT_NAMESPACE_ID::DPlayerIDKey& r) const {
     return l.zone_id() == r.zone_id() && l.user_id() == r.user_id();
   }

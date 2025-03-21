@@ -25,7 +25,6 @@
 #include <logic/session_manager.h>
 
 #include <config/logic_config.h>
-#include <proto_base.h>
 #include <time/time_utility.h>
 
 #include <memory>

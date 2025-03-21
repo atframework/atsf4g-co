@@ -55,7 +55,7 @@ class context {
     kRecording,
   };
 
-  struct UTIL_SYMBOL_VISIBLE inherit_options {
+  struct ATFW_UTIL_SYMBOL_VISIBLE inherit_options {
     parent_mode mode;
     bool inherit_allocator;
     bool inherit_parent_span;
@@ -70,9 +70,9 @@ class context {
         : mode(m), inherit_allocator(inherit_alloc), inherit_parent_span(inherit_parent_trace_span) {}
   };
 
-  struct UTIL_SYMBOL_VISIBLE create_options{};
+  struct ATFW_UTIL_SYMBOL_VISIBLE create_options {};
 
-  struct UTIL_SYMBOL_VISIBLE task_context_data {
+  struct ATFW_UTIL_SYMBOL_VISIBLE task_context_data {
     uint64_t task_id;
     gsl::string_view task_name;
     uint32_t reference_object_type_id;
@@ -83,7 +83,7 @@ class context {
   };
 
   template <class TMsg>
-  struct UTIL_SYMBOL_VISIBLE message_holder {
+  struct ATFW_UTIL_SYMBOL_VISIBLE message_holder {
     explicit message_holder(context &ctx) : arena_message_ptr_(ctx.create<TMsg>()) {}
     explicit message_holder(message_holder &&other) : arena_message_ptr_(nullptr) {
       using std::swap;
@@ -212,7 +212,7 @@ class context {
    * @return 在arena上分配的对象，失败返回nullptr
    */
   template <class TMSG>
-  UTIL_SYMBOL_VISIBLE TMSG *create() {
+  ATFW_UTIL_SYMBOL_VISIBLE TMSG *create() {
     // 上面的分支减少一次atomic操作
     if (allocator_) {
 #if defined(PROTOBUF_VERSION) && PROTOBUF_VERSION >= 5027000
@@ -254,14 +254,14 @@ class context {
                                                    const PROJECT_NAMESPACE_ID::config::logic_section_cfg &logic_cfg);
 
   SERVER_FRAME_API void set_task_context(const task_context_data &task_ctx) noexcept;
-  UTIL_FORCEINLINE const task_context_data &get_task_context() const noexcept { return task_context_; }
-  UTIL_FORCEINLINE void update_task_instance(uint64_t task_id, gsl::string_view task_name) noexcept {
+  ATFW_UTIL_FORCEINLINE const task_context_data &get_task_context() const noexcept { return task_context_; }
+  ATFW_UTIL_FORCEINLINE void update_task_instance(uint64_t task_id, gsl::string_view task_name) noexcept {
     task_context_.task_id = task_id;
     task_context_.task_name = task_name;
   }
 
-  UTIL_FORCEINLINE void update_task_context_reference_object(uint32_t type_id, uint32_t zone_id,
-                                                             uint64_t instance_id) noexcept {
+  ATFW_UTIL_FORCEINLINE void update_task_context_reference_object(uint32_t type_id, uint32_t zone_id,
+                                                                  uint64_t instance_id) noexcept {
     task_context_.reference_object_type_id = type_id;
     task_context_.reference_object_zone_id = zone_id;
     task_context_.reference_object_instance_id = instance_id;

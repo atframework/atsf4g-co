@@ -62,7 +62,7 @@ SERVER_FRAME_API int32_t logic_hpa_discovery_provider::get_scaling_down_expect_r
   return previous_result;
 }
 
-struct UTIL_SYMBOL_LOCAL logic_hpa_discovery::policy_data {
+struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_discovery::policy_data {
   std::shared_ptr<logic_hpa_policy> policy;
   logic_hpa_policy::event_callback_on_ready_handle ready_handle;
   logic_hpa_policy::event_on_pull_instant_callback_handle pull_instant_handle;
@@ -78,7 +78,7 @@ struct UTIL_SYMBOL_LOCAL logic_hpa_discovery::policy_data {
         last_update_timepoint(std::chrono::system_clock::from_time_t(0)) {}
 };
 
-struct UTIL_SYMBOL_LOCAL logic_hpa_discovery::custom_provider_guard {
+struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_discovery::custom_provider_guard {
   custom_provider_guard(const logic_hpa_discovery& owner) : owner_(nullptr) {
     if (owner.custom_provider_guard_ == nullptr) {
       owner.custom_provider_guard_ = this;

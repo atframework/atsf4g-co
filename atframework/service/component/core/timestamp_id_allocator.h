@@ -9,7 +9,7 @@
 #include "lock/atomic_int_type.h"
 #include "time/time_utility.h"
 
-namespace atframe {
+namespace atframework {
 namespace component {
 
 /**
@@ -62,4 +62,4 @@ class ATFRAME_SERVICE_COMPONENT_MACRO_API_HEAD_ONLY timestamp_id_allocator {
   void deallocate(value_type) noexcept {}
 };
 }  // namespace component
-}  // namespace atframe
+}  // namespace atframework

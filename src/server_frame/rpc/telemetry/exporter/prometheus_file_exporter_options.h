@@ -35,7 +35,7 @@ namespace metrics {
  *     %N:  rotate index, start from 0
  *     %n:  rotate index, start from 1
  */
-struct UTIL_SYMBOL_VISIBLE PrometheusFileExporterOptions {
+struct ATFW_UTIL_SYMBOL_VISIBLE PrometheusFileExporterOptions {
   std::string file_pattern = "%Y-%m-%d.prometheus.%N.log";
   std::string alias_pattern = "%Y-%m-%d.prometheus.log";
   std::chrono::microseconds flush_interval = std::chrono::microseconds{30000000};

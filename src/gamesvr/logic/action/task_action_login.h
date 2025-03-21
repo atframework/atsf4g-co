@@ -8,7 +8,7 @@
 #include <dispatcher/task_action_cs_req_base.h>
 
 #ifndef GAMECLIENT_RPC_API
-#  define GAMECLIENT_RPC_API UTIL_SYMBOL_VISIBLE
+#  define GAMECLIENT_RPC_API ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
 class player;

@@ -321,7 +321,8 @@ message CSMsgHead {
 
   // 通道和任务信息
   uint64 session_node_id = 11;
-  uint64 session_id = 12;
+  uint64 session_node_name = 12;
+  uint64 session_id = 13;
 
   // 新RPC接口的meta信息
   oneof rpc_type {

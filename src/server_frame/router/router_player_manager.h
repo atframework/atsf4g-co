@@ -41,38 +41,38 @@ class router_player_manager : public router_manager<router_player_cache, player_
 #endif
 
  private:
-  SERVER_FRAME_CONFIG_API router_player_manager();
+  SERVER_FRAME_API router_player_manager();
 
  public:
-  SERVER_FRAME_CONFIG_API ~router_player_manager();
+  SERVER_FRAME_API ~router_player_manager();
 
-  SERVER_FRAME_CONFIG_API const char *name() const override;
+  SERVER_FRAME_API const char *name() const override;
 
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_CONFIG_API rpc::result_code_type remove_player_object(rpc::context &ctx,
-                                                                                             uint64_t user_id,
-                                                                                             uint32_t zone_id,
-                                                                                             priv_data_t priv_data);
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_player_object(rpc::context &ctx,
+                                                                                      uint64_t user_id,
+                                                                                      uint32_t zone_id,
+                                                                                      priv_data_t priv_data);
 
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_CONFIG_API rpc::result_code_type remove_player_object(
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_player_object(
       rpc::context &ctx, uint64_t user_id, uint32_t zone_id, std::shared_ptr<router_object_base> cache,
       priv_data_t priv_data);
 
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_CONFIG_API rpc::result_code_type remove_player_cache(rpc::context &ctx,
-                                                                                            uint64_t user_id,
-                                                                                            uint32_t zone_id,
-                                                                                            priv_data_t priv_data);
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_player_cache(rpc::context &ctx,
+                                                                                     uint64_t user_id, uint32_t zone_id,
+                                                                                     priv_data_t priv_data);
 
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_CONFIG_API rpc::result_code_type remove_player_cache(
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_player_cache(
       rpc::context &ctx, uint64_t user_id, uint32_t zone_id, std::shared_ptr<router_object_base> cache,
       priv_data_t priv_data);
 
-  SERVER_FRAME_CONFIG_API void set_create_object_fn(create_object_fn_t fn);
+  SERVER_FRAME_API void set_create_object_fn(create_object_fn_t fn);
 
-  SERVER_FRAME_CONFIG_API router_player_cache::object_ptr_t create_player_object(uint64_t user_id, uint32_t zone_id,
-                                                                                 const std::string &openid);
+  SERVER_FRAME_API router_player_cache::object_ptr_t create_player_object(uint64_t user_id, uint32_t zone_id,
+                                                                          const std::string &openid);
 
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_CONFIG_API rpc::result_code_type pull_online_server(
-      rpc::context &ctx, const key_t &key, uint64_t &router_svr_id, uint64_t &router_svr_ver) override;
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type pull_online_server(rpc::context &ctx, const key_t &key,
+                                                                                    uint64_t &router_svr_id,
+                                                                                    uint64_t &router_svr_ver) override;
 
  private:
   EXPLICIT_NODISCARD_ATTR rpc::result_code_type on_evt_remove_object(rpc::context &ctx, const key_t &key,

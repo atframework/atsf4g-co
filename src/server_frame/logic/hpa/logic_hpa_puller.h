@@ -34,7 +34,7 @@ class logic_hpa_policy;
  * @brief 指标拉取器接口类
  *
  */
-class UTIL_SYMBOL_VISIBLE logic_hpa_puller {
+class ATFW_UTIL_SYMBOL_VISIBLE logic_hpa_puller {
   UTIL_DESIGN_PATTERN_NOCOPYABLE(logic_hpa_puller);
   UTIL_DESIGN_PATTERN_NOMOVABLE(logic_hpa_puller);
 
@@ -56,8 +56,8 @@ class UTIL_SYMBOL_VISIBLE logic_hpa_puller {
 
   virtual bool can_pulling_available() const noexcept = 0;
 
-  UTIL_FORCEINLINE logic_hpa_policy& get_owner() noexcept { return *owner_; }
-  UTIL_FORCEINLINE const logic_hpa_policy& get_owner() const noexcept { return *owner_; }
+  ATFW_UTIL_FORCEINLINE logic_hpa_policy& get_owner() noexcept { return *owner_; }
+  ATFW_UTIL_FORCEINLINE const logic_hpa_policy& get_owner() const noexcept { return *owner_; }
 
  private:
   util::nostd::nonnull<logic_hpa_policy*> owner_;

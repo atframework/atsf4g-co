@@ -3,7 +3,7 @@
 
 #pragma once
 
-namespace atframe {
+namespace atframework {
 namespace component {
 struct service_type {
   enum type {
@@ -16,5 +16,5 @@ struct service_type {
   };
 };
 }  // namespace component
-}  // namespace atframe
+}  // namespace atframework
 #endif

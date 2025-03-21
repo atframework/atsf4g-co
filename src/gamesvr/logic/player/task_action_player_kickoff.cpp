@@ -25,7 +25,6 @@
 #include <utility/protobuf_mini_dumper.h>
 
 #include <config/extern_service_types.h>
-#include <proto_base.h>
 
 #include <memory>
 #include <string>
@@ -89,7 +88,7 @@ task_action_player_kickoff::result_type task_action_player_kickoff::operator()()
   if (sess) {
     int32_t reason = static_cast<int32_t>(req_body.reason());
     if (reason == 0) {
-      reason = ::atframe::gateway::close_reason_t::EN_CRT_KICKOFF;
+      reason = ::atframework::gateway::close_reason_t::EN_CRT_KICKOFF;
     }
     int32_t ret = sess->send_kickoff(reason);
     if (ret) {

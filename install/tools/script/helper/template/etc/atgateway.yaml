@@ -8,17 +8,19 @@ atgateway:
     address:
 % if project.is_ip_v6_enabled():
       - ipv6://:::${project.get_server_gateway_port(for_server_name, for_server_index)}
-% else: 
+% else:
       - ipv4://0.0.0.0:${project.get_server_gateway_port(for_server_name, for_server_index)}
 % endif
     type: inner                     # protocol type
     max_client: 65536               # max client number, more client will be closed
     backlog: 128
 
-  # default router ${hex(project.get_server_proc_id(for_server_name, for_server_index))} 
   client:
-    default_router: ${project.get_server_proc_id(for_server_name, for_server_index)} 
-    send_buffer_size: 1048576       # 1MB send buffer limit
+    default_router:
+      node_id: ${project.get_server_proc_id(for_server_name, for_server_index)}
+      type_name : ${for_server_name}
+    recv_buffer_size: 2MB           # recv buffer limit
+    send_buffer_size: 4MB           # send buffer limit
     reconnect_timeout: 180          # reconnect timeout
     first_idle_timeout: 10          # first idle timeout
     limit:

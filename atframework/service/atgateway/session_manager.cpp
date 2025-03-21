@@ -8,6 +8,8 @@
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
+#include <atframe/modules/etcd_module.h>
+
 #include <new>
 #include <sstream>
 
@@ -15,9 +17,9 @@
 
 #include "session_manager.h"
 
-namespace atframe {
+namespace atframework {
 namespace gateway {
-namespace detail {
+namespace {
 template <typename T>
 static void session_manager_delete_stream_fn(uv_stream_t *handle) {
   if (nullptr == handle) {
@@ -42,18 +44,18 @@ static T *session_manager_make_stream_ptr(std::shared_ptr<uv_stream_t> &res) {
   stream_conn->data = nullptr;
   return real_conn;
 }
-}  // namespace detail
+}  // namespace
 
-session_manager::session_manager() : evloop_(nullptr), app_node_(nullptr), last_tick_time_(0), private_data_(nullptr) {}
+session_manager::session_manager() : evloop_(nullptr), app_(nullptr), last_tick_time_(0), private_data_(nullptr) {}
 
 session_manager::~session_manager() { reset(); }
 
-int session_manager::init(::atbus::node *bus_node, create_proto_fn_t fn) {
-  evloop_ = bus_node->get_evloop();
-  app_node_ = bus_node;
+int session_manager::init(::atapp::app *app_inst, create_proto_fn_t fn) {
+  evloop_ = app_inst->get_evloop();
+  app_ = app_inst;
   create_proto_fn_ = fn;
   if (!fn) {
-    WLOGERROR("create protocol function is required");
+    FWLOGERROR("{}", "create protocol function is required");
     return -1;
   }
   return 0;
@@ -86,7 +88,7 @@ int session_manager::listen(const char *address) {
     int libuv_res;
     if (0 == UTIL_STRFUNC_STRNCASE_CMP("ipv4", addr.scheme.c_str(), 4) ||
         0 == UTIL_STRFUNC_STRNCASE_CMP("ipv6", addr.scheme.c_str(), 4)) {
-      uv_tcp_t *tcp_handle = ::atframe::gateway::detail::session_manager_make_stream_ptr<uv_tcp_t>(res);
+      uv_tcp_t *tcp_handle = session_manager_make_stream_ptr<uv_tcp_t>(res);
       if (res) {
         uv_stream_set_blocking(res.get(), 0);
         uv_tcp_nodelay(tcp_handle, 1);
@@ -146,7 +148,7 @@ int session_manager::listen(const char *address) {
       }
 
     } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("unix", addr.scheme.c_str(), 4)) {
-      uv_pipe_t *pipe_handle = ::atframe::gateway::detail::session_manager_make_stream_ptr<uv_pipe_t>(res);
+      uv_pipe_t *pipe_handle = session_manager_make_stream_ptr<uv_pipe_t>(res);
       if (res) {
         uv_stream_set_blocking(res.get(), 0);
       } else {
@@ -249,19 +251,11 @@ int session_manager::tick() {
   // 每分钟打印一次统计数据
   if (last_tick_time_ / atfw::util::time::time_utility::MINITE_SECONDS !=
       now / atfw::util::time::time_utility::MINITE_SECONDS) {
-#if defined(__cpluscplus) && __cpluscplus >= 201103L
     // std::list 在C++11以前可能是O(n)复杂度
-    WLOGINFO(
-        "[STAT] session manager: actived session %llu, reconnect session %llu, idle timer count %llu, reconnect timer "
-        "count %llu",
-        static_cast<unsigned long long>(actived_sessions_.size()),
-        static_cast<unsigned long long>(reconnect_cache_.size()), static_cast<unsigned long long>(first_idle_.size()),
-        static_cast<unsigned long long>(reconnect_timeout_.size()));
-#else
-    WLOGINFO("[STAT] session manager: actived session %llu, reconnect session %llu",
-             static_cast<unsigned long long>(actived_sessions_.size()),
-             static_cast<unsigned long long>(reconnect_cache_.size()));
-#endif
+    FWLOGINFO(
+        "[STAT] session manager: actived session {}, reconnect session {}, idle timer count {}, reconnect timer "
+        "count {}",
+        actived_sessions_.size(), reconnect_cache_.size(), first_idle_.size(), reconnect_timeout_.size());
   }
   last_tick_time_ = now;
 
@@ -274,10 +268,10 @@ int session_manager::tick() {
     if (reconnect_timeout_.front().s) {
       session::ptr_t s = reconnect_timeout_.front().s;
       if (s->check_flag(session::flag_t::EN_FT_RECONNECTED)) {
-        WLOGINFO("session 0x%llx(%p) reconnected, cleanup", static_cast<unsigned long long>(s->get_id()), s.get());
+        FWLOGINFO("session {}({}) reconnected, cleanup", s->get_id(), reinterpret_cast<const void *>(s.get()));
       } else {
-        WLOGINFO("session 0x%llx(%p) reconnect timeout, close and cleanup",
-                 static_cast<unsigned long long>(s->get_id()), s.get());
+        FWLOGINFO("session {}({}) reconnect timeout, close and cleanup", s->get_id(),
+                  reinterpret_cast<const void *>(s.get()));
       }
       reconnect_cache_.erase(s->get_id());
 
@@ -298,7 +292,7 @@ int session_manager::tick() {
       session::ptr_t s = first_idle_.front().s;
 
       if (!s->check_flag(session::flag_t::EN_FT_REGISTERED) && !s->check_flag(session::flag_t::EN_FT_CLOSING)) {
-        WLOGINFO("session 0x%llx(%p) register timeout", static_cast<unsigned long long>(s->get_id()), s.get());
+        FWLOGINFO("session {}({}) register timeout", s->get_id(), reinterpret_cast<const void *>(s.get()));
         s->close(close_reason_t::EN_CRT_FIRST_IDLE);
       }
     }
@@ -356,12 +350,14 @@ int session_manager::close(session::id_t sess_id, int reason, bool allow_reconne
   return 0;
 }
 
-int session_manager::post_data(::atbus::node::bus_id_t tid, ::atframe::gw::ss_msg &msg) {
-  return post_data(tid, ::atframe::component::service_type::EN_ATST_GATEWAY, msg);
+void session_manager::cleanup() { app_ = nullptr; }
+
+int session_manager::post_data(::atbus::node::bus_id_t tid, ::atframework::gw::ss_msg &msg) {
+  return post_data(tid, ::atframework::component::service_type::EN_ATST_GATEWAY, msg);
 }
 
-int session_manager::post_data(::atbus::node::bus_id_t tid, int type, ::atframe::gw::ss_msg &msg) {
-  // send to server with type = ::atframe::component::service_type::EN_ATST_GATEWAY
+int session_manager::post_data(::atbus::node::bus_id_t tid, int type, ::atframework::gw::ss_msg &msg) {
+  // send to server with type = ::atframework::component::service_type::EN_ATST_GATEWAY
   std::string packed_buffer;
   if (false == msg.SerializeToString(&packed_buffer)) {
     FWLOGERROR("can not send ss message to {:#x} with serialize failed: {}", tid, msg.InitializationErrorString());
@@ -373,11 +369,35 @@ int session_manager::post_data(::atbus::node::bus_id_t tid, int type, ::atframe:
 
 int session_manager::post_data(::atbus::node::bus_id_t tid, int type, const void *buffer, size_t s) {
   // send to process
-  if (!app_node_) {
-    return error_code_t::EN_ECT_HANDLE_NOT_FOUND;
+  if (nullptr == app_) {
+    return error_code_t::EN_ECT_LOST_MANAGER;
   }
 
-  return app_node_->send_data(tid, type, buffer, s);
+  return app_->send_message(tid, type, buffer, s);
+}
+
+int session_manager::post_data(const std::string &tname, ::atframework::gw::ss_msg &msg) {
+  return post_data(tname, ::atframework::component::service_type::EN_ATST_GATEWAY, msg);
+}
+
+int session_manager::post_data(const std::string &tname, int type, ::atframework::gw::ss_msg &msg) {
+  // send to server with type = ::atframework::component::service_type::EN_ATST_GATEWAY
+  std::string packed_buffer;
+  if (false == msg.SerializeToString(&packed_buffer)) {
+    FWLOGERROR("can not send ss message to {:#x} with serialize failed: {}", tname, msg.InitializationErrorString());
+    return error_code_t::EN_ECT_BAD_DATA;
+  }
+
+  return post_data(tname, type, packed_buffer.data(), packed_buffer.size());
+}
+
+int session_manager::post_data(const std::string &tname, int type, const void *buffer, size_t s) {
+  // send to process
+  if (nullptr == app_) {
+    return error_code_t::EN_ECT_LOST_MANAGER;
+  }
+
+  return app_->send_message(tname, type, buffer, s);
 }
 
 int session_manager::push_data(session::id_t sess_id, const void *buffer, size_t s) {
@@ -395,8 +415,7 @@ int session_manager::broadcast_data(const void *buffer, size_t s) {
     if (iter->second->check_flag(session::flag_t::EN_FT_REGISTERED)) {
       int res = iter->second->send_to_client(buffer, s);
       if (0 != res) {
-        WLOGERROR("broadcast data to session 0x%llx failed, res: %d", static_cast<unsigned long long>(iter->first),
-                  res);
+        FWLOGERROR("broadcast data to session {} failed, res: {}", iter->first, res);
       }
 
       if (0 != ret) {
@@ -408,13 +427,14 @@ int session_manager::broadcast_data(const void *buffer, size_t s) {
   return ret;
 }
 
-int session_manager::set_session_router(session::id_t sess_id, ::atbus::node::bus_id_t router) {
+int session_manager::set_session_router(session::id_t sess_id, ::atbus::node::bus_id_t router_node_id,
+                                        const std::string &router_node_name) {
   session_map_t::iterator iter = actived_sessions_.find(sess_id);
   if (actived_sessions_.end() == iter) {
     return error_code_t::EN_ECT_SESSION_NOT_FOUND;
   }
 
-  iter->second->set_router(router);
+  iter->second->set_router(router_node_id, router_node_name);
   return 0;
 }
 
@@ -429,20 +449,19 @@ int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
         nullptr != iter->second->get_protocol_handle()) {
       has_reconnect_checked = true;
       if (new_sess.get_protocol_handle()->check_reconnect(iter->second->get_protocol_handle())) {
-        WLOGDEBUG("session %s:%d try to reconnect 0x%llx and need to close old connection %p",
-                  new_sess.get_peer_host().c_str(), new_sess.get_peer_port(),
-                  static_cast<unsigned long long>(old_sess_id), iter->second.get());
+        FWLOGDEBUG("session {}:{} try to reconnect {} and need to close old connection {}", new_sess.get_peer_host(),
+                   new_sess.get_peer_port(), old_sess_id, reinterpret_cast<const void *>(iter->second.get()));
         close(old_sess_id, close_reason_t::EN_CRT_LOGOUT, true);
       } else {
-        WLOGDEBUG("session %s:%d try to reconnect 0x%llx to old connection %p, but check_reconnect failed",
-                  new_sess.get_peer_host().c_str(), new_sess.get_peer_port(),
-                  static_cast<unsigned long long>(old_sess_id), iter->second.get());
+        FWLOGDEBUG("session {}:{} try to reconnect {} to old connection {}, but check_reconnect failed",
+                   new_sess.get_peer_host(), new_sess.get_peer_port(), old_sess_id,
+                   reinterpret_cast<const void *>(iter->second.get()));
       }
     } else if (iter == actived_sessions_.end()) {
-      WLOGDEBUG("old session 0x%llx not found", static_cast<unsigned long long>(old_sess_id));
+      FWLOGDEBUG("old session {} not found", old_sess_id);
     } else if (nullptr == iter->second->get_protocol_handle()) {
-      WLOGERROR("old session 0x%llx(%p) has no protocol handle", static_cast<unsigned long long>(old_sess_id),
-                iter->second.get());
+      FWLOGERROR("old session 0x{}({}) has no protocol handle", old_sess_id,
+                 reinterpret_cast<const void *>(iter->second.get()));
     }
 
     iter = reconnect_cache_.find(old_sess_id);
@@ -459,8 +478,8 @@ int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
 
   // check if old session not reconnected
   if (iter->second->check_flag(session::flag_t::EN_FT_RECONNECTED)) {
-    WLOGERROR("session %s:%d try to reconnect 0x%llx, but old session already reconnected",
-              new_sess.get_peer_host().c_str(), new_sess.get_peer_port(), static_cast<unsigned long long>(old_sess_id));
+    FWLOGERROR("session {}:{} try to reconnect {}, but old session already reconnected", new_sess.get_peer_host(),
+               new_sess.get_peer_port(), old_sess_id);
     return error_code_t::EN_ECT_SESSION_NOT_FOUND;
   }
 
@@ -502,9 +521,58 @@ int session_manager::active_session(session::ptr_t sess) {
   return 0;
 }
 
+void session_manager::assign_default_router(session &sess) const {
+  bool by_setting = true;
+  switch (conf_.origin_conf.client().default_router().policy()) {
+    case ::atframework::gw::atgateway_router_policy::EN_ATGW_ROUTER_POLICY_RANDOM: {
+      if (nullptr == app_) {
+        break;
+      }
+      auto select_node = app_->get_global_discovery().get_node_by_random(
+          &conf_.origin_conf.client().default_router().policy_selector());
+      if (select_node) {
+        sess.set_router(select_node->get_discovery_info().id(), select_node->get_discovery_info().name());
+        by_setting = false;
+      }
+      break;
+    }
+    case ::atframework::gw::atgateway_router_policy::EN_ATGW_ROUTER_POLICY_ROUND_ROBIN: {
+      if (nullptr == app_) {
+        break;
+      }
+      auto select_node = app_->get_global_discovery().get_node_by_round_robin(
+          &conf_.origin_conf.client().default_router().policy_selector());
+      if (select_node) {
+        sess.set_router(select_node->get_discovery_info().id(), select_node->get_discovery_info().name());
+        by_setting = false;
+      }
+      break;
+    }
+    case ::atframework::gw::atgateway_router_policy::EN_ATGW_ROUTER_POLICY_HASH: {
+      if (nullptr == app_) {
+        break;
+      }
+      auto select_node = app_->get_global_discovery().get_node_hash_by_consistent_hash(
+          sess.get_id(), &conf_.origin_conf.client().default_router().policy_selector());
+      if (select_node.node) {
+        sess.set_router(select_node.node->get_discovery_info().id(), select_node.node->get_discovery_info().name());
+        by_setting = false;
+      }
+      break;
+    }
+    default:
+      break;
+  }
+
+  if (by_setting) {
+    sess.set_router(conf_.origin_conf.client().default_router().node_id(),
+                    conf_.origin_conf.client().default_router().node_name());
+  }
+}
+
 void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   if (0 != status) {
-    WLOGERROR("accept tcp socket failed, status: %d", status);
+    FWLOGERROR("accept tcp socket failed, status: {}", status);
     return;
   }
 
@@ -512,14 +580,14 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   session_manager *mgr = reinterpret_cast<session_manager *>(server->data);
   assert(mgr);
   if (nullptr == mgr) {
-    WLOGERROR("session_manager not found");
+    FWLOGERROR("{}", "session_manager not found");
     return;
   }
 
   session::ptr_t sess;
 
   {
-    std::unique_ptr< ::atframe::gateway::proto_base> proto;
+    std::unique_ptr< ::atframework::gateway::libatgw_protocol_api> proto;
     if (mgr->create_proto_fn_) {
       mgr->create_proto_fn_().swap(proto);
     }
@@ -531,9 +599,9 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   }
 
   if (!sess || nullptr == sess->get_protocol_handle()) {
-    WLOGERROR("create proto fn is null or create proto object failed or create session failed");
+    FWLOGERROR("{}", "create proto fn is null or create proto object failed or create session failed");
     listen_handle_ptr_t sp;
-    uv_tcp_t *sock = detail::session_manager_make_stream_ptr<uv_tcp_t>(sp);
+    uv_tcp_t *sock = session_manager_make_stream_ptr<uv_tcp_t>(sp);
     if (nullptr != sock) {
       uv_tcp_init(server->loop, sock);
       uv_accept(server, reinterpret_cast<uv_stream_t *>(sock));
@@ -544,11 +612,11 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   }
 
   // setup send buffer size
-  sess->get_protocol_handle()->set_recv_buffer_limit(ATBUS_MACRO_MSG_LIMIT, 2);
+  sess->get_protocol_handle()->set_recv_buffer_limit(mgr->conf_.origin_conf.client().recv_buffer_size(), 0);
   sess->get_protocol_handle()->set_send_buffer_limit(mgr->conf_.origin_conf.client().send_buffer_size(), 0);
 
   // setup default router
-  sess->set_router(mgr->conf_.origin_conf.client().default_router());
+  mgr->assign_default_router(*sess);
 
   // create proto object and session object
   int res = sess->accept_tcp(server);
@@ -579,15 +647,14 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   } else {
     sess_timeout.timeout = atfw::util::time::time_utility::get_now() + 1;
   }
-  WLOGINFO("accept a tcp socket(%s:%d), create sesson %p and to wait for handshake now, expired time is %lld(+%lld)",
-           sess->get_peer_host().c_str(), sess->get_peer_port(), sess.get(),
-           static_cast<long long>(sess_timeout.timeout),
-           static_cast<long long>(sess_timeout.timeout - atfw::util::time::time_utility::get_now()));
+  FWLOGINFO("accept a tcp socket({}:{}), create sesson {} and to wait for handshake now, expired time is {}(+{})",
+            sess->get_peer_host(), sess->get_peer_port(), reinterpret_cast<const void *>(sess.get()),
+            sess_timeout.timeout, sess_timeout.timeout - atfw::util::time::time_utility::get_now());
 }
 
 void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
   if (0 != status) {
-    WLOGERROR("accept tcp socket failed, status: %d", status);
+    FWLOGERROR("accept pipe socket failed, status: {}", status);
     return;
   }
 
@@ -595,11 +662,11 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
   session_manager *mgr = reinterpret_cast<session_manager *>(server->data);
   assert(mgr);
   if (nullptr == mgr) {
-    WLOGERROR("session_manager not found");
+    FWLOGERROR("{}", "session_manager not found");
     return;
   }
 
-  std::unique_ptr< ::atframe::gateway::proto_base> proto;
+  std::unique_ptr< ::atframework::gateway::libatgw_protocol_api> proto;
   if (mgr->create_proto_fn_) {
     mgr->create_proto_fn_().swap(proto);
   }
@@ -611,9 +678,9 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
   }
 
   if (!sess) {
-    WLOGERROR("create proto fn is null or create proto object failed or create session failed");
+    FWLOGERROR("{}", "create proto fn is null or create proto object failed or create session failed");
     listen_handle_ptr_t sp;
-    uv_pipe_t *sock = detail::session_manager_make_stream_ptr<uv_pipe_t>(sp);
+    uv_pipe_t *sock = session_manager_make_stream_ptr<uv_pipe_t>(sp);
     if (nullptr != sock) {
       uv_pipe_init(server->loop, sock, 1);
       uv_accept(server, reinterpret_cast<uv_stream_t *>(sock));
@@ -624,11 +691,11 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
   }
 
   // setup send buffer size
-  proto->set_recv_buffer_limit(ATBUS_MACRO_MSG_LIMIT, 2);
+  proto->set_recv_buffer_limit(mgr->conf_.origin_conf.client().recv_buffer_size(), 0);
   proto->set_send_buffer_limit(mgr->conf_.origin_conf.client().send_buffer_size(), 0);
 
   // setup default router
-  sess->set_router(mgr->conf_.origin_conf.client().default_router());
+  mgr->assign_default_router(*sess);
 
   int res = sess->accept_pipe(server);
   if (0 != res) {
@@ -665,4 +732,4 @@ void session_manager::on_evt_listen_closed(uv_handle_t *handle) {
   delete ptr;
 }
 }  // namespace gateway
-}  // namespace atframe
+}  // namespace atframework

@@ -45,7 +45,7 @@ namespace rpc {
 namespace telemetry {
 
 namespace {
-struct UTIL_SYMBOL_LOCAL trace_additional_metric_span {
+struct ATFW_UTIL_SYMBOL_LOCAL trace_additional_metric_span {
   std::string span_name;
   std::string kind;
   opentelemetry::sdk::common::AttributeMap attribute;
@@ -61,7 +61,7 @@ struct UTIL_SYMBOL_LOCAL trace_additional_metric_span {
 };
 
 using trace_additional_metric_report = std::unordered_map<std::string, std::shared_ptr<trace_additional_metric_span>>;
-struct UTIL_SYMBOL_LOCAL trace_additional_metric_data_set {
+struct ATFW_UTIL_SYMBOL_LOCAL trace_additional_metric_data_set {
   std::mutex pending_to_report_lock;
   trace_additional_metric_report pending_to_report;
   trace_additional_metric_report local_history;

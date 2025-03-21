@@ -38,7 +38,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 #include <string>
 
 #ifndef ${rpc_dllexport_decl}
-#  define ${rpc_dllexport_decl} UTIL_SYMBOL_VISIBLE
+#  define ${rpc_dllexport_decl} ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
 namespace rpc {

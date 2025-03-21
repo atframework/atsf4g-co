@@ -124,14 +124,14 @@ class logic_hpa_controller {
    *
    * @return atapp对象
    */
-  UTIL_FORCEINLINE const atapp::app* get_app() const noexcept { return owner_app_; }
+  ATFW_UTIL_FORCEINLINE const atapp::app* get_app() const noexcept { return owner_app_; }
 
   /**
    * @brief 获取持有生命周期的atapp对象
    *
    * @return atapp对象
    */
-  UTIL_FORCEINLINE atapp::app* get_app() noexcept { return owner_app_; }
+  ATFW_UTIL_FORCEINLINE atapp::app* get_app() noexcept { return owner_app_; }
 
   /**
    * @brief 获取当前节点是否开启了Ready标签(就绪状态,当前分布)
@@ -196,7 +196,7 @@ class logic_hpa_controller {
    *
    * @return HTTP Method
    */
-  UTIL_FORCEINLINE util::network::http_request::method_t::type get_pull_http_method() const noexcept {
+  ATFW_UTIL_FORCEINLINE util::network::http_request::method_t::type get_pull_http_method() const noexcept {
     return pull_http_method_;
   }
 

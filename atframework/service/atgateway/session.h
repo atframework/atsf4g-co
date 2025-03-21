@@ -11,11 +11,11 @@
 
 #include "uv.h"
 
+#include "atgateway/protocols/libatgw_server_protocol.h"
+#include "atgateway/protocols/v1/libatgw_protocol_sdk.h"
 #include "libatbus.h"
-#include "protocols/inner_v1/libatgw_proto_inner.h"
-#include "protocols/libatgw_server_protocol.h"
 
-namespace atframe {
+namespace atframework {
 namespace gateway {
 class session_manager;
 class session : public std::enable_shared_from_this<session> {
@@ -65,14 +65,14 @@ class session : public std::enable_shared_from_this<session> {
 
   void set_flag(flag_t::type t, bool v);
 
-  static ptr_t create(session_manager *, std::unique_ptr<proto_base> &);
+  static ptr_t create(session_manager *, std::unique_ptr<atframework::gateway::libatgw_protocol_api> &);
 
   inline id_t get_id() const { return id_; };
 
   int accept_tcp(uv_stream_t *server);
   int accept_pipe(uv_stream_t *server);
 
-  int init_new_session(::atbus::node::bus_id_t router);
+  int init_new_session();
 
   int init_reconnect(session &sess);
 
@@ -88,12 +88,12 @@ class session : public std::enable_shared_from_this<session> {
 
   int send_to_client(const void *data, size_t len);
 
-  int send_to_server(::atframe::gw::ss_msg &msg);
+  int send_to_server(::atframework::gw::ss_msg &msg);
 
-  int send_to_server(::atframe::gw::ss_msg &msg, session_manager *mgr);
+  int send_to_server(::atframework::gw::ss_msg &msg, session_manager *mgr);
 
-  proto_base *get_protocol_handle();
-  const proto_base *get_protocol_handle() const;
+  atframework::gateway::libatgw_protocol_api *get_protocol_handle();
+  const atframework::gateway::libatgw_protocol_api *get_protocol_handle() const;
 
   uv_stream_t *get_uv_stream();
   const uv_stream_t *get_uv_stream() const;
@@ -113,18 +113,25 @@ class session : public std::enable_shared_from_this<session> {
   void check_total_limit(bool check_recv, bool check_send);
 
  public:
-  inline void *get_private_data() const { return private_data_; }
-  inline void set_private_data(void *priv_data) { private_data_ = priv_data; }
-  inline ::atbus::node::bus_id_t get_router() const { return router_; }
-  inline void set_router(::atbus::node::bus_id_t id) { router_ = id; }
+  inline void *get_private_data() const noexcept { return private_data_; }
+  inline void set_private_data(void *priv_data) noexcept { private_data_ = priv_data; }
 
-  inline const std::string &get_peer_host() const { return peer_ip_; }
-  inline int32_t get_peer_port() const { return peer_port_; }
-  inline session_manager *get_manager() const { return owner_; }
+  inline void set_router(::atbus::node::bus_id_t id, const std::string &node_name) {
+    router_node_id_ = id;
+    router_node_name_ = node_name;
+  }
+
+  inline ::atbus::node::bus_id_t get_router_id() const noexcept { return router_node_id_; }
+  inline const std::string &get_router_name() const noexcept { return router_node_name_; }
+
+  inline const std::string &get_peer_host() const noexcept { return peer_ip_; }
+  inline int32_t get_peer_port() const noexcept { return peer_port_; }
+  inline session_manager *get_manager() const noexcept { return owner_; }
 
  private:
   id_t id_;
-  ::atbus::node::bus_id_t router_;
+  ::atbus::node::bus_id_t router_node_id_;
+  std::string router_node_name_;
   session_manager *owner_;
 
   limit_t limit_;
@@ -140,8 +147,8 @@ class session : public std::enable_shared_from_this<session> {
   std::string peer_ip_;
   int32_t peer_port_;
 
-  std::unique_ptr<proto_base> proto_;
+  std::unique_ptr<atframework::gateway::libatgw_protocol_api> proto_;
   void *private_data_;
 };
 }  // namespace gateway
-}  // namespace atframe
+}  // namespace atframework

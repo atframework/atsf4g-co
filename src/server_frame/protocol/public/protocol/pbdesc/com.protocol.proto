@@ -119,35 +119,6 @@ message SCPlayerGetInfoRsp {
   DPlayerOptions player_options = 2;  // 玩家自定义选项
 }
 
-// 协议包头
-message CSMsgHead {
-  // 通用结构
-  int32 error_code = 1;
-  int64 timestamp = 2;  // lua 5.3 才开始支持int64
-  uint64 client_sequence = 3;
-  uint64 server_sequence = 4;   // 服务器生成的用户消息序号
-  uint64 session_sequence = 5;  // 服务器生成的Session消息序号
-  int32 op_type = 6;
-
-  // 通道和任务信息
-  uint64 session_node_id = 11;
-  uint64 session_id = 12;
-
-  // 新RPC接口的meta信息
-  oneof rpc_type {
-    atframework.RpcRequestMeta rpc_request = 31;
-    atframework.RpcResponseMeta rpc_response = 32;
-    atframework.RpcStreamMeta rpc_stream = 33;
-  }
-  atframework.RpcTraceSpan rpc_trace = 34;  // 用于链路追踪
-}
-
-// 协议包
-message CSMsg {
-  CSMsgHead head = 1;
-  bytes body_bin = 3;
-}
-
 service LoginsvrClientService {
   rpc login_auth(CSLoginAuthReq) returns (SCLoginAuthRsp) {
     option (atframework.rpc_options) = {

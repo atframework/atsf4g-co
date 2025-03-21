@@ -1,40 +1,15 @@
-# ============ sample - [...] ============
-get_filename_component(SERVER_INST_SRC_BIN_NAME ${CMAKE_CURRENT_LIST_DIR} NAME_WE)
-echowithcolor(COLOR GREEN "-- Configure ${SERVER_INST_SRC_BIN_NAME} on ${CMAKE_CURRENT_LIST_DIR}")
+get_filename_component(SERVICE_TARGET_NAME ${CMAKE_CURRENT_LIST_DIR} NAME_WE)
+file(GLOB_RECURSE SERVICE_SOURCES *.cpp *.cc *.c *.cxx)
+file(GLOB_RECURSE SERVICE_HEADERS *.h *.hpp)
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/${SERVER_INST_SRC_BIN_NAME}/bin")
-file(MAKE_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/${SERVER_INST_SRC_BIN_NAME}/bin")
-file(MAKE_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/${SERVER_INST_SRC_BIN_NAME}/etc")
-file(MAKE_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/${SERVER_INST_SRC_BIN_NAME}/log")
-
-# ============ atgateway ============
-
-file(
-  GLOB_RECURSE
-  SERVER_INST_SRC_LIST
-  *.cpp
-  *.cc
-  *.c
-  *.cxx
-  *.h
-  *.hpp)
-source_group_by_dir(SERVER_INST_SRC_LIST)
-
-# these service will use atgateway protocol
-
-add_executable(${SERVER_INST_SRC_BIN_NAME} ${SERVER_INST_SRC_LIST})
-if(MSVC)
-  add_target_properties(${SERVER_INST_SRC_BIN_NAME} LINK_FLAGS /NODEFAULTLIB:library)
-endif()
-
-target_link_libraries(${SERVER_INST_SRC_BIN_NAME} ${ATFRAMEWORK_SERVICE_GATEWAY_LINK_NAME}
-                      ${ATFRAMEWORK_SERVICE_COMPONENT_LINK_NAME})
-
-target_compile_options(${SERVER_INST_SRC_BIN_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
-if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
-  target_link_options(${SERVER_INST_SRC_BIN_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
-endif()
-
-set_property(TARGET ${SERVER_INST_SRC_BIN_NAME} PROPERTY FOLDER "${PROJECT_NAME}/service/server")
-
-project_install_and_export_targets(${SERVER_INST_SRC_BIN_NAME})
+project_service_declare_instance(
+  ${SERVICE_TARGET_NAME}
+  "${CMAKE_CURRENT_LIST_DIR}"
+  RUNTIME_OUTPUT_DIRECTORY
+  "${SERVICE_TARGET_NAME}/bin"
+  HRADERS
+  ${SERVICE_HEADERS}
+  SOURCES
+  ${SERVICE_SOURCES}
+  RESOURCE_DIRECTORIES
+  "${SERVICE_TARGET_NAME}/log")

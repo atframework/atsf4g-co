@@ -52,7 +52,7 @@ class transaction_client_handle {
   using transaction_participator_failure_reason =
       atframework::distributed_system::transaction_participator_failure_reason;
 
-  struct UTIL_SYMBOL_VISIBLE vtable_type {
+  struct ATFW_UTIL_SYMBOL_VISIBLE vtable_type {
     std::function<rpc::result_code_type(rpc::context&, transaction_client_handle&, const storage_type&,
                                         const participator_type&, transaction_participator_failure_reason&)>
         prepare_participator;
@@ -69,7 +69,7 @@ class transaction_client_handle {
   };
   using on_destroy_callback_type = void (*)(transaction_client_handle*);
 
-  struct UTIL_SYMBOL_VISIBLE transaction_options {
+  struct ATFW_UTIL_SYMBOL_VISIBLE transaction_options {
     uint32_t replication_read_count = 0;
     uint32_t replication_total_count = 0;
     bool memory_only = false;
@@ -102,10 +102,10 @@ class transaction_client_handle {
       const atfw::util::memory::strong_rc_ptr<vtable_type>& vtable);
   DISTRIBUTED_TRANSACTION_SDK_API ~transaction_client_handle();
 
-  UTIL_FORCEINLINE void* get_private_data() const noexcept { return private_data_; }
-  UTIL_FORCEINLINE void set_private_data(void* ptr) noexcept { private_data_ = ptr; }
-  UTIL_FORCEINLINE on_destroy_callback_type get_on_destroy_callback() const noexcept { return on_destroy_; }
-  UTIL_FORCEINLINE void set_on_destroy_callback(on_destroy_callback_type fn) noexcept { on_destroy_ = fn; };
+  ATFW_UTIL_FORCEINLINE void* get_private_data() const noexcept { return private_data_; }
+  ATFW_UTIL_FORCEINLINE void set_private_data(void* ptr) noexcept { private_data_ = ptr; }
+  ATFW_UTIL_FORCEINLINE on_destroy_callback_type get_on_destroy_callback() const noexcept { return on_destroy_; }
+  ATFW_UTIL_FORCEINLINE void set_on_destroy_callback(on_destroy_callback_type fn) noexcept { on_destroy_ = fn; };
 
   /**
    * @brief Create a transaction object

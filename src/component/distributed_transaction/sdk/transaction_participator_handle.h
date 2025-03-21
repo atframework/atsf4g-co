@@ -51,7 +51,7 @@ class transaction_participator_handle
   using storage_ptr_type = atfw::util::memory::strong_rc_ptr<storage_type>;
   using storage_const_ptr_type = atfw::util::memory::strong_rc_ptr<const storage_type>;
 
-  struct UTIL_SYMBOL_VISIBLE vtable_type {
+  struct ATFW_UTIL_SYMBOL_VISIBLE vtable_type {
     // 事务执行(Do)回调
     std::function<rpc::result_code_type(rpc::context&, transaction_participator_handle&, const storage_type&)> do_event;
 
@@ -95,12 +95,12 @@ class transaction_participator_handle
       const atfw::util::memory::strong_rc_ptr<vtable_type>& vtable, gsl::string_view participator_key);
   DISTRIBUTED_TRANSACTION_SDK_API ~transaction_participator_handle();
 
-  UTIL_FORCEINLINE void* get_private_data() const noexcept { return private_data_; }
-  UTIL_FORCEINLINE void set_private_data(void* ptr) noexcept { private_data_ = ptr; }
-  UTIL_FORCEINLINE on_destroy_callback_type get_on_destroy_callback() const noexcept { return on_destroy_; }
-  UTIL_FORCEINLINE void set_on_destroy_callback(on_destroy_callback_type fn) noexcept { on_destroy_ = fn; };
+  ATFW_UTIL_FORCEINLINE void* get_private_data() const noexcept { return private_data_; }
+  ATFW_UTIL_FORCEINLINE void set_private_data(void* ptr) noexcept { private_data_ = ptr; }
+  ATFW_UTIL_FORCEINLINE on_destroy_callback_type get_on_destroy_callback() const noexcept { return on_destroy_; }
+  ATFW_UTIL_FORCEINLINE void set_on_destroy_callback(on_destroy_callback_type fn) noexcept { on_destroy_ = fn; };
 
-  UTIL_FORCEINLINE const std::string& get_participator_key() const noexcept { return participator_key_; }
+  ATFW_UTIL_FORCEINLINE const std::string& get_participator_key() const noexcept { return participator_key_; }
 
   DISTRIBUTED_TRANSACTION_SDK_API void load(const snapshot_type& storage);
 

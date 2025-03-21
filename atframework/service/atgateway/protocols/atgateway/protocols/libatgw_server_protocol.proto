@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package atframe.gw;
+package atframework.gw;
 
 option optimize_for = SPEED;
 // option optimize_for = LITE_RUNTIME;
@@ -18,6 +18,11 @@ message ss_body_session {
   int32 client_port = 2;
 }
 
+message ss_body_set_router {
+  uint64 target_service_id = 1;
+  string target_service_name = 2;
+}
+
 message ss_msg_head {
   uint64 session_id = 1;
   int32 error_code = 2;
@@ -31,8 +36,8 @@ message ss_msg_body {
     ss_body_session remove_session = 12;
     ss_body_session kickoff_session = 14;
 
-    uint64 set_router_req = 15;
-    uint64 set_router_rsp = 16;
+    ss_body_set_router set_router_req = 15;
+    ss_body_set_router set_router_rsp = 16;
   }
 }
 

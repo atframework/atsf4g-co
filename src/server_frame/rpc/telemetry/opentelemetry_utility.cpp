@@ -60,7 +60,7 @@ static constexpr const char* kkNotificationWarning = "atframework.notifaction.wa
 static constexpr const char* kkNotificationError = "atframework.notifaction.error";
 static constexpr const char* kkNotificationCritical = "atframework.notifaction.critial";
 
-struct UTIL_SYMBOL_VISIBLE opentelemetry_utility::metrics_attributes_with_lifetime {
+struct ATFW_UTIL_SYMBOL_VISIBLE opentelemetry_utility::metrics_attributes_with_lifetime {
   std::unordered_map<std::string, opentelemetry::common::AttributeValue> attributes;
 
   std::list<std::string> lifetime_string;
@@ -68,13 +68,13 @@ struct UTIL_SYMBOL_VISIBLE opentelemetry_utility::metrics_attributes_with_lifeti
   std::list<std::unique_ptr<unsigned char[]>> lifetime_buffer;
 };
 
-struct UTIL_SYMBOL_VISIBLE opentelemetry_utility::metrics_record {
+struct ATFW_UTIL_SYMBOL_VISIBLE opentelemetry_utility::metrics_record {
   opentelemetry::nostd::variant<int64_t, double> value;
 
   metrics_attributes_with_lifetime attributes;
 };
 
-struct UTIL_SYMBOL_VISIBLE opentelemetry_utility::metrics_observer {
+struct ATFW_UTIL_SYMBOL_VISIBLE opentelemetry_utility::metrics_observer {
   std::string key;
   metrics_observable_type type;
 
@@ -132,7 +132,7 @@ static double get_opentelemetry_utility_metrics_record_value_as_double(
   return 0.0;
 }
 
-struct UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_converter {
+struct ATFW_UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_converter {
   opentelemetry_utility::metrics_attributes_with_lifetime* record;
 
   explicit inline opentelemetry_utility_attribute_converter(
@@ -222,103 +222,100 @@ struct UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_converter {
   }
 };
 
-struct UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_value_to_string_converter{
-    std::string operator()(bool v){return atfw::util::log::format("{}", v);
-}  // namespace
-std::string operator()(int32_t v) { return atfw::util::log::format("{}", v); }
-std::string operator()(uint32_t v) { return atfw::util::log::format("{}", v); }
-std::string operator()(int64_t v) { return atfw::util::log::format("{}", v); }
-std::string operator()(uint64_t v) { return atfw::util::log::format("{}", v); }
-std::string operator()(double v) { return atfw::util::log::format("{}", v); }
-std::string operator()(opentelemetry::nostd::string_view v) { return static_cast<std::string>(v); }
-std::string operator()(const char* v) { return v == nullptr ? "" : v; }
+struct ATFW_UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_value_to_string_converter {
+  std::string operator()(bool v) { return atfw::util::log::format("{}", v); }  // namespace
+  std::string operator()(int32_t v) { return atfw::util::log::format("{}", v); }
+  std::string operator()(uint32_t v) { return atfw::util::log::format("{}", v); }
+  std::string operator()(int64_t v) { return atfw::util::log::format("{}", v); }
+  std::string operator()(uint64_t v) { return atfw::util::log::format("{}", v); }
+  std::string operator()(double v) { return atfw::util::log::format("{}", v); }
+  std::string operator()(opentelemetry::nostd::string_view v) { return static_cast<std::string>(v); }
+  std::string operator()(const char* v) { return v == nullptr ? "" : v; }
 
-template <class T>
-inline void dump_array_value(std::ostream& os, const T& v) {
-  os << v;
-}
-inline void dump_array_value(std::ostream& os, const opentelemetry::nostd::string_view& v) {
-  os.write(v.data(), static_cast<std::streamsize>(v.size()));
-}
-
-template <class T>
-std::string to_array(opentelemetry::nostd::span<const T> v) {
-  if (v.empty()) {
-    return "[]";
+  template <class T>
+  inline void dump_array_value(std::ostream& os, const T& v) {
+    os << v;
+  }
+  inline void dump_array_value(std::ostream& os, const opentelemetry::nostd::string_view& v) {
+    os.write(v.data(), static_cast<std::streamsize>(v.size()));
   }
 
-  std::stringstream ss;
-  ss << "[";
-  dump_array_value(ss, v[0]);
+  template <class T>
+  std::string to_array(opentelemetry::nostd::span<const T> v) {
+    if (v.empty()) {
+      return "[]";
+    }
 
-  for (size_t i = 1; i < v.size(); ++i) {
-    ss << ", ";
-    dump_array_value(ss, v[i]);
+    std::stringstream ss;
+    ss << "[";
+    dump_array_value(ss, v[0]);
+
+    for (size_t i = 1; i < v.size(); ++i) {
+      ss << ", ";
+      dump_array_value(ss, v[i]);
+    }
+
+    ss << "]";
+
+    return ss.str();
   }
 
-  ss << "]";
-
-  return ss.str();
-}
-
-std::string operator()(opentelemetry::nostd::span<const uint8_t> v) { return to_array(v); }
-std::string operator()(opentelemetry::nostd::span<const bool> v) { return to_array(v); }
-std::string operator()(opentelemetry::nostd::span<const int32_t> v) { return to_array(v); }
-std::string operator()(opentelemetry::nostd::span<const uint32_t> v) { return to_array(v); }
-std::string operator()(opentelemetry::nostd::span<const int64_t> v) { return to_array(v); }
-std::string operator()(opentelemetry::nostd::span<const uint64_t> v) { return to_array(v); }
-std::string operator()(opentelemetry::nostd::span<const double> v) { return to_array(v); }
-std::string operator()(opentelemetry::nostd::span<const opentelemetry::nostd::string_view> v) { return to_array(v); }
+  std::string operator()(opentelemetry::nostd::span<const uint8_t> v) { return to_array(v); }
+  std::string operator()(opentelemetry::nostd::span<const bool> v) { return to_array(v); }
+  std::string operator()(opentelemetry::nostd::span<const int32_t> v) { return to_array(v); }
+  std::string operator()(opentelemetry::nostd::span<const uint32_t> v) { return to_array(v); }
+  std::string operator()(opentelemetry::nostd::span<const int64_t> v) { return to_array(v); }
+  std::string operator()(opentelemetry::nostd::span<const uint64_t> v) { return to_array(v); }
+  std::string operator()(opentelemetry::nostd::span<const double> v) { return to_array(v); }
+  std::string operator()(opentelemetry::nostd::span<const opentelemetry::nostd::string_view> v) { return to_array(v); }
 };  // namespace telemetry
 
-struct UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_owned_value_to_string_converter{
-    std::string operator()(bool v){return atfw::util::log::format("{}", v);
-}  // namespace rpc
-std::string operator()(int32_t v) { return atfw::util::log::format("{}", v); }
-std::string operator()(uint32_t v) { return atfw::util::log::format("{}", v); }
-std::string operator()(int64_t v) { return atfw::util::log::format("{}", v); }
-std::string operator()(uint64_t v) { return atfw::util::log::format("{}", v); }
-std::string operator()(double v) { return atfw::util::log::format("{}", v); }
-std::string operator()(const std::string& v) { return static_cast<std::string>(v); }
+struct ATFW_UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_owned_value_to_string_converter {
+  std::string operator()(bool v) { return atfw::util::log::format("{}", v); }  // namespace rpc
+  std::string operator()(int32_t v) { return atfw::util::log::format("{}", v); }
+  std::string operator()(uint32_t v) { return atfw::util::log::format("{}", v); }
+  std::string operator()(int64_t v) { return atfw::util::log::format("{}", v); }
+  std::string operator()(uint64_t v) { return atfw::util::log::format("{}", v); }
+  std::string operator()(double v) { return atfw::util::log::format("{}", v); }
+  std::string operator()(const std::string& v) { return static_cast<std::string>(v); }
 
-template <class T>
-inline void dump_array_value(std::ostream& os, const T& v) {
-  os << v;
-}
-inline void dump_array_value(std::ostream& os, const std::string& v) {
-  os.write(v.data(), static_cast<std::streamsize>(v.size()));
-}
-
-template <class T>
-std::string to_array(const std::vector<T>& v) {
-  if (v.empty()) {
-    return "[]";
+  template <class T>
+  inline void dump_array_value(std::ostream& os, const T& v) {
+    os << v;
+  }
+  inline void dump_array_value(std::ostream& os, const std::string& v) {
+    os.write(v.data(), static_cast<std::streamsize>(v.size()));
   }
 
-  std::stringstream ss;
-  ss << "[";
-  dump_array_value(ss, v[0]);
+  template <class T>
+  std::string to_array(const std::vector<T>& v) {
+    if (v.empty()) {
+      return "[]";
+    }
 
-  for (size_t i = 1; i < v.size(); ++i) {
-    ss << ", ";
-    dump_array_value(ss, v[i]);
+    std::stringstream ss;
+    ss << "[";
+    dump_array_value(ss, v[0]);
+
+    for (size_t i = 1; i < v.size(); ++i) {
+      ss << ", ";
+      dump_array_value(ss, v[i]);
+    }
+
+    ss << "]";
+
+    return ss.str();
   }
 
-  ss << "]";
-
-  return ss.str();
-}
-
-std::string operator()(const std::vector<bool>& v) { return to_array(v); }
-std::string operator()(const std::vector<int32_t>& v) { return to_array(v); }
-std::string operator()(const std::vector<uint32_t>& v) { return to_array(v); }
-std::string operator()(const std::vector<int64_t>& v) { return to_array(v); }
-std::string operator()(const std::vector<uint64_t>& v) { return to_array(v); }
-std::string operator()(const std::vector<double>& v) { return to_array(v); }
-std::string operator()(const std::vector<std::string>& v) { return to_array(v); }
-std::string operator()(const std::vector<uint8_t>& v) { return to_array(v); }
-}
-;
+  std::string operator()(const std::vector<bool>& v) { return to_array(v); }
+  std::string operator()(const std::vector<int32_t>& v) { return to_array(v); }
+  std::string operator()(const std::vector<uint32_t>& v) { return to_array(v); }
+  std::string operator()(const std::vector<int64_t>& v) { return to_array(v); }
+  std::string operator()(const std::vector<uint64_t>& v) { return to_array(v); }
+  std::string operator()(const std::vector<double>& v) { return to_array(v); }
+  std::string operator()(const std::vector<std::string>& v) { return to_array(v); }
+  std::string operator()(const std::vector<uint8_t>& v) { return to_array(v); }
+};
 
 static opentelemetry::nostd::string_view get_notification_event_log_domain(notification_domain domain) {
   switch (domain) {
@@ -552,7 +549,7 @@ static void opentelemetry_utility_protobuf_to_otel_attributes_message(
   }
 }
 
-struct UTIL_SYMBOL_LOCAL opentelemetry_utility_global_metrics_set {
+struct ATFW_UTIL_SYMBOL_LOCAL opentelemetry_utility_global_metrics_set {
   std::atomic<bool> initialized;
   std::atomic<bool> closing;
   std::atomic<size_t> collecting_version;

@@ -1,0 +1,40 @@
+#.rst:
+# =============================================================================
+# Copyright 2025 OWenT.
+#
+# Distributed under the OSI-approved BSD License (the "License"); see accompanying file Copyright.txt for details.
+#
+# This software is distributed WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+# PURPOSE. See the License for more information.
+# =============================================================================
+# (To distribute this file outside of CMake, substitute the full License text for the above reference.)
+
+set(${CMAKE_FIND_PACKAGE_NAME}_VERSION "@PROJECT_VERSION@")
+
+@PACKAGE_INIT@
+
+# Patch PACKAGE_PREFIX_DIR for build interface
+if(DEFINED PACKAGE_PREFIX_DIR
+   AND NOT EXISTS "@PACKAGE_ATFRAMEWORK_EXPORT_CMAKE_INSTALL_LIBDIR@"
+   AND EXISTS
+       "${PACKAGE_PREFIX_DIR}/../../@CMAKE_INSTALL_LIBDIR@/@SERVER_FRAME_VCS_COMMIT_SHORT_SHA@/@CMAKE_INSTALL_LIBDIR@")
+  set(PACKAGE_PREFIX_DIR "${PACKAGE_PREFIX_DIR}/../..")
+endif()
+
+# ######################################################################################################################
+# ${CMAKE_FIND_PACKAGE_NAME} source dir
+
+set_and_check(${CMAKE_FIND_PACKAGE_NAME}_INCLUDE_DIRS "@PACKAGE_ATFRAMEWORK_EXPORT_CMAKE_INSTALL_INCLUDEDIR@")
+set_and_check(${CMAKE_FIND_PACKAGE_NAME}_LIBRARY_DIRS "@PACKAGE_ATFRAMEWORK_EXPORT_CMAKE_INSTALL_LIBDIR@")
+
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/@ATFRAMEWORK_EXPORT_COMPONENT_NAME@.cmake")
+  include("${CMAKE_CURRENT_LIST_DIR}/@ATFRAMEWORK_EXPORT_COMPONENT_NAME@.cmake")
+endif()
+
+foreach(_${CMAKE_FIND_PACKAGE_NAME}_COMPONENT IN LISTS ${${CMAKE_FIND_PACKAGE_NAME}_FIND_COMPONENTS})
+  if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/${_${CMAKE_FIND_PACKAGE_NAME}_COMPONENT}-target.cmake")
+    include("${CMAKE_CURRENT_LIST_DIR}/${_${CMAKE_FIND_PACKAGE_NAME}_COMPONENT}-target.cmake")
+  endif()
+endforeach()
+
+check_required_components(${CMAKE_FIND_PACKAGE_NAME})

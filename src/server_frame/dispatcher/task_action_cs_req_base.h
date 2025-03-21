@@ -23,7 +23,7 @@
 class session;
 class player_cache;
 
-class UTIL_SYMBOL_VISIBLE task_action_cs_req_base : public task_action_req_base<atframework::CSMsg> {
+class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_req_base : public task_action_req_base<atframework::CSMsg> {
  public:
   using base_type = task_action_req_base<atframework::CSMsg>;
   using message_type = base_type::message_type;
@@ -77,7 +77,7 @@ class UTIL_SYMBOL_VISIBLE task_action_cs_req_base : public task_action_req_base<
   SERVER_FRAME_API std::shared_ptr<player_cache> get_player_cache() const;
 
   template <typename TPLAYER>
-  UTIL_FORCEINLINE std::shared_ptr<TPLAYER> get_player() const {
+  ATFW_UTIL_FORCEINLINE std::shared_ptr<TPLAYER> get_player() const {
     return std::static_pointer_cast<TPLAYER>(get_player_cache());
   }
 
@@ -88,7 +88,7 @@ class UTIL_SYMBOL_VISIBLE task_action_cs_req_base : public task_action_req_base<
   SERVER_FRAME_API void write_actor_log_body(const google::protobuf::Message &msg, const atframework::CSMsgHead &head,
                                              bool is_input);
 
-  UTIL_FORCEINLINE bool has_response_message() const noexcept { return !response_messages_.empty(); }
+  ATFW_UTIL_FORCEINLINE bool has_response_message() const noexcept { return !response_messages_.empty(); }
 
  private:
   mutable std::shared_ptr<session> session_inst_;
@@ -100,7 +100,7 @@ class UTIL_SYMBOL_VISIBLE task_action_cs_req_base : public task_action_req_base<
 };
 
 template <class TReqType, class TRspType>
-class UTIL_SYMBOL_VISIBLE task_action_cs_rpc_base : public task_action_cs_req_base {
+class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_rpc_base : public task_action_cs_req_base {
  public:
   using base_type = task_action_cs_req_base;
   using message_type = base_type::message_type;

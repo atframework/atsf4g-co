@@ -1,6 +1,6 @@
-// atgateway inner protocol schema file v1
+// atgateway protocol schema file v1
 
-namespace atframe.gw.inner.v1;
+namespace atframework.gw.v1;
 
 enum error_code_t:int {
     EN_ECT_REFUSE_RECONNECT = -1005,
@@ -11,7 +11,7 @@ enum error_code_t:int {
     EN_ECT_SUCCESS = 0,
 }
 
-enum handshake_step_t : ubyte { 
+enum handshake_step_t : ubyte {
     EN_HST_START_REQ = 0,           // Step 1. start a new session handshake by client
     EN_HST_START_RSP = 1,           // Step 2. tell client the session id, crypt method and bits, secret switch method and init data
     EN_HST_RECONNECT_REQ = 11,      // Step 1. start a reconnect handshake by client, with session id, crypt method and bits and the encrypted secret code
@@ -23,7 +23,7 @@ enum handshake_step_t : ubyte {
     EN_HST_VERIFY = 101,            // Step 5. validate the shared secret, send a encrypted public key to server
 }
 
-enum switch_secret_t : ubyte { 
+enum switch_secret_t : ubyte {
     EN_SST_DIRECT = 0,          // direct send secret codes (deprecated)
     EN_SST_DH = 1,              // use DH algorithm to swicth secrets
     EN_SST_ECDH = 2            // use ECDH algorithm to switch secrets
@@ -31,7 +31,7 @@ enum switch_secret_t : ubyte {
 
 enum cs_msg_type_t : ubyte {
     EN_MTT_UNKNOWN = 0,
-    EN_MTT_POST = 1, 
+    EN_MTT_POST = 1,
     EN_MTT_HANDSHAKE = 2,
     EN_MTT_PING = 3,
     EN_MTT_PONG = 4,
@@ -48,7 +48,7 @@ union cs_msg_body { cs_body_post, cs_body_kickoff, cs_body_ping, cs_body_handsha
 
 table cs_body_post {
     /// the length before encrypt, because encrypt data will pad data.
-    length: ulong; 
+    length: ulong;
     data: [byte];
 }
 
@@ -69,13 +69,13 @@ table cs_body_handshake {
     step: handshake_step_t (id: 1);
     switch_type: switch_secret_t (id: 2);
     crypt_type: string (id: 3);
-    crypt_param: [byte] (id: 4); 
+    crypt_param: [byte] (id: 4);
     switch_param: [byte] (id: 5);
 }
 
 table cs_body_ping {
     /// the time when start ping
-    timepoint: long (id: 0); 
+    timepoint: long (id: 0);
 }
 
 /// message

@@ -66,12 +66,12 @@ struct logic_hpa_observable_value {
   static constexpr const double kDoubleNaN =
       logic_hpa_observable_value_NaN<double, std::numeric_limits<double>::has_quiet_NaN>::NaN();
 
-  UTIL_FORCEINLINE static bool is_nan(int64_t v) noexcept { return v == kInt64NaN; }
+  ATFW_UTIL_FORCEINLINE static bool is_nan(int64_t v) noexcept { return v == kInt64NaN; }
 
-  UTIL_FORCEINLINE static bool is_nan(double v) noexcept { return ::std::isnan(v); }
+  ATFW_UTIL_FORCEINLINE static bool is_nan(double v) noexcept { return ::std::isnan(v); }
 };
 
-struct UTIL_SYMBOL_VISIBLE logic_hpa_pull_value {
+struct ATFW_UTIL_SYMBOL_VISIBLE logic_hpa_pull_value {
   std::chrono::system_clock::time_point timepoint = std::chrono::system_clock::from_time_t(0);
   absl::variant<int64_t, double> value;
 
@@ -83,7 +83,7 @@ enum class logic_hpa_pull_metrics_name_mode : uint8_t {
   kWithNameOnly = 1,
 };
 
-class UTIL_SYMBOL_VISIBLE logic_hpa_pull_instant_record {
+class ATFW_UTIL_SYMBOL_VISIBLE logic_hpa_pull_instant_record {
   UTIL_DESIGN_PATTERN_NOCOPYABLE(logic_hpa_pull_instant_record);
   UTIL_DESIGN_PATTERN_NOMOVABLE(logic_hpa_pull_instant_record);
 
@@ -112,7 +112,7 @@ class UTIL_SYMBOL_VISIBLE logic_hpa_pull_instant_record {
   logic_hpa_pull_value data_;
 };
 
-class UTIL_SYMBOL_VISIBLE logic_hpa_pull_range_record {
+class ATFW_UTIL_SYMBOL_VISIBLE logic_hpa_pull_range_record {
   UTIL_DESIGN_PATTERN_NOCOPYABLE(logic_hpa_pull_range_record);
 
   UTIL_DESIGN_PATTERN_NOMOVABLE(logic_hpa_pull_range_record);
@@ -164,7 +164,7 @@ class UTIL_SYMBOL_VISIBLE logic_hpa_pull_range_record {
 //   "warnings": ["<string>"]
 // }
 
-class UTIL_SYMBOL_VISIBLE logic_hpa_pull_result {
+class ATFW_UTIL_SYMBOL_VISIBLE logic_hpa_pull_result {
   UTIL_DESIGN_PATTERN_NOCOPYABLE(logic_hpa_pull_result);
 
   UTIL_DESIGN_PATTERN_NOMOVABLE(logic_hpa_pull_result);
@@ -191,9 +191,9 @@ class UTIL_SYMBOL_VISIBLE logic_hpa_pull_result {
 
   virtual std::vector<gsl::string_view> get_warning_messages() const noexcept = 0;
 
-  UTIL_FORCEINLINE bool has_range_record() const noexcept { return !range_record_.empty(); }
+  ATFW_UTIL_FORCEINLINE bool has_range_record() const noexcept { return !range_record_.empty(); }
 
-  UTIL_FORCEINLINE bool has_instant_record() const noexcept { return !instant_record_.empty(); }
+  ATFW_UTIL_FORCEINLINE bool has_instant_record() const noexcept { return !instant_record_.empty(); }
 
   SERVER_FRAME_API gsl::span<const std::unique_ptr<logic_hpa_pull_instant_record>> get_instant_records() const noexcept;
 

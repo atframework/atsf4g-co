@@ -31,11 +31,11 @@ static int app_handle_on_response(atapp::app &app, const atapp::app::message_sen
 }
 
 struct app_handle_on_connected {
-  std::reference_wrapper<atframe::proxy::atproxy_manager> atproxy_mgr_module;
-  app_handle_on_connected(atframe::proxy::atproxy_manager &mod) : atproxy_mgr_module(mod) {}
+  std::reference_wrapper<atframework::proxy::atproxy_manager> atproxy_mgr_module;
+  app_handle_on_connected(atframework::proxy::atproxy_manager &mod) : atproxy_mgr_module(mod) {}
 
   int operator()(atapp::app &app, atbus::endpoint &ep, int status) {
-    WLOGINFO("node 0x%llx connected, status: %d", static_cast<unsigned long long>(ep.get_id()), status);
+    FWLOGINFO("node {} connected, status: {}", ep.get_id(), status);
 
     atproxy_mgr_module.get().on_connected(app, ep.get_id());
     return 0;
@@ -43,11 +43,11 @@ struct app_handle_on_connected {
 };
 
 struct app_handle_on_disconnected {
-  std::reference_wrapper<atframe::proxy::atproxy_manager> atproxy_mgr_module;
-  app_handle_on_disconnected(atframe::proxy::atproxy_manager &mod) : atproxy_mgr_module(mod) {}
+  std::reference_wrapper<atframework::proxy::atproxy_manager> atproxy_mgr_module;
+  app_handle_on_disconnected(atframework::proxy::atproxy_manager &mod) : atproxy_mgr_module(mod) {}
 
   int operator()(atapp::app &app, atbus::endpoint &ep, int status) {
-    WLOGINFO("node 0x%llx disconnected, status: %d", static_cast<unsigned long long>(ep.get_id()), status);
+    FWLOGINFO("node {} disconnected, status: {}", ep.get_id(), status);
 
     atproxy_mgr_module.get().on_disconnected(app, ep.get_id());
     return 0;
@@ -57,7 +57,8 @@ struct app_handle_on_disconnected {
 int main(int argc, char *argv[]) {
   atapp::app app;
 
-  std::shared_ptr<atframe::proxy::atproxy_manager> proxy_mgr_mod = std::make_shared<atframe::proxy::atproxy_manager>();
+  std::shared_ptr<atframework::proxy::atproxy_manager> proxy_mgr_mod =
+      std::make_shared<atframework::proxy::atproxy_manager>();
   if (!proxy_mgr_mod) {
     fprintf(stderr, "create atproxy manager module failed\n");
     return -1;

@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package atframe.gw;
+package atframework.gw;
 
 option optimize_for = SPEED;
 // option optimize_for = LITE_RUNTIME;
@@ -42,15 +42,32 @@ message atgateway_client_crypt_cfg {
   string dhparam = 4;
 }
 
+enum atgateway_router_policy {
+  EN_ATGW_ROUTER_POLICY_RANDOM = 0;
+  EN_ATGW_ROUTER_POLICY_ROUND_ROBIN = 1;
+  EN_ATGW_ROUTER_POLICY_HASH = 2;
+}
+
+message atgateway_router_cfg {
+  uint64 node_id = 1;
+  string node_name = 2;
+  uint64 type_id = 3;
+  string type_name = 4;
+
+  atgateway_router_policy policy = 11;
+  atapp.protocol.atapp_metadata policy_selector = 12;
+}
+
 message atgateway_client_cfg {
   google.protobuf.Duration reconnect_timeout = 1
       [(atapp.protocol.CONFIGURE) = { default_value: "180s" min_value: "1s" }];
   google.protobuf.Duration first_idle_timeout = 2
       [(atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
-  uint64 send_buffer_size = 3 [(atapp.protocol.CONFIGURE) = { default_value: "1MB" size_mode: true }];
-  uint64 default_router = 4;
-  atgateway_client_limit_cfg limit = 5;
-  atgateway_client_crypt_cfg crypt = 6;
+  uint64 recv_buffer_size = 3 [(atapp.protocol.CONFIGURE) = { default_value: "2MB" size_mode: true }];
+  uint64 send_buffer_size = 4 [(atapp.protocol.CONFIGURE) = { default_value: "4MB" size_mode: true }];
+  atgateway_router_cfg default_router = 5;
+  atgateway_client_limit_cfg limit = 11;
+  atgateway_client_crypt_cfg crypt = 12;
 }
 
 message atgateway_cfg {

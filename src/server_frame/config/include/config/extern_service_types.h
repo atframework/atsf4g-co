@@ -9,7 +9,7 @@
 
 #include "config/server_frame_build_feature.h"
 
-namespace atframe {
+namespace atframework {
 namespace component {
 struct SERVER_FRAME_CONFIG_HEAD_ONLY message_type {
   enum type {
@@ -25,5 +25,5 @@ struct SERVER_FRAME_CONFIG_HEAD_ONLY logic_service_type {
   };
 };
 }  // namespace component
-}  // namespace atframe
+}  // namespace atframework
 #endif

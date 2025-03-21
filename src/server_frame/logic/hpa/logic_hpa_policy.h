@@ -57,7 +57,7 @@ class logic_hpa_policy {
   using observable_callback_custom_handle = std::shared_ptr<observable_callback_custom_data>;
 
   template <class CallbackType>
-  struct UTIL_SYMBOL_VISIBLE event_callback_data {
+  struct ATFW_UTIL_SYMBOL_VISIBLE event_callback_data {
     CallbackType callback;
     logic_hpa_event_active_type active;
 
@@ -76,22 +76,22 @@ class logic_hpa_policy {
   using event_callback_on_ready = std::function<void(logic_hpa_policy&)>;
 
   template <class CallbackDataType>
-  struct UTIL_SYMBOL_VISIBLE event_callback_handle {
+  struct ATFW_UTIL_SYMBOL_VISIBLE event_callback_handle {
     typename std::list<event_callback_data<CallbackDataType>>::iterator iterator;
     int64_t version;
 
-    UTIL_FORCEINLINE event_callback_handle(typename std::list<event_callback_data<CallbackDataType>>::iterator it,
-                                           int64_t v)
+    ATFW_UTIL_FORCEINLINE event_callback_handle(typename std::list<event_callback_data<CallbackDataType>>::iterator it,
+                                                int64_t v)
         : iterator(it), version(v) {}
 
     event_callback_handle(const event_callback_handle&) = delete;
-    UTIL_FORCEINLINE event_callback_handle(event_callback_handle&& other) noexcept
+    ATFW_UTIL_FORCEINLINE event_callback_handle(event_callback_handle&& other) noexcept
         : iterator(other.iterator), version(other.version) {
       other.version = 0;
     }
 
     event_callback_handle& operator=(const event_callback_handle&) = delete;
-    UTIL_FORCEINLINE event_callback_handle& operator=(event_callback_handle&& other) noexcept {
+    ATFW_UTIL_FORCEINLINE event_callback_handle& operator=(event_callback_handle&& other) noexcept {
       iterator = other.iterator;
       version = other.version;
       other.version = 0;
@@ -177,11 +177,11 @@ class logic_hpa_policy {
 
   SERVER_FRAME_API bool remove_observer_custom(observable_callback_custom_handle& handle);
 
-  UTIL_FORCEINLINE bool is_stoping() const noexcept { return stoping_; }
+  ATFW_UTIL_FORCEINLINE bool is_stoping() const noexcept { return stoping_; }
 
   SERVER_FRAME_API bool is_stopped() const noexcept;
 
-  UTIL_FORCEINLINE bool is_ready() const noexcept { return ready_; }
+  ATFW_UTIL_FORCEINLINE bool is_ready() const noexcept { return ready_; }
 
   /**
    * @brief 当前策略是否可拉取(配置了拉取规则)
@@ -271,22 +271,22 @@ class logic_hpa_policy {
    */
   SERVER_FRAME_API void schedule_pull() noexcept;
 
-  UTIL_FORCEINLINE const logic_hpa_controller& get_controller() const noexcept { return *controller_; }
-  UTIL_FORCEINLINE logic_hpa_controller& get_controller() noexcept { return *controller_; }
+  ATFW_UTIL_FORCEINLINE const logic_hpa_controller& get_controller() const noexcept { return *controller_; }
+  ATFW_UTIL_FORCEINLINE logic_hpa_controller& get_controller() noexcept { return *controller_; }
 
   /**
    * @brief 获取当前策略的扩容预期副本数
    *
    * @return 扩容策略预期的副本数
    */
-  UTIL_FORCEINLINE int64_t get_configure_scaling_up_value() const noexcept { return scaling_up_value_; }
+  ATFW_UTIL_FORCEINLINE int64_t get_configure_scaling_up_value() const noexcept { return scaling_up_value_; }
 
   /**
    * @brief 获取当前策略的缩容预期副本数
    *
    * @return 缩容策略预期的副本数
    */
-  UTIL_FORCEINLINE int64_t get_configure_scaling_down_value() const noexcept { return scaling_down_value_; }
+  ATFW_UTIL_FORCEINLINE int64_t get_configure_scaling_down_value() const noexcept { return scaling_down_value_; }
 
   SERVER_FRAME_API void trigger_event_on_pull_result(logic_hpa_pull_result& result) noexcept;
 
@@ -356,7 +356,7 @@ class logic_hpa_policy {
     std::list<observable_callback_data<CallbackType>> observable;
     int64_t version = 0;
 
-    UTIL_FORCEINLINE observable_callback_set() {}
+    ATFW_UTIL_FORCEINLINE observable_callback_set() {}
   };
 
   observable_callback_set<observable_callback_int64> observable_callback_int64_;
@@ -370,7 +370,7 @@ class logic_hpa_policy {
     std::list<event_callback_data<CallbackType>> callbacks;
     int64_t version = 0;
 
-    UTIL_FORCEINLINE event_callback_set() {}
+    ATFW_UTIL_FORCEINLINE event_callback_set() {}
   };
 
   using event_on_pull_range_callback_set = event_callback_set<event_callback_on_pull_range>;

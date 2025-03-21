@@ -10,7 +10,8 @@
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
-#include <proto_base.h>
+#include <atgateway/protocols/libatgw_protocol_api.h>
+
 #include <rpc/db/login.h>
 
 #include <logic/session_manager.h>
@@ -23,22 +24,24 @@
 
 #include "router/router_player_manager.h"
 
-router_player_private_type::router_player_private_type() : login_tb(nullptr), login_ver(nullptr) {}
-router_player_private_type::router_player_private_type(rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> *tb,
-                                                       std::string *ver)
+SERVER_FRAME_API router_player_private_type::router_player_private_type() : login_tb(nullptr), login_ver(nullptr) {}
+SERVER_FRAME_API router_player_private_type::router_player_private_type(
+    rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> *tb, std::string *ver)
     : login_tb(tb), login_ver(ver) {}
 
-router_player_cache::router_player_cache(uint64_t user_id, uint32_t zone_id, const std::string &openid)
+SERVER_FRAME_API router_player_private_type::~router_player_private_type() {}
+
+SERVER_FRAME_API router_player_cache::router_player_cache(uint64_t user_id, uint32_t zone_id, const std::string &openid)
     : base_type(router_player_manager::me()->create_player_object(user_id, zone_id, openid),
                 key_t(router_player_manager::me()->get_type_id(), zone_id, user_id)) {}
 
 // 这个时候openid无效，后面需要再init一次
-router_player_cache::router_player_cache(const key_t &key)
+SERVER_FRAME_API router_player_cache::router_player_cache(const key_t &key)
     : base_type(router_player_manager::me()->create_player_object(key.object_id, key.zone_id, ""), key) {}
 
-const char *router_player_cache::name() const { return "[player  router cache]"; }
+SERVER_FRAME_API const char *router_player_cache::name() const { return "[player  router cache]"; }
 
-rpc::result_code_type router_player_cache::pull_cache(rpc::context &ctx, void *priv_data) {
+SERVER_FRAME_API rpc::result_code_type router_player_cache::pull_cache(rpc::context &ctx, void *priv_data) {
   if (nullptr == priv_data) {
     router_player_private_type local_priv_data;
     return pull_cache(ctx, local_priv_data);
@@ -47,7 +50,8 @@ rpc::result_code_type router_player_cache::pull_cache(rpc::context &ctx, void *p
   return pull_cache(ctx, *reinterpret_cast<router_player_private_type *>(priv_data));
 }
 
-rpc::result_code_type router_player_cache::pull_cache(rpc::context &ctx, router_player_private_type &priv_data) {
+SERVER_FRAME_API rpc::result_code_type router_player_cache::pull_cache(rpc::context &ctx,
+                                                                       router_player_private_type &priv_data) {
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> login_table_ptr{ctx};
   if (nullptr != priv_data.login_tb) {
     login_table_ptr = *priv_data.login_tb;
@@ -99,7 +103,7 @@ rpc::result_code_type router_player_cache::pull_cache(rpc::context &ctx, router_
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, void *priv_data) {
+SERVER_FRAME_API rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, void *priv_data) {
   if (nullptr == priv_data) {
     router_player_private_type local_priv_data;
     return pull_object(ctx, local_priv_data);
@@ -108,7 +112,8 @@ rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, void *
   return pull_object(ctx, *reinterpret_cast<router_player_private_type *>(priv_data));
 }
 
-rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, router_player_private_type &priv_data) {
+SERVER_FRAME_API rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx,
+                                                                        router_player_private_type &priv_data) {
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> login_table_ptr{ctx};
   bool has_login_table = false;
   if (nullptr != priv_data.login_tb) {
@@ -257,7 +262,7 @@ rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, router
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void * /*priv_data*/) {
+SERVER_FRAME_API rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void * /*priv_data*/) {
   // 保存数据
   player_cache::ptr_t obj = object();
   if (!obj || !obj->can_be_writable()) {
@@ -411,7 +416,7 @@ rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void *
 
     // 在其他设备登入的要把这里的Session踢下线
     if (obj->get_session()) {
-      obj->get_session()->send_kickoff(::atframe::gateway::close_reason_t::EN_CRT_KICKOFF);
+      obj->get_session()->send_kickoff(::atframework::gateway::close_reason_t::EN_CRT_KICKOFF);
     }
 
     RPC_AWAIT_IGNORE_RESULT(router_player_manager::me()->remove_object(ctx, get_key(), nullptr, nullptr));

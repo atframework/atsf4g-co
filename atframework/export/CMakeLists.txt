@@ -7,4 +7,4 @@ if(COMPILER_STRICT_EXTRA_CFLAGS)
 endif()
 
 # base services
-add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/atgw_inner_v1_c")
+add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/atgw_v1_c")
