@@ -12,7 +12,6 @@
 #include <dispatcher/cs_msg_dispatcher.h>
 #include <dispatcher/db_msg_dispatcher.h>
 #include <dispatcher/ss_msg_dispatcher.h>
-#include <libatgw_server_protocol.h>
 
 #include <logic/logic_server_macro.h>
 #include <logic/logic_server_setup.h>

@@ -17,8 +17,6 @@
 #include <dispatcher/task_action_no_req_base.h>
 #include <dispatcher/task_action_ss_req_base.h>
 
-#include <libatgw_server_protocol.h>
-
 #include <config/server_frame_build_feature.h>
 
 #include <logic/logic_server_macro.h>

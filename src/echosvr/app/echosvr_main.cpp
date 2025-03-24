@@ -7,8 +7,8 @@
 #include <libatbus_protocol.h>
 #include <time/time_utility.h>
 
+#include <atgateway/protocols/libatgw_server_protocol.h>
 #include <config/atframe_service_types.h>
-#include <libatgw_server_protocol.h>
 
 #include <cstdio>
 #include <cstdlib>

@@ -106,14 +106,14 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_api::set_flag(flag_t::type t, bool v)
   }
 }
 
-void *libatgw_protocol_api::get_tls_buffer(tls_buffer_t::type tls_type) {
+LIBATGW_PROTOCOL_API void *libatgw_protocol_api::get_tls_buffer(tls_buffer_t::type tls_type) {
   if (tls_type >= tls_buffer_t::EN_TBT_MAX || tls_type < 0) {
     return nullptr;
   }
   return ::atframework::gateway::detail::atgateway_get_msg_buffer(tls_type);
 }
 
-size_t libatgw_protocol_api::get_tls_length(tls_buffer_t::type tls_type) {
+LIBATGW_PROTOCOL_API size_t libatgw_protocol_api::get_tls_length(tls_buffer_t::type tls_type) {
   if (tls_type >= tls_buffer_t::EN_TBT_MAX || tls_type < 0) {
     return 0;
   }

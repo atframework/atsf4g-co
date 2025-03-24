@@ -187,8 +187,8 @@ namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID {
 template <class CharT>
 struct ATFW_UTIL_SYMBOL_VISIBLE formatter<session, CharT> : formatter<std::string> {
   template <class FormatContext>
-  auto format(const session &sess, FormatContext &ctx) {
-    return LOG_WRAPPER_FWAPI_FORMAT_TO(ctx.out(), "session ({}){}:{}({}:{})", sess.get_key().name_name,
+  auto format(const session &sess, FormatContext &ctx) const {
+    return LOG_WRAPPER_FWAPI_FORMAT_TO(ctx.out(), "session ({}){}:{}({}:{})", sess.get_key().node_name,
                                        sess.get_key().node_id, sess.get_key().session_id, sess.get_cached_zone_id(),
                                        sess.get_cached_user_id());
   }

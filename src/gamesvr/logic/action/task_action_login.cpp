@@ -3,15 +3,21 @@
 
 #include "logic/action/task_action_login.h"
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <common/string_oprs.h>
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
+
+#include <atgateway/protocols/libatgw_protocol_api.h>
 
 #include <rpc/db/login.h>
 
@@ -272,8 +278,8 @@ GAMECLIENT_RPC_API int task_action_login::on_failed() {
 
   // 登入过程中掉线了，直接退出
   if (!s) {
-    FCTXLOGWARNING(get_shared_context(), "session [{},{}] not found", get_gateway_info().first,
-                   get_gateway_info().second);
+    FCTXLOGWARNING(get_shared_context(), "session ({}){}:{} not found", get_gateway_node_name(), get_gateway_node_id(),
+                   get_gateway_session_id());
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
@@ -281,13 +287,11 @@ GAMECLIENT_RPC_API int task_action_login::on_failed() {
     case PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_OTHER_DEVICE:
     case PROJECT_NAMESPACE_ID::EN_ERR_NOT_LOGIN:
     case PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_BAN: {
-      FCTXLOGWARNING(get_shared_context(), "session [{},{}] login failed, rsp code: {}, ret code: {}",
-                     get_gateway_info().first, get_gateway_info().second, get_response_code(), get_result());
+      FCTXLOGWARNING(get_shared_context(), "{} login failed, rsp code: {}, ret code: {}", *s);
       break;
     }
     default: {
-      FCTXLOGERROR(get_shared_context(), "session [{},{}] login failed, rsp code: {}, ret code: {}",
-                   get_gateway_info().first, get_gateway_info().second, get_response_code(), get_result());
+      FCTXLOGERROR(get_shared_context(), "{}} login failed, rsp code: {}, ret code: {}", *s, get_result());
       break;
     }
   }

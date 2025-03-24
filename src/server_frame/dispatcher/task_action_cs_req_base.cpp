@@ -8,6 +8,8 @@
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
+#include <atframe/atapp.h>
+
 #include <data/player_cache.h>
 #include <logic/player_manager.h>
 #include <logic/session_manager.h>
@@ -34,6 +36,12 @@ static std::recursive_mutex &get_handle_lock() {
   return ret;
 }
 }  // namespace
+
+struct task_action_cs_req_base::gateway_info_t {
+  uint64_t node_id;
+  std::string node_name;
+  uint64_t session_id;
+};
 
 std::list<rpc::result_code_type (*)(rpc::context &, task_action_cs_req_base &)>
     task_action_cs_req_base::prepare_handles_;
@@ -207,10 +215,16 @@ SERVER_FRAME_API bool task_action_cs_req_base::is_stream_rpc() const noexcept {
   return get_request().head().has_rpc_stream();
 }
 
-SERVER_FRAME_API std::pair<uint64_t, uint64_t> task_action_cs_req_base::get_gateway_info() const {
-  const message_type &cs_msg = get_request();
-  return std::pair<uint64_t, uint64_t>(cs_msg.head().session_node_id(), cs_msg.head().session_node_name(),
-                                       cs_msg.head().session_id());
+SERVER_FRAME_API uint64_t task_action_cs_req_base::get_gateway_node_id() const noexcept {
+  return get_gateway_info().node_id;
+}
+
+SERVER_FRAME_API const std::string &task_action_cs_req_base::get_gateway_node_name() const noexcept {
+  return get_gateway_info().node_name;
+}
+
+SERVER_FRAME_API uint64_t task_action_cs_req_base::get_gateway_session_id() const noexcept {
+  return get_gateway_info().session_id;
 }
 
 SERVER_FRAME_API session::ptr_t task_action_cs_req_base::get_session() const {
@@ -218,7 +232,7 @@ SERVER_FRAME_API session::ptr_t task_action_cs_req_base::get_session() const {
     return session_inst_;
   }
 
-  session::key_t key(get_gateway_info());
+  session::key_t key(get_gateway_info().node_id, get_gateway_info().node_name, get_gateway_info().session_id);
   session_inst_ = session_manager::me()->find(key);
   return session_inst_;
 }
@@ -284,6 +298,48 @@ SERVER_FRAME_API const std::list<task_action_cs_req_base::message_type *> &task_
   return response_messages_;
 }
 
+const task_action_cs_req_base::gateway_info_t &task_action_cs_req_base::get_gateway_info() const noexcept {
+  if (gateway_info_t_) {
+    return *gateway_info_t_;
+  }
+
+  gateway_info_t_ = atfw::util::memory::make_strong_rc<gateway_info_t>();
+
+  const message_type &cs_msg = get_request();
+  gateway_info_t_->node_id = cs_msg.head().session_node_id();
+  gateway_info_t_->node_name = cs_msg.head().session_node_name();
+  gateway_info_t_->session_id = cs_msg.head().session_id();
+
+  do {
+    if (!gateway_info_t_->node_name.empty() && gateway_info_t_->node_id != 0) {
+      break;
+    }
+
+    if (gateway_info_t_->node_id == 0 && gateway_info_t_->node_name.empty()) {
+      break;
+    }
+
+    atapp::app *app = atapp::app::get_last_instance();
+    if (nullptr == app) {
+      break;
+    }
+
+    if (gateway_info_t_->node_name.empty()) {
+      auto gateway_node = app->get_discovery_node_by_id(gateway_info_t_->node_id);
+      if (gateway_node) {
+        gateway_info_t_->node_name = gateway_node->get_discovery_info().name();
+      }
+    } else {
+      auto gateway_node = app->get_discovery_node_by_name(gateway_info_t_->node_name);
+      if (gateway_node) {
+        gateway_info_t_->node_id = gateway_node->get_discovery_info().id();
+      }
+    }
+  } while (false);
+
+  return *gateway_info_t_;
+}
+
 SERVER_FRAME_API void task_action_cs_req_base::write_actor_log_head() {
   std::shared_ptr<session> sess = get_session();
   if (sess) {
@@ -304,8 +360,8 @@ SERVER_FRAME_API void task_action_cs_req_base::send_response() {
 
   session::ptr_t sess = get_session();
   if (!sess) {
-    std::pair<uint64_t, uint64_t> sess_id = get_gateway_info();
-    FWLOGWARNING("try to send response message, but session [{:#x}, {}] not found", sess_id.first, sess_id.second);
+    FWLOGWARNING("try to send response message, but session ({}){}:{} not found", get_gateway_info().node_name,
+                 get_gateway_info().node_id, get_gateway_info().session_id);
     return;
   }
 
@@ -327,8 +383,7 @@ SERVER_FRAME_API void task_action_cs_req_base::send_response() {
         FWLOGERROR("task {} [{}] send message to player_cache {}:{} failed, res: {}", name(), get_task_id(),
                    get_zone_id(), get_user_id(), res);
       } else {
-        FWLOGERROR("task {} [{}] send message to session [{:#x}, {}] failed, res: {}", name(), get_task_id(),
-                   sess->get_key().node_id, sess->get_key().session_id, res);
+        FWLOGERROR("task {} [{}] send message to {} failed, res: {}", name(), get_task_id(), *sess, res);
       }
     }
   }

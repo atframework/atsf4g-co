@@ -310,7 +310,7 @@ namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID {
 template <class CharT>
 struct ATFW_UTIL_SYMBOL_VISIBLE formatter<player_cache, CharT> : formatter<std::string> {
   template <class FormatContext>
-  auto format(const player_cache &user, FormatContext &ctx) {
+  auto format(const player_cache &user, FormatContext &ctx) const {
     return LOG_WRAPPER_FWAPI_FORMAT_TO(ctx.out(), "player {}({}:{})", user.get_open_id(), user.get_zone_id(),
                                        user.get_user_id());
   }

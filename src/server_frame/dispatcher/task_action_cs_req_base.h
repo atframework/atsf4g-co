@@ -4,11 +4,17 @@
 
 #pragma once
 
+#include <memory/rc_ptr.h>
+
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/com.protocol.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <list>
 #include <memory>
@@ -33,6 +39,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_req_base : public task_action_req_
 
  protected:
   using base_type::get_request;
+
+ private:
+  struct gateway_info_t;
 
  public:
   using base_type::get_response_code;
@@ -65,7 +74,11 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_req_base : public task_action_req_
 
   virtual const std::string &get_response_type_url() const noexcept = 0;
 
-  SERVER_FRAME_API std::pair<uint64_t, uint64_t> get_gateway_info() const;
+  SERVER_FRAME_API uint64_t get_gateway_node_id() const noexcept;
+
+  SERVER_FRAME_API const std::string &get_gateway_node_name() const noexcept;
+
+  SERVER_FRAME_API uint64_t get_gateway_session_id() const noexcept;
 
   SERVER_FRAME_API std::shared_ptr<session> get_session() const;
 
@@ -81,6 +94,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_req_base : public task_action_req_
     return std::static_pointer_cast<TPLAYER>(get_player_cache());
   }
 
+ private:
+  const gateway_info_t &get_gateway_info() const noexcept;
+
  protected:
   SERVER_FRAME_API void write_actor_log_head();
   SERVER_FRAME_API void send_response() override;
@@ -92,6 +108,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_req_base : public task_action_req_
 
  private:
   mutable std::shared_ptr<session> session_inst_;
+  mutable atfw::util::memory::strong_rc_ptr<gateway_info_t> gateway_info_t_;
   std::list<message_type *> response_messages_;
   bool has_sync_dirty_;
   bool recursive_sync_dirty_;

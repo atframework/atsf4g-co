@@ -303,39 +303,39 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
    * @param tls_type type, different type has different address
    * @return thread-local storage buffer address
    */
-  static void *get_tls_buffer(tls_buffer_t::type tls_type);
+  static LIBATGW_PROTOCOL_API void *get_tls_buffer(tls_buffer_t::type tls_type);
 
   /**
    * @biref get thread-local storage buffer length for message encrypt/decrypt, zip/unzip and etc
    * @param tls_type type, different type has different length
    * @return thread-local storage buffer length
    */
-  static size_t get_tls_length(tls_buffer_t::type tls_type);
+  static LIBATGW_PROTOCOL_API size_t get_tls_length(tls_buffer_t::type tls_type);
 
  public:
   /**
    * @biref get callback group
    * @return callback group
    */
-  inline proto_callbacks_t *get_callbacks() const { return callbacks_; }
+  ATFW_UTIL_FORCEINLINE proto_callbacks_t *get_callbacks() const { return callbacks_; }
 
   /**
    * @biref set callback group, it's usually used for outer engine to do the real things to write or read data.
    * @param callbacks callback group
    */
-  inline void set_callbacks(proto_callbacks_t *callbacks) { callbacks_ = callbacks; }
+  ATFW_UTIL_FORCEINLINE void set_callbacks(proto_callbacks_t *callbacks) { callbacks_ = callbacks; }
 
   /**
    * @biref get private data
    * @return private data pointer
    */
-  inline void *get_private_data() const { return private_data_; }
+  ATFW_UTIL_FORCEINLINE void *get_private_data() const { return private_data_; }
 
   /**
    * @biref set private data
    * @param priv_data private data pointer
    */
-  inline void set_private_data(void *priv_data) { private_data_ = priv_data; }
+  ATFW_UTIL_FORCEINLINE void set_private_data(void *priv_data) { private_data_ = priv_data; }
 
   /**
    * @biref get write header offset
@@ -343,7 +343,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
    *       **on_write_start_fn_t**
    * @return write header offset
    */
-  inline size_t get_write_header_offset() const { return write_header_offset_; }
+  ATFW_UTIL_FORCEINLINE size_t get_write_header_offset() const { return write_header_offset_; }
 
   /**
    * @biref set write header offset
@@ -351,7 +351,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
    *       **on_write_start_fn_t**
    * @param sz write header offset
    */
-  inline void set_write_header_offset(size_t sz) {
+  ATFW_UTIL_FORCEINLINE void set_write_header_offset(size_t sz) {
     if (0 == sz) {
       write_header_offset_ = sz;
     } else {
