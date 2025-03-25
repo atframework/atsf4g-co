@@ -60,13 +60,14 @@ class context {
     bool inherit_allocator;
     bool inherit_parent_span;
 
-    inline inherit_options() noexcept
+    ATFW_UTIL_FORCEINLINE inherit_options() noexcept
         : mode(parent_mode::kParent), inherit_allocator(true), inherit_parent_span(true) {}
-    explicit inline inherit_options(parent_mode m) noexcept
+    ATFW_UTIL_FORCEINLINE explicit inherit_options(parent_mode m) noexcept
         : mode(m), inherit_allocator(true), inherit_parent_span(true) {}
-    explicit inline inherit_options(parent_mode m, bool inherit_alloc) noexcept
+    ATFW_UTIL_FORCEINLINE explicit inherit_options(parent_mode m, bool inherit_alloc) noexcept
         : mode(m), inherit_allocator(inherit_alloc), inherit_parent_span(true) {}
-    explicit inline inherit_options(parent_mode m, bool inherit_alloc, bool inherit_parent_trace_span) noexcept
+    ATFW_UTIL_FORCEINLINE explicit inherit_options(parent_mode m, bool inherit_alloc,
+                                                   bool inherit_parent_trace_span) noexcept
         : mode(m), inherit_allocator(inherit_alloc), inherit_parent_span(inherit_parent_trace_span) {}
   };
 
@@ -78,7 +79,7 @@ class context {
     uint32_t reference_object_type_id;
     uint32_t reference_object_zone_id;
     uint64_t reference_object_instance_id;
-    inline task_context_data() noexcept
+    ATFW_UTIL_FORCEINLINE task_context_data() noexcept
         : task_id(0), reference_object_type_id(0), reference_object_zone_id(0), reference_object_instance_id(0) {}
   };
 
@@ -285,7 +286,7 @@ class context {
 
 namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID {
 template <class CharT>
-struct formatter<rpc::context, CharT> : formatter<std::string, CharT> {
+struct ATFW_UTIL_SYMBOL_VISIBLE formatter<rpc::context, CharT> : formatter<std::string, CharT> {
   template <class FormatContext>
   auto format(const rpc::context &rpc_ctx, FormatContext &fmt_ctx) const {
     auto ret = LOG_WRAPPER_FWAPI_FORMAT_TO(fmt_ctx.out(), ": task_id={}", rpc_ctx.get_task_context().task_id);

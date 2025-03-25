@@ -34,10 +34,10 @@ namespace hash_table {
  * @param unpack_fn unpack callback
  * @return future of 0 or error code
  */
-EXPLICIT_NODISCARD_ATTR result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
-                                            shared_message<PROJECT_NAMESPACE_ID::table_all_message> &output,
-                                            int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg,
-                                                                 const redisReply *reply));
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type
+get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
+        shared_message<PROJECT_NAMESPACE_ID::table_all_message> &output,
+        int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply));
 
 /**
  * @brief Set data of hash table
@@ -50,12 +50,11 @@ EXPLICIT_NODISCARD_ATTR result_type get_all(rpc::context &ctx, uint32_t channel,
  * @warning 默认值会被忽略，比如空message或者空字符串，或者0不会更新
  * @return future of 0 or error code
  */
-EXPLICIT_NODISCARD_ATTR result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key,
-                                        shared_abstract_message<google::protobuf::Message> &&store,
-                                        std::string &version,
-                                        shared_message<PROJECT_NAMESPACE_ID::table_all_message> &output,
-                                        int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg,
-                                                             const redisReply *reply));
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type
+set(rpc::context &ctx, uint32_t channel, gsl::string_view key,
+    shared_abstract_message<google::protobuf::Message> &&store, std::string &version,
+    shared_message<PROJECT_NAMESPACE_ID::table_all_message> &output,
+    int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply));
 
 /**
  * @brief Remove all data of hash table key
@@ -63,7 +62,8 @@ EXPLICIT_NODISCARD_ATTR result_type set(rpc::context &ctx, uint32_t channel, gsl
  * @param key key
  * @return future of 0 or error code
  */
-EXPLICIT_NODISCARD_ATTR result_type remove_all(rpc::context &ctx, uint32_t channel, gsl::string_view key);
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel,
+                                                                gsl::string_view key);
 
 }  // namespace hash_table
 }  // namespace db

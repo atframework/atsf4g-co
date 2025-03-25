@@ -41,7 +41,7 @@ include("${PROJECT_SERVER_FRAME_BAS_DIR}/generate_proto_source.cmake")
 include("${PROJECT_SERVER_FRAME_BAS_DIR}/generate_config_codes.cmake")
 list(REMOVE_DUPLICATES SRC_LIST)
 
-source_group_by_dir(SRC_LIST)
+source_group(TREE ${PROJECT_SERVER_FRAME_SRC_DIR} FILES ${SRC_LIST})
 
 list(APPEND PROJECT_SERVER_FRAME_PUBLIC_LINK_NAMES ${ATFRAMEWORK_SERVICE_GATEWAY_SERVER_SDK}
      ${ATFRAMEWORK_SERVICE_COMPONENT_LINK_NAME})
@@ -54,8 +54,7 @@ elseif(CMAKE_USE_PTHREADS_INIT OR ATFRAMEWORK_CMAKE_TOOLSET_TEST_FLAG_PTHREAD)
   list(APPEND PROJECT_SERVER_FRAME_PUBLIC_COMPILE_OPTIONS "-pthread")
 endif()
 
-if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows|MinGW|WindowsStore" AND (BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY
-                                                                  ))
+if(BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY)
   add_library(${PROJECT_SERVER_FRAME_LIB_LINK} SHARED ${SRC_LIST})
   set(PROJECT_SERVER_FRAME_LIB_INSTALL_RPATH
       "${PROJECT_RPATH_ORIGIN}"
@@ -72,17 +71,16 @@ if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows|MinGW|WindowsStore" AND (BUILD_SHARED_
 
   project_tool_split_target_debug_sybmol(${PROJECT_SERVER_FRAME_LIB_LINK})
   project_build_tools_set_shared_library_declaration(SERVER_FRAME_API "${PROJECT_SERVER_FRAME_LIB_LINK}")
-  if(project_component_declare_sdk_SHARED_LIBRARY_DECL)
-    target_compile_definitions(${TARGET_FULL_NAME} PUBLIC "SERVER_FRAME_API_DLL=1")
-  endif()
+  target_compile_definitions(${PROJECT_SERVER_FRAME_LIB_LINK} PUBLIC "SERVER_FRAME_API_DLL=1")
 else()
   add_library(${PROJECT_SERVER_FRAME_LIB_LINK} STATIC ${SRC_LIST})
   set_target_properties(${PROJECT_SERVER_FRAME_LIB_LINK} PROPERTIES VERSION "${PROJECT_VERSION}")
   project_build_tools_set_static_library_declaration(SERVER_FRAME_API "${PROJECT_SERVER_FRAME_LIB_LINK}")
 endif()
-if(project_component_declare_sdk_NATIVE_CODE_DECL)
-  target_compile_definitions(${TARGET_FULL_NAME} PRIVATE "SERVER_FRAME_API_NATIVE=1")
-endif()
+target_compile_definitions(${PROJECT_SERVER_FRAME_LIB_LINK} PRIVATE "SERVER_FRAME_API_NATIVE=1")
+
+set_target_properties(${PROJECT_SERVER_FRAME_LIB_LINK} PROPERTIES C_VISIBILITY_PRESET "hidden" CXX_VISIBILITY_PRESET
+                                                                                               "hidden")
 
 add_dependencies(${PROJECT_SERVER_FRAME_LIB_LINK} protocol config-loader)
 target_link_libraries(${PROJECT_SERVER_FRAME_LIB_LINK} PUBLIC ${PROJECT_SERVER_FRAME_LIB_LINK}-config

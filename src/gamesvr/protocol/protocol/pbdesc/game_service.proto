@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "google/protobuf/empty.proto";
+import "protocol/pbdesc/atframework.proto";
+
+package hello;
+
+/////////////////////////////////////////////////////
+////  此处开始是登入相关协议
+/////////////////////////////////////////////////////
+
+message SSPlayerKickOffReq {
+  uint32 reason = 1;     // 原因
+  string gm_reason = 2;  // 原因
+}
+
+message SSPlayerKickOffRsp {}
+
+message SSPlayerAsyncJobsSync {}
+/////////////////////////////////////////////////////
+////  登入相关协议到此结束
+/////////////////////////////////////////////////////
+
+service GamesvrService {
+  option (atframework.service_options) = {
+    module_name: "game"
+  };
+
+  rpc player_kickoff(SSPlayerKickOffReq) returns (SSPlayerKickOffRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "player"
+      api_name: "通知提用户下线"
+      user_rpc: true
+    };
+  };
+
+  rpc player_async_jobs_sync(stream SSPlayerAsyncJobsSync) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      module_name: "player"
+      api_name: "通知更新和执行异步任务"
+      descriptions: "notify another server instance to sync async jobs"
+      user_rpc: true
+    };
+  };
+}

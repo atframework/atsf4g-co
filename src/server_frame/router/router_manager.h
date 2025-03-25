@@ -70,7 +70,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    *
    * @param type_id 类型ID
    */
-  SERVER_FRAME_API explicit router_manager(uint32_t type_id) : router_manager_base(type_id) {}
+  explicit router_manager(uint32_t type_id) : router_manager_base(type_id) {}
 
   /**
    * @brief 获取基础缓存对象，如果不存在返回空
@@ -78,7 +78,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param key 缓存对象的键
    * @return std::shared_ptr<router_object_base> 缓存对象
    */
-  SERVER_FRAME_API std::shared_ptr<router_object_base> get_base_cache(const key_t &key) const override {
+  std::shared_ptr<router_object_base> get_base_cache(const key_t &key) const override {
     typename std::unordered_map<key_t, ptr_t>::const_iterator iter = caches_.find(key);
     if (iter == caches_.end()) {
       return nullptr;
@@ -90,7 +90,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
   /**
    * @brief 停止路由管理器
    */
-  SERVER_FRAME_API void on_stop() override {
+  void on_stop() override {
     router_manager_base::on_stop();
 
     // unbind LRU timer
@@ -107,7 +107,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param key 缓存对象的键
    * @return ptr_t 缓存对象指针
    */
-  SERVER_FRAME_API ptr_t get_cache(const key_t &key) const {
+  ptr_t get_cache(const key_t &key) const {
     typename std::unordered_map<key_t, ptr_t>::const_iterator iter = caches_.find(key);
     if (iter == caches_.end()) {
       return nullptr;
@@ -122,7 +122,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param key 对象的键
    * @return ptr_t 对象指针
    */
-  SERVER_FRAME_API ptr_t get_object(const key_t &key) const {
+  ptr_t get_object(const key_t &key) const {
     typename std::unordered_map<key_t, ptr_t>::const_iterator iter = caches_.find(key);
     if (iter == caches_.end() || !iter->second->is_writable()) {
       return nullptr;
@@ -143,9 +143,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param io_guard IO任务保护
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type mutable_cache(
-      rpc::context &ctx, std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data,
-      router_object_base::io_task_guard &io_guard) override {
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_cache(rpc::context &ctx,
+                                                              std::shared_ptr<router_object_base> &out,
+                                                              const key_t &key, void *priv_data,
+                                                              router_object_base::io_task_guard &io_guard) override {
     ptr_t outc;
     auto ret = RPC_AWAIT_CODE_RESULT(mutable_cache(ctx, outc, key, reinterpret_cast<priv_data_t>(priv_data), io_guard));
     out = std::static_pointer_cast<router_object_base>(outc);
@@ -161,9 +162,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param priv_data 私有数据
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type mutable_cache(rpc::context &ctx, ptr_t &out,
-                                                                               const key_t &key,
-                                                                               priv_data_t priv_data) {
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_cache(rpc::context &ctx, ptr_t &out, const key_t &key,
+                                                              priv_data_t priv_data) {
     router_object_base::io_task_guard io_guard;
     auto ret = RPC_AWAIT_CODE_RESULT(mutable_cache(ctx, out, key, reinterpret_cast<priv_data_t>(priv_data), io_guard));
     RPC_RETURN_CODE(ret);
@@ -179,9 +179,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param io_guard IO任务保护
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type mutable_cache(
-      rpc::context &ctx, ptr_t &out, const key_t &key, priv_data_t priv_data,
-      router_object_base::io_task_guard &io_guard) {
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_cache(rpc::context &ctx, ptr_t &out, const key_t &key,
+                                                              priv_data_t priv_data,
+                                                              router_object_base::io_task_guard &io_guard) {
     size_t left_ttl = logic_config::me()->get_cfg_router().retry_max_ttl();
     for (; left_ttl > 0; --left_ttl) {
       int res;
@@ -262,9 +262,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param priv_data 私有数据
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type renew_cache(rpc::context &ctx, store_ptr_t &in,
-                                                                             ptr_t &out, const key_t &key,
-                                                                             priv_data_t priv_data) {
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type renew_cache(rpc::context &ctx, store_ptr_t &in, ptr_t &out,
+                                                            const key_t &key, priv_data_t priv_data) {
     if (!in.expired()) {
       out = in.lock();
     } else {
@@ -295,9 +294,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param io_guard IO任务保护
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type mutable_object(
-      rpc::context &ctx, std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data,
-      router_object_base::io_task_guard &io_guard) override {
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_object(rpc::context &ctx,
+                                                               std::shared_ptr<router_object_base> &out,
+                                                               const key_t &key, void *priv_data,
+                                                               router_object_base::io_task_guard &io_guard) override {
     ptr_t outc;
     auto ret =
         RPC_AWAIT_CODE_RESULT(mutable_object(ctx, outc, key, reinterpret_cast<priv_data_t>(priv_data), io_guard));
@@ -314,9 +314,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param priv_data 私有数据
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type mutable_object(rpc::context &ctx, ptr_t &out,
-                                                                                const key_t &key,
-                                                                                priv_data_t priv_data) {
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_object(rpc::context &ctx, ptr_t &out, const key_t &key,
+                                                               priv_data_t priv_data) {
     router_object_base::io_task_guard io_guard;
     auto ret = RPC_AWAIT_CODE_RESULT(mutable_object(ctx, out, key, priv_data, io_guard));
     RPC_RETURN_CODE(ret);
@@ -332,9 +331,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param io_guard IO任务保护
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type mutable_object(
-      rpc::context &ctx, ptr_t &out, const key_t &key, priv_data_t priv_data,
-      router_object_base::io_task_guard &io_guard) {
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_object(rpc::context &ctx, ptr_t &out, const key_t &key,
+                                                               priv_data_t priv_data,
+                                                               router_object_base::io_task_guard &io_guard) {
     size_t left_ttl = logic_config::me()->get_cfg_router().retry_max_ttl();
     for (; left_ttl > 0; --left_ttl) {
       rpc::result_code_type::value_type res;

@@ -31,13 +31,13 @@ namespace player {
  * @param rsp 返回的登入信息
  * @return 0或错误码
  */
-EXPLICIT_NODISCARD_ATTR result_type get_all(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                            shared_message<PROJECT_NAMESPACE_ID::table_user> &rsp,
-                                            std::string &version);
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
+                                                             shared_message<PROJECT_NAMESPACE_ID::table_user> &rsp,
+                                                             std::string &version);
 
-EXPLICIT_NODISCARD_ATTR result_type get_basic(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                              shared_message<PROJECT_NAMESPACE_ID::table_user> &rsp,
-                                              std::string *version = nullptr);
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_basic(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
+                                                               shared_message<PROJECT_NAMESPACE_ID::table_user> &rsp,
+                                                               std::string *version = nullptr);
 
 /**
  * @brief 设置用户表的rpc操作
@@ -46,8 +46,9 @@ EXPLICIT_NODISCARD_ATTR result_type get_basic(rpc::context &ctx, uint64_t user_i
  * @warning 默认值会被忽略，比如空message或者空字符串，或者0不会更新
  * @return 0或错误码
  */
-EXPLICIT_NODISCARD_ATTR result_type set(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                        shared_message<PROJECT_NAMESPACE_ID::table_user> &&store, std::string &version);
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type set(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
+                                                         shared_message<PROJECT_NAMESPACE_ID::table_user> &&store,
+                                                         std::string &version);
 
 }  // namespace player
 }  // namespace db

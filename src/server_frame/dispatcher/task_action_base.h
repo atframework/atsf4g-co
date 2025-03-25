@@ -210,9 +210,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_base
   SERVER_FRAME_API virtual const char *name() const;
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-  result_type operator()(task_action_meta_data_type &&task_meta, dispatcher_start_data_type &&start_data);
+  SERVER_FRAME_API result_type operator()(task_action_meta_data_type &&task_meta,
+                                          dispatcher_start_data_type &&start_data);
 #else
-  int operator()(void *priv_data) override;
+  SERVER_FRAME_API int operator()(void *priv_data) override;
 #endif
 
   SERVER_FRAME_API virtual result_type hook_run();

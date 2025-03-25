@@ -25,8 +25,8 @@
 #include "logic/player_manager.h"
 #include "logic/session_manager.h"
 
-#if defined(DS_BATTLE_SDK_DLL) && DS_BATTLE_SDK_DLL
-#  if defined(DS_BATTLE_SDK_NATIVE) && DS_BATTLE_SDK_NATIVE
+#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
+#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
 UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(session_manager);
 #  else
 UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(session_manager);

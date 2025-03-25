@@ -47,6 +47,16 @@ class table_all_message;
 }
 
 class db_msg_dispatcher : public dispatcher_implement {
+#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
+#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
+  UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(db_msg_dispatcher)
+#  else
+  UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(db_msg_dispatcher)
+#  endif
+#else
+  UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(db_msg_dispatcher)
+#endif
+
  public:
   using msg_op_type_t = dispatcher_implement::msg_op_type_t;
   using msg_raw_t = dispatcher_implement::msg_raw_t;
@@ -73,16 +83,6 @@ class db_msg_dispatcher : public dispatcher_implement {
     kCompareAndSetHashTable = 1,
     kMax  // Unused
   };
-
-#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
-#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
-  UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(db_msg_dispatcher)
-#  else
-  UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(db_msg_dispatcher)
-#  endif
-#else
-  UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(db_msg_dispatcher)
-#endif
 
  private:
   SERVER_FRAME_API db_msg_dispatcher();

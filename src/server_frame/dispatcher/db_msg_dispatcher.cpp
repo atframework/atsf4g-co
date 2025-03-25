@@ -60,8 +60,8 @@ static_assert(std::is_trivial<db_async_data_t>::value,
               "buffer and will not call dtor fn");
 #endif
 
-#if defined(DS_BATTLE_SDK_DLL) && DS_BATTLE_SDK_DLL
-#  if defined(DS_BATTLE_SDK_NATIVE) && DS_BATTLE_SDK_NATIVE
+#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
+#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
 UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(db_msg_dispatcher);
 #  else
 UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(db_msg_dispatcher);
@@ -314,7 +314,7 @@ void db_msg_dispatcher::log_debug_fn(const char *content) { WCLOGDEBUG(log_categ
 
 void db_msg_dispatcher::log_info_fn(const char *content) { WCLOGINFO(log_categorize_t::DB, "%s", content); }
 
-SERVER_FRAME_API int db_msg_dispatcher::script_load(redisAsyncContext *c, script_type type) {
+int db_msg_dispatcher::script_load(redisAsyncContext *c, script_type type) {
   // load lua script
   int status;
   std::string script;

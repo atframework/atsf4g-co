@@ -82,8 +82,8 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
       PROPERTIES C_VISIBILITY_PRESET "hidden"
                  CXX_VISIBILITY_PRESET "hidden"
                  VERSION "${PROJECT_VERSION}"
+                 SOVERSION "${PROJECT_VERSION}"
                  BUILD_RPATH_USE_ORIGIN YES
-                 PORJECT_PROTOCOL_DIR "${PROTOCOL_DIR}"
                  INSTALL_RPATH "${TARGET_INSTALL_RPATH}")
   endif()
 
@@ -358,6 +358,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
     PROPERTIES C_VISIBILITY_PRESET "hidden"
                CXX_VISIBILITY_PRESET "hidden"
                VERSION "${PROJECT_VERSION}"
+               SOVERSION "${PROJECT_VERSION}"
                BUILD_RPATH_USE_ORIGIN YES
                PORJECT_PROTOCOL_DIR "${PROTOCOL_DIR}"
                INSTALL_RPATH "${TARGET_INSTALL_RPATH}")

@@ -115,7 +115,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE dispatcher_await_options {
  private:
   ATFW_UTIL_FORCEINLINE dispatcher_await_options() noexcept : sequence(0), timeout(get_default_timeout()) {}
 
-  static std::chrono::system_clock::duration get_default_timeout() noexcept;
+  SERVER_FRAME_API static std::chrono::system_clock::duration get_default_timeout() noexcept;
 
   template <class T>
   friend T dispatcher_make_default() noexcept;

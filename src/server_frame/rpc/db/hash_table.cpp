@@ -30,9 +30,10 @@ namespace rpc {
 namespace db {
 namespace hash_table {
 
-result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
-                    shared_message<PROJECT_NAMESPACE_ID::table_all_message> &output,
-                    int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply)) {
+SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
+                                     shared_message<PROJECT_NAMESPACE_ID::table_all_message> &output,
+                                     int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg,
+                                                          const redisReply *reply)) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
       {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.db"},
@@ -87,10 +88,11 @@ result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 
-result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key,
-                shared_abstract_message<google::protobuf::Message> &&store, std::string &version,
-                shared_message<PROJECT_NAMESPACE_ID::table_all_message> &output,
-                int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply)) {
+SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key,
+                                 shared_abstract_message<google::protobuf::Message> &&store, std::string &version,
+                                 shared_message<PROJECT_NAMESPACE_ID::table_all_message> &output,
+                                 int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg,
+                                                      const redisReply *reply)) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
       {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.db"},
@@ -176,7 +178,7 @@ result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key,
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 
-result_type remove_all(rpc::context &ctx, uint32_t channel, gsl::string_view key) {
+SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel, gsl::string_view key) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
       {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.db"},

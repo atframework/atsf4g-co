@@ -22,7 +22,7 @@ struct router_player_private_type {
   std::string *login_ver;
 };
 
-class router_player_cache : public router_object<player_cache, router_player_cache> {
+class ATFW_UTIL_SYMBOL_VISIBLE router_player_cache : public router_object<player_cache, router_player_cache> {
  public:
   using base_type = router_object<player_cache, router_player_cache>;
   using key_t = base_type::key_t;

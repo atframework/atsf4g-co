@@ -32,8 +32,9 @@ namespace login {
  * @param rsp 返回的登入信息
  * @return 0或错误码
  */
-EXPLICIT_NODISCARD_ATTR result_type get(rpc::context &ctx, const char *openid, uint32_t zone_id,
-                                        shared_message<PROJECT_NAMESPACE_ID::table_login> &rsp, std::string &version);
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get(rpc::context &ctx, const char *openid, uint32_t zone_id,
+                                                         shared_message<PROJECT_NAMESPACE_ID::table_login> &rsp,
+                                                         std::string &version);
 
 /**
  * @brief 设置登入表的rpc操作
@@ -42,9 +43,9 @@ EXPLICIT_NODISCARD_ATTR result_type get(rpc::context &ctx, const char *openid, u
  * @note 未设置的值会采用默认值，部分字段更新请使用update接口
  * @return 0或错误码
  */
-EXPLICIT_NODISCARD_ATTR result_type set(rpc::context &ctx, const char *openid, uint32_t zone_id,
-                                        shared_message<PROJECT_NAMESPACE_ID::table_login> &&store,
-                                        std::string &version);
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type set(rpc::context &ctx, const char *openid, uint32_t zone_id,
+                                                         shared_message<PROJECT_NAMESPACE_ID::table_login> &&store,
+                                                         std::string &version);
 }  // namespace login
 }  // namespace db
 }  // namespace rpc

@@ -19,11 +19,11 @@
 namespace rpc {
 namespace db {
 namespace detail {
-int32_t do_nothing(PROJECT_NAMESPACE_ID::table_all_message &, const redisReply *) {
+SERVER_FRAME_API int32_t do_nothing(PROJECT_NAMESPACE_ID::table_all_message &, const redisReply *) {
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-int32_t unpack_integer(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *data) {
+SERVER_FRAME_API int32_t unpack_integer(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *data) {
   if (nullptr == data) {
     WLOGDEBUG("data mot found.");
     // 数据找不到，直接成功结束，外层会判为无数据
@@ -45,7 +45,7 @@ int32_t unpack_integer(PROJECT_NAMESPACE_ID::table_all_message &msg, const redis
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-int32_t unpack_str(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *data) {
+SERVER_FRAME_API int32_t unpack_str(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *data) {
   if (nullptr == data) {
     WLOGDEBUG("data mot found.");
     // 数据找不到，直接成功结束，外层会判为无数据
@@ -61,7 +61,7 @@ int32_t unpack_str(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisRepl
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-int32_t unpack_arr_str(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *data) {
+SERVER_FRAME_API int32_t unpack_arr_str(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *data) {
   if (nullptr == data) {
     WLOGDEBUG("data mot found.");
     // 数据找不到，直接成功结束，外层会判为无数据

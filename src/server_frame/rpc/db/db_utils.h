@@ -38,10 +38,10 @@ class result_type {
   using value_type = int32_t;
 
  public:
-  result_type();
+  SERVER_FRAME_API result_type();
 
   template <class TINPUT>
-  result_type(rpc_result_guard<TINPUT>&& guard)
+  ATFW_UTIL_SYMBOL_VISIBLE result_type(rpc_result_guard<TINPUT>&& guard)
       : result_data_(guard.get()),
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
         ,
@@ -51,20 +51,20 @@ class result_type {
   }
 
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
-  result_type(result_type&&) = default;
-  result_type& operator=(result_type&&) = default;
+  SERVER_FRAME_API result_type(result_type&&);
+  SERVER_FRAME_API result_type& operator=(result_type&&);
 
-  ~result_type();
-  inline void _internal_set_awaited() noexcept { awaited_ = true; }
+  ATFW_UTIL_FORCEINLINE void _internal_set_awaited() noexcept { awaited_ = true; }
 #  endif
+  SERVER_FRAME_API ~result_type();
 
-  explicit result_type(value_type code);
-  explicit operator value_type() const noexcept;
+  SERVER_FRAME_API explicit result_type(value_type code);
+  SERVER_FRAME_API explicit operator value_type() const noexcept;
 
-  bool is_success() const noexcept;
-  bool is_error() const noexcept;
+  SERVER_FRAME_API bool is_success() const noexcept;
+  SERVER_FRAME_API bool is_error() const noexcept;
 
-  inline bool is_ready() const noexcept { return result_data_.is_ready(); }
+  ATFW_UTIL_FORCEINLINE bool is_ready() const noexcept { return result_data_.is_ready(); }
 
  private:
   copp::future::poller<value_type> result_data_;
@@ -84,7 +84,7 @@ class result_type {
  * @return allocated buffer address, nullptr if failed
  */
 template <typename Ty>
-void* align_alloc(void*& buf_addr, size_t& buf_len) {
+ATFW_UTIL_SYMBOL_VISIBLE void* align_alloc(void*& buf_addr, size_t& buf_len) {
   if (nullptr == buf_addr) {
     return nullptr;
   }

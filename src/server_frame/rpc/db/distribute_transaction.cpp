@@ -44,8 +44,9 @@ static int32_t unpack_table_distribute_transaction(PROJECT_NAMESPACE_ID::table_a
 }
 }  // namespace detail
 
-result_type get(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid,
-                rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> &output, std::string &version) {
+SERVER_FRAME_API result_type get(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid,
+                                 rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> &output,
+                                 std::string &version) {
   table_key_type user_key;
   size_t user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, transaction_uuid, zone_id);
   if (user_key_len <= 0) {
@@ -68,8 +69,9 @@ result_type get(rpc::context &ctx, uint32_t zone_id, gsl::string_view transactio
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-result_type set(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid,
-                rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> &&store, std::string &version) {
+SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid,
+                                 rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> &&store,
+                                 std::string &version) {
   table_key_type user_key;
   size_t user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, transaction_uuid, zone_id);
   if (user_key_len <= 0) {
@@ -90,7 +92,7 @@ result_type set(rpc::context &ctx, uint32_t zone_id, gsl::string_view transactio
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-result_type remove(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid) {
+SERVER_FRAME_API result_type remove(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid) {
   table_key_type user_key;
   size_t user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, transaction_uuid, zone_id);
   if (user_key_len <= 0) {

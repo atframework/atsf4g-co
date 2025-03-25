@@ -67,24 +67,24 @@
 
 # generated
 /src/generate-nomsg-task.sh
-/src/loginsvr/app/handle_cs_rpc_loginsvrclientservice.cpp
-/src/loginsvr/app/handle_cs_rpc_loginsvrclientservice.h
-/src/loginsvr/rpc/loginsvrclientservice/loginsvrclientservice.h
-/src/loginsvr/rpc/loginsvrclientservice/loginsvrclientservice.cpp
-/src/gamesvr/app/handle_ss_rpc_gamesvrservice.cpp
-/src/gamesvr/app/handle_ss_rpc_gamesvrservice.h
-/src/gamesvr/app/handle_cs_rpc_gamesvrclientservice.cpp
-/src/gamesvr/app/handle_cs_rpc_gamesvrclientservice.h
-/src/gamesvr/rpc/gamesvrclientservice/gamesvrclientservice.h
-/src/gamesvr/rpc/gamesvrclientservice/gamesvrclientservice.cpp
+/src/loginsvr/service/app/handle_cs_rpc_loginsvrclientservice.cpp
+/src/loginsvr/service/app/handle_cs_rpc_loginsvrclientservice.h
+/src/loginsvr/service/rpc/loginsvrclientservice/loginsvrclientservice.h
+/src/loginsvr/service/rpc/loginsvrclientservice/loginsvrclientservice.cpp
+/src/gamesvr/service/app/handle_ss_rpc_gamesvrservice.cpp
+/src/gamesvr/service/app/handle_ss_rpc_gamesvrservice.h
+/src/gamesvr/service/app/handle_cs_rpc_gamesvrclientservice.cpp
+/src/gamesvr/service/app/handle_cs_rpc_gamesvrclientservice.h
+/src/gamesvr/service/rpc/gamesvrclientservice/gamesvrclientservice.h
+/src/gamesvr/service/rpc/gamesvrclientservice/gamesvrclientservice.cpp
 /src/server_frame/config/include/config/server_frame_build_feature.h
 /src/server_frame/config/src/server_frame_build_feature.cpp
 /src/server_frame/config/include/config/excel/*
 /src/server_frame/config/src/excel/*
 /src/server_frame/router/handle_ss_rpc_routerservice.cpp
 /src/server_frame/router/handle_ss_rpc_routerservice.h
-/src/server_frame/rpc/game/gamesvrservice.cpp
-/src/server_frame/rpc/game/gamesvrservice.h
+/src/gamesvr/sdk/rpc/game/gamesvrservice.cpp
+/src/gamesvr/sdk/rpc/game/gamesvrservice.h
 /src/server_frame/rpc/router/routerservice.cpp
 /src/server_frame/rpc/router/routerservice.h
 /src/server_frame/logic/handle_ss_rpc_logiccommonservice.h

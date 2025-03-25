@@ -149,8 +149,8 @@ static std::shared_ptr<ss_rpc_mertrics_group> rpc_metrics_get_rpc_metric_report(
 
 }  // namespace
 
-#if defined(DS_BATTLE_SDK_DLL) && DS_BATTLE_SDK_DLL
-#  if defined(DS_BATTLE_SDK_NATIVE) && DS_BATTLE_SDK_NATIVE
+#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
+#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
 UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(ss_msg_dispatcher);
 #  else
 UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(ss_msg_dispatcher);
@@ -922,8 +922,7 @@ void ss_msg_dispatcher::setup_metrics() {
       });
 }
 
-SERVER_FRAME_API void ss_msg_dispatcher::dns_lookup_callback(uv_getaddrinfo_t *req, int /*status*/,
-                                                             struct addrinfo *result) noexcept {
+void ss_msg_dispatcher::dns_lookup_callback(uv_getaddrinfo_t *req, int /*status*/, struct addrinfo *result) noexcept {
   std::shared_ptr<dns_lookup_async_data> *lifetime_ptr =
       reinterpret_cast<std::shared_ptr<dns_lookup_async_data> *>(req->data);
 

@@ -36,9 +36,9 @@ namespace distribute_transaction {
  * @param version 版本号
  * @return 0或错误码
  */
-EXPLICIT_NODISCARD_ATTR result_type get(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid,
-                                        rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> &output,
-                                        std::string &version);
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type
+get(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid,
+    rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> &output, std::string &version);
 
 /**
  * @brief 分布式事务表的rpc操作 - 保存
@@ -49,9 +49,9 @@ EXPLICIT_NODISCARD_ATTR result_type get(rpc::context &ctx, uint32_t zone_id, gsl
  *
  * @return 0或错误码
  */
-EXPLICIT_NODISCARD_ATTR result_type set(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid,
-                                        rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> &&store,
-                                        std::string &version);
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type
+set(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid,
+    rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> &&store, std::string &version);
 
 /**
  * @brief 分布式事务表的rpc操作 - 删除
@@ -62,7 +62,8 @@ EXPLICIT_NODISCARD_ATTR result_type set(rpc::context &ctx, uint32_t zone_id, gsl
  *
  * @return 0或错误码
  */
-EXPLICIT_NODISCARD_ATTR result_type remove(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid);
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove(rpc::context &ctx, uint32_t zone_id,
+                                                            gsl::string_view transaction_uuid);
 }  // namespace distribute_transaction
 }  // namespace db
 }  // namespace rpc

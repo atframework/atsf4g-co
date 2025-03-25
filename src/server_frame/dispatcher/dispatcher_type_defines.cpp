@@ -11,7 +11,7 @@
 
 #include <ctime>
 
-std::chrono::system_clock::duration dispatcher_await_options::get_default_timeout() noexcept {
+SERVER_FRAME_API std::chrono::system_clock::duration dispatcher_await_options::get_default_timeout() noexcept {
   auto& timeout = logic_config::me()->get_logic().task().csmsg().timeout();
 
   if ATFW_UTIL_LIKELY_CONDITION (timeout.seconds() > 0 || timeout.nanos() > 0) {

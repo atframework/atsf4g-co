@@ -17,7 +17,8 @@
 namespace rpc {
 namespace dns {
 
-rpc::result_code_type lookup(rpc::context &ctx, gsl::string_view domain, std::vector<address_record> &output) {
+SERVER_FRAME_API rpc::result_code_type lookup(rpc::context &ctx, gsl::string_view domain,
+                                              std::vector<address_record> &output) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("rpc {} must be called in a task", "rpc::dns::lookup");
 
   rpc::context child_ctx(ctx);

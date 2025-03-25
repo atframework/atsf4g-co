@@ -72,17 +72,16 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   else()
     add_library(${TARGET_FULL_NAME} INTERFACE)
   endif()
-  #[[ 迁移完之后可以打开hidden
   if(project_component_declare_sdk_SOURCES)
     set_target_properties(
       ${TARGET_FULL_NAME}
       PROPERTIES C_VISIBILITY_PRESET "hidden"
                  CXX_VISIBILITY_PRESET "hidden"
                  VERSION "${PROJECT_VERSION}"
+                 SOVERSION "${PROJECT_VERSION}"
                  BUILD_RPATH_USE_ORIGIN YES
-                 PORJECT_PROTOCOL_DIR "${PROTOCOL_DIR}")
+                 INSTALL_RPATH "${TARGET_INSTALL_RPATH}")
   endif()
-  ]]
 
   if(project_service_declare_sdk_OUTPUT_NAME)
     set_target_properties(${TARGET_FULL_NAME} PROPERTIES OUTPUT_NAME "${project_service_declare_sdk_OUTPUT_NAME}")
@@ -378,6 +377,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
     PROPERTIES C_VISIBILITY_PRESET "hidden"
                CXX_VISIBILITY_PRESET "hidden"
                VERSION "${PROJECT_VERSION}"
+               SOVERSION "${PROJECT_VERSION}"
                BUILD_RPATH_USE_ORIGIN YES
                PORJECT_PROTOCOL_DIR "${PROTOCOL_DIR}"
                INSTALL_RPATH "${TARGET_INSTALL_RPATH}")

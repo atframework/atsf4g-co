@@ -26,9 +26,9 @@
 
 #include <typeinfo>
 
-int dispatcher_implement::init() { return 0; }
+SERVER_FRAME_API int dispatcher_implement::init() { return 0; }
 
-const char *dispatcher_implement::name() const {
+SERVER_FRAME_API const char *dispatcher_implement::name() const {
   if (!human_readable_name_.empty()) {
     return human_readable_name_.c_str();
   }
@@ -51,16 +51,19 @@ const char *dispatcher_implement::name() const {
   return human_readable_name_.c_str();
 }
 
-uintptr_t dispatcher_implement::get_instance_ident() const { return reinterpret_cast<uintptr_t>(this); }
+SERVER_FRAME_API uintptr_t dispatcher_implement::get_instance_ident() const {
+  return reinterpret_cast<uintptr_t>(this);
+}
 
-dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_message(rpc::context &ctx, msg_raw_t &msg,
-                                                                                   void *priv_data, uint64_t sequence) {
+SERVER_FRAME_API dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_message(rpc::context &ctx,
+                                                                                                    msg_raw_t &msg,
+                                                                                                    void *priv_data,
+                                                                                                    uint64_t sequence) {
   return on_receive_message(ctx, msg, get_instance_ident(), priv_data, sequence);
 }
 
-dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_message(rpc::context &ctx, msg_raw_t &msg,
-                                                                                   uintptr_t expect_msg_type,
-                                                                                   void *priv_data, uint64_t sequence) {
+SERVER_FRAME_API dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_message(
+    rpc::context &ctx, msg_raw_t &msg, uintptr_t expect_msg_type, void *priv_data, uint64_t sequence) {
   dispatcher_result_t ret;
   if (nullptr == msg.msg_addr) {
     FWLOGERROR("msg.msg_addr == nullptr.");
@@ -80,7 +83,7 @@ dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_messa
   if (!msg_filter_list_.empty()) {
     msg_filter_data_t filter_data(msg);
 
-    for (std::list<msg_filter_handle_t>::iterator iter = msg_filter_list_.begin(); iter != msg_filter_list_.end();
+    for (std::list<message_filter_handle_t>::iterator iter = msg_filter_list_.begin(); iter != msg_filter_list_.end();
          ++iter) {
       if (false == (*iter)(filter_data)) {
         ret.result_code = 0;
@@ -149,8 +152,8 @@ dispatcher_implement::dispatcher_result_t dispatcher_implement::on_receive_messa
   return ret;
 }
 
-int32_t dispatcher_implement::on_send_message_failed(rpc::context &ctx, msg_raw_t &msg, int32_t error_code,
-                                                     uint64_t sequence) {
+SERVER_FRAME_API int32_t dispatcher_implement::on_send_message_failed(rpc::context &ctx, msg_raw_t &msg,
+                                                                      int32_t error_code, uint64_t sequence) {
   // msg->set_rpc_result(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_SEND_FAILED);
   uint64_t task_id = pick_msg_task_id(msg);
   if (task_id > 0) {  // 如果是恢复任务则尝试切回协程任务
@@ -169,9 +172,10 @@ int32_t dispatcher_implement::on_send_message_failed(rpc::context &ctx, msg_raw_
   return 0;
 }
 
-void dispatcher_implement::on_create_task_failed(dispatcher_start_data_type &, int32_t) {}
+SERVER_FRAME_API void dispatcher_implement::on_create_task_failed(dispatcher_start_data_type &, int32_t) {}
 
-int dispatcher_implement::create_task(dispatcher_start_data_type &start_data, task_type_trait::task_type &task_inst) {
+SERVER_FRAME_API int dispatcher_implement::create_task(dispatcher_start_data_type &start_data,
+                                                       task_type_trait::task_type &task_inst) {
   task_type_trait::reset_task(task_inst);
 
   msg_type_t msg_type_id = pick_msg_type_id(start_data.message);
@@ -203,15 +207,23 @@ int dispatcher_implement::create_task(dispatcher_start_data_type &start_data, ta
   return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
 }
 
-const atframework::DispatcherOptions *dispatcher_implement::get_options_by_message_type(msg_type_t) { return nullptr; }
+SERVER_FRAME_API const atframework::DispatcherOptions *dispatcher_implement::get_options_by_message_type(msg_type_t) {
+  return nullptr;
+}
 
-void dispatcher_implement::push_filter_to_front(msg_filter_handle_t fn) { msg_filter_list_.push_front(fn); }
+SERVER_FRAME_API void dispatcher_implement::push_filter_to_front(message_filter_handle_t fn) {
+  msg_filter_list_.push_front(fn);
+}
 
-void dispatcher_implement::push_filter_to_back(msg_filter_handle_t fn) { msg_filter_list_.push_back(fn); }
+SERVER_FRAME_API void dispatcher_implement::push_filter_to_back(message_filter_handle_t fn) {
+  msg_filter_list_.push_back(fn);
+}
 
-bool dispatcher_implement::is_closing() const noexcept { return NULL == get_app() || get_app()->is_closing(); }
+SERVER_FRAME_API bool dispatcher_implement::is_closing() const noexcept {
+  return NULL == get_app() || get_app()->is_closing();
+}
 
-dispatcher_implement::rpc_service_set_t::mapped_type dispatcher_implement::get_registered_service(
+SERVER_FRAME_API dispatcher_implement::rpc_service_set_t::mapped_type dispatcher_implement::get_registered_service(
     const std::string &service_full_name) const noexcept {
   auto iter = registered_service_.find(service_full_name);
   if (iter == registered_service_.end()) {
@@ -221,7 +233,7 @@ dispatcher_implement::rpc_service_set_t::mapped_type dispatcher_implement::get_r
   return iter->second;
 }
 
-dispatcher_implement::rpc_method_set_t::mapped_type dispatcher_implement::get_registered_method(
+SERVER_FRAME_API dispatcher_implement::rpc_method_set_t::mapped_type dispatcher_implement::get_registered_method(
     const std::string &method_full_name) const noexcept {
   auto iter = registered_method_.find(method_full_name);
   if (iter == registered_method_.end()) {
@@ -231,12 +243,12 @@ dispatcher_implement::rpc_method_set_t::mapped_type dispatcher_implement::get_re
   return iter->second;
 }
 
-const std::string &dispatcher_implement::get_empty_string() {
+SERVER_FRAME_API const std::string &dispatcher_implement::get_empty_string() {
   static std::string ret;
   return ret;
 }
 
-int32_t dispatcher_implement::convert_from_atapp_error_code(int32_t code) {
+SERVER_FRAME_API int32_t dispatcher_implement::convert_from_atapp_error_code(int32_t code) {
   if (code >= 0 || code <= EN_ATBUS_ERR_MIN) {
     return code;
   }
@@ -244,7 +256,8 @@ int32_t dispatcher_implement::convert_from_atapp_error_code(int32_t code) {
   return PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_BEGIN + code;
 }
 
-int dispatcher_implement::_register_action(msg_type_t message_type, task_manager::task_action_creator_t action) {
+SERVER_FRAME_API int dispatcher_implement::_register_action(msg_type_t message_type,
+                                                            task_manager::task_action_creator_t action) {
   msg_task_action_set_t::iterator iter = task_action_map_by_id_.find(message_type);
   if (task_action_map_by_id_.end() != iter) {
     FWLOGERROR("{} try to register more than one task actions to type {}.", name(), message_type);
@@ -255,8 +268,8 @@ int dispatcher_implement::_register_action(msg_type_t message_type, task_manager
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-int dispatcher_implement::_register_action(const std::string &rpc_full_name,
-                                           task_manager::task_action_creator_t action) {
+SERVER_FRAME_API int dispatcher_implement::_register_action(const std::string &rpc_full_name,
+                                                            task_manager::task_action_creator_t action) {
   rpc_task_action_set_t::iterator iter = task_action_map_by_name_.find(rpc_full_name);
   if (task_action_map_by_name_.end() != iter) {
     FWLOGERROR("{} try to register more than one task actions to rpc {}.", name(), rpc_full_name);

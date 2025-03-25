@@ -58,7 +58,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE trace_start_option {
   trace_links_type links;
   trace_attributes_type attributes;
 
-  inline trace_start_option()
+  ATFW_UTIL_FORCEINLINE trace_start_option()
       : dispatcher(nullptr),
         kind(atframework::RpcTraceSpan::SPAN_KIND_INTERNAL),
         is_remote(true),
@@ -72,9 +72,10 @@ struct ATFW_UTIL_SYMBOL_VISIBLE trace_finish_option {
   int32_t result_code;
   trace_attributes_type attributes;
 
-  inline trace_finish_option() : result_code(0), attributes({}) {}
+  ATFW_UTIL_FORCEINLINE trace_finish_option() : result_code(0), attributes({}) {}
 
-  inline trace_finish_option(int32_t code, trace_attributes_type attrs) : result_code(code), attributes(attrs) {}
+  ATFW_UTIL_FORCEINLINE trace_finish_option(int32_t code, trace_attributes_type attrs)
+      : result_code(code), attributes(attrs) {}
 };
 
 class tracer {

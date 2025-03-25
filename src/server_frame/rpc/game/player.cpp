@@ -27,7 +27,7 @@
 namespace rpc {
 namespace game {
 namespace player {
-rpc::rpc_result<int64_t> alloc_user_id(::rpc::context &ctx) {
+SERVER_FRAME_API rpc::rpc_result<int64_t> alloc_user_id(::rpc::context &ctx) {
   int64_t prefix_id = RPC_AWAIT_TYPE_RESULT(
       rpc::db::uuid::generate_global_unique_id(ctx, PROJECT_NAMESPACE_ID::EN_GLOBAL_UUID_MAT_USER_ID, 0, 0));
   if (prefix_id < 0) {
@@ -44,7 +44,7 @@ rpc::rpc_result<int64_t> alloc_user_id(::rpc::context &ctx) {
   RPC_RETURN_CODE(out);
 }
 
-bool is_valid_user_id(int64_t in) {
+SERVER_FRAME_API bool is_valid_user_id(int64_t in) {
   if (in <= 0) {
     return false;
   }

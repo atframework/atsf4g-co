@@ -106,12 +106,27 @@ result_type::result_type()
 }
 
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+SERVER_FRAME_API result_type::result_type(result_type &&other)
+    : result_data_(std::move(other.result_data_)), awaited_(other.awaited_) {
+  other.awaited_ = false;
+}
+
+SERVER_FRAME_API result_type::result_type &operator=(result_type &&other) {
+  result_data_ = std::move(other.result_data_);
+  awaited_ = other.awaited_;
+
+  other.awaited_ = false;
+  return *this;
+}
+#  endif
+
 result_type::~result_type() {
+#  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
   // rpc::result_XXX must be awaited with RPC_AWAIT_IGNORE_RESULT(...), RPC_AWAIT_IGNORE_VOID(...) or
   // RPC_AWAIT_TYPE_RESULT(...)
   assert(awaited_ || !result_data_.is_ready());
-}
 #  endif
+}
 
 result_type::result_type(int32_t code)
     : result_data_(code)

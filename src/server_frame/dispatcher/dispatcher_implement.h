@@ -35,7 +35,7 @@
 
 #include "dispatcher/task_manager.h"
 
-class dispatcher_implement : public ::atapp::module_impl {
+class ATFW_UTIL_SYMBOL_VISIBLE dispatcher_implement : public ::atapp::module_impl {
  public:
   using msg_op_type_t = PROJECT_NAMESPACE_ID::EnMsgOpType;
   using msg_raw_t = dispatcher_raw_message;
@@ -50,7 +50,7 @@ class dispatcher_implement : public ::atapp::module_impl {
   struct msg_filter_data_t {
     dispatcher_raw_message msg;
 
-    inline explicit msg_filter_data_t(const dispatcher_raw_message &m) : msg(m) {}
+    ATFW_UTIL_FORCEINLINE explicit msg_filter_data_t(const dispatcher_raw_message &m) : msg(m) {}
   };
 
   struct dispatcher_result_t {
@@ -58,24 +58,24 @@ class dispatcher_implement : public ::atapp::module_impl {
     uint64_t task_id;                               // 如果启动了一个协程任务，传出任务ID
     const atframework::DispatcherOptions *options;  // 如果启动了新任务传出可能的配置选项数据
 
-    inline dispatcher_result_t() : result_code(0), task_id(0), options(nullptr) {}
+    ATFW_UTIL_FORCEINLINE dispatcher_result_t() : result_code(0), task_id(0), options(nullptr) {}
   };
 
   /**
    * @brief 消息过滤器函数，调用式为: bool(const msg_filter_data_t&)
    * @note 返回false可以中断后续过滤器的执行并禁止消息分发
    */
-  using msg_filter_handle_t = std::function<bool(const msg_filter_data_t &)>;
+  using message_filter_handle_t = std::function<bool(const msg_filter_data_t &)>;
 
  public:
-  int init() override;
+  SERVER_FRAME_API int init() override;
 
-  const char *name() const override;
+  SERVER_FRAME_API const char *name() const override;
 
   /**
    * @brief 获取实例标识，因为继承这个类型的都是单例，这个用来区分类型
    */
-  uintptr_t get_instance_ident() const;
+  SERVER_FRAME_API uintptr_t get_instance_ident() const;
 
   /**
    * @brief 接收消息回调接口，通常会尝试恢复协程任务运行或创建一个协程任务
@@ -84,7 +84,8 @@ class dispatcher_implement : public ::atapp::module_impl {
    * @param msg_size 数据长度
    * @return 返回错误码或0
    */
-  virtual dispatcher_result_t on_receive_message(rpc::context &ctx, msg_raw_t &msg, void *priv_data, uint64_t sequence);
+  SERVER_FRAME_API virtual dispatcher_result_t on_receive_message(rpc::context &ctx, msg_raw_t &msg, void *priv_data,
+                                                                  uint64_t sequence);
 
   /**
    * @brief 接收消息回调接口，指定要检查的消息类型id，通常会尝试恢复协程任务运行或创建一个协程任务
@@ -94,8 +95,9 @@ class dispatcher_implement : public ::atapp::module_impl {
    * @param msg_size 数据长度
    * @return 返回错误码或0
    */
-  virtual dispatcher_result_t on_receive_message(rpc::context &ctx, msg_raw_t &msg, uintptr_t expect_msg_type,
-                                                 void *priv_data, uint64_t sequence);
+  SERVER_FRAME_API virtual dispatcher_result_t on_receive_message(rpc::context &ctx, msg_raw_t &msg,
+                                                                  uintptr_t expect_msg_type, void *priv_data,
+                                                                  uint64_t sequence);
 
   /**
    * @brief 发送消息消息失败的通知接口，通常会尝试填充错误码后恢复协程任务
@@ -105,14 +107,15 @@ class dispatcher_implement : public ::atapp::module_impl {
    * @param error_code 数据长度
    * @return 返回错误码或0
    */
-  virtual int32_t on_send_message_failed(rpc::context &ctx, msg_raw_t &msg, int32_t error_code, uint64_t sequence);
+  SERVER_FRAME_API virtual int32_t on_send_message_failed(rpc::context &ctx, msg_raw_t &msg, int32_t error_code,
+                                                          uint64_t sequence);
 
   /**
    * @brief 创建任务(包括Actor)失败事件
    * @param start_data 启动数据
    * @param error_code 错误码
    */
-  virtual void on_create_task_failed(dispatcher_start_data_type &start_data, int32_t error_code);
+  SERVER_FRAME_API virtual void on_create_task_failed(dispatcher_start_data_type &start_data, int32_t error_code);
 
   /**
    * @brief 数据解包
@@ -166,14 +169,15 @@ class dispatcher_implement : public ::atapp::module_impl {
    * @param task_inst 相关的任务id
    * @return 返回错误码或0
    */
-  virtual int create_task(dispatcher_start_data_type &start_data, task_type_trait::task_type &task_inst);
+  SERVER_FRAME_API virtual int create_task(dispatcher_start_data_type &start_data,
+                                           task_type_trait::task_type &task_inst);
 
   /**
    * @brief 根据类型ID获取action或actor选项
    * @param raw_msg 消息抽象结构
    * @return 返回action或actor选项或NULL
    */
-  virtual const atframework::DispatcherOptions *get_options_by_message_type(msg_type_t message_type);
+  SERVER_FRAME_API virtual const atframework::DispatcherOptions *get_options_by_message_type(msg_type_t message_type);
 
   /**
    * @brief 注册Action
@@ -181,7 +185,7 @@ class dispatcher_implement : public ::atapp::module_impl {
    * @return 或错误码
    */
   template <typename TAction>
-  inline int register_action(msg_type_t message_type) {
+  ATFW_UTIL_FORCEINLINE int register_action(msg_type_t message_type) {
     const atframework::DispatcherOptions *options = get_options_by_message_type(message_type);
     return _register_action(message_type, task_manager::me()->make_task_creator<TAction>(options));
   }
@@ -192,8 +196,8 @@ class dispatcher_implement : public ::atapp::module_impl {
    * @return 或错误码
    */
   template <typename TAction>
-  int register_action(const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::ServiceDescriptor *service_desc,
-                      const std::string &rpc_name) {
+  ATFW_UTIL_SYMBOL_VISIBLE int register_action(
+      const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::ServiceDescriptor *service_desc, const std::string &rpc_name) {
     if (nullptr == service_desc) {
       return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
     }
@@ -234,43 +238,45 @@ class dispatcher_implement : public ::atapp::module_impl {
    * @param fn 函数或仿函数
    * @note 被添加的过滤器会先执行
    */
-  void push_filter_to_front(msg_filter_handle_t fn);
+  SERVER_FRAME_API void push_filter_to_front(message_filter_handle_t fn);
 
   /**
    * @brief 添加后置过滤器
    * @param fn 函数或仿函数
    * @note 被添加的过滤器会最后执行
    */
-  void push_filter_to_back(msg_filter_handle_t fn);
+  SERVER_FRAME_API void push_filter_to_back(message_filter_handle_t fn);
 
   /**
    * @brief If is closing
    * @return true if it's closing
    */
-  bool is_closing() const noexcept;
+  SERVER_FRAME_API bool is_closing() const noexcept;
 
   /**
    * @brief Try to get registered service descriptor by full name
    * @param service_full_name service full name
    * @return service descriptor or nullptr if not found
    */
-  rpc_service_set_t::mapped_type get_registered_service(const std::string &service_full_name) const noexcept;
+  SERVER_FRAME_API rpc_service_set_t::mapped_type get_registered_service(
+      const std::string &service_full_name) const noexcept;
 
   /**
    * @brief Try to get registered method descriptor by full name
    * @param method_full_name method full name
    * @return method descriptor or nullptr if not found
    */
-  rpc_method_set_t::mapped_type get_registered_method(const std::string &method_full_name) const noexcept;
+  SERVER_FRAME_API rpc_method_set_t::mapped_type get_registered_method(
+      const std::string &method_full_name) const noexcept;
 
  protected:
-  const std::string &get_empty_string();
+  SERVER_FRAME_API const std::string &get_empty_string();
 
-  int32_t convert_from_atapp_error_code(int32_t code);
+  SERVER_FRAME_API int32_t convert_from_atapp_error_code(int32_t code);
 
  private:
-  int _register_action(msg_type_t message_type, task_manager::task_action_creator_t action);
-  int _register_action(const std::string &rpc_full_name, task_manager::task_action_creator_t action);
+  SERVER_FRAME_API int _register_action(msg_type_t message_type, task_manager::task_action_creator_t action);
+  SERVER_FRAME_API int _register_action(const std::string &rpc_full_name, task_manager::task_action_creator_t action);
 
  private:
   msg_task_action_set_t task_action_map_by_id_;
@@ -278,13 +284,13 @@ class dispatcher_implement : public ::atapp::module_impl {
   rpc_service_set_t registered_service_;
   rpc_method_set_t registered_method_;
 
-  std::list<msg_filter_handle_t> msg_filter_list_;
+  std::list<message_filter_handle_t> msg_filter_list_;
   mutable std::string human_readable_name_;
 };
 
 template <typename TMsg>
-int32_t dispatcher_implement::unpack_protobuf_msg(TMsg &real_msg, msg_raw_t &raw_msg, const void *msg_buf,
-                                                  size_t msg_size) {
+ATFW_UTIL_SYMBOL_VISIBLE int32_t dispatcher_implement::unpack_protobuf_msg(TMsg &real_msg, msg_raw_t &raw_msg,
+                                                                           const void *msg_buf, size_t msg_size) {
   raw_msg.msg_addr = nullptr;
   raw_msg.message_type = get_instance_ident();
 
@@ -311,7 +317,7 @@ int32_t dispatcher_implement::unpack_protobuf_msg(TMsg &real_msg, msg_raw_t &raw
 }
 
 template <typename TMsg>
-TMsg *dispatcher_implement::get_protobuf_msg(msg_raw_t &raw_msg) {
+ATFW_UTIL_SYMBOL_VISIBLE TMsg *dispatcher_implement::get_protobuf_msg(msg_raw_t &raw_msg) {
   if (get_instance_ident() != raw_msg.message_type) {
     return nullptr;
   }
@@ -320,7 +326,7 @@ TMsg *dispatcher_implement::get_protobuf_msg(msg_raw_t &raw_msg) {
 }
 
 template <typename TMsg>
-TMsg *dispatcher_implement::get_protobuf_msg(msg_raw_t &raw_msg, uintptr_t check_msg_type) {
+ATFW_UTIL_SYMBOL_VISIBLE TMsg *dispatcher_implement::get_protobuf_msg(msg_raw_t &raw_msg, uintptr_t check_msg_type) {
   if (0 != check_msg_type && check_msg_type != raw_msg.message_type) {
     return NULL;
   }

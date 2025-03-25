@@ -85,7 +85,7 @@ struct short_uuid_encoder {
 static short_uuid_encoder short_uuid_encoder_;
 }  // namespace detail
 
-std::string generate_standard_uuid(bool remove_minus, standard_uuid_type type) {
+SERVER_FRAME_API std::string generate_standard_uuid(bool remove_minus, standard_uuid_type type) {
   if (type == standard_uuid_type::kV1) {
     return atfw::util::random::uuid_generator::generate_string_time(remove_minus);
   } else {
@@ -93,7 +93,7 @@ std::string generate_standard_uuid(bool remove_minus, standard_uuid_type type) {
   }
 }
 
-std::string generate_standard_uuid_binary(standard_uuid_type type) {
+SERVER_FRAME_API std::string generate_standard_uuid_binary(standard_uuid_type type) {
   if (type == standard_uuid_type::kV1) {
     return atfw::util::random::uuid_generator::uuid_to_binary(util::random::uuid_generator::generate_time());
   } else {
@@ -101,7 +101,7 @@ std::string generate_standard_uuid_binary(standard_uuid_type type) {
   }
 }
 
-std::string generate_short_uuid() {
+SERVER_FRAME_API std::string generate_short_uuid() {
   // node_id:(timestamp-2022-01-01 00:00:00):sequence
   // 2022-01-01 00:00:00 UTC => 1640995200
   uint64_t node_id = logic_config::me()->get_local_server_id();
@@ -120,8 +120,8 @@ std::string generate_short_uuid() {
   return bin_buffer;
 }
 
-rpc_result<int64_t> generate_global_increase_id(rpc::context &ctx, uint32_t major_type, uint32_t minor_type,
-                                                uint32_t patch_type) {
+SERVER_FRAME_API rpc_result<int64_t> generate_global_increase_id(rpc::context &ctx, uint32_t major_type,
+                                                                 uint32_t minor_type, uint32_t patch_type) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in task");
 
   // 这个算法比许固定
@@ -418,8 +418,8 @@ static rpc::rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx, uin
   RPC_RETURN_TYPE(ret);
 }
 
-rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx, uint32_t major_type, uint32_t minor_type,
-                                              uint32_t patch_type) {
+SERVER_FRAME_API rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx, uint32_t major_type,
+                                                               uint32_t minor_type, uint32_t patch_type) {
   if (PROJECT_NAMESPACE_ID::EN_GLOBAL_UUID_MAT_USER_ID == major_type ||
       PROJECT_NAMESPACE_ID::EN_GLOBAL_UUID_MAT_GUILD_ID == major_type) {
     // POOL => 1 | * | 5

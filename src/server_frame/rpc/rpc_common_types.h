@@ -43,7 +43,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE always_ready<void> {
   always_ready() {}
 
 #if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
-  inline void _internal_set_awaited() noexcept {}
+  ATFW_UTIL_FORCEINLINE void _internal_set_awaited() noexcept {}
 #endif
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
@@ -63,7 +63,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE always_ready {
       : result_data_(std::move(input)) {}
 
 #if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
-  inline void _internal_set_awaited() noexcept {}
+  ATFW_UTIL_FORCEINLINE void _internal_set_awaited() noexcept {}
 #endif
 
   ATFW_UTIL_FORCEINLINE operator value_type() const noexcept { return result_data_; }
@@ -148,12 +148,14 @@ struct _rpc_result_not_ready;
 
 template <class TVALUE>
 struct ATFW_UTIL_SYMBOL_VISIBLE _rpc_result_not_ready<TVALUE, true> {
-  inline static TVALUE not_ready_value() noexcept { return static_cast<TVALUE>(rpc_get_not_ready_code()); }
+  ATFW_UTIL_FORCEINLINE static TVALUE not_ready_value() noexcept {
+    return static_cast<TVALUE>(rpc_get_not_ready_code());
+  }
 };
 
 template <class TVALUE>
 struct ATFW_UTIL_SYMBOL_VISIBLE _rpc_result_not_ready<TVALUE, false> {
-  inline static TVALUE not_ready_value() { return TVALUE(); }
+  ATFW_UTIL_FORCEINLINE static TVALUE not_ready_value() { return TVALUE(); }
 };
 
 template <class TVALUE, bool IS_LREFERENCE>
@@ -164,7 +166,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE rpc_result_guard_getter<TVALUE, true> {
   using value_type = TVALUE;
 
   template <class TINPUT>
-  inline static value_type get(TINPUT& data) noexcept {
+  ATFW_UTIL_FORCEINLINE static value_type get(TINPUT& data) noexcept {
     return data;
   }
 };
@@ -174,7 +176,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE rpc_result_guard_getter<TVALUE, false> {
   using value_type = typename std::add_rvalue_reference<TVALUE>::type;
 
   template <class TINPUT>
-  inline static value_type get(TINPUT& data) noexcept {
+  ATFW_UTIL_FORCEINLINE static value_type get(TINPUT& data) noexcept {
     return std::move(data);
   }
 };
@@ -232,7 +234,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE rpc_result {
 #  endif
 
   // Remove this and implement co_yield to get the result in the future
-  explicit inline operator value_type() const noexcept {
+  ATFW_UTIL_FORCEINLINE explicit operator value_type() const noexcept {
     if (result_data_.is_ready()) {
       return *result_data_.data();
     } else {
@@ -240,10 +242,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE rpc_result {
     }
   }
 
-  inline bool is_ready() const noexcept { return result_data_.is_ready(); }
+  ATFW_UTIL_FORCEINLINE bool is_ready() const noexcept { return result_data_.is_ready(); }
 
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
-  inline void _internal_set_awaited() noexcept { awaited_ = true; }
+  ATFW_UTIL_FORCEINLINE void _internal_set_awaited() noexcept { awaited_ = true; }
 #  endif
 
  private:
@@ -264,10 +266,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE result_void_type {
   result_void_type(result_void_type&&) = default;
   result_void_type& operator=(result_void_type&&) = default;
 
-  inline bool is_ready() const noexcept { return result_data_.is_ready(); }
+  ATFW_UTIL_FORCEINLINE bool is_ready() const noexcept { return result_data_.is_ready(); }
 
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
-  inline void _internal_set_awaited() noexcept { awaited_ = true; }
+  ATFW_UTIL_FORCEINLINE void _internal_set_awaited() noexcept { awaited_ = true; }
 #  endif
  private:
   copp::future::poller<void> result_data_;

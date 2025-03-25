@@ -109,17 +109,20 @@ SERVER_FRAME_API const char *task_action_base::name() const {
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
 SERVER_FRAME_API task_action_base::result_type task_action_base::operator()(task_action_meta_data_type &&task_meta,
-                                                                            dispatcher_start_data_type &&start_data) {
+                                                                            dispatcher_start_data_type &&start_data)
 #else
-SERVER_FRAME_API int task_action_base::operator()(void *priv_data) {
+SERVER_FRAME_API int task_action_base::operator()(void *priv_data)
 #endif
+{
   detail::task_action_stat_guard stat(this);
 
   rpc::context::trace_start_option trace_start_option = get_trace_option();
+  do {
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-  {
 #else
-  if (nullptr != priv_data) {
+    if (nullptr == priv_data) {
+      break;
+    }
     dispatcher_start_data_type &start_data = *reinterpret_cast<dispatcher_start_data_type *>(priv_data);
 #endif
     // Set parent context if not set by child type
@@ -129,7 +132,7 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data) {
     if (start_data.options != nullptr) {
       dispatcher_options_ = start_data.options;
     }
-  }
+  } while (false);
 
   task_trace_attributes trace_attributes;
   trace_attributes[static_cast<size_t>(trace_attribute_type::kRpcSystem)] = {
