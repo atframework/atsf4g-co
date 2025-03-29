@@ -19,7 +19,7 @@
 
 #include <config/server_frame_build_feature.h>
 
-#include <libatgw_inner_v1_c.h>
+#include <libatgw_v1_c.h>
 
 #include <simulator_player_impl.h>
 
@@ -81,13 +81,13 @@ class client_player : public simulator_player_impl {
   inline int get_gamesvr_index() const { return gamesvr_index_; }
   inline void set_gamesvr_index(int index) { gamesvr_index_ = index; }
 
-  libatgw_inner_v1_c_context mutable_proto_context(libuv_ptr_t net);
+  libatgw_v1_c_context mutable_proto_context(libuv_ptr_t net);
   void destroy_proto_context(libuv_ptr_t net);
 
-  libuv_ptr_t find_network(libatgw_inner_v1_c_context ctx);
+  libuv_ptr_t find_network(libatgw_v1_c_context ctx);
   using simulator_player_impl::find_network;
 
-  void connect_done(libatgw_inner_v1_c_context ctx);
+  void connect_done(libatgw_v1_c_context ctx);
 
   inline bool is_connecting() const { return is_connecting_; }
 
@@ -98,7 +98,7 @@ class client_player : public simulator_player_impl {
   const std::string &mutable_lua_env_table();
 
  private:
-  std::map<uint32_t, libatgw_inner_v1_c_context> proto_handles_;
+  std::map<uint32_t, libatgw_v1_c_context> proto_handles_;
   PROJECT_NAMESPACE_ID::DAccountData account_;
   int32_t system_id_;
   std::string package_version_;

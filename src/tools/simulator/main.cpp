@@ -6,13 +6,13 @@
 #include <utility/client_config.h>
 #include <utility/client_simulator.h>
 
-#include <libatgw_inner_v1_c.h>
+#include <libatgw_v1_c.h>
 
 #include <cstdlib>
 #include <memory>
 
 int main(int argc, char *argv[]) {
-  libatgw_inner_v1_c_global_init_algorithms();
+  libatgw_v1_c_global_init_algorithms();
 
   std::shared_ptr<client_simulator> client = std::make_shared<client_simulator>();
   client->init();

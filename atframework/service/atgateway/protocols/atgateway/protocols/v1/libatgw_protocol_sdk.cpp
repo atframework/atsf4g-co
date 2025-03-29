@@ -1319,7 +1319,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::try_write() {
     }
 
     void *data = nullptr;
-    write_buffers_.push_front(data, write_header_offset_ + (free_buffer - buffer_start));
+    write_buffers_.push_front(data, write_header_offset_ + static_cast<size_t>(free_buffer - buffer_start));
 
     // already pop more data than write_header_offset_ + (free_buffer - buffer_start)
     // so this push_front should always success
@@ -1331,7 +1331,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::try_write() {
 
     data = ::atbus::detail::fn::buffer_next(data, write_header_offset_);
     // copy back merged data
-    memcpy(data, buffer_start, free_buffer - buffer_start);
+    memcpy(data, buffer_start, static_cast<size_t>(free_buffer - buffer_start));
   }
 
   // prepare to writing

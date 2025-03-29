@@ -244,11 +244,20 @@ endif()
 
 if(NOT PROJECT_TOOL_CLANG_FORMAT)
   if(WIN32 AND ATFRAMEWORK_CMAKE_TOOLSET_PWSH)
-    generate_for_pb_initialize_pwsh("${CMAKE_CURRENT_BINARY_DIR}/.format-code-files.ps1")
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/.format-code-files.ps1" "${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+    project_make_executable("${CMAKE_CURRENT_BINARY_DIR}/.format-code-files.ps1")
+
+    file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/.format-code-files.ps1"
+         "$PSDefaultParameterValues['*:Encoding'] = 'UTF-8'${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+    file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/.format-code-files.ps1"
+         "$OutputEncoding = [System.Text.UTF8Encoding]::new()${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
   else()
-    generate_for_pb_initialize_sh("${CMAKE_CURRENT_BINARY_DIR}/.format-code-files.sh")
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/.format-code-files.sh"
+         "#!/bin/bash${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+    project_make_executable("${CMAKE_CURRENT_BINARY_DIR}/.format-code-files.sh")
   endif()
   unset(PROJECT_TOOL_CLANG_FORMAT)
+  unset(PROJECT_TOOL_CLANG_FORMAT CACHE)
 endif()
 
 function(project_tool_clang_format_generate_commands OUTPUT_VAR SCRIPT_BASEPATH)

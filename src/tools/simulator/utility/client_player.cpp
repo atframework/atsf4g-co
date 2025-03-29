@@ -18,11 +18,10 @@
 #include "client_player.h"
 #include "client_simulator.h"
 
-#define GTCLI2PLAYER(ctx) (*reinterpret_cast<client_player *>(libatgw_inner_v1_c_get_private_data(ctx)))
+#define GTCLI2PLAYER(ctx) (*reinterpret_cast<client_player *>(libatgw_v1_c_get_private_data(ctx)))
 
 // ======================== 以下为协议处理回调 ========================
-static int32_t proto_inner_callback_on_write(libatgw_inner_v1_c_context ctx, void *buffer, uint64_t sz,
-                                             int32_t *is_done) {
+static int32_t proto_inner_callback_on_write(libatgw_v1_c_context ctx, void *buffer, uint64_t sz, int32_t *is_done) {
   client_player::libuv_ptr_t net = GTCLI2PLAYER(ctx).find_network(ctx);
   if (!net || nullptr == buffer) {
     if (nullptr != is_done) {
@@ -41,24 +40,24 @@ static int32_t proto_inner_callback_on_write(libatgw_inner_v1_c_context ctx, voi
   return ret;
 }
 
-static int proto_inner_callback_on_message(libatgw_inner_v1_c_context ctx, const void *buffer, uint64_t sz) {
+static int proto_inner_callback_on_message(libatgw_v1_c_context ctx, const void *buffer, uint64_t sz) {
   GTCLI2PLAYER(ctx).read_message(buffer, sz);
   return 0;
 }
 
 // useless
-static int proto_inner_callback_on_new_session(libatgw_inner_v1_c_context ctx, uint64_t *sess_id) {
+static int proto_inner_callback_on_new_session(libatgw_v1_c_context ctx, uint64_t *sess_id) {
   printf("create session 0x%llx\n", nullptr == sess_id ? 0 : static_cast<unsigned long long>(*sess_id));
   return 0;
 }
 
 // useless
-static int proto_inner_callback_on_reconnect(libatgw_inner_v1_c_context ctx, uint64_t sess_id) {
+static int proto_inner_callback_on_reconnect(libatgw_v1_c_context ctx, uint64_t sess_id) {
   printf("reconnect session 0x%llx\n", static_cast<unsigned long long>(sess_id));
   return 0;
 }
 
-static int proto_inner_callback_on_close(libatgw_inner_v1_c_context ctx, int32_t reason) {
+static int proto_inner_callback_on_close(libatgw_v1_c_context ctx, int32_t reason) {
   atfw::util::cli::shell_stream ss(std::cout);
 
   if ((reason < 0 || reason > 0x10000) && LIBATGW_V1_C_EN_CLOSE_REASON_EOF != reason) {
@@ -74,7 +73,7 @@ static int proto_inner_callback_on_close(libatgw_inner_v1_c_context ctx, int32_t
   return 0;
 }
 
-static int proto_inner_callback_on_handshake(libatgw_inner_v1_c_context ctx, int32_t status) {
+static int proto_inner_callback_on_handshake(libatgw_v1_c_context ctx, int32_t status) {
   GTCLI2PLAYER(ctx).connect_done(ctx);
 
   if (0 != status) {
@@ -82,7 +81,7 @@ static int proto_inner_callback_on_handshake(libatgw_inner_v1_c_context ctx, int
     ss_pack << "[Error] player " << GTCLI2PLAYER(ctx).get_id() << " handshake failed, status: " << status << std::endl;
 
     char msg[4096];
-    libatgw_inner_v1_c_get_info(ctx, msg, sizeof(msg));
+    libatgw_v1_c_get_info(ctx, msg, sizeof(msg));
     ss_pack << (char *)msg;
 
     atfw::util::cli::shell_stream ss(std::cerr);
@@ -94,9 +93,9 @@ static int proto_inner_callback_on_handshake(libatgw_inner_v1_c_context ctx, int
   return 0;
 }
 
-static int proto_inner_callback_on_handshake_update(libatgw_inner_v1_c_context ctx, int32_t status) { return 0; }
+static int proto_inner_callback_on_handshake_update(libatgw_v1_c_context ctx, int32_t status) { return 0; }
 
-static int proto_inner_callback_on_error(libatgw_inner_v1_c_context ctx, const char *filename, int line, int errcode,
+static int proto_inner_callback_on_error(libatgw_v1_c_context ctx, const char *filename, int line, int errcode,
                                          const char *errmsg) {
   atfw::util::cli::shell_stream ss(std::cerr);
   ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "[Error][" << filename << ":" << line
@@ -105,14 +104,14 @@ static int proto_inner_callback_on_error(libatgw_inner_v1_c_context ctx, const c
 }
 
 void client_player::init_handles() {
-  libatgw_inner_v1_c_gset_on_write_start_fn(proto_inner_callback_on_write);
-  libatgw_inner_v1_c_gset_on_message_fn(proto_inner_callback_on_message);
-  libatgw_inner_v1_c_gset_on_init_new_session_fn(proto_inner_callback_on_new_session);
-  libatgw_inner_v1_c_gset_on_init_reconnect_fn(proto_inner_callback_on_reconnect);
-  libatgw_inner_v1_c_gset_on_close_fn(proto_inner_callback_on_close);
-  libatgw_inner_v1_c_gset_on_handshake_done_fn(proto_inner_callback_on_handshake);
-  libatgw_inner_v1_c_gset_on_handshake_update_fn(proto_inner_callback_on_handshake_update);
-  libatgw_inner_v1_c_gset_on_error_fn(proto_inner_callback_on_error);
+  libatgw_v1_c_gset_on_write_start_fn(proto_inner_callback_on_write);
+  libatgw_v1_c_gset_on_message_fn(proto_inner_callback_on_message);
+  libatgw_v1_c_gset_on_init_new_session_fn(proto_inner_callback_on_new_session);
+  libatgw_v1_c_gset_on_init_reconnect_fn(proto_inner_callback_on_reconnect);
+  libatgw_v1_c_gset_on_close_fn(proto_inner_callback_on_close);
+  libatgw_v1_c_gset_on_handshake_done_fn(proto_inner_callback_on_handshake);
+  libatgw_v1_c_gset_on_handshake_update_fn(proto_inner_callback_on_handshake_update);
+  libatgw_v1_c_gset_on_error_fn(proto_inner_callback_on_error);
 }
 
 client_player::client_player()
@@ -129,9 +128,9 @@ client_player::client_player()
 }
 
 client_player::~client_player() {
-  for (std::map<uint32_t, libatgw_inner_v1_c_context>::iterator iter = proto_handles_.begin();
-       iter != proto_handles_.end(); ++iter) {
-    libatgw_inner_v1_c_destroy(iter->second);
+  for (std::map<uint32_t, libatgw_v1_c_context>::iterator iter = proto_handles_.begin(); iter != proto_handles_.end();
+       ++iter) {
+    libatgw_v1_c_destroy(iter->second);
   }
   proto_handles_.clear();
 
@@ -153,19 +152,19 @@ int client_player::connect(const std::string &host, int port) {
 }
 
 int client_player::on_connected(libuv_ptr_t net, int status) {
-  libatgw_inner_v1_c_context proto_handle = mutable_proto_context(net);
-  libatgw_inner_v1_c_set_private_data(proto_handle, this);
+  libatgw_v1_c_context proto_handle = mutable_proto_context(net);
+  libatgw_v1_c_set_private_data(proto_handle, this);
 
   std::string all_avail_types;
-  uint64_t type_sz = libatgw_inner_v1_c_global_get_crypt_size();
+  uint64_t type_sz = libatgw_v1_c_global_get_crypt_size();
   for (uint64_t i = 0; i < type_sz; ++i) {
     if (0 != i) {
       all_avail_types += ":";
     }
-    all_avail_types += libatgw_inner_v1_c_global_get_crypt_name(i);
+    all_avail_types += libatgw_v1_c_global_get_crypt_name(i);
   }
 
-  int32_t res = libatgw_inner_v1_c_start_session(proto_handle, all_avail_types.c_str());
+  int32_t res = libatgw_v1_c_start_session(proto_handle, all_avail_types.c_str());
   if (res < 0) {
     atfw::util::cli::shell_stream ss(std::cerr);
     ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "start session failed, res" << res << std::endl;
@@ -178,9 +177,9 @@ int client_player::on_connected(libuv_ptr_t net, int status) {
 }
 
 void client_player::on_alloc(libuv_ptr_t net, size_t suggested_size, uv_buf_t *buf) {
-  libatgw_inner_v1_c_context proto_handle = mutable_proto_context(net);
+  libatgw_v1_c_context proto_handle = mutable_proto_context(net);
   uint64_t len = static_cast<uint64_t>(buf->len);
-  libatgw_inner_v1_c_read_alloc(proto_handle, suggested_size, &buf->base, &len);
+  libatgw_v1_c_read_alloc(proto_handle, suggested_size, &buf->base, &len);
 
 #if _MSC_VER
   buf->len = static_cast<ULONG>(len);
@@ -190,9 +189,9 @@ void client_player::on_alloc(libuv_ptr_t net, size_t suggested_size, uv_buf_t *b
 }
 
 void client_player::on_read_data(libuv_ptr_t net, ssize_t nread, const uv_buf_t *buf) {
-  libatgw_inner_v1_c_context proto_handle = mutable_proto_context(net);
+  libatgw_v1_c_context proto_handle = mutable_proto_context(net);
   int32_t errcode = 0;
-  libatgw_inner_v1_c_read(proto_handle, nread, buf->base, static_cast<uint64_t>(nread), &errcode);
+  libatgw_v1_c_read(proto_handle, nread, buf->base, static_cast<uint64_t>(nread), &errcode);
 }
 
 void client_player::on_read_message(libuv_ptr_t net, const void *buffer, size_t sz) {
@@ -208,15 +207,15 @@ void client_player::on_read_message(libuv_ptr_t net, const void *buffer, size_t 
 }
 
 void client_player::on_written_data(libuv_ptr_t net, int status) {
-  libatgw_inner_v1_c_context proto_handle = mutable_proto_context(net);
-  libatgw_inner_v1_c_write_done(proto_handle, status);
+  libatgw_v1_c_context proto_handle = mutable_proto_context(net);
+  libatgw_v1_c_write_done(proto_handle, status);
 }
 
 int client_player::on_write_message(libuv_ptr_t net, void *buffer, uint64_t sz) {
-  libatgw_inner_v1_c_context proto_handle = mutable_proto_context(net);
+  libatgw_v1_c_context proto_handle = mutable_proto_context(net);
 
   if (!is_connecting_) {
-    return libatgw_inner_v1_c_post_msg(proto_handle, buffer, sz);
+    return libatgw_v1_c_post_msg(proto_handle, buffer, sz);
   } else {
     pending_msg_.push_back(std::vector<unsigned char>());
     pending_msg_.back().assign((unsigned char *)buffer, (unsigned char *)buffer + sz);
@@ -235,20 +234,20 @@ void client_player::on_closed() {}
 
 uint32_t client_player::alloc_sequence() { return ++sequence_; }
 
-libatgw_inner_v1_c_context client_player::mutable_proto_context(libuv_ptr_t net) {
+libatgw_v1_c_context client_player::mutable_proto_context(libuv_ptr_t net) {
   uint32_t id = 0;
   if (net) {
     id = net->id;
   }
 
-  std::map<uint32_t, libatgw_inner_v1_c_context>::iterator iter = proto_handles_.find(id);
+  std::map<uint32_t, libatgw_v1_c_context>::iterator iter = proto_handles_.find(id);
   if (iter != proto_handles_.end()) {
     return iter->second;
   }
 
-  libatgw_inner_v1_c_context ret = libatgw_inner_v1_c_create();
+  libatgw_v1_c_context ret = libatgw_v1_c_create();
   proto_handles_[id] = ret;
-  libatgw_inner_v1_c_set_private_data(ret, this);
+  libatgw_v1_c_set_private_data(ret, this);
   return ret;
 }
 
@@ -258,17 +257,17 @@ void client_player::destroy_proto_context(libuv_ptr_t net) {
     id = net->id;
   }
 
-  std::map<uint32_t, libatgw_inner_v1_c_context>::iterator iter = proto_handles_.find(id);
+  std::map<uint32_t, libatgw_v1_c_context>::iterator iter = proto_handles_.find(id);
   if (iter != proto_handles_.end()) {
-    libatgw_inner_v1_c_destroy(iter->second);
+    libatgw_v1_c_destroy(iter->second);
     proto_handles_.erase(iter);
   }
 }
 
-client_player::libuv_ptr_t client_player::find_network(libatgw_inner_v1_c_context ctx) {
+client_player::libuv_ptr_t client_player::find_network(libatgw_v1_c_context ctx) {
   uint32_t id = 0;
-  for (std::map<uint32_t, libatgw_inner_v1_c_context>::iterator iter = proto_handles_.begin();
-       iter != proto_handles_.end(); ++iter) {
+  for (std::map<uint32_t, libatgw_v1_c_context>::iterator iter = proto_handles_.begin(); iter != proto_handles_.end();
+       ++iter) {
     if (iter->second == ctx) {
       id = iter->first;
       break;
@@ -284,9 +283,9 @@ client_player::libuv_ptr_t client_player::find_network(libatgw_inner_v1_c_contex
   return nullptr;
 }
 
-void client_player::connect_done(libatgw_inner_v1_c_context ctx) {
+void client_player::connect_done(libatgw_v1_c_context ctx) {
   for (size_t i = 0; i < pending_msg_.size(); ++i) {
-    libatgw_inner_v1_c_post_msg(ctx, pending_msg_[i].data(), pending_msg_[i].size());
+    libatgw_v1_c_post_msg(ctx, pending_msg_[i].data(), pending_msg_[i].size());
   }
 
   pending_msg_.clear();

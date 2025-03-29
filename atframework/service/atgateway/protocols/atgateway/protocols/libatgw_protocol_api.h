@@ -153,7 +153,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
    * OPTIONAL
    * PROTOCOL: any custom protocol should call this when any error happen.
    */
-  using on_error_fn_t = std::function<int(libatgw_protocol_api *, const char *, int, int, const char *)>;
+  using on_error_fn_t = std::function<int(libatgw_protocol_api *, const char *, uint32_t, int, const char *)>;
 
   struct tls_buffer_t {
     enum type {

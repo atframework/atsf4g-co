@@ -3,6 +3,9 @@
 import time
 %><%
 module_name = service.get_extension_field("service_options", lambda x: x.module_name, service.get_name_lower_rule())
+service_proto_file_path = service.file.get_name()
+service_proto_file_prefix = service_proto_file_path.removesuffix(".proto")
+service_header_file_path = service_proto_file_prefix + ".pb.h"
 %>// Copyright ${time.strftime("%Y", time.localtime()) } atframework
 // @brief Created by ${generator} for ${service.get_full_name()}, please don't edit it
 
@@ -17,10 +20,12 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
-#include <protocol/pbdesc/com.protocol.pb.h>
+#include <${service_header_file_path}>
 % if include_headers:
 %   for include_header in include_headers:
+%     if service_header_file_path != include_header:
 #include <${include_header}>
+%     endif
 %   endfor
 % endif
 

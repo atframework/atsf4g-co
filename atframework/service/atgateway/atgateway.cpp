@@ -85,7 +85,7 @@ class gateway_module : public ::atapp::module_impl {
       };
 
       proto_callbacks_.on_error_fn = [this](::atframework::gateway::libatgw_protocol_api *proto, const char *filename,
-                                            int line, int errcode, const char *errmsg) -> int {
+                                            uint32_t line, int errcode, const char *errmsg) -> int {
         return this->proto_inner_callback_on_error(proto, filename, line, errcode, errmsg);
       };
 
@@ -497,7 +497,7 @@ class gateway_module : public ::atapp::module_impl {
     return 0;
   }
 
-  int proto_inner_callback_on_error(::atframework::gateway::libatgw_protocol_api *, const char *filename, int line,
+  int proto_inner_callback_on_error(::atframework::gateway::libatgw_protocol_api *, const char *filename, uint32_t line,
                                     int errcode, const char *errmsg) {
     if (atfw::util::log::log_wrapper::check_level(WDTLOGGETCAT(atfw::util::log::log_wrapper::categorize_t::DEFAULT),
                                                   atfw::util::log::log_wrapper::level_t::LOG_LW_ERROR)) {
