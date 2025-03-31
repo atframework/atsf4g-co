@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- <?xml-stylesheet type="text/xsl" href="helper/view.xsl"?> -->
 <root>
+  <include>@PROJECT_XRESLOADER_XML_DATA_XML@</include>
   <global>
     <work_dir desc="工作目录，相对于当前xml的目录">.</work_dir>
     <xresloader_path desc="xresloader地址，相对于当前xml的目录">@PROJECT_THIRD_PARTY_XRESLOADER_JAR@</xresloader_path>
@@ -21,27 +22,6 @@
 
     <default_scheme name="KeyRow" desc="默认scheme模式参数-Key行号">2</default_scheme>
     <!--<default_scheme name="UeCg-CsvObjectWrapper" desc="Ue-Csv输出的包裹字符">{|}</default_scheme>-->
+    <option desc="忽略仅客户端资源">--ignore-field-tags client_only</option>
   </global>
-
-  <groups desc="分组信息">
-    <group id="client" name="客户端"></group>
-    <group id="server" name="服务器"></group>
-  </groups>
-
-  <category desc="类信息">
-    <!--
-      <tree id="all_cats" name="大分类">
-          <tree id="kind" name="角色配置"></tree>
-      </tree>
-      -->
-    <tree id="misc" name="杂项"></tree>
-  </category>
-
-  <list>
-    <item name="常量表" cat="misc" class="client server">
-      <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Const.xlsx|常量|3,1</scheme>
-      <scheme name="ProtoName" desc="协议名">hello.config.excel_origin_const_config</scheme>
-      <scheme name="OutputFile" desc="输出文件名">const.bytes</scheme>
-    </item>
-  </list>
 </root>

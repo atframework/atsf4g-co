@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- <?xml-stylesheet type="text/xsl" href="helper/view.xsl"?> -->
+<root>
+  <global>
+    <java_option desc="java选项-最大内存限制2GB">-Xmx2048m</java_option>
+    <java_option desc="java选项-客户端模式">-client</java_option>
+    <java_option desc="java选项-默认时区">-Duser.timezone=UTC</java_option>
+
+    <default_scheme name="KeyRow" desc="默认scheme模式参数-Key行号">2</default_scheme>
+    <!--<default_scheme name="UeCg-CsvObjectWrapper" desc="Ue-Csv输出的包裹字符">{|}</default_scheme>-->
+
+    <option desc="自定义验证器">--validator-rules validator.yaml</option>
+  </global>
+
+  <category desc="类信息">
+    <!--
+      <tree id="all_cats" name="大分类">
+          <tree id="kind" name="角色配置"></tree>
+      </tree>
+      -->
+    <tree id="misc" name="杂项"></tree>
+    <tree id="item" name="道具/库存"></tree>
+  </category>
+
+  <list>
+    <item name="常量表" cat="misc" class="client server">
+      <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Const.xlsx|常量|3,1</scheme>
+      <scheme name="ProtoName" desc="协议名">hello.config.excel_origin_const_config</scheme>
+      <scheme name="OutputFile" desc="输出文件名">const.bytes</scheme>
+    </item>
+    <item name="道具描述总表" cat="item" class="client server">
+      <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Item.xlsx|道具描述总表|3,1</scheme>
+      <scheme name="ProtoName" desc="协议名">hello.config.ExcelItemType</scheme>
+      <scheme name="OutputFile" desc="输出文件名">item_type.bytes</scheme>
+    </item>
+  </list>
+</root>

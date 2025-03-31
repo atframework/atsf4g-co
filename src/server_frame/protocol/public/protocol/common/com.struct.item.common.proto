@@ -6,12 +6,70 @@ option optimize_for = SPEED;
 // --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
 
+import "protocol/common/extensions/v3/xresloader.proto";
+
+import "protocol/common/com.struct.isolation_scope.proto";
+
 package hello;
 
-// 道具数据
-message DItemOffset {
-  int32 type_id = 1;
-  int32 count = 2;
+message DItemBoxPosition {
+  int32 x = 1;
+  int32 y = 2;
+}
 
-  int64 expire_offset = 3;  // 有效期，0表示永久生效
+message DItemSlotPosition {
+  int32 slot_idx = 1;
+}
+
+message DItemPosition {
+  // Container guid
+  int64 container_guid = 1;
+
+  oneof posotion_type {
+    // 仓库
+    DItemBoxPosition inventory = 11;
+    // 角色背包
+    DItemBoxPosition role_backpack = 12;
+    // 角色装备位置
+    DItemSlotPosition role_equipment = 13;
+  }
+}
+
+message DItemBasic {
+  int32 type_id = 1 [(org.xresloader.validator) = "ExcelItemType_type_id"];
+  int64 count = 2;
+  int64 guid = 3;  // 唯一ID(如果有)
+  DItemPosition position = 4;
+  // 所属沙箱Scope（赛季信息等）
+  DIsolationScope scope = 5;
+}
+
+// 道具数据实例
+message DItemInstance {
+  // 道具基础信息
+  DItemBasic item_basic = 1;
+
+  int64 expire_timepoint = 11;  // 超时时间（如果有）
+}
+
+// 道具数据(增量,用于奖励等)
+message DItemOffset {
+  int32 type_id = 1 [(org.xresloader.validator) = "ExcelItemType_type_id"];
+  int64 count = 2;
+
+  // 有效期，0表示永久生效
+  int64 expire_offset = 11 [(org.xresloader.field_allow_missing_in_plain_mode) = true];
+}
+
+// 道具数据(增量,限定Scope,用于奖励等)
+message DItemScopeOffset {
+  DItemOffset item_offset = 1 [(org.xresloader.validator) = "ExcelItemType_type_id"];
+  // 所属沙箱Scope（赛季信息等）
+  DIsolationScope scope = 2;
+}
+
+message DItemUseAction {
+  oneof action_type {
+    int64 add_role_exp = 1 [(org.xresloader.field_unique_tag) = "item"];
+  }
 }

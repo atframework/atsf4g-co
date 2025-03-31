@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "protocol/common/extensions/v3/xresloader.proto";
+
+package hello;
+
+message DIsolationScopeSeason {
+  option (org.xresloader.msg_separator) = "@";
+
+  // 赛季ID
+  int32 season_id = 1;
+}
+
+message DIsolationScope {
+  option (org.xresloader.msg_separator) = "@";
+
+  // scope_type == NOT_SET 视为主世界
+  oneof scope_type {
+    option (org.xresloader.oneof_separator) = "|";
+
+    // 主世界Scope(和Not Set区分开来，应对作为奖励时未设置则为当前Scope)
+    bool main_world = 1;
+
+    // 赛季Scope
+    DIsolationScopeSeason season = 2;
+  }
+}

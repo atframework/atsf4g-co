@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "protocol/common/xrescode_extensions_v3.proto";
+import "protocol/common/extensions/v3/xresloader.proto";
+
+import "protocol/common/com.struct.item.common.proto";
+
+package hello.config;
+
+message ExcelItemType {
+  option (xrescode.loader) = {
+    file_path: "item_type.bytes"
+    indexes: { fields: "type_id" index_type: EN_INDEX_KV allow_not_found: true }
+
+    tags: "client"
+    tags: "server"
+  };
+
+  // 唯一性检查
+  int32 type_id = 1 [(org.xresloader.field_unique_tag) = "type_id"];
+  // 仅客户端资源导出
+  string name = 2 [(org.xresloader.field_tag) = "client_only"];
+  DItemUseAction use_action = 3;
+}
