@@ -1,6 +1,10 @@
 include("${CMAKE_CURRENT_LIST_DIR}/component-functions.cmake")
 
-# ============ components ============
+# ============ shared components ============
+include("${CMAKE_CURRENT_LIST_DIR}/GameSharedConponent.settings.cmake")
+add_subdirectory(GameSharedComponent)
+
+# ============ server components ============
 add_subdirectory(test)
 add_subdirectory(distributed_transaction)
 

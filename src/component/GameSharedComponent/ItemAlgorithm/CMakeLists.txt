@@ -1,0 +1,13 @@
+project_game_shared_component_declare_sdk(
+  ItemAlgorithmSDK
+  "${CMAKE_CURRENT_LIST_DIR}"
+  INCLUDE_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/include"
+  DLLEXPORT_DECL
+  ITEM_ALGORITHM_API
+  HRADERS
+  "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemAlgorithmConfig.h"
+  "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemHashHelper.h"
+  "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemIterable.h"
+  SOURCES
+  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemHashHelper.cpp")
