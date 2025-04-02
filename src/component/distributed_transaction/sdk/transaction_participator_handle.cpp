@@ -1,4 +1,4 @@
-// Copyright 2022 Tencent
+// Copyright 2022 atframework
 // Created by owentou, on 2022-02-28
 
 #include "transaction_participator_handle.h"
