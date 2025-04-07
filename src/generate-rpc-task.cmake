@@ -48,20 +48,20 @@ endif()
 if(PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR
    AND EXISTS "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/extensions/v3/xresloader.proto")
   generate_for_pb_create_protocol_sandbox(
-    "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb/protocol/common/extensions/v3"
+    "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb/protocol/extension/v3"
     "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/extensions/v3/xresloader.proto"
     "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/extensions/v3/xresloader_ue.proto")
   generate_for_pb_add_proto_file(
-    "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb/protocol/common/extensions/v3/xresloader.proto"
-    "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb/protocol/common/extensions/v3/xresloader_ue.proto")
+    "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb/protocol/extension/v3/xresloader.proto"
+    "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb/protocol/extension/v3/xresloader_ue.proto")
 endif()
 if(PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR
    AND EXISTS "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension/xrescode_extensions_v3.proto")
   generate_for_pb_create_protocol_sandbox(
-    "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb/protocol/common"
+    "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb/protocol/extension"
     "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension/xrescode_extensions_v3.proto")
   generate_for_pb_add_proto_file(
-    "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb/protocol/common/xrescode_extensions_v3.proto")
+    "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb/protocol/extension/xrescode_extensions_v3.proto")
 endif()
 
 # -----------------------------------------------------------------------------

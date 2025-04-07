@@ -12,7 +12,7 @@
 
 #include <google/protobuf/timestamp.pb.h>
 
-#include <protocol/pbdesc/atframework.pb.h>
+#include <protocol/extension/atframework.pb.h>
 
 #include <opentelemetry/trace/span.h>
 #include <opentelemetry/trace/tracer.h>

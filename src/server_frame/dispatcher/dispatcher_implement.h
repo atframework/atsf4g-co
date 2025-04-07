@@ -9,7 +9,7 @@
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/service.h>
 
-#include <protocol/pbdesc/atframework.pb.h>
+#include <protocol/extension/atframework.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 

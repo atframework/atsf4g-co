@@ -173,7 +173,11 @@ SERVER_FRAME_CONFIG_API const atframework::ConstSettingsType &logic_config::get_
   if ATFW_UTIL_LIKELY_CONDITION (nullptr != atframe_settings_) {
     return *atframe_settings_;
   }
-  auto desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("protocol/pbdesc/atframework.proto");
+  auto desc =
+      ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("protocol/extension/atframework.proto");
+  if (nullptr == desc) {
+    desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("protocol/pbdesc/atframework.proto");
+  }
   if (nullptr == desc) {
     desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("pbdesc/atframework.proto");
   }

@@ -8,7 +8,7 @@ option cc_enable_arenas = true;
 option cc_generic_services = true;
 
 import "google/protobuf/empty.proto";
-import "protocol/pbdesc/atframework.proto";
+import "protocol/extension/atframework.proto";
 
 package hello;
 

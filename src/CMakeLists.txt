@@ -11,7 +11,8 @@ include("${CMAKE_CURRENT_LIST_DIR}/generate-rpc-task.cmake")
 configure_file("${CMAKE_CURRENT_LIST_DIR}/generate-nomsg-task.sh.in" "${CMAKE_CURRENT_LIST_DIR}/generate-nomsg-task.sh"
                @ONLY NEWLINE_STYLE LF)
 
-set(PROJECT_COMPONENT_PUBLIC_PROTO_PATH "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_COMMON_DIR}")
+set(PROJECT_COMPONENT_PUBLIC_PROTO_PATH "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_EXTENSION_DIR}"
+                                        "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_COMMON_DIR}")
 # set(PROJECT_SERVICE_PUBLIC_PROTO_PATH)
 
 add_subdirectory(server_frame)

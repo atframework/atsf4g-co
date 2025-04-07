@@ -6,7 +6,7 @@ option optimize_for = SPEED;
 // --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
 
-import "protocol/common/extensions/v3/xresloader.proto";
+import "protocol/extension/v3/xresloader.proto";
 
 import "protocol/common/com.struct.isolation_scope.proto";
 

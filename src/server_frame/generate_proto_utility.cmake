@@ -91,6 +91,8 @@ function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OU
           copy_if_different
           ${LAST_DIRECTORY_SOURCES}
           "${CURRENT_GENERATED_DIR}/src/${LAST_CREATED_DIRECTORY}")
+        unset(LAST_DIRECTORY_HEADERS)
+        unset(LAST_DIRECTORY_SOURCES)
       endif()
 
       set(LAST_CREATED_DIRECTORY "${FILE_RELATIVE_DIR}")

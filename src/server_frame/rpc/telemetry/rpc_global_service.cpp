@@ -13,7 +13,7 @@
 #include <google/protobuf/timestamp.pb.h>
 
 #include <protocol/config/svr.protocol.config.pb.h>
-#include <protocol/pbdesc/atframework.pb.h>
+#include <protocol/extension/atframework.pb.h>
 
 #include <opentelemetry/exporters/ostream/log_record_exporter.h>
 #include <opentelemetry/exporters/ostream/metric_exporter_factory.h>

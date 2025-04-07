@@ -16,7 +16,7 @@
 #include <google/protobuf/duration.pb.h>
 #include <google/protobuf/timestamp.pb.h>
 
-#include <protocol/pbdesc/atframework.pb.h>
+#include <protocol/extension/atframework.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>

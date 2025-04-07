@@ -9,8 +9,8 @@
 #include <google/protobuf/duration.pb.h>
 #include <google/protobuf/message.h>
 #include <google/protobuf/timestamp.pb.h>
-#include <protocol/common/xresloader.pb.h>
 #include <protocol/config/com.const.config.pb.h>
+#include <protocol/extension/v3/xresloader.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>

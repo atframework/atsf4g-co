@@ -8,18 +8,10 @@ option optimize_for = SPEED;
 option cc_enable_arenas = true;
 
 import "google/protobuf/descriptor.proto";
-import "protocol/pbdesc/extensions_error_code.proto";
+import "protocol/extension/extensions_error_code.proto";
+import "protocol/extension/com.const.extension.proto";
 
 package hello;
-
-// 只能配置在 com.const.proto 这个文件里有效
-extend google.protobuf.FileOptions {
-  DConstSettingsType CONST_SETTINGS = 100001;  // 自定义配置
-}
-
-message DConstSettingsType {
-  int64 time_tolerate = 1;  // 时间错容忍值
-}
 
 option (CONST_SETTINGS) = {
   time_tolerate: 10

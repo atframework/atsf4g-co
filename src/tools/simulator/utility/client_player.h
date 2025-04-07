@@ -11,7 +11,7 @@
 
 #include <config/compiler/protobuf_prefix.h>
 
-#include <protocol/pbdesc/atframework.pb.h>
+#include <protocol/extension/atframework.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/com.protocol.pb.h>
 

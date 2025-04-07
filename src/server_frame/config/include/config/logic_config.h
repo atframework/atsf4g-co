@@ -11,7 +11,7 @@
 // clang-format on
 
 #include <protocol/config/svr.protocol.config.pb.h>
-#include <protocol/pbdesc/atframework.pb.h>
+#include <protocol/extension/atframework.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 
 // clang-format off

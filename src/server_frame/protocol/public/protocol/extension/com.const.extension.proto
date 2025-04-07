@@ -8,6 +8,13 @@ option cc_enable_arenas = true;
 
 import "google/protobuf/descriptor.proto";
 
-package tgf;
+package hello;
 
-// 涉及客户端，需要一起迁移
+message DConstSettingsType {
+  int64 time_tolerate = 1;  // 时间错容忍值
+}
+
+// 只能配置在 com.const.proto 这个文件里有效
+extend google.protobuf.FileOptions {
+  DConstSettingsType CONST_SETTINGS = 100001;  // 自定义配置
+}

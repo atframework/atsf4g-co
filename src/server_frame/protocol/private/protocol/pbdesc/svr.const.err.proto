@@ -8,7 +8,7 @@ option cc_enable_arenas = true;
 
 // 后台协议常量定义
 
-import "protocol/pbdesc/extensions_error_code.proto";
+import "protocol/extension/extensions_error_code.proto";
 
 package hello.err;
 

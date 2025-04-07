@@ -23,7 +23,7 @@
 #include <google/protobuf/reflection.h>
 #include <google/protobuf/repeated_field.h>
 
-#include <protocol/pbdesc/atframework.pb.h>
+#include <protocol/extension/atframework.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>

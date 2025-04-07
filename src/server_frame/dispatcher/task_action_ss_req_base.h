@@ -6,7 +6,7 @@
 
 #include <config/compiler/protobuf_prefix.h>
 
-#include <protocol/pbdesc/atframework.pb.h>
+#include <protocol/extension/atframework.pb.h>
 #include <protocol/pbdesc/svr.protocol.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
