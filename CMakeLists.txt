@@ -4,6 +4,10 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.27.0")
   cmake_policy(SET CMP0144 NEW)
 endif()
 
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.30.0")
+  cmake_policy(SET CMP0169 NEW)
+endif()
+
 project(
   atf4g-co
   VERSION "0.11.0"
