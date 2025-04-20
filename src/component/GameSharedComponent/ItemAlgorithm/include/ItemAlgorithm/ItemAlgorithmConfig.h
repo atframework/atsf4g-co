@@ -4,8 +4,10 @@
 
 #include <config/compile_optimize.h>
 
-#ifdef GAME_SHARED_COMPONENT_SERVER_MODE&& GAME_SHARED_COMPONENT_SERVER_MODE
+#if defined(GAME_SHARED_COMPONENT_SERVER_MODE) && GAME_SHARED_COMPONENT_SERVER_MODE
 #  include <config/server_frame_build_feature.h>
+#else
+#  include <config/shared_component_build_feature.h>
 #endif
 
 #ifndef PROJECT_NAMESPACE_BEGIN
