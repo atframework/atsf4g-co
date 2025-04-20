@@ -1010,6 +1010,7 @@ def write_code_if_different(
     project_dir, output_file, encoding, content, clang_format_path, clang_format_rule_re
 ):
     global LOCAL_WOKER_POOL
+    global LOCAL_WOKER_FUTURES
     if LOCAL_WOKER_POOL is None:
         LOCAL_WOKER_POOL = concurrent.futures.ThreadPoolExecutor()
 
@@ -1959,6 +1960,7 @@ def generate_file_group(pb_db, options, yaml_conf, project_dir, custom_vars):
 def main():
     # lizard forgives
     global LOCAL_WOKER_POOL
+    global LOCAL_WOKER_FUTURES
 
     script_dir = os.path.dirname(os.path.realpath(__file__))
     work_dir = os.getcwd()
