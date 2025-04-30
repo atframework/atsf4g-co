@@ -223,12 +223,12 @@ struct ATFW_UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_converter {
 };
 
 struct ATFW_UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_value_to_string_converter {
-  std::string operator()(bool v) { return atfw::util::log::format("{}", v); }  // namespace
-  std::string operator()(int32_t v) { return atfw::util::log::format("{}", v); }
-  std::string operator()(uint32_t v) { return atfw::util::log::format("{}", v); }
-  std::string operator()(int64_t v) { return atfw::util::log::format("{}", v); }
-  std::string operator()(uint64_t v) { return atfw::util::log::format("{}", v); }
-  std::string operator()(double v) { return atfw::util::log::format("{}", v); }
+  std::string operator()(bool v) { return atfw::util::string::format("{}", v); }  // namespace
+  std::string operator()(int32_t v) { return atfw::util::string::format("{}", v); }
+  std::string operator()(uint32_t v) { return atfw::util::string::format("{}", v); }
+  std::string operator()(int64_t v) { return atfw::util::string::format("{}", v); }
+  std::string operator()(uint64_t v) { return atfw::util::string::format("{}", v); }
+  std::string operator()(double v) { return atfw::util::string::format("{}", v); }
   std::string operator()(opentelemetry::nostd::string_view v) { return static_cast<std::string>(v); }
   std::string operator()(const char* v) { return v == nullptr ? "" : v; }
 
@@ -271,12 +271,12 @@ struct ATFW_UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_value_to_string_co
 };  // namespace telemetry
 
 struct ATFW_UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_owned_value_to_string_converter {
-  std::string operator()(bool v) { return atfw::util::log::format("{}", v); }  // namespace rpc
-  std::string operator()(int32_t v) { return atfw::util::log::format("{}", v); }
-  std::string operator()(uint32_t v) { return atfw::util::log::format("{}", v); }
-  std::string operator()(int64_t v) { return atfw::util::log::format("{}", v); }
-  std::string operator()(uint64_t v) { return atfw::util::log::format("{}", v); }
-  std::string operator()(double v) { return atfw::util::log::format("{}", v); }
+  std::string operator()(bool v) { return atfw::util::string::format("{}", v); }  // namespace rpc
+  std::string operator()(int32_t v) { return atfw::util::string::format("{}", v); }
+  std::string operator()(uint32_t v) { return atfw::util::string::format("{}", v); }
+  std::string operator()(int64_t v) { return atfw::util::string::format("{}", v); }
+  std::string operator()(uint64_t v) { return atfw::util::string::format("{}", v); }
+  std::string operator()(double v) { return atfw::util::string::format("{}", v); }
   std::string operator()(const std::string& v) { return static_cast<std::string>(v); }
 
   template <class T>
@@ -420,51 +420,55 @@ static void opentelemetry_utility_protobuf_to_otel_attributes_field(const google
     case google::protobuf::FieldDescriptor::CPPTYPE_INT32: {
       if (fds->is_repeated()) {
         opentelemetry_utility_protobuf_to_otel_attributes_assign_vector<int32_t>(
-            atfw::util::log::format("{}{}", key_prefix, fds->name()), output,
+            atfw::util::string::format("{}{}", key_prefix, fds->name()), output,
             reflection->GetRepeatedFieldRef<google::protobuf::int32>(message, fds));
       } else {
-        output.attributes[util::log::format("{}{}", key_prefix, fds->name())] = reflection->GetInt32(message, fds);
+        output.attributes[atfw::util::string::format("{}{}", key_prefix, fds->name())] =
+            reflection->GetInt32(message, fds);
       }
       break;
     }
     case google::protobuf::FieldDescriptor::CPPTYPE_INT64: {
       if (fds->is_repeated()) {
         opentelemetry_utility_protobuf_to_otel_attributes_assign_vector<int64_t>(
-            atfw::util::log::format("{}{}", key_prefix, fds->name()), output,
+            atfw::util::string::format("{}{}", key_prefix, fds->name()), output,
             reflection->GetRepeatedFieldRef<google::protobuf::int64>(message, fds));
       } else {
-        output.attributes[util::log::format("{}{}", key_prefix, fds->name())] = reflection->GetInt64(message, fds);
+        output.attributes[atfw::util::string::format("{}{}", key_prefix, fds->name())] =
+            reflection->GetInt64(message, fds);
       }
       break;
     }
     case google::protobuf::FieldDescriptor::CPPTYPE_UINT32: {
       if (fds->is_repeated()) {
         opentelemetry_utility_protobuf_to_otel_attributes_assign_vector<uint32_t>(
-            atfw::util::log::format("{}{}", key_prefix, fds->name()), output,
+            atfw::util::string::format("{}{}", key_prefix, fds->name()), output,
             reflection->GetRepeatedFieldRef<google::protobuf::uint32>(message, fds));
       } else {
-        output.attributes[util::log::format("{}{}", key_prefix, fds->name())] = reflection->GetUInt32(message, fds);
+        output.attributes[atfw::util::string::format("{}{}", key_prefix, fds->name())] =
+            reflection->GetUInt32(message, fds);
       }
       break;
     }
     case google::protobuf::FieldDescriptor::CPPTYPE_UINT64: {
       if (fds->is_repeated()) {
         opentelemetry_utility_protobuf_to_otel_attributes_assign_vector<uint64_t>(
-            atfw::util::log::format("{}{}", key_prefix, fds->name()), output,
+            atfw::util::string::format("{}{}", key_prefix, fds->name()), output,
             reflection->GetRepeatedFieldRef<google::protobuf::uint64>(message, fds));
       } else {
-        output.attributes[util::log::format("{}{}", key_prefix, fds->name())] = reflection->GetUInt64(message, fds);
+        output.attributes[atfw::util::string::format("{}{}", key_prefix, fds->name())] =
+            reflection->GetUInt64(message, fds);
       }
       break;
     }
     case google::protobuf::FieldDescriptor::CPPTYPE_STRING: {
       if (fds->is_repeated()) {
         opentelemetry_utility_protobuf_to_otel_attributes_assign_vector(
-            atfw::util::log::format("{}{}", key_prefix, fds->name()), output,
+            atfw::util::string::format("{}{}", key_prefix, fds->name()), output,
             reflection->GetRepeatedFieldRef<std::string>(message, fds));
       } else {
         std::string empty;
-        output.attributes[util::log::format("{}{}", key_prefix, fds->name())] =
+        output.attributes[atfw::util::string::format("{}{}", key_prefix, fds->name())] =
             reflection->GetStringReference(message, fds, &empty);
       }
       break;
@@ -476,14 +480,14 @@ static void opentelemetry_utility_protobuf_to_otel_attributes_field(const google
           auto& sub_message = reflection->GetRepeatedMessage(message, fds, i);
           opentelemetry_utility_protobuf_to_otel_attributes_message(
               sub_message.GetReflection(), sub_message, output,
-              atfw::util::log::format("{}{}[{}].", key_prefix, fds->name(), i));
+              atfw::util::string::format("{}{}[{}].", key_prefix, fds->name(), i));
         }
       } else {
         if (reflection->HasField(message, fds)) {
           auto& sub_message = reflection->GetMessage(message, fds);
           opentelemetry_utility_protobuf_to_otel_attributes_message(
               sub_message.GetReflection(), sub_message, output,
-              atfw::util::log::format("{}{}.", key_prefix, fds->name()));
+              atfw::util::string::format("{}{}.", key_prefix, fds->name()));
         }
       }
       break;
@@ -491,40 +495,44 @@ static void opentelemetry_utility_protobuf_to_otel_attributes_field(const google
     case google::protobuf::FieldDescriptor::CPPTYPE_DOUBLE: {
       if (fds->is_repeated()) {
         opentelemetry_utility_protobuf_to_otel_attributes_assign_vector<double>(
-            atfw::util::log::format("{}{}", key_prefix, fds->name()), output,
+            atfw::util::string::format("{}{}", key_prefix, fds->name()), output,
             reflection->GetRepeatedFieldRef<double>(message, fds));
       } else {
-        output.attributes[util::log::format("{}{}", key_prefix, fds->name())] = reflection->GetDouble(message, fds);
+        output.attributes[atfw::util::string::format("{}{}", key_prefix, fds->name())] =
+            reflection->GetDouble(message, fds);
       }
       break;
     }
     case google::protobuf::FieldDescriptor::CPPTYPE_FLOAT: {
       if (fds->is_repeated()) {
         opentelemetry_utility_protobuf_to_otel_attributes_assign_vector<double>(
-            atfw::util::log::format("{}{}", key_prefix, fds->name()), output,
+            atfw::util::string::format("{}{}", key_prefix, fds->name()), output,
             reflection->GetRepeatedFieldRef<float>(message, fds));
       } else {
-        output.attributes[util::log::format("{}{}", key_prefix, fds->name())] = reflection->GetFloat(message, fds);
+        output.attributes[atfw::util::string::format("{}{}", key_prefix, fds->name())] =
+            reflection->GetFloat(message, fds);
       }
       break;
     }
     case google::protobuf::FieldDescriptor::CPPTYPE_BOOL: {
       if (fds->is_repeated()) {
         opentelemetry_utility_protobuf_to_otel_attributes_assign_vector(
-            atfw::util::log::format("{}{}", key_prefix, fds->name()), output,
+            atfw::util::string::format("{}{}", key_prefix, fds->name()), output,
             reflection->GetRepeatedFieldRef<bool>(message, fds));
       } else {
-        output.attributes[util::log::format("{}{}", key_prefix, fds->name())] = reflection->GetBool(message, fds);
+        output.attributes[atfw::util::string::format("{}{}", key_prefix, fds->name())] =
+            reflection->GetBool(message, fds);
       }
       break;
     }
     case google::protobuf::FieldDescriptor::CPPTYPE_ENUM: {
       if (fds->is_repeated()) {
         opentelemetry_utility_protobuf_to_otel_attributes_assign_vector<int32_t>(
-            atfw::util::log::format("{}{}", key_prefix, fds->name()), output,
+            atfw::util::string::format("{}{}", key_prefix, fds->name()), output,
             reflection->GetRepeatedFieldRef<int32_t>(message, fds));
       } else {
-        output.attributes[util::log::format("{}{}", key_prefix, fds->name())] = reflection->GetEnumValue(message, fds);
+        output.attributes[atfw::util::string::format("{}{}", key_prefix, fds->name())] =
+            reflection->GetEnumValue(message, fds);
       }
       break;
     }
@@ -1162,8 +1170,8 @@ SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_int64(
   }
 
   // opentelemetry only use metrics name as key of metric storage
-  std::string key = atfw::util::log::format("{}:{}", gsl::string_view{meter_name.data(), meter_name.size()},
-                                            gsl::string_view{metrics_key.name.data(), metrics_key.name.size()});
+  std::string key = atfw::util::string::format("{}:{}", gsl::string_view{meter_name.data(), meter_name.size()},
+                                               gsl::string_view{metrics_key.name.data(), metrics_key.name.size()});
 
   std::pair<std::recursive_mutex&, opentelemetry_utility_global_metrics_set&> data_set = get_global_metrics_set();
   {
@@ -1214,8 +1222,8 @@ SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_double
   }
 
   // opentelemetry only use metrics name as key of metric storage
-  std::string key = atfw::util::log::format("{}:{}", gsl::string_view{meter_name.data(), meter_name.size()},
-                                            gsl::string_view{metrics_key.name.data(), metrics_key.name.size()});
+  std::string key = atfw::util::string::format("{}:{}", gsl::string_view{meter_name.data(), meter_name.size()},
+                                               gsl::string_view{metrics_key.name.data(), metrics_key.name.size()});
   std::pair<std::recursive_mutex&, opentelemetry_utility_global_metrics_set&> data_set = get_global_metrics_set();
   {
     std::lock_guard<std::recursive_mutex> lock_guard{data_set.first};

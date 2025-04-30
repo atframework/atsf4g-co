@@ -991,8 +991,9 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> 
     return opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
   }
 
-  std::string cache_key = atfw::util::log::format("{}:{}", gsl::string_view{library_name.data(), library_name.size()},
-                                                  gsl::string_view{library_version.data(), library_version.size()});
+  std::string cache_key =
+      atfw::util::string::format("{}:{}", gsl::string_view{library_name.data(), library_name.size()},
+                                 gsl::string_view{library_version.data(), library_version.size()});
   {
     atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{group->tracer_lock};
     auto iter = group->tracer_cache.find(cache_key);
@@ -1623,9 +1624,10 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> g
     return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
   }
 
-  std::string cache_key = atfw::util::log::format("{}:{}:{}", gsl::string_view{logger_name.data(), logger_name.size()},
-                                                  gsl::string_view{library_name.data(), library_name.size()},
-                                                  gsl::string_view{library_version.data(), library_version.size()});
+  std::string cache_key =
+      atfw::util::string::format("{}:{}:{}", gsl::string_view{logger_name.data(), logger_name.size()},
+                                 gsl::string_view{library_name.data(), library_name.size()},
+                                 gsl::string_view{library_version.data(), library_version.size()});
   {
     atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{group->logger_lock};
     auto iter = group->logger_cache.find(cache_key);
