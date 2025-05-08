@@ -183,7 +183,7 @@ class session {
   opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> actor_log_otel_;
 };
 
-namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID {
+ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN
 template <class CharT>
 struct ATFW_UTIL_SYMBOL_VISIBLE formatter<session, CharT> : formatter<std::string> {
   template <class FormatContext>
@@ -193,4 +193,4 @@ struct ATFW_UTIL_SYMBOL_VISIBLE formatter<session, CharT> : formatter<std::strin
                                        sess.get_cached_user_id());
   }
 };
-}  // namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID
+ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_END

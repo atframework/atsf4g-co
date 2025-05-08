@@ -306,7 +306,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
     FWLOGFATAL("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id(), ##args)
 #endif
 
-namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID {
+ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN
 template <class CharT>
 struct ATFW_UTIL_SYMBOL_VISIBLE formatter<player_cache, CharT> : formatter<std::string> {
   template <class FormatContext>
@@ -315,4 +315,4 @@ struct ATFW_UTIL_SYMBOL_VISIBLE formatter<player_cache, CharT> : formatter<std::
                                        user.get_user_id());
   }
 };
-}  // namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID
+ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_END

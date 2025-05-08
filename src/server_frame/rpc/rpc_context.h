@@ -284,7 +284,7 @@ class context {
 };
 }  // namespace rpc
 
-namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID {
+ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN
 template <class CharT>
 struct ATFW_UTIL_SYMBOL_VISIBLE formatter<rpc::context, CharT> : formatter<std::string, CharT> {
   template <class FormatContext>
@@ -319,7 +319,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE formatter<rpc::context, CharT> : formatter<std::
     return ret;
   }
 };
-}  // namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID
+ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_END
 
 // 玩家日志输出工具
 #ifdef _MSC_VER

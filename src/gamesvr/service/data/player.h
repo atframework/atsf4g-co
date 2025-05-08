@@ -268,7 +268,7 @@ class player : public player_cache {
   REG_PLAYER_MGR_PTR_DEF(user_async_jobs_manager)
 };
 
-namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID {
+ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN
 template <class CharT>
 struct formatter<player, CharT> : formatter<player_cache, CharT> {};
-}  // namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID
+ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_END

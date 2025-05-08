@@ -417,7 +417,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_req_base : public task_action_base {
   mutable TREQ *request_msg_;
 };
 
-namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID {
+ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN
 template <class T>
 struct ATFW_UTIL_SYMBOL_VISIBLE
 formatter<T, typename std::enable_if<std::is_base_of<task_action_base, T>::value, char>::type>
@@ -428,7 +428,7 @@ formatter<T, typename std::enable_if<std::is_base_of<task_action_base, T>::value
   }
 };
 
-}  // namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID
+ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_END
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
 #  define TASK_ACTION_RETURN_CODE(x) co_return (x)

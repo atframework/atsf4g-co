@@ -1321,12 +1321,12 @@ SERVER_FRAME_API void opentelemetry_utility::send_notification_event(rpc::contex
   }
   if (0 != ctx.get_task_context().reference_object_zone_id) {
     standard_attributes[attribute_pair_size++] = attribute_pair_type{
-        rpc::telemetry::semantic_conventions::kRpcRouterObjectZoneID, ctx.get_task_context().reference_object_type_id};
+        rpc::telemetry::semantic_conventions::kRpcRouterObjectZoneID, ctx.get_task_context().reference_object_zone_id};
   }
   if (0 != ctx.get_task_context().reference_object_instance_id) {
     standard_attributes[attribute_pair_size++] =
         attribute_pair_type{rpc::telemetry::semantic_conventions::kRpcRouterObjectInstanceID,
-                            ctx.get_task_context().reference_object_type_id};
+                            ctx.get_task_context().reference_object_instance_id};
   }
   opentelemetry::nostd::string_view body{message.data(), message.size()};
   if (0 != (static_cast<int32_t>(event_domain) & static_cast<int32_t>(notification_domain::kStackTraceBitFlag))) {
