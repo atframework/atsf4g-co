@@ -444,6 +444,8 @@ SERVER_FRAME_API int logic_server_common_module::init() {
 SERVER_FRAME_API void logic_server_common_module::ready() {
   FWLOGINFO("============ Server ready ============");
 
+  rpc::telemetry::opentelemetry_utility::setup();
+
   memset(&stats_->last_checkpoint_usage, 0, sizeof(stats_->last_checkpoint_usage));
   stats_->collect_sequence.store(0, std::memory_order_release);
   stats_->last_update_usage_timepoint = 0;
@@ -518,6 +520,8 @@ SERVER_FRAME_API int logic_server_common_module::stop() {
     if (detail::g_last_common_module == this) {
       detail::g_last_common_module_stats.reset();
       detail::g_last_common_module = nullptr;
+
+      rpc::telemetry::opentelemetry_utility::stop();
     }
   }
 
@@ -594,6 +598,8 @@ SERVER_FRAME_API int logic_server_common_module::tick() {
       ++ret;
     }
   }
+
+  ret += rpc::telemetry::opentelemetry_utility::tick();
 
   tick_stats();
   return ret;

@@ -147,6 +147,10 @@ class opentelemetry_utility {
                                                             opentelemetry::nostd::variant<int64_t, double> value,
                                                             const opentelemetry::common::KeyValueIterable& attributes);
 
+  SERVER_FRAME_API static void global_metics_observe_record(metrics_observer& observer,
+                                                            opentelemetry::nostd::variant<int64_t, double> value,
+                                                            attribute_span_type attributes);
+
   template <class ValueType>
   ATFW_UTIL_SYMBOL_VISIBLE static void global_metics_observe_record(metrics_observer& observer, ValueType&& value) {
     std::shared_ptr<::rpc::telemetry::group_type> __lifetime;
@@ -156,10 +160,17 @@ class opentelemetry_utility {
   }
 
   template <class ValueType, class AttributeType,
-            class = atfw::util::nostd::enable_if_t<!std::is_base_of<opentelemetry::common::KeyValueIterable,
-                                                                    atfw::util::nostd::decay_t<AttributeType>>::value>>
+            class = atfw::util::nostd::enable_if_t<
+                !std::is_base_of<opentelemetry::common::KeyValueIterable,
+                                 atfw::util::nostd::remove_cvref_t<AttributeType>>::value &&
+                !std::is_convertible<atfw::util::nostd::remove_cvref_t<AttributeType>, attribute_span_type>::value>>
   ATFW_UTIL_SYMBOL_VISIBLE static void global_metics_observe_record(metrics_observer& observer, ValueType&& value,
                                                                     AttributeType&& attributes) {
+    using next_parameter_type =
+        atfw::util::nostd::remove_cvref_t<decltype(opentelemetry::common::MakeAttributes(attributes))>;
+    static_assert(std::is_base_of<opentelemetry::common::KeyValueIterable, next_parameter_type>::value ||
+                  std::is_convertible<next_parameter_type, attribute_span_type>::value);
+
     global_metics_observe_record(observer, global_metics_observe_record_parse_value(value),
                                  opentelemetry::common::MakeAttributes(attributes));
   }

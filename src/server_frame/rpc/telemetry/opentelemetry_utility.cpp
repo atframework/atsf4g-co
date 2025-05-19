@@ -1000,9 +1000,6 @@ SERVER_FRAME_API void opentelemetry_utility::stop() {
   }
 
   std::pair<std::recursive_mutex&, opentelemetry_utility_global_metrics_set&> data_set = get_global_metrics_set();
-  if (data_set.second.closing.load(std::memory_order_acquire)) {
-    return;
-  }
   std::shared_ptr<::rpc::telemetry::group_type> telemetry_lifetime =
       rpc::telemetry::global_service::get_default_group();
 
@@ -1268,6 +1265,22 @@ SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_double
 SERVER_FRAME_API void opentelemetry_utility::global_metics_observe_record(
     metrics_observer& observer, opentelemetry::nostd::variant<int64_t, double> value,
     const opentelemetry::common::KeyValueIterable& attributes) {
+  atfw::util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record> record =
+      atfw::util::memory::make_strong_rc<opentelemetry_utility::metrics_record>();
+  if (!record) {
+    return;
+  }
+
+  record->value = value;
+  populate_attributes(record->attributes, attributes);
+
+  observer.records.emplace(std::move(record));
+
+  ++observer.stat_push_record_counter_sum;
+}
+
+SERVER_FRAME_API void opentelemetry_utility::global_metics_observe_record(
+    metrics_observer& observer, opentelemetry::nostd::variant<int64_t, double> value, attribute_span_type attributes) {
   atfw::util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record> record =
       atfw::util::memory::make_strong_rc<opentelemetry_utility::metrics_record>();
   if (!record) {
