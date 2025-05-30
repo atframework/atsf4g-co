@@ -4,6 +4,8 @@
 
 #include "rpc/telemetry/rpc_global_service.h"
 
+#include <xxhash.h>
+
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
@@ -23,6 +25,8 @@
 #include <opentelemetry/exporters/otlp/otlp_file_log_record_exporter_factory.h>
 #include <opentelemetry/exporters/otlp/otlp_file_metric_exporter_factory.h>
 #include <opentelemetry/exporters/otlp/otlp_file_metric_exporter_options.h>
+#include <opentelemetry/exporters/otlp/otlp_grpc_client_factory.h>
+#include <opentelemetry/exporters/otlp/otlp_grpc_client_options.h>
 #include <opentelemetry/exporters/otlp/otlp_grpc_exporter_factory.h>
 #include <opentelemetry/exporters/otlp/otlp_grpc_exporter_options.h>
 #include <opentelemetry/exporters/otlp/otlp_grpc_log_record_exporter_factory.h>
@@ -99,6 +103,7 @@
 #include <initializer_list>
 #include <memory>
 #include <mutex>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -109,6 +114,7 @@
 #include "rpc/telemetry/exporter/prometheus_push_exporter_factory.h"
 #include "rpc/telemetry/exporter/prometheus_push_exporter_options.h"
 #include "rpc/telemetry/opentelemetry_utility.h"
+#include "rpc/telemetry/semantic_conventions.h"
 
 namespace rpc {
 
@@ -276,6 +282,10 @@ struct global_service_data_type : public atfw::util::design_pattern::local_singl
   atfw::util::lock::spin_rw_lock group_lock;
   std::shared_ptr<group_type> default_group;
   std::unordered_map<std::string, std::shared_ptr<group_type>> named_groups;
+
+  atfw::util::lock::spin_rw_lock shared_grpc_client_lock;
+  std::unordered_map<std::string, std::shared_ptr<opentelemetry::exporter::otlp::OtlpGrpcClient>>
+      shared_grpc_client_cache;
 
   bool shutdown = false;
   inline global_service_data_type() {}
@@ -1662,6 +1672,85 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> g
 }
 
 namespace {
+
+static std::shared_ptr<opentelemetry::exporter::otlp::OtlpGrpcClient> _opentelemetry_create_grpc_client(
+    const opentelemetry::exporter::otlp::OtlpGrpcClientOptions options) {
+  // std::shared_ptr<OtlpGrpcClient> ret = ;
+
+  std::shared_ptr<global_service_data_type> current_service_cache = get_global_service_data();
+  if (!current_service_cache) {
+    return nullptr;
+  }
+
+  std::stringstream ss_key;
+  ss_key << options.endpoint << "|" << options.use_ssl_credentials << "|" << options.user_agent;
+
+  XXH64_hash_t seed = static_cast<XXH64_hash_t>(4611686018427387847LL);
+  if (!options.ssl_credentials_cacert_path.empty()) {
+    ss_key << "|"
+           << XXH64(reinterpret_cast<const void *>(options.ssl_credentials_cacert_path.c_str()),
+                    options.ssl_credentials_cacert_path.size(), seed);
+  } else if (!options.ssl_credentials_cacert_as_string.empty()) {
+    ss_key << "|"
+           << XXH64(reinterpret_cast<const void *>(options.ssl_credentials_cacert_as_string.c_str()),
+                    options.ssl_credentials_cacert_as_string.size(), seed);
+  }
+
+#if defined(ENABLE_OTLP_GRPC_SSL_MTLS_PREVIEW)
+  if (!options.ssl_client_key_path.empty()) {
+    ss_key << "|"
+           << XXH64(reinterpret_cast<const void *>(options.ssl_client_key_path.c_str()),
+                    options.ssl_client_key_path.size(), seed);
+  } else if (!options.ssl_client_key_string.empty()) {
+    ss_key << "|"
+           << XXH64(reinterpret_cast<const void *>(options.ssl_client_key_string.c_str()),
+                    options.ssl_client_key_string.size(), seed);
+  }
+
+  if (!options.ssl_client_cert_path.empty()) {
+    ss_key << "|"
+           << XXH64(reinterpret_cast<const void *>(options.ssl_client_cert_path.c_str()),
+                    options.ssl_client_cert_path.size(), seed);
+  } else if (!options.ssl_client_cert_string.empty()) {
+    ss_key << "|"
+           << XXH64(reinterpret_cast<const void *>(options.ssl_client_cert_string.c_str()),
+                    options.ssl_client_cert_string.size(), seed);
+  }
+#endif
+
+  std::string client_key = ss_key.str();
+
+  // 先只加读锁，允许并行
+  {
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{
+        current_service_cache->shared_grpc_client_lock};
+    auto iter = current_service_cache->shared_grpc_client_cache.find(options.endpoint);
+    if (iter != current_service_cache->shared_grpc_client_cache.end()) {
+      return iter->second;
+    }
+  }
+
+  // 如果创建需要写，再换成写锁
+  std::shared_ptr<opentelemetry::exporter::otlp::OtlpGrpcClient> ret =
+      opentelemetry::exporter::otlp::OtlpGrpcClientFactory::Create(options);
+  if (!ret) {
+    return ret;
+  }
+
+  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{
+      current_service_cache->shared_grpc_client_lock};
+
+  // double check
+  {
+    auto iter = current_service_cache->shared_grpc_client_cache.find(options.endpoint);
+    if (iter != current_service_cache->shared_grpc_client_cache.end()) {
+      return iter->second;
+    }
+  }
+  current_service_cache->shared_grpc_client_cache[client_key] = ret;
+  return ret;
+}
+
 static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> _opentelemetry_create_trace_exporter(
     ::rpc::telemetry::group_type &group,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_trace_exporter_cfg &exporter_cfg) {
@@ -1707,6 +1796,12 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> _op
     }
 
     options.max_concurrent_requests = exporter_cfg.otlp_grpc().max_concurrent_requests();
+    if (exporter_cfg.otlp_grpc().max_threads() > 0) {
+      options.max_threads = exporter_cfg.otlp_grpc().max_threads();
+    } else {
+      options.max_threads = 2;
+    }
+
     if (!exporter_cfg.otlp_grpc().ssl_ca_cert_path().empty()) {
       options.ssl_credentials_cacert_path = exporter_cfg.otlp_grpc().ssl_ca_cert_path();
     }
@@ -1727,8 +1822,12 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> _op
       options.ssl_client_cert_string = exporter_cfg.otlp_grpc().ssl_client_cert_string();
     }
 #endif
+    if (!exporter_cfg.otlp_grpc().compression().empty()) {
+      options.compression = exporter_cfg.otlp_grpc().compression();
+    }
 
-    ret.emplace_back(opentelemetry::exporter::otlp::OtlpGrpcExporterFactory::Create(options));
+    ret.emplace_back(opentelemetry::exporter::otlp::OtlpGrpcExporterFactory::Create(
+        options, _opentelemetry_create_grpc_client(options)));
   }
 
   if (exporter_cfg.has_otlp_http() && !exporter_cfg.otlp_http().endpoint().empty()) {
@@ -2010,6 +2109,12 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
     }
 
     options.max_concurrent_requests = exporter_cfg.otlp_grpc().max_concurrent_requests();
+    if (exporter_cfg.otlp_grpc().max_threads() > 0) {
+      options.max_threads = exporter_cfg.otlp_grpc().max_threads();
+    } else {
+      options.max_threads = 2;
+    }
+
     if (!exporter_cfg.otlp_grpc().ssl_ca_cert_path().empty()) {
       options.ssl_credentials_cacert_path = exporter_cfg.otlp_grpc().ssl_ca_cert_path();
     }
@@ -2030,8 +2135,12 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
       options.ssl_client_cert_string = exporter_cfg.otlp_grpc().ssl_client_cert_string();
     }
 #endif
+    if (!exporter_cfg.otlp_grpc().compression().empty()) {
+      options.compression = exporter_cfg.otlp_grpc().compression();
+    }
 
-    ret.emplace_back(opentelemetry::exporter::otlp::OtlpGrpcMetricExporterFactory::Create(options));
+    ret.emplace_back(opentelemetry::exporter::otlp::OtlpGrpcMetricExporterFactory::Create(
+        options, _opentelemetry_create_grpc_client(options)));
   }
 
   if (exporter_cfg.has_otlp_http() && !exporter_cfg.otlp_http().endpoint().empty()) {
@@ -2311,6 +2420,12 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogRecordExporter>>
     }
 
     options.max_concurrent_requests = exporter_cfg.otlp_grpc().max_concurrent_requests();
+    if (exporter_cfg.otlp_grpc().max_threads() > 0) {
+      options.max_threads = exporter_cfg.otlp_grpc().max_threads();
+    } else {
+      options.max_threads = 2;
+    }
+
     if (!exporter_cfg.otlp_grpc().ssl_ca_cert_path().empty()) {
       options.ssl_credentials_cacert_path = exporter_cfg.otlp_grpc().ssl_ca_cert_path();
     }
@@ -2331,8 +2446,12 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogRecordExporter>>
       options.ssl_client_cert_string = exporter_cfg.otlp_grpc().ssl_client_cert_string();
     }
 #endif
+    if (!exporter_cfg.otlp_grpc().compression().empty()) {
+      options.compression = exporter_cfg.otlp_grpc().compression();
+    }
 
-    ret.emplace_back(opentelemetry::exporter::otlp::OtlpGrpcLogRecordExporterFactory::Create(options));
+    ret.emplace_back(opentelemetry::exporter::otlp::OtlpGrpcLogRecordExporterFactory::Create(
+        options, _opentelemetry_create_grpc_client(options)));
   }
 
   if (exporter_cfg.has_otlp_http() && !exporter_cfg.otlp_http().endpoint().empty()) {
@@ -3022,6 +3141,18 @@ static void _create_opentelemetry_app_resource(
     }
   }
 
+  // 框架层额外属性
+  if (group.group_name.empty()) {
+    // Default group
+    group.common_owned_attributes.SetAttribute(semantic_conventions::kTelemetryGroupName, "default");
+    set_attributes_map_item(group.common_owned_attributes, group.metrics_attributes,
+                            semantic_conventions::kTelemetryGroupName);
+  } else {
+    group.common_owned_attributes.SetAttribute(semantic_conventions::kTelemetryGroupName, group.group_name);
+    set_attributes_map_item(group.common_owned_attributes, group.metrics_attributes,
+                            semantic_conventions::kTelemetryGroupName);
+  }
+
   // Other common resource should be set by configure generator
   rebuild_attributes_map(group.common_owned_attributes, group.common_attributes);
 
@@ -3193,6 +3324,20 @@ SERVER_FRAME_API void global_service::set_current_service(
   if (!default_group || app.is_closing()) {
     return;
   }
+
+  // Cleanup shared caches of previous configure
+  do {
+    std::shared_ptr<global_service_data_type> current_service_cache = get_global_service_data();
+    if (!current_service_cache) {
+      break;
+    }
+
+    {
+      atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{
+          current_service_cache->shared_grpc_client_lock};
+      current_service_cache->shared_grpc_client_cache.clear();
+    }
+  } while (false);
 
   // Setup telemetry
   default_group->initialized = false;
