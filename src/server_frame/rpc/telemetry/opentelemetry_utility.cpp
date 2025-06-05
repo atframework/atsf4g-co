@@ -1390,40 +1390,38 @@ SERVER_FRAME_API void opentelemetry_utility::send_notification_event(
                           attribute_span_type{attrbites.begin(), attrbites.end()});
 }
 
-SERVER_FRAME_API void opentelemetry_utility::send_log_to_default_group(rpc::context& ctx, gsl::string_view event_domain,
-                                                                       gsl::string_view event_name,
+SERVER_FRAME_API void opentelemetry_utility::send_log_to_default_group(rpc::context& ctx, gsl::string_view event_name,
                                                                        gsl::string_view message,
                                                                        attribute_span_type attrbites) {
-  send_log_to_default_group(ctx, event_domain, opentelemetry::logs::Severity::kInfo, event_domain, event_name, message,
-                            attrbites);
+  send_log_to_default_group(ctx, event_name, opentelemetry::logs::Severity::kInfo, event_name, message, attrbites);
 }
 
 SERVER_FRAME_API void opentelemetry_utility::send_log_to_default_group(
-    rpc::context& ctx, gsl::string_view event_domain, gsl::string_view event_name, gsl::string_view message,
+    rpc::context& ctx, gsl::string_view event_name, gsl::string_view message,
     std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
         attrbites) {
-  send_log_to_default_group(ctx, event_domain, opentelemetry::logs::Severity::kInfo, event_domain, event_name, message,
+  send_log_to_default_group(ctx, event_name, opentelemetry::logs::Severity::kInfo, event_name, message,
                             attribute_span_type{attrbites.begin(), attrbites.end()});
 }
 
-SERVER_FRAME_API void opentelemetry_utility::send_log_to_default_group(
-    rpc::context& ctx, opentelemetry::logs::Severity severity, gsl::string_view event_domain,
-    gsl::string_view event_name, gsl::string_view message, attribute_span_type attrbites) {
-  send_log_to_default_group(ctx, event_domain, severity, event_domain, event_name, message, attrbites);
+SERVER_FRAME_API void opentelemetry_utility::send_log_to_default_group(rpc::context& ctx,
+                                                                       opentelemetry::logs::Severity severity,
+                                                                       gsl::string_view event_name,
+                                                                       gsl::string_view message,
+                                                                       attribute_span_type attrbites) {
+  send_log_to_default_group(ctx, event_name, severity, event_name, message, attrbites);
 }
 
 SERVER_FRAME_API void opentelemetry_utility::send_log_to_default_group(
-    rpc::context& ctx, opentelemetry::logs::Severity severity, gsl::string_view event_domain,
-    gsl::string_view event_name, gsl::string_view message,
+    rpc::context& ctx, opentelemetry::logs::Severity severity, gsl::string_view event_name, gsl::string_view message,
     std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
         attrbites) {
-  send_log_to_default_group(ctx, event_domain, severity, event_domain, event_name, message,
+  send_log_to_default_group(ctx, event_name, severity, event_name, message,
                             attribute_span_type{attrbites.begin(), attrbites.end()});
 }
 
 SERVER_FRAME_API void opentelemetry_utility::send_log_to_default_group(rpc::context& ctx, gsl::string_view logger_name,
                                                                        opentelemetry::logs::Severity severity,
-                                                                       gsl::string_view event_domain,
                                                                        gsl::string_view event_name,
                                                                        gsl::string_view message,
                                                                        attribute_span_type attrbites) {
@@ -1439,12 +1437,9 @@ SERVER_FRAME_API void opentelemetry_utility::send_log_to_default_group(rpc::cont
     return;
   }
 
-  attribute_pair_type standard_attributes[6] = {
-      attribute_pair_type{rpc::telemetry::semantic_conventions::kEventDomain,
-                          opentelemetry::nostd::string_view{event_domain.data(), event_domain.size()}},
-      attribute_pair_type{opentelemetry::trace::SemanticConventions::kEventName,
-                          opentelemetry::common::AttributeValue{
-                              opentelemetry::nostd::string_view{event_name.data(), event_name.size()}}}};
+  attribute_pair_type standard_attributes[6] = {attribute_pair_type{
+      opentelemetry::trace::SemanticConventions::kEventName,
+      opentelemetry::common::AttributeValue{opentelemetry::nostd::string_view{event_name.data(), event_name.size()}}}};
 
   size_t attribute_pair_size = 2;
   if (!ctx.get_task_context().task_name.empty()) {
@@ -1469,13 +1464,12 @@ SERVER_FRAME_API void opentelemetry_utility::send_log_to_default_group(rpc::cont
 
   auto& trace_span = ctx.get_trace_span();
   if (trace_span) {
-    logger->EmitLogRecord(
-        severity, opentelemetry::nostd::string_view{event_domain.data(), event_domain.size()}, trace_span->GetContext(),
-        attrbites, attribute_span_type(&standard_attributes[0], attribute_pair_size),
-        atfw::util::time::time_utility::sys_now(), opentelemetry::nostd::string_view{message.data(), message.size()});
+    logger->EmitLogRecord(severity, trace_span->GetContext(), attrbites,
+                          attribute_span_type(&standard_attributes[0], attribute_pair_size),
+                          atfw::util::time::time_utility::sys_now(),
+                          opentelemetry::nostd::string_view{message.data(), message.size()});
   } else {
-    logger->EmitLogRecord(severity, opentelemetry::nostd::string_view{event_domain.data(), event_domain.size()},
-                          attrbites, attribute_span_type(&standard_attributes[0], attribute_pair_size),
+    logger->EmitLogRecord(severity, attrbites, attribute_span_type(&standard_attributes[0], attribute_pair_size),
                           atfw::util::time::time_utility::sys_now(),
                           opentelemetry::nostd::string_view{message.data(), message.size()});
   }
@@ -1483,10 +1477,10 @@ SERVER_FRAME_API void opentelemetry_utility::send_log_to_default_group(rpc::cont
 
 SERVER_FRAME_API void opentelemetry_utility::send_log_to_default_group(
     rpc::context& ctx, gsl::string_view logger_name, opentelemetry::logs::Severity severity,
-    gsl::string_view event_domain, gsl::string_view event_name, gsl::string_view message,
+    gsl::string_view event_name, gsl::string_view message,
     std::initializer_list<std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue>>
         attrbites) {
-  send_log_to_default_group(ctx, logger_name, severity, event_domain, event_name, message,
+  send_log_to_default_group(ctx, logger_name, severity, event_name, message,
                             attribute_span_type{attrbites.begin(), attrbites.end()});
 }
 
