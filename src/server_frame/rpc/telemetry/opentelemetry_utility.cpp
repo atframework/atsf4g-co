@@ -1441,7 +1441,7 @@ SERVER_FRAME_API void opentelemetry_utility::send_log_to_default_group(rpc::cont
       opentelemetry::trace::SemanticConventions::kEventName,
       opentelemetry::common::AttributeValue{opentelemetry::nostd::string_view{event_name.data(), event_name.size()}}}};
 
-  size_t attribute_pair_size = 2;
+  size_t attribute_pair_size = 1;
   if (!ctx.get_task_context().task_name.empty()) {
     standard_attributes[attribute_pair_size++] =
         attribute_pair_type{rpc::telemetry::semantic_conventions::kRpcSystemValueAtRpcTask,
