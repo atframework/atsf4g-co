@@ -85,8 +85,8 @@ message opentelemetry_simple_processor_cfg {}
 
 message opentelemetry_batch_processor_cfg {
   google.protobuf.Duration timeout = 1 [(atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
-  uint64 send_batch_size = 2 [(atapp.protocol.CONFIGURE) = { default_value: "512" min_value: "1" }];
-  uint64 send_batch_max_size = 3 [(atapp.protocol.CONFIGURE) = { default_value: "2048" min_value: "1" }];
+  uint64 max_export_batch_size = 2 [(atapp.protocol.CONFIGURE) = { default_value: "512" min_value: "1" }];
+  uint64 max_queue_size = 3 [(atapp.protocol.CONFIGURE) = { default_value: "2048" min_value: "1" }];
 }
 
 message opentelemetry_processor_cfg {

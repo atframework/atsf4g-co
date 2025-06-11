@@ -124,8 +124,8 @@ logic:
         processors:
           batch:
             timeout: 5s
-            send_batch_size: 512
-            send_batch_max_size: 4096
+            max_export_batch_size: 512
+            max_queue_size: 4096
         samplers:
           always_on: true
           # trace_id_ratio: 0.25
@@ -187,5 +187,5 @@ logic:
         processors:
           batch:
             timeout: 5s
-            send_batch_size: 512
-            send_batch_max_size: 4096
+            max_export_batch_size: 512
+            max_queue_size: 4096

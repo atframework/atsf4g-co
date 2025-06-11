@@ -1921,8 +1921,8 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanProcessor>> _o
 
   opentelemetry::sdk::trace::BatchSpanProcessorOptions options{};
   if (processor_cfg.has_batch()) {
-    options.max_export_batch_size = static_cast<size_t>(processor_cfg.batch().send_batch_max_size());
-    options.max_queue_size = static_cast<size_t>(processor_cfg.batch().send_batch_size());
+    options.max_export_batch_size = static_cast<size_t>(processor_cfg.batch().max_export_batch_size());
+    options.max_queue_size = static_cast<size_t>(processor_cfg.batch().max_queue_size());
     options.schedule_delay_millis = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::seconds(processor_cfg.batch().timeout().seconds()) +
         std::chrono::nanoseconds(processor_cfg.batch().timeout().nanos()));
@@ -2544,8 +2544,8 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogRecordProcessor>
   }
 
   opentelemetry::v1::sdk::logs::BatchLogRecordProcessorOptions options;
-  options.max_export_batch_size = static_cast<size_t>(processor_cfg.batch().send_batch_size());
-  options.max_queue_size = static_cast<size_t>(processor_cfg.batch().send_batch_max_size());
+  options.max_export_batch_size = static_cast<size_t>(processor_cfg.batch().max_export_batch_size());
+  options.max_queue_size = static_cast<size_t>(processor_cfg.batch().max_queue_size());
   options.schedule_delay_millis = std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::seconds(processor_cfg.batch().timeout().seconds()) +
       std::chrono::nanoseconds(processor_cfg.batch().timeout().nanos()));
