@@ -124,7 +124,7 @@ logic:
         processors:
           batch:
             timeout: 5s
-            max_export_batch_size: 512
+            send_batch_size: 512
             max_queue_size: 4096
         samplers:
           always_on: true
@@ -187,5 +187,5 @@ logic:
         processors:
           batch:
             timeout: 5s
-            max_export_batch_size: 512
+            send_batch_size: 512
             max_queue_size: 4096

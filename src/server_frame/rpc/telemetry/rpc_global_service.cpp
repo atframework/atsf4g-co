@@ -1877,6 +1877,17 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> _op
     if (!exporter_cfg.otlp_http().ssl_cipher_suite().empty()) {
       options.ssl_cipher_suite = exporter_cfg.otlp_http().ssl_cipher_suite();
     }
+    options.ssl_insecure_skip_verify = exporter_cfg.otlp_http().insecure();
+
+    if (!exporter_cfg.otlp_http().compression().empty()) {
+      options.compression = exporter_cfg.otlp_http().compression();
+    }
+    if (exporter_cfg.otlp_http().content_type() ==
+        PROJECT_NAMESPACE_ID::config::EN_OPENTELEMETRY_EXPORTER_OTLP_HTTP_CONTENT_TYPE_JSON) {
+      options.content_type = opentelemetry::exporter::otlp::HttpRequestContentType::kJson;
+    } else {
+      options.content_type = opentelemetry::exporter::otlp::HttpRequestContentType::kBinary;
+    }
 
     ret.emplace_back(opentelemetry::exporter::otlp::OtlpHttpExporterFactory::Create(options));
   }
@@ -1921,7 +1932,7 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanProcessor>> _o
 
   opentelemetry::sdk::trace::BatchSpanProcessorOptions options{};
   if (processor_cfg.has_batch()) {
-    options.max_export_batch_size = static_cast<size_t>(processor_cfg.batch().max_export_batch_size());
+    options.max_export_batch_size = static_cast<size_t>(processor_cfg.batch().send_batch_size());
     options.max_queue_size = static_cast<size_t>(processor_cfg.batch().max_queue_size());
     options.schedule_delay_millis = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::seconds(processor_cfg.batch().timeout().seconds()) +
@@ -2209,9 +2220,20 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
     if (!exporter_cfg.otlp_http().ssl_cipher_suite().empty()) {
       options.ssl_cipher_suite = exporter_cfg.otlp_http().ssl_cipher_suite();
     }
+    options.ssl_insecure_skip_verify = exporter_cfg.otlp_http().insecure();
 
     options.max_concurrent_requests = exporter_cfg.otlp_http().max_concurrent_requests();
     options.max_requests_per_connection = exporter_cfg.otlp_http().max_requests_per_connection();
+
+    if (!exporter_cfg.otlp_http().compression().empty()) {
+      options.compression = exporter_cfg.otlp_http().compression();
+    }
+    if (exporter_cfg.otlp_http().content_type() ==
+        PROJECT_NAMESPACE_ID::config::EN_OPENTELEMETRY_EXPORTER_OTLP_HTTP_CONTENT_TYPE_JSON) {
+      options.content_type = opentelemetry::exporter::otlp::HttpRequestContentType::kJson;
+    } else {
+      options.content_type = opentelemetry::exporter::otlp::HttpRequestContentType::kBinary;
+    }
 
     ret.emplace_back(opentelemetry::exporter::otlp::OtlpHttpMetricExporterFactory::Create(options));
   }
@@ -2501,6 +2523,17 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogRecordExporter>>
     if (!exporter_cfg.otlp_http().ssl_cipher_suite().empty()) {
       options.ssl_cipher_suite = exporter_cfg.otlp_http().ssl_cipher_suite();
     }
+    options.ssl_insecure_skip_verify = exporter_cfg.otlp_http().insecure();
+
+    if (!exporter_cfg.otlp_http().compression().empty()) {
+      options.compression = exporter_cfg.otlp_http().compression();
+    }
+    if (exporter_cfg.otlp_http().content_type() ==
+        PROJECT_NAMESPACE_ID::config::EN_OPENTELEMETRY_EXPORTER_OTLP_HTTP_CONTENT_TYPE_JSON) {
+      options.content_type = opentelemetry::exporter::otlp::HttpRequestContentType::kJson;
+    } else {
+      options.content_type = opentelemetry::exporter::otlp::HttpRequestContentType::kBinary;
+    }
 
     ret.emplace_back(opentelemetry::exporter::otlp::OtlpHttpLogRecordExporterFactory::Create(options));
   }
@@ -2544,7 +2577,7 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogRecordProcessor>
   }
 
   opentelemetry::v1::sdk::logs::BatchLogRecordProcessorOptions options;
-  options.max_export_batch_size = static_cast<size_t>(processor_cfg.batch().max_export_batch_size());
+  options.max_export_batch_size = static_cast<size_t>(processor_cfg.batch().send_batch_size());
   options.max_queue_size = static_cast<size_t>(processor_cfg.batch().max_queue_size());
   options.schedule_delay_millis = std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::seconds(processor_cfg.batch().timeout().seconds()) +

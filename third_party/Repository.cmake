@@ -1,5 +1,7 @@
 include_guard(GLOBAL)
 
+set(PROJECT_THIRD_PARTY_ROOT_DIR "${CMAKE_CURRENT_LIST_DIR}")
+
 # Cleanup old prebuilt
 project_git_get_ambiguous_name(ATFRAMEWORK_CMAKE_TOOLSET_VERSION "${ATFRAMEWORK_CMAKE_TOOLSET_DIR}")
 string(STRIP "${ATFRAMEWORK_CMAKE_TOOLSET_VERSION}" ATFRAMEWORK_CMAKE_TOOLSET_VERSION)
@@ -50,6 +52,24 @@ else()
   execute_process(COMMAND ${GIT_EXECUTABLE} config --local --unset-all "url.${PROJECT_GITHUB_GIT_HTTP_MIRROR}.insteadOf"
                   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
 endif()
+
+# ============ third party - package alias ============
+function(project_third_party_make_package_alias_dir)
+  file(REAL_PATH "${PROJECT_THIRD_PARTY_PACKAGE_DIR}" _rel_pkg_path)
+  file(TO_CMAKE_PATH "${_rel_pkg_path}" _rel_pkg_path)
+  file(REAL_PATH "${CMAKE_CURRENT_LIST_DIR}" _alias_pkg_path_base)
+  if(_rel_pkg_path STREQUAL "${_alias_pkg_path_base}/packages")
+    return()
+  endif()
+  message(STATUS "Try to creating package directory alias: ${_alias_pkg_path} -> ${_rel_pkg_path}")
+
+  if(EXISTS "${_alias_pkg_path_base}/packages")
+    file(REMOVE_RECURSE "${_alias_pkg_path_base}/packages")
+  endif()
+
+  file(CREATE_LINK "${_rel_pkg_path}" "${_alias_pkg_path_base}/packages" SYMBOLIC)
+endfunction()
+project_third_party_make_package_alias_dir()
 
 # ============ third party ============
 project_third_party_include_port("compression/import.cmake")

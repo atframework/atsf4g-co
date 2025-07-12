@@ -22,9 +22,11 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <ctime>
 #include <fstream>
+#include <memory>
 #include <mutex>
 #include <ostream>
 #include <string>

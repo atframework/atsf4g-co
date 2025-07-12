@@ -298,6 +298,8 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
       "${PROJECT_GENERATED_PBD_DIR}/component-${TARGET_NAME}.pb"
       # Protocol buffer files
       ${project_component_declare_protocol_PROTOCOLS} ${FINAL_GENERATED_COPY_COMMANDS}
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROJECT_THIRD_PARTY_ROOT_DIR}/.clang-tidy"
+            "${project_component_declare_protocol_OUTPUT_DIR}/"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     DEPENDS ${project_component_declare_protocol_PROTOCOLS}
             "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}"
@@ -361,7 +363,9 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
                SOVERSION "${PROJECT_VERSION}"
                BUILD_RPATH_USE_ORIGIN YES
                PORJECT_PROTOCOL_DIR "${PROTOCOL_DIR}"
-               INSTALL_RPATH "${TARGET_INSTALL_RPATH}")
+               INSTALL_RPATH "${TARGET_INSTALL_RPATH}"
+               CXX_INCLUDE_WHAT_YOU_USE ""
+               CXX_CLANG_TIDY "")
 
   target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PROTOCOL_SOURCE_COMPILE_OPTIONS})
   if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)

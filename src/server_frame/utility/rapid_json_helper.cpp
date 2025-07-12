@@ -1,4 +1,4 @@
-﻿// Copyright 2023 atframework
+﻿// Copyright 2025 atframework
 //
 
 #if defined(_WIN32)
@@ -30,6 +30,7 @@
 // clang-format on
 
 #include <common/string_oprs.h>
+#include <nostd/string_view.h>
 #include <string/tquerystring.h>
 
 #include <assert.h>
@@ -145,26 +146,27 @@ static void load_field_item(rapidjson::Value& parent, const ::google::protobuf::
     parent.SetObject();
   }
 
-  const char* key_name = fds->name().c_str();
+  gsl::string_view key_name{fds->name().data(), fds->name().size()};
   if (fds->options().HasExtension(atframework::field_json_options)) {
     const atframework::JsonOptions& field_json_options = fds->options().GetExtension(atframework::field_json_options);
     if (!field_json_options.alias_key_name().empty()) {
-      key_name = field_json_options.alias_key_name().c_str();
+      key_name =
+          gsl::string_view{field_json_options.alias_key_name().data(), field_json_options.alias_key_name().size()};
     }
   }
 
   rapidjson::Value* array_value = nullptr;
   if (fds->is_repeated() && !fds->is_map()) {
-    auto iter = parent.FindMember(key_name);
+    auto iter = parent.FindMember(rapidjson::StringRef(key_name.data(), key_name.size()));
     if (iter == parent.MemberEnd()) {
       rapidjson::Value key;
-      key.SetString(key_name, doc.GetAllocator());
+      key.SetString(key_name.data(), static_cast<rapidjson::SizeType>(key_name.size()), doc.GetAllocator());
 
       rapidjson::Value ls;
       ls.SetArray();
       parent.AddMember(key, ls, doc.GetAllocator());
 
-      iter = parent.FindMember(key_name);
+      iter = parent.FindMember(rapidjson::StringRef(key_name.data(), key_name.size()));
     }
 
     if (iter == parent.MemberEnd()) {
@@ -314,16 +316,16 @@ static void load_field_item(rapidjson::Value& parent, const ::google::protobuf::
 
         rapidjson::Value* map_value = nullptr;
         if (fds->is_map()) {
-          auto iter = parent.FindMember(key_name);
+          auto iter = parent.FindMember(rapidjson::StringRef(key_name.data(), key_name.size()));
           if (iter == parent.MemberEnd()) {
             rapidjson::Value key;
-            key.SetString(key_name, doc.GetAllocator());
+            key.SetString(key_name.data(), static_cast<rapidjson::SizeType>(key_name.size()), doc.GetAllocator());
 
             rapidjson::Value new_map_obj;
             new_map_obj.SetObject();
             parent.AddMember(key, new_map_obj, doc.GetAllocator());
 
-            iter = parent.FindMember(key_name);
+            iter = parent.FindMember(rapidjson::StringRef(key_name.data(), key_name.size()));
           }
 
           if (iter == parent.MemberEnd()) {
@@ -344,8 +346,10 @@ static void load_field_item(rapidjson::Value& parent, const ::google::protobuf::
           // 以后看需要是否优化
           load_field_item(obj, data.Get(i, nullptr), map_key_fds, doc, options);
           load_field_item(obj, data.Get(i, nullptr), map_value_fds, doc, options);
-          auto move_key_iter = obj.FindMember(map_key_fds->name().c_str());
-          auto move_value_iter = obj.FindMember(map_value_fds->name().c_str());
+          auto move_key_iter =
+              obj.FindMember(rapidjson::StringRef(map_key_fds->name().data(), map_key_fds->name().size()));
+          auto move_value_iter =
+              obj.FindMember(rapidjson::StringRef(map_value_fds->name().data(), map_value_fds->name().size()));
           if (move_key_iter == obj.MemberEnd() || move_value_iter == obj.MemberEnd()) {
             continue;
           }
@@ -375,12 +379,12 @@ static void load_field_item(rapidjson::Value& parent, const ::google::protobuf::
           break;
         }
 
-        auto obj_iter = parent.FindMember(key_name);
+        auto obj_iter = parent.FindMember(rapidjson::StringRef(key_name.data(), key_name.size()));
         if (obj_iter != parent.MemberEnd()) {
           rapidjson_helper_load_from(obj_iter->value, doc, src.GetReflection()->GetMessage(src, fds), options);
         } else {
           rapidjson::Value obj_key;
-          obj_key.SetString(key_name, doc.GetAllocator());
+          obj_key.SetString(key_name.data(), static_cast<rapidjson::SizeType>(key_name.size()), doc.GetAllocator());
 
           rapidjson::Value obj;
           obj.SetObject();
@@ -448,7 +452,7 @@ static void load_field_item(rapidjson::Value& parent, const ::google::protobuf::
       break;
     };
     default: {
-      WLOGERROR("%s in ConstSettings with type=%s is not supported now", key_name, fds->type_name());
+      FWLOGERROR("%s in ConstSettings with type={} is not supported now", key_name, fds->type_name());
       break;
     }
   }
@@ -611,8 +615,9 @@ static void dump_pick_field(const rapidjson::Value& val, ::google::protobuf::Mes
       break;
     };
     default: {
-      WLOGERROR("%s in %s with type=%s is not supported now", fds->name().c_str(),
-                dst.GetDescriptor()->full_name().c_str(), fds->type_name());
+      FWLOGERROR("{} in {} with type={} is not supported now", gsl::string_view{fds->name().data(), fds->name().size()},
+                 gsl::string_view{dst.GetDescriptor()->full_name().data(), dst.GetDescriptor()->full_name().size()},
+                 fds->type_name());
       break;
     }
   }
@@ -629,14 +634,15 @@ static void dump_field_item(const rapidjson::Value& src, ::google::protobuf::Mes
     return;
   }
 
-  const char* key_name = fds->name().c_str();
+  gsl::string_view key_name{fds->name().data(), fds->name().size()};
   if (fds->options().HasExtension(atframework::field_json_options)) {
     const atframework::JsonOptions& field_json_options = fds->options().GetExtension(atframework::field_json_options);
     if (!field_json_options.alias_key_name().empty()) {
-      key_name = field_json_options.alias_key_name().c_str();
+      key_name =
+          gsl::string_view{field_json_options.alias_key_name().data(), field_json_options.alias_key_name().size()};
     }
   }
-  rapidjson::Value::ConstMemberIterator iter = src.FindMember(key_name);
+  rapidjson::Value::ConstMemberIterator iter = src.FindMember(rapidjson::StringRef(key_name.data(), key_name.size()));
   if (iter == src.MemberEnd()) {
     // field not found, just skip
     return;

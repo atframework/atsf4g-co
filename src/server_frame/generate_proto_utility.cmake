@@ -231,7 +231,9 @@ function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OU
                CXX_VISIBILITY_PRESET "hidden"
                VERSION "${PROJECT_VERSION}"
                SOVERSION "${PROJECT_VERSION}"
-               INSTALL_RPATH "${PROJECT_SERVER_FRAME_LIB_INSTALL_RPATH}")
+               INSTALL_RPATH "${PROJECT_SERVER_FRAME_LIB_INSTALL_RPATH}"
+               CXX_INCLUDE_WHAT_YOU_USE ""
+               CXX_CLANG_TIDY "")
   target_include_directories(
     ${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME}
     PUBLIC "$<BUILD_INTERFACE:${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include>"

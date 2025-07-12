@@ -43,6 +43,11 @@ message opentelemetry_exporter_otlp_grpc {
   string compression = 27;
 }
 
+enum opentelemetry_exporter_otlp_http_content_type {
+  EN_OPENTELEMETRY_EXPORTER_OTLP_HTTP_CONTENT_TYPE_BINARY = 0 [(atapp.protocol.ENUMVALUE) = { alias_name: "binary" }];
+  EN_OPENTELEMETRY_EXPORTER_OTLP_HTTP_CONTENT_TYPE_JSON = 1 [(atapp.protocol.ENUMVALUE) = { alias_name: "json" }];
+}
+
 message opentelemetry_exporter_otlp_http {
   string endpoint = 11;
   google.protobuf.Duration timeout = 12 [(atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "16ms" }];
@@ -63,6 +68,7 @@ message opentelemetry_exporter_otlp_http {
   string ssl_cipher = 29;
   string ssl_cipher_suite = 30;
   string compression = 31;
+  opentelemetry_exporter_otlp_http_content_type content_type = 32;
 }
 
 message opentelemetry_exporter_otlp_file {
@@ -85,7 +91,7 @@ message opentelemetry_simple_processor_cfg {}
 
 message opentelemetry_batch_processor_cfg {
   google.protobuf.Duration timeout = 1 [(atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
-  uint64 max_export_batch_size = 2 [(atapp.protocol.CONFIGURE) = { default_value: "512" min_value: "1" }];
+  uint64 send_batch_size = 2 [(atapp.protocol.CONFIGURE) = { default_value: "512" min_value: "1" }];
   uint64 max_queue_size = 3 [(atapp.protocol.CONFIGURE) = { default_value: "2048" min_value: "1" }];
 }
 

@@ -572,7 +572,7 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
       FWLOGERROR("pack message {} failed, alloc {} key failed", msg.GetDescriptor()->full_name(), fds[i]->name());
       return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
     }
-    memcpy(data_allocated, fds[i]->name().c_str(), fds[i]->name().size());
+    memcpy(data_allocated, fds[i]->name().data(), fds[i]->name().size());
 
 #define CASE_PB_INT_TO_REDIS_DATA(pbtype, cpptype, cppformat, func)                                         \
   case pbtype: {                                                                                            \
