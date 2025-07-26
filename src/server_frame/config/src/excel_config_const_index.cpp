@@ -26,6 +26,7 @@
 #include <cli/cmd_option.h>
 
 #include <algorithm>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <unordered_set>
@@ -96,13 +97,18 @@ static int32_t pick_enum_number_from_string(const char* str, size_t sz, const go
     return ret;
   }
 
+  static std::mutex cache_lock;
   static std::unordered_map<std::string, std::unordered_map<std::string, int32_t>> cached_alias;
-  auto& cache = cached_alias[eds->full_name()];
+  std::string full_name = std::string{eds->full_name()};
+
+  std::lock_guard<std::mutex> lock_guard{cache_lock};
+  auto& cache = cached_alias[full_name];
   if (cache.empty()) {
+    std::string short_name = std::string{eds->name()};
     for (int i = 0; i < eds->value_count(); ++i) {
       auto edv = eds->value(i);
-      cache[edv->name()] = edv->number();
-      cache[edv->full_name()] = edv->number();
+      cache[short_name] = edv->number();
+      cache[full_name] = edv->number();
       if (edv->options().ExtensionSize(org::xresloader::enum_alias) > 0) {
         for (auto& elasa_name : edv->options().GetRepeatedExtension(org::xresloader::enum_alias)) {
           cache[elasa_name] = edv->number();
@@ -644,18 +650,20 @@ SERVER_FRAME_CONFIG_API void setup_const_config(config_group_t& group) {
     }
 
     if (detail::reset_const_value(group.const_settings, fds, kv.second->value())) {
-      if (dumped_keys.end() == dumped_keys.find(fds->name())) {
-        dumped_keys.insert(fds->name());
+      std::string fds_name = std::string{fds->name()};
+      if (dumped_keys.end() == dumped_keys.find(fds_name)) {
+        dumped_keys.insert(fds_name);
       } else {
         FWLOGWARNING("const config {}={}, but {} is set more than one times, we will use the last one",
-                     kv.second->key(), kv.second->value(), fds->name());
+                     kv.second->key(), kv.second->value(), fds_name);
       }
     }
   }
 
   for (int i = 0; i < ::PROJECT_NAMESPACE_ID::config::excel_const_config::descriptor()->field_count(); ++i) {
     auto fds = ::PROJECT_NAMESPACE_ID::config::excel_const_config::descriptor()->field(i);
-    if (dumped_keys.end() == dumped_keys.find(fds->name())) {
+    std::string fds_name = std::string{fds->name()};
+    if (dumped_keys.end() == dumped_keys.find(fds_name)) {
       FWLOGWARNING("{} not found in const excel, we will use the previous or default value", fds->full_name());
     }
   }

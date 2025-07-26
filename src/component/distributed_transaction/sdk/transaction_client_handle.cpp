@@ -69,8 +69,8 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
        "atframework.transaction_client_handle.create_transaction"}};
 
   rpc::context child_ctx{ctx};
-  rpc::context::tracer child_tracer;
-  rpc::context::trace_start_option child_trace_option;
+  rpc::telemetry::tracer child_tracer;
+  rpc::telemetry::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -116,8 +116,8 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
        "atframework.transaction_client_handle.submit_transaction"}};
 
   rpc::context child_ctx{ctx};
-  rpc::context::tracer child_tracer;
-  rpc::context::trace_start_option child_trace_option;
+  rpc::telemetry::tracer child_tracer;
+  rpc::telemetry::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -310,8 +310,8 @@ DISTRIBUTED_TRANSACTION_SDK_API int32_t transaction_client_handle::add_participa
        "atframework.transaction_client_handle.add_participator"}};
 
   rpc::context child_ctx{ctx};
-  rpc::context::tracer child_tracer;
-  rpc::context::trace_start_option child_trace_option;
+  rpc::telemetry::tracer child_tracer;
+  rpc::telemetry::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;

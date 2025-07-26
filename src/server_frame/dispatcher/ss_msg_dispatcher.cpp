@@ -595,8 +595,8 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_s
     rpc_metrics_mutable_record_rpc(rpc_response.rpc_name(), delay, ss_msg->body_bin().size());
   } while (false);
 
-  rpc::context::tracer tracer;
-  rpc::context::trace_start_option trace_start_option;
+  rpc::telemetry::tracer tracer;
+  rpc::telemetry::trace_start_option trace_start_option;
   trace_start_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
   trace_start_option.is_remote = true;
   trace_start_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());
@@ -702,12 +702,12 @@ SERVER_FRAME_API void ss_msg_dispatcher::on_create_task_failed(dispatcher_start_
     return;
   }
 
-  rpc::context::tracer tracer;
+  rpc::telemetry::tracer tracer;
   std::unique_ptr<rpc::context> child_context;
   if (nullptr != start_data.context) {
     child_context.reset(new rpc::context(*start_data.context));
     if (child_context) {
-      rpc::context::trace_start_option trace_start_option;
+      rpc::telemetry::trace_start_option trace_start_option;
       trace_start_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
       trace_start_option.is_remote = true;
       trace_start_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());

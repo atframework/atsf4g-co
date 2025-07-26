@@ -33,7 +33,7 @@ service_header_file_path = service_proto_file_prefix + ".pb.h"
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include <gsl/select-gsl.h>
+#include <nostd/string_view.h>
 
 #include <config/server_frame_build_feature.h>
 
@@ -82,7 +82,7 @@ ${rpc_dllexport_decl} int package_${rpc.get_name()}(${', '.join(rpc_params)});
  * @brief get full rpc name of ${rpc.get_name()}
  * @return full rpc name of ${rpc.get_name()}
  */
-${rpc_dllexport_decl} gsl::string_view get_full_name_of_${rpc.get_name()}();
+${rpc_dllexport_decl} atfw::util::nostd::string_view get_full_name_of_${rpc.get_name()}();
 
 % endfor
 % for ns in service.get_cpp_namespace_end(module_name, ''):

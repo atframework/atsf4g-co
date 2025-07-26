@@ -97,8 +97,8 @@ player::ptr_t player::create(uint64_t user_id, uint32_t zone_id, const std::stri
 
 void player::create_init(rpc::context &parent_ctx, uint32_t version_type) {
   rpc::context ctx{parent_ctx.create_temporary_child()};
-  rpc::context::tracer trace;
-  rpc::context::trace_start_option trace_start_option;
+  rpc::telemetry::tracer trace;
+  rpc::telemetry::trace_start_option trace_start_option;
   trace_start_option.dispatcher = nullptr;
   trace_start_option.is_remote = false;
   trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -128,8 +128,8 @@ void player::create_init(rpc::context &parent_ctx, uint32_t version_type) {
 
 void player::login_init(rpc::context &parent_ctx) {
   rpc::context ctx{parent_ctx.create_temporary_child()};
-  rpc::context::tracer trace;
-  rpc::context::trace_start_option trace_start_option;
+  rpc::telemetry::tracer trace;
+  rpc::telemetry::trace_start_option trace_start_option;
   trace_start_option.dispatcher = nullptr;
   trace_start_option.is_remote = false;
   trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -205,8 +205,8 @@ void player::on_login(rpc::context &parent_ctx) {
   }
 
   rpc::context ctx{parent_ctx.create_temporary_child()};
-  rpc::context::tracer trace;
-  rpc::context::trace_start_option trace_start_option;
+  rpc::telemetry::tracer trace;
+  rpc::telemetry::trace_start_option trace_start_option;
   trace_start_option.dispatcher = nullptr;
   trace_start_option.is_remote = false;
   trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -221,8 +221,8 @@ void player::on_login(rpc::context &parent_ctx) {
 
 void player::on_logout(rpc::context &parent_ctx) {
   rpc::context ctx{parent_ctx.create_temporary_child()};
-  rpc::context::tracer trace;
-  rpc::context::trace_start_option trace_start_option;
+  rpc::telemetry::tracer trace;
+  rpc::telemetry::trace_start_option trace_start_option;
   trace_start_option.dispatcher = nullptr;
   trace_start_option.is_remote = false;
   trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -245,8 +245,8 @@ void player::on_update_session(rpc::context &ctx, const std::shared_ptr<session>
 
 void player::init_from_table_data(rpc::context &parent_ctx, const PROJECT_NAMESPACE_ID::table_user &tb_player) {
   rpc::context ctx{parent_ctx.create_temporary_child()};
-  rpc::context::tracer trace;
-  rpc::context::trace_start_option trace_start_option;
+  rpc::telemetry::tracer trace;
+  rpc::telemetry::trace_start_option trace_start_option;
   trace_start_option.dispatcher = nullptr;
   trace_start_option.is_remote = false;
   trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -274,8 +274,8 @@ void player::init_from_table_data(rpc::context &parent_ctx, const PROJECT_NAMESP
 
 int player::dump(rpc::context &parent_ctx, PROJECT_NAMESPACE_ID::table_user &user, bool always) {
   rpc::context ctx{parent_ctx.create_temporary_child()};
-  rpc::context::tracer trace;
-  rpc::context::trace_start_option trace_start_option;
+  rpc::telemetry::tracer trace;
+  rpc::telemetry::trace_start_option trace_start_option;
   trace_start_option.dispatcher = nullptr;
   trace_start_option.is_remote = false;
   trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;

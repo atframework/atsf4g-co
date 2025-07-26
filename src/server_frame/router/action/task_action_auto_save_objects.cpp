@@ -31,6 +31,7 @@
 #include "router/router_manager_set.h"
 #include "router/router_object_base.h"
 
+#include "rpc/rpc_context.h"
 #include "rpc/telemetry/rpc_global_service.h"
 
 bool task_action_auto_save_objects::debug_receive_stop_when_running = false;

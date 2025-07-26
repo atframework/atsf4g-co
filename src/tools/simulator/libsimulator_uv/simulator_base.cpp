@@ -166,7 +166,7 @@ struct on_default_cmd_error {
 simulator_base::cmd_wrapper_t::cmd_wrapper_t(const std::string &n) : parent(nullptr), name(n) {}
 
 // create a child node
-simulator_base::cmd_wrapper_t &simulator_base::cmd_wrapper_t::operator[](const std::string &nm) {
+simulator_base::cmd_wrapper_t &simulator_base::cmd_wrapper_t::mutable_child(const std::string &nm) {
   std::vector<std::string> cmds = atfw::util::cli::cmd_option_ci::split_cmd(nm.c_str());
   if (cmds.empty()) {
     return *this;

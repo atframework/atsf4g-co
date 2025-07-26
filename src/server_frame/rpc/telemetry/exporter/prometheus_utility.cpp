@@ -19,20 +19,14 @@ SERVER_FRAME_API std::string PrometheusUtility::SanitizePrometheusName(std::stri
   constexpr const auto replacement = '_';
   constexpr const auto replacement_dup = '=';
 
-  bool (*valid)(std::size_t, char);
+  bool (*valid)(std::size_t, char) = nullptr;
   if (label) {
     valid = [](std::size_t i, char c) {
-      if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9' && i > 0)) {
-        return true;
-      }
-      return false;
+      return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9' && i > 0);
     };
   } else {
     valid = [](std::size_t i, char c) {
-      if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == ':' || (c >= '0' && c <= '9' && i > 0)) {
-        return true;
-      }
-      return false;
+      return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == ':' || (c >= '0' && c <= '9' && i > 0);
     };
   }
 

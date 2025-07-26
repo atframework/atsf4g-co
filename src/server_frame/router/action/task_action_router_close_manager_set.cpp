@@ -21,6 +21,7 @@
 #include <dispatcher/task_manager.h>
 
 #include <rpc/rpc_async_invoke.h>
+#include <rpc/rpc_context.h>
 
 #include <utility>
 

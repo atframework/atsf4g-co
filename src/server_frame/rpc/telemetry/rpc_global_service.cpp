@@ -511,6 +511,7 @@ SERVER_FRAME_API std::pair<bool, global_service::global_event_callback_handle> g
   }
 
   bool already_ready = false;
+  global_event_callback_type copy_fn;
   std::pair<bool, global_service::global_event_callback_handle> ret;
   {
     bool hold_write_lock = current_service_cache->on_ready_callback_lock.try_write_lock();
@@ -526,12 +527,17 @@ SERVER_FRAME_API std::pair<bool, global_service::global_event_callback_handle> g
       return {false, current_service_cache->on_ready_callbacks.end()};
     }
 
-    ret.second = current_service_cache->on_ready_callbacks.insert(current_service_cache->on_ready_callbacks.end(), fn);
+    if (already_ready) {
+      copy_fn = fn;
+    }
+
+    ret.second = current_service_cache->on_ready_callbacks.insert(current_service_cache->on_ready_callbacks.end(),
+                                                                  std::move(fn));
     ret.first = true;
   }
 
-  if (already_ready && fn) {
-    fn();
+  if (already_ready && copy_fn) {
+    copy_fn();
   }
 
   return ret;
@@ -580,7 +586,7 @@ SERVER_FRAME_API std::pair<bool, global_service::group_event_callback_handle> gl
     }
 
     ret.second = current_service_cache->on_group_destroy_callbacks.insert(
-        current_service_cache->on_group_destroy_callbacks.end(), fn);
+        current_service_cache->on_group_destroy_callbacks.end(), std::move(fn));
     ret.first = true;
   }
 
@@ -630,7 +636,7 @@ SERVER_FRAME_API std::pair<bool, global_service::group_event_callback_handle> gl
     }
 
     ret.second = current_service_cache->on_group_create_callbacks.insert(
-        current_service_cache->on_group_create_callbacks.end(), fn);
+        current_service_cache->on_group_create_callbacks.end(), std::move(fn));
     ret.first = true;
   }
 
@@ -948,7 +954,7 @@ global_service::get_current_default_tracer(std::shared_ptr<group_type> group) {
   } while (false);
 
   if (!group) {
-    return opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
+    return {};
   }
 
   if (!group->initialized) {
@@ -956,14 +962,14 @@ global_service::get_current_default_tracer(std::shared_ptr<group_type> group) {
   }
   // It will not be initialized when closing
   if (!group->initialized) {
-    return opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
+    return {};
   }
 
   if (group) {
     return group->default_tracer;
   }
 
-  return opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
+  return {};
 }
 
 SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> global_service::get_tracer(
@@ -990,7 +996,7 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> 
   } while (false);
 
   if (!group) {
-    return opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
+    return {};
   }
 
   if (!group->initialized) {
@@ -998,7 +1004,7 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> 
   }
   // It will not be initialized when closing
   if (!group->initialized) {
-    return opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
+    return {};
   }
 
   std::string cache_key =
@@ -1014,7 +1020,7 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> 
 
   auto provider = group->tracer_handle.provider;
   if (!provider) {
-    return opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>();
+    return {};
   }
 
   if (library_name.empty()) {
@@ -1288,7 +1294,7 @@ global_service::get_metrics_observable(opentelemetry::nostd::string_view meter_n
                                        std::shared_ptr<group_type> group) {
   auto meter_info = get_meter_info(group, meter_name);
   if (!meter_info) {
-    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+    return {};
   }
 
   std::string metrics_storage_key = get_metrics_key(key);
@@ -1308,7 +1314,7 @@ global_service::mutable_metrics_observable_counter_int64(opentelemetry::nostd::s
 
   auto meter_info = get_meter_info(group, meter_name);
   if (!meter_info) {
-    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+    return {};
   }
 
   std::string metrics_storage_key = static_cast<std::string>(key.name);
@@ -1328,7 +1334,7 @@ global_service::mutable_metrics_observable_counter_int64(opentelemetry::nostd::s
                gsl::string_view{key.description.data(), key.description.size()}
 
     );
-    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+    return {};
   }
 
   atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
@@ -1352,7 +1358,7 @@ global_service::mutable_metrics_observable_counter_double(opentelemetry::nostd::
 
   auto meter_info = get_meter_info(group, meter_name);
   if (!meter_info) {
-    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+    return {};
   }
 
   std::string metrics_storage_key = static_cast<std::string>(key.name);
@@ -1372,7 +1378,7 @@ global_service::mutable_metrics_observable_counter_double(opentelemetry::nostd::
                gsl::string_view{key.description.data(), key.description.size()}
 
     );
-    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+    return {};
   }
 
   atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
@@ -1396,7 +1402,7 @@ global_service::mutable_metrics_observable_gauge_int64(opentelemetry::nostd::str
 
   auto meter_info = get_meter_info(group, meter_name);
   if (!meter_info) {
-    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+    return {};
   }
 
   std::string metrics_storage_key = static_cast<std::string>(key.name);
@@ -1416,7 +1422,7 @@ global_service::mutable_metrics_observable_gauge_int64(opentelemetry::nostd::str
                gsl::string_view{key.description.data(), key.description.size()}
 
     );
-    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+    return {};
   }
 
   atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
@@ -1440,7 +1446,7 @@ global_service::mutable_metrics_observable_gauge_double(opentelemetry::nostd::st
 
   auto meter_info = get_meter_info(group, meter_name);
   if (!meter_info) {
-    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+    return {};
   }
 
   std::string metrics_storage_key = static_cast<std::string>(key.name);
@@ -1460,7 +1466,7 @@ global_service::mutable_metrics_observable_gauge_double(opentelemetry::nostd::st
                gsl::string_view{key.description.data(), key.description.size()}
 
     );
-    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+    return {};
   }
 
   atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
@@ -1485,7 +1491,7 @@ global_service::mutable_metrics_observable_up_down_counter_int64(opentelemetry::
 
   auto meter_info = get_meter_info(group, meter_name);
   if (!meter_info) {
-    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+    return {};
   }
 
   std::string metrics_storage_key = static_cast<std::string>(key.name);
@@ -1505,7 +1511,7 @@ global_service::mutable_metrics_observable_up_down_counter_int64(opentelemetry::
                gsl::string_view{key.description.data(), key.description.size()}
 
     );
-    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+    return {};
   }
 
   atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
@@ -1530,7 +1536,7 @@ global_service::mutable_metrics_observable_up_down_counter_double(opentelemetry:
 
   auto meter_info = get_meter_info(group, meter_name);
   if (!meter_info) {
-    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+    return {};
   }
 
   std::string metrics_storage_key = static_cast<std::string>(key.name);
@@ -1550,7 +1556,7 @@ global_service::mutable_metrics_observable_up_down_counter_double(opentelemetry:
                gsl::string_view{key.description.data(), key.description.size()}
 
     );
-    return opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>();
+    return {};
   }
 
   atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{meter_info->lock};
@@ -1580,7 +1586,7 @@ global_service::get_current_default_logger(std::shared_ptr<group_type> group) {
   } while (false);
 
   if (!group) {
-    return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
+    return {};
   }
 
   if (!group->initialized) {
@@ -1588,14 +1594,14 @@ global_service::get_current_default_logger(std::shared_ptr<group_type> group) {
   }
   // It will not be initialized when closing
   if (!group->initialized) {
-    return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
+    return {};
   }
 
   if (group) {
     return group->default_logger;
   }
 
-  return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
+  return {};
 }
 
 SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> global_service::get_logger(
@@ -1623,7 +1629,7 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> g
   } while (false);
 
   if (!group) {
-    return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
+    return {};
   }
 
   if (!group->initialized) {
@@ -1631,7 +1637,7 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> g
   }
   // It will not be initialized when closing
   if (!group->initialized) {
-    return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
+    return {};
   }
 
   std::string cache_key =
@@ -1649,7 +1655,7 @@ SERVER_FRAME_API opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> g
   auto provider = group->logs_handle.provider;
 
   if (!provider) {
-    return opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger>();
+    return {};
   }
 
   if (library_name.empty()) {
@@ -1903,9 +1909,9 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::trace::SpanExporter>> _op
       file_backend.file_pattern = exporter_cfg.otlp_file().file_pattern();
       file_backend.alias_pattern = exporter_cfg.otlp_file().alias_pattern();
       file_backend.flush_interval =
-          std::chrono::microseconds{exporter_cfg.otlp_file().flush_interval().seconds() * 1000000};
+          std::chrono::microseconds(exporter_cfg.otlp_file().flush_interval().seconds() * 1000000);
       file_backend.flush_interval += std::chrono::duration_cast<std::chrono::microseconds>(
-          std::chrono::nanoseconds{exporter_cfg.otlp_file().flush_interval().nanos()});
+          std::chrono::nanoseconds(exporter_cfg.otlp_file().flush_interval().nanos()));
       file_backend.file_size = exporter_cfg.otlp_file().file_size();
       file_backend.rotate_size = exporter_cfg.otlp_file().rotate_size();
 
@@ -1998,13 +2004,13 @@ static local_provider_handle_type<opentelemetry::trace::TracerProvider> _opentel
         // 处理优雅退出时无限等待的问题
         if (processors_ptr && !processors_ptr->empty()) {
           std::chrono::microseconds timeout =
-              std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::seconds{10});
+              std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::seconds(10));
           auto app = atapp::app::get_last_instance();
           if (nullptr != app) {
             timeout = std::chrono::duration_cast<std::chrono::microseconds>(
-                std::chrono::seconds{app->get_origin_configure().timer().stop_timeout().seconds() / 2});
+                std::chrono::seconds(app->get_origin_configure().timer().stop_timeout().seconds() / 2));
             timeout += std::chrono::duration_cast<std::chrono::microseconds>(
-                std::chrono::nanoseconds{app->get_origin_configure().timer().stop_timeout().nanos() / 2});
+                std::chrono::nanoseconds(app->get_origin_configure().timer().stop_timeout().nanos() / 2));
           }
           for (auto &processor : *processors_ptr) {
             processor->Shutdown(timeout);
@@ -2066,8 +2072,8 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
     options.rotate_size = static_cast<std::size_t>(exporter_cfg.prometheus_file().rotate_size());
     options.flush_count = static_cast<std::size_t>(exporter_cfg.prometheus_file().flush_count());
     options.flush_interval = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::seconds{exporter_cfg.prometheus_file().flush_interval().seconds()} +
-        std::chrono::nanoseconds{exporter_cfg.prometheus_file().flush_interval().nanos()});
+        std::chrono::seconds(exporter_cfg.prometheus_file().flush_interval().seconds()) +
+        std::chrono::nanoseconds(exporter_cfg.prometheus_file().flush_interval().nanos()));
 
     options.populate_target_info = exporter_cfg.prometheus_push().populate_target_info();
     options.without_otel_scope = exporter_cfg.prometheus_push().without_otel_scope();
@@ -2249,9 +2255,9 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
       file_backend.file_pattern = exporter_cfg.otlp_file().file_pattern();
       file_backend.alias_pattern = exporter_cfg.otlp_file().alias_pattern();
       file_backend.flush_interval =
-          std::chrono::microseconds{exporter_cfg.otlp_file().flush_interval().seconds() * 1000000};
+          std::chrono::microseconds(exporter_cfg.otlp_file().flush_interval().seconds() * 1000000);
       file_backend.flush_interval += std::chrono::duration_cast<std::chrono::microseconds>(
-          std::chrono::nanoseconds{exporter_cfg.otlp_file().flush_interval().nanos()});
+          std::chrono::nanoseconds(exporter_cfg.otlp_file().flush_interval().nanos()));
       file_backend.file_size = exporter_cfg.otlp_file().file_size();
       file_backend.rotate_size = exporter_cfg.otlp_file().rotate_size();
 
@@ -2265,7 +2271,7 @@ static std::vector<std::unique_ptr<PushMetricExporter>> _opentelemetry_create_me
 }
 
 static std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricReader>> _opentelemetry_create_metrics_reader(
-    std::vector<std::unique_ptr<PushMetricExporter>> &&exporters,
+    std::vector<std::unique_ptr<PushMetricExporter>> &exporters,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_metrics_reader_cfg &reader_cfg,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_metrics_exporter_cfg &exporter_cfg) {
   std::vector<std::unique_ptr<opentelemetry::sdk::metrics::MetricReader>> ret;
@@ -2371,13 +2377,13 @@ static local_provider_handle_type<opentelemetry::metrics::MeterProvider> _opente
         // 处理优雅退出时无限等待的问题
         if (readers_ptr && !readers_ptr->empty()) {
           std::chrono::microseconds timeout =
-              std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::seconds{10});
+              std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::seconds(10));
           auto app = atapp::app::get_last_instance();
           if (nullptr != app) {
             timeout = std::chrono::duration_cast<std::chrono::microseconds>(
-                std::chrono::seconds{app->get_origin_configure().timer().stop_timeout().seconds() / 2});
+                std::chrono::seconds(app->get_origin_configure().timer().stop_timeout().seconds() / 2));
             timeout += std::chrono::duration_cast<std::chrono::microseconds>(
-                std::chrono::nanoseconds{app->get_origin_configure().timer().stop_timeout().nanos() / 2});
+                std::chrono::nanoseconds(app->get_origin_configure().timer().stop_timeout().nanos() / 2));
           }
           for (auto &reader : *readers_ptr) {
             reader->Shutdown(timeout);
@@ -2549,9 +2555,9 @@ static std::vector<std::unique_ptr<opentelemetry::sdk::logs::LogRecordExporter>>
       file_backend.file_pattern = exporter_cfg.otlp_file().file_pattern();
       file_backend.alias_pattern = exporter_cfg.otlp_file().alias_pattern();
       file_backend.flush_interval =
-          std::chrono::microseconds{exporter_cfg.otlp_file().flush_interval().seconds() * 1000000};
+          std::chrono::microseconds(exporter_cfg.otlp_file().flush_interval().seconds() * 1000000);
       file_backend.flush_interval += std::chrono::duration_cast<std::chrono::microseconds>(
-          std::chrono::nanoseconds{exporter_cfg.otlp_file().flush_interval().nanos()});
+          std::chrono::nanoseconds(exporter_cfg.otlp_file().flush_interval().nanos()));
       file_backend.file_size = exporter_cfg.otlp_file().file_size();
       file_backend.rotate_size = exporter_cfg.otlp_file().rotate_size();
 
@@ -2621,13 +2627,13 @@ static local_provider_handle_type<opentelemetry::logs::LoggerProvider> _opentele
         // 处理优雅退出时无限等待的问题
         if (processors_ptr && !processors_ptr->empty()) {
           std::chrono::microseconds timeout =
-              std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::seconds{10});
+              std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::seconds(10));
           auto app = atapp::app::get_last_instance();
           if (nullptr != app) {
             timeout = std::chrono::duration_cast<std::chrono::microseconds>(
-                std::chrono::seconds{app->get_origin_configure().timer().stop_timeout().seconds() / 2});
+                std::chrono::seconds(app->get_origin_configure().timer().stop_timeout().seconds() / 2));
             timeout += std::chrono::duration_cast<std::chrono::microseconds>(
-                std::chrono::nanoseconds{app->get_origin_configure().timer().stop_timeout().nanos() / 2});
+                std::chrono::nanoseconds(app->get_origin_configure().timer().stop_timeout().nanos() / 2));
           }
           for (auto &processor : *processors_ptr) {
             processor->Shutdown(timeout);
@@ -2927,7 +2933,7 @@ static void _opentelemetry_prepare_group(
   }
 }
 
-static void _opentelemetry_setup_group(atapp::app &app, std::shared_ptr<group_type> group,
+static void _opentelemetry_setup_group(atapp::app &app, const std::shared_ptr<group_type> &group,
                                        local_provider_handle_type<opentelemetry::trace::TracerProvider> tracer_handle,
                                        local_provider_handle_type<opentelemetry::metrics::MeterProvider> metrics_handle,
                                        local_provider_handle_type<opentelemetry::logs::LoggerProvider> logs_handle) {
@@ -3251,11 +3257,11 @@ _opentelemetry_create_opentelemetry_metrics_provider(::rpc::telemetry::group_typ
     group.metrics_exporter_count = exporters.size();
     if (group.group_configure.has_agent() && group.group_configure.agent().enable_metrics()) {
       readers = _opentelemetry_create_metrics_reader(
-          std::move(exporters), group.group_configure.configure().metrics().reader(), *exporters_cfg);
+          exporters, group.group_configure.configure().metrics().reader(), *exporters_cfg);
     }
     if (readers.empty()) {
       readers = _opentelemetry_create_metrics_reader(
-          std::move(exporters), group.group_configure.configure().metrics().reader(), *exporters_cfg);
+          exporters, group.group_configure.configure().metrics().reader(), *exporters_cfg);
     }
 
     opentelemetry::sdk::resource::ResourceAttributes metrics_resource_values = group.common_owned_attributes;

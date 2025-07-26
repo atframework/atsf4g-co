@@ -35,8 +35,6 @@
 ## libiniloader
 
 # packages and installed
-/3rd_party/packages
-/3rd_party/install
 /third_party/install
 /third_party/packages
 /third_party/xresloader/xresconv-cli

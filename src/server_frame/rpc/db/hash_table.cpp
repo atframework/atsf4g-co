@@ -42,13 +42,13 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
       {opentelemetry::trace::SemanticConventions::kDbSystem,
        opentelemetry::trace::SemanticConventions::DbSystemValues::kRedis}};
 
-  rpc::context::trace_start_option __trace_option;
+  rpc::telemetry::trace_start_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
   __trace_option.is_remote = true;
   __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
   __trace_option.attributes = __trace_attributes;
 
-  rpc::context::tracer __tracer = __child_ctx.make_tracer("rpc.db.hash_table.get_all", std::move(__trace_option));
+  rpc::telemetry::tracer __tracer = __child_ctx.make_tracer("rpc.db.hash_table.get_all", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
@@ -100,13 +100,13 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
       {opentelemetry::trace::SemanticConventions::kRpcMethod, "rpc.db.hash_table.set"},
       {opentelemetry::trace::SemanticConventions::kDbSystem,
        opentelemetry::trace::SemanticConventions::DbSystemValues::kRedis}};
-  rpc::context::trace_start_option __trace_option;
+  rpc::telemetry::trace_start_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
   __trace_option.is_remote = true;
   __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
   __trace_option.attributes = __trace_attributes;
 
-  rpc::context::tracer __tracer = __child_ctx.make_tracer("rpc.db.hash_table.set", std::move(__trace_option));
+  rpc::telemetry::tracer __tracer = __child_ctx.make_tracer("rpc.db.hash_table.set", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
@@ -186,13 +186,13 @@ SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel, gsl
       {opentelemetry::trace::SemanticConventions::kRpcMethod, "rpc.db.hash_table.remove_all"},
       {opentelemetry::trace::SemanticConventions::kDbSystem,
        opentelemetry::trace::SemanticConventions::DbSystemValues::kRedis}};
-  rpc::context::trace_start_option __trace_option;
+  rpc::telemetry::trace_start_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
   __trace_option.is_remote = true;
   __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
   __trace_option.attributes = __trace_attributes;
 
-  rpc::context::tracer __tracer = __child_ctx.make_tracer("rpc.db.hash_table.remove_all", std::move(__trace_option));
+  rpc::telemetry::tracer __tracer = __child_ctx.make_tracer("rpc.db.hash_table.remove_all", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");

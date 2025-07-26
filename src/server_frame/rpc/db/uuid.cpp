@@ -144,12 +144,12 @@ SERVER_FRAME_API rpc_result<int64_t> generate_global_increase_id(rpc::context &c
   }
 
   rpc::context child_ctx(ctx);
-  rpc::context::trace_start_option trace_start_option;
+  rpc::telemetry::trace_start_option trace_start_option;
   trace_start_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
   trace_start_option.is_remote = true;
   trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
 
-  rpc::context::tracer tracer =
+  rpc::telemetry::tracer tracer =
       child_ctx.make_tracer("rpc.db.uuid.generate_global_increase_id", std::move(trace_start_option));
 
   uint64_t rpc_sequence = 0;

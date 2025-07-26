@@ -216,17 +216,17 @@ SERVER_FRAME_API void task_action_ss_req_base::add_prepare_handle(
   prepare_handles_.push_back(fn);
 }
 
-SERVER_FRAME_API rpc::context::inherit_options task_action_ss_req_base::get_inherit_option() const noexcept {
+SERVER_FRAME_API rpc::telemetry::trace_inherit_options task_action_ss_req_base::get_inherit_option() const noexcept {
   auto &req_msg = get_request();
   if (req_msg.has_head() && req_msg.head().has_rpc_request() && 0 != req_msg.head().source_task_id()) {
-    return rpc::context::inherit_options{rpc::context::parent_mode::kParent, true, false};
+    return rpc::telemetry::trace_inherit_options{rpc::context::parent_mode::kParent, true, false};
   }
 
-  return rpc::context::inherit_options{rpc::context::parent_mode::kLink, true, false};
+  return rpc::telemetry::trace_inherit_options{rpc::context::parent_mode::kLink, true, false};
 }
 
-SERVER_FRAME_API rpc::context::trace_start_option task_action_ss_req_base::get_trace_option() const noexcept {
-  rpc::context::trace_start_option ret = task_action_base::get_trace_option();
+SERVER_FRAME_API rpc::telemetry::trace_start_option task_action_ss_req_base::get_trace_option() const noexcept {
+  rpc::telemetry::trace_start_option ret = task_action_base::get_trace_option();
 
   auto &req_msg = get_request();
   if (req_msg.has_head() && req_msg.head().has_rpc_trace() && !req_msg.head().rpc_trace().trace_id().empty()) {
@@ -519,6 +519,7 @@ SERVER_FRAME_API atframework::SSMsg &task_action_ss_req_base::add_response_messa
   response_messages_.push_back(msg);
 
   atframework::SSMsgHead *head = msg->mutable_head();
+  auto response_type_url = get_response_type_url();
   if (get_request().head().has_rpc_request()) {
     head->clear_rpc_request();
     do {
@@ -528,7 +529,7 @@ SERVER_FRAME_API atframework::SSMsg &task_action_ss_req_base::add_response_messa
       }
       rpc_response->set_version(logic_config::me()->get_atframework_settings().rpc_version());
       rpc_response->set_rpc_name(get_request().head().rpc_request().rpc_name());
-      rpc_response->set_type_url(get_response_type_url());
+      rpc_response->set_type_url(response_type_url.data(), response_type_url.size());
       rpc_response->set_caller_node_id(get_request_node_id());
       rpc_response->set_caller_node_name(get_request_node_name());
       protobuf_copy_message(*rpc_response->mutable_caller_timestamp(),
@@ -543,7 +544,7 @@ SERVER_FRAME_API atframework::SSMsg &task_action_ss_req_base::add_response_messa
       }
       rpc_stream->set_version(logic_config::me()->get_atframework_settings().rpc_version());
       rpc_stream->set_rpc_name(get_request().head().rpc_stream().rpc_name());
-      rpc_stream->set_type_url(get_response_type_url());
+      rpc_stream->set_type_url(response_type_url.data(), response_type_url.size());
       rpc_stream->set_caller(static_cast<std::string>(logic_config::me()->get_local_server_name()));
       rpc_stream->set_callee(get_request().head().rpc_stream().caller());
       protobuf_copy_message(*rpc_stream->mutable_caller_timestamp(),

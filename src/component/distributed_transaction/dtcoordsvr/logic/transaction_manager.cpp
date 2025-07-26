@@ -181,8 +181,8 @@ rpc::result_code_type transaction_manager::mutable_transaction(
           if (false == storage->blob_data().UnpackTo(&output)) {
             std::string error_msg = output.InitializationErrorString();
             if (error_msg.empty() && output.GetDescriptor()->full_name() != storage->blob_data().type_url()) {
-              error_msg = "type mismatch, expect: " + output.GetDescriptor()->full_name() +
-                          " , got: " + storage->blob_data().type_url();
+              error_msg = "type mismatch, expect: " + std::string{output.GetDescriptor()->full_name()} +
+                          " , got: " + std::string{storage->blob_data().type_url()};
             }
             FWLOGERROR("ParseFromString transaction_blob_storage failed, {}", error_msg);
             RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK);

@@ -26,10 +26,12 @@
 #include <utility/protobuf_mini_dumper.h>
 
 #include <rpc/db/uuid.h>
+#include <rpc/rpc_context.h>
 #include <rpc/telemetry/semantic_conventions.h>
 
 #include <config/logic_config.h>
 
+#include <cassert>
 #include <functional>
 #include <utility>
 
@@ -86,7 +88,7 @@ SERVER_FRAME_API task_action_base::task_action_base(const dispatcher_start_data_
       event_disabled_(false),
       external_error_code_(0),
       dispatcher_options_(start_param.options),
-      shared_context_(rpc::context::create_without_task()) {
+      shared_context_(atfw::util::memory::make_strong_rc<rpc::context>(rpc::context::create_without_task())) {
   if (start_param.context) {
     get_shared_context().try_reuse_protobuf_arena(start_param.context->mutable_protobuf_arena());
   }
@@ -116,7 +118,7 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data)
 {
   detail::task_action_stat_guard stat(this);
 
-  rpc::context::trace_start_option trace_start_option = get_trace_option();
+  rpc::telemetry::trace_start_option trace_start_option = get_trace_option();
   do {
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
 #else
@@ -150,7 +152,7 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data)
 
   trace_start_option.attributes =
       rpc::telemetry::trace_attributes_type{trace_attributes, static_cast<size_t>(trace_attribute_type::kAtRpcKind)};
-  rpc::context::tracer tracer = shared_context_.make_tracer(name(), std::move(trace_start_option));
+  rpc::telemetry::tracer tracer = shared_context_->make_tracer(name(), std::move(trace_start_option));
 
   trace_attributes[static_cast<size_t>(trace_attribute_type::kAtRpcKind)] = {
       rpc::telemetry::semantic_conventions::kAtRpcKind, tracer.get_span_kind()};
@@ -184,7 +186,7 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data)
     private_data_->action = this;
   }
 
-  shared_context_.update_task_instance(current_task_id, name());
+  shared_context_->update_task_instance(current_task_id, name());
 
   if (0 != get_user_id()) {
     FCTXLOGDEBUG(get_shared_context(), "task {} [{}] for player {}:{} start to run\n", name(), get_task_id(),
@@ -321,17 +323,17 @@ SERVER_FRAME_API int task_action_base::on_timeout() { return 0; }
 
 SERVER_FRAME_API int task_action_base::on_complete() { return 0; }
 
-SERVER_FRAME_API rpc::context::inherit_options task_action_base::get_inherit_option() const noexcept {
-  return rpc::context::inherit_options{rpc::context::parent_mode::kLink, true, false};
+SERVER_FRAME_API rpc::telemetry::trace_inherit_options task_action_base::get_inherit_option() const noexcept {
+  return rpc::telemetry::trace_inherit_options{rpc::context::parent_mode::kLink, true, false};
 }
 
-SERVER_FRAME_API rpc::context::trace_start_option task_action_base::get_trace_option() const noexcept {
-  rpc::context::trace_start_option ret;
+SERVER_FRAME_API rpc::telemetry::trace_start_option task_action_base::get_trace_option() const noexcept {
+  rpc::telemetry::trace_start_option ret;
   ret.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
   ret.is_remote = true;
   ret.dispatcher = get_dispatcher();
   ret.parent_network_span = nullptr;
-  ret.parent_memory_span = rpc::context::trace_start_option::span_ptr_type();
+  ret.parent_memory_span = rpc::telemetry::trace_start_option::span_ptr_type();
 
   return ret;
 }
@@ -343,10 +345,10 @@ SERVER_FRAME_API uint64_t task_action_base::get_task_id() const {
 SERVER_FRAME_API void task_action_base::set_user_key(uint64_t user_id, uint32_t zone_id) {
   user_id_ = user_id;
   zone_id_ = zone_id;
-  if (user_id != 0 && zone_id != 0 && shared_context_.get_task_context().reference_object_type_id == 0 &&
-      shared_context_.get_task_context().reference_object_zone_id == 0 &&
-      shared_context_.get_task_context().reference_object_instance_id == 0) {
-    shared_context_.update_task_context_reference_object(PROJECT_NAMESPACE_ID::EN_ROT_PLAYER, zone_id, user_id);
+  if (user_id != 0 && zone_id != 0 && shared_context_->get_task_context().reference_object_type_id == 0 &&
+      shared_context_->get_task_context().reference_object_zone_id == 0 &&
+      shared_context_->get_task_context().reference_object_instance_id == 0) {
+    shared_context_->update_task_context_reference_object(PROJECT_NAMESPACE_ID::EN_ROT_PLAYER, zone_id, user_id);
   }
 }
 
@@ -371,18 +373,37 @@ SERVER_FRAME_API void task_action_base::set_response_code(int32_t rsp_code, int6
   }
 }
 
+SERVER_FRAME_API const std::string &task_action_base::get_shared_context_log_prefix() const {
+  if (context_log_prefix_.empty()) {
+    context_log_prefix_ = atfw::util::string::format("{}", get_shared_context());
+  }
+  return context_log_prefix_;
+}
+
+SERVER_FRAME_API const std::shared_ptr<::google::protobuf::Arena> &task_action_base::get_task_arena() const {
+  const std::shared_ptr<::google::protobuf::Arena> &ret = shared_context_->get_protobuf_arena();
+  if (ret) {
+    return ret;
+  }
+
+  shared_context_->mutable_protobuf_arena();
+
+  assert(shared_context_->get_protobuf_arena());
+  return shared_context_->get_protobuf_arena();
+}
+
 SERVER_FRAME_API void task_action_base::set_caller_context(rpc::context &ctx) {
   get_shared_context().set_parent_context(ctx, get_inherit_option());
 }
 
 task_action_base::result_type::value_type task_action_base::_notify_finished(int32_t final_result,
-                                                                             rpc::context::tracer &tracer,
+                                                                             rpc::telemetry::tracer &tracer,
                                                                              task_trace_attributes &attributes) {
   attributes[static_cast<size_t>(trace_attribute_type::kTaskResponseCode)] = {
       rpc::telemetry::semantic_conventions::kAtRpcResponseCode, get_response_code()};
   // Additional trace data
-  if (rpc::context::trace_dynamic_policy::kDrop != shared_context_.get_trace_policy()) {
-    auto trace_span = shared_context_.get_trace_span();
+  if (rpc::context::trace_dynamic_policy::kDrop != shared_context_->get_trace_policy()) {
+    auto trace_span = shared_context_->get_trace_span();
     if (trace_span) {
       if (0 != get_user_id() && 0 != get_zone_id()) {
         trace_span->SetAttribute("user_id", get_user_id());

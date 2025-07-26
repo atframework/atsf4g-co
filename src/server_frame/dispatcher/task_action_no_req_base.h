@@ -41,8 +41,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_no_req_base : public task_action_base
 
   SERVER_FRAME_API result_type hook_run() override;
 
-  SERVER_FRAME_API rpc::context::inherit_options get_inherit_option() const noexcept override;
-  SERVER_FRAME_API rpc::context::trace_start_option get_trace_option() const noexcept override;
+  SERVER_FRAME_API rpc::telemetry::trace_inherit_options get_inherit_option() const noexcept override;
+  SERVER_FRAME_API rpc::telemetry::trace_start_option get_trace_option() const noexcept override;
 
  protected:
   SERVER_FRAME_API void send_response() override;

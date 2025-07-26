@@ -26,13 +26,13 @@ SERVER_FRAME_API rpc::result_code_type lookup(rpc::context &ctx, gsl::string_vie
       {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
       {opentelemetry::trace::SemanticConventions::kRpcService, "rpc.dns"},
       {opentelemetry::trace::SemanticConventions::kRpcMethod, "rpc.dns.lookup"}};
-  rpc::context::trace_start_option trace_start_option;
+  rpc::telemetry::trace_start_option trace_start_option;
   trace_start_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());
   trace_start_option.is_remote = true;
   trace_start_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
   trace_start_option.attributes = trace_attributes;
 
-  rpc::context::tracer tracer = child_ctx.make_tracer("rpc.dns.lookup", std::move(trace_start_option));
+  rpc::telemetry::tracer tracer = child_ctx.make_tracer("rpc.dns.lookup", std::move(trace_start_option));
 
   uint64_t sequence = ss_msg_dispatcher::me()->allocate_sequence();
 

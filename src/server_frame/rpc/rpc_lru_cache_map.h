@@ -26,6 +26,7 @@
 
 #include "rpc/rpc_async_invoke.h"
 #include "rpc/rpc_common_types.h"
+#include "rpc/rpc_context.h"
 
 namespace rpc {
 class context;

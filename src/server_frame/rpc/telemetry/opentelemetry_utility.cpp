@@ -35,6 +35,7 @@
 #include <atomic>
 #include <functional>
 #include <limits>
+#include <list>
 #include <memory>
 #include <mutex>
 #include <sstream>
@@ -114,7 +115,9 @@ static int64_t get_opentelemetry_utility_metrics_record_value_as_int64(
     const opentelemetry::nostd::variant<int64_t, double>& value) {
   if (opentelemetry::nostd::holds_alternative<int64_t>(value)) {
     return opentelemetry::nostd::get<int64_t>(value);
-  } else if (opentelemetry::nostd::holds_alternative<double>(value)) {
+  }
+
+  if (opentelemetry::nostd::holds_alternative<double>(value)) {
     return static_cast<int64_t>(opentelemetry::nostd::get<double>(value) + std::numeric_limits<float>::epsilon());
   }
 
@@ -125,7 +128,9 @@ static double get_opentelemetry_utility_metrics_record_value_as_double(
     const opentelemetry::nostd::variant<int64_t, double>& value) {
   if (opentelemetry::nostd::holds_alternative<int64_t>(value)) {
     return static_cast<double>(opentelemetry::nostd::get<int64_t>(value));
-  } else if (opentelemetry::nostd::holds_alternative<double>(value)) {
+  }
+
+  if (opentelemetry::nostd::holds_alternative<double>(value)) {
     return opentelemetry::nostd::get<double>(value);
   }
 
@@ -213,7 +218,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_converter {
     record->lifetime_string_view.push_back(std::vector<opentelemetry::nostd::string_view>());
     std::vector<opentelemetry::nostd::string_view>& ret = *record->lifetime_string_view.rbegin();
     ret.reserve(v.size());
-    for (auto& ov : v) {
+    for (const auto& ov : v) {
       record->lifetime_string.push_back(static_cast<std::string>(ov));
       ret.emplace_back(opentelemetry::nostd::string_view{*record->lifetime_string.rbegin()});
     }
@@ -233,15 +238,15 @@ struct ATFW_UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_value_to_string_co
   std::string operator()(const char* v) { return v == nullptr ? "" : v; }
 
   template <class T>
-  inline void dump_array_value(std::ostream& os, const T& v) {
+  inline static void dump_array_value(std::ostream& os, const T& v) {
     os << v;
   }
-  inline void dump_array_value(std::ostream& os, const opentelemetry::nostd::string_view& v) {
+  inline static void dump_array_value(std::ostream& os, const opentelemetry::nostd::string_view& v) {
     os.write(v.data(), static_cast<std::streamsize>(v.size()));
   }
 
   template <class T>
-  std::string to_array(opentelemetry::nostd::span<const T> v) {
+  static std::string to_array(opentelemetry::nostd::span<const T> v) {
     if (v.empty()) {
       return "[]";
     }
@@ -280,15 +285,15 @@ struct ATFW_UTIL_SYMBOL_LOCAL opentelemetry_utility_attribute_owned_value_to_str
   std::string operator()(const std::string& v) { return static_cast<std::string>(v); }
 
   template <class T>
-  inline void dump_array_value(std::ostream& os, const T& v) {
+  inline static void dump_array_value(std::ostream& os, const T& v) {
     os << v;
   }
-  inline void dump_array_value(std::ostream& os, const std::string& v) {
+  inline static void dump_array_value(std::ostream& os, const std::string& v) {
     os.write(v.data(), static_cast<std::streamsize>(v.size()));
   }
 
   template <class T>
-  std::string to_array(const std::vector<T>& v) {
+  static std::string to_array(const std::vector<T>& v) {
     if (v.empty()) {
       return "[]";
     }
@@ -385,7 +390,7 @@ static inline void opentelemetry_utility_protobuf_to_otel_attributes_assign_vect
       *output.string_view_storages.rbegin();
 
   owned_type_values.reserve(static_cast<size_t>(values.size()));
-  for (auto& value : values) {
+  for (const auto& value : values) {
     owned_type_values.push_back(value);
   }
 
@@ -477,14 +482,14 @@ static void opentelemetry_utility_protobuf_to_otel_attributes_field(const google
       if (fds->is_repeated()) {
         int size = reflection->FieldSize(message, fds);
         for (int i = 0; i < size; ++i) {
-          auto& sub_message = reflection->GetRepeatedMessage(message, fds, i);
+          const auto& sub_message = reflection->GetRepeatedMessage(message, fds, i);
           opentelemetry_utility_protobuf_to_otel_attributes_message(
               sub_message.GetReflection(), sub_message, output,
               atfw::util::string::format("{}{}[{}].", key_prefix, fds->name(), i));
         }
       } else {
         if (reflection->HasField(message, fds)) {
-          auto& sub_message = reflection->GetMessage(message, fds);
+          const auto& sub_message = reflection->GetMessage(message, fds);
           opentelemetry_utility_protobuf_to_otel_attributes_message(
               sub_message.GetReflection(), sub_message, output,
               atfw::util::string::format("{}{}.", key_prefix, fds->name()));
@@ -659,7 +664,7 @@ static bool internal_add_global_metrics_observable_int64(opentelemetry_utility::
       }
     }
 
-    for (auto& record : metrics_item->collected_records) {
+    for (const auto& record : metrics_item->collected_records) {
       if (!record) {
         continue;
       }
@@ -999,54 +1004,69 @@ SERVER_FRAME_API void opentelemetry_utility::stop() {
     return;
   }
 
-  std::pair<std::recursive_mutex&, opentelemetry_utility_global_metrics_set&> data_set = get_global_metrics_set();
-  std::shared_ptr<::rpc::telemetry::group_type> telemetry_lifetime =
-      rpc::telemetry::global_service::get_default_group();
+  using pending_remove_callback_args = std::pair<opentelemetry::metrics::ObservableCallbackPtr, void*>;
+  using pending_remove_data = std::pair<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>,
+                                        pending_remove_callback_args>;
+  std::list<pending_remove_data> pending_remove_list;
 
-  std::lock_guard<std::recursive_mutex> lock_guard{data_set.first};
+  // 先提取instrument，降低临界区
+  {
+    std::pair<std::recursive_mutex&, opentelemetry_utility_global_metrics_set&> data_set = get_global_metrics_set();
+    std::shared_ptr<::rpc::telemetry::group_type> telemetry_lifetime =
+        rpc::telemetry::global_service::get_default_group();
 
-  for (auto& observable : data_set.second.int64_observable_by_pointer) {
-    if (!observable.second) {
-      continue;
+    std::lock_guard<std::recursive_mutex> lock_guard{data_set.first};
+
+    for (auto& observable : data_set.second.int64_observable_by_pointer) {
+      if (!observable.second) {
+        continue;
+      }
+
+      if (nullptr == observable.second->origin_callback) {
+        continue;
+      }
+
+      meter_instrument_key metrics_key{observable.second->meter_instrument_name,
+                                       observable.second->meter_instrument_description,
+                                       observable.second->meter_instrument_unit};
+      auto instrument = rpc::telemetry::global_service::get_metrics_observable(observable.second->meter_name,
+                                                                               metrics_key, telemetry_lifetime);
+      if (!instrument) {
+        continue;
+      }
+
+      pending_remove_list.push_back({instrument, std::make_pair(observable.second->origin_callback,
+                                                                reinterpret_cast<void*>(observable.second.get()))});
+      observable.second->origin_callback = nullptr;
     }
 
-    if (nullptr == observable.second->origin_callback) {
-      continue;
-    }
+    for (auto& observable : data_set.second.double_observable_by_pointer) {
+      if (!observable.second) {
+        continue;
+      }
 
-    meter_instrument_key metrics_key{observable.second->meter_instrument_name,
-                                     observable.second->meter_instrument_description,
-                                     observable.second->meter_instrument_unit};
-    auto instrument = rpc::telemetry::global_service::get_metrics_observable(observable.second->meter_name, metrics_key,
-                                                                             telemetry_lifetime);
-    if (!instrument) {
-      continue;
-    }
+      if (nullptr == observable.second->origin_callback) {
+        continue;
+      }
 
-    instrument->RemoveCallback(observable.second->origin_callback, reinterpret_cast<void*>(observable.second.get()));
-    observable.second->origin_callback = nullptr;
+      meter_instrument_key metrics_key{observable.second->meter_instrument_name,
+                                       observable.second->meter_instrument_description,
+                                       observable.second->meter_instrument_unit};
+      auto instrument = rpc::telemetry::global_service::get_metrics_observable(observable.second->meter_name,
+                                                                               metrics_key, telemetry_lifetime);
+      if (!instrument) {
+        continue;
+      }
+
+      pending_remove_list.push_back({instrument, std::make_pair(observable.second->origin_callback,
+                                                                reinterpret_cast<void*>(observable.second.get()))});
+      observable.second->origin_callback = nullptr;
+    }
   }
 
-  for (auto& observable : data_set.second.double_observable_by_pointer) {
-    if (!observable.second) {
-      continue;
-    }
-
-    if (nullptr == observable.second->origin_callback) {
-      continue;
-    }
-
-    meter_instrument_key metrics_key{observable.second->meter_instrument_name,
-                                     observable.second->meter_instrument_description,
-                                     observable.second->meter_instrument_unit};
-    auto instrument = rpc::telemetry::global_service::get_metrics_observable(observable.second->meter_name, metrics_key,
-                                                                             telemetry_lifetime);
-    if (!instrument) {
-      continue;
-    }
-
-    instrument->RemoveCallback(observable.second->origin_callback, reinterpret_cast<void*>(observable.second.get()));
-    observable.second->origin_callback = nullptr;
+  // 执行移除
+  for (auto& inst : pending_remove_list) {
+    inst.first->RemoveCallback(inst.second.first, inst.second.second);
   }
 }
 
@@ -1077,7 +1097,7 @@ SERVER_FRAME_API void opentelemetry_utility::populate_attributes(metrics_attribu
   target.attributes.reserve(attributes.size() + target.attributes.size());
 
   opentelemetry_utility_attribute_converter converter{target};
-  for (auto& kv : attributes) {
+  for (const auto& kv : attributes) {
     target.attributes[static_cast<std::string>(kv.first)] = opentelemetry::nostd::visit(converter, kv.second);
   }
 }
@@ -1089,7 +1109,7 @@ SERVER_FRAME_API void opentelemetry_utility::populate_attributes(
   target.attributes.reserve(attributes.size() + target.attributes.size());
 
   opentelemetry_utility_attribute_converter converter{target};
-  for (auto& kv : attributes) {
+  for (const auto& kv : attributes) {
     target.attributes[static_cast<std::string>(kv.first)] = opentelemetry::nostd::visit(converter, kv.second);
   }
 }
@@ -1104,41 +1124,55 @@ SERVER_FRAME_API opentelemetry::common::AttributeValue opentelemetry_utility::co
     const opentelemetry::sdk::common::OwnedAttributeValue& value) {
   if (opentelemetry::nostd::holds_alternative<bool>(value)) {
     return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<bool>(value)};
-  } else if (opentelemetry::nostd::holds_alternative<int32_t>(value)) {
+  }
+  if (opentelemetry::nostd::holds_alternative<int32_t>(value)) {
     return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<int32_t>(value)};
-  } else if (opentelemetry::nostd::holds_alternative<int64_t>(value)) {
+  }
+  if (opentelemetry::nostd::holds_alternative<int64_t>(value)) {
     return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<int64_t>(value)};
-  } else if (opentelemetry::nostd::holds_alternative<uint32_t>(value)) {
+  }
+  if (opentelemetry::nostd::holds_alternative<uint32_t>(value)) {
     return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<uint32_t>(value)};
-  } else if (opentelemetry::nostd::holds_alternative<uint64_t>(value)) {
+  }
+  if (opentelemetry::nostd::holds_alternative<uint64_t>(value)) {
     return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<uint64_t>(value)};
-  } else if (opentelemetry::nostd::holds_alternative<double>(value)) {
+  }
+  if (opentelemetry::nostd::holds_alternative<double>(value)) {
     return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<double>(value)};
-  } else if (opentelemetry::nostd::holds_alternative<std::string>(value)) {
+  }
+  if (opentelemetry::nostd::holds_alternative<std::string>(value)) {
     return opentelemetry::common::AttributeValue{opentelemetry::nostd::get<std::string>(value)};
-  } else if (opentelemetry::nostd::holds_alternative<std::vector<bool>>(value)) {
+  }
+  if (opentelemetry::nostd::holds_alternative<std::vector<bool>>(value)) {
     // 暂无低开销解决方案，目前公共属性中没有数组类型，故而不处理所有的数组类型也是没有问题的
     // 参见 https://github.com/open-telemetry/opentelemetry-cpp/pull/1154 里的讨论
     return opentelemetry::common::AttributeValue{};
-  } else if (opentelemetry::nostd::holds_alternative<std::vector<int32_t>>(value)) {
+  }
+  if (opentelemetry::nostd::holds_alternative<std::vector<int32_t>>(value)) {
     const auto& data = opentelemetry::nostd::get<std::vector<int32_t>>(value);
     return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const int32_t>{data.data(), data.size()}};
-  } else if (opentelemetry::nostd::holds_alternative<std::vector<uint32_t>>(value)) {
+  }
+  if (opentelemetry::nostd::holds_alternative<std::vector<uint32_t>>(value)) {
     const auto& data = opentelemetry::nostd::get<std::vector<uint32_t>>(value);
     return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const uint32_t>{data.data(), data.size()}};
-  } else if (opentelemetry::nostd::holds_alternative<std::vector<int64_t>>(value)) {
+  }
+  if (opentelemetry::nostd::holds_alternative<std::vector<int64_t>>(value)) {
     const auto& data = opentelemetry::nostd::get<std::vector<int64_t>>(value);
     return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const int64_t>{data.data(), data.size()}};
-  } else if (opentelemetry::nostd::holds_alternative<std::vector<uint64_t>>(value)) {
+  }
+  if (opentelemetry::nostd::holds_alternative<std::vector<uint64_t>>(value)) {
     const auto& data = opentelemetry::nostd::get<std::vector<uint64_t>>(value);
     return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const uint64_t>{data.data(), data.size()}};
-  } else if (opentelemetry::nostd::holds_alternative<std::vector<uint8_t>>(value)) {
+  }
+  if (opentelemetry::nostd::holds_alternative<std::vector<uint8_t>>(value)) {
     const auto& data = opentelemetry::nostd::get<std::vector<uint8_t>>(value);
     return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const uint8_t>{data.data(), data.size()}};
-  } else if (opentelemetry::nostd::holds_alternative<std::vector<double>>(value)) {
+  }
+  if (opentelemetry::nostd::holds_alternative<std::vector<double>>(value)) {
     const auto& data = opentelemetry::nostd::get<std::vector<double>>(value);
     return opentelemetry::common::AttributeValue{opentelemetry::nostd::span<const double>{data.data(), data.size()}};
-  } else if (opentelemetry::nostd::holds_alternative<std::vector<std::string>>(value)) {
+  }
+  if (opentelemetry::nostd::holds_alternative<std::vector<std::string>>(value)) {
     // 暂无低开销解决方案，目前公共属性中没有数组类型，故而不处理所有的数组类型也是没有问题的
     // 参见 https://github.com/open-telemetry/opentelemetry-cpp/pull/1154 里的讨论
     return opentelemetry::common::AttributeValue{};
@@ -1163,6 +1197,11 @@ SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_int64(
     metrics_observable_type type, opentelemetry::nostd::string_view meter_name, meter_instrument_key metrics_key,
     std::function<void(metrics_observer&)> fn) {
   if (!fn) {
+    return false;
+  }
+
+  // Skip if already closed
+  if (true == get_global_metrics_set().second.closing.load(std::memory_order_acquire)) {
     return false;
   }
 
@@ -1206,15 +1245,20 @@ SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_int64(
     data_set.second.int64_observable_by_pointer[reinterpret_cast<void*>(handle.get())] = handle;
     ++data_set.second.collecting_version;
     return true;
-  } else {
-    return false;
   }
+
+  return false;
 }
 
 SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_double(
     metrics_observable_type type, opentelemetry::nostd::string_view meter_name, meter_instrument_key metrics_key,
     std::function<void(metrics_observer&)> fn) {
   if (!fn) {
+    return false;
+  }
+
+  // Skip if already closed
+  if (true == get_global_metrics_set().second.closing.load(std::memory_order_acquire)) {
     return false;
   }
 
@@ -1257,9 +1301,9 @@ SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_double
     data_set.second.double_observable_by_pointer[reinterpret_cast<void*>(handle.get())] = handle;
     ++data_set.second.collecting_version;
     return true;
-  } else {
-    return false;
   }
+
+  return false;
 }
 
 SERVER_FRAME_API void opentelemetry_utility::global_metics_observe_record(
@@ -1347,7 +1391,7 @@ SERVER_FRAME_API void opentelemetry_utility::send_notification_event(rpc::contex
     size_t buffer_size = tls_buffers_get_length(tls_buffers_type_t::EN_TBT_DEFAULT);
 
     if (message.size() + 16 < buffer_size) {
-      atfw::util::log::stacktrace_options options;
+      atfw::util::log::stacktrace_options options = {};
       options.skip_start_frames = 1;
       options.skip_end_frames = 1;
       options.max_frames = 0;

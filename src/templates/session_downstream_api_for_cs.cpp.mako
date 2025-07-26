@@ -11,6 +11,9 @@ result_clazz_name = service.get_name_lower_rule() + '_result_t'
 
 #include "${service.get_name_lower_rule()}.h"
 
+#include <nostd/string_view.h>
+#include <nostd/utility_data_size.h>
+
 #include <log/log_wrapper.h>
 
 // clang-format off
@@ -52,11 +55,17 @@ for rpc in rpcs.values():
     if rpc.is_response_stream():
       rpc_common_codes_enable_stream_header = True
 
-%>namespace details {
-% if rpc_common_codes_enable_stream_header:
+%>namespace {
+% if rpc_common_codes_enable_common or rpc_common_codes_enable_stream_header:
+template<class StringViewLikeT>
+inline static atfw::util::nostd::string_view __to_string_view(const StringViewLikeT &input) {
+  return {atfw::util::nostd::data(input), atfw::util::nostd::size(input)};
+}
+% endif
+% if rpc_common_codes_enable_common:
 template<class TBodyType>
-static inline int __pack_body(TBodyType &body, std::string *output, const char *rpc_full_name,
-                                  const std::string &type_full_name) {
+inline static int __pack_body(TBodyType &body, std::string *output, atfw::util::nostd::string_view rpc_full_name,
+                                  atfw::util::nostd::string_view type_full_name) {
   if (false == body.SerializeToString(output)) {
     FWLOGERROR("rpc {} serialize message {} failed, msg: {}", rpc_full_name, type_full_name,
                body.InitializationErrorString());
@@ -70,8 +79,8 @@ static inline int __pack_body(TBodyType &body, std::string *output, const char *
 % endif
 
 % if rpc_common_codes_enable_stream_header:
-static inline int __setup_rpc_stream_header(atframework::CSMsgHead &head, const char *rpc_full_name,
-                                            const std::string &type_full_name) {
+inline static int __setup_rpc_stream_header(atframework::CSMsgHead &head, atfw::util::nostd::string_view rpc_full_name,
+                                            atfw::util::nostd::string_view type_full_name) {
   head.set_op_type(${project_namespace}::EN_MSG_OP_TYPE_STREAM);
   atframework::RpcStreamMeta* stream_meta = head.mutable_rpc_stream();
   if (nullptr == stream_meta) {
@@ -80,8 +89,8 @@ static inline int __setup_rpc_stream_header(atframework::CSMsgHead &head, const 
   stream_meta->set_version(logic_config::me()->get_atframework_settings().rpc_version());
   stream_meta->set_caller(static_cast<std::string>(logic_config::me()->get_local_server_name()));
   stream_meta->set_callee("${service.get_full_name()}");
-  stream_meta->set_rpc_name(rpc_full_name);
-  stream_meta->set_type_url(type_full_name);
+  stream_meta->set_rpc_name(rpc_full_name.data(), rpc_full_name.size());
+  stream_meta->set_type_url(type_full_name.data(), type_full_name.size());
 
   return ${project_namespace}::err::EN_SUCCESS;
 
@@ -110,17 +119,17 @@ ${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
     return {static_cast<rpc::always_ready_code_type::value_type>(${project_namespace}::err::EN_SYS_MALLOC)};
   }
 
-  int res = details::__setup_rpc_stream_header(
+  int res = __setup_rpc_stream_header(
     *msg_ptr->mutable_head(), "${rpc.get_full_name()}",
-    ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
+    __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
 
   if (res < 0) {
     return {static_cast<rpc::always_ready_code_type::value_type>(res)};
   }
 
-  res = details::__pack_body(__body, msg_ptr->mutable_body_bin(),
-                            "${rpc.get_full_name()}",
-                            ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
+  res = __pack_body(
+    __body, msg_ptr->mutable_body_bin(), "${rpc.get_full_name()}",
+    __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
   if (res < 0) {
     return {static_cast<rpc::always_ready_code_type::value_type>(res)};
   }
@@ -150,17 +159,17 @@ ${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
     return {static_cast<rpc::always_ready_code_type::value_type>(${project_namespace}::err::EN_SYS_MALLOC)};
   }
 
-  int res = details::__setup_rpc_stream_header(
+  int res = __setup_rpc_stream_header(
     *msg_ptr->mutable_head(), "${rpc.get_full_name()}",
-    ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
+    __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
 
   if (res < 0) {
     return {static_cast<rpc::always_ready_code_type::value_type>(res)};
   }
 
-  res = details::__pack_body(__body, msg_ptr->mutable_body_bin(),
-                            "${rpc.get_full_name()}",
-                            ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
+  res = __pack_body(
+    __body, msg_ptr->mutable_body_bin(), "${rpc.get_full_name()}",
+    __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
   if (res < 0) {
     return {static_cast<rpc::always_ready_code_type::value_type>(res)};
   }
@@ -190,17 +199,17 @@ ${service_dllexport_decl} rpc::always_ready_code_type broadcast_${rpc.get_name()
     return {static_cast<rpc::always_ready_code_type::value_type>(${project_namespace}::err::EN_SYS_MALLOC)};
   }
 
-  int res = details::__setup_rpc_stream_header(
+  int res = __setup_rpc_stream_header(
     *msg_ptr->mutable_head(), "${rpc.get_full_name()}",
-    ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
+    __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
 
   if (res < 0) {
     return {static_cast<rpc::always_ready_code_type::value_type>(res)};
   }
 
-  res = details::__pack_body(__body, msg_ptr->mutable_body_bin(),
-                            "${rpc.get_full_name()}",
-                            ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
+  res = __pack_body(
+    __body, msg_ptr->mutable_body_bin(), "${rpc.get_full_name()}",
+    __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
   if (res < 0) {
     return {static_cast<rpc::always_ready_code_type::value_type>(res)};
   }

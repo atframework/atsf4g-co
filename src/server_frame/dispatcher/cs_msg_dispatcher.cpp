@@ -30,6 +30,8 @@
 #include <logic/action/task_action_player_logout.h>
 #include <logic/session_manager.h>
 
+#include <rpc/rpc_context.h>
+
 #include <utility>
 
 #include "dispatcher/task_manager.h"
@@ -149,14 +151,14 @@ SERVER_FRAME_API void cs_msg_dispatcher::on_create_task_failed(dispatcher_start_
     return;
   }
 
-  rpc::context::tracer tracer;
+  rpc::telemetry::tracer tracer;
   std::unique_ptr<rpc::context> child_context;
   if (nullptr != start_data.context) {
     child_context.reset(new rpc::context(*start_data.context));
   } else {
     child_context.reset(new rpc::context(rpc::context::create_without_task()));
   }
-  rpc::context::trace_start_option trace_start_option;
+  rpc::telemetry::trace_start_option trace_start_option;
   trace_start_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
   trace_start_option.is_remote = true;
   trace_start_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(cs_msg_dispatcher::me());
@@ -273,8 +275,8 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_s
         break;
       }
 
-      rpc::context::tracer tracer;
-      rpc::context::trace_start_option trace_start_option;
+      rpc::telemetry::tracer tracer;
+      rpc::telemetry::trace_start_option trace_start_option;
       trace_start_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_SERVER;
       trace_start_option.is_remote = true;
       trace_start_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(cs_msg_dispatcher::me());

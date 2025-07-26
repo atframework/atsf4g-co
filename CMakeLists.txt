@@ -8,6 +8,8 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.30.0")
   cmake_policy(SET CMP0169 NEW)
 endif()
 
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
 project(
   atf4g-co
   VERSION "0.11.0"

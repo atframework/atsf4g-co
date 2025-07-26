@@ -200,8 +200,8 @@ SERVER_FRAME_API void task_action_cs_req_base::add_prepare_handle(
   prepare_handles_.push_back(fn);
 }
 
-SERVER_FRAME_API rpc::context::trace_start_option task_action_cs_req_base::get_trace_option() const noexcept {
-  rpc::context::trace_start_option ret = task_action_base::get_trace_option();
+SERVER_FRAME_API rpc::telemetry::trace_start_option task_action_cs_req_base::get_trace_option() const noexcept {
+  rpc::telemetry::trace_start_option ret = task_action_base::get_trace_option();
 
   auto &req_msg = get_request();
   if (req_msg.has_head() && req_msg.head().has_rpc_trace() && !req_msg.head().rpc_trace().trace_id().empty()) {
@@ -271,15 +271,16 @@ SERVER_FRAME_API task_action_cs_req_base::msg_ref_type task_action_cs_req_base::
     head->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE);
   }
 
+  auto response_type_url = get_response_type_url();
   if (get_request().head().has_rpc_request()) {
     head->mutable_rpc_response()->set_version(logic_config::me()->get_atframework_settings().rpc_version());
     head->mutable_rpc_response()->set_rpc_name(get_request().head().rpc_request().rpc_name());
-    head->mutable_rpc_response()->set_type_url(get_response_type_url());
+    head->mutable_rpc_response()->set_type_url(response_type_url.data(), response_type_url.size());
   } else {
     head->clear_rpc_stream();
     head->mutable_rpc_stream()->set_version(logic_config::me()->get_atframework_settings().rpc_version());
     head->mutable_rpc_stream()->set_rpc_name(get_request().head().rpc_stream().rpc_name());
-    head->mutable_rpc_stream()->set_type_url(get_response_type_url());
+    head->mutable_rpc_stream()->set_type_url(response_type_url.data(), response_type_url.size());
 
     head->mutable_rpc_stream()->set_caller(static_cast<std::string>(logic_config::me()->get_local_server_name()));
     head->mutable_rpc_stream()->set_callee(get_request().head().rpc_stream().caller());

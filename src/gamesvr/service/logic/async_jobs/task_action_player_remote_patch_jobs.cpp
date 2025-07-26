@@ -385,8 +385,8 @@ int task_action_player_remote_patch_jobs::on_success() {
     }
 
     rpc::context new_ctx{rpc::context::create_without_task()};
-    rpc::context::tracer new_tracer;
-    rpc::context::trace_start_option trace_start_option;
+    rpc::telemetry::tracer new_tracer;
+    rpc::telemetry::trace_start_option trace_start_option;
     trace_start_option.dispatcher = nullptr;
     trace_start_option.is_remote = true;
     trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -422,8 +422,8 @@ int task_action_player_remote_patch_jobs::on_failed() {
     }
 
     rpc::context new_ctx{rpc::context::create_without_task()};
-    rpc::context::tracer new_tracer;
-    rpc::context::trace_start_option trace_start_option;
+    rpc::telemetry::tracer new_tracer;
+    rpc::telemetry::trace_start_option trace_start_option;
     trace_start_option.dispatcher = nullptr;
     trace_start_option.is_remote = true;
     trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;

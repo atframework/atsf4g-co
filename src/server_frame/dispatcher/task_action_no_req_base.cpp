@@ -66,17 +66,17 @@ SERVER_FRAME_API task_action_no_req_base::result_type task_action_no_req_base::h
   TASK_ACTION_RETURN_CODE(ret);
 }
 
-SERVER_FRAME_API rpc::context::inherit_options task_action_no_req_base::get_inherit_option() const noexcept {
-  return rpc::context::inherit_options{rpc::context::parent_mode::kParent, false, true};
+SERVER_FRAME_API rpc::telemetry::trace_inherit_options task_action_no_req_base::get_inherit_option() const noexcept {
+  return rpc::telemetry::trace_inherit_options{rpc::context::parent_mode::kParent, false, true};
 }
 
-SERVER_FRAME_API rpc::context::trace_start_option task_action_no_req_base::get_trace_option() const noexcept {
-  rpc::context::trace_start_option ret;
+SERVER_FRAME_API rpc::telemetry::trace_start_option task_action_no_req_base::get_trace_option() const noexcept {
+  rpc::telemetry::trace_start_option ret;
   ret.kind = ::atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
   ret.is_remote = false;
   ret.dispatcher = nullptr;
   ret.parent_network_span = nullptr;
-  ret.parent_memory_span = rpc::context::trace_start_option::span_ptr_type();
+  ret.parent_memory_span = rpc::telemetry::trace_start_option::span_ptr_type();
 
   return ret;
 }

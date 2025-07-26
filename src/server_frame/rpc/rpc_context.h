@@ -43,35 +43,10 @@ class context {
   using string_view = opentelemetry::nostd::string_view;
   using tracer = rpc::telemetry::tracer;
   using trace_start_option = rpc::telemetry::trace_start_option;
-
-  enum class parent_mode : uint8_t {
-    kParent = 0,
-    kLink = 1,
-  };
-
-  enum trace_dynamic_policy : uint8_t {
-    kUnset = 0,
-    kDrop,
-    kRecording,
-  };
-
-  struct ATFW_UTIL_SYMBOL_VISIBLE inherit_options {
-    parent_mode mode;
-    bool inherit_allocator;
-    bool inherit_parent_span;
-
-    ATFW_UTIL_FORCEINLINE inherit_options() noexcept
-        : mode(parent_mode::kParent), inherit_allocator(true), inherit_parent_span(true) {}
-    ATFW_UTIL_FORCEINLINE explicit inherit_options(parent_mode m) noexcept
-        : mode(m), inherit_allocator(true), inherit_parent_span(true) {}
-    ATFW_UTIL_FORCEINLINE explicit inherit_options(parent_mode m, bool inherit_alloc) noexcept
-        : mode(m), inherit_allocator(inherit_alloc), inherit_parent_span(true) {}
-    ATFW_UTIL_FORCEINLINE explicit inherit_options(parent_mode m, bool inherit_alloc,
-                                                   bool inherit_parent_trace_span) noexcept
-        : mode(m), inherit_allocator(inherit_alloc), inherit_parent_span(inherit_parent_trace_span) {}
-  };
-
-  struct ATFW_UTIL_SYMBOL_VISIBLE create_options {};
+  using parent_mode = rpc::telemetry::trace_parent_mode;
+  using trace_dynamic_policy = rpc::telemetry::trace_dynamic_policy;
+  using inherit_options = rpc::telemetry::trace_inherit_options;
+  using create_options = rpc::telemetry::trace_create_options;
 
   struct ATFW_UTIL_SYMBOL_VISIBLE task_context_data {
     uint64_t task_id;
@@ -304,7 +279,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE formatter<rpc::context, CharT> : formatter<std::
       ret = LOG_WRAPPER_FWAPI_FORMAT_TO(ret, ", object_instance_id={}",
                                         rpc_ctx.get_task_context().reference_object_instance_id);
     }
-    const ::rpc::context::tracer::span_ptr_type &trace_span = rpc_ctx.get_trace_span();
+    const ::rpc::telemetry::tracer::span_ptr_type &trace_span = rpc_ctx.get_trace_span();
     if (trace_span) {
       auto trace_ctx = trace_span->GetContext();
       char trace_id_buffer[static_cast<size_t>(opentelemetry::trace::TraceId::kSize) * 2];

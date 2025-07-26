@@ -193,8 +193,8 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
       {opentelemetry::trace::SemanticConventions::kRpcMethod, "atframework.transaction_participator_handle.prepare"}};
 
   rpc::context child_ctx{ctx};
-  rpc::context::tracer child_tracer;
-  rpc::context::trace_start_option child_trace_option;
+  rpc::telemetry::tracer child_tracer;
+  rpc::telemetry::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -282,8 +282,8 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
         {opentelemetry::trace::SemanticConventions::kRpcMethod, "atframework.transaction_participator_handle.reject"}};
 
     rpc::context child_ctx{ctx};
-    rpc::context::tracer child_tracer;
-    rpc::context::trace_start_option child_trace_option;
+    rpc::telemetry::tracer child_tracer;
+    rpc::telemetry::trace_start_option child_trace_option;
     child_trace_option.dispatcher = nullptr;
     child_trace_option.is_remote = false;
     child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -515,8 +515,8 @@ rpc::result_code_type transaction_participator_handle::add_running_transcation(r
        "atframework.transaction_participator_handle.add_running_transcation"}};
 
   rpc::context child_ctx{ctx};
-  rpc::context::tracer child_tracer;
-  rpc::context::trace_start_option child_trace_option;
+  rpc::telemetry::tracer child_tracer;
+  rpc::telemetry::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -573,8 +573,8 @@ rpc::result_code_type transaction_participator_handle::remove_running_transactio
        "atframework.transaction_participator_handle.remove_running_transaction"}};
 
   rpc::context child_ctx{ctx};
-  rpc::context::tracer child_tracer;
-  rpc::context::trace_start_option child_trace_option;
+  rpc::telemetry::tracer child_tracer;
+  rpc::telemetry::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -655,8 +655,8 @@ rpc::result_code_type transaction_participator_handle::add_finished_transcation(
        "atframework.transaction_participator_handle.add_finished_transcation"}};
 
   rpc::context child_ctx{ctx};
-  rpc::context::tracer child_tracer;
-  rpc::context::trace_start_option child_trace_option;
+  rpc::telemetry::tracer child_tracer;
+  rpc::telemetry::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -706,8 +706,8 @@ rpc::result_code_type transaction_participator_handle::remove_finished_transacti
        "atframework.transaction_participator_handle.remove_finished_transaction"}};
 
   rpc::context child_ctx{ctx};
-  rpc::context::tracer child_tracer;
-  rpc::context::trace_start_option child_trace_option;
+  rpc::telemetry::tracer child_tracer;
+  rpc::telemetry::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -747,8 +747,8 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
        "atframework.transaction_participator_handle.resolve_transcation"}};
 
   rpc::context child_ctx{ctx};
-  rpc::context::tracer child_tracer;
-  rpc::context::trace_start_option child_trace_option;
+  rpc::telemetry::tracer child_tracer;
+  rpc::telemetry::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -838,8 +838,8 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
        "atframework.transaction_participator_handle.commit_transcation"}};
 
   rpc::context child_ctx{ctx};
-  rpc::context::tracer child_tracer;
-  rpc::context::trace_start_option child_trace_option;
+  rpc::telemetry::tracer child_tracer;
+  rpc::telemetry::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
@@ -910,8 +910,8 @@ rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::c
        "atframework.transaction_participator_handle.reject_transcation"}};
 
   rpc::context child_ctx{ctx};
-  rpc::context::tracer child_tracer;
-  rpc::context::trace_start_option child_trace_option;
+  rpc::telemetry::tracer child_tracer;
+  rpc::telemetry::trace_start_option child_trace_option;
   child_trace_option.dispatcher = nullptr;
   child_trace_option.is_remote = false;
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;

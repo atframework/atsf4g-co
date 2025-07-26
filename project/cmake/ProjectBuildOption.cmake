@@ -216,13 +216,17 @@ if(PROJECT_ENABLE_LINKER_MOLD)
     ]]
   endif()
 endif()
+
+#[[
+# ld.gold is deprecated from binutils 2.44 and is removed in the latest version
 if(NOT PROJECT_TRY_SET_LINKER
    AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
    AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  # Use ld.gold
+  # ld.gold is deprecated from binutils 2.44 and is removed in the latest version
   try_set_linker(LINKER gold)
   set(PROJECT_TRY_SET_LINKER "gold")
 endif()
+]]
 
 if(PROJECT_TOOL_REPORT_COMPILE_UNIT_TIME)
   set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CMAKE_COMMAND} -E time")

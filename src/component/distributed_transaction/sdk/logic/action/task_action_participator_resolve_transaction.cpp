@@ -17,6 +17,8 @@
 #include <config/server_frame_build_feature.h>
 #include <utility/protobuf_mini_dumper.h>
 
+#include <rpc/rpc_context.h>
+
 #include <dispatcher/task_manager.h>
 
 #include "rpc/transaction/transaction_api.h"

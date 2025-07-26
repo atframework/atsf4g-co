@@ -59,5 +59,35 @@ class ATFW_UTIL_SYMBOL_VISIBLE multiple_key_value_iterable_view final : public o
  private:
   opentelemetry::nostd::span<const T> containers_;
 };
+
+enum class trace_parent_mode : uint8_t {
+  kParent = 0,
+  kLink = 1,
+};
+
+enum trace_dynamic_policy : uint8_t {
+  kUnset = 0,
+  kDrop,
+  kRecording,
+};
+
+struct ATFW_UTIL_SYMBOL_VISIBLE trace_inherit_options {
+  trace_parent_mode mode;
+  bool inherit_allocator;
+  bool inherit_parent_span;
+
+  ATFW_UTIL_FORCEINLINE trace_inherit_options() noexcept
+      : mode(trace_parent_mode::kParent), inherit_allocator(true), inherit_parent_span(true) {}
+  ATFW_UTIL_FORCEINLINE explicit trace_inherit_options(trace_parent_mode m) noexcept
+      : mode(m), inherit_allocator(true), inherit_parent_span(true) {}
+  ATFW_UTIL_FORCEINLINE explicit trace_inherit_options(trace_parent_mode m, bool inherit_alloc) noexcept
+      : mode(m), inherit_allocator(inherit_alloc), inherit_parent_span(true) {}
+  ATFW_UTIL_FORCEINLINE explicit trace_inherit_options(trace_parent_mode m, bool inherit_alloc,
+                                                       bool inherit_parent_trace_span) noexcept
+      : mode(m), inherit_allocator(inherit_alloc), inherit_parent_span(inherit_parent_trace_span) {}
+};
+
+struct ATFW_UTIL_SYMBOL_VISIBLE trace_create_options {};
+
 }  // namespace telemetry
 }  // namespace rpc

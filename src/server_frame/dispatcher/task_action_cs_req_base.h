@@ -5,6 +5,8 @@
 #pragma once
 
 #include <memory/rc_ptr.h>
+#include <nostd/string_view.h>
+#include <nostd/utility_data_size.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -64,15 +66,15 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_req_base : public task_action_req_
   SERVER_FRAME_API static void add_prepare_handle(rpc::result_code_type (*fn)(rpc::context &,
                                                                               task_action_cs_req_base &));
 
-  SERVER_FRAME_API rpc::context::trace_start_option get_trace_option() const noexcept override;
+  SERVER_FRAME_API rpc::telemetry::trace_start_option get_trace_option() const noexcept override;
 
   SERVER_FRAME_API virtual bool is_stream_rpc() const noexcept;
 
   virtual bool unpack_request() noexcept = 0;
 
-  virtual const std::string &get_request_type_url() const noexcept = 0;
+  virtual atfw::util::nostd::string_view get_request_type_url() const noexcept = 0;
 
-  virtual const std::string &get_response_type_url() const noexcept = 0;
+  virtual atfw::util::nostd::string_view get_response_type_url() const noexcept = 0;
 
   SERVER_FRAME_API uint64_t get_gateway_node_id() const noexcept;
 
@@ -164,7 +166,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_rpc_base : public task_action_cs_r
 
   rpc_response_type &get_response_body() {
     if (nullptr == response_body_) {
-      response_body_ = get_shared_context().template create<rpc_response_type>();
+      response_body_ = create_message_at_task_arena<rpc_response_type>();
     }
 
     if (nullptr == response_body_) {
@@ -176,12 +178,14 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_rpc_base : public task_action_cs_r
     return *response_body_;
   }
 
-  const std::string &get_request_type_url() const noexcept override {
-    return rpc_request_type::descriptor()->full_name();
+  atfw::util::nostd::string_view get_request_type_url() const noexcept override {
+    decltype(auto) full_name = rpc_request_type::descriptor()->full_name();
+    return {atfw::util::nostd::data(full_name), atfw::util::nostd::size(full_name)};
   }
 
-  const std::string &get_response_type_url() const noexcept override {
-    return rpc_response_type::descriptor()->full_name();
+  atfw::util::nostd::string_view get_response_type_url() const noexcept override {
+    decltype(auto) full_name = rpc_response_type::descriptor()->full_name();
+    return {atfw::util::nostd::data(full_name), atfw::util::nostd::size(full_name)};
   }
 
  protected:
@@ -199,7 +203,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_rpc_base : public task_action_cs_r
     }
 
     if (nullptr == request_body_) {
-      request_body_ = get_shared_context().template create<rpc_request_type>();
+      request_body_ = create_message_at_task_arena<rpc_request_type>();
     }
     if (nullptr == request_body_) {
       return false;
@@ -207,27 +211,32 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_rpc_base : public task_action_cs_r
 
     // Check message type
     if (get_request().head().has_rpc_request()) {
-      if (get_request_type_url() != get_request().head().rpc_request().type_url()) {
-        FCTXLOGERROR(get_shared_context(), "Except message {}, real got {}", get_request_type_url(),
-                     get_request().head().rpc_request().type_url());
+      decltype(auto) type_url = get_request().head().rpc_request().type_url();
+      atfw::util::nostd::string_view type_url_view{atfw::util::nostd::data(type_url),
+                                                   atfw::util::nostd::size(type_url)};
+      if (get_request_type_url() != type_url_view) {
+        FWLOGERROR("{}Except message {}, real got {}", get_shared_context_log_prefix(), get_request_type_url(),
+                   type_url_view);
         return false;
       }
     } else if (get_request().head().has_rpc_stream()) {
-      if (get_request_type_url() != get_request().head().rpc_stream().type_url()) {
-        FCTXLOGERROR(get_shared_context(), "Except message {}, real got {}", get_request_type_url(),
-                     get_request().head().rpc_stream().type_url());
+      decltype(auto) type_url = get_request().head().rpc_stream().type_url();
+      atfw::util::nostd::string_view type_url_view{atfw::util::nostd::data(type_url),
+                                                   atfw::util::nostd::size(type_url)};
+      if (get_request_type_url() != type_url_view) {
+        FWLOGERROR("{}Except message {}, real got {}", get_shared_context_log_prefix(), get_request_type_url(),
+                   type_url_view);
         return false;
       }
     }
 
     if (false == request_body_->ParseFromString(get_request().body_bin())) {
-      FCTXLOGERROR(get_shared_context(), "Try to parse message {} failed, msg: {}", get_request_type_url(),
-                   request_body_->InitializationErrorString());
+      FWLOGERROR("{}Try to parse message {} failed, message: {}", get_shared_context_log_prefix(), get_request_type_url(),
+                request_body_->InitializationErrorString());
       return false;
     } else {
-      FCTXLOGDEBUG(get_shared_context(), "Parse rpc request message {} success:\n{}", get_request_type_url(),
-                   protobuf_mini_dumper_get_readable(*request_body_));
-      write_actor_log_body(*request_body_, get_request().head(), true);
+      FWLOGDEBUG("{}Parse rpc request message {} success:\n{}", get_shared_context_log_prefix(), get_request_type_url(),
+                protobuf_mini_dumper_get_readable(*request_body_));
     }
 
     has_unpack_request_ = true;
@@ -240,12 +249,11 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_rpc_base : public task_action_cs_r
     atframework::CSMsg &rsp = add_response_message();
 
     if (false == get_response_body().SerializeToString(rsp.mutable_body_bin())) {
-      FCTXLOGERROR(get_shared_context(), "Try to serialize message {} failed, msg: {}", get_response_type_url(),
-                   get_response_body().InitializationErrorString());
+      FWLOGERROR("{}Try to serialize message {} failed, success: {}", get_shared_context_log_prefix(),
+                get_response_type_url(), get_response_body().InitializationErrorString());
     } else {
-      FCTXLOGDEBUG(get_shared_context(), "Serialize rpc response message {} success:\n{}", get_response_type_url(),
-                   protobuf_mini_dumper_get_readable(get_response_body()));
-      write_actor_log_body(get_response_body(), rsp.head(), false);
+      FWLOGDEBUG("{}Serialize rpc response message {} success:\n{}", get_shared_context_log_prefix(),
+                get_response_type_url(), protobuf_mini_dumper_get_readable(get_response_body()));
     }
   }
 

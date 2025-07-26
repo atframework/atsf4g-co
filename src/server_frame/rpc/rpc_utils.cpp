@@ -328,13 +328,13 @@ SERVER_FRAME_API result_code_type wait(context &ctx, std::chrono::system_clock::
       {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.timer"},
       {opentelemetry::trace::SemanticConventions::kRpcService, "rpc.timer"},
       {opentelemetry::trace::SemanticConventions::kRpcMethod, "rpc.wait"}};
-  rpc::context::trace_start_option trace_start_option;
+  rpc::telemetry::trace_start_option trace_start_option;
   trace_start_option.dispatcher = nullptr;
   trace_start_option.is_remote = false;
   trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
   trace_start_option.attributes = trace_attributes;
 
-  rpc::context::tracer tracer = child_ctx.make_tracer("rpc.wait.timer", std::move(trace_start_option));
+  rpc::telemetry::tracer tracer = child_ctx.make_tracer("rpc.wait.timer", std::move(trace_start_option));
 
   logic_server_timer timer;
   mod->insert_timer(ctx.get_task_context().task_id, timeout, timer);

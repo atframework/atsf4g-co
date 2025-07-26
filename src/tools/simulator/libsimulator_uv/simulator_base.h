@@ -63,7 +63,12 @@ class simulator_base {
     explicit cmd_wrapper_t(const std::string &n);
 
     // create a child node
-    cmd_wrapper_t &operator[](const std::string &name);
+    cmd_wrapper_t &mutable_child(const std::string &name);
+    inline cmd_wrapper_t &operator[](const std::string &name) { return mutable_child(name); }
+    template <class StringLike>
+    inline cmd_wrapper_t &operator[](StringLike &&name) {
+      return mutable_child(std::string{std::forward<StringLike>(name)});
+    }
 
     // bind a cmd handle
     std::shared_ptr<atfw::util::cli::cmd_option_ci> parent_node();
@@ -289,7 +294,10 @@ class simulator_msg_base : public simulator_base {
   void reg_rsp(uint32_t msg_id, rsp_fn_t fn) { msg_id_handles_[msg_id] = fn; }
 
   void reg_rsp(const std::string &msg_name, rsp_fn_t fn) { msg_name_handles_[msg_name] = fn; }
-  void reg_rsp(const gsl::string_view &msg_name, rsp_fn_t fn) { reg_rsp(static_cast<std::string>(msg_name), fn); }
+  template <class StringLikeT>
+  inline void reg_rsp(StringLikeT &&name, rsp_fn_t fn) {
+    return reg_rsp(std::string{std::forward<StringLikeT>(name)}, fn);
+  }
 
   static cmd_sender_t &get_sender(util::cli::callback_param param) {
     return *reinterpret_cast<cmd_sender_t *>(param.get_ext_param());

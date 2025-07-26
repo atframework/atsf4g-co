@@ -9,11 +9,23 @@
 #include <log/log_wrapper.h>
 
 #include <memory/object_allocator.h>
+#include <memory/rc_ptr.h>
+#include <nostd/nullability.h>
 
 #include <config/server_frame_build_feature.h>
 
 #include <rpc/rpc_common_types.h>
-#include <rpc/rpc_context.h>
+#include <rpc/telemetry/rpc_trace.h>
+
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
+#include <google/protobuf/arena.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <functional>
 #include <list>
@@ -28,6 +40,10 @@
 
 #include "dispatcher/dispatcher_type_defines.h"
 #include "dispatcher/task_type_traits.h"
+
+namespace rpc {
+class context;
+}
 
 class player_cache;
 
@@ -230,8 +246,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_base
   virtual std::shared_ptr<dispatcher_implement> get_dispatcher() const = 0;
   virtual const char *get_type_name() const = 0;
 
-  SERVER_FRAME_API virtual rpc::context::inherit_options get_inherit_option() const noexcept;
-  SERVER_FRAME_API virtual rpc::context::trace_start_option get_trace_option() const noexcept;
+  SERVER_FRAME_API virtual rpc::telemetry::trace_inherit_options get_inherit_option() const noexcept;
+  SERVER_FRAME_API virtual rpc::telemetry::trace_start_option get_trace_option() const noexcept;
 
   SERVER_FRAME_API uint64_t get_task_id() const;
 
@@ -328,8 +344,12 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_base
     return dispatcher_options_;
   }
 
-  ATFW_UTIL_FORCEINLINE const rpc::context &get_shared_context() const { return shared_context_; }
-  ATFW_UTIL_FORCEINLINE rpc::context &get_shared_context() { return shared_context_; }
+  ATFW_UTIL_FORCEINLINE const rpc::context &get_shared_context() const noexcept { return *shared_context_; }
+  ATFW_UTIL_FORCEINLINE rpc::context &get_shared_context() noexcept { return *shared_context_; }
+
+  SERVER_FRAME_API const std::string &get_shared_context_log_prefix() const;
+
+  SERVER_FRAME_API const atfw::util::nostd::nonnull<std::shared_ptr<::google::protobuf::Arena>> &get_task_arena() const;
 
   /**
    * @brief Set caller rpc context, we will try to reuse arena allocator and set trace parent data
@@ -350,7 +370,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_base
   };
   using task_trace_attributes =
       rpc::telemetry::trace_attribute_pair_type[static_cast<size_t>(trace_attribute_type::kMax)];
-  result_type::value_type _notify_finished(int32_t final_result, rpc::context::tracer &tracer,
+  result_type::value_type _notify_finished(int32_t final_result, rpc::telemetry::tracer &tracer,
                                            task_trace_attributes &attributes);
 
  private:
@@ -370,7 +390,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_base
   // Additional events
   on_finished_callback_set_t on_finished_callback_;
 
-  rpc::context shared_context_;
+  atfw::util::nostd::nonnull<atfw::util::memory::strong_rc_ptr<rpc::context>> shared_context_;
+  mutable std::string context_log_prefix_;
 };
 
 template <typename TREQ>
@@ -383,19 +404,27 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_req_base : public task_action_base {
   explicit task_action_req_base(const dispatcher_start_data_type &start_param)
       : task_action_base(start_param), request_msg_(nullptr) {}
 
+  template <class MessageType, class... ArgsType>
+  ATFW_UTIL_FORCEINLINE MessageType *create_message_at_task_arena(ArgsType &&...args) const {
+#if defined(PROTOBUF_VERSION) && PROTOBUF_VERSION >= 5027000
+    return ::google::protobuf::Arena::Create<MessageType>(get_task_arena().get(), std::forward<ArgsType>(args)...);
+#else
+    return = ::google::protobuf::Arena::CreateMessage<MessageType>(get_task_arena().get(),
+                                                                   std::forward<ArgsType>(args)...);
+#endif
+  }
+
   inline TREQ &get_request() {
     if (nullptr != request_msg_) {
       return *request_msg_;
     }
 
-    request_msg_ = get_shared_context().template create<TREQ>();
+    request_msg_ = create_message_at_task_arena<TREQ>();
     if (nullptr != request_msg_) {
       return *request_msg_;
     }
 
-    static TREQ empty_msg;
-    empty_msg.Clear();
-    return empty_msg;
+    return get_empty_request();
   }
 
   inline const TREQ &get_request() const {
@@ -403,17 +432,21 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_req_base : public task_action_base {
       return *request_msg_;
     }
 
-    request_msg_ = const_cast<rpc::context &>(get_shared_context()).create<TREQ>();
+    request_msg_ = create_message_at_task_arena<TREQ>();
     if (nullptr != request_msg_) {
       return *request_msg_;
     }
 
+    return get_empty_request();
+  }
+
+ private:
+  static TREQ &get_empty_request() {
     static TREQ empty_msg;
     empty_msg.Clear();
     return empty_msg;
   }
 
- private:
   mutable TREQ *request_msg_;
 };
 

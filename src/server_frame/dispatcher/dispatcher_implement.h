@@ -201,7 +201,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE dispatcher_implement : public ::atapp::module_imp
     if (nullptr == service_desc) {
       return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
     }
-    registered_service_[service_desc->full_name()] = service_desc;
+    std::string service_full_name = std::string{service_desc->full_name()};
+    registered_service_[service_full_name] = service_desc;
 
     std::string::size_type final_segment = rpc_name.find_last_of('.');
     std::string rpc_short_name;
@@ -214,14 +215,15 @@ class ATFW_UTIL_SYMBOL_VISIBLE dispatcher_implement : public ::atapp::module_imp
         service_desc->FindMethodByName(rpc_short_name);
     if (nullptr == method) {
       FWLOGERROR("{} try to register rpc action {} for service {} failed, not found", name(), rpc_name,
-                 service_desc->full_name());
+                 service_full_name);
       return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
     }
-    registered_method_[method->full_name()] = method;
+    std::string method_full_name = std::string{method->full_name()};
+    registered_method_[method_full_name] = method;
 
-    if (method->full_name() != rpc_name) {
+    if (method_full_name != rpc_name) {
       FWLOGERROR("{} try to register rpc action {} for service {} failed, the real full name is {}", name(), rpc_name,
-                 service_desc->full_name(), method->full_name());
+                 service_full_name, method_full_name);
       return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
     }
 
@@ -230,7 +232,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE dispatcher_implement : public ::atapp::module_imp
       options = &method->options().GetExtension(atframework::rpc_options);
     }
 
-    return _register_action(method->full_name(), task_manager::me()->make_task_creator<TAction>(options));
+    return _register_action(method_full_name, task_manager::me()->make_task_creator<TAction>(options));
   }
 
   /**

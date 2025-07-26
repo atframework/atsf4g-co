@@ -753,7 +753,7 @@ class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
       check_file_path_interval_ = 0;
       for (std::size_t i = 0; i + 1 < file_pattern.size(); ++i) {
         if (file_pattern[i] == '%') {
-          int checked = static_cast<int>(file_pattern[i + 1]);
+          int checked = static_cast<int>(file_pattern[i + 1]);  // NOLINT(bugprone-signed-char-misuse)
           if (checked > 0 && checked < 128 && check_interval[checked] > 0) {
             if (0 == check_file_path_interval_ || check_interval[checked] < check_file_path_interval_) {
               check_file_path_interval_ = check_interval[checked];
