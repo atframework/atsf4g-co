@@ -115,6 +115,7 @@ CheckOptions:
   llvm-qualified-auto.AddConstToQualified: "false"
   bugprone-lambda-function-name.IgnoreMacros: "true"
   bugprone-signed-char-misuse.CharTypdefsToIgnore: "signed char"
+  bugprone-implicit-widening-of-multiplication-result.IgnoreConstantIntExpr: "true"
   readability-function-cognitive-complexity.Threshold: "100"
   readability-implicit-bool-conversion.AllowIntegerConditions: "true"
   misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic: "true"

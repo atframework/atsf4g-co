@@ -107,8 +107,10 @@ static int32_t pick_enum_number_from_string(const char* str, size_t sz, const go
     std::string short_name = std::string{eds->name()};
     for (int i = 0; i < eds->value_count(); ++i) {
       auto edv = eds->value(i);
-      cache[short_name] = edv->number();
-      cache[full_name] = edv->number();
+      std::string edv_full_name = std::string{edv->full_name()};
+      std::string edv_short_name = std::string{edv->name()};
+      cache[edv_short_name] = edv->number();
+      cache[edv_full_name] = edv->number();
       if (edv->options().ExtensionSize(org::xresloader::enum_alias) > 0) {
         for (auto& elasa_name : edv->options().GetRepeatedExtension(org::xresloader::enum_alias)) {
           cache[elasa_name] = edv->number();

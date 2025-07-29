@@ -40,7 +40,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE PrometheusFileExporterOptions {
   std::string alias_pattern = "%Y-%m-%d.prometheus.log";
   std::chrono::microseconds flush_interval = std::chrono::microseconds{30000000};
   std::size_t flush_count = 256;
-  std::size_t file_size = 20 * 1024 * 1024;
+  std::size_t file_size = static_cast<size_t>(20) * 1024 * 1024;
   std::size_t rotate_size = 3;
 
   // Populating target_info
