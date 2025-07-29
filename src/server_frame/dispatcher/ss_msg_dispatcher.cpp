@@ -151,12 +151,12 @@ static std::shared_ptr<ss_rpc_mertrics_group> rpc_metrics_get_rpc_metric_report(
 
 #if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
 #  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
-UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(ss_msg_dispatcher);
+ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(ss_msg_dispatcher);
 #  else
-UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(ss_msg_dispatcher);
+ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(ss_msg_dispatcher);
 #  endif
 #else
-UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(ss_msg_dispatcher);
+ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(ss_msg_dispatcher);
 #endif
 
 SERVER_FRAME_API ss_msg_dispatcher::ss_msg_dispatcher() : sequence_allocator_(0) {}

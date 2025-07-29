@@ -65,12 +65,12 @@ class ss_msg_dispatcher : public dispatcher_implement {
 
 #if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
 #  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
-  UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(ss_msg_dispatcher)
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(ss_msg_dispatcher)
 #  else
-  UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(ss_msg_dispatcher)
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(ss_msg_dispatcher)
 #  endif
 #else
-  UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(ss_msg_dispatcher)
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(ss_msg_dispatcher)
 #endif
 
  private:

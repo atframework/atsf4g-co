@@ -28,12 +28,12 @@ class task_action_auto_save_objects;
 class router_manager_set {
 #if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
 #  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
-  UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(router_manager_set)
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(router_manager_set)
 #  else
-  UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(router_manager_set)
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(router_manager_set)
 #  endif
 #else
-  UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(router_manager_set)
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(router_manager_set)
 #endif
  public:
   using timer_t = router_system_timer_t;

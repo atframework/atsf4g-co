@@ -32,12 +32,12 @@ class router_player_manager : public router_manager<router_player_cache, player_
 
 #if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
 #  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
-  UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(router_player_manager)
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(router_player_manager)
 #  else
-  UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(router_player_manager)
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(router_player_manager)
 #  endif
 #else
-  UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(router_player_manager)
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(router_player_manager)
 #endif
 
  private:
