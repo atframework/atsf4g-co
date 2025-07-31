@@ -261,7 +261,7 @@ class context {
 
 ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN
 template <class CharT>
-struct ATFW_UTIL_SYMBOL_VISIBLE formatter<rpc::context, CharT> : formatter<std::string, CharT> {
+struct ATFW_UTIL_SYMBOL_VISIBLE formatter<rpc::context, CharT> : formatter<basic_string_view<CharT>, CharT> {
   template <class FormatContext>
   auto format(const rpc::context &rpc_ctx, FormatContext &fmt_ctx) const {
     auto ret = LOG_WRAPPER_FWAPI_FORMAT_TO(fmt_ctx.out(), ": task_id={}", rpc_ctx.get_task_context().task_id);

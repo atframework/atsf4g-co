@@ -287,11 +287,12 @@ GAMECLIENT_RPC_API int task_action_login::on_failed() {
     case PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_OTHER_DEVICE:
     case PROJECT_NAMESPACE_ID::EN_ERR_NOT_LOGIN:
     case PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_BAN: {
-      FCTXLOGWARNING(get_shared_context(), "{} login failed, rsp code: {}, ret code: {}", *s);
+      FCTXLOGWARNING(get_shared_context(), "{} login failed, rsp code: {}", *s, get_response_code());
       break;
     }
     default: {
-      FCTXLOGERROR(get_shared_context(), "{}} login failed, rsp code: {}, ret code: {}", *s, get_result());
+      FCTXLOGERROR(get_shared_context(), "{} login failed, rsp code: {}, ret code: {}", *s, get_response_code(),
+                   get_result());
       break;
     }
   }

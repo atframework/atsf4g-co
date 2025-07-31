@@ -384,7 +384,7 @@ int session_manager::post_data(const std::string &tname, int type, ::atframework
   // send to server with type = ::atframework::component::service_type::EN_ATST_GATEWAY
   std::string packed_buffer;
   if (false == msg.SerializeToString(&packed_buffer)) {
-    FWLOGERROR("can not send ss message to {:#x} with serialize failed: {}", tname, msg.InitializationErrorString());
+    FWLOGERROR("can not send ss message to {} with serialize failed: {}", tname, msg.InitializationErrorString());
     return error_code_t::EN_ECT_BAD_DATA;
   }
 

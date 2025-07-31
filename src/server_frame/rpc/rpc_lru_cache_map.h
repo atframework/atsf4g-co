@@ -232,10 +232,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
       }
     } else {
       if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == ret) {
-        FWLOGWARNING("{} try to rpc fetch data failed and will remove lru cache(task: {}), res: {}",
+        FWLOGWARNING("Try to rpc fetch data failed and will remove lru cache(task: {}), res: {}",
                      ctx.get_task_context().task_id, ret);
       } else {
-        FWLOGERROR("{} try to rpc fetch data failed and will remove lru cache(task: {}), res: {}",
+        FWLOGERROR("Try to rpc fetch data failed and will remove lru cache(task: {}), res: {}",
                    ctx.get_task_context().task_id, ret);
       }
       remove_cache(key);

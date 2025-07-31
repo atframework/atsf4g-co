@@ -185,10 +185,10 @@ class session {
 
 ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN
 template <class CharT>
-struct ATFW_UTIL_SYMBOL_VISIBLE formatter<session, CharT> : formatter<std::string> {
+struct ATFW_UTIL_SYMBOL_VISIBLE formatter<session, CharT> : formatter<basic_string_view<CharT>, CharT> {
   template <class FormatContext>
-  auto format(const session &sess, FormatContext &ctx) const {
-    return LOG_WRAPPER_FWAPI_FORMAT_TO(ctx.out(), "session ({}){}:{}({}:{})", sess.get_key().node_name,
+  auto format(const session & sess, FormatContext &ctx) const {
+    return atfw::util::string::format_to(ctx.out(), "session ({}){}:{}({}:{})", sess.get_key().node_name,
                                        sess.get_key().node_id, sess.get_key().session_id, sess.get_cached_zone_id(),
                                        sess.get_cached_user_id());
   }

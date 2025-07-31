@@ -308,7 +308,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
 
 ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN
 template <class CharT>
-struct ATFW_UTIL_SYMBOL_VISIBLE formatter<player_cache, CharT> : formatter<std::string> {
+struct ATFW_UTIL_SYMBOL_VISIBLE formatter<player_cache, CharT> : formatter<basic_string_view<CharT>, CharT> {
   template <class FormatContext>
   auto format(const player_cache &user, FormatContext &ctx) const {
     return LOG_WRAPPER_FWAPI_FORMAT_TO(ctx.out(), "player {}({}:{})", user.get_open_id(), user.get_zone_id(),
