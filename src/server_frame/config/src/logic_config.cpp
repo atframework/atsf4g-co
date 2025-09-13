@@ -184,8 +184,8 @@ SERVER_FRAME_CONFIG_API const atframework::ConstSettingsType &logic_config::get_
   if (nullptr == desc) {
     desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("atframework.proto");
   }
-  if (nullptr != desc && desc->options().HasExtension(atframework::CONST_SETTINGS)) {
-    atframe_settings_ = &desc->options().GetExtension(atframework::CONST_SETTINGS);
+  if (nullptr != desc && desc->options().HasExtension(atframework::ATFW_RPC_CONST_SETTINGS)) {
+    atframe_settings_ = &desc->options().GetExtension(atframework::ATFW_RPC_CONST_SETTINGS);
   }
 
   if (nullptr == atframe_settings_) {

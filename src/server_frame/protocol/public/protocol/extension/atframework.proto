@@ -14,14 +14,14 @@ import "google/protobuf/descriptor.proto";
 
 // 只能配置在 com.const.proto 这个文件里有效
 extend google.protobuf.FileOptions {
-  ConstSettingsType CONST_SETTINGS = 3271;  // 自定义配置
+  ConstSettingsType ATFW_RPC_CONST_SETTINGS = 3271;  // 自定义配置
 }
 
 message ConstSettingsType {
   string rpc_version = 1;  // RPC协议版本号
 }
 
-option (CONST_SETTINGS) = {
+option (ATFW_RPC_CONST_SETTINGS) = {
   rpc_version: "0.1.0"
 };
 

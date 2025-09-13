@@ -184,8 +184,8 @@ const atframework::ConstSettingsType &client_simulator::get_atframework_settings
   static std::once_flag ret_init_flag;
   std::call_once(ret_init_flag, []() {
     auto desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("atframework.proto");
-    if (nullptr != desc && desc->options().HasExtension(atframework::CONST_SETTINGS)) {
-      ret.CopyFrom(desc->options().GetExtension(atframework::CONST_SETTINGS));
+    if (nullptr != desc && desc->options().HasExtension(atframework::ATFW_RPC_CONST_SETTINGS)) {
+      ret.CopyFrom(desc->options().GetExtension(atframework::ATFW_RPC_CONST_SETTINGS));
     }
   });
 
