@@ -1,79 +1,80 @@
 configure:
-  encoding: 'UTF-8'
-  output_directory: 'output directory'
+  encoding: "UTF-8"
+  output_directory: "output directory"
   overwrite: false # overwrite file if it's already exists
   paths: []
   package_prefix: []
-  protoc: 'path of protobuf protoc'
+  protoc: "path of protobuf protoc"
   protoc_flags: []
   protoc_includes: []
   protocol_files: []
-  protocol_input_pb_file: 'path of input pb file'
-  protocol_output_pb_file: 'path of output pb file'
-  protocol_project_directory: 'path of project'
+  protocol_input_pb_file: "path of input pb file"
+  protocol_output_pb_file: "path of output pb file"
+  protocol_project_directory: "path of project"
   protocol_external_pb_files: [] # external pb fils to load
   custom_variables:
-    key: 'value' # custom variables of "key"
-
+    key: "value" # custom variables of "key"
 
 rules:
   - global:
       overwrite: false # overwrite configure.overwrite
-      output_directory: 'overwrite configure.output_directory'
+      output_directory: "overwrite configure.output_directory"
       custom_variables:
-        key: 'value' # overwrite configure.custom_variables.key
-      input: 'input template path'
-      output: 'output path rule'
+        key: "value" # overwrite configure.custom_variables.key
+      input: "input template path"
+      output: "output path rule"
   - service:
-      name: 'service name'
+      name: "service name"
       overwrite: false # overwrite configure.overwrite
-      output_directory: 'overwrite configure.output_directory'
+      output_directory: "overwrite configure.output_directory"
       custom_variables:
-        key: 'value' # overwrite configure.custom_variables.key
+        key: "value" # overwrite configure.custom_variables.key
       service_template:
         - overwrite: false
-          input: 'input template path'
-          output: 'output path rule'
+          input: "input template path"
+          output: "output path rule"
       rpc_template:
         - overwrite: false
-          input: 'input template path'
-          output: 'output path rule'
-      rpc_include: 'regex rule'
-      rpc_exclude: 'regex rule'
-      rpc_ignore_request: [] # ignore request types for rpc template
+          input: "input template path"
+          output: "output path rule"
+      rpc_include: "regex rule"
+      rpc_exclude: "regex rule"
+      rpc_include_request: [] # include request types for rpc template
+      rpc_exclude_request: [] # exclude request types for rpc template
   - message:
-      name: 'message name'
+      name: "message name"
       overwrite: false # overwrite configure.overwrite
-      output_directory: 'overwrite configure.output_directory'
+      output_directory: "overwrite configure.output_directory"
       custom_variables:
-        key: 'value' # overwrite configure.custom_variables.key
+        key: "value" # overwrite configure.custom_variables.key
       message_template:
         - overwrite: false
-          input: 'input template path'
-          output: 'output path rule'
+          input: "input template path"
+          output: "output path rule"
       field_template:
         - overwrite: false
-          input: 'input template path'
-          output: 'output path rule'
-      field_include: 'regex rule'
-      field_exclude: 'regex rule'
-      field_ignore_type: [] # ignore types for field template
+          input: "input template path"
+          output: "output path rule"
+      field_include: "regex rule"
+      field_exclude: "regex rule"
+      field_include_type: [] # include types for field template
+      field_exclude_type: [] # exclude types for field template
   - enum:
-      name: 'enum name'
+      name: "enum name"
       overwrite: false # overwrite configure.overwrite
-      output_directory: 'overwrite configure.output_directory'
+      output_directory: "overwrite configure.output_directory"
       custom_variables:
-        key: 'value' # overwrite configure.custom_variables.key
+        key: "value" # overwrite configure.custom_variables.key
       enum_template:
         - overwrite: false
-          input: 'input template path'
-          output: 'output path rule'
+          input: "input template path"
+          output: "output path rule"
       value_template:
         - overwrite: false
-          input: 'input template path'
-          output: 'output path rule'
-      value_include: 'regex rule'
-      value_exclude: 'regex rule'
+          input: "input template path"
+          output: "output path rule"
+      value_include: "regex rule"
+      value_exclude: "regex rule"
   - file:
       overwrite: false # overwrite configure.overwrite
       output_directory: "overwrite configure.output_directory"
@@ -85,4 +86,4 @@ rules:
           output: "output path rule"
       file_include: "regex rule"
       file_exclude: "regex rule"
-      file_ignore_package: [] # ignore files by package
+      file_exclude_package: [] # ignore files by package

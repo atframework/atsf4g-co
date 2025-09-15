@@ -18,8 +18,8 @@ generate_for_pb_add_proto_file(
   "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/config/svr.*.proto"
   "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/pbdesc/svr.*.proto"
   "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/extension/*.proto"
-  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/pbdesc/*.proto"
-  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/pbdesc/*.proto"
+  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/common/*.proto"
+  "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/config/*.proto"
   "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/pbdesc/*.proto")
 
 # Add additional proto files and paths
