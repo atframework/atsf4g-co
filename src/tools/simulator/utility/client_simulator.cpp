@@ -205,7 +205,6 @@ client_simulator::msg_t &client_simulator::add_req(cmd_sender_t &sender) {
   msg.mutable_head()->set_error_code(0);
   msg.mutable_head()->set_client_sequence(sender.player->alloc_sequence());
   msg.mutable_head()->set_timestamp(util::time::time_utility::get_now());
-  msg.mutable_head()->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP);
   return msg;
 }
 

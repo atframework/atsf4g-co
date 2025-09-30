@@ -9,7 +9,10 @@ option cc_enable_arenas = true;
 option cc_generic_services = true;
 
 import "google/protobuf/empty.proto";
+
 import "protocol/extension/atframework.proto";
+
+import "protocol/common/com.struct.item.common.proto";
 
 import "protocol/pbdesc/com.const.proto";
 import "protocol/pbdesc/com.struct.proto";
@@ -98,7 +101,7 @@ message SCPlayerProfileSyn {
 
 // 脏数据同步包
 message SCPlayerDirtyChgSync {
-  repeated DItem dirty_items = 1;
+  repeated DItemInstance dirty_items = 1;
 }
 
 // 心跳包，上行包

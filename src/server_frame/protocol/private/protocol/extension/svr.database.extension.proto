@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+option go_package = "github.com/atframework/atsf4g-go/component-protocol-private/extension/protocol/extension";
+
+import "google/protobuf/descriptor.proto";
+
+package atframework;
+
+enum database_index_type {
+  EN_ATFRAMEWORK_DB_INDEX_TYPE_KV = 0;
+  EN_ATFRAMEWORK_DB_INDEX_TYPE_KL = 1;
+}
+
+message database_table_index {
+  string name = 1;
+
+  database_index_type type = 2;
+
+  repeated string key_fields = 11;
+}
+
+message database_table_options { repeated database_table_index index = 1; }
+
+extend google.protobuf.MessageOptions {
+  database_table_options database_table = 3311; // 自定义数据库表配置
+}

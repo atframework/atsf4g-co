@@ -231,8 +231,6 @@ SERVER_FRAME_API uint64_t ss_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg
   return real_msg->head().destination_task_id();
 }
 
-SERVER_FRAME_API ss_msg_dispatcher::msg_type_t ss_msg_dispatcher::pick_msg_type_id(msg_raw_t &) { return 0; }
-
 SERVER_FRAME_API const std::string &ss_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
   atframework::SSMsg *real_msg = get_protobuf_msg<atframework::SSMsg>(raw_msg);
   if (nullptr == real_msg) {
@@ -262,23 +260,6 @@ SERVER_FRAME_API const std::string &ss_msg_dispatcher::pick_rpc_name(const atfra
   }
 
   return get_empty_string();
-}
-
-SERVER_FRAME_API ss_msg_dispatcher::msg_op_type_t ss_msg_dispatcher::pick_msg_op_type(msg_raw_t &raw_msg) {
-  atframework::SSMsg *real_msg = get_protobuf_msg<atframework::SSMsg>(raw_msg);
-  if (nullptr == real_msg) {
-    return PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP;
-  }
-
-  if (false == PROJECT_NAMESPACE_ID::EnMsgOpType_IsValid(real_msg->head().op_type())) {
-    return PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP;
-  }
-
-  return static_cast<msg_op_type_t>(real_msg->head().op_type());
-}
-
-SERVER_FRAME_API const atframework::DispatcherOptions *ss_msg_dispatcher::get_options_by_message_type(msg_type_t) {
-  return nullptr;
 }
 
 SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t node_id, atframework::SSMsg &ss_msg,
@@ -728,7 +709,6 @@ SERVER_FRAME_API void ss_msg_dispatcher::on_create_task_failed(dispatcher_start_
   head->set_destination_task_id(real_msg->head().source_task_id());
   head->set_sequence(real_msg->head().sequence());
   head->set_error_code(error_code);
-  head->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE);
   head->set_node_id(real_msg->head().node_id());
   head->set_timestamp(util::time::time_utility::get_now());
 

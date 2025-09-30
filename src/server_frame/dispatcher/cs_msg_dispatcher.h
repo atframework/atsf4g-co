@@ -70,33 +70,11 @@ class cs_msg_dispatcher : public dispatcher_implement {
   SERVER_FRAME_API uint64_t pick_msg_task_id(msg_raw_t &raw_msg) override;
 
   /**
-   * @brief 获取消息名称
-   * @param raw_msg 消息抽象结构
-   * @return 消息类型ID
-   */
-  SERVER_FRAME_API msg_type_t pick_msg_type_id(msg_raw_t &raw_msg) override;
-
-  /**
    * @brief 获取消息的RPC名字
    * @param raw_msg 消息抽象结构
    * @return 消息的RPC名字,如果不是RPC消息，返回空字符串
    */
   SERVER_FRAME_API const std::string &pick_rpc_name(msg_raw_t &raw_msg) override;
-
-  /**
-   * @brief 获取操作类型
-   * @param raw_msg 消息抽象结构
-   * @note 这只是一个调度曾规范，不强制执行。详情 @see PROJECT_NAMESPACE_ID::EnMsgOpType
-   * @return 消息操作类型
-   */
-  SERVER_FRAME_API msg_op_type_t pick_msg_op_type(msg_raw_t &raw_msg) override;
-
-  /**
-   * @brief 根据类型ID获取action或actor选项
-   * @param raw_msg 消息抽象结构
-   * @return 返回action或actor选项或NULL
-   */
-  SERVER_FRAME_API const atframework::DispatcherOptions *get_options_by_message_type(msg_type_t message_type) override;
 
   /**
    * @brief on create task failed

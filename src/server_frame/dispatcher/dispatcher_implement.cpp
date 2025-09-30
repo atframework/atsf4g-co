@@ -92,28 +92,17 @@ SERVER_FRAME_API dispatcher_implement::dispatcher_result_t dispatcher_implement:
     }
   }
 
-  msg_op_type_t op_type = pick_msg_op_type(msg);
-  if (PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP == op_type ||
-      PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE == op_type) {
-    ret.task_id = pick_msg_task_id(msg);
-    if (ret.task_id > 0) {  // 如果是恢复任务则尝试切回协程任务
-      // 查找并恢复已有task
-      dispatcher_resume_data_type callback_data = dispatcher_make_default<dispatcher_resume_data_type>();
-      callback_data.message = msg;
-      callback_data.private_data = priv_data;
-      callback_data.sequence = sequence;
-      callback_data.context = &ctx;
+  ret.task_id = pick_msg_task_id(msg);
+  if (ret.task_id > 0) {  // 如果是恢复任务则尝试切回协程任务
+    // 查找并恢复已有task
+    dispatcher_resume_data_type callback_data = dispatcher_make_default<dispatcher_resume_data_type>();
+    callback_data.message = msg;
+    callback_data.private_data = priv_data;
+    callback_data.sequence = sequence;
+    callback_data.context = &ctx;
 
-      ret.result_code = rpc::custom_resume(ret.task_id, callback_data);
-      return ret;
-    }
-
-    if (PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE == op_type) {
-      FWLOGDEBUG("Ignore response message {}:{} of {} without task id", pick_rpc_name(msg), pick_msg_type_id(msg),
-                 name());
-      ret.result_code = 0;
-      return ret;
-    }
+    ret.result_code = rpc::custom_resume(ret.task_id, callback_data);
+    return ret;
   }
 
   dispatcher_start_data_type callback_data = dispatcher_make_default<dispatcher_start_data_type>();
@@ -178,22 +167,13 @@ SERVER_FRAME_API int dispatcher_implement::create_task(dispatcher_start_data_typ
                                                        task_type_trait::task_type &task_inst) {
   task_type_trait::reset_task(task_inst);
 
-  msg_type_t msg_type_id = pick_msg_type_id(start_data.message);
   const std::string &rpc_name = pick_rpc_name(start_data.message);
-  if (0 == msg_type_id && rpc_name.empty()) {
+  if (rpc_name.empty()) {
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
-  if (task_action_map_by_id_.empty() && task_action_map_by_name_.empty()) {
+  if (task_action_map_by_name_.empty()) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
-  }
-
-  if (0 != msg_type_id) {
-    msg_task_action_set_t::iterator iter = task_action_map_by_id_.find(msg_type_id);
-    if (task_action_map_by_id_.end() != iter && iter->second) {
-      start_data.options = &iter->second->options;
-      return (*iter->second)(task_inst, start_data);
-    }
   }
 
   if (!rpc_name.empty()) {
@@ -205,10 +185,6 @@ SERVER_FRAME_API int dispatcher_implement::create_task(dispatcher_start_data_typ
   }
 
   return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
-}
-
-SERVER_FRAME_API const atframework::DispatcherOptions *dispatcher_implement::get_options_by_message_type(msg_type_t) {
-  return nullptr;
 }
 
 SERVER_FRAME_API void dispatcher_implement::push_filter_to_front(message_filter_handle_t fn) {
@@ -254,18 +230,6 @@ SERVER_FRAME_API int32_t dispatcher_implement::convert_from_atapp_error_code(int
   }
 
   return PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_BEGIN + code;
-}
-
-SERVER_FRAME_API int dispatcher_implement::_register_action(msg_type_t message_type,
-                                                            task_manager::task_action_creator_t action) {
-  msg_task_action_set_t::iterator iter = task_action_map_by_id_.find(message_type);
-  if (task_action_map_by_id_.end() != iter) {
-    FWLOGERROR("{} try to register more than one task actions to type {}.", name(), message_type);
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
-  }
-
-  task_action_map_by_id_[message_type] = action;
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 SERVER_FRAME_API int dispatcher_implement::_register_action(const std::string &rpc_full_name,

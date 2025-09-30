@@ -265,11 +265,6 @@ SERVER_FRAME_API task_action_cs_req_base::msg_ref_type task_action_cs_req_base::
   }
   head->set_timestamp(util::time::time_utility::get_now());
   head->set_client_sequence(get_request().head().client_sequence());
-  if (get_request().head().op_type() == PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM) {
-    head->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM);
-  } else {
-    head->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE);
-  }
 
   auto response_type_url = get_response_type_url();
   if (get_request().head().has_rpc_request()) {

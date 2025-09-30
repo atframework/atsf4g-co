@@ -108,26 +108,11 @@ class db_msg_dispatcher : public dispatcher_implement {
   SERVER_FRAME_API uint64_t pick_msg_task_id(msg_raw_t &raw_msg) override;
 
   /**
-   * @brief 获取消息名称
-   * @param raw_msg 消息抽象结构
-   * @return 消息类型ID
-   */
-  SERVER_FRAME_API msg_type_t pick_msg_type_id(msg_raw_t &raw_msg) override;
-
-  /**
    * @brief 获取消息的RPC名字
    * @param raw_msg 消息抽象结构
    * @return 消息的RPC名字,如果不是RPC消息，返回空字符串
    */
   SERVER_FRAME_API const std::string &pick_rpc_name(msg_raw_t &raw_msg) override;
-
-  /**
-   * @brief 获取操作类型
-   * @param raw_msg 消息抽象结构
-   * @note 这只是一个调度曾规范，不强制执行。详情 @see PROJECT_NAMESPACE_ID::EnMsgOpType
-   * @return 消息操作类型
-   */
-  SERVER_FRAME_API msg_op_type_t pick_msg_op_type(msg_raw_t &raw_msg) override;
 
   SERVER_FRAME_API int32_t dispatch(const void *req, size_t reqsz);
 

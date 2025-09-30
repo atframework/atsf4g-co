@@ -72,8 +72,6 @@ SERVER_FRAME_API uint64_t cs_msg_dispatcher::pick_msg_task_id(msg_raw_t &) {
   return 0;
 }
 
-SERVER_FRAME_API cs_msg_dispatcher::msg_type_t cs_msg_dispatcher::pick_msg_type_id(msg_raw_t &) { return 0; }
-
 SERVER_FRAME_API const std::string &cs_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
   atframework::CSMsg *real_msg = get_protobuf_msg<atframework::CSMsg>(raw_msg);
   if (nullptr == real_msg) {
@@ -99,23 +97,6 @@ SERVER_FRAME_API const std::string &cs_msg_dispatcher::pick_rpc_name(msg_raw_t &
   }
 
   return get_empty_string();
-}
-
-SERVER_FRAME_API cs_msg_dispatcher::msg_op_type_t cs_msg_dispatcher::pick_msg_op_type(msg_raw_t &raw_msg) {
-  atframework::CSMsg *real_msg = get_protobuf_msg<atframework::CSMsg>(raw_msg);
-  if (nullptr == real_msg) {
-    return PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP;
-  }
-
-  if (false == PROJECT_NAMESPACE_ID::EnMsgOpType_IsValid(real_msg->head().op_type())) {
-    return PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_MIXUP;
-  }
-
-  return static_cast<msg_op_type_t>(real_msg->head().op_type());
-}
-
-SERVER_FRAME_API const atframework::DispatcherOptions *cs_msg_dispatcher::get_options_by_message_type(msg_type_t) {
-  return nullptr;
 }
 
 SERVER_FRAME_API void cs_msg_dispatcher::on_create_task_failed(dispatcher_start_data_type &start_data,
@@ -181,7 +162,6 @@ SERVER_FRAME_API void cs_msg_dispatcher::on_create_task_failed(dispatcher_start_
   } else {
     head->set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN);
   }
-  head->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE);
   head->set_session_id(real_msg->head().session_id());
   head->set_session_node_id(real_msg->head().session_node_id());
   head->set_session_node_name(real_msg->head().session_node_name());

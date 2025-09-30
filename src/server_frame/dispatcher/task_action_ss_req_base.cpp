@@ -191,12 +191,6 @@ SERVER_FRAME_API int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uin
     head->set_source_task_id(0);
   }
 
-  if (PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM == request_head.op_type()) {
-    head->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_STREAM);
-  } else {
-    head->set_op_type(PROJECT_NAMESPACE_ID::EN_MSG_OP_TYPE_UNARY_RESPONSE);
-  }
-
   return 0;
 }
 

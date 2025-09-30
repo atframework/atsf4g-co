@@ -7,6 +7,8 @@ option optimize_for = SPEED;
 option cc_enable_arenas = true;
 option cc_generic_services = true;
 
+option go_package = "github.com/atframework/atsf4g-go/component-protocol-private/pbdesc/protocol/pbdesc";
+
 // 后台通信协议定义
 
 import "google/protobuf/empty.proto";

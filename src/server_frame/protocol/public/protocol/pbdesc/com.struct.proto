@@ -47,7 +47,7 @@ message DAppleGameCenter {
 message DAccountData {
   uint32 account_type = 1;  // 平台类型 EnAccountTypeID
   string access = 2;        // 授权码（内置账户的话就是密码的hash值，OAuth的话就是access token）
-  uint32 channel_id = 3;  // 渠道ID（某些品太需要区分认证体系以外的渠道号） @see EnPlatformChannelID
+  uint32 channel_id = 3;    // 渠道ID（某些品太需要区分认证体系以外的渠道号） @see EnPlatformChannelID
 }
 
 message DUpdateData {
@@ -128,9 +128,3 @@ message DPlayerAccountIDRefer {
 // 用户好友数据
 
 // ====================== 角色人物相关数据 ======================
-// 道具数据
-message DItem {
-  uint32 type_id = 1;
-  uint32 count = 2;
-  uint32 value = 3;  // 自定义值
-}

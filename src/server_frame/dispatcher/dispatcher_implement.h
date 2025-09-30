@@ -40,7 +40,6 @@ class ATFW_UTIL_SYMBOL_VISIBLE dispatcher_implement : public ::atapp::module_imp
   using msg_op_type_t = PROJECT_NAMESPACE_ID::EnMsgOpType;
   using msg_raw_t = dispatcher_raw_message;
   using msg_type_t = uint32_t;
-  using msg_task_action_set_t = std::unordered_map<msg_type_t, task_manager::task_action_creator_t>;
   using rpc_task_action_set_t = std::unordered_map<std::string, task_manager::task_action_creator_t>;
   using rpc_service_set_t =
       std::unordered_map<std::string, const ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::ServiceDescriptor *>;
@@ -142,26 +141,11 @@ class ATFW_UTIL_SYMBOL_VISIBLE dispatcher_implement : public ::atapp::module_imp
   virtual uint64_t pick_msg_task_id(msg_raw_t &raw_msg) = 0;
 
   /**
-   * @brief 获取消息类型ID
-   * @param raw_msg 消息抽象结构
-   * @return 消息类型ID
-   */
-  virtual msg_type_t pick_msg_type_id(msg_raw_t &raw_msg) = 0;
-
-  /**
    * @brief 获取消息的RPC名字
    * @param raw_msg 消息抽象结构
    * @return 消息的RPC名字,如果不是RPC消息，返回空字符串
    */
   virtual const std::string &pick_rpc_name(msg_raw_t &raw_msg) = 0;
-
-  /**
-   * @brief 获取操作类型
-   * @param raw_msg 消息抽象结构
-   * @note 这只是一个调度曾规范，不强制执行。详情 @see PROJECT_NAMESPACE_ID::EnMsgOpType
-   * @return 消息操作类型
-   */
-  virtual msg_op_type_t pick_msg_op_type(msg_raw_t &raw_msg) = 0;
 
   /**
    * @brief 创建协程任务
@@ -171,24 +155,6 @@ class ATFW_UTIL_SYMBOL_VISIBLE dispatcher_implement : public ::atapp::module_imp
    */
   SERVER_FRAME_API virtual int create_task(dispatcher_start_data_type &start_data,
                                            task_type_trait::task_type &task_inst);
-
-  /**
-   * @brief 根据类型ID获取action或actor选项
-   * @param raw_msg 消息抽象结构
-   * @return 返回action或actor选项或NULL
-   */
-  SERVER_FRAME_API virtual const atframework::DispatcherOptions *get_options_by_message_type(msg_type_t message_type);
-
-  /**
-   * @brief 注册Action
-   * @param message_type 消息类型ID
-   * @return 或错误码
-   */
-  template <typename TAction>
-  ATFW_UTIL_FORCEINLINE int register_action(msg_type_t message_type) {
-    const atframework::DispatcherOptions *options = get_options_by_message_type(message_type);
-    return _register_action(message_type, task_manager::me()->make_task_creator<TAction>(options));
-  }
 
   /**
    * @brief 注册Action
@@ -277,11 +243,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE dispatcher_implement : public ::atapp::module_imp
   SERVER_FRAME_API int32_t convert_from_atapp_error_code(int32_t code);
 
  private:
-  SERVER_FRAME_API int _register_action(msg_type_t message_type, task_manager::task_action_creator_t action);
   SERVER_FRAME_API int _register_action(const std::string &rpc_full_name, task_manager::task_action_creator_t action);
 
  private:
-  msg_task_action_set_t task_action_map_by_id_;
   rpc_task_action_set_t task_action_map_by_name_;
   rpc_service_set_t registered_service_;
   rpc_method_set_t registered_method_;

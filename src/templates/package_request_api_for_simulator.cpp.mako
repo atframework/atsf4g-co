@@ -74,7 +74,6 @@ inline static int __pack_body(const TBodyType &body, std::string *output, atfw::
 % if rpc_common_codes_enable_stream_header:
 inline static int __setup_rpc_stream_header(atframework::CSMsgHead &head, atfw::util::nostd::string_view rpc_full_name,
                                             atfw::util::nostd::string_view type_full_name) {
-  head.set_op_type(${project_namespace}::EN_MSG_OP_TYPE_STREAM);
   atframework::RpcStreamMeta* stream_meta = head.mutable_rpc_stream();
   if (nullptr == stream_meta) {
     return ${project_namespace}::EN_ERR_SYSTEM;
@@ -95,7 +94,6 @@ inline static int __setup_rpc_stream_header(atframework::CSMsgHead &head, atfw::
 % if rpc_common_codes_enable_request_header:
 inline static int __setup_rpc_request_header(atframework::CSMsgHead &head, atfw::util::nostd::string_view rpc_full_name,
                                             atfw::util::nostd::string_view type_full_name) {
-  head.set_op_type(${project_namespace}::EN_MSG_OP_TYPE_UNARY_REQUEST);
   atframework::RpcRequestMeta* request_meta = head.mutable_rpc_request();
   if (nullptr == request_meta) {
     return ${project_namespace}::EN_ERR_SYSTEM;

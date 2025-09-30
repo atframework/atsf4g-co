@@ -6,6 +6,8 @@ option optimize_for = SPEED;
 // --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
 
+option go_package = "github.com/atframework/atsf4g-go/component-protocol-private/common/protocol/common";
+
 package hello;
 
 import "google/protobuf/descriptor.proto";

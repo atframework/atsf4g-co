@@ -180,7 +180,6 @@ inline static rpc::telemetry::tracer::span_ptr_type __setup_tracer(rpc::context 
 % if rpc_common_codes_enable_stream_header:
 inline static int __setup_rpc_stream_header(atframework::SSMsgHead &head, atfw::util::nostd::string_view rpc_full_name,
                                             atfw::util::nostd::string_view type_full_name) {
-  head.set_op_type(${project_namespace}::EN_MSG_OP_TYPE_STREAM);
   atframework::RpcStreamMeta* stream_meta = head.mutable_rpc_stream();
   if (nullptr == stream_meta) {
     return ${project_namespace}::err::EN_SYS_MALLOC;
@@ -201,7 +200,6 @@ inline static int __setup_rpc_request_header(atframework::SSMsgHead &head, task_
                                              atfw::util::nostd::string_view rpc_full_name,
                                              atfw::util::nostd::string_view type_full_name) {
   head.set_source_task_id(task_id);
-  head.set_op_type(${project_namespace}::EN_MSG_OP_TYPE_UNARY_REQUEST);
   atframework::RpcRequestMeta* request_meta = head.mutable_rpc_request();
   if (nullptr == request_meta) {
     return ${project_namespace}::err::EN_SYS_MALLOC;

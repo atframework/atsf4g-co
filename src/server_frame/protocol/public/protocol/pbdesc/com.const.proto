@@ -25,13 +25,6 @@ enum EnConstLimits {
   EN_CL_MAX_AUTH_TOKEN_LENGHT = 128;   // token length limit
 }
 
-enum EnMsgOpType {
-  EN_MSG_OP_TYPE_MIXUP = 0;           // 混合模式
-  EN_MSG_OP_TYPE_STREAM = 1;          // 流,如果上行包时流，那么下行包也是流
-  EN_MSG_OP_TYPE_UNARY_REQUEST = 2;   // 请求-应答模式，请求包
-  EN_MSG_OP_TYPE_UNARY_RESPONSE = 3;  // 请求-应答模式，回应包
-};
-
 // account type
 enum EnAccountTypeID {
   EN_ATI_ACCOUNT_INNER = 0;      // inner: username/password
@@ -225,6 +218,12 @@ enum EnErrorCode {
                                       [(error_code.description) = "创建用户失败"];
   EN_ERR_LOGIN_USERID_NOT_MATCH = -417
                                   [(error_code.description) = "用户ID不匹配"];
+
+  // 道具模块错误码
+  EN_ERR_ITEM_NOT_ENOUGH = -501
+                           [(error_code.description) = "道具不足"];
+  EN_ERR_ITEM_NOT_FOUND = -502
+                          [(error_code.description) = "道具未找到"];
 
   // 注意错误码不能小于 -999999，便于区分服务器错误码和客户端错误码
 }
