@@ -30,6 +30,7 @@
 # build directories
 /build
 /build_*
+/log
 
 # external libs
 ## libiniloader
