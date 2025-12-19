@@ -88,15 +88,16 @@ static int show_server_time(util::cli::callback_param params) {
   UTIL_STRFUNC_LOCALTIME_S(&now, &tt);
   char str[64] = {0};
   strftime(str, sizeof(str) - 1, "%Y-%m-%d %H:%M:%S", &tt);
-  ::atapp::app::add_custom_command_rsp(params, &str[0]);
+  ::atfw::atapp::app::add_custom_command_rsp(params, &str[0]);
   return 0;
 }
 
 static int send_notification(util::cli::callback_param params) {
   if (params.get_params_number() < 3) {
-    ::atapp::app::add_custom_command_rsp(params,
-                                         "send-notification <level> <event name> <event message>    send notification "
-                                         "message(level: crirical,error,warn,notice");
+    ::atfw::atapp::app::add_custom_command_rsp(
+        params,
+        "send-notification <level> <event name> <event message>    send notification "
+        "message(level: crirical,error,warn,notice");
     return 0;
   }
 
@@ -112,7 +113,7 @@ static int send_notification(util::cli::callback_param params) {
   rpc::context ctx{rpc::context::create_without_task()};
   rpc::telemetry::opentelemetry_utility::send_notification_event(ctx, domain, params[1]->to_cpp_string(),
                                                                  params[2]->to_cpp_string(), {{"source", "command"}});
-  ::atapp::app::add_custom_command_rsp(params, "success");
+  ::atfw::atapp::app::add_custom_command_rsp(params, "success");
   return 0;
 }
 
@@ -123,22 +124,22 @@ static int debug_receive_stop_when_running(util::cli::callback_param) {
 
 static int show_configure_handler(util::cli::callback_param params) {
   // std::string atapp_configure =
-  auto app = atapp::app::get_last_instance();
+  auto app = atfw::atapp::app::get_last_instance();
   if (nullptr != app) {
     std::string app_configure =
         std::string("atapp configure:\n") +
         static_cast<std::string>(protobuf_mini_dumper_get_readable(app->get_origin_configure()));
-    ::atapp::app::add_custom_command_rsp(params, app_configure);
+    ::atfw::atapp::app::add_custom_command_rsp(params, app_configure);
   }
   std::string logic_configure =
       std::string("logic configure:\n") +
       static_cast<std::string>(protobuf_mini_dumper_get_readable(logic_config::me()->get_server_cfg()));
-  ::atapp::app::add_custom_command_rsp(params, logic_configure);
+  ::atfw::atapp::app::add_custom_command_rsp(params, logic_configure);
   return 0;
 }
 
-static int app_default_handle_on_receive_request(atapp::app &, const atapp::app::message_sender_t &source,
-                                                 const atapp::app::message_t &msg) {
+static int app_default_handle_on_receive_request(atfw::atapp::app &, const atfw::atapp::app::message_sender_t &source,
+                                                 const atfw::atapp::app::message_t &msg) {
   if (0 == source.id) {
     FWLOGERROR("receive a message from unknown source or invalid body case");
     return PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
@@ -165,8 +166,9 @@ static int app_default_handle_on_receive_request(atapp::app &, const atapp::app:
   return ret;
 }
 
-static int app_default_handle_on_forward_response(atapp::app &app, const atapp::app::message_sender_t &source,
-                                                  const atapp::app::message_t &msg, int32_t error_code) {
+static int app_default_handle_on_forward_response(atfw::atapp::app &app,
+                                                  const atfw::atapp::app::message_sender_t &source,
+                                                  const atfw::atapp::app::message_t &msg, int32_t error_code) {
   if (error_code < 0) {
     FWLOGERROR("send data from {:#x}({}) to {:#x}({}) failed, sequence: {}, code: {}", app.get_id(), app.get_app_name(),
                source.id, source.name, msg.message_sequence, error_code);
@@ -190,19 +192,20 @@ static int app_default_handle_on_forward_response(atapp::app &app, const atapp::
   return ret;
 }
 
-static int app_default_handle_on_connected(atapp::app &, atbus::endpoint &ep, int status) {
+static int app_default_handle_on_connected(atfw::atapp::app &, atbus::endpoint &ep, int status) {
   FWLOGINFO("endpoint {:#x} connected, status: {}", ep.get_id(), status);
   return 0;
 }
 
-static int app_default_handle_on_disconnected(atapp::app &, atbus::endpoint &ep, int status) {
+static int app_default_handle_on_disconnected(atfw::atapp::app &, atbus::endpoint &ep, int status) {
   FWLOGINFO("endpoint {:#x} disconnected, status: {}", ep.get_id(), status);
   return 0;
 }
 
 }  // namespace
 
-SERVER_FRAME_API int logic_server_setup_common(atapp::app &app, const logic_server_common_module_configure &conf) {
+SERVER_FRAME_API int logic_server_setup_common(atfw::atapp::app &app,
+                                               const logic_server_common_module_configure &conf) {
 #if defined(SERVER_FRAME_ENABLE_SANITIZER_ASAN_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_ASAN_INTERFACE
   // @see
   // https://github.com/gcc-mirror/gcc/blob/releases/gcc-4.8.5/libsanitizer/include/sanitizer/asan_interface.h
@@ -546,7 +549,7 @@ SERVER_FRAME_API void logic_server_common_module::cleanup() {
   task_manager::me()->kill_all();
 
   if (!service_index_handle_) {
-    std::shared_ptr<atapp::etcd_module> etcd_mod = get_etcd_module();
+    std::shared_ptr<atfw::atapp::etcd_module> etcd_mod = get_etcd_module();
     if (etcd_mod) {
       etcd_mod->remove_on_node_event(*service_index_handle_);
     }
@@ -611,7 +614,7 @@ SERVER_FRAME_API bool logic_server_common_module::is_closing() const noexcept { 
 
 SERVER_FRAME_API logic_server_common_module::etcd_keepalive_ptr_t logic_server_common_module::add_keepalive(
     const std::string &path, std::string &value) {
-  std::shared_ptr<atapp::etcd_module> etcd_mod;
+  std::shared_ptr<atfw::atapp::etcd_module> etcd_mod;
 
   if (NULL != get_app()) {
     etcd_mod = get_app()->get_etcd_module();
@@ -643,8 +646,8 @@ void logic_server_common_module::setup_hpa_controller() {
   }
 }
 
-SERVER_FRAME_API atapp::etcd_cluster *logic_server_common_module::get_etcd_cluster() {
-  std::shared_ptr<::atapp::etcd_module> etcd_mod = get_etcd_module();
+SERVER_FRAME_API atfw::atapp::etcd_cluster *logic_server_common_module::get_etcd_cluster() {
+  std::shared_ptr<::atfw::atapp::etcd_module> etcd_mod = get_etcd_module();
   if (!etcd_mod) {
     return nullptr;
   }
@@ -652,8 +655,8 @@ SERVER_FRAME_API atapp::etcd_cluster *logic_server_common_module::get_etcd_clust
   return &etcd_mod->get_raw_etcd_ctx();
 }
 
-SERVER_FRAME_API std::shared_ptr<::atapp::etcd_module> logic_server_common_module::get_etcd_module() {
-  atapp::app *app = get_app();
+SERVER_FRAME_API std::shared_ptr<::atfw::atapp::etcd_module> logic_server_common_module::get_etcd_module() {
+  atfw::atapp::app *app = get_app();
   if (nullptr == app) {
     return nullptr;
   }
@@ -661,7 +664,7 @@ SERVER_FRAME_API std::shared_ptr<::atapp::etcd_module> logic_server_common_modul
   return app->get_etcd_module();
 }
 
-SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type(
+SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type(
     uint64_t type_id) const {
   auto iter = service_type_id_index_.find(type_id);
   if (iter == service_type_id_index_.end()) {
@@ -671,7 +674,7 @@ SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t logic_server_common_module::ge
   return iter->second.all_index;
 }
 
-SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type(
+SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type(
     const std::string &type_name) const {
   auto iter = service_type_name_index_.find(type_name);
   if (iter == service_type_name_index_.end()) {
@@ -681,7 +684,7 @@ SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t logic_server_common_module::ge
   return iter->second.all_index;
 }
 
-SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type_zone(
+SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type_zone(
     uint64_t type_id, uint64_t zone_id) const {
   auto type_iter = service_type_id_index_.find(type_id);
   if (type_iter == service_type_id_index_.end()) {
@@ -696,7 +699,7 @@ SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t logic_server_common_module::ge
   return zone_iter->second;
 }
 
-SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type_zone(
+SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type_zone(
     const std::string &type_name, uint64_t zone_id) const {
   auto type_iter = service_type_name_index_.find(type_name);
   if (type_iter == service_type_name_index_.end()) {
@@ -711,7 +714,7 @@ SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t logic_server_common_module::ge
   return zone_iter->second;
 }
 
-SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_zone(
+SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_zone(
     uint64_t zone_id) const {
   auto iter = service_zone_index_.find(zone_id);
   if (iter == service_zone_index_.end()) {
@@ -721,7 +724,7 @@ SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t logic_server_common_module::ge
   return iter->second;
 }
 
-SERVER_FRAME_API util::memory::strong_rc_ptr<atapp::etcd_discovery_node>
+SERVER_FRAME_API util::memory::strong_rc_ptr<atfw::atapp::etcd_discovery_node>
 logic_server_common_module::get_discovery_by_id(uint64_t id) const {
   if (nullptr == get_app()) {
     return nullptr;
@@ -730,7 +733,7 @@ logic_server_common_module::get_discovery_by_id(uint64_t id) const {
   return get_app()->get_global_discovery().get_node_by_id(id);
 }
 
-SERVER_FRAME_API util::memory::strong_rc_ptr<atapp::etcd_discovery_node>
+SERVER_FRAME_API util::memory::strong_rc_ptr<atfw::atapp::etcd_discovery_node>
 logic_server_common_module::get_discovery_by_name(const std::string &name) const {
   if (nullptr == get_app()) {
     return nullptr;
@@ -740,25 +743,26 @@ logic_server_common_module::get_discovery_by_name(const std::string &name) const
 }
 
 int logic_server_common_module::setup_etcd_event_handle() {
-  std::shared_ptr<::atapp::etcd_module> etcd_mod = get_etcd_module();
+  std::shared_ptr<::atfw::atapp::etcd_module> etcd_mod = get_etcd_module();
   if (!etcd_mod) {
     return 0;
   }
   if (service_index_handle_) {
     etcd_mod->remove_on_node_event(*service_index_handle_);
   } else {
-    service_index_handle_ = std::unique_ptr<atapp::etcd_module::node_event_callback_handle_t>(
-        new atapp::etcd_module::node_event_callback_handle_t());
+    service_index_handle_ = std::unique_ptr<atfw::atapp::etcd_module::node_event_callback_handle_t>(
+        new atfw::atapp::etcd_module::node_event_callback_handle_t());
   }
   if (service_index_handle_) {
-    *service_index_handle_ = etcd_mod->add_on_node_discovery_event(
-        [this](atapp::etcd_module::node_action_t::type action_type, const atapp::etcd_discovery_node::ptr_t &node) {
+    *service_index_handle_ =
+        etcd_mod->add_on_node_discovery_event([this](atfw::atapp::etcd_module::node_action_t::type action_type,
+                                                     const atfw::atapp::etcd_discovery_node::ptr_t &node) {
           if (!node) {
             return;
           }
 
           switch (action_type) {
-            case atapp::etcd_module::node_action_t::EN_NAT_PUT: {
+            case atfw::atapp::etcd_module::node_action_t::EN_NAT_PUT: {
               if (0 != node->get_discovery_info().type_id()) {
                 add_service_type_id_index(node);
               }
@@ -770,7 +774,7 @@ int logic_server_common_module::setup_etcd_event_handle() {
               }
               break;
             }
-            case atapp::etcd_module::node_action_t::EN_NAT_DELETE: {
+            case atfw::atapp::etcd_module::node_action_t::EN_NAT_DELETE: {
               if (0 != node->get_discovery_info().type_id()) {
                 remove_service_type_id_index(node);
               }
@@ -1000,12 +1004,12 @@ void logic_server_common_module::setup_metrics() {
       });
 }
 
-void logic_server_common_module::add_service_type_id_index(const atapp::etcd_discovery_node::ptr_t &node) {
+void logic_server_common_module::add_service_type_id_index(const atfw::atapp::etcd_discovery_node::ptr_t &node) {
   uint64_t zone_id = node->get_discovery_info().area().zone_id();
   uint64_t type_id = node->get_discovery_info().type_id();
   logic_server_type_discovery_set_t &type_index = service_type_id_index_[type_id];
   if (!type_index.all_index) {
-    type_index.all_index = atfw::memory::stl::make_strong_rc<atapp::etcd_discovery_set>();
+    type_index.all_index = atfw::memory::stl::make_strong_rc<atfw::atapp::etcd_discovery_set>();
   }
 
   if (!type_index.all_index) {
@@ -1020,9 +1024,9 @@ void logic_server_common_module::add_service_type_id_index(const atapp::etcd_dis
     return;
   }
 
-  atapp::etcd_discovery_set::ptr_t &zone_index = type_index.zone_index[zone_id];
+  atfw::atapp::etcd_discovery_set::ptr_t &zone_index = type_index.zone_index[zone_id];
   if (!zone_index) {
-    zone_index = atfw::memory::stl::make_strong_rc<atapp::etcd_discovery_set>();
+    zone_index = atfw::memory::stl::make_strong_rc<atfw::atapp::etcd_discovery_set>();
   }
 
   if (!zone_index) {
@@ -1033,7 +1037,7 @@ void logic_server_common_module::add_service_type_id_index(const atapp::etcd_dis
   zone_index->add_node(node);
 }
 
-void logic_server_common_module::remove_service_type_id_index(const atapp::etcd_discovery_node::ptr_t &node) {
+void logic_server_common_module::remove_service_type_id_index(const atfw::atapp::etcd_discovery_node::ptr_t &node) {
   uint64_t zone_id = node->get_discovery_info().area().zone_id();
   uint64_t type_id = node->get_discovery_info().type_id();
   auto type_iter = service_type_id_index_.find(type_id);
@@ -1081,12 +1085,12 @@ void logic_server_common_module::remove_service_type_id_index(const atapp::etcd_
   }
 }
 
-void logic_server_common_module::add_service_type_name_index(const atapp::etcd_discovery_node::ptr_t &node) {
+void logic_server_common_module::add_service_type_name_index(const atfw::atapp::etcd_discovery_node::ptr_t &node) {
   uint64_t zone_id = node->get_discovery_info().area().zone_id();
   const std::string &type_name = node->get_discovery_info().type_name();
   logic_server_type_discovery_set_t &type_index = service_type_name_index_[type_name];
   if (!type_index.all_index) {
-    type_index.all_index = atfw::memory::stl::make_strong_rc<atapp::etcd_discovery_set>();
+    type_index.all_index = atfw::memory::stl::make_strong_rc<atfw::atapp::etcd_discovery_set>();
   }
 
   if (!type_index.all_index) {
@@ -1101,9 +1105,9 @@ void logic_server_common_module::add_service_type_name_index(const atapp::etcd_d
     return;
   }
 
-  atapp::etcd_discovery_set::ptr_t &zone_index = type_index.zone_index[zone_id];
+  atfw::atapp::etcd_discovery_set::ptr_t &zone_index = type_index.zone_index[zone_id];
   if (!zone_index) {
-    zone_index = atfw::memory::stl::make_strong_rc<atapp::etcd_discovery_set>();
+    zone_index = atfw::memory::stl::make_strong_rc<atfw::atapp::etcd_discovery_set>();
   }
 
   if (!zone_index) {
@@ -1114,7 +1118,7 @@ void logic_server_common_module::add_service_type_name_index(const atapp::etcd_d
   zone_index->add_node(node);
 }
 
-void logic_server_common_module::remove_service_type_name_index(const atapp::etcd_discovery_node::ptr_t &node) {
+void logic_server_common_module::remove_service_type_name_index(const atfw::atapp::etcd_discovery_node::ptr_t &node) {
   uint64_t zone_id = node->get_discovery_info().area().zone_id();
   const std::string &type_name = node->get_discovery_info().type_name();
   auto type_iter = service_type_name_index_.find(type_name);
@@ -1162,11 +1166,11 @@ void logic_server_common_module::remove_service_type_name_index(const atapp::etc
   }
 }
 
-void logic_server_common_module::add_service_zone_index(const atapp::etcd_discovery_node::ptr_t &node) {
+void logic_server_common_module::add_service_zone_index(const atfw::atapp::etcd_discovery_node::ptr_t &node) {
   uint64_t zone_id = node->get_discovery_info().area().zone_id();
-  atapp::etcd_discovery_set::ptr_t &zone_index = service_zone_index_[zone_id];
+  atfw::atapp::etcd_discovery_set::ptr_t &zone_index = service_zone_index_[zone_id];
   if (!zone_index) {
-    zone_index = atfw::memory::stl::make_strong_rc<atapp::etcd_discovery_set>();
+    zone_index = atfw::memory::stl::make_strong_rc<atfw::atapp::etcd_discovery_set>();
   }
 
   if (!zone_index) {
@@ -1182,7 +1186,7 @@ void logic_server_common_module::add_service_zone_index(const atapp::etcd_discov
             node->get_discovery_info().area().zone_id());
 }
 
-void logic_server_common_module::remove_service_zone_index(const atapp::etcd_discovery_node::ptr_t &node) {
+void logic_server_common_module::remove_service_zone_index(const atfw::atapp::etcd_discovery_node::ptr_t &node) {
   uint64_t zone_id = node->get_discovery_info().area().zone_id();
 
   auto zone_iter = service_zone_index_.find(zone_id);

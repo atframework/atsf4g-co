@@ -50,7 +50,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE action_options {
 
 struct ATFW_UTIL_SYMBOL_VISIBLE async_jobs_record {
   int64_t record_index;
-  int64_t version;
+  uint64_t version;
   shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data> action_blob;
 };
 
@@ -131,7 +131,7 @@ EXPLICIT_NODISCARD_ATTR GAME_RPC_API result_type remove_all_jobs(::rpc::context 
 EXPLICIT_NODISCARD_ATTR GAME_RPC_API result_type
 update_jobs(::rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
             shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data> &inout, int64_t record_index,
-            int64_t *version = nullptr, action_options options = {});
+            uint64_t *version = nullptr, action_options options = {});
 }  // namespace async_jobs
 }  // namespace db
 }  // namespace rpc

@@ -108,7 +108,7 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
   user.reset();
 
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> tb{get_shared_context()};
-  std::string version;
+  uint64_t version = 0;
   res = RPC_AWAIT_CODE_RESULT(
       rpc::db::login::get(get_shared_context(), req_body.open_id().c_str(), zone_id, tb, version));
   if (res < 0) {
@@ -143,7 +143,7 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
 
   res = RPC_AWAIT_CODE_RESULT(player_manager::me()->create_as<player>(get_shared_context(), req_body.user_id(), zone_id,
                                                                       req_body.open_id(), tb, version, user));
-  is_new_player_ = user && user->get_version() == "1";
+  is_new_player_ = user && user->get_version() == 1;
   // ============ 在这之后tb不再有效 ============
 
   if (!user) {

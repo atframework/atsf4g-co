@@ -117,7 +117,7 @@ SERVER_FRAME_API player_cache::ptr_t player_cache::create(uint64_t user_id, uint
 
 SERVER_FRAME_API void player_cache::create_init(rpc::context &, uint32_t /*version_type*/) {
   data_version_ = 0;
-  version_.assign("0");
+  version_ = 0;
 
   // copy account information
   protobuf_copy_message(get_account_info(), get_login_info().account());
@@ -255,8 +255,7 @@ SERVER_FRAME_API std::shared_ptr<session> player_cache::get_session() { return s
 
 SERVER_FRAME_API bool player_cache::has_session() const { return false == session_.expired(); }
 
-SERVER_FRAME_API void player_cache::load_and_move_login_info(PROJECT_NAMESPACE_ID::table_login &&lg,
-                                                             const std::string &ver) {
+SERVER_FRAME_API void player_cache::load_and_move_login_info(PROJECT_NAMESPACE_ID::table_login &&lg, uint64_t ver) {
   login_info_.Swap(&lg);
   login_info_version_ = ver;
 

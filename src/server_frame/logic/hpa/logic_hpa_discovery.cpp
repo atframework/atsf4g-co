@@ -426,9 +426,9 @@ SERVER_FRAME_API bool logic_hpa_discovery::watch(logic_hpa_discovery_watch_mode 
 
   if (mode == logic_hpa_discovery_watch_mode::kDirectory) {
     // @see https://etcd.io/docs/v3.5/learning/api/#key-ranges
-    etcd_watcher_ = atapp::etcd_watcher::create(etcd_mod->get_raw_etcd_ctx(), etcd_path_, "+1");
+    etcd_watcher_ = atfw::atapp::etcd_watcher::create(etcd_mod->get_raw_etcd_ctx(), etcd_path_, "+1");
   } else {
-    etcd_watcher_ = atapp::etcd_watcher::create(etcd_mod->get_raw_etcd_ctx(), etcd_path_, "");
+    etcd_watcher_ = atfw::atapp::etcd_watcher::create(etcd_mod->get_raw_etcd_ctx(), etcd_path_, "");
   }
   if (!etcd_watcher_) {
     FWLOGERROR("[HPA]: Discovery {} can create watcher failed", etcd_path_);
@@ -449,7 +449,7 @@ SERVER_FRAME_API bool logic_hpa_discovery::watch(logic_hpa_discovery_watch_mode 
 
   // setup callback
   etcd_watcher_->set_evt_handle(
-      [this](const atapp::etcd_response_header&, const atapp::etcd_watcher::response_t& evt_data) {
+      [this](const atfw::atapp::etcd_response_header&, const atfw::atapp::etcd_watcher::response_t& evt_data) {
         for (auto& evt_item : evt_data.events) {
           data_header evt_header;
 
@@ -484,7 +484,7 @@ SERVER_FRAME_API bool logic_hpa_discovery::watch(logic_hpa_discovery_watch_mode 
           }
 
           // Handle event
-          if (evt_item.evt_type == atapp::etcd_watch_event::EN_WEVT_PUT) {
+          if (evt_item.evt_type == atfw::atapp::etcd_watch_event::EN_WEVT_PUT) {
             this->do_changed_put(evt_header, *value_ptr);
           } else {
             this->do_changed_delete(evt_header);
@@ -857,7 +857,7 @@ void logic_hpa_discovery::clear_etcd_watcher() {
     etcd_mod->get_raw_etcd_ctx().remove_watcher(etcd_watcher_);
   } while (false);
 
-  etcd_watcher_->set_evt_handle(atapp::etcd_watcher::watch_event_fn_t());
+  etcd_watcher_->set_evt_handle(atfw::atapp::etcd_watcher::watch_event_fn_t());
   etcd_watcher_->close();
   etcd_watcher_.reset();
 }

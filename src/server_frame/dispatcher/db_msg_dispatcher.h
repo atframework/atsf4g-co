@@ -58,7 +58,6 @@ class db_msg_dispatcher : public dispatcher_implement {
 #endif
 
  public:
-  using msg_op_type_t = dispatcher_implement::msg_op_type_t;
   using msg_raw_t = dispatcher_implement::msg_raw_t;
   using msg_type_t = dispatcher_implement::msg_type_t;
   using unpack_fn_t = int32_t (*)(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply);

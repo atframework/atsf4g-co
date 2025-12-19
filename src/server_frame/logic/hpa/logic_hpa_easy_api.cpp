@@ -54,11 +54,11 @@ static void rebuild_enabled_services_cache(
                  fds->type_name());
       continue;
     }
-    if (fds->message_type() != atapp::protocol::atapp_metadata::descriptor()) {
+    if (fds->message_type() != atfw::atapp::protocol::atapp_metadata::descriptor()) {
       FWLOGERROR(
           "[HPA]: Easy API -> {} (except message type {}, real message type {}) is a invalid HPA discovery "
           "service.",
-          atapp::protocol::atapp_metadata::descriptor()->full_name(), fds->full_name(),
+          atfw::atapp::protocol::atapp_metadata::descriptor()->full_name(), fds->full_name(),
           fds->message_type()->full_name());
       continue;
     }
@@ -67,7 +67,7 @@ static void rebuild_enabled_services_cache(
   }
 }
 
-const atapp::protocol::atapp_metadata* find_enabled_services_cache(int32_t type_id) {
+const atfw::atapp::protocol::atapp_metadata* find_enabled_services_cache(int32_t type_id) {
   const PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg& origin_cfg =
       logic_config::me()->get_server_cfg().logic().discovery_selector();
 
@@ -80,7 +80,7 @@ const atapp::protocol::atapp_metadata* find_enabled_services_cache(int32_t type_
   if (fds->is_repeated() || fds->cpp_type() != google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE) {
     return nullptr;
   }
-  if (fds->message_type() != atapp::protocol::atapp_metadata::descriptor()) {
+  if (fds->message_type() != atfw::atapp::protocol::atapp_metadata::descriptor()) {
     return nullptr;
   }
 
@@ -88,11 +88,12 @@ const atapp::protocol::atapp_metadata* find_enabled_services_cache(int32_t type_
     return nullptr;
   }
 
-  return static_cast<const atapp::protocol::atapp_metadata*>(&origin_cfg.GetReflection()->GetMessage(origin_cfg, fds));
+  return static_cast<const atfw::atapp::protocol::atapp_metadata*>(
+      &origin_cfg.GetReflection()->GetMessage(origin_cfg, fds));
 }
 }  // namespace
 
-SERVER_FRAME_API const atapp::protocol::atapp_metadata* logic_hpa_discovery_select(
+SERVER_FRAME_API const atfw::atapp::protocol::atapp_metadata* logic_hpa_discovery_select(
     int32_t type_id, logic_hpa_discovery_select_mode mode) noexcept {
   static std::unordered_map<int32_t, const google::protobuf::FieldDescriptor*> enabled_services;
   static int64_t configure_version[2] = {0, 0};
@@ -133,7 +134,7 @@ SERVER_FRAME_API const atapp::protocol::atapp_metadata* logic_hpa_discovery_sele
     return nullptr;
   }
 
-  return static_cast<const atapp::protocol::atapp_metadata*>(
+  return static_cast<const atfw::atapp::protocol::atapp_metadata*>(
       &use_cfg->GetReflection()->GetMessage(*use_cfg, fds_iter->second));
 }
 

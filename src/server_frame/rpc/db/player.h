@@ -33,11 +33,11 @@ namespace player {
  */
 EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
                                                              shared_message<PROJECT_NAMESPACE_ID::table_user> &rsp,
-                                                             std::string &version);
+                                                             uint64_t &version);
 
 EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_basic(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
                                                                shared_message<PROJECT_NAMESPACE_ID::table_user> &rsp,
-                                                               std::string *version = nullptr);
+                                                               uint64_t *version = nullptr);
 
 /**
  * @brief 设置用户表的rpc操作
@@ -48,7 +48,7 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_basic(rpc::context &ctx
  */
 EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type set(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
                                                          shared_message<PROJECT_NAMESPACE_ID::table_user> &&store,
-                                                         std::string &version);
+                                                         uint64_t &version);
 
 }  // namespace player
 }  // namespace db

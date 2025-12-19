@@ -24,6 +24,8 @@
 
 #include <config/logic_config.h>
 
+#include <atframe/atapp_config.h>
+
 #include <list>
 #include <memory>
 #include <string>
@@ -34,9 +36,9 @@
 #include "rpc/rpc_common_types.h"
 #include "utility/protobuf_mini_dumper.h"
 
-namespace atapp {
+LIBATAPP_MACRO_NAMESPACE_BEGIN
 class etcd_discovery_node;
-}  // namespace atapp
+LIBATAPP_MACRO_NAMESPACE_END
 
 class router_manager_base;
 class router_object_base;
@@ -101,9 +103,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_ss_req_base : public task_action_req_
    * @param ignore_discovery ignore discovery
    * @return EXPLICIT_NODISCARD_ATTR
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type forward_rpc(const atapp::etcd_discovery_node &node,
-                                                                             bool transparent, bool &ok,
-                                                                             bool ignore_discovery = false);
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type forward_rpc(
+      const atfw::atapp::etcd_discovery_node &node, bool transparent, bool &ok, bool ignore_discovery = false);
 
   /**
    * @brief Forward RPC to another server node
@@ -125,7 +126,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_ss_req_base : public task_action_req_
    * @param ignore_discovery ignore discovery
    * @return EXPLICIT_NODISCARD_ATTR
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type clone_rpc(const atapp::etcd_discovery_node &node,
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type clone_rpc(const atfw::atapp::etcd_discovery_node &node,
                                                                            atframework::SSMsg *response_message,
                                                                            bool ignore_discovery = false);
 
@@ -270,12 +271,12 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_ss_rpc_base : public task_action_ss_r
     }
 
     if (false == request_body_->ParseFromString(get_request().body_bin())) {
-      FWLOGERROR("{}Try to parse message {} failed, message: {}", get_shared_context_log_prefix(), get_request_type_url(),
-                request_body_->InitializationErrorString());
+      FWLOGERROR("{}Try to parse message {} failed, message: {}", get_shared_context_log_prefix(),
+                 get_request_type_url(), request_body_->InitializationErrorString());
       return false;
     } else {
       FWLOGDEBUG("{}Parse rpc request message {} success:\n{}", get_shared_context_log_prefix(), get_request_type_url(),
-                protobuf_mini_dumper_get_readable(*request_body_));
+                 protobuf_mini_dumper_get_readable(*request_body_));
     }
 
     has_unpack_request_ = true;
@@ -291,10 +292,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_ss_rpc_base : public task_action_ss_r
 
     if (false == get_response_body().SerializeToString(rsp.mutable_body_bin())) {
       FWLOGERROR("{}Try to serialize message {} failed, success: {}", get_shared_context_log_prefix(),
-                get_response_type_url(), get_response_body().InitializationErrorString());
+                 get_response_type_url(), get_response_body().InitializationErrorString());
     } else {
       FWLOGDEBUG("{}Serialize rpc response message {} success:\n{}", get_shared_context_log_prefix(),
-                get_response_type_url(), protobuf_mini_dumper_get_readable(get_response_body()));
+                 get_response_type_url(), protobuf_mini_dumper_get_readable(get_response_body()));
     }
   }
 

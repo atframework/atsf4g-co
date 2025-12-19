@@ -176,11 +176,11 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t
       } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("CAS_FAILED", req->response->str, 10)) {
         FWLOGINFO("db reply status: {}", req->response->str);
         if (req->response->str[10] && req->response->str[11]) {
-          table_msg->set_version(&req->response->str[11]);
+          table_msg->set_version(atfw::util::string::to_int<uint64_t>(&req->response->str[11]));
         }
         ret = PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION;
       } else {
-        table_msg->set_version(req->response->str);
+        table_msg->set_version(atfw::util::string::to_int<uint64_t>(req->response->str));
         ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
       }
       break;
@@ -188,7 +188,7 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t
     case REDIS_REPLY_ERROR: {
       if (0 == UTIL_STRFUNC_STRNCASE_CMP("CAS_FAILED", req->response->str, 10)) {
         if (req->response->str[10] && req->response->str[11]) {
-          table_msg->set_version(&req->response->str[11]);
+          table_msg->set_version(atfw::util::string::to_int<uint64_t>(&req->response->str[11]));
         }
         ret = PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION;
       } else {

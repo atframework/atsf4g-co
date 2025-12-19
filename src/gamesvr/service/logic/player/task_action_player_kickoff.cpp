@@ -54,7 +54,7 @@ task_action_player_kickoff::result_type task_action_player_kickoff::operator()()
 
     // 尝试保存用户数据
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> user_lg{get_shared_context()};
-    std::string version;
+    uint64_t version = 0;
     int res = RPC_AWAIT_CODE_RESULT(
         rpc::db::login::get(get_shared_context(), player_open_id.c_str(), player_zone_id, user_lg, version));
     if (res < 0) {

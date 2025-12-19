@@ -80,7 +80,7 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
-  if (output->version().empty()) {
+  if (output->version() == 0) {
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, __trace_attributes}));
   }
 
@@ -89,7 +89,7 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
 }
 
 SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key,
-                                 shared_abstract_message<google::protobuf::Message> &&store, std::string &version,
+                                 shared_abstract_message<google::protobuf::Message> &&store, uint64_t &version,
                                  shared_message<PROJECT_NAMESPACE_ID::table_all_message> &output,
                                  int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg,
                                                       const redisReply *reply)) {
@@ -111,10 +111,6 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
-  }
-
-  if (version.empty()) {
-    version = "0";
   }
 
   std::stringstream segs_debug_info;
@@ -162,17 +158,16 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
   // 协程操作
   res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, *output, await_options));
   if (res < 0) {
-    if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res && !output->version().empty()) {
-      version.assign(output->version());
+    if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res && output->version() != 0) {
+      version = output->version();
     }
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
-  if (output->version().empty()) {
+  if (output->version() == 0) {
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, __trace_attributes}));
   }
-
-  version.assign(output->version());
+  version = output->version();
 
   FWLOGINFO("table [key={}] data saved, new version: {}, detail: {}", key, output->version(), segs_debug_info.str());
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));

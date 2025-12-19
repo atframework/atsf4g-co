@@ -50,7 +50,7 @@ session_manager::session_manager() : evloop_(nullptr), app_(nullptr), last_tick_
 
 session_manager::~session_manager() { reset(); }
 
-int session_manager::init(::atapp::app *app_inst, create_proto_fn_t fn) {
+int session_manager::init(::atfw::atapp::app *app_inst, create_proto_fn_t fn) {
   evloop_ = app_inst->get_evloop();
   app_ = app_inst;
   create_proto_fn_ = fn;

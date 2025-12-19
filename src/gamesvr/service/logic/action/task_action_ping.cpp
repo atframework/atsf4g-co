@@ -56,7 +56,7 @@ task_action_ping::result_type task_action_ping::operator()() {
     int kick_off_reason = PROJECT_NAMESPACE_ID::EN_CRT_LOGIN_BAN;
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> tb{get_shared_context()};
     do {
-      std::string login_ver;
+      uint64_t login_ver = 0;
       int res = RPC_AWAIT_CODE_RESULT(
           rpc::db::login::get(get_shared_context(), user->get_open_id().c_str(), user->get_zone_id(), tb, login_ver));
       if (res < 0) {

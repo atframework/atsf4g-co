@@ -36,7 +36,7 @@
 
 #include "data/player.h"
 
-class main_service_module : public atapp::module_impl {
+class main_service_module : public atfw::atapp::module_impl {
  private:
   static router_player_cache::object_ptr_t create_player_fn(uint64_t user_id, uint32_t zone_id,
                                                             const std::string &openid) {
@@ -117,7 +117,7 @@ class main_service_module : public atapp::module_impl {
 };
 
 int main(int argc, char *argv[]) {
-  atapp::app app;
+  atfw::atapp::app app;
 
   // project directory
   {

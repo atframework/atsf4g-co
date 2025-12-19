@@ -18,6 +18,8 @@
 
 #include <config/server_frame_build_feature.h>
 
+#include <atframe/atapp_config.h>
+
 #include <list>
 #include <memory>
 #include <string>
@@ -26,9 +28,9 @@
 #include "rpc/rpc_common_types.h"
 #include "rpc/telemetry/rpc_trace.h"
 
-namespace atapp {
+LIBATAPP_MACRO_NAMESPACE_BEGIN
 class app;
-}
+LIBATAPP_MACRO_NAMESPACE_END
 
 PROJECT_NAMESPACE_BEGIN
 namespace config {
@@ -226,7 +228,7 @@ class context {
    * @param app atapp instance
    * @param telemetry telemetry configure
    */
-  SERVER_FRAME_API static void set_current_service(atapp::app &app,
+  SERVER_FRAME_API static void set_current_service(atfw::atapp::app &app,
                                                    const PROJECT_NAMESPACE_ID::config::logic_section_cfg &logic_cfg);
 
   SERVER_FRAME_API void set_task_context(const task_context_data &task_ctx) noexcept;

@@ -17,7 +17,7 @@ import "atframe/atapp_conf.proto";
 import "protocol/extension/svr.config.extension.proto";
 
 message logic_discovery_selector_cfg {
-  atapp.protocol.atapp_metadata dtcoordsvr = 270;
+  atframework.atapp.protocol.atapp_metadata dtcoordsvr = 270;
 }
 
 // @see
@@ -60,12 +60,12 @@ message logic_hpa_ssl {
 
 message logic_hpa_pull_request {
   bool debug_mode = 1;
-  google.protobuf.Duration timeout = 2 [(atapp.protocol.CONFIGURE) = { default_value: "10s" }];
-  google.protobuf.Duration keepalive_timeout = 3 [(atapp.protocol.CONFIGURE) = { default_value: "600s" }];
-  google.protobuf.Duration connect_timeout = 4 [(atapp.protocol.CONFIGURE) = { default_value: "0ms" }];
-  google.protobuf.Duration dns_cache_timeout = 5 [(atapp.protocol.CONFIGURE) = { default_value: "900s" }];
+  google.protobuf.Duration timeout = 2 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" }];
+  google.protobuf.Duration keepalive_timeout = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "600s" }];
+  google.protobuf.Duration connect_timeout = 4 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "0ms" }];
+  google.protobuf.Duration dns_cache_timeout = 5 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "900s" }];
   string dns_servers = 6;
-  string user_agent = 7 [(atapp.protocol.CONFIGURE) = { default_value: "Atapp HPA module/1.0" }];
+  string user_agent = 7 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "Atapp HPA module/1.0" }];
   string proxy = 8;
   string no_proxy = 9;
   string proxy_user_name = 10;
@@ -74,8 +74,10 @@ message logic_hpa_pull_request {
 }
 
 enum logic_hpa_pull_metrics_name_mode {
-  EN_LOGIC_HPA_PULL_METRICS_NAME_WITH_NAME_AND_UNIT = 0 [(atapp.protocol.ENUMVALUE) = { alias_name: "name_and_unit" }];
-  EN_LOGIC_HPA_PULL_METRICS_NAME_WITH_NAME_ONLY = 1 [(atapp.protocol.ENUMVALUE) = { alias_name: "name_only" }];
+  EN_LOGIC_HPA_PULL_METRICS_NAME_WITH_NAME_AND_UNIT = 0
+      [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "name_and_unit" }];
+  EN_LOGIC_HPA_PULL_METRICS_NAME_WITH_NAME_ONLY = 1
+      [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "name_only" }];
 }
 
 message logic_hpa_metrics {
@@ -83,9 +85,10 @@ message logic_hpa_metrics {
   bool enable = 1;
 
   // 拉取指标的间隔
-  google.protobuf.Duration pull_interval = 11 [(atapp.protocol.CONFIGURE) = { default_value: "180s" min_value: "1s" }];
+  google.protobuf.Duration pull_interval = 11
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "180s" min_value: "1s" }];
   google.protobuf.Duration pull_retry_interval = 12
-      [(atapp.protocol.CONFIGURE) = { default_value: "30s" min_value: "1s" }];
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30s" min_value: "1s" }];
   // 拉取指标的请求配置
   logic_hpa_pull_request pull_request = 13;
   // 拉取指标的SSL配置
@@ -93,7 +96,8 @@ message logic_hpa_metrics {
   // 拉取指标名的组成规则
   logic_hpa_pull_metrics_name_mode pull_metrics_name_mode = 15;
   // 拉取默认的时间范围倍率(千分率,考虑service->本地agent->远程agent->PodMonitor/ServiceMonitor链路中，每层都有可能有间隔延迟)
-  int32 pull_default_time_range_multiplying_factor = 16 [(atapp.protocol.CONFIGURE) = { default_value: "4500" }];
+  int32 pull_default_time_range_multiplying_factor = 16
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "4500" }];
 
   // 指标的公共附加写出标签
   //   建议提取 workload的namespace和name作为写出标签以支持多版本和蓝绿发布
@@ -118,15 +122,15 @@ message logic_hpa_metrics {
 }
 
 enum logic_hpa_policy_aggregation_operator {
-  EN_HPA_POLICY_AGGREGATION_NONE = 0 [(atapp.protocol.ENUMVALUE) = { alias_name: "none" }];
-  EN_HPA_POLICY_AGGREGATION_SUM = 1 [(atapp.protocol.ENUMVALUE) = { alias_name: "sum" }];
-  EN_HPA_POLICY_AGGREGATION_AVG = 2 [(atapp.protocol.ENUMVALUE) = { alias_name: "avg" }];
-  EN_HPA_POLICY_AGGREGATION_COUNT = 3 [(atapp.protocol.ENUMVALUE) = { alias_name: "count" }];
-  EN_HPA_POLICY_AGGREGATION_MIN = 4 [(atapp.protocol.ENUMVALUE) = { alias_name: "min" }];
-  EN_HPA_POLICY_AGGREGATION_MAX = 5 [(atapp.protocol.ENUMVALUE) = { alias_name: "max" }];
-  EN_HPA_POLICY_AGGREGATION_COUNT_VALUES = 6 [(atapp.protocol.ENUMVALUE) = { alias_name: "count_values" }];
-  EN_HPA_POLICY_AGGREGATION_TOPK = 11 [(atapp.protocol.ENUMVALUE) = { alias_name: "topk" }];
-  EN_HPA_POLICY_AGGREGATION_BOTTOMK = 12 [(atapp.protocol.ENUMVALUE) = { alias_name: "bottomk" }];
+  EN_HPA_POLICY_AGGREGATION_NONE = 0 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "none" }];
+  EN_HPA_POLICY_AGGREGATION_SUM = 1 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "sum" }];
+  EN_HPA_POLICY_AGGREGATION_AVG = 2 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "avg" }];
+  EN_HPA_POLICY_AGGREGATION_COUNT = 3 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "count" }];
+  EN_HPA_POLICY_AGGREGATION_MIN = 4 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "min" }];
+  EN_HPA_POLICY_AGGREGATION_MAX = 5 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "max" }];
+  EN_HPA_POLICY_AGGREGATION_COUNT_VALUES = 6 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "count_values" }];
+  EN_HPA_POLICY_AGGREGATION_TOPK = 11 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "topk" }];
+  EN_HPA_POLICY_AGGREGATION_BOTTOMK = 12 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "bottomk" }];
 }
 
 message logic_hpa_policy_aggregation_group_by {
@@ -166,8 +170,8 @@ message logic_hpa_policy_simple_function {
 }
 
 enum logic_hpa_policy_metrics_type {
-  EN_HPA_POLICY_METRICS_TYPE_GAUGE = 0 [(atapp.protocol.ENUMVALUE) = { alias_name: "gauge" }];
-  EN_HPA_POLICY_METRICS_TYPE_COUNTER = 1 [(atapp.protocol.ENUMVALUE) = { alias_name: "counter" }];
+  EN_HPA_POLICY_METRICS_TYPE_GAUGE = 0 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "gauge" }];
+  EN_HPA_POLICY_METRICS_TYPE_COUNTER = 1 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "counter" }];
 }
 
 message logic_hpa_policy {
@@ -215,7 +219,7 @@ message logic_hpa_scaling_configure {
 
 message logic_hpa_scaling_rule {
   // 是否禁用自动设置ready标签
-  bool set_scaling_label = 1 [(atapp.protocol.CONFIGURE) = { default_value: "true" }];
+  bool set_scaling_label = 1 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "true" }];
   logic_hpa_scaling_configure scaling_up_configure = 3;
   logic_hpa_scaling_configure scaling_down_configure = 4;
 

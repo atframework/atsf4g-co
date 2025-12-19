@@ -381,7 +381,7 @@ bool redis_args::push(int64_t v) {
   return true;
 }
 
-int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, std::string *version) {
+int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, uint64_t *version) {
   if (nullptr == reply) {
     FWLOGDEBUG("unpack message {} failed, data mot found.", msg.GetDescriptor()->full_name());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
@@ -420,11 +420,11 @@ int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, st
       if (REDIS_REPLY_INTEGER == value->type) {
         char intval[24] = {0};
         UTIL_STRFUNC_SNPRINTF(intval, sizeof(intval), "%lld", value->integer);
-        version->assign((const char *)intval);
+        *version = static_cast<uint64_t>(value->integer);
       } else if (nullptr != value->str) {
-        version->assign(value->str);
+        *version = atfw::util::string::to_int<uint64_t>(value->str);
       } else {
-        version->assign("0");
+        *version = 0;
       }
 
       version = nullptr;
@@ -534,7 +534,7 @@ int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, st
 }
 
 int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
-                 std::vector<const ::google::protobuf::FieldDescriptor *> fds, std::string *version,
+                 std::vector<const ::google::protobuf::FieldDescriptor *> fds, uint64_t *version,
                  std::ostream *debug_message) {
   // 反射获取所有的字段
   const google::protobuf::Reflection *reflect = msg.GetReflection();
@@ -552,13 +552,15 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
     memcpy(d, RPC_DB_VERSION_NAME, RPC_DB_VERSION_LENGTH);
 
     //
-    d = args.alloc(version->size());
+    char version_buffer[32] = {0};
+    size_t version_buffer_size = atfw::util::string::int2str(version_buffer, sizeof(version_buffer), *version);
+    d = args.alloc(version_buffer_size);
     if (nullptr == d) {
       args.dealloc();
       FWLOGERROR("pack message {} failed, alloc version value failed", msg.GetDescriptor()->full_name());
       return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
     }
-    memcpy(d, version->c_str(), version->size());
+    memcpy(d, version_buffer, version_buffer_size);
   }
 
   size_t stat_sum_len = 0;

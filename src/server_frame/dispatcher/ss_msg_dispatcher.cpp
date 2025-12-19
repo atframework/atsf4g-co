@@ -264,7 +264,7 @@ SERVER_FRAME_API const std::string &ss_msg_dispatcher::pick_rpc_name(const atfra
 
 SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t node_id, atframework::SSMsg &ss_msg,
                                                          bool ignore_discovery) {
-  atapp::app *owner = get_app();
+  atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("module not attached to a atapp, maybe not initialized or already closed");
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
@@ -296,7 +296,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t node_id, atfra
 SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t node_id, const void *msg_buf, size_t msg_len,
                                                          uint64_t sequence,
                                                          EXPLICIT_UNUSED_ATTR bool ignore_discovery) {
-  atapp::app *owner = get_app();
+  atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("module not attached to a atapp, maybe not initialized or already closed");
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
@@ -308,7 +308,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t node_id, const
   }
 
   if (0 == sequence) {
-    sequence = owner->get_bus_node()->alloc_msg_seq();
+    sequence = owner->get_bus_node()->allocate_message_sequence();
   }
 
   int res = convert_from_atapp_error_code(
@@ -326,13 +326,13 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t node_id, const
 
 SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const std::string &node_name, atframework::SSMsg &ss_msg,
                                                          bool ignore_discovery) {
-  atapp::app *owner = get_app();
+  atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("module not attached to a atapp");
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
-  atapp::etcd_discovery_node::ptr_t node_ptr = owner->get_discovery_node_by_name(node_name);
+  atfw::atapp::etcd_discovery_node::ptr_t node_ptr = owner->get_discovery_node_by_name(node_name);
   if (!node_ptr) {
     FWLOGERROR("send msg to proc {} failed: not found", node_name);
     return PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_ATNODE_NOT_FOUND;
@@ -341,7 +341,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const std::string &node
   return send_to_proc(*node_ptr, ss_msg, ignore_discovery);
 }
 
-SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const atapp::etcd_discovery_node &node,
+SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const atfw::atapp::etcd_discovery_node &node,
                                                          atframework::SSMsg &ss_msg, bool ignore_discovery) {
   if (node.get_discovery_info().id() != 0) {
     return send_to_proc(node.get_discovery_info().id(), ss_msg, ignore_discovery);
@@ -370,13 +370,14 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const atapp::etcd_disco
   return send_to_proc(node, buf_start, msg_buf_len, ss_msg.head().sequence(), ignore_discovery);
 }
 
-SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const atapp::etcd_discovery_node &node, const void *msg_buf,
-                                                         size_t msg_len, uint64_t sequence, bool ignore_discovery) {
+SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const atfw::atapp::etcd_discovery_node &node,
+                                                         const void *msg_buf, size_t msg_len, uint64_t sequence,
+                                                         bool ignore_discovery) {
   if (node.get_discovery_info().id() != 0) {
     return send_to_proc(node.get_discovery_info().id(), msg_buf, msg_len, sequence, ignore_discovery);
   }
 
-  atapp::app *owner = get_app();
+  atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("module not attached to a atapp");
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
@@ -428,15 +429,15 @@ SERVER_FRAME_API bool ss_msg_dispatcher::is_target_server_available(const std::s
 }
 
 SERVER_FRAME_API int32_t ss_msg_dispatcher::broadcast(atframework::SSMsg &ss_msg, const ss_msg_logic_index &index,
-                                                      ::atapp::protocol::atapp_metadata *metadata) {
-  atapp::app *owner = get_app();
+                                                      ::atfw::atapp::protocol::atapp_metadata *metadata) {
+  atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("module not attached to a atapp, maybe not initialized or already closed");
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
-  const atapp::etcd_discovery_set *discovery_set = nullptr;
-  atapp::etcd_discovery_set::ptr_t discovery_set_ptr_lifetime;
+  const atfw::atapp::etcd_discovery_set *discovery_set = nullptr;
+  atfw::atapp::etcd_discovery_set::ptr_t discovery_set_ptr_lifetime;
   if (index.type_id == 0 && index.zone_id == 0 && index.type_name.empty()) {
     discovery_set = &owner->get_global_discovery();
   } else {
@@ -514,8 +515,8 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::broadcast(atframework::SSMsg &ss_msg
   return ret;
 }
 
-SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source,
-                                                     const atapp::app::message_t &msg) {
+SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atfw::atapp::app::message_sender_t &source,
+                                                     const atfw::atapp::app::message_t &msg) {
   if (::atframework::component::message_type::EN_ATST_SS_MSG != msg.type) {
     FWLOGERROR("message type {} invalid", msg.type);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
@@ -603,9 +604,8 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atapp::app::message_s
   return tracer.finish({ret, {}});
 }
 
-SERVER_FRAME_API int32_t ss_msg_dispatcher::on_receive_send_data_response(const atapp::app::message_sender_t &source,
-                                                                          const atapp::app::message_t &msg,
-                                                                          int32_t error_code) {
+SERVER_FRAME_API int32_t ss_msg_dispatcher::on_receive_send_data_response(
+    const atfw::atapp::app::message_sender_t &source, const atfw::atapp::app::message_t &msg, int32_t error_code) {
   if (::atframework::component::message_type::EN_ATST_SS_MSG != msg.type) {
     FWLOGERROR("message type {} invalid", msg.type);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;

@@ -11,6 +11,8 @@
 
 #include <network/http_request.h>
 
+#include <atframe/atapp_config.h>
+
 #include <rpc/telemetry/rpc_global_service.h>
 
 #include <ctime>
@@ -22,9 +24,9 @@
 
 #include "logic/hpa/logic_hpa_data_type.h"
 
-namespace atapp {
+LIBATAPP_MACRO_NAMESPACE_BEGIN
 class app;
-}
+LIBATAPP_MACRO_NAMESPACE_END
 
 PROJECT_NAMESPACE_BEGIN
 namespace config {
@@ -47,7 +49,7 @@ class logic_hpa_controller {
   UTIL_DESIGN_PATTERN_NOMOVABLE(logic_hpa_controller);
 
  public:
-  SERVER_FRAME_API explicit logic_hpa_controller(atapp::app& owner_app);
+  SERVER_FRAME_API explicit logic_hpa_controller(atfw::atapp::app& owner_app);
 
   SERVER_FRAME_API ~logic_hpa_controller();
 
@@ -124,14 +126,14 @@ class logic_hpa_controller {
    *
    * @return atapp对象
    */
-  ATFW_UTIL_FORCEINLINE const atapp::app* get_app() const noexcept { return owner_app_; }
+  ATFW_UTIL_FORCEINLINE const atfw::atapp::app* get_app() const noexcept { return owner_app_; }
 
   /**
    * @brief 获取持有生命周期的atapp对象
    *
    * @return atapp对象
    */
-  ATFW_UTIL_FORCEINLINE atapp::app* get_app() noexcept { return owner_app_; }
+  ATFW_UTIL_FORCEINLINE atfw::atapp::app* get_app() noexcept { return owner_app_; }
 
   /**
    * @brief 获取当前节点是否开启了Ready标签(就绪状态,当前分布)
@@ -280,7 +282,7 @@ class logic_hpa_controller {
   bool is_main_hpa_controller() const noexcept;
 
  private:
-  atapp::app* owner_app_;
+  atfw::atapp::app* owner_app_;
   bool need_configure_;
   bool available_;
   time_t last_tick_timepoint_;

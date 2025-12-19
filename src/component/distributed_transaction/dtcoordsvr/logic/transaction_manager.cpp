@@ -74,9 +74,9 @@ rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_p
       ctx, data,
       [](rpc::context& subctx, const atframework::distributed_system::transaction_blob_storage& in,
          int64_t* out_version) -> rpc::result_code_type {
-        std::string data_version;
+        uint64_t data_version = 0;
         if (nullptr != out_version) {
-          data_version = atfw::util::log::format("{}", *out_version);
+          data_version = *out_version;
         }
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> storage{subctx};
         storage->set_zone_id(get_transaction_zone_id(in.metadata()));
@@ -88,7 +88,7 @@ rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_p
         int ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::set(
             subctx, storage->zone_id(), storage->transaction_uuid(), std::move(storage), data_version));
         if (nullptr != out_version) {
-          atfw::util::string::str2int(*out_version, data_version.c_str(), data_version.size());
+          *out_version = data_version;
         }
 
         RPC_RETURN_CODE(ret);
@@ -122,7 +122,7 @@ rpc::result_code_type transaction_manager::create_transaction(
     storage.mutable_metadata()->mutable_expire_timepoint()->set_nanos(now_nanos);
   }
 
-  std::string db_version;
+  uint64_t db_version = 0;
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> db_data{ctx};
   db_data->set_zone_id(get_transaction_zone_id(storage.metadata()));
   db_data->set_transaction_uuid(storage.metadata().transaction_uuid());
@@ -170,7 +170,7 @@ rpc::result_code_type transaction_manager::mutable_transaction(
         [zone_id](rpc::context& subctx, const std::string& key,
                   atframework::distributed_system::transaction_blob_storage& output,
                   int64_t* out_version) -> rpc::result_code_type {
-          std::string data_version;
+          uint64_t data_version = 0;
           rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> storage{subctx};
           int sub_ret =
               RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::get(subctx, zone_id, key, storage, data_version));
@@ -189,7 +189,7 @@ rpc::result_code_type transaction_manager::mutable_transaction(
           }
 
           if (nullptr != out_version) {
-            atfw::util::string::str2int(*out_version, data_version.c_str(), data_version.size());
+            *out_version = data_version;
           }
 
           RPC_RETURN_CODE(sub_ret);

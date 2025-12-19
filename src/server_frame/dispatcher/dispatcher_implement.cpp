@@ -37,7 +37,7 @@ SERVER_FRAME_API const char *dispatcher_implement::name() const {
   int cxx_abi_status;
   char *readable_name = abi::__cxa_demangle(raw_name, 0, 0, &cxx_abi_status);
   if (nullptr == readable_name) {
-    human_readable_name_ = ::atapp::module_impl::name();
+    human_readable_name_ = ::atfw::atapp::module_impl::name();
     return human_readable_name_.c_str();
   }
 
@@ -45,7 +45,7 @@ SERVER_FRAME_API const char *dispatcher_implement::name() const {
   free(readable_name);
 
 #else
-  human_readable_name_ = ::atapp::module_impl::name();
+  human_readable_name_ = ::atfw::atapp::module_impl::name();
 #endif
 
   return human_readable_name_.c_str();

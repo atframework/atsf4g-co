@@ -74,7 +74,7 @@ static uint64_t calculate_server_id(const atframework::distributed_system::trans
     return 0;
   }
 
-  atapp::etcd_discovery_node::ptr_t node = discovery->get_node_by_consistent_hash(metadata.transaction_uuid());
+  atfw::atapp::etcd_discovery_node::ptr_t node = discovery->get_node_by_consistent_hash(metadata.transaction_uuid());
   if (!node) {
     return 0;
   }

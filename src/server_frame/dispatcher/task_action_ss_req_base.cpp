@@ -401,9 +401,8 @@ static rpc::result_code_type task_action_ss_action_clone_rpc(rpc::context &ctx, 
 }
 }  // namespace
 
-SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::forward_rpc(const atapp::etcd_discovery_node &node,
-                                                                            bool transparent, bool &ok,
-                                                                            bool ignore_discovery) {
+SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::forward_rpc(
+    const atfw::atapp::etcd_discovery_node &node, bool transparent, bool &ok, bool ignore_discovery) {
   if (has_response_message()) {
     ok = false;
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_ALREADY_HAS_RESPONSE);
@@ -486,7 +485,7 @@ SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::forward_rpc(uint
   RPC_RETURN_CODE(ret);
 }
 
-SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::clone_rpc(const atapp::etcd_discovery_node &node,
+SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::clone_rpc(const atfw::atapp::etcd_discovery_node &node,
                                                                           atframework::SSMsg *response_message,
                                                                           bool ignore_discovery) {
   rpc::result_code_type::value_type ret = RPC_AWAIT_CODE_RESULT(

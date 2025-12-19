@@ -35,9 +35,8 @@
 
 #include "dispatcher/task_manager.h"
 
-class ATFW_UTIL_SYMBOL_VISIBLE dispatcher_implement : public ::atapp::module_impl {
+class ATFW_UTIL_SYMBOL_VISIBLE dispatcher_implement : public ::atfw::atapp::module_impl {
  public:
-  using msg_op_type_t = PROJECT_NAMESPACE_ID::EnMsgOpType;
   using msg_raw_t = dispatcher_raw_message;
   using msg_type_t = uint32_t;
   using rpc_task_action_set_t = std::unordered_map<std::string, task_manager::task_action_creator_t>;

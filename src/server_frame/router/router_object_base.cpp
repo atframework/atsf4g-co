@@ -138,6 +138,8 @@ SERVER_FRAME_API rpc::result_code_type router_object_base::io_task_guard::take(r
   owner_ = owner.shared_from_this();
   await_task_id_ = ctx.get_task_context().task_id;
 
+  owner.io_task_id_ = await_task_id_;
+
   RPC_RETURN_CODE(ret);
 }
 

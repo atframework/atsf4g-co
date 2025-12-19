@@ -183,8 +183,8 @@ SERVER_FRAME_API void cs_msg_dispatcher::on_create_task_failed(dispatcher_start_
   }
 }
 
-SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_sender_t &source,
-                                                     const atapp::app::message_t &msg) {
+SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atfw::atapp::app::message_sender_t &source,
+                                                     const atfw::atapp::app::message_t &msg) {
   if (::atframework::component::service_type::EN_ATST_GATEWAY != msg.type) {
     FWLOGERROR("message type {} invalid", msg.type);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
@@ -378,7 +378,7 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atapp::app::message_s
 }
 
 SERVER_FRAME_API int32_t cs_msg_dispatcher::send_kickoff(uint64_t node_id, uint64_t session_id, int32_t reason) {
-  atapp::app *owner = get_app();
+  atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("not in a atapp");
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
@@ -401,7 +401,7 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::send_kickoff(uint64_t node_id, uint6
 
 SERVER_FRAME_API int32_t cs_msg_dispatcher::send_data(uint64_t node_id, uint64_t session_id, const void *buffer,
                                                       size_t len) {
-  atapp::app *owner = get_app();
+  atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("not in a atapp");
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
@@ -458,7 +458,7 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::broadcast_data(uint64_t node_id, con
 SERVER_FRAME_API int32_t cs_msg_dispatcher::broadcast_data(uint64_t node_id,
                                                            const std::vector<uint64_t> & /*session_ids*/,
                                                            const void *buffer, size_t len) {
-  atapp::app *owner = get_app();
+  atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("not in a atapp");
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;

@@ -82,17 +82,18 @@ message CSLoginReq {
   string login_code = 1;  // loginsvr下发的登录码
   string open_id = 2;
   uint64 user_id = 3;        // 玩家数字ID
-  DAccountData account = 4;  // 平台信息
+  uint32 zone_id = 4;        // 玩家ZoneID
+  DAccountData account = 5;  // 平台信息
   DClientDeviceInfo client_info = 11;
 }
 
 // 登录返回
 message SCLoginRsp {
-  int32 last_sequence = 1;       // 上次收包的seq(不算MCSLogin)
+  uint64 last_sequence = 1;      // 上次收包的seq(不算MCSLogin)
   int64 heartbeat_interval = 2;  // 心跳包间隔
   bool is_new_player = 3;        // 是否是新玩家
-  int32 version_type = 4;        // 版本类型 @EnVersionType
-  int32 zone_id = 5;             // 大区ID
+  uint32 version_type = 4;       // 版本类型 @EnVersionType
+  uint32 zone_id = 5;            // 大区ID
 }
 
 message SCPlayerProfileSyn {
@@ -101,14 +102,25 @@ message SCPlayerProfileSyn {
 
 // 脏数据同步包
 message SCPlayerDirtyChgSync {
+  message RemoveItemKey {
+    int32 type_id = 1;
+    int64 guid = 2;
+  }
+
   repeated DItemInstance dirty_items = 1;
+
+  repeated RemoveItemKey remove_item_keys = 2;
 }
 
 // 心跳包，上行包
-message CSPingReq {}
+message CSPingReq {
+  int64 timepoint = 1;
+}
 
 // 心跳包，下行包
-message SCPongRsp {}
+message SCPongRsp {
+  int64 timepoint = 1;
+}
 
 // 请求用户数据
 message CSPlayerGetInfoReq {
@@ -118,8 +130,9 @@ message CSPlayerGetInfoReq {
 
 // 用户数据返回
 message SCPlayerGetInfoRsp {
-  DPlayerInfo player_info = 1;        // 玩家数据
-  DPlayerOptions player_options = 2;  // 玩家自定义选项
+  DPlayerProfile player_profile = 1;
+  DPlayerInfo player_info = 2;        // 玩家数据
+  DPlayerOptions player_options = 3;  // 玩家自定义选项
 }
 
 service LoginsvrClientService {

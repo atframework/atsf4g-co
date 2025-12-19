@@ -21,9 +21,9 @@
 using session_gw_map_t = std::map<uint64_t, uint64_t>;
 
 struct app_command_handler_kickoff {
-  atapp::app *app_;
+  atfw::atapp::app *app_;
   session_gw_map_t *gw_;
-  app_command_handler_kickoff(atapp::app *app, session_gw_map_t *gw) : app_(app), gw_(gw) {}
+  app_command_handler_kickoff(atfw::atapp::app *app, session_gw_map_t *gw) : app_(app), gw_(gw) {}
   int operator()(util::cli::callback_param params) {
     if (params.get_params_number() <= 0) {
       FWLOGERROR("kickoff command must require session id");
@@ -58,7 +58,8 @@ struct app_handle_on_msg {
   session_gw_map_t *gw_;
   explicit app_handle_on_msg(session_gw_map_t *gw) : gw_(gw) {}
 
-  int operator()(atapp::app &app, const atapp::app::message_sender_t &source, const atapp::app::message_t &msg) {
+  int operator()(atfw::atapp::app &app, const atfw::atapp::app::message_sender_t &source,
+                 const atfw::atapp::app::message_t &msg) {
     switch (msg.type) {
       case ::atframework::component::service_type::EN_ATST_GATEWAY: {
         ::atframework::gw::ss_msg req_msg;
@@ -113,8 +114,8 @@ struct app_handle_on_msg {
   }
 };
 
-static int app_handle_on_forward_response(atapp::app &app, const atapp::app::message_sender_t &source,
-                                          const atapp::app::message_t &msg, int32_t error_code) {
+static int app_handle_on_forward_response(atfw::atapp::app &app, const atfw::atapp::app::message_sender_t &source,
+                                          const atfw::atapp::app::message_t &msg, int32_t error_code) {
   if (error_code < 0) {
     FWLOGERROR("send data from {:#x}({}) to {:#x}({}) failed, sequence: {}, code: {}", app.get_id(), app.get_app_name(),
                source.id, source.name, msg.message_sequence, error_code);
@@ -125,18 +126,18 @@ static int app_handle_on_forward_response(atapp::app &app, const atapp::app::mes
   return 0;
 }
 
-static int app_handle_on_connected(atapp::app &, atbus::endpoint &ep, int status) {
+static int app_handle_on_connected(atfw::atapp::app &, atbus::endpoint &ep, int status) {
   FWLOGINFO("app {:#x} connected, status: {}", ep.get_id(), status);
   return 0;
 }
 
-static int app_handle_on_disconnected(atapp::app &, atbus::endpoint &ep, int status) {
+static int app_handle_on_disconnected(atfw::atapp::app &, atbus::endpoint &ep, int status) {
   FWLOGINFO("app {:#x} disconnected, status: {}", ep.get_id(), status);
   return 0;
 }
 
 int main(int argc, char *argv[]) {
-  atapp::app app;
+  atfw::atapp::app app;
 
   session_gw_map_t gws;
 

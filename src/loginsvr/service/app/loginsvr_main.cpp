@@ -26,7 +26,7 @@
 
 #include "app/handle_cs_rpc_loginsvrclientservice.h"
 
-class main_service_module : public atapp::module_impl {
+class main_service_module : public atfw::atapp::module_impl {
  public:
   int init() override {
     {
@@ -44,7 +44,7 @@ class main_service_module : public atapp::module_impl {
 };
 
 int main(int argc, char *argv[]) {
-  atapp::app app;
+  atfw::atapp::app app;
 
   // project directory
   {

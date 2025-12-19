@@ -23,15 +23,8 @@
 #include "dispatcher/dispatcher_implement.h"
 #include "dispatcher/dispatcher_type_defines.h"
 
-namespace atbus {
-namespace protocol {
-class msg;
-}
-}  // namespace atbus
-
 class cs_msg_dispatcher : public dispatcher_implement {
  public:
-  using msg_op_type_t = dispatcher_implement::msg_op_type_t;
   using msg_raw_t = dispatcher_implement::msg_raw_t;
   using msg_type_t = dispatcher_implement::msg_type_t;
 
@@ -90,7 +83,8 @@ class cs_msg_dispatcher : public dispatcher_implement {
    * @param len data length
    * @return 0 or error code
    */
-  SERVER_FRAME_API int32_t dispatch(const atapp::app::message_sender_t &source, const atapp::app::message_t &msg);
+  SERVER_FRAME_API int32_t dispatch(const atfw::atapp::app::message_sender_t &source,
+                                    const atfw::atapp::app::message_t &msg);
 
   /**
    * send kickoff message to atgateway
@@ -128,7 +122,8 @@ class cs_msg_dispatcher : public dispatcher_implement {
    * @param len data length
    * @return 0 or error code
    */
-  SERVER_FRAME_API int32_t broadcast_data(uint64_t node_id, const std::vector<uint64_t> &session_ids, const void *buffer, size_t len);
+  SERVER_FRAME_API int32_t broadcast_data(uint64_t node_id, const std::vector<uint64_t> &session_ids,
+                                          const void *buffer, size_t len);
 
  private:
   bool is_closing_;

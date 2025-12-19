@@ -45,7 +45,7 @@ class session_manager {
   session_manager();
   ~session_manager();
 
-  int init(::atapp::app *app_inst, create_proto_fn_t fn);
+  int init(::atfw::atapp::app *app_inst, create_proto_fn_t fn);
   /**
    * @brief listen all address in configure
    * @return the number of listened address
@@ -99,7 +99,7 @@ class session_manager {
   };
 
   uv_loop_t *evloop_;
-  ::atapp::app *app_;
+  ::atfw::atapp::app *app_;
   conf_t conf_;
 
   create_proto_fn_t create_proto_fn_;

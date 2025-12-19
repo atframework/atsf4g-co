@@ -39,12 +39,15 @@ static int32_t unpack_login(PROJECT_NAMESPACE_ID::table_all_message &table_msg, 
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
-  return rpc::db::unpack_message(*table_msg.mutable_login(), reply, table_msg.mutable_version());
+  uint64_t version = 0;
+  int32_t ret = rpc::db::unpack_message(*table_msg.mutable_login(), reply, &version);
+  table_msg.set_version(version);
+  return ret;
 }
 }  // namespace detail
 
 SERVER_FRAME_API result_type get(rpc::context &ctx, const char *openid, uint32_t zone_id,
-                                 shared_message<PROJECT_NAMESPACE_ID::table_login> &rsp, std::string &version) {
+                                 shared_message<PROJECT_NAMESPACE_ID::table_login> &rsp, uint64_t &version) {
   table_key_type user_key;
   size_t user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, openid, zone_id);
   if (user_key_len <= 0) {
@@ -61,14 +64,14 @@ SERVER_FRAME_API result_type get(rpc::context &ctx, const char *openid, uint32_t
     RPC_DB_RETURN_CODE(res);
   }
 
-  version.assign(output->version());
+  version = static_cast<uint64_t>(output->version());
   rsp->Swap(output->mutable_login());
 
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 SERVER_FRAME_API result_type set(rpc::context &ctx, const char *openid, uint32_t zone_id,
-                                 shared_message<PROJECT_NAMESPACE_ID::table_login> &&store, std::string &version) {
+                                 shared_message<PROJECT_NAMESPACE_ID::table_login> &&store, uint64_t &version) {
   table_key_type user_key;
   size_t user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, openid, zone_id);
   if (user_key_len <= 0) {

@@ -124,7 +124,7 @@ class player : public player_cache {
     time_t refresh_feature_limit_hour;
     // PROJECT_NAMESPACE_ID::SCPlayerLevelupSyn player_level_up_syn;
 
-    atfw::memory::stl::unordered_map<int32_t, PROJECT_NAMESPACE_ID::DItem> dirty_item_by_type;
+    atfw::memory::stl::unordered_map<int32_t, PROJECT_NAMESPACE_ID::DItemInstance> dirty_item_by_type;
 
     atfw::memory::stl::unordered_map<uintptr_t, dirty_sync_handle_t> dirty_handles;
     gsl::string_view current_dirty_handle_name;
@@ -231,7 +231,7 @@ class player : public player_cache {
   EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_before_logout_tasks(rpc::context &ctx) override;
   void clear_dirty_cache();
 
-  PROJECT_NAMESPACE_ID::DItem &mutable_dirty_item(const PROJECT_NAMESPACE_ID::DItem &in);
+  PROJECT_NAMESPACE_ID::DItemInstance &mutable_dirty_item(const PROJECT_NAMESPACE_ID::DItemInstance &in);
 
   /**
    * @brief 插入脏数据handle

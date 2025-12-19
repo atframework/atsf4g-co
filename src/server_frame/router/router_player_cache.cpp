@@ -26,7 +26,7 @@
 
 SERVER_FRAME_API router_player_private_type::router_player_private_type() : login_tb(nullptr), login_ver(nullptr) {}
 SERVER_FRAME_API router_player_private_type::router_player_private_type(
-    rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> *tb, std::string *ver)
+    rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> *tb, uint64_t *ver)
     : login_tb(tb), login_ver(ver) {}
 
 SERVER_FRAME_API router_player_private_type::~router_player_private_type() {}
@@ -57,8 +57,8 @@ SERVER_FRAME_API rpc::result_code_type router_player_cache::pull_cache(rpc::cont
     login_table_ptr = *priv_data.login_tb;
   }
 
-  std::string local_login_ver;
-  std::string *local_login_ver_ptr = priv_data.login_ver;
+  uint64_t local_login_ver = 0;
+  uint64_t *local_login_ver_ptr = priv_data.login_ver;
   if (nullptr == local_login_ver_ptr) {
     local_login_ver_ptr = &local_login_ver;
   }
@@ -121,8 +121,8 @@ SERVER_FRAME_API rpc::result_code_type router_player_cache::pull_object(rpc::con
     has_login_table = true;
   }
 
-  std::string local_login_ver;
-  std::string *local_login_ver_ptr = priv_data.login_ver;
+  uint64_t local_login_ver = 0;
+  uint64_t *local_login_ver_ptr = priv_data.login_ver;
   if (nullptr == local_login_ver_ptr) {
     local_login_ver_ptr = &local_login_ver;
   }
@@ -143,7 +143,7 @@ SERVER_FRAME_API rpc::result_code_type router_player_cache::pull_object(rpc::con
 
   // 先尝试从数据库读数据
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_user> tbu{ctx};
-  std::string tbu_version;
+  uint64_t tbu_version = 0;
   auto res =
       RPC_AWAIT_CODE_RESULT(rpc::db::player::get_basic(ctx, get_key().object_id, get_key().zone_id, tbu, &tbu_version));
   if (res < 0) {
@@ -191,9 +191,8 @@ SERVER_FRAME_API rpc::result_code_type router_player_cache::pull_object(rpc::con
 
   // 冲突检测
   {
-    int64_t expect_table_user_version =
-        atfw::util::string::to_int<int64_t>(login_table_ptr->expect_table_user_db_version().c_str());
-    int64_t real_table_user_version = atfw::util::string::to_int<int64_t>(tbu_version.c_str());
+    uint64_t expect_table_user_version = login_table_ptr->expect_table_user_db_version();
+    uint64_t real_table_user_version = tbu_version;
     if (expect_table_user_version > 0 && real_table_user_version > 0 &&
         expect_table_user_version >= real_table_user_version) {
       // Check timeout
@@ -419,7 +418,8 @@ SERVER_FRAME_API rpc::result_code_type router_player_cache::save_object(rpc::con
       obj->get_session()->send_kickoff(::atframework::gateway::close_reason_t::EN_CRT_KICKOFF);
     }
 
-    RPC_AWAIT_IGNORE_RESULT(router_player_manager::me()->remove_object(ctx, get_key(), nullptr, nullptr));
+    // 强制降级，删除缓存数据
+    downgrade();
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_OTHER_DEVICE);
   }
 

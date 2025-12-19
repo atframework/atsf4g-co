@@ -24,7 +24,7 @@ message table_login {
   uint64 router_version = 5;    // 路由系统 - 登入进程变更版本号
 
   // 资源冲突检测
-  string expect_table_user_db_version = 6;
+  uint64 expect_table_user_db_version = 6;
   google.protobuf.Timestamp expect_table_user_db_timeout = 7;
 
   // 登入信息
@@ -81,7 +81,7 @@ message table_user {
 
   account_information account = 11;  // 账号信息
   player_data player = 12;           // 玩家数据
-  uint32 data_version = 13;          // 数据版本号
+  uint64 data_version = 13;          // 数据版本号
 
   player_options options = 21;  // 玩家选项
 
@@ -97,14 +97,14 @@ message table_distribute_transaction {
 }
 
 message table_all_message {
-  uint64 node_id = 1;              // 用于恢复协程的BusID
-  uint64 destination_task_id = 2;  // 用于恢复协程的任务ID
-  int32 error_code = 3;            // 用于恢复协程的透传解包层错误码
+  uint64 node_id = 1; // 用于恢复协程的BusID
+  uint64 destination_task_id = 2; // 用于恢复协程的任务ID
+  int32 error_code = 3; // 用于恢复协程的透传解包层错误码
 
   table_login login = 11;
   table_user user = 12;
-  string version = 13;            // 透传版本
-  table_simple_info simple = 14;  // 简单数据类型
+  uint64 version = 13; // 透传版本
+  table_simple_info simple = 14; // 简单数据类型
   table_user_async_jobs_blob_data async_jobs = 15;
   table_distribute_transaction distribute_transaction = 16;
 }

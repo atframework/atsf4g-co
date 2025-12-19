@@ -78,7 +78,7 @@ static rpc::result_code_type fetch_user_login_cache(rpc::context& ctx, uint64_t 
     }
   }
 
-  std::string version;
+  uint64_t version = 0;
   int ret = RPC_AWAIT_CODE_RESULT(rpc::db::login::get(ctx, std::to_string(user_id).c_str(), zone_id, rsp, version));
   if (0 == ret) {
     local_cache[key] = atfw::util::memory::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::table_login>>(rsp);
@@ -229,7 +229,7 @@ GAME_RPC_API result_type remove_all_jobs(rpc::context& /*ctx*/, int32_t jobs_typ
 
 GAME_RPC_API result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
                                      shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>& inout,
-                                     int64_t record_index, int64_t* /*version*/, action_options options) {
+                                     int64_t record_index, uint64_t* /*version*/, action_options options) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
                user_id, zone_id);

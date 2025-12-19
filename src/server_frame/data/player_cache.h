@@ -199,9 +199,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
     return static_cast<unsigned long long>(get_user_id());
   }
 
-  ATFW_UTIL_FORCEINLINE const std::string &get_version() const { return version_; }
-  ATFW_UTIL_FORCEINLINE std::string &get_version() { return version_; }
-  ATFW_UTIL_FORCEINLINE void set_version(const std::string &version) { version_ = version; }
+  ATFW_UTIL_FORCEINLINE uint64_t get_version() const { return version_; }
+  ATFW_UTIL_FORCEINLINE uint64_t &get_version() { return version_; }
+  ATFW_UTIL_FORCEINLINE void set_version(uint64_t version) { version_ = version; }
 
   /**
    * @brief 获取大区号
@@ -210,10 +210,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
 
   ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::table_login &get_login_info() const { return login_info_; }
   ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::table_login &get_login_info() { return login_info_; }
-  SERVER_FRAME_API void load_and_move_login_info(PROJECT_NAMESPACE_ID::table_login &&lg, const std::string &ver);
+  SERVER_FRAME_API void load_and_move_login_info(PROJECT_NAMESPACE_ID::table_login &&lg, uint64_t ver);
 
-  ATFW_UTIL_FORCEINLINE const std::string &get_login_version() const { return login_info_version_; }
-  ATFW_UTIL_FORCEINLINE std::string &get_login_version() { return login_info_version_; }
+  ATFW_UTIL_FORCEINLINE uint64_t get_login_version() const { return login_info_version_; }
+  ATFW_UTIL_FORCEINLINE uint64_t &get_login_version() { return login_info_version_; }
 
   ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::account_information &get_account_info() const {
     return account_info_;
@@ -227,7 +227,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
 
   ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::player_data &get_player_data() const { return player_data_; }
 
-  ATFW_UTIL_FORCEINLINE uint32_t get_data_version() const { return data_version_; }
+  ATFW_UTIL_FORCEINLINE uint64_t get_data_version() const { return data_version_; }
 
   SERVER_FRAME_API uint64_t alloc_server_sequence();
 
@@ -249,10 +249,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
   uint64_t user_id_;
   uint32_t zone_id_;
   PROJECT_NAMESPACE_ID::table_login login_info_;
-  std::string login_info_version_;
+  uint64_t login_info_version_;
 
-  std::string version_;
-  uint32_t data_version_;
+  uint64_t version_;
+  uint64_t data_version_;
 
   std::weak_ptr<session> session_;
   uint64_t server_sequence_;

@@ -25,6 +25,8 @@
 
 #include <gsl/select-gsl.h>
 
+#include <atframe/atapp_config.h>
+
 #include <stdint.h>
 #include <functional>
 #include <list>
@@ -35,9 +37,9 @@
 
 #include "rpc/telemetry/opentelemetry_types.h"
 
-namespace atapp {
+LIBATAPP_MACRO_NAMESPACE_BEGIN
 class app;
-}
+LIBATAPP_MACRO_NAMESPACE_END
 
 PROJECT_NAMESPACE_BEGIN
 namespace config {
@@ -382,7 +384,7 @@ class global_service {
    * @param app atapp instance
    * @param telemetry telemetry configure
    */
-  SERVER_FRAME_API static void set_current_service(atapp::app& app,
+  SERVER_FRAME_API static void set_current_service(atfw::atapp::app& app,
                                                    const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg& telemetry);
 
   /**

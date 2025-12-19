@@ -875,7 +875,7 @@ SERVER_FRAME_API int opentelemetry_utility::tick() {
   int32_t max_record_per_loop = logic_config::me()->get_logic().telemetry().executor().max_metric_record_per_loop();
   std::chrono::system_clock::duration max_tick_time_per_loop = std::chrono::system_clock::duration::zero();
 
-  atapp::app* app_inst = atapp::app::get_last_instance();
+  atfw::atapp::app* app_inst = atfw::atapp::app::get_last_instance();
   if (nullptr != app_inst) {
     max_tick_time_per_loop = std::chrono::duration_cast<std::chrono::system_clock::duration>(
         std::chrono::seconds(app_inst->get_origin_configure().timer().tick_interval().seconds()) +

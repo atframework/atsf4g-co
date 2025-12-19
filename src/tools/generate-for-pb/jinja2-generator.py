@@ -662,8 +662,19 @@ class PbDatabase(object):
                     descriptor_pb2.FileDescriptorProto.FromString(
                         patch_inner_pb_data))
         pb_fds_patched.extend(pb_fds_inner)
-        msg_set = self._register_by_pb_fds(self.default_factory,
-                                           pb_fds_patched)
+        try:
+            msg_set = self._register_by_pb_fds(self.default_factory,
+                                               pb_fds_patched)
+        except Exception as e:
+            pb_files = [pb_file_path]
+            if external_pb_files:
+                pb_files.extend(external_pb_files)
+            print_exception_with_traceback(
+                e,
+                "register proto files for extensions failed:\n- proto files:\n{0}\n- pb files:\n{1}"
+                .format("\n".join(["  - " + x.name for x in pb_fds_patched]),
+                        "\n".join(["  - " + x for x in pb_files])))
+            return
 
         # Use extensions in default_factory to build extended_factory
         try:
@@ -694,7 +705,18 @@ class PbDatabase(object):
                     pb_fds_loaded.add(x.name)
 
         pb_fds_patched.extend(pb_fds_inner)
-        self._register_by_pb_fds(self.extended_factory, pb_fds_patched)
+        try:
+            self._register_by_pb_fds(self.extended_factory, pb_fds_patched)
+        except Exception as e:
+            pb_files = [pb_file_path]
+            if external_pb_files:
+                pb_files.extend(external_pb_files)
+            print_exception_with_traceback(
+                e,
+                "register final proto files failed:\n- proto files:\n{0}\n- pb files:\n{1}"
+                .format("\n".join(["  - " + x.name for x in pb_fds_patched]),
+                        "\n".join(["  - " + x for x in pb_files])))
+            return
 
         # Clear all caches
         self._cache_files.clear()

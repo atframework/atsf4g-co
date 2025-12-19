@@ -315,7 +315,7 @@ const task_action_cs_req_base::gateway_info_t &task_action_cs_req_base::get_gate
       break;
     }
 
-    atapp::app *app = atapp::app::get_last_instance();
+    atfw::atapp::app *app = atfw::atapp::app::get_last_instance();
     if (nullptr == app) {
       break;
     }

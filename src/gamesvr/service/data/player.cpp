@@ -433,7 +433,7 @@ static player::dirty_sync_handle_t _player_generate_dirty_handle(
   return handle;
 }
 
-PROJECT_NAMESPACE_ID::DItem &player::mutable_dirty_item(const PROJECT_NAMESPACE_ID::DItem &in) {
+PROJECT_NAMESPACE_ID::DItemInstance &player::mutable_dirty_item(const PROJECT_NAMESPACE_ID::DItemInstance &in) {
   insert_dirty_handle_if_not_exists(reinterpret_cast<uintptr_t>(&cache_data_.dirty_item_by_type),
                                     "player.mutable_dirty_item", [](gsl::string_view handle_name, player &) {
                                       return _player_generate_dirty_handle(
@@ -441,7 +441,8 @@ PROJECT_NAMESPACE_ID::DItem &player::mutable_dirty_item(const PROJECT_NAMESPACE_
                                           &player::cache_t::dirty_item_by_type);
                                     });
 
-  PROJECT_NAMESPACE_ID::DItem &ret = cache_data_.dirty_item_by_type[static_cast<int32_t>(in.type_id())];
+  PROJECT_NAMESPACE_ID::DItemInstance &ret =
+      cache_data_.dirty_item_by_type[static_cast<int32_t>(in.item_basic().type_id())];
   ret = in;
   return ret;
 }

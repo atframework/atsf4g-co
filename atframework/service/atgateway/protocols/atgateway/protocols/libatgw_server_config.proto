@@ -16,17 +16,17 @@ import "atframe/atapp_conf.proto";
 message atgateway_listen_cfg {
   repeated string address = 1;
   string type = 2;
-  uint64 max_client = 3 [(atapp.protocol.CONFIGURE) = { default_value: "65536" }];
-  int32 backlog = 4 [(atapp.protocol.CONFIGURE) = { default_value: "1024" min_value: "1" }];
+  uint64 max_client = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "65536" }];
+  int32 backlog = 4 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1024" min_value: "1" }];
 }
 
 message atgateway_client_limit_cfg {
-  uint64 total_send_bytes = 1 [(atapp.protocol.CONFIGURE) = { size_mode: true }];
-  uint64 total_recv_bytes = 2 [(atapp.protocol.CONFIGURE) = { size_mode: true }];
-  uint64 hour_send_bytes = 3 [(atapp.protocol.CONFIGURE) = { size_mode: true }];
-  uint64 hour_recv_bytes = 4 [(atapp.protocol.CONFIGURE) = { size_mode: true }];
-  uint64 minute_send_bytes = 5 [(atapp.protocol.CONFIGURE) = { size_mode: true }];
-  uint64 minute_recv_bytes = 6 [(atapp.protocol.CONFIGURE) = { size_mode: true }];
+  uint64 total_send_bytes = 1 [(atframework.atapp.protocol.CONFIGURE) = { size_mode: true }];
+  uint64 total_recv_bytes = 2 [(atframework.atapp.protocol.CONFIGURE) = { size_mode: true }];
+  uint64 hour_send_bytes = 3 [(atframework.atapp.protocol.CONFIGURE) = { size_mode: true }];
+  uint64 hour_recv_bytes = 4 [(atframework.atapp.protocol.CONFIGURE) = { size_mode: true }];
+  uint64 minute_send_bytes = 5 [(atframework.atapp.protocol.CONFIGURE) = { size_mode: true }];
+  uint64 minute_recv_bytes = 6 [(atframework.atapp.protocol.CONFIGURE) = { size_mode: true }];
   uint64 total_send_times = 7;
   uint64 total_recv_times = 8;
   uint64 hour_send_times = 9;
@@ -37,7 +37,8 @@ message atgateway_client_limit_cfg {
 
 message atgateway_client_crypt_cfg {
   string key = 1;
-  google.protobuf.Duration update_interval = 2 [(atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "1s" }];
+  google.protobuf.Duration update_interval = 2
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "1s" }];
   string type = 3;
   string dhparam = 4;
 }
@@ -55,16 +56,16 @@ message atgateway_router_cfg {
   string type_name = 4;
 
   atgateway_router_policy policy = 11;
-  atapp.protocol.atapp_metadata policy_selector = 12;
+  atframework.atapp.protocol.atapp_metadata policy_selector = 12;
 }
 
 message atgateway_client_cfg {
   google.protobuf.Duration reconnect_timeout = 1
-      [(atapp.protocol.CONFIGURE) = { default_value: "180s" min_value: "1s" }];
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "180s" min_value: "1s" }];
   google.protobuf.Duration first_idle_timeout = 2
-      [(atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
-  uint64 recv_buffer_size = 3 [(atapp.protocol.CONFIGURE) = { default_value: "2MB" size_mode: true }];
-  uint64 send_buffer_size = 4 [(atapp.protocol.CONFIGURE) = { default_value: "4MB" size_mode: true }];
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
+  uint64 recv_buffer_size = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "2MB" size_mode: true }];
+  uint64 send_buffer_size = 4 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "4MB" size_mode: true }];
   atgateway_router_cfg default_router = 5;
   atgateway_client_limit_cfg limit = 11;
   atgateway_client_crypt_cfg crypt = 12;

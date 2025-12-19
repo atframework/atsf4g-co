@@ -32,7 +32,7 @@ SERVER_FRAME_CONFIG_API int logic_config::init(uint64_t /*server_id*/, const std
   return 0;
 }
 
-SERVER_FRAME_CONFIG_API int logic_config::reload(atapp::app &app) {
+SERVER_FRAME_CONFIG_API int logic_config::reload(atfw::atapp::app &app) {
   const_settings_ = nullptr;
   atframe_settings_ = nullptr;
 
@@ -44,7 +44,7 @@ SERVER_FRAME_CONFIG_API int logic_config::reload(atapp::app &app) {
 }
 
 SERVER_FRAME_CONFIG_API uint64_t logic_config::get_local_server_id() const noexcept {
-  auto app = atapp::app::get_last_instance();
+  auto app = atfw::atapp::app::get_last_instance();
   if (nullptr == app) {
     return 0;
   }
@@ -53,7 +53,7 @@ SERVER_FRAME_CONFIG_API uint64_t logic_config::get_local_server_id() const noexc
 }
 
 SERVER_FRAME_CONFIG_API uint32_t logic_config::get_local_zone_id() const noexcept {
-  auto app = atapp::app::get_last_instance();
+  auto app = atfw::atapp::app::get_last_instance();
   if (nullptr == app) {
     return 0;
   }
@@ -62,7 +62,7 @@ SERVER_FRAME_CONFIG_API uint32_t logic_config::get_local_zone_id() const noexcep
 }
 
 SERVER_FRAME_CONFIG_API gsl::string_view logic_config::get_local_server_name() const noexcept {
-  auto app = atapp::app::get_last_instance();
+  auto app = atfw::atapp::app::get_last_instance();
   if (nullptr == app) {
     return gsl::string_view();
   }
@@ -75,7 +75,7 @@ SERVER_FRAME_CONFIG_API gsl::string_view logic_config::get_local_server_id_reada
     return readable_app_id_;
   }
 
-  auto app = atapp::app::get_last_instance();
+  auto app = atfw::atapp::app::get_last_instance();
   if (nullptr == app) {
     return readable_app_id_;
   }
@@ -85,7 +85,7 @@ SERVER_FRAME_CONFIG_API gsl::string_view logic_config::get_local_server_id_reada
 }
 
 SERVER_FRAME_CONFIG_API gsl::string_view logic_config::get_deployment_environment_name() const noexcept {
-  auto app = atapp::app::get_last_instance();
+  auto app = atfw::atapp::app::get_last_instance();
   if (nullptr == app) {
     return gsl::string_view();
   }
@@ -195,7 +195,7 @@ SERVER_FRAME_CONFIG_API const atframework::ConstSettingsType &logic_config::get_
   return *atframe_settings_;
 }
 
-void logic_config::_load_server_cfg(atapp::app &app) {
+void logic_config::_load_server_cfg(atfw::atapp::app &app) {
   server_cfg_.Clear();
   app.parse_configures_into(server_cfg_, std::string(), "ATAPP");
 
@@ -230,14 +230,13 @@ void logic_config::_load_server_cfg(atapp::app &app) {
       if (fds->cpp_type() != google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE || fds->message_type() == nullptr) {
         continue;
       }
-      if (fds->message_type() != atapp::protocol::atapp_metadata::descriptor()) {
+      if (fds->message_type() !=atfw::atapp::protocol::atapp_metadata::descriptor()) {
         continue;
       }
 
-      auto metadata = static_cast<atapp::protocol::atapp_metadata *>(reflect->MutableMessage(discovery_service, fds));
-      if (nullptr == metadata) {
-        FWLOGERROR("Can not malloc atapp_metadata");
-        continue;
+      auto metadata = static_cast<atfw::atapp::protocol::atapp_metadata
+  *>(reflect->MutableMessage(discovery_service, fds)); if (nullptr == metadata) { FWLOGERROR("Can not malloc
+  atapp_metadata"); continue;
       }
 
       (*metadata->mutable_labels())[opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName] =

@@ -17,7 +17,7 @@
 
 namespace atframework {
 namespace proxy {
-class atproxy_manager : public ::atapp::module_impl {
+class atproxy_manager : public ::atfw::atapp::module_impl {
  public:
   using node_action_t = atapp::etcd_module::node_action_t;
   struct node_info_t {
@@ -35,7 +35,7 @@ class atproxy_manager : public ::atapp::module_impl {
  private:
   struct check_info_t {
     time_t timeout_sec;
-    ::atapp::app::app_id_t proxy_id;
+    ::atfw::atapp::app::app_id_t proxy_id;
   };
 
  public:
@@ -49,13 +49,13 @@ class atproxy_manager : public ::atapp::module_impl {
 
   int set(atapp::etcd_module::node_info_t &proxy_info);
 
-  int remove(::atapp::app::app_id_t id);
+  int remove(::atfw::atapp::app::app_id_t id);
 
   int reset(node_list_t &all_proxys);
 
-  int on_connected(const ::atapp::app &app, ::atapp::app::app_id_t id);
+  int on_connected(const ::atfw::atapp::app &app, ::atfw::atapp::app::app_id_t id);
 
-  int on_disconnected(const ::atapp::app &app, ::atapp::app::app_id_t id);
+  int on_disconnected(const ::atfw::atapp::app &app, ::atfw::atapp::app::app_id_t id);
 
  private:
   void swap(node_info_t &l, node_info_t &r);
@@ -64,7 +64,7 @@ class atproxy_manager : public ::atapp::module_impl {
 
  private:
   std::list<check_info_t> check_list_;
-  using proxy_set_t = std::map< ::atapp::app::app_id_t, node_info_t>;
+  using proxy_set_t = std::map< ::atfw::atapp::app::app_id_t, node_info_t>;
   proxy_set_t proxy_set_;
 };
 }  // namespace proxy

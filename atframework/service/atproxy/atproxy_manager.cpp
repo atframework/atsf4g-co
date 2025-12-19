@@ -51,7 +51,7 @@ int atproxy_manager::init() {
     return -1;
   }
 
-  std::shared_ptr<::atapp::etcd_module> etcd_mod = get_app()->get_etcd_module();
+  std::shared_ptr<::atfw::atapp::etcd_module> etcd_mod = get_app()->get_etcd_module();
   if (!etcd_mod) {
     FWLOGERROR("etcd mod not found");
     return -1;
@@ -91,7 +91,7 @@ int atproxy_manager::tick() {
       continue;
     }
 
-    std::map<::atapp::app::app_id_t, node_info_t>::iterator iter = proxy_set_.find(ci.proxy_id);
+    std::map<::atfw::atapp::app::app_id_t, node_info_t>::iterator iter = proxy_set_.find(ci.proxy_id);
     // already removed, skip
     if (iter == proxy_set_.end()) {
       continue;
@@ -133,7 +133,7 @@ int atproxy_manager::tick() {
             continue;
           }
           uint32_t address_type = get_app()->get_address_type(try_gateway->address());
-          if (address_type & atapp::app::address_type_t::EN_ACAT_LOCAL_HOST) {
+          if (address_type & atfw::atapp::app::address_type_t::EN_ACAT_LOCAL_HOST) {
             continue;
           }
 
@@ -205,7 +205,7 @@ int atproxy_manager::set(atapp::etcd_module::node_info_t &etcd_node) {
   return 0;
 }
 
-int atproxy_manager::remove(::atapp::app::app_id_t id) {
+int atproxy_manager::remove(::atfw::atapp::app::app_id_t id) {
   proxy_set_t::iterator iter = proxy_set_.find(id);
   if (iter != proxy_set_.end()) {
     FWLOGINFO("lost atproxy {:#x}", id);
@@ -241,15 +241,15 @@ int atproxy_manager::reset(node_list_t &all_proxys) {
   return 0;
 }
 
-int atproxy_manager::on_connected(const ::atapp::app &, ::atapp::app::app_id_t) { return 0; }
+int atproxy_manager::on_connected(const ::atfw::atapp::app &, ::atfw::atapp::app::app_id_t) { return 0; }
 
-int atproxy_manager::on_disconnected(const ::atapp::app &app, ::atapp::app::app_id_t id) {
+int atproxy_manager::on_disconnected(const ::atfw::atapp::app &app, ::atfw::atapp::app::app_id_t id) {
   proxy_set_t::iterator iter = proxy_set_.find(id);
   if (proxy_set_.end() != iter) {
     check_info_t ci;
 
     // when stoping bus noe may be unavailable
-    if (!app.check_flag(::atapp::app::flag_t::STOPING)) {
+    if (!app.check_flag(::atfw::atapp::app::flag_t::STOPING)) {
       if (app.get_bus_node() && app.get_bus_node()->get_conf().retry_interval > 0) {
         ci.timeout_sec = atfw::util::time::time_utility::get_sys_now() + app.get_bus_node()->get_conf().retry_interval;
       } else {

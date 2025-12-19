@@ -24,17 +24,19 @@
 #include "dispatcher/dispatcher_implement.h"
 #include "dispatcher/dispatcher_type_defines.h"
 
+namespace atframework {
 namespace atbus {
-namespace protocol {
-class msg;
-}  // namespace protocol
+class message;
 }  // namespace atbus
+}  // namespace atframework
 
+namespace atframework {
 namespace atapp {
 namespace protocol {
 class atapp_metadata;
 }  // namespace protocol
 }  // namespace atapp
+}  // namespace atframework
 
 namespace atframework {
 class SSMsg;
@@ -59,7 +61,6 @@ struct ATFW_UTIL_SYMBOL_VISIBLE ss_msg_logic_index {
 
 class ss_msg_dispatcher : public dispatcher_implement {
  public:
-  using msg_op_type_t = dispatcher_implement::msg_op_type_t;
   using msg_raw_t = dispatcher_implement::msg_raw_t;
   using msg_type_t = dispatcher_implement::msg_type_t;
 
@@ -111,7 +112,8 @@ class ss_msg_dispatcher : public dispatcher_implement {
    * @param msg msg wrapper
    * @return 0 or error code
    */
-  SERVER_FRAME_API int32_t dispatch(const atapp::app::message_sender_t &source, const atapp::app::message_t &msg);
+  SERVER_FRAME_API int32_t dispatch(const atfw::atapp::app::message_sender_t &source,
+                                    const atfw::atapp::app::message_t &msg);
 
   /**
    * notify send failed
@@ -120,8 +122,8 @@ class ss_msg_dispatcher : public dispatcher_implement {
    * @param error_code error code
    * @return 0 or error code
    */
-  SERVER_FRAME_API int32_t on_receive_send_data_response(const atapp::app::message_sender_t &source,
-                                                         const atapp::app::message_t &msg, int32_t error_code);
+  SERVER_FRAME_API int32_t on_receive_send_data_response(const atfw::atapp::app::message_sender_t &source,
+                                                         const atfw::atapp::app::message_t &msg, int32_t error_code);
 
   /**
    * @brief on create task failed
@@ -142,10 +144,10 @@ class ss_msg_dispatcher : public dispatcher_implement {
                                         bool ignore_discovery);
   SERVER_FRAME_API int32_t send_to_proc(const std::string &node_name, atframework::SSMsg &ss_msg,
                                         bool ignore_discovery = false);
-  SERVER_FRAME_API int32_t send_to_proc(const atapp::etcd_discovery_node &node, atframework::SSMsg &ss_msg,
+  SERVER_FRAME_API int32_t send_to_proc(const atfw::atapp::etcd_discovery_node &node, atframework::SSMsg &ss_msg,
                                         bool ignore_discovery = false);
-  SERVER_FRAME_API int32_t send_to_proc(const atapp::etcd_discovery_node &node, const void *msg_buf, size_t msg_len,
-                                        uint64_t sequence, bool ignore_discovery = false);
+  SERVER_FRAME_API int32_t send_to_proc(const atfw::atapp::etcd_discovery_node &node, const void *msg_buf,
+                                        size_t msg_len, uint64_t sequence, bool ignore_discovery = false);
 
   SERVER_FRAME_API bool is_target_server_available(uint64_t node_id) const;
   SERVER_FRAME_API bool is_target_server_available(const std::string &node_name) const;
@@ -158,7 +160,7 @@ class ss_msg_dispatcher : public dispatcher_implement {
    * @return 所有成功返回0，否则返回第一个错误码
    */
   SERVER_FRAME_API int32_t broadcast(atframework::SSMsg &ss_msg, const ss_msg_logic_index &index,
-                                     ::atapp::protocol::atapp_metadata *metadata = nullptr);
+                                     ::atfw::atapp::protocol::atapp_metadata *metadata = nullptr);
 
  private:
   void setup_metrics();

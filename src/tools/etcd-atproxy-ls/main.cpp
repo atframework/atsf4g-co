@@ -29,7 +29,7 @@ static int init_wait_ticks = 200;
 static void tick_timer_callback(uv_timer_t *handle) {
   atfw::util::time::time_utility::update();
 
-  atapp::etcd_cluster *ec = reinterpret_cast<atapp::etcd_cluster *>(handle->data);
+  atfw::atapp::etcd_cluster *ec = reinterpret_cast<atfw::atapp::etcd_cluster *>(handle->data);
   ec->tick();
 
   --init_wait_ticks;
@@ -110,7 +110,7 @@ static int libcurl_callback_on_range_completed(util::network::http_request &req)
   req.get_response_stream().str().swap(http_content);
 
   rapidjson::Document doc;
-  if (false == atapp::etcd_packer::parse_object(doc, http_content.c_str())) {
+  if (false == atfw::atapp::etcd_packer::parse_object(doc, http_content.c_str())) {
     WLOGERROR("Etcd range response error: %s", http_content.c_str());
     return 0;
   }
@@ -121,8 +121,8 @@ static int libcurl_callback_on_range_completed(util::network::http_request &req)
   if (doc.MemberEnd() != res) {
     rapidjson::Document::Array all_events = res->value.GetArray();
     for (rapidjson::Document::Array::ValueIterator iter = all_events.Begin(); iter != all_events.End(); ++iter) {
-      atapp::etcd_key_value kv_data;
-      atapp::etcd_packer::unpack(kv_data, *iter);
+      atfw::atapp::etcd_key_value kv_data;
+      atfw::atapp::etcd_packer::unpack(kv_data, *iter);
       WLOGINFO("Path: %s, Lease: %lld, Created: %lld, Modify: %lld, Version: %lld", kv_data.key.c_str(),
                static_cast<long long>(kv_data.lease), static_cast<long long>(kv_data.create_revision),
                static_cast<long long>(kv_data.mod_revision), static_cast<long long>(kv_data.version));
@@ -204,7 +204,7 @@ int main(int argc, char *argv[]) {
 
   atfw::util::network::http_request::curl_m_bind_ptr_t curl_mgr;
   atfw::util::network::http_request::create_curl_multi(uv_default_loop(), curl_mgr);
-  atapp::etcd_cluster ec;
+  atfw::atapp::etcd_cluster ec;
   ec.init(curl_mgr);
   std::vector<std::string> hosts;
 

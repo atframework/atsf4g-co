@@ -44,7 +44,7 @@ get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
  * @param channel DB channel
  * @param key key
  * @param store data to store
- * @param version 期望的版本号，留空或0表示忽略版本号检查
+ * @param version 期望的版本号，留空或0表示版本号检查
  * @param output output message from DB
  * @param unpack_fn unpack callback
  * @warning 默认值会被忽略，比如空message或者空字符串，或者0不会更新
@@ -52,7 +52,7 @@ get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
  */
 EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type
 set(rpc::context &ctx, uint32_t channel, gsl::string_view key,
-    shared_abstract_message<google::protobuf::Message> &&store, std::string &version,
+    shared_abstract_message<google::protobuf::Message> &&store, uint64_t &version,
     shared_message<PROJECT_NAMESPACE_ID::table_all_message> &output,
     int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply));
 

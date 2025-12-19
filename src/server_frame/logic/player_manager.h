@@ -113,11 +113,11 @@ class player_manager {
 
   EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type create(
       rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const std::string &openid,
-      rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> &login_tb, std::string &login_ver, player_ptr_t &output);
+      rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> &login_tb, uint64_t &login_ver, player_ptr_t &output);
   template <typename TPLAYER>
   EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE rpc::result_code_type create_as(
       rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const std::string &openid,
-      rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> &login_tb, std::string &login_ver,
+      rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> &login_tb, uint64_t &login_ver,
       std::shared_ptr<TPLAYER> &output) {
     player_ptr_t output_base;
     auto ret = RPC_AWAIT_CODE_RESULT(create(ctx, user_id, zone_id, openid, login_tb, login_ver, output_base));

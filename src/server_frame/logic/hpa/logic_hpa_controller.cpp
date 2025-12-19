@@ -246,9 +246,9 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data {
   std::mutex event_loop_lock;
   uv_loop_t* event_loop_pointer;
 
-  atapp::etcd_discovery_set::ptr_t discovery_set;
-  atapp::protocol::atapp_metadata discovery_filter;
-  atapp::etcd_module::node_event_callback_handle_t node_event_handle;
+  atfw::atapp::etcd_discovery_set::ptr_t discovery_set;
+  atfw::atapp::protocol::atapp_metadata discovery_filter;
+  atfw::atapp::etcd_module::node_event_callback_handle_t node_event_handle;
   bool node_event_has_handle;
 
   int64_t current_setting_data_version;
@@ -291,7 +291,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data {
         default_hpa_discovery_scaling_up_expect_replicas(0),
         default_hpa_discovery_scaling_down_expect_replicas(0),
         event_loop_pointer(nullptr),
-        discovery_set(atfw::memory::stl::make_strong_rc<atapp::etcd_discovery_set>()),
+        discovery_set(atfw::memory::stl::make_strong_rc<atfw::atapp::etcd_discovery_set>()),
         node_event_has_handle(false),
         current_setting_data_version(0),
         current_setting_modify_revision(0),
@@ -361,25 +361,26 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
       util::cli::callback_param params,
       std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
     if (hpa_discovery_data_ptr->with_type_id != 0) {
-      ::atapp::app::add_custom_command_rsp(
+      ::atfw::atapp::app::add_custom_command_rsp(
           params, util::log::format("HPA Controller Discovery with type id: {}", hpa_discovery_data_ptr->with_type_id));
     }
 
     if (!hpa_discovery_data_ptr->with_type_name.empty()) {
-      ::atapp::app::add_custom_command_rsp(params, util::log::format("HPA Controller Discovery with type name: {}",
-                                                                     hpa_discovery_data_ptr->with_type_name));
+      ::atfw::atapp::app::add_custom_command_rsp(
+          params,
+          util::log::format("HPA Controller Discovery with type name: {}", hpa_discovery_data_ptr->with_type_name));
     }
 
     auto& hpa_configure = logic_config::me()->get_logic().hpa();
-    ::atapp::app::add_custom_command_rsp(
+    ::atfw::atapp::app::add_custom_command_rsp(
         params,
         util::log::format("HPA metrics configure:\n{}", protobuf_mini_dumper_get_readable(hpa_configure.metrics())));
 
-    ::atapp::app::add_custom_command_rsp(
+    ::atfw::atapp::app::add_custom_command_rsp(
         params, util::log::format("HPA Controller configure:\n{}",
                                   protobuf_mini_dumper_get_readable(hpa_configure.controller())));
 
-    ::atapp::app::add_custom_command_rsp(
+    ::atfw::atapp::app::add_custom_command_rsp(
         params, util::log::format("HPA Controller Discovery filter:\n{}",
                                   protobuf_mini_dumper_get_readable(hpa_discovery_data_ptr->discovery_filter)));
   }
@@ -387,16 +388,16 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
   static void command_show_hpa_controller_status(
       util::cli::callback_param params,
       std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
-    ::atapp::app::add_custom_command_rsp(
+    ::atfw::atapp::app::add_custom_command_rsp(
         params, util::log::format("HPA Controller stateful index: {}",
                                   hpa_discovery_data_ptr->controller_stateful_index.load(std::memory_order_acquire)));
 
-    ::atapp::app::add_custom_command_rsp(
+    ::atfw::atapp::app::add_custom_command_rsp(
         params,
         util::log::format("HPA Controller current replicas: {}",
                           hpa_discovery_data_ptr->main_controller_current_replicas.load(std::memory_order_acquire)));
 
-    ::atapp::app::add_custom_command_rsp(
+    ::atfw::atapp::app::add_custom_command_rsp(
         params,
         util::log::format("HPA Controller expect replicas: {}",
                           hpa_discovery_data_ptr->main_controller_expect_replicas.load(std::memory_order_acquire)));
@@ -409,7 +410,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
       UTIL_STRFUNC_LOCALTIME_S(&expect_scaling_timepoint, &c_tm);
       std::strftime(local_time_str, sizeof(local_time_str) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
 
-      ::atapp::app::add_custom_command_rsp(
+      ::atfw::atapp::app::add_custom_command_rsp(
           params, util::log::format("HPA Controller expect scaling timepoint: {}(local time: {})",
                                     expect_scaling_timepoint, local_time_str));
     }
@@ -423,10 +424,10 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
       is_main = "unset";
     }
 
-    ::atapp::app::add_custom_command_rsp(params, util::log::format("HPA Controller is main: {}", is_main));
-    ::atapp::app::add_custom_command_rsp(
+    ::atfw::atapp::app::add_custom_command_rsp(params, util::log::format("HPA Controller is main: {}", is_main));
+    ::atfw::atapp::app::add_custom_command_rsp(
         params, util::log::format("HPA Controller ready label: {}", hpa_discovery_data_ptr->current_hpa_label_ready));
-    ::atapp::app::add_custom_command_rsp(
+    ::atfw::atapp::app::add_custom_command_rsp(
         params, util::log::format("HPA Controller target label: {}", hpa_discovery_data_ptr->current_hpa_label_target));
 
     // 主控节点额外输出提交信息
@@ -436,7 +437,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
       char local_time_str[32] = {0};
       UTIL_STRFUNC_LOCALTIME_S(&next_submit_timepoint, &c_tm);
       std::strftime(local_time_str, sizeof(local_time_str) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
-      ::atapp::app::add_custom_command_rsp(
+      ::atfw::atapp::app::add_custom_command_rsp(
           params, util::log::format("HPA Controller next submit time: {}(local time: {})", next_submit_timepoint,
                                     local_time_str));
 
@@ -445,16 +446,16 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
       if (scaling_up_stabilization_end_timepoint > 0) {
         UTIL_STRFUNC_LOCALTIME_S(&scaling_up_stabilization_end_timepoint, &c_tm);
         std::strftime(local_time_str, sizeof(local_time_str) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
-        ::atapp::app::add_custom_command_rsp(
+        ::atfw::atapp::app::add_custom_command_rsp(
             params, util::log::format("HPA Controller scaling up stabilization end time: {}(local time: {})",
                                       scaling_up_stabilization_end_timepoint, local_time_str));
-        ::atapp::app::add_custom_command_rsp(
+        ::atfw::atapp::app::add_custom_command_rsp(
             params, util::log::format("HPA Controller scaling up target replicas: {}",
                                       hpa_discovery_data_ptr->default_hpa_discovery_scaling_up_target_replicas));
       } else {
-        ::atapp::app::add_custom_command_rsp(params, "HPA Controller scaling up stabilization end time: NA");
+        ::atfw::atapp::app::add_custom_command_rsp(params, "HPA Controller scaling up stabilization end time: NA");
       }
-      ::atapp::app::add_custom_command_rsp(
+      ::atfw::atapp::app::add_custom_command_rsp(
           params, util::log::format("HPA Controller scaling up expect replicas: {}",
                                     hpa_discovery_data_ptr->default_hpa_discovery_scaling_up_expect_replicas));
 
@@ -463,22 +464,22 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
       if (scaling_down_stabilization_end_timepoint > 0) {
         UTIL_STRFUNC_LOCALTIME_S(&scaling_down_stabilization_end_timepoint, &c_tm);
         std::strftime(local_time_str, sizeof(local_time_str) - 1, "%Y-%m-%d %H:%M:%S", &c_tm);
-        ::atapp::app::add_custom_command_rsp(
+        ::atfw::atapp::app::add_custom_command_rsp(
             params, util::log::format("HPA Controller scaling down stabilization end time: {}(local time: {})",
                                       scaling_down_stabilization_end_timepoint, local_time_str));
-        ::atapp::app::add_custom_command_rsp(
+        ::atfw::atapp::app::add_custom_command_rsp(
             params, util::log::format("HPA Controller scaling down target replicas: {}",
                                       hpa_discovery_data_ptr->default_hpa_discovery_scaling_down_target_replicas));
       } else {
-        ::atapp::app::add_custom_command_rsp(params, "HPA Controller scaling down stabilization end time: NA");
+        ::atfw::atapp::app::add_custom_command_rsp(params, "HPA Controller scaling down stabilization end time: NA");
       }
-      ::atapp::app::add_custom_command_rsp(
+      ::atfw::atapp::app::add_custom_command_rsp(
           params, util::log::format("HPA Controller scaling down expect replicas: {}",
                                     hpa_discovery_data_ptr->default_hpa_discovery_scaling_down_expect_replicas));
 
       // 输出所有策略的评估值
       if (hpa_discovery_data_ptr->default_hpa_discovery) {
-        ::atapp::app::add_custom_command_rsp(params, "HPA Controller policy:");
+        ::atfw::atapp::app::add_custom_command_rsp(params, "HPA Controller policy:");
         hpa_discovery_data_ptr->default_hpa_discovery->foreach_policy(
             [&params](const logic_hpa_policy& policy, int64_t last_value,
                       std::chrono::system_clock::time_point last_update_time) -> bool {
@@ -493,7 +494,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
                               &policy_c_tm);
               }
 
-              ::atapp::app::add_custom_command_rsp(
+              ::atfw::atapp::app::add_custom_command_rsp(
                   params,
                   util::log::format("\t Policy {} : Scaling up target: {}, , Scaling down target: {}, Last value: {}, "
                                     "Last update time: {}",
@@ -503,17 +504,17 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
             });
       }
     } else {
-      ::atapp::app::add_custom_command_rsp(params, "HPA Controller next submit time: NA");
-      ::atapp::app::add_custom_command_rsp(params, "HPA Controller scaling up stabilization end time: NA");
-      ::atapp::app::add_custom_command_rsp(params, "HPA Controller scaling down stabilization end time: NA");
+      ::atfw::atapp::app::add_custom_command_rsp(params, "HPA Controller next submit time: NA");
+      ::atfw::atapp::app::add_custom_command_rsp(params, "HPA Controller scaling up stabilization end time: NA");
+      ::atfw::atapp::app::add_custom_command_rsp(params, "HPA Controller scaling down stabilization end time: NA");
     }
 
-    ::atapp::app::add_custom_command_rsp(
+    ::atfw::atapp::app::add_custom_command_rsp(
         params, util::log::format("HPA Controller current setting:\n{}",
                                   protobuf_mini_dumper_get_readable(hpa_discovery_data_ptr->current_setting)));
 
     if (is_main) {
-      ::atapp::app::add_custom_command_rsp(
+      ::atfw::atapp::app::add_custom_command_rsp(
           params, util::log::format("HPA Controller expect setting:\n{}",
                                     protobuf_mini_dumper_get_readable(hpa_discovery_data_ptr->expect_setting)));
     }
@@ -527,7 +528,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
     }
 
     auto& hpa_configure = logic_config::me()->get_logic().hpa();
-    ::atapp::app::add_custom_command_rsp(
+    ::atfw::atapp::app::add_custom_command_rsp(
         params, util::log::format("HPA Controller Discovery configure: {}",
                                   protobuf_mini_dumper_get_readable(hpa_configure.discovery())));
 
@@ -536,7 +537,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
         continue;
       }
 
-      ::atapp::app::add_custom_command_rsp(
+      ::atfw::atapp::app::add_custom_command_rsp(
           params, util::log::format("HPA Controller Discovery node: {}",
                                     protobuf_mini_dumper_get_readable(node->get_discovery_info())));
     }
@@ -568,7 +569,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
 
     std::string response_message =
         util::log::format("HPA Controller schedule shutdown at: {}(local time: {})", offset, local_time_str);
-    ::atapp::app::add_custom_command_rsp(params, response_message);
+    ::atfw::atapp::app::add_custom_command_rsp(params, response_message);
 
     FWLOGINFO("[HPA]: Controller receive command: {}\n{}", "schedule-hpa-node-shutdown", response_message);
   }
@@ -627,7 +628,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
         tp_replicate_start, local_time_replicate_start, tp_replicate_end, local_time_replicate_end, tp_expect_scaling,
         local_time_replicate_scaling);
 
-    ::atapp::app::add_custom_command_rsp(params, response_message);
+    ::atfw::atapp::app::add_custom_command_rsp(params, response_message);
 
     FWLOGINFO("[HPA]: Controller receive command: {}\n{}", "schedule-hpa-expect-scaling", response_message);
   }
@@ -648,7 +649,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
 
     std::string response_message = util::log::format("debug-hpa-set-expect-replicas {}",
                                                      hpa_discovery_data_ptr->main_controller_debug_expect_replicas);
-    ::atapp::app::add_custom_command_rsp(params, response_message);
+    ::atfw::atapp::app::add_custom_command_rsp(params, response_message);
 
     FWLOGINFO("[HPA]: Controller receive command: {}", response_message);
   }
@@ -690,7 +691,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
         hpa_discovery_data_ptr->controller_debug_cpu_permillage_offset.load(std::memory_order_relaxed),
         hpa_discovery_data_ptr->controller_debug_cpu_permillage_end_time.load(std::memory_order_relaxed),
         local_time_end_time);
-    ::atapp::app::add_custom_command_rsp(params, response_message);
+    ::atfw::atapp::app::add_custom_command_rsp(params, response_message);
 
     FWLOGINFO("[HPA]: Controller receive command: {}", response_message);
   }
@@ -711,7 +712,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
   }
 };
 
-SERVER_FRAME_API logic_hpa_controller::logic_hpa_controller(atapp::app& owner_app)
+SERVER_FRAME_API logic_hpa_controller::logic_hpa_controller(atfw::atapp::app& owner_app)
     : owner_app_(&owner_app),
       need_configure_(false),
       available_(false),
@@ -878,12 +879,12 @@ SERVER_FRAME_API void logic_hpa_controller::reload() {
 
     for (int i = 0; i < rule_desc->field_count(); ++i) {
       auto fds = ready_rules.GetDescriptor()->field(i);
-      if (fds == nullptr || fds->message_type() != atapp::protocol::atapp_metadata::descriptor()) {
+      if (fds == nullptr || fds->message_type() != atfw::atapp::protocol::atapp_metadata::descriptor()) {
         continue;
       }
 
-      atapp::protocol::atapp_metadata* metadata =
-          static_cast<atapp::protocol::atapp_metadata*>(rule_reflection->MutableMessage(&ready_rules, fds));
+      atfw::atapp::protocol::atapp_metadata* metadata =
+          static_cast<atfw::atapp::protocol::atapp_metadata*>(rule_reflection->MutableMessage(&ready_rules, fds));
       if (nullptr == metadata) {
         FWLOGERROR("mutable atapp_metadata failed");
         continue;
@@ -903,12 +904,12 @@ SERVER_FRAME_API void logic_hpa_controller::reload() {
 
     for (int i = 0; i < rule_desc->field_count(); ++i) {
       auto fds = target_rules.GetDescriptor()->field(i);
-      if (fds == nullptr || fds->message_type() != atapp::protocol::atapp_metadata::descriptor()) {
+      if (fds == nullptr || fds->message_type() != atfw::atapp::protocol::atapp_metadata::descriptor()) {
         continue;
       }
 
-      atapp::protocol::atapp_metadata* metadata =
-          static_cast<atapp::protocol::atapp_metadata*>(rule_reflection->MutableMessage(&target_rules, fds));
+      atfw::atapp::protocol::atapp_metadata* metadata =
+          static_cast<atfw::atapp::protocol::atapp_metadata*>(rule_reflection->MutableMessage(&target_rules, fds));
       if (nullptr == metadata) {
         FWLOGERROR("mutable atapp_metadata failed");
         continue;
@@ -3291,7 +3292,8 @@ void logic_hpa_controller::do_update_default_hpa_settings(
 
   bool has_update_to_etcd = false;
   if (hpa_discovery_data_->current_setting_modify_revision == 0 ||
-      !atapp::protobuf_equal(hpa_discovery_data_->current_setting, hpa_discovery_data_->expect_setting)) {
+
+      atfw::atapp::protobuf_equal(hpa_discovery_data_->current_setting, hpa_discovery_data_->expect_setting)) {
     rapidjson_helper_load_options load_options;
     hpa_discovery_data_->default_hpa_discovery->set_value(
         rapidjson_helper_stringify(hpa_discovery_data_->expect_setting, load_options));
@@ -3550,7 +3552,7 @@ void logic_hpa_controller::setup_hpa_controller() {
 
   hpa_discovery_data_->discovery_set.reset();
   if (!hpa_discovery_data_->discovery_set) {
-    hpa_discovery_data_->discovery_set = atfw::memory::stl::make_strong_rc<atapp::etcd_discovery_set>();
+    hpa_discovery_data_->discovery_set = atfw::memory::stl::make_strong_rc<atfw::atapp::etcd_discovery_set>();
   }
 
   // 用已有的服务发现初始化节点分布
@@ -3559,8 +3561,8 @@ void logic_hpa_controller::setup_hpa_controller() {
       continue;
     }
 
-    if (!atapp::etcd_discovery_set::metadata_equal_type::filter(hpa_discovery_data_->discovery_filter,
-                                                                node->get_discovery_info().metadata())) {
+    if (atfw::atapp::etcd_discovery_set::metadata_equal_type::filter(hpa_discovery_data_->discovery_filter,
+                                                                     node->get_discovery_info().metadata())) {
       continue;
     }
 
@@ -3587,8 +3589,8 @@ void logic_hpa_controller::setup_hpa_controller() {
     if (etcd_mod) {
       std::weak_ptr<hpa_discovery_data> hpa_discovery_data_weak = hpa_discovery_data_;
       hpa_discovery_data_->node_event_handle = etcd_mod->add_on_node_discovery_event(
-          [hpa_discovery_data_weak](atapp::etcd_module::node_action_t::type action,
-                                    const atapp::etcd_discovery_node::ptr_t& node) {
+          [hpa_discovery_data_weak](atfw::atapp::etcd_module::node_action_t::type action,
+                                    const atfw::atapp::etcd_discovery_node::ptr_t& node) {
             std::shared_ptr<hpa_discovery_data> hpa_discovery_data_ptr = hpa_discovery_data_weak.lock();
             if (!hpa_discovery_data_ptr || !hpa_discovery_data_ptr->discovery_set || !node) {
               return;
@@ -3612,9 +3614,9 @@ void logic_hpa_controller::setup_hpa_controller() {
             }
 
             // 新增要开绿筛选标签，移除不需要
-            if (action == atapp::etcd_module::node_action_t::EN_NAT_PUT) {
-              if (atapp::etcd_discovery_set::metadata_equal_type::filter(hpa_discovery_data_ptr->discovery_filter,
-                                                                         node->get_discovery_info().metadata())) {
+            if (action == atfw::atapp::etcd_module::node_action_t::EN_NAT_PUT) {
+              if (atfw::atapp::etcd_discovery_set::metadata_equal_type::filter(hpa_discovery_data_ptr->discovery_filter,
+                                                                               node->get_discovery_info().metadata())) {
                 hpa_discovery_data_ptr->discovery_set->add_node(node);
               }
             } else {
@@ -3671,11 +3673,12 @@ bool logic_hpa_controller::is_main_hpa_controller() const noexcept {
 
   // 云下节点的index要更新为pod下标+1
   if (owner_app_->get_runtime_stateful_pod_index() < 0) {
-    std::pair<atapp::app::app_id_t, const std::string&> self_info{owner_app_->get_app_id(), owner_app_->get_app_name()};
+    std::pair<atfw::atapp::app::app_id_t, const std::string&> self_info{owner_app_->get_app_id(),
+                                                                        owner_app_->get_app_name()};
 
     auto iter = std::lower_bound(hpa_target_set.begin(), hpa_target_set.end(), self_info,
-                                 [](const atapp::etcd_discovery_node::ptr_t& data,
-                                    const std::pair<atapp::app::app_id_t, const std::string&>& info) {
+                                 [](const atfw::atapp::etcd_discovery_node::ptr_t& data,
+                                    const std::pair<atfw::atapp::app::app_id_t, const std::string&>& info) {
                                    if (!data) {
                                      return false;
                                    }
@@ -3695,7 +3698,7 @@ bool logic_hpa_controller::is_main_hpa_controller() const noexcept {
     }
   }
 
-  atapp::etcd_discovery_node::ptr_t select_node;
+  atfw::atapp::etcd_discovery_node::ptr_t select_node;
   gsl::string_view select_mode;
   main_controller_mode select_controller_mode = main_controller_mode::kUnknown;
   for (auto iter = hpa_target_set.begin(); iter != hpa_target_set.end(); ++iter) {

@@ -93,7 +93,7 @@ for rpc in rpcs.values():
 %>namespace {
 % if rpc_common_codes_enable_common:
 %   if rpc_common_codes_has_no_router_rpc:
-ATFW_UTIL_FORCEINLINE static bool __is_invalid_server_node(const atapp::etcd_discovery_node& destination_server) {
+ATFW_UTIL_FORCEINLINE static bool __is_invalid_server_node(const atfw::atapp::etcd_discovery_node& destination_server) {
   return destination_server.get_discovery_info().id() == 0 || destination_server.get_discovery_info().name().empty();
 }
 
@@ -341,7 +341,7 @@ ${ns}
     rpc_unicast_params_decl_legacy = []
     for param in rpc_unicast_params_decl:
         if 'TargetServerNode&& destination_server' == param:
-            rpc_unicast_params_decl_modern.append('const atapp::etcd_discovery_node& destination_server')
+            rpc_unicast_params_decl_modern.append('const atfw::atapp::etcd_discovery_node& destination_server')
             rpc_unicast_params_decl_legacy.append('uint64_t destination_server')
         else:
             rpc_unicast_params_decl_modern.append(param)
@@ -384,7 +384,7 @@ ${rpc_dllexport_decl} bool unpack_${rpc.get_name()}(const std::string& input, ${
 namespace broadcast {
 ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
     ${', '.join(rpc_broadcast_params_decl)},
-    const ss_msg_logic_index& index, ::atapp::protocol::atapp_metadata *metadata) {
+    const ss_msg_logic_index& index, ::atfw::atapp::protocol::atapp_metadata *metadata) {
   atframework::SSMsg* req_msg_ptr = __ctx.create<atframework::SSMsg>();
   if (nullptr == req_msg_ptr) {
     FWLOGERROR("rpc {} create request message failed",

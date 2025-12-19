@@ -42,9 +42,7 @@ task_action_player_get_info::result_type task_action_player_get_info::operator()
   // 资源
   if (req_body.need_player_info()) {
     // TODO(owent) update auto restore
-
-    PROJECT_NAMESPACE_ID::DPlayerInfo* rsp_item = rsp_body.mutable_player_info();
-    protobuf_copy_message(*rsp_item->mutable_player(), user->get_account_info().profile());
+    protobuf_copy_message(*rsp_body.mutable_player_profile(), user->get_account_info().profile());
     // rsp_item->set_player_level(user->get_player_level());
 
     // uint32_t player_level_func_bound = user->get_player_level();

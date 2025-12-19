@@ -144,7 +144,7 @@ class redis_args {
   char* free_buffer_;
 };
 
-int unpack_message(::google::protobuf::Message& msg, const redisReply* reply, std::string* version);
+int unpack_message(::google::protobuf::Message& msg, const redisReply* reply, uint64_t* version);
 
 /**
  * package message into redis args, each message field will take two segment in args
@@ -156,7 +156,7 @@ int unpack_message(::google::protobuf::Message& msg, const redisReply* reply, st
  * @return 0 or error code
  */
 int pack_message(const ::google::protobuf::Message& msg, redis_args& args,
-                 std::vector<const ::google::protobuf::FieldDescriptor*> fds, std::string* version,
+                 std::vector<const ::google::protobuf::FieldDescriptor*> fds, uint64_t* version,
                  std::ostream* debug_message);
 }  // namespace db
 }  // namespace rpc

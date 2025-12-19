@@ -65,7 +65,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE logic_server_common_module_configure {
  * @param conf 配置选项
  * @return SERVER_FRAME_API
  */
-SERVER_FRAME_API int logic_server_setup_common(atapp::app& app, const logic_server_common_module_configure& conf);
+SERVER_FRAME_API int logic_server_setup_common(atfw::atapp::app& app, const logic_server_common_module_configure& conf);
 
 /**
  * @brief 获取公共模块
@@ -90,14 +90,14 @@ struct ATFW_UTIL_SYMBOL_VISIBLE logic_server_timer {
 };
 
 struct logic_server_type_discovery_set_t {
-  atapp::etcd_discovery_set::ptr_t all_index;
-  std::unordered_map<uint64_t, atapp::etcd_discovery_set::ptr_t> zone_index;
+  atfw::atapp::etcd_discovery_set::ptr_t all_index;
+  std::unordered_map<uint64_t, atfw::atapp::etcd_discovery_set::ptr_t> zone_index;
 };
 
-class logic_server_common_module : public atapp::module_impl {
+class logic_server_common_module : public atfw::atapp::module_impl {
  public:
-  using etcd_keepalive_ptr_t = std::shared_ptr<atapp::etcd_keepalive>;
-  using etcd_watcher_ptr_t = std::shared_ptr<atapp::etcd_watcher>;
+  using etcd_keepalive_ptr_t = std::shared_ptr<atfw::atapp::etcd_keepalive>;
+  using etcd_watcher_ptr_t = std::shared_ptr<atfw::atapp::etcd_watcher>;
 
   struct stats_data_t {
     // cross thread
@@ -144,9 +144,9 @@ class logic_server_common_module : public atapp::module_impl {
 
   SERVER_FRAME_API void setup_hpa_controller();
 
-  SERVER_FRAME_API atapp::etcd_cluster* get_etcd_cluster();
+  SERVER_FRAME_API atfw::atapp::etcd_cluster* get_etcd_cluster();
 
-  SERVER_FRAME_API std::shared_ptr<::atapp::etcd_module> get_etcd_module();
+  SERVER_FRAME_API std::shared_ptr<::atfw::atapp::etcd_module> get_etcd_module();
 
   /**
    * @brief 添加自定义的etcd keepalive 数据
@@ -176,20 +176,22 @@ class logic_server_common_module : public atapp::module_impl {
   SERVER_FRAME_API void insert_timer(uint64_t task_id, std::chrono::system_clock::duration timeout,
                                      logic_server_timer& output);
 
-  SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type(uint64_t type_id) const;
-  SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type(const std::string& type_name) const;
-  SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type_zone(uint64_t type_id,
-                                                                                     uint64_t zone_id) const;
-  SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type_zone(const std::string& type_name,
-                                                                                     uint64_t zone_id) const;
-  SERVER_FRAME_API atapp::etcd_discovery_set::ptr_t get_discovery_index_by_zone(uint64_t zone_id) const;
-  ATFW_UTIL_FORCEINLINE const std::unordered_map<uint64_t, atapp::etcd_discovery_set::ptr_t>& get_origin_zone_index()
-      const noexcept {
+  SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type(uint64_t type_id) const;
+  SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type(
+      const std::string& type_name) const;
+  SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type_zone(uint64_t type_id,
+                                                                                           uint64_t zone_id) const;
+  SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type_zone(const std::string& type_name,
+                                                                                           uint64_t zone_id) const;
+  SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t get_discovery_index_by_zone(uint64_t zone_id) const;
+  ATFW_UTIL_FORCEINLINE const std::unordered_map<uint64_t, atfw::atapp::etcd_discovery_set::ptr_t>&
+  get_origin_zone_index() const noexcept {
     return service_zone_index_;
   }
 
-  SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<atapp::etcd_discovery_node> get_discovery_by_id(uint64_t id) const;
-  SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<atapp::etcd_discovery_node> get_discovery_by_name(
+  SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<atfw::atapp::etcd_discovery_node> get_discovery_by_id(
+      uint64_t id) const;
+  SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<atfw::atapp::etcd_discovery_node> get_discovery_by_name(
       const std::string& name) const;
 
   /**
@@ -207,12 +209,12 @@ class logic_server_common_module : public atapp::module_impl {
 
   void setup_metrics();
 
-  void add_service_type_id_index(const atapp::etcd_discovery_node::ptr_t& node);
-  void remove_service_type_id_index(const atapp::etcd_discovery_node::ptr_t& node);
-  void add_service_type_name_index(const atapp::etcd_discovery_node::ptr_t& node);
-  void remove_service_type_name_index(const atapp::etcd_discovery_node::ptr_t& node);
-  void add_service_zone_index(const atapp::etcd_discovery_node::ptr_t& node);
-  void remove_service_zone_index(const atapp::etcd_discovery_node::ptr_t& node);
+  void add_service_type_id_index(const atfw::atapp::etcd_discovery_node::ptr_t& node);
+  void remove_service_type_id_index(const atfw::atapp::etcd_discovery_node::ptr_t& node);
+  void add_service_type_name_index(const atfw::atapp::etcd_discovery_node::ptr_t& node);
+  void remove_service_type_name_index(const atfw::atapp::etcd_discovery_node::ptr_t& node);
+  void add_service_zone_index(const atfw::atapp::etcd_discovery_node::ptr_t& node);
+  void remove_service_zone_index(const atfw::atapp::etcd_discovery_node::ptr_t& node);
 
  private:
   logic_server_common_module_configure static_conf_;
@@ -226,8 +228,8 @@ class logic_server_common_module : public atapp::module_impl {
 
   std::unordered_map<uint64_t, logic_server_type_discovery_set_t> service_type_id_index_;
   std::unordered_map<std::string, logic_server_type_discovery_set_t> service_type_name_index_;
-  std::unordered_map<uint64_t, atapp::etcd_discovery_set::ptr_t> service_zone_index_;
-  std::unique_ptr<atapp::etcd_module::node_event_callback_handle_t> service_index_handle_;
+  std::unordered_map<uint64_t, atfw::atapp::etcd_discovery_set::ptr_t> service_zone_index_;
+  std::unique_ptr<atfw::atapp::etcd_module::node_event_callback_handle_t> service_index_handle_;
 
   PROJECT_NAMESPACE_ID::table_service_configure_data server_remote_conf_;
   int32_t server_remote_conf_global_version_;

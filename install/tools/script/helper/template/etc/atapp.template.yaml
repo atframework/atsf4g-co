@@ -35,7 +35,7 @@ atapp:
     ping_interval: 8s                  # ping interval(second)
     retry_interval: 3s                 # retry interval when error happen(second)
     fault_tolerant: 2                  # how many errors at most to ignore, or it will kill the connection
-    msg_size: 262144                   # max message size(256KB)
+    message_size: 262144                   # max message size(256KB)
     recv_buffer_size: ${project.get_server_recv_buffer_size()} # recv channel size(2MB), will be used to initialize (shared) memory channel size
     send_buffer_size: ${project.get_server_send_buffer_size()} # send buffer size, will be used to initialize io_stream channel write queue
     send_buffer_number: 0              # send message number limit, will be used to initialize io_stream channel write queue, 0 for dynamic buffer

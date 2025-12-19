@@ -3,15 +3,19 @@
 
 #pragma once
 
+#include <atframe/atapp_config.h>
+
 #include <cstdint>
 
 #include <config/server_frame_build_feature.h>
 
+namespace atframework {
 namespace atapp {
 namespace protocol {
 class atapp_metadata;
 }
 }  // namespace atapp
+}  // namespace atframework
 
 enum class logic_hpa_discovery_select_mode : int32_t {
   // kReady should be used by all client and
@@ -26,9 +30,9 @@ enum class logic_hpa_discovery_select_mode : int32_t {
  *
  * @param type_id Refer to field number of PROJECT_NAMESPACE_ID.config.logic_discovery_selector_cfg
  * @param mode All caller should use kReady, and services need migrate data can use kTarget to get target distribution
- * @return const atapp::protocol::atapp_metadata*
+ * @return const atfw::atapp::protocol::atapp_metadata*
  */
-SERVER_FRAME_API const atapp::protocol::atapp_metadata* logic_hpa_discovery_select(
+SERVER_FRAME_API const atfw::atapp::protocol::atapp_metadata* logic_hpa_discovery_select(
     int32_t type_id, logic_hpa_discovery_select_mode mode = logic_hpa_discovery_select_mode::kReady) noexcept;
 
 /**

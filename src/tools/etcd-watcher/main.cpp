@@ -16,7 +16,7 @@ static int wait_for_close = 0;
 static void tick_timer_callback(uv_timer_t *handle) {
   atfw::util::time::time_utility::update();
 
-  atapp::etcd_cluster *ec = reinterpret_cast<atapp::etcd_cluster *>(handle->data);
+  atfw::atapp::etcd_cluster *ec = reinterpret_cast<atfw::atapp::etcd_cluster *>(handle->data);
   ec->tick();
 }
 
@@ -76,21 +76,21 @@ int main(int argc, char *argv[]) {
 
   atfw::util::network::http_request::curl_m_bind_ptr_t curl_mgr;
   atfw::util::network::http_request::create_curl_multi(uv_default_loop(), curl_mgr);
-  atapp::etcd_cluster ec;
+  atfw::atapp::etcd_cluster ec;
   ec.init(curl_mgr);
   std::vector<std::string> hosts;
   hosts.push_back(argv[1]);
   ec.set_conf_hosts(hosts);
 
   if (argc > 2) {
-    atapp::etcd_watcher::ptr_t p = atapp::etcd_watcher::create(ec, argv[2]);
+    atfw::atapp::etcd_watcher::ptr_t p = atfw::atapp::etcd_watcher::create(ec, argv[2]);
     if (p) {
       ec.add_watcher(p);
     }
   }
 
   if (argc > 4) {
-    atapp::etcd_keepalive::ptr_t p = atapp::etcd_keepalive::create(ec, argv[3]);
+    atfw::atapp::etcd_keepalive::ptr_t p = atfw::atapp::etcd_keepalive::create(ec, argv[3]);
     if (p) {
       p->set_checker(check_keepalive_data_callback(argv[4]));
       p->set_value(argv[4]);

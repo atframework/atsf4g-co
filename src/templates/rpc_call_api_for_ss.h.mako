@@ -31,6 +31,8 @@ service_header_file_path = service_proto_file_prefix + ".pb.h"
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <atframe/atapp_config.h>
+
 #include <stdint.h>
 #include <cstddef>
 #include <cstring>
@@ -46,12 +48,17 @@ service_header_file_path = service_proto_file_prefix + ".pb.h"
 
 struct ss_msg_logic_index;
 
-namespace atapp {
+LIBATAPP_MACRO_NAMESPACE_BEGIN
 class etcd_discovery_node;
+LIBATAPP_MACRO_NAMESPACE_END
+
+namespace atframework {
+namespace atapp {
 namespace protocol {
 class atapp_metadata;
 }  // namespace protocol
 }  // namespace atapp
+}  // namespace atframework
 
 namespace rpc {
 class context;
@@ -76,7 +83,7 @@ ${ns}
             'object_id           router object instance id'
         ])
     else:
-        rpc_unicast_params_decl.append('const atapp::etcd_discovery_node& destination_server')
+        rpc_unicast_params_decl.append('const atfw::atapp::etcd_discovery_node& destination_server')
         rpc_unicast_params_docs.append('destination_server  target server')
         if rpc_is_user_rpc:
             rpc_unicast_params_decl.extend(['uint32_t zone_id', 'uint64_t user_id', "const std::string& open_id"])
@@ -114,7 +121,7 @@ ${ns}
         rpc_return_type = 'rpc::result_code_type'
     rpc_unicast_params_decl_legacy = []
     for param in rpc_unicast_params_decl:
-        if 'const atapp::etcd_discovery_node& destination_server' == param:
+        if 'const atfw::atapp::etcd_discovery_node& destination_server' == param:
             rpc_unicast_params_decl_legacy.append('uint64_t destination_server_id')
         else:
             rpc_unicast_params_decl_legacy.append(param)
@@ -145,7 +152,7 @@ namespace broadcast {
 EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type}
   ${rpc.get_name()}(
     ${', '.join(rpc_broadcast_params_decl)},
-    const ss_msg_logic_index& index, ::atapp::protocol::atapp_metadata *metadata = nullptr);
+    const ss_msg_logic_index& index, ::atfw::atapp::protocol::atapp_metadata *metadata = nullptr);
 }  // namespace broadcast
 % endif
 

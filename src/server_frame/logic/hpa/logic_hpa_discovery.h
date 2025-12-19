@@ -320,7 +320,7 @@ class logic_hpa_discovery {
   time_t last_tick_;
 
   std::string etcd_path_;
-  atapp::etcd_watcher::ptr_t etcd_watcher_;
+  atfw::atapp::etcd_watcher::ptr_t etcd_watcher_;
   logic_hpa_discovery_watch_mode etcd_watch_mode_;
   atfw::util::network::http_request::ptr_t etcd_set_value_;
 

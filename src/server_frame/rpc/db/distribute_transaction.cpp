@@ -40,13 +40,16 @@ static int32_t unpack_table_distribute_transaction(PROJECT_NAMESPACE_ID::table_a
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
-  return rpc::db::unpack_message(*table_msg.mutable_distribute_transaction(), reply, table_msg.mutable_version());
+  uint64_t version = 0;
+  int32_t ret = rpc::db::unpack_message(*table_msg.mutable_distribute_transaction(), reply, &version);
+  table_msg.set_version(version);
+  return ret;
 }
 }  // namespace detail
 
 SERVER_FRAME_API result_type get(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid,
                                  rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> &output,
-                                 std::string &version) {
+                                 uint64_t &version) {
   table_key_type user_key;
   size_t user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, transaction_uuid, zone_id);
   if (user_key_len <= 0) {
@@ -63,7 +66,7 @@ SERVER_FRAME_API result_type get(rpc::context &ctx, uint32_t zone_id, gsl::strin
     RPC_DB_RETURN_CODE(res);
   }
 
-  version.assign(table_container->version());
+  version = table_container->version();
   output->Swap(table_container->mutable_distribute_transaction());
 
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -71,7 +74,7 @@ SERVER_FRAME_API result_type get(rpc::context &ctx, uint32_t zone_id, gsl::strin
 
 SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t zone_id, gsl::string_view transaction_uuid,
                                  rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> &&store,
-                                 std::string &version) {
+                                 uint64_t &version) {
   table_key_type user_key;
   size_t user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, transaction_uuid, zone_id);
   if (user_key_len <= 0) {

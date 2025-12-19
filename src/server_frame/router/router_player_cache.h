@@ -15,11 +15,11 @@
 struct router_player_private_type {
   SERVER_FRAME_API router_player_private_type();
   SERVER_FRAME_API router_player_private_type(rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> *tb,
-                                              std::string *ver);
+                                              uint64_t *ver);
   SERVER_FRAME_API ~router_player_private_type();
 
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> *login_tb;
-  std::string *login_ver;
+  uint64_t *login_ver;
 };
 
 class ATFW_UTIL_SYMBOL_VISIBLE router_player_cache : public router_object<player_cache, router_player_cache> {

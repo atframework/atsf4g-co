@@ -34,7 +34,7 @@ namespace login {
  */
 EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get(rpc::context &ctx, const char *openid, uint32_t zone_id,
                                                          shared_message<PROJECT_NAMESPACE_ID::table_login> &rsp,
-                                                         std::string &version);
+                                                         uint64_t &version);
 
 /**
  * @brief 设置登入表的rpc操作
@@ -45,7 +45,7 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get(rpc::context &ctx, cons
  */
 EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type set(rpc::context &ctx, const char *openid, uint32_t zone_id,
                                                          shared_message<PROJECT_NAMESPACE_ID::table_login> &&store,
-                                                         std::string &version);
+                                                         uint64_t &version);
 }  // namespace login
 }  // namespace db
 }  // namespace rpc

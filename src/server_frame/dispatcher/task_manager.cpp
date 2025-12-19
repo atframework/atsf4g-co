@@ -322,7 +322,7 @@ SERVER_FRAME_API task_manager::task_manager()
   get_task_manager_metrics_data().pool_used_memory = 0;
 
   // task_manager 必须在全局变量之后构造。并且进入析构阶段不允许再创建
-  assert(nullptr != atapp::app::get_last_instance());
+  assert(nullptr != atfw::atapp::app::get_last_instance());
 }
 
 SERVER_FRAME_API task_manager::~task_manager() {
@@ -370,11 +370,11 @@ SERVER_FRAME_API int task_manager::init() {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
-  atapp::app *app = atapp::app::get_last_instance();
+  atfw::atapp::app *app = atfw::atapp::app::get_last_instance();
   if (nullptr != app) {
     // Cleanup and destroy task manager
     native_task_manager_ptr_type hold_task_manager = native_mgr_;
-    app->add_evt_on_finally([hold_task_manager](atapp::app &) {
+    app->add_evt_on_finally([hold_task_manager](atfw::atapp::app &) {
       if (hold_task_manager) {
         hold_task_manager->reset();
       }

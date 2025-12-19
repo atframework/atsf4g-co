@@ -19,8 +19,8 @@
 
 #include "atproxy_manager.h"
 
-static int app_handle_on_response(atapp::app &app, const atapp::app::message_sender_t &source,
-                                  const atapp::app::message_t &msg, int32_t error_code) {
+static int app_handle_on_response(atfw::atapp::app &app, const atfw::atapp::app::message_sender_t &source,
+                                  const atfw::atapp::app::message_t &msg, int32_t error_code) {
   if (error_code < 0) {
     FWLOGERROR("send data from {:#x} to {:#x} failed, sequence: {}, code: {}", app.get_id(), source.id,
                msg.message_sequence, error_code);
@@ -34,7 +34,7 @@ struct app_handle_on_connected {
   std::reference_wrapper<atframework::proxy::atproxy_manager> atproxy_mgr_module;
   app_handle_on_connected(atframework::proxy::atproxy_manager &mod) : atproxy_mgr_module(mod) {}
 
-  int operator()(atapp::app &app, atbus::endpoint &ep, int status) {
+  int operator()(atfw::atapp::app &app, atbus::endpoint &ep, int status) {
     FWLOGINFO("node {} connected, status: {}", ep.get_id(), status);
 
     atproxy_mgr_module.get().on_connected(app, ep.get_id());
@@ -46,7 +46,7 @@ struct app_handle_on_disconnected {
   std::reference_wrapper<atframework::proxy::atproxy_manager> atproxy_mgr_module;
   app_handle_on_disconnected(atframework::proxy::atproxy_manager &mod) : atproxy_mgr_module(mod) {}
 
-  int operator()(atapp::app &app, atbus::endpoint &ep, int status) {
+  int operator()(atfw::atapp::app &app, atbus::endpoint &ep, int status) {
     FWLOGINFO("node {} disconnected, status: {}", ep.get_id(), status);
 
     atproxy_mgr_module.get().on_disconnected(app, ep.get_id());
@@ -55,7 +55,7 @@ struct app_handle_on_disconnected {
 };
 
 int main(int argc, char *argv[]) {
-  atapp::app app;
+  atfw::atapp::app app;
 
   std::shared_ptr<atframework::proxy::atproxy_manager> proxy_mgr_mod =
       std::make_shared<atframework::proxy::atproxy_manager>();

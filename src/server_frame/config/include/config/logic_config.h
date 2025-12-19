@@ -23,13 +23,15 @@
 #include <config/ini_loader.h>
 #include <design_pattern/singleton.h>
 
+#include <atframe/atapp_config.h>
+
 #include <config/server_frame_build_feature.h>
 
 #include <string>
 
-namespace atapp {
+LIBATAPP_MACRO_NAMESPACE_BEGIN
 class app;
-}
+LIBATAPP_MACRO_NAMESPACE_END
 
 class logic_config {
  private:
@@ -49,7 +51,7 @@ class logic_config {
  public:
   SERVER_FRAME_CONFIG_API int init(uint64_t server_id, const std::string &server_name);
 
-  SERVER_FRAME_CONFIG_API int reload(atapp::app &app);
+  SERVER_FRAME_CONFIG_API int reload(atfw::atapp::app &app);
 
   SERVER_FRAME_CONFIG_API uint64_t get_local_server_id() const noexcept;
   SERVER_FRAME_CONFIG_API uint32_t get_local_zone_id() const noexcept;
@@ -89,7 +91,7 @@ class logic_config {
   void _load_db();
   void _load_db_hosts(PROJECT_NAMESPACE_ID::config::db_group_cfg &out);
 
-  void _load_server_cfg(atapp::app &app);
+  void _load_server_cfg(atfw::atapp::app &app);
 
  private:
   const PROJECT_NAMESPACE_ID::DConstSettingsType *const_settings_;

@@ -2005,7 +2005,7 @@ static local_provider_handle_type<opentelemetry::trace::TracerProvider> _opentel
         if (processors_ptr && !processors_ptr->empty()) {
           std::chrono::microseconds timeout =
               std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::seconds(10));
-          auto app = atapp::app::get_last_instance();
+          auto app = atfw::atapp::app::get_last_instance();
           if (nullptr != app) {
             timeout = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::seconds(app->get_origin_configure().timer().stop_timeout().seconds() / 2));
@@ -2378,7 +2378,7 @@ static local_provider_handle_type<opentelemetry::metrics::MeterProvider> _opente
         if (readers_ptr && !readers_ptr->empty()) {
           std::chrono::microseconds timeout =
               std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::seconds(10));
-          auto app = atapp::app::get_last_instance();
+          auto app = atfw::atapp::app::get_last_instance();
           if (nullptr != app) {
             timeout = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::seconds(app->get_origin_configure().timer().stop_timeout().seconds() / 2));
@@ -2628,7 +2628,7 @@ static local_provider_handle_type<opentelemetry::logs::LoggerProvider> _opentele
         if (processors_ptr && !processors_ptr->empty()) {
           std::chrono::microseconds timeout =
               std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::seconds(10));
-          auto app = atapp::app::get_last_instance();
+          auto app = atfw::atapp::app::get_last_instance();
           if (nullptr != app) {
             timeout = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::seconds(app->get_origin_configure().timer().stop_timeout().seconds() / 2));
@@ -2724,7 +2724,7 @@ static void _opentelemetry_cleanup_group(std::shared_ptr<::rpc::telemetry::group
   }
 }
 
-static void _opentelemetry_cleanup_global_provider(atapp::app & /*app*/) {
+static void _opentelemetry_cleanup_global_provider(atfw::atapp::app & /*app*/) {
   std::shared_ptr<global_service_data_type> current_service_cache = get_global_service_data();
   std::list<std::shared_ptr<std::thread>> cleanup_threads;
   if (current_service_cache) {
@@ -2772,7 +2772,7 @@ static void _opentelemetry_cleanup_global_provider(atapp::app & /*app*/) {
 }
 
 static void _opentelemetry_prepare_group(
-    atapp::app &app, std::shared_ptr<group_type> group, std::string group_name,
+    atfw::atapp::app &app, std::shared_ptr<group_type> group, std::string group_name,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_cfg &group_config,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_agent_cfg *group_agent_config,
     const PROJECT_NAMESPACE_ID::config::opentelemetry_trace_cfg &default_tracer_config,
@@ -2933,7 +2933,7 @@ static void _opentelemetry_prepare_group(
   }
 }
 
-static void _opentelemetry_setup_group(atapp::app &app, const std::shared_ptr<group_type> &group,
+static void _opentelemetry_setup_group(atfw::atapp::app &app, const std::shared_ptr<group_type> &group,
                                        local_provider_handle_type<opentelemetry::trace::TracerProvider> tracer_handle,
                                        local_provider_handle_type<opentelemetry::metrics::MeterProvider> metrics_handle,
                                        local_provider_handle_type<opentelemetry::logs::LoggerProvider> logs_handle) {
@@ -3053,7 +3053,7 @@ static void _opentelemetry_setup_group(atapp::app &app, const std::shared_ptr<gr
 
   // Internal Logger
   current_service_cache->internal_logger = atfw::util::log::log_wrapper::create_user_logger();
-  ::atapp::protocol::atapp_log opentelemetry_log_conf;
+  ::atfw::atapp::protocol::atapp_log opentelemetry_log_conf;
   app.parse_log_configures_into(opentelemetry_log_conf,
                                 std::vector<gsl::string_view>{"logic", "telemetry", "opentelemetry", "app_log"},
                                 "ATAPP_LOGIC_TELEMETRY_OPENTELEMETRY_LOG");
@@ -3095,7 +3095,7 @@ static void _opentelemetry_setup_group(atapp::app &app, const std::shared_ptr<gr
 }
 
 static void _create_opentelemetry_app_resource(
-    group_type &group, const atapp::app &app,
+    group_type &group, const atfw::atapp::app &app,
     std::initializer_list<const ::google::protobuf::Map<std::string, std::string> *> resource_configures) {
   // @see
   // https://github.com/open-telemetry/semantic-conventions/blob/main/docs/resource/README.md
@@ -3256,12 +3256,12 @@ _opentelemetry_create_opentelemetry_metrics_provider(::rpc::telemetry::group_typ
     }
     group.metrics_exporter_count = exporters.size();
     if (group.group_configure.has_agent() && group.group_configure.agent().enable_metrics()) {
-      readers = _opentelemetry_create_metrics_reader(
-          exporters, group.group_configure.configure().metrics().reader(), *exporters_cfg);
+      readers = _opentelemetry_create_metrics_reader(exporters, group.group_configure.configure().metrics().reader(),
+                                                     *exporters_cfg);
     }
     if (readers.empty()) {
-      readers = _opentelemetry_create_metrics_reader(
-          exporters, group.group_configure.configure().metrics().reader(), *exporters_cfg);
+      readers = _opentelemetry_create_metrics_reader(exporters, group.group_configure.configure().metrics().reader(),
+                                                     *exporters_cfg);
     }
 
     opentelemetry::sdk::resource::ResourceAttributes metrics_resource_values = group.common_owned_attributes;
@@ -3332,7 +3332,7 @@ static void _opentelemetry_initialize_group(const std::shared_ptr<group_type> &g
     return;
   }
 
-  atapp::app *app_inst = atapp::app::get_last_instance();
+  atfw::atapp::app *app_inst = atfw::atapp::app::get_last_instance();
   if (nullptr == app_inst) {
     return;
   }
@@ -3358,7 +3358,7 @@ static void _opentelemetry_initialize_group(const std::shared_ptr<group_type> &g
 }  // namespace
 
 SERVER_FRAME_API void global_service::set_current_service(
-    atapp::app &app, const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &telemetry) {
+    atfw::atapp::app &app, const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &telemetry) {
   std::shared_ptr<group_type> default_group = atfw::memory::stl::make_shared<group_type>();
   if (!default_group || app.is_closing()) {
     return;

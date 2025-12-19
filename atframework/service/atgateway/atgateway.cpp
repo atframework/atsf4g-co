@@ -25,8 +25,8 @@
 
 #include "session_manager.h"  // NOLINT: build/include_subdir
 
-static int app_handle_on_forward_response(atapp::app &app, const atapp::app::message_sender_t &source,
-                                          const atapp::app::message_t &m, int32_t error_code) {
+static int app_handle_on_forward_response(atfw::atapp::app &app, const atfw::atapp::app::message_sender_t &source,
+                                          const atfw::atapp::app::message_t &m, int32_t error_code) {
   if (error_code >= 0) {
     return 0;
   }
@@ -36,7 +36,7 @@ static int app_handle_on_forward_response(atapp::app &app, const atapp::app::mes
   return 0;
 }
 
-class gateway_module : public ::atapp::module_impl {
+class gateway_module : public ::atfw::atapp::module_impl {
  public:
   gateway_module() {}
   virtual ~gateway_module() {}
@@ -569,7 +569,8 @@ struct app_handle_on_recv {
   std::reference_wrapper<gateway_module> mod_;
   app_handle_on_recv(gateway_module &mod) : mod_(mod) {}
 
-  int operator()(::atapp::app &, const atapp::app::message_sender_t &source, const atapp::app::message_t &message) {
+  int operator()(::atfw::atapp::app &, const atfw::atapp::app::message_sender_t &source,
+                 const atfw::atapp::app::message_t &message) {
     if (nullptr == message.data || 0 == message.data_size) {
       return 0;
     }
@@ -679,7 +680,7 @@ struct app_handle_on_recv {
 };
 
 int main(int argc, char *argv[]) {
-  atapp::app app;
+  atfw::atapp::app app;
   std::shared_ptr<gateway_module> gw_mod = std::make_shared<gateway_module>();
   if (!gw_mod) {
     fprintf(stderr, "create gateway module failed\n");

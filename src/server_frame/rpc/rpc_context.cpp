@@ -369,7 +369,7 @@ SERVER_FRAME_API void context::add_link_span(const tracer::span_ptr_type &span_p
   trace_context_.link_spans.push_back(span_ptr);
 }
 
-SERVER_FRAME_API void context::set_current_service(atapp::app &app,
+SERVER_FRAME_API void context::set_current_service(atfw::atapp::app &app,
                                                    const PROJECT_NAMESPACE_ID::config::logic_section_cfg &logic_cfg) {
   telemetry::global_service::set_current_service(app, logic_cfg.telemetry());
 

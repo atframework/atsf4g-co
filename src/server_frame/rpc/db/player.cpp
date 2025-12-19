@@ -40,12 +40,15 @@ static int32_t unpack_user(PROJECT_NAMESPACE_ID::table_all_message &msg, const r
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
-  return rpc::db::unpack_message(*msg.mutable_user(), reply, msg.mutable_version());
+  uint64_t version = 0;
+  int32_t ret = rpc::db::unpack_message(*msg.mutable_user(), reply, &version);
+  msg.set_version(version);
+  return ret;
 }
 }  // namespace detail
 
 SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                     shared_message<PROJECT_NAMESPACE_ID::table_user> &rsp, std::string &version) {
+                                     shared_message<PROJECT_NAMESPACE_ID::table_user> &rsp, uint64_t &version) {
   table_key_type user_key;
   size_t user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, user_id, zone_id);
   if (user_key_len <= 0) {
@@ -62,15 +65,15 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint64_t user_id, uint32
     RPC_DB_RETURN_CODE(res);
   }
 
-  version.assign(output->version());
+  version = output->version();
   rsp->Swap(output->mutable_user());
 
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 SERVER_FRAME_API result_type get_basic(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                       shared_message<PROJECT_NAMESPACE_ID::table_user> &rsp, std::string *version) {
-  std::string ignore_version;
+                                       shared_message<PROJECT_NAMESPACE_ID::table_user> &rsp, uint64_t *version) {
+  uint64_t ignore_version;
   if (nullptr == version) {
     version = &ignore_version;
   }
@@ -78,7 +81,7 @@ SERVER_FRAME_API result_type get_basic(rpc::context &ctx, uint64_t user_id, uint
 }
 
 SERVER_FRAME_API result_type set(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                 shared_message<PROJECT_NAMESPACE_ID::table_user> &&store, std::string &version) {
+                                 shared_message<PROJECT_NAMESPACE_ID::table_user> &&store, uint64_t &version) {
   table_key_type user_key;
   size_t user_key_len = format_user_key(user_key, RPC_DB_TABLE_NAME, user_id, zone_id);
   if (user_key_len <= 0) {
