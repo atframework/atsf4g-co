@@ -325,9 +325,6 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
     DEPENDS ${project_service_declare_protocol_PROTOCOLS} "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}"
     COMMENT "Generate [@${CMAKE_CURRENT_BINARY_DIR}] ${FINAL_GENERATED_SOURCE_FILES};${FINAL_GENERATED_HEADER_FILES}")
 
-  project_build_tools_patch_protobuf_sources(${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
-  # project_service_force_optimize_sources(${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
-
   if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
     set(TARGET_FULL_NAME "pp-${TARGET_NAME}")
   else()
@@ -352,6 +349,14 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
     project_setup_runtime_post_build_bash(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_BASH)
     project_setup_runtime_post_build_pwsh(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_PWSH)
   endif()
+
+  if(COMMAND project_build_tools_patch_protobuf_targets)
+    project_build_tools_patch_protobuf_targets(${TARGET_FULL_NAME})
+  else()
+    project_build_tools_patch_protobuf_sources(${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
+    # project_service_force_optimize_sources(${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
+  endif()
+
   project_service_target_precompile_headers(
     ${TARGET_FULL_NAME}
     PUBLIC

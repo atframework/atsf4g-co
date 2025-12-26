@@ -4,12 +4,16 @@
 
 #include "utility/protobuf_mini_dumper.h"
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <common/string_oprs.h>
 #include <log/log_wrapper.h>

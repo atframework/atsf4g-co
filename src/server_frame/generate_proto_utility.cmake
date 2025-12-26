@@ -190,6 +190,14 @@ function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OU
     project_build_tools_set_static_library_declaration(${CURRENT_API_MACRO}
                                                        "${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME}")
   endif()
+
+  if(COMMAND project_build_tools_patch_protobuf_targets)
+    project_build_tools_patch_protobuf_targets(${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME})
+  else()
+    project_build_tools_patch_protobuf_sources(${HEADERS} ${SOURCES})
+    # project_build_tools_optimize_sources(${HEADERS} ${SOURCES})
+  endif()
+
   project_build_tools_target_precompile_headers(
     ${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME}
     PUBLIC
