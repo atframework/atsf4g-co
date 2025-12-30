@@ -17,7 +17,7 @@
 
 #include <log/log_wrapper.h>
 
-#include <opentelemetry/trace/semantic_conventions.h>
+#include <opentelemetry/semconv/incubating/rpc_attributes.h>
 
 #include <memory/object_allocator.h>
 
@@ -188,9 +188,9 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
   }
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
-      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-      {opentelemetry::trace::SemanticConventions::kRpcService, "atframework.transaction_participator_handle"},
-      {opentelemetry::trace::SemanticConventions::kRpcMethod, "atframework.transaction_participator_handle.prepare"}};
+      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
+      {opentelemetry::semconv::rpc::kRpcService, "atframework.transaction_participator_handle"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle.prepare"}};
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;
@@ -277,9 +277,9 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
     rpc::context& ctx, const SSParticipatorTransactionRejectReq& request, SSParticipatorTransactionRejectRsp&) {
   if (request.has_storage() && request.storage().configure().force_commit()) {
     rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
-        {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-        {opentelemetry::trace::SemanticConventions::kRpcService, "atframework.transaction_participator_handle"},
-        {opentelemetry::trace::SemanticConventions::kRpcMethod, "atframework.transaction_participator_handle.reject"}};
+        {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
+        {opentelemetry::semconv::rpc::kRpcService, "atframework.transaction_participator_handle"},
+        {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle.reject"}};
 
     rpc::context child_ctx{ctx};
     rpc::telemetry::tracer child_tracer;
@@ -509,10 +509,9 @@ rpc::result_code_type transaction_participator_handle::add_running_transcation(r
   }
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
-      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-      {opentelemetry::trace::SemanticConventions::kRpcService, "atframework.transaction_participator_handle"},
-      {opentelemetry::trace::SemanticConventions::kRpcMethod,
-       "atframework.transaction_participator_handle.add_running_transcation"}};
+      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
+      {opentelemetry::semconv::rpc::kRpcService, "atframework.transaction_participator_handle"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle.add_running_transcation"}};
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;
@@ -567,9 +566,9 @@ rpc::result_code_type transaction_participator_handle::remove_running_transactio
     rpc::context& ctx, EnDistibutedTransactionStatus target_status, const std::string& transaction_uuid,
     storage_ptr_type* output) {
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
-      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-      {opentelemetry::trace::SemanticConventions::kRpcService, "atframework.transaction_participator_handle"},
-      {opentelemetry::trace::SemanticConventions::kRpcMethod,
+      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
+      {opentelemetry::semconv::rpc::kRpcService, "atframework.transaction_participator_handle"},
+      {opentelemetry::semconv::rpc::kRpcMethod,
        "atframework.transaction_participator_handle.remove_running_transaction"}};
 
   rpc::context child_ctx{ctx};
@@ -649,9 +648,9 @@ rpc::result_code_type transaction_participator_handle::add_finished_transcation(
   }
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
-      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-      {opentelemetry::trace::SemanticConventions::kRpcService, "atframework.transaction_participator_handle"},
-      {opentelemetry::trace::SemanticConventions::kRpcMethod,
+      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
+      {opentelemetry::semconv::rpc::kRpcService, "atframework.transaction_participator_handle"},
+      {opentelemetry::semconv::rpc::kRpcMethod,
        "atframework.transaction_participator_handle.add_finished_transcation"}};
 
   rpc::context child_ctx{ctx};
@@ -700,9 +699,9 @@ rpc::result_code_type transaction_participator_handle::remove_finished_transacti
   }
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
-      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-      {opentelemetry::trace::SemanticConventions::kRpcService, "atframework.transaction_participator_handle"},
-      {opentelemetry::trace::SemanticConventions::kRpcMethod,
+      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
+      {opentelemetry::semconv::rpc::kRpcService, "atframework.transaction_participator_handle"},
+      {opentelemetry::semconv::rpc::kRpcMethod,
        "atframework.transaction_participator_handle.remove_finished_transaction"}};
 
   rpc::context child_ctx{ctx};
@@ -741,10 +740,9 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
   }
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
-      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-      {opentelemetry::trace::SemanticConventions::kRpcService, "atframework.transaction_participator_handle"},
-      {opentelemetry::trace::SemanticConventions::kRpcMethod,
-       "atframework.transaction_participator_handle.resolve_transcation"}};
+      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
+      {opentelemetry::semconv::rpc::kRpcService, "atframework.transaction_participator_handle"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle.resolve_transcation"}};
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;
@@ -832,10 +830,9 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
   }
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
-      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-      {opentelemetry::trace::SemanticConventions::kRpcService, "atframework.transaction_participator_handle"},
-      {opentelemetry::trace::SemanticConventions::kRpcMethod,
-       "atframework.transaction_participator_handle.commit_transcation"}};
+      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
+      {opentelemetry::semconv::rpc::kRpcService, "atframework.transaction_participator_handle"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle.commit_transcation"}};
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;
@@ -904,10 +901,9 @@ rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::c
   }
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
-      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-      {opentelemetry::trace::SemanticConventions::kRpcService, "atframework.transaction_participator_handle"},
-      {opentelemetry::trace::SemanticConventions::kRpcMethod,
-       "atframework.transaction_participator_handle.reject_transcation"}};
+      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
+      {opentelemetry::semconv::rpc::kRpcService, "atframework.transaction_participator_handle"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle.reject_transcation"}};
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;

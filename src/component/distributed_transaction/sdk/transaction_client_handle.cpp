@@ -19,7 +19,7 @@
 
 #include <time/time_utility.h>
 
-#include <opentelemetry/trace/semantic_conventions.h>
+#include <opentelemetry/semconv/incubating/rpc_attributes.h>
 #include <utility/random_engine.h>
 
 #include <utility/protobuf_mini_dumper.h>
@@ -63,10 +63,9 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
   }
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
-      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-      {opentelemetry::trace::SemanticConventions::kRpcService, "atframework.transaction_client_handle"},
-      {opentelemetry::trace::SemanticConventions::kRpcMethod,
-       "atframework.transaction_client_handle.create_transaction"}};
+      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
+      {opentelemetry::semconv::rpc::kRpcService, "atframework.transaction_client_handle"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_client_handle.create_transaction"}};
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;
@@ -110,10 +109,9 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
   }
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
-      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-      {opentelemetry::trace::SemanticConventions::kRpcService, "atframework.transaction_client_handle"},
-      {opentelemetry::trace::SemanticConventions::kRpcMethod,
-       "atframework.transaction_client_handle.submit_transaction"}};
+      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
+      {opentelemetry::semconv::rpc::kRpcService, "atframework.transaction_client_handle"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_client_handle.submit_transaction"}};
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;
@@ -304,10 +302,9 @@ DISTRIBUTED_TRANSACTION_SDK_API int32_t transaction_client_handle::add_participa
   }
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
-      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-      {opentelemetry::trace::SemanticConventions::kRpcService, "atframework.transaction_client_handle"},
-      {opentelemetry::trace::SemanticConventions::kRpcMethod,
-       "atframework.transaction_client_handle.add_participator"}};
+      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
+      {opentelemetry::semconv::rpc::kRpcService, "atframework.transaction_client_handle"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_client_handle.add_participator"}};
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;

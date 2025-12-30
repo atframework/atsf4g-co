@@ -4,7 +4,7 @@
 
 #include "rpc/dns/lookup.h"
 
-#include <opentelemetry/trace/semantic_conventions.h>
+#include <opentelemetry/semconv/incubating/rpc_attributes.h>
 
 #include <memory>
 
@@ -23,9 +23,9 @@ SERVER_FRAME_API rpc::result_code_type lookup(rpc::context &ctx, gsl::string_vie
 
   rpc::context child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
-      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-      {opentelemetry::trace::SemanticConventions::kRpcService, "rpc.dns"},
-      {opentelemetry::trace::SemanticConventions::kRpcMethod, "rpc.dns.lookup"}};
+      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
+      {opentelemetry::semconv::rpc::kRpcService, "rpc.dns"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.dns.lookup"}};
   rpc::telemetry::trace_start_option trace_start_option;
   trace_start_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());
   trace_start_option.is_remote = true;

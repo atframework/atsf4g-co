@@ -26,7 +26,7 @@
 #  include <libcopp/coroutine/algorithm.h>
 #endif
 
-#include <opentelemetry/trace/semantic_conventions.h>
+#include <opentelemetry/semconv/incubating/rpc_attributes.h>
 
 #include <memory>
 #include <unordered_map>
@@ -325,9 +325,9 @@ SERVER_FRAME_API result_code_type wait(context &ctx, std::chrono::system_clock::
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in a task");
   rpc::context child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
-      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.timer"},
-      {opentelemetry::trace::SemanticConventions::kRpcService, "rpc.timer"},
-      {opentelemetry::trace::SemanticConventions::kRpcMethod, "rpc.wait"}};
+      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.timer"},
+      {opentelemetry::semconv::rpc::kRpcService, "rpc.timer"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.wait"}};
   rpc::telemetry::trace_start_option trace_start_option;
   trace_start_option.dispatcher = nullptr;
   trace_start_option.is_remote = false;

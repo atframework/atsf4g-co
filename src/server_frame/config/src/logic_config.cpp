@@ -9,7 +9,7 @@
 
 #include <atframe/atapp.h>
 
-#include <opentelemetry/sdk/resource/semantic_conventions.h>
+#include <opentelemetry/semconv/incubating/deployment_attributes.h>
 
 #include <sstream>
 #include <string>
@@ -90,8 +90,7 @@ SERVER_FRAME_CONFIG_API gsl::string_view logic_config::get_deployment_environmen
     return gsl::string_view();
   }
 
-  auto iter =
-      app->get_metadata().labels().find(opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName);
+  auto iter = app->get_metadata().labels().find(opentelemetry::semconv::deployment::kDeploymentEnvironmentName);
   if (iter == app->get_metadata().labels().end()) {
     return "";
   }
@@ -239,7 +238,7 @@ void logic_config::_load_server_cfg(atfw::atapp::app &app) {
   atapp_metadata"); continue;
       }
 
-      (*metadata->mutable_labels())[opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName] =
+      (*metadata->mutable_labels())[opentelemetry::semconv::deployment::kDeploymentEnvironmentName] =
           static_cast<std::string>(get_deployment_environment_name());
     }
   } while (false);

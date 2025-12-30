@@ -16,7 +16,7 @@
 #include <config/compiler/protobuf_suffix.h>
 //clang-format on
 
-#include <opentelemetry/trace/semantic_conventions.h>
+#include <opentelemetry/semconv/incubating/rpc_attributes.h>
 
 #include <config/extern_log_categorize.h>
 
@@ -138,16 +138,16 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data)
 
   task_trace_attributes trace_attributes;
   trace_attributes[static_cast<size_t>(trace_attribute_type::kRpcSystem)] = {
-      opentelemetry::trace::SemanticConventions::kRpcSystem,
+      opentelemetry::semconv::rpc::kRpcSystem,
       trace_start_option.dispatcher ? (rpc::telemetry::semantic_conventions::kRpcSystemValueAtRpcDistapcher)
                                     : (rpc::telemetry::semantic_conventions::kRpcSystemValueAtRpcTask)};
   trace_attributes[static_cast<size_t>(trace_attribute_type::kRpcService)] = {
-      opentelemetry::trace::SemanticConventions::kRpcService,
+      opentelemetry::semconv::rpc::kRpcService,
       trace_start_option.dispatcher
           ? rpc::context::string_view{trace_start_option.dispatcher->name()}
           : rpc::context::string_view{rpc::telemetry::semantic_conventions::kRpcServiceValueNoDispatcher}};
-  trace_attributes[static_cast<size_t>(trace_attribute_type::kRpcMethod)] = {
-      opentelemetry::trace::SemanticConventions::kRpcMethod, rpc::context::string_view{name()}};
+  trace_attributes[static_cast<size_t>(trace_attribute_type::kRpcMethod)] = {opentelemetry::semconv::rpc::kRpcMethod,
+                                                                             rpc::context::string_view{name()}};
   trace_start_option.attributes = trace_attributes;
 
   trace_start_option.attributes =

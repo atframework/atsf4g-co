@@ -11,7 +11,8 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
-#include <opentelemetry/trace/semantic_conventions.h>
+#include <opentelemetry/semconv/incubating/db_attributes.h>
+#include <opentelemetry/semconv/incubating/rpc_attributes.h>
 
 #include <log/log_wrapper.h>
 
@@ -36,11 +37,10 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
                                                           const redisReply *reply)) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
-      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.db"},
-      {opentelemetry::trace::SemanticConventions::kRpcService, "rpc.db.redis"},
-      {opentelemetry::trace::SemanticConventions::kRpcMethod, "rpc.db.hash_table.get"},
-      {opentelemetry::trace::SemanticConventions::kDbSystem,
-       opentelemetry::trace::SemanticConventions::DbSystemValues::kRedis}};
+      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcService, "rpc.db.redis"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table.get"},
+      {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemNameValues::kRedis}};
 
   rpc::telemetry::trace_start_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
@@ -95,11 +95,10 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
                                                       const redisReply *reply)) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
-      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.db"},
-      {opentelemetry::trace::SemanticConventions::kRpcService, "rpc.db.redis"},
-      {opentelemetry::trace::SemanticConventions::kRpcMethod, "rpc.db.hash_table.set"},
-      {opentelemetry::trace::SemanticConventions::kDbSystem,
-       opentelemetry::trace::SemanticConventions::DbSystemValues::kRedis}};
+      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcService, "rpc.db.redis"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table.set"},
+      {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
   rpc::telemetry::trace_start_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
   __trace_option.is_remote = true;
@@ -176,11 +175,10 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
 SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel, gsl::string_view key) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
-      {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.db"},
-      {opentelemetry::trace::SemanticConventions::kRpcService, "rpc.db.redis"},
-      {opentelemetry::trace::SemanticConventions::kRpcMethod, "rpc.db.hash_table.remove_all"},
-      {opentelemetry::trace::SemanticConventions::kDbSystem,
-       opentelemetry::trace::SemanticConventions::DbSystemValues::kRedis}};
+      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcService, "rpc.db.redis"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table.remove_all"},
+      {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
   rpc::telemetry::trace_start_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
   __trace_option.is_remote = true;

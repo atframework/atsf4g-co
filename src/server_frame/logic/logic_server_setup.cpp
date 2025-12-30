@@ -27,7 +27,7 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include <opentelemetry/sdk/resource/semantic_conventions.h>
+#include <opentelemetry/semconv/incubating/deployment_attributes.h>
 
 #include <utility/rapid_json_helper.h>
 
@@ -242,7 +242,7 @@ SERVER_FRAME_API int logic_server_setup_common(atfw::atapp::app &app,
                      return;
                    }
 
-                   app.set_metadata_label(opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName,
+                   app.set_metadata_label(opentelemetry::semconv::deployment::kDeploymentEnvironmentName,
                                           params[0]->to_cpp_string());
                  })
       ->set_help_msg("-env [text]                                               set a env name.");

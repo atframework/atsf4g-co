@@ -276,8 +276,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE __shared_message_shared_base {
 };
 
 template <class MessageType, class Allocator>
-class ATFW_UTIL_SYMBOL_VISIBLE __shared_message_base<MessageType, Allocator, true>
-    : public __shared_message_shared_base<MessageType, Allocator> {
+class ATFW_UTIL_SYMBOL_VISIBLE
+__shared_message_base<MessageType, Allocator, true> : public __shared_message_shared_base<MessageType, Allocator> {
  public:
   using base_type = __shared_message_shared_base<MessageType, Allocator>;
   using type = typename base_type::type;
@@ -321,8 +321,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE __shared_message_base<MessageType, Allocator, tru
 };
 
 template <class MessageType, class Allocator>
-class ATFW_UTIL_SYMBOL_VISIBLE __shared_message_base<MessageType, Allocator, false>
-    : public __shared_message_shared_base<MessageType, Allocator> {
+class ATFW_UTIL_SYMBOL_VISIBLE
+__shared_message_base<MessageType, Allocator, false> : public __shared_message_shared_base<MessageType, Allocator> {
  public:
   using base_type = __shared_message_shared_base<MessageType, Allocator>;
   using type = typename base_type::type;

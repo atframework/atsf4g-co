@@ -16,7 +16,7 @@
 #include <config/atframe_service_types.h>
 #include <libatbus_protocol.h>
 
-#include <opentelemetry/trace/semantic_conventions.h>
+#include <opentelemetry/semconv/incubating/rpc_attributes.h>
 
 #include <config/compiler/protobuf_prefix.h>
 
@@ -266,9 +266,9 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atfw::atapp::app::mes
         trace_start_option.parent_network_span = nullptr;
       }
       rpc::telemetry::trace_attribute_pair_type internal_rpc_trace_attributes[] = {
-          {opentelemetry::trace::SemanticConventions::kRpcSystem, "internal"},
-          {opentelemetry::trace::SemanticConventions::kRpcService, "cs_msg_dispatcher"},
-          {opentelemetry::trace::SemanticConventions::kRpcMethod, "cs_msg_dispatcher"}};
+          {opentelemetry::semconv::rpc::kRpcSystem, "internal"},
+          {opentelemetry::semconv::rpc::kRpcService, "cs_msg_dispatcher"},
+          {opentelemetry::semconv::rpc::kRpcMethod, "cs_msg_dispatcher"}};
       trace_start_option.attributes = internal_rpc_trace_attributes;
       ctx.setup_tracer(tracer, "cs_msg_dispatcher", std::move(trace_start_option));
 

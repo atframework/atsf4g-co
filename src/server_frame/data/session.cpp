@@ -25,7 +25,9 @@
 
 #include <config/logic_config.h>
 
-#include <opentelemetry/trace/semantic_conventions.h>
+#include <opentelemetry/semconv/incubating/rpc_attributes.h>
+#include <opentelemetry/semconv/incubating/session_attributes.h>
+
 #include <rpc/rpc_context.h>
 #include <rpc/telemetry/semantic_conventions.h>
 
@@ -161,7 +163,7 @@ SERVER_FRAME_API session::~session() {
         {"user.id", cached_user_id_},
         {"user.zone_id", cached_zone_id_},
         {"session.event", "destroy"},
-        {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id}};
+        {opentelemetry::semconv::session::kSessionId, get_key().session_id}};
     actor_log_otel_->Info(util::log::format("------------ session: {:#x}:{} destroyed ------------", get_key().node_id,
                                             get_key().session_id),
                           opentelemetry::common::MakeAttributes(attributes));
@@ -339,14 +341,13 @@ SERVER_FRAME_API void session::write_actor_log_head(rpc::context &ctx, const atf
         {"session.event", is_input ? "receive_hint" : "send_hint"},
         {"user.id", cached_user_id_},
         {"user.zone_id", cached_zone_id_},
-        {opentelemetry::trace::SemanticConventions::kRpcMethod,
-         opentelemetry::nostd::string_view{rpc_name.data(), rpc_name.size()}},
-        {opentelemetry::trace::SemanticConventions::kRpcMessageId,
+        {opentelemetry::semconv::rpc::kRpcMethod, opentelemetry::nostd::string_view{rpc_name.data(), rpc_name.size()}},
+        {opentelemetry::semconv::rpc::kRpcMessageId,
          opentelemetry::nostd::string_view{type_url.data(), type_url.size()}},
-        {opentelemetry::trace::SemanticConventions::kRpcMessageType,
+        {opentelemetry::semconv::rpc::kRpcMessageType,
          opentelemetry::nostd::string_view{is_input ? "RECEIVED" : "SENT"}},
-        {opentelemetry::trace::SemanticConventions::kRpcMessageUncompressedSize, byte_size},
-        {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id}};
+        {opentelemetry::semconv::rpc::kRpcMessageUncompressedSize, byte_size},
+        {opentelemetry::semconv::session::kSessionId, get_key().session_id}};
     if (ctx.get_trace_span()) {
       actor_log_otel_->Info(hint_text, opentelemetry::common::MakeAttributes(attributes),
                             ctx.get_trace_span()->GetContext());
@@ -399,15 +400,14 @@ SERVER_FRAME_API void session::write_actor_log_body(rpc::context &ctx, const goo
 
         {"user.id", cached_user_id_},
         {"user.zone_id", cached_zone_id_},
-        {opentelemetry::trace::SemanticConventions::kRpcMethod,
-         opentelemetry::nostd::string_view{rpc_name.data(), rpc_name.size()}},
-        {opentelemetry::trace::SemanticConventions::kRpcMessageId,
+        {opentelemetry::semconv::rpc::kRpcMethod, opentelemetry::nostd::string_view{rpc_name.data(), rpc_name.size()}},
+        {opentelemetry::semconv::rpc::kRpcMessageId,
          opentelemetry::nostd::string_view{type_url.data(), type_url.size()}},
-        {opentelemetry::trace::SemanticConventions::kRpcMessageType,
+        {opentelemetry::semconv::rpc::kRpcMessageType,
          opentelemetry::nostd::string_view{is_input ? "RECEIVED" : "SENT"}},
         {"message.result_code", head.error_code()},
         {"message.business_time", head.timestamp()},
-        {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id},
+        {opentelemetry::semconv::session::kSessionId, get_key().session_id},
         {"session.event", is_input ? "receive_head" : "send_head"},
     };
     if (ctx.get_trace_span()) {
@@ -498,7 +498,7 @@ void session::create_actor_log_writter() {
         {"session.event", "create"},
         {"user.id", cached_user_id_},
         {"user.zone_id", cached_zone_id_},
-        {opentelemetry::trace::SemanticConventions::kSessionId, get_key().session_id}};
+        {opentelemetry::semconv::session::kSessionId, get_key().session_id}};
     actor_log_otel_->Info(util::log::format("============ user: {}:{}, session: {:#x}:{} created ============",
                                             cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id),
                           opentelemetry::common::MakeAttributes(attributes));

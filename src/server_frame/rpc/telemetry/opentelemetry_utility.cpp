@@ -14,7 +14,8 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include <opentelemetry/trace/semantic_conventions.h>
+#include <opentelemetry/semconv/incubating/event_attributes.h>
+#include <opentelemetry/semconv/incubating/rpc_attributes.h>
 
 #include <gsl/select-gsl.h>
 #include <log/log_stacktrace.h>
@@ -1362,7 +1363,7 @@ SERVER_FRAME_API void opentelemetry_utility::send_notification_event(rpc::contex
   attribute_pair_type standard_attributes[6] = {
       attribute_pair_type{rpc::telemetry::semantic_conventions::kEventDomain,
                           get_notification_event_log_domain(event_domain)},
-      attribute_pair_type{opentelemetry::trace::SemanticConventions::kEventName,
+      attribute_pair_type{rpc::telemetry::semantic_conventions::kEventName,
                           opentelemetry::common::AttributeValue{
                               opentelemetry::nostd::string_view{event_name.data(), event_name.size()}}}};
   size_t attribute_pair_size = 2;
@@ -1482,7 +1483,7 @@ SERVER_FRAME_API void opentelemetry_utility::send_log_to_default_group(rpc::cont
   }
 
   attribute_pair_type standard_attributes[6] = {attribute_pair_type{
-      opentelemetry::trace::SemanticConventions::kEventName,
+      rpc::telemetry::semantic_conventions::kEventName,
       opentelemetry::common::AttributeValue{opentelemetry::nostd::string_view{event_name.data(), event_name.size()}}}};
 
   size_t attribute_pair_size = 1;

@@ -101,6 +101,9 @@ project_third_party_include_port("redis/hiredis.cmake")
 project_third_party_include_port("cares/c-ares.cmake")
 project_third_party_include_port("abseil-cpp/abseil-cpp.cmake")
 project_third_party_include_port("re2/re2.cmake")
+project_third_party_include_port("ngtcp2/nghttp3.cmake")
+project_third_party_include_port("ngtcp2/ngtcp2.cmake")
+project_third_party_include_port("nghttp2/nghttp2.cmake")
 project_third_party_include_port("libcurl/libcurl.cmake")
 
 # Set stack size to 512KB, the default value is 100K and will overflow with asan

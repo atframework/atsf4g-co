@@ -37,7 +37,8 @@
 
 #include <uv.h>
 
-#include <opentelemetry/sdk/resource/semantic_conventions.h>
+#include <opentelemetry/semconv/incubating/deployment_attributes.h>
+#include <opentelemetry/semconv/incubating/service_attributes.h>
 
 #include <prometheus/gateway.h>
 
@@ -1696,9 +1697,9 @@ void logic_hpa_controller::reload_hpa_controller_metadata_filter() {
   }
 
   // 内置模块拉取指标的筛选规则,和k8s相似的结构
-  std::string auto_labels[] = {opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName,
-                               opentelemetry::sdk::resource::SemanticConventions::kServiceNamespace,
-                               kLogicHpaLabelTargetKind, kLogicHpaLabelTargetApiVersion, kLogicHpaLabelTargetName};
+  std::string auto_labels[] = {opentelemetry::semconv::deployment::kDeploymentEnvironmentName,
+                               opentelemetry::semconv::service::kServiceNamespace, kLogicHpaLabelTargetKind,
+                               kLogicHpaLabelTargetApiVersion, kLogicHpaLabelTargetName};
 
   hpa_discovery_data_->discovery_filter.Clear();
   if (!owner_app_->get_metadata().kind().empty()) {
@@ -1842,45 +1843,40 @@ void logic_hpa_controller::do_reload_hpa_metrics_auto_inject_resource(
 
   // @see https://opentelemetry.io/docs/specs/semconv/resource/deployment-environment/
   std::string deployment_environment_key = rpc::telemetry::exporter::metrics::PrometheusUtility::SanitizePrometheusName(
-      opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName, true);
+      opentelemetry::semconv::deployment::kDeploymentEnvironmentName, true);
   if (common_attributes_reference_.end() ==
-          common_attributes_reference_.find(
-              opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName) &&
+          common_attributes_reference_.find(opentelemetry::semconv::deployment::kDeploymentEnvironmentName) &&
       common_attributes_reference_.end() == common_attributes_reference_.find(deployment_environment_key)) {
-    auto& label_value =
-        common_attributes_lifetime_[opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName];
+    auto& label_value = common_attributes_lifetime_[opentelemetry::semconv::deployment::kDeploymentEnvironmentName];
     label_value = static_cast<std::string>(logic_config::me()->get_deployment_environment_name());
-    common_attributes_reference_[opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName] =
-        label_value;
+    common_attributes_reference_[opentelemetry::semconv::deployment::kDeploymentEnvironmentName] = label_value;
   }
   if (common_ignore_selectors.end() == common_ignore_selectors.find(deployment_environment_key) &&
       common_ignore_selectors.end() ==
-          common_ignore_selectors.find(opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName)) {
+          common_ignore_selectors.find(opentelemetry::semconv::deployment::kDeploymentEnvironmentName)) {
     common_selectors_[deployment_environment_key] =
         static_cast<std::string>(logic_config::me()->get_deployment_environment_name());
   }
 
   // @see https://opentelemetry.io/docs/specs/semconv/resource/#service
-  auto iter_namespace =
-      common_attributes_reference_.find(opentelemetry::sdk::resource::SemanticConventions::kServiceNamespace);
+  auto iter_namespace = common_attributes_reference_.find(opentelemetry::semconv::service::kServiceNamespace);
   if (common_attributes_reference_.end() == iter_namespace) {
     iter_namespace =
         common_attributes_reference_.find(rpc::telemetry::exporter::metrics::PrometheusUtility::SanitizePrometheusName(
-            opentelemetry::sdk::resource::SemanticConventions::kServiceNamespace, true));
+            opentelemetry::semconv::service::kServiceNamespace, true));
   }
-  auto iter_service_name =
-      common_attributes_reference_.find(opentelemetry::sdk::resource::SemanticConventions::kServiceName);
+  auto iter_service_name = common_attributes_reference_.find(opentelemetry::semconv::service::kServiceName);
   if (common_attributes_reference_.end() == iter_service_name) {
     iter_service_name =
         common_attributes_reference_.find(rpc::telemetry::exporter::metrics::PrometheusUtility::SanitizePrometheusName(
-            opentelemetry::sdk::resource::SemanticConventions::kServiceName, true));
+            opentelemetry::semconv::service::kServiceName, true));
   }
   auto iter_service_instance_id =
-      common_attributes_reference_.find(opentelemetry::sdk::resource::SemanticConventions::kServiceInstanceId);
+      common_attributes_reference_.find(opentelemetry::semconv::service::kServiceInstanceId);
   if (common_attributes_reference_.end() == iter_service_name) {
     iter_service_instance_id =
         common_attributes_reference_.find(rpc::telemetry::exporter::metrics::PrometheusUtility::SanitizePrometheusName(
-            opentelemetry::sdk::resource::SemanticConventions::kServiceInstanceId, true));
+            opentelemetry::semconv::service::kServiceInstanceId, true));
   }
 
   // Target Info转换规则
@@ -1918,27 +1914,25 @@ void logic_hpa_controller::do_reload_hpa_metrics_auto_inject_resource(
   common_attributes_reference_[kLogicHpaMetricsTargetInfoJob] = job_value;
   if (!service_namespace.empty()) {
     if (iter_namespace == common_attributes_reference_.end()) {
-      auto& label_value =
-          common_attributes_lifetime_[opentelemetry::sdk::resource::SemanticConventions::kServiceNamespace];
+      auto& label_value = common_attributes_lifetime_[opentelemetry::semconv::service::kServiceNamespace];
       label_value = service_namespace;
-      common_attributes_reference_[opentelemetry::sdk::resource::SemanticConventions::kServiceNamespace] = label_value;
+      common_attributes_reference_[opentelemetry::semconv::service::kServiceNamespace] = label_value;
     }
     if (common_ignore_selectors.end() ==
-        common_ignore_selectors.find(opentelemetry::sdk::resource::SemanticConventions::kServiceNamespace)) {
+        common_ignore_selectors.find(opentelemetry::semconv::service::kServiceNamespace)) {
       common_selectors_[rpc::telemetry::exporter::metrics::PrometheusUtility::SanitizePrometheusName(
-          opentelemetry::sdk::resource::SemanticConventions::kServiceNamespace, true)] = service_namespace;
+          opentelemetry::semconv::service::kServiceNamespace, true)] = service_namespace;
     }
   }
 
   if (iter_service_name == common_attributes_reference_.end()) {
-    auto& label_value = common_attributes_lifetime_[opentelemetry::sdk::resource::SemanticConventions::kServiceName];
+    auto& label_value = common_attributes_lifetime_[opentelemetry::semconv::service::kServiceName];
     label_value = service_name;
-    common_attributes_reference_[opentelemetry::sdk::resource::SemanticConventions::kServiceName] = label_value;
+    common_attributes_reference_[opentelemetry::semconv::service::kServiceName] = label_value;
   }
-  if (common_ignore_selectors.end() ==
-      common_ignore_selectors.find(opentelemetry::sdk::resource::SemanticConventions::kServiceName)) {
+  if (common_ignore_selectors.end() == common_ignore_selectors.find(opentelemetry::semconv::service::kServiceName)) {
     common_selectors_[rpc::telemetry::exporter::metrics::PrometheusUtility::SanitizePrometheusName(
-        opentelemetry::sdk::resource::SemanticConventions::kServiceName, true)] = service_name;
+        opentelemetry::semconv::service::kServiceName, true)] = service_name;
   }
 
   // instance和service.instance.id不作为默认selector
@@ -1946,10 +1940,9 @@ void logic_hpa_controller::do_reload_hpa_metrics_auto_inject_resource(
     service_instance_id = owner_app_->get_app_name();
   }
   if (iter_service_instance_id == common_attributes_reference_.end()) {
-    auto& label_value =
-        common_attributes_lifetime_[opentelemetry::sdk::resource::SemanticConventions::kServiceInstanceId];
+    auto& label_value = common_attributes_lifetime_[opentelemetry::semconv::service::kServiceInstanceId];
     label_value = service_instance_id;
-    common_attributes_reference_[opentelemetry::sdk::resource::SemanticConventions::kServiceInstanceId] = label_value;
+    common_attributes_reference_[opentelemetry::semconv::service::kServiceInstanceId] = label_value;
   }
   auto& instance_value = common_attributes_lifetime_[kLogicHpaMetricsTargetInfoInstance];
   instance_value = service_instance_id;
@@ -2033,13 +2026,11 @@ util::nostd::nonnull<std::shared_ptr<logic_hpa_policy>> logic_hpa_controller::in
     if (append_default_aggregation_by(
             *patch_policy_cfg.mutable_aggregation_parameter(), common_attributes_reference_,
             {{rpc::telemetry::exporter::metrics::PrometheusUtility::SanitizePrometheusName(
-                  opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName, true),
-              opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName},
+                  opentelemetry::semconv::deployment::kDeploymentEnvironmentName, true),
+              opentelemetry::semconv::deployment::kDeploymentEnvironmentName},
              // {kLogicHpaMetricsTargetInfoInstance}, // Prometheus直接计算好，省去二次聚合
-             {kLogicHpaMetricsTargetInfoServiceNamespace,
-              opentelemetry::sdk::resource::SemanticConventions::kServiceNamespace},
-             {kLogicHpaMetricsTargetInfoServiceName,
-              opentelemetry::sdk::resource::SemanticConventions::kServiceName}})) {
+             {kLogicHpaMetricsTargetInfoServiceNamespace, opentelemetry::semconv::service::kServiceNamespace},
+             {kLogicHpaMetricsTargetInfoServiceName, opentelemetry::semconv::service::kServiceName}})) {
       patch_policy_cfg.set_aggregation(PROJECT_NAMESPACE_ID::config::EN_HPA_POLICY_AGGREGATION_SUM);
       policy_instance = atfw::memory::stl::make_shared<logic_hpa_policy>(
           *this, telemetry_group_, hpa_cfg, patch_policy_cfg, common_attributes_reference_, common_selectors_);

@@ -40,7 +40,7 @@ def rpc_return_always_ready_code_sentense(input):
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include <opentelemetry/trace/semantic_conventions.h>
+#include <opentelemetry/semconv/incubating/rpc_attributes.h>
 
 #include <atframe/etcdcli/etcd_discovery.h>
 
@@ -416,9 +416,9 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
   rpc::context __child_ctx(__ctx);
   rpc::telemetry::tracer __tracer;
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
-    {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-    {opentelemetry::trace::SemanticConventions::kRpcService, "${rpc.get_service().get_full_name()}"},
-    {opentelemetry::trace::SemanticConventions::kRpcMethod, "${rpc.get_full_name()}"}
+    {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
+    {opentelemetry::semconv::rpc::kRpcService, "${rpc.get_service().get_full_name()}"},
+    {opentelemetry::semconv::rpc::kRpcMethod, "${rpc.get_full_name()}"}
   };
 %   if rpc_is_user_rpc:
   auto __child_trace_span = __setup_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
@@ -537,9 +537,9 @@ static ${rpc_return_type} __${rpc.get_name()}(
   rpc::context __child_ctx(__ctx);
   rpc::telemetry::tracer __tracer;
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
-    {opentelemetry::trace::SemanticConventions::kRpcSystem, "atrpc.ss"},
-    {opentelemetry::trace::SemanticConventions::kRpcService, "${rpc.get_service().get_full_name()}"},
-    {opentelemetry::trace::SemanticConventions::kRpcMethod, "${rpc.get_full_name()}"}
+    {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
+    {opentelemetry::semconv::rpc::kRpcService, "${rpc.get_service().get_full_name()}"},
+    {opentelemetry::semconv::rpc::kRpcMethod, "${rpc.get_full_name()}"}
   };
 %   if rpc_is_user_rpc or rpc_is_router_api:
   auto __child_trace_span = __setup_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),

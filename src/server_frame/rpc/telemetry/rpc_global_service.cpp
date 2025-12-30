@@ -62,7 +62,6 @@
 #include <opentelemetry/sdk/metrics/view/instrument_selector_factory.h>
 #include <opentelemetry/sdk/metrics/view/meter_selector_factory.h>
 #include <opentelemetry/sdk/metrics/view/view_factory.h>
-#include <opentelemetry/sdk/resource/semantic_conventions.h>
 #include <opentelemetry/sdk/trace/batch_span_processor_factory.h>
 #include <opentelemetry/sdk/trace/batch_span_processor_options.h>
 #include <opentelemetry/sdk/trace/exporter.h>
@@ -75,6 +74,10 @@
 #include <opentelemetry/sdk/trace/simple_processor_factory.h>
 #include <opentelemetry/sdk/trace/tracer_provider.h>
 #include <opentelemetry/sdk/trace/tracer_provider_factory.h>
+#include <opentelemetry/semconv/incubating/deployment_attributes.h>
+#include <opentelemetry/semconv/incubating/host_attributes.h>
+#include <opentelemetry/semconv/incubating/process_attributes.h>
+#include <opentelemetry/semconv/incubating/service_attributes.h>
 #include <opentelemetry/trace/noop.h>
 #include <opentelemetry/trace/provider.h>
 
@@ -2341,9 +2344,6 @@ static local_provider_handle_type<opentelemetry::metrics::MeterProvider> _opente
       config->boundaries_ = {0, 2000, 8000, 16000, 32000, 128000, 1024000, 3000000, 8000000};
       std::unique_ptr<opentelemetry::sdk::metrics::View> view = opentelemetry::sdk::metrics::ViewFactory::Create(
           static_cast<std::string>(trace_metrics_name) + "_view", "",
-#if (OPENTELEMETRY_VERSION_MAJOR * 1000 + OPENTELEMETRY_VERSION_MINOR) >= 1011
-          "us",
-#endif
           opentelemetry::sdk::metrics::AggregationType::kHistogram, config);
       std::unique_ptr<opentelemetry::sdk::metrics::InstrumentSelector> instrument_selector =
           opentelemetry::sdk::metrics::InstrumentSelectorFactory::Create(
@@ -3104,13 +3104,11 @@ static void _create_opentelemetry_app_resource(
   group.metrics_attributes.clear();
 
   // basic
-  group.common_owned_attributes.SetAttribute(opentelemetry::sdk::resource::SemanticConventions::kServiceInstanceId,
-                                             app.get_app_name());
-  group.common_owned_attributes.SetAttribute(opentelemetry::sdk::resource::SemanticConventions::kServiceName,
-                                             app.get_type_name());
+  group.common_owned_attributes.SetAttribute(opentelemetry::semconv::service::kServiceInstanceId, app.get_app_name());
+  group.common_owned_attributes.SetAttribute(opentelemetry::semconv::service::kServiceName, app.get_type_name());
   group.common_owned_attributes.SetAttribute("service.identity", app.get_app_identity());
   group.common_owned_attributes.SetAttribute("service.type_id", app.get_type_id());
-  group.common_owned_attributes.SetAttribute(opentelemetry::sdk::resource::SemanticConventions::kServiceVersion,
+  group.common_owned_attributes.SetAttribute(opentelemetry::semconv::service::kServiceVersion,
                                              server_frame_project_get_version());
 
   // area
@@ -3129,39 +3127,36 @@ static void _create_opentelemetry_app_resource(
 
   // metadata
   if (!app.get_metadata().namespace_name().empty()) {
-    group.common_owned_attributes.SetAttribute(opentelemetry::sdk::resource::SemanticConventions::kServiceNamespace,
+    group.common_owned_attributes.SetAttribute(opentelemetry::semconv::service::kServiceNamespace,
                                                app.get_metadata().namespace_name());
     set_attributes_map_item(group.common_owned_attributes, group.metrics_attributes,
-                            opentelemetry::sdk::resource::SemanticConventions::kServiceNamespace);
+                            opentelemetry::semconv::service::kServiceNamespace);
   }
 
   {
-    auto iter =
-        app.get_metadata().labels().find(opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName);
+    auto iter = app.get_metadata().labels().find(opentelemetry::semconv::deployment::kDeploymentEnvironmentName);
     if (iter != app.get_metadata().labels().end()) {
-      group.common_owned_attributes.SetAttribute(
-          opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName, iter->second);
+      group.common_owned_attributes.SetAttribute(opentelemetry::semconv::deployment::kDeploymentEnvironmentName,
+                                                 iter->second);
       set_attributes_map_item(group.common_owned_attributes, group.metrics_attributes,
-                              opentelemetry::sdk::resource::SemanticConventions::kDeploymentEnvironmentName);
+                              opentelemetry::semconv::deployment::kDeploymentEnvironmentName);
     }
   }
 
   // process
   // @see
   // https://github.com/open-telemetry/semantic-conventions/blob/main/docs/resource/process.md#process
-  group.common_owned_attributes.SetAttribute(opentelemetry::sdk::resource::SemanticConventions::kProcessPid,
-                                             atbus::node::get_pid());
+  group.common_owned_attributes.SetAttribute(opentelemetry::semconv::process::kProcessPid, atbus::node::get_pid());
   {
     if (!app.get_origin_configure().hostname().empty()) {
-      group.common_owned_attributes.SetAttribute(opentelemetry::sdk::resource::SemanticConventions::kHostName,
+      group.common_owned_attributes.SetAttribute(opentelemetry::semconv::host::kHostName,
                                                  app.get_origin_configure().hostname());
       set_attributes_map_item(group.common_owned_attributes, group.metrics_attributes,
-                              opentelemetry::sdk::resource::SemanticConventions::kHostName);
+                              opentelemetry::semconv::host::kHostName);
     } else {
-      group.common_owned_attributes.SetAttribute(opentelemetry::sdk::resource::SemanticConventions::kHostName,
-                                                 atbus::node::get_hostname());
+      group.common_owned_attributes.SetAttribute(opentelemetry::semconv::host::kHostName, atbus::node::get_hostname());
       set_attributes_map_item(group.common_owned_attributes, group.metrics_attributes,
-                              opentelemetry::sdk::resource::SemanticConventions::kHostName);
+                              opentelemetry::semconv::host::kHostName);
     }
   }
 
