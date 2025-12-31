@@ -67,14 +67,18 @@ function(project_third_party_make_package_alias_dir)
     file(REMOVE_RECURSE "${_alias_pkg_path_base}/packages")
   endif()
 
-  file(CREATE_LINK "${_rel_pkg_path}" "${_alias_pkg_path_base}/packages" SYMBOLIC)
+  if (NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    file(CREATE_LINK "${_rel_pkg_path}" "${_alias_pkg_path_base}/packages" SYMBOLIC)
+  endif()
 endfunction()
 project_third_party_make_package_alias_dir()
 
 # ============ third party ============
 project_third_party_include_port("compression/import.cmake")
 if(NOT ANDROID AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
-  project_third_party_include_port("malloc/jemalloc.cmake")
+  if(NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    project_third_party_include_port("malloc/jemalloc.cmake")
+  endif()
   project_third_party_include_port("malloc/mimalloc.cmake")
   #[[
   # There is a BUG in gcc 4.6-4.8 and finxed in gcc 4.9
