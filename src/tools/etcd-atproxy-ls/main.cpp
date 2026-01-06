@@ -178,6 +178,8 @@ int main(int argc, char *argv[]) {
     log_level = atfw::util::log::log_wrapper::level_t::LOG_LW_ERROR;
   } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("warn", log_level_name.c_str(), 4)) {
     log_level = atfw::util::log::log_wrapper::level_t::LOG_LW_WARNING;
+  } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("warning", log_level_name.c_str(), 7)) {
+    log_level = atfw::util::log::log_wrapper::level_t::LOG_LW_WARNING;
   } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("info", log_level_name.c_str(), 4)) {
     log_level = atfw::util::log::log_wrapper::level_t::LOG_LW_INFO;
   } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("notice", log_level_name.c_str(), 6)) {

@@ -1,0 +1,105 @@
+{{- define "libapp.pv.tpl" -}}
+{{- if .Values.persistence }}
+{{- with $cfs := .Values.persistence.cfs }}
+{{- if $cfs.enabled }}
+{{- range $k,$v := $cfs.volumes }}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "libapp.fullname" $ }}-{{ $v.name }}-cfs-pv
+  labels:
+    {{- include "libapp.labels" $ | nindent 4 }}
+spec:
+  accessModes:
+  - ReadWriteMany
+  capacity:
+    storage: {{ $v.storage }}
+  csi:
+    {{- if $cfs.turbo }}
+    driver: com.tencent.cloud.csi.cfsturbo
+    {{- else }}
+    driver: com.tencent.cloud.csi.cfs
+    {{- end }}
+    {{- with $v.volumeAttributes }}
+    volumeAttributes:
+      {{- toYaml . | nindent 6}}
+    {{- end }}
+    volumeHandle: {{ include "libapp.fullname" $ }}-{{ $v.name }}-cfs
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  storageClassName: ""
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{- with $cos := .Values.persistence.cos }}
+{{- if $cos.enabled }}
+{{- range $k,$v := $cos.volumes }}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "libapp.fullname" $ }}-{{ $v.name }}-cos-pv
+  labels:
+    {{- include "libapp.labels" $ | nindent 4 }}
+    bucket: {{ $cos.bucket }}
+spec:
+  accessModes:
+    - ReadWriteMany
+  capacity:
+    storage: {{ $v.storage }}
+  persistentVolumeReclaimPolicy: Retain
+  csi:
+    driver: com.tencent.cloud.csi.cosfs
+    volumeHandle: {{ printf "%s-%s-%s" (include "libapp.fullname" $) $v.name $cos.bucket }}
+    volumeAttributes:
+      url: {{ $cos.url | quote }}
+      bucket: {{ $cos.bucket }}
+    {{- if $cos.path }}
+      path: {{ $cos.path }}
+    {{- else }}
+      path: "/"
+    {{- end }}
+    {{- if $v.additionalArgs }}
+      additional_args: {{ $v.additionalArgs | quote }}
+    {{- end }}
+    nodePublishSecretRef:
+      name: {{ include "libapp.fullname" $ }}-cos-token
+      namespace:  {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{- with $local := .Values.persistence.local }}
+{{- if $local.enabled }}
+{{- range $k,$v := $local.volumes }}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "libapp.fullname" $ }}-{{ $v.name }}-local-pv
+  labels:
+    {{- include "libapp.labels" $ | nindent 4 }}
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: {{ $v.storage }}
+  local:
+    path: {{ $v.localPath }}
+  persistentVolumeReclaimPolicy: Delete
+  volumeMode: Filesystem
+  storageClassName: {{ default "local-storage" $local.storageClass | quote }}
+  {{- with $local.nodeAffinity }}
+  nodeAffinity:
+    {{ toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end -}}
+{{- define "libapp.pv" -}}
+{{- template "libapp.util.merge" (append . "libapp.pv.tpl") -}}
+{{- end -}}

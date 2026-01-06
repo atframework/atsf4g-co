@@ -461,8 +461,7 @@ void session::create_actor_log_writter() {
     actor_log_writter_ = atfw::util::log::log_wrapper::create_user_logger();
     if (actor_log_writter_) {
       actor_log_writter_->init(util::log::log_formatter::level_t::LOG_LW_INFO);
-      actor_log_writter_->set_stacktrace_level(util::log::log_formatter::level_t::LOG_LW_DISABLED,
-                                               atfw::util::log::log_formatter::level_t::LOG_LW_DISABLED);
+      actor_log_writter_->set_stacktrace_level(util::log::log_formatter::level_t::LOG_LW_DISABLED);
       actor_log_writter_->set_prefix_format("[%F %T.%f]: ");
 
       std::stringstream ss_path;

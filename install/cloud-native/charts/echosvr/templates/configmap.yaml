@@ -1,0 +1,6 @@
+{{- template "libapp.configmap" (list . "echosvr.configmap") -}}
+{{- define "echosvr.configmap" -}}
+data:
+  {{ include "echosvr.name" . }}.yaml: {{ tpl (.Files.Get "cfg/echosvr.yaml.tpl") . | quote }}
+  vector.yaml: {{ tpl (.Files.Get "cfg/vector.yaml.tpl") . | quote }}
+{{- end -}}

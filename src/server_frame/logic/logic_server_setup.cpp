@@ -108,6 +108,8 @@ static int send_notification(util::cli::callback_param params) {
     domain = rpc::telemetry::notification_domain::kError;
   } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("warn", params[0]->to_string(), 4)) {
     domain = rpc::telemetry::notification_domain::kWarning;
+  } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("warning", params[0]->to_string(), 7)) {
+    domain = rpc::telemetry::notification_domain::kWarning;
   }
 
   rpc::context ctx{rpc::context::create_without_task()};

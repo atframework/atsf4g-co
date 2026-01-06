@@ -1,0 +1,3 @@
+{{- template "libapp.pvc" (list . "dtcoordsvr.pvc") -}}
+{{- define "dtcoordsvr.pvc" -}}
+{{- end -}}

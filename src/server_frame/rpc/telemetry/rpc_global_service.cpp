@@ -3079,18 +3079,18 @@ static void _opentelemetry_setup_group(atfw::atapp::app &app, const std::shared_
   opentelemetry::metrics::Provider::SetMeterProvider(metrics_handle.provider);
   opentelemetry::logs::Provider::SetLoggerProvider(logs_handle.provider);
 
-  if (opentelemetry_log_level <= atfw::util::log::log_formatter::level_t::LOG_LW_ERROR) {
+  if (opentelemetry_log_level <= atfw::util::log::log_formatter::level_t::LOG_LW_DEBUG) {
     opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogLevel(
-        opentelemetry::sdk::common::internal_log::LogLevel::Error);
-  } else if (opentelemetry_log_level <= atfw::util::log::log_formatter::level_t::LOG_LW_WARNING) {
-    opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogLevel(
-        opentelemetry::sdk::common::internal_log::LogLevel::Warning);
+        opentelemetry::sdk::common::internal_log::LogLevel::Debug);
   } else if (opentelemetry_log_level <= atfw::util::log::log_formatter::level_t::LOG_LW_INFO) {
     opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogLevel(
         opentelemetry::sdk::common::internal_log::LogLevel::Info);
+  } else if (opentelemetry_log_level <= atfw::util::log::log_formatter::level_t::LOG_LW_WARNING) {
+    opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogLevel(
+        opentelemetry::sdk::common::internal_log::LogLevel::Warning);
   } else {
     opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogLevel(
-        opentelemetry::sdk::common::internal_log::LogLevel::Debug);
+        opentelemetry::sdk::common::internal_log::LogLevel::Error);
   }
 }
 

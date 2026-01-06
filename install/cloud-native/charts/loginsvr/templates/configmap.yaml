@@ -1,0 +1,6 @@
+{{- template "libapp.configmap" (list . "loginsvr.configmap") -}}
+{{- define "loginsvr.configmap" -}}
+data:
+  {{ include "loginsvr.name" . }}.yaml: {{ tpl (.Files.Get "cfg/loginsvr.yaml.tpl") . | quote }}
+  vector.yaml: {{ tpl (.Files.Get "cfg/vector.yaml.tpl") . | quote }}
+{{- end -}}

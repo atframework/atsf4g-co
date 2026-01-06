@@ -1,0 +1,3 @@
+{{- template "libapp.httproute" (list . "gamesvr.httproute") -}}
+{{- define "gamesvr.httproute" -}}
+{{- end -}}

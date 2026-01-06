@@ -1,0 +1,3 @@
+{{- template "libapp.service" (list . "dtcoordsvr.service") -}}
+{{- define "dtcoordsvr.service" -}}
+{{- end -}}

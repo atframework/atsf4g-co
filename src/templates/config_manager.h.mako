@@ -100,11 +100,11 @@ public:
 
   struct log_level_t {
     enum type {
-      LOG_LW_DISABLED = 0, // 关闭日志
-      LOG_LW_ERROR,        // 错误
-      LOG_LW_WARNING,
+      LOG_LW_DEBUG = 0,
       LOG_LW_INFO,
-      LOG_LW_DEBUG,
+      LOG_LW_WARNING,
+      LOG_LW_ERROR,        // 错误
+      LOG_LW_DISABLED, // 关闭日志
     };
   };
 

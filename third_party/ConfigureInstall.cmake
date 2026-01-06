@@ -20,6 +20,8 @@ unset(PROJECT_COPY_EXECUTABLES)
 
 # cfssl
 project_link_or_copy_files(${PROJECT_THIRD_PARTY_CFSSL_PREBUILT_FILES} "${PROJECT_INSTALL_TOOLS_DIR}/cfssl")
+# atdtool
+project_link_or_copy_files(${PROJECT_THIRD_PARTY_ATDTOOL_PREBUILT_FILES} "${PROJECT_INSTALL_TOOLS_DIR}/atdtool")
 
 # otelcol
 file(MAKE_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/otelcol/bin")

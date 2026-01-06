@@ -1,0 +1,55 @@
+# global.yaml
+# vim: set sw=2 sts=2 et:
+# encoding: utf-8
+
+###### 环境相关配置 ######
+envOverride: ""
+partition: ""
+
+atapp:
+  deployment:
+    project_name: ""
+    deployment_environment: "production"
+  bus_recv_buff_size: 2MB
+  bus_send_buff_size: 1MB
+  bus_loop_times_per_tick: 2048
+  bus_ttl: 16
+  backlog: 256
+  worker_pool:
+    queue_size: 20480
+    tick_min_interval: 4ms
+    tick_max_interval: 128ms
+    worker_number_min: 2
+    worker_number_max: 4
+    scaling_rules:
+      scaling_up_stabilization_window: 10s
+      scaling_up_cpu_permillage: 600
+      scaling_up_queue_size: 32
+      scaling_down_stabilization_window: 10s
+      scaling_down_cpu_permillage: 500
+      scaling_down_queue_size: 8
+      leak_scan_interval: 600s
+
+# 远程服务器配置自动更新间隔
+remote_configure_update_interval: 5m
+
+# 日志级别
+log_level: INFO
+enable_session_actor_log: true
+log_stacktrace_level: disable
+
+enable_oss_log: true
+enable_mon_log: true
+
+login_code_protect: 0s
+login_code_valid_sec: 720s
+
+# 日志输出路径
+server_log_dir: ../log
+
+# 日志滚动数量
+log_rotate_num: 10
+
+remove_all_delay_await_time_ms: 150
+remove_all_delay_timeout_second: 60
+log_enable_stdout: disable

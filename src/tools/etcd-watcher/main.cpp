@@ -69,7 +69,7 @@ int main(int argc, char *argv[]) {
 
   atfw::util::time::time_utility::update();
   WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->init();
-  WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->set_prefix_format("[%L][%F %T.%f][%k:%n(%C)]: ");
+  WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->set_prefix_format("[%F %T.%f][%L](%k:%n): ");
   WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->add_sink(log_callback);
   WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)
       ->set_stacktrace_level(util::log::log_formatter::level_t::LOG_LW_ERROR);

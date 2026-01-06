@@ -1,0 +1,3 @@
+{{- template "libapp.pvc" (list . "echosvr.pvc") -}}
+{{- define "echosvr.pvc" -}}
+{{- end -}}

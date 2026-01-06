@@ -1,0 +1,156 @@
+{{- define "libapp.statefulset.tpl" -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "libapp.fullname" . }}
+  labels:
+    {{- include "libapp.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "libapp.fullname" . }}
+  {{- if or (empty .Values.autoscaling) (not .Values.autoscaling.enabled) }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  {{- if .Values.minReadySeconds }}
+  minReadySeconds: {{ .Values.minReadySeconds }}
+  {{- end }}
+  {{- with .Values.updateStrategy }}
+  updateStrategy:
+    {{- toYaml . | nindent 8 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "libapp.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+      {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "libapp.selectorLabels" . | nindent 8 }}
+    spec:
+      enableServiceLinks: {{ default false .Values.enableServiceLinks }}
+      {{- if .Values.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - {{ include "libapp.container.tpl" . | nindent 10 }}
+      {{- if and .Values.vector (default true .Values.vector.enabled) }}
+      initContainers:
+        - {{ include "libapp.vector.container.tpl" . | nindent 10 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        {{- /* configmap volume */}}
+        - name: config
+          configMap: 
+            name: {{ include "libapp.fullname" . }}
+
+        {{- /* persistence volume */}}
+        {{- $persistentVols := list -}}
+        {{- if .Values.persistence }}
+        {{- $_ := unset .Values.persistence "enabled" }}
+        {{- range $_,$m := .Values.persistence -}}
+        {{- if $m.enabled -}}
+        {{- range $_,$v := $m.volumes -}}
+        {{- $persistentVols = append $persistentVols $v.name -}}
+        {{- end -}}
+        {{- end -}}
+        {{- end -}}
+
+        {{- with $cfs := .Values.persistence.cfs }}
+        {{- if $cfs.enabled }}
+        {{- range $_,$v := $cfs.volumes }}
+        - name: {{ $v.name | required "volume name is required" }}
+          persistentVolumeClaim:
+            claimName: {{ include "libapp.fullname" $ }}-{{ $v.name }}-cfs-pvc
+        {{- end }}
+        {{- end }}
+        {{- end }}
+        
+        {{- with $cos := .Values.persistence.cos }}
+        {{- if $cos.enabled }}
+        {{- range $_,$v := $cos.volumes }}
+        - name: {{ $v.name | required "volume name is required" }}
+          persistentVolumeClaim:
+            claimName: {{ include "libapp.fullname" $ }}-{{ $v.name }}-cos-pvc
+        {{- end }}
+        {{- end }}
+        {{- end }}
+
+        {{- with $local := .Values.persistence.local }}
+        {{- if $local.enabled }}
+        {{- range $_,$v := $local.volumes }}
+        - name: {{ $v.name | required "volume name is required" }}
+          persistentVolumeClaim:
+            claimName: {{ include "libapp.fullname" $ }}-{{ $v.name }}-local-pvc
+        {{- end }}
+        {{- end }}
+        {{- end }}
+        {{- end }} {{- /* end if persistence */}}
+        
+        {{- /* extra volume */}}
+        {{- /* convert volume spec begin */}}
+        {{- $vols := list -}}
+        {{- range .Values.extraVolumes }}
+          {{- $v := . | deepCopy -}}
+          {{- if not (has $v.name $persistentVols) }} {{- /* persistent volumes has high authoritative */}}
+          {{- $hostPath := $v.hostPath }}
+          {{- if $hostPath }} {{- /* hostPath volume */}}
+            {{- if and $v.hostPartition $.Values.partition }}
+            {{- $_ := set $hostPath "path" (printf "%s/%s" $hostPath.path $.Values.partition) }}
+            {{- end }}
+            {{- $_ := unset $v "hostPartition" }}
+          {{- end }}
+          {{- $_ := unset $v "mountPath" }}
+          {{- $_ := unset $v "subPath" }}
+          {{- $_ := unset $v "readOnly" }}
+          {{- $vols = append $vols $v }}
+          {{- end }}
+        {{- end }}
+        {{- /* convert volume spec end */}}
+        {{- if $vols }}
+        {{- toYaml $vols | nindent 8 }}
+        {{- end }}
+  {{- if .Values.persistence }}
+  {{- with $cbs := .Values.persistence.cbs }}
+  {{- if $cbs.enabled }}
+  volumeClaimTemplates:
+    {{- range $_,$v := $cbs.volumes }}
+    - metadata:
+        name: {{ $v.name }}
+        labels:
+          app: {{ include "libapp.name" $ }}
+          release: {{ $.Release.Name }}
+      spec:
+        storageClassName: {{ default "cbs" $cbs.storageClass | quote }}
+        accessModes:
+        - {{ default "ReadWriteOnce" $v.accessMode | quote }}
+        resources:
+          requests:
+            storage: {{ $v.storage | quote }}
+    {{- end }} {{- /* end range cbs volumes */}}
+  {{- end }} {{- /* end if cbs enabled */}}
+  {{- end }} {{- /* end with persistence cbs */}}
+  {{- end }} {{- /* end if persistence */}}
+{{- end -}}
+{{- define "libapp.statefulset" -}}
+{{- template "libapp.util.merge" (append . "libapp.statefulset.tpl") -}}
+{{- end -}}

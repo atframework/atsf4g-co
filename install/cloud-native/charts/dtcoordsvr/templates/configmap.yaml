@@ -1,0 +1,6 @@
+{{- template "libapp.configmap" (list . "dtcoordsvr.configmap") -}}
+{{- define "dtcoordsvr.configmap" -}}
+data:
+  {{ include "dtcoordsvr.name" . }}.yaml: {{ tpl (.Files.Get "cfg/dtcoordsvr.yaml.tpl") . | quote }}
+  vector.yaml: {{ tpl (.Files.Get "cfg/vector.yaml.tpl") . | quote }}
+{{- end -}}

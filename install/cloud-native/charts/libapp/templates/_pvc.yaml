@@ -1,0 +1,76 @@
+{{- define "libapp.pvc.tpl" -}}
+{{- if .Values.persistence }}
+{{- with $cfs := .Values.persistence.cfs }}
+{{- if $cfs.enabled }}
+{{- range $k,$v := $cfs.volumes }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "libapp.fullname" $ }}-{{ $v.name }}-cfs-pvc
+  namespace: {{ $.Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "libapp.selectorLabels" $ | nindent 6 }}
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: {{ $v.storage }}
+  storageClassName: ""
+  volumeMode: Filesystem
+  volumeName: {{ include "libapp.fullname" $ }}-{{ $v.name }}-cfs-pv
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{- with $cos := .Values.persistence.cos }}
+{{- if $cos.enabled }}
+{{- range $k,$v := $cos.volumes }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "libapp.fullname" $ }}-{{ $v.name }}-cos-pvc
+spec:
+  selector:
+    matchLabels:
+      {{- include "libapp.selectorLabels" $ | nindent 6 }}
+      bucket: {{ $cos.bucket }}
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: {{ $v.storage }}
+  storageClassName: ""
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{- with $local := .Values.persistence.local }}
+{{- if $local.enabled }}
+{{- range $k,$v := $local.volumes }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "libapp.fullname" $ }}-{{ $v.name }}-local-pvc
+spec:
+  selector:
+    matchLabels:
+      {{- include "libapp.selectorLabels" $ | nindent 6 }}
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ $v.storage }}
+  storageClassName: {{ default "local-storage" $local.storageClass | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end -}}
+{{- define "libapp.pvc" -}}
+{{- template "libapp.util.merge" (append . "libapp.pvc.tpl") -}}
+{{- end -}}
