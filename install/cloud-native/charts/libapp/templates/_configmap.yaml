@@ -1,0 +1,14 @@
+{{- define "libapp.configmap.tpl" -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "libapp.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "libapp.name" . }}
+    release: {{ .Release.Name }}
+data:
+{{- end -}}
+{{- define "libapp.configmap" -}}
+{{- template "libapp.util.merge" (append . "libapp.configmap.tpl") -}}
+{{- end -}}

@@ -1,0 +1,123 @@
+{{- define "libapp.container.tpl" -}}
+name: {{ include "libapp.name" . }}
+securityContext:
+  {{- toYaml .Values.securityContext | nindent 2 }}
+image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
+imagePullPolicy: {{ .Values.image.pullPolicy }}
+args:
+  - "start"
+livenessProbe:
+  exec:
+    command:
+      - /bin/sh
+      - "-c"
+      - |
+        set -x
+        /entrypoint.sh health_check
+  periodSeconds: 3
+startupProbe:
+  exec:
+    command:
+      - /bin/sh
+      - "-c"
+      - |
+        set -ex
+        /entrypoint.sh health_check
+  failureThreshold: 18
+lifecycle:
+  preStop:
+    exec:
+      command:
+        - /bin/sh
+        - "-c"
+        - |
+          set -x
+          {{- if .Values.terminationGracePeriodSeconds }}
+          /entrypoint.sh stop --timeout {{ .Values.terminationGracePeriodSeconds }}
+          {{- else }}
+          /entrypoint.sh stop
+          {{- end }}
+volumeMounts:
+- name: config
+  mountPath: {{ .Values.volumeMounts.configMountPath | quote }}
+  readOnly: true
+- name: log
+  mountPath: {{ .Values.volumeMounts.logMountPath | quote }}
+env:
+- name: ATAPP_NAME
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.name
+- name: ATAPP_HOSTNAME
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.name
+- name: ATAPP_METADATA_NAME
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.name
+- name: ATAPP_METADATA_NAMESPACE_NAME
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.namespace
+- name: ATAPP_METADATA_UID
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.uid
+- name: ATAPP_RUNTIME_SPEC_SERVICE_ACCOUNT_NAME
+  valueFrom:
+    fieldRef:
+      fieldPath: spec.serviceAccountName
+- name: ATAPP_RUNTIME_SPEC_NODE_NAME
+  valueFrom:
+    fieldRef:
+      fieldPath: spec.nodeName
+- name: ATAPP_RUNTIME_STATUS_HOST_IP
+  valueFrom:
+    fieldRef:
+      fieldPath: status.hostIP
+- name: ATAPP_RUNTIME_STATUS_POD_IP
+  valueFrom:
+    fieldRef:
+      fieldPath: status.podIP
+- name: ATAPP_RESOURCE_LIMITS_CPU
+  valueFrom:
+    resourceFieldRef:
+      containerName: {{ include "libapp.name" . }}
+      resource: limits.cpu
+      divisor: "1m"
+- name: ATAPP_RESOURCE_LIMITS_MEMORY
+  valueFrom:
+    resourceFieldRef:
+      containerName: {{ include "libapp.name" . }}
+      resource: limits.memory
+- name: ATAPP_RESOURCE_REQUESTS_CPU
+  valueFrom:
+    resourceFieldRef:
+      containerName: {{ include "libapp.name" . }}
+      resource: requests.cpu
+      divisor: "1m"
+- name: ATAPP_RESOURCE_REQUESTS_MEMORY
+  valueFrom:
+    resourceFieldRef:
+      containerName: {{ include "libapp.name" . }}
+      resource: requests.memory
+- name: ATAPP_INSTANCE_ID
+  value: {{ include "libapp.busAddr" . }}
+{{- end -}}
+
+{{- define "libapp.vector.container.tpl" -}}
+{{- if and .Values.vector (default true .Values.vector.enabled) }}
+name: vector
+image: "{{ .Values.vector.image.repository }}"
+imagePullPolicy: {{ .Values.vector.image.pullPolicy }}
+restartPolicy: Always
+args: [--config, {{ .Values.volumeMounts.configMountPath }}/vector.yaml]
+volumeMounts:
+- name: config
+  mountPath: {{ .Values.volumeMounts.configMountPath | quote }}
+  readOnly: true
+- name: log
+  mountPath: {{ .Values.volumeMounts.logMountPath | quote }}
+{{- end }}
+{{- end -}}

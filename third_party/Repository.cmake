@@ -141,6 +141,9 @@ include("${CMAKE_CURRENT_LIST_DIR}/xresloader/xresloader.cmake")
 # =========== third_party - cfssl ===========
 include("${CMAKE_CURRENT_LIST_DIR}/cfssl/cfssl.cmake")
 
+# =========== third_party - atdtool ===========
+include("${CMAKE_CURRENT_LIST_DIR}/atdtool/atdtool.cmake")
+
 # =========== third_party - otel ===========
 include("${CMAKE_CURRENT_LIST_DIR}/otel/otelcol-contrib.cmake")
 

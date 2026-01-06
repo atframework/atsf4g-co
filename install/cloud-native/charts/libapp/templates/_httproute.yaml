@@ -1,0 +1,35 @@
+{{- define "libapp.httproute.tpl" -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  # name: 使用 chart fullname 并追加 -http-route，允许通过 .Values.httproute.name 覆盖
+  name: {{ default (printf "%s-http-route" (include "libapp.fullname" .)) }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "libapp.name" . }}
+    release: {{ .Release.Name }}
+spec:
+  parentRefs:
+  - name: {{ default "project-x-tls-gateway" .Values.httproute.parentRefsName | quote }}
+  # hostnames: 支持单个字符串或数组 .Values.httproute.hosts
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        {{- $atapp := (default (dict) .Values.atapp) -}}
+        {{- $deploy := (default (dict) $atapp.deployment) -}}
+        {{- $env := (default "" $deploy.deployment_environment) -}}
+        {{- $ws := (default (dict) .Values.websocket) -}}
+        {{- $wspath := (default "" $ws.path) -}}
+        {{- if $wspath }}
+        value: {{ printf "/%s/%s/ws/v1" $env $wspath | replace "///" "/" | replace "//" "/" | quote }}
+        {{- else }}
+        value: "/ws/v1"
+        {{- end }}
+    backendRefs:
+    - name: {{ default (include "libapp.fullname" .) }}
+      port: {{ default 80 .Values.service.port }}
+{{- end -}}
+{{- define "libapp.httproute" -}}
+{{- template "libapp.util.merge" (append . "libapp.httproute.tpl") -}}
+{{- end -}}
