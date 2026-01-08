@@ -22,11 +22,17 @@ enum EnSystemLimit {
 }
 
 enum EnGlobalUUIDMajorType {
-  EN_GLOBAL_UUID_MAT_DEFAULT = 0;      // INVALID
-  EN_GLOBAL_UUID_MAT_MAIL = 1;         // 邮件GUID分配器
-  EN_GLOBAL_UUID_MAT_TRANSACTION = 2;  // 事务GUID分配器
-  EN_GLOBAL_UUID_MAT_USER_ID = 3;      // User ID分配器
-  EN_GLOBAL_UUID_MAT_GUILD_ID = 4;     // Guild ID分配器
+  EN_GLOBAL_UUID_MAT_DEFAULT = 0;            // INVALID
+  EN_GLOBAL_UUID_MAT_MAIL = 1;               // 邮件GUID分配器
+  EN_GLOBAL_UUID_MAT_TRANSACTION = 2;        // 事务GUID分配器
+  EN_GLOBAL_UUID_MAT_USER_ID = 3;            // User ID分配器
+  EN_GLOBAL_UUID_MAT_GUILD_ID = 4;           // Guild ID分配器
+  EN_GLOBAL_UUID_MAT_DB_LIST_RECORD_ID = 5;  // DB List Record ID分配器
+}
+
+enum EnGlobalUUIDMinorType {
+  EN_GLOBAL_UUID_MIT_DEFAULT = 0;                       // INVALID
+  EN_GLOBAL_UUID_MIT_DB_LIST_RECORD_ID_ASYNC_JOBS = 1;  // AsyncJobs 类型的DB List Record ID
 }
 
 // player async job type

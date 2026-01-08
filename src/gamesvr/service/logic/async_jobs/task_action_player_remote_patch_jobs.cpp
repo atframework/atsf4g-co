@@ -28,7 +28,7 @@
 #include <dispatcher/task_manager.h>
 #include <logic/async_jobs/user_async_jobs_manager.h>
 
-#include <rpc/db/async_jobs.h>
+#include <rpc/async_jobs/async_jobs.h>
 
 #include <string>
 #include <utility>
@@ -44,7 +44,7 @@ task_action_player_remote_patch_jobs::task_action_player_remote_patch_jobs(ctor_
 task_action_player_remote_patch_jobs::~task_action_player_remote_patch_jobs() {}
 
 static rpc::result_code_type save_player_data(rpc::context& ctx, router_player_cache::ptr_t& cache,
-                                              size_t batch_job_number, std::vector<int64_t>& complete_jobs_idx,
+                                              size_t batch_job_number, std::vector<uint64_t>& complete_jobs_idx,
                                               int job_type, uint64_t user_id, uint32_t zone_id,
                                               const std::string& openid) {
   if (!cache || !cache->is_writable()) {
@@ -70,7 +70,7 @@ static rpc::result_code_type save_player_data(rpc::context& ctx, router_player_c
 
   if (!complete_jobs_idx.empty()) {
     // 移除远程命令
-    ret = RPC_AWAIT_CODE_RESULT(rpc::db::async_jobs::del_jobs(ctx, job_type, user_id, zone_id, complete_jobs_idx));
+    ret = RPC_AWAIT_CODE_RESULT(rpc::async_jobs::del_jobs(ctx, job_type, user_id, zone_id, complete_jobs_idx));
     if (ret < 0) {
       FWLOGERROR("delete async jobs for player {}({}:{}) failed, res: {}({})", openid, zone_id, user_id, ret,
                  protobuf_mini_dumper_get_error_msg(ret));
@@ -147,10 +147,10 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
 
     FWPLOGDEBUG(*param_.user, "task_action_player_remote_patch_jobs load from get_jobs type {}", val_desc->number());
 
-    std::vector<rpc::db::async_jobs::async_jobs_record> job_list;
-    std::vector<int64_t> complete_jobs_idx;
+    std::vector<rpc::db::async_jobs::table_user_async_jobs_list_message> job_list;
+    std::vector<uint64_t> complete_jobs_idx;
 
-    ret = RPC_AWAIT_CODE_RESULT(rpc::db::async_jobs::get_jobs(
+    ret = RPC_AWAIT_CODE_RESULT(rpc::async_jobs::get_jobs(
         get_shared_context(), val_desc->number(), param_.user->get_user_id(), param_.user->get_zone_id(), job_list));
     if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
       param_.user->get_user_async_jobs_manager().clear_job_uuids(val_desc->number());
@@ -169,17 +169,24 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
         break;
       }
 
-      complete_jobs_idx.push_back(job_list[i].record_index);
+      complete_jobs_idx.push_back(job_list[i].list_index);
 
-      if (param_.user->get_user_async_jobs_manager().is_job_uuid_exists(val_desc->number(),
-                                                                        job_list[i].action_blob->action_uuid())) {
+      if (!job_list[i].message) {
+        // 数据异常，直接跳过
+        continue;
+      }
+
+      if (param_.user->get_user_async_jobs_manager().is_job_uuid_exists(
+              val_desc->number(), (*job_list[i].message)->job_data().action_uuid())) {
         // 已执行则跳过
         continue;
       }
       param_.user->get_user_async_jobs_manager().add_job_uuid(val_desc->number(),
-                                                              job_list[i].action_blob->action_uuid());
+                                                              (*job_list[i].message)->job_data().action_uuid());
 
-      async_job_ptr_type job_data_ptr = job_list[i].action_blob.share_instance();
+      async_job_ptr_type job_data_ptr =
+          atfw::util::memory::make_strong_rc<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>(
+              std::move(*(*job_list[i].message)->mutable_job_data()));
 
       ++batch_job_number;
       int async_job_res = do_job(val_desc->number(), job_data_ptr);

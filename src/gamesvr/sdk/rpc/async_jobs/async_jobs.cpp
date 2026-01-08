@@ -2,7 +2,7 @@
 // Created by owent on 2019-06-17.
 //
 
-#include "rpc/db/async_jobs.h"
+#include "rpc/async_jobs/async_jobs.h"
 
 #include <algorithm/murmur_hash.h>
 #include <log/log_wrapper.h>
@@ -27,11 +27,9 @@
 #include "rpc/rpc_macros.h"
 #include "rpc/rpc_utils.h"
 
-#include "rpc/db/local_db_interface.h"
 #include "rpc/db/uuid.h"
 
 namespace rpc {
-namespace db {
 namespace async_jobs {
 
 namespace detail {
@@ -86,8 +84,9 @@ static rpc::result_code_type fetch_user_login_cache(rpc::context& ctx, uint64_t 
 }
 }  // namespace detail
 
-GAME_RPC_API result_type get_jobs(rpc::context& /*ctx*/, int32_t jobs_type, uint64_t user_id, uint32_t /*zone_id*/,
-                                  std::vector<async_jobs_record>& /*out*/) {
+GAME_RPC_API ::rpc::db::result_type get_jobs(
+    rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
+    std::vector<rpc::db::async_jobs::table_user_async_jobs_list_message>& out) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid paronlineameters.(jobs_type={}, user_id={})", __FUNCTION__, jobs_type,
                user_id);
@@ -100,14 +99,11 @@ GAME_RPC_API result_type get_jobs(rpc::context& /*ctx*/, int32_t jobs_type, uint
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  // TODO db operation
-  // return RPC_AWAIT_CODE_RESULT(RPC_AWAIT_CODE_RESULT(rpc::db::TABLE_USER_ASYNC_JOBS_DEF::get_all(ctx, jobs_type,
-  // user_id, zone_id, out)));
-  RPC_DB_RETURN_CODE(0);
+  RPC_DB_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::db::async_jobs::get_all(ctx, jobs_type, user_id, zone_id, out)));
 }
 
-GAME_RPC_API result_type del_jobs(rpc::context& /*ctx*/, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-                                  const std::vector<int64_t>& in) {
+GAME_RPC_API ::rpc::db::result_type del_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
+                                             const std::vector<uint64_t>& in) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, zone_id={}, user_id={})", __FUNCTION__, jobs_type,
                zone_id, user_id);
@@ -125,14 +121,13 @@ GAME_RPC_API result_type del_jobs(rpc::context& /*ctx*/, int32_t jobs_type, uint
     RPC_DB_RETURN_CODE(0);
   }
 
-  // TODO db operation
-  // return RPC_AWAIT_CODE_RESULT(rpc::db::TABLE_USER_ASYNC_JOBS_DEF::remove(ctx, jobs_type, user_id, zone_id, in));
-  RPC_DB_RETURN_CODE(0);
+  RPC_DB_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+      rpc::db::async_jobs::remove_by_index(ctx, jobs_type, user_id, zone_id, gsl::make_span(in))));
 }
 
-GAME_RPC_API result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-                                  shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>& in,
-                                  action_options options) {
+GAME_RPC_API ::rpc::db::result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
+                                             shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>& in,
+                                             action_options options) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
                user_id, zone_id);
@@ -158,12 +153,26 @@ GAME_RPC_API result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t
   in->set_timepoint_ms(util::time::time_utility::get_now() * 1000 +
                        atfw::util::time::time_utility::get_now_usec() / 1000);
 
-  // TODO db operation
-  // auto ret = RPC_AWAIT_CODE_RESULT(rpc::db::TABLE_USER_ASYNC_JOBS_DEF::add(ctx, in, nullptr, nullptr));
-  // if (0 != ret) {
-  //   return ret;
-  // }
-  int ret = 0;
+  rpc::shared_message<hello::table_user_async_jobs> input{ctx};
+  input->set_job_type(jobs_type);
+  input->set_user_id(user_id);
+  input->set_zone_id(zone_id);
+  protobuf_copy_message(*input->mutable_job_data(), *in);
+
+  // 生成RecordId
+  int64_t record_index = RPC_AWAIT_TYPE_RESULT(rpc::db::uuid::generate_global_unique_id(
+      ctx, static_cast<uint32_t>(PROJECT_NAMESPACE_ID::EN_GLOBAL_UUID_MAT_DB_LIST_RECORD_ID),
+      static_cast<uint32_t>(PROJECT_NAMESPACE_ID::EN_GLOBAL_UUID_MIT_DB_LIST_RECORD_ID_ASYNC_JOBS), 0));
+  if (record_index < 0) {
+    RPC_RETURN_CODE(static_cast<int>(record_index));
+  }
+
+  uint64_t record_version = 0;
+  int32_t ret =
+      RPC_AWAIT_CODE_RESULT(rpc::db::async_jobs::replace(ctx, record_index, std::move(input), record_version));
+  if (0 != ret) {
+    RPC_DB_RETURN_CODE(ret);
+  }
 
   // 尝试通知在线玩家, 失败则放弃。只是会延迟到账，不影响逻辑。
   do {
@@ -197,9 +206,9 @@ GAME_RPC_API result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t
   RPC_DB_RETURN_CODE(ret);
 }
 
-GAME_RPC_API result_code_type add_jobs_with_retry(
-    rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-    shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>& inout, action_options options) {
+GAME_RPC_API result_code_type
+add_jobs_with_retry(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
+                    shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>& inout, action_options options) {
   if (inout->left_retry_times() <= 0) {
     inout->set_left_retry_times(logic_config::me()->get_logic().user().async_job().default_retry_times());
   }
@@ -207,7 +216,8 @@ GAME_RPC_API result_code_type add_jobs_with_retry(
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(add_jobs(ctx, jobs_type, user_id, zone_id, inout, options)));
 }
 
-GAME_RPC_API result_type remove_all_jobs(rpc::context& /*ctx*/, int32_t jobs_type, uint64_t user_id, uint32_t zone_id) {
+GAME_RPC_API ::rpc::db::result_type remove_all_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id,
+                                                    uint32_t zone_id) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, zone_id={}, user_id={})", __FUNCTION__, jobs_type,
                zone_id, user_id);
@@ -221,14 +231,13 @@ GAME_RPC_API result_type remove_all_jobs(rpc::context& /*ctx*/, int32_t jobs_typ
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  // TODO db operation
-  // return RPC_AWAIT_CODE_RESULT(rpc::db::TABLE_USER_ASYNC_JOBS_DEF::remove_all(ctx, jobs_type, user_id, zone_id));
-  RPC_DB_RETURN_CODE(0);
+  RPC_DB_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::db::async_jobs::remove_all(ctx, jobs_type, user_id, zone_id)));
 }
 
-GAME_RPC_API result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-                                     shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>& inout,
-                                     int64_t record_index, uint64_t* /*version*/, action_options options) {
+GAME_RPC_API ::rpc::db::result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id,
+                                                uint32_t zone_id,
+                                                shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs>& input,
+                                                int64_t record_index, uint64_t& version, action_options options) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
                user_id, zone_id);
@@ -242,7 +251,7 @@ GAME_RPC_API result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint6
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  if (PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::ACTION_NOT_SET == inout->action_case()) {
+  if (PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::ACTION_NOT_SET == input->job_data().action_case()) {
     FWLOGERROR("{} be called without a action.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type, user_id,
                zone_id);
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
@@ -254,19 +263,17 @@ GAME_RPC_API result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint6
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  if (inout->action_uuid().empty()) {
-    inout->set_action_uuid(rpc::db::uuid::generate_short_uuid());
+  if (input->job_data().action_uuid().empty()) {
+    input->mutable_job_data()->set_action_uuid(rpc::db::uuid::generate_short_uuid());
   }
 
-  inout->set_timepoint_ms(util::time::time_utility::get_now() * 1000 +
-                          atfw::util::time::time_utility::get_now_usec() / 1000);
+  input->mutable_job_data()->set_timepoint_ms(util::time::time_utility::get_now() * 1000 +
+                                              atfw::util::time::time_utility::get_now_usec() / 1000);
 
-  // TODO db operation
-  // auto ret = RPC_AWAIT_CODE_RESULT(rpc::db::TABLE_USER_ASYNC_JOBS_DEF::replace(ctx, inout, record_index, version));
-  // if (0 != ret) {
-  //   return ret;
-  // }
-  int ret = 0;
+  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::db::async_jobs::replace(ctx, record_index, std::move(input), version));
+  if (0 != ret) {
+    RPC_DB_RETURN_CODE(ret);
+  }
 
   // 尝试通知在线玩家, 失败则放弃。只是会延迟到账，不影响逻辑。
   do {
@@ -302,5 +309,4 @@ GAME_RPC_API result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint6
 }
 
 }  // namespace async_jobs
-}  // namespace db
 }  // namespace rpc
