@@ -8,52 +8,19 @@
 - **License**: MIT
 - **Languages**: C++ (C++17 required, C++17/C++20/C++23 features used when available)
 
+## Skills (How-to playbooks)
+
+Operational, copy/paste-friendly guides live in `.github/skills/`:
+
+- Entry point: `.github/skills/README.md`
+
 ## Build System
 
 This project uses **CMake** (minimum version 3.24.0).
 
-### Build on Windows
+Build steps and common configuration options are documented in:
 
-```bash
-mkdir build_jobs_msvc
-cd build_jobs_msvc
-
-# Configure with vcpkg
-cmake [SOURCE_PATH] -G "Visual Studio 17 2022" -A x64 \
-  "-DCMAKE_TOOLCHAIN_FILE=<VCPKG_INSTALL_DIR>/scripts/buildsystems/vcpkg.cmake" \
-  -DPROJECT_ENABLE_UNITTEST=YES \
-  -DPROJECT_ENABLE_SAMPLE=YES \
-  -DPROJECT_ENABLE_TOOLS=YES
-
-# Build
-cmake --build . --config Debug
-cmake --build . --config RelWithDebInfo  # For production
-```
-
-### Build on Unix/Linux/macOS
-
-```bash
-# Auto setup with cmake_dev.sh
-bash cmake_dev.sh [options] ...
-
-# Example: Enable OpenSSL, unit tests, samples
-bash ./cmake_dev.sh -lus -- -DCRYPTO_USE_OPENSSL=YES
-
-# Build
-cd build_jobs_*
-cmake --build . -- -j4
-```
-
-### Key CMake Options
-
-| Option                    | Default | Description                |
-| ------------------------- | ------- | -------------------------- |
-| `PROJECT_ENABLE_UNITTEST` | NO      | Enable unit tests          |
-| `PROJECT_ENABLE_SAMPLE`   | NO      | Enable sample applications |
-| `PROJECT_ENABLE_TOOLS`    | NO      | Enable tools               |
-| `BUILD_SHARED_LIBS`       | NO      | Build shared libraries     |
-| `CRYPTO_USE_OPENSSL`      | NO      | Use OpenSSL for crypto     |
-| `CRYPTO_USE_MBEDTLS`      | NO      | Use MbedTLS for crypto     |
+- `.github/skills/build.md`
 
 ## Directory Structure
 
@@ -145,64 +112,11 @@ CASE_THREAD_YIELD()
 
 ### Running Tests
 
-```bash
-# Run all tests
-./<test_executable>
+See `.github/skills/testing.md` for how to run unit tests (including Windows DLL/PATH notes).
 
-# List all test cases
-./<test_executable> -l
-./<test_executable> --list-tests
+## CMake helper functions
 
-# Run specific test group(s) or case(s)
-./<test_executable> -r <test_group_name>
-./<test_executable> -r <test_group_name>.<test_case_name>
-
-# Run with filter pattern (supports wildcards)
-./<test_executable> -f "pattern*"
-./<test_executable> --filter "pattern*"
-
-# Show help
-./<test_executable> -h
-
-# Show version
-./<test_executable> -v
-```
-
-## CMake Functions
-
-### Service Declaration Functions
-
-Located in `src/service-functions.cmake`:
-
-```cmake
-# Declare a service protocol (protobuf)
-project_service_declare_protocol(
-    TARGET_NAME
-    PROTOCOL_DIR
-    PROTOCOLS <proto_files...>
-    [USE_COMPONENTS <components...>]
-    [USE_SERVICE_PROTOCOL <protocols...>]
-    [OUTPUT_DIR <dir>]
-    [DLLEXPORT_DECL <decl>]
-)
-
-# Declare a service SDK
-project_service_declare_sdk(
-    TARGET_NAME
-    SDK_ROOT_DIR
-    [SOURCES <source_files...>]
-    [HEADERS <header_files...>]
-    [USE_COMPONENTS <components...>]
-    [USE_SERVICE_PROTOCOL <protocols...>]
-    [USE_SERVICE_SDK <sdks...>]
-)
-```
-
-### Target Aliases
-
-- `protocol::<name>` - Protocol library target
-- `sdk::<name>` - SDK library target
-- `components::<name>` - Component library target
+See `.github/skills/service-functions-cmake.md`.
 
 ## Server Architecture
 
@@ -225,37 +139,13 @@ Client → atgateway → atproxy → Game Server
            dispatcher → logic → data → DB
 ```
 
-## Configuration
+## Deployment configuration
 
-### Deployment Configuration
+See `.github/skills/deployment-config.md`.
 
-1. Edit `<BUILD_DIR>/publish/tools/script/config.conf`
-2. Set etcd server and DB configuration
-3. Run `python3 gen_conf.py` to generate all config files
-4. Use generated scripts: `restart_all.sh`, `stop_all.sh`, `reload_all.sh`
+## Code generation
 
-```bash
-cd publish/tools/script
-vim config.conf
-python3 gen_conf.py
-./restart_all.sh
-```
-
-## Code Generation
-
-### Protobuf Code Generation
-
-Protocol buffer files are auto-generated during build:
-
-- Source: `*.proto` files in protocol directories
-- Output: `*.pb.h` and `*.pb.cc` in `_generated/` directory
-
-### Template-Based Generation
-
-Uses Mako templates for code generation:
-
-- Templates in `src/templates/`
-- Generated files in `_generated/` directory
+See `.github/skills/code-generation.md`.
 
 ## Coding Conventions
 
