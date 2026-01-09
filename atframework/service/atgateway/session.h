@@ -116,12 +116,12 @@ class session : public std::enable_shared_from_this<session> {
   inline void *get_private_data() const noexcept { return private_data_; }
   inline void set_private_data(void *priv_data) noexcept { private_data_ = priv_data; }
 
-  inline void set_router(::atbus::node::bus_id_t id, const std::string &node_name) {
+  inline void set_router(::atbus::bus_id_t id, const std::string &node_name) {
     router_node_id_ = id;
     router_node_name_ = node_name;
   }
 
-  inline ::atbus::node::bus_id_t get_router_id() const noexcept { return router_node_id_; }
+  inline ::atbus::bus_id_t get_router_id() const noexcept { return router_node_id_; }
   inline const std::string &get_router_name() const noexcept { return router_node_name_; }
 
   inline const std::string &get_peer_host() const noexcept { return peer_ip_; }
@@ -130,7 +130,7 @@ class session : public std::enable_shared_from_this<session> {
 
  private:
   id_t id_;
-  ::atbus::node::bus_id_t router_node_id_;
+  ::atbus::bus_id_t router_node_id_;
   std::string router_node_name_;
   session_manager *owner_;
 
