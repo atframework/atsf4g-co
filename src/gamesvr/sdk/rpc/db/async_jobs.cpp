@@ -21,14 +21,13 @@
 
 #include <unordered_map>
 
-#include "rpc/db/db_macros.h"
 #include "rpc/db/db_utils.h"
 #include "rpc/game/gamesvrservice.h"
 #include "rpc/game/player.h"
 #include "rpc/rpc_macros.h"
 #include "rpc/rpc_utils.h"
 
-#include "rpc/db/login.h"
+#include "rpc/db/local_db_interface.h"
 #include "rpc/db/uuid.h"
 
 namespace rpc {
@@ -79,7 +78,7 @@ static rpc::result_code_type fetch_user_login_cache(rpc::context& ctx, uint64_t 
   }
 
   uint64_t version = 0;
-  int ret = RPC_AWAIT_CODE_RESULT(rpc::db::login::get(ctx, std::to_string(user_id).c_str(), zone_id, rsp, version));
+  int ret = RPC_AWAIT_CODE_RESULT(rpc::db::login::get_all(ctx, user_id, zone_id, rsp, version));
   if (0 == ret) {
     local_cache[key] = atfw::util::memory::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::table_login>>(rsp);
   }
@@ -132,7 +131,7 @@ GAME_RPC_API result_type del_jobs(rpc::context& /*ctx*/, int32_t jobs_type, uint
 }
 
 GAME_RPC_API result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-                                  shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>& in,
+                                  shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>& in,
                                   action_options options) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
@@ -147,7 +146,7 @@ GAME_RPC_API result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  if (PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data::ACTION_NOT_SET == in->action_case()) {
+  if (PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::ACTION_NOT_SET == in->action_case()) {
     FWLOGERROR("{} be called without a action.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type, user_id,
                zone_id);
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
@@ -200,7 +199,7 @@ GAME_RPC_API result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t
 
 GAME_RPC_API result_code_type add_jobs_with_retry(
     rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-    shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>& inout, action_options options) {
+    shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>& inout, action_options options) {
   if (inout->left_retry_times() <= 0) {
     inout->set_left_retry_times(logic_config::me()->get_logic().user().async_job().default_retry_times());
   }
@@ -228,7 +227,7 @@ GAME_RPC_API result_type remove_all_jobs(rpc::context& /*ctx*/, int32_t jobs_typ
 }
 
 GAME_RPC_API result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-                                     shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>& inout,
+                                     shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>& inout,
                                      int64_t record_index, uint64_t* /*version*/, action_options options) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
@@ -243,7 +242,7 @@ GAME_RPC_API result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint6
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  if (PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data::ACTION_NOT_SET == inout->action_case()) {
+  if (PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::ACTION_NOT_SET == inout->action_case()) {
     FWLOGERROR("{} be called without a action.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type, user_id,
                zone_id);
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);

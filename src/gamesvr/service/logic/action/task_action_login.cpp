@@ -19,15 +19,13 @@
 
 #include <atgateway/protocols/libatgw_protocol_api.h>
 
-#include <rpc/db/login.h>
-
 #include <data/player.h>
 #include <data/session.h>
 #include <logic/player_manager.h>
 #include <logic/session_manager.h>
 
 #include <config/logic_config.h>
-#include <rpc/db/player.h>
+#include <rpc/db/local_db_interface.h>
 #include <rpc/rpc_async_invoke.h>
 
 #include <router/router_player_manager.h>
@@ -109,8 +107,7 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
 
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> tb{get_shared_context()};
   uint64_t version = 0;
-  res = RPC_AWAIT_CODE_RESULT(
-      rpc::db::login::get(get_shared_context(), req_body.open_id().c_str(), zone_id, tb, version));
+  res = RPC_AWAIT_CODE_RESULT(rpc::db::login::get_all(get_shared_context(), req_body.user_id(), zone_id, tb, version));
   if (res < 0) {
     FCTXLOGERROR(get_shared_context(), "player {} not found", req_body.open_id());
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);

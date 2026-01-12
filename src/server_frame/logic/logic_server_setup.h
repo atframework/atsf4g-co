@@ -168,7 +168,7 @@ class logic_server_common_module : public atfw::atapp::module_impl {
   SERVER_FRAME_API void update_remote_server_configure(const std::string& global_conf, int32_t global_version,
                                                        const std::string& zone_conf, int32_t zone_version);
 
-  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::table_service_configure_data& get_remote_server_configure()
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::remote_service_configure_data& get_remote_server_configure()
       const noexcept {
     return server_remote_conf_;
   }
@@ -231,7 +231,7 @@ class logic_server_common_module : public atfw::atapp::module_impl {
   std::unordered_map<uint64_t, atfw::atapp::etcd_discovery_set::ptr_t> service_zone_index_;
   std::unique_ptr<atfw::atapp::etcd_module::node_event_callback_handle_t> service_index_handle_;
 
-  PROJECT_NAMESPACE_ID::table_service_configure_data server_remote_conf_;
+  PROJECT_NAMESPACE_ID::remote_service_configure_data server_remote_conf_;
   int32_t server_remote_conf_global_version_;
   int32_t server_remote_conf_zone_version_;
   time_t server_remote_conf_next_update_time_;

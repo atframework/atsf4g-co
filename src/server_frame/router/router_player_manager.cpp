@@ -19,8 +19,7 @@
 
 #include <logic/session_manager.h>
 
-#include <rpc/db/login.h>
-#include <rpc/db/player.h>
+#include <rpc/db/local_db_interface.h>
 #include <rpc/rpc_utils.h>
 
 #if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL

@@ -12,6 +12,7 @@
 
 #include <config/compiler/protobuf_prefix.h>
 
+#include <protocol/extension/atframework.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/pbdesc/svr.const.pb.h>
 #include <protocol/pbdesc/svr.global.table.pb.h>
@@ -365,25 +366,24 @@ SERVER_FRAME_API result_code_type wait(context &ctx, atframework::SSMsg &msg, co
   RPC_RETURN_CODE(msg.head().error_code());
 }
 
-SERVER_FRAME_API result_code_type wait(context &ctx, PROJECT_NAMESPACE_ID::table_all_message &msg,
-                                       const dispatcher_await_options &options) {
+SERVER_FRAME_API result_code_type wait(context &ctx, db_message_t &msg, const dispatcher_await_options &options) {
   int ret = RPC_AWAIT_CODE_RESULT(detail::wait(
       ctx, db_msg_dispatcher::me()->get_instance_ident(), options,
       [](const dispatcher_resume_data_type *resume_data, void *stack_data) {
-        PROJECT_NAMESPACE_ID::table_all_message *stack_msg =
-            reinterpret_cast<PROJECT_NAMESPACE_ID::table_all_message *>(stack_data);
+        db_message_t *stack_msg = reinterpret_cast<db_message_t *>(stack_data);
         if (nullptr == stack_msg || nullptr == resume_data) {
           return;
         }
-
-        detail::wait_swap_message(stack_msg, resume_data->message.msg_addr);
+        db_message_t *src_msg = reinterpret_cast<db_message_t *>(resume_data->message.msg_addr);
+        stack_msg->head_message.Swap(&src_msg->head_message);
+        stack_msg->body_message.swap(src_msg->body_message);
       },
       reinterpret_cast<void *>(&msg)));
   if (0 != ret) {
     RPC_RETURN_CODE(ret);
   }
 
-  RPC_RETURN_CODE(msg.error_code());
+  RPC_RETURN_CODE(msg.head_message.error_code());
 }
 
 SERVER_FRAME_API result_code_type wait(context &ctx, const std::unordered_set<dispatcher_await_options> &waiters,

@@ -445,7 +445,7 @@ int task_action_player_remote_patch_jobs::on_failed() {
 void task_action_player_remote_patch_jobs::register_callbacks(
     std::unordered_map<int32_t, sync_callback_type>& sync_callbacks,
     std::unordered_map<int32_t, async_callback_type>& /*async_callbacks*/) {
-  sync_callbacks[static_cast<int32_t>(PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data::kDebugMessage)] =
+  sync_callbacks[static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kDebugMessage)] =
       [](task_action_player_remote_patch_jobs& /*task_action_inst*/, player& user, int32_t /*job_type*/,
          async_job_ptr_type job_data) -> int32_t {
     FWPLOGINFO(user, "[TODO] do async action {}, message: {}", static_cast<int32_t>(job_data->action_case()),
@@ -473,7 +473,7 @@ int32_t task_action_player_remote_patch_jobs::do_job(int32_t job_type, const asy
 
   auto iter_async = async_callbacks.find(static_cast<int32_t>(job_data->action_case()));
   if (iter_async != async_callbacks.end() && iter_async->second) {
-    auto fds = PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data::descriptor()->FindFieldByNumber(
+    auto fds = PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::descriptor()->FindFieldByNumber(
         static_cast<int32_t>(job_data->action_case()));
     std::string sub_job_name;
     if (nullptr == fds) {

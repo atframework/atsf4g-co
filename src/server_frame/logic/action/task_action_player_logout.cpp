@@ -10,8 +10,6 @@
 
 #include <log/log_wrapper.h>
 
-#include <rpc/db/player.h>
-
 #include <data/player_cache.h>
 #include <data/session.h>
 #include <logic/player_manager.h>

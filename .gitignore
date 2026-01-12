@@ -90,6 +90,10 @@
 /src/server_frame/logic/handle_ss_rpc_logiccommonservice.cpp
 /src/server_frame/rpc/logic/logiccommonservice.h
 /src/server_frame/rpc/logic/logiccommonservice.cpp
+/src/server_frame/rpc/db/global_db_interface.cpp
+/src/server_frame/rpc/db/global_db_interface.h
+/src/server_frame/rpc/db/local_db_interface.cpp
+/src/server_frame/rpc/db/local_db_interface.h
 /src/component/distributed_transaction/sdk/rpc/transaction/dtcoordsvrservice.*
 /src/component/distributed_transaction/dtcoordsvr/app/handle_ss_rpc_dtcoordsvrservice.*
 /src/tools/simulator/rpc

@@ -1236,7 +1236,7 @@ SERVER_FRAME_API void logic_server_common_module::update_remote_server_configure
   }
 
   rapidjson_helper_dump_options default_dump_options;
-  PROJECT_NAMESPACE_ID::table_service_configure_data new_conf;
+  PROJECT_NAMESPACE_ID::remote_service_configure_data new_conf;
   rapidjson_helper_parse(new_conf, global_conf, default_dump_options);
   rapidjson_helper_parse(new_conf, zone_conf, default_dump_options);
 

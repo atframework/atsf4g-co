@@ -8,12 +8,33 @@ option cc_enable_arenas = true;
 
 option go_package = "github.com/atframework/atsf4g-go/component-protocol-private/pbdesc/protocol/pbdesc";
 
+import "protocol/extension/svr.database.extension.proto";
+
 // 前后台共用数据结构定义
 package hello;
 
 // 这是一个独立的表描述。不能import其他的本项目的proto
 // ============ 全局表数据结构 ============
 
-message table_service_configure_data {
+message remote_service_configure_data {
   int64 zone_open_time = 101;  // 开服时间
+}
+
+message table_uuid_allocator {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "uuid_allocator"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      key_fields: "major_type"
+      key_fields: "minor_type"
+      key_fields: "path_type"
+      atomic_inc_fields: "auto_inc_id"
+    }
+  };
+  // clang-format on
+  uint32 major_type = 1;
+  uint32 minor_type = 2;
+  uint32 path_type = 3;
+  uint64 auto_inc_id = 4;
 }
