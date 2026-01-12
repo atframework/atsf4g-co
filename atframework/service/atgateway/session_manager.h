@@ -60,9 +60,9 @@ class session_manager {
   inline void *get_private_data() const { return private_data_; }
   inline void set_private_data(void *priv_data) { private_data_ = priv_data; }
 
-  int post_data(::atbus::node::bus_id_t tid, ::atframework::gw::ss_msg &msg);
-  int post_data(::atbus::node::bus_id_t tid, int type, ::atframework::gw::ss_msg &msg);
-  int post_data(::atbus::node::bus_id_t tid, int type, const void *buffer, size_t s);
+  int post_data(::atbus::bus_id_t tid, ::atframework::gw::ss_msg &msg);
+  int post_data(::atbus::bus_id_t tid, int type, ::atframework::gw::ss_msg &msg);
+  int post_data(::atbus::bus_id_t tid, int type, const void *buffer, size_t s);
 
   int post_data(const std::string &tname, ::atframework::gw::ss_msg &msg);
   int post_data(const std::string &tname, int type, ::atframework::gw::ss_msg &msg);
@@ -71,8 +71,7 @@ class session_manager {
   int push_data(session::id_t sess_id, const void *buffer, size_t s);
   int broadcast_data(const void *buffer, size_t s);
 
-  int set_session_router(session::id_t sess_id, ::atbus::node::bus_id_t router_node_id,
-                         const std::string &router_node_name);
+  int set_session_router(session::id_t sess_id, ::atbus::bus_id_t router_node_id, const std::string &router_node_name);
 
   inline conf_t &get_conf() { return conf_; }
   inline const conf_t &get_conf() const { return conf_; }

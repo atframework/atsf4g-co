@@ -352,11 +352,11 @@ int session_manager::close(session::id_t sess_id, int reason, bool allow_reconne
 
 void session_manager::cleanup() { app_ = nullptr; }
 
-int session_manager::post_data(::atbus::node::bus_id_t tid, ::atframework::gw::ss_msg &msg) {
+int session_manager::post_data(::atbus::bus_id_t tid, ::atframework::gw::ss_msg &msg) {
   return post_data(tid, ::atframework::component::service_type::EN_ATST_GATEWAY, msg);
 }
 
-int session_manager::post_data(::atbus::node::bus_id_t tid, int type, ::atframework::gw::ss_msg &msg) {
+int session_manager::post_data(::atbus::bus_id_t tid, int type, ::atframework::gw::ss_msg &msg) {
   // send to server with type = ::atframework::component::service_type::EN_ATST_GATEWAY
   std::string packed_buffer;
   if (false == msg.SerializeToString(&packed_buffer)) {
@@ -367,7 +367,7 @@ int session_manager::post_data(::atbus::node::bus_id_t tid, int type, ::atframew
   return post_data(tid, type, packed_buffer.data(), packed_buffer.size());
 }
 
-int session_manager::post_data(::atbus::node::bus_id_t tid, int type, const void *buffer, size_t s) {
+int session_manager::post_data(::atbus::bus_id_t tid, int type, const void *buffer, size_t s) {
   // send to process
   if (nullptr == app_) {
     return error_code_t::EN_ECT_LOST_MANAGER;
@@ -427,7 +427,7 @@ int session_manager::broadcast_data(const void *buffer, size_t s) {
   return ret;
 }
 
-int session_manager::set_session_router(session::id_t sess_id, ::atbus::node::bus_id_t router_node_id,
+int session_manager::set_session_router(session::id_t sess_id, ::atbus::bus_id_t router_node_id,
                                         const std::string &router_node_name) {
   session_map_t::iterator iter = actived_sessions_.find(sess_id);
   if (actived_sessions_.end() == iter) {
