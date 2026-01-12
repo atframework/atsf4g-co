@@ -35,9 +35,9 @@
 #include <unordered_map>
 #include <utility>
 
-#include "rpc/db/db_utils.h"
 #include "rpc/rpc_async_invoke.h"
 #include "rpc/rpc_utils.h"
+#include "rpc/db/global_db_interface.h"
 
 namespace rpc {
 namespace db {
@@ -123,62 +123,12 @@ SERVER_FRAME_API std::string generate_short_uuid() {
 SERVER_FRAME_API rpc_result<int64_t> generate_global_increase_id(rpc::context &ctx, uint32_t major_type,
                                                                  uint32_t minor_type, uint32_t patch_type) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in task");
-
-  // 这个算法比许固定
-  char keyvar[64];
-  size_t keylen = sizeof(keyvar) - 1;
-  int __snprintf_writen_length =
-      UTIL_STRFUNC_SNPRINTF(keyvar, static_cast<int>(keylen), "guid:%x-%x-%x", major_type, minor_type, patch_type);
-  if (__snprintf_writen_length < 0) {
-    keyvar[sizeof(keyvar) - 1] = '\0';
-    keylen = 0;
-  } else {
-    keylen = static_cast<size_t>(__snprintf_writen_length);
-    keyvar[__snprintf_writen_length] = '\0';
+  uint64_t inc_value = 0;
+  auto ret = RPC_AWAIT_CODE_RESULT(::rpc::db::uuid_allocator::inc_field_auto_inc_id(ctx, major_type, minor_type, patch_type, inc_value));
+  if (ret < 0) {
+    RPC_RETURN_CODE(ret);
   }
-
-  rpc::db::redis_args args(2);
-  {
-    args.push("INCR");
-    args.push(keyvar);
-  }
-
-  rpc::context child_ctx(ctx);
-  rpc::telemetry::trace_start_option trace_start_option;
-  trace_start_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
-  trace_start_option.is_remote = true;
-  trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
-
-  rpc::telemetry::tracer tracer =
-      child_ctx.make_tracer("rpc.db.uuid.generate_global_increase_id", std::move(trace_start_option));
-
-  uint64_t rpc_sequence = 0;
-  int res = db_msg_dispatcher::me()->send_msg(
-      db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, keyvar, keylen, child_ctx.get_task_context().task_id,
-      logic_config::me()->get_local_server_id(), rpc::db::detail::unpack_integer, rpc_sequence,
-      static_cast<int>(args.size()), args.get_args_values(), args.get_args_lengths());
-
-  if (res < 0) {
-    RPC_RETURN_TYPE(tracer.finish({res, {}}));
-  }
-
-  PROJECT_NAMESPACE_ID::table_all_message msg;
-  // 协程操作
-  dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
-  await_options.sequence = rpc_sequence;
-  await_options.timeout =
-      rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(), std::chrono::seconds{6});
-
-  res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, msg, await_options));
-  if (res < 0) {
-    RPC_RETURN_TYPE(tracer.finish({res, {}}));
-  }
-
-  if (!msg.has_simple()) {
-    RPC_RETURN_TYPE(tracer.finish({PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, {}}));
-  }
-
-  RPC_RETURN_TYPE(tracer.finish({static_cast<int>(msg.simple().msg_i64()), {}}));
+  RPC_RETURN_CODE(inc_value);
 }
 
 struct unique_id_key_t {

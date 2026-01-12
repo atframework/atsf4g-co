@@ -16,9 +16,13 @@
 #include <string>
 #include <vector>
 
+#include "dispatcher/db_msg_dispatcher.h"
 #include "rpc/rpc_common_types.h"
 
 extern "C" struct redisReply;
+
+#define RPC_DB_VERSION_NAME "CAS_VERSION"
+#define RPC_DB_VERSION_LENGTH 11
 
 namespace rpc {
 namespace db {
@@ -144,8 +148,25 @@ class redis_args {
   char* free_buffer_;
 };
 
-int unpack_message(::google::protobuf::Message& msg, const redisReply* reply, uint64_t* version);
+int unpack_message(::google::protobuf::Message& msg, const redisReply* reply, uint64_t& version, bool& record_existed);
 
+int unpack_message_with_field(::google::protobuf::Message& msg, const redisReply* reply, std::string_view* fields,
+                              int32_t length, uint64_t& version, bool& record_existed);
+
+std::string get_list_value_field(uint64_t index);
+std::string get_list_version_field(uint64_t index);
+
+int unpack_list_message(
+    rpc::context* ctx, const redisReply* reply, std::vector<db_key_list_message_result_t>& results,
+    std::function<
+        atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>>(rpc::context*)>
+        msg_factory);
+
+int unpack_list_message_with_index(
+    rpc::context* ctx, const redisReply* reply, bool enable_cas, std::vector<db_key_list_message_result_t>& results,
+    std::function<
+        atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>>(rpc::context*)>
+        msg_factory);
 /**
  * package message into redis args, each message field will take two segment in args
  * @param msg message

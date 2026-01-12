@@ -11,12 +11,24 @@ option go_package = "github.com/atframework/atsf4g-go/component-protocol-private
 import "google/protobuf/any.proto";
 import "google/protobuf/timestamp.proto";
 
+import "protocol/extension/svr.database.extension.proto";
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/svr.struct.proto";
 
 package hello;
 
 message table_login {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "login"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "user_id"
+      key_fields: "zone_id"
+    }
+  };
+  // clang-format on
   string open_id = 1;
   uint64 user_id = 2;
   uint32 zone_id = 3;
@@ -51,30 +63,46 @@ message table_login {
   uint32 stat_login_failed_times = 53;   // 失败登入次数
 }
 
-message table_user_async_jobs_blob_data {
-  // action的 唯一ID，用于容灾
-  string action_uuid = 1;
-  int64 timepoint_ms = 2;
-
-  // 如果失败了，内置的剩余重试次数
-  int32 left_retry_times = 3;
-
-  oneof action {
-    user_async_job_debug_message debug_message = 101;  // 调试消息
-  }
-}
-
-message table_user_async_jobs_cache_blob_data {
-  player_async_jobs_data async_jobs = 1;  // 异步任务缓存
-
-  message retry_job_data {
-    int32 job_type = 1;
-    table_user_async_jobs_blob_data job_data = 2;
+message table_user_async_jobs {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "async_jobs"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KL
+      enable_cas: true
+      key_fields: "job_type"
+      key_fields: "user_id"
+      key_fields: "zone_id"
+    }
   };
-  repeated retry_job_data retry_jobs = 11;
+  // clang-format on
+  int32 job_type = 1;  // 任务类型
+  uint64 user_id = 2;
+  uint32 zone_id = 3;
+
+  user_async_jobs_blob_data job_data = 11;
 }
 
 message table_user {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "user"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "zone_id"
+      key_fields: "user_id"
+      partly_get: {
+        name: "basic_info"
+        fields: "open_id"
+        fields: "account"
+        fields: "player"
+        fields: "data_version"
+        fields: "options"
+      }
+    }
+  };
+  // clang-format on
   string open_id = 1;
   uint64 user_id = 2;
   uint32 zone_id = 3;
@@ -86,25 +114,23 @@ message table_user {
   player_options options = 21;  // 玩家选项
 
   // 以下是服务器内部数据
-  table_user_async_jobs_cache_blob_data async_job_blob_data = 101;  // 异步任务缓存
+  user_async_jobs_cache_blob_data async_job_blob_data = 101;  // 异步任务缓存
 }
 
 message table_distribute_transaction {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "distribute_transaction"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "zone_id"
+      key_fields: "transaction_uuid"
+    }
+  };
+  // clang-format on
   uint32 zone_id = 1;
   bytes transaction_uuid = 2;
 
   google.protobuf.Any blob_data = 11;
-}
-
-message table_all_message {
-  uint64 node_id = 1; // 用于恢复协程的BusID
-  uint64 destination_task_id = 2; // 用于恢复协程的任务ID
-  int32 error_code = 3; // 用于恢复协程的透传解包层错误码
-
-  table_login login = 11;
-  table_user user = 12;
-  uint64 version = 13; // 透传版本
-  table_simple_info simple = 14; // 简单数据类型
-  table_user_async_jobs_blob_data async_jobs = 15;
-  table_distribute_transaction distribute_transaction = 16;
 }

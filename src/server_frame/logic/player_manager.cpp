@@ -16,8 +16,6 @@
 
 #include <config/logic_config.h>
 #include <dispatcher/task_manager.h>
-#include <rpc/db/login.h>
-#include <rpc/db/player.h>
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_utils.h>
 #include <utility/protobuf_mini_dumper.h>

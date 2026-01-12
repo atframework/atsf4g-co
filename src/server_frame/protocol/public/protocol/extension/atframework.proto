@@ -11,6 +11,7 @@ package atframework;
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/descriptor.proto";
+import "google/protobuf/any.proto";
 
 // 只能配置在 com.const.proto 这个文件里有效
 extend google.protobuf.FileOptions {
@@ -335,4 +336,12 @@ message CSMsgHead {
 message CSMsg {
   CSMsgHead head = 1;
   bytes body_bin = 3;
+}
+
+// -----------------------------    DBMsg    -----------------------------
+message DBMsg {
+  uint64 node_id = 1;              // 用于恢复协程的BusID
+  uint64 destination_task_id = 2;  // 用于恢复协程的任务ID
+  int32 error_code = 3;            // 用于恢复协程的透传解包层错误码
+  uint64 cas_version = 4;          // CAS版本
 }

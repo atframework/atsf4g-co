@@ -59,7 +59,7 @@ void user_async_jobs_manager::init_from_table_data(rpc::context&,
     for (int i = 0; i < player_table.async_job_blob_data().retry_jobs_size(); ++i) {
       auto& retry_job = player_table.async_job_blob_data().retry_jobs(i);
       retry_jobs_[retry_job.job_type()][retry_job.job_data().action_uuid()] =
-          atfw::memory::stl::make_strong_rc<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>(
+          atfw::memory::stl::make_strong_rc<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>(
               retry_job.job_data());
     }
 

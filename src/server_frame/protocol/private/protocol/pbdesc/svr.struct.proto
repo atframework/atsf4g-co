@@ -13,20 +13,6 @@ import "protocol/pbdesc/com.struct.proto";
 
 package hello;
 
-message table_simple_info {
-  string msg_str = 1;
-  int32 msg_i32 = 2;
-  uint32 msg_u32 = 3;
-  int64 msg_i64 = 4;
-  uint64 msg_u64 = 5;
-
-  repeated string arr_str = 6;
-  repeated int32 arr_i32 = 7;
-  repeated uint32 arr_u32 = 8;
-  repeated int64 arr_i64 = 9;
-  repeated uint64 arr_u64 = 10;
-}
-
 message client_session_index {
   uint64 node_id = 1;
   uint64 session_id = 2;
@@ -76,4 +62,27 @@ message player_async_jobs_data {
   }
   repeated history_job_meta history = 1;  // 上一轮处理的UUID列表
   int64 next_task_active_time = 2;        // 下一次异步任务的启动时间
+}
+
+message user_async_jobs_blob_data {
+  // action的 唯一ID，用于容灾
+  string action_uuid = 1;
+  int64 timepoint_ms = 2;
+
+  // 如果失败了，内置的剩余重试次数
+  int32 left_retry_times = 3;
+
+  oneof action {
+    user_async_job_debug_message debug_message = 101;  // 调试消息
+  }
+}
+
+message user_async_jobs_cache_blob_data {
+  player_async_jobs_data async_jobs = 1;  // 异步任务缓存
+
+  message retry_job_data {
+    int32 job_type = 1;
+    user_async_jobs_blob_data job_data = 2;
+  };
+  repeated retry_job_data retry_jobs = 11;
 }

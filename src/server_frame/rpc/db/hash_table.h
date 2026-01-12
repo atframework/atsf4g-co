@@ -17,51 +17,69 @@
 #include <string>
 #include <vector>
 
-#include "rpc/db/db_macros.h"
+#include <dispatcher/db_msg_dispatcher.h>
+#include <rpc/rpc_shared_message.h>
 #include "rpc/db/db_utils.h"
-#include "rpc/rpc_shared_message.h"
+
+struct db_message_t;
 
 namespace rpc {
 class context;
 
 namespace db {
 namespace hash_table {
-/**
- * @brief Get all data of hash table
- * @param channel DB channel
- * @param key key
- * @param output output message from DB
- * @param unpack_fn unpack callback
- * @return future of 0 or error code
- */
-EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type
-get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
-        shared_message<PROJECT_NAMESPACE_ID::table_all_message> &output,
-        int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply));
+namespace key_value {
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_all(
+    rpc::context &ctx, uint32_t channel, gsl::string_view key,
+    atfw::util::memory::strong_rc_ptr<db_key_value_message_result_t> output, db_msg_dispatcher::unpack_fn_t unpack_fn);
 
-/**
- * @brief Set data of hash table
- * @param channel DB channel
- * @param key key
- * @param store data to store
- * @param version 期望的版本号，留空或0表示版本号检查
- * @param output output message from DB
- * @param unpack_fn unpack callback
- * @warning 默认值会被忽略，比如空message或者空字符串，或者0不会更新
- * @return future of 0 or error code
- */
 EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type
-set(rpc::context &ctx, uint32_t channel, gsl::string_view key,
-    shared_abstract_message<google::protobuf::Message> &&store, uint64_t &version,
-    shared_message<PROJECT_NAMESPACE_ID::table_all_message> &output,
-    int32_t (*unpack_fn)(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply));
+partly_get(rpc::context &ctx, uint32_t channel, gsl::string_view key, gsl::string_view *partly_get_fields,
+           int32_t partly_get_field_count, atfw::util::memory::strong_rc_ptr<db_key_value_message_result_t> output,
+           db_msg_dispatcher::unpack_fn_t unpack_fn);
 
-/**
- * @brief Remove all data of hash table key
- * @param channel DB channel
- * @param key key
- * @return future of 0 or error code
- */
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type
+batch_get_all(rpc::context &ctx, uint32_t channel, gsl::span<std::string> key,
+              std::vector<atfw::util::memory::strong_rc_ptr<db_key_value_message_result_t>> &output,
+              db_msg_dispatcher::unpack_fn_t unpack_fn);
+
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type
+batch_partly_get(rpc::context &ctx, uint32_t channel, gsl::span<std::string> key, gsl::string_view *partly_get_fields,
+                 int32_t partly_get_field_count,
+                 std::vector<atfw::util::memory::strong_rc_ptr<db_key_value_message_result_t>> &output,
+                 db_msg_dispatcher::unpack_fn_t unpack_fn);
+
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::string_view key,
+                                                         shared_abstract_message<google::protobuf::Message> &&store,
+                                                         uint64_t *version);
+
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type
+inc_field(rpc::context &ctx, uint32_t channel, gsl::string_view key, gsl::string_view inc_field,
+          shared_abstract_message<google::protobuf::Message> &message, db_msg_dispatcher::unpack_fn_t unpack_fn);
+}  // namespace key_value
+
+namespace key_list {
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
+                                                             std::vector<db_key_list_message_result_t> &output,
+                                                             db_msg_dispatcher::unpack_fn_t unpack_fn);
+
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_by_indexs(rpc::context &ctx, uint32_t channel,
+                                                                   gsl::string_view key, gsl::span<uint64_t> list_index,
+                                                                   bool enable_cas,
+                                                                   std::vector<db_key_list_message_result_t> &output,
+                                                                   db_msg_dispatcher::unpack_fn_t unpack_fn);
+
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type
+set_by_index(rpc::context &ctx, uint32_t channel, gsl::string_view key, uint64_t list_index,
+             shared_abstract_message<google::protobuf::Message> &&store, uint64_t *version);
+
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel,
+                                                                     gsl::string_view key,
+                                                                     gsl::span<uint64_t> list_index, bool enable_cas);
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel,
+                                                                     gsl::string_view key,
+                                                                     gsl::span<const uint64_t> list_index, bool enable_cas);
+}  // namespace key_list
 EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel,
                                                                 gsl::string_view key);
 

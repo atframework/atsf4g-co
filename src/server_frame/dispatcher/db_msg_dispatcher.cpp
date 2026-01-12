@@ -157,11 +157,7 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t
     ctx_ptr = &ctx;
   }
 
-  PROJECT_NAMESPACE_ID::table_all_message *table_msg = ctx_ptr->create<PROJECT_NAMESPACE_ID::table_all_message>();
-  if (nullptr == table_msg) {
-    FWLOGERROR("{} create message instance failed", name());
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
-  }
+  db_message_t db_msg;
 
   if (nullptr == req->response) {
     FWLOGERROR("task [{}] DB msg, no response found", req->task_id);
@@ -171,16 +167,17 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t
   int ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   switch (req->response->type) {
     case REDIS_REPLY_STATUS: {
+      // 脚本返回
       if (0 == UTIL_STRFUNC_STRNCASE_CMP("OK", req->response->str, 2)) {
         FWLOGINFO("db reply status: {}", req->response->str);
       } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("CAS_FAILED", req->response->str, 10)) {
         FWLOGINFO("db reply status: {}", req->response->str);
         if (req->response->str[10] && req->response->str[11]) {
-          table_msg->set_version(atfw::util::string::to_int<uint64_t>(&req->response->str[11]));
+          db_msg.head_message.set_cas_version(atfw::util::string::to_int<uint64_t>(&req->response->str[11]));
         }
         ret = PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION;
       } else {
-        table_msg->set_version(atfw::util::string::to_int<uint64_t>(req->response->str));
+        db_msg.head_message.set_cas_version(atfw::util::string::to_int<uint64_t>(req->response->str));
         ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
       }
       break;
@@ -188,7 +185,7 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t
     case REDIS_REPLY_ERROR: {
       if (0 == UTIL_STRFUNC_STRNCASE_CMP("CAS_FAILED", req->response->str, 10)) {
         if (req->response->str[10] && req->response->str[11]) {
-          table_msg->set_version(atfw::util::string::to_int<uint64_t>(&req->response->str[11]));
+          db_msg.head_message.set_cas_version(atfw::util::string::to_int<uint64_t>(&req->response->str[11]));
         }
         ret = PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION;
       } else {
@@ -199,7 +196,7 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t
     }
     default: {
       if (nullptr != req->unpack_fn) {
-        ret = req->unpack_fn(*table_msg, req->response);
+        ret = req->unpack_fn(ctx_ptr, db_msg, req->response);
         if (ret < 0) {
           FWLOGERROR("db unpack data error, res: {}", ret);
         }
@@ -210,12 +207,12 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t
     }
   }
 
-  table_msg->set_node_id(req->node_id);
-  table_msg->set_destination_task_id(req->task_id);
-  table_msg->set_error_code(ret);
+  db_msg.head_message.set_node_id(req->node_id);
+  db_msg.head_message.set_destination_task_id(req->task_id);
+  db_msg.head_message.set_error_code(ret);
 
   dispatcher_raw_message callback_msg = dispatcher_make_default<dispatcher_raw_message>();
-  callback_msg.msg_addr = table_msg;
+  callback_msg.msg_addr = &db_msg;
   callback_msg.message_type = get_instance_ident();
 
   dispatcher_result_t res = on_receive_message(*ctx_ptr, callback_msg, req->response, req->sequence);
@@ -224,13 +221,12 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t
 }
 
 SERVER_FRAME_API uint64_t db_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
-  PROJECT_NAMESPACE_ID::table_all_message *real_msg =
-      get_protobuf_msg<PROJECT_NAMESPACE_ID::table_all_message>(raw_msg);
+  db_message_t *real_msg = get_protobuf_msg<db_message_t>(raw_msg);
   if (nullptr == real_msg) {
     return 0;
   }
 
-  return real_msg->destination_task_id();
+  return real_msg->head_message.destination_task_id();
 }
 
 SERVER_FRAME_API const std::string &db_msg_dispatcher::pick_rpc_name(msg_raw_t &) { return get_empty_string(); }

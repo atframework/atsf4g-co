@@ -603,3 +603,36 @@ if ($LastExitCode -ne 0) {
     endif()
   endif()
 endfunction()
+
+generate_for_pb_add_custom_configure("
+- global:
+    overwrite: true
+    input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.cpp.mako'
+    output: 'local_db_interface.cpp'
+    output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
+    custom_variables:
+      generate_proto_file: 'protocol/pbdesc/svr.local.table.proto'
+      include_cpp: 'local_db_interface.h'
+- global:
+    overwrite: true
+    input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.h.mako'
+    output: 'local_db_interface.h'
+    output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
+    custom_variables:
+      generate_proto_file: 'protocol/pbdesc/svr.local.table.proto'
+- global:
+    overwrite: true
+    input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.cpp.mako'
+    output: 'global_db_interface.cpp'
+    output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
+    custom_variables:
+      generate_proto_file: 'protocol/pbdesc/svr.global.table.proto'
+      include_cpp: 'global_db_interface.h'
+- global:
+    overwrite: true
+    input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.h.mako'
+    output: 'global_db_interface.h'
+    output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
+    custom_variables:
+      generate_proto_file: 'protocol/pbdesc/svr.global.table.proto'
+")

@@ -12,6 +12,12 @@
 #include <config/compiler_features.h>
 #include <design_pattern/singleton.h>
 
+#include <config/compiler/protobuf_prefix.h>
+
+#include <protocol/extension/atframework.pb.h>
+
+#include <config/compiler/protobuf_suffix.h>
+
 #ifdef _MSC_VER
 #  pragma warning(push)
 #  pragma warning(disable : 4005)
@@ -26,7 +32,8 @@
 #endif
 
 #include <config/logic_config.h>
-#include <rpc/db/unpack.h>
+#include <rpc/rpc_shared_message.h>
+#include <memory/rc_ptr.h>
 
 #include "dispatcher_implement.h"
 
@@ -41,9 +48,27 @@ class connection;
 }  // namespace happ
 }  // namespace hiredis
 
-namespace PROJECT_NAMESPACE_ID {
-class table_all_message;
+namespace rpc {
+class context;
 }
+
+struct db_key_value_message_result_t {
+  int32_t result;
+  uint64_t version;
+  atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>> message;
+};
+
+struct db_key_list_message_result_t {
+  uint64_t list_index;
+  uint64_t version;
+  atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>> message;
+};
+
+struct db_message_t {
+  atframework::DBMsg head_message;
+  atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>> body_message;
+  std::vector<db_key_list_message_result_t> body_message_list;
+};
 
 class db_msg_dispatcher : public dispatcher_implement {
 #if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
@@ -59,7 +84,7 @@ class db_msg_dispatcher : public dispatcher_implement {
  public:
   using msg_raw_t = dispatcher_implement::msg_raw_t;
   using msg_type_t = dispatcher_implement::msg_type_t;
-  using unpack_fn_t = int32_t (*)(PROJECT_NAMESPACE_ID::table_all_message &msg, const redisReply *reply);
+  using unpack_fn_t = int32_t (*)(rpc::context *ctx, db_message_t &msg, const redisReply *reply);
   using user_callback_t = std::function<int()>;
 
   struct ATFW_UTIL_SYMBOL_VISIBLE channel_t {

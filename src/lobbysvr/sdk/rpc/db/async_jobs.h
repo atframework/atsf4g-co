@@ -51,7 +51,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE action_options {
 struct ATFW_UTIL_SYMBOL_VISIBLE async_jobs_record {
   int64_t record_index;
   uint64_t version;
-  shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data> action_blob;
+  shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data> action_blob;
 };
 
 /**
@@ -90,7 +90,7 @@ EXPLICIT_NODISCARD_ATTR GAME_RPC_API result_type del_jobs(::rpc::context &ctx, i
  */
 EXPLICIT_NODISCARD_ATTR GAME_RPC_API result_type
 add_jobs(::rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-         shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data> &in, action_options options = {});
+         shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data> &in, action_options options = {});
 
 /**
  * @brief 添加用户异步任务操作,自动补全重试次数
@@ -104,7 +104,7 @@ add_jobs(::rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone
  */
 EXPLICIT_NODISCARD_ATTR GAME_RPC_API result_code_type add_jobs_with_retry(
     rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-    shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data> &inout, action_options options = {});
+    shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data> &inout, action_options options = {});
 
 /**
  * @brief 删除用户异步任务表所有数据的rpc操作
@@ -130,7 +130,7 @@ EXPLICIT_NODISCARD_ATTR GAME_RPC_API result_type remove_all_jobs(::rpc::context 
  */
 EXPLICIT_NODISCARD_ATTR GAME_RPC_API result_type
 update_jobs(::rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-            shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data> &inout, int64_t record_index,
+            shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data> &inout, int64_t record_index,
             uint64_t *version = nullptr, action_options options = {});
 }  // namespace async_jobs
 }  // namespace db
