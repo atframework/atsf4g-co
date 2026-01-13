@@ -1,0 +1,41 @@
+{{ include "atapp.yaml" . }}
+{{ include "atapp.logic.yaml" . }}
+
+atgateway:
+  # listen address for client to connect, how to use it depends listen.type
+  listen:
+    address:
+      # - ipv6: # TODO
+      # - ipv4: # TODO
+    type: inner                     # protocol type
+    max_client: 65536               # max client number, more client will be closed
+    backlog: 128
+
+  client:
+    default_router:
+      node_id:                      # TODO
+      type_name:                    # TODO
+    recv_buffer_size: 2MB           # recv buffer limit
+    send_buffer_size: 4MB           # send buffer limit
+    reconnect_timeout: 180          # reconnect timeout
+    first_idle_timeout: 10          # first idle timeout
+    limit:
+      total_send_bytes: 0           # total send limit (bytes)
+      total_recv_bytes: 0           # total recv limit (bytes)
+      hour_send_bytes: 0            # send limit (bytes) in an hour
+      hour_recv_bytes: 0            # recv limit (bytes) in an hour
+      minute_send_bytes: 0          # total send (bytes) limit in one minute
+      minute_recv_bytes: 0          # total recv (bytes) limit in one minute
+      total_send_times: 0           # total send limit (times)
+      total_recv_times: 0           # total recv limit (times)
+      hour_send_times: 0            # send limit (times) in an hour
+      hour_recv_times: 0            # recv limit (times) in an hour
+      minute_send_times: 0          # total send (times) limit in one minute
+      minute_recv_times: 0          # total recv (times) limit in one minute
+      message_size: 0               # message size limit
+    # below descript the crypt information, but if it's used depend on listen.type
+    crypt:
+      key: gateway-default                          # default key
+      type: "XXTEA:AES-256-CFB:AES-128-CFB"         # encrypt algorithm(support XXTEA,AES when listen.type=inner)
+      update_interval: 300                          # generate a new key by every 5 minutes
+      dhparam: ../cfg/dhparam.pem                   # dynamic key
