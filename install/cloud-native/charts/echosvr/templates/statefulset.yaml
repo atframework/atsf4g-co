@@ -1,3 +1,0 @@
-{{- template "libapp.statefulset" (list . "echosvr.statefulset") -}}
-{{- define "echosvr.statefulset" -}}
-{{- end -}}

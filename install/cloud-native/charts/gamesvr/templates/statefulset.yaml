@@ -1,3 +1,0 @@
-{{- template "libapp.statefulset" (list . "gamesvr.statefulset") -}}
-{{- define "gamesvr.statefulset" -}}
-{{- end -}}

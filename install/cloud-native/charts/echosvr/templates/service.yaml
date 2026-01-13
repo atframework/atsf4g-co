@@ -1,3 +1,0 @@
-{{- template "libapp.service" (list . "echosvr.service") -}}
-{{- define "echosvr.service" -}}
-{{- end -}}

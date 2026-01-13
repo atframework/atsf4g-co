@@ -1,6 +1,0 @@
-<%!
-    import common.project_utils as project
-%>
-# <template dir>: <template file name> = <output dir/output file name> [| append into global script]
-script: etcd.start.sh.mako = bin/start-${hex(project.get_server_id())}.sh | restart_all.sh
-script: etcd.stop.sh.mako = bin/stop-${hex(project.get_server_id())}.sh | stop_all.sh

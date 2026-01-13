@@ -1,3 +1,0 @@
-{{- template "libapp.service" (list . "gamesvr.service") -}}
-{{- define "gamesvr.service" -}}
-{{- end -}}

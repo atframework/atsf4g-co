@@ -411,7 +411,7 @@ function(atframework_add_executable TARGET_NAME)
   endif()
 
   if(NOT __atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY)
-    set(__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/atframework/${TARGET_NAME}/bin")
+    set(__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/${TARGET_NAME}/bin")
   endif()
 
   if(__atfw_add_library_args_HEADERS OR __atfw_add_library_args_SOURCES)
@@ -480,6 +480,16 @@ function(atframework_add_executable TARGET_NAME)
                RUNTIME_OUTPUT_DIRECTORY "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
                BUILD_RPATH_USE_ORIGIN YES
                INSTALL_RPATH "${TARGET_INSTALL_RPATH}")
+
+  # 针对MSVC多配置生成器，防止自动添加Debug目录
+  if(MSVC)
+    set_target_properties(${TARGET_NAME} PROPERTIES
+      RUNTIME_OUTPUT_DIRECTORY_DEBUG "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
+      RUNTIME_OUTPUT_DIRECTORY_RELEASE "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
+      RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
+      RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}")
+  endif()
+
   target_compile_options(${TARGET_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
   if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
     target_link_options(${TARGET_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})

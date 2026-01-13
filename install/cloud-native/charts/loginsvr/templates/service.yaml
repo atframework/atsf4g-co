@@ -1,3 +1,0 @@
-{{- template "libapp.service" (list . "loginsvr.service") -}}
-{{- define "loginsvr.service" -}}
-{{- end -}}

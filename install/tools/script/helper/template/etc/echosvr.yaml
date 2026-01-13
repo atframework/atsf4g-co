@@ -1,5 +1,0 @@
-<%!
-    import common.project_utils as project
-%><%include file="atapp.template.yaml" />
-
-# echosvr:

@@ -1,3 +1,0 @@
-{{- template "libapp.httproute" (list . "dtcoordsvr.httproute") -}}
-{{- define "dtcoordsvr.httproute" -}}
-{{- end -}}
