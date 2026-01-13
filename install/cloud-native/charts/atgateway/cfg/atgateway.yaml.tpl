@@ -1,5 +1,4 @@
 {{ include "atapp.yaml" . }}
-{{ include "atapp.logic.yaml" . }}
 
 atgateway:
   # listen address for client to connect, how to use it depends listen.type

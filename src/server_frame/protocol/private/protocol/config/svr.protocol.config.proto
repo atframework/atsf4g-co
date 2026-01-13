@@ -164,11 +164,6 @@ message logic_localization_cfg {
   string lang = 1;
 }
 
-message logic_battle_cfg {
-  string etcd_version_path = 1;
-  bool ignore_invalid_version = 2;
-}
-
 message logic_transaction_cfg {
   google.protobuf.Duration timeout = 1
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
@@ -179,26 +174,6 @@ message logic_excel_cfg {
   bool override_same_version = 2;
   uint32 group_number = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8" }];
   string bindir = 4 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "../../resource/excel" }];
-}
-
-message logic_section_cfg {
-  logic_hpa_cfg hpa = 3;
-  logic_localization_cfg localization = 8;
-  logic_discovery_selector_cfg discovery_selector = 9;
-  google.protobuf.Duration remote_configure_update_interval = 24
-      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "60s" }];
-
-  logic_dns_cfg dns = 100;
-  logic_server_cfg server = 102;
-  logic_user_cfg user = 103;
-  logic_session_cfg session = 104;
-  logic_task_cfg task = 105;
-  logic_heartbeat_cfg heartbeat = 106;
-  logic_router_cfg router = 107;
-  logic_telemetry_cfg telemetry = 108;
-  logic_battle_cfg battle = 109;
-  logic_excel_cfg excel = 110;
-  logic_transaction_cfg transaction = 111;
 }
 
 message db_group_gateway_cfg {
@@ -212,22 +187,36 @@ message db_group_cfg {
   repeated db_group_gateway_cfg gateways = 2;
 }
 
-message db_script_cfg {
-  string login = 101;
-  string user = 102;
-}
-
 message db_timer_cfg {
   google.protobuf.Duration retry = 1;
   google.protobuf.Duration timeout = 2;
   google.protobuf.Duration proc = 3;
 }
 
-message db_section_cfg {
+message logic_db_cfg {
   db_group_cfg cluster = 101;
   db_group_cfg raw = 102;
-  db_script_cfg script = 103;
-  db_timer_cfg timer = 104;
+  db_timer_cfg timer = 103;
+}
+
+message logic_section_cfg {
+  logic_hpa_cfg hpa = 3;
+  logic_localization_cfg localization = 8;
+  logic_discovery_selector_cfg discovery_selector = 9;
+  google.protobuf.Duration remote_configure_update_interval = 24
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "60s" }];
+
+  logic_dns_cfg dns = 100;
+  logic_db_cfg db = 101;
+  logic_server_cfg server = 102;
+  logic_user_cfg user = 103;
+  logic_session_cfg session = 104;
+  logic_task_cfg task = 105;
+  logic_heartbeat_cfg heartbeat = 106;
+  logic_router_cfg router = 107;
+  logic_telemetry_cfg telemetry = 108;
+  logic_excel_cfg excel = 110;
+  logic_transaction_cfg transaction = 111;
 }
 
 message loginsvr_cfg {
@@ -256,12 +245,4 @@ message dtcoordsvr_cfg {
 
   google.protobuf.Duration transaction_default_timeout = 11
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
-}
-
-message server_cfg {
-  logic_section_cfg logic = 101;
-  db_section_cfg db = 102;
-
-  loginsvr_cfg loginsvr = 201;
-  dtcoordsvr_cfg dtcoordsvr = 202;
 }

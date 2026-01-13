@@ -22,6 +22,7 @@
 
 #include <config/ini_loader.h>
 #include <design_pattern/singleton.h>
+#include <memory/rc_ptr.h>
 
 #include <atframe/atapp_config.h>
 
@@ -49,6 +50,8 @@ class logic_config {
 #endif
 
  public:
+  using custom_config_loader_func = void (*)(atfw::atapp::app &, logic_config &);
+
   SERVER_FRAME_CONFIG_API int init(uint64_t server_id, const std::string &server_name);
 
   SERVER_FRAME_CONFIG_API int reload(atfw::atapp::app &app);
@@ -63,28 +66,46 @@ class logic_config {
   SERVER_FRAME_CONFIG_API const PROJECT_NAMESPACE_ID::DConstSettingsType &get_const_settings();
   SERVER_FRAME_CONFIG_API const atframework::ConstSettingsType &get_atframework_settings();
 
-  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::server_cfg &get_server_cfg() const noexcept {
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_section_cfg &get_server_cfg() const noexcept {
     return server_cfg_;
   }
-  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::config::server_cfg *mutable_server_cfg() noexcept { return &server_cfg_; }
-  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::db_section_cfg &get_cfg_db() const noexcept {
-    return server_cfg_.db();
-  }
-  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_section_cfg &get_logic() const noexcept {
-    return server_cfg_.logic();
-  }
-  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &get_cfg_telemetry() const noexcept {
-    return get_logic().telemetry();
-  }
-  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_router_cfg &get_cfg_router() const noexcept {
-    return get_logic().router();
-  }
-  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_task_cfg &get_cfg_task() const noexcept {
-    return get_logic().task();
+  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::config::logic_section_cfg *mutable_server_cfg() noexcept {
+    return &server_cfg_;
   }
 
-  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::loginsvr_cfg &get_cfg_loginsvr() const noexcept {
-    return get_server_cfg().loginsvr();
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_db_cfg &get_cfg_db() const noexcept {
+    return get_server_cfg().db();
+  }
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &get_cfg_telemetry() const noexcept {
+    return get_server_cfg().telemetry();
+  }
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_router_cfg &get_cfg_router() const noexcept {
+    return get_server_cfg().router();
+  }
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_task_cfg &get_cfg_task() const noexcept {
+    return get_server_cfg().task();
+  }
+
+  ATFW_UTIL_FORCEINLINE void set_custom_config_loader(custom_config_loader_func loader) noexcept {
+    custom_config_loader_ = loader;
+  }
+
+  template <typename CustomConfigProtocol>
+  SERVER_FRAME_CONFIG_API const CustomConfigProtocol &get_custom_config() const noexcept {
+    static CustomConfigProtocol empty;
+    if (!custom_config_) {
+      return empty;
+    }
+    auto config_ptr = dynamic_cast<const CustomConfigProtocol *>(custom_config_.get());
+    if (config_ptr) {
+      return *config_ptr;
+    }
+    return empty;
+  }
+
+  SERVER_FRAME_CONFIG_API atfw::util::memory::strong_rc_ptr<google::protobuf::Message> &
+  mutable_custom_config() noexcept {
+    return custom_config_;
   }
 
  private:
@@ -97,6 +118,9 @@ class logic_config {
   const PROJECT_NAMESPACE_ID::DConstSettingsType *const_settings_;
   const atframework::ConstSettingsType *atframe_settings_;
 
-  PROJECT_NAMESPACE_ID::config::server_cfg server_cfg_;
+  custom_config_loader_func custom_config_loader_;
+  atfw::util::memory::strong_rc_ptr<google::protobuf::Message> custom_config_;
+
+  PROJECT_NAMESPACE_ID::config::logic_section_cfg server_cfg_;
   std::string readable_app_id_;
 };

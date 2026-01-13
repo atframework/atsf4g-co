@@ -186,7 +186,7 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
 GAMECLIENT_RPC_API int task_action_login::on_success() {
   const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
-  rsp_body.set_heartbeat_interval(logic_config::me()->get_logic().heartbeat().interval().seconds());
+  rsp_body.set_heartbeat_interval(logic_config::me()->get_server_cfg().heartbeat().interval().seconds());
   rsp_body.set_is_new_player(is_new_player_);
 
   std::shared_ptr<session> s = get_session();

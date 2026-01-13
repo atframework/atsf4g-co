@@ -396,7 +396,7 @@ SERVER_FRAME_API int logic_server_common_module::init() {
   INIT_CALL(logic_config, get_app()->get_id(), get_app()->get_app_name());
 
   // 内部模块暂不支持热开关
-  shared_component_ = logic_config::me()->get_logic().server().shared_component();
+  shared_component_ = logic_config::me()->get_server_cfg().server().shared_component();
 
   if (shared_component_.excel_config()) {
     INIT_CALL_FN(excel_config_wrapper_reload_all, true);
@@ -470,7 +470,7 @@ SERVER_FRAME_API int logic_server_common_module::reload() {
   RELOAD_CALL(ret, logic_config, *get_app());
 
   // Update rpc caller context data
-  rpc::context::set_current_service(*get_app(), logic_config::me()->get_logic());
+  rpc::context::set_current_service(*get_app(), logic_config::me()->get_server_cfg());
 
   if (get_app() && get_app()->is_running()) {
     setup_etcd_event_handle();
@@ -814,7 +814,7 @@ int logic_server_common_module::tick_update_remote_configures() {
   }
 
   server_remote_conf_next_update_time_ =
-      sys_now + logic_config::me()->get_server_cfg().logic().remote_configure_update_interval().seconds();
+      sys_now + logic_config::me()->get_server_cfg().remote_configure_update_interval().seconds();
   if (server_remote_conf_next_update_time_ <= sys_now) {
     server_remote_conf_next_update_time_ = sys_now + 300;
   }

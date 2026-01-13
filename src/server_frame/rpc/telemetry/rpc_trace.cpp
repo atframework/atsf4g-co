@@ -776,7 +776,7 @@ SERVER_FRAME_API int32_t tracer::finish(trace_finish_option &&options) {
 
   trace_span_->End(end_options);
 
-  auto &trace_configure = logic_config::me()->get_logic().telemetry().opentelemetry().trace();
+  auto &trace_configure = logic_config::me()->get_server_cfg().telemetry().opentelemetry().trace();
   const std::string &additional_metrics_name = trace_configure.additional_metrics_name();
   if (is_span_recording && !additional_metrics_name.empty() && !trace_span_name_.empty() &&
       trace_configure.enable_additional_metrics()) {

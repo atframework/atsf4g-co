@@ -993,7 +993,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_dns_lookup(gsl::string_view dom
   }
 
   async_data->start_timepoint = atfw::util::time::time_utility::get_sys_now();
-  time_t timeout_conf = logic_config::me()->get_logic().dns().lookup_timeout().seconds();
+  time_t timeout_conf = logic_config::me()->get_server_cfg().dns().lookup_timeout().seconds();
   if (timeout_conf <= 0) {
     timeout_conf = 5;
   }

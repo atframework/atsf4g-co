@@ -188,7 +188,7 @@ SERVER_FRAME_API rpc::result_code_type player_manager::create(
   }
 
   // online user number limit
-  if (size() > logic_config::me()->get_logic().user().max_online()) {
+  if (size() > logic_config::me()->get_server_cfg().user().max_online()) {
     FWLOGERROR("online number extended");
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY);
   }

@@ -43,7 +43,7 @@ SERVER_FRAME_API int session_manager::init() { return 0; }
 
 SERVER_FRAME_API int session_manager::proc() {
   // 写入时间可配,实时在线统计
-  time_t proc_interval = logic_config::me()->get_logic().session().tick_sec().seconds();
+  time_t proc_interval = logic_config::me()->get_server_cfg().session().tick_sec().seconds();
 
   // disabled
   if (proc_interval <= 0) {

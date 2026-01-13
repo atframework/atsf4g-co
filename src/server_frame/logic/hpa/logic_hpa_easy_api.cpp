@@ -69,7 +69,7 @@ static void rebuild_enabled_services_cache(
 
 const atfw::atapp::protocol::atapp_metadata* find_enabled_services_cache(int32_t type_id) {
   const PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg& origin_cfg =
-      logic_config::me()->get_server_cfg().logic().discovery_selector();
+      logic_config::me()->get_server_cfg().discovery_selector();
 
   auto fds = origin_cfg.GetDescriptor()->FindFieldByNumber(type_id);
   if (nullptr == fds) {
@@ -98,7 +98,7 @@ SERVER_FRAME_API const atfw::atapp::protocol::atapp_metadata* logic_hpa_discover
   static std::unordered_map<int32_t, const google::protobuf::FieldDescriptor*> enabled_services;
   static int64_t configure_version[2] = {0, 0};
 
-  auto& reload_time = logic_config::me()->get_server_cfg().logic().server().reload_timepoint();
+  auto& reload_time = logic_config::me()->get_server_cfg().server().reload_timepoint();
   if (reload_time.seconds() != configure_version[0] || reload_time.nanos() != configure_version[1]) {
     configure_version[0] = reload_time.seconds();
     configure_version[1] = reload_time.nanos();
@@ -113,20 +113,20 @@ SERVER_FRAME_API const atfw::atapp::protocol::atapp_metadata* logic_hpa_discover
   }
 
   static_assert(
-      std::is_same<decltype(logic_config::me()->get_server_cfg().logic().hpa().discovery().scaling_ready()),
-                   decltype(logic_config::me()->get_server_cfg().logic().hpa().discovery().scaling_target())>::value,
+      std::is_same<decltype(logic_config::me()->get_server_cfg().hpa().discovery().scaling_ready()),
+                   decltype(logic_config::me()->get_server_cfg().hpa().discovery().scaling_target())>::value,
       "Type checking - 1");
-  static_assert(std::is_same<decltype(logic_config::me()->get_server_cfg().logic().hpa().discovery().scaling_ready()),
-                             decltype(logic_config::me()->get_server_cfg().logic().discovery_selector())>::value,
+  static_assert(std::is_same<decltype(logic_config::me()->get_server_cfg().hpa().discovery().scaling_ready()),
+                             decltype(logic_config::me()->get_server_cfg().discovery_selector())>::value,
                 "Type checking - 2");
 
   const PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg* use_cfg = nullptr;
   switch (mode) {
     case logic_hpa_discovery_select_mode::kTarget:
-      use_cfg = &logic_config::me()->get_server_cfg().logic().hpa().discovery().scaling_target();
+      use_cfg = &logic_config::me()->get_server_cfg().hpa().discovery().scaling_target();
       break;
     default:
-      use_cfg = &logic_config::me()->get_server_cfg().logic().hpa().discovery().scaling_ready();
+      use_cfg = &logic_config::me()->get_server_cfg().hpa().discovery().scaling_ready();
       break;
   }
 

@@ -399,7 +399,7 @@ SERVER_FRAME_API rpc::result_code_type router_object_base::await_io_task(rpc::co
 
     dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
     await_options.sequence = ctx.get_task_context().task_id;
-    await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(),
+    await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_server_cfg().task().csmsg().timeout(),
                                                           std::chrono::seconds{6});
 
     RPC_AWAIT_IGNORE_RESULT(rpc::custom_wait(ctx, reinterpret_cast<const void *>(&io_task_awaiter_), await_options));

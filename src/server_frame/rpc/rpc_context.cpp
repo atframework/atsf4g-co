@@ -57,7 +57,7 @@ static rpc_context_mertrics_data &get_rpc_context_mertrics_data() noexcept {
 
 static void calculate_trace_span_permillage(time_t now) {
   int64_t current_rate = 0x1000000;
-  auto &trace_configure = logic_config::me()->get_logic().task().trace();
+  auto &trace_configure = logic_config::me()->get_server_cfg().task().trace();
   auto &metrics_data = get_rpc_context_mertrics_data();
 
   metrics_data.configure_max_count_per_second = trace_configure.max_count_per_second();

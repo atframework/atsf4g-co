@@ -44,7 +44,7 @@ SERVER_FRAME_API rpc::result_code_type lookup(rpc::context &ctx, gsl::string_vie
   dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
   await_options.sequence = sequence;
   await_options.timeout =
-      rpc::make_duration_or_default(logic_config::me()->get_logic().dns().lookup_timeout(), std::chrono::seconds{5});
+      rpc::make_duration_or_default(logic_config::me()->get_server_cfg().dns().lookup_timeout(), std::chrono::seconds{5});
 
   ret = RPC_AWAIT_CODE_RESULT(rpc::custom_wait(
       ctx, ss_msg_dispatcher::me()->get_dns_lookup_rpc_type(), await_options,

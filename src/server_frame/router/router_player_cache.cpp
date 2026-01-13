@@ -380,7 +380,7 @@ SERVER_FRAME_API rpc::result_code_type router_player_cache::save_object(rpc::con
       if (obj->get_session()) {
         obj->get_login_info().set_login_code_expired(
             atfw::util::time::time_utility::get_sys_now() +
-            logic_config::me()->get_logic().session().login_code_valid_sec().seconds());
+            logic_config::me()->get_server_cfg().session().login_code_valid_sec().seconds());
       }
 
       auto save_login_blob_data =

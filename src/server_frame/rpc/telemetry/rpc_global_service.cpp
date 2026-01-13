@@ -415,7 +415,7 @@ static std::shared_ptr<local_meter_info_type> get_meter_info(std::shared_ptr<gro
     }
 
     if (meter_name.empty() ||
-        meter_name == logic_config::me()->get_logic().telemetry().opentelemetry().metrics().default_name()) {
+        meter_name == logic_config::me()->get_server_cfg().telemetry().opentelemetry().metrics().default_name()) {
       return group->default_metrics_meter;
     }
 
@@ -430,7 +430,7 @@ static std::shared_ptr<local_meter_info_type> get_meter_info(std::shared_ptr<gro
 
     opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Meter> meter = group->metrics_handle.provider->GetMeter(
         meter_name, group->metrics_default_library_version,
-        logic_config::me()->get_logic().telemetry().opentelemetry().metrics().schema_url());
+        logic_config::me()->get_server_cfg().telemetry().opentelemetry().metrics().schema_url());
     if (!meter) {
       return nullptr;
     }
@@ -478,7 +478,7 @@ static bool remove_meter_info(std::shared_ptr<group_type> &group, const opentele
 
     opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Meter> meter = group->metrics_handle.provider->RemoveMeter(
         meter_name, group->metrics_default_library_version,
-        logic_config::me()->get_logic().telemetry().opentelemetry().metrics().schema_url());
+        logic_config::me()->get_server_cfg().telemetry().opentelemetry().metrics().schema_url());
   }
 
   return ret;

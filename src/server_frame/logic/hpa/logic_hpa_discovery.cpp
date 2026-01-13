@@ -113,7 +113,7 @@ SERVER_FRAME_API std::string logic_hpa_discovery::make_path(gsl::string_view key
     domain = logic_hpa_discovery_semantic_conventions::kLogicHpaDiscoveryDomainDefault;
   }
 
-  auto& hpa_configure = logic_config::me()->get_logic().hpa();
+  auto& hpa_configure = logic_config::me()->get_server_cfg().hpa();
 
   std::string etcd_path;
   // 预留空间，粗略即可

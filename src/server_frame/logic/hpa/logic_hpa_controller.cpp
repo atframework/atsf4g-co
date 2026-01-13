@@ -372,7 +372,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
           util::log::format("HPA Controller Discovery with type name: {}", hpa_discovery_data_ptr->with_type_name));
     }
 
-    auto& hpa_configure = logic_config::me()->get_logic().hpa();
+    auto& hpa_configure = logic_config::me()->get_server_cfg().hpa();
     ::atfw::atapp::app::add_custom_command_rsp(
         params,
         util::log::format("HPA metrics configure:\n{}", protobuf_mini_dumper_get_readable(hpa_configure.metrics())));
@@ -528,7 +528,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
       return;
     }
 
-    auto& hpa_configure = logic_config::me()->get_logic().hpa();
+    auto& hpa_configure = logic_config::me()->get_server_cfg().hpa();
     ::atfw::atapp::app::add_custom_command_rsp(
         params, util::log::format("HPA Controller Discovery configure: {}",
                                   protobuf_mini_dumper_get_readable(hpa_configure.discovery())));
@@ -787,7 +787,7 @@ SERVER_FRAME_API void logic_hpa_controller::reload() {
   // 因为HPA模块依赖telemetry模块的篇日志初始化，我们延迟实际的reload行为到下一次tick
   need_configure_ = true;
 
-  auto& hpa_configure = logic_config::me()->get_logic().hpa();
+  auto& hpa_configure = logic_config::me()->get_server_cfg().hpa();
   auto& hpa_target = hpa_configure.controller().target();
 
   time_t sys_now = util::time::time_utility::get_sys_now();
@@ -858,17 +858,15 @@ SERVER_FRAME_API void logic_hpa_controller::reload() {
   // Patch补充HPA策略路由配置
   auto& ready_rules = *logic_config::me()
                            ->mutable_server_cfg()
-                           ->mutable_logic()
                            ->mutable_hpa()
                            ->mutable_discovery()
                            ->mutable_scaling_ready();
   auto& target_rules = *logic_config::me()
                             ->mutable_server_cfg()
-                            ->mutable_logic()
                             ->mutable_hpa()
                             ->mutable_discovery()
                             ->mutable_scaling_target();
-  protobuf_copy_message(ready_rules, logic_config::me()->get_logic().discovery_selector());
+  protobuf_copy_message(ready_rules, logic_config::me()->get_server_cfg().discovery_selector());
   protobuf_copy_message(target_rules, ready_rules);
 
   do {
@@ -991,7 +989,7 @@ SERVER_FRAME_API int logic_hpa_controller::stop(bool prestop, time_t target_labe
 
     // 启用HPA controller时（适用于需要状态转移），prestop 使用target和ready保护延迟
     // 不启用HPA controller时，仅仅使用服务发现和策略路由，两个标签都要提前缩短
-    auto& controller_cfg = logic_config::me()->get_logic().hpa().controller();
+    auto& controller_cfg = logic_config::me()->get_server_cfg().hpa().controller();
     if (prestop && controller_cfg.enable()) {
       time_t expect_hpa_label_target_timepoint =
           sys_now + target_label_offset >= 0 ? target_label_offset
@@ -1344,7 +1342,7 @@ SERVER_FRAME_API util::network::http_request::ptr_t logic_hpa_controller::create
     return ret;
   }
 
-  auto& hpa_metrics_cfg = logic_config::me()->get_logic().hpa().metrics();
+  auto& hpa_metrics_cfg = logic_config::me()->get_server_cfg().hpa().metrics();
   auto& pull_request_cfg = hpa_metrics_cfg.pull_request();
   auto& pull_ssl_cfg = hpa_metrics_cfg.pull_ssl();
 
@@ -1733,7 +1731,7 @@ void logic_hpa_controller::reload_hpa_controller_metadata_filter() {
   }
 
   // HPA控制器的额外标签
-  for (auto& label_kv : logic_config::me()->get_logic().hpa().controller().discovery_labels()) {
+  for (auto& label_kv : logic_config::me()->get_server_cfg().hpa().controller().discovery_labels()) {
     (*hpa_discovery_data_->discovery_filter.mutable_labels())[label_kv.first] = label_kv.second;
 
     owner_app_->set_metadata_label(label_kv.first, label_kv.second);
@@ -1743,7 +1741,7 @@ void logic_hpa_controller::reload_hpa_controller_metadata_filter() {
 void logic_hpa_controller::do_reload_hpa_metrics() {
   auto hpa_telemetry_group =
       rpc::telemetry::global_service::get_group(rpc::telemetry::semantic_conventions::kGroupNameHpa);
-  auto& hpa_configure = logic_config::me()->get_logic().hpa();
+  auto& hpa_configure = logic_config::me()->get_server_cfg().hpa();
   common_attributes_reference_.clear();
   common_attributes_lifetime_.clear();
   common_selectors_.clear();
@@ -1951,7 +1949,7 @@ void logic_hpa_controller::do_reload_hpa_metrics_auto_inject_resource(
 
 void logic_hpa_controller::do_reload_hpa_metrics_auto_inject_hpa_labels(
     std::unordered_set<std::string>& common_ignore_selectors) {
-  auto& hpa_configure = logic_config::me()->get_logic().hpa();
+  auto& hpa_configure = logic_config::me()->get_server_cfg().hpa();
 
   // 自动注入的target相关标签
   if (!hpa_configure.controller().target().kind().empty()) {
@@ -1982,7 +1980,7 @@ void logic_hpa_controller::do_reload_hpa_metrics_auto_inject_hpa_labels(
 
 void logic_hpa_controller::do_reload_hpa_metrics_auto_inject_common_attributes(
     std::unordered_set<std::string>& common_ignore_selectors) {
-  auto& hpa_configure = logic_config::me()->get_logic().hpa();
+  auto& hpa_configure = logic_config::me()->get_server_cfg().hpa();
 
   // HPA控制器的额外上报标签
   for (auto& kv : hpa_configure.metrics().labels()) {
@@ -2008,7 +2006,7 @@ util::nostd::nonnull<std::shared_ptr<logic_hpa_policy>> logic_hpa_controller::in
     const PROJECT_NAMESPACE_ID::config::logic_hpa_policy& policy_cfg, int64_t push_interval_seconds) {
   std::shared_ptr<logic_hpa_policy> policy_instance;
   int64_t pull_default_time_range =
-      logic_config::me()->get_logic().hpa().metrics().pull_default_time_range_multiplying_factor();
+      logic_config::me()->get_server_cfg().hpa().metrics().pull_default_time_range_multiplying_factor();
 
   // 默认4.5倍的推送间隔，考虑 [业务service]->[本地otelcol]->[远程otelcol]->PodMonitor抓取每层都有可能有时间差
   if (pull_default_time_range <= 0) {
@@ -2906,7 +2904,7 @@ void logic_hpa_controller::cleanup_default_hpa_discovery() {
 }
 
 void logic_hpa_controller::do_reload_hpa_configure() {
-  auto& hpa_configure = logic_config::me()->get_logic().hpa();
+  auto& hpa_configure = logic_config::me()->get_server_cfg().hpa();
   auto& hpa_target = hpa_configure.controller().target();
   std::string hpa_configure_key;
 
@@ -2949,7 +2947,7 @@ void logic_hpa_controller::do_reload_hpa_configure() {
 }
 
 void logic_hpa_controller::do_reload_hpa_controller_tick(bool need_reload) {
-  auto& hpa_configure = logic_config::me()->get_logic().hpa();
+  auto& hpa_configure = logic_config::me()->get_server_cfg().hpa();
 
   if (nullptr == owner_app_) {
     return;
@@ -3097,7 +3095,7 @@ void logic_hpa_controller::do_reload_hpa_controller_tick(bool need_reload) {
     policy_cfg.set_metrics_name(hpa_configure.metrics().metrics_name_stateful_index());
     policy_cfg.set_metrics_unit("count");
 
-    for (auto& label_kv : logic_config::me()->get_logic().hpa().controller().discovery_labels()) {
+    for (auto& label_kv : logic_config::me()->get_server_cfg().hpa().controller().discovery_labels()) {
       (*policy_cfg.mutable_labels())[rpc::telemetry::exporter::metrics::PrometheusUtility::SanitizePrometheusName(
           label_kv.first, true)] = label_kv.second;
     }
@@ -3130,7 +3128,7 @@ void logic_hpa_controller::do_reload_hpa_controller_tick(bool need_reload) {
     policy_cfg.set_metrics_name(hpa_configure.metrics().metrics_name_expect_replicas());
     policy_cfg.set_metrics_unit("count");
 
-    for (auto& label_kv : logic_config::me()->get_logic().hpa().controller().discovery_labels()) {
+    for (auto& label_kv : logic_config::me()->get_server_cfg().hpa().controller().discovery_labels()) {
       (*policy_cfg.mutable_labels())[rpc::telemetry::exporter::metrics::PrometheusUtility::SanitizePrometheusName(
           label_kv.first, true)] = label_kv.second;
     }
@@ -3152,7 +3150,7 @@ void logic_hpa_controller::do_report_default_hpa_discovery() {
     return;
   }
 
-  auto& hpa_configure = logic_config::me()->get_logic().hpa();
+  auto& hpa_configure = logic_config::me()->get_server_cfg().hpa();
   time_t pull_interval_sec = hpa_configure.metrics().pull_interval().seconds();
   if (pull_interval_sec <= 0) {
     pull_interval_sec = 60;
@@ -3537,7 +3535,7 @@ void logic_hpa_controller::setup_hpa_controller() {
     return;
   }
 
-  auto& hpa_configure = logic_config::me()->get_logic().hpa();
+  auto& hpa_configure = logic_config::me()->get_server_cfg().hpa();
   hpa_discovery_data_->with_type_id = hpa_configure.controller().type_id();
   hpa_discovery_data_->with_type_name = hpa_configure.controller().type_name();
 
@@ -3734,7 +3732,7 @@ bool logic_hpa_controller::is_main_hpa_controller() const noexcept {
     return false;
   }
 
-  time_t pull_interval_sec = logic_config::me()->get_logic().hpa().metrics().pull_interval().seconds();
+  time_t pull_interval_sec = logic_config::me()->get_server_cfg().hpa().metrics().pull_interval().seconds();
   if (pull_interval_sec <= 0) {
     pull_interval_sec = 60;
   }

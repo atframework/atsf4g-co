@@ -12,7 +12,7 @@
 #include <ctime>
 
 SERVER_FRAME_API std::chrono::system_clock::duration dispatcher_await_options::get_default_timeout() noexcept {
-  auto& timeout = logic_config::me()->get_logic().task().csmsg().timeout();
+  auto& timeout = logic_config::me()->get_server_cfg().task().csmsg().timeout();
 
   if ATFW_UTIL_LIKELY_CONDITION (timeout.seconds() > 0 || timeout.nanos() > 0) {
     return std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::seconds{timeout.seconds()}) +
