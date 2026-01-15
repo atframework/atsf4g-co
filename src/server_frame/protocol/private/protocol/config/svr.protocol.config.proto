@@ -197,6 +197,8 @@ message logic_db_cfg {
   db_group_cfg cluster = 101;
   db_group_cfg raw = 102;
   db_timer_cfg timer = 103;
+  string password = 104;
+  string record_prefix = 105;
 }
 
 message logic_section_cfg {

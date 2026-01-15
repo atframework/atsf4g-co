@@ -1,0 +1,35 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "(Windows) 附加",
+            "type": "cppvsdbg",
+            "request": "attach",
+        },
+        {
+            "name": "(Windows) 启动 - gamesvr",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/publish/gamesvr/bin/gamesvrd.exe",
+            "args": [
+                "--config",
+                "${workspaceFolder}/build/publish/gamesvr/cfg/gamesvr_1.1.12.1.yaml",
+                "-pid",
+                "${workspaceFolder}/build/publish/gamesvr/bin/gamesvr_1.1.12.1.pid",
+                "start"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/publish/gamesvr/bin",
+            "environment": [
+                {
+                    "name": "PATH",
+                    "value": "${workspaceFolder}/build/publish/gamesvr/bin;${workspaceFolder}/build/publish/lib;${workspaceFolder}/build/publish/bin;${env:PATH}"
+                }
+            ],
+            "externalConsole": true
+        }
+    ]
+}

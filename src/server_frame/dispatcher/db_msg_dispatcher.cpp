@@ -118,7 +118,8 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::init() {
   }
 
   // init
-  cluster_init(logic_config::me()->get_cfg_db().cluster(), channel_t::CLUSTER_DEFAULT);
+  cluster_init(logic_config::me()->get_cfg_db().cluster(), logic_config::me()->get_cfg_db().password(),
+               channel_t::CLUSTER_DEFAULT);
   raw_init(logic_config::me()->get_cfg_db().raw(), channel_t::RAW_DEFAULT);
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
@@ -307,37 +308,31 @@ void db_msg_dispatcher::log_info_fn(const char *content) { WCLOGINFO(log_categor
 int db_msg_dispatcher::script_load(redisAsyncContext *c, script_type type) {
   // load lua script
   int status;
-  std::string script;
-  std::stringstream script_stream;
+  const char *script;
   switch (type) {
     case script_type::kCompareAndSetHashTable: {
-      script_stream << "local real_version_str = redis.call('HGET', KEYS[1], ARGV[1])\n";
-      script_stream << "local real_version = 0\n";
-      script_stream << "if real_version_str != false and real_version_str != nil then\n";
-      script_stream << "  real_version = tonumber(real_version_str)\n";
-      script_stream << "end\n";
-      script_stream << "local except_version = tonumber(ARGV[2])\n";
-      script_stream << "local unpack_fn = table.unpack or unpack -- Lua 5.1 - 5.3\n";
-      script_stream << "if real_version == 0 or except_version == real_version then\n";
-      script_stream << "  ARGV[2] = real_version + 1;\n";
-      script_stream << "  redis.call('HMSET', KEYS[1], unpack_fn(ARGV))\n";
-      script_stream << "  return  { ok = tostring(ARGV[2]) }\n";
-      script_stream << "else\n";
-      script_stream << "  return  { err = 'CAS_FAILED|' .. tostring(real_version) }\n";
-      script_stream << "end\n";
+      script = R"(local real_version_str = redis.call('HGET', KEYS[1], ARGV[1])
+local real_version = 0
+if real_version_str ~= false and real_version_str ~= nil then
+  real_version = tonumber(real_version_str)
+end
+local except_version = tonumber(ARGV[2])
+local unpack_fn = table.unpack or unpack -- Lua 5.1 - 5.3
+if real_version == 0 or except_version == real_version then
+  ARGV[2] = real_version + 1;
+  redis.call('HSET', KEYS[1], unpack_fn(ARGV))
+  return  { ok = tostring(ARGV[2]) }
+else
+  return  { err = 'CAS_FAILED|' .. tostring(real_version) }
+end)";
       break;
     }
     default:
-      break;
-  }
-
-  script = script_stream.str();
-  if (script.empty()) {
-    return 0;
+      return 0;
   }
 
   status = redisAsyncCommand(c, script_callback, reinterpret_cast<void *>(static_cast<intptr_t>(type)),
-                             "SCRIPT LOAD %s", script.c_str());
+                             "SCRIPT LOAD %s", script);
   if (REDIS_OK != status) {
     FWLOGERROR("send db msg failed, status: {}, msg: {}", status, c->errstr);
   }
@@ -385,7 +380,8 @@ void db_msg_dispatcher::script_callback(redisAsyncContext *c, void *r, void *pri
 }
 
 // cluster
-int db_msg_dispatcher::cluster_init(const PROJECT_NAMESPACE_ID::config::db_group_cfg &conns, int index) {
+int db_msg_dispatcher::cluster_init(const PROJECT_NAMESPACE_ID::config::db_group_cfg &conns,
+                                    const std::string &password, int index) {
   if (index >= channel_t::SENTINEL_BOUND || index < 0) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
@@ -404,6 +400,7 @@ int db_msg_dispatcher::cluster_init(const PROJECT_NAMESPACE_ID::config::db_group
   int32_t conn_idx = atfw::util::random_engine::random_between<int32_t>(0, conns.gateways_size());
 
   // 初始化
+  conn->set_auth_password(password);
   conn->init(conns.gateways(conn_idx).host(), static_cast<uint16_t>(conns.gateways(conn_idx).port()));
 
   // 设置日志handle

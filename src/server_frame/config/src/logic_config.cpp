@@ -24,7 +24,8 @@ ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(logic_config);
 ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(logic_config);
 #endif
 
-SERVER_FRAME_CONFIG_API logic_config::logic_config() : const_settings_(nullptr), atframe_settings_(nullptr) {}
+SERVER_FRAME_CONFIG_API logic_config::logic_config()
+    : const_settings_(nullptr), atframe_settings_(nullptr), custom_config_loader_(nullptr) {}
 
 SERVER_FRAME_CONFIG_API logic_config::~logic_config() {}
 
@@ -107,9 +108,10 @@ void logic_config::_load_db() {
 }
 
 void logic_config::_load_db_hosts(PROJECT_NAMESPACE_ID::config::db_group_cfg &out) {
+  out.clear_gateways();
   for (int i = 0; i < out.host_size(); ++i) {
     const std::string &host = out.host(i);
-    out.clear_gateways();
+    FWLOGINFO("Load DB host config: {}", host);
 
     std::string::size_type fn = host.find_last_of(":");
     if (std::string::npos == fn) {
@@ -199,7 +201,7 @@ SERVER_FRAME_CONFIG_API const atframework::ConstSettingsType &logic_config::get_
 
 void logic_config::_load_server_cfg(atfw::atapp::app &app) {
   server_cfg_.Clear();
-  app.parse_configures_into(server_cfg_, std::string(), "ATAPP");
+  app.parse_configures_into(server_cfg_, "logic", "ATAPP_LOGIC");
 
   atfw::util::time::time_utility::update();
   auto reload_timepoint = server_cfg_.mutable_server()->mutable_reload_timepoint();

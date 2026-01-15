@@ -1,3 +1,17 @@
 # redis.yaml
 # vim: set sw=2 sts=2 et:
 # encoding: utf-8
+
+enabled: true
+addrs: [
+  10.100.0.18:6379
+  10.100.0.19:6379
+  10.100.0.20:6379
+  10.100.0.21:6379
+  10.100.0.22:6379
+  10.100.0.23:6379
+]
+password: Va7dKXVkyBVxxo
+pool_size: 50
+record_prefix:
+random_prefix: true

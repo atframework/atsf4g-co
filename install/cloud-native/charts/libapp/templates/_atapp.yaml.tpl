@@ -16,7 +16,11 @@ atapp:
   hostname: "{{ . }}"   # hostname, any host should has a unique name. if empty, we wil try to use the mac address
   {{- end }}
   bus:
+{{- if eq .Values.atdtool_running_platform "windows" }}
+    listen: pipe://\\.\pipe\{{ .Values.atapp.deployment.project_name }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.sock
+{{- else }}
     listen: unix:///run/atapp/{{ .Values.atapp.deployment.project_name }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.sock
+{{- end }}
     # bus.subnets: 0/0
     # proxy:                           # atgateway must has parent node
     loop_times: {{ .Values.atapp.bus_loop_times_per_tick | default 2048 }}                    # max message number in one loop
@@ -76,7 +80,7 @@ atapp:
             writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.normal.all.log"
             auto_flush: error
             flush_interval: 1s    # flush log interval
-      - name: redis
+      - name: db
         index: 1
         prefix: "[%F %T.%f][%L](%k:%n): "
         stacktrace:
@@ -90,8 +94,8 @@ atapp:
             rotate:
               number: {{ .Values.log_rotate_num }}
               size: 10MB
-            file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.redis.all.%N.log"
-            writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.redis.all.log"
+            file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db.all.%N.log"
+            writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db.all.log"
             auto_flush: error
             flush_interval: 1s        # flush log interval
           - type: file
@@ -101,11 +105,11 @@ atapp:
             rotate:
               number: {{ .Values.log_rotate_num }}
               size: 10MB
-            file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.redis.error.%N.log"
-            writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.redis.error.log"
+            file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db.error.%N.log"
+            writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db.error.log"
             auto_flush: error
             flush_interval: 1s        # flush log interval
-      - name: db_inner
+      - name: stat
         index: 2
         prefix: "[%F %T.%f][%L](%k:%n): "
         stacktrace:
@@ -119,8 +123,8 @@ atapp:
             rotate:
               number: {{ .Values.log_rotate_num }}
               size: 10MB
-            file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db_inner.all.%N.log"
-            writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db_inner.all.log"
+            file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.stat.all.%N.log"
+            writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.stat.all.log"
             auto_flush: error
             flush_interval: 1s    # flush log interval
           - type: file
@@ -130,8 +134,8 @@ atapp:
             rotate:
               number: {{ .Values.log_rotate_num }}
               size: 10MB
-            file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db_inner.error.%N.log"
-            writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db_inner.error.log"
+            file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.stat.error.%N.log"
+            writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.stat.error.log"
             auto_flush: error
             flush_interval: 1s        # flush log interval
   # =========== timer ===========

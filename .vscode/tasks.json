@@ -1,0 +1,44 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Deploy-Update Dependencies",
+      "type": "shell",
+      "command": "./update_dependency.sh",
+      "args": [],
+      "options": {
+        "cwd": "${workspaceFolder}/build/publish/tools/script"
+      },
+      "windows": {
+        "command": "./update_dependency.bat"
+      },
+      "group": "none"
+    },
+    {
+      "label": "Deploy-GenerateServiceConfig",
+      "type": "shell",
+      "command": "generate_config.sh",
+      "args": [],
+      "options": {
+        "cwd": "${workspaceFolder}/build/publish/tools/script"
+      },
+      "windows": {
+        "command": "./generate_config.bat"
+      },
+      "group": "none"
+    },
+    {
+      "label": "Run-Gamesvr",
+      "type": "shell",
+      "command": "start_1.1.12.1.sh",
+      "args": [],
+      "options": {
+        "cwd": "${workspaceFolder}/build/publish/gamesvr/bin"
+      },
+      "windows": {
+        "command": "./start_1.1.12.1.bat"
+      },
+      "group": "none"
+    }
+  ]
+}
