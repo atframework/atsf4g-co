@@ -203,7 +203,7 @@ class db_msg_dispatcher : public dispatcher_implement {
   static void script_callback(redisAsyncContext *c, void *r, void *privdata);
 
   // cluster
-  int cluster_init(const PROJECT_NAMESPACE_ID::config::db_group_cfg &conns, int index);
+  int cluster_init(const PROJECT_NAMESPACE_ID::config::db_group_cfg &conns, const std::string &password, int index);
   static void cluster_request_callback(hiredis::happ::cmd_exec *, struct redisAsyncContext *c, void *r, void *privdata);
   static void cluster_on_connect(hiredis::happ::cluster *, hiredis::happ::connection *);
   static void cluster_on_connected(hiredis::happ::cluster *, hiredis::happ::connection *,

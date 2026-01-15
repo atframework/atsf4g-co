@@ -1,0 +1,7 @@
+# global.yaml
+# vim: set sw=2 sts=2 et:
+# encoding: utf-8
+
+# 日志级别
+log_level: DEBUG
+log_stacktrace_level: ERROR
