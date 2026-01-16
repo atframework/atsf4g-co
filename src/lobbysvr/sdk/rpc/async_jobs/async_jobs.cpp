@@ -33,28 +33,12 @@ namespace rpc {
 namespace async_jobs {
 
 namespace detail {
-struct player_key_hash_t {
-  size_t operator()(const PROJECT_NAMESPACE_ID::DPlayerIDKey& key) const {
-    uint64_t out[2] = {0};
-    uint64_t val = key.user_id();
-    atfw::util::hash::murmur_hash3_x64_128(&val, static_cast<int>(sizeof(val)), key.zone_id(), out);
-    return out[0];
-  }
-};
-
-struct player_key_equal_t {
-  bool operator()(const PROJECT_NAMESPACE_ID::DPlayerIDKey& l, const PROJECT_NAMESPACE_ID::DPlayerIDKey& r) const {
-    return l.zone_id() == r.zone_id() && l.user_id() == r.user_id();
-  }
-};
-
 // 如果短期内发生太多次针对同一玩家得在线表拉取，则直接用缓存。这可以优化短期频繁拉取login表，并且异步任务就算过期也只是回延后触发，不影响逻辑
-static rpc::result_code_type fetch_user_login_cache(rpc::context& ctx, uint64_t user_id, uint32_t zone_id,
-                                                    shared_message<PROJECT_NAMESPACE_ID::table_login>& rsp,
+static rpc::result_code_type fetch_user_login_cache(rpc::context& ctx, uint64_t user_id,
+                                                    shared_message<PROJECT_NAMESPACE_ID::table_login_lock>& rsp,
                                                     bool ignore_cache) {
-  static std::unordered_map<PROJECT_NAMESPACE_ID::DPlayerIDKey,
-                            atfw::util::memory::strong_rc_ptr<shared_message<PROJECT_NAMESPACE_ID::table_login>>,
-                            player_key_hash_t, player_key_equal_t>
+  static std::unordered_map<uint64_t,
+                            atfw::util::memory::strong_rc_ptr<shared_message<PROJECT_NAMESPACE_ID::table_login_lock>>>
       local_cache;
   static time_t local_cache_timepoint = 0;
   time_t now = atfw::util::time::time_utility::get_now();
@@ -63,12 +47,8 @@ static rpc::result_code_type fetch_user_login_cache(rpc::context& ctx, uint64_t 
     local_cache.clear();
   }
 
-  PROJECT_NAMESPACE_ID::DPlayerIDKey key;
-  key.set_user_id(user_id);
-  key.set_zone_id(zone_id);
-
   if (!ignore_cache) {
-    auto iter_cache = local_cache.find(key);
+    auto iter_cache = local_cache.find(user_id);
     if (iter_cache != local_cache.end() && iter_cache->second) {
       protobuf_copy_message(*rsp, **iter_cache->second);
       RPC_RETURN_CODE(0);
@@ -76,9 +56,10 @@ static rpc::result_code_type fetch_user_login_cache(rpc::context& ctx, uint64_t 
   }
 
   uint64_t version = 0;
-  int ret = RPC_AWAIT_CODE_RESULT(rpc::db::login::get_all(ctx, user_id, zone_id, rsp, version));
+  int ret = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get_all(ctx, user_id, rsp, version));
   if (0 == ret) {
-    local_cache[key] = atfw::util::memory::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::table_login>>(rsp);
+    local_cache[user_id] =
+        atfw::util::memory::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::table_login_lock>>(rsp);
   }
   RPC_RETURN_CODE(ret);
 }
@@ -180,23 +161,23 @@ GAME_RPC_API ::rpc::db::result_type add_jobs(rpc::context& ctx, int32_t jobs_typ
       break;
     }
     // 不走路由系统，异步任务允许任意节点发送，但是有些服务不需要拉缓存对象
-    shared_message<PROJECT_NAMESPACE_ID::table_login> login_table{ctx};
+    shared_message<PROJECT_NAMESPACE_ID::table_login_lock> login_table{ctx};
     shared_message<PROJECT_NAMESPACE_ID::SSPlayerAsyncJobsSync> req_body{ctx};
 
-    auto res = RPC_AWAIT_CODE_RESULT(
-        detail::fetch_user_login_cache(ctx, user_id, zone_id, login_table, options.ignore_router_cache));
+    auto res =
+        RPC_AWAIT_CODE_RESULT(detail::fetch_user_login_cache(ctx, user_id, login_table, options.ignore_router_cache));
     if (res < 0) {
       if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == res) {
-        FWLOGWARNING("rpc::db::login::get({}, {}) but not found, maybe not created yet", user_id, zone_id);
+        FWLOGWARNING("rpc::db::login_lock::get({}) but not found, maybe not created yet", user_id);
       } else {
-        FWLOGERROR("rpc::db::login::get({}, {}) failed, res: {}", user_id, zone_id, res);
+        FWLOGERROR("rpc::db::login_lock::get({}) failed, res: {}", user_id, res);
       }
       break;
     }
 
     // 不在线则不用通知
-    if (0 == login_table->router_server_id() ||
-        login_table->login_code_expired() <= atfw::util::time::time_utility::get_sys_now()) {
+    if (0 == login_table->router_server_id() || login_table->login_zone_id() != zone_id ||
+        login_table->login_expired() <= atfw::util::time::time_utility::get_sys_now()) {
       break;
     }
 
@@ -281,23 +262,23 @@ GAME_RPC_API ::rpc::db::result_type update_jobs(rpc::context& ctx, int32_t jobs_
       break;
     }
     // 不走路由系统，异步任务允许任意节点发送，但是有些服务不需要拉缓存对象
-    shared_message<PROJECT_NAMESPACE_ID::table_login> login_table{ctx};
+    shared_message<PROJECT_NAMESPACE_ID::table_login_lock> login_table{ctx};
     shared_message<PROJECT_NAMESPACE_ID::SSPlayerAsyncJobsSync> req_body{ctx};
 
-    auto res = RPC_AWAIT_CODE_RESULT(
-        detail::fetch_user_login_cache(ctx, user_id, zone_id, login_table, options.ignore_router_cache));
+    auto res =
+        RPC_AWAIT_CODE_RESULT(detail::fetch_user_login_cache(ctx, user_id, login_table, options.ignore_router_cache));
     if (res < 0) {
       if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == res) {
-        FWLOGWARNING("rpc::db::login::get({}, {}) but not found, maybe not created yet", user_id, zone_id);
+        FWLOGWARNING("rpc::db::login_lock::get({}, {}) but not found, maybe not created yet", user_id, zone_id);
       } else {
-        FWLOGERROR("rpc::db::login::get({}, {}) failed, res: {}", user_id, zone_id, res);
+        FWLOGERROR("rpc::db::login_lock::get({}, {}) failed, res: {}", user_id, zone_id, res);
       }
       break;
     }
 
     // 不在线则不用通知
-    if (0 == login_table->router_server_id() ||
-        login_table->login_code_expired() <= atfw::util::time::time_utility::get_sys_now()) {
+    if (0 == login_table->router_server_id() || login_table->login_zone_id() != zone_id ||
+        login_table->login_expired() <= atfw::util::time::time_utility::get_sys_now()) {
       break;
     }
 

@@ -71,6 +71,7 @@ class player : public player_cache {
       EN_IFT_IS_INITED,                  // 是否已初始化
       EN_IFT_NEED_PATCH_REMOTE_COMMAND,  // 是否需要启动远程命令任务
       EN_IFT_IN_DIRTY_CALLBACK,          // 是否在结算脏数据过程中
+      EN_IFT_IS_LOGIN,                   // 是否已登录
       EN_IFT_MAX
     };
   };
@@ -147,7 +148,7 @@ class player : public player_cache {
   static ptr_t create(uint64_t user_id, uint32_t zone_id, const std::string &openid);
 
   // 创建默认角色数据，不允许异步，不允许失败
-  void create_init(rpc::context &ctx, uint32_t version_type) override;
+  void create_init(rpc::context &ctx) override;
 
   // 登入读取用户数据后初始化，不允许异步，不允许失败
   void login_init(rpc::context &ctx) override;

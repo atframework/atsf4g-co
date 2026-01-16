@@ -71,10 +71,10 @@ task_action_player_get_info::result_type task_action_player_get_info::operator()
     //}
   }
 
-  // 自定义选项
-  if (req_body.need_player_options()) {
-    protobuf_copy_message(*rsp_body.mutable_player_options(), user->get_player_options().custom_options());
-  }
+  // // 自定义选项
+  // if (req_body.need_player_options()) {
+  //   protobuf_copy_message(*rsp_body.mutable_player_options(), user->get_player_options().custom_options());
+  // }
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

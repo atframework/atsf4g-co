@@ -88,9 +88,8 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
     }
   }
 
-  if (user && user->get_login_info().login_code() == req_body.login_code() &&
-      atfw::util::time::time_utility::get_sys_now() <=
-          static_cast<time_t>(user->get_login_info().login_code_expired()) &&
+  if (user && user->get_login_lock().login_code() == req_body.login_code() &&
+      atfw::util::time::time_utility::get_sys_now() <= static_cast<time_t>(user->get_login_lock().login_expired()) &&
       user->is_writable()) {
     RPC_AWAIT_IGNORE_RESULT(replace_session(user));
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -105,42 +104,54 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
   RPC_AWAIT_IGNORE_RESULT(player_manager::me()->remove(get_shared_context(), req_body.user_id(), zone_id, true));
   user.reset();
 
-  rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> tb{get_shared_context()};
-  uint64_t version = 0;
-  res = RPC_AWAIT_CODE_RESULT(rpc::db::login::get_all(get_shared_context(), req_body.user_id(), zone_id, tb, version));
-  if (res < 0) {
-    FCTXLOGERROR(get_shared_context(), "player {} not found", req_body.open_id());
-    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
-    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  // 拉取或创建last login表，查询禁止登入和踢出之前的session
+  rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> login_lock_tb{get_shared_context()};
+  uint64_t login_lock_cas_version = 0;
+
+  res = RPC_AWAIT_CODE_RESULT(kickoff_other_session(req_body.user_id(), login_lock_tb, login_lock_cas_version));
+  if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == res) {
+    login_lock_tb->set_user_id(req_body.user_id());
+
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::replace(
+        get_shared_context(),
+        rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_login_lock>(get_shared_context(), login_lock_tb),
+        login_lock_cas_version));
+    FCTXLOGDEBUG(get_shared_context(), "create last login user {}, res: {}", req_body.user_id(), res);
+    if (res < 0) {
+      FCTXLOGERROR(get_shared_context(), "user {}:{} try to add last login table failed, errcode {}", zone_id,
+                   req_body.user_id(), res);
+      set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_OPERATE_DB_FAILED);
+      TASK_ACTION_RETURN_CODE(res);
+    }
+  } else if (res != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
+    FCTXLOGERROR(get_shared_context(), "user {}:{} try to kickoff other session failed, errcode {}", zone_id,
+                 req_body.user_id(), res);
+    TASK_ACTION_RETURN_CODE(res);
   }
 
-  if (req_body.user_id() != tb->user_id()) {
-    FCTXLOGERROR(get_shared_context(), "player {} expect user_id={}, but we got {} not found", req_body.open_id(),
-                 tb->user_id(), req_body.user_id());
-    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_USERID_NOT_MATCH);
-    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
-  }
+  // 2. 校验登入码 TODO 从另一个非LoginLock表拿到LoginCode并校验
+  // if (util::time::time_utility::get_sys_now() > tb->login_expired()) {
+  //   FCTXLOGERROR(get_shared_context(), "player {}({}:{}) login code expired", req_body.open_id(), zone_id,
+  //                req_body.user_id());
+  //   set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
+  //   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  // }
 
-  // 2. 校验登入码
-  if (util::time::time_utility::get_sys_now() > tb->login_code_expired()) {
-    FCTXLOGERROR(get_shared_context(), "player {}({}:{}) login code expired", req_body.open_id(), zone_id,
-                 req_body.user_id());
-    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
-    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
-  }
+  // if (0 != UTIL_STRFUNC_STRCMP(req_body.login_code().c_str(), tb->login_code().c_str())) {
+  //   FCTXLOGERROR(get_shared_context(), "player {}({}:{}) login code error(expected: {}, real: {})",
+  //   req_body.open_id(),
+  //                zone_id, req_body.user_id(), tb->login_code(), req_body.login_code());
+  //   set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
+  //   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  // }
 
-  if (0 != UTIL_STRFUNC_STRCMP(req_body.login_code().c_str(), tb->login_code().c_str())) {
-    FCTXLOGERROR(get_shared_context(), "player {}({}:{}) login code error(expected: {}, real: {})", req_body.open_id(),
-                 zone_id, req_body.user_id(), tb->login_code(), req_body.login_code());
-    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
-    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
-  }
+  login_lock_tb->set_login_code(req_body.login_code());
 
   // 3. 写入登入信息和登入信息续期会在路由系统中完成
-
   res = RPC_AWAIT_CODE_RESULT(player_manager::me()->create_as<player>(get_shared_context(), req_body.user_id(), zone_id,
-                                                                      req_body.open_id(), tb, version, user));
-  is_new_player_ = user && user->get_version() == 1;
+                                                                      req_body.open_id(), login_lock_tb,
+                                                                      login_lock_cas_version, user));
+  is_new_player_ = user && user->is_new_user();
   // ============ 在这之后tb不再有效 ============
 
   if (!user) {
@@ -178,7 +189,7 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
 
   my_sess->set_player(user);
 
-  FWPLOGDEBUG(*user, "login curr data version: {}", user->get_version());
+  FWPLOGDEBUG(*user, "login curr data version: {}", user->get_data_version());
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
@@ -249,6 +260,7 @@ GAMECLIENT_RPC_API int task_action_login::on_success() {
 
   // 加入快速保存队列，确保玩家登入成功后保存一次在线状态
   user->set_quick_save();
+  user->on_login(get_shared_context());
 
   return get_result();
 }
@@ -334,7 +346,7 @@ GAMECLIENT_RPC_API rpc::result_code_type task_action_login::replace_session(std:
     user->set_client_info(get_request_body().client_info());
   }
 
-  FWPLOGDEBUG(*user, "relogin curr data version: {}", user->get_version());
+  FWPLOGDEBUG(*user, "relogin curr data version: {}", user->get_data_version());
 
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
@@ -379,4 +391,22 @@ GAMECLIENT_RPC_API rpc::result_code_type task_action_login::await_logout_io_task
   }
 
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
+}
+
+GAMECLIENT_RPC_API rpc::result_code_type task_action_login::kickoff_other_session(
+    uint64_t user_id, rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock>& login_lock_tb,
+    uint64_t& login_lock_cas_version) {
+  int ret = RPC_AWAIT_CODE_RESULT(
+      rpc::db::login_lock::get_all(get_shared_context(), user_id, login_lock_tb, login_lock_cas_version));
+  if (ret < 0) {
+    if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != ret) {
+      FCTXLOGERROR(get_shared_context(), "user {} try to get login table failed when login", user_id);
+      set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_OPERATE_DB_FAILED);
+    }
+    RPC_RETURN_CODE(ret);
+  }
+
+  // 如果在线则尝试踢出 TODO
+
+  RPC_RETURN_CODE(0);
 }

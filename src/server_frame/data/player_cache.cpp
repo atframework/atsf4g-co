@@ -75,7 +75,13 @@ SERVER_FRAME_API initialization_task_lock_guard &initialization_task_lock_guard:
 SERVER_FRAME_API bool initialization_task_lock_guard::has_value() const noexcept { return !!guard_; }
 
 SERVER_FRAME_API player_cache::player_cache(fake_constructor &)
-    : user_id_(0), zone_id_(0), data_version_(0), initialization_task_id_(0) {
+    : user_id_(0),
+      zone_id_(0),
+      login_lock_version_(0),
+      user_cas_version_(0),
+      create_init_(false),
+      initialization_task_id_(0),
+      data_version_(0) {
   server_sequence_ =
       static_cast<uint64_t>(
           (util::time::time_utility::get_sys_now() - PROJECT_NAMESPACE_ID::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET)
@@ -115,41 +121,19 @@ SERVER_FRAME_API player_cache::ptr_t player_cache::create(uint64_t user_id, uint
   return ret;
 }
 
-SERVER_FRAME_API void player_cache::create_init(rpc::context &, uint32_t /*version_type*/) {
+SERVER_FRAME_API void player_cache::create_init(rpc::context &) {
   data_version_ = 0;
-  version_ = 0;
-
-  // copy account information
-  protobuf_copy_message(get_account_info(), get_login_info().account());
-  login_info_.set_zone_id(get_zone_id());
-
-  login_info_.set_business_register_time(util::time::time_utility::get_now());
+  create_init_ = true;
 }
 
-SERVER_FRAME_API void player_cache::login_init(rpc::context &) {
-  // 由于对象缓存可以被复用，这个函数可能会被多次执行。这个阶段，新版本的 login_table 已载入
-
-  // refresh account parameters，这里只刷新部分数据
-  {
-    PROJECT_NAMESPACE_ID::account_information &account = get_account_info();
-    account.set_access(get_login_info().account().access());
-    account.set_account_type(get_login_info().account().account_type());
-    account.set_version_type(get_login_info().account().version_type());
-
-    // 冗余的key字段
-    account.mutable_profile()->set_open_id(get_open_id());
-    account.mutable_profile()->set_user_id(get_user_id());
-  }
-
-  login_info_.set_zone_id(get_zone_id());
-}
+SERVER_FRAME_API void player_cache::login_init(rpc::context &) {}
 
 SERVER_FRAME_API bool player_cache::is_dirty() const {
   //! === manager implement === 检查是否有脏数据
   bool ret = false;
   ret = ret || account_info_.is_dirty();
   ret = ret || player_data_.is_dirty();
-  ret = ret || player_options_.is_dirty();
+  ret = ret || login_info_.is_dirty();
   return ret;
 }
 
@@ -157,7 +141,7 @@ SERVER_FRAME_API void player_cache::clear_dirty() {
   //! === manager implement === 清理脏数据标记
   account_info_.clear_dirty();
   player_data_.clear_dirty();
-  player_options_.clear_dirty();
+  login_info_.clear_dirty();
 }
 
 SERVER_FRAME_API void player_cache::refresh_feature_limit(rpc::context &) {
@@ -170,52 +154,68 @@ SERVER_FRAME_API bool player_cache::is_gm() const {
   return get_account_info().version_type() == PROJECT_NAMESPACE_ID::EN_VERSION_GM;
 }
 
-SERVER_FRAME_API void player_cache::on_login(rpc::context &) {}
+SERVER_FRAME_API void player_cache::on_login(rpc::context &) {
+  // 更新 login_info_ 数据
+  if (is_new_user()) {
+    // 新用户，设置注册时间
+    login_info_.ref().set_business_register_time(static_cast<uint32_t>(util::time::time_utility::get_sys_now()));
+  }
+  login_info_.ref().set_business_login_time(static_cast<uint32_t>(util::time::time_utility::get_sys_now()));
+  login_info_.ref().set_stat_login_total_times(login_info_.ref().stat_login_total_times() + 1);
+  login_info_.ref().set_stat_login_success_times(login_info_.ref().stat_login_success_times() + 1);
+}
 
-SERVER_FRAME_API void player_cache::on_logout(rpc::context &) {}
+SERVER_FRAME_API void player_cache::on_logout(rpc::context &) {
+  login_info_.ref().set_business_logout_time(static_cast<uint32_t>(util::time::time_utility::get_sys_now()));
+}
 
 SERVER_FRAME_API void player_cache::on_saved(rpc::context &) {}
 
 SERVER_FRAME_API void player_cache::on_update_session(rpc::context &, const std::shared_ptr<session> &,
                                                       const std::shared_ptr<session> &) {}
 
+SERVER_FRAME_API bool player_cache::is_new_user() const { return login_info_.ref().business_login_time() == 0; }
+
 SERVER_FRAME_API void player_cache::init_from_table_data(rpc::context &,
                                                          const PROJECT_NAMESPACE_ID::table_user &tb_player) {
-  data_version_ = tb_player.data_version();
-
+  create_init_ = tb_player.create_init();
   const PROJECT_NAMESPACE_ID::table_user *src_tb = &tb_player;
-  if (src_tb->has_account()) {
-    protobuf_copy_message(account_info_.ref(), src_tb->account());
+  if (src_tb->has_account_data()) {
+    protobuf_copy_message(account_info_.ref(), src_tb->account_data());
   }
 
-  if (src_tb->has_player()) {
-    protobuf_copy_message(player_data_.ref(), src_tb->player());
+  if (src_tb->has_user_data()) {
+    protobuf_copy_message(player_data_.ref(), src_tb->user_data());
     if (player_data_.ref().session_sequence() > server_sequence_) {
       server_sequence_ = player_data_.ref().session_sequence();
     }
   }
 
-  if (src_tb->has_options()) {
-    protobuf_copy_message(player_options_.ref(), src_tb->options());
+  if (src_tb->has_login_data()) {
+    protobuf_copy_message(login_info_.ref(), src_tb->login_data());
   }
+
+  data_version_ = tb_player.data_version();
 }
 
 SERVER_FRAME_API int player_cache::dump(rpc::context &, PROJECT_NAMESPACE_ID::table_user &user, bool always) {
   user.set_open_id(get_open_id());
   user.set_user_id(get_user_id());
   user.set_zone_id(get_zone_id());
+
+  user.set_create_init(create_init_);
   user.set_data_version(data_version_);
 
   if (always || player_data_.is_dirty()) {
-    protobuf_copy_message(*user.mutable_player(), player_data_.ref());
+    protobuf_copy_message(*user.mutable_user_data(), player_data_.ref());
   }
 
   if (always || account_info_.is_dirty()) {
-    protobuf_copy_message(*user.mutable_account(), account_info_.ref());
+    protobuf_copy_message(*user.mutable_account_data(), account_info_.ref());
   }
 
-  if (always || player_options_.is_dirty()) {
-    protobuf_copy_message(*user.mutable_options(), player_options_.ref());
+  if (always || login_info_.is_dirty()) {
+    protobuf_copy_message(*user.mutable_login_data(), login_info_.ref());
   }
 
   return 0;
@@ -239,27 +239,16 @@ SERVER_FRAME_API void player_cache::set_session(rpc::context &ctx, std::shared_p
 
   session_ = session_ptr;
   on_update_session(ctx, old_sess, session_ptr);
-
-  // 如果为置空Session，则要加入登出缓存排队列表
-  if (!session_ptr) {
-    // 移除Session时触发Logout
-    if (old_sess && is_writable()) {
-      on_logout(ctx);
-    }
-  } else if (is_writable()) {
-    on_login(ctx);
-  }
 }
 
 SERVER_FRAME_API std::shared_ptr<session> player_cache::get_session() { return session_.lock(); }
 
 SERVER_FRAME_API bool player_cache::has_session() const { return false == session_.expired(); }
 
-SERVER_FRAME_API void player_cache::load_and_move_login_info(PROJECT_NAMESPACE_ID::table_login &&lg, uint64_t ver) {
-  login_info_.Swap(&lg);
-  login_info_version_ = ver;
-
-  login_info_.set_zone_id(get_zone_id());
+SERVER_FRAME_API void player_cache::load_and_move_login_lock(PROJECT_NAMESPACE_ID::table_login_lock &&lg,
+                                                             uint64_t ver) {
+  login_lock_.Swap(&lg);
+  login_lock_version_ = ver;
 }
 
 SERVER_FRAME_API uint64_t player_cache::alloc_server_sequence() {

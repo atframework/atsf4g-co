@@ -46,7 +46,7 @@ class user_async_jobs_manager {
   ~user_async_jobs_manager();
 
   // 创建默认角色数据
-  void create_init(rpc::context& ctx, uint32_t version_type);
+  void create_init(rpc::context& ctx);
 
   // 登入读取用户数据
   void login_init(rpc::context& ctx);

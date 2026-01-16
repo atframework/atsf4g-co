@@ -121,7 +121,7 @@ SERVER_FRAME_API rpc::result_code_type router_player_manager::pull_online_server
   router_svr_ver = 0;
 
   /**
-  rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> local_login_tb{ctx};
+  rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> local_login_tb{ctx};
   std::string        local_login_ver;
   PROJECT_NAMESPACE_ID::table_user  tbu;
 
@@ -131,7 +131,7 @@ SERVER_FRAME_API rpc::result_code_type router_player_manager::pull_online_server
       return ret;
   }
 
-  ret = RPC_AWAIT_CODE_RESULT(rpc::db::login::get(tbu.open_id().c_str(), key.zone_id, local_login_tb, local_login_ver));
+  ret = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get(tbu.open_id().c_str(), key.zone_id, local_login_tb, local_login_ver));
   if (ret < 0) {
       return ret;
   }

@@ -95,7 +95,7 @@ player::ptr_t player::create(uint64_t user_id, uint32_t zone_id, const std::stri
   return ret;
 }
 
-void player::create_init(rpc::context &parent_ctx, uint32_t version_type) {
+void player::create_init(rpc::context &parent_ctx) {
   rpc::context ctx{parent_ctx.create_temporary_child()};
   rpc::telemetry::tracer trace;
   rpc::telemetry::trace_start_option trace_start_option;
@@ -104,12 +104,12 @@ void player::create_init(rpc::context &parent_ctx, uint32_t version_type) {
   trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
   ctx.setup_tracer(trace, "player.create_init", std::move(trace_start_option));
 
-  base_type::create_init(ctx, version_type);
+  base_type::create_init(ctx);
 
   set_data_version(PLAYER_DATA_LOGIC_VERSION);
 
   //! === manager implement === 创建后事件回调，这时候还没进入数据库并且未执行login_init()
-  user_async_jobs_manager_->create_init(ctx, version_type);
+  user_async_jobs_manager_->create_init(ctx);
 
   // TODO init all interval checkpoint
 
@@ -203,6 +203,10 @@ void player::on_login(rpc::context &parent_ctx) {
   if (!is_inited()) {
     return;
   }
+  if (internal_flags_.test(internal_flag::EN_IFT_IS_LOGIN)) {
+    // 已经登录
+    return;
+  }
 
   rpc::context ctx{parent_ctx.create_temporary_child()};
   rpc::telemetry::tracer trace;
@@ -215,11 +219,15 @@ void player::on_login(rpc::context &parent_ctx) {
   base_type::on_login(ctx);
 
   // TODO sync messages
-
+  internal_flags_.set(internal_flag::EN_IFT_IS_LOGIN, true);
   trace.finish({0, {}});
 }
 
 void player::on_logout(rpc::context &parent_ctx) {
+  if (!internal_flags_.test(internal_flag::EN_IFT_IS_LOGIN)) {
+    // 未登录状态不处理logout
+    return;
+  }
   rpc::context ctx{parent_ctx.create_temporary_child()};
   rpc::telemetry::tracer trace;
   rpc::telemetry::trace_start_option trace_start_option;
@@ -229,7 +237,7 @@ void player::on_logout(rpc::context &parent_ctx) {
   ctx.setup_tracer(trace, "player.on_logout", std::move(trace_start_option));
 
   base_type::on_logout(ctx);
-
+  internal_flags_.set(internal_flag::EN_IFT_IS_LOGIN, false);
   trace.finish({0, {}});
 }
 
@@ -313,9 +321,6 @@ void player::update_heartbeat() {
   }
 
   heartbeat_data_.last_recv_time = now_time;
-
-  // 顺带更新login_code的有效期
-  get_login_info().set_login_code_expired(now_time + logic_cfg.session().login_code_valid_sec().seconds());
 }
 
 void player::send_all_syn_msg(rpc::context &ctx) {
