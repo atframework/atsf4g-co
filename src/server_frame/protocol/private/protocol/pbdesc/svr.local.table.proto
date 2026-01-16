@@ -17,50 +17,32 @@ import "protocol/pbdesc/svr.struct.proto";
 
 package hello;
 
-message table_login {
+message table_login_lock {
   // clang-format off
   option (atframework.database_table) = {
     index: {
-      name: "login"
+      name: "login_lock"
       type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
       enable_cas: true
       key_fields: "user_id"
-      key_fields: "zone_id"
     }
   };
   // clang-format on
-  string open_id = 1;
-  uint64 user_id = 2;
-  uint32 zone_id = 3;
-  uint64 router_server_id = 4;  // 路由系统 - 登入进程id
-  uint64 router_version = 5;    // 路由系统 - 登入进程变更版本号
-
-  // 资源冲突检测
-  uint64 expect_table_user_db_version = 6;
-  google.protobuf.Timestamp expect_table_user_db_timeout = 7;
+  uint64 user_id = 1;
+  uint64 router_server_id = 2;  // 路由系统 - 登入进程id
+  uint64 router_version = 3;    // 路由系统 - 登入进程变更版本号
 
   // 登入信息
-  int64 login_time = 12;          // 上次登入时间
-  string login_code = 13;         // 认证码
-  int64 login_code_expired = 14;  // 认证码到期时间
-  int64 logout_time = 15;         // 登出时间
-
+  uint32 login_zone_id = 11;  // 登入区服ID
+  int64 login_expired = 12;   // 登入进程过期时间（时间戳）
+  string login_code = 13;     // 认证码
   // 限制登入信息
-  int64 ban_time = 21;  // 封号期限
+  int64 ban_time = 14;  // 封号期限
+   account_except except = 15;        // 账户异常数据
 
-  // 业务层登入注册信息
-  int64 business_register_time = 31;  // 业务层注册时间
-  int64 business_login_time = 32;     // 业务层登入时间
-  int64 business_logout_time = 33;    // 业务层登出时间
-
-  account_information account = 41;  // 账号信息
-  login_record last_login = 42;      // 上次登入的信息
-  account_except except = 43;        // 账户异常数据
-
-  // 统计数据
-  uint32 stat_login_total_times = 51;    // 总登入次数
-  uint32 stat_login_success_times = 52;  // 成功登入次数
-  uint32 stat_login_failed_times = 53;   // 失败登入次数
+  // 资源冲突检测
+  uint64 expect_table_user_db_version = 21;
+  google.protobuf.Timestamp expect_table_user_db_timeout = 22;
 }
 
 message table_user_async_jobs {
@@ -107,14 +89,20 @@ message table_user {
   uint64 user_id = 2;
   uint32 zone_id = 3;
 
-  account_information account = 11;  // 账号信息
-  player_data player = 12;           // 玩家数据
-  uint64 data_version = 13;          // 数据版本号
-
-  player_options options = 21;  // 玩家选项
+  // BasicInfo
+  user_login_data login_data = 11;             // 登入数据
+  account_information account_data = 12;  // 账号信息
+  user_data user_data = 13;               // 玩家数据
+  uint64 data_version = 14;               // 数据版本号
+  // BasicInfo
 
   // 以下是服务器内部数据
-  user_async_jobs_cache_blob_data async_job_blob_data = 101;  // 异步任务缓存
+  // 异步任务缓存
+  user_async_jobs_cache_blob_data async_job_blob_data = 101;
+  bool create_init = 103;  // 是否已经执行过创建初始化
+
+  // 业务逻辑数据
+  user_options_data options_data = 200;  // 玩家选项
 }
 
 message table_distribute_transaction {

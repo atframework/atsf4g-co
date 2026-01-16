@@ -40,12 +40,12 @@ message login_record {
   int64 gamesvr_version = 2;  // Gamesvr组版本号
 }
 
-message player_data {
+message user_data {
   uint32 player_level = 1;      // 玩家等级
   uint64 session_sequence = 2;  // 玩家的全局递增发包序号
 }
 
-message player_options {
+message user_options_data {
   DPlayerOptions custom_options = 1;  // 用户自定义选项
 }
 
@@ -62,6 +62,19 @@ message player_async_jobs_data {
   }
   repeated history_job_meta history = 1;  // 上一轮处理的UUID列表
   int64 next_task_active_time = 2;        // 下一次异步任务的启动时间
+}
+
+message user_login_data {
+  // 业务层登入注册信息
+  int64 business_register_time = 31;  // 业务层注册时间
+  int64 business_login_time = 32;     // 业务层登入时间
+  int64 business_logout_time = 33;    // 业务层登出时间
+
+  login_record last_login = 42;      // 上次登入的信息
+
+  uint32 stat_login_total_times = 51;    // 总登入次数
+  uint32 stat_login_success_times = 52;  // 成功登入次数
+  uint32 stat_login_failed_times = 53;   // 失败登入次数
 }
 
 message user_async_jobs_blob_data {

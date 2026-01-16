@@ -35,7 +35,7 @@ user_async_jobs_manager::user_async_jobs_manager(player& owner)
 
 user_async_jobs_manager::~user_async_jobs_manager() {}
 
-void user_async_jobs_manager::create_init(rpc::context&, uint32_t) {}
+void user_async_jobs_manager::create_init(rpc::context&) {}
 
 void user_async_jobs_manager::login_init(rpc::context&) { reset_async_jobs_protect(); }
 

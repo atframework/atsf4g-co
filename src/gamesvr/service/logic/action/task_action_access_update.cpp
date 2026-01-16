@@ -37,12 +37,12 @@ task_action_access_update::result_type task_action_access_update::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  if (user->get_login_info().login_code() != req_body.old_access()) {
+  if (user->get_login_lock().login_code() != req_body.old_access()) {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  user->get_login_info().set_login_code(req_body.new_access());
+  user->get_login_lock().set_login_code(req_body.new_access());
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 

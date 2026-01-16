@@ -175,7 +175,7 @@ SERVER_FRAME_API size_t player_manager::size() const { return router_player_mana
 
 SERVER_FRAME_API rpc::result_code_type player_manager::create(
     rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const std::string &openid,
-    rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> &login_tb, uint64_t &login_ver,
+    rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> &login_lock_tb, uint64_t login_lock_ver,
     player_manager::player_ptr_t &output) {
   if (0 == user_id || openid.empty()) {
     FWLOGERROR("can not create player_cache without user id or open id");
@@ -215,7 +215,7 @@ SERVER_FRAME_API rpc::result_code_type player_manager::create(
 
   router_player_cache::key_t key(router_player_manager::me()->get_type_id(), zone_id, user_id);
   router_player_cache::ptr_t cache;
-  router_player_private_type priv_data(&login_tb, &login_ver);
+  router_player_private_type priv_data(&login_lock_tb, login_lock_ver, openid);
 
   auto res = RPC_AWAIT_CODE_RESULT(router_player_manager::me()->mutable_object(ctx, cache, key, &priv_data));
   if (res < 0 || !cache) {
@@ -231,20 +231,10 @@ SERVER_FRAME_API rpc::result_code_type player_manager::create(
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY);
   }
 
-  // 新用户，数据版本号为0，启动创建初始化
-  if (0 == output->get_data_version()) {
+  // 新用户,启动创建初始化
+  if (!output->has_create_init()) {
     // manager 创建初始化
-    if (output->get_login_info().account().version_type() >= PROJECT_NAMESPACE_ID::EN_VERSION_INNER) {
-      output->create_init(ctx, PROJECT_NAMESPACE_ID::EN_VERSION_DEFAULT);
-    } else {
-      output->create_init(ctx, static_cast<uint32_t>(output->get_login_info().account().version_type()));
-    }
-    if (res < 0) {
-      FWLOGERROR("save create {}:{} object failed, res: {}({})", zone_id, user_id, res,
-                 protobuf_mini_dumper_get_error_msg(res));
-      RPC_RETURN_CODE(res);
-    }
-
+    output->create_init(ctx);
     // 初始化完成，保存一次
     res = RPC_AWAIT_CODE_RESULT(cache->save(ctx, nullptr));
     if (res < 0) {

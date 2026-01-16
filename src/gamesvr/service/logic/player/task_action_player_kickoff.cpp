@@ -53,10 +53,10 @@ task_action_player_kickoff::result_type task_action_player_kickoff::operator()()
     FWLOGERROR("user {}({}:{}) not found, maybe already logout.", player_open_id, player_zone_id, player_user_id);
 
     // 尝试保存用户数据
-    rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> user_lg{get_shared_context()};
+    rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> user_lg{get_shared_context()};
     uint64_t version = 0;
     int res = RPC_AWAIT_CODE_RESULT(
-        rpc::db::login::get_all(get_shared_context(), player_user_id, player_zone_id, user_lg, version));
+        rpc::db::login_lock::get_all(get_shared_context(), player_user_id, user_lg, version));
     if (res < 0) {
       FWLOGERROR("user {}({}:{}) try load login data failed.", player_open_id, player_zone_id, player_user_id);
       set_response_code(PROJECT_NAMESPACE_ID::err::EN_DB_REPLY_ERROR);
@@ -71,7 +71,7 @@ task_action_player_kickoff::result_type task_action_player_kickoff::operator()()
     }
 
     user_lg->set_router_server_id(0);
-    res = RPC_AWAIT_CODE_RESULT(rpc::db::login::replace(get_shared_context(), std::move(user_lg), version));
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::replace(get_shared_context(), std::move(user_lg), version));
     if (res < 0) {
       FWLOGERROR("user {}({}:{}) try load login data failed.", player_open_id, player_zone_id, player_user_id);
       set_response_code(PROJECT_NAMESPACE_ID::err::EN_DB_SEND_FAILED);
