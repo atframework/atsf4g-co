@@ -26,6 +26,7 @@ message database_table_index {
   string name = 1;
   database_index_type type = 2;
   bool enable_cas = 3;
+  uint32 max_list_length = 4;
 
   repeated string key_fields = 11;
   repeated database_partly_field partly_get = 12;

@@ -11,7 +11,7 @@ static int32_t unpack_${message_name}(rpc::context *ctx, db_message_t &msg, cons
   uint64_t version = 0;
   bool record_existed = false;
   int32_t ret = rpc::db::unpack_message(*table_pb.get(), reply, version, record_existed);
-  msg.head_message.set_cas_version(version);
+  msg.head_message.set_response_int(version);
   if (record_existed) {
     msg.body_message =
         atfw::util::memory::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(std::move(table_pb));
@@ -201,7 +201,7 @@ static int32_t unpack_${message_name}_${partly_field_name}(rpc::context *ctx, db
   uint64_t version = 0;
   bool record_existed = false;
   int32_t ret = rpc::db::unpack_message_with_field(*table_pb.get(), reply, partly_get_field, ${partly_field_len}, version, record_existed);
-  msg.head_message.set_cas_version(version);
+  msg.head_message.set_response_int(version);
   if (record_existed) {
     msg.body_message =
         atfw::util::memory::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(std::move(table_pb));

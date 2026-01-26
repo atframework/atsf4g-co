@@ -85,7 +85,7 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, __trace_attributes}));
   }
   output->message.swap(db_message.body_message);
-  output->version = db_message.head_message.cas_version();
+  output->version = db_message.head_message.response_int();
 
   if (output->version != 0) {
     FWLOGINFO("table [key={}] get all cas_version: {}", key, output->version);
@@ -154,7 +154,7 @@ SERVER_FRAME_API result_type partly_get(rpc::context &ctx, uint32_t channel, gsl
   if (!db_message.body_message) {
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, __trace_attributes}));
   }
-  output->version = db_message.head_message.cas_version();
+  output->version = db_message.head_message.response_int();
   output->message.swap(db_message.body_message);
 
   if (output->version != 0) {
@@ -421,16 +421,16 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
   db_message_t db_message;
   res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, db_message, await_options));
   if (res < 0) {
-    if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res && db_message.head_message.cas_version() != 0 &&
+    if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res && db_message.head_message.response_int() != 0 &&
         version != nullptr) {
-      *version = db_message.head_message.cas_version();
+      *version = db_message.head_message.response_int();
     }
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
   if (version != nullptr) {
-    *version = db_message.head_message.cas_version();
-    FWLOGINFO("table [key={}] data saved, new cas_version: {}, detail: {}", key, db_message.head_message.cas_version(),
+    *version = db_message.head_message.response_int();
+    FWLOGINFO("table [key={}] data saved, new cas_version: {}, detail: {}", key, db_message.head_message.response_int(),
               segs_debug_info.str());
   } else {
     FWLOGINFO("table [key={}] data saved, detail: {}", key, segs_debug_info.str());
@@ -575,7 +575,7 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
 }
 
 SERVER_FRAME_API result_type get_by_indexs(rpc::context &ctx, uint32_t channel, gsl::string_view key,
-                                           gsl::span<uint64_t> list_index, bool enable_cas,
+                                           gsl::span<uint64_t> list_index,
                                            std::vector<db_key_list_message_result_t> &output,
                                            db_msg_dispatcher::unpack_fn_t unpack_fn) {
   rpc::context __child_ctx(ctx);
@@ -604,15 +604,12 @@ SERVER_FRAME_API result_type get_by_indexs(rpc::context &ctx, uint32_t channel, 
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM, __trace_attributes}));
   }
 
-  size_t args_size = 2 + list_index.size() * (enable_cas ? 2 : 1);
+  size_t args_size = 2 + list_index.size();
   redis_args args(args_size);
   args.push("HMGET");
   args.push(key.data(), key.size());
   for (auto index : list_index) {
     args.push(::rpc::db::get_list_value_field(index));
-    if (enable_cas) {
-      args.push(::rpc::db::get_list_version_field(index));
-    }
   }
 
   uint64_t rpc_sequence = 0;
@@ -651,15 +648,14 @@ SERVER_FRAME_API result_type get_by_indexs(rpc::context &ctx, uint32_t channel, 
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 
-SERVER_FRAME_API result_type set_by_index(rpc::context &ctx, uint32_t channel, gsl::string_view key,
+SERVER_FRAME_API result_type update_by_index(rpc::context &ctx, uint32_t channel, gsl::string_view key,
                                           uint64_t list_index,
-                                          shared_abstract_message<google::protobuf::Message> &&store,
-                                          uint64_t *version) {
+                                          shared_abstract_message<google::protobuf::Message> &&store) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
       {opentelemetry::semconv::rpc::kRpcService, "rpc.db.redis"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table.key_list.set_by_index"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table.key_list.update_by_index"},
       {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
 
   rpc::telemetry::trace_start_option __trace_option;
@@ -669,27 +665,17 @@ SERVER_FRAME_API result_type set_by_index(rpc::context &ctx, uint32_t channel, g
   __trace_option.attributes = __trace_attributes;
 
   rpc::telemetry::tracer __tracer =
-      __child_ctx.make_tracer("rpc.db.hash_table.key_list.set_by_index", std::move(__trace_option));
+      __child_ctx.make_tracer("rpc.db.hash_table.key_list.update_by_index", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
   }
 
-  std::string value_field = ::rpc::db::get_list_value_field(list_index);
-  std::string version_field = ::rpc::db::get_list_version_field(list_index);
-  redis_args args(version != nullptr ? 8 : 4);
-  if (version != nullptr) {
-    args.push("EVALSHA");
-    args.push(db_msg_dispatcher::me()->get_db_script_sha1(db_msg_dispatcher::script_type::kCompareAndSetHashTable));
-    args.push(1);
-    args.push(key.data(), key.size());
-    args.push(version_field);
-    args.push(*version);
-  } else {
-    args.push("HSET");
-    args.push(key.data(), key.size());
-  }
+  redis_args args(4);
+  args.push("HSET");
+  args.push(key.data(), key.size());
+  args.push(::rpc::db::get_list_value_field(list_index));
 
   size_t dump_len = store->ByteSizeLong();
   char *data_allocated = args.alloc(dump_len + 1);
@@ -722,26 +708,84 @@ SERVER_FRAME_API result_type set_by_index(rpc::context &ctx, uint32_t channel, g
   res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, db_message, await_options));
 
   if (res < 0) {
-    if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res && db_message.head_message.cas_version() != 0 &&
-        version != nullptr) {
-      *version = db_message.head_message.cas_version();
-    }
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
-  if (version != nullptr) {
-    *version = db_message.head_message.cas_version();
-    FWLOGINFO("table [key={}] data saved, new cas_version: {}", key, db_message.head_message.cas_version());
-  } else {
-    FWLOGINFO("table [key={}] data saved", key);
+  FWLOGINFO("table [key={}] key_list update_by_index {}", key, list_index);
+  RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
+}
+
+SERVER_FRAME_API result_type add_index(rpc::context &ctx, uint32_t channel, gsl::string_view key,
+                                          uint32_t max_list_length,
+                                          shared_abstract_message<google::protobuf::Message> &&store) {
+  rpc::context __child_ctx(ctx);
+  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
+      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcService, "rpc.db.redis"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table.key_list.add_index"},
+      {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
+
+  rpc::telemetry::trace_start_option __trace_option;
+  __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
+  __trace_option.is_remote = true;
+  __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
+  __trace_option.attributes = __trace_attributes;
+
+  rpc::telemetry::tracer __tracer =
+      __child_ctx.make_tracer("rpc.db.hash_table.key_list.add_index", std::move(__trace_option));
+
+  if (ctx.get_task_context().task_id == 0) {
+    FWLOGERROR("current not in a task");
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
   }
 
-  FWLOGINFO("table [key={}] key_list set_by_index {}", key, list_index);
+  redis_args args(6);
+  args.push("EVALSHA");
+  args.push(db_msg_dispatcher::me()->get_db_script_sha1(db_msg_dispatcher::script_type::kAddListIndexHashTable));
+  args.push(1);
+  args.push(key.data(), key.size());
+  args.push(std::to_string(max_list_length));
+
+  size_t dump_len = store->ByteSizeLong();
+  char *data_allocated = args.alloc(dump_len + 1);
+  if (nullptr == data_allocated) {
+    FWLOGERROR("pack message {} failed", store->GetDescriptor()->full_name());
+    args.dealloc();
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC, __trace_attributes}));
+  }
+  memcpy(data_allocated, "&", 1);
+  data_allocated += 1;
+  // 再dump 字段内容
+  store->SerializeWithCachedSizesToArray(reinterpret_cast<::google::protobuf::uint8 *>(data_allocated));
+
+  uint64_t rpc_sequence = 0;
+  int res = db_msg_dispatcher::me()->send_msg(
+      static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
+      logic_config::me()->get_local_server_id(), nullptr, rpc_sequence, static_cast<int>(args.size()),
+      args.get_args_values(), args.get_args_lengths());
+
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
+  }
+
+  dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+  await_options.sequence = rpc_sequence;
+  await_options.timeout =
+      rpc::make_duration_or_default(logic_config::me()->get_server_cfg().task().csmsg().timeout(), std::chrono::seconds{6});
+
+  db_message_t db_message;
+  res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, db_message, await_options));
+
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
+  }
+
+  FWLOGINFO("table [key={}] key_list add_index", key);
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 
 SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel, gsl::string_view key,
-                                             gsl::span<uint64_t> list_index, bool enable_cas) {
+                                             gsl::span<uint64_t> list_index) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
@@ -763,18 +807,17 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
   }
 
-  size_t args_size = 2 + list_index.size();
-  if (enable_cas) {
-    args_size += list_index.size();
+  if (list_index.empty()) {
+    FWLOGINFO("list_index is empty");
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
   }
-  redis_args args(enable_cas ? 4 : 3);  // Note: CAS delete not fully supported yet, falling back to HDEL
+
+  size_t args_size = 2 + list_index.size();
+  redis_args args(args_size);
   args.push("HDEL");
   args.push(key.data(), key.size());
   for (auto index : list_index) {
     args.push(::rpc::db::get_list_value_field(index));
-    if (enable_cas) {
-      args.push(::rpc::db::get_list_version_field(index));
-    }
   }
 
   uint64_t rpc_sequence = 0;
@@ -803,7 +846,7 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
 }
 
 SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel, gsl::string_view key,
-                                             gsl::span<const uint64_t> list_index, bool enable_cas) {
+                                             gsl::span<const uint64_t> list_index) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
@@ -825,18 +868,17 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
   }
 
-  size_t args_size = 2 + list_index.size();
-  if (enable_cas) {
-    args_size += list_index.size();
+  if (list_index.empty()) {
+    FWLOGINFO("list_index is empty");
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
   }
-  redis_args args(enable_cas ? 4 : 3);  // Note: CAS delete not fully supported yet, falling back to HDEL
+
+  size_t args_size = 2 + list_index.size();
+  redis_args args(args_size);
   args.push("HDEL");
   args.push(key.data(), key.size());
   for (auto index : list_index) {
     args.push(::rpc::db::get_list_value_field(index));
-    if (enable_cas) {
-      args.push(::rpc::db::get_list_version_field(index));
-    }
   }
 
   uint64_t rpc_sequence = 0;
@@ -885,7 +927,7 @@ SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel, gsl
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
   }
 
-  redis_args args(4);
+  redis_args args(2);
 
   args.push("DEL");
   args.push(key.data(), key.size());

@@ -65,20 +65,22 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_all(rpc::context &ctx, 
 
 EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_by_indexs(rpc::context &ctx, uint32_t channel,
                                                                    gsl::string_view key, gsl::span<uint64_t> list_index,
-                                                                   bool enable_cas,
                                                                    std::vector<db_key_list_message_result_t> &output,
                                                                    db_msg_dispatcher::unpack_fn_t unpack_fn);
 
 EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type
-set_by_index(rpc::context &ctx, uint32_t channel, gsl::string_view key, uint64_t list_index,
-             shared_abstract_message<google::protobuf::Message> &&store, uint64_t *version);
+update_by_index(rpc::context &ctx, uint32_t channel, gsl::string_view key, uint64_t list_index,
+                shared_abstract_message<google::protobuf::Message> &&store);
 
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type
+add_index(rpc::context &ctx, uint32_t channel, gsl::string_view key, uint32_t max_list_length,
+          shared_abstract_message<google::protobuf::Message> &&store);
 EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel,
                                                                      gsl::string_view key,
-                                                                     gsl::span<uint64_t> list_index, bool enable_cas);
+                                                                     gsl::span<uint64_t> list_index);
 EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel,
                                                                      gsl::string_view key,
-                                                                     gsl::span<const uint64_t> list_index, bool enable_cas);
+                                                                     gsl::span<const uint64_t> list_index);
 }  // namespace key_list
 EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel,
                                                                 gsl::string_view key);

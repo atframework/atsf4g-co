@@ -343,5 +343,5 @@ message DBMsg {
   uint64 node_id = 1;              // 用于恢复协程的BusID
   uint64 destination_task_id = 2;  // 用于恢复协程的任务ID
   int32 error_code = 3;            // 用于恢复协程的透传解包层错误码
-  uint64 cas_version = 4;          // CAS版本
+  uint64 response_int = 4;         // Redis 脚本回包整数返回值
 }

@@ -125,6 +125,6 @@ EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type remove_all_jobs(::rp
 EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type
 update_jobs(::rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
             shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data> &input, int64_t record_index,
-            uint64_t& version, action_options options = {});
+            action_options options = {});
 }  // namespace async_jobs
 }  // namespace rpc

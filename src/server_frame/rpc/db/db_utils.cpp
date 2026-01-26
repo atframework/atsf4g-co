@@ -853,16 +853,9 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-constexpr const char *REDIS_LIST_VALUE_FIELD_PREFIX = "d_";
-constexpr const char *REDIS_LIST_VERSION_FIELD_PREFIX = "v_";
+constexpr const char *REDIS_LIST_INDEX_FIELD = "index_number";
 
-std::string get_list_value_field(uint64_t index) {
-  return std::string(REDIS_LIST_VALUE_FIELD_PREFIX) + std::to_string(index);
-}
-
-std::string get_list_version_field(uint64_t index) {
-  return std::string(REDIS_LIST_VERSION_FIELD_PREFIX) + std::to_string(index);
-}
+std::string get_list_value_field(uint64_t index) { return std::to_string(index); }
 
 int32_t unpack_list_message(
     rpc::context *ctx, const redisReply *reply, std::vector<db_key_list_message_result_t> &results,
@@ -878,7 +871,7 @@ int32_t unpack_list_message(
   }
 
   // <index, <data, version>>
-  std::unordered_map<uint64_t, std::pair<const redisReply *, const redisReply *>> items;
+  std::unordered_map<uint64_t, const redisReply *> items;
   for (size_t i = 0; i < reply->elements; i += 2) {
     if (i + 1 >= reply->elements) {
       break;
@@ -901,36 +894,14 @@ int32_t unpack_list_message(
       return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
     }
 
-    bool is_version = false;
     uint64_t index = 0;
 
-    // Check version prefix
-    size_t version_prefix_len = strlen(REDIS_LIST_VERSION_FIELD_PREFIX);
-    size_t value_prefix_len = strlen(REDIS_LIST_VALUE_FIELD_PREFIX);
-
-    if (version_prefix_len > 0 && key_str.size() > version_prefix_len &&
-        key_str.substr(0, version_prefix_len) == REDIS_LIST_VERSION_FIELD_PREFIX) {
-      if (atfw::util::string::str2int(index, key_str.data() + version_prefix_len)) {
-        is_version = true;
-      } else {
-        return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
-      }
-    } else if (key_str.size() > value_prefix_len &&
-               (value_prefix_len == 0 || key_str.substr(0, value_prefix_len) == REDIS_LIST_VALUE_FIELD_PREFIX)) {
-      if (atfw::util::string::str2int(index, key_str.data() + value_prefix_len)) {
-        is_version = false;
-      } else {
-        return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
-      }
-    } else {
-      return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+    if (std::strcmp(key_str.data(), REDIS_LIST_INDEX_FIELD) == 0) {
+      continue;
     }
 
-    if (is_version) {
-      items[index].second = value_reply;
-    } else {
-      items[index].first = value_reply;
-    }
+    atfw::util::string::str2int(index, key_str.data());
+    items[index] = value_reply;
   }
 
   for (auto &item : items) {
@@ -938,38 +909,24 @@ int32_t unpack_list_message(
     db_key_list_message_result_t &modify_result = results.back();
     modify_result.list_index = item.first;
 
-    if (item.second.first != nullptr) {
-      auto& value = item.second.first;
-      auto ptr = msg_factory(ctx);
-      if (REDIS_REPLY_STRING != value->type || nullptr == value->str) {
-        FWLOGERROR(
-            "unpack failed, type in pb is a message, but the redis reply type is not string(reply "
-            "type={}).",
-            value->type);
-        return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
-      } else {
-        if (value->len <= 1) {
-          FWLOGERROR("unpack failed, type in pb is a string, but the redis reply len error(len{}).", value->len);
-          return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
-        }
-        if (false == (*ptr)->ParseFromArray(value->str + 1, static_cast<int>(value->len) - 1)) {
-          FWLOGERROR("message unpack error failed");
-          return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
-        }
-        modify_result.message = ptr;
-      }
-    }
-
-    if (item.second.second != nullptr) {
-      auto& value = item.second.second;
-      if (value->type == REDIS_REPLY_INTEGER) {
-        modify_result.version = static_cast<uint64_t>(value->integer);
-      } else if (value->type == REDIS_REPLY_STRING) {
-        atfw::util::string::str2int(modify_result.version, value->str);
-      } else {
-        FWLOGERROR("unpack list message version failed, invalid redis reply type {}.", value->type);
+    auto &value = item.second;
+    auto ptr = msg_factory(ctx);
+    if (REDIS_REPLY_STRING != value->type || nullptr == value->str) {
+      FWLOGERROR(
+          "unpack failed, type in pb is a message, but the redis reply type is not string(reply "
+          "type={}).",
+          value->type);
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+    } else {
+      if (value->len <= 1) {
+        FWLOGERROR("unpack failed, type in pb is a string, but the redis reply len error(len{}).", value->len);
         return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
       }
+      if (false == (*ptr)->ParseFromArray(value->str + 1, static_cast<int>(value->len) - 1)) {
+        FWLOGERROR("message unpack error failed");
+        return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+      }
+      modify_result.message = ptr;
     }
   }
 
@@ -977,7 +934,7 @@ int32_t unpack_list_message(
 }
 
 int32_t unpack_list_message_with_index(
-    rpc::context *ctx, const redisReply *reply, bool enable_cas, std::vector<db_key_list_message_result_t> &results,
+    rpc::context *ctx, const redisReply *reply, std::vector<db_key_list_message_result_t> &results,
     std::function<
         atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>>(rpc::context *)>
         msg_factory) {
@@ -989,20 +946,8 @@ int32_t unpack_list_message_with_index(
     return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
   }
 
-  if (enable_cas && reply->elements % 2 != 0) {
-    FWLOGERROR("unpack list message failed, reply elements {} is not even.", reply->elements);
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
-  }
-
   for (size_t i = 0; i < reply->elements; ++i) {
-    bool is_version = false;
-    if (enable_cas && i & 1) {
-      is_version = true;
-    }
-
-    if (!is_version) {
-      results.emplace_back();
-    }
+    results.emplace_back();
     db_key_list_message_result_t &modify_result = results.back();
 
     const redisReply *value = reply->element[i];
@@ -1011,34 +956,23 @@ int32_t unpack_list_message_with_index(
       continue;
     }
 
-    if (is_version) {
-      if (value->type == REDIS_REPLY_INTEGER) {
-        modify_result.version = static_cast<uint64_t>(value->integer);
-      } else if (value->type == REDIS_REPLY_STRING) {
-        atfw::util::string::str2int(modify_result.version, value->str);
-      } else {
-        FWLOGERROR("unpack list message version failed, invalid redis reply type {}.", value->type);
-        return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
-      }
+    auto ptr = msg_factory(ctx);
+    if (REDIS_REPLY_STRING != value->type || nullptr == value->str) {
+      FWLOGERROR(
+          "unpack failed, type in pb is a message, but the redis reply type is not string(reply "
+          "type={}).",
+          value->type);
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
     } else {
-      auto ptr = msg_factory(ctx);
-      if (REDIS_REPLY_STRING != value->type || nullptr == value->str) {
-        FWLOGERROR(
-            "unpack failed, type in pb is a message, but the redis reply type is not string(reply "
-            "type={}).",
-            value->type);
+      if (value->len <= 1) {
+        FWLOGERROR("unpack failed, type in pb is a string, but the redis reply len error(len{}).", value->len);
         return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
-      } else {
-        if (value->len <= 1) {
-          FWLOGERROR("unpack failed, type in pb is a string, but the redis reply len error(len{}).", value->len);
-          return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
-        }
-        if (false == (*ptr)->ParseFromArray(value->str + 1, static_cast<int>(value->len) - 1)) {
-          FWLOGERROR("message unpack error failed");
-          return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
-        }
-        modify_result.message = ptr;
       }
+      if (false == (*ptr)->ParseFromArray(value->str + 1, static_cast<int>(value->len) - 1)) {
+        FWLOGERROR("message unpack error failed");
+        return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+      }
+      modify_result.message = ptr;
     }
   }
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
