@@ -105,6 +105,7 @@ class db_msg_dispatcher : public dispatcher_implement {
   enum class script_type : uint8_t {
     kInvalid = 0,
     kCompareAndSetHashTable = 1,
+    kAddListIndexHashTable = 2,
     kMax  // Unused
   };
 

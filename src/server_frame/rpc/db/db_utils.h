@@ -154,7 +154,6 @@ int unpack_message_with_field(::google::protobuf::Message& msg, const redisReply
                               int32_t length, uint64_t& version, bool& record_existed);
 
 std::string get_list_value_field(uint64_t index);
-std::string get_list_version_field(uint64_t index);
 
 int unpack_list_message(
     rpc::context* ctx, const redisReply* reply, std::vector<db_key_list_message_result_t>& results,
@@ -163,7 +162,7 @@ int unpack_list_message(
         msg_factory);
 
 int unpack_list_message_with_index(
-    rpc::context* ctx, const redisReply* reply, bool enable_cas, std::vector<db_key_list_message_result_t>& results,
+    rpc::context* ctx, const redisReply* reply, std::vector<db_key_list_message_result_t>& results,
     std::function<
         atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>>(rpc::context*)>
         msg_factory);

@@ -51,7 +51,7 @@ message table_user_async_jobs {
     index: {
       name: "async_jobs"
       type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KL
-      enable_cas: true
+      max_list_length: 50
       key_fields: "job_type"
       key_fields: "user_id"
       key_fields: "zone_id"
@@ -61,7 +61,6 @@ message table_user_async_jobs {
   int32 job_type = 1;  // 任务类型
   uint64 user_id = 2;
   uint32 zone_id = 3;
-
   user_async_jobs_blob_data job_data = 11;
 }
 

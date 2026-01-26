@@ -140,17 +140,8 @@ GAME_RPC_API ::rpc::db::result_type add_jobs(rpc::context& ctx, int32_t jobs_typ
   input->set_zone_id(zone_id);
   protobuf_copy_message(*input->mutable_job_data(), *in);
 
-  // 生成RecordId
-  int64_t record_index = RPC_AWAIT_TYPE_RESULT(rpc::db::uuid::generate_global_unique_id(
-      ctx, static_cast<uint32_t>(PROJECT_NAMESPACE_ID::EN_GLOBAL_UUID_MAT_DB_LIST_RECORD_ID),
-      static_cast<uint32_t>(PROJECT_NAMESPACE_ID::EN_GLOBAL_UUID_MIT_DB_LIST_RECORD_ID_ASYNC_JOBS), 0));
-  if (record_index < 0) {
-    RPC_RETURN_CODE(static_cast<int>(record_index));
-  }
-
-  uint64_t record_version = 0;
   int32_t ret =
-      RPC_AWAIT_CODE_RESULT(rpc::db::async_jobs::replace(ctx, record_index, std::move(input), record_version));
+      RPC_AWAIT_CODE_RESULT(rpc::db::async_jobs::add(ctx, std::move(input)));
   if (0 != ret) {
     RPC_DB_RETURN_CODE(ret);
   }
@@ -218,7 +209,7 @@ GAME_RPC_API ::rpc::db::result_type remove_all_jobs(rpc::context& ctx, int32_t j
 GAME_RPC_API ::rpc::db::result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id,
                                                 uint32_t zone_id,
                                                 shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs>& input,
-                                                int64_t record_index, uint64_t& version, action_options options) {
+                                                int64_t record_index, action_options options) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
                user_id, zone_id);
@@ -251,7 +242,7 @@ GAME_RPC_API ::rpc::db::result_type update_jobs(rpc::context& ctx, int32_t jobs_
   input->mutable_job_data()->set_timepoint_ms(util::time::time_utility::get_now() * 1000 +
                                               atfw::util::time::time_utility::get_now_usec() / 1000);
 
-  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::db::async_jobs::replace(ctx, record_index, std::move(input), version));
+  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::db::async_jobs::update(ctx, record_index, std::move(input)));
   if (0 != ret) {
     RPC_DB_RETURN_CODE(ret);
   }

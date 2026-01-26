@@ -21,11 +21,6 @@ static int32_t unpack_${message_name}_indexs(rpc::context *ctx,
   }
 
   return rpc::db::unpack_list_message_with_index(ctx, reply,
-% if index.enable_cas:
-                                                 true,
-% else:
-                                                 false,
-% endif
                                                  msg.body_message_list,
                                                  [](rpc::context *sub_ctx) -> atfw::util::memory::strong_rc_ptr<shared_abstract_message<google::protobuf::Message>> {
                                                    return atfw::util::memory::make_strong_rc<shared_abstract_message<google::protobuf::Message>>(
@@ -54,7 +49,6 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_all(rpc::context &ctx
   for (auto &result : results) {
     ${message_name}_list_message list_message;
     list_message.list_index = result.list_index;
-    list_message.version = result.version;
     if (result.message) {
       list_message.message =
         atfw::util::memory::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::${message_name}>>(
@@ -82,11 +76,6 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_by_indexs(rpc::context 
   std::vector<db_key_list_message_result_t> results;
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::get_by_indexs(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
                                                                 gsl::string_view{db_key, keylen}, list_index,
-% if index.enable_cas:
-                                                                true,
-% else:
-                                                                false,
-% endif
                                                                 results,
                                                                 detail::unpack_${message_name}_indexs));
   if (res < 0) {
@@ -95,7 +84,6 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_by_indexs(rpc::context 
   for (auto &result : results) {
     ${message_name}_list_message list_message;
     list_message.list_index = result.list_index;
-    list_message.version = result.version;
     if (result.message) {
       list_message.message =
               atfw::util::memory::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::${message_name}>>(
@@ -109,26 +97,34 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_by_indexs(rpc::context 
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type replace(rpc::context &ctx
-                                                         , uint64_t list_index
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type add(rpc::context &ctx
                                                          , shared_message<PROJECT_NAMESPACE_ID::${message_name}> &&store
-% if index.enable_cas:
-                                                         ,uint64_t &version) {
-% else:
                                                          ) {
-% endif
   char db_key[256];
   size_t keylen = sizeof(db_key) - 1;
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_pb});
   db_key[result.size] = '\0';
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::set_by_index(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
+                                                                gsl::string_view{db_key, keylen},
+                                                                ${index.max_list_length},
+                                                                std::move(store)));
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(res);
+  }
+  RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+}
+
+EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type update(rpc::context &ctx
+                                                         , uint64_t list_index
+                                                         , shared_message<PROJECT_NAMESPACE_ID::${message_name}> &&store
+                                                         ) {
+  char db_key[256];
+  size_t keylen = sizeof(db_key) - 1;
+  auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_pb});
+  db_key[result.size] = '\0';
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::update_by_index(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
                                                                 gsl::string_view{db_key, keylen}, list_index,
-                                                                std::move(store)
-% if index.enable_cas:
-                                                                , &version));
-% else:
-                                                                , nullptr));
-% endif
+                                                                std::move(store)));
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
   }
@@ -145,12 +141,7 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::contex
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
   db_key[result.size] = '\0';
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::remove_by_index(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
-                                                                gsl::string_view{db_key, keylen}, list_index,
-% if index.enable_cas:
-                                                                true));
-% else:
-                                                                false));
-% endif
+                                                                gsl::string_view{db_key, keylen}, list_index));
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
   }
@@ -167,12 +158,7 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::contex
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
   db_key[result.size] = '\0';
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::remove_by_index(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
-                                                                gsl::string_view{db_key, keylen}, list_index,
-% if index.enable_cas:
-                                                                true));
-% else:
-                                                                false));
-% endif
+                                                                gsl::string_view{db_key, keylen}, list_index));
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
   }
