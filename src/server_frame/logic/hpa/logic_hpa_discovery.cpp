@@ -484,7 +484,7 @@ SERVER_FRAME_API bool logic_hpa_discovery::watch(logic_hpa_discovery_watch_mode 
           }
 
           // Handle event
-          if (evt_item.evt_type == atfw::atapp::etcd_watch_event::EN_WEVT_PUT) {
+          if (evt_item.evt_type == atfw::atapp::etcd_watch_event::kPut) {
             this->do_changed_put(evt_header, *value_ptr);
           } else {
             this->do_changed_delete(evt_header);

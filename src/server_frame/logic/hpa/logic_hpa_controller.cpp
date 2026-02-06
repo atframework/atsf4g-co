@@ -3580,7 +3580,7 @@ void logic_hpa_controller::setup_hpa_controller() {
     if (etcd_mod) {
       std::weak_ptr<hpa_discovery_data> hpa_discovery_data_weak = hpa_discovery_data_;
       hpa_discovery_data_->node_event_handle = etcd_mod->add_on_node_discovery_event(
-          [hpa_discovery_data_weak](atfw::atapp::etcd_module::node_action_t::type action,
+          [hpa_discovery_data_weak](atfw::atapp::etcd_module::node_action_t action,
                                     const atfw::atapp::etcd_discovery_node::ptr_t& node) {
             std::shared_ptr<hpa_discovery_data> hpa_discovery_data_ptr = hpa_discovery_data_weak.lock();
             if (!hpa_discovery_data_ptr || !hpa_discovery_data_ptr->discovery_set || !node) {
@@ -3605,7 +3605,7 @@ void logic_hpa_controller::setup_hpa_controller() {
             }
 
             // 新增要开绿筛选标签，移除不需要
-            if (action == atfw::atapp::etcd_module::node_action_t::EN_NAT_PUT) {
+            if (action == atfw::atapp::etcd_module::node_action_t::kPut) {
               if (atfw::atapp::etcd_discovery_set::metadata_equal_type::filter(hpa_discovery_data_ptr->discovery_filter,
                                                                                node->get_discovery_info().metadata())) {
                 hpa_discovery_data_ptr->discovery_set->add_node(node);

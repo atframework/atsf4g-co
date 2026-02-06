@@ -218,7 +218,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE __shared_message_shared_base {
 #endif
               ,
           arena_deletor());
-      if UTIL_LIKELY_CONDITION (instance) {
+      if ATFW_UTIL_LIKELY_CONDITION (instance) {
         return;
       }
     }
@@ -243,7 +243,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE __shared_message_shared_base {
 #endif
               ,
           arena_deletor());
-      if UTIL_LIKELY_CONDITION (instance) {
+      if ATFW_UTIL_LIKELY_CONDITION (instance) {
 #if !((defined(PROTOBUF_VERSION) && PROTOBUF_VERSION >= 5027000) || \
       (defined(GOOGLE_PROTOBUF_VERSION) && GOOGLE_PROTOBUF_VERSION >= 5027000))
         *instance = std::forward<Arg0>(arg0);

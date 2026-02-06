@@ -1,4 +1,4 @@
-// Copyright 2021 atframework
+// Copyright 2026 atframework
 // Created by owent on 2016/9/29.
 //
 
@@ -12,8 +12,6 @@
 #include <ctime>
 #include <list>
 #include <map>
-#include <string>
-#include <vector>
 
 namespace atframework {
 namespace proxy {
@@ -41,6 +39,8 @@ class atproxy_manager : public ::atfw::atapp::module_impl {
  public:
   atproxy_manager();
 
+  void prereload(atapp::app_conf &conf) override;
+
   int init() override;
 
   int tick() override;
@@ -59,7 +59,7 @@ class atproxy_manager : public ::atfw::atapp::module_impl {
 
  private:
   void swap(node_info_t &l, node_info_t &r);
-  void on_watcher_notify(atapp::etcd_module::watcher_sender_one_t &sender);
+  void on_watcher_notify(atapp::etcd_module::discovery_watcher_sender_list_t &sender);
   bool check_available(const atapp::etcd_module::node_info_t &node_event) const;
 
  private:

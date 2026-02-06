@@ -147,10 +147,17 @@ See `.github/skills/deployment-config.md`.
 
 See `.github/skills/code-generation.md`.
 
+## Code Formatting
+
+This project uses **clang-format** for code formatting. The `.clang-format` file is located at the project root.
+
+- Style: Based on Google style
+- Column limit: 120
+- Run formatting: `clang-format -i <file>`
+
 ## Coding Conventions
 
 1. **Namespaces**:
-
    - Framework: `atframework::*`
    - Project: Follow project naming
 
@@ -159,7 +166,6 @@ See `.github/skills/code-generation.md`.
 3. **C++ Standard**: C++17 required
 
 4. **Naming**:
-
    - Classes/structs: `snake_case`
    - Functions: `snake_case`
    - Constants: `UPPER_SNAKE_CASE`

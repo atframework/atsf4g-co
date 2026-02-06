@@ -757,14 +757,14 @@ int logic_server_common_module::setup_etcd_event_handle() {
   }
   if (service_index_handle_) {
     *service_index_handle_ =
-        etcd_mod->add_on_node_discovery_event([this](atfw::atapp::etcd_module::node_action_t::type action_type,
+        etcd_mod->add_on_node_discovery_event([this](atfw::atapp::etcd_module::node_action_t action_type,
                                                      const atfw::atapp::etcd_discovery_node::ptr_t &node) {
           if (!node) {
             return;
           }
 
           switch (action_type) {
-            case atfw::atapp::etcd_module::node_action_t::EN_NAT_PUT: {
+            case atfw::atapp::etcd_module::node_action_t::kPut: {
               if (0 != node->get_discovery_info().type_id()) {
                 add_service_type_id_index(node);
               }
@@ -776,7 +776,7 @@ int logic_server_common_module::setup_etcd_event_handle() {
               }
               break;
             }
-            case atfw::atapp::etcd_module::node_action_t::EN_NAT_DELETE: {
+            case atfw::atapp::etcd_module::node_action_t::kDelete: {
               if (0 != node->get_discovery_info().type_id()) {
                 remove_service_type_id_index(node);
               }

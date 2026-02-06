@@ -59,6 +59,7 @@
 .mako_modules-*
 .cache
 /compile_commands.json
+/.clangd
 
 # protocol
 /src/**/protocol/**/*.h
