@@ -10,11 +10,76 @@ atapp:
   deployment:
     project_name: ""
     deployment_environment: "production"
-  bus_recv_buff_size: 2MB
-  bus_send_buff_size: 1MB
-  bus_loop_times_per_tick: 2048
-  bus_ttl: 16
-  backlog: 256
+  atbus:
+    policy:
+      port:
+        base: 7200
+        # 如果一台机器部署多套环境，通过machine_index来区分不同环境的端口范围
+        machine_index: 0
+        machine_index_multiply: 500
+        type_multiply: 10
+        # 普通服务的对外端口为 base + machine_index * machine_index_multiply + type_multiply * .Values.type_id + .Values.instance_id
+        # atproxy服务的对外端口为 atproxy_base + machine_index * machine_index_multiply + (.Values.instance_id or 1)
+        atproxy_base: 7100
+      # 使用上云部署时请禁用掉 enable_local_proxy, 并把 remote_proxy 设置为atproxy的service地址(可以是LB地址)
+      enable_local_proxy: true
+      # remote_proxy: ""
+      # gateway:
+      #   - address: "atcp://${ATAPP_EXTERNAL_IP}:{{ $proxy_port }}"
+      #     # match_hosts: []
+      #     # match_namespaces: []
+      #     # match_labels:
+      #     #   "key": "value"
+    configure:
+      loop_times: 2048 # max message number in one loop
+      ttl: 16 # max ttl when transfer messages
+      backlog: 256 # tcp backlog
+      access_token_max_number: 5
+      access_tokens:
+        - "atapp.default" # access token list, if not empty, the atapp must provide one of the token to connect
+      overwrite_listen_path: false # overwrite the existing unix socket
+      topology:
+        rule:
+          allow_direct_connection: false
+          require_same_upstream: false
+          require_same_process: false
+          require_same_host: false
+          match_label:
+            "area.region":
+              value:
+                - local
+                - cn
+        data:
+          label:
+            "area.region": cn
+      first_idle_timeout: 30s # first idle timeout when have new connection(second)
+      ping_interval: 8s # ping interval(second)
+      retry_interval: 3s # retry interval when error happen(second)
+      reconnect_start_interval: 8s
+      reconnect_max_interval: 60s
+      reconnect_max_try_times: 5
+      lost_topology_timeout: 120s
+      fault_tolerant: 3 # how many errors at most to ignore, or it will kill the connection
+      message_size: 256KB # max message size(256KB)
+      recv_buffer_size: 2MB # recv channel size, will be used to initialize (shared) memory channel size
+      send_buffer_size: 1MB # send buffer size, will be used to initialize io_stream channel write queue
+      send_buffer_number: 0 # send message number limit, will be used to initialize io_stream channel write queue, 0 for dynamic buffer
+      crypto:
+        # Available algorithms: none, x25519, p-256/secp256r1, p-384/secp384r1, p-521/secp521r1
+        key_exchange_type: none
+        key_refresh_interval: 10800s # key refresh interval
+        # Available algorithms:
+        # - none, xxtea
+        # - aes-128-cbc, aes-192-cbc, aes-256-cbc
+        # - aes-128-gcm, aes-192-gcm, aes-256-gcm
+        # - chacha20, chacha20-poly1305-ietf, xchacha20-poly1305-ietf
+        algorithm:
+          - none
+      compression:
+        # Available algorithms: zstd, lz4, snappy, zlib, none
+        algorithm:
+          - none
+        level: default # default,storage,fast,low_cpu,balanced,high_ratio,max_ratio
   worker_pool:
     queue_size: 20480
     tick_min_interval: 4ms
@@ -29,6 +94,17 @@ atapp:
       scaling_down_cpu_permillage: 500
       scaling_down_queue_size: 8
       leak_scan_interval: 600s
+  timer:
+    stop_timeout: 30s # 20s for stop operation
+    stop_interval: 256ms
+    tick_interval: 8ms # 8ms for tick active
+    tick_round_timeout: 128ms
+    message_timeout: 8s
+    initialize_timeout: 30s # 20s for initialization
+    reserve_interval_min: 100us
+    reserve_interval_max: 1s
+    reserve_permille: 10
+    endpoint_gc_timeout: 60s
 
 # 远程服务器配置自动更新间隔
 remote_configure_update_interval: 5m

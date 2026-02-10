@@ -110,11 +110,11 @@ Libapp deploy cluster
 
 {{/*
 Calculate ZoneBase from bus_addr_template
-Extracts zone bits from bus_addr_template (e.g., "world:4.zone:9" -> 9)
+Extracts zone bits from bus_addr_template (e.g., "world:12.zone:12" -> 12)
 ZoneBase finds minimum 10^n where 10^n > 2^zoneBits
 */}}
 {{- define "libapp.zoneBase" -}}
-  {{- $busAddrTemplate := .Values.bus_addr_template | default "world:4.zone:9.function:7.instance:12" -}}
+  {{- $busAddrTemplate := .Values.bus_addr_template | default "world:12.zone:12.function:16.instance:24" -}}
   {{- $zonePart := (split ".zone:" $busAddrTemplate)._1 -}}
   {{- $zoneBits := (split "." $zonePart)._0 | atoi -}}
   {{- /* Calculate 2^zoneBits */ -}}
@@ -141,18 +141,18 @@ If .Values.logic_id is set, use it directly
   {{- if .Values.logic_id -}}
     {{- .Values.logic_id -}}
   {{- else -}}
-    {{- $worldID := .Values.world_id | default 1 | toString | atoi -}}
-    {{- $zoneID := .Values.zone_id | default 1 | toString | atoi -}}
-    {{- $busAddrTemplate := .Values.bus_addr_template | default "world:4.zone:9.function:7.instance:12" -}}
+    {{- $worldID := .Values.world_id | default 1 | toString | int64 -}}
+    {{- $zoneID := .Values.zone_id | default 1 | toString | int64 -}}
+    {{- $busAddrTemplate := .Values.bus_addr_template | default "world:12.zone:12.function:16.instance:24" -}}
     {{- $zonePart := (split ".zone:" $busAddrTemplate)._1 -}}
     {{- $zoneBits := (split "." $zonePart)._0 | atoi -}}
     {{- /* Calculate 2^zoneBits */ -}}
-    {{- $maxVal := 1 -}}
+    {{- $maxVal := (1 | int64) -}}
     {{- range until $zoneBits -}}
       {{- $maxVal = mul $maxVal 2 -}}
     {{- end -}}
     {{- /* Find minimum 10^n > maxVal */ -}}
-    {{- $base := 1 -}}
+    {{- $base := (1 | int64) -}}
     {{- range until 100 -}}
       {{- if le $base $maxVal -}}
         {{- $base = mul $base 10 -}}
@@ -174,12 +174,52 @@ If .Values.bus_addr is set, use it directly
     {{- $worldID := .Values.world_id | default 1 | toString -}}
     {{- $zoneID := .Values.zone_id | default 1 | toString -}}
     {{- $isWorldInstance := .Values.world_instance | default false -}}
-    {{- $typeID := .Values.type_id | default 65 | toString -}}
-    {{- $insID := "1" -}}
+    {{- $typeID := .Values.type_id | default 11 | toString -}}
+    {{- $insID := .Values.instance_id | default 1 | toString -}}
     {{- $zoneIDPart := $zoneID -}}
     {{- if $isWorldInstance -}}
       {{- $zoneIDPart = "0" -}}
     {{- end -}}
     {{- printf "%s.%s.%s.%s" $worldID $zoneIDPart $typeID $insID -}}
   {{- end -}}
+{{- end }}
+
+{{- define "libapp.configure.hostname" -}}
+  {{- if .Values.external_ipv6 -}}
+    {{- .Values.external_ipv6 -}}
+  {{- else if .Values.external_ipv4 -}}
+    {{- .Values.external_ipv4 -}}
+  {{- else if .Values.internal_ipv6 -}}
+    {{- .Values.internal_ipv6 -}}
+  {{- else if .Values.internal_ipv4 -}}
+    {{- .Values.internal_ipv4 -}}
+  {{- end -}}
+{{- end }}
+
+{{- define "libapp.atbus.calculateAtproxyPort" -}}
+  {{- $basePort := (dig .Values.atapp.atbus "policy" "port" "atproxy_base" 7100 | int) -}}
+  {{- $machineIndex := (dig .Values.atapp.atbus "policy" "port" "machine_index" 0 | int64) -}}
+  {{- $machineIndexMultiply := (dig .Values.atapp.atbus "policy" "port" "machine_index_multiply" 500 | int64) -}}
+  {{- $insID := (1 | int64) -}}
+  {{- if eq .Values.type_name "atproxy" -}}
+    {{- $insID = (.Values.instance_id | default 1 | int64) -}}
+  {{- else -}}
+    {{- $insID = (1 | int64) -}}
+  {{- end -}}
+  {{- add $basePort (mul $machineIndex $machineIndexMultiply) $insID -}}
+{{- end }}
+
+{{- define "libapp.atbus.calculateServicePort" -}}
+  {{- $basePort := (1 | int64) -}}
+  {{- $machineIndex := (dig .Values.atapp.atbus "policy" "port" "machine_index" 0 | int64) -}}
+  {{- $machineIndexMultiply := (dig .Values.atapp.atbus "policy" "port" "machine_index_multiply" 500 | int64) -}}
+  {{- $typeMultiply := (dig .Values.atapp.atbus "policy" "port" "type_multiply" 10 | int64) -}}
+  {{- $typeID := .Values.type_id | default 11 | int64 -}}
+  {{- $insID := .Values.instance_id | default 1 | int64 -}}
+  {{- if eq .Values.type_name "atproxy" }}
+    {{- $basePort = (dig .Values.atapp.atbus "policy" "port" "atproxy_base" 7100 | int) -}}
+  {{- else }}
+    {{- $basePort = (dig .Values.atapp.atbus "policy" "port" "base" 7200 | int) -}}
+  {{- end }}
+  {{- add $basePort (mul $machineIndex $machineIndexMultiply) (mul $typeID $typeMultiply) $insID -}}
 {{- end }}

@@ -8,6 +8,7 @@ This folder contains **actionable, copy/paste-friendly** guides for common workf
 - `testing.md` - Run unit tests (including Windows DLL/PATH notes)
 - `service-functions-cmake.md` - How to use `src/service-functions.cmake` helper functions
 - `deployment-config.md` - Generate and manage deployment configs/scripts
+- `configure-expression.md` - Environment-variable expression expansion in configuration fields
 - `code-generation.md` - Protobuf/template-based code generation notes
 
 ## When to read what

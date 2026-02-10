@@ -4,6 +4,9 @@
 
 #include <time/time_utility.h>
 
+#include <opentelemetry/semconv/incubating/deployment_attributes.h>
+#include <opentelemetry/semconv/incubating/service_attributes.h>
+
 #include <algorithm>
 #include <memory>
 #include <utility>
@@ -97,6 +100,19 @@ void atproxy_manager::prereload(atapp::app_conf &conf) {
   if (inject_region && !has_label_value_region) {
     (*rule->mutable_match_label())[kAtproxyTopologyLabelRegionKey].add_value(kAtproxyTopologyLabelRegionDefaultValue);
   }
+
+  // 注入可观测性标签
+  auto *metadata_labels = conf.origin.mutable_metadata()->mutable_labels();
+  if (metadata_labels->end() == metadata_labels->find(opentelemetry::semconv::service::kServiceName)) {
+    (*metadata_labels)[opentelemetry::semconv::service::kServiceName] = "atproxy";
+  }
+  if (metadata_labels->end() == metadata_labels->find(opentelemetry::semconv::service::kServiceInstanceId)) {
+    (*metadata_labels)[opentelemetry::semconv::service::kServiceInstanceId] = get_app()->get_app_name();
+  }
+  if (metadata_labels->end() == metadata_labels->find(opentelemetry::semconv::service::kServiceVersion)) {
+    (*metadata_labels)[opentelemetry::semconv::service::kServiceVersion] = get_app()->get_app_version();
+  }
+  (*metadata_labels)["service.identity"] = get_app()->get_app_identity();
 }
 
 int atproxy_manager::init() {

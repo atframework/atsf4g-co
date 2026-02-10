@@ -143,6 +143,13 @@ Client → atgateway → atproxy → Game Server
 
 See `.github/skills/deployment-config.md`.
 
+## Configuration Expression Expansion
+
+Protobuf fields annotated with `enable_expression: true` in the `atapp_configure_meta` extension
+(defined in `atapp_conf.proto`) support **environment-variable expression expansion** at config-load time.
+
+See `.github/skills/configure-expression.md` for the full syntax reference and how-to guide.
+
 ## Code generation
 
 See `.github/skills/code-generation.md`.
@@ -177,6 +184,13 @@ This project uses **clang-format** for code formatting. The `.clang-format` file
    ```cpp
    FWLOGINFO("Message: {}", value);
    FWLOGERROR("Error: {}", error);
+   ```
+
+7. **Anonymous namespace + static**: In `.cpp` files, file-local functions should be placed inside an anonymous namespace **and** keep the `static` keyword. Do **not** remove `static` when moving a function into an anonymous namespace.
+   ```cpp
+   namespace {
+   static void my_helper() { /* ... */ }
+   }  // namespace
    ```
 
 ## Compiler Support

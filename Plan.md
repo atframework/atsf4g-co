@@ -62,86 +62,6 @@ app1.run_noblock();
 
 ---
 
-## libatbus 单元测试补全 ✅ 已完成
-
-### 项目信息
-
-- **代码目录**: `atframework/libatbus`
-  - ⚠️ 忽略 `atframework/libatbus/atframework` 内的所有内容
-- **单元测试目录**: `atframework/libatbus/test/case`
-- **测试工具头文件**: `atframework/libatbus/test/case/atbus_test_utils.h`
-
-### 参考文件
-
-| 文件 | 用途 |
-|------|------|
-| `channel_mem_test.cpp` | mem通道测试参考 |
-| `channel_io_stream_tcp_test.cpp` | ios通道TCP测试参考 |
-| `atbus_node_msg_test.cpp` | node消息测试参考 |
-| `atbus_node_reg_test.cpp` | node注册测试参考 |
-| `atbus_test_utils.h/cpp` | 测试工具函数 |
-
----
-
-### A. 通道层事件回调测试 ✅
-
-> ⚠️ **mem通道**: 无回调机制，仅有 `mem_send`/`mem_recv` 同步接口，无需测试回调。
-
-> ⚠️ **ios通道**: 以下回调已在 `channel_io_stream_tcp_test.cpp` 中覆盖，无需新增:
-> - `kAccepted` - `accepted_callback_test_fn`
-> - `kConnected` - `connected_callback_test_fn`, `listen_callback_test_fn`
-> - `kDisconnected` - `disconnected_callback_test_fn` (多处使用: io_stream_tcp_reset_by_client, io_stream_tcp_reset_by_server 等)
-> - `kReceived` - `recv_callback_check_fn`
-
-**已新增测试的回调**:
-
-**文件**: `channel_io_stream_tcp_test.cpp` (追加)
-
-| 用例名 | 描述 | 状态 |
-|--------|------|------|
-| `io_stream_callback_on_written` | 发送完成回调 kWritten | ✅ 通过 |
-
----
-
-### B. Node层事件回调测试 ✅ (atbus_node.h set_on_XXX_handle)
-
-> ⚠️ 以下回调已在现有测试中覆盖，无需新增:
-> - `set_on_forward_request_handle` - atbus_node_msg_test.cpp
-> - `set_on_forward_response_handle` - atbus_node_msg_test.cpp
-> - `set_on_custom_command_request_handle` - atbus_node_msg_test.cpp
-> - `set_on_custom_command_response_handle` - atbus_node_msg_test.cpp
-> - `set_on_ping_endpoint_handle` - atbus_node_msg_test.cpp
-> - `set_on_pong_endpoint_handle` - atbus_node_msg_test.cpp
-> - `set_on_add_endpoint_handle` - atbus_node_reg_test.cpp
-> - `set_on_remove_endpoint_handle` - atbus_node_reg_test.cpp, atbus_node_msg_test.cpp
-> - `set_on_new_connection_handle` - atbus_node_reg_test.cpp
-> - `set_on_invalid_connection_handle` - atbus_node_reg_test.cpp
-> - `set_on_register_handle` - atbus_node_reg_test.cpp
-> - `set_on_available_handle` - atbus_node_reg_test.cpp
-> - `set_on_shutdown_handle` - atbus_node_reg_test.cpp
-
-**已新增测试的回调**:
-
-**文件**: `atbus_node_reg_test.cpp` (追加)
-
-#### B.1 关闭连接回调 ✅
-
-| 回调接口 | 用例名 | 触发场景 | 状态 |
-|----------|--------|----------|------|
-| `set_on_close_connection_handle` | `on_close_connection_normal` | 连接正常关闭（node1/node2独立计数验证） | ✅ 通过 |
-| `set_on_close_connection_handle` | `on_close_connection_by_peer` | 对端关闭连接 | ✅ 通过 |
-
-#### B.2 拓扑相关回调 ✅
-
-| 回调接口 | 用例名 | 触发场景 | 状态 |
-|----------|--------|----------|------|
-| `set_on_topology_update_upstream_handle` | `on_topology_upstream_set` | 下游节点通过 conf.upstream_address 连接上游时触发 | ✅ 通过 |
-| `set_on_topology_update_upstream_handle` | `on_topology_upstream_clear` | 上游节点断开后下游状态变化 | ✅ 通过 |
-| `set_on_topology_update_upstream_handle` | `on_topology_upstream_change_id` | 上游地址不变但ID更换（模拟上游重启） | ✅ 通过 |
-| `set_on_topology_update_upstream_handle` | `on_topology_upstream_clear` | 清除上游节点 | new_peer为空 |
-
----
-
 ## libatapp 单元测试补全
 
 ### 项目信息
@@ -149,6 +69,7 @@ app1.run_noblock();
 - **代码目录**: `atframework/libatapp`
   - ⚠️ 忽略 `atframework/libatapp/atframework` 内的所有内容
 - **单元测试目录**: `atframework/libatapp/test/case`
+- **单元测试编译和执行目标**: `atapp_unit_test`
 
 ### 参考文件
 
@@ -484,3 +405,337 @@ app1.run_noblock();
 | `on_remove_endpoint` | A.4, B.4, C.3, D.6 |
 | `on_discovery_event` (kPut) | A.1, B.2, E.1 |
 | `on_discovery_event` (kDelete) | E.1 |
+
+---
+
+## libatapp etcd 接入测试
+
+### 架构概述
+
+libatapp 通过 `etcd_module`（atapp 模块接口）和 `etcdcli/*` 库接入 etcd，实现服务注册、服务发现和拓扑管理。
+
+**关键组件层次**:
+
+```
+etcd_module (atapp module 生命周期集成)
+  ├─ etcd_cluster     (HTTP/JSON 连接管理、认证、租约、成员发现)
+  ├─ etcd_keepalive   (注册 KV 并绑定租约 TTL)
+  ├─ etcd_watcher     (监听 key 变化: 快照+长轮询流式watch)
+  ├─ etcd_discovery   (内存中服务发现数据集: 一致性哈希、轮询、随机路由)
+  └─ etcd_packer      (JSON/Base64 序列化工具)
+```
+
+**接入模式**: HTTP-only，使用 etcd v3 JSON gateway (非 gRPC)，通过 libcurl multi-handle 异步通信。
+
+**使用的 etcd v3 API 端点**:
+
+| 端点 | 用途 |
+|------|------|
+| `/v3/cluster/member/list` | 发现集群成员 |
+| `/v3/auth/authenticate` | 用户名密码认证，获取 token |
+| `/v3/auth/user/get` | 刷新认证 token |
+| `/v3/lease/grant` | 获取租约 |
+| `/v3/lease/keepalive` | 续约 |
+| `/v3/kv/lease/revoke` | 撤销租约（停止时） |
+| `/v3/kv/range` | 读取 KV |
+| `/v3/kv/put` | 写入 KV |
+| `/v3/kv/deleterange` | 删除 KV |
+| `/v3/watch` | 长轮询 Watch |
+
+**Key 路径结构**:
+
+```
+<etcd.path>/
+├── by_id/<app_name>-<app_id>        # 按 ID 索引的服务发现
+├── by_name/<app_name>-<app_id>      # 按 Name 索引的服务发现
+└── topology/<app_name>-<app_id>     # 拓扑信息
+```
+
+---
+
+### G. CI 脚本: etcd 服务管理
+
+**新建目录**: `atframework/libatapp/ci/etcd/`
+
+#### G.1 etcd 下载与启停脚本 (Bash)
+
+**新建文件**: `atframework/libatapp/ci/etcd/setup-etcd.sh`
+
+> 跨 Linux/macOS 平台脚本
+
+**功能需求**:
+
+| 子命令 | 功能 | 说明 |
+|--------|------|------|
+| `download` | 下载最新版本 etcd | 通过 GitHub API (`/repos/etcd-io/etcd/releases/latest`) 获取最新 tag，下载对应平台(linux-amd64/linux-arm64/darwin-amd64/darwin-arm64)的包 |
+| `start` | 启动 etcd 实例 | 在指定 data-dir 启动，支持自定义 client/peer 端口，后台运行并记录 PID |
+| `stop` | 停止 etcd 实例 | 通过 PID 文件停止已启动的实例 |
+| `cleanup` | 清理数据和二进制 | 删除 data-dir 和下载的二进制 |
+| `status` | 检查运行状态 | 检查 PID 文件和进程是否存活 |
+
+**设计要点**:
+
+```bash
+# 目录结构 (运行时)
+<WORK_DIR>/
+├── etcd                    # etcd 二进制
+├── etcdctl                 # etcdctl 二进制
+├── etcd.pid                # PID 文件
+├── etcd.log                # 日志文件
+└── data/                   # etcd 数据目录
+```
+
+- **版本获取**: `curl -sSL https://api.github.com/repos/etcd-io/etcd/releases/latest | grep tag_name`
+- **下载 URL 模式**:
+  - Linux: `https://github.com/etcd-io/etcd/releases/download/${TAG}/etcd-${TAG}-linux-${ARCH}.tar.gz`
+  - macOS: `https://github.com/etcd-io/etcd/releases/download/${TAG}/etcd-${TAG}-darwin-${ARCH}.zip`
+- **架构检测**: `uname -m` → amd64/arm64
+- **重复启停处理**: `start` 前检查 PID 文件，若进程仍存活则先 `stop`；`stop` 发送 SIGTERM，等待 5s，仍存活则 SIGKILL
+- **健康检查**: 启动后轮询 `etcdctl endpoint health --endpoints=http://127.0.0.1:${CLIENT_PORT}` 直到 healthy 或超时
+- **默认端口**: client=12379, peer=12380（避免与系统 etcd 冲突）
+
+**参数**:
+
+```
+setup-etcd.sh <command> [options]
+  --work-dir DIR        工作目录 (默认: /tmp/etcd-unit-test)
+  --client-port PORT    客户端端口 (默认: 12379)
+  --peer-port PORT      对等端口 (默认: 12380)
+  --etcd-version VER    指定版本 (默认: latest)
+```
+
+#### G.2 etcd 下载与启停脚本 (PowerShell)
+
+**新建文件**: `atframework/libatapp/ci/etcd/setup-etcd.ps1`
+
+> Windows 平台脚本
+
+**功能需求**: 与 Bash 版本一致
+
+**设计要点**:
+
+```powershell
+# 目录结构 (运行时)
+<WORK_DIR>\
+├── etcd.exe                # etcd 二进制
+├── etcdctl.exe             # etcdctl 二进制
+├── etcd.pid                # PID 文件 (存储进程 ID)
+├── etcd.log                # 日志文件
+└── data\                   # etcd 数据目录
+```
+
+- **版本获取**: `Invoke-RestMethod -Uri https://api.github.com/repos/etcd-io/etcd/releases/latest | Select-Object -ExpandProperty tag_name`
+- **下载 URL 模式**: `https://github.com/etcd-io/etcd/releases/download/${TAG}/etcd-${TAG}-windows-amd64.zip`
+- **重复启停处理**: `start` 前通过 `Get-Process -Id (Get-Content etcd.pid)` 检查进程；`stop` 使用 `Stop-Process`
+- **健康检查**: 启动后轮询 `etcdctl.exe endpoint health`
+- **进程启动**: `Start-Process -NoNewWindow -PassThru -RedirectStandardOutput etcd.log`
+
+**参数** (同 Bash):
+
+```
+setup-etcd.ps1 -Command <download|start|stop|cleanup|status>
+  -WorkDir DIR          工作目录 (默认: $env:TEMP\etcd-unit-test)
+  -ClientPort PORT      客户端端口 (默认: 12379)
+  -PeerPort PORT        对等端口 (默认: 12380)
+  -EtcdVersion VER      指定版本 (默认: latest)
+```
+
+---
+
+### H. etcdcli 纯客户端层单元测试（不需要 etcd 服务）
+
+> 以下测试不需要真实 etcd 服务，仅测试客户端逻辑
+
+**新建文件**: `atframework/libatapp/test/case/atapp_etcd_packer_test.cpp`
+
+#### H.1 etcd_packer 序列化/反序列化测试
+
+| # | 用例名 | 描述 | 验证点 |
+|----|--------|------|--------|
+| H.1.1 | `packer_key_value_pack_unpack` | etcd_key_value 打包/解包往返 | key/value base64 编码正确、revision/version 一致 |
+| H.1.2 | `packer_response_header_pack_unpack` | etcd_response_header 打包/解包 | cluster_id/member_id/revision/raft_term 正确 |
+| H.1.3 | `packer_key_range_prefix` | pack_key_range 前缀匹配 ("+1") | 例如 key="abc" → range_end="abd" |
+| H.1.4 | `packer_key_range_exact` | pack_key_range 精确匹配 (空 range_end) | range_end 为空 |
+| H.1.5 | `packer_base64_roundtrip` | base64 编码/解码往返 | 各种长度字符串（空串/短串/长串/含特殊字符） |
+| H.1.6 | `packer_unpack_int_formats` | unpack_int 处理数字和字符串格式 | etcd 返回 int64 有时为 JSON 数字，有时为字符串 |
+| H.1.7 | `packer_parse_object_error` | parse_object 处理无效 JSON | 返回 false，不崩溃 |
+
+#### H.2 etcd_discovery_set 内存路由测试
+
+> 已有 `atapp_discovery_test.cpp` 覆盖 metadata_filter / get_discovery_by_metadata / round_robin / consistent_hash_compact / consistent_hash_unique 等
+
+**新增测试** (追加到 `atapp_discovery_test.cpp`):
+
+| # | 用例名 | 描述 | 验证点 |
+|----|--------|------|--------|
+| H.2.1 | `discovery_node_version_update` | 版本更新：同 ID 节点用更高 modify_revision 更新 | 旧节点被替换，路由数据更新 |
+| H.2.2 | `discovery_node_version_stale_skip` | 版本过旧：用更低 modify_revision 尝试更新 | 被忽略，保持原节点 |
+| H.2.3 | `discovery_add_remove_stress` | 大量（100+）节点增删 | 一致性哈希环一致性、无内存泄漏 |
+| H.2.4 | `discovery_node_ingress_round_robin` | `next_ingress_gateway()` 轮询 gateway 地址 | 返回地址依次循环 |
+| H.2.5 | `discovery_empty_set_operations` | 空集合上的所有查询操作 | 返回 nullptr/空，不崩溃 |
+
+---
+
+### I. etcd 集成测试（需要 etcd 服务）
+
+> 以下测试需要真实 etcd 服务运行（通过 G 组 CI 脚本启动）
+> 所有测试需在开头检测 etcd 是否可用，不可用时跳过 (CASE_MSG_INFO() + return)
+
+**新建文件**: `atframework/libatapp/test/case/atapp_etcd_cluster_test.cpp`
+
+**辅助函数** (文件开头):
+
+```cpp
+// 检测 etcd 是否可用
+static bool is_etcd_available() {
+  // 检查环境变量 ATAPP_UNIT_TEST_ETCD_HOST (默认 "http://127.0.0.1:12379")
+  // 尝试 HTTP GET /version 或 /health
+  // 返回 true/false
+}
+
+// 获取 etcd 主机地址
+static std::string get_etcd_host() {
+  const char* env = getenv("ATAPP_UNIT_TEST_ETCD_HOST");
+  return env ? env : "http://127.0.0.1:12379";
+}
+
+// 创建配置好的 etcd_cluster 对象
+static std::shared_ptr<atapp::etcd_cluster> create_test_cluster();
+```
+
+#### I.1 etcd_cluster 集群管理测试
+
+| # | 用例名 | 描述 | 验证点 |
+|----|--------|------|--------|
+| I.1.1 | `cluster_init_and_connect` | 初始化 etcd_cluster，tick 直到 kRunning+kReady | `is_available()` 返回 true，`get_lease() != 0` |
+| I.1.2 | `cluster_member_list_discovery` | tick 后 `get_available_hosts()` 包含至少一个成员 | hosts 非空 |
+| I.1.3 | `cluster_lease_grant_and_keepalive` | 获取 lease 后等待一个 keepalive 周期 | `get_lease()` 保持不变（续约成功） |
+| I.1.4 | `cluster_close_revoke_lease` | `close(true, true)` → 等待关闭完成 | lease 被撤销，关联的 KV 被自动删除 |
+| I.1.5 | `cluster_stats_tracking` | 发送若干请求后检查 `get_stats()` | `sum_create_requests > 0`, `sum_success_requests > 0` |
+| I.1.6 | `cluster_event_up_down_callbacks` | 注册 `add_on_event_up` / `add_on_event_down` | up 回调在 ready 时触发，down 回调在 close 时触发 |
+
+#### I.2 etcd_keepalive KV 注册测试
+
+| # | 用例名 | 描述 | 验证点 |
+|----|--------|------|--------|
+| I.2.1 | `keepalive_set_value_and_read` | 创建 keepalive 设置值 → 用 `create_request_kv_get` 读回 | 值一致 |
+| I.2.2 | `keepalive_update_value` | 更新 keepalive 值 → 再读回 | 新值 |
+| I.2.3 | `keepalive_lease_binding` | 停止 keepalive → 等待 lease TTL 过期 → 读取 | KV 被自动删除 |
+| I.2.4 | `keepalive_checker_conflict` | 两个 keepalive 注册同一 path → 第二个 checker 应检测到冲突 | 第二个不覆盖 |
+| I.2.5 | `keepalive_checker_same_identity` | 同 identity 的 keepalive 重启注册同一 path | checker 通过，允许覆盖 |
+| I.2.6 | `keepalive_remove_and_readd` | remove_keepalive → add_keepalive | 重新注册成功 |
+
+#### I.3 etcd_watcher Watch 事件测试
+
+| # | 用例名 | 描述 | 验证点 |
+|----|--------|------|--------|
+| I.3.1 | `watcher_initial_snapshot` | 预写入若干 KV → 创建 watcher → 收到 snapshot 事件 | `response.snapshot == true`，kv 列表完整 |
+| I.3.2 | `watcher_put_event` | watcher 运行中 → 写入新 KV | 收到 kPut 事件，kv.key/value 正确 |
+| I.3.3 | `watcher_delete_event` | watcher 运行中 → 删除 KV | 收到 kDelete 事件 |
+| I.3.4 | `watcher_prefix_range` | 创建前缀 watcher(`key+"+1"`) → 写入多个前缀下的 KV | 只收到匹配前缀的事件 |
+| I.3.5 | `watcher_reconnect_after_timeout` | 等待 watch 超时（默认 1 小时，可配短于 watcher_request_timeout） → 自动重连 | 重连后继续收到事件 |
+| I.3.6 | `watcher_revision_continuity` | 写入多个 KV → 验证 `last_revision` 单调递增 | revision 递增 |
+
+#### I.4 etcd_module 模块集成测试
+
+> 测试 etcd_module 作为 atapp 模块的完整集成流程
+> 需要构造 atapp 实例并加载 etcd_module
+
+**新建配置文件**: `atframework/libatapp/test/case/atapp_test_etcd.yaml`
+
+```yaml
+atapp:
+  id: 0x00000701
+  name: "etcd-test-node"
+  bus:
+    listen: "ipv4://127.0.0.1:22201"
+  etcd:
+    enable: true
+    hosts:
+      - "http://127.0.0.1:12379"
+    path: "/unit-test/libatapp"
+    init:
+      timeout: "10s"
+      tick_interval: "64ms"
+    keepalive:
+      timeout: "16s"
+      ttl: "5s"
+    request:
+      timeout: "5s"
+      initialization_timeout: "3s"
+    watcher:
+      retry_interval: "3s"
+```
+
+| # | 用例名 | 描述 | 验证点 |
+|----|--------|------|--------|
+| I.4.1 | `etcd_module_init_and_ready` | 启动 atapp 带 etcd_module → etcd_ctx 进入 ready | `is_etcd_enabled()`, `get_raw_etcd_ctx().is_available()` |
+| I.4.2 | `etcd_module_keepalive_paths` | 模块初始化后检查 keepalive 路径 | `get_discovery_by_id_path()`, `get_discovery_by_name_path()`, `get_topology_path()` 非空 |
+| I.4.3 | `etcd_module_watcher_paths` | 模块初始化后检查 watcher 路径 | `get_discovery_by_id_watcher_path()`, `get_discovery_by_name_watcher_path()`, `get_topology_watcher_path()` 非空 |
+| I.4.4 | `etcd_module_discovery_registration` | 启动两个 atapp 实例 → 都带 etcd_module → 互相通过 etcd 发现 | node1 能在 `get_global_discovery()` 中找到 node2 |
+| I.4.5 | `etcd_module_topology_registration` | 启动后检查 `get_topology_info_set()` | 包含自身拓扑信息 |
+| I.4.6 | `etcd_module_discovery_event_callback` | 注册 `add_on_node_discovery_event` → 启动第二个节点 → 回调被触发 | 回调参数: action=kPut, node 非空 |
+| I.4.7 | `etcd_module_discovery_event_remove_callback` | 注册回调 → `remove_on_node_event` 移除 → 启动第二个节点 → 回调不再触发 | handle 置为 end()，新节点上线不触发已移除回调 |
+| I.4.8 | `etcd_module_discovery_event_delete` | 注册回调 → 启动第二个节点(触发 kPut) → 关闭第二个节点(触发 kDelete) | 先收到 kPut（node 非空），再收到 kDelete（node 为关闭的节点） |
+| I.4.9 | `etcd_module_discovery_event_multi_callbacks` | 注册多个回调 → 启动第二个节点 | 所有回调均被调用，回调顺序与注册顺序一致 |
+| I.4.10 | `etcd_module_topology_event_callback` | 注册 `add_on_topology_info_event` → 启动第二个节点 → 回调被触发 | 回调参数: action=kPut, topology_info 非空, version.create_revision > 0 |
+| I.4.11 | `etcd_module_topology_event_remove_callback` | 注册回调 → `remove_on_topology_info_event` 移除 → 启动第二个节点 → 回调不再触发 | handle 置为 end()，新节点拓扑上线不触发已移除回调 |
+| I.4.12 | `etcd_module_topology_event_delete` | 注册回调 → 启动第二个节点(触发 kPut) → 关闭第二个节点(租约过期后触发 kDelete) | 先收到 kPut，再收到 kDelete |
+| I.4.13 | `etcd_module_topology_event_multi_callbacks` | 注册多个拓扑回调 → 启动第二个节点 | 所有回调均被调用 |
+| I.4.14 | `etcd_module_discovery_snapshot` | 启动后 `has_discovery_snapshot()` 为 true | 快照加载完成 |
+| I.4.15 | `etcd_module_topology_snapshot` | 启动后 `has_topology_snapshot()` 为 true | 快照加载完成 |
+| I.4.16 | `etcd_module_stop_revoke_lease` | stop 模块 → 等待 → 关联 KV 被删除 | etcd 中无该节点 KV |
+| I.4.17 | `etcd_module_reload_config` | 修改配置 → reload → 参数生效 | timeout 等配置更新 |
+| I.4.18 | `etcd_module_disable_enable` | `disable_etcd()` → tick → `enable_etcd()` → tick → 恢复 | 关闭后不通信，重新启用后恢复 |
+
+#### I.5 多节点服务发现联动测试
+
+> 利用 etcd 作为中间件，测试多个 atapp 节点通过 etcd 实现服务发现的全流程
+
+**新建配置文件**:
+- `atframework/libatapp/test/case/atapp_test_etcd_node1.yaml` (ID: 0x00000801, port: 22301)
+- `atframework/libatapp/test/case/atapp_test_etcd_node2.yaml` (ID: 0x00000802, port: 22302)
+
+| # | 用例名 | 描述 | 验证点 |
+|----|--------|------|--------|
+| I.5.1 | `multi_node_discovery_put_event` | node1 启动 → node2 启动 → node1 收到 node2 的 discovery kPut | node1 的 global_discovery 包含 node2 |
+| I.5.2 | `multi_node_discovery_delete_event` | node2 关闭 → node1 收到 kDelete 事件 | node1 的 global_discovery 不再包含 node2 |
+| I.5.3 | `multi_node_topology_update` | 两个节点都注册拓扑 → 互相能看到对方拓扑 | topology_info_set 包含对方 |
+| I.5.4 | `multi_node_custom_data` | `set_conf_custom_data` → 另一节点通过 watcher 收到 | custom_data 正确传播 |
+
+---
+
+### 需要新建/修改的配置文件汇总 (etcd 测试)
+
+#### I 组 — etcd 集成测试
+
+| 文件名 | 用途 | ID | 端口 | etcd 配置 |
+|--------|------|-----|------|-----------|
+| `atapp_test_etcd.yaml` | 单节点 etcd 模块测试 | 0x00000701 | 22201 | hosts: `["http://127.0.0.1:12379"]`, path: `/unit-test/libatapp` |
+| `atapp_test_etcd_node1.yaml` | 多节点测试节点1 | 0x00000801 | 22301 | 同上 |
+| `atapp_test_etcd_node2.yaml` | 多节点测试节点2 | 0x00000802 | 22302 | 同上 |
+
+---
+
+### etcd 测试执行顺序
+
+1. **Phase E1**: CI 脚本（无需编译）
+   - [ ] 创建 `ci/etcd/setup-etcd.sh`
+   - [ ] 创建 `ci/etcd/setup-etcd.ps1`
+   - [ ] 本地验证: download → start → health check → stop → cleanup
+
+2. **Phase E2**: 纯客户端测试（不需要 etcd）
+   - [ ] 创建 `atapp_etcd_packer_test.cpp` (H.1.1~H.1.7)
+   - [ ] 追加 `atapp_discovery_test.cpp` (H.2.1~H.2.5)
+   - [ ] 编译 & 运行验证
+
+3. **Phase E3**: 启动 etcd，运行集成测试
+   - [ ] 创建 `atapp_etcd_cluster_test.cpp` (I.1~I.3)
+   - [ ] 创建 etcd 测试配置文件（I 组）
+   - [ ] 启动 etcd 服务(`setup-etcd.sh start` / `setup-etcd.ps1 -Command start`)
+   - [ ] 编译 & 运行验证
+   - [ ] 停止 etcd 服务
+
+4. **Phase E4**: etcd_module 集成测试
+   - [ ] 创建 `atapp_etcd_module_test.cpp` (I.4.1~I.4.11, I.5.1~I.5.4)
+   - [ ] 编译 & 运行验证

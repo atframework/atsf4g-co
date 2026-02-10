@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package atframework.atproxy.protocol;
+
+option go_package = "github.com/atframework/atproxy-go/protocol";
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "google/protobuf/duration.proto";
+import "atframe/atapp_conf.proto";
+
+message atproxy_activity_connecttion {
+  bool enabled = 1 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "true" }];
+
+  atframework.atapp.protocol.atapp_metadata metadata = 2;
+
+  google.protobuf.Duration retry_interval_min = 11 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8s" }];
+  google.protobuf.Duration retry_interval_max = 12 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "300s" }];
+}
+
+message atproxy_configure {
+  atproxy_activity_connecttion activity_connecttion = 1;
+}

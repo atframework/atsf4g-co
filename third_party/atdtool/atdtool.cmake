@@ -1,6 +1,6 @@
 # =========== third_party atdtool ==================
 
-set(PROJECT_THIRD_PARTY_ATDTOOL_VERSION "1.0.2")
+set(PROJECT_THIRD_PARTY_ATDTOOL_VERSION "1.0.5")
 set(PROJECT_THIRD_PARTY_ATDTOOL_PACKAGE_DIR
     "${PROJECT_THIRD_PARTY_PACKAGE_DIR}/atdtool-v${PROJECT_THIRD_PARTY_ATDTOOL_VERSION}")
 
@@ -31,7 +31,7 @@ foreach(PROJECT_THIRD_PARTY_ATDTOOL_CHECK_FILE IN LISTS PROJECT_THIRD_PARTY_ATDT
 endforeach()
 
 if(PROJECT_THIRD_PARTY_ATDTOOL_NEED_DOWNLOAD OR NOT PROJECT_THIRD_PARTY_ATDTOOL_EXISTED_VERSION STREQUAL
-                                              PROJECT_THIRD_PARTY_ATDTOOL_VERSION)
+                                                PROJECT_THIRD_PARTY_ATDTOOL_VERSION)
   file(MAKE_DIRECTORY "${PROJECT_THIRD_PARTY_ATDTOOL_PACKAGE_DIR}")
   if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     findconfigurepackagedownloadfile(
@@ -46,14 +46,14 @@ if(PROJECT_THIRD_PARTY_ATDTOOL_NEED_DOWNLOAD OR NOT PROJECT_THIRD_PARTY_ATDTOOL_
       "${PROJECT_THIRD_PARTY_ATDTOOL_PACKAGE_DIR}/atdtool_darwin_amd64.tar.gz")
     file(MAKE_DIRECTORY "${PROJECT_THIRD_PARTY_ATDTOOL_PACKAGE_DIR}/darwin")
     findconfigurepackagetarxv("${PROJECT_THIRD_PARTY_ATDTOOL_PACKAGE_DIR}/atdtool_darwin_amd64.tar.gz"
-                            "${PROJECT_THIRD_PARTY_ATDTOOL_PACKAGE_DIR}/darwin/")
+                              "${PROJECT_THIRD_PARTY_ATDTOOL_PACKAGE_DIR}/darwin/")
   else()
     findconfigurepackagedownloadfile(
       "${PROJECT_THIRD_PARTY_ATDTOOL_RELEASE_MIRROR}/v${PROJECT_THIRD_PARTY_ATDTOOL_VERSION}/atdtool-linux-amd64.tar.gz"
       "${PROJECT_THIRD_PARTY_ATDTOOL_PACKAGE_DIR}/atdtool_linux_amd64.tar.gz")
     file(MAKE_DIRECTORY "${PROJECT_THIRD_PARTY_ATDTOOL_PACKAGE_DIR}/linux")
     findconfigurepackagetarxv("${PROJECT_THIRD_PARTY_ATDTOOL_PACKAGE_DIR}/atdtool_linux_amd64.tar.gz"
-                            "${PROJECT_THIRD_PARTY_ATDTOOL_PACKAGE_DIR}/linux/")
+                              "${PROJECT_THIRD_PARTY_ATDTOOL_PACKAGE_DIR}/linux/")
   endif()
 
   foreach(PROJECT_THIRD_PARTY_ATDTOOL_CHECK_FILE IN LISTS PROJECT_THIRD_PARTY_ATDTOOL_PREBUILT_FILES)

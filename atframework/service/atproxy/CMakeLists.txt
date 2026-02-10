@@ -26,3 +26,5 @@ atframework_add_executable(
   ${ATSF4G_APP_HEADER_LIST}
   SOURCES
   ${ATSF4G_APP_SOURCE_LIST})
+
+target_link_libraries(${ATSF4G_APP_NAME} PRIVATE opentelemetry-cpp::api)
