@@ -8,6 +8,12 @@ world_id: 1
 zone_id: 1
 
 proc_desc:
+  - chart_name: "atproxy"
+    instance_type_id: 1
+    world_instance: false
+    instance_count: 1
+    start_instance_id: 1
+
   - chart_name: "echosvr"
     instance_type_id: 10
     world_instance: false

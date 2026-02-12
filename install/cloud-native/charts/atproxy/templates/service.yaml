@@ -1,0 +1,3 @@
+{{- template "libapp.service" (list . "atproxy.service") -}}
+{{- define "atproxy.service" -}}
+{{- end -}}

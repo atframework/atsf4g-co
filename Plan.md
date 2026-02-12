@@ -720,9 +720,9 @@ atapp:
 ### etcd 测试执行顺序
 
 1. **Phase E1**: CI 脚本（无需编译）
-   - [ ] 创建 `ci/etcd/setup-etcd.sh`
-   - [ ] 创建 `ci/etcd/setup-etcd.ps1`
-   - [ ] 本地验证: download → start → health check → stop → cleanup
+   - [x] 创建 `ci/etcd/setup-etcd.sh`
+   - [x] 创建 `ci/etcd/setup-etcd.ps1`
+   - [x] 本地验证: download → start → health check → stop → cleanup
 
 2. **Phase E2**: 纯客户端测试（不需要 etcd）
    - [ ] 创建 `atapp_etcd_packer_test.cpp` (H.1.1~H.1.7)
@@ -731,11 +731,12 @@ atapp:
 
 3. **Phase E3**: 启动 etcd，运行集成测试
    - [ ] 创建 `atapp_etcd_cluster_test.cpp` (I.1~I.3)
-   - [ ] 创建 etcd 测试配置文件（I 组）
-   - [ ] 启动 etcd 服务(`setup-etcd.sh start` / `setup-etcd.ps1 -Command start`)
-   - [ ] 编译 & 运行验证
-   - [ ] 停止 etcd 服务
+   - [x] 创建 etcd 测试配置文件（I 组）
+   - [x] 启动 etcd 服务(`setup-etcd.sh start` / `setup-etcd.ps1 -Command start`)
+   - [ ] 编译 & 运行验证（I.1~I.3 尚未编写）
+   - [x] 停止 etcd 服务
 
 4. **Phase E4**: etcd_module 集成测试
-   - [ ] 创建 `atapp_etcd_module_test.cpp` (I.4.1~I.4.11, I.5.1~I.5.4)
-   - [ ] 编译 & 运行验证
+   - [x] 创建 `atapp_etcd_module_test.cpp` (I.4.1~I.4.18, I.5.1~I.5.4) — 22 test cases 全部通过
+   - [x] 编译 & 运行验证
+   - **注意**: I.5.4 (`multi_node_custom_data`) 仅验证本地 set/get API，因为 `app::pack()` 中 `custom_data` 字段当前被注释（atapp.cpp:1851）

@@ -14,11 +14,11 @@ image:
   tag: latest
 
 volumeMounts:
-  configMountPath: /data/projectx/echosvr/cfg
-  logMountPath: /data/projectx/echosvr/log
+  configMountPath: /data/atframework/publish/echosvr/cfg
+  logMountPath: /data/atframework/publish/echosvr/log
 
 vector:
-  log_path: /data/projectx/echosvr/log
+  log_path: /data/atframework/publish/echosvr/log
   image:
     repository: harbor.m-oa.com:6023/vector/vector:latest
     pullPolicy: Always
@@ -50,16 +50,6 @@ persistence:
         storage: 5Gi
         accessMode: ReadWriteOnce
 
-gateway:
-  class: cilium
-  port: 7001
-  hostname: gateway.example.com
-  addresses_ip: 127.0.0.1
-
-httproute:
-  port: 7001
-  parentRefsName: project-x-tls-gateway
-
 service:
   type: ClusterIP
   port: 7001
@@ -73,5 +63,5 @@ webserver:
   port: 7001
 
 # websocket:
-  # websocket 路径片段 实际路径为 /<deployment_environment>/daily/ws/v1
-  # path: daily 
+# websocket 路径片段 实际路径为 /<deployment_environment>/daily/ws/v1
+# path: daily

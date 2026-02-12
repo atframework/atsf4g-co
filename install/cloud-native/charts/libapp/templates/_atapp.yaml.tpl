@@ -3,14 +3,14 @@
   {{- $proxy_port := include "libapp.atbus.calculateAtproxyPort" . -}}
   {{- $service_port := include "libapp.atbus.calculateServicePort" . -}}
 listen:
-  {{- if (dig .Values.atapp.atbus "configure" "topology" "rule" "allow_direct_connection" false) }}
+  {{- if or (dig .Values.atapp.atbus "configure" "topology" "rule" "allow_direct_connection" false) ( eq .Values.type_name "atproxy" ) }}
   - "atcp://${ATAPP_EXTERNAL_IP:-::}:{{ $service_port }}"
   {{- else if (eq .Values.atdtool_running_platform "windows") }}
   - "pipe://.\\pipe\\{{ .Values.atapp.deployment.project_name }}\\{{ include "libapp.name" . }}_{{ $bus_addr }}.sock"
   {{- else }}
   - "unix:///run/atapp/{{ .Values.atapp.deployment.project_name }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.sock"
   {{- end }}
-  {{- if (dig .Values.atapp.atbus "policy" "enable_local_proxy" false) }}
+  {{- if and (dig .Values.atapp.atbus "policy" "enable_local_proxy" false) ( ne .Values.type_name "atproxy" ) }}
 proxy: "atcp://${ATAPP_EXTERNAL_IP:-127.0.0.1}:{{ $proxy_port }}"
   {{- else if (dig .Values.atapp.atbus "policy" "remote_proxy" false) }}
 proxy: "{{ .Values.atapp.atbus.policy.remote_proxy }}" # address of upstream node

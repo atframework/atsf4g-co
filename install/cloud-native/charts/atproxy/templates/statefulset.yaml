@@ -1,0 +1,3 @@
+{{- template "libapp.statefulset" (list . "atproxy.statefulset") -}}
+{{- define "atproxy.statefulset" -}}
+{{- end -}}

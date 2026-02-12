@@ -1,0 +1,3 @@
+{{- template "libapp.httproute" (list . "atproxy.httproute") -}}
+{{- define "atproxy.httproute" -}}
+{{- end -}}

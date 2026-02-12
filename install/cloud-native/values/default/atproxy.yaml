@@ -1,0 +1,14 @@
+# global.yaml
+# vim: set sw=2 sts=2 et:
+# encoding: utf-8
+
+atapp:
+  atbus:
+    policy:
+      enable_local_proxy: false
+      remote_proxy: ""
+    configure:
+      topology:
+        rule:
+          allow_direct_connection: true
+          require_same_upstream: false

@@ -1,0 +1,6 @@
+{{- template "libapp.configmap" (list . "atproxy.configmap") -}}
+{{- define "atproxy.configmap" -}}
+data:
+  {{ include "atproxy.name" . }}.yaml: {{ tpl (.Files.Get "cfg/atproxy.yaml.tpl") . | quote }}
+  vector.yaml: {{ tpl (.Files.Get "cfg/vector.yaml.tpl") . | quote }}
+{{- end -}}

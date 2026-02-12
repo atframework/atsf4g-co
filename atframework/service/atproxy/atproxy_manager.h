@@ -4,14 +4,26 @@
 
 #pragma once
 
+#include <memory/rc_ptr.h>
+
 #include <atframe/atapp.h>
 #include <atframe/atapp_module_impl.h>
 
+#include <atframe/atapp_common_types.h>
 #include <atframe/modules/etcd_module.h>
 
-#include <ctime>
-#include <list>
-#include <map>
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
+#include <atproxy/atproxy_protocol.pb.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
+#include <chrono>
+#include <unordered_map>
 
 namespace atframework {
 namespace proxy {
@@ -19,53 +31,42 @@ class atproxy_manager : public ::atfw::atapp::module_impl {
  public:
   using node_action_t = atapp::etcd_module::node_action_t;
   struct node_info_t {
-    atapp::etcd_module::node_info_t etcd_node;
-    atapp::protocol::atapp_gateway ingress_for_listen;
-    time_t next_action_time;
+    bool has_topology_info;
+    bool has_discovery_info;
     bool is_available;
-    int round_robin_index;
+    std::chrono::system_clock::duration next_retry_duration;
+    atapp::jiffies_timer_watcher_t timer_handle;
   };
-
-  struct node_list_t {
-    std::list<node_info_t> nodes;
-  };
-
- private:
-  struct check_info_t {
-    time_t timeout_sec;
-    ::atfw::atapp::app::app_id_t proxy_id;
-  };
+  using node_info_ptr_t = ::atfw::util::memory::strong_rc_ptr<node_info_t>;
 
  public:
   atproxy_manager();
 
   void prereload(atapp::app_conf &conf) override;
 
-  int init() override;
+  int reload() override;
 
-  int tick() override;
+  int init() override;
 
   const char *name() const override;
 
-  int set(atapp::etcd_module::node_info_t &proxy_info);
+ private:
+  node_info_ptr_t mutable_node_info(::atfw::atapp::app::app_id_t id);
+  void remove_node_info(::atfw::atapp::app::app_id_t id);
+  void try_activity_connect_to_node(::atfw::atapp::app::app_id_t id);
 
-  int remove(::atfw::atapp::app::app_id_t id);
+  void set_discovery_info_ready(::atfw::atapp::app::app_id_t id);
+  void remove_discovery_info_ready(::atfw::atapp::app::app_id_t id);
+  void set_topology_info_ready(::atfw::atapp::app::app_id_t id);
+  void remove_topology_info_ready(::atfw::atapp::app::app_id_t id);
 
-  int reset(node_list_t &all_proxys);
-
-  int on_connected(const ::atfw::atapp::app &app, ::atfw::atapp::app::app_id_t id);
-
-  int on_disconnected(const ::atfw::atapp::app &app, ::atfw::atapp::app::app_id_t id);
+  bool check_available(atapp::app::app_id_t id) const;
 
  private:
-  void swap(node_info_t &l, node_info_t &r);
-  void on_watcher_notify(atapp::etcd_module::discovery_watcher_sender_list_t &sender);
-  bool check_available(const atapp::etcd_module::node_info_t &node_event) const;
-
- private:
-  std::list<check_info_t> check_list_;
-  using proxy_set_t = std::map< ::atfw::atapp::app::app_id_t, node_info_t>;
+  using proxy_set_t = std::unordered_map< ::atfw::atapp::app::app_id_t, node_info_ptr_t>;
   proxy_set_t proxy_set_;
+
+  atframework::atproxy::protocol::atproxy_configure atproxy_configure_;
 };
 }  // namespace proxy
 }  // namespace atframework

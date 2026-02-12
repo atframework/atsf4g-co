@@ -4,50 +4,23 @@
 
 #include <time/time_utility.h>
 
+#include <atbus_topology.h>
+
 #include <opentelemetry/semconv/incubating/deployment_attributes.h>
 #include <opentelemetry/semconv/incubating/service_attributes.h>
 
-#include <algorithm>
+#include <chrono>
 #include <memory>
 #include <utility>
+#include "atframe/atapp_common_types.h"
+#include "atframe/atapp_conf.h"
+#include "atframe/connectors/atapp_connector_atbus.h"
+#include "detail/libatbus_channel_export.h"
 
 #include "atproxy_manager.h"  // NOLINT: build/include_subdir
 
 namespace atframework {
 namespace proxy {
-
-namespace {
-static const atapp::protocol::atapp_gateway *next_listen_address(atproxy_manager::node_info_t &node_info) {
-  if (node_info.round_robin_index < 0) {
-    node_info.round_robin_index = 0;
-  }
-  if (node_info.etcd_node.node_discovery.gateways_size() > 0) {
-    if (node_info.round_robin_index >= node_info.etcd_node.node_discovery.gateways_size()) {
-      node_info.round_robin_index %= node_info.etcd_node.node_discovery.gateways_size();
-      return &node_info.etcd_node.node_discovery.gateways(node_info.round_robin_index++);
-    }
-  }
-
-  if (node_info.etcd_node.node_discovery.listen_size() > 0) {
-    if (node_info.round_robin_index >= node_info.etcd_node.node_discovery.listen_size()) {
-      node_info.round_robin_index %= node_info.etcd_node.node_discovery.listen_size();
-      node_info.ingress_for_listen.set_address(
-          node_info.etcd_node.node_discovery.listen(node_info.round_robin_index++));
-      return &node_info.ingress_for_listen;
-    }
-  }
-
-  return nullptr;
-}
-
-static int listen_address_size(atproxy_manager::node_info_t &node_info) {
-  if (node_info.etcd_node.node_discovery.gateways_size() > 0) {
-    return node_info.etcd_node.node_discovery.gateways_size();
-  }
-
-  return node_info.etcd_node.node_discovery.listen_size();
-}
-}  // namespace
 
 atproxy_manager::atproxy_manager() {}
 
@@ -115,6 +88,11 @@ void atproxy_manager::prereload(atapp::app_conf &conf) {
   (*metadata_labels)["service.identity"] = get_app()->get_app_identity();
 }
 
+int atproxy_manager::reload() {
+  get_app()->parse_configures_into(atproxy_configure_, "atproxy", "ATPROXY");
+  return 0;
+}
+
 int atproxy_manager::init() {
   std::shared_ptr<::atfw::atapp::etcd_module> etcd_mod = get_app()->get_etcd_module();
   if (!etcd_mod) {
@@ -122,260 +100,336 @@ int atproxy_manager::init() {
     return -1;
   }
 
-  int ret =
-      etcd_mod->add_discovery_watcher_by_name([this](atapp::etcd_module::discovery_watcher_sender_list_t &sender) {
-        if (this->get_app()->get_type_name() == sender.node.get().node_discovery.type_name()) {
-          this->on_watcher_notify(sender);
+  atbus::node::ptr_t bus_node = get_app()->get_bus_node();
+  if (!bus_node) {
+    FWLOGERROR("bus node not found");
+    return -1;
+  }
+
+  etcd_mod->add_on_topology_info_event([this](atapp::etcd_module::topology_action_t action,
+                                              const atapp::etcd_module::atapp_topology_info_ptr_t &info,
+                                              const atapp::etcd_data_version &) {
+    if (!info) {
+      return;
+    }
+    if (info->id() == 0) {
+      return;
+    }
+
+    if (action == atapp::etcd_module::topology_action_t::kDelete) {
+      this->remove_topology_info_ready(info->id());
+    } else {
+      this->set_topology_info_ready(info->id());
+    }
+  });
+
+  etcd_mod->add_on_node_discovery_event(
+      [this](atapp::etcd_module::node_action_t action, const atapp::etcd_discovery_node::ptr_t &node) {
+        if (!node) {
+          return;
+        }
+
+        if (node->get_discovery_info().id() == 0) {
+          return;
+        }
+
+        if (action == atapp::etcd_module::node_action_t::kDelete) {
+          this->remove_discovery_info_ready(node->get_discovery_info().id());
+        } else if (action == atapp::etcd_module::node_action_t::kPut) {
+          this->set_discovery_info_ready(node->get_discovery_info().id());
         }
       });
 
-  if (ret < 0) {
-    FWLOGERROR("add watcher by type name {} failed, res: {}", get_app()->get_type_name(), ret);
-    return ret;
-  }
+  bus_node->set_on_add_endpoint_handle([this](const atbus::node &, atbus::endpoint *ep, ATBUS_ERROR_TYPE result) {
+    if (ep == nullptr || result != EN_ATBUS_ERR_SUCCESS) {
+      return 0;
+    }
 
-  FWLOGINFO("watch atproxy discovery watcher by_name path: {}", etcd_mod->get_discovery_by_name_watcher_path());
+    auto iter = this->proxy_set_.find(ep->get_id());
+    if (iter == this->proxy_set_.end()) {
+      return 0;
+    }
+
+    if (!iter->second) {
+      this->proxy_set_.erase(iter);
+      return 0;
+    }
+
+    atapp::protobuf_to_chrono_set_duration(iter->second->next_retry_duration,
+                                           atproxy_configure_.activity_connecttion().retry_interval_min());
+    if (iter->second->next_retry_duration <= std::chrono::system_clock::duration::zero()) {
+      iter->second->next_retry_duration =
+          std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::seconds(8));
+    }
+    if (!iter->second->timer_handle.expired()) {
+      auto timer_inst = iter->second->timer_handle.lock();
+      iter->second->timer_handle.reset();
+      if (timer_inst) {
+        atapp::jiffies_timer_t::remove_timer(*timer_inst);
+      }
+    }
+    return 0;
+  });
+
+  FWLOGINFO("atproxy setup event listeners done");
 
   return 0;
-}
-
-int atproxy_manager::tick() {
-  time_t now = atfw::util::time::time_utility::get_sys_now();
-
-  int ret = 0;
-  do {
-    if (check_list_.empty()) {
-      break;
-    }
-
-    check_info_t ci = check_list_.front();
-    if (now <= ci.timeout_sec) {
-      break;
-    }
-    check_list_.pop_front();
-
-    // skip self
-    if (ci.proxy_id == get_app()->get_id()) {
-      continue;
-    }
-
-    std::map<::atfw::atapp::app::app_id_t, node_info_t>::iterator iter = proxy_set_.find(ci.proxy_id);
-    // already removed, skip
-    if (iter == proxy_set_.end()) {
-      continue;
-    }
-
-    // if has no listen addrs, skip
-    if (listen_address_size(iter->second) <= 0) {
-      continue;
-    }
-
-    // has another pending check info
-    if (iter->second.next_action_time > ci.timeout_sec) {
-      continue;
-    }
-
-    if (get_app()->get_bus_node()) {
-      // set next_action_time first
-      iter->second.next_action_time = 0;
-
-      // already connected, skip
-      if (nullptr != get_app()->get_bus_node()->get_endpoint(ci.proxy_id)) {
-        continue;
-      }
-
-      if (false == iter->second.is_available) {
-        continue;
-      }
-
-      // TODO(owent): 拓扑关系允许直连才发起连接
-
-      const std::string *select_address = nullptr;
-      {
-        int check_size = listen_address_size(iter->second);
-        for (int i = 0; nullptr == select_address && i < check_size; ++i) {
-          // support more protocols
-          const atapp::protocol::atapp_gateway *try_gateway = next_listen_address(iter->second);
-          if (nullptr == try_gateway) {
-            continue;
-          }
-          if (!get_app()->match_gateway(*try_gateway)) {
-            continue;
-          }
-          uint32_t address_type = get_app()->get_address_type(try_gateway->address());
-          if (0 != (address_type & static_cast<uint32_t>(atfw::atapp::app::address_type_t::kLocalHost))) {
-            continue;
-          }
-          if (0 != (address_type & static_cast<uint32_t>(atfw::atapp::app::address_type_t::kSimplex))) {
-            continue;
-          }
-
-          select_address = &try_gateway->address();
-        }
-      }
-
-      if (nullptr == select_address) {
-        continue;
-      }
-
-      // try to connect to brother proxy
-      int res = get_app()->get_bus_node()->connect(select_address);
-      if (res >= 0) {
-        ++ret;
-      } else {
-        FWLOGERROR("try to connect to proxy: {:#x}, address: {} failed, res: {}",
-                   iter->second.etcd_node.node_discovery.id(), *select_address, res);
-      }
-
-      // recheck some time later
-      ci.timeout_sec = now + get_app()->get_bus_node()->get_conf().retry_interval;
-      if (ci.timeout_sec <= now) {
-        ci.timeout_sec = now + 1;
-      }
-      // try to reconnect later
-      iter->second.next_action_time = ci.timeout_sec;
-      check_list_.push_back(ci);
-
-    } else {
-      ci.timeout_sec = now + 1;
-      // try to reconnect later
-      iter->second.next_action_time = ci.timeout_sec;
-      check_list_.push_back(ci);
-    }
-  } while (true);
-
-  return ret;
 }
 
 const char *atproxy_manager::name() const { return "atproxy manager"; }
 
-int atproxy_manager::set(atapp::etcd_module::node_info_t &etcd_node) {
-  // TODO Support name only node
-  check_info_t ci;
-  ci.timeout_sec = atfw::util::time::time_utility::get_sys_now();
-  ci.proxy_id = etcd_node.node_discovery.id();
-
-  proxy_set_t::iterator iter = proxy_set_.find(etcd_node.node_discovery.id());
-  if (iter != proxy_set_.end()) {
-    // already has pending action, just skipped
-    if (iter->second.next_action_time >= ci.timeout_sec) {
-      return 0;
+atproxy_manager::node_info_ptr_t atproxy_manager::mutable_node_info(::atfw::atapp::app::app_id_t id) {
+  atproxy_manager::node_info_ptr_t &ret = proxy_set_[id];
+  if (!ret) {
+    ret = atfw::util::memory::make_strong_rc<node_info_t>();
+    ret->has_discovery_info = false;
+    ret->has_topology_info = false;
+    ret->is_available = false;
+    atapp::protobuf_to_chrono_set_duration(ret->next_retry_duration,
+                                           atproxy_configure_.activity_connecttion().retry_interval_min());
+    if (ret->next_retry_duration <= std::chrono::system_clock::duration::zero()) {
+      ret->next_retry_duration =
+          std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::seconds(8));
     }
-
-    iter->second.next_action_time = ci.timeout_sec;
-    iter->second.etcd_node = etcd_node;
-  } else {
-    node_info_t &proxy_info = proxy_set_[etcd_node.node_discovery.id()];
-    proxy_info.next_action_time = ci.timeout_sec;
-    proxy_info.etcd_node = etcd_node;
-    proxy_info.is_available = check_available(etcd_node);
-    proxy_info.round_robin_index = 0;
-    FWLOGINFO("new atproxy {:#x} found", etcd_node.node_discovery.id());
   }
 
-  // push front and check it on next loop
-  check_list_.push_front(ci);
-  return 0;
+  return ret;
 }
 
-int atproxy_manager::remove(::atfw::atapp::app::app_id_t id) {
-  proxy_set_t::iterator iter = proxy_set_.find(id);
-  if (iter != proxy_set_.end()) {
-    FWLOGINFO("lost atproxy {:#x}", id);
+void atproxy_manager::remove_node_info(::atfw::atapp::app::app_id_t id) {
+  auto iter = proxy_set_.find(id);
+  if (iter == proxy_set_.end()) {
+    return;
+  }
+
+  if (!iter->second) {
     proxy_set_.erase(iter);
+    return;
   }
-  return 0;
+
+  if (!iter->second->timer_handle.expired()) {
+    auto timer_inst = iter->second->timer_handle.lock();
+    iter->second->timer_handle.reset();
+    if (timer_inst) {
+      atapp::jiffies_timer_t::remove_timer(*timer_inst);
+    }
+  }
+
+  proxy_set_.erase(iter);
 }
 
-int atproxy_manager::reset(node_list_t &all_proxys) {
-  proxy_set_.clear();
-  check_list_.clear();
+void atproxy_manager::try_activity_connect_to_node(::atfw::atapp::app::app_id_t id) {
+  auto iter = proxy_set_.find(id);
+  if (iter == proxy_set_.end()) {
+    return;
+  }
 
-  for (std::list<node_info_t>::iterator iter = all_proxys.nodes.begin(); iter != all_proxys.nodes.end(); ++iter) {
-    // skip all empty
-    // TODO Support gateway
-    if (iter->etcd_node.node_discovery.listen_size() == 0) {
+  if (!iter->second) {
+    proxy_set_.erase(iter);
+    return;
+  }
+
+  if (!iter->second->is_available) {
+    return;
+  }
+
+  auto atbus_connector = get_app()->get_atbus_connector();
+  if (!atbus_connector) {
+    return;
+  }
+  if (!get_app()->get_bus_node()) {
+    return;
+  }
+
+  // 有其他正在等待重试的定时器，则不重复设置
+  if (iter->second->timer_handle.lock()) {
+    return;
+  }
+
+  get_app()->add_custom_timer(
+      iter->second->next_retry_duration,
+      [this, id](time_t /*tick*/, const atapp::jiffies_timer_t::timer_t & /*timer*/) {
+        auto inner_iter = this->proxy_set_.find(id);
+        if (inner_iter == this->proxy_set_.end()) {
+          return;
+        }
+
+        if (!inner_iter->second) {
+          this->proxy_set_.erase(inner_iter);
+          return;
+        }
+
+        inner_iter->second->timer_handle.reset();
+        this->try_activity_connect_to_node(id);
+      },
+      nullptr, &iter->second->timer_handle);
+
+  std::chrono::system_clock::duration max_retry_interval;
+  atapp::protobuf_to_chrono_set_duration(max_retry_interval,
+                                         atproxy_configure_.activity_connecttion().retry_interval_max());
+  if (max_retry_interval <= std::chrono::system_clock::duration::zero()) {
+    max_retry_interval = std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::seconds(300));
+  }
+
+  if (iter->second->next_retry_duration < max_retry_interval) {
+    iter->second->next_retry_duration *= 2;
+    if (iter->second->next_retry_duration > max_retry_interval) {
+      iter->second->next_retry_duration = max_retry_interval;
+    }
+  }
+
+  atapp::etcd_discovery_node::ptr_t discovery = get_app()->get_discovery_node_by_id(id);
+  if (!discovery) {
+    remove_discovery_info_ready(id);
+    return;
+  }
+
+  // 选取合适的地址进行连接尝试
+  discovery->reset_ingress_index();
+  int32_t ingress_size = discovery->get_ingress_size();
+  bool has_sucess_connection = false;
+  for (int32_t i = 0; i < ingress_size; ++i) {
+    const atapp::protocol::atapp_gateway &ingress = discovery->next_ingress_gateway();
+    gsl::string_view addr = gsl::string_view{ingress.address().data(), ingress.address().size()};
+    // atproxy 仅仅支持atbus的协议
+    atbus::channel::channel_address_t parsed_addr;
+    if (!atbus::channel::make_address(addr, parsed_addr)) {
+      continue;
+    }
+    if (atbus_connector->get_support_protocols().end() ==
+        atbus_connector->get_support_protocols().find(parsed_addr.scheme)) {
+      continue;
+    }
+    // 单工协议不允许作为控制通道协议
+    if (atbus::channel::is_simplex_address(addr)) {
+      continue;
+    }
+    if (atbus::channel::is_local_process_address(addr) &&
+        discovery->get_discovery_info().pid() != atbus::node::get_pid()) {
+      continue;
+    }
+    if (atbus::channel::is_local_host_address(addr) &&
+        discovery->get_discovery_info().hostname() != atbus::node::get_hostname()) {
       continue;
     }
 
-    check_info_t ci;
-    ci.timeout_sec = atfw::util::time::time_utility::get_sys_now();
-    ci.proxy_id = iter->etcd_node.node_discovery.id();
-    (*iter).next_action_time = ci.timeout_sec;
-    (*iter).is_available = check_available((*iter).etcd_node);
-
-    // copy proxy info
-    proxy_set_[ci.proxy_id] = *iter;
-
-    // push front and check it on next loop
-    check_list_.push_front(ci);
-  }
-
-  return 0;
-}
-
-// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
-int atproxy_manager::on_connected(const ::atfw::atapp::app &, ::atfw::atapp::app::app_id_t) { return 0; }
-
-int atproxy_manager::on_disconnected(const ::atfw::atapp::app &app, ::atfw::atapp::app::app_id_t id) {
-  proxy_set_t::iterator iter = proxy_set_.find(id);
-  if (proxy_set_.end() != iter) {
-    check_info_t ci;
-
-    // when stoping bus noe may be unavailable
-    if (!app.check_flag(::atfw::atapp::app::flag_t::type::kStoping)) {
-      if (app.get_bus_node() && app.get_bus_node()->get_conf().retry_interval > 0) {
-        ci.timeout_sec = atfw::util::time::time_utility::get_sys_now() + app.get_bus_node()->get_conf().retry_interval;
-      } else {
-        ci.timeout_sec = atfw::util::time::time_utility::get_sys_now() + 1;
-      }
-    } else {
-      ci.timeout_sec = atfw::util::time::time_utility::get_sys_now() - 1;
-    }
-
-    if (iter->second.next_action_time < ci.timeout_sec) {
-      iter->second.next_action_time = ci.timeout_sec;
-      ci.proxy_id = id;
-      check_list_.push_back(ci);
+    int res = get_app()->get_bus_node()->connect(addr);
+    if (res == 0) {
+      has_sucess_connection = true;
+      break;
     }
   }
 
-  return 0;
-}
-
-void atproxy_manager::swap(node_info_t &l, node_info_t &r) {
-  using std::swap;
-  l.etcd_node.node_discovery.Swap(&r.etcd_node.node_discovery);
-  swap(l.etcd_node.action, r.etcd_node.action);
-
-  swap(l.next_action_time, r.next_action_time);
-  swap(l.is_available, r.is_available);
-  swap(l.round_robin_index, r.round_robin_index);
-}
-
-void atproxy_manager::on_watcher_notify(atapp::etcd_module::discovery_watcher_sender_list_t &sender) {
-  if (sender.node.get().action == node_action_t::kDelete) {
-    // trigger manager
-    remove(sender.node.get().node_discovery.id());
-  } else {
-    // trigger manager
-    set(sender.node);
+  if (!has_sucess_connection) {
+    FWLOGERROR("try connect to node {} failed, no available address, discovery info:\n{}", id,
+               discovery->get_discovery_info().ShortDebugString());
+    iter->second->is_available = false;
   }
 }
 
-bool atproxy_manager::check_available(const atapp::etcd_module::node_info_t &node_event) const {
-  uint64_t atbus_protocol_version = 0;
-  uint64_t atbus_protocol_min_version = 0;
-  if (nullptr != get_app() && get_app()->get_bus_node()) {
-    atbus_protocol_version = static_cast<uint64_t>(get_app()->get_bus_node()->get_protocol_version());
-    atbus_protocol_min_version = static_cast<uint64_t>(get_app()->get_bus_node()->get_protocol_minimal_version());
-  } else {
-    atbus_protocol_version = atbus::protocol::ATBUS_PROTOCOL_VERSION;
-    atbus_protocol_min_version = atbus::protocol::ATBUS_PROTOCOL_MINIMAL_VERSION;
+void atproxy_manager::set_discovery_info_ready(::atfw::atapp::app::app_id_t id) {
+  node_info_ptr_t node_info = mutable_node_info(id);
+
+  node_info->has_discovery_info = true;
+  if (node_info->has_topology_info) {
+    node_info->is_available = check_available(id);
+    try_activity_connect_to_node(id);
+  }
+}
+
+void atproxy_manager::remove_discovery_info_ready(::atfw::atapp::app::app_id_t id) {
+  auto iter = proxy_set_.find(id);
+  if (iter == proxy_set_.end()) {
+    return;
   }
 
-  return node_event.node_discovery.atbus_protocol_version() >= atbus_protocol_min_version &&
-         atbus_protocol_version >= node_event.node_discovery.atbus_protocol_min_version();
+  if (!iter->second) {
+    proxy_set_.erase(iter);
+    return;
+  }
+
+  iter->second->has_discovery_info = false;
+  if (!iter->second->has_topology_info) {
+    remove_node_info(id);
+    return;
+  }
+
+  iter->second->is_available = false;
+}
+
+void atproxy_manager::set_topology_info_ready(::atfw::atapp::app::app_id_t id) {
+  node_info_ptr_t node_info = mutable_node_info(id);
+
+  node_info->has_topology_info = true;
+  if (node_info->has_discovery_info) {
+    node_info->is_available = check_available(id);
+    try_activity_connect_to_node(id);
+  }
+}
+
+void atproxy_manager::remove_topology_info_ready(::atfw::atapp::app::app_id_t id) {
+  auto iter = proxy_set_.find(id);
+  if (iter == proxy_set_.end()) {
+    return;
+  }
+
+  if (!iter->second) {
+    proxy_set_.erase(iter);
+    return;
+  }
+
+  iter->second->has_topology_info = false;
+  if (!iter->second->has_discovery_info) {
+    remove_node_info(id);
+    return;
+  }
+
+  iter->second->is_available = false;
+}
+
+bool atproxy_manager::check_available(::atfw::atapp::app::app_id_t id) const {
+  atapp::etcd_discovery_node::ptr_t discovery = get_app()->get_discovery_node_by_id(id);
+  if (!discovery) {
+    return false;
+  }
+  const atbus::node::ptr_t &bus_node = get_app()->get_bus_node();
+  if (!bus_node) {
+    return false;
+  }
+
+  uint64_t atbus_protocol_version = static_cast<uint64_t>(bus_node->get_protocol_version());
+  uint64_t atbus_protocol_min_version = static_cast<uint64_t>(bus_node->get_protocol_minimal_version());
+
+  // 最小协议版本号判定
+  if (discovery->get_discovery_info().atbus_protocol_version() < atbus_protocol_min_version) {
+    return false;
+  }
+  if (atbus_protocol_version < discovery->get_discovery_info().atbus_protocol_min_version()) {
+    return false;
+  }
+
+  atbus::topology_peer::ptr_t other_topology_info = get_app()->get_topology_peer(id);
+  if (!other_topology_info) {
+    return false;
+  }
+  atbus::topology_peer::ptr_t self_topology_info = get_app()->get_topology_peer(get_app()->get_id());
+  if (!self_topology_info) {
+    return false;
+  }
+
+  if (!atbus::topology_registry::check_policy(get_app()->get_topology_policy_rule(),
+                                              self_topology_info->get_topology_data(),
+                                              other_topology_info->get_topology_data())) {
+    return false;
+  }
+
+  if (atproxy_configure_.activity_connecttion().has_metadata() &&
+      !atapp::etcd_discovery_set::metadata_equal_type::filter(atproxy_configure_.activity_connecttion().metadata(),
+                                                              discovery->get_discovery_info().metadata())) {
+    return false;
+  }
+
+  return true;
 }
 }  // namespace proxy
 }  // namespace atframework

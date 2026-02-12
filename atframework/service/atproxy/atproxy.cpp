@@ -19,6 +19,7 @@
 
 #include "atproxy_manager.h"
 
+namespace {
 static int app_handle_on_response(atfw::atapp::app &app, const atfw::atapp::app::message_sender_t &source,
                                   const atfw::atapp::app::message_t &msg, int32_t error_code) {
   if (error_code < 0) {
@@ -29,30 +30,7 @@ static int app_handle_on_response(atfw::atapp::app &app, const atfw::atapp::app:
   }
   return 0;
 }
-
-struct app_handle_on_connected {
-  std::reference_wrapper<atframework::proxy::atproxy_manager> atproxy_mgr_module;
-  app_handle_on_connected(atframework::proxy::atproxy_manager &mod) : atproxy_mgr_module(mod) {}
-
-  int operator()(atfw::atapp::app &app, atbus::endpoint &ep, int status) {
-    FWLOGINFO("node {} connected, status: {}", ep.get_id(), status);
-
-    atproxy_mgr_module.get().on_connected(app, ep.get_id());
-    return 0;
-  }
-};
-
-struct app_handle_on_disconnected {
-  std::reference_wrapper<atframework::proxy::atproxy_manager> atproxy_mgr_module;
-  app_handle_on_disconnected(atframework::proxy::atproxy_manager &mod) : atproxy_mgr_module(mod) {}
-
-  int operator()(atfw::atapp::app &app, atbus::endpoint &ep, int status) {
-    FWLOGINFO("node {} disconnected, status: {}", ep.get_id(), status);
-
-    atproxy_mgr_module.get().on_disconnected(app, ep.get_id());
-    return 0;
-  }
-};
+}  // namespace
 
 int main(int argc, char *argv[]) {
   atfw::atapp::app app;
@@ -76,8 +54,6 @@ int main(int argc, char *argv[]) {
 
   // setup message handle
   app.set_evt_on_forward_response(app_handle_on_response);
-  app.set_evt_on_app_connected(app_handle_on_connected(*proxy_mgr_mod));
-  app.set_evt_on_app_disconnected(app_handle_on_disconnected(*proxy_mgr_mod));
 
   // run
   return app.run(uv_default_loop(), argc, (const char **)argv, nullptr);

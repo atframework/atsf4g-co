@@ -12,11 +12,30 @@ file(
 set(ATSF4G_APP_HEADER_LIST "atproxy_manager.h")
 set(ATSF4G_APP_SOURCE_LIST "atproxy.cpp" "atproxy_manager.cpp")
 
+atframework_add_protobuf_library(
+  "${ATSF4G_APP_NAME}-protocol"
+  "${CMAKE_CURRENT_LIST_DIR}/protocol"
+  NO_INSTALL_PBFILE
+  NO_INSTALL_HEADERS
+  ENABLE_PUBLIC_PRECOMPILE_HEADERS
+  PUBLIC_SYMBOL_DECL
+  "ATPROXY_PROTOCOL_API"
+  FOLDER_PATH
+  "atframework/service/${ATSF4G_APP_NAME}"
+  PUBLIC_LINK_NAMES
+  "atapp-protocol"
+  COMPONENT_NAME
+  "${ATSF4G_APP_NAME}"
+  PROTOCOLS
+  "${CMAKE_CURRENT_LIST_DIR}/protocol/atproxy/atproxy_protocol.proto")
+
 atframework_add_executable(
   ${ATSF4G_APP_NAME}
   ENABLE_PRIVATE_PRECOMPILE_HEADERS
   FOLDER_PATH
-  "atframework/atgateway/service"
+  "atframework/service/${ATSF4G_APP_NAME}"
+  COMPONENT_NAME
+  "${ATSF4G_APP_NAME}"
   PUBLIC_INCLUDE_DIRECTORY
   "${CMAKE_CURRENT_LIST_DIR}"
   PRIVATE_LINK_NAMES
@@ -27,4 +46,4 @@ atframework_add_executable(
   SOURCES
   ${ATSF4G_APP_SOURCE_LIST})
 
-target_link_libraries(${ATSF4G_APP_NAME} PRIVATE opentelemetry-cpp::api)
+target_link_libraries(${ATSF4G_APP_NAME} PRIVATE "${ATSF4G_APP_NAME}-protocol" opentelemetry-cpp::api)

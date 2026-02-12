@@ -1,0 +1,3 @@
+{{- template "libapp.pvc" (list . "atproxy.pvc") -}}
+{{- define "atproxy.pvc" -}}
+{{- end -}}

@@ -2,10 +2,10 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-proc_name: gamesvrd
+proc_name: atproxy
 
-type_id: 12
-type_name: "gamesvr"
+type_id: 11
+type_name: "atproxy"
 
 image:
   repository: harbor.m-oa.com:6023/project-x/project-x-server
@@ -14,11 +14,11 @@ image:
   tag: latest
 
 volumeMounts:
-  configMountPath: /data/atframework/publish/gamesvr/cfg
-  logMountPath: /data/atframework/publish/gamesvr/log
+  configMountPath: /data/atframework/publish/atproxy/cfg
+  logMountPath: /data/atframework/publish/atproxy/log
 
 vector:
-  log_path: /data/atframework/publish/gamesvr/log
+  log_path: /data/atframework/publish/atproxy/log
   image:
     repository: harbor.m-oa.com:6023/vector/vector:latest
     pullPolicy: Always
@@ -52,16 +52,25 @@ persistence:
 
 service:
   type: ClusterIP
-  port: 7001
-  targetPort: 7001
+  port: 7101
+  targetPort: 7101
   protocol: TCP
 
 redis:
   enable: true
 
-webserver:
-  port: 7001
-
-# websocket:
-# websocket 路径片段 实际路径为 /<deployment_environment>/daily/ws/v1
-# path: daily
+atproxy:
+  activity_connecttion:
+    enabled: true
+    # metadata:
+    #   api_version: v1
+    #   kind: Atframework/Atproxy
+    #   group: atframework
+    #   name: atproxy
+    #   namespace_name: default
+    #   uid: 1000
+    #   service_subset: default
+    #   labels:
+    #     "service.name": "atproxy"
+    retry_interval_min: 8s
+    retry_interval_max: 300s
