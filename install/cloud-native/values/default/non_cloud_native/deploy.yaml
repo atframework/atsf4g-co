@@ -20,13 +20,13 @@ proc_desc:
     instance_count: 1
     start_instance_id: 1
 
-  - chart_name: "loginsvr"
+  - chart_name: "authsvr"
     instance_type_id: 11
     world_instance: false
     instance_count: 1
     start_instance_id: 1
 
-  - chart_name: "gamesvr"
+  - chart_name: "lobbysvr"
     instance_type_id: 12
     world_instance: false
     instance_count: 1

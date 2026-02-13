@@ -1,0 +1,3 @@
+{{- template "libapp.pvc" (list . "authsvr.pvc") -}}
+{{- define "authsvr.pvc" -}}
+{{- end -}}

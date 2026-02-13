@@ -46,9 +46,9 @@ message atgateway_client_crypt_cfg {
 }
 
 enum atgateway_router_policy {
-  EN_ATGW_ROUTER_POLICY_RANDOM = 0;
-  EN_ATGW_ROUTER_POLICY_ROUND_ROBIN = 1;
-  EN_ATGW_ROUTER_POLICY_HASH = 2;
+  EN_ATGW_ROUTER_POLICY_RANDOM = 0 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name:  "random" }];
+  EN_ATGW_ROUTER_POLICY_ROUND_ROBIN = 1 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "round_robin" }];
+  EN_ATGW_ROUTER_POLICY_HASH = 2 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "hash" }];
 }
 
 message atgateway_router_cfg {

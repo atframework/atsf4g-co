@@ -1,0 +1,3 @@
+{{- template "libapp.statefulset" (list . "authsvr.statefulset") -}}
+{{- define "authsvr.statefulset" -}}
+{{- end -}}

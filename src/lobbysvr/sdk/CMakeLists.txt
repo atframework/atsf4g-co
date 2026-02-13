@@ -1,0 +1,15 @@
+project_service_declare_sdk(
+  "lobbysvr-sdk"
+  "${CMAKE_CURRENT_LIST_DIR}"
+  INCLUDE_DIR
+  "${CMAKE_CURRENT_LIST_DIR}"
+  DLLEXPORT_DECL
+  GAME_RPC_API
+  USE_SERVICE_PROTOCOL
+  lobbysvr-protocol
+  HRADERS
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/lobby/lobbysvrservice.h"
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/db/async_jobs.h"
+  SOURCES
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/lobby/lobbysvrservice.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/db/async_jobs.cpp")

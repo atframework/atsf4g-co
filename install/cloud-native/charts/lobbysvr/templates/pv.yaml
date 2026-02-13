@@ -1,0 +1,3 @@
+{{- template "libapp.pv" (list . "lobbysvr.pv") -}}
+{{- define "lobbysvr.pv" -}}
+{{- end -}}

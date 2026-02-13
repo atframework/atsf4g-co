@@ -223,38 +223,7 @@ message db_section_cfg {
   db_timer_cfg timer = 104;
 }
 
-message loginsvr_cfg {
-  string version_conf = 1 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "../cfg/cfg_version.xml" }];
-  string strategy_conf = 2 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "../cfg/cfg_strategy.xml" }];
-  uint32 debug_platform = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "false" }];
-  string cdn_url = 4;
-
-  google.protobuf.Timestamp start_time = 11;
-  google.protobuf.Timestamp end_time = 12;
-
-  repeated string white_openid_list = 21;
-
-  message gamesvr_ingress_cfg {
-    repeated string addr = 1;
-    google.protobuf.Duration relogin_expire = 2
-        [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3600s" min_value: "1" }];
-  }
-  gamesvr_ingress_cfg gamesvr = 31;
-}
-
-message dtcoordsvr_cfg {
-  google.protobuf.Duration lru_expired_duration = 1
-      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "1s" }];
-  uint32 lru_max_cache_count = 2;
-
-  google.protobuf.Duration transaction_default_timeout = 11
-      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
-}
-
 message server_cfg {
   logic_section_cfg logic = 101;
   db_section_cfg db = 102;
-
-  loginsvr_cfg loginsvr = 201;
-  dtcoordsvr_cfg dtcoordsvr = 202;
 }

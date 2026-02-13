@@ -1,3 +1,0 @@
-{{- template "libapp.pvc" (list . "gamesvr.pvc") -}}
-{{- define "gamesvr.pvc" -}}
-{{- end -}}

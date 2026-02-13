@@ -2,16 +2,6 @@
 {{ include "atapp.logic.yaml" . }}
 
 dtcoordsvr:
-  webserver:
-    port: {{ .Values.webserver.port }}
-  websocket:
-    {{- $atapp := (default (dict) .Values.atapp) -}}
-    {{- $deploy := (default (dict) $atapp.deployment) -}}
-    {{- $env := (default "" $deploy.deployment_environment) -}}
-    {{- $ws := (default (dict) .Values.websocket) -}}
-    {{- $wspath := (default "" $ws.path) -}}
-    {{- if $wspath }}
-    path: {{ printf "/%s/%s/ws/v1" $env $wspath | replace "///" "/" | replace "//" "/" | quote }}
-    {{- else }}
-    path: "/ws/v1"
-    {{- end }}
+  lru_expired_duration: 1800s    # 30min for lru cache expired
+  lru_max_cache_count: 30000     # max count of transaction cache
+  transaction_default_timeout: 10s

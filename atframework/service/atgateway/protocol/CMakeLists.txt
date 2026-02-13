@@ -63,6 +63,8 @@ if(ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_FLATC_EXECUTABLE)
     COMMENT "Generate libatgw_protocol_sdk_generated.h")
   add_custom_target(${ATSF4G_APP_SDK_LIBATGW_PROTOCOL_SDK_TARGET_NAME}-generated
                     DEPENDS ${ATSF4G_APP_SDK_LIBATGW_PROTOCOL_API_GENERATED_HEADER_LIST})
+  set_property(TARGET ${ATSF4G_APP_SDK_LIBATGW_PROTOCOL_SDK_TARGET_NAME}-generated
+               PROPERTY FOLDER "atframework/service/${ATSF4G_APP_NAME}")
 endif()
 
 # ATSF4G_APP_SDK_LIBATGW_SERVER_CONFIG_TARGET_NAME
@@ -93,7 +95,7 @@ atframework_add_library(
   PUBLIC_SYMBOL_DECL
   LIBATGW_PROTOCOL_API
   FOLDER_PATH
-  "atframework/atgateway/sdk"
+  "atframework/service/${ATSF4G_APP_NAME}"
   PUBLIC_INCLUDE_DIRECTORY
   "${ATGATEWAY_GENERATED_CLIENT_SDK_DIR}"
   "${CMAKE_CURRENT_LIST_DIR}"
@@ -157,7 +159,7 @@ atframework_add_library(
   PUBLIC_SYMBOL_DECL
   LIBATGW_SERVER_API
   FOLDER_PATH
-  "atframework/atgateway/sdk"
+  "atframework/service/${ATSF4G_APP_NAME}"
   PUBLIC_INCLUDE_DIRECTORY
   "${ATGATEWAY_GENERATED_SERVER_SDK_DIR}"
   "${CMAKE_CURRENT_LIST_DIR}"

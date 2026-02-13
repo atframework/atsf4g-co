@@ -14,4 +14,5 @@ project_component_declare_service(
   RESOURCE_DIRECTORIES
   "${SERVICE_TARGET_NAME}/log"
   USE_COMPONENTS
-  "distributed-transaction-protocol")
+  "distributed-transaction-protocol"
+  "dtcoordsvr-config")

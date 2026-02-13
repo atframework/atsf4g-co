@@ -26,12 +26,39 @@
 #include <logic/logic_server_macro.h>
 #include <logic/logic_server_setup.h>
 
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
+#include <protocol/config/dtcoordsvr_config.pb.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
 #include "handle_ss_rpc_dtcoordsvrservice.h"
 
 #include <logic/transaction_manager.h>
 
+namespace {
+static std::shared_ptr<hello::config::dtcoordsvr_cfg> &get_server_cfg_pointer() {
+  static std::shared_ptr<hello::config::dtcoordsvr_cfg> cfg = std::make_shared<hello::config::dtcoordsvr_cfg>();
+  return cfg;
+}
+}  // namespace
+
+// NOLINTNEXTLINE(misc-use-internal-linkage)
+const hello::config::dtcoordsvr_cfg &get_dtcoordsvr_cfg() { return *get_server_cfg_pointer(); }
+
 class main_service_module : public atfw::atapp::module_impl {
  public:
+  int reload() override {
+    std::shared_ptr<hello::config::dtcoordsvr_cfg> cfg = std::make_shared<hello::config::dtcoordsvr_cfg>();
+    get_app()->parse_configures_into(*cfg, "dtcoordsvr", "ATAPP_DTCOORDSVR");
+    get_server_cfg_pointer().swap(cfg);
+    return 0;
+  }
+
   int init() override {
     {
       // register all router managers

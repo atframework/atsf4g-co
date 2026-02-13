@@ -1,3 +1,0 @@
-{{- template "libapp.httproute" (list . "loginsvr.httproute") -}}
-{{- define "loginsvr.httproute" -}}
-{{- end -}}

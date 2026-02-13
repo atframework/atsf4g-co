@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+package hello.config;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+import "atframe/atapp_conf.proto";
+
+enum authsvr_router_policy {
+  EN_AUTHSVR_ROUTER_POLICY_RANDOM = 0 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name:  "random" }];
+  EN_AUTHSVR_ROUTER_POLICY_ROUND_ROBIN = 1 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "round_robin" }];
+  EN_AUTHSVR_ROUTER_POLICY_HASH = 2 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "hash" }];
+}
+
+message authsvr_router_cfg {
+  uint64 node_id = 1;
+  string node_name = 2;
+  uint64 type_id = 3;
+  string type_name = 4;
+
+  authsvr_router_policy policy = 11;
+  atframework.atapp.protocol.atapp_metadata policy_selector = 12;
+}
+
+message authsvr_cfg {
+  string version_conf = 1 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "../cfg/cfg_version.xml" }];
+  string strategy_conf = 2 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "../cfg/cfg_strategy.xml" }];
+  uint32 debug_platform = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "false" }];
+  string cdn_url = 4;
+
+  google.protobuf.Timestamp start_time = 11;
+  google.protobuf.Timestamp end_time = 12;
+
+  repeated string white_openid_list = 21;
+
+  message lobbysvr_ingress_cfg {
+    authsvr_router_cfg router = 1;
+    google.protobuf.Duration relogin_expire = 2
+        [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3600s" min_value: "1" }];
+  }
+  lobbysvr_ingress_cfg lobbysvr = 31;
+}
+

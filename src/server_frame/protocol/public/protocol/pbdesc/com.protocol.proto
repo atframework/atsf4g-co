@@ -24,25 +24,25 @@ package hello;
 /////////////////////////////////////////////////////
 
 message CSLoginUpdateReq {
-  DAccountData account = 1;      // 平台信息
-  EnSystemID system_id = 2;      // 系统id，ios or android
-  string package_version = 11;   // 包版本
-  string resource_version = 12;  // 资源版本
-  string protocol_version = 13;  // 协议版本
+  DAccountData account = 1; // 平台信息
+  EnSystemID system_id = 2; // 系统id，ios or android
+  string package_version = 11; // 包版本
+  string resource_version = 12; // 资源版本
+  string protocol_version = 13; // 协议版本
 }
 
 message SCLoginUpdateRsp {
-  DClientUpdateCfg update_info = 1;  // 更新信息
-  int32 version_type = 2;            // 版本类型 @EnVersionType
+  DClientUpdateCfg update_info = 1; // 更新信息
+  int32 version_type = 2; // 版本类型 @EnVersionType
 }
 
 message CSLoginAuthReq {
   string open_id = 1;
-  DAccountData account = 2;      // 平台信息
-  EnSystemID system_id = 3;      // 系统id，ios or android
-  string package_version = 11;   // 包版本
-  string resource_version = 12;  // 资源版本
-  string protocol_version = 13;  // 协议版本
+  DAccountData account = 2; // 平台信息
+  EnSystemID system_id = 3; // 系统id，ios or android
+  string package_version = 11; // 包版本
+  string resource_version = 12; // 资源版本
+  string protocol_version = 13; // 协议版本
 
   DClientDeviceInfo client_info = 21;
 }
@@ -51,23 +51,23 @@ message SCLoginAuthRsp {
   string login_code = 1;
   // repeated 表示有多个备选 。域名|IP + 端口, 类似下面的形式：10.164.1.54:8002 or dd.qq.com:8080
   repeated string login_address = 2;
-  DClientUpdateCfg update_info = 3;  // 更新信息
-  uint32 version_type = 4;           // 版本类型 @EnVersionType
+  DClientUpdateCfg update_info = 3; // 更新信息
+  uint32 version_type = 4; // 版本类型 @EnVersionType
 
-  string open_id = 21;      // 最终open_id
-  uint64 user_id = 22;      // 玩家数字ID
-  bool is_new_player = 23;  // 是否是新玩家
-  uint32 zone_id = 24;      // 大区ID
+  string open_id = 21; // 最终open_id
+  uint64 user_id = 22; // 玩家数字ID
+  bool is_new_player = 23; // 是否是新玩家
+  uint32 zone_id = 24; // 大区ID
 
-  int64 ban_time = 101;    // 封号期限
-  int64 start_time = 102;  // 开服时间
+  int64 ban_time = 101; // 封号期限
+  int64 start_time = 102; // 开服时间
 }
 
 // 修改密码
 message CSAccessUpdateReq {
   string open_id = 1;
-  uint64 user_id = 2;     // 玩家数字ID
-  string old_access = 3;  // 老密码
+  uint64 user_id = 2; // 玩家数字ID
+  string old_access = 3; // 老密码
   string new_access = 4;
 }
 
@@ -79,21 +79,21 @@ message SCAccessUpdateRsp {}
 
 // 登录请求
 message CSLoginReq {
-  string login_code = 1;  // loginsvr下发的登录码
+  string login_code = 1; // loginsvr下发的登录码
   string open_id = 2;
-  uint64 user_id = 3;        // 玩家数字ID
-  uint32 zone_id = 4;        // 玩家ZoneID
-  DAccountData account = 5;  // 平台信息
+  uint64 user_id = 3; // 玩家数字ID
+  uint32 zone_id = 4; // 玩家ZoneID
+  DAccountData account = 5; // 平台信息
   DClientDeviceInfo client_info = 11;
 }
 
 // 登录返回
 message SCLoginRsp {
-  uint64 last_sequence = 1;      // 上次收包的seq(不算MCSLogin)
-  int64 heartbeat_interval = 2;  // 心跳包间隔
-  bool is_new_player = 3;        // 是否是新玩家
-  uint32 version_type = 4;       // 版本类型 @EnVersionType
-  uint32 zone_id = 5;            // 大区ID
+  uint64 last_sequence = 1; // 上次收包的seq(不算MCSLogin)
+  int64 heartbeat_interval = 2; // 心跳包间隔
+  bool is_new_player = 3; // 是否是新玩家
+  uint32 version_type = 4; // 版本类型 @EnVersionType
+  uint32 zone_id = 5; // 大区ID
 }
 
 message SCPlayerProfileSyn {
@@ -124,18 +124,18 @@ message SCPongRsp {
 
 // 请求用户数据
 message CSPlayerGetInfoReq {
-  bool need_player_info = 1;     // 标记为true 回包才有会有玩家基本数据
-  bool need_player_options = 2;  // 标记为true 回包才有会有玩家选项数据
+  bool need_player_info = 1; // 标记为true 回包才有会有玩家基本数据
+  bool need_player_options = 2; // 标记为true 回包才有会有玩家选项数据
 }
 
 // 用户数据返回
 message SCPlayerGetInfoRsp {
   DPlayerProfile player_profile = 1;
-  DPlayerInfo player_info = 2;        // 玩家数据
-  DPlayerOptions player_options = 3;  // 玩家自定义选项
+  DPlayerInfo player_info = 2; // 玩家数据
+  DPlayerOptions player_options = 3; // 玩家自定义选项
 }
 
-service LoginsvrClientService {
+service AuthsvrClientService {
   rpc login_auth(CSLoginAuthReq) returns (SCLoginAuthRsp) {
     option (atframework.rpc_options) = {
       api_name: "Authorization"
@@ -143,7 +143,7 @@ service LoginsvrClientService {
   };
 }
 
-service GamesvrClientService {
+service LobbysvrClientService {
   rpc login(CSLoginReq) returns (SCLoginRsp) {
     option (atframework.rpc_options) = {
       api_name: "Login"

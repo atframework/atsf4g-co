@@ -100,7 +100,7 @@ class player_manager {
   /**
    * @brief 加载指定玩家数据。
    * @note 注意这个函数只是读数据库做缓存。
-   * @note gamesvr 请不要强制拉去数据 会冲掉玩家数据
+   * @note lobbysvr 请不要强制拉去数据 会冲掉玩家数据
    * @note 返回的 user 指针不能用于改写玩家数据，不做保存。
    * @param user_id
    * @return null 或者 user指针

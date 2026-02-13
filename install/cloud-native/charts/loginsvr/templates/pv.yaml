@@ -1,3 +1,0 @@
-{{- template "libapp.pv" (list . "loginsvr.pv") -}}
-{{- define "loginsvr.pv" -}}
-{{- end -}}

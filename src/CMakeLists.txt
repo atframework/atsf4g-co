@@ -21,7 +21,7 @@ add_subdirectory(component)
 include("${CMAKE_CURRENT_LIST_DIR}/service-functions.cmake")
 
 add_subdirectory(echosvr)
-add_subdirectory(loginsvr)
-add_subdirectory(gamesvr)
+add_subdirectory(authsvr)
+add_subdirectory(lobbysvr)
 
 add_subdirectory(tools)

@@ -16,7 +16,19 @@
 #include <rpc/db/distribute_transaction.h>
 #include <rpc/rpc_utils.h>
 
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
+#include <protocol/config/dtcoordsvr_config.pb.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
 #include <string>
+
+#include "app/dtcoordsvr_config.h"
 
 #define TRANSACTION_RETRY_MAX_TIMES 5
 
@@ -45,8 +57,8 @@ int transaction_manager::tick() {
     return ret;
   }
 
-  time_t timeout_duration = logic_config::me()->get_server_cfg().dtcoordsvr().lru_expired_duration().seconds();
-  size_t max_count = logic_config::me()->get_server_cfg().dtcoordsvr().lru_max_cache_count();
+  time_t timeout_duration = get_dtcoordsvr_cfg().lru_expired_duration().seconds();
+  size_t max_count = get_dtcoordsvr_cfg().lru_max_cache_count();
   while (!lru_caches_.empty()) {
     if (!lru_caches_.front().second) {
       lru_caches_.pop_front();
@@ -107,7 +119,7 @@ rpc::result_code_type transaction_manager::create_transaction(
   storage.mutable_metadata()->mutable_prepare_timepoint()->set_nanos(now_nanos);
 
   if (storage.metadata().expire_timepoint().seconds() <= now) {
-    const auto& cfg_value = logic_config::me()->get_server_cfg().dtcoordsvr().transaction_default_timeout();
+    const auto& cfg_value = get_dtcoordsvr_cfg().transaction_default_timeout();
     if (now_nanos + cfg_value.nanos() > 1000000000) {
       storage.mutable_metadata()->mutable_expire_timepoint()->set_seconds(now + cfg_value.seconds() + 1);
       storage.mutable_metadata()->mutable_expire_timepoint()->set_nanos(now_nanos + cfg_value.nanos() - 1000000000);

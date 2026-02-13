@@ -1,0 +1,3 @@
+{{- template "libapp.service" (list . "lobbysvr.service") -}}
+{{- define "lobbysvr.service" -}}
+{{- end -}}

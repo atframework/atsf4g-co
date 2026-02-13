@@ -1,6 +1,0 @@
-{{- template "libapp.configmap" (list . "gamesvr.configmap") -}}
-{{- define "gamesvr.configmap" -}}
-data:
-  {{ include "gamesvr.name" . }}.yaml: {{ tpl (.Files.Get "cfg/gamesvr.yaml.tpl") . | quote }}
-  vector.yaml: {{ tpl (.Files.Get "cfg/vector.yaml.tpl") . | quote }}
-{{- end -}}

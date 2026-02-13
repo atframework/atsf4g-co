@@ -83,10 +83,6 @@ class logic_config {
     return get_logic().task();
   }
 
-  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::loginsvr_cfg &get_cfg_loginsvr() const noexcept {
-    return get_server_cfg().loginsvr();
-  }
-
  private:
   void _load_db();
   void _load_db_hosts(PROJECT_NAMESPACE_ID::config::db_group_cfg &out);

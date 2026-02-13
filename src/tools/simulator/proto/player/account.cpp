@@ -16,8 +16,8 @@
 #include <utility/client_config.h>
 #include <utility/client_simulator.h>
 
-#include <rpc/gamesvrclientservice/gamesvrclientservice.h>
-#include <rpc/loginsvrclientservice/loginsvrclientservice.h>
+#include <rpc/authsvrclientservice/authsvrclientservice.h>
+#include <rpc/lobbysvrclientservice/lobbysvrclientservice.h>
 
 namespace proto {
 namespace player {
@@ -62,7 +62,7 @@ void on_cmd_login_auth(util::cli::callback_param params) {
   req_body.set_system_id(static_cast<PROJECT_NAMESPACE_ID::EnSystemID>(sender.player->get_system_id()));
 
   client_simulator::msg_t &msg = client_simulator::add_req(params);
-  rpc::loginsvrclientservice::package_login_auth(msg, req_body);
+  rpc::authsvrclientservice::package_login_auth(msg, req_body);
 }
 
 void on_rsp_login_auth(client_simulator::player_ptr_t player, client_simulator::msg_t &msg) {
@@ -85,7 +85,7 @@ void on_rsp_login_auth(client_simulator::player_ptr_t player, client_simulator::
 
   int sz = rsp_body.login_address_size();
   if (sz <= 0) {
-    SIMULATOR_INFO_MSG() << "player " << player->get_id() << " login auth failed, has no gamesvr." << std::endl;
+    SIMULATOR_INFO_MSG() << "player " << player->get_id() << " login auth failed, has no lobbysvr." << std::endl;
     player->close();
     return;
   }
@@ -111,7 +111,7 @@ void on_cmd_login(util::cli::callback_param params) {
 
   client_simulator::cmd_sender_t &sender = client_simulator::get_cmd_sender(params);
   if (sender.player->get_gamesvr_addr().empty()) {
-    SIMULATOR_ERR_MSG() << "player " << sender.player->get_id() << " has no gamesvr address" << std::endl;
+    SIMULATOR_ERR_MSG() << "player " << sender.player->get_id() << " has no lobbysvr address" << std::endl;
     sender.player->close();
     return;
   }
@@ -150,7 +150,7 @@ void on_cmd_login(util::cli::callback_param params) {
   protobuf_copy_message(*req_body.mutable_account(), sender.player->get_account());
 
   client_simulator::msg_t &req = client_simulator::add_req(params);
-  rpc::gamesvrclientservice::package_login(req, req_body);
+  rpc::lobbysvrclientservice::package_login(req, req_body);
 }
 
 void on_rsp_login(client_simulator::player_ptr_t player, client_simulator::msg_t &msg) {
@@ -198,7 +198,7 @@ void on_cmd_ping(util::cli::callback_param params) {
 
   client_simulator::msg_t &req = client_simulator::add_req(params);
   PROJECT_NAMESPACE_ID::CSPingReq req_body;
-  rpc::gamesvrclientservice::package_ping(req, req_body);
+  rpc::lobbysvrclientservice::package_ping(req, req_body);
 }
 
 void on_cmd_get_info(util::cli::callback_param params) {
@@ -236,7 +236,7 @@ void on_cmd_get_info(util::cli::callback_param params) {
   }
 
   client_simulator::msg_t &req = client_simulator::add_req(params);
-  rpc::gamesvrclientservice::package_player_get_info(req, req_body);
+  rpc::lobbysvrclientservice::package_player_get_info(req, req_body);
 }
 
 }  // namespace player
@@ -245,13 +245,13 @@ void on_cmd_get_info(util::cli::callback_param params) {
 SIMULATOR_ACTIVE(player_account, base) {
   client_simulator::cast(base)->reg_req()["Player"]["Login"].bind(
       proto::player::on_cmd_login_auth,
-      "<openid> [platform type=0] [account type=1] [access=''] [use gamesvr=0] login into loginsvr");
-  client_simulator::cast(base)->reg_rsp(rpc::loginsvrclientservice::get_full_name_of_login_auth(),
+      "<openid> [platform type=0] [account type=1] [access=''] [use lobbysvr=0] login into authsvr");
+  client_simulator::cast(base)->reg_rsp(rpc::authsvrclientservice::get_full_name_of_login_auth(),
                                         proto::player::on_rsp_login_auth);
 
   client_simulator::cast(base)->reg_req()["Player"]["LoginGame"].bind(proto::player::on_cmd_login,
-                                                                      "login into gamesvr");
-  client_simulator::cast(base)->reg_rsp(rpc::gamesvrclientservice::get_full_name_of_login(),
+                                                                      "login into lobbysvr");
+  client_simulator::cast(base)->reg_rsp(rpc::lobbysvrclientservice::get_full_name_of_login(),
                                         proto::player::on_rsp_login);
 
   client_simulator::cast(base)->reg_req()["Player"]["Ping"].bind(proto::player::on_cmd_ping, "send ping package");

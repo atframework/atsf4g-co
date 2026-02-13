@@ -19,11 +19,11 @@ int main(int argc, char *argv[]) {
 
   client->get_option_manager()
       ->bind_cmd("-ip, --host", atfw::util::cli::phoenix::assign(client_config::host))
-      ->set_help_msg("<domain or ip> set host or ip address of loginsvr");
+      ->set_help_msg("<domain or ip> set host or ip address of authsvr");
 
   client->get_option_manager()
       ->bind_cmd("-p, --port", atfw::util::cli::phoenix::assign(client_config::port))
-      ->set_help_msg("<port> set port of loginsvr");
+      ->set_help_msg("<port> set port of authsvr");
 
   client_player::init_handles();
   return client->run(argc, (const char **)argv);

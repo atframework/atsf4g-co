@@ -99,15 +99,15 @@ generate_for_pb_add_ss_service(
   RPC_DLLEXPORT_DECL
   SERVER_FRAME_API)
 
-# add tool to binding loginsvr rpcs
-include("${CMAKE_CURRENT_LIST_DIR}/loginsvr/generate-rpc-task.cmake")
+# add tool to binding authsvr rpcs
+include("${CMAKE_CURRENT_LIST_DIR}/authsvr/generate-rpc-task.cmake")
 
-# add tool to binding gamesvr rpcs
-include("${CMAKE_CURRENT_LIST_DIR}/gamesvr/generate-rpc-task.cmake")
+# add tool to binding lobbysvr rpcs
+include("${CMAKE_CURRENT_LIST_DIR}/lobbysvr/generate-rpc-task.cmake")
 
 # add tool to generate simulator rpcs
 generate_for_pb_add_simulator_cs_api(
-  "${PROJECT_NAMESPACE}.LoginsvrClientService"
+  "${PROJECT_NAMESPACE}.AuthsvrClientService"
   "${CMAKE_CURRENT_LIST_DIR}/tools/simulator"
   RPC_IGNORE_EMPTY_REQUEST
   SERVICE_DLLEXPORT_DECL
@@ -122,7 +122,7 @@ generate_for_pb_add_simulator_cs_api(
   GAMECLIENT_RPC_API)
 
 generate_for_pb_add_simulator_cs_api(
-  "${PROJECT_NAMESPACE}.GamesvrClientService"
+  "${PROJECT_NAMESPACE}.LobbysvrClientService"
   "${CMAKE_CURRENT_LIST_DIR}/tools/simulator"
   RPC_IGNORE_EMPTY_REQUEST
   PROJECT_NAMESPACE
