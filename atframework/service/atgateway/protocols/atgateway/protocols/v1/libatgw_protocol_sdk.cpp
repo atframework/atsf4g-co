@@ -4,6 +4,7 @@
 
 #include <gsl/select-gsl.h>
 #include <algorithm>
+#include <gsl/span>
 #include <limits>
 #include <memory>
 #include <sstream>
@@ -310,7 +311,7 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::alloc_recv_buffer(size_t /*sugge
   out_len = swrite;
 }
 
-LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::read(int /*ssz*/, const char * /*buff*/, size_t nread_s, int &errcode) {
+LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::read(int /*ssz*/, gsl::span<const unsigned char> buffer, int &errcode) {
   if (check_flag(flag_t::EN_PFT_CLOSING)) {
     errcode = error_code_t::EN_ECT_CLOSING;
     return;
@@ -330,8 +331,8 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::read(int /*ssz*/, const char * /
   if (nullptr == data || 0 == swrite) {
     // first, read from small buffer block
     // read header
-    assert(nread_s <= sizeof(read_head_.buffer) - read_head_.len);
-    read_head_.len += nread_s;  // 写数据计数
+    assert(buffer.size() <= sizeof(read_head_.buffer) - read_head_.len);
+    read_head_.len += buffer.size();  // 写数据计数
 
     // try to unpack all messages
     char *buff_start = read_head_.buffer;
@@ -356,7 +357,9 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::read(int /*ssz*/, const char * /
         }
 
         // padding to 64bits
-        dispatch_data(reinterpret_cast<char *>(buff_start) + msg_header_len, msg_len, errcode);
+        dispatch_data(
+            gsl::span<const unsigned char>{reinterpret_cast<unsigned char *>(buff_start) + msg_header_len, msg_len},
+            errcode);
 
         // 32bits hash+vint+buffer
         buff_start += msg_header_len + msg_len;
@@ -388,7 +391,7 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::read(int /*ssz*/, const char * /
     read_head_.len = buff_left_len;
   } else {
     // mark data written
-    read_buffers_.pop_back(nread_s, false);
+    read_buffers_.pop_back(buffer.size(), false);
   }
 
   // if big message recv done, dispatch it
@@ -409,7 +412,8 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::read(int /*ssz*/, const char * /
       //     errcode = EN_ATBUS_ERR_INVALID_SIZE;
     }
 
-    dispatch_data(reinterpret_cast<char *>(data) + msg_header_len, msg_len, errcode);
+    dispatch_data(gsl::span<const unsigned char>{reinterpret_cast<unsigned char *>(data) + msg_header_len, msg_len},
+                  errcode);
     // free the buffer block
     read_buffers_.pop_front(0, true);
   }
@@ -417,22 +421,24 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::read(int /*ssz*/, const char * /
   if (is_free) {
     errcode = error_code_t::EN_ECT_INVALID_SIZE;
     if (read_head_.len > 0) {
-      dispatch_data(read_head_.buffer, read_head_.len, errcode);
+      dispatch_data(
+          gsl::span<const unsigned char>{reinterpret_cast<unsigned char *>(read_head_.buffer), read_head_.len},
+          errcode);
     }
   }
 }
 
-LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::dispatch_data(const char *buffer, size_t len, int errcode) {
+LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::dispatch_data(gsl::span<const unsigned char> data, int errcode) {
   if (check_flag(flag_t::EN_PFT_CLOSING)) {
     return;
   }
 
   // do nothing if any error
-  if (errcode < 0 || nullptr == buffer) {
+  if (errcode < 0 || data.empty()) {
     return;
   }
 
-  ::flatbuffers::Verifier cs_msg_verify(reinterpret_cast<const uint8_t *>(buffer), len);
+  ::flatbuffers::Verifier cs_msg_verify(reinterpret_cast<const uint8_t *>(data.data()), data.size());
   // verify
   if (false == atframework::gw::v1::Verifycs_msgBuffer(cs_msg_verify)) {
     close(close_reason_t::EN_CRT_INVALID_DATA);
@@ -440,7 +446,7 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::dispatch_data(const char *buffer
   }
 
   // unpack
-  const atframework::gw::v1::cs_msg *msg = atframework::gw::v1::Getcs_msg(buffer);
+  const atframework::gw::v1::cs_msg *msg = atframework::gw::v1::Getcs_msg(data.data());
   if (nullptr == msg->head()) {
     return;
   }
@@ -460,13 +466,14 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::dispatch_data(const char *buffer
       const ::atframework::gw::v1::cs_body_post *msg_body =
           static_cast<const ::atframework::gw::v1::cs_body_post *>(msg->body());
 
-      const void *out;
+      const void *out = nullptr;
       size_t outsz = static_cast<size_t>(msg_body->length());
       int res = decode_post(msg_body->data()->data(), static_cast<size_t>(msg_body->data()->size()), out, outsz);
       if (0 == res) {
         // on_message
         if (nullptr != callbacks_ && callbacks_->message_fn) {
-          callbacks_->message_fn(this, out, static_cast<size_t>(msg_body->length()));
+          callbacks_->message_fn(this, gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(out),
+                                                                      static_cast<size_t>(msg_body->length())});
         }
       } else {
         close(close_reason_t::EN_CRT_INVALID_DATA, false);
@@ -760,7 +767,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake_start_rsp(
       close_handshake(ret);
 
       // send verify
-      ret = send_verify(nullptr, 0);
+      ret = send_verify({});
       break;
     }
     case ::atframework::gw::v1::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(switch_secret_t, EN_SST_DH):
@@ -1024,7 +1031,8 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake_dh_pubkey_rsp(
       }
     }
 
-    ret = send_verify(verify_data.data(), verify_data.size());
+    ret = send_verify(gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(verify_data.data()),
+                                                     verify_data.size()});
     close_handshake(ret);
   }
 
@@ -1290,9 +1298,10 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::try_write() {
   if (write_buffers_.limit().cost_number_ > 1 &&
       write_buffers_.front()->raw_size() <= ATFRAMEWORK_GATEWAY_MACRO_DATA_SMALL_SIZE) {
     // left write_header_offset_ size at front
-    size_t available_bytes = get_tls_length(tls_buffer_t::EN_TBT_MERGE) - write_header_offset_;
-    char *buffer_start = reinterpret_cast<char *>(get_tls_buffer(tls_buffer_t::EN_TBT_MERGE));
-    char *free_buffer = buffer_start;
+    auto tls_buffer = get_tls_buffer(tls_buffer_t::EN_TBT_MERGE);
+    size_t available_bytes = tls_buffer.size() - write_header_offset_;
+    unsigned char *buffer_start = tls_buffer.data();
+    unsigned char *free_buffer = buffer_start;
 
     assert(ATFRAMEWORK_GATEWAY_MACRO_DATA_SMALL_SIZE < available_bytes);
 
@@ -1326,8 +1335,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::try_write() {
     assert(data);
     // at least merge one block
     assert(free_buffer > buffer_start);
-    assert(static_cast<size_t>(free_buffer - buffer_start) <=
-           (get_tls_length(tls_buffer_t::EN_TBT_MERGE) - write_header_offset_));
+    assert(static_cast<size_t>(free_buffer - buffer_start) <= (tls_buffer.size() - write_header_offset_));
 
     data = ::atbus::detail::fn::buffer_next(data, write_header_offset_);
     // copy back merged data
@@ -1353,7 +1361,10 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::try_write() {
   // call write
   set_flag(flag_t::EN_PFT_WRITING, true);
   last_write_ptr_ = writing_block->raw_data();
-  ret = callbacks_->write_fn(this, writing_block->raw_data(), writing_block->raw_size(), &is_done);
+  ret = callbacks_->write_fn(
+      this,
+      gsl::span<unsigned char>{reinterpret_cast<unsigned char *>(writing_block->raw_data()), writing_block->raw_size()},
+      &is_done);
   if (is_done) {
     return write_done(ret);
   }
@@ -1401,9 +1412,8 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::write_msg(flatbuffers::FlatBuffer
   return try_write();
 }
 
-LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::write(const void *buffer, size_t len) {
-  return send_post(::atframework::gw::v1::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(cs_msg_type_t, EN_MTT_POST), buffer,
-                   len);
+LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::write(gsl::span<const unsigned char> data) {
+  return send_post(::atframework::gw::v1::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(cs_msg_type_t, EN_MTT_POST), data);
 }
 
 LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::write_done(int status) {
@@ -1413,7 +1423,8 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::write_done(int status) {
   flag_guard_t flag_guard(flags_, flag_t::EN_PFT_IN_CALLBACK);
 
   void *data = nullptr;
-  size_t nread, nwrite;
+  size_t nread = 0;
+  size_t nwrite = 0;
 
   // first 32bits is hash code, and then 32bits length
   // const size_t msg_header_len = sizeof(uint32_t) + sizeof(uint32_t);
@@ -1703,46 +1714,45 @@ LIBATGW_PROTOCOL_API std::string libatgw_protocol_sdk::get_info() const {
 
   std::stringstream ss;
   size_t limit_sz = 0;
-  ss << "atgateway inner protocol: session id=" << session_id_ << std::endl;
-  ss << "    last ping delta=" << ping_.last_delta << std::endl;
+  ss << "atgateway inner protocol: session id=" << session_id_ << '\n';
+  ss << "    last ping delta=" << ping_.last_delta << '\n';
   ss << "    handshake=" << (handshake_.has_data ? "running" : "not running") << ", switch type=" << switch_secret_name
-     << std::endl;
+     << '\n';
   ss << "    status: writing=" << check_flag(flag_t::EN_PFT_WRITING)
      << ",closing=" << check_flag(flag_t::EN_PFT_CLOSING) << ",closed=" << check_flag(flag_t::EN_PFT_CLOSED)
      << ",handshake done=" << check_flag(flag_t::EN_PFT_HANDSHAKE_DONE)
-     << ",handshake update=" << check_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE) << std::endl;
+     << ",handshake update=" << check_flag(flag_t::EN_PFT_HANDSHAKE_UPDATE) << '\n';
 
   if (read_buffers_.limit().limit_size_ > 0) {
     limit_sz = read_buffers_.limit().limit_size_ + sizeof(read_head_.buffer) - read_head_.len -
                read_buffers_.limit().cost_size_;
     ss << "    read buffer: used size=" << (read_head_.len + read_buffers_.limit().cost_size_)
-       << ", free size=" << limit_sz << std::endl;
+       << ", free size=" << limit_sz << '\n';
   } else {
     ss << "    read buffer: used size=" << (read_head_.len + read_buffers_.limit().cost_size_)
-       << ", free size=unlimited" << std::endl;
+       << ", free size=unlimited" << '\n';
   }
 
   if (write_buffers_.limit().limit_size_ > 0) {
     limit_sz = write_buffers_.limit().limit_size_ - write_buffers_.limit().cost_size_;
-    ss << "    write buffer: used size=" << write_buffers_.limit().cost_size_ << ", free size=" << limit_sz
-       << std::endl;
+    ss << "    write buffer: used size=" << write_buffers_.limit().cost_size_ << ", free size=" << limit_sz << '\n';
   } else {
-    ss << "    write buffer: used size=" << write_buffers_.limit().cost_size_ << ", free size=unlimited" << std::endl;
+    ss << "    write buffer: used size=" << write_buffers_.limit().cost_size_ << ", free size=unlimited" << '\n';
   }
 
 #define DUMP_INFO(name, h)                                                       \
   if (h) {                                                                       \
     if (&h != &crypt_handshake_ && h == crypt_handshake_) {                      \
-      ss << "    " << name << " handle: == handshake handle" << std::endl;       \
+      ss << "    " << name << " handle: == handshake handle" << '\n';            \
     } else {                                                                     \
       ss << "    " << name << " handle: crypt type=";                            \
       ss << (h->type.empty() ? "NONE" : h->type.c_str());                        \
       ss << ", crypt keybits=" << h->cipher.get_key_bits() << ", crypt secret="; \
       atfw::util::string::dumphex(h->secret.data(), h->secret.size(), ss);       \
-      ss << std::endl;                                                           \
+      ss << '\n';                                                                \
     }                                                                            \
   } else {                                                                       \
-    ss << "    " << name << " handle: unset" << std::endl;                       \
+    ss << "    " << name << " handle: unset" << '\n';                            \
   }
 
   DUMP_INFO("read", crypt_read_);
@@ -1836,7 +1846,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::reconnect_session(uint64_t sess_i
 }
 
 LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_post(::atframework::gw::v1::cs_msg_type_t msg_type,
-                                                         const void *buffer, size_t len) {
+                                                         gsl::span<const unsigned char> data) {
   if (check_flag(flag_t::EN_PFT_CLOSING)) {
     return error_code_t::EN_ECT_CLOSING;
   }
@@ -1846,8 +1856,10 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_post(::atframework::gw::v1::
   }
 
   // encrypt/zip
-  size_t ori_len = len;
-  int res = encode_post(buffer, len, buffer, len);
+  size_t ori_len = data.size();
+  const void *out = nullptr;
+  size_t outsz = 0;
+  int res = encode_post(data.data(), data.size(), out, outsz);
   if (0 != res) {
     return res;
   }
@@ -1860,7 +1872,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_post(::atframework::gw::v1::
       Createcs_msg_head(builder, msg_type, ::atframework::gateway::detail::alloc_seq());
 
   flatbuffers::Offset<cs_body_post> post_body = Createcs_body_post(
-      builder, static_cast<uint64_t>(ori_len), builder.CreateVector(reinterpret_cast<const int8_t *>(buffer), len));
+      builder, static_cast<uint64_t>(ori_len), builder.CreateVector(reinterpret_cast<const int8_t *>(out), res));
 
   builder.Finish(Createcs_msg(builder, header_data, ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(cs_msg_body, cs_body_post),
                               post_body.Union()),
@@ -1868,9 +1880,8 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_post(::atframework::gw::v1::
   return write_msg(builder);
 }
 
-LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_post(const void *buffer, size_t len) {
-  return send_post(::atframework::gw::v1::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(cs_msg_type_t, EN_MTT_POST), buffer,
-                   len);
+LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_post(gsl::span<const unsigned char> data) {
+  return send_post(::atframework::gw::v1::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(cs_msg_type_t, EN_MTT_POST), data);
 }
 
 LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_ping() {
@@ -2007,7 +2018,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_kickoff(int reason) {
   return write_msg(builder);
 }
 
-LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_verify(const void *buf, size_t sz) {
+LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_verify(gsl::span<const unsigned char> data) {
   if (check_flag(flag_t::EN_PFT_CLOSING)) {
     return error_code_t::EN_ECT_CLOSING;
   }
@@ -2022,8 +2033,8 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_verify(const void *buf, size
   const void *outbuf = nullptr;
   size_t outsz = 0;
   int ret = 0;
-  if (nullptr != buf && sz > 0) {
-    ret = encrypt_data(*crypt_write_, buf, sz, outbuf, outsz);
+  if (!data.empty()) {
+    ret = encrypt_data(*crypt_write_, data.data(), data.size(), outbuf, outsz);
   }
 
   if (0 != ret) {
@@ -2139,18 +2150,18 @@ int libatgw_protocol_sdk::encrypt_data(crypt_session_t &crypt_info, const void *
     return error_code_t::EN_ECT_SUCCESS;
   }
 
-  void *buffer = get_tls_buffer(tls_buffer_t::EN_TBT_CRYPT);
-  size_t len = get_tls_length(tls_buffer_t::EN_TBT_CRYPT);
+  auto tls_buffer = get_tls_buffer(tls_buffer_t::EN_TBT_CRYPT);
+  size_t len = tls_buffer.size();
+  unsigned char *buffer = tls_buffer.data();
 
   std::unique_ptr<unsigned char[]> unique_buffer;
   if (len < insz + crypt_info.cipher.get_block_size() + crypt_info.cipher.get_iv_size()) {
     len = insz + crypt_info.cipher.get_block_size() + crypt_info.cipher.get_iv_size();
     unique_buffer.reset(new unsigned char[len]);
-    buffer = reinterpret_cast<void *>(unique_buffer.get());
+    buffer = unique_buffer.get();
   }
 
-  int res = crypt_info.cipher.encrypt(reinterpret_cast<const unsigned char *>(in), insz,
-                                      reinterpret_cast<unsigned char *>(buffer), &len);
+  int res = crypt_info.cipher.encrypt(reinterpret_cast<const unsigned char *>(in), insz, buffer, &len);
 
   // DEBUG CIPHER PROGRESS
   if (logger_) {
@@ -2195,18 +2206,18 @@ int libatgw_protocol_sdk::decrypt_data(crypt_session_t &crypt_info, const void *
     return error_code_t::EN_ECT_SUCCESS;
   }
 
-  void *buffer = get_tls_buffer(tls_buffer_t::EN_TBT_CRYPT);
-  size_t len = get_tls_length(tls_buffer_t::EN_TBT_CRYPT);
+  auto tls_buffer = get_tls_buffer(tls_buffer_t::EN_TBT_CRYPT);
+  unsigned char *buffer = tls_buffer.data();
+  size_t len = tls_buffer.size();
 
   std::unique_ptr<unsigned char[]> unique_buffer;
   if (len < insz + crypt_info.cipher.get_block_size() + crypt_info.cipher.get_iv_size()) {
     len = insz + crypt_info.cipher.get_block_size() + crypt_info.cipher.get_iv_size();
     unique_buffer.reset(new unsigned char[len]);
-    buffer = reinterpret_cast<void *>(unique_buffer.get());
+    buffer = unique_buffer.get();
   }
 
-  int res = crypt_info.cipher.decrypt(reinterpret_cast<const unsigned char *>(in), insz,
-                                      reinterpret_cast<unsigned char *>(buffer), &len);
+  int res = crypt_info.cipher.decrypt(reinterpret_cast<const unsigned char *>(in), insz, buffer, &len);
 
   // DEBUG CIPHER PROGRESS
   if (logger_) {

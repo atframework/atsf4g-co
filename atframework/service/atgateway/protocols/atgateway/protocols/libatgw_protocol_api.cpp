@@ -24,7 +24,7 @@
 #  include <pthread.h>
 namespace atframework {
 namespace gateway {
-namespace detail {
+namespace {
 static pthread_once_t gt_atgateway_get_msg_buffer_tls_once = PTHREAD_ONCE_INIT;
 static pthread_key_t
     gt_atgateway_get_msg_buffer_tls_key[::atframework::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_MAX];
@@ -46,24 +46,24 @@ static char *atgateway_get_msg_buffer(::atframework::gateway::libatgw_protocol_a
   (void)pthread_once(&gt_atgateway_get_msg_buffer_tls_once, init_pthread_atgateway_get_msg_buffer_tls);
   char *ret = reinterpret_cast<char *>(pthread_getspecific(gt_atgateway_get_msg_buffer_tls_key[t]));
   if (nullptr == ret) {
-    ret = new char[ATFRAMEWORK_ATGATEWAY_TLS_BUFFER_SIZE + 2 * sizeof(size_t)];  // in case of padding
+    ret = new char[ATFRAMEWORK_ATGATEWAY_TLS_BUFFER_SIZE + (2 * sizeof(size_t))];  // in case of padding
     pthread_setspecific(gt_atgateway_get_msg_buffer_tls_key[t], ret);
   }
   return ret;
 }
-}  // namespace detail
+}  // namespace
 }  // namespace gateway
 }  // namespace atframework
 #else
 namespace atframework {
 namespace gateway {
-namespace detail {
+namespace {
 static char *atgateway_get_msg_buffer(::atframework::gateway::libatgw_protocol_api::tls_buffer_t::type t) {
   static THREAD_TLS char ret[::atframework::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_MAX]
-                            [ATFRAMEWORK_ATGATEWAY_TLS_BUFFER_SIZE + 2 * sizeof(size_t)];  // in case of padding
+                            [ATFRAMEWORK_ATGATEWAY_TLS_BUFFER_SIZE + (2 * sizeof(size_t))];  // in case of padding
   return ret[t];
 }
-}  // namespace detail
+}  // namespace
 }  // namespace gateway
 }  // namespace atframework
 #endif
@@ -106,18 +106,11 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_api::set_flag(flag_t::type t, bool v)
   }
 }
 
-LIBATGW_PROTOCOL_API void *libatgw_protocol_api::get_tls_buffer(tls_buffer_t::type tls_type) {
+LIBATGW_PROTOCOL_API gsl::span<unsigned char> libatgw_protocol_api::get_tls_buffer(tls_buffer_t::type tls_type) {
   if (tls_type >= tls_buffer_t::EN_TBT_MAX || tls_type < 0) {
-    return nullptr;
+    return {};
   }
-  return ::atframework::gateway::detail::atgateway_get_msg_buffer(tls_type);
-}
-
-LIBATGW_PROTOCOL_API size_t libatgw_protocol_api::get_tls_length(tls_buffer_t::type tls_type) {
-  if (tls_type >= tls_buffer_t::EN_TBT_MAX || tls_type < 0) {
-    return 0;
-  }
-  return ATFRAMEWORK_ATGATEWAY_TLS_BUFFER_SIZE;
+  return {reinterpret_cast<unsigned char *>(atgateway_get_msg_buffer(tls_type)), ATFRAMEWORK_ATGATEWAY_TLS_BUFFER_SIZE};
 }
 
 LIBATGW_PROTOCOL_API int libatgw_protocol_api::write_done(int /*status*/) {

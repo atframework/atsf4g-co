@@ -6,6 +6,7 @@
 
 #include <libatbus_protocol.h>
 
+#include <algorithm/bit.h>
 #include <common/file_system.h>
 #include <common/string_oprs.h>
 #include <log/log_wrapper.h>
@@ -18,10 +19,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <functional>
-#include <iostream>
 #include <memory>
-#include <sstream>
-#include <vector>
 
 #include "session_manager.h"  // NOLINT: build/include_subdir
 
@@ -54,14 +52,14 @@ class gateway_module : public ::atfw::atapp::module_impl {
       });
 
       // init callbacks
-      proto_callbacks_.write_fn = [this](::atframework::gateway::libatgw_protocol_api *proto, void *buffer, size_t sz,
-                                         bool *is_done) -> int {
-        return this->proto_inner_callback_on_write(proto, buffer, sz, is_done);
+      proto_callbacks_.write_fn = [this](::atframework::gateway::libatgw_protocol_api *proto,
+                                         gsl::span<unsigned char> data, bool *is_done) -> int {
+        return this->proto_inner_callback_on_write(proto, data, is_done);
       };
 
-      proto_callbacks_.message_fn = [this](::atframework::gateway::libatgw_protocol_api *proto, const void *buffer,
-                                           size_t sz) -> int {
-        return this->proto_inner_callback_on_message(proto, buffer, sz);
+      proto_callbacks_.message_fn = [this](::atframework::gateway::libatgw_protocol_api *proto,
+                                           gsl::span<const unsigned char> buffer) -> int {
+        return this->proto_inner_callback_on_message(proto, buffer);
       };
       proto_callbacks_.new_session_fn = [this](::atframework::gateway::libatgw_protocol_api *proto,
                                                uint64_t &sess_id) -> int {
@@ -229,7 +227,9 @@ class gateway_module : public ::atfw::atapp::module_impl {
     if (nullptr != buf) {
       // in case of deallocator session in read callback.
       ::atframework::gateway::session::ptr_t sess_holder = sess->shared_from_this();
-      sess_holder->on_read(static_cast<int>(nread), buf->base, static_cast<size_t>(nread));
+      sess_holder->on_read(static_cast<int>(nread),
+                           gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(buf->base),
+                                                          static_cast<size_t>(nread)});
     }
   }
 
@@ -261,9 +261,10 @@ class gateway_module : public ::atfw::atapp::module_impl {
     }
   }
 
-  int proto_inner_callback_on_write(::atframework::gateway::libatgw_protocol_api *proto, void *buffer, size_t sz,
+  // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+  int proto_inner_callback_on_write(::atframework::gateway::libatgw_protocol_api *proto, gsl::span<unsigned char> data,
                                     bool *is_done) {
-    if (nullptr == proto || nullptr == buffer) {
+    if (nullptr == proto || data.empty()) {
       if (nullptr != is_done) {
         *is_done = true;
       }
@@ -279,13 +280,14 @@ class gateway_module : public ::atfw::atapp::module_impl {
       return -1;
     }
 
-    assert(sz >= proto->get_write_header_offset());
+    assert(data.size() >= proto->get_write_header_offset());
     int ret = 0;
     do {
       // uv_write_t
-      void *real_buffer = ::atbus::detail::fn::buffer_next(buffer, proto->get_write_header_offset());
-      sz -= proto->get_write_header_offset();
-      uv_write_t *req = reinterpret_cast<uv_write_t *>(buffer);
+      void *real_buffer =
+          ::atbus::detail::fn::buffer_next(reinterpret_cast<void *>(data.data()), proto->get_write_header_offset());
+      size_t sz = data.size() - proto->get_write_header_offset();
+      uv_write_t *req = reinterpret_cast<uv_write_t *>(data.data());
       req->data = proto->get_private_data();
       assert(sizeof(uv_write_t) <= proto->get_write_header_offset());
 
@@ -295,7 +297,7 @@ class gateway_module : public ::atfw::atapp::module_impl {
       ret = uv_write(req, sess->get_uv_stream(), bufs, 1, proto_inner_callback_on_written_fn);
       if (0 != ret) {
         sess->set_flag(::atframework::gateway::session::flag_t::EN_FT_WRITING_FD, false);
-        FWLOGERROR("send data to proto {} failed, res: ", reinterpret_cast<const void *>(proto), ret);
+        FWLOGERROR("send data to proto {} failed, res: {}", reinterpret_cast<const void *>(proto), ret);
       }
     } while (false);
 
@@ -306,8 +308,8 @@ class gateway_module : public ::atfw::atapp::module_impl {
     return ret;
   }
 
-  int proto_inner_callback_on_message(::atframework::gateway::libatgw_protocol_api *proto, const void *buffer,
-                                      size_t sz) {
+  int proto_inner_callback_on_message(::atframework::gateway::libatgw_protocol_api *proto,
+                                      gsl::span<const unsigned char> buffer) {
     ::atframework::gateway::session *sess =
         reinterpret_cast<::atframework::gateway::session *>(proto->get_private_data());
     if (nullptr == sess) {
@@ -322,23 +324,23 @@ class gateway_module : public ::atfw::atapp::module_impl {
     ::atframework::gw::ss_body_post *post = post_msg.mutable_body()->mutable_post();
     if (nullptr != post) {
       post->add_session_ids(sess_holder->get_id());
-      post->set_content(buffer, sz);
+      post->set_content(reinterpret_cast<const void *>(buffer.data()), buffer.size());
     }
 
     // send to router
     if (0 != sess_holder->get_router_id()) {
-      FWLOGDEBUG("session {} send {} bytes data to server {}({})", sess_holder->get_id(), sz,
+      FWLOGDEBUG("session {} send {} bytes data to server {}({})", sess_holder->get_id(), buffer.size(),
                  sess_holder->get_router_id(), sess_holder->get_router_name());
 
       return gw_mgr_.post_data(sess_holder->get_router_id(), post_msg);
     } else if (!sess_holder->get_router_name().empty()) {
-      FWLOGDEBUG("session {} send {} bytes data to server {}({})", sess_holder->get_id(), sz,
+      FWLOGDEBUG("session {} send {} bytes data to server {}({})", sess_holder->get_id(), buffer.size(),
                  sess_holder->get_router_id(), sess_holder->get_router_name());
 
       return gw_mgr_.post_data(sess_holder->get_router_name(), post_msg);
     }
 
-    FWLOGERROR("session {} send {} bytes data failed, not router", sess_holder->get_id(), sz);
+    FWLOGERROR("session {} send {} bytes data failed, not router", sess_holder->get_id(), buffer.size());
     return -1;
   }
 
@@ -571,12 +573,12 @@ struct app_handle_on_recv {
 
   int operator()(::atfw::atapp::app &, const atfw::atapp::app::message_sender_t &source,
                  const atfw::atapp::app::message_t &message) {
-    if (nullptr == message.data || 0 == message.data_size) {
+    if (message.data.empty()) {
       return 0;
     }
 
     ::google::protobuf::ArenaOptions arena_options;
-    arena_options.initial_block_size = (message.data_size + 256) & 255;
+    arena_options.initial_block_size = atfw::util::bit::bit_ceil(message.data.size() + 256);
     ::google::protobuf::Arena arena(arena_options);
 #if defined(PROTOBUF_VERSION) && PROTOBUF_VERSION >= 5027000
     ::atframework::gw::ss_msg *msg =
@@ -587,9 +589,9 @@ struct app_handle_on_recv {
 #endif
     assert(msg);
 
-    if (false == msg->ParseFromArray(message.data, static_cast<int>(message.data_size))) {
+    if (false == msg->ParseFromArray(message.data.data(), static_cast<int>(message.data.size()))) {
       FWLOGDEBUG("from server {}: session {} parse {} bytes data failed: {}", source.id, msg->head().session_id(),
-                 message.data_size, msg->InitializationErrorString());
+                 message.data.size(), msg->InitializationErrorString());
       return 0;
     }
 
@@ -601,7 +603,9 @@ struct app_handle_on_recv {
                      msg->body().post().content().size());
 
           int res = mod_.get().get_session_manager().push_data(
-              msg->head().session_id(), msg->body().post().content().data(), msg->body().post().content().size());
+              msg->head().session_id(), gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(
+                                                                           msg->body().post().content().data()),
+                                                                       msg->body().post().content().size()});
           if (0 != res) {
             FWLOGERROR("from server {}: session {} push data failed, res: {}", source.id, msg->head().session_id(),
                        res);
@@ -619,16 +623,19 @@ struct app_handle_on_recv {
             }
           }
         } else if (0 == msg->body().post().session_ids_size()) {  // broadcast to all actived session
-          int res = mod_.get().get_session_manager().broadcast_data(msg->body().post().content().data(),
-                                                                    msg->body().post().content().size());
+          int res = mod_.get().get_session_manager().broadcast_data(gsl::span<const unsigned char>{
+              reinterpret_cast<const unsigned char *>(msg->body().post().content().data()),
+              msg->body().post().content().size()});
           if (0 != res) {
             FWLOGERROR("from server {}: broadcast data failed, res: {}", source.id, res);
           }
         } else {  // multicast to more than one client
           for (int i = 0; i < msg->body().post().session_ids_size(); ++i) {
-            int res = mod_.get().get_session_manager().push_data(msg->body().post().session_ids(i),
-                                                                 msg->body().post().content().data(),
-                                                                 msg->body().post().content().size());
+            int res = mod_.get().get_session_manager().push_data(
+                msg->body().post().session_ids(i),
+                gsl::span<const unsigned char>{
+                    reinterpret_cast<const unsigned char *>(msg->body().post().content().data()),
+                    msg->body().post().content().size()});
             if (0 != res) {
               FWLOGERROR("from server {}: session {} push data failed, res: {}", source.id,
                          msg->body().post().session_ids(i), res);

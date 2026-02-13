@@ -4,8 +4,10 @@
 
 #include <config/compile_optimize.h>
 
-#include <stdint.h>
+#include <gsl/select-gsl.h>
+
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <string>
 
@@ -85,7 +87,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
    * peer 2: buffer length, should be greater than write_header_offset_ 3: output if it's already done RETURN: 0 or
    * error code REQUIRED PROTOCOL: any custom protocol must call this when there is any data to send to peer.
    */
-  using on_write_start_fn_t = std::function<int(libatgw_protocol_api *, void *, size_t, bool *)>;
+  using on_write_start_fn_t = std::function<int(libatgw_protocol_api *, gsl::span<unsigned char>, bool *)>;
 
   /**
    * SPECIFY: callback when receive any custom message
@@ -98,7 +100,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
    * PROTOCOL: any custom protocol should call this when receive a custom message.
    * check_flag(flag_t::EN_PFT_IN_CALLBACK) must return true here
    */
-  using on_message_fn_t = std::function<int(libatgw_protocol_api *, const void *, size_t)>;
+  using on_message_fn_t = std::function<int(libatgw_protocol_api *, gsl::span<const unsigned char>)>;
 
   /**
    * SPECIFY: callback when start init a new session
@@ -159,7 +161,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
     enum type {
       EN_TBT_MERGE = 0,
       EN_TBT_CRYPT,
-      EN_TBT_ZIP,
+      EN_TBT_COMPRESS,
       EN_TBT_CUSTOM,
       EN_TBT_MAX,
     };
@@ -218,21 +220,19 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
   /**
    * @biref call this when received any data from engine. custom protocol must implement this
    * @param ssz read size or error code
-   * @param buff read buffer address
-   * @param len read buffer length
+   * @param buffer read buffer block
    * @param errcode if there is any error , output it
    */
-  virtual void read(int ssz, const char *buff, size_t len, int &errcode) = 0;
+  virtual void read(int ssz, gsl::span<const unsigned char> buffer, int &errcode) = 0;
 
   /**
    * @biref call this when need to write custem message to peer. custom protocol must implement this
-   * @param buffer written buffer address
-   * @param len written buffer length
+   * @param data written data address
    * @note if there is any writing not finished, call set_flag(flag_t::EN_PFT_WRITING, true) and call write_done(status)
    * when writing finished
    * @return 0 or error code
    */
-  virtual int write(const void *buffer, size_t len) = 0;
+  virtual int write(gsl::span<const unsigned char> data) = 0;
 
   /**
    * @biref call this to notify protocol object last write is finished.
@@ -303,14 +303,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
    * @param tls_type type, different type has different address
    * @return thread-local storage buffer address
    */
-  static LIBATGW_PROTOCOL_API void *get_tls_buffer(tls_buffer_t::type tls_type);
-
-  /**
-   * @biref get thread-local storage buffer length for message encrypt/decrypt, zip/unzip and etc
-   * @param tls_type type, different type has different length
-   * @return thread-local storage buffer length
-   */
-  static LIBATGW_PROTOCOL_API size_t get_tls_length(tls_buffer_t::type tls_type);
+  static LIBATGW_PROTOCOL_API gsl::span<unsigned char> get_tls_buffer(tls_buffer_t::type tls_type);
 
  public:
   /**

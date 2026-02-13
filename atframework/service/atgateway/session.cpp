@@ -254,14 +254,14 @@ void session::on_alloc_read(size_t suggested_size, char *&out_buf, size_t &out_l
   }
 }
 
-void session::on_read(int ssz, const char *buff, size_t len) {
+void session::on_read(int ssz, gsl::span<const unsigned char> buffer) {
   if (proto_) {
     int errcode = 0;
-    proto_->read(ssz, buff, len, errcode);
+    proto_->read(ssz, buffer, errcode);
 
     if (errcode < 0) {
-      FWLOGERROR("session {}:{} read data length={} failed and will be closed, res: {}", peer_ip_, peer_port_, len,
-                 errcode);
+      FWLOGERROR("session {}:{} read data length={} failed and will be closed, res: {}", peer_ip_, peer_port_,
+                 buffer.size(), errcode);
       close(close_reason_t::EN_CRT_INVALID_DATA);
     }
   }
@@ -330,7 +330,7 @@ int session::close_fd(int reason) {
   return 0;
 }
 
-int session::send_to_client(const void *data, size_t len) {
+int session::send_to_client(gsl::span<const unsigned char> data) {
   // send to proto_
   if (check_flag(flag_t::EN_FT_CLOSING)) {
     return error_code_t::EN_ECT_CLOSING;
@@ -346,14 +346,14 @@ int session::send_to_client(const void *data, size_t len) {
   }
 
   // send limit
-  limit_.hour_send_bytes += len;
-  limit_.minute_send_bytes += len;
-  limit_.total_send_bytes += len;
+  limit_.hour_send_bytes += data.size();
+  limit_.minute_send_bytes += data.size();
+  limit_.total_send_bytes += data.size();
   ++limit_.total_send_times;
   ++limit_.hour_send_times;
   ++limit_.minute_send_times;
 
-  int ret = proto_->write(data, len);
+  int ret = proto_->write(data);
 
   check_hour_limit(false, true);
   check_minute_limit(false, true);
@@ -398,11 +398,13 @@ int session::send_to_server(::atframework::gw::ss_msg &msg, session_manager *mgr
 
   int ret;
   if (0 != router_node_id_) {
-    ret = mgr->post_data(router_node_id_, ::atframework::component::service_type::EN_ATST_GATEWAY, packed_buffer.data(),
-                         len);
+    ret = mgr->post_data(
+        router_node_id_, ::atframework::component::service_type::EN_ATST_GATEWAY,
+        gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(packed_buffer.data()), len});
   } else {
-    ret = mgr->post_data(router_node_name_, ::atframework::component::service_type::EN_ATST_GATEWAY,
-                         packed_buffer.data(), len);
+    ret = mgr->post_data(
+        router_node_name_, ::atframework::component::service_type::EN_ATST_GATEWAY,
+        gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(packed_buffer.data()), len});
   }
 
   check_hour_limit(true, false);

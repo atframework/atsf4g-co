@@ -77,7 +77,7 @@ class session : public std::enable_shared_from_this<session> {
   int init_reconnect(session &sess);
 
   void on_alloc_read(size_t suggested_size, char *&out_buf, size_t &out_len);
-  void on_read(int ssz, const char *buff, size_t len);
+  void on_read(int ssz, gsl::span<const unsigned char> buffer);
   int on_write_done(int status);
 
   int close(int reason);
@@ -86,7 +86,7 @@ class session : public std::enable_shared_from_this<session> {
 
   int close_fd(int reason);
 
-  int send_to_client(const void *data, size_t len);
+  int send_to_client(gsl::span<const unsigned char>);
 
   int send_to_server(::atframework::gw::ss_msg &msg);
 

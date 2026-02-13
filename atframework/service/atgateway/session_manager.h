@@ -15,10 +15,10 @@
 // clang-format on
 
 #include <atframe/atapp.h>
+#include <gsl/select-gsl.h>
 
 #include <functional>
 #include <list>
-#include <map>
 #include <unordered_map>
 
 #include "session.h"
@@ -61,15 +61,15 @@ class session_manager {
   inline void set_private_data(void *priv_data) { private_data_ = priv_data; }
 
   int post_data(::atbus::bus_id_t tid, ::atframework::gw::ss_msg &msg);
-  int post_data(::atbus::bus_id_t tid, int type, ::atframework::gw::ss_msg &msg);
-  int post_data(::atbus::bus_id_t tid, int type, const void *buffer, size_t s);
+  int post_data(::atbus::bus_id_t tid, int32_t type, ::atframework::gw::ss_msg &msg);
+  int post_data(::atbus::bus_id_t tid, int32_t type, gsl::span<const unsigned char> data);
 
   int post_data(const std::string &tname, ::atframework::gw::ss_msg &msg);
-  int post_data(const std::string &tname, int type, ::atframework::gw::ss_msg &msg);
-  int post_data(const std::string &tname, int type, const void *buffer, size_t s);
+  int post_data(const std::string &tname, int32_t type, ::atframework::gw::ss_msg &msg);
+  int post_data(const std::string &tname, int32_t type, gsl::span<const unsigned char> data);
 
-  int push_data(session::id_t sess_id, const void *buffer, size_t s);
-  int broadcast_data(const void *buffer, size_t s);
+  int push_data(session::id_t sess_id, const gsl::span<const unsigned char> data);
+  int broadcast_data(gsl::span<const unsigned char> data);
 
   int set_session_router(session::id_t sess_id, ::atbus::bus_id_t router_node_id, const std::string &router_node_name);
 

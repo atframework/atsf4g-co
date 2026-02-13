@@ -356,7 +356,7 @@ int session_manager::post_data(::atbus::bus_id_t tid, ::atframework::gw::ss_msg 
   return post_data(tid, ::atframework::component::service_type::EN_ATST_GATEWAY, msg);
 }
 
-int session_manager::post_data(::atbus::bus_id_t tid, int type, ::atframework::gw::ss_msg &msg) {
+int session_manager::post_data(::atbus::bus_id_t tid, int32_t type, ::atframework::gw::ss_msg &msg) {
   // send to server with type = ::atframework::component::service_type::EN_ATST_GATEWAY
   std::string packed_buffer;
   if (false == msg.SerializeToString(&packed_buffer)) {
@@ -364,23 +364,25 @@ int session_manager::post_data(::atbus::bus_id_t tid, int type, ::atframework::g
     return error_code_t::EN_ECT_BAD_DATA;
   }
 
-  return post_data(tid, type, packed_buffer.data(), packed_buffer.size());
+  return post_data(tid, type,
+                   gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(packed_buffer.data()),
+                                                  packed_buffer.size()});
 }
 
-int session_manager::post_data(::atbus::bus_id_t tid, int type, const void *buffer, size_t s) {
+int session_manager::post_data(::atbus::bus_id_t tid, int32_t type, gsl::span<const unsigned char> data) {
   // send to process
   if (nullptr == app_) {
     return error_code_t::EN_ECT_LOST_MANAGER;
   }
 
-  return app_->send_message(tid, type, buffer, s);
+  return app_->send_message(tid, type, data);
 }
 
 int session_manager::post_data(const std::string &tname, ::atframework::gw::ss_msg &msg) {
   return post_data(tname, ::atframework::component::service_type::EN_ATST_GATEWAY, msg);
 }
 
-int session_manager::post_data(const std::string &tname, int type, ::atframework::gw::ss_msg &msg) {
+int session_manager::post_data(const std::string &tname, int32_t type, ::atframework::gw::ss_msg &msg) {
   // send to server with type = ::atframework::component::service_type::EN_ATST_GATEWAY
   std::string packed_buffer;
   if (false == msg.SerializeToString(&packed_buffer)) {
@@ -388,32 +390,34 @@ int session_manager::post_data(const std::string &tname, int type, ::atframework
     return error_code_t::EN_ECT_BAD_DATA;
   }
 
-  return post_data(tname, type, packed_buffer.data(), packed_buffer.size());
+  return post_data(tname, type,
+                   gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(packed_buffer.data()),
+                                                  packed_buffer.size()});
 }
 
-int session_manager::post_data(const std::string &tname, int type, const void *buffer, size_t s) {
+int session_manager::post_data(const std::string &tname, int32_t type, gsl::span<const unsigned char> data) {
   // send to process
   if (nullptr == app_) {
     return error_code_t::EN_ECT_LOST_MANAGER;
   }
 
-  return app_->send_message(tname, type, buffer, s);
+  return app_->send_message(tname, type, data);
 }
 
-int session_manager::push_data(session::id_t sess_id, const void *buffer, size_t s) {
+int session_manager::push_data(session::id_t sess_id, gsl::span<const unsigned char> data) {
   session_map_t::iterator iter = actived_sessions_.find(sess_id);
   if (actived_sessions_.end() == iter) {
     return error_code_t::EN_ECT_SESSION_NOT_FOUND;
   }
 
-  return iter->second->send_to_client(buffer, s);
+  return iter->second->send_to_client(data);
 }
 
-int session_manager::broadcast_data(const void *buffer, size_t s) {
+int session_manager::broadcast_data(gsl::span<const unsigned char> data) {
   int ret = error_code_t::EN_ECT_SESSION_NOT_FOUND;
   for (session_map_t::iterator iter = actived_sessions_.begin(); iter != actived_sessions_.end(); ++iter) {
     if (iter->second->check_flag(session::flag_t::EN_FT_REGISTERED)) {
-      int res = iter->second->send_to_client(buffer, s);
+      int res = iter->second->send_to_client(data);
       if (0 != res) {
         FWLOGERROR("broadcast data to session {} failed, res: {}", iter->first, res);
       }

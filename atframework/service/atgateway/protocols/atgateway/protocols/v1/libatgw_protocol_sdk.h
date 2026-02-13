@@ -109,9 +109,9 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   LIBATGW_PROTOCOL_API ~libatgw_protocol_sdk();
 
   LIBATGW_PROTOCOL_API void alloc_recv_buffer(size_t suggested_size, char *&out_buf, size_t &out_len) override;
-  LIBATGW_PROTOCOL_API void read(int ssz, const char *buff, size_t len, int &errcode) override;
+  LIBATGW_PROTOCOL_API void read(int ssz, gsl::span<const unsigned char> buffer, int &errcode) override;
 
-  LIBATGW_PROTOCOL_API void dispatch_data(const char *buff, size_t len, int errcode);
+  LIBATGW_PROTOCOL_API void dispatch_data(gsl::span<const unsigned char> data, int errcode);
   LIBATGW_PROTOCOL_API int dispatch_handshake(const ::atframework::gw::v1::cs_body_handshake &body_handshake);
 
   LIBATGW_PROTOCOL_API int dispatch_handshake_start_req(const ::atframework::gw::v1::cs_body_handshake &body_handshake);
@@ -138,7 +138,7 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
 
   LIBATGW_PROTOCOL_API int try_write();
   LIBATGW_PROTOCOL_API int write_msg(flatbuffers::FlatBufferBuilder &builder);
-  LIBATGW_PROTOCOL_API int write(const void *buffer, size_t len) override;
+  LIBATGW_PROTOCOL_API int write(gsl::span<const unsigned char>) override;
   LIBATGW_PROTOCOL_API int write_done(int status) override;
 
   LIBATGW_PROTOCOL_API int close(int reason) override;
@@ -160,13 +160,14 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   LIBATGW_PROTOCOL_API int reconnect_session(uint64_t sess_id, const std::string &crypt_type,
                                              const std::vector<unsigned char> &secret);
 
-  LIBATGW_PROTOCOL_API int send_post(::atframework::gw::v1::cs_msg_type_t msg_type, const void *buffer, size_t len);
-  LIBATGW_PROTOCOL_API int send_post(const void *buffer, size_t len);
+  LIBATGW_PROTOCOL_API int send_post(::atframework::gw::v1::cs_msg_type_t msg_type,
+                                     gsl::span<const unsigned char> data);
+  LIBATGW_PROTOCOL_API int send_post(gsl::span<const unsigned char> data);
   LIBATGW_PROTOCOL_API int send_ping();
   LIBATGW_PROTOCOL_API int send_pong(int64_t tp);
   LIBATGW_PROTOCOL_API int send_key_syn();
   LIBATGW_PROTOCOL_API int send_kickoff(int reason);
-  LIBATGW_PROTOCOL_API int send_verify(const void *buf, size_t sz);
+  LIBATGW_PROTOCOL_API int send_verify(gsl::span<const unsigned char> data);
 
   ATFW_UTIL_FORCEINLINE const ping_data_t &get_last_ping() const { return ping_; }
 
