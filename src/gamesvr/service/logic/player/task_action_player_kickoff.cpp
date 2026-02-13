@@ -18,7 +18,7 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include <atgateway/protocols/libatgw_protocol_api.h>
+#include <atgateway/protocol/libatgw_protocol_api.h>
 
 #include <rpc/db/login.h>
 
@@ -94,7 +94,7 @@ task_action_player_kickoff::result_type task_action_player_kickoff::operator()()
   if (sess) {
     int32_t reason = static_cast<int32_t>(req_body.reason());
     if (reason == 0) {
-      reason = ::atframework::gateway::close_reason_t::EN_CRT_KICKOFF;
+      reason = static_cast<int32_t>(atfw::gateway::close_reason_t::kKickoff);
     }
     int32_t ret = sess->send_kickoff(reason);
     if (ret) {

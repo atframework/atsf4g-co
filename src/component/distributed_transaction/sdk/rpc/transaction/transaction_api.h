@@ -16,10 +16,8 @@
 
 #include <rpc/rpc_common_types.h>
 
-#include <stdint.h>
-#include <cstddef>
+#include <cstdint>
 #include <string>
-#include <unordered_set>
 
 namespace rpc {
 class context;

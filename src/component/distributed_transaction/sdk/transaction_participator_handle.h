@@ -27,7 +27,6 @@
 #include <memory/rc_ptr.h>
 #include <functional>
 #include <list>
-#include <memory>
 #include <set>
 #include <string>
 #include <unordered_map>

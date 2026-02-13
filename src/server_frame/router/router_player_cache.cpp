@@ -10,17 +10,15 @@
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
-#include <atgateway/protocols/libatgw_protocol_api.h>
+#include <atgateway/protocol/libatgw_protocol_api.h>
 
 #include <rpc/db/login.h>
 
 #include <logic/session_manager.h>
 #include <rpc/db/player.h>
 
-#include <algorithm>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "router/router_player_manager.h"
 
@@ -415,7 +413,7 @@ SERVER_FRAME_API rpc::result_code_type router_player_cache::save_object(rpc::con
 
     // 在其他设备登入的要把这里的Session踢下线
     if (obj->get_session()) {
-      obj->get_session()->send_kickoff(::atframework::gateway::close_reason_t::EN_CRT_KICKOFF);
+      obj->get_session()->send_kickoff(static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff));
     }
 
     // 强制降级，删除缓存数据

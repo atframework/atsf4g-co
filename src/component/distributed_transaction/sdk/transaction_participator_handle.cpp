@@ -49,7 +49,7 @@ DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::load(const
   transaction_locks_.clear();
   finished_transactions_.clear();
 
-  for (auto& transaction : storage.running_transaction()) {
+  for (const auto& transaction : storage.running_transaction()) {
     auto transaction_ptr = atfw::memory::stl::make_strong_rc<storage_type>();
     if (!transaction_ptr) {
       FWLOGERROR("participator {} malloc transaction storage failed", get_participator_key());
@@ -59,14 +59,14 @@ DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::load(const
     running_transactions_[transaction.metadata().transaction_uuid()] = transaction_ptr;
 
     // Restore locks
-    for (auto& lock_resource : transaction.lock_resource()) {
+    for (const auto& lock_resource : transaction.lock_resource()) {
       transaction_locks_[lock_resource] = transaction_ptr;
     }
 
     resolve_timers_.insert(storage_resolve_timer_type{transaction});
   }
 
-  for (auto& transaction : storage.finished_transaction()) {
+  for (const auto& transaction : storage.finished_transaction()) {
     auto transaction_ptr = atfw::memory::stl::make_strong_rc<storage_type>();
     if (!transaction_ptr) {
       FWLOGERROR("participator {} malloc transaction storage failed", get_participator_key());
@@ -322,7 +322,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type::value_type transaction_pa
   }
 
   preemption_transaction.clear();
-  for (auto& resource_uuid : resource_uuids) {
+  for (const auto& resource_uuid : resource_uuids) {
     do {
       auto old_holder = transaction_locks_.find(resource_uuid);
       if (old_holder == transaction_locks_.end()) {
@@ -375,12 +375,12 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
   }
 
   bool from_empty = transaction_ptr->lock_resource().empty();
-  for (auto& resource_uuid : resource_uuids) {
+  for (const auto& resource_uuid : resource_uuids) {
     // resource_uuids is already from lock_resource. there is no need to add again.
     if (&resource_uuids != &transaction_ptr->lock_resource()) {
       bool need_add_lock_resource = from_empty;
       if (!need_add_lock_resource) {
-        for (auto& lock_uuid : transaction_ptr->lock_resource()) {
+        for (const auto& lock_uuid : transaction_ptr->lock_resource()) {
           if (lock_uuid == resource_uuid) {
             need_add_lock_resource = false;
             break;
@@ -418,7 +418,7 @@ DISTRIBUTED_TRANSACTION_SDK_API bool transaction_participator_handle::unlock(
   }
 
   protobuf_remove_repeated_if(*transaction_ptr->mutable_lock_resource(),
-                              [&resource_uuid](const std::string value) { return value == resource_uuid; });
+                              [&resource_uuid](const std::string& value) { return value == resource_uuid; });
 
   transaction_locks_.erase(lock_iter);
   return true;
@@ -445,7 +445,7 @@ DISTRIBUTED_TRANSACTION_SDK_API bool transaction_participator_handle::unlock(
     return false;
   }
 
-  for (auto& resource_uuid : transaction_ptr->lock_resource()) {
+  for (const auto& resource_uuid : transaction_ptr->lock_resource()) {
     auto lock_iter = transaction_locks_.find(resource_uuid);
     if (lock_iter == transaction_locks_.end()) {
       continue;
@@ -846,7 +846,7 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
                          std::move(child_trace_option));
 
   FWLOGINFO("participator {} commit transaction {}", get_participator_key(), transaction_uuid);
-  rpc::result_code_type::value_type res;
+  rpc::result_code_type::value_type res{};
   // event callback
   if (vtable_ && vtable_->do_event) {
     res = RPC_AWAIT_CODE_RESULT(vtable_->do_event(child_ctx, *this, *transaction_ptr));
@@ -916,7 +916,7 @@ rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::c
   child_ctx.setup_tracer(child_tracer, "transaction_participator_handle.reject_transcation",
                          std::move(child_trace_option));
 
-  rpc::result_code_type::value_type res;
+  rpc::result_code_type::value_type res{};
   FWLOGINFO("participator {} reject transaction {}", get_participator_key(), transaction_uuid);
   res = RPC_AWAIT_CODE_RESULT(remove_running_transaction(
       child_ctx, atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING, transaction_uuid,

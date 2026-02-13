@@ -5,7 +5,6 @@
 #pragma once
 
 #include <memory/rc_ptr.h>
-#include <std/smart_ptr.h>
 
 #include <dispatcher/task_action_no_req_base.h>
 

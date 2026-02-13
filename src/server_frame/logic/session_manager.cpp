@@ -3,7 +3,7 @@
 
 #include <log/log_wrapper.h>
 
-#include <atgateway/protocols/libatgw_protocol_api.h>
+#include <atgateway/protocol/libatgw_protocol_api.h>
 #include <libatbus_protocol.h>
 #include <time/time_utility.h>
 
@@ -39,6 +39,7 @@ SERVER_FRAME_API session_manager::session_manager() : last_proc_timepoint_(util:
 
 SERVER_FRAME_API session_manager::~session_manager() {}
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 SERVER_FRAME_API int session_manager::init() { return 0; }
 
 SERVER_FRAME_API int session_manager::proc() {
@@ -51,7 +52,7 @@ SERVER_FRAME_API int session_manager::proc() {
   }
 
   time_t cur_time = atfw::util::time::time_utility::get_now();
-  cur_time = cur_time - cur_time % proc_interval;
+  cur_time = cur_time - (cur_time % proc_interval);
   if (cur_time > last_proc_timepoint_) {
     last_proc_timepoint_ = cur_time;
     FWLOGINFO("online number: {} clients on {} atgateway", all_sessions_.size(), session_counter_.size());
@@ -222,16 +223,14 @@ SERVER_FRAME_API size_t session_manager::size() const { return all_sessions_.siz
 
 SERVER_FRAME_API int32_t session_manager::broadcast_msg_to_client(const atframework::CSMsg &msg) {
   size_t msg_buf_len = msg.ByteSizeLong();
-  size_t tls_buf_len = atframework::gateway::libatgw_protocol_api::get_tls_length(
-      atframework::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM);
-  if (msg_buf_len > tls_buf_len) {
-    FWLOGERROR("broadcast to all gateway failed: require {}, only have {}", msg_buf_len, tls_buf_len);
+  auto tls_buffer =
+      atfw::gateway::libatgw_protocol_api::get_tls_buffer(atfw::gateway::libatgw_protocol_api::tls_buffer_t::kCustom);
+  if (msg_buf_len > tls_buffer.size()) {
+    FWLOGERROR("broadcast to all gateway failed: require {}, only have {}", msg_buf_len, tls_buffer.size());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
   }
 
-  ::google::protobuf::uint8 *buf_start =
-      reinterpret_cast< ::google::protobuf::uint8 *>(atframework::gateway::libatgw_protocol_api::get_tls_buffer(
-          atframework::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM));
+  ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(tls_buffer.data());
   msg.SerializeWithCachedSizesToArray(buf_start);
   FWLOGDEBUG("broadcast msg to all gateway {} bytes\n{}", msg_buf_len, protobuf_mini_dumper_get_readable(msg));
 

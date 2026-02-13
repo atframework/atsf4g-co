@@ -7,16 +7,10 @@
 #include <libatbus_protocol.h>
 #include <time/time_utility.h>
 
-#include <atgateway/protocols/libatgw_server_protocol.h>
+#include <atgateway/protocol/libatgw_server_protocol.h>
 #include <config/atframe_service_types.h>
 
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <iostream>
 #include <map>
-#include <sstream>
-#include <vector>
 
 using session_gw_map_t = std::map<uint64_t, uint64_t>;
 
@@ -39,7 +33,7 @@ struct app_command_handler_kickoff {
       FWLOGINFO("kickoff {}", sess_id);
     }
 
-    ::atframework::gw::ss_msg msg;
+    ::atfw::gateway::server_message msg;
     msg.mutable_head()->set_session_id(sess_id);
 
     msg.mutable_body()->mutable_kickoff_session();
@@ -50,7 +44,10 @@ struct app_command_handler_kickoff {
       return 0;
     }
 
-    return app_->get_bus_node()->send_data(iter->second, 0, packed_buffer.data(), packed_buffer.size());
+    return app_->get_bus_node()->send_data(
+        iter->second, 0,
+        gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(packed_buffer.data()),
+                                       packed_buffer.size()});
   }
 };
 
@@ -61,18 +58,22 @@ struct app_handle_on_msg {
   int operator()(atfw::atapp::app &app, const atfw::atapp::app::message_sender_t &source,
                  const atfw::atapp::app::message_t &msg) {
     switch (msg.type) {
-      case ::atframework::component::service_type::EN_ATST_GATEWAY: {
-        ::atframework::gw::ss_msg req_msg;
-        if (false == req_msg.ParseFromArray(msg.data, static_cast<int>(msg.data_size))) {
-          FWLOGERROR("receive msg of {} bytes from {:#x} parse failed: {}", msg.data_size, source.id,
+      case static_cast<int32_t>(::atfw::component::service_type::kAtGateway): {
+        ::atfw::gateway::server_message req_msg;
+        if (false == req_msg.ParseFromArray(reinterpret_cast<const void *>(msg.data.data()),
+                                            static_cast<int>(msg.data.size()))) {
+          FWLOGERROR("receive msg of {} bytes from {:#x} parse failed: {}", msg.data.size(), source.id,
                      req_msg.InitializationErrorString());
           return 0;
         }
 
         switch (req_msg.body().cmd_case()) {
-          case ::atframework::gw::ss_msg_body::kPost: {
+          case ::atfw::gateway::server_message_body::kPost: {
             // keep all data not changed and send back
-            int res = app.get_bus_node()->send_data(source.id, 0, msg.data, msg.data_size);
+            int res = app.get_bus_node()->send_data(
+                source.id, 0,
+                gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(msg.data.data()),
+                                               msg.data.size()});
             if (res < 0) {
               FWLOGERROR("send back post data to {:#x}({}) failed, res: {}", source.id, source.name, res);
             } else {
@@ -81,7 +82,7 @@ struct app_handle_on_msg {
             }
             break;
           }
-          case ::atframework::gw::ss_msg_body::kAddSession: {
+          case ::atfw::gateway::server_message_body::kAddSession: {
             FWLOGINFO("create new session {}, address: {}:{}", req_msg.head().session_id(),
                       req_msg.body().add_session().client_ip(), req_msg.body().add_session().client_port());
 
@@ -90,7 +91,7 @@ struct app_handle_on_msg {
             }
             break;
           }
-          case ::atframework::gw::ss_msg_body::kRemoveSession: {
+          case ::atfw::gateway::server_message_body::kRemoveSession: {
             FWLOGINFO("remove session {}", req_msg.head().session_id());
 
             gw_->erase(req_msg.head().session_id());

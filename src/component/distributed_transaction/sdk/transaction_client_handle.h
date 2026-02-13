@@ -31,11 +31,7 @@ class context;
 #include <memory/rc_ptr.h>
 #include <chrono>
 #include <functional>
-#include <list>
-#include <memory>
-#include <set>
 #include <string>
-#include <unordered_map>
 #include <unordered_set>
 
 namespace atframework {

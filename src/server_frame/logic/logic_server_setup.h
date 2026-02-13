@@ -16,7 +16,6 @@
 #include <config/compiler_features.h>
 
 #include <gsl/select-gsl.h>
-#include <std/smart_ptr.h>
 
 #include <atframe/atapp_module_impl.h>
 #include <atframe/etcdcli/etcd_discovery.h>
@@ -38,18 +37,15 @@
 
 #include <opentelemetry/common/attribute_value.h>
 
-#include <stdint.h>
-
 #include <atomic>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <ctime>
-#include <list>
 #include <memory>
 #include <queue>
 #include <string>
 #include <unordered_map>
-#include <vector>
 
 class logic_server_common_module;
 class logic_hpa_controller;
@@ -163,7 +159,7 @@ class logic_server_common_module : public atfw::atapp::module_impl {
    * @return （本地）服务发现版本号
    */
   SERVER_FRAME_API int64_t
-  get_service_discovery_version(atframework::component::logic_service_type::type service_type_id) const noexcept;
+  get_service_discovery_version(atframework::component::logic_service_type service_type_id) const noexcept;
 
   SERVER_FRAME_API void update_remote_server_configure(const std::string& global_conf, int32_t global_version,
                                                        const std::string& zone_conf, int32_t zone_version);

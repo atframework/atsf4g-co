@@ -55,6 +55,7 @@ DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle::~transaction_client_h
   }
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle::create_transaction(
     rpc::context& ctx, storage_ptr_type& output, const transaction_options& options) {
   output = atfw::memory::stl::make_strong_rc<storage_type>();
@@ -152,7 +153,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
     // 参与者准备
     bool retry_later = false;
     if (vtable_ && vtable_->prepare_participator) {
-      for (auto& participator : input->participators()) {
+      for (const auto& participator : input->participators()) {
         transaction_participator_failure_reason failure_reason;
         ret = RPC_AWAIT_CODE_RESULT(
             vtable_->prepare_participator(child_ctx, *this, *input, participator.second, failure_reason));
@@ -168,7 +169,9 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
             failed_participator = participator.second.participator_key();
           }
           break;
-        } else if (ret < 0) {
+        }
+
+        if (ret < 0) {
           FWLOGERROR("transaction {} prepare participator {} failed, error code: {}({})",
                      input->metadata().transaction_uuid(), participator.second.participator_key(), ret,
                      protobuf_mini_dumper_get_error_msg(ret));
@@ -201,12 +204,14 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
 
       if (ret >= 0) {
         continue;
-      } else {
-        FWLOGERROR("transaction {} sleep and wait failed, error code: {}({})", input->metadata().transaction_uuid(),
-                   ret, protobuf_mini_dumper_get_error_msg(ret));
-        break;
       }
-    } else if (ret < 0) {
+
+      FWLOGERROR("transaction {} sleep and wait failed, error code: {}({})", input->metadata().transaction_uuid(), ret,
+                 protobuf_mini_dumper_get_error_msg(ret));
+      break;
+    }
+
+    if (ret < 0) {
       break;
     }
 
@@ -222,7 +227,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
     // 通知参与者成功提交
     // 自动强制提交的事务不需要通知参与者
     if (!input->configure().force_commit() && vtable_ && vtable_->commit_participator) {
-      for (auto& participator : input->participators()) {
+      for (const auto& participator : input->participators()) {
         ret = RPC_AWAIT_CODE_RESULT(vtable_->commit_participator(child_ctx, *this, *input, participator.second));
         if (ret < 0) {
           FWLOGERROR("transaction {} prepare participator {} failed, error code: {}({})",
@@ -236,7 +241,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
                protobuf_mini_dumper_get_error_msg(ret));
     // 通知参与者否决提交
     if (vtable_ && vtable_->reject_participator) {
-      for (auto& participator_key : *output_prepared_participators) {
+      for (const auto& participator_key : *output_prepared_participators) {
         auto iter = input->participators().find(participator_key);
         if (iter == input->participators().end()) {
           continue;
@@ -270,6 +275,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
   RPC_RETURN_CODE(child_tracer.finish({ret, {}}));
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 DISTRIBUTED_TRANSACTION_SDK_API int32_t transaction_client_handle::set_transaction_data(
     rpc::context&, storage_ptr_type& input, google::protobuf::Message& data) {
   if (!input) {
@@ -289,6 +295,7 @@ DISTRIBUTED_TRANSACTION_SDK_API int32_t transaction_client_handle::set_transacti
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 DISTRIBUTED_TRANSACTION_SDK_API int32_t transaction_client_handle::add_participator(rpc::context& ctx,
                                                                                     storage_ptr_type& input,
                                                                                     const std::string& participator_key,

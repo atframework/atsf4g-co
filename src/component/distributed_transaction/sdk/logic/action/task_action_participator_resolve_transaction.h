@@ -13,7 +13,6 @@
 
 #include <memory/rc_ptr.h>
 #include <list>
-#include <memory>
 #include <string>
 #include <vector>
 

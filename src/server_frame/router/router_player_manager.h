@@ -8,8 +8,8 @@
 #pragma once
 
 #include <design_pattern/singleton.h>
-#include <std/functional.h>
 
+#include <functional>
 #include <memory>
 #include <string>
 

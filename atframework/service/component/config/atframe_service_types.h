@@ -3,17 +3,17 @@
 
 #pragma once
 
+#include <cstdint>
+
 namespace atframework {
 namespace component {
-struct service_type {
-  enum type {
-    EN_ATST_UNKNOWN = 0,
-    EN_ATST_ATPROXY,
-    EN_ATST_GATEWAY,
+enum class service_type : uint32_t {
+  kUnknown = 0,
+  kAtProxy = 1,
+  kAtGateway = 2,
 
-    EN_ATST_INNER_BOUND = 0x20,
-    EN_ATST_CUSTOM_START = 0x21,
-  };
+  kInternal = 10,
+  kCustomStart = 10,
 };
 }  // namespace component
 }  // namespace atframework

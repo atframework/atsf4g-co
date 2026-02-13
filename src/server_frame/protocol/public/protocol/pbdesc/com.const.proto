@@ -20,21 +20,21 @@ option (CONST_SETTINGS) = {
 // limits
 enum EnConstLimits {
   EN_CL_UNKNOWN = 0;
-  EN_CL_MAX_PROTOCOL_LENGTH = 262144;  // message length limit: 256K
-  EN_CL_MAX_OPEN_ID_LENGTH = 64;       // openid length limit
-  EN_CL_MAX_AUTH_TOKEN_LENGHT = 128;   // token length limit
+  EN_CL_MAX_PROTOCOL_LENGTH = 262144; // message length limit: 256K
+  EN_CL_MAX_OPEN_ID_LENGTH = 64; // openid length limit
+  EN_CL_MAX_AUTH_TOKEN_LENGHT = 128; // token length limit
 }
 
 // account type
 enum EnAccountTypeID {
-  EN_ATI_ACCOUNT_INNER = 0;      // inner: username/password
-  EN_ATI_ACCOUNT_IOS_GUEST = 1;  // ios guest
+  EN_ATI_ACCOUNT_INNER = 0; // inner: username/password
+  EN_ATI_ACCOUNT_IOS_GUEST = 1; // ios guest
 }
 
 // channel id
 enum EnPlatformChannelID {
-  EN_PCI_NONE = 0;              // NONE
-  EN_PCI_APPLE_GAMECENTER = 1;  // 苹果GAMECENTER渠道
+  EN_PCI_NONE = 0; // NONE
+  EN_PCI_APPLE_GAMECENTER = 1; // 苹果GAMECENTER渠道
 }
 
 // system type
@@ -60,58 +60,58 @@ enum EnSystemID {
 
 // 模拟器ID
 enum EnWellKnownSimulatorID {
-  EN_WKS_ID_NONE = 0;               // 未使用模拟器
-  EN_WKS_ID_TX_GAME_ASSISTANT = 1;  // 腾讯手游助手
+  EN_WKS_ID_NONE = 0; // 未使用模拟器
+  EN_WKS_ID_TX_GAME_ASSISTANT = 1; // 腾讯手游助手
 }
 
 // update type
 enum EnUpdateType {
-  EN_UPDATE_NONE = 0;              // no upgrade
-  EN_UPDATE_INVALID = -1;          // error parameters
-  EN_UPDATE_DEFAULT_RECOM = 1;     // recommand resource upgrade
-  EN_UPDATE_PACKAGE_RECOM = 2;     // recommand package upgrade
-  EN_UPDATE_FORCE_START = 1024;    // force upgrade bound
-  EN_UPDATE_DEFAULT_FORCE = 1025;  // force resource upgrade
-  EN_UPDATE_PACKAGE_FORCE = 1026;  // force package upgrade
+  EN_UPDATE_NONE = 0; // no upgrade
+  EN_UPDATE_INVALID = -1; // error parameters
+  EN_UPDATE_DEFAULT_RECOM = 1; // recommand resource upgrade
+  EN_UPDATE_PACKAGE_RECOM = 2; // recommand package upgrade
+  EN_UPDATE_FORCE_START = 1024; // force upgrade bound
+  EN_UPDATE_DEFAULT_FORCE = 1025; // force resource upgrade
+  EN_UPDATE_PACKAGE_FORCE = 1026; // force package upgrade
 }
 
 // user type
 enum EnVersionType {
-  EN_VERSION_DEFAULT = 0;  // default
-  EN_VERSION_GRAY = 1;     // gray
-  EN_VERSION_REVIEW = 2;   // review
+  EN_VERSION_DEFAULT = 0; // default
+  EN_VERSION_GRAY = 1; // gray
+  EN_VERSION_REVIEW = 2; // review
 
-  EN_VERSION_INNER = 10000;  // inner
-  EN_VERSION_GM = 10001;     // gm
+  EN_VERSION_INNER = 10000; // inner
+  EN_VERSION_GM = 10001; // gm
 }
 
 // chat channel type
 enum EnChatChannelType {
-  EN_CCT_INVALID = 0;              // invalid
-  EN_CCT_ALL_DEFAULT = 1001;       // all zones
-  EN_CCT_ALL_BOUND = 2000;         // all zones bound
-  EN_CCT_ZONE_DEFAULT = 2001;      // one zone
-  EN_CCT_ZONE_BOUND = 3000;        // one zone bound
-  EN_CCT_PERSONAL_DEFAULT = 3001;  // personal
-  EN_CCT_PERSONAL_BOUND = 4000;    // personal bound
+  EN_CCT_INVALID = 0; // invalid
+  EN_CCT_ALL_DEFAULT = 1001; // all zones
+  EN_CCT_ALL_BOUND = 2000; // all zones bound
+  EN_CCT_ZONE_DEFAULT = 2001; // one zone
+  EN_CCT_ZONE_BOUND = 3000; // one zone bound
+  EN_CCT_PERSONAL_DEFAULT = 3001; // personal
+  EN_CCT_PERSONAL_BOUND = 4000; // personal bound
 
-  EN_CCT_SUB_GUILD = 8001;  // subcribe-guild
+  EN_CCT_SUB_GUILD = 8001; // subcribe-guild
 }
 
 // item change type
 enum EnItemChgMainType {
-  EN_ICMT_UNKNOWN = 0;  // unknown
-  EN_ICMT_USE = 1;      // use
-  EN_ICMT_SALE = 2;     // sale
-  EN_ICMT_BUY = 3;      // 使用资源
+  EN_ICMT_UNKNOWN = 0; // unknown
+  EN_ICMT_USE = 1; // use
+  EN_ICMT_SALE = 2; // sale
+  EN_ICMT_BUY = 3; // 使用资源
 }
 
 // item change sub type
 enum EnItemChgSubType {
-  EN_ICST_DEFAULT = 0;  // default
+  EN_ICST_DEFAULT = 0; // default
 }
 
-// @see atframework/service/atgateway/protocols/libatgw_protocol_api.h
+// @see atframework/service/atgateway/protocol/libatgw_protocol_api.h
 // @see atframework::gateway::close_reason_t
 enum EnCloseReasonType {
   EN_CRT_UNKNOWN = 0;
@@ -120,12 +120,12 @@ enum EnCloseReasonType {
 
   // 0x20000 == 131072
   // 0x20000 - 0x30000 是自定义网络层不可重连，逻辑层可重连关闭原因
-  EN_CRT_SESSION_NOT_FOUND = 131073;  // session不存在
-  EN_CRT_SPEED_WARNING = 131074;      // 游戏速度异常
+  EN_CRT_SESSION_NOT_FOUND = 131073; // session不存在
+  EN_CRT_SPEED_WARNING = 131074; // 游戏速度异常
 
   // 0x30000 == 196608
   // 0x30000 - 0x40000 是自定义网络层不可重连，逻辑层不可重连关闭原因
-  EN_CRT_LOGIN_BAN = 196609;  // 封号
+  EN_CRT_LOGIN_BAN = 196609; // 封号
 }
 
 // error code

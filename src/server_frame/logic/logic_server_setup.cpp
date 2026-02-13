@@ -1,4 +1,4 @@
-// Copyright 2021 atframework
+// Copyright 2026 atframework
 
 #include "logic/logic_server_setup.h"
 
@@ -62,10 +62,8 @@
 #include <cstring>
 #include <ctime>
 #include <iostream>
-#include <map>
 #include <sstream>
 #include <utility>
-#include <vector>
 
 #include "logic/action/task_action_reload_remote_server_configure.h"
 #include "logic/handle_ss_rpc_logiccommonservice.h"
@@ -77,13 +75,13 @@
 #include "logic/hpa/logic_hpa_controller.h"
 
 namespace detail {
-static logic_server_common_module *g_last_common_module = NULL;
+static logic_server_common_module *g_last_common_module = nullptr;
 static std::shared_ptr<logic_server_common_module::stats_data_t> g_last_common_module_stats;
 }  // namespace detail
 
 namespace {
 static int show_server_time(util::cli::callback_param params) {
-  struct tm tt;
+  struct tm tt{};
   time_t now = atfw::util::time::time_utility::get_now();
   UTIL_STRFUNC_LOCALTIME_S(&now, &tt);
   char str[64] = {0};
@@ -126,7 +124,7 @@ static int debug_receive_stop_when_running(util::cli::callback_param) {
 
 static int show_configure_handler(util::cli::callback_param params) {
   // std::string atapp_configure =
-  auto app = atfw::atapp::app::get_last_instance();
+  auto *app = atfw::atapp::app::get_last_instance();
   if (nullptr != app) {
     std::string app_configure =
         std::string("atapp configure:\n") +
@@ -149,12 +147,12 @@ static int app_default_handle_on_receive_request(atfw::atapp::app &, const atfw:
 
   int ret = 0;
   switch (msg.type) {
-    case ::atframework::component::service_type::EN_ATST_GATEWAY: {
+    case static_cast<int32_t>(::atfw::component::service_type::kAtGateway): {
       ret = cs_msg_dispatcher::me()->dispatch(source, msg);
       break;
     }
 
-    case ::atframework::component::message_type::EN_ATST_SS_MSG: {
+    case static_cast<int32_t>(::atfw::component::message_type::kInServerMessage): {
       ret = ss_msg_dispatcher::me()->dispatch(source, msg);
       break;
     }
@@ -181,7 +179,7 @@ static int app_default_handle_on_forward_response(atfw::atapp::app &app,
 
   int ret = 0;
   switch (msg.type) {
-    case ::atframework::component::message_type::EN_ATST_SS_MSG: {
+    case static_cast<int32_t>(::atfw::component::message_type::kInServerMessage): {
       ret = ss_msg_dispatcher::me()->on_receive_send_data_response(source, msg, error_code);
       break;
     }
@@ -273,19 +271,19 @@ SERVER_FRAME_API int logic_server_setup_common(atfw::atapp::app &app,
   // set VCS version info
   const char *vcs_commit = server_frame_vcs_get_commit();
   const char *vcs_version = server_frame_vcs_get_version();
-  if (!(vcs_commit && *vcs_commit)) {
+  if (!(vcs_commit != nullptr && *vcs_commit)) {
     vcs_commit = server_frame_vcs_get_commit_sha();
   }
-  if ((vcs_commit && *vcs_commit) || (vcs_version && *vcs_version)) {
+  if ((vcs_commit != nullptr && *vcs_commit) || (vcs_version != nullptr && *vcs_version)) {
     std::stringstream ss;
-    ss << app.get_build_version() << std::endl;
-    if (vcs_commit && *vcs_commit) {
-      ss << "VCS Commit       : " << vcs_commit << std::endl;
+    ss << app.get_build_version() << '\n';
+    if (vcs_commit != nullptr && *vcs_commit) {
+      ss << "VCS Commit       : " << vcs_commit << '\n';
       app.set_metadata_label("vcs_commit", vcs_commit);
     }
 
-    if (vcs_version && *vcs_version) {
-      ss << "VCS Refer        : " << vcs_version << std::endl;
+    if (vcs_version != nullptr && *vcs_version) {
+      ss << "VCS Refer        : " << vcs_version << '\n';
       app.set_metadata_label("vcs_version", vcs_version);
     }
 
@@ -293,17 +291,17 @@ SERVER_FRAME_API int logic_server_setup_common(atfw::atapp::app &app,
     const char *package_version = server_frame_project_get_version();
     const char *bussiness_version = server_frame_get_user_bussiness_version();
 
-    if (vcs_server_branch && *vcs_server_branch) {
-      ss << "Server Branch    : " << vcs_server_branch << std::endl;
+    if (vcs_server_branch != nullptr && *vcs_server_branch) {
+      ss << "Server Branch    : " << vcs_server_branch << '\n';
       app.set_metadata_label("server_branch", vcs_server_branch);
     }
 
-    if (package_version && *package_version) {
-      ss << "Package Version  : " << package_version << std::endl;
+    if (vcs_server_branch != nullptr && *package_version) {
+      ss << "Package Version  : " << package_version << '\n';
     }
 
-    if (bussiness_version && *bussiness_version) {
-      ss << "Bussness Version : " << bussiness_version << std::endl;
+    if (vcs_server_branch != nullptr && *bussiness_version) {
+      ss << "Bussness Version : " << bussiness_version << '\n';
     }
 
 #ifdef __DATE__
@@ -311,7 +309,7 @@ SERVER_FRAME_API int logic_server_setup_common(atfw::atapp::app &app,
 #  ifdef __TIME__
     ss << " " << __TIME__;
 #  endif
-    ss << std::endl;
+    ss << '\n';
 #endif
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
@@ -328,7 +326,7 @@ SERVER_FRAME_API int logic_server_setup_common(atfw::atapp::app &app,
 #  if defined(__cpp_impl_coroutine) || defined(__cpp_lib_coroutine)
     ss << ")";
 #  endif
-    ss << std::endl;
+    ss << '\n';
 #else
     ss << "Coroutine mode   : stackful";
 #  ifdef LIBCOPP_MACRO_SYS_POSIX
@@ -338,11 +336,11 @@ SERVER_FRAME_API int logic_server_setup_common(atfw::atapp::app &app,
 #  else
     ss << "(pool)";
 #  endif
-    ss << std::endl;
+    ss << '\n';
 #endif
 
     {
-      auto sanitizer_name = server_frame_get_sanitizer_name();
+      const auto *sanitizer_name = server_frame_get_sanitizer_name();
       if (nullptr != sanitizer_name && *sanitizer_name) {
         ss << "Sanitizer        : " << sanitizer_name;
       }
@@ -472,7 +470,7 @@ SERVER_FRAME_API int logic_server_common_module::reload() {
   // Update rpc caller context data
   rpc::context::set_current_service(*get_app(), logic_config::me()->get_logic());
 
-  if (get_app() && get_app()->is_running()) {
+  if (get_app()->is_running()) {
     setup_etcd_event_handle();
   }
 
@@ -1214,7 +1212,7 @@ void logic_server_common_module::remove_service_zone_index(const atfw::atapp::et
 }
 
 SERVER_FRAME_API int64_t logic_server_common_module::get_service_discovery_version(
-    atframework::component::logic_service_type::type service_type_id) const noexcept {
+    atframework::component::logic_service_type service_type_id) const noexcept {
   int32_t type_id = static_cast<int32_t>(service_type_id);
   auto iter = service_discovery_version_.find(type_id);
   if (iter != service_discovery_version_.end()) {

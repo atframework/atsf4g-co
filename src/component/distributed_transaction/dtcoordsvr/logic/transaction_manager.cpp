@@ -107,7 +107,7 @@ rpc::result_code_type transaction_manager::create_transaction(
   storage.mutable_metadata()->mutable_prepare_timepoint()->set_nanos(now_nanos);
 
   if (storage.metadata().expire_timepoint().seconds() <= now) {
-    auto& cfg_value = logic_config::me()->get_server_cfg().dtcoordsvr().transaction_default_timeout();
+    const auto& cfg_value = logic_config::me()->get_server_cfg().dtcoordsvr().transaction_default_timeout();
     if (now_nanos + cfg_value.nanos() > 1000000000) {
       storage.mutable_metadata()->mutable_expire_timepoint()->set_seconds(now + cfg_value.seconds() + 1);
       storage.mutable_metadata()->mutable_expire_timepoint()->set_nanos(now_nanos + cfg_value.nanos() - 1000000000);
@@ -163,7 +163,7 @@ rpc::result_code_type transaction_manager::mutable_transaction(
   }
 
   uint32_t zone_id = get_transaction_zone_id(metadata);
-  int ret;
+  int ret = 0;
   if (!metadata.memory_only()) {
     ret = RPC_AWAIT_CODE_RESULT(lru_caches_.await_fetch(
         ctx, metadata.transaction_uuid(), out,
@@ -221,8 +221,8 @@ rpc::result_code_type transaction_manager::try_commit(rpc::context& ctx, transac
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
 
-  auto all_participators = trans->data_object.mutable_participators();
-  if (all_participators == NULL) {
+  auto* all_participators = trans->data_object.mutable_participators();
+  if (all_participators == nullptr) {
     FWLOGWARNING("Transaction {} commit for participator {}, has no participators",
                  trans->data_object.metadata().transaction_uuid(), participator_key);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_PARTICIPATOR_NOT_FOUND);
@@ -300,8 +300,8 @@ rpc::result_code_type transaction_manager::try_reject(rpc::context& ctx, transac
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
 
-  auto all_participators = trans->data_object.mutable_participators();
-  if (all_participators == NULL) {
+  auto* all_participators = trans->data_object.mutable_participators();
+  if (all_participators == nullptr) {
     FWLOGWARNING("Transaction {} reject for participator, has no participators",
                  trans->data_object.metadata().transaction_uuid(), participator_key);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_PARTICIPATOR_NOT_FOUND);

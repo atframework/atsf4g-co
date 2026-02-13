@@ -65,9 +65,11 @@ static uint64_t calculate_server_id(const atframework::distributed_system::trans
   }
 
   auto discovery = common_mod->get_discovery_index_by_type_zone(
-      atframework::component::logic_service_type::EN_LST_DTCOORDSVR, logic_config::me()->get_local_zone_id());
+      static_cast<uint64_t>(atframework::component::logic_service_type::kDtCoordSvr),
+      logic_config::me()->get_local_zone_id());
   if (!discovery || discovery->empty()) {
-    discovery = common_mod->get_discovery_index_by_type(atframework::component::logic_service_type::EN_LST_DTCOORDSVR);
+    discovery = common_mod->get_discovery_index_by_type(
+        static_cast<uint64_t>(atframework::component::logic_service_type::kDtCoordSvr));
   }
 
   if (!discovery || discovery->empty()) {
@@ -92,16 +94,18 @@ static void initialize_replication_server_ids(atframework::distributed_system::t
   }
 
   auto discovery = common_mod->get_discovery_index_by_type_zone(
-      atframework::component::logic_service_type::EN_LST_DTCOORDSVR, logic_config::me()->get_local_zone_id());
+      static_cast<uint64_t>(atframework::component::logic_service_type::kDtCoordSvr),
+      logic_config::me()->get_local_zone_id());
   if (!discovery || discovery->empty()) {
-    discovery = common_mod->get_discovery_index_by_type(atframework::component::logic_service_type::EN_LST_DTCOORDSVR);
+    discovery = common_mod->get_discovery_index_by_type(
+        static_cast<uint64_t>(atframework::component::logic_service_type::kDtCoordSvr));
   }
 
   if (!discovery || discovery->empty()) {
     return;
   }
 
-  auto& sorted_nodes = discovery->get_sorted_nodes();
+  const auto& sorted_nodes = discovery->get_sorted_nodes();
   if (sorted_nodes.empty()) {
     return;
   }
@@ -201,7 +205,7 @@ static inline void merge_transaction_participator(
 static void merge_transaction_participators(
     google::protobuf::Map<std::string, ::atframework::distributed_system::transaction_participator>& output,
     const google::protobuf::Map<std::string, ::atframework::distributed_system::transaction_participator>& input) {
-  for (auto& participator : input) {
+  for (const auto& participator : input) {
     auto output_iter = output.find(participator.first);
     if (output_iter == output.end()) {
       protobuf_copy_message(output[participator.first], participator.second);
@@ -367,8 +371,8 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type initialize_new_transaction
   metadata.mutable_prepare_timepoint()->set_seconds(util::time::time_utility::get_now());
   metadata.mutable_prepare_timepoint()->set_nanos(
       static_cast<int32_t>(util::time::time_utility::get_now_usec() * 1000));
-  int64_t timeout_sec;
-  int32_t timeout_nanos;
+  int64_t timeout_sec = 0;
+  int32_t timeout_nanos = 0;
   if (timeout.seconds() <= 0 && timeout.nanos() <= 0) {
     timeout_sec = 10;
     timeout_nanos = 0;
@@ -481,7 +485,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type create_transaction(
   } else {
     protobuf_copy_message(*req_body->mutable_storage(), inout);
   }
-  int res;
+  int res = 0;
 
   // Read-Your-Writes 一致性实现
   if (is_replication_mode(inout.metadata())) {
@@ -500,9 +504,9 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type create_transaction(
 
   if (req_body->GetArena() == inout.GetArena()) {
     if (nullptr == req_body->GetArena()) {
-      EXPLICIT_UNUSED_ATTR auto _storage = req_body->release_storage();
+      EXPLICIT_UNUSED_ATTR auto* _storage = req_body->release_storage();
     } else {
-      EXPLICIT_UNUSED_ATTR auto _storage = req_body->unsafe_arena_release_storage();
+      EXPLICIT_UNUSED_ATTR auto* _storage = req_body->unsafe_arena_release_storage();
     }
   }
 

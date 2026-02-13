@@ -10,7 +10,7 @@
 
 #include <gsl/select-gsl.h>
 
-#include <atgateway/protocols/libatgw_protocol_api.h>
+#include <atgateway/protocol/libatgw_protocol_api.h>
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
@@ -50,6 +50,7 @@ SERVER_FRAME_API rpc::result_code_type player_manager::remove(rpc::context &ctx,
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove(ctx, u->get_user_id(), u->get_zone_id(), force_kickoff, u.get())));
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 SERVER_FRAME_API rpc::result_code_type player_manager::remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
                                                               bool force_kickoff, player_cache *check_user) {
   if (0 == user_id) {
@@ -69,7 +70,7 @@ SERVER_FRAME_API rpc::result_code_type player_manager::remove(rpc::context &ctx,
     check_user->set_session(ctx, nullptr);
     if (check_sess && check_sess->get_player().get() == check_user) {
       check_sess->set_player(nullptr);
-      session_manager::me()->remove(check_sess, ::atframework::gateway::close_reason_t::EN_CRT_KICKOFF);
+      session_manager::me()->remove(check_sess, static_cast<int32_t>(::atfw::gateway::close_reason_t::kKickoff));
     }
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -96,6 +97,7 @@ SERVER_FRAME_API void player_manager::async_remove(rpc::context &ctx, player_ptr
   async_remove(ctx, u->get_user_id(), u->get_zone_id(), force_kickoff, u.get());
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 SERVER_FRAME_API void player_manager::async_remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
                                                    bool force_kickoff, player_cache *check_user) {
   auto invoke_result = rpc::async_invoke(
@@ -111,6 +113,7 @@ SERVER_FRAME_API void player_manager::async_remove(rpc::context &ctx, uint64_t u
   }
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 SERVER_FRAME_API rpc::result_code_type player_manager::save(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
                                                             const player_cache *check_user) {
   router_player_cache::key_t key(router_player_manager::me()->get_type_id(), zone_id, user_id);
@@ -138,6 +141,7 @@ SERVER_FRAME_API rpc::result_code_type player_manager::save(rpc::context &ctx, u
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 SERVER_FRAME_API bool player_manager::add_save_schedule(uint64_t user_id, uint32_t zone_id, bool kickoff) {
   router_player_cache::key_t key(router_player_manager::me()->get_type_id(), zone_id, user_id);
   router_player_cache::ptr_t cache = router_player_manager::me()->get_cache(key);
@@ -148,11 +152,12 @@ SERVER_FRAME_API bool player_manager::add_save_schedule(uint64_t user_id, uint32
 
   if (kickoff) {
     return router_manager_set::me()->add_downgrade_schedule(std::static_pointer_cast<router_object_base>(cache));
-  } else {
-    return router_manager_set::me()->add_save_schedule(std::static_pointer_cast<router_object_base>(cache));
   }
+
+  return router_manager_set::me()->add_save_schedule(std::static_pointer_cast<router_object_base>(cache));
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 SERVER_FRAME_API rpc::result_code_type player_manager::load(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
                                                             player_manager::player_ptr_t &output, bool force) {
   router_player_cache::key_t key(router_player_manager::me()->get_type_id(), zone_id, user_id);
@@ -173,6 +178,7 @@ SERVER_FRAME_API rpc::result_code_type player_manager::load(rpc::context &ctx, u
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 SERVER_FRAME_API size_t player_manager::size() const { return router_player_manager::me()->size(); }
 
 SERVER_FRAME_API rpc::result_code_type player_manager::create(
@@ -261,6 +267,7 @@ SERVER_FRAME_API rpc::result_code_type player_manager::create(
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 SERVER_FRAME_API player_manager::player_ptr_t player_manager::find(uint64_t user_id, uint32_t zone_id) const {
   router_player_cache::key_t key(router_player_manager::me()->get_type_id(), zone_id, user_id);
   router_player_cache::ptr_t cache = router_player_manager::me()->get_cache(key);

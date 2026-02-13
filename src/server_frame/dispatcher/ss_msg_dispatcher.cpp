@@ -8,7 +8,7 @@
 #include <log/log_wrapper.h>
 
 #include <atframe/atapp.h>
-#include <atgateway/protocols/libatgw_protocol_api.h>
+#include <atgateway/protocol/libatgw_protocol_api.h>
 #include <libatbus.h>
 #include <libatbus_protocol.h>
 
@@ -275,17 +275,15 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t node_id, atfra
   }
 
   size_t msg_buf_len = ss_msg.ByteSizeLong();
-  size_t tls_buf_len = atfw::gateway::libatgw_protocol_api::get_tls_length(
-      atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM);
-  if (msg_buf_len > tls_buf_len) {
+  auto tls_buffer =
+      atfw::gateway::libatgw_protocol_api::get_tls_buffer(atfw::gateway::libatgw_protocol_api::tls_buffer_t::kCustom);
+  if (msg_buf_len > tls_buffer.size()) {
     FWLOGERROR("send to proc [{:#x}: {}] failed: require {}, only have {}", node_id,
-               get_app()->convert_app_id_to_string(node_id), msg_buf_len, tls_buf_len);
+               get_app()->convert_app_id_to_string(node_id), msg_buf_len, tls_buffer.size());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
   }
 
-  ::google::protobuf::uint8 *buf_start =
-      reinterpret_cast< ::google::protobuf::uint8 *>(atfw::gateway::libatgw_protocol_api::get_tls_buffer(
-          atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM));
+  ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(tls_buffer.data());
   ss_msg.SerializeWithCachedSizesToArray(buf_start);
   FWLOGDEBUG("send msg to proc [{:#x}: {}] {} bytes\n{}", node_id, get_app()->convert_app_id_to_string(node_id),
              msg_buf_len, protobuf_mini_dumper_get_readable(ss_msg));
@@ -311,8 +309,9 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t node_id, const
     sequence = owner->get_bus_node()->allocate_message_sequence();
   }
 
-  int res = convert_from_atapp_error_code(
-      owner->send_message(node_id, atframework::component::message_type::EN_ATST_SS_MSG, msg_buf, msg_len, &sequence));
+  int res = convert_from_atapp_error_code(owner->send_message(
+      node_id, static_cast<int32_t>(::atfw::component::message_type::kInServerMessage),
+      gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(msg_buf), msg_len}, &sequence));
   if (res < 0) {
     FWLOGERROR("send msg to proc [{:#x}: {}] {} bytes failed, res: {}", node_id,
                get_app()->convert_app_id_to_string(node_id), msg_len, res);
@@ -352,17 +351,15 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const atfw::atapp::etcd
   }
 
   size_t msg_buf_len = ss_msg.ByteSizeLong();
-  size_t tls_buf_len = atfw::gateway::libatgw_protocol_api::get_tls_length(
-      atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM);
-  if (msg_buf_len > tls_buf_len) {
+  auto tls_buffer =
+      atfw::gateway::libatgw_protocol_api::get_tls_buffer(atfw::gateway::libatgw_protocol_api::tls_buffer_t::kCustom);
+  if (msg_buf_len > tls_buffer.size()) {
     FWLOGERROR("send to proc {} failed: require {}, only have {}", node.get_discovery_info().name(), msg_buf_len,
-               tls_buf_len);
+               tls_buffer.size());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
   }
 
-  ::google::protobuf::uint8 *buf_start =
-      reinterpret_cast< ::google::protobuf::uint8 *>(atfw::gateway::libatgw_protocol_api::get_tls_buffer(
-          atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM));
+  ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(tls_buffer.data());
   ss_msg.SerializeWithCachedSizesToArray(buf_start);
   FWLOGDEBUG("send msg to proc {} {} bytes\n{}", node.get_discovery_info().name(), msg_buf_len,
              protobuf_mini_dumper_get_readable(ss_msg));
@@ -383,9 +380,9 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const atfw::atapp::etcd
     return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
   }
 
-  int res = convert_from_atapp_error_code(owner->send_message(node.get_discovery_info().name(),
-                                                              atframework::component::message_type::EN_ATST_SS_MSG,
-                                                              msg_buf, msg_len, &sequence));
+  int res = convert_from_atapp_error_code(owner->send_message(
+      node.get_discovery_info().name(), static_cast<int32_t>(::atfw::component::message_type::kInServerMessage),
+      gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(msg_buf), msg_len}, &sequence));
   if (res < 0) {
     FWLOGERROR("{} send msg to proc {} {} bytes failed, res: {}", name(), node.get_discovery_info().name(), msg_len,
                res);
@@ -480,17 +477,15 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::broadcast(atframework::SSMsg &ss_msg
   }
 
   size_t msg_buf_len = ss_msg.ByteSizeLong();
-  size_t tls_buf_len = atfw::gateway::libatgw_protocol_api::get_tls_length(
-      atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM);
-  if (msg_buf_len > tls_buf_len) {
+  auto tls_buffer =
+      atfw::gateway::libatgw_protocol_api::get_tls_buffer(atfw::gateway::libatgw_protocol_api::tls_buffer_t::kCustom);
+  if (msg_buf_len > tls_buffer.size()) {
     FWLOGERROR("broadcast message {} failed: require {}, only have {}", pick_rpc_name(ss_msg), msg_buf_len,
-               tls_buf_len);
+               tls_buffer.size());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
   }
 
-  ::google::protobuf::uint8 *buf_start =
-      reinterpret_cast< ::google::protobuf::uint8 *>(atfw::gateway::libatgw_protocol_api::get_tls_buffer(
-          atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM));
+  ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(tls_buffer.data());
   ss_msg.SerializeWithCachedSizesToArray(buf_start);
   FWLOGDEBUG("broadcast message {} to {} nodes with {} bytes\n{}", pick_rpc_name(ss_msg), server_nodes.size(),
              msg_buf_len, protobuf_mini_dumper_get_readable(ss_msg));
@@ -517,12 +512,12 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::broadcast(atframework::SSMsg &ss_msg
 
 SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atfw::atapp::app::message_sender_t &source,
                                                      const atfw::atapp::app::message_t &msg) {
-  if (::atframework::component::message_type::EN_ATST_SS_MSG != msg.type) {
+  if (static_cast<int32_t>(::atfw::component::message_type::kInServerMessage) != msg.type) {
     FWLOGERROR("message type {} invalid", msg.type);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
-  if (0 == source.id || (nullptr == msg.data && msg.data_size > 0)) {
+  if (0 == source.id || msg.data.empty()) {
     FWLOGERROR("receive a message from unknown source or without data content");
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
@@ -538,7 +533,8 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atfw::atapp::app::mes
 
   dispatcher_raw_message callback_msg = dispatcher_make_default<dispatcher_raw_message>();
 
-  int32_t ret = unpack_protobuf_msg(*ss_msg, callback_msg, msg.data, msg.data_size);
+  int32_t ret =
+      unpack_protobuf_msg(*ss_msg, callback_msg, reinterpret_cast<const void *>(msg.data.data()), msg.data.size());
   if (ret != 0) {
     FWLOGERROR("{} unpack received message from [{:#x}: {}] failed, res: {}", name(), from_server_id,
                get_app()->convert_app_id_to_string(from_server_id), ret);
@@ -606,13 +602,13 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atfw::atapp::app::mes
 
 SERVER_FRAME_API int32_t ss_msg_dispatcher::on_receive_send_data_response(
     const atfw::atapp::app::message_sender_t &source, const atfw::atapp::app::message_t &msg, int32_t error_code) {
-  if (::atframework::component::message_type::EN_ATST_SS_MSG != msg.type) {
+  if (static_cast<int32_t>(::atfw::component::message_type::kInServerMessage) != msg.type) {
     FWLOGERROR("message type {} invalid", msg.type);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
-  if (0 == source.id || (nullptr == msg.data && msg.data_size > 0)) {
-    FWLOGERROR("send a message from unknown source");
+  if (0 == source.id) {
+    FWLOGERROR("receive a message from unknown source");
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
@@ -622,14 +618,14 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::on_receive_send_data_response(
     return error_code;
   }
 
-  if (nullptr == msg.data && msg.data_size > 0) {
+  if (msg.data.empty()) {
     FWLOGERROR("receive_send_data_response from [{:#x}: {}] without data, res: {}", source.id,
                get_app()->convert_app_id_to_string(source.id), error_code);
     return error_code;
   }
 
-  const void *buffer = msg.data;
-  size_t len = msg.data_size;
+  const void *buffer = reinterpret_cast<const void *>(msg.data.data());
+  size_t len = msg.data.size();
 
   rpc::context ctx{rpc::context::create_without_task()};
   atframework::SSMsg *ss_msg = ctx.create<atframework::SSMsg>();

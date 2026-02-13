@@ -47,7 +47,15 @@
 #  undef GetMessage
 #endif
 
-namespace detail {
+#if defined(max)
+#  undef max
+#endif
+
+#if defined(min)
+#  undef min
+#endif
+
+namespace {
 static void load_field_string_filter(const std::string& input, rapidjson::Value& output, rapidjson::Document& doc,
                                      const rapidjson_helper_load_options& options) {
   switch (options.string_mode) {
@@ -689,7 +697,7 @@ static void dump_field_item(const rapidjson::Value& src, ::google::protobuf::Mes
     dump_pick_field(val, dst, fds, options);
   }
 }
-}  // namespace detail
+}  // namespace
 
 SERVER_FRAME_API std::string rapidjson_helper_stringify(const rapidjson::Document& doc, size_t more_reserve_size) {
   // Stringify the DOM
@@ -857,7 +865,7 @@ SERVER_FRAME_API void rapidjson_helper_dump_to(const rapidjson::Value& src, ::go
   }
 
   for (int i = 0; i < desc->field_count(); ++i) {
-    detail::dump_field_item(src, dst, desc->field(i), options);
+    dump_field_item(src, dst, desc->field(i), options);
   }
 }
 
@@ -871,13 +879,13 @@ SERVER_FRAME_API void rapidjson_helper_load_from(rapidjson::Value& dst, rapidjso
     }
 
     for (int i = 0; i < desc->field_count(); ++i) {
-      detail::load_field_item(dst, src, desc->field(i), doc, options);
+      load_field_item(dst, src, desc->field(i), doc, options);
     }
   } else {
     std::vector<const ::google::protobuf::FieldDescriptor*> fields_with_data;
     src.GetReflection()->ListFields(src, &fields_with_data);
     for (size_t i = 0; i < fields_with_data.size(); ++i) {
-      detail::load_field_item(dst, src, fields_with_data[i], doc, options);
+      load_field_item(dst, src, fields_with_data[i], doc, options);
     }
   }
 }

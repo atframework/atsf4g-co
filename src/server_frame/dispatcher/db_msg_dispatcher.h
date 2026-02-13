@@ -1,5 +1,5 @@
-//
-// Created by owt50 on 2016/9/27.
+// Copyright 2026 atframework
+// Created by owent on 2016/9/27.
 //
 
 #ifndef DISPATCHER_DB_MSG_DISPATCHER_H
@@ -8,7 +8,6 @@
 #pragma once
 
 #include <config/compile_optimize.h>
-#include <std/functional.h>
 
 #include <config/compiler_features.h>
 #include <design_pattern/singleton.h>
@@ -80,7 +79,7 @@ class db_msg_dispatcher : public dispatcher_implement {
   enum class script_type : uint8_t {
     kInvalid = 0,
     kCompareAndSetHashTable = 1,
-    kMax  // Unused
+    kMax = 2  // Unused
   };
 
  private:

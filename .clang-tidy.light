@@ -18,6 +18,8 @@ Checks:
   # 老代码大量使用，以后处理
   - '-bugprone-multi-level-implicit-pointer-conversion'
   - '-bugprone-macro-parentheses'
+  # 以下是框架设计模式，不需要告警
+  - "-cppcoreguidelines-avoid-reference-coroutine-parameters"
 WarningsAsErrors: ''
 HeaderFileExtensions:
   - ''

@@ -15,7 +15,7 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include <atgateway/protocols/libatgw_protocol_api.h>
+#include <atgateway/protocol/libatgw_protocol_api.h>
 
 #include <logic/session_manager.h>
 
@@ -91,7 +91,7 @@ rpc::result_code_type router_player_manager::on_evt_remove_object(rpc::context &
     std::shared_ptr<player_cache> check_binded_user = s->get_player();
     if (!check_binded_user || check_binded_user == obj) {
       s->set_player(nullptr);
-      session_manager::me()->remove(s, ::atframework::gateway::close_reason_t::EN_CRT_KICKOFF);
+      session_manager::me()->remove(s, static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff));
     }
   }
 
@@ -108,7 +108,7 @@ rpc::result_code_type router_player_manager::on_evt_object_removed(rpc::context 
     std::shared_ptr<player_cache> check_binded_user = s->get_player();
     if (!check_binded_user || check_binded_user == obj) {
       s->set_player(nullptr);
-      session_manager::me()->remove(s, ::atframework::gateway::close_reason_t::EN_CRT_KICKOFF);
+      session_manager::me()->remove(s, static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff));
     }
   }
 

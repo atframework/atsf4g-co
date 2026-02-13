@@ -18,7 +18,7 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include <atgateway/protocols/libatgw_protocol_api.h>
+#include <atgateway/protocol/libatgw_protocol_api.h>
 #include <dispatcher/cs_msg_dispatcher.h>
 
 #include <utility/protobuf_mini_dumper.h>
@@ -213,17 +213,15 @@ SERVER_FRAME_API int32_t session::send_msg_to_client(rpc::context &ctx, atframew
   alloc_session_sequence(msg);
 
   size_t msg_buf_len = msg.ByteSizeLong();
-  size_t tls_buf_len = atfw::gateway::libatgw_protocol_api::get_tls_length(
-      atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM);
-  if (msg_buf_len > tls_buf_len) {
+  auto tls_buffuer =
+      atfw::gateway::libatgw_protocol_api::get_tls_buffer(atfw::gateway::libatgw_protocol_api::tls_buffer_t::kCustom);
+  if (msg_buf_len > tls_buffuer.size()) {
     FWLOGERROR("send to gateway [{:#x}, {}] failed: require {}, only have {}", id_.node_id, id_.session_id, msg_buf_len,
-               tls_buf_len);
+               tls_buffuer.size());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
   }
 
-  ::google::protobuf::uint8 *buf_start =
-      reinterpret_cast< ::google::protobuf::uint8 *>(atfw::gateway::libatgw_protocol_api::get_tls_buffer(
-          atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM));
+  ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(tls_buffuer.data());
   msg.SerializeWithCachedSizesToArray(buf_start);
   FWLOGDEBUG(
       "send msg to client:[{:#x}, {}] {} bytes.(session sequence: {}, client sequence: {}, server sequence: {})\n{}",
@@ -242,16 +240,15 @@ SERVER_FRAME_API int32_t session::send_msg_to_client(const void *msg_data, size_
 
 SERVER_FRAME_API int32_t session::broadcast_msg_to_client(uint64_t node_id, const atframework::CSMsg &msg) {
   size_t msg_buf_len = msg.ByteSizeLong();
-  size_t tls_buf_len = atfw::gateway::libatgw_protocol_api::get_tls_length(
-      atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM);
-  if (msg_buf_len > tls_buf_len) {
-    FWLOGERROR("broadcast to gateway [{:#x}] failed: require {}, only have {}", node_id, msg_buf_len, tls_buf_len);
+  auto tls_buffuer =
+      atfw::gateway::libatgw_protocol_api::get_tls_buffer(atfw::gateway::libatgw_protocol_api::tls_buffer_t::kCustom);
+  if (msg_buf_len > tls_buffuer.size()) {
+    FWLOGERROR("broadcast to gateway [{:#x}] failed: require {}, only have {}", node_id, msg_buf_len,
+               tls_buffuer.size());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
   }
 
-  ::google::protobuf::uint8 *buf_start =
-      reinterpret_cast< ::google::protobuf::uint8 *>(atfw::gateway::libatgw_protocol_api::get_tls_buffer(
-          atfw::gateway::libatgw_protocol_api::tls_buffer_t::EN_TBT_CUSTOM));
+  ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(tls_buffuer.data());
   msg.SerializeWithCachedSizesToArray(buf_start);
   FWLOGDEBUG("broadcast msg to gateway [{:#x}] {} bytes\n{}", node_id, msg_buf_len,
              protobuf_mini_dumper_get_readable(msg));

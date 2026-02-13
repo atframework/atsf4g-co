@@ -17,11 +17,6 @@
 
 #include <rpc/rpc_lru_cache_map.h>
 
-#include <stdint.h>
-#include <cstddef>
-#include <memory>
-#include <unordered_map>
-
 class transaction_manager : public atfw::util::design_pattern::singleton<transaction_manager> {
  public:
   using transaction_lru_map_type =
