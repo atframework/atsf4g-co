@@ -94,14 +94,14 @@ int session_manager::listen(const char *address) {
         uv_tcp_nodelay(tcp_handle, 1);
       } else {
         FWLOGERROR("create uv_tcp_t failed.");
-        ret = error_code_t::EN_ECT_NETWORK;
+        ret = static_cast<int>(error_code_t::kNetwork);
         break;
       }
 
       libuv_res = uv_tcp_init(evloop_, tcp_handle);
       if (0 != libuv_res) {
         FWLOGERROR("init listen to {} failed, libuv_res: {}({})", address, libuv_res, uv_strerror(libuv_res));
-        ret = error_code_t::EN_ECT_NETWORK;
+        ret = static_cast<int>(error_code_t::kNetwork);
         break;
       }
 
@@ -112,7 +112,7 @@ int session_manager::listen(const char *address) {
         if (0 != libuv_res) {
           FWLOGERROR("bind sock to tcp/ip v4 {}:{} failed, libuv_res: {}({})", addr.host, addr.port, libuv_res,
                      uv_strerror(libuv_res));
-          ret = error_code_t::EN_ECT_NETWORK;
+          ret = static_cast<int>(error_code_t::kNetwork);
           break;
         }
 
@@ -120,7 +120,7 @@ int session_manager::listen(const char *address) {
         if (0 != libuv_res) {
           FWLOGERROR("listen to tcp/ip v4 {}:{} failed, libuv_res: {}({})", addr.host, addr.port, libuv_res,
                      uv_strerror(libuv_res));
-          ret = error_code_t::EN_ECT_NETWORK;
+          ret = static_cast<int>(error_code_t::kNetwork);
           break;
         }
 
@@ -132,7 +132,7 @@ int session_manager::listen(const char *address) {
         if (0 != libuv_res) {
           FWLOGERROR("bind sock to tcp/ip v6 {}:{} failed, libuv_res: {}({})", addr.host, addr.port, libuv_res,
                      uv_strerror(libuv_res));
-          ret = error_code_t::EN_ECT_NETWORK;
+          ret = static_cast<int>(error_code_t::kNetwork);
           break;
         }
 
@@ -140,7 +140,7 @@ int session_manager::listen(const char *address) {
         if (0 != libuv_res) {
           FWLOGERROR("listen to tcp/ip v6 {}:{} failed, libuv_res: {}({})", addr.host, addr.port, libuv_res,
                      uv_strerror(libuv_res));
-          ret = error_code_t::EN_ECT_NETWORK;
+          ret = static_cast<int>(error_code_t::kNetwork);
           break;
         }
 
@@ -153,7 +153,7 @@ int session_manager::listen(const char *address) {
         uv_stream_set_blocking(res.get(), 0);
       } else {
         FWLOGERROR("create uv_pipe_t failed.");
-        ret = error_code_t::EN_ECT_NETWORK;
+        ret = static_cast<int>(error_code_t::kNetwork);
         break;
       }
 
@@ -161,27 +161,27 @@ int session_manager::listen(const char *address) {
       if (0 != libuv_res) {
         FWLOGERROR("init listen to unix sock {} failed, libuv_res: {}({})", addr.host, libuv_res,
                    uv_strerror(libuv_res));
-        ret = error_code_t::EN_ECT_NETWORK;
+        ret = static_cast<int>(error_code_t::kNetwork);
         break;
       }
 
       libuv_res = uv_pipe_bind(pipe_handle, addr.host.c_str());
       if (0 != libuv_res) {
         FWLOGERROR("bind pipe to unix sock {} failed, libuv_res: {}({})", addr.host, libuv_res, uv_strerror(libuv_res));
-        ret = error_code_t::EN_ECT_NETWORK;
+        ret = static_cast<int>(error_code_t::kNetwork);
         break;
       }
 
       libuv_res = uv_listen(res.get(), conf_.origin_conf.listen().backlog(), on_evt_accept_pipe);
       if (0 != libuv_res) {
         FWLOGERROR("listen to unix sock {} failed, libuv_res: {}({})", addr.host, libuv_res, uv_strerror(libuv_res));
-        ret = error_code_t::EN_ECT_NETWORK;
+        ret = static_cast<int>(error_code_t::kNetwork);
         break;
       }
 
       pipe_handle->data = this;
     } else {
-      ret = error_code_t::EN_ECT_INVALID_ADDRESS;
+      ret = static_cast<int>(error_code_t::kInvalidAddress);
     }
   } while (false);
 
@@ -202,21 +202,21 @@ int session_manager::reset() {
   // close all sessions
   for (session_map_t::iterator iter = actived_sessions_.begin(); iter != actived_sessions_.end(); ++iter) {
     if (iter->second) {
-      iter->second->close(close_reason_t::EN_CRT_SERVER_CLOSED);
+      iter->second->close(static_cast<int>(close_reason_t::kServerClosed));
     }
   }
   actived_sessions_.clear();
 
   for (std::list<session_timeout_t>::iterator iter = first_idle_.begin(); iter != first_idle_.end(); ++iter) {
     if (iter->s) {
-      iter->s->close(close_reason_t::EN_CRT_SERVER_CLOSED);
+      iter->s->close(static_cast<int>(close_reason_t::kServerClosed));
     }
   }
   first_idle_.clear();
 
   for (session_map_t::iterator iter = reconnect_cache_.begin(); iter != reconnect_cache_.end(); ++iter) {
     if (iter->second) {
-      iter->second->close(close_reason_t::EN_CRT_SERVER_CLOSED);
+      iter->second->close(static_cast<int>(close_reason_t::kServerClosed));
     }
   }
   reconnect_cache_.clear();
@@ -224,7 +224,7 @@ int session_manager::reset() {
   for (std::list<session_timeout_t>::iterator iter = reconnect_timeout_.begin(); iter != reconnect_timeout_.end();
        ++iter) {
     if (iter->s) {
-      iter->s->close(close_reason_t::EN_CRT_SERVER_CLOSED);
+      iter->s->close(static_cast<int>(close_reason_t::kServerClosed));
     }
   }
   reconnect_timeout_.clear();
@@ -267,7 +267,7 @@ int session_manager::tick() {
 
     if (reconnect_timeout_.front().s) {
       session::ptr_t s = reconnect_timeout_.front().s;
-      if (s->check_flag(session::flag_t::EN_FT_RECONNECTED)) {
+      if (s->check_flag(session::flag_t::kReconnected)) {
         FWLOGINFO("session {}({}) reconnected, cleanup", s->get_id(), reinterpret_cast<const void *>(s.get()));
       } else {
         FWLOGINFO("session {}({}) reconnect timeout, close and cleanup", s->get_id(),
@@ -275,9 +275,9 @@ int session_manager::tick() {
       }
       reconnect_cache_.erase(s->get_id());
 
-      // timeout and unset EN_FT_WAIT_RECONNECT to send remove notify
-      s->set_flag(session::flag_t::EN_FT_WAIT_RECONNECT, false);
-      s->close_with_manager(close_reason_t::EN_CRT_LOGOUT, this);
+      // timeout and unset kWaitReconnect to send remove notify
+      s->set_flag(session::flag_t::kWaitReconnect, false);
+      s->close_with_manager(static_cast<int>(close_reason_t::kLogout), this);
     }
     reconnect_timeout_.pop_front();
   }
@@ -291,9 +291,9 @@ int session_manager::tick() {
     if (first_idle_.front().s) {
       session::ptr_t s = first_idle_.front().s;
 
-      if (!s->check_flag(session::flag_t::EN_FT_REGISTERED) && !s->check_flag(session::flag_t::EN_FT_CLOSING)) {
+      if (!s->check_flag(session::flag_t::kRegistered) && !s->check_flag(session::flag_t::kClosing)) {
         FWLOGINFO("session {}({}) register timeout", s->get_id(), reinterpret_cast<const void *>(s.get()));
-        s->close(close_reason_t::EN_CRT_FIRST_IDLE);
+        s->close(static_cast<int>(close_reason_t::kFirstIdle));
       }
     }
     first_idle_.pop_front();
@@ -310,13 +310,13 @@ int session_manager::close(session::id_t sess_id, int reason, bool allow_reconne
       iter = reconnect_cache_.find(sess_id);
       if (reconnect_cache_.end() != iter) {
         iter->second->close(reason);
-        iter->second->set_flag(session::flag_t::EN_FT_WAIT_RECONNECT, false);
+        iter->second->set_flag(session::flag_t::kWaitReconnect, false);
         reconnect_cache_.erase(iter);
       } else {
-        return error_code_t::EN_ECT_SESSION_NOT_FOUND;
+        return static_cast<int>(error_code_t::kSessionNotFound);
       }
     } else {
-      return error_code_t::EN_ECT_SESSION_NOT_FOUND;
+      return static_cast<int>(error_code_t::kSessionNotFound);
     }
 
     return 0;
@@ -334,8 +334,8 @@ int session_manager::close(session::id_t sess_id, int reason, bool allow_reconne
               reinterpret_cast<const void *>(sess_timer.s.get()), sess_timer.timeout,
               conf_.origin_conf.client().reconnect_timeout().seconds());
 
-    // maybe transfer reconnecting session, old session still keep EN_FT_WAIT_RECONNECT flag
-    sess_timer.s->set_flag(session::flag_t::EN_FT_WAIT_RECONNECT, true);
+    // maybe transfer reconnecting session, old session still keeps kWaitReconnect flag
+    sess_timer.s->set_flag(session::flag_t::kWaitReconnect, true);
 
     // just close fd
     sess_timer.s->close_fd(reason);
@@ -352,16 +352,17 @@ int session_manager::close(session::id_t sess_id, int reason, bool allow_reconne
 
 void session_manager::cleanup() { app_ = nullptr; }
 
-int session_manager::post_data(::atbus::bus_id_t tid, ::atframework::gw::ss_msg &msg) {
-  return post_data(tid, ::atframework::component::service_type::EN_ATST_GATEWAY, msg);
+int session_manager::post_data(::atbus::bus_id_t tid, ::atframework::gateway::server_message &message) {
+  return post_data(tid, ::atframework::component::service_type::EN_ATST_GATEWAY, message);
 }
 
-int session_manager::post_data(::atbus::bus_id_t tid, int32_t type, ::atframework::gw::ss_msg &msg) {
+int session_manager::post_data(::atbus::bus_id_t tid, int32_t type, ::atframework::gateway::server_message &message) {
   // send to server with type = ::atframework::component::service_type::EN_ATST_GATEWAY
   std::string packed_buffer;
-  if (false == msg.SerializeToString(&packed_buffer)) {
-    FWLOGERROR("can not send ss message to {:#x} with serialize failed: {}", tid, msg.InitializationErrorString());
-    return error_code_t::EN_ECT_BAD_DATA;
+  if (false == message.SerializeToString(&packed_buffer)) {
+    FWLOGERROR("can not send server message to {:#x} with serialize failed: {}", tid,
+               message.InitializationErrorString());
+    return static_cast<int>(error_code_t::kBadData);
   }
 
   return post_data(tid, type,
@@ -372,22 +373,24 @@ int session_manager::post_data(::atbus::bus_id_t tid, int32_t type, ::atframewor
 int session_manager::post_data(::atbus::bus_id_t tid, int32_t type, gsl::span<const unsigned char> data) {
   // send to process
   if (nullptr == app_) {
-    return error_code_t::EN_ECT_LOST_MANAGER;
+    return static_cast<int>(error_code_t::kLostManager);
   }
 
   return app_->send_message(tid, type, data);
 }
 
-int session_manager::post_data(const std::string &tname, ::atframework::gw::ss_msg &msg) {
-  return post_data(tname, ::atframework::component::service_type::EN_ATST_GATEWAY, msg);
+int session_manager::post_data(const std::string &tname, ::atframework::gateway::server_message &message) {
+  return post_data(tname, ::atframework::component::service_type::EN_ATST_GATEWAY, message);
 }
 
-int session_manager::post_data(const std::string &tname, int32_t type, ::atframework::gw::ss_msg &msg) {
+int session_manager::post_data(const std::string &tname, int32_t type,
+                               ::atframework::gateway::server_message &message) {
   // send to server with type = ::atframework::component::service_type::EN_ATST_GATEWAY
   std::string packed_buffer;
-  if (false == msg.SerializeToString(&packed_buffer)) {
-    FWLOGERROR("can not send ss message to {} with serialize failed: {}", tname, msg.InitializationErrorString());
-    return error_code_t::EN_ECT_BAD_DATA;
+  if (false == message.SerializeToString(&packed_buffer)) {
+    FWLOGERROR("can not send server message to {} with serialize failed: {}", tname,
+               message.InitializationErrorString());
+    return static_cast<int>(error_code_t::kBadData);
   }
 
   return post_data(tname, type,
@@ -398,7 +401,7 @@ int session_manager::post_data(const std::string &tname, int32_t type, ::atframe
 int session_manager::post_data(const std::string &tname, int32_t type, gsl::span<const unsigned char> data) {
   // send to process
   if (nullptr == app_) {
-    return error_code_t::EN_ECT_LOST_MANAGER;
+    return static_cast<int>(error_code_t::kLostManager);
   }
 
   return app_->send_message(tname, type, data);
@@ -407,16 +410,16 @@ int session_manager::post_data(const std::string &tname, int32_t type, gsl::span
 int session_manager::push_data(session::id_t sess_id, gsl::span<const unsigned char> data) {
   session_map_t::iterator iter = actived_sessions_.find(sess_id);
   if (actived_sessions_.end() == iter) {
-    return error_code_t::EN_ECT_SESSION_NOT_FOUND;
+    return static_cast<int>(error_code_t::kSessionNotFound);
   }
 
   return iter->second->send_to_client(data);
 }
 
 int session_manager::broadcast_data(gsl::span<const unsigned char> data) {
-  int ret = error_code_t::EN_ECT_SESSION_NOT_FOUND;
+  int ret = static_cast<int>(error_code_t::kSessionNotFound);
   for (session_map_t::iterator iter = actived_sessions_.begin(); iter != actived_sessions_.end(); ++iter) {
-    if (iter->second->check_flag(session::flag_t::EN_FT_REGISTERED)) {
+    if (iter->second->check_flag(session::flag_t::kRegistered)) {
       int res = iter->second->send_to_client(data);
       if (0 != res) {
         FWLOGERROR("broadcast data to session {} failed, res: {}", iter->first, res);
@@ -435,7 +438,7 @@ int session_manager::set_session_router(session::id_t sess_id, ::atbus::bus_id_t
                                         const std::string &router_node_name) {
   session_map_t::iterator iter = actived_sessions_.find(sess_id);
   if (actived_sessions_.end() == iter) {
-    return error_code_t::EN_ECT_SESSION_NOT_FOUND;
+    return static_cast<int>(error_code_t::kSessionNotFound);
   }
 
   iter->second->set_router(router_node_id, router_node_name);
@@ -455,7 +458,7 @@ int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
       if (new_sess.get_protocol_handle()->check_reconnect(iter->second->get_protocol_handle())) {
         FWLOGDEBUG("session {}:{} try to reconnect {} and need to close old connection {}", new_sess.get_peer_host(),
                    new_sess.get_peer_port(), old_sess_id, reinterpret_cast<const void *>(iter->second.get()));
-        close(old_sess_id, close_reason_t::EN_CRT_LOGOUT, true);
+        close(old_sess_id, static_cast<int>(close_reason_t::kLogout), true);
       } else {
         FWLOGDEBUG("session {}:{} try to reconnect {} to old connection {}, but check_reconnect failed",
                    new_sess.get_peer_host(), new_sess.get_peer_port(), old_sess_id,
@@ -472,34 +475,34 @@ int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
   }
 
   if (iter == reconnect_cache_.end() || !iter->second) {
-    return error_code_t::EN_ECT_SESSION_NOT_FOUND;
+    return static_cast<int>(error_code_t::kSessionNotFound);
   }
 
   // check if old session closed
-  if (iter->second->check_flag(session::flag_t::EN_FT_HAS_FD)) {
-    return error_code_t::EN_ECT_ALREADY_HAS_FD;
+  if (iter->second->check_flag(session::flag_t::kHasFd)) {
+    return static_cast<int>(error_code_t::kAlreadyHasFd);
   }
 
   // check if old session not reconnected
-  if (iter->second->check_flag(session::flag_t::EN_FT_RECONNECTED)) {
+  if (iter->second->check_flag(session::flag_t::kReconnected)) {
     FWLOGERROR("session {}:{} try to reconnect {}, but old session already reconnected", new_sess.get_peer_host(),
                new_sess.get_peer_port(), old_sess_id);
-    return error_code_t::EN_ECT_SESSION_NOT_FOUND;
+    return static_cast<int>(error_code_t::kSessionNotFound);
   }
 
   // run proto check
   if (nullptr == new_sess.get_protocol_handle() || nullptr == iter->second->get_protocol_handle()) {
-    return error_code_t::EN_ECT_BAD_PROTOCOL;
+    return static_cast<int>(error_code_t::kBadProtocol);
   }
 
   if (!has_reconnect_checked && !new_sess.get_protocol_handle()->check_reconnect(iter->second->get_protocol_handle())) {
-    return error_code_t::EN_ECT_REFUSE_RECONNECT;
+    return static_cast<int>(error_code_t::kRefuseReconnect);
   }
 
   // init with reconnect
   new_sess.init_reconnect(*iter->second);
   // close old session
-  iter->second->close(close_reason_t::EN_CRT_LOGOUT);
+  iter->second->close(static_cast<int>(close_reason_t::kLogout));
 
   // erase reconnect cache, this session id may reconnect again
   reconnect_cache_.erase(iter);
@@ -508,12 +511,12 @@ int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
 
 int session_manager::active_session(session::ptr_t sess) {
   if (!sess) {
-    return error_code_t::EN_ECT_SESSION_NOT_FOUND;
+    return static_cast<int>(error_code_t::kSessionNotFound);
   }
 
   session_map_t::iterator iter = actived_sessions_.find(sess->get_id());
   if (iter != actived_sessions_.end()) {
-    close(sess->get_id(), close_reason_t::EN_CRT_KICKOFF);
+    close(sess->get_id(), static_cast<int>(close_reason_t::kKickoff));
   }
 
   int ret = sess->send_new_session();
@@ -527,37 +530,38 @@ int session_manager::active_session(session::ptr_t sess) {
 
 void session_manager::assign_default_router(session &sess) const {
   bool by_setting = true;
+  const atfw::atapp::protocol::atapp_metadata *policy_selector = nullptr;
+  if (conf_.origin_conf.client().default_router().has_policy_selector()) {
+    policy_selector = &conf_.origin_conf.client().default_router().policy_selector();
+  }
   switch (conf_.origin_conf.client().default_router().policy()) {
-    case ::atframework::gw::atgateway_router_policy::EN_ATGW_ROUTER_POLICY_RANDOM: {
+    case ::atframework::gateway::atgateway_router_policy::EN_ATGW_ROUTER_POLICY_RANDOM: {
       if (nullptr == app_) {
         break;
       }
-      auto select_node = app_->get_global_discovery().get_node_by_random(
-          &conf_.origin_conf.client().default_router().policy_selector());
+      auto select_node = app_->get_global_discovery().get_node_by_random(policy_selector);
       if (select_node) {
         sess.set_router(select_node->get_discovery_info().id(), select_node->get_discovery_info().name());
         by_setting = false;
       }
       break;
     }
-    case ::atframework::gw::atgateway_router_policy::EN_ATGW_ROUTER_POLICY_ROUND_ROBIN: {
+    case ::atframework::gateway::atgateway_router_policy::EN_ATGW_ROUTER_POLICY_ROUND_ROBIN: {
       if (nullptr == app_) {
         break;
       }
-      auto select_node = app_->get_global_discovery().get_node_by_round_robin(
-          &conf_.origin_conf.client().default_router().policy_selector());
+      auto select_node = app_->get_global_discovery().get_node_by_round_robin(policy_selector);
       if (select_node) {
         sess.set_router(select_node->get_discovery_info().id(), select_node->get_discovery_info().name());
         by_setting = false;
       }
       break;
     }
-    case ::atframework::gw::atgateway_router_policy::EN_ATGW_ROUTER_POLICY_HASH: {
+    case ::atframework::gateway::atgateway_router_policy::EN_ATGW_ROUTER_POLICY_HASH: {
       if (nullptr == app_) {
         break;
       }
-      auto select_node = app_->get_global_discovery().get_node_hash_by_consistent_hash(
-          sess.get_id(), &conf_.origin_conf.client().default_router().policy_selector());
+      auto select_node = app_->get_global_discovery().get_node_hash_by_consistent_hash(sess.get_id(), policy_selector);
       if (select_node.node) {
         sess.set_router(select_node.node->get_discovery_info().id(), select_node.node->get_discovery_info().name());
         by_setting = false;
@@ -625,7 +629,7 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   // create proto object and session object
   int res = sess->accept_tcp(server);
   if (0 != res) {
-    sess->close(close_reason_t::EN_CRT_SERVER_BUSY);
+    sess->close(static_cast<int>(close_reason_t::kServerBusy));
     return;
   }
 
@@ -633,7 +637,7 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   if (mgr->conf_.origin_conf.listen().max_client() > 0 &&
       mgr->reconnect_cache_.size() + mgr->actived_sessions_.size() >= mgr->conf_.origin_conf.listen().max_client()) {
     FWLOGWARNING("accept tcp socket failed, gateway have too many sessions now");
-    sess->close(close_reason_t::EN_CRT_SERVER_BUSY);
+    sess->close(static_cast<int>(close_reason_t::kServerBusy));
     return;
   }
 
@@ -703,14 +707,14 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
 
   int res = sess->accept_pipe(server);
   if (0 != res) {
-    sess->close(close_reason_t::EN_CRT_SERVER_BUSY);
+    sess->close(static_cast<int>(close_reason_t::kServerBusy));
     return;
   }
 
   // check session number limit
   if (mgr->conf_.origin_conf.listen().max_client() > 0 &&
       mgr->reconnect_cache_.size() + mgr->actived_sessions_.size() >= mgr->conf_.origin_conf.listen().max_client()) {
-    sess->close(close_reason_t::EN_CRT_SERVER_BUSY);
+    sess->close(static_cast<int>(close_reason_t::kServerBusy));
     return;
   }
 

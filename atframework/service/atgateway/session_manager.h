@@ -8,7 +8,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
-#include <atgateway/protocols/libatgw_server_config.pb.h>
+#include <atgateway/protocol/libatgw_server_config.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
@@ -32,7 +32,7 @@ class session_manager {
   struct conf_t {
     size_t version;
 
-    atframework::gw::atgateway_cfg origin_conf;
+    atframework::gateway::atgateway_cfg origin_conf;
 
     crypt_conf_t crypt;
   };
@@ -60,12 +60,12 @@ class session_manager {
   inline void *get_private_data() const { return private_data_; }
   inline void set_private_data(void *priv_data) { private_data_ = priv_data; }
 
-  int post_data(::atbus::bus_id_t tid, ::atframework::gw::ss_msg &msg);
-  int post_data(::atbus::bus_id_t tid, int32_t type, ::atframework::gw::ss_msg &msg);
+  int post_data(::atbus::bus_id_t tid, ::atframework::gateway::server_message &message);
+  int post_data(::atbus::bus_id_t tid, int32_t type, ::atframework::gateway::server_message &message);
   int post_data(::atbus::bus_id_t tid, int32_t type, gsl::span<const unsigned char> data);
 
-  int post_data(const std::string &tname, ::atframework::gw::ss_msg &msg);
-  int post_data(const std::string &tname, int32_t type, ::atframework::gw::ss_msg &msg);
+  int post_data(const std::string &tname, ::atframework::gateway::server_message &message);
+  int post_data(const std::string &tname, int32_t type, ::atframework::gateway::server_message &message);
   int post_data(const std::string &tname, int32_t type, gsl::span<const unsigned char> data);
 
   int push_data(session::id_t sess_id, const gsl::span<const unsigned char> data);
@@ -77,7 +77,7 @@ class session_manager {
   inline const conf_t &get_conf() const { return conf_; }
 
   inline on_create_session_fn_t get_on_create_session() const { return on_create_session_fn_; }
-  inline void set_on_create_session(on_create_session_fn_t fn) { on_create_session_fn_ = fn; }
+  inline void set_on_create_session(on_create_session_fn_t fn) { on_create_session_fn_ = std::move(fn); }
 
   int reconnect(session &new_sess, session::id_t old_sess_id);
 

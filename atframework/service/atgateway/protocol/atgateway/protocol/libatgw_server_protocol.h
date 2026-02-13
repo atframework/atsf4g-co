@@ -14,7 +14,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
-#include "atgateway/protocols/libatgw_server_protocol.pb.h"
+#include "atgateway/protocol/libatgw_server_protocol.pb.h"
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>

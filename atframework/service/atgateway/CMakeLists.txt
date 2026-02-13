@@ -1,7 +1,7 @@
 set(ATSF4G_APP_NAME atgateway)
 echowithcolor(COLOR GREEN "-- Configure ${ATSF4G_APP_NAME} on ${CMAKE_CURRENT_LIST_DIR}")
 
-add_subdirectory(protocols)
+add_subdirectory(protocol)
 
 # ============ atgateway ============
 

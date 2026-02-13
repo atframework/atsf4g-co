@@ -1,6 +1,8 @@
 syntax = "proto3";
 
-package atframework.gw;
+package atframework.gateway;
+
+option go_package = "github.com/atframework/atsf4g-go/atframework/service/atgateway/protocol";
 
 option optimize_for = SPEED;
 // option optimize_for = LITE_RUNTIME;

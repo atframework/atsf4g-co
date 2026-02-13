@@ -22,6 +22,8 @@ atframework_add_protobuf_library(
   "ATPROXY_PROTOCOL_API"
   FOLDER_PATH
   "atframework/service/${ATSF4G_APP_NAME}"
+  OUTPUT_DIR
+  "${CMAKE_BINARY_DIR}/_generated/atproxy"
   PUBLIC_LINK_NAMES
   "atapp-protocol"
   COMPONENT_NAME

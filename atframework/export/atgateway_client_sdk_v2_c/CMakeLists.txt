@@ -15,7 +15,7 @@ aux_source_directory(${CMAKE_CURRENT_LIST_DIR} EXPORT_SRC_LIST)
 atframework_add_library(
   ${EXPORT_SRC_BIN_NAME}
   PUBLIC_SYMBOL_DECL
-  LIBATGW_V1_C_API
+  LIBATGW_V2_C_API
   FOLDER_PATH
   "atframework/sdk"
   PUBLIC_INCLUDE_DIRECTORY
@@ -27,6 +27,6 @@ atframework_add_library(
   PRIVATE_LINK_NAMES
   ${ATFRAMEWORK_SERVICE_GATEWAY_CLIENT_SDK}
   HEADERS
-  "libatgw_v1_c.h"
+  "libatgateway_v2_c.h"
   SOURCES
-  "libatgw_v1_c.cpp")
+  "libatgateway_v2_c.cpp")

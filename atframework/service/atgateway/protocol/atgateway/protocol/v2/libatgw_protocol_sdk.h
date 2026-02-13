@@ -10,11 +10,10 @@
 
 #include "algorithm/crypto_cipher.h"
 #include "algorithm/crypto_dh.h"
-#include "algorithm/xxtea.h"
 #include "detail/buffer.h"
 #include "log/log_wrapper.h"
 
-#include "atgateway/protocols/libatgw_protocol_api.h"
+#include "atgateway/protocol/libatgw_protocol_api.h"
 
 // MSVC hack
 #ifdef _MSC_VER
@@ -27,7 +26,7 @@
 #  endif
 #endif
 
-#include "atgateway/protocols/v1/libatgw_protocol_sdk_generated.h"
+#include "atgateway/protocol/v2/libatgw_protocol_sdk_generated.h"
 
 // By now, message header may cost about 150 bytes, some special message may cost more. we hope one
 // connection will cost no more than 8KB, so 100K connections will cost no more than 800MB memory so we use 7KB for
@@ -46,7 +45,7 @@
 
 namespace atframework {
 namespace gateway {
-inline namespace v1 {
+namespace v2 {
 namespace detail {
 struct crypt_global_configure_t;
 }
@@ -57,13 +56,13 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
    * @brief crypt configure
    * @note default reuse the definition of inner protocol, if it's useful for other protocol depends other protocol's
    * implement
-   * @see protocols/inner_v1/libatgw_proto_inner.fbs
+   * @see protocol/inner_v1/libatgw_proto_inner.fbs
    */
   struct ATFW_UTIL_SYMBOL_VISIBLE crypt_conf_t {
     std::string default_key; /** default key, different used for different crypt protocol **/
     time_t update_interval;  /** crypt key refresh interval **/
     std::string type;        /** crypt type. XXTEA, AES and etc. **/
-    ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gw::v1, switch_secret_t)
+    ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, switch_secret_t)
     switch_secret_type; /** how to generate the secret key, dh, rsa or direct send. recommander to use DH **/
 
     // Not supported now
@@ -101,7 +100,7 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   struct ATFW_UTIL_SYMBOL_VISIBLE ping_data_t {
     using clk_t = std::chrono::system_clock;
     clk_t::time_point last_ping;
-    time_t last_delta;
+    time_t last_delta = 0;
   };
 
  public:
@@ -112,32 +111,34 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   LIBATGW_PROTOCOL_API void read(int ssz, gsl::span<const unsigned char> buffer, int &errcode) override;
 
   LIBATGW_PROTOCOL_API void dispatch_data(gsl::span<const unsigned char> data, int errcode);
-  LIBATGW_PROTOCOL_API int dispatch_handshake(const ::atframework::gw::v1::cs_body_handshake &body_handshake);
+    LIBATGW_PROTOCOL_API int dispatch_handshake(const ::atframework::gateway::v2::cs_body_handshake &body_handshake);
 
-  LIBATGW_PROTOCOL_API int dispatch_handshake_start_req(const ::atframework::gw::v1::cs_body_handshake &body_handshake);
-  LIBATGW_PROTOCOL_API int dispatch_handshake_start_rsp(const ::atframework::gw::v1::cs_body_handshake &body_handshake);
+    LIBATGW_PROTOCOL_API int dispatch_handshake_start_req(
+      const ::atframework::gateway::v2::cs_body_handshake &body_handshake);
+    LIBATGW_PROTOCOL_API int dispatch_handshake_start_rsp(
+      const ::atframework::gateway::v2::cs_body_handshake &body_handshake);
   LIBATGW_PROTOCOL_API int dispatch_handshake_reconn_req(
-      const ::atframework::gw::v1::cs_body_handshake &body_handshake);
+      const ::atframework::gateway::v2::cs_body_handshake &body_handshake);
   LIBATGW_PROTOCOL_API int dispatch_handshake_reconn_rsp(
-      const ::atframework::gw::v1::cs_body_handshake &body_handshake);
+      const ::atframework::gateway::v2::cs_body_handshake &body_handshake);
   LIBATGW_PROTOCOL_API int dispatch_handshake_dh_pubkey_req(
-      const ::atframework::gw::v1::cs_body_handshake &body_handshake,
-      ::atframework::gw::v1::handshake_step_t next_step);
+      const ::atframework::gateway::v2::cs_body_handshake &body_handshake,
+      ::atframework::gateway::v2::handshake_step_t next_step);
   LIBATGW_PROTOCOL_API int dispatch_handshake_dh_pubkey_rsp(
-      const ::atframework::gw::v1::cs_body_handshake &body_handshake);
+      const ::atframework::gateway::v2::cs_body_handshake &body_handshake);
   LIBATGW_PROTOCOL_API int dispatch_handshake_verify_ntf(
-      const ::atframework::gw::v1::cs_body_handshake &body_handshake);
+      const ::atframework::gateway::v2::cs_body_handshake &body_handshake);
 
   LIBATGW_PROTOCOL_API int pack_handshake_start_rsp(
       flatbuffers::FlatBufferBuilder &builder, uint64_t sess_id, std::string &crypt_type,
-      flatbuffers::Offset< ::atframework::gw::v1::cs_body_handshake> &handshake_body);
+      flatbuffers::Offset< ::atframework::gateway::v2::cs_body_handshake> &handshake_body);
   LIBATGW_PROTOCOL_API int pack_handshake_dh_pubkey_req(
-      flatbuffers::FlatBufferBuilder &builder, const ::atframework::gw::v1::cs_body_handshake &peer_body,
-      flatbuffers::Offset< ::atframework::gw::v1::cs_body_handshake> &handshake_body,
-      ::atframework::gw::v1::handshake_step_t next_step);
+      flatbuffers::FlatBufferBuilder &builder, const ::atframework::gateway::v2::cs_body_handshake &peer_body,
+      flatbuffers::Offset< ::atframework::gateway::v2::cs_body_handshake> &handshake_body,
+      ::atframework::gateway::v2::handshake_step_t next_step);
 
   LIBATGW_PROTOCOL_API int try_write();
-  LIBATGW_PROTOCOL_API int write_msg(flatbuffers::FlatBufferBuilder &builder);
+  LIBATGW_PROTOCOL_API int write_message(flatbuffers::FlatBufferBuilder &builder);
   LIBATGW_PROTOCOL_API int write(gsl::span<const unsigned char>) override;
   LIBATGW_PROTOCOL_API int write_done(int status) override;
 
@@ -160,7 +161,7 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   LIBATGW_PROTOCOL_API int reconnect_session(uint64_t sess_id, const std::string &crypt_type,
                                              const std::vector<unsigned char> &secret);
 
-  LIBATGW_PROTOCOL_API int send_post(::atframework::gw::v1::cs_msg_type_t msg_type,
+  LIBATGW_PROTOCOL_API int send_post(::atframework::gateway::v2::client_message_type_t message_type,
                                      gsl::span<const unsigned char> data);
   LIBATGW_PROTOCOL_API int send_post(gsl::span<const unsigned char> data);
   LIBATGW_PROTOCOL_API int send_ping();
@@ -216,7 +217,7 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
 
   // used for handshake
   struct handshake_t {
-    ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gw::v1, switch_secret_t) switch_secret_type;
+    ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, switch_secret_t) switch_secret_type;
     bool has_data;
     const void *ext_data;
     atfw::util::crypto::dh dh_ctx;
@@ -226,6 +227,13 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   // logger
   atfw::util::log::log_wrapper::ptr_t logger_;
 };
-}  // namespace v1
+}  // namespace v2
+
+// ABI bridge: keep outer references stable without explicitly naming v2.
+inline namespace abi_v2 {
+using v2::libatgw_protocol_sdk;
+}
+using libatgw_protocol_sdk = v2::libatgw_protocol_sdk;
+
 }  // namespace gateway
 }  // namespace atframework

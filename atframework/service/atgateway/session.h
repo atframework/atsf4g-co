@@ -11,9 +11,9 @@
 
 #include "uv.h"
 
-#include "atgateway/protocols/libatgw_server_protocol.h"
-#include "atgateway/protocols/v1/libatgw_protocol_sdk.h"
-#include "libatbus.h"
+#include "atgateway/protocol/libatgw_server_protocol.h"  // IWYU pragma: keep
+#include "atgateway/protocol/v2/libatgw_protocol_sdk.h"  // IWYU pragma: keep
+#include "libatbus.h"                                    // IWYU pragma: keep
 
 namespace atframework {
 namespace gateway {
@@ -42,17 +42,15 @@ class session : public std::enable_shared_from_this<session> {
 
   using id_t = uint64_t;
 
-  struct flag_t {
-    enum type {
-      EN_FT_INITED = 0x0001,
-      EN_FT_HAS_FD = 0x0002,
-      EN_FT_REGISTERED = 0x0004,
-      EN_FT_RECONNECTED = 0x0008,
-      EN_FT_WAIT_RECONNECT = 0x0010,
-      EN_FT_CLOSING = 0x0020,
-      EN_FT_CLOSING_FD = 0x0040,
-      EN_FT_WRITING_FD = 0x0080,
-    };
+  enum class flag_t : uint32_t {
+    kInited = 0x0001,
+    kHasFd = 0x0002,
+    kRegistered = 0x0004,
+    kReconnected = 0x0008,
+    kWaitReconnect = 0x0010,
+    kClosing = 0x0020,
+    kClosingFd = 0x0040,
+    kWritingFd = 0x0080,
   };
 
   using ptr_t = std::shared_ptr<session>;
@@ -61,9 +59,9 @@ class session : public std::enable_shared_from_this<session> {
   session();
   ~session();
 
-  bool check_flag(flag_t::type t) const;
+  bool check_flag(flag_t t) const;
 
-  void set_flag(flag_t::type t, bool v);
+  void set_flag(flag_t t, bool v);
 
   static ptr_t create(session_manager *, std::unique_ptr<atframework::gateway::libatgw_protocol_api> &);
 
@@ -88,9 +86,9 @@ class session : public std::enable_shared_from_this<session> {
 
   int send_to_client(gsl::span<const unsigned char>);
 
-  int send_to_server(::atframework::gw::ss_msg &msg);
+  int send_to_server(::atframework::gateway::server_message &message);
 
-  int send_to_server(::atframework::gw::ss_msg &msg, session_manager *mgr);
+  int send_to_server(::atframework::gateway::server_message &message, session_manager *mgr);
 
   atframework::gateway::libatgw_protocol_api *get_protocol_handle();
   const atframework::gateway::libatgw_protocol_api *get_protocol_handle() const;
@@ -135,7 +133,7 @@ class session : public std::enable_shared_from_this<session> {
   session_manager *owner_;
 
   limit_t limit_;
-  int flags_;
+  uint32_t flags_;
   union {
     uv_handle_t raw_handle_;
     uv_stream_t stream_handle_;

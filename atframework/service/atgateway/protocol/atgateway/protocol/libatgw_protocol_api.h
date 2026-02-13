@@ -17,63 +17,59 @@
 
 namespace atframework {
 namespace gateway {
-struct error_code_t {
-  enum type {
-    EN_ECT_SUCCESS = 0,
-    EN_ECT_FIRST_IDEL = -1001,
-    EN_ECT_HANDSHAKE = -1002,
-    EN_ECT_BUSY = -1003,
-    EN_ECT_SESSION_EXPIRED = -1004,
-    EN_ECT_REFUSE_RECONNECT = -1005,
-    EN_ECT_MISS_CALLBACKS = -1006,
-    EN_ECT_INVALID_ROUTER = -1007,
-    EN_ECT_INVALID_ADDRESS = -1008,
-    EN_ECT_NETWORK = -1009,
-    EN_ECT_BAD_PROTOCOL = -1010,
-    EN_ECT_CLOSING = -1011,
-    EN_ECT_LOST_MANAGER = -1012,
-    EN_ECT_MSG_TOO_LARGE = -1013,
-    EN_ECT_HANDLE_NOT_FOUND = -1014,
-    EN_ECT_ALREADY_HAS_FD = -1015,
-    EN_ECT_SESSION_NOT_FOUND = -1016,
-    EN_ECT_SESSION_ALREADY_EXIST = -1017,
-    EN_ECT_NOT_WRITING = -1018,
-    EN_ECT_CRYPT_NOT_SUPPORTED = -1019,
-    EN_ECT_PARAM = -1020,
-    EN_ECT_BAD_DATA = -1021,
-    EN_ECT_INVALID_SIZE = -1022,
-    EN_ECT_NO_DATA = -1023,
-    EN_ECT_MALLOC = -1024,
-    EN_ECT_CRYPT_ALREADY_INITED = -1101,
-    EN_ECT_CRYPT_VERIFY = -1102,
-    EN_ECT_CRYPT_OPERATION = -1103,
-    EN_ECT_CRYPT_READ_DHPARAM_FILE = -1211,
-    EN_ECT_CRYPT_INIT_DHPARAM = -1212,
-    EN_ECT_CRYPT_READ_RSA_PUBKEY = -1221,
-    EN_ECT_CRYPT_READ_RSA_PRIKEY = -1222,
-  };
+enum class error_code_t : int32_t {
+  kSuccess = 0,
+  kFirstIdel = -1001,
+  kHandshake = -1002,
+  kBusy = -1003,
+  kSessionExpired = -1004,
+  kRefuseReconnect = -1005,
+  kMissCallbacks = -1006,
+  kInvalidRouter = -1007,
+  kInvalidAddress = -1008,
+  kNetwork = -1009,
+  kBadProtocol = -1010,
+  kClosing = -1011,
+  kLostManager = -1012,
+  kMsgTooLarge = -1013,
+  kHandleNotFound = -1014,
+  kAlreadyHasFd = -1015,
+  kSessionNotFound = -1016,
+  kSessionAlreadyExist = -1017,
+  kNotWriting = -1018,
+  kCryptNotSupported = -1019,
+  kParam = -1020,
+  kBadData = -1021,
+  kInvalidSize = -1022,
+  kNoData = -1023,
+  kMalloc = -1024,
+  kCryptAlreadyInited = -1101,
+  kCryptVerify = -1102,
+  kCryptOperation = -1103,
+  kCryptReadDhparamFile = -1211,
+  kCryptInitDhparam = -1212,
+  kCryptReadRsaPubkey = -1221,
+  kCryptReadRsaPrikey = -1222,
 };
 
-struct close_reason_t {
-  enum type {
-    EN_CRT_UNKNOWN = 0x0000,
-    EN_CRT_EAGAIN = 0x0001,  // resource temporary unavailable
-    EN_CRT_TRAFIC_EXTENDED = 0x0002,
-    EN_CRT_INVALID_DATA = 0x0003,
-    EN_CRT_RESET = 0x0004,
-    EN_CRT_RECONNECT_INNER_BOUND = 0x0100,
-    EN_CRT_RECONNECT_BOUND = 0x10000,
-    EN_CRT_FIRST_IDLE = 0x10001,
-    EN_CRT_SERVER_CLOSED = 0x10002,
-    EN_CRT_SERVER_BUSY = 0x10003,
-    EN_CRT_KICKOFF = 0x10004,
-    EN_CRT_HANDSHAKE = 0x10005,
-    EN_CRT_LOGOUT = 0x10006,
-    EN_CRT_ADMINISTRATOR = 0x10007,  // kickoff by administrator
-    EN_CRT_MAINTENANCE = 0x10008,    // closed to maintenance
-    EN_CRT_EOF = 0x10009,            // EOF means everything is finished and no more need this connection
-    EN_CRT_NO_RECONNECT_INNER_BOUND = 0x10100,
-  };
+enum class close_reason_t : int32_t {
+  kUnknown = 0x0000,
+  kEagain = 0x0001,  // resource temporary unavailable
+  kTraficExtended = 0x0002,
+  kInvalidData = 0x0003,
+  kReset = 0x0004,
+  kReconnectInnerBound = 0x0100,
+  kReconnectBound = 0x10000,
+  kFirstIdle = 0x10001,
+  kServerClosed = 0x10002,
+  kServerBusy = 0x10003,
+  kKickoff = 0x10004,
+  kHandshake = 0x10005,
+  kLogout = 0x10006,
+  kAdministrator = 0x10007,  // kickoff by administrator
+  kMaintenance = 0x10008,    // closed to maintenance
+  kEof = 0x10009,            // EOF means everything is finished and no more need this connection
+  kNoReconnectInnerBound = 0x10100,
 };
 
 class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
@@ -98,7 +94,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
    * RETURN: 0 or error code
    * REQUIRED
    * PROTOCOL: any custom protocol should call this when receive a custom message.
-   * check_flag(flag_t::EN_PFT_IN_CALLBACK) must return true here
+  * check_flag(flag_t::kInCallback) must return true here
    */
   using on_message_fn_t = std::function<int(libatgw_protocol_api *, gsl::span<const unsigned char>)>;
 
@@ -110,7 +106,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
    * RETURN: 0 or error code
    * REQUIRED
    * PROTOCOL: any custom protocol must call this when the new connection is a new session.
-   * check_flag(flag_t::EN_PFT_IN_CALLBACK) must return true here
+  * check_flag(flag_t::kInCallback) must return true here
    */
   using on_init_new_session_fn_t = std::function<int(libatgw_protocol_api *, uint64_t &)>;
 
@@ -121,7 +117,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
    *   1: old session id
    * RETURN: 0 or error code
    * OPTIONAL
-   * PROTOCOL: if not provided, we think reconnect is not supported. check_flag(flag_t::EN_PFT_IN_CALLBACK) must
+  * PROTOCOL: if not provided, we think reconnect is not supported. check_flag(flag_t::kInCallback) must
    *           return true here
    */
   using on_init_reconnect_fn_t = std::function<int(libatgw_protocol_api *, uint64_t)>;
@@ -129,8 +125,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
   /**
    * SPECIFY: callback when all recource closed and do not use this object's resource any more
    *   any resource can only be freed after proto closed, you can use both **on_close_fn_t** or
-   * check_flag(flag_t::EN_PFT_CLOSED) PARAMETER: 0: proto object 1: close reason RETURN: 0 or error code REQUIRED
-   * PROTOCOL: any custom protocol must set_flag(flag_t::EN_PFT_CLOSED, true) and then call this when all resource
+  * check_flag(flag_t::kClosed) PARAMETER: 0: proto object 1: close reason RETURN: 0 or error code REQUIRED
+  * PROTOCOL: any custom protocol must set_flag(flag_t::kClosed, true) and then call this when all resource
    * closed.
    */
   using on_close_fn_t = std::function<int(libatgw_protocol_api *, int)>;
@@ -138,8 +134,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
   /**
    * SPECIFY: callback when handshake done
    *   any resource can only be freed after proto closed, you can use both **on_close_fn_t** or
-   * check_flag(flag_t::EN_PFT_CLOSED) PARAMETER: 0: proto object 1: status RETURN: 0 or error code OPTIONAL PROTOCOL:
-   * just notify when handshake finished. check_flag(flag_t::EN_PFT_IN_CALLBACK) must return true here
+  * check_flag(flag_t::kClosed) PARAMETER: 0: proto object 1: status RETURN: 0 or error code OPTIONAL PROTOCOL:
+  * just notify when handshake finished. check_flag(flag_t::kInCallback) must return true here
    */
   using on_handshake_done_fn_t = std::function<int(libatgw_protocol_api *, int)>;
 
@@ -157,31 +153,27 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
    */
   using on_error_fn_t = std::function<int(libatgw_protocol_api *, const char *, uint32_t, int, const char *)>;
 
-  struct tls_buffer_t {
-    enum type {
-      EN_TBT_MERGE = 0,
-      EN_TBT_CRYPT,
-      EN_TBT_COMPRESS,
-      EN_TBT_CUSTOM,
-      EN_TBT_MAX,
-    };
+  enum class tls_buffer_t : uint8_t {
+    kMerge = 0,
+    kCrypt = 1,
+    kCompress = 2,
+    kCustom = 3,
+    kMax = 4,
   };
 
-  struct flag_t {
-    enum type {
-      EN_PFT_WRITING = 0x0001,
-      EN_PFT_CLOSING = 0x0002,
-      EN_PFT_CLOSED = 0x0004,
-      EN_PFT_IN_CALLBACK = 0x0008,
-      EN_PFT_HANDSHAKE_DONE = 0x0100,
-      EN_PFT_HANDSHAKE_UPDATE = 0x0200,
-    };
+  enum class flag_t : uint32_t {
+    kWriting = 0x0001,
+    kClosing = 0x0002,
+    kClosed = 0x0004,
+    kInCallback = 0x0008,
+    kHandshakeDone = 0x0100,
+    kHandshakeUpdate = 0x0200,
   };
 
   struct flag_guard_t {
-    int *flags_;
-    int v_;
-    LIBATGW_PROTOCOL_API flag_guard_t(int &f, int v);
+    uint32_t *flags_;
+    uint32_t v_;
+    LIBATGW_PROTOCOL_API flag_guard_t(uint32_t &f, flag_t v);
     LIBATGW_PROTOCOL_API ~flag_guard_t();
 
     flag_guard_t(const flag_guard_t &other) = delete;
@@ -205,9 +197,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
  public:
   LIBATGW_PROTOCOL_API virtual ~libatgw_protocol_api();
 
-  LIBATGW_PROTOCOL_API bool check_flag(flag_t::type t) const;
+  LIBATGW_PROTOCOL_API bool check_flag(flag_t t) const;
 
-  LIBATGW_PROTOCOL_API void set_flag(flag_t::type t, bool v);
+  LIBATGW_PROTOCOL_API void set_flag(flag_t t, bool v);
 
   /**
    * @biref call this when need to allocate buffer block to store received data. custom protocol must implement this
@@ -228,7 +220,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
   /**
    * @biref call this when need to write custem message to peer. custom protocol must implement this
    * @param data written data address
-   * @note if there is any writing not finished, call set_flag(flag_t::EN_PFT_WRITING, true) and call write_done(status)
+  * @note if there is any writing not finished, call set_flag(flag_t::kWriting, true) and call write_done(status)
    * when writing finished
    * @return 0 or error code
    */
@@ -243,7 +235,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
 
   /**
    * @biref call this to close protocol's resource.
-   * @note must call set_flag(flag_t::EN_PFT_CLOSING, true), and call set_flag(flag_t::EN_PFT_CLOSED, true) only if all
+  * @note must call set_flag(flag_t::kClosing, true), and call set_flag(flag_t::kClosed, true) only if all
    * resource are real closed.
    * @param reason close reason
    * @return 0 or error code
@@ -274,7 +266,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
   /**
    * @biref notify handshake finished
    * @note custom protocol should call it when handshake is finished or updated no matter if it's success
-   * @note it will set EN_PFT_HANDSHAKE_DONE to true, EN_PFT_HANDSHAKE_UPDATE to false, and then call the
+  * @note it will set kHandshakeDone to true, kHandshakeUpdate to false, and then call the
    * on_handshake_done_fn callback
    * @param status status
    * @return 0 or error code
@@ -285,7 +277,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
   /**
    * @biref update and do handshake again
    * @note custom protocol could use this function to implement the update of crypt secret, access token or other data
-   * @note it will set EN_PFT_HANDSHAKE_UPDATE to true
+  * @note it will set kHandshakeUpdate to true
    * @param status status
    * @return 0 or error code
    */
@@ -303,7 +295,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
    * @param tls_type type, different type has different address
    * @return thread-local storage buffer address
    */
-  static LIBATGW_PROTOCOL_API gsl::span<unsigned char> get_tls_buffer(tls_buffer_t::type tls_type);
+  static LIBATGW_PROTOCOL_API gsl::span<unsigned char> get_tls_buffer(tls_buffer_t tls_type);
 
  public:
   /**
@@ -354,15 +346,19 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
   }
 
  protected:
-  int flags_;
+  // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
+  uint32_t flags_;
 
   /**
    * @brief instead of malloc new data block, we can use some buffer in write buffer to hold the additional data.
    *      For example, we can store uv_write_t at the head of buffer when we use libuv
    */
+  // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
   size_t write_header_offset_;
 
+  // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
   proto_callbacks_t *callbacks_;
+  // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
   void *private_data_;
 };
 }  // namespace gateway

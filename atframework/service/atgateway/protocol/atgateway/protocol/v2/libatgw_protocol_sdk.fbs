@@ -1,6 +1,6 @@
-// atgateway protocol schema file v1
+// atgateway protocol schema file v2
 
-namespace atframework.gw.v1;
+namespace atframework.gateway.v2;
 
 enum error_code_t:int {
     EN_ECT_REFUSE_RECONNECT = -1005,
@@ -29,7 +29,7 @@ enum switch_secret_t : ubyte {
     EN_SST_ECDH = 2            // use ECDH algorithm to switch secrets
 }
 
-enum cs_msg_type_t : ubyte {
+enum client_message_type_t : ubyte {
     EN_MTT_UNKNOWN = 0,
     EN_MTT_POST = 1,
     EN_MTT_HANDSHAKE = 2,
@@ -40,11 +40,11 @@ enum cs_msg_type_t : ubyte {
     EN_MTT_POST_KEY_ACK = 7
 }
 
-table cs_msg_head {
-    type: cs_msg_type_t(id: 0);
+table client_message_head {
+    type: client_message_type_t(id: 0);
     sequence: ulong(id: 1);
 }
-union cs_msg_body { cs_body_post, cs_body_kickoff, cs_body_ping, cs_body_handshake }
+union client_message_body { cs_body_post, cs_body_kickoff, cs_body_ping, cs_body_handshake }
 
 table cs_body_post {
     /// the length before encrypt, because encrypt data will pad data.
@@ -79,12 +79,12 @@ table cs_body_ping {
 }
 
 /// message
-table cs_msg {
-    head: cs_msg_head (id: 0);
-    body: cs_msg_body (id: 2);
+table client_message {
+    head: client_message_head (id: 0);
+    body: client_message_body (id: 2);
 }
 
-root_type cs_msg;
+root_type client_message;
 
 file_identifier "ATGW";
 file_extension "atgw";
