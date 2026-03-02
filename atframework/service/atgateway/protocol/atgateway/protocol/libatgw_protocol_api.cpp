@@ -10,7 +10,7 @@
 #include "std/thread.h"
 
 #ifndef ATFRAMEWORK_ATGATEWAY_TLS_BUFFER_SIZE
-#  define ATFRAMEWORK_ATGATEWAY_TLS_BUFFER_SIZE 262144
+#  define ATFRAMEWORK_ATGATEWAY_TLS_BUFFER_SIZE 2097152
 #endif
 
 #ifdef _REENTRANT
@@ -27,8 +27,7 @@ namespace atframework {
 namespace gateway {
 namespace {
 static pthread_once_t gt_atgateway_get_msg_buffer_tls_once = PTHREAD_ONCE_INIT;
-static pthread_key_t
-  gt_atgateway_get_msg_buffer_tls_key[static_cast<size_t>(
+static pthread_key_t gt_atgateway_get_msg_buffer_tls_key[static_cast<size_t>(
     ::atframework::gateway::libatgw_protocol_api::tls_buffer_t::kMax)];
 
 static void dtor_pthread_atgateway_get_msg_buffer_tls(void *p) {
@@ -39,8 +38,7 @@ static void dtor_pthread_atgateway_get_msg_buffer_tls(void *p) {
 }
 
 static void init_pthread_atgateway_get_msg_buffer_tls() {
-  for (size_t i = 0;
-       i < static_cast<size_t>(::atframework::gateway::libatgw_protocol_api::tls_buffer_t::kMax); ++i) {
+  for (size_t i = 0; i < static_cast<size_t>(::atframework::gateway::libatgw_protocol_api::tls_buffer_t::kMax); ++i) {
     (void)pthread_key_create(&gt_atgateway_get_msg_buffer_tls_key[i], dtor_pthread_atgateway_get_msg_buffer_tls);
   }
 }

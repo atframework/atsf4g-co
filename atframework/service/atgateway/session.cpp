@@ -49,9 +49,7 @@ session::session()
 
 session::~session() { assert(check_flag(flag_t::kClosing)); }
 
-bool session::check_flag(flag_t t) const {
-  return 0 != (flags_ & static_cast<uint32_t>(t));
-}
+bool session::check_flag(flag_t t) const { return 0 != (flags_ & static_cast<uint32_t>(t)); }
 
 void session::set_flag(flag_t t, bool v) {
   const uint32_t flag_value = static_cast<uint32_t>(t);
@@ -285,7 +283,7 @@ int session::on_write_done(int status) {
 
     // if about to closing and all data transferred, shutdown the socket
     if (check_flag(flag_t::kClosingFd) &&
-      proto_->check_flag(atframework::gateway::libatgw_protocol_api::flag_t::kClosed)) {
+        proto_->check_flag(atframework::gateway::libatgw_protocol_api::flag_t::kClosed)) {
       uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
     }
 
@@ -373,9 +371,7 @@ int session::send_to_client(gsl::span<const unsigned char> data) {
   return ret;
 }
 
-int session::send_to_server(::atframework::gateway::server_message &message) {
-  return send_to_server(message, owner_);
-}
+int session::send_to_server(::atframework::gateway::server_message &message) { return send_to_server(message, owner_); }
 
 int session::send_to_server(::atframework::gateway::server_message &message, session_manager *mgr) {
   // send to router_
@@ -413,11 +409,11 @@ int session::send_to_server(::atframework::gateway::server_message &message, ses
   int ret = 0;
   if (0 != router_node_id_) {
     ret = mgr->post_data(
-        router_node_id_, ::atframework::component::service_type::EN_ATST_GATEWAY,
+        router_node_id_, static_cast<int32_t>(::atframework::component::service_type::kAtGateway),
         gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(packed_buffer.data()), len});
   } else {
     ret = mgr->post_data(
-        router_node_name_, ::atframework::component::service_type::EN_ATST_GATEWAY,
+        router_node_name_, static_cast<int32_t>(::atframework::component::service_type::kAtGateway),
         gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(packed_buffer.data()), len});
   }
 

@@ -171,3 +171,10 @@ atframework_add_library(
   "${ATGATEWAY_GENERATED_SERVER_SDK_DIR}"
   HEADERS
   ${ATSF4G_APP_SDK_LIBATGW_PROTOCOL_SERVICE_SDK_HEADER_LIST})
+
+# ============ unit tests ============
+if(PROJECT_ENABLE_UNITTEST OR BUILD_TESTING)
+  atframework_atframe_utils_populate()
+  include("${ATFRAMEWORK_ATFRAME_UTILS_REPO_DIR}/test/test.utils-macro.cmake")
+  add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/test")
+endif()

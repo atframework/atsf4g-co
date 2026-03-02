@@ -34,7 +34,6 @@ static int app_handle_on_forward_response(atfw::atapp::app &app, const atfw::ata
              m.message_sequence, error_code);
   return 0;
 }
-}  // namespace
 
 class gateway_module : public ::atfw::atapp::module_impl {
  public:
@@ -111,21 +110,87 @@ class gateway_module : public ::atfw::atapp::module_impl {
 
     // crypt
     ::atframework::gateway::session_manager::crypt_conf_t &crypt_conf = gw_mgr_.get_conf().crypt;
-    crypt_conf.default_key = gw_mgr_.get_conf().origin_conf.client().crypt().key();
+
+    // Access tokens
+    crypt_conf.access_tokens.clear();
+    for (const auto &token : gw_mgr_.get_conf().origin_conf.client().crypt().access_tokens()) {
+      crypt_conf.access_tokens.emplace_back(reinterpret_cast<const unsigned char *>(token.data()),
+                                            reinterpret_cast<const unsigned char *>(token.data()) + token.size());
+    }
+
     crypt_conf.update_interval = gw_mgr_.get_conf().origin_conf.client().crypt().update_interval().seconds();
-    crypt_conf.type = gw_mgr_.get_conf().origin_conf.client().crypt().type();
-    crypt_conf.switch_secret_type =
-      ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(switch_secret_t, EN_SST_DIRECT);
     crypt_conf.client_mode = false;
 
-    crypt_conf.dh_param = gw_mgr_.get_conf().origin_conf.client().crypt().dhparam();
-    if (!crypt_conf.dh_param.empty()) {
-      if (0 == UTIL_STRFUNC_STRNCASE_CMP("ecdh:", crypt_conf.dh_param.c_str(), 5)) {
-        crypt_conf.switch_secret_type =
-          ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(switch_secret_t, EN_SST_ECDH);
-      } else {
-        crypt_conf.switch_secret_type =
-          ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(switch_secret_t, EN_SST_DH);
+    // Map protobuf key exchange type to flatbuffers key_exchange_t
+    switch (gw_mgr_.get_conf().origin_conf.client().crypt().key_exchange()) {
+      case ::atframework::gateway::EN_ATGW_KEY_EXCHANGE_X25519:
+        crypt_conf.key_exchange_algorithm =
+            ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(key_exchange_t, kX25519);
+        break;
+      case ::atframework::gateway::EN_ATGW_KEY_EXCHANGE_SECP256R1:
+        crypt_conf.key_exchange_algorithm =
+            ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(key_exchange_t, kSecp256r1);
+        break;
+      case ::atframework::gateway::EN_ATGW_KEY_EXCHANGE_SECP384R1:
+        crypt_conf.key_exchange_algorithm =
+            ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(key_exchange_t, kSecp384r1);
+        break;
+      case ::atframework::gateway::EN_ATGW_KEY_EXCHANGE_SECP521R1:
+        crypt_conf.key_exchange_algorithm =
+            ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(key_exchange_t, kSecp521r1);
+        break;
+      default:
+        crypt_conf.key_exchange_algorithm =
+            ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(key_exchange_t, kNone);
+        break;
+    }
+
+    // Map protobuf crypto algorithms to flatbuffers crypto_algorithm_t
+    crypt_conf.supported_algorithms.clear();
+    for (auto alg : gw_mgr_.get_conf().origin_conf.client().crypt().algorithms()) {
+      switch (alg) {
+        case ::atframework::gateway::EN_ATGW_CRYPTO_XXTEA:
+          crypt_conf.supported_algorithms.push_back(
+              ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kXxtea));
+          break;
+        case ::atframework::gateway::EN_ATGW_CRYPTO_AES_128_CBC:
+          crypt_conf.supported_algorithms.push_back(
+              ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kAes128Cbc));
+          break;
+        case ::atframework::gateway::EN_ATGW_CRYPTO_AES_192_CBC:
+          crypt_conf.supported_algorithms.push_back(
+              ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kAes192Cbc));
+          break;
+        case ::atframework::gateway::EN_ATGW_CRYPTO_AES_256_CBC:
+          crypt_conf.supported_algorithms.push_back(
+              ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kAes256Cbc));
+          break;
+        case ::atframework::gateway::EN_ATGW_CRYPTO_AES_128_GCM:
+          crypt_conf.supported_algorithms.push_back(
+              ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kAes128Gcm));
+          break;
+        case ::atframework::gateway::EN_ATGW_CRYPTO_AES_192_GCM:
+          crypt_conf.supported_algorithms.push_back(
+              ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kAes192Gcm));
+          break;
+        case ::atframework::gateway::EN_ATGW_CRYPTO_AES_256_GCM:
+          crypt_conf.supported_algorithms.push_back(
+              ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kAes256Gcm));
+          break;
+        case ::atframework::gateway::EN_ATGW_CRYPTO_CHACHA20:
+          crypt_conf.supported_algorithms.push_back(
+              ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kChacha20));
+          break;
+        case ::atframework::gateway::EN_ATGW_CRYPTO_CHACHA20_POLY1305:
+          crypt_conf.supported_algorithms.push_back(::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(
+              crypto_algorithm_t, kChacha20Poly1305Ietf));
+          break;
+        case ::atframework::gateway::EN_ATGW_CRYPTO_XCHACHA20_POLY1305:
+          crypt_conf.supported_algorithms.push_back(::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(
+              crypto_algorithm_t, kXchacha20Poly1305Ietf));
+          break;
+        default:
+          break;
       }
     }
 
@@ -159,8 +224,8 @@ class gateway_module : public ::atfw::atapp::module_impl {
 
  private:
   std::unique_ptr<::atframework::gateway::libatgw_protocol_api> create_proto_inner() {
-        ::atframework::gateway::libatgw_protocol_sdk *ret =
-          new (std::nothrow)::atframework::gateway::libatgw_protocol_sdk();
+    ::atframework::gateway::libatgw_protocol_sdk *ret =
+        new (std::nothrow)::atframework::gateway::libatgw_protocol_sdk();
     if (nullptr != ret) {
       ret->set_callbacks(&proto_callbacks_);
       ret->set_write_header_offset(sizeof(uv_write_t));
@@ -392,7 +457,7 @@ class gateway_module : public ::atfw::atapp::module_impl {
 
     int res = gw_mgr_.reconnect(*sess_holder, sess_id);
     if (0 != res) {
-        if (static_cast<int>(::atframework::gateway::error_code_t::kSessionNotFound) != res &&
+      if (static_cast<int>(::atframework::gateway::error_code_t::kSessionNotFound) != res &&
           static_cast<int>(::atframework::gateway::error_code_t::kRefuseReconnect) != res) {
         FWLOGERROR("reconnect session {}({}) from {} failed, res: {}", sess_holder->get_id(),
                    reinterpret_cast<const void *>(sess), sess_id, res);
@@ -608,9 +673,9 @@ struct app_handle_on_recv {
 
           int res = mod_.get().get_session_manager().push_data(
               server_message->head().session_id(),
-              gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(
-                                               server_message->body().post().content().data()),
-                                             server_message->body().post().content().size()});
+              gsl::span<const unsigned char>{
+                  reinterpret_cast<const unsigned char *>(server_message->body().post().content().data()),
+                  server_message->body().post().content().size()});
           if (0 != res) {
             FWLOGERROR("from server {}: session {} push data failed, res: {}", source.id,
                        server_message->head().session_id(), res);
@@ -658,7 +723,7 @@ struct app_handle_on_recv {
           mod_.get().get_session_manager().close(
               server_message->head().session_id(), server_message->head().error_code(),
               server_message->head().error_code() > 0 &&
-                    server_message->head().error_code() <
+                  server_message->head().error_code() <
                       static_cast<int>(::atframework::gateway::close_reason_t::kReconnectBound));
         }
         break;
@@ -691,6 +756,7 @@ struct app_handle_on_recv {
     return 0;
   }
 };
+}  // namespace
 
 int main(int argc, char *argv[]) {
   atfw::atapp::app app;

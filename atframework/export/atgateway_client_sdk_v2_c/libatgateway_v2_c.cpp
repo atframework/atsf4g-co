@@ -264,17 +264,16 @@ LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_send_buffer_limit(libat
   ATGW_CONTEXT(context)->set_send_buffer_limit(static_cast<size_t>(max_size), static_cast<size_t>(max_number));
 }
 
-LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_start_session(libatgateway_v2_c_context context,
-                                                                      const char *crypt_type) {
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_start_session(libatgateway_v2_c_context context) {
   if (ATGW_CONTEXT_IS_NULL(context)) {
     return static_cast<int32_t>(::atframework::gateway::error_code_t::kParam);
   }
 
-  return ATGW_CONTEXT(context)->start_session(crypt_type);
+  return ATGW_CONTEXT(context)->start_session();
 }
 
 LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_reconnect_session(libatgateway_v2_c_context context,
-                                                                          uint64_t sessios_id, const char *crypt_type,
+                                                                          uint64_t sessios_id,
                                                                           const unsigned char *secret_buf,
                                                                           uint64_t secret_len) {
   if (ATGW_CONTEXT_IS_NULL(context)) {
@@ -285,7 +284,7 @@ LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_reconnect_session(libatg
   if (nullptr != secret_buf && secret_len > 0) {
     secret.assign(secret_buf, secret_buf + secret_len);
   }
-  return ATGW_CONTEXT(context)->reconnect_session(sessios_id, crypt_type, secret);
+  return ATGW_CONTEXT(context)->reconnect_session(sessios_id, secret);
 }
 
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_get_info(libatgateway_v2_c_context context, char *info_str,
@@ -333,44 +332,16 @@ LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_session_id(libatgat
   return ATGW_CONTEXT(context)->get_session_id();
 }
 
-LIBATGATEWAY_V2_C_API const char *__cdecl libatgateway_v2_c_get_crypt_type(libatgateway_v2_c_context context) {
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_get_crypt_algorithm(libatgateway_v2_c_context context) {
   if (ATGW_CONTEXT_IS_NULL(context)) {
     return 0;
   }
 
-  return ATGW_CONTEXT(context)->get_crypt_handshake()->type.c_str();
-}
-
-LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_crypt_secret_size(libatgateway_v2_c_context context) {
-  if (ATGW_CONTEXT_IS_NULL(context)) {
+  auto session = ATGW_CONTEXT(context)->get_crypt_session();
+  if (!session) {
     return 0;
   }
-
-  return static_cast<uint64_t>(ATGW_CONTEXT(context)->get_crypt_handshake()->secret.size());
-}
-
-LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_copy_crypt_secret(libatgateway_v2_c_context context,
-                                                                           unsigned char *secret,
-                                                                           uint64_t available_size) {
-  if (ATGW_CONTEXT_IS_NULL(context) || 0 == available_size) {
-    return 0;
-  }
-
-  size_t len = ATGW_CONTEXT(context)->get_crypt_handshake()->secret.size();
-  if (len >= available_size) {
-    len = static_cast<size_t>(available_size);
-  }
-
-  memcpy(secret, ATGW_CONTEXT(context)->get_crypt_handshake()->secret.data(), len);
-  return len;
-}
-
-LIBATGATEWAY_V2_C_API uint32_t __cdecl libatgateway_v2_c_get_crypt_keybits(libatgateway_v2_c_context context) {
-  if (ATGW_CONTEXT_IS_NULL(context)) {
-    return 0;
-  }
-
-  return ATGW_CONTEXT(context)->get_crypt_handshake()->cipher.get_key_bits();
+  return static_cast<int32_t>(session->selected_algorithm);
 }
 
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_read_alloc(libatgateway_v2_c_context context,

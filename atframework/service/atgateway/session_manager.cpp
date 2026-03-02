@@ -11,7 +11,6 @@
 #include <atframe/modules/etcd_module.h>
 
 #include <new>
-#include <sstream>
 
 #include "config/atframe_service_types.h"
 
@@ -50,6 +49,7 @@ session_manager::session_manager() : evloop_(nullptr), app_(nullptr), last_tick_
 
 session_manager::~session_manager() { reset(); }
 
+// NOLINTNEXTLINE(performance-unnecessary-value-param)
 int session_manager::init(::atfw::atapp::app *app_inst, create_proto_fn_t fn) {
   evloop_ = app_inst->get_evloop();
   app_ = app_inst;
@@ -63,7 +63,7 @@ int session_manager::init(::atfw::atapp::app *app_inst, create_proto_fn_t fn) {
 
 int session_manager::listen_all() {
   int ret = 0;
-  for (auto &listen_address : conf_.origin_conf.listen().address()) {
+  for (const auto &listen_address : conf_.origin_conf.listen().address()) {
     int res = listen(listen_address.c_str());
     if (0 != res) {
       FWLOGERROR("try to listen {} failed, res: {}", listen_address, res);
@@ -85,7 +85,7 @@ int session_manager::listen(const char *address) {
   listen_handle_ptr_t res;
   do {
     // libuv listen and setup callbacks
-    int libuv_res;
+    int libuv_res = 0;
     if (0 == UTIL_STRFUNC_STRNCASE_CMP("ipv4", addr.scheme.c_str(), 4) ||
         0 == UTIL_STRFUNC_STRNCASE_CMP("ipv6", addr.scheme.c_str(), 4)) {
       uv_tcp_t *tcp_handle = session_manager_make_stream_ptr<uv_tcp_t>(res);
@@ -106,7 +106,7 @@ int session_manager::listen(const char *address) {
       }
 
       if ('4' == addr.scheme[3]) {
-        sockaddr_in sock_addr;
+        sockaddr_in sock_addr{};
         uv_ip4_addr(addr.host.c_str(), addr.port, &sock_addr);
         libuv_res = uv_tcp_bind(tcp_handle, reinterpret_cast<const sockaddr *>(&sock_addr), 0);
         if (0 != libuv_res) {
@@ -126,7 +126,7 @@ int session_manager::listen(const char *address) {
 
         tcp_handle->data = this;
       } else {
-        sockaddr_in6 sock_addr;
+        sockaddr_in6 sock_addr{};
         uv_ip6_addr(addr.host.c_str(), addr.port, &sock_addr);
         libuv_res = uv_tcp_bind(tcp_handle, reinterpret_cast<const sockaddr *>(&sock_addr), 0);
         if (0 != libuv_res) {
@@ -353,7 +353,7 @@ int session_manager::close(session::id_t sess_id, int reason, bool allow_reconne
 void session_manager::cleanup() { app_ = nullptr; }
 
 int session_manager::post_data(::atbus::bus_id_t tid, ::atframework::gateway::server_message &message) {
-  return post_data(tid, ::atframework::component::service_type::EN_ATST_GATEWAY, message);
+  return post_data(tid, static_cast<int32_t>(::atframework::component::service_type::kAtGateway), message);
 }
 
 int session_manager::post_data(::atbus::bus_id_t tid, int32_t type, ::atframework::gateway::server_message &message) {
@@ -380,7 +380,7 @@ int session_manager::post_data(::atbus::bus_id_t tid, int32_t type, gsl::span<co
 }
 
 int session_manager::post_data(const std::string &tname, ::atframework::gateway::server_message &message) {
-  return post_data(tname, ::atframework::component::service_type::EN_ATST_GATEWAY, message);
+  return post_data(tname, static_cast<int32_t>(::atframework::component::service_type::kAtGateway), message);
 }
 
 int session_manager::post_data(const std::string &tname, int32_t type,
@@ -509,6 +509,7 @@ int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
   return 0;
 }
 
+// NOLINTNEXTLINE(performance-unnecessary-value-param)
 int session_manager::active_session(session::ptr_t sess) {
   if (!sess) {
     return static_cast<int>(error_code_t::kSessionNotFound);

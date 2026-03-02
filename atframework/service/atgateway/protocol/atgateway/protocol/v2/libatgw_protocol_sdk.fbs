@@ -1,43 +1,139 @@
 // atgateway protocol schema file v2
+// Refactored: 2-message handshake (like libatbus node_register_req/rsp)
+// - kKeyExchangeReq: client sends ECDH public key + supported algorithms
+// - kKeyExchangeRsp: server sends ECDH public key + selected algorithm + session_id
+// Key refresh: re-run the same 2-message handshake via kPostKeySyn/kPostKeyAck
 
 namespace atframework.gateway.v2;
 
 enum error_code_t:int {
-    EN_ECT_REFUSE_RECONNECT = -1005,
-    EN_ECT_SESSION_EXPIRED = -1004,
-    EN_ECT_BUSY = -1003,
-    EN_ECT_HANDSHAKE = -1002,
-    EN_ECT_FIRST_IDEL = -1001,
-    EN_ECT_SUCCESS = 0,
+    kRefuseReconnect = -1005,
+    kSessionExpired = -1004,
+    kBusy = -1003,
+    kHandshake = -1002,
+    kFirstIdel = -1001,
+    kSuccess = 0,
 }
 
 enum handshake_step_t : ubyte {
-    EN_HST_START_REQ = 0,           // Step 1. start a new session handshake by client
-    EN_HST_START_RSP = 1,           // Step 2. tell client the session id, crypt method and bits, secret switch method and init data
-    EN_HST_RECONNECT_REQ = 11,      // Step 1. start a reconnect handshake by client, with session id, crypt method and bits and the encrypted secret code
-    EN_HST_RECONNECT_RSP = 12,      // Step 2. response reconnect handshake result to client
-    EN_HST_DH_PUBKEY_REQ = 21,      // Step 3. DH: send public key of client to server
-    EN_HST_DH_PUBKEY_RSP = 22,      // Step 4. DH: notify public key is accepted
-    EN_HST_ECDH_PUBKEY_REQ = 31,    // Step 3. ECDH: send public key of client to server
-    EN_HST_ECDH_PUBKEY_RSP = 32,    // Step 4. ECDH: notify public key is accepted
-    EN_HST_VERIFY = 101,            // Step 5. validate the shared secret, send a encrypted public key to server
+    kKeyExchangeReq = 0,    // Client → Server: ECDH public key + all supported algorithms
+    kKeyExchangeRsp = 1,    // Server → Client: ECDH public key + selected algorithm + session_id
+    kReconnectReq = 11,     // Client → Server: reconnect with old session_id
+    kReconnectRsp = 12,     // Server → Client: reconnect result
 }
 
-enum switch_secret_t : ubyte {
-    EN_SST_DIRECT = 0,          // direct send secret codes (deprecated)
-    EN_SST_DH = 1,              // use DH algorithm to swicth secrets
-    EN_SST_ECDH = 2            // use ECDH algorithm to switch secrets
+enum access_data_algorithm_t : ubyte {
+  kHmacSha256 = 0,
+}
+
+enum kdf_algorithm_t : ubyte {
+  kHkdfSha256 = 0, // HKDF with SHA256
+}
+
+enum key_exchange_t : ubyte {
+  kNone = 0,          // no encryption
+  // golang 标准库只支持ECDH
+  kX25519 = 1,     // x25519(TLS 1.3推荐)
+  kSecp256r1 = 2,  // secp256r1, p-256
+  kSecp384r1 = 3,  // secp384r1, p-384
+  kSecp521r1 = 4,  // secp521r1, p-521
+}
+
+enum crypto_algorithm_t : ubyte {
+  kNone = 0,
+  kXxtea = 1,
+  kAes128Cbc = 11, // PKCS#7
+  kAes192Cbc = 12, // PKCS#7
+  kAes256Cbc = 13, // PKCS#7
+  kAes128Gcm = 14, // AEAD
+  kAes192Gcm = 15, // AEAD
+  kAes256Gcm = 16, // AEAD
+
+  kChacha20 = 31,
+  kChacha20Poly1305Ietf = 32, // AEAD
+  kXchacha20Poly1305Ietf = 33, // AEAD
+}
+
+enum compression_algorithm_t : ubyte {
+  kNone = 0,
+
+  kZstd = 10,
+  kLz4 = 20,
+  kSnappy = 30,
+  kZlib = 40,
+}
+
+// 统一压缩等级定义，用于抽象不同压缩算法的压缩强度。
+// 枚举值表达语义等级，具体算法参数由实现层映射。
+enum compression_level_t : ubyte {
+  // 默认值：使用各压缩算法的默认推荐配置
+  //
+  // 典型映射：
+  //   zstd   : level 3
+  //   lz4    : fast 默认
+  //   snappy : 默认配置
+  //   zlib   : level 6
+  kDefault = 0;
+
+  // 存储优先：最低 CPU 开销，允许不压缩直接存储
+  //
+  // 典型映射：
+  //   zstd   : level 1（或 0）
+  //   lz4    : fast(1)
+  //   snappy : 默认配置
+  //   zlib   : level 1
+  //   none   : 不压缩
+  kStorage = 10;
+
+  // 极速压缩，强调最低 CPU 与延迟
+  //
+  // 典型映射：
+  //   zstd   : level -1
+  //   lz4    : fast(1)
+  //   snappy : 默认配置
+  //   zlib   : level 1
+  kFast = 20;
+
+  // 低 CPU 开销压缩，在性能与压缩率之间轻度折中
+  //
+  // 典型映射：
+  //   zstd   : level 1
+  //   lz4    : fast(3)
+  //   zlib   : level 3
+  kLowCpu = 30;
+
+  // 均衡压缩，作为系统推荐的通用等级
+  //
+  // 典型映射：
+  //   zstd   : level 3
+  //   lz4    : fast(6)
+  //   zlib   : level 6
+  kBalanced = 40;
+
+  // 高压缩率，存储优先，允许较高 CPU 成本
+  //
+  // 典型映射：
+  //   zstd   : level 6
+  //   lz4    : hc(9)
+  //   zlib   : level 9
+  kHighRatio = 50;
+
+  // 极限压缩，仅适用于冷数据或离线场景
+  //
+  // 典型映射：
+  //   zstd   : level 9 ~ 15
+  kMaxRatio = 60;
 }
 
 enum client_message_type_t : ubyte {
-    EN_MTT_UNKNOWN = 0,
-    EN_MTT_POST = 1,
-    EN_MTT_HANDSHAKE = 2,
-    EN_MTT_PING = 3,
-    EN_MTT_PONG = 4,
-    EN_MTT_KICKOFF = 5,
-    EN_MTT_POST_KEY_SYN = 6,
-    EN_MTT_POST_KEY_ACK = 7
+    kUnknown = 0,
+    kPost = 1,
+    kHandshake = 2,
+    kPing = 3,
+    kPong = 4,
+    kKickoff = 5,
+    kPostKeySyn = 6,
+    kPostKeyAck = 7
 }
 
 table client_message_head {
@@ -46,31 +142,101 @@ table client_message_head {
 }
 union client_message_body { cs_body_post, cs_body_kickoff, cs_body_ping, cs_body_handshake }
 
+table cs_body_post_crypto {
+  algorithm: crypto_algorithm_t(id: 0);
+
+  // IV/nonce for crypto, must be unique for each encryption
+  // If not set, just used the default rotation/nonce rule of the algorithm
+  iv: [byte] (id: 1);
+
+  // AAD for AEAD
+  aad: [byte] (id: 2);
+}
+
+table cs_body_post_compression {
+  type: compression_algorithm_t (id: 0);
+  original_size: ulong (id: 1);
+}
+
 table cs_body_post {
-    /// the length before encrypt, because encrypt data will pad data.
-    length: ulong;
-    data: [byte];
+    crypto: cs_body_post_crypto (id: 0);
+
+    // 加密算法：加密会带字典头部，如果数据很小，加密后反而会扩大尺寸。此时不如不加密。
+    // 所以我们每个包是动态决定是否加密的，通过此字段告诉对端如何解包。
+    compression: cs_body_post_compression (id: 1);
+
+    /// body size without padding
+    length: ulong (id: 2);
+    data: [byte] (id: 3);
 }
 
 table cs_body_kickoff {
     reason: int (id: 0);
 }
 
+table cs_body_handshake_access_data {
+  algorithm : access_data_algorithm_t (id: 0);
+
+  timestamp: int64 (id: 1);  // unix timestamp
+
+  // 128bits nonce is enough
+  // - TLS 1.3: 96 bits
+  // - IPSec:   64 bits
+  // - JWT:     128 bits
+  // - UUID v4: 128 bits
+  nonce1: uint64 (id: 2);  // random
+  nonce2: uint64 (id: 3);  // random
+
+  // access_token plaintext format:
+  //   "<timestamp>:<nonce1>-<nonce2>:<session_id>:<key_exchange>:<hex(sha256(public_key))>"
+  //   or without encryption: "<timestamp>:<nonce1>-<nonce2>:<session_id>"
+  // abs(timestamp - current_time) <= 300
+  // signature = HMAC-SHA256(access_token_key, plaintext)
+  signature: [byte] (id: 4);
+}
+
+/// Handshake body for the 2-message key exchange (like libatbus register req/rsp).
 ///
-/// crypt_param is used for different purpose depends on step and switch_type, that's
-///     step=EN_HST_START_RSP, switch_type=EN_SST_DIRECT                        : nothing
-///     step=EN_HST_START_RSP, switch_type=EN_SST_DH                            : DH Parameters: P,G,GX (GX means G^X and pub_key in openssl). KeyExchangeData as in SSL3
-///     step=EN_HST_DH_PUBKEY_REQ|EN_HST_ECDH_PUBKEY_REQ, switch_type=EN_SST_DH : DH public key of client
-///     step=EN_HST_DH_PUBKEY_RSP|EN_HST_ECDH_PUBKEY_RSP, switch_type=EN_SST_DH : verify data prefix
-///     step=EN_HST_START_RSP, switch_type=EN_SST_DIRECT                        : secret
-///     step=EN_HST_VERIFY, switch_type=ANY                                     : verify data prefix + suffix
+/// kKeyExchangeReq (Client → Server):
+///   - key_exchange: selected ECDH curve (must not be kNone for encrypted sessions)
+///   - algorithms[]: all cipher algorithms supported by the client
+///   - kdf_type[]: all KDF types supported by the client
+///   - public_key: client's ECDH ephemeral public key
+///   - access_data: HMAC-SHA256 authentication
+///
+/// kKeyExchangeRsp (Server → Client):
+///   - session_id: newly assigned session ID
+///   - key_exchange: confirmed ECDH curve (echoed from req)
+///   - algorithms[]: single selected cipher algorithm
+///   - kdf_type[]: single selected KDF type
+///   - public_key: server's ECDH ephemeral public key
+///   - access_data: HMAC-SHA256 authentication
+///   - iv_size/tag_size: negotiated IV and tag sizes
+///
+/// After both sides have each other's public key, they derive:
+///   shared_secret = ECDH(my_private, peer_public)
+///   key_material = HKDF(SHA256, shared_secret, nil, nil, key_size + iv_size)
+///   KEY = key_material[0..key_size-1]
+///   IV  = key_material[key_size..key_size+iv_size-1]
 table cs_body_handshake {
     session_id: ulong (id: 0);
     step: handshake_step_t (id: 1);
-    switch_type: switch_secret_t (id: 2);
-    crypt_type: string (id: 3);
-    crypt_param: [byte] (id: 4);
-    switch_param: [byte] (id: 5);
+    key_exchange: key_exchange_t (id: 2);
+    kdf_type: [kdf_algorithm_t] (id: 3);
+    algorithms: [crypto_algorithm_t] (id: 4);
+    access_data: [cs_body_handshake_access_data] (id: 5);
+
+    // ECDH ephemeral public key for this side of the handshake
+    public_key: [byte] (id: 6);
+
+    // 初始iv size for crypto, must be same as the selected algorithm requirement
+    iv_size: uint32 (id: 7);
+
+    // tag length for AEAD
+    tag_size: uint32 (id: 8);
+
+    // supported compression algorithms, can be empty if client doesn't support compression or didn't send this field
+    supported_compression_algorithm: [compression_algorithm_t] (id: 9);
 }
 
 table cs_body_ping {

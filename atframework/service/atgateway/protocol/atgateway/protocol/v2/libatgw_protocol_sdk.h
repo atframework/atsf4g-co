@@ -1,6 +1,5 @@
-﻿// Copyright 2021 atframework
-// Created by owent on 2016/9/29.
-//
+﻿// Copyright 2026 atframework
+// Refactored: 2-message ECDH handshake (like libatbus node_register_req/rsp)
 
 #pragma once
 
@@ -53,47 +52,113 @@ struct crypt_global_configure_t;
 class libatgw_protocol_sdk : public libatgw_protocol_api {
  public:
   /**
-   * @brief crypt configure
-   * @note default reuse the definition of inner protocol, if it's useful for other protocol depends other protocol's
-   * implement
-   * @see protocol/inner_v1/libatgw_proto_inner.fbs
+   * @brief Crypto configuration for the gateway protocol.
+   * @note Replaces the old crypt_conf_t that used string-based cipher types and switch_secret_t.
+   *       Now uses ECDH key exchange exclusively (like libatbus).
    */
   struct ATFW_UTIL_SYMBOL_VISIBLE crypt_conf_t {
-    std::string default_key; /** default key, different used for different crypt protocol **/
-    time_t update_interval;  /** crypt key refresh interval **/
-    std::string type;        /** crypt type. XXTEA, AES and etc. **/
-    ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, switch_secret_t)
-    switch_secret_type; /** how to generate the secret key, dh, rsa or direct send. recommander to use DH **/
+    /// Access tokens for HMAC-SHA256 authentication (multiple for rolling rotation)
+    std::vector<std::vector<unsigned char>> access_tokens;
 
-    // Not supported now
-    // int rsa_sign_type;           /** RSA sign type. PKCS1, PKCS1_V15 or PSS **/
-    // int hash_id;                 /** hash id, md5,sha1,sha256,sha512 **/
-    // std::string rsa_public_key;  /** RSA public key file path. **/
-    // std::string rsa_private_key; /** RSA private key file path. **/
-    std::string dh_param; /** DH parameter file path. **/
+    /// Key refresh interval (seconds). Re-runs handshake to rotate keys periodically.
+    time_t update_interval;
 
-    bool client_mode; /** client mode, must be false in server when call global_reload(cfg) **/
+    /// ECDH key exchange algorithm (curve selection)
+    ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, key_exchange_t) key_exchange_algorithm;
+
+    /// Supported crypto algorithms for session data encryption (ordered by preference)
+    std::vector<ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, crypto_algorithm_t)>
+        supported_algorithms;
+
+    /// Whether this is client mode (vs server mode)
+    bool client_mode;
   };
 
-  struct crypt_session_t {
+  /**
+   * @brief Per-connection crypto session state (like libatbus connection_context).
+   * @note Owns the cipher pair for encrypt/decrypt, and the handshake DH context.
+   */
+  struct ATFW_UTIL_SYMBOL_VISIBLE crypt_session_t {
+    // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
     std::shared_ptr<detail::crypt_global_configure_t> shared_conf;
-    std::string type;                  /** crypt type. XXTEA, AES and etc. **/
-    std::vector<unsigned char> secret; /** crypt secret. **/
 
-    std::vector<unsigned char> param; /** cache data used for generate key, dhparam if using DH algorithm. **/
+    /// Selected crypto algorithm after negotiation
+    // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
+    ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, crypto_algorithm_t) selected_algorithm;
+
+    /// Selected KDF type after negotiation
+    // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
+    ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, kdf_algorithm_t) selected_kdf;
+
+    /// Selected key exchange algorithm
+    // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
+    ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, key_exchange_t) key_exchange_algorithm;
 
     LIBATGW_PROTOCOL_API crypt_session_t();
     LIBATGW_PROTOCOL_API ~crypt_session_t();
 
-    LIBATGW_PROTOCOL_API int setup(const std::string &t);
-    LIBATGW_PROTOCOL_API void close();
-    LIBATGW_PROTOCOL_API int generate_secret(int &libres, const atfw::util::log::log_wrapper::ptr_t &logger);
-    LIBATGW_PROTOCOL_API int swap_secret(std::vector<unsigned char> &in, int &libres,
-                                         const atfw::util::log::log_wrapper::ptr_t &logger);
+    /**
+     * @brief Generate ECDH key pair for handshake
+     * @param peer_sequence_id peer sequence if server mode, 0 if client mode
+     * @return 0 or error code
+     */
+    LIBATGW_PROTOCOL_API int handshake_generate_self_key(uint64_t peer_sequence_id);
 
-    atfw::util::crypto::cipher cipher;
-    bool is_inited_;
+    /**
+     * @brief Read peer's public key and derive shared secret + setup ciphers
+     * @param peer_public_key peer's ECDH public key bytes
+     * @param peer_algorithms peer's supported algorithm list
+     * @param local_algorithms local supported algorithm list
+     * @return 0 or error code
+     */
+    LIBATGW_PROTOCOL_API int handshake_read_peer_key(
+        gsl::span<const unsigned char> peer_public_key,
+        gsl::span<const ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, crypto_algorithm_t)>
+            peer_algorithms,
+        gsl::span<const ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, crypto_algorithm_t)>
+            local_algorithms);
+
+    /**
+     * @brief Write self public key to output buffer
+     * @param out_public_key output buffer for public key
+     * @return 0 or error code
+     */
+    LIBATGW_PROTOCOL_API int handshake_write_self_public_key(std::vector<unsigned char> &out_public_key);
+
+    /**
+     * @brief Setup crypto with explicit key (for testing, bypasses DH)
+     * @return 0 or error code
+     */
+    LIBATGW_PROTOCOL_API int setup_crypto_with_key(
+        ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, crypto_algorithm_t) algorithm,
+        const unsigned char *key, size_t key_size, const unsigned char *iv, size_t iv_size);
+
+    LIBATGW_PROTOCOL_API void close();
+
+    /// Check if handshake DH is initialized
+    ATFW_UTIL_FORCEINLINE bool has_handshake_data() const { return handshake_dh_ != nullptr; }
+
+    /// Get handshake sequence ID
+    ATFW_UTIL_FORCEINLINE uint64_t get_handshake_sequence_id() const { return handshake_sequence_id_; }
+
+    /// Encrypt data using send cipher
+    LIBATGW_PROTOCOL_API int encrypt_data(const void *in, size_t insz, const void *&out, size_t &outsz);
+
+    /// Decrypt data using receive cipher
+    LIBATGW_PROTOCOL_API int decrypt_data(const void *in, size_t insz, const void *&out, size_t &outsz);
+
+   private:
+    int derive_key_from_shared_secret(const std::vector<unsigned char> &shared_secret);
+
+    uint64_t handshake_sequence_id_;
+    std::chrono::system_clock::time_point handshake_start_time_;
+    std::vector<unsigned char> handshake_self_public_key_;
+    ::atfw::util::crypto::dh::shared_context::ptr_t handshake_ctx_;
+    std::unique_ptr<::atfw::util::crypto::dh> handshake_dh_;
+    std::unique_ptr<::atfw::util::crypto::cipher> send_cipher_;
+    std::unique_ptr<::atfw::util::crypto::cipher> receive_cipher_;
   };
+
   using crypt_session_ptr_t = std::shared_ptr<crypt_session_t>;
 
   // ping/pong
@@ -111,31 +176,29 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   LIBATGW_PROTOCOL_API void read(int ssz, gsl::span<const unsigned char> buffer, int &errcode) override;
 
   LIBATGW_PROTOCOL_API void dispatch_data(gsl::span<const unsigned char> data, int errcode);
-    LIBATGW_PROTOCOL_API int dispatch_handshake(const ::atframework::gateway::v2::cs_body_handshake &body_handshake);
 
-    LIBATGW_PROTOCOL_API int dispatch_handshake_start_req(
+  /**
+   * @brief Dispatch handshake message (new 2-message exchange)
+   * @note kKeyExchangeReq → server processes, sends kKeyExchangeRsp
+   *       kKeyExchangeRsp → client processes, handshake complete
+   */
+  LIBATGW_PROTOCOL_API int dispatch_handshake(const ::atframework::gateway::v2::cs_body_handshake &body_handshake);
+
+  /// Server-side: handle kKeyExchangeReq from client
+  LIBATGW_PROTOCOL_API int dispatch_handshake_key_exchange_req(
       const ::atframework::gateway::v2::cs_body_handshake &body_handshake);
-    LIBATGW_PROTOCOL_API int dispatch_handshake_start_rsp(
+
+  /// Client-side: handle kKeyExchangeRsp from server
+  LIBATGW_PROTOCOL_API int dispatch_handshake_key_exchange_rsp(
       const ::atframework::gateway::v2::cs_body_handshake &body_handshake);
+
+  /// Server-side: handle kReconnectReq from client
   LIBATGW_PROTOCOL_API int dispatch_handshake_reconn_req(
       const ::atframework::gateway::v2::cs_body_handshake &body_handshake);
+
+  /// Client-side: handle kReconnectRsp from server
   LIBATGW_PROTOCOL_API int dispatch_handshake_reconn_rsp(
       const ::atframework::gateway::v2::cs_body_handshake &body_handshake);
-  LIBATGW_PROTOCOL_API int dispatch_handshake_dh_pubkey_req(
-      const ::atframework::gateway::v2::cs_body_handshake &body_handshake,
-      ::atframework::gateway::v2::handshake_step_t next_step);
-  LIBATGW_PROTOCOL_API int dispatch_handshake_dh_pubkey_rsp(
-      const ::atframework::gateway::v2::cs_body_handshake &body_handshake);
-  LIBATGW_PROTOCOL_API int dispatch_handshake_verify_ntf(
-      const ::atframework::gateway::v2::cs_body_handshake &body_handshake);
-
-  LIBATGW_PROTOCOL_API int pack_handshake_start_rsp(
-      flatbuffers::FlatBufferBuilder &builder, uint64_t sess_id, std::string &crypt_type,
-      flatbuffers::Offset< ::atframework::gateway::v2::cs_body_handshake> &handshake_body);
-  LIBATGW_PROTOCOL_API int pack_handshake_dh_pubkey_req(
-      flatbuffers::FlatBufferBuilder &builder, const ::atframework::gateway::v2::cs_body_handshake &peer_body,
-      flatbuffers::Offset< ::atframework::gateway::v2::cs_body_handshake> &handshake_body,
-      ::atframework::gateway::v2::handshake_step_t next_step);
 
   LIBATGW_PROTOCOL_API int try_write();
   LIBATGW_PROTOCOL_API int write_message(flatbuffers::FlatBufferBuilder &builder);
@@ -157,9 +220,13 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
 
   LIBATGW_PROTOCOL_API std::string get_info() const override;
 
-  LIBATGW_PROTOCOL_API int start_session(const std::string &crypt_type);
-  LIBATGW_PROTOCOL_API int reconnect_session(uint64_t sess_id, const std::string &crypt_type,
-                                             const std::vector<unsigned char> &secret);
+  /**
+   * @brief Client-side: start a new session by sending kKeyExchangeReq
+   * @return 0 or error code
+   */
+  LIBATGW_PROTOCOL_API int start_session();
+
+  LIBATGW_PROTOCOL_API int reconnect_session(uint64_t sess_id, const std::vector<unsigned char> &secret);
 
   LIBATGW_PROTOCOL_API int send_post(::atframework::gateway::v2::client_message_type_t message_type,
                                      gsl::span<const unsigned char> data);
@@ -168,24 +235,49 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   LIBATGW_PROTOCOL_API int send_pong(int64_t tp);
   LIBATGW_PROTOCOL_API int send_key_syn();
   LIBATGW_PROTOCOL_API int send_kickoff(int reason);
-  LIBATGW_PROTOCOL_API int send_verify(gsl::span<const unsigned char> data);
 
   ATFW_UTIL_FORCEINLINE const ping_data_t &get_last_ping() const { return ping_; }
 
-  LIBATGW_PROTOCOL_API const crypt_session_ptr_t &get_crypt_read() const;
-  LIBATGW_PROTOCOL_API const crypt_session_ptr_t &get_crypt_write() const;
-  LIBATGW_PROTOCOL_API const crypt_session_ptr_t &get_crypt_handshake() const;
+  LIBATGW_PROTOCOL_API const crypt_session_ptr_t &get_crypt_session() const;
 
   ATFW_UTIL_FORCEINLINE uint64_t get_session_id() const { return session_id_; }
 
   LIBATGW_PROTOCOL_API void set_logger(atfw::util::log::log_wrapper::ptr_t logger);
 
+  // ========== Access data authentication (like libatbus) ==========
+
+  /**
+   * @brief Generate access_data for handshake authentication
+   * @param ad output FlatBuffers builder offset
+   * @param builder FlatBuffers builder
+   * @param session_id session ID (0 for new session req)
+   * @param handshake_body_for_signing handshake body for HMAC (includes public key hash)
+   * @return 0 or error code
+   */
+  LIBATGW_PROTOCOL_API int generate_access_data(
+      flatbuffers::FlatBufferBuilder &builder,
+      std::vector<flatbuffers::Offset<::atframework::gateway::v2::cs_body_handshake_access_data>> &out,
+      uint64_t session_id,
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, key_exchange_t) key_exchange,
+      gsl::span<const unsigned char> public_key);
+
+  /**
+   * @brief Verify access_data from peer
+   * @return 0 if verified, negative error code otherwise
+   */
+  LIBATGW_PROTOCOL_API int verify_access_data(const ::atframework::gateway::v2::cs_body_handshake &body_handshake);
+
+  static LIBATGW_PROTOCOL_API std::string make_access_data_plaintext(
+      uint64_t session_id, int64_t timestamp, uint64_t nonce1, uint64_t nonce2,
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, key_exchange_t) key_exchange,
+      gsl::span<const unsigned char> public_key);
+
+  static LIBATGW_PROTOCOL_API std::string calculate_access_data_signature(gsl::span<const unsigned char> access_token,
+                                                                          const std::string &plaintext);
+
  private:
   int encode_post(const void *in, size_t insz, const void *&out, size_t &outsz);
   int decode_post(const void *in, size_t insz, const void *&out, size_t &outsz);
-
-  int encrypt_data(crypt_session_t &crypt_info, const void *in, size_t insz, const void *&out, size_t &outsz);
-  int decrypt_data(crypt_session_t &crypt_info, const void *in, size_t insz, const void *&out, size_t &outsz);
 
  public:
   static LIBATGW_PROTOCOL_API int global_reload(crypt_conf_t &crypt_conf);
@@ -207,22 +299,11 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   const void *last_write_ptr_;
   int close_reason_;
 
-  // crypt option
-  crypt_session_ptr_t crypt_read_;
-  crypt_session_ptr_t crypt_write_;
-  crypt_session_ptr_t crypt_handshake_;
+  // Single crypt session (like libatbus connection_context)
+  crypt_session_ptr_t crypt_session_;
 
   // ping data
   ping_data_t ping_;
-
-  // used for handshake
-  struct handshake_t {
-    ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, switch_secret_t) switch_secret_type;
-    bool has_data;
-    const void *ext_data;
-    atfw::util::crypto::dh dh_ctx;
-  };
-  handshake_t handshake_;
 
   // logger
   atfw::util::log::log_wrapper::ptr_t logger_;

@@ -110,10 +110,9 @@ LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_recv_buffer_limit(libat
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_send_buffer_limit(libatgateway_v2_c_context context,
                                                                            uint64_t max_size, uint64_t max_number);
 
-LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_start_session(libatgateway_v2_c_context context,
-                                                                      const char *crypt_type);
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_start_session(libatgateway_v2_c_context context);
 LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_reconnect_session(libatgateway_v2_c_context context,
-                                                                          uint64_t sessios_id, const char *crypt_type,
+                                                                          uint64_t sessios_id,
                                                                           const unsigned char *secret_buf,
                                                                           uint64_t secret_len);
 
@@ -124,12 +123,9 @@ LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_private_data(libatgatew
 LIBATGATEWAY_V2_C_API void *__cdecl libatgateway_v2_c_get_private_data(libatgateway_v2_c_context context);
 
 LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_session_id(libatgateway_v2_c_context context);
-LIBATGATEWAY_V2_C_API const char *__cdecl libatgateway_v2_c_get_crypt_type(libatgateway_v2_c_context context);
-LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_crypt_secret_size(libatgateway_v2_c_context context);
-LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_copy_crypt_secret(libatgateway_v2_c_context context,
-                                                                           unsigned char *secret,
-                                                                           uint64_t available_size);
-LIBATGATEWAY_V2_C_API uint32_t __cdecl libatgateway_v2_c_get_crypt_keybits(libatgateway_v2_c_context context);
+
+/// @brief Get selected crypto algorithm as integer (see crypto_algorithm_t enum in .fbs)
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_get_crypt_algorithm(libatgateway_v2_c_context context);
 
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_read_alloc(libatgateway_v2_c_context context,
                                                                 uint64_t suggested_size, char **out_buf,

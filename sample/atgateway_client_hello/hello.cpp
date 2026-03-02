@@ -71,8 +71,6 @@ static client_session_data_t g_client_sess;
 static std::string g_host;
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static int g_port = 0;
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-static std::string crypt_types;
 
 static std::pair<unsigned long long, const char *> get_size_readable(size_t sz) {
   const char *unit = "B";
@@ -166,19 +164,12 @@ static void libuv_tcp_connect_callback(uv_connect_t *req, int status) {
   libatgateway_v2_c_set_send_buffer_limit(sess_proto->ctx, 2 * 1024 * 1024, 0);
 
   if (g_client_sess.proto && g_client_sess.allow_reconnect) {
-    std::vector<unsigned char> secret;
-    uint64_t secret_len = libatgateway_v2_c_get_crypt_secret_size(g_client_sess.proto->ctx);
-    secret.resize(secret_len);
-    std::string crypt_type = libatgateway_v2_c_get_crypt_type(g_client_sess.proto->ctx);
-    libatgateway_v2_c_copy_crypt_secret(g_client_sess.proto->ctx, secret.data(), secret_len);
-
     g_client_sess.proto = sess_proto;
-    ret = libatgateway_v2_c_reconnect_session(sess_proto->ctx, g_client_sess.session_id, crypt_type.c_str(),
-                                              secret.data(), secret_len);
+    ret = libatgateway_v2_c_reconnect_session(sess_proto->ctx, g_client_sess.session_id, nullptr, 0);
   } else {
     g_client_sess.proto = sess_proto;
 
-    ret = libatgateway_v2_c_start_session(sess_proto->ctx, crypt_types.c_str());
+    ret = libatgateway_v2_c_start_session(sess_proto->ctx);
   }
   if (0 != ret) {
     fprintf(stderr, "start session failed, res: %d\n", ret);
@@ -462,10 +453,8 @@ static void libuv_tick_timer_callback(uv_timer_t *handle) {
 
 int main(int argc, char *argv[]) {
   if (argc < 3) {
-    fprintf(stderr,
-            "usage: %s <ip> <port> [crypt types] [mode]\n\tmode can be tick or busy\n\t%s 127.0.0.1 9005 "
-            "xxtea:aes-128-cfb:aes-256-cfb tick\n",
-            argv[0], argv[0]);
+    fprintf(stderr, "usage: %s <ip> <port> [mode]\n\tmode can be tick or busy\n\t%s 127.0.0.1 9005 tick\n", argv[0],
+            argv[0]);
     return -1;
   }
 
@@ -503,15 +492,7 @@ int main(int argc, char *argv[]) {
   memset(&g_client, 0, sizeof(g_client));
 
   if (argc > 3) {
-    crypt_types = argv[3];
-  }
-
-  if (crypt_types.empty()) {
-    crypt_types = "xxtea:aes-128-cfb:aes-256-cfb";
-  }
-
-  if (argc > 4) {
-    mode = argv[4];
+    mode = argv[3];
     std::transform(mode.begin(), mode.end(), mode.begin(), to_lower_case<char>);
   }
 

@@ -11,7 +11,6 @@ option optimize_for = SPEED;
 option cc_enable_arenas = true;
 
 import "google/protobuf/duration.proto";
-import "google/protobuf/timestamp.proto";
 
 import "atframe/atapp_conf.proto";
 
@@ -37,12 +36,44 @@ message atgateway_client_limit_cfg {
   uint64 minute_recv_times = 12;
 }
 
+// Key exchange algorithm for the handshake
+enum atgateway_key_exchange_type {
+  EN_ATGW_KEY_EXCHANGE_NONE = 0 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "none" }];
+  EN_ATGW_KEY_EXCHANGE_X25519 = 1 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "x25519" }];
+  EN_ATGW_KEY_EXCHANGE_SECP256R1 = 2 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "secp256r1" }];
+  EN_ATGW_KEY_EXCHANGE_SECP384R1 = 3 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "secp384r1" }];
+  EN_ATGW_KEY_EXCHANGE_SECP521R1 = 4 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "secp521r1" }];
+}
+
+// Crypto algorithm for session data encryption
+enum atgateway_crypto_algorithm {
+  EN_ATGW_CRYPTO_NONE = 0 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "none" }];
+  EN_ATGW_CRYPTO_XXTEA = 1 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "xxtea" }];
+  EN_ATGW_CRYPTO_AES_128_CBC = 11 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "aes-128-cbc" }];
+  EN_ATGW_CRYPTO_AES_192_CBC = 12 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "aes-192-cbc" }];
+  EN_ATGW_CRYPTO_AES_256_CBC = 13 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "aes-256-cbc" }];
+  EN_ATGW_CRYPTO_AES_128_GCM = 14 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "aes-128-gcm" }];
+  EN_ATGW_CRYPTO_AES_192_GCM = 15 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "aes-192-gcm" }];
+  EN_ATGW_CRYPTO_AES_256_GCM = 16 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "aes-256-gcm" }];
+  EN_ATGW_CRYPTO_CHACHA20 = 31 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "chacha20" }];
+  EN_ATGW_CRYPTO_CHACHA20_POLY1305 = 32 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "chacha20-poly1305" }];
+  EN_ATGW_CRYPTO_XCHACHA20_POLY1305 = 33 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "xchacha20-poly1305" }];
+}
+
 message atgateway_client_crypt_cfg {
-  string key = 1;
+  // Access tokens for HMAC-SHA256 authentication (multiple for rolling rotation)
+  repeated bytes access_tokens = 1;
+
+  // Key refresh interval (re-run handshake to rotate keys)
   google.protobuf.Duration update_interval = 2
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "1s" }];
-  string type = 3;
-  string dhparam = 4;
+
+  // Key exchange algorithm (ECDH curve)
+  atgateway_key_exchange_type key_exchange = 3
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "x25519" }];
+
+  // Supported crypto algorithms (server selects the first mutually supported one)
+  repeated atgateway_crypto_algorithm algorithms = 4;
 }
 
 enum atgateway_router_policy {
