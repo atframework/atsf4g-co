@@ -7,6 +7,7 @@
 #include <memory>
 #include <vector>
 
+#include "algorithm/compression.h"
 #include "algorithm/crypto_cipher.h"
 #include "algorithm/crypto_dh.h"
 #include "detail/buffer.h"
@@ -46,17 +47,16 @@ namespace atframework {
 namespace gateway {
 namespace v2 {
 namespace detail {
-struct crypt_global_configure_t;
+struct crypto_global_configure_t;
 }
 
 class libatgw_protocol_sdk : public libatgw_protocol_api {
  public:
   /**
    * @brief Crypto configuration for the gateway protocol.
-   * @note Replaces the old crypt_conf_t that used string-based cipher types and switch_secret_t.
-   *       Now uses ECDH key exchange exclusively (like libatbus).
+   * @note Uses ECDH key exchange exclusively (like libatbus).
    */
-  struct ATFW_UTIL_SYMBOL_VISIBLE crypt_conf_t {
+  struct ATFW_UTIL_SYMBOL_VISIBLE crypto_conf_t {
     /// Access tokens for HMAC-SHA256 authentication (multiple for rolling rotation)
     std::vector<std::vector<unsigned char>> access_tokens;
 
@@ -70,17 +70,28 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
     std::vector<ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, crypto_algorithm_t)>
         supported_algorithms;
 
+    /// Supported compression algorithms (ordered by preference)
+    std::vector<ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, compression_algorithm_t)>
+        compression_algorithms;
+
+    /// Supported KDF algorithms (ordered by preference)
+    std::vector<ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, kdf_algorithm_t)>
+        supported_kdf_algorithms;
+
+    /// Maximum post message size in bytes (default 2MB, sent to client during handshake)
+    uint64_t max_post_message_size;
+
     /// Whether this is client mode (vs server mode)
     bool client_mode;
   };
 
   /**
    * @brief Per-connection crypto session state (like libatbus connection_context).
-   * @note Owns the cipher pair for encrypt/decrypt, and the handshake DH context.
+   * @note Owns the cipher pair for encrypt/decrypt, the handshake DH context, and compression state.
    */
-  struct ATFW_UTIL_SYMBOL_VISIBLE crypt_session_t {
+  struct ATFW_UTIL_SYMBOL_VISIBLE crypto_session_t {
     // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
-    std::shared_ptr<detail::crypt_global_configure_t> shared_conf;
+    std::shared_ptr<detail::crypto_global_configure_t> shared_conf;
 
     /// Selected crypto algorithm after negotiation
     // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
@@ -94,8 +105,17 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
     // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
     ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, key_exchange_t) key_exchange_algorithm;
 
-    LIBATGW_PROTOCOL_API crypt_session_t();
-    LIBATGW_PROTOCOL_API ~crypt_session_t();
+    /// Selected compression algorithm after negotiation
+    // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
+    ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, compression_algorithm_t)
+    selected_compression_algorithm;
+
+    /// Maximum post message size in bytes (negotiated during handshake)
+    // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
+    uint64_t max_post_message_size;
+
+    LIBATGW_PROTOCOL_API crypto_session_t();
+    LIBATGW_PROTOCOL_API ~crypto_session_t();
 
     /**
      * @brief Generate ECDH key pair for handshake
@@ -147,6 +167,12 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
     /// Decrypt data using receive cipher
     LIBATGW_PROTOCOL_API int decrypt_data(const void *in, size_t insz, const void *&out, size_t &outsz);
 
+    /// Compress data
+    LIBATGW_PROTOCOL_API int compress_data(const void *in, size_t insz, const void *&out, size_t &outsz);
+
+    /// Decompress data
+    LIBATGW_PROTOCOL_API int decompress_data(const void *in, size_t insz, const void *&out, size_t &outsz);
+
    private:
     int derive_key_from_shared_secret(const std::vector<unsigned char> &shared_secret);
 
@@ -159,7 +185,11 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
     std::unique_ptr<::atfw::util::crypto::cipher> receive_cipher_;
   };
 
-  using crypt_session_ptr_t = std::shared_ptr<crypt_session_t>;
+  using crypto_session_ptr_t = std::shared_ptr<crypto_session_t>;
+
+  /// @brief Backward compatibility aliases
+  using crypt_session_t = crypto_session_t;
+  using crypt_session_ptr_t = crypto_session_ptr_t;
 
   // ping/pong
   struct ATFW_UTIL_SYMBOL_VISIBLE ping_data_t {
@@ -169,10 +199,14 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   };
 
  public:
-  LIBATGW_PROTOCOL_API libatgw_protocol_sdk();
+  /**
+   * @brief Construct with a shared global crypto configuration.
+   * @param shared_conf shared pointer to global crypto configuration (created via create_global_configure)
+   */
+  LIBATGW_PROTOCOL_API explicit libatgw_protocol_sdk(std::shared_ptr<detail::crypto_global_configure_t> shared_conf);
   LIBATGW_PROTOCOL_API ~libatgw_protocol_sdk();
 
-  LIBATGW_PROTOCOL_API void alloc_recv_buffer(size_t suggested_size, char *&out_buf, size_t &out_len) override;
+  LIBATGW_PROTOCOL_API void alloc_receive_buffer(size_t suggested_size, char *&out_buf, size_t &out_len) override;
   LIBATGW_PROTOCOL_API void read(int ssz, gsl::span<const unsigned char> buffer, int &errcode) override;
 
   LIBATGW_PROTOCOL_API void dispatch_data(gsl::span<const unsigned char> data, int errcode);
@@ -208,12 +242,12 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   LIBATGW_PROTOCOL_API int close(int reason) override;
   LIBATGW_PROTOCOL_API int close(int reason, bool is_send_kickoff);
 
-  LIBATGW_PROTOCOL_API int setup_handshake(std::shared_ptr<detail::crypt_global_configure_t> &shared_conf);
+  LIBATGW_PROTOCOL_API int setup_handshake(std::shared_ptr<detail::crypto_global_configure_t> &shared_conf);
   LIBATGW_PROTOCOL_API void close_handshake(int status);
 
   LIBATGW_PROTOCOL_API bool check_reconnect(const libatgw_protocol_api *other) override;
 
-  LIBATGW_PROTOCOL_API void set_recv_buffer_limit(size_t max_size, size_t max_number) override;
+  LIBATGW_PROTOCOL_API void set_receive_buffer_limit(size_t max_size, size_t max_number) override;
   LIBATGW_PROTOCOL_API void set_send_buffer_limit(size_t max_size, size_t max_number) override;
 
   LIBATGW_PROTOCOL_API int handshake_update() override;
@@ -233,12 +267,11 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   LIBATGW_PROTOCOL_API int send_post(gsl::span<const unsigned char> data);
   LIBATGW_PROTOCOL_API int send_ping();
   LIBATGW_PROTOCOL_API int send_pong(int64_t tp);
-  LIBATGW_PROTOCOL_API int send_key_syn();
-  LIBATGW_PROTOCOL_API int send_kickoff(int reason);
+  LIBATGW_PROTOCOL_API int send_kickoff(int reason, int sub_reason = 0, const char *message = nullptr);
 
   ATFW_UTIL_FORCEINLINE const ping_data_t &get_last_ping() const { return ping_; }
 
-  LIBATGW_PROTOCOL_API const crypt_session_ptr_t &get_crypt_session() const;
+  LIBATGW_PROTOCOL_API const crypto_session_ptr_t &get_crypto_session() const;
 
   ATFW_UTIL_FORCEINLINE uint64_t get_session_id() const { return session_id_; }
 
@@ -280,18 +313,33 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   int decode_post(const void *in, size_t insz, const void *&out, size_t &outsz);
 
  public:
-  static LIBATGW_PROTOCOL_API int global_reload(crypt_conf_t &crypt_conf);
+  /**
+   * @brief Create a shared global crypto configuration from crypto_conf_t.
+   * @param conf the configuration to use
+   * @return shared_ptr to the global configure object
+   */
+  static LIBATGW_PROTOCOL_API std::shared_ptr<detail::crypto_global_configure_t> create_global_configure(
+      crypto_conf_t &conf);
+
+  /**
+   * @brief Get a mutable pointer to the crypto_conf_t stored inside a global configure object.
+   * @param global_conf the shared global configure
+   * @return pointer to the mutable crypto_conf_t, or nullptr if global_conf is empty
+   */
+  static LIBATGW_PROTOCOL_API crypto_conf_t *get_global_configure_mutable_conf(
+      const std::shared_ptr<detail::crypto_global_configure_t> &global_conf);
 
  private:
+  std::shared_ptr<detail::crypto_global_configure_t> shared_conf_;
   uint64_t session_id_;
   ::atbus::detail::buffer_manager read_buffers_;
   /**
-   * @brief 由于大多数数据包都比较小
-   *        当数据包比较小时和动态直接放在动态int的数据包一起，这样可以减少内存拷贝次数
+   * @brief Since most packets are small, when the packet is small we store it directly in
+   *        the read_head buffer alongside the dynamic packet header to reduce memory copies.
    */
   struct read_head_t {
-    char buffer[ATFRAMEWORK_GATEWAY_MACRO_DATA_SMALL_SIZE];  // 小数据包存储区
-    size_t len;                                              // 小数据包存储区已使用长度
+    unsigned char buffer[ATFRAMEWORK_GATEWAY_MACRO_DATA_SMALL_SIZE];  // Small message buffer
+    size_t len;                                                       // Used length of the small buffer
   };
   read_head_t read_head_;
 
@@ -299,8 +347,8 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   const void *last_write_ptr_;
   int close_reason_;
 
-  // Single crypt session (like libatbus connection_context)
-  crypt_session_ptr_t crypt_session_;
+  // Single crypto session (like libatbus connection_context)
+  crypto_session_ptr_t crypto_session_;
 
   // ping data
   ping_data_t ping_;

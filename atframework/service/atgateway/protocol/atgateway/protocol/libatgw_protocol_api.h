@@ -207,7 +207,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
    * @param out_buf output the allocated buffer address
    * @param out_len output the allocated buffer length
    */
-  virtual void alloc_recv_buffer(size_t suggested_size, char *&out_buf, size_t &out_len) = 0;
+  virtual void alloc_receive_buffer(size_t suggested_size, char *&out_buf, size_t &out_len) = 0;
 
   /**
    * @biref call this when received any data from engine. custom protocol must implement this
@@ -254,7 +254,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
    * @param max_size max size, 0 for umlimited
    * @param max_number max max_number, 0 for umlimited
    */
-  LIBATGW_PROTOCOL_API virtual void set_recv_buffer_limit(size_t max_size, size_t max_number);
+  LIBATGW_PROTOCOL_API virtual void set_receive_buffer_limit(size_t max_size, size_t max_number);
 
   /**
    * @biref set send buffer limit, it's useful only if custom protocol implement this

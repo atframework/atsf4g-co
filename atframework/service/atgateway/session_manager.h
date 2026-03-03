@@ -27,14 +27,14 @@ namespace atframework {
 namespace gateway {
 class session_manager {
  public:
-  using crypt_conf_t = ::atframework::gateway::libatgw_protocol_sdk::crypt_conf_t;
+  using crypto_conf_t = ::atframework::gateway::libatgw_protocol_sdk::crypto_conf_t;
 
   struct conf_t {
     size_t version;
 
     atframework::gateway::atgateway_cfg origin_conf;
 
-    crypt_conf_t crypt;
+    crypto_conf_t crypto;
   };
 
   using session_map_t = std::unordered_map<session::id_t, session::ptr_t>;

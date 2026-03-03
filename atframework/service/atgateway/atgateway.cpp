@@ -108,85 +108,85 @@ class gateway_module : public ::atfw::atapp::module_impl {
 
     get_app()->parse_configures_into(gw_mgr_.get_conf().origin_conf, "atgateway");
 
-    // crypt
-    ::atframework::gateway::session_manager::crypt_conf_t &crypt_conf = gw_mgr_.get_conf().crypt;
+    // crypto
+    ::atframework::gateway::session_manager::crypto_conf_t &crypto_conf = gw_mgr_.get_conf().crypto;
 
     // Access tokens
-    crypt_conf.access_tokens.clear();
-    for (const auto &token : gw_mgr_.get_conf().origin_conf.client().crypt().access_tokens()) {
-      crypt_conf.access_tokens.emplace_back(reinterpret_cast<const unsigned char *>(token.data()),
+    crypto_conf.access_tokens.clear();
+    for (const auto &token : gw_mgr_.get_conf().origin_conf.client().crypto().access_tokens()) {
+      crypto_conf.access_tokens.emplace_back(reinterpret_cast<const unsigned char *>(token.data()),
                                             reinterpret_cast<const unsigned char *>(token.data()) + token.size());
     }
 
-    crypt_conf.update_interval = gw_mgr_.get_conf().origin_conf.client().crypt().update_interval().seconds();
-    crypt_conf.client_mode = false;
+    crypto_conf.update_interval = gw_mgr_.get_conf().origin_conf.client().crypto().update_interval().seconds();
+    crypto_conf.client_mode = false;
 
     // Map protobuf key exchange type to flatbuffers key_exchange_t
-    switch (gw_mgr_.get_conf().origin_conf.client().crypt().key_exchange()) {
+    switch (gw_mgr_.get_conf().origin_conf.client().crypto().key_exchange()) {
       case ::atframework::gateway::EN_ATGW_KEY_EXCHANGE_X25519:
-        crypt_conf.key_exchange_algorithm =
+        crypto_conf.key_exchange_algorithm =
             ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(key_exchange_t, kX25519);
         break;
       case ::atframework::gateway::EN_ATGW_KEY_EXCHANGE_SECP256R1:
-        crypt_conf.key_exchange_algorithm =
+        crypto_conf.key_exchange_algorithm =
             ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(key_exchange_t, kSecp256r1);
         break;
       case ::atframework::gateway::EN_ATGW_KEY_EXCHANGE_SECP384R1:
-        crypt_conf.key_exchange_algorithm =
+        crypto_conf.key_exchange_algorithm =
             ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(key_exchange_t, kSecp384r1);
         break;
       case ::atframework::gateway::EN_ATGW_KEY_EXCHANGE_SECP521R1:
-        crypt_conf.key_exchange_algorithm =
+        crypto_conf.key_exchange_algorithm =
             ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(key_exchange_t, kSecp521r1);
         break;
       default:
-        crypt_conf.key_exchange_algorithm =
+        crypto_conf.key_exchange_algorithm =
             ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(key_exchange_t, kNone);
         break;
     }
 
     // Map protobuf crypto algorithms to flatbuffers crypto_algorithm_t
-    crypt_conf.supported_algorithms.clear();
-    for (auto alg : gw_mgr_.get_conf().origin_conf.client().crypt().algorithms()) {
+    crypto_conf.supported_algorithms.clear();
+    for (auto alg : gw_mgr_.get_conf().origin_conf.client().crypto().algorithms()) {
       switch (alg) {
         case ::atframework::gateway::EN_ATGW_CRYPTO_XXTEA:
-          crypt_conf.supported_algorithms.push_back(
+          crypto_conf.supported_algorithms.push_back(
               ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kXxtea));
           break;
         case ::atframework::gateway::EN_ATGW_CRYPTO_AES_128_CBC:
-          crypt_conf.supported_algorithms.push_back(
+          crypto_conf.supported_algorithms.push_back(
               ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kAes128Cbc));
           break;
         case ::atframework::gateway::EN_ATGW_CRYPTO_AES_192_CBC:
-          crypt_conf.supported_algorithms.push_back(
+          crypto_conf.supported_algorithms.push_back(
               ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kAes192Cbc));
           break;
         case ::atframework::gateway::EN_ATGW_CRYPTO_AES_256_CBC:
-          crypt_conf.supported_algorithms.push_back(
+          crypto_conf.supported_algorithms.push_back(
               ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kAes256Cbc));
           break;
         case ::atframework::gateway::EN_ATGW_CRYPTO_AES_128_GCM:
-          crypt_conf.supported_algorithms.push_back(
+          crypto_conf.supported_algorithms.push_back(
               ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kAes128Gcm));
           break;
         case ::atframework::gateway::EN_ATGW_CRYPTO_AES_192_GCM:
-          crypt_conf.supported_algorithms.push_back(
+          crypto_conf.supported_algorithms.push_back(
               ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kAes192Gcm));
           break;
         case ::atframework::gateway::EN_ATGW_CRYPTO_AES_256_GCM:
-          crypt_conf.supported_algorithms.push_back(
+          crypto_conf.supported_algorithms.push_back(
               ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kAes256Gcm));
           break;
         case ::atframework::gateway::EN_ATGW_CRYPTO_CHACHA20:
-          crypt_conf.supported_algorithms.push_back(
+          crypto_conf.supported_algorithms.push_back(
               ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kChacha20));
           break;
         case ::atframework::gateway::EN_ATGW_CRYPTO_CHACHA20_POLY1305:
-          crypt_conf.supported_algorithms.push_back(::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(
+          crypto_conf.supported_algorithms.push_back(::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(
               crypto_algorithm_t, kChacha20Poly1305Ietf));
           break;
         case ::atframework::gateway::EN_ATGW_CRYPTO_XCHACHA20_POLY1305:
-          crypt_conf.supported_algorithms.push_back(::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(
+          crypto_conf.supported_algorithms.push_back(::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(
               crypto_algorithm_t, kXchacha20Poly1305Ietf));
           break;
         default:
@@ -194,13 +194,46 @@ class gateway_module : public ::atfw::atapp::module_impl {
       }
     }
 
+    // Map protobuf compression algorithms
+    crypto_conf.compression_algorithms.clear();
+    for (auto comp_alg : gw_mgr_.get_conf().origin_conf.client().crypto().compression_algorithms()) {
+      switch (comp_alg) {
+        case ::atframework::gateway::EN_ATGW_COMPRESSION_ZSTD:
+          crypto_conf.compression_algorithms.push_back(
+              ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_algorithm_t, kZstd));
+          break;
+        case ::atframework::gateway::EN_ATGW_COMPRESSION_LZ4:
+          crypto_conf.compression_algorithms.push_back(
+              ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_algorithm_t, kLz4));
+          break;
+        case ::atframework::gateway::EN_ATGW_COMPRESSION_SNAPPY:
+          crypto_conf.compression_algorithms.push_back(
+              ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_algorithm_t, kSnappy));
+          break;
+        case ::atframework::gateway::EN_ATGW_COMPRESSION_ZLIB:
+          crypto_conf.compression_algorithms.push_back(
+              ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_algorithm_t, kZlib));
+          break;
+        default:
+          break;
+      }
+    }
+
+    // Max post message size
+    if (gw_mgr_.get_conf().origin_conf.client().crypto().max_post_message_size() > 0) {
+      crypto_conf.max_post_message_size = gw_mgr_.get_conf().origin_conf.client().crypto().max_post_message_size();
+    } else {
+      crypto_conf.max_post_message_size = 2 * 1024 * 1024;  // Default 2MB
+    }
+
     // protocol reload
     if ("inner" == gw_mgr_.get_conf().origin_conf.listen().type()) {
-      int res = ::atframework::gateway::libatgw_protocol_sdk::global_reload(crypt_conf);
-      if (res < 0) {
-        FWLOGERROR("reload inner protocol global configure failed, res: {}", res);
-        return res;
+      auto global_conf = ::atframework::gateway::libatgw_protocol_sdk::create_global_configure(crypto_conf);
+      if (!global_conf) {
+        FWLOGERROR("reload inner protocol global configure failed");
+        return -1;
       }
+      shared_conf_ = global_conf;
     }
 
     return 0;
@@ -225,7 +258,7 @@ class gateway_module : public ::atfw::atapp::module_impl {
  private:
   std::unique_ptr<::atframework::gateway::libatgw_protocol_api> create_proto_inner() {
     ::atframework::gateway::libatgw_protocol_sdk *ret =
-        new (std::nothrow)::atframework::gateway::libatgw_protocol_sdk();
+        new (std::nothrow)::atframework::gateway::libatgw_protocol_sdk(shared_conf_);
     if (nullptr != ret) {
       ret->set_callbacks(&proto_callbacks_);
       ret->set_write_header_offset(sizeof(uv_write_t));
@@ -634,6 +667,7 @@ class gateway_module : public ::atfw::atapp::module_impl {
  private:
   ::atframework::gateway::session_manager gw_mgr_;
   ::atframework::gateway::libatgw_protocol_api::proto_callbacks_t proto_callbacks_;
+  std::shared_ptr<::atframework::gateway::v2::detail::crypto_global_configure_t> shared_conf_;
 };
 
 struct app_handle_on_recv {
@@ -773,7 +807,7 @@ int main(int argc, char *argv[]) {
     atfw::util::log::log_formatter::set_project_directory(proj_dir.c_str(), proj_dir.size());
   }
 
-  // setup crypt algorithms
+  // setup crypto algorithms
   atfw::util::crypto::cipher::init_global_algorithm();
 
   // setup module
@@ -795,7 +829,7 @@ int main(int argc, char *argv[]) {
   // run
   int ret = app.run(uv_default_loop(), argc, (const char **)argv, nullptr);
 
-  // cleanup crypt algorithms
+  // cleanup crypto algorithms
   atfw::util::crypto::cipher::cleanup_global_algorithm();
 
   return ret;

@@ -145,7 +145,7 @@ LIBATGW_PROTOCOL_API bool libatgw_protocol_api::check_reconnect(const libatgw_pr
   return false;
 }
 
-LIBATGW_PROTOCOL_API void libatgw_protocol_api::set_recv_buffer_limit(size_t, size_t) {}
+LIBATGW_PROTOCOL_API void libatgw_protocol_api::set_receive_buffer_limit(size_t, size_t) {}
 LIBATGW_PROTOCOL_API void libatgw_protocol_api::set_send_buffer_limit(size_t, size_t) {}
 
 LIBATGW_PROTOCOL_API int libatgw_protocol_api::handshake_done(int status) { return inner_handshake_done(status); }

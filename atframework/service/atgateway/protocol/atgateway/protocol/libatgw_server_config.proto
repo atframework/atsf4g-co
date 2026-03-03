@@ -38,29 +38,49 @@ message atgateway_client_limit_cfg {
 
 // Key exchange algorithm for the handshake
 enum atgateway_key_exchange_type {
-  EN_ATGW_KEY_EXCHANGE_NONE = 0 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "none" }];
-  EN_ATGW_KEY_EXCHANGE_X25519 = 1 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "x25519" }];
-  EN_ATGW_KEY_EXCHANGE_SECP256R1 = 2 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "secp256r1" }];
-  EN_ATGW_KEY_EXCHANGE_SECP384R1 = 3 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "secp384r1" }];
-  EN_ATGW_KEY_EXCHANGE_SECP521R1 = 4 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "secp521r1" }];
+  EN_ATGW_KEY_EXCHANGE_NONE = 0 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "none" case_sensitive: false }];
+  EN_ATGW_KEY_EXCHANGE_X25519 = 1
+      [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "x25519" alias_name: "curve25519" case_sensitive: false }];
+  EN_ATGW_KEY_EXCHANGE_SECP256R1 = 2
+      [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "secp256r1" alias_name: "p-256" alias_name: "prime256v1" case_sensitive: false }];
+  EN_ATGW_KEY_EXCHANGE_SECP384R1 = 3
+      [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "secp384r1" alias_name: "p-384" case_sensitive: false }];
+  EN_ATGW_KEY_EXCHANGE_SECP521R1 = 4
+      [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "secp521r1" alias_name: "p-521" case_sensitive: false }];
 }
 
 // Crypto algorithm for session data encryption
 enum atgateway_crypto_algorithm {
-  EN_ATGW_CRYPTO_NONE = 0 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "none" }];
-  EN_ATGW_CRYPTO_XXTEA = 1 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "xxtea" }];
-  EN_ATGW_CRYPTO_AES_128_CBC = 11 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "aes-128-cbc" }];
-  EN_ATGW_CRYPTO_AES_192_CBC = 12 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "aes-192-cbc" }];
-  EN_ATGW_CRYPTO_AES_256_CBC = 13 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "aes-256-cbc" }];
-  EN_ATGW_CRYPTO_AES_128_GCM = 14 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "aes-128-gcm" }];
-  EN_ATGW_CRYPTO_AES_192_GCM = 15 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "aes-192-gcm" }];
-  EN_ATGW_CRYPTO_AES_256_GCM = 16 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "aes-256-gcm" }];
-  EN_ATGW_CRYPTO_CHACHA20 = 31 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "chacha20" }];
-  EN_ATGW_CRYPTO_CHACHA20_POLY1305 = 32 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "chacha20-poly1305" }];
-  EN_ATGW_CRYPTO_XCHACHA20_POLY1305 = 33 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "xchacha20-poly1305" }];
+  EN_ATGW_CRYPTO_NONE = 0 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "none" case_sensitive: false }];
+  EN_ATGW_CRYPTO_XXTEA = 1 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "xxtea" case_sensitive: false }];
+  EN_ATGW_CRYPTO_AES_128_CBC = 11 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "aes-128-cbc" case_sensitive: false }];
+  EN_ATGW_CRYPTO_AES_192_CBC = 12 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "aes-192-cbc" case_sensitive: false }];
+  EN_ATGW_CRYPTO_AES_256_CBC = 13 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "aes-256-cbc" case_sensitive: false }];
+  EN_ATGW_CRYPTO_AES_128_GCM = 14 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "aes-128-gcm" case_sensitive: false }]; // AEAD
+  EN_ATGW_CRYPTO_AES_192_GCM = 15 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "aes-192-gcm" case_sensitive: false }]; // AEAD
+  EN_ATGW_CRYPTO_AES_256_GCM = 16 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "aes-256-gcm" case_sensitive: false }]; // AEAD
+  EN_ATGW_CRYPTO_CHACHA20 = 31 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "chacha20" case_sensitive: false }];
+  EN_ATGW_CRYPTO_CHACHA20_POLY1305 = 32
+      [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "chacha20-poly1305" alias_name: "chacha20-poly1305-ietf" case_sensitive: false }];  // AEAD
+  EN_ATGW_CRYPTO_XCHACHA20_POLY1305 = 33
+      [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "xchacha20-poly1305" alias_name: "xchacha20-poly1305-ietf" case_sensitive: false }];  // AEAD
 }
 
-message atgateway_client_crypt_cfg {
+// Compression algorithm for session data
+enum atgateway_compression_algorithm {
+  EN_ATGW_COMPRESSION_NONE = 0 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "none" case_sensitive: false }];
+  EN_ATGW_COMPRESSION_ZSTD = 10 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "zstd" case_sensitive: false }];
+  EN_ATGW_COMPRESSION_LZ4 = 20 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "lz4" case_sensitive: false }];
+  EN_ATGW_COMPRESSION_SNAPPY = 30 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "snappy" case_sensitive: false }];
+  EN_ATGW_COMPRESSION_ZLIB = 40 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "zlib" case_sensitive: false }];
+}
+
+// KDF algorithm for key derivation
+enum atgateway_kdf_algorithm {
+  EN_ATGW_KDF_HKDF_SHA256 = 0 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "hkdf-sha256" case_sensitive: false }];
+}
+
+message atgateway_client_crypto_cfg {
   // Access tokens for HMAC-SHA256 authentication (multiple for rolling rotation)
   repeated bytes access_tokens = 1;
 
@@ -74,12 +94,21 @@ message atgateway_client_crypt_cfg {
 
   // Supported crypto algorithms (server selects the first mutually supported one)
   repeated atgateway_crypto_algorithm algorithms = 4;
+
+  // Supported compression algorithms (server selects the first mutually supported one)
+  repeated atgateway_compression_algorithm compression_algorithms = 5;
+
+  // Supported KDF algorithms
+  repeated atgateway_kdf_algorithm kdf_algorithms = 6;
+
+  // Maximum post message size in bytes (default 2MB, sent to client during handshake)
+  uint64 max_post_message_size = 7 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "2MB" size_mode: true }];
 }
 
 enum atgateway_router_policy {
-  EN_ATGW_ROUTER_POLICY_RANDOM = 0 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name:  "random" }];
-  EN_ATGW_ROUTER_POLICY_ROUND_ROBIN = 1 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "round_robin" }];
-  EN_ATGW_ROUTER_POLICY_HASH = 2 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "hash" }];
+  EN_ATGW_ROUTER_POLICY_RANDOM = 0 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "random" case_sensitive: false }];
+  EN_ATGW_ROUTER_POLICY_ROUND_ROBIN = 1 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "round_robin" case_sensitive: false }];
+  EN_ATGW_ROUTER_POLICY_HASH = 2 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "hash" case_sensitive: false }];
 }
 
 message atgateway_router_cfg {
@@ -101,7 +130,7 @@ message atgateway_client_cfg {
   uint64 send_buffer_size = 4 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "4MB" size_mode: true }];
   atgateway_router_cfg default_router = 5;
   atgateway_client_limit_cfg limit = 11;
-  atgateway_client_crypt_cfg crypt = 12;
+  atgateway_client_crypto_cfg crypto = 12;
 }
 
 message atgateway_cfg {

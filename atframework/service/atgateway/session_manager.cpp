@@ -621,7 +621,7 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   }
 
   // setup send buffer size
-  sess->get_protocol_handle()->set_recv_buffer_limit(mgr->conf_.origin_conf.client().recv_buffer_size(), 0);
+  sess->get_protocol_handle()->set_receive_buffer_limit(mgr->conf_.origin_conf.client().recv_buffer_size(), 0);
   sess->get_protocol_handle()->set_send_buffer_limit(mgr->conf_.origin_conf.client().send_buffer_size(), 0);
 
   // setup default router
@@ -700,7 +700,7 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
   }
 
   // setup send buffer size
-  proto->set_recv_buffer_limit(mgr->conf_.origin_conf.client().recv_buffer_size(), 0);
+  proto->set_receive_buffer_limit(mgr->conf_.origin_conf.client().recv_buffer_size(), 0);
   proto->set_send_buffer_limit(mgr->conf_.origin_conf.client().send_buffer_size(), 0);
 
   // setup default router

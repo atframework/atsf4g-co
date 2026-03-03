@@ -1,4 +1,4 @@
-﻿// Copyright 2026 atframework
+// Copyright 2026 atframework
 
 #include <uv.h>
 
@@ -11,18 +11,8 @@
 #include <cstdlib>
 #include <memory>
 #include <string>
-#include <vector>
 
 namespace {
-
-template <typename TCH = char>
-static TCH to_lower_case(TCH c) {
-  if (c >= 'A' && c <= 'Z') {
-    return static_cast<TCH>(c - 'A' + 'a');
-  }
-
-  return c;
-}
 
 struct client_libuv_data_t {
   uv_tcp_t tcp_sock;
@@ -97,11 +87,11 @@ static std::pair<unsigned long long, const char *> get_size_readable(size_t sz) 
   return std::pair<unsigned long long, const char *>(static_cast<unsigned long long>(sz), unit);
 }
 
-// ======================== 以下为网络处理及回调 ========================
+// ======================== Network processing and callbacks ========================
 static int close_sock();
 static void libuv_close_sock_callback(uv_handle_t *handle);
 
-static void libuv_tcp_recv_alloc_fn(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
+static void libuv_tcp_receive_alloc_fn(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
   if (!g_client_sess.proto) {
     uv_read_stop(reinterpret_cast<uv_stream_t *>(handle));
     return;
@@ -122,7 +112,7 @@ static void libuv_tcp_recv_alloc_fn(uv_handle_t *handle, size_t suggested_size, 
   }
 }
 
-static void libuv_tcp_recv_read_fn(uv_stream_t *, ssize_t nread, const uv_buf_t *buf) {
+static void libuv_tcp_receive_read_fn(uv_stream_t *, ssize_t nread, const uv_buf_t *buf) {
   // if no more data or EAGAIN or break by signal, just ignore
   if (0 == nread || UV_EAGAIN == nread || UV_EAI_AGAIN == nread || UV_EINTR == nread) {
     return;
@@ -156,11 +146,11 @@ static void libuv_tcp_connect_callback(uv_connect_t *req, int status) {
     return;
   }
 
-  uv_read_start(req->handle, libuv_tcp_recv_alloc_fn, libuv_tcp_recv_read_fn);
+  uv_read_start(req->handle, libuv_tcp_receive_alloc_fn, libuv_tcp_receive_read_fn);
   int ret = 0;
 
   std::shared_ptr<proto_wrapper> sess_proto = std::make_shared<proto_wrapper>();
-  libatgateway_v2_c_set_recv_buffer_limit(sess_proto->ctx, 2 * 1024 * 1024, 0);
+  libatgateway_v2_c_set_receive_buffer_limit(sess_proto->ctx, 2 * 1024 * 1024, 0);
   libatgateway_v2_c_set_send_buffer_limit(sess_proto->ctx, 2 * 1024 * 1024, 0);
 
   if (g_client_sess.proto && g_client_sess.allow_reconnect) {
@@ -262,7 +252,7 @@ int close_sock() {
   return libatgateway_v2_c_close(g_client_sess.proto->ctx, 0);
 }
 
-// ======================== 以下为协议处理回调 ========================
+// ======================== Protocol processing callbacks ========================
 static void proto_inner_callback_on_written_fn(uv_write_t *, int status) {
   if (g_client_sess.proto) {
     libatgateway_v2_c_write_done(g_client_sess.proto->ctx, status);
@@ -493,7 +483,7 @@ int main(int argc, char *argv[]) {
 
   if (argc > 3) {
     mode = argv[3];
-    std::transform(mode.begin(), mode.end(), mode.begin(), to_lower_case<char>);
+    std::transform(mode.begin(), mode.end(), mode.begin(), atfw::util::string::tolower<char>);
   }
 
   if ("tick" == mode) {

@@ -86,8 +86,8 @@ using libatgateway_v2_c_on_error_fn_t = int32_t (*)(libatgateway_v2_c_context, c
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_global_init_algorithms();
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_global_cleanup_algorithms();
 
-LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_global_get_crypt_size();
-LIBATGATEWAY_V2_C_API const char *__cdecl libatgateway_v2_c_global_get_crypt_name(uint64_t idx);
+LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_global_get_crypto_size();
+LIBATGATEWAY_V2_C_API const char *__cdecl libatgateway_v2_c_global_get_crypto_name(uint64_t idx);
 
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_gset_on_write_start_fn(libatgateway_v2_c_on_write_start_fn_t fn);
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_gset_on_message_fn(libatgateway_v2_c_on_message_fn_t fn);
@@ -105,8 +105,8 @@ LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_gset_on_error_fn(libatgatew
 LIBATGATEWAY_V2_C_API libatgateway_v2_c_context __cdecl libatgateway_v2_c_create();
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_destroy(libatgateway_v2_c_context context);
 
-LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_recv_buffer_limit(libatgateway_v2_c_context context,
-                                                                           uint64_t max_size, uint64_t max_number);
+LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_receive_buffer_limit(libatgateway_v2_c_context context,
+                                                                              uint64_t max_size, uint64_t max_number);
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_send_buffer_limit(libatgateway_v2_c_context context,
                                                                            uint64_t max_size, uint64_t max_number);
 
@@ -125,7 +125,7 @@ LIBATGATEWAY_V2_C_API void *__cdecl libatgateway_v2_c_get_private_data(libatgate
 LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_session_id(libatgateway_v2_c_context context);
 
 /// @brief Get selected crypto algorithm as integer (see crypto_algorithm_t enum in .fbs)
-LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_get_crypt_algorithm(libatgateway_v2_c_context context);
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_get_crypto_algorithm(libatgateway_v2_c_context context);
 
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_read_alloc(libatgateway_v2_c_context context,
                                                                 uint64_t suggested_size, char **out_buf,
@@ -157,6 +157,40 @@ LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_is_handshake_updating(li
 LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_is_handshake_done(libatgateway_v2_c_context context);
 LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_is_writing(libatgateway_v2_c_context context);
 LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_is_in_callback(libatgateway_v2_c_context context);
+
+/// @brief Set write header offset (bytes reserved at front of send buffers for transport headers)
+LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_write_header_offset(libatgateway_v2_c_context context,
+                                                                             uint64_t offset);
+/// @brief Get write header offset
+LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_write_header_offset(libatgateway_v2_c_context context);
+
+// ========== Algorithm configuration APIs ==========
+
+/// @brief Set crypto algorithm configuration.
+/// @param context protocol context
+/// @param key_exchange key exchange algorithm (0=none, 1=x25519, 2=secp256r1, 3=secp384r1, 4=secp521r1)
+/// @param crypto_algorithms array of crypto algorithm integers
+/// @param crypto_algorithms_count number of crypto algorithms
+/// @param update_interval key refresh interval in seconds
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_crypto_config(libatgateway_v2_c_context context,
+                                                                          int32_t key_exchange,
+                                                                          const int32_t *crypto_algorithms,
+                                                                          uint64_t crypto_algorithms_count,
+                                                                          int64_t update_interval);
+
+/// @brief Set access tokens for authentication
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_access_tokens(libatgateway_v2_c_context context,
+                                                                          const unsigned char *const *tokens,
+                                                                          const uint64_t *token_sizes,
+                                                                          uint64_t token_count);
+
+/// @brief Set compression algorithms
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_compression_algorithms(
+    libatgateway_v2_c_context context, const int32_t *compression_algorithms, uint64_t count);
+
+/// @brief Set max post message size
+LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_max_post_message_size(libatgateway_v2_c_context context,
+                                                                               uint64_t max_size);
 
 #ifdef __cplusplus
 }

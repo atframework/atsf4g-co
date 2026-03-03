@@ -174,18 +174,18 @@ extern "C" {
 #endif
 
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_global_init_algorithms() {
-  util::crypto::cipher::init_global_algorithm();
+  ::atfw::util::crypto::cipher::init_global_algorithm();
 }
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_global_cleanup_algorithms() {
-  util::crypto::cipher::cleanup_global_algorithm();
+  ::atfw::util::crypto::cipher::cleanup_global_algorithm();
 }
 
-LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_global_get_crypt_size() {
-  return static_cast<uint64_t>(util::crypto::cipher::get_all_cipher_names().size());
+LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_global_get_crypto_size() {
+  return static_cast<uint64_t>(::atfw::util::crypto::cipher::get_all_cipher_names().size());
 }
 
-LIBATGATEWAY_V2_C_API const char *__cdecl libatgateway_v2_c_global_get_crypt_name(uint64_t idx) {
-  const std::vector<std::string> &res = util::crypto::cipher::get_all_cipher_names();
+LIBATGATEWAY_V2_C_API const char *__cdecl libatgateway_v2_c_global_get_crypto_name(uint64_t idx) {
+  const std::vector<std::string> &res = ::atfw::util::crypto::cipher::get_all_cipher_names();
   if (idx >= res.size()) {
     return nullptr;
   }
@@ -229,11 +229,22 @@ LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_gset_on_error_fn(libatgatew
   libatgateway_v2_c_get_c_callbacks()->on_error_fn = fn;
 }
 
+// Thread-local storage for the C SDK's crypto configuration
+namespace {
+static std::shared_ptr<::atframework::gateway::v2::detail::crypto_global_configure_t> &
+libatgateway_v2_c_get_global_conf() {
+  static std::shared_ptr<::atframework::gateway::v2::detail::crypto_global_configure_t> inst;
+  return inst;
+}
+}  // namespace
+
 LIBATGATEWAY_V2_C_API libatgateway_v2_c_context __cdecl libatgateway_v2_c_create() {
   libatgateway_v2_c_context ret = nullptr;
   assert(sizeof(void *) == sizeof(libatgateway_v2_c_context));
 
-  ::atframework::gateway::libatgw_protocol_sdk *res = new (std::nothrow)::atframework::gateway::libatgw_protocol_sdk();
+  auto global_conf = libatgateway_v2_c_get_global_conf();
+  ::atframework::gateway::libatgw_protocol_sdk *res =
+      new (std::nothrow)::atframework::gateway::libatgw_protocol_sdk(global_conf);
   if (nullptr != res) {
     res->set_callbacks(libatgateway_v2_c_get_proto_callbacks());
   }
@@ -246,13 +257,13 @@ LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_destroy(libatgateway_v2_c_c
   delete ATGW_CONTEXT(context);
 }
 
-LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_recv_buffer_limit(libatgateway_v2_c_context context,
-                                                                           uint64_t max_size, uint64_t max_number) {
+LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_receive_buffer_limit(libatgateway_v2_c_context context,
+                                                                              uint64_t max_size, uint64_t max_number) {
   if (ATGW_CONTEXT_IS_NULL(context)) {
     return;
   }
 
-  ATGW_CONTEXT(context)->set_recv_buffer_limit(static_cast<size_t>(max_size), static_cast<size_t>(max_number));
+  ATGW_CONTEXT(context)->set_receive_buffer_limit(static_cast<size_t>(max_size), static_cast<size_t>(max_number));
 }
 
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_send_buffer_limit(libatgateway_v2_c_context context,
@@ -332,12 +343,12 @@ LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_session_id(libatgat
   return ATGW_CONTEXT(context)->get_session_id();
 }
 
-LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_get_crypt_algorithm(libatgateway_v2_c_context context) {
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_get_crypto_algorithm(libatgateway_v2_c_context context) {
   if (ATGW_CONTEXT_IS_NULL(context)) {
     return 0;
   }
 
-  auto session = ATGW_CONTEXT(context)->get_crypt_session();
+  auto session = ATGW_CONTEXT(context)->get_crypto_session();
   if (!session) {
     return 0;
   }
@@ -357,7 +368,7 @@ LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_read_alloc(libatgateway_v2_
     out_buf = &co;
   }
 
-  ATGW_CONTEXT(context)->alloc_recv_buffer(suggested_size, *out_buf, colen);
+  ATGW_CONTEXT(context)->alloc_receive_buffer(suggested_size, *out_buf, colen);
 
   if (nullptr != out_len) {
     *out_len = colen;
@@ -476,6 +487,105 @@ LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_is_in_callback(libatgate
   }
 
   return ATGW_CONTEXT(context)->check_flag(::atframework::gateway::libatgw_protocol_api::flag_t::kInCallback);
+}
+
+LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_write_header_offset(libatgateway_v2_c_context context,
+                                                                             uint64_t offset) {
+  if (ATGW_CONTEXT_IS_NULL(context)) {
+    return;
+  }
+  ATGW_CONTEXT(context)->set_write_header_offset(static_cast<size_t>(offset));
+}
+
+LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_write_header_offset(libatgateway_v2_c_context context) {
+  if (ATGW_CONTEXT_IS_NULL(context)) {
+    return 0;
+  }
+  return static_cast<uint64_t>(ATGW_CONTEXT(context)->get_write_header_offset());
+}
+
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_crypto_config(
+    libatgateway_v2_c_context /*context*/, int32_t key_exchange, const int32_t *crypto_algorithms,
+    uint64_t crypto_algorithms_count, int64_t update_interval) {
+  using sdk_t = ::atframework::gateway::libatgw_protocol_sdk;
+  sdk_t::crypto_conf_t conf;
+  conf.key_exchange_algorithm =
+      static_cast<ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, key_exchange_t)>(
+          key_exchange);
+  if (nullptr != crypto_algorithms && crypto_algorithms_count > 0) {
+    for (uint64_t i = 0; i < crypto_algorithms_count; ++i) {
+      conf.supported_algorithms.push_back(
+          static_cast<ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, crypto_algorithm_t)>(
+              crypto_algorithms[i]));
+    }
+  }
+  conf.update_interval = static_cast<time_t>(update_interval);
+  conf.max_post_message_size = 2 * 1024 * 1024;
+  conf.client_mode = true;
+
+  auto global_conf = sdk_t::create_global_configure(conf);
+  if (!global_conf) {
+    return static_cast<int32_t>(::atframework::gateway::error_code_t::kCryptNotSupported);
+  }
+  libatgateway_v2_c_get_global_conf() = global_conf;
+  return 0;
+}
+
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_access_tokens(
+    libatgateway_v2_c_context /*context*/, const unsigned char *const *tokens, const uint64_t *token_sizes,
+    uint64_t token_count) {
+  auto &global_conf = libatgateway_v2_c_get_global_conf();
+  if (!global_conf) {
+    return static_cast<int32_t>(::atframework::gateway::error_code_t::kParam);
+  }
+  auto *conf = ::atframework::gateway::libatgw_protocol_sdk::get_global_configure_mutable_conf(global_conf);
+  if (nullptr == conf) {
+    return static_cast<int32_t>(::atframework::gateway::error_code_t::kParam);
+  }
+  conf->access_tokens.clear();
+  if (nullptr != tokens && nullptr != token_sizes) {
+    for (uint64_t i = 0; i < token_count; ++i) {
+      if (tokens[i] != nullptr && token_sizes[i] > 0) {
+        conf->access_tokens.emplace_back(tokens[i], tokens[i] + token_sizes[i]);
+      }
+    }
+  }
+  return 0;
+}
+
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_compression_algorithms(
+    libatgateway_v2_c_context /*context*/, const int32_t *compression_algorithms, uint64_t count) {
+  auto &global_conf = libatgateway_v2_c_get_global_conf();
+  if (!global_conf) {
+    return static_cast<int32_t>(::atframework::gateway::error_code_t::kParam);
+  }
+  auto *conf = ::atframework::gateway::libatgw_protocol_sdk::get_global_configure_mutable_conf(global_conf);
+  if (nullptr == conf) {
+    return static_cast<int32_t>(::atframework::gateway::error_code_t::kParam);
+  }
+  conf->compression_algorithms.clear();
+  if (nullptr != compression_algorithms) {
+    for (uint64_t i = 0; i < count; ++i) {
+      conf->compression_algorithms.push_back(
+          static_cast<ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2,
+                                                                  compression_algorithm_t)>(
+              compression_algorithms[i]));
+    }
+  }
+  return 0;
+}
+
+LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_max_post_message_size(libatgateway_v2_c_context /*context*/,
+                                                                               uint64_t max_size) {
+  auto &global_conf = libatgateway_v2_c_get_global_conf();
+  if (!global_conf) {
+    return;
+  }
+  auto *conf = ::atframework::gateway::libatgw_protocol_sdk::get_global_configure_mutable_conf(global_conf);
+  if (nullptr == conf) {
+    return;
+  }
+  conf->max_post_message_size = max_size;
 }
 
 #ifdef __cplusplus

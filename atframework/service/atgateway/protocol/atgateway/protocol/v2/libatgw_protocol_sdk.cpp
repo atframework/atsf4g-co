@@ -11,11 +11,11 @@
 #include <cstring>
 #include <limits>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <unordered_set>
 #include <vector>
 
+#include "algorithm/compression.h"
 #include "algorithm/crypto_cipher.h"
 #include "algorithm/crypto_dh.h"
 #include "algorithm/crypto_hmac.h"
@@ -26,6 +26,7 @@
 #include "lock/seq_alloc.h"
 #include "lock/spin_lock.h"
 #include "random/random_generator.h"
+#include "string/string_format.h"
 #include "time/time_utility.h"
 
 namespace atframework {
@@ -33,14 +34,6 @@ namespace gateway {
 namespace v2 {
 namespace detail {
 namespace {
-
-template <class TCH = char>
-static TCH tolower(TCH c) {
-  if (c >= 'A' && c <= 'Z') {
-    return static_cast<TCH>(c - 'A' + 'a');
-  }
-  return c;
-}
 
 static uint64_t alloc_seq() {
   static atfw::util::lock::seq_alloc_u64 seq_alloc;
@@ -99,15 +92,33 @@ static const char *map_crypto_algorithm_to_name(ATFRAMEWORK_GATEWAY_MACRO_ENUM_S
   }
 }
 
+/// Map flatbuffers compression_algorithm_t to atfw::util::compression::algorithm_t
+static ::atfw::util::compression::algorithm_t map_compression_algorithm(
+    ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, compression_algorithm_t) alg) {
+  using namespace ::atframework::gateway::v2;
+  switch (alg) {
+    case ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_algorithm_t, kZstd):
+      return ::atfw::util::compression::algorithm_t::kZstd;
+    case ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_algorithm_t, kLz4):
+      return ::atfw::util::compression::algorithm_t::kLz4;
+    case ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_algorithm_t, kSnappy):
+      return ::atfw::util::compression::algorithm_t::kSnappy;
+    case ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_algorithm_t, kZlib):
+      return ::atfw::util::compression::algorithm_t::kZlib;
+    default:
+      return ::atfw::util::compression::algorithm_t::kNone;
+  }
+}
+
 }  // namespace
 
-struct crypt_global_configure_t {
-  using ptr_t = std::shared_ptr<crypt_global_configure_t>;
+struct crypto_global_configure_t {
+  using ptr_t = std::shared_ptr<crypto_global_configure_t>;
 
-  crypt_global_configure_t(libatgw_protocol_sdk::crypt_conf_t conf) : conf_(std::move(conf)), inited_(false) {
+  crypto_global_configure_t(libatgw_protocol_sdk::crypto_conf_t conf) : conf_(std::move(conf)), inited_(false) {
     shared_dh_context_ = atfw::util::crypto::dh::shared_context::create();
   }
-  ~crypt_global_configure_t() { close(); }
+  ~crypto_global_configure_t() { close(); }
 
   int init() {
     int ret = 0;
@@ -133,7 +144,7 @@ struct crypt_global_configure_t {
     const std::vector<std::string> &all_supported_ciphers = atfw::util::crypto::cipher::get_all_cipher_names();
     for (const auto &supported_type : all_supported_ciphers) {
       std::string lower_name = supported_type;
-      std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), tolower<char>);
+      std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), atfw::util::string::tolower<char>);
       all_supported_cipher_set.insert(lower_name);
     }
 
@@ -141,10 +152,19 @@ struct crypt_global_configure_t {
       const char *name = map_crypto_algorithm_to_name(alg);
       if (nullptr != name && name[0] != '\0') {
         std::string lower_name = name;
-        std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), tolower<char>);
+        std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), atfw::util::string::tolower<char>);
         if (all_supported_cipher_set.find(lower_name) != all_supported_cipher_set.end()) {
           available_algorithms_.push_back(alg);
         }
+      }
+    }
+
+    // Validate compression algorithms
+    for (auto calg : conf_.compression_algorithms) {
+      auto mapped = map_compression_algorithm(calg);
+      if (mapped != ::atfw::util::compression::algorithm_t::kNone &&
+          ::atfw::util::compression::is_algorithm_supported(mapped)) {
+        available_compression_algorithms_.push_back(calg);
       }
     }
 
@@ -177,39 +197,42 @@ struct crypt_global_configure_t {
     return false;
   }
 
-  static void default_crypt_configure(libatgw_protocol_sdk::crypt_conf_t &dconf) {
+  static void default_crypto_configure(libatgw_protocol_sdk::crypto_conf_t &dconf) {
     dconf.access_tokens.clear();
     dconf.key_exchange_algorithm =
         ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(key_exchange_t, kX25519);
     dconf.supported_algorithms.clear();
+    dconf.compression_algorithms.clear();
+    dconf.supported_kdf_algorithms.clear();
+    dconf.max_post_message_size = 2 * 1024 * 1024;  // 2MB default
     dconf.update_interval = 300;
     dconf.client_mode = false;
   }
 
-  libatgw_protocol_sdk::crypt_conf_t conf_;
+  libatgw_protocol_sdk::crypto_conf_t conf_;
   bool inited_;
   std::vector<ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, crypto_algorithm_t)>
       available_algorithms_;
+  std::vector<ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, compression_algorithm_t)>
+      available_compression_algorithms_;
   atfw::util::crypto::dh::shared_context::ptr_t shared_dh_context_;
-
-  static ptr_t &current() {
-    static ptr_t ret;
-    return ret;
-  }
 };
 }  // namespace detail
 
-// ========================= crypt_session_t =========================
+// ========================= crypto_session_t =========================
 
-LIBATGW_PROTOCOL_API libatgw_protocol_sdk::crypt_session_t::crypt_session_t()
+LIBATGW_PROTOCOL_API libatgw_protocol_sdk::crypto_session_t::crypto_session_t()
     : selected_algorithm(ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kNone)),
       selected_kdf(ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(kdf_algorithm_t, kHkdfSha256)),
       key_exchange_algorithm(ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(key_exchange_t, kNone)),
+      selected_compression_algorithm(ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_algorithm_t, kNone)),
+      max_post_message_size(2 * 1024 * 1024),
       handshake_sequence_id_(0) {}
 
-LIBATGW_PROTOCOL_API libatgw_protocol_sdk::crypt_session_t::~crypt_session_t() { close(); }
+LIBATGW_PROTOCOL_API libatgw_protocol_sdk::crypto_session_t::~crypto_session_t() { close(); }
 
-LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::crypt_session_t::handshake_generate_self_key(uint64_t peer_sequence_id) {
+LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::crypto_session_t::handshake_generate_self_key(
+    uint64_t peer_sequence_id) {
   if (!shared_conf || !shared_conf->shared_dh_context_) {
     return static_cast<int>(::atframework::gateway::error_code_t::kHandshake);
   }
@@ -247,7 +270,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::crypt_session_t::handshake_genera
   return 0;
 }
 
-LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::crypt_session_t::handshake_read_peer_key(
+LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::crypto_session_t::handshake_read_peer_key(
     gsl::span<const unsigned char> peer_public_key,
     gsl::span<const ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, crypto_algorithm_t)>
         peer_algorithms,
@@ -294,13 +317,13 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::crypt_session_t::handshake_read_p
   return ret;
 }
 
-LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::crypt_session_t::handshake_write_self_public_key(
+LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::crypto_session_t::handshake_write_self_public_key(
     std::vector<unsigned char> &out_public_key) {
   out_public_key = handshake_self_public_key_;
   return 0;
 }
 
-LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::crypt_session_t::setup_crypto_with_key(
+LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::crypto_session_t::setup_crypto_with_key(
     ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, crypto_algorithm_t) algorithm,
     const unsigned char *key, size_t key_size, const unsigned char *iv, size_t iv_size) {
   selected_algorithm = algorithm;
@@ -345,7 +368,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::crypt_session_t::setup_crypto_wit
   return 0;
 }
 
-LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::crypt_session_t::close() {
+LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::crypto_session_t::close() {
   handshake_dh_.reset();
   send_cipher_.reset();
   receive_cipher_.reset();
@@ -353,7 +376,7 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::crypt_session_t::close() {
   handshake_sequence_id_ = 0;
 }
 
-int libatgw_protocol_sdk::crypt_session_t::derive_key_from_shared_secret(
+int libatgw_protocol_sdk::crypto_session_t::derive_key_from_shared_secret(
     const std::vector<unsigned char> &shared_secret) {
   if (selected_algorithm == ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kNone)) {
     return 0;
@@ -389,8 +412,8 @@ int libatgw_protocol_sdk::crypt_session_t::derive_key_from_shared_secret(
                                iv_size > 0 ? key_material.data() + key_size : nullptr, iv_size);
 }
 
-LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::crypt_session_t::encrypt_data(const void *in, size_t insz,
-                                                                             const void *&out, size_t &outsz) {
+LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::crypto_session_t::encrypt_data(const void *in, size_t insz,
+                                                                              const void *&out, size_t &outsz) {
   if (selected_algorithm == ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kNone) || !send_cipher_) {
     out = in;
     outsz = insz;
@@ -431,8 +454,8 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::crypt_session_t::encrypt_data(con
   return 0;
 }
 
-LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::crypt_session_t::decrypt_data(const void *in, size_t insz,
-                                                                             const void *&out, size_t &outsz) {
+LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::crypto_session_t::decrypt_data(const void *in, size_t insz,
+                                                                              const void *&out, size_t &outsz) {
   if (selected_algorithm == ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kNone) || !receive_cipher_) {
     out = in;
     outsz = insz;
@@ -473,11 +496,104 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::crypt_session_t::decrypt_data(con
   return 0;
 }
 
+LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::crypto_session_t::compress_data(const void *in, size_t insz,
+                                                                               const void *&out, size_t &outsz) {
+  if (selected_compression_algorithm == ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_algorithm_t, kNone)) {
+    out = in;
+    outsz = insz;
+    return 0;
+  }
+
+  if (0 == insz || nullptr == in) {
+    out = in;
+    outsz = insz;
+    return static_cast<int>(::atframework::gateway::error_code_t::kParam);
+  }
+
+  auto mapped_alg = detail::map_compression_algorithm(selected_compression_algorithm);
+  if (mapped_alg == ::atfw::util::compression::algorithm_t::kNone) {
+    out = in;
+    outsz = insz;
+    return 0;
+  }
+
+  auto tls_buffer = libatgw_protocol_api::get_tls_buffer(libatgw_protocol_api::tls_buffer_t::kCompress);
+
+  std::vector<unsigned char> compressed;
+  int res = ::atfw::util::compression::compress(
+      mapped_alg, gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(in), insz}, compressed);
+  if (0 != res) {
+    out = nullptr;
+    outsz = 0;
+    return static_cast<int>(::atframework::gateway::error_code_t::kCryptOperation);
+  }
+
+  // Copy to TLS buffer if it fits, otherwise use the vector directly
+  unsigned char *buffer = tls_buffer.data();
+  if (compressed.size() <= tls_buffer.size()) {
+    memcpy(buffer, compressed.data(), compressed.size());
+    out = buffer;
+    outsz = compressed.size();
+  } else {
+    // Compressed data is larger than TLS buffer - this can happen
+    out = compressed.data();
+    outsz = compressed.size();
+  }
+  return 0;
+}
+
+LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::crypto_session_t::decompress_data(const void *in, size_t insz,
+                                                                                 const void *&out, size_t &outsz) {
+  if (selected_compression_algorithm == ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_algorithm_t, kNone)) {
+    out = in;
+    outsz = insz;
+    return 0;
+  }
+
+  if (0 == insz || nullptr == in) {
+    out = in;
+    outsz = insz;
+    return static_cast<int>(::atframework::gateway::error_code_t::kParam);
+  }
+
+  auto mapped_alg = detail::map_compression_algorithm(selected_compression_algorithm);
+  if (mapped_alg == ::atfw::util::compression::algorithm_t::kNone) {
+    out = in;
+    outsz = insz;
+    return 0;
+  }
+
+  auto tls_buffer = libatgw_protocol_api::get_tls_buffer(libatgw_protocol_api::tls_buffer_t::kCompress);
+
+  std::vector<unsigned char> decompressed;
+  int res = ::atfw::util::compression::decompress(
+      mapped_alg, gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(in), insz},
+      outsz,  // original_size hint
+      decompressed);
+  if (0 != res) {
+    out = nullptr;
+    outsz = 0;
+    return static_cast<int>(::atframework::gateway::error_code_t::kCryptOperation);
+  }
+
+  unsigned char *buffer = tls_buffer.data();
+  if (decompressed.size() <= tls_buffer.size()) {
+    memcpy(buffer, decompressed.data(), decompressed.size());
+    out = buffer;
+    outsz = decompressed.size();
+  } else {
+    out = decompressed.data();
+    outsz = decompressed.size();
+  }
+  return 0;
+}
+
 // ========================= libatgw_protocol_sdk =========================
 
-LIBATGW_PROTOCOL_API libatgw_protocol_sdk::libatgw_protocol_sdk()
-    : session_id_(0), read_head_{}, last_write_ptr_(nullptr), close_reason_(0) {
-  crypt_session_ = std::make_shared<crypt_session_t>();
+LIBATGW_PROTOCOL_API libatgw_protocol_sdk::libatgw_protocol_sdk(
+    std::shared_ptr<detail::crypto_global_configure_t> shared_conf)
+    : shared_conf_(std::move(shared_conf)), session_id_(0), read_head_{}, last_write_ptr_(nullptr), close_reason_(0) {
+  crypto_session_ = std::make_shared<crypto_session_t>();
 
   read_head_.len = 0;
 
@@ -490,8 +606,8 @@ LIBATGW_PROTOCOL_API libatgw_protocol_sdk::~libatgw_protocol_sdk() {
   close_handshake(static_cast<int>(::atframework::gateway::error_code_t::kSessionExpired));
 }
 
-LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::alloc_recv_buffer(size_t /*suggested_size*/, char *&out_buf,
-                                                                  size_t &out_len) {
+LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::alloc_receive_buffer(size_t /*suggested_size*/, char *&out_buf,
+                                                                     size_t &out_len) {
   flag_guard_t flag_guard(flags_, flag_t::kInCallback);
 
   if (check_flag(flag_t::kClosing)) {
@@ -511,7 +627,7 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::alloc_recv_buffer(size_t /*sugge
       out_buf = nullptr;
       assert(false);
     } else {
-      out_buf = &read_head_.buffer[read_head_.len];
+      out_buf = reinterpret_cast<char *>(&read_head_.buffer[read_head_.len]);
     }
     return;
   }
@@ -540,7 +656,7 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::read(int /*ssz*/, gsl::span<cons
     assert(buffer.size() <= sizeof(read_head_.buffer) - read_head_.len);
     read_head_.len += buffer.size();
 
-    char *buff_start = read_head_.buffer;
+    char *buff_start = reinterpret_cast<char *>(read_head_.buffer);
     size_t buff_left_len = read_head_.len;
 
     while (buff_left_len > sizeof(uint32_t) + sizeof(uint32_t)) {
@@ -579,7 +695,7 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::read(int /*ssz*/, gsl::span<cons
       }
     }
 
-    if (buff_start != read_head_.buffer && buff_left_len > 0) {
+    if (buff_start != reinterpret_cast<char *>(read_head_.buffer) && buff_left_len > 0) {
       memmove(read_head_.buffer, buff_start, buff_left_len);
     }
     read_head_.len = buff_left_len;
@@ -645,7 +761,7 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::dispatch_data(gsl::span<const un
       }
 
       // Server rejects data messages before handshake is done
-      if (!check_flag(flag_t::kHandshakeDone) || !crypt_session_) {
+      if (!check_flag(flag_t::kHandshakeDone) || !crypto_session_) {
         close(static_cast<int>(::atframework::gateway::close_reason_t::kHandshake), false);
         break;
       }
@@ -664,23 +780,6 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::dispatch_data(gsl::span<const un
       } else {
         close(static_cast<int>(::atframework::gateway::close_reason_t::kInvalidData), false);
       }
-      break;
-    }
-    case atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(client_message_type_t, kPostKeySyn):
-    case atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(client_message_type_t, kPostKeyAck): {
-      if (::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(client_message_body, cs_body_handshake) !=
-          msg->body_type()) {
-        close(static_cast<int>(::atframework::gateway::close_reason_t::kInvalidData), false);
-        break;
-      }
-      const ::atframework::gateway::v2::cs_body_handshake *msg_body =
-          static_cast<const ::atframework::gateway::v2::cs_body_handshake *>(msg->body());
-
-      if (!check_flag(flag_t::kHandshakeUpdate)) {
-        set_flag(flag_t::kHandshakeUpdate, true);
-      }
-
-      dispatch_handshake(*msg_body);
       break;
     }
     case atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(client_message_type_t, kHandshake): {
@@ -804,16 +903,16 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake_key_exchange_r
     return static_cast<int>(::atframework::gateway::error_code_t::kMissCallbacks);
   }
 
-  std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
-  int ret = setup_handshake(global_cfg);
+  // Verify access data first (before setup_handshake)
+  int ret = verify_access_data(body_handshake);
   if (ret < 0) {
+    ATFRAME_GATEWAY_ON_ERROR(ret, "key exchange req: access data verification failed");
     return ret;
   }
 
-  // Verify access data (if tokens configured)
-  ret = verify_access_data(body_handshake);
+  std::shared_ptr<detail::crypto_global_configure_t> global_cfg = shared_conf_;
+  ret = setup_handshake(global_cfg);
   if (ret < 0) {
-    ATFRAME_GATEWAY_ON_ERROR(ret, "key exchange req: access data verification failed");
     return ret;
   }
 
@@ -828,7 +927,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake_key_exchange_r
   if (0 == client_sequence) {
     client_sequence = 1;
   }
-  ret = crypt_session_->handshake_generate_self_key(client_sequence);
+  ret = crypto_session_->handshake_generate_self_key(client_sequence);
   if (ret < 0) {
     ATFRAME_GATEWAY_ON_ERROR(ret, "server: generate ECDH key pair failed");
     return ret;
@@ -852,7 +951,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake_key_exchange_r
 
   // Read peer's public key and derive shared secret
   if (body_handshake.public_key() != nullptr && body_handshake.public_key()->size() > 0) {
-    ret = crypt_session_->handshake_read_peer_key(
+    ret = crypto_session_->handshake_read_peer_key(
         gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(body_handshake.public_key()->data()),
                                        body_handshake.public_key()->size()},
         gsl::span<const alg_type>{peer_algorithms.data(), peer_algorithms.size()}, local_alg_span);
@@ -861,6 +960,22 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake_key_exchange_r
       return ret;
     }
   }
+
+  // Negotiate compression algorithm
+  if (body_handshake.compression_algorithm() != nullptr && global_cfg) {
+    for (size_t i = 0; i < global_cfg->available_compression_algorithms_.size(); ++i) {
+      for (flatbuffers::uoffset_t j = 0; j < body_handshake.compression_algorithm()->size(); ++j) {
+        if (global_cfg->available_compression_algorithms_[i] == body_handshake.compression_algorithm()->Get(j)) {
+          crypto_session_->selected_compression_algorithm = global_cfg->available_compression_algorithms_[i];
+          goto compression_negotiated;
+        }
+      }
+    }
+  }
+compression_negotiated:
+
+  // Set max_post_message_size
+  crypto_session_->max_post_message_size = global_cfg ? global_cfg->conf_.max_post_message_size : (2 * 1024 * 1024);
 
   // Build kKeyExchangeRsp
   using namespace ::atframework::gateway::v2;
@@ -871,24 +986,35 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake_key_exchange_r
 
   // Write server's public key
   std::vector<unsigned char> self_public_key;
-  crypt_session_->handshake_write_self_public_key(self_public_key);
+  crypto_session_->handshake_write_self_public_key(self_public_key);
 
   // Selected algorithm (single item)
   std::vector<crypto_algorithm_t> selected_algs;
-  selected_algs.push_back(crypt_session_->selected_algorithm);
+  selected_algs.push_back(crypto_session_->selected_algorithm);
   std::vector<kdf_algorithm_t> selected_kdfs;
-  selected_kdfs.push_back(crypt_session_->selected_kdf);
+  selected_kdfs.push_back(crypto_session_->selected_kdf);
+
+  // Selected compression algorithm (single item in response)
+  std::vector<compression_algorithm_t> selected_comp_algs;
+  if (crypto_session_->selected_compression_algorithm !=
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_algorithm_t, kNone)) {
+    selected_comp_algs.push_back(crypto_session_->selected_compression_algorithm);
+  }
 
   // Generate server access data
   std::vector<flatbuffers::Offset<cs_body_handshake_access_data>> access_data_offsets;
-  generate_access_data(builder, access_data_offsets, session_id_, crypt_session_->key_exchange_algorithm,
+  generate_access_data(builder, access_data_offsets, session_id_, crypto_session_->key_exchange_algorithm,
                        gsl::span<const unsigned char>{self_public_key.data(), self_public_key.size()});
 
   flatbuffers::Offset<cs_body_handshake> handshake_body = Createcs_body_handshake(
       builder, session_id_, ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(handshake_step_t, kKeyExchangeRsp),
-      crypt_session_->key_exchange_algorithm, builder.CreateVector(selected_kdfs), builder.CreateVector(selected_algs),
+      crypto_session_->key_exchange_algorithm, builder.CreateVector(selected_kdfs), builder.CreateVector(selected_algs),
       builder.CreateVector(access_data_offsets),
-      builder.CreateVector(reinterpret_cast<const int8_t *>(self_public_key.data()), self_public_key.size()));
+      builder.CreateVector(reinterpret_cast<const int8_t *>(self_public_key.data()), self_public_key.size()),
+      0,                                         // iv_size
+      0,                                         // tag_size
+      builder.CreateVector(selected_comp_algs),  // compression_algorithm (selected)
+      crypto_session_->max_post_message_size);
 
   builder.Finish(Createclient_message(builder, header_data,
                                       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(client_message_body, cs_body_handshake),
@@ -931,7 +1057,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake_key_exchange_r
   }
 
   // Get local algorithms
-  std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
+  std::shared_ptr<detail::crypto_global_configure_t> global_cfg = shared_conf_;
   gsl::span<const alg_type> local_alg_span;
   if (global_cfg) {
     local_alg_span =
@@ -940,7 +1066,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake_key_exchange_r
 
   // Read server's public key and derive shared secret
   if (body_handshake.public_key() != nullptr && body_handshake.public_key()->size() > 0) {
-    ret = crypt_session_->handshake_read_peer_key(
+    ret = crypto_session_->handshake_read_peer_key(
         gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(body_handshake.public_key()->data()),
                                        body_handshake.public_key()->size()},
         gsl::span<const alg_type>{server_algorithms.data(), server_algorithms.size()}, local_alg_span);
@@ -948,6 +1074,14 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake_key_exchange_r
       ATFRAME_GATEWAY_ON_ERROR(ret, "client: read server key and derive secret failed");
       return ret;
     }
+  }
+
+  // Read negotiated compression algorithm and max message size from server response
+  if (body_handshake.compression_algorithm() != nullptr && body_handshake.compression_algorithm()->size() > 0) {
+    crypto_session_->selected_compression_algorithm = body_handshake.compression_algorithm()->Get(0);
+  }
+  if (body_handshake.max_post_message_size() > 0) {
+    crypto_session_->max_post_message_size = body_handshake.max_post_message_size();
   }
 
   // Handshake complete on client side
@@ -981,7 +1115,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake_reconn_req(
 
   flatbuffers::Offset<cs_body_handshake> handshake_body = Createcs_body_handshake(
       builder, 0 == ret ? session_id_ : 0, ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(handshake_step_t, kReconnectRsp),
-      crypt_session_->key_exchange_algorithm);
+      crypto_session_->key_exchange_algorithm);
 
   builder.Finish(Createclient_message(builder, header_data,
                                       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(client_message_body, cs_body_handshake),
@@ -1018,7 +1152,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::generate_access_data(
     uint64_t session_id,
     ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, key_exchange_t) key_exchange,
     gsl::span<const unsigned char> public_key) {
-  std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
+  std::shared_ptr<detail::crypto_global_configure_t> global_cfg = shared_conf_;
   if (!global_cfg || global_cfg->conf_.access_tokens.empty()) {
     return 0;  // No access tokens configured, skip authentication
   }
@@ -1058,7 +1192,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::generate_access_data(
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::verify_access_data(
     const ::atframework::gateway::v2::cs_body_handshake &body_handshake) {
-  std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
+  std::shared_ptr<detail::crypto_global_configure_t> global_cfg = shared_conf_;
   if (!global_cfg || global_cfg->conf_.access_tokens.empty()) {
     return 0;  // No access tokens configured, skip verification
   }
@@ -1110,18 +1244,16 @@ LIBATGW_PROTOCOL_API std::string libatgw_protocol_sdk::make_access_data_plaintex
     uint64_t session_id, int64_t timestamp, uint64_t nonce1, uint64_t nonce2,
     ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, key_exchange_t) key_exchange,
     gsl::span<const unsigned char> public_key) {
-  std::stringstream ss;
-  ss << timestamp << ":" << nonce1 << "-" << nonce2 << ":" << session_id;
+  std::string result = atfw::util::string::format("{}:{}-{}:{}", timestamp, nonce1, nonce2, session_id);
 
   if (!public_key.empty()) {
     // Include key exchange type and SHA256 of public key
-    ss << ":" << static_cast<int>(key_exchange) << ":";
     std::string pub_key_hash = atfw::util::hash::sha::hash_to_hex(atfw::util::hash::sha::EN_ALGORITHM_SHA256,
                                                                   public_key.data(), public_key.size());
-    ss << pub_key_hash;
+    result += atfw::util::string::format(":{}:{}", static_cast<int>(key_exchange), pub_key_hash);
   }
 
-  return ss.str();
+  return result;
 }
 
 LIBATGW_PROTOCOL_API std::string libatgw_protocol_sdk::calculate_access_data_signature(
@@ -1136,17 +1268,17 @@ LIBATGW_PROTOCOL_API std::string libatgw_protocol_sdk::calculate_access_data_sig
 // ========================= Setup / Teardown =========================
 
 LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::setup_handshake(
-    std::shared_ptr<detail::crypt_global_configure_t> &shared_conf) {
+    std::shared_ptr<detail::crypto_global_configure_t> &shared_conf) {
   if (!shared_conf) {
     return 0;
   }
 
-  if (crypt_session_->has_handshake_data()) {
+  if (crypto_session_->has_handshake_data()) {
     return 0;
   }
 
-  crypt_session_->shared_conf = shared_conf;
-  crypt_session_->key_exchange_algorithm = shared_conf->conf_.key_exchange_algorithm;
+  crypto_session_->shared_conf = shared_conf;
+  crypto_session_->key_exchange_algorithm = shared_conf->conf_.key_exchange_algorithm;
 
   // Ready to update handshake
   set_flag(flag_t::kHandshakeUpdate, true);
@@ -1179,7 +1311,7 @@ LIBATGW_PROTOCOL_API bool libatgw_protocol_sdk::check_reconnect(const libatgw_pr
   return true;
 }
 
-LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::set_recv_buffer_limit(size_t max_size, size_t max_number) {
+LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::set_receive_buffer_limit(size_t max_size, size_t max_number) {
   read_buffers_.set_mode(max_size, max_number);
 }
 
@@ -1187,40 +1319,48 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::set_send_buffer_limit(size_t max
   write_buffers_.set_mode(max_size, max_number);
 }
 
-LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::handshake_update() { return send_key_syn(); }
+LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::handshake_update() { return start_session(); }
 
 LIBATGW_PROTOCOL_API std::string libatgw_protocol_sdk::get_info() const {
-  std::stringstream ss;
   size_t limit_sz = 0;
-  ss << "atgateway v2 protocol: session id=" << session_id_ << '\n';
-  ss << "    last ping delta=" << ping_.last_delta << '\n';
-  ss << "    handshake=" << (crypt_session_ && crypt_session_->has_handshake_data() ? "running" : "not running")
-     << '\n';
-  ss << "    key_exchange=" << (crypt_session_ ? static_cast<int>(crypt_session_->key_exchange_algorithm) : 0) << '\n';
-  ss << "    selected_algorithm=" << (crypt_session_ ? static_cast<int>(crypt_session_->selected_algorithm) : 0)
-     << '\n';
-  ss << "    status: writing=" << check_flag(flag_t::kWriting) << ",closing=" << check_flag(flag_t::kClosing)
-     << ",closed=" << check_flag(flag_t::kClosed) << ",handshake done=" << check_flag(flag_t::kHandshakeDone)
-     << ",handshake update=" << check_flag(flag_t::kHandshakeUpdate) << '\n';
+  std::string result = atfw::util::string::format(
+      "atgateway v2 protocol: session id={}\n"
+      "    last ping delta={}\n"
+      "    handshake={}\n"
+      "    key_exchange={}\n"
+      "    selected_algorithm={}\n"
+      "    selected_compression={}\n"
+      "    max_post_message_size={}\n"
+      "    status: writing={},closing={},closed={},handshake done={},handshake update={}\n",
+      session_id_, ping_.last_delta,
+      (crypto_session_ && crypto_session_->has_handshake_data() ? "running" : "not running"),
+      (crypto_session_ ? static_cast<int>(crypto_session_->key_exchange_algorithm) : 0),
+      (crypto_session_ ? static_cast<int>(crypto_session_->selected_algorithm) : 0),
+      (crypto_session_ ? static_cast<int>(crypto_session_->selected_compression_algorithm) : 0),
+      (crypto_session_ ? crypto_session_->max_post_message_size : 0), check_flag(flag_t::kWriting),
+      check_flag(flag_t::kClosing), check_flag(flag_t::kClosed), check_flag(flag_t::kHandshakeDone),
+      check_flag(flag_t::kHandshakeUpdate));
 
   if (read_buffers_.limit().limit_size_ > 0) {
     limit_sz = read_buffers_.limit().limit_size_ + sizeof(read_head_.buffer) - read_head_.len -
                read_buffers_.limit().cost_size_;
-    ss << "    read buffer: used size=" << (read_head_.len + read_buffers_.limit().cost_size_)
-       << ", free size=" << limit_sz << '\n';
+    result += atfw::util::string::format("    read buffer: used size={}, free size={}\n",
+                                         (read_head_.len + read_buffers_.limit().cost_size_), limit_sz);
   } else {
-    ss << "    read buffer: used size=" << (read_head_.len + read_buffers_.limit().cost_size_)
-       << ", free size=unlimited" << '\n';
+    result += atfw::util::string::format("    read buffer: used size={}, free size=unlimited\n",
+                                         (read_head_.len + read_buffers_.limit().cost_size_));
   }
 
   if (write_buffers_.limit().limit_size_ > 0) {
     limit_sz = write_buffers_.limit().limit_size_ - write_buffers_.limit().cost_size_;
-    ss << "    write buffer: used size=" << write_buffers_.limit().cost_size_ << ", free size=" << limit_sz << '\n';
+    result += atfw::util::string::format("    write buffer: used size={}, free size={}\n",
+                                         write_buffers_.limit().cost_size_, limit_sz);
   } else {
-    ss << "    write buffer: used size=" << write_buffers_.limit().cost_size_ << ", free size=unlimited" << '\n';
+    result += atfw::util::string::format("    write buffer: used size={}, free size=unlimited\n",
+                                         write_buffers_.limit().cost_size_);
   }
 
-  return ss.str();
+  return result;
 }
 
 // ========================= Client-side session start =========================
@@ -1239,14 +1379,14 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::start_session() {
   }
 
   // Setup global config
-  std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
+  std::shared_ptr<detail::crypto_global_configure_t> global_cfg = shared_conf_;
   int ret = setup_handshake(global_cfg);
   if (ret < 0) {
     return ret;
   }
 
   // Generate client ECDH key pair
-  ret = crypt_session_->handshake_generate_self_key(0);
+  ret = crypto_session_->handshake_generate_self_key(0);
   if (ret < 0) {
     ATFRAME_GATEWAY_ON_ERROR(ret, "client start_session: generate ECDH key failed");
     return ret;
@@ -1254,7 +1394,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::start_session() {
 
   // Write client's public key
   std::vector<unsigned char> self_public_key;
-  crypt_session_->handshake_write_self_public_key(self_public_key);
+  crypto_session_->handshake_write_self_public_key(self_public_key);
 
   using namespace ::atframework::gateway::v2;
 
@@ -1271,16 +1411,27 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::start_session() {
   }
   std::vector<kdf_algorithm_t> kdfs = {ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(kdf_algorithm_t, kHkdfSha256)};
 
+  // Compression algorithms
+  std::vector<compression_algorithm_t> comp_algs;
+  if (global_cfg) {
+    for (auto ca : global_cfg->available_compression_algorithms_) {
+      comp_algs.push_back(ca);
+    }
+  }
+
   // Generate access data
   std::vector<flatbuffers::Offset<cs_body_handshake_access_data>> access_data_offsets;
-  generate_access_data(builder, access_data_offsets, 0, crypt_session_->key_exchange_algorithm,
+  generate_access_data(builder, access_data_offsets, 0, crypto_session_->key_exchange_algorithm,
                        gsl::span<const unsigned char>{self_public_key.data(), self_public_key.size()});
 
   flatbuffers::Offset<cs_body_handshake> handshake_body = Createcs_body_handshake(
       builder, 0, ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(handshake_step_t, kKeyExchangeReq),
-      crypt_session_->key_exchange_algorithm, builder.CreateVector(kdfs), builder.CreateVector(algs),
+      crypto_session_->key_exchange_algorithm, builder.CreateVector(kdfs), builder.CreateVector(algs),
       builder.CreateVector(access_data_offsets),
-      builder.CreateVector(reinterpret_cast<const int8_t *>(self_public_key.data()), self_public_key.size()));
+      builder.CreateVector(reinterpret_cast<const int8_t *>(self_public_key.data()), self_public_key.size()),
+      0,                                 // iv_size
+      0,                                 // tag_size
+      builder.CreateVector(comp_algs));  // compression_algorithm
 
   builder.Finish(Createclient_message(builder, header_data,
                                       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(client_message_body, cs_body_handshake),
@@ -1307,7 +1458,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::reconnect_session(uint64_t sess_i
 
   flatbuffers::Offset<cs_body_handshake> handshake_body =
       Createcs_body_handshake(builder, sess_id, ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(handshake_step_t, kReconnectReq),
-                              crypt_session_->key_exchange_algorithm);
+                              crypto_session_->key_exchange_algorithm);
 
   builder.Finish(Createclient_message(builder, header_data,
                                       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(client_message_body, cs_body_handshake),
@@ -1324,8 +1475,13 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_post(::atframework::gateway:
     return static_cast<int>(::atframework::gateway::error_code_t::kClosing);
   }
 
-  if (nullptr == callbacks_ || !callbacks_->write_fn || !crypt_session_) {
+  if (nullptr == callbacks_ || !callbacks_->write_fn || !crypto_session_) {
     return static_cast<int>(::atframework::gateway::error_code_t::kMissCallbacks);
+  }
+
+  // Enforce max_post_message_size
+  if (crypto_session_->max_post_message_size > 0 && data.size() > crypto_session_->max_post_message_size) {
+    return static_cast<int>(::atframework::gateway::error_code_t::kMsgTooLarge);
   }
 
   size_t ori_len = data.size();
@@ -1409,76 +1565,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_pong(int64_t tp) {
   return write_message(builder);
 }
 
-LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_key_syn() {
-  if (check_flag(flag_t::kClosing)) {
-    return static_cast<int>(::atframework::gateway::error_code_t::kClosing);
-  }
-
-  if (nullptr == callbacks_ || !callbacks_->write_fn || !crypt_session_) {
-    return static_cast<int>(::atframework::gateway::error_code_t::kMissCallbacks);
-  }
-
-  // If handshake is running, do not start another one
-  if (crypt_session_->has_handshake_data()) {
-    return 0;
-  }
-
-  std::shared_ptr<detail::crypt_global_configure_t> global_cfg = detail::crypt_global_configure_t::current();
-  if (!global_cfg || global_cfg->conf_.client_mode) {
-    return 0;
-  }
-
-  // Create a new crypt session for key rotation
-  crypt_session_ = std::make_shared<crypt_session_t>();
-  int ret = setup_handshake(global_cfg);
-  if (ret < 0) {
-    return ret;
-  }
-
-  // Generate ECDH key pair for key rotation
-  ret = crypt_session_->handshake_generate_self_key(0);
-  if (ret < 0) {
-    return ret;
-  }
-
-  std::vector<unsigned char> self_public_key;
-  crypt_session_->handshake_write_self_public_key(self_public_key);
-
-  using namespace ::atframework::gateway::v2;
-
-  flatbuffers::FlatBufferBuilder builder;
-  flatbuffers::Offset<client_message_head> header_data = Createclient_message_head(
-      builder, ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(client_message_type_t, kPostKeySyn), detail::alloc_seq());
-
-  std::vector<crypto_algorithm_t> algs;
-  for (auto a : global_cfg->available_algorithms_) {
-    algs.push_back(a);
-  }
-  std::vector<kdf_algorithm_t> kdfs = {ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(kdf_algorithm_t, kHkdfSha256)};
-
-  std::vector<flatbuffers::Offset<cs_body_handshake_access_data>> access_data_offsets;
-  generate_access_data(builder, access_data_offsets, session_id_, crypt_session_->key_exchange_algorithm,
-                       gsl::span<const unsigned char>{self_public_key.data(), self_public_key.size()});
-
-  flatbuffers::Offset<cs_body_handshake> handshake_body = Createcs_body_handshake(
-      builder, session_id_, ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(handshake_step_t, kKeyExchangeReq),
-      crypt_session_->key_exchange_algorithm, builder.CreateVector(kdfs), builder.CreateVector(algs),
-      builder.CreateVector(access_data_offsets),
-      builder.CreateVector(reinterpret_cast<const int8_t *>(self_public_key.data()), self_public_key.size()));
-
-  builder.Finish(Createclient_message(builder, header_data,
-                                      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(client_message_body, cs_body_handshake),
-                                      handshake_body.Union()),
-                 client_messageIdentifier());
-
-  ret = write_message(builder);
-  if (ret < 0) {
-    handshake_done(ret);
-  }
-  return ret;
-}
-
-LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_kickoff(int reason) {
+LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_kickoff(int reason, int sub_reason, const char *message) {
   if (check_flag(flag_t::kClosing)) {
     return static_cast<int>(::atframework::gateway::error_code_t::kClosing);
   }
@@ -1493,7 +1580,12 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_kickoff(int reason) {
   flatbuffers::Offset<client_message_head> header_data = Createclient_message_head(
       builder, ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(client_message_type_t, kKickoff), detail::alloc_seq());
 
-  flatbuffers::Offset<cs_body_kickoff> kickoff_body = Createcs_body_kickoff(builder, reason);
+  flatbuffers::Offset<flatbuffers::String> msg_offset;
+  if (message != nullptr && message[0] != '\0') {
+    msg_offset = builder.CreateString(message);
+  }
+
+  flatbuffers::Offset<cs_body_kickoff> kickoff_body = Createcs_body_kickoff(builder, reason, sub_reason, msg_offset);
 
   builder.Finish(Createclient_message(builder, header_data,
                                       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(client_message_body, cs_body_kickoff),
@@ -1502,8 +1594,9 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_kickoff(int reason) {
   return write_message(builder);
 }
 
-LIBATGW_PROTOCOL_API const libatgw_protocol_sdk::crypt_session_ptr_t &libatgw_protocol_sdk::get_crypt_session() const {
-  return crypt_session_;
+LIBATGW_PROTOCOL_API const libatgw_protocol_sdk::crypto_session_ptr_t &libatgw_protocol_sdk::get_crypto_session()
+    const {
+  return crypto_session_;
 }
 
 LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::set_logger(atfw::util::log::log_wrapper::ptr_t logger) {
@@ -1722,12 +1815,12 @@ int libatgw_protocol_sdk::encode_post(const void *in, size_t insz, const void *&
     return static_cast<int>(::atframework::gateway::error_code_t::kClosing);
   }
 
-  if (!crypt_session_) {
+  if (!crypto_session_) {
     outsz = insz;
     out = in;
     return static_cast<int>(::atframework::gateway::error_code_t::kHandshake);
   }
-  return crypt_session_->encrypt_data(in, insz, out, outsz);
+  return crypto_session_->encrypt_data(in, insz, out, outsz);
 }
 
 int libatgw_protocol_sdk::decode_post(const void *in, size_t insz, const void *&out, size_t &outsz) {
@@ -1737,12 +1830,12 @@ int libatgw_protocol_sdk::decode_post(const void *in, size_t insz, const void *&
     return static_cast<int>(::atframework::gateway::error_code_t::kClosing);
   }
 
-  if (!crypt_session_) {
+  if (!crypto_session_) {
     outsz = insz;
     out = in;
     return static_cast<int>(::atframework::gateway::error_code_t::kHandshake);
   }
-  int ret = crypt_session_->decrypt_data(in, insz, out, outsz);
+  int ret = crypto_session_->decrypt_data(in, insz, out, outsz);
   if (ret < 0) {
     out = in;
     outsz = insz;
@@ -1750,24 +1843,29 @@ int libatgw_protocol_sdk::decode_post(const void *in, size_t insz, const void *&
   return ret;
 }
 
-// ========================= Global reload =========================
+// ========================= Create global configure =========================
 
-LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::global_reload(crypt_conf_t &crypt_conf) {
-  static atfw::util::lock::spin_lock global_proto_lock;
-  atfw::util::lock::lock_holder<atfw::util::lock::spin_lock> lh(global_proto_lock);
-
-  detail::crypt_global_configure_t::ptr_t inst =
-      std::make_shared<detail::crypt_global_configure_t>(std::move(crypt_conf));
+LIBATGW_PROTOCOL_API std::shared_ptr<detail::crypto_global_configure_t> libatgw_protocol_sdk::create_global_configure(
+    crypto_conf_t &conf) {
+  auto inst = std::make_shared<detail::crypto_global_configure_t>(std::move(conf));
   if (!inst) {
-    return static_cast<int>(::atframework::gateway::error_code_t::kMalloc);
+    return nullptr;
   }
 
   int ret = inst->init();
-  if (0 == ret) {
-    detail::crypt_global_configure_t::current().swap(inst);
+  if (0 != ret) {
+    return nullptr;
   }
 
-  return ret;
+  return inst;
+}
+
+LIBATGW_PROTOCOL_API libatgw_protocol_sdk::crypto_conf_t *libatgw_protocol_sdk::get_global_configure_mutable_conf(
+    const std::shared_ptr<detail::crypto_global_configure_t> &global_conf) {
+  if (!global_conf) {
+    return nullptr;
+  }
+  return &global_conf->conf_;
 }
 }  // namespace v2
 }  // namespace gateway

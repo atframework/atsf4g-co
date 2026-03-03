@@ -174,7 +174,7 @@ int session::init_new_session() {
   router_node_id_ = 0;
   router_node_name_.clear();
   limit_.update_handshake_timepoint =
-      atfw::util::time::time_utility::get_now() + owner_->get_conf().crypt.update_interval;
+      atfw::util::time::time_utility::get_now() + owner_->get_conf().crypto.update_interval;
 
   set_flag(flag_t::kInited, true);
   return 0;
@@ -187,7 +187,7 @@ int session::init_reconnect(session &sess) {
   router_node_name_ = sess.router_node_name_;
   limit_ = sess.limit_;
   limit_.update_handshake_timepoint =
-      atfw::util::time::time_utility::get_now() + owner_->get_conf().crypt.update_interval;
+      atfw::util::time::time_utility::get_now() + owner_->get_conf().crypto.update_interval;
 
   private_data_ = sess.private_data_;
 
@@ -256,7 +256,7 @@ int session::send_remove_session(session_manager *mgr) {
 
 void session::on_alloc_read(size_t suggested_size, char *&out_buf, size_t &out_len) {
   if (proto_) {
-    proto_->alloc_recv_buffer(suggested_size, out_buf, out_len);
+    proto_->alloc_receive_buffer(suggested_size, out_buf, out_len);
 
     if (nullptr == out_buf && 0 == out_len) {
       close_fd(static_cast<int>(::atframework::gateway::close_reason_t::kInvalidData));
@@ -537,10 +537,10 @@ void session::check_minute_limit(bool check_recv, bool check_send) {
     return;
   }
 
-  if (nullptr != owner_ && owner_->get_conf().crypt.update_interval > 0 && check_flag(flag_t::kHasFd)) {
+  if (nullptr != owner_ && owner_->get_conf().crypto.update_interval > 0 && check_flag(flag_t::kHasFd)) {
     if (limit_.update_handshake_timepoint < atfw::util::time::time_utility::get_now()) {
       limit_.update_handshake_timepoint =
-          atfw::util::time::time_utility::get_now() + owner_->get_conf().crypt.update_interval;
+          atfw::util::time::time_utility::get_now() + owner_->get_conf().crypto.update_interval;
       atframework::gateway::libatgw_protocol_api *proto = get_protocol_handle();
       if (nullptr != proto) {
         proto->handshake_update();

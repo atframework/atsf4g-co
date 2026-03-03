@@ -2,7 +2,7 @@
 // Refactored: 2-message handshake (like libatbus node_register_req/rsp)
 // - kKeyExchangeReq: client sends ECDH public key + supported algorithms
 // - kKeyExchangeRsp: server sends ECDH public key + selected algorithm + session_id
-// Key refresh: re-run the same 2-message handshake via kPostKeySyn/kPostKeyAck
+// Key refresh: re-run the same 2-message kHandshake exchange
 
 namespace atframework.gateway.v2;
 
@@ -16,10 +16,10 @@ enum error_code_t:int {
 }
 
 enum handshake_step_t : ubyte {
-    kKeyExchangeReq = 0,    // Client → Server: ECDH public key + all supported algorithms
-    kKeyExchangeRsp = 1,    // Server → Client: ECDH public key + selected algorithm + session_id
-    kReconnectReq = 11,     // Client → Server: reconnect with old session_id
-    kReconnectRsp = 12,     // Server → Client: reconnect result
+    kKeyExchangeReq = 0,    // Client -> Server: ECDH public key + all supported algorithms
+    kKeyExchangeRsp = 1,    // Server -> Client: ECDH public key + selected algorithm + session_id
+    kReconnectReq = 11,     // Client -> Server: reconnect with old session_id (still requires full handshake)
+    kReconnectRsp = 12,     // Server -> Client: reconnect result + session_id (then full handshake follows)
 }
 
 enum access_data_algorithm_t : ubyte {
@@ -32,8 +32,8 @@ enum kdf_algorithm_t : ubyte {
 
 enum key_exchange_t : ubyte {
   kNone = 0,          // no encryption
-  // golang 标准库只支持ECDH
-  kX25519 = 1,     // x25519(TLS 1.3推荐)
+  // golang standard library only supports ECDH
+  kX25519 = 1,     // x25519 (TLS 1.3 recommended)
   kSecp256r1 = 2,  // secp256r1, p-256
   kSecp384r1 = 3,  // secp384r1, p-384
   kSecp521r1 = 4,  // secp521r1, p-521
@@ -63,66 +63,66 @@ enum compression_algorithm_t : ubyte {
   kZlib = 40,
 }
 
-// 统一压缩等级定义，用于抽象不同压缩算法的压缩强度。
-// 枚举值表达语义等级，具体算法参数由实现层映射。
+// Unified compression level definition for abstracting different compression algorithms.
+// Enum values express semantic level; concrete algorithm parameters are mapped by the implementation.
 enum compression_level_t : ubyte {
-  // 默认值：使用各压缩算法的默认推荐配置
+  // Default: use each compression algorithm's recommended default
   //
-  // 典型映射：
+  // Typical mapping:
   //   zstd   : level 3
-  //   lz4    : fast 默认
-  //   snappy : 默认配置
+  //   lz4    : fast default
+  //   snappy : default
   //   zlib   : level 6
-  kDefault = 0;
+  kDefault = 0,
 
-  // 存储优先：最低 CPU 开销，允许不压缩直接存储
+  // Storage first: lowest CPU overhead, allow storing without compression
   //
   // 典型映射：
-  //   zstd   : level 1（或 0）
+  //   zstd   : level 1 (or 0)
   //   lz4    : fast(1)
-  //   snappy : 默认配置
+  //   snappy : default
   //   zlib   : level 1
-  //   none   : 不压缩
-  kStorage = 10;
+  //   none   : no compression
+  kStorage = 10,
 
-  // 极速压缩，强调最低 CPU 与延迟
+  // Extreme speed, emphasize lowest CPU and latency
   //
   // 典型映射：
   //   zstd   : level -1
   //   lz4    : fast(1)
-  //   snappy : 默认配置
+  //   snappy : default
   //   zlib   : level 1
-  kFast = 20;
+  kFast = 20,
 
-  // 低 CPU 开销压缩，在性能与压缩率之间轻度折中
+  // Low CPU overhead, slight tradeoff between performance and ratio
   //
   // 典型映射：
   //   zstd   : level 1
   //   lz4    : fast(3)
   //   zlib   : level 3
-  kLowCpu = 30;
+  kLowCpu = 30,
 
-  // 均衡压缩，作为系统推荐的通用等级
+  // Balanced compression, recommended general-purpose level
   //
   // 典型映射：
   //   zstd   : level 3
   //   lz4    : fast(6)
   //   zlib   : level 6
-  kBalanced = 40;
+  kBalanced = 40,
 
-  // 高压缩率，存储优先，允许较高 CPU 成本
+  // High compression ratio, storage-oriented, allows higher CPU cost
   //
   // 典型映射：
   //   zstd   : level 6
   //   lz4    : hc(9)
   //   zlib   : level 9
-  kHighRatio = 50;
+  kHighRatio = 50,
 
-  // 极限压缩，仅适用于冷数据或离线场景
+  // Extreme compression, only for cold data or offline scenarios
   //
   // 典型映射：
   //   zstd   : level 9 ~ 15
-  kMaxRatio = 60;
+  kMaxRatio = 60,
 }
 
 enum client_message_type_t : ubyte {
@@ -132,8 +132,6 @@ enum client_message_type_t : ubyte {
     kPing = 3,
     kPong = 4,
     kKickoff = 5,
-    kPostKeySyn = 6,
-    kPostKeyAck = 7
 }
 
 table client_message_head {
@@ -146,7 +144,7 @@ table cs_body_post_crypto {
   algorithm: crypto_algorithm_t(id: 0);
 
   // IV/nonce for crypto, must be unique for each encryption
-  // If not set, just used the default rotation/nonce rule of the algorithm
+  // If not set, just use the default rotation/nonce rule of the algorithm
   iv: [byte] (id: 1);
 
   // AAD for AEAD
@@ -161,8 +159,8 @@ table cs_body_post_compression {
 table cs_body_post {
     crypto: cs_body_post_crypto (id: 0);
 
-    // 加密算法：加密会带字典头部，如果数据很小，加密后反而会扩大尺寸。此时不如不加密。
-    // 所以我们每个包是动态决定是否加密的，通过此字段告诉对端如何解包。
+    // Crypto note: encryption with dictionary headers may increase small data size.
+    // Each packet dynamically decides whether to encrypt; this field tells peer how to unpack.
     compression: cs_body_post_compression (id: 1);
 
     /// body size without padding
@@ -172,6 +170,8 @@ table cs_body_post {
 
 table cs_body_kickoff {
     reason: int (id: 0);
+    sub_reason: int (id: 1);
+    message: string (id: 2);
 }
 
 table cs_body_handshake_access_data {
@@ -197,14 +197,15 @@ table cs_body_handshake_access_data {
 
 /// Handshake body for the 2-message key exchange (like libatbus register req/rsp).
 ///
-/// kKeyExchangeReq (Client → Server):
+/// kKeyExchangeReq (Client -> Server):
 ///   - key_exchange: selected ECDH curve (must not be kNone for encrypted sessions)
 ///   - algorithms[]: all cipher algorithms supported by the client
 ///   - kdf_type[]: all KDF types supported by the client
 ///   - public_key: client's ECDH ephemeral public key
 ///   - access_data: HMAC-SHA256 authentication
+///   - compression_algorithm[]: all compression algorithms supported by client
 ///
-/// kKeyExchangeRsp (Server → Client):
+/// kKeyExchangeRsp (Server -> Client):
 ///   - session_id: newly assigned session ID
 ///   - key_exchange: confirmed ECDH curve (echoed from req)
 ///   - algorithms[]: single selected cipher algorithm
@@ -212,6 +213,8 @@ table cs_body_handshake_access_data {
 ///   - public_key: server's ECDH ephemeral public key
 ///   - access_data: HMAC-SHA256 authentication
 ///   - iv_size/tag_size: negotiated IV and tag sizes
+///   - compression_algorithm[]: single selected compression algorithm
+///   - max_post_message_size: maximum post message size in bytes
 ///
 /// After both sides have each other's public key, they derive:
 ///   shared_secret = ECDH(my_private, peer_public)
@@ -229,14 +232,19 @@ table cs_body_handshake {
     // ECDH ephemeral public key for this side of the handshake
     public_key: [byte] (id: 6);
 
-    // 初始iv size for crypto, must be same as the selected algorithm requirement
+    // Initial iv size for crypto, must be same as the selected algorithm requirement
     iv_size: uint32 (id: 7);
 
-    // tag length for AEAD
+    // Tag length for AEAD
     tag_size: uint32 (id: 8);
 
-    // supported compression algorithms, can be empty if client doesn't support compression or didn't send this field
-    supported_compression_algorithm: [compression_algorithm_t] (id: 9);
+    // Compression algorithms:
+    //   kKeyExchangeReq: all supported compression algorithms (empty if none)
+    //   kKeyExchangeRsp: single selected compression algorithm after negotiation
+    compression_algorithm: [compression_algorithm_t] (id: 9);
+
+    // Maximum post message size in bytes (server fills in rsp, default 2MB)
+    max_post_message_size: uint64 (id: 10);
 }
 
 table cs_body_ping {
