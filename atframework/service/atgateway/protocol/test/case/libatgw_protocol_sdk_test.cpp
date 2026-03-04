@@ -230,11 +230,12 @@ CASE_TEST(atgateway_protocol_sdk, crypto_session_default_state) {
   const char *test_data = "hello world";
   gsl::span<const unsigned char> in{reinterpret_cast<const unsigned char *>(test_data), strlen(test_data)};
   gsl::span<unsigned char> out;
-  int ret = session.encrypt_data(in, out);
+  std::unique_ptr<unsigned char[]> heap_buf;
+  int ret = session.encrypt_data(in, out, heap_buf);
   CASE_EXPECT_EQ(0, ret);
   CASE_EXPECT_EQ(strlen(test_data), out.size());
 
-  ret = session.decrypt_data(in, out);
+  ret = session.decrypt_data(in, out, heap_buf);
   CASE_EXPECT_EQ(0, ret);
   CASE_EXPECT_EQ(strlen(test_data), out.size());
 }
@@ -298,7 +299,8 @@ CASE_TEST(atgateway_protocol_sdk, setup_crypto_with_key_and_roundtrip) {
 
   gsl::span<const unsigned char> in{reinterpret_cast<const unsigned char *>(plaintext), plaintext_len};
   gsl::span<unsigned char> encrypted;
-  ret = sender.encrypt_data(in, encrypted);
+  std::unique_ptr<unsigned char[]> heap_buf;
+  ret = sender.encrypt_data(in, encrypted, heap_buf);
   CASE_EXPECT_EQ(0, ret);
   CASE_EXPECT_GT(encrypted.size(), static_cast<size_t>(0));
 
@@ -313,7 +315,8 @@ CASE_TEST(atgateway_protocol_sdk, setup_crypto_with_key_and_roundtrip) {
   // Decrypt
   gsl::span<const unsigned char> enc_in{encrypted_copy.data(), encrypted_copy.size()};
   gsl::span<unsigned char> decrypted;
-  ret = receiver.decrypt_data(enc_in, decrypted);
+  std::unique_ptr<unsigned char[]> dec_heap_buf;
+  ret = receiver.decrypt_data(enc_in, decrypted, dec_heap_buf);
   CASE_EXPECT_EQ(0, ret);
   CASE_EXPECT_EQ(plaintext_len, decrypted.size());
   if (decrypted.size() == plaintext_len && !decrypted.empty()) {
@@ -334,12 +337,13 @@ CASE_TEST(atgateway_protocol_sdk, encrypt_decrypt_no_cipher) {
   const char *data = "test data no cipher";
   gsl::span<const unsigned char> in{reinterpret_cast<const unsigned char *>(data), strlen(data)};
   gsl::span<unsigned char> out;
+  std::unique_ptr<unsigned char[]> heap_buf;
 
-  int ret = session.encrypt_data(in, out);
+  int ret = session.encrypt_data(in, out, heap_buf);
   CASE_EXPECT_EQ(0, ret);
   CASE_EXPECT_EQ(strlen(data), out.size());
 
-  ret = session.decrypt_data(in, out);
+  ret = session.decrypt_data(in, out, heap_buf);
   CASE_EXPECT_EQ(0, ret);
   CASE_EXPECT_EQ(strlen(data), out.size());
 }
@@ -410,7 +414,8 @@ CASE_TEST(atgateway_protocol_sdk, crypto_session_close) {
   const char *data = "post-close data";
   gsl::span<const unsigned char> in{reinterpret_cast<const unsigned char *>(data), strlen(data)};
   gsl::span<unsigned char> out;
-  ret = session.encrypt_data(in, out);
+  std::unique_ptr<unsigned char[]> heap_buf;
+  ret = session.encrypt_data(in, out, heap_buf);
   CASE_EXPECT_EQ(0, ret);
   CASE_EXPECT_EQ(strlen(data), out.size());
 }
@@ -507,7 +512,8 @@ CASE_TEST(atgateway_protocol_sdk, encrypt_decrypt_aes_128_gcm) {
 
   gsl::span<const unsigned char> in{reinterpret_cast<const unsigned char *>(plaintext), plaintext_len};
   gsl::span<unsigned char> encrypted;
-  ret = sender.encrypt_data(in, encrypted);
+  std::unique_ptr<unsigned char[]> enc_heap;
+  ret = sender.encrypt_data(in, encrypted, enc_heap);
   CASE_EXPECT_EQ(0, ret);
   CASE_EXPECT_GT(encrypted.size(), static_cast<size_t>(0));
 
@@ -515,7 +521,8 @@ CASE_TEST(atgateway_protocol_sdk, encrypt_decrypt_aes_128_gcm) {
 
   gsl::span<const unsigned char> enc_in{encrypted_copy.data(), encrypted_copy.size()};
   gsl::span<unsigned char> decrypted;
-  ret = receiver.decrypt_data(enc_in, decrypted);
+  std::unique_ptr<unsigned char[]> dec_heap;
+  ret = receiver.decrypt_data(enc_in, decrypted, dec_heap);
   CASE_EXPECT_EQ(0, ret);
   CASE_EXPECT_EQ(plaintext_len, decrypted.size());
   if (decrypted.size() == plaintext_len && !decrypted.empty()) {
@@ -556,14 +563,16 @@ CASE_TEST(atgateway_protocol_sdk, encrypt_decrypt_chacha20) {
 
   gsl::span<const unsigned char> in{reinterpret_cast<const unsigned char *>(plaintext), plaintext_len};
   gsl::span<unsigned char> encrypted;
-  ret = sender.encrypt_data(in, encrypted);
+  std::unique_ptr<unsigned char[]> enc_heap;
+  ret = sender.encrypt_data(in, encrypted, enc_heap);
   CASE_EXPECT_EQ(0, ret);
 
   std::vector<unsigned char> encrypted_copy(encrypted.data(), encrypted.data() + encrypted.size());
 
   gsl::span<const unsigned char> enc_in{encrypted_copy.data(), encrypted_copy.size()};
   gsl::span<unsigned char> decrypted;
-  ret = receiver.decrypt_data(enc_in, decrypted);
+  std::unique_ptr<unsigned char[]> dec_heap;
+  ret = receiver.decrypt_data(enc_in, decrypted, dec_heap);
   CASE_EXPECT_EQ(0, ret);
   CASE_EXPECT_EQ(plaintext_len, decrypted.size());
   if (decrypted.size() == plaintext_len && !decrypted.empty()) {
@@ -650,8 +659,9 @@ CASE_TEST(atgateway_protocol_sdk, crypto_conf_set_default) {
   CASE_EXPECT_EQ(static_cast<uint64_t>(2 * 1024 * 1024), conf.max_post_message_size);
   CASE_EXPECT_EQ(static_cast<time_t>(300), conf.update_interval);
   CASE_EXPECT_FALSE(conf.client_mode);
-  CASE_EXPECT_TRUE(conf.supported_algorithms.empty());
-  CASE_EXPECT_TRUE(conf.compression_algorithms.empty());
+  // set_default() now populates default algorithm lists
+  CASE_EXPECT_FALSE(conf.supported_algorithms.empty());
+  CASE_EXPECT_FALSE(conf.compression_algorithms.empty());
   CASE_EXPECT_TRUE(conf.access_tokens.empty());
 
   CASE_MSG_INFO() << "crypto_conf_t::set_default verified" << '\n';
@@ -878,12 +888,16 @@ CASE_TEST(atgateway_protocol_sdk, server_client_no_encryption) {
   crypto_conf_t server_conf_data;
   server_conf_data.key_exchange_algorithm =
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  server_conf_data.supported_algorithms.clear();     // no cipher
+  server_conf_data.compression_algorithms.clear();   // no compression
   server_conf_data.client_mode = false;
   server_conf_data.update_interval = 300;
 
   crypto_conf_t client_conf_data;
   client_conf_data.key_exchange_algorithm =
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  client_conf_data.supported_algorithms.clear();     // no cipher
+  client_conf_data.compression_algorithms.clear();   // no compression
   client_conf_data.client_mode = true;
   client_conf_data.update_interval = 300;
 
@@ -1197,4 +1211,408 @@ CASE_TEST(atgateway_protocol_sdk, server_client_with_access_tokens) {
   CASE_EXPECT_EQ(static_cast<size_t>(1), server.received_messages.size());
 
   CASE_MSG_INFO() << "handshake with matching access tokens verified" << '\n';
+}
+
+// ========== Reconnect tests ==========
+
+CASE_TEST(atgateway_protocol_sdk, server_client_reconnect_success) {
+  ensure_openssl_init();
+
+  crypto_conf_t conf_data;
+  conf_data.key_exchange_algorithm =
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  conf_data.supported_algorithms.push_back(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
+  conf_data.client_mode = false;
+  conf_data.update_interval = 300;
+
+  crypto_conf_t client_conf_data = conf_data;
+  client_conf_data.client_mode = true;
+
+  auto server_conf = libatgw_protocol_sdk::create_global_configure(conf_data);
+  auto client_conf = libatgw_protocol_sdk::create_global_configure(client_conf_data);
+  CASE_EXPECT_TRUE(!!server_conf && !!client_conf);
+  if (!server_conf || !client_conf) {
+    return;
+  }
+
+  // --- Phase 1: initial handshake ---
+  sim_peer_t server1, client1;
+  libatgw_protocol_api::proto_callbacks_t server1_cbs = {}, client1_cbs = {};
+  setup_sim_pair(server1, client1, server_conf, client_conf, server1_cbs, client1_cbs);
+
+  int ret = client1.sdk->start_session();
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(0, server1.handshake_status);
+  CASE_EXPECT_EQ(0, client1.handshake_status);
+
+  uint64_t original_session_id = client1.sdk->get_session_id();
+  CASE_EXPECT_NE(static_cast<uint64_t>(0), original_session_id);
+
+  // Send a message to verify connectivity
+  std::string msg1 = "before reconnect";
+  gsl::span<const unsigned char> msg1_span{reinterpret_cast<const unsigned char *>(msg1.data()), msg1.size()};
+  ret = client1.sdk->send_post(msg1_span);
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(static_cast<size_t>(1), server1.received_messages.size());
+  if (!server1.received_messages.empty()) {
+    std::string received(server1.received_messages[0].begin(), server1.received_messages[0].end());
+    CASE_EXPECT_EQ(msg1, received);
+  }
+
+  // --- Phase 2: simulate reconnect with new protocol instances ---
+  sim_peer_t server2, client2;
+  libatgw_protocol_api::proto_callbacks_t server2_cbs = {}, client2_cbs = {};
+  setup_sim_pair(server2, client2, server_conf, client_conf, server2_cbs, client2_cbs);
+
+  // Server side: set the session_id to match (simulating session lookup)
+  // The reconnect_fn callback will accept the reconnect
+  ret = client2.sdk->reconnect_session(original_session_id, std::vector<unsigned char>{});
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(0, server2.handshake_status);
+  CASE_EXPECT_EQ(0, client2.handshake_status);
+  CASE_EXPECT_EQ(original_session_id, client2.sdk->get_session_id());
+
+  // Send a message after reconnect
+  std::string msg2 = "after reconnect";
+  gsl::span<const unsigned char> msg2_span{reinterpret_cast<const unsigned char *>(msg2.data()), msg2.size()};
+  ret = client2.sdk->send_post(msg2_span);
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(static_cast<size_t>(1), server2.received_messages.size());
+  if (!server2.received_messages.empty()) {
+    std::string received(server2.received_messages[0].begin(), server2.received_messages[0].end());
+    CASE_EXPECT_EQ(msg2, received);
+  }
+
+  CASE_MSG_INFO() << "reconnect success verified, session_id: " << original_session_id << '\n';
+}
+
+CASE_TEST(atgateway_protocol_sdk, server_client_reconnect_refused) {
+  ensure_openssl_init();
+
+  crypto_conf_t conf_data;
+  conf_data.key_exchange_algorithm =
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  conf_data.supported_algorithms.push_back(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
+  conf_data.client_mode = false;
+  conf_data.update_interval = 300;
+
+  crypto_conf_t client_conf_data = conf_data;
+  client_conf_data.client_mode = true;
+
+  auto server_conf = libatgw_protocol_sdk::create_global_configure(conf_data);
+  auto client_conf = libatgw_protocol_sdk::create_global_configure(client_conf_data);
+  CASE_EXPECT_TRUE(!!server_conf && !!client_conf);
+  if (!server_conf || !client_conf) {
+    return;
+  }
+
+  sim_peer_t server, client;
+  libatgw_protocol_api::proto_callbacks_t server_cbs = {}, client_cbs = {};
+  setup_sim_pair(server, client, server_conf, client_conf, server_cbs, client_cbs);
+
+  // Override reconnect callback to refuse
+  server_cbs.reconnect_fn = [](libatgw_protocol_api * /*proto*/, uint64_t /*sess_id*/) -> int {
+    return static_cast<int>(::atframework::gateway::error_code_t::kRefuseReconnect);
+  };
+  server.sdk->set_callbacks(&server_cbs);
+
+  // Client tries to reconnect
+  int ret = client.sdk->reconnect_session(0x12345, std::vector<unsigned char>{});
+
+  // reconnect_session returns write status (0 = write ok), but the server rejects the
+  // reconnect asynchronously (via handshake response with session_id == 0).  In the
+  // synchronous test harness the rejection is already processed when we get here, so
+  // the client should be closed or have a non-zero handshake status.
+  CASE_EXPECT_TRUE(client.closed || client.handshake_status != 0);
+
+  CASE_MSG_INFO() << "reconnect refused verified, ret: " << ret
+                  << ", closed: " << client.closed
+                  << ", handshake_status: " << client.handshake_status << '\n';
+}
+
+// ========== Ping/pong timing test ==========
+
+CASE_TEST(atgateway_protocol_sdk, server_client_ping_pong_get_last_ping) {
+  ensure_openssl_init();
+
+  crypto_conf_t conf_data;
+  conf_data.key_exchange_algorithm =
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  conf_data.supported_algorithms.push_back(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
+  conf_data.client_mode = false;
+  conf_data.update_interval = 300;
+
+  crypto_conf_t client_conf_data = conf_data;
+  client_conf_data.client_mode = true;
+
+  auto server_conf = libatgw_protocol_sdk::create_global_configure(conf_data);
+  auto client_conf = libatgw_protocol_sdk::create_global_configure(client_conf_data);
+  CASE_EXPECT_TRUE(!!server_conf && !!client_conf);
+  if (!server_conf || !client_conf) {
+    return;
+  }
+
+  sim_peer_t server, client;
+  libatgw_protocol_api::proto_callbacks_t server_cbs = {}, client_cbs = {};
+  setup_sim_pair(server, client, server_conf, client_conf, server_cbs, client_cbs);
+
+  int ret = client.sdk->start_session();
+  CASE_EXPECT_EQ(0, ret);
+
+  // Before ping, last_delta should be 0
+  auto ping_before = client.sdk->get_last_ping();
+  CASE_EXPECT_EQ(static_cast<int64_t>(0), ping_before.last_delta);
+
+  // Send ping from client — server auto-replies with pong
+  ret = client.sdk->send_ping();
+  CASE_EXPECT_EQ(0, ret);
+
+  // After ping/pong round-trip, last_delta should be >= 0
+  auto ping_after = client.sdk->get_last_ping();
+  CASE_EXPECT_GE(ping_after.last_delta, static_cast<int64_t>(0));
+
+  CASE_MSG_INFO() << "ping/pong timing: last_delta=" << ping_after.last_delta << '\n';
+}
+
+// ========== handshake_update mid-stream messaging ==========
+
+CASE_TEST(atgateway_protocol_sdk, server_client_handshake_update_midstream) {
+  ensure_openssl_init();
+
+  crypto_conf_t conf_data;
+  conf_data.key_exchange_algorithm =
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  conf_data.supported_algorithms.push_back(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
+  conf_data.client_mode = false;
+  conf_data.update_interval = 300;
+
+  crypto_conf_t client_conf_data = conf_data;
+  client_conf_data.client_mode = true;
+
+  auto server_conf = libatgw_protocol_sdk::create_global_configure(conf_data);
+  auto client_conf = libatgw_protocol_sdk::create_global_configure(client_conf_data);
+  CASE_EXPECT_TRUE(!!server_conf && !!client_conf);
+  if (!server_conf || !client_conf) {
+    return;
+  }
+
+  sim_peer_t server, client;
+  libatgw_protocol_api::proto_callbacks_t server_cbs = {}, client_cbs = {};
+  setup_sim_pair(server, client, server_conf, client_conf, server_cbs, client_cbs);
+
+  // Phase 1: initial handshake + messaging
+  int ret = client.sdk->start_session();
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(0, client.handshake_status);
+
+  std::string msg1 = "phase1 message";
+  gsl::span<const unsigned char> msg1_span{reinterpret_cast<const unsigned char *>(msg1.data()), msg1.size()};
+  ret = client.sdk->send_post(msg1_span);
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(static_cast<size_t>(1), server.received_messages.size());
+  if (!server.received_messages.empty()) {
+    std::string received(server.received_messages[0].begin(), server.received_messages[0].end());
+    CASE_EXPECT_EQ(msg1, received);
+  }
+
+  // Phase 2: handshake_update (key refresh)
+  uint64_t session_id = client.sdk->get_session_id();
+  ret = client.sdk->handshake_update();
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(session_id, client.sdk->get_session_id());
+
+  // Phase 3: continue messaging after key refresh
+  std::string msg2 = "phase3 message after handshake_update";
+  gsl::span<const unsigned char> msg2_span{reinterpret_cast<const unsigned char *>(msg2.data()), msg2.size()};
+  ret = client.sdk->send_post(msg2_span);
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(static_cast<size_t>(2), server.received_messages.size());
+  if (server.received_messages.size() >= 2) {
+    std::string received(server.received_messages[1].begin(), server.received_messages[1].end());
+    CASE_EXPECT_EQ(msg2, received);
+  }
+
+  // Also send from server to client
+  std::string msg3 = "server reply after handshake_update";
+  gsl::span<const unsigned char> msg3_span{reinterpret_cast<const unsigned char *>(msg3.data()), msg3.size()};
+  ret = server.sdk->send_post(msg3_span);
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(static_cast<size_t>(1), client.received_messages.size());
+  if (!client.received_messages.empty()) {
+    std::string received(client.received_messages[0].begin(), client.received_messages[0].end());
+    CASE_EXPECT_EQ(msg3, received);
+  }
+
+  CASE_MSG_INFO() << "handshake_update mid-stream: 3 phases verified, session_id=" << session_id << '\n';
+}
+
+// ========== Access token mismatch test ==========
+
+CASE_TEST(atgateway_protocol_sdk, server_client_access_token_mismatch) {
+  ensure_openssl_init();
+
+  std::vector<unsigned char> server_token = {'s', 'e', 'r', 'v', 'e', 'r', '-', 'k', 'e', 'y'};
+  std::vector<unsigned char> client_token = {'c', 'l', 'i', 'e', 'n', 't', '-', 'k', 'e', 'y'};
+
+  crypto_conf_t server_conf_data;
+  server_conf_data.key_exchange_algorithm =
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  server_conf_data.supported_algorithms.push_back(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
+  server_conf_data.access_tokens.push_back(server_token);
+  server_conf_data.client_mode = false;
+
+  crypto_conf_t client_conf_data;
+  client_conf_data.key_exchange_algorithm =
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  client_conf_data.supported_algorithms.push_back(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
+  client_conf_data.access_tokens.push_back(client_token);
+  client_conf_data.client_mode = true;
+
+  auto server_conf = libatgw_protocol_sdk::create_global_configure(server_conf_data);
+  auto client_conf = libatgw_protocol_sdk::create_global_configure(client_conf_data);
+  CASE_EXPECT_TRUE(!!server_conf && !!client_conf);
+  if (!server_conf || !client_conf) {
+    return;
+  }
+
+  sim_peer_t server, client;
+  libatgw_protocol_api::proto_callbacks_t server_cbs = {}, client_cbs = {};
+  setup_sim_pair(server, client, server_conf, client_conf, server_cbs, client_cbs);
+
+  // Client initiates handshake — should fail due to token mismatch.
+  // start_session() returns write status (0 = write ok).  The server rejects the handshake
+  // when verify_access_data fails and closes its side.  In the synchronous test harness
+  // the server's close is processed before start_session returns.
+  int ret = client.sdk->start_session();
+
+  // The server should have detected the mismatch and either error'd or closed.
+  CASE_EXPECT_TRUE(server.error_count > 0 || server.closed || server.handshake_status != 0);
+
+  CASE_MSG_INFO() << "access token mismatch verified, ret=" << ret
+                  << ", server_errors=" << server.error_count
+                  << ", server_closed=" << server.closed
+                  << ", client_errors=" << client.error_count << '\n';
+}
+
+// ========== Data correctness: large message ==========
+
+CASE_TEST(atgateway_protocol_sdk, server_client_large_message_correctness) {
+  ensure_openssl_init();
+
+  crypto_conf_t conf_data;
+  conf_data.key_exchange_algorithm =
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  conf_data.supported_algorithms.push_back(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
+  conf_data.client_mode = false;
+  conf_data.update_interval = 300;
+  conf_data.max_post_message_size = 256 * 1024;
+
+  crypto_conf_t client_conf_data = conf_data;
+  client_conf_data.client_mode = true;
+
+  auto server_conf = libatgw_protocol_sdk::create_global_configure(conf_data);
+  auto client_conf = libatgw_protocol_sdk::create_global_configure(client_conf_data);
+  CASE_EXPECT_TRUE(!!server_conf && !!client_conf);
+  if (!server_conf || !client_conf) {
+    return;
+  }
+
+  sim_peer_t server, client;
+  libatgw_protocol_api::proto_callbacks_t server_cbs = {}, client_cbs = {};
+  setup_sim_pair(server, client, server_conf, client_conf, server_cbs, client_cbs);
+
+  int ret = client.sdk->start_session();
+  CASE_EXPECT_EQ(0, ret);
+
+  // Build a large message with known pattern
+  std::vector<unsigned char> large_msg(8192);
+  for (size_t i = 0; i < large_msg.size(); ++i) {
+    large_msg[i] = static_cast<unsigned char>(i & 0xFF);
+  }
+
+  gsl::span<const unsigned char> msg_span{large_msg.data(), large_msg.size()};
+  ret = client.sdk->send_post(msg_span);
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(static_cast<size_t>(1), server.received_messages.size());
+
+  if (!server.received_messages.empty()) {
+    CASE_EXPECT_EQ(large_msg.size(), server.received_messages[0].size());
+    // Verify byte-by-byte correctness
+    bool data_matches = (large_msg == server.received_messages[0]);
+    CASE_EXPECT_TRUE(data_matches);
+    if (!data_matches && server.received_messages[0].size() == large_msg.size()) {
+      // Find first mismatch for diagnostics
+      for (size_t i = 0; i < large_msg.size(); ++i) {
+        if (large_msg[i] != server.received_messages[0][i]) {
+          CASE_MSG_ERROR() << "Data mismatch at byte " << i << ": expected 0x" << std::hex
+                           << static_cast<int>(large_msg[i]) << " got 0x"
+                           << static_cast<int>(server.received_messages[0][i]) << std::dec << '\n';
+          break;
+        }
+      }
+    }
+  }
+
+  CASE_MSG_INFO() << "large message correctness verified: " << large_msg.size() << " bytes" << '\n';
+}
+
+// ========== crypto_conf_t constructor / copy / move tests ==========
+
+CASE_TEST(atgateway_protocol_sdk, crypto_conf_constructor_sets_defaults) {
+  ensure_openssl_init();
+
+  crypto_conf_t conf;
+
+  // Constructor should call set_default()
+  CASE_EXPECT_EQ(ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519),
+                 conf.key_exchange_algorithm);
+  CASE_EXPECT_EQ(static_cast<uint64_t>(2 * 1024 * 1024), conf.max_post_message_size);
+  CASE_EXPECT_EQ(static_cast<time_t>(300), conf.update_interval);
+  CASE_EXPECT_FALSE(conf.client_mode);
+
+  CASE_MSG_INFO() << "crypto_conf_t default constructor sets defaults" << '\n';
+}
+
+CASE_TEST(atgateway_protocol_sdk, crypto_conf_copy_move) {
+  ensure_openssl_init();
+
+  crypto_conf_t conf;
+  conf.key_exchange_algorithm =
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kSecp256r1);
+  conf.max_post_message_size = 512;
+  conf.client_mode = true;
+  std::vector<unsigned char> token = {'a', 'b', 'c'};
+  conf.access_tokens.push_back(token);
+
+  // Copy constructor
+  crypto_conf_t copy_conf(conf);
+  CASE_EXPECT_EQ(conf.key_exchange_algorithm, copy_conf.key_exchange_algorithm);
+  CASE_EXPECT_EQ(conf.max_post_message_size, copy_conf.max_post_message_size);
+  CASE_EXPECT_EQ(conf.client_mode, copy_conf.client_mode);
+  CASE_EXPECT_EQ(conf.access_tokens.size(), copy_conf.access_tokens.size());
+
+  // Move constructor
+  crypto_conf_t move_conf(std::move(copy_conf));
+  CASE_EXPECT_EQ(conf.key_exchange_algorithm, move_conf.key_exchange_algorithm);
+  CASE_EXPECT_EQ(conf.max_post_message_size, move_conf.max_post_message_size);
+  CASE_EXPECT_EQ(static_cast<size_t>(1), move_conf.access_tokens.size());
+
+  // Copy assignment
+  crypto_conf_t assign_conf;
+  assign_conf = conf;
+  CASE_EXPECT_EQ(conf.key_exchange_algorithm, assign_conf.key_exchange_algorithm);
+
+  // Move assignment
+  crypto_conf_t move_assign_conf;
+  move_assign_conf = std::move(assign_conf);
+  CASE_EXPECT_EQ(conf.key_exchange_algorithm, move_assign_conf.key_exchange_algorithm);
+
+  CASE_MSG_INFO() << "crypto_conf_t copy/move verified" << '\n';
 }

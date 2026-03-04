@@ -245,6 +245,9 @@ table cs_body_handshake {
 
     // Maximum post message size in bytes (server fills in rsp, default 2MB)
     max_post_message_size: uint64 (id: 10);
+
+    // Session token for reconnect authentication (server fills in rsp)
+    session_token: [byte] (id: 11);
 }
 
 table cs_body_ping {

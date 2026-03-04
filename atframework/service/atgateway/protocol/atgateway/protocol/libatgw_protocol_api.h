@@ -5,6 +5,7 @@
 #include <config/compile_optimize.h>
 
 #include <gsl/select-gsl.h>
+#include <nostd/string_view.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -126,11 +127,11 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
   /**
    * SPECIFY: callback when all recource closed and do not use this object's resource any more
    *   any resource can only be freed after proto closed, you can use both **on_close_fn_t** or
-   * check_flag(flag_t::kClosed) PARAMETER: 0: proto object 1: close reason RETURN: 0 or error code REQUIRED
-   * PROTOCOL: any custom protocol must set_flag(flag_t::kClosed, true) and then call this when all resource
-   * closed.
+   * check_flag(flag_t::kClosed) PARAMETER: 0: proto object 1: close reason 2: sub reason 3: message RETURN: 0 or error
+   * code REQUIRED PROTOCOL: any custom protocol must set_flag(flag_t::kClosed, true) and then call this when all
+   * resource closed.
    */
-  using on_close_fn_t = std::function<int(libatgw_protocol_api *, int)>;
+  using on_close_fn_t = std::function<int(libatgw_protocol_api *, int32_t, int32_t, atfw::util::nostd::string_view)>;
 
   /**
    * SPECIFY: callback when handshake done
@@ -241,7 +242,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
    * @param reason close reason
    * @return 0 or error code
    */
-  LIBATGW_PROTOCOL_API virtual int close(int reason);
+  LIBATGW_PROTOCOL_API virtual int close(int32_t reason, int32_t sub_reason = 0,
+                                         atfw::util::nostd::string_view message = {});
 
   /**
    * @biref call this to check if reconnect is accepted

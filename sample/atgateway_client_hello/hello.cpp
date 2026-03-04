@@ -260,7 +260,8 @@ static void proto_inner_callback_on_written_fn(uv_write_t *, int status) {
   }
 }
 
-static int32_t proto_inner_callback_on_write(libatgateway_v2_c_context, void *buffer, uint64_t sz, int32_t *is_done) {
+static int32_t proto_inner_callback_on_write(libatgateway_v2_c_context ctx, void *buffer, uint64_t sz,
+                                             int32_t *is_done) {
   if (!g_client_sess.proto || nullptr == buffer) {
     if (nullptr != is_done) {
       *is_done = 1;
@@ -269,7 +270,14 @@ static int32_t proto_inner_callback_on_write(libatgateway_v2_c_context, void *bu
     return -1;
   }
 
-  uv_buf_t bufs[1] = {uv_buf_init(reinterpret_cast<char *>(buffer), static_cast<unsigned int>(sz))};
+  char *buffer_start = reinterpret_cast<char *>(buffer);
+  unsigned int buffer_len = static_cast<unsigned int>(sz);
+  unsigned int header_offset = static_cast<unsigned int>(libatgateway_v2_c_get_write_header_offset(ctx));
+  if (buffer_len > header_offset) {
+    buffer_start += header_offset;
+    buffer_len -= header_offset;
+  }
+  uv_buf_t bufs[1] = {uv_buf_init(buffer_start, buffer_len)};
   int ret = uv_write(&g_client.write_req, reinterpret_cast<uv_stream_t *>(&g_client.tcp_sock), bufs, 1,
                      proto_inner_callback_on_written_fn);
   if (0 != ret) {

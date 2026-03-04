@@ -128,7 +128,8 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_api::write_done(int /*status*/) {
   return 0;
 }
 
-LIBATGW_PROTOCOL_API int libatgw_protocol_api::close(int reason) {
+LIBATGW_PROTOCOL_API int libatgw_protocol_api::close(int32_t reason, int32_t sub_reason,
+                                                     atfw::util::nostd::string_view message) {
   if (check_flag(flag_t::kClosing)) {
     return 0;
   }
@@ -136,7 +137,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_api::close(int reason) {
   set_flag(flag_t::kClosed, true);
 
   if (nullptr != callbacks_ && callbacks_->close_fn) {
-    return callbacks_->close_fn(this, reason);
+    return callbacks_->close_fn(this, reason, sub_reason, message);
   }
   return 0;
 }
