@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -443,8 +444,29 @@ static void libuv_tick_timer_callback(uv_timer_t *handle) {
 
 int main(int argc, char *argv[]) {
   if (argc < 3) {
-    fprintf(stderr, "usage: %s <ip> <port> [mode]\n\tmode can be tick or busy\n\t%s 127.0.0.1 9005 tick\n", argv[0],
-            argv[0]);
+    fprintf(stderr,
+            "usage: %s <ip> <port> [mode] [options...]\n"
+            "  mode: tick or busy\n"
+            "  options:\n"
+            "    --key-exchange <name>    Key exchange algorithm (e.g. x25519, secp256r1, secp384r1, secp521r1)\n"
+            "    --crypto <name>          Add a crypto algorithm (e.g. aes-256-gcm, chacha20-poly1305-ietf, xxtea)\n"
+            "    --compression <name>     Add a compression algorithm (e.g. zstd, lz4, snappy, zlib)\n"
+            "  example:\n"
+            "    %s 127.0.0.1 9005 tick --key-exchange x25519 --crypto aes-256-gcm --compression zstd\n",
+            argv[0], argv[0]);
+
+    fprintf(stderr, "\navailable key exchange algorithms:\n");
+    for (uint64_t i = 0; i < libatgateway_v2_c_get_key_exchange_algorithm_count(); ++i) {
+      fprintf(stderr, "  %s\n", libatgateway_v2_c_get_key_exchange_algorithm_name(i));
+    }
+    fprintf(stderr, "\navailable crypto algorithms:\n");
+    for (uint64_t i = 0; i < libatgateway_v2_c_get_crypto_algorithm_count(); ++i) {
+      fprintf(stderr, "  %s\n", libatgateway_v2_c_get_crypto_algorithm_name(i));
+    }
+    fprintf(stderr, "\navailable compression algorithms:\n");
+    for (uint64_t i = 0; i < libatgateway_v2_c_get_compression_algorithm_count(); ++i) {
+      fprintf(stderr, "  %s\n", libatgateway_v2_c_get_compression_algorithm_name(i));
+    }
     return -1;
   }
 
@@ -481,9 +503,57 @@ int main(int argc, char *argv[]) {
   g_port = static_cast<int>(strtol(argv[2], nullptr, 10));
   memset(&g_client, 0, sizeof(g_client));
 
-  if (argc > 3) {
-    mode = argv[3];
-    std::transform(mode.begin(), mode.end(), mode.begin(), atfw::util::string::tolower<char>);
+  // Parse CLI options
+  const char *key_exchange_name = nullptr;
+  std::vector<const char *> crypto_names;
+  std::vector<const char *> compression_names;
+
+  for (int i = 3; i < argc; ++i) {
+    std::string arg = argv[i];
+    if (arg == "--key-exchange" && i + 1 < argc) {
+      key_exchange_name = argv[++i];
+    } else if (arg == "--crypto" && i + 1 < argc) {
+      crypto_names.push_back(argv[++i]);
+    } else if (arg == "--compression" && i + 1 < argc) {
+      compression_names.push_back(argv[++i]);
+    } else if (mode == "tick") {
+      // First non-option after port is mode
+      mode = arg;
+      std::transform(mode.begin(), mode.end(), mode.begin(), atfw::util::string::tolower<char>);
+    }
+  }
+
+  // Apply crypto configuration if any algorithm options were specified
+  if (key_exchange_name != nullptr || !crypto_names.empty()) {
+    if (nullptr == key_exchange_name) {
+      key_exchange_name = "x25519";  // default
+    }
+    int32_t ret = libatgateway_v2_c_set_crypto_config(nullptr, key_exchange_name, crypto_names.data(),
+                                                      static_cast<uint64_t>(crypto_names.size()), 300);
+    if (0 != ret) {
+      fprintf(stderr, "failed to set crypto config, error: %d\n", ret);
+      return -1;
+    }
+    printf("crypto config: key_exchange=%s", key_exchange_name);
+    for (auto &n : crypto_names) {
+      printf(", crypto=%s", n);
+    }
+    printf("\n");
+  }
+
+  // Apply compression configuration if specified
+  if (!compression_names.empty()) {
+    int32_t ret = libatgateway_v2_c_set_compression_algorithms(nullptr, compression_names.data(),
+                                                               static_cast<uint64_t>(compression_names.size()));
+    if (0 != ret) {
+      fprintf(stderr, "failed to set compression algorithms, error: %d\n", ret);
+      return -1;
+    }
+    printf("compression config:");
+    for (auto &n : compression_names) {
+      printf(" %s", n);
+    }
+    printf("\n");
   }
 
   if ("tick" == mode) {

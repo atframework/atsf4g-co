@@ -158,23 +158,38 @@ LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_is_handshake_done(libatg
 LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_is_writing(libatgateway_v2_c_context context);
 LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_is_in_callback(libatgateway_v2_c_context context);
 
-/// @brief Set write header offset (bytes reserved at front of send buffers for transport headers)
-LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_write_header_offset(libatgateway_v2_c_context context,
-                                                                             uint64_t offset);
-/// @brief Get write header offset
-LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_write_header_offset(libatgateway_v2_c_context context);
+// ========== Algorithm configuration APIs (string-based) ==========
 
-// ========== Algorithm configuration APIs ==========
+/// @brief Get the number of available key exchange algorithm names.
+LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_key_exchange_algorithm_count();
 
-/// @brief Set crypto algorithm configuration.
-/// @param context protocol context
-/// @param key_exchange key exchange algorithm (0=none, 1=x25519, 2=secp256r1, 3=secp384r1, 4=secp521r1)
-/// @param crypto_algorithms array of crypto algorithm integers
-/// @param crypto_algorithms_count number of crypto algorithms
+/// @brief Get a key exchange algorithm name by index.
+/// @return algorithm name string, or nullptr if idx is out of range
+LIBATGATEWAY_V2_C_API const char *__cdecl libatgateway_v2_c_get_key_exchange_algorithm_name(uint64_t idx);
+
+/// @brief Get the number of available crypto algorithm names.
+LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_crypto_algorithm_count();
+
+/// @brief Get a crypto algorithm name by index.
+/// @return algorithm name string, or nullptr if idx is out of range
+LIBATGATEWAY_V2_C_API const char *__cdecl libatgateway_v2_c_get_crypto_algorithm_name(uint64_t idx);
+
+/// @brief Get the number of available compression algorithm names.
+LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_compression_algorithm_count();
+
+/// @brief Get a compression algorithm name by index.
+/// @return algorithm name string, or nullptr if idx is out of range
+LIBATGATEWAY_V2_C_API const char *__cdecl libatgateway_v2_c_get_compression_algorithm_name(uint64_t idx);
+
+/// @brief Set crypto configuration using string-based algorithm names.
+/// @param context protocol context (ignored, configures global)
+/// @param key_exchange key exchange algorithm name (e.g. "x25519", "secp256r1", "secp384r1", "secp521r1", or "none")
+/// @param crypto_algorithm_names array of crypto algorithm name strings
+/// @param crypto_algorithms_count number of crypto algorithm names
 /// @param update_interval key refresh interval in seconds
 LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_crypto_config(libatgateway_v2_c_context context,
-                                                                          int32_t key_exchange,
-                                                                          const int32_t *crypto_algorithms,
+                                                                          const char *key_exchange,
+                                                                          const char *const *crypto_algorithm_names,
                                                                           uint64_t crypto_algorithms_count,
                                                                           int64_t update_interval);
 
@@ -184,9 +199,13 @@ LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_access_tokens(libatg
                                                                           const uint64_t *token_sizes,
                                                                           uint64_t token_count);
 
-/// @brief Set compression algorithms
+/// @brief Set compression algorithms using string-based names.
+/// @param context protocol context (ignored, configures global)
+/// @param compression_algorithm_names array of compression algorithm name strings (e.g. "zstd", "lz4", "snappy",
+/// "zlib")
+/// @param count number of compression algorithm names
 LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_compression_algorithms(
-    libatgateway_v2_c_context context, const int32_t *compression_algorithms, uint64_t count);
+    libatgateway_v2_c_context context, const char *const *compression_algorithm_names, uint64_t count);
 
 /// @brief Set max post message size
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_max_post_message_size(libatgateway_v2_c_context context,

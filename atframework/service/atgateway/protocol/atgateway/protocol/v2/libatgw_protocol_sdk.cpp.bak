@@ -2157,7 +2157,7 @@ int libatgw_protocol_sdk::encrypt_data(crypt_session_t &crypt_info, const void *
     return static_cast<int>(::atframework::gateway::error_code_t::kSuccess);
   }
 
-  auto tls_buffer = get_tls_buffer(tls_buffer_t::kCrypt);
+  auto tls_buffer = get_tls_buffer(tls_buffer_t::kCrypto);
   size_t len = tls_buffer.size();
   unsigned char *buffer = tls_buffer.data();
 
@@ -2213,7 +2213,7 @@ int libatgw_protocol_sdk::decrypt_data(crypt_session_t &crypt_info, const void *
     return static_cast<int>(::atframework::gateway::error_code_t::kSuccess);
   }
 
-  auto tls_buffer = get_tls_buffer(tls_buffer_t::kCrypt);
+  auto tls_buffer = get_tls_buffer(tls_buffer_t::kCrypto);
   unsigned char *buffer = tls_buffer.data();
   size_t len = tls_buffer.size();
 

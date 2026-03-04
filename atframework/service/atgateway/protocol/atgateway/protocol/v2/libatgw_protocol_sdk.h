@@ -83,6 +83,9 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
 
     /// Whether this is client mode (vs server mode)
     bool client_mode;
+
+    /// @brief Initialize to default values (x25519, 2MB max message, 300s update interval)
+    LIBATGW_PROTOCOL_API void set_default();
   };
 
   /**
@@ -162,16 +165,17 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
     ATFW_UTIL_FORCEINLINE uint64_t get_handshake_sequence_id() const { return handshake_sequence_id_; }
 
     /// Encrypt data using send cipher
-    LIBATGW_PROTOCOL_API int encrypt_data(const void *in, size_t insz, const void *&out, size_t &outsz);
+    LIBATGW_PROTOCOL_API int encrypt_data(gsl::span<const unsigned char> in, gsl::span<unsigned char> &out);
 
     /// Decrypt data using receive cipher
-    LIBATGW_PROTOCOL_API int decrypt_data(const void *in, size_t insz, const void *&out, size_t &outsz);
+    LIBATGW_PROTOCOL_API int decrypt_data(gsl::span<const unsigned char> in, gsl::span<unsigned char> &out);
 
     /// Compress data
-    LIBATGW_PROTOCOL_API int compress_data(const void *in, size_t insz, const void *&out, size_t &outsz);
+    LIBATGW_PROTOCOL_API int compress_data(gsl::span<const unsigned char> in, gsl::span<unsigned char> &out);
 
     /// Decompress data
-    LIBATGW_PROTOCOL_API int decompress_data(const void *in, size_t insz, const void *&out, size_t &outsz);
+    LIBATGW_PROTOCOL_API int decompress_data(gsl::span<const unsigned char> in, size_t original_size,
+                                             gsl::span<unsigned char> &out);
 
    private:
     int derive_key_from_shared_secret(const std::vector<unsigned char> &shared_secret);
@@ -260,7 +264,7 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
    */
   LIBATGW_PROTOCOL_API int start_session();
 
-  LIBATGW_PROTOCOL_API int reconnect_session(uint64_t sess_id, const std::vector<unsigned char> &secret);
+  LIBATGW_PROTOCOL_API int reconnect_session(uint64_t session_id, const std::vector<unsigned char> &session_token);
 
   LIBATGW_PROTOCOL_API int send_post(::atframework::gateway::v2::client_message_type_t message_type,
                                      gsl::span<const unsigned char> data);
@@ -309,10 +313,53 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
                                                                           const std::string &plaintext);
 
  private:
-  int encode_post(const void *in, size_t insz, const void *&out, size_t &outsz);
-  int decode_post(const void *in, size_t insz, const void *&out, size_t &outsz);
+  int encode_post(gsl::span<const unsigned char> in, gsl::span<unsigned char> &out);
+  int decode_post(gsl::span<const unsigned char> in, size_t original_size, gsl::span<unsigned char> &out);
 
  public:
+  // ========== Algorithm name ↔ enum conversion helpers ==========
+
+  /// @brief Convert key exchange algorithm name to enum value.
+  /// @param name algorithm name (e.g. "x25519", "secp256r1")
+  /// @return enum value, or kNone if not found
+  static LIBATGW_PROTOCOL_API ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, key_exchange_t)
+      key_exchange_algorithm_from_name(const char *name);
+
+  /// @brief Convert key exchange enum to name string.
+  static LIBATGW_PROTOCOL_API const char *key_exchange_algorithm_to_name(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, key_exchange_t) alg);
+
+  /// @brief Get available key exchange algorithm names.
+  static LIBATGW_PROTOCOL_API const std::vector<const char *> &get_all_key_exchange_algorithm_names();
+
+  /// @brief Convert crypto algorithm name to enum value.
+  /// @param name algorithm name (e.g. "aes-256-gcm", "chacha20-poly1305-ietf")
+  /// @return enum value, or kNone if not found
+  static LIBATGW_PROTOCOL_API ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2,
+                                                                          crypto_algorithm_t)
+      crypto_algorithm_from_name(const char *name);
+
+  /// @brief Convert crypto algorithm enum to name string.
+  static LIBATGW_PROTOCOL_API const char *crypto_algorithm_to_name(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, crypto_algorithm_t) alg);
+
+  /// @brief Get available crypto algorithm names.
+  static LIBATGW_PROTOCOL_API const std::vector<const char *> &get_all_crypto_algorithm_names();
+
+  /// @brief Convert compression algorithm name to enum value.
+  /// @param name algorithm name (e.g. "zstd", "lz4", "snappy", "zlib")
+  /// @return enum value, or kNone if not found
+  static LIBATGW_PROTOCOL_API ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2,
+                                                                          compression_algorithm_t)
+      compression_algorithm_from_name(const char *name);
+
+  /// @brief Convert compression algorithm enum to name string.
+  static LIBATGW_PROTOCOL_API const char *compression_algorithm_to_name(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, compression_algorithm_t) alg);
+
+  /// @brief Get available compression algorithm names.
+  static LIBATGW_PROTOCOL_API const std::vector<const char *> &get_all_compression_algorithm_names();
+
   /**
    * @brief Create a shared global crypto configuration from crypto_conf_t.
    * @param conf the configuration to use

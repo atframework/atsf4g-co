@@ -80,7 +80,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
    * PARAMETER:
    *   0: proto object
    *   1: buffer to write, the first write_header_offset_ bytes are headspace and are not the real data need to send to
-   * peer 2: buffer length, should be greater than write_header_offset_ 3: output if it's already done RETURN: 0 or
+   * peer
+   *   2: output if it's already done RETURN: 0 or
    * error code REQUIRED PROTOCOL: any custom protocol must call this when there is any data to send to peer.
    */
   using on_write_start_fn_t = std::function<int(libatgw_protocol_api *, gsl::span<unsigned char>, bool *)>;
@@ -94,7 +95,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
    * RETURN: 0 or error code
    * REQUIRED
    * PROTOCOL: any custom protocol should call this when receive a custom message.
-  * check_flag(flag_t::kInCallback) must return true here
+   * check_flag(flag_t::kInCallback) must return true here
    */
   using on_message_fn_t = std::function<int(libatgw_protocol_api *, gsl::span<const unsigned char>)>;
 
@@ -106,7 +107,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
    * RETURN: 0 or error code
    * REQUIRED
    * PROTOCOL: any custom protocol must call this when the new connection is a new session.
-  * check_flag(flag_t::kInCallback) must return true here
+   * check_flag(flag_t::kInCallback) must return true here
    */
   using on_init_new_session_fn_t = std::function<int(libatgw_protocol_api *, uint64_t &)>;
 
@@ -117,7 +118,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
    *   1: old session id
    * RETURN: 0 or error code
    * OPTIONAL
-  * PROTOCOL: if not provided, we think reconnect is not supported. check_flag(flag_t::kInCallback) must
+   * PROTOCOL: if not provided, we think reconnect is not supported. check_flag(flag_t::kInCallback) must
    *           return true here
    */
   using on_init_reconnect_fn_t = std::function<int(libatgw_protocol_api *, uint64_t)>;
@@ -125,8 +126,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
   /**
    * SPECIFY: callback when all recource closed and do not use this object's resource any more
    *   any resource can only be freed after proto closed, you can use both **on_close_fn_t** or
-  * check_flag(flag_t::kClosed) PARAMETER: 0: proto object 1: close reason RETURN: 0 or error code REQUIRED
-  * PROTOCOL: any custom protocol must set_flag(flag_t::kClosed, true) and then call this when all resource
+   * check_flag(flag_t::kClosed) PARAMETER: 0: proto object 1: close reason RETURN: 0 or error code REQUIRED
+   * PROTOCOL: any custom protocol must set_flag(flag_t::kClosed, true) and then call this when all resource
    * closed.
    */
   using on_close_fn_t = std::function<int(libatgw_protocol_api *, int)>;
@@ -134,8 +135,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
   /**
    * SPECIFY: callback when handshake done
    *   any resource can only be freed after proto closed, you can use both **on_close_fn_t** or
-  * check_flag(flag_t::kClosed) PARAMETER: 0: proto object 1: status RETURN: 0 or error code OPTIONAL PROTOCOL:
-  * just notify when handshake finished. check_flag(flag_t::kInCallback) must return true here
+   * check_flag(flag_t::kClosed) PARAMETER: 0: proto object 1: status RETURN: 0 or error code OPTIONAL PROTOCOL:
+   * just notify when handshake finished. check_flag(flag_t::kInCallback) must return true here
    */
   using on_handshake_done_fn_t = std::function<int(libatgw_protocol_api *, int)>;
 
@@ -155,7 +156,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
 
   enum class tls_buffer_t : uint8_t {
     kMerge = 0,
-    kCrypt = 1,
+    kCrypto = 1,
     kCompress = 2,
     kCustom = 3,
     kMax = 4,
@@ -220,7 +221,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
   /**
    * @biref call this when need to write custem message to peer. custom protocol must implement this
    * @param data written data address
-  * @note if there is any writing not finished, call set_flag(flag_t::kWriting, true) and call write_done(status)
+   * @note if there is any writing not finished, call set_flag(flag_t::kWriting, true) and call write_done(status)
    * when writing finished
    * @return 0 or error code
    */
@@ -235,7 +236,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
 
   /**
    * @biref call this to close protocol's resource.
-  * @note must call set_flag(flag_t::kClosing, true), and call set_flag(flag_t::kClosed, true) only if all
+   * @note must call set_flag(flag_t::kClosing, true), and call set_flag(flag_t::kClosed, true) only if all
    * resource are real closed.
    * @param reason close reason
    * @return 0 or error code
@@ -266,7 +267,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
   /**
    * @biref notify handshake finished
    * @note custom protocol should call it when handshake is finished or updated no matter if it's success
-  * @note it will set kHandshakeDone to true, kHandshakeUpdate to false, and then call the
+   * @note it will set kHandshakeDone to true, kHandshakeUpdate to false, and then call the
    * on_handshake_done_fn callback
    * @param status status
    * @return 0 or error code
@@ -277,7 +278,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
   /**
    * @biref update and do handshake again
    * @note custom protocol could use this function to implement the update of crypt secret, access token or other data
-  * @note it will set kHandshakeUpdate to true
+   * @note it will set kHandshakeUpdate to true
    * @param status status
    * @return 0 or error code
    */

@@ -18,8 +18,8 @@ enum error_code_t:int {
 enum handshake_step_t : ubyte {
     kKeyExchangeReq = 0,    // Client -> Server: ECDH public key + all supported algorithms
     kKeyExchangeRsp = 1,    // Server -> Client: ECDH public key + selected algorithm + session_id
-    kReconnectReq = 11,     // Client -> Server: reconnect with old session_id (still requires full handshake)
-    kReconnectRsp = 12,     // Server -> Client: reconnect result + session_id (then full handshake follows)
+    kReconnectReq = 11,     // Client -> Server: reconnect with old session_id + full ECDH handshake inline (same fields as kKeyExchangeReq)
+    kReconnectRsp = 12,     // Server -> Client: reconnect result + full ECDH handshake inline (same fields as kKeyExchangeRsp), reuses session_id
 }
 
 enum access_data_algorithm_t : ubyte {

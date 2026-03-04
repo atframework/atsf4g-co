@@ -489,34 +489,60 @@ LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_is_in_callback(libatgate
   return ATGW_CONTEXT(context)->check_flag(::atframework::gateway::libatgw_protocol_api::flag_t::kInCallback);
 }
 
-LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_write_header_offset(libatgateway_v2_c_context context,
-                                                                             uint64_t offset) {
-  if (ATGW_CONTEXT_IS_NULL(context)) {
-    return;
-  }
-  ATGW_CONTEXT(context)->set_write_header_offset(static_cast<size_t>(offset));
+// ========== Algorithm listing APIs ==========
+
+LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_key_exchange_algorithm_count() {
+  return static_cast<uint64_t>(
+      ::atframework::gateway::libatgw_protocol_sdk::get_all_key_exchange_algorithm_names().size());
 }
 
-LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_write_header_offset(libatgateway_v2_c_context context) {
-  if (ATGW_CONTEXT_IS_NULL(context)) {
-    return 0;
+LIBATGATEWAY_V2_C_API const char *__cdecl libatgateway_v2_c_get_key_exchange_algorithm_name(uint64_t idx) {
+  const auto &names = ::atframework::gateway::libatgw_protocol_sdk::get_all_key_exchange_algorithm_names();
+  if (idx >= names.size()) {
+    return nullptr;
   }
-  return static_cast<uint64_t>(ATGW_CONTEXT(context)->get_write_header_offset());
+  return names[idx];
 }
 
-LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_crypto_config(
-    libatgateway_v2_c_context /*context*/, int32_t key_exchange, const int32_t *crypto_algorithms,
-    uint64_t crypto_algorithms_count, int64_t update_interval) {
+LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_crypto_algorithm_count() {
+  return static_cast<uint64_t>(::atframework::gateway::libatgw_protocol_sdk::get_all_crypto_algorithm_names().size());
+}
+
+LIBATGATEWAY_V2_C_API const char *__cdecl libatgateway_v2_c_get_crypto_algorithm_name(uint64_t idx) {
+  const auto &names = ::atframework::gateway::libatgw_protocol_sdk::get_all_crypto_algorithm_names();
+  if (idx >= names.size()) {
+    return nullptr;
+  }
+  return names[idx];
+}
+
+LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_compression_algorithm_count() {
+  return static_cast<uint64_t>(
+      ::atframework::gateway::libatgw_protocol_sdk::get_all_compression_algorithm_names().size());
+}
+
+LIBATGATEWAY_V2_C_API const char *__cdecl libatgateway_v2_c_get_compression_algorithm_name(uint64_t idx) {
+  const auto &names = ::atframework::gateway::libatgw_protocol_sdk::get_all_compression_algorithm_names();
+  if (idx >= names.size()) {
+    return nullptr;
+  }
+  return names[idx];
+}
+
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_crypto_config(libatgateway_v2_c_context /*context*/,
+                                                                          const char *key_exchange,
+                                                                          const char *const *crypto_algorithm_names,
+                                                                          uint64_t crypto_algorithms_count,
+                                                                          int64_t update_interval) {
   using sdk_t = ::atframework::gateway::libatgw_protocol_sdk;
   sdk_t::crypto_conf_t conf;
-  conf.key_exchange_algorithm =
-      static_cast<ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, key_exchange_t)>(
-          key_exchange);
-  if (nullptr != crypto_algorithms && crypto_algorithms_count > 0) {
+  conf.key_exchange_algorithm = sdk_t::key_exchange_algorithm_from_name(key_exchange);
+  if (nullptr != crypto_algorithm_names && crypto_algorithms_count > 0) {
     for (uint64_t i = 0; i < crypto_algorithms_count; ++i) {
-      conf.supported_algorithms.push_back(
-          static_cast<ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2, crypto_algorithm_t)>(
-              crypto_algorithms[i]));
+      auto alg = sdk_t::crypto_algorithm_from_name(crypto_algorithm_names[i]);
+      if (alg != ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kNone)) {
+        conf.supported_algorithms.push_back(alg);
+      }
     }
   }
   conf.update_interval = static_cast<time_t>(update_interval);
@@ -531,9 +557,10 @@ LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_crypto_config(
   return 0;
 }
 
-LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_access_tokens(
-    libatgateway_v2_c_context /*context*/, const unsigned char *const *tokens, const uint64_t *token_sizes,
-    uint64_t token_count) {
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_access_tokens(libatgateway_v2_c_context /*context*/,
+                                                                          const unsigned char *const *tokens,
+                                                                          const uint64_t *token_sizes,
+                                                                          uint64_t token_count) {
   auto &global_conf = libatgateway_v2_c_get_global_conf();
   if (!global_conf) {
     return static_cast<int32_t>(::atframework::gateway::error_code_t::kParam);
@@ -554,7 +581,7 @@ LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_access_tokens(
 }
 
 LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_compression_algorithms(
-    libatgateway_v2_c_context /*context*/, const int32_t *compression_algorithms, uint64_t count) {
+    libatgateway_v2_c_context /*context*/, const char *const *compression_algorithm_names, uint64_t count) {
   auto &global_conf = libatgateway_v2_c_get_global_conf();
   if (!global_conf) {
     return static_cast<int32_t>(::atframework::gateway::error_code_t::kParam);
@@ -564,12 +591,13 @@ LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_compression_algorith
     return static_cast<int32_t>(::atframework::gateway::error_code_t::kParam);
   }
   conf->compression_algorithms.clear();
-  if (nullptr != compression_algorithms) {
+  if (nullptr != compression_algorithm_names) {
     for (uint64_t i = 0; i < count; ++i) {
-      conf->compression_algorithms.push_back(
-          static_cast<ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atframework::gateway::v2,
-                                                                  compression_algorithm_t)>(
-              compression_algorithms[i]));
+      auto alg =
+          ::atframework::gateway::libatgw_protocol_sdk::compression_algorithm_from_name(compression_algorithm_names[i]);
+      if (alg != ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::compression_algorithm_t, kNone)) {
+        conf->compression_algorithms.push_back(alg);
+      }
     }
   }
   return 0;
