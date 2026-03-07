@@ -4,6 +4,7 @@
 #pragma once
 
 #include <chrono>
+#include <gsl/pointers>
 #include <memory>
 #include <vector>
 
@@ -14,6 +15,8 @@
 #include "log/log_wrapper.h"
 
 #include "atgateway/protocol/libatgw_protocol_api.h"
+#include "nostd/nullability.h"
+#include "nostd/string_view.h"
 
 // MSVC hack
 #ifdef _MSC_VER
@@ -150,10 +153,9 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
 
     /**
      * @brief Generate ECDH key pair for handshake
-     * @param peer_sequence_id peer sequence if server mode, 0 if client mode
      * @return 0 or error code
      */
-    LIBATGW_PROTOCOL_API int handshake_generate_self_key(uint64_t peer_sequence_id);
+    LIBATGW_PROTOCOL_API int handshake_generate_self_key();
 
     /**
      * @brief Read peer's public key and derive shared secret + setup ciphers
@@ -167,11 +169,12 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
                                                      gsl::span<const crypto_algorithm_type> local_algorithms);
 
     /**
-     * @brief Write self public key to output buffer
-     * @param out_public_key output buffer for public key
-     * @return 0 or error code
+     * @brief Get self public key to output buffer
+     * @return span of the public key bytes
      */
-    LIBATGW_PROTOCOL_API int handshake_write_self_public_key(std::vector<unsigned char> &out_public_key);
+    ATFW_UTIL_FORCEINLINE gsl::span<const unsigned char> get_handshake_self_public_key() const noexcept {
+      return gsl::span<const unsigned char>{handshake_self_public_key_.data(), handshake_self_public_key_.size()};
+    }
 
     /**
      * @brief Setup crypto with explicit key (for testing, bypasses DH)
@@ -188,31 +191,44 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
     /// Get handshake sequence ID
     ATFW_UTIL_FORCEINLINE uint64_t get_handshake_sequence_id() const { return handshake_sequence_id_; }
 
+    LIBATGW_PROTOCOL_API void update_handshake(uint64_t handshake_sequence_id);
+
+    ATFW_UTIL_FORCEINLINE const std::unique_ptr<::atfw::util::crypto::cipher> &get_current_receive_cipher()
+        const noexcept {
+      return receive_cipher_;
+    }
+
+    ATFW_UTIL_FORCEINLINE const std::unique_ptr<::atfw::util::crypto::cipher> &get_current_send_cipher()
+        const noexcept {
+      return send_cipher_;
+    }
+
+    ATFW_UTIL_FORCEINLINE const std::unique_ptr<::atfw::util::crypto::cipher> &get_handshaking_receive_cipher()
+        const noexcept {
+      return handshaking_receive_cipher_;
+    }
+
     /// Encrypt data using send cipher
     /// @param in input data
     /// @param out output span (may point into tls_buffer or heap_buffer)
     /// @param heap_buffer heap fallback buffer (populated if data exceeds TLS buffer)
-    /// @param iv optional IV/nonce for AEAD (nullptr to use cipher internal state)
-    /// @param iv_size IV size in bytes
-    /// @param aad optional AAD for AEAD
-    /// @param aad_size AAD size in bytes
+    /// @param iv optional IV/nonce
+    /// @param aad AAD for AEAD ciphers
     LIBATGW_PROTOCOL_API int encrypt_data(gsl::span<const unsigned char> in, gsl::span<unsigned char> &out,
                                           std::unique_ptr<unsigned char[]> &heap_buffer,
-                                          const unsigned char *iv = nullptr, size_t iv_size = 0,
-                                          const unsigned char *aad = nullptr, size_t aad_size = 0);
+                                          gsl::span<const unsigned char> input_iv,
+                                          std::vector<unsigned char>& output_iv, atfw::util::nostd::string_view aad);
 
     /// Decrypt data using receive cipher
     /// @param in input data
     /// @param out output span (may point into tls_buffer or heap_buffer)
     /// @param heap_buffer heap fallback buffer (populated if data exceeds TLS buffer)
-    /// @param iv optional IV/nonce for AEAD (nullptr to use cipher internal state)
+    /// @param iv optional IV/nonce
     /// @param iv_size IV size in bytes
     /// @param aad optional AAD for AEAD
-    /// @param aad_size AAD size in bytes
     LIBATGW_PROTOCOL_API int decrypt_data(gsl::span<const unsigned char> in, gsl::span<unsigned char> &out,
                                           std::unique_ptr<unsigned char[]> &heap_buffer,
-                                          const unsigned char *iv = nullptr, size_t iv_size = 0,
-                                          const unsigned char *aad = nullptr, size_t aad_size = 0);
+                                          gsl::span<const unsigned char> iv, atfw::util::nostd::string_view aad);
 
     /// Compress data
     /// @param in input data
@@ -244,6 +260,7 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
     std::unique_ptr<::atfw::util::crypto::dh> handshake_dh_;
     std::unique_ptr<::atfw::util::crypto::cipher> send_cipher_;
     std::unique_ptr<::atfw::util::crypto::cipher> receive_cipher_;
+    std::unique_ptr<::atfw::util::crypto::cipher> handshaking_receive_cipher_;
   };
 
   using crypto_session_ptr_t = std::shared_ptr<crypto_session_t>;
@@ -262,7 +279,7 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
  public:
   /**
    * @brief Construct with a shared global crypto configuration.
-   * @param shared_conf shared pointer to global crypto configuration (created via create_global_configure)
+   * @param shared_conf shared pointer to global crypto configuration (created via create_shared_context)
    */
   LIBATGW_PROTOCOL_API explicit libatgw_protocol_sdk(std::shared_ptr<crypto_shared_context_t> shared_conf);
   LIBATGW_PROTOCOL_API ~libatgw_protocol_sdk();
@@ -332,12 +349,15 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   LIBATGW_PROTOCOL_API int send_pong(int64_t tp);
   LIBATGW_PROTOCOL_API int send_kickoff(int32_t reason, int32_t sub_reason = 0,
                                         atfw::util::nostd::string_view message = {});
+  LIBATGW_PROTOCOL_API int send_confirm();
 
   ATFW_UTIL_FORCEINLINE const ping_data_t &get_last_ping() const { return ping_; }
 
   LIBATGW_PROTOCOL_API const crypto_session_ptr_t &get_crypto_session() const;
 
-  ATFW_UTIL_FORCEINLINE uint64_t get_session_id() const { return session_id_; }
+  LIBATGW_PROTOCOL_API uint64_t get_session_id() const noexcept override;
+
+  LIBATGW_PROTOCOL_API gsl::span<const unsigned char> get_session_token() const noexcept override;
 
   LIBATGW_PROTOCOL_API void set_logger(atfw::util::log::log_wrapper::ptr_t logger);
 
@@ -354,7 +374,8 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   LIBATGW_PROTOCOL_API int generate_access_data(
       flatbuffers::FlatBufferBuilder &builder,
       std::vector<flatbuffers::Offset<::atframework::gateway::v2::cs_body_handshake_access_data>> &out,
-      uint64_t session_id, key_exchange_type key_exchange, gsl::span<const unsigned char> public_key);
+      uint64_t session_id, key_exchange_type key_exchange, gsl::span<const unsigned char> public_key,
+      gsl::span<const unsigned char> session_token);
 
   /**
    * @brief Verify access_data from peer
@@ -362,10 +383,11 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
    */
   LIBATGW_PROTOCOL_API int verify_access_data(const ::atframework::gateway::v2::cs_body_handshake &body_handshake);
 
-  static LIBATGW_PROTOCOL_API std::string make_access_data_plaintext(
-      uint64_t session_id, int64_t timestamp, uint64_t nonce1, uint64_t nonce2, key_exchange_type key_exchange,
-      gsl::span<const unsigned char> public_key,
-      gsl::span<const unsigned char> session_token = gsl::span<const unsigned char>{});
+  static LIBATGW_PROTOCOL_API std::string make_access_data_plaintext(uint64_t session_id, int64_t timestamp,
+                                                                     uint64_t nonce1, uint64_t nonce2,
+                                                                     key_exchange_type key_exchange,
+                                                                     gsl::span<const unsigned char> public_key,
+                                                                     gsl::span<const unsigned char> session_token);
 
   static LIBATGW_PROTOCOL_API std::string calculate_access_data_signature(gsl::span<const unsigned char> access_token,
                                                                           const std::string &plaintext);
@@ -387,50 +409,69 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   /// @brief Convert key exchange algorithm name to enum value.
   /// @param name algorithm name (e.g. "x25519", "secp256r1")
   /// @return enum value, or kNone if not found
-  static LIBATGW_PROTOCOL_API key_exchange_type key_exchange_algorithm_from_name(const char *name);
-
-  /// @brief Convert key exchange enum to name string.
-  static LIBATGW_PROTOCOL_API const char *key_exchange_algorithm_to_name(key_exchange_type alg);
+  static LIBATGW_PROTOCOL_API key_exchange_type key_exchange_algorithm_from_name(atfw::util::nostd::string_view name);
 
   /// @brief Get available key exchange algorithm names.
-  static LIBATGW_PROTOCOL_API const std::vector<const char *> &get_all_key_exchange_algorithm_names();
+  static LIBATGW_PROTOCOL_API const std::vector<std::string> &get_all_key_exchange_algorithm_names();
 
   /// @brief Convert crypto algorithm name to enum value.
   /// @param name algorithm name (e.g. "aes-256-gcm", "chacha20-poly1305-ietf")
   /// @return enum value, or kNone if not found
-  static LIBATGW_PROTOCOL_API crypto_algorithm_type crypto_algorithm_from_name(const char *name);
-
-  /// @brief Convert crypto algorithm enum to name string.
-  static LIBATGW_PROTOCOL_API const char *crypto_algorithm_to_name(crypto_algorithm_type alg);
+  static LIBATGW_PROTOCOL_API crypto_algorithm_type crypto_algorithm_from_name(atfw::util::nostd::string_view name);
 
   /// @brief Get available crypto algorithm names.
-  static LIBATGW_PROTOCOL_API const std::vector<const char *> &get_all_crypto_algorithm_names();
+  static LIBATGW_PROTOCOL_API const std::vector<std::string> &get_all_crypto_algorithm_names();
 
   /// @brief Convert compression algorithm name to enum value.
   /// @param name algorithm name (e.g. "zstd", "lz4", "snappy", "zlib")
   /// @return enum value, or kNone if not found
-  static LIBATGW_PROTOCOL_API compression_algorithm_type compression_algorithm_from_name(const char *name);
-
-  /// @brief Convert compression algorithm enum to name string.
-  static LIBATGW_PROTOCOL_API const char *compression_algorithm_to_name(compression_algorithm_type alg);
+  static LIBATGW_PROTOCOL_API compression_algorithm_type
+  compression_algorithm_from_name(atfw::util::nostd::string_view name);
 
   /// @brief Get available compression algorithm names.
-  static LIBATGW_PROTOCOL_API const std::vector<const char *> &get_all_compression_algorithm_names();
+  static LIBATGW_PROTOCOL_API const std::vector<std::string> &get_all_compression_algorithm_names();
 
   /**
    * @brief Create a shared global crypto configuration from crypto_conf_t.
    * @param conf the configuration to use
    * @return shared_ptr to the global configure object
    */
-  static LIBATGW_PROTOCOL_API std::shared_ptr<crypto_shared_context_t> create_global_configure(crypto_conf_t &conf);
+  static LIBATGW_PROTOCOL_API std::shared_ptr<crypto_shared_context_t> create_shared_context(crypto_conf_t &conf);
 
   /**
-   * @brief Get a mutable pointer to the crypto_conf_t stored inside a global configure object.
-   * @param global_conf the shared global configure
-   * @return pointer to the mutable crypto_conf_t, or nullptr if global_conf is empty
+   * @brief Get a mutable pointer to the crypto_conf_t stored inside a shared context.
+   * @param ctx the shared context
+   * @return pointer to the mutable crypto_conf_t, or nullptr if ctx is empty
    */
-  static LIBATGW_PROTOCOL_API crypto_conf_t *get_global_configure_mutable_conf(
-      const std::shared_ptr<crypto_shared_context_t> &global_conf);
+  static LIBATGW_PROTOCOL_API crypto_conf_t *get_shared_context_mutable_conf(
+      const std::shared_ptr<crypto_shared_context_t> &ctx);
+
+  /**
+   * @brief Set the crypto algorithms for a shared context.
+   * @param ctx the shared context
+   * @param alg the key exchange algorithm to set
+   * @return pointer to the mutable crypto_conf_t, or nullptr if ctx is empty
+   */
+  static LIBATGW_PROTOCOL_API int set_shared_context_key_exchange_algorithm(
+      const std::shared_ptr<crypto_shared_context_t> &ctx, const key_exchange_type alg);
+
+  /**
+   * @brief Set the crypto algorithms for a shared context.
+   * @param ctx the shared context
+   * @param alg the list of crypto algorithms to set
+   * @return pointer to the mutable crypto_conf_t, or nullptr if ctx is empty
+   */
+  static LIBATGW_PROTOCOL_API int set_shared_context_crypto_algorithm(
+      const std::shared_ptr<crypto_shared_context_t> &ctx, gsl::span<const crypto_algorithm_type> alg);
+
+  /**
+   * @brief Set the compression algorithms for a shared context.
+   * @param ctx the shared context
+   * @param alg the list of compression algorithms to set
+   * @return pointer to the mutable crypto_conf_t, or nullptr if ctx is empty
+   */
+  static LIBATGW_PROTOCOL_API int set_shared_context_compression_algorithm(
+      const std::shared_ptr<crypto_shared_context_t> &ctx, gsl::span<const compression_algorithm_type> alg);
 
  private:
   std::shared_ptr<crypto_shared_context_t> shared_conf_;
@@ -452,7 +493,7 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   int close_reason_;
 
   // Single crypto session (like libatbus connection_context)
-  crypto_session_ptr_t crypto_session_;
+  atfw::util::nostd::nonnull<crypto_session_ptr_t> crypto_session_;
 
   // ping data
   ping_data_t ping_;

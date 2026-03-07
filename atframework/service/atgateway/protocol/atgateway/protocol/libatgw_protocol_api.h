@@ -32,7 +32,7 @@ enum class error_code_t : int32_t {
   kBadProtocol = -1010,
   kClosing = -1011,
   kLostManager = -1012,
-  kMsgTooLarge = -1013,
+  kMessageTooLarge = -1013,
   kHandleNotFound = -1014,
   kAlreadyHasFd = -1015,
   kSessionNotFound = -1016,
@@ -59,6 +59,7 @@ enum class close_reason_t : int32_t {
   kTraficExtended = 0x0002,
   kInvalidData = 0x0003,
   kReset = 0x0004,
+  kInvalidMessageSize = 0x0005,
   kReconnectInnerBound = 0x0100,
   kReconnectBound = 0x10000,
   kFirstIdle = 0x10001,
@@ -198,6 +199,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
 
  public:
   LIBATGW_PROTOCOL_API virtual ~libatgw_protocol_api();
+
+  virtual uint64_t get_session_id() const noexcept = 0;
+
+  virtual gsl::span<const unsigned char> get_session_token() const noexcept = 0;
 
   LIBATGW_PROTOCOL_API bool check_flag(flag_t t) const;
 

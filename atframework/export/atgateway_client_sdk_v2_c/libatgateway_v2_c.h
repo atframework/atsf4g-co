@@ -78,7 +78,8 @@ using libatgateway_v2_c_on_write_start_fn_t = int32_t (*)(libatgateway_v2_c_cont
 using libatgateway_v2_c_on_message_fn_t = int32_t (*)(libatgateway_v2_c_context, const void *, uint64_t);
 using libatgateway_v2_c_on_init_new_session_fn_t = int32_t (*)(libatgateway_v2_c_context, uint64_t *);
 using libatgateway_v2_c_on_init_reconnect_fn_t = int32_t (*)(libatgateway_v2_c_context, uint64_t);
-using libatgateway_v2_c_on_close_fn_t = int32_t (*)(libatgateway_v2_c_context, int32_t);
+using libatgateway_v2_c_on_close_fn_t = int32_t (*)(libatgateway_v2_c_context, int32_t, int32_t, const char *,
+                                                    uint64_t);
 using libatgateway_v2_c_on_handshake_done_fn_t = int32_t (*)(libatgateway_v2_c_context, int32_t);
 using libatgateway_v2_c_on_error_fn_t = int32_t (*)(libatgateway_v2_c_context, const char *, int32_t, int32_t,
                                                     const char *);
@@ -104,6 +105,11 @@ LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_gset_on_error_fn(libatgatew
 
 LIBATGATEWAY_V2_C_API libatgateway_v2_c_context __cdecl libatgateway_v2_c_create();
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_destroy(libatgateway_v2_c_context context);
+
+LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_session_id(libatgateway_v2_c_context context);
+
+LIBATGATEWAY_V2_C_API const unsigned char *__cdecl libatgateway_v2_c_get_session_token(
+    libatgateway_v2_c_context context, uint64_t *size);
 
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_receive_buffer_limit(libatgateway_v2_c_context context,
                                                                               uint64_t max_size, uint64_t max_number);
@@ -181,17 +187,26 @@ LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_compression_algorit
 /// @return algorithm name string, or nullptr if idx is out of range
 LIBATGATEWAY_V2_C_API const char *__cdecl libatgateway_v2_c_get_compression_algorithm_name(uint64_t idx);
 
-/// @brief Set crypto configuration using string-based algorithm names.
+/// @brief Set crypto algorithms using string-based algorithm names.
 /// @param context protocol context (ignored, configures global)
-/// @param key_exchange key exchange algorithm name (e.g. "x25519", "secp256r1", "secp384r1", "secp521r1", or "none")
 /// @param crypto_algorithm_names array of crypto algorithm name strings
 /// @param crypto_algorithms_count number of crypto algorithm names
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_crypto_algorithm(libatgateway_v2_c_context context,
+                                                                             const char *const *crypto_algorithm_names,
+                                                                             uint64_t crypto_algorithms_count);
+
+/// @brief Set key exchange algorithm using string-based algorithm name.
+/// @param context protocol context (ignored, configures global)
+/// @param key_exchange_algorithm key exchange algorithm name (e.g. "x25519", "secp256r1", "secp384r1", "secp521r1", or
+/// "none")
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_key_exchange_algorithm(libatgateway_v2_c_context context,
+                                                                                   const char *key_exchange_algorithm);
+
+/// @brief Set key exchange update interval using string-based algorithm names.
+/// @param context protocol context (ignored, configures global)
 /// @param update_interval key refresh interval in seconds
-LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_crypto_config(libatgateway_v2_c_context context,
-                                                                          const char *key_exchange,
-                                                                          const char *const *crypto_algorithm_names,
-                                                                          uint64_t crypto_algorithms_count,
-                                                                          int64_t update_interval);
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_crypto_update_interval(libatgateway_v2_c_context context,
+                                                                                   int64_t update_interval);
 
 /// @brief Set access tokens for authentication
 LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_access_tokens(libatgateway_v2_c_context context,

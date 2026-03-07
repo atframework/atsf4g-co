@@ -1,8 +1,10 @@
 // Copyright 2026 atframework
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <functional>
+#include <list>
 #include <memory>
 #include <string>
 #include <vector>
@@ -45,6 +47,8 @@ struct sim_peer_t {
   bool closed;
   int close_reason;
   uint64_t new_session_id_counter;
+  bool pause_writing = false;
+  std::list<std::vector<unsigned char>> pending_write_messages;
 
   sim_peer_t()
       : remote(nullptr),
@@ -53,8 +57,66 @@ struct sim_peer_t {
         error_count(0),
         closed(false),
         close_reason(0),
-        new_session_id_counter(0x1000) {}
+        new_session_id_counter(0x1000),
+        pause_writing(false) {}
 };
+
+static bool sim_process_writing(libatgw_protocol_api *proto, bool *is_done) {
+  auto *self = reinterpret_cast<sim_peer_t *>(proto->get_private_data());
+  if (nullptr == self) {
+    return false;
+  }
+
+  if (nullptr == self->remote || nullptr == self->remote->sdk) {
+    self->pending_write_messages.clear();
+    return true;
+  }
+
+  while (!self->pending_write_messages.empty() && !self->pause_writing) {
+    auto &msg = self->pending_write_messages.front();
+    gsl::span<unsigned char> buffer{msg.data(), msg.size()};
+
+    // Deliver to remote peer using alloc_receive_buffer + read protocol
+    auto &remote_sdk = self->remote->sdk;
+    size_t remaining = buffer.size();
+    const unsigned char *src = buffer.data();
+
+    while (remaining > 0 && !self->pause_writing) {
+      char *recv_buf = nullptr;
+      size_t recv_len = 0;
+      remote_sdk->alloc_receive_buffer(remaining, recv_buf, recv_len);
+      if (nullptr == recv_buf || 0 == recv_len) {
+        break;
+      }
+      size_t to_copy = (remaining < recv_len) ? remaining : recv_len;
+      memcpy(recv_buf, src, to_copy);
+
+      int32_t errcode = 0;
+      gsl::span<const unsigned char> data_span{reinterpret_cast<const unsigned char *>(recv_buf), to_copy};
+      remote_sdk->read(static_cast<int>(to_copy), data_span, errcode);
+
+      src += to_copy;
+      remaining -= to_copy;
+    }
+
+    if (remaining == 0) {
+      self->pending_write_messages.pop_front();
+    } else {
+      msg.erase(msg.begin(),
+                msg.begin() + static_cast<std::vector<unsigned char>::difference_type>(buffer.size() - remaining));
+    }
+  }
+
+  if (self->pending_write_messages.empty()) {
+    if (is_done != nullptr) {
+      *is_done = true;
+    }
+    proto->write_done(0);
+    return true;
+  }
+
+  return false;
+}
 
 /// @brief Deliver data from one peer's write callback to the other peer's read path.
 ///
@@ -90,34 +152,9 @@ static int sim_write_fn(libatgw_protocol_api *proto, gsl::span<unsigned char> bu
   const unsigned char *payload = buffer.data() + header_offset;
   size_t payload_len = buffer.size() - header_offset;
 
-  // Deliver to remote peer using alloc_receive_buffer + read protocol
-  auto &remote_sdk = self->remote->sdk;
-  size_t remaining = payload_len;
-  const unsigned char *src = payload;
+  self->pending_write_messages.emplace_back(payload, payload + payload_len);
 
-  while (remaining > 0) {
-    char *recv_buf = nullptr;
-    size_t recv_len = 0;
-    remote_sdk->alloc_receive_buffer(remaining, recv_buf, recv_len);
-    if (nullptr == recv_buf || 0 == recv_len) {
-      break;
-    }
-    size_t to_copy = (remaining < recv_len) ? remaining : recv_len;
-    memcpy(recv_buf, src, to_copy);
-
-    int32_t errcode = 0;
-    gsl::span<const unsigned char> data_span{reinterpret_cast<const unsigned char *>(recv_buf), to_copy};
-    remote_sdk->read(static_cast<int>(to_copy), data_span, errcode);
-
-    src += to_copy;
-    remaining -= to_copy;
-  }
-
-  // Signal write done
-  if (nullptr != is_done) {
-    *is_done = true;
-  }
-  proto->write_done(0);
+  sim_process_writing(proto, is_done);
   return 0;
 }
 
@@ -143,7 +180,7 @@ static int sim_reconnect_fn(libatgw_protocol_api * /*proto*/, uint64_t /*sess_id
   return 0;
 }
 
-static int sim_close_fn(libatgw_protocol_api *proto, int reason) {
+static int sim_close_fn(libatgw_protocol_api *proto, int32_t reason, int32_t, atfw::util::nostd::string_view) {
   auto *self = reinterpret_cast<sim_peer_t *>(proto->get_private_data());
   if (nullptr != self) {
     self->closed = true;
@@ -179,8 +216,8 @@ static int sim_error_fn(libatgw_protocol_api *proto, const char * /*filename*/, 
 
 /// @brief Setup a server-client pair with callbacks wired for loopback simulation.
 static void setup_sim_pair(sim_peer_t &server, sim_peer_t &client,
-                           std::shared_ptr<::atframework::gateway::v2::detail::crypto_global_configure_t> server_conf,
-                           std::shared_ptr<::atframework::gateway::v2::detail::crypto_global_configure_t> client_conf,
+                           std::shared_ptr<::atframework::gateway::v2::crypto_shared_context_t> server_conf,
+                           std::shared_ptr<::atframework::gateway::v2::crypto_shared_context_t> client_conf,
                            libatgw_protocol_api::proto_callbacks_t &server_cbs,
                            libatgw_protocol_api::proto_callbacks_t &client_cbs) {
   server_cbs.write_fn = sim_write_fn;
@@ -888,16 +925,16 @@ CASE_TEST(atgateway_protocol_sdk, server_client_no_encryption) {
   crypto_conf_t server_conf_data;
   server_conf_data.key_exchange_algorithm =
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
-  server_conf_data.supported_algorithms.clear();     // no cipher
-  server_conf_data.compression_algorithms.clear();   // no compression
+  server_conf_data.supported_algorithms.clear();    // no cipher
+  server_conf_data.compression_algorithms.clear();  // no compression
   server_conf_data.client_mode = false;
   server_conf_data.update_interval = 300;
 
   crypto_conf_t client_conf_data;
   client_conf_data.key_exchange_algorithm =
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
-  client_conf_data.supported_algorithms.clear();     // no cipher
-  client_conf_data.compression_algorithms.clear();   // no compression
+  client_conf_data.supported_algorithms.clear();    // no cipher
+  client_conf_data.compression_algorithms.clear();  // no compression
   client_conf_data.client_mode = true;
   client_conf_data.update_interval = 300;
 
@@ -1327,8 +1364,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_reconnect_refused) {
   // the client should be closed or have a non-zero handshake status.
   CASE_EXPECT_TRUE(client.closed || client.handshake_status != 0);
 
-  CASE_MSG_INFO() << "reconnect refused verified, ret: " << ret
-                  << ", closed: " << client.closed
+  CASE_MSG_INFO() << "reconnect refused verified, ret: " << ret << ", closed: " << client.closed
                   << ", handshake_status: " << client.handshake_status << '\n';
 }
 
@@ -1419,6 +1455,9 @@ CASE_TEST(atgateway_protocol_sdk, server_client_handshake_update_midstream) {
     CASE_EXPECT_EQ(msg1, received);
   }
 
+  // Pause server's writing
+  server.pause_writing = true;
+
   // Phase 2: handshake_update (key refresh)
   uint64_t session_id = client.sdk->get_session_id();
   ret = client.sdk->handshake_update();
@@ -1436,6 +1475,12 @@ CASE_TEST(atgateway_protocol_sdk, server_client_handshake_update_midstream) {
     CASE_EXPECT_EQ(msg2, received);
   }
 
+  // TODO: 验证此时client端仍然是老的加密参数，服务器端是新的加密参数，并且消息能够正确解密。
+
+  // Resume server's writing
+  server.pause_writing = false;
+  sim_process_writing(server.sdk.get(), nullptr);
+
   // Also send from server to client
   std::string msg3 = "server reply after handshake_update";
   gsl::span<const unsigned char> msg3_span{reinterpret_cast<const unsigned char *>(msg3.data()), msg3.size()};
@@ -1446,6 +1491,8 @@ CASE_TEST(atgateway_protocol_sdk, server_client_handshake_update_midstream) {
     std::string received(client.received_messages[0].begin(), client.received_messages[0].end());
     CASE_EXPECT_EQ(msg3, received);
   }
+
+  // TODO: 验证此时client是新的加密参数，并且消息能够正确解密。
 
   CASE_MSG_INFO() << "handshake_update mid-stream: 3 phases verified, session_id=" << session_id << '\n';
 }
@@ -1494,10 +1541,8 @@ CASE_TEST(atgateway_protocol_sdk, server_client_access_token_mismatch) {
   // The server should have detected the mismatch and either error'd or closed.
   CASE_EXPECT_TRUE(server.error_count > 0 || server.closed || server.handshake_status != 0);
 
-  CASE_MSG_INFO() << "access token mismatch verified, ret=" << ret
-                  << ", server_errors=" << server.error_count
-                  << ", server_closed=" << server.closed
-                  << ", client_errors=" << client.error_count << '\n';
+  CASE_MSG_INFO() << "access token mismatch verified, ret=" << ret << ", server_errors=" << server.error_count
+                  << ", server_closed=" << server.closed << ", client_errors=" << client.error_count << '\n';
 }
 
 // ========== Data correctness: large message ==========
@@ -1512,7 +1557,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_large_message_correctness) {
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
   conf_data.client_mode = false;
   conf_data.update_interval = 300;
-  conf_data.max_post_message_size = 256 * 1024;
+  conf_data.max_post_message_size = 32 * 1024;
 
   crypto_conf_t client_conf_data = conf_data;
   client_conf_data.client_mode = true;

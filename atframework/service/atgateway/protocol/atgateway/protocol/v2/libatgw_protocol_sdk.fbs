@@ -132,13 +132,14 @@ enum client_message_type_t : ubyte {
     kPing = 3,
     kPong = 4,
     kKickoff = 5,
+    kConfirm = 6,
 }
 
 table client_message_head {
     type: client_message_type_t(id: 0);
     sequence: ulong(id: 1);
 }
-union client_message_body { cs_body_post, cs_body_kickoff, cs_body_ping, cs_body_handshake }
+union client_message_body { cs_body_post, cs_body_kickoff, cs_body_ping, cs_body_handshake, cs_body_confirm }
 
 table cs_body_post_crypto {
   algorithm: crypto_algorithm_t(id: 0);
@@ -232,22 +233,29 @@ table cs_body_handshake {
     // ECDH ephemeral public key for this side of the handshake
     public_key: [byte] (id: 6);
 
-    // Initial iv size for crypto, must be same as the selected algorithm requirement
-    iv_size: uint32 (id: 7);
-
-    // Tag length for AEAD
-    tag_size: uint32 (id: 8);
+    // Initialize crypto parameters, used to encode session_token.
+    initialize_crypto: cs_body_post_crypto (id: 7);
 
     // Compression algorithms:
     //   kKeyExchangeReq: all supported compression algorithms (empty if none)
     //   kKeyExchangeRsp: single selected compression algorithm after negotiation
-    compression_algorithm: [compression_algorithm_t] (id: 9);
+    compression_algorithm: [compression_algorithm_t] (id: 8);
 
     // Maximum post message size in bytes (server fills in rsp, default 2MB)
-    max_post_message_size: uint64 (id: 10);
+    max_post_message_size: uint64 (id: 9);
 
     // Session token for reconnect authentication (server fills in rsp)
-    session_token: [byte] (id: 11);
+    session_token: [byte] (id: 10);
+
+    // Handshake sequence is used to confirm receiver cipher
+    handshake_sequence: ulong (id: 11);
+}
+
+table cs_body_confirm {
+  session_id: ulong (id: 0);
+
+  // Handshake sequence is used to confirm receiver cipher
+  handshake_sequence: ulong (id: 1);
 }
 
 table cs_body_ping {
