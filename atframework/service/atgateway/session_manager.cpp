@@ -202,21 +202,21 @@ int session_manager::reset() {
   // close all sessions
   for (session_map_t::iterator iter = actived_sessions_.begin(); iter != actived_sessions_.end(); ++iter) {
     if (iter->second) {
-      iter->second->close(static_cast<int>(close_reason_t::kServerClosed));
+      iter->second->close(static_cast<int>(close_reason_t::kServerClosed), 0, "server closed");
     }
   }
   actived_sessions_.clear();
 
   for (std::list<session_timeout_t>::iterator iter = first_idle_.begin(); iter != first_idle_.end(); ++iter) {
     if (iter->s) {
-      iter->s->close(static_cast<int>(close_reason_t::kServerClosed));
+      iter->s->close(static_cast<int>(close_reason_t::kServerClosed), 0, "server closed");
     }
   }
   first_idle_.clear();
 
   for (session_map_t::iterator iter = reconnect_cache_.begin(); iter != reconnect_cache_.end(); ++iter) {
     if (iter->second) {
-      iter->second->close(static_cast<int>(close_reason_t::kServerClosed));
+      iter->second->close(static_cast<int>(close_reason_t::kServerClosed), 0, "server closed");
     }
   }
   reconnect_cache_.clear();
@@ -224,7 +224,7 @@ int session_manager::reset() {
   for (std::list<session_timeout_t>::iterator iter = reconnect_timeout_.begin(); iter != reconnect_timeout_.end();
        ++iter) {
     if (iter->s) {
-      iter->s->close(static_cast<int>(close_reason_t::kServerClosed));
+      iter->s->close(static_cast<int>(close_reason_t::kServerClosed), 0, "server closed");
     }
   }
   reconnect_timeout_.clear();
@@ -277,7 +277,7 @@ int session_manager::tick() {
 
       // timeout and unset kWaitReconnect to send remove notify
       s->set_flag(session::flag_t::kWaitReconnect, false);
-      s->close_with_manager(static_cast<int>(close_reason_t::kLogout), this);
+      s->close_with_manager(static_cast<int>(close_reason_t::kLogout), 0, "logout", this);
     }
     reconnect_timeout_.pop_front();
   }
@@ -293,7 +293,7 @@ int session_manager::tick() {
 
       if (!s->check_flag(session::flag_t::kRegistered) && !s->check_flag(session::flag_t::kClosing)) {
         FWLOGINFO("session {}({}) register timeout", s->get_id(), reinterpret_cast<const void *>(s.get()));
-        s->close(static_cast<int>(close_reason_t::kFirstIdle));
+        s->close(static_cast<int>(close_reason_t::kFirstIdle), 0, "idle timeout");
       }
     }
     first_idle_.pop_front();
@@ -302,14 +302,15 @@ int session_manager::tick() {
   return 0;
 }
 
-int session_manager::close(session::id_t sess_id, int reason, bool allow_reconnect) {
+int session_manager::close(session::id_t sess_id, int32_t reason, int32_t sub_reason,
+                           atfw::util::nostd::string_view message, bool allow_reconnect) {
   session_map_t::iterator iter = actived_sessions_.find(sess_id);
   if (actived_sessions_.end() == iter) {
     // if not allow reconnect, close reconnect cache
     if (!allow_reconnect) {
       iter = reconnect_cache_.find(sess_id);
       if (reconnect_cache_.end() != iter) {
-        iter->second->close(reason);
+        iter->second->close(reason, sub_reason, message);
         iter->second->set_flag(session::flag_t::kWaitReconnect, false);
         reconnect_cache_.erase(iter);
       } else {
@@ -338,11 +339,11 @@ int session_manager::close(session::id_t sess_id, int reason, bool allow_reconne
     sess_timer.s->set_flag(session::flag_t::kWaitReconnect, true);
 
     // just close fd
-    sess_timer.s->close_fd(reason);
+    sess_timer.s->close_fd(reason, sub_reason, message);
   } else {
     FWLOGINFO("session {:#x}({}) closed and disable reconnect", iter->second->get_id(),
               reinterpret_cast<const void *>(iter->second.get()));
-    iter->second->close(reason);
+    iter->second->close(reason, sub_reason, message);
   }
 
   // erase from activited map
@@ -458,7 +459,7 @@ int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
       if (new_sess.get_protocol_handle()->check_reconnect(iter->second->get_protocol_handle())) {
         FWLOGDEBUG("session {}:{} try to reconnect {} and need to close old connection {}", new_sess.get_peer_host(),
                    new_sess.get_peer_port(), old_sess_id, reinterpret_cast<const void *>(iter->second.get()));
-        close(old_sess_id, static_cast<int>(close_reason_t::kLogout), true);
+        close(old_sess_id, static_cast<int>(close_reason_t::kLogout), 0, "logout", true);
       } else {
         FWLOGDEBUG("session {}:{} try to reconnect {} to old connection {}, but check_reconnect failed",
                    new_sess.get_peer_host(), new_sess.get_peer_port(), old_sess_id,
@@ -502,7 +503,7 @@ int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
   // init with reconnect
   new_sess.init_reconnect(*iter->second);
   // close old session
-  iter->second->close(static_cast<int>(close_reason_t::kLogout));
+  iter->second->close(static_cast<int>(close_reason_t::kLogout), 0, "logout");
 
   // erase reconnect cache, this session id may reconnect again
   reconnect_cache_.erase(iter);
@@ -517,7 +518,7 @@ int session_manager::active_session(session::ptr_t sess) {
 
   session_map_t::iterator iter = actived_sessions_.find(sess->get_id());
   if (iter != actived_sessions_.end()) {
-    close(sess->get_id(), static_cast<int>(close_reason_t::kKickoff));
+    close(sess->get_id(), static_cast<int>(close_reason_t::kKickoff), 0, "kickoff");
   }
 
   int ret = sess->send_new_session();
@@ -630,7 +631,7 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   // create proto object and session object
   int res = sess->accept_tcp(server);
   if (0 != res) {
-    sess->close(static_cast<int>(close_reason_t::kServerBusy));
+    sess->close(static_cast<int>(close_reason_t::kServerBusy), 0, "server busy");
     return;
   }
 
@@ -638,7 +639,7 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   if (mgr->conf_.origin_conf.listen().max_client() > 0 &&
       mgr->reconnect_cache_.size() + mgr->actived_sessions_.size() >= mgr->conf_.origin_conf.listen().max_client()) {
     FWLOGWARNING("accept tcp socket failed, gateway have too many sessions now");
-    sess->close(static_cast<int>(close_reason_t::kServerBusy));
+    sess->close(static_cast<int>(close_reason_t::kServerBusy), 0, "server busy");
     return;
   }
 
@@ -708,14 +709,14 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
 
   int res = sess->accept_pipe(server);
   if (0 != res) {
-    sess->close(static_cast<int>(close_reason_t::kServerBusy));
+    sess->close(static_cast<int>(close_reason_t::kServerBusy), 0, "server busy");
     return;
   }
 
   // check session number limit
   if (mgr->conf_.origin_conf.listen().max_client() > 0 &&
       mgr->reconnect_cache_.size() + mgr->actived_sessions_.size() >= mgr->conf_.origin_conf.listen().max_client()) {
-    sess->close(static_cast<int>(close_reason_t::kServerBusy));
+    sess->close(static_cast<int>(close_reason_t::kServerBusy), 0, "server busy");
     return;
   }
 

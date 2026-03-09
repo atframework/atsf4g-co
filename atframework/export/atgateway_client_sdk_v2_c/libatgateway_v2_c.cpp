@@ -560,7 +560,7 @@ LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_crypto_algorithm(lib
   }
 
   if (!global_conf) {
-    return static_cast<int32_t>(::atframework::gateway::error_code_t::kCryptNotSupported);
+    return static_cast<int32_t>(::atframework::gateway::error_code_t::kCryptoAlgorithmNotSupported);
   }
 
   std::vector<sdk_t::crypto_algorithm_type> algorithms;
@@ -654,7 +654,7 @@ LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_compression_algorith
   }
 
   if (!global_conf) {
-    return static_cast<int32_t>(::atframework::gateway::error_code_t::kCryptNotSupported);
+    return static_cast<int32_t>(::atframework::gateway::error_code_t::kCryptoAlgorithmNotSupported);
   }
 
   std::vector<sdk_t::compression_algorithm_type> algorithms;

@@ -177,6 +177,7 @@ int session::init_new_session() {
       atfw::util::time::time_utility::get_now() + owner_->get_conf().crypto.update_interval;
 
   set_flag(flag_t::kInited, true);
+  FWLOGWARNING("session {}({}) new session inited", id_, reinterpret_cast<const void *>(this));
   return 0;
 }
 
@@ -196,6 +197,8 @@ int session::init_reconnect(session &sess) {
 
   sess.set_flag(flag_t::kReconnected, true);
   sess.set_flag(session::flag_t::kWaitReconnect, false);
+
+  FWLOGWARNING("session {}({}) reconnect inited", id_, reinterpret_cast<const void *>(this));
   return 0;
 }
 
@@ -217,7 +220,7 @@ int session::send_new_session() {
   int ret = send_to_server(message);
   if (0 == ret) {
     set_flag(flag_t::kRegistered, true);
-    FWLOGINFO("session {} send register notify to {}({}) success", id_, router_node_id_, router_node_name_);
+    FWLOGWARNING("session {} send register notify to {}({}) success", id_, router_node_id_, router_node_name_);
   } else {
     FWLOGERROR("session {} send register notify to {}({}) failed, res: {}", id_, router_node_id_, router_node_name_,
                ret);
@@ -246,7 +249,7 @@ int session::send_remove_session(session_manager *mgr) {
   int ret = send_to_server(message, mgr);
   if (0 == ret) {
     set_flag(flag_t::kRegistered, false);
-    FWLOGINFO("session {} send remove notify to {}({}) success", id_, router_node_id_, router_node_name_);
+    FWLOGWARNING("session {} send remove notify to {}({}) success", id_, router_node_id_, router_node_name_);
   } else {
     FWLOGERROR("session {} send remove notify to {}({}) failed, res: {}", id_, router_node_id_, router_node_name_, ret);
   }
@@ -259,7 +262,7 @@ void session::on_alloc_read(size_t suggested_size, char *&out_buf, size_t &out_l
     proto_->alloc_receive_buffer(suggested_size, out_buf, out_len);
 
     if (nullptr == out_buf && 0 == out_len) {
-      close_fd(static_cast<int>(::atframework::gateway::close_reason_t::kInvalidData));
+      close_fd(static_cast<int>(::atframework::gateway::close_reason_t::kInvalidData), 0, "alloc read memory failed");
     }
   }
 }
@@ -272,7 +275,9 @@ void session::on_read(int ssz, gsl::span<const unsigned char> buffer) {
     if (errcode < 0) {
       FWLOGERROR("session {}:{} read data length={} failed and will be closed, res: {}", peer_ip_, peer_port_,
                  buffer.size(), errcode);
-      close(static_cast<int>(close_reason_t::kInvalidData));
+      close(static_cast<int>(close_reason_t::kInvalidData), errcode, "network error");
+    } else {
+      FWLOGDEBUG("session {}:{} read data length={} success", peer_ip_, peer_port_, buffer.size());
     }
   }
 }
@@ -293,9 +298,12 @@ int session::on_write_done(int status) {
   return 0;
 }
 
-int session::close(int reason) { return close_with_manager(reason, owner_); }
+int session::close(int32_t reason, int32_t sub_reason, atfw::util::nostd::string_view message) {
+  return close_with_manager(reason, sub_reason, message, owner_);
+}
 
-int session::close_with_manager(int reason, session_manager *mgr) {
+int session::close_with_manager(int32_t reason, int32_t sub_reason, atfw::util::nostd::string_view message,
+                                session_manager *mgr) {
   // 这个接口会被多次调用（分别在关闭网络连接、重连超时、主动踢下线）
   // 重连超时的逻辑不会走后面的流程了，但是还是要通知服务器踢下线
   if (check_flag(flag_t::kRegistered) && !check_flag(flag_t::kReconnected) && !check_flag(flag_t::kWaitReconnect)) {
@@ -307,10 +315,10 @@ int session::close_with_manager(int reason, session_manager *mgr) {
   }
 
   set_flag(flag_t::kClosing, true);
-  return close_fd(reason);
+  return close_fd(reason, sub_reason, message);
 }
 
-int session::close_fd(int reason) {
+int session::close_fd(int32_t reason, int32_t sub_reason, atfw::util::nostd::string_view message) {
   if (check_flag(flag_t::kClosingFd)) {
     return 0;
   }
@@ -319,7 +327,7 @@ int session::close_fd(int reason) {
     set_flag(flag_t::kHasFd, false);
 
     if (proto_) {
-      proto_->close(reason);
+      proto_->close(reason, sub_reason, message);
     }
 
     // shutdown and close uv_stream_t
@@ -335,6 +343,8 @@ int session::close_fd(int reason) {
 
     FWLOGINFO("session {}({}) lost fd", id_, reinterpret_cast<const void *>(this));
   }
+  FWLOGWARNING("session {}({}) close reason: {}, {}, {}", id_, reinterpret_cast<const void *>(this), reason, sub_reason,
+               message);
 
   return 0;
 }
@@ -475,22 +485,22 @@ void session::check_hour_limit(bool check_recv, bool check_send) {
 
   if (check_recv && owner_->get_conf().origin_conf.client().limit().hour_recv_bytes() > 0 &&
       limit_.hour_recv_bytes > owner_->get_conf().origin_conf.client().limit().hour_recv_bytes()) {
-    close(static_cast<int>(close_reason_t::kTraficExtended));
+    close(static_cast<int>(close_reason_t::kTraficExtended), 0, "trafic extended");
   }
 
   if (check_recv && owner_->get_conf().origin_conf.client().limit().hour_send_bytes() > 0 &&
       limit_.hour_send_bytes > owner_->get_conf().origin_conf.client().limit().hour_send_bytes()) {
-    close(static_cast<int>(close_reason_t::kTraficExtended));
+    close(static_cast<int>(close_reason_t::kTraficExtended), 0, "trafic extended");
   }
 
   if (check_send && owner_->get_conf().origin_conf.client().limit().hour_recv_times() > 0 &&
       limit_.hour_recv_times > owner_->get_conf().origin_conf.client().limit().hour_recv_times()) {
-    close(static_cast<int>(close_reason_t::kTraficExtended));
+    close(static_cast<int>(close_reason_t::kTraficExtended), 0, "trafic extended");
   }
 
   if (check_send && owner_->get_conf().origin_conf.client().limit().hour_send_times() > 0 &&
       limit_.hour_send_times > owner_->get_conf().origin_conf.client().limit().hour_send_times()) {
-    close(static_cast<int>(close_reason_t::kTraficExtended));
+    close(static_cast<int>(close_reason_t::kTraficExtended), 0, "trafic extended");
   }
 }
 
@@ -515,25 +525,25 @@ void session::check_minute_limit(bool check_recv, bool check_send) {
 
   if (check_recv && owner_->get_conf().origin_conf.client().limit().minute_recv_bytes() > 0 &&
       limit_.minute_recv_bytes > owner_->get_conf().origin_conf.client().limit().minute_recv_bytes()) {
-    close(static_cast<int>(close_reason_t::kTraficExtended));
+    close(static_cast<int>(close_reason_t::kTraficExtended), 0, "trafic extended");
     return;
   }
 
   if (check_recv && owner_->get_conf().origin_conf.client().limit().minute_recv_times() > 0 &&
       limit_.minute_recv_times > owner_->get_conf().origin_conf.client().limit().minute_recv_times()) {
-    close(static_cast<int>(close_reason_t::kTraficExtended));
+    close(static_cast<int>(close_reason_t::kTraficExtended), 0, "trafic extended");
     return;
   }
 
   if (check_send && owner_->get_conf().origin_conf.client().limit().minute_send_bytes() > 0 &&
       limit_.minute_send_bytes > owner_->get_conf().origin_conf.client().limit().minute_send_bytes()) {
-    close(static_cast<int>(close_reason_t::kTraficExtended));
+    close(static_cast<int>(close_reason_t::kTraficExtended), 0, "trafic extended");
     return;
   }
 
   if (check_send && owner_->get_conf().origin_conf.client().limit().minute_send_times() > 0 &&
       limit_.minute_send_times > owner_->get_conf().origin_conf.client().limit().minute_send_times()) {
-    close(static_cast<int>(close_reason_t::kTraficExtended));
+    close(static_cast<int>(close_reason_t::kTraficExtended), 0, "trafic extended");
     return;
   }
 
@@ -560,22 +570,22 @@ void session::check_total_limit(bool check_recv, bool check_send) {
 
   if (check_recv && owner_->get_conf().origin_conf.client().limit().total_recv_bytes() > 0 &&
       limit_.total_recv_bytes > owner_->get_conf().origin_conf.client().limit().total_send_bytes()) {
-    close(static_cast<int>(close_reason_t::kTraficExtended));
+    close(static_cast<int>(close_reason_t::kTraficExtended), 0, "trafic extended");
   }
 
   if (check_recv && owner_->get_conf().origin_conf.client().limit().total_recv_times() > 0 &&
       limit_.total_recv_times > owner_->get_conf().origin_conf.client().limit().total_recv_times()) {
-    close(static_cast<int>(close_reason_t::kTraficExtended));
+    close(static_cast<int>(close_reason_t::kTraficExtended), 0, "trafic extended");
   }
 
   if (check_send && owner_->get_conf().origin_conf.client().limit().total_send_bytes() > 0 &&
       limit_.total_send_bytes > owner_->get_conf().origin_conf.client().limit().total_send_bytes()) {
-    close(static_cast<int>(close_reason_t::kTraficExtended));
+    close(static_cast<int>(close_reason_t::kTraficExtended), 0, "trafic extended");
   }
 
   if (check_send && owner_->get_conf().origin_conf.client().limit().total_send_times() > 0 &&
       limit_.total_send_times > owner_->get_conf().origin_conf.client().limit().total_send_times()) {
-    close(static_cast<int>(close_reason_t::kTraficExtended));
+    close(static_cast<int>(close_reason_t::kTraficExtended), 0, "trafic extended");
   }
 }
 }  // namespace gateway

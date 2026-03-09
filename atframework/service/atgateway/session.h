@@ -1,11 +1,11 @@
-// Copyright 2021 atframework
+// Copyright 2026 atframework
 // Created by owent on 2016/9/29.
 //
 
 #pragma once
 
-#include <stdint.h>
 #include <cstddef>
+#include <cstdint>
 #include <ctime>
 #include <memory>
 
@@ -78,11 +78,12 @@ class session : public std::enable_shared_from_this<session> {
   void on_read(int ssz, gsl::span<const unsigned char> buffer);
   int on_write_done(int status);
 
-  int close(int reason);
+  int close(int32_t reason, int32_t sub_reason, atfw::util::nostd::string_view message);
 
-  int close_with_manager(int reason, session_manager *mgr);
+  int close_with_manager(int32_t reason, int32_t sub_reason, atfw::util::nostd::string_view message,
+                         session_manager *mgr);
 
-  int close_fd(int reason);
+  int close_fd(int32_t reason, int32_t sub_reason, atfw::util::nostd::string_view message);
 
   int send_to_client(gsl::span<const unsigned char>);
 

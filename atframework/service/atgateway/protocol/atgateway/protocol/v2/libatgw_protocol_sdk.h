@@ -6,6 +6,7 @@
 #include <chrono>
 #include <gsl/pointers>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "algorithm/compression.h"
@@ -166,7 +167,8 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
      */
     LIBATGW_PROTOCOL_API int handshake_read_peer_key(gsl::span<const unsigned char> peer_public_key,
                                                      gsl::span<const crypto_algorithm_type> peer_algorithms,
-                                                     gsl::span<const crypto_algorithm_type> local_algorithms);
+                                                     gsl::span<const crypto_algorithm_type> local_algorithms,
+                                                     bool need_confirm);
 
     /**
      * @brief Get self public key to output buffer
@@ -181,7 +183,7 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
      * @return 0 or error code
      */
     LIBATGW_PROTOCOL_API int setup_crypto_with_key(crypto_algorithm_type algorithm, gsl::span<const unsigned char> key,
-                                                   gsl::span<const unsigned char> iv);
+                                                   gsl::span<const unsigned char> iv, bool need_confirm);
 
     LIBATGW_PROTOCOL_API void close();
 
@@ -192,6 +194,8 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
     ATFW_UTIL_FORCEINLINE uint64_t get_handshake_sequence_id() const { return handshake_sequence_id_; }
 
     LIBATGW_PROTOCOL_API void update_handshake(uint64_t handshake_sequence_id);
+
+    LIBATGW_PROTOCOL_API void confirm_handshake(uint64_t handshake_sequence_id);
 
     ATFW_UTIL_FORCEINLINE const std::unique_ptr<::atfw::util::crypto::cipher> &get_current_receive_cipher()
         const noexcept {
@@ -211,13 +215,14 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
     /// Encrypt data using send cipher
     /// @param in input data
     /// @param out output span (may point into tls_buffer or heap_buffer)
-    /// @param heap_buffer heap fallback buffer (populated if data exceeds TLS buffer)
+    /// @param compression_heap_buffer heap buffer for compression (used if compression is applied before encryption)
+    /// @param crypto_heap_buffer heap fallback buffer (populated if data exceeds TLS buffer)
     /// @param iv optional IV/nonce
     /// @param aad AAD for AEAD ciphers
-    LIBATGW_PROTOCOL_API int encrypt_data(gsl::span<const unsigned char> in, gsl::span<unsigned char> &out,
-                                          std::unique_ptr<unsigned char[]> &heap_buffer,
-                                          gsl::span<const unsigned char> input_iv,
-                                          std::vector<unsigned char>& output_iv, atfw::util::nostd::string_view aad);
+    LIBATGW_PROTOCOL_API int encrypt_data(gsl::span<const unsigned char> in, gsl::span<const unsigned char> &out,
+                                          std::vector<unsigned char> &compression_heap_buffer,
+                                          std::unique_ptr<unsigned char[]> &crypto_heap_buffer,
+                                          gsl::span<const unsigned char> &iv, atfw::util::nostd::string_view &aad);
 
     /// Decrypt data using receive cipher
     /// @param in input data
@@ -226,7 +231,7 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
     /// @param iv optional IV/nonce
     /// @param iv_size IV size in bytes
     /// @param aad optional AAD for AEAD
-    LIBATGW_PROTOCOL_API int decrypt_data(gsl::span<const unsigned char> in, gsl::span<unsigned char> &out,
+    LIBATGW_PROTOCOL_API int decrypt_data(gsl::span<const unsigned char> in, gsl::span<const unsigned char> &out,
                                           std::unique_ptr<unsigned char[]> &heap_buffer,
                                           gsl::span<const unsigned char> iv, atfw::util::nostd::string_view aad);
 
@@ -237,7 +242,7 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
     /// @param level compression level
     /// @param threshold minimum size to compress (below this, data is passed through)
     LIBATGW_PROTOCOL_API int compress_data(
-        gsl::span<const unsigned char> in, gsl::span<unsigned char> &out, std::unique_ptr<unsigned char[]> &heap_buffer,
+        gsl::span<const unsigned char> in, gsl::span<const unsigned char> &out, std::vector<unsigned char> &heap_buffer,
         compression_level_type level = ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_level_t, kDefault),
         uint64_t threshold = 0);
 
@@ -247,11 +252,11 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
     /// @param out output span (may point into tls_buffer or heap_buffer)
     /// @param heap_buffer heap fallback buffer (populated if data exceeds TLS buffer)
     LIBATGW_PROTOCOL_API int decompress_data(gsl::span<const unsigned char> in, size_t original_size,
-                                             gsl::span<unsigned char> &out,
-                                             std::unique_ptr<unsigned char[]> &heap_buffer);
+                                             gsl::span<const unsigned char> &out,
+                                             std::vector<unsigned char> &heap_buffer);
 
    private:
-    int derive_key_from_shared_secret(const std::vector<unsigned char> &shared_secret);
+    int derive_key_from_shared_secret(const std::vector<unsigned char> &shared_secret, bool need_confirm);
 
     uint64_t handshake_sequence_id_;
     std::chrono::system_clock::time_point handshake_start_time_;
@@ -261,6 +266,9 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
     std::unique_ptr<::atfw::util::crypto::cipher> send_cipher_;
     std::unique_ptr<::atfw::util::crypto::cipher> receive_cipher_;
     std::unique_ptr<::atfw::util::crypto::cipher> handshaking_receive_cipher_;
+
+    std::vector<unsigned char> send_iv_;
+    std::string send_aad_;
   };
 
   using crypto_session_ptr_t = std::shared_ptr<crypto_session_t>;
@@ -393,8 +401,16 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
                                                                           const std::string &plaintext);
 
  private:
-  int encode_post(gsl::span<const unsigned char> in, gsl::span<unsigned char> &out);
-  int decode_post(gsl::span<const unsigned char> in, size_t original_size, gsl::span<unsigned char> &out);
+  int encode_post(gsl::span<const unsigned char> in, gsl::span<const unsigned char> &out_buffer,
+                  compression_algorithm_t &out_compression_algorithm, size_t &out_compression_origin_size,
+                  gsl::span<const unsigned char> &iv, atfw::util::nostd::string_view &aad,
+                  std::vector<unsigned char> &compression_heap_buffer,
+                  std::unique_ptr<unsigned char[]> &crypto_heap_buffer);
+  int decode_post(gsl::span<const unsigned char> in, size_t original_size, gsl::span<const unsigned char> &out,
+                  compression_algorithm_t compression_algorithm, size_t compression_origin_size,
+                  gsl::span<const unsigned char> iv, atfw::util::nostd::string_view aad,
+                  std::vector<unsigned char> &compression_heap_buffer,
+                  std::unique_ptr<unsigned char[]> &crypto_heap_buffer);
 
   /// Shared server-side handshake logic (key exchange & reconnect)
   int dispatch_handshake_server_common(const ::atframework::gateway::v2::cs_body_handshake &body_handshake,
@@ -490,7 +506,9 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
 
   ::atbus::detail::buffer_manager write_buffers_;
   const void *last_write_ptr_;
-  int close_reason_;
+  int32_t close_reason_;
+  int32_t close_sub_reason_;
+  std::string close_message_;
 
   // Single crypto session (like libatbus connection_context)
   atfw::util::nostd::nonnull<crypto_session_ptr_t> crypto_session_;

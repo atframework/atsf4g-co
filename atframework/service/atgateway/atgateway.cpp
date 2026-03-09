@@ -21,6 +21,7 @@
 #include <functional>
 #include <memory>
 
+#include "protocol/atgateway/protocol/v2/libatgw_protocol_sdk.h"
 #include "session_manager.h"  // NOLINT: build/include_subdir
 
 namespace {
@@ -70,8 +71,9 @@ class gateway_module : public ::atfw::atapp::module_impl {
                                              uint64_t sess_id) -> int {
         return this->proto_inner_callback_on_reconnect(proto, sess_id);
       };
-      proto_callbacks_.close_fn = [](::atframework::gateway::libatgw_protocol_api *proto, int reason) -> int {
-        return gateway_module::proto_inner_callback_on_close(proto, reason);
+      proto_callbacks_.close_fn = [](::atframework::gateway::libatgw_protocol_api *proto, int32_t reason,
+                                     int32_t sub_reason, atfw::util::nostd::string_view message) -> int {
+        return gateway_module::proto_inner_callback_on_close(proto, reason, sub_reason, message);
       };
       proto_callbacks_.on_handshake_done_fn = [this](::atframework::gateway::libatgw_protocol_api *proto,
                                                      int status) -> int {
@@ -115,7 +117,7 @@ class gateway_module : public ::atfw::atapp::module_impl {
     crypto_conf.access_tokens.clear();
     for (const auto &token : gw_mgr_.get_conf().origin_conf.client().crypto().access_tokens()) {
       crypto_conf.access_tokens.emplace_back(reinterpret_cast<const unsigned char *>(token.data()),
-                                            reinterpret_cast<const unsigned char *>(token.data()) + token.size());
+                                             reinterpret_cast<const unsigned char *>(token.data()) + token.size());
     }
 
     crypto_conf.update_interval = gw_mgr_.get_conf().origin_conf.client().crypto().update_interval().seconds();
@@ -228,7 +230,7 @@ class gateway_module : public ::atfw::atapp::module_impl {
 
     // protocol reload
     if ("inner" == gw_mgr_.get_conf().origin_conf.listen().type()) {
-      auto global_conf = ::atframework::gateway::libatgw_protocol_sdk::create_global_configure(crypto_conf);
+      auto global_conf = ::atframework::gateway::libatgw_protocol_sdk::create_shared_context(crypto_conf);
       if (!global_conf) {
         FWLOGERROR("reload inner protocol global configure failed");
         return -1;
@@ -320,7 +322,8 @@ class gateway_module : public ::atfw::atapp::module_impl {
     // if network error or reset by peer, move session into reconnect queue
     if (nread < 0) {
       // notify to close fd
-      mgr->close(sess->get_id(), static_cast<int>(::atframework::gateway::close_reason_t::kReset), true);
+      mgr->close(sess->get_id(), static_cast<int>(::atframework::gateway::close_reason_t::kReset),
+                 static_cast<int32_t>(nread), "network reset", true);
       return;
     }
 
@@ -504,7 +507,8 @@ class gateway_module : public ::atfw::atapp::module_impl {
     return res;
   }
 
-  static int proto_inner_callback_on_close(::atframework::gateway::libatgw_protocol_api *proto, int reason) {
+  static int proto_inner_callback_on_close(::atframework::gateway::libatgw_protocol_api *proto, int32_t reason,
+                                           int32_t sub_reason, atfw::util::nostd::string_view message) {
     if (nullptr == proto) {
       FWLOGERROR("{}", "parameter error");
       return -1;
@@ -529,11 +533,12 @@ class gateway_module : public ::atfw::atapp::module_impl {
                   reinterpret_cast<const void *>(sess));
       }
       if (nullptr != sess_holder->get_manager()) {
-        if (sess_holder->get_manager()->close(sess_holder->get_id(), reason, enable_reconnect) < 0) {
-          sess_holder->close(reason);
+        if (sess_holder->get_manager()->close(sess_holder->get_id(), reason, sub_reason, message, enable_reconnect) <
+            0) {
+          sess_holder->close(reason, sub_reason, message);
         }
       } else {
-        sess_holder->close(reason);
+        sess_holder->close(reason, sub_reason, message);
       }
     } else {
       if (sess_holder->check_flag(::atframework::gateway::session::flag_t::kReconnected)) {
@@ -623,13 +628,23 @@ class gateway_module : public ::atfw::atapp::module_impl {
     ::atframework::gateway::session::id_t sess_id = 0;
     atfw::util::string::str2int(sess_id, params[0]->to_string());
 
-    int reason = static_cast<int>(::atframework::gateway::close_reason_t::kKickoff);
+    int32_t reason = static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff);
     if (params.get_params_number() > 1) {
       atfw::util::string::str2int(reason, params[1]->to_string());
     }
 
+    int32_t sub_reason = 0;
+    if (params.get_params_number() > 2) {
+      atfw::util::string::str2int(sub_reason, params[2]->to_string());
+    }
+
+    atfw::util::nostd::string_view message;
+    if (params.get_params_number() > 3) {
+      message = params[3]->to_cpp_string();
+    }
+
     // do not allow reconnect
-    int res = gw_mgr_.close(sess_id, reason, false);
+    int res = gw_mgr_.close(sess_id, reason, sub_reason, message, false);
     if (0 != res) {
       FWLOGERROR("command kickoff session {} failed, res: {}", sess_id, res);
     } else {
@@ -648,13 +663,23 @@ class gateway_module : public ::atfw::atapp::module_impl {
     ::atframework::gateway::session::id_t sess_id = 0;
     atfw::util::string::str2int(sess_id, params[0]->to_string());
 
-    int reason = static_cast<int>(::atframework::gateway::close_reason_t::kReset);
+    int32_t reason = static_cast<int32_t>(::atframework::gateway::close_reason_t::kReset);
     if (params.get_params_number() > 1) {
       atfw::util::string::str2int(reason, params[1]->to_string());
     }
 
+    int32_t sub_reason = 0;
+    if (params.get_params_number() > 2) {
+      atfw::util::string::str2int(sub_reason, params[2]->to_string());
+    }
+
+    atfw::util::nostd::string_view message;
+    if (params.get_params_number() > 3) {
+      message = params[3]->to_cpp_string();
+    }
+
     // do not allow reconnect
-    int res = gw_mgr_.close(sess_id, reason, true);
+    int res = gw_mgr_.close(sess_id, reason, sub_reason, message, true);
     if (0 != res) {
       FWLOGERROR("command disconnect session {} failed, res: {}", sess_id, res);
     } else {
@@ -667,7 +692,7 @@ class gateway_module : public ::atfw::atapp::module_impl {
  private:
   ::atframework::gateway::session_manager gw_mgr_;
   ::atframework::gateway::libatgw_protocol_api::proto_callbacks_t proto_callbacks_;
-  std::shared_ptr<::atframework::gateway::v2::detail::crypto_global_configure_t> shared_conf_;
+  std::shared_ptr<::atframework::gateway::v2::crypto_shared_context_t> shared_conf_;
 };
 
 struct app_handle_on_recv {
@@ -749,7 +774,12 @@ struct app_handle_on_recv {
         break;
       }
       case ::atframework::gateway::server_message_body::kKickoffSession: {
-        FWLOGINFO("from server {}: session {} kickoff by server", source.id, server_message->head().session_id());
+        atfw::util::nostd::string_view message{server_message->body().kickoff_session().message().data(),
+                                               server_message->body().kickoff_session().message().size()};
+        FWLOGWARNING("from server {}: session {} kickoff by server, reason: {}, {}, {}", source.id,
+                     server_message->head().session_id(),
+                     static_cast<int32_t>(::atframework::gateway::close_reason_t::kReconnectBound),
+                     server_message->body().kickoff_session().reason(), message);
         if (0 == server_message->head().error_code()) {
           mod_.get().get_session_manager().close(server_message->head().session_id(),
                                                  static_cast<int>(::atframework::gateway::close_reason_t::kKickoff));
@@ -758,7 +788,8 @@ struct app_handle_on_recv {
               server_message->head().session_id(), server_message->head().error_code(),
               server_message->head().error_code() > 0 &&
                   server_message->head().error_code() <
-                      static_cast<int>(::atframework::gateway::close_reason_t::kReconnectBound));
+                      static_cast<int32_t>(::atframework::gateway::close_reason_t::kReconnectBound),
+              server_message->body().kickoff_session().reason(), message);
         }
         break;
       }

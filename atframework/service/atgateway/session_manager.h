@@ -54,7 +54,8 @@ class session_manager {
   int listen(const char *address);
   int reset();
   int tick();
-  int close(session::id_t sess_id, int reason, bool allow_reconnect = false);
+  int close(session::id_t sess_id, int32_t reason, int32_t sub_reason, atfw::util::nostd::string_view message,
+            bool allow_reconnect = false);
   void cleanup();
 
   inline void *get_private_data() const { return private_data_; }
