@@ -23,11 +23,11 @@
 
 #include "rpc/db/db_utils.h"
 #include "rpc/rpc_shared_message.h"
+#include "rpc/db/local_db_interface.h"
 
 namespace rpc {
 class context;
 
-namespace db {
 namespace async_jobs {
 
 struct ATFW_UTIL_SYMBOL_VISIBLE action_options {
@@ -48,12 +48,6 @@ struct ATFW_UTIL_SYMBOL_VISIBLE action_options {
   {}
 };
 
-struct ATFW_UTIL_SYMBOL_VISIBLE async_jobs_record {
-  int64_t record_index;
-  uint64_t version;
-  shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data> action_blob;
-};
-
 /**
  * @brief 获取用户异步任务表所有数据的rpc操作
  * @param jobs_type 任务类型
@@ -63,8 +57,8 @@ struct ATFW_UTIL_SYMBOL_VISIBLE async_jobs_record {
  * @param out 返回的玩家数据
  * @return 0或错误码
  */
-EXPLICIT_NODISCARD_ATTR GAME_RPC_API result_type get_jobs(::rpc::context &ctx, int32_t jobs_type, uint64_t user_id,
-                                                          uint32_t zone_id, std::vector<async_jobs_record> &out);
+EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type get_jobs(::rpc::context &ctx, int32_t jobs_type, uint64_t user_id,
+                                                          uint32_t zone_id, std::vector<rpc::db::async_jobs::table_user_async_jobs_list_message> &out);
 
 /**
  * @brief 删除用户异步任务表指定任务数据的rpc操作
@@ -75,8 +69,8 @@ EXPLICIT_NODISCARD_ATTR GAME_RPC_API result_type get_jobs(::rpc::context &ctx, i
  * @param in 要删除的下标
  * @return 0或错误码
  */
-EXPLICIT_NODISCARD_ATTR GAME_RPC_API result_type del_jobs(::rpc::context &ctx, int32_t jobs_type, uint64_t user_id,
-                                                          uint32_t zone_id, const std::vector<int64_t> &in);
+EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type del_jobs(::rpc::context &ctx, int32_t jobs_type, uint64_t user_id,
+                                                          uint32_t zone_id, const std::vector<uint64_t> &in);
 
 /**
  * @brief 添加用户异步任务操作
@@ -88,7 +82,7 @@ EXPLICIT_NODISCARD_ATTR GAME_RPC_API result_type del_jobs(::rpc::context &ctx, i
  * @note 最大异步任务数量配置在tcaplus的list表中。采用tcaplus的自动覆盖老记录的策略
  * @return 0或错误码
  */
-EXPLICIT_NODISCARD_ATTR GAME_RPC_API result_type
+EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type
 add_jobs(::rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
          shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data> &in, action_options options = {});
 
@@ -114,7 +108,7 @@ EXPLICIT_NODISCARD_ATTR GAME_RPC_API result_code_type add_jobs_with_retry(
  * @param openid 用户的openid
  * @return 0或错误码
  */
-EXPLICIT_NODISCARD_ATTR GAME_RPC_API result_type remove_all_jobs(::rpc::context &ctx, int32_t jobs_type,
+EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type remove_all_jobs(::rpc::context &ctx, int32_t jobs_type,
                                                                  uint64_t user_id, uint32_t zone_id);
 
 /**
@@ -128,10 +122,9 @@ EXPLICIT_NODISCARD_ATTR GAME_RPC_API result_type remove_all_jobs(::rpc::context 
  * @param version 版本号
  * @return 0或错误码
  */
-EXPLICIT_NODISCARD_ATTR GAME_RPC_API result_type
+EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type
 update_jobs(::rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
-            shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data> &inout, int64_t record_index,
-            uint64_t *version = nullptr, action_options options = {});
+            shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data> &input, int64_t record_index,
+            uint64_t& version, action_options options = {});
 }  // namespace async_jobs
-}  // namespace db
 }  // namespace rpc
