@@ -60,6 +60,8 @@
 /compile_commands.json
 /.clangd
 
+/src/tools/generate-for-pb/__pycache__/*
+
 # protocol
 /src/**/protocol/**/*.h
 /src/**/protocol/**/*.cc

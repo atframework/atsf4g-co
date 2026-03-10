@@ -23,16 +23,13 @@
 #include <unordered_set>
 #include <vector>
 
-namespace hello {
-class table_user;
-}
-
 namespace rpc {
 class context;
 }
 
 PROJECT_NAMESPACE_BEGIN
 class user_async_jobs_blob_data;
+class table_user;
 PROJECT_NAMESPACE_END
 
 class player;

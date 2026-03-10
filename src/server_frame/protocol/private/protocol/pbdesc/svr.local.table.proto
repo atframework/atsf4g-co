@@ -12,7 +12,6 @@ import "google/protobuf/any.proto";
 import "google/protobuf/timestamp.proto";
 
 import "protocol/extension/svr.database.extension.proto";
-import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/svr.struct.proto";
 
 package hello;

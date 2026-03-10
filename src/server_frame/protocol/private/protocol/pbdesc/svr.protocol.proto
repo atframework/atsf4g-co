@@ -14,9 +14,6 @@ option go_package = "github.com/atframework/atsf4g-go/component-protocol-private
 import "google/protobuf/empty.proto";
 import "protocol/extension/atframework.proto";
 
-import "protocol/pbdesc/com.struct.proto";
-import "protocol/pbdesc/svr.struct.proto";
-
 package hello;
 
 /////////////////////////////////////////////////////

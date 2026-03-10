@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+package hello;
+
+import "google/protobuf/descriptor.proto";
+
+message UeEnumConversion {
+  string UeEnumAlias = 1;
+  string DefaultUeEnum = 2;
+  string DefaultPbEnum = 3;
+}
+
+extend google.protobuf.EnumOptions {
+  UeEnumConversion ue_enum_conversion = 2001;
+}
+
+message ItemTypeRangeOption {
+  // end_index > id >= start_index
+  int32 start_index = 1;
+  int32 end_index = 2;
+}
+
+message ItemTypeOption {
+  repeated ItemTypeRangeOption item_type_range = 1;
+  bool need_guid = 2;             // 是否需要GUID
+  bool need_occupy_the_grid = 3;  // 是否占格子
+}
+
+extend google.protobuf.EnumValueOptions {
+  string ue_enum_alias = 2003;
+  ItemTypeOption item_type_option = 2004;
+}
