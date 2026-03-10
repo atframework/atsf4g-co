@@ -141,13 +141,30 @@ function(project_server_frame_add_config_target)
       "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND} '-c' 'custom_config_group:custom_group_fields.h.mako'"
   )
   set(PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND
-      "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND} '-c' 'custom_config_include:custom_include_fields.h.mako'"
+      "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND} '-c' 'custom_config_set_include:custom_config_set_include_fields.h.mako'"
+  )
+  set(PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND
+      "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND} '-c' 'custom_config_manager_include:custom_config_manager_include_fields.h.mako'"
   )
   set(PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND
       "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND} '-c' 'custom_config_easy_api_include:custom_easy_api_include_fields.h.mako'"
   )
   set(PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND
       "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND} '--pb-include-prefix' 'protocol/config/'")
+  # Generate item_type_config
+  set(PROJECT_SERVER_FRAME_CONFIG_GENERATE_ITEM_TYPE_CONFIG_OUT_CONF
+      "${PROJECT_SERVER_FRAME_CONFIG_GENERATED_TEMP_DIR}/generate-item-type-config.yaml")
+  file(
+    WRITE "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_ITEM_TYPE_CONFIG_OUT_CONF}"
+    "rules:
+      - global:
+                input: \"${PROJECT_SOURCE_TEMPLATE_DIR}/item_type_config.cpp.mako\"
+                output: \"item_type_config.cpp\"
+                output_directory: \"${PROJECT_SERVER_FRAME_CONFIG_GENERATED_SOURCE_DIR}/excel\"
+      - global:
+                input: \"${PROJECT_SOURCE_TEMPLATE_DIR}/item_type_config.h.mako\"
+                output: \"item_type_config.h\"
+                output_directory: \"${PROJECT_SERVER_FRAME_CONFIG_GENERATED_HEADER_DIR}/excel\"")
   if(CMAKE_HOST_WIN32 AND ATFRAMEWORK_CMAKE_TOOLSET_PWSH)
     file(
       APPEND "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_SCRIPT}"
@@ -155,6 +172,10 @@ function(project_server_frame_add_config_target)
     file(
       APPEND "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_SCRIPT}"
       "& \"${CMAKE_COMMAND}\" -E copy_if_different \"${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/template/common/cpp/config/excel/config_traits.h\" \"${PROJECT_SERVER_FRAME_CONFIG_GENERATED_HEADER_DIR}/excel/config_traits.h\"${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    )
+    file(
+      APPEND "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_SCRIPT}"
+      "& '${Python3_EXECUTABLE}' '${GENERATE_FOR_PB_MAKO_PY}' '--add-package-prefix' '${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}' '--pb-file' '${PROJECT_GENERATED_PBD_DIR}/config.pb' '--project-dir' '${PROJECT_SERVER_FRAME_CONFIG_GENERATED_TEMP_DIR}' '-c' '${PROJECT_SERVER_FRAME_CONFIG_GENERATE_ITEM_TYPE_CONFIG_OUT_CONF}'${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     )
   else()
     file(
@@ -164,16 +185,26 @@ function(project_server_frame_add_config_target)
       APPEND "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_SCRIPT}"
       "\"${CMAKE_COMMAND}\" -E copy_if_different \"${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/template/common/cpp/config/excel/config_traits.h\" \"${PROJECT_SERVER_FRAME_CONFIG_GENERATED_HEADER_DIR}/excel/config_traits.h\"${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
     )
+    file(
+      APPEND "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_SCRIPT}"
+      "'${Python3_EXECUTABLE}' '${GENERATE_FOR_PB_MAKO_PY}' '--add-package-prefix' '${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}' '--pb-file' '${PROJECT_GENERATED_PBD_DIR}/config.pb' '--project-dir' '${PROJECT_SERVER_FRAME_CONFIG_GENERATED_TEMP_DIR}' '-c' '${PROJECT_SERVER_FRAME_CONFIG_GENERATE_ITEM_TYPE_CONFIG_OUT_CONF}'${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+    )
   endif()
   list(APPEND PROJECT_SERVER_FRAME_CONFIG_GENERATED_HEADER_LIST
-       "${PROJECT_SERVER_FRAME_CONFIG_GENERATED_HEADER_DIR}/excel/config_traits.h")
+       "${PROJECT_SERVER_FRAME_CONFIG_GENERATED_HEADER_DIR}/excel/config_traits.h"
+       "${PROJECT_SERVER_FRAME_CONFIG_GENERATED_HEADER_DIR}/excel/item_type_config.h")
+  list(
+    APPEND
+    PROJECT_SERVER_FRAME_CONFIG_GENERATED_SOURCE_LIST
+    "${PROJECT_SERVER_FRAME_CONFIG_GENERATED_SOURCE_DIR}/excel/item_type_config.cpp")
   unset(PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND)
   unset(PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_SCRIPT)
 
   add_custom_command(
     OUTPUT ${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_HEADER_LIST}
            ${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SOURCE_LIST}
-           "${PROJECT_SERVER_FRAME_CONFIG_GENERATED_HEADER_DIR}/excel/config_traits.h"
+           ${PROJECT_SERVER_FRAME_CONFIG_GENERATED_HEADER_LIST}
+           ${PROJECT_SERVER_FRAME_CONFIG_GENERATED_SOURCE_LIST}
     COMMAND "${CMAKE_COMMAND}" -E remove -f ${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_HEADER_LIST}
             ${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SOURCE_LIST}
     COMMAND ${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER}
@@ -181,12 +212,16 @@ function(project_server_frame_add_config_target)
             "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.h.mako"
             "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.cpp.mako"
             "${PROJECT_SOURCE_TEMPLATE_DIR}/custom_group_fields.h.mako"
-            "${PROJECT_SOURCE_TEMPLATE_DIR}/custom_include_fields.h.mako"
+            "${PROJECT_SOURCE_TEMPLATE_DIR}/custom_config_manager_include_fields.h.mako"
+            "${PROJECT_SOURCE_TEMPLATE_DIR}/custom_config_set_include_fields.h.mako"
+            "${PROJECT_SOURCE_TEMPLATE_DIR}/custom_easy_api_include_fields.h.mako"
             "${PROJECT_SOURCE_TEMPLATE_DIR}/config_set.h.mako"
             "${PROJECT_SOURCE_TEMPLATE_DIR}/config_set.cpp.mako"
             "${PROJECT_SOURCE_TEMPLATE_DIR}/config_easy_api.h.mako"
             "${PROJECT_SOURCE_TEMPLATE_DIR}/config_easy_api.cpp.mako"
-    COMMENT "Generate config_set,config_easy_api,config_manager and etc.")
+            "${PROJECT_SOURCE_TEMPLATE_DIR}/item_type_config.h.mako"
+            "${PROJECT_SOURCE_TEMPLATE_DIR}/item_type_config.cpp.mako"
+    COMMENT "Generate config_set,config_easy_api,config_manager,item_type_config and etc.")
   add_custom_target(
     config-loader
     DEPENDS ${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_HEADER_LIST}
@@ -235,7 +270,8 @@ function(project_server_frame_add_config_target)
     add_library(
       ${PROJECT_SERVER_FRAME_LIB_LINK}-config SHARED
       ${PROJECT_SERVER_FRAME_CONFIG_HEADER_LIST} ${PROJECT_SERVER_FRAME_CONFIG_SOURCE_LIST}
-      ${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_HEADER_LIST} ${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SOURCE_LIST})
+      ${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_HEADER_LIST} ${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SOURCE_LIST}
+      ${PROJECT_SERVER_FRAME_CONFIG_GENERATED_HEADER_LIST} ${PROJECT_SERVER_FRAME_CONFIG_GENERATED_SOURCE_LIST})
     set(PROJECT_SERVER_FRAME_LIB_INSTALL_RPATH
         "${PROJECT_RPATH_ORIGIN}"
         "${PROJECT_RPATH_ORIGIN}/../../${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${PROJECT_SERVER_FRAME_LIB_LINK}/${CMAKE_INSTALL_LIBDIR}"
@@ -256,7 +292,8 @@ function(project_server_frame_add_config_target)
     add_library(
       ${PROJECT_SERVER_FRAME_LIB_LINK}-config STATIC
       ${PROJECT_SERVER_FRAME_CONFIG_HEADER_LIST} ${PROJECT_SERVER_FRAME_CONFIG_SOURCE_LIST}
-      ${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_HEADER_LIST} ${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SOURCE_LIST})
+      ${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_HEADER_LIST} ${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SOURCE_LIST}
+      ${PROJECT_SERVER_FRAME_CONFIG_GENERATED_HEADER_LIST} ${PROJECT_SERVER_FRAME_CONFIG_GENERATED_SOURCE_LIST})
     set_target_properties(${PROJECT_SERVER_FRAME_LIB_LINK}-config PROPERTIES VERSION "${PROJECT_VERSION}")
     target_compile_definitions("${PROJECT_SERVER_FRAME_LIB_LINK}-config" PRIVATE SERVER_FRAME_CONFIG_NATIVE=1)
   endif()

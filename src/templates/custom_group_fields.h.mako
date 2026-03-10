@@ -1,1 +1,1 @@
-  ::PROJECT_NAMESPACE_ID::config::excel_const_config const_settings;
+  ::PROJECT_NAMESPACE_ID::config::ExcelConstConfig const_settings;

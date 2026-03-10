@@ -1,4 +1,4 @@
-﻿## -*- coding: utf-8 -*-
+## -*- coding: utf-8 -*-
 <%!
 import time
 %><%
@@ -22,23 +22,70 @@ xresloader_include_prefix = pb_set.get_custom_variable("xresloader_include_prefi
 #include <memory>
 #include <cstring>
 
-#include "lock/spin_rw_lock.h"
-
 // clang-format off
 #include "config/compiler/protobuf_prefix.h"
 // clang-format on
 
+#pragma push_macro("InterlockedAdd")
+#ifdef InterlockedAdd
+#  undef InterlockedAdd
+#endif
+#pragma push_macro("InterlockedIncrement")
+#ifdef InterlockedIncrement
+#  undef InterlockedIncrement
+#endif
+#pragma push_macro("InterlockedDecrement")
+#ifdef InterlockedDecrement
+#  undef InterlockedDecrement
+#endif
+#pragma push_macro("InterlockedExchange")
+#ifdef InterlockedExchange
+#  undef InterlockedExchange
+#endif
+#pragma push_macro("InterlockedExchangeAdd")
+#ifdef InterlockedExchangeAdd
+#  undef InterlockedExchangeAdd
+#endif
+#pragma push_macro("InterlockedCompareExchange")
+#ifdef InterlockedCompareExchange
+#  undef InterlockedCompareExchange
+#endif
+#pragma push_macro("InterlockedAnd")
+#ifdef InterlockedAnd
+#  undef InterlockedAnd
+#endif
+#pragma push_macro("InterlockedOr")
+#ifdef InterlockedOr
+#  undef InterlockedOr
+#endif
+#pragma push_macro("InterlockedXor")
+#ifdef InterlockedXor
+#  undef InterlockedXor
+#endif
+
+#include "lock/spin_rw_lock.h"
+
+#  pragma pop_macro("InterlockedXor")
+#  pragma pop_macro("InterlockedOr")
+#  pragma pop_macro("InterlockedAnd")
+#  pragma pop_macro("InterlockedCompareExchange")
+#  pragma pop_macro("InterlockedExchangeAdd")
+#  pragma pop_macro("InterlockedExchange")
+#  pragma pop_macro("InterlockedDecrement")
+#  pragma pop_macro("InterlockedIncrement")
+#  pragma pop_macro("InterlockedAdd")
+
 #include "${pb_set.pb_include_prefix}${loader.get_pb_header_path()}"
 #include "${xresloader_include_prefix}pb_header_v3.pb.h"
+
+% for block_file in pb_set.get_custom_blocks("custom_config_set_include"):
+// include custom_config_set_include: ${block_file}
+<%include file="${block_file}" />
+% endfor
 
 // clang-format off
 #include "config/compiler/protobuf_suffix.h"
 // clang-format on
-
-% for block_file in pb_set.get_custom_blocks("custom_config_include"):
-// include custom_config_include: ${block_file}
-<%include file="${block_file}" />
-% endfor
 
 #include "${cpp_include_prefix}config_traits.h"
 
@@ -101,12 +148,18 @@ class ${loader.get_cpp_class_name()} {
   EXCEL_CONFIG_LOADER_API ${code_index.name}_value_type
     get_list_by_${code_index.name}(${code_index.get_key_decl()});
   EXCEL_CONFIG_LOADER_API item_ptr_type get_by_${code_index.name}(${code_index.get_key_decl()}, size_t index);
+  EXCEL_CONFIG_LOADER_API bool contains_${code_index.name}(${code_index.get_key_decl()}, size_t index);
+  EXCEL_CONFIG_LOADER_API std::size_t get_sizeof_${code_index.name}(${code_index.get_key_decl()});
 private:
-  ${code_index.name}_value_type _get_list_by_${code_index.name}(${code_index.get_key_decl()});
+  ${code_index.name}_value_type _get_list_by_${code_index.name}(${code_index.get_key_decl()}, bool ignore_not_found);
 public:
 % else:
   using ${code_index.name}_value_type = item_ptr_type;
   EXCEL_CONFIG_LOADER_API ${code_index.name}_value_type get_by_${code_index.name}(${code_index.get_key_decl()});
+  EXCEL_CONFIG_LOADER_API bool contains_${code_index.name}(${code_index.get_key_decl()});
+private:
+  ${code_index.name}_value_type _get_by_${code_index.name}(${code_index.get_key_decl()}, bool ignore_not_found);
+public:
 % endif
 % if code_index.is_vector():
   using ${code_index.name}_container_type = excel_config_type_traits::shared_ptr<const std::vector<${code_index.name}_value_type> >;

@@ -115,6 +115,7 @@ add_custom_command(
 # ============= Convert excel =============
 find_package(Java REQUIRED COMPONENTS Runtime)
 file(GLOB PROJECT_RESOURCE_EXCEL_FILES "${PROJECT_THIRD_PARTY_XRESLOADER_EXCEL_DIR}/*.xlsx")
+file(GLOB PROJECT_RESOURCE_UE_SOURCE_BYTES_FILES "${PROJECT_SOURCE_DIR}/resource/UeSourceBytes/*.bytes")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml")
 set(PROJECT_XRESLOADER_XML_DATA_XML "xresconv.data.xml")
 configure_file("${PROJECT_SOURCE_DIR}/resource/excel_xml/xresconv.xml.in"
@@ -148,7 +149,13 @@ file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.sh"
      "#!/bin/bash${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
 file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.sh" "set -ex${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
 file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.sh"
+     "\"${CMAKE_COMMAND}\" -E rm -rf \"${PROJECT_INSTALL_RES_DIR}/excel\"${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.sh"
+     "\"${CMAKE_COMMAND}\" -E make_directory \"${PROJECT_INSTALL_RES_DIR}/excel\"${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.sh"
      "${PROJECT_RESOURCE_EXCEL_COMMAND_ARGS}${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.sh"
+     "\"${CMAKE_COMMAND}\" -E copy_directory \"${PROJECT_SOURCE_DIR}/resource/UeSourceBytes\" \"${PROJECT_INSTALL_RES_DIR}/excel\"${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
 file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.sh"
      "\"${CMAKE_COMMAND}\" -E touch \"${CMAKE_CURRENT_BINARY_DIR}/resource-config.log\"")
 
@@ -161,7 +168,15 @@ file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
 file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
      "Set-PSDebug -Trace 1${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
 file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
+     "& \"${CMAKE_COMMAND}\" -E rm -rf \"${PROJECT_INSTALL_RES_DIR}/excel\"${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
+     "& \"${CMAKE_COMMAND}\" -E make_directory \"${PROJECT_INSTALL_RES_DIR}/excel\"${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
      "& ${PROJECT_RESOURCE_EXCEL_COMMAND_ARGS}${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+file(
+  APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
+  "& \"${CMAKE_COMMAND}\" -E copy_directory \"${PROJECT_SOURCE_DIR}/resource/UeSourceBytes\" \"${PROJECT_INSTALL_RES_DIR}/excel\"${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+)
 file(
   APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
   "& \"${CMAKE_COMMAND}\" -E touch \"${CMAKE_CURRENT_BINARY_DIR}/resource-config.log\"${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
@@ -177,6 +192,7 @@ if(NOT UNIX AND ATFRAMEWORK_CMAKE_TOOLSET_PWSH)
     DEPENDS "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb" "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.xml"
             "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.data.xml"
             "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/validator.yaml" ${PROJECT_RESOURCE_EXCEL_FILES}
+            ${PROJECT_RESOURCE_UE_SOURCE_BYTES_FILES}
     COMMENT "Generate excel resources [@${CMAKE_CURRENT_BINARY_DIR}]")
 else()
   add_custom_command(
@@ -186,6 +202,7 @@ else()
     DEPENDS "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb" "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.xml"
             "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.data.xml"
             "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/validator.yaml" ${PROJECT_RESOURCE_EXCEL_FILES}
+            ${PROJECT_RESOURCE_UE_SOURCE_BYTES_FILES}
     COMMENT "Generate excel resources [@${CMAKE_CURRENT_BINARY_DIR}]")
 endif()
 

@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "protocol/extension/v3/xresloader.proto";
+
+import "protocol/common/com.struct.extension.common.proto";
+
+package hello;
+
+enum EnItemType {
+  EN_ITEM_TYPE_NONE = 0;
+  // 货币
+  EN_ITEM_TYPE_COIN = 1 [
+    (item_type_option) = {
+      item_type_range: { start_index: 1000 end_index: 10000 }
+    },
+    (org.xresloader.enum_alias) = "货币"
+  ];
+  // 虚拟道具
+  EN_ITEM_TYPE_VIRTUAL = 2 [
+    (item_type_option) = {
+      item_type_range: { start_index: 10000 end_index: 100000 }
+    },
+    (org.xresloader.enum_alias) = "虚拟道具ID段"
+  ];
+  // 普通道具
+  EN_ITEM_TYPE_ITEM = 3 [
+    (item_type_option) = {
+      item_type_range: { start_index: 100000 end_index: 400000 }
+      need_occupy_the_grid: true
+    },
+    (org.xresloader.enum_alias) = "普通道具ID段"
+  ];
+  // 装备
+  EN_ITEM_TYPE_EQUIPMENT = 4 [
+    (item_type_option) = {
+      item_type_range: { start_index: 700000 end_index: 900000 }
+      need_occupy_the_grid: true
+      need_guid: true
+    },
+    (org.xresloader.enum_alias) = "装备ID段"
+  ];
+}

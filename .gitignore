@@ -59,6 +59,8 @@
 .cache
 /compile_commands.json
 
+/src/tools/generate-for-pb/__pycache__/*
+
 # protocol
 /src/**/protocol/**/*.h
 /src/**/protocol/**/*.cc

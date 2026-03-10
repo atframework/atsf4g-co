@@ -27,4 +27,25 @@ message ExcelItemType {
   // 仅客户端资源导出
   string name = 2 [(org.xresloader.field_tag) = "client_only"];
   DItemUseAction use_action = 3;
+  EnItemRarity rarity = 4;
+  string description = 5 [(org.xresloader.field_tag) = "client_only"];
+  int32 score = 6;
+  int32 sell_price = 7;
+  int32 durability = 8;
+  int32 ue_source_type_id = 101 [(org.xresloader.validator) = "UESourceInventory_type_id"];
+}
+
+message UESourceInventory {
+  option (xrescode.loader) = {
+    file_path: "UeSource_Inventory.bytes"
+    indexes: { fields: "type_id" index_type: EN_INDEX_KV allow_not_found: true }
+
+    tags: "client"
+    tags: "server"
+  };
+
+  int32 type_id = 1 [(org.xresloader.field_unique_tag) = "type_id"];
+  int32 ue_source_equipment_equip_id = 2;
+  DItemPositionCfg position_cfg = 3;
+  string ue_path = 101;
 }

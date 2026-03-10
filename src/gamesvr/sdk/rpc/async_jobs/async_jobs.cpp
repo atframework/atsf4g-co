@@ -134,7 +134,7 @@ GAME_RPC_API ::rpc::db::result_type add_jobs(rpc::context& ctx, int32_t jobs_typ
   in->set_timepoint_ms(util::time::time_utility::get_now() * 1000 +
                        atfw::util::time::time_utility::get_now_usec() / 1000);
 
-  rpc::shared_message<hello::table_user_async_jobs> input{ctx};
+  rpc::shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs> input{ctx};
   input->set_job_type(jobs_type);
   input->set_user_id(user_id);
   input->set_zone_id(zone_id);

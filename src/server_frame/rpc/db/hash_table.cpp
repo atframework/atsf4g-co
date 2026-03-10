@@ -643,7 +643,7 @@ SERVER_FRAME_API result_type get_by_indexs(rpc::context &ctx, uint32_t channel, 
   for (size_t i = 0; i < list_index.size(); ++i) {
     output[i].list_index = list_index[i];
   }
-  FWLOGINFO("table [key={}] key_list get_by_indexs {}", key, list_index);
+  FWLOGINFO("table [key={}] key_list get_by_indexs, count: {}", key, list_index.size());
 
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
@@ -841,7 +841,7 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
-  FWLOGINFO("table [key={}] key_list remove_by_index {}", key, list_index);
+  FWLOGINFO("table [key={}] key_list remove_by_index, count: {}", key, list_index.size());
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 
@@ -902,7 +902,7 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
-  FWLOGINFO("table [key={}] key_list remove_by_index {}", key, list_index);
+  FWLOGINFO("table [key={}] key_list remove_by_index, count: {}", key, list_index.size());
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 }  // namespace key_list

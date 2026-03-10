@@ -2,14 +2,14 @@
 
 #pragma once
 
-#include <config/server_frame_build_feature.h>
+#include <config/excel_type_trait_setting.h>
 
 #include <string>
 #include <unordered_map>
 
 PROJECT_NAMESPACE_BEGIN
 namespace config {
-class excel_const_config;
+class ExcelConstConfig;
 }
 PROJECT_NAMESPACE_END
 
@@ -28,11 +28,5 @@ struct config_group_t;
 
 EXCEL_CONFIG_LOADER_API void setup_const_config(config_group_t &group);
 
-EXCEL_CONFIG_LOADER_API const ::PROJECT_NAMESPACE_ID::config::excel_const_config &get_const_config();
-
-EXCEL_CONFIG_LOADER_API void parse_timepoint(const std::string &in, google::protobuf::Timestamp &out);
-EXCEL_CONFIG_LOADER_API void parse_duration(const std::string &in, google::protobuf::Duration &out);
-
-EXCEL_CONFIG_LOADER_API bool parse_message_field(const std::string &input, google::protobuf::Message &out,
-                                                 const ::google::protobuf::FieldDescriptor *fds);
+EXCEL_CONFIG_LOADER_API const ::PROJECT_NAMESPACE_ID::config::ExcelConstConfig &get_const_config();
 }  // namespace excel

@@ -1,4 +1,4 @@
-﻿## -*- coding: utf-8 -*-
+## -*- coding: utf-8 -*-
 <%!
 import time
 %><%
@@ -11,9 +11,12 @@ cpp_include_prefix = pb_set.get_custom_variable("cpp_include_prefix", "config/ex
 #include "${cpp_include_prefix}config_manager.h"
 
 #ifdef _MSC_VER
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
+#  ifndef WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
 #include <Windows.h>
 #endif
 
@@ -240,8 +243,8 @@ EXCEL_CONFIG_LOADER_API config_manager::log_caller_info_t::~log_caller_info_t() 
 config_manager::config_manager() :
   reload_version_(std::chrono::system_clock::now().time_since_epoch().count()),
   override_same_version_(false),
-  enable_multithread_lock_(false),
-  max_group_number_(8),
+  enable_multithread_lock_(true),
+  max_group_number_(5),
   on_log_(config_manager::default_log_writer),
   read_file_handle_(config_manager::default_buffer_loader),
   read_version_handle_(default_version_loader) {}
@@ -249,8 +252,8 @@ config_manager::config_manager() :
 EXCEL_CONFIG_LOADER_API config_manager::config_manager(constructor_helper_t&) :
   reload_version_(std::chrono::system_clock::now().time_since_epoch().count()),
   override_same_version_(false),
-  enable_multithread_lock_(false),
-  max_group_number_(8),
+  enable_multithread_lock_(true),
+  max_group_number_(5),
   on_log_(config_manager::default_log_writer),
   read_file_handle_(config_manager::default_buffer_loader),
   read_version_handle_(default_version_loader) {}
@@ -262,11 +265,11 @@ EXCEL_CONFIG_LOADER_API config_manager::~config_manager() {
 }
 
 EXCEL_CONFIG_LOADER_API excel_config_type_traits::shared_ptr<config_manager> config_manager::me() {
+  static excel_config_type_traits::shared_ptr<config_manager> ret;
   if (is_destroyed_) {
     return excel_config_type_traits::shared_ptr<config_manager>();
   }
 
-  static excel_config_type_traits::shared_ptr<config_manager> ret;
   if (ret) {
     return ret;
   }
@@ -323,9 +326,9 @@ EXCEL_CONFIG_LOADER_API int config_manager::init_new_group() {
       break;
     }
 
-    // 版本未变化，不需要reload
+    // 版本未变化，不需要reload, 空版本号意味着忽略版本号检查。
     // if (0 == ::utils::string::version_compare(version.c_str(), config_group_list_.back()->version.c_str())) {
-    if (version == config_group_list_.back()->version) {
+    if (!version.empty() && version == config_group_list_.back()->version) {
       return 0;
     }
   } while (false);
@@ -351,8 +354,7 @@ EXCEL_CONFIG_LOADER_API int config_manager::init_new_group() {
       ret += res;
     }
 
-    EXCEL_CONFIG_MANAGER_LOGINFO("[EXCEL] initialize %s for new config_group success",
-      "${loader.get_cpp_public_var_name()}");
+    EXCEL_CONFIG_MANAGER_LOGINFO("[EXCEL] initialize %s for new config_group success", "${loader.get_cpp_public_var_name()}");
   }
 %   endfor
 % endfor
@@ -405,9 +407,13 @@ EXCEL_CONFIG_LOADER_API void config_manager::reset() {
 
     read_file_handle_ = nullptr;
     read_version_handle_ = nullptr;
+    on_log_ = nullptr;
+    on_filter_ = nullptr;
+    on_not_found_ = nullptr;
     on_group_created_ = nullptr;
     on_group_reload_all_ = nullptr;
     on_group_destroyed_ = nullptr;
+    on_group_filter_ = nullptr;
   }
 
   clear();
@@ -464,6 +470,14 @@ EXCEL_CONFIG_LOADER_API int config_manager::reload_all(bool del_when_failed) {
   }
 %   endfor
 % endfor
+
+  if (on_group_filter_) {
+    res = on_group_filter_(cfg_group);
+    if (res < 0) {
+      EXCEL_CONFIG_MANAGER_LOGERROR("[EXCEL] filter config group failed, res: %d", res);
+      ret = res;
+    }
+  }
 
   if (del_when_failed && ret < 0) {
     atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
@@ -524,7 +538,7 @@ EXCEL_CONFIG_LOADER_API void config_manager::set_version_loader(read_version_fun
 
 EXCEL_CONFIG_LOADER_API const config_manager::config_group_ptr_t& config_manager::get_current_config_group() {
   details::thread_local_config_group_data& tls_cache = enable_multithread_lock_? details::get_tls_config_group() : details::get_static_config_group();
-  if (tls_cache.current_version == reload_version_.load(util::lock::memory_order_acquire) && tls_cache.current_group) {
+  if (tls_cache.current_version == reload_version_.load(std::memory_order_acquire) && tls_cache.current_group) {
     return tls_cache.current_group;
   }
 
@@ -534,7 +548,7 @@ EXCEL_CONFIG_LOADER_API const config_manager::config_group_ptr_t& config_manager
       rlh = atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock>{config_group_lock_};
     }
     if (!config_group_list_.empty()) {
-      tls_cache.current_version = reload_version_.load(util::lock::memory_order_acquire);
+      tls_cache.current_version = reload_version_.load(std::memory_order_acquire);
       tls_cache.current_group = *config_group_list_.rbegin();
       return tls_cache.current_group;
     }
@@ -546,7 +560,7 @@ EXCEL_CONFIG_LOADER_API const config_manager::config_group_ptr_t& config_manager
       rlh = atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock>{config_group_lock_};
     }
     if (!config_group_list_.empty()) {
-      tls_cache.current_version = reload_version_.load(util::lock::memory_order_acquire);
+      tls_cache.current_version = reload_version_.load(std::memory_order_acquire);
       tls_cache.current_group = *config_group_list_.rbegin();
       return tls_cache.current_group;
     }
@@ -676,7 +690,7 @@ bool config_manager::default_buffer_loader(std::string& out, const char* path) {
 }
 
 bool config_manager::default_version_loader(std::string& out) {
-  out = "0";
+  out.clear();
   return true;
 }
 
