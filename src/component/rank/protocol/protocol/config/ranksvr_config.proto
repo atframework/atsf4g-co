@@ -19,7 +19,7 @@ message rank_publisher_congigure {
   int32 max_log_size = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "300" }];
 }
 
-message ranksvr_ranking_cfg {
+message ranksvr_cfg {
   uint32 rank_slave_num = 101;
   google.protobuf.Duration rank_server_router_lock_timeout = 102
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30s" }];

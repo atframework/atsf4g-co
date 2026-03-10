@@ -91,12 +91,8 @@
 /src/component/distributed_transaction/sdk/rpc/transaction/dtcoordsvrservice.*
 /src/component/distributed_transaction/dtcoordsvr/app/handle_ss_rpc_dtcoordsvrservice.*
 /src/tools/simulator/rpc
-/src/component/ranksvr/service/ranking/app/handle_ss_rpc_ranksvrservice.cpp
-/src/component/ranksvr/service/ranking/app/handle_ss_rpc_ranksvrservice.h
-/src/component/ranksvr/service/ranking/app/handle_ss_rpc_ranksvrservice.cpp
-/src/component/ranksvr/service/ranking/app/handle_ss_rpc_ranksvrservice.h
-/src/ranksvr/sdk/settlement/rpc/rank/ranksvrsettlementservice.cpp
-/src/ranksvr/sdk/settlement/rpc/rank/ranksvrsettlementservice.h
+/src/component/rank/ranksvr/app/handle_ss_rpc_ranksvrservice.cpp
+/src/component/rank/ranksvr/app/handle_ss_rpc_ranksvrservice.h
 /src/authsvr/service/app/handle_cs_rpc_authsvrclientservice.cpp
 /src/authsvr/service/app/handle_cs_rpc_authsvrclientservice.h
 /src/authsvr/service/rpc/authsvrclientservice/authsvrclientservice.cpp
@@ -109,5 +105,5 @@
 /src/lobbysvr/service/app/handle_ss_rpc_lobbysvrservice.h
 /src/lobbysvr/service/rpc/lobbysvrclientservice/lobbysvrclientservice.cpp
 /src/lobbysvr/service/rpc/lobbysvrclientservice/lobbysvrclientservice.h
-/src/component/ranksvr/sdk/ranking/rpc/rank/ranksvrservice.cpp
-/src/component/ranksvr/sdk/ranking/rpc/rank/ranksvrservice.h
+/src/component/rank/sdk/ranksvr/rpc/rank/ranksvrservice.cpp
+/src/component/rank/sdk/ranksvr/rpc/rank/ranksvrservice.h

@@ -62,7 +62,7 @@ rpc::result_code_type rank_mirror_manager::get_mirror_data_from_db(
         db_data) {
   const static int32_t rank_max_batch_get_num =
       logic_config::me()
-          ->get_custom_config<PROJECT_NAMESPACE_ID::config::ranksvr_ranking_cfg>()
+          ->get_custom_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
           .rank_max_batch_get_num();
   // TODO 先分批拉取，后续看看是否需要移到tick中处理
   int32_t cur_batch_index = 0;
@@ -227,7 +227,7 @@ bool rank_mirror_manager::check_mirror_dump_finish(int64_t mirror_id) const {
 
 void rank_mirror_manager::check_and_remove_mirror() {
   const static int32_t max_mirror_count =
-      logic_config::me()->get_custom_config<PROJECT_NAMESPACE_ID::config::ranksvr_ranking_cfg>().max_mirror_count();
+      logic_config::me()->get_custom_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>().max_mirror_count();
   if (meta_data_.success_mirror_size() <= max_mirror_count) {
     return;
   }

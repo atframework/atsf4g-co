@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
   }
 
   logic_config::me()->set_custom_config_loader([](atfw::atapp::app &app, logic_config &cfg) {
-    auto config_ptr = atfw::util::memory::make_strong_rc<PROJECT_NAMESPACE_ID::config::ranksvr_ranking_cfg>();
+    auto config_ptr = atfw::util::memory::make_strong_rc<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>();
     app.parse_configures_into(*config_ptr, "ranksvr-ranking");
     cfg.mutable_custom_config() = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);
   });
