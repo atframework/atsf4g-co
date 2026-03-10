@@ -11,100 +11,285 @@ option go_package = "github.com/atframework/atsf4g-go/component-protocol-private
 import "google/protobuf/any.proto";
 import "google/protobuf/timestamp.proto";
 
-import "protocol/pbdesc/com.struct.proto";
+import "protocol/extension/svr.database.extension.proto";
 import "protocol/pbdesc/svr.struct.proto";
+import "protocol/pbdesc/svr.struct.rank.proto";
+import "protocol/pbdesc/com.struct.rank.proto";
 
 package hello;
 
-message table_login {
-  string open_id = 1;
-  uint64 user_id = 2;
-  uint32 zone_id = 3;
-  uint64 router_server_id = 4;  // 路由系统 - 登入进程id
-  uint64 router_version = 5;    // 路由系统 - 登入进程变更版本号
-
-  // 资源冲突检测
-  uint64 expect_table_user_db_version = 6;
-  google.protobuf.Timestamp expect_table_user_db_timeout = 7;
+message table_login_lock {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "login_lock"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "user_id"
+    }
+  };
+  // clang-format on
+  uint64 user_id = 1;
+  uint64 router_server_id = 2;  // 路由系统 - 登入进程id
+  uint64 router_version = 3;    // 路由系统 - 登入进程变更版本号
 
   // 登入信息
-  int64 login_time = 12;          // 上次登入时间
-  string login_code = 13;         // 认证码
-  int64 login_code_expired = 14;  // 认证码到期时间
-  int64 logout_time = 15;         // 登出时间
-
+  uint32 login_zone_id = 11;  // 登入区服ID
+  int64 login_expired = 12;   // 登入进程过期时间（时间戳）
+  string login_code = 13;     // 认证码
   // 限制登入信息
-  int64 ban_time = 21;  // 封号期限
+  int64 ban_time = 14;  // 封号期限
+   account_except except = 15;        // 账户异常数据
 
-  // 业务层登入注册信息
-  int64 business_register_time = 31;  // 业务层注册时间
-  int64 business_login_time = 32;     // 业务层登入时间
-  int64 business_logout_time = 33;    // 业务层登出时间
-
-  account_information account = 41;  // 账号信息
-  login_record last_login = 42;      // 上次登入的信息
-  account_except except = 43;        // 账户异常数据
-
-  // 统计数据
-  uint32 stat_login_total_times = 51;    // 总登入次数
-  uint32 stat_login_success_times = 52;  // 成功登入次数
-  uint32 stat_login_failed_times = 53;   // 失败登入次数
+  // 资源冲突检测
+  uint64 expect_table_user_db_version = 21;
+  google.protobuf.Timestamp expect_table_user_db_timeout = 22;
 }
 
-message table_user_async_jobs_blob_data {
-  // action的 唯一ID，用于容灾
-  string action_uuid = 1;
-  int64 timepoint_ms = 2;
-
-  // 如果失败了，内置的剩余重试次数
-  int32 left_retry_times = 3;
-
-  oneof action {
-    user_async_job_debug_message debug_message = 101;  // 调试消息
-  }
-}
-
-message table_user_async_jobs_cache_blob_data {
-  player_async_jobs_data async_jobs = 1;  // 异步任务缓存
-
-  message retry_job_data {
-    int32 job_type = 1;
-    table_user_async_jobs_blob_data job_data = 2;
+message table_user_async_jobs {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "async_jobs"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KL
+      max_list_length: 50
+      key_fields: "job_type"
+      key_fields: "user_id"
+      key_fields: "zone_id"
+    }
   };
-  repeated retry_job_data retry_jobs = 11;
+  // clang-format on
+  int32 job_type = 1;  // 任务类型
+  uint64 user_id = 2;
+  uint32 zone_id = 3;
+  user_async_jobs_blob_data job_data = 11;
 }
 
 message table_user {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "user"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "zone_id"
+      key_fields: "user_id"
+      partly_get: {
+        name: "basic_info"
+        fields: "open_id"
+        fields: "account"
+        fields: "player"
+        fields: "data_version"
+        fields: "options"
+      }
+    }
+  };
+  // clang-format on
   string open_id = 1;
   uint64 user_id = 2;
   uint32 zone_id = 3;
 
-  account_information account = 11;  // 账号信息
-  player_data player = 12;           // 玩家数据
-  uint64 data_version = 13;          // 数据版本号
-
-  player_options options = 21;  // 玩家选项
+  // BasicInfo
+  user_login_data login_data = 11;             // 登入数据
+  account_information account_data = 12;  // 账号信息
+  user_data user_data = 13;               // 玩家数据
+  uint64 data_version = 14;               // 数据版本号
+  // BasicInfo
 
   // 以下是服务器内部数据
-  table_user_async_jobs_cache_blob_data async_job_blob_data = 101;  // 异步任务缓存
+  // 异步任务缓存
+  user_async_jobs_cache_blob_data async_job_blob_data = 101;
+  bool create_init = 103;  // 是否已经执行过创建初始化
+
+  // 业务逻辑数据
+  user_options_data options_data = 200;  // 玩家选项
+  DRankUserData rank_data = 201; // 玩家排行榜数据
 }
 
 message table_distribute_transaction {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "distribute_transaction"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "zone_id"
+      key_fields: "transaction_uuid"
+    }
+  };
+  // clang-format on
   uint32 zone_id = 1;
   bytes transaction_uuid = 2;
 
   google.protobuf.Any blob_data = 11;
 }
 
-message table_all_message {
-  uint64 node_id = 1; // 用于恢复协程的BusID
-  uint64 destination_task_id = 2; // 用于恢复协程的任务ID
-  int32 error_code = 3; // 用于恢复协程的透传解包层错误码
 
-  table_login login = 11;
-  table_user user = 12;
-  uint64 version = 13; // 透传版本
-  table_simple_info simple = 14; // 简单数据类型
-  table_user_async_jobs_blob_data async_jobs = 15;
-  table_distribute_transaction distribute_transaction = 16;
+
+message table_rank {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "rank"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      key_fields: "rank_type"
+      key_fields: "rank_instance_id"
+      key_fields: "sub_rank_type"
+      key_fields: "sub_rank_instance_id"
+      key_fields: "zone_id"
+      key_fields: "slice_index"
+      key_fields: "storge_version"
+
+    }
+  };
+  // clang-format on
+  uint32 rank_type = 1;
+  uint32 rank_instance_id = 2;
+  uint32 sub_rank_type = 4;
+  uint32 sub_rank_instance_id = 5;
+  uint32 zone_id = 6;
+  int32 slice_index = 7;
+  int64 storge_version = 8;
+  int64 data_version = 9;
+  int32 max_slice_index = 10;
+  
+  table_rank_blob_data blob_data = 101;
+}
+
+message table_rank_mirror {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "rank_mirror"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      key_fields: "rank_type"
+      key_fields: "rank_instance_id"
+      key_fields: "sub_rank_type"
+      key_fields: "sub_rank_instance_id"
+      key_fields: "zone_id"
+      key_fields: "mirror_id"
+      key_fields: "slice_index"
+    }
+  };
+  // clang-format on
+  uint32 rank_type = 1;
+  uint32 rank_instance_id = 2;
+  uint32 sub_rank_type = 4;
+  uint32 sub_rank_instance_id = 5;
+  uint32 zone_id = 6;
+  int64 mirror_id = 7;
+  int32 slice_index = 8;
+  int32 max_slice_count = 9;
+  int32 per_slice_count = 10;
+  int32 rank_total_size = 11;
+  int64 data_version = 12;
+
+  table_rank_blob_data blob_data = 101;
+}
+
+message table_rank_router {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "rank_router"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "rank_type"
+      key_fields: "rank_instance_id"
+      key_fields: "sub_rank_type"
+      key_fields: "sub_rank_instance_id"
+      key_fields: "zone_id"
+    }
+  };
+  // clang-format on
+  int32 rank_type = 1;
+  int32 rank_instance_id = 2;
+  uint32 sub_rank_type = 4;
+  uint32 sub_rank_instance_id = 5;
+  uint32 zone_id = 6;
+  
+  uint64 router_main_node_id = 7;
+  int64 router_save_timepoint = 8;
+
+  table_rank_slave_node_data blob_data = 101;
+}
+
+message table_rank_mirror_meta {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "rank_mirror_meta"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      key_fields: "rank_type"
+      key_fields: "rank_instance_id"
+      key_fields: "sub_rank_type"
+      key_fields: "sub_rank_instance_id"
+      key_fields: "zone_id"
+    }
+  };
+  // clang-format on
+  uint32 rank_type = 1;
+  uint32 rank_instance_id = 2;
+  uint32 sub_rank_type = 3;
+  uint32 sub_rank_instance_id = 4;
+  uint32 zone_id = 6;
+  int64 last_data_version = 7;
+
+  table_rank_mirror_meta_data blob_data = 101;
+}
+
+message table_rank_settlement {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "rank_settlement"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "zone_id"
+      key_fields: "rank_type"
+      key_fields: "rank_instance_id"
+      key_fields: "sub_rank_type"
+      key_fields: "sub_rank_instance_id"
+
+    }
+  };
+  // clang-format on
+  uint32 zone_id = 1;
+  uint32 rank_type = 2;
+  uint32 rank_instance_id = 3;
+  uint32 sub_rank_type = 4;
+  uint32 sub_rank_instance_id = 5;
+
+  table_rank_settlement_blob_data blob_data = 101;
+}
+
+message table_rank_history {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "rank_history"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      key_fields: "zone_id"
+      key_fields: "rank_type"
+      key_fields: "rank_instance_id"
+      key_fields: "sub_rank_type"
+      key_fields: "sub_rank_instance_id"
+      key_fields: "rank_no"
+    }
+  };
+  // clang-format on
+  uint32 zone_id = 1;
+  uint32 rank_type = 2;
+  uint32 rank_instance_id = 3;
+  uint32 sub_rank_type = 4;
+  uint32 sub_rank_instance_id = 5;
+  int64 rank_day_id  = 6;
+  int64 rank_season_id = 7;
+  uint32 rank_no = 8;
+  int64 rank_score = 9;
+  uint32 settle_rank_no = 10;
+  uint64 user_id = 11;
+  uint32 user_zone_id = 12;
+  
+  table_rank_history_blob_data blob_data = 101;
 }

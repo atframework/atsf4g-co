@@ -7,7 +7,7 @@ add_subdirectory(GameSharedComponent)
 # ============ server components ============
 add_subdirectory(test)
 add_subdirectory(distributed_transaction)
-
+add_subdirectory(rank)
 # ============ Export and install components ============
 install(
   EXPORT ${PROJECT_INSTALL_COMPONENT_EXPORT_NAME}

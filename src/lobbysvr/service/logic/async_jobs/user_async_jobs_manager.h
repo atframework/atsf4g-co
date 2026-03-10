@@ -23,30 +23,27 @@
 #include <unordered_set>
 #include <vector>
 
-namespace hello {
-class table_user;
-}
-
 namespace rpc {
 class context;
 }
 
 PROJECT_NAMESPACE_BEGIN
-class table_user_async_jobs_blob_data;
+class user_async_jobs_blob_data;
+class table_user;
 PROJECT_NAMESPACE_END
 
 class player;
 
 class user_async_jobs_manager {
  public:
-  using async_job_ptr_type = atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>;
+  using async_job_ptr_type = atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>;
 
  public:
   explicit user_async_jobs_manager(player& owner);
   ~user_async_jobs_manager();
 
   // 创建默认角色数据
-  void create_init(rpc::context& ctx, uint32_t version_type);
+  void create_init(rpc::context& ctx);
 
   // 登入读取用户数据
   void login_init(rpc::context& ctx);

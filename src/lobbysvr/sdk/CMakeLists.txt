@@ -9,7 +9,7 @@ project_service_declare_sdk(
   lobbysvr-protocol
   HRADERS
   "${CMAKE_CURRENT_LIST_DIR}/rpc/lobby/lobbysvrservice.h"
-  "${CMAKE_CURRENT_LIST_DIR}/rpc/db/async_jobs.h"
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/async_jobs/async_jobs.h"
   SOURCES
   "${CMAKE_CURRENT_LIST_DIR}/rpc/lobby/lobbysvrservice.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/rpc/db/async_jobs.cpp")
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/async_jobs/async_jobs.cpp")

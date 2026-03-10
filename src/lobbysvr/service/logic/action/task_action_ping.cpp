@@ -17,7 +17,7 @@
 #include <config/logic_config.h>
 #include <utility/protobuf_mini_dumper.h>
 
-#include <rpc/db/login.h>
+#include <rpc/db/local_db_interface.h>
 
 #include <data/player.h>
 #include <data/session.h>
@@ -49,18 +49,19 @@ task_action_ping::result_type task_action_ping::operator()() {
   user->update_heartbeat();
 
   // 心跳超出容忍值，直接提下线
-  if (user->get_heartbeat_data().continue_error_times >= logic_config::me()->get_logic().heartbeat().error_times()) {
+  if (user->get_heartbeat_data().continue_error_times >=
+      logic_config::me()->get_server_cfg().heartbeat().error_times()) {
     // 封号一段时间
 
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_BAN);
     int kick_off_reason = PROJECT_NAMESPACE_ID::EN_CRT_LOGIN_BAN;
-    rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> tb{get_shared_context()};
+    rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> tb{get_shared_context()};
     do {
-      uint64_t login_ver = 0;
-      int res = RPC_AWAIT_CODE_RESULT(
-          rpc::db::login::get(get_shared_context(), user->get_open_id().c_str(), user->get_zone_id(), tb, login_ver));
+      uint64_t login_lock_cas_ver = 0;
+      int res =
+          RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get_all(get_shared_context(), user->get_user_id(), tb, login_lock_cas_ver));
       if (res < 0) {
-        WLOGERROR("call login rpc Get method failed, user %s, res: %d", user->get_open_id().c_str(), res);
+        WLOGERROR("call login rpc Get method failed, user %llu, res: %d", user->get_user_id(), res);
         break;
       }
 
@@ -72,7 +73,7 @@ task_action_ping::result_type task_action_ping::operator()() {
       tb->mutable_except()->set_except_sum_times(tb->except().except_sum_times() + 1);
       if (0 != tb->except().last_except_time() &&
           atfw::util::time::time_utility::get_now() - tb->except().last_except_time() <=
-              logic_config::me()->get_logic().heartbeat().ban_time_bound().seconds()) {
+              logic_config::me()->get_server_cfg().heartbeat().ban_time_bound().seconds()) {
         tb->mutable_except()->set_except_con_times(tb->except().except_con_times() + 1);
       } else {
         tb->mutable_except()->set_except_con_times(1);
@@ -80,9 +81,10 @@ task_action_ping::result_type task_action_ping::operator()() {
 
       tb->mutable_except()->set_last_except_time(util::time::time_utility::get_now());
 
-      if (tb->except().except_con_times() >= logic_config::me()->get_logic().heartbeat().ban_error_times()) {
-        tb->set_ban_time(static_cast<uint32_t>(util::time::time_utility::get_now() +
-                                               logic_config::me()->get_logic().session().login_ban_time().seconds()));
+      if (tb->except().except_con_times() >= logic_config::me()->get_server_cfg().heartbeat().ban_error_times()) {
+        tb->set_ban_time(
+            static_cast<uint32_t>(util::time::time_utility::get_now() +
+                                  logic_config::me()->get_server_cfg().session().login_ban_time().seconds()));
         kick_off_reason = PROJECT_NAMESPACE_ID::EN_CRT_LOGIN_BAN;
         set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_BAN);
       } else {
@@ -90,14 +92,14 @@ task_action_ping::result_type task_action_ping::operator()() {
         set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_SPEED_WARNING);
       }
       // 保存封号结果
-      res = RPC_AWAIT_CODE_RESULT(rpc::db::login::set(
-          get_shared_context(), user->get_open_id().c_str(), user->get_zone_id(),
-          rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_login>(get_shared_context(), tb), login_ver));
+      res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::replace(
+          get_shared_context(),
+          rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_login_lock>(get_shared_context(), tb), login_lock_cas_ver));
       if (res < 0) {
-        WLOGERROR("call login rpc Set method failed, user %s, zone id: %u, res: %d", user->get_open_id().c_str(),
+        WLOGERROR("call login rpc Set method failed, user %s, zone id: %llu, res: %d", user->get_user_id(),
                   user->get_zone_id(), res);
       } else {
-        user->load_and_move_login_info(std::move(*tb), login_ver);
+        user->load_and_move_login_lock(std::move(*tb), login_lock_cas_ver);
       }
     } while (false);
 

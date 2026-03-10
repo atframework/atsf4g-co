@@ -14,14 +14,14 @@ import "google/protobuf/descriptor.proto";
 
 // 只能配置在 com.const.proto 这个文件里有效
 extend google.protobuf.FileOptions {
-  ConstSettingsType ATFW_RPC_CONST_SETTINGS = 3271;  // 自定义配置
+  ConstSettingsType CONST_SETTINGS = 3271;  // 自定义配置
 }
 
 message ConstSettingsType {
   string rpc_version = 1;  // RPC协议版本号
 }
 
-option (ATFW_RPC_CONST_SETTINGS) = {
+option (CONST_SETTINGS) = {
   rpc_version: "0.1.0"
 };
 
@@ -269,6 +269,7 @@ message SSMsgHead {
   sint32 error_code = 1;
   int64 timestamp = 2;
   uint64 sequence = 3;
+  int32 op_type = 4;
 
   sint64 external_error_code = 8;
   string external_error_message = 9;
@@ -313,6 +314,7 @@ message CSMsgHead {
   uint64 client_sequence = 3;
   uint64 server_sequence = 4;   // 服务器生成的用户消息序号
   uint64 session_sequence = 5;  // 服务器生成的Session消息序号
+  int32 op_type = 6;            // @see EnMsgOpType
 
   sint64 external_error_code = 8;
   string external_error_message = 9;
@@ -335,4 +337,12 @@ message CSMsgHead {
 message CSMsg {
   CSMsgHead head = 1;
   bytes body_bin = 3;
+}
+
+// -----------------------------    DBMsg    -----------------------------
+message DBMsg {
+  uint64 node_id = 1;              // 用于恢复协程的BusID
+  uint64 destination_task_id = 2;  // 用于恢复协程的任务ID
+  int32 error_code = 3;            // 用于恢复协程的透传解包层错误码
+  uint64 response_int = 4;         // Redis 脚本回包整数返回值
 }

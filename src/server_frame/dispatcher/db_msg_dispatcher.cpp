@@ -118,7 +118,8 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::init() {
   }
 
   // init
-  cluster_init(logic_config::me()->get_cfg_db().cluster(), channel_t::CLUSTER_DEFAULT);
+  cluster_init(logic_config::me()->get_cfg_db().cluster(), logic_config::me()->get_cfg_db().password(),
+               channel_t::CLUSTER_DEFAULT);
   raw_init(logic_config::me()->get_cfg_db().raw(), channel_t::RAW_DEFAULT);
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
@@ -138,7 +139,7 @@ SERVER_FRAME_API int db_msg_dispatcher::tick() {
   return tick_msg_count_;
 }
 
-SERVER_FRAME_API int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t msg_buf_sz) {
+SERVER_FRAME_API int32_t db_msg_dispatcher::dispatch(const void *msg_buf, ATFW_EXPLICIT_UNUSED_ATTR size_t msg_buf_sz) {
   assert(msg_buf_sz == sizeof(db_async_data_t));
   const db_async_data_t *req = reinterpret_cast<const db_async_data_t *>(msg_buf);
 
@@ -157,11 +158,7 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t
     ctx_ptr = &ctx;
   }
 
-  PROJECT_NAMESPACE_ID::table_all_message *table_msg = ctx_ptr->create<PROJECT_NAMESPACE_ID::table_all_message>();
-  if (nullptr == table_msg) {
-    FWLOGERROR("{} create message instance failed", name());
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
-  }
+  db_message_t db_msg;
 
   if (nullptr == req->response) {
     FWLOGERROR("task [{}] DB msg, no response found", req->task_id);
@@ -171,16 +168,17 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t
   int ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   switch (req->response->type) {
     case REDIS_REPLY_STATUS: {
+      // 脚本返回
       if (0 == UTIL_STRFUNC_STRNCASE_CMP("OK", req->response->str, 2)) {
         FWLOGINFO("db reply status: {}", req->response->str);
       } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("CAS_FAILED", req->response->str, 10)) {
         FWLOGINFO("db reply status: {}", req->response->str);
         if (req->response->str[10] && req->response->str[11]) {
-          table_msg->set_version(atfw::util::string::to_int<uint64_t>(&req->response->str[11]));
+          db_msg.head_message.set_response_int(atfw::util::string::to_int<uint64_t>(&req->response->str[11]));
         }
         ret = PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION;
       } else {
-        table_msg->set_version(atfw::util::string::to_int<uint64_t>(req->response->str));
+        db_msg.head_message.set_response_int(atfw::util::string::to_int<uint64_t>(req->response->str));
         ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
       }
       break;
@@ -188,7 +186,7 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t
     case REDIS_REPLY_ERROR: {
       if (0 == UTIL_STRFUNC_STRNCASE_CMP("CAS_FAILED", req->response->str, 10)) {
         if (req->response->str[10] && req->response->str[11]) {
-          table_msg->set_version(atfw::util::string::to_int<uint64_t>(&req->response->str[11]));
+          db_msg.head_message.set_response_int(atfw::util::string::to_int<uint64_t>(&req->response->str[11]));
         }
         ret = PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION;
       } else {
@@ -199,7 +197,7 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t
     }
     default: {
       if (nullptr != req->unpack_fn) {
-        ret = req->unpack_fn(*table_msg, req->response);
+        ret = req->unpack_fn(ctx_ptr, db_msg, req->response);
         if (ret < 0) {
           FWLOGERROR("db unpack data error, res: {}", ret);
         }
@@ -210,12 +208,12 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t
     }
   }
 
-  table_msg->set_node_id(req->node_id);
-  table_msg->set_destination_task_id(req->task_id);
-  table_msg->set_error_code(ret);
+  db_msg.head_message.set_node_id(req->node_id);
+  db_msg.head_message.set_destination_task_id(req->task_id);
+  db_msg.head_message.set_error_code(ret);
 
   dispatcher_raw_message callback_msg = dispatcher_make_default<dispatcher_raw_message>();
-  callback_msg.msg_addr = table_msg;
+  callback_msg.msg_addr = &db_msg;
   callback_msg.message_type = get_instance_ident();
 
   dispatcher_result_t res = on_receive_message(*ctx_ptr, callback_msg, req->response, req->sequence);
@@ -224,13 +222,12 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::dispatch(const void *msg_buf, size_t
 }
 
 SERVER_FRAME_API uint64_t db_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
-  PROJECT_NAMESPACE_ID::table_all_message *real_msg =
-      get_protobuf_msg<PROJECT_NAMESPACE_ID::table_all_message>(raw_msg);
+  db_message_t *real_msg = get_protobuf_msg<db_message_t>(raw_msg);
   if (nullptr == real_msg) {
     return 0;
   }
 
-  return real_msg->destination_task_id();
+  return real_msg->head_message.destination_task_id();
 }
 
 SERVER_FRAME_API const std::string &db_msg_dispatcher::pick_rpc_name(msg_raw_t &) { return get_empty_string(); }
@@ -311,37 +308,60 @@ void db_msg_dispatcher::log_info_fn(const char *content) { WCLOGINFO(log_categor
 int db_msg_dispatcher::script_load(redisAsyncContext *c, script_type type) {
   // load lua script
   int status;
-  std::string script;
-  std::stringstream script_stream;
+  const char *script;
   switch (type) {
     case script_type::kCompareAndSetHashTable: {
-      script_stream << "local real_version_str = redis.call('HGET', KEYS[1], ARGV[1])\n";
-      script_stream << "local real_version = 0\n";
-      script_stream << "if real_version_str != false and real_version_str != nil then\n";
-      script_stream << "  real_version = tonumber(real_version_str)\n";
-      script_stream << "end\n";
-      script_stream << "local except_version = tonumber(ARGV[2])\n";
-      script_stream << "local unpack_fn = table.unpack or unpack -- Lua 5.1 - 5.3\n";
-      script_stream << "if real_version == 0 or except_version == real_version then\n";
-      script_stream << "  ARGV[2] = real_version + 1;\n";
-      script_stream << "  redis.call('HMSET', KEYS[1], unpack_fn(ARGV))\n";
-      script_stream << "  return  { ok = tostring(ARGV[2]) }\n";
-      script_stream << "else\n";
-      script_stream << "  return  { err = 'CAS_FAILED|' .. tostring(real_version) }\n";
-      script_stream << "end\n";
+      script = R"(local real_version_str = redis.call('HGET', KEYS[1], ARGV[1])
+local real_version = 0
+if real_version_str ~= false and real_version_str ~= nil then
+  real_version = tonumber(real_version_str)
+end
+local except_version = tonumber(ARGV[2])
+local unpack_fn = table.unpack or unpack -- Lua 5.1 - 5.3
+if real_version == 0 or except_version == real_version then
+  ARGV[2] = real_version + 1;
+  redis.call('HSET', KEYS[1], unpack_fn(ARGV))
+  return  { ok = tostring(ARGV[2]) }
+else
+  return  { err = 'CAS_FAILED|' .. tostring(real_version) }
+end)";
+      break;
+    }
+    case script_type::kAddListIndexHashTable: {
+      script = R"(local max_len = tonumber(ARGV[1])
+local index_field = "index_number"
+
+local fields = redis.call('HKEYS', KEYS[1])
+local current_len = #fields
+
+if current_len >= max_len + 1 then
+    local min_idx = nil
+    for _, field in ipairs(fields) do
+        if field ~= index_field then
+            local num = tonumber(field)
+            if num ~= nil then
+                if min_idx == nil or num < min_idx then
+                    min_idx = num
+                end
+            end
+        end
+    end
+    if min_idx ~= nil then
+        redis.call('HDEL', KEYS[1], tostring(min_idx))
+    end
+end
+
+local new_idx = redis.call('HINCRBY', KEYS[1], index_field, 1)
+redis.call('HSET', KEYS[1], tostring(new_idx), ARGV[2])
+return { ok = tostring(new_idx) })";
       break;
     }
     default:
-      break;
-  }
-
-  script = script_stream.str();
-  if (script.empty()) {
-    return 0;
+      return 0;
   }
 
   status = redisAsyncCommand(c, script_callback, reinterpret_cast<void *>(static_cast<intptr_t>(type)),
-                             "SCRIPT LOAD %s", script.c_str());
+                             "SCRIPT LOAD %s", script);
   if (REDIS_OK != status) {
     FWLOGERROR("send db msg failed, status: {}, msg: {}", status, c->errstr);
   }
@@ -389,7 +409,8 @@ void db_msg_dispatcher::script_callback(redisAsyncContext *c, void *r, void *pri
 }
 
 // cluster
-int db_msg_dispatcher::cluster_init(const PROJECT_NAMESPACE_ID::config::db_group_cfg &conns, int index) {
+int db_msg_dispatcher::cluster_init(const PROJECT_NAMESPACE_ID::config::db_group_cfg &conns,
+                                    const std::string &password, int index) {
   if (index >= channel_t::SENTINEL_BOUND || index < 0) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
@@ -408,6 +429,7 @@ int db_msg_dispatcher::cluster_init(const PROJECT_NAMESPACE_ID::config::db_group
   int32_t conn_idx = atfw::util::random_engine::random_between<int32_t>(0, conns.gateways_size());
 
   // 初始化
+  conn->set_auth_password(password);
   conn->init(conns.gateways(conn_idx).host(), static_cast<uint16_t>(conns.gateways(conn_idx).port()));
 
   // 设置日志handle
@@ -494,6 +516,7 @@ void db_msg_dispatcher::cluster_on_connected(hiredis::happ::cluster *clu, hiredi
   FWLOGINFO("connect to db host {} success", conn->get_key().name);
   // 注入redis的lua脚本
   me()->script_load(conn->get_context(), script_type::kCompareAndSetHashTable);
+  me()->script_load(conn->get_context(), script_type::kAddListIndexHashTable);
 
   for (int i = 0; i < channel_t::SENTINEL_BOUND; ++i) {
     std::shared_ptr<hiredis::happ::cluster> &clu_ptr = me()->db_cluster_conns_[i];
@@ -578,7 +601,7 @@ int db_msg_dispatcher::raw_init(const PROJECT_NAMESPACE_ID::config::db_group_cfg
     conn->set_log_writer(info_fn, debug_fn);
   }
 
-  // 设置连接成功注入login脚本和user脚本
+  // 设置连接成功
   conn->set_on_connect(db_msg_dispatcher::raw_on_connect);
   conn->set_on_connected(db_msg_dispatcher::raw_on_connected);
 

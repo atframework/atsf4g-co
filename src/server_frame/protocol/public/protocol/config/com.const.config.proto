@@ -9,8 +9,6 @@ option cc_enable_arenas = true;
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 
-import "protocol/extension/v3/xresloader.proto";
-import "protocol/extension/v3/xresloader_ue.proto";
 import "protocol/extension/xrescode_extensions_v3.proto";
 
 package hello.config;
@@ -26,24 +24,23 @@ enum game_const_config {
   EN_GCC_START_PLAYER_ID = 10000;         // start id for alloc player id
 }
 
-message excel_const_config {
+message ExcelConstConfig {
+  option (xrescode.loader) = {
+    file_path: "const.bytes"
+    indexes: { fields: "fake_key" index_type: EN_INDEX_KV }
+
+    tags: "client"
+    tags: "server"
+  };
+
+  // 虚拟的字段，用于生成读表代码。没有实际作用
+  int32 fake_key = 9999;
+
   google.protobuf.Duration test_duration = 1;
   repeated google.protobuf.Timestamp test_timestamp = 2;
   google.protobuf.Duration mail_default_expire = 3;
   int32 mail_max_count_per_major_type = 4;
   int32 global_mail_max_count_per_major_type = 5;
   string i18n_system_admin = 6;
-}
-
-message excel_origin_const_config {
-  option (xrescode.loader) = {
-    file_path: "const.bytes"
-    indexes: { fields: "key" index_type: EN_INDEX_KV }
-
-    tags: "client"
-    tags: "server"
-  };
-
-  string key = 1;
-  string value = 2;
+  google.protobuf.Duration daily_reset_time_offset = 7;     // 默认每日重置时间
 }

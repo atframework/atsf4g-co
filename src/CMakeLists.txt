@@ -23,5 +23,6 @@ include("${CMAKE_CURRENT_LIST_DIR}/service-functions.cmake")
 add_subdirectory(echosvr)
 add_subdirectory(authsvr)
 add_subdirectory(lobbysvr)
+add_subdirectory(rank_settlement_svr)
 
 add_subdirectory(tools)

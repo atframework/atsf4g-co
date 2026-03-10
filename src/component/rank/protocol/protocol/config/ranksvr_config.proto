@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+package hello.config;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+import "atframe/atapp_conf.proto";
+
+message rank_publisher_congigure {
+  int64 gc_expire_duration = 1 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3600" }];
+  int32 gc_log_size = 2 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30" }];
+  int32 max_log_size = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "300" }];
+}
+
+message ranksvr_cfg {
+  uint32 rank_slave_num = 101;
+  google.protobuf.Duration rank_server_router_lock_timeout = 102
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30s" }];
+  int32 rank_dunmp_task_max_num = 103 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "20" }];
+  google.protobuf.Duration rank_refresh_limit_second_interval = 104
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" }];
+  rank_publisher_congigure pushlisher_congihure = 105;
+  int32 rank_max_batch_get_num = 106
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "20" }];                           // db拉取分片数量
+  int32 max_mirror_count = 107 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10" }];  // 镜像最大数量
+  uint32 rank_history_version_max_count = 108;
+  int32 rank_slice_max_count = 109 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "200" }];
+  int32 rank_tree_degree = 110 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "20" }];
+  int64 rank_save_interval = 111 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "600" }];
+  uint32 rank_btree_degree = 112 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "20" }];
+}

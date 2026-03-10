@@ -24,7 +24,8 @@ ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(logic_config);
 ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(logic_config);
 #endif
 
-SERVER_FRAME_CONFIG_API logic_config::logic_config() : const_settings_(nullptr), atframe_settings_(nullptr) {}
+SERVER_FRAME_CONFIG_API logic_config::logic_config()
+    : const_settings_(nullptr), atframe_settings_(nullptr), custom_config_loader_(nullptr) {}
 
 SERVER_FRAME_CONFIG_API logic_config::~logic_config() {}
 
@@ -38,6 +39,9 @@ SERVER_FRAME_CONFIG_API int logic_config::reload(atfw::atapp::app &app) {
 
   _load_server_cfg(app);
   _load_db();
+  if (custom_config_loader_) {
+    custom_config_loader_(app, *this);
+  }
 
   readable_app_id_.clear();
   return 0;
@@ -104,9 +108,10 @@ void logic_config::_load_db() {
 }
 
 void logic_config::_load_db_hosts(PROJECT_NAMESPACE_ID::config::db_group_cfg &out) {
+  out.clear_gateways();
   for (int i = 0; i < out.host_size(); ++i) {
     const std::string &host = out.host(i);
-    out.clear_gateways();
+    FWLOGINFO("Load DB host config: {}", host);
 
     std::string::size_type fn = host.find_last_of(":");
     if (std::string::npos == fn) {
@@ -183,8 +188,8 @@ SERVER_FRAME_CONFIG_API const atframework::ConstSettingsType &logic_config::get_
   if (nullptr == desc) {
     desc = ::google::protobuf::DescriptorPool::generated_pool()->FindFileByName("atframework.proto");
   }
-  if (nullptr != desc && desc->options().HasExtension(atframework::ATFW_RPC_CONST_SETTINGS)) {
-    atframe_settings_ = &desc->options().GetExtension(atframework::ATFW_RPC_CONST_SETTINGS);
+  if (nullptr != desc && desc->options().HasExtension(atframework::CONST_SETTINGS)) {
+    atframe_settings_ = &desc->options().GetExtension(atframework::CONST_SETTINGS);
   }
 
   if (nullptr == atframe_settings_) {
@@ -196,10 +201,10 @@ SERVER_FRAME_CONFIG_API const atframework::ConstSettingsType &logic_config::get_
 
 void logic_config::_load_server_cfg(atfw::atapp::app &app) {
   server_cfg_.Clear();
-  app.parse_configures_into(server_cfg_, std::string(), "ATAPP");
+  app.parse_configures_into(server_cfg_, "logic", "ATAPP_LOGIC");
 
   atfw::util::time::time_utility::update();
-  auto reload_timepoint = server_cfg_.mutable_logic()->mutable_server()->mutable_reload_timepoint();
+  auto reload_timepoint = server_cfg_.mutable_server()->mutable_reload_timepoint();
   reload_timepoint->set_seconds(util::time::time_utility::get_sys_now());
   reload_timepoint->set_nanos(static_cast<int32_t>(util::time::time_utility::get_now_usec() * 1000));
 
@@ -243,4 +248,8 @@ void logic_config::_load_server_cfg(atfw::atapp::app &app) {
     }
   } while (false);
   */
+}
+
+SERVER_FRAME_CONFIG_API uint32_t logic_config::get_local_world_id() const noexcept {
+  return static_cast<uint32_t>(get_server_cfg().world_id());
 }

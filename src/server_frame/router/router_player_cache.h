@@ -7,6 +7,7 @@
 #include <data/player_cache.h>
 
 #include <rpc/rpc_shared_message.h>
+#include <nostd/string_view.h>
 
 #include <string>
 
@@ -14,12 +15,13 @@
 
 struct router_player_private_type {
   SERVER_FRAME_API router_player_private_type();
-  SERVER_FRAME_API router_player_private_type(rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> *tb,
-                                              uint64_t *ver);
+  SERVER_FRAME_API router_player_private_type(rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> *login_lock_tb,
+                                              uint64_t login_lock_cas_ver, const std::string& openid);
   SERVER_FRAME_API ~router_player_private_type();
 
-  rpc::shared_message<PROJECT_NAMESPACE_ID::table_login> *login_tb;
-  uint64_t *login_ver;
+  rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> *login_lock_tb;
+  uint64_t login_lock_cas_ver;
+  std::string openid;
 };
 
 class ATFW_UTIL_SYMBOL_VISIBLE router_player_cache : public router_object<player_cache, router_player_cache> {

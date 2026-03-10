@@ -27,7 +27,7 @@ const char* task_action_player_get_info::name() const { return "task_action_play
 
 task_action_player_get_info::result_type task_action_player_get_info::operator()() {
   const rpc_request_type& req_body = get_request_body();
-  rpc_response_type& rsp_body = get_response_body();
+  // rpc_response_type& rsp_body = get_response_body();
 
   player::ptr_t user = get_player<player>();
   if (!user) {
@@ -42,7 +42,7 @@ task_action_player_get_info::result_type task_action_player_get_info::operator()
   // 资源
   if (req_body.need_player_info()) {
     // TODO(owent) update auto restore
-    protobuf_copy_message(*rsp_body.mutable_player_profile(), user->get_account_info().profile());
+    // protobuf_copy_message(*rsp_body.mutable_player_profile(), user->get_account_info().profile());
     // rsp_item->set_player_level(user->get_player_level());
 
     // uint32_t player_level_func_bound = user->get_player_level();
@@ -71,10 +71,10 @@ task_action_player_get_info::result_type task_action_player_get_info::operator()
     //}
   }
 
-  // 自定义选项
-  if (req_body.need_player_options()) {
-    protobuf_copy_message(*rsp_body.mutable_player_options(), user->get_player_options().custom_options());
-  }
+  // // 自定义选项
+  // if (req_body.need_player_options()) {
+  //   protobuf_copy_message(*rsp_body.mutable_player_options(), user->get_player_options().custom_options());
+  // }
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

@@ -159,6 +159,32 @@ struct ATFW_UTIL_SYMBOL_VISIBLE __shared_message_meta {
   inline __shared_message_meta() noexcept {}
 };
 
+template <class FromMessageType, class ToMessageType>
+struct ATFW_UTIL_SYMBOL_VISIBLE __shared_message_convertor;
+
+template <class FromMessageType>
+struct ATFW_UTIL_SYMBOL_VISIBLE __shared_message_convertor<FromMessageType, FromMessageType> {
+  static inline atfw::util::memory::strong_rc_ptr<FromMessageType> convert(
+      atfw::util::memory::strong_rc_ptr<FromMessageType> &&from) {
+    return {std::move(from)};
+  }
+  static inline atfw::util::memory::strong_rc_ptr<FromMessageType> convert(
+      const atfw::util::memory::strong_rc_ptr<FromMessageType> &from) {
+    return {from};
+  }
+};
+template <class FromMessageType, class ToMessageType>
+struct ATFW_UTIL_SYMBOL_VISIBLE __shared_message_convertor {
+  static inline atfw::util::memory::strong_rc_ptr<ToMessageType> convert(
+      atfw::util::memory::strong_rc_ptr<FromMessageType> &&from) {
+    return {atfw::util::memory::static_pointer_cast<ToMessageType>(from)};
+  }
+  static inline atfw::util::memory::strong_rc_ptr<ToMessageType> convert(
+      const atfw::util::memory::strong_rc_ptr<FromMessageType> &from) {
+    return {atfw::util::memory::static_pointer_cast<ToMessageType>(from)};
+  }
+};
+
 template <class MessageType, class Allocator>
 class ATFW_UTIL_SYMBOL_VISIBLE __shared_message_shared_base {
  public:
@@ -391,7 +417,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, false>
   inline __shared_message(
       __shared_message<OtherMessageType, OtherAllocatorType, true> &&other)  // NOLINT: runtime/explicit
       noexcept
-      : base_type(std::move(other.arena_), std::move(other.instance_)) {
+      : base_type(std::move(other.arena_),
+                  __shared_message_convertor<OtherMessageType, type>::convert(std::move(other.instance_))) {
     other.mark_moved();
   }
 
@@ -405,7 +432,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, false>
     }
 
     arena_ = std::move(other.arena_);
-    instance_ = std::move(other.instance_);
+    instance_ = __shared_message_convertor<OtherMessageType, type>::convert(std::move(other.instance_));
 
     other.mark_moved();
     return *this;
@@ -668,7 +695,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, true>
   inline __shared_message(
       __shared_message<OtherMessageType, OtherAllocatorType, true> &&other)  // NOLINT: runtime/explicit
       noexcept
-      : base_type(std::move(other.arena_), std::move(other.instance_)) {
+      : base_type(std::move(other.arena_),
+                  __shared_message_convertor<OtherMessageType, type>::convert(std::move(other.instance_))) {
     other.mark_moved();
   }
 
@@ -682,7 +710,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, true>
     }
 
     arena_ = std::move(other.arena_);
-    instance_ = std::move(other.instance_);
+    instance_ = __shared_message_convertor<OtherMessageType, type>::convert(std::move(other.instance_));
 
     other.mark_moved();
     return *this;
@@ -705,15 +733,18 @@ class ATFW_UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, true>
 
   template <class OtherMessageType, class OtherAllocatorType, bool OtherWithDefaultConstructor,
             class = atfw::util::nostd::enable_if_t<
-                std::is_base_of<type, atfw::util::nostd::remove_cvref_t<OtherMessageType>>::value>>
+                std::is_base_of<type, atfw::util::nostd::remove_cvref_t<OtherMessageType>>::value ||
+                std::is_base_of<atfw::util::nostd::remove_cvref_t<OtherMessageType>, type>::value>>
   inline __shared_message(const __shared_message<OtherMessageType, OtherAllocatorType, OtherWithDefaultConstructor>
                               &other)  // NOLINT: runtime/explicit
       noexcept(std::is_nothrow_default_constructible<OtherAllocatorType>::value)
-      : base_type(other.arena_, other.share_instance()) {}
+      : base_type(other.arena_,
+         __shared_message_convertor<OtherMessageType, type>::convert(other.share_instance())){}
 
   template <class OtherMessageType, class OtherAllocatorType, bool OtherWithDefaultConstructor,
             class = atfw::util::nostd::enable_if_t<
-                std::is_base_of<type, atfw::util::nostd::remove_cvref_t<OtherMessageType>>::value>>
+                std::is_base_of<type, atfw::util::nostd::remove_cvref_t<OtherMessageType>>::value ||
+                std::is_base_of<atfw::util::nostd::remove_cvref_t<OtherMessageType>, type>::value>>
   inline __shared_message &
   operator=(const __shared_message<OtherMessageType, OtherAllocatorType, OtherWithDefaultConstructor> &other) noexcept(
       std::is_nothrow_default_constructible<OtherAllocatorType>::value) {
@@ -722,7 +753,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, true>
     }
 
     arena_ = other.arena_;
-    instance_ = other.share_instance();
+    instance_ = __shared_message_convertor<OtherMessageType, type>::convert(other.share_instance());
     return *this;
   }
 

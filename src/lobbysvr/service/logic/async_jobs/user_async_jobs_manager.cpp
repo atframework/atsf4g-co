@@ -35,7 +35,7 @@ user_async_jobs_manager::user_async_jobs_manager(player& owner)
 
 user_async_jobs_manager::~user_async_jobs_manager() {}
 
-void user_async_jobs_manager::create_init(rpc::context&, uint32_t) {}
+void user_async_jobs_manager::create_init(rpc::context&) {}
 
 void user_async_jobs_manager::login_init(rpc::context&) { reset_async_jobs_protect(); }
 
@@ -59,7 +59,7 @@ void user_async_jobs_manager::init_from_table_data(rpc::context&,
     for (int i = 0; i < player_table.async_job_blob_data().retry_jobs_size(); ++i) {
       auto& retry_job = player_table.async_job_blob_data().retry_jobs(i);
       retry_jobs_[retry_job.job_type()][retry_job.job_data().action_uuid()] =
-          atfw::memory::stl::make_strong_rc<PROJECT_NAMESPACE_ID::table_user_async_jobs_blob_data>(
+          atfw::memory::stl::make_strong_rc<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>(
               retry_job.job_data());
     }
 
@@ -168,14 +168,14 @@ bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
   if (::util::time::time_utility::get_now() > remote_command_patch_task_next_timepoint_) {
     force_async_job_type_.clear();
     remote_command_patch_task_next_timepoint_ = atfw::util::time::time_utility::get_now() +
-                                                logic_config::me()->get_logic().user().async_job().interval().seconds();
+                                                logic_config::me()->get_server_cfg().user().async_job().interval().seconds();
   }
 
   task_type_trait::task_type task_inst;
   task_action_player_remote_patch_jobs::ctor_param_t params;
   params.user = owner_->shared_from_this();
   params.timeout_duration =
-      task_manager::make_timeout_duration(logic_config::me()->get_logic().user().async_job().timeout());
+      task_manager::make_timeout_duration(logic_config::me()->get_server_cfg().user().async_job().timeout());
   params.timeout_timepoint = atfw::util::time::time_utility::now() + params.timeout_duration;
   params.caller_context = &ctx;
   params.async_job_type.swap(force_async_job_type_);
@@ -231,13 +231,13 @@ void user_async_jobs_manager::clear_job_uuids(int32_t job_type) {
     return;
   }
 
-  // uint32_t max_queue_size = logic_config::me()->get_logic().user().async_job().retry_queue_size();
+  // uint32_t max_queue_size = logic_config::me()->get_server_cfg().user().async_job().retry_queue_size();
   // if (max_queue_size <= 0) {
   //   max_queue_size = 100;
   // }
 
   uint32_t conflict_checking_queue_size =
-      logic_config::me()->get_logic().user().async_job().conflict_checking_queue_size();
+      logic_config::me()->get_server_cfg().user().async_job().conflict_checking_queue_size();
   if (conflict_checking_queue_size <= 0) {
     conflict_checking_queue_size = 1000;
   }
@@ -268,9 +268,9 @@ void user_async_jobs_manager::add_job_uuid(int32_t job_type, const std::string& 
   auto& history_set = history_uuids_[job_type];
 
   int64_t conflict_checking_timeout =
-      logic_config::me()->get_logic().user().async_job().conflict_checking_timeout().seconds();
+      logic_config::me()->get_server_cfg().user().async_job().conflict_checking_timeout().seconds();
   uint32_t conflict_checking_queue_size =
-      logic_config::me()->get_logic().user().async_job().conflict_checking_queue_size();
+      logic_config::me()->get_server_cfg().user().async_job().conflict_checking_queue_size();
   if (conflict_checking_queue_size <= 0) {
     conflict_checking_queue_size = 1000;
   }

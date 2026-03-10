@@ -8,31 +8,46 @@ option cc_enable_arenas = true;
 
 import "protocol/extension/v3/xresloader.proto";
 
-import "protocol/common/com.struct.isolation_scope.proto";
+import "protocol/common/com.struct.isolation_scope.common.proto";
+import "protocol/common/com.struct.extension.common.proto";
 
 package hello;
+
+message DItemPositionCfg {
+  int32 accumulation_limit = 1;
+  int32 row_size = 2;
+  int32 column_size = 3;
+}
 
 message DItemBoxPosition {
   int32 x = 1;
   int32 y = 2;
 }
 
+message DItemGridSize {
+  int32 row_size = 1;
+  int32 column_size = 2;
+}
+
 message DItemSlotPosition {
   int32 slot_idx = 1;
+}
+
+message DItemGridPosition {
+  oneof position_type {
+    // 仓库
+    DItemBoxPosition inventory = 1;
+    // 角色背包
+    DItemBoxPosition character_backpack = 2;
+    // 角色装备位置
+    DItemSlotPosition character_equipment = 3;
+  }
 }
 
 message DItemPosition {
   // Container guid
   int64 container_guid = 1;
-
-  oneof posotion_type {
-    // 仓库
-    DItemBoxPosition inventory = 11;
-    // 角色背包
-    DItemBoxPosition role_backpack = 12;
-    // 角色装备位置
-    DItemSlotPosition role_equipment = 13;
-  }
+  DItemGridPosition grid_position = 2;
 }
 
 message DItemBasic {
@@ -41,15 +56,23 @@ message DItemBasic {
   int64 guid = 3;  // 唯一ID(如果有)
   DItemPosition position = 4;
   // 所属沙箱Scope（赛季信息等）
-  // DIsolationScope scope = 5;
+  DIsolationScope scope = 5;
 }
+
+message DItemData {}
 
 // 道具数据实例
 message DItemInstance {
   // 道具基础信息
   DItemBasic item_basic = 1;
+  DItemData item_data = 2;
 
   int64 expire_timepoint = 11;  // 超时时间（如果有）
+}
+
+message DItemInstanceEntry {
+  DItemInstance instance = 1;
+  uint64 entry_id = 2;
 }
 
 // 道具数据(增量,用于奖励等)
@@ -70,6 +93,21 @@ message DItemScopeOffset {
 
 message DItemUseAction {
   oneof action_type {
-    int64 add_role_exp = 1 [(org.xresloader.field_unique_tag) = "item"];
+    int64 add_character_exp = 1 [(org.xresloader.field_unique_tag) = "item"];
   }
+}
+
+enum EnItemRarity {
+  option (ue_enum_conversion) = {
+    UeEnumAlias: "EHelloInventoryRarity"
+    DefaultPbEnum: "EN_ITEM_RARITY_NONE"
+    DefaultUeEnum: "None"
+  };
+  EN_ITEM_RARITY_NONE = 0 [(ue_enum_alias) = "None"];
+  EN_ITEM_RARITY_NORMAL = 20 [(ue_enum_alias) = "Normal", (org.xresloader.enum_alias) = "Normal"];
+  EN_ITEM_RARITY_UNCOMMON = 40 [(ue_enum_alias) = "Uncommon", (org.xresloader.enum_alias) = "Uncommon"];
+  EN_ITEM_RARITY_RARE = 60 [(ue_enum_alias) = "Rare", (org.xresloader.enum_alias) = "Rare"];
+  EN_ITEM_RARITY_EPIC = 80 [(ue_enum_alias) = "Epic", (org.xresloader.enum_alias) = "Epic"];
+  EN_ITEM_RARITY_LEGENDARY = 100 [(ue_enum_alias) = "Legendary", (org.xresloader.enum_alias) = "Legendary"];
+  EN_ITEM_RARITY_UNIQUE = 120 [(ue_enum_alias) = "Unique", (org.xresloader.enum_alias) = "Unique"];
 }

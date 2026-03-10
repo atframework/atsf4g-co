@@ -1,5 +1,10 @@
 validator:
+  # com.struct.item.config.proto
   - name: "ExcelItemType_type_id"
     description: "Item.xlsx|道具描述总表|type_id 值校验"
     rules:
       - InTableColumn("Item.xlsx", "道具描述总表", 3, 2, "type_id")
+  - name: "UESourceInventory_type_id"
+    description: "UE局内 UESourceInventory 资源值校验"
+    rules:
+      - InText("UeSource_Inventory.txt", 1)

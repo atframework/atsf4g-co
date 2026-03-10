@@ -1,7 +1,0 @@
-<%!
-    import common.project_utils as project
-%><%include file="atapp.template.yaml" />
-<%include file="db.template.yaml" />
-<%include file="logic.template.yaml" />
-
-# gamesvr:

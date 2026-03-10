@@ -533,6 +533,19 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
                PDB_OUTPUT_DIRECTORY
                "${PROJECT_INSTALL_BAS_DIR}/${project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY}"
                INSTALL_RPATH "${TARGET_INSTALL_RPATH}")
+  
+  # 针对MSVC多配置生成器，防止自动添加Debug目录
+  if(MSVC)
+    set_target_properties(${TARGET_NAME} PROPERTIES
+      RUNTIME_OUTPUT_DIRECTORY_DEBUG "${PROJECT_INSTALL_BAS_DIR}/${project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY}"
+      RUNTIME_OUTPUT_DIRECTORY_RELEASE "${PROJECT_INSTALL_BAS_DIR}/${project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY}"
+      RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${PROJECT_INSTALL_BAS_DIR}/${project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY}"
+      RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${PROJECT_INSTALL_BAS_DIR}/${project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY}"
+      PDB_OUTPUT_DIRECTORY_DEBUG "${PROJECT_INSTALL_BAS_DIR}/${project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY}"
+      PDB_OUTPUT_DIRECTORY_RELEASE "${PROJECT_INSTALL_BAS_DIR}/${project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY}"
+      PDB_OUTPUT_DIRECTORY_RELWITHDEBINFO "${PROJECT_INSTALL_BAS_DIR}/${project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY}"
+      PDB_OUTPUT_DIRECTORY_MINSIZEREL "${PROJECT_INSTALL_BAS_DIR}/${project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY}")
+  endif()
 
   if(project_service_declare_instance_OUTPUT_TARGET_NAME)
     set(${project_service_declare_instance_OUTPUT_TARGET_NAME}

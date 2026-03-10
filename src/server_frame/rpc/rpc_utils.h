@@ -50,7 +50,9 @@ PROJECT_NAMESPACE_END
 
 namespace atframework {
 class SSMsg;
-}
+}  // namespace atframework
+
+struct db_message_t;
 
 namespace rpc {
 
@@ -103,8 +105,7 @@ ATFW_UTIL_FORCEINLINE result_code_type wait(context &ctx, std::chrono::duration<
 }
 
 SERVER_FRAME_API result_code_type wait(context &ctx, atframework::SSMsg &msg, const dispatcher_await_options &options);
-SERVER_FRAME_API result_code_type wait(context &ctx, PROJECT_NAMESPACE_ID::table_all_message &msg,
-                                       const dispatcher_await_options &options);
+SERVER_FRAME_API result_code_type wait(context &ctx, db_message_t &msg, const dispatcher_await_options &options);
 
 /**
  * @brief wait for multiple messages

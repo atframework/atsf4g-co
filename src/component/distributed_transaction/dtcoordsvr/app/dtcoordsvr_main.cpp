@@ -40,24 +40,9 @@
 
 #include <logic/transaction_manager.h>
 
-namespace {
-static std::shared_ptr<hello::config::dtcoordsvr_cfg> &get_server_cfg_pointer() {
-  static std::shared_ptr<hello::config::dtcoordsvr_cfg> cfg = std::make_shared<hello::config::dtcoordsvr_cfg>();
-  return cfg;
-}
-}  // namespace
-
-// NOLINTNEXTLINE(misc-use-internal-linkage)
-const hello::config::dtcoordsvr_cfg &get_dtcoordsvr_cfg() { return *get_server_cfg_pointer(); }
 
 class main_service_module : public atfw::atapp::module_impl {
  public:
-  int reload() override {
-    std::shared_ptr<hello::config::dtcoordsvr_cfg> cfg = std::make_shared<hello::config::dtcoordsvr_cfg>();
-    get_app()->parse_configures_into(*cfg, "dtcoordsvr", "ATAPP_DTCOORDSVR");
-    get_server_cfg_pointer().swap(cfg);
-    return 0;
-  }
 
   int init() override {
     {
@@ -92,6 +77,12 @@ int main(int argc, char *argv[]) {
     atfw::util::file_system::dirname(__FILE__, 0, proj_dir, 4);
     atfw::util::log::log_formatter::set_project_directory(proj_dir.c_str(), proj_dir.size());
   }
+
+  logic_config::me()->set_custom_config_loader([](atfw::atapp::app &app, logic_config &cfg) {
+    auto config_ptr = atfw::util::memory::make_strong_rc<PROJECT_NAMESPACE_ID::config::dtcoordsvr_cfg>();
+    app.parse_configures_into(*config_ptr, "dtcoordsvr", "ATAPP_DTCOORDSVR");
+    cfg.mutable_custom_config() = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);
+  });
 
   logic_server_common_module_configure logic_mod_conf;
   if (logic_server_setup_common(app, logic_mod_conf) < 0) {

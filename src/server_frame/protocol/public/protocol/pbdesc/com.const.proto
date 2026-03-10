@@ -25,6 +25,13 @@ enum EnConstLimits {
   EN_CL_MAX_AUTH_TOKEN_LENGHT = 128; // token length limit
 }
 
+enum EnMsgOpType {
+  EN_MSG_OP_TYPE_MIXUP = 0;           // 混合模式
+  EN_MSG_OP_TYPE_STREAM = 1;          // 流,如果上行包时流，那么下行包也是流
+  EN_MSG_OP_TYPE_UNARY_REQUEST = 2;   // 请求-应答模式，请求包
+  EN_MSG_OP_TYPE_UNARY_RESPONSE = 3;  // 请求-应答模式，回应包
+};
+
 // account type
 enum EnAccountTypeID {
   EN_ATI_ACCOUNT_INNER = 0; // inner: username/password
@@ -163,6 +170,8 @@ enum EnErrorCode {
                        [(error_code.description) = "服务器系统繁忙，请稍后重试"];
   EN_ERR_SYSTEM_BAD_PACKAGE = -115
                               [(error_code.description) = "包结构错误"];
+  EN_ERR_OPERATE_DB_FAILED = -116
+                              [(error_code.description) = "操作数据库失败"];
 
   // openapi
   EN_ERR_OPENAPI_LIMIT = -201
@@ -224,6 +233,62 @@ enum EnErrorCode {
                            [(error_code.description) = "道具不足"];
   EN_ERR_ITEM_NOT_FOUND = -502
                           [(error_code.description) = "道具未找到"];
-
+  EN_ERR_ITEM_POSITION_OCCUPIED = -503
+                                 [(error_code.description) = "道具位置已被占用"];
+  EN_ERR_ITEM_POSITION_OUT_OF_RANGE = -504
+                                     [(error_code.description) = "道具位置超出背包范围"];
+  EN_ERR_ITEM_NO_EMPTY_POSITION = -505
+                                 [(error_code.description) = "背包没有空位"];
+  EN_ERR_ITEM_DUPLICATE_GUID = -506
+                               [(error_code.description) = "道具GUID重复"];
+  EN_ERR_ITEM_MOVE_TARGET_OCCUPIED = -507
+                                    [(error_code.description) = "移动目标位置已被占用"];
+  EN_ERR_ITEM_STORAGE_FULL = -508
+                             [(error_code.description) = "背包已满"];
+  EN_ERR_ITEM_STACK_OVERFLOW = -509
+                              [(error_code.description) = "堆叠数量超过上限"];
+  // 排行榜[601-700]
+  EN_ERR_RANK_USER_NOT_FOUND = -601
+                                                        [(error_code.description) = "排行榜玩家不在榜单上"];
+  EN_ERR_RANK_NO_NOT_FOUND = -602
+                                                        [(error_code.description) = "排行榜排名不存在"];
+  EN_ERR_RANK_NO_HAS_BUT_NO_FOUND_DETAIL_DATA = -603
+                                                        [(error_code.description) = "排行榜排名存在但没有详细数据"];
+  EN_ERR_RANK_DATA_VERSION_INCONSISTENCY = -604
+                                                        [(error_code.description) = "排行榜数据版本不一致"];
+  EN_ERR_RANK_NOT_EXIST = -605
+                                                        [(error_code.description) = "排行榜数据不存在"];
+  EN_ERR_RANK_SERVICE_NOT_AVAILABLE = -606
+                                                        [(error_code.description) = "没有可用的排行榜服务"];
+  EN_ERR_RANK_SERVICE_SYSTEM_BUSY = -607
+                                                        [(error_code.description) = "排行榜服务繁忙"];                                                                                                              
+  EN_ERR_RANK_SCORE_INVALID = -608
+                                                        [(error_code.description) = "排行榜成绩非法, 不能小于0"];    
+  EN_ERR_RANK_CONFIG_NOT_FOUND = -609
+                                                        [(error_code.description) = "排行榜配置没有找到"]; 
+  EN_ERR_RANK_IS_NOT_SLAVE = -710  
+                                                        [(error_code.description) = "不是从节点"];
+  EN_ERR_RANK_IS_NOT_MAIN = -711
+                                                        [(error_code.description) = "不是主节点"];
+  EN_ERR_RANK_SLAVE_SERVER_EMPTY = -712
+                                                        [(error_code.description) = "没有可用的从节点"];        
+  EN_ERR_RANK_MIRROR_ALLOC_FAILED = -713
+                                                        [(error_code.description) = "排行榜镜像分配失败"];  
+  EN_ERR_RANK_MIRROR_NOT_FOUND = -714
+                                                        [(error_code.description) = "排行榜镜像不存在"];  
+  EN_ERR_RANK_INVALID_TYPE = -715
+                             [(error_code.description) = "排行榜类型错误"];
+  EN_ERR_RANK_USER_NOT_EXISTS = -716
+                                [(error_code.description) = "未在排行榜上"];
+  EN_ERR_RANK_ROLE_GUID_INVALID = -717
+                                  [(error_code.description) = "角色榜单上报guid错误"];
+  EN_ERR_RANK_TYPE_OPERATE_INVALID = -718
+                                     [(error_code.description) = "排行榜类型不支持此操作"];
+  EN_ERR_RANK_SERVERTIME_UNAVAILABLE = -719
+                                     [(error_code.description) = "排行榜服务不可用"];
+  EN_ERR_RANK_INSTANCE_KEY_INVALID = -720
+                                     [(error_code.description) = "排行榜实例键无效"];
+  EN_ERR_RANK_DEFINE_CFG_NOT_FOUND = -721
+                                     [(error_code.description) = "排行榜未定义"];
   // 注意错误码不能小于 -999999，便于区分服务器错误码和客户端错误码
 }

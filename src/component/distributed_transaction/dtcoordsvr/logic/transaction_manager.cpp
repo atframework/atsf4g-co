@@ -13,7 +13,7 @@
 
 #include <utility/protobuf_mini_dumper.h>
 
-#include <rpc/db/distribute_transaction.h>
+#include <rpc/db/local_db_interface.h>
 #include <rpc/rpc_utils.h>
 
 // clang-format off
@@ -27,8 +27,6 @@
 // clang-format on
 
 #include <string>
-
-#include "app/dtcoordsvr_config.h"
 
 #define TRANSACTION_RETRY_MAX_TIMES 5
 
@@ -57,8 +55,8 @@ int transaction_manager::tick() {
     return ret;
   }
 
-  time_t timeout_duration = get_dtcoordsvr_cfg().lru_expired_duration().seconds();
-  size_t max_count = get_dtcoordsvr_cfg().lru_max_cache_count();
+  time_t timeout_duration = logic_config::me()->get_custom_config<PROJECT_NAMESPACE_ID::config::dtcoordsvr_cfg>().lru_expired_duration().seconds();
+  size_t max_count = logic_config::me()->get_custom_config<PROJECT_NAMESPACE_ID::config::dtcoordsvr_cfg>().lru_max_cache_count();
   while (!lru_caches_.empty()) {
     if (!lru_caches_.front().second) {
       lru_caches_.pop_front();
@@ -97,8 +95,7 @@ rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_p
           FWLOGERROR("Serialize transaction_blob_storage failed, {}", storage->blob_data().InitializationErrorString());
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PACK);
         }
-        int ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::set(
-            subctx, storage->zone_id(), storage->transaction_uuid(), std::move(storage), data_version));
+        int ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::replace(subctx, std::move(storage), data_version));
         if (nullptr != out_version) {
           *out_version = data_version;
         }
@@ -119,7 +116,7 @@ rpc::result_code_type transaction_manager::create_transaction(
   storage.mutable_metadata()->mutable_prepare_timepoint()->set_nanos(now_nanos);
 
   if (storage.metadata().expire_timepoint().seconds() <= now) {
-    const auto& cfg_value = get_dtcoordsvr_cfg().transaction_default_timeout();
+    const auto& cfg_value = logic_config::me()->get_custom_config<PROJECT_NAMESPACE_ID::config::dtcoordsvr_cfg>().transaction_default_timeout();
     if (now_nanos + cfg_value.nanos() > 1000000000) {
       storage.mutable_metadata()->mutable_expire_timepoint()->set_seconds(now + cfg_value.seconds() + 1);
       storage.mutable_metadata()->mutable_expire_timepoint()->set_nanos(now_nanos + cfg_value.nanos() - 1000000000);
@@ -145,9 +142,7 @@ rpc::result_code_type transaction_manager::create_transaction(
 
   rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   if (!storage.metadata().memory_only()) {
-    ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::set(ctx, get_transaction_zone_id(storage.metadata()),
-                                                                     storage.metadata().transaction_uuid(),
-                                                                     std::move(db_data), db_version));
+    ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::replace(ctx, std::move(db_data), db_version));
     // TODO(owent): With TTL
 
     if (ret < 0) {
@@ -184,8 +179,8 @@ rpc::result_code_type transaction_manager::mutable_transaction(
                   int64_t* out_version) -> rpc::result_code_type {
           uint64_t data_version = 0;
           rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> storage{subctx};
-          int sub_ret =
-              RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::get(subctx, zone_id, key, storage, data_version));
+          int sub_ret = RPC_AWAIT_CODE_RESULT(
+              rpc::db::distribute_transaction::get_all(subctx, zone_id, key.c_str(), storage, data_version));
           if (sub_ret < 0) {
             RPC_RETURN_CODE(sub_ret);
           }
@@ -274,8 +269,8 @@ rpc::result_code_type transaction_manager::try_commit(rpc::context& ctx, transac
       ret = 0;
     } else {
       ret = RPC_AWAIT_CODE_RESULT(
-          rpc::db::distribute_transaction::remove(ctx, get_transaction_zone_id(trans->data_object.metadata()),
-                                                  trans->data_object.metadata().transaction_uuid()));
+          rpc::db::distribute_transaction::remove_all(ctx, get_transaction_zone_id(trans->data_object.metadata()),
+                                                      trans->data_object.metadata().transaction_uuid().c_str()));
       if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
         ret = 0;
       }
@@ -353,8 +348,8 @@ rpc::result_code_type transaction_manager::try_reject(rpc::context& ctx, transac
       ret = 0;
     } else {
       ret = RPC_AWAIT_CODE_RESULT(
-          rpc::db::distribute_transaction::remove(ctx, get_transaction_zone_id(trans->data_object.metadata()),
-                                                  trans->data_object.metadata().transaction_uuid()));
+          rpc::db::distribute_transaction::remove_all(ctx, get_transaction_zone_id(trans->data_object.metadata()),
+                                                      trans->data_object.metadata().transaction_uuid().c_str()));
       if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
         ret = 0;
       }
@@ -465,8 +460,8 @@ rpc::result_code_type transaction_manager::try_remove(
 
   int ret = 0;
   if (!metadata.memory_only()) {
-    RPC_AWAIT_CODE_RESULT(
-        rpc::db::distribute_transaction::remove(ctx, get_transaction_zone_id(metadata), metadata.transaction_uuid()));
+    RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::remove_all(ctx, get_transaction_zone_id(metadata),
+                                                                      metadata.transaction_uuid().c_str()));
     if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
       ret = 0;
     }

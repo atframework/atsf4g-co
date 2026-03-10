@@ -10,22 +10,9 @@ option cc_enable_arenas = true;
 option go_package = "github.com/atframework/atsf4g-go/component-protocol-private/pbdesc/protocol/pbdesc";
 
 import "protocol/pbdesc/com.struct.proto";
+import "protocol/common/com.struct.rank.common.proto";
 
 package hello;
-
-message table_simple_info {
-  string msg_str = 1;
-  int32 msg_i32 = 2;
-  uint32 msg_u32 = 3;
-  int64 msg_i64 = 4;
-  uint64 msg_u64 = 5;
-
-  repeated string arr_str = 6;
-  repeated int32 arr_i32 = 7;
-  repeated uint32 arr_u32 = 8;
-  repeated int64 arr_i64 = 9;
-  repeated uint64 arr_u64 = 10;
-}
 
 message client_session_index {
   uint64 node_id = 1;
@@ -54,18 +41,43 @@ message login_record {
   int64 gamesvr_version = 2;  // Gamesvr组版本号
 }
 
-message player_data {
+message user_data {
   uint32 player_level = 1;      // 玩家等级
   uint64 session_sequence = 2;  // 玩家的全局递增发包序号
 }
 
-message player_options {
+message user_options_data {
   DPlayerOptions custom_options = 1;  // 用户自定义选项
 }
 
 message user_async_job_debug_message {
   string content = 1;
   string title = 2;
+}
+
+
+message user_async_job_update_rank {
+  DRankKey rank_key = 1;
+  bool trigger_by_io_task = 3;
+
+  DRankInstanceKey rank_instance_key = 4;
+
+  oneof action_hint {
+    uint32 set_score = 11;
+    uint32 add_score = 12;
+    uint32 sub_score = 13;
+  }
+}
+
+message user_async_job_settle_rank {
+  DRankBoardBasicData rank_board_basic_data = 1;
+  int32 rank_reward_pool_id = 3; // 奖励池ID
+  EnRankPeriodRewardType rank_reward_pool_type = 4;
+  bool save_history = 6; // 是否落地存储历史
+  int32 season_id = 7; // 结算时的赛季
+
+  int64 daily_reward_cycle_no = 11; // 每日结算奖励的奖励周期ID（防止重复结算）
+  int64 custom_reward_cycle_no = 12; // 自定义结算周期奖励的奖励周期ID（防止重复结算）
 }
 
 message player_async_jobs_data {
@@ -76,4 +88,47 @@ message player_async_jobs_data {
   }
   repeated history_job_meta history = 1;  // 上一轮处理的UUID列表
   int64 next_task_active_time = 2;        // 下一次异步任务的启动时间
+}
+
+message user_login_data {
+  // 业务层登入注册信息
+  int64 business_register_time = 31;  // 业务层注册时间
+  int64 business_login_time = 32;     // 业务层登入时间
+  int64 business_logout_time = 33;    // 业务层登出时间
+
+  login_record last_login = 42;      // 上次登入的信息
+
+  uint32 stat_login_total_times = 51;    // 总登入次数
+  uint32 stat_login_success_times = 52;  // 成功登入次数
+  uint32 stat_login_failed_times = 53;   // 失败登入次数
+}
+
+message user_async_jobs_blob_data {
+  // action的 唯一ID，用于容灾
+  string action_uuid = 1;
+  int64 timepoint_ms = 2;
+
+  // 如果失败了，内置的剩余重试次数
+  int32 left_retry_times = 3;
+
+  oneof action {
+    user_async_job_debug_message debug_message = 101;  // 调试消息
+    user_async_job_update_rank update_rank = 201;     // 更新排行榜
+    user_async_job_settle_rank settle_rank = 202;     // 结算排行榜
+  }
+}
+
+message user_async_jobs_cache_blob_data {
+  player_async_jobs_data async_jobs = 1;  // 异步任务缓存
+
+  message retry_job_data {
+    int32 job_type = 1;
+    user_async_jobs_blob_data job_data = 2;
+  };
+  repeated retry_job_data retry_jobs = 11;
+}
+
+message table_user_instance_rank_battle_blob_data {
+  int64 occur_time = 1;
+  int32 kill_player_count = 2;
 }

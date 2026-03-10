@@ -121,7 +121,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
   SERVER_FRAME_API static ptr_t create(uint64_t user_id, uint32_t zone_id, const std::string &openid);
 
   // 创建默认角色数据
-  SERVER_FRAME_API virtual void create_init(rpc::context &ctx, uint32_t version_type);
+  SERVER_FRAME_API virtual void create_init(rpc::context &ctx);
 
   // 登入读取用户数据
   SERVER_FRAME_API virtual void login_init(rpc::context &ctx);
@@ -199,33 +199,39 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
     return static_cast<unsigned long long>(get_user_id());
   }
 
-  ATFW_UTIL_FORCEINLINE uint64_t get_version() const { return version_; }
-  ATFW_UTIL_FORCEINLINE uint64_t &get_version() { return version_; }
-  ATFW_UTIL_FORCEINLINE void set_version(uint64_t version) { version_ = version; }
+  ATFW_UTIL_FORCEINLINE uint64_t get_user_cas_version() const { return user_cas_version_; }
+  ATFW_UTIL_FORCEINLINE uint64_t& get_user_cas_version() { return user_cas_version_; }
+  ATFW_UTIL_FORCEINLINE void set_user_cas_version(uint64_t version) { user_cas_version_ = version; }
 
   /**
    * @brief 获取大区号
    */
   ATFW_UTIL_FORCEINLINE uint32_t get_zone_id() const { return zone_id_; }
 
-  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::table_login &get_login_info() const { return login_info_; }
-  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::table_login &get_login_info() { return login_info_; }
-  SERVER_FRAME_API void load_and_move_login_info(PROJECT_NAMESPACE_ID::table_login &&lg, uint64_t ver);
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::table_login_lock &get_login_lock() const { return login_lock_; }
+  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::table_login_lock &get_login_lock() { return login_lock_; }
+  SERVER_FRAME_API void load_and_move_login_lock(PROJECT_NAMESPACE_ID::table_login_lock &&lg, uint64_t ver);
 
-  ATFW_UTIL_FORCEINLINE uint64_t get_login_version() const { return login_info_version_; }
-  ATFW_UTIL_FORCEINLINE uint64_t &get_login_version() { return login_info_version_; }
+  ATFW_UTIL_FORCEINLINE uint64_t get_login_lock_cas_version() const { return login_lock_version_; }
+  ATFW_UTIL_FORCEINLINE uint64_t &get_login_lock_cas_version() { return login_lock_version_; }
 
   ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::account_information &get_account_info() const {
     return account_info_;
   }
   ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::account_information &get_account_info() { return account_info_.ref(); }
 
-  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::player_options &get_player_options() const {
-    return player_options_;
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::user_login_data &get_login_info() const {
+    return login_info_;
   }
-  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::player_options &get_player_options() { return player_options_.ref(); }
+  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::user_login_data &get_login_info() { return login_info_.ref(); }
 
-  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::player_data &get_player_data() const { return player_data_; }
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::user_data &get_player_data() const { return player_data_; }
+
+  ATFW_UTIL_FORCEINLINE bool has_create_init() const {
+    return create_init_;
+  }
+
+  SERVER_FRAME_API bool is_new_user() const;
 
   ATFW_UTIL_FORCEINLINE uint64_t get_data_version() const { return data_version_; }
 
@@ -237,7 +243,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
   EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type await_initialization_task(rpc::context &ctx);
 
  private:
-  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::player_data &mutable_player_data() { return player_data_.ref(); }
+  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::user_data &mutable_player_data() { return player_data_.ref(); }
 
  protected:
   ATFW_UTIL_FORCEINLINE void set_data_version(uint32_t ver) { data_version_ = ver; }
@@ -248,20 +254,21 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
   std::string openid_id_;
   uint64_t user_id_;
   uint32_t zone_id_;
-  PROJECT_NAMESPACE_ID::table_login login_info_;
-  uint64_t login_info_version_;
 
-  uint64_t version_;
-  uint64_t data_version_;
+  PROJECT_NAMESPACE_ID::table_login_lock login_lock_;
+  uint64_t login_lock_version_;
+  uint64_t user_cas_version_;
+  bool create_init_;
 
   std::weak_ptr<session> session_;
-  uint64_t server_sequence_;
 
   task_type_trait::id_type initialization_task_id_;
 
+  player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::user_login_data> login_info_;
   player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::account_information> account_info_;
-  player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::player_data> player_data_;
-  player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::player_options> player_options_;
+  player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::user_data> player_data_;
+  uint64_t server_sequence_;
+  uint64_t data_version_;
 };
 
 // 玩家日志输出工具

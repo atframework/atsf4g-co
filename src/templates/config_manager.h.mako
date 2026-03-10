@@ -1,4 +1,4 @@
-﻿## -*- coding: utf-8 -*-
+## -*- coding: utf-8 -*-
 <%!
 import time
 %><%
@@ -23,11 +23,58 @@ xresloader_include_prefix = pb_set.get_custom_variable("xresloader_include_prefi
 #include <type_traits>
 #include <unordered_map>
 
-#include "lock/spin_rw_lock.h"
-
 // clang-format off
 #include "config/compiler/protobuf_prefix.h"
 // clang-format on
+
+#pragma push_macro("InterlockedAdd")
+#ifdef InterlockedAdd
+#  undef InterlockedAdd
+#endif
+#pragma push_macro("InterlockedIncrement")
+#ifdef InterlockedIncrement
+#  undef InterlockedIncrement
+#endif
+#pragma push_macro("InterlockedDecrement")
+#ifdef InterlockedDecrement
+#  undef InterlockedDecrement
+#endif
+#pragma push_macro("InterlockedExchange")
+#ifdef InterlockedExchange
+#  undef InterlockedExchange
+#endif
+#pragma push_macro("InterlockedExchangeAdd")
+#ifdef InterlockedExchangeAdd
+#  undef InterlockedExchangeAdd
+#endif
+#pragma push_macro("InterlockedCompareExchange")
+#ifdef InterlockedCompareExchange
+#  undef InterlockedCompareExchange
+#endif
+#pragma push_macro("InterlockedAnd")
+#ifdef InterlockedAnd
+#  undef InterlockedAnd
+#endif
+#pragma push_macro("InterlockedOr")
+#ifdef InterlockedOr
+#  undef InterlockedOr
+#endif
+#pragma push_macro("InterlockedXor")
+#ifdef InterlockedXor
+#  undef InterlockedXor
+#endif
+
+#include "lock/spin_rw_lock.h"
+
+#  pragma pop_macro("InterlockedXor")
+#  pragma pop_macro("InterlockedOr")
+#  pragma pop_macro("InterlockedAnd")
+#  pragma pop_macro("InterlockedCompareExchange")
+#  pragma pop_macro("InterlockedExchangeAdd")
+#  pragma pop_macro("InterlockedExchange")
+#  pragma pop_macro("InterlockedDecrement")
+#  pragma pop_macro("InterlockedIncrement")
+#  pragma pop_macro("InterlockedAdd")
 
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/message.h"
@@ -38,10 +85,12 @@ xresloader_include_prefix = pb_set.get_custom_variable("xresloader_include_prefi
 #include "config/compiler/protobuf_suffix.h"
 // clang-format on
 
-% for block_file in pb_set.get_custom_blocks("custom_config_include"):
-// include custom_config_include: ${block_file}
+// clang-format off
+% for block_file in pb_set.get_custom_blocks("custom_config_manager_include"):
+// include custom_config_manager_include: ${block_file}
 <%include file="${block_file}" />
 % endfor
+// clang-format on
 
 % for pb_msg in pb_set.generate_message:
 %   for loader in pb_msg.loaders:
@@ -237,7 +286,7 @@ private:
 
 private:
   static bool is_destroyed_;
-  atfw::util::lock::atomic_int_type<int64_t> reload_version_;
+  std::atomic<int64_t> reload_version_;
   bool override_same_version_;
   bool enable_multithread_lock_;
   size_t max_group_number_;

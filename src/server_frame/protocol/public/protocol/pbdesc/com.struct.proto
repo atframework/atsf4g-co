@@ -6,8 +6,6 @@ option optimize_for = SPEED;
 // --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
 
-import "protocol/pbdesc/com.const.proto";
-
 package hello;
 
 // 登录用户终端信息
@@ -47,7 +45,7 @@ message DAppleGameCenter {
 message DAccountData {
   uint32 account_type = 1;  // 平台类型 EnAccountTypeID
   string access = 2;        // 授权码（内置账户的话就是密码的hash值，OAuth的话就是access token）
-  uint32 channel_id = 3;    // 渠道ID（某些品太需要区分认证体系以外的渠道号） @see EnPlatformChannelID
+  uint32 channel_id = 3;  // 渠道ID（某些品太需要区分认证体系以外的渠道号） @see EnPlatformChannelID
 }
 
 message DUpdateData {
@@ -82,6 +80,7 @@ message DPlayerStat {
 
 // 用户数据
 message DPlayerInfo {
+  DPlayerProfile player = 1;
   uint32 player_level = 2;  // 玩家（主城）等级
   DPlayerStat player_stat = 4;
 }

@@ -1,0 +1,146 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+import "protocol/extension/v3/xresloader.proto";
+
+package hello;
+
+// 限频 - 检查点存储结构
+message DConditionCounterCheckpoint {
+  int64 next_day_checkpoint = 1;
+  int64 next_week_checkpoint = 2;
+  int64 next_month_checkpoint = 3;
+}
+
+// 限频 - 次数存储结构
+message DConditionCounterItem {
+  int32 daily_counter = 1;
+  int32 weekly_counter = 2;
+  int32 monthly_counter = 3;
+  int32 sum_counter = 4;
+
+  int64 m_day_next_checkpoint = 11;
+  int32 m_day_counter = 12;
+}
+
+message DConditionCounterStorage {
+  DConditionCounterItem total_counter = 1;
+
+  // 约定: 版本号上涨表示要重置之前的计数
+  int32 current_version = 2;
+  DConditionCounterItem version_counter = 3;
+}
+
+// 限频 - 配置结构
+message DConditionCounterLimit {
+  int32 day_start_offset = 1; // 每日结算时间偏移
+
+  // 约定: 版本号上涨表示要重置之前的计数,0表示不限制版本号
+  int32 counter_version = 5;
+  int32 daily = 6;
+  int32 weekly = 7;
+  int32 monthly = 8;
+  int32 sum = 9;
+
+  google.protobuf.Timestamp m_day_start_time = 11;
+  int32 m_day_m = 12;
+  int32 m_day_limit = 13;
+}
+
+message DConditionRuleMultipleInt {
+  option (org.xresloader.msg_separator) = "#";
+  repeated int32 values = 1;
+}
+
+message DConditionRuleMultipleUInt {
+  option (org.xresloader.msg_separator) = "#";
+  repeated uint32 values = 1;
+}
+
+message DConditionRuleInt {
+  int32 values = 1;
+}
+
+message DConditionRuleRangeInt {
+  int32 left = 1;
+  int32 right = 2;
+}
+
+message DConditionRuleRangeUInt {
+  uint32 left = 1;
+  uint32 right = 2;
+}
+
+message DConditionRuleRangeVersion {
+  string begin = 1;
+  string end = 2;
+}
+
+// Datetime区间, 用以支持时间段配置
+//   2022-11-16 00:00:00~2022-12-16 00:00:00
+// 要支持多组配置的使用的地方请设置 [(org.xresloader.field_separator) = "|"]
+//   2022-11-16 00:00:00~2022-12-16 00:00:00|2022-12-16 00:00:00~2023-01-01 00:00:00
+message DConditionRuleRangeDatetime {
+  option (org.xresloader.msg_separator) = "~";
+  google.protobuf.Timestamp begin_time = 1; // 开始时间
+  google.protobuf.Timestamp end_time = 2; // 结束
+}
+
+// Time区间, 用以支持多个区间范围的时间段配置
+//   08:00:00-12:00:00
+// 要支持多组配置的使用的地方请设置 [(org.xresloader.field_separator) = "|"]
+//   08:00:00-12:00:00|16:00:00-20:00:00
+message DConditionRuleRangeTime {
+  option (org.xresloader.msg_separator) = "-";
+  google.protobuf.Duration begin_time = 1; // 开始时间
+  google.protobuf.Duration end_time = 2; // 结束
+}
+
+// 功能性条件
+message DConditionRule {
+  option (org.xresloader.msg_separator) = "@";
+
+  oneof rule_type {
+    option (org.xresloader.oneof_separator) = "|";
+
+    // @see EnAccountITopLoginChannelType
+    DConditionRuleMultipleUInt login_channel = 101 [(org.xresloader.field_alias) = "登入渠道"];
+    DConditionRuleMultipleUInt system_platform = 102 [(org.xresloader.field_alias) = "系统平台"]; // @see EnPlatformID
+    DConditionRuleRangeInt player_level = 201 [(org.xresloader.field_alias) = "玩家等级"];
+    DConditionRuleRangeInt team_member_count = 301 [(org.xresloader.field_alias) = "组队人数"];
+    DConditionRuleRangeDatetime register_time = 401 [(org.xresloader.field_alias) = "注册时间"];
+    DConditionRuleRangeVersion client_version = 501 [(org.xresloader.field_alias) = "版本号限制"];
+    DConditionRuleRangeInt role_current_max_level = 601 [(org.xresloader.field_alias) = "所有角色最大等级"];
+    DConditionRuleRangeInt role_history_max_level = 602 [(org.xresloader.field_alias) = "历史角色最大等级"];
+    DConditionRuleRangeInt role_scope_current_max_level = 603 [(org.xresloader.field_alias) = "赛季内所有角色最大等级"];
+    DConditionRuleRangeInt role_scope_history_max_level = 604 [(org.xresloader.field_alias) = "赛季内历史角色最大等级"];
+    DConditionRuleInt aduit_limit = 701 [(org.xresloader.field_alias) = "是否成年限制"];
+    DConditionRuleRangeInt has_item = 801 [(org.xresloader.field_alias) = "拥有道具"];
+    DConditionRuleRangeInt has_no_item = 802 [(org.xresloader.field_alias) = "没有道具"];
+    DConditionRuleRangeInt minion_package_skill_level = 901 [(org.xresloader.field_alias) = "宠物背包等级"];
+    DConditionRuleRangeInt mithril_force_prestige_level = 1001 [(org.xresloader.field_alias) = "秘银声望等级"];
+    DConditionRuleRangeInt mithril_commerce_level = 1101 [(org.xresloader.field_alias) = "秘银商会等级"];
+  }
+}
+
+message DConditionBasicLimit {
+  // 时效性
+  google.protobuf.Timestamp show_time = 1; // 显示时间:不填取valid_time
+
+  // 多段时效性
+  repeated DConditionRuleRangeDatetime valid_time = 2 [(org.xresloader.field_separator) = "|"];
+
+  // 时效性
+  google.protobuf.Timestamp expired_time = 3; // 过期时间:不填取valid_time
+
+  // 通用规则
+  repeated DConditionRule rule = 11;
+}

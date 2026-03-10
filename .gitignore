@@ -53,13 +53,14 @@
 /atframework/service/atgateway/protocols/libatgw_server_config.pb.cc
 
 # editors
-.vscode
 .idea
 /cmake-build-*
 .mako_modules-*
 .cache
 /compile_commands.json
 /.clangd
+
+/src/tools/generate-for-pb/__pycache__/*
 
 # protocol
 /src/**/protocol/**/*.h
@@ -71,26 +72,38 @@
 /src/loginsvr/service/app/handle_cs_rpc_loginsvrclientservice.h
 /src/loginsvr/service/rpc/loginsvrclientservice/loginsvrclientservice.h
 /src/loginsvr/service/rpc/loginsvrclientservice/loginsvrclientservice.cpp
-/src/gamesvr/service/app/handle_ss_rpc_gamesvrservice.cpp
-/src/gamesvr/service/app/handle_ss_rpc_gamesvrservice.h
-/src/gamesvr/service/app/handle_cs_rpc_gamesvrclientservice.cpp
-/src/gamesvr/service/app/handle_cs_rpc_gamesvrclientservice.h
-/src/gamesvr/service/rpc/gamesvrclientservice/gamesvrclientservice.h
-/src/gamesvr/service/rpc/gamesvrclientservice/gamesvrclientservice.cpp
 /src/server_frame/config/include/config/server_frame_build_feature.h
 /src/server_frame/config/src/server_frame_build_feature.cpp
 /src/server_frame/config/include/config/excel/*
 /src/server_frame/config/src/excel/*
 /src/server_frame/router/handle_ss_rpc_routerservice.cpp
 /src/server_frame/router/handle_ss_rpc_routerservice.h
-/src/gamesvr/sdk/rpc/game/gamesvrservice.cpp
-/src/gamesvr/sdk/rpc/game/gamesvrservice.h
 /src/server_frame/rpc/router/routerservice.cpp
 /src/server_frame/rpc/router/routerservice.h
 /src/server_frame/logic/handle_ss_rpc_logiccommonservice.h
 /src/server_frame/logic/handle_ss_rpc_logiccommonservice.cpp
 /src/server_frame/rpc/logic/logiccommonservice.h
 /src/server_frame/rpc/logic/logiccommonservice.cpp
+/src/server_frame/rpc/db/global_db_interface.cpp
+/src/server_frame/rpc/db/global_db_interface.h
+/src/server_frame/rpc/db/local_db_interface.cpp
+/src/server_frame/rpc/db/local_db_interface.h
 /src/component/distributed_transaction/sdk/rpc/transaction/dtcoordsvrservice.*
 /src/component/distributed_transaction/dtcoordsvr/app/handle_ss_rpc_dtcoordsvrservice.*
 /src/tools/simulator/rpc
+/src/component/rank/ranksvr/app/handle_ss_rpc_ranksvrservice.cpp
+/src/component/rank/ranksvr/app/handle_ss_rpc_ranksvrservice.h
+/src/authsvr/service/app/handle_cs_rpc_authsvrclientservice.cpp
+/src/authsvr/service/app/handle_cs_rpc_authsvrclientservice.h
+/src/authsvr/service/rpc/authsvrclientservice/authsvrclientservice.cpp
+/src/authsvr/service/rpc/authsvrclientservice/authsvrclientservice.h
+/src/lobbysvr/sdk/rpc/lobby/lobbysvrservice.cpp
+/src/lobbysvr/sdk/rpc/lobby/lobbysvrservice.h
+/src/lobbysvr/service/app/handle_cs_rpc_lobbysvrclientservice.cpp
+/src/lobbysvr/service/app/handle_cs_rpc_lobbysvrclientservice.h
+/src/lobbysvr/service/app/handle_ss_rpc_lobbysvrservice.cpp
+/src/lobbysvr/service/app/handle_ss_rpc_lobbysvrservice.h
+/src/lobbysvr/service/rpc/lobbysvrclientservice/lobbysvrclientservice.cpp
+/src/lobbysvr/service/rpc/lobbysvrclientservice/lobbysvrclientservice.h
+/src/component/rank/sdk/ranksvr/rpc/rank/ranksvrservice.cpp
+/src/component/rank/sdk/ranksvr/rpc/rank/ranksvrservice.h

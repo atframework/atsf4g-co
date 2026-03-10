@@ -86,7 +86,7 @@ atapp:
             writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.normal.all.log"
             auto_flush: error
             flush_interval: 1s    # flush log interval
-      - name: redis
+      - name: db
         index: 1
         prefix: "[%F %T.%f][%L](%k:%n): "
         stacktrace:
@@ -100,8 +100,8 @@ atapp:
             rotate:
               number: {{ .Values.log_rotate_num }}
               size: 10MB
-            file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.redis.all.%N.log"
-            writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.redis.all.log"
+            file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db.all.%N.log"
+            writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db.all.log"
             auto_flush: error
             flush_interval: 1s        # flush log interval
           - type: file
@@ -111,11 +111,11 @@ atapp:
             rotate:
               number: {{ .Values.log_rotate_num }}
               size: 10MB
-            file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.redis.error.%N.log"
-            writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.redis.error.log"
+            file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db.error.%N.log"
+            writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db.error.log"
             auto_flush: error
             flush_interval: 1s        # flush log interval
-      - name: db_inner
+      - name: stat
         index: 2
         prefix: "[%F %T.%f][%L](%k:%n): "
         stacktrace:
@@ -129,8 +129,8 @@ atapp:
             rotate:
               number: {{ .Values.log_rotate_num }}
               size: 10MB
-            file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db_inner.all.%N.log"
-            writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db_inner.all.log"
+            file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.stat.all.%N.log"
+            writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.stat.all.log"
             auto_flush: error
             flush_interval: 1s    # flush log interval
           - type: file
@@ -140,8 +140,8 @@ atapp:
             rotate:
               number: {{ .Values.log_rotate_num }}
               size: 10MB
-            file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db_inner.error.%N.log"
-            writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db_inner.error.log"
+            file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.stat.error.%N.log"
+            writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.stat.error.log"
             auto_flush: error
             flush_interval: 1s        # flush log interval
   # =========== timer ===========
