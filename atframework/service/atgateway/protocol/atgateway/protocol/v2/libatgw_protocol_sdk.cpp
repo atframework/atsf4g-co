@@ -4,7 +4,6 @@
 #include "atgateway/protocol/v2/libatgw_protocol_sdk.h"
 
 #include <gsl/select-gsl.h>
-#include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <cstdint>

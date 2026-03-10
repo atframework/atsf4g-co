@@ -1433,13 +1433,14 @@ CASE_TEST(atgateway_protocol_sdk, server_client_reconnect_refused) {
   client1.handshake_update_status = -1;
 
   // Modify token to simulate a wrong token
+  CASE_EXPECT_FALSE(origin_token.empty());
   if (!origin_token.empty()) {
     ++origin_token[0];
   }
 
   // Client tries to reconnect with modified token
-  ret =
-      client1.sdk->reconnect_session(original_session_id, gsl::span<const unsigned char>{origin_token.data(), origin_token.size()});
+  ret = client1.sdk->reconnect_session(original_session_id,
+                                       gsl::span<const unsigned char>{origin_token.data(), origin_token.size()});
 
   // The server refuses the reconnect, so the client should be closed or have a non-zero handshake status.
   CASE_EXPECT_TRUE(client1.closed || client1.handshake_update_status != 0);
