@@ -348,7 +348,7 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
    */
   LIBATGW_PROTOCOL_API int start_session();
 
-  LIBATGW_PROTOCOL_API int reconnect_session(uint64_t session_id, const std::vector<unsigned char> &session_token);
+  LIBATGW_PROTOCOL_API int reconnect_session(uint64_t session_id, gsl::span<const unsigned char> session_token);
 
   LIBATGW_PROTOCOL_API int send_post(::atframework::gateway::v2::client_message_type_t message_type,
                                      gsl::span<const unsigned char> data);

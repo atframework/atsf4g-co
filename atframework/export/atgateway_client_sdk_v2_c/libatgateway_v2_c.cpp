@@ -519,7 +519,7 @@ LIBATGATEWAY_V2_C_API const char *__cdecl libatgateway_v2_c_get_key_exchange_alg
   if (idx >= names.size()) {
     return nullptr;
   }
-  return names[idx];
+  return names[idx].c_str();
 }
 
 LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_crypto_algorithm_count() {
@@ -531,7 +531,7 @@ LIBATGATEWAY_V2_C_API const char *__cdecl libatgateway_v2_c_get_crypto_algorithm
   if (idx >= names.size()) {
     return nullptr;
   }
-  return names[idx];
+  return names[idx].c_str();
 }
 
 LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_compression_algorithm_count() {
@@ -544,7 +544,7 @@ LIBATGATEWAY_V2_C_API const char *__cdecl libatgateway_v2_c_get_compression_algo
   if (idx >= names.size()) {
     return nullptr;
   }
-  return names[idx];
+  return names[idx].c_str();
 }
 
 LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_crypto_algorithm(libatgateway_v2_c_context /*context*/,

@@ -1,0 +1,4 @@
+Checks:
+  # 用于单元测试case
+  - "-misc-use-anonymous-namespace"
+  - "-cppcoreguidelines-avoid-non-const-global-variables"

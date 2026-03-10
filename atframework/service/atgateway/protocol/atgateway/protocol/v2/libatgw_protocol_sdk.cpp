@@ -1935,7 +1935,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::start_session() {
 }
 
 LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::reconnect_session(uint64_t sess_id,
-                                                                 const std::vector<unsigned char> &session_token) {
+                                                                 gsl::span<const unsigned char> session_token) {
   if (check_flag(flag_t::kClosing)) {
     return static_cast<int>(::atfw::gateway::error_code_t::kClosing);
   }
