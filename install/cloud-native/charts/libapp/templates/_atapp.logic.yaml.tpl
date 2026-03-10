@@ -29,7 +29,7 @@ logic:
         size: 20MB
       flush_interval: 1s
 {{- if and .Values.redis .Values.redis.enable }}
-  redis:
+  db:
     addrs:
 {{- range $_, $addr := .Values.redis.addrs }}
       - {{ $addr }}

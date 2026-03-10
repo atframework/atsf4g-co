@@ -210,7 +210,7 @@ GAME_RPC_API result_code_type
 add_jobs_with_retry(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
                     shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>& inout, action_options options) {
   if (inout->left_retry_times() <= 0) {
-    inout->set_left_retry_times(logic_config::me()->get_logic().user().async_job().default_retry_times());
+    inout->set_left_retry_times(logic_config::me()->get_server_cfg().user().async_job().default_retry_times());
   }
 
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(add_jobs(ctx, jobs_type, user_id, zone_id, inout, options)));

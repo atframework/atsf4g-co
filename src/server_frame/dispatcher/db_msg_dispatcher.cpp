@@ -574,7 +574,7 @@ int db_msg_dispatcher::raw_init(const PROJECT_NAMESPACE_ID::config::db_group_cfg
     conn->set_log_writer(info_fn, debug_fn);
   }
 
-  // 设置连接成功注入login脚本和user脚本
+  // 设置连接成功
   conn->set_on_connect(db_msg_dispatcher::raw_on_connect);
   conn->set_on_connected(db_msg_dispatcher::raw_on_connected);
 

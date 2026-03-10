@@ -189,6 +189,7 @@ message logic_section_cfg {
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "60s" }];
 
   logic_dns_cfg dns = 100;
+  logic_db_cfg db = 101;
   logic_server_cfg server = 102;
   logic_user_cfg user = 103;
   logic_session_cfg session = 104;
@@ -196,7 +197,6 @@ message logic_section_cfg {
   logic_heartbeat_cfg heartbeat = 106;
   logic_router_cfg router = 107;
   logic_telemetry_cfg telemetry = 108;
-  logic_battle_cfg battle = 109;
   logic_excel_cfg excel = 110;
   logic_transaction_cfg transaction = 111;
 }
@@ -212,25 +212,14 @@ message db_group_cfg {
   repeated db_group_gateway_cfg gateways = 2;
 }
 
-message db_script_cfg {
-  string login = 101;
-  string user = 102;
-}
-
 message db_timer_cfg {
   google.protobuf.Duration retry = 1;
   google.protobuf.Duration timeout = 2;
   google.protobuf.Duration proc = 3;
 }
 
-message db_section_cfg {
+message logic_db_cfg {
   db_group_cfg cluster = 101;
   db_group_cfg raw = 102;
-  db_script_cfg script = 103;
-  db_timer_cfg timer = 104;
-}
-
-message server_cfg {
-  logic_section_cfg logic = 101;
-  db_section_cfg db = 102;
+  db_timer_cfg timer = 103;
 }

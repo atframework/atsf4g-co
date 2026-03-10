@@ -298,7 +298,7 @@ int player::dump(rpc::context &parent_ctx, PROJECT_NAMESPACE_ID::table_user &use
 }
 
 void player::update_heartbeat() {
-  const auto &logic_cfg = logic_config::me()->get_logic();
+  const auto &logic_cfg = logic_config::me()->get_server_cfg();
   time_t heartbeat_interval = logic_cfg.heartbeat().interval().seconds();
   time_t heartbeat_tolerance = logic_cfg.heartbeat().tolerance().seconds();
   time_t tol_dura = heartbeat_interval - heartbeat_tolerance;

@@ -38,6 +38,9 @@ SERVER_FRAME_CONFIG_API int logic_config::reload(atfw::atapp::app &app) {
 
   _load_server_cfg(app);
   _load_db();
+  if (custom_config_loader_) {
+    custom_config_loader_(app, *this);
+  }
 
   readable_app_id_.clear();
   return 0;
@@ -199,7 +202,7 @@ void logic_config::_load_server_cfg(atfw::atapp::app &app) {
   app.parse_configures_into(server_cfg_, std::string(), "ATAPP");
 
   atfw::util::time::time_utility::update();
-  auto reload_timepoint = server_cfg_.mutable_logic()->mutable_server()->mutable_reload_timepoint();
+  auto reload_timepoint = server_cfg_.mutable_server()->mutable_reload_timepoint();
   reload_timepoint->set_seconds(util::time::time_utility::get_sys_now());
   reload_timepoint->set_nanos(static_cast<int32_t>(util::time::time_utility::get_now_usec() * 1000));
 

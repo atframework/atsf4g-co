@@ -72,7 +72,7 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
   dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
   await_options.sequence = rpc_sequence;
   await_options.timeout =
-      rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(), std::chrono::seconds{6});
+      rpc::make_duration_or_default(logic_config::me()->get_server_cfg().task().csmsg().timeout(), std::chrono::seconds{6});
 
   // 协程操作
   db_message_t db_message;
@@ -142,7 +142,7 @@ SERVER_FRAME_API result_type partly_get(rpc::context &ctx, uint32_t channel, gsl
   dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
   await_options.sequence = rpc_sequence;
   await_options.timeout =
-      rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(), std::chrono::seconds{6});
+      rpc::make_duration_or_default(logic_config::me()->get_server_cfg().task().csmsg().timeout(), std::chrono::seconds{6});
 
   // 协程操作
   db_message_t db_message;
@@ -415,7 +415,7 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
   dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
   await_options.sequence = rpc_sequence;
   await_options.timeout =
-      rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(), std::chrono::seconds{6});
+      rpc::make_duration_or_default(logic_config::me()->get_server_cfg().task().csmsg().timeout(), std::chrono::seconds{6});
 
   // 协程操作
   db_message_t db_message;
@@ -499,7 +499,7 @@ SERVER_FRAME_API result_type inc_field(rpc::context &ctx, uint32_t channel, gsl:
   dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
   await_options.sequence = rpc_sequence;
   await_options.timeout =
-      rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(), std::chrono::seconds{6});
+      rpc::make_duration_or_default(logic_config::me()->get_server_cfg().task().csmsg().timeout(), std::chrono::seconds{6});
 
   // 协程操作
   db_message_t db_message;
@@ -556,7 +556,7 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
   dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
   await_options.sequence = rpc_sequence;
   await_options.timeout =
-      rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(), std::chrono::seconds{6});
+      rpc::make_duration_or_default(logic_config::me()->get_server_cfg().task().csmsg().timeout(), std::chrono::seconds{6});
 
   db_message_t db_message;
   res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, db_message, await_options));
@@ -628,7 +628,7 @@ SERVER_FRAME_API result_type get_by_indexs(rpc::context &ctx, uint32_t channel, 
   dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
   await_options.sequence = rpc_sequence;
   await_options.timeout =
-      rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(), std::chrono::seconds{6});
+      rpc::make_duration_or_default(logic_config::me()->get_server_cfg().task().csmsg().timeout(), std::chrono::seconds{6});
 
   db_message_t db_message;
   res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, db_message, await_options));
@@ -716,7 +716,7 @@ SERVER_FRAME_API result_type set_by_index(rpc::context &ctx, uint32_t channel, g
   dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
   await_options.sequence = rpc_sequence;
   await_options.timeout =
-      rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(), std::chrono::seconds{6});
+      rpc::make_duration_or_default(logic_config::me()->get_server_cfg().task().csmsg().timeout(), std::chrono::seconds{6});
 
   db_message_t db_message;
   res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, db_message, await_options));
@@ -790,7 +790,7 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
   dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
   await_options.sequence = rpc_sequence;
   await_options.timeout =
-      rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(), std::chrono::seconds{6});
+      rpc::make_duration_or_default(logic_config::me()->get_server_cfg().task().csmsg().timeout(), std::chrono::seconds{6});
 
   db_message_t db_message;
   res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, db_message, await_options));
@@ -852,7 +852,7 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
   dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
   await_options.sequence = rpc_sequence;
   await_options.timeout =
-      rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(), std::chrono::seconds{6});
+      rpc::make_duration_or_default(logic_config::me()->get_server_cfg().task().csmsg().timeout(), std::chrono::seconds{6});
 
   db_message_t db_message;
   res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, db_message, await_options));
@@ -907,7 +907,7 @@ SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel, gsl
   dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
   await_options.sequence = rpc_sequence;
   await_options.timeout =
-      rpc::make_duration_or_default(logic_config::me()->get_logic().task().csmsg().timeout(), std::chrono::seconds{6});
+      rpc::make_duration_or_default(logic_config::me()->get_server_cfg().task().csmsg().timeout(), std::chrono::seconds{6});
 
   // 协程操作
   db_message_t db_message;

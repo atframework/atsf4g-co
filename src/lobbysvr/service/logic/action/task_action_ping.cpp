@@ -49,7 +49,7 @@ task_action_ping::result_type task_action_ping::operator()() {
   user->update_heartbeat();
 
   // 心跳超出容忍值，直接提下线
-  if (user->get_heartbeat_data().continue_error_times >= logic_config::me()->get_logic().heartbeat().error_times()) {
+  if (user->get_heartbeat_data().continue_error_times >= logic_config::me()->get_server_cfg().heartbeat().error_times()) {
     // 封号一段时间
 
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_BAN);
@@ -72,7 +72,7 @@ task_action_ping::result_type task_action_ping::operator()() {
       tb->mutable_except()->set_except_sum_times(tb->except().except_sum_times() + 1);
       if (0 != tb->except().last_except_time() &&
           atfw::util::time::time_utility::get_now() - tb->except().last_except_time() <=
-              logic_config::me()->get_logic().heartbeat().ban_time_bound().seconds()) {
+              logic_config::me()->get_server_cfg().heartbeat().ban_time_bound().seconds()) {
         tb->mutable_except()->set_except_con_times(tb->except().except_con_times() + 1);
       } else {
         tb->mutable_except()->set_except_con_times(1);
@@ -80,9 +80,9 @@ task_action_ping::result_type task_action_ping::operator()() {
 
       tb->mutable_except()->set_last_except_time(util::time::time_utility::get_now());
 
-      if (tb->except().except_con_times() >= logic_config::me()->get_logic().heartbeat().ban_error_times()) {
+      if (tb->except().except_con_times() >= logic_config::me()->get_server_cfg().heartbeat().ban_error_times()) {
         tb->set_ban_time(static_cast<uint32_t>(util::time::time_utility::get_now() +
-                                               logic_config::me()->get_logic().session().login_ban_time().seconds()));
+                                               logic_config::me()->get_server_cfg().session().login_ban_time().seconds()));
         kick_off_reason = PROJECT_NAMESPACE_ID::EN_CRT_LOGIN_BAN;
         set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_BAN);
       } else {

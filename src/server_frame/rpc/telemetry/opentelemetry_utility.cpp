@@ -873,7 +873,7 @@ SERVER_FRAME_API int opentelemetry_utility::tick() {
     return ret;
   }
 
-  int32_t max_record_per_loop = logic_config::me()->get_logic().telemetry().executor().max_metric_record_per_loop();
+  int32_t max_record_per_loop = logic_config::me()->get_server_cfg().telemetry().executor().max_metric_record_per_loop();
   std::chrono::system_clock::duration max_tick_time_per_loop = std::chrono::system_clock::duration::zero();
 
   atfw::atapp::app* app_inst = atfw::atapp::app::get_last_instance();
@@ -1231,7 +1231,7 @@ SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_int64(
   handle->meter_instrument_description = static_cast<std::string>(metrics_key.description);
   handle->meter_instrument_unit = static_cast<std::string>(metrics_key.unit);
   handle->collect_interval = protobuf_to_chrono_duration<>(
-      logic_config::me()->get_logic().telemetry().opentelemetry().metrics().reader().export_interval());
+      logic_config::me()->get_server_cfg().telemetry().opentelemetry().metrics().reader().export_interval());
   if (handle->collect_interval < std::chrono::seconds{2}) {
     handle->collect_interval = std::chrono::seconds{15};
   } else {
@@ -1287,7 +1287,7 @@ SERVER_FRAME_API bool opentelemetry_utility::add_global_metics_observable_double
   handle->meter_instrument_description = static_cast<std::string>(metrics_key.description);
   handle->meter_instrument_unit = static_cast<std::string>(metrics_key.unit);
   handle->collect_interval = protobuf_to_chrono_duration<>(
-      logic_config::me()->get_logic().telemetry().opentelemetry().metrics().reader().export_interval());
+      logic_config::me()->get_server_cfg().telemetry().opentelemetry().metrics().reader().export_interval());
   if (handle->collect_interval < std::chrono::seconds{2}) {
     handle->collect_interval = std::chrono::seconds{15};
   } else {
