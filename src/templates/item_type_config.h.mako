@@ -48,7 +48,7 @@ namespace ItemTypeConfig {
 %>\
 %           for enum_value in enum.values:
 <%
-                  item_type_option = enum_value.get_extension('prx.item_type_option')
+                  item_type_option = enum_value.get_extension('hello.item_type_option')
                   if item_type_option == None:
                         continue
                   if len(item_type_option.item_type_range) == 0:

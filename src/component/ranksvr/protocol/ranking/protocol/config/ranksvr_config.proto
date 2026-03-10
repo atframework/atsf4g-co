@@ -13,13 +13,6 @@ import "google/protobuf/timestamp.proto";
 
 import "atframe/atapp_conf.proto";
 
-message logic_rank_cfg {
-  // 全服排行榜ZoneID offset，用于管理区分多个环境的排行榜
-  uint32 shared_zone_id_offset = 1;
-  bool disable_rank_report_limit = 2;
-  uint32 query_max_count = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "100" }];
-}
-
 message rank_publisher_congigure {
   int64 gc_expire_duration = 1 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3600" }];
   int32 gc_log_size = 2 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30" }];
@@ -42,11 +35,4 @@ message ranksvr_ranking_cfg {
   int32 rank_tree_degree = 110 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "20" }];
   int64 rank_save_interval = 111 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "600" }];
   uint32 rank_btree_degree = 112 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "20" }];
-}
-
-message ranksvr_settlement_cfg {
-  google.protobuf.Duration settle_interval = 101;  // 结算检查时间
-  uint32 settle_loop_count = 102
-      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "100" }];  // 每个结算单元结算的数量
-  bool disable_rank_settlemnet_clear = 103;
 }

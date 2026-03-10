@@ -25,13 +25,11 @@
 #include <rank/logic_rank_algorithm.h>
 #include <rank/logic_rank_handle.h>
 
-// #include <rpc/gameclientservice/gameclientservice.h>
-#include <rpc/gamesvrclientservice/gamesvrclientservice.h>
+#include <rpc/lobbysvrclientservice/lobbysvrclientservice.h>
 #include <rpc/rpc_async_invoke.h>
 
 #include <utility/protobuf_mini_dumper.h>
 
-// #include <logic/item_util/item_algorithm.h>
 #include "data/player.h"
 #include "logic/async_jobs/user_async_jobs_manager.h"
 
@@ -106,7 +104,7 @@ void user_rank_manager::refresh_feature_limit_second(rpc::context &ctx) {
     }
 
     next_auto_update_score_timepoint_ =
-        now + logic_config::me()->get_custom_config<PROJECT_NAMESPACE_ID::config::gamesvr_cfg>().rank_auto_update_interval().seconds();
+        now + logic_config::me()->get_custom_config<PROJECT_NAMESPACE_ID::config::lobbysvr_cfg>().rank_auto_update_interval().seconds();
     // 不能少于30秒
     if (next_auto_update_score_timepoint_ < now + 30) {
       next_auto_update_score_timepoint_ = now + 30;
@@ -2033,7 +2031,7 @@ EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_rank_manager::clear_instance_
 
 rpc::result_void_type user_rank_manager::set_client_rank_cache_expired(rpc::context &ctx) {
   rpc::context::message_holder<PROJECT_NAMESPACE_ID::SCRankCacheExpiredSync> sync_body{ctx};
-  rpc::gamesvrclientservice::send_rank_cache_expired_sync(ctx, *sync_body, *owner_->get_session());
+  rpc::lobbysvrclientservice::send_rank_cache_expired_sync(ctx, *sync_body, *owner_->get_session());
   RPC_RETURN_VOID;
 }
 

@@ -28,8 +28,6 @@
 
 #include <string>
 
-#include "app/dtcoordsvr_config.h"
-
 #define TRANSACTION_RETRY_MAX_TIMES 5
 
 namespace {

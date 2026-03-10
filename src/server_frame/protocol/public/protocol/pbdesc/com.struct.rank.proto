@@ -6,7 +6,7 @@ option optimize_for = SPEED;
 // --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
 
-package prx;
+package hello;
 
 import "protocol/common/com.struct.rank.common.proto";
 import "protocol/pbdesc/com.struct.proto";

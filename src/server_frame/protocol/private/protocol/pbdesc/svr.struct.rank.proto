@@ -15,7 +15,7 @@ import "protocol/common/com.struct.rank.common.proto";
 import "protocol/pbdesc/com.struct.rank.proto";
 
 
-package prx;
+package hello;
 
 
 message history_rank_show_data {

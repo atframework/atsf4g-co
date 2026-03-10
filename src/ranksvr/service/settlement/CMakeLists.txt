@@ -10,8 +10,7 @@ project_service_declare_instance(
   RUNTIME_OUTPUT_DIRECTORY
   "${SERVICE_TARGET_NAME}/bin"
   USE_SERVICE_SDK
-  # "ranksvr-sdk-settlement"
-  "gamesvr-sdk"
+  "lobbysvr-sdk"
   USE_COMPONENTS
   "rank-sdk"
   HRADERS
@@ -19,4 +18,6 @@ project_service_declare_instance(
   SOURCES
   ${SERVICE_SOURCES}
   RESOURCE_DIRECTORIES
-  "${SERVICE_TARGET_NAME}/log")
+  "${SERVICE_TARGET_NAME}/log"
+  USE_SERVICE_PROTOCOL
+  "rank-settlement-config")

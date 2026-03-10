@@ -99,7 +99,7 @@ message DItemUseAction {
 
 enum EnItemRarity {
   option (ue_enum_conversion) = {
-    UeEnumAlias: "EPrxInventoryRarity"
+    UeEnumAlias: "EHelloInventoryRarity"
     DefaultPbEnum: "EN_ITEM_RARITY_NONE"
     DefaultUeEnum: "None"
   };

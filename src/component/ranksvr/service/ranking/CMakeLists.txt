@@ -12,6 +12,7 @@ project_component_declare_service(
   USE_COMPONENTS
   "ranksvr-sdk-ranking"
   "rank-sdk"
+  "ranksvr-config"
   HRADERS
   ${SERVICE_HEADERS}
   SOURCES

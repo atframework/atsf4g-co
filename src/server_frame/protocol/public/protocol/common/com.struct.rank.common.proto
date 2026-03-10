@@ -11,10 +11,9 @@ import "protocol/extension/v3/xresloader.proto";
 import "google/protobuf/duration.proto";
 
 import "protocol/common/com.struct.item.common.proto";
-
 import "protocol/common/com.struct.condition.common.proto";
 
-package prx;
+package hello;
 
 enum EnRankImplType{
   EN_RANK_IMPL_TYPE_DEFAULT = 0;

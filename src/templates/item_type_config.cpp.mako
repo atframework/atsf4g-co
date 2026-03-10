@@ -33,7 +33,7 @@ static void InitItemTypeCache(std::vector<ItemAlgorithmTypeOption> &data) {
 %>\
 %           for enum_value in enum.values:
 <%
-                  item_type_option = enum_value.get_extension('prx.item_type_option')
+                  item_type_option = enum_value.get_extension('hello.item_type_option')
                   if item_type_option == None:
                         continue
                   if len(item_type_option.item_type_range) == 0:
@@ -101,7 +101,7 @@ namespace ItemTypeConfig {
 %>\
 %           for enum_value in enum.values:
 <%
-                  item_type_option = enum_value.get_extension('prx.item_type_option')
+                  item_type_option = enum_value.get_extension('hello.item_type_option')
                   if item_type_option == None:
                         continue
                   if len(item_type_option.item_type_range) == 0:
@@ -139,8 +139,8 @@ EXCEL_CONFIG_LOADER_API bool is_item_type_invalid(int32_t type_id) {
 %>\
 %           for enum_value in enum.values:
 <%
-                item_type_option = enum_value.get_extension('prx.item_type_option')
-                item_excel_option = enum_value.get_extension('prx.item_excel_option')
+                item_type_option = enum_value.get_extension('hello.item_type_option')
+                item_excel_option = enum_value.get_extension('hello.item_excel_option')
                 if item_type_option == None:
                       continue
                 if item_excel_option == None:

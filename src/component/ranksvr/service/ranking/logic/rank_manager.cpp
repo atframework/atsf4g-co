@@ -334,7 +334,7 @@ std::vector<uint64_t> rank_manager::get_slave_nodes(rpc::context& ctx, const PRO
   }
 
   util::memory::strong_rc_ptr<atapp::etcd_discovery_set> index_by_type = mod->get_discovery_index_by_type(
-      static_cast<uint64_t>(atframework::component::logic_service_type::EN_LST_RANKSVR));
+      static_cast<uint64_t>(atframework::component::logic_service_type::kRankSvr));
   if (!index_by_type) {
     FWLOGERROR("select_teamsvr_match get_all_nodes_of_type nullptr");
     return slave_nodes;

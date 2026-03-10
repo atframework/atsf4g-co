@@ -1,7 +1,5 @@
 #pragma once
 
-#include <std/smart_ptr.h>
-
 #include <design_pattern/singleton.h>
 
 #include <dispatcher/task_manager.h>

@@ -38,17 +38,17 @@
     </item>
     <item name="排行榜规则表" cat="rank" class="client server">
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Rank.xlsx|排行榜规则表|3,1</scheme>
-      <scheme name="ProtoName" desc="协议名">prx.config.ExcelRankRule</scheme>
+      <scheme name="ProtoName" desc="协议名">hello.config.ExcelRankRule</scheme>
       <scheme name="OutputFile" desc="输出文件名">rank_rule.bytes</scheme>
     </item>
     <item name="排行榜定义表" cat="rank" class="client server">
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Rank.xlsx|排行榜定义表|3,1</scheme>
-      <scheme name="ProtoName" desc="协议名">prx.config.ExcelRankDefine</scheme>
+      <scheme name="ProtoName" desc="协议名">hello.config.ExcelRankDefine</scheme>
       <scheme name="OutputFile" desc="输出文件名">rank_define.bytes</scheme>
     </item>
     <item name="排行榜类型奖励池" cat="rank" class="client server">
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Rank.xlsx|排行榜奖励池|3,1</scheme>
-      <scheme name="ProtoName" desc="协议名">prx.config.ExcelRankPeriodRewardPool</scheme>
+      <scheme name="ProtoName" desc="协议名">hello.config.ExcelRankPeriodRewardPool</scheme>
       <scheme name="OutputFile" desc="输出文件名">rank_period_reward_pool.bytes</scheme>
    </item>
   </list>

@@ -90,7 +90,7 @@ class router_rank_manager : public util::design_pattern::singleton<router_rank_m
   uint64_t get_ranksvr_server_id_by_consistent_hash(uint32_t rank_id) {
     if (auto common_mod = logic_server_last_common_module()) {
       auto type_index = common_mod->get_discovery_index_by_type(
-          static_cast<uint64_t>(atframework::component::logic_service_type::EN_LST_RANKSVR));
+          static_cast<uint64_t>(atframework::component::logic_service_type::kRankSvr));
       const atfw::atapp::protocol::atapp_metadata* selector =
           logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kRanksvrFieldNumber,
                                      logic_hpa_discovery_select_mode::kReady);

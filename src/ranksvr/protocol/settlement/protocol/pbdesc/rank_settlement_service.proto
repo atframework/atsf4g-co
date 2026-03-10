@@ -16,7 +16,7 @@ import "protocol/extension/atframework.proto";
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/svr.struct.proto";
 
-package prx;
+package hello;
 
 service RanksvrSettlementService {
   option (atframework.service_options) = {

@@ -8,6 +8,12 @@
 
 #include <utility/protobuf_mini_dumper.h>
 
+#include <config/compiler/protobuf_prefix.h>
+
+#include <protocol/config/rank_settlement_config.pb.h>
+
+#include <config/compiler/protobuf_suffix.h>
+
 #include "logic/action/task_action_rank_update_settlement.h"
 
 rank_settlement_manager::rank_settlement_manager()

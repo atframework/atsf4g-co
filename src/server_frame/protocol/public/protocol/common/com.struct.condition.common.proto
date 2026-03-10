@@ -11,7 +11,7 @@ import "google/protobuf/duration.proto";
 
 import "protocol/extension/v3/xresloader.proto";
 
-package prx;
+package hello;
 
 // 限频 - 检查点存储结构
 message DConditionCounterCheckpoint {

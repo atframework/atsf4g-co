@@ -4,6 +4,7 @@
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/svr.struct.pb.h>
+#include <protocol/config/ranksvr_config.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on

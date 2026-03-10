@@ -13,7 +13,7 @@ import "protocol/extension/atframework.proto";
 import "protocol/common/com.struct.rank.common.proto";
 import "protocol/pbdesc/com.struct.rank.proto";
 
-package prx;
+package hello;
 
 message SSRankGetSpecifyRankReq {
   DRankKey rank_key = 1;

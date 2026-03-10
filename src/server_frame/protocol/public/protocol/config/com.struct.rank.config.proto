@@ -18,7 +18,7 @@ import "protocol/extension/v3/xresloader.proto";
 import "protocol/common/com.struct.rank.common.proto";
 import "protocol/common/com.struct.item.common.proto";
 
-package prx.config;
+package hello.config;
 
 // 排行榜配置
 message ExcelRankDefine {

@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+package hello.config;
+
+import "google/protobuf/duration.proto";
+
+import "atframe/atapp_conf.proto";
+
+message ranksvr_settlement_cfg {
+  google.protobuf.Duration settle_interval = 101;  // 结算检查时间
+  uint32 settle_loop_count = 102
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "100" }];  // 每个结算单元结算的数量
+  bool disable_rank_settlemnet_clear = 103;
+}

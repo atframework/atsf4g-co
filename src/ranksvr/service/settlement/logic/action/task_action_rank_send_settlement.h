@@ -1,7 +1,5 @@
 #pragma once
 
-#include <std/smart_ptr.h>
-
 #include <dispatcher/task_action_no_req_base.h>
 #include <dispatcher/task_manager.h>
 

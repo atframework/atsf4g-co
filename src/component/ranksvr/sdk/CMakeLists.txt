@@ -15,7 +15,6 @@ project_component_declare_sdk(
   "${CMAKE_CURRENT_LIST_DIR}/common/rank/logic_rank_handle.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/common/rank/logic_rank_algorithm.cpp")
 
-  
 project_component_declare_sdk(
   "ranksvr-sdk-ranking"
   "${CMAKE_CURRENT_LIST_DIR}/ranking"
