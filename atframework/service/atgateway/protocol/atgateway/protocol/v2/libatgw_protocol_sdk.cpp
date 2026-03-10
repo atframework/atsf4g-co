@@ -1240,11 +1240,18 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake(
     return static_cast<int>(::atfw::gateway::error_code_t::kClosing);
   }
 
+  using namespace atfw::gateway::v2;
+
+  // Reconnect requests are allowed even after the initial handshake is done,
+  // because kHandshakeUpdate is set later inside setup_handshake() when the
+  // server processes the reconnect/key-refresh flow.
   if (check_flag(flag_t::kHandshakeDone) && !check_flag(flag_t::kHandshakeUpdate)) {
-    return static_cast<int>(::atfw::gateway::error_code_t::kHandshake);
+    if (body_handshake.step() != ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(handshake_step_t, kReconnectReq) &&
+        body_handshake.step() != ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(handshake_step_t, kReconnectRsp)) {
+      return static_cast<int>(::atfw::gateway::error_code_t::kHandshake);
+    }
   }
 
-  using namespace atfw::gateway::v2;
   int ret = 0;
   switch (body_handshake.step()) {
     case ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(handshake_step_t, kKeyExchangeReq): {

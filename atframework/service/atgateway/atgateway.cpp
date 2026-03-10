@@ -774,22 +774,23 @@ struct app_handle_on_recv {
         break;
       }
       case ::atframework::gateway::server_message_body::kKickoffSession: {
-        atfw::util::nostd::string_view message{server_message->body().kickoff_session().message().data(),
-                                               server_message->body().kickoff_session().message().size()};
+        atfw::util::nostd::string_view kickoff_message{server_message->body().kickoff_session().message().data(),
+                                                       server_message->body().kickoff_session().message().size()};
         FWLOGWARNING("from server {}: session {} kickoff by server, reason: {}, {}, {}", source.id,
                      server_message->head().session_id(),
                      static_cast<int32_t>(::atframework::gateway::close_reason_t::kReconnectBound),
-                     server_message->body().kickoff_session().reason(), message);
+                     server_message->body().kickoff_session().reason(), kickoff_message);
         if (0 == server_message->head().error_code()) {
           mod_.get().get_session_manager().close(server_message->head().session_id(),
-                                                 static_cast<int>(::atframework::gateway::close_reason_t::kKickoff));
+                                                 static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff),
+                                                 server_message->body().kickoff_session().reason(), kickoff_message);
         } else {
+          bool allow_reconnect = server_message->head().error_code() > 0 &&
+                                 server_message->head().error_code() <
+                                     static_cast<int32_t>(::atframework::gateway::close_reason_t::kReconnectBound);
           mod_.get().get_session_manager().close(
               server_message->head().session_id(), server_message->head().error_code(),
-              server_message->head().error_code() > 0 &&
-                  server_message->head().error_code() <
-                      static_cast<int32_t>(::atframework::gateway::close_reason_t::kReconnectBound),
-              server_message->body().kickoff_session().reason(), message);
+              server_message->body().kickoff_session().reason(), kickoff_message, allow_reconnect);
         }
         break;
       }

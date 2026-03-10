@@ -1392,36 +1392,60 @@ CASE_TEST(atgateway_protocol_sdk, server_client_reconnect_refused) {
     return;
   }
 
-  sim_peer_t server, client;
-  libatgw_protocol_api::proto_callbacks_t server_cbs = {}, client_cbs = {};
-  setup_sim_pair(server, client, server_conf, client_conf, server_cbs, client_cbs);
+  // --- Phase 1: initial handshake to obtain session token ---
+  sim_peer_t server1, client1;
+  libatgw_protocol_api::proto_callbacks_t server1_cbs = {}, client1_cbs = {};
+  setup_sim_pair(server1, client1, server_conf, client_conf, server1_cbs, client1_cbs);
 
-  // Override reconnect callback to refuse
-  server_cbs.reconnect_fn = [](libatgw_protocol_api * /*proto*/, uint64_t /*sess_id*/) -> int {
+  int ret = client1.sdk->start_session();
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(0, client1.handshake_status);
+
+  CASE_EXPECT_FALSE(client1.sdk->get_session_token().empty());
+  std::vector<unsigned char> origin_token;
+  origin_token.assign(client1.sdk->get_session_token().data(),
+                      client1.sdk->get_session_token().data() + client1.sdk->get_session_token().size());
+
+  uint64_t original_session_id = client1.sdk->get_session_id();
+  CASE_EXPECT_NE(static_cast<uint64_t>(0), original_session_id);
+
+  // --- Phase 2: reconnect to a new server that refuses ---
+  sim_peer_t server2;
+  server2.sdk = std::make_shared<libatgw_protocol_sdk>(server_conf);
+  libatgw_protocol_api::proto_callbacks_t server2_cbs = {};
+  server2_cbs.write_fn = sim_write_fn;
+  server2_cbs.message_fn = sim_message_fn;
+  server2_cbs.new_session_fn = sim_new_session_fn;
+  server2_cbs.reconnect_fn = [](libatgw_protocol_api * /*proto*/, uint64_t /*sess_id*/) -> int {
     return static_cast<int>(::atframework::gateway::error_code_t::kRefuseReconnect);
   };
-  server.sdk->set_callbacks(&server_cbs);
+  server2_cbs.close_fn = sim_close_fn;
+  server2_cbs.on_handshake_done_fn = sim_handshake_done_fn;
+  server2_cbs.on_handshake_update_fn = sim_handshake_update_fn;
+  server2_cbs.on_error_fn = sim_error_fn;
+  server2.sdk->set_callbacks(&server2_cbs);
+  server2.sdk->set_private_data(&server2);
 
-  CASE_EXPECT_FALSE(client.sdk->get_session_token().empty());
-  std::vector<unsigned char> origin_token;
-  origin_token.assign(client.sdk->get_session_token().data(),
-                      client.sdk->get_session_token().data() + client.sdk->get_session_token().size());
+  // Rewire client1 to talk to server2
+  client1.remote = &server2;
+  server2.remote = &client1;
+  client1.handshake_status = -1;
+  client1.handshake_update_status = -1;
+
+  // Modify token to simulate a wrong token
   if (!origin_token.empty()) {
     ++origin_token[0];
   }
 
-  // Client tries to reconnect
-  int ret =
-      client.sdk->reconnect_session(0x12345, gsl::span<const unsigned char>{origin_token.data(), origin_token.size()});
+  // Client tries to reconnect with modified token
+  ret =
+      client1.sdk->reconnect_session(original_session_id, gsl::span<const unsigned char>{origin_token.data(), origin_token.size()});
 
-  // reconnect_session returns write status (0 = write ok), but the server rejects the
-  // reconnect asynchronously (via handshake response with session_id == 0).  In the
-  // synchronous test harness the rejection is already processed when we get here, so
-  // the client should be closed or have a non-zero handshake status.
-  CASE_EXPECT_TRUE(client.closed || client.handshake_status != 0);
+  // The server refuses the reconnect, so the client should be closed or have a non-zero handshake status.
+  CASE_EXPECT_TRUE(client1.closed || client1.handshake_update_status != 0);
 
-  CASE_MSG_INFO() << "reconnect refused verified, ret: " << ret << ", closed: " << client.closed
-                  << ", handshake_status: " << client.handshake_status << '\n';
+  CASE_MSG_INFO() << "reconnect refused verified, ret: " << ret << ", closed: " << client1.closed
+                  << ", handshake_update_status: " << client1.handshake_update_status << '\n';
 }
 
 // ========== Ping/pong timing test ==========
@@ -1713,6 +1737,263 @@ CASE_TEST(atgateway_protocol_sdk, server_client_large_message_correctness) {
   }
 
   CASE_MSG_INFO() << "large message correctness verified: " << large_msg.size() << " bytes" << '\n';
+}
+
+// ========== crypto_conf_t constructor / copy / move tests ==========
+
+// ========== Algorithm coverage: XXTEA (block cipher, no AEAD) ==========
+
+CASE_TEST(atgateway_protocol_sdk, server_client_handshake_xxtea) {
+  ensure_openssl_init();
+
+  crypto_conf_t conf_data;
+  conf_data.key_exchange_algorithm =
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  conf_data.supported_algorithms.clear();
+  conf_data.supported_algorithms.push_back(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kXxtea));
+  conf_data.client_mode = false;
+  conf_data.update_interval = 300;
+
+  crypto_conf_t client_conf_data = conf_data;
+  client_conf_data.client_mode = true;
+
+  auto server_conf = libatgw_protocol_sdk::create_shared_context(conf_data);
+  auto client_conf = libatgw_protocol_sdk::create_shared_context(client_conf_data);
+  CASE_EXPECT_TRUE(!!server_conf && !!client_conf);
+  if (!server_conf || !client_conf) {
+    return;
+  }
+
+  sim_peer_t server, client;
+  libatgw_protocol_api::proto_callbacks_t server_cbs = {}, client_cbs = {};
+  setup_sim_pair(server, client, server_conf, client_conf, server_cbs, client_cbs);
+
+  int ret = client.sdk->start_session();
+  // If xxtea is not available on this platform, handshake may negotiate kNone
+  if (server.handshake_status != 0 || client.handshake_status != 0) {
+    CASE_MSG_INFO() << "xxtea not available on this platform, skip" << '\n';
+    return;
+  }
+  CASE_EXPECT_EQ(0, ret);
+
+  // Send message client->server (tests PKCS#7 padding for block cipher)
+  std::string msg = "xxtea block cipher test";
+  gsl::span<const unsigned char> msg_span{reinterpret_cast<const unsigned char *>(msg.data()), msg.size()};
+  ret = client.sdk->send_post(msg_span);
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(static_cast<size_t>(1), server.received_messages.size());
+  if (!server.received_messages.empty()) {
+    std::string received(server.received_messages[0].begin(), server.received_messages[0].end());
+    CASE_EXPECT_EQ(msg, received);
+  }
+
+  // Send message server->client (bidirectional)
+  std::string reply = "xxtea reply";
+  gsl::span<const unsigned char> reply_span{reinterpret_cast<const unsigned char *>(reply.data()), reply.size()};
+  ret = server.sdk->send_post(reply_span);
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(static_cast<size_t>(1), client.received_messages.size());
+  if (!client.received_messages.empty()) {
+    std::string received(client.received_messages[0].begin(), client.received_messages[0].end());
+    CASE_EXPECT_EQ(reply, received);
+  }
+
+  CASE_MSG_INFO() << "server-client x25519+xxtea handshake and messaging verified" << '\n';
+}
+
+// ========== Algorithm coverage: AES-256-CBC (block cipher, non-AEAD) ==========
+
+CASE_TEST(atgateway_protocol_sdk, server_client_handshake_aes256cbc) {
+  ensure_openssl_init();
+
+  crypto_conf_t conf_data;
+  conf_data.key_exchange_algorithm =
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  conf_data.supported_algorithms.clear();
+  conf_data.supported_algorithms.push_back(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Cbc));
+  conf_data.client_mode = false;
+  conf_data.update_interval = 300;
+
+  crypto_conf_t client_conf_data = conf_data;
+  client_conf_data.client_mode = true;
+
+  auto server_conf = libatgw_protocol_sdk::create_shared_context(conf_data);
+  auto client_conf = libatgw_protocol_sdk::create_shared_context(client_conf_data);
+  CASE_EXPECT_TRUE(!!server_conf && !!client_conf);
+  if (!server_conf || !client_conf) {
+    return;
+  }
+
+  sim_peer_t server, client;
+  libatgw_protocol_api::proto_callbacks_t server_cbs = {}, client_cbs = {};
+  setup_sim_pair(server, client, server_conf, client_conf, server_cbs, client_cbs);
+
+  int ret = client.sdk->start_session();
+  if (server.handshake_status != 0 || client.handshake_status != 0) {
+    CASE_MSG_INFO() << "aes-256-cbc not available on this platform, skip" << '\n';
+    return;
+  }
+  CASE_EXPECT_EQ(0, ret);
+
+  // Test block-alignment: send message that is NOT a multiple of AES block size (16 bytes)
+  std::string msg = "aes256cbc non-aligned msg!";  // 25 bytes, not multiple of 16
+  gsl::span<const unsigned char> msg_span{reinterpret_cast<const unsigned char *>(msg.data()), msg.size()};
+  ret = client.sdk->send_post(msg_span);
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(static_cast<size_t>(1), server.received_messages.size());
+  if (!server.received_messages.empty()) {
+    std::string received(server.received_messages[0].begin(), server.received_messages[0].end());
+    CASE_EXPECT_EQ(msg, received);
+  }
+
+  // Test exact block-alignment: 32 bytes = 2 * AES block size
+  std::string msg_aligned = "0123456789abcdef0123456789abcdef";  // exactly 32 bytes
+  gsl::span<const unsigned char> msg_aligned_span{reinterpret_cast<const unsigned char *>(msg_aligned.data()),
+                                                  msg_aligned.size()};
+  ret = client.sdk->send_post(msg_aligned_span);
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(static_cast<size_t>(2), server.received_messages.size());
+  if (server.received_messages.size() >= 2) {
+    std::string received(server.received_messages[1].begin(), server.received_messages[1].end());
+    CASE_EXPECT_EQ(msg_aligned, received);
+  }
+
+  // Bidirectional
+  std::string reply = "cbc server reply";
+  gsl::span<const unsigned char> reply_span{reinterpret_cast<const unsigned char *>(reply.data()), reply.size()};
+  ret = server.sdk->send_post(reply_span);
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(static_cast<size_t>(1), client.received_messages.size());
+  if (!client.received_messages.empty()) {
+    std::string received(client.received_messages[0].begin(), client.received_messages[0].end());
+    CASE_EXPECT_EQ(reply, received);
+  }
+
+  CASE_MSG_INFO() << "server-client x25519+aes-256-cbc handshake and messaging verified" << '\n';
+}
+
+// ========== Algorithm coverage: ChaCha20-Poly1305-IETF (AEAD stream cipher) ==========
+
+CASE_TEST(atgateway_protocol_sdk, server_client_handshake_chacha20_poly1305) {
+  ensure_openssl_init();
+
+  crypto_conf_t conf_data;
+  conf_data.key_exchange_algorithm =
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  conf_data.supported_algorithms.clear();
+  conf_data.supported_algorithms.push_back(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kChacha20Poly1305Ietf));
+  conf_data.client_mode = false;
+  conf_data.update_interval = 300;
+
+  crypto_conf_t client_conf_data = conf_data;
+  client_conf_data.client_mode = true;
+
+  auto server_conf = libatgw_protocol_sdk::create_shared_context(conf_data);
+  auto client_conf = libatgw_protocol_sdk::create_shared_context(client_conf_data);
+  CASE_EXPECT_TRUE(!!server_conf && !!client_conf);
+  if (!server_conf || !client_conf) {
+    return;
+  }
+
+  sim_peer_t server, client;
+  libatgw_protocol_api::proto_callbacks_t server_cbs = {}, client_cbs = {};
+  setup_sim_pair(server, client, server_conf, client_conf, server_cbs, client_cbs);
+
+  int ret = client.sdk->start_session();
+  if (server.handshake_status != 0 || client.handshake_status != 0) {
+    CASE_MSG_INFO() << "chacha20-poly1305-ietf not available on this platform, skip" << '\n';
+    return;
+  }
+  CASE_EXPECT_EQ(0, ret);
+
+  // Send message client->server (AEAD mode)
+  std::string msg = "chacha20-poly1305 AEAD test message";
+  gsl::span<const unsigned char> msg_span{reinterpret_cast<const unsigned char *>(msg.data()), msg.size()};
+  ret = client.sdk->send_post(msg_span);
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(static_cast<size_t>(1), server.received_messages.size());
+  if (!server.received_messages.empty()) {
+    std::string received(server.received_messages[0].begin(), server.received_messages[0].end());
+    CASE_EXPECT_EQ(msg, received);
+  }
+
+  // Bidirectional
+  std::string reply = "chacha20-poly1305 reply";
+  gsl::span<const unsigned char> reply_span{reinterpret_cast<const unsigned char *>(reply.data()), reply.size()};
+  ret = server.sdk->send_post(reply_span);
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(static_cast<size_t>(1), client.received_messages.size());
+  if (!client.received_messages.empty()) {
+    std::string received(client.received_messages[0].begin(), client.received_messages[0].end());
+    CASE_EXPECT_EQ(reply, received);
+  }
+
+  CASE_MSG_INFO() << "server-client x25519+chacha20-poly1305-ietf handshake and messaging verified" << '\n';
+}
+
+// ========== Oversized message rejection ==========
+
+CASE_TEST(atgateway_protocol_sdk, server_client_oversized_message_rejected) {
+  ensure_openssl_init();
+
+  crypto_conf_t conf_data;
+  conf_data.key_exchange_algorithm =
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  conf_data.supported_algorithms.push_back(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
+  conf_data.client_mode = false;
+  conf_data.update_interval = 300;
+  conf_data.max_post_message_size = 1024;  // 1KB limit
+
+  crypto_conf_t client_conf_data = conf_data;
+  client_conf_data.client_mode = true;
+
+  auto server_conf = libatgw_protocol_sdk::create_shared_context(conf_data);
+  auto client_conf = libatgw_protocol_sdk::create_shared_context(client_conf_data);
+  CASE_EXPECT_TRUE(!!server_conf && !!client_conf);
+  if (!server_conf || !client_conf) {
+    return;
+  }
+
+  sim_peer_t server, client;
+  libatgw_protocol_api::proto_callbacks_t server_cbs = {}, client_cbs = {};
+  setup_sim_pair(server, client, server_conf, client_conf, server_cbs, client_cbs);
+
+  int ret = client.sdk->start_session();
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(0, client.handshake_status);
+
+  // Send a message within the limit — should succeed
+  std::vector<unsigned char> small_msg(512, 0x41);
+  gsl::span<const unsigned char> small_span{small_msg.data(), small_msg.size()};
+  ret = client.sdk->send_post(small_span);
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(static_cast<size_t>(1), server.received_messages.size());
+
+  // Send a message exceeding the limit — should be rejected
+  std::vector<unsigned char> large_msg(conf_data.max_post_message_size + 1, 0x42);
+  gsl::span<const unsigned char> large_span{large_msg.data(), large_msg.size()};
+  ret = client.sdk->send_post(large_span);
+  CASE_EXPECT_EQ(static_cast<int>(::atframework::gateway::error_code_t::kMessageTooLarge), ret);
+  // Server should not receive the oversized message
+  CASE_EXPECT_EQ(static_cast<size_t>(1), server.received_messages.size());
+
+  // Normal message after rejection — should still succeed
+  std::string recovery_msg = "recovery after rejection";
+  gsl::span<const unsigned char> recovery_span{reinterpret_cast<const unsigned char *>(recovery_msg.data()),
+                                               recovery_msg.size()};
+  ret = client.sdk->send_post(recovery_span);
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(static_cast<size_t>(2), server.received_messages.size());
+  if (server.received_messages.size() >= 2) {
+    std::string received(server.received_messages[1].begin(), server.received_messages[1].end());
+    CASE_EXPECT_EQ(recovery_msg, received);
+  }
+
+  CASE_MSG_INFO() << "oversized message correctly rejected with kMessageTooLarge, recovery works" << '\n';
 }
 
 // ========== crypto_conf_t constructor / copy / move tests ==========
