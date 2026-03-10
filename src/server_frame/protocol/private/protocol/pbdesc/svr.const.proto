@@ -28,6 +28,7 @@ enum EnGlobalUUIDMajorType {
   EN_GLOBAL_UUID_MAT_USER_ID = 3;            // User ID分配器
   EN_GLOBAL_UUID_MAT_GUILD_ID = 4;           // Guild ID分配器
   EN_GLOBAL_UUID_MAT_DB_LIST_RECORD_ID = 5;  // DB List Record ID分配器
+  EN_GLOBAL_UUID_MAT_RANK_MIRROR_ID = 6; // Rank Mirror ID分配器
 }
 
 enum EnGlobalUUIDMinorType {

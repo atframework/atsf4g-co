@@ -99,3 +99,9 @@
 /src/component/distributed_transaction/sdk/rpc/transaction/dtcoordsvrservice.*
 /src/component/distributed_transaction/dtcoordsvr/app/handle_ss_rpc_dtcoordsvrservice.*
 /src/tools/simulator/rpc
+/src/component/ranksvr/service/ranking/app/handle_ss_rpc_ranksvrservice.cpp
+/src/component/ranksvr/service/ranking/app/handle_ss_rpc_ranksvrservice.h
+/src/component/ranksvr/service/ranking/app/handle_ss_rpc_ranksvrservice.cpp
+/src/component/ranksvr/service/ranking/app/handle_ss_rpc_ranksvrservice.h
+/src/ranksvr/sdk/settlement/rpc/rank/ranksvrsettlementservice.cpp
+/src/ranksvr/sdk/settlement/rpc/rank/ranksvrsettlementservice.h

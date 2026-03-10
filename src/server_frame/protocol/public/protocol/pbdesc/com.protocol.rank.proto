@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+package prx;
+
+import "protocol/common/com.struct.rank.common.proto";
+import "protocol/pbdesc/com.struct.rank.proto";
+
+message CSRankGetSpecifyRankReq {
+  DRankKey rank_key = 1;
+  uint32 start_no = 2; // 起始排名
+  uint32 count = 3; // 拉取数量（一次拉取最多100个）
+}
+
+message SCRankGetSpecifyRankRsp {
+  DRankKey rank_key = 1;
+  repeated DRankUserBasicData rank_records = 2;
+  uint32 total_count = 3;
+}
+
+message CSRankGetSelfRankReq {
+  DRankKey rank_key = 1;
+  // int64 role_guid = 2;
+  DRankInstanceKey rank_instance_key = 2;
+  uint32 up_count = 3; // 上面up_count个排名的其它用户，0表示不查询该用户上面的排名区间
+  uint32 down_count = 4; // 下面down_count个排名的其它用户，0表示不查询该用户下面的排名区间
+                          // up_count + down_count <= 99
+}
+
+message SCRankGetSelfRankRsp {
+  DRankKey rank_key = 1;
+  DRankInstanceKey rank_instance_key = 2;
+  repeated DRankUserBasicData rank_records = 3;
+  uint32 total_count = 4;
+}
+
+message SCRankCacheExpiredSync {}

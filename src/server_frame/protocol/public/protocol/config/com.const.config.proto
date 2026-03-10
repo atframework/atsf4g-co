@@ -42,4 +42,5 @@ message ExcelConstConfig {
   int32 mail_max_count_per_major_type = 4;
   int32 global_mail_max_count_per_major_type = 5;
   string i18n_system_admin = 6;
+  google.protobuf.Duration daily_reset_time_offset = 7;     // 默认每日重置时间
 }

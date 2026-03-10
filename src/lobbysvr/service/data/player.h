@@ -30,6 +30,7 @@
   inline mgr &get_##mgr() { return *mgr##_; }
 
 class user_async_jobs_manager;
+class user_rank_manager;
 
 /**
  * @brief 用户数据缓存包装，析构时自动还原
@@ -267,6 +268,8 @@ class player : public player_cache {
   // -------------------------------------------------------
 
   REG_PLAYER_MGR_PTR_DEF(user_async_jobs_manager)
+  REG_PLAYER_MGR_PTR_DEF(user_rank_manager)
+
 };
 
 ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN

@@ -1,0 +1,173 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "protocol/extension/v3/xresloader.proto";
+
+import "google/protobuf/duration.proto";
+
+import "protocol/common/com.struct.item.common.proto";
+
+import "protocol/common/com.struct.condition.common.proto";
+
+package prx;
+
+enum EnRankImplType{
+  EN_RANK_IMPL_TYPE_DEFAULT = 0;
+  EN_RANK_IMPL_TYPE_SELF = 1;
+}
+
+enum EnRankLogicType {
+  EN_RANK_LOGIC_TYPE_INVALID = 0;
+  EN_RANK_LOGIC_TYPE_TEST = 999; // 测试使用
+  EN_RANK_LOGIC_TYPE_MAIN = 101; // 主排行榜（玩家战力排行榜）
+  EN_RANK_LOGIC_TYPE_ABC_BASIC = 1001; // 三榜轮换类型
+}
+
+enum EnRankInstanceID {
+  EN_RANK_INSTANCE_ID_NONE = 0;
+  EN_RANK_INSTANCE_ID_DEFAULT = 1;
+}
+
+enum EnRankSortType {
+  EN_RANK_SORT_TYPE_DESCENDING_ORDER = 0; // 降序
+  EN_RANK_SORT_TYPE_ASCENDING_ORDER = 1; // 升序
+}
+
+enum EnRankSettlementType {
+  EN_RANK_SETTLEMENT_TYPE_NONE = 0 [(org.xresloader.enum_alias) = "无结算"];
+  EN_RANK_SETTLEMENT_TYPE_IMAGE = 1 [(org.xresloader.enum_alias) = "使用镜像榜结算"];
+  EN_RANK_SETTLEMENT_TYPE_ORIGINAL_AND_CLEAR = 2
+      [(org.xresloader.enum_alias) = "使用原榜单结算，清空分数，结算期间必须锁榜"];
+}
+
+enum EnRankLockType {
+  EN_RANK_LOCK_TYPE_NONE = 0 [(org.xresloader.enum_alias) = "不锁榜"];
+  EN_RANK_LOCK_TYPE_DAILY = 1 [(org.xresloader.enum_alias) = "每日锁榜"];
+  EN_RANK_LOCK_TYPE_CUSTOM = 2 [(org.xresloader.enum_alias) = "自定义周期锁榜"];
+}
+
+enum EnRankPeriodRewardType {
+  EN_RANK_PREWARD_TYPE_NONE = 0;
+  EN_RANK_PREWARD_TYPE_BY_RANK = 1 [(org.xresloader.enum_alias) = "按排名区间（升序）奖励"];
+  EN_RANK_PREWARD_TYPE_BY_SCORE = 2 [(org.xresloader.enum_alias) = "按分数区间（降序）奖励"];
+}
+
+enum ENRankScoreSettleType {
+  EN_RANK_SCORE_SETTLE_NONE = 0;
+  EN_RANK_SCORE_SETTLE_SUB_SCORE = 1 [(org.xresloader.enum_alias) = "扣除分数"];
+  EN_RANK_SCORE_SETTLE_RESET_SCORE = 2 [(org.xresloader.enum_alias) = "重置分数"];
+}
+
+
+enum EnRankDataType {
+  EN_RANK_SHOW_INVALID = 0;
+}
+
+enum rank_cache_mode {
+  EN_RANK_CACHE_MODE_OFFLINE = 0; // 离线缓存，未同步
+  EN_RANK_CACHE_MODE_KONLINE = 1; // 在线缓存，且在榜上
+  EN_RANK_CACHE_MODE_KLOCAL = 2; // 本地缓存，未同步
+  
+}
+
+enum RankInstanceType {
+  EN_RANK_INSTANCE_TYPE_USER = 0; // 玩家
+  EN_RANK_INSTANCE_TYPE_ROLE = 1; // 角色
+}
+
+message DRankInstanceKey{
+  int32 instance_type = 1; // RankInstanceType
+  int64 instance_id = 2;
+}
+
+message DRankPeriodRewardPoolIndex {
+  int32 rank_reward_pool_id = 1; // 排行榜奖励池ID
+  EnRankPeriodRewardType reward_type = 2; // 奖励池类型
+  int32 interval_days = 3; // 周期天数
+  int32 lock_first_days = 4; // 前N天锁榜
+  int32 lock_last_days = 5; // 后N天锁榜
+  bool save_history = 6; // 是否落地存储历史
+
+  // 切换赛季/天时是否重置分数
+  //   -1: 置0
+  //    0: 保留分数
+  // 正数: 设置到目标分数
+  int32 local_mode_season_settlement_set_score = 11;
+}
+
+message DRankRuleBind {
+  int32 bind_type = 1;
+  int32 bind_id = 2;
+}
+
+message DRankRuleBindLevel {
+  int32 level_type = 1;
+  int32 level_id = 2;
+}
+
+message DRankRuleContent {
+  uint32 sub_rank_type = 1; // 初始子榜类型
+  uint32 sub_rank_instance_id = 2; // 初始子榜ID
+
+  uint32 shared_zone_id = 10; // 全服榜zone id
+  string name = 11;
+  string description = 12;
+
+  DConditionRuleRangeDatetime valid_time = 21; // 有效期
+  EnRankSettlementType settlement_type = 23; // 结算类型
+  google.protobuf.Duration settlement_time_offset = 24; // 结算时间偏移
+  EnRankLockType lock_type = 25; // 锁榜类型
+  DConditionRuleRangeTime lock_time = 26; // 锁榜时间
+  DRankPeriodRewardPoolIndex daily_settlement = 31; // 每日结算
+  DRankPeriodRewardPoolIndex custom_settlement = 32; // 自定义周期结算
+
+  DRankRuleBind bind = 41; // 绑定类型
+}
+
+message DRankPeriodRewardPoolContent {
+  repeated DItemOffset reward = 1 [(org.xresloader.field_separator) = ";"];
+
+  int32 mail_template_id = 4;
+
+  string rank_name = 11;
+  string rank_description = 12;
+
+  int32 elo_k = 21;
+  int32 elo_rating_point = 22;
+
+  ENRankScoreSettleType score_change_type = 31;
+  int32 score_change_param = 32;
+}
+
+message DRankKey {
+  uint32 rank_type = 1;
+  uint32 rank_instance_id = 2;
+  uint32 sub_rank_type = 3;
+  uint32 sub_rank_instance_id = 4;
+}
+
+message DRankBoardBasicData {
+  DRankKey rank_key = 1;
+
+  uint32 rank_no = 2;
+  int64 score = 3;
+
+  DRankInstanceKey rank_instance_key = 4;
+  // 多维度排序字段
+  repeated int64 sort_fields = 6;
+
+  repeated uint64 ext_fields = 7;
+
+  int64 submit_timepoint = 11;
+
+  uint32 settle_rank_no = 12;
+}
+
+message DRankImageData {
+  int64 mirror_id = 1;
+}

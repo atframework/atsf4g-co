@@ -16,6 +16,7 @@ package hello.err;
 
 enum EnSysErrorType {
   EN_SUCCESS = 0 [(error_code.description) = "成功"];
+  EN_COMMON_BREAK = 1000001 [(error_code.description) = "正常中断操作"];
 
   EN_SYS_UNKNOWN = -1
                    [(error_code.description) = "未知异常"];

@@ -19,6 +19,8 @@
 #include <time/time_utility.h>
 
 #include <logic/async_jobs/user_async_jobs_manager.h>
+#include <logic/rank/user_rank_manager.h>
+
 #include <logic/player_manager.h>
 
 #include <data/session.h>
@@ -110,7 +112,7 @@ void player::create_init(rpc::context &parent_ctx) {
 
   //! === manager implement === 创建后事件回调，这时候还没进入数据库并且未执行login_init()
   user_async_jobs_manager_->create_init(ctx);
-
+  user_rank_manager_->create_init(ctx);
   // TODO init all interval checkpoint
 
   // TODO init items
@@ -143,6 +145,7 @@ void player::login_init(rpc::context &parent_ctx) {
 
   // all module login init
   user_async_jobs_manager_->login_init(ctx);
+  user_rank_manager_->login_init(ctx);
 
   set_inited();
   on_login(ctx);
@@ -161,6 +164,7 @@ bool player::is_dirty() const {
 
   //! === manager implement === 检查是否有脏数据
   PLAYER_CHECK_RET_DIRTY(ret, user_async_jobs_manager_->is_dirty());
+  PLAYER_CHECK_RET_DIRTY(ret, user_rank_manager_->is_dirty());
 
 #undef PLAYER_CHECK_RET_DIRTY
 
@@ -170,6 +174,8 @@ bool player::is_dirty() const {
 void player::clear_dirty() {
   //! === manager implement === 清理脏数据标记
   user_async_jobs_manager_->clear_dirty();
+  user_rank_manager_->clear_dirty();
+
 }
 
 void player::refresh_feature_limit(rpc::context &ctx) {
@@ -178,6 +184,7 @@ void player::refresh_feature_limit(rpc::context &ctx) {
   //! === manager implement === 不定期调用，用于刷新逻辑
   // all modules refresh limit
   user_async_jobs_manager_->refresh_feature_limit(ctx);
+  // user_rank_manager_->refresh_feature_limit(ctx);
 
   time_t now = atfw::util::time::time_utility::get_now();
   if (now != cache_data_.refresh_feature_limit_second) {
@@ -277,6 +284,10 @@ void player::init_from_table_data(rpc::context &parent_ctx, const PROJECT_NAMESP
     user_async_jobs_manager_->init_from_table_data(ctx, tb_player);
   }
 
+  if (tb_player.has_rank_data()) {
+    user_rank_manager_->init_from_table_data(ctx, tb_player);
+  }
+
   trace.finish({0, {}});
 }
 
@@ -299,6 +310,12 @@ int player::dump(rpc::context &parent_ctx, PROJECT_NAMESPACE_ID::table_user &use
   ret = user_async_jobs_manager_->dump(ctx, user);
   if (ret < 0) {
     FWPLOGERROR(*this, "dump async_jobs_manager_ failed, res: {}({})", ret, protobuf_mini_dumper_get_error_msg(ret));
+    return trace.finish({ret, {}});
+  }
+
+  ret = user_rank_manager_->dump(ctx, user);
+  if (ret < 0) {
+    FWPLOGERROR(*this, "dump user_rank_manager_ failed, res: {}({})", ret, protobuf_mini_dumper_get_error_msg(ret));
     return trace.finish({ret, {}});
   }
 

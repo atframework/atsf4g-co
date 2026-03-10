@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+
+
+option go_package = "github.com/atframework/atsf4g-go/component-protocol-private/pbdesc/protocol/pbdesc";
+
+
+import "protocol/extension/xrescode_extensions_v3.proto";
+import "protocol/extension/v3/xresloader.proto";
+
+import "protocol/common/com.struct.rank.common.proto";
+import "protocol/common/com.struct.item.common.proto";
+
+package prx.config;
+
+// 排行榜配置
+message ExcelRankDefine {
+  option (xrescode.loader) = {
+    file_path: "rank_define.bytes"
+    indexes: { fields: "rank_type" fields: "rank_instance_id" index_type: EN_INDEX_KV }
+    tags: "server"
+    tags: "client"
+  };
+  uint32 rank_type = 1 [(org.xresloader.field_unique_tag) = "rank_type_and_instance_id"]; // 排行榜类型
+  uint32 rank_instance_id = 2
+      [(org.xresloader.field_unique_tag) = "rank_type_and_instance_id"];  // -InstanceId
+  EnRankSortType sort_type = 28; // 排名类型
+  EnRankDataType rank_show_type = 6; // 客户端用
+  uint32 capacity = 8; // 容量
+  EnRankImplType rank_impl_type = 9;
+}
+
+message ExcelRankRule {
+  option (xrescode.loader) = {
+    file_path: "rank_settlement_rule.bytes"
+    indexes: { fields: "rank_type" fields: "rank_instance_id" index_type: EN_INDEX_KV }
+
+    tags: "server"
+    tags: "client"
+  };
+  uint32 rank_type = 1 [(org.xresloader.field_unique_tag) = "rank_type_and_instance_id"]; // 排行榜类型
+  uint32 rank_instance_id = 2
+      [(org.xresloader.field_unique_tag) = "rank_type_and_instance_id"];  // 
+  DRankRuleContent content = 3; // 详情配置
+  bool is_instance_rank = 5; // 指定上单实例类型
+  bool need_auto_update = 7; // 是否走自动更新修复流程
+  EnRankImplType rank_impl_type = 9; // 实现类型
+}
+
+
+
+// 排行榜奖励池配置
+message ExcelRankPeriodRewardPool {
+  option (xrescode.loader) = {
+    file_path: "rank_period_reward_pool.bytes"
+    indexes: { fields: "rank_reward_pool_id" sort_by: "rank_or_score" index_type: EN_INDEX_KL }
+    tags: "server"
+    tags: "client"
+  };
+
+  int32 rank_reward_pool_id = 1
+      [(org.xresloader.field_unique_tag) = "rank_reward_pool_id_rank_or_score"];  // 排行榜奖励池ID
+  int64 rank_or_score = 2 [(org.xresloader.field_unique_tag) = "rank_reward_pool_id_rank_or_score"]; // 排行榜段位
+  DRankPeriodRewardPoolContent content = 3;
+  repeated DItemOffset show_items = 101 [(org.xresloader.field_separator) = ";"];
+}

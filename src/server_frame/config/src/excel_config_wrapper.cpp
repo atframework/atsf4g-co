@@ -19,6 +19,8 @@
 
 #include "config/server_frame_build_feature.h"
 
+#include "config/excel_config_rank_index.h"
+
 #include "config/excel/config_manager.h"
 #include "config/excel_config_const_index.h"
 #include "config/logic_config.h"
@@ -83,6 +85,9 @@ static void excel_config_callback_on_reload_all(excel::config_manager::config_gr
     FWLOGERROR("excel config group error");
     return;
   }
+
+  setup_rank_config(*group);
+
 
   // 自定义跨表索引在这之后初始化
   setup_const_config(*group);

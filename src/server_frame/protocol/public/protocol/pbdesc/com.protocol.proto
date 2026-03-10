@@ -13,6 +13,7 @@ import "protocol/extension/atframework.proto";
 
 import "protocol/pbdesc/com.const.proto";
 import "protocol/pbdesc/com.struct.proto";
+import "protocol/pbdesc/com.protocol.rank.proto";
 import "protocol/common/com.struct.item.common.proto";
 
 package hello;
@@ -159,6 +160,28 @@ service LobbysvrClientService {
     option (atframework.rpc_options) = {
       module_name: "player"
       api_name: "Push dirty data"
+    };
+  };
+
+  // ================ 排行榜RPC ================
+  rpc rank_get_specify_rank(CSRankGetSpecifyRankReq) returns (SCRankGetSpecifyRankRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "rank"
+      api_name: "获取指定排名范围的排行榜"
+    };
+  };
+
+  rpc rank_get_self_rank(CSRankGetSelfRankReq) returns (SCRankGetSelfRankRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "rank"
+      api_name: "获取排行榜中自身及前后排名"
+    };
+  };
+
+  rpc rank_cache_expired_sync(google.protobuf.Empty) returns (stream SCRankCacheExpiredSync) {
+    option (atframework.rpc_options) = {
+      module_name: "rank"
+      api_name: "排行榜缓存失效通知"
     };
   };
 }

@@ -12,6 +12,7 @@ package hello;
 
 message DConstSettingsType {
   int64 time_tolerate = 1;  // 时间错容忍值
+  int64 max_timestamp = 2;  // 最大时间戳
 }
 
 // 只能配置在 com.const.proto 这个文件里有效
