@@ -16,6 +16,7 @@ import "atframe/atapp_conf.proto";
 
 message logic_discovery_selector_cfg {
   atframework.atapp.protocol.atapp_metadata dtcoordsvr = 270;
+  atframework.atapp.protocol.atapp_metadata ranksvr = 271;
 }
 
 // @see

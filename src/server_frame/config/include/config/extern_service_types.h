@@ -21,7 +21,9 @@ struct SERVER_FRAME_CONFIG_HEAD_ONLY logic_service_type {
   enum type {
     EN_LST_LOGINSVR = 35,
     EN_LST_GAMESVR = 36,
+    EN_LST_RANKSVR = 37,      // 排行榜服务器
     EN_LST_DTCOORDSVR = 70,  // 用于分布式事务的协调者服务
+
   };
 };
 }  // namespace component

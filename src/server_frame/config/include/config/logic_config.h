@@ -63,6 +63,8 @@ class logic_config {
 
   SERVER_FRAME_CONFIG_API gsl::string_view get_deployment_environment_name() const noexcept;
 
+  SERVER_FRAME_CONFIG_API uint32_t get_local_world_id() const noexcept;
+
   SERVER_FRAME_CONFIG_API const PROJECT_NAMESPACE_ID::DConstSettingsType &get_const_settings();
   SERVER_FRAME_CONFIG_API const atframework::ConstSettingsType &get_atframework_settings();
 

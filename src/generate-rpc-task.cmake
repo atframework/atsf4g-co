@@ -105,6 +105,12 @@ include("${CMAKE_CURRENT_LIST_DIR}/loginsvr/generate-rpc-task.cmake")
 # add tool to binding gamesvr rpcs
 include("${CMAKE_CURRENT_LIST_DIR}/gamesvr/generate-rpc-task.cmake")
 
+# add tool to binding ranksvr-settlement rpcs
+include("${CMAKE_CURRENT_LIST_DIR}/ranksvr/generate-rpc-task.cmake")
+
+# add tool to binding ranksvr-ranking rpcs
+include("${CMAKE_CURRENT_LIST_DIR}/component/ranksvr/generate-rpc-task.cmake")
+
 # add tool to generate simulator rpcs
 generate_for_pb_add_simulator_cs_api(
   "${PROJECT_NAMESPACE}.LoginsvrClientService"

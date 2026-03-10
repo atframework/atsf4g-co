@@ -13,6 +13,8 @@ import "google/protobuf/timestamp.proto";
 
 import "protocol/extension/svr.database.extension.proto";
 import "protocol/pbdesc/svr.struct.proto";
+import "protocol/pbdesc/svr.struct.rank.proto";
+import "protocol/pbdesc/com.struct.rank.proto";
 
 package hello;
 
@@ -101,6 +103,7 @@ message table_user {
 
   // 业务逻辑数据
   user_options_data options_data = 200;  // 玩家选项
+  DRankUserData rank_data = 201; // 玩家排行榜数据
 }
 
 message table_distribute_transaction {
@@ -119,4 +122,174 @@ message table_distribute_transaction {
   bytes transaction_uuid = 2;
 
   google.protobuf.Any blob_data = 11;
+}
+
+
+
+message table_rank {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "rank"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      key_fields: "rank_type"
+      key_fields: "rank_instance_id"
+      key_fields: "sub_rank_type"
+      key_fields: "sub_rank_instance_id"
+      key_fields: "zone_id"
+      key_fields: "slice_index"
+      key_fields: "storge_version"
+
+    }
+  };
+  // clang-format on
+  uint32 rank_type = 1;
+  uint32 rank_instance_id = 2;
+  uint32 sub_rank_type = 4;
+  uint32 sub_rank_instance_id = 5;
+  uint32 zone_id = 6;
+  int32 slice_index = 7;
+  int64 storge_version = 8;
+  int64 data_version = 9;
+  int32 max_slice_index = 10;
+  
+  table_rank_blob_data blob_data = 101;
+}
+
+message table_rank_mirror {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "rank_mirror"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      key_fields: "rank_type"
+      key_fields: "rank_instance_id"
+      key_fields: "sub_rank_type"
+      key_fields: "sub_rank_instance_id"
+      key_fields: "zone_id"
+      key_fields: "mirror_id"
+      key_fields: "slice_index"
+    }
+  };
+  // clang-format on
+  uint32 rank_type = 1;
+  uint32 rank_instance_id = 2;
+  uint32 sub_rank_type = 4;
+  uint32 sub_rank_instance_id = 5;
+  uint32 zone_id = 6;
+  int64 mirror_id = 7;
+  int32 slice_index = 8;
+  int32 max_slice_count = 9;
+  int32 per_slice_count = 10;
+  int32 rank_total_size = 11;
+  int64 data_version = 12;
+
+  table_rank_blob_data blob_data = 101;
+}
+
+message table_rank_router {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "rank_router"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "rank_type"
+      key_fields: "rank_instance_id"
+      key_fields: "sub_rank_type"
+      key_fields: "sub_rank_instance_id"
+      key_fields: "zone_id"
+    }
+  };
+  // clang-format on
+  int32 rank_type = 1;
+  int32 rank_instance_id = 2;
+  uint32 sub_rank_type = 4;
+  uint32 sub_rank_instance_id = 5;
+  uint32 zone_id = 6;
+  
+  uint64 router_main_node_id = 7;
+  int64 router_save_timepoint = 8;
+
+  table_rank_slave_node_data blob_data = 101;
+}
+
+message table_rank_mirror_meta {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "rank_mirror_meta"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      key_fields: "rank_type"
+      key_fields: "rank_instance_id"
+      key_fields: "sub_rank_type"
+      key_fields: "sub_rank_instance_id"
+      key_fields: "zone_id"
+    }
+  };
+  // clang-format on
+  uint32 rank_type = 1;
+  uint32 rank_instance_id = 2;
+  uint32 sub_rank_type = 3;
+  uint32 sub_rank_instance_id = 4;
+  uint32 zone_id = 6;
+  int64 last_data_version = 7;
+
+  table_rank_mirror_meta_data blob_data = 101;
+}
+
+message table_rank_settlement {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "rank_settlement"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "zone_id"
+      key_fields: "rank_type"
+      key_fields: "rank_instance_id"
+      key_fields: "sub_rank_type"
+      key_fields: "sub_rank_instance_id"
+
+    }
+  };
+  // clang-format on
+  uint32 zone_id = 1;
+  uint32 rank_type = 2;
+  uint32 rank_instance_id = 3;
+  uint32 sub_rank_type = 4;
+  uint32 sub_rank_instance_id = 5;
+
+  table_rank_settlement_blob_data blob_data = 101;
+}
+
+message table_rank_history {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "rank_history"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      key_fields: "zone_id"
+      key_fields: "rank_type"
+      key_fields: "rank_instance_id"
+      key_fields: "sub_rank_type"
+      key_fields: "sub_rank_instance_id"
+      key_fields: "rank_no"
+    }
+  };
+  // clang-format on
+  uint32 zone_id = 1;
+  uint32 rank_type = 2;
+  uint32 rank_instance_id = 3;
+  uint32 sub_rank_type = 4;
+  uint32 sub_rank_instance_id = 5;
+  int64 rank_day_id  = 6;
+  int64 rank_season_id = 7;
+  uint32 rank_no = 8;
+  int64 rank_score = 9;
+  uint32 settle_rank_no = 10;
+  uint64 user_id = 11;
+  uint32 user_zone_id = 12;
+  
+  table_rank_history_blob_data blob_data = 101;
 }

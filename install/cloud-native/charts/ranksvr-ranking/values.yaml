@@ -1,0 +1,87 @@
+# Default values for ranksvr.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+
+proc_name: ranksvr-rankingd
+
+# 服务唯一ID标识
+type_id: 15
+type_name: "ranksvr-ranking"
+
+image:
+  repository: harbor.m-oa.com:6023/project-x/project-x-server/ranksvr-ranking
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: latest
+
+volumeMounts:
+  configMountPath: /data/projectx/gamesvr/cfg
+  logMountPath: /data/projectx/gamesvr/log
+
+vector:
+  log_path: /data/projectx/gamesvr/log
+  image:
+    repository: harbor.m-oa.com:6023/vector/vector:latest
+    pullPolicy: Always
+  sliks:
+    console:
+      enable: false
+    test_file:
+      enable: false
+    opensearch:
+      enable: true
+      username: project-Y-log-writer
+      password: 11bo1B{OE,gjzZ4D
+      endpoint: https://opensearch-cluster-master.devops.svc.cluster.local:9200/
+  index:
+    - "user_id"
+    - "task_name"
+    - "zone_id"
+    - "response_code"
+
+imagePullSecrets:
+  - name: harbor-regcred
+
+persistence:
+  cbs:
+    enabled: true
+    storageClass: openebs-hostpath
+    volumes:
+      - name: log
+        storage: 5Gi
+        accessMode: ReadWriteOnce
+
+gateway:
+  class: cilium
+  port: 7001
+  hostname: gateway.example.com
+  addresses_ip: 127.0.0.1
+
+httproute:
+  port: 7001
+  parentRefsName: project-x-tls-gateway
+
+service:
+  type: ClusterIP
+  port: 7001
+  targetPort: 7001
+  protocol: TCP
+
+redis:
+  enable: true
+
+rank_slave_num: 1 
+rank_dunmp_task_max_num: 20
+rank_refresh_limit_second_interval: 60s
+rank_max_batch_get_num: 20
+max_mirror_count: 10
+rank_history_version_max_count: 20
+rank_slice_max_count: 200
+rank_tree_degree: 20
+rank_save_interval: 600
+rank_btree_degree: 20
+pushlisher_congihure:
+  gc_expire_duration: 3600
+  gc_log_size: 30
+  max_log_size: 300

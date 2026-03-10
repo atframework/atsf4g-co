@@ -10,6 +10,7 @@ option cc_enable_arenas = true;
 option go_package = "github.com/atframework/atsf4g-go/component-protocol-private/pbdesc/protocol/pbdesc";
 
 import "protocol/pbdesc/com.struct.proto";
+import "protocol/common/com.struct.rank.common.proto";
 
 package hello;
 
@@ -54,6 +55,31 @@ message user_async_job_debug_message {
   string title = 2;
 }
 
+
+message user_async_job_update_rank {
+  DRankKey rank_key = 1;
+  bool trigger_by_io_task = 3;
+
+  DRankInstanceKey rank_instance_key = 4;
+
+  oneof action_hint {
+    uint32 set_score = 11;
+    uint32 add_score = 12;
+    uint32 sub_score = 13;
+  }
+}
+
+message user_async_job_settle_rank {
+  DRankBoardBasicData rank_board_basic_data = 1;
+  int32 rank_reward_pool_id = 3; // 奖励池ID
+  EnRankPeriodRewardType rank_reward_pool_type = 4;
+  bool save_history = 6; // 是否落地存储历史
+  int32 season_id = 7; // 结算时的赛季
+
+  int64 daily_reward_cycle_no = 11; // 每日结算奖励的奖励周期ID（防止重复结算）
+  int64 custom_reward_cycle_no = 12; // 自定义结算周期奖励的奖励周期ID（防止重复结算）
+}
+
 message player_async_jobs_data {
   message history_job_meta {
     int32 job_type = 1;
@@ -87,6 +113,8 @@ message user_async_jobs_blob_data {
 
   oneof action {
     user_async_job_debug_message debug_message = 101;  // 调试消息
+    user_async_job_update_rank update_rank = 201;     // 更新排行榜
+    user_async_job_settle_rank settle_rank = 202;     // 结算排行榜
   }
 }
 
@@ -98,4 +126,9 @@ message user_async_jobs_cache_blob_data {
     user_async_jobs_blob_data job_data = 2;
   };
   repeated retry_job_data retry_jobs = 11;
+}
+
+message table_user_instance_rank_battle_blob_data {
+  int64 occur_time = 1;
+  int32 kill_player_count = 2;
 }

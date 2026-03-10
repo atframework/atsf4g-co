@@ -1,0 +1,135 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+package prx;
+
+import "protocol/common/com.struct.rank.common.proto";
+import "protocol/pbdesc/com.struct.proto";
+import "google/protobuf/timestamp.proto";
+
+/////////////////////////////////////////////////////////////////////////
+// 排行榜数据
+/////////////////////////////////////////////////////////////////////////
+
+message DRankRouterData {
+  uint64 main_server_id = 2;
+  repeated uint64 slave_server_ids = 3;
+  uint64 router_version = 4;
+}
+
+message DRankUnsubmitData {
+  DPlayerIDKey user_key = 1; // 玩家ID
+
+  DRankInstanceKey rank_instance_key = 8;
+
+  bool is_offset = 3; // 是否是增量变化
+  int64 value = 4; // 必须大于等于0小于等于UINT32_MAX
+  int64 expired_timepoint = 5; // 过期时间
+
+  // 多维度排序字段
+  repeated uint32 sort_fields = 6;
+  // 扩展字段
+  repeated uint64 ext_fields = 7;
+}
+
+message DRankInstanceBoard {
+  DRankInstanceKey rank_instance_key = 1;
+
+  rank_cache_mode mode = 5;
+  // 多维度排序字段
+  repeated uint32 sort_fields = 6;
+  // 扩展字段
+  repeated uint64 ext_fields = 7;
+
+  int64 last_submit_timepoint = 11;
+  uint32 last_score_cache = 12; // 最后一次提交/拉拉取的绝对值的分数缓存
+  uint32 last_rank_no_cache = 13; // 最后一次拉取的排名缓存
+  int64 daily_reward_cycle_no = 21; // 每日结算奖励的奖励周期ID（防止重复结算）
+  int64 custom_reward_cycle_no = 22; // 自定义周期结算奖励的奖励周期ID（防止重复结算）
+  int64 local_mode_daily_season_id = 23; // 本地缓存模式下的每日赛季ID（即天ID）
+  int64 local_mode_custom_season_id = 24; // 本地缓存模式下的自定义周期赛季ID
+}
+
+message DRankUserBoard {
+  DRankKey rank_key = 1;
+  repeated DRankInstanceBoard rank_instance_data = 2;
+
+  repeated DRankUnsubmitData unsubmit_action = 4; // 未提交的排行榜数据（可能提交期间锁榜，这时候要先缓存以后再处理）
+}
+
+message DRankUserData {
+  repeated DRankUserBoard ranks = 1;
+}
+
+message DRankUserBasicData {
+  DPlayerIDKey user_key = 1; // 玩家ID
+  DRankInstanceKey rank_instance_key = 2;
+  uint32 rank_no = 3;
+  uint32 score = 4;
+
+  // 多维度排序字段
+  repeated uint32 sort_fields = 6;
+  // 扩展字段
+  repeated uint64 ext_fields = 7;
+
+  int64 submit_timepoint = 11;
+}
+
+message DRankQueryRspData{
+  repeated DRankUserBoardData rank_records = 2;
+  uint32 rank_total_count = 3;
+}
+
+message DRankUserBoardData {
+  DRankUserKey user_key = 1;
+  uint32 rank_no = 2;
+  int64 score = 3;
+  DRankCustomData custom_data = 4;
+  int64 submit_timepoint = 11;
+}
+
+message DRankCustomData{
+  // 多维度排序字段
+  repeated int64 sort_fields = 1;
+}
+
+message DRankUserKey {
+  uint64 user_id = 1;
+  uint32 zone_id = 2;
+  // int64 role_guid = 3;
+  DRankInstanceKey rank_instance_key = 4;
+}
+
+message DRankEventUpdateUserScore {
+  DRankUserKey user_key = 2;
+  int64 score = 3;
+  DRankCustomData custom_data = 4;
+}
+
+message DRankEventRemoveUserScore {
+  DRankUserKey user_key = 2;
+}
+
+message DRankEventClear {
+}
+
+message DRankEventLog {
+  int64 event_id = 1;
+  google.protobuf.Timestamp timepoint = 2; // 创建时间
+  oneof event {
+    DRankEventUpdateUserScore update_score = 20;
+    DRankEventRemoveUserScore remove_score = 21;
+    DRankEventClear  rank_clear = 22;
+  }
+}
+
+
+message DRankSubscriberData {
+  DRankKey rank_key = 1;
+  uint64 server_id = 2;
+}

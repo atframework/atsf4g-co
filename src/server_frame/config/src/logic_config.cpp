@@ -249,3 +249,7 @@ void logic_config::_load_server_cfg(atfw::atapp::app &app) {
   } while (false);
   */
 }
+
+SERVER_FRAME_CONFIG_API uint32_t logic_config::get_local_world_id() const noexcept {
+  return static_cast<uint32_t>(get_server_cfg().world_id());
+}

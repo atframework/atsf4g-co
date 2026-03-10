@@ -176,6 +176,41 @@ message logic_excel_cfg {
   string bindir = 4 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "../../resource/excel" }];
 }
 
+message logic_rank_cfg {
+  // 全服排行榜ZoneID offset，用于管理区分多个环境的排行榜
+  uint32 shared_zone_id_offset = 1;
+  bool disable_rank_report_limit = 2;
+  uint32 query_max_count = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "100" }];
+}
+
+
+message rank_publisher_congigure {
+  int64 gc_expire_duration = 1 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3600" }];
+  int32 gc_log_size = 2 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30" }];
+  int32 max_log_size = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "300" }];
+}
+
+message ranksvr_ranking_cfg {
+  uint32 rank_slave_num = 101;
+  google.protobuf.Duration rank_server_router_lock_timeout = 102 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30s" }];
+  int32 rank_dunmp_task_max_num = 103 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "20" }];
+  google.protobuf.Duration rank_refresh_limit_second_interval = 104 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" }];
+  rank_publisher_congigure pushlisher_congihure = 105;
+  int32 rank_max_batch_get_num = 106 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "20" }]; // db拉取分片数量
+  int32 max_mirror_count = 107 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10" }]; // 镜像最大数量
+  uint32 rank_history_version_max_count = 108;
+  int32 rank_slice_max_count = 109 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "200" }];
+  int32 rank_tree_degree = 110 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "20" }];
+  int64 rank_save_interval = 111 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "600" }];
+  uint32 rank_btree_degree = 112 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "20" }];
+}
+
+message ranksvr_settlement_cfg {
+  google.protobuf.Duration settle_interval = 101; // 结算检查时间
+  uint32 settle_loop_count = 102 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "100" }]; // 每个结算单元结算的数量
+  bool disable_rank_settlemnet_clear = 103;
+}
+
 message db_group_gateway_cfg {
   string url = 1;
   int32 port = 2;
@@ -202,7 +237,10 @@ message logic_db_cfg {
 }
 
 message logic_section_cfg {
-  logic_hpa_cfg hpa = 3;
+  uint32 world_id = 1;
+  uint32 zone_id = 2;
+  uint32 logic_id = 3;
+  logic_hpa_cfg hpa = 4;
   logic_localization_cfg localization = 8;
   logic_discovery_selector_cfg discovery_selector = 9;
   google.protobuf.Duration remote_configure_update_interval = 24
@@ -219,6 +257,7 @@ message logic_section_cfg {
   logic_telemetry_cfg telemetry = 108;
   logic_excel_cfg excel = 110;
   logic_transaction_cfg transaction = 111;
+  logic_rank_cfg rank = 112;
 }
 
 message loginsvr_cfg {
@@ -247,4 +286,9 @@ message dtcoordsvr_cfg {
 
   google.protobuf.Duration transaction_default_timeout = 11
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
+}
+
+message gamesvr_cfg {
+  google.protobuf.Duration rank_auto_update_interval = 101
+    [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3600s" min_value: "30s" }];  // 排行榜强制刷新间隔  
 }

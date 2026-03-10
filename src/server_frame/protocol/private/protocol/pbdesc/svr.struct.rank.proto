@@ -1,0 +1,113 @@
+syntax = "proto3";
+// 后台数据结构定义
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+option go_package = "github.com/atframework/atsf4g-go/component-protocol-private/pbdesc/protocol/pbdesc";
+
+import "protocol/pbdesc/com.struct.proto";
+
+import "protocol/common/com.struct.rank.common.proto";
+import "protocol/pbdesc/com.struct.rank.proto";
+
+
+package prx;
+
+
+message history_rank_show_data {
+  int64 role_guid = 3;
+  string account_nick_name = 4;
+  string role_name = 5;
+  int32 role_type = 6;
+  int64 role_create_index = 7;
+}
+
+message rank_sort_key {
+  uint64 user_id = 1;
+  uint32 zone_id = 2;
+  uint64 role_guid = 3;
+}
+
+message rank_sort_score {
+  int64 score = 1;
+  repeated int64 sort_fields = 2;
+  int64 submit_timepoint = 3;
+}
+
+message rank_sort_data {
+  DRankUserKey key = 1;
+  rank_sort_score value = 2;
+}
+
+message rank_storage_data {
+  rank_sort_data sort_data = 1;
+  DRankCustomData custom_data = 2;
+  // int64 submit_timepoint = 3;
+}
+
+message rank_data {
+  rank_storage_data data = 1;
+  uint32 rank_no = 2;
+}
+
+message user_rank_unsubmit_data {
+  DRankKey rank_key = 1;
+
+  DPlayerIDKey user_key = 2; // 玩家ID
+  
+  DRankInstanceKey rank_instance_key = 4; // 排行榜实例Key
+
+  bool is_offset = 11; // 是否是增量变化
+  int32 value = 12; // 必须大于等于0小于等于UINT32_MAX
+  // int64 expired_timepoint = 13;  // 过期时间
+
+  // 多维度排序字段
+  // repeated uint32 sort_fields = 21;
+  // // 扩展字段
+  // repeated uint64 ext_fields = 7;
+}
+
+message table_rank_blob_data {
+  repeated rank_data data = 1;
+}
+
+message rank_mirror_meta_info {
+  int64 mirror_id = 1;
+  int32 max_slice_count = 2;
+  bool is_normal_save = 3;
+} 
+
+message table_rank_mirror_meta_data {
+  repeated rank_mirror_meta_info success_mirror = 1;
+  repeated rank_mirror_meta_info removing_mirror = 2;
+  rank_mirror_meta_info last_save_mirror = 3; // 最新的镜像（对于榜单的定时保存不会占用success_mirror，防止其他服务需要用到的镜像被冲掉）
+}
+
+message table_rank_slave_node_data {
+  repeated uint64 slave_nodes = 1;
+}
+
+message table_rank_settlement_blob_data {
+  uint64 current_settle_server_id = 1; // 当前执行结算的服务器ID
+  int64 current_settle_timeout = 2; // 当前执行结算的超时时间
+
+  int64 latest_settlement_rank = 11; // 最后一次结算已完成的结算排名(0表示全部结算完了)
+  bool latest_settlement_need_daily = 12; // 最后一次结算需要每日结算
+  bool latest_settlement_need_custom = 13; // 最后一次结算需要自定义结算周期结算
+  int32 bind_activity_id = 15; // 绑定的活动id, 绑定活动的榜单在活动过期后自动清理
+
+  int64 settle_daily_day_no = 21; // 已完成的日结算的结算日ID
+  int64 settle_custom_season_no = 22; // 已完成的自定义结算周期的结算天/赛季ID
+
+  int64 mirror_id = 50;
+}
+
+message table_rank_history_blob_data {
+  int32 daily_settlement_pool_id = 1;
+  int32 custom_settlement_pool_id = 2;
+  history_rank_show_data show_data = 3;
+}

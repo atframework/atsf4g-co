@@ -43,3 +43,15 @@ proc_desc:
     world_instance: false
     num: 1
     start_ins_id: 1
+
+  - chart_name: "ranksvr-settlement"
+    instance_type_id: 14
+    world_instance: false
+    num: 1
+    start_ins_id: 1
+
+  - chart_name: "ranksvr-ranking"
+    instance_type_id: 15
+    world_instance: false
+    num: 1
+    start_ins_id: 1

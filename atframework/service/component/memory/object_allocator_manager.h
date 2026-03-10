@@ -286,7 +286,7 @@ class object_allocator_manager {
     defined(__cpp_lib_allocate_at_least) && __cpp_lib_allocate_at_least >= 202302L
     EXPLICIT_NODISCARD_ATTR UTIL_CONFIG_CONSTEXPR std::allocation_result<T*, size_type> allocate_at_least(size_type n) {
       auto ret = backend_allocator()->allocate_at_least(n);
-      object_allocator_metrics_controller::add_allocate_counter_template<T>(ret.second);
+      object_allocator_metrics_controller::add_allocate_counter_template<T>(ret.count);
       return ret;
     }
 #endif
