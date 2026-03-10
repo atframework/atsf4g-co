@@ -49,6 +49,7 @@ struct sim_peer_t {
   uint64_t new_session_id_counter;
   bool pause_writing = false;
   std::list<std::vector<unsigned char>> pending_write_messages;
+  size_t total_write_payload_bytes = 0;
 
   sim_peer_t()
       : remote(nullptr),
@@ -58,7 +59,8 @@ struct sim_peer_t {
         closed(false),
         close_reason(0),
         new_session_id_counter(0x1000),
-        pause_writing(false) {}
+        pause_writing(false),
+        total_write_payload_bytes(0) {}
 };
 
 static bool sim_process_writing(libatgw_protocol_api *proto, bool *is_done) {
@@ -152,6 +154,7 @@ static int sim_write_fn(libatgw_protocol_api *proto, gsl::span<unsigned char> bu
   const unsigned char *payload = buffer.data() + header_offset;
   size_t payload_len = buffer.size() - header_offset;
 
+  self->total_write_payload_bytes += payload_len;
   self->pending_write_messages.emplace_back(payload, payload + payload_len);
 
   sim_process_writing(proto, is_done);
@@ -1995,6 +1998,103 @@ CASE_TEST(atgateway_protocol_sdk, server_client_oversized_message_rejected) {
   }
 
   CASE_MSG_INFO() << "oversized message correctly rejected with kMessageTooLarge, recovery works" << '\n';
+}
+
+// ========== Compression-only (no encryption) with wire size verification ==========
+
+CASE_TEST(atgateway_protocol_sdk, server_client_compression_only_no_encryption) {
+  ensure_openssl_init();
+
+  crypto_conf_t conf_data;
+  conf_data.key_exchange_algorithm =
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  conf_data.supported_algorithms.clear();  // no cipher
+  // Keep default compression algorithms (zstd, lz4, snappy, zlib)
+  conf_data.compression_threshold_size = 256;  // lower threshold to ensure compression kicks in
+  conf_data.client_mode = false;
+  conf_data.update_interval = 300;
+
+  crypto_conf_t client_conf_data = conf_data;
+  client_conf_data.client_mode = true;
+
+  auto server_conf = libatgw_protocol_sdk::create_shared_context(conf_data);
+  auto client_conf = libatgw_protocol_sdk::create_shared_context(client_conf_data);
+  CASE_EXPECT_TRUE(!!server_conf && !!client_conf);
+  if (!server_conf || !client_conf) {
+    return;
+  }
+
+  sim_peer_t server, client;
+  libatgw_protocol_api::proto_callbacks_t server_cbs = {}, client_cbs = {};
+  setup_sim_pair(server, client, server_conf, client_conf, server_cbs, client_cbs);
+
+  int ret = client.sdk->start_session();
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(0, server.handshake_status);
+  CASE_EXPECT_EQ(0, client.handshake_status);
+
+  // Check if any compression algorithm was negotiated
+  auto crypto_session = client.sdk->get_crypto_session();
+  CASE_EXPECT_TRUE(!!crypto_session);
+  if (!crypto_session ||
+      crypto_session->selected_compression_algorithm ==
+          ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::compression_algorithm_t, kNone)) {
+    CASE_MSG_INFO() << "no compression algorithm available on this platform, skip" << '\n';
+    return;
+  }
+
+  CASE_MSG_INFO() << "negotiated compression algorithm: "
+                  << static_cast<int>(crypto_session->selected_compression_algorithm) << '\n';
+
+  // Build a large, highly compressible message (repeated pattern)
+  // Must be larger than compression_threshold_size (256 bytes)
+  const size_t large_msg_size = 8192;
+  std::vector<unsigned char> large_msg(large_msg_size);
+  for (size_t i = 0; i < large_msg_size; ++i) {
+    // Repeated pattern: very compressible
+    large_msg[i] = static_cast<unsigned char>('A' + (i % 4));
+  }
+
+  // Reset write byte counters after handshake
+  client.total_write_payload_bytes = 0;
+  server.total_write_payload_bytes = 0;
+
+  // Send the large compressible message
+  gsl::span<const unsigned char> msg_span{large_msg.data(), large_msg.size()};
+  ret = client.sdk->send_post(msg_span);
+  CASE_EXPECT_EQ(0, ret);
+
+  // Verify server received the message correctly (decompressed)
+  CASE_EXPECT_EQ(static_cast<size_t>(1), server.received_messages.size());
+  if (!server.received_messages.empty()) {
+    CASE_EXPECT_EQ(large_msg.size(), server.received_messages[0].size());
+    bool data_matches = (large_msg == server.received_messages[0]);
+    CASE_EXPECT_TRUE(data_matches);
+  }
+
+  // The key assertion: verify wire data is smaller than original data.
+  // total_write_payload_bytes includes FlatBuffer framing overhead, but for a highly
+  // compressible 8KB message, the compressed wire payload should be significantly smaller.
+  CASE_EXPECT_LT(client.total_write_payload_bytes, large_msg_size);
+  CASE_MSG_INFO() << "compression-only: original=" << large_msg_size
+                  << " bytes, wire=" << client.total_write_payload_bytes << " bytes (ratio "
+                  << (client.total_write_payload_bytes * 100 / large_msg_size) << "%)" << '\n';
+
+  // Also test bidirectional: server -> client
+  server.total_write_payload_bytes = 0;
+  client.received_messages.clear();
+
+  gsl::span<const unsigned char> reply_span{large_msg.data(), large_msg.size()};
+  ret = server.sdk->send_post(reply_span);
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(static_cast<size_t>(1), client.received_messages.size());
+  if (!client.received_messages.empty()) {
+    bool data_matches = (large_msg == client.received_messages[0]);
+    CASE_EXPECT_TRUE(data_matches);
+  }
+  CASE_EXPECT_LT(server.total_write_payload_bytes, large_msg_size);
+
+  CASE_MSG_INFO() << "compression-only (no encryption) verified: data compressed on wire" << '\n';
 }
 
 // ========== crypto_conf_t constructor / copy / move tests ==========
