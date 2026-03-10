@@ -1,5 +1,6 @@
 // Copyright 2026 atframework
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -50,6 +51,7 @@ struct sim_peer_t {
   bool pause_writing = false;
   std::list<std::vector<unsigned char>> pending_write_messages;
   size_t total_write_payload_bytes = 0;
+  std::vector<std::vector<unsigned char>> captured_write_payloads;
 
   sim_peer_t()
       : remote(nullptr),
@@ -155,6 +157,7 @@ static int sim_write_fn(libatgw_protocol_api *proto, gsl::span<unsigned char> bu
   size_t payload_len = buffer.size() - header_offset;
 
   self->total_write_payload_bytes += payload_len;
+  self->captured_write_payloads.emplace_back(payload, payload + payload_len);
   self->pending_write_messages.emplace_back(payload, payload + payload_len);
 
   sim_process_writing(proto, is_done);
@@ -1998,6 +2001,124 @@ CASE_TEST(atgateway_protocol_sdk, server_client_oversized_message_rejected) {
   }
 
   CASE_MSG_INFO() << "oversized message correctly rejected with kMessageTooLarge, recovery works" << '\n';
+}
+
+// ========== Encryption-only (no compression) with wire data verification ==========
+
+CASE_TEST(atgateway_protocol_sdk, server_client_encryption_only_no_compression) {
+  ensure_openssl_init();
+
+  crypto_conf_t conf_data;
+  conf_data.key_exchange_algorithm =
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  conf_data.supported_algorithms.clear();
+  conf_data.supported_algorithms.push_back(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
+  conf_data.compression_algorithms.clear();  // no compression
+  conf_data.client_mode = false;
+  conf_data.update_interval = 300;
+
+  crypto_conf_t client_conf_data = conf_data;
+  client_conf_data.client_mode = true;
+
+  auto server_conf = libatgw_protocol_sdk::create_shared_context(conf_data);
+  auto client_conf = libatgw_protocol_sdk::create_shared_context(client_conf_data);
+  CASE_EXPECT_TRUE(!!server_conf && !!client_conf);
+  if (!server_conf || !client_conf) {
+    return;
+  }
+
+  sim_peer_t server, client;
+  libatgw_protocol_api::proto_callbacks_t server_cbs = {}, client_cbs = {};
+  setup_sim_pair(server, client, server_conf, client_conf, server_cbs, client_cbs);
+
+  int ret = client.sdk->start_session();
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(0, server.handshake_status);
+  CASE_EXPECT_EQ(0, client.handshake_status);
+
+  // Verify encryption algorithm was actually negotiated
+  auto crypto_session = client.sdk->get_crypto_session();
+  CASE_EXPECT_TRUE(!!crypto_session);
+  if (!crypto_session ||
+      crypto_session->selected_algorithm ==
+          ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kNone)) {
+    CASE_MSG_INFO() << "aes-256-gcm not available on this platform, skip" << '\n';
+    return;
+  }
+
+  // Clear captured payloads from handshake phase
+  client.captured_write_payloads.clear();
+  server.captured_write_payloads.clear();
+
+  // Build a recognizable plaintext message with a distinctive pattern.
+  // Use a long, repeated, unique marker string so that any substring search
+  // in the encrypted wire data will fail if encryption is working.
+  const char plaintext_marker[] = "PLAINTEXT_ENCRYPTION_TEST_MARKER";
+  const size_t marker_len = sizeof(plaintext_marker) - 1;  // exclude null terminator
+  const size_t repeat_count = 16;
+  std::vector<unsigned char> plaintext_msg;
+  plaintext_msg.reserve(marker_len * repeat_count);
+  for (size_t r = 0; r < repeat_count; ++r) {
+    plaintext_msg.insert(plaintext_msg.end(), reinterpret_cast<const unsigned char *>(plaintext_marker),
+                         reinterpret_cast<const unsigned char *>(plaintext_marker) + marker_len);
+  }
+
+  // Send the message
+  gsl::span<const unsigned char> msg_span{plaintext_msg.data(), plaintext_msg.size()};
+  ret = client.sdk->send_post(msg_span);
+  CASE_EXPECT_EQ(0, ret);
+
+  // Verify server received the correct decrypted message
+  CASE_EXPECT_EQ(static_cast<size_t>(1), server.received_messages.size());
+  if (!server.received_messages.empty()) {
+    CASE_EXPECT_EQ(plaintext_msg.size(), server.received_messages[0].size());
+    bool data_matches = (plaintext_msg == server.received_messages[0]);
+    CASE_EXPECT_TRUE(data_matches);
+  }
+
+  // Key assertion: verify that the plaintext marker cannot be found in any
+  // captured wire payload. This proves the data was actually encrypted.
+  const unsigned char *marker_begin = reinterpret_cast<const unsigned char *>(plaintext_marker);
+  const unsigned char *marker_end = marker_begin + marker_len;
+  CASE_EXPECT_FALSE(client.captured_write_payloads.empty());
+  for (size_t pi = 0; pi < client.captured_write_payloads.size(); ++pi) {
+    const auto &wire_payload = client.captured_write_payloads[pi];
+    bool found_plaintext =
+        std::search(wire_payload.begin(), wire_payload.end(), marker_begin, marker_end) != wire_payload.end();
+    CASE_EXPECT_FALSE(found_plaintext);
+    if (found_plaintext) {
+      CASE_MSG_ERROR() << "plaintext marker found in wire payload #" << pi << " (size=" << wire_payload.size()
+                       << "), encryption is NOT working!" << '\n';
+    }
+  }
+
+  // Also verify bidirectional: server -> client
+  server.captured_write_payloads.clear();
+  client.received_messages.clear();
+
+  gsl::span<const unsigned char> reply_span{plaintext_msg.data(), plaintext_msg.size()};
+  ret = server.sdk->send_post(reply_span);
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(static_cast<size_t>(1), client.received_messages.size());
+  if (!client.received_messages.empty()) {
+    bool data_matches = (plaintext_msg == client.received_messages[0]);
+    CASE_EXPECT_TRUE(data_matches);
+  }
+
+  CASE_EXPECT_FALSE(server.captured_write_payloads.empty());
+  for (size_t pi = 0; pi < server.captured_write_payloads.size(); ++pi) {
+    const auto &wire_payload = server.captured_write_payloads[pi];
+    bool found_plaintext =
+        std::search(wire_payload.begin(), wire_payload.end(), marker_begin, marker_end) != wire_payload.end();
+    CASE_EXPECT_FALSE(found_plaintext);
+    if (found_plaintext) {
+      CASE_MSG_ERROR() << "plaintext marker found in server wire payload #" << pi << ", encryption is NOT working!"
+                       << '\n';
+    }
+  }
+
+  CASE_MSG_INFO() << "encryption-only (no compression) verified: plaintext not found in wire data" << '\n';
 }
 
 // ========== Compression-only (no encryption) with wire size verification ==========
