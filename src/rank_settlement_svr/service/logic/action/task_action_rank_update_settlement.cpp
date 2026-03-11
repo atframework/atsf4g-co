@@ -26,11 +26,11 @@
 
 #include <rpc/rpc_async_invoke.h>
 
-#include <rank/logic_rank_algorithm.h>
-#include <rank/logic_rank_handle.h>
+#include <rank_logic/logic_rank_algorithm.h>
+#include <rank_logic/logic_rank_handle.h>
 
 #include <rpc/db/local_db_interface.h>
-#include <rpc/rank/rank.h>
+#include <rpc/rank_board/rank.h>
 
 #include <assert.h>
 #include <algorithm>
@@ -544,7 +544,7 @@ static rpc::result_void_type query_mirror_create(
   rank_key->set_rank_instance_id(cfg.rank_instance_id());
   rank_key->set_sub_rank_type(cfg.content().sub_rank_type());
   rank_key->set_sub_rank_instance_id(cfg.content().sub_rank_instance_id());
-  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::rank::make_new_mirror(ctx, *rank_key, mirror_id));
+  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::rank_board::make_new_mirror(ctx, *rank_key, mirror_id));
   if (ret != 0) {
     FWLOGERROR("rank {}:{}:{}:{}, creat rank mirror failed ret:{}", rank_key->rank_type(), rank_key->rank_instance_id(),
                rank_key->sub_rank_type(), rank_key->sub_rank_instance_id(), ret);

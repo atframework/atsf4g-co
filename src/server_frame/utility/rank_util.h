@@ -8,17 +8,17 @@
 #include <config/server_frame_build_feature.h>
 
 PROJECT_NAMESPACE_BEGIN
-bool operator<(const DRankInstanceKey& l, const DRankInstanceKey& r) noexcept;
-bool operator==(const DRankInstanceKey& l, const DRankInstanceKey& r) noexcept;
+SERVER_FRAME_API bool operator<(const DRankInstanceKey& l, const DRankInstanceKey& r) noexcept;
+SERVER_FRAME_API bool operator==(const DRankInstanceKey& l, const DRankInstanceKey& r) noexcept;
 
-bool operator<(const DRankUserKey& l, const DRankUserKey& r) noexcept;
-bool operator==(const DRankUserKey& l, const DRankUserKey& r) noexcept;
+SERVER_FRAME_API bool operator<(const DRankUserKey& l, const DRankUserKey& r) noexcept;
+SERVER_FRAME_API bool operator==(const DRankUserKey& l, const DRankUserKey& r) noexcept;
 
-bool operator<(const rank_sort_score& l, const rank_sort_score& r) noexcept;
-bool operator==(const rank_sort_score& l, const rank_sort_score& r) noexcept;
+SERVER_FRAME_API bool operator<(const rank_sort_score& l, const rank_sort_score& r) noexcept;
+SERVER_FRAME_API bool operator==(const rank_sort_score& l, const rank_sort_score& r) noexcept;
 
-bool operator<(const rank_sort_data& l, const rank_sort_data& r) noexcept;
-bool operator==(const rank_sort_data& l, const rank_sort_data& r) noexcept;
+SERVER_FRAME_API bool operator<(const rank_sort_data& l, const rank_sort_data& r) noexcept;
+SERVER_FRAME_API bool operator==(const rank_sort_data& l, const rank_sort_data& r) noexcept;
 PROJECT_NAMESPACE_END
 
 namespace rank_util {

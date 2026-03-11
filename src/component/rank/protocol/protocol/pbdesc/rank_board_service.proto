@@ -1,0 +1,254 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "google/protobuf/empty.proto";
+import "protocol/extension/atframework.proto";
+
+import "protocol/common/com.struct.rank.common.proto";
+import "protocol/pbdesc/com.struct.rank.proto";
+
+package hello;
+
+message SSRankGetSpecifyRankReq {
+  DRankKey rank_key = 1;
+  DRankUserKey user_key = 2;
+}
+
+message SSRankGetSpecifyRankRsp {
+  int32 result = 1;
+  DRankUserBoardData rank_records = 2;
+}
+
+message SSRankGetUserFrontBackReq {
+  DRankKey rank_key = 1;
+  DRankUserKey user_key = 2;
+  uint32 count = 3;  
+}
+
+message SSRankGetUserFrontBackRsp {
+  int32 result = 1;
+  DRankQueryRspData data = 2;
+}
+
+message SSRankSetScoreReq {
+  DRankKey rank_key = 1;
+  DRankEventUpdateUserScore data = 2;
+}
+
+message SSRankSetScoreRsp {
+  // int64 new_score = 1;
+  int32 result = 1;
+}
+
+
+message SSRankModifyScoreReq {
+  DRankKey rank_key = 1;
+  DRankEventUpdateUserScore data = 2;
+}
+
+message SSRankModifyScoreRsp {
+  // int64 new_score = 1;
+  int32 result = 1;
+}
+
+
+message SSRankDelUserReq {
+  DRankKey rank_key = 1;
+  DRankEventRemoveUserScore data = 2;
+}
+
+message SSRankDelUserRsp {
+  int32 result = 1;
+}
+
+message SSRankGetTopReq {
+  DRankKey rank_key = 1;
+  uint32 start_no = 2; // 起始排名
+  uint32 count = 3; // 拉取数量（一次拉取最多100个）
+}
+
+message SSRankGetTopRsp {
+  int32 result = 1;
+  DRankQueryRspData data = 2;
+}
+
+message SSRankClearReq{
+  DRankKey rank_key = 1;
+  DRankEventClear data = 2;
+}
+
+
+message SSRankClearRsp{
+  int32 result = 1;
+}
+
+message SSRankMakeNewMirrorReq {
+  DRankKey rank_key = 1;
+}
+
+message SSRankMakeNewMirrorRsp {
+  DRankKey rank_key = 1;
+  int64 mirror_id = 2;
+}
+
+message SSRankCheckMirrorDumpFinishReq {
+  DRankKey rank_key = 1;
+  int64 mirror_id = 2;  
+}
+
+message SSRankCheckMirrorDumpFinishRsp {
+  DRankKey rank_key = 1;
+  int64 mirror_id = 2;
+  bool is_dump_finish = 3;  
+}
+
+message SSRankEventSync {
+  DRankKey rank_key = 1;
+  repeated DRankEventLog event_logs = 2;
+}
+
+//----------------------------- 主从相关 -------------------------------------
+message SSRankLoadMainReq {
+  DRankKey rank_key = 1;
+  int32 ttl = 2;
+}
+
+message SSRankLoadMainRsp {
+  DRankKey rank_key = 1;
+  DRankRouterData router_data = 2;
+}
+
+message SSRankCheckSlaveReq {
+  DRankKey rank_key = 1;
+}
+
+message SSRankCheckSlaveRsp {
+  DRankKey rank_key = 1;
+  bool is_slave = 2;
+  int64 data_version = 3;
+}
+
+message SSRankHeartbeatReq {
+  DRankKey rank_key = 1;
+  int64 data_version = 2;
+  int32 router_version = 3;
+}
+
+message SSRankHeartbeatRsp {
+  DRankKey rank_key = 1;
+}
+
+message SSRankSwitchToSlaveReq {
+  DRankKey rank_key = 1;
+  DRankRouterData router_data = 2;
+  int64 data_version = 3;
+}
+
+message SSRankSwitchToSlaveRsp {
+  DRankKey rank_key = 1;
+}
+
+
+service RankBoardService {
+  option (atframework.service_options) = {
+    module_name: "rank_board"
+  };
+  rpc rank_get_special(SSRankGetSpecifyRankReq) returns (SSRankGetSpecifyRankRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "获取指定排行榜数据"
+      allow_no_wait: true
+    };
+  };
+  rpc rank_set_score(SSRankSetScoreReq) returns (SSRankSetScoreRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "更新玩家排行榜数据"
+      allow_no_wait: true
+    };
+  };
+
+  rpc rank_modify_score(SSRankModifyScoreReq) returns (SSRankModifyScoreRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "修改玩家排行榜数据"
+      allow_no_wait: true
+    };
+  };
+
+  rpc rank_del_one_user(SSRankDelUserReq) returns (SSRankDelUserRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "删除单个玩家数据"
+      allow_no_wait: true
+    };
+  };
+
+  rpc rank_get_top(SSRankGetTopReq) returns (SSRankGetTopRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "获取连续榜单数据"
+      allow_no_wait: true
+    };
+  };
+
+  rpc rank_clear(SSRankClearReq) returns (SSRankClearRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "清理榜单"
+      allow_no_wait: true
+    };
+  };
+
+  rpc rank_load_main(SSRankLoadMainReq) returns (SSRankLoadMainRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "主节点加载排行榜信息"
+      allow_no_wait: true
+    };
+  };
+  rpc rank_check_slave(SSRankCheckSlaveReq) returns (SSRankCheckSlaveRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "查询是否是从节点并返回数据版本信息"
+      allow_no_wait: true
+    };
+  };
+  rpc rank_event_sync(stream SSRankEventSync) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "主从节点信息同步"
+      allow_no_wait: true
+    };
+  }; 
+  rpc rank_heartbeat(SSRankHeartbeatReq) returns (SSRankHeartbeatRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "主从心跳"
+      allow_no_wait: true
+    };
+  };
+  rpc rank_switch_to_slave(SSRankSwitchToSlaveReq) returns (SSRankSwitchToSlaveRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "切换到从节点"
+      allow_no_wait: true
+    };
+  };  
+  rpc rank_get_special_one_front_back(SSRankGetUserFrontBackReq) returns (SSRankGetUserFrontBackRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "获取玩家前后排名count的排行榜数据"
+      allow_no_wait: true
+    };
+  };  
+  rpc rank_make_new_mirror(SSRankMakeNewMirrorReq) returns (SSRankMakeNewMirrorRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "请求生成排行榜镜像"
+      allow_no_wait: true
+    };
+  }; 
+  rpc rank_check_mirror_dump_finish(SSRankCheckMirrorDumpFinishReq) returns (SSRankCheckMirrorDumpFinishRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "检查镜像是否生成完成"
+      allow_no_wait: true
+    };
+  };   
+}
+
+
+

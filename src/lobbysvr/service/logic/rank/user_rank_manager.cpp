@@ -22,8 +22,8 @@
 #include <config/excel/config_manager.h>
 #include <config/excel_config_rank_index.h>
 
-#include <rank/logic_rank_algorithm.h>
-#include <rank/logic_rank_handle.h>
+#include <rank_logic/logic_rank_algorithm.h>
+#include <rank_logic/logic_rank_handle.h>
 
 #include <rpc/lobbysvrclientservice/lobbysvrclientservice.h>
 #include <rpc/rpc_async_invoke.h>

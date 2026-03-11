@@ -20,7 +20,7 @@ project_service_declare_instance(
   RESOURCE_DIRECTORIES
   "${SERVICE_TARGET_NAME}/log"
   USE_COMPONENTS
-  "rank-sdk"
+  "rank-logic-sdk"
   USE_SERVICE_SDK
   "lobbysvr-sdk"
   USE_SERVICE_PROTOCOL

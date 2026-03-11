@@ -20,8 +20,8 @@
 #include <dispatcher/task_manager.h>
 #include <dispatcher/task_type_traits.h>
 
-#include <rank/logic_rank_algorithm.h>
-#include <rank/logic_rank_handle.h>
+#include <rank_logic/logic_rank_algorithm.h>
+#include <rank_logic/logic_rank_handle.h>
 #include <rpc/rpc_common_types.h>
 
 #include <list>

@@ -1,22 +1,23 @@
 {
   "cmake.configureSettings": {
-    "CMAKE_BUILD_TYPE": "Debug",
+    "CMAKE_BUILD_TYPE": "RelWithDebInfo",
     "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
     "CMAKE_CXX_STANDARD": "20",
     "CMAKE_CXX_STANDARD_REQUIRED": "ON",
     "PROJECT_ENABLE_SAMPLE": "ON",
     "PROJECT_ENABLE_TOOLS": "ON",
     "PROJECT_ENABLE_UNITTEST": "ON",
-    "ATFRAMEWORK_USE_DYNAMIC_LIBRARY": "ON" // ,
-    // "ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_CRYPTO_USE_MBEDTLS": "ON"
+    "ATFRAMEWORK_USE_DYNAMIC_LIBRARY": "ON"
   },
   "cmake.outputLogEncoding": "utf-8",
   "cmake.environment": {
     "VSLANG": "1033" // 美国英语
   },
-  // "cmake.generator": "Visual Studio 18 2026",
-  "cmake.preferredGenerators": ["Ninja", "Visual Studio 18 2026", "Visual Studio 17 2022"],
-  // "cpplint.cpplintPath": "C:/Users/owent/AppData/Roaming/Python/Python311/Scripts/cpplint.exe",
+  "cmake.preferredGenerators": [
+    "Ninja",
+    "Visual Studio 18 2026",
+    "Visual Studio 17 2022"
+  ],
   "C_Cpp.intelliSenseEngine": "disabled",
   "clangd.enable": true,
   "clangd.arguments": [
@@ -30,7 +31,7 @@
     "-j=8"
   ],
   "[cpp]": {
-    "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+    "editor.defaultFormatter": "xaver.clang-format"
   },
   "files.associations": {
     "*.ejs": "html",

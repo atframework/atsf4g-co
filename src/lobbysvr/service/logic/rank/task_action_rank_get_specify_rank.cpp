@@ -18,7 +18,7 @@
 #include <utility/protobuf_mini_dumper.h>
 #include <utility/rank_util.h>
 
-#include <rank/logic_rank_algorithm.h>
+#include <rank_logic/logic_rank_algorithm.h>
 
 #include <logic/rank/user_rank_manager.h>
 

@@ -22,8 +22,8 @@
 #include <rpc/async_jobs/async_jobs.h>
 #include <rpc/db/local_db_interface.h>
 
-#include <rank/logic_rank_algorithm.h>
-#include <rank/logic_rank_handle.h>
+#include <rank_logic/logic_rank_algorithm.h>
+#include <rank_logic/logic_rank_handle.h>
 
 #include <utility/rank_util.h>
 

@@ -12,7 +12,7 @@ project_service_declare_instance(
   USE_SERVICE_SDK
   "lobbysvr-sdk"
   USE_COMPONENTS
-  "rank-sdk"
+  "rank-logic-sdk"
   HRADERS
   ${SERVICE_HEADERS}
   SOURCES

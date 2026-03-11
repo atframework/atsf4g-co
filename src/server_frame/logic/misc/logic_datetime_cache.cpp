@@ -67,12 +67,12 @@ static std::pair<time_t, time_t> refresh_month_cache() {
 
 }  // namespace detail
 
-time_t logic_datetime_cache_get_today_start_timepoint(time_t offset) {
+SERVER_FRAME_API time_t logic_datetime_cache_get_today_start_timepoint(time_t offset) {
   auto res = detail::refresh_day_cache();
   return res.first + offset;
 }
 
-time_t logic_datetime_cache_get_next_day_start_timepoint(time_t offset) {
+SERVER_FRAME_API time_t logic_datetime_cache_get_next_day_start_timepoint(time_t offset) {
   time_t now = util::time::time_utility::get_now();
   auto res = detail::refresh_day_cache();
   if (res.first + offset > now) {
@@ -81,7 +81,7 @@ time_t logic_datetime_cache_get_next_day_start_timepoint(time_t offset) {
   return res.second + offset;
 }
 
-time_t logic_datetime_cache_get_next_week_start_timepoint(time_t offset) {
+SERVER_FRAME_API time_t logic_datetime_cache_get_next_week_start_timepoint(time_t offset) {
   time_t now = util::time::time_utility::get_now();
   auto res = detail::refresh_week_cache();
   if (res.first + offset > now) {
@@ -90,7 +90,7 @@ time_t logic_datetime_cache_get_next_week_start_timepoint(time_t offset) {
   return res.second + offset;
 }
 
-time_t logic_datetime_cache_get_next_month_start_timepoint(time_t offset) {
+SERVER_FRAME_API time_t logic_datetime_cache_get_next_month_start_timepoint(time_t offset) {
   time_t now = util::time::time_utility::get_now();
   auto res = detail::refresh_month_cache();
   if (res.first + offset > now) {
@@ -99,7 +99,7 @@ time_t logic_datetime_cache_get_next_month_start_timepoint(time_t offset) {
   return res.second + offset;
 }
 
-time_t logic_datetime_cache_get_max_timepoint() {
+SERVER_FRAME_API time_t logic_datetime_cache_get_max_timepoint() {
   UTIL_UNLIKELY_IF (detail::g_logic_datetime_next_cache.max_timestamp < INT32_MAX - 1) {
     detail::g_logic_datetime_next_cache.max_timestamp = logic_config::me()->get_const_settings().max_timestamp();
 
@@ -112,11 +112,11 @@ time_t logic_datetime_cache_get_max_timepoint() {
   return detail::g_logic_datetime_next_cache.max_timestamp;
 }
 
-time_t logic_datetime_cache_get_default_daily_refresh_offset() {
+SERVER_FRAME_API time_t logic_datetime_cache_get_default_daily_refresh_offset() {
   return excel::get_const_config().daily_reset_time_offset().seconds();
 }
 
-time_t logic_datetime_cache_get_day_id(time_t now, time_t offset) {
+SERVER_FRAME_API time_t logic_datetime_cache_get_day_id(time_t now, time_t offset) {
   time_t relative_to = 1577808000;  // 2020-01-01 00:00:00+08:00
 
   now = util::time::time_utility::get_day_start_time(now - offset);
@@ -125,12 +125,12 @@ time_t logic_datetime_cache_get_day_id(time_t now, time_t offset) {
   return (now - relative_to) / util::time::time_utility::DAY_SECONDS;
 }
 
-time_t logic_datetime_cache_get_day_start_timepoint(time_t now, time_t offset) {
+SERVER_FRAME_API time_t logic_datetime_cache_get_day_start_timepoint(time_t now, time_t offset) {
   now = util::time::time_utility::get_day_start_time(now - offset);
   return now + offset;
 }
 
-time_t logic_datetime_cache_get_week_id(time_t now, time_t offset) {
+SERVER_FRAME_API time_t logic_datetime_cache_get_week_id(time_t now, time_t offset) {
   time_t relative_to = 1577808000;  // 2020-01-01 00:00:00+08:00
 
   now = util::time::time_utility::get_week_start_time(now - offset, 1);
@@ -139,7 +139,7 @@ time_t logic_datetime_cache_get_week_id(time_t now, time_t offset) {
   return (now - relative_to) / util::time::time_utility::WEEK_SECONDS;
 }
 
-time_t logic_datetime_cache_get_week_start_timepoint(time_t now, time_t offset) {
+SERVER_FRAME_API time_t logic_datetime_cache_get_week_start_timepoint(time_t now, time_t offset) {
   now = util::time::time_utility::get_week_start_time(now - offset, 1);
   return now + offset;
 }
