@@ -1222,7 +1222,8 @@ ItemGridPosition ItemGridAlgorithm::extract_position(const PROJECT_NAMESPACE_ID:
       break;
     }
     case PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterEquipment: {
-      result.x = position.character_equipment().slot_idx();
+      result.x = static_cast<int32_t>(position.character_equipment().slot_idx());
+      result.y = 0;
       break;
     }
     default:
@@ -1245,7 +1246,7 @@ void ItemGridAlgorithm::apply_position(PROJECT_NAMESPACE_ID::DItemGridPosition& 
       break;
     }
     case PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterEquipment: {
-      position.mutable_character_equipment()->set_slot_idx(grid_pos.x);
+      position.mutable_character_equipment()->set_slot_idx(static_cast<PROJECT_NAMESPACE_ID::EnEquipmentSlot>(grid_pos.x));
       break;
     }
     default:
