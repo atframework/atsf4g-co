@@ -20,6 +20,7 @@
       -->
     <tree id="misc" name="杂项"></tree>
     <tree id="item" name="道具/库存"></tree>
+    <tree id="rank" name="排行榜"></tree>
   </category>
 
   <list>
