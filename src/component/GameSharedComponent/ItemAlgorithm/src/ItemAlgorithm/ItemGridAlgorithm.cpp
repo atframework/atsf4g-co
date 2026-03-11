@@ -26,8 +26,8 @@ void ItemGridAlgorithm::init(int32_t row_size, int32_t column_size,
   position_type_ = position_type;
 
   switch (position_type) {
-    case PROJECT_NAMESPACE_ID::DItemGridPosition::kInventory:
-    case PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterBackpack: {
+    case PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory:
+    case PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterInventory: {
       is_care_item_size_ = true;
       break;
     }
@@ -1211,14 +1211,14 @@ int32_t ItemGridAlgorithm::get_column_size() const { return column_size_; }
 ItemGridPosition ItemGridAlgorithm::extract_position(const PROJECT_NAMESPACE_ID::DItemGridPosition& position) const {
   ItemGridPosition result;
   switch (position_type_) {
-    case PROJECT_NAMESPACE_ID::DItemGridPosition::kInventory: {
-      result.x = position.inventory().x();
-      result.y = position.inventory().y();
+    case PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory: {
+      result.x = position.user_inventory().x();
+      result.y = position.user_inventory().y();
       break;
     }
-    case PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterBackpack: {
-      result.x = position.character_backpack().x();
-      result.y = position.character_backpack().y();
+    case PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterInventory: {
+      result.x = position.character_inventory().x();
+      result.y = position.character_inventory().y();
       break;
     }
     case PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterEquipment: {
@@ -1235,14 +1235,14 @@ ItemGridPosition ItemGridAlgorithm::extract_position(const PROJECT_NAMESPACE_ID:
 void ItemGridAlgorithm::apply_position(PROJECT_NAMESPACE_ID::DItemGridPosition& position,
                                        const ItemGridPosition& grid_pos) const {
   switch (position_type_) {
-    case PROJECT_NAMESPACE_ID::DItemGridPosition::kInventory: {
-      position.mutable_inventory()->set_x(grid_pos.x);
-      position.mutable_inventory()->set_y(grid_pos.y);
+    case PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory: {
+      position.mutable_user_inventory()->set_x(grid_pos.x);
+      position.mutable_user_inventory()->set_y(grid_pos.y);
       break;
     }
-    case PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterBackpack: {
-      position.mutable_character_backpack()->set_x(grid_pos.x);
-      position.mutable_character_backpack()->set_y(grid_pos.y);
+    case PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterInventory: {
+      position.mutable_character_inventory()->set_x(grid_pos.x);
+      position.mutable_character_inventory()->set_y(grid_pos.y);
       break;
     }
     case PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterEquipment: {

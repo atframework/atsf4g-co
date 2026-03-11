@@ -37,9 +37,9 @@ message DItemSlotPosition {
 message DItemGridPosition {
   oneof position_type {
     // 仓库
-    DItemBoxPosition inventory = 1;
+    DItemBoxPosition user_inventory = 1;
     // 角色背包
-    DItemBoxPosition character_backpack = 2;
+    DItemBoxPosition character_inventory = 2;
     // 角色装备位置
     DItemSlotPosition character_equipment = 3;
   }
