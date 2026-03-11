@@ -3,6 +3,8 @@
 #include <uv.h>
 
 #include <common/string_oprs.h>
+#include <nostd/string_view.h>
+#include <string/string_format.h>
 
 #include <libatgateway_v2_c.h>
 
@@ -344,12 +346,16 @@ static int proto_inner_callback_on_reconnect(libatgateway_v2_c_context, uint64_t
   return 0;
 }
 
-static int proto_inner_callback_on_close(libatgateway_v2_c_context, int32_t reason) {
+static int proto_inner_callback_on_close(libatgateway_v2_c_context, int32_t reason, int32_t subreason,
+                                         const char *message, uint64_t message_len) {
   if (nullptr == g_client.tcp_sock.data) {
     return 0;
   }
 
-  printf("close socket start, reason: %d\n", reason);
+  printf(
+      "close socket start, reason: %s\n",
+      atfw::util::string::format("{}, {}, {}", reason, subreason, atfw::util::nostd::string_view(message, message_len))
+          .c_str());
   if (0 == uv_is_closing(reinterpret_cast<uv_handle_t *>(&g_client.tcp_sock))) {
     uv_close(reinterpret_cast<uv_handle_t *>(&g_client.tcp_sock), libuv_close_sock_callback);
   }
@@ -536,8 +542,13 @@ int main(int argc, char *argv[]) {
     if (nullptr == key_exchange_name) {
       key_exchange_name = "x25519";  // default
     }
-    int32_t ret = libatgateway_v2_c_set_crypto_config(nullptr, key_exchange_name, crypto_names.data(),
-                                                      static_cast<uint64_t>(crypto_names.size()), 300);
+    int32_t ret = libatgateway_v2_c_set_key_exchange_algorithm(nullptr, key_exchange_name);
+    if (0 != ret) {
+      fprintf(stderr, "failed to set crypto config, error: %d\n", ret);
+      return -1;
+    }
+    ret = libatgateway_v2_c_set_crypto_algorithm(nullptr, crypto_names.data(),
+                                                 static_cast<uint64_t>(crypto_names.size()));
     if (0 != ret) {
       fprintf(stderr, "failed to set crypto config, error: %d\n", ret);
       return -1;
