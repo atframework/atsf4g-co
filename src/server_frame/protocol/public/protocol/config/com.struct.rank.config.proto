@@ -39,7 +39,7 @@ message ExcelRankDefine {
 
 message ExcelRankRule {
   option (xrescode.loader) = {
-    file_path: "rank_settlement_rule.bytes"
+    file_path: "rank_rule.bytes"
     indexes: { fields: "rank_type" fields: "rank_instance_id" index_type: EN_INDEX_KV }
 
     tags: "server"
@@ -53,8 +53,6 @@ message ExcelRankRule {
   bool need_auto_update = 7; // 是否走自动更新修复流程
   EnRankImplType rank_impl_type = 9; // 实现类型
 }
-
-
 
 // 排行榜奖励池配置
 message ExcelRankPeriodRewardPool {

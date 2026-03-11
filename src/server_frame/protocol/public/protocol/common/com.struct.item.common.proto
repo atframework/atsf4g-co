@@ -10,6 +10,7 @@ import "protocol/extension/v3/xresloader.proto";
 
 import "protocol/common/com.struct.isolation_scope.common.proto";
 import "protocol/common/com.struct.extension.common.proto";
+import "protocol/common/com.struct.equipment.common.proto";
 
 package hello;
 
@@ -30,7 +31,7 @@ message DItemGridSize {
 }
 
 message DItemSlotPosition {
-  int32 slot_idx = 1;
+  EnEquipmentSlot slot_idx = 1;
 }
 
 message DItemGridPosition {
