@@ -55,6 +55,7 @@
 # editors
 .vscode
 .idea
+.vscode
 /cmake-build-*
 .mako_modules-*
 .cache

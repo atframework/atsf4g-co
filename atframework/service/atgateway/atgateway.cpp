@@ -419,6 +419,18 @@ class gateway_module : public ::atfw::atapp::module_impl {
       FWLOGERROR("recv message from proto object {} length, but has no session", reinterpret_cast<const void *>(proto));
       return -1;
     }
+
+    // echo server mode
+    if (gw_mgr_.get_conf().origin_conf.echo_server()) {
+      int ret = sess->send_to_client(buffer);
+      if (ret < 0) {
+        FWLOGERROR("session {} send {} bytes data to client failed, error_code: {}(echo server)", sess->get_id(), buffer.size(), ret);
+      } else {
+        FWLOGDEBUG("session {} send {} bytes data to client(echo server)", sess->get_id(), buffer.size());
+      }
+      return ret;
+    }
+
     ::atframework::gateway::session::ptr_t sess_holder = sess->shared_from_this();
 
     ::atframework::gateway::server_message post_message;
