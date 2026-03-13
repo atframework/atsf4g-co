@@ -154,8 +154,8 @@ static PROJECT_NAMESPACE_ID::DItemInstance make_grid_item(int32_t type_id, int64
   basic->set_type_id(type_id);
   basic->set_count(count);
   basic->set_guid(guid);
-  basic->mutable_position()->mutable_grid_position()->mutable_inventory()->set_x(x);
-  basic->mutable_position()->mutable_grid_position()->mutable_inventory()->set_y(y);
+  basic->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(x);
+  basic->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(y);
   return instance;
 }
 
@@ -176,14 +176,14 @@ static PROJECT_NAMESPACE_ID::DItemBasic make_sub_basic(int32_t type_id, int64_t 
   basic.set_type_id(type_id);
   basic.set_count(count);
   basic.set_guid(guid);
-  basic.mutable_position()->mutable_grid_position()->mutable_inventory()->set_x(x);
-  basic.mutable_position()->mutable_grid_position()->mutable_inventory()->set_y(y);
+  basic.mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(x);
+  basic.mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(y);
   return basic;
 }
 
 /// @brief 初始化测试 Grid 算法 (inventory 类型, 默认 10x10)
 static void init_test_grid(TestItemGridAlgorithm& grid, int32_t row = 10, int32_t col = 10) {
-  grid.init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kInventory);
+  grid.init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
   // 注册配置
   grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
   grid.register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
@@ -196,8 +196,8 @@ static PROJECT_NAMESPACE_ID::DItemInstance make_equip_item(int64_t guid, int32_t
   basic->set_type_id(kEquipmentTypeId);
   basic->set_count(1);
   basic->set_guid(guid);
-  basic->mutable_position()->mutable_grid_position()->mutable_inventory()->set_x(x);
-  basic->mutable_position()->mutable_grid_position()->mutable_inventory()->set_y(y);
+  basic->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(x);
+  basic->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(y);
   return instance;
 }
 
@@ -236,8 +236,8 @@ static const PROJECT_NAMESPACE_ID::DItemInstance* find_dumped_by_position(
     const std::vector<PROJECT_NAMESPACE_ID::DItemInstance>& items, int32_t type_id, int32_t x, int32_t y) {
   for (const auto& inst : items) {
     if (inst.item_basic().type_id() == type_id &&
-        inst.item_basic().position().grid_position().inventory().x() == x &&
-        inst.item_basic().position().grid_position().inventory().y() == y) {
+        inst.item_basic().position().grid_position().user_inventory().x() == x &&
+        inst.item_basic().position().grid_position().user_inventory().y() == y) {
       return &inst;
     }
   }
@@ -247,16 +247,16 @@ static const PROJECT_NAMESPACE_ID::DItemInstance* find_dumped_by_position(
 /// @brief 创建 inventory 类型的目标位置
 static PROJECT_NAMESPACE_ID::DItemPosition make_inventory_target(int32_t x, int32_t y) {
   PROJECT_NAMESPACE_ID::DItemPosition target;
-  target.mutable_grid_position()->mutable_inventory()->set_x(x);
-  target.mutable_grid_position()->mutable_inventory()->set_y(y);
+  target.mutable_grid_position()->mutable_user_inventory()->set_x(x);
+  target.mutable_grid_position()->mutable_user_inventory()->set_y(y);
   return target;
 }
 
 /// @brief 创建 backpack 类型的目标位置
 static PROJECT_NAMESPACE_ID::DItemPosition make_backpack_target(int32_t x, int32_t y) {
   PROJECT_NAMESPACE_ID::DItemPosition target;
-  target.mutable_grid_position()->mutable_character_backpack()->set_x(x);
-  target.mutable_grid_position()->mutable_character_backpack()->set_y(y);
+  target.mutable_grid_position()->mutable_character_inventory()->set_x(x);
+  target.mutable_grid_position()->mutable_character_inventory()->set_y(y);
   return target;
 }
 
@@ -265,8 +265,8 @@ static const PROJECT_NAMESPACE_ID::DItemInstance* find_dumped_by_backpack_positi
     const std::vector<PROJECT_NAMESPACE_ID::DItemInstance>& items, int32_t type_id, int32_t x, int32_t y) {
   for (const auto& inst : items) {
     if (inst.item_basic().type_id() == type_id &&
-        inst.item_basic().position().grid_position().character_backpack().x() == x &&
-        inst.item_basic().position().grid_position().character_backpack().y() == y) {
+        inst.item_basic().position().grid_position().character_inventory().x() == x &&
+        inst.item_basic().position().grid_position().character_inventory().y() == y) {
       return &inst;
     }
   }
@@ -353,7 +353,7 @@ static void call_apply_entries(
 
 /// @brief 初始化 ServerTestItemGridAlgorithm (与 init_test_grid 相同配置)
 static void init_server_grid(ServerTestItemGridAlgorithm& grid, int32_t row = 10, int32_t col = 10) {
-  grid.init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kInventory);
+  grid.init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
   grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
   grid.register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
 }
@@ -481,7 +481,7 @@ class TestItemGridContainer : public ItemGridContainer {
   TestItemGridAlgorithm grid;
 
   TestItemGridContainer(int32_t row = 10, int32_t col = 10) {
-    grid.init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kInventory);
+    grid.init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
     grid.register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
   }
@@ -493,36 +493,36 @@ class TestItemGridContainer : public ItemGridContainer {
   }
 };
 
-/// @brief 双 Grid 测试容器: inventory_grid 处理 kInventory 位置, backpack_grid 处理 kCharacterBackpack 位置
+/// @brief 双 Grid 测试容器: inventory_grid 处理 kUserInventory 位置, backpack_grid 处理 kCharacterInventory 位置
 /// 用于测试跨 Grid Move 场景
 class DualGridContainer : public ItemGridContainer {
  public:
-  TestItemGridAlgorithm inventory_grid;  ///< 处理 kInventory 位置
-  TestItemGridAlgorithm backpack_grid;   ///< 处理 kCharacterBackpack 位置
+  TestItemGridAlgorithm inventory_grid;  ///< 处理 kUserInventory 位置
+  TestItemGridAlgorithm backpack_grid;   ///< 处理 kCharacterInventory 位置
 
   DualGridContainer(int32_t row = 10, int32_t col = 10) {
-    inventory_grid.init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kInventory);
+    inventory_grid.init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
     inventory_grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
     inventory_grid.register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
 
-    backpack_grid.init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterBackpack);
+    backpack_grid.init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterInventory);
     backpack_grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
     backpack_grid.register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
   }
 
   ItemGridAlgorithm* select_grid(const PROJECT_NAMESPACE_ID::DItemPosition& pos) override {
-    if (pos.grid_position().has_inventory()) {
+    if (pos.grid_position().has_user_inventory()) {
       return &inventory_grid;
-    } else if (pos.grid_position().has_character_backpack()) {
+    } else if (pos.grid_position().has_character_inventory()) {
       return &backpack_grid;
     }
     return nullptr;
   }
 
   const ItemGridAlgorithm* select_grid(const PROJECT_NAMESPACE_ID::DItemPosition& pos) const override {
-    if (pos.grid_position().has_inventory()) {
+    if (pos.grid_position().has_user_inventory()) {
       return &inventory_grid;
-    } else if (pos.grid_position().has_character_backpack()) {
+    } else if (pos.grid_position().has_character_inventory()) {
       return &backpack_grid;
     }
     return nullptr;
@@ -668,8 +668,8 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
   CASE_EXPECT_EQ(server.get_item_count(kItemTypeId_1x1), 140);  // 90 + 50
   {
     PROJECT_NAMESPACE_ID::DItemGridPosition gpos10;
-    gpos10.mutable_inventory()->set_x(1);
-    gpos10.mutable_inventory()->set_y(0);
+    gpos10.mutable_user_inventory()->set_x(1);
+    gpos10.mutable_user_inventory()->set_y(0);
     auto e = server.get(gpos10);
     CASE_EXPECT_TRUE(e != nullptr);
     if (e) CASE_EXPECT_EQ(e->item_instance.item_basic().count(), static_cast<int64_t>(90));
@@ -810,8 +810,8 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
   CASE_EXPECT_EQ(server.get_item_count(kItemTypeId_1x1), 120);  // 90 + 30
   {
     PROJECT_NAMESPACE_ID::DItemGridPosition gpos20;
-    gpos20.mutable_inventory()->set_x(2);
-    gpos20.mutable_inventory()->set_y(0);
+    gpos20.mutable_user_inventory()->set_x(2);
+    gpos20.mutable_user_inventory()->set_y(0);
     auto e = server.get(gpos20);
     CASE_EXPECT_TRUE(e != nullptr);
     if (e) CASE_EXPECT_EQ(e->item_instance.item_basic().count(), static_cast<int64_t>(30));
@@ -833,8 +833,8 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
   CASE_EXPECT_EQ(server.get_item_count(kItemTypeId_1x1), 90);  // 只剩 (1,0)=90
   {
     PROJECT_NAMESPACE_ID::DItemGridPosition gpos20;
-    gpos20.mutable_inventory()->set_x(2);
-    gpos20.mutable_inventory()->set_y(0);
+    gpos20.mutable_user_inventory()->set_x(2);
+    gpos20.mutable_user_inventory()->set_y(0);
     CASE_EXPECT_TRUE(server.get(gpos20) == nullptr);  // 已释放
     const auto& flags = server.get_occupy_grid_flag();
     CASE_EXPECT_FALSE(flags[0][2]);  // (2,0) 已释放
@@ -906,8 +906,8 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
   CASE_EXPECT_TRUE(server.get_by_guid(1002) == nullptr);
   {
     PROJECT_NAMESPACE_ID::DItemGridPosition gpos30;
-    gpos30.mutable_inventory()->set_x(3);
-    gpos30.mutable_inventory()->set_y(0);
+    gpos30.mutable_user_inventory()->set_x(3);
+    gpos30.mutable_user_inventory()->set_y(0);
     CASE_EXPECT_TRUE(server.get(gpos30) == nullptr);
   }
   verify_grid_dump(server);
@@ -921,8 +921,8 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
   uint64_t move_entry_id;
   {
     PROJECT_NAMESPACE_ID::DItemGridPosition gpos10;
-    gpos10.mutable_inventory()->set_x(1);
-    gpos10.mutable_inventory()->set_y(0);
+    gpos10.mutable_user_inventory()->set_x(1);
+    gpos10.mutable_user_inventory()->set_y(0);
     auto entry = server.get(gpos10);
     CASE_EXPECT_TRUE(entry != nullptr);
     move_entry_id = entry->entry_id;
@@ -931,8 +931,8 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
     move_req.move_sub_entrys.push_back({entry, 90});
 
     PROJECT_NAMESPACE_ID::DItemPosition goal;
-    goal.mutable_grid_position()->mutable_inventory()->set_x(2);
-    goal.mutable_grid_position()->mutable_inventory()->set_y(0);
+    goal.mutable_grid_position()->mutable_user_inventory()->set_x(2);
+    goal.mutable_grid_position()->mutable_user_inventory()->set_y(0);
     move_req.move_add_entrys.push_back({entry, goal, 90});
 
     auto checked = server.check_move(config, move_req);
@@ -943,10 +943,10 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
   CASE_EXPECT_EQ(server.get_item_count(kItemTypeId_1x1), 90);
   {
     PROJECT_NAMESPACE_ID::DItemGridPosition gpos10, gpos20;
-    gpos10.mutable_inventory()->set_x(1);
-    gpos10.mutable_inventory()->set_y(0);
-    gpos20.mutable_inventory()->set_x(2);
-    gpos20.mutable_inventory()->set_y(0);
+    gpos10.mutable_user_inventory()->set_x(1);
+    gpos10.mutable_user_inventory()->set_y(0);
+    gpos20.mutable_user_inventory()->set_x(2);
+    gpos20.mutable_user_inventory()->set_y(0);
     CASE_EXPECT_TRUE(server.get(gpos10) == nullptr);       // 旧位置空
     auto moved = server.get(gpos20);
     CASE_EXPECT_TRUE(moved != nullptr);                     // 新位置有
@@ -969,8 +969,8 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
   CASE_MSG_INFO() << "=== Step 14: Move 部分拆分 ===\n";
   {
     PROJECT_NAMESPACE_ID::DItemGridPosition gpos20;
-    gpos20.mutable_inventory()->set_x(2);
-    gpos20.mutable_inventory()->set_y(0);
+    gpos20.mutable_user_inventory()->set_x(2);
+    gpos20.mutable_user_inventory()->set_y(0);
     auto entry = server.get(gpos20);
     CASE_EXPECT_TRUE(entry != nullptr);
 
@@ -978,8 +978,8 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
     move_req.move_sub_entrys.push_back({entry, 40});
 
     PROJECT_NAMESPACE_ID::DItemPosition goal;
-    goal.mutable_grid_position()->mutable_inventory()->set_x(5);
-    goal.mutable_grid_position()->mutable_inventory()->set_y(0);
+    goal.mutable_grid_position()->mutable_user_inventory()->set_x(5);
+    goal.mutable_grid_position()->mutable_user_inventory()->set_y(0);
     move_req.move_add_entrys.push_back({entry, goal, 40});
 
     auto checked = server.check_move(config, move_req);
@@ -989,10 +989,10 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
   CASE_EXPECT_EQ(server.get_item_count(kItemTypeId_1x1), 90);  // 总量不变
   {
     PROJECT_NAMESPACE_ID::DItemGridPosition gpos20, gpos50;
-    gpos20.mutable_inventory()->set_x(2);
-    gpos20.mutable_inventory()->set_y(0);
-    gpos50.mutable_inventory()->set_x(5);
-    gpos50.mutable_inventory()->set_y(0);
+    gpos20.mutable_user_inventory()->set_x(2);
+    gpos20.mutable_user_inventory()->set_y(0);
+    gpos50.mutable_user_inventory()->set_x(5);
+    gpos50.mutable_user_inventory()->set_y(0);
     auto src = server.get(gpos20);
     auto dst = server.get(gpos50);
     CASE_EXPECT_TRUE(src != nullptr);
@@ -1011,8 +1011,8 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
   CASE_MSG_INFO() << "=== Step 15: Move 目标位置被占用失败 ===\n";
   {
     PROJECT_NAMESPACE_ID::DItemGridPosition gpos20;
-    gpos20.mutable_inventory()->set_x(2);
-    gpos20.mutable_inventory()->set_y(0);
+    gpos20.mutable_user_inventory()->set_x(2);
+    gpos20.mutable_user_inventory()->set_y(0);
     auto entry = server.get(gpos20);
     CASE_EXPECT_TRUE(entry != nullptr);
 
@@ -1020,8 +1020,8 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
     move_req.move_sub_entrys.push_back({entry, 10});
 
     PROJECT_NAMESPACE_ID::DItemPosition goal;
-    goal.mutable_grid_position()->mutable_inventory()->set_x(5);  // (5,0) 已被 step14 占
-    goal.mutable_grid_position()->mutable_inventory()->set_y(0);
+    goal.mutable_grid_position()->mutable_user_inventory()->set_x(5);  // (5,0) 已被 step14 占
+    goal.mutable_grid_position()->mutable_user_inventory()->set_y(0);
     move_req.move_add_entrys.push_back({entry, goal, 10});
 
     auto checked = server.check_move(config, move_req);
@@ -1032,8 +1032,8 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
   // 改用 move 到装备位置 (0,0)
   {
     PROJECT_NAMESPACE_ID::DItemGridPosition gpos20;
-    gpos20.mutable_inventory()->set_x(2);
-    gpos20.mutable_inventory()->set_y(0);
+    gpos20.mutable_user_inventory()->set_x(2);
+    gpos20.mutable_user_inventory()->set_y(0);
     auto entry = server.get(gpos20);
     CASE_EXPECT_TRUE(entry != nullptr);
 
@@ -1041,8 +1041,8 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
     move_req.move_sub_entrys.push_back({entry, 10});
 
     PROJECT_NAMESPACE_ID::DItemPosition goal;
-    goal.mutable_grid_position()->mutable_inventory()->set_x(0);  // (0,0) 是装备
-    goal.mutable_grid_position()->mutable_inventory()->set_y(0);
+    goal.mutable_grid_position()->mutable_user_inventory()->set_x(0);  // (0,0) 是装备
+    goal.mutable_grid_position()->mutable_user_inventory()->set_y(0);
     move_req.move_add_entrys.push_back({entry, goal, 10});
 
     auto checked = server.check_move(config, move_req);
@@ -1059,8 +1059,8 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
   CASE_MSG_INFO() << "=== Step 16: Move 装备 ===\n";
   {
     PROJECT_NAMESPACE_ID::DItemGridPosition gpos40;
-    gpos40.mutable_inventory()->set_x(4);
-    gpos40.mutable_inventory()->set_y(0);
+    gpos40.mutable_user_inventory()->set_x(4);
+    gpos40.mutable_user_inventory()->set_y(0);
     auto entry = server.get(gpos40);
     CASE_EXPECT_TRUE(entry != nullptr);
     CASE_EXPECT_EQ(entry->item_instance.item_basic().guid(), static_cast<int64_t>(1003));
@@ -1069,8 +1069,8 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
     move_req.move_sub_entrys.push_back({entry, 1});
 
     PROJECT_NAMESPACE_ID::DItemPosition goal;
-    goal.mutable_grid_position()->mutable_inventory()->set_x(3);
-    goal.mutable_grid_position()->mutable_inventory()->set_y(0);
+    goal.mutable_grid_position()->mutable_user_inventory()->set_x(3);
+    goal.mutable_grid_position()->mutable_user_inventory()->set_y(0);
     move_req.move_add_entrys.push_back({entry, goal, 1});
 
     auto checked = server.check_move(config, move_req);
@@ -1079,10 +1079,10 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
   }
   {
     PROJECT_NAMESPACE_ID::DItemGridPosition gpos40, gpos30;
-    gpos40.mutable_inventory()->set_x(4);
-    gpos40.mutable_inventory()->set_y(0);
-    gpos30.mutable_inventory()->set_x(3);
-    gpos30.mutable_inventory()->set_y(0);
+    gpos40.mutable_user_inventory()->set_x(4);
+    gpos40.mutable_user_inventory()->set_y(0);
+    gpos30.mutable_user_inventory()->set_x(3);
+    gpos30.mutable_user_inventory()->set_y(0);
     CASE_EXPECT_TRUE(server.get(gpos40) == nullptr);
     auto moved_eq = server.get(gpos30);
     CASE_EXPECT_TRUE(moved_eq != nullptr);
@@ -1217,8 +1217,8 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
 
     // 两个 Grid 的 entry_id 独立
     PROJECT_NAMESPACE_ID::DItemGridPosition gp00;
-    gp00.mutable_inventory()->set_x(0);
-    gp00.mutable_inventory()->set_y(0);
+    gp00.mutable_user_inventory()->set_x(0);
+    gp00.mutable_user_inventory()->set_y(0);
     CASE_EXPECT_EQ(grid_a.get(gp00)->entry_id, static_cast<uint64_t>(1));
     CASE_EXPECT_EQ(grid_b.get(gp00)->entry_id, static_cast<uint64_t>(1));
   }
@@ -1248,14 +1248,14 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
     grid.add(grid.check_add(config, reqs));
 
     PROJECT_NAMESPACE_ID::DItemGridPosition gpos00, gpos10, gpos20, gpos30;
-    gpos00.mutable_inventory()->set_x(0);
-    gpos00.mutable_inventory()->set_y(0);
-    gpos10.mutable_inventory()->set_x(1);
-    gpos10.mutable_inventory()->set_y(0);
-    gpos20.mutable_inventory()->set_x(2);
-    gpos20.mutable_inventory()->set_y(0);
-    gpos30.mutable_inventory()->set_x(3);
-    gpos30.mutable_inventory()->set_y(0);
+    gpos00.mutable_user_inventory()->set_x(0);
+    gpos00.mutable_user_inventory()->set_y(0);
+    gpos10.mutable_user_inventory()->set_x(1);
+    gpos10.mutable_user_inventory()->set_y(0);
+    gpos20.mutable_user_inventory()->set_x(2);
+    gpos20.mutable_user_inventory()->set_y(0);
+    gpos30.mutable_user_inventory()->set_x(3);
+    gpos30.mutable_user_inventory()->set_y(0);
 
     uint64_t eid1 = grid.get(gpos00)->entry_id;
     uint64_t eid2 = grid.get(gpos10)->entry_id;
@@ -1292,8 +1292,8 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
     }
     CASE_EXPECT_TRUE(grid.get(gpos10) == nullptr);
     PROJECT_NAMESPACE_ID::DItemGridPosition gpos78;
-    gpos78.mutable_inventory()->set_x(7);
-    gpos78.mutable_inventory()->set_y(8);
+    gpos78.mutable_user_inventory()->set_x(7);
+    gpos78.mutable_user_inventory()->set_y(8);
     CASE_EXPECT_TRUE(grid.get(gpos78) != nullptr);
     if (grid.get(gpos78)) CASE_EXPECT_EQ(grid.get(gpos78)->entry_id, eid2);
 
@@ -1557,8 +1557,8 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
     }
     // backpack 第一个 entry_id 应为 1
     PROJECT_NAMESPACE_ID::DItemGridPosition bp00;
-    bp00.mutable_character_backpack()->set_x(0);
-    bp00.mutable_character_backpack()->set_y(0);
+    bp00.mutable_character_inventory()->set_x(0);
+    bp00.mutable_character_inventory()->set_y(0);
     auto bp_entry = container.backpack_grid.get(bp00);
     CASE_EXPECT_TRUE(bp_entry != nullptr);
     if (bp_entry) CASE_EXPECT_EQ(bp_entry->entry_id, static_cast<uint64_t>(1));
@@ -1642,14 +1642,14 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     PROJECT_NAMESPACE_ID::DItemBasic b;
     b.set_type_id(type_id);
     b.set_count(count);
-    b.mutable_position()->mutable_grid_position()->mutable_inventory()->set_x(x);
-    b.mutable_position()->mutable_grid_position()->mutable_inventory()->set_y(y);
+    b.mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(x);
+    b.mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(y);
     return b;
   };
 
   // 读取 inventory 坐标分量
-  auto get_x = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.inventory().x(); };
-  auto get_y = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.inventory().y(); };
+  auto get_x = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().x(); };
+  auto get_y = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().y(); };
 
   // ============================================================
   // Case 1: 非占格道具 -> 输出空 DItemGridPosition
@@ -1657,7 +1657,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
   CASE_MSG_INFO() << "Case 1: 非占格道具输出空位置\n";
   {
     TestItemGridAlgorithm grid;
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kInventory);
+    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -1678,7 +1678,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
   CASE_MSG_INFO() << "Case 2: 空网格批量分配游标递进\n";
   {
     TestItemGridAlgorithm grid;
-    grid.init(3, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kInventory);
+    grid.init(3, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -1712,7 +1712,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
   CASE_MSG_INFO() << "Case 3: 首选位置被优先使用\n";
   {
     TestItemGridAlgorithm grid;
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kInventory);
+    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -1731,7 +1731,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
   CASE_MSG_INFO() << "Case 4: 首选位置被占用时回退扫描\n";
   {
     TestItemGridAlgorithm grid;
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kInventory);
+    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
     // accumulation_limit=1: 已有条目无剩余容量，策略2不会命中，确保走策略3扫描
     grid.register_position_cfg(kItemTypeId_1x1, 1, 1, 1);
 
@@ -1740,8 +1740,8 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
       PROJECT_NAMESPACE_ID::DItemInstance inst;
       inst.mutable_item_basic()->set_type_id(kItemTypeId_1x1);
       inst.mutable_item_basic()->set_count(1);
-      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_inventory()->set_x(3);
-      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_inventory()->set_y(2);
+      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(3);
+      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(2);
       CASE_EXPECT_TRUE(grid.load(config, inst));
     }
 
@@ -1765,7 +1765,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
   CASE_MSG_INFO() << "Case 5: 堆叠到已有条目\n";
   {
     TestItemGridAlgorithm grid;
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kInventory);
+    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     // 先 load 一件到 (x=0, y=0), count=50，堆叠上限99
@@ -1773,8 +1773,8 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
       PROJECT_NAMESPACE_ID::DItemInstance inst;
       inst.mutable_item_basic()->set_type_id(kItemTypeId_1x1);
       inst.mutable_item_basic()->set_count(50);
-      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_inventory()->set_x(0);
-      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_inventory()->set_y(0);
+      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
+      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
       CASE_EXPECT_TRUE(grid.load(config, inst));
     }
 
@@ -1795,7 +1795,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
   CASE_MSG_INFO() << "Case 6: 背包全满返回 false\n";
   {
     TestItemGridAlgorithm grid;
-    grid.init(2, 2, PROJECT_NAMESPACE_ID::DItemGridPosition::kInventory);
+    grid.init(2, 2, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
     grid.register_position_cfg(kItemTypeId_1x1, 1, 1, 1);  // 堆叠上限=1，不可堆叠
 
     for (int32_t y = 0; y < 2; ++y) {
@@ -1803,8 +1803,8 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
         PROJECT_NAMESPACE_ID::DItemInstance inst;
         inst.mutable_item_basic()->set_type_id(kItemTypeId_1x1);
         inst.mutable_item_basic()->set_count(1);
-        inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_inventory()->set_x(x);
-        inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_inventory()->set_y(y);
+        inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(x);
+        inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(y);
         CASE_EXPECT_TRUE(grid.load(config, inst));
       }
     }
@@ -1820,7 +1820,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
   CASE_MSG_INFO() << "Case 7: 2x2 物品批量分配\n";
   {
     TestItemGridAlgorithm grid;
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kInventory);
+    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
     grid.register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -1847,7 +1847,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
   CASE_MSG_INFO() << "Case 8: 混合批次 1x1 与 2x2\n";
   {
     TestItemGridAlgorithm grid;
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kInventory);
+    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
     grid.register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
 
@@ -1875,7 +1875,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
   CASE_MSG_INFO() << "Case 9: 游标优化接近满格验证\n";
   {
     TestItemGridAlgorithm grid;
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kInventory);
+    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
     grid.register_position_cfg(kItemTypeId_1x1, 1, 1, 1);  // 不可堆叠
 
     // 填满 x=0,1,2，留 x=3 空闲
@@ -1884,8 +1884,8 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
         PROJECT_NAMESPACE_ID::DItemInstance inst;
         inst.mutable_item_basic()->set_type_id(kItemTypeId_1x1);
         inst.mutable_item_basic()->set_count(1);
-        inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_inventory()->set_x(x);
-        inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_inventory()->set_y(y);
+        inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(x);
+        inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(y);
         CASE_EXPECT_TRUE(grid.load(config, inst));
       }
     }
@@ -1926,7 +1926,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
   CASE_MSG_INFO() << "Case 10: 混合非占格与占格\n";
   {
     TestItemGridAlgorithm grid;
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kInventory);
+    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -1978,7 +1978,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
           const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
           const ItemGridAddRequest& request) const override {
         if (request.item_instance &&
-            request.item_instance->item_basic().position().grid_position().inventory().x() == 0) {
+            request.item_instance->item_basic().position().grid_position().user_inventory().x() == 0) {
           return PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;  // 拒绝 x=0
         }
         return TestItemGridAlgorithm::on_check_add(config_group, request);
@@ -1986,7 +1986,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     };
 
     RejectFirstColGrid grid;
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kInventory);
+    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_basic(kItemTypeId_1x1, 1)};
