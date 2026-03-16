@@ -4,7 +4,7 @@
 
 proc_name: atgateway
 
-type_id: 1
+type_id: 2
 type_name: "atgateway"
 
 image:

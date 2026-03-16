@@ -197,9 +197,9 @@ If .Values.bus_addr is set, use it directly
 {{- end }}
 
 {{- define "libapp.atbus.calculateAtproxyPort" -}}
-  {{- $basePort := (dig .Values.atapp.atbus "policy" "port" "atproxy_base" 7100 | int) -}}
-  {{- $machineIndex := (dig .Values.atapp.atbus "policy" "port" "machine_index" 0 | int64) -}}
-  {{- $machineIndexMultiply := (dig .Values.atapp.atbus "policy" "port" "machine_index_multiply" 500 | int64) -}}
+  {{- $basePort := (dig "policy" "port" "atproxy_base" 7100 .Values.atapp.atbus ) -}}
+  {{- $machineIndex := (dig "policy" "port" "machine_index" 0 .Values.atapp.atbus ) -}}
+  {{- $machineIndexMultiply := (dig "policy" "port" "machine_index_multiply" 500 .Values.atapp.atbus ) -}}
   {{- $insID := (1 | int64) -}}
   {{- if eq .Values.type_name "atproxy" -}}
     {{- $insID = (.Values.instance_id | default 1 | int64) -}}
@@ -211,15 +211,15 @@ If .Values.bus_addr is set, use it directly
 
 {{- define "libapp.atbus.calculateServicePort" -}}
   {{- $basePort := (1 | int64) -}}
-  {{- $machineIndex := (dig .Values.atapp.atbus "policy" "port" "machine_index" 0 | int64) -}}
-  {{- $machineIndexMultiply := (dig .Values.atapp.atbus "policy" "port" "machine_index_multiply" 500 | int64) -}}
-  {{- $typeMultiply := (dig .Values.atapp.atbus "policy" "port" "type_multiply" 10 | int64) -}}
+  {{- $machineIndex := (dig "policy" "port" "machine_index" 0 .Values.atapp.atbus ) -}}
+  {{- $machineIndexMultiply := (dig "policy" "port" "machine_index_multiply" 500 .Values.atapp.atbus ) -}}
+  {{- $typeMultiply := (dig "policy" "port" "type_multiply" 10 .Values.atapp.atbus ) -}}
   {{- $typeID := .Values.type_id | default 11 | int64 -}}
   {{- $insID := .Values.instance_id | default 1 | int64 -}}
   {{- if eq .Values.type_name "atproxy" }}
-    {{- $basePort = (dig .Values.atapp.atbus "policy" "port" "atproxy_base" 7100 | int) -}}
+    {{- $basePort = (dig "policy" "port" "atproxy_base" 7100 .Values.atapp.atbus | int) -}}
   {{- else }}
-    {{- $basePort = (dig .Values.atapp.atbus "policy" "port" "base" 7200 | int) -}}
+    {{- $basePort = (dig "policy" "port" "base" 7200 .Values.atapp.atbus | int) -}}
   {{- end }}
   {{- add $basePort (mul $machineIndex $machineIndexMultiply) (mul $typeID $typeMultiply) $insID -}}
 {{- end }}

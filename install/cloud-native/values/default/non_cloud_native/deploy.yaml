@@ -14,6 +14,12 @@ proc_desc:
     instance_count: 1
     start_instance_id: 1
 
+  - chart_name: "atgateway"
+    instance_type_id: 2
+    world_instance: false
+    instance_count: 1
+    start_instance_id: 1
+
   - chart_name: "echosvr"
     instance_type_id: 10
     world_instance: false

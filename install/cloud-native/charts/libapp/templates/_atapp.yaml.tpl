@@ -3,21 +3,21 @@
   {{- $proxy_port := include "libapp.atbus.calculateAtproxyPort" . -}}
   {{- $service_port := include "libapp.atbus.calculateServicePort" . -}}
 listen:
-  {{- if or (dig .Values.atapp.atbus "configure" "topology" "rule" "allow_direct_connection" false) ( eq .Values.type_name "atproxy" ) }}
+  {{- if or (dig "configure" "topology" "rule" "allow_direct_connection" false .Values.atapp.atbus ) ( eq .Values.type_name "atproxy" ) }}
   - "atcp://${ATAPP_EXTERNAL_IP:-::}:{{ $service_port }}"
   {{- else if (eq .Values.atdtool_running_platform "windows") }}
-  - "pipe://.\\pipe\\{{ .Values.atapp.deployment.project_name }}\\{{ include "libapp.name" . }}_{{ $bus_addr }}.sock"
+  - "pipe://\\\\.\\pipe\\{{ .Values.atapp.deployment.project_name }}\\{{ include "libapp.name" . }}_{{ $bus_addr }}.sock"
   {{- else }}
   - "unix:///run/atapp/{{ .Values.atapp.deployment.project_name }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.sock"
   {{- end }}
-  {{- if and (dig .Values.atapp.atbus "policy" "enable_local_proxy" false) ( ne .Values.type_name "atproxy" ) }}
+  {{- if and (dig "policy" "enable_local_proxy" false .Values.atapp.atbus ) ( ne .Values.type_name "atproxy" ) }}
 proxy: "atcp://${ATAPP_EXTERNAL_IP:-127.0.0.1}:{{ $proxy_port }}"
-  {{- else if (dig .Values.atapp.atbus "policy" "remote_proxy" false) }}
+  {{- else if (dig "policy" "remote_proxy" false .Values.atapp.atbus ) }}
 proxy: "{{ .Values.atapp.atbus.policy.remote_proxy }}" # address of upstream node
   {{- else }}
 # proxy: "not set" # address of upstream node
   {{- end }}
-  {{- if (dig .Values.atapp.atbus "policy" "gateway" false) }}
+  {{- if (dig "policy" "gateway" false .Values.atapp.atbus ) }}
 gateways:
     {{- toYaml .Values.atapp.atbus.policy.gateway | trim | nindent 2 }}
   {{- end -}}
@@ -40,7 +40,7 @@ atapp:
   {{- with (include "libapp.configure.hostname" .) }}
   hostname: "{{ . }}"   # hostname, any host should has a unique name. if empty, we wil try to use the mac address
   {{- end }}
-  {{- $atbus_settings := mergeOverwrite (dict ) .Values.atapp.atbus.configure (include "atapp.atbus.service.settings.yaml" .) -}}
+  {{- $atbus_settings := mergeOverwrite (dict ) .Values.atapp.atbus.configure (include "atapp.atbus.service.settings.yaml" . | fromYaml) }}
   bus:
     {{- toYaml $atbus_settings | trim | nindent 4  }}
   worker_pool:

@@ -53,9 +53,9 @@
 /atframework/service/atgateway/protocols/libatgw_server_config.pb.cc
 
 # editors
-.vscode
+.vscode/*
+!.vscode/tasks.json
 .idea
-.vscode
 /cmake-build-*
 .mako_modules-*
 .cache
