@@ -1,0 +1,26 @@
+# etcd.yaml
+# vim: set sw=2 sts=2 et:
+# encoding: utf-8
+
+enabled: true
+log:
+  enable: true
+  startup_level: debug
+  level: info
+path: /atapp/services/atsf4g-co
+client_urls:
+  - http://127.0.0.1:12379
+init:
+  timeout: "15s"
+  tick_interval: "64ms"
+keepalive:
+  timeout: "16s"
+  ttl: "5s"
+  retry_interval: "3s"
+request:
+  timeout: "5s"
+  initialization_timeout: "3s"
+watcher:
+  retry_interval: "3s"
+  request_timeout: "3600s"
+  get_request_timeout: "180s"

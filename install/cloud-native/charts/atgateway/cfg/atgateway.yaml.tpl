@@ -4,37 +4,45 @@ atgateway:
   # listen address for client to connect, how to use it depends listen.type
   listen:
     address:
-      # - ipv6: # TODO
-      # - ipv4: # TODO
+      - ipv4://0.0.0.0:{{ add (.Values.atgateway.listen.begin_port | default 8000 | int64) (.Values.instance_id | default 1 | int64) }}
     type: inner                     # protocol type
     max_client: 65536               # max client number, more client will be closed
     backlog: 128
 
   client:
-    default_router:
-      node_id:                      # TODO
-      type_name:                    # TODO
-    recv_buffer_size: 2MB           # recv buffer limit
-    send_buffer_size: 4MB           # send buffer limit
     reconnect_timeout: 180          # reconnect timeout
     first_idle_timeout: 10          # first idle timeout
-    limit:
-      total_send_bytes: 0           # total send limit (bytes)
-      total_recv_bytes: 0           # total recv limit (bytes)
-      hour_send_bytes: 0            # send limit (bytes) in an hour
-      hour_recv_bytes: 0            # recv limit (bytes) in an hour
-      minute_send_bytes: 0          # total send (bytes) limit in one minute
-      minute_recv_bytes: 0          # total recv (bytes) limit in one minute
-      total_send_times: 0           # total send limit (times)
-      total_recv_times: 0           # total recv limit (times)
-      hour_send_times: 0            # send limit (times) in an hour
-      hour_recv_times: 0            # recv limit (times) in an hour
-      minute_send_times: 0          # total send (times) limit in one minute
-      minute_recv_times: 0          # total recv (times) limit in one minute
-      message_size: 0               # message size limit
-    # below descript the crypt information, but if it's used depend on listen.type
-    crypt:
-      key: gateway-default                          # default key
-      type: "XXTEA:AES-256-CFB:AES-128-CFB"         # encrypt algorithm(support XXTEA,AES when listen.type=inner)
-      update_interval: 300                          # generate a new key by every 5 minutes
-      dhparam: ../cfg/dhparam.pem                   # dynamic key
+    recv_buffer_size: 2MB           # recv buffer limit
+    send_buffer_size: 4MB           # send buffer limit
+
+    {{- if .Values.atgateway.default_router }}
+    default_router:
+      node_id: {{ .Values.atgateway.default_router.node_id }}
+      node_name: {{ .Values.atgateway.default_router.node_name }}
+      type_id: {{ .Values.atgateway.default_router.type_id }}
+      type_name: {{ .Values.atgateway.default_router.type_name }}
+    {{- end }}
+
+    {{- if .Values.atgateway.crypto }}
+    crypto:
+      access_tokens:
+      {{- range $_, $access_token := .Values.atgateway.crypto.access_tokens }}
+        - {{ $access_token }}
+      {{- end }}
+      update_interval: {{ .Values.atgateway.crypto.update_interval }}
+      key_exchange: {{ .Values.atgateway.crypto.key_exchange }}
+      algorithms:
+      {{- range $_, $algorithm := .Values.atgateway.crypto.algorithms }}
+        - {{ $algorithm }}
+      {{- end }}
+      compression_algorithms:
+      {{- range $_, $compression_algorithm := .Values.atgateway.crypto.compression_algorithms }}
+        - {{ $compression_algorithm }}
+      {{- end }}
+      kdf_algorithms:
+      {{- range $_, $kdf_algorithm := .Values.atgateway.crypto.kdf_algorithms }}
+        - {{ $kdf_algorithm }}
+      {{- end }}
+    {{- end }}
+
+  echo_server: {{ .Values.atgateway.echo_server }}

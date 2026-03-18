@@ -65,13 +65,3 @@ service:
   port: 7001
   targetPort: 7001
   protocol: TCP
-
-redis:
-  enable: true
-
-webserver:
-  port: 7001
-
-# websocket:
-# websocket 路径片段 实际路径为 /<deployment_environment>/daily/ws/v1
-# path: daily

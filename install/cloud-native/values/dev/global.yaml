@@ -5,3 +5,12 @@
 # 日志级别
 log_level: DEBUG
 log_stacktrace_level: ERROR
+
+# 本地测试 先不开Proxy
+atapp:
+  atbus:
+    policy:
+      enable_local_proxy: false
+
+atgateway:
+  echo_server: true
