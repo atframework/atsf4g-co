@@ -404,6 +404,11 @@ int session_manager::post_data(::atbus::bus_id_t tid, int32_t type, gsl::span<co
     return static_cast<int>(error_code_t::kLostManager);
   }
 
+  // echo server模式不用发给下游
+  if (get_conf().origin_conf.echo_server()) {
+    return 0;
+  }
+
   return app_->send_message(tid, type, data);
 }
 
@@ -430,6 +435,11 @@ int session_manager::post_data(const std::string &tname, int32_t type, gsl::span
   // send to process
   if (nullptr == app_) {
     return static_cast<int>(error_code_t::kLostManager);
+  }
+
+  // echo server模式不用发给下游
+  if (get_conf().origin_conf.echo_server()) {
+    return 0;
   }
 
   return app_->send_message(tname, type, data);

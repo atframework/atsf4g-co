@@ -827,7 +827,7 @@ struct app_handle_on_recv {
         break;
       }
       default: {
-        FWLOGERROR("from server {}: session {} recv invalid cmd {}", source.id, server_message->head().session_id(),
+        FWLOGERROR("from server {}: session {} recv invalid command {}", source.id, server_message->head().session_id(),
                    static_cast<int>(server_message->body().cmd_case()));
         break;
       }
@@ -858,7 +858,7 @@ int main(int argc, char *argv[]) {
   // setup module
   app.add_module(gw_mod);
 
-  // setup cmd
+  // setup command
   atfw::util::cli::cmd_option_ci::ptr_type cmgr = app.get_command_manager();
   cmgr->bind_cmd("kickoff", &gateway_module::cmd_on_kickoff, gw_mod.get())
       ->set_help_msg(
