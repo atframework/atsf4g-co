@@ -438,11 +438,11 @@ int db_msg_dispatcher::cluster_init(const PROJECT_NAMESPACE_ID::config::db_group
     hiredis::happ::cluster::log_fn_t debug_fn = db_msg_dispatcher::log_debug_fn;
 
     atfw::util::log::log_wrapper *wrapper = WLOG_GETCAT(log_categorize_t::DB);
-    if (!wrapper->check_level(util::log::log_wrapper::level_t::LOG_LW_DEBUG)) {
+    if (!wrapper->check_level(util::log::log_level::kDebug)) {
       debug_fn = nullptr;
     }
 
-    if (!wrapper->check_level(util::log::log_wrapper::level_t::LOG_LW_INFO)) {
+    if (!wrapper->check_level(util::log::log_level::kInfo)) {
       info_fn = nullptr;
     }
 
@@ -590,11 +590,11 @@ int db_msg_dispatcher::raw_init(const PROJECT_NAMESPACE_ID::config::db_group_cfg
     hiredis::happ::raw::log_fn_t debug_fn = db_msg_dispatcher::log_debug_fn;
 
     atfw::util::log::log_wrapper *wrapper = WLOG_GETCAT(log_categorize_t::DB);
-    if (!wrapper->check_level(util::log::log_wrapper::level_t::LOG_LW_DEBUG)) {
+    if (!wrapper->check_level(util::log::log_level::kDebug)) {
       debug_fn = nullptr;
     }
 
-    if (!wrapper->check_level(util::log::log_wrapper::level_t::LOG_LW_INFO)) {
+    if (!wrapper->check_level(util::log::log_level::kInfo)) {
       info_fn = nullptr;
     }
 

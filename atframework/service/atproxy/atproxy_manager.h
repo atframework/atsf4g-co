@@ -51,19 +51,19 @@ class atproxy_manager : public ::atfw::atapp::module_impl {
   const char *name() const override;
 
  private:
-  node_info_ptr_t mutable_node_info(::atfw::atapp::app::app_id_t id);
-  void remove_node_info(::atfw::atapp::app::app_id_t id);
-  void try_activity_connect_to_node(::atfw::atapp::app::app_id_t id);
+  node_info_ptr_t mutable_node_info(::atfw::atapp::app_id_t id);
+  void remove_node_info(::atfw::atapp::app_id_t id);
+  void try_activity_connect_to_node(::atfw::atapp::app_id_t id);
 
-  void set_discovery_info_ready(::atfw::atapp::app::app_id_t id);
-  void remove_discovery_info_ready(::atfw::atapp::app::app_id_t id);
-  void set_topology_info_ready(::atfw::atapp::app::app_id_t id);
-  void remove_topology_info_ready(::atfw::atapp::app::app_id_t id);
+  void set_discovery_info_ready(::atfw::atapp::app_id_t id);
+  void remove_discovery_info_ready(::atfw::atapp::app_id_t id);
+  void set_topology_info_ready(::atfw::atapp::app_id_t id);
+  void remove_topology_info_ready(::atfw::atapp::app_id_t id);
 
-  bool check_available(atapp::app::app_id_t id) const;
+  bool check_available(atapp::app_id_t id) const;
 
  private:
-  using proxy_set_t = std::unordered_map< ::atfw::atapp::app::app_id_t, node_info_ptr_t>;
+  using proxy_set_t = std::unordered_map< ::atfw::atapp::app_id_t, node_info_ptr_t>;
   proxy_set_t proxy_set_;
 
   atframework::atproxy::protocol::atproxy_configure atproxy_configure_;

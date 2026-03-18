@@ -316,27 +316,27 @@ class opentelemetry_internal_log_handler : public opentelemetry::sdk::common::in
     caller.rotate_index = 0;
     switch (level) {
       case opentelemetry::sdk::common::internal_log::LogLevel::Error: {
-        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_ERROR;
+        caller.level_id = atfw::util::log::log_level::kError;
         caller.level_name = "Error";
         break;
       }
       case opentelemetry::sdk::common::internal_log::LogLevel::Warning: {
-        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_WARNING;
+        caller.level_id = atfw::util::log::log_level::kWarning;
         caller.level_name = "Warning";
         break;
       }
       case opentelemetry::sdk::common::internal_log::LogLevel::Info: {
-        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_INFO;
+        caller.level_id = atfw::util::log::log_level::kInfo;
         caller.level_name = "Info";
         break;
       }
       case opentelemetry::sdk::common::internal_log::LogLevel::Debug: {
-        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_DEBUG;
+        caller.level_id = atfw::util::log::log_level::kDebug;
         caller.level_name = "Debug";
         break;
       }
       default: {
-        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_DEBUG;
+        caller.level_id = atfw::util::log::log_level::kDebug;
         caller.level_name = "Debug";
         break;
       }
@@ -3057,7 +3057,7 @@ static void _opentelemetry_setup_group(atfw::atapp::app &app, const std::shared_
   app.parse_log_configures_into(opentelemetry_log_conf,
                                 std::vector<gsl::string_view>{"logic", "telemetry", "opentelemetry", "app_log"},
                                 "ATAPP_LOGIC_TELEMETRY_OPENTELEMETRY_LOG");
-  atfw::util::log::log_formatter::level_t::type opentelemetry_log_level =
+  atfw::util::log::log_level opentelemetry_log_level =
       atfw::util::log::log_formatter::get_level_by_name(opentelemetry_log_conf.level().c_str());
   if (current_service_cache->internal_logger && opentelemetry_log_conf.category_size() > 0) {
     current_service_cache->internal_logger->init(opentelemetry_log_level);
@@ -3079,13 +3079,13 @@ static void _opentelemetry_setup_group(atfw::atapp::app &app, const std::shared_
   opentelemetry::metrics::Provider::SetMeterProvider(metrics_handle.provider);
   opentelemetry::logs::Provider::SetLoggerProvider(logs_handle.provider);
 
-  if (opentelemetry_log_level <= atfw::util::log::log_formatter::level_t::LOG_LW_DEBUG) {
+  if (opentelemetry_log_level <= atfw::util::log::log_level::kDebug) {
     opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogLevel(
         opentelemetry::sdk::common::internal_log::LogLevel::Debug);
-  } else if (opentelemetry_log_level <= atfw::util::log::log_formatter::level_t::LOG_LW_INFO) {
+  } else if (opentelemetry_log_level <= atfw::util::log::log_level::kInfo) {
     opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogLevel(
         opentelemetry::sdk::common::internal_log::LogLevel::Info);
-  } else if (opentelemetry_log_level <= atfw::util::log::log_formatter::level_t::LOG_LW_WARNING) {
+  } else if (opentelemetry_log_level <= atfw::util::log::log_level::kWarning) {
     opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogLevel(
         opentelemetry::sdk::common::internal_log::LogLevel::Warning);
   } else {

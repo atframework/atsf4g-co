@@ -27,9 +27,10 @@ static void signal_callback(uv_signal_t *handle, int signum) {
 
 static void close_callback(uv_handle_t *handle) { --wait_for_close; }
 
-static void log_callback(const atfw::util::log::log_wrapper::caller_info_t &caller, const char *content,
-                         size_t content_size) {
-  puts(content);
+static void log_callback(const atfw::util::log::log_wrapper::caller_info_t &caller,
+                         atfw::util::nostd::string_view content) {
+  std::cout.write(content.data(), static_cast<std::streamsize>(content.size()));
+  std::cout << '\n';
 }
 
 struct check_keepalive_data_callback {
@@ -71,8 +72,7 @@ int main(int argc, char *argv[]) {
   WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->init();
   WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->set_prefix_format("[%F %T.%f][%L](%k:%n): ");
   WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->add_sink(log_callback);
-  WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)
-      ->set_stacktrace_level(util::log::log_formatter::level_t::LOG_LW_ERROR);
+  WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->set_stacktrace_level(util::log::log_level::kError);
 
   atfw::util::network::http_request::curl_m_bind_ptr_t curl_mgr;
   atfw::util::network::http_request::create_curl_multi(uv_default_loop(), curl_mgr);

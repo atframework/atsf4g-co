@@ -88,7 +88,6 @@ static void excel_config_callback_on_reload_all(excel::config_manager::config_gr
 
   setup_rank_config(*group);
 
-
   // 自定义跨表索引在这之后初始化
   setup_const_config(*group);
 }
@@ -103,23 +102,23 @@ static void excel_config_callback_logger(const excel::config_manager::log_caller
   log_caller.rotate_index = 0;
   switch (caller.level_id) {
     case excel::config_manager::log_level_t::LOG_LW_DISABLED: {
-      log_caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_DISABLED;
+      log_caller.level_id = atfw::util::log::log_level::kDisabled;
       break;
     }
     case excel::config_manager::log_level_t::LOG_LW_ERROR: {
-      log_caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_ERROR;
+      log_caller.level_id = atfw::util::log::log_level::kError;
       break;
     }
     case excel::config_manager::log_level_t::LOG_LW_WARNING: {
-      log_caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_WARNING;
+      log_caller.level_id = atfw::util::log::log_level::kWarning;
       break;
     }
     case excel::config_manager::log_level_t::LOG_LW_INFO: {
-      log_caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_INFO;
+      log_caller.level_id = atfw::util::log::log_level::kInfo;
       break;
     }
     default: {
-      log_caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_DEBUG;
+      log_caller.level_id = atfw::util::log::log_level::kDebug;
       break;
     }
   }

@@ -424,7 +424,8 @@ class gateway_module : public ::atfw::atapp::module_impl {
     if (gw_mgr_.get_conf().origin_conf.echo_server()) {
       int ret = sess->send_to_client(buffer);
       if (ret < 0) {
-        FWLOGERROR("session {} send {} bytes data to client failed, error_code: {}(echo server)", sess->get_id(), buffer.size(), ret);
+        FWLOGERROR("session {} send {} bytes data to client failed, error_code: {}(echo server)", sess->get_id(),
+                   buffer.size(), ret);
       } else {
         FWLOGDEBUG("session {} send {} bytes data to client(echo server)", sess->get_id(), buffer.size());
       }
@@ -621,10 +622,10 @@ class gateway_module : public ::atfw::atapp::module_impl {
   static int proto_inner_callback_on_error(::atframework::gateway::libatgw_protocol_api *, const char *filename,
                                            uint32_t line, int errcode, const char *errmsg) {
     if (atfw::util::log::log_wrapper::check_level(WDTLOGGETCAT(atfw::util::log::log_wrapper::categorize_t::DEFAULT),
-                                                  atfw::util::log::log_wrapper::level_t::LOG_LW_ERROR)) {
+                                                  atfw::util::log::log_level::kError)) {
       WDTLOGGETCAT(atfw::util::log::log_wrapper::categorize_t::DEFAULT)
-          ->log(atfw::util::log::log_wrapper::caller_info_t(atfw::util::log::log_wrapper::level_t::LOG_LW_ERROR,
-                                                            "Error", filename, line, "anonymous"),
+          ->log(atfw::util::log::log_wrapper::caller_info_t(atfw::util::log::log_level::kError, "Error", filename, line,
+                                                            "anonymous"),
                 "error code %d, msg: %s", errcode, errmsg);
     }
     return 0;

@@ -151,8 +151,7 @@ SERVER_FRAME_API session::~session() {
   FWLOGDEBUG("session [{:#x}, {}] destroyed", id_.node_id, id_.session_id);
 
   if (actor_log_writter_) {
-    atfw::util::log::log_wrapper::caller_info_t caller = atfw::util::log::log_wrapper::caller_info_t(
-        atfw::util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
+    atfw::util::log::log_wrapper::caller_info_t caller = WDTLOGFILENF(atfw::util::log::log_level::kInfo, {});
     actor_log_writter_->format_log(caller, "------------ session: {:#x}:{} destroyed ------------", get_key().node_id,
                                    get_key().session_id);
   }
@@ -316,8 +315,7 @@ SERVER_FRAME_API void session::write_actor_log_head(rpc::context &ctx, const atf
       break;
   }
 
-  atfw::util::log::log_wrapper::caller_info_t caller = atfw::util::log::log_wrapper::caller_info_t(
-      atfw::util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
+  atfw::util::log::log_wrapper::caller_info_t caller = WDTLOGFILENF(atfw::util::log::log_level::kInfo, {});
   std::string hint_text;
   if (is_input) {
     hint_text = atfw::util::log::format(
@@ -380,8 +378,7 @@ SERVER_FRAME_API void session::write_actor_log_body(rpc::context &ctx, const goo
       type_url = "UNKNOWN TYPE";
       break;
   }
-  atfw::util::log::log_wrapper::caller_info_t caller = atfw::util::log::log_wrapper::caller_info_t(
-      atfw::util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
+  atfw::util::log::log_wrapper::caller_info_t caller = WDTLOGFILENF(atfw::util::log::log_level::kInfo, {});
 
   std::string head_text = protobuf_mini_dumper_get_readable(head);
   std::string body_text = protobuf_mini_dumper_get_readable(msg);
@@ -457,8 +454,8 @@ void session::create_actor_log_writter() {
       logic_config::me()->get_server_cfg().session().actor_log_rotate() > 0) {
     actor_log_writter_ = atfw::util::log::log_wrapper::create_user_logger();
     if (actor_log_writter_) {
-      actor_log_writter_->init(util::log::log_formatter::level_t::LOG_LW_INFO);
-      actor_log_writter_->set_stacktrace_level(util::log::log_formatter::level_t::LOG_LW_DISABLED);
+      actor_log_writter_->init(util::log::log_level::kInfo);
+      actor_log_writter_->set_stacktrace_level(util::log::log_level::kDisabled);
       actor_log_writter_->set_prefix_format("[%F %T.%f]: ");
 
       std::stringstream ss_path;
@@ -471,11 +468,11 @@ void session::create_actor_log_writter() {
       file_sink.set_writing_alias_pattern(ss_alias.str());
       file_sink.set_flush_interval(1);  // flush every 1 second
       file_sink.set_max_file_size(logic_config::me()->get_server_cfg().session().actor_log_size());
-      file_sink.set_rotate_size(static_cast<uint32_t>(logic_config::me()->get_server_cfg().session().actor_log_rotate()));
+      file_sink.set_rotate_size(
+          static_cast<uint32_t>(logic_config::me()->get_server_cfg().session().actor_log_rotate()));
       actor_log_writter_->add_sink(file_sink);
 
-      atfw::util::log::log_wrapper::caller_info_t caller = atfw::util::log::log_wrapper::caller_info_t(
-          atfw::util::log::log_formatter::level_t::LOG_LW_INFO, {}, __FILE__, __LINE__, __FUNCTION__);
+      atfw::util::log::log_wrapper::caller_info_t caller = WDTLOGFILENF(atfw::util::log::log_level::kInfo, {});
       actor_log_writter_->format_log(caller, "============ user: {}:{}, session: {:#x}:{} created ============",
                                      cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id);
     }

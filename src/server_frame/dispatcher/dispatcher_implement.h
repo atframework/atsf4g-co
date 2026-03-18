@@ -273,8 +273,7 @@ ATFW_UTIL_SYMBOL_VISIBLE int32_t dispatcher_implement::unpack_protobuf_msg(TMsg 
   raw_msg.msg_addr = &real_msg;
 
   if (nullptr != WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT) &&
-      WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT)
-          ->check_level(util::log::log_wrapper::level_t::LOG_LW_DEBUG)) {
+      WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->check_level(util::log::log_level::kDebug)) {
     FWLOGDEBUG("{}(type={}) recv msg.\n{}", name(), get_instance_ident(), protobuf_mini_dumper_get_readable(real_msg));
   }
 

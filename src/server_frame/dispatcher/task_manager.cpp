@@ -65,27 +65,27 @@ class ATFW_UTIL_SYMBOL_LOCAL absl_global_log_sink : public absl::LogSink {
 
     switch (entry.log_severity()) {
       case ::absl::LogSeverity::kInfo:
-        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_INFO;
+        caller.level_id = atfw::util::log::log_level::kInfo;
         caller.level_name = "Info";
         break;
 
       case ::absl::LogSeverity::kWarning:
-        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_WARNING;
+        caller.level_id = atfw::util::log::log_level::kWarning;
         caller.level_name = "Warn";
         break;
 
       case ::absl::LogSeverity::kError:
-        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_ERROR;
+        caller.level_id = atfw::util::log::log_level::kError;
         caller.level_name = "Error";
         break;
 
       case ::absl::LogSeverity::kFatal:
-        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_FATAL;
+        caller.level_id = atfw::util::log::log_level::kFatal;
         caller.level_name = "Fatal";
         break;
 
       default:
-        caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_DEBUG;
+        caller.level_id = atfw::util::log::log_level::kDebug;
         caller.level_name = "Debug";
         break;
     }
@@ -111,27 +111,27 @@ static void log_wrapper_for_protobuf(::google::protobuf::LogLevel level, const c
 
   switch (level) {
     case ::google::protobuf::LOGLEVEL_INFO:
-      caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_INFO;
+      caller.level_id = atfw::util::log::log_level::LOG_LW_INFO;
       caller.level_name = "Info";
       break;
 
     case ::google::protobuf::LOGLEVEL_WARNING:
-      caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_WARNING;
+      caller.level_id = atfw::util::log::log_level::LOG_LW_WARNING;
       caller.level_name = "Warn";
       break;
 
     case ::google::protobuf::LOGLEVEL_ERROR:
-      caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_ERROR;
+      caller.level_id = atfw::util::log::log_level::LOG_LW_ERROR;
       caller.level_name = "Error";
       break;
 
     case ::google::protobuf::LOGLEVEL_FATAL:
-      caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_FATAL;
+      caller.level_id = atfw::util::log::log_level::LOG_LW_FATAL;
       caller.level_name = "Fatal";
       break;
 
     default:
-      caller.level_id = atfw::util::log::log_wrapper::level_t::LOG_LW_DEBUG;
+      caller.level_id = atfw::util::log::log_level::LOG_LW_DEBUG;
       caller.level_name = "Debug";
       break;
   }

@@ -856,16 +856,10 @@ SERVER_FRAME_API void logic_hpa_controller::reload() {
   reload_hpa_controller_metadata_filter();
 
   // Patch补充HPA策略路由配置
-  auto& ready_rules = *logic_config::me()
-                           ->mutable_server_cfg()
-                           ->mutable_hpa()
-                           ->mutable_discovery()
-                           ->mutable_scaling_ready();
-  auto& target_rules = *logic_config::me()
-                            ->mutable_server_cfg()
-                            ->mutable_hpa()
-                            ->mutable_discovery()
-                            ->mutable_scaling_target();
+  auto& ready_rules =
+      *logic_config::me()->mutable_server_cfg()->mutable_hpa()->mutable_discovery()->mutable_scaling_ready();
+  auto& target_rules =
+      *logic_config::me()->mutable_server_cfg()->mutable_hpa()->mutable_discovery()->mutable_scaling_target();
   protobuf_copy_message(ready_rules, logic_config::me()->get_server_cfg().discovery_selector());
   protobuf_copy_message(target_rules, ready_rules);
 
@@ -3662,12 +3656,12 @@ bool logic_hpa_controller::is_main_hpa_controller() const noexcept {
 
   // 云下节点的index要更新为pod下标+1
   if (owner_app_->get_runtime_stateful_pod_index() < 0) {
-    std::pair<atfw::atapp::app::app_id_t, const std::string&> self_info{owner_app_->get_app_id(),
-                                                                        owner_app_->get_app_name()};
+    std::pair<atfw::atapp::app_id_t, const std::string&> self_info{owner_app_->get_app_id(),
+                                                                   owner_app_->get_app_name()};
 
     auto iter = std::lower_bound(hpa_target_set.begin(), hpa_target_set.end(), self_info,
                                  [](const atfw::atapp::etcd_discovery_node::ptr_t& data,
-                                    const std::pair<atfw::atapp::app::app_id_t, const std::string&>& info) {
+                                    const std::pair<atfw::atapp::app_id_t, const std::string&>& info) {
                                    if (!data) {
                                      return false;
                                    }

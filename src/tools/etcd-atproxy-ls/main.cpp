@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <cstdlib>
+#include "nostd/string_view.h"
 
 #include <common/string_oprs.h>
 #include <time/time_utility.h>
@@ -47,9 +48,10 @@ static void signal_callback(uv_signal_t *handle, int signum) {
 
 static void close_callback(uv_handle_t *handle) { --wait_for_close; }
 
-static void log_callback(const atfw::util::log::log_wrapper::caller_info_t &caller, const char *content,
-                         size_t content_size) {
-  puts(content);
+static void log_callback(const atfw::util::log::log_wrapper::caller_info_t &caller,
+                         atfw::util::nostd::string_view content) {
+  std::cout.write(content.data(), static_cast<std::streamsize>(content.size()));
+  std::cout << '\n';
 }
 
 struct check_keepalive_data_callback {
@@ -171,23 +173,23 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
-  atfw::util::log::log_wrapper::level_t::type log_level = atfw::util::log::log_wrapper::level_t::LOG_LW_INFO;
+  atfw::util::log::log_level log_level = atfw::util::log::log_level::kInfo;
   if (0 == UTIL_STRFUNC_STRNCASE_CMP("fatal", log_level_name.c_str(), 5)) {
-    log_level = atfw::util::log::log_wrapper::level_t::LOG_LW_FATAL;
+    log_level = atfw::util::log::log_level::kFatal;
   } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("error", log_level_name.c_str(), 5)) {
-    log_level = atfw::util::log::log_wrapper::level_t::LOG_LW_ERROR;
+    log_level = atfw::util::log::log_level::kError;
   } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("warn", log_level_name.c_str(), 4)) {
-    log_level = atfw::util::log::log_wrapper::level_t::LOG_LW_WARNING;
+    log_level = atfw::util::log::log_level::kWarning;
   } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("warning", log_level_name.c_str(), 7)) {
-    log_level = atfw::util::log::log_wrapper::level_t::LOG_LW_WARNING;
+    log_level = atfw::util::log::log_level::kWarning;
   } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("info", log_level_name.c_str(), 4)) {
-    log_level = atfw::util::log::log_wrapper::level_t::LOG_LW_INFO;
+    log_level = atfw::util::log::log_level::kInfo;
   } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("notice", log_level_name.c_str(), 6)) {
-    log_level = atfw::util::log::log_wrapper::level_t::LOG_LW_NOTICE;
+    log_level = atfw::util::log::log_level::kNotice;
   } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("debug", log_level_name.c_str(), 5)) {
-    log_level = atfw::util::log::log_wrapper::level_t::LOG_LW_DEBUG;
+    log_level = atfw::util::log::log_level::kDebug;
   } else if (0 == UTIL_STRFUNC_STRNCASE_CMP("trace", log_level_name.c_str(), 5)) {
-    log_level = atfw::util::log::log_wrapper::level_t::LOG_LW_TRACE;
+    log_level = atfw::util::log::log_level::kTrace;
   }
 
   std::string::size_type pp = etcd_host.find("://");
@@ -201,8 +203,7 @@ int main(int argc, char *argv[]) {
   WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->init(log_level);
   WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->set_prefix_format("[%L][%F %T.%f]: ");
   WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->add_sink(log_callback);
-  WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)
-      ->set_stacktrace_level(util::log::log_formatter::level_t::LOG_LW_DISABLED);
+  WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->set_stacktrace_level(util::log::log_level::kDisabled);
 
   atfw::util::network::http_request::curl_m_bind_ptr_t curl_mgr;
   atfw::util::network::http_request::create_curl_multi(uv_default_loop(), curl_mgr);

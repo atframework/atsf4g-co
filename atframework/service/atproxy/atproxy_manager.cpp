@@ -178,7 +178,7 @@ int atproxy_manager::init() {
 
 const char *atproxy_manager::name() const { return "atproxy manager"; }
 
-atproxy_manager::node_info_ptr_t atproxy_manager::mutable_node_info(::atfw::atapp::app::app_id_t id) {
+atproxy_manager::node_info_ptr_t atproxy_manager::mutable_node_info(::atfw::atapp::app_id_t id) {
   atproxy_manager::node_info_ptr_t &ret = proxy_set_[id];
   if (!ret) {
     ret = atfw::util::memory::make_strong_rc<node_info_t>();
@@ -196,7 +196,7 @@ atproxy_manager::node_info_ptr_t atproxy_manager::mutable_node_info(::atfw::atap
   return ret;
 }
 
-void atproxy_manager::remove_node_info(::atfw::atapp::app::app_id_t id) {
+void atproxy_manager::remove_node_info(::atfw::atapp::app_id_t id) {
   auto iter = proxy_set_.find(id);
   if (iter == proxy_set_.end()) {
     return;
@@ -218,7 +218,7 @@ void atproxy_manager::remove_node_info(::atfw::atapp::app::app_id_t id) {
   proxy_set_.erase(iter);
 }
 
-void atproxy_manager::try_activity_connect_to_node(::atfw::atapp::app::app_id_t id) {
+void atproxy_manager::try_activity_connect_to_node(::atfw::atapp::app_id_t id) {
   auto iter = proxy_set_.find(id);
   if (iter == proxy_set_.end()) {
     return;
@@ -327,7 +327,7 @@ void atproxy_manager::try_activity_connect_to_node(::atfw::atapp::app::app_id_t 
   }
 }
 
-void atproxy_manager::set_discovery_info_ready(::atfw::atapp::app::app_id_t id) {
+void atproxy_manager::set_discovery_info_ready(::atfw::atapp::app_id_t id) {
   node_info_ptr_t node_info = mutable_node_info(id);
 
   node_info->has_discovery_info = true;
@@ -337,7 +337,7 @@ void atproxy_manager::set_discovery_info_ready(::atfw::atapp::app::app_id_t id) 
   }
 }
 
-void atproxy_manager::remove_discovery_info_ready(::atfw::atapp::app::app_id_t id) {
+void atproxy_manager::remove_discovery_info_ready(::atfw::atapp::app_id_t id) {
   auto iter = proxy_set_.find(id);
   if (iter == proxy_set_.end()) {
     return;
@@ -357,7 +357,7 @@ void atproxy_manager::remove_discovery_info_ready(::atfw::atapp::app::app_id_t i
   iter->second->is_available = false;
 }
 
-void atproxy_manager::set_topology_info_ready(::atfw::atapp::app::app_id_t id) {
+void atproxy_manager::set_topology_info_ready(::atfw::atapp::app_id_t id) {
   node_info_ptr_t node_info = mutable_node_info(id);
 
   node_info->has_topology_info = true;
@@ -367,7 +367,7 @@ void atproxy_manager::set_topology_info_ready(::atfw::atapp::app::app_id_t id) {
   }
 }
 
-void atproxy_manager::remove_topology_info_ready(::atfw::atapp::app::app_id_t id) {
+void atproxy_manager::remove_topology_info_ready(::atfw::atapp::app_id_t id) {
   auto iter = proxy_set_.find(id);
   if (iter == proxy_set_.end()) {
     return;
@@ -387,7 +387,7 @@ void atproxy_manager::remove_topology_info_ready(::atfw::atapp::app::app_id_t id
   iter->second->is_available = false;
 }
 
-bool atproxy_manager::check_available(::atfw::atapp::app::app_id_t id) const {
+bool atproxy_manager::check_available(::atfw::atapp::app_id_t id) const {
   atapp::etcd_discovery_node::ptr_t discovery = get_app()->get_discovery_node_by_id(id);
   if (!discovery) {
     return false;
