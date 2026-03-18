@@ -51,6 +51,7 @@ class session : public std::enable_shared_from_this<session> {
     kClosing = 0x0020,
     kClosingFd = 0x0040,
     kWritingFd = 0x0080,
+    kManagerClosing = 0x0100,
   };
 
   using ptr_t = std::shared_ptr<session>;

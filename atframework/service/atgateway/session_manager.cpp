@@ -10,6 +10,7 @@
 
 #include <atframe/modules/etcd_module.h>
 
+#include <gsl/util>
 #include <new>
 
 #include "config/atframe_service_types.h"
@@ -304,29 +305,57 @@ int session_manager::tick() {
 
 int session_manager::close(session::id_t sess_id, int32_t reason, int32_t sub_reason,
                            atfw::util::nostd::string_view message, bool allow_reconnect) {
-  session_map_t::iterator iter = actived_sessions_.find(sess_id);
-  if (actived_sessions_.end() == iter) {
-    // if not allow reconnect, close reconnect cache
-    if (!allow_reconnect) {
-      iter = reconnect_cache_.find(sess_id);
-      if (reconnect_cache_.end() != iter) {
-        iter->second->close(reason, sub_reason, message);
-        iter->second->set_flag(session::flag_t::kWaitReconnect, false);
-        reconnect_cache_.erase(iter);
-      } else {
-        return static_cast<int>(error_code_t::kSessionNotFound);
-      }
-    } else {
+  session_map_t::mapped_type session_ptr;
+
+  // not found
+  do {
+    session_map_t::iterator iter = actived_sessions_.find(sess_id);
+    if (actived_sessions_.end() != iter) {
+      session_ptr = iter->second;
+      actived_sessions_.erase(iter);
+      break;
+    }
+
+    if (allow_reconnect) {
       return static_cast<int>(error_code_t::kSessionNotFound);
     }
 
+    iter = reconnect_cache_.find(sess_id);
+    if (reconnect_cache_.end() == iter) {
+      return static_cast<int>(error_code_t::kSessionNotFound);
+    }
+    session_ptr = iter->second;
+    reconnect_cache_.erase(iter);
+    // 重入时直接忽略
+    if (!session_ptr) {
+    }
+
+    if (session_ptr->check_flag(session::flag_t::kManagerClosing)) {
+      return 0;
+    }
+
+    session_ptr->close(reason, sub_reason, message);
+    session_ptr->set_flag(session::flag_t::kWaitReconnect, false);
     return 0;
+  } while (false);
+
+  // 防止重入
+  if (session_ptr) {
+    if (session_ptr->check_flag(session::flag_t::kManagerClosing)) {
+      return 0;
+    }
+    session_ptr->set_flag(session::flag_t::kManagerClosing, true);
   }
+  auto flag_guard = gsl::finally([session_ptr] {
+    if (session_ptr) {
+      session_ptr->set_flag(session::flag_t::kManagerClosing, false);
+    }
+  });
 
   if (conf_.origin_conf.client().reconnect_timeout().seconds() > 0 && allow_reconnect) {
-    reconnect_timeout_.push_back(session_timeout_t());
+    reconnect_timeout_.emplace_back();
     session_timeout_t &sess_timer = reconnect_timeout_.back();
-    sess_timer.s = iter->second;
+    sess_timer.s = session_ptr;
     sess_timer.timeout =
         atfw::util::time::time_utility::get_now() + conf_.origin_conf.client().reconnect_timeout().seconds();
 
@@ -340,14 +369,12 @@ int session_manager::close(session::id_t sess_id, int32_t reason, int32_t sub_re
 
     // just close fd
     sess_timer.s->close_fd(reason, sub_reason, message);
-  } else {
-    FWLOGINFO("session {:#x}({}) closed and disable reconnect", iter->second->get_id(),
-              reinterpret_cast<const void *>(iter->second.get()));
-    iter->second->close(reason, sub_reason, message);
+  } else if (session_ptr) {
+    FWLOGINFO("session {:#x}({}) closed and disable reconnect", session_ptr->get_id(),
+              reinterpret_cast<const void *>(session_ptr.get()));
+    session_ptr->close(reason, sub_reason, message);
   }
 
-  // erase from activited map
-  actived_sessions_.erase(iter);
   return 0;
 }
 
