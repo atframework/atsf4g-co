@@ -1,3 +1,8 @@
+---
+name: configure-expression
+description: Environment-variable expression expansion syntax for Protobuf config fields annotated with enable_expression. Use when working with config templates, YAML deployment values, or expression syntax.
+---
+
 # Configuration Expression Expansion
 
 Protobuf fields annotated with `enable_expression: true` in the `atapp_configure_meta` extension
@@ -7,14 +12,14 @@ standard `atapp` config loaders (YAML, INI `.conf`, environment-variable files).
 
 ## Quick Reference
 
-| Syntax | Description |
-| --- | --- |
-| `$VAR` | Bare variable — POSIX names only (`[A-Za-z_][A-Za-z0-9_]*`) |
-| `${VAR}` | Braced variable — any characters including `.`, `-`, `/` (k8s labels) |
-| `${VAR:-default}` | If `VAR` is unset or empty, expand to `default` |
-| `${VAR:+word}` | If `VAR` is set and non-empty, expand to `word`; otherwise empty string |
-| `\$` | Literal dollar sign (escape) |
-| Nested | `${OUTER_${INNER}}`, `${VAR:-${OTHER:-fallback}}` |
+| Syntax            | Description                                                             |
+| ----------------- | ----------------------------------------------------------------------- |
+| `$VAR`            | Bare variable — POSIX names only (`[A-Za-z_][A-Za-z0-9_]*`)             |
+| `${VAR}`          | Braced variable — any characters including `.`, `-`, `/` (k8s labels)   |
+| `${VAR:-default}` | If `VAR` is unset or empty, expand to `default`                         |
+| `${VAR:+word}`    | If `VAR` is set and non-empty, expand to `word`; otherwise empty string |
+| `\$`              | Literal dollar sign (escape)                                            |
+| Nested            | `${OUTER_${INNER}}`, `${VAR:-${OTHER:-fallback}}`                       |
 
 ## Enabling Expression Expansion
 
@@ -63,4 +68,4 @@ listen=ipv4://0.0.0.0:${LISTEN_PORT:-12345}
 
 For full syntax rules, C++ API, and integration details, see the libatapp skill:
 
-- `atframework/libatapp/.github/skills/configure-expression.md`
+- `atframework/libatapp/.agents/skills/configure-expression/SKILL.md`

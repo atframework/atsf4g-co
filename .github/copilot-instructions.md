@@ -10,9 +10,9 @@
 
 ## Skills (How-to playbooks)
 
-Operational, copy/paste-friendly guides live in `.github/skills/`:
+Operational, copy/paste-friendly guides live in `.agents/skills/`:
 
-- Entry point: `.github/skills/README.md`
+- Entry point: `.agents/skills/README.md`
 
 ## Build System
 
@@ -20,7 +20,7 @@ This project uses **CMake** (minimum version 3.24.0).
 
 Build steps and common configuration options are documented in:
 
-- `.github/skills/build.md`
+- `.agents/skills/build/SKILL.md`
 
 ## Directory Structure
 
@@ -112,11 +112,33 @@ CASE_THREAD_YIELD()
 
 ### Running Tests
 
-See `.github/skills/testing.md` for how to run unit tests (including Windows DLL/PATH notes).
+See `.agents/skills/testing/SKILL.md` for how to run unit tests (including Windows DLL/PATH notes).
+
+### Local etcd for etcd-Dependent Tests
+
+libatapp provides `ci/etcd/setup-etcd` scripts (`.ps1` for Windows, `.sh` for Linux/macOS) at `atframework/libatapp/ci/etcd/` to automatically download, start, and manage a local etcd instance for testing.
+
+```bash
+# Linux / macOS
+bash atframework/libatapp/ci/etcd/setup-etcd.sh start
+export ATAPP_UNIT_TEST_ETCD_HOST="http://127.0.0.1:12379"
+# Run etcd-dependent tests, then:
+bash atframework/libatapp/ci/etcd/setup-etcd.sh stop
+```
+
+```powershell
+# Windows (PowerShell)
+.\atframework\libatapp\ci\etcd\setup-etcd.ps1 -Command start
+$env:ATAPP_UNIT_TEST_ETCD_HOST = "http://127.0.0.1:12379"
+# Run etcd-dependent tests, then:
+.\atframework\libatapp\ci\etcd\setup-etcd.ps1 -Command stop
+```
+
+Commands: `download`, `start`, `stop`, `cleanup`, `status`. Default client port: `12379`.
 
 ## CMake helper functions
 
-See `.github/skills/service-functions-cmake.md`.
+See `.agents/skills/service-functions-cmake/SKILL.md`.
 
 ## Server Architecture
 
@@ -141,18 +163,18 @@ Client → atgateway → atproxy → Game Server
 
 ## Deployment configuration
 
-See `.github/skills/deployment-config.md`.
+See `.agents/skills/deployment-config/SKILL.md`.
 
 ## Configuration Expression Expansion
 
 Protobuf fields annotated with `enable_expression: true` in the `atapp_configure_meta` extension
 (defined in `atapp_conf.proto`) support **environment-variable expression expansion** at config-load time.
 
-See `.github/skills/configure-expression.md` for the full syntax reference and how-to guide.
+See `.agents/skills/configure-expression/SKILL.md` for the full syntax reference and how-to guide.
 
 ## Code generation
 
-See `.github/skills/code-generation.md`.
+See `.agents/skills/code-generation/SKILL.md`.
 
 ## Code Formatting
 
@@ -181,6 +203,7 @@ This project uses **clang-format** for code formatting. The `.clang-format` file
 5. **Error handling**: Use return codes or error enums
 
 6. **Logging**: Use FWLOG macros
+
    ```cpp
    FWLOGINFO("Message: {}", value);
    FWLOGERROR("Error: {}", error);

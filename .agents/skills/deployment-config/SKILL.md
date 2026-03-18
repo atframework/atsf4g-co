@@ -1,3 +1,8 @@
+---
+name: deployment-config
+description: Generate and manage deployment configs and per-instance scripts using atdtool and Helm charts. Use when deploying, generating configs, or editing values.
+---
+
 # Deployment configuration (atsf4g-co)
 
 This repo now uses `atdtool` to render **deployment configs + per-instance scripts** from the charts under `cloud-native/charts`.
@@ -14,11 +19,11 @@ All paths below assume you are working inside the build output: `<BUILD_DIR>/pub
 Run the wrapper script (recommended):
 
 - Linux/macOS: `bash <PUBLISH_DIR>/tools/script/update_dependency.sh`
-- Windows: `<PUBLISH_DIR>\\tools\\script\\update_dependency.bat`
+- Windows: `<PUBLISH_DIR>\tools\script\update_dependency.bat`
 
 This runs `helm dependency update` for each server chart (to make `libapp` templates available).
 
-## 2) Edit values (deployment “inputs”)
+## 2) Edit values (deployment "inputs")
 
 Default values live under:
 
@@ -37,7 +42,7 @@ Tip: you can layer overrides by providing multiple `--values/-p` paths to `atdto
 Recommended (wrapper script):
 
 - Linux/macOS: `bash <PUBLISH_DIR>/tools/script/generate_config.sh`
-- Windows: `<PUBLISH_DIR>\\tools\\script\\generate_config.bat`
+- Windows: `<PUBLISH_DIR>\tools\script\generate_config.bat`
 
 Manual equivalent (adjust values/profile as needed):
 

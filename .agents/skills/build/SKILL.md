@@ -1,3 +1,8 @@
+---
+name: build
+description: Configure and build atsf4g-co with CMake on Windows (MSVC/vcpkg) and Unix/Linux/macOS. Use when building the project, resolving build errors, or adjusting CMake options.
+---
+
 # Build (atsf4g-co)
 
 This project uses **CMake (>= 3.24)** and requires a C++17 toolchain.

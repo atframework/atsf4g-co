@@ -1,3 +1,8 @@
+---
+name: code-generation
+description: Protobuf and template-based code generation during the CMake build. Use when working with proto files, generated headers, or template outputs.
+---
+
 # Code generation (atsf4g-co)
 
 This repository generates code during build in two main ways:
@@ -14,4 +19,5 @@ This repository generates code during build in two main ways:
 - Generated outputs: `_generated/` directory (in build tree)
 
 Notes:
+
 - Generation is driven by CMake targets; for most workflows you should not edit generated files directly.

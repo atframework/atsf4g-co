@@ -2,7 +2,6 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-
 proc_name: rank-board-svrd
 
 # 服务唯一ID标识
@@ -10,7 +9,7 @@ type_id: 15
 type_name: "rank-board-svr"
 
 image:
-  repository: harbor.m-oa.com:6023/project-x/project-x-server/rank-board-svr
+  repository: harbor.atframe.work/atsf4g-co/server/rank-board-svr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest
@@ -22,7 +21,7 @@ volumeMounts:
 vector:
   log_path: /data/projectx/gamesvr/log
   image:
-    repository: harbor.m-oa.com:6023/vector/vector:latest
+    repository: harbor.atframe.work/vector/vector:latest
     pullPolicy: Always
   sliks:
     console:
@@ -71,7 +70,7 @@ service:
 redis:
   enable: true
 
-rank_slave_num: 1 
+rank_slave_num: 1
 rank_dunmp_task_max_num: 20
 rank_refresh_limit_second_interval: 60s
 rank_max_batch_get_num: 20

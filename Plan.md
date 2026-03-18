@@ -149,44 +149,44 @@ app1.run_noblock();
 
 ---
 
-### A. 通过上游节点转发数据测试
+### A. 通过上游节点转发数据测试 ✅ 已完成
 
-**新建文件**: `atapp_upstream_forward_test.cpp`
+**文件**: `atapp_upstream_forward_test.cpp` ✅ 已创建
 
 > 拓扑结构: `node1(0x101) --proxy--> upstream(0x102) <--proxy-- node3(0x103)`
 > node1 发消息给 node3，经 upstream 转发
 
-| # | 用例名 | 描述 | 验证点 | 需求 |
-|----|--------|------|--------|------|
-| A.1 | `upstream_wait_discovery_then_send` | node3 服务发现延迟注入，node1 先发消息排队，注入后送达 | pending 消息到达 | R2.2 |
-| A.2 | `upstream_connected_forward_success` | 上游+目标均已连接，直接转发成功 | 数据正确到达 | R2.1 |
-| A.3 | `upstream_connected_target_unreachable` | 上游已连接，目标节点不存在 | 发送失败回调 | - |
-| A.4 | `upstream_reconnect_then_send_success` | 上游断开 → 重连成功 → pending 消息送达 | 重连期间消息排队，恢复后到达 | R2.4, R4.1 |
-| A.5 | `upstream_retry_exceed_limit_fail` | 上游断开 → 用 `set_sys_now()` 推进时间触发重试超限(reconnect_max_try_times) → handle 移除 | pending 消息失败回调 | R2.3 |
-| A.6 | `upstream_retry_timeout_downstream_cleanup` | 上游重连超时（`set_sys_now()` 推进） → 下游 pending 消息失败 → 下游 handle 清理 | 下游节点的 endpoint 也被关闭 | R2.5 |
-| A.7 | `upstream_topology_offline_pending_fail` | 上游拓扑移除(remove_topology_peer) → `set_sys_now()` 推进到 lost_topology_timeout 之后 → 强制移除 | pending 消息失败 | - |
-| A.8 | `upstream_topology_change_new_upstream` | update_topology_peer 切换上游 → 经新上游转发 | 数据通过新上游到达 | R1.2 |
+| # | 用例名 | 描述 | 验证点 | 需求 | 状态 |
+|----|--------|------|--------|------|------|
+| A.1 | `upstream_wait_discovery_then_send` | node3 服务发现延迟注入，node1 先发消息排队，注入后送达 | pending 消息到达 | R2.2 | ✅ |
+| A.2 | `upstream_connected_forward_success` | 上游+目标均已连接，直接转发成功 | 数据正确到达 | R2.1 | ✅ |
+| A.3 | `upstream_connected_target_unreachable` | 上游已连接，目标节点不存在 | 发送失败回调 | - | ✅ |
+| A.4 | `upstream_reconnect_then_send_success` | 上游断开 → 重连成功 → pending 消息送达 | 重连期间消息排队，恢复后到达 | R2.4, R4.1 | ✅ |
+| A.5 | `upstream_retry_exceed_limit_fail` | 上游断开 → 用 `set_sys_now()` 推进时间触发重试超限(reconnect_max_try_times) → handle 移除 | pending 消息失败回调 | R2.3 | ✅ |
+| A.6 | `upstream_retry_timeout_downstream_cleanup` | 上游重连超时（`set_sys_now()` 推进） → 下游 pending 消息失败 → 下游 handle 清理 | 下游节点的 endpoint 也被关闭 | R2.5 | ✅ |
+| A.7 | `upstream_topology_offline_pending_fail` | 上游拓扑移除(remove_topology_peer) → `set_sys_now()` 推进到 lost_topology_timeout 之后 → 强制移除 | pending 消息失败 | - | ✅ |
+| A.8 | `upstream_topology_change_new_upstream` | update_topology_peer 切换上游 → 经新上游转发 | 数据通过新上游到达 | R1.2 | ✅ |
 
 ---
 
-### B. 直连节点数据发送测试
+### B. 直连节点数据发送测试 ✅ 已完成
 
-**新建文件**: `atapp_direct_connect_test.cpp`
+**文件**: `atapp_direct_connect_test.cpp` ✅ 已创建
 
 > 拓扑结构: `node1(0x201) --proxy--> upstream(0x203) <--proxy-- node2(0x202)`
 > `allow_direct_connection: true`，node1 和 node2 为 kSameUpstreamPeer 关系
 
-| # | 用例名 | 描述 | 验证点 | 需求 |
-|----|--------|------|--------|------|
-| B.1 | `direct_discovery_ready_connect_send` | 服务发现已存在，发起直连后发送成功 | 数据正确到达 | R3.1 |
-| B.2 | `direct_discovery_missing_wait_then_send` | 服务发现延迟注入，等待后发起连接发送 | pending 消息到达 | R3.2 |
-| B.3 | `direct_connected_send_success` | 已直连，直接发送成功 | 数据正确到达 | - |
-| B.4 | `direct_reconnect_success_after_failure` | 直连断开 → 重连成功 → 发送成功 | 验证有过失败、验证恢复后数据正确 | R4.1 |
-| B.5 | `direct_reconnect_retry_backoff` | 用 `set_sys_now()` 逐步推进时间，验证重连退避间隔递增（start→2x→max） | 重试间隔递增 | R5.6 |
-| B.6 | `direct_retry_exceed_limit_fail` | 用 `set_sys_now()` 推进时间触发重试超限 | pending 消息失败回调、handle 被移除 | R3.3 |
-| B.7 | `direct_topology_offline_timeout` | 拓扑下线 → `set_sys_now()` 推进到 lost_topology_timeout 之后 → handle 移除 | 失败回调被调用 | - |
-| B.8 | `direct_prefer_direct_over_upstream` | 有上游但允许直连，验证走直连路径而非上游转发 | 直连 atbus endpoint 存在、未经上游 | R3.4 |
-| B.9 | `direct_prefer_direct_wait_discovery` | 有上游但允许直连，目标服务发现不存在 → 等待 → 到达后直连 | 直连成功 | R3.5 |
+| # | 用例名 | 描述 | 验证点 | 需求 | 状态 |
+|----|--------|------|--------|------|------|
+| B.1 | `direct_discovery_ready_connect_send` | 服务发现已存在，发起直连后发送成功 | 数据正确到达 | R3.1 | ✅ |
+| B.2 | `direct_discovery_missing_wait_then_send` | 服务发现延迟注入，等待后发起连接发送 | pending 消息到达 | R3.2 | ✅ |
+| B.3 | `direct_connected_send_success` | 已直连，直接发送成功 | 数据正确到达 | - | ✅ |
+| B.4 | `direct_reconnect_success_after_failure` | 直连断开 → 重连成功 → 发送成功 | 验证有过失败、验证恢复后数据正确 | R4.1 | ✅ |
+| B.5 | `direct_reconnect_retry_backoff` | 用 `set_sys_now()` 逐步推进时间，验证重连退避间隔递增（start→2x→max） | 重试间隔递增 | R5.6 | ✅ |
+| B.6 | `direct_retry_exceed_limit_fail` | 用 `set_sys_now()` 推进时间触发重试超限 | pending 消息失败回调、handle 被移除 | R3.3 | ✅ |
+| B.7 | `direct_topology_offline_timeout` | 拓扑下线 → `set_sys_now()` 推进到 lost_topology_timeout 之后 → handle 移除 | 失败回调被调用 | - | ✅ |
+| B.8 | `direct_prefer_direct_over_upstream` | 有上游但允许直连，验证走直连路径而非上游转发 | 直连 atbus endpoint 存在、未经上游 | R3.4 | ✅ |
+| B.9 | `direct_prefer_direct_wait_discovery` | 有上游但允许直连，目标服务发现不存在 → 等待 → 到达后直连 | 直连成功 | R3.5 | ✅ |
 
 ---
 
@@ -276,13 +276,14 @@ app1.run_noblock();
 >
 > 需要验证超时/重连退避行为时，使用 `app::set_sys_now()` 推进时间。
 
-#### A 组 — 上游转发测试
+#### A 组 — 上游转发测试 ✅ 已完成
 
-| 文件名 | 用途 | ID | 端口 | proxy |
-|--------|------|-----|------|-------|
-| `atapp_test_upstream_1.yaml` | 子节点1 | 0x00000101 | 21601 | `ipv4://127.0.0.1:21602` |
-| `atapp_test_upstream_2.yaml` | 上游(中转) | 0x00000102 | 21602 | - |
-| `atapp_test_upstream_3.yaml` | 子节点3 | 0x00000103 | 21603 | `ipv4://127.0.0.1:21602` |
+| 文件名 | 用途 | ID | 端口 | proxy | 状态 |
+|--------|------|-----|------|-------|------|
+| `atapp_test_upstream_1.yaml` | 子节点1 | 0x00000101 | 21601 | `ipv4://127.0.0.1:21602` | ✅ |
+| `atapp_test_upstream_2.yaml` | 上游(中转) | 0x00000102 | 21602 | - | ✅ |
+| `atapp_test_upstream_3.yaml` | 子节点3 | 0x00000103 | 21603 | `ipv4://127.0.0.1:21602` | ✅ |
+| `atapp_test_upstream_4.yaml` | 新上游(A.8用) | 0x00000104 | 21602 | - | ✅ |
 
 #### B 组 — 直连测试
 
@@ -333,8 +334,8 @@ app1.run_noblock();
    - [x] 拓扑相关回调 (topology_update_upstream)
 
 2. **Phase 2**: libatapp 配置文件准备
-   - [x] 创建 A 组配置 (upstream_1/2/3.yaml)
-   - [ ] 创建 B 组配置 (direct_1/2/3.yaml)
+   - [x] 创建 A 组配置 (upstream_1/2/3/4.yaml) ✅ 已完成（含额外 upstream_4.yaml）
+   - [x] 创建 B 组配置 (direct_1/2/3.yaml) ✅ 已完成
    - [ ] 创建 C 组配置 (downstream_1/2.yaml)
    - [ ] 创建 D 组配置 (topo_1/2/3/4.yaml)
    - [ ] 创建 E 组配置 (discovery_1/2.yaml)
@@ -345,10 +346,10 @@ app1.run_noblock();
    - [x] 实现 A.1~A.8 用例
    - [x] 编译 & 运行验证
 
-4. **Phase 4**: libatapp 直连测试
-   - [ ] 创建 `atapp_direct_connect_test.cpp`
-   - [ ] 实现 B.1~B.9 用例
-   - [ ] 编译 & 运行验证
+4. **Phase 4**: libatapp 直连测试 ✅ 已完成
+   - [x] 创建 `atapp_direct_connect_test.cpp`
+   - [x] 实现 B.1~B.9 用例
+   - [x] 编译 & 运行验证
 
 5. **Phase 5**: libatapp 下游测试
    - [ ] 创建 `atapp_downstream_send_test.cpp`

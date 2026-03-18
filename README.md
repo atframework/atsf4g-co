@@ -15,6 +15,19 @@ Service framework for game server using libatbus, libatapp, libcopp and etc.
 ## Prepare
 
 1. Install [etcd](https://github.com/coreos/etcd). (It's used for atproxy to connect to each other.)
+   + For **local testing**, you can use `atframework/libatapp/ci/etcd/setup-etcd` scripts to auto-download and start a temporary etcd instance:
+     ```bash
+     # Linux / macOS
+     bash atframework/libatapp/ci/etcd/setup-etcd.sh start   # download + start on port 12379
+     export ATAPP_UNIT_TEST_ETCD_HOST="http://127.0.0.1:12379"
+     bash atframework/libatapp/ci/etcd/setup-etcd.sh stop    # stop when done
+     ```
+     ```powershell
+     # Windows (PowerShell)
+     .\atframework\libatapp\ci\etcd\setup-etcd.ps1 -Command start
+     $env:ATAPP_UNIT_TEST_ETCD_HOST = "http://127.0.0.1:12379"
+     .\atframework\libatapp\ci\etcd\setup-etcd.ps1 -Command stop
+     ```
 2. *[opional]* Install [redis](http://redis.io/). (DB services.install it if used)
 
 ## Basic Usage

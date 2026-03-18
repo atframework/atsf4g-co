@@ -8,7 +8,7 @@ type_id: 14
 type_name: "rank-settlement-svr"
 
 image:
-  repository: harbor.m-oa.com:6023/project-x/project-x-server/rank-settlement-svr
+  repository: harbor.atframe.work/atsf4g-co/server/rank-settlement-svr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest
@@ -20,7 +20,7 @@ volumeMounts:
 vector:
   log_path: /data/projectx/gamesvr/log
   image:
-    repository: harbor.m-oa.com:6023/vector/vector:latest
+    repository: harbor.atframe.work/vector/vector:latest
     pullPolicy: Always
   sliks:
     console:
