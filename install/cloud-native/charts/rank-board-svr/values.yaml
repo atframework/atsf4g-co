@@ -3,14 +3,14 @@
 # Declare variables to be passed into your templates.
 
 
-proc_name: ranksvr-rankingd
+proc_name: rank-board-svrd
 
 # 服务唯一ID标识
 type_id: 15
-type_name: "ranksvr-ranking"
+type_name: "rank-board-svr"
 
 image:
-  repository: harbor.m-oa.com:6023/project-x/project-x-server/ranksvr-ranking
+  repository: harbor.m-oa.com:6023/project-x/project-x-server/rank-board-svr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest

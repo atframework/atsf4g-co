@@ -1,4 +1,4 @@
-set(SERVICE_TARGET_NAME rank_board_svr)
+set(SERVICE_TARGET_NAME rank-board-svr)
 file(GLOB_RECURSE SERVICE_SOURCES *.cpp *.cc *.c *.cxx)
 file(GLOB_RECURSE SERVICE_HEADERS *.h *.hpp)
 
