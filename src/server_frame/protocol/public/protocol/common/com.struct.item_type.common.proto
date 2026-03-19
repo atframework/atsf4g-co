@@ -10,6 +10,8 @@ import "protocol/extension/v3/xresloader.proto";
 
 import "protocol/common/com.struct.extension.common.proto";
 
+option go_package = "github.com/atframework/atsf4g-co/component/public/common/protocol/common";
+
 package hello;
 
 enum EnItemType {

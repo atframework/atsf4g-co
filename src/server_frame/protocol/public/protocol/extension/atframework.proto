@@ -12,6 +12,8 @@ import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/descriptor.proto";
 
+option go_package = "github.com/atframework/atsf4g-co/component/public/extension/protocol/extension";
+
 // 只能配置在 com.const.proto 这个文件里有效
 extend google.protobuf.FileOptions {
   ConstSettingsType CONST_SETTINGS = 3271;  // 自定义配置

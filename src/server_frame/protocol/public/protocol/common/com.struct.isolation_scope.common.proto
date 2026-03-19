@@ -8,6 +8,8 @@ option cc_enable_arenas = true;
 
 import "protocol/extension/v3/xresloader.proto";
 
+option go_package = "github.com/atframework/atsf4g-co/component/public/common/protocol/common";
+
 package hello;
 
 message DIsolationScopeSeason {

@@ -13,6 +13,8 @@ import "google/protobuf/duration.proto";
 import "protocol/common/com.struct.item.common.proto";
 import "protocol/common/com.struct.condition.common.proto";
 
+option go_package = "github.com/atframework/atsf4g-co/component/public/common/protocol/common";
+
 package hello;
 
 enum EnRankImplType{

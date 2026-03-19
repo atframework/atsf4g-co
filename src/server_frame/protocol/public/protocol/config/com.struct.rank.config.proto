@@ -7,16 +7,13 @@ option optimize_for = SPEED;
 option cc_enable_arenas = true;
 option cc_generic_services = true;
 
-
-
-option go_package = "github.com/atframework/atsf4g-go/component-protocol-private/pbdesc/protocol/pbdesc";
-
-
 import "protocol/extension/xrescode_extensions_v3.proto";
 import "protocol/extension/v3/xresloader.proto";
 
 import "protocol/common/com.struct.rank.common.proto";
 import "protocol/common/com.struct.item.common.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/config/protocol/config";
 
 package hello.config;
 

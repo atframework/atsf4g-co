@@ -10,6 +10,8 @@ package hello.error_code;
 
 import "google/protobuf/descriptor.proto";
 
+option go_package = "github.com/atframework/atsf4g-co/component/public/extension/protocol/extension";
+
 extend google.protobuf.EnumValueOptions {
   string description = 2001;
   bool show_code = 2002;

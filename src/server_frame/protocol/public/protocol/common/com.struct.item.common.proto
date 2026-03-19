@@ -12,6 +12,8 @@ import "protocol/common/com.struct.isolation_scope.common.proto";
 import "protocol/common/com.struct.extension.common.proto";
 import "protocol/common/com.struct.equipment.common.proto";
 
+option go_package = "github.com/atframework/atsf4g-co/component/public/common/protocol/common";
+
 package hello;
 
 message DItemPositionCfg {
