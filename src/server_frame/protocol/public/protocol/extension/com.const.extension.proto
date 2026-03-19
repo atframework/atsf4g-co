@@ -8,7 +8,7 @@ option cc_enable_arenas = true;
 
 import "google/protobuf/descriptor.proto";
 
-option go_package = "github.com/atframework/atsf4g-co/component/public/extension/protocol/extension";
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/extension";
 
 package hello;
 

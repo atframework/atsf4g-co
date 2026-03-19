@@ -16,7 +16,7 @@ import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.protocol.rank.proto";
 import "protocol/common/com.struct.item.common.proto";
 
-option go_package = "github.com/atframework/atsf4g-co/component/public/pbdesc/protocol/pbdesc";
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
 package hello;
 

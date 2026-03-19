@@ -12,7 +12,7 @@ import "protocol/common/com.struct.rank.common.proto";
 import "protocol/pbdesc/com.struct.proto";
 import "google/protobuf/timestamp.proto";
 
-option go_package = "github.com/atframework/atsf4g-co/component/public/pbdesc/protocol/pbdesc";
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
 /////////////////////////////////////////////////////////////////////////
 // 排行榜数据

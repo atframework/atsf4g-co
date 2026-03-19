@@ -3,7 +3,7 @@ syntax = "proto3";
 option optimize_for = SPEED;
 option cc_enable_arenas = true;
 
-option go_package = "github.com/atframework/atsf4g-co/component/public/common/protocol/common";
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/common";
 
 package hello;
 

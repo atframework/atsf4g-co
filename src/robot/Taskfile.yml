@@ -1,0 +1,214 @@
+version: "3"
+
+includes:
+  protocol: protocol/Taskfile.yml
+  robot: atframework/robot-go/Taskfile.yml
+  atframe-utils: atframework/atframe-utils-go/Taskfile.yml
+
+dotenv:
+  - build-tools.env
+
+set: [errexit, pipefail]
+
+shopt: [globstar]
+
+vars:
+  # 可执行文件扩展名
+  INSTALL_PATH: '{{.INSTALL_PATH | default "./build/install"}}'
+
+  EXE_EXT:
+    sh: |
+      if [ "{{OS}}" = "windows" ]; then
+        echo ".exe"
+      else
+        echo ""
+      fi
+  # Python 虚拟环境相关变量
+  PYTHON_VENV:
+    sh: |
+      if [ -n "$PYTHON_VENV_PATH" ]; then
+        echo "$PYTHON_VENV_PATH"
+      elif [ "{{OS}}" = "windows" ]; then
+        echo "./build/robot_venv"
+      else
+        echo "${HOME}/robot_venv"
+      fi
+  PYTHON_CMD:
+    sh: |
+      if [ "{{OS}}" = "windows" ]; then
+        echo "python"
+      else
+        echo "python3"
+      fi
+  PIP_BIN:
+    sh: |
+      if [ "{{OS}}" = "windows" ]; then
+        echo "{{.PYTHON_VENV}}/Scripts/pip.exe"
+      else
+        echo "{{.PYTHON_VENV}}/bin/pip"
+      fi
+  SET_VENV_CMD:
+    sh: |
+      if [ "{{OS}}" = "windows" ]; then
+        echo ""
+      else
+        echo "export PATH={{.PYTHON_VENV}}/bin:\$PATH"
+      fi
+  PYTHON_VENV_CMD:
+    sh: |
+      if [ "{{OS}}" = "windows" ]; then
+        echo "Scripts/python.exe"
+      else
+        echo "bin/python3"
+      fi
+
+tasks:
+  all:
+    desc: "Generate Protocol, Config and Robot Code"
+    cmds:
+      - mkdir -p build
+      - task: submodule_update
+      - task: build-tools-prepare
+      - task: generate
+      - task: rpc_handle
+      - task: build
+      - task: copy_config
+
+  build-tools-prepare:
+    desc: "Prepare build tools (protoc, python)"
+    cmds:
+      - task: _install-build-settings
+      - task: _prepare-protoc
+      - task: _prepare-python
+
+  _install-build-settings:
+    desc: "Install build settings tools"
+    cmds:
+      - task: atframe-utils:install-build-settings-tools
+        vars:
+          PROJECT_ROOT: "{{.ROOT_DIR}}"
+    silent: true
+
+  _prepare-protoc:
+    desc: "Prepare protoc and related plugins"
+    cmds:
+      - task: atframe-utils:install-protoc
+        vars:
+          PROJECT_ROOT: "{{.ROOT_DIR}}"
+    silent: false
+
+  _prepare-python-deps:
+    desc: "Setup Python virtual environment"
+    cmds:
+      - |
+        if [ ! -d "{{.PYTHON_VENV}}" ]; then
+          echo "Creating Python venv at {{.PYTHON_VENV}}..."
+          {{.PYTHON_CMD}} -m venv "{{.PYTHON_VENV}}"
+          echo "venv created successfully"
+        else
+          echo "Python venv already exists at {{.PYTHON_VENV}}"
+        fi
+        {{.PYTHON_VENV}}/{{.PYTHON_VENV_CMD}} -m pip install -r third_party/python_env/requirements.txt
+    silent: true
+
+  _prepare-python:
+    desc: "Prepare Python environment"
+    deps:
+      - _prepare-python-deps
+    cmds:
+      - |
+        cd "{{.ROOT_DIR}}"
+        {{.SET_VENV_CMD}}
+        REQUIREMENTS_FILE="{{.ROOT_DIR}}/atframework/robot-go/third_party/xres-code-generator/requirements.txt"
+        if [ -f "$REQUIREMENTS_FILE" ]; then
+          echo "Installing Python dependencies..."
+          "{{.PIP_BIN}}" install -r "$REQUIREMENTS_FILE"
+          echo "Dependencies installed"
+        else
+          echo "requirements.txt not found at $REQUIREMENTS_FILE"
+        fi
+
+        if [ "{{OS}}" = "windows" ]; then
+          PYTHON_BIN="$(cd "{{.PYTHON_VENV}}" && pwd)/Scripts/python.exe"
+          PYTHON_VERSION=$(powershell -NoProfile -Command "&{
+            \$output = & \"$PYTHON_BIN\" --version 2>&1
+            \$version = \$output -replace '^Python ', '' -replace '[^0-9.]', ''
+            Write-Host \$version
+          }")
+        else
+          PYTHON_BIN="{{.PYTHON_VENV}}/bin/python"
+          PYTHON_VERSION=$("$PYTHON_BIN" --version 2>&1 | awk '{print $2}')
+        fi
+
+        "{{.ENV_BUILD_TOOLS_DOWNLOAD_DIR}}/build_setting{{.EXE_EXT}}" set python -path "$PYTHON_BIN" -version "$PYTHON_VERSION" -settings-file "{{.ENV_BUILD_TARGET_DIR}}/build-settings.json"
+        echo "Python Version: $PYTHON_VERSION environment OK!"
+    silent: true
+
+  submodule_update:
+    desc: "Update Submodule"
+    cmds:
+      - git submodule update --init --recursive atframework/atframe-utils-go
+      - git submodule update --init --recursive atframework/robot-go
+
+  generate:
+    desc: "Generate Protocol and Config"
+    vars:
+      PROTOC_EXEC_BIN:
+        sh: '"{{.ENV_BUILD_TOOLS_DOWNLOAD_DIR}}/build_setting{{.EXE_EXT}}" get protoc -settings-file "{{.ENV_BUILD_TARGET_DIR}}/build-settings.json"'
+      PYTHON_BIN_PATH:
+        sh: '"{{.ENV_BUILD_TOOLS_DOWNLOAD_DIR}}/build_setting{{.EXE_EXT}}" get python -settings-file "{{.ENV_BUILD_TARGET_DIR}}/build-settings.json"'
+    cmds:
+      - task: _generate-protocol
+        vars:
+          PROTOC_EXEC_BIN: '{{.PROTOC_EXEC_BIN}}'
+      - task: _generate-config
+        vars:
+          PYTHON_BIN_PATH: '{{.PYTHON_BIN_PATH}}'
+
+  _generate-protocol:
+    desc: "Generate Protocol"
+    cmds:
+      - task: protocol:generate-protocol-pb
+        vars:
+          OUTPUT_DIR: '{{.ROOT_DIR}}/build/pb'
+          PROTOC_EXEC_BIN: '{{.PROTOC_EXEC_BIN}}'
+          XRES_PROTOCOL_PATH: '{{.ROOT_DIR}}/atframework/robot-go/third_party/protocols'
+
+      - task: protocol:generate-protocol-code
+        vars:
+          PROTOC_EXEC_BIN: "{{.PROTOC_EXEC_BIN}}"
+          XRES_PROTOCOL_PATH: '{{.ROOT_DIR}}/atframework/robot-go/third_party/protocols'
+
+  _generate-config:
+    desc: "Generate Config"
+    cmds:
+      - task: robot:generate-code
+        vars:
+          PYTHON_BIN_PATH: '{{.PYTHON_BIN_PATH}}'
+          OUTPUT_DIR: '{{.ROOT_DIR}}/config'
+          CONFIG_PROTOCOL_IMPORT_PATH: "github.com/atframework/atsf4g-co/component/public/protocol/config"
+          RES_CONFIG_PB: '{{.ROOT_DIR}}/build/pb/ALL.pb'
+
+    dir: "{{.TASKFILE_DIR}}"
+
+  rpc_handle:
+    desc: "Generate RPC Handle Code"
+    vars:
+      PYTHON_BIN_PATH:
+        sh: '"{{.ENV_BUILD_TOOLS_DOWNLOAD_DIR}}/build_setting{{.EXE_EXT}}" get python -settings-file "{{.ENV_BUILD_TARGET_DIR}}/build-settings.json"'
+    cmds:
+      - mkdir -p rpc_handle
+      - |
+        "{{.PYTHON_BIN_PATH}}" '{{.ROOT_DIR}}/atframework/robot-go/third_party/mako-generator/mako-generator.py' --project-dir "{{.ROOT_DIR}}/build" -c "{{.ROOT_DIR}}/generate-for-pb.yaml"
+
+  build:
+    desc: "Build Robot Code"
+    cmds:
+      - go build -o '{{.INSTALL_PATH}}/bin/robot{{.EXE_EXT}}' ./main.go
+
+  copy_config:
+    desc: "Copy case to Install Directory"
+    cmds:
+      - rm -rf '{{.INSTALL_PATH}}/case'
+      - cp -r ./case_config/ '{{.INSTALL_PATH}}/case/'
+      - cp config.yaml '{{.INSTALL_PATH}}/bin/'

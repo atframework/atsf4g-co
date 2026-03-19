@@ -14,3 +14,9 @@
 	path = atframework/libatapp
 	url = https://github.com/atframework/libatapp.git
 	branch = main
+[submodule "src/robot/atframework/atframe-utils-go"]
+	path = src/robot/atframework/atframe-utils-go
+	url = https://github.com/atframework/atframe-utils-go.git
+[submodule "src/robot/atframework/robot-go"]
+	path = src/robot/atframework/robot-go
+	url = https://github.com/atframework/robot-go.git

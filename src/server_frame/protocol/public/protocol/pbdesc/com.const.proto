@@ -11,7 +11,7 @@ import "google/protobuf/descriptor.proto";
 import "protocol/extension/extensions_error_code.proto";
 import "protocol/extension/com.const.extension.proto";
 
-option go_package = "github.com/atframework/atsf4g-co/component/public/pbdesc/protocol/pbdesc";
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
 package hello;
 

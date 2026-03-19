@@ -1,0 +1,7 @@
+url: 127.0.0.1:8001
+connect-type: atgateway
+case_file: ../case/connect_test.conf
+access-token: atgateway-access-token
+key-exchange: x25519
+crypto: aes-256-gcm
+compression: zstd

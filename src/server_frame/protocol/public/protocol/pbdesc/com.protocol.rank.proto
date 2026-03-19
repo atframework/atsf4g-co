@@ -11,7 +11,7 @@ package hello;
 import "protocol/common/com.struct.rank.common.proto";
 import "protocol/pbdesc/com.struct.rank.proto";
 
-option go_package = "github.com/atframework/atsf4g-co/component/public/pbdesc/protocol/pbdesc";
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
 message CSRankGetSpecifyRankReq {
   DRankKey rank_key = 1;

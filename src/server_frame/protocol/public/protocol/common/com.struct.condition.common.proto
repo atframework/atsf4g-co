@@ -11,7 +11,7 @@ import "google/protobuf/duration.proto";
 
 import "protocol/extension/v3/xresloader.proto";
 
-option go_package = "github.com/atframework/atsf4g-co/component/public/common/protocol/common";
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/common";
 
 package hello;
 

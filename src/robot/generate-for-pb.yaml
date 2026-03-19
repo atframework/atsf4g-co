@@ -1,0 +1,25 @@
+configure:
+  encoding: "UTF-8"
+  output_directory: "build"
+  overwrite: false
+  paths: []
+  package_prefix: []
+  protocol_input_pb_file: "build/pb/ALL.pb"
+
+rules:
+  - service:
+      name: "hello.LobbysvrClientService"
+      overwrite: true
+      output_directory: "rpc_handle/lobbysvr"
+      service_template:
+        - overwrite: true
+          input: "template/robot_rpc_handle.go.mako"
+          output: "rpc_handle_lobby.go"
+  - service:
+      name: "hello.AuthsvrClientService"
+      overwrite: true
+      output_directory: "rpc_handle/authsvr"
+      service_template:
+        - overwrite: true
+          input: "template/robot_rpc_handle.go.mako"
+          output: "rpc_handle_auth.go"

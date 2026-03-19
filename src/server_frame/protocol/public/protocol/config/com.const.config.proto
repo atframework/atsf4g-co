@@ -11,7 +11,7 @@ import "google/protobuf/timestamp.proto";
 
 import "protocol/extension/xrescode_extensions_v3.proto";
 
-option go_package = "github.com/atframework/atsf4g-co/component/public/config/protocol/config";
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/config";
 
 package hello.config;
 
