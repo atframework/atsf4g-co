@@ -137,6 +137,9 @@ class session {
    */
   SERVER_FRAME_API std::shared_ptr<player_cache> get_player() const noexcept;
 
+  SERVER_FRAME_API void login_init(const atframework::CSMsg &login_task_msg);
+  SERVER_FRAME_API bool login_protect(time_t timestamp) const;
+
   // 下行post包
   SERVER_FRAME_API int32_t send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg);
   SERVER_FRAME_API int32_t send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg, uint64_t server_sequence);
@@ -178,6 +181,8 @@ class session {
   uint64_t session_sequence_;
   uint32_t cached_zone_id_;
   uint64_t cached_user_id_;
+  time_t login_task_head_timestamp_;
+  time_t login_server_time_;
 
   std::shared_ptr<atfw::util::log::log_wrapper> actor_log_writter_;
   opentelemetry::nostd::shared_ptr<opentelemetry::logs::Logger> actor_log_otel_;

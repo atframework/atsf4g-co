@@ -27,6 +27,11 @@ option (ATFW_RPC_CONST_SETTINGS) = {
   rpc_version: "0.1.0"
 };
 
+message DispatcherOptionsCSFrequencyLimit {
+  int32 frequency_limit_ms = 1;
+  int32 frequency_limit_count = 2;
+}
+
 message DispatcherOptions {
   string module_name = 101;                     // module name
   string api_name = 102;                        // api name
@@ -52,6 +57,8 @@ message DispatcherOptions {
   bool router_ignore_offline = 309;                 // 路由RPC忽略路由对象不存在
   bool allow_ignore_discovery = 310;                // RPC请求允许忽略服务发现
   bool enable_broadcast = 311;                      // 是否启用广播接口
+  DispatcherOptionsCSFrequencyLimit frequency_limit = 312;  // 毫秒限频
+  bool disable = 313;                                       // 关闭接口
 }
 
 message JsonOptions {

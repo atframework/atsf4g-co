@@ -497,3 +497,18 @@ void session::create_actor_log_writter() {
                           opentelemetry::common::MakeAttributes(attributes));
   }
 }
+
+SERVER_FRAME_API void session::login_init(const atframework::CSMsg &login_task_msg) {
+  login_task_head_timestamp_ = login_task_msg.head().timestamp();
+  login_server_time_ = util::time::time_utility::get_now();
+}
+
+
+SERVER_FRAME_API bool session::login_protect(time_t timestamp) const {
+  if (login_server_time_ + util::time::time_utility::MINITE_SECONDS < util::time::time_utility::get_now()) {
+    // 保护时间过了
+    return false;
+  }
+  // 跟客户端时间判断
+  return login_task_head_timestamp_ > timestamp;
+}

@@ -29,6 +29,8 @@
 #include "dispatcher/task_type_traits.h"
 #include "rpc/rpc_common_types.h"
 
+#include <logic/task_lock.h>
+
 namespace rpc {
 class context;
 }
@@ -231,9 +233,17 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
     return create_init_;
   }
 
+  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type wait_task_lock(rpc::context &ctx);
+  SERVER_FRAME_API void task_lock_init_task(uint64_t task_id);
+  SERVER_FRAME_API void task_lock_remove_task(uint64_t task_id);
+
   SERVER_FRAME_API bool is_new_user() const;
 
   ATFW_UTIL_FORCEINLINE uint64_t get_data_version() const { return data_version_; }
+
+  ATFW_UTIL_FORCEINLINE std::unordered_map<const char *, std::deque<int64_t>> &get_protocol_frequency_limit() {
+    return protocol_frequency_limit_;
+  }
 
   SERVER_FRAME_API uint64_t alloc_server_sequence();
 
@@ -262,6 +272,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
 
   std::weak_ptr<session> session_;
 
+  std::shared_ptr<task_lock> task_lock_;
   task_type_trait::id_type initialization_task_id_;
 
   player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::user_login_data> login_info_;
@@ -269,6 +280,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
   player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::user_data> player_data_;
   uint64_t server_sequence_;
   uint64_t data_version_;
+
+  std::unordered_map<const char *, std::deque<int64_t>> protocol_frequency_limit_;
 };
 
 // 玩家日志输出工具

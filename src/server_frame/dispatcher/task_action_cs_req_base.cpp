@@ -118,6 +118,54 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
     } else {
       router_obj->trace_router(get_shared_context());
     }
+
+    auto dispatcher_options = get_dispatcher_options();
+    if (nullptr == dispatcher_options) {
+      break;
+    }
+
+    if (dispatcher_options->disable()) {
+      write_actor_log_head();
+      set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_CS_PROTOCOL_FREQUENCY_LIMIT);
+      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    }
+
+    if (dispatcher_options->frequency_limit().frequency_limit_ms() <= 0 ||
+        dispatcher_options->frequency_limit().frequency_limit_count() <= 0) {
+      break;
+    }
+
+    int32_t frequency_limit_ms = dispatcher_options->frequency_limit().frequency_limit_ms();
+    int32_t frequency_limit_count = dispatcher_options->frequency_limit().frequency_limit_count();
+
+    int64_t current_time = static_cast<int64_t>(util::time::time_utility::get_now() * 1000 +
+                                                util::time::time_utility::get_now_usec() / 1000);
+
+    auto &frequency_limit = player_cache->get_protocol_frequency_limit();
+    auto last_time_deque = frequency_limit.find(name());
+    if (last_time_deque == frequency_limit.end()) {
+      frequency_limit[name()].push_back(current_time);
+      break;
+    }
+
+    if (static_cast<int32_t>(last_time_deque->second.size()) < frequency_limit_count) {
+      last_time_deque->second.push_back(current_time);
+      break;
+    }
+
+    int64_t last_time = *last_time_deque->second.begin();
+    if (current_time - last_time < 0) {
+      // 时间回退
+      last_time_deque->second.clear();
+      last_time_deque->second.push_back(current_time);
+    } else if (current_time - last_time >= frequency_limit_ms) {
+      last_time_deque->second.pop_front();
+      last_time_deque->second.push_back(current_time);
+    } else {
+      write_actor_log_head();
+      set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_CS_PROTOCOL_FREQUENCY_LIMIT);
+      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    }
   } while (false);
 
   // 用户层消息过滤
@@ -140,7 +188,11 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
 
-  result_type::value_type ret = RPC_AWAIT_CODE_RESULT(base_type::hook_run());
+  result_type::value_type ret;
+  {
+    task_lock_guard cs_task_lock_guard(get_player_cache(), get_task_id());
+    ret = RPC_AWAIT_CODE_RESULT(base_type::hook_run());
+  }
 
   // 自动设置快队列保存
   do {

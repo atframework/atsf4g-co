@@ -178,6 +178,8 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
 
   // 8. 设置和Session互相关联
   user->set_session(get_shared_context(), my_sess);
+  // 填入上线时间
+  my_sess->login_init(get_request());
   user->login_init(get_shared_context());
 
   // 如果不存在则是登入过程中掉线了
@@ -334,6 +336,12 @@ GAMECLIENT_RPC_API rpc::result_code_type task_action_login::replace_session(std:
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
+  if (old_sess && old_sess->login_protect(get_request().head().timestamp())) {
+    session_manager::me()->remove(cur_sess, static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff));
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_PROTECT);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
   user->set_session(get_shared_context(), cur_sess);
   if (old_sess) {
     // 下发踢下线包，防止循环重连互踢
@@ -341,6 +349,8 @@ GAMECLIENT_RPC_API rpc::result_code_type task_action_login::replace_session(std:
     session_manager::me()->remove(old_sess, static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff));
   }
   cur_sess->set_player(user);
+  // 填入上线时间
+  cur_sess->login_init(get_request());
 
   if (get_request_body().has_client_info()) {
     user->set_client_info(get_request_body().client_info());

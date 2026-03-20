@@ -175,7 +175,6 @@ void player::clear_dirty() {
   //! === manager implement === 清理脏数据标记
   user_async_jobs_manager_->clear_dirty();
   user_rank_manager_->clear_dirty();
-
 }
 
 void player::refresh_feature_limit(rpc::context &ctx) {
@@ -382,6 +381,11 @@ rpc::result_code_type player::await_before_logout_tasks(rpc::context &ctx) {
   }
 
   ret = RPC_AWAIT_CODE_RESULT(user_async_jobs_manager_->wait_for_async_task(ctx));
+  if (ret < 0) {
+    RPC_RETURN_CODE(ret);
+  }
+
+  ret = RPC_AWAIT_CODE_RESULT(wait_task_lock(ctx));
   if (ret < 0) {
     RPC_RETURN_CODE(ret);
   }

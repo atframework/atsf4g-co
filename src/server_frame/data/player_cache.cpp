@@ -105,7 +105,11 @@ SERVER_FRAME_API void player_cache::init(uint64_t user_id, uint32_t zone_id, con
   zone_id_ = zone_id;
   openid_id_ = openid;
   data_version_ = 0;
-
+  protocol_frequency_limit_.clear();
+  task_lock_ = std::make_shared<task_lock>();
+  if (task_lock_) {
+    task_lock_->init(user_id_);
+  }
   // all manager init
   // ptr_t self = shared_from_this();
 }
@@ -291,4 +295,22 @@ SERVER_FRAME_API rpc::result_code_type player_cache::await_initialization_task(r
     initialization_task_id_ = 0;
   }
   RPC_RETURN_CODE(ret);
+}
+
+
+SERVER_FRAME_API rpc::result_code_type player_cache::wait_task_lock(rpc::context &ctx) {
+  if (task_lock_) {
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(task_lock_->wait_task(ctx)));
+  }
+  RPC_RETURN_CODE(0);
+}
+SERVER_FRAME_API void player_cache::task_lock_init_task(uint64_t task_id) {
+  if (task_lock_) {
+    task_lock_->init_task(task_id);
+  }
+}
+SERVER_FRAME_API void player_cache::task_lock_remove_task(uint64_t task_id) {
+  if (task_lock_) {
+    task_lock_->remove_task(task_id);
+  }
 }
