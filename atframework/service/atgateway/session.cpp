@@ -236,6 +236,11 @@ int session::send_remove_session(session_manager *mgr) {
     return 0;
   }
 
+  // echo server模式不需要路由通知
+  if (mgr != nullptr && mgr->get_conf().origin_conf.echo_server()) {
+    return 0;
+  }
+
   // send remove msg
   ::atframework::gateway::server_message message;
   message.mutable_head()->set_session_id(id_);
@@ -384,6 +389,11 @@ int session::send_to_client(gsl::span<const unsigned char> data) {
 int session::send_to_server(::atframework::gateway::server_message &message) { return send_to_server(message, owner_); }
 
 int session::send_to_server(::atframework::gateway::server_message &message, session_manager *mgr) {
+  // echo server模式不需要路由通知
+  if (mgr != nullptr && mgr->get_conf().origin_conf.echo_server()) {
+    return 0;
+  }
+
   // send to router_
   if (0 == router_node_id_ && router_node_name_.empty()) {
     FWLOGERROR("session {} has not configure router", id_);

@@ -118,7 +118,7 @@ enable_oss_log: true
 enable_mon_log: true
 
 login_code_protect: 0s
-login_code_valid_sec: 720s
+login_code_valid_duration: 720s
 
 # 日志输出路径
 server_log_dir: ../log

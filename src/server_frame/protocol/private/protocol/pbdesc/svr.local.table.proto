@@ -18,6 +18,25 @@ import "protocol/pbdesc/com.struct.rank.proto";
 
 package hello;
 
+message table_login_auth {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "login_auth"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "open_id"
+    }
+  };
+  // clang-format on
+
+  string open_id = 1;
+  uint64 user_id = 2;
+
+  string access_token_code = 11;                        // 认证码
+  google.protobuf.Timestamp access_token_expired = 12;  // 认证码过期时间
+}
+
 message table_login_lock {
   // clang-format off
   option (atframework.database_table) = {
@@ -34,12 +53,12 @@ message table_login_lock {
   uint64 router_version = 3;    // 路由系统 - 登入进程变更版本号
 
   // 登入信息
-  uint32 login_zone_id = 11;  // 登入区服ID
-  int64 login_expired = 12;   // 登入进程过期时间（时间戳）
-  string login_code = 13;     // 认证码
+  uint32 login_zone_id = 11;                            // 登入区服ID
+  string access_token_code = 12;                        // 本次登入使用的认证码
+  google.protobuf.Timestamp access_token_expired = 13;  // 本次登入使用的认证码过期时间(可以被续期)
   // 限制登入信息
-  int64 ban_time = 14;  // 封号期限
-   account_except except = 15;        // 账户异常数据
+  int64 ban_time = 14;         // 封号期限
+  account_except except = 15;  // 账户异常数据
 
   // 资源冲突检测
   uint64 expect_table_user_db_version = 21;
@@ -90,7 +109,7 @@ message table_user {
   uint32 zone_id = 3;
 
   // BasicInfo
-  user_login_data login_data = 11;             // 登入数据
+  user_login_data login_data = 11;        // 登入数据
   account_information account_data = 12;  // 账号信息
   user_data user_data = 13;               // 玩家数据
   uint64 data_version = 14;               // 数据版本号
@@ -103,7 +122,7 @@ message table_user {
 
   // 业务逻辑数据
   user_options_data options_data = 200;  // 玩家选项
-  DRankUserData rank_data = 201; // 玩家排行榜数据
+  DRankUserData rank_data = 201;         // 玩家排行榜数据
 }
 
 message table_distribute_transaction {
@@ -123,8 +142,6 @@ message table_distribute_transaction {
 
   google.protobuf.Any blob_data = 11;
 }
-
-
 
 message table_rank {
   // clang-format off
@@ -152,7 +169,7 @@ message table_rank {
   int64 storge_version = 8;
   int64 data_version = 9;
   int32 max_slice_index = 10;
-  
+
   table_rank_blob_data blob_data = 101;
 }
 
@@ -207,7 +224,7 @@ message table_rank_router {
   uint32 sub_rank_type = 4;
   uint32 sub_rank_instance_id = 5;
   uint32 zone_id = 6;
-  
+
   uint64 router_main_node_id = 7;
   int64 router_save_timepoint = 8;
 
@@ -290,6 +307,6 @@ message table_rank_history {
   uint32 settle_rank_no = 10;
   uint64 user_id = 11;
   uint32 user_zone_id = 12;
-  
+
   table_rank_history_blob_data blob_data = 101;
 }

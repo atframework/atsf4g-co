@@ -16,7 +16,7 @@ class player_cache;
 
 class task_lock : public std::enable_shared_from_this<task_lock> {
  public:
-  SERVER_FRAME_API task_lock() : user_id_(0) {}
+  ATFW_UTIL_FORCEINLINE task_lock() : user_id_(0) {}
   SERVER_FRAME_API void init(uint64_t user_id);
   SERVER_FRAME_API void init_task(uint64_t id);
   SERVER_FRAME_API void remove_task(uint64_t id);

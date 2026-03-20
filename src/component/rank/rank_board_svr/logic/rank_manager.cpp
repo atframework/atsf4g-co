@@ -169,7 +169,10 @@ rpc::result_code_type rank_manager::mutable_main_rank(rpc::context& ctx, const P
 
   out_rank = rank_ptr;
 
-  auto timeout = logic_config::me()->get_custom_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>().rank_server_router_lock_timeout().seconds();
+  auto timeout = logic_config::me()
+                     ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
+                     .rank_server_router_lock_timeout()
+                     .seconds();
   auto now_tm = util::time::time_utility::get_now();
   if (now_tm - rank_ptr->get_last_save_router_data_time() > timeout) {
     FWLOGDEBUG("cur rank router has timeout rank({}:{}:{}:{})", rank_key.rank_type(), rank_key.rank_instance_id(),
@@ -333,8 +336,8 @@ std::vector<uint64_t> rank_manager::get_slave_nodes(rpc::context& ctx, const PRO
     return slave_nodes;
   }
 
-  util::memory::strong_rc_ptr<atapp::etcd_discovery_set> index_by_type = mod->get_discovery_index_by_type(
-      static_cast<uint64_t>(atframework::component::logic_service_type::kRankSvr));
+  util::memory::strong_rc_ptr<atapp::etcd_discovery_set> index_by_type =
+      mod->get_discovery_index_by_type(static_cast<uint64_t>(atframework::component::logic_service_type::kRankSvr));
   if (!index_by_type) {
     FWLOGERROR("select_teamsvr_match get_all_nodes_of_type nullptr");
     return slave_nodes;
@@ -360,7 +363,7 @@ std::vector<uint64_t> rank_manager::get_slave_nodes(rpc::context& ctx, const PRO
     }
   }
   auto slave_node_cfg_num =
-      logic_config::me()->get_custom_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>().rank_slave_num();
+      logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>().rank_slave_num();
   if (slave_node_cfg_num <= 0) {
     slave_node_cfg_num = 1;
   }
@@ -448,7 +451,8 @@ rpc::result_code_type rank_manager::check_slave_and_highest_data_version_slave(
           protobuf_copy_message(*req_body.mutable_rank_key(), rank_key);
 
           PROJECT_NAMESPACE_ID::SSRankCheckSlaveRsp rsp_body;
-          auto ret = RPC_AWAIT_CODE_RESULT(rpc::rank_board::rank_check_slave(child_ctx, slave_node, req_body, rsp_body));
+          auto ret =
+              RPC_AWAIT_CODE_RESULT(rpc::rank_board::rank_check_slave(child_ctx, slave_node, req_body, rsp_body));
           if (ret != 0) {
             FWLOGERROR("rank_manager.check_slave_and_get_data_version invoke failed rank({}:{}:{}:{}) err:{}",
                        rank_key.rank_type(), rank_key.rank_instance_id(), rank_key.sub_rank_type(),

@@ -19,6 +19,7 @@
 // clang-format on
 
 #include <gsl/select-gsl.h>
+#include <nostd/type_traits.h>
 
 #include <config/ini_loader.h>
 #include <design_pattern/singleton.h>
@@ -50,7 +51,8 @@ class logic_config {
 #endif
 
  public:
-  using custom_config_loader_func = void (*)(atfw::atapp::app &, logic_config &);
+  using server_instance_config_ptr = atfw::util::memory::strong_rc_ptr<google::protobuf::Message>;
+  using server_instance_config_loader_func = void (*)(atfw::atapp::app &, logic_config &, server_instance_config_ptr &);
 
   SERVER_FRAME_CONFIG_API int init(uint64_t server_id, const std::string &server_name);
 
@@ -68,46 +70,46 @@ class logic_config {
   SERVER_FRAME_CONFIG_API const PROJECT_NAMESPACE_ID::DConstSettingsType &get_const_settings();
   SERVER_FRAME_CONFIG_API const atframework::ConstSettingsType &get_atframework_settings();
 
-  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_section_cfg &get_server_cfg() const noexcept {
-    return server_cfg_;
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_section_cfg &get_logic_cfg() const noexcept {
+    return logic_cfg_;
   }
-  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::config::logic_section_cfg *mutable_server_cfg() noexcept {
-    return &server_cfg_;
+  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::config::logic_section_cfg *mutable_logic_cfg() noexcept {
+    return &logic_cfg_;
   }
 
   ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_db_cfg &get_cfg_db() const noexcept {
-    return get_server_cfg().db();
+    return get_logic_cfg().db();
   }
   ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_telemetry_cfg &get_cfg_telemetry() const noexcept {
-    return get_server_cfg().telemetry();
+    return get_logic_cfg().telemetry();
   }
   ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_router_cfg &get_cfg_router() const noexcept {
-    return get_server_cfg().router();
+    return get_logic_cfg().router();
   }
   ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::config::logic_task_cfg &get_cfg_task() const noexcept {
-    return get_server_cfg().task();
+    return get_logic_cfg().task();
   }
 
-  ATFW_UTIL_FORCEINLINE void set_custom_config_loader(custom_config_loader_func loader) noexcept {
-    custom_config_loader_ = loader;
+  ATFW_UTIL_FORCEINLINE void set_server_instance_config_loader(server_instance_config_loader_func loader) noexcept {
+    server_instance_config_loader_ = loader;
   }
 
-  template <typename CustomConfigProtocol>
-  SERVER_FRAME_CONFIG_API const CustomConfigProtocol &get_custom_config() const noexcept {
-    static CustomConfigProtocol empty;
-    if (!custom_config_) {
-      return empty;
+  template <class CustomConfigProtocol, class = atfw::util::nostd::enable_if_t<
+                                            std::is_base_of<google::protobuf::Message, CustomConfigProtocol>::value>>
+  ATFW_UTIL_SYMBOL_VISIBLE const CustomConfigProtocol &get_server_instance_config() const noexcept {
+    if (!server_instance_config_data_) {
+      return CustomConfigProtocol::default_instance();
     }
-    auto config_ptr = dynamic_cast<const CustomConfigProtocol *>(custom_config_.get());
-    if (config_ptr) {
-      return *config_ptr;
-    }
-    return empty;
-  }
 
-  SERVER_FRAME_CONFIG_API atfw::util::memory::strong_rc_ptr<google::protobuf::Message> &
-  mutable_custom_config() noexcept {
-    return custom_config_;
+    if (server_instance_config_data_->GetDescriptor() == CustomConfigProtocol::descriptor()) {
+      return *static_cast<const CustomConfigProtocol *>(server_instance_config_data_.get());
+    }
+
+    if (server_instance_config_data_->GetDescriptor()->full_name() == CustomConfigProtocol::descriptor()->full_name()) {
+      return *static_cast<const CustomConfigProtocol *>(server_instance_config_data_.get());
+    }
+
+    return CustomConfigProtocol::default_instance();
   }
 
  private:
@@ -120,9 +122,9 @@ class logic_config {
   const PROJECT_NAMESPACE_ID::DConstSettingsType *const_settings_;
   const atframework::ConstSettingsType *atframe_settings_;
 
-  custom_config_loader_func custom_config_loader_;
-  atfw::util::memory::strong_rc_ptr<google::protobuf::Message> custom_config_;
+  server_instance_config_loader_func server_instance_config_loader_;
+  server_instance_config_ptr server_instance_config_data_;
 
-  PROJECT_NAMESPACE_ID::config::logic_section_cfg server_cfg_;
+  PROJECT_NAMESPACE_ID::config::logic_section_cfg logic_cfg_;
   std::string readable_app_id_;
 };

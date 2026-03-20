@@ -25,7 +25,7 @@ ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(logic_config);
 #endif
 
 SERVER_FRAME_CONFIG_API logic_config::logic_config()
-    : const_settings_(nullptr), atframe_settings_(nullptr), custom_config_loader_(nullptr) {}
+    : const_settings_(nullptr), atframe_settings_(nullptr), server_instance_config_loader_(nullptr) {}
 
 SERVER_FRAME_CONFIG_API logic_config::~logic_config() {}
 
@@ -39,8 +39,8 @@ SERVER_FRAME_CONFIG_API int logic_config::reload(atfw::atapp::app &app) {
 
   _load_server_cfg(app);
   _load_db();
-  if (custom_config_loader_) {
-    custom_config_loader_(app, *this);
+  if (server_instance_config_loader_) {
+    server_instance_config_loader_(app, *this, server_instance_config_data_);
   }
 
   readable_app_id_.clear();
@@ -103,8 +103,8 @@ SERVER_FRAME_CONFIG_API gsl::string_view logic_config::get_deployment_environmen
 }
 
 void logic_config::_load_db() {
-  _load_db_hosts(*server_cfg_.mutable_db()->mutable_cluster());
-  _load_db_hosts(*server_cfg_.mutable_db()->mutable_raw());
+  _load_db_hosts(*logic_cfg_.mutable_db()->mutable_cluster());
+  _load_db_hosts(*logic_cfg_.mutable_db()->mutable_raw());
 }
 
 void logic_config::_load_db_hosts(PROJECT_NAMESPACE_ID::config::db_group_cfg &out) {
@@ -200,18 +200,18 @@ SERVER_FRAME_CONFIG_API const atframework::ConstSettingsType &logic_config::get_
 }
 
 void logic_config::_load_server_cfg(atfw::atapp::app &app) {
-  server_cfg_.Clear();
-  app.parse_configures_into(server_cfg_, "logic", "ATAPP_LOGIC");
+  logic_cfg_.Clear();
+  app.parse_configures_into(logic_cfg_, "logic", "ATAPP_LOGIC");
 
   atfw::util::time::time_utility::update();
-  auto reload_timepoint = server_cfg_.mutable_server()->mutable_reload_timepoint();
+  auto reload_timepoint = logic_cfg_.mutable_server()->mutable_reload_timepoint();
   reload_timepoint->set_seconds(util::time::time_utility::get_sys_now());
   reload_timepoint->set_nanos(static_cast<int32_t>(util::time::time_utility::get_now_usec() * 1000));
 
   // Auto setting deployment environment, it's force limit
   /* HPA module
   do {
-    auto discovery_service = server_cfg_.mutable_logic()->mutable_discovery_selector();
+    auto discovery_service = logic_cfg_.mutable_logic()->mutable_discovery_selector();
     if (nullptr == discovery_service) {
       break;
     }
@@ -251,5 +251,5 @@ void logic_config::_load_server_cfg(atfw::atapp::app &app) {
 }
 
 SERVER_FRAME_CONFIG_API uint32_t logic_config::get_local_world_id() const noexcept {
-  return static_cast<uint32_t>(get_server_cfg().world_id());
+  return static_cast<uint32_t>(get_logic_cfg().world_id());
 }

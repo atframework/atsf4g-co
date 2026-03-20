@@ -453,7 +453,9 @@ rpc::result_code_type task_action_rank_send_settlement::settle_special_rule(rpc:
                                                                             int64_t& sub_score, int64_t& /*set_score*/,
                                                                             int32_t& score_change_type) {
   // 判断是否是特殊清理
-  if (logic_config::me()->get_custom_config<PROJECT_NAMESPACE_ID::config::ranksvr_settlement_cfg>().disable_rank_settlemnet_clear()) {
+  if (logic_config::me()
+          ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_settlement_cfg>()
+          .disable_rank_settlemnet_clear()) {
     RPC_RETURN_CODE(0);
   }
   RPC_RETURN_CODE(0);

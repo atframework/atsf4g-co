@@ -48,10 +48,11 @@ task_action_rank_update_settlement::task_action_rank_update_settlement(ctor_para
 task_action_rank_update_settlement::~task_action_rank_update_settlement() {}
 
 task_action_rank_send_settlement::result_type task_action_rank_update_settlement::operator()() {
-  uint32_t settle_loop_count =
-      logic_config::me()->get_custom_config<PROJECT_NAMESPACE_ID::config::ranksvr_settlement_cfg>().settle_loop_count();
-  if (settle_loop_count < 1 || settle_loop_count > logic_config::me()->get_server_cfg().rank().query_max_count()) {
-    settle_loop_count = logic_config::me()->get_server_cfg().rank().query_max_count();
+  uint32_t settle_loop_count = logic_config::me()
+                                   ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_settlement_cfg>()
+                                   .settle_loop_count();
+  if (settle_loop_count < 1 || settle_loop_count > logic_config::me()->get_logic_cfg().rank().query_max_count()) {
+    settle_loop_count = logic_config::me()->get_logic_cfg().rank().query_max_count();
   }
 
   // lock configure group, configure may be reload during settlement
@@ -92,7 +93,9 @@ int task_action_rank_update_settlement::on_complete() {
             std::chrono::duration_cast<std::chrono::milliseconds>(end_timepoint - start_timepoint_).count());
 
   std::chrono::system_clock::duration update_offset = task_manager::make_timeout_duration(
-      logic_config::me()->get_custom_config<PROJECT_NAMESPACE_ID::config::ranksvr_settlement_cfg>().settle_interval());
+      logic_config::me()
+          ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_settlement_cfg>()
+          .settle_interval());
   if (update_offset <= update_offset.zero()) {
     update_offset = task_manager::make_timeout_duration(logic_config::me()->get_cfg_task().nomsg().timeout());
   }

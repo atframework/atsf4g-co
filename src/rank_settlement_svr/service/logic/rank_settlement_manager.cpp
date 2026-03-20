@@ -20,8 +20,10 @@ rank_settlement_manager::rank_settlement_manager()
     : is_exiting_(false), next_update_timepoint_(std::chrono::system_clock::from_time_t(0)) {}
 
 int rank_settlement_manager::init() {
-  std::chrono::system_clock::duration update_offset =
-      task_manager::make_timeout_duration(logic_config::me()->get_custom_config<PROJECT_NAMESPACE_ID::config::ranksvr_settlement_cfg>().settle_interval());
+  std::chrono::system_clock::duration update_offset = task_manager::make_timeout_duration(
+      logic_config::me()
+          ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_settlement_cfg>()
+          .settle_interval());
 
   if (update_offset <= std::chrono::system_clock::duration::zero()) {
     update_offset = task_manager::make_timeout_duration(logic_config::me()->get_cfg_task().nomsg().timeout());

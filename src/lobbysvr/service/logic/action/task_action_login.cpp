@@ -1,5 +1,4 @@
-// Copyright 2021 atframework
-// @brief Created by owent with generate-for-pb.py at 2021-11-14 20:57:03
+// Copyright 2026 atframework
 
 #include "logic/action/task_action_login.h"
 
@@ -31,11 +30,14 @@
 #include <router/router_player_manager.h>
 
 #include <dispatcher/task_manager.h>
+#include <utility/protobuf_mini_dumper.h>
 
 #include <memory>
 #include <string>
 
 #include "logic/action/task_action_player_async_jobs.h"
+#include "protocol/pbdesc/com.const.pb.h"
+#include "rpc/rpc_context.h"
 
 GAMECLIENT_RPC_API task_action_login::task_action_login(dispatcher_start_data_type&& param)
     : base_type(std::move(param)), is_new_player_(false) {}
@@ -88,8 +90,9 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
     }
   }
 
-  if (user && user->get_login_lock().login_code() == req_body.login_code() &&
-      atfw::util::time::time_utility::get_sys_now() <= static_cast<time_t>(user->get_login_lock().login_expired()) &&
+  if (user && user->get_login_lock().access_token_code() == req_body.login_code() &&
+      atfw::util::time::time_utility::sys_now() <=
+          protobuf_to_system_clock(user->get_login_lock().access_token_expired()) &&
       user->is_writable()) {
     RPC_AWAIT_IGNORE_RESULT(replace_session(user));
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -103,6 +106,26 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
   // 如果有缓存要强制失效，因为可能其他地方登入了，这时候也不能复用缓存
   RPC_AWAIT_IGNORE_RESULT(player_manager::me()->remove(get_shared_context(), req_body.user_id(), zone_id, true));
   user.reset();
+
+  // 拉取或login_auth表，查询授权信息
+  rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> login_auth_tb{get_shared_context()};
+  uint64_t login_auth_cas_version = 0;
+
+  res = RPC_AWAIT_CODE_RESULT(
+      rpc::db::login_auth::get_all(get_shared_context(), req_body.open_id(), login_auth_tb, login_auth_cas_version));
+  if (res < 0) {
+    if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
+      FCTXLOGERROR(get_shared_context(), "user {} try to get login auth table failed when login", req_body.user_id());
+      set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_USER_NOT_FOUND);
+    }
+    RPC_RETURN_CODE(res);
+  }
+  if (login_auth_tb->user_id() != req_body.user_id()) {
+    FCTXLOGWARNING(get_shared_context(), "user {} open_id {} login auth table user_id mismatch, maybe open_id reused",
+                   req_body.user_id(), req_body.open_id());
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_USER_NOT_FOUND);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
 
   // 拉取或创建last login表，查询禁止登入和踢出之前的session
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> login_lock_tb{get_shared_context()};
@@ -129,23 +152,29 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
     TASK_ACTION_RETURN_CODE(res);
   }
 
-  // 2. 校验登入码 TODO 从另一个非LoginLock表拿到LoginCode并校验
-  // if (util::time::time_utility::get_sys_now() > tb->login_expired()) {
-  //   FCTXLOGERROR(get_shared_context(), "player {}({}:{}) login code expired", req_body.open_id(), zone_id,
-  //                req_body.user_id());
-  //   set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
-  //   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
-  // }
+  // 2. 校验登入码，优先使用login_lock里经过续期的老code
+  if (login_lock_tb->access_token_code() == req_body.login_code() &&
+      atfw::util::time::time_utility::sys_now() <= protobuf_to_system_clock(login_lock_tb->access_token_expired())) {
+    FCTXLOGDEBUG(get_shared_context(), "user {}:{} use access_token in login_lock table", zone_id, req_body.user_id());
+  } else {
+    if (util::time::time_utility::sys_now() > protobuf_to_system_clock(login_auth_tb->access_token_expired())) {
+      FCTXLOGERROR(get_shared_context(), "user {}({}:{}) login code expired", req_body.open_id(), zone_id,
+                   req_body.user_id());
+      set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
+      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    }
 
-  // if (0 != UTIL_STRFUNC_STRCMP(req_body.login_code().c_str(), tb->login_code().c_str())) {
-  //   FCTXLOGERROR(get_shared_context(), "player {}({}:{}) login code error(expected: {}, real: {})",
-  //   req_body.open_id(),
-  //                zone_id, req_body.user_id(), tb->login_code(), req_body.login_code());
-  //   set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
-  //   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
-  // }
+    if (0 != UTIL_STRFUNC_STRCMP(req_body.login_code().c_str(), login_auth_tb->access_token_code().c_str())) {
+      FCTXLOGERROR(get_shared_context(), "user {}({}:{}) login code error(expected: {}, real: {})", req_body.open_id(),
+                   zone_id, req_body.user_id(), login_auth_tb->access_token_code(), req_body.login_code());
+      set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
+      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    }
 
-  login_lock_tb->set_login_code(req_body.login_code());
+    FCTXLOGDEBUG(get_shared_context(), "user {}:{} use access_token in login_auth table", zone_id, req_body.user_id());
+    login_lock_tb->set_access_token_code(login_auth_tb->access_token_code());
+    protobuf_copy_message(*login_lock_tb->mutable_access_token_expired(), login_auth_tb->access_token_expired());
+  }
 
   // 3. 写入登入信息和登入信息续期会在路由系统中完成
   res = RPC_AWAIT_CODE_RESULT(player_manager::me()->create_as<player>(get_shared_context(), req_body.user_id(), zone_id,
@@ -199,7 +228,7 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
 GAMECLIENT_RPC_API int task_action_login::on_success() {
   const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
-  rsp_body.set_heartbeat_interval(logic_config::me()->get_server_cfg().heartbeat().interval().seconds());
+  rsp_body.set_heartbeat_interval(logic_config::me()->get_logic_cfg().heartbeat().interval().seconds());
   rsp_body.set_is_new_player(is_new_player_);
 
   std::shared_ptr<session> s = get_session();

@@ -10,4 +10,16 @@ authsvr:
   end_time: 0                                        # service end time
   # white_openid_list:                               # white openid list, can ignore start time and end time
   lobbysvr:
-    relogin_expire: 7200                             # relogin to the same gamesvr in 2 hours relogin
+    router:
+      type_id: 12
+      type_name: lobbysvr
+      policy: hash # random/round_robin/hash
+      # policy_selector:
+      #   api_version: apps/v1
+      #   kind: StatefulSet
+      #   name: authsvr
+      #   namespace_name: hello
+      #   service_subset: ""
+      #   labels:
+      #     district: cn
+    relogin_expire: 14400                             # relogin to the same gamesvr in 4 hours relogin

@@ -57,7 +57,7 @@ message logic_user_cfg {
 
 message logic_session_cfg {
   google.protobuf.Duration login_code_protect = 101 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "20m" }];
-  google.protobuf.Duration login_code_valid_sec = 102
+  google.protobuf.Duration login_code_valid_duration = 102
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10m" }];
   google.protobuf.Duration login_ban_time = 103 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3h" }];
   google.protobuf.Duration tick_sec = 104 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" }];

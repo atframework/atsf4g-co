@@ -185,8 +185,9 @@ SERVER_FRAME_API rpc::result_code_type router_player_cache::pull_object(rpc::con
   PROJECT_NAMESPACE_ID::table_login_lock &login_blob_data = obj->get_login_lock();
 
   // 更新登录锁信息
-  login_blob_data.set_login_expired(atfw::util::time::time_utility::get_sys_now() +
-                                    logic_config::me()->get_server_cfg().session().login_code_valid_sec().seconds());
+  login_blob_data.mutable_access_token_expired()->set_seconds(
+      static_cast<int64_t>(atfw::util::time::time_utility::get_sys_now()) +
+      logic_config::me()->get_logic_cfg().session().login_code_valid_duration().seconds());
   login_blob_data.set_login_zone_id(get_key().zone_id);
 
   uint64_t old_router_server_id = login_blob_data.router_server_id();

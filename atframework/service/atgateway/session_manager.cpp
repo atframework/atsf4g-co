@@ -558,9 +558,12 @@ int session_manager::active_session(session::ptr_t sess) {
     close(sess->get_id(), static_cast<int>(close_reason_t::kKickoff), 0, "kickoff");
   }
 
-  int ret = sess->send_new_session();
-  if (ret < 0) {
-    return ret;
+  // echo server 模式不需要路由通知
+  if (!get_conf().origin_conf.echo_server()) {
+    int ret = sess->send_new_session();
+    if (ret < 0) {
+      return ret;
+    }
   }
 
   actived_sessions_[sess->get_id()] = sess;

@@ -1,5 +1,20 @@
-
 atgateway:
+  default_router:
+    # 默认不设置路由目标
+    # node_id: 0
+    # node_name: ""
+    type_id: 11
+    type_name: "authsvr"
+    policy: hash # random/round_robin/hash
+    # policy_selector:
+    #   api_version: apps/v1
+    #   kind: StatefulSet
+    #   name: authsvr
+    #   namespace_name: hello
+    #   service_subset: ""
+    #   labels:
+    #     district: cn
+
   crypto:
     compression_algorithms:
       - "zstd"

@@ -186,7 +186,7 @@ SERVER_FRAME_API void session::set_player(std::shared_ptr<player_cache> u) noexc
     cached_user_id_ = u->get_user_id();
   }
 
-  if (u && logic_config::me()->get_server_cfg().session().enable_actor_log()) {
+  if (u && logic_config::me()->get_logic_cfg().session().enable_actor_log()) {
     create_actor_log_writter();
   }
 }
@@ -450,8 +450,8 @@ SERVER_FRAME_API void session::alloc_session_sequence(atframework::CSMsg &msg) {
 }
 
 void session::create_actor_log_writter() {
-  if (!actor_log_writter_ && logic_config::me()->get_server_cfg().session().actor_log_size() > 0 &&
-      logic_config::me()->get_server_cfg().session().actor_log_rotate() > 0) {
+  if (!actor_log_writter_ && logic_config::me()->get_logic_cfg().session().actor_log_size() > 0 &&
+      logic_config::me()->get_logic_cfg().session().actor_log_rotate() > 0) {
     actor_log_writter_ = atfw::util::log::log_wrapper::create_user_logger();
     if (actor_log_writter_) {
       actor_log_writter_->init(util::log::log_level::kInfo);
@@ -460,16 +460,16 @@ void session::create_actor_log_writter() {
 
       std::stringstream ss_path;
       std::stringstream ss_alias;
-      ss_path << logic_config::me()->get_server_cfg().server().log_path() << "/cs-actor/%Y-%m-%d/" << cached_user_id_
+      ss_path << logic_config::me()->get_logic_cfg().server().log_path() << "/cs-actor/%Y-%m-%d/" << cached_user_id_
               << ".%N.log";
-      ss_alias << logic_config::me()->get_server_cfg().server().log_path() << "/cs-actor/%Y-%m-%d/" << cached_user_id_
+      ss_alias << logic_config::me()->get_logic_cfg().server().log_path() << "/cs-actor/%Y-%m-%d/" << cached_user_id_
                << ".log";
       atfw::util::log::log_sink_file_backend file_sink(ss_path.str());
       file_sink.set_writing_alias_pattern(ss_alias.str());
       file_sink.set_flush_interval(1);  // flush every 1 second
-      file_sink.set_max_file_size(logic_config::me()->get_server_cfg().session().actor_log_size());
+      file_sink.set_max_file_size(logic_config::me()->get_logic_cfg().session().actor_log_size());
       file_sink.set_rotate_size(
-          static_cast<uint32_t>(logic_config::me()->get_server_cfg().session().actor_log_rotate()));
+          static_cast<uint32_t>(logic_config::me()->get_logic_cfg().session().actor_log_rotate()));
       actor_log_writter_->add_sink(file_sink);
 
       atfw::util::log::log_wrapper::caller_info_t caller = WDTLOGFILENF(atfw::util::log::log_level::kInfo, {});
@@ -478,7 +478,7 @@ void session::create_actor_log_writter() {
     }
   }
 
-  if (!actor_log_otel_ && logic_config::me()->get_server_cfg().session().enable_actor_otel_log()) {
+  if (!actor_log_otel_ && logic_config::me()->get_logic_cfg().session().enable_actor_otel_log()) {
     auto telemetry_group =
         rpc::telemetry::global_service::get_group(rpc::telemetry::semantic_conventions::kGroupNameCsActor);
     if (telemetry_group) {
@@ -502,7 +502,6 @@ SERVER_FRAME_API void session::login_init(const atframework::CSMsg &login_task_m
   login_task_head_timestamp_ = login_task_msg.head().timestamp();
   login_server_time_ = util::time::time_utility::get_now();
 }
-
 
 SERVER_FRAME_API bool session::login_protect(time_t timestamp) const {
   if (login_server_time_ + util::time::time_utility::MINITE_SECONDS < util::time::time_utility::get_now()) {

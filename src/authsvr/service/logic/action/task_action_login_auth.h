@@ -4,12 +4,12 @@
 #pragma once
 
 #include <dispatcher/task_action_cs_req_base.h>
+#include "nostd/string_view.h"
 
-class task_action_login_auth : public task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSLoginAuthReq,
-                                                              PROJECT_NAMESPACE_ID::SCLoginAuthRsp> {
+class task_action_login_auth
+    : public task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSLoginAuthReq, PROJECT_NAMESPACE_ID::SCLoginAuthRsp> {
  public:
-  using base_type = task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSLoginAuthReq,
-                                            PROJECT_NAMESPACE_ID::SCLoginAuthRsp>;
+  using base_type = task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSLoginAuthReq, PROJECT_NAMESPACE_ID::SCLoginAuthRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;
@@ -28,4 +28,8 @@ class task_action_login_auth : public task_action_cs_rpc_base<PROJECT_NAMESPACE_
 
   int on_success() override;
   int on_failed() override;
+
+ private:
+  result_type select_router_server_id(atfw::util::nostd::string_view openid, uint64_t user_id,
+                                      uint64_t& router_server_id);
 };

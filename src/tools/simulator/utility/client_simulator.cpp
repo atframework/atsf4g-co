@@ -192,7 +192,13 @@ const atframework::ConstSettingsType &client_simulator::get_atframework_settings
   return ret;
 }
 
-client_simulator *client_simulator::cast(simulator_base *b) { return dynamic_cast<client_simulator *>(b); }
+client_simulator *client_simulator::cast(simulator_base *b) {
+#if defined(ATFRAMEWORK_UTILS_ENABLE_RTTI) && ATFRAMEWORK_UTILS_ENABLE_RTTI
+  return dynamic_cast<client_simulator *>(b);
+#else
+  return static_cast<client_simulator *>(b);
+#endif
+}
 
 client_simulator::cmd_sender_t &client_simulator::get_cmd_sender(util::cli::callback_param params) {
   return *reinterpret_cast<cmd_sender_t *>(params.get_ext_param());

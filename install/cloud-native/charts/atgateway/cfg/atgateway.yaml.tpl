@@ -23,26 +23,9 @@ atgateway:
       type_name: {{ .Values.atgateway.default_router.type_name }}
     {{- end }}
 
-    {{- if .Values.atgateway.crypto }}
+    {{- with (dig "crypto" false .Values.atgateway ) }}
     crypto:
-      access_tokens:
-      {{- range $_, $access_token := .Values.atgateway.crypto.access_tokens }}
-        - {{ $access_token }}
-      {{- end }}
-      update_interval: {{ .Values.atgateway.crypto.update_interval }}
-      key_exchange: {{ .Values.atgateway.crypto.key_exchange }}
-      algorithms:
-      {{- range $_, $algorithm := .Values.atgateway.crypto.algorithms }}
-        - {{ $algorithm }}
-      {{- end }}
-      compression_algorithms:
-      {{- range $_, $compression_algorithm := .Values.atgateway.crypto.compression_algorithms }}
-        - {{ $compression_algorithm }}
-      {{- end }}
-      kdf_algorithms:
-      {{- range $_, $kdf_algorithm := .Values.atgateway.crypto.kdf_algorithms }}
-        - {{ $kdf_algorithm }}
-      {{- end }}
+      {{- toYaml . | trim | nindent 6 }}
     {{- end }}
 
   echo_server: {{ .Values.atgateway.echo_server }}

@@ -14,7 +14,7 @@ import "google/protobuf/timestamp.proto";
 import "atframe/atapp_conf.proto";
 
 enum authsvr_router_policy {
-  EN_AUTHSVR_ROUTER_POLICY_RANDOM = 0 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name:  "random" }];
+  EN_AUTHSVR_ROUTER_POLICY_RANDOM = 0 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "random" }];
   EN_AUTHSVR_ROUTER_POLICY_ROUND_ROBIN = 1 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "round_robin" }];
   EN_AUTHSVR_ROUTER_POLICY_HASH = 2 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "hash" }];
 }
@@ -40,11 +40,10 @@ message authsvr_cfg {
 
   repeated string white_openid_list = 21;
 
-  message lobbysvr_ingress_cfg {
+  message backend_ingress_cfg {
     authsvr_router_cfg router = 1;
     google.protobuf.Duration relogin_expire = 2
-        [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3600s" min_value: "1" }];
+        [(atframework.atapp.protocol.CONFIGURE) = { default_value: "14400s" min_value: "1" }];
   }
-  lobbysvr_ingress_cfg lobbysvr = 31;
+  backend_ingress_cfg backend = 31;
 }
-

@@ -42,7 +42,7 @@ SERVER_FRAME_CONFIG_API excel_config_block_report_t::~excel_config_block_report_
 static bool excel_config_callback_get_buffer(std::string& out, const char* path) {
   char file_path[util::file_system::MAX_PATH_LEN + 1];
   int res = UTIL_STRFUNC_SNPRINTF(file_path, sizeof(file_path) - 1, "%s%c%s",
-                                  logic_config::me()->get_server_cfg().excel().bindir().c_str(),
+                                  logic_config::me()->get_logic_cfg().excel().bindir().c_str(),
                                   atfw::util::file_system::DIRECTORY_SEPARATOR, path);
   if (res > 0 && static_cast<size_t>(res) < atfw::util::file_system::MAX_PATH_LEN) {
     file_path[res] = 0;
@@ -60,7 +60,7 @@ static bool excel_config_callback_get_buffer(std::string& out, const char* path)
 static bool excel_config_callback_get_version(std::string& out) {
   char file_path[util::file_system::MAX_PATH_LEN + 1];
   int res = UTIL_STRFUNC_SNPRINTF(file_path, sizeof(file_path) - 1, "%s%c%s",
-                                  logic_config::me()->get_server_cfg().excel().bindir().c_str(),
+                                  logic_config::me()->get_logic_cfg().excel().bindir().c_str(),
                                   atfw::util::file_system::DIRECTORY_SEPARATOR, "version.txt");
   if (res > 0 && static_cast<size_t>(res) < atfw::util::file_system::MAX_PATH_LEN) {
     file_path[res] = 0;
@@ -134,7 +134,7 @@ SERVER_FRAME_CONFIG_API int excel_config_wrapper_reload_all(bool is_init) {
     return 0;
   }
 
-  if (logic_config::me()->get_server_cfg().excel().enable()) {
+  if (logic_config::me()->get_logic_cfg().excel().enable()) {
     if (!details::g_excel_config_manager_inited) {
       int res = ::excel::config_manager::me()->init(false);
       if (res < 0) {
@@ -165,8 +165,8 @@ SERVER_FRAME_CONFIG_API int excel_config_wrapper_reload_all(bool is_init) {
     }
 
     excel::config_manager::me()->set_override_same_version(
-        logic_config::me()->get_server_cfg().excel().override_same_version());
-    excel::config_manager::me()->set_group_number(logic_config::me()->get_server_cfg().excel().group_number());
+        logic_config::me()->get_logic_cfg().excel().override_same_version());
+    excel::config_manager::me()->set_group_number(logic_config::me()->get_logic_cfg().excel().group_number());
     excel::config_manager::me()->set_on_not_found(
         [](const excel::config_manager::on_not_found_event_data_t& /*evt_data*/) {
           if (details::g_excel_reporter_blocker.load() > 0) {

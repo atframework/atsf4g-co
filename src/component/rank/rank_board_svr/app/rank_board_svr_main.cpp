@@ -76,11 +76,12 @@ int main(int argc, char *argv[]) {
     atfw::util::log::log_formatter::set_project_directory(proj_dir.c_str(), proj_dir.size());
   }
 
-  logic_config::me()->set_custom_config_loader([](atfw::atapp::app &app, logic_config &cfg) {
-    auto config_ptr = atfw::util::memory::make_strong_rc<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>();
-    app.parse_configures_into(*config_ptr, "ranksvr-ranking");
-    cfg.mutable_custom_config() = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);
-  });
+  logic_config::me()->set_server_instance_config_loader(
+      [](atfw::atapp::app &app, logic_config & /*cfg*/, logic_config::server_instance_config_ptr &to) {
+        auto config_ptr = atfw::util::memory::make_strong_rc<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>();
+        app.parse_configures_into(*config_ptr, "ranksvr-ranking");
+        to = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);
+      });
 
   logic_server_common_module_configure logic_mod_conf;
   if (logic_server_setup_common(app, logic_mod_conf) < 0) {

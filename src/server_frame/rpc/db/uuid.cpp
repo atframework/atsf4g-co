@@ -35,16 +35,19 @@
 #include <unordered_map>
 #include <utility>
 
+#include "config/compile_optimize.h"
+#include "rpc/db/global_db_interface.h"
 #include "rpc/rpc_async_invoke.h"
 #include "rpc/rpc_utils.h"
-#include "rpc/db/global_db_interface.h"
 
 namespace rpc {
 namespace db {
 namespace uuid {
-namespace detail {
-struct short_uuid_encoder {
+namespace {
+struct ATFW_UTIL_SYMBOL_LOCAL short_uuid_encoder {
   constexpr static const size_t kKeyLength = 36;
+
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
   short_uuid_encoder() {
     // 有些外部平台不区分大小写，为了通用改成不区分大小写的混淆表
     // memcpy(keys, "M7Vy1DQnIj93B2kNPJCRxuoTYhvSpOgstKaZ0lrH8WmGdcXLbzeqwUE5F4i6Af", 62);
@@ -53,12 +56,13 @@ struct short_uuid_encoder {
 
   atfw::util::lock::seq_alloc_u32 seq_;
   char keys[kKeyLength];
+
   size_t operator()(char *in, size_t insz, uint64_t val) {
-    if (insz == 0 || NULL == in) {
+    if (insz == 0 || nullptr == in) {
       return 0;
     }
 
-    size_t ret;
+    size_t ret = 0;
     for (ret = 1; val > 0 && ret < insz; ++ret) {
       in[ret] = keys[val % kKeyLength];
       val /= kKeyLength;
@@ -82,23 +86,25 @@ struct short_uuid_encoder {
     return (*this)(in, insz, v);
   }
 };
-static short_uuid_encoder short_uuid_encoder_;
-}  // namespace detail
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+static short_uuid_encoder g_short_uuid_encoder_;
+}  // namespace
 
 SERVER_FRAME_API std::string generate_standard_uuid(bool remove_minus, standard_uuid_type type) {
   if (type == standard_uuid_type::kV1) {
     return atfw::util::random::uuid_generator::generate_string_time(remove_minus);
-  } else {
-    return atfw::util::random::uuid_generator::generate_string_random(remove_minus);
   }
+
+  return atfw::util::random::uuid_generator::generate_string_random(remove_minus);
 }
 
 SERVER_FRAME_API std::string generate_standard_uuid_binary(standard_uuid_type type) {
   if (type == standard_uuid_type::kV1) {
     return atfw::util::random::uuid_generator::uuid_to_binary(util::random::uuid_generator::generate_time());
-  } else {
-    return atfw::util::random::uuid_generator::uuid_to_binary(util::random::uuid_generator::generate_random());
   }
+
+  return atfw::util::random::uuid_generator::uuid_to_binary(util::random::uuid_generator::generate_random());
 }
 
 SERVER_FRAME_API std::string generate_short_uuid() {
@@ -111,10 +117,10 @@ SERVER_FRAME_API std::string generate_short_uuid() {
   // 第二个字符表示版本号，以便后续变更算法可以和之前区分开来
   char bin_buffer[64] = {'S', '1', 0};
   size_t start_index = 2;
-  start_index += detail::short_uuid_encoder_(&bin_buffer[start_index], sizeof(bin_buffer) - start_index - 1, node_id);
-  start_index += detail::short_uuid_encoder_(&bin_buffer[start_index], sizeof(bin_buffer) - start_index - 1,
-                                             time_param > 0 ? static_cast<uint64_t>(time_param) : 0);
-  start_index += detail::short_uuid_encoder_(&bin_buffer[start_index], sizeof(bin_buffer) - start_index - 1);
+  start_index += g_short_uuid_encoder_(&bin_buffer[start_index], sizeof(bin_buffer) - start_index - 1, node_id);
+  start_index += g_short_uuid_encoder_(&bin_buffer[start_index], sizeof(bin_buffer) - start_index - 1,
+                                       time_param > 0 ? static_cast<uint64_t>(time_param) : 0);
+  start_index += g_short_uuid_encoder_(&bin_buffer[start_index], sizeof(bin_buffer) - start_index - 1);
   bin_buffer[start_index] = 0;
 
   return bin_buffer;
@@ -124,7 +130,8 @@ SERVER_FRAME_API rpc_result<int64_t> generate_global_increase_id(rpc::context &c
                                                                  uint32_t minor_type, uint32_t patch_type) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("{}", "this function should be called in task");
   uint64_t inc_value = 0;
-  auto ret = RPC_AWAIT_CODE_RESULT(::rpc::db::uuid_allocator::inc_field_auto_inc_id(ctx, major_type, minor_type, patch_type, inc_value));
+  auto ret = RPC_AWAIT_CODE_RESULT(
+      ::rpc::db::uuid_allocator::inc_field_auto_inc_id(ctx, major_type, minor_type, patch_type, inc_value));
   if (ret < 0) {
     RPC_RETURN_CODE(ret);
   }
@@ -241,7 +248,7 @@ struct unique_id_container_waker {
                                                 task_type_trait::task_type task) {
     dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
     await_options.sequence = task_type_trait::get_task_id(task);
-    await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_server_cfg().task().csmsg().timeout(),
+    await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic_cfg().task().csmsg().timeout(),
                                                           std::chrono::seconds{6});
 
     // Append to wake list and then custom_wait to switch out

@@ -53,18 +53,20 @@ RANK_LOGIC_SDK_API bool logic_rank_is_global_rank(const PROJECT_NAMESPACE_ID::co
 RANK_LOGIC_SDK_API uint32_t
 logic_rank_get_global_rank_shared_zone_id(const PROJECT_NAMESPACE_ID::config::ExcelRankRule& cfg) noexcept {
   if (cfg.content().shared_zone_id() > 0) {
-    return cfg.content().shared_zone_id() + logic_config::me()->get_server_cfg().rank().shared_zone_id_offset();
+    return cfg.content().shared_zone_id() + logic_config::me()->get_logic_cfg().rank().shared_zone_id_offset();
   }
 
   return 0;
 }
 
-RANK_LOGIC_SDK_API bool logic_rank_has_rank_daily_reward(const PROJECT_NAMESPACE_ID::config::ExcelRankRule& cfg) noexcept {
+RANK_LOGIC_SDK_API bool logic_rank_has_rank_daily_reward(
+    const PROJECT_NAMESPACE_ID::config::ExcelRankRule& cfg) noexcept {
   return logic_rank_has_rank_reward(cfg.content().daily_settlement().rank_reward_pool_id(),
                                     cfg.content().daily_settlement().reward_type());
 }
 
-RANK_LOGIC_SDK_API bool logic_rank_has_rank_custom_reward(const PROJECT_NAMESPACE_ID::config::ExcelRankRule& cfg) noexcept {
+RANK_LOGIC_SDK_API bool logic_rank_has_rank_custom_reward(
+    const PROJECT_NAMESPACE_ID::config::ExcelRankRule& cfg) noexcept {
   return logic_rank_has_rank_reward(cfg.content().custom_settlement().rank_reward_pool_id(),
                                     cfg.content().custom_settlement().reward_type());
 }
@@ -73,8 +75,8 @@ bool logic_rank_has_rank_reward(int32_t reward_pool_id, PROJECT_NAMESPACE_ID::En
   return reward_pool_id != 0 && reward_type != PROJECT_NAMESPACE_ID::EN_RANK_PREWARD_TYPE_NONE;
 }
 
-RANK_LOGIC_SDK_API time_t logic_rank_get_current_settlement_daily_id(const PROJECT_NAMESPACE_ID::config::ExcelRankRule& incfg,
-                                                               time_t now) {
+RANK_LOGIC_SDK_API time_t
+logic_rank_get_current_settlement_daily_id(const PROJECT_NAMESPACE_ID::config::ExcelRankRule& incfg, time_t now) {
   return logic_datetime_cache_get_day_id(now, incfg.content().settlement_time_offset().seconds());
 }
 
@@ -131,7 +133,7 @@ RANK_LOGIC_SDK_API std::pair<time_t, time_t> logic_rank_get_final_settlement_cus
 }
 
 RANK_LOGIC_SDK_API logic_rank_open_period_t logic_rank_get_rank_daily_valid_period(const logic_rank_rule_cfg_t& cfg,
-                                                                             time_t now) {
+                                                                                   time_t now) {
   logic_rank_open_period_t ret;
 
   // 至少要从配置的开始时间开始
@@ -193,7 +195,7 @@ RANK_LOGIC_SDK_API logic_rank_open_period_t logic_rank_get_rank_daily_valid_peri
 }
 
 RANK_LOGIC_SDK_API logic_rank_open_period_t logic_rank_get_rank_custom_valid_period(const logic_rank_rule_cfg_t& cfg,
-                                                                              time_t now) {
+                                                                                    time_t now) {
   logic_rank_open_period_t ret;
   if (cfg.content().custom_settlement().interval_days() > 0) {
     // 至少要从配置的开始时间开始
@@ -496,14 +498,14 @@ RANK_LOGIC_SDK_API uint32_t logic_rank_elo_get_ea(uint32_t ra, uint32_t rb, uint
 }
 
 RANK_LOGIC_SDK_API uint32_t logic_rank_elo_get_winner_score(uint32_t winner_score, uint32_t loser_socre, uint32_t k,
-                                                      uint32_t rating_point) {
+                                                            uint32_t rating_point) {
   return logic_rank_elo_get_ea(winner_score, loser_socre, k, rating_point);
 }
 
 RANK_LOGIC_SDK_API uint32_t logic_rank_elo_get_winner_score(const PROJECT_NAMESPACE_ID::DRankRuleContent& cfg,
-                                                      uint32_t winner_score, uint32_t winner_rank_no,
-                                                      uint32_t loser_socre,
-                                                      ATFW_EXPLICIT_UNUSED_ATTR uint32_t loser_rank_no) {
+                                                            uint32_t winner_score, uint32_t winner_rank_no,
+                                                            uint32_t loser_socre,
+                                                            ATFW_EXPLICIT_UNUSED_ATTR uint32_t loser_rank_no) {
   uint32_t elo_k = 0;
   uint32_t elo_rating_point = kEloDefaultRatingPoint;
 
@@ -537,7 +539,7 @@ RANK_LOGIC_SDK_API uint32_t logic_rank_elo_get_winner_score(const PROJECT_NAMESP
 }
 
 RANK_LOGIC_SDK_API uint32_t logic_rank_elo_get_loser_score(uint32_t winner_score, uint32_t loser_socre, uint32_t k,
-                                                     uint32_t rating_point) {
+                                                           uint32_t rating_point) {
   uint32_t s = logic_rank_elo_get_ea(loser_socre, winner_score, k, rating_point);
   if (s > k) {
     return 0;
@@ -546,9 +548,9 @@ RANK_LOGIC_SDK_API uint32_t logic_rank_elo_get_loser_score(uint32_t winner_score
 }
 
 RANK_LOGIC_SDK_API uint32_t logic_rank_elo_get_loser_score(const PROJECT_NAMESPACE_ID::DRankRuleContent& cfg,
-                                                     uint32_t winner_score,
-                                                     ATFW_EXPLICIT_UNUSED_ATTR uint32_t winner_rank_no,
-                                                     uint32_t loser_socre, uint32_t loser_rank_no) {
+                                                           uint32_t winner_score,
+                                                           ATFW_EXPLICIT_UNUSED_ATTR uint32_t winner_rank_no,
+                                                           uint32_t loser_socre, uint32_t loser_rank_no) {
   uint32_t elo_k = 0;
   uint32_t elo_rating_point = kEloDefaultRatingPoint;
 

@@ -65,7 +65,7 @@ user_rank_manager::user_rank_manager(player &owner)
 
 user_rank_manager::~user_rank_manager() {}
 
-rpc::result_code_type user_rank_manager::create_init(ATFW_EXPLICIT_UNUSED_ATTR rpc::context & ctx) {
+rpc::result_code_type user_rank_manager::create_init(ATFW_EXPLICIT_UNUSED_ATTR rpc::context &ctx) {
   RPC_RETURN_CODE(0);
 }
 
@@ -104,7 +104,10 @@ void user_rank_manager::refresh_feature_limit_second(rpc::context &ctx) {
     }
 
     next_auto_update_score_timepoint_ =
-        now + logic_config::me()->get_custom_config<PROJECT_NAMESPACE_ID::config::lobbysvr_cfg>().rank_auto_update_interval().seconds();
+        now + logic_config::me()
+                  ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::lobbysvr_cfg>()
+                  .rank_auto_update_interval()
+                  .seconds();
     // 不能少于30秒
     if (next_auto_update_score_timepoint_ < now + 30) {
       next_auto_update_score_timepoint_ = now + 30;
@@ -207,7 +210,7 @@ void user_rank_manager::try_start_io_task(rpc::context &ctx) {
     return;
   }
   io_task_next_timepoint_ = 0;
-  time_t protected_timeout = logic_config::me()->get_server_cfg().user().async_job().interval().seconds();
+  time_t protected_timeout = logic_config::me()->get_logic_cfg().user().async_job().interval().seconds();
   if (protected_timeout <= 0) {
     protected_timeout = 10;
   }
@@ -558,7 +561,6 @@ rpc::result_code_type user_rank_manager::get_top_rank(
     google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DRankUserBasicData> &response,
     ATFW_EXPLICIT_UNUSED_ATTR uint32_t &total_count, uint32_t from_rank_no, uint32_t rank_count,
     ATFW_EXPLICIT_UNUSED_ATTR bool ignore_zero, bool allow_submit_local) {
-
   if (PROJECT_NAMESPACE_ID::EN_RANK_LOGIC_TYPE_INVALID == rank_key.get_rank_type() ||
       !PROJECT_NAMESPACE_ID::EnRankLogicType_IsValid(static_cast<int>(rank_key.get_rank_type()))) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
@@ -636,7 +638,6 @@ rpc::result_code_type user_rank_manager::get_special_top_rank(
     const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key,
     google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DRankUserBasicData> &response,
     ATFW_EXPLICIT_UNUSED_ATTR uint32_t &total_count, uint32_t up_count, uint32_t down_count, bool allow_submit_local) {
-
   if (PROJECT_NAMESPACE_ID::EN_RANK_LOGIC_TYPE_INVALID == rank_key.get_rank_type() ||
       !PROJECT_NAMESPACE_ID::EnRankLogicType_IsValid(static_cast<int>(rank_key.get_rank_type()))) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);

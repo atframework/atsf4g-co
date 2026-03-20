@@ -243,7 +243,7 @@ static rpc::result_code_type task_action_ss_action_forward_rpc(rpc::context &ctx
                                                                atframework::SSMsg &forward_response) {
   const atframework::SSMsgHead &request_head = request_message.head();
   if (request_head.has_rpc_forward() &&
-      request_head.rpc_forward().ttl() >= logic_config::me()->get_server_cfg().router().transfer_max_ttl()) {
+      request_head.rpc_forward().ttl() >= logic_config::me()->get_logic_cfg().router().transfer_max_ttl()) {
     ok = false;
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_TTL_EXTEND);
   }
@@ -295,11 +295,11 @@ static rpc::result_code_type task_action_ss_action_forward_rpc(rpc::context &ctx
     if (nullptr != method && method->options().HasExtension(atframework::rpc_options)) {
       await_options.timeout = rpc::make_duration_or_default(
           method->options().GetExtension(atframework::rpc_options).timeout(),
-          rpc::make_duration_or_default(logic_config::me()->get_server_cfg().task().csmsg().timeout(),
+          rpc::make_duration_or_default(logic_config::me()->get_logic_cfg().task().csmsg().timeout(),
                                         std::chrono::seconds{6}));
     } else {
-      await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_server_cfg().task().csmsg().timeout(),
-                                                            std::chrono::seconds{6});
+      await_options.timeout = rpc::make_duration_or_default(
+          logic_config::me()->get_logic_cfg().task().csmsg().timeout(), std::chrono::seconds{6});
     }
 
     ret = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, forward_response, await_options));
@@ -385,10 +385,10 @@ static rpc::result_code_type task_action_ss_action_clone_rpc(rpc::context &ctx, 
   if (nullptr != method && method->options().HasExtension(atframework::rpc_options)) {
     await_options.timeout = rpc::make_duration_or_default(
         method->options().GetExtension(atframework::rpc_options).timeout(),
-        rpc::make_duration_or_default(logic_config::me()->get_server_cfg().task().csmsg().timeout(),
+        rpc::make_duration_or_default(logic_config::me()->get_logic_cfg().task().csmsg().timeout(),
                                       std::chrono::seconds{6}));
   } else {
-    await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_server_cfg().task().csmsg().timeout(),
+    await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic_cfg().task().csmsg().timeout(),
                                                           std::chrono::seconds{6});
   }
 
