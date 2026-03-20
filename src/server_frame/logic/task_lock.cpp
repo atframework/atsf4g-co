@@ -10,7 +10,7 @@
 
 #include <data/player_cache.h>
 
-rpc::result_code_type task_lock::wait_task(rpc::context &ctx) {
+SERVER_FRAME_API rpc::result_code_type task_lock::wait_task(rpc::context &ctx) {
   if (id_.empty()) {
     FWLOGDEBUG("[TASK_LOCK]:({}) task empty", user_id_);
     RPC_RETURN_CODE(0);
@@ -66,22 +66,22 @@ rpc::result_code_type task_lock::wait_task(rpc::context &ctx) {
   RPC_RETURN_CODE(0);
 }
 
-void task_lock::init(uint64_t user_id) {
+SERVER_FRAME_API void task_lock::init(uint64_t user_id) {
   user_id_ = user_id;
   FWLOGDEBUG("[TASK_LOCK]:({}) task init user success", user_id_);
 }
 
-void task_lock::init_task(uint64_t id) {
+SERVER_FRAME_API void task_lock::init_task(uint64_t id) {
   id_.insert(id);
   FWLOGDEBUG("[TASK_LOCK]:({}) task init:({}). current size:({})", user_id_, id, id_.size());
 }
 
-void task_lock::remove_task(uint64_t id) {
+SERVER_FRAME_API void task_lock::remove_task(uint64_t id) {
   id_.erase(id);
   FWLOGDEBUG("[TASK_LOCK]:({}) task remove:({}). current size:({})", user_id_, id, id_.size());
 }
 
-task_lock_guard::task_lock_guard(std::shared_ptr<player_cache> player, uint64_t task_id) {
+SERVER_FRAME_API task_lock_guard::task_lock_guard(std::shared_ptr<player_cache> player, uint64_t task_id) {
   if (player != nullptr) {
     ptr_ = player;
     task_id_ = task_id;
@@ -89,7 +89,7 @@ task_lock_guard::task_lock_guard(std::shared_ptr<player_cache> player, uint64_t 
   }
 }
 
-task_lock_guard::~task_lock_guard() {
+SERVER_FRAME_API task_lock_guard::~task_lock_guard() {
   if (!ptr_.expired()) {
     ptr_.lock()->task_lock_remove_task(task_id_);
   }
