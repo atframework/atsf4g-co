@@ -55,8 +55,8 @@ task_action_player_kickoff::result_type task_action_player_kickoff::operator()()
     // 尝试保存用户数据
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> user_lg{get_shared_context()};
     uint64_t version = 0;
-    int res = RPC_AWAIT_CODE_RESULT(
-        rpc::db::login_lock::get_all(get_shared_context(), player_user_id, user_lg, version));
+    int res =
+        RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get_all(get_shared_context(), player_user_id, user_lg, version));
     if (res < 0) {
       FWLOGERROR("user {}({}:{}) try load login data failed.", player_open_id, player_zone_id, player_user_id);
       set_response_code(PROJECT_NAMESPACE_ID::err::EN_DB_REPLY_ERROR);
@@ -95,7 +95,8 @@ task_action_player_kickoff::result_type task_action_player_kickoff::operator()()
     if (reason == 0) {
       reason = static_cast<int32_t>(atfw::gateway::close_reason_t::kKickoff);
     }
-    int32_t ret = sess->send_kickoff(reason);
+    int32_t ret = sess->send_kickoff(
+        reason, atfw::util::nostd::string_view{req_body.reason_message().data(), req_body.reason_message().size()});
     if (ret) {
       FWLOGERROR("task {} [{}] send cs msg failed, ret: {}", name(), get_task_id(), ret);
 

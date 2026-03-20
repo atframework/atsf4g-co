@@ -243,7 +243,8 @@ SERVER_FRAME_API rpc::result_code_type router_player_cache::save_object(rpc::con
 
       // 在其他设备登入的要把这里的Session踢下线
       if (obj->get_session()) {
-        obj->get_session()->send_kickoff(static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff));
+        obj->get_session()->send_kickoff(static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff),
+                                         "other device login");
       }
 
       // 强制降级，删除缓存数据

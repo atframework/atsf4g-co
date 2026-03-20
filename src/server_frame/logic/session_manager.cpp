@@ -110,9 +110,12 @@ SERVER_FRAME_API session_manager::sess_ptr_t session_manager::create(const sessi
   return sess;
 }
 
-SERVER_FRAME_API void session_manager::remove(const session::key_t &key, int reason) { remove(find(key), reason); }
+SERVER_FRAME_API void session_manager::remove(const session::key_t &key, int reason,
+                                              atfw::util::nostd::string_view message) {
+  remove(find(key), reason, message);
+}
 
-SERVER_FRAME_API void session_manager::remove(sess_ptr_t sess, int reason) {
+SERVER_FRAME_API void session_manager::remove(sess_ptr_t sess, int reason, atfw::util::nostd::string_view message) {
   if (!sess) {
     return;
   }
@@ -122,7 +125,7 @@ SERVER_FRAME_API void session_manager::remove(sess_ptr_t sess, int reason) {
   }
 
   if (0 != reason) {
-    sess->send_kickoff(reason);
+    sess->send_kickoff(reason, message);
   }
 
   session::key_t key = sess->get_key();
@@ -179,11 +182,11 @@ SERVER_FRAME_API void session_manager::remove(sess_ptr_t sess, int reason) {
   }
 }
 
-SERVER_FRAME_API void session_manager::remove_all(int32_t reason) {
+SERVER_FRAME_API void session_manager::remove_all(int32_t reason, atfw::util::nostd::string_view message) {
   for (session_index_t::iterator iter = all_sessions_.begin(); iter != all_sessions_.end(); ++iter) {
     if (iter->second) {
       iter->second->set_flag(session::flag_t::EN_SESSION_FLAG_CLOSED, true);
-      iter->second->send_kickoff(reason);
+      iter->second->send_kickoff(reason, message);
     }
   }
 

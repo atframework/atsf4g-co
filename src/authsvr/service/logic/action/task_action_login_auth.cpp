@@ -25,8 +25,12 @@
 
 #include <config/extern_service_types.h>
 
+#include <dispatcher/cs_msg_dispatcher.h>
+
 #include "rpc/rpc_common_types.h"
 #include "rpc/rpc_context.h"
+
+#include "data/session.h"
 
 task_action_login_auth::task_action_login_auth(dispatcher_start_data_type&& param) : base_type(std::move(param)) {}
 task_action_login_auth::~task_action_login_auth() {}
@@ -40,12 +44,19 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> login_auth_tb{get_shared_context()};
   uint64_t login_auth_cas_version = 0;
 
+  auto sess = get_session();
+  session::key_t session_key{};
+  if (sess) {
+    session_key = sess->get_key();
+  }
+
   // 拉取鉴权表
   int res = RPC_AWAIT_CODE_RESULT(
       rpc::db::login_auth::get_all(get_shared_context(), req_body.open_id(), login_auth_tb, login_auth_cas_version));
   if (res < 0 && res != PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
-    FCTXLOGERROR(get_shared_context(), "user {} try to get login auth table failed, error code: {}({})",
-                 req_body.open_id(), res, protobuf_mini_dumper_get_error_msg(res));
+    FCTXLOGERROR(get_shared_context(), "session {}:{}, user {} try to get login auth table failed, error code: {}({})",
+                 session_key.node_id, session_key.session_id, req_body.open_id(), res,
+                 protobuf_mini_dumper_get_error_msg(res));
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_OPENID_NOT_FOUND);
     RPC_RETURN_CODE(res);
   }
@@ -60,8 +71,9 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
     int64_t new_user_id = RPC_AWAIT_CODE_RESULT(rpc::db::uuid::generate_global_unique_id(
         get_shared_context(), PROJECT_NAMESPACE_ID::EN_GLOBAL_UUID_MAT_USER_ID, 0, 0));
     if (new_user_id <= 0) {
-      FCTXLOGERROR(get_shared_context(), "user {} try to allocate user_id failed, error code: {}({})",
-                   req_body.open_id(), new_user_id, protobuf_mini_dumper_get_error_msg(static_cast<int>(new_user_id)));
+      FCTXLOGERROR(get_shared_context(), "session {}:{}, user {} try to allocate user_id failed, error code: {}({})",
+                   session_key.node_id, session_key.session_id, req_body.open_id(), new_user_id,
+                   protobuf_mini_dumper_get_error_msg(static_cast<int>(new_user_id)));
       set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
       res = static_cast<int>(new_user_id);
       RPC_RETURN_CODE(res);
@@ -72,8 +84,9 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
     res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(
         get_shared_context(), login_auth_tb.clone(get_shared_context()), login_auth_cas_version));
     if (res < 0) {
-      FCTXLOGERROR(get_shared_context(), "user {} try to save user_id failed, error code: {}({})", req_body.open_id(),
-                   res, protobuf_mini_dumper_get_error_msg(res));
+      FCTXLOGERROR(get_shared_context(), "session {}:{}, user {} try to save user_id failed, error code: {}({})",
+                   session_key.node_id, session_key.session_id, req_body.open_id(), res,
+                   protobuf_mini_dumper_get_error_msg(res));
       set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
       RPC_RETURN_CODE(res);
     }
@@ -84,45 +97,64 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
   res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get_all(get_shared_context(), login_auth_tb->user_id(),
                                                            login_lock_tb, login_lock_cas_version));
   if (res < 0 && res != PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
-    FCTXLOGERROR(get_shared_context(), "user {}(user_id={}) try to get login lock table failed, error code: {}({})",
-                 login_auth_tb->open_id(), login_auth_tb->user_id(), res, protobuf_mini_dumper_get_error_msg(res));
+    FCTXLOGERROR(get_shared_context(),
+                 "session {}:{}, user {}(user_id={}) try to get login lock table failed, error code: {}({})",
+                 session_key.node_id, session_key.session_id, login_auth_tb->open_id(), login_auth_tb->user_id(), res,
+                 protobuf_mini_dumper_get_error_msg(res));
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_OPENID_NOT_FOUND);
     RPC_RETURN_CODE(res);
   }
 
   // 封禁检查
   if (login_lock_tb->ban_time() > atfw::util::time::time_utility::get_now()) {
-    FCTXLOGINFO(get_shared_context(), "user {}(user_id={}) login is banned until {}, login rejected",
-                login_auth_tb->open_id(), login_auth_tb->user_id(), login_lock_tb->ban_time());
+    FCTXLOGINFO(get_shared_context(), "session {}:{}, user {}(user_id={}) login is banned until {}, login rejected",
+                session_key.node_id, session_key.session_id, login_auth_tb->open_id(), login_auth_tb->user_id(),
+                login_lock_tb->ban_time());
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_BAN);
     RPC_RETURN_CODE(0);
   }
 
   // 选取路由服务，尽量复用老的节点，增加缓存命中率和降低时序风险
   uint64_t router_server_id = login_lock_tb->router_server_id();
+  std::string router_server_name;
   if (router_server_id != 0 &&
       protobuf_to_system_clock(login_lock_tb->access_token_expired()) < atfw::util::time::time_utility::sys_now()) {
     // 如果登录锁里token过期了，说明之前的session也过期了，可以清理掉路由信息
     router_server_id = 0;
   }
 
-  res = RPC_AWAIT_CODE_RESULT(
-      select_router_server_id(login_auth_tb->open_id(), login_auth_tb->user_id(), router_server_id));
+  res = RPC_AWAIT_CODE_RESULT(select_router_server_id(login_auth_tb->open_id(), login_auth_tb->user_id(),
+                                                      router_server_id, router_server_name));
   if (res < 0) {
-    FCTXLOGERROR(get_shared_context(), "user {}(user_id={}) try to get router server failed, error code: {}({})",
-                 login_auth_tb->open_id(), login_auth_tb->user_id(), res, protobuf_mini_dumper_get_error_msg(res));
+    FCTXLOGERROR(get_shared_context(),
+                 "session {}:{}, user {}(user_id={}) try to get router server failed, error code: {}({})",
+                 session_key.node_id, session_key.session_id, login_auth_tb->open_id(), login_auth_tb->user_id(), res,
+                 protobuf_mini_dumper_get_error_msg(res));
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_CONNECT_FAILED);
     RPC_RETURN_CODE(res);
   }
 
   if (router_server_id == 0) {
-    FCTXLOGINFO(get_shared_context(), "user {}(user_id={}) can not login because there is no available backend server",
-                login_auth_tb->open_id(), login_auth_tb->user_id());
+    FCTXLOGINFO(get_shared_context(),
+                "session {}:{}, user {}(user_id={}) can not login because there is no available backend server",
+                session_key.node_id, session_key.session_id, login_auth_tb->open_id(), login_auth_tb->user_id());
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_CONNECT_FAILED);
     RPC_RETURN_CODE(res);
   }
 
-  // TODO(owent): 发送设置路由到atgateway
+  // 发送设置路由到atgateway
+  if (sess) {
+    res = cs_msg_dispatcher::me()->send_set_router(session_key.node_id, session_key.session_id, router_server_id,
+                                                   router_server_name);
+    if (res < 0) {
+      FCTXLOGERROR(get_shared_context(),
+                   "session {}:{}, user {}(user_id={}) try to set router server to {},{} failed, error code: {}({})",
+                   session_key.node_id, session_key.session_id, login_auth_tb->open_id(), login_auth_tb->user_id(),
+                   router_server_id, router_server_name, res, protobuf_mini_dumper_get_error_msg(res));
+      set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_CONNECT_FAILED);
+      RPC_RETURN_CODE(res);
+    }
+  }
 
   // 创建新的access_token
   login_auth_tb->set_access_token_code(rpc::db::uuid::generate_short_uuid());
@@ -134,8 +166,10 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
   res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(
       get_shared_context(), login_auth_tb.clone(get_shared_context()), login_auth_cas_version));
   if (res < 0) {
-    FCTXLOGERROR(get_shared_context(), "user {}(user_id={}) try to save access_token failed, error code: {}({})",
-                 login_auth_tb->open_id(), login_auth_tb->user_id(), res, protobuf_mini_dumper_get_error_msg(res));
+    FCTXLOGERROR(get_shared_context(),
+                 "session {}:{}, user {}(user_id={}) try to save access_token failed, error code: {}({})",
+                 session_key.node_id, session_key.session_id, login_auth_tb->open_id(), login_auth_tb->user_id(), res,
+                 protobuf_mini_dumper_get_error_msg(res));
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
     RPC_RETURN_CODE(res);
   }
@@ -148,7 +182,8 @@ int task_action_login_auth::on_success() { return get_result(); }
 int task_action_login_auth::on_failed() { return get_result(); }
 
 task_action_login_auth::result_type task_action_login_auth::select_router_server_id(
-    atfw::util::nostd::string_view openid, uint64_t user_id, uint64_t& router_server_id) {
+    atfw::util::nostd::string_view openid, uint64_t user_id, uint64_t& router_server_id,
+    std::string& router_server_name) {
   atapp::app* app_inst = atapp::app::get_last_instance();
   if (app_inst == nullptr) {
     FCTXLOGINFO(get_shared_context(), "user {}(user_id={}) login is canceled because app instance is shutdown", openid,
@@ -158,8 +193,11 @@ task_action_login_auth::result_type task_action_login_auth::select_router_server
   }
 
   // 如果节点已经下线了，也清理掉路由信息
-  if (router_server_id != 0 && !app_inst->get_global_discovery().get_node_by_id(router_server_id)) {
+  auto target_node = app_inst->get_global_discovery().get_node_by_id(router_server_id);
+  if (router_server_id != 0 && !target_node) {
     router_server_id = 0;
+  } else {
+    router_server_name = std::string{target_node->get_discovery_info().name()};
   }
 
   if (router_server_id != 0) {
@@ -178,6 +216,7 @@ task_action_login_auth::result_type task_action_login_auth::select_router_server
       auto select_node = app_inst->get_global_discovery().get_node_by_random(policy_selector);
       if (select_node) {
         router_server_id = select_node->get_discovery_info().id();
+        router_server_name = std::string{select_node->get_discovery_info().name()};
         by_setting = false;
       }
       break;
@@ -186,6 +225,7 @@ task_action_login_auth::result_type task_action_login_auth::select_router_server
       auto select_node = app_inst->get_global_discovery().get_node_by_round_robin(policy_selector);
       if (select_node) {
         router_server_id = select_node->get_discovery_info().id();
+        router_server_name = std::string{select_node->get_discovery_info().name()};
         by_setting = false;
       }
       break;
@@ -194,6 +234,7 @@ task_action_login_auth::result_type task_action_login_auth::select_router_server
       auto select_node = app_inst->get_global_discovery().get_node_hash_by_consistent_hash(user_id, policy_selector);
       if (select_node.node) {
         router_server_id = select_node.node->get_discovery_info().id();
+        router_server_name = std::string{select_node.node->get_discovery_info().name()};
         by_setting = false;
       }
       break;
@@ -204,6 +245,7 @@ task_action_login_auth::result_type task_action_login_auth::select_router_server
 
   if (by_setting) {
     router_server_id = server_cfg.backend().router().node_id();
+    router_server_name = std::string{server_cfg.backend().router().node_name()};
   }
 
   RPC_RETURN_CODE(0);

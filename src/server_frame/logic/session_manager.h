@@ -47,10 +47,10 @@ class session_manager {
 
   SERVER_FRAME_API sess_ptr_t create(const session::key_t& key);
 
-  SERVER_FRAME_API void remove(const session::key_t& key, int reason = 0);
-  SERVER_FRAME_API void remove(sess_ptr_t sess, int reason = 0);
+  SERVER_FRAME_API void remove(const session::key_t& key, int reason = 0, atfw::util::nostd::string_view message = "");
+  SERVER_FRAME_API void remove(sess_ptr_t sess, int reason = 0, atfw::util::nostd::string_view message = "");
 
-  SERVER_FRAME_API void remove_all(int32_t reason);
+  SERVER_FRAME_API void remove_all(int32_t reason, atfw::util::nostd::string_view message = "");
 
   SERVER_FRAME_API size_t size() const;
 

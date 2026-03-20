@@ -91,9 +91,22 @@ class cs_msg_dispatcher : public dispatcher_implement {
    * @param node_id bus id of atgateway
    * @param session_id session id
    * @param reason kickoff reason
+   * @param message kickoff message
    * @return 0 or error code
    */
-  SERVER_FRAME_API int32_t send_kickoff(uint64_t node_id, uint64_t session_id, int32_t reason);
+  SERVER_FRAME_API int32_t send_kickoff(uint64_t node_id, uint64_t session_id, int32_t reason,
+                                        atfw::util::nostd::string_view message);
+
+  /**
+   * send set router message to atgateway
+   * @param node_id bus id of atgateway
+   * @param session_id session id
+   * @param target_service_id target service id
+   * @param target_service_name target service name
+   * @return 0 or error code
+   */
+  SERVER_FRAME_API int32_t send_set_router(uint64_t node_id, uint64_t session_id, uint64_t target_service_id,
+                                           atfw::util::nostd::string_view target_service_name);
 
   /**
    * send data to client

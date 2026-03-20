@@ -17,8 +17,8 @@ package hello;
 /////////////////////////////////////////////////////
 
 message SSPlayerKickOffReq {
-  uint32 reason = 1; // 原因
-  string gm_reason = 2; // 原因
+  uint32 reason = 1;          // 原因
+  string reason_message = 2;  // 原因文本
 }
 
 message SSPlayerKickOffRsp {}

@@ -279,12 +279,12 @@ SERVER_FRAME_API size_t session::compare_callback::operator()(const key_t &hash_
   }
 }
 
-SERVER_FRAME_API int32_t session::send_kickoff(int32_t reason) {
+SERVER_FRAME_API int32_t session::send_kickoff(int32_t reason, atfw::util::nostd::string_view message) {
   if (check_flag(flag_t::EN_SESSION_FLAG_GATEWAY_REMOVED)) {
     return 0;
   }
   // send kickoff using dispatcher
-  return cs_msg_dispatcher::me()->send_kickoff(get_key().node_id, get_key().session_id, reason);
+  return cs_msg_dispatcher::me()->send_kickoff(get_key().node_id, get_key().session_id, reason, message);
 }
 
 SERVER_FRAME_API void session::write_actor_log_head(rpc::context &ctx, const atframework::CSMsg &msg, size_t byte_size,

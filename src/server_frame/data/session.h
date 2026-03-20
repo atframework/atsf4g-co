@@ -155,7 +155,7 @@ class session {
     SERVER_FRAME_API size_t operator()(const key_t &hash_obj) const noexcept;
   };
 
-  SERVER_FRAME_API int32_t send_kickoff(int32_t reason);
+  SERVER_FRAME_API int32_t send_kickoff(int32_t reason, atfw::util::nostd::string_view message);
 
   SERVER_FRAME_API void write_actor_log_head(rpc::context &ctx, const atframework::CSMsg &msg, size_t byte_size,
                                              bool is_input);
@@ -192,10 +192,10 @@ ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN
 template <class CharT>
 struct ATFW_UTIL_SYMBOL_VISIBLE formatter<session, CharT> : formatter<basic_string_view<CharT>, CharT> {
   template <class FormatContext>
-  auto format(const session & sess, FormatContext &ctx) const {
+  auto format(const session &sess, FormatContext &ctx) const {
     return atfw::util::string::format_to(ctx.out(), "session ({}){}:{}({}:{})", sess.get_key().node_name,
-                                       sess.get_key().node_id, sess.get_key().session_id, sess.get_cached_zone_id(),
-                                       sess.get_cached_user_id());
+                                         sess.get_key().node_id, sess.get_key().session_id, sess.get_cached_zone_id(),
+                                         sess.get_cached_user_id());
   }
 };
 ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_END

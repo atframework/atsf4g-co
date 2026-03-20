@@ -112,7 +112,7 @@ task_action_ping::result_type task_action_ping::operator()() {
 
     session::ptr_t sess = user->get_session();
     if (sess) {
-      sess->send_kickoff(kick_off_reason);
+      sess->send_kickoff(kick_off_reason, "heartbeat errors.");
     }
 
     // 再踢下线

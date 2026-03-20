@@ -31,5 +31,5 @@ class task_action_login_auth
 
  private:
   result_type select_router_server_id(atfw::util::nostd::string_view openid, uint64_t user_id,
-                                      uint64_t& router_server_id);
+                                      uint64_t& router_server_id, std::string& router_server_name);
 };

@@ -176,8 +176,9 @@ SERVER_FRAME_API void cs_msg_dispatcher::on_create_task_failed(dispatcher_start_
 
   int res = sess->send_msg_to_client(*child_context, *rsp);
   if (res < 0) {
-    FWLOGERROR("Send rpc response failed of {} (session: [{:#x}, {}]) to [{:#x}: {}] failed, res: {}({})", rpc_name,
-               real_msg->head().session_node_id(), real_msg->head().session_id(), real_msg->head().session_node_id(),
+    FWLOGERROR("Send rpc response failed of {} (session: [{:#x}, {}]) to [{:#x}: {}] failed, result_code: {}({})",
+               rpc_name, real_msg->head().session_node_id(), real_msg->head().session_id(),
+               real_msg->head().session_node_id(),
                get_app()->convert_app_id_to_string(real_msg->head().session_node_id()), res,
                protobuf_mini_dumper_get_error_msg(res));
   }
@@ -228,7 +229,8 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atfw::atapp::app::mes
                    get_app()->convert_app_id_to_string(session_key.node_id), session_key.session_id);
         ret = PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
 
-        send_kickoff(session_key.node_id, session_key.session_id, PROJECT_NAMESPACE_ID::EN_CRT_SESSION_NOT_FOUND);
+        send_kickoff(session_key.node_id, session_key.session_id, PROJECT_NAMESPACE_ID::EN_CRT_SESSION_NOT_FOUND,
+                     "session not found");
         break;
       }
 
@@ -236,7 +238,7 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atfw::atapp::app::mes
       ret = unpack_protobuf_msg(*cs_msg, callback_msg, reinterpret_cast<const void *>(post.content().data()),
                                 post.content().size());
       if (ret != 0) {
-        FWLOGERROR("{} unpack received message from [{:#x}: {}], session id: {} failed, res: %d", name(),
+        FWLOGERROR("{} unpack received message from [{:#x}: {}], session id: {} failed, result_code: %d", name(),
                    session_key.node_id, get_app()->convert_app_id_to_string(session_key.node_id),
                    session_key.session_id, ret);
         return ret;
@@ -276,8 +278,9 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atfw::atapp::app::mes
       dispatcher_result_t res = on_receive_message(ctx, callback_msg, nullptr, cs_msg->head().client_sequence());
       ret = res.result_code;
       if (ret < 0) {
-        FWLOGERROR("{} on receive message callback from [{:#x}: {}, {}] failed, res: {}", name(), session_key.node_id,
-                   get_app()->convert_app_id_to_string(session_key.node_id), session_key.session_id, ret);
+        FWLOGERROR("{} on receive message callback from [{:#x}: {}, {}] failed, result_code: {}", name(),
+                   session_key.node_id, get_app()->convert_app_id_to_string(session_key.node_id),
+                   session_key.session_id, ret);
       }
       tracer.finish({ret, {}});
       break;
@@ -295,7 +298,7 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atfw::atapp::app::mes
                      get_app()->convert_app_id_to_string(session_key.node_id), session_key.session_id);
         ret = PROJECT_NAMESPACE_ID::err::EN_SYS_SERVER_SHUTDOWN;
         send_kickoff(session_key.node_id, session_key.session_id,
-                     static_cast<int32_t>(::atfw::gateway::close_reason_t::kServerClosed));
+                     static_cast<int32_t>(::atfw::gateway::close_reason_t::kServerClosed), "server is closing");
         break;
       }
 
@@ -306,14 +309,15 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atfw::atapp::app::mes
       session_manager::sess_ptr_t sess = session_manager::me()->find(session_key);
       if (sess) {
         if (sess->check_flag(session::flag_t::EN_SESSION_FLAG_CLOSING)) {
-          session_manager::me()->remove(sess, static_cast<int32_t>(::atfw::gateway::close_reason_t::kKickoff));
+          session_manager::me()->remove(sess, static_cast<int32_t>(::atfw::gateway::close_reason_t::kKickoff),
+                                        "session is closing");
         } else {
           FWLOGWARNING("session [{:#x}: {}, {}] already exists, address: {}:{}", session_key.node_id,
                        get_app()->convert_app_id_to_string(session_key.node_id), session_key.session_id,
                        sess_data.client_ip(), sess_data.client_port());
           ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
           send_kickoff(session_key.node_id, session_key.session_id,
-                       static_cast<int32_t>(::atfw::gateway::close_reason_t::kServerBusy));
+                       static_cast<int32_t>(::atfw::gateway::close_reason_t::kServerBusy), "session already exists");
           break;
         }
       }
@@ -322,7 +326,7 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atfw::atapp::app::mes
         FWLOGERROR("malloc failed");
         ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
         send_kickoff(session_key.node_id, session_key.session_id,
-                     static_cast<int32_t>(::atfw::gateway::close_reason_t::kServerBusy));
+                     static_cast<int32_t>(::atfw::gateway::close_reason_t::kServerBusy), "malloc failed");
         break;
       }
 
@@ -360,12 +364,35 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atfw::atapp::app::mes
 
         ret = task_manager::me()->start_task(task_inst, start_data);
         if (0 != ret) {
-          FWLOGERROR("run logout task failed, res: {}", ret);
+          FWLOGERROR("run logout task failed, result_code: {}", ret);
           session_manager::me()->remove(session_key);
         }
       } else {
-        FWLOGERROR("create logout task failed, res: {}", ret);
+        FWLOGERROR("create logout task failed, result_code: {}", ret);
         session_manager::me()->remove(session_key);
+      }
+      break;
+    }
+    case ::atfw::gateway::server_message_body::kSetRouterRsp: {
+      session::key_t session_key;
+      session_key.node_id = from_server_id;
+      session_key.session_id = req_msg.head().session_id();
+
+      const ::atfw::gateway::server_message_body_set_router &set_router_result = req_msg.body().set_router_rsp();
+      if (req_msg.head().error_code() < 0) {
+        FWLOGERROR(
+            "session [{:#x}: {}, {}] set router(target_server_id={}, target_service_name={}), failed. result_code: {}",
+            session_key.node_id, get_app()->convert_app_id_to_string(session_key.node_id), session_key.session_id,
+            set_router_result.target_service_id(),
+            atfw::util::nostd::string_view{set_router_result.target_service_name().data(),
+                                           set_router_result.target_service_name().size()},
+            req_msg.head().error_code());
+      } else {
+        FWLOGINFO("session [{:#x}: {}, {}] set router(target_server_id={}, target_service_name={}), succeeded",
+                  session_key.node_id, get_app()->convert_app_id_to_string(session_key.node_id), session_key.session_id,
+                  set_router_result.target_service_id(),
+                  atfw::util::nostd::string_view{set_router_result.target_service_name().data(),
+                                                 set_router_result.target_service_name().size()});
       }
       break;
     }
@@ -378,7 +405,8 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atfw::atapp::app::mes
   return ret;
 }
 
-SERVER_FRAME_API int32_t cs_msg_dispatcher::send_kickoff(uint64_t node_id, uint64_t session_id, int32_t reason) {
+SERVER_FRAME_API int32_t cs_msg_dispatcher::send_kickoff(uint64_t node_id, uint64_t session_id, int32_t reason,
+                                                         atfw::util::nostd::string_view message) {
   atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("not in a atapp");
@@ -389,12 +417,42 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::send_kickoff(uint64_t node_id, uint6
   msg.mutable_head()->set_session_id(session_id);
   msg.mutable_head()->set_error_code(reason);
 
-  msg.mutable_body()->mutable_kickoff_session();
+  ::atfw::gateway::server_message_body_close_reason *kickoff = msg.mutable_body()->mutable_kickoff_session();
+  kickoff->set_reason(reason);
+  kickoff->set_message(message.data(), message.size());
 
   std::string packed_buffer;
   if (false == msg.SerializeToString(&packed_buffer)) {
     FWLOGERROR("try to kickoff {} with serialize failed: {}", session_id, msg.InitializationErrorString());
-    return 0;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
+  }
+
+  return owner->get_bus_node()->send_data(
+      node_id, 0,
+      gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(packed_buffer.data()),
+                                     packed_buffer.size()});
+}
+
+SERVER_FRAME_API int32_t cs_msg_dispatcher::send_set_router(uint64_t node_id, uint64_t session_id,
+                                                            uint64_t target_service_id,
+                                                            atfw::util::nostd::string_view target_service_name) {
+  atfw::atapp::app *owner = get_app();
+  if (nullptr == owner) {
+    FWLOGERROR("not in a atapp");
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
+  }
+
+  ::atfw::gateway::server_message msg;
+  msg.mutable_head()->set_session_id(session_id);
+
+  ::atfw::gateway::server_message_body_set_router *set_router = msg.mutable_body()->mutable_set_router_req();
+  set_router->set_target_service_id(target_service_id);
+  set_router->set_target_service_name(target_service_name.data(), target_service_name.size());
+
+  std::string packed_buffer;
+  if (false == msg.SerializeToString(&packed_buffer)) {
+    FWLOGERROR("try to set router {} with serialize failed: {}", session_id, msg.InitializationErrorString());
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
   }
 
   return owner->get_bus_node()->send_data(
@@ -437,7 +495,7 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::send_data(uint64_t node_id, uint64_t
   if (false == msg.SerializeToString(&packed_buffer)) {
     FWLOGERROR("try to send {} bytes data to [{:#x}: {}] with serialize failed: {}", len, session_id,
                get_app()->convert_app_id_to_string(session_id), msg.InitializationErrorString());
-    return 0;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
   }
 
   int ret = owner->get_bus_node()->send_data(
@@ -446,10 +504,10 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::send_data(uint64_t node_id, uint64_t
                                      packed_buffer.size()});
   if (ret < 0) {
     if (0 == session_id) {
-      FWLOGERROR("broadcast data to atgateway [{:#x}: {}] failed, res: {}", node_id,
+      FWLOGERROR("broadcast data to atgateway [{:#x}: {}] failed, result_code: {}", node_id,
                  get_app()->convert_app_id_to_string(node_id), ret);
     } else {
-      FWLOGERROR("send data to session [{:#x}: {}, {}] failed, res: {}", node_id,
+      FWLOGERROR("send data to session [{:#x}: {}, {}] failed, result_code: {}", node_id,
                  get_app()->convert_app_id_to_string(node_id), session_id, ret);
     }
   }
@@ -498,7 +556,7 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::broadcast_data(uint64_t node_id,
       gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(packed_buffer.data()),
                                      packed_buffer.size()});
   if (ret < 0) {
-    FWLOGERROR("broadcast data to atgateway [{:#x}: {}] failed, res: {}", node_id,
+    FWLOGERROR("broadcast data to atgateway [{:#x}: {}] failed, result_code: {}", node_id,
                get_app()->convert_app_id_to_string(node_id), ret);
   }
 
