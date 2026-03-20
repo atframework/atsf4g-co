@@ -63,7 +63,7 @@ pb_msg_go_type_map = {
 
 pb_msg_cpp_type_map = {
     pb2.FieldDescriptorProto.TYPE_BOOL: "bool",
-    pb2.FieldDescriptorProto.TYPE_BYTES: "const char *",
+    pb2.FieldDescriptorProto.TYPE_BYTES: "string_view",
     pb2.FieldDescriptorProto.TYPE_DOUBLE: "double",
     pb2.FieldDescriptorProto.TYPE_ENUM: "int32_t",
     pb2.FieldDescriptorProto.TYPE_FIXED32: "int32_t",
@@ -75,7 +75,7 @@ pb_msg_cpp_type_map = {
     pb2.FieldDescriptorProto.TYPE_SFIXED64: "int64_t",
     pb2.FieldDescriptorProto.TYPE_SINT32: "int32_t",
     pb2.FieldDescriptorProto.TYPE_SINT64: "int64_t",
-    pb2.FieldDescriptorProto.TYPE_STRING: "const char *",
+    pb2.FieldDescriptorProto.TYPE_STRING: "string_view",
     pb2.FieldDescriptorProto.TYPE_UINT32: "uint32_t",
     pb2.FieldDescriptorProto.TYPE_UINT64: "uint64_t",
 }

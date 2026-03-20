@@ -54,7 +54,11 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_all(rpc::context &ctx
         atfw::util::memory::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::${message_name}>>(
             *result.message);
 % for key_field in key_fields:
-      (*list_message.message)->set_${key_field["raw_name"]}(${key_field["raw_name"]});
+      (*list_message.message)->set_${key_field["raw_name"]}(
+        % for arg in key_field["set_args"]:
+          ${arg}
+        % endfor
+      );
 % endfor
     }
     output.push_back(list_message);
@@ -89,7 +93,11 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_by_indexs(rpc::context 
               atfw::util::memory::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::${message_name}>>(
                   *result.message);
 % for key_field in key_fields:
-      (*list_message.message)->set_${key_field["raw_name"]}(${key_field["raw_name"]});
+      (*list_message.message)->set_${key_field["raw_name"]}(
+        % for arg in key_field["set_args"]:
+          ${arg}
+        % endfor
+      );
 % endfor
     }
     output.push_back(list_message);

@@ -29,6 +29,7 @@ if index_type_enum is None:
 #include <string>
 #include <vector>
 
+#include <nostd/string_view.h>
 #include "rpc/db/db_utils.h"
 #include "rpc/rpc_shared_message.h"
 #include <dispatcher/db_msg_dispatcher.h>
@@ -37,6 +38,9 @@ namespace rpc {
 class context;
 
 namespace db {
+
+using string_view = ATFRAMEWORK_UTILS_NAMESPACE_ID::nostd::string_view;
+
 %	for message_name, message_desc in file.descriptor.message_types_by_name.items():
 <%
     package_name = file.get_package()

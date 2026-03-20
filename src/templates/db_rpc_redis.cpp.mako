@@ -17,10 +17,18 @@ import sys
         index_type_kv = False
     for key in index.key_fields:
         field = message.fields_by_name[key]
-        key_fields.append({
-            "raw_name": key,
-            "cpp_type": field.get_cpp_type(),
-        })
+        if field.get_cpp_type() == "string_view":
+            key_fields.append({
+                "raw_name": key,
+                "cpp_type": field.get_cpp_type(),
+                "set_args": [key + ".data(),", key + ".size()"],
+            })
+        else:
+            key_fields.append({
+                "raw_name": key,
+                "cpp_type": field.get_cpp_type(),
+                "set_args": [key],
+            })
 
     prefix_fmt_key = "{}-"
     prefix_fmt_value_from_args = "\"prefix\""

@@ -46,7 +46,11 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx
   version = output->version;
 % endif
 % for key_field in key_fields:
-  rsp->set_${key_field["raw_name"]}(${key_field["raw_name"]});
+  rsp->set_${key_field["raw_name"]}(
+  % for arg in key_field["set_args"]:
+      ${arg}
+  % endfor
+  );
 % endfor
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
@@ -91,7 +95,11 @@ SERVER_FRAME_API result_type batch_get_all(rpc::context &ctx, gsl::span<table_ke
     if (output->message) {
       result.message = atfw::util::memory::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::${message_name}>>(*output->message);
 % for key_field in key_fields:
-      (*result.message)->set_${key_field["raw_name"]}(keys[index].${key_field["raw_name"]});
+      (*result.message)->set_${key_field["raw_name"]}(
+      % for arg in key_field["set_args"]:
+        keys[index].${arg}
+      % endfor
+      );
 % endfor
     }
     rsp.push_back(std::move(result));
@@ -260,7 +268,11 @@ SERVER_FRAME_API result_type partly_get_${partly_field_name}(rpc::context &ctx
   version = output->version;
 % endif
 %     for key_field in key_fields:
-  rsp->set_${key_field["raw_name"]}(${key_field["raw_name"]});
+  rsp->set_${key_field["raw_name"]}(
+      % for arg in key_field["set_args"]:
+        ${arg}
+      % endfor
+    );
 %     endfor
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
@@ -330,7 +342,11 @@ SERVER_FRAME_API result_type batch_partly_get_${partly_field_name}(rpc::context 
     if (output->message) {
       result.message = atfw::util::memory::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::${message_name}>>(*output->message);
 % for key_field in key_fields:
-      (*result.message)->set_${key_field["raw_name"]}(keys[index].${key_field["raw_name"]});
+      (*result.message)->set_${key_field["raw_name"]}(
+      % for arg in key_field["set_args"]:
+        keys[index].${arg}
+      % endfor
+      );
 % endfor
     }
     rsp.push_back(std::move(result));
