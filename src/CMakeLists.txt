@@ -27,4 +27,4 @@ add_subdirectory(rank_settlement_svr)
 
 add_subdirectory(tools)
 
-# add_subdirectory(robot)
+add_subdirectory(robot)
