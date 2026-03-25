@@ -3,11 +3,13 @@
 
 #pragma once
 
+#include <config/atframe_service_component_config.h>
+
 #include <memory/object_allocator.h>
 
 #include <memory/lru_map.h>
 
-namespace atframework {
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_BEGIN
 namespace memory {
 namespace util {
 template <class Key, class Value, class Hash = ::std::hash<Key>, class Eq = ::std::equal_to<Key>,
@@ -29,4 +31,4 @@ using lru_map_st = atfw::util::memory::lru_map<
         Key, typename atfw::util::memory::lru_map_type_traits<Key, Value, TOption>::iterator, BackendAllocator>>;
 }  // namespace util
 }  // namespace memory
-}  // namespace atframework
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_END

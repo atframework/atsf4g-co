@@ -2,15 +2,14 @@
 
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 
-#include <config/atframe_services_build_feature.h>
+#include <config/atframe_service_component_config.h>
 
 #include "lock/atomic_int_type.h"
 #include "time/time_utility.h"
 
-namespace atframework {
-namespace component {
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_BEGIN
 
 /**
  * @biref allocate a id of specify type
@@ -18,7 +17,7 @@ namespace component {
  *       the time depennd the length of TKey.
  */
 template <typename TKey = uint64_t>
-class ATFRAME_SERVICE_COMPONENT_MACRO_API_HEAD_ONLY timestamp_id_allocator {
+class ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API_HEAD_ONLY timestamp_id_allocator {
  public:
   using value_type = TKey;
 
@@ -61,5 +60,4 @@ class ATFRAME_SERVICE_COMPONENT_MACRO_API_HEAD_ONLY timestamp_id_allocator {
 
   void deallocate(value_type) noexcept {}
 };
-}  // namespace component
-}  // namespace atframework
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_END

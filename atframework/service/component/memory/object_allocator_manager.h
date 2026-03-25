@@ -12,6 +12,8 @@
 #include <nostd/function_ref.h>
 #include <nostd/type_traits.h>
 
+#include <config/atframe_service_component_config.h>
+
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
@@ -33,7 +35,7 @@
 #  endif
 #endif
 
-namespace atframework {
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_BEGIN
 namespace memory {
 
 template <class T>
@@ -522,7 +524,7 @@ class object_allocator_manager {
 };
 
 }  // namespace memory
-}  // namespace atframework
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_END
 
 #if defined(__GNUC__) && !defined(__clang__) && !defined(__apple_build_version__)
 #  if (__GNUC__ * 100 + __GNUC_MINOR__ * 10) >= 460

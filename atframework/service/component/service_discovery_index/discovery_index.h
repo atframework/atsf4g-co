@@ -1,4 +1,4 @@
-// Copyright 2026 atframework
+// Copyright 2026 atframework.
 
 #pragma once
 
@@ -7,12 +7,4 @@
 #include "config/atframe_service_component_config.h"
 
 ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_BEGIN
-enum class service_type : uint32_t {
-  kUnknown = 0,
-  kAtProxy = 1,
-  kAtGateway = 2,
-
-  kInternal = 10,
-  kCustomStart = 10,
-};
 ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_END

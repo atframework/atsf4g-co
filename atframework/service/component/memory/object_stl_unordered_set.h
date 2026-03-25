@@ -3,11 +3,13 @@
 
 #pragma once
 
+#include <config/atframe_service_component_config.h>
+
 #include <memory/object_allocator.h>
 
 #include <unordered_set>
 
-namespace atframework {
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_BEGIN
 namespace memory {
 namespace stl {
 
@@ -17,4 +19,4 @@ using unordered_set = std::unordered_set<T, Hash, Pred, object_allocator::alloca
 
 }
 }  // namespace memory
-}  // namespace atframework
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_END

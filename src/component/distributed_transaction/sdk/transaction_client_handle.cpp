@@ -197,9 +197,9 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
       if (delay_min >= delay_max) {
         ret = RPC_AWAIT_CODE_RESULT(rpc::wait(child_ctx, delay_min));
       } else {
-        ret = RPC_AWAIT_CODE_RESULT(
-            rpc::wait(child_ctx, std::chrono::system_clock::duration{atfw::util::random_engine::fast_random_between(
-                                     delay_min.count(), delay_max.count())}));
+        ret = RPC_AWAIT_CODE_RESULT(rpc::wait(
+            child_ctx, std::chrono::system_clock::duration{
+                           atfw::component::random_engine::fast_random_between(delay_min.count(), delay_max.count())}));
       }
 
       if (ret >= 0) {

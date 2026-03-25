@@ -3,11 +3,13 @@
 
 #pragma once
 
+#include <config/atframe_service_component_config.h>
+
 #include <memory/object_allocator.h>
 
 #include <map>
 
-namespace atframework {
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_BEGIN
 namespace memory {
 namespace stl {
 
@@ -17,4 +19,4 @@ using map = std::map<Key, Value, Compare, object_allocator::map_allocator<Key, V
 
 }
 }  // namespace memory
-}  // namespace atframework
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_END

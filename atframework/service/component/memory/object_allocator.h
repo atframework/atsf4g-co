@@ -9,6 +9,8 @@
 #include <gsl/select-gsl.h>
 #include <memory/rc_ptr.h>
 
+#include <config/atframe_service_component_config.h>
+
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -29,7 +31,7 @@
 #  endif
 #endif
 
-namespace atframework {
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_BEGIN
 namespace memory {
 
 class object_allocator {
@@ -94,7 +96,7 @@ ATFW_UTIL_FORCEINLINE static atfw::util::memory::strong_rc_ptr<T> allocate_stron
 }  // namespace stl
 
 }  // namespace memory
-}  // namespace atframework
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_END
 
 #if defined(__GNUC__) && !defined(__clang__) && !defined(__apple_build_version__)
 #  if (__GNUC__ * 100 + __GNUC_MINOR__ * 10) >= 460

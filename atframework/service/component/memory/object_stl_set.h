@@ -3,11 +3,13 @@
 
 #pragma once
 
+#include <config/atframe_service_component_config.h>
+
 #include <memory/object_allocator.h>
 
 #include <set>
 
-namespace atframework {
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_BEGIN
 namespace memory {
 namespace stl {
 
@@ -16,4 +18,4 @@ using set = std::set<T, Compare, object_allocator::allocator<T, BackendAllocator
 
 }
 }  // namespace memory
-}  // namespace atframework
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_END

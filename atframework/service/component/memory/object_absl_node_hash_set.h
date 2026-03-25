@@ -3,11 +3,13 @@
 
 #pragma once
 
+#include <config/atframe_service_component_config.h>
+
 #include <memory/object_allocator.h>
 
 #include <absl/container/node_hash_set.h>
 
-namespace atframework {
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_BEGIN
 namespace memory {
 namespace absl {
 template <class Key, class Hash = ::absl::container_internal::hash_default_hash<Key>,
@@ -15,4 +17,4 @@ template <class Key, class Hash = ::absl::container_internal::hash_default_hash<
 using node_hash_set = ::absl::node_hash_set<Key, Hash, Eq, object_allocator::allocator<Key, BackendAllocator>>;
 }
 }  // namespace memory
-}  // namespace atframework
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_END

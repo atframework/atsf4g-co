@@ -426,7 +426,7 @@ int db_msg_dispatcher::cluster_init(const PROJECT_NAMESPACE_ID::config::db_group
   }
 
   conn = atfw::memory::stl::make_shared<hiredis::happ::cluster>();
-  int32_t conn_idx = atfw::util::random_engine::random_between<int32_t>(0, conns.gateways_size());
+  int32_t conn_idx = atfw::component::random_engine::random_between<int32_t>(0, conns.gateways_size());
 
   // 初始化
   conn->set_auth_password(password);

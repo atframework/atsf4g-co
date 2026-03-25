@@ -60,6 +60,28 @@ app1.run_noblock();
 // ...
 ```
 
+### 数据内容验证原则
+
+> **所有成功投递消息的用例**不仅要验证来源（`sender.id` / `sender.direct_source_id`）和数量（`received_message_count`），
+> **还必须验证发送和收到的数据一致**（通过 `CASE_EXPECT_EQ` 比对 `received_messages[i]` 与发送时的原始字符串）。
+>
+> 对于失败场景（超时、重试超限等），需验证 `forward_response` 错误码，不需要验证数据内容。
+>
+> **示例**:
+> ```cpp
+> // 发送
+> char msg_data[] = "test-msg-XX";
+> gsl::span<const unsigned char> msg_span{reinterpret_cast<const unsigned char *>(msg_data),
+>                                         static_cast<size_t>(strlen(msg_data))};
+> CASE_EXPECT_EQ(0, apps.node1.send_message(target_id, 100, msg_span, &seq));
+>
+> // 接收后验证数据一致
+> CASE_EXPECT_EQ(1, g_test_ctx.received_message_count);
+> if (!g_test_ctx.received_messages.empty()) {
+>   CASE_EXPECT_EQ("test-msg-XX", g_test_ctx.received_messages[0]);
+> }
+> ```
+
 ---
 
 ## libatapp 单元测试补全
@@ -158,14 +180,14 @@ app1.run_noblock();
 
 | # | 用例名 | 描述 | 验证点 | 需求 | 状态 |
 |----|--------|------|--------|------|------|
-| A.1 | `upstream_wait_discovery_then_send` | node3 服务发现延迟注入，node1 先发消息排队，注入后送达 | pending 消息到达 | R2.2 | ✅ |
-| A.2 | `upstream_connected_forward_success` | 上游+目标均已连接，直接转发成功 | 数据正确到达 | R2.1 | ✅ |
+| A.1 | `upstream_wait_discovery_then_send` | node3 服务发现延迟注入，node1 先发消息排队，注入后送达 | pending 消息到达、收到数据与发送一致 | R2.2 | ✅ |
+| A.2 | `upstream_connected_forward_success` | 上游+目标均已连接，直接转发成功 | 数据正确到达、收到数据与发送一致 | R2.1 | ✅ |
 | A.3 | `upstream_connected_target_unreachable` | 上游已连接，目标节点不存在 | 发送失败回调 | - | ✅ |
-| A.4 | `upstream_reconnect_then_send_success` | 上游断开 → 重连成功 → pending 消息送达 | 重连期间消息排队，恢复后到达 | R2.4, R4.1 | ✅ |
+| A.4 | `upstream_reconnect_then_send_success` | 上游断开 → 重连成功 → pending 消息送达 | 重连期间消息排队，恢复后到达、收到数据与发送一致 | R2.4, R4.1 | ✅ 需补充数据比对 |
 | A.5 | `upstream_retry_exceed_limit_fail` | 上游断开 → 用 `set_sys_now()` 推进时间触发重试超限(reconnect_max_try_times) → handle 移除 | pending 消息失败回调 | R2.3 | ✅ |
 | A.6 | `upstream_retry_timeout_downstream_cleanup` | 上游重连超时（`set_sys_now()` 推进） → 下游 pending 消息失败 → 下游 handle 清理 | 下游节点的 endpoint 也被关闭 | R2.5 | ✅ |
 | A.7 | `upstream_topology_offline_pending_fail` | 上游拓扑移除(remove_topology_peer) → `set_sys_now()` 推进到 lost_topology_timeout 之后 → 强制移除 | pending 消息失败 | - | ✅ |
-| A.8 | `upstream_topology_change_new_upstream` | update_topology_peer 切换上游 → 经新上游转发 | 数据通过新上游到达 | R1.2 | ✅ |
+| A.8 | `upstream_topology_change_new_upstream` | update_topology_peer 切换上游 → 经新上游转发 | 数据通过新上游到达、收到数据与发送一致 | R1.2 | ✅ |
 
 ---
 
@@ -178,32 +200,30 @@ app1.run_noblock();
 
 | # | 用例名 | 描述 | 验证点 | 需求 | 状态 |
 |----|--------|------|--------|------|------|
-| B.1 | `direct_discovery_ready_connect_send` | 服务发现已存在，发起直连后发送成功 | 数据正确到达 | R3.1 | ✅ |
-| B.2 | `direct_discovery_missing_wait_then_send` | 服务发现延迟注入，等待后发起连接发送 | pending 消息到达 | R3.2 | ✅ |
-| B.3 | `direct_connected_send_success` | 已直连，直接发送成功 | 数据正确到达 | - | ✅ |
-| B.4 | `direct_reconnect_success_after_failure` | 直连断开 → 重连成功 → 发送成功 | 验证有过失败、验证恢复后数据正确 | R4.1 | ✅ |
+| B.1 | `direct_discovery_ready_connect_send` | 服务发现已存在，发起直连后发送成功 | 数据正确到达、收到数据与发送一致、`direct_source_id` 验证 | R3.1 | ✅ |
+| B.2 | `direct_discovery_missing_wait_then_send` | 服务发现延迟注入，先发送再注入服务发现 | 发送后 pending 数>0 且 received=0；注入后消息到达、数据内容比对、`direct_source_id` 验证 | R3.2 | ✅ |
+| B.3 | `direct_connected_send_success` | 已直连，直接发送成功 | 数据正确到达、收到数据与发送一致、`direct_source_id` 验证 | - | ✅ |
+| B.4 | `direct_reconnect_success_after_failure` | 直连断开 → 重连成功 → 发送成功 | 验证有过失败、3 条消息数据内容比对、`direct_source_id` 验证 | R4.1 | ✅ |
 | B.5 | `direct_reconnect_retry_backoff` | 用 `set_sys_now()` 逐步推进时间，验证重连退避间隔递增（start→2x→max） | 重试间隔递增 | R5.6 | ✅ |
-| B.6 | `direct_retry_exceed_limit_fail` | 用 `set_sys_now()` 推进时间触发重试超限 | pending 消息失败回调、handle 被移除 | R3.3 | ✅ |
-| B.7 | `direct_topology_offline_timeout` | 拓扑下线 → `set_sys_now()` 推进到 lost_topology_timeout 之后 → handle 移除 | 失败回调被调用 | - | ✅ |
-| B.8 | `direct_prefer_direct_over_upstream` | 有上游但允许直连，验证走直连路径而非上游转发 | 直连 atbus endpoint 存在、未经上游 | R3.4 | ✅ |
-| B.9 | `direct_prefer_direct_wait_discovery` | 有上游但允许直连，目标服务发现不存在 → 等待 → 到达后直连 | 直连成功 | R3.5 | ✅ |
+| B.6 | `direct_retry_exceed_limit_fail` | 用 `set_sys_now()` 推进时间触发重试超限 + 拓扑下线后 GC 清理 endpoint | pending 消息失败回调、handle 被移除、`has_lost_topology_flag`、GC 后 endpoint 释放 | R3.3 | ✅ |
+| B.7 | `direct_prefer_direct_over_upstream` | 有上游但允许直连，验证走直连路径而非上游转发 | 两节点上游相同且连通、`proxy_bus_id=0`（直连无代理）、数据内容比对、`direct_source_id` 验证 | R3.4 | ✅ |
+| B.8 | `direct_prefer_direct_wait_discovery` | 有上游但允许直连，目标服务发现不存在 → 等待 → 到达后直连 | 上游连通验证、直连成功、数据内容比对、`direct_source_id` 验证 | R3.5 | ✅ |
 
 ---
 
-### C. 下游节点数据发送测试
+### C. 下游节点数据发送测试 ✅ 已完成
 
-**新建文件**: `atapp_downstream_send_test.cpp`
+**文件**: `atapp_downstream_send_test.cpp` ✅ 已创建
 
 > 拓扑结构: `upstream(0x301) <--proxy-- downstream(0x302)`
 > upstream 向 downstream 发消息
 
-| # | 用例名 | 描述 | 验证点 | 需求 |
-|----|--------|------|--------|------|
-| C.1 | `downstream_not_connected_pending` | 下游未连接，消息排队等待 | 连接后 pending 消息到达 | - |
-| C.2 | `downstream_connected_send_success` | 下游已连接发送成功 | 数据正确到达 | - |
-| C.3 | `downstream_reconnect_before_timeout` | 下游断开 → 在 `set_sys_now()` 推进超时前重连 → pending 消息送达 | 消息发送成功 | R4.1 |
-| C.4 | `downstream_timeout_without_reconnect` | 下游断开 → `set_sys_now()` 推进超时 → handle 移除 | pending 消息失败 | - |
-| C.5 | `downstream_topology_offline_pending_fail` | 拓扑下线 → `set_sys_now()` 推进到 lost_topology_timeout 之后 → 失败 | 失败回调被调用 | - |
+| # | 用例名 | 描述 | 验证点 | 需求 | 状态 |
+|----|--------|------|--------|------|------|
+| C.1 | `downstream_not_connected_pending` | bus 未连接（无 IO pump），upstream 发消息排队 pending；`tick()` 不处理 IO 故消息保持 pending；`run_noblock()` 处理 IO → bus 连接 → `on_update_endpoint` → `set_handle_ready` → pending 刷新 → 消息到达 | `tick()` 后 received=0、pending>0；`pump_until`（`run_noblock`）后 received=1、数据一致、`direct_source_id` | - | ✅ |
+| C.2 | `downstream_connected_send_success` | 下游已连接，双向发送成功 | upstream→downstream 按 ID/Name 发送成功；downstream→upstream 发送成功；数据内容比对、`direct_source_id` | - | ✅ |
+| C.3 | `downstream_reconnect_before_timeout` | 下游断开 → 在 `set_sys_now()` 推进超时前重连 → pending 消息送达 | 3 条消息数据内容比对、`direct_source_id` 验证 | R4.1 | ✅ |
+| C.4 | `downstream_topology_offline_timeout_fail` | remove_topology_peer → `has_lost_topology_flag` → handle unready → `set_sys_now()` 推进超时 → handle 移除 → GC 清理 endpoint | `has_lost_topology_flag`、pending 消息失败、handle 移除、GC 后 endpoint 释放 | - | ✅ |
 
 ---
 
@@ -217,11 +237,11 @@ app1.run_noblock();
 
 | # | 用例名 | 描述 | 验证点 | 需求 |
 |----|--------|------|--------|------|
-| D.1 | `topology_change_new_upstream_not_connected` | update_topology_peer 切到新上游，新上游有服务发现但未连接 → 发起连接后正常 | 消息经新上游到达 | R1.1 |
-| D.2 | `topology_change_new_upstream_already_connected` | update_topology_peer 切到新上游，新上游已有 atbus endpoint → 无缝切换 ready | handle 保持 ready，消息不中断 | R1.2 |
-| D.3 | `topology_change_discovery_missing_then_arrive` | update_topology_peer 切到新上游 → 新上游无服务发现 → kWaitForDiscoveryToConnect → discovery 到达 → 连接成功 | 消息最终到达 | R1.3 |
+| D.1 | `topology_change_new_upstream_not_connected` | update_topology_peer 切到新上游，新上游有服务发现但未连接 → 发起连接后正常 | 消息经新上游到达、收到数据与发送一致 | R1.1 |
+| D.2 | `topology_change_new_upstream_already_connected` | update_topology_peer 切到新上游，新上游已有 atbus endpoint → 无缝切换 ready | handle 保持 ready，消息不中断、收到数据与发送一致 | R1.2 |
+| D.3 | `topology_change_discovery_missing_then_arrive` | update_topology_peer 切到新上游 → 新上游无服务发现 → kWaitForDiscoveryToConnect → discovery 到达 → 连接成功 | 消息最终到达、收到数据与发送一致 | R1.3 |
 | D.4 | `topology_change_discovery_timeout_cleanup` | update_topology_peer → 新上游无服务发现 → 用 `set_sys_now()` 推进时间触发重连超限 → handle 移除 | pending 消息失败 | R1.4 |
-| D.5 | `topology_lost_recover_before_timeout` | remove_topology_peer → kLostTopology=true → 在 `set_sys_now()` 推进超时前 update_topology_peer 恢复 → kLostTopology 清除 | 通信不受影响 | R1.5 |
+| D.5 | `topology_lost_recover_before_timeout` | remove_topology_peer → kLostTopology=true → 在 `set_sys_now()` 推进超时前 update_topology_peer 恢复 → kLostTopology 清除 | 通信不受影响、收到数据与发送一致 | R1.5 |
 | D.6 | `topology_lost_timeout_cleanup` | remove_topology_peer → `set_sys_now()` 推进到 lost_topology_timeout 之后 → handle 强制移除 | pending 消息失败，下游也清理 | R1.6 |
 | D.7 | `topology_lost_ready_handle_force_remove` | handle 处于 kReady+kLostTopology → `set_sys_now()` 推进到超时后仍强制移除 | handle 被移除（安全网机制） | - |
 | D.8 | `topology_same_upstream_noop` | update_topology_peer 上游 ID 不变 → 仅尝试 try_direct_reconnect | handle 状态不变 | - |
@@ -240,7 +260,7 @@ app1.run_noblock();
 
 | # | 用例名 | 描述 | 验证点 | 需求 |
 |----|--------|------|--------|------|
-| E.1 | `discovery_delete_then_put_reconnect` | on_discovery_event(kDelete) → kWaitForDiscoveryToConnect → on_discovery_event(kPut) → resume_handle_discovery → 重连成功 | 连接恢复，消息送达 | R5.1 |
+| E.1 | `discovery_delete_then_put_reconnect` | on_discovery_event(kDelete) → kWaitForDiscoveryToConnect → on_discovery_event(kPut) → resume_handle_discovery → 重连成功 | 连接恢复，消息送达、收到数据与发送一致 | R5.1 |
 | E.2 | `discovery_missing_reconnect_count_accumulate` | 服务发现缺失 → 用 `set_sys_now()` 逐步推进时间触发定时器 → reconnect_retry_times 递增 → 超限后 handle 移除 | handle 被清理 | R5.2 |
 | E.3 | `reconnect_exponential_backoff` | 配置 start_interval=2s, max_interval=16s → 断开连接 → 用 `set_sys_now()` 逐步推进时间，验证重连间隔 2s→4s→8s→16s→16s | 间隔递增到 max 后不再增加 | R5.6 |
 | E.4 | `reconnect_timer_replaced_by_earlier` | update_timer 若新 timeout < 旧 timeout → 定时器被替换 | 更早触发 | - |
@@ -258,8 +278,8 @@ app1.run_noblock();
 
 | # | 用例名 | 描述 | 验证点 | 需求 |
 |----|--------|------|--------|------|
-| F.1 | `send_fail_reconnect_then_success` | 发送返回 NO_CONNECTION → handle unready → endpoint 重建 → 重连 → 再次发送成功 | 第二次发送成功 | R5.3 |
-| F.2 | `proxy_ready_cascade_downstream` | 代理节点 set_handle_ready → 被代理下游节点也 ready + add_waker 被调用 | 下游的 pending 消息被发送 | R5.4 |
+| F.1 | `send_fail_reconnect_then_success` | 发送返回 NO_CONNECTION → handle unready → endpoint 重建 → 重连 → 再次发送成功 | 第二次发送成功、收到数据与发送一致 | R5.3 |
+| F.2 | `proxy_ready_cascade_downstream` | 代理节点 set_handle_ready → 被代理下游节点也 ready + add_waker 被调用 | 下游的 pending 消息被发送、收到数据与发送一致 | R5.4 |
 | F.3 | `proxy_unready_cascade_downstream` | 代理节点 set_handle_unready → 下游节点也 unready | 下游 app_handle 也 unready | R5.4 |
 | F.4 | `proxy_removed_downstream_closed` | remove_connection_handle(proxy) → 下游 handle 的 on_close_connection 被调用 | 下游 endpoint 关闭 | R5.5 |
 | F.5 | `proxy_removed_downstream_no_app_handle` | 代理被移除 → 下游 handle 无 app_handle（纯代理节点）→ set_handle_unready + remove_connection_handle | handle 安全清理 | R5.5 |
@@ -306,7 +326,7 @@ app1.run_noblock();
 |--------|------|-----|------|-------|
 | `atapp_test_topo_1.yaml` | 子节点 | 0x00000401 | 21901 | `ipv4://127.0.0.1:21902` |
 | `atapp_test_topo_2.yaml` | 旧上游 | 0x00000402 | 21902 | - |
-| `atapp_test_topo_3.yaml` | 新上游 | 0x00000403 | 21903 | - |
+| `atapp_test_topo_3.yaml` | 新上游 | 0x00000403 | 21902 | - |
 | `atapp_test_topo_4.yaml` | 远端目标 | 0x00000404 | 21904 | `ipv4://127.0.0.1:21902` |
 
 #### E 组 — 服务发现 & 重连测试
@@ -336,8 +356,8 @@ app1.run_noblock();
 2. **Phase 2**: libatapp 配置文件准备
    - [x] 创建 A 组配置 (upstream_1/2/3/4.yaml) ✅ 已完成（含额外 upstream_4.yaml）
    - [x] 创建 B 组配置 (direct_1/2/3.yaml) ✅ 已完成
-   - [ ] 创建 C 组配置 (downstream_1/2.yaml)
-   - [ ] 创建 D 组配置 (topo_1/2/3/4.yaml)
+   - [x] 创建 C 组配置 (downstream_1/2.yaml) ✅ 已完成
+   - [x] 创建 D 组配置 (topo_1/2/3/4.yaml) ✅ 已完成
    - [ ] 创建 E 组配置 (discovery_1/2.yaml)
    - [ ] 创建 F 组配置 (recovery_1/2/3.yaml)
 
@@ -351,15 +371,15 @@ app1.run_noblock();
    - [x] 实现 B.1~B.9 用例
    - [x] 编译 & 运行验证
 
-5. **Phase 5**: libatapp 下游测试
-   - [ ] 创建 `atapp_downstream_send_test.cpp`
-   - [ ] 实现 C.1~C.5 用例
-   - [ ] 编译 & 运行验证
+5. **Phase 5**: libatapp 下游测试 ✅ 已完成
+   - [x] 创建 `atapp_downstream_send_test.cpp`
+   - [x] 实现 C.1~C.4 用例（原 C.4+C.5 合并为 C.4）
+   - [x] 编译 & 运行验证
 
 6. **Phase 6**: libatapp 拓扑变更测试
-   - [ ] 创建 `atapp_topology_change_test.cpp`
-   - [ ] 实现 D.1~D.9 用例
-   - [ ] 编译 & 运行验证
+   - [x] 创建 `atapp_topology_change_test.cpp`
+   - [x] 实现 D.1~D.9 用例
+   - [x] 编译 & 运行验证（全部 101 个用例通过）
 
 7. **Phase 7**: libatapp 服务发现 & 重连机制测试
    - [ ] 创建 `atapp_discovery_reconnect_test.cpp`
@@ -382,7 +402,7 @@ app1.run_noblock();
 | `on_start_connect` | A.1, A.2, B.1, B.3, C.2 |
 | `on_close_connection` | A.5, B.6, F.4 |
 | `on_send_forward_request` (失败路径) | F.1 |
-| `try_connect_to` | A.1~A.8, B.1~B.9, C.1~C.5 |
+| `try_connect_to` | A.1~A.8, B.1~B.9, C.1~C.4 |
 | `on_start_connect_to_connected_endpoint` | A.2, B.3, C.2 |
 | `on_start_connect_to_same_or_other_upstream_peer` | B.1, B.2, B.8, B.9 |
 | `on_start_connect_to_upstream_peer` | A.1, A.2, A.4 |
@@ -391,7 +411,7 @@ app1.run_noblock();
 | `setup_reconnect_timer` (退避) | B.5, E.3 |
 | `setup_reconnect_timer` (超限移除) | A.5, B.6, E.2 |
 | `try_direct_reconnect` | A.4, B.4, C.3, D.1 |
-| `set_handle_lost_topology` | A.7, B.7, C.5, D.5, D.6, D.7 |
+| `set_handle_lost_topology` | A.7, B.7, C.4, D.5, D.6, D.7 |
 | `update_topology_peer` | D.1~D.9 |
 | `remove_topology_peer` | D.5, D.6, D.7 |
 | `set_handle_waiting_discovery` | B.2, D.3, E.1 |

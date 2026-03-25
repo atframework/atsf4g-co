@@ -7,7 +7,7 @@
 #include <config/compile_optimize.h>
 #include <config/compiler_features.h>
 
-#include <config/atframe_services_build_feature.h>
+#include <config/atframe_service_component_config.h>
 
 #include <type_traits>
 
@@ -18,7 +18,7 @@
 #  define ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR constexpr
 #endif
 
-namespace atframework {
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_BEGIN
 namespace memory {
 namespace type_traits {
 #if defined(__cpp_concepts) && __cpp_concepts
@@ -65,4 +65,4 @@ using bounded_array = typename ::std::enable_if<__is_array_known_bounds<T>::valu
 
 }  // namespace type_traits
 }  // namespace memory
-}  // namespace atframework
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_END

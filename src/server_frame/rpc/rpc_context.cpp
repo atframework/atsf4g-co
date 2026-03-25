@@ -128,7 +128,7 @@ static bool should_sample_trace_span() {
     return true;
   }
 
-  return atfw::util::random_engine::fast_random_between<int64_t>(0, 0x1000000) < metrics_data.sample_rate;
+  return atfw::component::random_engine::fast_random_between<int64_t>(0, 0x1000000) < metrics_data.sample_rate;
 }
 
 }  // namespace

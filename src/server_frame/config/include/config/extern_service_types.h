@@ -1,13 +1,13 @@
-#ifndef ATFRAME_SERVICE_COMPONENT_CONFIG_EXTERN_SERVICE_TYPES_H
-#define ATFRAME_SERVICE_COMPONENT_CONFIG_EXTERN_SERVICE_TYPES_H
+#ifndef ATFRAMEWORK_SERVICE_COMPONENT_CONFIG_EXTERN_SERVICE_TYPES_H
+#  define ATFRAMEWORK_SERVICE_COMPONENT_ .hCONFIG_EXTERN_SERVICE_TYPES_H
 
-#pragma once
+#  pragma once
 
-#include <config/compile_optimize.h>
+#  include <config/compile_optimize.h>
 
-#include <config/atframe_service_types.h>
+#  include <config/atframe_service_types.h>
 
-#include "config/server_frame_build_feature.h"
+#  include "config/server_frame_build_feature.h"
 
 namespace atframework {
 namespace component {

@@ -3,6 +3,6 @@
 
 #include "memory/object_allocator_manager.h"
 
-namespace atframework {
-namespace memory {}  // namespace memory
-}  // namespace atframework
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_BEGIN
+namespace memory {}
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_END

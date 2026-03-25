@@ -23,7 +23,7 @@
 #include "memory/object_allocator_manager.h"
 #include "memory/object_allocator_metrics.h"
 
-namespace atframework {
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_BEGIN
 namespace memory {
 #if ((defined(__cplusplus) && __cplusplus >= 201703L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L))
 // Not all compilers support detected_or for template template_args now
@@ -78,15 +78,15 @@ namespace memory {
 #    endif
 #  endif
 #else
-#  define object_allocator_manager_ALLOCATOR_NESTED_TYPE(TEST_CLASS, NESTED_TYPE, TYPE_ALIAS, DEFAULT_TYPE)            \
-   private:                                                                                                            \
-    template <class __TCNT>                                                                                            \
-    static                                                                                                             \
-        typename __TCNT::NESTED_TYPE __object_allocator_manager_ALLOCATOR_NESTED_TYPE_##NESTED_TYPE##_helper(__TCNT*); \
-    static DEFAULT_TYPE __object_allocator_manager_ALLOCATOR_NESTED_TYPE_##NESTED_TYPE##_helper(...);                  \
-                                                                                                                       \
-   public:                                                                                                             \
-    using TYPE_ALIAS = decltype(__object_allocator_manager_ALLOCATOR_NESTED_TYPE_##NESTED_TYPE##_helper(               \
+#  define object_allocator_manager_ALLOCATOR_NESTED_TYPE(TEST_CLASS, NESTED_TYPE, TYPE_ALIAS, DEFAULT_TYPE)      \
+   private:                                                                                                      \
+    template <class __TCNT>                                                                                      \
+    static typename __TCNT::NESTED_TYPE __object_allocator_manager_ALLOCATOR_NESTED_TYPE_##NESTED_TYPE##_helper( \
+        __TCNT*);                                                                                                \
+    static DEFAULT_TYPE __object_allocator_manager_ALLOCATOR_NESTED_TYPE_##NESTED_TYPE##_helper(...);            \
+                                                                                                                 \
+   public:                                                                                                       \
+    using TYPE_ALIAS = decltype(__object_allocator_manager_ALLOCATOR_NESTED_TYPE_##NESTED_TYPE##_helper(         \
         static_cast<TEST_CLASS*>(nullptr)))
 #endif
 
@@ -158,14 +158,15 @@ struct __object_allocator_manager_allocator_allocator_rebind<Allocator<Up, Args.
 };
 
 }  // namespace memory
-}  // namespace atframework
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_END
 
 namespace std {
 
 template <class AllocValueType, class BackendAllocator>
 struct ATFW_UTIL_SYMBOL_VISIBLE
-allocator_traits<::atfw::memory::object_allocator_manager::allocator<AllocValueType, BackendAllocator>> {
-  using allocator_type = ::atfw::memory::object_allocator_manager::allocator<AllocValueType, BackendAllocator>;
+allocator_traits<::atfw::component::memory::object_allocator_manager::allocator<AllocValueType, BackendAllocator>> {
+  using allocator_type =
+      ::atfw::component::memory::object_allocator_manager::allocator<AllocValueType, BackendAllocator>;
   using value_type = typename allocator_type::value_type;
 
 #if ((defined(__cplusplus) && __cplusplus >= 201703L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L))
@@ -235,7 +236,8 @@ allocator_traits<::atfw::memory::object_allocator_manager::allocator<AllocValueT
 
   template <typename U>
   using rebind_alloc =
-      typename ::atfw::memory::__object_allocator_manager_allocator_allocator_rebind<allocator_type, U>::type;
+      typename ::atfw::component::memory::__object_allocator_manager_allocator_allocator_rebind<allocator_type,
+                                                                                                U>::type;
 
   template <typename U>
   using rebind_traits = allocator_traits<rebind_alloc<U>>;
@@ -284,7 +286,7 @@ allocator_traits<::atfw::memory::object_allocator_manager::allocator<AllocValueT
   ATFW_UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR atfw::util::nostd::enable_if_t<
       !__construct_helper<U, _Args...>::value && ::std::is_constructible<U, _Args...>::value, void>
   _S_construct(allocator_type&, U* __p, _Args&&... __args) noexcept(std::is_nothrow_constructible<U, _Args...>::value) {
-    ::atfw::memory::object_allocator_metrics_controller::add_constructor_counter_template<value_type>(
+    ::atfw::component::memory::object_allocator_metrics_controller::add_constructor_counter_template<value_type>(
         reinterpret_cast<void*>(__p));
 
 #if ((defined(__cplusplus) && __cplusplus >= 202002L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L))
@@ -304,7 +306,7 @@ allocator_traits<::atfw::memory::object_allocator_manager::allocator<AllocValueT
   template <typename AllocatorOther, typename U>
   ATFW_UTIL_SYMBOL_VISIBLE inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR void _S_destroy(
       AllocatorOther&, U* __p, ...) noexcept(std::is_nothrow_destructible<U>::value) {
-    ::atfw::memory::object_allocator_metrics_controller::add_destructor_counter_template<value_type>(
+    ::atfw::component::memory::object_allocator_metrics_controller::add_destructor_counter_template<value_type>(
         reinterpret_cast<void*>(__p));
 
 #if ((defined(__cplusplus) && __cplusplus >= 202002L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L))

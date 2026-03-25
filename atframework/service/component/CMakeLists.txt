@@ -5,18 +5,24 @@ set(ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/_ge
 file(MAKE_DIRECTORY "${ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR}/include/config")
 file(MAKE_DIRECTORY "${ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR}/temp")
 
-configure_file("${CMAKE_CURRENT_LIST_DIR}/config/atframe_services_build_feature.h.in"
-               "${ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR}/temp/atframe_services_build_feature.h" @ONLY)
-execute_process(
-  COMMAND
-    "${CMAKE_COMMAND}" -E copy_if_different
-    "${ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR}/temp/atframe_services_build_feature.h"
-    "${ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR}/include/config")
-
 # ============ atproxy ============
 
 file(GLOB_RECURSE ATSF4G_APP_SOURCE_LIST *.cpp *.cc *.c *.cxx)
 file(GLOB_RECURSE ATSF4G_APP_HEADER_LIST *.h *.hpp)
+
+math(EXPR ATFRAMEWORK_SERVICE_COMPONENT_API_LEVEL "1000 * ${PROJECT_VERSION_MAJOR} + ${PROJECT_VERSION_MINOR}"
+     OUTPUT_FORMAT DECIMAL)
+set(ATFRAMEWORK_SERVICE_COMPONENT_ABI_TAG
+    "v${ATFRAMEWORK_SERVICE_COMPONENT_API_LEVEL}"
+    CACHE STRING "ABI tag for atframework/component.")
+
+configure_file("${CMAKE_CURRENT_LIST_DIR}/config/atframe_service_component_config.h.in"
+               "${ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR}/temp/atframe_service_component_config.h" @ONLY)
+execute_process(
+  COMMAND
+    "${CMAKE_COMMAND}" -E copy_if_different
+    "${ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR}/temp/atframe_service_component_config.h"
+    "${ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR}/include/config")
 
 atframework_add_library(
   ${ATSF4G_APP_NAME}
@@ -37,18 +43,18 @@ atframework_add_library(
   SOURCES
   ${ATSF4G_APP_SOURCE_LIST}
   GENERATED_HEADERS
-  "${ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR}/include/config/atframe_services_build_feature.h"
+  "${ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR}/include/config/atframe_service_component_config.h"
   INSTALL_HEADER_DIRECTORY
   ".")
 
 if(BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY)
-  target_compile_definitions(${ATSF4G_APP_NAME} PRIVATE ATFRAME_SERVICE_COMPONENT_MACRO_API_NATIVE=1
-                                                        ATFRAME_SERVICE_COMPONENT_MACRO_API_DLL=1)
+  target_compile_definitions(${ATSF4G_APP_NAME} PRIVATE ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API_NATIVE=1
+                                                        ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API_DLL=1)
 else()
-  target_compile_definitions(${ATSF4G_APP_NAME} PRIVATE ATFRAME_SERVICE_COMPONENT_MACRO_API_NATIVE=1)
+  target_compile_definitions(${ATSF4G_APP_NAME} PRIVATE ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API_NATIVE=1)
 endif()
 
 atframework_install_files(
   ${ATSF4G_APP_NAME} INSTALL_FILES
-  "${ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR}/include/config/atframe_services_build_feature.h" INSTALL_DESTINATION
-  "${CMAKE_INSTALL_INCLUDEDIR}/config")
+  "${ATFRAMEWORK_SERVICE_COMPONENT_GENERATED_DIR}/include/config/atframe_service_component_config.h"
+  INSTALL_DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/config")

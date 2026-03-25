@@ -232,8 +232,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
                 wait_interval_ms = 512;
               }
 
-              RPC_AWAIT_IGNORE_RESULT(rpc::wait(ctx, std::chrono::milliseconds{util::random_engine::random_between(
-                                                         wait_interval_ms / 2, wait_interval_ms)}));
+              RPC_AWAIT_IGNORE_RESULT(
+                  rpc::wait(ctx, std::chrono::milliseconds{atfw::component::random_engine::random_between(
+                                     wait_interval_ms / 2, wait_interval_ms)}));
               break;
             }
             default:
@@ -390,8 +391,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
               wait_interval_ms = 512;
             }
 
-            RPC_AWAIT_IGNORE_RESULT(rpc::wait(ctx, std::chrono::milliseconds{util::random_engine::random_between(
-                                                       wait_interval_ms / 2, wait_interval_ms)}));
+            RPC_AWAIT_IGNORE_RESULT(
+                rpc::wait(ctx, std::chrono::milliseconds{atfw::component::random_engine::random_between(
+                                   wait_interval_ms / 2, wait_interval_ms)}));
             break;
           }
           default:

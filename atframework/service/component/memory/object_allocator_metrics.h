@@ -12,7 +12,7 @@
 #include <nostd/function_ref.h>
 #include <nostd/type_traits.h>
 
-#include <config/atframe_services_build_feature.h>
+#include <config/atframe_service_component_config.h>
 
 #include <string>
 
@@ -27,7 +27,7 @@
 #  define ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR constexpr
 #endif
 
-namespace atframework {
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_BEGIN
 namespace memory {
 
 struct ATFW_UTIL_SYMBOL_VISIBLE object_allocator_metrics {
@@ -72,10 +72,10 @@ class object_allocator_metrics_controller {
 #endif
   }
 
-  ATFRAME_SERVICE_COMPONENT_MACRO_API static ::std::string try_parse_raw_name(const char* input);
-  ATFRAME_SERVICE_COMPONENT_MACRO_API static ::std::string try_parse_demangle_name(const char* input);
+  ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API static ::std::string try_parse_raw_name(const char* input);
+  ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API static ::std::string try_parse_demangle_name(const char* input);
 
-  ATFRAME_SERVICE_COMPONENT_MACRO_API static object_allocator_metrics_storage*
+  ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API static object_allocator_metrics_storage*
   mutable_object_allocator_metrics_for_type(::std::string raw_name, ::std::string demangle_name, size_t unit_size,
                                             bool& destroyed_flag);
 
@@ -107,14 +107,14 @@ class object_allocator_metrics_controller {
     }
   };  // namespace memory
 
-  ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_constructor_counter(object_allocator_metrics_storage* target,
-                                                                          void*);
-  ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_allocate_counter(object_allocator_metrics_storage* target,
-                                                                       size_t count);
-  ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_destructor_counter(object_allocator_metrics_storage* target,
-                                                                         void*);
-  ATFRAME_SERVICE_COMPONENT_MACRO_API static void add_deallocate_counter(object_allocator_metrics_storage* target,
-                                                                         size_t count);
+  ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API static void add_constructor_counter(object_allocator_metrics_storage* target,
+                                                                              void*);
+  ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API static void add_allocate_counter(object_allocator_metrics_storage* target,
+                                                                           size_t count);
+  ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API static void add_destructor_counter(object_allocator_metrics_storage* target,
+                                                                             void*);
+  ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API static void add_deallocate_counter(object_allocator_metrics_storage* target,
+                                                                             size_t count);
 
   template <class U>
   ATFW_UTIL_FORCEINLINE static void add_constructor_counter_template(void* p) {
@@ -140,9 +140,9 @@ class object_allocator_metrics_controller {
     add_deallocate_counter(helper<U>::get_instance(), count);
   }
 
-  ATFRAME_SERVICE_COMPONENT_MACRO_API static void foreach_object_statistics(
+  ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API static void foreach_object_statistics(
       atfw::util::nostd::function_ref<void(const object_allocator_metrics&)> fn);
 };  // namespace atframework
 
 }  // namespace memory
-}  // namespace atframework
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_END

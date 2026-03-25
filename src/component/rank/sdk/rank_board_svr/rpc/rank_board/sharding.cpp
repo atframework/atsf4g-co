@@ -79,7 +79,7 @@ class router_rank_manager : public util::design_pattern::singleton<router_rank_m
     if (slave_server_ids.empty()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_RANK_SLAVE_SERVER_EMPTY);
     }
-    size_t idx = util::random_engine::fast_random_between<size_t>(0, slave_server_ids.size());
+    size_t idx = atfw::component::random_engine::fast_random_between<size_t>(0, slave_server_ids.size());
     slave_server_id = slave_server_ids[idx];
     RPC_RETURN_CODE(0);
   }

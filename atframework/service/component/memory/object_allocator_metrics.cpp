@@ -19,7 +19,7 @@
 #include <mutex>
 #include <unordered_map>
 
-namespace atframework {
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_BEGIN
 namespace memory {
 
 struct object_allocator_metrics_controller::object_allocator_metrics_storage {
@@ -92,7 +92,7 @@ object_allocator_metrics_controller::object_allocator_metrics_storage::~object_a
   }
 }
 
-ATFRAME_SERVICE_COMPONENT_MACRO_API ::std::string object_allocator_metrics_controller::try_parse_raw_name(
+ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API ::std::string object_allocator_metrics_controller::try_parse_raw_name(
     const char* input) {
   if (nullptr == input) {
     return {};
@@ -105,7 +105,7 @@ ATFRAME_SERVICE_COMPONENT_MACRO_API ::std::string object_allocator_metrics_contr
   return input;
 }
 
-ATFRAME_SERVICE_COMPONENT_MACRO_API ::std::string object_allocator_metrics_controller::try_parse_demangle_name(
+ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API ::std::string object_allocator_metrics_controller::try_parse_demangle_name(
     const char* input) {
   if (nullptr == input) {
     return {};
@@ -175,7 +175,7 @@ ATFRAME_SERVICE_COMPONENT_MACRO_API ::std::string object_allocator_metrics_contr
   return fallback;
 }
 
-ATFRAME_SERVICE_COMPONENT_MACRO_API object_allocator_metrics_controller::object_allocator_metrics_storage*
+ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API object_allocator_metrics_controller::object_allocator_metrics_storage*
 object_allocator_metrics_controller::mutable_object_allocator_metrics_for_type(::std::string raw_name,
                                                                                ::std::string demangle_name,
                                                                                size_t unit_size, bool& destroyed_flag) {
@@ -222,7 +222,7 @@ object_allocator_metrics_controller::mutable_object_allocator_metrics_for_type(:
   return &ret;
 }
 
-ATFRAME_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::add_constructor_counter(
+ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::add_constructor_counter(
     object_allocator_metrics_storage* target, void*) {
   if (nullptr == target) {
     return;
@@ -231,7 +231,7 @@ ATFRAME_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::ad
   target->constructor_counter.fetch_add(1, std::memory_order_release);
 }
 
-ATFRAME_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::add_allocate_counter(
+ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::add_allocate_counter(
     object_allocator_metrics_storage* target, size_t count) {
   if (nullptr == target) {
     return;
@@ -240,7 +240,7 @@ ATFRAME_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::ad
   target->allocate_counter.fetch_add(count, std::memory_order_release);
 }
 
-ATFRAME_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::add_destructor_counter(
+ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::add_destructor_counter(
     object_allocator_metrics_storage* target, void*) {
   if (nullptr == target) {
     return;
@@ -249,7 +249,7 @@ ATFRAME_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::ad
   target->destructor_counter.fetch_add(1, std::memory_order_release);
 }
 
-ATFRAME_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::add_deallocate_counter(
+ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::add_deallocate_counter(
     object_allocator_metrics_storage* target, size_t count) {
   if (nullptr == target) {
     return;
@@ -258,7 +258,7 @@ ATFRAME_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::ad
   target->deallocate_counter.fetch_add(count, std::memory_order_release);
 }
 
-ATFRAME_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::foreach_object_statistics(
+ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::foreach_object_statistics(
     atfw::util::nostd::function_ref<void(const object_allocator_metrics&)> fn) {
   if (object_allocator_metrics_global_cache::is_instance_destroyed()) {
     return;
@@ -283,4 +283,4 @@ ATFRAME_SERVICE_COMPONENT_MACRO_API void object_allocator_metrics_controller::fo
 }
 
 }  // namespace memory
-}  // namespace atframework
+ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_END

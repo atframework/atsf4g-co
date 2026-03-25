@@ -376,7 +376,7 @@ std::vector<uint64_t> rank_manager::get_slave_nodes(rpc::context& ctx, const PRO
 
   while (slave_nodes.size() < slave_node_cfg_num && !sorted_nodes.empty()) {
     size_t node_num = sorted_nodes.size();
-    size_t idx = util::random_engine::fast_random_between<size_t>(0, node_num);
+    size_t idx = atfw::component::random_engine::fast_random_between<size_t>(0, node_num);
     auto discovery_node_ptr = sorted_nodes[idx];
     if (!discovery_node_ptr || discovery_node_ptr->get_discovery_info().id() == 0) {
       sorted_nodes.erase(sorted_nodes.begin() + static_cast<int>(idx));
@@ -480,7 +480,7 @@ rpc::result_code_type rank_manager::check_slave_and_highest_data_version_slave(
     if (it->second.empty()) {
       continue;
     }
-    auto idx = util::random_engine::fast_random_between<size_t>(0, it->second.size());
+    auto idx = atfw::component::random_engine::fast_random_between<size_t>(0, it->second.size());
     highest_slave_node = std::make_pair(it->second[idx], it->first);
     break;
   }
