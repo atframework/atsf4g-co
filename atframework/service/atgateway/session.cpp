@@ -71,7 +71,7 @@ session::ptr_t session::create(session_manager *mgr,
   ret->proto_.swap(proto);
 
   if (!ret->proto_) {
-    return ptr_t();
+    return {};
   }
 
   ret->proto_->set_private_data(ret.get());
@@ -80,25 +80,25 @@ session::ptr_t session::create(session_manager *mgr,
 
 int session::accept_tcp(uv_stream_t *server) {
   if (check_flag(flag_t::kClosing)) {
-    FWLOGERROR("session {} already closed or is closing, can not accept again", reinterpret_cast<const void *>(this));
+    FWLOGERROR("{} already closed or is closing, can not accept again", *this);
     return static_cast<int>(error_code_t::kClosing);
   }
 
   if (check_flag(flag_t::kHasFd)) {
-    FWLOGERROR("session {} already has fd, can not accept again", reinterpret_cast<const void *>(this));
+    FWLOGERROR("{} already has fd, can not accept again", *this);
     return static_cast<int>(error_code_t::kAlreadyHasFd);
   }
 
   int errcode = uv_tcp_init(server->loop, &tcp_handle_);
   if (0 != errcode) {
-    FWLOGERROR("session {} init tcp sock failed, error code: {}", reinterpret_cast<const void *>(this), errcode);
+    FWLOGERROR("{} init tcp sock failed, error code: {}", *this, errcode);
     return static_cast<int>(error_code_t::kNetwork);
   }
   set_flag(flag_t::kHasFd, true);
 
   errcode = uv_accept(server, &stream_handle_);
   if (0 != errcode) {
-    FWLOGERROR("session {} accept tcp failed, error code: {}", reinterpret_cast<const void *>(this), errcode);
+    FWLOGERROR("{} accept tcp failed, error code: {}", *this, errcode);
     return static_cast<int>(error_code_t::kNetwork);
   }
 
@@ -128,25 +128,25 @@ int session::accept_tcp(uv_stream_t *server) {
 
 int session::accept_pipe(uv_stream_t *server) {
   if (check_flag(flag_t::kClosing)) {
-    FWLOGERROR("session {} already closed or is closing, can not accept again", reinterpret_cast<const void *>(this));
+    FWLOGERROR("{} already closed or is closing, can not accept again", *this);
     return static_cast<int>(error_code_t::kClosing);
   }
 
   if (check_flag(flag_t::kHasFd)) {
-    FWLOGERROR("session {} already has fd, can not accept again", reinterpret_cast<const void *>(this));
+    FWLOGERROR("{} already has fd, can not accept again", *this);
     return static_cast<int>(error_code_t::kAlreadyHasFd);
   }
 
   int errcode = uv_pipe_init(server->loop, &unix_handle_, 1);
   if (0 != errcode) {
-    FWLOGERROR("session {} init unix sock failed, error code: {}", reinterpret_cast<const void *>(this), errcode);
+    FWLOGERROR("{} init unix sock failed, error code: {}", *this, errcode);
     return static_cast<int>(error_code_t::kNetwork);
   }
   set_flag(flag_t::kHasFd, true);
 
   errcode = uv_accept(server, &stream_handle_);
   if (0 != errcode) {
-    FWLOGERROR("session {} accept unix failed, error code: {}", reinterpret_cast<const void *>(this), errcode);
+    FWLOGERROR("{} accept unix failed, error code: {}", *this, errcode);
     return static_cast<int>(error_code_t::kNetwork);
   }
 
@@ -177,7 +177,7 @@ int session::init_new_session() {
       atfw::util::time::time_utility::get_now() + owner_->get_conf().crypto.update_interval;
 
   set_flag(flag_t::kInited, true);
-  FWLOGWARNING("session {}({}) new session inited", id_, reinterpret_cast<const void *>(this));
+  FWLOGWARNING("{} new session inited", *this);
   return 0;
 }
 
@@ -198,7 +198,7 @@ int session::init_reconnect(session &sess) {
   sess.set_flag(flag_t::kReconnected, true);
   sess.set_flag(session::flag_t::kWaitReconnect, false);
 
-  FWLOGWARNING("session {}({}) reconnect inited", id_, reinterpret_cast<const void *>(this));
+  FWLOGWARNING("{} reconnect inited", *this);
   return 0;
 }
 
@@ -220,10 +220,9 @@ int session::send_new_session() {
   int ret = send_to_server(message);
   if (0 == ret) {
     set_flag(flag_t::kRegistered, true);
-    FWLOGWARNING("session {} send register notify to {}({}) success", id_, router_node_id_, router_node_name_);
+    FWLOGWARNING("{} send register notify to {}({}) success", *this, router_node_id_, router_node_name_);
   } else {
-    FWLOGERROR("session {} send register notify to {}({}) failed, res: {}", id_, router_node_id_, router_node_name_,
-               ret);
+    FWLOGERROR("{} send register notify to {}({}) failed, res: {}", *this, router_node_id_, router_node_name_, ret);
   }
 
   return ret;
@@ -254,9 +253,9 @@ int session::send_remove_session(session_manager *mgr) {
   int ret = send_to_server(message, mgr);
   if (0 == ret) {
     set_flag(flag_t::kRegistered, false);
-    FWLOGWARNING("session {} send remove notify to {}({}) success", id_, router_node_id_, router_node_name_);
+    FWLOGWARNING("{} send remove notify to {}({}) success", *this, router_node_id_, router_node_name_);
   } else {
-    FWLOGERROR("session {} send remove notify to {}({}) failed, res: {}", id_, router_node_id_, router_node_name_, ret);
+    FWLOGERROR("{} send remove notify to {}({}) failed, res: {}", *this, router_node_id_, router_node_name_, ret);
   }
 
   return ret;
@@ -278,11 +277,10 @@ void session::on_read(int ssz, gsl::span<const unsigned char> buffer) {
     proto_->read(ssz, buffer, errcode);
 
     if (errcode < 0) {
-      FWLOGERROR("session {}:{} read data length={} failed and will be closed, res: {}", peer_ip_, peer_port_,
-                 buffer.size(), errcode);
+      FWLOGERROR("{} read data length={} failed and will be closed, res: {}", *this, buffer.size(), errcode);
       close(static_cast<int>(close_reason_t::kInvalidData), errcode, "network error");
     } else {
-      FWLOGDEBUG("session {}:{} read data length={} success", peer_ip_, peer_port_, buffer.size());
+      FWLOGDEBUG("{} read data length={} success", *this, buffer.size());
     }
   }
 }
@@ -346,10 +344,9 @@ int session::close_fd(int32_t reason, int32_t sub_reason, atfw::util::nostd::str
       uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
     }
 
-    FWLOGINFO("session {}({}) lost fd", id_, reinterpret_cast<const void *>(this));
+    FWLOGINFO("{} lost fd", *this);
   }
-  FWLOGWARNING("session {}({}) close reason: {}, {}, {}", id_, reinterpret_cast<const void *>(this), reason, sub_reason,
-               message);
+  FWLOGWARNING("{} close reason: {}, {}, {}", *this, reason, sub_reason, message);
 
   return 0;
 }
@@ -365,7 +362,7 @@ int session::send_to_client(gsl::span<const unsigned char> data) {
   }
 
   if (!proto_) {
-    FWLOGERROR("session {} lost protocol handle when send to client", id_);
+    FWLOGERROR("{} lost protocol handle when send to client", *this);
     return static_cast<int>(error_code_t::kBadProtocol);
   }
 
@@ -396,7 +393,7 @@ int session::send_to_server(::atframework::gateway::server_message &message, ses
 
   // send to router_
   if (0 == router_node_id_ && router_node_name_.empty()) {
-    FWLOGERROR("session {} has not configure router", id_);
+    FWLOGERROR("{} has not configure router", *this);
     return static_cast<int>(error_code_t::kInvalidRouter);
   }
 
@@ -405,15 +402,14 @@ int session::send_to_server(::atframework::gateway::server_message &message, ses
   }
 
   if (nullptr == mgr) {
-    FWLOGERROR("session {} has lost manager and can not send ss message any more", id_);
+    FWLOGERROR("{} has lost manager and can not send ss message any more", *this);
     return static_cast<int>(error_code_t::kLostManager);
   }
 
   // send to server with type = ::atframework::component::service_type::EN_ATST_GATEWAY
   std::string packed_buffer;
   if (false == message.SerializeToString(&packed_buffer)) {
-    FWLOGERROR("session {} serialize failed and can not send server message: {}", id_,
-               message.InitializationErrorString());
+    FWLOGERROR("{} serialize failed and can not send server message: {}", *this, message.InitializationErrorString());
     return static_cast<int>(error_code_t::kBadData);
   }
 

@@ -28,6 +28,8 @@
 /build
 /build_*
 /log
+/.startup-error
+/*.sln
 
 # external libs
 ## libiniloader

@@ -4,6 +4,9 @@
 
 #pragma once
 
+#include <config/compile_optimize.h>
+#include <string/string_format.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <ctime>
@@ -66,7 +69,7 @@ class session : public std::enable_shared_from_this<session> {
 
   static ptr_t create(session_manager *, std::unique_ptr<atframework::gateway::libatgw_protocol_api> &);
 
-  inline id_t get_id() const { return id_; };
+  ATFW_UTIL_FORCEINLINE id_t get_id() const noexcept { return id_; };
 
   int accept_tcp(uv_stream_t *server);
   int accept_pipe(uv_stream_t *server);
@@ -152,3 +155,16 @@ class session : public std::enable_shared_from_this<session> {
 };
 }  // namespace gateway
 }  // namespace atframework
+
+ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN
+template <class CharT>
+struct ATFW_UTIL_SYMBOL_VISIBLE
+formatter<atframework::gateway::session, CharT> : formatter<basic_string_view<CharT>, CharT> {
+  template <class FormatContext>
+  auto format(const atframework::gateway::session &sess, FormatContext &ctx) const {
+    return atfw::util::string::format_to(ctx.out(), "session {}@{}({}:{})", sess.get_id(),
+                                         reinterpret_cast<const void *>(&sess), sess.get_peer_host(),
+                                         sess.get_peer_port());
+  }
+};
+ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_END

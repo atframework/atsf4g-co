@@ -269,10 +269,9 @@ int session_manager::tick() {
     if (reconnect_timeout_.front().s) {
       session::ptr_t s = reconnect_timeout_.front().s;
       if (s->check_flag(session::flag_t::kReconnected)) {
-        FWLOGINFO("session {}({}) reconnected, cleanup", s->get_id(), reinterpret_cast<const void *>(s.get()));
+        FWLOGINFO("{} reconnected, cleanup", *s);
       } else {
-        FWLOGINFO("session {}({}) reconnect timeout, close and cleanup", s->get_id(),
-                  reinterpret_cast<const void *>(s.get()));
+        FWLOGINFO("{} reconnect timeout, close and cleanup", *s);
       }
       reconnect_cache_.erase(s->get_id());
 
@@ -293,7 +292,7 @@ int session_manager::tick() {
       session::ptr_t s = first_idle_.front().s;
 
       if (!s->check_flag(session::flag_t::kRegistered) && !s->check_flag(session::flag_t::kClosing)) {
-        FWLOGINFO("session {}({}) register timeout", s->get_id(), reinterpret_cast<const void *>(s.get()));
+        FWLOGINFO("{} register timeout", *s);
         s->close(static_cast<int>(close_reason_t::kFirstIdle), 0, "idle timeout");
       }
     }
@@ -360,8 +359,7 @@ int session_manager::close(session::id_t sess_id, int32_t reason, int32_t sub_re
         atfw::util::time::time_utility::get_now() + conf_.origin_conf.client().reconnect_timeout().seconds();
 
     reconnect_cache_[sess_timer.s->get_id()] = sess_timer.s;
-    FWLOGINFO("session {:#x}({}) closed and setup reconnect timeout {}(+{})", sess_timer.s->get_id(),
-              reinterpret_cast<const void *>(sess_timer.s.get()), sess_timer.timeout,
+    FWLOGINFO("{} closed and setup reconnect timeout {}(+{})", *sess_timer.s, sess_timer.timeout,
               conf_.origin_conf.client().reconnect_timeout().seconds());
 
     // maybe transfer reconnecting session, old session still keeps kWaitReconnect flag
@@ -370,8 +368,7 @@ int session_manager::close(session::id_t sess_id, int32_t reason, int32_t sub_re
     // just close fd
     sess_timer.s->close_fd(reason, sub_reason, message);
   } else if (session_ptr) {
-    FWLOGINFO("session {:#x}({}) closed and disable reconnect", session_ptr->get_id(),
-              reinterpret_cast<const void *>(session_ptr.get()));
+    FWLOGINFO("{} closed and disable reconnect", *session_ptr);
     session_ptr->close(reason, sub_reason, message);
   }
 
@@ -494,13 +491,11 @@ int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
         nullptr != iter->second->get_protocol_handle()) {
       has_reconnect_checked = true;
       if (new_sess.get_protocol_handle()->check_reconnect(iter->second->get_protocol_handle())) {
-        FWLOGDEBUG("session {}:{} try to reconnect {} and need to close old connection {}", new_sess.get_peer_host(),
-                   new_sess.get_peer_port(), old_sess_id, reinterpret_cast<const void *>(iter->second.get()));
+        FWLOGDEBUG("{} try to reconnect {} and need to close old connection {}", new_sess, old_sess_id, *iter->second);
         close(old_sess_id, static_cast<int>(close_reason_t::kLogout), 0, "logout", true);
       } else {
-        FWLOGDEBUG("session {}:{} try to reconnect {} to old connection {}, but check_reconnect failed",
-                   new_sess.get_peer_host(), new_sess.get_peer_port(), old_sess_id,
-                   reinterpret_cast<const void *>(iter->second.get()));
+        FWLOGDEBUG("{} try to reconnect {} to old connection {}, but check_reconnect failed", new_sess, old_sess_id,
+                   *iter->second);
       }
     } else if (iter == actived_sessions_.end()) {
       FWLOGDEBUG("old session {} not found", old_sess_id);
@@ -523,8 +518,7 @@ int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
 
   // check if old session not reconnected
   if (iter->second->check_flag(session::flag_t::kReconnected)) {
-    FWLOGERROR("session {}:{} try to reconnect {}, but old session already reconnected", new_sess.get_peer_host(),
-               new_sess.get_peer_port(), old_sess_id);
+    FWLOGERROR("{} try to reconnect {}, but old session already reconnected", new_sess, old_sess_id);
     return static_cast<int>(error_code_t::kSessionNotFound);
   }
 
@@ -618,6 +612,8 @@ void session_manager::assign_default_router(session &sess) const {
     sess.set_router(conf_.origin_conf.client().default_router().node_id(),
                     conf_.origin_conf.client().default_router().node_name());
   }
+
+  FWLOGINFO("{} set default router to {}:{}", sess, sess.get_router_id(), sess.get_router_name());
 }
 
 void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {

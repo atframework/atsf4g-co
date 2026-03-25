@@ -6,6 +6,8 @@
 
 #include <libatbus_protocol.h>
 
+#include <opentelemetry/semconv/incubating/deployment_attributes.h>
+
 #include <algorithm/bit.h>
 #include <common/file_system.h>
 #include <common/string_oprs.h>
@@ -424,10 +426,9 @@ class gateway_module : public ::atfw::atapp::module_impl {
     if (gw_mgr_.get_conf().origin_conf.echo_server()) {
       int ret = sess->send_to_client(buffer);
       if (ret < 0) {
-        FWLOGERROR("session {} send {} bytes data to client failed, error_code: {}(echo server)", sess->get_id(),
-                   buffer.size(), ret);
+        FWLOGERROR("{} send {} bytes data to client failed, error_code: {}(echo server)", *sess, buffer.size(), ret);
       } else {
-        FWLOGDEBUG("session {} send {} bytes data to client(echo server)", sess->get_id(), buffer.size());
+        FWLOGDEBUG("{} send {} bytes data to client(echo server)", *sess, buffer.size());
       }
       return ret;
     }
@@ -445,20 +446,20 @@ class gateway_module : public ::atfw::atapp::module_impl {
 
     // send to router
     if (0 != sess_holder->get_router_id()) {
-      FWLOGDEBUG("session {} send {} bytes data to server {}({})", sess_holder->get_id(), buffer.size(),
-                 sess_holder->get_router_id(), sess_holder->get_router_name());
+      FWLOGDEBUG("{} send {} bytes data to server {}({})", *sess_holder, buffer.size(), sess_holder->get_router_id(),
+                 sess_holder->get_router_name());
 
       return gw_mgr_.post_data(sess_holder->get_router_id(), post_message);
     }
 
     if (!sess_holder->get_router_name().empty()) {
-      FWLOGDEBUG("session {} send {} bytes data to server {}({})", sess_holder->get_id(), buffer.size(),
-                 sess_holder->get_router_id(), sess_holder->get_router_name());
+      FWLOGDEBUG("{} send {} bytes data to server {}({})", *sess_holder, buffer.size(), sess_holder->get_router_id(),
+                 sess_holder->get_router_name());
 
       return gw_mgr_.post_data(sess_holder->get_router_name(), post_message);
     }
 
-    FWLOGERROR("session {} send {} bytes data failed, not router", sess_holder->get_id(), buffer.size());
+    FWLOGERROR("{} send {} bytes data failed, not router", *sess_holder, buffer.size());
     return -1;
   }
 
@@ -540,10 +541,9 @@ class gateway_module : public ::atfw::atapp::module_impl {
       // if network EOF or network error, do not close session, but wait for reconnect
       bool enable_reconnect = reason <= static_cast<int>(::atframework::gateway::close_reason_t::kReconnectBound);
       if (enable_reconnect) {
-        FWLOGINFO("session {}({}) closed", sess_holder->get_id(), reinterpret_cast<const void *>(sess));
+        FWLOGINFO("{} closed", *sess_holder);
       } else {
-        FWLOGINFO("session {}({}) closed disable reconnect", sess_holder->get_id(),
-                  reinterpret_cast<const void *>(sess));
+        FWLOGINFO("{} closed disable reconnect", *sess_holder);
       }
       if (nullptr != sess_holder->get_manager()) {
         if (sess_holder->get_manager()->close(sess_holder->get_id(), reason, sub_reason, message, enable_reconnect) <
@@ -555,10 +555,9 @@ class gateway_module : public ::atfw::atapp::module_impl {
       }
     } else {
       if (sess_holder->check_flag(::atframework::gateway::session::flag_t::kReconnected)) {
-        FWLOGINFO("session {}({}) reconnected and release old connection", sess_holder->get_id(),
-                  reinterpret_cast<const void *>(sess));
+        FWLOGINFO("{} reconnected and release old connection", *sess_holder);
       } else {
-        FWLOGINFO("session {}({}) closed", sess_holder->get_id(), reinterpret_cast<const void *>(sess));
+        FWLOGINFO("{} closed", *sess_holder);
       }
     }
 
@@ -577,12 +576,11 @@ class gateway_module : public ::atfw::atapp::module_impl {
       }
       ::atframework::gateway::session::ptr_t sess_holder = sess->shared_from_this();
 
-      FWLOGINFO("session {}({}) handshake done\n{}", sess_holder->get_id(), reinterpret_cast<const void *>(sess),
-                proto->get_info());
+      FWLOGINFO("{} handshake done\n{}", *sess_holder, proto->get_info());
 
       int res = gw_mgr_.active_session(sess_holder);
       if (0 != res) {
-        FWLOGERROR("session {} send new session to router server failed, res: {}", sess->get_id(), res);
+        FWLOGERROR("{} send new session to router server failed, res: {}", *sess_holder, res);
         return -1;
       }
     } else {
@@ -591,8 +589,7 @@ class gateway_module : public ::atfw::atapp::module_impl {
       if (nullptr == sess) {
         FWLOGERROR("session NONE handshake failed,res: {}\n{}", status, proto->get_info());
       } else {
-        FWLOGERROR("session {}({}) handshake failed,res: {},\n{}", sess->get_id(), reinterpret_cast<const void *>(sess),
-                   status, proto->get_info());
+        FWLOGERROR("{} handshake failed,res: {},\n{}", *sess, status, proto->get_info());
       }
     }
     return 0;
@@ -605,15 +602,13 @@ class gateway_module : public ::atfw::atapp::module_impl {
       if (nullptr == sess) {
         FWLOGDEBUG("session NONE handshake update success\n{}", proto->get_info());
       } else {
-        FWLOGDEBUG("session {}({}) handshake update success\n{}", sess->get_id(), reinterpret_cast<const void *>(sess),
-                   proto->get_info());
+        FWLOGDEBUG("{} handshake update success\n{}", *sess, proto->get_info());
       }
     } else {
       if (nullptr == sess) {
         FWLOGERROR("session NONE handshake update failed,res: {}\n{}", status, proto->get_info());
       } else {
-        FWLOGERROR("session {}({}) handshake update failed,res: {},\n{}", sess->get_id(),
-                   reinterpret_cast<const void *>(sess), status, proto->get_info());
+        FWLOGERROR("{} handshake update failed,res: {},\n{}", *sess, status, proto->get_info());
       }
     }
     return 0;
@@ -860,6 +855,31 @@ int main(int argc, char *argv[]) {
 
   // setup command
   atfw::util::cli::cmd_option_ci::ptr_type cmgr = app.get_command_manager();
+  cmgr->bind_cmd("-env",
+                 [&app](util::cli::callback_param params) {
+                   if (params.get_params_number() <= 0) {
+                     return;
+                   }
+
+                   if (params[0]->to_cpp_string().empty()) {
+                     return;
+                   }
+
+                   app.set_metadata_label(opentelemetry::semconv::deployment::kDeploymentEnvironmentName,
+                                          params[0]->to_cpp_string());
+                 })
+      ->set_help_msg("-env [text]                                               set a env name.");
+  cmgr->bind_cmd("show-configure",
+                 [&app, gw_mod](util::cli::callback_param params) {
+                   std::string app_configure =
+                       std::string("atapp configure:\n") + app.get_origin_configure().Utf8DebugString();
+                   ::atfw::atapp::app::add_custom_command_rsp(params, app_configure);
+                   ::atfw::atapp::app::add_custom_command_rsp(
+                       params, std::string("gateway configure:\n") +
+                                   gw_mod->get_session_manager().get_conf().origin_conf.Utf8DebugString());
+                 })
+      ->set_help_msg("show-configure                                            show service configure");
+
   cmgr->bind_cmd("kickoff", &gateway_module::cmd_on_kickoff, gw_mod.get())
       ->set_help_msg(
           "kickoff <session id> [reason]          kickoff a session, session can not be reconnected anymore.");

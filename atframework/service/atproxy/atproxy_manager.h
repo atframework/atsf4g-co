@@ -50,6 +50,8 @@ class atproxy_manager : public ::atfw::atapp::module_impl {
 
   const char *name() const override;
 
+  inline const atframework::atproxy::protocol::atproxy_configure &get_origin_conf() const { return atproxy_configure_; }
+
  private:
   node_info_ptr_t mutable_node_info(::atfw::atapp::app_id_t id);
   void remove_node_info(::atfw::atapp::app_id_t id);
