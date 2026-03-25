@@ -477,6 +477,7 @@ int session_manager::set_session_router(session::id_t sess_id, ::atbus::bus_id_t
   }
 
   iter->second->set_router(router_node_id, router_node_name);
+  FWLOGINFO("{} set router to {}:{}", *iter->second, router_node_id, router_node_name);
   return 0;
 }
 
