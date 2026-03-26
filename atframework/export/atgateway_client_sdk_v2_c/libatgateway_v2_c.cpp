@@ -301,18 +301,24 @@ LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_send_buffer_limit(libat
   ATGW_CONTEXT(context)->set_send_buffer_limit(static_cast<size_t>(max_size), static_cast<size_t>(max_number));
 }
 
-LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_start_session(libatgateway_v2_c_context context) {
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_start_session(libatgateway_v2_c_context context,
+                                                                      const unsigned char *hash_data,
+                                                                      uint64_t hash_len) {
   if (ATGW_CONTEXT_IS_NULL(context)) {
     return static_cast<int32_t>(::atframework::gateway::error_code_t::kParam);
   }
 
-  return ATGW_CONTEXT(context)->start_session();
+  gsl::span<const unsigned char> hash_span;
+  if (nullptr != hash_data && hash_len > 0) {
+    hash_span = gsl::span<const unsigned char>{hash_data, static_cast<size_t>(hash_len)};
+  }
+
+  return ATGW_CONTEXT(context)->start_session(hash_span);
 }
 
-LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_reconnect_session(libatgateway_v2_c_context context,
-                                                                          uint64_t sessios_id,
-                                                                          const unsigned char *secret_buf,
-                                                                          uint64_t secret_len) {
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_reconnect_session(
+    libatgateway_v2_c_context context, uint64_t sessios_id, const unsigned char *secret_buf, uint64_t secret_len,
+    const unsigned char *hash_data, uint64_t hash_len) {
   if (ATGW_CONTEXT_IS_NULL(context)) {
     return static_cast<int32_t>(::atframework::gateway::error_code_t::kParam);
   }
@@ -321,7 +327,13 @@ LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_reconnect_session(libatg
   if (nullptr != secret_buf && secret_len > 0) {
     secret.assign(secret_buf, secret_buf + secret_len);
   }
-  return ATGW_CONTEXT(context)->reconnect_session(sessios_id, secret);
+
+  gsl::span<const unsigned char> hash_span;
+  if (nullptr != hash_data && hash_len > 0) {
+    hash_span = gsl::span<const unsigned char>{hash_data, static_cast<size_t>(hash_len)};
+  }
+
+  return ATGW_CONTEXT(context)->reconnect_session(sessios_id, secret, hash_span);
 }
 
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_get_info(libatgateway_v2_c_context context, char *info_str,

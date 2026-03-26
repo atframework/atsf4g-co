@@ -346,9 +346,10 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
    * @brief Client-side: start a new session by sending kKeyExchangeReq
    * @return 0 or error code
    */
-  LIBATGW_PROTOCOL_API int start_session();
+  LIBATGW_PROTOCOL_API int start_session(gsl::span<const unsigned char> hash_data = {});
 
-  LIBATGW_PROTOCOL_API int reconnect_session(uint64_t session_id, gsl::span<const unsigned char> session_token);
+  LIBATGW_PROTOCOL_API int reconnect_session(uint64_t session_id, gsl::span<const unsigned char> session_token,
+                                             gsl::span<const unsigned char> hash_data = {});
 
   LIBATGW_PROTOCOL_API int send_post(::atframework::gateway::v2::client_message_type_t message_type,
                                      gsl::span<const unsigned char> data);
@@ -366,6 +367,8 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   LIBATGW_PROTOCOL_API uint64_t get_session_id() const noexcept override;
 
   LIBATGW_PROTOCOL_API gsl::span<const unsigned char> get_session_token() const noexcept override;
+
+  LIBATGW_PROTOCOL_API gsl::span<const unsigned char> get_router_hash_data() const noexcept override;
 
   LIBATGW_PROTOCOL_API void set_logger(atfw::util::log::log_wrapper::ptr_t logger);
 
@@ -493,6 +496,7 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   std::shared_ptr<crypto_shared_context_t> shared_conf_;
   uint64_t session_id_;
   std::vector<unsigned char> session_token_;
+  std::vector<unsigned char> router_hash_data_;
   ::atbus::detail::buffer_manager read_buffers_;
   /**
    * @brief Since most packets are small, when the packet is small we store it directly in

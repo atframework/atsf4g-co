@@ -227,62 +227,63 @@ app1.run_noblock();
 
 ---
 
-### D. 拓扑变更与丢失拓扑测试
+### D. 拓扑变更与丢失拓扑测试 ✅ 已完成
 
-**新建文件**: `atapp_topology_change_test.cpp`
+**文件**: `atapp_topology_change_test.cpp` ✅ 已创建
 
 > 核心测试 `update_topology_peer` 和 `remove_topology_peer` 的异步流程
 >
 > 拓扑结构: `node1(0x401) --proxy--> old_upstream(0x402)`，可选 `new_upstream(0x403)`, `target(0x404)`
 
-| # | 用例名 | 描述 | 验证点 | 需求 |
-|----|--------|------|--------|------|
-| D.1 | `topology_change_new_upstream_not_connected` | update_topology_peer 切到新上游，新上游有服务发现但未连接 → 发起连接后正常 | 消息经新上游到达、收到数据与发送一致 | R1.1 |
-| D.2 | `topology_change_new_upstream_already_connected` | update_topology_peer 切到新上游，新上游已有 atbus endpoint → 无缝切换 ready | handle 保持 ready，消息不中断、收到数据与发送一致 | R1.2 |
-| D.3 | `topology_change_discovery_missing_then_arrive` | update_topology_peer 切到新上游 → 新上游无服务发现 → kWaitForDiscoveryToConnect → discovery 到达 → 连接成功 | 消息最终到达、收到数据与发送一致 | R1.3 |
-| D.4 | `topology_change_discovery_timeout_cleanup` | update_topology_peer → 新上游无服务发现 → 用 `set_sys_now()` 推进时间触发重连超限 → handle 移除 | pending 消息失败 | R1.4 |
-| D.5 | `topology_lost_recover_before_timeout` | remove_topology_peer → kLostTopology=true → 在 `set_sys_now()` 推进超时前 update_topology_peer 恢复 → kLostTopology 清除 | 通信不受影响、收到数据与发送一致 | R1.5 |
-| D.6 | `topology_lost_timeout_cleanup` | remove_topology_peer → `set_sys_now()` 推进到 lost_topology_timeout 之后 → handle 强制移除 | pending 消息失败，下游也清理 | R1.6 |
-| D.7 | `topology_lost_ready_handle_force_remove` | handle 处于 kReady+kLostTopology → `set_sys_now()` 推进到超时后仍强制移除 | handle 被移除（安全网机制） | - |
-| D.8 | `topology_same_upstream_noop` | update_topology_peer 上游 ID 不变 → 仅尝试 try_direct_reconnect | handle 状态不变 | - |
-| D.9 | `topology_proxy_in_new_upstream_path` | 当前 proxy_bus_id 仍在新上游链路中 → 不重算 → 保持现有代理 | handle 状态不变 | - |
+| # | 用例名 | 描述 | 验证点 | 需求 | 状态 |
+|----|--------|------|--------|------|------|
+| D.1 | `topology_change_new_upstream_not_connected` | update_topology_peer 切到新上游，新上游有服务发现但未连接 → 发起连接后正常 | 消息经新上游到达、收到数据与发送一致 | R1.1 | ✅ |
+| D.2 | `topology_change_new_upstream_already_connected` | update_topology_peer 切到新上游，新上游已有 atbus endpoint → 无缝切换 ready | handle 保持 ready，消息不中断、收到数据与发送一致 | R1.2 | ✅ |
+| D.3 | `topology_change_discovery_missing_then_arrive` | update_topology_peer 切到新上游 → 新上游无服务发现 → proxy_bus_id 已更新但连接不可用 → discovery 到达 → 连接成功 | 断开后: bus upstream==null + remove_topology_peer(old_upstream) → has_lost_topology_flag==true (退化); 拓扑更新后: new_upstream 的 handle 存在且无 kLostTopology; 最终: new_upstream handle 仍存在且无 kLostTopology + 消息到达 (完全恢复) | R1.3 | ✅ |
+| D.4 | `topology_change_discovery_timeout_cleanup` | update_topology_peer → 新上游无服务发现 → 用 `set_sys_now()` 推进时间触发重连超限 → handle 移除 | 断开后: bus upstream==null + remove_topology_peer(old_upstream) → has_lost_topology_flag==true (退化); 拓扑更新后: bus upstream 仍==null + old_upstream 仍为 kLostTopology (0x403 无总线连接); pending 消息以 EN_ATBUS_ERR_NODE_TIMEOUT 失败 | R1.4 | ✅ |
+| D.5 | `topology_lost_recover_before_timeout` | remove_topology_peer → kLostTopology=true → 在 `set_sys_now()` 推进超时前 update_topology_peer 恢复 → kLostTopology 清除 | ready 状态验证、has_lost_topology_flag 断言、恢复后 proxy_bus_id 验证、通信不受影响 | R1.5 | ✅ |
+| D.6 | `topology_lost_timeout_cleanup` | remove_topology_peer → `set_sys_now()` 推进到 lost_topology_timeout 之后 → handle 强制移除 | ready 状态断言、has_connection_handle 断言、pending 消息失败，endpoint 清理 | R1.6 | ✅ |
+| D.7 | `topology_lost_ready_handle_force_remove` | handle 处于 kReady+kLostTopology → `set_sys_now()` 推进到超时后仍强制移除 | handle 被移除（安全网机制） | - | ✅ |
+| D.8 | `topology_same_upstream_noop` | update_topology_peer 上游 ID 不变 → 仅尝试 try_direct_reconnect | ready/proxy_bus_id/lost_topology 全部断言验证状态不变 | - | ✅ |
+| D.9 | `topology_proxy_in_new_upstream_path` | 当前 proxy_bus_id 仍在新上游链路中 → 不重算 → 保持现有代理 | proxy_bus_id==old_upstream、ready 断言、无 lost_topology | - | ✅ |
 
 ---
 
-### E. 服务发现生命周期与重连机制测试
+### E. 服务发现生命周期与重连机制测试 ✅ 已完成
 
-**新建文件**: `atapp_discovery_reconnect_test.cpp`
+**文件**: `atapp_discovery_reconnect_test.cpp` ✅ 已创建
 
 > 测试 `on_discovery_event`、`set_handle_waiting_discovery`、`resume_handle_discovery` 的完整流程
 > 以及 `setup_reconnect_timer` 的指数退避和计数行为
 >
 > 拓扑结构: `node1(0x501) ←→ node2(0x502)` (直连或上游关系)
 
-| # | 用例名 | 描述 | 验证点 | 需求 |
-|----|--------|------|--------|------|
-| E.1 | `discovery_delete_then_put_reconnect` | on_discovery_event(kDelete) → kWaitForDiscoveryToConnect → on_discovery_event(kPut) → resume_handle_discovery → 重连成功 | 连接恢复，消息送达、收到数据与发送一致 | R5.1 |
-| E.2 | `discovery_missing_reconnect_count_accumulate` | 服务发现缺失 → 用 `set_sys_now()` 逐步推进时间触发定时器 → reconnect_retry_times 递增 → 超限后 handle 移除 | handle 被清理 | R5.2 |
-| E.3 | `reconnect_exponential_backoff` | 配置 start_interval=2s, max_interval=16s → 断开连接 → 用 `set_sys_now()` 逐步推进时间，验证重连间隔 2s→4s→8s→16s→16s | 间隔递增到 max 后不再增加 | R5.6 |
-| E.4 | `reconnect_timer_replaced_by_earlier` | update_timer 若新 timeout < 旧 timeout → 定时器被替换 | 更早触发 | - |
-| E.5 | `reconnect_timer_skip_if_later` | update_timer 若新 timeout > 旧 timeout → 定时器保持不变 | 原定时器不受影响 | - |
+| # | 用例名 | 描述 | 验证点 | 需求 | 状态 |
+|----|--------|------|--------|------|------|
+| E.1 | `discovery_delete_then_put_reconnect` | 移除 bus endpoint + discovery → `update_topology_peer(upstream=0)` 触发 `set_handle_waiting_discovery` → kWaitForDiscoveryToConnect 置位 → 重新添加 discovery + `on_discovery_event(kPut)` → `resume_handle_discovery` 清除标志 → 恢复拓扑 → 重连成功 | 每阶段用 `CASE_EXPECT_EQ/NE(flags & 0x02)` 验证 kWaitForDiscoveryToConnect 状态；消息送达 | R5.1 | ✅ |
+| E.2 | `discovery_missing_reconnect_count_accumulate` | 服务发现缺失 → `set_handle_unready_by_bus_id` → `set_sys_now()` 逐步推进 → reconnect_retry_times 递增 → 超限后 handle 移除 | `CASE_EXPECT_TRUE(handle_removed)` | R5.2 | ✅ |
+| E.3 | `reconnect_exponential_backoff` | 配置 `discovery_1b.yaml`: start=2s, max=8s, max_try=8 → `set_handle_unready_by_bus_id` → 精确推进到每个 reconnect_next_timepoint → 收集间隔 | `CASE_EXPECT_EQ(4/8/8/8, intervals[0..3])` 验证指数递增且到 max 后不再增加 | R5.6 | ✅ |
+| E.4 | `reconnect_timer_replaced_by_earlier` | 配置 `discovery_4.yaml`: start=30s, lost_timeout=8s → `set_handle_unready_by_bus_id` (FAR=30s) → `remove_topology_peer` (NEAR=8s) | `CASE_EXPECT_LT(new_pending, old_pending)` 验证 pending_timer_timeout 变小 | - | ✅ |
+| E.5 | `reconnect_timer_skip_if_later` | `set_handle_unready_by_bus_id` (NEAR=2s) → `remove_topology_peer` (FAR=32s) | `CASE_EXPECT_EQ(original, new_pending)` 验证 pending_timer_timeout 不变 | - | ✅ |
 
 ---
 
-### F. 发送失败恢复与代理级联测试
+### F. 发送失败恢复与代理级联测试 ✅ 已完成
 
-**新建文件**: `atapp_error_recovery_test.cpp`
+**文件**: `atapp_error_recovery_test.cpp` ✅ 已创建
 
-> 测试 `on_send_forward_request` 失败修复和代理 ready/unready 级联传播
+> 测试 handle unready→recovery 和代理 ready/unready 级联传播
 >
-> 拓扑结构: `node1(0x601) --proxy--> proxy(0x602) --proxy_for--> downstream(0x603)`
+> F.1 使用 E 组 3 节点拓扑 (kSameUpstreamPeer, allow_direct_connection: true)
+> F.2-F.5 使用 F 组 3 节点拓扑: `node1(0x601) --proxy--> proxy(0x602) --proxy_for--> downstream(0x603)`
 
-| # | 用例名 | 描述 | 验证点 | 需求 |
-|----|--------|------|--------|------|
-| F.1 | `send_fail_reconnect_then_success` | 发送返回 NO_CONNECTION → handle unready → endpoint 重建 → 重连 → 再次发送成功 | 第二次发送成功、收到数据与发送一致 | R5.3 |
-| F.2 | `proxy_ready_cascade_downstream` | 代理节点 set_handle_ready → 被代理下游节点也 ready + add_waker 被调用 | 下游的 pending 消息被发送、收到数据与发送一致 | R5.4 |
-| F.3 | `proxy_unready_cascade_downstream` | 代理节点 set_handle_unready → 下游节点也 unready | 下游 app_handle 也 unready | R5.4 |
-| F.4 | `proxy_removed_downstream_closed` | remove_connection_handle(proxy) → 下游 handle 的 on_close_connection 被调用 | 下游 endpoint 关闭 | R5.5 |
-| F.5 | `proxy_removed_downstream_no_app_handle` | 代理被移除 → 下游 handle 无 app_handle（纯代理节点）→ set_handle_unready + remove_connection_handle | handle 安全清理 | R5.5 |
+| # | 用例名 | 描述 | 验证点 | 需求 | 状态 |
+|----|--------|------|--------|------|------|
+| F.1 | `send_fail_reconnect_then_success` | set_handle_unready → pending 消息排队 → 重连定时器触发 → try_direct_reconnect 发现 bus endpoint 可用 → set_handle_ready → pending 消息送达 | 恢复后 handle ready、pending 消息送达、收到数据与发送一致 | R5.3 | ✅ |
+| F.2 | `proxy_ready_cascade_downstream` | 代理节点 set_handle_ready → 被代理下游节点也 ready + add_waker 被调用 | 下游的 pending 消息被发送、收到数据与发送一致 | R5.4 | ✅ |
+| F.3 | `proxy_unready_cascade_downstream` | 代理节点 set_handle_unready → 下游节点也 unready | 下游 app_handle 也 unready | R5.4 | ✅ |
+| F.4 | `proxy_removed_downstream_closed` | on_close_connection(proxy) → 下游 handle 的 on_close_connection 被调用 | 下游 handle 也被移除 | R5.5 | ✅ |
+| F.5 | `proxy_removed_downstream_safe_cleanup` | 先移除下游 handle → 再关闭代理 → 代理级联安全跳过已移除下游 | handle 安全清理、无崩溃 | R5.5 | ✅ |
 
 ---
 
@@ -329,20 +330,26 @@ app1.run_noblock();
 | `atapp_test_topo_3.yaml` | 新上游 | 0x00000403 | 21902 | - |
 | `atapp_test_topo_4.yaml` | 远端目标 | 0x00000404 | 21904 | `ipv4://127.0.0.1:21902` |
 
-#### E 组 — 服务发现 & 重连测试
+#### E 组 — 服务发现 & 重连测试 ✅ 已完成
 
-| 文件名 | 用途 | ID | 端口 | proxy |
-|--------|------|-----|------|-------|
-| `atapp_test_discovery_1.yaml` | 节点1 | 0x00000501 | 22001 | - |
-| `atapp_test_discovery_2.yaml` | 节点2 | 0x00000502 | 22002 | - |
+| 文件名 | 用途 | ID | 端口 | proxy | 状态 |
+|--------|------|-----|------|-------|------|
+| `atapp_test_discovery_1.yaml` | 节点1 (E.1/E.2/E.5) | 0x00000501 | 22001 | `ipv4://127.0.0.1:22003` | ✅ |
+| `atapp_test_discovery_1b.yaml` | 节点1 (E.3: max_interval=8s, max_try=8) | 0x00000501 | 22001 | `ipv4://127.0.0.1:22003` | ✅ |
+| `atapp_test_discovery_2.yaml` | 节点2 | 0x00000502 | 22002 | `ipv4://127.0.0.1:22003` | ✅ |
+| `atapp_test_discovery_3.yaml` | 上游 | 0x00000503 | 22003 | - | ✅ |
+| `atapp_test_discovery_4.yaml` | 节点1 (E.4: start=30s, lost_timeout=8s) | 0x00000501 | 22001 | `ipv4://127.0.0.1:22003` | ✅ |
 
-#### F 组 — 错误恢复 & 代理级联测试
+#### F 组 — 错误恢复 & 代理级联测试 ✅ 已完成
 
-| 文件名 | 用途 | ID | 端口 | proxy |
-|--------|------|-----|------|-------|
-| `atapp_test_recovery_1.yaml` | 节点1 | 0x00000601 | 22101 | - |
-| `atapp_test_recovery_2.yaml` | 代理节点 | 0x00000602 | 22102 | - |
-| `atapp_test_recovery_3.yaml` | 目标节点 | 0x00000603 | 22103 | `ipv4://127.0.0.1:22102` |
+> F.1 复用 E 组配置 (discovery_1/2/3.yaml)，无需额外配置文件。
+> F.2-F.5 使用以下配置文件:
+
+| 文件名 | 用途 | ID | 端口 | proxy | 状态 |
+|--------|------|-----|------|-------|------|
+| `atapp_test_recovery_1.yaml` | 节点1 | 0x00000601 | 22101 | `ipv4://127.0.0.1:22102` | ✅ |
+| `atapp_test_recovery_2.yaml` | 代理节点 | 0x00000602 | 22102 | - | ✅ |
+| `atapp_test_recovery_3.yaml` | 目标节点 | 0x00000603 | 22103 | `ipv4://127.0.0.1:22102` | ✅ |
 
 ---
 
@@ -358,8 +365,8 @@ app1.run_noblock();
    - [x] 创建 B 组配置 (direct_1/2/3.yaml) ✅ 已完成
    - [x] 创建 C 组配置 (downstream_1/2.yaml) ✅ 已完成
    - [x] 创建 D 组配置 (topo_1/2/3/4.yaml) ✅ 已完成
-   - [ ] 创建 E 组配置 (discovery_1/2.yaml)
-   - [ ] 创建 F 组配置 (recovery_1/2/3.yaml)
+   - [x] 创建 E 组配置 (discovery_1/2/3.yaml) ✅ 已完成
+   - [x] 创建 F 组配置 (recovery_1/2/3.yaml) ✅ 已完成
 
 3. **Phase 3**: libatapp 上游转发测试 ✅ 已完成
    - [x] 创建 `atapp_upstream_forward_test.cpp`
@@ -376,20 +383,21 @@ app1.run_noblock();
    - [x] 实现 C.1~C.4 用例（原 C.4+C.5 合并为 C.4）
    - [x] 编译 & 运行验证
 
-6. **Phase 6**: libatapp 拓扑变更测试
+6. **Phase 6**: libatapp 拓扑变更测试 ✅ 已完成
    - [x] 创建 `atapp_topology_change_test.cpp`
    - [x] 实现 D.1~D.9 用例
    - [x] 编译 & 运行验证（全部 101 个用例通过）
+   - [x] 加强 D.3/D.4/D.5/D.6/D.8/D.9 断言（使用 `get_connection_handle_debug_info`、`has_lost_topology_flag`、`is_connection_handle_ready`、`get_connection_handle_proxy_bus_id` 等 debug API 替代纯日志输出）
 
-7. **Phase 7**: libatapp 服务发现 & 重连机制测试
-   - [ ] 创建 `atapp_discovery_reconnect_test.cpp`
-   - [ ] 实现 E.1~E.5 用例
-   - [ ] 编译 & 运行验证
+7. **Phase 7**: libatapp 服务发现 & 重连机制测试 ✅ 已完成
+   - [x] 创建 `atapp_discovery_reconnect_test.cpp`
+   - [x] 实现 E.1~E.5 用例
+   - [x] 编译 & 运行验证（全部 106 个用例通过）
 
-8. **Phase 8**: libatapp 错误恢复 & 代理级联测试
-   - [ ] 创建 `atapp_error_recovery_test.cpp`
-   - [ ] 实现 F.1~F.5 用例
-   - [ ] 编译 & 运行验证
+8. **Phase 8**: libatapp 错误恢复 & 代理级联测试 ✅ 已完成
+   - [x] 创建 `atapp_error_recovery_test.cpp`
+   - [x] 实现 F.1~F.5 用例
+   - [x] 编译 & 运行验证（全部 111 个用例通过）
 
 ---
 

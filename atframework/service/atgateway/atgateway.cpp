@@ -108,7 +108,7 @@ class gateway_module : public ::atfw::atapp::module_impl {
   }
 
   int reload() override {
-    ++gw_mgr_.get_conf().version;
+    gw_mgr_.reload();
 
     get_app()->parse_configures_into(gw_mgr_.get_conf().origin_conf, "atgateway");
 
@@ -254,7 +254,7 @@ class gateway_module : public ::atfw::atapp::module_impl {
 
   int tick() override { return gw_mgr_.tick(); }
 
-  void cleanup() override { get_session_manager().cleanup(); }
+  void cleanup() override { gw_mgr_.cleanup(); }
 
   inline ::atframework::gateway::session_manager &get_session_manager() { return gw_mgr_; }
   inline const ::atframework::gateway::session_manager &get_session_manager() const { return gw_mgr_; }

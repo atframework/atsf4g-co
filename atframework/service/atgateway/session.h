@@ -127,6 +127,8 @@ class session : public std::enable_shared_from_this<session> {
   inline ::atbus::bus_id_t get_router_id() const noexcept { return router_node_id_; }
   inline const std::string &get_router_name() const noexcept { return router_node_name_; }
 
+  gsl::span<const unsigned char> get_router_hash_data() const noexcept;
+
   inline const std::string &get_peer_host() const noexcept { return peer_ip_; }
   inline int32_t get_peer_port() const noexcept { return peer_port_; }
   inline session_manager *get_manager() const noexcept { return owner_; }

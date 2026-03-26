@@ -2,6 +2,8 @@
 // Created by owent on 2016/9/29.
 //
 
+#include "session_manager.h"
+
 #include <uv.h>
 
 #include <common/string_oprs.h>
@@ -14,8 +16,7 @@
 #include <new>
 
 #include "config/atframe_service_types.h"
-
-#include "session_manager.h"
+#include "string/string_format.h"
 
 namespace atframework {
 namespace gateway {
@@ -58,6 +59,16 @@ int session_manager::init(::atfw::atapp::app *app_inst, create_proto_fn_t fn) {
   if (!fn) {
     FWLOGERROR("{}", "create protocol function is required");
     return -1;
+  }
+
+  if (!discovery_index_) {
+    discovery_index_ = component::service_discovery_index::create(app_inst->get_etcd_module());
+    if (!discovery_index_) {
+      FWLOGERROR("create service discovery index failed");
+      return -1;
+    }
+
+    discovery_index_->initialize();
   }
   return 0;
 }
@@ -375,7 +386,21 @@ int session_manager::close(session::id_t sess_id, int32_t reason, int32_t sub_re
   return 0;
 }
 
-void session_manager::cleanup() { app_ = nullptr; }
+void session_manager::reload() {
+  ++conf_.version;
+
+  if (discovery_index_) {
+    discovery_index_->reload();
+  }
+}
+
+void session_manager::cleanup() {
+  if (discovery_index_) {
+    discovery_index_->cleanup();
+  }
+
+  app_ = nullptr;
+}
 
 int session_manager::post_data(::atbus::bus_id_t tid, ::atframework::gateway::server_message &message) {
   return post_data(tid, static_cast<int32_t>(::atframework::component::service_type::kAtGateway), message);
@@ -562,6 +587,9 @@ int session_manager::active_session(session::ptr_t sess) {
   }
 
   actived_sessions_[sess->get_id()] = sess;
+
+  // setup default router
+  assign_default_router(*sess);
   return 0;
 }
 
@@ -571,12 +599,23 @@ void session_manager::assign_default_router(session &sess) const {
   if (conf_.origin_conf.client().default_router().has_policy_selector()) {
     policy_selector = &conf_.origin_conf.client().default_router().policy_selector();
   }
+
+  atfw::atapp::etcd_discovery_set::ptr_t select_set;
+  if (discovery_index_) {
+    if (conf_.origin_conf.client().default_router().type_id() != 0) {
+      select_set = discovery_index_->get_discovery_index_by_type(conf_.origin_conf.client().default_router().type_id());
+    } else if (!conf_.origin_conf.client().default_router().type_name().empty()) {
+      select_set =
+          discovery_index_->get_discovery_index_by_type(conf_.origin_conf.client().default_router().type_name());
+    }
+  }
+
   switch (conf_.origin_conf.client().default_router().policy()) {
     case ::atframework::gateway::atgateway_router_policy::EN_ATGW_ROUTER_POLICY_RANDOM: {
-      if (nullptr == app_) {
+      if (!select_set) {
         break;
       }
-      auto select_node = app_->get_global_discovery().get_node_by_random(policy_selector);
+      auto select_node = select_set->get_node_by_random(policy_selector);
       if (select_node) {
         sess.set_router(select_node->get_discovery_info().id(), select_node->get_discovery_info().name());
         by_setting = false;
@@ -584,10 +623,10 @@ void session_manager::assign_default_router(session &sess) const {
       break;
     }
     case ::atframework::gateway::atgateway_router_policy::EN_ATGW_ROUTER_POLICY_ROUND_ROBIN: {
-      if (nullptr == app_) {
+      if (!select_set) {
         break;
       }
-      auto select_node = app_->get_global_discovery().get_node_by_round_robin(policy_selector);
+      auto select_node = select_set->get_node_by_round_robin(policy_selector);
       if (select_node) {
         sess.set_router(select_node->get_discovery_info().id(), select_node->get_discovery_info().name());
         by_setting = false;
@@ -595,10 +634,17 @@ void session_manager::assign_default_router(session &sess) const {
       break;
     }
     case ::atframework::gateway::atgateway_router_policy::EN_ATGW_ROUTER_POLICY_HASH: {
-      if (nullptr == app_) {
+      if (!select_set) {
         break;
       }
-      auto select_node = app_->get_global_discovery().get_node_hash_by_consistent_hash(sess.get_id(), policy_selector);
+      atfw::atapp::etcd_discovery_set::node_hash_type select_node;
+      auto hash_data_span = sess.get_router_hash_data();
+      if (!hash_data_span.empty()) {
+        select_node = select_set->get_node_hash_by_consistent_hash(hash_data_span, policy_selector);
+      } else {
+        std::string address = atfw::util::string::format("{}:{}", sess.get_peer_host(), sess.get_peer_port());
+        select_node = select_set->get_node_hash_by_consistent_hash(address, policy_selector);
+      }
       if (select_node.node) {
         sess.set_router(select_node.node->get_discovery_info().id(), select_node.node->get_discovery_info().name());
         by_setting = false;
@@ -609,12 +655,29 @@ void session_manager::assign_default_router(session &sess) const {
       break;
   }
 
-  if (by_setting) {
-    sess.set_router(conf_.origin_conf.client().default_router().node_id(),
-                    conf_.origin_conf.client().default_router().node_name());
+  if (by_setting && discovery_index_) {
+    if (conf_.origin_conf.client().default_router().node_id() != 0) {
+      auto find_node = discovery_index_->get_discovery_by_id(conf_.origin_conf.client().default_router().node_id());
+      if (find_node) {
+        sess.set_router(find_node->get_discovery_info().id(), find_node->get_discovery_info().name());
+        by_setting = false;
+      }
+    }
+
+    if (by_setting && !conf_.origin_conf.client().default_router().node_name().empty()) {
+      auto find_node = discovery_index_->get_discovery_by_name(conf_.origin_conf.client().default_router().node_name());
+      if (find_node) {
+        sess.set_router(find_node->get_discovery_info().id(), find_node->get_discovery_info().name());
+        by_setting = false;
+      }
+    }
   }
 
-  FWLOGINFO("{} set default router to {}:{}", sess, sess.get_router_id(), sess.get_router_name());
+  if (sess.get_router_id() == 0 && sess.get_router_name().empty()) {
+    FWLOGWARNING("{} has no default router assigned", sess);
+  } else {
+    FWLOGINFO("{} set default router to {}:{}", sess, sess.get_router_id(), sess.get_router_name());
+  }
 }
 
 void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
@@ -661,9 +724,6 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   // setup send buffer size
   sess->get_protocol_handle()->set_receive_buffer_limit(mgr->conf_.origin_conf.client().recv_buffer_size(), 0);
   sess->get_protocol_handle()->set_send_buffer_limit(mgr->conf_.origin_conf.client().send_buffer_size(), 0);
-
-  // setup default router
-  mgr->assign_default_router(*sess);
 
   // create proto object and session object
   int res = sess->accept_tcp(server);
@@ -740,9 +800,6 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
   // setup send buffer size
   proto->set_receive_buffer_limit(mgr->conf_.origin_conf.client().recv_buffer_size(), 0);
   proto->set_send_buffer_limit(mgr->conf_.origin_conf.client().send_buffer_size(), 0);
-
-  // setup default router
-  mgr->assign_default_router(*sess);
 
   int res = sess->accept_pipe(server);
   if (0 != res) {

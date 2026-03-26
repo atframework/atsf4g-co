@@ -1301,6 +1301,13 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake_key_exchange_r
     return ret;
   }
 
+  const auto *default_hash_data = body_handshake.default_hash_data();
+  if (default_hash_data == nullptr || default_hash_data->size() == 0) {
+    router_hash_data_.clear();
+  } else {
+    router_hash_data_.assign(default_hash_data->data(), default_hash_data->data() + default_hash_data->size());
+  }
+
   // Allocate new session ID
   {
     flag_guard_t flag_guard(flags_, flag_t::kInCallback);
@@ -1369,6 +1376,13 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake_reconn_req(
                                         handshake_body.Union()),
                    client_messageIdentifier());
     return write_message(builder);
+  }
+
+  const auto *default_hash_data = body_handshake.default_hash_data();
+  if (default_hash_data == nullptr || default_hash_data->size() == 0) {
+    router_hash_data_.clear();
+  } else {
+    router_hash_data_.assign(default_hash_data->data(), default_hash_data->data() + default_hash_data->size());
   }
 
   // Adopt the reconnected session_id before building the response
@@ -1866,7 +1880,7 @@ LIBATGW_PROTOCOL_API std::string libatgw_protocol_sdk::get_info() const {
 
 // ========================= Client-side session start =========================
 
-LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::start_session() {
+LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::start_session(gsl::span<const unsigned char> hash_data) {
   if (check_flag(flag_t::kClosing)) {
     return static_cast<int>(::atfw::gateway::error_code_t::kClosing);
   }
@@ -1895,6 +1909,12 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::start_session() {
 
   // Get client's public key
   gsl::span<const unsigned char> self_public_key = crypto_session_->get_handshake_self_public_key();
+
+  if (hash_data.empty()) {
+    router_hash_data_.clear();
+  } else {
+    router_hash_data_.assign(hash_data.data(), hash_data.data() + hash_data.size());
+  }
 
   using namespace ::atfw::gateway::v2;
 
@@ -1931,7 +1951,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::start_session() {
       {},  // handshake will determine crypto parameters, so IV and tag size are not specified in request
       builder.CreateVector(comp_algs), crypto_session_->max_post_message_size,
       {},  // session token is only send by server to client, so not included in client's request
-      0);
+      0, builder.CreateVector(reinterpret_cast<const int8_t *>(router_hash_data_.data()), router_hash_data_.size()));
 
   builder.Finish(Createclient_message(builder, header_data,
                                       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(client_message_body, cs_body_handshake),
@@ -1941,7 +1961,8 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::start_session() {
 }
 
 LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::reconnect_session(uint64_t sess_id,
-                                                                 gsl::span<const unsigned char> session_token) {
+                                                                 gsl::span<const unsigned char> session_token,
+                                                                 gsl::span<const unsigned char> hash_data) {
   if (check_flag(flag_t::kClosing)) {
     return static_cast<int>(::atfw::gateway::error_code_t::kClosing);
   }
@@ -1971,6 +1992,12 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::reconnect_session(uint64_t sess_i
 
   // Get client's public key
   gsl::span<const unsigned char> self_public_key = crypto_session_->get_handshake_self_public_key();
+
+  if (hash_data.empty()) {
+    router_hash_data_.clear();
+  } else {
+    router_hash_data_.assign(hash_data.data(), hash_data.data() + hash_data.size());
+  }
 
   using namespace ::atfw::gateway::v2;
 
@@ -2008,7 +2035,8 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::reconnect_session(uint64_t sess_i
       {},  // handshake will determine crypto parameters, so IV and tag size are not specified in request
       builder.CreateVector(comp_algs), crypto_session_->max_post_message_size,
       {},  // session token is only send by server to client, so not included in client's request
-      crypto_session_->get_handshake_sequence_id());
+      crypto_session_->get_handshake_sequence_id(),
+      builder.CreateVector(reinterpret_cast<const int8_t *>(router_hash_data_.data()), router_hash_data_.size()));
 
   builder.Finish(Createclient_message(builder, header_data,
                                       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(client_message_body, cs_body_handshake),
@@ -2197,6 +2225,10 @@ LIBATGW_PROTOCOL_API uint64_t libatgw_protocol_sdk::get_session_id() const noexc
 
 LIBATGW_PROTOCOL_API gsl::span<const unsigned char> libatgw_protocol_sdk::get_session_token() const noexcept {
   return gsl::span<const unsigned char>{session_token_.data(), session_token_.size()};
+}
+
+gsl::span<const unsigned char> libatgw_protocol_sdk::get_router_hash_data() const noexcept {
+  return gsl::span<const unsigned char>{router_hash_data_.data(), router_hash_data_.size()};
 }
 
 LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::set_logger(atfw::util::log::log_wrapper::ptr_t logger) {

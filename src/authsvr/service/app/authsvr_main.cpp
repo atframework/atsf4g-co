@@ -26,12 +26,28 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <service_discovery_index/discovery_index.h>
+
 #include <memory>
 
 #include "app/handle_cs_rpc_authsvrclientservice.h"
+#include "authsvr_helper.h"
+
+namespace {
+class main_service_module;
+
+main_service_module *g_main_service_module = nullptr;
 
 class main_service_module : public atfw::atapp::module_impl {
  public:
+  main_service_module() { g_main_service_module = this; }
+
+  ~main_service_module() {
+    if (g_main_service_module == this) {
+      g_main_service_module = nullptr;
+    }
+  }
+
   int init() override {
     {
       // register all router managers
@@ -41,11 +57,44 @@ class main_service_module : public atfw::atapp::module_impl {
     // register handles
     INIT_CALL_FN(handle::authsvrclientservice::register_handles_for_authsvrclientservice);
 
+    discovery_index_ = atfw::component::service_discovery_index::create(get_app()->get_etcd_module());
+    discovery_index_->initialize();
+
     return 0;
   }
 
+  int reload() override {
+    if (discovery_index_) {
+      discovery_index_->reload();
+    }
+    return 0;
+  }
+
+  void cleanup() override {
+    if (discovery_index_) {
+      discovery_index_->cleanup();
+      discovery_index_.reset();
+    }
+  }
+
   const char *name() const override { return "main_service_module"; }
+
+  const atfw::component::service_discovery_index::ptr_t &get_discovery_index() const noexcept {
+    return discovery_index_;
+  }
+
+ private:
+  atfw::component::service_discovery_index::ptr_t discovery_index_;
 };
+}  // namespace
+
+atfw::component::service_discovery_index::ptr_t authsvr_get_service_discovery_index() noexcept {
+  if (g_main_service_module != nullptr) {
+    return g_main_service_module->get_discovery_index();
+  }
+
+  return nullptr;
+}
 
 int main(int argc, char *argv[]) {
   atfw::atapp::app app;

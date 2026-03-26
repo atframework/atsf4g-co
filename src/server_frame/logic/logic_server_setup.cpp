@@ -63,7 +63,6 @@
 #include <ctime>
 #include <iostream>
 #include <sstream>
-#include <utility>
 
 #include "logic/action/task_action_reload_remote_server_configure.h"
 #include "logic/handle_ss_rpc_logiccommonservice.h"
@@ -415,7 +414,8 @@ SERVER_FRAME_API int logic_server_common_module::init() {
     FWLOGERROR("Setup LogicCommonService failed, result: {}({})", ret, protobuf_mini_dumper_get_error_msg(ret));
   }
 
-  setup_etcd_event_handle();
+  discovery_index_ = atfw::component::service_discovery_index::create(get_etcd_module());
+  discovery_index_->initialize();
 
   setup_hpa_controller();
   if (hpa_controller_) {
@@ -470,8 +470,8 @@ SERVER_FRAME_API int logic_server_common_module::reload() {
   // Update rpc caller context data
   rpc::context::set_current_service(*get_app(), logic_config::me()->get_logic_cfg());
 
-  if (get_app()->is_running()) {
-    setup_etcd_event_handle();
+  if (discovery_index_) {
+    discovery_index_->reload();
   }
 
   if (shared_component_.excel_config()) {
@@ -548,12 +548,8 @@ SERVER_FRAME_API int logic_server_common_module::timeout() {
 SERVER_FRAME_API void logic_server_common_module::cleanup() {
   task_manager::me()->kill_all();
 
-  if (!service_index_handle_) {
-    std::shared_ptr<atfw::atapp::etcd_module> etcd_mod = get_etcd_module();
-    if (etcd_mod) {
-      etcd_mod->remove_on_node_event(*service_index_handle_);
-    }
-    service_index_handle_.reset();
+  if (discovery_index_) {
+    discovery_index_->cleanup();
   }
 
   if (hpa_controller_) {
@@ -614,6 +610,10 @@ SERVER_FRAME_API bool logic_server_common_module::is_closing() const noexcept { 
 
 SERVER_FRAME_API logic_server_common_module::etcd_keepalive_ptr_t logic_server_common_module::add_keepalive(
     const std::string &path, std::string &value) {
+  if (discovery_index_) {
+    return discovery_index_->add_keepalive(path, value);
+  }
+
   std::shared_ptr<atfw::atapp::etcd_module> etcd_mod;
 
   if (NULL != get_app()) {
@@ -666,62 +666,57 @@ SERVER_FRAME_API std::shared_ptr<::atfw::atapp::etcd_module> logic_server_common
 
 SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type(
     uint64_t type_id) const {
-  auto iter = service_type_id_index_.find(type_id);
-  if (iter == service_type_id_index_.end()) {
-    return nullptr;
+  if (discovery_index_) {
+    return discovery_index_->get_discovery_index_by_type(type_id);
   }
 
-  return iter->second.all_index;
+  return nullptr;
 }
 
 SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type(
     const std::string &type_name) const {
-  auto iter = service_type_name_index_.find(type_name);
-  if (iter == service_type_name_index_.end()) {
-    return nullptr;
+  if (discovery_index_) {
+    return discovery_index_->get_discovery_index_by_type(type_name);
   }
 
-  return iter->second.all_index;
+  return nullptr;
 }
 
 SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type_zone(
     uint64_t type_id, uint64_t zone_id) const {
-  auto type_iter = service_type_id_index_.find(type_id);
-  if (type_iter == service_type_id_index_.end()) {
-    return nullptr;
+  if (discovery_index_) {
+    return discovery_index_->get_discovery_index_by_realm_type(zone_id, type_id);
   }
 
-  auto zone_iter = type_iter->second.zone_index.find(zone_id);
-  if (zone_iter == type_iter->second.zone_index.end()) {
-    return nullptr;
-  }
-
-  return zone_iter->second;
+  return nullptr;
 }
 
 SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type_zone(
     const std::string &type_name, uint64_t zone_id) const {
-  auto type_iter = service_type_name_index_.find(type_name);
-  if (type_iter == service_type_name_index_.end()) {
-    return nullptr;
+  if (discovery_index_) {
+    return discovery_index_->get_discovery_index_by_realm_type(zone_id, type_name);
   }
 
-  auto zone_iter = type_iter->second.zone_index.find(zone_id);
-  if (zone_iter == type_iter->second.zone_index.end()) {
-    return nullptr;
-  }
-
-  return zone_iter->second;
+  return nullptr;
 }
 
 SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_zone(
     uint64_t zone_id) const {
-  auto iter = service_zone_index_.find(zone_id);
-  if (iter == service_zone_index_.end()) {
-    return nullptr;
+  if (discovery_index_) {
+    return discovery_index_->get_discovery_index_by_realm(zone_id);
   }
 
-  return iter->second;
+  return nullptr;
+}
+
+SERVER_FRAME_API const atfw::component::service_discovery_index_by_realm_t &
+logic_server_common_module::get_origin_zone_index() const noexcept {
+  if (discovery_index_) {
+    return discovery_index_->get_origin_zone_index();
+  }
+
+  static atfw::component::service_discovery_index_by_realm_t empty_index;
+  return empty_index;
 }
 
 SERVER_FRAME_API util::memory::strong_rc_ptr<atfw::atapp::etcd_discovery_node>
@@ -740,61 +735,6 @@ logic_server_common_module::get_discovery_by_name(const std::string &name) const
   }
 
   return get_app()->get_global_discovery().get_node_by_name(name);
-}
-
-int logic_server_common_module::setup_etcd_event_handle() {
-  std::shared_ptr<::atfw::atapp::etcd_module> etcd_mod = get_etcd_module();
-  if (!etcd_mod) {
-    return 0;
-  }
-  if (service_index_handle_) {
-    etcd_mod->remove_on_node_event(*service_index_handle_);
-  } else {
-    service_index_handle_ = std::unique_ptr<atfw::atapp::etcd_module::node_event_callback_handle_t>(
-        new atfw::atapp::etcd_module::node_event_callback_handle_t());
-  }
-  if (service_index_handle_) {
-    *service_index_handle_ =
-        etcd_mod->add_on_node_discovery_event([this](atfw::atapp::etcd_module::node_action_t action_type,
-                                                     const atfw::atapp::etcd_discovery_node::ptr_t &node) {
-          if (!node) {
-            return;
-          }
-
-          switch (action_type) {
-            case atfw::atapp::etcd_module::node_action_t::kPut: {
-              if (0 != node->get_discovery_info().type_id()) {
-                add_service_type_id_index(node);
-              }
-              if (!node->get_discovery_info().type_name().empty()) {
-                add_service_type_name_index(node);
-              }
-              if (0 != node->get_discovery_info().area().zone_id()) {
-                add_service_zone_index(node);
-              }
-              break;
-            }
-            case atfw::atapp::etcd_module::node_action_t::kDelete: {
-              if (0 != node->get_discovery_info().type_id()) {
-                remove_service_type_id_index(node);
-              }
-              if (!node->get_discovery_info().type_name().empty()) {
-                remove_service_type_name_index(node);
-              }
-              if (0 != node->get_discovery_info().area().zone_id()) {
-                remove_service_zone_index(node);
-              }
-              break;
-            }
-            default:
-              break;
-          }
-
-          ++service_discovery_version_[static_cast<int32_t>(node->get_discovery_info().type_id())];
-        });
-  }
-
-  return 0;
 }
 
 int logic_server_common_module::tick_update_remote_configures() {
@@ -1004,225 +944,13 @@ void logic_server_common_module::setup_metrics() {
       });
 }
 
-void logic_server_common_module::add_service_type_id_index(const atfw::atapp::etcd_discovery_node::ptr_t &node) {
-  uint64_t zone_id = node->get_discovery_info().area().zone_id();
-  uint64_t type_id = node->get_discovery_info().type_id();
-  logic_server_type_discovery_set_t &type_index = service_type_id_index_[type_id];
-  if (!type_index.all_index) {
-    type_index.all_index = atfw::memory::stl::make_strong_rc<atfw::atapp::etcd_discovery_set>();
-  }
-
-  if (!type_index.all_index) {
-    // Bad data
-    service_type_id_index_.erase(type_id);
-    return;
-  }
-
-  type_index.all_index->add_node(node);
-
-  if (0 == zone_id) {
-    return;
-  }
-
-  atfw::atapp::etcd_discovery_set::ptr_t &zone_index = type_index.zone_index[zone_id];
-  if (!zone_index) {
-    zone_index = atfw::memory::stl::make_strong_rc<atfw::atapp::etcd_discovery_set>();
-  }
-
-  if (!zone_index) {
-    type_index.zone_index.erase(zone_id);
-    return;
-  }
-
-  zone_index->add_node(node);
-}
-
-void logic_server_common_module::remove_service_type_id_index(const atfw::atapp::etcd_discovery_node::ptr_t &node) {
-  uint64_t zone_id = node->get_discovery_info().area().zone_id();
-  uint64_t type_id = node->get_discovery_info().type_id();
-  auto type_iter = service_type_id_index_.find(type_id);
-  if (type_iter == service_type_id_index_.end()) {
-    return;
-  }
-
-  if (!type_iter->second.all_index) {
-    service_type_id_index_.erase(type_iter);
-    return;
-  }
-
-  type_iter->second.all_index->remove_node(node);
-
-  if (0 == zone_id) {
-    if (type_iter->second.all_index->empty() && type_iter->second.zone_index.empty()) {
-      service_type_id_index_.erase(type_iter);
-    }
-    return;
-  }
-  auto zone_iter = type_iter->second.zone_index.find(zone_id);
-  if (zone_iter == type_iter->second.zone_index.end()) {
-    if (type_iter->second.all_index->empty() && type_iter->second.zone_index.empty()) {
-      service_type_id_index_.erase(type_iter);
-    }
-    return;
-  }
-
-  if (!zone_iter->second) {
-    type_iter->second.zone_index.erase(zone_iter);
-
-    if (type_iter->second.all_index->empty() && type_iter->second.zone_index.empty()) {
-      service_type_id_index_.erase(type_iter);
-    }
-    return;
-  }
-
-  zone_iter->second->remove_node(node);
-  if (zone_iter->second->empty()) {
-    type_iter->second.zone_index.erase(zone_iter);
-  }
-
-  if (type_iter->second.all_index->empty() && type_iter->second.zone_index.empty()) {
-    service_type_id_index_.erase(type_iter);
-  }
-}
-
-void logic_server_common_module::add_service_type_name_index(const atfw::atapp::etcd_discovery_node::ptr_t &node) {
-  uint64_t zone_id = node->get_discovery_info().area().zone_id();
-  const std::string &type_name = node->get_discovery_info().type_name();
-  logic_server_type_discovery_set_t &type_index = service_type_name_index_[type_name];
-  if (!type_index.all_index) {
-    type_index.all_index = atfw::memory::stl::make_strong_rc<atfw::atapp::etcd_discovery_set>();
-  }
-
-  if (!type_index.all_index) {
-    // Bad data
-    service_type_name_index_.erase(type_name);
-    return;
-  }
-
-  type_index.all_index->add_node(node);
-
-  if (0 == zone_id) {
-    return;
-  }
-
-  atfw::atapp::etcd_discovery_set::ptr_t &zone_index = type_index.zone_index[zone_id];
-  if (!zone_index) {
-    zone_index = atfw::memory::stl::make_strong_rc<atfw::atapp::etcd_discovery_set>();
-  }
-
-  if (!zone_index) {
-    type_index.zone_index.erase(zone_id);
-    return;
-  }
-
-  zone_index->add_node(node);
-}
-
-void logic_server_common_module::remove_service_type_name_index(const atfw::atapp::etcd_discovery_node::ptr_t &node) {
-  uint64_t zone_id = node->get_discovery_info().area().zone_id();
-  const std::string &type_name = node->get_discovery_info().type_name();
-  auto type_iter = service_type_name_index_.find(type_name);
-  if (type_iter == service_type_name_index_.end()) {
-    return;
-  }
-
-  if (!type_iter->second.all_index) {
-    service_type_name_index_.erase(type_iter);
-    return;
-  }
-
-  type_iter->second.all_index->remove_node(node);
-
-  if (0 == zone_id) {
-    if (type_iter->second.all_index->empty() && type_iter->second.zone_index.empty()) {
-      service_type_name_index_.erase(type_iter);
-    }
-    return;
-  }
-  auto zone_iter = type_iter->second.zone_index.find(zone_id);
-  if (zone_iter == type_iter->second.zone_index.end()) {
-    if (type_iter->second.all_index->empty() && type_iter->second.zone_index.empty()) {
-      service_type_name_index_.erase(type_iter);
-    }
-    return;
-  }
-
-  if (!zone_iter->second) {
-    type_iter->second.zone_index.erase(zone_iter);
-
-    if (type_iter->second.all_index->empty() && type_iter->second.zone_index.empty()) {
-      service_type_name_index_.erase(type_iter);
-    }
-    return;
-  }
-
-  zone_iter->second->remove_node(node);
-  if (zone_iter->second->empty()) {
-    type_iter->second.zone_index.erase(zone_iter);
-  }
-
-  if (type_iter->second.all_index->empty() && type_iter->second.zone_index.empty()) {
-    service_type_name_index_.erase(type_iter);
-  }
-}
-
-void logic_server_common_module::add_service_zone_index(const atfw::atapp::etcd_discovery_node::ptr_t &node) {
-  uint64_t zone_id = node->get_discovery_info().area().zone_id();
-  atfw::atapp::etcd_discovery_set::ptr_t &zone_index = service_zone_index_[zone_id];
-  if (!zone_index) {
-    zone_index = atfw::memory::stl::make_strong_rc<atfw::atapp::etcd_discovery_set>();
-  }
-
-  if (!zone_index) {
-    // Bad data
-    service_zone_index_.erase(zone_id);
-    return;
-  }
-  zone_index->add_node(node);
-
-  FWLOGINFO("service discovery {}({}, {}) indexed, type name={}, zone_id={}",
-            node->get_discovery_info().area().district(), node->get_discovery_info().id(),
-            node->get_discovery_info().name(), node->get_discovery_info().type_name(),
-            node->get_discovery_info().area().zone_id());
-}
-
-void logic_server_common_module::remove_service_zone_index(const atfw::atapp::etcd_discovery_node::ptr_t &node) {
-  uint64_t zone_id = node->get_discovery_info().area().zone_id();
-
-  auto zone_iter = service_zone_index_.find(zone_id);
-  if (zone_iter == service_zone_index_.end()) {
-    return;
-  }
-
-  if (!zone_iter->second) {
-    service_zone_index_.erase(zone_iter);
-    return;
-  }
-
-  zone_iter->second->remove_node(node);
-
-  if (zone_iter->second->empty()) {
-    service_zone_index_.erase(zone_iter);
-  }
-
-  FWLOGINFO("service discovery {}({}, {}) unindexed, type name={}, zone_id={}",
-            node->get_discovery_info().area().district(), node->get_discovery_info().id(),
-            node->get_discovery_info().name(), node->get_discovery_info().type_name(),
-            node->get_discovery_info().area().zone_id());
-}
-
 SERVER_FRAME_API int64_t logic_server_common_module::get_service_discovery_version(
     atframework::component::logic_service_type service_type_id) const noexcept {
-  int32_t type_id = static_cast<int32_t>(service_type_id);
-  auto iter = service_discovery_version_.find(type_id);
-  if (iter != service_discovery_version_.end()) {
-    return iter->second;
+  if (discovery_index_) {
+    return discovery_index_->get_service_discovery_version(static_cast<uint64_t>(service_type_id));
   }
 
-  int64_t local_version =
-      atfw::util::time::time_utility::get_sys_now() * 1000 + atfw::util::time::time_utility::get_now_usec() / 1000;
-  service_discovery_version_[type_id] = local_version;
-  return local_version;
+  return 0;
 }
 
 SERVER_FRAME_API void logic_server_common_module::update_remote_server_configure(const std::string &global_conf,

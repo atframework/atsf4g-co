@@ -17,6 +17,8 @@
 #include <atframe/atapp.h>
 #include <gsl/select-gsl.h>
 
+#include <service_discovery_index/discovery_index.h>
+
 #include <functional>
 #include <list>
 #include <unordered_map>
@@ -56,6 +58,8 @@ class session_manager {
   int tick();
   int close(session::id_t sess_id, int32_t reason, int32_t sub_reason, atfw::util::nostd::string_view message,
             bool allow_reconnect = false);
+
+  void reload();
   void cleanup();
 
   inline void *get_private_data() const { return private_data_; }
@@ -112,6 +116,9 @@ class session_manager {
   session_map_t reconnect_cache_;
   std::list<session_timeout_t> reconnect_timeout_;
   time_t last_tick_time_;
+
+  component::service_discovery_index::ptr_t discovery_index_;
+
   void *private_data_;
 };
 }  // namespace gateway

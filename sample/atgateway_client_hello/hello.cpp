@@ -158,11 +158,11 @@ static void libuv_tcp_connect_callback(uv_connect_t *req, int status) {
 
   if (g_client_sess.proto && g_client_sess.allow_reconnect) {
     g_client_sess.proto = sess_proto;
-    ret = libatgateway_v2_c_reconnect_session(sess_proto->ctx, g_client_sess.session_id, nullptr, 0);
+    ret = libatgateway_v2_c_reconnect_session(sess_proto->ctx, g_client_sess.session_id, nullptr, 0, nullptr, 0);
   } else {
     g_client_sess.proto = sess_proto;
 
-    ret = libatgateway_v2_c_start_session(sess_proto->ctx);
+    ret = libatgateway_v2_c_start_session(sess_proto->ctx, nullptr, 0);
   }
   if (0 != ret) {
     fprintf(stderr, "start session failed, res: %d\n", ret);

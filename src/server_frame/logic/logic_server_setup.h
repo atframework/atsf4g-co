@@ -37,6 +37,8 @@
 
 #include <opentelemetry/common/attribute_value.h>
 
+#include <service_discovery_index/discovery_index.h>
+
 #include <atomic>
 #include <chrono>
 #include <cstddef>
@@ -72,9 +74,9 @@ SERVER_FRAME_API logic_server_common_module* logic_server_last_common_module();
 
 struct ATFW_UTIL_SYMBOL_VISIBLE logic_server_timer {
   std::chrono::system_clock::time_point timeout;
-  uint64_t task_id;
-  uintptr_t message_type;
-  uint64_t sequence;
+  uint64_t task_id{};
+  uintptr_t message_type{};
+  uint64_t sequence{};
 
   friend inline bool operator<(const logic_server_timer& lhs, const logic_server_timer& rhs) noexcept {
     if (lhs.timeout != rhs.timeout) {
@@ -83,11 +85,6 @@ struct ATFW_UTIL_SYMBOL_VISIBLE logic_server_timer {
 
     return lhs.task_id < rhs.task_id;
   }
-};
-
-struct logic_server_type_discovery_set_t {
-  atfw::atapp::etcd_discovery_set::ptr_t all_index;
-  std::unordered_map<uint64_t, atfw::atapp::etcd_discovery_set::ptr_t> zone_index;
 };
 
 class logic_server_common_module : public atfw::atapp::module_impl {
@@ -180,10 +177,8 @@ class logic_server_common_module : public atfw::atapp::module_impl {
   SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type_zone(const std::string& type_name,
                                                                                            uint64_t zone_id) const;
   SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t get_discovery_index_by_zone(uint64_t zone_id) const;
-  ATFW_UTIL_FORCEINLINE const std::unordered_map<uint64_t, atfw::atapp::etcd_discovery_set::ptr_t>&
-  get_origin_zone_index() const noexcept {
-    return service_zone_index_;
-  }
+
+  SERVER_FRAME_API const atfw::component::service_discovery_index_by_realm_t& get_origin_zone_index() const noexcept;
 
   SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<atfw::atapp::etcd_discovery_node> get_discovery_by_id(
       uint64_t id) const;
@@ -198,19 +193,10 @@ class logic_server_common_module : public atfw::atapp::module_impl {
   ATFW_UTIL_FORCEINLINE const std::shared_ptr<logic_hpa_controller>& get_hpa_controller() { return hpa_controller_; }
 
  private:
-  int setup_etcd_event_handle();
-
   int tick_update_remote_configures();
   void tick_stats();
 
   void setup_metrics();
-
-  void add_service_type_id_index(const atfw::atapp::etcd_discovery_node::ptr_t& node);
-  void remove_service_type_id_index(const atfw::atapp::etcd_discovery_node::ptr_t& node);
-  void add_service_type_name_index(const atfw::atapp::etcd_discovery_node::ptr_t& node);
-  void remove_service_type_name_index(const atfw::atapp::etcd_discovery_node::ptr_t& node);
-  void add_service_zone_index(const atfw::atapp::etcd_discovery_node::ptr_t& node);
-  void remove_service_zone_index(const atfw::atapp::etcd_discovery_node::ptr_t& node);
 
  private:
   logic_server_common_module_configure static_conf_;
@@ -220,12 +206,7 @@ class logic_server_common_module : public atfw::atapp::module_impl {
   // stat
   std::shared_ptr<stats_data_t> stats_;
 
-  mutable std::unordered_map<int32_t, int64_t> service_discovery_version_;
-
-  std::unordered_map<uint64_t, logic_server_type_discovery_set_t> service_type_id_index_;
-  std::unordered_map<std::string, logic_server_type_discovery_set_t> service_type_name_index_;
-  std::unordered_map<uint64_t, atfw::atapp::etcd_discovery_set::ptr_t> service_zone_index_;
-  std::unique_ptr<atfw::atapp::etcd_module::node_event_callback_handle_t> service_index_handle_;
+  atfw::component::service_discovery_index::ptr_t discovery_index_;
 
   PROJECT_NAMESPACE_ID::remote_service_configure_data server_remote_conf_;
   int32_t server_remote_conf_global_version_;

@@ -32,6 +32,8 @@
 
 #include "data/session.h"
 
+#include "app/authsvr_helper.h"
+
 task_action_login_auth::task_action_login_auth(dispatcher_start_data_type&& param) : base_type(std::move(param)) {}
 task_action_login_auth::~task_action_login_auth() {}
 
@@ -184,8 +186,8 @@ int task_action_login_auth::on_failed() { return get_result(); }
 task_action_login_auth::result_type task_action_login_auth::select_router_server_id(
     atfw::util::nostd::string_view openid, uint64_t user_id, uint64_t& router_server_id,
     std::string& router_server_name) {
-  atapp::app* app_inst = atapp::app::get_last_instance();
-  if (app_inst == nullptr) {
+  atfw::component::service_discovery_index::ptr_t discovery_index = authsvr_get_service_discovery_index();
+  if (!discovery_index) {
     FCTXLOGINFO(get_shared_context(), "user {}(user_id={}) login is canceled because app instance is shutdown", openid,
                 user_id);
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_MAINTENANCE);
@@ -193,15 +195,19 @@ task_action_login_auth::result_type task_action_login_auth::select_router_server
   }
 
   // 如果节点已经下线了，也清理掉路由信息
-  auto target_node = app_inst->get_global_discovery().get_node_by_id(router_server_id);
-  if (router_server_id != 0 && !target_node) {
-    router_server_id = 0;
-  } else {
-    router_server_name = std::string{target_node->get_discovery_info().name()};
+  atfw::component::service_discovery_index::discovery_node_ptr_t select_node;
+  if (router_server_id != 0) {
+    select_node = discovery_index->get_discovery_by_id(router_server_id);
   }
 
-  if (router_server_id != 0) {
+  if (!select_node && !router_server_name.empty()) {
+    select_node = discovery_index->get_discovery_by_name(router_server_name);
+  }
+
+  if (select_node) {
     // 优先复用老节点
+    router_server_id = select_node->get_discovery_info().id();
+    router_server_name = std::string{select_node->get_discovery_info().name()};
     RPC_RETURN_CODE(0);
   }
 
@@ -211,9 +217,23 @@ task_action_login_auth::result_type task_action_login_auth::select_router_server
   if (server_cfg.backend().router().has_policy_selector()) {
     policy_selector = &server_cfg.backend().router().policy_selector();
   }
+
+  atfw::atapp::etcd_discovery_set::ptr_t select_set;
+  if (discovery_index) {
+    if (server_cfg.backend().router().type_id() != 0) {
+      select_set = discovery_index->get_discovery_index_by_type(server_cfg.backend().router().type_id());
+    } else if (!server_cfg.backend().router().type_name().empty()) {
+      select_set = discovery_index->get_discovery_index_by_type(server_cfg.backend().router().type_name());
+    }
+  }
+
   switch (server_cfg.backend().router().policy()) {
     case PROJECT_NAMESPACE_ID::config::EN_AUTHSVR_ROUTER_POLICY_RANDOM: {
-      auto select_node = app_inst->get_global_discovery().get_node_by_random(policy_selector);
+      if (!select_set) {
+        break;
+      }
+
+      select_node = select_set->get_node_by_random(policy_selector);
       if (select_node) {
         router_server_id = select_node->get_discovery_info().id();
         router_server_name = std::string{select_node->get_discovery_info().name()};
@@ -222,7 +242,11 @@ task_action_login_auth::result_type task_action_login_auth::select_router_server
       break;
     }
     case PROJECT_NAMESPACE_ID::config::EN_AUTHSVR_ROUTER_POLICY_ROUND_ROBIN: {
-      auto select_node = app_inst->get_global_discovery().get_node_by_round_robin(policy_selector);
+      if (!select_set) {
+        break;
+      }
+
+      select_node = select_set->get_node_by_round_robin(policy_selector);
       if (select_node) {
         router_server_id = select_node->get_discovery_info().id();
         router_server_name = std::string{select_node->get_discovery_info().name()};
@@ -231,10 +255,14 @@ task_action_login_auth::result_type task_action_login_auth::select_router_server
       break;
     }
     case PROJECT_NAMESPACE_ID::config::EN_AUTHSVR_ROUTER_POLICY_HASH: {
-      auto select_node = app_inst->get_global_discovery().get_node_hash_by_consistent_hash(user_id, policy_selector);
-      if (select_node.node) {
-        router_server_id = select_node.node->get_discovery_info().id();
-        router_server_name = std::string{select_node.node->get_discovery_info().name()};
+      if (!select_set) {
+        break;
+      }
+
+      select_node = select_set->get_node_hash_by_consistent_hash(user_id, policy_selector).node;
+      if (select_node) {
+        router_server_id = select_node->get_discovery_info().id();
+        router_server_name = std::string{select_node->get_discovery_info().name()};
         by_setting = false;
       }
       break;
@@ -243,9 +271,32 @@ task_action_login_auth::result_type task_action_login_auth::select_router_server
       break;
   }
 
-  if (by_setting) {
-    router_server_id = server_cfg.backend().router().node_id();
-    router_server_name = std::string{server_cfg.backend().router().node_name()};
+  if (by_setting && discovery_index) {
+    if (server_cfg.backend().router().node_id() != 0) {
+      auto find_node = discovery_index->get_discovery_by_id(server_cfg.backend().router().node_id());
+      if (find_node) {
+        router_server_id = find_node->get_discovery_info().id();
+        router_server_name = std::string{find_node->get_discovery_info().name()};
+        by_setting = false;
+      }
+    }
+
+    if (by_setting && !server_cfg.backend().router().node_name().empty()) {
+      auto find_node = discovery_index->get_discovery_by_name(server_cfg.backend().router().node_name());
+      if (find_node) {
+        router_server_id = find_node->get_discovery_info().id();
+        router_server_name = std::string{find_node->get_discovery_info().name()};
+        by_setting = false;
+      }
+    }
+  }
+
+  if (router_server_id == 0 && router_server_name.empty()) {
+    FCTXLOGWARNING(get_shared_context(),
+                   "user {}(user_id={}) login select router server failed, no available backend server", openid,
+                   user_id);
+  } else {
+    FWLOGINFO("user {}(user_id={}) login set router to {}:{}", openid, user_id, router_server_id, router_server_name);
   }
 
   RPC_RETURN_CODE(0);

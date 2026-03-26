@@ -206,6 +206,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
 
   virtual gsl::span<const unsigned char> get_session_token() const noexcept = 0;
 
+  virtual gsl::span<const unsigned char> get_router_hash_data() const noexcept = 0;
+
   LIBATGW_PROTOCOL_API bool check_flag(flag_t t) const;
 
   LIBATGW_PROTOCOL_API void set_flag(flag_t t, bool v);

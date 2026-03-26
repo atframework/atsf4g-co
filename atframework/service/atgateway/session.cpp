@@ -594,5 +594,14 @@ void session::check_total_limit(bool check_recv, bool check_send) {
     close(static_cast<int>(close_reason_t::kTraficExtended), 0, "trafic extended");
   }
 }
+
+gsl::span<const unsigned char> session::get_router_hash_data() const noexcept {
+  if (proto_) {
+    return proto_->get_router_hash_data();
+  }
+
+  return {};
+}
+
 }  // namespace gateway
 }  // namespace atframework

@@ -1,0 +1,524 @@
+[ On Start ] Running unit_test_event_on_start_setup_logger
+[==========] Running 13 test(s)
+
+[----------] 6 test case(s) from atapp_configure
+[ RUN      ] atapp_configure.load_yaml
+unit-test with libatapp 1.0.0 - based on libatapp 1.0.0
+        Build Time: Mar 25 2026 16:46:34
+Build Compiler: MSVC 195035726 with standard 202002
+[       OK ] atapp_configure.load_yaml (26 ms)
+[ RUN      ] atapp_configure.load_conf
+unit-test with libatapp 1.0.0 - based on libatapp 1.0.0
+        Build Time: Mar 25 2026 16:46:34
+Build Compiler: MSVC 195035726 with standard 202002
+[       OK ] atapp_configure.load_conf (6 ms)
+[ RUN      ] atapp_configure.load_environment
+unit-test with libatapp 1.0.0 - based on libatapp 1.0.0
+        Build Time: Mar 25 2026 16:46:34
+Build Compiler: MSVC 195035726 with standard 202002
+[       OK ] atapp_configure.load_environment (8 ms)
+[ RUN      ] atapp_configure.expression_expand_direct
+[       OK ] atapp_configure.expression_expand_direct (0 ms)
+[ RUN      ] atapp_configure.expression_yaml
+unit-test with libatapp 1.0.0 - based on libatapp 1.0.0
+        Build Time: Mar 25 2026 16:46:34
+Build Compiler: MSVC 195035726 with standard 202002
+[ RUNNING  ] name = test_app
+[ RUNNING  ] type_name = gamesvr
+[ RUNNING  ] hostname = yaml-host.example.com
+[ RUNNING  ] identity = fallback_identity
+[ RUNNING  ] metadata.namespace_name = ns_override
+[ RUNNING  ] metadata.service_subset = multi_level_default
+[ RUNNING  ] metadata.name = alpha_nested_value
+[ RUNNING  ] metadata.labels[env_label] = env_label_value
+[       OK ] atapp_configure.expression_yaml (5 ms)
+[ RUN      ] atapp_configure.expression_conf
+unit-test with libatapp 1.0.0 - based on libatapp 1.0.0
+        Build Time: Mar 25 2026 16:46:34
+Build Compiler: MSVC 195035726 with standard 202002
+[ RUNNING  ] name = test_app
+[ RUNNING  ] type_name = gamesvr
+[ RUNNING  ] hostname = conf-host.example.com
+[ RUNNING  ] identity = fallback_identity
+[ RUNNING  ] metadata.name = beta_nested_value
+[       OK ] atapp_configure.expression_conf (4 ms)
+[----------] 6 test case(s) from atapp_configure (49 ms total)
+
+[----------] 18 test case(s) from atapp_etcd_cluster
+[ RUN      ] atapp_etcd_cluster.cluster_init_and_connect
+[ RUNNING  ] etcd not available, skip
+[       OK ] atapp_etcd_cluster.cluster_init_and_connect (2004 ms)
+[ RUN      ] atapp_etcd_cluster.cluster_member_list_discovery
+[ RUNNING  ] etcd not available, skip
+[       OK ] atapp_etcd_cluster.cluster_member_list_discovery (2015 ms)
+[ RUN      ] atapp_etcd_cluster.cluster_lease_grant_and_keepalive
+[ RUNNING  ] etcd not available, skip
+[       OK ] atapp_etcd_cluster.cluster_lease_grant_and_keepalive (2010 ms)
+[ RUN      ] atapp_etcd_cluster.cluster_close_revoke_lease
+[ RUNNING  ] etcd not available, skip
+[       OK ] atapp_etcd_cluster.cluster_close_revoke_lease (2009 ms)
+[ RUN      ] atapp_etcd_cluster.cluster_stats_tracking
+[ RUNNING  ] etcd not available, skip
+[       OK ] atapp_etcd_cluster.cluster_stats_tracking (2012 ms)
+[ RUN      ] atapp_etcd_cluster.cluster_event_up_down_callbacks
+[ RUNNING  ] etcd not available, skip
+[       OK ] atapp_etcd_cluster.cluster_event_up_down_callbacks (2011 ms)
+[ RUN      ] atapp_etcd_cluster.keepalive_set_value_and_read
+[ RUNNING  ] etcd not available, skip
+[       OK ] atapp_etcd_cluster.keepalive_set_value_and_read (2010 ms)
+[ RUN      ] atapp_etcd_cluster.keepalive_update_value
+[ RUNNING  ] etcd not available, skip
+[       OK ] atapp_etcd_cluster.keepalive_update_value (2009 ms)
+[ RUN      ] atapp_etcd_cluster.keepalive_lease_binding
+[ RUNNING  ] etcd not available, skip
+[       OK ] atapp_etcd_cluster.keepalive_lease_binding (2008 ms)
+[ RUN      ] atapp_etcd_cluster.keepalive_checker_conflict
+[ RUNNING  ] etcd not available, skip
+[       OK ] atapp_etcd_cluster.keepalive_checker_conflict (2010 ms)
+[ RUN      ] atapp_etcd_cluster.keepalive_checker_same_identity
+[ RUNNING  ] etcd not available, skip
+[       OK ] atapp_etcd_cluster.keepalive_checker_same_identity (2012 ms)
+[ RUN      ] atapp_etcd_cluster.keepalive_remove_and_readd
+[ RUNNING  ] etcd not available, skip
+[       OK ] atapp_etcd_cluster.keepalive_remove_and_readd (2008 ms)
+[ RUN      ] atapp_etcd_cluster.watcher_initial_snapshot
+[ RUNNING  ] etcd not available, skip
+[       OK ] atapp_etcd_cluster.watcher_initial_snapshot (2001 ms)
+[ RUN      ] atapp_etcd_cluster.watcher_put_event
+[ RUNNING  ] etcd not available, skip
+[       OK ] atapp_etcd_cluster.watcher_put_event (2007 ms)
+[ RUN      ] atapp_etcd_cluster.watcher_delete_event
+[ RUNNING  ] etcd not available, skip
+[       OK ] atapp_etcd_cluster.watcher_delete_event (2007 ms)
+[ RUN      ] atapp_etcd_cluster.watcher_prefix_range
+[ RUNNING  ] etcd not available, skip
+[       OK ] atapp_etcd_cluster.watcher_prefix_range (2012 ms)
+[ RUN      ] atapp_etcd_cluster.watcher_reconnect_after_timeout
+[ RUNNING  ] etcd not available, skip
+[       OK ] atapp_etcd_cluster.watcher_reconnect_after_timeout (2007 ms)
+[ RUN      ] atapp_etcd_cluster.watcher_revision_continuity
+[ RUNNING  ] etcd not available, skip
+[       OK ] atapp_etcd_cluster.watcher_revision_continuity (2010 ms)
+[----------] 18 test case(s) from atapp_etcd_cluster (36164 ms total)
+
+[----------] 4 test case(s) from atapp_downstream_send
+[ RUN      ] atapp_downstream_send.downstream_not_connected_pending
+[2026-03-25 18:35:26.04960][WARN    ](atapp.cpp:1099): ============ start to load configure ============
+[2026-03-25 18:35:26.04960][WARN    ](atapp.cpp:1109): ============ load config file D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\test\case/atapp_test_downstream_1.yaml ============
+[2026-03-25 18:35:26.04960][WARN    ](atapp.cpp:1204): ------------ load configure done ------------
+[ RUNNING  ] C.1: handle NOT ready (bus not connected)
+[ RUNNING  ] C.1: received_count after tick=0
+[ RUNNING  ] C.1: pending count=1
+[ RUNNING  ] C.1: downstream received: pending-downstream-C1, direct_source=0x301
+[       OK ] atapp_downstream_send.downstream_not_connected_pending (50 ms)
+[ RUN      ] atapp_downstream_send.downstream_connected_send_success
+[ RUNNING  ] C.2: downstream received: downstream-send-C2, direct_source=0x301
+[ RUNNING  ] C.2: downstream received: downstream-by-name-C2, direct_source=0x301
+[ RUNNING  ] C.2: upstream received: upstream-from-downstream-C2, direct_source=0x302
+[       OK ] atapp_downstream_send.downstream_connected_send_success (77 ms)
+[ RUN      ] atapp_downstream_send.downstream_reconnect_before_timeout
+[ RUNNING  ] C.3: downstream received: before-disconnect-C3, direct_source=0x301
+[ RUNNING  ] C.3: Setting handle unready to simulate disconnect...
+[ RUNNING  ] C.3: pending count during disconnect: 1
+[ RUNNING  ] C.3: Setting handle ready to simulate reconnect...
+[ RUNNING  ] C.3: downstream received: during-reconnect-C3, direct_source=0x301
+[ RUNNING  ] C.3: downstream received: after-reconnect-C3, direct_source=0x301
+[ RUNNING  ] C.3: Total messages received: 3
+[       OK ] atapp_downstream_send.downstream_reconnect_before_timeout (78 ms)
+[ RUN      ] atapp_downstream_send.downstream_topology_offline_timeout_fail
+[ RUNNING  ] C.4: has_lost_topology_flag=1
+[ RUNNING  ] C.4: handle removed after 6050ms
+[ RUNNING  ] C.4: forward response error_code=-211
+[ RUNNING  ] C.4: forward response count=1
+[ RUNNING  ] C.4: handle_removed=1
+[ RUNNING  ] C.4: endpoint cleaned up after GC=1
+[       OK ] atapp_downstream_send.downstream_topology_offline_timeout_fail (31 ms)
+[----------] 4 test case(s) from atapp_downstream_send (236 ms total)
+
+[----------] 8 test case(s) from atapp_upstream_forward
+[ RUN      ] atapp_upstream_forward.upstream_wait_discovery_then_send
+[ RUNNING  ] A.1: node3 handle ready=1
+[ RUNNING  ] A.1: send_message ret=0 seq=5
+[ RUNNING  ] A.1: node3 received message: hello-from-node1-A1
+[ RUNNING  ] A.1: Total messages received by node3: 1
+[       OK ] atapp_upstream_forward.upstream_wait_discovery_then_send (32 ms)
+[ RUN      ] atapp_upstream_forward.upstream_connected_forward_success
+[ RUNNING  ] A.2: node3 received: upstream-forward-A2
+[ RUNNING  ] A.2: node3 received: upstream-forward-A2-by-name
+[       OK ] atapp_upstream_forward.upstream_connected_forward_success (79 ms)
+[ RUN      ] atapp_upstream_forward.upstream_connected_target_unreachable
+[ RUNNING  ] A.3: send_message to nonexistent node returned: 0
+[       OK ] atapp_upstream_forward.upstream_connected_target_unreachable (5042 ms)
+[ RUN      ] atapp_upstream_forward.upstream_reconnect_then_send_success
+[ RUNNING  ] A.4: node3 received: before-disconnect-A4
+[ RUNNING  ] A.4: Setting handle unready to simulate disconnect...
+[ RUNNING  ] A.4: pending count during disconnect: 1
+[ RUNNING  ] A.4: Setting handle ready to simulate reconnect...
+[ RUNNING  ] A.4: node3 received: during-reconnect-A4
+[ RUNNING  ] A.4: pending count after post-reconnect send: 0
+[ RUNNING  ] A.4: node3 received: after-reconnect-A4
+[ RUNNING  ] A.4: Total messages received: 3
+[       OK ] atapp_upstream_forward.upstream_reconnect_then_send_success (77 ms)
+[ RUN      ] atapp_upstream_forward.upstream_retry_exceed_limit_fail
+[ RUNNING  ] A.5: node3 handle exists=1 ready=0
+[ RUNNING  ] A.5: pending count=1
+[ RUNNING  ] A.5 DIAG @0ms: exists=1 flags=0x5 retry=1 timer_expired=0 pending_timeout=2000ms lost_timeout=32000ms reconn_next=2000ms proxy=0x102 proxy_for=0 timer_err=0 sizeof_time_t=8
+[ RUNNING  ] A.5 DIAG @1000ms: exists=1 flags=0x5 retry=1 timer_expired=0 pending_timeout=1000ms lost_timeout=31000ms reconn_next=1000ms proxy=0x102 proxy_for=0 fwd_resp=0
+[ RUNNING  ] A.5 DIAG @2000ms: exists=1 flags=0x5 retry=2 timer_expired=0 pending_timeout=4000ms lost_timeout=30000ms reconn_next=4000ms proxy=0x102 proxy_for=0 fwd_resp=0
+[ RUNNING  ] A.5 DIAG @3000ms: exists=1 flags=0x5 retry=2 timer_expired=0 pending_timeout=3000ms lost_timeout=29000ms reconn_next=3000ms proxy=0x102 proxy_for=0 fwd_resp=0
+[ RUNNING  ] A.5 DIAG @4000ms: exists=1 flags=0x5 retry=2 timer_expired=0 pending_timeout=2000ms lost_timeout=28000ms reconn_next=2000ms proxy=0x102 proxy_for=0 fwd_resp=0
+[ RUNNING  ] A.5 DIAG @5000ms: exists=1 flags=0x5 retry=2 timer_expired=0 pending_timeout=1000ms lost_timeout=27000ms reconn_next=1000ms proxy=0x102 proxy_for=0 fwd_resp=0
+[ RUNNING  ] A.5: handle removed after 6000ms
+[ RUNNING  ] A.5: forward response error_code=-211
+[ RUNNING  ] A.5: forward response count=1
+[ RUNNING  ] A.5: last error_code=-211
+[       OK ] atapp_upstream_forward.upstream_retry_exceed_limit_fail (31 ms)
+[ RUN      ] atapp_upstream_forward.upstream_retry_timeout_downstream_cleanup
+[ RUNNING  ] A.6 DIAG @0ms: exists=1 flags=0x5 retry=1 timer_expired=0 pending_timeout=2000ms lost_timeout=32000ms reconn_next=2000ms proxy=0x102 proxy_for=0 timer_err=0
+[ RUNNING  ] A.6 DIAG @1000ms: exists=1 flags=0x5 retry=1 timer_expired=0 pending_timeout=1000ms lost_timeout=31000ms reconn_next=1000ms proxy=0x102 proxy_for=0 fwd_resp=0
+[ RUNNING  ] A.6 DIAG @2000ms: exists=1 flags=0x5 retry=1 timer_expired=0 pending_timeout=0ms lost_timeout=30000ms reconn_next=0ms proxy=0x102 proxy_for=0 fwd_resp=0
+[ RUNNING  ] A.6 DIAG @3000ms: exists=1 flags=0x5 retry=2 timer_expired=0 pending_timeout=3050ms lost_timeout=29000ms reconn_next=3050ms proxy=0x102 proxy_for=0 fwd_resp=0
+[ RUNNING  ] A.6 DIAG @4000ms: exists=1 flags=0x5 retry=2 timer_expired=0 pending_timeout=2050ms lost_timeout=28000ms reconn_next=2050ms proxy=0x102 proxy_for=0 fwd_resp=0
+[ RUNNING  ] A.6 DIAG @5000ms: exists=1 flags=0x5 retry=2 timer_expired=0 pending_timeout=1050ms lost_timeout=27000ms reconn_next=1050ms proxy=0x102 proxy_for=0 fwd_resp=0
+[ RUNNING  ] A.6 DIAG @6000ms: exists=1 flags=0x5 retry=2 timer_expired=0 pending_timeout=50ms lost_timeout=26000ms reconn_next=50ms proxy=0x102 proxy_for=0 fwd_resp=0
+[ RUNNING  ] A.6: handle removed after 6050ms
+[ RUNNING  ] A.6: forward response error_code=-211
+[       OK ] atapp_upstream_forward.upstream_retry_timeout_downstream_cleanup (30 ms)
+[ RUN      ] atapp_upstream_forward.upstream_topology_offline_pending_fail
+[ RUNNING  ] A.7: has_connection_handle before remove: 1
+[ RUNNING  ] A.7: has_connection_handle after remove_topology_peer: 1, has_lost_topology_flag: 1
+[ RUNNING  ] A.7: node3 handle ready=0
+[ RUNNING  ] A.7 DIAG @0ms: exists=1 flags=0x5 retry=1 timer_expired=0 pending_timeout=2000ms lost_timeout=32000ms reconn_next=2000ms proxy=0x102 proxy_for=0 timer_err=0
+[ RUNNING  ] A.7 DIAG @1000ms: exists=1 flags=0x5 retry=1 timer_expired=0 pending_timeout=1000ms lost_timeout=31000ms reconn_next=1000ms proxy=0x102 proxy_for=0 fwd_resp=0
+[ RUNNING  ] A.7 DIAG @2000ms: exists=1 flags=0x5 retry=2 timer_expired=0 pending_timeout=4000ms lost_timeout=30000ms reconn_next=4000ms proxy=0x102 proxy_for=0 fwd_resp=0
+[ RUNNING  ] A.7 DIAG @3000ms: exists=1 flags=0x5 retry=2 timer_expired=0 pending_timeout=3000ms lost_timeout=29000ms reconn_next=3000ms proxy=0x102 proxy_for=0 fwd_resp=0
+[ RUNNING  ] A.7 DIAG @4000ms: exists=1 flags=0x5 retry=2 timer_expired=0 pending_timeout=2000ms lost_timeout=28000ms reconn_next=2000ms proxy=0x102 proxy_for=0 fwd_resp=0
+[ RUNNING  ] A.7 DIAG @5000ms: exists=1 flags=0x5 retry=2 timer_expired=0 pending_timeout=1000ms lost_timeout=27000ms reconn_next=1000ms proxy=0x102 proxy_for=0 fwd_resp=0
+[ RUNNING  ] A.7 DIAG @6000ms: exists=1 flags=0x5 retry=2 timer_expired=0 pending_timeout=0ms lost_timeout=26000ms reconn_next=0ms proxy=0x102 proxy_for=0 fwd_resp=0
+[ RUNNING  ] A.7: handle removed after 6100ms
+[ RUNNING  ] A.7: forward response error_code=-211
+[ RUNNING  ] A.7: forward response count=1
+[ RUNNING  ] A.7: last error_code=-211
+[ RUNNING  ] A.7: node3 endpoint after GC: null
+[       OK ] atapp_upstream_forward.upstream_topology_offline_pending_fail (30 ms)
+[ RUN      ] atapp_upstream_forward.upstream_topology_change_new_upstream
+[ RUNNING  ] A.8: node3 received: before-upstream-switch-A8, direct_source_id=0x102
+[Log INFO    ][2026-03-25 18:35:32.11835][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:4110(int __cdecl atframework::atapp::v1000::app::setup_tick_timer(void))]: setup tick interval to 8ms.
+[Log INFO    ][2026-03-25 18:35:32.12311][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:5028(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_available(const class atframework::atbus::v3000::node &,int))]: bus node 0x104 initialze done, res: 0
+[Log INFO    ][2026-03-25 18:35:32.12311][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\modules\etcd_module.cpp:266(int __cdecl atframework::atapp::v1000::etcd_module::init(void))]: etcd disabled, start single mode
+[Log INFO    ][2026-03-25 18:35:34.66934][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:5162(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_add_endpoint(const class atframework::atbus::v3000::node &,class atframework::atbus::v3000::endpoint *,int))]: bus node 0x104 make connection to 0x103 done, res: 0
+[Log INFO    ][2026-03-25 18:35:34.66934][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:4999(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_register(const class atframework::atbus::v3000::node &,const class atframework::atbus::v3000::endpoint *,const class atframework::atbus::v3000::connection *,int))]: bus node 0x104 endpoint 0x103 connection 0x192c91e3b18(atcp://127.0.0.1:21755) registered, res: 0
+[Log INFO    ][2026-03-25 18:35:34.66934][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:5162(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_add_endpoint(const class atframework::atbus::v3000::node &,class atframework::atbus::v3000::endpoint *,int))]: bus node 0x104 make connection to 0x101 done, res: 0
+[Log INFO    ][2026-03-25 18:35:34.66934][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:4999(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_register(const class atframework::atbus::v3000::node &,const class atframework::atbus::v3000::endpoint *,const class atframework::atbus::v3000::connection *,int))]: bus node 0x104 endpoint 0x101 connection 0x192c91e4798(atcp://127.0.0.1:22011) registered, res: 0
+[Log INFO    ][2026-03-25 18:35:34.67001][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:5162(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_add_endpoint(const class atframework::atbus::v3000::node &,class atframework::atbus::v3000::endpoint *,int))]: bus node 0x103 make connection to 0x104 done, res: 0
+[Log INFO    ][2026-03-25 18:35:34.67001][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:4999(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_register(const class atframework::atbus::v3000::node &,const class atframework::atbus::v3000::endpoint *,const class atframework::atbus::v3000::connection *,int))]: bus node 0x103 endpoint 0x104 connection 0x192c91e4c48(ipv4://127.0.0.1:21602) registered, res: 0
+[Log INFO    ][2026-03-25 18:35:34.67001][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:5162(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_add_endpoint(const class atframework::atbus::v3000::node &,class atframework::atbus::v3000::endpoint *,int))]: bus node 0x101 make connection to 0x104 done, res: 0
+[Log INFO    ][2026-03-25 18:35:34.67001][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:4999(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_register(const class atframework::atbus::v3000::node &,const class atframework::atbus::v3000::endpoint *,const class atframework::atbus::v3000::connection *,int))]: bus node 0x101 endpoint 0x104 connection 0x192c91e4608(ipv4://127.0.0.1:21602) registered, res: 0
+[Log INFO    ][2026-03-25 18:35:34.67100][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_endpoint.cpp:52(class std::shared_ptr<class atframework::atapp::v1000::atapp_endpoint> __cdecl atframework::atapp::v1000::atapp_endpoint::create(class atframework::atapp::v1000::app &))]: create atapp endpoint 0x192bf6ef9f0
+[Log INFO    ][2026-03-25 18:35:34.67100][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_endpoint.cpp:136(void __cdecl atframework::atapp::v1000::atapp_endpoint::update_discovery(const class atframework::util::v2008::memory::strong_rc_ptr<class atframework::atapp::v1000::etcd_discovery_node> &) noexcept)]: update atapp endpoint 0x192bf6ef9f0 with 260(new-upstream-test-relay)
+[Log INFO    ][2026-03-25 18:35:34.67100][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_connector_atbus.cpp:875(void __cdecl atframework::atapp::v1000::atapp_connector_atbus::set_handle_ready(const class atframework::util::v2008::memory::strong_rc_ptr<struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data> &))]: atbus node 0x101 set handle ready for 0x104
+[Log INFO    ][2026-03-25 18:35:34.67100][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:2598(class std::shared_ptr<class atframework::atapp::v1000::atapp_endpoint> __cdecl atframework::atapp::v1000::app::mutable_endpoint(const class atframework::util::v2008::memory::strong_rc_ptr<class atframework::atapp::v1000::etcd_discovery_node> &))]: connect address 260 of atapp endpoint new-upstream-test-relay(ipv4://127.0.0.1:21602) success and use handle 0x192be7b6100
+[Log INFO    ][2026-03-25 18:35:34.67100][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_endpoint.cpp:52(class std::shared_ptr<class atframework::atapp::v1000::atapp_endpoint> __cdecl atframework::atapp::v1000::atapp_endpoint::create(class atframework::atapp::v1000::app &))]: create atapp endpoint 0x192bf6efef0
+[Log INFO    ][2026-03-25 18:35:34.67100][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_endpoint.cpp:136(void __cdecl atframework::atapp::v1000::atapp_endpoint::update_discovery(const class atframework::util::v2008::memory::strong_rc_ptr<class atframework::atapp::v1000::etcd_discovery_node> &) noexcept)]: update atapp endpoint 0x192bf6efef0 with 257(upstream-test-node1)
+[Log INFO    ][2026-03-25 18:35:34.67100][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:2598(class std::shared_ptr<class atframework::atapp::v1000::atapp_endpoint> __cdecl atframework::atapp::v1000::app::mutable_endpoint(const class atframework::util::v2008::memory::strong_rc_ptr<class atframework::atapp::v1000::etcd_discovery_node> &))]: connect address 257 of atapp endpoint upstream-test-node1(ipv4://127.0.0.1:21601) success and use handle 0x192be7b61b0
+[Log INFO    ][2026-03-25 18:35:34.67100][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_endpoint.cpp:52(class std::shared_ptr<class atframework::atapp::v1000::atapp_endpoint> __cdecl atframework::atapp::v1000::atapp_endpoint::create(class atframework::atapp::v1000::app &))]: create atapp endpoint 0x192bf6f28f0
+[Log INFO    ][2026-03-25 18:35:34.67100][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_endpoint.cpp:136(void __cdecl atframework::atapp::v1000::atapp_endpoint::update_discovery(const class atframework::util::v2008::memory::strong_rc_ptr<class atframework::atapp::v1000::etcd_discovery_node> &) noexcept)]: update atapp endpoint 0x192bf6f28f0 with 259(upstream-test-node3)
+[Log INFO    ][2026-03-25 18:35:34.67100][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:2598(class std::shared_ptr<class atframework::atapp::v1000::atapp_endpoint> __cdecl atframework::atapp::v1000::app::mutable_endpoint(const class atframework::util::v2008::memory::strong_rc_ptr<class atframework::atapp::v1000::etcd_discovery_node> &))]: connect address 259 of atapp endpoint upstream-test-node3(ipv4://127.0.0.1:21603) success and use handle 0x192be7b65d0
+[Log INFO    ][2026-03-25 18:35:34.67100][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_endpoint.cpp:52(class std::shared_ptr<class atframework::atapp::v1000::atapp_endpoint> __cdecl atframework::atapp::v1000::atapp_endpoint::create(class atframework::atapp::v1000::app &))]: create atapp endpoint 0x192bf6f29f0
+[Log INFO    ][2026-03-25 18:35:34.67100][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_endpoint.cpp:136(void __cdecl atframework::atapp::v1000::atapp_endpoint::update_discovery(const class atframework::util::v2008::memory::strong_rc_ptr<class atframework::atapp::v1000::etcd_discovery_node> &) noexcept)]: update atapp endpoint 0x192bf6f29f0 with 260(new-upstream-test-relay)
+[Log INFO    ][2026-03-25 18:35:34.67100][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_connector_atbus.cpp:875(void __cdecl atframework::atapp::v1000::atapp_connector_atbus::set_handle_ready(const class atframework::util::v2008::memory::strong_rc_ptr<struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data> &))]: atbus node 0x103 set handle ready for 0x104
+[Log INFO    ][2026-03-25 18:35:34.67100][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:2598(class std::shared_ptr<class atframework::atapp::v1000::atapp_endpoint> __cdecl atframework::atapp::v1000::app::mutable_endpoint(const class atframework::util::v2008::memory::strong_rc_ptr<class atframework::atapp::v1000::etcd_discovery_node> &))]: connect address 260 of atapp endpoint new-upstream-test-relay(ipv4://127.0.0.1:21602) success and use handle 0x192be7b6680
+[Log INFO    ][2026-03-25 18:35:34.67100][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_connector_atbus.cpp:1707(void __cdecl atframework::atapp::v1000::atapp_connector_atbus::unbind_connection_handle_proxy(struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data &,struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data &))]: atbus unbind upstream 0x103 --x--> 0x102
+[Log INFO    ][2026-03-25 18:35:34.67100][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_connector_atbus.cpp:1700(void __cdecl atframework::atapp::v1000::atapp_connector_atbus::bind_connection_handle_proxy(struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data &,struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data &))]: atbus bind upstream 0x103 --> 0x104
+[Log INFO    ][2026-03-25 18:35:34.67100][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_connector_atbus.cpp:1707(void __cdecl atframework::atapp::v1000::atapp_connector_atbus::unbind_connection_handle_proxy(struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data &,struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data &))]: atbus unbind upstream 0x101 --x--> 0x102
+[Log INFO    ][2026-03-25 18:35:34.67100][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_connector_atbus.cpp:1700(void __cdecl atframework::atapp::v1000::atapp_connector_atbus::bind_connection_handle_proxy(struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data &,struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data &))]: atbus bind upstream 0x101 --> 0x104
+[Log INFO    ][2026-03-25 18:35:34.67216][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:4999(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_register(const class atframework::atbus::v3000::node &,const class atframework::atbus::v3000::endpoint *,const class atframework::atbus::v3000::connection *,int))]: bus node 0x104 endpoint 0x103 connection 0x192c91e4dd8(atcp://127.0.0.1:22267) registered, res: 0
+[Log INFO    ][2026-03-25 18:35:34.67216][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_connector_atbus.cpp:875(void __cdecl atframework::atapp::v1000::atapp_connector_atbus::set_handle_ready(const class atframework::util::v2008::memory::strong_rc_ptr<struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data> &))]: atbus node 0x104 set handle ready for 0x103
+[Log INFO    ][2026-03-25 18:35:34.67216][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:4999(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_register(const class atframework::atbus::v3000::node &,const class atframework::atbus::v3000::endpoint *,const class atframework::atbus::v3000::connection *,int))]: bus node 0x104 endpoint 0x101 connection 0x192c91e4158(atcp://127.0.0.1:22523) registered, res: 0
+[Log INFO    ][2026-03-25 18:35:34.67216][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_connector_atbus.cpp:875(void __cdecl atframework::atapp::v1000::atapp_connector_atbus::set_handle_ready(const class atframework::util::v2008::memory::strong_rc_ptr<struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data> &))]: atbus node 0x104 set handle ready for 0x101
+[Log INFO    ][2026-03-25 18:35:34.67255][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:4999(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_register(const class atframework::atbus::v3000::node &,const class atframework::atbus::v3000::endpoint *,const class atframework::atbus::v3000::connection *,int))]: bus node 0x103 endpoint 0x104 connection 0x192c91e50f8(ipv4://127.0.0.1:21602) registered, res: 0
+[ RUNNING  ] A.8: node3 received: after-upstream-switch-A8, direct_source_id=0x104
+[Log INFO    ][2026-03-25 18:35:34.67255][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:4999(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_register(const class atframework::atbus::v3000::node &,const class atframework::atbus::v3000::endpoint *,const class atframework::atbus::v3000::connection *,int))]: bus node 0x101 endpoint 0x104 connection 0x192c91e3e38(ipv4://127.0.0.1:21602) registered, res: 0
+[Log WARN    ][2026-03-25 18:35:34.67282][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:1212(int __cdecl atframework::atapp::v1000::app::stop(void))]: ============ receive stop signal and ready to stop all modules ============
+[Log INFO    ][2026-03-25 18:35:34.67286][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:5022(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_shutdown(const class atframework::atbus::v3000::node &,int))]: bus node 0x104 shutdown, reason: 0
+[Log WARN    ][2026-03-25 18:35:34.67286][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:1210(int __cdecl atframework::atapp::v1000::app::stop(void))]: ============= recall stop after some event action(s) finished =============
+[Log INFO    ][2026-03-25 18:35:34.67296][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_connector_atbus.cpp:922(void __cdecl atframework::atapp::v1000::atapp_connector_atbus::set_handle_unready(const class atframework::util::v2008::memory::strong_rc_ptr<struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data> &))]: atbus node 0x104 set handle unready for 0x101
+[Log INFO    ][2026-03-25 18:35:34.67296][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_connector_atbus.cpp:922(void __cdecl atframework::atapp::v1000::atapp_connector_atbus::set_handle_unready(const class atframework::util::v2008::memory::strong_rc_ptr<struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data> &))]: atbus node 0x104 set handle unready for 0x103
+[Log INFO    ][2026-03-25 18:35:34.67296][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_endpoint.cpp:58(__cdecl atframework::atapp::v1000::atapp_endpoint::~atapp_endpoint(void))]: destroy atapp endpoint  0x101(upstream-test-node1) - 0x192bf6efef0
+[Log INFO    ][2026-03-25 18:35:34.67296][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_endpoint.cpp:58(__cdecl atframework::atapp::v1000::atapp_endpoint::~atapp_endpoint(void))]: destroy atapp endpoint  0x103(upstream-test-node3) - 0x192bf6f28f0
+[2026-03-25 18:35:34.67296][INFO    ](atbus_node.cpp:517): node=0x104, endpoint=0x0, connection=0x0: node reset
+[Log INFO    ][2026-03-25 18:35:34.67296][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:5180(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_remove_endpoint(const class atframework::atbus::v3000::node &,class atframework::atbus::v3000::endpoint *,int))]: bus node 0x104 release connection to 0x103 done, res: 0
+[Log INFO    ][2026-03-25 18:35:34.67296][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:5180(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_remove_endpoint(const class atframework::atbus::v3000::node &,class atframework::atbus::v3000::endpoint *,int))]: bus node 0x104 release connection to 0x101 done, res: 0
+[2026-03-25 18:35:34.67296][ERROR   ](atbus_node.cpp:1877): node=0x103, endpoint=0x0, connection=0x192c91e4c48, status: -604, error_code: ATBUS_ERROR_TYPE(-4095): unknown: receive message from ipv4://127.0.0.1:21602 failed
+[2026-03-25 18:35:34.67296][ERROR   ](atbus_node.cpp:1877): node=0x103, endpoint=0x0, connection=0x192c91e50f8, status: -604, error_code: ATBUS_ERROR_TYPE(-4095): unknown: receive message from ipv4://127.0.0.1:21602 failed
+[2026-03-25 18:35:34.67296][ERROR   ](atbus_node.cpp:1877): node=0x101, endpoint=0x0, connection=0x192c91e4608, status: -604, error_code: ATBUS_ERROR_TYPE(-4095): unknown: receive message from ipv4://127.0.0.1:21602 failed
+[2026-03-25 18:35:34.67296][ERROR   ](atbus_node.cpp:1877): node=0x101, endpoint=0x0, connection=0x192c91e3e38, status: -604, error_code: ATBUS_ERROR_TYPE(-4095): unknown: receive message from ipv4://127.0.0.1:21602 failed
+[2026-03-25 18:35:34.67296][INFO    ](atbus_node.cpp:323): node=0x0, endpoint=0x0, connection=0x0: node destroyed
+[Log WARN    ][2026-03-25 18:35:34.67296][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:1212(int __cdecl atframework::atapp::v1000::app::stop(void))]: ============ receive stop signal and ready to stop all modules ============
+[Log INFO    ][2026-03-25 18:35:34.67477][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:5022(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_shutdown(const class atframework::atbus::v3000::node &,int))]: bus node 0x103 shutdown, reason: 0
+[Log WARN    ][2026-03-25 18:35:34.67477][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:1210(int __cdecl atframework::atapp::v1000::app::stop(void))]: ============= recall stop after some event action(s) finished =============
+[Log INFO    ][2026-03-25 18:35:34.67485][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_connector_atbus.cpp:922(void __cdecl atframework::atapp::v1000::atapp_connector_atbus::set_handle_unready(const class atframework::util::v2008::memory::strong_rc_ptr<struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data> &))]: atbus node 0x103 set handle unready for 0x101
+[Log INFO    ][2026-03-25 18:35:34.67485][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_connector_atbus.cpp:1707(void __cdecl atframework::atapp::v1000::atapp_connector_atbus::unbind_connection_handle_proxy(struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data &,struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data &))]: atbus unbind upstream 0x101 --x--> 0x104
+[Log INFO    ][2026-03-25 18:35:34.67485][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_connector_atbus.cpp:922(void __cdecl atframework::atapp::v1000::atapp_connector_atbus::set_handle_unready(const class atframework::util::v2008::memory::strong_rc_ptr<struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data> &))]: atbus node 0x103 set handle unready for 0x104
+[Log INFO    ][2026-03-25 18:35:34.67485][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_endpoint.cpp:58(__cdecl atframework::atapp::v1000::atapp_endpoint::~atapp_endpoint(void))]: destroy atapp endpoint  0x101(upstream-test-node1) - 0x192bf6f12f0
+[Log INFO    ][2026-03-25 18:35:34.67485][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_endpoint.cpp:58(__cdecl atframework::atapp::v1000::atapp_endpoint::~atapp_endpoint(void))]: destroy atapp endpoint  0x102(upstream-test-relay) - 0x192bf6f15f0
+[Log INFO    ][2026-03-25 18:35:34.67485][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_endpoint.cpp:58(__cdecl atframework::atapp::v1000::atapp_endpoint::~atapp_endpoint(void))]: destroy atapp endpoint  0x104(new-upstream-test-relay) - 0x192bf6f29f0
+[2026-03-25 18:35:34.67485][INFO    ](atbus_node.cpp:517): node=0x103, endpoint=0x0, connection=0x0: node reset
+[Log INFO    ][2026-03-25 18:35:34.67485][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:5180(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_remove_endpoint(const class atframework::atbus::v3000::node &,class atframework::atbus::v3000::endpoint *,int))]: bus node 0x103 release connection to 0x104 done, res: 0
+[2026-03-25 18:35:34.67544][INFO    ](atbus_node.cpp:842): node=0x101, endpoint=0x104, connection=0x0: endpoint gc timeout and reset
+[Log INFO    ][2026-03-25 18:35:34.67544][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:5180(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_remove_endpoint(const class atframework::atbus::v3000::node &,class atframework::atbus::v3000::endpoint *,int))]: bus node 0x101 release connection to 0x104 done, res: 0
+[2026-03-25 18:35:34.67560][INFO    ](atbus_node.cpp:323): node=0x0, endpoint=0x0, connection=0x0: node destroyed
+[Log WARN    ][2026-03-25 18:35:34.67560][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:1212(int __cdecl atframework::atapp::v1000::app::stop(void))]: ============ receive stop signal and ready to stop all modules ============
+[Log INFO    ][2026-03-25 18:35:34.67642][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:5022(int __cdecl atframework::atapp::v1000::app::bus_evt_callback_on_shutdown(const class atframework::atbus::v3000::node &,int))]: bus node 0x101 shutdown, reason: 0
+[Log WARN    ][2026-03-25 18:35:34.67642][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:1210(int __cdecl atframework::atapp::v1000::app::stop(void))]: ============= recall stop after some event action(s) finished =============
+[Log INFO    ][2026-03-25 18:35:34.67649][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_connector_atbus.cpp:922(void __cdecl atframework::atapp::v1000::atapp_connector_atbus::set_handle_unready(const class atframework::util::v2008::memory::strong_rc_ptr<struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data> &))]: atbus node 0x101 set handle unready for 0x102
+[Log INFO    ][2026-03-25 18:35:34.67649][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_connector_atbus.cpp:922(void __cdecl atframework::atapp::v1000::atapp_connector_atbus::set_handle_unready(const class atframework::util::v2008::memory::strong_rc_ptr<struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data> &))]: atbus node 0x101 set handle unready for 0x103
+[Log INFO    ][2026-03-25 18:35:34.67649][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_connector_atbus.cpp:1707(void __cdecl atframework::atapp::v1000::atapp_connector_atbus::unbind_connection_handle_proxy(struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data &,struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data &))]: atbus unbind upstream 0x103 --x--> 0x104
+[Log INFO    ][2026-03-25 18:35:34.67649][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_connector_atbus.cpp:922(void __cdecl atframework::atapp::v1000::atapp_connector_atbus::set_handle_unready(const class atframework::util::v2008::memory::strong_rc_ptr<struct atframework::atapp::v1000::atapp_connector_atbus::atbus_connection_handle_data> &))]: atbus node 0x101 set handle unready for 0x104
+[Log INFO    ][2026-03-25 18:35:34.67649][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_endpoint.cpp:58(__cdecl atframework::atapp::v1000::atapp_endpoint::~atapp_endpoint(void))]: destroy atapp endpoint  0x102(upstream-test-relay) - 0x192bf6f10f0
+[Log INFO    ][2026-03-25 18:35:34.67649][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_endpoint.cpp:58(__cdecl atframework::atapp::v1000::atapp_endpoint::~atapp_endpoint(void))]: destroy atapp endpoint  0x103(upstream-test-node3) - 0x192bf6ef6f0
+[Log INFO    ][2026-03-25 18:35:34.67649][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\connectors\atapp_endpoint.cpp:58(__cdecl atframework::atapp::v1000::atapp_endpoint::~atapp_endpoint(void))]: destroy atapp endpoint  0x104(new-upstream-test-relay) - 0x192bf6ef9f0
+[2026-03-25 18:35:34.67649][INFO    ](atbus_node.cpp:517): node=0x101, endpoint=0x0, connection=0x0: node reset
+[2026-03-25 18:35:34.67649][INFO    ](atbus_node.cpp:323): node=0x0, endpoint=0x0, connection=0x0: node destroyed
+[       OK ] atapp_upstream_forward.upstream_topology_change_new_upstream (3072 ms)
+[----------] 8 test case(s) from atapp_upstream_forward (8394 ms total)
+
+[----------] 1 test case(s) from atapp_connector
+[ RUN      ] atapp_connector.get_address_type
+[       OK ] atapp_connector.get_address_type (1 ms)
+[----------] 1 test case(s) from atapp_connector (1 ms total)
+
+[----------] 8 test case(s) from atapp_direct_connect
+[ RUN      ] atapp_direct_connect.direct_discovery_ready_connect_send
+[Log WARN    ][2026-03-25 18:35:34.68011][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:1099(int __cdecl atframework::atapp::v1000::app::reload(void))]: ============ start to load configure ============
+[Log WARN    ][2026-03-25 18:35:34.68011][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:1109(int __cdecl atframework::atapp::v1000::app::reload(void))]: ============ load config file D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\test\case/atapp_test_direct_3.yaml ============
+[Log WARN    ][2026-03-25 18:35:34.68011][D:\workspace\git\github\atframework\atsf4g-co\atframework\libatapp\src\atframe\atapp.cpp:1204(int __cdecl atframework::atapp::v1000::app::reload(void))]: ------------ load configure done ------------
+[ RUNNING  ] B.1: node2 received: direct-connect-B1, direct_source=0x201
+[       OK ] atapp_direct_connect.direct_discovery_ready_connect_send (62 ms)
+[ RUN      ] atapp_direct_connect.direct_discovery_missing_wait_then_send
+[ RUNNING  ] B.2: pending_message_count=1
+[ RUNNING  ] B.2: node2 received: pending-before-connect-B2, direct_source=0x201
+[       OK ] atapp_direct_connect.direct_discovery_missing_wait_then_send (60 ms)
+[ RUN      ] atapp_direct_connect.direct_connected_send_success
+[ RUNNING  ] B.3: node2 received: direct-msg1-B3, direct_source=0x201
+[ RUNNING  ] B.3: node2 received: direct-msg2-B3, direct_source=0x201
+[       OK ] atapp_direct_connect.direct_connected_send_success (79 ms)
+[ RUN      ] atapp_direct_connect.direct_reconnect_success_after_failure
+[ RUNNING  ] B.4: node2 received: before-disconnect-B4, direct_source=0x201
+[ RUNNING  ] B.4: Setting handle unready to simulate disconnect...
+[ RUNNING  ] B.4: Setting handle ready to simulate reconnect...
+[ RUNNING  ] B.4: node2 received: during-reconnect-B4, direct_source=0x201
+[ RUNNING  ] B.4: node2 received: after-reconnect-B4, direct_source=0x201
+[       OK ] atapp_direct_connect.direct_reconnect_success_after_failure (91 ms)
+[ RUN      ] atapp_direct_connect.direct_reconnect_retry_backoff
+[ RUNNING  ] B.5: initial retry_times=1
+[ RUNNING  ] B.5: retry 1->2 at 2000ms
+[ RUNNING  ] B.5: retry 2->3 at 6100ms
+[ RUNNING  ] B.5: handle removed after 14100ms
+[ RUNNING  ] B.5: first_interval=2000ms, second_interval=4100ms
+[ RUNNING  ] B.5: handle_removed=1
+[       OK ] atapp_direct_connect.direct_reconnect_retry_backoff (48 ms)
+[ RUN      ] atapp_direct_connect.direct_retry_exceed_limit_fail
+[ RUNNING  ] B.6: forward response error_code=-211
+[ RUNNING  ] B.6: handle removed after 14150ms
+[       OK ] atapp_direct_connect.direct_retry_exceed_limit_fail (46 ms)
+[ RUN      ] atapp_direct_connect.direct_prefer_direct_over_upstream
+[ RUNNING  ] B.7: node1 upstream=0x203, node2 upstream=0x203
+[ RUNNING  ] B.7: proxy_bus_id for node2 = 0x0
+[ RUNNING  ] B.7: node2 received: prefer-direct-B7, direct_source=0x201
+[       OK ] atapp_direct_connect.direct_prefer_direct_over_upstream (61 ms)
+[ RUN      ] atapp_direct_connect.direct_prefer_direct_wait_discovery
+[ RUNNING  ] B.8: node1 upstream=0x203, node2 upstream=0x203
+[ RUNNING  ] B.8: node2 received: wait-discovery-B8, direct_source=0x201
+[       OK ] atapp_direct_connect.direct_prefer_direct_wait_discovery (61 ms)
+[----------] 8 test case(s) from atapp_direct_connect (511 ms total)
+
+[----------] 12 test case(s) from atapp_discovery
+[ RUN      ] atapp_discovery.metadata_filter
+[       OK ] atapp_discovery.metadata_filter (0 ms)
+[ RUN      ] atapp_discovery.get_discovery_by_metadata
+[       OK ] atapp_discovery.get_discovery_by_metadata (0 ms)
+[ RUN      ] atapp_discovery.round_robin
+[       OK ] atapp_discovery.round_robin (2 ms)
+[ RUN      ] atapp_discovery.lower_bound_normal
+[       OK ] atapp_discovery.lower_bound_normal (2 ms)
+[ RUN      ] atapp_discovery.lower_bound_unique
+[       OK ] atapp_discovery.lower_bound_unique (9 ms)
+[ RUN      ] atapp_discovery.lower_bound_compact
+[       OK ] atapp_discovery.lower_bound_compact (2 ms)
+[ RUN      ] atapp_discovery.lower_bound_compact_unique
+[       OK ] atapp_discovery.lower_bound_compact_unique (8 ms)
+[ RUN      ] atapp_discovery.discovery_node_version_update
+[       OK ] atapp_discovery.discovery_node_version_update (0 ms)
+[ RUN      ] atapp_discovery.discovery_node_version_stale_skip
+[       OK ] atapp_discovery.discovery_node_version_stale_skip (0 ms)
+[ RUN      ] atapp_discovery.discovery_add_remove_stress
+[       OK ] atapp_discovery.discovery_add_remove_stress (20 ms)
+[ RUN      ] atapp_discovery.discovery_node_ingress_round_robin
+[       OK ] atapp_discovery.discovery_node_ingress_round_robin (0 ms)
+[ RUN      ] atapp_discovery.discovery_empty_set_operations
+[       OK ] atapp_discovery.discovery_empty_set_operations (0 ms)
+[----------] 12 test case(s) from atapp_discovery (44 ms total)
+
+[----------] 2 test case(s) from atapp_message
+[ RUN      ] atapp_message.send_message_remote
+[ RUNNING  ] Start to send message...
+[ RUNNING  ] Got message: hello app2
+[ RUNNING  ] Got message: hello app2
+[ RUNNING  ] Got message: hello app2
+[       OK ] atapp_message.send_message_remote (32 ms)
+[ RUN      ] atapp_message.send_message_loopback
+[ RUNNING  ] Got message: hello loopback
+[ RUNNING  ] Got message: hello loopback
+[ RUNNING  ] Got message: hello loopback
+[ RUNNING  ] Got message: hello loopback
+[       OK ] atapp_message.send_message_loopback (45 ms)
+[----------] 2 test case(s) from atapp_message (77 ms total)
+
+[----------] 20 test case(s) from atapp_etcd_module
+[ RUN      ] atapp_etcd_module.init_and_ready
+[ RUNNING  ] etcd is not available at http://127.0.0.1:12379, skip this test
+[       OK ] atapp_etcd_module.init_and_ready (2007 ms)
+[ RUN      ] atapp_etcd_module.keepalive_paths
+[ RUNNING  ] etcd is not available, skip this test
+[       OK ] atapp_etcd_module.keepalive_paths (2009 ms)
+[ RUN      ] atapp_etcd_module.watcher_paths
+[ RUNNING  ] etcd is not available, skip this test
+[       OK ] atapp_etcd_module.watcher_paths (2010 ms)
+[ RUN      ] atapp_etcd_module.topology_registration
+[ RUNNING  ] etcd is not available, skip this test
+[       OK ] atapp_etcd_module.topology_registration (2007 ms)
+[ RUN      ] atapp_etcd_module.discovery_snapshot
+[ RUNNING  ] etcd is not available, skip this test
+[       OK ] atapp_etcd_module.discovery_snapshot (2010 ms)
+[ RUN      ] atapp_etcd_module.topology_snapshot
+[ RUNNING  ] etcd is not available, skip this test
+[       OK ] atapp_etcd_module.topology_snapshot (2007 ms)
+[ RUN      ] atapp_etcd_module.discovery_registration
+[ RUNNING  ] etcd is not available, skip this test
+[       OK ] atapp_etcd_module.discovery_registration (2009 ms)
+[ RUN      ] atapp_etcd_module.discovery_event_callback
+[ RUNNING  ] etcd is not available, skip this test
+[       OK ] atapp_etcd_module.discovery_event_callback (2006 ms)
+[ RUN      ] atapp_etcd_module.discovery_event_remove_callback
+[ RUNNING  ] etcd is not available, skip this test
+[       OK ] atapp_etcd_module.discovery_event_remove_callback (2008 ms)
+[ RUN      ] atapp_etcd_module.discovery_event_multi_callbacks
+[ RUNNING  ] etcd is not available, skip this test
+[       OK ] atapp_etcd_module.discovery_event_multi_callbacks (2017 ms)
+[ RUN      ] atapp_etcd_module.topology_event_callback
+[ RUNNING  ] etcd is not available, skip this test
+[       OK ] atapp_etcd_module.topology_event_callback (2012 ms)
+[ RUN      ] atapp_etcd_module.topology_event_remove_callback
+[ RUNNING  ] etcd is not available, skip this test
+[       OK ] atapp_etcd_module.topology_event_remove_callback (2006 ms)
+[ RUN      ] atapp_etcd_module.topology_event_multi_callbacks
+[ RUNNING  ] etcd is not available, skip this test
+[       OK ] atapp_etcd_module.topology_event_multi_callbacks (2009 ms)
+[ RUN      ] atapp_etcd_module.multi_node_topology_update
+[ RUNNING  ] etcd is not available, skip this test
+[       OK ] atapp_etcd_module.multi_node_topology_update (2005 ms)
+[ RUN      ] atapp_etcd_module.discovery_event_delete
+[ RUNNING  ] etcd is not available, skip this test
+[       OK ] atapp_etcd_module.discovery_event_delete (2011 ms)
+[ RUN      ] atapp_etcd_module.topology_event_delete
+[ RUNNING  ] etcd is not available, skip this test
+[       OK ] atapp_etcd_module.topology_event_delete (2008 ms)
+[ RUN      ] atapp_etcd_module.stop_revoke_lease
+[ RUNNING  ] etcd is not available, skip this test
+[       OK ] atapp_etcd_module.stop_revoke_lease (2002 ms)
+[ RUN      ] atapp_etcd_module.multi_node_discovery_put_event
+[ RUNNING  ] etcd is not available, skip this test
+[       OK ] atapp_etcd_module.multi_node_discovery_put_event (2013 ms)
+[ RUN      ] atapp_etcd_module.multi_node_discovery_delete_event
+[ RUNNING  ] etcd is not available, skip this test
+[       OK ] atapp_etcd_module.multi_node_discovery_delete_event (2006 ms)
+[ RUN      ] atapp_etcd_module.multi_node_custom_data
+[ RUNNING  ] etcd is not available, skip this test
+[       OK ] atapp_etcd_module.multi_node_custom_data (2012 ms)
+[----------] 20 test case(s) from atapp_etcd_module (40175 ms total)
+
+[----------] 5 test case(s) from atapp_worker_pool
+[ RUN      ] atapp_worker_pool.basic_spawn
+[       OK ] atapp_worker_pool.basic_spawn (126 ms)
+[ RUN      ] atapp_worker_pool.stop
+[       OK ] atapp_worker_pool.stop (4307 ms)
+[ RUN      ] atapp_worker_pool.foreach_stable_workers
+[       OK ] atapp_worker_pool.foreach_stable_workers (10 ms)
+[ RUN      ] atapp_worker_pool.basic_tick
+[ RUNNING  ] Tick interval: 8000ms
+[ RUNNING  ] Tick interval: 16000ms
+[ RUNNING  ] Tick interval: 32000ms
+[ RUNNING  ] Tick interval: 64000ms
+[ RUNNING  ] Tick interval: 100000ms
+[       OK ] atapp_worker_pool.basic_tick (1314 ms)
+[ RUN      ] atapp_worker_pool.stop_tick
+[       OK ] atapp_worker_pool.stop_tick (1231 ms)
+[----------] 5 test case(s) from atapp_worker_pool (6988 ms total)
+
+[----------] 7 test case(s) from atapp_etcd_packer
+[ RUN      ] atapp_etcd_packer.packer_key_value_pack_unpack
+[       OK ] atapp_etcd_packer.packer_key_value_pack_unpack (0 ms)
+[ RUN      ] atapp_etcd_packer.packer_response_header_pack_unpack
+[       OK ] atapp_etcd_packer.packer_response_header_pack_unpack (0 ms)
+[ RUN      ] atapp_etcd_packer.packer_key_range_prefix
+[       OK ] atapp_etcd_packer.packer_key_range_prefix (0 ms)
+[ RUN      ] atapp_etcd_packer.packer_key_range_exact
+[       OK ] atapp_etcd_packer.packer_key_range_exact (0 ms)
+[ RUN      ] atapp_etcd_packer.packer_base64_roundtrip
+[       OK ] atapp_etcd_packer.packer_base64_roundtrip (0 ms)
+[ RUN      ] atapp_etcd_packer.packer_unpack_int_formats
+[       OK ] atapp_etcd_packer.packer_unpack_int_formats (0 ms)
+[ RUN      ] atapp_etcd_packer.packer_parse_object_error
+[       OK ] atapp_etcd_packer.packer_parse_object_error (0 ms)
+[----------] 7 test case(s) from atapp_etcd_packer (0 ms total)
+
+[----------] 1 test case(s) from atapp_setup
+[ RUN      ] atapp_setup.timeout
+[       OK ] atapp_setup.timeout (1015 ms)
+[----------] 1 test case(s) from atapp_setup (1015 ms total)
+
+[----------] 9 test case(s) from atapp_topology_change
+[ RUN      ] atapp_topology_change.topology_change_new_upstream_not_connected
+[ RUNNING  ] D.1: received: via-old-upstream-D1, direct_source=0x402
+[ RUNNING  ] D.1: handle ready=1 proxy_bus_id=0x0
+[ RUNNING  ] D.1: received: via-new-upstream-D1, direct_source=0x403
+[       OK ] atapp_topology_change.topology_change_new_upstream_not_connected (3114 ms)
+[ RUN      ] atapp_topology_change.topology_change_new_upstream_already_connected
+[ RUNNING  ] D.2: received: before-switch-D2, direct_source=0x402
+[ RUNNING  ] D.2: Phase 1 done, direct_source=0x402
+[ RUNNING  ] D.2: handle ready=1 proxy=0x403
+[ RUNNING  ] D.2: received: after-switch-D2, direct_source=0x403
+[       OK ] atapp_topology_change.topology_change_new_upstream_already_connected (3111 ms)
+[ RUN      ] atapp_topology_change.topology_change_discovery_missing_then_arrive
+[ RUNNING  ] D.3: received after tick (no discovery)=0
+[ RUNNING  ] D.3: received: discovery-delayed-D3, direct_source=0x403
+[       OK ] atapp_topology_change.topology_change_discovery_missing_then_arrive (3116 ms)
+[ RUN      ] atapp_topology_change.topology_change_discovery_timeout_cleanup
+[ RUNNING  ] D.4: forward response error_code=-211
+[ RUNNING  ] D.4: forward response after 8000ms
+[       OK ] atapp_topology_change.topology_change_discovery_timeout_cleanup (189 ms)
+[ RUN      ] atapp_topology_change.topology_lost_recover_before_timeout
+[ RUNNING  ] D.5: received: before-loss-D5, direct_source=0x402
+[ RUNNING  ] D.5: received: after-restore-D5, direct_source=0x402
+[       OK ] atapp_topology_change.topology_lost_recover_before_timeout (62 ms)
+[ RUN      ] atapp_topology_change.topology_lost_timeout_cleanup
+[ RUNNING  ] D.6: handle removed after 6000ms
+[ RUNNING  ] D.6: forward response error_code=-211
+[       OK ] atapp_topology_change.topology_lost_timeout_cleanup (31 ms)
+[ RUN      ] atapp_topology_change.topology_lost_ready_handle_force_remove
+[ RUNNING  ] D.7: kReady+kLostTopology, ready=1
+[ RUNNING  ] D.7: handle removed after 32000ms
+[ RUNNING  ] D.7: handle_removed=1
+[       OK ] atapp_topology_change.topology_lost_ready_handle_force_remove (31 ms)
+[ RUN      ] atapp_topology_change.topology_same_upstream_noop
+[ RUNNING  ] D.8: received: same-upstream-D8, direct_source=0x402
+[       OK ] atapp_topology_change.topology_same_upstream_noop (46 ms)
+[ RUN      ] atapp_topology_change.topology_proxy_in_new_upstream_path
+[ RUNNING  ] D.9: received: proxy-in-path-D9, direct_source=0x402
+[       OK ] atapp_topology_change.topology_proxy_in_new_upstream_path (46 ms)
+[----------] 9 test case(s) from atapp_topology_change (9747 ms total)
+[==========] 101 test(s) ran. (103401 ms total)
+[  PASSED  ] 101 test case(s).
+[ On Exit  ] Running unit_test_event_on_exit_close_libuv
+[ On Exit  ] Running unit_test_event_on_exit_shutdown_protobuf

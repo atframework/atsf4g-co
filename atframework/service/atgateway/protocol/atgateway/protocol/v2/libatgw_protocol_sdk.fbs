@@ -249,6 +249,9 @@ table cs_body_handshake {
 
     // Handshake sequence is used to confirm receiver cipher
     handshake_sequence: ulong (id: 11);
+
+    // Used to find default router when policy is hash-based. Client fills in req with hash data.
+    default_hash_data: [byte] (id: 12);
 }
 
 table cs_body_confirm {
