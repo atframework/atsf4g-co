@@ -10,5 +10,5 @@ atapp:
     configure:
       topology:
         rule:
-          allow_direct_connection: true
+          allow_direct_connection: false
           require_same_upstream: false

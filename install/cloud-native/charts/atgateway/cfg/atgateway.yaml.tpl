@@ -15,12 +15,9 @@ atgateway:
     recv_buffer_size: 2MB           # recv buffer limit
     send_buffer_size: 4MB           # send buffer limit
 
-    {{- if .Values.atgateway.default_router }}
+    {{- with (dig "default_router" false .Values.atgateway ) }}
     default_router:
-      node_id: {{ .Values.atgateway.default_router.node_id }}
-      node_name: {{ .Values.atgateway.default_router.node_name }}
-      type_id: {{ .Values.atgateway.default_router.type_id }}
-      type_name: {{ .Values.atgateway.default_router.type_name }}
+      {{- toYaml . | trim | nindent 6 }}
     {{- end }}
 
     {{- with (dig "crypto" false .Values.atgateway ) }}
