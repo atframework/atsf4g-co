@@ -501,7 +501,13 @@ int session_manager::set_session_router(session::id_t sess_id, ::atbus::bus_id_t
     return static_cast<int>(error_code_t::kSessionNotFound);
   }
 
+  if (router_node_id == iter->second->get_router_id() && router_node_name == iter->second->get_router_name()) {
+    return 0;
+  }
+
+  iter->second->send_remove_session();
   iter->second->set_router(router_node_id, router_node_name);
+  iter->second->send_new_session();
   FWLOGINFO("{} set router to {}:{}", *iter->second, router_node_id, router_node_name);
   return 0;
 }

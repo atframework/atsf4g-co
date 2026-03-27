@@ -102,10 +102,9 @@ class session : public std::enable_shared_from_this<session> {
   const uv_stream_t *get_uv_stream() const;
 
   int send_new_session();
-
- private:
   int send_remove_session();
 
+ private:
   int send_remove_session(session_manager *mgr);
 
   static void on_evt_shutdown(uv_shutdown_t *req, int status);
