@@ -209,6 +209,4 @@ tasks:
   copy_config:
     desc: "Copy case to Install Directory"
     cmds:
-      - rm -rf '{{.INSTALL_PATH}}/case'
-      - cp -r ./case_config/ '{{.INSTALL_PATH}}/case/'
       - cp config.yaml '{{.INSTALL_PATH}}/bin/'

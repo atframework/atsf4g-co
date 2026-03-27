@@ -30,14 +30,16 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx
                                                              ) {
 % endif
   char db_key[256];
-  size_t keylen = sizeof(db_key) - 1;
+  size_t keylen = sizeof(db_key);
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
-  db_key[result.size] = '\0';
+  if (result.size < static_cast<int64_t>(keylen)) {
+    keylen = result.size;
+  }
   auto output = atfw::util::memory::make_strong_rc<db_key_value_message_result_t>();
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::get_all(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
                                                                 gsl::string_view{db_key, keylen},
                                                                 output,
-                                                                detail::unpack_${message_name}));
+                                                                &detail::unpack_${message_name}));
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
   }
@@ -61,9 +63,11 @@ SERVER_FRAME_API result_type batch_get_all(rpc::context &ctx, gsl::span<table_ke
   db_keys.reserve(keys.size());
   for (auto &key : keys) {
     char db_key[256];
-    size_t keylen = sizeof(db_key) - 1;
+    size_t keylen = sizeof(db_key);
     auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_key});
-    db_key[result.size] = '\0';
+    if (result.size < static_cast<int64_t>(keylen)) {
+      keylen = result.size;
+    }
     db_keys.push_back(std::string{db_key, keylen});
   }
   rsp.reserve(keys.size());
@@ -71,7 +75,7 @@ SERVER_FRAME_API result_type batch_get_all(rpc::context &ctx, gsl::span<table_ke
   outputs.resize(keys.size());
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::batch_get_all(
       ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, gsl::span<std::string>{db_keys}, outputs,
-      detail::unpack_${message_name}));
+      &detail::unpack_${message_name}));
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
   }
@@ -115,9 +119,11 @@ SERVER_FRAME_API result_type replace(rpc::context &ctx,
                                                          ) {
 % endif
   char db_key[256];
-  size_t keylen = sizeof(db_key) - 1;
+  size_t keylen = sizeof(db_key);
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_pb});
-  db_key[result.size] = '\0';
+  if (result.size < static_cast<int64_t>(keylen)) {
+    keylen = result.size;
+  }
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::set(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
                                                                 gsl::string_view{db_key, keylen},
                                                                 shared_abstract_message<google::protobuf::Message>{std::move(store)},
@@ -134,6 +140,25 @@ SERVER_FRAME_API result_type replace(rpc::context &ctx,
 
 % if len(atomic_inc_fields) > 0:
 %     for inc_field in atomic_inc_fields:
+namespace detail {
+static int32_t unpack_${message_name}_inc_field_${inc_field["raw_name"]}(rpc::context *ctx, db_message_t &msg, const redisReply *reply) {
+  if (nullptr == reply) {
+    FWLOGDEBUG("{}", "data not found.");
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  }
+
+  if (reply->type != REDIS_REPLY_INTEGER) {
+    FWLOGERROR("unpack failed, the redis reply type is not int (reply type={}).", reply->type);
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+  }
+
+  shared_message<PROJECT_NAMESPACE_ID::${message_name}> table_pb{*ctx};
+  table_pb->set_${inc_field["raw_name"]}(reply->integer);
+  msg.body_message =
+      atfw::util::memory::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(std::move(table_pb));
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+}
+}
 SERVER_FRAME_API result_type inc_field_${inc_field["raw_name"]}(rpc::context &ctx
 %         for key_field in key_fields:
                                                          , ${key_field["cpp_type"]} ${key_field["raw_name"]}
@@ -141,9 +166,11 @@ SERVER_FRAME_API result_type inc_field_${inc_field["raw_name"]}(rpc::context &ct
                                                          , ${inc_field["cpp_type"]}& inc_value
 ) {
   char db_key[256];
-  size_t keylen = sizeof(db_key) - 1;
+  size_t keylen = sizeof(db_key);
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
-  db_key[result.size] = '\0';
+  if (result.size < static_cast<int64_t>(keylen)) {
+    keylen = result.size;
+  }
   shared_message<PROJECT_NAMESPACE_ID::${message_name}> table_db{ctx};
   table_db->set_${inc_field["raw_name"]}(1);
   shared_abstract_message<google::protobuf::Message> message{table_db};
@@ -151,11 +178,11 @@ SERVER_FRAME_API result_type inc_field_${inc_field["raw_name"]}(rpc::context &ct
                                                                 gsl::string_view{db_key, keylen},
                                                                 gsl::string_view{"${inc_field["raw_name"]}"},
                                                                 message,
-                                                                detail::unpack_${message_name}));
+                                                                &detail::unpack_${message_name}_inc_field_${inc_field["raw_name"]}));
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
   }
-  inc_value = table_db->auto_inc_id();
+  inc_value = table_db->${inc_field["raw_name"]}();
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 %     endfor
@@ -228,9 +255,11 @@ SERVER_FRAME_API result_type partly_get_${partly_field_name}(rpc::context &ctx
                                                          ) {
 %     endif
   char db_key[256];
-  size_t keylen = sizeof(db_key) - 1;
+  size_t keylen = sizeof(db_key);
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
-  db_key[result.size] = '\0';
+  if (result.size < static_cast<int64_t>(keylen)) {
+    keylen = result.size;
+  }
   gsl::string_view partly_get_field[${partly_field_len}];
 <%
   field_index = 0
@@ -259,7 +288,7 @@ SERVER_FRAME_API result_type partly_get_${partly_field_name}(rpc::context &ctx
                                                                 partly_get_field,
                                                                 ${partly_field_len},
                                                                 output,
-                                                                detail::unpack_${message_name}_${partly_field_name}));
+                                                                &detail::unpack_${message_name}_${partly_field_name}));
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
   }
@@ -283,9 +312,11 @@ SERVER_FRAME_API result_type batch_partly_get_${partly_field_name}(rpc::context 
   db_keys.reserve(keys.size());
   for (auto &key : keys) {
     char db_key[256];
-    size_t keylen = sizeof(db_key) - 1;
+    size_t keylen = sizeof(db_key);
     auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_key});
-    db_key[result.size] = '\0';
+    if (result.size < static_cast<int64_t>(keylen)) {
+      keylen = result.size;
+    }
     db_keys.push_back(std::string{db_key, keylen});
   }
   rsp.reserve(keys.size());
@@ -318,7 +349,7 @@ SERVER_FRAME_API result_type batch_partly_get_${partly_field_name}(rpc::context 
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::batch_partly_get(
       ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, gsl::span<std::string>{db_keys},
       partly_get_field, ${partly_field_len}, outputs,
-      detail::unpack_${message_name}_${partly_field_name}));
+      &detail::unpack_${message_name}_${partly_field_name}));
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
   }

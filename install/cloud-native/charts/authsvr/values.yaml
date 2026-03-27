@@ -61,7 +61,7 @@ authsvr:
   start_time: 0 # service start time
   end_time: 0 # service end time
   # white_openid_list:                               # white openid list, can ignore start time and end time
-  lobbysvr:
+  backend:
     router:
       type_id: 12
       type_name: lobbysvr

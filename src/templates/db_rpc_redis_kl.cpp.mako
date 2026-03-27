@@ -35,14 +35,16 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_all(rpc::context &ctx
                                                              , std::vector<${message_name}_list_message> &output
                                                              ) {
   char db_key[256];
-  size_t keylen = sizeof(db_key) - 1;
+  size_t keylen = sizeof(db_key);
   auto index = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
-  db_key[index.size] = '\0';
+  if (index.size < static_cast<int64_t>(keylen)) {
+    keylen = index.size;
+  }
   std::vector<db_key_list_message_result_t> results;
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::get_all(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
                                                                 gsl::string_view{db_key, keylen},
                                                                 results,
-                                                                detail::unpack_${message_name}));
+                                                                &detail::unpack_${message_name}));
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
   }
@@ -74,14 +76,16 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_by_indexs(rpc::context 
                                                              , std::vector<${message_name}_list_message> &output
                                                              ) {
   char db_key[256];
-  size_t keylen = sizeof(db_key) - 1;
+  size_t keylen = sizeof(db_key);
   auto index = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
-  db_key[index.size] = '\0';
+  if (index.size < static_cast<int64_t>(keylen)) {
+    keylen = index.size;
+  }
   std::vector<db_key_list_message_result_t> results;
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::get_by_indexs(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
                                                                 gsl::string_view{db_key, keylen}, list_index,
                                                                 results,
-                                                                detail::unpack_${message_name}_indexs));
+                                                                &detail::unpack_${message_name}_indexs));
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
   }
@@ -109,9 +113,11 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type add(rpc::context &ctx
                                                          , shared_message<PROJECT_NAMESPACE_ID::${message_name}> &&store
                                                          ) {
   char db_key[256];
-  size_t keylen = sizeof(db_key) - 1;
+  size_t keylen = sizeof(db_key);
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_pb});
-  db_key[result.size] = '\0';
+  if (result.size < static_cast<int64_t>(keylen)) {
+    keylen = result.size;
+  }
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
                                                                 gsl::string_view{db_key, keylen},
                                                                 ${index.max_list_length},
@@ -127,9 +133,11 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type update(rpc::context &ctx
                                                          , shared_message<PROJECT_NAMESPACE_ID::${message_name}> &&store
                                                          ) {
   char db_key[256];
-  size_t keylen = sizeof(db_key) - 1;
+  size_t keylen = sizeof(db_key);
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_pb});
-  db_key[result.size] = '\0';
+  if (result.size < static_cast<int64_t>(keylen)) {
+    keylen = result.size;
+  }
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::update_by_index(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
                                                                 gsl::string_view{db_key, keylen}, list_index,
                                                                 std::move(store)));
@@ -145,9 +153,11 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::contex
 % endfor
                                                                      , gsl::span<uint64_t> list_index) {
   char db_key[256];
-  size_t keylen = sizeof(db_key) - 1;
+  size_t keylen = sizeof(db_key);
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
-  db_key[result.size] = '\0';
+  if (result.size < static_cast<int64_t>(keylen)) {
+    keylen = result.size;
+  }
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::remove_by_index(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
                                                                 gsl::string_view{db_key, keylen}, list_index));
   if (res < 0) {
@@ -162,9 +172,11 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::contex
 % endfor
                                                                      , gsl::span<const uint64_t> list_index) {
   char db_key[256];
-  size_t keylen = sizeof(db_key) - 1;
+  size_t keylen = sizeof(db_key);
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
-  db_key[result.size] = '\0';
+  if (result.size < static_cast<int64_t>(keylen)) {
+    keylen = result.size;
+  }
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::remove_by_index(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
                                                                 gsl::string_view{db_key, keylen}, list_index));
   if (res < 0) {

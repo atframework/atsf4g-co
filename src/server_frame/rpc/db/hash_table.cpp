@@ -30,6 +30,12 @@
 namespace rpc {
 namespace db {
 namespace hash_table {
+namespace detail {
+static int32_t unpack_nothing(rpc::context *, db_message_t &, const redisReply *) {
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+}
+}  // namespace detail
+
 namespace key_value {
 SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
                                      atfw::util::memory::strong_rc_ptr<db_key_value_message_result_t> output,
@@ -395,15 +401,16 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
   }
 
   if (version != nullptr) {
-    FWLOGDEBUG("table [key={}] start to save data, expect version: {}", key, *version);
+    FWLOGDEBUG("table [key={}] start to save data, expect version: {}, detail: {}", key, *version,
+               segs_debug_info.str());
   } else {
-    FWLOGDEBUG("table [key={}] start to save data", key);
+    FWLOGDEBUG("table [key={}] start to save data, detail: {}", key, segs_debug_info.str());
   }
 
   uint64_t rpc_sequence = 0;
   res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
-      logic_config::me()->get_local_server_id(), nullptr, rpc_sequence, static_cast<int>(args.size()),
+      logic_config::me()->get_local_server_id(), &detail::unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
       args.get_args_values(), args.get_args_lengths());
 
   // args unavailable now
@@ -483,7 +490,7 @@ SERVER_FRAME_API result_type inc_field(rpc::context &ctx, uint32_t channel, gsl:
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
-  FWLOGDEBUG("table [key={}] start to inc data", key);
+  FWLOGDEBUG("table [key={}] start to inc data, detail: {}", key, segs_debug_info.str());
 
   uint64_t rpc_sequence = 0;
   res = db_msg_dispatcher::me()->send_msg(
@@ -692,7 +699,7 @@ SERVER_FRAME_API result_type update_by_index(rpc::context &ctx, uint32_t channel
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
-      logic_config::me()->get_local_server_id(), nullptr, rpc_sequence, static_cast<int>(args.size()),
+      logic_config::me()->get_local_server_id(), &detail::unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
       args.get_args_values(), args.get_args_lengths());
 
   if (res < 0) {
@@ -761,7 +768,7 @@ SERVER_FRAME_API result_type add_index(rpc::context &ctx, uint32_t channel, gsl:
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
-      logic_config::me()->get_local_server_id(), nullptr, rpc_sequence, static_cast<int>(args.size()),
+      logic_config::me()->get_local_server_id(), &detail::unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
       args.get_args_values(), args.get_args_lengths());
 
   if (res < 0) {
@@ -823,7 +830,7 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
-      logic_config::me()->get_local_server_id(), nullptr, rpc_sequence, static_cast<int>(args.size()),
+      logic_config::me()->get_local_server_id(), &detail::unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
       args.get_args_values(), args.get_args_lengths());
 
   if (res < 0) {
@@ -884,7 +891,7 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
-      logic_config::me()->get_local_server_id(), nullptr, rpc_sequence, static_cast<int>(args.size()),
+      logic_config::me()->get_local_server_id(), &detail::unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
       args.get_args_values(), args.get_args_lengths());
 
   if (res < 0) {
@@ -937,7 +944,7 @@ SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel, gsl
   uint64_t rpc_sequence = 0;
   result_type::value_type res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
-      logic_config::me()->get_local_server_id(), nullptr, rpc_sequence, static_cast<int>(args.size()),
+      logic_config::me()->get_local_server_id(), &detail::unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
       args.get_args_values(), args.get_args_lengths());
 
   // args unavailable now

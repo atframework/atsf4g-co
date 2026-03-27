@@ -756,15 +756,13 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
     cpptype vint = static_cast<cpptype>(reflect->func(msg, fds[i]));                                        \
     char vstr[24] = {0};                                                                                    \
     int intlen = UTIL_STRFUNC_SNPRINTF(vstr, sizeof(vstr), cppformat, vint);                                \
-    data_allocated = args.alloc(static_cast<size_t>(intlen) + 1);                                           \
+    data_allocated = args.alloc(static_cast<size_t>(intlen));                                               \
     if (nullptr == data_allocated || intlen < 0) {                                                          \
       FWLOGERROR("pack message {} failed, alloc {}, len={} value failed", msg.GetDescriptor()->full_name(), \
                  fds[i]->name(), intlen);                                                                   \
       args.dealloc();                                                                                       \
       return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;                                                      \
     }                                                                                                       \
-    memcpy(data_allocated, "&", 1);                                                                         \
-    data_allocated += 1;                                                                                    \
     memcpy(data_allocated, vstr, static_cast<size_t>(intlen));                                              \
     stat_sum_len += static_cast<size_t>(intlen);                                                            \
     if (nullptr != debug_message) {                                                                         \

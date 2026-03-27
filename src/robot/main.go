@@ -9,7 +9,6 @@ import (
 	public_protocol_extension "github.com/atframework/atsf4g-co/component/public/protocol/extension"
 	"google.golang.org/protobuf/proto"
 
-	_ "github.com/atframework/atsf4g-co-robot/case"
 	_ "github.com/atframework/atsf4g-co-robot/cmd"
 	robot "github.com/atframework/robot-go"
 )
