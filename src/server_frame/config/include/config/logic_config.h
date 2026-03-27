@@ -112,6 +112,10 @@ class logic_config {
     return CustomConfigProtocol::default_instance();
   }
 
+  ATFW_UTIL_FORCEINLINE server_instance_config_ptr get_origin_server_instance_config() const noexcept {
+    return server_instance_config_data_;
+  }
+
  private:
   void _load_db();
   void _load_db_hosts(PROJECT_NAMESPACE_ID::config::db_group_cfg &out);

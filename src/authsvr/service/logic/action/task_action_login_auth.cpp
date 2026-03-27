@@ -40,8 +40,8 @@ task_action_login_auth::~task_action_login_auth() {}
 const char* task_action_login_auth::name() const { return "task_action_login_auth"; }
 
 task_action_login_auth::result_type task_action_login_auth::operator()() {
-  EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
-  EXPLICIT_UNUSED_ATTR rpc_response_type& rsp_body = get_response_body();
+  const rpc_request_type& req_body = get_request_body();
+  rpc_response_type& rsp_body = get_response_body();
 
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> login_auth_tb{get_shared_context()};
   uint64_t login_auth_cas_version = 0;
@@ -94,6 +94,9 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
     }
   }
 
+  rsp_body.set_open_id(login_auth_tb->open_id());
+  rsp_body.set_user_id(login_auth_tb->user_id());
+
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> login_lock_tb{get_shared_context()};
   uint64_t login_lock_cas_version = 0;
   res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get_all(get_shared_context(), login_auth_tb->user_id(),
@@ -113,6 +116,8 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
                 session_key.node_id, session_key.session_id, login_auth_tb->open_id(), login_auth_tb->user_id(),
                 login_lock_tb->ban_time());
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_BAN);
+
+    rsp_body.set_ban_time(login_lock_tb->ban_time());
     RPC_RETURN_CODE(0);
   }
 
@@ -175,6 +180,10 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
     RPC_RETURN_CODE(res);
   }
+
+  rsp_body.set_login_code(login_auth_tb->access_token_code());
+
+  rsp_body.set_version_type(PROJECT_NAMESPACE_ID::EN_VERSION_DEFAULT);
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

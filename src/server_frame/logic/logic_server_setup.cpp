@@ -130,10 +130,19 @@ static int show_configure_handler(util::cli::callback_param params) {
         static_cast<std::string>(protobuf_mini_dumper_get_readable(app->get_origin_configure()));
     ::atfw::atapp::app::add_custom_command_rsp(params, app_configure);
   }
+
   std::string logic_configure =
       std::string("logic configure:\n") +
       static_cast<std::string>(protobuf_mini_dumper_get_readable(logic_config::me()->get_logic_cfg()));
   ::atfw::atapp::app::add_custom_command_rsp(params, logic_configure);
+
+  auto service_cfg = logic_config::me()->get_origin_server_instance_config();
+  if (service_cfg) {
+    std::string service_configure = std::string("service configure:(") +
+                                    std::string(service_cfg->GetDescriptor()->full_name()) + ")\n" +
+                                    static_cast<std::string>(protobuf_mini_dumper_get_readable(*service_cfg));
+    ::atfw::atapp::app::add_custom_command_rsp(params, service_configure);
+  }
   return 0;
 }
 

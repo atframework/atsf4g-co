@@ -35,14 +35,11 @@ func LoginTask(task *user_data.TaskActionUser) (err error) {
 	if rsp.GetUserId() != 0 {
 		user.SetUserId(rsp.GetUserId())
 	}
-	if rsp.GetZoneId() != 0 {
-		user.SetZoneId(rsp.GetZoneId())
-	}
 
 	var loginRsp *lobbysvr_protocol_pbdesc.SCLoginRsp
 	errCode, loginRsp, rpcErr = protocol.LoginRpc(task)
 	if rpcErr != nil {
-		task.Log("user login failed, error: %v, open_id: %s, user_id: %d, zone_id: %d", err, user.GetOpenId(), user.GetUserId(), user.GetZoneId())
+		task.Log("user login failed, error: %v, open_id: %s, user_id: %d", err, user.GetOpenId(), user.GetUserId())
 		err = rpcErr
 		return
 	}
@@ -51,6 +48,7 @@ func LoginTask(task *user_data.TaskActionUser) (err error) {
 		return
 	}
 
+	user.SetZoneId(uint32(loginRsp.GetZoneId()))
 	user.SetLogined(true)
 
 	if loginRsp.GetHeartbeatInterval() > 0 {

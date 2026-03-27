@@ -50,7 +50,10 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
   const rpc_request_type& req_body = get_request_body();
 
   is_new_player_ = false;
-  uint32_t zone_id = logic_config::me()->get_local_zone_id();
+  uint32_t zone_id = req_body.zone_id();
+  if (zone_id == 0) {
+    zone_id = logic_config::me()->get_local_zone_id();
+  }
   set_user_key(req_body.user_id(), zone_id);
 
   rpc::result_code_type::value_type res = 0;
