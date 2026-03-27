@@ -123,8 +123,8 @@ message logic_heartbeat_cfg {
   google.protobuf.Duration interval = 101
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "120s" min_value: "1s" }];
   google.protobuf.Duration tolerance = 102;
-  uint32 error_times = 103;
-  uint32 ban_error_times = 104;
+  uint32 error_times = 103 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10" min_value: "1" }];
+  uint32 ban_error_times = 104 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10" min_value: "1" }];
   google.protobuf.Duration ban_time_bound = 105;
 }
 

@@ -447,11 +447,10 @@ int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, ui
       reflect->func(&msg, fd, static_cast<cpptype>(value->integer));                                             \
     } else if (REDIS_REPLY_STRING == value->type && nullptr != value->str) {                                     \
       cpptype v = 0;                                                                                             \
-      if (value->len <= 1) {                                                                                     \
-        has_failed = true;                                                                                       \
+      if (value->len == 0) {                                                                                     \
         break;                                                                                                   \
       }                                                                                                          \
-      atfw::util::string::str2int(v, value->str + 1);                                                            \
+      atfw::util::string::str2int(v, value->str);                                                            \
       reflect->func(&msg, fd, v);                                                                                \
     } else {                                                                                                     \
       FWLOGERROR(                                                                                                \
@@ -608,11 +607,10 @@ int unpack_message_with_field(::google::protobuf::Message &msg, const redisReply
       reflect->func(&msg, fd, static_cast<cpptype>(value->integer));                                             \
     } else if (REDIS_REPLY_STRING == value->type && nullptr != value->str) {                                     \
       cpptype v = 0;                                                                                             \
-      if (value->len <= 1) {                                                                                     \
-        has_failed = true;                                                                                       \
+      if (value->len == 0) {                                                                                     \
         break;                                                                                                   \
       }                                                                                                          \
-      atfw::util::string::str2int(v, value->str + 1);                                                            \
+      atfw::util::string::str2int(v, value->str);                                                            \
       reflect->func(&msg, fd, v);                                                                                \
     } else {                                                                                                     \
       FWLOGERROR(                                                                                                \
@@ -688,6 +686,7 @@ int unpack_message_with_field(::google::protobuf::Message &msg, const redisReply
         CASE_REDIS_DATA_TO_PB_INT(google::protobuf::FieldDescriptor::CPPTYPE_UINT64, google::protobuf::uint64,
                                   SetUInt64)
         CASE_REDIS_DATA_TO_PB_INT(google::protobuf::FieldDescriptor::CPPTYPE_ENUM, int, SetEnumValue)
+        CASE_REDIS_DATA_TO_PB_INT(google::protobuf::FieldDescriptor::CPPTYPE_BOOL, bool, SetBool)
 
       default: {
         FWLOGERROR("message {} field {}(type={}) invalid", msg.GetDescriptor()->full_name(), fd->name(),
@@ -832,6 +831,7 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
         CASE_PB_INT_TO_REDIS_DATA(google::protobuf::FieldDescriptor::CPPTYPE_UINT64, unsigned long long, "%llu",
                                   GetUInt64)
         CASE_PB_INT_TO_REDIS_DATA(google::protobuf::FieldDescriptor::CPPTYPE_ENUM, int, "%d", GetEnumValue)
+        CASE_PB_INT_TO_REDIS_DATA(google::protobuf::FieldDescriptor::CPPTYPE_BOOL, int, "%d", GetBool)
 
       default: {
         FWLOGERROR("message {} field {}(type={}) invalid", msg.GetDescriptor()->full_name(), fds[i]->name(),

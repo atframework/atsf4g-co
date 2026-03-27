@@ -99,7 +99,7 @@ atapp:
               max: fatal
             rotate:
               number: {{ .Values.log_rotate_num }}
-              size: 10MB
+              size: 30MB
             file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db.all.%N.log"
             writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db.all.log"
             auto_flush: error
@@ -110,7 +110,7 @@ atapp:
               max: fatal
             rotate:
               number: {{ .Values.log_rotate_num }}
-              size: 10MB
+              size: 30MB
             file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db.error.%N.log"
             writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db.error.log"
             auto_flush: error
@@ -142,6 +142,35 @@ atapp:
               size: 10MB
             file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.stat.error.%N.log"
             writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.stat.error.log"
+            auto_flush: error
+            flush_interval: 1s        # flush log interval
+      - name: db_inner
+        index: 4
+        prefix: "[%F %T.%f][%L](%k:%n): "
+        stacktrace:
+          min: disable
+          max: disable
+        sink:
+          - type: file
+            level:
+              min: debug
+              max: fatal
+            rotate:
+              number: {{ .Values.log_rotate_num }}
+              size: 10MB
+            file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db_inner.all.%N.log"
+            writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db_inner.all.log"
+            auto_flush: error
+            flush_interval: 1s    # flush log interval
+          - type: file
+            level:
+              min: warning
+              max: fatal
+            rotate:
+              number: {{ .Values.log_rotate_num }}
+              size: 10MB
+            file: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db_inner.error.%N.log"
+            writing_alias: "{{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.db_inner.error.log"
             auto_flush: error
             flush_interval: 1s        # flush log interval
   # =========== timer ===========

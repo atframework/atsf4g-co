@@ -96,10 +96,9 @@ message table_user {
       partly_get: {
         name: "basic_info"
         fields: "open_id"
-        fields: "account"
-        fields: "player"
-        fields: "data_version"
-        fields: "options"
+        fields: "login_data"
+        fields: "account_data"
+        fields: "user_data"
       }
     }
   };
@@ -112,12 +111,12 @@ message table_user {
   user_login_data login_data = 11;        // 登入数据
   account_information account_data = 12;  // 账号信息
   user_data user_data = 13;               // 玩家数据
-  uint64 data_version = 14;               // 数据版本号
   // BasicInfo
 
   // 以下是服务器内部数据
   // 异步任务缓存
   user_async_jobs_cache_blob_data async_job_blob_data = 101;
+  uint64 data_version = 102;               // 数据版本号
   bool create_init = 103;  // 是否已经执行过创建初始化
 
   // 业务逻辑数据

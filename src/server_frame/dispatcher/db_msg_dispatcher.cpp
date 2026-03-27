@@ -301,9 +301,9 @@ SERVER_FRAME_API void db_msg_dispatcher::set_on_connected(channel_t::type t, use
   user_callback_onconnected_[t].push_back(fn);
 }
 
-void db_msg_dispatcher::log_debug_fn(const char *content) { WCLOGDEBUG(log_categorize_t::DB, "%s", content); }
+void db_msg_dispatcher::log_debug_fn(const char *content) { WCLOGDEBUG(log_categorize_t::DB_INNER, "%s", content); }
 
-void db_msg_dispatcher::log_info_fn(const char *content) { WCLOGINFO(log_categorize_t::DB, "%s", content); }
+void db_msg_dispatcher::log_info_fn(const char *content) { WCLOGINFO(log_categorize_t::DB_INNER, "%s", content); }
 
 int db_msg_dispatcher::script_load(redisAsyncContext *c, script_type type) {
   // load lua script

@@ -1,5 +1,5 @@
 ## -*- coding: utf-8 -*-
-<%page args="message_name,index,key_fields,prefix_fmt_key,prefix_fmt_value_from_args,prefix_fmt_value_from_pb" />
+<%page args="message_name,index,key_fields,all_fields,prefix_fmt_key,prefix_fmt_value_from_args,prefix_fmt_value_from_pb" />
 namespace detail {
 static int32_t unpack_${message_name}(rpc::context *ctx, db_message_t &msg, const redisReply *reply) {
   if (nullptr == reply) {

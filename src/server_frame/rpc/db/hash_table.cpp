@@ -21,6 +21,7 @@
 #include <config/logic_config.h>
 #include <dispatcher/db_msg_dispatcher.h>
 #include <dispatcher/task_manager.h>
+#include <config/extern_log_categorize.h>
 
 #include "rpc/db/db_utils.h"
 #include "rpc/rpc_async_invoke.h"
@@ -65,6 +66,7 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
   args.push("HGETALL");
   args.push(key.data(), key.size());
 
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] start to get all data", key);
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
@@ -94,10 +96,11 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
   output->version = db_message.head_message.response_int();
 
   if (output->version != 0) {
-    FWLOGINFO("table [key={}] get all cas_version: {}", key, output->version);
+    FWCLOGINFO(log_categorize_t::DB, "table [key={}] get all cas_version: {}", key, output->version);
   } else {
-    FWLOGINFO("table [key={}] get all", key);
+    FWCLOGINFO(log_categorize_t::DB, "table [key={}] get all", key);
   }
+  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] get all result: {}", key, protobuf_mini_dumper_get_readable(*output->message->get()));
 
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
@@ -135,6 +138,7 @@ SERVER_FRAME_API result_type partly_get(rpc::context &ctx, uint32_t channel, gsl
     args.push(partly_get_fields[index].data(), partly_get_fields[index].size());
   }
 
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] start to partly get data, field count: {}", key, partly_get_field_count);
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
@@ -164,11 +168,12 @@ SERVER_FRAME_API result_type partly_get(rpc::context &ctx, uint32_t channel, gsl
   output->message.swap(db_message.body_message);
 
   if (output->version != 0) {
-    FWLOGINFO("table [key={}] partly_get cas_version: {}", key, output->version);
+    FWCLOGINFO(log_categorize_t::DB, "table [key={}] partly_get cas_version: {}", key, output->version);
   } else {
-    FWLOGINFO("table [key={}] partly_get", key);
+    FWCLOGINFO(log_categorize_t::DB, "table [key={}] partly_get", key);
   }
-
+  FWCLOGDEBUG(log_categorize_t::DB, "result: {}", key,
+              protobuf_mini_dumper_get_readable(*output->message->get()));
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 
@@ -400,11 +405,13 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
+  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to save data content: {}", key,
+              protobuf_mini_dumper_get_readable(*store));
   if (version != nullptr) {
-    FWLOGDEBUG("table [key={}] start to save data, expect version: {}, detail: {}", key, *version,
+    FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to save data, expect version: {}, detail: {}", key, *version,
                segs_debug_info.str());
   } else {
-    FWLOGDEBUG("table [key={}] start to save data, detail: {}", key, segs_debug_info.str());
+    FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to save data, detail: {}", key, segs_debug_info.str());
   }
 
   uint64_t rpc_sequence = 0;
@@ -437,10 +444,11 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
 
   if (version != nullptr) {
     *version = db_message.head_message.response_int();
-    FWLOGINFO("table [key={}] data saved, new cas_version: {}, detail: {}", key, db_message.head_message.response_int(),
+    FWCLOGINFO(log_categorize_t::DB, "table [key={}] data saved, new cas_version: {}", key, db_message.head_message.response_int());
+    FWCLOGDEBUG(log_categorize_t::DB, "detail: {}", key, db_message.head_message.response_int(),
               segs_debug_info.str());
   } else {
-    FWLOGINFO("table [key={}] data saved, detail: {}", key, segs_debug_info.str());
+    FWCLOGINFO(log_categorize_t::DB, "table [key={}] data saved, detail: {}", key, segs_debug_info.str());
   }
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
@@ -490,7 +498,7 @@ SERVER_FRAME_API result_type inc_field(rpc::context &ctx, uint32_t channel, gsl:
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
-  FWLOGDEBUG("table [key={}] start to inc data, detail: {}", key, segs_debug_info.str());
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] start to inc data, detail: {}", key, segs_debug_info.str());
 
   uint64_t rpc_sequence = 0;
   res = db_msg_dispatcher::me()->send_msg(
@@ -516,7 +524,8 @@ SERVER_FRAME_API result_type inc_field(rpc::context &ctx, uint32_t channel, gsl:
   }
   db_message.body_message->swap(message);
 
-  FWLOGINFO("table [key={}] inc_field success, detail: {}", key, segs_debug_info.str());
+  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] inc_field result: {}", key,
+              protobuf_mini_dumper_get_readable(*message));
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 }  // namespace key_value
@@ -550,6 +559,7 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
   args.push("HGETALL");
   args.push(key.data(), key.size());
 
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list start to get all data", key);
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
@@ -576,7 +586,13 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
   }
   output.swap(db_message.body_message_list);
 
-  FWLOGINFO("table [key={}] key_list get all, count: {}", key, output.size());
+  for (size_t i = 0; i < output.size(); ++i) {
+    if (output[i].message) {
+      FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] key_list get all result[index={}]: {}", key,
+                  output[i].list_index, protobuf_mini_dumper_get_readable(*output[i].message->get()));
+    }
+  }
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list get all, count: {}", key, output.size());
 
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
@@ -619,6 +635,7 @@ SERVER_FRAME_API result_type get_by_indexs(rpc::context &ctx, uint32_t channel, 
     args.push(::rpc::db::get_list_value_field(index));
   }
 
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list start to get by index, count: {}", key, list_index.size());
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
@@ -650,7 +667,13 @@ SERVER_FRAME_API result_type get_by_indexs(rpc::context &ctx, uint32_t channel, 
   for (size_t i = 0; i < list_index.size(); ++i) {
     output[i].list_index = list_index[i];
   }
-  FWLOGINFO("table [key={}] key_list get_by_indexs, count: {}", key, list_index.size());
+  for (size_t i = 0; i < output.size(); ++i) {
+    if (output[i].message) {
+      FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] key_list get_by_indexs result[index={}]: {}", key,
+                  output[i].list_index, protobuf_mini_dumper_get_readable(*output[i].message->get()));
+    }
+  }
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list get_by_indexs, count: {}", key, list_index.size());
 
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
@@ -696,6 +719,7 @@ SERVER_FRAME_API result_type update_by_index(rpc::context &ctx, uint32_t channel
   // 再dump 字段内容
   store->SerializeWithCachedSizesToArray(reinterpret_cast<::google::protobuf::uint8 *>(data_allocated));
 
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list start to update data by index {}", key, list_index);
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
@@ -718,7 +742,7 @@ SERVER_FRAME_API result_type update_by_index(rpc::context &ctx, uint32_t channel
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
-  FWLOGINFO("table [key={}] key_list update_by_index {}", key, list_index);
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list update_by_index {}", key, list_index);
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 
@@ -765,6 +789,7 @@ SERVER_FRAME_API result_type add_index(rpc::context &ctx, uint32_t channel, gsl:
   // 再dump 字段内容
   store->SerializeWithCachedSizesToArray(reinterpret_cast<::google::protobuf::uint8 *>(data_allocated));
 
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list start to add index, max_list_length: {}", key, max_list_length);
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
@@ -787,7 +812,7 @@ SERVER_FRAME_API result_type add_index(rpc::context &ctx, uint32_t channel, gsl:
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
-  FWLOGINFO("table [key={}] key_list add_index", key);
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list add_index", key);
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 
@@ -815,7 +840,7 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
   }
 
   if (list_index.empty()) {
-    FWLOGINFO("list_index is empty");
+    FWCLOGINFO(log_categorize_t::DB, "list_index is empty");
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
   }
 
@@ -827,6 +852,8 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
     args.push(::rpc::db::get_list_value_field(index));
   }
 
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list start to remove by index, count: {}", key,
+             list_index.size());
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
@@ -848,7 +875,7 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
-  FWLOGINFO("table [key={}] key_list remove_by_index, count: {}", key, list_index.size());
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list remove_by_index, count: {}", key, list_index.size());
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 
@@ -876,7 +903,7 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
   }
 
   if (list_index.empty()) {
-    FWLOGINFO("list_index is empty");
+    FWCLOGINFO(log_categorize_t::DB, "list_index is empty");
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
   }
 
@@ -888,6 +915,8 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
     args.push(::rpc::db::get_list_value_field(index));
   }
 
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list start to remove by index, count: {}", key,
+             list_index.size());
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
@@ -909,7 +938,7 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
-  FWLOGINFO("table [key={}] key_list remove_by_index, count: {}", key, list_index.size());
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list remove_by_index, count: {}", key, list_index.size());
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 }  // namespace key_list
@@ -939,7 +968,7 @@ SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel, gsl
   args.push("DEL");
   args.push(key.data(), key.size());
 
-  FWLOGDEBUG("table [key={}] start to remove all data", key);
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] start to remove all data", key);
 
   uint64_t rpc_sequence = 0;
   result_type::value_type res = db_msg_dispatcher::me()->send_msg(
@@ -961,7 +990,7 @@ SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel, gsl
   // 协程操作
   db_message_t db_message;
   res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, db_message, await_options));
-  FWLOGINFO("table [key={}] all data removed", key);
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] all data removed", key);
 
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }

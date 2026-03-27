@@ -1,5 +1,5 @@
 ## -*- coding: utf-8 -*-
-<%page args="message_name,index,key_fields,atomic_inc_fields,prefix_fmt_key,prefix_fmt_value_from_args,prefix_fmt_value_from_key,prefix_fmt_value_from_pb" />
+<%page args="message_name,index,key_fields,all_fields,atomic_inc_fields,prefix_fmt_key,prefix_fmt_value_from_args,prefix_fmt_value_from_key,prefix_fmt_value_from_pb" />
 namespace detail {
 static int32_t unpack_${message_name}(rpc::context *ctx, db_message_t &msg, const redisReply *reply) {
   if (nullptr == reply) {
@@ -226,7 +226,11 @@ static int32_t unpack_${message_name}_${partly_field_name}(rpc::context *ctx, db
 %>
 %     endfor
 %     for field in partly_get.fields:
+%       if field not in all_fields:
+        #error "partly get field ${field} must be in fields"
+%       else:
   partly_get_field[${field_index}] = gsl::string_view{"${field}"};
+%       endif
 <%
   field_index = field_index + 1
 %>

@@ -56,7 +56,10 @@ void player::internal_flag_guard_t::reset() {
   flag_ = internal_flag::EN_IFT_FEATURE_INVALID;
 }
 
-player::player(fake_constructor &ctor) : base_type(ctor), user_async_jobs_manager_(new user_async_jobs_manager(*this)) {
+player::player(fake_constructor &ctor)
+    : base_type(ctor),
+      user_async_jobs_manager_(new user_async_jobs_manager(*this)),
+      user_rank_manager_(new user_rank_manager(*this)) {
   heartbeat_data_.continue_error_times = 0;
   heartbeat_data_.last_recv_time = 0;
   heartbeat_data_.sum_error_times = 0;
