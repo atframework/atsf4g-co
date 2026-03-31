@@ -12,6 +12,7 @@
 
 #include "algorithm/crypto_cipher.h"
 #include "algorithm/crypto_dh.h"
+#include "algorithm/murmur_hash.h"
 #include "frame/test_macros.h"
 
 #include <atgateway/protocol/v2/libatgw_protocol_sdk.h>
@@ -1879,6 +1880,244 @@ CASE_TEST(atgateway_protocol_sdk, server_client_handshake_aes256cbc) {
   }
 
   CASE_MSG_INFO() << "server-client x25519+aes-256-cbc handshake and messaging verified" << '\n';
+}
+
+// ========== Untrusted connection message size limit tests ==========
+
+// Helper: construct a wire-format message (8-byte header + payload)
+static std::vector<unsigned char> make_raw_wire_message(const unsigned char *payload, size_t payload_len) {
+  const size_t msg_header_len = sizeof(uint32_t) + sizeof(uint32_t);
+  std::vector<unsigned char> wire(msg_header_len + payload_len);
+
+  // Write message length at offset 4 (little-endian uint32)
+  uint32_t len32 = static_cast<uint32_t>(payload_len);
+  memcpy(wire.data() + sizeof(uint32_t), &len32, sizeof(uint32_t));
+
+  // Copy payload at offset 8
+  if (payload_len > 0 && payload != nullptr) {
+    memcpy(wire.data() + msg_header_len, payload, payload_len);
+  }
+
+  // Write murmur3 hash of payload at offset 0
+  uint32_t hash32 = atfw::util::hash::murmur_hash3_x86_32(reinterpret_cast<const char *>(wire.data() + msg_header_len),
+                                                          static_cast<int>(payload_len), 0);
+  memcpy(wire.data(), &hash32, sizeof(uint32_t));
+
+  return wire;
+}
+
+CASE_TEST(atgateway_protocol_sdk, untrusted_connection_rejects_oversized_message) {
+  ensure_openssl_init();
+
+  // Create a server SDK that has NOT completed handshake
+  crypto_conf_t server_conf_data;
+  server_conf_data.key_exchange_algorithm =
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  server_conf_data.supported_algorithms.push_back(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
+  server_conf_data.client_mode = false;
+  auto server_conf = libatgw_protocol_sdk::create_shared_context(server_conf_data);
+  CASE_EXPECT_TRUE(!!server_conf);
+  if (!server_conf) {
+    return;
+  }
+
+  sim_peer_t server;
+  libatgw_protocol_api::proto_callbacks_t server_cbs = {};
+  server_cbs.write_fn = sim_write_fn;
+  server_cbs.message_fn = sim_message_fn;
+  server_cbs.new_session_fn = sim_new_session_fn;
+  server_cbs.reconnect_fn = sim_reconnect_fn;
+  server_cbs.close_fn = sim_close_fn;
+  server_cbs.on_handshake_done_fn = sim_handshake_done_fn;
+  server_cbs.on_handshake_update_fn = sim_handshake_update_fn;
+  server_cbs.on_error_fn = sim_error_fn;
+
+  server.sdk = std::make_shared<libatgw_protocol_sdk>(server_conf);
+  server.sdk->set_callbacks(&server_cbs);
+  server.sdk->set_private_data(&server);
+  server.remote = nullptr;  // no remote needed for this test
+
+  // Verify handshake is NOT done
+  CASE_EXPECT_FALSE(server.sdk->check_flag(libatgw_protocol_api::flag_t::kHandshakeDone));
+
+  // Construct an oversized message: 4097 bytes payload (exceeds 4096 limit for untrusted connections)
+  const size_t oversized_payload_len = 4097;
+  std::vector<unsigned char> oversized_payload(oversized_payload_len, 0xAB);
+  auto wire_msg = make_raw_wire_message(oversized_payload.data(), oversized_payload_len);
+
+  // Feed the wire message into the server's read buffer
+  char *recv_buf = nullptr;
+  size_t recv_len = 0;
+  server.sdk->alloc_receive_buffer(wire_msg.size(), recv_buf, recv_len);
+  CASE_EXPECT_TRUE(recv_buf != nullptr);
+  CASE_EXPECT_GE(recv_len, wire_msg.size());
+  if (recv_buf == nullptr || recv_len < wire_msg.size()) {
+    return;
+  }
+  memcpy(recv_buf, wire_msg.data(), wire_msg.size());
+
+  int errcode = 0;
+  gsl::span<const unsigned char> data_span{reinterpret_cast<const unsigned char *>(recv_buf), wire_msg.size()};
+  server.sdk->read(static_cast<int>(wire_msg.size()), data_span, errcode);
+
+  // Should be rejected with kInvalidSize
+  CASE_EXPECT_EQ(static_cast<int>(::atframework::gateway::error_code_t::kInvalidSize), errcode);
+  CASE_MSG_INFO() << "Oversized message (4097 bytes) correctly rejected for untrusted connection" << '\n';
+}
+
+CASE_TEST(atgateway_protocol_sdk, untrusted_connection_allows_small_message) {
+  ensure_openssl_init();
+
+  // Verify that a normal handshake (which produces messages < 4096 bytes) still works
+  crypto_conf_t server_conf_data;
+  server_conf_data.key_exchange_algorithm =
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  server_conf_data.supported_algorithms.push_back(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
+  server_conf_data.client_mode = false;
+  server_conf_data.update_interval = 300;
+
+  crypto_conf_t client_conf_data;
+  client_conf_data.key_exchange_algorithm =
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  client_conf_data.supported_algorithms.push_back(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
+  client_conf_data.client_mode = true;
+  client_conf_data.update_interval = 300;
+
+  auto server_conf = libatgw_protocol_sdk::create_shared_context(server_conf_data);
+  auto client_conf = libatgw_protocol_sdk::create_shared_context(client_conf_data);
+  CASE_EXPECT_TRUE(!!server_conf && !!client_conf);
+  if (!server_conf || !client_conf) {
+    return;
+  }
+
+  sim_peer_t server, client;
+  libatgw_protocol_api::proto_callbacks_t server_cbs = {}, client_cbs = {};
+  setup_sim_pair(server, client, server_conf, client_conf, server_cbs, client_cbs);
+
+  // Normal handshake should complete successfully (handshake packets are well under 4096 bytes)
+  int ret = client.sdk->start_session();
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(0, server.handshake_status);
+  CASE_EXPECT_EQ(0, client.handshake_status);
+
+  // After handshake, send a normal message to verify connection works
+  std::string msg = "post-handshake message";
+  gsl::span<const unsigned char> msg_span{reinterpret_cast<const unsigned char *>(msg.data()), msg.size()};
+  ret = client.sdk->send_post(msg_span);
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(static_cast<size_t>(1), server.received_messages.size());
+  if (!server.received_messages.empty()) {
+    std::string received(server.received_messages[0].begin(), server.received_messages[0].end());
+    CASE_EXPECT_EQ(msg, received);
+  }
+
+  CASE_MSG_INFO() << "Normal handshake completes and messaging works with untrusted size limit in place" << '\n';
+}
+
+CASE_TEST(atgateway_protocol_sdk, untrusted_connection_boundary_4096) {
+  ensure_openssl_init();
+
+  // Test boundary: exactly 4096 bytes should be allowed, 4097 should be rejected
+  crypto_conf_t server_conf_data;
+  server_conf_data.key_exchange_algorithm =
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  server_conf_data.supported_algorithms.push_back(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
+  server_conf_data.client_mode = false;
+  auto server_conf = libatgw_protocol_sdk::create_shared_context(server_conf_data);
+  CASE_EXPECT_TRUE(!!server_conf);
+  if (!server_conf) {
+    return;
+  }
+
+  // Test 1: exactly 4096 bytes payload should be allowed
+  {
+    sim_peer_t server;
+    libatgw_protocol_api::proto_callbacks_t server_cbs = {};
+    server_cbs.write_fn = sim_write_fn;
+    server_cbs.message_fn = sim_message_fn;
+    server_cbs.new_session_fn = sim_new_session_fn;
+    server_cbs.reconnect_fn = sim_reconnect_fn;
+    server_cbs.close_fn = sim_close_fn;
+    server_cbs.on_handshake_done_fn = sim_handshake_done_fn;
+    server_cbs.on_handshake_update_fn = sim_handshake_update_fn;
+    server_cbs.on_error_fn = sim_error_fn;
+
+    server.sdk = std::make_shared<libatgw_protocol_sdk>(server_conf);
+    server.sdk->set_callbacks(&server_cbs);
+    server.sdk->set_private_data(&server);
+    server.remote = nullptr;
+
+    CASE_EXPECT_FALSE(server.sdk->check_flag(libatgw_protocol_api::flag_t::kHandshakeDone));
+
+    const size_t boundary_payload_len = 4096;
+    std::vector<unsigned char> boundary_payload(boundary_payload_len, 0xCD);
+    auto wire_msg = make_raw_wire_message(boundary_payload.data(), boundary_payload_len);
+
+    char *recv_buf = nullptr;
+    size_t recv_len = 0;
+    server.sdk->alloc_receive_buffer(wire_msg.size(), recv_buf, recv_len);
+    CASE_EXPECT_TRUE(recv_buf != nullptr);
+    CASE_EXPECT_GE(recv_len, wire_msg.size());
+    if (recv_buf == nullptr || recv_len < wire_msg.size()) {
+      return;
+    }
+    memcpy(recv_buf, wire_msg.data(), wire_msg.size());
+
+    int errcode = 0;
+    gsl::span<const unsigned char> data_span{reinterpret_cast<const unsigned char *>(recv_buf), wire_msg.size()};
+    server.sdk->read(static_cast<int>(wire_msg.size()), data_span, errcode);
+
+    // 4096-byte payload should NOT trigger kInvalidSize
+    CASE_EXPECT_NE(static_cast<int>(::atframework::gateway::error_code_t::kInvalidSize), errcode);
+    CASE_MSG_INFO() << "Boundary test: 4096-byte message allowed for untrusted connection, errcode=" << errcode << '\n';
+  }
+
+  // Test 2: 4097 bytes payload should be rejected
+  {
+    sim_peer_t server;
+    libatgw_protocol_api::proto_callbacks_t server_cbs = {};
+    server_cbs.write_fn = sim_write_fn;
+    server_cbs.message_fn = sim_message_fn;
+    server_cbs.new_session_fn = sim_new_session_fn;
+    server_cbs.reconnect_fn = sim_reconnect_fn;
+    server_cbs.close_fn = sim_close_fn;
+    server_cbs.on_handshake_done_fn = sim_handshake_done_fn;
+    server_cbs.on_handshake_update_fn = sim_handshake_update_fn;
+    server_cbs.on_error_fn = sim_error_fn;
+
+    server.sdk = std::make_shared<libatgw_protocol_sdk>(server_conf);
+    server.sdk->set_callbacks(&server_cbs);
+    server.sdk->set_private_data(&server);
+    server.remote = nullptr;
+
+    CASE_EXPECT_FALSE(server.sdk->check_flag(libatgw_protocol_api::flag_t::kHandshakeDone));
+
+    const size_t over_boundary_len = 4097;
+    std::vector<unsigned char> over_boundary_payload(over_boundary_len, 0xEF);
+    auto wire_msg = make_raw_wire_message(over_boundary_payload.data(), over_boundary_len);
+
+    char *recv_buf = nullptr;
+    size_t recv_len = 0;
+    server.sdk->alloc_receive_buffer(wire_msg.size(), recv_buf, recv_len);
+    CASE_EXPECT_TRUE(recv_buf != nullptr);
+    CASE_EXPECT_GE(recv_len, wire_msg.size());
+    if (recv_buf == nullptr || recv_len < wire_msg.size()) {
+      return;
+    }
+    memcpy(recv_buf, wire_msg.data(), wire_msg.size());
+
+    int errcode = 0;
+    gsl::span<const unsigned char> data_span{reinterpret_cast<const unsigned char *>(recv_buf), wire_msg.size()};
+    server.sdk->read(static_cast<int>(wire_msg.size()), data_span, errcode);
+
+    // 4097-byte payload should trigger kInvalidSize
+    CASE_EXPECT_EQ(static_cast<int>(::atframework::gateway::error_code_t::kInvalidSize), errcode);
+    CASE_MSG_INFO() << "Boundary test: 4097-byte message rejected for untrusted connection" << '\n';
+  }
 }
 
 // ========== Algorithm coverage: ChaCha20-Poly1305-IETF (AEAD stream cipher) ==========

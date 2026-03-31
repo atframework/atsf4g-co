@@ -492,6 +492,10 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   static LIBATGW_PROTOCOL_API int set_shared_context_compression_algorithm(
       const std::shared_ptr<crypto_shared_context_t> &ctx, gsl::span<const compression_algorithm_type> alg);
 
+  /// @brief Get the maximum message size allowed for untrusted connections (before handshake completion).
+  /// @return maximum untrusted message size in bytes
+  static LIBATGW_PROTOCOL_API uint64_t get_max_untrusted_message_size() noexcept;
+
  private:
   std::shared_ptr<crypto_shared_context_t> shared_conf_;
   uint64_t session_id_;

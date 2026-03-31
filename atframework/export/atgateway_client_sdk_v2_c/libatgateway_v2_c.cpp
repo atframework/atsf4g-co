@@ -703,6 +703,10 @@ LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_max_post_message_size(l
   conf->max_post_message_size = max_size;
 }
 
+LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_max_untrusted_message_size() {
+  return ::atframework::gateway::libatgw_protocol_sdk::get_max_untrusted_message_size();
+}
+
 LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_write_header_offset(libatgateway_v2_c_context context) {
   if (ATGW_CONTEXT_IS_NULL(context)) {
     return 0;

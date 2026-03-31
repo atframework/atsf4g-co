@@ -42,6 +42,10 @@ const constexpr size_t kCipherAadSize = 16;
 // Contains iv+aad/tag for ciphers, and some extra cost for future algorithm upgrade.
 const constexpr uint64_t kPostExtraCostSize = 32 * 1024;
 
+// Maximum message size for untrusted connections (before handshake completion).
+// Handshake packets should not exceed this size.
+const constexpr uint64_t kMaxUntrustedMessageSize = 4096;
+
 const constexpr uint64_t kDefaultMaxPostMessageSize = 2 * 1024 * 1024;
 const constexpr uint64_t kDefaultCompressionThresholdSize = 1024;
 using protocol_crypto_algorithm_t = ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atfw::gateway::v2,
@@ -1003,6 +1007,12 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::read(int /*ssz*/, gsl::span<cons
         break;
       }
 
+      // Enforce strict size limit for untrusted connections (before handshake completion)
+      if (!check_flag(flag_t::kHandshakeDone) && msg_len > kMaxUntrustedMessageSize) {
+        is_free = true;
+        break;
+      }
+
       if (buff_left_len >= msg_header_len + msg_len) {
         uint32_t check_hash =
             atfw::util::hash::murmur_hash3_x86_32(buff_start + msg_header_len, static_cast<int>(msg_len), 0);
@@ -1047,19 +1057,27 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::read(int /*ssz*/, gsl::span<cons
   if (nullptr != data && 0 == swrite) {
     data = reinterpret_cast<char *>(data) - sread;
 
-    uint32_t check_hash = atfw::util::hash::murmur_hash3_x86_32(reinterpret_cast<char *>(data) + msg_header_len,
-                                                                static_cast<int>(sread - msg_header_len), 0);
-    uint32_t expect_hash = 0;
-    memcpy(&expect_hash, data, sizeof(uint32_t));
     size_t msg_len = sread - msg_header_len;
 
-    if (check_hash != expect_hash) {
-      errcode = static_cast<int>(::atfw::gateway::error_code_t::kBadData);
-    }
+    // Enforce strict size limit for untrusted connections (before handshake completion)
+    if (!check_flag(flag_t::kHandshakeDone) && msg_len > kMaxUntrustedMessageSize) {
+      errcode = static_cast<int>(::atfw::gateway::error_code_t::kInvalidSize);
+      is_free = true;
+      read_buffers_.pop_front(0, true);
+    } else {
+      uint32_t check_hash = atfw::util::hash::murmur_hash3_x86_32(reinterpret_cast<char *>(data) + msg_header_len,
+                                                                  static_cast<int>(msg_len), 0);
+      uint32_t expect_hash = 0;
+      memcpy(&expect_hash, data, sizeof(uint32_t));
 
-    dispatch_data(gsl::span<const unsigned char>{reinterpret_cast<unsigned char *>(data) + msg_header_len, msg_len},
-                  errcode);
-    read_buffers_.pop_front(0, true);
+      if (check_hash != expect_hash) {
+        errcode = static_cast<int>(::atfw::gateway::error_code_t::kBadData);
+      }
+
+      dispatch_data(gsl::span<const unsigned char>{reinterpret_cast<unsigned char *>(data) + msg_header_len, msg_len},
+                    errcode);
+      read_buffers_.pop_front(0, true);
+    }
   }
 
   if (is_free) {
@@ -2663,6 +2681,10 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::set_shared_context_compression_al
   }
 
   return ctx->reload_compression_algorithm(alg);
+}
+
+LIBATGW_PROTOCOL_API uint64_t libatgw_protocol_sdk::get_max_untrusted_message_size() noexcept {
+  return kMaxUntrustedMessageSize;
 }
 
 }  // namespace v2

@@ -227,6 +227,10 @@ LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_compression_algorith
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_set_max_post_message_size(libatgateway_v2_c_context context,
                                                                                uint64_t max_size);
 
+/// @brief Get the maximum message size allowed for untrusted connections (before handshake completion).
+/// @return maximum untrusted message size in bytes
+LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_max_untrusted_message_size();
+
 /// @brief Get write header offset
 /// @return write header offset bytes
 LIBATGATEWAY_V2_C_API uint64_t __cdecl libatgateway_v2_c_get_write_header_offset(libatgateway_v2_c_context context);
