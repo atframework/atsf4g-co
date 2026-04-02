@@ -40,7 +40,6 @@ class session : public std::enable_shared_from_this<session> {
 
     time_t hour_timepoint;
     time_t minute_timepoint;
-    time_t update_handshake_timepoint;
   };
 
   using id_t = uint64_t;

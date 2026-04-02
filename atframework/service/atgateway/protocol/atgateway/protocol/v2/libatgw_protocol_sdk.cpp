@@ -4,11 +4,11 @@
 #include "atgateway/protocol/v2/libatgw_protocol_sdk.h"
 
 #include <gsl/select-gsl.h>
+
 #include <cassert>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
-#include <gsl/span>
 #include <limits>
 #include <memory>
 #include <string>
@@ -445,7 +445,8 @@ struct crypto_shared_context_t {
 // ========================= crypto_conf_t =========================
 
 LIBATGW_PROTOCOL_API libatgw_protocol_sdk::crypto_conf_t::crypto_conf_t()
-    : update_interval(0),
+    : key_refresh_interval(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::hours(4))),
+      ping_interval(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::minutes(2))),
       key_exchange_algorithm(key_exchange_type::kNone),
       max_post_message_size(kDefaultMaxPostMessageSize),
       compression_threshold_size(kDefaultCompressionThresholdSize),
@@ -499,7 +500,8 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::crypto_conf_t::set_default() {
   max_post_message_size = kDefaultMaxPostMessageSize;             // 2MB default
   compression_threshold_size = kDefaultCompressionThresholdSize;  // 1024 bytes minimum for compression
   compression_level = ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_level_t, kDefault);
-  update_interval = 300;
+  key_refresh_interval = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::hours(4));
+  ping_interval = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::minutes(2));
   client_mode = false;
 }
 
@@ -936,6 +938,7 @@ LIBATGW_PROTOCOL_API libatgw_protocol_sdk::libatgw_protocol_sdk(std::shared_ptr<
   read_head_.len = 0;
 
   ping_.last_ping = ping_data_t::clk_t::from_time_t(0);
+  ping_.last_handshake = ping_data_t::clk_t::from_time_t(0);
   ping_.last_delta = 0;
 }
 
@@ -1827,7 +1830,7 @@ LIBATGW_PROTOCOL_API bool libatgw_protocol_sdk::check_reconnect(const libatgw_pr
     return false;
   }
 
-  const libatgw_protocol_sdk *other_proto = dynamic_cast<const libatgw_protocol_sdk *>(other);
+  const libatgw_protocol_sdk *other_proto = static_cast<const libatgw_protocol_sdk *>(other);
   if (nullptr == other_proto) {
     return false;
   }
@@ -1911,6 +1914,8 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::start_session(gsl::span<const uns
     return static_cast<int>(::atfw::gateway::error_code_t::kMissCallbacks);
   }
 
+  ping_.last_handshake = ping_data_t::clk_t::now();
+
   // Setup global config
   std::shared_ptr<crypto_shared_context_t> global_cfg = shared_conf_;
   int ret = setup_handshake(global_cfg);
@@ -1993,6 +1998,8 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::reconnect_session(uint64_t sess_i
   if (nullptr == callbacks_ || !callbacks_->write_fn) {
     return static_cast<int>(::atfw::gateway::error_code_t::kMissCallbacks);
   }
+
+  ping_.last_handshake = ping_data_t::clk_t::now();
 
   // Setup global config and generate ECDH key pair (same as start_session)
   std::shared_ptr<crypto_shared_context_t> global_cfg = shared_conf_;
@@ -2240,6 +2247,34 @@ LIBATGW_PROTOCOL_API const libatgw_protocol_sdk::crypto_session_ptr_t &libatgw_p
 }
 
 LIBATGW_PROTOCOL_API uint64_t libatgw_protocol_sdk::get_session_id() const noexcept { return session_id_; }
+
+LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::tick() noexcept {
+  if (!check_flag(flag_t::kHandshakeDone)) {
+    return;
+  }
+
+  if (check_flag(flag_t::kClosing) || check_flag(flag_t::kClosed)) {
+    return;
+  }
+
+  if (!shared_conf_) {
+    return;
+  }
+
+  auto now = ping_data_t::clk_t::now();
+
+  if (shared_conf_->conf_.client_mode && now > ping_.last_ping + shared_conf_->conf_.ping_interval) {
+    FWINSTLOGDEBUG(*logger_, "Ping interval exceeded, sending ping");
+    send_ping();
+  }
+
+  if (shared_conf_->conf_.client_mode && now > ping_.last_handshake + shared_conf_->conf_.key_refresh_interval) {
+    if (logger_) {
+      FWINSTLOGINFO(*logger_, "Key refresh interval exceeded, refreshing session key");
+    }
+    handshake_update();
+  }
+}
 
 LIBATGW_PROTOCOL_API gsl::span<const unsigned char> libatgw_protocol_sdk::get_session_token() const noexcept {
   return gsl::span<const unsigned char>{session_token_.data(), session_token_.size()};

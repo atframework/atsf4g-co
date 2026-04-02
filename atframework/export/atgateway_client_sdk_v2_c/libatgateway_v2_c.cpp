@@ -7,6 +7,7 @@
 #include <atgateway/protocol/v2/libatgw_protocol_sdk.h>
 
 #include <cassert>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -447,6 +448,26 @@ LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_post_msg(libatgateway_v2
   return ATGW_CONTEXT(context)->send_post(span_buff);
 }
 
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_ping_interval(libatgateway_v2_c_context,
+                                                                          int64_t ping_interval) {
+  using sdk_t = ::atframework::gateway::libatgw_protocol_sdk;
+
+  auto &global_conf = libatgateway_v2_c_get_global_conf();
+  if (!global_conf) {
+    // Create new default config, then set crypto fields
+    sdk_t::crypto_conf_t conf;
+    global_conf = sdk_t::create_shared_context(conf);
+  }
+
+  auto *conf = sdk_t::get_shared_context_mutable_conf(global_conf);
+  if (nullptr == conf) {
+    return static_cast<int32_t>(::atframework::gateway::error_code_t::kParam);
+  }
+
+  conf->ping_interval = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::seconds(ping_interval));
+  return 0;
+}
+
 LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_send_ping(libatgateway_v2_c_context context) {
   if (ATGW_CONTEXT_IS_NULL(context)) {
     return static_cast<int32_t>(::atframework::gateway::error_code_t::kParam);
@@ -461,6 +482,14 @@ LIBATGATEWAY_V2_C_API int64_t __cdecl libatgateway_v2_c_get_ping_delta(libatgate
   }
 
   return static_cast<int64_t>(ATGW_CONTEXT(context)->get_last_ping().last_delta);
+}
+
+LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_tick(libatgateway_v2_c_context context) {
+  if (ATGW_CONTEXT_IS_NULL(context)) {
+    return;
+  }
+
+  ATGW_CONTEXT(context)->tick();
 }
 
 LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_close(libatgateway_v2_c_context context, int32_t reason) {
@@ -620,7 +649,8 @@ LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_crypto_update_interv
     return static_cast<int32_t>(::atframework::gateway::error_code_t::kParam);
   }
 
-  conf->update_interval = static_cast<time_t>(update_interval);
+  conf->key_refresh_interval =
+      std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::seconds(update_interval));
   return 0;
 }
 

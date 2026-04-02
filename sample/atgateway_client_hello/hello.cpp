@@ -431,6 +431,8 @@ static void libuv_tick_timer_callback(uv_timer_t *handle) {
     return;
   }
 
+  libatgateway_v2_c_tick(g_client_sess.proto->ctx);
+
   if (g_client_sess.busy_mode) {
     printf("[Tick]: sec recv(%llu,%llu%s), sum recv(%llu,%llu%s), sec send(%llu,%llu%s), sum send(%llu,%llu%s)\n",
            static_cast<unsigned long long>(g_client_sess.sec_recv_count),

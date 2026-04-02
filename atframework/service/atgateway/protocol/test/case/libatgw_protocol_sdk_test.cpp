@@ -301,7 +301,7 @@ CASE_TEST(atgateway_protocol_sdk, create_shared_context) {
   // Add an access token
   std::vector<unsigned char> token = {'t', 'e', 's', 't', '-', 't', 'o', 'k', 'e', 'n'};
   conf.access_tokens.push_back(token);
-  conf.update_interval = 300;
+  conf.key_refresh_interval = std::chrono::seconds(300);
   conf.max_post_message_size = 4 * 1024 * 1024;
 
   auto global_conf = libatgw_protocol_sdk::create_shared_context(conf);
@@ -418,7 +418,7 @@ CASE_TEST(atgateway_protocol_sdk, access_data_generation_and_verification) {
 
   std::vector<unsigned char> token = {'m', 'y', '-', 'a', 'c', 'c', 'e', 's', 's', '-', 't', 'o', 'k', 'e', 'n'};
   conf.access_tokens.push_back(token);
-  conf.update_interval = 300;
+  conf.key_refresh_interval = std::chrono::seconds(300);
 
   auto global_conf = libatgw_protocol_sdk::create_shared_context(conf);
   CASE_EXPECT_TRUE(!!global_conf);
@@ -723,7 +723,7 @@ CASE_TEST(atgateway_protocol_sdk, crypto_conf_set_default) {
   conf.key_exchange_algorithm =
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kSecp521r1);
   conf.max_post_message_size = 999;
-  conf.update_interval = 1;
+  conf.key_refresh_interval = std::chrono::seconds(1);
   conf.client_mode = true;
 
   // Call set_default
@@ -732,7 +732,7 @@ CASE_TEST(atgateway_protocol_sdk, crypto_conf_set_default) {
   CASE_EXPECT_EQ(ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519),
                  conf.key_exchange_algorithm);
   CASE_EXPECT_EQ(static_cast<uint64_t>(2 * 1024 * 1024), conf.max_post_message_size);
-  CASE_EXPECT_EQ(static_cast<time_t>(300), conf.update_interval);
+  CASE_EXPECT_EQ(std::chrono::seconds(300), conf.key_refresh_interval);
   CASE_EXPECT_FALSE(conf.client_mode);
   // set_default() now populates default algorithm lists
   CASE_EXPECT_FALSE(conf.supported_algorithms.empty());
@@ -835,7 +835,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_handshake_x25519_aes256gcm) {
   server_conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
   server_conf_data.client_mode = false;
-  server_conf_data.update_interval = 300;
+  server_conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   crypto_conf_t client_conf_data;
   client_conf_data.key_exchange_algorithm =
@@ -843,7 +843,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_handshake_x25519_aes256gcm) {
   client_conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
   client_conf_data.client_mode = true;
-  client_conf_data.update_interval = 300;
+  client_conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   auto server_conf = libatgw_protocol_sdk::create_shared_context(server_conf_data);
   auto client_conf = libatgw_protocol_sdk::create_shared_context(client_conf_data);
@@ -903,7 +903,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_handshake_secp256r1_aes128gcm) {
   server_conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes128Gcm));
   server_conf_data.client_mode = false;
-  server_conf_data.update_interval = 300;
+  server_conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   crypto_conf_t client_conf_data;
   client_conf_data.key_exchange_algorithm =
@@ -911,7 +911,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_handshake_secp256r1_aes128gcm) {
   client_conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes128Gcm));
   client_conf_data.client_mode = true;
-  client_conf_data.update_interval = 300;
+  client_conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   auto server_conf = libatgw_protocol_sdk::create_shared_context(server_conf_data);
   auto client_conf = libatgw_protocol_sdk::create_shared_context(client_conf_data);
@@ -953,7 +953,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_no_encryption) {
   server_conf_data.supported_algorithms.clear();    // no cipher
   server_conf_data.compression_algorithms.clear();  // no compression
   server_conf_data.client_mode = false;
-  server_conf_data.update_interval = 300;
+  server_conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   crypto_conf_t client_conf_data;
   client_conf_data.key_exchange_algorithm =
@@ -961,7 +961,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_no_encryption) {
   client_conf_data.supported_algorithms.clear();    // no cipher
   client_conf_data.compression_algorithms.clear();  // no compression
   client_conf_data.client_mode = true;
-  client_conf_data.update_interval = 300;
+  client_conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   auto server_conf = libatgw_protocol_sdk::create_shared_context(server_conf_data);
   auto client_conf = libatgw_protocol_sdk::create_shared_context(client_conf_data);
@@ -1001,7 +1001,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_multiple_messages) {
   server_conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
   server_conf_data.client_mode = false;
-  server_conf_data.update_interval = 300;
+  server_conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   crypto_conf_t client_conf_data = server_conf_data;
   client_conf_data.client_mode = true;
@@ -1048,7 +1048,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_key_refresh) {
   server_conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
   server_conf_data.client_mode = false;
-  server_conf_data.update_interval = 300;
+  server_conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   crypto_conf_t client_conf_data = server_conf_data;
   client_conf_data.client_mode = true;
@@ -1111,7 +1111,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_ping_pong) {
   conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
   conf_data.client_mode = false;
-  conf_data.update_interval = 300;
+  conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   crypto_conf_t client_conf_data = conf_data;
   client_conf_data.client_mode = true;
@@ -1146,7 +1146,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_bad_data) {
   conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
   conf_data.client_mode = false;
-  conf_data.update_interval = 300;
+  conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   crypto_conf_t client_conf_data = conf_data;
   client_conf_data.client_mode = true;
@@ -1190,7 +1190,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_algorithm_negotiation) {
   server_conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes128Gcm));
   server_conf_data.client_mode = false;
-  server_conf_data.update_interval = 300;
+  server_conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   crypto_conf_t client_conf_data;
   client_conf_data.key_exchange_algorithm =
@@ -1198,7 +1198,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_algorithm_negotiation) {
   client_conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes128Gcm));
   client_conf_data.client_mode = true;
-  client_conf_data.update_interval = 300;
+  client_conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   auto server_conf = libatgw_protocol_sdk::create_shared_context(server_conf_data);
   auto client_conf = libatgw_protocol_sdk::create_shared_context(client_conf_data);
@@ -1238,7 +1238,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_with_access_tokens) {
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
   server_conf_data.access_tokens.push_back(token);
   server_conf_data.client_mode = false;
-  server_conf_data.update_interval = 300;
+  server_conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   crypto_conf_t client_conf_data;
   client_conf_data.key_exchange_algorithm =
@@ -1247,7 +1247,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_with_access_tokens) {
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
   client_conf_data.access_tokens.push_back(token);
   client_conf_data.client_mode = true;
-  client_conf_data.update_interval = 300;
+  client_conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   auto server_conf = libatgw_protocol_sdk::create_shared_context(server_conf_data);
   auto client_conf = libatgw_protocol_sdk::create_shared_context(client_conf_data);
@@ -1286,7 +1286,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_reconnect_success) {
   conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
   conf_data.client_mode = false;
-  conf_data.update_interval = 300;
+  conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   crypto_conf_t client_conf_data = conf_data;
   client_conf_data.client_mode = true;
@@ -1387,7 +1387,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_reconnect_refused) {
   conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
   conf_data.client_mode = false;
-  conf_data.update_interval = 300;
+  conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   crypto_conf_t client_conf_data = conf_data;
   client_conf_data.client_mode = true;
@@ -1467,7 +1467,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_ping_pong_get_last_ping) {
   conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
   conf_data.client_mode = false;
-  conf_data.update_interval = 300;
+  conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   crypto_conf_t client_conf_data = conf_data;
   client_conf_data.client_mode = true;
@@ -1512,7 +1512,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_handshake_update_midstream) {
   conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
   conf_data.client_mode = false;
-  conf_data.update_interval = 300;
+  conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   crypto_conf_t client_conf_data = conf_data;
   client_conf_data.client_mode = true;
@@ -1691,7 +1691,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_large_message_correctness) {
   conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
   conf_data.client_mode = false;
-  conf_data.update_interval = 300;
+  conf_data.key_refresh_interval = std::chrono::seconds(300);
   conf_data.max_post_message_size = 128 * 1024;
 
   crypto_conf_t client_conf_data = conf_data;
@@ -1761,7 +1761,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_handshake_xxtea) {
   conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kXxtea));
   conf_data.client_mode = false;
-  conf_data.update_interval = 300;
+  conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   crypto_conf_t client_conf_data = conf_data;
   client_conf_data.client_mode = true;
@@ -1822,7 +1822,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_handshake_aes256cbc) {
   conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Cbc));
   conf_data.client_mode = false;
-  conf_data.update_interval = 300;
+  conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   crypto_conf_t client_conf_data = conf_data;
   client_conf_data.client_mode = true;
@@ -1976,7 +1976,7 @@ CASE_TEST(atgateway_protocol_sdk, untrusted_connection_allows_small_message) {
   server_conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
   server_conf_data.client_mode = false;
-  server_conf_data.update_interval = 300;
+  server_conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   crypto_conf_t client_conf_data;
   client_conf_data.key_exchange_algorithm =
@@ -1984,7 +1984,7 @@ CASE_TEST(atgateway_protocol_sdk, untrusted_connection_allows_small_message) {
   client_conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
   client_conf_data.client_mode = true;
-  client_conf_data.update_interval = 300;
+  client_conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   auto server_conf = libatgw_protocol_sdk::create_shared_context(server_conf_data);
   auto client_conf = libatgw_protocol_sdk::create_shared_context(client_conf_data);
@@ -2132,7 +2132,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_handshake_chacha20_poly1305) {
   conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kChacha20Poly1305Ietf));
   conf_data.client_mode = false;
-  conf_data.update_interval = 300;
+  conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   crypto_conf_t client_conf_data = conf_data;
   client_conf_data.client_mode = true;
@@ -2191,7 +2191,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_oversized_message_rejected) {
   conf_data.supported_algorithms.push_back(
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
   conf_data.client_mode = false;
-  conf_data.update_interval = 300;
+  conf_data.key_refresh_interval = std::chrono::seconds(300);
   conf_data.max_post_message_size = 1024;  // 1KB limit
 
   crypto_conf_t client_conf_data = conf_data;
@@ -2255,7 +2255,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_encryption_only_no_compression) 
       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
   conf_data.compression_algorithms.clear();  // no compression
   conf_data.client_mode = false;
-  conf_data.update_interval = 300;
+  conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   crypto_conf_t client_conf_data = conf_data;
   client_conf_data.client_mode = true;
@@ -2372,7 +2372,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_compression_only_no_encryption) 
   // Keep default compression algorithms (zstd, lz4, snappy, zlib)
   conf_data.compression_threshold_size = 256;  // lower threshold to ensure compression kicks in
   conf_data.client_mode = false;
-  conf_data.update_interval = 300;
+  conf_data.key_refresh_interval = std::chrono::seconds(300);
 
   crypto_conf_t client_conf_data = conf_data;
   client_conf_data.client_mode = true;
@@ -2468,7 +2468,7 @@ CASE_TEST(atgateway_protocol_sdk, crypto_conf_constructor_sets_defaults) {
   CASE_EXPECT_EQ(ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519),
                  conf.key_exchange_algorithm);
   CASE_EXPECT_EQ(static_cast<uint64_t>(2 * 1024 * 1024), conf.max_post_message_size);
-  CASE_EXPECT_EQ(static_cast<time_t>(300), conf.update_interval);
+  CASE_EXPECT_EQ(std::chrono::seconds(300), conf.key_refresh_interval);
   CASE_EXPECT_FALSE(conf.client_mode);
 
   CASE_MSG_INFO() << "crypto_conf_t default constructor sets defaults" << '\n';

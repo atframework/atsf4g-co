@@ -173,8 +173,6 @@ int session::init_new_session() {
   id_ = id_alloc.allocate();
   router_node_id_ = 0;
   router_node_name_.clear();
-  limit_.update_handshake_timepoint =
-      atfw::util::time::time_utility::get_now() + owner_->get_conf().crypto.update_interval;
 
   set_flag(flag_t::kInited, true);
   FWLOGWARNING("{} new session inited", *this);
@@ -187,8 +185,6 @@ int session::init_reconnect(session &sess) {
   router_node_id_ = sess.router_node_id_;
   router_node_name_ = sess.router_node_name_;
   limit_ = sess.limit_;
-  limit_.update_handshake_timepoint =
-      atfw::util::time::time_utility::get_now() + owner_->get_conf().crypto.update_interval;
 
   private_data_ = sess.private_data_;
 
@@ -551,17 +547,6 @@ void session::check_minute_limit(bool check_recv, bool check_send) {
       limit_.minute_send_times > owner_->get_conf().origin_conf.client().limit().minute_send_times()) {
     close(static_cast<int>(close_reason_t::kTraficExtended), 0, "trafic extended");
     return;
-  }
-
-  if (nullptr != owner_ && owner_->get_conf().crypto.update_interval > 0 && check_flag(flag_t::kHasFd)) {
-    if (limit_.update_handshake_timepoint < atfw::util::time::time_utility::get_now()) {
-      limit_.update_handshake_timepoint =
-          atfw::util::time::time_utility::get_now() + owner_->get_conf().crypto.update_interval;
-      atframework::gateway::libatgw_protocol_api *proto = get_protocol_handle();
-      if (nullptr != proto) {
-        proto->handshake_update();
-      }
-    }
   }
 }
 

@@ -23,6 +23,7 @@
 #include <functional>
 #include <memory>
 
+#include "atframe/atapp_conf.h"
 #include "protocol/atgateway/protocol/v2/libatgw_protocol_sdk.h"
 #include "session_manager.h"  // NOLINT: build/include_subdir
 
@@ -122,7 +123,8 @@ class gateway_module : public ::atfw::atapp::module_impl {
                                              reinterpret_cast<const unsigned char *>(token.data()) + token.size());
     }
 
-    crypto_conf.update_interval = gw_mgr_.get_conf().origin_conf.client().crypto().update_interval().seconds();
+    atfw::atapp::protobuf_to_chrono_set_duration(crypto_conf.key_refresh_interval,
+                                                 gw_mgr_.get_conf().origin_conf.client().crypto().update_interval());
     crypto_conf.client_mode = false;
 
     // Map protobuf key exchange type to flatbuffers key_exchange_t

@@ -7,6 +7,7 @@
 #include <gsl/select-gsl.h>
 #include <nostd/string_view.h>
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -203,6 +204,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
   LIBATGW_PROTOCOL_API virtual ~libatgw_protocol_api();
 
   virtual uint64_t get_session_id() const noexcept = 0;
+
+  virtual void tick() noexcept = 0;
 
   virtual gsl::span<const unsigned char> get_session_token() const noexcept = 0;
 

@@ -153,8 +153,17 @@ LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_write_done(libatgateway_
 
 LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_post_msg(libatgateway_v2_c_context context, const void *out_buf,
                                                                  uint64_t out_len);
+
+/// @brief Set ping interval in seconds
+/// @param context protocol context (ignored, configures global)
+/// @param ping_interval key refresh interval in seconds
+LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_set_ping_interval(libatgateway_v2_c_context context,
+                                                                          int64_t ping_interval);
+
 LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_send_ping(libatgateway_v2_c_context context);
 LIBATGATEWAY_V2_C_API int64_t __cdecl libatgateway_v2_c_get_ping_delta(libatgateway_v2_c_context context);
+
+LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_tick(libatgateway_v2_c_context context);
 
 LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_close(libatgateway_v2_c_context context, int32_t reason);
 

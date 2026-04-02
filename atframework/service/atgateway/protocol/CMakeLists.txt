@@ -30,7 +30,7 @@ set(ATSF4G_APP_SDK_LIBATGW_PROTOCOL_API_GENERATED_HEADER_LIST
 set(ATSF4G_APP_SDK_LIBATGW_PROTOCOL_API_SOURCE_LIST "atgateway/protocol/v2/libatgw_protocol_sdk.cpp"
                                                     "atgateway/protocol/libatgw_protocol_api.cpp")
 
-# ============ libatbus - src ============
+# ============ atgateway protocol - generate source ============
 if(ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_FLATC_EXECUTABLE)
   set(ATFRAMEWORK_LIBATGW_PROTOCOL_SDK_FLAC_OPTIONS "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_FLATC_EXECUTABLE}" --cpp
                                                     --allow-non-utf8 --gen-mutable --scoped-enums)

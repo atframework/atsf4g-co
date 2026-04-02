@@ -3,13 +3,13 @@
 
 #pragma once
 
+#include <gsl/select-gsl.h>
+
 #include <chrono>
-#include <gsl/pointers>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "algorithm/compression.h"
 #include "algorithm/crypto_cipher.h"
 #include "algorithm/crypto_dh.h"
 #include "detail/buffer.h"
@@ -19,15 +19,31 @@
 #include "nostd/nullability.h"
 #include "nostd/string_view.h"
 
-// MSVC hack
-#ifdef _MSC_VER
-#  ifdef max
-#    undef max
-#  endif
-
-#  ifdef min
-#    undef min
-#  endif
+// undef some maros by UE
+#pragma push_macro("GetObject")
+#ifdef GetObject
+#  undef GetObject
+#endif
+#pragma push_macro("max")
+#ifdef max
+#  undef max
+#endif
+#pragma push_macro("min")
+#ifdef min
+#  undef min
+#endif
+// Unreal Engine will define these macros
+#pragma push_macro("check")
+#ifdef check
+#  undef check
+#endif
+#pragma push_macro("verify")
+#ifdef verify
+#  undef verify
+#endif
+#pragma push_macro("cast")
+#ifdef cast
+#  undef cast
 #endif
 
 #include "atgateway/protocol/v2/libatgw_protocol_sdk_generated.h"
@@ -72,8 +88,11 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
     /// Access tokens for HMAC-SHA256 authentication (multiple for rolling rotation)
     std::vector<std::vector<unsigned char>> access_tokens;
 
-    /// Key refresh interval (seconds). Re-runs handshake to rotate keys periodically.
-    time_t update_interval;
+    /// Key refresh interval . Re-runs handshake to rotate keys periodically.
+    std::chrono::microseconds key_refresh_interval;
+
+    /// Ping interval.
+    std::chrono::microseconds ping_interval;
 
     /// ECDH key exchange algorithm (curve selection)
     key_exchange_type key_exchange_algorithm;
@@ -281,6 +300,7 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   struct ATFW_UTIL_SYMBOL_VISIBLE ping_data_t {
     using clk_t = std::chrono::system_clock;
     clk_t::time_point last_ping;
+    clk_t::time_point last_handshake;
     time_t last_delta = 0;
   };
 
@@ -365,6 +385,8 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
   LIBATGW_PROTOCOL_API const crypto_session_ptr_t &get_crypto_session() const;
 
   LIBATGW_PROTOCOL_API uint64_t get_session_id() const noexcept override;
+
+  LIBATGW_PROTOCOL_API void tick() noexcept override;
 
   LIBATGW_PROTOCOL_API gsl::span<const unsigned char> get_session_token() const noexcept override;
 
@@ -537,3 +559,10 @@ using libatgw_protocol_sdk = v2::libatgw_protocol_sdk;
 
 }  // namespace gateway
 }  // namespace atframework
+
+#pragma pop_macro("cast")
+#pragma pop_macro("verify")
+#pragma pop_macro("check")
+#pragma pop_macro("min")
+#pragma pop_macro("max")
+#pragma pop_macro("GetObject")
