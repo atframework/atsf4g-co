@@ -30,7 +30,7 @@ func LoginTask(task *user_data.TaskActionUser) (err error) {
 	user := task.User
 
 	if rsp.GetLoginCode() != "" {
-		user.SetLoginCode(rsp.GetLoginCode())
+		user.SetExtralData("LoginCode", rsp.GetLoginCode())
 	}
 	if rsp.GetUserId() != 0 {
 		user.SetUserId(rsp.GetUserId())
@@ -49,7 +49,7 @@ func LoginTask(task *user_data.TaskActionUser) (err error) {
 	}
 
 	user.SetZoneId(uint32(loginRsp.GetZoneId()))
-	user.SetLogined(true)
+	user.Login()
 
 	if loginRsp.GetHeartbeatInterval() > 0 {
 		user.SetHeartbeatInterval(time.Duration(loginRsp.GetHeartbeatInterval()) * time.Second)

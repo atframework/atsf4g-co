@@ -18,7 +18,8 @@ import (
 
 func LoginAuthRpc(action *user_data.TaskActionUser) (int32, *public_protocol_pbdesc.SCLoginAuthRsp, error) {
 	user := action.User
-	if user.GetLoginCode() != "" {
+	loginCode := user.GetExtralData("LoginCode").(string)
+	if loginCode != "" {
 		return 0, nil, fmt.Errorf("already login auth")
 	}
 
@@ -38,7 +39,8 @@ func LoginAuthRpc(action *user_data.TaskActionUser) (int32, *public_protocol_pbd
 
 func LoginRpc(action *user_data.TaskActionUser) (int32, *public_protocol_pbdesc.SCLoginRsp, error) {
 	user := action.User
-	if user.GetLoginCode() == "" {
+	loginCode := user.GetExtralData("LoginCode").(string)
+	if loginCode == "" {
 		return 0, nil, fmt.Errorf("need login auth")
 	}
 
@@ -50,7 +52,7 @@ func LoginRpc(action *user_data.TaskActionUser) (int32, *public_protocol_pbdesc.
 	cpuInfo, _ := cpu.Info()
 
 	csBody := &public_protocol_pbdesc.CSLoginReq{
-		LoginCode: user.GetLoginCode(),
+		LoginCode: loginCode,
 		OpenId:    user.GetOpenId(),
 		UserId:    user.GetUserId(),
 		Account: &public_protocol_pbdesc.DAccountData{

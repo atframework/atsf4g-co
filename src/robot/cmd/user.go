@@ -19,12 +19,12 @@ func init() {
 	robot_cmd.RegisterUserCommand([]string{"user", "ping"}, PingCmd, "", "Ping包", nil)
 }
 
-func LogoutCmd(action base.TaskActionImpl, user user_data.User, cmd []string) string {
+func LogoutCmd(action base.TaskActionImpl, user user_data.User, cmd []string) error {
 	err := action.AwaitTask(user.RunTaskDefaultTimeout(task.LogoutTask, "Logout Task"))
 	if err != nil {
-		return err.Error()
+		return err
 	}
-	return ""
+	return nil
 }
 
 func LoginCmd(action base.TaskActionImpl, cmd []string) string {
@@ -33,12 +33,8 @@ func LoginCmd(action base.TaskActionImpl, cmd []string) string {
 	}
 
 	openId := cmd[0]
-	u, err := robot_cmd.CmdCreateUser(action, openId)
-	if err != nil {
-		return err.Error()
-	}
-
-	err = action.AwaitTask(u.RunTaskDefaultTimeout(task.LoginTask, "Login Task"))
+	u := user_data.CreateUser(openId, user_data.CreateDefaultUserLogHandler(openId), true)
+	err := action.AwaitTask(u.RunTaskDefaultTimeout(task.LoginTask, "Login Task"))
 	if err != nil {
 		u.Logout()
 		return err.Error()
@@ -47,7 +43,7 @@ func LoginCmd(action base.TaskActionImpl, cmd []string) string {
 	return ""
 }
 
-func GetInfoCmd(action base.TaskActionImpl, user user_data.User, cmd []string) string {
+func GetInfoCmd(action base.TaskActionImpl, user user_data.User, cmd []string) error {
 	// 发送登录请求
 	err := action.AwaitTask(user.RunTaskDefaultTimeout(func(task *user_data.TaskActionUser) error {
 		errCode, _, rpcErr := protocol.GetInfoRpc(task, cmd)
@@ -61,18 +57,18 @@ func GetInfoCmd(action base.TaskActionImpl, user user_data.User, cmd []string) s
 		return nil
 	}, "GetInfo Task"))
 	if err != nil {
-		return err.Error()
+		return err
 	}
-	return ""
+	return nil
 }
 
-func PingCmd(action base.TaskActionImpl, user user_data.User, cmd []string) string {
+func PingCmd(action base.TaskActionImpl, user user_data.User, cmd []string) error {
 	// 发送登录请求
 	err := action.AwaitTask(user.RunTaskDefaultTimeout(func(task *user_data.TaskActionUser) error {
 		return protocol.PingRpc(task)
 	}, "Ping Task"))
 	if err != nil {
-		return err.Error()
+		return err
 	}
-	return ""
+	return nil
 }
