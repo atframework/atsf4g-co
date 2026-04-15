@@ -6,9 +6,11 @@ import (
 	"strings"
 	"time"
 
+	pu "github.com/atframework/atframe-utils-go/proto_utility"
 	auth_rpc_handle "github.com/atframework/atsf4g-co-robot/rpc_handle/authsvr"
 	lobbysvr_rpc_handle "github.com/atframework/atsf4g-co-robot/rpc_handle/lobbysvr"
 	public_protocol_pbdesc "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc"
+	base "github.com/atframework/robot-go/base"
 	user_data "github.com/atframework/robot-go/data"
 
 	"github.com/shirou/gopsutil/v4/cpu"
@@ -16,8 +18,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-func LoginAuthRpc(action *user_data.TaskActionUser) (int32, *public_protocol_pbdesc.SCLoginAuthRsp, error) {
-	user := action.User
+func LoginAuthRpc(action base.TaskActionImpl, user user_data.User) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCLoginAuthRsp], error) {
 	loginCode := user.GetExtralData("LoginCode").(string)
 	if loginCode != "" {
 		return 0, nil, fmt.Errorf("already login auth")
@@ -34,11 +35,10 @@ func LoginAuthRpc(action *user_data.TaskActionUser) (int32, *public_protocol_pbd
 		PackageVersion:  "0.0.0.1",
 		ResourceVersion: "0.0.0.1",
 	}
-	return auth_rpc_handle.SendLoginAuth(action, csBody, false)
+	return auth_rpc_handle.SendLoginAuth(action, user, csBody, false)
 }
 
-func LoginRpc(action *user_data.TaskActionUser) (int32, *public_protocol_pbdesc.SCLoginRsp, error) {
-	user := action.User
+func LoginRpc(action base.TaskActionImpl, user user_data.User) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCLoginRsp], error) {
 	loginCode := user.GetExtralData("LoginCode").(string)
 	if loginCode == "" {
 		return 0, nil, fmt.Errorf("need login auth")
@@ -75,24 +75,24 @@ func LoginRpc(action *user_data.TaskActionUser) (int32, *public_protocol_pbdesc.
 		},
 	}
 
-	return lobbysvr_rpc_handle.SendLogin(action, csBody, false)
+	return lobbysvr_rpc_handle.SendLogin(action, user, csBody, false)
 }
 
-func PingRpc(action *user_data.TaskActionUser) error {
+func PingRpc(action base.TaskActionImpl, user user_data.User) error {
 	csBody := &public_protocol_pbdesc.CSPingReq{}
 
-	errCode, _, err := lobbysvr_rpc_handle.SendPing(action, csBody, true)
+	errCode, _, err := lobbysvr_rpc_handle.SendPing(action, user, csBody, true)
 	if err != nil {
 		return err
 	}
 	if errCode < 0 {
 		return fmt.Errorf("ping failed, errCode: %d", errCode)
 	}
-	action.User.SetLastPingTime(time.Now())
+	user.SetLastPingTime(time.Now())
 	return nil
 }
 
-func GetInfoRpc(action *user_data.TaskActionUser, args []string) (int32, *public_protocol_pbdesc.SCPlayerGetInfoRsp, error) {
+func GetInfoRpc(action base.TaskActionImpl, user user_data.User, args []string) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCPlayerGetInfoRsp], error) {
 	csBody := &public_protocol_pbdesc.CSPlayerGetInfoReq{}
 
 	ref := csBody.ProtoReflect()
@@ -123,5 +123,5 @@ func GetInfoRpc(action *user_data.TaskActionUser, args []string) (int32, *public
 		}
 	}
 
-	return lobbysvr_rpc_handle.SendPlayerGetInfo(action, csBody, true)
+	return lobbysvr_rpc_handle.SendPlayerGetInfo(action, user, csBody, true)
 }

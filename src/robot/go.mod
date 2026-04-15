@@ -13,7 +13,7 @@ replace github.com/atframework/atframe-utils-go => ./atframework/atframe-utils-g
 replace github.com/atframework/atsf4g-co/component/public => ./protocol
 
 require (
-	github.com/atframework/atframe-utils-go v1.0.3
+	github.com/atframework/atframe-utils-go v1.0.5-0.20260415092013-23b411f59869
 	github.com/atframework/atsf4g-co/component/public v0.0.0-00010101000000-000000000000
 	github.com/atframework/robot-go v0.0.0-00010101000000-000000000000
 	github.com/shirou/gopsutil/v4 v4.26.2

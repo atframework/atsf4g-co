@@ -46,7 +46,7 @@ func LoginCmd(action base.TaskActionImpl, cmd []string) string {
 func GetInfoCmd(action base.TaskActionImpl, user user_data.User, cmd []string) error {
 	// 发送登录请求
 	err := action.AwaitTask(user.RunTaskDefaultTimeout(func(task *user_data.TaskActionUser) error {
-		errCode, _, rpcErr := protocol.GetInfoRpc(task, cmd)
+		errCode, _, rpcErr := protocol.GetInfoRpc(task, user, cmd)
 		if rpcErr != nil {
 			return rpcErr
 		}
@@ -65,7 +65,7 @@ func GetInfoCmd(action base.TaskActionImpl, user user_data.User, cmd []string) e
 func PingCmd(action base.TaskActionImpl, user user_data.User, cmd []string) error {
 	// 发送登录请求
 	err := action.AwaitTask(user.RunTaskDefaultTimeout(func(task *user_data.TaskActionUser) error {
-		return protocol.PingRpc(task)
+		return protocol.PingRpc(task, user)
 	}, "Ping Task"))
 	if err != nil {
 		return err

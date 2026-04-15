@@ -15,6 +15,8 @@ import (
 
 	"time"
 	lu "github.com/atframework/atframe-utils-go/lang_utility"
+	pu "github.com/atframework/atframe-utils-go/proto_utility"
+	base "github.com/atframework/robot-go/base"
 	data "github.com/atframework/robot-go/data"
 	public_protocol_extension "github.com/atframework/atsf4g-co/component/public/protocol/extension"
 	public_protocol_pbdesc "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc"
@@ -40,43 +42,44 @@ rpc_name = rpc.get_identify_name(rpc.get_name(), PbConvertRule.CONVERT_NAME_CAME
 %>
 % if rpc.get_request_descriptor().full_name == "google.protobuf.Empty":
 func RegisterMessageHandler${rpc_name}(user data.User, f func(*data.TaskActionUser, *public_protocol_pbdesc.${rpc.get_response().get_name()}, int32) error) {
-	user.RegisterMessageHandler("${rpc.descriptor.full_name}", func(action *data.TaskActionUser, msg proto.Message, errCode int32) error {
-		body, ok := msg.(*public_protocol_pbdesc.${rpc.get_response().get_name()})
+	user.RegisterMessageHandler("${rpc.descriptor.full_name}", func(action *data.TaskActionUser, msg *pu.LazyUnmarshalProtobufMessage, errCode int32) error {
+		body, err := msg.GetMessage()
+		if err != nil {
+			action.Log("GetMessage to ${rpc.get_response().get_name()} failed")
+			return fmt.Errorf("GetMessage to ${rpc.get_response().get_name()} failed")
+		}
+		bodyTyped, ok := body.(*public_protocol_pbdesc.${rpc.get_response().get_name()})
 		if !ok {
 			action.Log("type assertion to ${rpc.get_response().get_name()} failed")
 			return fmt.Errorf("type assertion to ${rpc.get_response().get_name()} failed")
 		}
-		return f(action, body, errCode)
+		return f(action, bodyTyped, errCode)
 	})
 }
 % else:
-func Send${rpc_name}(task *data.TaskActionUser, reqBody *public_protocol_pbdesc.${rpc.get_request().get_name()}, needLogin bool) (
-	int32, *public_protocol_pbdesc.${rpc.get_response().get_name()}, error) {
-	if lu.IsNil(task.User) || reqBody == nil {
+func Send${rpc_name}(task base.TaskActionImpl, user data.User, reqBody *public_protocol_pbdesc.${rpc.get_request().get_name()}, needLogin bool) (
+	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.${rpc.get_response().get_name()}], error) {
+	if lu.IsNil(user) || reqBody == nil {
 		return 0, nil, fmt.Errorf("user or request is nil")
 	}
 	if needLogin {
-		if !task.User.IsLogin() {
+		if !user.IsLogin() {
 			return 0, nil, fmt.Errorf("user not login")
 		}
 	}
 	csMsg := &public_protocol_extension.CSMsg{
-		Head: MakeMessageHead(task.User, "${rpc.descriptor.full_name}", "${rpc.get_request_descriptor().full_name}"),
+		Head: MakeMessageHead(user, "${rpc.descriptor.full_name}", "${rpc.get_request_descriptor().full_name}"),
 	}
 	csMsg.BodyBin, _ = proto.Marshal(reqBody)
-	code, bodyRaw, err := task.User.SendReq(task, csMsg, csMsg.Head, reqBody,
+	code, bodyRaw, err := user.SendReq(task, csMsg, csMsg.Head, reqBody,
 		csMsg.Head.GetRpcRequest().GetRpcName(), csMsg.Head.GetClientSequence(), true)
 	if err != nil {
 		return code, nil, fmt.Errorf("SendReq failed: %v", err)
 	}
-	body, ok := bodyRaw.(*public_protocol_pbdesc.${rpc.get_response().get_name()})
-	if !ok {
-		return code, nil, fmt.Errorf("type assertion to ${rpc.get_response().get_name()} failed")
-	}
 	if code != 0 {
-		task.User.Log("${rpc.get_name()} failed, code: %d, err: %v", code, err)
+		user.Log("${rpc.get_name()} failed, code: %d, err: %v", code, err)
 	}
-	return code, body, err
+	return code, pu.CreateLazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.${rpc.get_response().get_name()}](bodyRaw), err
 }
 % endif
 % endfor
