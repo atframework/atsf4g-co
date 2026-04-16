@@ -1,7 +1,8 @@
 version: "3"
 
 includes:
-  protocol: protocol/Taskfile.yml
+  public_protocol: protocol/public/Taskfile.yml
+  private_protocol: protocol/private/Taskfile.yml
   robot: atframework/robot-go/Taskfile.yml
   atframe-utils: atframework/atframe-utils-go/Taskfile.yml
 
@@ -168,13 +169,24 @@ tasks:
   _generate-protocol:
     desc: "Generate Protocol"
     cmds:
-      - task: protocol:generate-protocol-pb
+      - task: public_protocol:generate-protocol-pb
         vars:
           OUTPUT_DIR: '{{.ROOT_DIR}}/build/pb'
           PROTOC_EXEC_BIN: '{{.PROTOC_EXEC_BIN}}'
           XRES_PROTOCOL_PATH: '{{.ROOT_DIR}}/atframework/robot-go/third_party/protocols'
 
-      - task: protocol:generate-protocol-code
+      - task: public_protocol:generate-protocol-code
+        vars:
+          PROTOC_EXEC_BIN: "{{.PROTOC_EXEC_BIN}}"
+          XRES_PROTOCOL_PATH: '{{.ROOT_DIR}}/atframework/robot-go/third_party/protocols'
+
+      - task: private_protocol:generate-protocol-pb
+        vars:
+          OUTPUT_DIR: '{{.ROOT_DIR}}/build/pb'
+          PROTOC_EXEC_BIN: '{{.PROTOC_EXEC_BIN}}'
+          XRES_PROTOCOL_PATH: '{{.ROOT_DIR}}/atframework/robot-go/third_party/protocols'
+
+      - task: private_protocol:generate-protocol-code
         vars:
           PROTOC_EXEC_BIN: "{{.PROTOC_EXEC_BIN}}"
           XRES_PROTOCOL_PATH: '{{.ROOT_DIR}}/atframework/robot-go/third_party/protocols'

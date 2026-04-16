@@ -13,7 +13,7 @@ import (
 
 // ========================= 注册指令 =========================
 func init() {
-	utils.RegisterCommandDefaultTimeout([]string{"user", "login"}, LoginCmd, "<openid>", "登录协议", nil)
+	utils.RegisterCommandDefaultTimeout(robot_cmd.MutableCommandRoot(), []string{"user", "login"}, LoginCmd, "<openid>", "登录协议", nil)
 	robot_cmd.RegisterUserCommand([]string{"user", "logout"}, LogoutCmd, "", "登出协议", nil)
 	robot_cmd.RegisterUserCommand([]string{"user", "getInfo"}, GetInfoCmd, "", "拉取用户信息", nil)
 	robot_cmd.RegisterUserCommand([]string{"user", "ping"}, PingCmd, "", "Ping包", nil)

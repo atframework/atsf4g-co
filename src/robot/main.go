@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	_ "github.com/atframework/atsf4g-co-robot/cmd"
+	_ "github.com/atframework/atsf4g-co-robot/db"
 	robot "github.com/atframework/robot-go"
 )
 

@@ -1,0 +1,28 @@
+version: "3"
+
+tasks:
+  generate-protocol-pb:
+    desc: "Generate Protocol pb"
+    dir: "{{.TASKFILE_DIR}}"
+    cmds:
+      - |
+        mkdir -p "{{.OUTPUT_DIR}}"
+        echo -e "\033[34;1m Generate pb protocol... \033[0m"
+        "{{.PROTOC_EXEC_BIN}}" --include_imports --proto_path=../../../../atframework/libatapp/include --proto_path='{{.XRES_PROTOCOL_PATH}}/core' --proto_path='{{.XRES_PROTOCOL_PATH}}/code' --proto_path=../../../server_frame/protocol/private --proto_path=../../../server_frame/protocol/public ../../../server_frame/protocol/private/protocol/common/*.proto ../../../server_frame/protocol/private/protocol/config/*.proto ../../../server_frame/protocol/private/protocol/extension/*.proto ../../../server_frame/protocol/private/protocol/pbdesc/*.proto ../../../../atframework/libatapp/include/atframe/*.proto -o "{{.OUTPUT_DIR}}/private.pb"
+        echo -e "\033[34;1m Generate pb protocol... done \033[0m"
+    silent: true
+
+  generate-protocol-code:
+    desc: "Generate Protocol code"
+    dir: "{{.TASKFILE_DIR}}"
+    cmds:
+      - |
+        mkdir -p "{{.OUTPUT_DIR}}"
+        echo -e "\033[34;1m Generate code protocol... \033[0m"
+        "{{.PROTOC_EXEC_BIN}}" --go_out=./ --mutable_out=./ --go_opt=paths=source_relative --mutable_opt=paths=source_relative --proto_path='{{.XRES_PROTOCOL_PATH}}/core' --proto_path='{{.XRES_PROTOCOL_PATH}}/code' --proto_path=../../../server_frame/protocol/private --proto_path=../../../server_frame/protocol/public --proto_path=../../../../atframework/libatapp/include ../../../server_frame/protocol/private/protocol/common/*.proto
+        "{{.PROTOC_EXEC_BIN}}" --go_out=./ --mutable_out=./ --go_opt=paths=source_relative --mutable_opt=paths=source_relative --proto_path='{{.XRES_PROTOCOL_PATH}}/core' --proto_path='{{.XRES_PROTOCOL_PATH}}/code' --proto_path=../../../server_frame/protocol/private --proto_path=../../../server_frame/protocol/public --proto_path=../../../../atframework/libatapp/include ../../../server_frame/protocol/private/protocol/extension/*.proto
+        "{{.PROTOC_EXEC_BIN}}" --go_out=./ --mutable_out=./ --go_opt=paths=source_relative --mutable_opt=paths=source_relative --proto_path='{{.XRES_PROTOCOL_PATH}}/core' --proto_path='{{.XRES_PROTOCOL_PATH}}/code' --proto_path=../../../server_frame/protocol/private --proto_path=../../../server_frame/protocol/public --proto_path=../../../../atframework/libatapp/include ../../../server_frame/protocol/private/protocol/config/*.proto
+        "{{.PROTOC_EXEC_BIN}}" --go_out=./ --mutable_out=./ --go_opt=paths=source_relative --mutable_opt=paths=source_relative --proto_path='{{.XRES_PROTOCOL_PATH}}/core' --proto_path='{{.XRES_PROTOCOL_PATH}}/code' --proto_path=../../../server_frame/protocol/private --proto_path=../../../server_frame/protocol/public --proto_path=../../../../atframework/libatapp/include ../../../server_frame/protocol/private/protocol/pbdesc/*.proto
+
+        echo -e "\033[34;1m Generate code protocol... done \033[0m"
+    silent: true

@@ -10,10 +10,13 @@ replace github.com/xresloader/xres-code-generator => ./atframework/robot-go/thir
 
 replace github.com/atframework/atframe-utils-go => ./atframework/atframe-utils-go
 
-replace github.com/atframework/atsf4g-co/component/public => ./protocol
+replace github.com/atframework/atsf4g-co/component/public => ./protocol/public
+
+replace github.com/atframework/atsf4g-co/component/private => ./protocol/private
 
 require (
-	github.com/atframework/atframe-utils-go v1.0.5-0.20260415092013-23b411f59869
+	github.com/atframework/atframe-utils-go v1.0.5-0.20260416024202-66c04636f055
+	github.com/atframework/atsf4g-co/component/private v0.0.0-00010101000000-000000000000
 	github.com/atframework/atsf4g-co/component/public v0.0.0-00010101000000-000000000000
 	github.com/atframework/robot-go v0.0.0-00010101000000-000000000000
 	github.com/shirou/gopsutil/v4 v4.26.2
