@@ -33,7 +33,7 @@ func LoginCmd(action base.TaskActionImpl, cmd []string) string {
 	}
 
 	openId := cmd[0]
-	u := user_data.CreateUser(openId, user_data.CreateDefaultUserLogHandler(openId), true)
+	u := user_data.CreateUser(openId, user_data.CreateDefaultUserLogHandler(openId), true, false)
 	err := action.AwaitTask(u.RunTaskDefaultTimeout(task.LoginTask, "Login Task"))
 	if err != nil {
 		u.Logout()
