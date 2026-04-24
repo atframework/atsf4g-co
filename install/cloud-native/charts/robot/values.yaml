@@ -1,0 +1,10 @@
+redis:
+  enabled: true
+
+master_addr: http://robot.m-oa.com:8080
+report_redis_addr: 10.100.0.9:6379
+report_redis_password: 74widaoRLNUbxQ
+
+server_port: 7001
+db_pb_path: ../../resource/pbdesc/network.pb
+redis_version: 1

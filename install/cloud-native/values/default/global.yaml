@@ -6,6 +6,8 @@
 envOverride: ""
 partition: ""
 
+id_mask: 24.12.12.16
+
 atapp:
   deployment:
     project_name: ""

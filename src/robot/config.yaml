@@ -1,7 +1,0 @@
-url: 127.0.0.1:8001
-connect-type: atgateway
-access-token: atgateway-access-token
-key-exchange: x25519
-crypto: aes-256-gcm
-compression: zstd
-resource: ../../resource/excel

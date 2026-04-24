@@ -15,3 +15,4 @@ password: Va7dKXVkyBVxxo
 pool_size: 50
 record_prefix:
 random_prefix: true
+cluster_mode: true

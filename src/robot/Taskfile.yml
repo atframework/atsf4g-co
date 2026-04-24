@@ -73,7 +73,6 @@ tasks:
       - task: generate
       - task: rpc_handle
       - task: build
-      - task: copy_config
 
   build-tools-prepare:
     desc: "Prepare build tools (protoc, python)"
@@ -217,8 +216,3 @@ tasks:
     desc: "Build Robot Code"
     cmds:
       - go build -o '{{.INSTALL_PATH}}/bin/robot{{.EXE_EXT}}' ./main.go
-
-  copy_config:
-    desc: "Copy case to Install Directory"
-    cmds:
-      - cp config.yaml '{{.INSTALL_PATH}}/bin/'

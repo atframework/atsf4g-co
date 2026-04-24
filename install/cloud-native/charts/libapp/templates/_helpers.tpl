@@ -109,30 +109,6 @@ Libapp deploy cluster
 {{- end }}
 
 {{/*
-Calculate ZoneBase from bus_addr_template
-Extracts zone bits from bus_addr_template (e.g., "world:12.zone:12" -> 12)
-ZoneBase finds minimum 10^n where 10^n > 2^zoneBits
-*/}}
-{{- define "libapp.zoneBase" -}}
-  {{- $busAddrTemplate := .Values.bus_addr_template | default "world:12.zone:12.function:16.instance:24" -}}
-  {{- $zonePart := (split ".zone:" $busAddrTemplate)._1 -}}
-  {{- $zoneBits := (split "." $zonePart)._0 | atoi -}}
-  {{- /* Calculate 2^zoneBits */ -}}
-  {{- $maxVal := 1 -}}
-  {{- range until $zoneBits -}}
-    {{- $maxVal = mul $maxVal 2 -}}
-  {{- end -}}
-  {{- /* Find minimum 10^n > maxVal */ -}}
-  {{- $base := 1 -}}
-  {{- range until 100 -}}
-    {{- if le $base $maxVal -}}
-      {{- $base = mul $base 10 -}}
-    {{- end -}}
-  {{- end -}}
-  {{- $base | toString -}}
-{{- end }}
-
-{{/*
 Calculate LogicID from world_id and zone_id
 Formula: worldID * ZoneBase() + zoneID
 If .Values.logic_id is set, use it directly
@@ -141,18 +117,20 @@ If .Values.logic_id is set, use it directly
   {{- if .Values.logic_id -}}
     {{- .Values.logic_id -}}
   {{- else -}}
-    {{- $worldID := .Values.world_id | default 1 | toString | int64 -}}
-    {{- $zoneID := .Values.zone_id | default 1 | toString | int64 -}}
-    {{- $busAddrTemplate := .Values.bus_addr_template | default "world:12.zone:12.function:16.instance:24" -}}
-    {{- $zonePart := (split ".zone:" $busAddrTemplate)._1 -}}
-    {{- $zoneBits := (split "." $zonePart)._0 | atoi -}}
+    {{- $worldID := .Values.world_id | default 1 | toString | atoi -}}
+    {{- $zoneID := .Values.zone_id | default 1 | toString | atoi -}}
+    {{- $idMaskParts := splitList "." (.Values.id_mask | default "24.12.12.16" | toString) -}}
+    {{- $zoneBits := 12 -}}
+    {{- if ge (len $idMaskParts) 2 -}}
+      {{- $zoneBits = (index $idMaskParts 1) | atoi -}}
+    {{- end -}}
     {{- /* Calculate 2^zoneBits */ -}}
-    {{- $maxVal := (1 | int64) -}}
+    {{- $maxVal := 1 -}}
     {{- range until $zoneBits -}}
       {{- $maxVal = mul $maxVal 2 -}}
     {{- end -}}
     {{- /* Find minimum 10^n > maxVal */ -}}
-    {{- $base := (1 | int64) -}}
+    {{- $base := 1 -}}
     {{- range until 100 -}}
       {{- if le $base $maxVal -}}
         {{- $base = mul $base 10 -}}
@@ -162,25 +140,11 @@ If .Values.logic_id is set, use it directly
   {{- end -}}
 {{- end }}
 
-{{/*
-Calculate BusAddr from world_id, zone_id, type_id
-Formula: worldID.zoneID(or 0 if world_instance).typeID.insID(fixed 1)
-If .Values.bus_addr is set, use it directly
-*/}}
 {{- define "libapp.busAddr" -}}
   {{- if .Values.bus_addr -}}
     {{- .Values.bus_addr -}}
   {{- else -}}
-    {{- $worldID := .Values.world_id | default 1 | toString -}}
-    {{- $zoneID := .Values.zone_id | default 1 | toString -}}
-    {{- $isWorldInstance := .Values.world_instance | default false -}}
-    {{- $typeID := .Values.type_id | default 11 | toString -}}
-    {{- $insID := .Values.instance_id | default 1 | toString -}}
-    {{- $zoneIDPart := $zoneID -}}
-    {{- if $isWorldInstance -}}
-      {{- $zoneIDPart = "0" -}}
-    {{- end -}}
-    {{- printf "%s.%s.%s.%s" $worldID $zoneIDPart $typeID $insID -}}
+    ${ATAPP_INSTANCE_ID}
   {{- end -}}
 {{- end }}
 

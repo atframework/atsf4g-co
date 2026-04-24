@@ -25,10 +25,10 @@ gateways:
 
 {{- define "atapp.yaml" -}}
 {{- $bus_addr := include "libapp.busAddr" . -}}
-{{- $uniq_id := .Values.uniq_id -}}
 atapp:
   # =========== bus configure ===========
-  id: {{ $uniq_id }}
+  id: {{ $bus_addr }}
+  id_mask: {{ .Values.id_mask }}
   name: {{ .Values.type_name | default (include "libapp.name" .) }}_{{ $bus_addr }}
   world_id: {{ .Values.world_id }}
   zone_id: {{ .Values.zone_id }}
