@@ -81,7 +81,7 @@ void on_rsp_login_auth(client_simulator::player_ptr_t player, client_simulator::
   }
 
   player->set_id(rsp_body.open_id());
-  player->set_login_code(rsp_body.login_code());
+  player->set_access_token_code(rsp_body.access_token_code());
 
   int sz = rsp_body.login_address_size();
   if (sz <= 0) {
@@ -116,7 +116,7 @@ void on_cmd_login(util::cli::callback_param params) {
     return;
   }
 
-  if (sender.player->get_login_code().empty()) {
+  if (sender.player->get_access_token_code().empty()) {
     SIMULATOR_ERR_MSG() << "player " << sender.player->get_id() << " has access token" << std::endl;
     sender.player->close();
     return;
@@ -144,7 +144,7 @@ void on_cmd_login(util::cli::callback_param params) {
 
   PROJECT_NAMESPACE_ID::CSLoginReq req_body;
 
-  req_body.set_login_code(sender.player->get_login_code());
+  req_body.set_access_token_code(sender.player->get_access_token_code());
   req_body.set_open_id(sender.player->get_id());
   req_body.set_user_id(sender.player->get_user_id());
   protobuf_copy_message(*req_body.mutable_account(), sender.player->get_account());

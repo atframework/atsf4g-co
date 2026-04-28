@@ -59,9 +59,11 @@ service:
 redis:
   enable: true
 
-webserver:
-  port: 7001
+cachesvr_shared:
+  enable: true
 
-# websocket:
-# websocket 路径片段 实际路径为 /<deployment_environment>/daily/ws/v1
-# path: daily
+cs_session:
+  enable: true
+
+lobbysvr:
+  rank_auto_update_interval: 3600s

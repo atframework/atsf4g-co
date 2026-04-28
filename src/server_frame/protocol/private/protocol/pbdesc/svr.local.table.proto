@@ -99,6 +99,7 @@ message table_user {
         fields: "login_data"
         fields: "account_data"
         fields: "user_data"
+        fields: "option_data_public"
       }
     }
   };
@@ -108,20 +109,21 @@ message table_user {
   uint32 zone_id = 3;
 
   // BasicInfo
-  user_login_data login_data = 11;        // 登入数据
-  account_information account_data = 12;  // 账号信息
-  user_data user_data = 13;               // 玩家数据
+  user_login_data login_data = 11;                  // 登入数据
+  account_information account_data = 12;            // 账号信息
+  user_data user_data = 13;                         // 玩家数据
+  user_option_public_data option_data_public = 14;  // 公开的设置
   // BasicInfo
 
   // 以下是服务器内部数据
   // 异步任务缓存
   user_async_jobs_cache_blob_data async_job_blob_data = 101;
-  uint64 data_version = 102;               // 数据版本号
-  bool create_init = 103;  // 是否已经执行过创建初始化
+  uint64 data_version = 102;  // 数据版本号
+  bool create_init = 103;     // 是否已经执行过创建初始化
 
   // 业务逻辑数据
-  user_options_data options_data = 200;  // 玩家选项
-  DRankUserData rank_data = 201;         // 玩家排行榜数据
+  user_option_private_data option_data_private = 200;  // 玩家选项
+  DRankUserData rank_data = 201;                       // 玩家排行榜数据
 }
 
 message table_distribute_transaction {
@@ -299,7 +301,7 @@ message table_rank_history {
   uint32 rank_instance_id = 3;
   uint32 sub_rank_type = 4;
   uint32 sub_rank_instance_id = 5;
-  int64 rank_day_id  = 6;
+  int64 rank_day_id = 6;
   int64 rank_season_id = 7;
   uint32 rank_no = 8;
   int64 rank_score = 9;

@@ -63,7 +63,7 @@ atapp:
       lost_topology_timeout: 120s
       fault_tolerant: 3 # how many errors at most to ignore, or it will kill the connection
       message_size: 256KB # max message size(256KB)
-      recv_buffer_size: 2MB # recv channel size, will be used to initialize (shared) memory channel size
+      receive_buffer_size: 2MB # recv channel size, will be used to initialize (shared) memory channel size
       send_buffer_size: 1MB # send buffer size, will be used to initialize io_stream channel write queue
       send_buffer_number: 0 # send message number limit, will be used to initialize io_stream channel write queue, 0 for dynamic buffer
       crypto:
@@ -118,9 +118,6 @@ log_stacktrace_level: disable
 
 enable_oss_log: true
 enable_mon_log: true
-
-login_code_protect: 0s
-login_code_valid_duration: 720s
 
 # 日志输出路径
 server_log_dir: ../log

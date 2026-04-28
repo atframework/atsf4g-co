@@ -1,6 +1,6 @@
 ---
 name: configure-expression
-description: Environment-variable expression expansion syntax for Protobuf config fields annotated with enable_expression. Use when working with config templates, YAML deployment values, or expression syntax.
+description: "Use when: editing enable_expression config fields, environment-variable expansion syntax, YAML deployment values, or atapp config templates."
 ---
 
 # Configuration Expression Expansion

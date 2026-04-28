@@ -732,7 +732,7 @@ CASE_TEST(atgateway_protocol_sdk, crypto_conf_set_default) {
   CASE_EXPECT_EQ(ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519),
                  conf.key_exchange_algorithm);
   CASE_EXPECT_EQ(static_cast<uint64_t>(2 * 1024 * 1024), conf.max_post_message_size);
-  CASE_EXPECT_EQ(std::chrono::seconds(300), conf.key_refresh_interval);
+  CASE_EXPECT_EQ(std::chrono::hours(4), conf.key_refresh_interval);
   CASE_EXPECT_FALSE(conf.client_mode);
   // set_default() now populates default algorithm lists
   CASE_EXPECT_FALSE(conf.supported_algorithms.empty());
@@ -2280,7 +2280,7 @@ CASE_TEST(atgateway_protocol_sdk, server_client_encryption_only_no_compression) 
   auto crypto_session = client.sdk->get_crypto_session();
   CASE_EXPECT_TRUE(!!crypto_session);
   if (!crypto_session ||
-      crypto_session->selected_algorithm ==
+      crypto_session->get_selected_algorithm() ==
           ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kNone)) {
     CASE_MSG_INFO() << "aes-256-gcm not available on this platform, skip" << '\n';
     return;
@@ -2397,14 +2397,14 @@ CASE_TEST(atgateway_protocol_sdk, server_client_compression_only_no_encryption) 
   auto crypto_session = client.sdk->get_crypto_session();
   CASE_EXPECT_TRUE(!!crypto_session);
   if (!crypto_session ||
-      crypto_session->selected_compression_algorithm ==
+      crypto_session->get_selected_compression_algorithm() ==
           ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::compression_algorithm_t, kNone)) {
     CASE_MSG_INFO() << "no compression algorithm available on this platform, skip" << '\n';
     return;
   }
 
   CASE_MSG_INFO() << "negotiated compression algorithm: "
-                  << static_cast<int>(crypto_session->selected_compression_algorithm) << '\n';
+                  << static_cast<int>(crypto_session->get_selected_compression_algorithm()) << '\n';
 
   // Build a large, highly compressible message (repeated pattern)
   // Must be larger than compression_threshold_size (256 bytes)
@@ -2468,7 +2468,7 @@ CASE_TEST(atgateway_protocol_sdk, crypto_conf_constructor_sets_defaults) {
   CASE_EXPECT_EQ(ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519),
                  conf.key_exchange_algorithm);
   CASE_EXPECT_EQ(static_cast<uint64_t>(2 * 1024 * 1024), conf.max_post_message_size);
-  CASE_EXPECT_EQ(std::chrono::seconds(300), conf.key_refresh_interval);
+  CASE_EXPECT_EQ(std::chrono::hours(4), conf.key_refresh_interval);
   CASE_EXPECT_FALSE(conf.client_mode);
 
   CASE_MSG_INFO() << "crypto_conf_t default constructor sets defaults" << '\n';

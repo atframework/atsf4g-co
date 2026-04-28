@@ -1,6 +1,6 @@
 ---
 name: atgateway-protocol
-description: atgateway v2 client protocol SDK — ECDH handshake, encryption, compression, reconnection, and testing. Use when working with gateway protocol code, crypto sessions, FlatBuffers schema, or writing gateway unit tests.
+description: "Use when: working on atgateway v2 protocol code, ECDH handshakes, encryption, compression, reconnection, FlatBuffers schema, or gateway unit tests."
 ---
 
 # atgateway Protocol SDK
@@ -18,7 +18,7 @@ The atgateway protocol provides secure client-gateway communication via a 2-mess
 
 ## Architecture
 
-```
+```text
 Game Client  ←─ FlatBuffers (v2) ─→  atgateway  ←─ Protobuf ─→  Logic Server
                 (libatgw_protocol_sdk)              (libatgw_server_protocol)
 ```

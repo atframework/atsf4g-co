@@ -12,7 +12,7 @@
 namespace rpc {
 namespace auth {
 namespace login {
-SERVER_FRAME_API void generate_login_code(char *code, size_t sz) {
+SERVER_FRAME_API void generate_access_token_code(char *code, size_t sz) {
   if (sz > 0) {
     for (size_t i = 0; i < sz - 1; ++i) {
       code[i] = atfw::component::random_engine::random_between<char>(33, 127);

@@ -28,14 +28,22 @@ logic:
         number: 3
         size: 20MB
       flush_interval: 1s
-{{- if and .Values.redis .Values.redis.enable }}
+  {{- if and .Values.redis .Values.redis.enable }}
   db:
     cluster:
       host:
-{{- range $_, $addr := .Values.redis.addrs }}
+    {{- range $_, $addr := .Values.redis.addrs }}
         - {{ $addr }}
-{{- end }} {{- /* end range redis.addrs */}}
+    {{- end }}
     password: {{ .Values.redis.password }}
     record_prefix: {{ .Values.redis.record_prefix }}
-{{- end -}} {{- /* end if */}}
+  {{- end -}}
+  {{- if and .Values.cachesvr_shared .Values.cachesvr_shared.enable }}
+  cache:
+    {{- toYaml .Values.cachesvr_shared | trim | nindent 4 }}
+  {{- end -}}
+  {{- if and .Values.cs_session .Values.cs_session.enable }}
+  session:
+    {{- toYaml .Values.cs_session | trim | nindent 4 }}
+  {{- end -}}
 {{- end }}

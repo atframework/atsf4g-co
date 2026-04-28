@@ -14,9 +14,24 @@ import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 import "atframe/atapp_conf.proto";
 
+import "protocol/extension/svr.config.extension.proto";
+
 message logic_discovery_selector_cfg {
   atframework.atapp.protocol.atapp_metadata dtcoordsvr = 270;
   atframework.atapp.protocol.atapp_metadata ranksvr = 271;
+  atframework.atapp.protocol.atapp_metadata cachesvr = 272;
+  atframework.atapp.protocol.atapp_metadata mqsvr = 273;
+  atframework.atapp.protocol.atapp_metadata friendsvr = 274;
+  atframework.atapp.protocol.atapp_metadata guildsvr = 275;
+
+  atframework.atapp.protocol.atapp_metadata tradesvr_order = 291
+      [(atframework.logic_discovery) = { alias_name: "tradesvr-order" }];
+  atframework.atapp.protocol.atapp_metadata tradesvr_matchmaking = 292
+      [(atframework.logic_discovery) = { alias_name: "tradesvr-matchmaking" }];
+  atframework.atapp.protocol.atapp_metadata tradesvr_index = 293
+      [(atframework.logic_discovery) = { alias_name: "tradesvr-index" }];
+  atframework.atapp.protocol.atapp_metadata tradesvr_search = 294
+      [(atframework.logic_discovery) = { alias_name: "tradesvr-search" }];
 }
 
 // @see

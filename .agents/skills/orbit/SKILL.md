@@ -1,6 +1,6 @@
 ---
 name: dsa-dsc-dsm-pseudocode
-description: 'Use when drafting, reviewing, or extending DSA, DSC, DSM pseudocode in this repo. Triggers: 伪代码, pseudocode, DS lifecycle, scheduler, session routing, protocol, SDK, atframework component, x-server style, design-to-implementation. Read the design guide, implementation plan, pseudocode roadmap, and atframework/x-server baseline before editing.'
+description: "Use when: drafting, reviewing, or extending DSA, DSC, DSM pseudocode in this repo. Triggers: 伪代码, pseudocode, DS lifecycle, scheduler, session routing, protocol, SDK, atframework component, x-server style, design-to-implementation. Read the design guide, implementation plan, pseudocode roadmap, and atframework/x-server baseline before editing."
 user-invocable: true
 ---
 

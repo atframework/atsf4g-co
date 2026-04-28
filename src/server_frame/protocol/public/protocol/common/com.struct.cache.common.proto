@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/common";
+
+package hello;
+
+enum EnCacheApiGetCacheType {
+  EN_CACHE_API_GET_CACHE_TYPE_NORMAL = 0;
+  EN_CACHE_API_GET_CACHE_TYPE_SUBSCRIBE = 1;
+  EN_CACHE_API_GET_CACHE_TYPE_HOT_DATA = 2;
+}

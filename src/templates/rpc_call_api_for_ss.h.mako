@@ -126,7 +126,7 @@ ${ns}
         else:
             rpc_unicast_params_decl_legacy.append(param)
 %>
-// ============ ${rpc.get_full_name()} ============
+// ============ ${rpc.get_service().get_full_name()}/${rpc.get_name()} ============
 namespace packer {
 ${rpc_dllexport_decl} bool pack_${rpc.get_name()}(std::string& output, const ${rpc.get_request().get_cpp_class_name()}& input);
 ${rpc_dllexport_decl} bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_request().get_cpp_class_name()}& output);

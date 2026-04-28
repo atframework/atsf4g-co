@@ -99,6 +99,9 @@ generate_for_pb_add_ss_service(
   RPC_DLLEXPORT_DECL
   SERVER_FRAME_API)
 
+# add tool to binding cachesvr rpcs
+include("${CMAKE_CURRENT_LIST_DIR}/cachesvr/generate-rpc-task.cmake")
+
 # add tool to binding authsvr rpcs
 include("${CMAKE_CURRENT_LIST_DIR}/authsvr/generate-rpc-task.cmake")
 

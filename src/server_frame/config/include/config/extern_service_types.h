@@ -20,6 +20,7 @@ enum class logic_service_type : uint32_t {
   kLobbySvr = 12,
   kDtCoordSvr = 13,  // 用于分布式事务的协调者服务
   kRankSvr = 14,     // 排行榜服务器
+  kCacheSvr = 15,    // 缓存服务器
 };
 }  // namespace component
 }  // namespace atframework

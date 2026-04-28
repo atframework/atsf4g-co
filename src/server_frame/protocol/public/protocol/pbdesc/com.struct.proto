@@ -8,6 +8,8 @@ option cc_enable_arenas = true;
 
 package hello;
 
+import "google/protobuf/timestamp.proto";
+
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
 // 登录用户终端信息
@@ -47,7 +49,7 @@ message DAppleGameCenter {
 message DAccountData {
   uint32 account_type = 1;  // 平台类型 EnAccountTypeID
   string access = 2;        // 授权码（内置账户的话就是密码的hash值，OAuth的话就是access token）
-  uint32 channel_id = 3;  // 渠道ID（某些品太需要区分认证体系以外的渠道号） @see EnPlatformChannelID
+  uint32 channel_id = 3;    // 渠道ID（某些品太需要区分认证体系以外的渠道号） @see EnPlatformChannelID
 }
 
 message DUpdateData {
@@ -66,7 +68,7 @@ message DClientUpdateCfg {
 }
 
 // 用户profile
-message DPlayerProfile {
+message DUserProfile {
   string open_id = 1;
   uint64 user_id = 2;
   string nick_name = 3;
@@ -75,30 +77,70 @@ message DPlayerProfile {
 }
 
 // 用户profile
-message DPlayerStat {
+message DUserStatistics {
   int64 register_time = 1;    // 注册时间
   int64 last_login_time = 2;  // 注册时间
 }
 
 // 用户数据
-message DPlayerInfo {
-  DPlayerProfile player = 1;
-  uint32 player_level = 2;  // 玩家（主城）等级
-  DPlayerStat player_stat = 4;
+message DUserInformation {
+  DUserProfile profile = 1;
+  int32 user_level = 2;  // 玩家（主城）等级
+  DUserStatistics user_statistics = 4;
 }
 
 // 用户自定义选项
-message DPlayerOptions {}
+message DUserOptions {}
 
-message DPlayerIDKey {
+message DUserIDKey {
   uint64 user_id = 1;
   uint32 zone_id = 2;
 }
 
-message DPlayerAccountIDRefer {
+message DUserAccountIDRefer {
   uint64 user_id = 1;
   uint32 zone_id = 2;
-  uint64 account_id = 3;
+  // uint64 account_id = 3;
+}
+
+// 用户公开选项
+message DUserSharedOptions {}
+
+// 用户私有选项
+message DUserPrivateOptions {
+  // 客户端自定义选项数据，长度受 Const.xlsx 的 user_options_max_size 选项限制
+  bytes client_options = 1;
+}
+
+// 用户基础信息（允许客户端批量拉）
+message DUserBasicData {
+  DUserIDKey user_key = 1;
+  uint32 account_type = 2;           // @see EnAccountType
+  uint32 account_login_channel = 3;  // @see EnPlatformChannelID
+  // uint64 account_id = 4;
+  DLoginBasicDataCache login_data_cache = 5;
+  string client_version = 6;
+
+  DUserProfile profile = 31;             // 用户账号属性
+  uint32 package_register_channel = 35;  // 包注册渠道号
+  uint32 package_login_channel = 36;     // 包登录渠道号
+  int32 version_type = 37;               // 上一次的登入版本类型 @EnVersionType
+
+  int32 user_level = 51;          // 玩家等级
+  uint64 user_data_version = 53;  // data version
+
+  DUserSharedOptions shared_options = 101;  // 公开的用户自定义选项
+}
+
+message DLoginBasicDataCache {
+  string access_token_code = 11;                        // 认证码
+  google.protobuf.Timestamp access_token_expired = 12;  // 认证码过期时间
+
+  // 业务层登入注册信息
+  int64 business_register_time = 31;    // 业务层注册时间
+  int64 business_login_time = 32;       // 业务层登入时间
+  int64 business_logout_time = 33;      // 业务层登出时间
+  int64 business_unregister_time = 34;  // 业务层注销时间
 }
 
 /////////////////////////////////////////////////////////////////////////

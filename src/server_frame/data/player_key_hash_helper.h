@@ -14,7 +14,7 @@
 #include <config/server_frame_build_feature.h>
 
 struct ATFW_UTIL_SYMBOL_VISIBLE player_key_hash_t {
-  size_t operator()(const PROJECT_NAMESPACE_ID::DPlayerIDKey& key) const {
+  size_t operator()(const PROJECT_NAMESPACE_ID::DUserIDKey& key) const {
     uint64_t out[2] = {0};
     uint64_t val = key.user_id();
     atfw::util::hash::murmur_hash3_x64_128(&val, static_cast<int>(sizeof(val)), key.zone_id(), out);
@@ -23,7 +23,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE player_key_hash_t {
 };
 
 struct ATFW_UTIL_SYMBOL_VISIBLE player_key_equal_t {
-  bool operator()(const PROJECT_NAMESPACE_ID::DPlayerIDKey& l, const PROJECT_NAMESPACE_ID::DPlayerIDKey& r) const {
+  bool operator()(const PROJECT_NAMESPACE_ID::DUserIDKey& l, const PROJECT_NAMESPACE_ID::DUserIDKey& r) const {
     return l.zone_id() == r.zone_id() && l.user_id() == r.user_id();
   }
 };

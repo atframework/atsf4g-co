@@ -1,6 +1,6 @@
 ---
 name: code-generation
-description: Protobuf and template-based code generation during the CMake build. Use when working with proto files, generated headers, or template outputs.
+description: "Use when: editing proto files, Mako templates, generated RPC/task code, protobuf outputs, or CMake-driven code generation."
 ---
 
 # Code generation (atsf4g-co)
@@ -21,3 +21,5 @@ This repository generates code during build in two main ways:
 Notes:
 
 - Generation is driven by CMake targets; for most workflows you should not edit generated files directly.
+- When templates or generated task/RPC code create temporary protobuf messages, prefer the Arena-backed pattern from
+  `../rpc-protobuf-arena/SKILL.md` instead of adding stack/heap temporaries that live only within one task/RPC call.

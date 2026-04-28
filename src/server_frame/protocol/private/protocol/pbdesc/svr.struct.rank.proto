@@ -14,9 +14,7 @@ import "protocol/pbdesc/com.struct.proto";
 import "protocol/common/com.struct.rank.common.proto";
 import "protocol/pbdesc/com.struct.rank.proto";
 
-
 package hello;
-
 
 message history_rank_show_data {
   int64 role_guid = 3;
@@ -57,12 +55,12 @@ message rank_data {
 message user_rank_unsubmit_data {
   DRankKey rank_key = 1;
 
-  DPlayerIDKey user_key = 2; // 玩家ID
-  
-  DRankInstanceKey rank_instance_key = 4; // 排行榜实例Key
+  DUserIDKey user_key = 2;  // 玩家ID
 
-  bool is_offset = 11; // 是否是增量变化
-  int32 value = 12; // 必须大于等于0小于等于UINT32_MAX
+  DRankInstanceKey rank_instance_key = 4;  // 排行榜实例Key
+
+  bool is_offset = 11;  // 是否是增量变化
+  int32 value = 12;     // 必须大于等于0小于等于UINT32_MAX
   // int64 expired_timepoint = 13;  // 过期时间
 
   // 多维度排序字段
@@ -79,12 +77,13 @@ message rank_mirror_meta_info {
   int64 mirror_id = 1;
   int32 max_slice_count = 2;
   bool is_normal_save = 3;
-} 
+}
 
 message table_rank_mirror_meta_data {
   repeated rank_mirror_meta_info success_mirror = 1;
   repeated rank_mirror_meta_info removing_mirror = 2;
-  rank_mirror_meta_info last_save_mirror = 3; // 最新的镜像（对于榜单的定时保存不会占用success_mirror，防止其他服务需要用到的镜像被冲掉）
+  rank_mirror_meta_info last_save_mirror =
+      3;  // 最新的镜像（对于榜单的定时保存不会占用success_mirror，防止其他服务需要用到的镜像被冲掉）
 }
 
 message table_rank_slave_node_data {
@@ -92,13 +91,13 @@ message table_rank_slave_node_data {
 }
 
 message table_rank_settlement_blob_data {
-  uint64 current_settle_server_id = 1; // 当前执行结算的服务器ID
-  int64 current_settle_timeout = 2; // 当前执行结算的超时时间
+  uint64 current_settle_server_id = 1;  // 当前执行结算的服务器ID
+  int64 current_settle_timeout = 2;     // 当前执行结算的超时时间
 
-  int64 latest_settlement_rank = 11; // 最后一次结算已完成的结算排名(0表示全部结算完了)
-  bool latest_settlement_need_daily = 12; // 最后一次结算需要每日结算
-  bool latest_settlement_need_custom = 13; // 最后一次结算需要自定义结算周期结算
-  int32 bind_activity_id = 15; // 绑定的活动id, 绑定活动的榜单在活动过期后自动清理
+  int64 latest_settlement_rank = 11;        // 最后一次结算已完成的结算排名(0表示全部结算完了)
+  bool latest_settlement_need_daily = 12;   // 最后一次结算需要每日结算
+  bool latest_settlement_need_custom = 13;  // 最后一次结算需要自定义结算周期结算
+  int32 bind_activity_id = 15;              // 绑定的活动id, 绑定活动的榜单在活动过期后自动清理
 
   int64 settle_daily_day_no = 21; // 已完成的日结算的结算日ID
   int64 settle_custom_season_no = 22; // 已完成的自定义结算周期的结算天/赛季ID

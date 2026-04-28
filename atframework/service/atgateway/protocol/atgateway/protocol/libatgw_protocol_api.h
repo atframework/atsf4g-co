@@ -7,7 +7,6 @@
 #include <gsl/select-gsl.h>
 #include <nostd/string_view.h>
 
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <functional>

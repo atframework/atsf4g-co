@@ -27,6 +27,7 @@
 
 #include <opentelemetry/semconv/incubating/rpc_attributes.h>
 #include <opentelemetry/semconv/incubating/session_attributes.h>
+#include <opentelemetry/semconv/incubating/user_attributes.h>
 
 #include <rpc/rpc_context.h>
 #include <rpc/telemetry/semantic_conventions.h>
@@ -159,10 +160,10 @@ SERVER_FRAME_API session::~session() {
   if (actor_log_otel_) {
     std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue> attributes[] = {
         {"gateway.node_id", get_key().node_id},
-        {"user.id", cached_user_id_},
+        {opentelemetry::semconv::session::kSessionId, get_key().session_id},
+        {opentelemetry::semconv::user::kUserId, cached_user_id_},
         {"user.zone_id", cached_zone_id_},
-        {"session.event", "destroy"},
-        {opentelemetry::semconv::session::kSessionId, get_key().session_id}};
+        {"session.event", "destroy"}};
     actor_log_otel_->Info(util::log::format("------------ session: {:#x}:{} destroyed ------------", get_key().node_id,
                                             get_key().session_id),
                           opentelemetry::common::MakeAttributes(attributes));
@@ -332,17 +333,12 @@ SERVER_FRAME_API void session::write_actor_log_head(rpc::context &ctx, const atf
   }
   if (actor_log_otel_) {
     std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue> attributes[] = {
-        {"tconnd.node_id", get_key().node_id},
+        {"gateway.node_id", get_key().node_id},
+        {opentelemetry::semconv::session::kSessionId, get_key().session_id},
         {"session.event", is_input ? "receive_hint" : "send_hint"},
-        {"user.id", cached_user_id_},
+        {opentelemetry::semconv::user::kUserId, cached_user_id_},
         {"user.zone_id", cached_zone_id_},
-        {opentelemetry::semconv::rpc::kRpcMethod, opentelemetry::nostd::string_view{rpc_name.data(), rpc_name.size()}},
-        {opentelemetry::semconv::rpc::kRpcMessageId,
-         opentelemetry::nostd::string_view{type_url.data(), type_url.size()}},
-        {opentelemetry::semconv::rpc::kRpcMessageType,
-         opentelemetry::nostd::string_view{is_input ? "RECEIVED" : "SENT"}},
-        {opentelemetry::semconv::rpc::kRpcMessageUncompressedSize, byte_size},
-        {opentelemetry::semconv::session::kSessionId, get_key().session_id}};
+        {opentelemetry::semconv::rpc::kRpcMethod, opentelemetry::nostd::string_view{rpc_name.data(), rpc_name.size()}}};
     if (ctx.get_trace_span()) {
       actor_log_otel_->Info(hint_text, opentelemetry::common::MakeAttributes(attributes),
                             ctx.get_trace_span()->GetContext());
@@ -390,18 +386,13 @@ SERVER_FRAME_API void session::write_actor_log_body(rpc::context &ctx, const goo
   }
   if (actor_log_otel_) {
     std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue> attributes[] = {
-        {"tconnd.node_id", get_key().node_id},
-
-        {"user.id", cached_user_id_},
+        {"gateway.node_id", get_key().node_id},
+        {opentelemetry::semconv::session::kSessionId, get_key().session_id},
+        {opentelemetry::semconv::user::kUserId, cached_user_id_},
         {"user.zone_id", cached_zone_id_},
         {opentelemetry::semconv::rpc::kRpcMethod, opentelemetry::nostd::string_view{rpc_name.data(), rpc_name.size()}},
-        {opentelemetry::semconv::rpc::kRpcMessageId,
-         opentelemetry::nostd::string_view{type_url.data(), type_url.size()}},
-        {opentelemetry::semconv::rpc::kRpcMessageType,
-         opentelemetry::nostd::string_view{is_input ? "RECEIVED" : "SENT"}},
         {"message.result_code", head.error_code()},
         {"message.business_time", head.timestamp()},
-        {opentelemetry::semconv::session::kSessionId, get_key().session_id},
         {"session.event", is_input ? "receive_head" : "send_head"},
     };
     if (ctx.get_trace_span()) {
@@ -488,10 +479,10 @@ void session::create_actor_log_writter() {
   if (actor_log_otel_) {
     std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue> attributes[] = {
         {"gateway.node_id", get_key().node_id},
+        {opentelemetry::semconv::session::kSessionId, get_key().session_id},
         {"session.event", "create"},
-        {"user.id", cached_user_id_},
-        {"user.zone_id", cached_zone_id_},
-        {opentelemetry::semconv::session::kSessionId, get_key().session_id}};
+        {opentelemetry::semconv::user::kUserId, cached_user_id_},
+        {"user.zone_id", cached_zone_id_}};
     actor_log_otel_->Info(util::log::format("============ user: {}:{}, session: {:#x}:{} created ============",
                                             cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id),
                           opentelemetry::common::MakeAttributes(attributes));

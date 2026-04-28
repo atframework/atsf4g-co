@@ -1,0 +1,15 @@
+# cs_session.yaml
+# vim: set sw=2 sts=2 et:
+# encoding: utf-8
+
+enabled: false
+access_token_code_protect: 20m
+access_token_code_valid_duration: 10m
+login_ban_time: 3h
+tick_sec: 60s
+enable_actor_log: true
+enable_actor_otel_log: false
+remove_player_cache_when_stop: true
+actor_log_size: 10MB
+actor_log_rotate: 3
+actor_auto_flush: 3s

@@ -93,7 +93,7 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
     }
   }
 
-  if (user && user->get_login_lock().access_token_code() == req_body.login_code() &&
+  if (user && user->get_login_lock().access_token_code() == req_body.access_token_code() &&
       atfw::util::time::time_utility::sys_now() <=
           protobuf_to_system_clock(user->get_login_lock().access_token_expired()) &&
       user->is_writable()) {
@@ -156,7 +156,7 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
   }
 
   // 2. 校验登入码，优先使用login_lock里经过续期的老code
-  if (login_lock_tb->access_token_code() == req_body.login_code() &&
+  if (login_lock_tb->access_token_code() == req_body.access_token_code() &&
       atfw::util::time::time_utility::sys_now() <= protobuf_to_system_clock(login_lock_tb->access_token_expired())) {
     FCTXLOGDEBUG(get_shared_context(), "user {}:{} use access_token in login_lock table", zone_id, req_body.user_id());
   } else {
@@ -167,9 +167,9 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
       TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
 
-    if (0 != UTIL_STRFUNC_STRCMP(req_body.login_code().c_str(), login_auth_tb->access_token_code().c_str())) {
+    if (0 != UTIL_STRFUNC_STRCMP(req_body.access_token_code().c_str(), login_auth_tb->access_token_code().c_str())) {
       FCTXLOGERROR(get_shared_context(), "user {}({}:{}) login code error(expected: {}, real: {})", req_body.open_id(),
-                   zone_id, req_body.user_id(), login_auth_tb->access_token_code(), req_body.login_code());
+                   zone_id, req_body.user_id(), login_auth_tb->access_token_code(), req_body.access_token_code());
       set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
       TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
@@ -351,7 +351,7 @@ GAMECLIENT_RPC_API int task_action_login::on_failed() {
 }
 
 GAMECLIENT_RPC_API rpc::result_code_type task_action_login::replace_session(std::shared_ptr<player> user) {
-  FWPLOGDEBUG(*user, "relogin using login code: {}", get_request_body().login_code());
+  FWPLOGDEBUG(*user, "relogin using login code: {}", get_request_body().access_token_code());
 
   // 获取当前Session
   std::shared_ptr<session> cur_sess = get_session();

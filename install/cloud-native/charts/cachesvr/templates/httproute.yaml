@@ -1,0 +1,3 @@
+{{- template "libapp.httproute" (list . "cachesvr.httproute") -}}
+{{- define "cachesvr.httproute" -}}
+{{- end -}}

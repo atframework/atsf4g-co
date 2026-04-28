@@ -122,15 +122,15 @@ ${ns}
       'const {0} &__body'.format(rpc.get_request().get_cpp_class_name())
     ]
 %>
-// ============ ${rpc.get_full_name()} ============
+// ============ ${rpc.get_service().get_full_name()}/${rpc.get_name()} ============
 ${rpc_dllexport_decl} int package_${rpc.get_name()}(${', '.join(rpc_params)}) {
   auto request_full_name = __to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name());
 % if rpc.is_request_stream():
   int res = __setup_rpc_stream_header(
-    *__output.mutable_head(), "${rpc.get_full_name()}", request_full_name);
+    *__output.mutable_head(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}", request_full_name);
 % else:
   int res = __setup_rpc_request_header(
-    *__output.mutable_head(), "${rpc.get_full_name()}", request_full_name);
+    *__output.mutable_head(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}", request_full_name);
 % endif
 
   if (res < 0) {
@@ -138,13 +138,13 @@ ${rpc_dllexport_decl} int package_${rpc.get_name()}(${', '.join(rpc_params)}) {
   }
 
   res = __pack_body(
-    __body, __output.mutable_body_bin(), "${rpc.get_full_name()}", request_full_name);
+    __body, __output.mutable_body_bin(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}", request_full_name);
 
   return res;
 }
 
 ${rpc_dllexport_decl} atfw::util::nostd::string_view get_full_name_of_${rpc.get_name()}() {
-  return "${rpc.get_full_name()}";
+  return "${rpc.get_service().get_full_name()}/${rpc.get_name()}";
 }
 
 % endfor

@@ -18,10 +18,10 @@
 
 #include <hiredis_happ.h>
 
+#include <config/extern_log_categorize.h>
 #include <config/logic_config.h>
 #include <dispatcher/db_msg_dispatcher.h>
 #include <dispatcher/task_manager.h>
-#include <config/extern_log_categorize.h>
 
 #include "rpc/db/db_utils.h"
 #include "rpc/rpc_async_invoke.h"
@@ -43,9 +43,8 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
                                      db_msg_dispatcher::unpack_fn_t unpack_fn) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
-      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
-      {opentelemetry::semconv::rpc::kRpcService, "rpc.db.redis"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table.key_value.get"},
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/get_all"},
       {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemNameValues::kRedis}};
 
   rpc::telemetry::trace_start_option __trace_option;
@@ -54,8 +53,7 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
   __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
   __trace_option.attributes = __trace_attributes;
 
-  rpc::telemetry::tracer __tracer =
-      __child_ctx.make_tracer("rpc.db.hash_table.key_value.get_all", std::move(__trace_option));
+  rpc::telemetry::tracer __tracer = __child_ctx.make_tracer("rpc.db.hash_table/get_all", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
@@ -100,7 +98,8 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
   } else {
     FWCLOGINFO(log_categorize_t::DB, "table [key={}] get all", key);
   }
-  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] get all result: {}", key, protobuf_mini_dumper_get_readable(*output->message->get()));
+  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] get all result: {}", key,
+              protobuf_mini_dumper_get_readable(*output->message->get()));
 
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
@@ -111,9 +110,8 @@ SERVER_FRAME_API result_type partly_get(rpc::context &ctx, uint32_t channel, gsl
                                         db_msg_dispatcher::unpack_fn_t unpack_fn) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
-      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
-      {opentelemetry::semconv::rpc::kRpcService, "rpc.db.redis"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table.key_value.partly_get"},
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/partly_get"},
       {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
   rpc::telemetry::trace_start_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
@@ -121,8 +119,7 @@ SERVER_FRAME_API result_type partly_get(rpc::context &ctx, uint32_t channel, gsl
   __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
   __trace_option.attributes = __trace_attributes;
 
-  rpc::telemetry::tracer __tracer =
-      __child_ctx.make_tracer("rpc.db.hash_table.key_value.partly_get", std::move(__trace_option));
+  rpc::telemetry::tracer __tracer = __child_ctx.make_tracer("rpc.db.hash_table/partly_get", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
@@ -138,7 +135,8 @@ SERVER_FRAME_API result_type partly_get(rpc::context &ctx, uint32_t channel, gsl
     args.push(partly_get_fields[index].data(), partly_get_fields[index].size());
   }
 
-  FWCLOGINFO(log_categorize_t::DB, "table [key={}] start to partly get data, field count: {}", key, partly_get_field_count);
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] start to partly get data, field count: {}", key,
+             partly_get_field_count);
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
@@ -172,8 +170,7 @@ SERVER_FRAME_API result_type partly_get(rpc::context &ctx, uint32_t channel, gsl
   } else {
     FWCLOGINFO(log_categorize_t::DB, "table [key={}] partly_get", key);
   }
-  FWCLOGDEBUG(log_categorize_t::DB, "result: {}", key,
-              protobuf_mini_dumper_get_readable(*output->message->get()));
+  FWCLOGDEBUG(log_categorize_t::DB, "result: {}", key, protobuf_mini_dumper_get_readable(*output->message->get()));
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 
@@ -183,9 +180,8 @@ batch_get_all(rpc::context &ctx, uint32_t channel, gsl::span<std::string> key,
               db_msg_dispatcher::unpack_fn_t unpack_fn) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
-      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
-      {opentelemetry::semconv::rpc::kRpcService, "rpc.db.redis"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table.key_value.batch_get_all"},
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/batch_get_all"},
       {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemNameValues::kRedis}};
 
   rpc::telemetry::trace_start_option __trace_option;
@@ -195,7 +191,7 @@ batch_get_all(rpc::context &ctx, uint32_t channel, gsl::span<std::string> key,
   __trace_option.attributes = __trace_attributes;
 
   rpc::telemetry::tracer __tracer =
-      __child_ctx.make_tracer("rpc.db.hash_table.key_value.get_all", std::move(__trace_option));
+      __child_ctx.make_tracer("rpc.db.hash_table/batch_get_all", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
@@ -267,9 +263,8 @@ batch_partly_get(rpc::context &ctx, uint32_t channel, gsl::span<std::string> key
                  db_msg_dispatcher::unpack_fn_t unpack_fn) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
-      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
-      {opentelemetry::semconv::rpc::kRpcService, "rpc.db.redis"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table.key_value.batch_partly_get"},
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/batch_partly_get"},
       {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
   rpc::telemetry::trace_start_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
@@ -278,7 +273,7 @@ batch_partly_get(rpc::context &ctx, uint32_t channel, gsl::span<std::string> key
   __trace_option.attributes = __trace_attributes;
 
   rpc::telemetry::tracer __tracer =
-      __child_ctx.make_tracer("rpc.db.hash_table.key_value.batch_partly_get", std::move(__trace_option));
+      __child_ctx.make_tracer("rpc.db.hash_table/batch_partly_get", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
@@ -349,9 +344,8 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
                                  shared_abstract_message<google::protobuf::Message> &&store, uint64_t *version) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
-      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
-      {opentelemetry::semconv::rpc::kRpcService, "rpc.db.redis"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table.key_value.set"},
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/key_value.set"},
       {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
   rpc::telemetry::trace_start_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
@@ -360,7 +354,7 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
   __trace_option.attributes = __trace_attributes;
 
   rpc::telemetry::tracer __tracer =
-      __child_ctx.make_tracer("rpc.db.hash_table.key_value.set", std::move(__trace_option));
+      __child_ctx.make_tracer("rpc.db.hash_table/key_value.set", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
@@ -408,8 +402,8 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
   FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to save data content: {}", key,
               protobuf_mini_dumper_get_readable(*store));
   if (version != nullptr) {
-    FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to save data, expect version: {}, detail: {}", key, *version,
-               segs_debug_info.str());
+    FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to save data, expect version: {}, detail: {}", key,
+                *version, segs_debug_info.str());
   } else {
     FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to save data, detail: {}", key, segs_debug_info.str());
   }
@@ -444,9 +438,9 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
 
   if (version != nullptr) {
     *version = db_message.head_message.response_int();
-    FWCLOGINFO(log_categorize_t::DB, "table [key={}] data saved, new cas_version: {}", key, db_message.head_message.response_int());
-    FWCLOGDEBUG(log_categorize_t::DB, "detail: {}", key, db_message.head_message.response_int(),
-              segs_debug_info.str());
+    FWCLOGINFO(log_categorize_t::DB, "table [key={}] data saved, new cas_version: {}", key,
+               db_message.head_message.response_int());
+    FWCLOGDEBUG(log_categorize_t::DB, "detail: {}", key, db_message.head_message.response_int(), segs_debug_info.str());
   } else {
     FWCLOGINFO(log_categorize_t::DB, "table [key={}] data saved, detail: {}", key, segs_debug_info.str());
   }
@@ -459,9 +453,8 @@ SERVER_FRAME_API result_type inc_field(rpc::context &ctx, uint32_t channel, gsl:
                                        db_msg_dispatcher::unpack_fn_t unpack_fn) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
-      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
-      {opentelemetry::semconv::rpc::kRpcService, "rpc.db.redis"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table.key_value.inc_field"},
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/inc_field"},
       {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
   rpc::telemetry::trace_start_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
@@ -469,8 +462,7 @@ SERVER_FRAME_API result_type inc_field(rpc::context &ctx, uint32_t channel, gsl:
   __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
   __trace_option.attributes = __trace_attributes;
 
-  rpc::telemetry::tracer __tracer =
-      __child_ctx.make_tracer("rpc.db.hash_table.key_value.inc_field", std::move(__trace_option));
+  rpc::telemetry::tracer __tracer = __child_ctx.make_tracer("rpc.db.hash_table/inc_field", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
@@ -536,9 +528,8 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
                                      db_msg_dispatcher::unpack_fn_t unpack_fn) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
-      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
-      {opentelemetry::semconv::rpc::kRpcService, "rpc.db.redis"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table.key_list.get_all"},
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/get_all"},
       {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
 
   rpc::telemetry::trace_start_option __trace_option;
@@ -547,8 +538,7 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
   __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
   __trace_option.attributes = __trace_attributes;
 
-  rpc::telemetry::tracer __tracer =
-      __child_ctx.make_tracer("rpc.db.hash_table.key_list.get_all", std::move(__trace_option));
+  rpc::telemetry::tracer __tracer = __child_ctx.make_tracer("rpc.db.hash_table/get_all", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
@@ -603,9 +593,8 @@ SERVER_FRAME_API result_type get_by_indexs(rpc::context &ctx, uint32_t channel, 
                                            db_msg_dispatcher::unpack_fn_t unpack_fn) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
-      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
-      {opentelemetry::semconv::rpc::kRpcService, "rpc.db.redis"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table.key_list.get_by_index"},
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/get_by_index"},
       {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
 
   rpc::telemetry::trace_start_option __trace_option;
@@ -615,7 +604,7 @@ SERVER_FRAME_API result_type get_by_indexs(rpc::context &ctx, uint32_t channel, 
   __trace_option.attributes = __trace_attributes;
 
   rpc::telemetry::tracer __tracer =
-      __child_ctx.make_tracer("rpc.db.hash_table.key_list.get_by_index", std::move(__trace_option));
+      __child_ctx.make_tracer("rpc.db.hash_table/get_by_index", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
@@ -683,9 +672,8 @@ SERVER_FRAME_API result_type update_by_index(rpc::context &ctx, uint32_t channel
                                              shared_abstract_message<google::protobuf::Message> &&store) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
-      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
-      {opentelemetry::semconv::rpc::kRpcService, "rpc.db.redis"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table.key_list.update_by_index"},
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/update_by_index"},
       {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
 
   rpc::telemetry::trace_start_option __trace_option;
@@ -695,7 +683,7 @@ SERVER_FRAME_API result_type update_by_index(rpc::context &ctx, uint32_t channel
   __trace_option.attributes = __trace_attributes;
 
   rpc::telemetry::tracer __tracer =
-      __child_ctx.make_tracer("rpc.db.hash_table.key_list.update_by_index", std::move(__trace_option));
+      __child_ctx.make_tracer("rpc.db.hash_table/update_by_index", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
@@ -751,9 +739,8 @@ SERVER_FRAME_API result_type add_index(rpc::context &ctx, uint32_t channel, gsl:
                                        shared_abstract_message<google::protobuf::Message> &&store) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
-      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
-      {opentelemetry::semconv::rpc::kRpcService, "rpc.db.redis"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table.key_list.add_index"},
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/add_index"},
       {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
 
   rpc::telemetry::trace_start_option __trace_option;
@@ -762,8 +749,7 @@ SERVER_FRAME_API result_type add_index(rpc::context &ctx, uint32_t channel, gsl:
   __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
   __trace_option.attributes = __trace_attributes;
 
-  rpc::telemetry::tracer __tracer =
-      __child_ctx.make_tracer("rpc.db.hash_table.key_list.add_index", std::move(__trace_option));
+  rpc::telemetry::tracer __tracer = __child_ctx.make_tracer("rpc.db.hash_table/add_index", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
@@ -789,7 +775,8 @@ SERVER_FRAME_API result_type add_index(rpc::context &ctx, uint32_t channel, gsl:
   // 再dump 字段内容
   store->SerializeWithCachedSizesToArray(reinterpret_cast<::google::protobuf::uint8 *>(data_allocated));
 
-  FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list start to add index, max_list_length: {}", key, max_list_length);
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list start to add index, max_list_length: {}", key,
+             max_list_length);
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
@@ -820,9 +807,8 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
                                              gsl::span<uint64_t> list_index) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
-      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
-      {opentelemetry::semconv::rpc::kRpcService, "rpc.db.redis"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table.key_list.remove_by_index"},
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/remove_by_index"},
       {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
 
   rpc::telemetry::trace_start_option __trace_option;
@@ -832,7 +818,7 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
   __trace_option.attributes = __trace_attributes;
 
   rpc::telemetry::tracer __tracer =
-      __child_ctx.make_tracer("rpc.db.hash_table.key_list.remove_by_index", std::move(__trace_option));
+      __child_ctx.make_tracer("rpc.db.hash_table/remove_by_index", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
@@ -883,9 +869,8 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
                                              gsl::span<const uint64_t> list_index) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
-      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
-      {opentelemetry::semconv::rpc::kRpcService, "rpc.db.redis"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table.key_list.remove_by_index"},
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/remove_by_index"},
       {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
 
   rpc::telemetry::trace_start_option __trace_option;
@@ -895,7 +880,7 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
   __trace_option.attributes = __trace_attributes;
 
   rpc::telemetry::tracer __tracer =
-      __child_ctx.make_tracer("rpc.db.hash_table.key_list.remove_by_index", std::move(__trace_option));
+      __child_ctx.make_tracer("rpc.db.hash_table/remove_by_index", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");
@@ -946,9 +931,8 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
 SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel, gsl::string_view key) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
-      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.db"},
-      {opentelemetry::semconv::rpc::kRpcService, "rpc.db.redis"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table.remove_all"},
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/remove_all"},
       {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
   rpc::telemetry::trace_start_option __trace_option;
   __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
@@ -956,7 +940,7 @@ SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel, gsl
   __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
   __trace_option.attributes = __trace_attributes;
 
-  rpc::telemetry::tracer __tracer = __child_ctx.make_tracer("rpc.db.hash_table.remove_all", std::move(__trace_option));
+  rpc::telemetry::tracer __tracer = __child_ctx.make_tracer("rpc.db.hash_table/remove_all", std::move(__trace_option));
 
   if (ctx.get_task_context().task_id == 0) {
     FWLOGERROR("current not in a task");

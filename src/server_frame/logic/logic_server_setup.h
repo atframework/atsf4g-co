@@ -186,6 +186,16 @@ class logic_server_common_module : public atfw::atapp::module_impl {
       const std::string& name) const;
 
   /**
+   * @brief 获取指定服务类型的服务发现版本号（本地）
+   *        仅在收到真实的服务发现 PUT/DELETE 变更时递增，initialize/reload 的本地回放不会递增
+   *
+   * @param service_type 服务类型
+   * @return （本地）服务发现版本号
+   */
+  SERVER_FRAME_API int64_t
+  get_discovery_service_version(atfw::component::logic_service_type service_type) const noexcept;
+
+  /**
    * @brief 获取HPA控制器
    *
    * @return HPA控制器

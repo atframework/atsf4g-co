@@ -199,7 +199,7 @@ SERVER_FRAME_API rpc::result_code_type player_manager::create(
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY);
   }
 
-  PROJECT_NAMESPACE_ID::DPlayerIDKey user_key;
+  PROJECT_NAMESPACE_ID::DUserIDKey user_key;
   user_key.set_user_id(user_id);
   user_key.set_zone_id(zone_id);
   // check conflict
@@ -268,7 +268,7 @@ SERVER_FRAME_API player_manager::player_ptr_t player_manager::find(uint64_t user
 }
 
 SERVER_FRAME_API bool player_manager::has_create_user_lock(uint64_t user_id, uint32_t zone_id) const noexcept {
-  PROJECT_NAMESPACE_ID::DPlayerIDKey user_key;
+  PROJECT_NAMESPACE_ID::DUserIDKey user_key;
   user_key.set_user_id(user_id);
   user_key.set_zone_id(zone_id);
 

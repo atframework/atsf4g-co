@@ -746,6 +746,15 @@ logic_server_common_module::get_discovery_by_name(const std::string &name) const
   return get_app()->get_global_discovery().get_node_by_name(name);
 }
 
+SERVER_FRAME_API int64_t logic_server_common_module::get_discovery_service_version(
+    atfw::component::logic_service_type service_type) const noexcept {
+  if (!discovery_index_ || 0 == static_cast<uint32_t>(service_type)) {
+    return 0;
+  }
+
+  return discovery_index_->get_service_discovery_version(static_cast<uint64_t>(service_type));
+}
+
 int logic_server_common_module::tick_update_remote_configures() {
   if (nullptr == get_app()) {
     return 0;

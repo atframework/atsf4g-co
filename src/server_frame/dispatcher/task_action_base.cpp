@@ -138,16 +138,15 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data)
 
   task_trace_attributes trace_attributes;
   trace_attributes[static_cast<size_t>(trace_attribute_type::kRpcSystem)] = {
-      opentelemetry::semconv::rpc::kRpcSystem,
+      opentelemetry::semconv::rpc::kRpcSystemName,
       trace_start_option.dispatcher ? (rpc::telemetry::semantic_conventions::kRpcSystemValueAtRpcDistapcher)
                                     : (rpc::telemetry::semantic_conventions::kRpcSystemValueAtRpcTask)};
-  trace_attributes[static_cast<size_t>(trace_attribute_type::kRpcService)] = {
-      opentelemetry::semconv::rpc::kRpcService,
-      trace_start_option.dispatcher
-          ? rpc::context::string_view{trace_start_option.dispatcher->name()}
-          : rpc::context::string_view{rpc::telemetry::semantic_conventions::kRpcServiceValueNoDispatcher}};
+  std::string method_name = (trace_start_option.dispatcher != nullptr
+                                 ? std::string{trace_start_option.dispatcher->name()}
+                                 : std::string{rpc::telemetry::semantic_conventions::kRpcServiceValueNoDispatcher}) +
+                            "/" + std::string{name()};
   trace_attributes[static_cast<size_t>(trace_attribute_type::kRpcMethod)] = {opentelemetry::semconv::rpc::kRpcMethod,
-                                                                             rpc::context::string_view{name()}};
+                                                                             rpc::context::string_view{method_name}};
   trace_start_option.attributes = trace_attributes;
 
   trace_start_option.attributes =

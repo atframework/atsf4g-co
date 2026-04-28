@@ -269,9 +269,8 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atfw::atapp::app::mes
         trace_start_option.parent_network_span = nullptr;
       }
       rpc::telemetry::trace_attribute_pair_type internal_rpc_trace_attributes[] = {
-          {opentelemetry::semconv::rpc::kRpcSystem, "internal"},
-          {opentelemetry::semconv::rpc::kRpcService, "cs_msg_dispatcher"},
-          {opentelemetry::semconv::rpc::kRpcMethod, "cs_msg_dispatcher"}};
+          {opentelemetry::semconv::rpc::kRpcSystemName, "internal"},
+          {opentelemetry::semconv::rpc::kRpcMethod, "cs_msg_dispatcher/dispatch"}};
       trace_start_option.attributes = internal_rpc_trace_attributes;
       ctx.setup_tracer(tracer, "cs_msg_dispatcher", std::move(trace_start_option));
 

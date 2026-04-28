@@ -437,7 +437,7 @@ rpc::result_code_type task_action_rank_update_settlement::cleanup_save(
   callback_data.submit_timepoint = util::time::time_utility::get_now();
 
   ret = PROJECT_NAMESPACE_ID::err::EN_COMMON_BREAK;
-  std::unordered_set<PROJECT_NAMESPACE_ID::DPlayerIDKey, player_key_hash_t, player_key_equal_t> prev_round_user_keys;
+  std::unordered_set<PROJECT_NAMESPACE_ID::DUserIDKey, player_key_hash_t, player_key_equal_t> prev_round_user_keys;
   prev_round_user_keys.reserve(settle_loop_count);
   size_t repeated_count = 0;
   for (bool loop_again = true; loop_again && repeated_count < 2 * settle_loop_count;) {
@@ -480,7 +480,7 @@ rpc::result_code_type task_action_rank_update_settlement::cleanup_save(
     uint32_t cleanup_max_score = 0;
     uint32_t cleanup_min_score = UINT32_MAX;
     size_t cleanup_count = 0;
-    std::unordered_set<PROJECT_NAMESPACE_ID::DPlayerIDKey, player_key_hash_t, player_key_equal_t> cur_round_user_keys;
+    std::unordered_set<PROJECT_NAMESPACE_ID::DUserIDKey, player_key_hash_t, player_key_equal_t> cur_round_user_keys;
     cur_round_user_keys.reserve(settle_loop_count);
     for (bool need_next = true; need_next; need_next = rank_handle.previous_cursor()) {
       if (!rank_handle.valid_cursor()) {
@@ -496,7 +496,7 @@ rpc::result_code_type task_action_rank_update_settlement::cleanup_save(
         int64_t instance_id = 0;
 
         std::tie(user_zone_id, user_id, instance_type, instance_id) = rank_openid_to_user_key(openid);
-        PROJECT_NAMESPACE_ID::DPlayerIDKey user_key;
+        PROJECT_NAMESPACE_ID::DUserIDKey user_key;
         user_key.set_zone_id(user_zone_id);
         user_key.set_user_id(user_id);
         cur_round_user_keys.insert(user_key);

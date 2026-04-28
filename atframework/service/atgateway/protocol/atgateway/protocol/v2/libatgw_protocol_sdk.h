@@ -10,8 +10,6 @@
 #include <string>
 #include <vector>
 
-#include "algorithm/crypto_cipher.h"
-#include "algorithm/crypto_dh.h"
 #include "detail/buffer.h"
 #include "log/log_wrapper.h"
 
@@ -140,136 +138,89 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
     LIBATGW_PROTOCOL_API void set_default();
   };
 
+  struct ATFW_UTIL_SYMBOL_VISIBLE crypto_session_internal_data_t;
+
   /**
    * @brief Per-connection crypto session state (like libatbus connection_context).
    * @note Owns the cipher pair for encrypt/decrypt, the handshake DH context, and compression state.
+   *       Internal data is hidden behind a pimpl to avoid exposing crypto headers.
    */
   struct ATFW_UTIL_SYMBOL_VISIBLE crypto_session_t {
-    // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
-    std::shared_ptr<crypto_shared_context_t> shared_conf;
-
-    /// Selected crypto algorithm after negotiation
-    // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
-    crypto_algorithm_type selected_algorithm;
-
-    /// Selected KDF type after negotiation
-    // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
-    kdf_algorithm_type selected_kdf;
-
-    /// Selected key exchange algorithm
-    // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
-    key_exchange_type key_exchange_algorithm;
-
-    /// Selected compression algorithm after negotiation
-    // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
-    compression_algorithm_type selected_compression_algorithm;
-
-    /// Maximum post message size in bytes (negotiated during handshake)
-    // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
-    uint64_t max_post_message_size;
-
     LIBATGW_PROTOCOL_API crypto_session_t();
     LIBATGW_PROTOCOL_API ~crypto_session_t();
 
-    /**
-     * @brief Generate ECDH key pair for handshake
-     * @return 0 or error code
-     */
+    // Non-copyable, movable
+    crypto_session_t(const crypto_session_t &) = delete;
+    crypto_session_t &operator=(const crypto_session_t &) = delete;
+    LIBATGW_PROTOCOL_API crypto_session_t(crypto_session_t &&other) noexcept;
+    LIBATGW_PROTOCOL_API crypto_session_t &operator=(crypto_session_t &&other) noexcept;
+
+    // ========== Getters / Setters for negotiated state ==========
+
+    LIBATGW_PROTOCOL_API const std::shared_ptr<crypto_shared_context_t> &get_shared_conf() const noexcept;
+    LIBATGW_PROTOCOL_API void set_shared_conf(std::shared_ptr<crypto_shared_context_t> conf);
+
+    LIBATGW_PROTOCOL_API crypto_algorithm_type get_selected_algorithm() const noexcept;
+    LIBATGW_PROTOCOL_API void set_selected_algorithm(crypto_algorithm_type alg);
+
+    LIBATGW_PROTOCOL_API kdf_algorithm_type get_selected_kdf() const noexcept;
+    LIBATGW_PROTOCOL_API void set_selected_kdf(kdf_algorithm_type kdf);
+
+    LIBATGW_PROTOCOL_API key_exchange_type get_key_exchange_algorithm() const noexcept;
+    LIBATGW_PROTOCOL_API void set_key_exchange_algorithm(key_exchange_type ke);
+
+    LIBATGW_PROTOCOL_API compression_algorithm_type get_selected_compression_algorithm() const noexcept;
+    LIBATGW_PROTOCOL_API void set_selected_compression_algorithm(compression_algorithm_type alg);
+
+    LIBATGW_PROTOCOL_API uint64_t get_max_post_message_size() const noexcept;
+    LIBATGW_PROTOCOL_API void set_max_post_message_size(uint64_t size);
+
+    // ========== Handshake operations ==========
+
     LIBATGW_PROTOCOL_API int handshake_generate_self_key();
 
-    /**
-     * @brief Read peer's public key and derive shared secret + setup ciphers
-     * @param peer_public_key peer's ECDH public key bytes
-     * @param peer_algorithms peer's supported algorithm list
-     * @param local_algorithms local supported algorithm list
-     * @return 0 or error code
-     */
     LIBATGW_PROTOCOL_API int handshake_read_peer_key(gsl::span<const unsigned char> peer_public_key,
                                                      gsl::span<const crypto_algorithm_type> peer_algorithms,
                                                      gsl::span<const crypto_algorithm_type> local_algorithms,
                                                      bool need_confirm);
 
-    /**
-     * @brief Get self public key to output buffer
-     * @return span of the public key bytes
-     */
-    ATFW_UTIL_FORCEINLINE gsl::span<const unsigned char> get_handshake_self_public_key() const noexcept {
-      return gsl::span<const unsigned char>{handshake_self_public_key_.data(), handshake_self_public_key_.size()};
-    }
+    LIBATGW_PROTOCOL_API gsl::span<const unsigned char> get_handshake_self_public_key() const noexcept;
 
-    /**
-     * @brief Setup crypto with explicit key (for testing, bypasses DH)
-     * @return 0 or error code
-     */
     LIBATGW_PROTOCOL_API int setup_crypto_with_key(crypto_algorithm_type algorithm, gsl::span<const unsigned char> key,
                                                    gsl::span<const unsigned char> iv, bool need_confirm);
 
     LIBATGW_PROTOCOL_API void close();
 
-    /// Check if handshake DH is initialized
-    ATFW_UTIL_FORCEINLINE bool has_handshake_data() const { return handshake_dh_ != nullptr; }
+    LIBATGW_PROTOCOL_API bool has_handshake_data() const noexcept;
 
-    /// Get handshake sequence ID
-    ATFW_UTIL_FORCEINLINE uint64_t get_handshake_sequence_id() const { return handshake_sequence_id_; }
+    LIBATGW_PROTOCOL_API uint64_t get_handshake_sequence_id() const noexcept;
 
     LIBATGW_PROTOCOL_API void update_handshake(uint64_t handshake_sequence_id);
 
     LIBATGW_PROTOCOL_API void confirm_handshake(uint64_t handshake_sequence_id);
 
-    ATFW_UTIL_FORCEINLINE const std::unique_ptr<::atfw::util::crypto::cipher> &get_current_receive_cipher()
-        const noexcept {
-      return receive_cipher_;
-    }
+    // ========== Cipher state queries ==========
 
-    ATFW_UTIL_FORCEINLINE const std::unique_ptr<::atfw::util::crypto::cipher> &get_current_send_cipher()
-        const noexcept {
-      return send_cipher_;
-    }
+    LIBATGW_PROTOCOL_API bool has_send_cipher() const noexcept;
+    LIBATGW_PROTOCOL_API bool has_receive_cipher() const noexcept;
+    LIBATGW_PROTOCOL_API bool has_handshaking_receive_cipher() const noexcept;
 
-    ATFW_UTIL_FORCEINLINE const std::unique_ptr<::atfw::util::crypto::cipher> &get_handshaking_receive_cipher()
-        const noexcept {
-      return handshaking_receive_cipher_;
-    }
+    // ========== Encrypt / Decrypt / Compress / Decompress ==========
 
-    /// Encrypt data using send cipher
-    /// @param in input data
-    /// @param out output span (may point into tls_buffer or heap_buffer)
-    /// @param compression_heap_buffer heap buffer for compression (used if compression is applied before encryption)
-    /// @param crypto_heap_buffer heap fallback buffer (populated if data exceeds TLS buffer)
-    /// @param iv optional IV/nonce
-    /// @param aad AAD for AEAD ciphers
     LIBATGW_PROTOCOL_API int encrypt_data(gsl::span<const unsigned char> in, gsl::span<const unsigned char> &out,
                                           std::vector<unsigned char> &compression_heap_buffer,
                                           std::unique_ptr<unsigned char[]> &crypto_heap_buffer,
                                           gsl::span<const unsigned char> &iv, atfw::util::nostd::string_view &aad);
 
-    /// Decrypt data using receive cipher
-    /// @param in input data
-    /// @param out output span (may point into tls_buffer or heap_buffer)
-    /// @param heap_buffer heap fallback buffer (populated if data exceeds TLS buffer)
-    /// @param iv optional IV/nonce
-    /// @param iv_size IV size in bytes
-    /// @param aad optional AAD for AEAD
     LIBATGW_PROTOCOL_API int decrypt_data(gsl::span<const unsigned char> in, gsl::span<const unsigned char> &out,
                                           std::unique_ptr<unsigned char[]> &heap_buffer,
                                           gsl::span<const unsigned char> iv, atfw::util::nostd::string_view aad);
 
-    /// Compress data
-    /// @param in input data
-    /// @param out output span (may point into tls_buffer or heap_buffer)
-    /// @param heap_buffer heap fallback buffer (populated if data exceeds TLS buffer)
-    /// @param level compression level
-    /// @param threshold minimum size to compress (below this, data is passed through)
     LIBATGW_PROTOCOL_API int compress_data(
         gsl::span<const unsigned char> in, gsl::span<const unsigned char> &out, std::vector<unsigned char> &heap_buffer,
         compression_level_type level = ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_level_t, kDefault),
         uint64_t threshold = 0);
 
-    /// Decompress data
-    /// @param in input data
-    /// @param original_size original uncompressed size
-    /// @param out output span (may point into tls_buffer or heap_buffer)
-    /// @param heap_buffer heap fallback buffer (populated if data exceeds TLS buffer)
     LIBATGW_PROTOCOL_API int decompress_data(gsl::span<const unsigned char> in, size_t original_size,
                                              gsl::span<const unsigned char> &out,
                                              std::vector<unsigned char> &heap_buffer);
@@ -277,17 +228,7 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
    private:
     int derive_key_from_shared_secret(const std::vector<unsigned char> &shared_secret, bool need_confirm);
 
-    uint64_t handshake_sequence_id_;
-    std::chrono::system_clock::time_point handshake_start_time_;
-    std::vector<unsigned char> handshake_self_public_key_;
-    ::atfw::util::crypto::dh::shared_context::ptr_t handshake_ctx_;
-    std::unique_ptr<::atfw::util::crypto::dh> handshake_dh_;
-    std::unique_ptr<::atfw::util::crypto::cipher> send_cipher_;
-    std::unique_ptr<::atfw::util::crypto::cipher> receive_cipher_;
-    std::unique_ptr<::atfw::util::crypto::cipher> handshaking_receive_cipher_;
-
-    std::vector<unsigned char> send_iv_;
-    std::string send_aad_;
+    std::shared_ptr<crypto_session_internal_data_t> internal_data_;
   };
 
   using crypto_session_ptr_t = std::shared_ptr<crypto_session_t>;

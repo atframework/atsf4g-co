@@ -30,11 +30,11 @@ atapp:
   id: {{ $bus_addr }}
   id_mask: {{ .Values.id_mask }}
   name: {{ .Values.type_name | default (include "libapp.name" .) }}_{{ $bus_addr }}
-  world_id: {{ .Values.world_id }}
-  zone_id: {{ .Values.zone_id }}
   type_id: {{ required ".Values.type_id who entry required!" .Values.type_id }} # server type id
   type_name: {{ .Values.type_name | default (include "libapp.name" .) }}         # server type name
   area:
+    zone_id: {{ .Values.zone_id }}
+  metadata:
     {{- include "atapp.default.metadata.yaml" . | nindent 4 }}
   remove_pidfile_after_exit: false     # keep pid file after exited
   {{- with (include "libapp.configure.hostname" .) }}

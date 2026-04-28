@@ -23,9 +23,8 @@ SERVER_FRAME_API rpc::result_code_type lookup(rpc::context &ctx, gsl::string_vie
 
   rpc::context child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
-      {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
-      {opentelemetry::semconv::rpc::kRpcService, "rpc.dns"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.dns.lookup"}};
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.dns/lookup"}};
   rpc::telemetry::trace_start_option trace_start_option;
   trace_start_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());
   trace_start_option.is_remote = true;

@@ -43,7 +43,7 @@ message DConditionCounterStorage {
 
 // 限频 - 配置结构
 message DConditionCounterLimit {
-  int32 day_start_offset = 1; // 每日结算时间偏移
+  int32 day_start_offset = 1;  // 每日结算时间偏移
 
   // 约定: 版本号上涨表示要重置之前的计数,0表示不限制版本号
   int32 counter_version = 5;
@@ -92,8 +92,8 @@ message DConditionRuleRangeVersion {
 //   2022-11-16 00:00:00~2022-12-16 00:00:00|2022-12-16 00:00:00~2023-01-01 00:00:00
 message DConditionRuleRangeDatetime {
   option (org.xresloader.msg_separator) = "~";
-  google.protobuf.Timestamp begin_time = 1; // 开始时间
-  google.protobuf.Timestamp end_time = 2; // 结束
+  google.protobuf.Timestamp begin_time = 1;  // 开始时间
+  google.protobuf.Timestamp end_time = 2;    // 结束
 }
 
 // Time区间, 用以支持多个区间范围的时间段配置
@@ -102,8 +102,8 @@ message DConditionRuleRangeDatetime {
 //   08:00:00-12:00:00|16:00:00-20:00:00
 message DConditionRuleRangeTime {
   option (org.xresloader.msg_separator) = "-";
-  google.protobuf.Duration begin_time = 1; // 开始时间
-  google.protobuf.Duration end_time = 2; // 结束
+  google.protobuf.Duration begin_time = 1;  // 开始时间
+  google.protobuf.Duration end_time = 2;    // 结束
 }
 
 // 功能性条件
@@ -115,8 +115,8 @@ message DConditionRule {
 
     // @see EnAccountITopLoginChannelType
     DConditionRuleMultipleUInt login_channel = 101 [(org.xresloader.field_alias) = "登入渠道"];
-    DConditionRuleMultipleUInt system_platform = 102 [(org.xresloader.field_alias) = "系统平台"]; // @see EnPlatformID
-    DConditionRuleRangeInt player_level = 201 [(org.xresloader.field_alias) = "玩家等级"];
+    DConditionRuleMultipleUInt system_platform = 102 [(org.xresloader.field_alias) = "系统平台"];  // @see EnPlatformID
+    DConditionRuleRangeInt user_level = 201 [(org.xresloader.field_alias) = "玩家等级"];
     DConditionRuleRangeInt team_member_count = 301 [(org.xresloader.field_alias) = "组队人数"];
     DConditionRuleRangeDatetime register_time = 401 [(org.xresloader.field_alias) = "注册时间"];
     DConditionRuleRangeVersion client_version = 501 [(org.xresloader.field_alias) = "版本号限制"];

@@ -1,134 +1,35 @@
-# atsf4g-co
+# atsf4g-co Agent Guide
 
-**atsf4g-co** (AT Service Framework for Game - Coroutine) is a service framework for building game servers using libatbus, libatapp, libcopp and other atframework components. It provides a complete solution for building scalable, high-performance game server architectures.
+This is the canonical, cross-agent guide for this repository. Keep it short: put repeatable workflows in
+`.agents/skills/*/SKILL.md`, and keep `.github/copilot-instructions.md` / `CLAUDE.md` as lightweight bridges.
 
-- **Repository**: https://github.com/atframework/atsf4g-co
-- **License**: MIT
+**atsf4g-co** (AT Service Framework for Game - Coroutine) is a service framework for building game servers with
+libatbus, libatapp, libcopp, and other atframework components. It provides a complete solution for scalable,
+high-performance game server architectures.
+
+- **Repository**: <https://github.com/atframework/atsf4g-co>
 - **Languages**: C++ (C++17 required, C++17/C++20/C++23 features used when available)
 
-## Build System
+## Project Map
 
-This project uses **CMake** (minimum version 3.24.0).
+- `atframework/`: vendored framework libraries (`atframe_utils`, `libatbus`, `libatapp`, gateway/proxy components).
+- `src/server_frame/`: shared config, protocol, dispatcher, router, RPC, data, and utility code.
+- `src/*svr/` and `src/component/`: service implementations and shared service components.
+- `src/templates/`: Mako templates for generated RPC/task code.
+- `project/`, `third_party/`, `install/`, `resource/`: build tooling, dependency setup, deployment assets, resources.
+- Main flow: `Client → atgateway → atproxy → service → dispatcher → logic → data/DB`.
+- `atgateway` handles client connections, ECDH/DH handshakes, encryption, compression, and routing handoff.
+- `atproxy` handles cross-service communication, discovery, and online detection.
+- Protobuf definitions and templates are the source of truth; generated files should normally be regenerated, not edited.
 
-Build steps and common configuration options are documented in:
+## Always-On Rules
 
-- `.agents/skills/build/SKILL.md`
+- Respect the user's dirty workspace: inspect current file contents before editing and avoid unrelated reformatting.
+- For paths under vendored subprojects, read the nearest subproject `AGENTS.md` before changing code.
+- When a task matches a skill below, read that `SKILL.md` first; skills contain the long commands and edge cases.
+- After C++ edits, run `clang-format -i <file>` and verify with `clang-format --dry-run --Werror <file>` when practical.
 
-## Directory Structure
-
-```
-atsf4g-co/
-├── atframework/           # Core framework libraries
-│   ├── atframe_utils/     # Utility library
-│   ├── libatbus/          # Message bus library
-│   ├── libatapp/          # Application framework
-│   ├── cmake-toolset/     # CMake build tools
-│   ├── export/            # Exported client libraries
-│   └── service/           # Inner services
-│       ├── atproxy/       # Proxy server
-│       ├── atgateway/     # Gateway server
-│       └── component/     # Common service components
-├── src/                   # Application source code
-│   ├── server_frame/      # Server common library
-│   │   ├── config/        # Server configuration
-│   │   ├── data/          # Game data layer
-│   │   ├── dispatcher/    # Message dispatchers
-│   │   ├── logic/         # Game logic layer
-│   │   ├── protocol/      # Protocol definitions
-│   │   ├── router/        # Routing logic
-│   │   ├── rpc/           # RPC APIs
-│   │   └── utility/       # Utility codes
-│   ├── component/         # Shared components
-│   ├── echosvr/           # Echo server sample
-│   ├── authsvr/           # Auth server
-│   ├── lobbysvr/          # Lobby server
-│   ├── rank_settlement_svr/ # Rank settlement server
-│   ├── robot/             # Robot/stress test client
-│   ├── tools/             # Tool projects
-│   └── templates/         # Code generation templates
-├── project/               # Build scripts and cmake modules
-│   ├── cmake/             # CMake modules
-│   └── tools/             # Build tools
-├── sample/                # Sample applications
-├── resource/              # Resources and templates
-├── third_party/           # Third-party dependencies
-└── install/               # Installation resources
-```
-
-## Inner Services
-
-### atproxy
-
-Proxy server for logic servers to communicate with each other.
-
-- Uses [etcd](https://etcd.io/) for service discovery and online detection
-- Handles cross-group server communication
-
-### atgateway
-
-Gateway server for client connections to logic servers.
-
-- DH/ECDH key exchange for secure connections
-- Traffic control and handshake timeout per client
-- Routing switching support
-
-## Server Architecture
-
-### Layers
-
-1. **Protocol Layer** (`protocol/`) - Protobuf message definitions
-2. **Data Layer** (`data/`) - Game data management and persistence
-3. **RPC Layer** (`rpc/`) - Remote procedure call implementations
-4. **Logic Layer** (`logic/`) - Game logic and business rules
-5. **Dispatcher Layer** (`dispatcher/`) - Message routing and coroutine task management
-6. **Router Layer** (`router/`) - Service routing
-
-### Message Flow
-
-```
-Client → atgateway → atproxy → Game Server
-                  ↓
-              libatbus (message bus)
-                  ↓
-           dispatcher → logic → data → DB
-```
-
-## Unit Testing
-
-This repository uses the same **private unit testing framework** as `atframe_utils`, `libatbus`, and `libatapp`.
-
-- Generic test running, filtering, and Windows DLL/PATH notes: `.agents/skills/testing/SKILL.md`
-- etcd-dependent tests: use `atframework/libatapp/ci/etcd/setup-etcd.ps1` or `.sh`
-- libatapp-specific test groups and multi-node patterns: `atframework/libatapp/AGENTS.md`
-
-## CMake Helper Functions
-
-See `.agents/skills/service-functions-cmake/SKILL.md`.
-
-## Deployment Configuration
-
-See `.agents/skills/deployment-config/SKILL.md`.
-
-## Configuration Expression Expansion
-
-Protobuf fields annotated with `enable_expression: true` in the `atapp_configure_meta` extension
-(defined in `atapp_conf.proto`) support **environment-variable expression expansion** at config-load time.
-
-See `.agents/skills/configure-expression/SKILL.md` for the full syntax reference and how-to guide.
-
-## Code Generation
-
-See `.agents/skills/code-generation/SKILL.md`.
-
-## Code Formatting
-
-This project uses **clang-format** for code formatting. The `.clang-format` file is located at the project root.
-
-- Style: Based on Google style
-- Column limit: 120
-- Run formatting: `clang-format -i <file>`
-
-## Coding Conventions
+## C++ Conventions
 
 1. **Namespaces**:
    - Framework: `atframework::*`
@@ -154,78 +55,42 @@ This project uses **clang-format** for code formatting. The `.clang-format` file
    ```
 
 7. **Anonymous namespace + static**: In `.cpp` files, file-local functions should be placed inside an anonymous namespace **and** keep the `static` keyword. Do **not** remove `static` when moving a function into an anonymous namespace.
+
    ```cpp
    namespace {
    static void my_helper() { /* ... */ }
    }  // namespace
    ```
 
-## Compiler Support
+8. **Temporary protobuf messages in tasks/RPC APIs**: When creating a protobuf message object only as a temporary inside
+   a task or RPC interface, and it is not cached, stored as an object member, or kept beyond the task/RPC lifetime,
+   prefer `rpc::make_shared_message<MessageType>(ctx)` (or
+   `rpc::make_shared_message<MessageType>(get_shared_context())` inside `task_action_*`) over stack/heap allocation.
+   This allocates from the task/RPC Arena and reduces heap fragmentation. Use `msg->...`, `*msg`, and `msg.get()` as
+   appropriate; include `rpc/rpc_shared_message.h` when needed. Do not use task-Arena objects for data that must outlive
+   the Arena.
 
-| Compiler | Minimum Version |
-| -------- | --------------- |
-| GCC      | 7.1+            |
-| Clang    | 7+              |
-| MSVC     | VS2022+         |
+## Skill Routing
 
-## Dependencies
+Read the matching `.agents/skills/*/SKILL.md` before doing specialized work:
 
-### Required
+| Skill | Use when |
+| --- | --- |
+| `build` | Configuring or building with CMake |
+| `testing` | Running or writing unit tests |
+| `service-functions-cmake` | Adding services, protocols, SDKs, or components |
+| `deployment-config` | Generating/editing deployment configs or Helm values |
+| `configure-expression` | Editing env-expression-enabled config fields |
+| `code-generation` | Editing proto files, templates, or generated outputs |
+| `rpc-protobuf-arena` | Working with task/RPC-local protobuf messages and Arena allocation |
+| `atgateway-protocol` | Working on atgateway v2 protocol, crypto, compression, reconnection, or tests |
 
-- CMake 3.24.0+
-- C++17 compiler
-- protobuf
-- libuv
-- OpenSSL or MbedTLS
+## Agent File Compatibility
 
-### Optional
-
-- etcd (for service discovery)
-- Redis (for data storage)
-
-### Python Modules
-
-- python-mako (for code generation)
-- python-setuptools (optional)
-- python-pip (optional)
-
-## Development Tools
-
-- cmake 3.24+
-- git
-- gdb/lldb/windb (debugging)
-- unzip, tar, p7zip
-- autoconf, automake
-- Python 3.x
-
-## Build Outputs
-
-All compiled resources are placed in:
-
-```
-<BUILD_DIR>/publish/
-├── bin/           # Executables
-├── lib/           # Libraries
-├── resource/      # Resources
-│   └── pbdesc/    # Protobuf descriptors
-└── tools/         # Tools and scripts
-    ├── bin/
-    └── script/
-```
-
-## How-to Guides
-
-Detailed operational playbooks live in `.agents/skills/`:
-
-| Guide | Path | Description |
-|-------|------|-------------|
-| Build | `.agents/skills/build/SKILL.md` | Configure and build (Windows / Unix) |
-| Testing | `.agents/skills/testing/SKILL.md` | Run unit tests (including Windows DLL/PATH notes) |
-| Service CMake | `.agents/skills/service-functions-cmake/SKILL.md` | `src/service-functions.cmake` helper functions |
-| Deployment | `.agents/skills/deployment-config/SKILL.md` | Generate and manage deployment configs/scripts |
-| Config Expressions | `.agents/skills/configure-expression/SKILL.md` | Environment-variable expression expansion |
-| Code Generation | `.agents/skills/code-generation/SKILL.md` | Protobuf/template-based code generation |
-| Gateway Protocol | `.agents/skills/atgateway-protocol/SKILL.md` | atgateway v2 protocol SDK — ECDH, encryption, testing |
+- `AGENTS.md` is canonical for tools that support hierarchical agent instructions.
+- `.github/copilot-instructions.md` exists only to point VS Code Copilot at this guide and `.agents/skills/`.
+- `CLAUDE.md` exists only to point Claude-compatible tools at this guide and `.agents/skills/`.
+- Keep skill folder names and frontmatter `name` values identical; descriptions are the discovery surface.
 
 ## Subprojects
 

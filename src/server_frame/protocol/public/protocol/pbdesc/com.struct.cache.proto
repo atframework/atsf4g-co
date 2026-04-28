@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+package hello;
+
+import "protocol/pbdesc/com.struct.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
+
+message DUserProfileBasic {
+  // After add new fields, please update merge_basic_profile to implement the merge logic
+}
+
+message DUserCacheMeta {
+  DUserIDKey user_key = 1;
+
+  DLoginBasicDataCache login_data_cache = 5;
+  DUserProfileBasic player_profile_basic = 7;
+  uint64 user_data_version = 10;
+
+  int32 user_level = 51;       // 玩家等级
+  string nick_name = 52;       // 昵称
+  string client_version = 53;  // 客户端版本
+}

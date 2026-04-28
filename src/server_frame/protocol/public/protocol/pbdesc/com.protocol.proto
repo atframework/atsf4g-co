@@ -49,7 +49,7 @@ message CSLoginAuthReq {
 }
 
 message SCLoginAuthRsp {
-  string login_code = 1;
+  string access_token_code = 11;  // 认证码
 
   DClientUpdateCfg update_info = 3;  // 更新信息
   uint32 version_type = 4;           // 版本类型 @EnVersionType
@@ -77,7 +77,7 @@ message SCAccessUpdateRsp {}
 
 // 登录请求
 message CSLoginReq {
-  string login_code = 1;  // loginsvr下发的登录码
+  string access_token_code = 1;  // 认证码
   string open_id = 2;
   uint64 user_id = 3;  // 玩家数字ID
   int32 zone_id = 4;   // 大区ID
@@ -96,7 +96,7 @@ message SCLoginRsp {
 }
 
 message SCPlayerProfileSyn {
-  DPlayerProfile player = 1;
+  DUserProfile player = 1;
 }
 
 // 脏数据同步包
@@ -112,14 +112,14 @@ message SCPongRsp {}
 
 // 请求用户数据
 message CSPlayerGetInfoReq {
-  bool need_player_info = 1;     // 标记为true 回包才有会有玩家基本数据
-  bool need_player_options = 2;  // 标记为true 回包才有会有玩家选项数据
+  bool need_user_information = 1;  // 标记为true 回包才有会有玩家基本数据
+  bool need_user_options = 2;      // 标记为true 回包才有会有玩家选项数据
 }
 
 // 用户数据返回
 message SCPlayerGetInfoRsp {
-  DPlayerInfo player_info = 1;        // 玩家数据
-  DPlayerOptions player_options = 2;  // 玩家自定义选项
+  DUserInformation user_information = 1;  // 玩家数据
+  DUserOptions user_options = 2;          // 玩家自定义选项
 }
 
 service AuthsvrClientService {

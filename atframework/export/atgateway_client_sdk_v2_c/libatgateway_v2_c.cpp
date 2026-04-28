@@ -6,6 +6,8 @@
 
 #include <atgateway/protocol/v2/libatgw_protocol_sdk.h>
 
+#include "algorithm/crypto_cipher.h"
+
 #include <cassert>
 #include <chrono>
 #include <cstddef>
@@ -383,7 +385,7 @@ LIBATGATEWAY_V2_C_API int32_t __cdecl libatgateway_v2_c_get_crypto_algorithm(lib
   if (!session) {
     return 0;
   }
-  return static_cast<int32_t>(session->selected_algorithm);
+  return static_cast<int32_t>(session->get_selected_algorithm());
 }
 
 LIBATGATEWAY_V2_C_API void __cdecl libatgateway_v2_c_read_alloc(libatgateway_v2_c_context context,

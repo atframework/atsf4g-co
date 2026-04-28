@@ -124,7 +124,7 @@ class player : public player_cache {
     time_t refresh_feature_limit_second;
     time_t refresh_feature_limit_minute;
     time_t refresh_feature_limit_hour;
-    // PROJECT_NAMESPACE_ID::SCPlayerLevelupSyn player_level_up_syn;
+    // PROJECT_NAMESPACE_ID::SCPlayerLevelupSyn user_level_up_syn;
 
     atfw::memory::stl::unordered_map<int32_t, PROJECT_NAMESPACE_ID::DItemInstance> dirty_item_by_type;
 
@@ -269,7 +269,6 @@ class player : public player_cache {
 
   REG_PLAYER_MGR_PTR_DEF(user_async_jobs_manager)
   REG_PLAYER_MGR_PTR_DEF(user_rank_manager)
-
 };
 
 ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN

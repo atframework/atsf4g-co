@@ -62,7 +62,7 @@ ${ns}
         '__body           Message body to send'
     ]
 %>
-// ============ ${rpc.get_full_name()} ============
+// ============ ${rpc.get_service().get_full_name()}/${rpc.get_name()} ============
 /**
  * @brief send ${rpc.get_response().get_cpp_class_name()} for ${rpc.get_name()} to session
  * @brief ${rpc.get_extension_field('rpc_options', lambda x: x.api_name, rpc.get_name())}

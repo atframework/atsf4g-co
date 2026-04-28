@@ -25,13 +25,13 @@ message DRankRouterData {
 }
 
 message DRankUnsubmitData {
-  DPlayerIDKey user_key = 1; // 玩家ID
+  DUserIDKey user_key = 1;  // 玩家ID
 
   DRankInstanceKey rank_instance_key = 8;
 
-  bool is_offset = 3; // 是否是增量变化
-  int64 value = 4; // 必须大于等于0小于等于UINT32_MAX
-  int64 expired_timepoint = 5; // 过期时间
+  bool is_offset = 3;           // 是否是增量变化
+  int64 value = 4;              // 必须大于等于0小于等于UINT32_MAX
+  int64 expired_timepoint = 5;  // 过期时间
 
   // 多维度排序字段
   repeated uint32 sort_fields = 6;
@@ -49,19 +49,19 @@ message DRankInstanceBoard {
   repeated uint64 ext_fields = 7;
 
   int64 last_submit_timepoint = 11;
-  uint32 last_score_cache = 12; // 最后一次提交/拉拉取的绝对值的分数缓存
-  uint32 last_rank_no_cache = 13; // 最后一次拉取的排名缓存
-  int64 daily_reward_cycle_no = 21; // 每日结算奖励的奖励周期ID（防止重复结算）
-  int64 custom_reward_cycle_no = 22; // 自定义周期结算奖励的奖励周期ID（防止重复结算）
-  int64 local_mode_daily_season_id = 23; // 本地缓存模式下的每日赛季ID（即天ID）
-  int64 local_mode_custom_season_id = 24; // 本地缓存模式下的自定义周期赛季ID
+  uint32 last_score_cache = 12;            // 最后一次提交/拉拉取的绝对值的分数缓存
+  uint32 last_rank_no_cache = 13;          // 最后一次拉取的排名缓存
+  int64 daily_reward_cycle_no = 21;        // 每日结算奖励的奖励周期ID（防止重复结算）
+  int64 custom_reward_cycle_no = 22;       // 自定义周期结算奖励的奖励周期ID（防止重复结算）
+  int64 local_mode_daily_season_id = 23;   // 本地缓存模式下的每日赛季ID（即天ID）
+  int64 local_mode_custom_season_id = 24;  // 本地缓存模式下的自定义周期赛季ID
 }
 
 message DRankUserBoard {
   DRankKey rank_key = 1;
   repeated DRankInstanceBoard rank_instance_data = 2;
 
-  repeated DRankUnsubmitData unsubmit_action = 4; // 未提交的排行榜数据（可能提交期间锁榜，这时候要先缓存以后再处理）
+  repeated DRankUnsubmitData unsubmit_action = 4;  // 未提交的排行榜数据（可能提交期间锁榜，这时候要先缓存以后再处理）
 }
 
 message DRankUserData {
@@ -69,7 +69,7 @@ message DRankUserData {
 }
 
 message DRankUserBasicData {
-  DPlayerIDKey user_key = 1; // 玩家ID
+  DUserIDKey user_key = 1;  // 玩家ID
   DRankInstanceKey rank_instance_key = 2;
   uint32 rank_no = 3;
   uint32 score = 4;
@@ -82,7 +82,7 @@ message DRankUserBasicData {
   int64 submit_timepoint = 11;
 }
 
-message DRankQueryRspData{
+message DRankQueryRspData {
   repeated DRankUserBoardData rank_records = 2;
   uint32 rank_total_count = 3;
 }
@@ -95,7 +95,7 @@ message DRankUserBoardData {
   int64 submit_timepoint = 11;
 }
 
-message DRankCustomData{
+message DRankCustomData {
   // 多维度排序字段
   repeated int64 sort_fields = 1;
 }

@@ -1,0 +1,3 @@
+{{- template "libapp.service" (list . "cachesvr.service") -}}
+{{- define "cachesvr.service" -}}
+{{- end -}}

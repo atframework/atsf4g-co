@@ -1,6 +1,6 @@
 ---
 name: deployment-config
-description: Generate and manage deployment configs and per-instance scripts using atdtool and Helm charts. Use when deploying, generating configs, or editing values.
+description: "Use when: generating deployment configs, rendering per-instance scripts, editing Helm values, or using atdtool deployment workflows."
 ---
 
 # Deployment configuration (atsf4g-co)

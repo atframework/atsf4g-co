@@ -51,13 +51,14 @@ message logic_user_async_job_cfg {
 
 message logic_user_cfg {
   uint64 max_online = 101 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "50000" }];
-  string default_openid = 102 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "gm://system" }];
+  string default_openid = 102 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "gm:; //system" }];
   logic_user_async_job_cfg async_job = 103;
 }
 
 message logic_session_cfg {
-  google.protobuf.Duration login_code_protect = 101 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "20m" }];
-  google.protobuf.Duration login_code_valid_duration = 102
+  google.protobuf.Duration access_token_code_protect = 101
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "20m" }];
+  google.protobuf.Duration access_token_code_valid_duration = 102
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10m" }];
   google.protobuf.Duration login_ban_time = 103 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3h" }];
   google.protobuf.Duration tick_sec = 104 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" }];
@@ -188,6 +189,31 @@ message logic_rank_cfg {
   uint32 query_max_count = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "100" }];
 }
 
+message logic_cache_watcher_cfg {
+  google.protobuf.Duration heartbeat_interval = 1;
+  google.protobuf.Duration expired_timeout = 2;
+  google.protobuf.Duration check_interval = 3;
+  uint64 max_recycle_count_per_tick = 4;
+
+  uint64 max_number = 11;
+}
+
+message logic_cache_data_cfg {
+  google.protobuf.Duration cache_data_expired_timeout = 1;
+  google.protobuf.Duration cache_expired_timeout = 2;
+  google.protobuf.Duration cache_check_interval = 3;
+  google.protobuf.Duration cache_fallback_expired_timeout = 4;
+  uint64 max_recycle_count_per_tick = 5;
+
+  uint64 max_user_cache_number = 11;
+  uint64 gc_user_cache_number = 12;
+}
+
+message logic_cache_cfg {
+  logic_cache_watcher_cfg watcher = 1;
+  logic_cache_data_cfg data = 2;
+}
+
 message logic_section_cfg {
   uint32 world_id = 1;
   uint32 zone_id = 2;
@@ -209,7 +235,12 @@ message logic_section_cfg {
   logic_telemetry_cfg telemetry = 108;
   logic_excel_cfg excel = 110;
   logic_transaction_cfg transaction = 111;
+
+  // configure for rank service
   logic_rank_cfg rank = 112;
+
+  // configure for cache service
+  logic_cache_cfg cache = 113;
 }
 
 message db_group_gateway_cfg {

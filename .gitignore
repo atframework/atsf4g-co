@@ -43,6 +43,7 @@
 .cache
 .mako_modules-*
 .mako_modules
+/.cmake-toolset
 
 ## atframework
 /atframework/service/component/config/atframe_services_build_feature.h
@@ -107,3 +108,8 @@
 /src/component/rank/rank_board_svr/app/handle_ss_rpc_rankboardservice.h
 /src/component/rank/sdk/rank_board_svr/rpc/rank_board/rankboardservice.cpp
 /src/component/rank/sdk/rank_board_svr/rpc/rank_board/rankboardservice.h
+
+/src/cachesvr/sdk/rpc/cache/cachesvrservice.h
+/src/cachesvr/sdk/rpc/cache/cachesvrservice.cpp
+/src/cachesvr/service/app/handle_ss_rpc_cachesvrservice.h
+/src/cachesvr/service/app/handle_ss_rpc_cachesvrservice.cpp

@@ -1,0 +1,17 @@
+project_service_declare_sdk(
+  "cachesvr-sdk"
+  "${CMAKE_CURRENT_LIST_DIR}"
+  INCLUDE_DIR
+  "${CMAKE_CURRENT_LIST_DIR}"
+  DLLEXPORT_DECL
+  CACHE_RPC_API
+  USE_SERVICE_PROTOCOL
+  cachesvr-protocol
+  HRADERS
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cache_algorithm.h"
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cache_api.h"
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cachesvrservice.h"
+  SOURCES
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cache_algorithm.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cache_api.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cachesvrservice.cpp")

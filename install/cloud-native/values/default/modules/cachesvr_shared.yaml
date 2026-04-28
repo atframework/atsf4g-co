@@ -1,0 +1,19 @@
+# cachesvr_shared.yaml
+# vim: set sw=2 sts=2 et:
+# encoding: utf-8
+
+enabled: false
+watcher:
+  heartbeat_interval: 15m # 自动更新watcher的心跳间隔
+  expired_timeout: 32m # 订阅自动清理时间，由于有些模块是按分钟的精度。最好大于 watcher.heartbeat_interval 的2倍
+  check_interval: 16m # Watcher的检查间隔
+  max_number: 2000000 #
+  max_recycle_count_per_tick: 1000 # 每个tick最大回收缓存数量
+data:
+  cache_data_expired_timeout: 60m # 如果未主动标记过期，缓存的被动刷新周期
+  cache_expired_timeout: 35m # 缓存对象长时间未访问自动清理时间，最好大于 watcher.heartbeat_interval 的2倍
+  cache_check_interval: 10m # 缓存对象的生命周期检查间隔
+  cache_fallback_expired_timeout: 5m # 缓存服务未开启时本地模块的缓存过期时间
+  max_recycle_count_per_tick: 100 # 每个tick最大回收缓存数量
+  max_user_cache_number: 200000 # 最大玩家数据缓存数量，超出后会强制回收最老的数据块
+  gc_user_cache_number: 100000 # 开始主动执行GC的玩家缓存数量

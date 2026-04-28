@@ -106,8 +106,7 @@ static rank_wal_publisher_type::vtable_pointer create_rank_publisher_vtable() {
                           wal_publisher_type::subscriber_iterator subscriber_begin,
                           wal_publisher_type::subscriber_iterator subscriber_end,
                           ATFW_EXPLICIT_UNUSED_ATTR wal_publisher_type::callback_param_type param) -> wal_result_code {
-    std::unordered_map<uint64_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DPlayerIDKey>*>
-        notify_servers;
+    std::unordered_map<uint64_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DUserIDKey>*> notify_servers;
 
     for (; subscriber_begin != subscriber_end; ++subscriber_begin) {
       auto& user = *subscriber_begin;

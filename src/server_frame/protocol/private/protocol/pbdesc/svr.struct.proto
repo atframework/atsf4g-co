@@ -22,7 +22,7 @@ message client_session_index {
 message account_information {
   uint32 account_type = 1;            // @see EnAccountTypeID
   string platform_access_token = 11;  // 可能有的属性（平台Token）
-  DPlayerProfile profile = 31;        // 用户账号属性
+  DUserProfile profile = 31;          // 用户账号属性
   uint32 channel_id = 36;             // 渠道号
   int32 version_type = 37;            // 上一次的登入版本类型 @EnVersionType
 }
@@ -42,12 +42,16 @@ message login_record {
 }
 
 message user_data {
-  uint32 player_level = 1;      // 玩家等级
+  int32 user_level = 1;         // 玩家等级
   uint64 session_sequence = 2;  // 玩家的全局递增发包序号
 }
 
-message user_options_data {
-  DPlayerOptions custom_options = 1;  // 用户自定义选项
+message user_option_private_data {
+  DUserOptions custom_options = 1;  // 用户自定义选项
+}
+
+message user_option_public_data {
+  DUserSharedOptions custom_options = 1;  // 用户自定义选项
 }
 
 message user_async_job_debug_message {
@@ -91,15 +95,17 @@ message player_async_jobs_data {
 
 message user_login_data {
   // 业务层登入注册信息
-  int64 business_register_time = 31;  // 业务层注册时间
-  int64 business_login_time = 32;     // 业务层登入时间
-  int64 business_logout_time = 33;    // 业务层登出时间
+  int64 business_register_time = 31;    // 业务层注册时间
+  int64 business_login_time = 32;       // 业务层登入时间
+  int64 business_logout_time = 33;      // 业务层登出时间
+  int64 business_unregister_time = 34;  // 业务层注销时间
 
   login_record last_login = 42;  // 上次登入的信息
 
-  uint32 stat_login_total_times = 51;    // 总登入次数
-  uint32 stat_login_success_times = 52;  // 成功登入次数
-  uint32 stat_login_failed_times = 53;   // 失败登入次数
+  uint32 stat_login_total_times = 51;     // 总登入次数
+  uint32 stat_login_success_times = 52;   // 成功登入次数
+  uint32 stat_login_failed_times = 53;    // 失败登入次数
+  int64 stat_total_online_duration = 54;  // 总在线时长(秒)
 }
 
 message user_async_jobs_blob_data {
@@ -112,13 +118,13 @@ message user_async_jobs_blob_data {
 
   oneof action {
     user_async_job_debug_message debug_message = 101;  // 调试消息
-    user_async_job_update_rank update_rank = 201; // 更新排行榜
-    user_async_job_settle_rank settle_rank = 202; // 结算排行榜
+    user_async_job_update_rank update_rank = 201;      // 更新排行榜
+    user_async_job_settle_rank settle_rank = 202;      // 结算排行榜
   }
 }
 
 message user_async_jobs_cache_blob_data {
-  player_async_jobs_data async_jobs = 1; // 异步任务缓存
+  player_async_jobs_data async_jobs = 1;  // 异步任务缓存
 
   message retry_job_data {
     int32 job_type = 1;

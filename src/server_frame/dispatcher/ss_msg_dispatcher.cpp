@@ -584,9 +584,8 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atfw::atapp::app::mes
     trace_start_option.parent_network_span = nullptr;
   }
   rpc::telemetry::trace_attribute_pair_type internal_rpc_trace_attributes[] = {
-      {opentelemetry::semconv::rpc::kRpcSystem, "internal"},
-      {opentelemetry::semconv::rpc::kRpcService, "ss_msg_dispatcher"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "ss_msg_dispatcher"}};
+      {opentelemetry::semconv::rpc::kRpcSystemName, "internal"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "ss_msg_dispatcher/dispatch"}};
   trace_start_option.attributes = internal_rpc_trace_attributes;
   ctx.setup_tracer(tracer, "ss_msg_dispatcher", std::move(trace_start_option));
 
@@ -779,14 +778,8 @@ void ss_msg_dispatcher::setup_metrics() {
         }
 
         for (auto &method : report->rpc_metrics) {
-          auto service_end = method.second.rpc_name.find_last_of('.');
-          opentelemetry::nostd::string_view service_name = "UNKNOWN";
-          if (service_end != std::string::npos) {
-            service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
-          }
           rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
-              {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
-              {opentelemetry::semconv::rpc::kRpcService, service_name},
+              {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
               {opentelemetry::semconv::rpc::kRpcMethod, method.second.rpc_name}};
 
           rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
@@ -804,14 +797,8 @@ void ss_msg_dispatcher::setup_metrics() {
         }
 
         for (auto &method : report->rpc_metrics) {
-          auto service_end = method.second.rpc_name.find_last_of('.');
-          opentelemetry::nostd::string_view service_name = "UNKNOWN";
-          if (service_end != std::string::npos) {
-            service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
-          }
           rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
-              {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
-              {opentelemetry::semconv::rpc::kRpcService, service_name},
+              {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
               {opentelemetry::semconv::rpc::kRpcMethod, method.second.rpc_name}};
 
           rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
@@ -832,14 +819,8 @@ void ss_msg_dispatcher::setup_metrics() {
           if (method.second.total_count <= 0) {
             continue;
           }
-          auto service_end = method.second.rpc_name.find_last_of('.');
-          opentelemetry::nostd::string_view service_name = "UNKNOWN";
-          if (service_end != std::string::npos) {
-            service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
-          }
           rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
-              {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
-              {opentelemetry::semconv::rpc::kRpcService, service_name},
+              {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
               {opentelemetry::semconv::rpc::kRpcMethod, method.second.rpc_name}};
 
           rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
@@ -858,14 +839,8 @@ void ss_msg_dispatcher::setup_metrics() {
         }
 
         for (auto &method : report->rpc_metrics) {
-          auto service_end = method.second.rpc_name.find_last_of('.');
-          opentelemetry::nostd::string_view service_name = "UNKNOWN";
-          if (service_end != std::string::npos) {
-            service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
-          }
           rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
-              {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
-              {opentelemetry::semconv::rpc::kRpcService, service_name},
+              {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
               {opentelemetry::semconv::rpc::kRpcMethod, method.second.rpc_name}};
 
           rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
@@ -882,14 +857,8 @@ void ss_msg_dispatcher::setup_metrics() {
         }
 
         for (auto &method : report->rpc_metrics) {
-          auto service_end = method.second.rpc_name.find_last_of('.');
-          opentelemetry::nostd::string_view service_name = "UNKNOWN";
-          if (service_end != std::string::npos) {
-            service_name = opentelemetry::nostd::string_view{method.second.rpc_name.c_str(), service_end};
-          }
           rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
-              {opentelemetry::semconv::rpc::kRpcSystem, "atrpc.ss"},
-              {opentelemetry::semconv::rpc::kRpcService, service_name},
+              {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
               {opentelemetry::semconv::rpc::kRpcMethod, method.second.rpc_name}};
 
           rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(

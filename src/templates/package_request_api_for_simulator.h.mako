@@ -64,7 +64,7 @@ ${ns}
         '__body           Message body to package'
     ]
 %>
-// ============ ${rpc.get_full_name()} ============
+// ============ ${rpc.get_service().get_full_name()}/${rpc.get_name()} ============
 /**
  * @brief package ${rpc.get_request().get_cpp_class_name()} for ${rpc.get_name()}
  * @brief ${rpc.get_extension_field('rpc_options', lambda x: x.api_name, rpc.get_name())}

@@ -13,6 +13,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "config/atframe_service_component_config.h"
 
@@ -114,12 +115,25 @@ class service_discovery_index {
   ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API int64_t
   get_service_discovery_version(uint64_t service_type_id) const noexcept;
 
+  /**
+   * @brief 获取指定服务类型的服务发现版本号（本地）
+   *        仅在收到真实的服务发现 PUT/DELETE 变更时递增，initialize/reload 的本地回放不会递增
+   *
+   * @param service_type_name 服务类型名称
+   * @return （本地）服务发现版本号
+   */
+  ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API int64_t
+  get_service_discovery_version(const std::string& service_type_name) const noexcept;
+
  private:
   void setup_etcd_event_handle();
   void reset_local_cache(bool reset_version) noexcept;
   void apply_node_event(atfw::atapp::etcd_module::node_action_t action_type,
-                        const atfw::atapp::etcd_discovery_node::ptr_t& node, bool update_version);
-  void bump_service_discovery_version(uint64_t service_type_id) noexcept;
+                        const atfw::atapp::etcd_discovery_node::ptr_t& node,
+                        std::unordered_set<uint64_t>& bump_service_discovery_version_by_type_id,
+                        std::unordered_set<std::string>& bump_service_discovery_version_by_type_name);
+  void bump_service_discovery_version(uint64_t service_type_id, bool update_version) const noexcept;
+  void bump_service_discovery_version(const std::string& service_type_name, bool update_version) const noexcept;
 
   static service_discovery_node_snapshot_t make_node_snapshot(const atfw::atapp::etcd_discovery_node::ptr_t& node);
   bool get_node_snapshot(uint64_t id, const std::string& name,
@@ -153,7 +167,10 @@ class service_discovery_index {
   bool initialized_;
   atfw::util::nostd::nonnull<std::shared_ptr<::atfw::atapp::etcd_module>> etcd_module_;
 
-  mutable std::unordered_map<uint64_t, int64_t> service_discovery_version_;
+  mutable std::unordered_map<uint64_t, int64_t> service_discovery_version_by_type_id_;
+  mutable std::unordered_map<std::string, int64_t> service_discovery_version_by_type_name_;
+  mutable std::unordered_set<uint64_t> service_discovery_dirty_by_type_id_;
+  mutable std::unordered_set<std::string> service_discovery_dirty_by_type_name_;
 
   atfw::util::nostd::nonnull<atfw::atapp::etcd_discovery_set::ptr_t> all_nodes_;
   service_discovery_snapshot_by_id_t snapshot_by_id_;

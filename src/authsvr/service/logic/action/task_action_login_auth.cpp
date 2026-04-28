@@ -167,7 +167,7 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
   login_auth_tb->set_access_token_code(rpc::db::uuid::generate_short_uuid());
 
   auto valid_duration =
-      protobuf_to_chrono_duration<>(logic_config::me()->get_logic_cfg().session().login_code_valid_duration());
+      protobuf_to_chrono_duration<>(logic_config::me()->get_logic_cfg().session().access_token_code_valid_duration());
   auto token_timeout = atfw::util::time::time_utility::now() + valid_duration;
   protobuf_copy_message(*login_auth_tb->mutable_access_token_expired(), protobuf_from_system_clock(token_timeout));
   res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(
@@ -181,7 +181,7 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
     RPC_RETURN_CODE(res);
   }
 
-  rsp_body.set_login_code(login_auth_tb->access_token_code());
+  rsp_body.set_access_token_code(login_auth_tb->access_token_code());
 
   rsp_body.set_version_type(PROJECT_NAMESPACE_ID::EN_VERSION_DEFAULT);
 

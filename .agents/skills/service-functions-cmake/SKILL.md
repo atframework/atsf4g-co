@@ -1,6 +1,6 @@
 ---
 name: service-functions-cmake
-description: Use CMake helper functions in src/service-functions.cmake to declare service protocols, SDKs, and components. Use when adding a new service or protocol target.
+description: "Use when: adding service protocols, SDKs, components, or CMake targets with src/service-functions.cmake helper functions."
 ---
 
 # CMake service helper functions (atsf4g-co)

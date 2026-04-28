@@ -19,11 +19,11 @@ namespace rpc {
 namespace auth {
 namespace login {
 /**
- * @brief generate logincode
+ * @brief generate access token code
  * @param code where to store code
  * @param sz code length
  */
-SERVER_FRAME_API void generate_login_code(char *code, size_t sz);
+SERVER_FRAME_API void generate_access_token_code(char *code, size_t sz);
 
 /**
  * @brief add account and channel prefix into openid

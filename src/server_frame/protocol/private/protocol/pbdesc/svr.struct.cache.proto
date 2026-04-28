@@ -1,0 +1,51 @@
+syntax = "proto3";
+// 后台数据结构定义
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+option go_package = "github.com/atframework/atsf4g-go/component-protocol-private/pbdesc/protocol/pbdesc";
+
+import "google/protobuf/any.proto";
+
+package hello;
+
+enum EnCacheServiceCacheType {
+  EN_CACHE_SERVICE_CACHE_TYPE_UNKNOWN = 0;
+  EN_CACHE_SERVICE_CACHE_TYPE_USER = 1;
+}
+
+message object_cache_key {
+  EnCacheServiceCacheType cache_type = 11;
+  uint32 zone_id = 12;      // 大区ID（无大区ID填0）
+  uint64 instance_id = 13;  // 实例ID
+}
+
+message object_cache_watcher {
+  EnCacheServiceCacheType cache_type = 11;
+  uint32 zone_id = 12;      // 大区ID（无大区ID填0）
+  uint64 instance_id = 13;  // 实例ID
+
+  bool server_subscribe = 21;
+}
+
+message object_cache_meta {
+  // 数据版本号
+  int64 data_version = 1;
+
+  // 缓存Meta数据，变更直接下发，不需要客户端再拉取
+  // - DUserCacheMeta
+  google.protobuf.Any cache_meta = 2;
+}
+
+message object_cache_content {
+  // 数据版本号
+  int64 data_version = 1;
+
+  // 缓存数据，变更仅下发变化通知，需要客户端再拉取详情
+  // - DUserBasicData
+  google.protobuf.Any cache_data = 11;
+}

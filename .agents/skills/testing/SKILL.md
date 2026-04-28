@@ -1,6 +1,6 @@
 ---
 name: testing
-description: Run and write unit tests for atsf4g-co using the private test framework. Covers test discovery, filtering, Windows DLL/PATH issues, and test macros.
+description: "Use when: running or writing unit tests, discovering/filtering private test-framework cases, or fixing Windows DLL/PATH test startup issues."
 ---
 
 # Unit testing (atsf4g-co)

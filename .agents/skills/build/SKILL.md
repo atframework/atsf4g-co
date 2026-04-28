@@ -1,6 +1,6 @@
 ---
 name: build
-description: Configure and build atsf4g-co with CMake on Windows (MSVC/vcpkg) and Unix/Linux/macOS. Use when building the project, resolving build errors, or adjusting CMake options.
+description: "Use when: configuring or building atsf4g-co with CMake, resolving build errors, or adjusting Windows/MSVC/vcpkg and Unix/Linux/macOS build options."
 ---
 
 # Build (atsf4g-co)

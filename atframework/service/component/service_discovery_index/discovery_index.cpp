@@ -3,6 +3,7 @@
 #include "service_discovery_index/discovery_index.h"
 
 #include <log/log_wrapper.h>
+#include <time/time_utility.h>
 #include <cstdint>
 #include "memory/rc_ptr.h"
 
@@ -28,7 +29,7 @@ service_discovery_index::service_discovery_index(ctor_guard_t& ctor_guard)
       etcd_module_(std::move(ctor_guard.etcd_module)),
       all_nodes_(atfw::util::memory::make_strong_rc<atfw::atapp::etcd_discovery_set>()) {}
 
-ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API service_discovery_index::~service_discovery_index() {}
+ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API service_discovery_index::~service_discovery_index() { cleanup(); }
 
 ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API void service_discovery_index::initialize() {
   setup_etcd_event_handle();
@@ -63,7 +64,10 @@ void service_discovery_index::reset_local_cache(bool reset_version) noexcept {
   snapshot_by_id_.clear();
   snapshot_by_name_.clear();
   if (reset_version) {
-    service_discovery_version_.clear();
+    service_discovery_version_by_type_id_.clear();
+    service_discovery_version_by_type_name_.clear();
+    service_discovery_dirty_by_type_id_.clear();
+    service_discovery_dirty_by_type_name_.clear();
   }
 }
 
@@ -170,12 +174,38 @@ service_discovery_index::add_keepalive(const std::string& path, std::string& val
 
 ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API int64_t
 service_discovery_index::get_service_discovery_version(uint64_t service_type_id) const noexcept {
-  auto iter = service_discovery_version_.find(service_type_id);
-  if (iter != service_discovery_version_.end()) {
+  if (service_discovery_dirty_by_type_id_.end() != service_discovery_dirty_by_type_id_.find(service_type_id)) {
+    bump_service_discovery_version(service_type_id, true);
+  }
+
+  auto iter = service_discovery_version_by_type_id_.find(service_type_id);
+  if (iter != service_discovery_version_by_type_id_.end()) {
     return iter->second;
   }
 
-  return 0;
+  int64_t init_version =
+      (atfw::util::time::time_utility::get_sys_now() * 1000) + (atfw::util::time::time_utility::get_now_usec() / 1000);
+  service_discovery_version_by_type_id_.emplace(service_type_id, init_version);
+
+  return init_version;
+}
+
+ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API int64_t
+service_discovery_index::get_service_discovery_version(const std::string& service_type_name) const noexcept {
+  if (service_discovery_dirty_by_type_name_.end() != service_discovery_dirty_by_type_name_.find(service_type_name)) {
+    bump_service_discovery_version(service_type_name, true);
+  }
+
+  auto iter = service_discovery_version_by_type_name_.find(service_type_name);
+  if (iter != service_discovery_version_by_type_name_.end()) {
+    return iter->second;
+  }
+
+  int64_t init_version =
+      (atfw::util::time::time_utility::get_sys_now() * 1000) + (atfw::util::time::time_utility::get_now_usec() / 1000);
+  service_discovery_version_by_type_name_.emplace(service_type_name, init_version);
+
+  return init_version;
 }
 
 service_discovery_node_snapshot_t service_discovery_index::make_node_snapshot(
@@ -249,15 +279,46 @@ void service_discovery_index::remove_node_snapshot(uint64_t id, const std::strin
   }
 }
 
-void service_discovery_index::bump_service_discovery_version(uint64_t service_type_id) noexcept {
-  if (service_type_id != 0) {
-    ++service_discovery_version_[service_type_id];
+void service_discovery_index::bump_service_discovery_version(uint64_t service_type_id,
+                                                             bool update_version) const noexcept {
+  if (service_type_id == 0) {
+    return;
   }
+
+  auto iter = service_discovery_version_by_type_id_.find(service_type_id);
+  if (iter == service_discovery_version_by_type_id_.end()) {
+    int64_t init_version = (atfw::util::time::time_utility::get_sys_now() * 1000) +
+                           (atfw::util::time::time_utility::get_now_usec() / 1000);
+    iter = service_discovery_version_by_type_id_.emplace(service_type_id, init_version).first;
+  } else if (update_version) {
+    ++iter->second;
+  }
+
+  service_discovery_dirty_by_type_id_.erase(service_type_id);
 }
 
-void service_discovery_index::apply_node_event(atfw::atapp::etcd_module::node_action_t action_type,
-                                               const atfw::atapp::etcd_discovery_node::ptr_t& node,
-                                               bool update_version) {
+void service_discovery_index::bump_service_discovery_version(const std::string& service_type_name,
+                                                             bool update_version) const noexcept {
+  if (service_type_name.empty()) {
+    return;
+  }
+
+  auto iter = service_discovery_version_by_type_name_.find(service_type_name);
+  if (iter == service_discovery_version_by_type_name_.end()) {
+    int64_t init_version = (atfw::util::time::time_utility::get_sys_now() * 1000) +
+                           (atfw::util::time::time_utility::get_now_usec() / 1000);
+    iter = service_discovery_version_by_type_name_.emplace(service_type_name, init_version).first;
+  } else if (update_version) {
+    ++iter->second;
+  }
+
+  service_discovery_dirty_by_type_name_.erase(service_type_name);
+}
+
+void service_discovery_index::apply_node_event(
+    atfw::atapp::etcd_module::node_action_t action_type, const atfw::atapp::etcd_discovery_node::ptr_t& node,
+    std::unordered_set<uint64_t>& bump_service_discovery_version_by_type_id,
+    std::unordered_set<std::string>& bump_service_discovery_version_by_type_name) {
   if (!node) {
     return;
   }
@@ -312,13 +373,18 @@ void service_discovery_index::apply_node_event(atfw::atapp::etcd_module::node_ac
       all_nodes_->add_node(node);
       set_node_snapshot(new_snapshot);
 
-      if (update_version) {
-        if (has_old_snapshot && old_snapshot.type_id != 0 && old_snapshot.type_id != new_snapshot.type_id) {
-          bump_service_discovery_version(old_snapshot.type_id);
-        }
-        if (new_snapshot.type_id != 0) {
-          bump_service_discovery_version(new_snapshot.type_id);
-        }
+      if (has_old_snapshot && old_snapshot.type_id != 0 && old_snapshot.type_id != new_snapshot.type_id) {
+        bump_service_discovery_version_by_type_id.insert(old_snapshot.type_id);
+      }
+      if (new_snapshot.type_id != 0) {
+        bump_service_discovery_version_by_type_id.insert(new_snapshot.type_id);
+      }
+
+      if (has_old_snapshot && !old_snapshot.type_name.empty() && old_snapshot.type_name != new_snapshot.type_name) {
+        bump_service_discovery_version_by_type_name.insert(old_snapshot.type_name);
+      }
+      if (!new_snapshot.type_name.empty()) {
+        bump_service_discovery_version_by_type_name.insert(new_snapshot.type_name);
       }
       break;
     }
@@ -349,8 +415,11 @@ void service_discovery_index::apply_node_event(atfw::atapp::etcd_module::node_ac
                                    old_snapshot.id, old_snapshot.name);
       }
 
-      if (update_version && old_snapshot.type_id != 0) {
-        bump_service_discovery_version(old_snapshot.type_id);
+      if (old_snapshot.type_id != 0) {
+        bump_service_discovery_version_by_type_id.insert(old_snapshot.type_id);
+      }
+      if (!old_snapshot.type_name.empty()) {
+        bump_service_discovery_version_by_type_name.insert(old_snapshot.type_name);
       }
       break;
     }
@@ -369,7 +438,7 @@ void service_discovery_index::setup_etcd_event_handle() {
   if (service_index_handle_) {
     auto event_handle = [this](atfw::atapp::etcd_module::node_action_t action_type,
                                const atfw::atapp::etcd_discovery_node::ptr_t& node) {
-      apply_node_event(action_type, node, true);
+      apply_node_event(action_type, node, service_discovery_dirty_by_type_id_, service_discovery_dirty_by_type_name_);
     };
     *service_index_handle_ = etcd_module_->add_on_node_discovery_event(event_handle);
 
@@ -379,7 +448,17 @@ void service_discovery_index::setup_etcd_event_handle() {
         continue;
       }
 
-      apply_node_event(atfw::atapp::etcd_module::node_action_t::kPut, node, false);
+      std::unordered_set<uint64_t> bump_service_discovery_version_by_type_id;
+      std::unordered_set<std::string> bump_service_discovery_version_by_type_name;
+      apply_node_event(atfw::atapp::etcd_module::node_action_t::kPut, node, bump_service_discovery_version_by_type_id,
+                       bump_service_discovery_version_by_type_name);
+
+      for (auto type_id : bump_service_discovery_version_by_type_id) {
+        bump_service_discovery_version(type_id, false);
+      }
+      for (const auto& type_name : bump_service_discovery_version_by_type_name) {
+        bump_service_discovery_version(type_name, false);
+      }
     }
   }
 }

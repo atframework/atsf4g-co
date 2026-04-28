@@ -1,0 +1,111 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+option go_package = "github.com/atframework/atsf4g-go/service-cachesvr/protocol/protocol/pbdesc";
+
+// import "google/protobuf/duration.proto";
+// import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+import "protocol/extension/atframework.proto";
+
+import "protocol/common/com.struct.cache.common.proto";
+import "protocol/pbdesc/svr.struct.cache.proto";
+import "protocol/pbdesc/svr.struct.proto";
+
+package hello;
+
+message object_cache_pull_key {
+  EnCacheApiGetCacheType type = 1;
+  object_cache_key cache_key = 2;
+}
+
+message object_cache_watch_key {
+  int64 data_version = 1;  // 当前数据版本号
+
+  EnCacheServiceCacheType cache_type = 11;
+  uint32 zone_id = 12;      // 大区ID（无大区ID填0）
+  uint64 instance_id = 13;  // 实例ID
+}
+
+// ====== 缓存拉取请求 ======
+message SSCachePullCacheReq {
+  object_cache_watcher watcher = 11;
+
+  repeated object_cache_pull_key pull_keys = 21;  // 拉取的对象ID
+}
+
+message SSCachePullCacheRsp {
+  repeated object_cache_content content = 21;
+}
+
+// ====== 监视缓存变化通知 ======
+message SSCacheWatchSync {
+  object_cache_watcher watcher = 11;
+  repeated object_cache_watch_key watch_keys = 21;  // 监视的对象ID
+}
+
+// ====== 取消监视缓存变化通知 ======
+message SSCacheUnwatchSync {
+  object_cache_watcher watcher = 11;
+  repeated object_cache_key unwatch_keys = 21;  // 取消监视的对象ID
+}
+
+// ====== 标记过期通知 ======
+message SSCacheSetExpiredSync {
+  repeated object_cache_key expired_keys = 21;  // 监视的对象ID
+}
+
+// ====== 更新Meta信息 ======
+message SSCacheUpdateMetaSync {
+  repeated object_cache_meta object_metas = 21;  // 对象的Meta信息
+}
+
+// 缓存服务，负责缓存拉取、监视、过期和元数据同步。
+service CachesvrService {
+  option (atframework.service_options) = {
+    module_name: "cache"
+  };
+
+  // 拉取指定缓存对象的数据内容。
+  rpc pull_caches(SSCachePullCacheReq) returns (SSCachePullCacheRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "拉取缓存"
+      allow_no_wait: true
+    };
+  };
+
+  // 建立或刷新缓存变化监视列表。
+  rpc watch(stream SSCacheWatchSync) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "监视缓存变化"
+    };
+  };
+
+  // 取消已建立的缓存变化监视。
+  rpc unwatch(stream SSCacheUnwatchSync) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "取消监视缓存变化"
+    };
+  };
+
+  // 通知指定缓存对象已经过期。
+  rpc set_expired(stream SSCacheSetExpiredSync) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "通知缓存过期"
+    };
+  };
+
+  // 下发缓存对象的最新 Meta 信息。
+  rpc update_meta(stream SSCacheUpdateMetaSync) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "通知缓存刷新Meta"
+    };
+  };
+}

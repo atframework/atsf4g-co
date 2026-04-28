@@ -75,8 +75,8 @@ class client_player : public simulator_player_impl {
   inline const std::string &get_gamesvr_addr() const { return gamesvr_addr_; }
   inline void set_gamesvr_addr(const std::string &addr) { gamesvr_addr_ = addr; }
 
-  inline const std::string &get_login_code() const { return login_code_; }
-  inline void set_login_code(const std::string &code) { login_code_ = code; }
+  inline const std::string &get_access_token_code() const { return access_token_code_; }
+  inline void set_access_token_code(const std::string &code) { access_token_code_ = code; }
 
   inline int get_gamesvr_index() const { return gamesvr_index_; }
   inline void set_gamesvr_index(int index) { gamesvr_index_ = index; }
@@ -108,7 +108,7 @@ class client_player : public simulator_player_impl {
 
   uint32_t sequence_;
   std::string gamesvr_addr_;
-  std::string login_code_;
+  std::string access_token_code_;
   int gamesvr_index_;
 
   std::vector<std::vector<unsigned char> > pending_msg_;

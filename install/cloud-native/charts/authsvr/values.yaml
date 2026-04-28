@@ -53,6 +53,9 @@ persistence:
 redis:
   enable: true
 
+cs_session:
+  enable: true
+
 authsvr:
   version_conf: ../cfg/cfg_version.xml # version file
   strategy_conf: ../cfg/cfg_strategy.loginsvr.xml # strategy file

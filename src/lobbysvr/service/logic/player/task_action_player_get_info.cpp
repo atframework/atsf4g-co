@@ -40,24 +40,24 @@ task_action_player_get_info::result_type task_action_player_get_info::operator()
   // bool is_review_mode = user->is_review_mode();
 
   // 资源
-  if (req_body.need_player_info()) {
+  if (req_body.need_user_information()) {
     // TODO(owent) update auto restore
     // protobuf_copy_message(*rsp_body.mutable_player_profile(), user->get_account_info().profile());
-    // rsp_item->set_player_level(user->get_player_level());
+    // rsp_item->set_user_level(user->get_user_level());
 
-    // uint32_t player_level_func_bound = user->get_player_level();
+    // uint32_t user_level_func_bound = user->get_user_level();
     // uint32_t player_vip_level_func_bound = user->get_player_vip_level();
 
     // TODO(owent) 审核版本功能全开
     // if (is_review_mode) {
-    //    player_level_func_bound = static_cast<uint32_t>(config_const_parameter_index::me()->get(
+    //    user_level_func_bound = static_cast<uint32_t>(config_const_parameter_index::me()->get(
     //        PROJECT_NAMESPACE_ID::config::EN_CPT_PLAYER_MAX_LEVEL));
     //    player_vip_level_func_bound = static_cast<uint32_t>(config_const_parameter_index::me()->get(
     //        PROJECT_NAMESPACE_ID::config::EN_CPT_PLAYER_MAX_VIP_LEVEL));
     //}
 
     //// 额外下发依靠等级解锁的功能
-    // for (uint32_t i = 0; i <= player_level_func_bound; ++i) {
+    // for (uint32_t i = 0; i <= user_level_func_bound; ++i) {
     //    const std::vector<uint32_t> *cfg = config_player_index::me()->get_player_unlock(i);
     //    for (size_t j = 0; nullptr != cfg && j < cfg->size(); ++j) {
     //        if ((*cfg)[j] > 0) {
@@ -72,8 +72,8 @@ task_action_player_get_info::result_type task_action_player_get_info::operator()
   }
 
   // // 自定义选项
-  // if (req_body.need_player_options()) {
-  //   protobuf_copy_message(*rsp_body.mutable_player_options(), user->get_player_options().custom_options());
+  // if (req_body.need_user_options()) {
+  //   protobuf_copy_message(*rsp_body.mutable_user_options(), user->get_user_options().custom_options());
   // }
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);

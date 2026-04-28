@@ -10,6 +10,9 @@ option cc_generic_services = true;
 import "google/protobuf/empty.proto";
 import "protocol/extension/atframework.proto";
 
+import "protocol/pbdesc/svr.struct.proto";
+import "protocol/pbdesc/svr.struct.cache.proto";
+
 package hello;
 
 /////////////////////////////////////////////////////
@@ -28,11 +31,44 @@ message SSPlayerAsyncJobsSync {}
 ////  登入相关协议到此结束
 /////////////////////////////////////////////////////
 
+/////////////////////////////////////////////////////
+////  此处开始是缓存服的协议
+/////////////////////////////////////////////////////
+
+// ====== 过期通知 ======
+message SSObjectCacheExpiredSync {
+  repeated object_cache_watcher watchers = 11;
+  object_cache_key expired_key = 21;  // 过期的缓存对象ID
+}
+
+// ====== Meta信息刷新通知 ======
+message SSObjectCacheMetaSync {
+  repeated object_cache_watcher watchers = 11;
+  object_cache_meta update_meta = 21;  // 要刷新的cache meta
+}
+
+// ====== gamesvr拉取用户缓存信息 ======
+message SSObjectCacheGetUserCacheDataReq {
+  object_cache_key key = 1;
+}
+
+// ====== gamesvr拉取用户缓存信息 ======
+message SSObjectCacheGetUserCacheDataRsp {
+  int32 result = 1;
+  object_cache_meta cache_meta = 2;  // 要刷新的cache meta
+}
+
+/////////////////////////////////////////////////////
+////  缓存服的协议到此结束
+/////////////////////////////////////////////////////
+
+// 提供 lobbysvr 内部服务之间的 RPC 接口定义。
 service LobbysvrService {
   option (atframework.service_options) = {
     module_name: "lobby"
   };
 
+  // 通知目标玩家下线。
   rpc player_kickoff(SSPlayerKickOffReq) returns (SSPlayerKickOffRsp) {
     option (atframework.rpc_options) = {
       module_name: "player"
@@ -41,11 +77,39 @@ service LobbysvrService {
     };
   };
 
+  // 通知其他服务实例同步并执行异步任务。
   rpc player_async_jobs_sync(stream SSPlayerAsyncJobsSync) returns (google.protobuf.Empty) {
     option (atframework.rpc_options) = {
       module_name: "player"
       api_name: "通知更新和执行异步任务"
       descriptions: "notify another server instance to sync async jobs"
+      user_rpc: true
+    };
+  };
+
+  // 通知其他服务实例将指定缓存对象标记为过期。
+  rpc object_cache_expired_sync(stream SSObjectCacheExpiredSync) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      module_name: "cache"
+      api_name: "缓存过期事件通知"
+      descriptions: "notify another server instance to set cache expired"
+    };
+  };
+
+  // 通知其他服务实例刷新指定缓存对象的 Meta 信息。
+  rpc object_cache_meta_sync(stream SSObjectCacheMetaSync) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      module_name: "cache"
+      api_name: "缓存刷新Meta事件通知"
+      descriptions: "notify another server instance to update cache meta"
+    };
+  };
+
+  // 拉取用户缓存信息
+  rpc object_cache_get_user_cache_data(SSObjectCacheGetUserCacheDataReq) returns (SSObjectCacheGetUserCacheDataRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "cache"
+      api_name: "拉取用户缓存信息"
       user_rpc: true
     };
   };
