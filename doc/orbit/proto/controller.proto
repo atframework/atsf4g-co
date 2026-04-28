@@ -1,0 +1,121 @@
+syntax = "proto3";
+
+package atorbit.protocol;
+
+import "common.proto";
+
+// ControllerService 由 DSA 发送请求到 DSC。
+// 请求发送方: DSA service / Agent side.
+// 请求处理方: DSC service / Controller side.
+service ControllerService {
+  // DSA -> DSC: 建连后注册自身容量、Region 和当前 DS 清单。
+  rpc RegisterAgent(RegisterAgentReq) returns (RegisterAgentRsp);
+  // DSA -> DSC: 上报轻量存活心跳。
+  rpc HeartbeatAgent(HeartbeatAgentReq) returns (HeartbeatAgentRsp);
+  // DSA -> DSC: 上报当前负载快照。
+  rpc ReportAgentLoad(ReportAgentLoadReq) returns (ReportAgentLoadRsp);
+  // DSA -> DSC: 通知某个 DS 已经启动完成。
+  rpc NotifyDSStarted(NotifyDSStartedReq) returns (NotifyDSStartedRsp);
+  // DSA -> DSC: 通知某个 DS 已退出。
+  rpc NotifyDSExit(NotifyDSExitReq) returns (NotifyDSExitRsp);
+  // DSA -> DSC: 转发 DS 发给 service 侧的上行消息。
+  rpc ForwardFromDS(ForwardFromDSReq) returns (ForwardFromDSRsp);
+  // DSA -> DSC: 确认 DS 已收到下行消息。
+  rpc AckDownstream(AckDownstreamReq) returns (AckDownstreamRsp);
+  // DSA -> DSC: 启动恢复或重连时回传全量状态。
+  rpc ReconcileAgentState(ReconcileAgentStateReq) returns (ReconcileAgentStateRsp);
+}
+
+message RegisterAgentReq {
+  RequestMeta meta = 1;
+  AgentIdentity agent = 2;
+  LoadSnapshot load = 3;
+  repeated DSRuntimeSnapshot current_ds_list = 4;
+}
+
+message RegisterAgentRsp {
+  ErrorCode result_code = 1;
+  string error_message = 2;
+}
+
+message HeartbeatAgentReq {
+  RequestMeta meta = 1;
+  AgentIdentity agent = 2;
+  LoadSnapshot load = 3;
+}
+
+message HeartbeatAgentRsp {
+  ErrorCode result_code = 1;
+  string error_message = 2;
+}
+
+message ReportAgentLoadReq {
+  RequestMeta meta = 1;
+  AgentIdentity agent = 2;
+  LoadSnapshot load = 3;
+}
+
+message ReportAgentLoadRsp {
+  ErrorCode result_code = 1;
+  string error_message = 2;
+}
+
+message NotifyDSStartedReq {
+  RequestMeta meta = 1;
+  DSIdentity ds = 2;
+  LoadSnapshot load = 3;
+}
+
+message NotifyDSStartedRsp {
+  ErrorCode result_code = 1;
+  string error_message = 2;
+}
+
+message NotifyDSExitReq {
+  RequestMeta meta = 1;
+  DSIdentity ds = 2;
+  DSExitReason exit_reason = 3;
+  int32 exit_code = 4;
+  bytes user_data = 5;
+  LoadSnapshot load = 6;
+}
+
+message NotifyDSExitRsp {
+  ErrorCode result_code = 1;
+  string error_message = 2;
+}
+
+message ForwardFromDSReq {
+  RequestMeta meta = 1;
+  DSIdentity ds = 2;
+  AckMeta ack = 3;
+  bytes payload = 4;
+}
+
+message ForwardFromDSRsp {
+  ErrorCode result_code = 1;
+  string error_message = 2;
+}
+
+message AckDownstreamReq {
+  RequestMeta meta = 1;
+  DSIdentity ds = 2;
+  AckMeta ack = 3;
+}
+
+message AckDownstreamRsp {
+  ErrorCode result_code = 1;
+  string error_message = 2;
+}
+
+message ReconcileAgentStateReq {
+  RequestMeta meta = 1;
+  AgentIdentity agent = 2;
+  LoadSnapshot load = 3;
+  repeated DSRuntimeSnapshot snapshots = 4;
+}
+
+message ReconcileAgentStateRsp {
+  ErrorCode result_code = 1;
+  string error_message = 2;
+}

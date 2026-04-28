@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package atorbit.protocol;
+
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  ERROR_CODE_OK = 1;
+  ERROR_CODE_INVALID_ARGUMENT = 2;
+  ERROR_CODE_NOT_FOUND = 3;
+  ERROR_CODE_CAPACITY_EXHAUSTED = 4;
+  ERROR_CODE_AGENT_NOT_READY = 5;
+  ERROR_CODE_SESSION_NOT_FOUND = 6;
+  ERROR_CODE_PERMISSION_DENIED = 7;
+  ERROR_CODE_TIMEOUT = 8;
+  ERROR_CODE_CONFLICT = 9;
+  ERROR_CODE_INTERNAL = 10;
+}
+
+enum DSState {
+  DS_STATE_UNSPECIFIED = 0;
+  DS_STATE_STARTING = 1;
+  DS_STATE_RUNNING = 2;
+  DS_STATE_EXITING = 3;
+  DS_STATE_EXITED = 4;
+}
+
+enum DSExitReason {
+  DS_EXIT_REASON_UNSPECIFIED = 0;
+  DS_EXIT_REASON_NORMAL = 1;
+  DS_EXIT_REASON_CRASH = 2;
+  DS_EXIT_REASON_HEARTBEAT_TIMEOUT = 3;
+  DS_EXIT_REASON_OOM_KILL = 4;
+  DS_EXIT_REASON_DRAIN_STOP = 5;
+  DS_EXIT_REASON_OPERATOR_STOP = 6;
+}
+
+message RequestMeta {
+  uint64 request_id = 1;
+  string trace_id = 2;
+  string region = 3;
+  uint64 sent_at_ms = 4;
+}
+
+message AckMeta {
+  uint64 seq = 1;
+  uint64 acked_seq = 2;
+  uint64 received_at_ms = 3;
+}
+
+message AgentIdentity {
+  uint64 agent_id = 1;
+  repeated string regions = 2;
+  string node_name = 3;
+  string endpoint = 4;
+}
+
+message DSIdentity {
+  uint64 agent_id = 1;
+  uint64 ds_id = 2;
+  string client_addr = 3;
+}
+
+message SessionIdentity {
+  uint64 unique_id = 1;
+  string region = 2;
+  uint64 last_received_seq = 3;
+}
+
+message LoadSnapshot {
+  double cpu_capacity = 1;
+  double cpu_used = 2;
+  double memory_capacity_mb = 3;
+  double memory_used_mb = 4;
+  uint32 ds_count = 5;
+  uint32 inflight_count = 6;
+}
+
+message DSRuntimeSnapshot {
+  DSIdentity ds = 1;
+  DSState state = 2;
+  double expected_cpu = 3;
+  double expected_memory_mb = 4;
+  double actual_cpu = 5;
+  double actual_memory_mb = 6;
+  uint64 owner_unique_id = 7;
+  DSExitReason exit_reason = 8;
+}

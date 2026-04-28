@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package atorbit.protocol;
+
+import "common.proto";
+
+// AgentService 由 DSC 发送请求到 DSA。
+// 请求发送方: DSC service / Controller side.
+// 请求处理方: DSA service / Agent side.
+service AgentService {
+  // DSC -> DSA: 请求 DSA 拉起新的 DS 进程。
+  rpc StartDS(StartDSReq) returns (StartDSRsp);
+  // DSC -> DSA: 请求 DSA 停止指定 DS。
+  rpc StopDS(StopDSReq) returns (StopDSRsp);
+  // DSC -> DSA: 查询指定 DS 或当前 agent 的运行状态。
+  rpc QueryDSState(QueryDSStateReq) returns (QueryDSStateRsp);
+  // DSC -> DSA: 把当前 agent 切到 drain 模式。
+  rpc DrainAgent(DrainAgentReq) returns (DrainAgentRsp);
+  // DSC -> DSA: 下发来自 service 侧的管理面消息到 DS。
+  rpc ForwardToDS(ForwardToDSReq) returns (ForwardToDSRsp);
+  // DSC -> DSA: 确认 service 侧已经消费 DS 的上行消息。
+  rpc AckUpstream(AckUpstreamReq) returns (AckUpstreamRsp);
+}
+
+message StartDSReq {
+  RequestMeta meta = 1;
+  double expected_cpu = 2;
+  double expected_memory_mb = 3;
+  repeated string custom_args = 4;
+}
+
+message StartDSRsp {
+  ErrorCode result_code = 1;
+  string error_message = 2;
+  DSIdentity ds = 3;
+}
+
+message StopDSReq {
+  RequestMeta meta = 1;
+  DSIdentity ds = 2;
+  string reason = 3;
+}
+
+message StopDSRsp {
+  ErrorCode result_code = 1;
+  string error_message = 2;
+}
+
+message QueryDSStateReq {
+  RequestMeta meta = 1;
+  uint64 ds_id = 2;
+  bool include_all = 3;
+}
+
+message QueryDSStateRsp {
+  ErrorCode result_code = 1;
+  string error_message = 2;
+  repeated DSRuntimeSnapshot snapshots = 3;
+  LoadSnapshot agent_load = 4;
+}
+
+message DrainAgentReq {
+  RequestMeta meta = 1;
+  bool reject_new_launch = 2;
+  string reason = 3;
+}
+
+message DrainAgentRsp {
+  ErrorCode result_code = 1;
+  string error_message = 2;
+}
+
+message ForwardToDSReq {
+  RequestMeta meta = 1;
+  DSIdentity ds = 2;
+  AckMeta ack = 3;
+  bytes payload = 4;
+  bool require_ack = 5;
+}
+
+message ForwardToDSRsp {
+  ErrorCode result_code = 1;
+  string error_message = 2;
+}
+
+message AckUpstreamReq {
+  RequestMeta meta = 1;
+  DSIdentity ds = 2;
+  AckMeta ack = 3;
+}
+
+message AckUpstreamRsp {
+  ErrorCode result_code = 1;
+  string error_message = 2;
+}
