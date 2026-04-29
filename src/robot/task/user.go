@@ -32,8 +32,8 @@ func LoginTask(task *user_data.TaskActionUser) (err error) {
 		return fmt.Errorf("failed to get login auth response message: %v", err)
 	}
 
-	if rsp.GetLoginCode() != "" {
-		user.SetExtralData("LoginCode", rsp.GetLoginCode())
+	if rsp.GetAccessTokenCode() != "" {
+		user.SetExtralData("AccessTokenCode", rsp.GetAccessTokenCode())
 	}
 	if rsp.GetUserId() != 0 {
 		user.SetUserId(rsp.GetUserId())

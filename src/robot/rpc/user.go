@@ -19,8 +19,8 @@ import (
 )
 
 func LoginAuthRpc(action base.TaskActionImpl, user user_data.User) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCLoginAuthRsp], error) {
-	loginCode := user.GetExtralData("LoginCode").(string)
-	if loginCode != "" {
+	accessTokenCode := user.GetExtralData("AccessTokenCode").(string)
+	if accessTokenCode != "" {
 		return 0, nil, fmt.Errorf("already login auth")
 	}
 
@@ -39,8 +39,8 @@ func LoginAuthRpc(action base.TaskActionImpl, user user_data.User) (int32, *pu.L
 }
 
 func LoginRpc(action base.TaskActionImpl, user user_data.User) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCLoginRsp], error) {
-	loginCode := user.GetExtralData("LoginCode").(string)
-	if loginCode == "" {
+	accessTokenCode := user.GetExtralData("AccessTokenCode").(string)
+	if accessTokenCode == "" {
 		return 0, nil, fmt.Errorf("need login auth")
 	}
 
@@ -52,9 +52,9 @@ func LoginRpc(action base.TaskActionImpl, user user_data.User) (int32, *pu.LazyU
 	cpuInfo, _ := cpu.Info()
 
 	csBody := &public_protocol_pbdesc.CSLoginReq{
-		LoginCode: loginCode,
-		OpenId:    user.GetOpenId(),
-		UserId:    user.GetUserId(),
+		AccessTokenCode: accessTokenCode,
+		OpenId:          user.GetOpenId(),
+		UserId:          user.GetUserId(),
 		Account: &public_protocol_pbdesc.DAccountData{
 			AccountType: uint32(public_protocol_pbdesc.EnAccountTypeID_EN_ATI_ACCOUNT_INNER),
 			Access:      user.GetAccessToken(),
