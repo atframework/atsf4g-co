@@ -1,5 +1,5 @@
 ---
-name: dsa-dsc-dsm-pseudocode
+name: orbit
 description: "Use when: drafting, reviewing, or extending orbit protocol notes and DSA/DSC pseudocode in this repo. Triggers: 伪代码, pseudocode, protocol, SDK, session routing, agent/controller/server/client flow, atframework component, x-server style, design-to-implementation. Read the orbit guide, protocol index, and formal proto definitions before editing."
 user-invocable: true
 ---
