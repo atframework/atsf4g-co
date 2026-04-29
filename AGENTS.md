@@ -84,6 +84,7 @@ Read the matching `.agents/skills/*/SKILL.md` before doing specialized work:
 | `code-generation` | Editing proto files, templates, or generated outputs |
 | `rpc-protobuf-arena` | Working with task/RPC-local protobuf messages and Arena allocation |
 | `atgateway-protocol` | Working on atgateway v2 protocol, crypto, compression, reconnection, or tests |
+| `ai-agent-maintenance` | Auditing or optimizing AI agent prompts, bridge files, and skills |
 
 ## Agent File Compatibility
 

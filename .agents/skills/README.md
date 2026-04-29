@@ -15,6 +15,7 @@ commands, caveats, and examples here.
 | `code-generation/` | Protobuf/template-based code generation notes |
 | `rpc-protobuf-arena/` | Arena-backed temporary protobuf messages in task/RPC code |
 | `atgateway-protocol/` | atgateway v2 protocol SDK — ECDH handshake, encryption, testing |
+| `ai-agent-maintenance/` | Audit and optimize AI agent prompts, bridge files, and skills |
 
 ## When to read what
 
@@ -23,6 +24,7 @@ commands, caveats, and examples here.
 - If you are adding a new service/protocol/SDK: see `service-functions-cmake/SKILL.md`.
 - If you are creating temporary protobuf messages in task/RPC code: see `rpc-protobuf-arena/SKILL.md`.
 - If you are working on gateway protocol code: see `atgateway-protocol/SKILL.md`.
+- If you are updating AI agent prompts or skills: see `ai-agent-maintenance/SKILL.md`.
 
 ## Maintenance rules
 
