@@ -31,6 +31,16 @@ project_component_declare_protocol(
   PROTOCOLS
   "${CMAKE_CURRENT_LIST_DIR}/protocol/client/protocol/pbdesc/client_service.proto")
 
+project_component_declare_protocol(
+  "orbit-agent-config" "${CMAKE_CURRENT_LIST_DIR}/agent/protocol"
+  PROTOCOLS
+  "${CMAKE_CURRENT_LIST_DIR}/agent/protocol/protocol/config/orbit_agent_config.proto")
+
+project_component_declare_protocol(
+  "orbit-controller-config" "${CMAKE_CURRENT_LIST_DIR}/controller/protocol"
+  PROTOCOLS
+  "${CMAKE_CURRENT_LIST_DIR}/controller/protocol/protocol/config/orbit_controller_config.proto")
+
 add_subdirectory(sdk)
 
 add_subdirectory(agent)

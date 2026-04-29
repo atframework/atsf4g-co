@@ -3,6 +3,8 @@
 
 #include "task_action_send_to_server.h"
 
+#include <logic/orbit_agent_manager.h>
+
 #include <log/log_wrapper.h>
 #include <std/explicit_declare.h>
 #include <time/time_utility.h>
@@ -19,6 +21,7 @@
 // clang-format on
 
 #include <config/logic_config.h>
+#include <rpc/agenttocontrollerservice/agenttocontrollerservice.h>
 #include <utility/protobuf_mini_dumper.h>
 
 #include <config/extern_service_types.h>
@@ -31,13 +34,11 @@ ORBIT_AGENT_SERVICE_API task_action_send_to_server::~task_action_send_to_server(
 ORBIT_AGENT_SERVICE_API const char* task_action_send_to_server::name() const { return "task_action_send_to_server"; }
 
 ORBIT_AGENT_SERVICE_API task_action_send_to_server::result_type task_action_send_to_server::operator()() {
-  EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
-  // Stream request or stream response, just ignore auto response
+  const rpc_request_type& req_body = get_request_body();
   disable_response_message();
 
-  // TODO ...
-
-  TASK_ACTION_RETURN_CODE(hello::err::EN_SUCCESS);
+  TASK_ACTION_RETURN_CODE(
+      RPC_AWAIT_CODE_RESULT(orbit_agent_manager::me()->handle_send_to_server(get_shared_context(), req_body)));
 }
 
 ORBIT_AGENT_SERVICE_API int task_action_send_to_server::on_success() { return get_result(); }

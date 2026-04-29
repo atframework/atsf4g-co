@@ -192,6 +192,15 @@ enum EnSysErrorType {
   EN_ATBUS_ERR_NOT_READY = -2000607
                            [(error_code.description) = "未准备好（没有握手完成）"];
 
+  EN_ORBIT_AGENT_CONTROLLER_SERVER_ID_NOT_MATCH = -2100001
+                                                        [(error_code.description) = "控制器ID不匹配"];
+  EN_ORBIT_AGENT_CLIENT_ID_ALREADY_EXISTS = -2100002
+                                                        [(error_code.description) = "Client ID已经存在"];
+  EN_ORBIT_AGENT_CLIENT_STATE_INVALID = -2100003
+                                                        [(error_code.description) = "Client状态异常"];
+  EN_ORBIT_AGENT_CLIENT_TIMEOUT = -2100004
+                                                        [(error_code.description) = "Client超时"];
+
   EN_ROUTER_NOT_FOUND = -10000081
                         [(error_code.description) = "路由信息找不到"];
   EN_ROUTER_TTL_EXTEND = -10000082

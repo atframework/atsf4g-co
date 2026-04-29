@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+package orbit.config;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+import "atframe/atapp_conf.proto";
+
+message orbit_agent_cfg {
+  string region = 1;
+  string configured_client_command_line = 2;
+  double cpu_capacity = 3;
+  double memory_capacity_mb = 4;
+  google.protobuf.Duration register_attempt_interval = 5
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" }];
+  google.protobuf.Duration heartbeat_interval = 6 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" }];
+}

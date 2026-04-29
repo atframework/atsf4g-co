@@ -21,8 +21,20 @@
 #include <logic/logic_server_macro.h>
 #include <logic/logic_server_setup.h>
 
+#include "logic/orbit_agent_manager.h"
+
 #include "app/handle_ss_rpc_clienttoagentservice.h"
 #include "app/handle_ss_rpc_controllertoagentservice.h"
+
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
+#include <protocol/config/orbit_agent_config.pb.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 class main_service_module : public atapp::module_impl, public std::enable_shared_from_this<main_service_module> {
  public:
@@ -33,20 +45,25 @@ class main_service_module : public atapp::module_impl, public std::enable_shared
 
     INIT_CALL_FN(handle::clienttoagentservice::register_handles_for_clienttoagentservice);
     INIT_CALL_FN(handle::controllertoagentservice::register_handles_for_controllertoagentservice);
+    INIT_CALL(orbit_agent_manager);
     return 0;
   }
 
-  int stop() override { return 0; }
+  int stop() override {
+    orbit_agent_manager::me()->stop();
+    return 0;
+  }
 
-  const char *name() const override { return "main_service_module"; }
+  const char* name() const override { return "main_service_module"; }
 
   int tick() override {
     int ret = 0;
+    orbit_agent_manager::me()->tick();
     return ret;
   }
 };
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
   atfw::atapp::app app;
 
   {
@@ -54,6 +71,13 @@ int main(int argc, char *argv[]) {
     atfw::util::file_system::dirname(__FILE__, 0, proj_dir, 4);
     atfw::util::log::log_formatter::set_project_directory(proj_dir.c_str(), proj_dir.size());
   }
+
+  logic_config::me()->set_server_instance_config_loader(
+      [](atfw::atapp::app &app, logic_config & /*cfg*/, logic_config::server_instance_config_ptr &to) {
+        auto config_ptr = atfw::util::memory::make_strong_rc<orbit::config::orbit_agent_cfg>();
+        app.parse_configures_into(*config_ptr, "orbit-agent");
+        to = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);
+      });
 
   logic_server_common_module_configure logic_mod_conf;
   if (logic_server_setup_common(app, logic_mod_conf) < 0) {

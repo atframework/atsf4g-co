@@ -11,6 +11,7 @@ project_component_declare_service(
   "orbit-controller-agent-sdk"
   "orbit-controller-server-sdk"
   "orbit-controller-protocol"
+  "orbit-controller-config"
   HRADERS
   ${SERVICE_HEADERS}
   SOURCES

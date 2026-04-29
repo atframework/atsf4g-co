@@ -21,11 +21,6 @@ service ControllerToAgentService {
       api_name: "拉起Client 返回不等于可用"
     };
   };
-  rpc stop_client(CTAStopClientReq) returns (ATCStopClientRsp) {
-    option (atframework.rpc_options) = {
-      api_name: "停止Client"
-    };
-  };
   rpc forward_to_client(CTAForwardToClientReq) returns (ATCForwardToClientRsp) {
     option (atframework.rpc_options) = {
       api_name: "转发Client消息"
@@ -37,12 +32,6 @@ message CTAStartClientReq {
   DAgentClientStartArgs args = 1;
 }
 message ATCStartClientRsp {}
-
-message CTAStopClientReq {
-  DClientId client_id = 1;
-  string reason = 2;
-}
-message ATCStopClientRsp {}
 
 message CTAForwardToClientReq {
   DClientId client_id = 1;

@@ -3,6 +3,8 @@
 
 #include "task_action_forward_to_client.h"
 
+#include <logic/orbit_agent_manager.h>
+
 #include <log/log_wrapper.h>
 #include <std/explicit_declare.h>
 #include <time/time_utility.h>
@@ -19,6 +21,7 @@
 // clang-format on
 
 #include <config/logic_config.h>
+#include <rpc/agenttoclientservice/agenttoclientservice.h>
 #include <utility/protobuf_mini_dumper.h>
 
 #include <config/extern_service_types.h>
@@ -33,12 +36,12 @@ ORBIT_AGENT_SERVICE_API const char* task_action_forward_to_client::name() const 
 }
 
 ORBIT_AGENT_SERVICE_API task_action_forward_to_client::result_type task_action_forward_to_client::operator()() {
-  EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
-  EXPLICIT_UNUSED_ATTR rpc_response_type& rsp_body = get_response_body();
+  const rpc_request_type& req_body = get_request_body();
+  rpc_response_type& rsp_body = get_response_body();
 
-  // TODO ...
-
-  TASK_ACTION_RETURN_CODE(hello::err::EN_SUCCESS);
+  int32_t rpc_result = RPC_AWAIT_CODE_RESULT(
+      orbit_agent_manager::me()->handle_forward_to_client(get_shared_context(), req_body, rsp_body));
+  TASK_ACTION_RETURN_CODE(rpc_result);
 }
 
 ORBIT_AGENT_SERVICE_API int task_action_forward_to_client::on_success() { return get_result(); }

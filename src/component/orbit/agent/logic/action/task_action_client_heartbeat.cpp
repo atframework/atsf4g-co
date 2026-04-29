@@ -3,6 +3,8 @@
 
 #include "task_action_client_heartbeat.h"
 
+#include <logic/orbit_agent_manager.h>
+
 #include <log/log_wrapper.h>
 #include <std/explicit_declare.h>
 #include <time/time_utility.h>
@@ -33,13 +35,13 @@ ORBIT_AGENT_SERVICE_API const char* task_action_client_heartbeat::name() const {
 }
 
 ORBIT_AGENT_SERVICE_API task_action_client_heartbeat::result_type task_action_client_heartbeat::operator()() {
-  EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
+  const rpc_request_type& req_body = get_request_body();
   // Stream request or stream response, just ignore auto response
   disable_response_message();
 
-  // TODO ...
-
-  TASK_ACTION_RETURN_CODE(hello::err::EN_SUCCESS);
+  int32_t rpc_result =
+      RPC_AWAIT_CODE_RESULT(orbit_agent_manager::me()->handle_client_heartbeat(get_shared_context(), req_body));
+  TASK_ACTION_RETURN_CODE(rpc_result);
 }
 
 ORBIT_AGENT_SERVICE_API int task_action_client_heartbeat::on_success() { return get_result(); }

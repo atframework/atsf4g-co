@@ -8,10 +8,6 @@ option cc_enable_arenas = true;
 
 package orbit;
 
-enum EnOrbitErrorCode {
-  EN_ORBIT_SUCCESS = 0;
-}
-
 enum EnClientState {
   EN_SLAVE_STATE_UNSPECIFIED = 0;
   EN_SLAVE_STATE_STARTING = 1;
@@ -68,6 +64,8 @@ message DAgentClientStartArgs {
   DClientStartArgs client_start_args = 1;
   double expected_cpu = 2;
   double expected_memory_mb = 3;
+  uint32 startup_timeout_sec = 4;
+  uint32 heartbeat_timeout_sec = 5;
 }
 
 message DAgentLoadSnapshot {

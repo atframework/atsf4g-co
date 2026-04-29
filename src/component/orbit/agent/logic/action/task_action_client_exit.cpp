@@ -3,6 +3,8 @@
 
 #include "task_action_client_exit.h"
 
+#include <logic/orbit_agent_manager.h>
+
 #include <log/log_wrapper.h>
 #include <std/explicit_declare.h>
 #include <time/time_utility.h>
@@ -19,6 +21,7 @@
 // clang-format on
 
 #include <config/logic_config.h>
+#include <rpc/agenttocontrollerservice/agenttocontrollerservice.h>
 #include <utility/protobuf_mini_dumper.h>
 
 #include <config/extern_service_types.h>
@@ -31,13 +34,13 @@ ORBIT_AGENT_SERVICE_API task_action_client_exit::~task_action_client_exit() {}
 ORBIT_AGENT_SERVICE_API const char* task_action_client_exit::name() const { return "task_action_client_exit"; }
 
 ORBIT_AGENT_SERVICE_API task_action_client_exit::result_type task_action_client_exit::operator()() {
-  EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
+  const rpc_request_type& req_body = get_request_body();
   // Stream request or stream response, just ignore auto response
   disable_response_message();
 
-  // TODO ...
-
-  TASK_ACTION_RETURN_CODE(hello::err::EN_SUCCESS);
+  int32_t rpc_result =
+      RPC_AWAIT_CODE_RESULT(orbit_agent_manager::me()->handle_client_exit(get_shared_context(), req_body));
+  TASK_ACTION_RETURN_CODE(rpc_result);
 }
 
 ORBIT_AGENT_SERVICE_API int task_action_client_exit::on_success() { return get_result(); }
