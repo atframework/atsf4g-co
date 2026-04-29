@@ -143,10 +143,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param io_guard IO任务保护
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_cache(rpc::context &ctx,
-                                                              std::shared_ptr<router_object_base> &out,
-                                                              const key_t &key, void *priv_data,
-                                                              router_object_base::io_task_guard &io_guard) override {
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_cache(
+      rpc::context &ctx, std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data,
+      router_object_base::io_task_guard &io_guard) override {
     ptr_t outc;
     auto ret = RPC_AWAIT_CODE_RESULT(mutable_cache(ctx, outc, key, reinterpret_cast<priv_data_t>(priv_data), io_guard));
     out = std::static_pointer_cast<router_object_base>(outc);
@@ -162,8 +161,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param priv_data 私有数据
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_cache(rpc::context &ctx, ptr_t &out, const key_t &key,
-                                                              priv_data_t priv_data) {
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_cache(rpc::context &ctx, ptr_t &out, const key_t &key,
+                                                                   priv_data_t priv_data) {
     router_object_base::io_task_guard io_guard;
     auto ret = RPC_AWAIT_CODE_RESULT(mutable_cache(ctx, out, key, reinterpret_cast<priv_data_t>(priv_data), io_guard));
     RPC_RETURN_CODE(ret);
@@ -179,9 +178,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param io_guard IO任务保护
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_cache(rpc::context &ctx, ptr_t &out, const key_t &key,
-                                                              priv_data_t priv_data,
-                                                              router_object_base::io_task_guard &io_guard) {
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_cache(rpc::context &ctx, ptr_t &out, const key_t &key,
+                                                                   priv_data_t priv_data,
+                                                                   router_object_base::io_task_guard &io_guard) {
     size_t left_ttl = logic_config::me()->get_cfg_router().retry_max_ttl();
     for (; left_ttl > 0; --left_ttl) {
       int res;
@@ -263,8 +262,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param priv_data 私有数据
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type renew_cache(rpc::context &ctx, store_ptr_t &in, ptr_t &out,
-                                                            const key_t &key, priv_data_t priv_data) {
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type renew_cache(rpc::context &ctx, store_ptr_t &in, ptr_t &out,
+                                                                 const key_t &key, priv_data_t priv_data) {
     if (!in.expired()) {
       out = in.lock();
     } else {
@@ -295,10 +294,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param io_guard IO任务保护
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_object(rpc::context &ctx,
-                                                               std::shared_ptr<router_object_base> &out,
-                                                               const key_t &key, void *priv_data,
-                                                               router_object_base::io_task_guard &io_guard) override {
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_object(
+      rpc::context &ctx, std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data,
+      router_object_base::io_task_guard &io_guard) override {
     ptr_t outc;
     auto ret =
         RPC_AWAIT_CODE_RESULT(mutable_object(ctx, outc, key, reinterpret_cast<priv_data_t>(priv_data), io_guard));
@@ -315,8 +313,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param priv_data 私有数据
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_object(rpc::context &ctx, ptr_t &out, const key_t &key,
-                                                               priv_data_t priv_data) {
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_object(rpc::context &ctx, ptr_t &out, const key_t &key,
+                                                                    priv_data_t priv_data) {
     router_object_base::io_task_guard io_guard;
     auto ret = RPC_AWAIT_CODE_RESULT(mutable_object(ctx, out, key, priv_data, io_guard));
     RPC_RETURN_CODE(ret);
@@ -332,9 +330,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param io_guard IO任务保护
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_object(rpc::context &ctx, ptr_t &out, const key_t &key,
-                                                               priv_data_t priv_data,
-                                                               router_object_base::io_task_guard &io_guard) {
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_object(rpc::context &ctx, ptr_t &out, const key_t &key,
+                                                                    priv_data_t priv_data,
+                                                                    router_object_base::io_task_guard &io_guard) {
     size_t left_ttl = logic_config::me()->get_cfg_router().retry_max_ttl();
     for (; left_ttl > 0; --left_ttl) {
       rpc::result_code_type::value_type res;
@@ -423,7 +421,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param priv_data 私有数据
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE virtual rpc::result_code_type transfer(
+  ATFW_EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE virtual rpc::result_code_type transfer(
       rpc::context &ctx, const key_t &key, uint64_t svr_id, bool need_notify, priv_data_t priv_data) {
     ptr_t obj;
     auto ret = RPC_AWAIT_CODE_RESULT(mutable_object(ctx, obj, key, priv_data));
@@ -444,7 +442,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param priv_data 私有数据
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE virtual rpc::result_code_type transfer(
+  ATFW_EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE virtual rpc::result_code_type transfer(
       rpc::context &ctx, const ptr_t &obj, uint64_t svr_id, bool need_notify, priv_data_t priv_data) {
     if (!obj) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
@@ -573,7 +571,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param io_guard IO任务保护
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE rpc::result_code_type remove_cache(
+  ATFW_EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE rpc::result_code_type remove_cache(
       rpc::context &ctx, const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data,
       router_object_base::io_task_guard &io_guard) override {
     ptr_t cache_child;
@@ -650,7 +648,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param io_guard IO任务保护
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE rpc::result_code_type remove_object(
+  ATFW_EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE rpc::result_code_type remove_object(
       rpc::context &ctx, const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data,
       router_object_base::io_task_guard &io_guard) override {
     ptr_t cache_child;
@@ -859,8 +857,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param priv_data 私有数据
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR virtual rpc::result_code_type on_evt_remove_cache(rpc::context &ctx, const key_t &key,
-                                                                            const ptr_t &cache, priv_data_t priv_data) {
+  ATFW_EXPLICIT_NODISCARD_ATTR virtual rpc::result_code_type on_evt_remove_cache(rpc::context &ctx, const key_t &key,
+                                                                                 const ptr_t &cache,
+                                                                                 priv_data_t priv_data) {
     if (handle_on_remove_cache_) {
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle_on_remove_cache_(ctx, *this, key, cache, priv_data)));
     }
@@ -876,9 +875,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param priv_data 私有数据
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR virtual rpc::result_code_type on_evt_cache_removed(rpc::context &ctx, const key_t &key,
-                                                                             const ptr_t &cache,
-                                                                             priv_data_t priv_data) {
+  ATFW_EXPLICIT_NODISCARD_ATTR virtual rpc::result_code_type on_evt_cache_removed(rpc::context &ctx, const key_t &key,
+                                                                                  const ptr_t &cache,
+                                                                                  priv_data_t priv_data) {
     if (handle_on_cache_removed_) {
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle_on_cache_removed_(ctx, *this, key, cache, priv_data)));
     }
@@ -894,9 +893,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param priv_data 私有数据
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR virtual rpc::result_code_type on_evt_remove_object(rpc::context &ctx, const key_t &key,
-                                                                             const ptr_t &cache,
-                                                                             priv_data_t priv_data) {
+  ATFW_EXPLICIT_NODISCARD_ATTR virtual rpc::result_code_type on_evt_remove_object(rpc::context &ctx, const key_t &key,
+                                                                                  const ptr_t &cache,
+                                                                                  priv_data_t priv_data) {
     if (handle_on_remove_object_) {
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle_on_remove_object_(ctx, *this, key, cache, priv_data)));
     }
@@ -912,9 +911,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param priv_data 私有数据
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR virtual rpc::result_code_type on_evt_object_removed(rpc::context &ctx, const key_t &key,
-                                                                              const ptr_t &cache,
-                                                                              priv_data_t priv_data) {
+  ATFW_EXPLICIT_NODISCARD_ATTR virtual rpc::result_code_type on_evt_object_removed(rpc::context &ctx, const key_t &key,
+                                                                                   const ptr_t &cache,
+                                                                                   priv_data_t priv_data) {
     if (handle_on_object_removed_) {
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle_on_object_removed_(ctx, *this, key, cache, priv_data)));
     }
@@ -929,8 +928,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param priv_data 私有数据
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR virtual rpc::result_code_type on_evt_pull_cache(rpc::context &ctx, const ptr_t &cache,
-                                                                          priv_data_t priv_data) {
+  ATFW_EXPLICIT_NODISCARD_ATTR virtual rpc::result_code_type on_evt_pull_cache(rpc::context &ctx, const ptr_t &cache,
+                                                                               priv_data_t priv_data) {
     if (handle_on_pull_cache_) {
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle_on_pull_cache_(ctx, *this, cache, priv_data)));
     }
@@ -945,8 +944,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
    * @param priv_data 私有数据
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR virtual rpc::result_code_type on_evt_pull_object(rpc::context &ctx, const ptr_t &cache,
-                                                                           priv_data_t priv_data) {
+  ATFW_EXPLICIT_NODISCARD_ATTR virtual rpc::result_code_type on_evt_pull_object(rpc::context &ctx, const ptr_t &cache,
+                                                                                priv_data_t priv_data) {
     if (handle_on_pull_object_) {
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle_on_pull_object_(ctx, *this, cache, priv_data)));
     }

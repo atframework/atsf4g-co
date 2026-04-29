@@ -27,7 +27,7 @@ class rank_mirror_global : public util::design_pattern::singleton<rank_mirror_gl
   void add_failed_task(const dump_mirror_task_ptr& task);
 
   void async_tick_dump(rpc::context& ctx);
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type tick_dump(rpc::context& ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type tick_dump(rpc::context& ctx);
 
   bool is_dump_task_running();
 

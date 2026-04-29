@@ -56,7 +56,7 @@ task_action_object_cache_get_user_cache_data::operator()() {
   cache_meta->mutable_user_key()->set_user_id(user->get_user_id());
 
   rpc::cache_api::update_cache_meta_from_origin_data(get_shared_context(), *cache_meta, user->get_data_version(),
-                                                     &user->get_login_info(), &user->get_player_data(),
+                                                     &user->get_login_info(), &user->get_user_data(),
                                                      &user->get_account_info().profile(), &user->get_client_info());
 
   rsp_body.set_result(PROJECT_NAMESPACE_ID::EN_SUCCESS);

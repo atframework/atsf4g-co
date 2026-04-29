@@ -44,27 +44,28 @@ class rank_mirror_manager {
   rank_mirror_manager(rank* owner);
   ~rank_mirror_manager();
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type init_from_db(rpc::context& ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type init_from_db(rpc::context& ctx);
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_mirror(rpc::context& ctx, int64_t& mirror_id,
-                                                              bool is_normal_save);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_mirror(rpc::context& ctx, int64_t& mirror_id,
+                                                                   bool is_normal_save);
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type dump_mirror_success(rpc::context& ctx, const dump_mirror_task_ptr task);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type dump_mirror_success(rpc::context& ctx,
+                                                                         const dump_mirror_task_ptr task);
 
   bool check_mirror_dump_finish(int64_t mirror_id) const;
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type get_mirror_data_from_db(
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type get_mirror_data_from_db(
       rpc::context& ctx, const PROJECT_NAMESPACE_ID::rank_mirror_meta_info& mirror_info,
-      std::vector<atfw::util::memory::strong_rc_ptr<rpc::shared_message<PROJECT_NAMESPACE_ID::table_rank_mirror>>>& db_data);
+      std::vector<atfw::util::memory::strong_rc_ptr<rpc::shared_message<PROJECT_NAMESPACE_ID::table_rank_mirror>>>&
+          db_data);
 
   const PROJECT_NAMESPACE_ID::table_rank_mirror_meta_data& get_rank_mirror_meta_data() const { return meta_data_; }
 
-  
  private:
   std::pair<bool, int64_t> check_need_create_mirror(bool is_normal_save);
 
   void check_and_remove_mirror();
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type do_remove_mirror(rpc::context& ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type do_remove_mirror(rpc::context& ctx);
 
  private:
   rank* owner_ = nullptr;

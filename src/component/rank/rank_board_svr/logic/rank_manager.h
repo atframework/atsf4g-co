@@ -17,7 +17,6 @@
 #include <protocol/pbdesc/svr.local.table.pb.h>
 #include <rpc/rpc_shared_message.h>
 
-
 #include <rpc/db/db_utils.h>
 #include <rpc/rpc_common_types.h>
 #include "config/server_frame_build_feature.h"
@@ -35,7 +34,6 @@ struct rank_sort_type_equal_type {
 };
 
 class rank_manager : public util::design_pattern::singleton<rank_manager> {
-
  public:
   rank_manager();
 
@@ -55,9 +53,9 @@ class rank_manager : public util::design_pattern::singleton<rank_manager> {
    * @param out_rank 返回的排行榜对象
    * @return rpc::result_code_type
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_rank(rpc::context& ctx,
-                                                             const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
-                                                             rank_ptr_type& out_rank);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_rank(rpc::context& ctx,
+                                                                  const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
+                                                                  rank_ptr_type& out_rank);
   /**
    * @brief 获取可变排行榜对象
    * @param ctx rpc上下文
@@ -65,9 +63,9 @@ class rank_manager : public util::design_pattern::singleton<rank_manager> {
    * @param out_rank 返回的排行榜对象
    * @return rpc::result_code_type
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_main_rank(rpc::context& ctx,
-                                                                  const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
-                                                                  rank_ptr_type& out_rank);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_main_rank(rpc::context& ctx,
+                                                                       const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
+                                                                       rank_ptr_type& out_rank);
 
   /**
    * @brief 修改玩家分数
@@ -78,11 +76,10 @@ class rank_manager : public util::design_pattern::singleton<rank_manager> {
    * @param custom_data 自定义数据
    * @return rpc::result_code_type
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type modify_score(rpc::context& ctx,
-                                                             const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
-                                                             const PROJECT_NAMESPACE_ID::DRankUserKey& user_key,
-                                                             int64_t score,
-                                                             const PROJECT_NAMESPACE_ID::DRankCustomData& custom_data);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type modify_score(
+      rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
+      const PROJECT_NAMESPACE_ID::DRankUserKey& user_key, int64_t score,
+      const PROJECT_NAMESPACE_ID::DRankCustomData& custom_data);
 
   /**
    * @brief 查询指定key排行数据
@@ -92,11 +89,10 @@ class rank_manager : public util::design_pattern::singleton<rank_manager> {
    * @param output 返回的玩家排行数据
    * @return rpc::result_code_type
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type query_one_user(rpc::context& ctx,
-                                                               const 
-                                                               PROJECT_NAMESPACE_ID::DRankKey& rank_key,
-                                                               const PROJECT_NAMESPACE_ID::DRankUserKey& sort_key,
-                                                               PROJECT_NAMESPACE_ID::DRankUserBoardData& output);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type query_one_user(rpc::context& ctx,
+                                                                    const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
+                                                                    const PROJECT_NAMESPACE_ID::DRankUserKey& sort_key,
+                                                                    PROJECT_NAMESPACE_ID::DRankUserBoardData& output);
   /**
    * @brief 查询排行数据
    * @param ctx rpc上下文
@@ -106,9 +102,10 @@ class rank_manager : public util::design_pattern::singleton<rank_manager> {
    * @param output 返回的排行榜对象
    * @return rpc::result_code_type
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type query_top(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
-                                                          uint32_t from, uint32_t count,
-                                                          PROJECT_NAMESPACE_ID::DRankQueryRspData& output);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type query_top(rpc::context& ctx,
+                                                               const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
+                                                               uint32_t from, uint32_t count,
+                                                               PROJECT_NAMESPACE_ID::DRankQueryRspData& output);
 
   inline bool is_running() { return init_ && !closing_; }
   inline bool is_init() { return init_; }
@@ -122,13 +119,9 @@ class rank_manager : public util::design_pattern::singleton<rank_manager> {
   std::vector<uint64_t> get_slave_nodes(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank,
                                         uint64_t main_node);
 
-
-
-
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type upgrade_rank_to_main(rpc::context& ctx,
-                                                                     const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
-                                                                     int32_t db_router_version);
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type check_slave_and_highest_data_version_slave(
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type upgrade_rank_to_main(
+      rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key, int32_t db_router_version);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type check_slave_and_highest_data_version_slave(
       rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
       const PROJECT_NAMESPACE_ID::table_rank_router& new_db_router, std::pair<uint64_t, int64_t>& highest_slave_node);
 

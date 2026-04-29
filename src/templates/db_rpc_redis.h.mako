@@ -41,7 +41,7 @@ namespace ${index.name} {
 %     else:
 <%include file="db_rpc_redis_kl.h.mako" args="message_name=message_name,index=index,key_fields=key_fields" />
 %     endif
-EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_all(rpc::context &ctx
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_all(rpc::context &ctx
 %     for key_field in key_fields:
                                                              ,${key_field["cpp_type"]} ${key_field["raw_name"]}
 %     endfor

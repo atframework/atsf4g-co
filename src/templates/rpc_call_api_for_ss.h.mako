@@ -149,7 +149,7 @@ namespace broadcast {
 %   endfor
  * @return 0 or error code
  */
-EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type}
+ATFW_EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type}
   ${rpc.get_name()}(
     ${', '.join(rpc_broadcast_params_decl)},
     const ss_msg_logic_index& index, ::atfw::atapp::protocol::atapp_metadata *metadata = nullptr);
@@ -167,7 +167,7 @@ namespace unicast {
 %   endfor
  * @return 0 or error code
  */
-EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type}
+ATFW_EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type}
   ${rpc.get_name()}(
     ${', '.join(rpc_unicast_params_decl)});
 }  // namespace unicast
@@ -182,7 +182,7 @@ EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type}
 %   endfor
  * @return 0 or error code
  */
-EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type}
+ATFW_EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type}
   ${rpc.get_name()}(
     ${', '.join(rpc_unicast_params_decl_legacy)});
 % endfor

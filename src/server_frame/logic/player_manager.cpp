@@ -22,6 +22,7 @@
 
 #include <router/router_manager_set.h>
 #include <router/router_player_manager.h>
+#include <memory>
 
 #include "logic/session_manager.h"
 
@@ -68,7 +69,7 @@ SERVER_FRAME_API rpc::result_code_type player_manager::remove(rpc::context &ctx,
     check_user->set_session(ctx, nullptr);
     if (check_sess && check_sess->get_player().get() == check_user) {
       check_sess->set_player(nullptr);
-      session_manager::me()->remove(check_sess, static_cast<int32_t>(::atfw::gateway::close_reason_t::kKickoff));
+      session_manager::me()->remove(ctx, check_sess, static_cast<int32_t>(::atfw::gateway::close_reason_t::kKickoff));
     }
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -240,12 +241,30 @@ SERVER_FRAME_API rpc::result_code_type player_manager::create(
   // 新用户,启动创建初始化
   if (!output->has_create_init()) {
     // manager 创建初始化
-    output->create_init(ctx);
+    res = RPC_AWAIT_CODE_RESULT(output->create_init(ctx));
+    if (res < 0) {
+      FWLOGERROR("create_init player_cache {}:{} object failed, res: {}({})", zone_id, user_id, res,
+                 protobuf_mini_dumper_get_error_msg(res));
+      auto remove_res = RPC_AWAIT_CODE_RESULT(router_player_manager::me()->remove_player_object(
+          ctx, user_id, zone_id, std::static_pointer_cast<router_object_base>(cache), nullptr));
+      if (remove_res < 0) {
+        FWLOGERROR("remove player_cache {}:{} object after create_init failed, res: {}({})", zone_id, user_id,
+                   remove_res, protobuf_mini_dumper_get_error_msg(remove_res));
+      }
+      RPC_RETURN_CODE(res);
+    }
+
     // 初始化完成，保存一次
     res = RPC_AWAIT_CODE_RESULT(cache->save(ctx, nullptr));
     if (res < 0) {
       FWLOGERROR("save player_cache {}:{} object failed, res: {}({})", zone_id, user_id, res,
                  protobuf_mini_dumper_get_error_msg(res));
+      auto remove_res = RPC_AWAIT_CODE_RESULT(router_player_manager::me()->remove_player_object(
+          ctx, user_id, zone_id, std::static_pointer_cast<router_object_base>(cache), nullptr));
+      if (remove_res < 0) {
+        FWLOGERROR("remove player_cache {}:{} object after create_init failed, res: {}({})", zone_id, user_id,
+                   remove_res, protobuf_mini_dumper_get_error_msg(remove_res));
+      }
       RPC_RETURN_CODE(res);
     }
 

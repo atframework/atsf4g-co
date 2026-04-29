@@ -125,27 +125,33 @@ SERVER_FRAME_API player_cache::ptr_t player_cache::create(uint64_t user_id, uint
   return ret;
 }
 
-SERVER_FRAME_API void player_cache::create_init(rpc::context &) {
+SERVER_FRAME_API rpc::result_code_type player_cache::create_init(rpc::context &) {
   data_version_ = 0;
   create_init_ = true;
+
+  RPC_RETURN_CODE(0);
 }
 
-SERVER_FRAME_API void player_cache::login_init(rpc::context &) {}
+SERVER_FRAME_API rpc::result_code_type player_cache::login_init(rpc::context &) { RPC_RETURN_CODE(0); }
 
 SERVER_FRAME_API bool player_cache::is_dirty() const {
   //! === manager implement === 检查是否有脏数据
   bool ret = false;
   ret = ret || account_info_.is_dirty();
-  ret = ret || player_data_.is_dirty();
+  ret = ret || user_data_.is_dirty();
   ret = ret || login_info_.is_dirty();
+  ret = ret || user_option_public_data_.is_dirty();
+  ret = ret || user_option_private_data_.is_dirty();
   return ret;
 }
 
 SERVER_FRAME_API void player_cache::clear_dirty() {
   //! === manager implement === 清理脏数据标记
   account_info_.clear_dirty();
-  player_data_.clear_dirty();
+  user_data_.clear_dirty();
   login_info_.clear_dirty();
+  user_option_public_data_.clear_dirty();
+  user_option_private_data_.clear_dirty();
 }
 
 SERVER_FRAME_API void player_cache::refresh_feature_limit(rpc::context &) {
@@ -189,14 +195,22 @@ SERVER_FRAME_API void player_cache::init_from_table_data(rpc::context &,
   }
 
   if (src_tb->has_user_data()) {
-    protobuf_copy_message(player_data_.ref(), src_tb->user_data());
-    if (player_data_.ref().session_sequence() > server_sequence_) {
-      server_sequence_ = player_data_.ref().session_sequence();
+    protobuf_copy_message(user_data_.ref(), src_tb->user_data());
+    if (user_data_.ref().session_sequence() > server_sequence_) {
+      server_sequence_ = user_data_.ref().session_sequence();
     }
   }
 
   if (src_tb->has_login_data()) {
     protobuf_copy_message(login_info_.ref(), src_tb->login_data());
+  }
+
+  if (src_tb->has_option_data_public()) {
+    protobuf_copy_message(user_option_public_data_.ref(), src_tb->option_data_public());
+  }
+
+  if (src_tb->has_option_data_private()) {
+    protobuf_copy_message(user_option_private_data_.ref(), src_tb->option_data_private());
   }
 
   data_version_ = tb_player.data_version();
@@ -210,8 +224,8 @@ SERVER_FRAME_API int player_cache::dump(rpc::context &, PROJECT_NAMESPACE_ID::ta
   user.set_create_init(create_init_);
   user.set_data_version(data_version_);
 
-  if (always || player_data_.is_dirty()) {
-    protobuf_copy_message(*user.mutable_user_data(), player_data_.ref());
+  if (always || user_data_.is_dirty()) {
+    protobuf_copy_message(*user.mutable_user_data(), user_data_.ref());
   }
 
   if (always || account_info_.is_dirty()) {
@@ -220,6 +234,14 @@ SERVER_FRAME_API int player_cache::dump(rpc::context &, PROJECT_NAMESPACE_ID::ta
 
   if (always || login_info_.is_dirty()) {
     protobuf_copy_message(*user.mutable_login_data(), login_info_.ref());
+  }
+
+  if (always || user_option_public_data_.is_dirty()) {
+    protobuf_copy_message(*user.mutable_option_data_public(), user_option_public_data_.ref());
+  }
+
+  if (always || user_option_private_data_.is_dirty()) {
+    protobuf_copy_message(*user.mutable_option_data_private(), user_option_private_data_.ref());
   }
 
   return 0;
@@ -257,7 +279,7 @@ SERVER_FRAME_API void player_cache::load_and_move_login_lock(PROJECT_NAMESPACE_I
 
 SERVER_FRAME_API uint64_t player_cache::alloc_server_sequence() {
   uint64_t ret = ++server_sequence_;
-  player_data_.ref().set_session_sequence(ret);
+  user_data_.ref().set_session_sequence(ret);
   return ret;
 }
 
@@ -296,7 +318,6 @@ SERVER_FRAME_API rpc::result_code_type player_cache::await_initialization_task(r
   }
   RPC_RETURN_CODE(ret);
 }
-
 
 SERVER_FRAME_API rpc::result_code_type player_cache::wait_task_lock(rpc::context &ctx) {
   if (task_lock_) {

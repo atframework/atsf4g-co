@@ -110,12 +110,13 @@ SERVER_FRAME_API session_manager::sess_ptr_t session_manager::create(const sessi
   return sess;
 }
 
-SERVER_FRAME_API void session_manager::remove(const session::key_t &key, int reason,
+SERVER_FRAME_API void session_manager::remove(rpc::context &ctx, const session::key_t &key, int reason,
                                               atfw::util::nostd::string_view message) {
-  remove(find(key), reason, message);
+  remove(ctx, find(key), reason, message);
 }
 
-SERVER_FRAME_API void session_manager::remove(sess_ptr_t sess, int reason, atfw::util::nostd::string_view message) {
+SERVER_FRAME_API void session_manager::remove(rpc::context & /*ctx*/, sess_ptr_t sess, int reason,
+                                              atfw::util::nostd::string_view message) {
   if (!sess) {
     return;
   }
@@ -182,7 +183,8 @@ SERVER_FRAME_API void session_manager::remove(sess_ptr_t sess, int reason, atfw:
   }
 }
 
-SERVER_FRAME_API void session_manager::remove_all(int32_t reason, atfw::util::nostd::string_view message) {
+SERVER_FRAME_API void session_manager::remove_all(rpc::context &ctx, int32_t reason,
+                                                  atfw::util::nostd::string_view message) {
   for (session_index_t::iterator iter = all_sessions_.begin(); iter != all_sessions_.end(); ++iter) {
     if (iter->second) {
       iter->second->set_flag(session::flag_t::EN_SESSION_FLAG_CLOSED, true);
@@ -195,7 +197,6 @@ SERVER_FRAME_API void session_manager::remove_all(int32_t reason, atfw::util::no
   session_counter_.clear();
 
   if (!all_sessions->empty()) {
-    rpc::context ctx{rpc::context::create_without_task()};
     auto remove_player_task = rpc::async_invoke(
         ctx, "session_manager.remove_all", [all_sessions](rpc::context &subctx) -> rpc::result_code_type {
           for (auto &session : *all_sessions) {

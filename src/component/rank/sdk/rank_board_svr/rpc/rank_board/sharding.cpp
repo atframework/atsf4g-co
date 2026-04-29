@@ -49,7 +49,7 @@ class router_rank_manager : public util::design_pattern::singleton<router_rank_m
         static_cast<uint32_t>(::PROJECT_NAMESPACE_ID::rank_api::rank_key_hash_type()(rank_key)));
   }
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type get_rank_slave_server_ids(
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type get_rank_slave_server_ids(
       rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key, std::vector<uint64_t>& slave_server_ids) {
     const router_rank_info* router_info = nullptr;
     auto ret = RPC_AWAIT_CODE_RESULT(get_rank_server_router_info(ctx, rank_key, &router_info));
@@ -69,7 +69,7 @@ class router_rank_manager : public util::design_pattern::singleton<router_rank_m
     RPC_RETURN_CODE(0);
   }
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type get_rank_slave_server_random(
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type get_rank_slave_server_random(
       rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key, uint64_t& slave_server_id) {
     std::vector<uint64_t> slave_server_ids;
     auto ret = RPC_AWAIT_CODE_RESULT(get_rank_slave_server_ids(ctx, rank_key, slave_server_ids));
@@ -102,7 +102,7 @@ class router_rank_manager : public util::design_pattern::singleton<router_rank_m
     return 0;
   }
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type get_rank_server_router_info(
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type get_rank_server_router_info(
       rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key, const router_rank_info** output_router_info) {
     if (output_router_info == nullptr) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
@@ -179,13 +179,13 @@ RANK_BOARD_SDK_API uint64_t get_rank_main_server_id(rpc::context& ctx, const PRO
   return inner::router_rank_manager::me()->get_rank_main_server_id(ctx, rank_key);
 }
 
-EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_rank_slave_server_ids(
+ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_rank_slave_server_ids(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key, std::vector<uint64_t>& slave_server_ids) {
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
       inner::router_rank_manager::me()->get_rank_slave_server_ids(ctx, rank_key, slave_server_ids)));
 }
 
-EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_rank_slave_server_random(
+ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_rank_slave_server_random(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key, uint64_t& slave_server_id) {
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
       inner::router_rank_manager::me()->get_rank_slave_server_random(ctx, rank_key, slave_server_id)));

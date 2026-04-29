@@ -80,7 +80,7 @@ class user_rank_manager {
 
   void try_start_io_task(rpc::context &ctx);
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type wait_for_async_task(rpc::context &ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type wait_for_async_task(rpc::context &ctx);
 
   bool is_rank_writable_now(const logic_rank_rule_cfg_t &cfg, time_t now) const noexcept;
 
@@ -118,7 +118,7 @@ class user_rank_manager {
    * @biref 获取指定排行榜的缓存数据
    * @return 排行榜的缓存数据,失败或者无效返回全0
    */
-  EXPLICIT_NODISCARD_ATTR rpc::rpc_result<rank_board_cache> get_rank_cache(
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::rpc_result<rank_board_cache> get_rank_cache(
       rpc::context &ctx, const logic_rank_handle_key &rank_key, const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
       const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key);
 
@@ -134,7 +134,7 @@ class user_rank_manager {
    * @param sync_mode 同步模式（等待返回）
    * @return rpc::result_code_type
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type set_rank_score(
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type set_rank_score(
       rpc::context &ctx, const logic_rank_handle_key &rank_key, const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
       const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key, uint32_t score,
       const logic_rank_user_extend_span *user_extend = nullptr, bool sync_mode = false);
@@ -153,7 +153,7 @@ class user_rank_manager {
    * @param sync_mode 同步模式（等待返回）
    * @return rpc::result_code_type
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type add_rank_score(
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type add_rank_score(
       rpc::context &ctx, const logic_rank_handle_key &rank_key, const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
       uint32_t target_user_zone_id, uint64_t target_user_id,
       const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key, uint32_t score,
@@ -172,7 +172,7 @@ class user_rank_manager {
    * @param sync_mode 同步模式（等待返回)
    * @return rpc::result_code_type
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type sub_rank_score(
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type sub_rank_score(
       rpc::context &ctx, const logic_rank_handle_key &rank_key, const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
       uint32_t target_user_zone_id, uint64_t target_user_id,
       const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key, uint32_t score,
@@ -193,7 +193,7 @@ class user_rank_manager {
    * @param ignore_zero 0值视为无效值
    * @return rpc::result_code_type
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type get_top_rank(
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type get_top_rank(
       rpc::context &ctx, const logic_rank_handle_key &rank_key, const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
       google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DRankUserBasicData> &response, uint32_t &total_count,
       uint32_t from_rank_no, uint32_t rank_count, bool ignore_zero = false);
@@ -212,7 +212,7 @@ class user_rank_manager {
    * @param down_count 指定用户下面uiUpCount个排名的其它用户，0表示不查询该用户下面的排名区间
    * @return rpc::result_code_type
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type get_self_top_rank(
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type get_self_top_rank(
       rpc::context &ctx, const logic_rank_handle_key &rank_key, const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
       const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key,
       google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DRankUserBasicData> &response, uint32_t &total_count,
@@ -234,7 +234,7 @@ class user_rank_manager {
    * @param down_count 指定用户下面uiUpCount个排名的其它用户，0表示不查询该用户下面的排名区间
    * @return rpc::result_code_type
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type get_special_top_rank(
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type get_special_top_rank(
       rpc::context &ctx, const logic_rank_handle_key &rank_key, const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
       uint32_t target_user_zone_id, uint64_t target_user_id,
       const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key,
@@ -246,7 +246,7 @@ class user_rank_manager {
    * @param ctx 上下文
    * @return rpc::result_code_type
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type clear_user_all_rank(rpc::context &ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type clear_user_all_rank(rpc::context &ctx);
 
   /**
    * @brief  将玩家从指定的榜单上删除 处罚用户使用 不改变排行榜缓存，调用前请先确定用户对应榜单被封禁||缓存被删除
@@ -255,18 +255,18 @@ class user_rank_manager {
    * @return rpc::result_code_type
    */
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type clear_user_one_rank(
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type clear_user_one_rank(
       rpc::context &ctx, const PROJECT_NAMESPACE_ID::config::ExcelRankRule &rank_cfg);
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type clear_user_one_rank(rpc::context &ctx, uint32_t rank_type,
-                                                                    uint32_t rank_instance_id);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type clear_user_one_rank(rpc::context &ctx, uint32_t rank_type,
+                                                                         uint32_t rank_instance_id);
   /**
    * @brief  将玩家从指定的榜单上删除 处罚用户使用 不改变排行榜缓存，调用前请先确定用户对应榜单被封禁||缓存被删除
    * @param ctx 上下文
    * @param ban_id 封禁id
    * @return rpc::result_code_type
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type clear_instance_rank(
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type clear_instance_rank(
       rpc::context &ctx, uint32_t rank_type, uint32_t rank_instance_id,
       const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key);
   /**
@@ -289,20 +289,20 @@ class user_rank_manager {
    */
   void delete_instance_rank_data(const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key);
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type add_settle_reward(
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type add_settle_reward(
       rpc::context &ctx, const PROJECT_NAMESPACE_ID::DRankBoardBasicData &rank_basic, int32_t pool_id,
       PROJECT_NAMESPACE_ID::EnRankPeriodRewardType pool_type, bool save_history, time_t cycle_no, bool is_custom,
       time_t deliver_time, int32_t season_id);
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_void_type set_client_rank_cache_expired(rpc::context &ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_void_type set_client_rank_cache_expired(rpc::context &ctx);
 
  private:
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type get_top_rank(
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type get_top_rank(
       rpc::context &ctx, const logic_rank_handle_key &rank_key, const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
       google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DRankUserBasicData> &response, uint32_t &total_count,
       uint32_t from_rank_no, uint32_t rank_count, bool ignore_zero, bool allow_submit_local);
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type get_special_top_rank(
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type get_special_top_rank(
       rpc::context &ctx, const logic_rank_handle_key &rank_key, const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
       uint32_t target_user_zone_id, uint64_t target_user_id,
       const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key,
@@ -344,7 +344,7 @@ class user_rank_manager {
     time_t local_mode_next_settlement_timepoint;
   };
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type run_io_task(rpc::context &ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type run_io_task(rpc::context &ctx);
 
   void check_and_settlement_local_rank_data(const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
                                             const std::shared_ptr<rank_data_type> &randk_data,
@@ -382,10 +382,11 @@ class user_rank_manager {
    * @param now 当前时间
    * @return rpc::result_code_type
    */
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type submit(rpc::context &ctx, const rank_data_index &rank_index,
-                                                       const logic_rank_handle_key &rank_key,
-                                                       const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
-                                                       PROJECT_NAMESPACE_ID::DRankUnsubmitData &unsubmit, time_t now);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type submit(rpc::context &ctx, const rank_data_index &rank_index,
+                                                            const logic_rank_handle_key &rank_key,
+                                                            const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
+                                                            PROJECT_NAMESPACE_ID::DRankUnsubmitData &unsubmit,
+                                                            time_t now);
 
   /**
    * @brief Patch/设置下一次IO任务时间

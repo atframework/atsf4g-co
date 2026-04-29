@@ -37,6 +37,7 @@
 
 #include "logic/action/task_action_player_async_jobs.h"
 #include "protocol/pbdesc/com.const.pb.h"
+#include "rpc/rpc_common_types.h"
 #include "rpc/rpc_context.h"
 
 GAMECLIENT_RPC_API task_action_login::task_action_login(dispatcher_start_data_type&& param)
@@ -212,7 +213,16 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
   user->set_session(get_shared_context(), my_sess);
   // 填入上线时间
   my_sess->login_init(get_request());
-  user->login_init(get_shared_context());
+  res = RPC_AWAIT_CODE_RESULT(user->login_init(get_shared_context()));
+  if (res < 0) {
+    FCTXLOGERROR(*user, "user login_init failed, result: {}({})", res, protobuf_mini_dumper_get_error_msg(res));
+    session_manager::me()->remove(get_shared_context(), my_sess, PROJECT_NAMESPACE_ID::EN_CRT_UNKNOWN,
+                                  "login init failed");
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
+    TASK_ACTION_RETURN_CODE(res);
+  }
+
+  // 9. 替换Session中的玩家对象，老Session要下线
 
   // 如果不存在则是登入过程中掉线了
   if (!my_sess) {
@@ -256,7 +266,8 @@ GAMECLIENT_RPC_API int task_action_login::on_success() {
   if (user->get_session() != s) {
     FWPLOGWARNING(*user, "login success but session changed , remove old session {}:{}", s->get_key().node_id,
                   s->get_key().session_id);
-    session_manager::me()->remove(s, static_cast<int32_t>(atfw::gateway::close_reason_t::kKickoff));
+    session_manager::me()->remove(get_shared_context(), s,
+                                  static_cast<int32_t>(atfw::gateway::close_reason_t::kKickoff));
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_OTHER_DEVICE);
     return get_result();
   }
@@ -346,7 +357,8 @@ GAMECLIENT_RPC_API int task_action_login::on_failed() {
   // 手动发包并无情地踢下线
   send_response();
 
-  session_manager::me()->remove(s, static_cast<int32_t>(::atframework::gateway::close_reason_t::kFirstIdle));
+  session_manager::me()->remove(get_shared_context(), s,
+                                static_cast<int32_t>(::atframework::gateway::close_reason_t::kFirstIdle));
   return get_result();
 }
 
@@ -369,7 +381,8 @@ GAMECLIENT_RPC_API rpc::result_code_type task_action_login::replace_session(std:
   }
 
   if (old_sess && old_sess->login_protect(get_request().head().timestamp())) {
-    session_manager::me()->remove(cur_sess, static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff));
+    session_manager::me()->remove(get_shared_context(), cur_sess,
+                                  static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff));
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_PROTECT);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -378,7 +391,8 @@ GAMECLIENT_RPC_API rpc::result_code_type task_action_login::replace_session(std:
   if (old_sess) {
     // 下发踢下线包，防止循环重连互踢
     old_sess->set_player(nullptr);
-    session_manager::me()->remove(old_sess, static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff));
+    session_manager::me()->remove(get_shared_context(), old_sess,
+                                  static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff));
   }
   cur_sess->set_player(user);
   // 填入上线时间

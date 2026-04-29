@@ -21,11 +21,9 @@
 
 #include <config/server_frame_build_feature.h>
 
-#include <bitset>
 #include <memory>
 #include <string>
 
-#include "data/player_key_hash_helper.h"
 #include "dispatcher/task_type_traits.h"
 #include "rpc/rpc_common_types.h"
 
@@ -123,10 +121,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
   SERVER_FRAME_API static ptr_t create(uint64_t user_id, uint32_t zone_id, const std::string &openid);
 
   // 创建默认角色数据
-  SERVER_FRAME_API virtual void create_init(rpc::context &ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type create_init(rpc::context &ctx);
 
   // 登入读取用户数据
-  SERVER_FRAME_API virtual void login_init(rpc::context &ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type login_init(rpc::context &ctx);
 
   // 是否脏（有数据变更）
   SERVER_FRAME_API virtual bool is_dirty() const;
@@ -202,7 +200,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
   }
 
   ATFW_UTIL_FORCEINLINE uint64_t get_user_cas_version() const { return user_cas_version_; }
-  ATFW_UTIL_FORCEINLINE uint64_t& get_user_cas_version() { return user_cas_version_; }
+  ATFW_UTIL_FORCEINLINE uint64_t &get_user_cas_version() { return user_cas_version_; }
   ATFW_UTIL_FORCEINLINE void set_user_cas_version(uint64_t version) { user_cas_version_ = version; }
 
   /**
@@ -222,18 +220,28 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
   }
   ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::account_information &get_account_info() { return account_info_.ref(); }
 
-  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::user_login_data &get_login_info() const {
-    return login_info_;
-  }
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::user_login_data &get_login_info() const { return login_info_; }
   ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::user_login_data &get_login_info() { return login_info_.ref(); }
 
-  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::user_data &get_player_data() const { return player_data_; }
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::user_data &get_user_data() const { return user_data_; }
 
-  ATFW_UTIL_FORCEINLINE bool has_create_init() const {
-    return create_init_;
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::user_option_public_data &get_user_option_public_data() const {
+    return user_option_public_data_;
+  }
+  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::user_option_public_data &get_user_option_public_data() {
+    return user_option_public_data_.ref();
   }
 
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type wait_task_lock(rpc::context &ctx);
+  ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::user_option_private_data &get_user_option_private_data() const {
+    return user_option_private_data_;
+  }
+  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::user_option_private_data &get_user_option_private_data() {
+    return user_option_private_data_.ref();
+  }
+
+  ATFW_UTIL_FORCEINLINE bool has_create_init() const { return create_init_; }
+
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type wait_task_lock(rpc::context &ctx);
   SERVER_FRAME_API void task_lock_init_task(uint64_t task_id);
   SERVER_FRAME_API void task_lock_remove_task(uint64_t task_id);
 
@@ -250,10 +258,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
   SERVER_FRAME_API void set_quick_save() const;
 
   SERVER_FRAME_API bool has_initialization_task_id() const noexcept;
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type await_initialization_task(rpc::context &ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type await_initialization_task(rpc::context &ctx);
 
  private:
-  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::user_data &mutable_player_data() { return player_data_.ref(); }
+  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::user_data &mutable_player_data() { return user_data_.ref(); }
 
  protected:
   ATFW_UTIL_FORCEINLINE void set_data_version(uint32_t ver) { data_version_ = ver; }
@@ -277,7 +285,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
 
   player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::user_login_data> login_info_;
   player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::account_information> account_info_;
-  player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::user_data> player_data_;
+  player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::user_data> user_data_;
+  player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::user_option_public_data> user_option_public_data_;
+  player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::user_option_private_data> user_option_private_data_;
+
   uint64_t server_sequence_;
   uint64_t data_version_;
 

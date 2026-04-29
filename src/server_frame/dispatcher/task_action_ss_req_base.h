@@ -101,9 +101,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_ss_req_base : public task_action_req_
    * @param transparent transparent forward
    * @param ok If forward success, if ok returns true, task should exit with return code
    * @param ignore_discovery ignore discovery
-   * @return EXPLICIT_NODISCARD_ATTR
+   * @return ATFW_EXPLICIT_NODISCARD_ATTR
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type forward_rpc(
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type forward_rpc(
       const atfw::atapp::etcd_discovery_node &node, bool transparent, bool &ok, bool ignore_discovery = false);
 
   /**
@@ -113,10 +113,11 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_ss_req_base : public task_action_req_
    * @param transparent transparent forward
    * @param ok If forward success, if ok returns true, task should exit with return code
    * @param ignore_discovery ignore discovery
-   * @return EXPLICIT_NODISCARD_ATTR
+   * @return ATFW_EXPLICIT_NODISCARD_ATTR
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type forward_rpc(uint64_t node_id, bool transparent,
-                                                                             bool &ok, bool ignore_discovery = false);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type forward_rpc(uint64_t node_id, bool transparent,
+                                                                                  bool &ok,
+                                                                                  bool ignore_discovery = false);
 
   /**
    * @brief Clone RPC to another server node
@@ -124,11 +125,11 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_ss_req_base : public task_action_req_
    * @param node target node
    * @param response_message receive response message, set nullptr to ignore response
    * @param ignore_discovery ignore discovery
-   * @return EXPLICIT_NODISCARD_ATTR
+   * @return ATFW_EXPLICIT_NODISCARD_ATTR
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type clone_rpc(const atfw::atapp::etcd_discovery_node &node,
-                                                                           atframework::SSMsg *response_message,
-                                                                           bool ignore_discovery = false);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type clone_rpc(
+      const atfw::atapp::etcd_discovery_node &node, atframework::SSMsg *response_message,
+      bool ignore_discovery = false);
 
   /**
    * @brief Clone RPC to another server node
@@ -136,11 +137,11 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_ss_req_base : public task_action_req_
    * @param node_id target node
    * @param response_message receive response message, set nullptr to ignore response
    * @param ignore_discovery ignore discovery
-   * @return EXPLICIT_NODISCARD_ATTR
+   * @return ATFW_EXPLICIT_NODISCARD_ATTR
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type clone_rpc(uint64_t node_id,
-                                                                           atframework::SSMsg *response_message,
-                                                                           bool ignore_discovery = false);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type clone_rpc(uint64_t node_id,
+                                                                                atframework::SSMsg *response_message,
+                                                                                bool ignore_discovery = false);
 
  protected:
   SERVER_FRAME_API msg_ref_type add_response_message();
@@ -148,7 +149,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_ss_req_base : public task_action_req_
 
   SERVER_FRAME_API virtual bool is_router_offline_ignored() const;  // 忽略路由对象不在线
 
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type filter_router_msg(
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type filter_router_msg(
       router_manager_base *&mgr, std::shared_ptr<router_object_base> &obj, std::pair<bool, int> &filter_result);
 
   ATFW_UTIL_FORCEINLINE bool has_response_message() const noexcept { return !response_messages_.empty(); }

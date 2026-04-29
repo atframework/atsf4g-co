@@ -15,11 +15,8 @@
 #include <dispatcher/task_type_traits.h>
 
 #include <functional>
-#include <list>
 #include <memory>
 #include <string>
-#include <unordered_map>
-#include <vector>
 
 #define REG_PLAYER_MGR_PTR_DEF(mgr)                       \
  private:                                                 \
@@ -31,37 +28,7 @@
 
 class user_async_jobs_manager;
 class user_rank_manager;
-
-/**
- * @brief 用户数据缓存包装，析构时自动还原
- * @note 注意只能用作局部变量
- */
-template <typename Ty>
-class player_cache_ptr_holder : public atfw::util::design_pattern::noncopyable {
- public:
-  using value_type = Ty;
-  using pointer_type = value_type *;
-
-  explicit player_cache_ptr_holder(pointer_type &holded, pointer_type ptr_addr) : ptr_addr_(nullptr) {
-    if (nullptr != holded || nullptr == ptr_addr) {
-      return;
-    }
-
-    ptr_addr_ = &holded;
-    holded = ptr_addr;
-  }
-
-  ~player_cache_ptr_holder() noexcept {
-    if (nullptr != ptr_addr_) {
-      *ptr_addr_ = nullptr;
-    }
-  }
-
-  bool available() const noexcept { return nullptr != ptr_addr_ && nullptr != *ptr_addr_; }
-
- protected:
-  pointer_type *ptr_addr_;
-};
+class user_cache_manager;
 
 class player : public player_cache {
  private:
@@ -149,10 +116,10 @@ class player : public player_cache {
   static ptr_t create(uint64_t user_id, uint32_t zone_id, const std::string &openid);
 
   // 创建默认角色数据，不允许异步，不允许失败
-  void create_init(rpc::context &ctx) override;
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_init(rpc::context &ctx) override;
 
   // 登入读取用户数据后初始化，不允许异步，不允许失败
-  void login_init(rpc::context &ctx) override;
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type login_init(rpc::context &ctx) override;
 
   bool is_dirty() const override;
 
@@ -230,7 +197,7 @@ class player : public player_cache {
    * @brief 下发同步消息
    */
   void send_all_syn_msg(rpc::context &ctx) override;
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_before_logout_tasks(rpc::context &ctx) override;
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_before_logout_tasks(rpc::context &ctx) override;
   void clear_dirty_cache();
 
   PROJECT_NAMESPACE_ID::DItemInstance &mutable_dirty_item(const PROJECT_NAMESPACE_ID::DItemInstance &in);
@@ -269,6 +236,7 @@ class player : public player_cache {
 
   REG_PLAYER_MGR_PTR_DEF(user_async_jobs_manager)
   REG_PLAYER_MGR_PTR_DEF(user_rank_manager)
+  REG_PLAYER_MGR_PTR_DEF(user_cache_manager)
 };
 
 ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN

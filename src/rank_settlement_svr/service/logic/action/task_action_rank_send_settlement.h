@@ -51,28 +51,30 @@ class task_action_rank_send_settlement : public task_action_no_req_base {
   result_type operator()() override;
 
  private:
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type settle_daily_rewards(rpc::context& ctx,
-                                                                     logic_rank_handle_variant& rank_handle,
-                                                                     const std::string& user_openid, int64_t& sub_score,
-                                                                     int64_t& reset_score, int32_t& score_cahgne_type);
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type settle_custom_rewards(rpc::context& ctx,
-                                                                      logic_rank_handle_variant& rank_handle,
-                                                                      const std::string& user_openid,
-                                                                      int64_t& sub_score, int64_t& reset_score,
-                                                                      int32_t& score_cahgne_type);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type settle_daily_rewards(rpc::context& ctx,
+                                                                          logic_rank_handle_variant& rank_handle,
+                                                                          const std::string& user_openid,
+                                                                          int64_t& sub_score, int64_t& reset_score,
+                                                                          int32_t& score_cahgne_type);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type settle_custom_rewards(rpc::context& ctx,
+                                                                           logic_rank_handle_variant& rank_handle,
+                                                                           const std::string& user_openid,
+                                                                           int64_t& sub_score, int64_t& reset_score,
+                                                                           int32_t& score_cahgne_type);
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type settle_special_rule(rpc::context& ctx,
-                                                                    logic_rank_handle_variant& rank_handle,
-                                                                    const std::string& user_openid, int64_t& sub_score,
-                                                                    int64_t& reset_score, int32_t& score_cahgne_type);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type settle_special_rule(rpc::context& ctx,
+                                                                         logic_rank_handle_variant& rank_handle,
+                                                                         const std::string& user_openid,
+                                                                         int64_t& sub_score, int64_t& reset_score,
+                                                                         int32_t& score_cahgne_type);
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type update_sub_period_score(rpc::context& ctx,
-                                                                        logic_rank_handle_variant& rank_handle,
-                                                                        const std::string& user_openid,
-                                                                        int64_t sub_score, int64_t reset_score);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type update_sub_period_score(rpc::context& ctx,
+                                                                             logic_rank_handle_variant& rank_handle,
+                                                                             const std::string& user_openid,
+                                                                             int64_t sub_score, int64_t reset_score);
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type save_history(rpc::context& ctx, logic_rank_handle_variant& rank_handle);
-
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type save_history(rpc::context& ctx,
+                                                                  logic_rank_handle_variant& rank_handle);
 
  private:
   ctor_param_t param_;

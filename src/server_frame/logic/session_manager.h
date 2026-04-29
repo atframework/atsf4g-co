@@ -10,10 +10,13 @@
 
 #include <map>
 #include <unordered_map>
-#include <vector>
 
 namespace atframework {
 class CSMsg;
+}
+
+namespace rpc {
+class context;
 }
 
 class session_manager {
@@ -47,10 +50,12 @@ class session_manager {
 
   SERVER_FRAME_API sess_ptr_t create(const session::key_t& key);
 
-  SERVER_FRAME_API void remove(const session::key_t& key, int reason = 0, atfw::util::nostd::string_view message = "");
-  SERVER_FRAME_API void remove(sess_ptr_t sess, int reason = 0, atfw::util::nostd::string_view message = "");
+  SERVER_FRAME_API void remove(rpc::context& ctx, const session::key_t& key, int reason = 0,
+                               atfw::util::nostd::string_view message = "");
+  SERVER_FRAME_API void remove(rpc::context& ctx, sess_ptr_t sess, int reason = 0,
+                               atfw::util::nostd::string_view message = "");
 
-  SERVER_FRAME_API void remove_all(int32_t reason, atfw::util::nostd::string_view message = "");
+  SERVER_FRAME_API void remove_all(rpc::context& ctx, int32_t reason, atfw::util::nostd::string_view message = "");
 
   SERVER_FRAME_API size_t size() const;
 

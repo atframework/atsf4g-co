@@ -58,9 +58,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager_base {
    * @param priv_data 私有数据
    * @return RPC结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type mutable_cache(rpc::context &ctx,
-                                                                               std::shared_ptr<router_object_base> &out,
-                                                                               const key_t &key, void *priv_data);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type mutable_cache(
+      rpc::context &ctx, std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data);
 
   /**
    * @brief 可变缓存（带IO任务保护）
@@ -71,7 +70,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager_base {
    * @param io_guard IO任务保护
    * @return RPC结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type mutable_cache(
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type mutable_cache(
       rpc::context &ctx, std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data,
       router_object_base::io_task_guard &io_guard) = 0;
 
@@ -83,7 +82,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager_base {
    * @param priv_data 私有数据
    * @return RPC结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type mutable_object(
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type mutable_object(
       rpc::context &ctx, std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data);
 
   /**
@@ -95,7 +94,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager_base {
    * @param io_guard IO任务保护
    * @return RPC结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type mutable_object(
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type mutable_object(
       rpc::context &ctx, std::shared_ptr<router_object_base> &out, const key_t &key, void *priv_data,
       router_object_base::io_task_guard &io_guard) = 0;
 
@@ -107,9 +106,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager_base {
    * @param priv_data 私有数据
    * @return RPC结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_cache(rpc::context &ctx, const key_t &key,
-                                                                              std::shared_ptr<router_object_base> cache,
-                                                                              void *priv_data);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_cache(
+      rpc::context &ctx, const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data);
 
   /**
    * @brief 移除缓存（带IO任务保护）
@@ -120,7 +118,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager_base {
    * @param io_guard IO任务保护
    * @return RPC结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type remove_cache(
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type remove_cache(
       rpc::context &ctx, const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data,
       router_object_base::io_task_guard &io_guard) = 0;
 
@@ -132,7 +130,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager_base {
    * @param priv_data 私有数据
    * @return RPC结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_object(
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_object(
       rpc::context &ctx, const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data);
 
   /**
@@ -144,7 +142,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager_base {
    * @param io_guard IO任务保护
    * @return RPC结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type remove_object(
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type remove_object(
       rpc::context &ctx, const key_t &key, std::shared_ptr<router_object_base> cache, void *priv_data,
       router_object_base::io_task_guard &io_guard) = 0;
 
@@ -175,8 +173,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager_base {
    * @param sequence 消息序列号
    * @return RPC结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type send_msg(rpc::context &ctx, router_object_base &obj,
-                                                                          atframework::SSMsg &&msg, uint64_t &sequence);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type send_msg(rpc::context &ctx,
+                                                                               router_object_base &obj,
+                                                                               atframework::SSMsg &&msg,
+                                                                               uint64_t &sequence);
 
   /**
    * @brief 发送消息
@@ -186,8 +186,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager_base {
    * @param sequence 消息序列号
    * @return RPC结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type send_msg(rpc::context &ctx, const key_t &key,
-                                                                          atframework::SSMsg &&msg, uint64_t &sequence);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type send_msg(rpc::context &ctx, const key_t &key,
+                                                                               atframework::SSMsg &&msg,
+                                                                               uint64_t &sequence);
 
   /**
    * @brief 获取路由管理器大小
@@ -214,10 +215,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager_base {
    * @param router_svr_ver 路由服务器版本
    * @return RPC结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type pull_online_server(rpc::context &ctx,
-                                                                                            const key_t &key,
-                                                                                            uint64_t &router_svr_id,
-                                                                                            uint64_t &router_svr_ver);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type pull_online_server(
+      rpc::context &ctx, const key_t &key, uint64_t &router_svr_id, uint64_t &router_svr_ver);
 
   /**
    * @brief 获取可变的路由管理器指标数据
@@ -234,10 +233,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager_base {
    * @param sequence 消息序列号
    * @return RPC结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type send_msg_raw(rpc::context &ctx,
-                                                                              router_object_base &obj,
-                                                                              atframework::SSMsg &&msg,
-                                                                              uint64_t &sequence);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type send_msg_raw(rpc::context &ctx,
+                                                                                   router_object_base &obj,
+                                                                                   atframework::SSMsg &&msg,
+                                                                                   uint64_t &sequence);
 
  protected:
   size_t stat_size_;  ///< 路由管理器大小

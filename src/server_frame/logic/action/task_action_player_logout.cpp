@@ -48,7 +48,7 @@ task_action_player_logout::result_type task_action_player_logout::operator()() {
       user->set_session(get_shared_context(), nullptr);
       s->set_player(nullptr);
     }
-    session_manager::me()->remove(s);
+    session_manager::me()->remove(get_shared_context(), s);
 
     if (user) {
       set_response_code(RPC_AWAIT_CODE_RESULT(user->await_before_logout_tasks(get_shared_context())));

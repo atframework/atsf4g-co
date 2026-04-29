@@ -271,41 +271,16 @@ CACHE_RPC_API rpc::result_code_type batch_get_cache(
   RPC_RETURN_CODE(ret);
 }
 
-namespace {
-template <class AnyType>
-bool internal_pick_key_from_meta(::rpc::context &ctx, const ::google::protobuf::Any &input,
-                                 atfw::util::nostd::function_ref<void(const AnyType &)> callback) {
-  if (input.Is<AnyType>()) {
-    rpc::shared_message<AnyType> meta_msg = rpc::make_shared_message<AnyType>(ctx);
-    if (!input.UnpackTo(meta_msg.get())) {
-      FWLOGERROR("unpack {} failed", AnyType::descriptor()->full_name());
-      return true;
-    }
-
-    callback(*meta_msg);
-    return true;
-  }
-
-  return false;
-}
-}  // namespace
-
 CACHE_RPC_API void pick_key_from_meta(::rpc::context &ctx, PROJECT_NAMESPACE_ID::object_cache_key &output,
                                       const ::google::protobuf::Any &input) {
-  {
-    auto key_setter = [&output](const PROJECT_NAMESPACE_ID::DUserCacheMeta &meta_body) {
-      output.set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_USER);
-      output.set_zone_id(meta_body.user_key().zone_id());
-      output.set_instance_id(meta_body.user_key().user_id());
-    };
-    if (internal_pick_key_from_meta<PROJECT_NAMESPACE_ID::DUserCacheMeta>(ctx, input, key_setter)) {
-      return;
-    }
+  auto unpack_message = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DCacheApiMetaData>(ctx);
+  if (!unpack_cache_meta_from_any(ctx, *unpack_message, input)) {
+    FWLOGERROR("unpack cache meta from any failed, got type_url: {}, size: {}, unpack to {}", input.type_url(),
+               input.value().size(), unpack_message->GetDescriptor()->full_name());
+    return;
   }
 
-  output.set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_UNKNOWN);
-  output.set_zone_id(0);
-  output.set_instance_id(0);
+  pick_key_from_meta(ctx, output, *unpack_message);
 }
 
 CACHE_RPC_API rpc::result_void_type set_cache_expired(::rpc::context &ctx,

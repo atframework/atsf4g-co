@@ -27,7 +27,7 @@ namespace rpc {
 
 namespace rank_board {
 
-EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_special_one(
+ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_special_one(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankUserKey& user, const PROJECT_NAMESPACE_ID::DRankKey& rank,
     PROJECT_NAMESPACE_ID::DRankUserBoardData& output) {
   rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankGetSpecifyRankReq> request_body{ctx};
@@ -43,7 +43,8 @@ EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_special_one
     RPC_RETURN_CODE(ret);
   }
 
-  ret = RPC_AWAIT_CODE_RESULT(rpc::rank_board::rank_get_special(ctx, destination_server_id, *request_body, *response_body));
+  ret = RPC_AWAIT_CODE_RESULT(
+      rpc::rank_board::rank_get_special(ctx, destination_server_id, *request_body, *response_body));
   if (ret != 0) {
     RPC_RETURN_CODE(ret);
   }
@@ -51,7 +52,7 @@ EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_special_one
   RPC_RETURN_CODE(response_body->result());
 }
 
-EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_top(
+ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_top(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank, uint32_t start_no, uint32_t count,
     PROJECT_NAMESPACE_ID::DRankQueryRspData& output) {
   rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankGetTopReq> request_body{ctx};
@@ -76,7 +77,7 @@ EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_top(
   RPC_RETURN_CODE(response_body->result());
 }
 
-EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_special_one_front_back(
+ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_special_one_front_back(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank, const PROJECT_NAMESPACE_ID::DRankUserKey& user,
     uint32_t count, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DRankUserBoardData>& output) {
   rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankGetUserFrontBackReq> request_body{ctx};
@@ -102,7 +103,7 @@ EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_special_one
   RPC_RETURN_CODE(response_body->result());
 }
 
-EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type update_score(
+ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type update_score(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankUserKey& user, const PROJECT_NAMESPACE_ID::DRankKey& rank,
     int64_t score, const PROJECT_NAMESPACE_ID::DRankCustomData& custom_data) {
   rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankSetScoreReq> request_body{ctx};
@@ -124,7 +125,7 @@ EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type update_score(
   RPC_RETURN_CODE(response_body->result());
 }
 
-EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type modify_score(
+ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type modify_score(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankUserKey& user, const PROJECT_NAMESPACE_ID::DRankKey& rank,
     int64_t score, const PROJECT_NAMESPACE_ID::DRankCustomData& custom_data) {
   rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankSetScoreReq> request_body{ctx};
@@ -146,7 +147,7 @@ EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type modify_score(
   RPC_RETURN_CODE(response_body->result());
 }
 
-EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type remove_one(
+ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type remove_one(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankUserKey& user, const PROJECT_NAMESPACE_ID::DRankKey& rank) {
   rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankDelUserReq> request_body{ctx};
   rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankDelUserRsp> response_body{ctx};
@@ -156,15 +157,15 @@ EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type remove_one(
 
   uint64_t destination_server_id = PROJECT_NAMESPACE_ID::rank_api::get_rank_main_server_id(ctx, rank);
 
-  int32_t ret =
-      RPC_AWAIT_CODE_RESULT(rpc::rank_board::rank_del_one_user(ctx, destination_server_id, *request_body, *response_body));
+  int32_t ret = RPC_AWAIT_CODE_RESULT(
+      rpc::rank_board::rank_del_one_user(ctx, destination_server_id, *request_body, *response_body));
   if (ret != 0) {
     RPC_RETURN_CODE(ret);
   }
   RPC_RETURN_CODE(response_body->result());
 }
 
-EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type clear_rank(
+ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type clear_rank(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank) {
   rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankClearReq> request_body{ctx};
   rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankClearRsp> response_body{ctx};
@@ -173,14 +174,15 @@ EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type clear_rank(
 
   uint64_t destination_server_id = PROJECT_NAMESPACE_ID::rank_api::get_rank_main_server_id(ctx, rank);
 
-  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::rank_board::rank_clear(ctx, destination_server_id, *request_body, *response_body));
+  int32_t ret =
+      RPC_AWAIT_CODE_RESULT(rpc::rank_board::rank_clear(ctx, destination_server_id, *request_body, *response_body));
   if (ret != 0) {
     RPC_RETURN_CODE(ret);
   }
   RPC_RETURN_CODE(response_body->result());
 }
 
-EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_top_from_mirror(
+ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_top_from_mirror(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank, uint32_t zone_id, uint32_t start_no, uint32_t count,
     int64_t mirror_id, PROJECT_NAMESPACE_ID::DRankQueryRspData& output) {
   // 从镜像拉取数据，先拉取0切片获取基本数据
@@ -250,8 +252,8 @@ RANK_BOARD_SDK_API rpc::result_code_type make_new_mirror(rpc::context& ctx, cons
 
   uint64_t destination_server_id = PROJECT_NAMESPACE_ID::rank_api::get_rank_main_server_id(ctx, rank);
 
-  int32_t ret =
-      RPC_AWAIT_CODE_RESULT(rpc::rank_board::rank_make_new_mirror(ctx, destination_server_id, *request_body, *response_body));
+  int32_t ret = RPC_AWAIT_CODE_RESULT(
+      rpc::rank_board::rank_make_new_mirror(ctx, destination_server_id, *request_body, *response_body));
   if (ret != 0) {
     RPC_RETURN_CODE(ret);
   }
@@ -259,5 +261,5 @@ RANK_BOARD_SDK_API rpc::result_code_type make_new_mirror(rpc::context& ctx, cons
   RPC_RETURN_CODE(0);
 }
 
-}  // namespace rank
+}  // namespace rank_board
 }  // namespace rpc

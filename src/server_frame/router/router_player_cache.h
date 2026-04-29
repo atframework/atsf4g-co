@@ -6,8 +6,9 @@
 
 #include <data/player_cache.h>
 
-#include <rpc/rpc_shared_message.h>
 #include <nostd/string_view.h>
+#include <rpc/rpc_shared_message.h>
+
 
 #include <string>
 
@@ -15,8 +16,9 @@
 
 struct router_player_private_type {
   SERVER_FRAME_API router_player_private_type();
-  SERVER_FRAME_API router_player_private_type(rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> *login_lock_tb,
-                                              uint64_t login_lock_cas_ver, const std::string& openid);
+  SERVER_FRAME_API router_player_private_type(
+      rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> *login_lock_tb, uint64_t login_lock_cas_ver,
+      const std::string &openid);
   SERVER_FRAME_API ~router_player_private_type();
 
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> *login_lock_tb;
@@ -40,15 +42,15 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_player_cache : public router_object<player
 
   SERVER_FRAME_API const char *name() const override;
 
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type pull_cache(rpc::context &ctx,
-                                                                            void *priv_data) override;
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type pull_cache(rpc::context &ctx,
-                                                                            router_player_private_type &priv_data);
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type pull_object(rpc::context &ctx,
-                                                                             void *priv_data) override;
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type pull_object(rpc::context &ctx,
-                                                                             router_player_private_type &priv_data);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type pull_cache(rpc::context &ctx,
+                                                                                 void *priv_data) override;
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type pull_cache(rpc::context &ctx,
+                                                                                 router_player_private_type &priv_data);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type pull_object(rpc::context &ctx,
+                                                                                  void *priv_data) override;
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type pull_object(
+      rpc::context &ctx, router_player_private_type &priv_data);
 
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type save_object(rpc::context &ctx,
-                                                                             void *priv_data) override;
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type save_object(rpc::context &ctx,
+                                                                                  void *priv_data) override;
 };

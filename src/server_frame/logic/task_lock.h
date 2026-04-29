@@ -20,7 +20,7 @@ class task_lock : public std::enable_shared_from_this<task_lock> {
   SERVER_FRAME_API void init(uint64_t user_id);
   SERVER_FRAME_API void init_task(uint64_t id);
   SERVER_FRAME_API void remove_task(uint64_t id);
-  SERVER_FRAME_API EXPLICIT_NODISCARD_ATTR rpc::result_code_type wait_task(rpc::context &ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type wait_task(rpc::context &ctx);
 
  private:
   std::unordered_set<uint64_t> id_;

@@ -122,7 +122,7 @@ class transaction_client_handle {
    *
    * @return future of 0 or error code
    */
-  EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type create_transaction(
+  ATFW_EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type create_transaction(
       rpc::context& ctx, storage_ptr_type& output, const transaction_options& options = {});
 
   /**
@@ -134,7 +134,7 @@ class transaction_client_handle {
    * @param output_failed_participators 输出prepare阶段失败的参与者
    * @return future of 0 or error code
    */
-  EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type submit_transaction(
+  ATFW_EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type submit_transaction(
       rpc::context& ctx, storage_ptr_type& input,
       std::unordered_set<std::string>* output_prepared_participators = nullptr,
       std::unordered_set<std::string>* output_failed_participators = nullptr);

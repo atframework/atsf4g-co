@@ -71,7 +71,7 @@ class user_async_jobs_manager {
    */
   bool try_async_jobs(rpc::context& ctx);
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type wait_for_async_task(rpc::context& ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type wait_for_async_task(rpc::context& ctx);
 
   void force_async_job(int32_t jobs_type);
 

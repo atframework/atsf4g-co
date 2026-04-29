@@ -48,13 +48,13 @@ class task_action_login
   GAMECLIENT_RPC_API int on_failed() override;
 
  private:
-  EXPLICIT_NODISCARD_ATTR GAMECLIENT_RPC_API rpc::result_code_type kickoff_other_session(
+  ATFW_EXPLICIT_NODISCARD_ATTR GAMECLIENT_RPC_API rpc::result_code_type kickoff_other_session(
       uint64_t user_id, rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock>& login_lock_tb,
       uint64_t& login_lock_cas_version);
-  EXPLICIT_NODISCARD_ATTR GAMECLIENT_RPC_API rpc::result_code_type replace_session(std::shared_ptr<player> user);
-  EXPLICIT_NODISCARD_ATTR GAMECLIENT_RPC_API static rpc::result_code_type await_login_io_task(
+  ATFW_EXPLICIT_NODISCARD_ATTR GAMECLIENT_RPC_API rpc::result_code_type replace_session(std::shared_ptr<player> user);
+  ATFW_EXPLICIT_NODISCARD_ATTR GAMECLIENT_RPC_API static rpc::result_code_type await_login_io_task(
       rpc::context& ctx, std::shared_ptr<player> user);
-  EXPLICIT_NODISCARD_ATTR GAMECLIENT_RPC_API static rpc::result_code_type await_logout_io_task(
+  ATFW_EXPLICIT_NODISCARD_ATTR GAMECLIENT_RPC_API static rpc::result_code_type await_logout_io_task(
       rpc::context& ctx, std::shared_ptr<player> user);
 
  private:

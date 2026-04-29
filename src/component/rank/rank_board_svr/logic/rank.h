@@ -84,27 +84,26 @@ class rank : public util::memory::enable_shared_rc_from_this<rank> {
 
   int32_t clear_rank();
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type init_rank_from_db(rpc::context& ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type init_rank_from_db(rpc::context& ctx);
   void fetch_rank_data(google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::rank_data>& output);
 
   inline int64_t get_data_version() { return data_version_; }
 
   void async_save_rank_data(rpc::context& ctx);
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type save_rank_data(rpc::context& ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type save_rank_data(rpc::context& ctx);
 
   bool is_main_node() const;
   bool is_slave_node() const;
   bool is_readable() const;
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type switch_to_main(rpc::context& ctx,
-                                                               const PROJECT_NAMESPACE_ID::table_rank_router& db_router,
-                                                               int32_t db_router_version);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type switch_to_main(
+      rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_rank_router& db_router, int32_t db_router_version);
   void switch_to_slave(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankRouterData& router_data);
   const PROJECT_NAMESPACE_ID::DRankRouterData& get_router_data() const;
   void set_router_data(const PROJECT_NAMESPACE_ID::table_rank_router& db_router, int32_t db_router_version);
 
   bool is_io_task_running();
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(rpc::context& ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(rpc::context& ctx);
   static bool is_task_running(task_type_trait::task_type& task);
 
   const PROJECT_NAMESPACE_ID::DRankKey& get_key() { return key_; }
@@ -121,7 +120,7 @@ class rank : public util::memory::enable_shared_rc_from_this<rank> {
   void insert_data_from_btree(const PROJECT_NAMESPACE_ID::rank_sort_data& score);
   inline int64_t get_next_data_version() { return data_version_; }
 
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type notify_switch_to_slave(rpc::context& ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type notify_switch_to_slave(rpc::context& ctx);
   void async_heartbeat(rpc::context& ctx);
   void async_router_lock(rpc::context& ctx);
 

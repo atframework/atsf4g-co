@@ -12,7 +12,9 @@ package hello;
 
 enum EnCacheApiCacheType {
   EN_CACHE_API_CACHE_TYPE_UNKNOWN = 0;
-  EN_CACHE_API_CACHE_TYPE_USER = 1;
+  EN_CACHE_API_CACHE_TYPE_SERVICE = 1;
+
+  EN_CACHE_API_CACHE_TYPE_USER = 11;
 }
 
 enum EnCacheApiGetCacheType {

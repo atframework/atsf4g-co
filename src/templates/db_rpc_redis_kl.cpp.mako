@@ -28,7 +28,7 @@ static int32_t unpack_${message_name}_indexs(rpc::context *ctx,
                                                  });
 }
 } // namespace detail
-EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_all(rpc::context &ctx
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_all(rpc::context &ctx
 % for key_field in key_fields:
                                                              , ${key_field["cpp_type"]} ${key_field["raw_name"]}
 % endfor
@@ -68,7 +68,7 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_all(rpc::context &ctx
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_by_indexs(rpc::context &ctx
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_by_indexs(rpc::context &ctx
                                                              , gsl::span<uint64_t> list_index
 % for key_field in key_fields:
                                                              , ${key_field["cpp_type"]} ${key_field["raw_name"]}
@@ -109,7 +109,7 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_by_indexs(rpc::context 
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type add(rpc::context &ctx
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type add(rpc::context &ctx
                                                          , shared_message<PROJECT_NAMESPACE_ID::${message_name}> &&store
                                                          ) {
   char db_key[256];
@@ -128,7 +128,7 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type add(rpc::context &ctx
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type update(rpc::context &ctx
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type update(rpc::context &ctx
                                                          , uint64_t list_index
                                                          , shared_message<PROJECT_NAMESPACE_ID::${message_name}> &&store
                                                          ) {
@@ -147,7 +147,7 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type update(rpc::context &ctx
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx
 % for key_field in key_fields:
                                                                      , ${key_field["cpp_type"]} ${key_field["raw_name"]}
 % endfor
@@ -166,7 +166,7 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::contex
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx
 % for key_field in key_fields:
                                                                      , ${key_field["cpp_type"]} ${key_field["raw_name"]}
 % endfor

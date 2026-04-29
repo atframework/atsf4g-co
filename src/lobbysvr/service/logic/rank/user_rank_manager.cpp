@@ -1951,7 +1951,7 @@ void user_rank_manager::delete_instance_rank_data(const PROJECT_NAMESPACE_ID::DR
   return;
 }
 
-EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_rank_manager::clear_user_all_rank(rpc::context &ctx) {
+ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_rank_manager::clear_user_all_rank(rpc::context &ctx) {
   auto rank_cfgs = excel::get_ExcelRankRule_all_of_rank_type_rank_instance_id();
   int32_t ret = 0;
   for (const auto &rank_cfg : rank_cfgs) {
@@ -1966,9 +1966,9 @@ EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_rank_manager::clear_user_all_
   RPC_RETURN_CODE(ret);
 }
 
-EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_rank_manager::clear_user_one_rank(rpc::context &ctx,
-                                                                                     uint32_t rank_type,
-                                                                                     uint32_t rank_instance_id) {
+ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_rank_manager::clear_user_one_rank(rpc::context &ctx,
+                                                                                          uint32_t rank_type,
+                                                                                          uint32_t rank_instance_id) {
   auto rank_cfg = excel::get_ExcelRankRule_by_rank_type_rank_instance_id(rank_type, rank_instance_id);
   if (nullptr == rank_cfg) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_RANK_INVALID_TYPE);
@@ -1981,7 +1981,7 @@ EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_rank_manager::clear_user_one_
   RPC_RETURN_CODE(ret);
 }
 
-EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_rank_manager::clear_user_one_rank(
+ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_rank_manager::clear_user_one_rank(
     rpc::context &ctx, const PROJECT_NAMESPACE_ID::config::ExcelRankRule &rank_cfg) {
   rank_ret_t ret;
   for (const auto &unit : db_data_) {
@@ -2007,7 +2007,7 @@ EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_rank_manager::clear_user_one_
   RPC_RETURN_CODE(0);
 }
 
-EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_rank_manager::clear_instance_rank(
+ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_rank_manager::clear_instance_rank(
     rpc::context &ctx, uint32_t rank_type, uint32_t rank_instance_id,
     const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key) {
   auto rank_cfg = excel::get_ExcelRankRule_by_rank_type_rank_instance_id(rank_type, rank_instance_id);

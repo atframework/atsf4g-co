@@ -19,6 +19,7 @@
 #include <time/time_utility.h>
 
 #include <logic/async_jobs/user_async_jobs_manager.h>
+#include <logic/cache/user_cache_manager.h>
 #include <logic/rank/user_rank_manager.h>
 
 #include <logic/player_manager.h>
@@ -26,6 +27,7 @@
 #include <data/session.h>
 #include <rpc/lobbysvrclientservice/lobbysvrclientservice.h>
 #include <rpc/rpc_utils.h>
+#include "rpc/rpc_common_types.h"
 
 player::internal_flag_guard_t::internal_flag_guard_t()
     : flag_(internal_flag::EN_IFT_FEATURE_INVALID), owner_(nullptr) {}
@@ -58,8 +60,10 @@ void player::internal_flag_guard_t::reset() {
 
 player::player(fake_constructor &ctor)
     : base_type(ctor),
+      heartbeat_data_{},
       user_async_jobs_manager_(new user_async_jobs_manager(*this)),
-      user_rank_manager_(new user_rank_manager(*this)) {
+      user_rank_manager_(new user_rank_manager(*this)),
+      user_cache_manager_(new user_cache_manager(*this)) {
   heartbeat_data_.continue_error_times = 0;
   heartbeat_data_.last_recv_time = 0;
   heartbeat_data_.sum_error_times = 0;
@@ -100,7 +104,7 @@ player::ptr_t player::create(uint64_t user_id, uint32_t zone_id, const std::stri
   return ret;
 }
 
-void player::create_init(rpc::context &parent_ctx) {
+rpc::result_code_type player::create_init(rpc::context &parent_ctx) {
   rpc::context ctx{parent_ctx.create_temporary_child()};
   rpc::telemetry::tracer trace;
   rpc::telemetry::trace_start_option trace_start_option;
@@ -109,7 +113,10 @@ void player::create_init(rpc::context &parent_ctx) {
   trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
   ctx.setup_tracer(trace, "player.create_init", std::move(trace_start_option));
 
-  base_type::create_init(ctx);
+  auto ret = RPC_AWAIT_CODE_RESULT(base_type::create_init(ctx));
+  if (ret < 0) {
+    RPC_RETURN_CODE(trace.finish({ret, {}}));
+  }
 
   set_data_version(PLAYER_DATA_LOGIC_VERSION);
 
@@ -128,10 +135,10 @@ void player::create_init(rpc::context &parent_ctx) {
   //     });
   // }
 
-  trace.finish({0, {}});
+  RPC_RETURN_CODE(trace.finish({0, {}}));
 }
 
-void player::login_init(rpc::context &parent_ctx) {
+rpc::result_code_type player::login_init(rpc::context &parent_ctx) {
   rpc::context ctx{parent_ctx.create_temporary_child()};
   rpc::telemetry::tracer trace;
   rpc::telemetry::trace_start_option trace_start_option;
@@ -140,7 +147,10 @@ void player::login_init(rpc::context &parent_ctx) {
   trace_start_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
   ctx.setup_tracer(trace, "player.login_init", std::move(trace_start_option));
 
-  base_type::login_init(ctx);
+  auto ret = RPC_AWAIT_CODE_RESULT(base_type::login_init(ctx));
+  if (ret < 0) {
+    RPC_RETURN_CODE(trace.finish({ret, {}}));
+  }
 
   // 由于对象缓存可以被复用，这个函数可能会被多次执行。这个阶段，新版本的 login_table 已载入
 
@@ -150,10 +160,15 @@ void player::login_init(rpc::context &parent_ctx) {
   user_async_jobs_manager_->login_init(ctx);
   user_rank_manager_->login_init(ctx);
 
+  ret = RPC_AWAIT_CODE_RESULT(user_cache_manager_->login_init(ctx));
+  if (ret < 0) {
+    RPC_RETURN_CODE(trace.finish({ret, {}}));
+  }
+
   set_inited();
   on_login(ctx);
 
-  trace.finish({0, {}});
+  RPC_RETURN_CODE(trace.finish({0, {}}));
 }
 
 bool player::is_dirty() const {
@@ -192,16 +207,19 @@ void player::refresh_feature_limit(rpc::context &ctx) {
   if (now != cache_data_.refresh_feature_limit_second) {
     cache_data_.refresh_feature_limit_second = now;
     // 每秒仅需要执行一次的refresh_feature_limit
+
+    user_cache_manager_->refresh_feature_limit_second(ctx);
   }
   if (now >= cache_data_.refresh_feature_limit_minute + atfw::util::time::time_utility::MINITE_SECONDS ||
       now < cache_data_.refresh_feature_limit_minute) {
-    cache_data_.refresh_feature_limit_minute = now - now % atfw::util::time::time_utility::MINITE_SECONDS;
+    cache_data_.refresh_feature_limit_minute = now - (now % atfw::util::time::time_utility::MINITE_SECONDS);
 
     // 每分钟仅需要执行一次的refresh_feature_limit
+    user_cache_manager_->refresh_feature_limit_minute(ctx);
   }
   if (now >= cache_data_.refresh_feature_limit_hour + atfw::util::time::time_utility::HOUR_SECONDS ||
       now < cache_data_.refresh_feature_limit_hour) {
-    cache_data_.refresh_feature_limit_hour = now - now % atfw::util::time::time_utility::HOUR_SECONDS;
+    cache_data_.refresh_feature_limit_hour = now - (now % atfw::util::time::time_utility::HOUR_SECONDS);
 
     // 每小时仅需要执行一次的refresh_feature_limit
   }
@@ -246,6 +264,9 @@ void player::on_logout(rpc::context &parent_ctx) {
   ctx.setup_tracer(trace, "player.on_logout", std::move(trace_start_option));
 
   base_type::on_logout(ctx);
+
+  user_cache_manager_->on_logout(ctx);
+
   internal_flags_.set(internal_flag::EN_IFT_IS_LOGIN, false);
   trace.finish({0, {}});
 }
@@ -253,11 +274,15 @@ void player::on_logout(rpc::context &parent_ctx) {
 void player::on_saved(rpc::context &ctx) {
   // at last call base on remove callback
   base_type::on_saved(ctx);
+
+  user_cache_manager_->on_saved(ctx);
 }
 
 void player::on_update_session(rpc::context &ctx, const std::shared_ptr<session> &from,
                                const std::shared_ptr<session> &to) {
   base_type::on_update_session(ctx, from, to);
+
+  user_cache_manager_->on_update_session(ctx);
 }
 
 void player::init_from_table_data(rpc::context &parent_ctx, const PROJECT_NAMESPACE_ID::table_user &tb_player) {
@@ -373,6 +398,9 @@ void player::send_all_syn_msg(rpc::context &ctx) {
     }
   }
 
+  // 缓存过期更新
+  user_cache_manager_->update_user_cache_info(ctx);
+
   clear_dirty_cache();
 }
 
@@ -420,6 +448,7 @@ void player::clear_dirty_cache() {
   // Other clear actions
 }
 
+namespace {
 template <class TMSG, class TCONTAINER>
 static player::dirty_sync_handle_t _player_generate_dirty_handle(
     gsl::string_view /*handle_name*/, TMSG *(PROJECT_NAMESPACE_ID::SCPlayerDirtyChgSync::*add_fn)(),
@@ -461,6 +490,7 @@ static player::dirty_sync_handle_t _player_generate_dirty_handle(
 
   return handle;
 }
+}  // namespace
 
 PROJECT_NAMESPACE_ID::DItemInstance &player::mutable_dirty_item(const PROJECT_NAMESPACE_ID::DItemInstance &in) {
   insert_dirty_handle_if_not_exists(reinterpret_cast<uintptr_t>(&cache_data_.dirty_item_by_type),
@@ -479,7 +509,7 @@ PROJECT_NAMESPACE_ID::DItemInstance &player::mutable_dirty_item(const PROJECT_NA
 void player::insert_dirty_handle_if_not_exists(uintptr_t key, gsl::string_view handle_name,
                                                dirty_sync_handle_t (*create_handle_fn)(gsl::string_view handle_name,
                                                                                        player &)) {
-  if (!create_handle_fn) {
+  if (create_handle_fn == nullptr) {
     return;
   }
 
@@ -497,6 +527,7 @@ void player::insert_dirty_handle_if_not_exists(uintptr_t key, gsl::string_view h
 }
 
 void player::insert_dirty_handle_if_not_exists(uintptr_t key, gsl::string_view handle_name,
+                                               // NOLINTNEXTLINE(performance-unnecessary-value-param)
                                                build_dirty_message_fn_t build_fn, clear_dirty_cache_fn_t clear_fn) {
   if (!build_fn && !clear_fn) {
     return;

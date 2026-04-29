@@ -181,7 +181,7 @@ class context {
    * @param attributes 自定义属性
    * @return 链路跟踪器
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API tracer make_tracer(string_view name, trace_start_option &&options);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API tracer make_tracer(string_view name, trace_start_option &&options);
 
   /**
    * @brief 使用内置的Arena创建protobuf对象。注意，该对象必须是局部变量，不允许转移给外部使用

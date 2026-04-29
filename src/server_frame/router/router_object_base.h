@@ -215,9 +215,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_fr
    *
    * @return rpc::result_code_type 返回表示操作结果的代码。
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_object(rpc::context &ctx, void *priv_data,
-                                                                               uint64_t transfer_to_svr_id,
-                                                                               io_task_guard &guard);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_object(rpc::context &ctx, void *priv_data,
+                                                                                    uint64_t transfer_to_svr_id,
+                                                                                    io_task_guard &guard);
 
   /**
    * @brief 名字接口
@@ -238,7 +238,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_fr
    *       如果需要处理容灾也可以保存时间并忽略过长时间的不匹配路由信息
    * @return 0或错误码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type pull_cache(rpc::context &ctx, void *priv_data);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type pull_cache(rpc::context &ctx,
+                                                                                         void *priv_data);
 
   /**
    * @brief 启动拉取实体流程
@@ -252,8 +253,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_fr
    *       如果需要处理容灾也可以保存时间并忽略过长时间的不匹配路由信息
    * @return 0或错误码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type pull_object(rpc::context &ctx,
-                                                                                     void *priv_data) = 0;
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type pull_object(rpc::context &ctx,
+                                                                                          void *priv_data) = 0;
 
   /**
    * @brief 启动保存实体的流程(这个接口不会设置状态)
@@ -267,8 +268,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_fr
    *        * 可以保存执行时间用以处理容灾时的过期数据（按需）
    * @return 0或错误码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type save_object(rpc::context &ctx,
-                                                                                     void *priv_data) = 0;
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type save_object(rpc::context &ctx,
+                                                                                          void *priv_data) = 0;
 
   /**
    * @brief 启动保存实体的流程(这个接口会设置状态,被router_object<TObj, TChild>覆盖)
@@ -276,8 +277,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_fr
    * @param priv_data 外部传入的私有数据
    * @return 0或错误码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type save(rpc::context &ctx, void *priv_data,
-                                                                              io_task_guard &guard) = 0;
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type save(rpc::context &ctx, void *priv_data,
+                                                                                   io_task_guard &guard) = 0;
 
   /**
    * @brief 启动保存实体的流程,不继承IO task保护(这个接口会设置状态,被router_object<TObj, TChild>覆盖)
@@ -285,7 +286,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_fr
    * @param priv_data 外部传入的私有数据
    * @return 0或错误码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type save(rpc::context &ctx, void *priv_data);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type save(rpc::context &ctx, void *priv_data);
 
   /**
    * @brief 启动拉取缓存流程
@@ -344,7 +345,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_fr
    */
   SERVER_FRAME_API int send_transfer_msg_failed(atframework::SSMsg &&req);
 
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type await_io_task(rpc::context &ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type await_io_task(rpc::context &ctx);
 
   /**
    * @brief 设置链路跟踪信息到RPC上下文
@@ -378,8 +379,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_fr
    *
    * @return rpc::result_code_type 返回表示操作结果的代码。
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type await_io_task(rpc::context &ctx,
-                                                                               task_type_trait::task_type &other_task);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type await_io_task(
+      rpc::context &ctx, task_type_trait::task_type &other_task);
 
   /**
    * @brief 内部接口，拉取缓存，会排队读任务
@@ -392,8 +393,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_fr
    *
    * @return rpc::result_code_type 返回表示操作结果的代码。
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type internal_pull_cache(rpc::context &ctx, void *priv_data,
-                                                                                     io_task_guard &guard);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type internal_pull_cache(rpc::context &ctx,
+                                                                                          void *priv_data,
+                                                                                          io_task_guard &guard);
 
   /**
    * @brief 内部接口，拉取实体，会排队读任务
@@ -406,9 +408,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_fr
    *
    * @return rpc::result_code_type 返回表示操作结果的代码。
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type internal_pull_object(rpc::context &ctx,
-                                                                                      void *priv_data,
-                                                                                      io_task_guard &guard);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type internal_pull_object(rpc::context &ctx,
+                                                                                           void *priv_data,
+                                                                                           io_task_guard &guard);
 
   /**
    * @brief 内部接口，保存数据，会排队写任务
@@ -421,9 +423,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_fr
    *
    * @return rpc::result_code_type 返回表示操作结果的代码。
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type internal_save_object(rpc::context &ctx,
-                                                                                      void *priv_data,
-                                                                                      io_task_guard &guard);
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type internal_save_object(rpc::context &ctx,
+                                                                                           void *priv_data,
+                                                                                           io_task_guard &guard);
 
  private:
   // 重置定时器引用
@@ -436,7 +438,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_fr
   void unset_timer_ref();
 
   // 等待IO调度订单任务
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_schedule_order_task(rpc::context &ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_schedule_order_task(rpc::context &ctx);
 
  private:
   key_t key_;                                              // 对象的键

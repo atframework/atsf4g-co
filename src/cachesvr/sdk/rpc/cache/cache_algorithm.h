@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include "config/compile_optimize.h"
+#include "protocol/pbdesc/com.struct.cache.pb.h"
 
 PROJECT_NAMESPACE_BEGIN
 class user_login_data;
@@ -18,10 +19,17 @@ class DUserProfile;
 class DClientDeviceInfo;
 class DUserBasicData;
 class DUserCacheMeta;
+class DCacheApiMetaData;
 
 class object_cache_watcher;
 class object_cache_key;
 PROJECT_NAMESPACE_END
+
+namespace google {
+namespace protobuf {
+class Any;
+}
+}  // namespace google
 
 namespace rpc {
 class context;
@@ -81,5 +89,23 @@ CACHE_RPC_API void update_cache_meta_from_origin_data(
     const PROJECT_NAMESPACE_ID::user_data* input_user_data,
     const PROJECT_NAMESPACE_ID::DUserProfile* input_user_profile,
     const PROJECT_NAMESPACE_ID::DClientDeviceInfo* input_client_device_info);
+
+CACHE_RPC_API void pick_key_from_meta(::rpc::context& ctx, PROJECT_NAMESPACE_ID::object_cache_key& output,
+                                      const PROJECT_NAMESPACE_ID::DCacheApiMetaData& input);
+
+CACHE_RPC_API void pick_key_from_content(::rpc::context& ctx, PROJECT_NAMESPACE_ID::object_cache_key& output,
+                                         const PROJECT_NAMESPACE_ID::DCacheApiObjectData& input);
+
+CACHE_RPC_API bool pack_cache_meta_to_any(::rpc::context& ctx, google::protobuf::Any& output,
+                                          const PROJECT_NAMESPACE_ID::DCacheApiMetaData& input);
+
+CACHE_RPC_API bool unpack_cache_meta_from_any(::rpc::context& ctx, PROJECT_NAMESPACE_ID::DCacheApiMetaData& output,
+                                              const google::protobuf::Any& input);
+
+CACHE_RPC_API bool pack_cache_content_to_any(::rpc::context& ctx, google::protobuf::Any& output,
+                                             const PROJECT_NAMESPACE_ID::DCacheApiObjectData& input);
+
+CACHE_RPC_API bool unpack_cache_content_from_any(::rpc::context& ctx, PROJECT_NAMESPACE_ID::DCacheApiObjectData& output,
+                                                 const google::protobuf::Any& input);
 }  // namespace cache_api
 }  // namespace rpc

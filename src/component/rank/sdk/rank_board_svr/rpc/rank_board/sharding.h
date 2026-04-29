@@ -36,7 +36,7 @@ RANK_BOARD_SDK_API uint64_t get_rank_main_server_id(rpc::context& ctx, const PRO
  * @param rank_key 排行榜key
  * @param slave_server_ids 从节点id集合
  */
-EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_rank_slave_server_ids(
+ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_rank_slave_server_ids(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key, std::vector<uint64_t>& slave_server_ids);
 
 /**
@@ -44,7 +44,7 @@ EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_rank_slave_
  * @param rank_key 排行榜key
  * @param slave_server_id 从节点id
  */
-EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_rank_slave_server_random(
+ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_rank_slave_server_random(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key, uint64_t& slave_server_id);
 }  // namespace rank_api
 

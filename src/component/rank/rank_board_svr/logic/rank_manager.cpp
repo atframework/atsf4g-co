@@ -279,7 +279,7 @@ rank::compare_fn_t rank_manager::get_compare_fn(PROJECT_NAMESPACE_ID::EnRankSort
   return nullptr;
 }
 
-EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::modify_score(
+ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::modify_score(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
     const PROJECT_NAMESPACE_ID::DRankUserKey& user_key, int64_t score,
     const PROJECT_NAMESPACE_ID::DRankCustomData& custom_data) {
@@ -303,7 +303,7 @@ EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::modify_score(
 }
 
 // 查询排行榜接口
-EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::query_one_user(
+ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::query_one_user(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
     const PROJECT_NAMESPACE_ID::DRankUserKey& sort_key, PROJECT_NAMESPACE_ID::DRankUserBoardData& output) {
   auto rank_iter = rank_map_.find(rank_key);
@@ -315,10 +315,9 @@ EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::query_one_user(
   rank_iter->second->query_one_user_by_key(sort_key, output);
   RPC_RETURN_CODE(ret);
 }
-EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::query_top(rpc::context& ctx,
-                                                                      const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
-                                                                      uint32_t from, uint32_t count,
-                                                                      PROJECT_NAMESPACE_ID::DRankQueryRspData& output) {
+ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::query_top(
+    rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key, uint32_t from, uint32_t count,
+    PROJECT_NAMESPACE_ID::DRankQueryRspData& output) {
   auto rank_iter = rank_map_.find(rank_key);
   if (rank_iter == rank_map_.end()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_RANK_NOT_EXIST);
@@ -392,7 +391,7 @@ std::vector<uint64_t> rank_manager::get_slave_nodes(rpc::context& ctx, const PRO
   return slave_nodes;
 }
 
-EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::upgrade_rank_to_main(
+ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::upgrade_rank_to_main(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key, int32_t db_router_version) {
   auto main_server_node = logic_config::me()->get_local_server_id();
   PROJECT_NAMESPACE_ID::table_rank_router new_db_router;

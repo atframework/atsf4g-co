@@ -90,7 +90,7 @@ rpc::result_code_type router_player_manager::on_evt_remove_object(rpc::context &
     std::shared_ptr<player_cache> check_binded_user = s->get_player();
     if (!check_binded_user || check_binded_user == obj) {
       s->set_player(nullptr);
-      session_manager::me()->remove(s, static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff));
+      session_manager::me()->remove(ctx, s, static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff));
     }
   }
 
@@ -107,7 +107,7 @@ rpc::result_code_type router_player_manager::on_evt_object_removed(rpc::context 
     std::shared_ptr<player_cache> check_binded_user = s->get_player();
     if (!check_binded_user || check_binded_user == obj) {
       s->set_player(nullptr);
-      session_manager::me()->remove(s, static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff));
+      session_manager::me()->remove(ctx, s, static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff));
     }
   }
 
@@ -131,9 +131,8 @@ SERVER_FRAME_API rpc::result_code_type router_player_manager::pull_online_server
       return ret;
   }
 
-  ret = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get(tbu.open_id().c_str(), key.zone_id, local_login_tb, local_login_ver));
-  if (ret < 0) {
-      return ret;
+  ret = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get(tbu.open_id().c_str(), key.zone_id, local_login_tb,
+  local_login_ver)); if (ret < 0) { return ret;
   }
 
   router_svr_id  = local_login_tb.router_server_id();

@@ -8,6 +8,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <google/protobuf/arena.h>
 #include <protocol/pbdesc/svr.protocol.pb.h>
 
 #include <protocol/pbdesc/com.struct.cache.pb.h>
@@ -19,6 +20,7 @@
 
 #include <gsl/select-gsl.h>
 #include <log/log_wrapper.h>
+#include <std/explicit_declare.h>
 #include <time/time_utility.h>
 
 #include <config/logic_config.h>
@@ -441,14 +443,29 @@ rpc::result_code_type cache_group_manager::pull_user_cache_fn(::rpc::context &ct
 }
 
 void cache_group_manager::pack_user_cache_fn(
-    rpc::context &, const user_cache_group_t::value_type &input,
+    rpc::context &ctx, const user_cache_group_t::value_type &input,
     ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_content> &output) {
   PROJECT_NAMESPACE_ID::object_cache_content *content = output.Add();
   if (nullptr == content) {
     return;
   }
 
-  if (content->mutable_cache_data()->PackFrom(input.get_data())) {
+  PROJECT_NAMESPACE_ID::DCacheApiObjectData convert_data;
+  PROJECT_NAMESPACE_ID::DCacheApiObjectData *convert_data_ptr = nullptr;
+  if (input.get_data().GetArena() != nullptr) {
+    convert_data_ptr =
+        google::protobuf::Arena::Create<PROJECT_NAMESPACE_ID::DCacheApiObjectData>(input.get_data().GetArena());
+  } else {
+    convert_data_ptr = &convert_data;
+  }
+  if (convert_data_ptr == nullptr) {
+    return;
+  }
+  convert_data_ptr->set_allocated_user_cache(const_cast<PROJECT_NAMESPACE_ID::DUserBasicData *>(&input.get_data()));
+  auto defer_clear_data = gsl::finally(
+      [&convert_data_ptr]() { ATFW_EXPLICIT_UNUSED_ATTR auto *_ = convert_data_ptr->release_user_cache(); });
+
+  if (rpc::cache_api::pack_cache_content_to_any(ctx, *content->mutable_cache_data(), *convert_data_ptr)) {
     content->set_data_version(input.get_data_version());
   }
 }
@@ -460,12 +477,14 @@ void cache_group_manager::update_meta_user_cache_fn(rpc::context &ctx,
     return;
   }
 
-  auto meta_msg = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DUserCacheMeta>(ctx);
-  if (!input.cache_meta().UnpackTo(meta_msg.get())) {
+  auto meta_msg = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DCacheApiMetaData>(ctx);
+  if (!rpc::cache_api::unpack_cache_meta_from_any(ctx, *meta_msg, input.cache_meta())) {
     FWLOGERROR("unpack user cache meta failed, got type_url: {}, size: {}, unpack to {}", input.cache_meta().type_url(),
                input.cache_meta().value().size(), meta_msg->GetDescriptor()->full_name());
     return;
   }
 
-  rpc::cache_api::update_cache_content_from_meta(ctx, output, *meta_msg);
+  if (meta_msg->has_user_meta()) {
+    rpc::cache_api::update_cache_content_from_meta(ctx, output, meta_msg->user_meta());
+  }
 }

@@ -32,7 +32,7 @@ namespace details {
 using callback_data_type = std::vector<address_record>;
 }
 
-EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type lookup(rpc::context& ctx, gsl::string_view domain,
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type lookup(rpc::context& ctx, gsl::string_view domain,
                                                                       std::vector<address_record>& output);
 
 }  // namespace dns

@@ -28,7 +28,7 @@ namespace user {
  *       即便是大批玩家涌入比较极端的情况下，数据库访问30k/s时，能提供百万级的分配QPS。
  * @return allocated user id or error code(< 0)
  */
-EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::rpc_result<int64_t> allocate_user_id(::rpc::context& ctx);
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::rpc_result<int64_t> allocate_user_id(::rpc::context& ctx);
 
 /**
  * @brief 检测User ID是否合法

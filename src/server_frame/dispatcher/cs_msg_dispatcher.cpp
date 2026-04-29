@@ -62,7 +62,9 @@ SERVER_FRAME_API int cs_msg_dispatcher::stop() {
     return dispatcher_implement::stop();
   }
 
-  session_manager::me()->remove_all(static_cast<int32_t>(atframework::gateway::close_reason_t::kServerClosed));
+  rpc::context ctx{rpc::context::create_without_task()};
+  session_manager::me()->remove_all(ctx, static_cast<int32_t>(atframework::gateway::close_reason_t::kServerClosed),
+                                    "service shutdown");
   is_closing_ = true;
   return dispatcher_implement::stop();
 }
@@ -308,7 +310,8 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atfw::atapp::app::mes
       session_manager::sess_ptr_t sess = session_manager::me()->find(session_key);
       if (sess) {
         if (sess->check_flag(session::flag_t::EN_SESSION_FLAG_CLOSING)) {
-          session_manager::me()->remove(sess, static_cast<int32_t>(::atfw::gateway::close_reason_t::kKickoff),
+          rpc::context ctx{rpc::context::create_without_task()};
+          session_manager::me()->remove(ctx, sess, static_cast<int32_t>(::atfw::gateway::close_reason_t::kKickoff),
                                         "session is closing");
         } else {
           FWLOGWARNING("session [{:#x}: {}, {}] already exists, address: {}:{}", session_key.node_id,
@@ -364,11 +367,13 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atfw::atapp::app::mes
         ret = task_manager::me()->start_task(task_inst, start_data);
         if (0 != ret) {
           FWLOGERROR("run logout task failed, result_code: {}", ret);
-          session_manager::me()->remove(session_key);
+          rpc::context ctx{rpc::context::create_without_task()};
+          session_manager::me()->remove(ctx, session_key);
         }
       } else {
         FWLOGERROR("create logout task failed, result_code: {}", ret);
-        session_manager::me()->remove(session_key);
+        rpc::context ctx{rpc::context::create_without_task()};
+        session_manager::me()->remove(ctx, session_key);
       }
       break;
     }

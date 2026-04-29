@@ -97,8 +97,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object : public router_object_base {
    * @param guard IO任务保护
    * @return rpc::result_code_type 结果代码
    */
-  EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type save(rpc::context &ctx, void *priv_data,
-                                                                      io_task_guard &guard) override {
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type save(rpc::context &ctx, void *priv_data,
+                                                                           io_task_guard &guard) override {
     if (!is_writable()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE);
     }
@@ -108,13 +108,13 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object : public router_object_base {
 
   // =========================== 子类需要实现以下接口 ===========================
   // 可选 - 不接入的话会调用pull_object(void *priv_data)
-  // EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_cache(rpc::context& ctx, void *priv_data) override;
+  // ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_cache(rpc::context& ctx, void *priv_data) override;
 
   // 必需 - 注意事项见 router_object_base::pull_cache
-  // EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_object(rpc::context& ctx, void *priv_data) override;
+  // ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type pull_object(rpc::context& ctx, void *priv_data) override;
 
   // 必需 - 注意事项见 router_object_base::save_object
-  // EXPLICIT_NODISCARD_ATTR rpc::result_code_type save_object(rpc::context& ctx, void *priv_data) override;
+  // ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type save_object(rpc::context& ctx, void *priv_data) override;
 
  protected:
   /**
