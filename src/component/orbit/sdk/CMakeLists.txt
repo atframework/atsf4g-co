@@ -1,0 +1,103 @@
+project_component_declare_sdk(
+  "orbit-controller-agent-sdk"
+  "${CMAKE_CURRENT_LIST_DIR}/agent"
+  INCLUDE_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/agent"
+  DLLEXPORT_DECL
+  ORBIT_AGENT_SDK_API
+  OUTPUT_TARGET_NAME
+  PROJECT_COMPONENT_ORBIT_AGENT_SDK
+  USE_COMPONENTS
+  "orbit-agent-protocol"
+  HRADERS
+  "${CMAKE_CURRENT_LIST_DIR}/agent/rpc/controllertoagentservice/controllertoagentservice.h"
+  SOURCES
+  "${CMAKE_CURRENT_LIST_DIR}/agent/rpc/controllertoagentservice/controllertoagentservice.cpp")
+
+project_component_declare_sdk(
+  "orbit-agent-controller-sdk"
+  "${CMAKE_CURRENT_LIST_DIR}/controller"
+  INCLUDE_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/controller"
+  DLLEXPORT_DECL
+  ORBIT_CONTROLLER_SDK_API
+  OUTPUT_TARGET_NAME
+  PROJECT_COMPONENT_ORBIT_AGENT_CONTROLLER_SDK
+  USE_COMPONENTS
+  "orbit-controller-protocol"
+  HRADERS
+  "${CMAKE_CURRENT_LIST_DIR}/controller/rpc/agenttocontrollerservice/agenttocontrollerservice.h"
+  SOURCES
+  "${CMAKE_CURRENT_LIST_DIR}/controller/rpc/agenttocontrollerservice/agenttocontrollerservice.cpp")
+
+project_component_declare_sdk(
+  "orbit-agent-client-sdk"
+  "${CMAKE_CURRENT_LIST_DIR}/client"
+  INCLUDE_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/client"
+  DLLEXPORT_DECL
+  ORBIT_SLAVE_SDK_API
+  OUTPUT_TARGET_NAME
+  PROJECT_COMPONENT_ORBIT_AGENT_SLAVE_SDK
+  USE_COMPONENTS
+  "orbit-client-protocol"
+  HRADERS
+  "${CMAKE_CURRENT_LIST_DIR}/client/rpc/agenttoclientservice/agenttoclientservice.h"
+  SOURCES
+  "${CMAKE_CURRENT_LIST_DIR}/client/rpc/agenttoclientservice/agenttoclientservice.cpp")
+
+project_component_declare_sdk(
+  "orbit-server-controller-sdk"
+  "${CMAKE_CURRENT_LIST_DIR}/controller"
+  INCLUDE_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/controller"
+  DLLEXPORT_DECL
+  ORBIT_CONTROLLER_SDK_API
+  OUTPUT_TARGET_NAME
+  PROJECT_COMPONENT_ORBIT_MASTER_CONTROLLER_SDK
+  USE_COMPONENTS
+  "orbit-server-protocol"
+  HRADERS
+  "${CMAKE_CURRENT_LIST_DIR}/controller/rpc/servertocontrollerservice/servertocontrollerservice.h"
+  SOURCES
+  "${CMAKE_CURRENT_LIST_DIR}/controller/rpc/servertocontrollerservice/servertocontrollerservice.cpp")
+
+project_component_declare_sdk(
+  "orbit-controller-server-sdk"
+  "${CMAKE_CURRENT_LIST_DIR}/server"
+  INCLUDE_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/server"
+  DLLEXPORT_DECL
+  ORBIT_MASTER_SDK_API
+  OUTPUT_TARGET_NAME
+  PROJECT_COMPONENT_ORBIT_MASTER_SDK
+  USE_COMPONENTS
+  "orbit-server-protocol"
+  HRADERS
+  "${CMAKE_CURRENT_LIST_DIR}/server/rpc/controllertoserverservice/controllertoserverservice.h"
+  SOURCES
+  "${CMAKE_CURRENT_LIST_DIR}/server/rpc/controllertoserverservice/controllertoserverservice.cpp")
+
+project_component_declare_sdk(
+  "orbit-server-sdk"
+  "${CMAKE_CURRENT_LIST_DIR}/server"
+  INCLUDE_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/server"
+  DLLEXPORT_DECL
+  ORBIT_MASTER_SDK_API
+  OUTPUT_TARGET_NAME
+  PROJECT_COMPONENT_ORBIT_MASTER_SDK
+  USE_COMPONENTS
+  "orbit-server-controller-sdk"
+  HRADERS
+  "${CMAKE_CURRENT_LIST_DIR}/server/handle/handle_ss_rpc_controllertoserverservice.h"
+  "${CMAKE_CURRENT_LIST_DIR}/server/module/orbit_server.h"
+  "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_forward_to_server.h"
+  "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_client_end_notify.h"
+  "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_client_start_notify.h"
+  SOURCES
+  "${CMAKE_CURRENT_LIST_DIR}/server/handle/handle_ss_rpc_controllertoserverservice.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/server/module/orbit_server.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_forward_to_server.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_client_end_notify.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_client_start_notify.cpp")

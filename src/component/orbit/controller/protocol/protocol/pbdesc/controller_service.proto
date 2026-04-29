@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "google/protobuf/empty.proto";
+import "protocol/extension/atframework.proto";
+
+package orbit;
+
+import "protocol/common/orbit.common.proto";
+
+service AgentToControllerService {
+  rpc register_agent(ATCRegisterAgentReq) returns (CTARegisterAgentRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "注册Agent"
+    };
+  };
+  rpc heartbeat_agent(ATCHeartbeatAgentReq) returns (CTAHeartbeatAgentRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "心跳/上报负载快照"
+    };
+  };
+  rpc notify_client_started(stream ATCNotifyClientStartedReq) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "通知Client已启动"
+    };
+  };
+  rpc notify_client_exit(stream ATCNotifyClientExitReq) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "通知Client已退出"
+    };
+  };
+  rpc forward_to_server(stream ATCForwardToServerReq) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "转发至Server"
+    };
+  };
+}
+
+message ATCRegisterAgentReq {
+  double cpu_capacity = 1;
+  double memory_capacity_mb = 2;
+  DAgentIdentity agent_identity = 3;
+}
+message CTARegisterAgentRsp {}
+
+message ATCHeartbeatAgentReq {
+  DAgentLoadSnapshot load = 1;
+}
+message CTAHeartbeatAgentRsp {}
+
+message ATCNotifyClientStartedReq {
+  DClientIdentity client_identity = 1;
+  string client_addr = 2;
+  bytes custom_data = 3;
+}
+
+message ATCNotifyClientExitReq {
+  DClientIdentity client_identity = 1;
+
+  EnClientExitReason exit_reason = 11;
+  bytes custom_data = 12;
+  int32 exit_code = 13;
+}
+
+message ATCForwardToServerReq {
+  DClientMessage client_message = 1;
+}

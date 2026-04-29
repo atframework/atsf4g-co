@@ -114,6 +114,9 @@ include("${CMAKE_CURRENT_LIST_DIR}/rank_settlement_svr/generate-rpc-task.cmake")
 # add tool to binding ranksvr-ranking rpcs
 include("${CMAKE_CURRENT_LIST_DIR}/component/rank/generate-rpc-task.cmake")
 
+# add tool to binding orbit rpcs
+include("${CMAKE_CURRENT_LIST_DIR}/component/orbit/generate-rpc-task.cmake")
+
 # add tool to generate simulator rpcs
 generate_for_pb_add_simulator_cs_api(
   "${PROJECT_NAMESPACE}.AuthsvrClientService"

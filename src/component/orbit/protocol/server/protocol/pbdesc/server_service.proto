@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "google/protobuf/empty.proto";
+import "protocol/extension/atframework.proto";
+
+package orbit;
+
+import "protocol/common/orbit.common.proto";
+
+/////////////// Controller -> Server ///////////////
+service ControllerToServerService {
+  rpc forward_to_server(stream CTMForwardToServerNotify) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "转发Client消息"
+    };
+  };
+
+  rpc client_start_notify(stream CTMClientStartNotify) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "Client启动通知"
+    };
+  };
+
+  rpc client_end_notify(stream CTMClientEndNotify) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "Client退出通知"
+    };
+  };
+}
+
+message CTMForwardToServerNotify {
+  DClientMessage client_message = 1;
+}
+
+message CTMClientStartNotify {
+  DClientIdentity client_identity = 1;
+  string client_addr = 2;
+  bytes data = 3;
+}
+
+message CTMClientEndNotify {
+  DClientIdentity client_identity = 1;
+
+  EnClientExitReason exit_reason = 11;
+  bytes exit_data = 12;
+  int32 exit_code = 13;
+}
+
+/////////////// Server -> Controller ///////////////
+service ServerToControllerService {
+  rpc connect(MTCConnectReq) returns (CTMConnectRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "连接Controller"
+    };
+  };
+  rpc disconnect(stream MTCDisconnectReq) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "断开Controller连接"
+    };
+  };
+  rpc launch_client(MTCLaunchClientReq) returns (CTMLaunchClientRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "启动Client 返回不等于可用"
+    };
+  };
+  rpc send_to_client(stream MTCSendToClientNotify) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "发送消息至Client"
+    };
+  };
+}
+
+message MTCConnectReq {
+  DServerIdentity server_identity = 1;
+  bool reconnect = 2;
+}
+message CTMConnectRsp {
+  repeated DClientMessage replay_messages = 1;
+}
+
+message MTCDisconnectReq {
+  DServerIdentity server_identity = 1;
+}
+
+message MTCLaunchClientReq {
+  DServerIdentity server_identity = 1;
+  DAgentClientStartArgs args = 2;
+}
+message CTMLaunchClientRsp {}
+
+message MTCSendToClientNotify {
+  DServerIdentity server_identity = 1;
+  DClientIdentity client_identity = 2;
+  bytes payload = 3;
+}

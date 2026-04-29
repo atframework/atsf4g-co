@@ -2,15 +2,20 @@
 
 ## 执行顺序
 
-1. 从 `doc/guide.md` 找到当前需求的设计来源。
-2. 在 `doc/implementation-plan.md` 中确认它属于哪个阶段。
-3. 在 `doc/pseudocode-roadmap.md` 中确认目标目录和文件粒度。
+1. 从 `doc/orbit/guide.md` 找到当前需求对应的协议面、组件边界和消息方向。
+2. 从 `doc/orbit/pseudocode/proto/README.md` 找到对应链路的协议索引。
+3. 回到 `src/component/orbit/**/*.proto` 核对最终字段、RPC 名称和调用方向。
 4. 先判断该切片主要依赖哪个 atframework 子组件，以及未来真实代码要落到 `include/`、`src/`、`test/case/` 的哪个位置，同时确认它是否应对齐 `module_impl`、`dispatcher`、`task_action`、`router` 或 `rpc facade` 这一层。
 5. 先确定该切片需要哪些 `.pseudo.h`、`.pseudo.cpp` 和 `_test.pseudo.cpp` 文件；必要时再拆辅助流程文件。
-6. 只实现一个最小伪代码切片。
+6. 只实现一个最小协议说明或伪代码切片。
 7. 先写函数签名，再写函数体内部的关键语句级逻辑。
 8. 为该切片补齐异常路径、超时处理、状态变化、可观测性和测试伪代码。
 9. 如果切片完成后影响目录结构或流程说明，同步更新说明文档。
+
+补充约束：
+
+- 没有进入 `.proto` 的能力不当作既成事实写进总览文档。
+- DSM 当前仅保留占位，不扩写 controller 管理面、DS inventory 扩展或运维动作细节。
 
 ## 伪代码完成标准
 

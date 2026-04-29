@@ -1,0 +1,10 @@
+distributed_transaction/sdk/rpc/transaction/dtcoordsvrservice.*
+distributed_transaction/dtcoordsvr/app/handle_ss_rpc_dtcoordsvrservice.*
+rank/rank_board_svr/app/handle_ss_rpc_rankboardservice.cpp
+rank/rank_board_svr/app/handle_ss_rpc_rankboardservice.h
+rank/sdk/rank_board_svr/rpc/rank_board/rankboardservice.cpp
+rank/sdk/rank_board_svr/rpc/rank_board/rankboardservice.h
+orbit/agent/app/handle_ss_rpc_*
+orbit/controller/app/handle_ss_rpc_*
+orbit/sdk/server/handle/handle_ss_rpc_*
+orbit/sdk/*/rpc/*

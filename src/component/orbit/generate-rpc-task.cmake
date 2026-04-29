@@ -1,0 +1,123 @@
+generate_for_pb_add_proto_path(
+  "${CMAKE_CURRENT_LIST_DIR}/protocol/common"
+  "${CMAKE_CURRENT_LIST_DIR}/protocol/server"
+  "${CMAKE_CURRENT_LIST_DIR}/protocol/client"
+  "${CMAKE_CURRENT_LIST_DIR}/agent/protocol"
+  "${CMAKE_CURRENT_LIST_DIR}/controller/protocol")
+
+generate_for_pb_add_proto_file(
+  "${CMAKE_CURRENT_LIST_DIR}/protocol/common/protocol/common/orbit.common.proto"
+  "${CMAKE_CURRENT_LIST_DIR}/agent/protocol/protocol/pbdesc/agent_service.proto"
+  "${CMAKE_CURRENT_LIST_DIR}/controller/protocol/protocol/pbdesc/controller_service.proto"
+  "${CMAKE_CURRENT_LIST_DIR}/protocol/server/protocol/pbdesc/server_service.proto"
+  "${CMAKE_CURRENT_LIST_DIR}/protocol/client/protocol/pbdesc/client_service.proto")
+
+generate_for_pb_add_ss_service(
+  "orbit.ControllerToAgentService"
+  "${CMAKE_CURRENT_LIST_DIR}/agent"
+  TASK_PATH_PREFIX
+  "logic"
+  HANDLE_PATH_PREFIX
+  "app"
+  PROJECT_NAMESPACE
+  "${PROJECT_NAMESPACE}"
+  RPC_ROOT_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/sdk/agent"
+  SERVICE_DLLEXPORT_DECL
+  ORBIT_AGENT_SERVICE_API
+  RPC_DLLEXPORT_DECL
+  ORBIT_AGENT_SDK_API
+  INCLUDE_HEADERS
+  "protocol/pbdesc/agent_service.pb.h")
+
+generate_for_pb_add_ss_service(
+  "orbit.AgentToControllerService"
+  "${CMAKE_CURRENT_LIST_DIR}/controller"
+  TASK_PATH_PREFIX
+  "logic"
+  HANDLE_PATH_PREFIX
+  "app"
+  PROJECT_NAMESPACE
+  "${PROJECT_NAMESPACE}"
+  RPC_ROOT_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/sdk/controller"
+  SERVICE_DLLEXPORT_DECL
+  ORBIT_CONTROLLER_SERVICE_API
+  RPC_DLLEXPORT_DECL
+  ORBIT_CONTROLLER_SDK_API
+  INCLUDE_HEADERS
+  "protocol/pbdesc/controller_service.pb.h")
+
+generate_for_pb_add_ss_service(
+  "orbit.ServerToControllerService"
+  "${CMAKE_CURRENT_LIST_DIR}/controller"
+  TASK_PATH_PREFIX
+  "logic"
+  HANDLE_PATH_PREFIX
+  "app"
+  PROJECT_NAMESPACE
+  "${PROJECT_NAMESPACE}"
+  RPC_ROOT_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/sdk/controller"
+  SERVICE_DLLEXPORT_DECL
+  ORBIT_CONTROLLER_SERVICE_API
+  RPC_DLLEXPORT_DECL
+  ORBIT_CONTROLLER_SDK_API
+  INCLUDE_HEADERS
+  "protocol/pbdesc/server_service.pb.h")
+
+generate_for_pb_add_ss_service(
+  "orbit.ControllerToServerService"
+  "${CMAKE_CURRENT_LIST_DIR}/sdk/server"
+  TASK_PATH_PREFIX
+  "logic"
+  HANDLE_PATH_PREFIX
+  "handle"
+  PROJECT_NAMESPACE
+  "${PROJECT_NAMESPACE}"
+  RPC_ROOT_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/sdk/server"
+  SERVICE_DLLEXPORT_DECL
+  ORBIT_MASTER_SERVICE_API
+  RPC_DLLEXPORT_DECL
+  ORBIT_MASTER_SDK_API
+  INCLUDE_HEADERS
+  "protocol/pbdesc/server_service.pb.h")
+
+generate_for_pb_add_ss_service(
+  "orbit.ClientToAgentService"
+  "${CMAKE_CURRENT_LIST_DIR}/agent"
+  TASK_PATH_PREFIX
+  "logic"
+  HANDLE_PATH_PREFIX
+  "app"
+  PROJECT_NAMESPACE
+  "${PROJECT_NAMESPACE}"
+  RPC_ROOT_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/sdk/agent"
+  SERVICE_DLLEXPORT_DECL
+  ORBIT_AGENT_SERVICE_API
+  RPC_DLLEXPORT_DECL
+  ORBIT_AGENT_SDK_API
+  NO_RPC # 需要后续提供Client端RPC
+  INCLUDE_HEADERS
+  "protocol/pbdesc/client_service.pb.h")
+
+generate_for_pb_add_ss_service(
+  "orbit.AgentToClientService"
+  "${CMAKE_CURRENT_LIST_DIR}/sdk/client"
+  TASK_PATH_PREFIX
+  "logic"
+  HANDLE_PATH_PREFIX
+  "logic"
+  PROJECT_NAMESPACE
+  "${PROJECT_NAMESPACE}"
+  RPC_ROOT_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/sdk/client"
+  SERVICE_DLLEXPORT_DECL
+  ORBIT_SLAVE_SERVICE_API
+  RPC_DLLEXPORT_DECL
+  ORBIT_SLAVE_SDK_API
+  NO_SERVICE_TASK # 需要后续提供Client端Service
+  INCLUDE_HEADERS
+  "protocol/pbdesc/client_service.pb.h")

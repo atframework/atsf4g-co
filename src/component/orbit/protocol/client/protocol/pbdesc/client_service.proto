@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "google/protobuf/empty.proto";
+import "protocol/extension/atframework.proto";
+
+package orbit;
+
+import "protocol/common/orbit.common.proto";
+
+/////////////// Agent -> Client ///////////////
+service AgentToClientService {
+  rpc forward_to_client(stream ATSForwardToClientNotify) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "转发Server消息"
+    };
+  };
+  rpc fork_seed_client(stream ATSForkSeedClientNotify) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "Fork方式启动Client"
+    };
+  };
+}
+
+message ATSForwardToClientNotify {
+  bytes payload = 1;
+}
+
+message ATSForkSeedClientNotify {
+  DClientStartArgs start_args = 1;
+}
+
+/////////////// Client -> Agent ///////////////
+service ClientToAgentService {
+  // 上报 Client 心跳
+  rpc client_heartbeat(stream STAClientHeartbeatNotify) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "上报心跳"
+    };
+  };
+  // 上报来自 service 侧的管理面消息的消费结果。
+  rpc send_to_server(stream STASendToServerNotify) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "发送至Server"
+    };
+  };
+  // 上报 Client 状态
+  rpc client_start(stream STAClientStartReq) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "Client启动成功"
+    };
+  };
+  rpc client_exit(stream STAClientExitReq) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "Client退出"
+    };
+  };
+}
+
+message STAClientHeartbeatNotify {
+  DClientId client_id = 1;
+  DClientLoadSnapshot snapshot = 2;
+}
+
+message STASendToServerNotify {
+  DClientId client_id = 1;
+  bytes payload = 2;
+}
+
+message STAClientStartReq {
+  DClientId client_id = 1;
+  string client_addr = 2;
+  bytes custom_data = 3;
+}
+
+message STAClientExitReq {
+  DClientId client_id = 1;
+
+  EnClientExitReason exit_reason = 11;
+  bytes custom_data = 12;
+  int32 exit_code = 13;
+}

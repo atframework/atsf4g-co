@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "google/protobuf/empty.proto";
+import "protocol/extension/atframework.proto";
+
+package orbit;
+
+import "protocol/common/orbit.common.proto";
+
+/////////////// Controller -> Agent ///////////////
+service ControllerToAgentService {
+  rpc start_client(CTAStartClientReq) returns (ATCStartClientRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "拉起Client 返回不等于可用"
+    };
+  };
+  rpc stop_client(CTAStopClientReq) returns (ATCStopClientRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "停止Client"
+    };
+  };
+  rpc forward_to_client(CTAForwardToClientReq) returns (ATCForwardToClientRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "转发Client消息"
+    };
+  };
+}
+
+message CTAStartClientReq {
+  DAgentClientStartArgs args = 1;
+}
+message ATCStartClientRsp {}
+
+message CTAStopClientReq {
+  DClientId client_id = 1;
+  string reason = 2;
+}
+message ATCStopClientRsp {}
+
+message CTAForwardToClientReq {
+  DClientId client_id = 1;
+  bytes payload = 2;
+}
+message ATCForwardToClientRsp {}

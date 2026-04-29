@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+package orbit;
+
+enum EnOrbitErrorCode {
+  EN_ORBIT_SUCCESS = 0;
+}
+
+enum EnClientState {
+  EN_SLAVE_STATE_UNSPECIFIED = 0;
+  EN_SLAVE_STATE_STARTING = 1;
+  EN_SLAVE_STATE_SEED = 2;
+  EN_SLAVE_STATE_RUNNING = 3;
+  EN_SLAVE_STATE_EXITING = 4;
+}
+
+enum EnClientExitReason {
+  EN_SLAVE_EXIT_REASON_UNSPECIFIED = 0;
+  EN_SLAVE_EXIT_REASON_NORMAL = 1;
+  EN_SLAVE_EXIT_REASON_CRASH = 2;
+  EN_SLAVE_EXIT_REASON_HEARTBEAT_TIMEOUT = 3;
+  EN_SLAVE_EXIT_REASON_OOM_KILL = 4;
+  EN_SLAVE_EXIT_REASON_DRAIN_STOP = 5;
+  EN_SLAVE_EXIT_REASON_OPERATOR_STOP = 6;
+}
+
+message DClientLoadSnapshot {
+  // Client 的运行状态
+  double cpu_used = 1;
+  double memory_used_mb = 2;
+}
+
+message DAgentIdentity {
+  uint64 agent_id = 1;
+}
+
+message DClientId {
+  string client_id = 1;
+}
+
+message DClientIdentity {
+  // 两个参数才能唯一确定一个Client
+  DAgentIdentity agent_identity = 1;
+  DClientId client_id = 2;
+}
+
+message DServerIdentity {
+  uint64 unique_id = 1;
+}
+
+message DClientMessage {
+  DClientIdentity client_identity = 1;
+  bytes payload = 2;
+}
+
+message DClientStartArgs {
+  DClientId client_id = 1;
+  repeated string custom_args = 2;
+}
+
+message DAgentClientStartArgs {
+  DClientStartArgs client_start_args = 1;
+  double expected_cpu = 2;
+  double expected_memory_mb = 3;
+}
+
+message DAgentLoadSnapshot {
+  double cpu_capacity = 1;
+  double cpu_used = 2;
+  double memory_capacity_mb = 3;
+  double memory_used_mb = 4;
+  uint32 client_count = 5;
+  uint32 inflight_count = 6;
+}

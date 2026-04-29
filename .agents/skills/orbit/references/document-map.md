@@ -2,19 +2,23 @@
 
 ## 文档角色
 
-- `doc/orbitguide.md`: 设计事实来源，负责架构、协议、状态机和关键约束。
-- `doc/orbitimplementation-plan.md`: 实现阶段与推进顺序。
-- `doc/orbitpseudocode-roadmap.md`: 伪代码写法、目录规范和开发流程。
-- `references/atframework-baseline.md`: atframework submodule 复用顺序与 x-server 风格基线。
+- `doc/orbit/guide.md`: orbit 当前设计事实来源，负责组件角色、协议边界、消息方向和约束说明。
+- `doc/orbit/pseudocode/README.md`: orbit 伪代码总入口，说明哪些目录已落地、哪些目录仍是占位。
+- `doc/orbit/pseudocode/proto/README.md`: 正式协议索引，按五份 `.proto` 总结链路与字段语义。
+- `src/component/orbit/**/*.proto`: 最终协议事实源，文档只能归纳这里已定义的内容。
 
 ## 目录角色
 
-- `proto/`: 正式 Protobuf 协议定义，不使用伪代码替代。
+- `src/component/orbit/protocol/common/protocol/common/`: 共享消息、标识、状态、负载快照等基础定义。
+- `src/component/orbit/protocol/client/protocol/pbdesc/`: Client 与 Agent 之间的 RPC 与消息。
+- `src/component/orbit/protocol/server/protocol/pbdesc/`: Server 与 Controller 之间的 RPC 与消息。
+- `src/component/orbit/agent/protocol/protocol/pbdesc/`: Agent 与 Controller 之间的 RPC 与消息。
+- `src/component/orbit/controller/protocol/protocol/pbdesc/`: Controller 到 Agent 的下行 RPC。
 - `doc/orbit/pseudocode/shared/`: 共用模型、账本、运行时抽象、日志与指标的代码化伪代码。
 - `doc/orbit/pseudocode/dsa/`: DSA 内部流程的代码化伪代码。
 - `doc/orbit/pseudocode/dsc/`: DSC 内部流程的代码化伪代码。
 - `doc/orbit/pseudocode/sdk/`: SDK 接口与交互语义的代码化伪代码。
-- `doc/orbit/pseudocode/dsm/`: DSM 占位与待确认内容。
+- `doc/orbit/pseudocode/dsm/`: DSM 占位与待确认内容，当前不作为正式协议事实来源。
 
 ## atframework 依赖映射
 
@@ -33,6 +37,6 @@
 ## 放置原则
 
 - 组件内部实现优先落到对应组件目录。
-- 跨组件协议优先落到 `doc/orbit/pseudocode/proto/`。
+- 跨组件协议说明优先落到 `doc/orbit/pseudocode/proto/`，但字段和 RPC 事实必须回溯到 `src/component/orbit/**/*.proto`。
 - 横切能力优先落到 `doc/orbit/pseudocode/shared/`。
-- 若无法判断归属，先回到 `doc/orbitguide.md` 按责任边界再决定。
+- 若无法判断归属，先回到 `doc/orbit/guide.md` 按责任边界再决定。
