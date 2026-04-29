@@ -95,11 +95,7 @@ class cache_object_base {
 template <class TCache>
 class cache_object : public cache_object_base {
  public:
-#if defined(UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES) && UTIL_CONFIG_COMPILER_CXX_RVALUE_REFERENCES
   using cache_type = TCache;
-#else
-  typedef TCache cache_type;
-#endif
 
  public:
   explicit cache_object(const PROJECT_NAMESPACE_ID::object_cache_key &key) : cache_object_base(key) {}
@@ -277,7 +273,7 @@ class cache_group : public cache_group_base {
       }
 
       // 必须先更新watcher，不然tick里会因为没有wacher且缓存无效而释放掉cache对象
-      if (watcher_key.cache_type() != PROJECT_NAMESPACE_ID::EN_CACHE_SERVICE_CACHE_TYPE_UNKNOWN &&
+      if (watcher_key.cache_type() != PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_UNKNOWN &&
           watcher_key.instance_id() != 0 && watcher_server_inst_id != 0 &&
           cache_pull_keys.Get(i).type() == PROJECT_NAMESPACE_ID::EN_CACHE_API_GET_CACHE_TYPE_SUBSCRIBE) {
         cache_object->replace_watcher(ctx, *manager, watcher_key, 0, watcher_server_inst_id);
@@ -286,7 +282,7 @@ class cache_group : public cache_group_base {
       if (cache_pull_keys.Get(i).type() == PROJECT_NAMESPACE_ID::EN_CACHE_API_GET_CACHE_TYPE_HOT_DATA &&
           watcher_server_inst_id != 0) {
         PROJECT_NAMESPACE_ID::object_cache_watcher cache_key;
-        cache_key.set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_SERVICE_CACHE_TYPE_UNKNOWN);
+        cache_key.set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_UNKNOWN);
         cache_key.set_zone_id(0);
         cache_key.set_instance_id(watcher_server_inst_id);
         cache_key.set_server_subscribe(true);

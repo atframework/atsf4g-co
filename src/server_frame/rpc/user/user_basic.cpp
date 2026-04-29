@@ -60,25 +60,17 @@ SERVER_FRAME_API bool is_valid_user_id(int64_t in) noexcept {
 }
 
 SERVER_FRAME_API void merge_basic_profile(PROJECT_NAMESPACE_ID::DUserBasicData& /*output*/,
-                                          const PROJECT_NAMESPACE_ID::DUserProfileBasic& /*input*/) noexcept {
+                                          const PROJECT_NAMESPACE_ID::DUserCacheMetaBasicProfile& /*input*/) noexcept {
   // 填充基本信息
 }
 
 SERVER_FRAME_API void convert_to_client_data(PROJECT_NAMESPACE_ID::DLoginBasicDataCache& output,
-                                             const PROJECT_NAMESPACE_ID::table_login_lock* input_login,
-                                             const PROJECT_NAMESPACE_ID::table_user* input_user) noexcept {
-  if (input_user != nullptr) {
-    const auto& login_data = input_user->login_data();
-    output.set_business_register_time(login_data.business_register_time());
-    output.set_business_login_time(login_data.business_login_time());
-    output.set_business_logout_time(login_data.business_logout_time());
-    output.set_business_unregister_time(login_data.business_unregister_time());
-  }
-
-  if (input_login != nullptr) {
-    output.set_access_token_code(input_login->access_token_code());
-    protobuf_copy_message(*output.mutable_access_token_expired(), input_login->access_token_expired());
-  }
+                                             const PROJECT_NAMESPACE_ID::table_user& input_user) noexcept {
+  const auto& login_data = input_user.login_data();
+  output.set_business_register_time(login_data.business_register_time());
+  output.set_business_login_time(login_data.business_login_time());
+  output.set_business_logout_time(login_data.business_logout_time());
+  output.set_business_unregister_time(login_data.business_unregister_time());
 }
 
 SERVER_FRAME_API void convert_to_client_data(PROJECT_NAMESPACE_ID::DUserBasicData& output,
@@ -90,7 +82,7 @@ SERVER_FRAME_API void convert_to_client_data(PROJECT_NAMESPACE_ID::DUserBasicDat
   output.set_account_login_channel(input.account_data().channel_id());
   // output.set_account_id(0);
 
-  convert_to_client_data(*output.mutable_login_data_cache(), nullptr, &input);
+  convert_to_client_data(*output.mutable_login_data_cache(), input);
 
   // output.set_client_version();
   protobuf_copy_message(*output.mutable_profile(), input.account_data().profile());

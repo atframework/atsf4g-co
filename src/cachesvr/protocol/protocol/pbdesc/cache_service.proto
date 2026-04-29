@@ -29,7 +29,7 @@ message object_cache_pull_key {
 message object_cache_watch_key {
   int64 data_version = 1;  // 当前数据版本号
 
-  EnCacheServiceCacheType cache_type = 11;
+  EnCacheApiCacheType cache_type = 11;
   uint32 zone_id = 12;      // 大区ID（无大区ID填0）
   uint64 instance_id = 13;  // 实例ID
 }

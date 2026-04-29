@@ -12,7 +12,7 @@
 PROJECT_NAMESPACE_BEGIN
 class DLoginBasicDataCache;
 class DUserBasicData;
-class DUserProfileBasic;
+class DUserCacheMetaBasicProfile;
 class table_user;
 class table_login_lock;
 PROJECT_NAMESPACE_END
@@ -38,11 +38,10 @@ EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::rpc_result<int64_t> allocate_user_
 SERVER_FRAME_API bool is_valid_user_id(int64_t in) noexcept;
 
 SERVER_FRAME_API void merge_basic_profile(PROJECT_NAMESPACE_ID::DUserBasicData& output,
-                                          const PROJECT_NAMESPACE_ID::DUserProfileBasic& input) noexcept;
+                                          const PROJECT_NAMESPACE_ID::DUserCacheMetaBasicProfile& input) noexcept;
 
 SERVER_FRAME_API void convert_to_client_data(PROJECT_NAMESPACE_ID::DLoginBasicDataCache& output,
-                                             const PROJECT_NAMESPACE_ID::table_login_lock* input_login,
-                                             const PROJECT_NAMESPACE_ID::table_user* input_user) noexcept;
+                                             const PROJECT_NAMESPACE_ID::table_user& input_user) noexcept;
 
 SERVER_FRAME_API void convert_to_client_data(PROJECT_NAMESPACE_ID::DUserBasicData& output,
                                              const PROJECT_NAMESPACE_ID::table_user& input) noexcept;

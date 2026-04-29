@@ -12,6 +12,12 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
+enum EnGenderType {
+  EN_GENDER_TYPE_UNKNOWN = 0;
+  EN_GENDER_TYPE_MALE = 1;
+  EN_GENDER_TYPE_FEMALE = 2;
+}
+
 // 登录用户终端信息
 message DClientDeviceInfo {
   uint32 system_id = 1;                // EnSystemID
@@ -73,13 +79,15 @@ message DUserProfile {
   uint64 user_id = 2;
   string nick_name = 3;
   string logo_url = 4;
-  bool sex = 5;  // true男, false女
+  EnGenderType gender = 5;
+
+  string custom_nick_name = 11;  // 玩家自定义昵称
 }
 
 // 用户profile
 message DUserStatistics {
   int64 register_time = 1;    // 注册时间
-  int64 last_login_time = 2;  // 注册时间
+  int64 last_login_time = 2;  // 上次登录时间
 }
 
 // 用户数据

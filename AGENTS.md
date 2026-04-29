@@ -37,24 +37,40 @@ high-performance game server architectures.
 
 2. **Include guards**: Use `#pragma once`
 
-3. **C++ Standard**: C++17 required
+3. **Protobuf includes**: Any C++ include of protobuf headers, including upstream protobuf headers and generated
+   `*.pb.h` files, must be wrapped between `config/compiler/protobuf_prefix.h` and
+   `config/compiler/protobuf_suffix.h` with clang-format disabled for the wrapper includes.
 
-4. **Naming**:
+   ```cpp
+   // clang-format off
+   #include <config/compiler/protobuf_prefix.h>
+   // clang-format on
+
+   #include <protocol/pbdesc/svr.protocol.pb.h>
+
+   // clang-format off
+   #include <config/compiler/protobuf_suffix.h>
+   // clang-format on
+   ```
+
+4. **C++ Standard**: C++17 required
+
+5. **Naming**:
    - Classes/structs: `snake_case`
    - Functions: `snake_case`
    - Constants: `UPPER_SNAKE_CASE`
    - Types: `*_t` suffix for typedefs
 
-5. **Error handling**: Use return codes or error enums
+6. **Error handling**: Use return codes or error enums
 
-6. **Logging**: Use FWLOG macros
+7. **Logging**: Use FWLOG macros
 
    ```cpp
    FWLOGINFO("Message: {}", value);
    FWLOGERROR("Error: {}", error);
    ```
 
-7. **Anonymous namespace + static**: In `.cpp` files, file-local functions should be placed inside an anonymous namespace **and** keep the `static` keyword. Do **not** remove `static` when moving a function into an anonymous namespace.
+8. **Anonymous namespace + static**: In `.cpp` files, file-local functions should be placed inside an anonymous namespace **and** keep the `static` keyword. Do **not** remove `static` when moving a function into an anonymous namespace.
 
    ```cpp
    namespace {
@@ -62,7 +78,7 @@ high-performance game server architectures.
    }  // namespace
    ```
 
-8. **Temporary protobuf messages in tasks/RPC APIs**: When creating a protobuf message object only as a temporary inside
+9. **Temporary protobuf messages in tasks/RPC APIs**: When creating a protobuf message object only as a temporary inside
    a task or RPC interface, and it is not cached, stored as an object member, or kept beyond the task/RPC lifetime,
    prefer `rpc::make_shared_message<MessageType>(ctx)` (or
    `rpc::make_shared_message<MessageType>(get_shared_context())` inside `task_action_*`) over stack/heap allocation.

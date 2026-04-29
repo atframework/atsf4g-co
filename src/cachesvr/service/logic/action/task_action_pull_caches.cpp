@@ -39,7 +39,7 @@ task_action_pull_caches::result_type task_action_pull_caches::operator()() {
 
   for (int i = 0; i < req_body.pull_keys_size(); ++i) {
     const PROJECT_NAMESPACE_ID::object_cache_pull_key& key = req_body.pull_keys(i);
-    if (PROJECT_NAMESPACE_ID::EN_CACHE_SERVICE_CACHE_TYPE_UNKNOWN == key.cache_key().cache_type() ||
+    if (PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_UNKNOWN == key.cache_key().cache_type() ||
         0 == key.cache_key().instance_id()) {
       continue;
     }

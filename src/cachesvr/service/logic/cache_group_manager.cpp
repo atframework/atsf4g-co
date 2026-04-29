@@ -10,6 +10,9 @@
 
 #include <protocol/pbdesc/svr.protocol.pb.h>
 
+#include <protocol/pbdesc/com.struct.cache.pb.h>
+#include <protocol/pbdesc/svr.struct.cache.pb.h>
+
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
@@ -28,7 +31,10 @@
 
 #include <rpc/db/local_db_interface.h>
 #include <rpc/rpc_async_invoke.h>
+#include <rpc/rpc_shared_message.h>
 #include <rpc/user/user_basic.h>
+
+#include <rpc/cache/cache_algorithm.h>
 
 #include <rpc/lobby/lobbysvrservice.h>
 
@@ -39,9 +45,6 @@
 #include <vector>
 
 #include "config/server_frame_build_feature.h"
-#include "protocol/pbdesc/com.struct.cache.pb.h"
-#include "protocol/pbdesc/svr.struct.cache.pb.h"
-#include "rpc/rpc_shared_message.h"
 
 cache_group_manager::cache_group_manager()
     : user_cache_group_(*this, cache_group_manager::pull_user_cache_fn, cache_group_manager::pack_user_cache_fn,
@@ -235,9 +238,9 @@ bool cache_group_manager::is_time_handle_valid(const cache_watcher_timer_handle_
   return handle != timers_.end();
 }
 
-cache_group_base *cache_group_manager::get_group(PROJECT_NAMESPACE_ID::EnCacheServiceCacheType cache_type) {
+cache_group_base *cache_group_manager::get_group(PROJECT_NAMESPACE_ID::EnCacheApiCacheType cache_type) {
   switch (cache_type) {
-    case PROJECT_NAMESPACE_ID::EN_CACHE_SERVICE_CACHE_TYPE_USER:
+    case PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_USER:
       return &user_cache_group_;
     default:
       return nullptr;
@@ -315,7 +318,7 @@ rpc::result_code_type cache_group_manager::pull_user_cache_fn(::rpc::context &ct
 
     PROJECT_NAMESPACE_ID::object_cache_key table_key;
 
-    table_key.set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_SERVICE_CACHE_TYPE_USER);
+    table_key.set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_USER);
     table_key.set_zone_id((*table.message)->zone_id());
     table_key.set_instance_id((*table.message)->user_id());
 
@@ -329,12 +332,6 @@ rpc::result_code_type cache_group_manager::pull_user_cache_fn(::rpc::context &ct
     }
 
     rpc::user::convert_to_client_data(*iter_fill->second, **table.message);
-
-    auto iter_login_lock = pull_login_lock_index.find((*table.message)->user_id());
-    if (iter_login_lock != pull_login_lock_index.end()) {
-      rpc::user::convert_to_client_data(*iter_fill->second->mutable_login_data_cache(),
-                                        iter_login_lock->second->message->get(), nullptr);
-    }
   }
 
   std::vector<task_type_trait::task_type> pending_tasks;
@@ -347,7 +344,7 @@ rpc::result_code_type cache_group_manager::pull_user_cache_fn(::rpc::context &ct
 
     PROJECT_NAMESPACE_ID::object_cache_key table_key;
 
-    table_key.set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_SERVICE_CACHE_TYPE_USER);
+    table_key.set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_USER);
     table_key.set_zone_id((*table.message)->zone_id());
     table_key.set_instance_id((*table.message)->user_id());
 
@@ -470,16 +467,5 @@ void cache_group_manager::update_meta_user_cache_fn(rpc::context &ctx,
     return;
   }
 
-  // 直接实时刷新下发数据
-  output.set_user_level(meta_msg->user_level());
-  output.mutable_profile()->set_nick_name(meta_msg->nick_name());
-  output.set_client_version(meta_msg->client_version());
-
-  if (meta_msg->has_login_data_cache()) {
-    protobuf_copy_message(*output.mutable_login_data_cache(), meta_msg->login_data_cache());
-  }
-  if (meta_msg->has_player_profile_basic()) {
-    rpc::user::merge_basic_profile(output, meta_msg->player_profile_basic());
-  }
-  output.set_user_data_version(meta_msg->user_data_version());
+  rpc::cache_api::update_cache_content_from_meta(ctx, output, *meta_msg);
 }

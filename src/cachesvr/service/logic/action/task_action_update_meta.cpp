@@ -43,7 +43,7 @@ task_action_update_meta::result_type task_action_update_meta::operator()() {
     const PROJECT_NAMESPACE_ID::object_cache_meta& meta = req_body.object_metas(i);
     PROJECT_NAMESPACE_ID::object_cache_key key;
     rpc::cache_api::pick_key_from_meta(get_shared_context(), key, meta.cache_meta());
-    if (key.cache_type() == PROJECT_NAMESPACE_ID::EN_CACHE_SERVICE_CACHE_TYPE_UNKNOWN) {
+    if (key.cache_type() == PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_UNKNOWN) {
       FWLOGERROR("invalid meta data {}", protobuf_mini_dumper_get_readable(meta));
       continue;
     }

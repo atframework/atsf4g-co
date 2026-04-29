@@ -45,10 +45,10 @@ class cache_group_manager : public util::design_pattern::singleton<cache_group_m
   /**
    * @brief Get the group object by cache type
    *
-   * @param cache_type @see PROJECT_NAMESPACE_ID::EnCacheServiceCacheType
+   * @param cache_type @see PROJECT_NAMESPACE_ID::EnCacheApiCacheType
    * @return nullptr if type is invalid
    */
-  cache_group_base *get_group(PROJECT_NAMESPACE_ID::EnCacheServiceCacheType cache_type);
+  cache_group_base *get_group(PROJECT_NAMESPACE_ID::EnCacheApiCacheType cache_type);
 
  private:
   ATFW_EXPLICIT_NODISCARD_ATTR static rpc::result_code_type pull_user_cache_fn(

@@ -23,5 +23,6 @@ project_service_declare_instance(
   "rank-logic-sdk"
   USE_SERVICE_SDK
   "lobbysvr-sdk"
+  "cachesvr-sdk"
   USE_SERVICE_PROTOCOL
   "lobbysvr-config")

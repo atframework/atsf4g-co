@@ -10,8 +10,25 @@ option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/
 
 package hello;
 
+enum EnCacheApiCacheType {
+  EN_CACHE_API_CACHE_TYPE_UNKNOWN = 0;
+  EN_CACHE_API_CACHE_TYPE_USER = 1;
+}
+
 enum EnCacheApiGetCacheType {
   EN_CACHE_API_GET_CACHE_TYPE_NORMAL = 0;
   EN_CACHE_API_GET_CACHE_TYPE_SUBSCRIBE = 1;
   EN_CACHE_API_GET_CACHE_TYPE_HOT_DATA = 2;
+}
+
+message DCacheApiObjectKey {
+  EnCacheApiGetCacheType get_type = 1;
+  uint32 zone_id = 2;
+  uint64 instance_id = 3;
+}
+
+message DCacheApiCacheKey {
+  EnCacheApiCacheType cache_type = 1;
+  uint32 zone_id = 2;
+  uint64 instance_id = 3;
 }

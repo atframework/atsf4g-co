@@ -12,18 +12,57 @@ import "protocol/pbdesc/com.struct.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
-message DUserProfileBasic {
-  // After add new fields, please update merge_basic_profile to implement the merge logic
+message DUserCacheMetaBasicProfile {
+  string nick_name = 3;
+  string logo_url = 4;
+  EnGenderType gender = 5;
+
+  string custom_nick_name = 11;  // 玩家自定义昵称
+}
+
+message DUserCacheMetaLoginBasicData {
+  // 业务层注册时间
+  int64 business_register_time = 31;
+
+  // 业务层登入时间
+  int64 business_login_time = 32;
+
+  // 业务层登出时间
+  int64 business_logout_time = 33;
+
+  // 业务层注销时间
+  int64 business_unregister_time = 34;
+}
+
+message DUserCacheMetaUserInformation {
+  int32 user_level = 1;
+}
+
+message DUserCacheMetaClientInformation {
+  // 客户端版本
+  string client_version = 1;
 }
 
 message DUserCacheMeta {
   DUserIDKey user_key = 1;
 
-  DLoginBasicDataCache login_data_cache = 5;
-  DUserProfileBasic player_profile_basic = 7;
-  uint64 user_data_version = 10;
+  DUserCacheMetaLoginBasicData login_basic = 5;
+  DUserCacheMetaBasicProfile basic_profile = 6;
+  DUserCacheMetaUserInformation user_information = 7;
+  DUserCacheMetaClientInformation client_information = 8;
 
-  int32 user_level = 51;       // 玩家等级
-  string nick_name = 52;       // 昵称
-  string client_version = 53;  // 客户端版本
+  uint64 user_data_version = 10;
+}
+
+message DCacheApiObjectData {
+  oneof object_data {
+    DUserBasicData user_cache = 11;
+  }
+}
+
+message DCacheApiMetaData {
+  oneof meta_data {
+    // User Meta
+    DUserCacheMeta user_meta = 11;
+  }
 }

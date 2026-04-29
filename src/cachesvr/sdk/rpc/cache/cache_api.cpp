@@ -57,7 +57,7 @@ struct pull_group_t {
 };
 }  // namespace
 
-CACHE_RPC_API uint64_t get_cachesvr_server_id(PROJECT_NAMESPACE_ID::EnCacheServiceCacheType cache_type,
+CACHE_RPC_API uint64_t get_cachesvr_server_id(PROJECT_NAMESPACE_ID::EnCacheApiCacheType cache_type,
                                               EXPLICIT_UNUSED_ATTR uint32_t zone_id, uint64_t instance_id) {
   logic_server_common_module *mod = logic_server_last_common_module();
   if (mod == nullptr) {
@@ -91,6 +91,7 @@ CACHE_RPC_API uint64_t get_cachesvr_server_id(const PROJECT_NAMESPACE_ID::object
   return get_cachesvr_server_id(cache_key.cache_type(), cache_key.zone_id(), cache_key.instance_id());
 }
 
+// NOLINTNEXTLINE(misc-use-internal-linkage)
 CACHE_RPC_API uint64_t get_cachesvr_server_id(const PROJECT_NAMESPACE_ID::object_cache_watch_key &watch_key) {
   return get_cachesvr_server_id(watch_key.cache_type(), watch_key.zone_id(), watch_key.instance_id());
 }
@@ -114,6 +115,7 @@ CACHE_RPC_API bool has_cachesvr() {
               .empty();
 }
 
+// NOLINTNEXTLINE(misc-use-internal-linkage)
 CACHE_RPC_API rpc::result_code_type batch_get_cache(
     ::rpc::context &ctx, const PROJECT_NAMESPACE_ID::object_cache_watcher &watcher,
     ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_pull_key> &&cache_pull_keys,
@@ -292,7 +294,7 @@ CACHE_RPC_API void pick_key_from_meta(::rpc::context &ctx, PROJECT_NAMESPACE_ID:
                                       const ::google::protobuf::Any &input) {
   {
     auto key_setter = [&output](const PROJECT_NAMESPACE_ID::DUserCacheMeta &meta_body) {
-      output.set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_SERVICE_CACHE_TYPE_USER);
+      output.set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_USER);
       output.set_zone_id(meta_body.user_key().zone_id());
       output.set_instance_id(meta_body.user_key().user_id());
     };
@@ -301,13 +303,13 @@ CACHE_RPC_API void pick_key_from_meta(::rpc::context &ctx, PROJECT_NAMESPACE_ID:
     }
   }
 
-  output.set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_SERVICE_CACHE_TYPE_UNKNOWN);
+  output.set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_UNKNOWN);
   output.set_zone_id(0);
   output.set_instance_id(0);
 }
 
 CACHE_RPC_API rpc::result_void_type set_cache_expired(::rpc::context &ctx,
-                                                      PROJECT_NAMESPACE_ID::EnCacheServiceCacheType cache_type,
+                                                      PROJECT_NAMESPACE_ID::EnCacheApiCacheType cache_type,
                                                       uint32_t zone_id, uint64_t instance_id) {
   PROJECT_NAMESPACE_ID::SSCacheSetExpiredSync *request_body = ctx.create<PROJECT_NAMESPACE_ID::SSCacheSetExpiredSync>();
   if (nullptr == request_body) {

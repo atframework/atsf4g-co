@@ -14,6 +14,7 @@ import "protocol/extension/atframework.proto";
 import "protocol/pbdesc/com.const.proto";
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.protocol.rank.proto";
+import "protocol/pbdesc/com.protocol.cache.proto";
 import "protocol/common/com.struct.item.common.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
@@ -183,6 +184,61 @@ service LobbysvrClientService {
     option (atframework.rpc_options) = {
       module_name: "rank"
       api_name: "排行榜缓存失效通知"
+    };
+  };
+
+  // ================ CACHE RPC =================
+  // 批量拉取数据（并订阅）
+  rpc cache_api_batch_get(CSCacheApiBatchGetReq) returns (SCCacheApiBatchGetRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "cache"
+      api_name: "批量拉取数据（并订阅）"
+      frequency_limit: { frequency_limit_ms: 10000 frequency_limit_count: 100 }
+    };
+  };
+
+  // 反订阅
+  rpc cache_api_unwatch(CSCacheApiUnwatchReq) returns (SCCacheApiUnwatchRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "cache"
+      api_name: "反订阅"
+      frequency_limit: { frequency_limit_ms: 5000 frequency_limit_count: 30 }
+    };
+  };
+
+  // 指定缓存数据失效通知
+  rpc cache_api_expired(google.protobuf.Empty) returns (stream SCCacheApiExpiredSync) {
+    option (atframework.rpc_options) = {
+      module_name: "cache"
+      api_name: "指定缓存数据失效通知"
+      no_cache: true
+    };
+  };
+
+  // Meta信息更新(缓存数据的简化版本)通知
+  rpc cache_api_update_meta(google.protobuf.Empty) returns (stream SCCacheApiUpdateMetaSync) {
+    option (atframework.rpc_options) = {
+      module_name: "cache"
+      api_name: "Meta信息更新(缓存数据的简化版本)通知"
+      no_cache: true
+    };
+  };
+
+  // 全部缓存数据失效通知
+  rpc cache_api_all_expired(google.protobuf.Empty) returns (stream SCCacheApiAllExpiredSync) {
+    option (atframework.rpc_options) = {
+      module_name: "cache"
+      api_name: "全部缓存数据失效通知"
+      no_cache: true
+    };
+  };
+
+  // 主动通知服务器更新meta
+  rpc cache_api_notify_meta(CSCacheApiNotifyMetaReq) returns (SCCacheApiNotifyMetaRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "cache"
+      api_name: "主动通知服务器更新meta"
+      frequency_limit: { frequency_limit_ms: 5000 frequency_limit_count: 30 }
     };
   };
 }

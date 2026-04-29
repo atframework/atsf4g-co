@@ -6,6 +6,46 @@ option optimize_for = SPEED;
 // --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
 
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
+
+import "protocol/common/com.struct.cache.common.proto";
+import "protocol/pbdesc/com.struct.cache.proto";
+
 package hello;
 
-option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
+// 批量请求数据
+message CSCacheApiBatchGetReq {
+  EnCacheApiCacheType cache_type = 1;
+  repeated DCacheApiObjectKey keys_with_status = 2;
+  sint64 client_tag = 3;  // 客户端要的回传tag
+}
+
+// 批量数据返回
+message SCCacheApiBatchGetRsp {
+  repeated DCacheApiObjectData results = 1;
+  sint64 client_tag = 2;  // 客户端要的回传tag
+  repeated DCacheApiCacheKey not_found_keys = 3;
+}
+
+message CSCacheApiUnwatchReq {
+  EnCacheApiCacheType cache_type = 1;
+  repeated DCacheApiObjectKey keys = 2;
+}
+
+message SCCacheApiUnwatchRsp {}
+
+message SCCacheApiExpiredSync {
+  repeated DCacheApiCacheKey keys = 1;
+}
+
+message SCCacheApiUpdateMetaSync {
+  DCacheApiMetaData cache_meta = 1;
+}
+
+message SCCacheApiAllExpiredSync {}
+
+message CSCacheApiNotifyMetaReq {
+  EnCacheApiCacheType cache_type = 1;
+}
+
+message SCCacheApiNotifyMetaRsp {}

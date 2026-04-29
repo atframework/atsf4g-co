@@ -26,6 +26,7 @@
 #include <config/extern_service_types.h>
 #include <data/player.h>
 #include <logic/player_manager.h>
+#include <rpc/cache/cache_algorithm.h>
 #include <rpc/rpc_shared_message.h>
 #include <rpc/user/user_basic.h>
 
@@ -53,12 +54,10 @@ task_action_object_cache_get_user_cache_data::operator()() {
   auto cache_meta = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DUserCacheMeta>(get_shared_context());
   cache_meta->mutable_user_key()->set_zone_id(user->get_zone_id());
   cache_meta->mutable_user_key()->set_user_id(user->get_user_id());
-  rpc::user::convert_to_client_data(*cache_meta->mutable_login_data_cache(), &user->get_login_lock(), nullptr);
 
-  cache_meta->set_user_level(user->get_player_data().user_level());
-  cache_meta->set_nick_name(user->get_account_info().profile().nick_name());
-  cache_meta->set_client_version(user->get_client_info().client_version());
-  cache_meta->set_user_data_version(user->get_data_version());
+  rpc::cache_api::update_cache_meta_from_origin_data(get_shared_context(), *cache_meta, user->get_data_version(),
+                                                     &user->get_login_info(), &user->get_player_data(),
+                                                     &user->get_account_info().profile(), &user->get_client_info());
 
   rsp_body.set_result(PROJECT_NAMESPACE_ID::EN_SUCCESS);
   rsp_body.mutable_cache_meta()->set_data_version(static_cast<int64_t>(user->get_data_version()));
