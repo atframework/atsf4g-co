@@ -105,38 +105,39 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
                                  INTERFACE "$<BUILD_INTERFACE:${project_component_declare_sdk_INCLUDE_DIR}>")
     endif()
 
-    set(FINAL_GENERATED_PCH_HEADER_FILES)
+    set(__FINAL_GENERATED_PCH_HEADER_FILES)
     foreach(HEADER_FILE ${project_component_declare_sdk_HRADERS})
       if(IS_ABSOLUTE "${HEADER_FILE}")
         file(RELATIVE_PATH RELATIVE_HEADER_FILE "${project_component_declare_sdk_INCLUDE_DIR}" "${HEADER_FILE}")
       else()
         set(RELATIVE_HEADER_FILE "${HEADER_FILE}")
       endif()
-      list(APPEND FINAL_GENERATED_PCH_HEADER_FILES "\"${RELATIVE_HEADER_FILE}\"")
+      list(APPEND __FINAL_GENERATED_PCH_HEADER_FILES "\"${RELATIVE_HEADER_FILE}\"")
     endforeach()
 
     if(project_component_declare_sdk_SOURCES)
       project_component_target_precompile_headers(
-        ${TARGET_FULL_NAME} PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${FINAL_GENERATED_PCH_HEADER_FILES}>>")
+        ${TARGET_FULL_NAME} PUBLIC
+        "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
     else()
       project_component_target_precompile_headers(
         ${TARGET_FULL_NAME} INTERFACE
-        "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${FINAL_GENERATED_PCH_HEADER_FILES}>>")
+        "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
     endif()
   endif()
 
-  unset(PUBLIC_LINK_TARGETS)
+  unset(__PUBLIC_LINK_TARGETS)
   if(project_component_declare_sdk_USE_COMPONENTS)
     foreach(USE_COMPONENT ${project_component_declare_sdk_USE_COMPONENTS})
-      list(APPEND PUBLIC_LINK_TARGETS "components::${USE_COMPONENT}")
+      list(APPEND __PUBLIC_LINK_TARGETS "components::${USE_COMPONENT}")
     endforeach()
   endif()
-  list(APPEND PUBLIC_LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK})
+  list(APPEND __PUBLIC_LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK})
 
   if(project_component_declare_sdk_SOURCES)
-    target_link_libraries(${TARGET_FULL_NAME} PUBLIC ${PUBLIC_LINK_TARGETS})
+    target_link_libraries(${TARGET_FULL_NAME} PUBLIC ${__PUBLIC_LINK_TARGETS})
   elseif(project_component_declare_sdk_HRADERS)
-    target_link_libraries(${TARGET_FULL_NAME} INTERFACE ${PUBLIC_LINK_TARGETS})
+    target_link_libraries(${TARGET_FULL_NAME} INTERFACE ${__PUBLIC_LINK_TARGETS})
   endif()
 
   install(
@@ -166,18 +167,17 @@ endfunction()
 function(project_component_force_optimize_sources)
   if(${CMAKE_CXX_COMPILER_ID} MATCHES "GNU|Clang|AppleClang" AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     foreach(PROTO_SRC ${ARGN})
-      unset(PROTO_SRC_OPTIONS)
-      get_source_file_property(PROTO_SRC_OPTIONS ${PROTO_SRC} COMPILE_OPTIONS)
-      if(PROTO_SRC_OPTIONS)
-        list(APPEND PROTO_SRC_OPTIONS "$<$<CONFIG:Debug>:-O2>")
+      unset(__PROTO_SRC_OPTIONS)
+      get_source_file_property(__PROTO_SRC_OPTIONS ${PROTO_SRC} COMPILE_OPTIONS)
+      if(__PROTO_SRC_OPTIONS)
+        list(APPEND __PROTO_SRC_OPTIONS "$<$<CONFIG:Debug>:-O2>")
       else()
-        set(PROTO_SRC_OPTIONS "$<$<CONFIG:Debug>:-O2>")
+        set(__PROTO_SRC_OPTIONS "$<$<CONFIG:Debug>:-O2>")
       endif()
 
-      set_source_files_properties(${PROTO_SRC} PROPERTIES COMPILE_OPTIONS "${PROTO_SRC_OPTIONS}")
+      set_source_files_properties(${PROTO_SRC} PROPERTIES COMPILE_OPTIONS "${__PROTO_SRC_OPTIONS}")
     endforeach()
-    unset(PROTO_SRC)
-    unset(PROTO_SRC_OPTIONS)
+    unset(__PROTO_SRC_OPTIONS)
   endif()
 endfunction()
 
@@ -192,7 +192,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
     file(MAKE_DIRECTORY "${project_component_declare_protocol_OUTPUT_DIR}")
   else()
     set(project_component_declare_protocol_OUTPUT_DIR "${CMAKE_BINARY_DIR}/_generated/component/${TARGET_NAME}")
-    file(MAKE_DIRECTORY "${project_service_declare_protocol_OUTPUT_DIR}")
+    file(MAKE_DIRECTORY "${project_component_declare_protocol_OUTPUT_DIR}")
   endif()
 
   if(NOT project_component_declare_protocol_PROTOCOLS)
@@ -210,19 +210,19 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
                    project_component_declare_protocol_DLLEXPORT_DECL)
   endif()
 
-  unset(FINAL_GENERATED_SOURCE_FILES)
-  unset(FINAL_GENERATED_HEADER_FILES)
-  unset(FINAL_GENERATED_PCH_HEADER_FILES)
+  unset(__FINAL_GENERATED_SOURCE_FILES)
+  unset(__FINAL_GENERATED_HEADER_FILES)
+  unset(__FINAL_GENERATED_PCH_HEADER_FILES)
   set(FINAL_GENERATED_LAST_CREATED_DIR ".")
   unset(FINAL_GENERATED_COPY_COMMANDS)
   list(SORT project_component_declare_protocol_PROTOCOLS)
   foreach(PROTO_FILE ${project_component_declare_protocol_PROTOCOLS})
     file(RELATIVE_PATH RELATIVE_FILE_PATH "${PROTOCOL_DIR}" "${PROTO_FILE}")
     string(REGEX REPLACE "\\.proto$" "" RELATIVE_FILE_PREFIX "${RELATIVE_FILE_PATH}")
-    list(APPEND FINAL_GENERATED_HEADER_FILES
+    list(APPEND __FINAL_GENERATED_HEADER_FILES
          "${project_component_declare_protocol_OUTPUT_DIR}/${RELATIVE_FILE_PREFIX}.pb.h")
-    list(APPEND FINAL_GENERATED_PCH_HEADER_FILES "\"${RELATIVE_FILE_PREFIX}.pb.h\"")
-    list(APPEND FINAL_GENERATED_SOURCE_FILES
+    list(APPEND __FINAL_GENERATED_PCH_HEADER_FILES "\"${RELATIVE_FILE_PREFIX}.pb.h\"")
+    list(APPEND __FINAL_GENERATED_SOURCE_FILES
          "${project_component_declare_protocol_OUTPUT_DIR}/${RELATIVE_FILE_PREFIX}.pb.cc")
     get_filename_component(FINAL_GENERATED_SOURCE_DIR
                            "${project_component_declare_protocol_OUTPUT_DIR}/${RELATIVE_FILE_PREFIX}.pb.cc" DIRECTORY)
@@ -279,15 +279,20 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
       list(APPEND APPEND PROTOBUF_PROTO_PATHS "--proto_path" "${PROTO_PATH}")
     endforeach()
   endif()
-  unset(PUBLIC_LINK_TARGETS)
-  unset(INTERFACE_LINK_TARGETS)
-  if(project_service_declare_protocol_USE_COMPONENTS)
-    foreach(USE_COMPONENT ${project_service_declare_protocol_USE_COMPONENTS})
-      get_target_property(FIND_PROTO_DIR "components::${USE_COMPONENT}" PORJECT_PROTOCOL_DIR)
-      if(FIND_PROTO_DIR)
-        list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${FIND_PROTO_DIR}")
+  unset(__PUBLIC_LINK_TARGETS)
+  unset(__INTERFACE_LINK_TARGETS)
+  if(project_component_declare_protocol_USE_COMPONENTS)
+    foreach(USE_COMPONENT ${project_component_declare_protocol_USE_COMPONENTS})
+      unset(__RESOLVE_PROTO_ALIAS_TARGET)
+      get_target_property(__RESOLVE_PROTO_ALIAS_TARGET "components::${USE_COMPONENT}" ALIASED_TARGET)
+      if(NOT __RESOLVE_PROTO_ALIAS_TARGET)
+        set(__RESOLVE_PROTO_ALIAS_TARGET "components::${USE_COMPONENT}")
       endif()
-      list(APPEND PUBLIC_LINK_TARGETS "components::${USE_COMPONENT}")
+      get_target_property(__FIND_PROTO_DIR "${__RESOLVE_PROTO_ALIAS_TARGET}" PORJECT_PROTOCOL_DIR)
+      if(__FIND_PROTO_DIR)
+        list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${__FIND_PROTO_DIR}")
+      endif()
+      list(APPEND __PUBLIC_LINK_TARGETS "components::${USE_COMPONENT}")
     endforeach()
   endif()
 
@@ -298,7 +303,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   endif()
 
   add_custom_command(
-    OUTPUT ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES}
+    OUTPUT ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES}
            "${PROJECT_INSTALL_RES_PBD_DIR}/component-${TARGET_NAME}.pb"
     COMMAND
       "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" ${PROTOBUF_PROTO_PATHS} --cpp_out
@@ -311,17 +316,18 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     DEPENDS ${project_component_declare_protocol_PROTOCOLS}
             "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}"
-    COMMENT "Generate [@${CMAKE_CURRENT_BINARY_DIR}] ${FINAL_GENERATED_SOURCE_FILES};${FINAL_GENERATED_HEADER_FILES}")
+    COMMENT
+      "Generate [@${CMAKE_CURRENT_BINARY_DIR}] ${__FINAL_GENERATED_SOURCE_FILES};${__FINAL_GENERATED_HEADER_FILES}")
 
   if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
     set(TARGET_FULL_NAME "pc-${TARGET_NAME}")
   else()
     set(TARGET_FULL_NAME "${PROJECT_NAME}-component-${TARGET_NAME}")
   endif()
-  source_group(TREE ${project_component_declare_protocol_OUTPUT_DIR} FILES ${FINAL_GENERATED_SOURCE_FILES}
-                                                                           ${FINAL_GENERATED_HEADER_FILES})
+  source_group(TREE ${project_component_declare_protocol_OUTPUT_DIR} FILES ${__FINAL_GENERATED_SOURCE_FILES}
+                                                                           ${__FINAL_GENERATED_HEADER_FILES})
   if(BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY)
-    add_library(${TARGET_FULL_NAME} SHARED ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
+    add_library(${TARGET_FULL_NAME} SHARED ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES})
 
     project_tool_split_target_debug_sybmol(${TARGET_FULL_NAME})
     project_build_tools_set_shared_library_declaration(${project_component_declare_protocol_DLLEXPORT_DECL}
@@ -330,7 +336,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
     project_setup_runtime_post_build_bash(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_DYNAMIC_LIBRARY_BASH)
     project_setup_runtime_post_build_pwsh(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_DYNAMIC_LIBRARY_PWSH)
   else()
-    add_library(${TARGET_FULL_NAME} STATIC ${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
+    add_library(${TARGET_FULL_NAME} STATIC ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES})
     project_build_tools_set_static_library_declaration(${project_component_declare_protocol_DLLEXPORT_DECL}
                                                        "${TARGET_FULL_NAME}")
 
@@ -341,14 +347,14 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   if(COMMAND project_build_tools_patch_protobuf_targets)
     project_build_tools_patch_protobuf_targets(${TARGET_FULL_NAME})
   else()
-    project_build_tools_patch_protobuf_sources(${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
-    # project_component_force_optimize_sources(${FINAL_GENERATED_SOURCE_FILES} ${FINAL_GENERATED_HEADER_FILES})
+    project_build_tools_patch_protobuf_sources(${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES})
+    # project_component_force_optimize_sources(${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES})
   endif()
 
   project_component_target_precompile_headers(
     ${TARGET_FULL_NAME}
     PUBLIC
-    "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${FINAL_GENERATED_PCH_HEADER_FILES}>>"
+    "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>"
     PRIVATE
     "<limits>"
     "<string>"
@@ -398,12 +404,12 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   target_include_directories(${TARGET_FULL_NAME}
                              PUBLIC "$<BUILD_INTERFACE:${project_component_declare_protocol_OUTPUT_DIR}>")
 
-  list(APPEND PUBLIC_LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol)
-  list(APPEND PUBLIC_LINK_TARGETS ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_LINK_NAME})
-  if(INTERFACE_LINK_TARGETS)
-    target_link_libraries(${TARGET_FULL_NAME} INTERFACE ${INTERFACE_LINK_TARGETS})
+  list(APPEND __PUBLIC_LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol)
+  list(APPEND __PUBLIC_LINK_TARGETS ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_LINK_NAME})
+  if(__INTERFACE_LINK_TARGETS)
+    target_link_libraries(${TARGET_FULL_NAME} INTERFACE ${__INTERFACE_LINK_TARGETS})
   endif()
-  target_link_libraries(${TARGET_FULL_NAME} PUBLIC ${PUBLIC_LINK_TARGETS})
+  target_link_libraries(${TARGET_FULL_NAME} PUBLIC ${__PUBLIC_LINK_TARGETS})
 
   install(
     TARGETS ${TARGET_FULL_NAME}
@@ -465,9 +471,9 @@ function(project_component_declare_service TARGET_NAME SERVICE_ROOT_DIR)
        "${PROJECT_INSTALL_BAS_DIR}")
 
   if(BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY)
-    set(project_service_declare_service_USE_SHARED_LIBRARY TRUE)
+    set(project_component_declare_service_USE_SHARED_LIBRARY TRUE)
   else()
-    set(project_service_declare_service_USE_SHARED_LIBRARY FALSE)
+    set(project_component_declare_service_USE_SHARED_LIBRARY FALSE)
   endif()
   if(PROJECT_WITH_SANTIZER_NAME)
     set(SERVER_FRAME_PACKAGE_SANITIZER_FIELD "sanitizer type: ${PROJECT_WITH_SANTIZER_NAME}
@@ -524,15 +530,24 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
 
   # 针对MSVC多配置生成器，防止自动添加Debug/Release等目录
   if(MSVC)
-    set_target_properties(${TARGET_FULL_NAME} PROPERTIES
-      RUNTIME_OUTPUT_DIRECTORY_DEBUG "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
-      RUNTIME_OUTPUT_DIRECTORY_RELEASE "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
-      RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
-      RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
-      PDB_OUTPUT_DIRECTORY_DEBUG "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
-      PDB_OUTPUT_DIRECTORY_RELEASE "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
-      PDB_OUTPUT_DIRECTORY_RELWITHDEBINFO "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
-      PDB_OUTPUT_DIRECTORY_MINSIZEREL "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}")
+    set_target_properties(
+      ${TARGET_FULL_NAME}
+      PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
+                 "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
+                 RUNTIME_OUTPUT_DIRECTORY_RELEASE
+                 "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
+                 RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO
+                 "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
+                 RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL
+                 "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
+                 PDB_OUTPUT_DIRECTORY_DEBUG
+                 "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
+                 PDB_OUTPUT_DIRECTORY_RELEASE
+                 "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
+                 PDB_OUTPUT_DIRECTORY_RELWITHDEBINFO
+                 "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
+                 PDB_OUTPUT_DIRECTORY_MINSIZEREL
+                 "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}")
   endif()
 
   if(project_component_declare_service_OUTPUT_TARGET_NAME)

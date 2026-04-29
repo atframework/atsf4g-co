@@ -7,6 +7,8 @@ project_component_declare_sdk(
   "${CMAKE_CURRENT_LIST_DIR}"
   DLLEXPORT_DECL
   DISTRIBUTED_TRANSACTION_SDK_API
+  USE_COMPONENTS
+  distributed-transaction-protocol
   HRADERS
   "${CMAKE_CURRENT_LIST_DIR}/rpc/transaction/dtcoordsvrservice.h"
   "${CMAKE_CURRENT_LIST_DIR}/rpc/transaction/transaction_api.h"
@@ -19,6 +21,3 @@ project_component_declare_sdk(
   "${CMAKE_CURRENT_LIST_DIR}/transaction_participator_handle.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/transaction_client_handle.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/logic/action/task_action_participator_resolve_transaction.cpp")
-
-target_link_libraries(${PROJECT_COMPONENT_DISTRIBUTED_TRANSACTION_SDK}
-                      PUBLIC components::distributed-transaction-protocol)
