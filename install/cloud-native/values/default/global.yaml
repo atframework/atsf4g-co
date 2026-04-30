@@ -133,3 +133,23 @@ atgateway:
   listen:
     begin_port: 8000
   echo_server: false
+
+# 云上部署基础相关
+imagePullSecrets:
+  - name: harbor-regcred
+
+persistence:
+cbs:
+  enabled: true
+  storageClass: openebs-hostpath
+  volumes:
+    - name: log
+      storage: 5Gi
+      accessMode: ReadWriteOnce
+
+
+service:
+  type: ClusterIP
+  port: 7001
+  targetPort: 7001
+  protocol: TCP

@@ -1,3 +1,0 @@
-{{- template "libapp.httproute" (list . "echosvr.httproute") -}}
-{{- define "echosvr.httproute" -}}
-{{- end -}}
