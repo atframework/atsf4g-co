@@ -6,11 +6,15 @@
 #include <std/explicit_declare.h>
 #include <time/time_utility.h>
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <config/logic_config.h>
 #include <utility/protobuf_mini_dumper.h>

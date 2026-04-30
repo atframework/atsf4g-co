@@ -11,6 +11,16 @@
 
 #include <config/server_frame_build_feature.h>
 
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
+#include <protocol/pbdesc/svr.struct.cache.pb.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
 #include <rpc/cache/cache_algorithm.h>
 
 #include <cstddef>
@@ -19,7 +29,6 @@
 #include <list>
 #include <memory>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -102,12 +111,13 @@ class cache_watcher_t {
 
 struct cache_watcher_hash_t : public ::rpc::cache_api::cache_watcher_hash_t {
   using ::rpc::cache_api::cache_watcher_hash_t::operator();
-  size_t operator()(const cache_watcher_t::ptr_t &watcher) const;
 };
 
 struct cache_watcher_equal_t : public ::rpc::cache_api::cache_watcher_equal_t {
   using ::rpc::cache_api::cache_watcher_equal_t::operator();
-  bool operator()(const cache_watcher_t::ptr_t &left, const cache_watcher_t::ptr_t &right) const;
 };
 
-using cache_watcher_set_t = std::unordered_set<cache_watcher_t::ptr_t, cache_watcher_hash_t, cache_watcher_equal_t>;
+// Map keyed by object_cache_watcher to support heterogeneous lookup without
+// constructing a temporary cache_watcher_t for every find/erase.
+using cache_watcher_set_t = std::unordered_map<PROJECT_NAMESPACE_ID::object_cache_watcher, cache_watcher_t::ptr_t,
+                                               cache_watcher_hash_t, cache_watcher_equal_t>;

@@ -82,11 +82,11 @@ class cache_object_base {
   friend class cache_group;
 
  private:
-  int64_t cachesvr_version_;    // Cache版本号
-  int64_t data_version_;        // Cache的更新时间
-  time_t expired_time_;         // Cache失效时间
-  time_t remove_protect_time_;  // Cache移除保护时间（防止拉取期间被删除）
-  time_t next_check_time_;      // 下一次检查时间
+  mutable int64_t cachesvr_version_;  // Cache版本号
+  mutable int64_t data_version_;      // Cache的更新时间
+  time_t expired_time_;               // Cache失效时间
+  time_t remove_protect_time_;        // Cache移除保护时间（防止拉取期间被删除）
+  time_t next_check_time_;            // 下一次检查时间
   PROJECT_NAMESPACE_ID::object_cache_key key_;
 
   cache_watcher_set_t watchers_;  // 监听者

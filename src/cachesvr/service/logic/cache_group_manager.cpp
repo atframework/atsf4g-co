@@ -289,7 +289,7 @@ rpc::result_code_type cache_group_manager::pull_user_cache_fn(::rpc::context &ct
     if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
       RPC_RETURN_CODE(0);
     }
-    FWLOGERROR("rpc::db::user::batch_partly_get_basic_info failed, res: {}()", ret,
+    FWLOGERROR("rpc::db::user::batch_partly_get_basic_info failed, res: {}({})", ret,
                protobuf_mini_dumper_get_error_msg(ret));
     RPC_RETURN_CODE(ret);
   }
@@ -301,7 +301,7 @@ rpc::result_code_type cache_group_manager::pull_user_cache_fn(::rpc::context &ct
     if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
       RPC_RETURN_CODE(0);
     }
-    FWLOGERROR("rpc::db::login_lock::batch_get_all failed, res: {}()", ret, protobuf_mini_dumper_get_error_msg(ret));
+    FWLOGERROR("rpc::db::login_lock::batch_get_all failed, res: {}({})", ret, protobuf_mini_dumper_get_error_msg(ret));
     RPC_RETURN_CODE(ret);
   }
   pull_login_lock_index.reserve(pull_login_lock_results.size());

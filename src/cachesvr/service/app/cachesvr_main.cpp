@@ -86,5 +86,5 @@ int main(int argc, char *argv[]) {
   app.add_module(std::make_shared<main_service_module>());
 
   // run
-  return app.run(uv_default_loop(), argc, (const char **)argv, NULL);
+  return app.run(uv_default_loop(), argc, const_cast<const char **>(argv), nullptr);
 }

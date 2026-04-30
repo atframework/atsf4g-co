@@ -42,13 +42,12 @@ void global_cache_manager::tick() {
     return;
   }
 
-  static time_t last_time_tick = 0;
-  if (util::time::time_utility::get_now() == last_time_tick) {
+  if (util::time::time_utility::get_now() == last_time_tick_) {
     return;
   }
-  last_time_tick = util::time::time_utility::get_now();
+  last_time_tick_ = util::time::time_utility::get_now();
 
-  if (last_time_tick % 60 == 0) {
+  if (last_time_tick_ % 60 == 0) {
     hot_data_debug();
   }
 
@@ -58,6 +57,7 @@ void global_cache_manager::tick() {
 
 int global_cache_manager::init() {
   watch_heartbeat_timepoint_ = 0;
+  last_time_tick_ = 0;
   return 0;
 }
 
@@ -77,7 +77,7 @@ void global_cache_manager::fetch_hot_data(
   std::unordered_map<PROJECT_NAMESPACE_ID::object_cache_key, PROJECT_NAMESPACE_ID::EnCacheApiGetCacheType,
                      rpc::cache_api::cache_key_hash_t, rpc::cache_api::cache_key_equal_t>
       output_cache_keys;
-  cache_keys.reserve(cache_keys.size());
+  output_cache_keys.reserve(cache_keys.size());
 
   for (const auto& iter : cache_keys) {
     if (iter.second != PROJECT_NAMESPACE_ID::EN_CACHE_API_GET_CACHE_TYPE_HOT_DATA &&

@@ -101,4 +101,5 @@ class global_cache_manager : public atfw::util::design_pattern::local_singleton<
                                  rpc::cache_api::cache_key_equal_t>
       hot_data_map_;
   time_t watch_heartbeat_timepoint_;
+  time_t last_time_tick_;
 };

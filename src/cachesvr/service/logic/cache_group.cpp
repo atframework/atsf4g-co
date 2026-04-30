@@ -37,8 +37,8 @@ int cache_object_base::replace_watcher(rpc::context &ctx, cache_group_manager &m
   cache_watcher_timer_handle_t timer_handle;
   manager.reset_timer_handle(timer_handle);
 
-  auto iter = watchers_.find(copp::future::make_unique<cache_watcher_t>(server_inst_id, watcher_key));
-  if (iter != watchers_.end() && !(*iter)) {
+  auto iter = watchers_.find(watcher_key);
+  if (iter != watchers_.end() && !iter->second) {
     watchers_.erase(iter);
     iter = watchers_.end();
   }
@@ -54,19 +54,19 @@ int cache_object_base::replace_watcher(rpc::context &ctx, cache_group_manager &m
     // 需要刷新访问时间
     new_watcher->visit_update();
     manager.setup_timer(*this, *new_watcher);
-    watchers_.emplace(std::move(new_watcher));
+    watchers_.emplace(watcher_key, std::move(new_watcher));
 
     FWLOGINFO("Insert watcher {}:{}:{} for cache {}:{}:{}", static_cast<uint32_t>(watcher_key.cache_type()),
               watcher_key.zone_id(), watcher_key.instance_id(), static_cast<uint32_t>(get_key().cache_type()),
               get_key().zone_id(), get_key().instance_id());
   } else {
     // 需要刷新访问时间
-    (*iter)->visit_update();
-    (*iter)->set_server_instance_id(server_inst_id);
+    iter->second->visit_update();
+    iter->second->set_server_instance_id(server_inst_id);
 
     // 检查观察者数据版本号，如果不匹配通知缓存失效
     if (data_version > 0 && data_version != get_data_version()) {
-      (*iter)->notify_cache_expired(ctx, get_key());
+      iter->second->notify_cache_expired(ctx, get_key());
     }
   }
 
@@ -75,8 +75,8 @@ int cache_object_base::replace_watcher(rpc::context &ctx, cache_group_manager &m
 
 void cache_object_base::remove_watcher(const PROJECT_NAMESPACE_ID::object_cache_watcher &watcher_key,
                                        const cache_watcher_t *check_watcher) {
-  cache_watcher_set_t::iterator iter = watchers_.find(copp::future::make_unique<cache_watcher_t>(0, watcher_key));
-  if (iter != watchers_.end() && !(*iter)) {
+  auto iter = watchers_.find(watcher_key);
+  if (iter != watchers_.end() && !iter->second) {
     watchers_.erase(iter);
     iter = watchers_.end();
   }
@@ -85,7 +85,7 @@ void cache_object_base::remove_watcher(const PROJECT_NAMESPACE_ID::object_cache_
     return;
   }
 
-  if (nullptr != check_watcher && check_watcher != (*iter).get()) {
+  if (nullptr != check_watcher && check_watcher != iter->second.get()) {
     return;
   }
 
@@ -99,7 +99,7 @@ void cache_object_base::remove_watcher(const PROJECT_NAMESPACE_ID::object_cache_
   cache_watcher_timer_handle_t timer_handle;
 
   // 先用内部的const接口移出定时器。允许重入
-  std::tie(timer_manager, timer_handle) = (*iter)->move_timer_out_inner();
+  std::tie(timer_manager, timer_handle) = iter->second->move_timer_out_inner();
 
   // 解绑定时器
   if (nullptr != timer_manager && timer_manager->is_time_handle_valid(timer_handle)) {
@@ -127,10 +127,10 @@ bool cache_object_base::is_cache_valid() const {
   if (nullptr != logic_module && cachesvr_version_ != current_cachesvr_version) {
     // 缓存分布未变化，则直接刷新版本即可
     if (logic_config::me()->get_local_server_id() == rpc::cache_api::get_cachesvr_server_id(get_key())) {
-      const_cast<cache_object_base *>(this)->update_cachesvr_version(current_cachesvr_version);
+      cachesvr_version_ = current_cachesvr_version;
     } else {
       // 缓存已经不在本节点上了，下次直接返回false即可
-      const_cast<cache_object_base *>(this)->data_version_ = 0;
+      data_version_ = 0;
       return false;
     }
   }
@@ -143,7 +143,7 @@ bool cache_object_base::is_cache_valid() const {
   time_t cache_content_update_time = data_version_ / 1000;
   bool ret = now >= cache_content_update_time && now < cache_content_update_time + cache_data_expired_timeout;
   if (!ret) {
-    const_cast<cache_object_base *>(this)->data_version_ = 0;  // 下次直接返回false即可，不需要计算时间了
+    data_version_ = 0;  // 下次直接返回false即可，不需要计算时间了
   }
 
   return ret;
@@ -162,12 +162,12 @@ void cache_object_base::cleanup_all_watchers(bool /*notify*/) {
   // 要保证析构流程中递归调用到 remove_watcher 时安全
   cache_watcher_set_t watchers;
   watchers_.swap(watchers);
-  for (const auto &watcher : watchers) {
-    if (!watcher) {
+  for (const auto &watcher_pair : watchers) {
+    if (!watcher_pair.second) {
       continue;
     }
 
-    watcher->cleanup_timer();
+    watcher_pair.second->cleanup_timer();
   }
 
   // FIXME 正常对象关闭时都应该是失效状态，如果非失效状态且有watcher的情况下析构。说明缓存不够用了而淘汰。
@@ -194,7 +194,8 @@ rpc::result_code_type cache_object_base::set_cache_expired(rpc::context &ctx) {
       object_cache_key_watcher;
   object_cache_key_watcher.reserve(watchers_.size());
 
-  for (const auto &watcher : watchers_) {
+  for (const auto &watcher_pair : watchers_) {
+    const cache_watcher_t::ptr_t &watcher = watcher_pair.second;
     if (!watcher) {
       continue;
     }
@@ -282,7 +283,8 @@ rpc::result_code_type cache_object_base::notify_update_meta(rpc::context &ctx,
       object_cache_key_watcher;
   object_cache_key_watcher.reserve(watchers_.size());
 
-  for (const auto &watcher : watchers_) {
+  for (const auto &watcher_pair : watchers_) {
+    const cache_watcher_t::ptr_t &watcher = watcher_pair.second;
     if (!watcher) {
       continue;
     }

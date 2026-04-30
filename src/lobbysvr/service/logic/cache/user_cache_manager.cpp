@@ -185,20 +185,23 @@ void user_cache_manager::refresh_feature_limit_minute(rpc::context& ctx) {
 void user_cache_manager::send_cache_expired_notify_to_cachesvr(rpc::context& ctx) {
   auto zone_id = owner_->get_zone_id();
   auto user_id = owner_->get_user_id();
+  auto user_ptr = owner_->shared_from_this();
   auto notify_task = rpc::async_invoke(
       ctx, "user_cache_manager.send_cache_expired_notify_to_cachesvr",
-      [zone_id, user_id](rpc::context& subctx) -> rpc::result_code_type {
+      [user_ptr, zone_id, user_id](rpc::context& subctx) -> rpc::result_code_type {
         // 通知cachesvr，缓存过期
         PROJECT_NAMESPACE_ID::SSCacheSetExpiredSync* sync_body =
             subctx.create<PROJECT_NAMESPACE_ID::SSCacheSetExpiredSync>();
         if (nullptr == sync_body) {
           FWLOGERROR("malloc SSCacheSetExpiredSync failed");
+          user_ptr->get_user_cache_manager().need_notify_user_cache_expired_ = true;
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
         }
 
         PROJECT_NAMESPACE_ID::object_cache_key* cache_key = sync_body->add_expired_keys();
         if (nullptr == cache_key) {
           FWLOGERROR("malloc object_cache_key failed");
+          user_ptr->get_user_cache_manager().need_notify_user_cache_expired_ = true;
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
         }
 
@@ -216,6 +219,8 @@ void user_cache_manager::send_cache_expired_notify_to_cachesvr(rpc::context& ctx
           FWLOGERROR("call rpc::cache::set_expired to server {:#x} with key {}:{}:{} failed, res: {}({})",
                      server_inst_id, static_cast<uint32_t>(cache_key->cache_type()), cache_key->zone_id(),
                      cache_key->instance_id(), res, protobuf_mini_dumper_get_error_msg(res));
+          // 任务失败，恢复脏标记以供后续重试
+          user_ptr->get_user_cache_manager().need_notify_user_cache_expired_ = true;
         }
 
         RPC_RETURN_CODE(res);
@@ -368,7 +373,7 @@ rpc::result_code_type user_cache_manager::unwatch_cache_keys(
 
   for (int i = 0; i < keys.size(); ++i) {
     PROJECT_NAMESPACE_ID::object_cache_key* cache_key = cache_keys->Add();
-    if (nullptr == cache_keys) {
+    if (nullptr == cache_key) {
       FWLOGERROR("malloc object_cache_key failed");
       break;
     }
@@ -460,14 +465,12 @@ void user_cache_manager::fill_self_basic_data(PROJECT_NAMESPACE_ID::DUserBasicDa
   output.mutable_user_key()->set_zone_id(owner_->get_zone_id());
   // output.set_account_id(owner_->get_account_id());
 
-  PROJECT_NAMESPACE_ID::DLoginBasicDataCache* login_cache = output.mutable_login_data_cache();
   // user 表里的这个字段可能没更新，用本地login表里的
-  if (NULL != login_cache) {
-    login_cache->set_business_login_time(owner_->get_login_info().business_login_time());
-    login_cache->set_business_logout_time(owner_->get_login_info().business_logout_time());
-    login_cache->set_business_register_time(owner_->get_login_info().business_register_time());
-    login_cache->set_business_unregister_time(owner_->get_login_info().business_unregister_time());
-  }
+  PROJECT_NAMESPACE_ID::DLoginBasicDataCache* login_cache = output.mutable_login_data_cache();
+  login_cache->set_business_login_time(owner_->get_login_info().business_login_time());
+  login_cache->set_business_logout_time(owner_->get_login_info().business_logout_time());
+  login_cache->set_business_register_time(owner_->get_login_info().business_register_time());
+  login_cache->set_business_unregister_time(owner_->get_login_info().business_unregister_time());
 
   output.set_account_type(owner_->get_account_info().account_type());
   output.set_account_login_channel(owner_->get_account_info().channel_id());
@@ -695,8 +698,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_cache_manager::pull_cach
     }
 
     if (filter_unused_id) {
-      auto iter = output.begin();
-      if (iter != output.end()) {
+      for (auto iter = output.begin(); iter != output.end();) {
         if (iter->has_user_cache() && iter->user_cache().login_data_cache().business_unregister_time() != 0) {
           if (not_found_keys != nullptr) {
             auto* key = not_found_keys->Add();

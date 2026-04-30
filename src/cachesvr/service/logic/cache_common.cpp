@@ -172,23 +172,3 @@ void cache_watcher_t::cleanup_timer() {
 std::pair<cache_group_manager *, cache_watcher_timer_handle_t> cache_watcher_t::move_timer_out_inner() const {
   return const_cast<cache_watcher_t *>(this)->move_timer_out();
 }
-
-size_t cache_watcher_hash_t::operator()(const cache_watcher_t::ptr_t &watcher) const {
-  if (!watcher) {
-    return 0;
-  }
-
-  return (*this)(watcher->get_key());
-}
-
-bool cache_watcher_equal_t::operator()(const cache_watcher_t::ptr_t &left, const cache_watcher_t::ptr_t &right) const {
-  if (left == right) {
-    return true;
-  }
-
-  if (!left || !right) {
-    return false;
-  }
-
-  return (*this)(left->get_key(), right->get_key());
-}
