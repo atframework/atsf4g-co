@@ -214,6 +214,7 @@ orbit::DAgentLoadSnapshot orbit_agent_manager::build_agent_load_snapshot() const
 rpc::result_code_type orbit_agent_manager::handle_start_client(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx,
                                                                const orbit::CTAStartClientReq& request,
                                                                orbit::ATCStartClientRsp& response) {
+  server_heartbeat(request.server_identity());
   // TODO 检查负载状态
 
   // 启动Client
@@ -233,6 +234,8 @@ rpc::result_code_type orbit_agent_manager::handle_start_client(ATFW_EXPLICIT_UNU
 rpc::result_code_type orbit_agent_manager::handle_forward_to_client(rpc::context& ctx,
                                                                     const orbit::CTAForwardToClientReq& request,
                                                                     orbit::ATCForwardToClientRsp& response) {
+  server_heartbeat(request.server_identity());
+
   const std::string& client_id = request.client_id().client_id();
   if (client_id.empty()) {
     FWLOGERROR("orbit agent forward_to_client rejected: missing client_id");
@@ -248,7 +251,7 @@ rpc::result_code_type orbit_agent_manager::handle_forward_to_client(rpc::context
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
 
-  auto notify_request = rpc::make_shared_message<orbit::ATSForwardToClientNotify>(ctx);
+  auto notify_request = rpc::make_shared_message<orbit::ATDForwardToClientNotify>(ctx);
   notify_request->set_payload(request.payload());
 
   int32_t rpc_result = RPC_AWAIT_CODE_RESULT(
@@ -262,8 +265,27 @@ rpc::result_code_type orbit_agent_manager::handle_forward_to_client(rpc::context
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
+rpc::result_code_type orbit_agent_manager::handle_server_heartbeat(rpc::context& ctx,
+                                                                   const orbit::CTAServerHeartbeatReq& request) {
+  server_heartbeat(request.server_identity());
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+}
+
+void orbit_agent_manager::server_heartbeat(const orbit::DServerIdentity& server_identity) {
+  server_unique_id_to_identity_[server_identity.unique_id()] = server_identity;
+}
+
+orbit::DServerIdentity* orbit_agent_manager::find_server_identity(uint64_t server_unique_id) {
+  // TODO 超时流程 与 消息缓存
+  auto iter = server_unique_id_to_identity_.find(server_unique_id);
+  if (iter == server_unique_id_to_identity_.end()) {
+    return nullptr;
+  }
+  return &iter->second;
+}
+
 rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx, uint64_t client_server_id,
-                                                               const orbit::STAClientStartReq& request) {
+                                                               const orbit::DTAClientStartReq& request) {
   const std::string& client_id = request.client_id().client_id();
   if (client_id.empty()) {
     FWLOGERROR("orbit agent client_start rejected: missing client_id");
@@ -287,11 +309,18 @@ rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx
   client_record->last_heartbeat_timepoint = util::time::time_utility::get_sys_now();
   client_record->client_server_id = client_server_id;
 
+  auto identity = find_server_identity(client_record->server_unique_id);
+  if (identity == nullptr) {
+    FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
+               client_id, client_record->server_unique_id);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+  }
+
   auto notify_request = rpc::make_shared_message<orbit::ATCNotifyClientStartedReq>(ctx);
   fill_client_identity(*notify_request->mutable_client_identity(), client_record);
   notify_request->set_client_addr(client_record->client_addr);
   notify_request->set_custom_data(request.custom_data());
-  *notify_request->mutable_server_identity() = client_record->server_identity;
+  *notify_request->mutable_server_identity() = *identity;
 
   auto controller_server_id = client_record->get_controller_server_id();
 
@@ -307,7 +336,7 @@ rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx
 }
 
 rpc::result_code_type orbit_agent_manager::handle_client_heartbeat(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx,
-                                                                   const orbit::STAClientHeartbeatNotify& request) {
+                                                                   const orbit::DTAClientHeartbeatNotify& request) {
   const std::string& client_id = request.client_id().client_id();
   if (client_id.empty()) {
     FWLOGERROR("orbit agent client_heartbeat rejected: missing client_id");
@@ -327,7 +356,7 @@ rpc::result_code_type orbit_agent_manager::handle_client_heartbeat(ATFW_EXPLICIT
 }
 
 rpc::result_code_type orbit_agent_manager::handle_send_to_server(rpc::context& ctx,
-                                                                 const orbit::STASendToServerNotify& request) {
+                                                                 const orbit::DTASendToServerNotify& request) {
   const std::string& client_id = request.client_id().client_id();
   if (client_id.empty()) {
     FWLOGERROR("orbit agent send_to_server rejected: missing client_id");
@@ -348,11 +377,18 @@ rpc::result_code_type orbit_agent_manager::handle_send_to_server(rpc::context& c
 
   client_record->last_heartbeat_timepoint = util::time::time_utility::get_sys_now();
 
+  auto identity = find_server_identity(client_record->server_unique_id);
+  if (identity == nullptr) {
+    FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
+               client_id, client_record->server_unique_id);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+  }
+
   auto forward_request = rpc::make_shared_message<orbit::ATCForwardToServerReq>(ctx);
   orbit::DClientMessage* client_message = forward_request->mutable_client_message();
   fill_client_identity(*client_message->mutable_client_identity(), client_record);
   client_message->set_payload(request.payload());
-  *forward_request->mutable_server_identity() = client_record->server_identity;
+  *forward_request->mutable_server_identity() = *identity;
 
   auto controller_server_id = client_record->get_controller_server_id();
 
@@ -368,7 +404,7 @@ rpc::result_code_type orbit_agent_manager::handle_send_to_server(rpc::context& c
 }
 
 rpc::result_code_type orbit_agent_manager::handle_client_exit(rpc::context& ctx,
-                                                              const orbit::STAClientExitReq& request) {
+                                                              const orbit::DTAClientExitReq& request) {
   const std::string& client_id = request.client_id().client_id();
   if (client_id.empty()) {
     FWLOGERROR("orbit agent client_exit rejected: missing client_id");
@@ -389,12 +425,19 @@ rpc::result_code_type orbit_agent_manager::handle_client_exit(rpc::context& ctx,
 
   clients_.erase(client_id);
 
+  auto identity = find_server_identity(client_record->server_unique_id);
+  if (identity == nullptr) {
+    FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
+               client_id, client_record->server_unique_id);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+  }
+
   auto notify_request = rpc::make_shared_message<orbit::ATCNotifyClientExitReq>(ctx);
   fill_client_identity(*notify_request->mutable_client_identity(), client_record);
   notify_request->set_exit_reason(request.exit_reason());
   notify_request->set_custom_data(request.custom_data());
   notify_request->set_exit_code(request.exit_code());
-  *notify_request->mutable_server_identity() = client_record->server_identity;
+  *notify_request->mutable_server_identity() = *identity;
 
   auto controller_server_id = client_record->get_controller_server_id();
 
@@ -448,7 +491,7 @@ int orbit_agent_manager::prepare_start_client_record(const orbit::CTAStartClient
   record->expected_memory_mb = request.args().expected_memory_mb();
   record->startup_timeout_sec = request.args().startup_timeout_sec();
   record->heartbeat_timeout_sec = request.args().heartbeat_timeout_sec();
-  record->server_identity = request.server_identity();
+  record->server_unique_id = request.server_identity().unique_id();
 
   record->state = orbit::EN_SLAVE_STATE_STARTING;
   record->client_addr.clear();
@@ -549,23 +592,29 @@ void orbit_agent_manager::on_client_process_exit(const std::string& client_id, i
     return;
   }
 
+  auto server_identity_ptr = find_server_identity(record->server_unique_id);
+  if (server_identity_ptr == nullptr) {
+    FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
+               client_id, record->server_unique_id);
+    return;
+  }
+
   orbit::DClientIdentity identity;
   fill_client_identity(identity, record);
   const orbit::EnClientExitReason reason = orbit::EN_SLAVE_EXIT_REASON_CRASH;
   const int32_t exit_code = static_cast<int32_t>(exit_status);
-  orbit::DServerIdentity server_identity = record->server_identity;
 
   auto invoke_result =
       rpc::async_invoke("orbit_agent_manager", "notify_crash_exit",
-                        [controller_server_id, identity = std::move(identity), server_identity = std::move(server_identity),
+                        [controller_server_id, identity = std::move(identity), server_identity = *server_identity_ptr,
                          reason, exit_code](rpc::context& ctx) mutable -> rpc::result_code_type {
                           auto notify_request = rpc::make_shared_message<orbit::ATCNotifyClientExitReq>(ctx);
                           *notify_request->mutable_client_identity() = std::move(identity);
                           *notify_request->mutable_server_identity() = std::move(server_identity);
                           notify_request->set_exit_reason(reason);
                           notify_request->set_exit_code(exit_code);
-                          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-                              rpc::agenttocontrollerservice::notify_client_exit(ctx, controller_server_id, *notify_request)));
+                          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::agenttocontrollerservice::notify_client_exit(
+                              ctx, controller_server_id, *notify_request)));
                         });
   if (!invoke_result.is_success()) {
     FWLOGERROR("orbit agent failed to spawn notify_crash_exit task for {}, res: {}({})", client_id,
@@ -614,15 +663,21 @@ void orbit_agent_manager::check_client_timeouts(time_t now) {
       continue;
     }
 
+    auto server_identity_ptr = find_server_identity(record->server_unique_id);
+    if (server_identity_ptr == nullptr) {
+      FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
+                 entry.client_id, record->server_unique_id);
+      return;
+    }
+
     orbit::DClientIdentity identity;
     fill_client_identity(identity, record);
     const orbit::EnClientExitReason reason = entry.reason;
     const int32_t exit_code = PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_TIMEOUT;
-    orbit::DServerIdentity server_identity = record->server_identity;
 
     auto invoke_result =
         rpc::async_invoke("orbit_agent_manager", "notify_timeout_exit",
-                          [controller_server_id, identity = std::move(identity), server_identity = std::move(server_identity),
+                          [controller_server_id, identity = std::move(identity), server_identity = *server_identity_ptr,
                            reason, exit_code](rpc::context& ctx) mutable -> rpc::result_code_type {
                             auto notify_request = rpc::make_shared_message<orbit::ATCNotifyClientExitReq>(ctx);
                             *notify_request->mutable_client_identity() = std::move(identity);

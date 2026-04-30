@@ -55,8 +55,8 @@ struct orbit_agent_client_record {
   uint64_t startup_timeout_sec = 0;        ///< STARTING/SEED 状态最大等待时间 (秒)
   uint64_t heartbeat_timeout_sec = 0;      ///< RUNNING 状态心跳最大间隔 (秒)
 
-  // 路由信息：从 CTAStartClientReq 写入，用于向 Controller 上报时携带
-  orbit::DServerIdentity server_identity;  ///< 启动该 Client 的 Server unique_id
+  // Server路由信息
+  uint64_t server_unique_id;
 
   uint64_t get_controller_server_id();
 };
@@ -78,20 +78,23 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   // 转发至 Client
   EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_forward_to_client(
       rpc::context& ctx, const orbit::CTAForwardToClientReq& request, orbit::ATCForwardToClientRsp& response);
+  // Server 心跳
+  EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_server_heartbeat(
+      rpc::context& ctx, const orbit::CTAServerHeartbeatReq& request);
 
   // 来自Client
   // Client 启动
   EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_client_start(
-      rpc::context& ctx, uint64_t client_server_id, const orbit::STAClientStartReq& request);
+      rpc::context& ctx, uint64_t client_server_id, const orbit::DTAClientStartReq& request);
   // Client 心跳
   EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_client_heartbeat(
-      rpc::context& ctx, const orbit::STAClientHeartbeatNotify& request);
+      rpc::context& ctx, const orbit::DTAClientHeartbeatNotify& request);
   // 转发至 Server
   EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_send_to_server(
-      rpc::context& ctx, const orbit::STASendToServerNotify& request);
+      rpc::context& ctx, const orbit::DTASendToServerNotify& request);
   // Client 退出
   EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_client_exit(
-      rpc::context& ctx, const orbit::STAClientExitReq& request);
+      rpc::context& ctx, const orbit::DTAClientExitReq& request);
 
   void on_client_process_exit(const std::string& client_id, int64_t exit_status, int term_signal);
 
@@ -108,16 +111,20 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
 
   void check_client_timeouts(time_t now);
 
+  void server_heartbeat(const orbit::DServerIdentity& server_identity);
+  orbit::DServerIdentity* find_server_identity(uint64_t server_unique_id);
+
  private:
   bool stoped_ = false;
 
   // 启动的Client数据
   std::unordered_map<std::string, orbit_agent_client_record_ptr> clients_;
+  // Server唯一ID到ServerIdentity的映射 用于心跳和转发消息时更新路由信息
+  std::unordered_map<uint64_t, orbit::DServerIdentity> server_unique_id_to_identity_;
 
   // 启动配置
   std::string region_;
   google::protobuf::RepeatedPtrField<std::string> tags_;
-
   std::vector<std::string> configured_client_command_line_;
   double cpu_capacity_ = 0.0;
   double memory_capacity_mb_ = 0.0;

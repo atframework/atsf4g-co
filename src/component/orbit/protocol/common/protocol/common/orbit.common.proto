@@ -49,6 +49,7 @@ message DClientIdentity {
 
 message DServerIdentity {
   uint64 unique_id = 1;
+  uint64 server_node_id = 2;
 }
 
 message DClientMessage {

@@ -16,37 +16,37 @@ import "protocol/common/orbit.common.proto";
 
 /////////////// Controller -> Server ///////////////
 service ControllerToServerService {
-  rpc forward_to_server(stream CTMForwardToServerNotify) returns (google.protobuf.Empty) {
+  rpc forward_to_server(stream CTSForwardToServerNotify) returns (google.protobuf.Empty) {
     option (atframework.rpc_options) = {
       api_name: "转发Client消息"
     };
   };
 
-  rpc client_start_notify(stream CTMClientStartNotify) returns (google.protobuf.Empty) {
+  rpc client_start_notify(stream CTSClientStartNotify) returns (google.protobuf.Empty) {
     option (atframework.rpc_options) = {
       api_name: "Client启动通知"
     };
   };
 
-  rpc client_end_notify(stream CTMClientEndNotify) returns (google.protobuf.Empty) {
+  rpc client_end_notify(stream CTSClientEndNotify) returns (google.protobuf.Empty) {
     option (atframework.rpc_options) = {
       api_name: "Client退出通知"
     };
   };
 }
 
-message CTMForwardToServerNotify {
+message CTSForwardToServerNotify {
   DClientMessage client_message = 1;
 }
 
-message CTMClientStartNotify {
+message CTSClientStartNotify {
   DClientIdentity client_identity = 1;
 
   string client_addr = 2;
   bytes data = 3;
 }
 
-message CTMClientEndNotify {
+message CTSClientEndNotify {
   DClientIdentity client_identity = 1;
 
   EnClientExitReason exit_reason = 11;
@@ -56,27 +56,39 @@ message CTMClientEndNotify {
 
 /////////////// Server -> Controller ///////////////
 service ServerToControllerService {
-  rpc launch_client(MTCLaunchClientReq) returns (CTMLaunchClientRsp) {
+  rpc launch_client(STCLaunchClientReq) returns (CTSLaunchClientRsp) {
     option (atframework.rpc_options) = {
       api_name: "启动Client 返回不等于可用"
     };
   };
-  rpc send_to_client(stream MTCSendToClientNotify) returns (google.protobuf.Empty) {
+  rpc send_to_client(stream STCSendToClientNotify) returns (google.protobuf.Empty) {
     option (atframework.rpc_options) = {
       api_name: "发送消息至Client"
     };
   };
+  rpc server_heartbeat(stream STCServerHeartbeatNotify) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "Server心跳"
+    };
+  };
 }
 
-message MTCLaunchClientReq {
+message STCLaunchClientReq {
   DServerIdentity server_identity = 1;
+
   DAgentClientStartArgs args = 2;
   repeated string match_tags = 3;
 }
-message CTMLaunchClientRsp {}
+message CTSLaunchClientRsp {}
 
-message MTCSendToClientNotify {
+message STCSendToClientNotify {
   DServerIdentity server_identity = 1;
+
   DClientIdentity client_identity = 2;
   bytes payload = 3;
+}
+
+message STCServerHeartbeatNotify {
+  DServerIdentity server_identity = 1;
+  DAgentIdentity agent_identity = 2;
 }

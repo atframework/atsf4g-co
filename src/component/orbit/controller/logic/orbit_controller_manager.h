@@ -10,6 +10,9 @@
 #include <unordered_set>
 #include <vector>
 
+#include <atframe/etcdcli/etcd_discovery.h>
+#include <atframe/modules/etcd_module.h>
+
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
@@ -58,16 +61,24 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
   // ---- 来自 Server ----
   // Server 请求启动 Client
   EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_launch_client(
-      rpc::context& ctx, const orbit::MTCLaunchClientReq& request, orbit::CTMLaunchClientRsp& response);
+      rpc::context& ctx, const orbit::STCLaunchClientReq& request, orbit::CTSLaunchClientRsp& response);
 
   // Server 发送消息至 Client（下行转发）
   EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_send_to_client(
-      rpc::context& ctx, const orbit::MTCSendToClientNotify& request);
+      rpc::context& ctx, const orbit::STCSendToClientNotify& request);
+
+  // Server 心跳
+  EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_server_heartbeat(
+      rpc::context& ctx, const orbit::STCServerHeartbeatNotify& request);
 
  private:
   orbit::DAgentIdentity select_agent_for_launch(double expected_cpu, double expected_memory_mb,
                                                 const google::protobuf::RepeatedPtrField<std::string>& tags) noexcept;
-  uint64_t find_server_id_by_unique_id(uint64_t unique_id) noexcept;
+
+  void on_server_node_event(atfw::atapp::etcd_module::node_action_t action_type,
+                            const atfw::atapp::etcd_discovery_node::ptr_t& node);
+  void on_agent_node_event(atfw::atapp::etcd_module::node_action_t action_type,
+                           const atfw::atapp::etcd_discovery_node::ptr_t& node);
 
  private:
   bool stopped_ = false;

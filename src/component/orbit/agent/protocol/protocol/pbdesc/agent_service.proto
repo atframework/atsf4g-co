@@ -26,16 +26,28 @@ service ControllerToAgentService {
       api_name: "转发Client消息"
     };
   };
+  rpc server_heartbeat(stream CTAServerHeartbeatReq) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "Server心跳"
+    };
+  };
 }
 
 message CTAStartClientReq {
-  DAgentClientStartArgs args = 1;
-  DServerIdentity server_identity = 2;
+  DServerIdentity server_identity = 1;
+
+  DAgentClientStartArgs args = 2;
 }
 message ATCStartClientRsp {}
 
 message CTAForwardToClientReq {
-  DClientId client_id = 1;
-  bytes payload = 2;
+  DServerIdentity server_identity = 1;
+
+  DClientId client_id = 2;
+  bytes payload = 3;
 }
 message ATCForwardToClientRsp {}
+
+message CTAServerHeartbeatReq {
+  DServerIdentity server_identity = 1;
+}
