@@ -100,6 +100,17 @@ static void on_uv_process_exit(uv_process_t* handle, int64_t exit_status, int te
 }
 }  // namespace
 
+uint64_t orbit_agent_client_record::get_controller_server_id() {
+  auto common_mod = logic_server_last_common_module();
+  auto discovery = common_mod->get_discovery_index_by_type(
+      static_cast<uint64_t>(atframework::component::logic_service_type::kOrbitControllerSvr));
+  auto node = discovery->get_node_by_consistent_hash(client_id);
+  if (node == nullptr) {
+    return 0;
+  }
+  return node->get_discovery_info().id();
+}
+
 orbit_agent_manager::orbit_agent_manager() = default;
 
 int orbit_agent_manager::init() {
@@ -108,15 +119,11 @@ int orbit_agent_manager::init() {
   std::string origin_configured_client_command_line_ =
       logic_config::me()->get_server_instance_config<orbit::config::orbit_agent_cfg>().configured_client_command_line();
   region_ = logic_config::me()->get_server_instance_config<orbit::config::orbit_agent_cfg>().region();
+  tags_ = logic_config::me()->get_server_instance_config<orbit::config::orbit_agent_cfg>().tags();
+
   cpu_capacity_ = logic_config::me()->get_server_instance_config<orbit::config::orbit_agent_cfg>().cpu_capacity();
   memory_capacity_mb_ =
       logic_config::me()->get_server_instance_config<orbit::config::orbit_agent_cfg>().memory_capacity_mb();
-  register_attempt_interval_ = logic_config::me()
-                                   ->get_server_instance_config<orbit::config::orbit_agent_cfg>()
-                                   .register_attempt_interval()
-                                   .seconds();
-  heartbeat_interval_ =
-      logic_config::me()->get_server_instance_config<orbit::config::orbit_agent_cfg>().heartbeat_interval().seconds();
 
   if (!origin_configured_client_command_line_.empty()) {
     FWLOGINFO("orbit agent launch command configured: {}", origin_configured_client_command_line_);
@@ -150,22 +157,12 @@ int orbit_agent_manager::init() {
     FWLOGWARNING("orbit agent memory_capacity_mb not set, defaulting to {}", memory_capacity_mb_);
   }
 
-  if (register_attempt_interval_ <= 0) {
-    register_attempt_interval_ = 5;
-    FWLOGWARNING("orbit agent register_attempt_interval not set, defaulting to {}", register_attempt_interval_);
-  }
-
-  if (heartbeat_interval_ <= 0) {
-    heartbeat_interval_ = 3;
-    FWLOGWARNING("orbit agent heartbeat_interval not set, defaulting to {}", heartbeat_interval_);
-  }
-
   const uint64_t local_server_id = logic_config::me()->get_local_server_id();
   if (local_server_id == 0) {
     FWLOGERROR("orbit agent failed to get local_server_id from logic_config");
     return -4;
   }
-  agent_identity_.set_agent_id(local_server_id);
+  agent_identity_.set_agent_server_id(local_server_id);
 
   return 0;
 }
@@ -181,114 +178,6 @@ void orbit_agent_manager::tick() {
 
   // 检查 Client 超时（无论是否已连接 Controller）
   check_client_timeouts(now);
-
-  // 未注册时，每 register_attempt_interval_ 秒尝试一次 register_agent
-  if (0 == controller_server_id_) {
-    if (!register_in_progress_ && now >= last_register_attempt_timepoint_ + static_cast<time_t>(register_attempt_interval_)) {
-      last_register_attempt_timepoint_ = now;
-      register_in_progress_ = true;
-      auto invoke_result = rpc::async_invoke("orbit_agent_manager", "register_agent",
-                                             [this](rpc::context& ctx) -> rpc::result_code_type {
-                                               auto res = RPC_AWAIT_CODE_RESULT(connect_controller_server(ctx));
-                                               register_in_progress_ = false;
-                                               RPC_RETURN_CODE(res);
-                                             });
-      if (!invoke_result.is_success()) {
-        register_in_progress_ = false;
-        FWLOGERROR("orbit agent failed to spawn register_agent task, res: {}({})", *invoke_result.get_error(),
-                   protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
-      }
-    }
-    return;
-  }
-
-  // 已注册后，每 heartbeat_interval_ 秒发送一次 heartbeat_agent
-  if (!heartbeat_in_progress_ && now >= last_heartbeat_to_controller_timepoint_ + static_cast<time_t>(heartbeat_interval_)) {
-    last_heartbeat_to_controller_timepoint_ = now;
-    heartbeat_in_progress_ = true;
-    auto invoke_result =
-        rpc::async_invoke("orbit_agent_manager", "heartbeat_agent", [this](rpc::context& ctx) -> rpc::result_code_type {
-          auto res = RPC_AWAIT_CODE_RESULT(do_heartbeat_agent(ctx));
-          heartbeat_in_progress_ = false;
-          RPC_RETURN_CODE(res);
-        });
-    if (!invoke_result.is_success()) {
-      heartbeat_in_progress_ = false;
-      FWLOGERROR("orbit agent failed to spawn heartbeat_agent task, res: {}({})", *invoke_result.get_error(),
-                 protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
-    }
-  }
-}
-
-rpc::result_code_type orbit_agent_manager::connect_controller_server(rpc::context& ctx) {
-  // TODO 发消息 通过Region选择Controller Server，目前先通过一致性hash选择
-  logic_server_common_module* common_mod = logic_server_last_common_module();
-  if (nullptr == common_mod) {
-    FWLOGERROR("orbit agent register_agent failed: logic_server_common_module not available");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_INIT);
-  }
-
-  const uint64_t zone_id = logic_config::me() != nullptr ? logic_config::me()->get_local_zone_id() : 0;
-  atfw::atapp::etcd_discovery_set::ptr_t discovery =
-      common_mod->get_discovery_index_by_type_zone("orbit-controller", zone_id);
-  if (!discovery || discovery->empty()) {
-    discovery = common_mod->get_discovery_index_by_type("orbit-controller");
-  }
-
-  if (!discovery || discovery->empty()) {
-    FWLOGWARNING("orbit agent register_agent: no orbit-controller found in service discovery (zone_id={})", zone_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
-  }
-
-  const uint64_t local_server_id = logic_config::me() != nullptr ? logic_config::me()->get_local_server_id() : 0;
-  atfw::atapp::etcd_discovery_node::ptr_t node =
-      discovery->get_node_by_consistent_hash(std::to_string(local_server_id));
-  if (!node) {
-    FWLOGWARNING("orbit agent register_agent: consistent_hash selection returned null (zone_id={})", zone_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
-  }
-
-  const uint64_t target_id = node->get_discovery_info().id();
-
-  auto req = rpc::make_shared_message<orbit::ATCRegisterAgentReq>(ctx);
-  auto rsp = rpc::make_shared_message<orbit::CTARegisterAgentRsp>(ctx);
-  req->set_cpu_capacity(cpu_capacity_);
-  req->set_memory_capacity_mb(memory_capacity_mb_);
-  *req->mutable_agent_identity() = agent_identity_;
-
-  int32_t rpc_result = RPC_AWAIT_CODE_RESULT(rpc::agenttocontrollerservice::register_agent(ctx, target_id, *req, *rsp));
-  if (rpc_result < 0) {
-    FWLOGERROR("orbit agent register_agent to controller {:#x} failed, res: {}", target_id, rpc_result);
-    RPC_RETURN_CODE(rpc_result);
-  }
-
-  controller_server_id_ = target_id;
-  last_heartbeat_to_controller_timepoint_ = 0;
-  FWLOGINFO("orbit agent registered with controller {:#x} (zone_id={})", controller_server_id_, zone_id);
-
-  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
-}
-
-rpc::result_code_type orbit_agent_manager::do_heartbeat_agent(rpc::context& ctx) {
-  if (0 == controller_server_id_) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_INIT);
-  }
-
-  auto req = rpc::make_shared_message<orbit::ATCHeartbeatAgentReq>(ctx);
-  auto rsp = rpc::make_shared_message<orbit::CTAHeartbeatAgentRsp>(ctx);
-  *req->mutable_load() = build_agent_load_snapshot();
-
-  int32_t rpc_result =
-      RPC_AWAIT_CODE_RESULT(rpc::agenttocontrollerservice::heartbeat_agent(ctx, controller_server_id_, *req, *rsp));
-  if (rpc_result < 0) {
-    FWLOGERROR("orbit agent heartbeat_agent to controller {:#x} failed, res: {} -- will re-register",
-               controller_server_id_, rpc_result);
-    controller_server_id_ = 0;
-    last_register_attempt_timepoint_ = 0;
-    RPC_RETURN_CODE(rpc_result);
-  }
-
-  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 orbit::DAgentLoadSnapshot orbit_agent_manager::build_agent_load_snapshot() const noexcept {
@@ -325,6 +214,8 @@ orbit::DAgentLoadSnapshot orbit_agent_manager::build_agent_load_snapshot() const
 rpc::result_code_type orbit_agent_manager::handle_start_client(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx,
                                                                const orbit::CTAStartClientReq& request,
                                                                orbit::ATCStartClientRsp& response) {
+  // TODO 检查负载状态
+
   // 启动Client
   orbit_agent_client_record_ptr client_record = nullptr;
   int prepare_result = prepare_start_client_record(request, client_record);
@@ -400,12 +291,15 @@ rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx
   fill_client_identity(*notify_request->mutable_client_identity(), client_record);
   notify_request->set_client_addr(client_record->client_addr);
   notify_request->set_custom_data(request.custom_data());
+  *notify_request->mutable_server_identity() = client_record->server_identity;
+
+  auto controller_server_id = client_record->get_controller_server_id();
 
   int32_t rpc_result = RPC_AWAIT_CODE_RESULT(
-      rpc::agenttocontrollerservice::notify_client_started(ctx, controller_server_id_, *notify_request));
+      rpc::agenttocontrollerservice::notify_client_started(ctx, controller_server_id, *notify_request));
   if (rpc_result < 0) {
     FWLOGERROR("orbit agent notify_client_started failed for {} to controller {:#x}, res: {}", client_record->client_id,
-               controller_server_id_, rpc_result);
+               controller_server_id, rpc_result);
     RPC_RETURN_CODE(rpc_result);
   }
 
@@ -458,12 +352,15 @@ rpc::result_code_type orbit_agent_manager::handle_send_to_server(rpc::context& c
   orbit::DClientMessage* client_message = forward_request->mutable_client_message();
   fill_client_identity(*client_message->mutable_client_identity(), client_record);
   client_message->set_payload(request.payload());
+  *forward_request->mutable_server_identity() = client_record->server_identity;
+
+  auto controller_server_id = client_record->get_controller_server_id();
 
   int32_t rpc_result = RPC_AWAIT_CODE_RESULT(
-      rpc::agenttocontrollerservice::forward_to_server(ctx, controller_server_id_, *forward_request));
+      rpc::agenttocontrollerservice::forward_to_server(ctx, controller_server_id, *forward_request));
   if (rpc_result < 0) {
     FWLOGERROR("orbit agent forward_to_server failed for {} to controller {:#x}, res: {}", client_record->client_id,
-               controller_server_id_, rpc_result);
+               controller_server_id, rpc_result);
     RPC_RETURN_CODE(rpc_result);
   }
 
@@ -497,12 +394,15 @@ rpc::result_code_type orbit_agent_manager::handle_client_exit(rpc::context& ctx,
   notify_request->set_exit_reason(request.exit_reason());
   notify_request->set_custom_data(request.custom_data());
   notify_request->set_exit_code(request.exit_code());
+  *notify_request->mutable_server_identity() = client_record->server_identity;
+
+  auto controller_server_id = client_record->get_controller_server_id();
 
   int32_t rpc_result = RPC_AWAIT_CODE_RESULT(
-      rpc::agenttocontrollerservice::notify_client_exit(ctx, controller_server_id_, *notify_request));
+      rpc::agenttocontrollerservice::notify_client_exit(ctx, controller_server_id, *notify_request));
   if (rpc_result < 0) {
     FWLOGERROR("orbit agent notify_client_exit failed for {} to controller {:#x}, res: {}", client_record->client_id,
-               controller_server_id_, rpc_result);
+               controller_server_id, rpc_result);
     RPC_RETURN_CODE(rpc_result);
   }
 
@@ -548,6 +448,7 @@ int orbit_agent_manager::prepare_start_client_record(const orbit::CTAStartClient
   record->expected_memory_mb = request.args().expected_memory_mb();
   record->startup_timeout_sec = request.args().startup_timeout_sec();
   record->heartbeat_timeout_sec = request.args().heartbeat_timeout_sec();
+  record->server_identity = request.server_identity();
 
   record->state = orbit::EN_SLAVE_STATE_STARTING;
   record->client_addr.clear();
@@ -642,7 +543,8 @@ void orbit_agent_manager::on_client_process_exit(const std::string& client_id, i
   record->state = orbit::EN_SLAVE_STATE_EXITING;
   clients_.erase(client_id);
 
-  if (0 == controller_server_id_) {
+  auto controller_server_id = record->get_controller_server_id();
+  if (0 == controller_server_id) {
     FWLOGWARNING("orbit agent process crash for {} but no controller connected, skip notify", client_id);
     return;
   }
@@ -651,18 +553,19 @@ void orbit_agent_manager::on_client_process_exit(const std::string& client_id, i
   fill_client_identity(identity, record);
   const orbit::EnClientExitReason reason = orbit::EN_SLAVE_EXIT_REASON_CRASH;
   const int32_t exit_code = static_cast<int32_t>(exit_status);
-  const uint64_t controller_id = controller_server_id_;
+  orbit::DServerIdentity server_identity = record->server_identity;
 
   auto invoke_result =
       rpc::async_invoke("orbit_agent_manager", "notify_crash_exit",
-                        [controller_id, identity = std::move(identity), reason,
-                         exit_code](rpc::context& ctx) mutable -> rpc::result_code_type {
+                        [controller_server_id, identity = std::move(identity), server_identity = std::move(server_identity),
+                         reason, exit_code](rpc::context& ctx) mutable -> rpc::result_code_type {
                           auto notify_request = rpc::make_shared_message<orbit::ATCNotifyClientExitReq>(ctx);
                           *notify_request->mutable_client_identity() = std::move(identity);
+                          *notify_request->mutable_server_identity() = std::move(server_identity);
                           notify_request->set_exit_reason(reason);
                           notify_request->set_exit_code(exit_code);
                           RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-                              rpc::agenttocontrollerservice::notify_client_exit(ctx, controller_id, *notify_request)));
+                              rpc::agenttocontrollerservice::notify_client_exit(ctx, controller_server_id, *notify_request)));
                         });
   if (!invoke_result.is_success()) {
     FWLOGERROR("orbit agent failed to spawn notify_crash_exit task for {}, res: {}({})", client_id,
@@ -685,11 +588,12 @@ void orbit_agent_manager::check_client_timeouts(time_t now) {
     if (orbit::EN_SLAVE_STATE_STARTING == record->state || orbit::EN_SLAVE_STATE_SEED == record->state) {
       if (record->startup_timeout_sec > 0 && record->start_timepoint > 0 &&
           now >= static_cast<time_t>(record->start_timepoint) + static_cast<time_t>(record->startup_timeout_sec)) {
-        expired.push_back({kv.first, orbit::EN_SLAVE_EXIT_REASON_HEARTBEAT_TIMEOUT});
+        expired.push_back({kv.first, orbit::EN_SLAVE_EXIT_REASON_STARTUP_TIMEOUT});
       }
     } else if (orbit::EN_SLAVE_STATE_RUNNING == record->state) {
       if (record->heartbeat_timeout_sec > 0 && record->last_heartbeat_timepoint > 0 &&
-          now >= static_cast<time_t>(record->last_heartbeat_timepoint) + static_cast<time_t>(record->heartbeat_timeout_sec)) {
+          now >= static_cast<time_t>(record->last_heartbeat_timepoint) +
+                     static_cast<time_t>(record->heartbeat_timeout_sec)) {
         expired.push_back({kv.first, orbit::EN_SLAVE_EXIT_REASON_HEARTBEAT_TIMEOUT});
       }
     }
@@ -704,7 +608,8 @@ void orbit_agent_manager::check_client_timeouts(time_t now) {
     record->state = orbit::EN_SLAVE_STATE_EXITING;
     clients_.erase(entry.client_id);
 
-    if (0 == controller_server_id_) {
+    auto controller_server_id = record->get_controller_server_id();
+    if (0 == controller_server_id) {
       FWLOGWARNING("orbit agent process timeout for {} but no controller connected, skip notify", entry.client_id);
       continue;
     }
@@ -713,18 +618,19 @@ void orbit_agent_manager::check_client_timeouts(time_t now) {
     fill_client_identity(identity, record);
     const orbit::EnClientExitReason reason = entry.reason;
     const int32_t exit_code = PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_TIMEOUT;
-    const uint64_t controller_id = controller_server_id_;
+    orbit::DServerIdentity server_identity = record->server_identity;
 
     auto invoke_result =
         rpc::async_invoke("orbit_agent_manager", "notify_timeout_exit",
-                          [controller_id, identity = std::move(identity), reason,
-                           exit_code](rpc::context& ctx) mutable -> rpc::result_code_type {
+                          [controller_server_id, identity = std::move(identity), server_identity = std::move(server_identity),
+                           reason, exit_code](rpc::context& ctx) mutable -> rpc::result_code_type {
                             auto notify_request = rpc::make_shared_message<orbit::ATCNotifyClientExitReq>(ctx);
                             *notify_request->mutable_client_identity() = std::move(identity);
+                            *notify_request->mutable_server_identity() = std::move(server_identity);
                             notify_request->set_exit_reason(reason);
                             notify_request->set_exit_code(exit_code);
                             RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::agenttocontrollerservice::notify_client_exit(
-                                ctx, controller_id, *notify_request)));
+                                ctx, controller_server_id, *notify_request)));
                           });
     if (!invoke_result.is_success()) {
       FWLOGERROR("orbit agent failed to spawn notify_timeout_exit task for {}, res: {}({})", entry.client_id,

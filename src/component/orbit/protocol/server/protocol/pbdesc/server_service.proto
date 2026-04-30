@@ -41,6 +41,7 @@ message CTMForwardToServerNotify {
 
 message CTMClientStartNotify {
   DClientIdentity client_identity = 1;
+
   string client_addr = 2;
   bytes data = 3;
 }
@@ -55,16 +56,6 @@ message CTMClientEndNotify {
 
 /////////////// Server -> Controller ///////////////
 service ServerToControllerService {
-  rpc connect(MTCConnectReq) returns (CTMConnectRsp) {
-    option (atframework.rpc_options) = {
-      api_name: "连接Controller"
-    };
-  };
-  rpc disconnect(stream MTCDisconnectReq) returns (google.protobuf.Empty) {
-    option (atframework.rpc_options) = {
-      api_name: "断开Controller连接"
-    };
-  };
   rpc launch_client(MTCLaunchClientReq) returns (CTMLaunchClientRsp) {
     option (atframework.rpc_options) = {
       api_name: "启动Client 返回不等于可用"
@@ -77,21 +68,10 @@ service ServerToControllerService {
   };
 }
 
-message MTCConnectReq {
-  DServerIdentity server_identity = 1;
-  bool reconnect = 2;
-}
-message CTMConnectRsp {
-  repeated DClientMessage replay_messages = 1;
-}
-
-message MTCDisconnectReq {
-  DServerIdentity server_identity = 1;
-}
-
 message MTCLaunchClientReq {
   DServerIdentity server_identity = 1;
   DAgentClientStartArgs args = 2;
+  repeated string match_tags = 3;
 }
 message CTMLaunchClientRsp {}
 

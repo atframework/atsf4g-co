@@ -47,13 +47,18 @@ struct orbit_agent_client_record {
   orbit::DClientLoadSnapshot load_snapshot;
   time_t last_heartbeat_timepoint = 0;
   std::string client_addr;
-  uint64_t client_server_id = 0;  // 初步用于发送消息 TODO 待定
+  uint64_t client_server_id = 0;  // 初步用于发送消息给Client
 
   // 进程管理
   uv_process_t* process_handle = nullptr;  ///< 进程句柄，由 libuv 生命周期管理，spawn 后有效
-  time_t start_timepoint = 0;            ///< 启动时间点 (unix sec)
+  time_t start_timepoint = 0;              ///< 启动时间点 (unix sec)
   uint64_t startup_timeout_sec = 0;        ///< STARTING/SEED 状态最大等待时间 (秒)
   uint64_t heartbeat_timeout_sec = 0;      ///< RUNNING 状态心跳最大间隔 (秒)
+
+  // 路由信息：从 CTAStartClientReq 写入，用于向 Controller 上报时携带
+  orbit::DServerIdentity server_identity;  ///< 启动该 Client 的 Server unique_id
+
+  uint64_t get_controller_server_id();
 };
 
 using orbit_agent_client_record_ptr = atfw::util::memory::strong_rc_ptr<orbit_agent_client_record>;
@@ -88,14 +93,10 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_client_exit(
       rpc::context& ctx, const orbit::STAClientExitReq& request);
 
-  uint64_t get_controller_server_id() const noexcept { return controller_server_id_; }
   void on_client_process_exit(const std::string& client_id, int64_t exit_status, int term_signal);
 
  private:
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type connect_controller_server(rpc::context& ctx);
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type do_heartbeat_agent(rpc::context& ctx);
   orbit::DAgentLoadSnapshot build_agent_load_snapshot() const noexcept;
-
   orbit_agent_client_record_ptr find_client(const std::string& client_id) noexcept;
   const orbit_agent_client_record_ptr find_client(const std::string& client_id) const noexcept;
 
@@ -115,17 +116,10 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
 
   // 启动配置
   std::string region_;
+  google::protobuf::RepeatedPtrField<std::string> tags_;
+
   std::vector<std::string> configured_client_command_line_;
   double cpu_capacity_ = 0.0;
   double memory_capacity_mb_ = 0.0;
-  uint64_t register_attempt_interval_ = 0;
-  uint64_t heartbeat_interval_ = 0;
   orbit::DAgentIdentity agent_identity_;
-
-  // Controller Server 连接状态
-  uint64_t controller_server_id_ = 0;
-  time_t last_register_attempt_timepoint_ = 0;
-  time_t last_heartbeat_to_controller_timepoint_ = 0;
-  bool register_in_progress_ = false;
-  bool heartbeat_in_progress_ = false;
 };

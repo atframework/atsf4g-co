@@ -30,6 +30,7 @@ service ControllerToAgentService {
 
 message CTAStartClientReq {
   DAgentClientStartArgs args = 1;
+  DServerIdentity server_identity = 2;
 }
 message ATCStartClientRsp {}
 

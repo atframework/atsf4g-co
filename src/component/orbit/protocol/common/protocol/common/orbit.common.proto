@@ -21,9 +21,10 @@ enum EnClientExitReason {
   EN_SLAVE_EXIT_REASON_NORMAL = 1;
   EN_SLAVE_EXIT_REASON_CRASH = 2;
   EN_SLAVE_EXIT_REASON_HEARTBEAT_TIMEOUT = 3;
-  EN_SLAVE_EXIT_REASON_OOM_KILL = 4;
-  EN_SLAVE_EXIT_REASON_DRAIN_STOP = 5;
-  EN_SLAVE_EXIT_REASON_OPERATOR_STOP = 6;
+  EN_SLAVE_EXIT_REASON_STARTUP_TIMEOUT = 4;
+  EN_SLAVE_EXIT_REASON_OOM_KILL = 5;
+  EN_SLAVE_EXIT_REASON_DRAIN_STOP = 6;
+  EN_SLAVE_EXIT_REASON_OPERATOR_STOP = 7;
 }
 
 message DClientLoadSnapshot {
@@ -33,7 +34,7 @@ message DClientLoadSnapshot {
 }
 
 message DAgentIdentity {
-  uint64 agent_id = 1;
+  uint64 agent_server_id = 1;
 }
 
 message DClientId {
@@ -75,4 +76,9 @@ message DAgentLoadSnapshot {
   double memory_used_mb = 4;
   uint32 client_count = 5;
   uint32 inflight_count = 6;
+}
+
+message DOrbitGroupInfo {
+  string region = 1;
+  repeated string tags = 2;
 }

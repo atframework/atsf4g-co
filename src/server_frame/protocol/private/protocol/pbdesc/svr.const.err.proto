@@ -201,6 +201,13 @@ enum EnSysErrorType {
   EN_ORBIT_AGENT_CLIENT_TIMEOUT = -2100004
                                                         [(error_code.description) = "Client超时"];
 
+  EN_ORBIT_CONTROLLER_SERVER_DUP_UNIQUE_ID = -2200001
+                                                        [(error_code.description) = "控制器服务器唯一ID重复"];
+  EN_ORBIT_CONTROLLER_SERVER_NODE_ID_MISMATCH = -2200002
+                                                        [(error_code.description) = "控制器服务器节点ID不匹配"];
+  EN_ORBIT_CONTROLLER_NO_AVAILABLE_AGENT = -2200003
+                                                        [(error_code.description) = "没有可用的Agent"];
+
   EN_ROUTER_NOT_FOUND = -10000081
                         [(error_code.description) = "路由信息找不到"];
   EN_ROUTER_TTL_EXTEND = -10000082

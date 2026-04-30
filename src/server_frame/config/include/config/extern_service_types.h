@@ -22,6 +22,8 @@ enum class logic_service_type : uint32_t {
   kCacheSvr = 15,           // 缓存服务器
   kRankSettlementSvr = 16,  // 排行榜结算服务器
   kRankBoardSvr = 17,       // 排行榜展示服务器
+  kOrbitAgentSvr = 18,       // Orbit Agent 服务
+  kOrbitControllerSvr = 19,  // Orbit Controller 服务
 };
 }  // namespace component
 }  // namespace atframework

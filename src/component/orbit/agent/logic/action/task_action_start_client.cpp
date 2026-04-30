@@ -37,10 +37,6 @@ ORBIT_AGENT_SERVICE_API task_action_start_client::result_type task_action_start_
   const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
 
-  if (orbit_agent_manager::me()->get_controller_server_id() != get_request_node_id()) {
-    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CONTROLLER_SERVER_ID_NOT_MATCH);
-  }
-
   int32_t rpc_result =
       RPC_AWAIT_CODE_RESULT(orbit_agent_manager::me()->handle_start_client(get_shared_context(), req_body, rsp_body));
   TASK_ACTION_RETURN_CODE(rpc_result);

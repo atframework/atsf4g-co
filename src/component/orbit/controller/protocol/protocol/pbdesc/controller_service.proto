@@ -15,16 +15,6 @@ package orbit;
 import "protocol/common/orbit.common.proto";
 
 service AgentToControllerService {
-  rpc register_agent(ATCRegisterAgentReq) returns (CTARegisterAgentRsp) {
-    option (atframework.rpc_options) = {
-      api_name: "注册Agent"
-    };
-  };
-  rpc heartbeat_agent(ATCHeartbeatAgentReq) returns (CTAHeartbeatAgentRsp) {
-    option (atframework.rpc_options) = {
-      api_name: "心跳/上报负载快照"
-    };
-  };
   rpc notify_client_started(stream ATCNotifyClientStartedReq) returns (google.protobuf.Empty) {
     option (atframework.rpc_options) = {
       api_name: "通知Client已启动"
@@ -42,26 +32,19 @@ service AgentToControllerService {
   };
 }
 
-message ATCRegisterAgentReq {
-  double cpu_capacity = 1;
-  double memory_capacity_mb = 2;
-  DAgentIdentity agent_identity = 3;
-}
-message CTARegisterAgentRsp {}
-
-message ATCHeartbeatAgentReq {
-  DAgentLoadSnapshot load = 1;
-}
-message CTAHeartbeatAgentRsp {}
-
 message ATCNotifyClientStartedReq {
-  DClientIdentity client_identity = 1;
-  string client_addr = 2;
-  bytes custom_data = 3;
+  DServerIdentity server_identity = 1;
+
+  DClientIdentity client_identity = 2;
+
+  string client_addr = 3;
+  bytes custom_data = 4;
 }
 
 message ATCNotifyClientExitReq {
-  DClientIdentity client_identity = 1;
+  DServerIdentity server_identity = 1;
+
+  DClientIdentity client_identity = 2;
 
   EnClientExitReason exit_reason = 11;
   bytes custom_data = 12;
@@ -69,5 +52,7 @@ message ATCNotifyClientExitReq {
 }
 
 message ATCForwardToServerReq {
-  DClientMessage client_message = 1;
+  DServerIdentity server_identity = 1;
+
+  DClientMessage client_message = 2;
 }
