@@ -200,6 +200,8 @@ enum EnSysErrorType {
                                                         [(error_code.description) = "Client状态异常"];
   EN_ORBIT_AGENT_CLIENT_TIMEOUT = -2100004
                                                         [(error_code.description) = "Client超时"];
+  EN_ORBIT_AGENT_OVERLOAD = -2100005
+                                                        [(error_code.description) = "Agent负载已满"];
 
   EN_ORBIT_CONTROLLER_SERVER_DUP_UNIQUE_ID = -2200001
                                                         [(error_code.description) = "控制器服务器唯一ID重复"];

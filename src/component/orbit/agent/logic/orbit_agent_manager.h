@@ -9,6 +9,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <atframe/atapp.h>
+
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
@@ -67,7 +69,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
  public:
   orbit_agent_manager();
 
-  int init();
+  int init(atfw::atapp::app* app);
   void stop();
   void tick();
 
@@ -114,8 +116,11 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   void server_heartbeat(const orbit::DServerIdentity& server_identity);
   orbit::DServerIdentity* find_server_identity(uint64_t server_unique_id);
 
+  void update_etcd_load_snapshot();
+
  private:
   bool stoped_ = false;
+  atfw::atapp::app* owner_app_ = nullptr;
 
   // 启动的Client数据
   std::unordered_map<std::string, orbit_agent_client_record_ptr> clients_;
@@ -129,4 +134,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   double cpu_capacity_ = 0.0;
   double memory_capacity_mb_ = 0.0;
   orbit::DAgentIdentity agent_identity_;
+
+  // etcd 负载快照更新
+  time_t last_load_etcd_update_timepoint_ = 0;
 };

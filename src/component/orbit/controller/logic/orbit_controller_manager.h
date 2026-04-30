@@ -10,6 +10,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include <atframe/atapp.h>
 #include <atframe/etcdcli/etcd_discovery.h>
 #include <atframe/modules/etcd_module.h>
 
@@ -37,11 +38,18 @@ namespace rpc {
 class context;
 }  // namespace rpc
 
+struct orbit_controller_agent_info {
+  orbit::DAgentLoadSnapshot load_snapshot;
+  double preallocated_cpu = 0.0;
+  double preallocated_memory_mb = 0.0;
+  uint32_t preallocated_client_count = 0;
+};
+
 class orbit_controller_manager : public util::design_pattern::singleton<orbit_controller_manager> {
  public:
   orbit_controller_manager();
 
-  int init();
+  int init(atfw::atapp::app* app);
   void stop();
   void tick();
 
@@ -75,7 +83,7 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
   orbit::DAgentIdentity select_agent_for_launch(double expected_cpu, double expected_memory_mb,
                                                 const google::protobuf::RepeatedPtrField<std::string>& tags) noexcept;
 
-  void on_server_node_event(atfw::atapp::etcd_module::node_action_t action_type,
+  static void on_node_event(atfw::atapp::etcd_module::node_action_t action_type,
                             const atfw::atapp::etcd_discovery_node::ptr_t& node);
   void on_agent_node_event(atfw::atapp::etcd_module::node_action_t action_type,
                            const atfw::atapp::etcd_discovery_node::ptr_t& node);
@@ -83,4 +91,7 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
  private:
   bool stopped_ = false;
   std::string region_;
+
+  // Agent节点信息: agent_server_id → orbit_controller_agent_info
+  std::unordered_map<uint64_t, orbit_controller_agent_info> agents_;
 };

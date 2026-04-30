@@ -27,6 +27,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <google/protobuf/util/json_util.h>
 #include <protocol/config/orbit_agent_config.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
@@ -113,7 +114,8 @@ uint64_t orbit_agent_client_record::get_controller_server_id() {
 
 orbit_agent_manager::orbit_agent_manager() = default;
 
-int orbit_agent_manager::init() {
+int orbit_agent_manager::init(atfw::atapp::app* app) {
+  owner_app_ = app;
   uv_disable_stdio_inheritance();
 
   std::string origin_configured_client_command_line_ =
@@ -178,6 +180,13 @@ void orbit_agent_manager::tick() {
 
   // 检查 Client 超时（无论是否已连接 Controller）
   check_client_timeouts(now);
+
+  // 定期将负载快照写入 etcd metadata（每5秒更新一次）
+  constexpr time_t kLoadUpdateIntervalSec = 5;
+  if (now - last_load_etcd_update_timepoint_ >= kLoadUpdateIntervalSec) {
+    last_load_etcd_update_timepoint_ = now;
+    update_etcd_load_snapshot();
+  }
 }
 
 orbit::DAgentLoadSnapshot orbit_agent_manager::build_agent_load_snapshot() const noexcept {
@@ -215,7 +224,25 @@ rpc::result_code_type orbit_agent_manager::handle_start_client(ATFW_EXPLICIT_UNU
                                                                const orbit::CTAStartClientReq& request,
                                                                orbit::ATCStartClientRsp& response) {
   server_heartbeat(request.server_identity());
-  // TODO 检查负载状态
+
+  // 检查负载状态
+  {
+    const double expected_cpu = request.args().expected_cpu();
+    const double expected_memory_mb = request.args().expected_memory_mb();
+    const auto load = build_agent_load_snapshot();
+    if (cpu_capacity_ > 0.0 && load.cpu_used() + expected_cpu > cpu_capacity_) {
+      FWLOGWARNING(
+          "orbit agent start_client rejected (cpu overload): cpu_used={:.2f} + expected={:.2f} > capacity={:.2f}",
+          load.cpu_used(), expected_cpu, cpu_capacity_);
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD);
+    }
+    if (memory_capacity_mb_ > 0.0 && load.memory_used_mb() + expected_memory_mb > memory_capacity_mb_) {
+      FWLOGWARNING(
+          "orbit agent start_client rejected (mem overload): mem_used={:.2f} + expected={:.2f} > capacity={:.2f}",
+          load.memory_used_mb(), expected_memory_mb, memory_capacity_mb_);
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD);
+    }
+  }
 
   // 启动Client
   orbit_agent_client_record_ptr client_record = nullptr;
@@ -692,4 +719,21 @@ void orbit_agent_manager::check_client_timeouts(time_t now) {
                  *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
     }
   }
+}
+
+void orbit_agent_manager::update_etcd_load_snapshot() {
+  auto load = build_agent_load_snapshot();
+
+  google::protobuf::util::JsonPrintOptions options;
+  options.add_whitespace = false;
+  options.always_print_enums_as_ints = true;
+  options.preserve_proto_field_names = true;
+  options.unquote_int64_if_possible = true;
+  std::string json;
+  if (!google::protobuf::util::MessageToJsonString(load, &json, options).ok()) {
+    FWLOGERROR("orbit agent failed to serialize DAgentLoadSnapshot to JSON");
+    return;
+  }
+
+  owner_app_->set_metadata_label("orbit.agent.load", json);
 }

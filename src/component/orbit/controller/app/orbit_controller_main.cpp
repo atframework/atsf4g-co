@@ -44,7 +44,7 @@ class main_service_module : public atapp::module_impl, public std::enable_shared
 
     INIT_CALL_FN(handle::agenttocontrollerservice::register_handles_for_agenttocontrollerservice);
     INIT_CALL_FN(handle::servertocontrollerservice::register_handles_for_servertocontrollerservice);
-    INIT_CALL(orbit_controller_manager);
+    INIT_CALL(orbit_controller_manager, get_app());
     return 0;
   }
 

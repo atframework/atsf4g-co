@@ -45,7 +45,7 @@ class main_service_module : public atapp::module_impl, public std::enable_shared
 
     INIT_CALL_FN(handle::clienttoagentservice::register_handles_for_clienttoagentservice);
     INIT_CALL_FN(handle::controllertoagentservice::register_handles_for_controllertoagentservice);
-    INIT_CALL(orbit_agent_manager);
+    INIT_CALL(orbit_agent_manager, get_app());
     return 0;
   }
 
