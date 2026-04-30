@@ -15,11 +15,15 @@ if index_type_enum is None:
 
 #include "${include_cpp}"
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <log/log_wrapper.h>
 
@@ -29,6 +33,7 @@ if index_type_enum is None:
 #include <dispatcher/db_msg_dispatcher.h>
 #include <dispatcher/task_manager.h>
 
+#include "rpc/rpc_context.h"
 #include "rpc/db/db_utils.h"
 #include "rpc/db/hash_table.h"
 

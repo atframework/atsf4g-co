@@ -300,20 +300,39 @@ ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_END
 
 // 玩家日志输出工具
 #ifdef _MSC_VER
-#  define FCTXLOGTRACE(__CTX, fmt, ...) FWLOGTRACE("{}" fmt, (__CTX), __VA_ARGS__)
-#  define FCTXLOGDEBUG(__CTX, fmt, ...) FWLOGDEBUG("{}" fmt, (__CTX), __VA_ARGS__)
-#  define FCTXLOGNOTICE(__CTX, fmt, ...) FWLOGNOTICE("{}" fmt, (__CTX), __VA_ARGS__)
-#  define FCTXLOGINFO(__CTX, fmt, ...) FWLOGINFO("{}" fmt, (__CTX), __VA_ARGS__)
-#  define FCTXLOGWARNING(__CTX, fmt, ...) FWLOGWARNING("{}" fmt, (__CTX), __VA_ARGS__)
-#  define FCTXLOGERROR(__CTX, fmt, ...) FWLOGERROR("{}" fmt, (__CTX), __VA_ARGS__)
-#  define FCTXLOGFATAL(__CTX, fmt, ...) FWLOGFATAL("{}" fmt, (__CTX), __VA_ARGS__)
-#  define FCTXCLOGTRACE(__CAT, __CTX, fmt, ...) FWCLOGTRACE(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
-#  define FCTXCLOGDEBUG(__CAT, __CTX, fmt, ...) FWCLOGDEBUG(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
-#  define FCTXCLOGNOTICE(__CAT, __CTX, fmt, ...) FWCLOGNOTICE(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
-#  define FCTXCLOGINFO(__CAT, __CTX, fmt, ...) FWCLOGINFO(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
-#  define FCTXCLOGWARNING(__CAT, __CTX, fmt, ...) FWCLOGWARNING(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
-#  define FCTXCLOGERROR(__CAT, __CTX, fmt, ...) FWCLOGERROR(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
-#  define FCTXCLOGFATAL(__CAT, __CTX, fmt, ...) FWCLOGFATAL(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
+// MSVC 启用 /Zc:preprocessor 时（_MSVC_TRADITIONAL == 0），可以使用 C++20 的 __VA_OPT__
+// 同时支持「仅 fmt」和「fmt + args」两种调用方式；未启用时保留传统写法，要求至少传入一个变参。
+#  if defined(_MSVC_TRADITIONAL) && _MSVC_TRADITIONAL == 0
+#    define FCTXLOGTRACE(__CTX, fmt, ...) FWLOGTRACE("{}" fmt, (__CTX)__VA_OPT__(, ) __VA_ARGS__)
+#    define FCTXLOGDEBUG(__CTX, fmt, ...) FWLOGDEBUG("{}" fmt, (__CTX)__VA_OPT__(, ) __VA_ARGS__)
+#    define FCTXLOGNOTICE(__CTX, fmt, ...) FWLOGNOTICE("{}" fmt, (__CTX)__VA_OPT__(, ) __VA_ARGS__)
+#    define FCTXLOGINFO(__CTX, fmt, ...) FWLOGINFO("{}" fmt, (__CTX)__VA_OPT__(, ) __VA_ARGS__)
+#    define FCTXLOGWARNING(__CTX, fmt, ...) FWLOGWARNING("{}" fmt, (__CTX)__VA_OPT__(, ) __VA_ARGS__)
+#    define FCTXLOGERROR(__CTX, fmt, ...) FWLOGERROR("{}" fmt, (__CTX)__VA_OPT__(, ) __VA_ARGS__)
+#    define FCTXLOGFATAL(__CTX, fmt, ...) FWLOGFATAL("{}" fmt, (__CTX)__VA_OPT__(, ) __VA_ARGS__)
+#    define FCTXCLOGTRACE(__CAT, __CTX, fmt, ...) FWCLOGTRACE(__CAT, "{}" fmt, (__CTX)__VA_OPT__(, ) __VA_ARGS__)
+#    define FCTXCLOGDEBUG(__CAT, __CTX, fmt, ...) FWCLOGDEBUG(__CAT, "{}" fmt, (__CTX)__VA_OPT__(, ) __VA_ARGS__)
+#    define FCTXCLOGNOTICE(__CAT, __CTX, fmt, ...) FWCLOGNOTICE(__CAT, "{}" fmt, (__CTX)__VA_OPT__(, ) __VA_ARGS__)
+#    define FCTXCLOGINFO(__CAT, __CTX, fmt, ...) FWCLOGINFO(__CAT, "{}" fmt, (__CTX)__VA_OPT__(, ) __VA_ARGS__)
+#    define FCTXCLOGWARNING(__CAT, __CTX, fmt, ...) FWCLOGWARNING(__CAT, "{}" fmt, (__CTX)__VA_OPT__(, ) __VA_ARGS__)
+#    define FCTXCLOGERROR(__CAT, __CTX, fmt, ...) FWCLOGERROR(__CAT, "{}" fmt, (__CTX)__VA_OPT__(, ) __VA_ARGS__)
+#    define FCTXCLOGFATAL(__CAT, __CTX, fmt, ...) FWCLOGFATAL(__CAT, "{}" fmt, (__CTX)__VA_OPT__(, ) __VA_ARGS__)
+#  else
+#    define FCTXLOGTRACE(__CTX, fmt, ...) FWLOGTRACE("{}" fmt, (__CTX), __VA_ARGS__)
+#    define FCTXLOGDEBUG(__CTX, fmt, ...) FWLOGDEBUG("{}" fmt, (__CTX), __VA_ARGS__)
+#    define FCTXLOGNOTICE(__CTX, fmt, ...) FWLOGNOTICE("{}" fmt, (__CTX), __VA_ARGS__)
+#    define FCTXLOGINFO(__CTX, fmt, ...) FWLOGINFO("{}" fmt, (__CTX), __VA_ARGS__)
+#    define FCTXLOGWARNING(__CTX, fmt, ...) FWLOGWARNING("{}" fmt, (__CTX), __VA_ARGS__)
+#    define FCTXLOGERROR(__CTX, fmt, ...) FWLOGERROR("{}" fmt, (__CTX), __VA_ARGS__)
+#    define FCTXLOGFATAL(__CTX, fmt, ...) FWLOGFATAL("{}" fmt, (__CTX), __VA_ARGS__)
+#    define FCTXCLOGTRACE(__CAT, __CTX, fmt, ...) FWCLOGTRACE(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
+#    define FCTXCLOGDEBUG(__CAT, __CTX, fmt, ...) FWCLOGDEBUG(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
+#    define FCTXCLOGNOTICE(__CAT, __CTX, fmt, ...) FWCLOGNOTICE(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
+#    define FCTXCLOGINFO(__CAT, __CTX, fmt, ...) FWCLOGINFO(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
+#    define FCTXCLOGWARNING(__CAT, __CTX, fmt, ...) FWCLOGWARNING(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
+#    define FCTXCLOGERROR(__CAT, __CTX, fmt, ...) FWCLOGERROR(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
+#    define FCTXCLOGFATAL(__CAT, __CTX, fmt, ...) FWCLOGFATAL(__CAT, "{}" fmt, (__CTX), __VA_ARGS__)
+#  endif
 #else
 #  define FCTXLOGTRACE(__CTX, fmt, args...) FWLOGTRACE("{}" fmt, (__CTX), ##args)
 #  define FCTXLOGDEBUG(__CTX, fmt, args...) FWLOGDEBUG("{}" fmt, (__CTX), ##args)

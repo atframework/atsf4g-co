@@ -53,6 +53,8 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
   endif()
   add_compiler_flags_to_inherit_var_unique(CMAKE_CXX_FLAGS "-pipe")
   add_compiler_flags_to_inherit_var_unique(CMAKE_C_FLAGS "-pipe")
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+  list(APPEND PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS "/Zc:preprocessor")
 endif()
 
 if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")

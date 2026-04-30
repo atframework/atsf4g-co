@@ -45,28 +45,45 @@ task_action_object_cache_get_user_cache_data::operator()() {
   const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
 
-  player::ptr_t user = player_manager::me()->find_as<player>(req_body.key().instance_id(), req_body.key().zone_id());
-  if (!user) {
-    rsp_body.set_result(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
-    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  task_action_object_cache_get_user_cache_data::result_type::value_type ret_code =
+      PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+
+  switch (req_body.key().cache_type()) {
+    case PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_USER: {
+      player::ptr_t user =
+          player_manager::me()->find_as<player>(req_body.key().instance_id(), req_body.key().zone_id());
+      if (!user) {
+        rsp_body.set_result(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
+        TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+      }
+
+      auto cache_meta = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DCacheApiMetaData>(get_shared_context());
+      cache_meta->mutable_user_meta()->mutable_user_key()->set_zone_id(user->get_zone_id());
+      cache_meta->mutable_user_meta()->mutable_user_key()->set_user_id(user->get_user_id());
+
+      rpc::cache_api::update_cache_meta_from_origin_data(
+          get_shared_context(), *cache_meta->mutable_user_meta(), user->get_data_version(), &user->get_login_info(),
+          &user->get_user_data(), &user->get_account_info().profile(), &user->get_client_info());
+
+      if (!rpc::cache_api::pack_cache_meta_to_any(get_shared_context(),
+                                                  *rsp_body.mutable_cache_meta()->mutable_cache_meta(), *cache_meta)) {
+        FWLOGERROR("pack cache meta failed for user {}:{}", user->get_zone_id(), user->get_user_id());
+        ret_code = PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
+        rsp_body.set_result(ret_code);
+      } else {
+        rsp_body.set_result(PROJECT_NAMESPACE_ID::EN_SUCCESS);
+      }
+      break;
+    }
+    default: {
+      FCTXLOGERROR(get_shared_context(), "unsupported cache type: {}",
+                   static_cast<uint32_t>(req_body.key().cache_type()));
+      set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+      break;
+    }
   }
 
-  auto cache_meta = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DUserCacheMeta>(get_shared_context());
-  cache_meta->mutable_user_key()->set_zone_id(user->get_zone_id());
-  cache_meta->mutable_user_key()->set_user_id(user->get_user_id());
-
-  rpc::cache_api::update_cache_meta_from_origin_data(get_shared_context(), *cache_meta, user->get_data_version(),
-                                                     &user->get_login_info(), &user->get_user_data(),
-                                                     &user->get_account_info().profile(), &user->get_client_info());
-
-  rsp_body.set_result(PROJECT_NAMESPACE_ID::EN_SUCCESS);
-  rsp_body.mutable_cache_meta()->set_data_version(static_cast<int64_t>(user->get_data_version()));
-  if (!rsp_body.mutable_cache_meta()->mutable_cache_meta()->PackFrom(*cache_meta)) {
-    FWLOGERROR("pack DUserCacheMeta failed for user {}:{}", user->get_zone_id(), user->get_user_id());
-    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PACK);
-  }
-
-  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  TASK_ACTION_RETURN_CODE(ret_code);
 }
 
 GAME_SERVICE_API int task_action_object_cache_get_user_cache_data::on_success() { return get_result(); }

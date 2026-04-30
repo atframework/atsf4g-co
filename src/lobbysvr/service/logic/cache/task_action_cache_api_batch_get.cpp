@@ -41,7 +41,7 @@ GAMECLIENT_SERVICE_API task_action_cache_api_batch_get::result_type task_action_
 
   player::ptr_t user = get_player<player>();
   if (!user) {
-    FWLOGERROR("not logined.");
+    FCTXLOGERROR(get_shared_context(), "{}", "not logined.");
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }

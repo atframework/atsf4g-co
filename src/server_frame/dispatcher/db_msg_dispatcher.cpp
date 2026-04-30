@@ -537,7 +537,7 @@ int db_msg_dispatcher::cluster_send_msg(hiredis::happ::cluster &clu, const char 
     cmd = clu.exec(ks, kl, nullptr, nullptr, argc, argv, argvlen);
   } else {
     // 异步数据
-    db_async_data_t req;
+    db_async_data_t req{};
     req.node_id = pd;
     req.task_id = task_id;
     req.unpack_fn = fn;
@@ -684,7 +684,7 @@ int db_msg_dispatcher::raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_
     cmd = raw_conn.exec(nullptr, nullptr, argc, argv, argvlen);
   } else {
     // 异步数据
-    db_async_data_t req;
+    db_async_data_t req{};
     req.node_id = pd;
     req.task_id = task_id;
     req.unpack_fn = fn;

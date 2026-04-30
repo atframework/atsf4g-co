@@ -27,80 +27,23 @@ high-performance game server architectures.
 - Respect the user's dirty workspace: inspect current file contents before editing and avoid unrelated reformatting.
 - For paths under vendored subprojects, read the nearest subproject `AGENTS.md` before changing code.
 - When a task matches a skill below, read that `SKILL.md` first; skills contain the long commands and edge cases.
-- After C++ edits, run `clang-format -i <file>` and verify with `clang-format --dry-run --Werror <file>` when practical.
-
-## C++ Conventions
-
-1. **Namespaces**:
-   - Framework: `atframework::*`
-   - Project: Follow project naming
-
-2. **Include guards**: Use `#pragma once`
-
-3. **Protobuf includes**: Any C++ include of protobuf headers, including upstream protobuf headers and generated
-   `*.pb.h` files, must be wrapped between `config/compiler/protobuf_prefix.h` and
-   `config/compiler/protobuf_suffix.h` with clang-format disabled for the wrapper includes.
-
-   ```cpp
-   // clang-format off
-   #include <config/compiler/protobuf_prefix.h>
-   // clang-format on
-
-   #include <protocol/pbdesc/svr.protocol.pb.h>
-
-   // clang-format off
-   #include <config/compiler/protobuf_suffix.h>
-   // clang-format on
-   ```
-
-4. **C++ Standard**: C++17 required
-
-5. **Naming**:
-   - Classes/structs: `snake_case`
-   - Functions: `snake_case`
-   - Constants: `UPPER_SNAKE_CASE`
-   - Types: `*_t` suffix for typedefs
-
-6. **Error handling**: Use return codes or error enums
-
-7. **Logging**: Use FWLOG macros
-
-   ```cpp
-   FWLOGINFO("Message: {}", value);
-   FWLOGERROR("Error: {}", error);
-   ```
-
-8. **Anonymous namespace + static**: In `.cpp` files, file-local functions should be placed inside an anonymous namespace **and** keep the `static` keyword. Do **not** remove `static` when moving a function into an anonymous namespace.
-
-   ```cpp
-   namespace {
-   static void my_helper() { /* ... */ }
-   }  // namespace
-   ```
-
-9. **Temporary protobuf messages in tasks/RPC APIs**: When creating a protobuf message object only as a temporary inside
-   a task or RPC interface, and it is not cached, stored as an object member, or kept beyond the task/RPC lifetime,
-   prefer `rpc::make_shared_message<MessageType>(ctx)` (or
-   `rpc::make_shared_message<MessageType>(get_shared_context())` inside `task_action_*`) over stack/heap allocation.
-   This allocates from the task/RPC Arena and reduces heap fragmentation. Use `msg->...`, `*msg`, and `msg.get()` as
-   appropriate; include `rpc/rpc_shared_message.h` when needed. Do not use task-Arena objects for data that must outlive
-   the Arena.
+- For coding or code review in `src/**`, first read `engineering-guidelines`; it owns shared style, lint, and project
+  engineering conventions.
 
 ## Skill Routing
 
 Read the matching `.agents/skills/*/SKILL.md` before doing specialized work:
 
-| Skill | Use when |
-| --- | --- |
-| `build` | Configuring or building with CMake |
-| `testing` | Running or writing unit tests |
-| `service-functions-cmake` | Adding services, protocols, SDKs, or components |
-| `deployment-config` | Generating/editing deployment configs or Helm values |
-| `configure-expression` | Editing env-expression-enabled config fields |
-| `code-generation` | Editing proto files, templates, or generated outputs |
-| `rpc-protobuf-arena` | Working with task/RPC-local protobuf messages and Arena allocation |
-| `atgateway-protocol` | Working on atgateway v2 protocol, crypto, compression, reconnection, or tests |
-| `ai-agent-maintenance` | Auditing or optimizing AI agent prompts, bridge files, and skills |
+| Skill                     | Use when                                                                                |
+| ------------------------- | --------------------------------------------------------------------------------------- |
+| `engineering-guidelines`  | Writing or reviewing C++/CMake/Markdown code, RPC/Arena, generated code, service CMake  |
+| `build`                   | Configuring or building with CMake                                                      |
+| `testing`                 | Running or writing unit tests                                                           |
+| `deployment-config`       | Generating/editing deployment configs or Helm values                                    |
+| `configure-expression`    | Editing env-expression-enabled config fields                                            |
+| `atgateway-protocol`      | Working on atgateway v2 protocol, crypto, compression, reconnection, or tests           |
+| `orbit`                   | Drafting or reviewing orbit protocol notes, pseudocode, and flow design                 |
+| `ai-agent-maintenance`    | Auditing or optimizing AI agent prompts, bridge files, and skills                       |
 
 ## Agent File Compatibility
 

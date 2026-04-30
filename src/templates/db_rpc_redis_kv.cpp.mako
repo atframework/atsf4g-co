@@ -3,7 +3,7 @@
 namespace detail {
 static int32_t unpack_${message_name}(rpc::context *ctx, db_message_t &msg, const redisReply *reply) {
   if (nullptr == reply) {
-    FWLOGDEBUG("{}", "data not found.");
+    FCTXLOGDEBUG(*ctx, "{}", "data not found.");
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
@@ -143,12 +143,12 @@ SERVER_FRAME_API result_type replace(rpc::context &ctx,
 namespace detail {
 static int32_t unpack_${message_name}_inc_field_${inc_field["raw_name"]}(rpc::context *ctx, db_message_t &msg, const redisReply *reply) {
   if (nullptr == reply) {
-    FWLOGDEBUG("{}", "data not found.");
+    FCTXLOGDEBUG(*ctx, "{}", "data not found.");
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
   if (reply->type != REDIS_REPLY_INTEGER) {
-    FWLOGERROR("unpack failed, the redis reply type is not int (reply type={}).", reply->type);
+    FCTXLOGERROR(*ctx, "unpack failed, the redis reply type is not int (reply type={}).", reply->type);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
   }
 
@@ -205,7 +205,7 @@ SERVER_FRAME_API result_type inc_field_${inc_field["raw_name"]}(rpc::context &ct
 namespace detail {
 static int32_t unpack_${message_name}_${partly_field_name}(rpc::context *ctx, db_message_t &msg, const redisReply *reply) {
   if (nullptr == reply) {
-    FWLOGDEBUG("{}", "data not found.");
+    FCTXLOGDEBUG(*ctx, "{}", "data not found.");
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 

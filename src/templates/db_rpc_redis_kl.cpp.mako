@@ -3,7 +3,7 @@
 namespace detail {
 static int32_t unpack_${message_name}(rpc::context *ctx, db_message_t &msg, const redisReply *reply) {
   if (nullptr == reply) {
-    FWLOGDEBUG("{}", "data not found.");
+    FCTXLOGDEBUG(*ctx, "{}", "data not found.");
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
@@ -16,7 +16,7 @@ static int32_t unpack_${message_name}(rpc::context *ctx, db_message_t &msg, cons
 static int32_t unpack_${message_name}_indexs(rpc::context *ctx,
                                                    db_message_t &msg, const redisReply *reply) {
   if (nullptr == reply) {
-    FWLOGDEBUG("{}", "data not found.");
+    FCTXLOGDEBUG(*ctx, "{}", "data not found.");
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 

@@ -472,7 +472,7 @@ SERVER_FRAME_API result_type inc_field(rpc::context &ctx, uint32_t channel, gsl:
   std::stringstream segs_debug_info;
 
   std::vector<const ::google::protobuf::FieldDescriptor *> fds;
-  auto fd = message->GetDescriptor()->FindFieldByName(inc_field.data());
+  const auto *fd = message->GetDescriptor()->FindFieldByName(inc_field.data());
   if (nullptr == fd) {
     FWLOGERROR("field {} not found in message {}", inc_field, message->GetDescriptor()->full_name());
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PACK, __trace_attributes}));

@@ -1,18 +1,12 @@
----
-name: rpc-protobuf-arena
-description: >-
-  Use when: creating temporary protobuf messages inside task_action classes, RPC APIs, rpc::context callbacks, or
-  code-generation templates that emit task/RPC-local messages and should use rpc::make_shared_message with task Arena.
----
-
 # RPC protobuf Arena allocation
 
-Use this skill when a task/RPC implementation creates protobuf message objects that are temporary scratch data.
+Detail companion to `SKILL.md`. Load when a task/RPC implementation creates protobuf message objects that are temporary
+scratch data.
 
 ## Preferred pattern
 
-- If a message is created only inside a task/RPC call and is not cached, saved as a member, or returned beyond the call's
-  Arena lifetime, prefer:
+- If a message is created only inside a task/RPC call and is not cached, saved as a member, or returned beyond the
+  call's Arena lifetime, prefer:
   - `rpc::make_shared_message<MessageType>(ctx)` when a `rpc::context &ctx` is available.
   - `rpc::make_shared_message<MessageType>(get_shared_context())` inside `task_action_*` classes.
 - Add `#include <rpc/rpc_shared_message.h>` when the symbol is not already included.
@@ -27,8 +21,6 @@ Do not store task-Arena messages in members, global structures, caches, delayed 
 outlive the task/RPC context. Copy, clone, or allocate with an owning lifetime that matches the storage instead.
 
 ## Example
-
-In a task action, prefer this for a temporary response metadata message:
 
 ```cpp
 auto cache_meta = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DUserCacheMeta>(get_shared_context());
