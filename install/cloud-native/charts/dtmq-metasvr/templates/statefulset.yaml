@@ -1,0 +1,3 @@
+{{- template "libapp.statefulset" (list . "dtmq-metasvr.statefulset") -}}
+{{- define "dtmq-metasvr.statefulset" -}}
+{{- end -}}

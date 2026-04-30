@@ -1,0 +1,25 @@
+# Default values for lobby.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+proc_name: dtmq-metasvrd
+
+type_id: 21
+type_name: "dtmq-metasvr"
+
+image:
+  repository: harbor.atframe.work/atsf4g-co/server
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: latest
+
+volumeMounts:
+  configMountPath: /data/atframework/publish/dtmq-metasvr/cfg
+  logMountPath: /data/atframework/publish/dtmq-metasvr/log
+
+vector:
+  enabled: true
+  log_path: /data/atframework/publish/dtmq-metasvr/log
+
+redis:
+  enable: true
