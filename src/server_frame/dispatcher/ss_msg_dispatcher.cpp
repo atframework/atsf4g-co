@@ -293,7 +293,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t node_id, atfra
 
 SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t node_id, const void *msg_buf, size_t msg_len,
                                                          uint64_t sequence,
-                                                         EXPLICIT_UNUSED_ATTR bool ignore_discovery) {
+                                                         ATFW_EXPLICIT_UNUSED_ATTR bool ignore_discovery) {
   atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("module not attached to a atapp, maybe not initialized or already closed");

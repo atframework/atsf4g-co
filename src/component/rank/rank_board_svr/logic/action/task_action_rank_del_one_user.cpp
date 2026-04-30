@@ -29,8 +29,8 @@ RANK_SERVICE_API task_action_rank_del_one_user::~task_action_rank_del_one_user()
 RANK_SERVICE_API const char* task_action_rank_del_one_user::name() const { return "task_action_rank_del_one_user"; }
 
 RANK_SERVICE_API task_action_rank_del_one_user::result_type task_action_rank_del_one_user::operator()() {
-  EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
-  EXPLICIT_UNUSED_ATTR rpc_response_type& rsp_body = get_response_body();
+  const rpc_request_type& req_body = get_request_body();
+  rpc_response_type& rsp_body = get_response_body();
   if (is_stream_rpc()) {
     disable_response_message();
   }
@@ -48,12 +48,15 @@ RANK_SERVICE_API task_action_rank_del_one_user::result_type task_action_rank_del
     bool ok = false;
     ret = RPC_AWAIT_CODE_RESULT(forward_rpc(rank_ptr->get_router_data().main_server_id(), false, ok));
     if (ret != 0 || !ok) {
-      FWLOGERROR("forward rank:({}:{}:{}:{}) message to dest server {} failed! ret:{} ok:{}", req_body.rank_key().rank_type(),
-                 req_body.rank_key().rank_instance_id(), req_body.rank_key().sub_rank_type(), req_body.rank_key().sub_rank_instance_id(), rank_ptr->get_router_data().main_server_id(), ret, ok ? 1 : 0);
+      FWLOGERROR("forward rank:({}:{}:{}:{}) message to dest server {} failed! ret:{} ok:{}",
+                 req_body.rank_key().rank_type(), req_body.rank_key().rank_instance_id(),
+                 req_body.rank_key().sub_rank_type(), req_body.rank_key().sub_rank_instance_id(),
+                 rank_ptr->get_router_data().main_server_id(), ret, ok ? 1 : 0);
       TASK_ACTION_RETURN_CODE(ret != 0 ? ret : PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN);
     }
     FWLOGDEBUG("forward rank:({}:{}:{}:{}) message to dest server {} success", req_body.rank_key().rank_type(),
-               req_body.rank_key().rank_instance_id(), req_body.rank_key().sub_rank_type(), req_body.rank_key().sub_rank_instance_id(), rank_ptr->get_router_data().main_server_id());
+               req_body.rank_key().rank_instance_id(), req_body.rank_key().sub_rank_type(),
+               req_body.rank_key().sub_rank_instance_id(), rank_ptr->get_router_data().main_server_id());
     TASK_ACTION_RETURN_CODE(0);
   }
 

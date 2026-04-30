@@ -22,7 +22,7 @@ import "protocol/pbdesc/svr.struct.proto";
 package hello;
 
 message object_cache_pull_key {
-  EnCacheApiGetCacheType type = 1;
+  EnCacheApiGetCacheType get_type = 1;
   object_cache_key cache_key = 2;
 }
 

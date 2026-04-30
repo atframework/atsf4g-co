@@ -504,9 +504,9 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type create_transaction(
 
   if (req_body->GetArena() == inout.GetArena()) {
     if (nullptr == req_body->GetArena()) {
-      EXPLICIT_UNUSED_ATTR auto* _storage = req_body->release_storage();
+      ATFW_EXPLICIT_UNUSED_ATTR auto* _storage = req_body->release_storage();
     } else {
-      EXPLICIT_UNUSED_ATTR auto* _storage = req_body->unsafe_arena_release_storage();
+      ATFW_EXPLICIT_UNUSED_ATTR auto* _storage = req_body->unsafe_arena_release_storage();
     }
   }
 

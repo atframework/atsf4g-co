@@ -697,7 +697,7 @@ static rpc::result_code_type check_local_router_object(rpc::context &ctx, uint64
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-static rpc::result_code_type try_filter_router_msg(rpc::context &ctx, EXPLICIT_UNUSED_ATTR int retry_times,
+static rpc::result_code_type try_filter_router_msg(rpc::context &ctx, ATFW_EXPLICIT_UNUSED_ATTR int retry_times,
                                                    uint64_t /*request_node_id*/, atframework::SSMsg &request_msg,
                                                    router_manager_base &mgr, router_manager_base::key_t key,
                                                    std::shared_ptr<router_object_base> &obj,

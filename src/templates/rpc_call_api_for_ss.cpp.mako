@@ -113,11 +113,11 @@ inline static int __pack_rpc_body(TBodyType &&input, std::string *output, atfw::
   if (false == input.SerializeToString(output)) {
     FWLOGERROR("rpc {} serialize message {} failed, msg: {}", rpc_full_name, type_full_name,
               input.InitializationErrorString());
-    return ${project_namespace}::err::EN_SYS_PACK;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
   } else {
     FWLOGDEBUG("rpc {} serialize message {} success:\n{}", rpc_full_name, type_full_name,
               protobuf_mini_dumper_get_readable(input));
-    return ${project_namespace}::err::EN_SUCCESS;
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 }
 
@@ -128,11 +128,11 @@ inline static int __unpack_rpc_body(TBodyType &&output, const std::string& input
   if (false == output.ParseFromString(input)) {
     FWLOGERROR("rpc {} parse message {} failed, msg: {}", rpc_full_name, type_full_name,
               output.InitializationErrorString());
-    return ${project_namespace}::err::EN_SYS_PACK;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
   } else {
     FWLOGDEBUG("rpc {} parse message {} success:\n{}", rpc_full_name, type_full_name,
               protobuf_mini_dumper_get_readable(output));
-    return ${project_namespace}::err::EN_SUCCESS;
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 }
 
@@ -182,7 +182,7 @@ inline static int __setup_rpc_stream_header(atframework::SSMsgHead &head, atfw::
                                             atfw::util::nostd::string_view type_full_name) {
   atframework::RpcStreamMeta* stream_meta = head.mutable_rpc_stream();
   if (nullptr == stream_meta) {
-    return ${project_namespace}::err::EN_SYS_MALLOC;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
   stream_meta->set_version(logic_config::me()->get_atframework_settings().rpc_version());
   stream_meta->set_caller(static_cast<std::string>(logic_config::me()->get_local_server_name()));
@@ -192,7 +192,7 @@ inline static int __setup_rpc_stream_header(atframework::SSMsgHead &head, atfw::
   stream_meta->mutable_caller_timestamp()->set_seconds(util::time::time_utility::get_sys_now());
   stream_meta->mutable_caller_timestamp()->set_nanos(util::time::time_utility::get_now_nanos());
 
-  return ${project_namespace}::err::EN_SUCCESS;
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 % endif
 % if rpc_common_codes_enable_request_header:
@@ -202,7 +202,7 @@ inline static int __setup_rpc_request_header(atframework::SSMsgHead &head, task_
   head.set_source_task_id(task_id);
   atframework::RpcRequestMeta* request_meta = head.mutable_rpc_request();
   if (nullptr == request_meta) {
-    return ${project_namespace}::err::EN_SYS_MALLOC;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
   request_meta->set_version(logic_config::me()->get_atframework_settings().rpc_version());
   request_meta->set_caller(static_cast<std::string>(logic_config::me()->get_local_server_name()));
@@ -212,7 +212,7 @@ inline static int __setup_rpc_request_header(atframework::SSMsgHead &head, task_
   request_meta->mutable_caller_timestamp()->set_seconds(util::time::time_utility::get_sys_now());
   request_meta->mutable_caller_timestamp()->set_nanos(util::time::time_utility::get_now_nanos());
 
-  return ${project_namespace}::err::EN_SUCCESS;
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 % endif
 % if rpc_common_codes_enable_redirect_info_log:
@@ -260,7 +260,7 @@ inline static rpc::result_code_type __rpc_wait_and_unpack_response(rpc::context 
   atframework::SSMsg* rsp_msg_ptr = __ctx.create<atframework::SSMsg>();
   if (nullptr == rsp_msg_ptr) {
     FWLOGERROR("rpc {} create response message failed", rpc_full_name);
-    RPC_RETURN_CODE(${project_namespace}::err::EN_SYS_MALLOC);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
   }
 
   atframework::SSMsg& rsp_msg = *rsp_msg_ptr;
@@ -350,14 +350,14 @@ ${ns}
 // ============ ${rpc.get_service().get_full_name()}/${rpc.get_name()} ============
 namespace packer {
 ${rpc_dllexport_decl} bool pack_${rpc.get_name()}(std::string& output, const ${rpc.get_request().get_cpp_class_name()}& input) {
-  return ${project_namespace}::err::EN_SUCCESS ==
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS ==
          __pack_rpc_body(
              input, &output, "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
              __to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()));
 }
 
 ${rpc_dllexport_decl} bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_request().get_cpp_class_name()}& output) {
-  return ${project_namespace}::err::EN_SUCCESS ==
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS ==
          __unpack_rpc_body(
              output, input, "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
              __to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()));
@@ -365,14 +365,14 @@ ${rpc_dllexport_decl} bool unpack_${rpc.get_name()}(const std::string& input, ${
 
 % if not rpc_is_stream_mode:
 ${rpc_dllexport_decl} bool pack_${rpc.get_name()}(std::string& output, const ${rpc.get_response().get_cpp_class_name()}& input) {
-  return ${project_namespace}::err::EN_SUCCESS ==
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS ==
          __pack_rpc_body(
              input, &output, "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
              __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
 }
 
 ${rpc_dllexport_decl} bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_response().get_cpp_class_name()}& output) {
-  return ${project_namespace}::err::EN_SUCCESS ==
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS ==
          __unpack_rpc_body(
              output, input, "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
              __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
@@ -585,7 +585,7 @@ static ${rpc_return_type} __${rpc.get_name()}(
   if (nullptr == router_manager) {
     FWLOGERROR("rpc {} can not get router manager of type {}",
                "${rpc.get_service().get_full_name()}/${rpc.get_name()}", type_id);
-    RPC_RETURN_CODE(__tracer.finish({${project_namespace}::err::EN_SYS_NOT_SUPPORT, __trace_attributes}));
+    RPC_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_NOT_SUPPORT, __trace_attributes}));
   }
 
   uint64_t rpc_sequence = 0;

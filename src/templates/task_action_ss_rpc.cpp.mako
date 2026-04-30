@@ -44,12 +44,12 @@ ${service_dllexport_decl} const char *${task_class_name}::name() const {
 }
 
 ${service_dllexport_decl} ${task_class_name}::result_type ${task_class_name}::operator()() {
-  EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
+  // const rpc_request_type& req_body = get_request_body();
 % if rpc.is_request_stream() or rpc.is_response_stream():
   // Stream request or stream response, just ignore auto response
   disable_response_message();
 % else:
-  EXPLICIT_UNUSED_ATTR rpc_response_type& rsp_body = get_response_body();
+  // rpc_response_type& rsp_body = get_response_body();
 %   if rpc.get_extension_field('rpc_options', lambda x: x.allow_no_wait, False):
   if (is_stream_rpc()) {
     disable_response_message();
@@ -59,7 +59,7 @@ ${service_dllexport_decl} ${task_class_name}::result_type ${task_class_name}::op
 
   // TODO ...
 
-  TASK_ACTION_RETURN_CODE(${project_namespace}::err::EN_SUCCESS);
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 ${service_dllexport_decl} int ${task_class_name}::on_success() { return get_result(); }

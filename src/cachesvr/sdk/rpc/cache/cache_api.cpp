@@ -58,7 +58,7 @@ struct pull_group_t {
 }  // namespace
 
 CACHE_RPC_API uint64_t get_cachesvr_server_id(PROJECT_NAMESPACE_ID::EnCacheApiCacheType cache_type,
-                                              EXPLICIT_UNUSED_ATTR uint32_t zone_id, uint64_t instance_id) {
+                                              ATFW_EXPLICIT_UNUSED_ATTR uint32_t zone_id, uint64_t instance_id) {
   logic_server_common_module *mod = logic_server_last_common_module();
   if (mod == nullptr) {
     return 0;

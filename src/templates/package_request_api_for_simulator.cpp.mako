@@ -63,10 +63,10 @@ inline static int __pack_body(const TBodyType &body, std::string *output, atfw::
   if (false == body.SerializeToString(output)) {
     FWLOGERROR("rpc {} serialize message {} failed, msg: {}", rpc_full_name, type_full_name,
                body.InitializationErrorString());
-    return ${project_namespace}::EN_ERR_SYSTEM;
+    return PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
   } else {
     FWLOGDEBUG("rpc {} serialize message {} success:\n{}", rpc_full_name, type_full_name, body.DebugString());
-    return ${project_namespace}::EN_SUCCESS;
+    return PROJECT_NAMESPACE_ID::EN_SUCCESS;
   }
 }
 % endif
@@ -76,7 +76,7 @@ inline static int __setup_rpc_stream_header(atframework::CSMsgHead &head, atfw::
                                             atfw::util::nostd::string_view type_full_name) {
   atframework::RpcStreamMeta* stream_meta = head.mutable_rpc_stream();
   if (nullptr == stream_meta) {
-    return ${project_namespace}::EN_ERR_SYSTEM;
+    return PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
   }
   stream_meta->set_version(client_simulator::get_atframework_settings().rpc_version());
   stream_meta->set_caller("client_simulator");
@@ -86,7 +86,7 @@ inline static int __setup_rpc_stream_header(atframework::CSMsgHead &head, atfw::
   stream_meta->mutable_caller_timestamp()->set_seconds(util::time::time_utility::get_sys_now());
   stream_meta->mutable_caller_timestamp()->set_nanos(util::time::time_utility::get_now_nanos());
 
-  return ${project_namespace}::EN_SUCCESS;
+  return PROJECT_NAMESPACE_ID::EN_SUCCESS;
 
 }
 % endif
@@ -96,7 +96,7 @@ inline static int __setup_rpc_request_header(atframework::CSMsgHead &head, atfw:
                                             atfw::util::nostd::string_view type_full_name) {
   atframework::RpcRequestMeta* request_meta = head.mutable_rpc_request();
   if (nullptr == request_meta) {
-    return ${project_namespace}::EN_ERR_SYSTEM;
+    return PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
   }
   request_meta->set_version(client_simulator::get_atframework_settings().rpc_version());
   request_meta->set_caller("client_simulator");
@@ -104,7 +104,7 @@ inline static int __setup_rpc_request_header(atframework::CSMsgHead &head, atfw:
   request_meta->set_rpc_name(rpc_full_name.data(), rpc_full_name.size());
   request_meta->set_type_url(type_full_name.data(), type_full_name.size());
 
-  return ${project_namespace}::EN_SUCCESS;
+  return PROJECT_NAMESPACE_ID::EN_SUCCESS;
 }
 % endif
 }  // namespace

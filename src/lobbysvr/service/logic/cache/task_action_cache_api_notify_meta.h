@@ -12,9 +12,11 @@
 #endif
 
 class task_action_cache_api_notify_meta
-    : public task_action_cs_rpc_base<hello::CSCacheApiNotifyMetaReq, hello::SCCacheApiNotifyMetaRsp> {
+    : public task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSCacheApiNotifyMetaReq,
+                                     PROJECT_NAMESPACE_ID::SCCacheApiNotifyMetaRsp> {
  public:
-  using base_type = task_action_cs_rpc_base<hello::CSCacheApiNotifyMetaReq, hello::SCCacheApiNotifyMetaRsp>;
+  using base_type = task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSCacheApiNotifyMetaReq,
+                                            PROJECT_NAMESPACE_ID::SCCacheApiNotifyMetaRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

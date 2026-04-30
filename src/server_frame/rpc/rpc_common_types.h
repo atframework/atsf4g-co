@@ -308,14 +308,14 @@ ATFW_UTIL_SYMBOL_VISIBLE typename _rpc_result_traits<TRESULT>::value_type _get_r
 namespace details {
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
 template <class TRESULT>
-ATFW_UTIL_SYMBOL_VISIBLE TRESULT _ignore_result(EXPLICIT_UNUSED_ATTR TRESULT&& result) {
+ATFW_UTIL_SYMBOL_VISIBLE TRESULT _ignore_result(ATFW_EXPLICIT_UNUSED_ATTR TRESULT&& result) {
   return std::forward<TRESULT>(result);
 }
 #else
 template <class TRESULT,
           typename std::enable_if<!std::is_same<::rpc::result_void_type, typename std::decay<TRESULT>::type>::value,
                                   int>::type* = nullptr>
-ATFW_UTIL_SYMBOL_VISIBLE TRESULT _ignore_result(EXPLICIT_UNUSED_ATTR TRESULT&& result) {
+ATFW_UTIL_SYMBOL_VISIBLE TRESULT _ignore_result(ATFW_EXPLICIT_UNUSED_ATTR TRESULT&& result) {
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
   result._internal_set_awaited();
 #  endif
@@ -325,7 +325,7 @@ ATFW_UTIL_SYMBOL_VISIBLE TRESULT _ignore_result(EXPLICIT_UNUSED_ATTR TRESULT&& r
 template <class TRESULT,
           typename std::enable_if<std::is_same<::rpc::result_void_type, typename std::decay<TRESULT>::type>::value,
                                   int>::type* = nullptr>
-ATFW_UTIL_SYMBOL_VISIBLE TRESULT _ignore_void(EXPLICIT_UNUSED_ATTR TRESULT&& result) {
+ATFW_UTIL_SYMBOL_VISIBLE TRESULT _ignore_void(ATFW_EXPLICIT_UNUSED_ATTR TRESULT&& result) {
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
   result._internal_set_awaited();
 #  endif

@@ -29,8 +29,8 @@ RANK_SERVICE_API task_action_rank_heartbeat::~task_action_rank_heartbeat() {}
 RANK_SERVICE_API const char* task_action_rank_heartbeat::name() const { return "task_action_rank_heartbeat"; }
 
 RANK_SERVICE_API task_action_rank_heartbeat::result_type task_action_rank_heartbeat::operator()() {
-  EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
-  EXPLICIT_UNUSED_ATTR rpc_response_type& rsp_body = get_response_body();
+  const rpc_request_type& req_body = get_request_body();
+  ATFW_EXPLICIT_UNUSED_ATTR rpc_response_type& rsp_body = get_response_body();
   if (is_stream_rpc()) {
     disable_response_message();
   }
@@ -40,9 +40,10 @@ RANK_SERVICE_API task_action_rank_heartbeat::result_type task_action_rank_heartb
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_RANK_IS_NOT_MAIN);
   }
   if (rank_ptr->get_router_data().router_version() != req_body.router_version()) {
-      FWLOGDEBUG("rank heartbeat router version mismatch, rank_key({}:{}:{}:{}) local_version:{} req_version:{}",
-                  req_body.rank_key().rank_type(), req_body.rank_key().rank_instance_id(), req_body.rank_key().sub_rank_type(), req_body.rank_key().sub_rank_instance_id(),
-                  rank_ptr->get_router_data().router_version(), req_body.router_version());
+    FWLOGDEBUG("rank heartbeat router version mismatch, rank_key({}:{}:{}:{}) local_version:{} req_version:{}",
+               req_body.rank_key().rank_type(), req_body.rank_key().rank_instance_id(),
+               req_body.rank_key().sub_rank_type(), req_body.rank_key().sub_rank_instance_id(),
+               rank_ptr->get_router_data().router_version(), req_body.router_version());
   }
   rank_ptr->slave_confirm_info(get_shared_context(), get_request_node_id(), req_body.data_version());
 

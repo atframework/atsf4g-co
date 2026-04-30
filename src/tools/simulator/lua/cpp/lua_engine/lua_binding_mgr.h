@@ -148,6 +148,6 @@ class lua_binding_wrapper {
 #define LUA_BIND_OBJECT(name, L)                                                           \
   static void LUA_BIND_FN_NAME(name)(lua_State *);                                         \
   static script::lua::lua_binding_wrapper LUA_BIND_VAR_NAME(name)(LUA_BIND_FN_NAME(name)); \
-  void LUA_BIND_FN_NAME(name)(EXPLICIT_UNUSED_ATTR lua_State * L)
+  void LUA_BIND_FN_NAME(name)(ATFW_EXPLICIT_UNUSED_ATTR lua_State * L)
 
 #endif

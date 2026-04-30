@@ -29,8 +29,8 @@ RANK_SERVICE_API task_action_rank_get_special::~task_action_rank_get_special() {
 RANK_SERVICE_API const char* task_action_rank_get_special::name() const { return "task_action_rank_get_special"; }
 
 RANK_SERVICE_API task_action_rank_get_special::result_type task_action_rank_get_special::operator()() {
-  EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
-  EXPLICIT_UNUSED_ATTR rpc_response_type& rsp_body = get_response_body();
+  const rpc_request_type& req_body = get_request_body();
+  rpc_response_type& rsp_body = get_response_body();
   if (is_stream_rpc()) {
     disable_response_message();
   }

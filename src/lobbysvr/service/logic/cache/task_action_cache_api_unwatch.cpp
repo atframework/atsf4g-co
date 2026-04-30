@@ -34,19 +34,19 @@ GAMECLIENT_SERVICE_API const char* task_action_cache_api_unwatch::name() const {
 }
 
 GAMECLIENT_SERVICE_API task_action_cache_api_unwatch::result_type task_action_cache_api_unwatch::operator()() {
-  EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
-  EXPLICIT_UNUSED_ATTR rpc_response_type& rsp_body = get_response_body();
+  ATFW_EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
+  ATFW_EXPLICIT_UNUSED_ATTR rpc_response_type& rsp_body = get_response_body();
 
   player::ptr_t user = get_player<player>();
   if (!user) {
     FWLOGERROR("not logined.");
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
-    TASK_ACTION_RETURN_CODE(hello::err::EN_SUCCESS);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // TODO ...
 
-  TASK_ACTION_RETURN_CODE(hello::err::EN_SUCCESS);
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 GAMECLIENT_SERVICE_API int task_action_cache_api_unwatch::on_success() { return get_result(); }

@@ -11,10 +11,11 @@
 #  define GAMECLIENT_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
-class task_action_cache_api_unwatch
-    : public task_action_cs_rpc_base<hello::CSCacheApiUnwatchReq, hello::SCCacheApiUnwatchRsp> {
+class task_action_cache_api_unwatch : public task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSCacheApiUnwatchReq,
+                                                                     PROJECT_NAMESPACE_ID::SCCacheApiUnwatchRsp> {
  public:
-  using base_type = task_action_cs_rpc_base<hello::CSCacheApiUnwatchReq, hello::SCCacheApiUnwatchRsp>;
+  using base_type =
+      task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSCacheApiUnwatchReq, PROJECT_NAMESPACE_ID::SCCacheApiUnwatchRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

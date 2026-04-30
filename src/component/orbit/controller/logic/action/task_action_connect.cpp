@@ -31,12 +31,12 @@ ORBIT_CONTROLLER_SERVICE_API task_action_connect::~task_action_connect() {}
 ORBIT_CONTROLLER_SERVICE_API const char* task_action_connect::name() const { return "task_action_connect"; }
 
 ORBIT_CONTROLLER_SERVICE_API task_action_connect::result_type task_action_connect::operator()() {
-  EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
-  EXPLICIT_UNUSED_ATTR rpc_response_type& rsp_body = get_response_body();
+  ATFW_EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
+  ATFW_EXPLICIT_UNUSED_ATTR rpc_response_type& rsp_body = get_response_body();
 
   // TODO ...
 
-  TASK_ACTION_RETURN_CODE(hello::err::EN_SUCCESS);
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 ORBIT_CONTROLLER_SERVICE_API int task_action_connect::on_success() { return get_result(); }

@@ -681,7 +681,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_cache_manager::pull_cach
     cache_key.set_cache_type(key.cache_key().cache_type());
     cache_key.set_zone_id(key.cache_key().zone_id());
     cache_key.set_instance_id(key.cache_key().instance_id());
-    player_map[cache_key] = key.type();
+    player_map[cache_key] = key.get_type();
   }
 
   if (player_map.empty()) {
@@ -735,7 +735,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_cache_manager::pull_cach
         FWLOGERROR("malloc object_cache_key failed");
         continue;
       }
-      pull_key->set_type(data.second);
+      pull_key->set_get_type(data.second);
       protobuf_copy_message(*pull_key->mutable_cache_key(), data.first);
     }
 
@@ -854,7 +854,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_cache_manager::pull_one_
       ctx.create<::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_pull_key>>();
   auto* unit = cache_pull_keys->Add();
   if (unit != nullptr) {
-    unit->set_type(PROJECT_NAMESPACE_ID::EN_CACHE_API_GET_CACHE_TYPE_NORMAL);
+    unit->set_get_type(PROJECT_NAMESPACE_ID::EN_CACHE_API_GET_CACHE_TYPE_NORMAL);
     protobuf_copy_message(*unit->mutable_cache_key(), key);
   }
 

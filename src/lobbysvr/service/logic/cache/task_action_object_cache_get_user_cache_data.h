@@ -22,10 +22,11 @@
 #endif
 
 class task_action_object_cache_get_user_cache_data
-    : public task_action_ss_rpc_base<hello::SSObjectCacheGetUserCacheDataReq, hello::SSObjectCacheGetUserCacheDataRsp> {
+    : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSObjectCacheGetUserCacheDataReq,
+                                     PROJECT_NAMESPACE_ID::SSObjectCacheGetUserCacheDataRsp> {
  public:
-  using base_type =
-      task_action_ss_rpc_base<hello::SSObjectCacheGetUserCacheDataReq, hello::SSObjectCacheGetUserCacheDataRsp>;
+  using base_type = task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSObjectCacheGetUserCacheDataReq,
+                                            PROJECT_NAMESPACE_ID::SSObjectCacheGetUserCacheDataRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

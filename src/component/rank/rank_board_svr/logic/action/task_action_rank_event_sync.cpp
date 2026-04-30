@@ -34,7 +34,7 @@ RANK_SERVICE_API task_action_rank_event_sync::~task_action_rank_event_sync() {}
 RANK_SERVICE_API const char* task_action_rank_event_sync::name() const { return "task_action_rank_event_sync"; }
 
 RANK_SERVICE_API task_action_rank_event_sync::result_type task_action_rank_event_sync::operator()() {
-  EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
+  const rpc_request_type& req_body = get_request_body();
   // Stream request or stream response, just ignore auto response
   disable_response_message();
 
@@ -71,11 +71,14 @@ RANK_SERVICE_API task_action_rank_event_sync::result_type task_action_rank_event
         break;
     }
     if (ret != 0) {
-      FWLOGERROR("sync rank event failed rank({}:{}:{}:{}) event_id:{} event_case:{} ret:{}", req_body.rank_key().rank_type(),
-                 req_body.rank_key().rank_instance_id(), req_body.rank_key().sub_rank_type(), req_body.rank_key().sub_rank_instance_id(), event.event_id(), static_cast<int>(event.event_case()), ret);
+      FWLOGERROR("sync rank event failed rank({}:{}:{}:{}) event_id:{} event_case:{} ret:{}",
+                 req_body.rank_key().rank_type(), req_body.rank_key().rank_instance_id(),
+                 req_body.rank_key().sub_rank_type(), req_body.rank_key().sub_rank_instance_id(), event.event_id(),
+                 static_cast<int>(event.event_case()), ret);
     } else {
       FWLOGDEBUG("sync rank event success rank({}:{}:{}:{}) event_id:{} event_case:{}", req_body.rank_key().rank_type(),
-                 req_body.rank_key().rank_instance_id(), req_body.rank_key().sub_rank_type(), req_body.rank_key().sub_rank_instance_id(), event.event_id(), static_cast<int>(event.event_case()));
+                 req_body.rank_key().rank_instance_id(), req_body.rank_key().sub_rank_type(),
+                 req_body.rank_key().sub_rank_instance_id(), event.event_id(), static_cast<int>(event.event_case()));
     }
   }
 

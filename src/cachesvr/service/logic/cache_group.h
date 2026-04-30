@@ -275,11 +275,11 @@ class cache_group : public cache_group_base {
       // 必须先更新watcher，不然tick里会因为没有wacher且缓存无效而释放掉cache对象
       if (watcher_key.cache_type() != PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_UNKNOWN &&
           watcher_key.instance_id() != 0 && watcher_server_inst_id != 0 &&
-          cache_pull_keys.Get(i).type() == PROJECT_NAMESPACE_ID::EN_CACHE_API_GET_CACHE_TYPE_SUBSCRIBE) {
+          cache_pull_keys.Get(i).get_type() == PROJECT_NAMESPACE_ID::EN_CACHE_API_GET_CACHE_TYPE_SUBSCRIBE) {
         cache_object->replace_watcher(ctx, *manager, watcher_key, 0, watcher_server_inst_id);
       }
 
-      if (cache_pull_keys.Get(i).type() == PROJECT_NAMESPACE_ID::EN_CACHE_API_GET_CACHE_TYPE_HOT_DATA &&
+      if (cache_pull_keys.Get(i).get_type() == PROJECT_NAMESPACE_ID::EN_CACHE_API_GET_CACHE_TYPE_HOT_DATA &&
           watcher_server_inst_id != 0) {
         PROJECT_NAMESPACE_ID::object_cache_watcher cache_key;
         cache_key.set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_UNKNOWN);
