@@ -54,7 +54,7 @@ class main_service_module : public atapp::module_impl, public std::enable_shared
     return 0;
   }
 
-  const char* name() const override { return "main_service_module"; }
+  const char *name() const override { return "main_service_module"; }
 
   int tick() override {
     int ret = 0;
@@ -63,7 +63,7 @@ class main_service_module : public atapp::module_impl, public std::enable_shared
   }
 };
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
   atfw::atapp::app app;
 
   {
@@ -75,7 +75,7 @@ int main(int argc, char* argv[]) {
   logic_config::me()->set_server_instance_config_loader(
       [](atfw::atapp::app &app, logic_config & /*cfg*/, logic_config::server_instance_config_ptr &to) {
         auto config_ptr = atfw::util::memory::make_strong_rc<orbit::config::orbit_agent_cfg>();
-        app.parse_configures_into(*config_ptr, "orbit-agent");
+        app.parse_configures_into(*config_ptr, "orbit_agent");
         to = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);
       });
 

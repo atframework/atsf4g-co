@@ -1,0 +1,25 @@
+# Default values for lobby.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+proc_name: orbit-controllerd
+
+type_id: 102
+type_name: "orbit-controller"
+
+image:
+  repository: harbor.atframe.work/atsf4g-co/server
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: latest
+
+volumeMounts:
+  configMountPath: /data/atframework/publish/orbit-controller/cfg
+  logMountPath: /data/atframework/publish/orbit-controller/log
+
+vector:
+  enabled: true
+  log_path: /data/atframework/publish/orbit-controller/log
+
+orbit_controller:
+  region: default

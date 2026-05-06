@@ -18,6 +18,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <atframe/atapp_conf.pb.h>
 #include <google/protobuf/empty.pb.h>
 #include <protocol/common/orbit.common.pb.h>
 #include <protocol/pbdesc/controller_service.pb.h>
@@ -90,7 +91,7 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
 
  private:
   bool stopped_ = false;
-  std::string region_;
+  atfw::atapp::protocol::atapp_metadata agent_policy_selector_;
 
   // Agent节点信息: agent_server_id → orbit_controller_agent_info
   std::unordered_map<uint64_t, orbit_controller_agent_info> agents_;

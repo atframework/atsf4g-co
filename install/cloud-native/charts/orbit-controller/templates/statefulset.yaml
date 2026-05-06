@@ -1,0 +1,3 @@
+{{- template "libapp.statefulset" (list . "orbit-controller.statefulset") -}}
+{{- define "orbit-controller.statefulset" -}}
+{{- end -}}

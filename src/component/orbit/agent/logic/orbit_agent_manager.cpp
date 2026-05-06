@@ -118,9 +118,11 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
   owner_app_ = app;
   uv_disable_stdio_inheritance();
 
+  app->set_metadata_label("orbit.region",
+                          logic_config::me()->get_server_instance_config<orbit::config::orbit_agent_cfg>().region());
+
   std::string origin_configured_client_command_line_ =
       logic_config::me()->get_server_instance_config<orbit::config::orbit_agent_cfg>().configured_client_command_line();
-  region_ = logic_config::me()->get_server_instance_config<orbit::config::orbit_agent_cfg>().region();
   tags_ = logic_config::me()->get_server_instance_config<orbit::config::orbit_agent_cfg>().tags();
 
   cpu_capacity_ = logic_config::me()->get_server_instance_config<orbit::config::orbit_agent_cfg>().cpu_capacity();

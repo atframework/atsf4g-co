@@ -30,7 +30,7 @@ service:
 redis:
   enable: true
 
-ranksvr_settlement_svr:
+ranksvr_settlement:
   settle_interval: 60
   settle_loop_count: 100
   disable_rank_settlemnet_clear: false

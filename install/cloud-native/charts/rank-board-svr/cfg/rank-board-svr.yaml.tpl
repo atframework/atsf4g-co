@@ -1,7 +1,7 @@
 {{ include "atapp.yaml" . }}
 {{ include "atapp.logic.yaml" . }}
 
-{{- with .Values.ranksvr-ranking }}
-ranksvr-ranking:
-  {{- toYaml .Values.ranksvr_ranking_svr | trim | nindent 2 }}
+{{- with .Values.ranksvr_ranking }}
+ranksvr_ranking:
+  {{- toYaml . | trim | nindent 2 }}
 {{- end }}

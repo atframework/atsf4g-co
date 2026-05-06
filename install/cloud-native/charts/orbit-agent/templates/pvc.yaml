@@ -1,0 +1,3 @@
+{{- template "libapp.pvc" (list . "orbit-agent.pvc") -}}
+{{- define "orbit-agent.pvc" -}}
+{{- end -}}

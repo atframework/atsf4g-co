@@ -40,18 +40,15 @@
 orbit_controller_manager::orbit_controller_manager() = default;
 
 int orbit_controller_manager::init(atfw::atapp::app* app) {
-  region_ = logic_config::me()->get_server_instance_config<orbit::config::orbit_controller_cfg>().region();
-
-  if (region_.empty()) {
-    FWLOGWARNING("orbit controller region is empty, all agents will be accepted");
-  } else {
-    FWLOGINFO("orbit controller started with region: {}", region_);
-  }
+  app->set_metadata_label(
+      "orbit.region", logic_config::me()->get_server_instance_config<orbit::config::orbit_controller_cfg>().region());
 
   auto etcd_mod = app->get_etcd_module();
   if (etcd_mod) {
     etcd_mod->add_on_node_discovery_event(on_node_event);
   }
+
+  (*agent_policy_selector_.mutable_labels())["orbit.region"] = logic_config::me()->get_server_instance_config<orbit::config::orbit_controller_cfg>().region();
 
   return 0;
 }
@@ -94,8 +91,7 @@ orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(
 
     // 按 CPU 和内存综合利用率打分（越低越好）
     double cpu_ratio = (load.cpu_capacity() > 0.0) ? effective_cpu_used / load.cpu_capacity() : 0.0;
-    double mem_ratio =
-        (load.memory_capacity_mb() > 0.0) ? effective_memory_used / load.memory_capacity_mb() : 0.0;
+    double mem_ratio = (load.memory_capacity_mb() > 0.0) ? effective_memory_used / load.memory_capacity_mb() : 0.0;
     double score = (cpu_ratio + mem_ratio) * 0.5;
 
     // 权重 = 1 / (score + epsilon)，利用率越低权重越高

@@ -31,7 +31,7 @@ service:
 redis:
   enable: true
 
-ranksvr_ranking_svr:
+ranksvr_ranking:
   rank_slave_num: 1
   rank_dunmp_task_max_num: 20
   rank_refresh_limit_second_interval: 60s

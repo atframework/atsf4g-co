@@ -1,0 +1,31 @@
+# Default values for lobby.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+proc_name: orbit-agentd
+
+type_id: 101
+type_name: "orbit-agent"
+
+image:
+  repository: harbor.atframe.work/atsf4g-co/server
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: latest
+
+volumeMounts:
+  configMountPath: /data/atframework/publish/orbit-agent/cfg
+  logMountPath: /data/atframework/publish/orbit-agent/log
+
+vector:
+  enabled: true
+  log_path: /data/atframework/publish/orbit-agent/log
+
+orbit_agent:
+  region: default
+  tags:
+    - "PVP"
+    - "PVE"
+  configured_client_command_line: 'echo "hello world"'
+  cpu_capacity: 1
+  memory_capacity_mb: 1024
