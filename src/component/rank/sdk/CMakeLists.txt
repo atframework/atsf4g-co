@@ -7,7 +7,7 @@ project_component_declare_sdk(
   RANK_BOARD_SDK_API
   OUTPUT_TARGET_NAME
   PROJECT_COMPONENT_RANK_BOARD_SVR_SDK
-  HRADERS
+  HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/rank_board_svr/rpc/rank_board/rankboardservice.h"
   "${CMAKE_CURRENT_LIST_DIR}/rank_board_svr/rpc/rank_board/rank.h"
   "${CMAKE_CURRENT_LIST_DIR}/rank_board_svr/rpc/rank_board/sharding.h"
@@ -30,7 +30,7 @@ project_component_declare_sdk(
   PROJECT_COMMON_RANK_LOGIC_SDK
   USE_COMPONENTS
   "rank-board-svr-sdk"
-  HRADERS
+  HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/rank_logic/rank_logic/logic_rank_handle.h"
   "${CMAKE_CURRENT_LIST_DIR}/rank_logic/rank_logic/logic_rank_algorithm.h"
   SOURCES

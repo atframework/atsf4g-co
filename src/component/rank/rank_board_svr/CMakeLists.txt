@@ -10,7 +10,7 @@ project_component_declare_service(
   USE_COMPONENTS
   "rank-logic-sdk"
   "rank-board-config"
-  HRADERS
+  HEADERS
   ${SERVICE_HEADERS}
   SOURCES
   ${SERVICE_SOURCES}

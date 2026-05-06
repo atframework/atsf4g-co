@@ -12,7 +12,7 @@ project_component_declare_service(
   "orbit-controller-server-sdk"
   "orbit-controller-protocol"
   "orbit-controller-config"
-  HRADERS
+  HEADERS
   ${SERVICE_HEADERS}
   SOURCES
   ${SERVICE_SOURCES}

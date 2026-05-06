@@ -4,7 +4,7 @@ set(PROJECT_GAME_SHARED_COMPONENT_PRIVATE_DEFINITIONS GAME_SHARED_COMPONENT_SERV
 function(project_game_shared_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   set(optionArgs "STATIC;SHARED")
   set(oneValueArgs INCLUDE_DIR OUTPUT_NAME OUTPUT_TARGET_NAME DLLEXPORT_DECL SHARED_LIBRARY_DECL NATIVE_CODE_DECL)
-  set(multiValueArgs HRADERS SOURCES USE_COMPONENTS)
+  set(multiValueArgs HEADERS SOURCES USE_COMPONENTS)
   cmake_parse_arguments(__declare_sdk "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
   set(__append_args)

@@ -7,7 +7,7 @@ endfunction()
 function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   set(optionArgs "STATIC;SHARED")
   set(oneValueArgs INCLUDE_DIR OUTPUT_NAME OUTPUT_TARGET_NAME DLLEXPORT_DECL SHARED_LIBRARY_DECL NATIVE_CODE_DECL)
-  set(multiValueArgs HRADERS SOURCES USE_COMPONENTS USE_SERVICE_SDK USE_SERVICE_PROTOCOL)
+  set(multiValueArgs HEADERS SOURCES USE_COMPONENTS USE_SERVICE_SDK USE_SERVICE_PROTOCOL)
   cmake_parse_arguments(project_service_declare_sdk "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
   if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
@@ -27,13 +27,13 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   endif()
 
   if(project_service_declare_sdk_SOURCES)
-    source_group(TREE ${SDK_ROOT_DIR} FILES ${project_service_declare_sdk_HRADERS}
+    source_group(TREE ${SDK_ROOT_DIR} FILES ${project_service_declare_sdk_HEADERS}
                                             ${project_service_declare_sdk_SOURCES})
     if(NOT project_service_declare_sdk_STATIC
        AND (BUILD_SHARED_LIBS
             OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY
             OR project_service_declare_sdk_SHARED))
-      add_library(${TARGET_FULL_NAME} SHARED ${project_service_declare_sdk_HRADERS}
+      add_library(${TARGET_FULL_NAME} SHARED ${project_service_declare_sdk_HEADERS}
                                              ${project_service_declare_sdk_SOURCES})
 
       project_tool_split_target_debug_sybmol(${TARGET_FULL_NAME})
@@ -46,7 +46,7 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
       project_setup_runtime_post_build_bash(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_DYNAMIC_LIBRARY_BASH)
       project_setup_runtime_post_build_pwsh(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_DYNAMIC_LIBRARY_PWSH)
     else()
-      add_library(${TARGET_FULL_NAME} STATIC ${project_service_declare_sdk_HRADERS}
+      add_library(${TARGET_FULL_NAME} STATIC ${project_service_declare_sdk_HEADERS}
                                              ${project_service_declare_sdk_SOURCES})
       project_build_tools_set_static_library_declaration(${project_service_declare_sdk_DLLEXPORT_DECL}
                                                          "${TARGET_FULL_NAME}")
@@ -92,7 +92,7 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
         PARENT_SCOPE)
   endif()
 
-  if(project_service_declare_sdk_HRADERS AND project_service_declare_sdk_INCLUDE_DIR)
+  if(project_service_declare_sdk_HEADERS AND project_service_declare_sdk_INCLUDE_DIR)
     if(project_service_declare_sdk_SOURCES)
       target_include_directories(${TARGET_FULL_NAME}
                                  PUBLIC "$<BUILD_INTERFACE:${project_service_declare_sdk_INCLUDE_DIR}>")
@@ -102,7 +102,7 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
     endif()
 
     set(__FINAL_GENERATED_PCH_HEADER_FILES)
-    foreach(HEADER_FILE ${project_service_declare_sdk_HRADERS})
+    foreach(HEADER_FILE ${project_service_declare_sdk_HEADERS})
       if(IS_ABSOLUTE "${HEADER_FILE}")
         file(RELATIVE_PATH RELATIVE_HEADER_FILE "${project_service_declare_sdk_INCLUDE_DIR}" "${HEADER_FILE}")
       else()
@@ -145,7 +145,7 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
       target_link_libraries(${TARGET_FULL_NAME} INTERFACE ${__PUBLIC_LINK_TARGETS})
     endif()
     target_link_libraries(${TARGET_FULL_NAME} PUBLIC ${__PUBLIC_LINK_TARGETS})
-  elseif(project_service_declare_sdk_HRADERS)
+  elseif(project_service_declare_sdk_HEADERS)
     target_link_libraries(${TARGET_FULL_NAME} INTERFACE ${__INTERFACE_LINK_TARGETS} ${__PUBLIC_LINK_TARGETS})
   endif()
 
@@ -157,7 +157,7 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}"
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}")
 
-  if(project_service_declare_sdk_HRADERS AND project_service_declare_sdk_INCLUDE_DIR)
+  if(project_service_declare_sdk_HEADERS AND project_service_declare_sdk_INCLUDE_DIR)
     install(
       DIRECTORY ${project_service_declare_sdk_INCLUDE_DIR}
       TYPE INCLUDE
@@ -452,7 +452,7 @@ function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
   set(optionArgs "")
   set(oneValueArgs INCLUDE_DIR OUTPUT_NAME OUTPUT_TARGET_NAME RUNTIME_OUTPUT_DIRECTORY)
   set(multiValueArgs
-      HRADERS
+      HEADERS
       SOURCES
       RESOURCE_DIRECTORIES
       RESOURCE_FILES
@@ -464,9 +464,9 @@ function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
 
   echowithcolor(COLOR GREEN "-- Configure service ${TARGET_NAME} on ${SERVICE_ROOT_DIR}")
 
-  source_group(TREE ${SERVICE_ROOT_DIR} FILES ${project_service_declare_instance_HRADERS}
+  source_group(TREE ${SERVICE_ROOT_DIR} FILES ${project_service_declare_instance_HEADERS}
                                               ${project_service_declare_instance_SOURCES})
-  add_executable(${TARGET_NAME} ${project_service_declare_instance_HRADERS} ${project_service_declare_instance_SOURCES})
+  add_executable(${TARGET_NAME} ${project_service_declare_instance_HEADERS} ${project_service_declare_instance_SOURCES})
 
   project_tool_split_target_debug_sybmol(${TARGET_NAME})
 
@@ -592,7 +592,7 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
       endif()
     endforeach()
   else()
-    foreach(PRECOMPILE_HEADER ${project_component_declare_service_HRADERS})
+    foreach(PRECOMPILE_HEADER ${project_component_declare_service_HEADERS})
       if(IS_ABSOLUTE "${PRECOMPILE_HEADER}")
         file(RELATIVE_PATH RELATIVE_HEADER_FILE "${SERVICE_ROOT_DIR}" "${PRECOMPILE_HEADER}")
       else()

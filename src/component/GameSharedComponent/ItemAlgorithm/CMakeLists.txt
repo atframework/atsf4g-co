@@ -7,7 +7,7 @@ project_game_shared_component_declare_sdk(
   "${CMAKE_CURRENT_LIST_DIR}/include"
   DLLEXPORT_DECL
   ITEM_ALGORITHM_API
-  HRADERS
+  HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemAlgorithmConfig.h"
   "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemGridAlgorithm.h"
   "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemGridContainer.h"

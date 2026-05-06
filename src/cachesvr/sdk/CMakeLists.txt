@@ -7,7 +7,7 @@ project_service_declare_sdk(
   CACHE_RPC_API
   USE_SERVICE_PROTOCOL
   cachesvr-protocol
-  HRADERS
+  HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cache_algorithm.h"
   "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cache_api.h"
   "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cachesvrservice.h"

@@ -55,8 +55,8 @@ file(
   "
   package_prefix:
     - \"${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}\"
-  protocol_input_pb_file: '${GENERATE_FOR_PB_OUT_PB}'
   protocol_project_directory: '${PROJECT_SOURCE_DIR}'
+  protocol_input_pb_file: '${GENERATE_FOR_PB_OUT_PB}'
 
 rules:
   # Rules to generate rpc codes

@@ -9,7 +9,7 @@ project_component_declare_sdk(
   PROJECT_COMPONENT_ORBIT_AGENT_SDK
   USE_COMPONENTS
   "orbit-agent-protocol"
-  HRADERS
+  HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/agent/rpc/controllertoagentservice/controllertoagentservice.h"
   SOURCES
   "${CMAKE_CURRENT_LIST_DIR}/agent/rpc/controllertoagentservice/controllertoagentservice.cpp")
@@ -25,7 +25,7 @@ project_component_declare_sdk(
   PROJECT_COMPONENT_ORBIT_AGENT_CONTROLLER_SDK
   USE_COMPONENTS
   "orbit-controller-protocol"
-  HRADERS
+  HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/controller/rpc/agenttocontrollerservice/agenttocontrollerservice.h"
   SOURCES
   "${CMAKE_CURRENT_LIST_DIR}/controller/rpc/agenttocontrollerservice/agenttocontrollerservice.cpp")
@@ -41,7 +41,7 @@ project_component_declare_sdk(
   PROJECT_COMPONENT_ORBIT_AGENT_SLAVE_SDK
   USE_COMPONENTS
   "orbit-client-protocol"
-  HRADERS
+  HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/client/rpc/agenttoclientservice/agenttoclientservice.h"
   SOURCES
   "${CMAKE_CURRENT_LIST_DIR}/client/rpc/agenttoclientservice/agenttoclientservice.cpp")
@@ -57,7 +57,7 @@ project_component_declare_sdk(
   PROJECT_COMPONENT_ORBIT_MASTER_CONTROLLER_SDK
   USE_COMPONENTS
   "orbit-server-protocol"
-  HRADERS
+  HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/controller/rpc/servertocontrollerservice/servertocontrollerservice.h"
   SOURCES
   "${CMAKE_CURRENT_LIST_DIR}/controller/rpc/servertocontrollerservice/servertocontrollerservice.cpp")
@@ -73,7 +73,7 @@ project_component_declare_sdk(
   PROJECT_COMPONENT_ORBIT_MASTER_SDK
   USE_COMPONENTS
   "orbit-server-protocol"
-  HRADERS
+  HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/server/rpc/controllertoserverservice/controllertoserverservice.h"
   SOURCES
   "${CMAKE_CURRENT_LIST_DIR}/server/rpc/controllertoserverservice/controllertoserverservice.cpp")
@@ -89,7 +89,7 @@ project_component_declare_sdk(
   PROJECT_COMPONENT_ORBIT_MASTER_SDK
   USE_COMPONENTS
   "orbit-server-controller-sdk"
-  HRADERS
+  HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/server/handle/handle_ss_rpc_controllertoserverservice.h"
   "${CMAKE_CURRENT_LIST_DIR}/server/module/orbit_server.h"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_forward_to_server.h"

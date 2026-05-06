@@ -9,7 +9,7 @@ project_component_declare_sdk(
   DISTRIBUTED_TRANSACTION_SDK_API
   USE_COMPONENTS
   distributed-transaction-protocol
-  HRADERS
+  HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/rpc/transaction/dtcoordsvrservice.h"
   "${CMAKE_CURRENT_LIST_DIR}/rpc/transaction/transaction_api.h"
   "${CMAKE_CURRENT_LIST_DIR}/transaction_participator_handle.h"

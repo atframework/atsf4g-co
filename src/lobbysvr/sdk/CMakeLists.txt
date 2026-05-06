@@ -7,7 +7,7 @@ project_service_declare_sdk(
   GAME_RPC_API
   USE_SERVICE_PROTOCOL
   lobbysvr-protocol
-  HRADERS
+  HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/rpc/lobby/lobbysvrservice.h"
   "${CMAKE_CURRENT_LIST_DIR}/rpc/async_jobs/async_jobs.h"
   SOURCES

@@ -11,7 +11,7 @@ project_service_declare_instance(
   USE_SERVICE_SDK
   "cachesvr-sdk"
   "lobbysvr-sdk"
-  HRADERS
+  HEADERS
   ${SERVICE_HEADERS}
   SOURCES
   ${SERVICE_SOURCES}
