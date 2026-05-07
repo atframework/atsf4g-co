@@ -57,7 +57,8 @@ endfunction()
 
 function(atframework_install_target TARGET_NAME)
   set(optionArgs NO_INSTALL_HEADERS)
-  set(oneValueArgs COMPONENT_NAME INSTALL_DESTINATION INSTALL_HEADERS_DESTINATION INSTALL_RESOURCE_DESTINATION)
+  set(oneValueArgs COMPONENT_NAME INSTALL_DESTINATION INSTALL_HEADERS_DESTINATION INSTALL_RESOURCE_DESTINATION
+                   FOLDER_PATH)
   set(multiValueArgs INSTALL_HEADER_DIRECTORY INSTALL_HEADER_FILES_MATCHING INSTALL_RESOURCE_DIRECTORY
                      INSTALL_RESOURCE_FILES_MATCHING)
   cmake_parse_arguments(__atfw_install_args "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
@@ -119,12 +120,23 @@ function(atframework_install_target TARGET_NAME)
     LIBRARY DESTINATION "${ATFRAMEWORK_EXPORT_CMAKE_INSTALL_LIBDIR}"
     ARCHIVE DESTINATION "${ATFRAMEWORK_EXPORT_CMAKE_INSTALL_LIBDIR}")
 
-  install(
-    EXPORT "${ATFRAMEWORK_EXPORT_PACKAGE_NAME}-${__atfw_install_args_COMPONENT_NAME}-target"
-    FILE "${__atfw_install_args_COMPONENT_NAME}-target.cmake"
-    NAMESPACE "atframework::"
-    DESTINATION "${__atfw_install_args_INSTALL_DESTINATION}"
-    COMPONENT "atframework::${__atfw_install_args_COMPONENT_NAME}")
+  if(NOT TARGET "atframework.export.${ATFRAMEWORK_EXPORT_PACKAGE_NAME}-${__atfw_install_args_COMPONENT_NAME}")
+    add_custom_target("atframework.export.${ATFRAMEWORK_EXPORT_PACKAGE_NAME}-${__atfw_install_args_COMPONENT_NAME}")
+    if(__atfw_install_args_FOLDER_PATH AND NOT "${__atfw_install_args_FOLDER_PATH}" MATCHES
+                                           "^atframework/(library|service)\$")
+      set_property(TARGET "atframework.export.${ATFRAMEWORK_EXPORT_PACKAGE_NAME}-${__atfw_install_args_COMPONENT_NAME}"
+                   PROPERTY FOLDER "${__atfw_install_args_FOLDER_PATH}/export")
+    else()
+      set_property(TARGET "atframework.export.${ATFRAMEWORK_EXPORT_PACKAGE_NAME}-${__atfw_install_args_COMPONENT_NAME}"
+                   PROPERTY FOLDER "atframework/export")
+    endif()
+    install(
+      EXPORT "${ATFRAMEWORK_EXPORT_PACKAGE_NAME}-${__atfw_install_args_COMPONENT_NAME}-target"
+      FILE "${__atfw_install_args_COMPONENT_NAME}-target.cmake"
+      NAMESPACE "atframework::"
+      DESTINATION "${__atfw_install_args_INSTALL_DESTINATION}"
+      COMPONENT "atframework::${__atfw_install_args_COMPONENT_NAME}")
+  endif()
 endfunction()
 
 function(atframework_install_files TARGET_NAME)
@@ -353,7 +365,8 @@ function(atframework_add_library TARGET_NAME)
   add_library(atframework::${TARGET_NAME} ALIAS ${TARGET_NAME})
 
   # Install target
-  set(__atfw_install_args ${TARGET_NAME} COMPONENT_NAME ${__atfw_add_library_args_COMPONENT_NAME})
+  set(__atfw_install_args ${TARGET_NAME} FOLDER_PATH "${__atfw_add_library_args_FOLDER_PATH}" COMPONENT_NAME
+                          ${__atfw_add_library_args_COMPONENT_NAME})
   set(__atfw_install_forward_args NO_INSTALL_HEADERS INSTALL_RESOURCE_DESTINATION INSTALL_RESOURCE_DIRECTORY
                                   INSTALL_RESOURCE_FILES_MATCHING)
   if(NOT __atfw_add_library_args_NO_INSTALL_HEADERS)
@@ -501,11 +514,12 @@ function(atframework_add_executable TARGET_NAME)
 
   # 针对MSVC多配置生成器，防止自动添加Debug目录
   if(MSVC)
-    set_target_properties(${TARGET_NAME} PROPERTIES
-      RUNTIME_OUTPUT_DIRECTORY_DEBUG "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
-      RUNTIME_OUTPUT_DIRECTORY_RELEASE "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
-      RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
-      RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}")
+    set_target_properties(
+      ${TARGET_NAME}
+      PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
+                 RUNTIME_OUTPUT_DIRECTORY_RELEASE "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
+                 RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
+                 RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}")
   endif()
 
   target_compile_options(${TARGET_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
@@ -528,7 +542,8 @@ function(atframework_add_executable TARGET_NAME)
   add_executable(atframework::${TARGET_NAME} ALIAS ${TARGET_NAME})
 
   # Install target
-  set(__atfw_install_args ${TARGET_NAME} COMPONENT_NAME ${__atfw_add_library_args_COMPONENT_NAME})
+  set(__atfw_install_args ${TARGET_NAME} FOLDER_PATH "${__atfw_add_library_args_FOLDER_PATH}" COMPONENT_NAME
+                          ${__atfw_add_library_args_COMPONENT_NAME})
   set(__atfw_install_forward_args INSTALL_RESOURCE_DESTINATION INSTALL_RESOURCE_DIRECTORY
                                   INSTALL_RESOURCE_FILES_MATCHING)
   foreach(_forward_arg IN LISTS __atfw_install_forward_args)
