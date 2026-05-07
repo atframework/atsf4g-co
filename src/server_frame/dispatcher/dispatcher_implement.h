@@ -4,7 +4,9 @@
 
 #pragma once
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/service.h>
@@ -13,11 +15,16 @@
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <log/log_wrapper.h>
 
+#include <nostd/string_view.h>
 #include <std/explicit_declare.h>
+#include <string/string_format.h>
+
 
 #include <gsl/select-gsl.h>
 
@@ -169,7 +176,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE dispatcher_implement : public ::atfw::atapp::modu
     std::string service_full_name = std::string{service_desc->full_name()};
     registered_service_[service_full_name] = service_desc;
 
-    std::string::size_type final_segment = rpc_name.find_last_of('.');
+    std::string::size_type final_segment = rpc_name.find_last_of('/');
+    if (std::string::npos == final_segment) {
+      final_segment = rpc_name.find_last_of('.');
+    }
     std::string rpc_short_name;
     if (std::string::npos == final_segment) {
       rpc_short_name = rpc_name;
@@ -183,21 +193,24 @@ class ATFW_UTIL_SYMBOL_VISIBLE dispatcher_implement : public ::atfw::atapp::modu
                  service_full_name);
       return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
     }
-    std::string method_full_name = std::string{method->full_name()};
-    registered_method_[method_full_name] = method;
+    std::string method_full_name_pb = std::string{method->full_name()};
+    std::string method_full_name_otel = atfw::util::string::format(
+        "{}/{}", service_full_name, atfw::util::nostd::string_view{method->name().data(), method->name().size()});
 
-    if (method_full_name != rpc_name) {
-      FWLOGERROR("{} try to register rpc action {} for service {} failed, the real full name is {}", name(), rpc_name,
-                 service_full_name, method_full_name);
+    if (method_full_name_pb != rpc_name && method_full_name_otel != rpc_name) {
+      FWLOGERROR("{} try to register rpc action {} for service {} failed, the real full name should be {} or {}", name(), rpc_name,
+                 service_full_name, method_full_name_pb, method_full_name_otel);
       return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
     }
+
+    registered_method_[rpc_name] = method;
 
     const atframework::DispatcherOptions *options = nullptr;
     if (method->options().HasExtension(atframework::rpc_options)) {
       options = &method->options().GetExtension(atframework::rpc_options);
     }
 
-    return _register_action(method_full_name, task_manager::me()->make_task_creator<TAction>(options));
+    return _register_action(rpc_name, task_manager::me()->make_task_creator<TAction>(options));
   }
 
   /**
