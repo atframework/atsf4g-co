@@ -29,3 +29,8 @@ orbit_agent:
   configured_client_command_line: 'echo "hello world"'
   cpu_capacity: 1
   memory_capacity_mb: 1024
+  server_identity_timeout_sec: 30
+  server_identity_check_interval_sec: 5
+
+etcd:
+  path: /atapp/services/atsf4g-co-orbit

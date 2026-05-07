@@ -22,27 +22,28 @@
 #include <utility/protobuf_mini_dumper.h>
 
 #include <config/extern_service_types.h>
+#include <logic/orbit_server_manager.h>
 
-ORBIT_MASTER_SERVICE_API task_action_client_start_notify::task_action_client_start_notify(
+ORBIT_SERVER_SERVICE_API task_action_client_start_notify::task_action_client_start_notify(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-ORBIT_MASTER_SERVICE_API task_action_client_start_notify::~task_action_client_start_notify() {}
+ORBIT_SERVER_SERVICE_API task_action_client_start_notify::~task_action_client_start_notify() {}
 
-ORBIT_MASTER_SERVICE_API const char* task_action_client_start_notify::name() const {
+ORBIT_SERVER_SERVICE_API const char* task_action_client_start_notify::name() const {
   return "task_action_client_start_notify";
 }
 
-ORBIT_MASTER_SERVICE_API task_action_client_start_notify::result_type task_action_client_start_notify::operator()() {
+ORBIT_SERVER_SERVICE_API task_action_client_start_notify::result_type task_action_client_start_notify::operator()() {
   ATFW_EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
   // Stream request or stream response, just ignore auto response
   disable_response_message();
 
-  // TODO ...
+  orbit_server_manager::me()->handle_client_start_notify(get_shared_context(), req_body);
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-ORBIT_MASTER_SERVICE_API int task_action_client_start_notify::on_success() { return get_result(); }
+ORBIT_SERVER_SERVICE_API int task_action_client_start_notify::on_success() { return get_result(); }
 
-ORBIT_MASTER_SERVICE_API int task_action_client_start_notify::on_failed() { return get_result(); }
+ORBIT_SERVER_SERVICE_API int task_action_client_start_notify::on_failed() { return get_result(); }

@@ -4,12 +4,15 @@
 
 #include <uv.h>
 
+#include <chrono>
 #include <cstdint>
+#include <deque>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include <atframe/atapp.h>
+#include <atframe/etcdcli/etcd_keepalive.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -63,6 +66,11 @@ struct orbit_agent_client_record {
   uint64_t get_controller_server_id();
 };
 
+struct orbit_agent_server_info {
+  orbit::DServerIdentity identity;
+  time_t expire_timepoint = 0;
+};
+
 using orbit_agent_client_record_ptr = atfw::util::memory::strong_rc_ptr<orbit_agent_client_record>;
 
 class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_manager> {
@@ -99,9 +107,9 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
       rpc::context& ctx, const orbit::DTAClientExitReq& request);
 
   void on_client_process_exit(const std::string& client_id, int64_t exit_status, int term_signal);
+  uint64_t select_controller_server_id(const std::string& client_id) const;
 
  private:
-  orbit::DAgentLoadSnapshot build_agent_load_snapshot() const noexcept;
   orbit_agent_client_record_ptr find_client(const std::string& client_id) noexcept;
   const orbit_agent_client_record_ptr find_client(const std::string& client_id) const noexcept;
 
@@ -112,11 +120,14 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   void fill_client_identity(orbit::DClientIdentity& output, orbit_agent_client_record_ptr client) const;
 
   void check_client_timeouts(time_t now);
+  void check_server_identity_timeouts(time_t now);
 
   void server_heartbeat(const orbit::DServerIdentity& server_identity);
   orbit::DServerIdentity* find_server_identity(uint64_t server_unique_id);
 
   void update_etcd_load_snapshot();
+  void load_record_to_json();
+  void try_sync_load_to_etcd();
 
  private:
   bool stoped_ = false;
@@ -125,15 +136,40 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   // 启动的Client数据
   std::unordered_map<std::string, orbit_agent_client_record_ptr> clients_;
   // Server唯一ID到ServerIdentity的映射 用于心跳和转发消息时更新路由信息
-  std::unordered_map<uint64_t, orbit::DServerIdentity> server_unique_id_to_identity_;
+  std::unordered_map<uint64_t, orbit_agent_server_info> server_unique_id_to_identity_;
 
   // 启动配置
+  std::string region_;
   google::protobuf::RepeatedPtrField<std::string> tags_;
   std::vector<std::string> configured_client_command_line_;
   double cpu_capacity_ = 0.0;
   double memory_capacity_mb_ = 0.0;
+  time_t server_identity_timeout_sec_ = 0;
+  time_t server_identity_check_interval_sec_ = 0;
   orbit::DAgentIdentity agent_identity_;
+  atfw::atapp::protocol::atapp_metadata controller_policy_selector_;
 
-  // etcd 负载快照更新
-  time_t last_load_etcd_update_timepoint_ = 0;
+  struct server_identity_timeout_entry_t {
+    uint64_t server_unique_id = 0;
+    time_t expire_timepoint = 0;
+  };
+
+  // 负载快照更新
+  time_t last_auto_load_etcd_update_timepoint_ = 0;
+  time_t last_server_identity_timeout_check_timepoint_ = 0;
+  atapp::etcd_keepalive::ptr_t keepalive_actor_;
+
+  orbit::DAgentEtcdLoadRecord load_record_;
+  bool dirty_load_record_ = true;      // 负载记录是否有未同步的变更
+  bool need_update_load_json_ = true;  // 是否需要更新负载记录对应的JSON字符串
+  std::string load_json_;              // 上次同步到etcd的负载记录JSON字符串
+  bool dirty_load_json_ = true;        // load_json_是否有未同步的变更
+
+  uv_rusage_t last_self_rusage_;
+  std::chrono::steady_clock::time_point last_self_usage_sample_timepoint_;
+  double last_self_cpu_used_ = 0.0;
+  bool has_self_usage_sample_ = false;
+
+  std::unordered_map<uint64_t, time_t> server_unique_id_to_expire_timepoint_;
+  std::deque<server_identity_timeout_entry_t> server_identity_timeout_queue_;
 };

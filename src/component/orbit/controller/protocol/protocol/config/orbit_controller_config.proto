@@ -15,4 +15,5 @@ import "atframe/atapp_conf.proto";
 
 message orbit_controller_cfg {
   string region = 1;
+  string agent_discovery_path = 2;
 }

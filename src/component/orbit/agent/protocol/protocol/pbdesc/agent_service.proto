@@ -38,7 +38,9 @@ message CTAStartClientReq {
 
   DAgentClientStartArgs args = 2;
 }
-message ATCStartClientRsp {}
+message ATCStartClientRsp {
+  DAgentEtcdLoadRecord load_record = 1;
+}
 
 message CTAForwardToClientReq {
   DServerIdentity server_identity = 1;

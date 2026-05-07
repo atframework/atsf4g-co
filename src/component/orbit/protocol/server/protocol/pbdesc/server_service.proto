@@ -90,5 +90,5 @@ message STCSendToClientNotify {
 
 message STCServerHeartbeatNotify {
   DServerIdentity server_identity = 1;
-  DAgentIdentity agent_identity = 2;
+  repeated DAgentIdentity agent_identity = 2;
 }

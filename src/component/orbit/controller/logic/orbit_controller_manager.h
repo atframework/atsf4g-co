@@ -38,7 +38,7 @@ class context;
 }  // namespace rpc
 
 struct orbit_controller_agent_info {
-  orbit::DAgentLoadSnapshot load_snapshot;
+  orbit::DAgentEtcdLoadRecord load_record;
   double preallocated_cpu = 0.0;
   double preallocated_memory_mb = 0.0;
   uint32_t preallocated_client_count = 0;
@@ -82,14 +82,13 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
   orbit::DAgentIdentity select_agent_for_launch(double expected_cpu, double expected_memory_mb,
                                                 const google::protobuf::RepeatedPtrField<std::string>& tags) noexcept;
 
-  static void on_node_event(atfw::atapp::etcd_module::node_action_t action_type,
-                            const atfw::atapp::etcd_discovery_node::ptr_t& node);
-  void on_agent_node_event(atfw::atapp::etcd_module::node_action_t action_type,
-                           const atfw::atapp::etcd_discovery_node::ptr_t& node);
+  void on_agent_load_event(atfw::atapp::etcd_module::node_action_t action_type,
+                           const orbit::DAgentEtcdLoadRecord& record);
+  void update_agent_load(const orbit::DAgentEtcdLoadRecord& record);
 
  private:
   bool stopped_ = false;
-  atfw::atapp::protocol::atapp_metadata agent_policy_selector_;
+  std::string region_;
 
   // Agent节点信息: agent_server_id → orbit_controller_agent_info
   std::unordered_map<uint64_t, orbit_controller_agent_info> agents_;

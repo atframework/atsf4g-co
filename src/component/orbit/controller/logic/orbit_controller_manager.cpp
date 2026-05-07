@@ -2,8 +2,11 @@
 
 #include "logic/orbit_controller_manager.h"
 
+#include <algorithm>
+#include <functional>
 #include <limits>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -37,18 +40,192 @@
 #include <rpc/controllertoagentservice/controllertoagentservice.h>
 #include <rpc/controllertoserverservice/controllertoserverservice.h>
 
+namespace {
+constexpr const char* kEtcdByIdDir = "by_id";
+constexpr const char* kEtcdByNameDir = "by_name";
+constexpr const char* kEtcdTopologyDir = "topology";
+constexpr const char* kEtcdOrbitLoadDir = "orbit_load";
+
+static bool unpack_agent_load_record(orbit::DAgentEtcdLoadRecord& out, const std::string& /*path*/,
+                                     const std::string& json, bool reset_data) {
+  if (reset_data) {
+    out.Clear();
+  }
+
+  if (!json.empty()) {
+    ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::util::JsonParseOptions options;
+    options.ignore_unknown_fields = true;
+
+    if (!ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::util::JsonStringToMessage(json, &out, options).ok()) {
+      return false;
+    }
+  }
+
+  return 0 != out.server_id();
+}
+
+struct orbit_load_watcher_state_t {
+  using node_action_t = atfw::atapp::etcd_module::node_action_t;
+
+  std::unordered_set<uint64_t> known_agent_ids;
+  std::function<void(node_action_t, const orbit::DAgentEtcdLoadRecord&)> on_event;
+};
+
+struct orbit_load_watcher_callback_list_wrapper_t {
+  using node_action_t = atfw::atapp::etcd_module::node_action_t;
+
+  std::shared_ptr<orbit_load_watcher_state_t> state;
+
+  explicit orbit_load_watcher_callback_list_wrapper_t(
+      std::function<void(node_action_t, const orbit::DAgentEtcdLoadRecord&)> callback)
+      : state(std::make_shared<orbit_load_watcher_state_t>()) {
+    state->on_event = std::move(callback);
+  }
+
+  void operator()(const ::atframework::atapp::etcd_response_header& /*header*/,
+                  const ::atframework::atapp::etcd_watcher::response_t& body) const {
+    if (!state || !state->on_event) {
+      return;
+    }
+
+    std::unordered_set<uint64_t> stale_agent_ids;
+    if (body.snapshot) {
+      stale_agent_ids = state->known_agent_ids;
+    }
+
+    for (size_t i = 0; i < body.events.size(); ++i) {
+      const ::atframework::atapp::etcd_watcher::event_t& evt_data = body.events[i];
+
+      orbit::DAgentEtcdLoadRecord record;
+      if (!unpack_agent_load_record(record, evt_data.kv.key.empty() ? evt_data.prev_kv.key : evt_data.kv.key,
+                                    evt_data.kv.value.empty() ? evt_data.prev_kv.value : evt_data.kv.value, true)) {
+        continue;
+      }
+
+      if (body.snapshot) {
+        stale_agent_ids.erase(record.server_id());
+      }
+
+      node_action_t action_type = node_action_t::kPut;
+      if (evt_data.evt_type == ::atframework::atapp::etcd_watch_event::kDelete) {
+        action_type = node_action_t::kDelete;
+        state->known_agent_ids.erase(record.server_id());
+      } else {
+        state->known_agent_ids.insert(record.server_id());
+      }
+
+      state->on_event(action_type, record);
+    }
+
+    if (!body.snapshot) {
+      return;
+    }
+
+    for (uint64_t stale_agent_id : stale_agent_ids) {
+      orbit::DAgentEtcdLoadRecord deleted_record;
+      deleted_record.set_server_id(stale_agent_id);
+      state->known_agent_ids.erase(stale_agent_id);
+      state->on_event(node_action_t::kDelete, deleted_record);
+    }
+  }
+};
+
+}  // namespace
+
 orbit_controller_manager::orbit_controller_manager() = default;
 
 int orbit_controller_manager::init(atfw::atapp::app* app) {
-  app->set_metadata_label(
-      "orbit.region", logic_config::me()->get_server_instance_config<orbit::config::orbit_controller_cfg>().region());
+  region_ = logic_config::me()->get_server_instance_config<orbit::config::orbit_controller_cfg>().region();
+  app->set_metadata_label("orbit.region", region_);
 
   auto etcd_mod = app->get_etcd_module();
-  if (etcd_mod) {
-    etcd_mod->add_on_node_discovery_event(on_node_event);
+  if (!etcd_mod) {
+    return -1;
   }
 
-  (*agent_policy_selector_.mutable_labels())["orbit.region"] = logic_config::me()->get_server_instance_config<orbit::config::orbit_controller_cfg>().region();
+  std::string path = etcd_mod->generate_etcd_path(
+      logic_config::me()->get_server_instance_config<orbit::config::orbit_controller_cfg>().agent_discovery_path());
+
+  // 初始化另一个discovery通道
+  {
+    auto& etcd_ctx = etcd_mod->get_raw_etcd_ctx();
+    std::string watch_path = LOG_WRAPPER_FWAPI_FORMAT("{}{}", path, kEtcdByIdDir);
+
+    auto discovery_watcher_by_id = atapp::etcd_watcher::create(etcd_ctx, watch_path, "+1");
+    if (!discovery_watcher_by_id) {
+      LIBATAPP_MACRO_ETCD_CLUSTER_LOG_ERROR(etcd_ctx, "create etcd_watcher by_id failed.");
+      return EN_ATBUS_ERR_MALLOC;
+    }
+
+    discovery_watcher_by_id->set_conf_from_protobuf(etcd_mod->get_configure().watcher());
+    if (!etcd_ctx.add_watcher(discovery_watcher_by_id)) {
+      LIBATAPP_MACRO_ETCD_CLUSTER_LOG_ERROR(etcd_ctx, "add etcd_watcher by_id failed.");
+      return EN_ATBUS_ERR_MALLOC;
+    }
+    LIBATAPP_MACRO_ETCD_CLUSTER_LOG_INFO(etcd_ctx, "create etcd_watcher for by_id index {} success", watch_path);
+
+    discovery_watcher_by_id->set_evt_handle(etcd_mod->create_discovery_watcher_callback_list_wrapper());
+  }
+  {
+    auto& etcd_ctx = etcd_mod->get_raw_etcd_ctx();
+    std::string watch_path = LOG_WRAPPER_FWAPI_FORMAT("{}{}", path, kEtcdByNameDir);
+
+    auto discovery_watcher_by_name = atapp::etcd_watcher::create(etcd_ctx, watch_path, "+1");
+    if (!discovery_watcher_by_name) {
+      LIBATAPP_MACRO_ETCD_CLUSTER_LOG_ERROR(etcd_ctx, "create etcd_watcher by_name failed.");
+      return EN_ATBUS_ERR_MALLOC;
+    }
+
+    discovery_watcher_by_name->set_conf_from_protobuf(etcd_mod->get_configure().watcher());
+    if (!etcd_ctx.add_watcher(discovery_watcher_by_name)) {
+      LIBATAPP_MACRO_ETCD_CLUSTER_LOG_ERROR(etcd_ctx, "add etcd_watcher by_name failed.");
+      return EN_ATBUS_ERR_MALLOC;
+    }
+    LIBATAPP_MACRO_ETCD_CLUSTER_LOG_INFO(etcd_ctx, "create etcd_watcher for by_name index {} success", watch_path);
+
+    discovery_watcher_by_name->set_evt_handle(etcd_mod->create_discovery_watcher_callback_list_wrapper());
+  }
+  {
+    auto& etcd_ctx = etcd_mod->get_raw_etcd_ctx();
+    std::string watch_path = LOG_WRAPPER_FWAPI_FORMAT("{}{}", path, kEtcdTopologyDir);
+
+    auto topology_watcher = atapp::etcd_watcher::create(etcd_ctx, watch_path, "+1");
+    if (!topology_watcher) {
+      LIBATAPP_MACRO_ETCD_CLUSTER_LOG_ERROR(etcd_ctx, "create etcd_watcher topology failed.");
+      return EN_ATBUS_ERR_MALLOC;
+    }
+
+    topology_watcher->set_conf_from_protobuf(etcd_mod->get_configure().watcher());
+    if (!etcd_ctx.add_watcher(topology_watcher)) {
+      LIBATAPP_MACRO_ETCD_CLUSTER_LOG_ERROR(etcd_ctx, "add etcd_watcher topology failed.");
+      return EN_ATBUS_ERR_MALLOC;
+    }
+    LIBATAPP_MACRO_ETCD_CLUSTER_LOG_INFO(etcd_ctx, "create etcd_watcher for topology index {} success", watch_path);
+
+    topology_watcher->set_evt_handle(etcd_mod->create_topology_watcher_callback_list_wrapper());
+  }
+  {
+    auto& etcd_ctx = etcd_mod->get_raw_etcd_ctx();
+    std::string watch_path = LOG_WRAPPER_FWAPI_FORMAT("{}{}", path, kEtcdOrbitLoadDir);
+
+    auto discovery_watcher_load = atapp::etcd_watcher::create(etcd_ctx, watch_path, "+1");
+    if (!discovery_watcher_load) {
+      LIBATAPP_MACRO_ETCD_CLUSTER_LOG_ERROR(etcd_ctx, "create etcd_watcher load failed.");
+      return EN_ATBUS_ERR_MALLOC;
+    }
+
+    discovery_watcher_load->set_conf_from_protobuf(etcd_mod->get_configure().watcher());
+    if (!etcd_ctx.add_watcher(discovery_watcher_load)) {
+      LIBATAPP_MACRO_ETCD_CLUSTER_LOG_ERROR(etcd_ctx, "add etcd_watcher load failed.");
+      return EN_ATBUS_ERR_MALLOC;
+    }
+    LIBATAPP_MACRO_ETCD_CLUSTER_LOG_INFO(etcd_ctx, "create etcd_watcher for load index {} success", watch_path);
+
+    discovery_watcher_load->set_evt_handle(orbit_load_watcher_callback_list_wrapper_t(
+        [this](atfw::atapp::etcd_module::node_action_t action_type, const orbit::DAgentEtcdLoadRecord& record) {
+          on_agent_load_event(action_type, record);
+        }));
+  }
 
   return 0;
 }
@@ -64,7 +241,7 @@ void orbit_controller_manager::tick() {
 // ===================== private helpers =====================
 orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(
     double expected_cpu, double expected_memory_mb,
-    ATFW_EXPLICIT_UNUSED_ATTR const google::protobuf::RepeatedPtrField<std::string>& tags) noexcept {
+    const google::protobuf::RepeatedPtrField<std::string>& tags) noexcept {
   // 收集候选 agent 及其权重
   struct candidate_t {
     uint64_t agent_server_id;
@@ -74,7 +251,22 @@ orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(
   double total_weight = 0.0;
 
   for (const auto& kv : agents_) {
-    const auto& load = kv.second.load_snapshot;
+    // 检查Tags标签
+    if (!tags.empty()) {
+      bool not_found = false;
+      for (const auto& tag : tags) {
+        if (std::find(kv.second.load_record.tags().begin(), kv.second.load_record.tags().end(), tag) ==
+            kv.second.load_record.tags().end()) {
+          not_found = true;
+          break;
+        }
+      }
+      if (not_found) {
+        continue;
+      }
+    }
+
+    const auto& load = kv.second.load_record.agent();
 
     // 将预分配量计入已用资源
     double effective_cpu_used = load.cpu_used() + kv.second.preallocated_cpu;
@@ -130,54 +322,15 @@ orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(
   return result;
 }
 
-void orbit_controller_manager::on_node_event(atfw::atapp::etcd_module::node_action_t action_type,
-                                             const atfw::atapp::etcd_discovery_node::ptr_t& node) {
-  if (!node) {
-    return;
-  }
-
-  if (node->get_discovery_info().type_id() !=
-      static_cast<uint64_t>(atfw::component::logic_service_type::kOrbitAgentSvr)) {
-    return;
-  }
-
-  orbit_controller_manager::me()->on_agent_node_event(action_type, node);
-}
-
-void orbit_controller_manager::on_agent_node_event(atfw::atapp::etcd_module::node_action_t action_type,
-                                                   const atfw::atapp::etcd_discovery_node::ptr_t& node) {
+void orbit_controller_manager::on_agent_load_event(atfw::atapp::etcd_module::node_action_t action_type,
+                                                   const orbit::DAgentEtcdLoadRecord& record) {
   switch (action_type) {
     case atfw::atapp::etcd_module::node_action_t::kPut: {
-      const uint64_t agent_server_id = node->get_discovery_info().id();
-      auto& info = agents_[agent_server_id];
-
-      // 从 metadata labels 中解析负载快照
-      const auto& labels = node->get_discovery_info().metadata().labels();
-      auto it = labels.find("orbit.agent.load");
-      if (it != labels.end() && !it->second.empty()) {
-        google::protobuf::util::JsonParseOptions parse_options;
-        auto status = google::protobuf::util::JsonStringToMessage(it->second, &info.load_snapshot, parse_options);
-        if (!status.ok()) {
-          FWLOGWARNING("orbit controller failed to parse DAgentLoadSnapshot for agent {:#x}: {}", agent_server_id,
-                       it->second);
-        }
-      }
-
-      // 负载快照已更新，清除预分配数据（agent 上报的负载已包含之前预分配的 client）
-      info.preallocated_cpu = 0.0;
-      info.preallocated_memory_mb = 0.0;
-      info.preallocated_client_count = 0;
-
-      FWLOGINFO(
-          "orbit controller agent {:#x} registered/updated: cpu={:.2f}/{:.2f}, mem={:.2f}/{:.2f} MB, "
-          "clients={}, inflight={}",
-          agent_server_id, info.load_snapshot.cpu_used(), info.load_snapshot.cpu_capacity(),
-          info.load_snapshot.memory_used_mb(), info.load_snapshot.memory_capacity_mb(),
-          info.load_snapshot.client_count(), info.load_snapshot.inflight_count());
+      update_agent_load(record);
       break;
     }
     case atfw::atapp::etcd_module::node_action_t::kDelete: {
-      const uint64_t agent_server_id = node->get_discovery_info().id();
+      const uint64_t agent_server_id = record.server_id();
       agents_.erase(agent_server_id);
       FWLOGINFO("orbit controller agent {:#x} removed from registry", agent_server_id);
       break;
@@ -185,6 +338,33 @@ void orbit_controller_manager::on_agent_node_event(atfw::atapp::etcd_module::nod
     default:
       break;
   }
+}
+
+void orbit_controller_manager::update_agent_load(const orbit::DAgentEtcdLoadRecord& record) {
+  const uint64_t agent_server_id = record.server_id();
+
+  if (record.region() != region_) {
+    // 不同region的agent负载不处理
+    agents_.erase(agent_server_id);
+    FWLOGINFO("orbit controller agent {:#x} removed from registry diff region: {}", agent_server_id, record.region());
+    return;
+  }
+
+  auto& info = agents_[agent_server_id];
+
+  info.load_record = record;
+  // 负载快照已更新，清除预分配数据（agent 上报的负载已包含之前预分配的 client）
+  info.preallocated_cpu = 0.0;
+  info.preallocated_memory_mb = 0.0;
+  info.preallocated_client_count = 0;
+
+  FWLOGINFO(
+      "orbit controller agent {:#x}:{}:tags_size:{} registered/updated: cpu={:.2f}/{:.2f}, mem={:.2f}/{:.2f} MB, "
+      "clients={}, inflight={}",
+      agent_server_id, info.load_record.region(), info.load_record.tags_size(), info.load_record.agent().cpu_used(),
+      info.load_record.agent().cpu_capacity(), info.load_record.agent().memory_used_mb(),
+      info.load_record.agent().memory_capacity_mb(), info.load_record.agent().client_count(),
+      info.load_record.agent().inflight_count());
 }
 
 // ===================== Agent 侧 handlers =====================
@@ -322,30 +502,45 @@ rpc::result_code_type orbit_controller_manager::handle_launch_client(rpc::contex
 
   const double expected_cpu = request.args().expected_cpu();
   const double expected_memory_mb = request.args().expected_memory_mb();
-  auto agent = select_agent_for_launch(expected_cpu, expected_memory_mb, request.match_tags());
-  if (agent.agent_server_id() == 0) {
-    FWLOGWARNING("orbit controller launch_client: no available agent for cpu={}, mem={}", expected_cpu,
-                 expected_memory_mb);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_CONTROLLER_NO_AVAILABLE_AGENT);
+  int32_t retry_count = 3;
+  while (retry_count > 0) {
+    auto agent = select_agent_for_launch(expected_cpu, expected_memory_mb, request.match_tags());
+    if (agent.agent_server_id() == 0) {
+      FWLOGWARNING("orbit controller launch_client: no available agent for cpu={}, mem={}", expected_cpu,
+                   expected_memory_mb);
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_CONTROLLER_NO_AVAILABLE_AGENT);
+    }
+
+    auto start_req = rpc::make_shared_message<orbit::CTAStartClientReq>(ctx);
+    auto start_rsp = rpc::make_shared_message<orbit::ATCStartClientRsp>(ctx);
+    *start_req->mutable_args() = request.args();
+    start_req->mutable_server_identity()->set_unique_id(server_unique_id);
+
+    FWLOGINFO("orbit controller dispatching launch_client to agent {:#x}: client_id={}, cpu={}, mem={}",
+              agent.agent_server_id(), client_id_str, expected_cpu, expected_memory_mb);
+
+    int32_t rpc_result = RPC_AWAIT_CODE_RESULT(
+        rpc::controllertoagentservice::start_client(ctx, agent.agent_server_id(), *start_req, *start_rsp));
+    if (start_rsp->has_load_record()) {
+      update_agent_load(start_rsp->load_record());
+    }
+    if (rpc_result < 0) {
+      if (rpc_result == PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD) {
+        FWLOGWARNING("orbit controller launch_client: agent {:#x} overloaded, retrying with another agent",
+                     agent.agent_server_id());
+      } else {
+        FWLOGERROR("orbit controller CTAStartClientReq failed for {} to agent {:#x}, res: {}", client_id_str,
+                   agent.agent_server_id(), rpc_result);
+        RPC_RETURN_CODE(rpc_result);
+      }
+    } else {
+      // 成功，返回结果
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    }
+    --retry_count;
   }
-
-  auto start_req = rpc::make_shared_message<orbit::CTAStartClientReq>(ctx);
-  auto start_rsp = rpc::make_shared_message<orbit::ATCStartClientRsp>(ctx);
-  *start_req->mutable_args() = request.args();
-  start_req->mutable_server_identity()->set_unique_id(server_unique_id);
-
-  FWLOGINFO("orbit controller dispatching launch_client to agent {:#x}: client_id={}, cpu={}, mem={}",
-            agent.agent_server_id(), client_id_str, expected_cpu, expected_memory_mb);
-
-  int32_t rpc_result = RPC_AWAIT_CODE_RESULT(
-      rpc::controllertoagentservice::start_client(ctx, agent.agent_server_id(), *start_req, *start_rsp));
-  if (rpc_result < 0) {
-    FWLOGERROR("orbit controller CTAStartClientReq failed for {} to agent {:#x}, res: {}", client_id_str,
-               agent.agent_server_id(), rpc_result);
-    RPC_RETURN_CODE(rpc_result);
-  }
-
-  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  FWLOGERROR("orbit controller launch_client: all candidate agents are overloaded for client_id={}", client_id_str);
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD);
 }
 
 rpc::result_code_type orbit_controller_manager::handle_send_to_client(rpc::context& ctx,
@@ -372,15 +567,17 @@ rpc::result_code_type orbit_controller_manager::handle_send_to_client(rpc::conte
 
 rpc::result_code_type orbit_controller_manager::handle_server_heartbeat(
     rpc::context& ctx, const orbit::STCServerHeartbeatNotify& request) {
-  const uint64_t agent_server_id = request.agent_identity().agent_server_id();
   auto forward_req = rpc::make_shared_message<orbit::CTAServerHeartbeatReq>(ctx);
   *forward_req->mutable_server_identity() = request.server_identity();
 
-  int32_t rpc_result =
-      RPC_AWAIT_CODE_RESULT(rpc::controllertoagentservice::server_heartbeat(ctx, agent_server_id, *forward_req));
-  if (rpc_result < 0) {
-    FWLOGERROR("orbit controller CTAServerHeartbeatReq failed to agent {:#x}, res: {}", agent_server_id, rpc_result);
-    RPC_RETURN_CODE(rpc_result);
+  for (const auto& agent_identity : request.agent_identity()) {
+    const uint64_t agent_server_id = agent_identity.agent_server_id();
+    int32_t rpc_result =
+        RPC_AWAIT_CODE_RESULT(rpc::controllertoagentservice::server_heartbeat(ctx, agent_server_id, *forward_req));
+    if (rpc_result < 0) {
+      FWLOGERROR("orbit controller CTAServerHeartbeatReq failed to agent {:#x}, res: {}", agent_server_id, rpc_result);
+      continue;
+    }
   }
 
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);

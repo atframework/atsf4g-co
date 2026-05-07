@@ -193,22 +193,31 @@ enum EnSysErrorType {
                            [(error_code.description) = "未准备好（没有握手完成）"];
 
   EN_ORBIT_AGENT_CONTROLLER_SERVER_ID_NOT_MATCH = -2100001
-                                                        [(error_code.description) = "控制器ID不匹配"];
+                                                  [(error_code.description) = "控制器ID不匹配"];
   EN_ORBIT_AGENT_CLIENT_ID_ALREADY_EXISTS = -2100002
-                                                        [(error_code.description) = "Client ID已经存在"];
+                                            [(error_code.description) = "Client ID已经存在"];
   EN_ORBIT_AGENT_CLIENT_STATE_INVALID = -2100003
-                                                        [(error_code.description) = "Client状态异常"];
+                                        [(error_code.description) = "Client状态异常"];
   EN_ORBIT_AGENT_CLIENT_TIMEOUT = -2100004
-                                                        [(error_code.description) = "Client超时"];
+                                  [(error_code.description) = "Client超时"];
   EN_ORBIT_AGENT_OVERLOAD = -2100005
-                                                        [(error_code.description) = "Agent负载已满"];
+                            [(error_code.description) = "Agent负载已满"];
 
   EN_ORBIT_CONTROLLER_SERVER_DUP_UNIQUE_ID = -2200001
-                                                        [(error_code.description) = "控制器服务器唯一ID重复"];
+                                             [(error_code.description) = "控制器服务器唯一ID重复"];
   EN_ORBIT_CONTROLLER_SERVER_NODE_ID_MISMATCH = -2200002
-                                                        [(error_code.description) = "控制器服务器节点ID不匹配"];
+                                                [(error_code.description) = "控制器服务器节点ID不匹配"];
   EN_ORBIT_CONTROLLER_NO_AVAILABLE_AGENT = -2200003
-                                                        [(error_code.description) = "没有可用的Agent"];
+                                           [(error_code.description) = "没有可用的Agent"];
+
+  EN_SERVER_CLIENT_NOT_FOUND = -2300001
+                               [(error_code.description) = "找不到Client"];
+  EN_SERVER_CLIENT_ALREADY_EXISTS = -2300002
+                                   [(error_code.description) = "Client已经存在"];
+  EN_SERVER_CONTROLLER_SERVER_NOT_FOUND = -2300003
+                                           [(error_code.description) = "找不到控制器服务器"];
+  EN_SERVER_CLIENT_NOT_RUNNING = -2300004
+                                 [(error_code.description) = "Client不在运行状态"];
 
   EN_ROUTER_NOT_FOUND = -10000081
                         [(error_code.description) = "路由信息找不到"];

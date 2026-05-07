@@ -36,6 +36,9 @@
 // clang-format on
 
 namespace {
+constexpr time_t kDefaultServerIdentityTimeoutSec = 30;
+constexpr time_t kDefaultServerIdentityCheckIntervalSec = 5;
+
 static bool split_command_line(const std::string& input, std::vector<std::string>& output) {
   output.clear();
 
@@ -92,6 +95,13 @@ struct orbit_agent_process_exit_data {
   std::string client_id;
 };
 
+static int64_t get_total_process_cpu_time_us(const uv_rusage_t& usage) {
+  int64_t total_us = static_cast<int64_t>(usage.ru_stime.tv_sec) + static_cast<int64_t>(usage.ru_utime.tv_sec);
+  total_us *= 1000000;
+  total_us += static_cast<int64_t>(usage.ru_stime.tv_usec) + static_cast<int64_t>(usage.ru_utime.tv_usec);
+  return total_us;
+}
+
 static void on_uv_process_exit(uv_process_t* handle, int64_t exit_status, int term_signal) {
   auto* data = static_cast<orbit_agent_process_exit_data*>(handle->data);
   orbit_agent_manager::me()->on_client_process_exit(data->client_id, exit_status, term_signal);
@@ -102,14 +112,7 @@ static void on_uv_process_exit(uv_process_t* handle, int64_t exit_status, int te
 }  // namespace
 
 uint64_t orbit_agent_client_record::get_controller_server_id() {
-  auto common_mod = logic_server_last_common_module();
-  auto discovery = common_mod->get_discovery_index_by_type(
-      static_cast<uint64_t>(atframework::component::logic_service_type::kOrbitControllerSvr));
-  auto node = discovery->get_node_by_consistent_hash(client_id);
-  if (node == nullptr) {
-    return 0;
-  }
-  return node->get_discovery_info().id();
+  return orbit_agent_manager::me()->select_controller_server_id(client_id);
 }
 
 orbit_agent_manager::orbit_agent_manager() = default;
@@ -118,16 +121,17 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
   owner_app_ = app;
   uv_disable_stdio_inheritance();
 
-  app->set_metadata_label("orbit.region",
-                          logic_config::me()->get_server_instance_config<orbit::config::orbit_agent_cfg>().region());
+  const auto& config = logic_config::me()->get_server_instance_config<orbit::config::orbit_agent_cfg>();
+  region_ = config.region();
+  tags_ = config.tags();
 
-  std::string origin_configured_client_command_line_ =
-      logic_config::me()->get_server_instance_config<orbit::config::orbit_agent_cfg>().configured_client_command_line();
-  tags_ = logic_config::me()->get_server_instance_config<orbit::config::orbit_agent_cfg>().tags();
+  (*controller_policy_selector_.mutable_labels())["orbit.region"] = region_;
 
-  cpu_capacity_ = logic_config::me()->get_server_instance_config<orbit::config::orbit_agent_cfg>().cpu_capacity();
-  memory_capacity_mb_ =
-      logic_config::me()->get_server_instance_config<orbit::config::orbit_agent_cfg>().memory_capacity_mb();
+  std::string origin_configured_client_command_line_ = config.configured_client_command_line();
+  cpu_capacity_ = config.cpu_capacity();
+  memory_capacity_mb_ = config.memory_capacity_mb();
+  server_identity_timeout_sec_ = static_cast<time_t>(config.server_identity_timeout_sec());
+  server_identity_check_interval_sec_ = static_cast<time_t>(config.server_identity_check_interval_sec());
 
   if (!origin_configured_client_command_line_.empty()) {
     FWLOGINFO("orbit agent launch command configured: {}", origin_configured_client_command_line_);
@@ -161,12 +165,71 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
     FWLOGWARNING("orbit agent memory_capacity_mb not set, defaulting to {}", memory_capacity_mb_);
   }
 
+  if (server_identity_timeout_sec_ <= 0) {
+    server_identity_timeout_sec_ = kDefaultServerIdentityTimeoutSec;
+    FWLOGWARNING("orbit agent server_identity_timeout_sec not set, defaulting to {}", server_identity_timeout_sec_);
+  }
+
+  if (server_identity_check_interval_sec_ <= 0) {
+    server_identity_check_interval_sec_ = kDefaultServerIdentityCheckIntervalSec;
+    FWLOGWARNING("orbit agent server_identity_check_interval_sec not set, defaulting to {}",
+                 server_identity_check_interval_sec_);
+  }
+
+  if (server_identity_check_interval_sec_ > server_identity_timeout_sec_) {
+    FWLOGWARNING(
+        "orbit agent server_identity_check_interval_sec={} is larger than server_identity_timeout_sec={}, clamp to {}",
+        server_identity_check_interval_sec_, server_identity_timeout_sec_, server_identity_timeout_sec_);
+    server_identity_check_interval_sec_ = server_identity_timeout_sec_;
+  }
+
   const uint64_t local_server_id = logic_config::me()->get_local_server_id();
   if (local_server_id == 0) {
     FWLOGERROR("orbit agent failed to get local_server_id from logic_config");
     return -4;
   }
   agent_identity_.set_agent_server_id(local_server_id);
+
+  // 初始化Record
+  load_record_.set_region(region_);
+  for (const auto& tag : tags_) {
+    load_record_.add_tags(tag);
+  }
+  load_record_.set_server_id(local_server_id);
+  load_record_.mutable_agent()->set_cpu_capacity(cpu_capacity_);
+  load_record_.mutable_agent()->set_memory_capacity_mb(memory_capacity_mb_);
+
+  update_etcd_load_snapshot();
+  need_update_load_json_ = true;
+  load_record_to_json();
+
+  // 初始化负载同步通道
+  {
+    auto etcd_mod = owner_app_->get_etcd_module();
+    if (!etcd_mod) {
+      FWLOGERROR("orbit agent failed to get etcd module from app");
+      return -5;
+    }
+    auto& etcd_ctx = etcd_mod->get_raw_etcd_ctx();
+
+    std::string keepalive_path = LOG_WRAPPER_FWAPI_FORMAT("{}{}/{}-{}", etcd_mod->get_configure_path(), "orbit_load",
+                                                          owner_app_->get_app_name(), owner_app_->get_id());
+
+    keepalive_actor_ = etcd_mod->add_keepalive_actor(load_json_, keepalive_path);
+    if (!keepalive_actor_) {
+      FWLOGERROR("orbit agent failed to create etcd keepalive actor for path {}", keepalive_path);
+      return -6;
+    }
+    LIBATAPP_MACRO_ETCD_CLUSTER_LOG_INFO(etcd_ctx, "create etcd_keepalive {} for topology index {} success",
+                                         reinterpret_cast<const void*>(keepalive_actor_.get()), keepalive_path);
+    std::list<atapp::etcd_keepalive::ptr_t> keepalive_list{keepalive_actor_};
+    const std::list<atapp::etcd_keepalive::ptr_t>* keepalive_actors[] = {&keepalive_list};
+
+    if (!etcd_mod->check_keepalive_actor_start_success(app, gsl::make_span(keepalive_actors))) {
+      FWLOGERROR("orbit agent etcd keepalive actor start failed for path {}", keepalive_path);
+      return -7;
+    }
+  }
 
   return 0;
 }
@@ -180,69 +243,75 @@ void orbit_agent_manager::tick() {
 
   time_t now = util::time::time_utility::get_sys_now();
 
+  if (now - last_server_identity_timeout_check_timepoint_ >= server_identity_check_interval_sec_) {
+    last_server_identity_timeout_check_timepoint_ = now;
+    check_server_identity_timeouts(now);
+  }
+
   // 检查 Client 超时（无论是否已连接 Controller）
   check_client_timeouts(now);
 
-  // 定期将负载快照写入 etcd metadata（每5秒更新一次）
-  constexpr time_t kLoadUpdateIntervalSec = 5;
-  if (now - last_load_etcd_update_timepoint_ >= kLoadUpdateIntervalSec) {
-    last_load_etcd_update_timepoint_ = now;
+  // 定期将负载快照写入 etcd（每5秒更新一次）
+  constexpr time_t kAutoLoadUpdateIntervalSec = 5;
+  if (now - last_auto_load_etcd_update_timepoint_ >= kAutoLoadUpdateIntervalSec) {
+    last_auto_load_etcd_update_timepoint_ = now;
     update_etcd_load_snapshot();
+    // 需要更新JSON字符串以同步到etcd
+    need_update_load_json_ = true;
   }
+
+  load_record_to_json();
+  try_sync_load_to_etcd();
 }
 
-orbit::DAgentLoadSnapshot orbit_agent_manager::build_agent_load_snapshot() const noexcept {
-  orbit::DAgentLoadSnapshot snapshot;
-  snapshot.set_cpu_capacity(cpu_capacity_);
-  snapshot.set_memory_capacity_mb(memory_capacity_mb_);
-
-  double cpu_used = 0.0;
-  double memory_used_mb = 0.0;
-  uint32_t client_count = 0;
-  uint32_t inflight_count = 0;
-
-  for (const auto& kv : clients_) {
-    auto record = kv.second;
-    if (orbit::EN_SLAVE_STATE_STARTING == record->state || orbit::EN_SLAVE_STATE_SEED == record->state) {
-      ++inflight_count;
-      // Account for reserved resources during startup
-      cpu_used += record->expected_cpu;
-      memory_used_mb += record->expected_memory_mb;
-    } else if (orbit::EN_SLAVE_STATE_RUNNING == record->state || orbit::EN_SLAVE_STATE_EXITING == record->state) {
-      ++client_count;
-      cpu_used += record->load_snapshot.cpu_used();
-      memory_used_mb += record->load_snapshot.memory_used_mb();
-    }
+uint64_t orbit_agent_manager::select_controller_server_id(const std::string& client_id) const {
+  auto common_mod = logic_server_last_common_module();
+  if (nullptr == common_mod) {
+    return 0;
   }
 
-  snapshot.set_cpu_used(cpu_used);
-  snapshot.set_memory_used_mb(memory_used_mb);
-  snapshot.set_client_count(client_count);
-  snapshot.set_inflight_count(inflight_count);
-  return snapshot;
+  auto discovery = common_mod->get_discovery_index_by_type(
+      static_cast<uint64_t>(atframework::component::logic_service_type::kOrbitControllerSvr));
+  if (!discovery) {
+    return 0;
+  }
+
+  auto selected = discovery->get_node_by_consistent_hash(client_id, &controller_policy_selector_);
+  if (!selected) {
+    selected = discovery->get_node_by_consistent_hash(client_id);
+  }
+  if (!selected) {
+    return 0;
+  }
+
+  return selected->get_discovery_info().id();
 }
 
 rpc::result_code_type orbit_agent_manager::handle_start_client(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx,
                                                                const orbit::CTAStartClientReq& request,
-                                                               ATFW_EXPLICIT_UNUSED_ATTR orbit::ATCStartClientRsp& response) {
+                                                               orbit::ATCStartClientRsp& response) {
+  update_etcd_load_snapshot();
+  *response.mutable_load_record() = load_record_;
   server_heartbeat(request.server_identity());
 
   // 检查负载状态
   {
     const double expected_cpu = request.args().expected_cpu();
     const double expected_memory_mb = request.args().expected_memory_mb();
-    const auto load = build_agent_load_snapshot();
-    if (cpu_capacity_ > 0.0 && load.cpu_used() + expected_cpu > cpu_capacity_) {
+    update_etcd_load_snapshot();
+    if (cpu_capacity_ > 0.0 && load_record_.agent().cpu_used() + expected_cpu > cpu_capacity_) {
       FWLOGWARNING(
           "orbit agent start_client rejected (cpu overload): cpu_used={:.2f} + expected={:.2f} > capacity={:.2f}",
-          load.cpu_used(), expected_cpu, cpu_capacity_);
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD);
+          load_record_.agent().cpu_used(), expected_cpu, cpu_capacity_);
+      need_update_load_json_ = true;                                        // 负载记录有变更需要更新JSON以同步到etcd
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD);  // 尝试另一个Agent
     }
-    if (memory_capacity_mb_ > 0.0 && load.memory_used_mb() + expected_memory_mb > memory_capacity_mb_) {
+    if (memory_capacity_mb_ > 0.0 && load_record_.agent().memory_used_mb() + expected_memory_mb > memory_capacity_mb_) {
       FWLOGWARNING(
           "orbit agent start_client rejected (mem overload): mem_used={:.2f} + expected={:.2f} > capacity={:.2f}",
-          load.memory_used_mb(), expected_memory_mb, memory_capacity_mb_);
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD);
+          load_record_.agent().memory_used_mb(), expected_memory_mb, memory_capacity_mb_);
+      need_update_load_json_ = true;                                        // 负载记录有变更需要更新JSON以同步到etcd
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD);  // 尝试另一个Agent
     }
   }
 
@@ -301,16 +370,49 @@ rpc::result_code_type orbit_agent_manager::handle_server_heartbeat(ATFW_EXPLICIT
 }
 
 void orbit_agent_manager::server_heartbeat(const orbit::DServerIdentity& server_identity) {
-  server_unique_id_to_identity_[server_identity.unique_id()] = server_identity;
+  const uint64_t server_unique_id = server_identity.unique_id();
+  const time_t now = util::time::time_utility::get_sys_now();
+  const time_t expire_timepoint = now + server_identity_timeout_sec_;
+
+  auto& info = server_unique_id_to_identity_[server_unique_id];
+  info.identity = server_identity;
+  info.expire_timepoint = expire_timepoint;
+  server_identity_timeout_queue_.push_back({server_unique_id, expire_timepoint});
 }
 
 orbit::DServerIdentity* orbit_agent_manager::find_server_identity(uint64_t server_unique_id) {
-  // TODO 超时流程 与 消息缓存
+  // TODO 消息缓存
   auto iter = server_unique_id_to_identity_.find(server_unique_id);
   if (iter == server_unique_id_to_identity_.end()) {
     return nullptr;
   }
-  return &iter->second;
+  return &iter->second.identity;
+}
+
+void orbit_agent_manager::check_server_identity_timeouts(time_t now) {
+  while (!server_identity_timeout_queue_.empty()) {
+    const server_identity_timeout_entry_t& front = server_identity_timeout_queue_.front();
+    if (front.expire_timepoint > now) {
+      break;
+    }
+
+    const uint64_t server_unique_id = front.server_unique_id;
+    const time_t expire_timepoint = front.expire_timepoint;
+    server_identity_timeout_queue_.pop_front();
+
+    auto identity_iter = server_unique_id_to_identity_.find(server_unique_id);
+    if (identity_iter == server_unique_id_to_identity_.end()) {
+      continue;
+    }
+
+    if (identity_iter->second.expire_timepoint != expire_timepoint) {
+      continue;
+    }
+
+    FWLOGWARNING("orbit agent server identity heartbeat timeout: unique_id={:#x}, server_node_id={:#x}",
+                 server_unique_id, identity_iter->second.identity.server_node_id());
+    server_unique_id_to_identity_.erase(identity_iter);
+  }
 }
 
 rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx, uint64_t client_server_id,
@@ -724,18 +826,104 @@ void orbit_agent_manager::check_client_timeouts(time_t now) {
 }
 
 void orbit_agent_manager::update_etcd_load_snapshot() {
-  auto load = build_agent_load_snapshot();
+  double cpu_used = 0.0;
+  double memory_used_mb = 0.0;
+  uint32_t client_count = 0;
+  uint32_t inflight_count = 0;
 
-  google::protobuf::util::JsonPrintOptions options;
+  double self_cpu_used = last_self_cpu_used_;
+  double self_memory_used_mb = 0.0;
+
+  do {
+    uv_rusage_t current_usage;
+    if (0 != uv_getrusage(&current_usage)) {
+      break;
+    }
+
+    auto now = std::chrono::steady_clock::now();
+    if (has_self_usage_sample_) {
+      int64_t elapsed_us =
+          std::chrono::duration_cast<std::chrono::microseconds>(now - last_self_usage_sample_timepoint_).count();
+      if (elapsed_us > 0) {
+        int64_t cpu_offset_us =
+            get_total_process_cpu_time_us(current_usage) - get_total_process_cpu_time_us(last_self_rusage_);
+        if (cpu_offset_us < 0) {
+          cpu_offset_us = 0;
+        }
+
+        self_cpu_used = static_cast<double>(cpu_offset_us) / static_cast<double>(elapsed_us);
+        last_self_cpu_used_ = self_cpu_used;
+      }
+    } else {
+      has_self_usage_sample_ = true;
+      last_self_cpu_used_ = 0.0;
+      self_cpu_used = 0.0;
+    }
+
+    last_self_rusage_ = current_usage;
+    last_self_usage_sample_timepoint_ = now;
+  } while (false);
+
+  size_t self_memory_rss = 0;
+  if (0 == uv_resident_set_memory(&self_memory_rss)) {
+    self_memory_used_mb = static_cast<double>(self_memory_rss) / (1024.0 * 1024.0);
+  }
+
+  cpu_used += self_cpu_used;
+  memory_used_mb += self_memory_used_mb;
+
+  for (const auto& kv : clients_) {
+    auto record = kv.second;
+    if (orbit::EN_SLAVE_STATE_STARTING == record->state || orbit::EN_SLAVE_STATE_SEED == record->state) {
+      ++inflight_count;
+      // Account for reserved resources during startup
+      cpu_used += record->expected_cpu;
+      memory_used_mb += record->expected_memory_mb;
+    } else if (orbit::EN_SLAVE_STATE_RUNNING == record->state || orbit::EN_SLAVE_STATE_EXITING == record->state) {
+      ++client_count;
+      cpu_used += record->load_snapshot.cpu_used();
+      memory_used_mb += record->load_snapshot.memory_used_mb();
+    }
+  }
+
+  if (load_record_.agent().cpu_used() != cpu_used || load_record_.agent().memory_used_mb() != memory_used_mb ||
+      load_record_.agent().client_count() != client_count || load_record_.agent().inflight_count() != inflight_count) {
+    load_record_.mutable_agent()->set_cpu_used(cpu_used);
+    load_record_.mutable_agent()->set_memory_used_mb(memory_used_mb);
+    load_record_.mutable_agent()->set_client_count(client_count);
+    load_record_.mutable_agent()->set_inflight_count(inflight_count);
+    dirty_load_record_ = true;
+  }
+}
+
+void orbit_agent_manager::load_record_to_json() {
+  if (!need_update_load_json_) {
+    return;
+  }
+  need_update_load_json_ = false;
+
+  if (!dirty_load_record_ && !load_json_.empty()) {
+    return;
+  }
+  dirty_load_record_ = false;
+
+  ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::util::JsonPrintOptions options;
   options.add_whitespace = false;
   options.always_print_enums_as_ints = true;
   options.preserve_proto_field_names = true;
   options.unquote_int64_if_possible = true;
-  std::string json;
-  if (!google::protobuf::util::MessageToJsonString(load, &json, options).ok()) {
-    FWLOGERROR("orbit agent failed to serialize DAgentLoadSnapshot to JSON");
+  if (!ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::util::MessageToJsonString(load_record_, &load_json_, options).ok()) {
+    FWLOGERROR("orbit controller pack DAgentEtcdLoadRecord to json failed");
+  } else {
+    dirty_load_json_ = true;
+  }
+}
+
+void orbit_agent_manager::try_sync_load_to_etcd() {
+  if (!dirty_load_json_) {
     return;
   }
-
-  owner_app_->set_metadata_label("orbit.agent.load", json);
+  dirty_load_json_ = false;
+  keepalive_actor_->set_checker(load_json_);
+  keepalive_actor_->set_value(load_json_);
 }

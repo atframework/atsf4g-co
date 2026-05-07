@@ -26,17 +26,6 @@ constexpr const char* logic_hpa_discovery_semantic_conventions::kLogicHpaDiscove
 constexpr const char* logic_hpa_discovery_semantic_conventions::kLogicHpaDiscoveryDomainCustom;
 #endif
 
-namespace {
-std::chrono::system_clock::duration convert_to_chrono(const ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::Duration& in,
-                                                      time_t default_value_ms) {
-  if (in.seconds() <= 0 && in.nanos() <= 0) {
-    return std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::milliseconds(default_value_ms));
-  }
-  return std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::seconds(in.seconds())) +
-         std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::nanoseconds(in.nanos()));
-}
-}  // namespace
-
 logic_hpa_discovery_setup_policy_accessor::logic_hpa_discovery_setup_policy_accessor() {}
 
 logic_hpa_discovery_setup_policy_accessor::~logic_hpa_discovery_setup_policy_accessor() {}
@@ -436,16 +425,7 @@ SERVER_FRAME_API bool logic_hpa_discovery::watch(logic_hpa_discovery_watch_mode 
   }
 
   // Watch走long polling，所以这里设置的超时时间应该比较长
-  etcd_watcher_->set_conf_request_timeout(
-      convert_to_chrono(etcd_mod->get_configure().watcher().request_timeout(), 3600000));
-  etcd_watcher_->set_conf_retry_interval(
-      convert_to_chrono(etcd_mod->get_configure().watcher().retry_interval(), 15000));
-  etcd_watcher_->set_conf_get_request_timeout(
-      convert_to_chrono(etcd_mod->get_configure().watcher().get_request_timeout(), 180000));
-  etcd_watcher_->set_conf_startup_random_delay_min(
-      convert_to_chrono(etcd_mod->get_configure().watcher().startup_random_delay_min(), 0));
-  etcd_watcher_->set_conf_startup_random_delay_max(
-      convert_to_chrono(etcd_mod->get_configure().watcher().startup_random_delay_max(), 0));
+  etcd_watcher_->set_conf_from_protobuf(etcd_mod->get_configure().watcher());
 
   // setup callback
   etcd_watcher_->set_evt_handle(

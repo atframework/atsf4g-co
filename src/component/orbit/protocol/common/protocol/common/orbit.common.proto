@@ -79,6 +79,13 @@ message DAgentLoadSnapshot {
   uint32 inflight_count = 6;
 }
 
+message DAgentEtcdLoadRecord {
+  uint64 server_id = 1;
+  string region = 2;
+  repeated string tags = 3;
+  DAgentLoadSnapshot agent = 4;
+}
+
 message DOrbitGroupInfo {
   string region = 1;
   repeated string tags = 2;
