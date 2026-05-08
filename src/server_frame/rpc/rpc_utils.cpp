@@ -430,4 +430,58 @@ SERVER_FRAME_API int32_t custom_resume(task_type_trait::id_type task_id, dispatc
   return task_manager::me()->resume_task(task_id, resume_data);
 }
 
+SERVER_FRAME_API rpc::telemetry::tracer::span_ptr_type setup_rpc_tracer(
+    rpc::context &__child_ctx, rpc::telemetry::tracer &__tracer, atframework::SSMsgHead &head,
+    atfw::util::nostd::string_view rpc_full_name, rpc::telemetry::trace_attributes_type attributes) {
+  rpc::telemetry::trace_start_option __trace_option;
+  __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());
+  __trace_option.is_remote = true;
+  __trace_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
+  __trace_option.attributes = attributes;
+
+  // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/semantic_conventions/README.md
+  __child_ctx.setup_tracer(__tracer, rpc::context::string_view{rpc_full_name.data(), rpc_full_name.size()},
+                           std::move(__trace_option));
+  if (__tracer.is_recording()) {
+    rpc::telemetry::tracer::span_ptr_type __child_trace_span = __child_ctx.get_trace_span();
+    if (__child_trace_span) {
+      auto trace_span_head = head.mutable_rpc_trace();
+      if (trace_span_head) {
+        auto trace_context = __child_trace_span->GetContext();
+        rpc::telemetry::tracer::trace_id_span trace_id = trace_context.trace_id().Id();
+        rpc::telemetry::tracer::span_id_span span_id = trace_context.span_id().Id();
+
+        trace_span_head->mutable_trace_id()->assign(reinterpret_cast<const char *>(trace_id.data()), trace_id.size());
+        trace_span_head->mutable_span_id()->assign(reinterpret_cast<const char *>(span_id.data()), span_id.size());
+        trace_span_head->set_kind(__trace_option.kind);
+        trace_span_head->set_name(static_cast<std::string>(rpc_full_name));
+      }
+    }
+
+    return __child_trace_span;
+  } else {
+    auto trace_span_head = head.mutable_rpc_trace();
+    if (trace_span_head) {
+      trace_span_head->set_dynamic_ignore(true);
+    }
+
+    return rpc::telemetry::tracer::span_ptr_type();
+  }
+}
+
+SERVER_FRAME_API int setup_rpc_stream_header(atframework::RpcStreamMeta &stream_meta,
+                                              atfw::util::nostd::string_view service_name,
+                                              atfw::util::nostd::string_view rpc_full_name,
+                                              atfw::util::nostd::string_view type_full_name) {
+  stream_meta.set_version(logic_config::me()->get_atframework_settings().rpc_version());
+  stream_meta.set_caller(static_cast<std::string>(logic_config::me()->get_local_server_name()));
+  stream_meta.set_callee(static_cast<std::string>(service_name));
+  stream_meta.set_rpc_name(static_cast<std::string>(rpc_full_name));
+  stream_meta.set_type_url(type_full_name.data(), type_full_name.size());
+  stream_meta.mutable_caller_timestamp()->set_seconds(util::time::time_utility::get_sys_now());
+  stream_meta.mutable_caller_timestamp()->set_nanos(util::time::time_utility::get_now_nanos());
+
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+}
+
 }  // namespace rpc

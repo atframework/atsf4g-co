@@ -136,64 +136,6 @@ inline static int __unpack_rpc_body(TBodyType &&output, const std::string& input
   }
 }
 
-inline static rpc::telemetry::tracer::span_ptr_type __setup_tracer(rpc::context &__child_ctx,
-                                  rpc::telemetry::tracer &__tracer, atframework::SSMsgHead &head,
-                                  atfw::util::nostd::string_view rpc_full_name,
-                                  rpc::telemetry::trace_attributes_type attributes) {
-  rpc::telemetry::trace_start_option __trace_option;
-  __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(ss_msg_dispatcher::me());
-  __trace_option.is_remote = true;
-  __trace_option.kind = ::atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
-  __trace_option.attributes = attributes;
-
-  // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/semantic_conventions/README.md
-  __child_ctx.setup_tracer(__tracer, rpc::context::string_view{rpc_full_name.data(), rpc_full_name.size()},
-    std::move(__trace_option));
-  if (__tracer.is_recording()) {
-    rpc::telemetry::tracer::span_ptr_type __child_trace_span = __child_ctx.get_trace_span();
-    if (__child_trace_span) {
-      auto trace_span_head = head.mutable_rpc_trace();
-      if (trace_span_head) {
-        auto trace_context = __child_trace_span->GetContext();
-        rpc::telemetry::tracer::trace_id_span trace_id = trace_context.trace_id().Id();
-        rpc::telemetry::tracer::span_id_span span_id = trace_context.span_id().Id();
-
-        trace_span_head->mutable_trace_id()->assign(reinterpret_cast<const char *>(trace_id.data()), trace_id.size());
-        trace_span_head->mutable_span_id()->assign(reinterpret_cast<const char *>(span_id.data()), span_id.size());
-        trace_span_head->set_kind(__trace_option.kind);
-        trace_span_head->set_name(static_cast<std::string>(rpc_full_name));
-      }
-    }
-
-    return __child_trace_span;
-  } else {
-    auto trace_span_head = head.mutable_rpc_trace();
-    if (trace_span_head) {
-      trace_span_head->set_dynamic_ignore(true);
-    }
-
-    return rpc::telemetry::tracer::span_ptr_type();
-  }
-}
-
-% endif
-% if rpc_common_codes_enable_stream_header:
-inline static int __setup_rpc_stream_header(atframework::SSMsgHead &head, atfw::util::nostd::string_view rpc_full_name,
-                                            atfw::util::nostd::string_view type_full_name) {
-  atframework::RpcStreamMeta* stream_meta = head.mutable_rpc_stream();
-  if (nullptr == stream_meta) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
-  }
-  stream_meta->set_version(logic_config::me()->get_atframework_settings().rpc_version());
-  stream_meta->set_caller(static_cast<std::string>(logic_config::me()->get_local_server_name()));
-  stream_meta->set_callee("${service.get_full_name()}");
-  stream_meta->set_rpc_name(static_cast<std::string>(rpc_full_name));
-  stream_meta->set_type_url(type_full_name.data(), type_full_name.size());
-  stream_meta->mutable_caller_timestamp()->set_seconds(util::time::time_utility::get_sys_now());
-  stream_meta->mutable_caller_timestamp()->set_nanos(util::time::time_utility::get_now_nanos());
-
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
-}
 % endif
 % if rpc_common_codes_enable_request_header:
 inline static int __setup_rpc_request_header(atframework::SSMsgHead &head, task_type_trait::id_type task_id,
@@ -397,8 +339,8 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
   task_action_ss_req_base::init_msg(req_msg, logic_config::me()->get_local_server_id(),
     logic_config::me()->get_local_server_name());
 
-  ${rpc_request_meta_pretty_prefix}res = __setup_rpc_stream_header(
-    ${rpc_request_meta_pretty_prefix}*req_msg.mutable_head(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
+  ${rpc_request_meta_pretty_prefix}res = rpc::setup_rpc_stream_header(
+    ${rpc_request_meta_pretty_prefix}*req_msg.mutable_head()->mutable_rpc_stream(), "${service.get_full_name()}", "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
     __to_string_view(${rpc_request_meta_pretty_prefix}${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name())
   ${rpc_request_meta_pretty_prefix});
 
@@ -420,9 +362,9 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
     {opentelemetry::semconv::rpc::kRpcMethod, "${rpc.get_service().get_full_name()}/${rpc.get_name()}"}
   };
 %   if rpc_is_user_rpc:
-  auto __child_trace_span = __setup_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
+  auto __child_trace_span = rpc::setup_rpc_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
 %   else:
-  __setup_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
+  rpc::setup_rpc_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
 %   endif
                           "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
                           __trace_attributes);
@@ -504,8 +446,8 @@ static ${rpc_return_type} __${rpc.get_name()}(
   if (__no_wait) {
 %   endif
 %   if rpc_is_stream_mode or rpc_allow_no_wait:
-  ${rpc_request_meta_pretty_prefix}res = __setup_rpc_stream_header(
-    ${rpc_request_meta_pretty_prefix}*req_msg.mutable_head(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
+  ${rpc_request_meta_pretty_prefix}res = rpc::setup_rpc_stream_header(
+    ${rpc_request_meta_pretty_prefix}*req_msg.mutable_head()->mutable_rpc_stream(), "${service.get_full_name()}","${rpc.get_service().get_full_name()}/${rpc.get_name()}",
     __to_string_view(${rpc_request_meta_pretty_prefix}${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name())
   ${rpc_request_meta_pretty_prefix});
 %   endif
@@ -540,9 +482,9 @@ static ${rpc_return_type} __${rpc.get_name()}(
     {opentelemetry::semconv::rpc::kRpcMethod, "${rpc.get_service().get_full_name()}/${rpc.get_name()}"}
   };
 %   if rpc_is_user_rpc or rpc_is_router_api:
-  auto __child_trace_span = __setup_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
+  auto __child_trace_span = rpc::setup_rpc_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
 %   else:
-  __setup_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
+  rpc::setup_rpc_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
 %   endif
                           "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
                           __trace_attributes);

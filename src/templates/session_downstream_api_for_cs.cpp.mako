@@ -77,24 +77,6 @@ inline static int __pack_body(TBodyType &body, std::string *output, atfw::util::
   }
 }
 % endif
-
-% if rpc_common_codes_enable_stream_header:
-inline static int __setup_rpc_stream_header(atframework::CSMsgHead &head, atfw::util::nostd::string_view rpc_full_name,
-                                            atfw::util::nostd::string_view type_full_name) {
-  atframework::RpcStreamMeta* stream_meta = head.mutable_rpc_stream();
-  if (nullptr == stream_meta) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
-  }
-  stream_meta->set_version(logic_config::me()->get_atframework_settings().rpc_version());
-  stream_meta->set_caller(static_cast<std::string>(logic_config::me()->get_local_server_name()));
-  stream_meta->set_callee("${service.get_full_name()}");
-  stream_meta->set_rpc_name(rpc_full_name.data(), rpc_full_name.size());
-  stream_meta->set_type_url(type_full_name.data(), type_full_name.size());
-
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
-
-}
-% endif
 }
 
 % for ns in service.get_cpp_namespace_begin(module_name, ''):
@@ -118,8 +100,8 @@ ${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
     return {static_cast<rpc::always_ready_code_type::value_type>(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC)};
   }
 
-  int res = __setup_rpc_stream_header(
-    *msg_ptr->mutable_head(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
+  int res = rpc::setup_rpc_stream_header(
+    *msg_ptr->mutable_head()->mutable_rpc_stream(), "${service.get_full_name()}", "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
     __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
 
   if (res < 0) {
@@ -158,8 +140,8 @@ ${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
     return {static_cast<rpc::always_ready_code_type::value_type>(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC)};
   }
 
-  int res = __setup_rpc_stream_header(
-    *msg_ptr->mutable_head(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
+  int res = rpc::setup_rpc_stream_header(
+    *msg_ptr->mutable_head()->mutable_rpc_stream(), "${service.get_full_name()}", "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
     __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
 
   if (res < 0) {
@@ -198,8 +180,8 @@ ${service_dllexport_decl} rpc::always_ready_code_type broadcast_${rpc.get_name()
     return {static_cast<rpc::always_ready_code_type::value_type>(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC)};
   }
 
-  int res = __setup_rpc_stream_header(
-    *msg_ptr->mutable_head(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
+  int res = rpc::setup_rpc_stream_header(
+    *msg_ptr->mutable_head()->mutable_rpc_stream(), "${service.get_full_name()}", "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
     __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
 
   if (res < 0) {

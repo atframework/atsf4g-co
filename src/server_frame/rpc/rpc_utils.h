@@ -202,4 +202,13 @@ SERVER_FRAME_API int32_t custom_resume(const task_type_trait::task_type &task,
  */
 SERVER_FRAME_API int32_t custom_resume(task_type_trait::id_type task_id, dispatcher_resume_data_type &resume_data);
 
+SERVER_FRAME_API rpc::telemetry::tracer::span_ptr_type setup_rpc_tracer(
+    rpc::context &__child_ctx, rpc::telemetry::tracer &__tracer, atframework::SSMsgHead &head,
+    atfw::util::nostd::string_view rpc_full_name, rpc::telemetry::trace_attributes_type attributes);
+
+SERVER_FRAME_API int setup_rpc_stream_header(atframework::RpcStreamMeta &stream_meta,
+                                              atfw::util::nostd::string_view service_name,
+                                              atfw::util::nostd::string_view rpc_full_name,
+                                              atfw::util::nostd::string_view type_full_name);
+
 }  // namespace rpc
