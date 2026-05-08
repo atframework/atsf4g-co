@@ -20,6 +20,7 @@ require (
 	github.com/atframework/atsf4g-co/component/public v0.0.0-00010101000000-000000000000
 	github.com/atframework/robot-go v0.0.0-00010101000000-000000000000
 	github.com/shirou/gopsutil/v4 v4.26.2
+	github.com/xresloader/xres-code-generator v0.0.0-00010101000000-000000000000
 	github.com/xresloader/xresloader v0.0.0-00010101000000-000000000000
 	google.golang.org/protobuf v1.36.11
 )
@@ -42,7 +43,6 @@ require (
 	github.com/redis/go-redis/v9 v9.18.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
-	github.com/xresloader/xres-code-generator v0.0.0-00010101000000-000000000000 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/crypto v0.47.0 // indirect
