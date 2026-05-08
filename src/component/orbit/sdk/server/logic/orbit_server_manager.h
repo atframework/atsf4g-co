@@ -73,9 +73,9 @@ class orbit_server_manager : public util::design_pattern::singleton<orbit_server
       rpc::context& ctx, const std::string& region, const orbit::DAgentClientStartArgs& args,
       const google::protobuf::RepeatedPtrField<std::string>& match_tags);
   // 发送消息至Client
-  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type send_to_client(rpc::context& ctx,
-                                                                                        const std::string& client_id,
-                                                                                        const std::string& data);
+  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API int32_t send_to_client(rpc::context& ctx,
+                                                                          const std::string& client_id,
+                                                                          const void* msg_data, size_t msg_size);
 
   void set_on_forward_to_server(on_forward_to_server_fn fn) { on_forward_to_server_ = std::move(fn); }
   void set_on_client_start_notify(on_client_start_notify_fn fn) { on_client_start_notify_ = std::move(fn); }

@@ -6,6 +6,8 @@ option optimize_for = SPEED;
 // --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
 
+import "protocol/extension/atframework.proto";
+
 package orbit;
 
 enum EnClientState {
@@ -89,4 +91,29 @@ message DAgentEtcdLoadRecord {
 message DOrbitGroupInfo {
   string region = 1;
   repeated string tags = 2;
+}
+
+/////////////// RPC 接入层 ///////////////
+
+message OrbitRpcMessageHead {
+  // 通用数据
+  sint32 error_code = 1;
+  int64 timestamp = 2;
+  uint64 sequence = 3;
+
+  // Session和任务信息
+  uint64 source_task_id = 11;
+  uint64 destination_task_id = 12;
+
+  oneof rpc_type {
+    atframework.RpcRequestMeta rpc_request = 31;
+    atframework.RpcResponseMeta rpc_response = 32;
+    atframework.RpcStreamMeta rpc_stream = 33;
+  }
+  atframework.RpcTraceSpan rpc_trace = 34;  // 用于链路追踪
+}
+
+message OrbitRpcMessage {
+  OrbitRpcMessageHead head = 1;
+  bytes body_bin = 3;
 }

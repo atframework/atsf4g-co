@@ -15,8 +15,11 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <dispatcher/ss_msg_dispatcher.h>
+#include <opentelemetry/semconv/incubating/rpc_attributes.h>
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_context.h>
+#include <rpc/rpc_utils.h>
 #include <rpc/servertocontrollerservice/servertocontrollerservice.h>
 
 int orbit_server_manager::init(uint64_t unique_id, uint64_t heartbeat_interval_sec) {
@@ -77,41 +80,66 @@ rpc::result_code_type orbit_server_manager::start_client(
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type orbit_server_manager::send_to_client(rpc::context& ctx, const std::string& client_id,
-                                                           const std::string& data) {
+int32_t orbit_server_manager::send_to_client(rpc::context& ctx, const std::string& client_id, const void* msg_data,
+                                             size_t msg_size) {
   auto client_info_ptr_ = get_client_info(client_id);
   if (client_info_ptr_ == nullptr) {
     FWLOGERROR("failed to find client info for client identity {}", client_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SERVER_CLIENT_NOT_FOUND);
+    return PROJECT_NAMESPACE_ID::err::EN_SERVER_CLIENT_NOT_FOUND;
   }
 
   if (client_info_ptr_->status != EnClientStatus::EN_CLIENT_STATUS_RUNNING) {
     FWLOGERROR("client {} is not in running status, current status: {}", client_id,
                static_cast<int>(client_info_ptr_->status));
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SERVER_CLIENT_NOT_RUNNING);
+    return PROJECT_NAMESPACE_ID::err::EN_SERVER_CLIENT_NOT_RUNNING;
   }
 
   uint64_t controller_server_id = select_controller_server_id(client_id, client_info_ptr_->region);
   if (controller_server_id == 0) {
     FWLOGERROR("failed to select controller server for region {}", client_info_ptr_->region);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SERVER_CONTROLLER_SERVER_NOT_FOUND);
+    return PROJECT_NAMESPACE_ID::err::EN_SERVER_CONTROLLER_SERVER_NOT_FOUND;
   }
 
   auto req = rpc::make_shared_message<orbit::STCSendToClientNotify>(ctx);
 
   *req->mutable_server_identity() = server_identity_;
   *req->mutable_client_identity() = client_info_ptr_->client_identity;
-  *req->mutable_payload() = data;
+  *req->mutable_payload() = std::string(static_cast<const char*>(msg_data), msg_size);
 
-  int32_t rpc_result =
-      RPC_AWAIT_CODE_RESULT(rpc::servertocontrollerservice::send_to_client(ctx, controller_server_id, *req));
-  if (rpc_result < 0) {
-    FWLOGERROR("orbit send_to_client failed for {} to controller {:#x}, res: {}", client_id, controller_server_id,
-               rpc_result);
-    RPC_RETURN_CODE(rpc_result);
+  rpc::result_code_type::value_type res;
+  atframework::SSMsg* req_msg_ptr = ctx.create<atframework::SSMsg>();
+  atframework::SSMsg& req_msg = *req_msg_ptr;
+  task_action_ss_req_base::init_msg(req_msg, logic_config::me()->get_local_server_id(),
+                                    logic_config::me()->get_local_server_name());
+  res =
+      rpc::setup_rpc_stream_header(*req_msg.mutable_head()->mutable_rpc_stream(), "orbit.ServerToControllerService",
+                                   "orbit.ServerToControllerService/send_to_client",
+                                   {atfw::util::nostd::data(orbit::STCSendToClientNotify::descriptor()->full_name()),
+                                    atfw::util::nostd::size(orbit::STCSendToClientNotify::descriptor()->full_name())});
+  if (res < 0) {
+    return {static_cast<rpc::always_ready_code_type::value_type>(res)};
   }
 
-  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  res = rpc::servertocontrollerservice::packer::pack_send_to_client(*req_msg.mutable_body_bin(), *req);
+  if (res < 0) {
+    return {static_cast<rpc::always_ready_code_type::value_type>(res)};
+  }
+
+  rpc::context __child_ctx(ctx);
+  rpc::telemetry::tracer __tracer;
+  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "orbit.ServerToControllerService/send_to_client"}};
+  rpc::setup_rpc_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
+                        "orbit.ServerToControllerService/send_to_client", __trace_attributes);
+
+  res = ss_msg_dispatcher::me()->send_to_proc(controller_server_id, req_msg);
+  if (res < 0) {
+    FWLOGERROR("rpc {} call failed, res: {}({})", "orbit.ServerToControllerService/send_to_client", res,
+               protobuf_mini_dumper_get_error_msg(res));
+  }
+
+  return res;
 }
 
 void orbit_server_manager::server_heartbeat() {

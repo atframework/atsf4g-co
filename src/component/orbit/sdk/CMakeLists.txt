@@ -85,19 +85,27 @@ project_component_declare_sdk(
   "${CMAKE_CURRENT_LIST_DIR}/server"
   DLLEXPORT_DECL
   ORBIT_MASTER_SDK_API
+  SHARED_LIBRARY_DECL
+  ORBIT_MASTER_SDK_DLL
+  NATIVE_CODE_DECL
+  ORBIT_MASTER_SDK_NATIVE
   OUTPUT_TARGET_NAME
   PROJECT_COMPONENT_ORBIT_MASTER_SDK
   USE_COMPONENTS
   "orbit-server-controller-sdk"
   HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/server/handle/handle_ss_rpc_controllertoserverservice.h"
+  "${CMAKE_CURRENT_LIST_DIR}/server/logic/orbit_msg_dispatcher.h"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/orbit_server_manager.h"
+  "${CMAKE_CURRENT_LIST_DIR}/server/logic/task_action_orbit_req_base.h"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_forward_to_server.h"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_client_end_notify.h"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_client_start_notify.h"
   SOURCES
   "${CMAKE_CURRENT_LIST_DIR}/server/handle/handle_ss_rpc_controllertoserverservice.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/server/logic/orbit_msg_dispatcher.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/orbit_server_manager.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/server/logic/task_action_orbit_req_base.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_forward_to_server.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_client_end_notify.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_client_start_notify.cpp")
