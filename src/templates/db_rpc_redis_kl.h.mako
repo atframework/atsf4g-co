@@ -1,6 +1,6 @@
 ## -*- coding: utf-8 -*-
 <%page args="message_name,index,key_fields" />
-struct ${message_name}_list_message {
+struct ATFW_UTIL_SYMBOL_VISIBLE ${message_name}_list_message {
   uint64_t list_index;
   atfw::util::memory::strong_rc_ptr<shared_message<PROJECT_NAMESPACE_ID::${message_name}>> message;
 };

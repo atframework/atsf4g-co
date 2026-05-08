@@ -11,13 +11,22 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_all(rpc::context &
                                                              );
 % endif
 
-struct table_key_t {
+struct ATFW_UTIL_SYMBOL_VISIBLE table_key_t {
+  explicit table_key_t(
+% for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]}${"," if not loop.last else ""}
+% endfor
+  ) :
+% for key_field in key_fields:
+    ${key_field["raw_name"]}(${key_field["raw_name"]})${"," if not loop.last else ""}
+% endfor
+  {}
 % for key_field in key_fields:
   ${key_field["cpp_type"]} ${key_field["raw_name"]};
 % endfor
 };
 
-struct batch_get_result_t {
+struct ATFW_UTIL_SYMBOL_VISIBLE batch_get_result_t {
   int32_t result;
 % if index.enable_cas:
   uint64_t version;
