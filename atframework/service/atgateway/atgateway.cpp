@@ -24,7 +24,7 @@
 #include <memory>
 
 #include "atframe/atapp_conf.h"
-#include "protocol/atgateway/protocol/v2/libatgw_protocol_sdk.h"
+#include "atgateway/protocol/v2/libatgw_protocol_sdk.h"
 #include "session_manager.h"  // NOLINT: build/include_subdir
 
 namespace {

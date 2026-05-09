@@ -137,7 +137,7 @@ message SSRankCheckSlaveRsp {
 message SSRankHeartbeatReq {
   DRankKey rank_key = 1;
   int64 data_version = 2;
-  int32 router_version = 3;
+  uint64 router_version = 3;
 }
 
 message SSRankHeartbeatRsp {

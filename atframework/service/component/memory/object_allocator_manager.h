@@ -386,7 +386,7 @@ class object_allocator_manager {
  public:
   template <class T, class... Args>
   ATFW_UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<T> make_shared(Args&&... args) {
-    allocator<T, typename object_allocator_backend<T>::allocator> alloc;
+    allocator<T, typename object_allocator_backend<T>::allocator> alloc{};
     ::std::shared_ptr<T> ret = ::std::allocate_shared<T>(alloc, std::forward<Args>(args)...);
 
     if (ret) {
@@ -491,7 +491,7 @@ class object_allocator_manager {
 
   template <class T, class... Args>
   ATFW_UTIL_SYMBOL_VISIBLE inline static atfw::util::memory::strong_rc_ptr<T> make_strong_rc(Args&&... args) {
-    allocator<T, typename object_allocator_backend<T>::allocator> alloc;
+    allocator<T, typename object_allocator_backend<T>::allocator> alloc{};
     atfw::util::memory::strong_rc_ptr<T> ret =
         atfw::util::memory::allocate_strong_rc<T>(alloc, std::forward<Args>(args)...);
 

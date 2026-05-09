@@ -135,7 +135,7 @@ SERVER_FRAME_API rpc_result<int64_t> generate_global_increase_id(rpc::context &c
   if (ret < 0) {
     RPC_RETURN_CODE(ret);
   }
-  RPC_RETURN_CODE(inc_value);
+  RPC_RETURN_CODE(static_cast<int64_t>(inc_value));
 }
 
 struct unique_id_key_t {

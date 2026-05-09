@@ -224,7 +224,7 @@ orbit::DAgentLoadSnapshot orbit_agent_manager::build_agent_load_snapshot() const
 
 rpc::result_code_type orbit_agent_manager::handle_start_client(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx,
                                                                const orbit::CTAStartClientReq& request,
-                                                               orbit::ATCStartClientRsp& response) {
+                                                               ATFW_EXPLICIT_UNUSED_ATTR orbit::ATCStartClientRsp& response) {
   server_heartbeat(request.server_identity());
 
   // 检查负载状态
@@ -262,7 +262,7 @@ rpc::result_code_type orbit_agent_manager::handle_start_client(ATFW_EXPLICIT_UNU
 
 rpc::result_code_type orbit_agent_manager::handle_forward_to_client(rpc::context& ctx,
                                                                     const orbit::CTAForwardToClientReq& request,
-                                                                    orbit::ATCForwardToClientRsp& response) {
+                                                                    ATFW_EXPLICIT_UNUSED_ATTR orbit::ATCForwardToClientRsp& response) {
   server_heartbeat(request.server_identity());
 
   const std::string& client_id = request.client_id().client_id();
@@ -294,7 +294,7 @@ rpc::result_code_type orbit_agent_manager::handle_forward_to_client(rpc::context
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type orbit_agent_manager::handle_server_heartbeat(rpc::context& ctx,
+rpc::result_code_type orbit_agent_manager::handle_server_heartbeat(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx,
                                                                    const orbit::CTAServerHeartbeatReq& request) {
   server_heartbeat(request.server_identity());
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -537,7 +537,7 @@ void orbit_agent_manager::fill_client_identity(orbit::DClientIdentity& output,
 
 void orbit_agent_manager::build_client_launch_arguments(orbit_agent_client_record_ptr record,
                                                         std::vector<std::string>& output) const {
-  output.reserve(configured_client_command_line_.size() + record->custom_args.size());
+  output.reserve(configured_client_command_line_.size() + static_cast<size_t>(record->custom_args.size()));
   for (const std::string& arg : configured_client_command_line_) {
     output.emplace_back(arg);
   }
@@ -585,7 +585,7 @@ int orbit_agent_manager::spawn_client_process(orbit_agent_client_record_ptr reco
   }
 
   record->process_handle = process_handle;
-  record->start_timepoint = static_cast<uint64_t>(util::time::time_utility::get_sys_now());
+  record->start_timepoint = static_cast<time_t>(util::time::time_utility::get_sys_now());
 
   std::string command_line_str;
   for (const auto& arg : launch_arguments) {

@@ -83,25 +83,8 @@ void on_rsp_login_auth(client_simulator::player_ptr_t player, client_simulator::
   player->set_id(rsp_body.open_id());
   player->set_access_token_code(rsp_body.access_token_code());
 
-  int sz = rsp_body.login_address_size();
-  if (sz <= 0) {
-    SIMULATOR_INFO_MSG() << "player " << player->get_id() << " login auth failed, has no lobbysvr." << std::endl;
-    player->close();
-    return;
-  }
-
-  int index = 0;
-  if (0 == player->get_gamesvr_index()) {
-    atfw::util::random::mt19937_64 rnd_engine;
-    index = rnd_engine.random_between<int>(0, sz);
-  } else if (player->get_gamesvr_index() > 0) {
-    index = (player->get_gamesvr_index() - 1) % sz;
-  } else {
-    index = (player->get_gamesvr_index() + sz) % sz;
-  }
 
   player->set_user_id(rsp_body.user_id());
-  player->set_gamesvr_addr(rsp_body.login_address(index));
 
   player->get_owner()->exec_cmd(player, "Player LoginGame");
 }

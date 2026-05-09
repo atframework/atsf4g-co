@@ -48,7 +48,7 @@ project_tool_split_target_debug_sybmol("${SIMULATOR_SRC_BIN_NAME}")
 project_tool_set_target_runtime_output_directory("${PROJECT_INSTALL_BAS_DIR}/tools/simulator/bin"
                                                  ${SIMULATOR_SRC_BIN_NAME} WITH_TARGET_RPATH WITH_ARCHIVE_RPATH)
 
-target_link_libraries(${SIMULATOR_SRC_BIN_NAME} ${PROJECT_SERVER_FRAME_LIB_LINK} atgw_v1_c
+target_link_libraries(${SIMULATOR_SRC_BIN_NAME} ${PROJECT_SERVER_FRAME_LIB_LINK} atgateway_client_sdk_v2_c
                       ${SIMULATOR_PRIVATE_LINK_NAMES})
 
 if(SIMULATOR_PRIVATE_DEFINITIONS)

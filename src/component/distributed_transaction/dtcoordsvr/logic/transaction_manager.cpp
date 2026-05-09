@@ -91,7 +91,7 @@ rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_p
          int64_t* out_version) -> rpc::result_code_type {
         uint64_t data_version = 0;
         if (nullptr != out_version) {
-          data_version = *out_version;
+          data_version = static_cast<uint64_t>(*out_version);
         }
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> storage{subctx};
         storage->set_zone_id(get_transaction_zone_id(in.metadata()));
@@ -103,7 +103,7 @@ rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_p
         int ret =
             RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::replace(subctx, std::move(storage), data_version));
         if (nullptr != out_version) {
-          *out_version = data_version;
+          *out_version = static_cast<int64_t>(data_version);
         }
 
         RPC_RETURN_CODE(ret);
@@ -204,7 +204,7 @@ rpc::result_code_type transaction_manager::mutable_transaction(
           }
 
           if (nullptr != out_version) {
-            *out_version = data_version;
+            *out_version = static_cast<int64_t>(data_version);
           }
 
           RPC_RETURN_CODE(sub_ret);

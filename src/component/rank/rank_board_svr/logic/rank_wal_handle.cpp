@@ -202,14 +202,14 @@ static rank_wal_publisher_type::configure_pointer create_rank_publisher_congigur
                                ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
                                .pushlisher_congihure()
                                .gc_expire_duration()};
-  ret->gc_log_size = logic_config::me()
+  ret->gc_log_size = static_cast<size_t>(logic_config::me()
                          ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
                          .pushlisher_congihure()
-                         .gc_log_size();
-  ret->max_log_size = logic_config::me()
+                         .gc_log_size());
+  ret->max_log_size = static_cast<size_t>(logic_config::me()
                           ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
                           .pushlisher_congihure()
-                          .max_log_size();
+                          .max_log_size());
 
   // ret->subscriber_timeout = std::chrono::seconds{10};
 

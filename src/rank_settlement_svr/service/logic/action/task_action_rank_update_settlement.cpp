@@ -37,6 +37,8 @@
 #include <memory>
 #include <unordered_set>
 
+#include "config/excel/config_manager.h"
+
 #include "logic/action/task_action_rank_send_settlement.h"
 #include "logic/rank_settlement_manager.h"
 
@@ -219,7 +221,7 @@ static rpc::result_void_type refresh_new_peried(
 
 rpc::result_code_type task_action_rank_update_settlement::settle_rank_once(
     rpc::context& ctx, bool& allow_continue,
-    const ::excel::excel_config_type_traits::shared_ptr<excel::config_group_t>& group,
+    ATFW_EXPLICIT_UNUSED_ATTR const ::excel::excel_config_type_traits::shared_ptr<excel::config_group_t>& group,
     const PROJECT_NAMESPACE_ID::config::ExcelRankRule& cfg, logic_rank_handle_variant& rank_handle,
     uint32_t settle_loop_count, bool /*has_daily_reword*/, time_t /*daily_settlement_id*/, bool /*has_custom_reword*/,
     time_t /*custom_settlement_id*/,
@@ -308,7 +310,7 @@ rpc::result_code_type task_action_rank_update_settlement::settle_rank_once(
     }
 
     task_action_rank_send_settlement::ctor_param_t subtask_param;
-    subtask_param.group = group;
+    // subtask_param.group = group;
     subtask_param.rank_rule_cfg = &cfg;
     std::tie(subtask_param.zone_id, subtask_param.user_id, subtask_param.instance_type, subtask_param.instance_id) =
         rank_openid_to_user_key(rank_handle.get_current_open_id());

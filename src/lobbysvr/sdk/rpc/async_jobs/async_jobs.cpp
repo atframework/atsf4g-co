@@ -214,7 +214,7 @@ GAME_RPC_API ::rpc::db::result_type remove_all_jobs(rpc::context& ctx, int32_t j
 GAME_RPC_API ::rpc::db::result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id,
                                                 uint32_t zone_id,
                                                 shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs>& input,
-                                                int64_t record_index, action_options options) {
+                                                uint64_t record_index, action_options options) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
                user_id, zone_id);
@@ -231,12 +231,6 @@ GAME_RPC_API ::rpc::db::result_type update_jobs(rpc::context& ctx, int32_t jobs_
   if (PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::ACTION_NOT_SET == input->job_data().action_case()) {
     FWLOGERROR("{} be called without a action.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type, user_id,
                zone_id);
-    RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
-  }
-
-  if (record_index < 0) {
-    FWLOGERROR("{} be called with invalid index {}.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, record_index,
-               jobs_type, user_id, zone_id);
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 

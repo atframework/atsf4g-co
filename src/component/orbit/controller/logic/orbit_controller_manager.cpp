@@ -301,7 +301,7 @@ rpc::result_code_type orbit_controller_manager::handle_forward_to_server(rpc::co
 // ===================== Server 侧 handlers =====================
 rpc::result_code_type orbit_controller_manager::handle_launch_client(rpc::context& ctx,
                                                                      const orbit::STCLaunchClientReq& request,
-                                                                     orbit::CTSLaunchClientRsp& response) {
+                                                                     ATFW_EXPLICIT_UNUSED_ATTR orbit::CTSLaunchClientRsp& response) {
   const uint64_t server_unique_id = request.server_identity().unique_id();
   if (0 == server_unique_id) {
     FWLOGERROR("orbit controller launch_client rejected: server unique_id is 0");

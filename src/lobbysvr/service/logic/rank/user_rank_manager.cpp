@@ -560,7 +560,7 @@ rpc::result_code_type user_rank_manager::get_top_rank(
     rpc::context &ctx, const logic_rank_handle_key &rank_key, const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
     google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DRankUserBasicData> &response,
     ATFW_EXPLICIT_UNUSED_ATTR uint32_t &total_count, uint32_t from_rank_no, uint32_t rank_count,
-    ATFW_EXPLICIT_UNUSED_ATTR bool ignore_zero, bool allow_submit_local) {
+    ATFW_EXPLICIT_UNUSED_ATTR bool ignore_zero, ATFW_EXPLICIT_UNUSED_ATTR bool allow_submit_local) {
   if (PROJECT_NAMESPACE_ID::EN_RANK_LOGIC_TYPE_INVALID == rank_key.get_rank_type() ||
       !PROJECT_NAMESPACE_ID::EnRankLogicType_IsValid(static_cast<int>(rank_key.get_rank_type()))) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
@@ -593,13 +593,13 @@ rpc::result_code_type user_rank_manager::get_top_rank(
   }
 
   time_t now = util::time::time_utility::get_now();
-  bool has_self = false;
+  // bool has_self = false;
   uint32_t score_min = std::numeric_limits<uint32_t>::max();
   for (auto cur = rank_handle.get_current_cursor(); cur != nullptr;) {
     convert_to(*response.Add(), *cur);
     if (cur->zone_id == owner_->get_zone_id() && cur->user_id == owner_->get_user_id()) {
       update_rank_score_cache(ctx, rank_data_index{cfg, rank_key}, cfg, *cur, now);
-      has_self = true;
+      // has_self = true;
     }
     if (score_min > cur->score) {
       score_min = cur->score;
@@ -861,12 +861,13 @@ void user_rank_manager::reset_io_task_protect() {
   }
 }
 
-rpc::result_code_type user_rank_manager::add_settle_reward(rpc::context &ctx,
+rpc::result_code_type user_rank_manager::add_settle_reward(ATFW_EXPLICIT_UNUSED_ATTR rpc::context &ctx,
                                                            const PROJECT_NAMESPACE_ID::DRankBoardBasicData &rank_basic,
                                                            int32_t pool_id,
                                                            PROJECT_NAMESPACE_ID::EnRankPeriodRewardType pool_type,
                                                            ATFW_EXPLICIT_UNUSED_ATTR bool save_history, time_t cycle_no,
-                                                           bool is_custom, time_t deliver_time, int32_t season_id) {
+                                                           bool is_custom, ATFW_EXPLICIT_UNUSED_ATTR time_t deliver_time, 
+                                                           ATFW_EXPLICIT_UNUSED_ATTR int32_t season_id) {
   auto rule_cfg = excel::get_ExcelRankRule_by_rank_type_rank_instance_id(rank_basic.rank_key().rank_type(),
                                                                          rank_basic.rank_key().rank_instance_id());
   if (!rule_cfg) {

@@ -563,7 +563,7 @@ int unpack_message_with_field(::google::protobuf::Message &msg, const redisReply
     return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
   }
 
-  if (reply->elements != length) {
+  if (reply->elements != static_cast<size_t>(length)) {
     FWLOGDEBUG("unpack message {} failed, reply elements {} not match fields length {}.",
                msg.GetDescriptor()->full_name(), reply->elements, length);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;

@@ -97,10 +97,10 @@ class rank : public util::memory::enable_shared_rc_from_this<rank> {
   bool is_readable() const;
 
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type switch_to_main(
-      rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_rank_router& db_router, int32_t db_router_version);
+      rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_rank_router& db_router, uint64_t db_router_version);
   void switch_to_slave(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankRouterData& router_data);
   const PROJECT_NAMESPACE_ID::DRankRouterData& get_router_data() const;
-  void set_router_data(const PROJECT_NAMESPACE_ID::table_rank_router& db_router, int32_t db_router_version);
+  void set_router_data(const PROJECT_NAMESPACE_ID::table_rank_router& db_router, uint64_t db_router_version);
 
   bool is_io_task_running();
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(rpc::context& ctx);

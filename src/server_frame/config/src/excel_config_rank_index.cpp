@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "utility/random_engine.h"
 #include "config/excel/config_manager.h"
 #include "config/excel/config_set_ExcelRankPeriodRewardPool.h"
 

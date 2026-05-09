@@ -418,7 +418,7 @@ bool rank::is_readable() const { return is_main_node() || is_slave_node(); }
 const PROJECT_NAMESPACE_ID::DRankRouterData& rank::get_router_data() const { return router_data_; }
 
 rpc::result_code_type rank::switch_to_main(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_rank_router& db_router,
-                                           int32_t db_router_version) {
+                                           uint64_t db_router_version) {
   set_router_data(db_router, db_router_version);
   RPC_AWAIT_IGNORE_RESULT(notify_switch_to_slave(ctx));
 
@@ -428,7 +428,7 @@ rpc::result_code_type rank::switch_to_main(rpc::context& ctx, const PROJECT_NAME
   RPC_RETURN_CODE(0);
 }
 
-void rank::set_router_data(const PROJECT_NAMESPACE_ID::table_rank_router& db_router, int32_t db_router_version) {
+void rank::set_router_data(const PROJECT_NAMESPACE_ID::table_rank_router& db_router, uint64_t db_router_version) {
   router_data_.set_main_server_id(db_router.router_main_node_id());
   protobuf_copy_message(*router_data_.mutable_slave_server_ids(), db_router.blob_data().slave_nodes());
 

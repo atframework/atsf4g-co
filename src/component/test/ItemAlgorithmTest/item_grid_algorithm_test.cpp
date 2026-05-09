@@ -918,14 +918,12 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
   // 验证: 旧位置释放, 新位置占用, entry_id 不变
   // ----------------------------------------------------------------
   CASE_MSG_INFO() << "=== Step 13: Move 整体搬移 ===\n";
-  uint64_t move_entry_id;
   {
     PROJECT_NAMESPACE_ID::DItemGridPosition gpos10;
     gpos10.mutable_user_inventory()->set_x(1);
     gpos10.mutable_user_inventory()->set_y(0);
     auto entry = server.get(gpos10);
     CASE_EXPECT_TRUE(entry != nullptr);
-    move_entry_id = entry->entry_id;
 
     ItemGridMoveRequest move_req;
     move_req.move_sub_entrys.push_back({entry, 90});

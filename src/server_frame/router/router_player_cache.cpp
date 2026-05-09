@@ -23,9 +23,9 @@
 SERVER_FRAME_API router_player_private_type::router_player_private_type()
     : login_lock_tb(nullptr), login_lock_cas_ver(0) {}
 SERVER_FRAME_API router_player_private_type::router_player_private_type(
-    rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> *login_lock_tb, uint64_t login_lock_cas_ver,
-    const std::string &openid)
-    : login_lock_tb(login_lock_tb), login_lock_cas_ver(login_lock_cas_ver), openid(openid) {}
+    rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> *login_lock_tb_t, uint64_t login_lock_cas_ver_t,
+    const std::string &openid_t)
+    : login_lock_tb(login_lock_tb_t), login_lock_cas_ver(login_lock_cas_ver_t), openid(openid_t) {}
 SERVER_FRAME_API router_player_private_type::~router_player_private_type() {}
 
 SERVER_FRAME_API router_player_cache::router_player_cache(uint64_t user_id, uint32_t zone_id, const std::string &openid)

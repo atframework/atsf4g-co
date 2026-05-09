@@ -81,7 +81,7 @@ SERVER_FRAME_API result_type remove_all(rpc::context &ctx
   size_t keylen = sizeof(db_key);
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
   if (result.size < static_cast<int64_t>(keylen)) {
-    keylen = result.size;
+    keylen = static_cast<size_t>(result.size);
   }
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::remove_all(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
                                                                 gsl::string_view{db_key, keylen}));

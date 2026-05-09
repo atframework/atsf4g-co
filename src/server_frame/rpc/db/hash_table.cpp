@@ -126,7 +126,7 @@ SERVER_FRAME_API result_type partly_get(rpc::context &ctx, uint32_t channel, gsl
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
   }
 
-  int32_t args_size = 2 + partly_get_field_count;
+  size_t args_size = 2 + size_t(partly_get_field_count);
   redis_args args(args_size);
   args.push("HMGet");
   args.push(key.data(), key.size());
@@ -202,7 +202,7 @@ batch_get_all(rpc::context &ctx, uint32_t channel, gsl::span<std::string> key,
   const size_t pending_action_batch_count = 20;
   pending_action_batch_tasks.reserve(pending_action_batch_count);
 
-  for (int32_t index = 0; index < key.size(); ++index) {
+  for (size_t index = 0; index < key.size(); ++index) {
     atfw::util::time::time_utility::update();
 
     TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_status);
@@ -284,7 +284,7 @@ batch_partly_get(rpc::context &ctx, uint32_t channel, gsl::span<std::string> key
   const size_t pending_action_batch_count = 20;
   pending_action_batch_tasks.reserve(pending_action_batch_count);
 
-  for (int32_t index = 0; index < key.size(); ++index) {
+  for (size_t index = 0; index < key.size(); ++index) {
     atfw::util::time::time_utility::update();
 
     TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_status);
@@ -371,7 +371,7 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
   }
   reflect->ListFields(*store, &fds);
 
-  int32_t args_size = static_cast<int32_t>(fds.size()) * 2;
+  size_t args_size = fds.size() * 2;
   if (version != nullptr) {
     // EVALSHA
     // sha1

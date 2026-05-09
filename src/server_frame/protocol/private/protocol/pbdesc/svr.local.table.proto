@@ -220,8 +220,8 @@ message table_rank_router {
     }
   };
   // clang-format on
-  int32 rank_type = 1;
-  int32 rank_instance_id = 2;
+  uint32 rank_type = 1;
+  uint32 rank_instance_id = 2;
   uint32 sub_rank_type = 4;
   uint32 sub_rank_instance_id = 5;
   uint32 zone_id = 6;

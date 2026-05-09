@@ -93,9 +93,9 @@ struct ITEM_ALGORITHM_API ItemGridMoveSubRequest {
   int32_t op_count;
 
   // Helper Field
-  ItemGridPosition position;
-  int32_t item_row;
-  int32_t item_col;
+  ItemGridPosition position = {};
+  int32_t item_row = 0;
+  int32_t item_col = 0;
 };
 
 struct ITEM_ALGORITHM_API ItemGridMoveAddRequest {
@@ -104,11 +104,11 @@ struct ITEM_ALGORITHM_API ItemGridMoveAddRequest {
   int32_t op_count;
 
   // Helper Field
-  int32_t type_id;
-  ItemGridPosition position;
-  int32_t item_row;
-  int32_t item_col;
-  int64_t accumulation_limit;
+  int32_t type_id = 0;
+  ItemGridPosition position = {};
+  int32_t item_row = 0;
+  int32_t item_col = 0;
+  int64_t accumulation_limit = 0;
 };
 
 struct ITEM_ALGORITHM_API ItemGridMoveRequest {

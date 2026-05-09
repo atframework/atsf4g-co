@@ -61,7 +61,7 @@ task_action_ping::result_type task_action_ping::operator()() {
       int res = RPC_AWAIT_CODE_RESULT(
           rpc::db::login_lock::get_all(get_shared_context(), user->get_user_id(), tb, login_lock_cas_ver));
       if (res < 0) {
-        WLOGERROR("call login rpc Get method failed, user %llu, res: %d", user->get_user_id(), res);
+        FWLOGERROR("call login rpc Get method failed, user {}, res: {}", user->get_user_id(), res);
         break;
       }
 
@@ -97,8 +97,8 @@ task_action_ping::result_type task_action_ping::operator()() {
           rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_login_lock>(get_shared_context(), tb),
           login_lock_cas_ver));
       if (res < 0) {
-        WLOGERROR("call login rpc Set method failed, user %s, zone id: %llu, res: %d", user->get_user_id(),
-                  user->get_zone_id(), res);
+        FWLOGERROR("call login rpc Set method failed, user {}, zone id: {}, res: {}", user->get_user_id(),
+                   user->get_zone_id(), res);
       } else {
         user->load_and_move_login_lock(std::move(*tb), login_lock_cas_ver);
       }

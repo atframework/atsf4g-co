@@ -33,7 +33,7 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx
   size_t keylen = sizeof(db_key);
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
   if (result.size < static_cast<int64_t>(keylen)) {
-    keylen = result.size;
+    keylen = static_cast<size_t>(result.size);
   }
   auto output = atfw::util::memory::make_strong_rc<db_key_value_message_result_t>();
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::get_all(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
@@ -66,7 +66,7 @@ SERVER_FRAME_API result_type batch_get_all(rpc::context &ctx, gsl::span<table_ke
     size_t keylen = sizeof(db_key);
     auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_key});
     if (result.size < static_cast<int64_t>(keylen)) {
-      keylen = result.size;
+      keylen = static_cast<size_t>(result.size);
     }
     db_keys.push_back(std::string{db_key, keylen});
   }
@@ -79,7 +79,7 @@ SERVER_FRAME_API result_type batch_get_all(rpc::context &ctx, gsl::span<table_ke
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
   }
-  for (int32_t index = 0; index < static_cast<int32_t>(outputs.size()); ++index) {
+  for (size_t index = 0; index < static_cast<size_t>(outputs.size()); ++index) {
     auto &output = outputs[index];
     if (!output) {
       batch_get_result_t empty_result;
@@ -122,7 +122,7 @@ SERVER_FRAME_API result_type replace(rpc::context &ctx,
   size_t keylen = sizeof(db_key);
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_pb});
   if (result.size < static_cast<int64_t>(keylen)) {
-    keylen = result.size;
+    keylen = size_t(result.size);
   }
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::set(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
                                                                 gsl::string_view{db_key, keylen},
@@ -153,7 +153,7 @@ static int32_t unpack_${message_name}_inc_field_${inc_field["raw_name"]}(rpc::co
   }
 
   shared_message<PROJECT_NAMESPACE_ID::${message_name}> table_pb{*ctx};
-  table_pb->set_${inc_field["raw_name"]}(reply->integer);
+  table_pb->set_${inc_field["raw_name"]}(static_cast<uint64_t>(reply->integer));
   msg.body_message =
       atfw::util::memory::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(std::move(table_pb));
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
@@ -169,7 +169,7 @@ SERVER_FRAME_API result_type inc_field_${inc_field["raw_name"]}(rpc::context &ct
   size_t keylen = sizeof(db_key);
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
   if (result.size < static_cast<int64_t>(keylen)) {
-    keylen = result.size;
+    keylen = static_cast<size_t>(result.size);
   }
   shared_message<PROJECT_NAMESPACE_ID::${message_name}> table_db{ctx};
   table_db->set_${inc_field["raw_name"]}(1);
@@ -262,7 +262,7 @@ SERVER_FRAME_API result_type partly_get_${partly_field_name}(rpc::context &ctx
   size_t keylen = sizeof(db_key);
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
   if (result.size < static_cast<int64_t>(keylen)) {
-    keylen = result.size;
+    keylen = static_cast<size_t>(result.size);
   }
   gsl::string_view partly_get_field[${partly_field_len}];
 <%
@@ -319,7 +319,7 @@ SERVER_FRAME_API result_type batch_partly_get_${partly_field_name}(rpc::context 
     size_t keylen = sizeof(db_key);
     auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_key});
     if (result.size < static_cast<int64_t>(keylen)) {
-      keylen = result.size;
+      keylen = static_cast<size_t>(result.size);
     }
     db_keys.push_back(std::string{db_key, keylen});
   }
@@ -357,7 +357,7 @@ SERVER_FRAME_API result_type batch_partly_get_${partly_field_name}(rpc::context 
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
   }
-  for (int32_t index = 0; index < static_cast<int32_t>(outputs.size()); ++index) {
+  for (size_t index = 0; index < outputs.size(); ++index) {
     auto &output = outputs[index];
     if (!output) {
       batch_get_result_t empty_result;

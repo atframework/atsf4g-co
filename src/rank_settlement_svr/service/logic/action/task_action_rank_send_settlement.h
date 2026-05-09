@@ -3,7 +3,7 @@
 #include <dispatcher/task_action_no_req_base.h>
 #include <dispatcher/task_manager.h>
 
-#include <config/excel/config_manager.h>
+// #include <config/excel/config_manager.h>
 
 #include <rpc/rpc_common_types.h>
 
@@ -17,7 +17,7 @@ struct logic_rank_handle_data;
 class task_action_rank_send_settlement : public task_action_no_req_base {
  public:
   struct ctor_param_t : public task_action_no_req_base::ctor_param_t {
-    excel::config_manager::config_group_ptr_t group;
+    // excel::config_manager::config_group_ptr_t group;
     const PROJECT_NAMESPACE_ID::config::ExcelRankRule* rank_rule_cfg;  // lifetime equal to group
     uint64_t user_id;
     uint32_t zone_id;

@@ -394,16 +394,16 @@ rpc::result_code_type cache_group_manager::pull_user_cache_fn(::rpc::context &ct
             RPC_RETURN_CODE(0);
           }
 
-          auto iter_fill = fill_data_ptr->find(table_key);
-          if (iter_fill == fill_data_ptr->end()) {
+          auto iter_fill_data = fill_data_ptr->find(table_key);
+          if (iter_fill_data == fill_data_ptr->end()) {
             RPC_RETURN_CODE(0);
           }
 
-          if (nullptr == iter_fill->second) {
+          if (nullptr == iter_fill_data->second) {
             RPC_RETURN_CODE(0);
           }
 
-          update_meta_user_cache_fn(child_ctx, rsp_body->cache_meta(), *iter_fill->second);
+          update_meta_user_cache_fn(child_ctx, rsp_body->cache_meta(), *iter_fill_data->second);
           RPC_RETURN_CODE(0);
         });
 
