@@ -16,3 +16,6 @@ project_game_shared_component_declare_sdk(
   SOURCES
   "${CMAKE_CURRENT_LIST_DIR}/src/Orbit/OrbitClientRuntime.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/src/Orbit/OrbitClientRuntimeRpc.cpp")
+
+set(ORBIT_CLIENT_SDK_TARGET "${TARGET_FULL_NAME}")
+add_subdirectory(AutoClient)

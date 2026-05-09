@@ -29,6 +29,7 @@ constexpr const char* kMethodClientHeartbeat = "client_heartbeat";
 constexpr const char* kMethodSendToServer = "send_to_server";
 constexpr const char* kMethodClientStart = "client_start";
 constexpr const char* kMethodClientExit = "client_exit";
+constexpr int32_t kInServerMessageType = 11;
 
 enum class orbit_receive_rpc_type_t : uint8_t {
   kInvalid = 0,
@@ -162,7 +163,7 @@ bool OrbitClientRuntime::send_stream_message(const google::protobuf::MessageLite
   }
 
   int send_result = app_->get_bus_node()->send_data(
-      agent_bus_id_, 0,
+      agent_bus_id_, kInServerMessageType,
       gsl::span<const unsigned char>(reinterpret_cast<const unsigned char*>(packed_message.data()),
                                      packed_message.size()));
   if (0 != send_result) {

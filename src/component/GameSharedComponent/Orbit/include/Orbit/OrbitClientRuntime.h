@@ -27,7 +27,7 @@ ORBIT_CLIENT_SDK_NAMESPACE_BEGIN
 
 namespace orbit_client_sdk {
 
-class ORBIT_CLIENT_SDK_API OrbitClientRuntime final : public util::design_pattern::singleton<OrbitClientRuntime> {
+class ORBIT_CLIENT_SDK_API OrbitClientRuntime : public util::design_pattern::singleton<OrbitClientRuntime> {
  public:
   using clock_type = std::chrono::steady_clock;
 
@@ -35,7 +35,7 @@ class ORBIT_CLIENT_SDK_API OrbitClientRuntime final : public util::design_patter
   OrbitClientRuntime();
   ~OrbitClientRuntime();
 
-  int init(int argc, char* argv[], const OrbitClientCallbacks& callbacks);
+  int init(int argc, char* argv[], const std::string& client_addr, const OrbitClientCallbacks& callbacks);
   int init(uint64_t app_id, const OrbitClientOptions& options, const OrbitClientCallbacks& callbacks);
   void tick();
 

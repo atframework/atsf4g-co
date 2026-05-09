@@ -6,6 +6,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include <string_view>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -30,6 +31,7 @@ constexpr const char* kAtappProgramName = "orbit-client-runtime";
 constexpr const char* kOrbitArgsAppId = "-id";
 constexpr const char* kOrbitArgsClientIdArgument = "--orbit-client-id";
 constexpr const char* kOrbitArgsAgentEndpointArgument = "--orbit-agent-endpoint";
+constexpr const char* kOrbitArgsConfigEnvArgument = "--config_env";
 
 void fill_client_id(orbit::DClientId& client_id, const std::string& value) { client_id.set_client_id(value); }
 
@@ -59,18 +61,7 @@ bool try_consume_argument_value(int argc, char* argv[], int& index, const char* 
     }
     return true;
   }
-
-  size_t option_name_len = std::strlen(option_name);
-  if (0 != std::strncmp(argv[index], option_name, option_name_len)) {
-    return false;
-  }
-
-  if ('=' != argv[index][option_name_len]) {
-    return false;
-  }
-
-  output.assign(argv[index] + option_name_len + 1);
-  return true;
+  return false;
 }
 
 bool try_parse_uint64_argument(const std::string& input, uint64_t& output) {
@@ -87,6 +78,62 @@ bool try_parse_uint64_argument(const std::string& input, uint64_t& output) {
 
   output = static_cast<uint64_t>(parsed_value);
   return true;
+}
+
+int set_process_environment_variable(const std::string& key, const std::string& value) {
+#if defined(_WIN32)
+  return _putenv_s(key.c_str(), value.c_str());
+#else
+  return setenv(key.c_str(), value.c_str(), 1);
+#endif
+}
+
+std::string_view trim_ascii_whitespace(std::string_view input) {
+  while (!input.empty()) {
+    char current = input.front();
+    if (current != ' ' && current != '\t' && current != '\r' && current != '\n') {
+      break;
+    }
+
+    input.remove_prefix(1);
+  }
+
+  while (!input.empty()) {
+    char current = input.back();
+    if (current != ' ' && current != '\t' && current != '\r' && current != '\n') {
+      break;
+    }
+
+    input.remove_suffix(1);
+  }
+
+  return input;
+}
+
+int apply_config_env_overrides(const OrbitClientOptions& options) {
+  if (options.config_env.empty()) {
+    return 0;
+  }
+
+  for (const std::string& env_line : options.config_env) {
+    std::string_view trimmed_line = trim_ascii_whitespace(env_line);
+    size_t equal_pos = env_line.find('=');
+    if (equal_pos == std::string_view::npos || 0 == equal_pos) {
+      return -1;
+    }
+
+    std::string_view key = trim_ascii_whitespace(trimmed_line.substr(0, equal_pos));
+    if (key.empty()) {
+      return -1;
+    }
+
+    std::string_view value = trimmed_line.substr(equal_pos + 1);
+    if (0 != set_process_environment_variable(std::string{key}, std::string{value})) {
+      return -1;
+    }
+  }
+
+  return 0;
 }
 
 uint64_t make_initial_sequence_allocator() {
@@ -111,48 +158,29 @@ OrbitClientRuntime::OrbitClientRuntime()
 
 OrbitClientRuntime::~OrbitClientRuntime() { restore_app_callbacks(); }
 
-int OrbitClientRuntime::init(int argc, char* argv[], const OrbitClientCallbacks& callbacks) {
+int OrbitClientRuntime::init(int argc, char* argv[], const std::string& client_addr,
+                             const OrbitClientCallbacks& callbacks) {
   OrbitClientOptions options;
   uint64_t app_id = 0;
+  options.client_addr = client_addr;
 
   int extract_result = extract_launch_options(argc, argv, app_id, options);
   if (extract_result >= 0) {
     return init(app_id, options, callbacks);
+  } else {
+    emit_log(callbacks, OrbitClientLogLevel::kError,
+             LOG_WRAPPER_FWAPI_FORMAT("init rejected: invalid extract_launch_options result {}", extract_result));
   }
-
-  switch (extract_result) {
-    case -20:
-      emit_log(callbacks, OrbitClientLogLevel::kError, "init rejected: invalid argc/argv input");
-      break;
-    case -21:
-      emit_log(callbacks, OrbitClientLogLevel::kError, "init rejected: missing -id launch argument");
-      break;
-    case -22:
-      emit_log(callbacks, OrbitClientLogLevel::kError, "init rejected: invalid -id launch argument value");
-      break;
-    case -23:
-      emit_log(callbacks, OrbitClientLogLevel::kError, "init rejected: missing --orbit-agent-endpoint launch argument");
-      break;
-    case -24:
-      emit_log(callbacks, OrbitClientLogLevel::kError, "init rejected: missing --orbit-client-id launch argument");
-      break;
-    default:
-      emit_log(callbacks, OrbitClientLogLevel::kError, "init rejected: failed to extract orbit launch arguments");
-      break;
-  }
-
   return extract_result;
 }
 
 int OrbitClientRuntime::extract_launch_options(int argc, char* argv[], uint64_t& app_id,
                                                OrbitClientOptions& options) const {
   if (argc <= 0 || nullptr == argv) {
-    return -20;
+    return -1;
   }
 
   app_id = 0;
-  options = OrbitClientOptions{};
-
   bool has_app_id = false;
   bool has_agent_endpoint = false;
   bool has_client_id = false;
@@ -180,22 +208,29 @@ int OrbitClientRuntime::extract_launch_options(int argc, char* argv[], uint64_t&
       has_client_id = !options.client_id.empty();
       continue;
     }
+
+    if (try_consume_argument_value(argc, argv, index, kOrbitArgsConfigEnvArgument, parsed_value)) {
+      if (!parsed_value.empty()) {
+        options.config_env.push_back(parsed_value);
+      }
+      continue;
+    }
   }
 
   if (app_id_value_invalid) {
-    return -22;
+    return -2;
   }
 
   if (!has_app_id || 0 == app_id) {
-    return -21;
+    return -3;
   }
 
   if (!has_agent_endpoint) {
-    return -23;
+    return -4;
   }
 
   if (!has_client_id) {
-    return -24;
+    return -5;
   }
 
   return 0;
@@ -234,6 +269,11 @@ int OrbitClientRuntime::init(uint64_t app_id, const OrbitClientOptions& options,
   sequence_allocator_ = make_initial_sequence_allocator();
   last_heartbeat_timepoint_ = clock_type::time_point{};
   set_state(OrbitClientRuntimeState::kIdle);
+
+  if (0 != apply_config_env_overrides(options_)) {
+    log(OrbitClientLogLevel::kError, "init rejected: failed to inject config env overrides");
+    return -8;
+  }
 
   uint64_t resolved_app_id = app_id;
   if (0 == resolved_app_id) {
@@ -323,7 +363,7 @@ bool OrbitClientRuntime::connect() {
   time_t begin_connect =
       std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
   while (state_ == OrbitClientRuntimeState::kConnecting) {
-    app_->tick();
+    app_->run_once(0, std::chrono::seconds{0});
     time_t now =
         std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     if (now - begin_connect > 5) {
@@ -367,7 +407,7 @@ bool OrbitClientRuntime::notify_process_ready(const std::string& custom_data) {
 
 void OrbitClientRuntime::tick() {
   if (nullptr != app_ && app_->is_inited() && !app_->check_flag(::atframework::atapp::app::flag_t::kInTick)) {
-    app_->tick();
+    app_->run_once(0, std::chrono::seconds{0});
   }
 
   if (state_ != OrbitClientRuntimeState::kRunning) {
@@ -525,6 +565,7 @@ int OrbitClientRuntime::on_atapp_forward_response(::atframework::atapp::app& app
 }
 
 int OrbitClientRuntime::on_atapp_connected(::atframework::atapp::app& app, ::atbus::endpoint& ep, int status) {
+  log(OrbitClientLogLevel::kInfo, "atapp connected");
   if (&app == app_.get() && 0 == status && OrbitClientRuntimeState::kConnecting == state_ && 0 == agent_bus_id_) {
     agent_bus_id_ = ep.get_id();
     set_state(OrbitClientRuntimeState::kConnected);
@@ -536,6 +577,7 @@ int OrbitClientRuntime::on_atapp_connected(::atframework::atapp::app& app, ::atb
 }
 
 int OrbitClientRuntime::on_atapp_disconnected(::atframework::atapp::app& app, ::atbus::endpoint& ep, int status) {
+  log(OrbitClientLogLevel::kInfo, "atapp disconnected");
   if (&app == app_.get() && 0 != agent_bus_id_ && ep.get_id() == agent_bus_id_) {
     agent_bus_id_ = 0;
     if (state_ != OrbitClientRuntimeState::kStopping && state_ != OrbitClientRuntimeState::kStopped) {

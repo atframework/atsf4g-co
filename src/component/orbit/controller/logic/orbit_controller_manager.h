@@ -86,10 +86,16 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
                            const orbit::DAgentEtcdLoadRecord& record);
   void update_agent_load(const orbit::DAgentEtcdLoadRecord& record);
 
+  int32_t init_discovery(std::shared_ptr<atfw::atapp::etcd_module> etcd_mod, const std::string& path);
+
  private:
   bool stopped_ = false;
+  atfw::atapp::app* app_;
   std::string region_;
 
   // Agent节点信息: agent_server_id → orbit_controller_agent_info
   std::unordered_map<uint64_t, orbit_controller_agent_info> agents_;
+
+  std::list<atapp::etcd_keepalive::ptr_t> keepalive_actors_;
+  std::list<atapp::etcd_watcher::ptr_t> watchers_;
 };

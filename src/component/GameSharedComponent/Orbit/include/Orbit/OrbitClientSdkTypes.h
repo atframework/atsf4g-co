@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <vector>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -46,6 +47,7 @@ struct OrbitClientOptions {
   std::string client_addr;
   std::chrono::milliseconds heartbeat_interval{std::chrono::seconds{5}};
   bool auto_send_heartbeat_on_tick = true;
+  std::vector<std::string> config_env;
 };
 
 struct OrbitClientLogRecord {

@@ -59,6 +59,7 @@ rpc::result_code_type orbit_server_manager::start_client(
   client_info_ptr_->status = EnClientStatus::EN_CLIENT_STATUS_STARTING;
   client_info_ptr_->region = region;
   client_info_map_[client_id] = client_info_ptr_;
+  client_region_map_[region].insert(client_id);
 
   auto req = rpc::make_shared_message<orbit::STCLaunchClientReq>(ctx);
   auto rsp = rpc::make_shared_message<orbit::CTSLaunchClientRsp>(ctx);
@@ -74,6 +75,13 @@ rpc::result_code_type orbit_server_manager::start_client(
                rpc_result);
     client_info_ptr_->status = EnClientStatus::EN_CLIENT_STATUS_EXITED;
     client_info_map_.erase(client_id);
+    auto client_region_iter = client_region_map_.find(region);
+    if (client_region_iter != client_region_map_.end()) {
+      client_region_iter->second.erase(client_id);
+      if (client_region_iter->second.empty()) {
+        client_region_map_.erase(client_region_iter);
+      }
+    }
     RPC_RETURN_CODE(rpc_result);
   }
 
@@ -280,6 +288,7 @@ rpc::result_code_type orbit_server_manager::handle_client_start_notify(rpc::cont
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SERVER_CLIENT_NOT_RUNNING);
   }
   client_info_ptr_->client_identity = req.client_identity();
+  client_info_ptr_->status = EnClientStatus::EN_CLIENT_STATUS_RUNNING;
   if (on_client_start_notify_) {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(on_client_start_notify_(ctx, client_id, req.client_addr(), req.data())));
   }
@@ -294,12 +303,16 @@ rpc::result_code_type orbit_server_manager::handle_client_end_notify(rpc::contex
     FWLOGERROR("failed to find client info for client identity {}", client_id);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SERVER_CLIENT_NOT_FOUND);
   }
-  if (client_info_ptr_->status != EnClientStatus::EN_CLIENT_STATUS_RUNNING) {
-    FWLOGERROR("client {} is not in running status, current status: {}", client_id,
-               static_cast<int>(client_info_ptr_->status));
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SERVER_CLIENT_NOT_RUNNING);
-  }
+
+  const std::string region = client_info_ptr_->region;
   client_info_map_.erase(client_id);
+  auto client_region_iter = client_region_map_.find(region);
+  if (client_region_iter != client_region_map_.end()) {
+    client_region_iter->second.erase(client_id);
+    if (client_region_iter->second.empty()) {
+      client_region_map_.erase(client_region_iter);
+    }
+  }
   if (on_client_end_notify_) {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
         on_client_end_notify_(ctx, client_id, req.exit_reason(), req.exit_data(), req.exit_code())));

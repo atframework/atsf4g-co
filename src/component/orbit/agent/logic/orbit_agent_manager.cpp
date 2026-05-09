@@ -29,8 +29,8 @@
 
 #include <google/protobuf/util/json_util.h>
 #include <protocol/config/orbit_agent_config.pb.h>
-#include <protocol/pbdesc/svr.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
+#include <protocol/pbdesc/svr.const.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
@@ -39,6 +39,112 @@
 namespace {
 constexpr time_t kDefaultServerIdentityTimeoutSec = 30;
 constexpr time_t kDefaultServerIdentityCheckIntervalSec = 5;
+
+constexpr const char* kOrbitArgsConfigEnvPrefix = "--config_env";
+
+static atapp::etcd_keepalive::checker_fn_t make_orbit_load_checker(uint64_t expected_server_id) {
+  return [expected_server_id](const std::string& checked) -> bool {
+    if (checked.empty()) {
+      return true;
+    }
+
+    orbit::DAgentEtcdLoadRecord current_record;
+    if (!ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::util::JsonStringToMessage(checked, &current_record).ok()) {
+      return false;
+    }
+
+    return current_record.server_id() == expected_server_id;
+  };
+}
+
+static void append_config_env_line(std::vector<std::string>& output, const char* key, const std::string& value) {
+  output.emplace_back(kOrbitArgsConfigEnvPrefix);
+  output.push_back(LOG_WRAPPER_FWAPI_FORMAT("{}={}", key, value));
+}
+
+static void append_config_env_line(std::vector<std::string>& output, const char* key, int32_t value) {
+  append_config_env_line(output, key, std::to_string(value));
+}
+
+static void append_config_env_line(std::vector<std::string>& output, const char* key, uint64_t value) {
+  append_config_env_line(output, key, std::to_string(static_cast<unsigned long long>(value)));
+}
+
+template <class Rep, class Period>
+static std::string make_duration_config_env_value(std::chrono::duration<Rep, Period> input) {
+  auto microseconds = std::chrono::duration_cast<std::chrono::microseconds>(input);
+  if (0 == microseconds.count() % std::chrono::seconds{1}.count()) {
+    return std::to_string(microseconds.count() / std::chrono::seconds{1}.count()) + "s";
+  }
+
+  if (0 == microseconds.count() % std::chrono::milliseconds{1}.count()) {
+    return std::to_string(microseconds.count() / std::chrono::milliseconds{1}.count()) + "ms";
+  }
+
+  return std::to_string(microseconds.count()) + "us";
+}
+
+static void append_bus_config_env_arguments(const atbus::node::conf_t& bus_conf, std::vector<std::string>& output) {
+  if (bus_conf.loop_times > 0) {
+    append_config_env_line(output, "ATAPP_BUS_LOOP_TIMES", bus_conf.loop_times);
+  }
+
+  if (bus_conf.ttl > 0) {
+    append_config_env_line(output, "ATAPP_BUS_TTL", bus_conf.ttl);
+  }
+
+  if (bus_conf.backlog > 0) {
+    append_config_env_line(output, "ATAPP_BUS_BACKLOG", bus_conf.backlog);
+  }
+
+  if (bus_conf.first_idle_timeout.count() > 0) {
+    append_config_env_line(output, "ATAPP_BUS_FIRST_IDLE_TIMEOUT",
+                           make_duration_config_env_value(bus_conf.first_idle_timeout));
+  }
+
+  if (bus_conf.ping_interval.count() > 0) {
+    append_config_env_line(output, "ATAPP_BUS_PING_INTERVAL", make_duration_config_env_value(bus_conf.ping_interval));
+  }
+
+  if (bus_conf.retry_interval.count() > 0) {
+    append_config_env_line(output, "ATAPP_BUS_RETRY_INTERVAL", make_duration_config_env_value(bus_conf.retry_interval));
+  }
+
+  if (bus_conf.fault_tolerant > 0) {
+    append_config_env_line(output, "ATAPP_BUS_FAULT_TOLERANT", static_cast<uint64_t>(bus_conf.fault_tolerant));
+  }
+
+  if (bus_conf.message_size > 0) {
+    append_config_env_line(output, "ATAPP_BUS_MESSAGE_SIZE", static_cast<uint64_t>(bus_conf.message_size));
+  }
+
+  if (bus_conf.receive_buffer_size > 0) {
+    append_config_env_line(output, "ATAPP_BUS_RECEIVE_BUFFER_SIZE",
+                           static_cast<uint64_t>(bus_conf.receive_buffer_size));
+  }
+
+  if (bus_conf.send_buffer_size > 0) {
+    append_config_env_line(output, "ATAPP_BUS_SEND_BUFFER_SIZE", static_cast<uint64_t>(bus_conf.send_buffer_size));
+  }
+
+  append_config_env_line(output, "ATAPP_BUS_SEND_BUFFER_NUMBER", static_cast<uint64_t>(bus_conf.send_buffer_number));
+
+  size_t access_token_max_number = bus_conf.access_token_max_number;
+  if (access_token_max_number < bus_conf.access_tokens.size()) {
+    access_token_max_number = bus_conf.access_tokens.size();
+  }
+
+  if (access_token_max_number > 0) {
+    append_config_env_line(output, "ATAPP_BUS_ACCESS_TOKEN_MAX_NUMBER", static_cast<uint64_t>(access_token_max_number));
+  }
+
+  for (size_t index = 0; index < bus_conf.access_tokens.size(); ++index) {
+    std::string env_key = "ATAPP_BUS_ACCESS_TOKENS_" + std::to_string(static_cast<unsigned long long>(index));
+    append_config_env_line(output, env_key.c_str(),
+                           std::string{reinterpret_cast<const char*>(bus_conf.access_tokens[index].data()),
+                                       bus_conf.access_tokens[index].size()});
+  }
+}
 
 static bool split_command_line(const std::string& input, std::vector<std::string>& output) {
   output.clear();
@@ -244,7 +350,8 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
       FWLOGERROR("orbit agent failed to create etcd keepalive actor for path {}", keepalive_path);
       return -6;
     }
-    LIBATAPP_MACRO_ETCD_CLUSTER_LOG_INFO(etcd_ctx, "create etcd_keepalive {} for topology index {} success",
+    keepalive_actor_->set_checker(make_orbit_load_checker(local_server_id));
+    LIBATAPP_MACRO_ETCD_CLUSTER_LOG_INFO(etcd_ctx, "create etcd_keepalive {} for orbit_load index {} success",
                                          reinterpret_cast<const void*>(keepalive_actor_.get()), keepalive_path);
     std::list<atapp::etcd_keepalive::ptr_t> keepalive_list{keepalive_actor_};
     const std::list<atapp::etcd_keepalive::ptr_t>* keepalive_actors[] = {&keepalive_list};
@@ -258,7 +365,14 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
   return 0;
 }
 
-void orbit_agent_manager::stop() { stoped_ = true; }
+void orbit_agent_manager::stop() {
+  stoped_ = true;
+  auto etcd_mod = owner_app_->get_etcd_module();
+  if (etcd_mod) {
+    etcd_mod->remove_keepalive_actor(keepalive_actor_);
+  }
+  keepalive_actor_.reset();
+}
 
 void orbit_agent_manager::tick() {
   if (stoped_) {
@@ -301,9 +415,6 @@ uint64_t orbit_agent_manager::select_controller_server_id(const std::string& cli
   }
 
   auto selected = discovery->get_node_by_consistent_hash(client_id, &controller_policy_selector_);
-  if (!selected) {
-    selected = discovery->get_node_by_consistent_hash(client_id);
-  }
   if (!selected) {
     return 0;
   }
@@ -370,7 +481,7 @@ rpc::result_code_type orbit_agent_manager::handle_forward_to_client(rpc::context
                  nullptr != client_record ? client_record->client_server_id : 0,
                  nullptr != client_record ? static_cast<int>(client_record->state)
                                           : static_cast<int>(orbit::EN_SLAVE_STATE_UNSPECIFIED));
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
   }
 
   auto notify_request = rpc::make_shared_message<orbit::ATDForwardToClientNotify>(ctx);
@@ -450,7 +561,7 @@ rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx
   auto client_record = find_client(client_id);
   if (nullptr == client_record) {
     FWLOGERROR("orbit agent client_start rejected: client_id {} not found in records", client_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
   }
 
   if (client_record->state != orbit::EN_SLAVE_STATE_STARTING) {
@@ -468,7 +579,7 @@ rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx
   if (identity == nullptr) {
     FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
                client_id, client_record->server_unique_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_SERVER_NOT_FOUND);
   }
 
   auto notify_request = rpc::make_shared_message<orbit::ATCNotifyClientStartedReq>(ctx);
@@ -501,7 +612,7 @@ rpc::result_code_type orbit_agent_manager::handle_client_heartbeat(ATFW_EXPLICIT
   auto client_record = find_client(client_id);
   if (nullptr == client_record) {
     FWLOGERROR("orbit agent client_heartbeat rejected: client_id {} not found in records", client_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
   }
 
   client_record->load_snapshot = request.snapshot();
@@ -521,7 +632,7 @@ rpc::result_code_type orbit_agent_manager::handle_send_to_server(rpc::context& c
   auto client_record = find_client(client_id);
   if (nullptr == client_record) {
     FWLOGERROR("orbit agent send_to_server rejected: client_id {} not found in records", client_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
   }
 
   if (client_record->state != orbit::EN_SLAVE_STATE_RUNNING) {
@@ -536,7 +647,7 @@ rpc::result_code_type orbit_agent_manager::handle_send_to_server(rpc::context& c
   if (identity == nullptr) {
     FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
                client_id, client_record->server_unique_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_SERVER_NOT_FOUND);
   }
 
   auto forward_request = rpc::make_shared_message<orbit::ATCForwardToServerReq>(ctx);
@@ -569,7 +680,7 @@ rpc::result_code_type orbit_agent_manager::handle_client_exit(rpc::context& ctx,
   auto client_record = find_client(client_id);
   if (nullptr == client_record) {
     FWLOGERROR("orbit agent handle_client_exit rejected: client_id {} not found in records", client_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
   }
 
   if (client_record->state != orbit::EN_SLAVE_STATE_RUNNING) {
@@ -584,7 +695,7 @@ rpc::result_code_type orbit_agent_manager::handle_client_exit(rpc::context& ctx,
   if (identity == nullptr) {
     FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
                client_id, client_record->server_unique_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_SERVER_NOT_FOUND);
   }
 
   auto notify_request = rpc::make_shared_message<orbit::ATCNotifyClientExitReq>(ctx);
@@ -631,6 +742,10 @@ void orbit_agent_manager::fill_normal_client_start_command(const orbit_agent_cli
   output.emplace_back(record.client_id);
   output.emplace_back("--orbit-agent-endpoint");
   output.emplace_back(agent_endpoint_);
+
+  if (nullptr != owner_app_ && nullptr != owner_app_->get_bus_node()) {
+    append_bus_config_env_arguments(owner_app_->get_bus_node()->get_conf(), output);
+  }
 }
 
 int orbit_agent_manager::prepare_start_client_record(const orbit::CTAStartClientReq& request,
@@ -729,10 +844,18 @@ int orbit_agent_manager::spawn_client_process(orbit_agent_client_record_ptr reco
   record->start_timepoint = static_cast<time_t>(util::time::time_utility::get_sys_now());
 
   std::string command_line_str;
-  for (const auto& arg : launch_arguments) {
+  for (size_t index = 0; index < launch_arguments.size(); ++index) {
+    const auto& arg = launch_arguments[index];
     if (!command_line_str.empty()) {
       command_line_str += " ";
     }
+
+    if (arg == kOrbitArgsConfigEnvPrefix && index + 1 < launch_arguments.size()) {
+      command_line_str += std::string{kOrbitArgsConfigEnvPrefix} + " <redacted>";
+      ++index;
+      continue;
+    }
+
     command_line_str += arg;
   }
 
@@ -945,6 +1068,7 @@ void orbit_agent_manager::load_record_to_json() {
     return;
   }
   dirty_load_record_ = false;
+  load_json_.clear();
 
   ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::util::JsonPrintOptions options;
   options.add_whitespace = false;
@@ -963,6 +1087,5 @@ void orbit_agent_manager::try_sync_load_to_etcd() {
     return;
   }
   dirty_load_json_ = false;
-  keepalive_actor_->set_checker(load_json_);
   keepalive_actor_->set_value(load_json_);
 }
