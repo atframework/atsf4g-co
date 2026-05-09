@@ -113,9 +113,11 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   orbit_agent_client_record_ptr find_client(const std::string& client_id) noexcept;
   const orbit_agent_client_record_ptr find_client(const std::string& client_id) const noexcept;
 
+  void fill_normal_client_start_command(const orbit_agent_client_record& record, uint64_t app_id,
+                                        std::vector<std::string>& output) const;
   int prepare_start_client_record(const orbit::CTAStartClientReq& request, orbit_agent_client_record_ptr& output);
   int spawn_client_process(orbit_agent_client_record_ptr record);
-  void build_client_launch_arguments(orbit_agent_client_record_ptr record, std::vector<std::string>& output) const;
+  void build_client_launch_arguments(orbit_agent_client_record_ptr record, std::vector<std::string>& output);
 
   void fill_client_identity(orbit::DClientIdentity& output, orbit_agent_client_record_ptr client) const;
 
@@ -140,8 +142,10 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
 
   // 启动配置
   std::string region_;
+  std::string agent_endpoint_;
   google::protobuf::RepeatedPtrField<std::string> tags_;
   std::vector<std::string> configured_client_command_line_;
+
   double cpu_capacity_ = 0.0;
   double memory_capacity_mb_ = 0.0;
   time_t server_identity_timeout_sec_ = 0;
@@ -169,6 +173,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   std::chrono::steady_clock::time_point last_self_usage_sample_timepoint_;
   double last_self_cpu_used_ = 0.0;
   bool has_self_usage_sample_ = false;
+  uint64_t sequence_allocator_ = 0;
 
   std::unordered_map<uint64_t, time_t> server_unique_id_to_expire_timepoint_;
   std::deque<server_identity_timeout_entry_t> server_identity_timeout_queue_;

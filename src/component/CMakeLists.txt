@@ -1,5 +1,8 @@
 include("${CMAKE_CURRENT_LIST_DIR}/component-functions.cmake")
 
+# ============ protocol-first server components ============
+add_subdirectory(orbit)
+
 # ============ shared components ============
 include("${CMAKE_CURRENT_LIST_DIR}/GameSharedConponent.settings.cmake")
 add_subdirectory(GameSharedComponent)
@@ -8,7 +11,6 @@ add_subdirectory(GameSharedComponent)
 add_subdirectory(test)
 add_subdirectory(distributed_transaction)
 add_subdirectory(rank)
-add_subdirectory(orbit)
 # ============ Export and install components ============
 install(
   EXPORT ${PROJECT_INSTALL_COMPONENT_EXPORT_NAME}

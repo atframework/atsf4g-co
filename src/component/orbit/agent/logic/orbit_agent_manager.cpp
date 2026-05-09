@@ -29,6 +29,7 @@
 
 #include <google/protobuf/util/json_util.h>
 #include <protocol/config/orbit_agent_config.pb.h>
+#include <protocol/pbdesc/svr.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
 // clang-format off
@@ -109,6 +110,13 @@ static void on_uv_process_exit(uv_process_t* handle, int64_t exit_status, int te
   handle->data = nullptr;
   uv_close(reinterpret_cast<uv_handle_t*>(handle), delete_uv_process_handle);
 }
+
+static uint64_t make_initial_sequence_allocator() {
+  return static_cast<uint64_t>(
+             (util::time::time_utility::get_sys_now() - PROJECT_NAMESPACE_ID::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET)
+             << 23) +
+         static_cast<uint64_t>(util::time::time_utility::get_now_usec() << 3);
+}
 }  // namespace
 
 uint64_t orbit_agent_client_record::get_controller_server_id() {
@@ -151,6 +159,7 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
     return -3;
   }
 
+  // 启动参数 ./client.exe ... (预设启动参数) + (customed启动参数) + (agent需要的额外启动参数)
   for (const auto& arg : configured_client_command_line_) {
     FWLOGINFO("orbit agent launch command argument: {}", arg);
   }
@@ -189,6 +198,21 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
     return -4;
   }
   agent_identity_.set_agent_server_id(local_server_id);
+  sequence_allocator_ = make_initial_sequence_allocator();
+
+  agent_endpoint_.clear();
+  const auto& bus_config = owner_app_->get_origin_configure().bus();
+  for (int i = 0; i < bus_config.listen_size(); ++i) {
+    if (!bus_config.listen(i).empty()) {
+      agent_endpoint_ = bus_config.listen(i);
+      break;
+    }
+  }
+  if (agent_endpoint_.empty()) {
+    FWLOGERROR("orbit agent failed to resolve listen address from atapp bus.listen");
+    return -8;
+  }
+  FWLOGINFO("orbit agent launch client endpoint: {}", agent_endpoint_);
 
   // 初始化Record
   load_record_.set_region(region_);
@@ -599,6 +623,16 @@ const orbit_agent_client_record_ptr orbit_agent_manager::find_client(const std::
   return iter->second;
 }
 
+void orbit_agent_manager::fill_normal_client_start_command(const orbit_agent_client_record& record, uint64_t app_id,
+                                                           std::vector<std::string>& output) const {
+  output.emplace_back("-id");
+  output.emplace_back(std::to_string(static_cast<unsigned long long>(app_id)));
+  output.emplace_back("--orbit-client-id");
+  output.emplace_back(record.client_id);
+  output.emplace_back("--orbit-agent-endpoint");
+  output.emplace_back(agent_endpoint_);
+}
+
 int orbit_agent_manager::prepare_start_client_record(const orbit::CTAStartClientReq& request,
                                                      orbit_agent_client_record_ptr& output) {
   const std::string& client_id = request.args().client_start_args().client_id().client_id();
@@ -639,13 +673,18 @@ void orbit_agent_manager::fill_client_identity(orbit::DClientIdentity& output,
 
 void orbit_agent_manager::build_client_launch_arguments(orbit_agent_client_record_ptr record,
                                                         std::vector<std::string>& output) const {
-  output.reserve(configured_client_command_line_.size() + static_cast<size_t>(record->custom_args.size()));
+  uint64_t app_id = ++sequence_allocator_;
+  output.clear();
+  output.reserve(configured_client_command_line_.size() + static_cast<size_t>(record->custom_args.size())  + 6);
+
   for (const std::string& arg : configured_client_command_line_) {
     output.emplace_back(arg);
   }
   for (const std::string& custom_arg : record->custom_args) {
     output.emplace_back(custom_arg);
   }
+
+  fill_normal_client_start_command(*record, app_id, output);
 }
 
 int orbit_agent_manager::spawn_client_process(orbit_agent_client_record_ptr record) {
