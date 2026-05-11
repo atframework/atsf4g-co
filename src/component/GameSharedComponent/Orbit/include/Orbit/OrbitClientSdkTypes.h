@@ -49,6 +49,12 @@ struct OrbitClientOptions {
   std::vector<std::string> config_env;
 };
 
+struct OrbitClientRequestOptions {
+  bool reliable = false;
+  int32_t retry_times = 0;
+  time_t timeout_second = 4;
+};
+
 struct OrbitClientLogRecord {
   OrbitClientLogLevel level = OrbitClientLogLevel::kInfo;
   std::string category;
@@ -58,6 +64,9 @@ struct OrbitClientLogRecord {
 using OrbitClientLogCallback = std::function<void(const OrbitClientLogRecord& record)>;
 using OrbitClientMessageCallback = std::function<void(const std::string& payload)>;
 using OrbitClientStopCallback = std::function<void()>;
+
+template <class TResponse>
+using OrbitClientRpcCallback = std::function<void(int32_t, const TResponse& response)>;
 
 struct OrbitClientCallbacks {
   // 日志接口

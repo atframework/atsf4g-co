@@ -73,7 +73,8 @@ int32_t OrbitRPCDispatcher::dispatch(const std::string& message) {
   } else {
     OrbitClientRuntime::me()->log(
         OrbitClientLogLevel::kError,
-        LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] unknown message.\n{}", OrbitClientRuntime::protobuf_mini_dumper_get_readable(orbit_msg)));
+        LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] unknown message.\n{}",
+                                 OrbitClientRuntime::protobuf_mini_dumper_get_readable(orbit_msg)));
     return orbit::EN_ORBIT_ERROR_CODE_PARSE_MESSAGE_FAILED;
   }
 }
@@ -136,11 +137,14 @@ int32_t OrbitRPCDispatcher::send_rsp_to_proc(orbit::OrbitRpcMessage& orbit_msg) 
       OrbitClientLogLevel::kInfo,
       LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] send rsp msg to {} bytes\n{}", msg_buf_len,
                                OrbitClientRuntime::protobuf_mini_dumper_get_readable(orbit_msg)));
-
-  return OrbitClientRuntime::me()->send_to_server(orbit_msg.SerializeAsString());
+  OrbitClientRequestOptions request_options;
+  request_options.reliable = true;
+  request_options.retry_times = 3;
+  return OrbitClientRuntime::me()->send_to_server(orbit_msg.SerializeAsString(), nullptr, request_options);
 }
 
-int32_t OrbitRPCDispatcher::send_req_to_proc(orbit::OrbitRpcMessage& orbit_msg, uint64_t& sequence) {
+int32_t OrbitRPCDispatcher::send_req_to_proc(orbit::OrbitRpcMessage& orbit_msg, uint64_t& sequence,
+                                             const OrbitClientRequestOptions& request_options) {
   if (0 == orbit_msg.head().sequence()) {
     orbit_msg.mutable_head()->set_sequence(allocate_sequence());
   }
@@ -152,8 +156,7 @@ int32_t OrbitRPCDispatcher::send_req_to_proc(orbit::OrbitRpcMessage& orbit_msg, 
       LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] send req msg to {} bytes\n{}", msg_buf_len,
                                OrbitClientRuntime::protobuf_mini_dumper_get_readable(orbit_msg)));
   sequence = orbit_msg.head().sequence();
-
-  return OrbitClientRuntime::me()->send_to_server(orbit_msg.SerializeAsString());
+  return OrbitClientRuntime::me()->send_to_server(orbit_msg.SerializeAsString(), nullptr, request_options);
 }
 
 int OrbitRPCDispatcher::_register_action(const std::string& rpc_full_name, task_action_creator_t action) {

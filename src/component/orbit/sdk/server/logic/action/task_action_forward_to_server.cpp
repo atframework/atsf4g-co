@@ -38,8 +38,8 @@ ORBIT_SERVER_SERVICE_API task_action_forward_to_server::result_type task_action_
   const rpc_request_type& req_body = get_request_body();
   // rpc_response_type& rsp_body = get_response_body();
 
-  TASK_ACTION_RETURN_CODE(
-      RPC_AWAIT_CODE_RESULT(orbit_server_manager::me()->handle_forward_to_server(get_shared_context(), req_body)));
+  RPC_AWAIT_IGNORE_RESULT(orbit_server_manager::me()->handle_forward_to_server(get_shared_context(), req_body));
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 ORBIT_SERVER_SERVICE_API int task_action_forward_to_server::on_success() { return get_result(); }

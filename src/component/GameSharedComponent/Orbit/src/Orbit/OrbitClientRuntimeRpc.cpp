@@ -30,6 +30,7 @@ constexpr const char* kMethodSendToServer = "send_to_server";
 constexpr const char* kMethodClientStart = "client_start";
 constexpr const char* kMethodClientExit = "client_exit";
 constexpr int32_t kInServerMessageType = 11;
+constexpr time_t kDefaultRequestTimeoutSecond = 4;
 
 enum class orbit_receive_rpc_type_t : uint8_t {
   kInvalid = 0,
@@ -133,6 +134,56 @@ const std::unordered_map<std::string, orbit_receive_rpc_type_t>& get_receive_rpc
 
 #undef ORBIT_CLIENT_RUNTIME_REG_RECEIVE_RPC
 
+time_t normalize_request_timeout_second(time_t timeout_second) {
+  if (timeout_second > 0) {
+    return timeout_second;
+  }
+
+  return kDefaultRequestTimeoutSecond;
+}
+
+int32_t normalize_request_retry_times(int32_t retry_times) {
+  if (retry_times > 0) {
+    return retry_times;
+  }
+
+  return 0;
+}
+
+template <class TResponse>
+OrbitClientRuntime::client_request_raw_callback_t make_typed_request_callback(
+    OrbitClientRuntime& runtime, const google::protobuf::MethodDescriptor& method,
+    OrbitClientRpcCallback<TResponse> callback) {
+  if (!callback) {
+    return {};
+  }
+
+  std::string rpc_full_name = get_rpc_full_name(method);
+  return [&runtime, rpc_full_name, callback = std::move(callback)](int32_t result,
+                                                                   const atframework::SSMsg& message) mutable {
+    TResponse response_body;
+    if (result == orbit::EN_ORBIT_ERROR_CODE_SUCCESS) {
+      if (!message.has_head() || !message.head().has_rpc_response()) {
+        runtime.log(OrbitClientLogLevel::kError, std::string{"rpc response head missing for "} + rpc_full_name);
+        result = orbit::EN_ORBIT_ERROR_CODE_MESSAGE_HEAD_NOT_FOUND;
+      } else if (message.head().rpc_response().type_url() != TResponse::descriptor()->full_name()) {
+        runtime.log(
+            OrbitClientLogLevel::kError,
+            LOG_WRAPPER_FWAPI_FORMAT("rpc response type mismatch for {}, expect {}, real {}", rpc_full_name,
+                                     TResponse::descriptor()->full_name(), message.head().rpc_response().type_url()));
+        result = orbit::EN_ORBIT_ERROR_CODE_PARSE_MESSAGE_FAILED;
+      } else if (!unpack_body_message(message, response_body)) {
+        runtime.log(OrbitClientLogLevel::kError,
+                    LOG_WRAPPER_FWAPI_FORMAT("rpc response parse failed for {}, detail {}", rpc_full_name,
+                                             response_body.InitializationErrorString()));
+        result = orbit::EN_ORBIT_ERROR_CODE_SERIALIZETOSTRING;
+      }
+    }
+
+    callback(result, response_body);
+  };
+}
+
 }  // namespace
 
 void OrbitClientRuntime::on_received_message(const std::string& message) {
@@ -148,7 +199,8 @@ void OrbitClientRuntime::on_received_message(const std::string& message) {
 }
 
 int32_t OrbitClientRuntime::send_message(const std::string& packed_message,
-                                         const google::protobuf::MethodDescriptor& method) {
+                                         const google::protobuf::MethodDescriptor& method, bool reliable,
+                                         uint64_t task_id) {
   if (nullptr == app_ || !app_->get_bus_node()) {
     log(OrbitClientLogLevel::kError, "send rejected: atapp bus node is unavailable");
     return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
@@ -166,6 +218,9 @@ int32_t OrbitClientRuntime::send_message(const std::string& packed_message,
   if (0 != send_result) {
     std::ostringstream stream;
     stream << "send_data failed for " << get_rpc_full_name(method) << ", code=" << send_result;
+    if (reliable) {
+      stream << ", reliable=true, task_id=" << task_id;
+    }
     log(OrbitClientLogLevel::kError, stream.str());
     return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
@@ -227,17 +282,40 @@ int32_t OrbitClientRuntime::pack_stream_message(std::string& output, const googl
 }
 
 int32_t OrbitClientRuntime::send_request_message(const google::protobuf::MessageLite& body,
-                                                 const google::protobuf::MethodDescriptor& method) {
+                                                 const google::protobuf::MethodDescriptor& method,
+                                                 client_request_raw_callback_t callback,
+                                                 const OrbitClientRequestOptions& request_options) {
   std::string packed_message;
-  int32_t pack_result = pack_request_message(packed_message, method, body);
+  uint64_t task_id = 0;
+  int32_t pack_result = pack_request_message(packed_message, task_id, method, body);
   if (pack_result < 0) {
     return pack_result;
   }
 
-  return send_message(packed_message, method);
+  bool reliable = request_options.reliable || request_options.retry_times > 0;
+  bool track_response = reliable || callback != nullptr;
+  if (track_response) {
+    pending_client_request_t pending;
+    pending.packed_message = packed_message;
+    pending.method = &method;
+    pending.callback = std::move(callback);
+    pending.timeout_second = normalize_request_timeout_second(request_options.timeout_second);
+    pending.retry_times_left = normalize_request_retry_times(request_options.retry_times);
+    pending.reliable = reliable;
+    reschedule_pending_request_timeout(task_id, pending);
+    pending_client_request_map_.emplace(task_id, std::move(pending));
+  }
+
+  int32_t send_result = send_message(packed_message, method, reliable, task_id);
+  if (send_result < 0 && track_response) {
+    pending_client_request_map_.erase(task_id);
+  }
+
+  return send_result;
 }
 
-int32_t OrbitClientRuntime::pack_request_message(std::string& output, const google::protobuf::MethodDescriptor& method,
+int32_t OrbitClientRuntime::pack_request_message(std::string& output, uint64_t& task_id,
+                                                 const google::protobuf::MethodDescriptor& method,
                                                  const google::protobuf::MessageLite& body) {
   atframework::SSMsg message;
   atframework::SSMsgHead* head = message.mutable_head();
@@ -248,7 +326,9 @@ int32_t OrbitClientRuntime::pack_request_message(std::string& output, const goog
 
   head->set_timestamp(get_now_seconds());
   head->set_sequence(allocate_sequence());
+  head->set_source_task_id(head->sequence());
   head->set_node_name(options_.client_id);
+  task_id = head->source_task_id();
 
   atframework::RpcRequestMeta* request_meta = head->mutable_rpc_request();
   if (nullptr == request_meta) {
@@ -351,6 +431,10 @@ int32_t OrbitClientRuntime::unpack_message(atframework::SSMsg& output, const std
 }
 
 int32_t OrbitClientRuntime::dispatch_received_message(const atframework::SSMsg& message) {
+  if (message.has_head() && message.head().has_rpc_response()) {
+    return dispatch_request_response(message);
+  }
+
   const std::string& rpc_name = pick_rpc_name(message);
   if (rpc_name.empty()) {
     log(OrbitClientLogLevel::kWarning, "received SSMsg without rpc name");
@@ -393,6 +477,100 @@ int32_t OrbitClientRuntime::dispatch_received_message(const atframework::SSMsg& 
   return orbit::EN_ORBIT_ERROR_CODE_METHOD_NOT_FOUND;
 }
 
+int32_t OrbitClientRuntime::dispatch_request_response(const atframework::SSMsg& message) {
+  uint64_t task_id = message.head().destination_task_id();
+  if (0 == task_id) {
+    log(OrbitClientLogLevel::kWarning, "received rpc response without destination_task_id");
+    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+  }
+
+  auto pending_iter = pending_client_request_map_.find(task_id);
+  if (pending_iter == pending_client_request_map_.end()) {
+    return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+  }
+
+  int32_t error_code = message.head().error_code();
+  if (error_code != orbit::EN_ORBIT_ERROR_CODE_SUCCESS &&
+      retry_pending_request(task_id, pending_iter->second, error_code, "rpc response error")) {
+    return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+  }
+
+  complete_pending_request(task_id, error_code, &message);
+  return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+}
+
+bool OrbitClientRuntime::retry_pending_request(uint64_t task_id, pending_client_request_t& pending, int32_t error_code,
+                                               const char* reason) {
+  if (!pending.reliable || pending.retry_times_left <= 0 || nullptr == pending.method) {
+    return false;
+  }
+
+  --pending.retry_times_left;
+
+  std::ostringstream stream;
+  stream << "retry request " << get_rpc_full_name(*pending.method) << ", task_id=" << task_id << ", code=" << error_code
+         << ", reason=" << reason << ", retries_left=" << pending.retry_times_left;
+  log(OrbitClientLogLevel::kWarning, stream.str());
+
+  reschedule_pending_request_timeout(task_id, pending);
+  int32_t send_result = send_message(pending.packed_message, *pending.method, true, task_id);
+  if (send_result < 0) {
+    std::ostringstream resend_stream;
+    resend_stream << "retry send_data failed for " << get_rpc_full_name(*pending.method) << ", task_id=" << task_id
+                  << ", code=" << send_result;
+    log(OrbitClientLogLevel::kWarning, resend_stream.str());
+  }
+
+  return true;
+}
+
+void OrbitClientRuntime::complete_pending_request(uint64_t task_id, int32_t error_code,
+                                                  const atframework::SSMsg* message) {
+  auto pending_iter = pending_client_request_map_.find(task_id);
+  if (pending_iter == pending_client_request_map_.end()) {
+    return;
+  }
+
+  client_request_raw_callback_t callback = std::move(pending_iter->second.callback);
+  pending_client_request_map_.erase(pending_iter);
+
+  if (!callback) {
+    return;
+  }
+
+  atframework::SSMsg empty_message;
+  callback(error_code, nullptr == message ? empty_message : *message);
+}
+
+void OrbitClientRuntime::reschedule_pending_request_timeout(uint64_t task_id, pending_client_request_t& pending) {
+  pending.deadline = get_now_seconds() + normalize_request_timeout_second(pending.timeout_second);
+  pending_client_request_timeout_map_.emplace(pending.deadline, task_id);
+}
+
+void OrbitClientRuntime::execute_pending_request_timeouts() {
+  time_t current_time = get_now_seconds();
+  for (auto iter = pending_client_request_timeout_map_.begin(); iter != pending_client_request_timeout_map_.end();) {
+    if (iter->first >= current_time) {
+      break;
+    }
+
+    uint64_t task_id = iter->second;
+    time_t deadline = iter->first;
+    iter = pending_client_request_timeout_map_.erase(iter);
+
+    auto pending_iter = pending_client_request_map_.find(task_id);
+    if (pending_iter == pending_client_request_map_.end() || pending_iter->second.deadline != deadline) {
+      continue;
+    }
+
+    if (retry_pending_request(task_id, pending_iter->second, orbit::EN_ORBIT_ERROR_CODE_TIMEOUT, "request timeout")) {
+      continue;
+    }
+
+    complete_pending_request(task_id, orbit::EN_ORBIT_ERROR_CODE_TIMEOUT, nullptr);
+  }
+}
+
 int32_t OrbitClientRuntime::rpc_send_client_heartbeat(const orbit::DTAClientHeartbeatNotify& request) {
   const google::protobuf::MethodDescriptor* method = get_client_to_agent_method(kMethodClientHeartbeat);
   if (nullptr == method) {
@@ -403,34 +581,46 @@ int32_t OrbitClientRuntime::rpc_send_client_heartbeat(const orbit::DTAClientHear
   return send_stream_message(request, *method);
 }
 
-int32_t OrbitClientRuntime::rpc_send_send_to_server(const orbit::DTASendToServerReq& request) {
+int32_t OrbitClientRuntime::rpc_send_send_to_server(const orbit::DTASendToServerReq& request,
+                                                    OrbitClientRpcCallback<orbit::ATDSendToServerRsp> callback,
+                                                    const OrbitClientRequestOptions& request_options) {
   const google::protobuf::MethodDescriptor* method = get_client_to_agent_method(kMethodSendToServer);
   if (nullptr == method) {
     log(OrbitClientLogLevel::kError, "send_to_server method descriptor not found");
     return orbit::EN_ORBIT_ERROR_CODE_METHOD_NOT_FOUND;
   }
 
-  return send_request_message(request, *method);
+  return send_request_message(
+      request, *method, make_typed_request_callback<orbit::ATDSendToServerRsp>(*this, *method, std::move(callback)),
+      request_options);
 }
 
-int32_t OrbitClientRuntime::rpc_send_client_start(const orbit::DTAClientStartReq& request) {
+int32_t OrbitClientRuntime::rpc_send_client_start(const orbit::DTAClientStartReq& request,
+                                                  OrbitClientRpcCallback<orbit::ATDClientStartRsp> callback,
+                                                  const OrbitClientRequestOptions& request_options) {
   const google::protobuf::MethodDescriptor* method = get_client_to_agent_method(kMethodClientStart);
   if (nullptr == method) {
     log(OrbitClientLogLevel::kError, "client_start method descriptor not found");
     return orbit::EN_ORBIT_ERROR_CODE_METHOD_NOT_FOUND;
   }
 
-  return send_request_message(request, *method);
+  return send_request_message(
+      request, *method, make_typed_request_callback<orbit::ATDClientStartRsp>(*this, *method, std::move(callback)),
+      request_options);
 }
 
-int32_t OrbitClientRuntime::rpc_send_client_exit(const orbit::DTAClientExitReq& request) {
+int32_t OrbitClientRuntime::rpc_send_client_exit(const orbit::DTAClientExitReq& request,
+                                                 OrbitClientRpcCallback<orbit::ATDClientExitRsp> callback,
+                                                 const OrbitClientRequestOptions& request_options) {
   const google::protobuf::MethodDescriptor* method = get_client_to_agent_method(kMethodClientExit);
   if (nullptr == method) {
     log(OrbitClientLogLevel::kError, "client_exit method descriptor not found");
     return orbit::EN_ORBIT_ERROR_CODE_METHOD_NOT_FOUND;
   }
 
-  return send_request_message(request, *method);
+  return send_request_message(request, *method,
+                              make_typed_request_callback<orbit::ATDClientExitRsp>(*this, *method, std::move(callback)),
+                              request_options);
 }
 
 int32_t OrbitClientRuntime::rpc_receive_forward_to_client(const ::atframework::SSMsgHead& req_head,

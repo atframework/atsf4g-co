@@ -390,8 +390,11 @@ int32_t OrbitClientRuntime::notify_process_ready(const std::string& custom_data)
   fill_client_id(*request.mutable_client_id(), options_.client_id);
   request.set_client_addr(options_.client_addr);
   request.set_custom_data(custom_data);
+  OrbitClientRequestOptions request_options;
+  request_options.reliable = true;
+  request_options.retry_times = 3;
 
-  int32_t send_result = rpc_send_client_start(request);
+  int32_t send_result = rpc_send_client_start(request, nullptr, request_options);
   if (send_result < 0) {
     log(OrbitClientLogLevel::kError,
         std::string{"failed to send client_start request, code="} + std::to_string(send_result));
@@ -409,6 +412,8 @@ void OrbitClientRuntime::tick() {
   if (nullptr != app_ && app_->is_inited() && !app_->check_flag(::atframework::atapp::app::flag_t::kInTick)) {
     app_->run_once(0, std::chrono::seconds{0});
   }
+
+  execute_pending_request_timeouts();
 
   if (state_ != OrbitClientRuntimeState::kRunning) {
     return;
@@ -449,7 +454,9 @@ int32_t OrbitClientRuntime::send_heartbeat(const OrbitClientLoadSnapshot& snapsh
   return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
-int32_t OrbitClientRuntime::send_to_server(const std::string& payload) {
+int32_t OrbitClientRuntime::send_to_server(const std::string& payload,
+                                           OrbitClientRpcCallback<orbit::ATDSendToServerRsp> callback,
+                                           const OrbitClientRequestOptions& request_options) {
   if (state_ != OrbitClientRuntimeState::kRunning) {
     log(OrbitClientLogLevel::kWarning, "send_to_server rejected: runtime is not running");
     return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
@@ -459,7 +466,7 @@ int32_t OrbitClientRuntime::send_to_server(const std::string& payload) {
   fill_client_id(*request.mutable_client_id(), options_.client_id);
   request.set_payload(payload);
 
-  int32_t send_result = rpc_send_send_to_server(request);
+  int32_t send_result = rpc_send_send_to_server(request, std::move(callback), request_options);
   if (send_result < 0) {
     log(OrbitClientLogLevel::kError,
         std::string{"failed to send send_to_server request, code="} + std::to_string(send_result));
@@ -473,6 +480,9 @@ int32_t OrbitClientRuntime::request_end(orbit::EnClientExitReason reason, int32_
                                         const std::string& custom_data) {
   OrbitClientRuntimeState previous_state = state_;
   set_state(OrbitClientRuntimeState::kStopping);
+  OrbitClientRequestOptions request_options;
+  request_options.reliable = true;
+  request_options.retry_times = 3;
 
   int32_t send_result = orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
   if (previous_state == OrbitClientRuntimeState::kConnected || previous_state == OrbitClientRuntimeState::kRunning) {
@@ -481,13 +491,23 @@ int32_t OrbitClientRuntime::request_end(orbit::EnClientExitReason reason, int32_
     request.set_exit_reason(reason);
     request.set_custom_data(custom_data);
     request.set_exit_code(exit_code);
-    send_result = rpc_send_client_exit(request);
+    auto wrapped_callback = [this](int32_t, const orbit::ATDClientExitRsp&) mutable { finalize_shutdown(); };
+    send_result = rpc_send_client_exit(request, std::move(wrapped_callback), request_options);
     if (send_result < 0) {
       log(OrbitClientLogLevel::kError,
           std::string{"failed to send client_exit request, code="} + std::to_string(send_result));
     }
   }
 
+  if (send_result < 0 ||
+      (previous_state != OrbitClientRuntimeState::kConnected && previous_state != OrbitClientRuntimeState::kRunning)) {
+    finalize_shutdown();
+  }
+
+  return send_result;
+}
+
+void OrbitClientRuntime::finalize_shutdown() {
   if (nullptr != app_ && app_->get_bus_node() && 0 != agent_bus_id_) {
     int disconnect_result = app_->get_bus_node()->disconnect(agent_bus_id_);
     if (0 != disconnect_result) {
@@ -497,10 +517,11 @@ int32_t OrbitClientRuntime::request_end(orbit::EnClientExitReason reason, int32_
   }
 
   restore_app_callbacks();
+  pending_client_request_map_.clear();
+  pending_client_request_timeout_map_.clear();
   agent_bus_id_ = 0;
   configured_ = false;
   set_state(OrbitClientRuntimeState::kStopped);
-  return send_result;
 }
 
 void OrbitClientRuntime::install_app_callbacks() {
@@ -556,10 +577,21 @@ int OrbitClientRuntime::on_atapp_forward_request(::atframework::atapp::app& app,
 int OrbitClientRuntime::on_atapp_forward_response(::atframework::atapp::app& app,
                                                   const ::atframework::atapp::app::message_sender_t& source,
                                                   const ::atframework::atapp::app::message_t& msg, int32_t error_code) {
-  (void)msg;
-
   if (&app == app_.get() && source.id == agent_bus_id_ && error_code < 0) {
     log(OrbitClientLogLevel::kWarning, std::string{"send message to agent failed, code="} + std::to_string(error_code));
+
+    atframework::SSMsg failed_message;
+    if (failed_message.ParseFromArray(msg.data.data(), static_cast<int>(msg.data.size())) &&
+        failed_message.has_head() && failed_message.head().has_rpc_request() &&
+        0 != failed_message.head().source_task_id()) {
+      uint64_t task_id = failed_message.head().source_task_id();
+      auto pending_iter = pending_client_request_map_.find(task_id);
+      if (pending_iter != pending_client_request_map_.end()) {
+        if (!retry_pending_request(task_id, pending_iter->second, error_code, "transport send failed")) {
+          complete_pending_request(task_id, error_code, nullptr);
+        }
+      }
+    }
   }
 
   return 0;

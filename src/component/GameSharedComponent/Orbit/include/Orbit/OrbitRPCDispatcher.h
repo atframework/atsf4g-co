@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Orbit/OrbitClientSdkTypes.h>
+
 #include <functional>
 #include <map>
 #include <memory>
@@ -54,7 +56,7 @@ class ORBIT_CLIENT_SDK_API OrbitRPCDispatcher : public util::design_pattern::sin
 
   const std::string &pick_rpc_name(const orbit::OrbitRpcMessage &raw_msg);
 
-  int32_t dispatch(const std::string& message);
+  int32_t dispatch(const std::string &message);
   int32_t on_rpc_req_message(orbit::OrbitRpcMessage &orbit_msg);
   int32_t on_rpc_rsp_message(orbit::OrbitRpcMessage &orbit_msg);
 
@@ -91,7 +93,8 @@ class ORBIT_CLIENT_SDK_API OrbitRPCDispatcher : public util::design_pattern::sin
 
  public:
   int32_t send_rsp_to_proc(orbit::OrbitRpcMessage &orbit_msg);
-  int32_t send_req_to_proc(orbit::OrbitRpcMessage &orbit_msg, uint64_t &sequence);
+  int32_t send_req_to_proc(orbit::OrbitRpcMessage &orbit_msg, uint64_t &sequence,
+                           const OrbitClientRequestOptions &request_options = OrbitClientRequestOptions{});
 
   const std::string &get_empty_string() {
     static std::string ret;

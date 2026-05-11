@@ -9,7 +9,9 @@
 #include <design_pattern/singleton.h>
 
 #include <chrono>
+#include <map>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 namespace google {
@@ -42,7 +44,9 @@ class ORBIT_CLIENT_SDK_API OrbitClientRuntime : public util::design_pattern::sin
   // 进程已准备成功 可以通知Agent了
   int32_t notify_process_ready(const std::string& custom_data = std::string{});
   // 发送消息给Server
-  int32_t send_to_server(const std::string& payload);
+  int32_t send_to_server(const std::string& payload,
+                         OrbitClientRpcCallback<orbit::ATDSendToServerRsp> callback = nullptr,
+                         const OrbitClientRequestOptions& request_options = OrbitClientRequestOptions{});
   // 请求停止服务
   int32_t request_end(orbit::EnClientExitReason reason, int32_t exit_code,
                       const std::string& custom_data = std::string{});
@@ -74,29 +78,58 @@ class ORBIT_CLIENT_SDK_API OrbitClientRuntime : public util::design_pattern::sin
   void on_received_message(const std::string& message);
 
  private:
+  using client_request_raw_callback_t = std::function<void(int32_t, const ::atframework::SSMsg&)>;
+
+  struct pending_client_request_t {
+    std::string packed_message;
+    const ::google::protobuf::MethodDescriptor* method = nullptr;
+    client_request_raw_callback_t callback;
+    time_t timeout_second = 4;
+    time_t deadline = 0;
+    int32_t retry_times_left = 0;
+    bool reliable = false;
+  };
+
   int32_t send_request_message(const ::google::protobuf::MessageLite& body,
-                               const ::google::protobuf::MethodDescriptor& method);
+                               const ::google::protobuf::MethodDescriptor& method,
+                               client_request_raw_callback_t callback,
+                               const OrbitClientRequestOptions& request_options);
   int32_t send_response_message(const ::atframework::SSMsgHead& req_head, const ::google::protobuf::MessageLite& body,
                                 const ::google::protobuf::MethodDescriptor& method);
   int32_t send_stream_message(const ::google::protobuf::MessageLite& body,
                               const ::google::protobuf::MethodDescriptor& method);
-  int32_t pack_request_message(std::string& output, const ::google::protobuf::MethodDescriptor& method,
+  int32_t pack_request_message(std::string& output, uint64_t& task_id,
+                               const ::google::protobuf::MethodDescriptor& method,
                                const ::google::protobuf::MessageLite& body);
   int32_t pack_response_message(const ::atframework::SSMsgHead& req_head, std::string& output,
                                 const ::google::protobuf::MethodDescriptor& method,
                                 const ::google::protobuf::MessageLite& body);
   int32_t pack_stream_message(std::string& output, const ::google::protobuf::MethodDescriptor& method,
                               const ::google::protobuf::MessageLite& body);
-  int32_t send_message(const std::string& packed_message, const google::protobuf::MethodDescriptor& method);
+  int32_t send_message(const std::string& packed_message, const google::protobuf::MethodDescriptor& method,
+                       bool reliable = false, uint64_t task_id = 0);
 
   int32_t unpack_message(atframework::SSMsg& output, const std::string& message) const;
+  int32_t dispatch_request_response(const atframework::SSMsg& message);
   int32_t dispatch_received_message(const atframework::SSMsg& message);
+  bool retry_pending_request(uint64_t task_id, pending_client_request_t& pending, int32_t error_code,
+                             const char* reason);
+  void complete_pending_request(uint64_t task_id, int32_t error_code, const atframework::SSMsg* message);
+  void reschedule_pending_request_timeout(uint64_t task_id, pending_client_request_t& pending);
+  void execute_pending_request_timeouts();
   uint64_t allocate_sequence();
+  void finalize_shutdown();
 
   int32_t rpc_send_client_heartbeat(const orbit::DTAClientHeartbeatNotify& request);
-  int32_t rpc_send_send_to_server(const orbit::DTASendToServerReq& request);
-  int32_t rpc_send_client_start(const orbit::DTAClientStartReq& request);
-  int32_t rpc_send_client_exit(const orbit::DTAClientExitReq& request);
+  int32_t rpc_send_send_to_server(const orbit::DTASendToServerReq& request,
+                                  OrbitClientRpcCallback<orbit::ATDSendToServerRsp> callback,
+                                  const OrbitClientRequestOptions& request_options);
+  int32_t rpc_send_client_start(const orbit::DTAClientStartReq& request,
+                                OrbitClientRpcCallback<orbit::ATDClientStartRsp> callback,
+                                const OrbitClientRequestOptions& request_options);
+  int32_t rpc_send_client_exit(const orbit::DTAClientExitReq& request,
+                               OrbitClientRpcCallback<orbit::ATDClientExitRsp> callback,
+                               const OrbitClientRequestOptions& request_options);
   int32_t rpc_receive_forward_to_client(const ::atframework::SSMsgHead& req_head,
                                         const orbit::ATDForwardToClientReq& request);
   int32_t rpc_receive_fork_seed_client(const ::atframework::SSMsgHead& req_head,
@@ -112,6 +145,8 @@ class ORBIT_CLIENT_SDK_API OrbitClientRuntime : public util::design_pattern::sin
   uint64_t agent_bus_id_;
   uint64_t sequence_allocator_;
   time_t last_heartbeat_timepoint_;
+  std::unordered_map<uint64_t, pending_client_request_t> pending_client_request_map_;
+  std::multimap<time_t, uint64_t> pending_client_request_timeout_map_;
 };
 
 }  // namespace orbit_client_sdk
