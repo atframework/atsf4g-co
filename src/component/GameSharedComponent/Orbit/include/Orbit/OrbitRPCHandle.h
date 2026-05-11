@@ -82,7 +82,7 @@ static inline int __setup_rpc_stream_header(orbit::OrbitRpcMessageHead& head, co
 }  // namespace
 
 template <class req_type, class rsp_type>
-int orbit_rpc_handle(const std::string& rpc_name, const std::string& service_name, const req_type& req_body,
+int ATFW_UTIL_SYMBOL_VISIBLE orbit_rpc_handle(const std::string& rpc_name, const std::string& service_name, const req_type& req_body,
                      std::function<void(int32_t, const rsp_type&)> callback, int32_t retry_time) {
   orbit::OrbitRpcMessage req_msg;
   std::string rpc_full_name = service_name + "." + rpc_name;

@@ -47,7 +47,7 @@ class ORBIT_CLIENT_SDK_API task_action_orbit_req_base {
 };
 
 template <class TReqType, class TRspType>
-class task_action_orbit_rpc_base : public task_action_orbit_req_base {
+class ATFW_UTIL_SYMBOL_VISIBLE task_action_orbit_rpc_base : public task_action_orbit_req_base {
  public:
   using base_type = task_action_orbit_req_base;
   using msg_type = base_type::msg_type;
