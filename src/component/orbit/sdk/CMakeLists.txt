@@ -101,6 +101,7 @@ project_component_declare_sdk(
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_forward_to_server.h"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_client_end_notify.h"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_client_start_notify.h"
+  "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_client_agent_heartbeat.h"
   SOURCES
   "${CMAKE_CURRENT_LIST_DIR}/server/handle/handle_ss_rpc_controllertoserverservice.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/orbit_msg_dispatcher.cpp"
@@ -108,4 +109,5 @@ project_component_declare_sdk(
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/task_action_orbit_req_base.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_forward_to_server.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_client_end_notify.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_client_start_notify.cpp")
+  "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_client_start_notify.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_client_agent_heartbeat.cpp")

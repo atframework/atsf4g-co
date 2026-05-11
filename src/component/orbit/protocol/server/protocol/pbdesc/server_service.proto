@@ -34,7 +34,7 @@ service ControllerToServerService {
     };
   };
 
-  rpc client_heartbeat(stream CTSClientHeartbeatNotify) returns (google.protobuf.Empty) {
+  rpc client_agent_heartbeat(stream CTSClientAgentHeartbeatNotify) returns (google.protobuf.Empty) {
     option (atframework.rpc_options) = {
       api_name: "Client心跳通知"
     };
@@ -60,7 +60,7 @@ message CTSClientEndNotify {
   int32 exit_code = 13;
 }
 
-message CTSClientHeartbeatNotify {
+message CTSClientAgentHeartbeatNotify {
   DAgentIdentity agent_identity = 1;
   repeated DClientId client_ids = 2;
 }

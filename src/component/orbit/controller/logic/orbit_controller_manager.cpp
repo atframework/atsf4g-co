@@ -521,12 +521,12 @@ rpc::result_code_type orbit_controller_manager::handle_agent_heartbeat(rpc::cont
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
 
-  auto notify = rpc::make_shared_message<orbit::CTSClientHeartbeatNotify>(ctx);
+  auto notify = rpc::make_shared_message<orbit::CTSClientAgentHeartbeatNotify>(ctx);
   *notify->mutable_agent_identity() = request.agent_identity();
   *notify->mutable_client_ids() = request.client_ids();
 
   int32_t rpc_result =
-      RPC_AWAIT_CODE_RESULT(rpc::controllertoserverservice::client_heartbeat(ctx, server_node_id, *notify));
+      RPC_AWAIT_CODE_RESULT(rpc::controllertoserverservice::client_agent_heartbeat(ctx, server_node_id, *notify));
   if (rpc_result < 0) {
     FWLOGERROR("orbit controller agent_heartbeat failed to server {:#x}, res: {}", server_node_id, rpc_result);
     RPC_RETURN_CODE(rpc_result);

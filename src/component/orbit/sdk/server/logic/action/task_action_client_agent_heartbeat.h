@@ -1,5 +1,5 @@
 // Copyright 2026 atframework
-// @brief Created by yousongyang with mako-generator.py at 2026-05-09 17:02:56
+// @brief Created by yousongyang with mako-generator.py at 2026-05-11 10:55:12
 
 #pragma once
 
@@ -21,10 +21,10 @@
 #  define ORBIT_SERVER_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
-class task_action_client_heartbeat
-    : public task_action_ss_rpc_base<orbit::CTSClientHeartbeatNotify, google::protobuf::Empty> {
+class task_action_client_agent_heartbeat
+    : public task_action_ss_rpc_base<orbit::CTSClientAgentHeartbeatNotify, google::protobuf::Empty> {
  public:
-  using base_type = task_action_ss_rpc_base<orbit::CTSClientHeartbeatNotify, google::protobuf::Empty>;
+  using base_type = task_action_ss_rpc_base<orbit::CTSClientAgentHeartbeatNotify, google::protobuf::Empty>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;
@@ -34,8 +34,8 @@ class task_action_client_heartbeat
   using task_action_ss_req_base::operator();
 
  public:
-  ORBIT_SERVER_SERVICE_API explicit task_action_client_heartbeat(dispatcher_start_data_type&& param);
-  ORBIT_SERVER_SERVICE_API ~task_action_client_heartbeat();
+  ORBIT_SERVER_SERVICE_API explicit task_action_client_agent_heartbeat(dispatcher_start_data_type&& param);
+  ORBIT_SERVER_SERVICE_API ~task_action_client_agent_heartbeat();
 
   ORBIT_SERVER_SERVICE_API const char* name() const override;
 

@@ -100,8 +100,8 @@ class orbit_server_manager : public util::design_pattern::singleton<orbit_server
   EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_client_end_notify(rpc::context& ctx,
                                                                           const orbit::CTSClientEndNotify& req);
   // 收到Client Heartbeat通知
-  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_client_heartbeat_notify(rpc::context& ctx,
-                                                                                const orbit::CTSClientHeartbeatNotify& req);
+  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_client_agent_heartbeat_notify(rpc::context& ctx,
+                                                                                const orbit::CTSClientAgentHeartbeatNotify& req);
  private:
   void server_heartbeat();
   void check_client_timeout();

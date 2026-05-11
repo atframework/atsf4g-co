@@ -352,8 +352,8 @@ rpc::result_code_type orbit_server_manager::handle_client_end_notify(rpc::contex
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type orbit_server_manager::handle_client_heartbeat_notify(rpc::context& ctx,
-                                                                           const orbit::CTSClientHeartbeatNotify& req) {
+rpc::result_code_type orbit_server_manager::handle_client_agent_heartbeat_notify(rpc::context& ctx,
+                                                                           const orbit::CTSClientAgentHeartbeatNotify& req) {
   for (const auto& client_id : req.client_ids()) {
     const std::string& id = client_id.client_id();
     auto client_info_ptr_ = get_client_info(id);
