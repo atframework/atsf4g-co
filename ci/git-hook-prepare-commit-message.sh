@@ -278,6 +278,9 @@ suggest_commit_message() {
   try_candidate_append_prompt "Qwen Code CLI" qwen --prompt && return 0
   try_candidate_append_prompt "Qwen Code CLI" qwen-code -p && return 0
   try_candidate_append_prompt "Qwen Code CLI" qwen-code --prompt && return 0
+  try_candidate_append_prompt "Kilo Code CLI" kilocode run && return 0
+  try_candidate_append_prompt "Kilo Code CLI" kilo run && return 0
+  try_candidate_append_prompt "Kilo Code CLI" kilo-code run && return 0
   try_candidate_append_prompt "Kimi CLI" kimi --quiet --afk -p && return 0
   try_candidate_append_prompt "Kimi CLI" kimi --print --afk -p && return 0
   try_candidate_append_prompt "DeepSeek CLI" deepseek -p && return 0
@@ -289,9 +292,6 @@ suggest_commit_message() {
   try_candidate_append_prompt "DeepSeek TUI" deepseek-tui -p && return 0
   try_candidate_stdin "DeepSeek TUI" deepseek-tui && return 0
 
-  try_candidate_append_prompt "Kilo Code CLI" kilocode run && return 0
-  try_candidate_append_prompt "Kilo Code CLI" kilo run && return 0
-  try_candidate_append_prompt "Kilo Code CLI" kilo-code run && return 0
   try_candidate_append_prompt "Roo CLI" roo --prompt && return 0
   try_candidate_append_prompt "Roo CLI" roo -p && return 0
   try_candidate_append_prompt "Roo CLI" roo-code --prompt && return 0
