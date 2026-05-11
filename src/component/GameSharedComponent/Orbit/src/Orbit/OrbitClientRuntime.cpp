@@ -1,12 +1,9 @@
 // Copyright 2026 atframework
 
 #include <Orbit/OrbitClientRuntime.h>
+#include <Orbit/OrbitRPCDispatcher.h>
 
 #include <time/time_utility.h>
-#include <cerrno>
-#include <cstdlib>
-#include <cstring>
-#include <string_view>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -18,7 +15,12 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <cerrno>
+#include <cstdlib>
+#include <cstring>
 #include <sstream>
+#include <string_view>
+
 
 ORBIT_CLIENT_SDK_NAMESPACE_BEGIN
 
@@ -163,6 +165,8 @@ int OrbitClientRuntime::init(int argc, char* argv[], const std::string& client_a
   OrbitClientOptions options;
   uint64_t app_id = 0;
   options.client_addr = client_addr;
+
+  OrbitRPCDispatcher::me()->init();
 
   int extract_result = extract_launch_options(argc, argv, app_id, options);
   if (extract_result >= 0) {
@@ -377,15 +381,15 @@ bool OrbitClientRuntime::connect() {
   return true;
 }
 
-bool OrbitClientRuntime::notify_process_ready(const std::string& custom_data) {
+int32_t OrbitClientRuntime::notify_process_ready(const std::string& custom_data) {
   if (state_ != OrbitClientRuntimeState::kConnected) {
     log(OrbitClientLogLevel::kWarning, "notify_process_ready rejected: runtime is not connected");
-    return false;
+    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
   if (options_.client_addr.empty()) {
     log(OrbitClientLogLevel::kError, "notify_process_ready rejected: client_addr is empty");
-    return false;
+    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
   orbit::DTAClientStartReq request;
@@ -393,16 +397,18 @@ bool OrbitClientRuntime::notify_process_ready(const std::string& custom_data) {
   request.set_client_addr(options_.client_addr);
   request.set_custom_data(custom_data);
 
-  if (!rpc_send_client_start(request)) {
-    log(OrbitClientLogLevel::kError, "failed to send client_start request");
-    return false;
+  int32_t send_result = rpc_send_client_start(request);
+  if (send_result < 0) {
+    log(OrbitClientLogLevel::kError,
+        std::string{"failed to send client_start request, code="} + std::to_string(send_result));
+    return send_result;
   }
 
   last_heartbeat_timepoint_ = clock_type::now();
   set_state(OrbitClientRuntimeState::kRunning);
 
   log(OrbitClientLogLevel::kInfo, "client_start sent");
-  return true;
+  return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
 void OrbitClientRuntime::tick() {
@@ -413,6 +419,8 @@ void OrbitClientRuntime::tick() {
   if (state_ != OrbitClientRuntimeState::kRunning) {
     return;
   }
+
+  OrbitRPCDispatcher::me()->tick();
 
   do {
     if (!options_.auto_send_heartbeat_on_tick) {
@@ -429,10 +437,10 @@ void OrbitClientRuntime::tick() {
   } while (false);
 }
 
-bool OrbitClientRuntime::send_heartbeat(const OrbitClientLoadSnapshot& snapshot) {
+int32_t OrbitClientRuntime::send_heartbeat(const OrbitClientLoadSnapshot& snapshot) {
   if (state_ != OrbitClientRuntimeState::kRunning) {
     log(OrbitClientLogLevel::kWarning, "send_heartbeat rejected: runtime is not running");
-    return false;
+    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
   orbit::DTAClientHeartbeatNotify request;
@@ -440,39 +448,43 @@ bool OrbitClientRuntime::send_heartbeat(const OrbitClientLoadSnapshot& snapshot)
   request.mutable_snapshot()->set_cpu_used(snapshot.cpu_used);
   request.mutable_snapshot()->set_memory_used_mb(snapshot.memory_used_mb);
 
-  if (!rpc_send_client_heartbeat(request)) {
-    log(OrbitClientLogLevel::kError, "failed to send client_heartbeat request");
-    return false;
+  int32_t send_result = rpc_send_client_heartbeat(request);
+  if (send_result < 0) {
+    log(OrbitClientLogLevel::kError,
+        std::string{"failed to send client_heartbeat request, code="} + std::to_string(send_result));
+    return send_result;
   }
 
   last_heartbeat_timepoint_ = clock_type::now();
-  return true;
+  return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
-bool OrbitClientRuntime::send_to_server(const std::string& payload) {
+int32_t OrbitClientRuntime::send_to_server(const std::string& payload) {
   if (state_ != OrbitClientRuntimeState::kRunning) {
     log(OrbitClientLogLevel::kWarning, "send_to_server rejected: runtime is not running");
-    return false;
+    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
   orbit::DTASendToServerNotify request;
   fill_client_id(*request.mutable_client_id(), options_.client_id);
   request.set_payload(payload);
 
-  if (!rpc_send_send_to_server(request)) {
-    log(OrbitClientLogLevel::kError, "failed to send send_to_server request");
-    return false;
+  int32_t send_result = rpc_send_send_to_server(request);
+  if (send_result < 0) {
+    log(OrbitClientLogLevel::kError,
+        std::string{"failed to send send_to_server request, code="} + std::to_string(send_result));
+    return send_result;
   }
 
-  return true;
+  return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
-bool OrbitClientRuntime::request_end(orbit::EnClientExitReason reason, int32_t exit_code,
-                                     const std::string& custom_data) {
+int32_t OrbitClientRuntime::request_end(orbit::EnClientExitReason reason, int32_t exit_code,
+                                        const std::string& custom_data) {
   OrbitClientRuntimeState previous_state = state_;
   set_state(OrbitClientRuntimeState::kStopping);
 
-  bool send_result = true;
+  int32_t send_result = orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
   if (previous_state == OrbitClientRuntimeState::kConnected || previous_state == OrbitClientRuntimeState::kRunning) {
     orbit::DTAClientExitReq request;
     fill_client_id(*request.mutable_client_id(), options_.client_id);
@@ -480,8 +492,9 @@ bool OrbitClientRuntime::request_end(orbit::EnClientExitReason reason, int32_t e
     request.set_custom_data(custom_data);
     request.set_exit_code(exit_code);
     send_result = rpc_send_client_exit(request);
-    if (!send_result) {
-      log(OrbitClientLogLevel::kError, "failed to send client_exit request");
+    if (send_result < 0) {
+      log(OrbitClientLogLevel::kError,
+          std::string{"failed to send client_exit request, code="} + std::to_string(send_result));
     }
   }
 
@@ -611,6 +624,25 @@ void OrbitClientRuntime::log(OrbitClientLogLevel level, const std::string& messa
   record.category = kLogCategory;
   record.message = message;
   callbacks_.on_log(record);
+}
+
+std::string OrbitClientRuntime::protobuf_mini_dumper_get_readable(const ::google::protobuf::Message& msg) {
+  std::string debug_string;
+  // 16K is in bin of tcache in jemalloc, and MEDIUM_PAGE in mimalloc
+  debug_string.reserve(16 * 1024);
+
+  ::google::protobuf::TextFormat::Printer printer;
+  printer.SetUseUtf8StringEscaping(true);
+  // printer.SetExpandAny(true);
+  printer.SetUseShortRepeatedPrimitives(true);
+  printer.SetSingleLineMode(false);
+  printer.SetTruncateStringFieldLongerThan(4096);
+  printer.SetPrintMessageFieldsInIndexOrder(false);
+
+  printer.PrintToString(msg, &debug_string);
+
+  // Old implementation will use COW and the new compiler will use NRVO here.
+  return debug_string;
 }
 
 }  // namespace orbit_client_sdk

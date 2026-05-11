@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
+
+import "google/protobuf/empty.proto";
+import "protocol/extension/atframework.proto";
+
+package hello;
+
+service OrbitServerRpcService {
+  option (atframework.service_options) = {
+    module_name: "orbit_server_rpc"
+  };
+
+  rpc echo(OrbitServerEchoReq) returns (OrbitServerEchoRsp);
+}
+
+message OrbitServerEchoReq {
+  string text = 1;
+}
+
+message OrbitServerEchoRsp {
+  string text = 1;
+}
+
+service OrbitClientRpcService {
+  option (atframework.service_options) = {
+    module_name: "orbit_client_rpc"
+  };
+
+  rpc echo(OrbitClientEchoReq) returns (OrbitClientEchoRsp);
+}
+
+message OrbitClientEchoReq {
+  string text = 1;
+}
+
+message OrbitClientEchoRsp {
+  string text = 1;
+}

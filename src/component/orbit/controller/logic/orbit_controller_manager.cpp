@@ -16,8 +16,10 @@
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_context.h>
 #include <rpc/rpc_shared_message.h>
+#include <rpc/rpc_utils.h>
 #include <time/time_utility.h>
 #include <utility/protobuf_mini_dumper.h>
+
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -598,7 +600,9 @@ rpc::result_code_type orbit_controller_manager::handle_launch_client(
     if (agent.agent_server_id() == 0) {
       FWLOGWARNING("orbit controller launch_client: no available agent for cpu={}, mem={}", expected_cpu,
                    expected_memory_mb);
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_CONTROLLER_NO_AVAILABLE_AGENT);
+      RPC_AWAIT_IGNORE_RESULT(rpc::wait(ctx, std::chrono::milliseconds(1000)));
+      --retry_count;
+      continue;
     }
 
     auto start_req = rpc::make_shared_message<orbit::CTAStartClientReq>(ctx);

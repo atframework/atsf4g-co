@@ -48,7 +48,7 @@ struct orbit_agent_client_record {
 
   // Client 状态
   int64_t process_id = 0;
-  orbit::EnClientState state = orbit::EN_SLAVE_STATE_UNSPECIFIED;
+  orbit::EnClientState state = orbit::EN_CLIENT_STATE_UNSPECIFIED;
   orbit::DClientLoadSnapshot load_snapshot;
   time_t last_heartbeat_timepoint = 0;
   std::string client_addr;

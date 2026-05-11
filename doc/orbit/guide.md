@@ -325,9 +325,9 @@ Agent 负责完成以下 Client 生命周期动作：
 | 场景 | 检测方式 | Agent 行为 |
 | --- | --- | --- |
 | 正常退出 | 收到 `STAClientExitReq` 且进程正常结束 | 释放资源并上报 `ATCNotifyClientExitReq` |
-| Crash | 进程异常退出，且没有 `STAClientExitReq` | 以 `EN_SLAVE_EXIT_REASON_CRASH` 上报 |
-| 心跳超时 | 超过 `heartbeat_timeout` 未收到 `STAClientHeartbeatNotify` | 强制回收 Client，并上报 `EN_SLAVE_EXIT_REASON_HEARTBEAT_TIMEOUT` |
-| OOM 保护 | Pod 总内存超过保护阈值 | 按策略回收 Client，并上报 `EN_SLAVE_EXIT_REASON_OOM_KILL` |
+| Crash | 进程异常退出，且没有 `STAClientExitReq` | 以 `EN_CLIENT_EXIT_REASON_CRASH` 上报 |
+| 心跳超时 | 超过 `heartbeat_timeout` 未收到 `STAClientHeartbeatNotify` | 强制回收 Client，并上报 `EN_CLIENT_EXIT_REASON_HEARTBEAT_TIMEOUT` |
+| OOM 保护 | Pod 总内存超过保护阈值 | 按策略回收 Client，并上报 `EN_CLIENT_EXIT_REASON_OOM_KILL` |
 | 控制面停止 | 收到 `CTAStopClientReq` | 触发本地停止流程，并按原因映射退出事件 |
 
 #### 5.4.5 Agent 建议指标
@@ -594,9 +594,9 @@ sequenceDiagram
     participant Controller as Controller
     participant Server as Server(unique_id=1001)
 
-    Client->>Agent: client_exit<br/>STAClientExitReq: client_id="match-42", exit_reason=EN_SLAVE_EXIT_REASON_NORMAL, custom_data=bye, exit_code=0
-    Agent->>Controller: notify_client_exit<br/>ATCNotifyClientExitReq: agent_id=4201, client_id="match-42", exit_reason=EN_SLAVE_EXIT_REASON_NORMAL, custom_data=bye, exit_code=0
-    Controller->>Server: client_end_notify<br/>CTMClientEndNotify: agent_id=4201, client_id="match-42", exit_reason=EN_SLAVE_EXIT_REASON_NORMAL, exit_data=bye, exit_code=0
+    Client->>Agent: client_exit<br/>STAClientExitReq: client_id="match-42", exit_reason=EN_CLIENT_EXIT_REASON_NORMAL, custom_data=bye, exit_code=0
+    Agent->>Controller: notify_client_exit<br/>ATCNotifyClientExitReq: agent_id=4201, client_id="match-42", exit_reason=EN_CLIENT_EXIT_REASON_NORMAL, custom_data=bye, exit_code=0
+    Controller->>Server: client_end_notify<br/>CTMClientEndNotify: agent_id=4201, client_id="match-42", exit_reason=EN_CLIENT_EXIT_REASON_NORMAL, exit_data=bye, exit_code=0
 ```
 
 ### 6.6 Server 重连与回放

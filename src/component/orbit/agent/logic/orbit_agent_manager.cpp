@@ -480,7 +480,7 @@ rpc::result_code_type orbit_agent_manager::handle_forward_to_client(
     FWLOGWARNING("orbit agent forward_to_client ignored for {}: client_server_id={:#x}, state={}", client_id,
                  nullptr != client_record ? client_record->client_server_id : 0,
                  nullptr != client_record ? static_cast<int>(client_record->state)
-                                          : static_cast<int>(orbit::EN_SLAVE_STATE_UNSPECIFIED));
+                                          : static_cast<int>(orbit::EN_CLIENT_STATE_UNSPECIFIED));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
   }
 
@@ -588,13 +588,13 @@ rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
   }
 
-  if (client_record->state != orbit::EN_SLAVE_STATE_STARTING) {
+  if (client_record->state != orbit::EN_CLIENT_STATE_STARTING) {
     FWLOGWARNING("orbit agent client_start ignored for {}: invalid state {}, expected STARTING", client_id,
                  static_cast<int>(client_record->state));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_STATE_INVALID);
   }
 
-  client_record->state = orbit::EN_SLAVE_STATE_RUNNING;
+  client_record->state = orbit::EN_CLIENT_STATE_RUNNING;
   client_record->client_addr = request.client_addr();
   client_record->last_heartbeat_timepoint = util::time::time_utility::get_sys_now();
   client_record->client_server_id = client_server_id;
@@ -659,7 +659,7 @@ rpc::result_code_type orbit_agent_manager::handle_send_to_server(rpc::context& c
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
   }
 
-  if (client_record->state != orbit::EN_SLAVE_STATE_RUNNING) {
+  if (client_record->state != orbit::EN_CLIENT_STATE_RUNNING) {
     FWLOGWARNING("orbit agent client_start ignored for {}: invalid state {}, expected RUNNING", client_id,
                  static_cast<int>(client_record->state));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_STATE_INVALID);
@@ -707,11 +707,11 @@ rpc::result_code_type orbit_agent_manager::handle_client_exit(rpc::context& ctx,
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
   }
 
-  if (client_record->state != orbit::EN_SLAVE_STATE_RUNNING) {
+  if (client_record->state != orbit::EN_CLIENT_STATE_RUNNING) {
     FWLOGERROR("orbit agent client_start ignored for {}: invalid state {}, expected RUNNING", client_id,
                static_cast<int>(client_record->state));
   }
-  client_record->state = orbit::EN_SLAVE_STATE_EXITING;
+  client_record->state = orbit::EN_CLIENT_STATE_EXITING;
 
   delete_client(client_record);
 
@@ -797,7 +797,7 @@ int orbit_agent_manager::prepare_start_client_record(const orbit::CTAStartClient
   record->heartbeat_timeout_sec = request.args().heartbeat_timeout_sec();
   record->server_unique_id = request.server_identity().unique_id();
 
-  record->state = orbit::EN_SLAVE_STATE_STARTING;
+  record->state = orbit::EN_CLIENT_STATE_STARTING;
   record->client_addr.clear();
 
   server_unique_id_to_client_ids_[record->server_unique_id].insert(record->client_id);
@@ -902,7 +902,7 @@ void orbit_agent_manager::on_client_process_exit(const std::string& client_id, i
                exit_status, term_signal, static_cast<int>(record->state));
 
   record->process_handle = nullptr;  // 句柄正在被 libuv 回调关闭
-  record->state = orbit::EN_SLAVE_STATE_EXITING;
+  record->state = orbit::EN_CLIENT_STATE_EXITING;
   delete_client(record);
 
   auto controller_server_id = record->get_controller_server_id();
@@ -920,7 +920,7 @@ void orbit_agent_manager::on_client_process_exit(const std::string& client_id, i
 
   orbit::DClientIdentity identity;
   fill_client_identity(identity, record);
-  const orbit::EnClientExitReason reason = orbit::EN_SLAVE_EXIT_REASON_CRASH;
+  const orbit::EnClientExitReason reason = orbit::EN_CLIENT_EXIT_REASON_CRASH;
   const int32_t exit_code = static_cast<int32_t>(exit_status);
 
   auto invoke_result =
@@ -953,16 +953,16 @@ void orbit_agent_manager::check_client_timeouts(time_t now) {
     if (!record) {
       continue;
     }
-    if (orbit::EN_SLAVE_STATE_STARTING == record->state || orbit::EN_SLAVE_STATE_SEED == record->state) {
+    if (orbit::EN_CLIENT_STATE_STARTING == record->state || orbit::EN_CLIENT_STATE_SEED == record->state) {
       if (record->startup_timeout_sec > 0 && record->start_timepoint > 0 &&
           now >= static_cast<time_t>(record->start_timepoint) + static_cast<time_t>(record->startup_timeout_sec)) {
-        expired.push_back({kv.first, orbit::EN_SLAVE_EXIT_REASON_STARTUP_TIMEOUT});
+        expired.push_back({kv.first, orbit::EN_CLIENT_EXIT_REASON_STARTUP_TIMEOUT});
       }
-    } else if (orbit::EN_SLAVE_STATE_RUNNING == record->state) {
+    } else if (orbit::EN_CLIENT_STATE_RUNNING == record->state) {
       if (record->heartbeat_timeout_sec > 0 && record->last_heartbeat_timepoint > 0 &&
           now >= static_cast<time_t>(record->last_heartbeat_timepoint) +
                      static_cast<time_t>(record->heartbeat_timeout_sec)) {
-        expired.push_back({kv.first, orbit::EN_SLAVE_EXIT_REASON_HEARTBEAT_TIMEOUT});
+        expired.push_back({kv.first, orbit::EN_CLIENT_EXIT_REASON_HEARTBEAT_TIMEOUT});
       }
     }
   }
@@ -973,7 +973,7 @@ void orbit_agent_manager::check_client_timeouts(time_t now) {
       continue;
     }
 
-    record->state = orbit::EN_SLAVE_STATE_EXITING;
+    record->state = orbit::EN_CLIENT_STATE_EXITING;
     delete_client(record);
 
     auto controller_server_id = record->get_controller_server_id();
@@ -1062,12 +1062,12 @@ void orbit_agent_manager::update_etcd_load_snapshot() {
 
   for (const auto& kv : clients_) {
     auto record = kv.second;
-    if (orbit::EN_SLAVE_STATE_STARTING == record->state || orbit::EN_SLAVE_STATE_SEED == record->state) {
+    if (orbit::EN_CLIENT_STATE_STARTING == record->state || orbit::EN_CLIENT_STATE_SEED == record->state) {
       ++inflight_count;
       // Account for reserved resources during startup
       cpu_used += record->expected_cpu;
       memory_used_mb += record->expected_memory_mb;
-    } else if (orbit::EN_SLAVE_STATE_RUNNING == record->state || orbit::EN_SLAVE_STATE_EXITING == record->state) {
+    } else if (orbit::EN_CLIENT_STATE_RUNNING == record->state || orbit::EN_CLIENT_STATE_EXITING == record->state) {
       ++client_count;
       cpu_used += record->load_snapshot.cpu_used();
       memory_used_mb += record->load_snapshot.memory_used_mb();
