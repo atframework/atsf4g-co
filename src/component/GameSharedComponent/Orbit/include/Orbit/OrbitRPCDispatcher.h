@@ -65,7 +65,7 @@ class ORBIT_CLIENT_SDK_API OrbitRPCDispatcher : public util::design_pattern::sin
     return std::make_shared<task_action_maker_t<TAction>>();
   }
 
-  int32_t init_rpc_req_callback(uint64_t sequence, int32_t timeout, rsp_callback_t callback);
+  int32_t init_rpc_req_callback(uint64_t sequence, time_t timeout, rsp_callback_t callback);
 
   template <typename TAction>
   int register_action(const ::google::protobuf::ServiceDescriptor *service_desc, const std::string &rpc_name) {
@@ -107,7 +107,7 @@ class ORBIT_CLIENT_SDK_API OrbitRPCDispatcher : public util::design_pattern::sin
   rpc_task_action_set_t task_action_map_by_name_;
 
   std::map<uint64_t, std::shared_ptr<rsp_callback_t>> sequence_callback_map_;
-  std::multimap<uint64_t, std::pair<uint64_t, std::weak_ptr<rsp_callback_t>>> timeout_callback_map_;
+  std::multimap<time_t, std::pair<uint64_t, std::weak_ptr<rsp_callback_t>>> timeout_callback_map_;
 };
 
 }  // namespace orbit_client_sdk

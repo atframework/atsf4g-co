@@ -188,7 +188,7 @@ void OrbitRPCDispatcher::on_create_task_failed(orbit::OrbitRpcMessage& orbit_msg
   send_rsp_to_proc(rsp);
 }
 
-int32_t OrbitRPCDispatcher::init_rpc_req_callback(uint64_t sequence, int32_t timeout, rsp_callback_t callback) {
+int32_t OrbitRPCDispatcher::init_rpc_req_callback(uint64_t sequence, time_t timeout, rsp_callback_t callback) {
   if (sequence == 0) {
     return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
@@ -196,7 +196,7 @@ int32_t OrbitRPCDispatcher::init_rpc_req_callback(uint64_t sequence, int32_t tim
   if (sequence_callback_map_.find(sequence) != sequence_callback_map_.end()) {
     return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
-  uint64_t timeout_stamp = ::util::time::time_utility::get_sys_now() + timeout;
+  time_t timeout_stamp = ::util::time::time_utility::get_sys_now() + timeout;
   auto ptr = std::make_shared<rsp_callback_t>(callback);
   sequence_callback_map_[sequence] = ptr;
   timeout_callback_map_.insert(
@@ -205,7 +205,7 @@ int32_t OrbitRPCDispatcher::init_rpc_req_callback(uint64_t sequence, int32_t tim
 }
 
 void OrbitRPCDispatcher::rsp_callback_execute() {
-  uint64_t current_time = ::util::time::time_utility::get_sys_now();
+  time_t current_time = ::util::time::time_utility::get_sys_now();
   for (auto iter = timeout_callback_map_.begin(); iter != timeout_callback_map_.end();) {
     if (iter->first >= current_time) {
       break;

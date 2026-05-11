@@ -19,7 +19,7 @@ ORBIT_CLIENT_SDK_NAMESPACE_BEGIN
 
 namespace orbit_client_sdk {
 
-class task_action_orbit_req_base {
+class ORBIT_CLIENT_SDK_API task_action_orbit_req_base {
  public:
   using msg_type = orbit::OrbitRpcMessage;
   using msg_ref_type = msg_type&;
