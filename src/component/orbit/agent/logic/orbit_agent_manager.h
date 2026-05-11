@@ -101,7 +101,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
       rpc::context& ctx, const orbit::DTAClientHeartbeatNotify& request);
   // 转发至 Server
   EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_send_to_server(
-      rpc::context& ctx, const orbit::DTASendToServerNotify& request);
+      rpc::context& ctx, const orbit::DTASendToServerReq& request);
   // Client 退出
   EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_client_exit(
       rpc::context& ctx, const orbit::DTAClientExitReq& request);

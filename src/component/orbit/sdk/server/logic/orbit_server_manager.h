@@ -80,10 +80,15 @@ class orbit_server_manager : public util::design_pattern::singleton<orbit_server
       rpc::context& ctx, const std::string& region, const orbit::DAgentClientStartArgs& args,
       const google::protobuf::RepeatedPtrField<std::string>& match_tags);
   // 发送消息至Client
-  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API int32_t send_to_client(rpc::context& ctx,
-                                                                          const std::string& client_id,
-                                                                          const void* msg_data, size_t msg_size);
-
+  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API int32_t send_to_client_no_wait(rpc::context& ctx,
+                                                                                  const std::string& client_id,
+                                                                                  const void* msg_data,
+                                                                                  size_t msg_size);
+  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type send_to_client(rpc::context& ctx,
+                                                                                        const std::string& client_id,
+                                                                                        const void* msg_data,
+                                                                                        size_t msg_size);
+  // 存在默认RPC实现
   void set_on_forward_to_server(on_forward_to_server_fn fn) { on_forward_to_server_ = std::move(fn); }
   void set_on_client_start_notify(on_client_start_notify_fn fn) { on_client_start_notify_ = std::move(fn); }
   void set_on_client_end_notify(on_client_end_notify_fn fn) { on_client_end_notify_ = std::move(fn); }
@@ -91,17 +96,18 @@ class orbit_server_manager : public util::design_pattern::singleton<orbit_server
  public:
   // SDK 内部使用
   // 收到Client消息
-  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_forward_to_server(rpc::context& ctx,
-                                                                          const orbit::CTSForwardToServerNotify& req);
+  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_forward_to_server(
+      rpc::context& ctx, const orbit::CTSForwardToServerReq& req);
   // 收到Client Start通知
-  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_client_start_notify(rpc::context& ctx,
-                                                                            const orbit::CTSClientStartNotify& req);
+  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_client_start_notify(
+      rpc::context& ctx, const orbit::CTSClientStartReq& req);
   // 收到Client End通知
-  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_client_end_notify(rpc::context& ctx,
-                                                                          const orbit::CTSClientEndNotify& req);
+  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_client_end_notify(
+      rpc::context& ctx, const orbit::CTSClientEndReq& req);
   // 收到Client Heartbeat通知
-  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_client_agent_heartbeat_notify(rpc::context& ctx,
-                                                                                const orbit::CTSClientAgentHeartbeatNotify& req);
+  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_client_agent_heartbeat_notify(
+      rpc::context& ctx, const orbit::CTSClientAgentHeartbeatNotify& req);
+
  private:
   void server_heartbeat();
   void check_client_timeout();
@@ -115,7 +121,7 @@ class orbit_server_manager : public util::design_pattern::singleton<orbit_server
 
   uint64_t heartbeat_interval_sec_ = 0;
   time_t last_heartbeat_time_ = 0;
-  time_t client_timeout_sec_ = 30;
+  time_t client_timeout_sec_ = 0;
 
   on_forward_to_server_fn on_forward_to_server_;
   on_client_start_notify_fn on_client_start_notify_;

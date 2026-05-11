@@ -54,7 +54,7 @@ const std::string& get_empty_string() {
   return empty_string;
 }
 
-[[maybe_unused]] const google::protobuf::MethodDescriptor* get_agent_to_client_method(const char* method_name) {
+const google::protobuf::MethodDescriptor* get_agent_to_client_method(const char* method_name) {
   return orbit::AgentToClientService::descriptor()->FindMethodByName(method_name);
 }
 
@@ -147,14 +147,8 @@ void OrbitClientRuntime::on_received_message(const std::string& message) {
   dispatch_received_message(unpacked_message);
 }
 
-int32_t OrbitClientRuntime::send_stream_message(const google::protobuf::MessageLite& body,
-                                                const google::protobuf::MethodDescriptor& method) {
-  std::string packed_message;
-  int32_t pack_result = pack_stream_message(packed_message, method, body);
-  if (pack_result < 0) {
-    return pack_result;
-  }
-
+int32_t OrbitClientRuntime::send_message(const std::string& packed_message,
+                                         const google::protobuf::MethodDescriptor& method) {
   if (nullptr == app_ || !app_->get_bus_node()) {
     log(OrbitClientLogLevel::kError, "send rejected: atapp bus node is unavailable");
     return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
@@ -177,6 +171,16 @@ int32_t OrbitClientRuntime::send_stream_message(const google::protobuf::MessageL
   }
 
   return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+}
+
+int32_t OrbitClientRuntime::send_stream_message(const google::protobuf::MessageLite& body,
+                                                const google::protobuf::MethodDescriptor& method) {
+  std::string packed_message;
+  int32_t pack_result = pack_stream_message(packed_message, method, body);
+  if (pack_result < 0) {
+    return pack_result;
+  }
+  return send_message(packed_message, method);
 }
 
 int32_t OrbitClientRuntime::pack_stream_message(std::string& output, const google::protobuf::MethodDescriptor& method,
@@ -204,6 +208,118 @@ int32_t OrbitClientRuntime::pack_stream_message(std::string& output, const googl
   stream_meta->set_rpc_name(get_rpc_full_name(method));
   stream_meta->set_type_url(method.input_type()->full_name());
   fill_protobuf_timestamp(*stream_meta->mutable_caller_timestamp());
+
+  if (!body.SerializeToString(message.mutable_body_bin())) {
+    std::ostringstream stream;
+    stream << "failed to serialize rpc body for " << get_rpc_full_name(method);
+    log(OrbitClientLogLevel::kError, stream.str());
+    return orbit::EN_ORBIT_ERROR_CODE_SERIALIZETOSTRING;
+  }
+
+  if (!message.SerializeToString(&output)) {
+    std::ostringstream stream;
+    stream << "failed to serialize SSMsg for " << get_rpc_full_name(method);
+    log(OrbitClientLogLevel::kError, stream.str());
+    return orbit::EN_ORBIT_ERROR_CODE_SERIALIZETOSTRING;
+  }
+
+  return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+}
+
+int32_t OrbitClientRuntime::send_request_message(const google::protobuf::MessageLite& body,
+                                                 const google::protobuf::MethodDescriptor& method) {
+  std::string packed_message;
+  int32_t pack_result = pack_request_message(packed_message, method, body);
+  if (pack_result < 0) {
+    return pack_result;
+  }
+
+  return send_message(packed_message, method);
+}
+
+int32_t OrbitClientRuntime::pack_request_message(std::string& output, const google::protobuf::MethodDescriptor& method,
+                                                 const google::protobuf::MessageLite& body) {
+  atframework::SSMsg message;
+  atframework::SSMsgHead* head = message.mutable_head();
+  if (nullptr == head) {
+    log(OrbitClientLogLevel::kError, "failed to allocate SSMsg head");
+    return orbit::EN_ORBIT_ERROR_CODE_MALLOC;
+  }
+
+  head->set_timestamp(get_now_seconds());
+  head->set_sequence(allocate_sequence());
+  head->set_node_name(options_.client_id);
+
+  atframework::RpcRequestMeta* request_meta = head->mutable_rpc_request();
+  if (nullptr == request_meta) {
+    log(OrbitClientLogLevel::kError, "failed to allocate rpc_request meta");
+    return orbit::EN_ORBIT_ERROR_CODE_MALLOC;
+  }
+
+  request_meta->set_version("1");
+  request_meta->set_caller(options_.client_id);
+  request_meta->set_callee(method.service()->full_name());
+  request_meta->set_rpc_name(get_rpc_full_name(method));
+  request_meta->set_type_url(method.input_type()->full_name());
+  fill_protobuf_timestamp(*request_meta->mutable_caller_timestamp());
+
+  if (!body.SerializeToString(message.mutable_body_bin())) {
+    std::ostringstream stream;
+    stream << "failed to serialize rpc body for " << get_rpc_full_name(method);
+    log(OrbitClientLogLevel::kError, stream.str());
+    return orbit::EN_ORBIT_ERROR_CODE_SERIALIZETOSTRING;
+  }
+
+  if (!message.SerializeToString(&output)) {
+    std::ostringstream stream;
+    stream << "failed to serialize SSMsg for " << get_rpc_full_name(method);
+    log(OrbitClientLogLevel::kError, stream.str());
+    return orbit::EN_ORBIT_ERROR_CODE_SERIALIZETOSTRING;
+  }
+
+  return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+}
+
+int32_t OrbitClientRuntime::send_response_message(const ::atframework::SSMsgHead& req_head,
+                                                  const google::protobuf::MessageLite& body,
+                                                  const google::protobuf::MethodDescriptor& method) {
+  std::string packed_message;
+  int32_t pack_result = pack_response_message(req_head, packed_message, method, body);
+  if (pack_result < 0) {
+    return pack_result;
+  }
+
+  return send_message(packed_message, method);
+}
+
+int32_t OrbitClientRuntime::pack_response_message(const ::atframework::SSMsgHead& req_head, std::string& output,
+                                                  const google::protobuf::MethodDescriptor& method,
+                                                  const google::protobuf::MessageLite& body) {
+  atframework::SSMsg message;
+  atframework::SSMsgHead* head = message.mutable_head();
+  if (nullptr == head) {
+    log(OrbitClientLogLevel::kError, "failed to allocate SSMsg head");
+    return orbit::EN_ORBIT_ERROR_CODE_MALLOC;
+  }
+
+  if (req_head.has_rpc_trace()) {
+    protobuf_copy_message(*head->mutable_rpc_trace(), req_head.rpc_trace());
+  }
+  head->set_timestamp(get_now_seconds());
+  head->set_sequence(req_head.sequence());
+  head->set_node_name(options_.client_id);
+  head->set_destination_task_id(req_head.source_task_id());
+
+  atframework::RpcResponseMeta* response_meta = head->mutable_rpc_response();
+  if (nullptr == response_meta) {
+    log(OrbitClientLogLevel::kError, "failed to allocate rpc_response meta");
+    return orbit::EN_ORBIT_ERROR_CODE_MALLOC;
+  }
+
+  response_meta->set_version("1");
+  response_meta->set_rpc_name(get_rpc_full_name(method));
+  response_meta->set_type_url(method.output_type()->full_name());
+  fill_protobuf_timestamp(*response_meta->mutable_caller_timestamp());
 
   if (!body.SerializeToString(message.mutable_body_bin())) {
     std::ostringstream stream;
@@ -250,23 +366,23 @@ int32_t OrbitClientRuntime::dispatch_received_message(const atframework::SSMsg& 
 
   switch (dispatcher->second) {
     case orbit_receive_rpc_type_t::kForwardToClient: {
-      orbit::ATDForwardToClientNotify request;
+      orbit::ATDForwardToClientReq request;
       if (!unpack_body_message(message, request)) {
         log(OrbitClientLogLevel::kError, "failed to parse forward_to_client payload");
         return orbit::EN_ORBIT_ERROR_CODE_SERIALIZETOSTRING;
       }
 
-      return rpc_receive_forward_to_client(request);
+      return rpc_receive_forward_to_client(message.head(), request);
     }
 
     case orbit_receive_rpc_type_t::kForkSeedClient: {
-      orbit::ATDForkSeedClientNotify request;
+      orbit::ATDForkSeedClientReq request;
       if (!unpack_body_message(message, request)) {
         log(OrbitClientLogLevel::kError, "failed to parse fork_seed_client payload");
         return orbit::EN_ORBIT_ERROR_CODE_SERIALIZETOSTRING;
       }
 
-      return rpc_receive_fork_seed_client(request);
+      return rpc_receive_fork_seed_client(message.head(), request);
     }
 
     default:
@@ -287,14 +403,14 @@ int32_t OrbitClientRuntime::rpc_send_client_heartbeat(const orbit::DTAClientHear
   return send_stream_message(request, *method);
 }
 
-int32_t OrbitClientRuntime::rpc_send_send_to_server(const orbit::DTASendToServerNotify& request) {
+int32_t OrbitClientRuntime::rpc_send_send_to_server(const orbit::DTASendToServerReq& request) {
   const google::protobuf::MethodDescriptor* method = get_client_to_agent_method(kMethodSendToServer);
   if (nullptr == method) {
     log(OrbitClientLogLevel::kError, "send_to_server method descriptor not found");
     return orbit::EN_ORBIT_ERROR_CODE_METHOD_NOT_FOUND;
   }
 
-  return send_stream_message(request, *method);
+  return send_request_message(request, *method);
 }
 
 int32_t OrbitClientRuntime::rpc_send_client_start(const orbit::DTAClientStartReq& request) {
@@ -304,7 +420,7 @@ int32_t OrbitClientRuntime::rpc_send_client_start(const orbit::DTAClientStartReq
     return orbit::EN_ORBIT_ERROR_CODE_METHOD_NOT_FOUND;
   }
 
-  return send_stream_message(request, *method);
+  return send_request_message(request, *method);
 }
 
 int32_t OrbitClientRuntime::rpc_send_client_exit(const orbit::DTAClientExitReq& request) {
@@ -314,10 +430,21 @@ int32_t OrbitClientRuntime::rpc_send_client_exit(const orbit::DTAClientExitReq& 
     return orbit::EN_ORBIT_ERROR_CODE_METHOD_NOT_FOUND;
   }
 
-  return send_stream_message(request, *method);
+  return send_request_message(request, *method);
 }
 
-int32_t OrbitClientRuntime::rpc_receive_forward_to_client(const orbit::ATDForwardToClientNotify& request) {
+int32_t OrbitClientRuntime::rpc_receive_forward_to_client(const ::atframework::SSMsgHead& req_head,
+                                                          const orbit::ATDForwardToClientReq& request) {
+  // 立刻回包
+  const google::protobuf::MethodDescriptor* method = get_agent_to_client_method(kMethodForwardToClient);
+  if (nullptr == method) {
+    log(OrbitClientLogLevel::kError, "forward_to_client method descriptor not found");
+    return orbit::EN_ORBIT_ERROR_CODE_METHOD_NOT_FOUND;
+  }
+  orbit::DTAForwardToClientRsp rsp;
+  send_response_message(req_head, rsp, *method);
+
+  ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitRPCDispatcher::me()->dispatch(request.payload());
   if (callbacks_.on_forward_to_client) {
     callbacks_.on_forward_to_client(request.payload());
   }
@@ -325,9 +452,18 @@ int32_t OrbitClientRuntime::rpc_receive_forward_to_client(const orbit::ATDForwar
   return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
-int32_t OrbitClientRuntime::rpc_receive_fork_seed_client(const orbit::ATDForkSeedClientNotify& request) {
+int32_t OrbitClientRuntime::rpc_receive_fork_seed_client(const ::atframework::SSMsgHead& req_head,
+                                                         const orbit::ATDForkSeedClientReq& request) {
   (void)request;
   log(OrbitClientLogLevel::kInfo, "fork_seed_client ignored in current SDK stage");
+
+  const google::protobuf::MethodDescriptor* method = get_agent_to_client_method(kMethodForkSeedClient);
+  if (nullptr == method) {
+    log(OrbitClientLogLevel::kError, "fork_seed_client method descriptor not found");
+    return orbit::EN_ORBIT_ERROR_CODE_METHOD_NOT_FOUND;
+  }
+  orbit::DTAForkSeedClientRsp rsp;
+  send_response_message(req_head, rsp, *method);
   return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 

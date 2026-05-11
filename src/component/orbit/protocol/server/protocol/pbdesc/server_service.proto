@@ -16,19 +16,19 @@ import "protocol/common/orbit.common.proto";
 
 /////////////// Controller -> Server ///////////////
 service ControllerToServerService {
-  rpc forward_to_server(stream CTSForwardToServerNotify) returns (google.protobuf.Empty) {
+  rpc forward_to_server(CTSForwardToServerReq) returns (STCForwardToServerRsp) {
     option (atframework.rpc_options) = {
       api_name: "转发Client消息"
     };
   };
 
-  rpc client_start_notify(stream CTSClientStartNotify) returns (google.protobuf.Empty) {
+  rpc client_start_notify(CTSClientStartReq) returns (STCClientStartRsp) {
     option (atframework.rpc_options) = {
       api_name: "Client启动通知"
     };
   };
 
-  rpc client_end_notify(stream CTSClientEndNotify) returns (google.protobuf.Empty) {
+  rpc client_end_notify(CTSClientEndReq) returns (STCClientEndRsp) {
     option (atframework.rpc_options) = {
       api_name: "Client退出通知"
     };
@@ -41,24 +41,27 @@ service ControllerToServerService {
   };
 }
 
-message CTSForwardToServerNotify {
+message CTSForwardToServerReq {
   DClientMessage client_message = 1;
 }
+message STCForwardToServerRsp {}
 
-message CTSClientStartNotify {
+message CTSClientStartReq {
   DClientIdentity client_identity = 1;
 
   string client_addr = 2;
   bytes data = 3;
 }
+message STCClientStartRsp {}
 
-message CTSClientEndNotify {
+message CTSClientEndReq {
   DClientIdentity client_identity = 1;
 
   EnClientExitReason exit_reason = 11;
   bytes exit_data = 12;
   int32 exit_code = 13;
 }
+message STCClientEndRsp {}
 
 message CTSClientAgentHeartbeatNotify {
   DAgentIdentity agent_identity = 1;
@@ -72,9 +75,10 @@ service ServerToControllerService {
       api_name: "启动Client 返回不等于可用"
     };
   };
-  rpc send_to_client(stream STCSendToClientNotify) returns (google.protobuf.Empty) {
+  rpc send_to_client(STCSendToClientReq) returns (CTSSendToClientRsp) {
     option (atframework.rpc_options) = {
       api_name: "发送消息至Client"
+      allow_no_wait: true
     };
   };
   rpc server_heartbeat(stream STCServerHeartbeatNotify) returns (google.protobuf.Empty) {
@@ -92,12 +96,13 @@ message STCLaunchClientReq {
 }
 message CTSLaunchClientRsp {}
 
-message STCSendToClientNotify {
+message STCSendToClientReq {
   DServerIdentity server_identity = 1;
 
   DClientIdentity client_identity = 2;
   bytes payload = 3;
 }
+message CTSSendToClientRsp {}
 
 message STCServerHeartbeatNotify {
   DServerIdentity server_identity = 1;

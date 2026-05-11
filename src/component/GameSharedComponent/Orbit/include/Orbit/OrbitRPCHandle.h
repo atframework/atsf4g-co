@@ -100,10 +100,10 @@ int orbit_rpc_handle(const std::string& rpc_name, const std::string& service_nam
     return res;
   }
   return OrbitRPCDispatcher::me()->init_rpc_req_callback(
-      sequence, 4, [&, req_body_copy = req_body, callback, retry_time](const orbit::OrbitRpcMessage& rsp_msg) {
+      sequence, 4,
+      [&, rpc_full_name, req_body_copy = req_body, callback, retry_time](const orbit::OrbitRpcMessage& rsp_msg) {
         int32_t res = 0;
         rsp_type rsp_body;
-        std::string rpc_full_name = service_name + "." + rpc_name;
         if (rsp_msg.head().rpc_response().type_url() == rsp_type::descriptor()->full_name() &&
             !rsp_msg.body_bin().empty()) {
           res = __unpack_rpc_body(rsp_body, rsp_msg.body_bin(), rpc_full_name, rsp_type::descriptor()->full_name());
@@ -117,7 +117,9 @@ int orbit_rpc_handle(const std::string& rpc_name, const std::string& service_nam
             return;
           }
         }
-        callback(res, rsp_body);
+        if (callback != nullptr) {
+          callback(res, rsp_body);
+        }
       });
 }
 

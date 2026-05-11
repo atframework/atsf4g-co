@@ -1,5 +1,5 @@
 // Copyright 2026 atframework
-// @brief Created by yousongyang with mako-generator.py at 2026-04-29 11:47:42
+// @brief Created by yousongyang with mako-generator.py at 2026-05-11 15:53:52
 
 #pragma once
 
@@ -21,9 +21,9 @@
 #  define ORBIT_AGENT_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
-class task_action_client_start : public task_action_ss_rpc_base<orbit::DTAClientStartReq, google::protobuf::Empty> {
+class task_action_client_start : public task_action_ss_rpc_base<orbit::DTAClientStartReq, orbit::ATDClientStartRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<orbit::DTAClientStartReq, google::protobuf::Empty>;
+  using base_type = task_action_ss_rpc_base<orbit::DTAClientStartReq, orbit::ATDClientStartRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

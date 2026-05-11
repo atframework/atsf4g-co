@@ -150,7 +150,7 @@ ORBIT_SERVER_SERVICE_API void task_action_orbit_req_base::send_response() {
   for (std::list<message_type *>::iterator iter = response_messages_.begin(); iter != response_messages_.end();
        ++iter) {
     (*iter)->mutable_head()->set_error_code(get_response_code());
-    int32_t res = orbit_msg_dispatcher::me()->send_to_proc(get_shared_context(), client_id_, **iter);
+    int32_t res = orbit_msg_dispatcher::me()->send_to_client_no_wait(get_shared_context(), client_id_, **iter);
     if (res < 0) {
       FWLOGERROR("task {} [{}] send orbit response to [{}] failed, res: {}({})", name(), get_task_id(), client_id_, res,
                  protobuf_mini_dumper_get_error_msg(res));

@@ -20,7 +20,6 @@
 #include <time/time_utility.h>
 #include <utility/protobuf_mini_dumper.h>
 
-
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
@@ -447,21 +446,21 @@ rpc::result_code_type orbit_controller_manager::handle_notify_client_started(
 
   // 通过请求中携带的 server_identity 路由到目标 Server
   if (0 == request.server_identity().unique_id() || 0 == request.server_identity().server_node_id()) {
-    FWLOGWARNING(
-        "orbit controller notify_client_started for {}: no server_identity in request, skip CTSClientStartNotify",
-        client_id_str);
+    FWLOGWARNING("orbit controller notify_client_started for {}: no server_identity in request, skip CTSClientStartReq",
+                 client_id_str);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  auto notify = rpc::make_shared_message<orbit::CTSClientStartNotify>(ctx);
+  auto notify = rpc::make_shared_message<orbit::CTSClientStartReq>(ctx);
+  auto rsp = rpc::make_shared_message<orbit::STCClientStartRsp>(ctx);
   *notify->mutable_client_identity() = identity;
   notify->set_client_addr(request.client_addr());
   notify->set_data(request.custom_data());
 
-  int32_t rpc_result = RPC_AWAIT_CODE_RESULT(
-      rpc::controllertoserverservice::client_start_notify(ctx, request.server_identity().server_node_id(), *notify));
+  int32_t rpc_result = RPC_AWAIT_CODE_RESULT(rpc::controllertoserverservice::client_start_notify(
+      ctx, request.server_identity().server_node_id(), *notify, *rsp));
   if (rpc_result < 0) {
-    FWLOGERROR("orbit controller CTSClientStartNotify failed for {} to server {:#x}, res: {}", client_id_str,
+    FWLOGERROR("orbit controller CTSClientStartReq failed for {} to server {:#x}, res: {}", client_id_str,
                request.server_identity().server_node_id(), rpc_result);
     RPC_RETURN_CODE(rpc_result);
   }
@@ -491,17 +490,18 @@ rpc::result_code_type orbit_controller_manager::handle_notify_client_exit(
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
 
-  auto notify = rpc::make_shared_message<orbit::CTSClientEndNotify>(ctx);
+  auto notify = rpc::make_shared_message<orbit::CTSClientEndReq>(ctx);
+  auto rsp = rpc::make_shared_message<orbit::STCClientEndRsp>(ctx);
   *notify->mutable_client_identity() = identity;
   notify->set_exit_reason(request.exit_reason());
   notify->set_exit_data(request.custom_data());
   notify->set_exit_code(request.exit_code());
 
   int32_t rpc_result =
-      RPC_AWAIT_CODE_RESULT(rpc::controllertoserverservice::client_end_notify(ctx, server_node_id, *notify));
+      RPC_AWAIT_CODE_RESULT(rpc::controllertoserverservice::client_end_notify(ctx, server_node_id, *notify, *rsp));
   if (rpc_result < 0) {
-    FWLOGERROR("orbit controller CTSClientEndNotify failed for {} to server {:#x}, res: {}", client_id_str,
-               server_node_id, rpc_result);
+    FWLOGERROR("orbit controller CTSClientEndReq failed for {} to server {:#x}, res: {}", client_id_str, server_node_id,
+               rpc_result);
     RPC_RETURN_CODE(rpc_result);
   }
 
@@ -556,11 +556,12 @@ rpc::result_code_type orbit_controller_manager::handle_forward_to_server(rpc::co
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
 
-  auto notify = rpc::make_shared_message<orbit::CTSForwardToServerNotify>(ctx);
+  auto notify = rpc::make_shared_message<orbit::CTSForwardToServerReq>(ctx);
+  auto rsp = rpc::make_shared_message<orbit::STCForwardToServerRsp>(ctx);
   *notify->mutable_client_message() = request.client_message();
 
   int32_t rpc_result =
-      RPC_AWAIT_CODE_RESULT(rpc::controllertoserverservice::forward_to_server(ctx, server_node_id, *notify));
+      RPC_AWAIT_CODE_RESULT(rpc::controllertoserverservice::forward_to_server(ctx, server_node_id, *notify, *rsp));
   if (rpc_result < 0) {
     FWLOGERROR("orbit controller forward_to_server failed for {} to server {:#x}, res: {}", client_id_str,
                server_node_id, rpc_result);
@@ -638,13 +639,14 @@ rpc::result_code_type orbit_controller_manager::handle_launch_client(
 }
 
 rpc::result_code_type orbit_controller_manager::handle_send_to_client(rpc::context& ctx,
-                                                                      const orbit::STCSendToClientNotify& request) {
+                                                                      const orbit::STCSendToClientReq& request) {
   const auto& identity = request.client_identity();
   const std::string& client_id_str = identity.client_id().client_id();
   const uint64_t agent_server_id = identity.agent_identity().agent_server_id();
 
   auto forward_req = rpc::make_shared_message<orbit::CTAForwardToClientReq>(ctx);
   auto forward_rsp = rpc::make_shared_message<orbit::ATCForwardToClientRsp>(ctx);
+  *forward_req->mutable_server_identity() = request.server_identity();
   *forward_req->mutable_client_id() = identity.client_id();
   forward_req->set_payload(request.payload());
 

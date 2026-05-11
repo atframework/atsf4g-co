@@ -1,5 +1,5 @@
 // Copyright 2026 atframework
-// @brief Created by yousongyang with mako-generator.py at 2026-04-29 11:47:42
+// @brief Created by yousongyang with mako-generator.py at 2026-05-11 15:53:52
 
 #include "task_action_client_start_notify.h"
 
@@ -35,9 +35,8 @@ ORBIT_SERVER_SERVICE_API const char* task_action_client_start_notify::name() con
 }
 
 ORBIT_SERVER_SERVICE_API task_action_client_start_notify::result_type task_action_client_start_notify::operator()() {
-  ATFW_EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
-  // Stream request or stream response, just ignore auto response
-  disable_response_message();
+  const rpc_request_type& req_body = get_request_body();
+  // rpc_response_type& rsp_body = get_response_body();
 
   TASK_ACTION_RETURN_CODE(
       RPC_AWAIT_CODE_RESULT(orbit_server_manager::me()->handle_client_start_notify(get_shared_context(), req_body)));

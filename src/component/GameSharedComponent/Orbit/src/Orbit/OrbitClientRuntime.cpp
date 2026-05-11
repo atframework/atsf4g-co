@@ -21,7 +21,6 @@
 #include <sstream>
 #include <string_view>
 
-
 ORBIT_CLIENT_SDK_NAMESPACE_BEGIN
 
 namespace orbit_client_sdk {
@@ -156,7 +155,7 @@ OrbitClientRuntime::OrbitClientRuntime()
       app_callbacks_installed_(false),
       agent_bus_id_(0),
       sequence_allocator_(0),
-      last_heartbeat_timepoint_() {}
+      last_heartbeat_timepoint_(0) {}
 
 OrbitClientRuntime::~OrbitClientRuntime() { restore_app_callbacks(); }
 
@@ -258,20 +257,18 @@ int OrbitClientRuntime::init(uint64_t app_id, const OrbitClientOptions& options,
     return -3;
   }
 
-  if (options.heartbeat_interval.count() <= 0) {
+  if (options.heartbeat_interval_second <= 0) {
     log(OrbitClientLogLevel::kError, "init rejected: heartbeat_interval must be positive");
     return -4;
   }
 
   restore_app_callbacks();
-  app_.reset();
 
   callbacks_ = callbacks;
   options_ = options;
   configured_ = false;
   agent_bus_id_ = 0;
   sequence_allocator_ = make_initial_sequence_allocator();
-  last_heartbeat_timepoint_ = clock_type::time_point{};
   set_state(OrbitClientRuntimeState::kIdle);
 
   if (0 != apply_config_env_overrides(options_)) {
@@ -302,13 +299,11 @@ int OrbitClientRuntime::init(uint64_t app_id, const OrbitClientOptions& options,
     std::ostringstream stream;
     stream << "init rejected: atapp init failed for app_id=" << resolved_app_id << ", code=" << app_init_result;
     log(OrbitClientLogLevel::kError, stream.str());
-    app_.reset();
     return -5;
   }
 
   if (!app_->get_bus_node()) {
     log(OrbitClientLogLevel::kError, "init rejected: bus node is unavailable");
-    app_.reset();
     return -6;
   }
 
@@ -319,7 +314,6 @@ int OrbitClientRuntime::init(uint64_t app_id, const OrbitClientOptions& options,
 
   if (!connect()) {
     restore_app_callbacks();
-    app_.reset();
     configured_ = false;
     return -7;
   }
@@ -404,7 +398,7 @@ int32_t OrbitClientRuntime::notify_process_ready(const std::string& custom_data)
     return send_result;
   }
 
-  last_heartbeat_timepoint_ = clock_type::now();
+  last_heartbeat_timepoint_ = ::util::time::time_utility::get_sys_now();
   set_state(OrbitClientRuntimeState::kRunning);
 
   log(OrbitClientLogLevel::kInfo, "client_start sent");
@@ -423,16 +417,12 @@ void OrbitClientRuntime::tick() {
   OrbitRPCDispatcher::me()->tick();
 
   do {
-    if (!options_.auto_send_heartbeat_on_tick) {
-      break;
-    }
-    clock_type::time_point now = clock_type::now();
-
-    if (last_heartbeat_timepoint_ != clock_type::time_point{} &&
-        now - last_heartbeat_timepoint_ < options_.heartbeat_interval) {
+    time_t now = ::util::time::time_utility::get_sys_now();
+    if (now - last_heartbeat_timepoint_ < options_.heartbeat_interval_second) {
       break;
     }
 
+    log(OrbitClientLogLevel::kInfo, "heartbeat begin");
     send_heartbeat(make_default_load_snapshot());
   } while (false);
 }
@@ -455,7 +445,7 @@ int32_t OrbitClientRuntime::send_heartbeat(const OrbitClientLoadSnapshot& snapsh
     return send_result;
   }
 
-  last_heartbeat_timepoint_ = clock_type::now();
+  last_heartbeat_timepoint_ = ::util::time::time_utility::get_sys_now();
   return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
@@ -465,7 +455,7 @@ int32_t OrbitClientRuntime::send_to_server(const std::string& payload) {
     return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
-  orbit::DTASendToServerNotify request;
+  orbit::DTASendToServerReq request;
   fill_client_id(*request.mutable_client_id(), options_.client_id);
   request.set_payload(payload);
 
@@ -507,10 +497,8 @@ int32_t OrbitClientRuntime::request_end(orbit::EnClientExitReason reason, int32_
   }
 
   restore_app_callbacks();
-  app_.reset();
   agent_bus_id_ = 0;
   configured_ = false;
-  last_heartbeat_timepoint_ = clock_type::time_point{};
   set_state(OrbitClientRuntimeState::kStopped);
   return send_result;
 }

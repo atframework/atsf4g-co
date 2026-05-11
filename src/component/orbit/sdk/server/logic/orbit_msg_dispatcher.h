@@ -16,6 +16,7 @@
 #include <dispatcher/dispatcher_implement.h>
 #include <dispatcher/dispatcher_type_defines.h>
 #include <protocol/common/orbit.common.pb.h>
+#include <rpc/rpc_common_types.h>
 
 #ifndef ORBIT_SERVER_SERVICE_API
 #  define ORBIT_SERVER_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
@@ -57,8 +58,10 @@ class orbit_msg_dispatcher : public dispatcher_implement {
 
   ORBIT_SERVER_SERVICE_API uint64_t allocate_sequence();
 
-  ORBIT_SERVER_SERVICE_API int32_t send_to_proc(rpc::context &ctx, const std::string &client_id,
-                                                orbit::OrbitRpcMessage &orbit_msg);
+  ORBIT_SERVER_SERVICE_API int32_t send_to_client_no_wait(rpc::context &ctx, const std::string &client_id,
+                                                          orbit::OrbitRpcMessage &orbit_msg);
+  ORBIT_SERVER_SERVICE_API rpc::result_code_type send_to_client(rpc::context &ctx, const std::string &client_id,
+                                                                orbit::OrbitRpcMessage &orbit_msg);
 
   ORBIT_SERVER_SERVICE_API static void *make_private_data(const std::string &client_id) noexcept;
   ORBIT_SERVER_SERVICE_API static const std::string &get_source_client_id(const void *private_data) noexcept;

@@ -39,9 +39,8 @@ ORBIT_AGENT_SERVICE_API task_action_forward_to_client::result_type task_action_f
   const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
 
-  int32_t rpc_result = RPC_AWAIT_CODE_RESULT(
-      orbit_agent_manager::me()->handle_forward_to_client(get_shared_context(), req_body, rsp_body));
-  TASK_ACTION_RETURN_CODE(rpc_result);
+  TASK_ACTION_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+      orbit_agent_manager::me()->handle_forward_to_client(get_shared_context(), req_body, rsp_body)));
 }
 
 ORBIT_AGENT_SERVICE_API int task_action_forward_to_client::on_success() { return get_result(); }

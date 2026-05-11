@@ -37,9 +37,9 @@ constexpr const char* kOrbitArgsAgentEndpoint = "--orbit-agent-endpoint";
 constexpr const char* kOrbitArgsConfigEnv = "--config_env";
 
 constexpr auto kTickInterval = std::chrono::milliseconds{100};
-constexpr auto kReadyDelay = std::chrono::milliseconds{500};
+constexpr auto kReadyDelay = std::chrono::seconds{10};
 constexpr auto kPingDelay = std::chrono::seconds{1};
-constexpr auto kExitDelay = std::chrono::seconds{8};
+constexpr auto kExitDelay = std::chrono::seconds{60};
 
 int get_process_id() {
 #if defined(_WIN32)
@@ -105,11 +105,12 @@ int main(int argc, char* argv[]) {
   auto write_log_line = [&log_file, &log_mutex](const std::string& message) {
     std::lock_guard<std::mutex> lock{log_mutex};
     if (log_file.is_open()) {
-      log_file << message << std::endl;
+      log_file << "[" << std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) << "] " << message
+               << std::endl;
       return;
     }
-
-    std::cerr << message << std::endl;
+    std::cerr << "[" << std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) << "] " << message
+              << std::endl;
   };
 
   bool stop_requested = false;
@@ -133,13 +134,10 @@ int main(int argc, char* argv[]) {
         write_log_line(stream.str());
       };
   callbacks.on_request_stop = [&stop_requested]() { stop_requested = true; };
-  callbacks.on_forward_to_client = [&received_forward_payload](const std::string& payload) {
-    received_forward_payload = true;
-    ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitRPCDispatcher::me()->dispatch(payload);
-  };
+  callbacks.on_forward_to_client = [&received_forward_payload](const std::string&) { received_forward_payload = true; };
 
   int init_result = runtime_t::me()->init(argc, argv, "localhost:12345", callbacks);
-  if (init_result < 0) {
+  if (init_result != 0) {
     write_log_line(std::string{"orbit runtime init failed, code="} + std::to_string(init_result));
     return init_result;
   }
@@ -155,7 +153,7 @@ int main(int argc, char* argv[]) {
     const auto now = std::chrono::steady_clock::now();
     if (!ready_sent && now - begin_timepoint >= kReadyDelay) {
       int32_t ready_result = runtime_t::me()->notify_process_ready("orbit-auto-client ready");
-      if (ready_result < 0) {
+      if (ready_result != 0) {
         runtime_t::me()->request_end(orbit::EN_CLIENT_EXIT_REASON_CRASH, ready_result,
                                      "orbit-auto-client ready failed");
         return ready_result;
@@ -186,8 +184,9 @@ int main(int argc, char* argv[]) {
       runtime_t::me()->request_end(orbit::EN_CLIENT_EXIT_REASON_NORMAL, 0,
                                    received_forward_payload ? "orbit-auto-client done" : "orbit-auto-client timeout");
   if (shutdown_result < 0) {
+    write_log_line(std::string{"orbit runtime shutdown failed, code="} + std::to_string(shutdown_result));
     return shutdown_result;
   }
-
+  write_log_line("orbit runtime shutdown successfully");
   return 0;
 }

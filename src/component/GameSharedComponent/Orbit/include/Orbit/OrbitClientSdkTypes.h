@@ -45,8 +45,7 @@ struct OrbitClientOptions {
   std::string client_id;
   std::string agent_endpoint;
   std::string client_addr;
-  std::chrono::milliseconds heartbeat_interval{std::chrono::seconds{5}};
-  bool auto_send_heartbeat_on_tick = true;
+  time_t heartbeat_interval_second = 5;
   std::vector<std::string> config_env;
 };
 

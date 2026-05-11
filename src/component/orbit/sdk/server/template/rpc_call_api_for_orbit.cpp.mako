@@ -317,14 +317,15 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_param
       {opentelemetry::semconv::rpc::kRpcMethod, "${rpc.get_full_name()}"}};
   __setup_tracer(__child_ctx, __tracer, *req_msg.mutable_head(), "${rpc.get_full_name()}", __trace_attributes);
 
-  res = orbit_msg_dispatcher::me()->send_to_proc(__child_ctx, client_id, req_msg);
 % if rpc_is_stream_mode:
+  res = orbit_msg_dispatcher::me()->send_to_client_no_wait(__child_ctx, client_id, req_msg);
   if (res < 0) {
     FWLOGERROR("[ORBIT_RPC] rpc {} call failed, res: {}({})", "${rpc.get_full_name()}", res,
                protobuf_mini_dumper_get_error_msg(res));
   }
   ${rpc_return_sentense('__tracer.finish({res, __trace_attributes})')}
 % else:
+  res = RPC_AWAIT_CODE_RESULT(orbit_msg_dispatcher::me()->send_to_client(__child_ctx, client_id, req_msg));
   do {
     dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
     await_options.sequence = req_msg.head().sequence();

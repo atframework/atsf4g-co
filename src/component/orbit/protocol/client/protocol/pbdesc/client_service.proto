@@ -16,25 +16,27 @@ import "protocol/common/orbit.common.proto";
 
 /////////////// Agent -> Client ///////////////
 service AgentToClientService {
-  rpc forward_to_client(stream ATDForwardToClientNotify) returns (google.protobuf.Empty) {
+  rpc forward_to_client(ATDForwardToClientReq) returns (DTAForwardToClientRsp) {
     option (atframework.rpc_options) = {
       api_name: "转发Server消息"
     };
   };
-  rpc fork_seed_client(stream ATDForkSeedClientNotify) returns (google.protobuf.Empty) {
+  rpc fork_seed_client(ATDForkSeedClientReq) returns (DTAForkSeedClientRsp) {
     option (atframework.rpc_options) = {
       api_name: "Fork方式启动Client"
     };
   };
 }
 
-message ATDForwardToClientNotify {
+message ATDForwardToClientReq {
   bytes payload = 1;
 }
+message DTAForwardToClientRsp {}
 
-message ATDForkSeedClientNotify {
+message ATDForkSeedClientReq {
   DClientStartArgs start_args = 1;
 }
+message DTAForkSeedClientRsp {}
 
 /////////////// Client -> Agent ///////////////
 service ClientToAgentService {
@@ -44,19 +46,20 @@ service ClientToAgentService {
       api_name: "上报心跳"
     };
   };
-  // 上报来自 service 侧的管理面消息的消费结果。
-  rpc send_to_server(stream DTASendToServerNotify) returns (google.protobuf.Empty) {
+  // 发送自定义消息
+  rpc send_to_server(DTASendToServerReq) returns (ATDSendToServerRsp) {
     option (atframework.rpc_options) = {
       api_name: "发送至Server"
+      allow_no_wait: true
     };
   };
   // 上报 Client 状态
-  rpc client_start(stream DTAClientStartReq) returns (google.protobuf.Empty) {
+  rpc client_start(DTAClientStartReq) returns (ATDClientStartRsp) {
     option (atframework.rpc_options) = {
       api_name: "Client启动成功"
     };
   };
-  rpc client_exit(stream DTAClientExitReq) returns (google.protobuf.Empty) {
+  rpc client_exit(DTAClientExitReq) returns (ATDClientExitRsp) {
     option (atframework.rpc_options) = {
       api_name: "Client退出"
     };
@@ -68,16 +71,18 @@ message DTAClientHeartbeatNotify {
   DClientLoadSnapshot snapshot = 2;
 }
 
-message DTASendToServerNotify {
+message DTASendToServerReq {
   DClientId client_id = 1;
   bytes payload = 2;
 }
+message ATDSendToServerRsp {}
 
 message DTAClientStartReq {
   DClientId client_id = 1;
   string client_addr = 2;
   bytes custom_data = 3;
 }
+message ATDClientStartRsp {}
 
 message DTAClientExitReq {
   DClientId client_id = 1;
@@ -86,3 +91,4 @@ message DTAClientExitReq {
   bytes custom_data = 12;
   int32 exit_code = 13;
 }
+message ATDClientExitRsp {}

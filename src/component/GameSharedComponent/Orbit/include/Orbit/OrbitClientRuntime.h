@@ -74,20 +74,33 @@ class ORBIT_CLIENT_SDK_API OrbitClientRuntime : public util::design_pattern::sin
   void on_received_message(const std::string& message);
 
  private:
+  int32_t send_request_message(const ::google::protobuf::MessageLite& body,
+                               const ::google::protobuf::MethodDescriptor& method);
+  int32_t send_response_message(const ::atframework::SSMsgHead& req_head, const ::google::protobuf::MessageLite& body,
+                                const ::google::protobuf::MethodDescriptor& method);
   int32_t send_stream_message(const ::google::protobuf::MessageLite& body,
                               const ::google::protobuf::MethodDescriptor& method);
+  int32_t pack_request_message(std::string& output, const ::google::protobuf::MethodDescriptor& method,
+                               const ::google::protobuf::MessageLite& body);
+  int32_t pack_response_message(const ::atframework::SSMsgHead& req_head, std::string& output,
+                                const ::google::protobuf::MethodDescriptor& method,
+                                const ::google::protobuf::MessageLite& body);
   int32_t pack_stream_message(std::string& output, const ::google::protobuf::MethodDescriptor& method,
                               const ::google::protobuf::MessageLite& body);
+  int32_t send_message(const std::string& packed_message, const google::protobuf::MethodDescriptor& method);
+
   int32_t unpack_message(atframework::SSMsg& output, const std::string& message) const;
   int32_t dispatch_received_message(const atframework::SSMsg& message);
   uint64_t allocate_sequence();
 
   int32_t rpc_send_client_heartbeat(const orbit::DTAClientHeartbeatNotify& request);
-  int32_t rpc_send_send_to_server(const orbit::DTASendToServerNotify& request);
+  int32_t rpc_send_send_to_server(const orbit::DTASendToServerReq& request);
   int32_t rpc_send_client_start(const orbit::DTAClientStartReq& request);
   int32_t rpc_send_client_exit(const orbit::DTAClientExitReq& request);
-  int32_t rpc_receive_forward_to_client(const orbit::ATDForwardToClientNotify& request);
-  int32_t rpc_receive_fork_seed_client(const orbit::ATDForkSeedClientNotify& request);
+  int32_t rpc_receive_forward_to_client(const ::atframework::SSMsgHead& req_head,
+                                        const orbit::ATDForwardToClientReq& request);
+  int32_t rpc_receive_fork_seed_client(const ::atframework::SSMsgHead& req_head,
+                                       const orbit::ATDForkSeedClientReq& request);
 
  private:
   std::unique_ptr<::atframework::atapp::app> app_;
@@ -98,7 +111,7 @@ class ORBIT_CLIENT_SDK_API OrbitClientRuntime : public util::design_pattern::sin
   bool app_callbacks_installed_;
   uint64_t agent_bus_id_;
   uint64_t sequence_allocator_;
-  clock_type::time_point last_heartbeat_timepoint_;
+  time_t last_heartbeat_timepoint_;
 };
 
 }  // namespace orbit_client_sdk

@@ -15,17 +15,17 @@ package orbit;
 import "protocol/common/orbit.common.proto";
 
 service AgentToControllerService {
-  rpc notify_client_started(stream ATCNotifyClientStartedReq) returns (google.protobuf.Empty) {
+  rpc notify_client_started(ATCNotifyClientStartedReq) returns (CTANotifyClientStartedRsp) {
     option (atframework.rpc_options) = {
       api_name: "通知Client已启动"
     };
   };
-  rpc notify_client_exit(stream ATCNotifyClientExitReq) returns (google.protobuf.Empty) {
+  rpc notify_client_exit(ATCNotifyClientExitReq) returns (CTANotifyClientExitRsp) {
     option (atframework.rpc_options) = {
       api_name: "通知Client已退出"
     };
   };
-  rpc forward_to_server(stream ATCForwardToServerReq) returns (google.protobuf.Empty) {
+  rpc forward_to_server(ATCForwardToServerReq) returns (CTAForwardToServerRsp) {
     option (atframework.rpc_options) = {
       api_name: "转发至Server"
     };
@@ -45,6 +45,7 @@ message ATCNotifyClientStartedReq {
   string client_addr = 3;
   bytes custom_data = 4;
 }
+message CTANotifyClientStartedRsp {}
 
 message ATCNotifyClientExitReq {
   DServerIdentity server_identity = 1;
@@ -55,12 +56,14 @@ message ATCNotifyClientExitReq {
   bytes custom_data = 12;
   int32 exit_code = 13;
 }
+message CTANotifyClientExitRsp {}
 
 message ATCForwardToServerReq {
   DServerIdentity server_identity = 1;
 
   DClientMessage client_message = 2;
 }
+message CTAForwardToServerRsp {}
 
 message ATCAgentHeartbeatReq {
   DServerIdentity server_identity = 1;

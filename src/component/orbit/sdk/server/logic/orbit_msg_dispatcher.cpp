@@ -191,12 +191,10 @@ ORBIT_SERVER_SERVICE_API void orbit_msg_dispatcher::on_create_task_failed(dispat
     if (nullptr != method) {
       rpc_response->set_type_url(method->output_type()->full_name());
     }
-    rpc_response->set_caller_node_id(logic_config::me()->get_local_server_id());
-    rpc_response->set_caller_node_name(static_cast<std::string>(logic_config::me()->get_local_server_name()));
     protobuf_copy_message(*rpc_response->mutable_caller_timestamp(), real_msg->head().rpc_request().caller_timestamp());
   }
 
-  int res = send_to_proc(*response_ctx, source_client_id, *rsp);
+  int res = send_to_client_no_wait(*response_ctx, source_client_id, *rsp);
   if (res < 0) {
     FWLOGERROR("send create response failed of {} (source task id: {}) to [{}] failed, res: {}({})", rpc_name,
                real_msg->head().source_task_id(), source_client_id, res, protobuf_mini_dumper_get_error_msg(res));
@@ -205,8 +203,9 @@ ORBIT_SERVER_SERVICE_API void orbit_msg_dispatcher::on_create_task_failed(dispat
 
 ORBIT_SERVER_SERVICE_API uint64_t orbit_msg_dispatcher::allocate_sequence() { return ++sequence_allocator_; }
 
-ORBIT_SERVER_SERVICE_API int32_t orbit_msg_dispatcher::send_to_proc(rpc::context &ctx, const std::string &client_id,
-                                                                    orbit::OrbitRpcMessage &orbit_msg) {
+ORBIT_SERVER_SERVICE_API int32_t orbit_msg_dispatcher::send_to_client_no_wait(rpc::context &ctx,
+                                                                              const std::string &client_id,
+                                                                              orbit::OrbitRpcMessage &orbit_msg) {
   atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("module not attached to a atapp, maybe not initialized or already closed");
@@ -235,7 +234,7 @@ ORBIT_SERVER_SERVICE_API int32_t orbit_msg_dispatcher::send_to_proc(rpc::context
   FWLOGDEBUG("send orbit msg to proc [{}] {} bytes\n{}", client_id, msg_buf_len,
              protobuf_mini_dumper_get_readable(orbit_msg));
 
-  int res = orbit_server_manager::me()->send_to_client(ctx, client_id, buf_start, msg_buf_len);
+  int res = orbit_server_manager::me()->send_to_client_no_wait(ctx, client_id, buf_start, msg_buf_len);
   if (res < 0) {
     FWLOGERROR("send orbit msg to proc [{}] {} bytes failed, res: {}", client_id, msg_buf_len, res);
   } else {
@@ -243,6 +242,46 @@ ORBIT_SERVER_SERVICE_API int32_t orbit_msg_dispatcher::send_to_proc(rpc::context
   }
 
   return res;
+}
+
+rpc::result_code_type orbit_msg_dispatcher::send_to_client(rpc::context &ctx, const std::string &client_id,
+                                                           orbit::OrbitRpcMessage &orbit_msg) {
+  atfw::atapp::app *owner = get_app();
+  if (nullptr == owner) {
+    FWLOGERROR("module not attached to a atapp, maybe not initialized or already closed");
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_INIT);
+  }
+
+  if (client_id.empty()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
+
+  if (0 == orbit_msg.head().sequence()) {
+    orbit_msg.mutable_head()->set_sequence(allocate_sequence());
+  }
+
+  size_t msg_buf_len = orbit_msg.ByteSizeLong();
+  auto tls_buffer =
+      atfw::gateway::libatgw_protocol_api::get_tls_buffer(atfw::gateway::libatgw_protocol_api::tls_buffer_t::kCustom);
+  if (msg_buf_len > tls_buffer.size()) {
+    FWLOGERROR("send orbit msg to proc [{}] failed: require {}, only have {}", client_id, msg_buf_len,
+               tls_buffer.size());
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND);
+  }
+
+  ::google::protobuf::uint8 *buf_start = reinterpret_cast<::google::protobuf::uint8 *>(tls_buffer.data());
+  orbit_msg.SerializeWithCachedSizesToArray(buf_start);
+  FWLOGDEBUG("send orbit msg to proc [{}] {} bytes\n{}", client_id, msg_buf_len,
+             protobuf_mini_dumper_get_readable(orbit_msg));
+
+  int res = RPC_AWAIT_CODE_RESULT(orbit_server_manager::me()->send_to_client(ctx, client_id, buf_start, msg_buf_len));
+  if (res < 0) {
+    FWLOGERROR("send orbit msg to proc [{}] {} bytes failed, res: {}", client_id, msg_buf_len, res);
+  } else {
+    FWLOGDEBUG("send orbit msg to proc [{}] {} bytes success", client_id, msg_buf_len);
+  }
+
+  RPC_RETURN_CODE(res);
 }
 
 ORBIT_SERVER_SERVICE_API void *orbit_msg_dispatcher::make_private_data(const std::string &client_id) noexcept {

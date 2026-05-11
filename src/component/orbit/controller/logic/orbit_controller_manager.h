@@ -76,7 +76,7 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
 
   // Server 发送消息至 Client（下行转发）
   EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_send_to_client(
-      rpc::context& ctx, const orbit::STCSendToClientNotify& request);
+      rpc::context& ctx, const orbit::STCSendToClientReq& request);
 
   // Server 心跳
   EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_server_heartbeat(
