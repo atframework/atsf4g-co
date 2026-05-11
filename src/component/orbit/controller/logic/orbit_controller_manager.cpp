@@ -506,6 +506,35 @@ rpc::result_code_type orbit_controller_manager::handle_notify_client_exit(
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
+rpc::result_code_type orbit_controller_manager::handle_agent_heartbeat(rpc::context& ctx,
+                                                                       const orbit::ATCAgentHeartbeatReq& request) {
+  // 通过请求中携带的 server_identity 路由到目标 Server
+  const uint64_t target_server_unique_id = request.server_identity().unique_id();
+  if (0 == target_server_unique_id) {
+    FWLOGWARNING("orbit controller agent_heartbeat no server_identity in request, dropped");
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
+
+  auto server_node_id = request.server_identity().server_node_id();
+  if (server_node_id == 0) {
+    FWLOGWARNING("orbit controller agent_heartbeat: server session {} not found, dropped", target_server_unique_id);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+  }
+
+  auto notify = rpc::make_shared_message<orbit::CTSClientHeartbeatNotify>(ctx);
+  *notify->mutable_agent_identity() = request.agent_identity();
+  *notify->mutable_client_ids() = request.client_ids();
+
+  int32_t rpc_result =
+      RPC_AWAIT_CODE_RESULT(rpc::controllertoserverservice::client_heartbeat(ctx, server_node_id, *notify));
+  if (rpc_result < 0) {
+    FWLOGERROR("orbit controller agent_heartbeat failed to server {:#x}, res: {}", server_node_id, rpc_result);
+    RPC_RETURN_CODE(rpc_result);
+  }
+
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+}
+
 rpc::result_code_type orbit_controller_manager::handle_forward_to_server(rpc::context& ctx,
                                                                          const orbit::ATCForwardToServerReq& request) {
   const auto& identity = request.client_message().client_identity();
@@ -540,9 +569,9 @@ rpc::result_code_type orbit_controller_manager::handle_forward_to_server(rpc::co
 }
 
 // ===================== Server 侧 handlers =====================
-rpc::result_code_type orbit_controller_manager::handle_launch_client(rpc::context& ctx,
-                                                                     const orbit::STCLaunchClientReq& request,
-                                                                     ATFW_EXPLICIT_UNUSED_ATTR orbit::CTSLaunchClientRsp& response) {
+rpc::result_code_type orbit_controller_manager::handle_launch_client(
+    rpc::context& ctx, const orbit::STCLaunchClientReq& request,
+    ATFW_EXPLICIT_UNUSED_ATTR orbit::CTSLaunchClientRsp& response) {
   const uint64_t server_unique_id = request.server_identity().unique_id();
   if (0 == server_unique_id) {
     FWLOGERROR("orbit controller launch_client rejected: server unique_id is 0");

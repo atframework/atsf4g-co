@@ -90,7 +90,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
       rpc::context& ctx, const orbit::CTAForwardToClientReq& request, orbit::ATCForwardToClientRsp& response);
   // Server 心跳
   EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_server_heartbeat(
-      rpc::context& ctx, const orbit::CTAServerHeartbeatReq& request);
+      rpc::context& ctx, uint64_t controller_server_id, const orbit::CTAServerHeartbeatReq& request);
 
   // 来自Client
   // Client 启动
@@ -125,11 +125,15 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   void check_server_identity_timeouts(time_t now);
 
   void server_heartbeat(const orbit::DServerIdentity& server_identity);
+  rpc::result_code_type agent_heartbeat(rpc::context& ctx, uint64_t controller_server_id,
+                                        const orbit::DServerIdentity& server_identity);
   orbit::DServerIdentity* find_server_identity(uint64_t server_unique_id);
 
   void update_etcd_load_snapshot();
   void load_record_to_json();
   void try_sync_load_to_etcd();
+
+  void delete_client(orbit_agent_client_record_ptr client_record);
 
  private:
   bool stoped_ = false;
@@ -137,6 +141,8 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
 
   // 启动的Client数据
   std::unordered_map<std::string, orbit_agent_client_record_ptr> clients_;
+  std::unordered_map<uint64_t, std::set<std::string>> server_unique_id_to_client_ids_;
+
   // Server唯一ID到ServerIdentity的映射 用于心跳和转发消息时更新路由信息
   std::unordered_map<uint64_t, orbit_agent_server_info> server_unique_id_to_identity_;
 

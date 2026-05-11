@@ -43,8 +43,15 @@ struct client_info {
   std::string client_id;
   EnClientStatus status;
   std::string region;
+  // 保底过期流程
+  time_t timeout_exit_time;
 
   orbit::DClientIdentity client_identity;
+};
+
+struct client_timeout_info {
+  atfw::util::memory::weak_rc_ptr<client_info> client_info_weak_ptr;
+  time_t timeout_exit_time;
 };
 
 namespace rpc {
@@ -84,23 +91,31 @@ class orbit_server_manager : public util::design_pattern::singleton<orbit_server
  public:
   // SDK 内部使用
   // 收到Client消息
-  ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_forward_to_server(rpc::context& ctx,
+  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_forward_to_server(rpc::context& ctx,
                                                                           const orbit::CTSForwardToServerNotify& req);
   // 收到Client Start通知
-  ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_client_start_notify(rpc::context& ctx,
+  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_client_start_notify(rpc::context& ctx,
                                                                             const orbit::CTSClientStartNotify& req);
   // 收到Client End通知
-  ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_client_end_notify(rpc::context& ctx,
+  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_client_end_notify(rpc::context& ctx,
                                                                           const orbit::CTSClientEndNotify& req);
-
+  // 收到Client Heartbeat通知
+  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_client_heartbeat_notify(rpc::context& ctx,
+                                                                                const orbit::CTSClientHeartbeatNotify& req);
  private:
   void server_heartbeat();
+  void check_client_timeout();
+
   client_info_ptr get_client_info(std::string client_id);
+  void add_client_timeout(client_info_ptr client);
+  void erase_client_info(const std::string& client_id);
+
   uint64_t select_controller_server_id(const std::string& client_id, const std::string& region);
   uint64_t select_controller_server_id(const std::string& region);
 
   uint64_t heartbeat_interval_sec_ = 0;
   time_t last_heartbeat_time_ = 0;
+  uint64_t client_timeout_sec_ = 30;
 
   on_forward_to_server_fn on_forward_to_server_;
   on_client_start_notify_fn on_client_start_notify_;
@@ -108,6 +123,7 @@ class orbit_server_manager : public util::design_pattern::singleton<orbit_server
 
   orbit::DServerIdentity server_identity_;
 
+  std::deque<client_timeout_info> timeout_client_queue_;
   std::unordered_map<std::string, client_info_ptr> client_info_map_;
   std::unordered_map<std::string, std::unordered_set<std::string>> client_region_map_;
 };

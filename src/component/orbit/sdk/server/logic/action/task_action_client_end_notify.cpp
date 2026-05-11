@@ -39,9 +39,8 @@ ORBIT_SERVER_SERVICE_API task_action_client_end_notify::result_type task_action_
   // Stream request or stream response, just ignore auto response
   disable_response_message();
 
-  orbit_server_manager::me()->handle_client_end_notify(get_shared_context(), req_body);
-
-  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  TASK_ACTION_RETURN_CODE(
+      RPC_AWAIT_CODE_RESULT(orbit_server_manager::me()->handle_client_end_notify(get_shared_context(), req_body)));
 }
 
 ORBIT_SERVER_SERVICE_API int task_action_client_end_notify::on_success() { return get_result(); }

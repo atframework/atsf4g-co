@@ -30,6 +30,11 @@ service AgentToControllerService {
       api_name: "转发至Server"
     };
   };
+  rpc agent_heartbeat(stream ATCAgentHeartbeatReq) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "Agent心跳"
+    };
+  };
 }
 
 message ATCNotifyClientStartedReq {
@@ -55,4 +60,11 @@ message ATCForwardToServerReq {
   DServerIdentity server_identity = 1;
 
   DClientMessage client_message = 2;
+}
+
+message ATCAgentHeartbeatReq {
+  DServerIdentity server_identity = 1;
+
+  DAgentIdentity agent_identity = 2;
+  repeated DClientId client_ids = 3;
 }

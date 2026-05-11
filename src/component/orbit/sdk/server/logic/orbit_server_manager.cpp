@@ -36,7 +36,10 @@ int orbit_server_manager::init(uint64_t unique_id, uint64_t heartbeat_interval_s
 
 void orbit_server_manager::stop() {}
 
-void orbit_server_manager::tick() { server_heartbeat(); }
+void orbit_server_manager::tick() {
+  server_heartbeat();
+  check_client_timeout();
+}
 
 rpc::result_code_type orbit_server_manager::start_client(
     rpc::context& ctx, const std::string& region, const orbit::DAgentClientStartArgs& args,
@@ -74,17 +77,11 @@ rpc::result_code_type orbit_server_manager::start_client(
     FWLOGERROR("orbit launch_client failed for {} to controller {:#x}, res: {}", client_id, controller_server_id,
                rpc_result);
     client_info_ptr_->status = EnClientStatus::EN_CLIENT_STATUS_EXITED;
-    client_info_map_.erase(client_id);
-    auto client_region_iter = client_region_map_.find(region);
-    if (client_region_iter != client_region_map_.end()) {
-      client_region_iter->second.erase(client_id);
-      if (client_region_iter->second.empty()) {
-        client_region_map_.erase(client_region_iter);
-      }
-    }
+    erase_client_info(client_id);
     RPC_RETURN_CODE(rpc_result);
   }
 
+  add_client_timeout(client_info_ptr_);
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
@@ -203,12 +200,55 @@ void orbit_server_manager::server_heartbeat() {
   }
 }
 
+void orbit_server_manager::check_client_timeout() {
+  time_t now = atfw::util::time::time_utility::get_sys_now();
+  while (!timeout_client_queue_.empty()) {
+    auto& timeout_info = timeout_client_queue_.front();
+    if (timeout_info.timeout_exit_time > now) {
+      break;
+    }
+    timeout_client_queue_.pop_front();
+
+    auto client_info_ptr_ = timeout_info.client_info_weak_ptr.lock();
+    if (client_info_ptr_ != nullptr && client_info_ptr_->timeout_exit_time == timeout_info.timeout_exit_time) {
+      FWLOGINFO("client {} timeout, last active time: {}, timeout exit time: {}", client_info_ptr_->client_id,
+                client_info_ptr_->timeout_exit_time - client_timeout_sec_, client_info_ptr_->timeout_exit_time);
+      client_info_ptr_->status = EnClientStatus::EN_CLIENT_STATUS_EXITED;
+      erase_client_info(client_info_ptr_->client_id);
+    }
+  }
+}
+
 client_info_ptr orbit_server_manager::get_client_info(std::string client_id) {
   auto iter = client_info_map_.find(client_id);
   if (iter == client_info_map_.end()) {
     return nullptr;
   }
   return iter->second;
+}
+
+void orbit_server_manager::erase_client_info(const std::string& client_id) {
+  auto client_info_ptr_ = get_client_info(client_id);
+  if (client_info_ptr_ == nullptr) {
+    return;
+  }
+  client_info_map_.erase(client_id);
+  auto client_region_iter = client_region_map_.find(client_info_ptr_->region);
+  if (client_region_iter != client_region_map_.end()) {
+    client_region_iter->second.erase(client_id);
+    if (client_region_iter->second.empty()) {
+      client_region_map_.erase(client_region_iter);
+    }
+  }
+}
+
+void orbit_server_manager::add_client_timeout(client_info_ptr client) {
+  if (client == nullptr) {
+    return;
+  }
+  client->timeout_exit_time = atfw::util::time::time_utility::get_sys_now() + client_timeout_sec_;
+  // 加入到超时检查内
+  timeout_client_queue_.emplace_back(client_timeout_info{client, client->timeout_exit_time});
 }
 
 uint64_t orbit_server_manager::select_controller_server_id(const std::string& client_id, const std::string& region) {
@@ -304,18 +344,25 @@ rpc::result_code_type orbit_server_manager::handle_client_end_notify(rpc::contex
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SERVER_CLIENT_NOT_FOUND);
   }
 
-  const std::string region = client_info_ptr_->region;
-  client_info_map_.erase(client_id);
-  auto client_region_iter = client_region_map_.find(region);
-  if (client_region_iter != client_region_map_.end()) {
-    client_region_iter->second.erase(client_id);
-    if (client_region_iter->second.empty()) {
-      client_region_map_.erase(client_region_iter);
-    }
-  }
+  erase_client_info(client_id);
   if (on_client_end_notify_) {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
         on_client_end_notify_(ctx, client_id, req.exit_reason(), req.exit_data(), req.exit_code())));
+  }
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+}
+
+rpc::result_code_type orbit_server_manager::handle_client_heartbeat_notify(rpc::context& ctx,
+                                                                           const orbit::CTSClientHeartbeatNotify& req) {
+  for (const auto& client_id : req.client_ids()) {
+    const std::string& id = client_id.client_id();
+    auto client_info_ptr_ = get_client_info(id);
+    if (client_info_ptr_ == nullptr) {
+      FWLOGERROR("failed to find client info for client identity {}", id);
+      continue;
+    }
+    // 刷新心跳时间
+    add_client_timeout(client_info_ptr_);
   }
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

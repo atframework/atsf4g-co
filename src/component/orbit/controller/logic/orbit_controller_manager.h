@@ -61,6 +61,10 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
   EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_notify_client_exit(
       rpc::context& ctx, const orbit::ATCNotifyClientExitReq& request);
 
+  // Agent 心跳（Agent 上报）
+  EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_agent_heartbeat(
+      rpc::context& ctx, const orbit::ATCAgentHeartbeatReq& request);
+
   // Client 发送消息至 Server（Agent 转发）
   EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_forward_to_server(
       rpc::context& ctx, const orbit::ATCForwardToServerReq& request);
