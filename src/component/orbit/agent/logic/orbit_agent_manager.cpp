@@ -1074,7 +1074,9 @@ void orbit_agent_manager::update_etcd_load_snapshot() {
     }
   }
 
-  if (load_record_.agent().cpu_used() != cpu_used || load_record_.agent().memory_used_mb() != memory_used_mb ||
+  double esp = 1e-9;
+
+  if (std::abs(load_record_.agent().cpu_used() - cpu_used) > esp || std::abs(load_record_.agent().memory_used_mb() - memory_used_mb) > esp ||
       load_record_.agent().client_count() != client_count || load_record_.agent().inflight_count() != inflight_count) {
     load_record_.mutable_agent()->set_cpu_used(cpu_used);
     load_record_.mutable_agent()->set_memory_used_mb(memory_used_mb);

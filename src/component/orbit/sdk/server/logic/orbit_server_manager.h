@@ -115,7 +115,7 @@ class orbit_server_manager : public util::design_pattern::singleton<orbit_server
 
   uint64_t heartbeat_interval_sec_ = 0;
   time_t last_heartbeat_time_ = 0;
-  uint64_t client_timeout_sec_ = 30;
+  time_t client_timeout_sec_ = 30;
 
   on_forward_to_server_fn on_forward_to_server_;
   on_client_start_notify_fn on_client_start_notify_;

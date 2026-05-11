@@ -54,7 +54,7 @@ const std::string& get_empty_string() {
   return empty_string;
 }
 
-const google::protobuf::MethodDescriptor* get_agent_to_client_method(const char* method_name) {
+[[maybe_unused]] const google::protobuf::MethodDescriptor* get_agent_to_client_method(const char* method_name) {
   return orbit::AgentToClientService::descriptor()->FindMethodByName(method_name);
 }
 

@@ -14,11 +14,11 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_all(rpc::context &
 struct ATFW_UTIL_SYMBOL_VISIBLE table_key_t {
   explicit table_key_t(
 % for key_field in key_fields:
-    ${key_field["cpp_type"]} ${key_field["raw_name"]}${"," if not loop.last else ""}
+    ${key_field["cpp_type"]} input_${key_field["raw_name"]}${"," if not loop.last else ""}
 % endfor
   ) :
 % for key_field in key_fields:
-    ${key_field["raw_name"]}(${key_field["raw_name"]})${"," if not loop.last else ""}
+    ${key_field["raw_name"]}(input_${key_field["raw_name"]})${"," if not loop.last else ""}
 % endfor
   {}
 % for key_field in key_fields:

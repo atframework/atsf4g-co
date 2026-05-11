@@ -85,14 +85,6 @@ function(project_server_frame_add_config_target)
     endif()
   endforeach()
 
-list(REMOVE_ITEM PROJECT_SERVER_FRAME_CONFIG_SET_PCH_HEADER_LIST
-    "\"config/excel/config_manager.h\""
-    "\"config/excel/config_easy_api.h\"")
-
-list(APPEND PROJECT_SERVER_FRAME_CONFIG_SET_PCH_HEADER_LIST
-     "\"config/excel/config_manager.h\""
-     "\"config/excel/config_easy_api.h\"")
-
   if(CMAKE_HOST_WIN32 AND ATFRAMEWORK_CMAKE_TOOLSET_PWSH)
     set(PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_SCRIPT
         "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-config-loader.ps1")
