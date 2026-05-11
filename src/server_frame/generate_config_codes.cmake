@@ -46,7 +46,7 @@ function(project_server_frame_add_config_target)
   execute_process(
     COMMAND
       ${Python3_EXECUTABLE} ${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_PY} --add-package-prefix
-      "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" -i "${PROJECT_SOURCE_TEMPLATE_DIR}" -p
+      "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" --encoding "utf-8" -i "${PROJECT_SOURCE_TEMPLATE_DIR}" -p
       "${CMAKE_CURRENT_BINARY_DIR}/config-test.pb" -o "${PROJECT_GENERATED_DIR}/${PROJECT_SERVER_FRAME_LIB_LINK}-config"
       -g "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.h.mako:include/config/excel/config_manager.h" -g
       "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.cpp.mako:src/excel/config_manager.cpp" -l
@@ -85,6 +85,14 @@ function(project_server_frame_add_config_target)
     endif()
   endforeach()
 
+list(REMOVE_ITEM PROJECT_SERVER_FRAME_CONFIG_SET_PCH_HEADER_LIST
+    "\"config/excel/config_manager.h\""
+    "\"config/excel/config_easy_api.h\"")
+
+list(APPEND PROJECT_SERVER_FRAME_CONFIG_SET_PCH_HEADER_LIST
+     "\"config/excel/config_manager.h\""
+     "\"config/excel/config_easy_api.h\"")
+
   if(CMAKE_HOST_WIN32 AND ATFRAMEWORK_CMAKE_TOOLSET_PWSH)
     set(PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_SCRIPT
         "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-config-loader.ps1")
@@ -100,7 +108,7 @@ function(project_server_frame_add_config_target)
   endif()
 
   set(PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND
-      "'${Python3_EXECUTABLE}' '${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_PY}' '--add-package-prefix' '${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}'"
+      "'${Python3_EXECUTABLE}' '${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_PY}' '--add-package-prefix' '${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}' '--encoding' 'utf-8'"
   )
   if(PROJECT_TOOL_CLANG_FORMAT)
     set(PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND

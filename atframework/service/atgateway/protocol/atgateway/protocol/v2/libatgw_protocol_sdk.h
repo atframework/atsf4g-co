@@ -1,4 +1,4 @@
-﻿// Copyright 2026 atframework
+// Copyright 2026 atframework
 // Refactored: 2-message ECDH handshake (like libatbus node_register_req/rsp)
 
 #pragma once
