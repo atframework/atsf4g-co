@@ -1,3 +1,21 @@
+*.h text working-tree-encoding=UTF-8 eol=lf
+*.hpp text working-tree-encoding=UTF-8 eol=lf
+*.cpp text working-tree-encoding=UTF-8 eol=lf
+*.cxx text working-tree-encoding=UTF-8 eol=lf
+*.cc text working-tree-encoding=UTF-8 eol=lf
+*.c text working-tree-encoding=UTF-8 eol=lf
+*.h.mako text working-tree-encoding=UTF-8 eol=lf
+*.hpp.mako text working-tree-encoding=UTF-8 eol=lf
+*.cpp.mako text working-tree-encoding=UTF-8 eol=lf
+*.cxx.mako text working-tree-encoding=UTF-8 eol=lf
+*.cc.mako text working-tree-encoding=UTF-8 eol=lf
+*.c.mako text working-tree-encoding=UTF-8 eol=lf
+*.h.in text working-tree-encoding=UTF-8 eol=lf
+*.hpp.in text working-tree-encoding=UTF-8 eol=lf
+*.cpp.in text working-tree-encoding=UTF-8 eol=lf
+*.cxx.in text working-tree-encoding=UTF-8 eol=lf
+*.cc.in text working-tree-encoding=UTF-8 eol=lf
+*.c.in text working-tree-encoding=UTF-8 eol=lf
 *.sh eol=lf
 *.sh.mako eol=lf
 *.sh.in eol=lf

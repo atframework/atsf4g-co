@@ -30,6 +30,7 @@
 #include <list>
 #include <memory>
 #include <mutex>
+#include "config/compile_optimize.h"
 
 namespace {
 static std::recursive_mutex &get_handle_lock() {
@@ -105,7 +106,7 @@ SERVER_FRAME_API task_action_ss_req_base::result_type task_action_ss_req_base::h
   // 自动设置快队列保存
   result_type::value_type ret = RPC_AWAIT_CODE_RESULT(base_type::hook_run());
   if (nullptr != get_dispatcher_options() && get_dispatcher_options()->mark_fast_save()) {
-    if (mgr && obj) {
+    if (mgr != nullptr && obj) {
       router_manager_set::me()->mark_fast_save(mgr, obj);
     }
   }
@@ -147,8 +148,8 @@ SERVER_FRAME_API int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uin
 SERVER_FRAME_API int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uint64_t dst_pd,
                                                            gsl::string_view node_name, msg_cref_type req_msg) {
   init_msg(msg, dst_pd, node_name);
-  auto head = msg.mutable_head();
-  auto &request_head = req_msg.head();
+  auto *head = msg.mutable_head();
+  const auto &request_head = req_msg.head();
   if (request_head.has_router()) {
     protobuf_copy_message(*head->mutable_router(), request_head.router());
   }
@@ -211,7 +212,7 @@ SERVER_FRAME_API void task_action_ss_req_base::add_prepare_handle(
 }
 
 SERVER_FRAME_API rpc::telemetry::trace_inherit_options task_action_ss_req_base::get_inherit_option() const noexcept {
-  auto &req_msg = get_request();
+  const auto &req_msg = get_request();
   if (req_msg.has_head() && req_msg.head().has_rpc_request() && 0 != req_msg.head().source_task_id()) {
     return rpc::telemetry::trace_inherit_options{rpc::context::parent_mode::kParent, true, false};
   }
@@ -222,7 +223,7 @@ SERVER_FRAME_API rpc::telemetry::trace_inherit_options task_action_ss_req_base::
 SERVER_FRAME_API rpc::telemetry::trace_start_option task_action_ss_req_base::get_trace_option() const noexcept {
   rpc::telemetry::trace_start_option ret = task_action_base::get_trace_option();
 
-  auto &req_msg = get_request();
+  const auto &req_msg = get_request();
   if (req_msg.has_head() && req_msg.head().has_rpc_trace() && !req_msg.head().rpc_trace().trace_id().empty()) {
     ret.parent_network_span = &req_msg.head().rpc_trace();
   }
@@ -268,7 +269,7 @@ static rpc::result_code_type task_action_ss_action_forward_rpc(rpc::context &ctx
     forward_for_head->set_forward_for_sequence(request_head.sequence());
   }
   {
-    auto forward_head = forward_request.mutable_head();
+    auto *forward_head = forward_request.mutable_head();
     forward_head->set_sequence(ss_msg_dispatcher::me()->allocate_sequence());
     forward_head->set_node_id(logic_config::me()->get_local_server_id());
     auto local_server_name = logic_config::me()->get_local_server_name();
@@ -345,7 +346,7 @@ static rpc::result_code_type task_action_ss_action_clone_rpc(rpc::context &ctx, 
       protobuf_copy_message(caller_timespamp, clone_head.rpc_request().caller_timestamp());
 
       do {
-        auto rpc_request = clone_head.mutable_rpc_request();
+        auto *rpc_request = clone_head.mutable_rpc_request();
         if (nullptr == rpc_request) {
           break;
         }
@@ -357,7 +358,7 @@ static rpc::result_code_type task_action_ss_action_clone_rpc(rpc::context &ctx, 
         clone_head.clear_rpc_request();
       } while (false);
       do {
-        auto rpc_stream = clone_head.mutable_rpc_stream();
+        auto *rpc_stream = clone_head.mutable_rpc_stream();
         if (nullptr == rpc_stream) {
           break;
         }
@@ -516,7 +517,7 @@ SERVER_FRAME_API atframework::SSMsg &task_action_ss_req_base::add_response_messa
   if (get_request().head().has_rpc_request()) {
     head->clear_rpc_request();
     do {
-      auto rpc_response = head->mutable_rpc_response();
+      auto *rpc_response = head->mutable_rpc_response();
       if (nullptr == rpc_response) {
         break;
       }
@@ -531,7 +532,7 @@ SERVER_FRAME_API atframework::SSMsg &task_action_ss_req_base::add_response_messa
   } else {
     head->clear_rpc_stream();
     do {
-      auto rpc_stream = head->mutable_rpc_stream();
+      auto *rpc_stream = head->mutable_rpc_stream();
       if (nullptr == rpc_stream) {
         break;
       }
@@ -570,7 +571,7 @@ SERVER_FRAME_API void task_action_ss_req_base::send_response() {
     }
 
     // send message using ss dispatcher
-    int32_t res;
+    int32_t res = 0;
     if (0 != head->node_id()) {
       res = ss_msg_dispatcher::me()->send_to_proc(head->node_id(), **iter, true);
     } else {
@@ -585,8 +586,8 @@ SERVER_FRAME_API void task_action_ss_req_base::send_response() {
   response_messages_.clear();
 }
 
-namespace detail {
-struct filter_router_message_result_type {
+namespace {
+struct ATFW_UTIL_SYMBOL_LOCAL filter_router_message_result_type {
   bool is_on_current_server;
   bool enable_retry;
 
@@ -783,7 +784,7 @@ static rpc::result_code_type try_filter_router_msg(rpc::context &ctx, ATFW_EXPLI
 
   // 路由消息转发
   if (obj && 0 != obj->get_router_server_id()) {
-    uint64_t rpc_sequence;
+    uint64_t rpc_sequence = 0;
     if (request_msg.head().router().router_transfer_ttl() < logic_config::me()->get_cfg_router().transfer_max_ttl()) {
       request_msg.mutable_head()->mutable_router()->set_router_transfer_ttl(
           request_msg.head().router().router_transfer_ttl() + 1);
@@ -808,7 +809,7 @@ static rpc::result_code_type try_filter_router_msg(rpc::context &ctx, ATFW_EXPLI
   result = filter_router_message_result_type(false, true);
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_IN_SERVER);
 }
-}  // namespace detail
+}  // namespace
 
 SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::filter_router_msg(
     router_manager_base *&mgr, std::shared_ptr<router_object_base> &obj, std::pair<bool, int> &filter_result) {
@@ -832,10 +833,9 @@ SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::filter_router_ms
 
   // 最多重试3次，故障恢复过程中可能发生抢占，这时候正常情况下第二次就应该会成功
   while ((++retry_times) <= 3) {
-    detail::filter_router_message_result_type internal_filter_result;
-    last_result =
-        RPC_AWAIT_CODE_RESULT(detail::try_filter_router_msg(get_shared_context(), retry_times, get_request_node_id(),
-                                                            get_request(), *mgr, key, obj, internal_filter_result));
+    filter_router_message_result_type internal_filter_result;
+    last_result = RPC_AWAIT_CODE_RESULT(try_filter_router_msg(get_shared_context(), retry_times, get_request_node_id(),
+                                                              get_request(), *mgr, key, obj, internal_filter_result));
     if (internal_filter_result.is_on_current_server) {
       filter_result = std::make_pair(true, last_result);
       RPC_RETURN_CODE(last_result);

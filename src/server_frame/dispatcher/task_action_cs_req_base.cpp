@@ -28,7 +28,6 @@
 #include <list>
 #include <memory>
 #include <mutex>
-#include <utility>
 
 namespace {
 static std::recursive_mutex &get_handle_lock() {
@@ -38,9 +37,9 @@ static std::recursive_mutex &get_handle_lock() {
 }  // namespace
 
 struct task_action_cs_req_base::gateway_info_t {
-  uint64_t node_id;
+  uint64_t node_id = 0;
   std::string node_name;
-  uint64_t session_id;
+  uint64_t session_id = 0;
 };
 
 std::list<rpc::result_code_type (*)(rpc::context &, task_action_cs_req_base &)>
@@ -119,7 +118,7 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
       router_obj->trace_router(get_shared_context());
     }
 
-    auto dispatcher_options = get_dispatcher_options();
+    const auto *dispatcher_options = get_dispatcher_options();
     if (nullptr == dispatcher_options) {
       break;
     }
@@ -138,8 +137,8 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
     int32_t frequency_limit_ms = dispatcher_options->frequency_limit().frequency_limit_ms();
     int32_t frequency_limit_count = dispatcher_options->frequency_limit().frequency_limit_count();
 
-    int64_t current_time = static_cast<int64_t>(util::time::time_utility::get_now() * 1000 +
-                                                util::time::time_utility::get_now_usec() / 1000);
+    int64_t current_time = static_cast<int64_t>((util::time::time_utility::get_now() * 1000) +
+                                                (util::time::time_utility::get_now_usec() / 1000));
 
     auto &frequency_limit = player_cache->get_protocol_frequency_limit();
     auto last_time_deque = frequency_limit.find(name());
@@ -188,7 +187,7 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
 
-  result_type::value_type ret;
+  result_type::value_type ret{};
   {
     task_lock_guard cs_task_lock_guard(get_player_cache(), get_task_id());
     ret = RPC_AWAIT_CODE_RESULT(base_type::hook_run());
@@ -196,7 +195,7 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
 
   // 自动设置快队列保存
   do {
-    auto dispatcher_options = get_dispatcher_options();
+    const auto *dispatcher_options = get_dispatcher_options();
     if (nullptr == dispatcher_options) {
       break;
     }
@@ -255,7 +254,7 @@ SERVER_FRAME_API void task_action_cs_req_base::add_prepare_handle(
 SERVER_FRAME_API rpc::telemetry::trace_start_option task_action_cs_req_base::get_trace_option() const noexcept {
   rpc::telemetry::trace_start_option ret = task_action_base::get_trace_option();
 
-  auto &req_msg = get_request();
+  const auto &req_msg = get_request();
   if (req_msg.has_head() && req_msg.head().has_rpc_trace() && !req_msg.head().rpc_trace().trace_id().empty()) {
     ret.parent_network_span = &req_msg.head().rpc_trace();
   }

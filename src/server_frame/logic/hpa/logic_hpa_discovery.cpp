@@ -285,7 +285,9 @@ SERVER_FRAME_API void logic_hpa_discovery::add_pull_policy(std::shared_ptr<logic
           // 理论上应该i通过query保证返回的数据只有一个，如果出现多维度，可能是抖动或query错误，此时取最大的
           if (record->get_time_point() + std::chrono::seconds{1} < select_tp) {
             continue;
-          } else if (record->get_time_point() > select_tp + std::chrono::seconds{1}) {
+          }
+
+          if (record->get_time_point() > select_tp + std::chrono::seconds{1}) {
             select_value = record->get_value_as_int64();
             select_tp = record->get_time_point();
           } else {

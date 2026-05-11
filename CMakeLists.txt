@@ -96,6 +96,13 @@ endif()
 list(APPEND CMAKE_INSTALL_RPATH ${PROJECT_INSTALL_RPATH} ${PROJECT_EXTERNAL_RPATH})
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH YES)
 
+# 初始化git hooks
+if(ATFRAMEWORK_CMAKE_TOOLSET_BASH)
+  execute_process(
+    COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_BASH}" "${CMAKE_CURRENT_LIST_DIR}/ci/git-setup-hooks.sh"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}" ${ATFRAMEWORK_CMAKE_TOOLSET_EXECUTE_PROCESS_OUTPUT_OPTIONS})
+endif()
+
 # 自动生成的工具脚本
 configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/prepare-dependency-dll.sh.in"
                "${PROJECT_GENERATED_TOOLS_DIR}/prepare-dependency-dll.sh" ESCAPE_QUOTES @ONLY)

@@ -275,10 +275,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_ss_rpc_base : public task_action_ss_r
       FWLOGERROR("{}Try to parse message {} failed, message: {}", get_shared_context_log_prefix(),
                  get_request_type_url(), request_body_->InitializationErrorString());
       return false;
-    } else {
-      FWLOGDEBUG("{}Parse rpc request message {} success:\n{}", get_shared_context_log_prefix(), get_request_type_url(),
-                 protobuf_mini_dumper_get_readable(*request_body_));
     }
+
+    FWLOGDEBUG("{}Parse rpc request message {} success:\n{}", get_shared_context_log_prefix(), get_request_type_url(),
+               protobuf_mini_dumper_get_readable(*request_body_));
 
     has_unpack_request_ = true;
     return true;
@@ -286,6 +286,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_ss_rpc_base : public task_action_ss_r
 
   void pack_response() {
     has_pack_response_ = true;
+
+    if (get_result() < 0 && get_response_code() == 0) {
+      set_response_code(get_result());
+    }
 
     atframework::SSMsg &rsp = add_response_message();
     rsp.mutable_head()->set_error_code(get_response_code());

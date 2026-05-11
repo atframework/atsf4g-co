@@ -23,7 +23,6 @@
 #include <string>
 #include <utility>
 
-#include "config/logic_config.h"
 #include "dispatcher/dispatcher_type_defines.h"
 #include "dispatcher/task_action_base.h"
 #include "utility/protobuf_mini_dumper.h"
@@ -231,13 +230,13 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_rpc_base : public task_action_cs_r
     }
 
     if (false == request_body_->ParseFromString(get_request().body_bin())) {
-      FWLOGERROR("{}Try to parse message {} failed, message: {}", get_shared_context_log_prefix(), get_request_type_url(),
-                request_body_->InitializationErrorString());
+      FWLOGERROR("{}Try to parse message {} failed, message: {}", get_shared_context_log_prefix(),
+                 get_request_type_url(), request_body_->InitializationErrorString());
       return false;
-    } else {
-      FWLOGDEBUG("{}Parse rpc request message {} success:\n{}", get_shared_context_log_prefix(), get_request_type_url(),
-                protobuf_mini_dumper_get_readable(*request_body_));
     }
+
+    FWLOGDEBUG("{}Parse rpc request message {} success:\n{}", get_shared_context_log_prefix(), get_request_type_url(),
+               protobuf_mini_dumper_get_readable(*request_body_));
 
     has_unpack_request_ = true;
     return true;
@@ -250,10 +249,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_rpc_base : public task_action_cs_r
 
     if (false == get_response_body().SerializeToString(rsp.mutable_body_bin())) {
       FWLOGERROR("{}Try to serialize message {} failed, success: {}", get_shared_context_log_prefix(),
-                get_response_type_url(), get_response_body().InitializationErrorString());
+                 get_response_type_url(), get_response_body().InitializationErrorString());
     } else {
       FWLOGDEBUG("{}Serialize rpc response message {} success:\n{}", get_shared_context_log_prefix(),
-                get_response_type_url(), protobuf_mini_dumper_get_readable(get_response_body()));
+                 get_response_type_url(), protobuf_mini_dumper_get_readable(get_response_body()));
     }
   }
 

@@ -38,9 +38,8 @@
 #include "config/server_frame_build_feature.h"
 
 #include "dispatcher/dispatcher_implement.h"
-#include "rpc/rpc_context.h"
 
-namespace detail {
+namespace {
 struct task_action_stat_guard {
   explicit task_action_stat_guard(task_action_base *act) : action(act) {
     if (nullptr != action) {
@@ -72,7 +71,7 @@ struct task_action_stat_guard {
   atfw::util::time::time_utility::raw_time_t start;
   task_action_base *action;
 };
-}  // namespace detail
+}  // namespace
 
 SERVER_FRAME_API rpc::context &task_action_base::task_action_helper_t::get_shared_context(task_action_base &action) {
   return action.get_shared_context();
@@ -89,7 +88,7 @@ SERVER_FRAME_API task_action_base::task_action_base(const dispatcher_start_data_
       external_error_code_(0),
       dispatcher_options_(start_param.options),
       shared_context_(atfw::util::memory::make_strong_rc<rpc::context>(rpc::context::create_without_task())) {
-  if (start_param.context) {
+  if (start_param.context != nullptr) {
     get_shared_context().try_reuse_protobuf_arena(start_param.context->mutable_protobuf_arena());
   }
 }
@@ -103,7 +102,7 @@ SERVER_FRAME_API const char *task_action_base::name() const {
   }
 
   // some compiler will generate number to mark the type
-  while (ret && *ret >= '0' && *ret <= '9') {
+  while (ret != nullptr && *ret >= '0' && *ret <= '9') {
     ++ret;
   }
   return ret;
@@ -116,7 +115,7 @@ SERVER_FRAME_API task_action_base::result_type task_action_base::operator()(task
 SERVER_FRAME_API int task_action_base::operator()(void *priv_data)
 #endif
 {
-  detail::task_action_stat_guard stat(this);
+  task_action_stat_guard stat(this);
 
   rpc::telemetry::trace_start_option trace_start_option = get_trace_option();
   do {
@@ -158,7 +157,7 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data)
   trace_attributes[static_cast<size_t>(trace_attribute_type::kAtRpcSpanName)] = {
       rpc::telemetry::semantic_conventions::kAtRpcSpanName, name()};
 
-  task_type_trait::id_type current_task_id;
+  task_type_trait::id_type current_task_id{};
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   private_data_ = task_meta.private_data;
   current_task_id = task_meta.task_id;
@@ -357,7 +356,7 @@ SERVER_FRAME_API task_action_base::on_finished_callback_handle_t task_action_bas
 }
 
 SERVER_FRAME_API void task_action_base::remove_on_finished(on_finished_callback_handle_t handle) {
-  on_finished_callback_.erase(handle);
+  on_finished_callback_.erase(std::move(handle));
 }
 
 SERVER_FRAME_API void task_action_base::set_response_code(int32_t rsp_code, int64_t external_error_code,
