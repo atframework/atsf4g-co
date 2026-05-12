@@ -44,7 +44,6 @@ struct OrbitClientLoadSnapshot {
 struct OrbitClientOptions {
   std::string client_id;
   std::string agent_endpoint;
-  std::string client_addr;
   time_t heartbeat_interval_second = 5;
   std::vector<std::string> config_env;
 };
@@ -70,11 +69,11 @@ using OrbitClientRpcCallback = std::function<void(int32_t, const TResponse& resp
 
 struct OrbitClientCallbacks {
   // 日志接口
-  OrbitClientLogCallback on_log;
+  OrbitClientLogCallback on_log = nullptr;
   // 主动Stop调用接口 需要调用方准备退出自身
-  OrbitClientStopCallback on_request_stop;
+  OrbitClientStopCallback on_request_stop = nullptr;
   // 接收到转发协议
-  OrbitClientMessageCallback on_forward_to_client;
+  OrbitClientMessageCallback on_forward_to_client = nullptr;
 };
 
 }  // namespace orbit_client_sdk

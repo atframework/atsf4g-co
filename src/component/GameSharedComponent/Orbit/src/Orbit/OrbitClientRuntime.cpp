@@ -34,9 +34,14 @@ constexpr const char* kOrbitArgsClientIdArgument = "--orbit-client-id";
 constexpr const char* kOrbitArgsAgentEndpointArgument = "--orbit-agent-endpoint";
 constexpr const char* kOrbitArgsConfigEnvArgument = "--config_env";
 
-void fill_client_id(orbit::DClientId& client_id, const std::string& value) { client_id.set_client_id(value); }
+int64_t get_total_process_cpu_time_us(const uv_rusage_t& usage) {
+  int64_t total_us = static_cast<int64_t>(usage.ru_stime.tv_sec) + static_cast<int64_t>(usage.ru_utime.tv_sec);
+  total_us *= 1000000;
+  total_us += static_cast<int64_t>(usage.ru_stime.tv_usec) + static_cast<int64_t>(usage.ru_utime.tv_usec);
+  return total_us;
+}
 
-OrbitClientLoadSnapshot make_default_load_snapshot() { return OrbitClientLoadSnapshot{}; }
+void fill_client_id(orbit::DClientId& client_id, const std::string& value) { client_id.set_client_id(value); }
 
 void emit_log(const OrbitClientCallbacks& callbacks, OrbitClientLogLevel level, const std::string& message) {
   if (!callbacks.on_log) {
@@ -169,11 +174,9 @@ ORBIT_CLIENT_SDK_API OrbitClientRuntime::OrbitClientRuntime()
 
 ORBIT_CLIENT_SDK_API OrbitClientRuntime::~OrbitClientRuntime() { restore_app_callbacks(); }
 
-ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(int argc, char* argv[], const std::string& client_addr,
-                                                  const OrbitClientCallbacks& callbacks) {
+ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(int argc, char* argv[], const OrbitClientCallbacks& callbacks) {
   OrbitClientOptions options;
   uint64_t app_id = 0;
-  options.client_addr = client_addr;
 
   OrbitRPCDispatcher::me()->init();
 
@@ -385,20 +388,21 @@ bool OrbitClientRuntime::connect() {
   return true;
 }
 
-ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::notify_process_ready(const std::string& custom_data) {
+ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::notify_process_ready(const std::string& client_addr,
+                                                                      const std::string& custom_data) {
   if (state_ != OrbitClientRuntimeState::kConnected) {
     log(OrbitClientLogLevel::kWarning, "notify_process_ready rejected: runtime is not connected");
     return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
-  if (options_.client_addr.empty()) {
+  if (client_addr.empty()) {
     log(OrbitClientLogLevel::kError, "notify_process_ready rejected: client_addr is empty");
     return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
   orbit::DTAClientStartReq request;
   fill_client_id(*request.mutable_client_id(), options_.client_id);
-  request.set_client_addr(options_.client_addr);
+  request.set_client_addr(client_addr);
   request.set_custom_data(custom_data);
   OrbitClientRequestOptions request_options;
   request_options.reliable = true;
@@ -419,27 +423,33 @@ ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::notify_process_ready(const std:
 }
 
 ORBIT_CLIENT_SDK_API void OrbitClientRuntime::tick() {
-  if (nullptr != app_ && app_->is_inited() && !app_->check_flag(::atframework::atapp::app::flag_t::kInTick)) {
+  if (app_->is_inited() && !app_->check_flag(::atframework::atapp::app::flag_t::kInTick)) {
     app_->run_once(0, std::chrono::seconds{0});
   }
 
-  execute_pending_request_timeouts();
+  if (state_ == OrbitClientRuntimeState::kRunning) {
+    execute_pending_request_timeouts();
 
-  if (state_ != OrbitClientRuntimeState::kRunning) {
-    return;
+    OrbitRPCDispatcher::me()->tick();
+
+    do {
+      time_t now = ::util::time::time_utility::get_sys_now();
+      if (now - last_heartbeat_timepoint_ < options_.heartbeat_interval_second) {
+        break;
+      }
+
+      log(OrbitClientLogLevel::kInfo, "heartbeat begin");
+      send_heartbeat(make_default_load_snapshot());
+    } while (false);
   }
 
-  OrbitRPCDispatcher::me()->tick();
-
-  do {
-    time_t now = ::util::time::time_utility::get_sys_now();
-    if (now - last_heartbeat_timepoint_ < options_.heartbeat_interval_second) {
-      break;
+  if (state_ == OrbitClientRuntimeState::kStopping && app_->is_closed()) {
+    log(OrbitClientLogLevel::kInfo, "stopping finalized");
+    set_state(OrbitClientRuntimeState::kStopped);
+    if (callbacks_.on_request_stop) {
+      callbacks_.on_request_stop();
     }
-
-    log(OrbitClientLogLevel::kInfo, "heartbeat begin");
-    send_heartbeat(make_default_load_snapshot());
-  } while (false);
+  }
 }
 
 int32_t OrbitClientRuntime::send_heartbeat(const OrbitClientLoadSnapshot& snapshot) {
@@ -518,20 +528,13 @@ ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::request_end(orbit::EnClientExit
 }
 
 void OrbitClientRuntime::finalize_shutdown() {
-  if (nullptr != app_ && app_->get_bus_node() && 0 != agent_bus_id_) {
-    int disconnect_result = app_->get_bus_node()->disconnect(agent_bus_id_);
-    if (0 != disconnect_result) {
-      log(OrbitClientLogLevel::kWarning,
-          std::string{"disconnect agent failed, code="} + std::to_string(disconnect_result));
-    }
-  }
-
+  log(OrbitClientLogLevel::kInfo, "finalize shutdown");
+  app_->stop();
   restore_app_callbacks();
   pending_client_request_map_.clear();
   pending_client_request_timeout_map_.clear();
   agent_bus_id_ = 0;
   configured_ = false;
-  set_state(OrbitClientRuntimeState::kStopped);
 }
 
 void OrbitClientRuntime::install_app_callbacks() {
@@ -674,6 +677,48 @@ ORBIT_CLIENT_SDK_API std::string OrbitClientRuntime::protobuf_mini_dumper_get_re
 
   // Old implementation will use COW and the new compiler will use NRVO here.
   return debug_string;
+}
+
+OrbitClientLoadSnapshot OrbitClientRuntime::make_default_load_snapshot() {
+  double cpu_used = 0.0;
+  double memory_used_mb = 0.0;
+
+  do {
+    uv_rusage_t current_usage;
+    if (0 != uv_getrusage(&current_usage)) {
+      break;
+    }
+
+    auto now = std::chrono::steady_clock::now();
+    if (has_self_usage_sample_) {
+      int64_t elapsed_us =
+          std::chrono::duration_cast<std::chrono::microseconds>(now - last_self_usage_sample_timepoint_).count();
+      if (elapsed_us > 0) {
+        int64_t cpu_offset_us =
+            get_total_process_cpu_time_us(current_usage) - get_total_process_cpu_time_us(last_self_rusage_);
+        if (cpu_offset_us < 0) {
+          cpu_offset_us = 0;
+        }
+
+        cpu_used = static_cast<double>(cpu_offset_us) / static_cast<double>(elapsed_us);
+        last_self_cpu_used_ = cpu_used;
+      }
+    } else {
+      has_self_usage_sample_ = true;
+      last_self_cpu_used_ = 0.0;
+      cpu_used = 0.0;
+    }
+
+    last_self_rusage_ = current_usage;
+    last_self_usage_sample_timepoint_ = now;
+  } while (false);
+
+  size_t self_memory_rss = 0;
+  if (0 == uv_resident_set_memory(&self_memory_rss)) {
+    memory_used_mb = static_cast<double>(self_memory_rss) / (1024.0 * 1024.0);
+  }
+
+  return OrbitClientLoadSnapshot{cpu_used, memory_used_mb};
 }
 
 }  // namespace orbit_client_sdk

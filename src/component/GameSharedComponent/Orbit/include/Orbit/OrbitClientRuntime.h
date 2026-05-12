@@ -48,14 +48,14 @@ class OrbitClientRuntime {
  public:
   ORBIT_CLIENT_SDK_API virtual ~OrbitClientRuntime();
 
-  ORBIT_CLIENT_SDK_API int init(int argc, char* argv[], const std::string& client_addr,
-                                const OrbitClientCallbacks& callbacks);
+  ORBIT_CLIENT_SDK_API int init(int argc, char* argv[], const OrbitClientCallbacks& callbacks);
   ORBIT_CLIENT_SDK_API int init(uint64_t app_id, const OrbitClientOptions& options,
                                 const OrbitClientCallbacks& callbacks);
   ORBIT_CLIENT_SDK_API void tick();
 
   // 进程已准备成功 可以通知Agent了
-  ORBIT_CLIENT_SDK_API int32_t notify_process_ready(const std::string& custom_data = std::string{});
+  ORBIT_CLIENT_SDK_API int32_t notify_process_ready(const std::string& client_addr,
+                                                    const std::string& custom_data = std::string{});
   // 发送消息给Server
   ORBIT_CLIENT_SDK_API int32_t
   send_to_server(const std::string& payload, OrbitClientRpcCallback<orbit::ATDSendToServerRsp> callback = nullptr,
@@ -132,6 +132,7 @@ class OrbitClientRuntime {
   void execute_pending_request_timeouts();
   uint64_t allocate_sequence();
   void finalize_shutdown();
+  OrbitClientLoadSnapshot make_default_load_snapshot();
 
   int32_t rpc_send_client_heartbeat(const orbit::DTAClientHeartbeatNotify& request);
   int32_t rpc_send_send_to_server(const orbit::DTASendToServerReq& request,
@@ -160,6 +161,11 @@ class OrbitClientRuntime {
   time_t last_heartbeat_timepoint_;
   std::unordered_map<uint64_t, pending_client_request_t> pending_client_request_map_;
   std::multimap<time_t, uint64_t> pending_client_request_timeout_map_;
+
+  uv_rusage_t last_self_rusage_;
+  std::chrono::steady_clock::time_point last_self_usage_sample_timepoint_;
+  double last_self_cpu_used_ = 0.0;
+  bool has_self_usage_sample_ = false;
 };
 
 }  // namespace orbit_client_sdk
