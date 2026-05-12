@@ -39,8 +39,14 @@
 namespace {
 constexpr time_t kDefaultServerIdentityTimeoutSec = 30;
 constexpr time_t kDefaultServerIdentityCheckIntervalSec = 5;
+constexpr time_t kDefaultClientForceCleanupDelaySec = 5;
 
 constexpr const char* kOrbitArgsConfigEnvPrefix = "--config_env";
+
+static bool is_timeout_exit_reason(orbit::EnClientExitReason reason) {
+  return orbit::EN_CLIENT_EXIT_REASON_STARTUP_TIMEOUT == reason ||
+         orbit::EN_CLIENT_EXIT_REASON_HEARTBEAT_TIMEOUT == reason;
+}
 
 static atapp::etcd_keepalive::checker_fn_t make_orbit_load_checker(uint64_t expected_server_id) {
   return [expected_server_id](const std::string& checked) -> bool {
@@ -207,6 +213,30 @@ static int64_t get_total_process_cpu_time_us(const uv_rusage_t& usage) {
   total_us *= 1000000;
   total_us += static_cast<int64_t>(usage.ru_stime.tv_usec) + static_cast<int64_t>(usage.ru_utime.tv_usec);
   return total_us;
+}
+
+static void async_notify_client_exit(const char* task_name, const std::string& client_id, uint64_t controller_server_id,
+                                     orbit::DClientIdentity identity, orbit::DServerIdentity server_identity,
+                                     orbit::EnClientExitReason reason, int32_t exit_code) {
+  rpc::context ctx{rpc::context::create_without_task()};
+
+  auto invoke_result = rpc::async_invoke(
+      ctx, task_name,
+      [controller_server_id, identity = std::move(identity), server_identity = std::move(server_identity), reason,
+       exit_code](rpc::context& ctx) mutable -> rpc::result_code_type {
+        auto notify_request = rpc::make_shared_message<orbit::ATCNotifyClientExitReq>(ctx);
+        auto rsp = rpc::make_shared_message<orbit::CTANotifyClientExitRsp>(ctx);
+        *notify_request->mutable_client_identity() = std::move(identity);
+        *notify_request->mutable_server_identity() = std::move(server_identity);
+        notify_request->set_exit_reason(reason);
+        notify_request->set_exit_code(exit_code);
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+            rpc::agenttocontrollerservice::notify_client_exit(ctx, controller_server_id, *notify_request, *rsp)));
+      });
+  if (!invoke_result.is_success()) {
+    FWLOGERROR("orbit agent failed to spawn {} task for {}, res: {}({})", task_name, client_id,
+               *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+  }
 }
 
 static void on_uv_process_exit(uv_process_t* handle, int64_t exit_status, int term_signal) {
@@ -388,6 +418,7 @@ void orbit_agent_manager::tick() {
 
   // 检查 Client 超时（无论是否已连接 Controller）
   check_client_timeouts(now);
+  check_client_force_cleanup(now);
 
   // 定期将负载快照写入 etcd（每5秒更新一次）
   constexpr time_t kAutoLoadUpdateIntervalSec = 5;
@@ -477,12 +508,14 @@ rpc::result_code_type orbit_agent_manager::handle_forward_to_client(
   }
 
   auto client_record = find_client(client_id);
-  if (nullptr == client_record || 0 == client_record->client_server_id) {
+  if (nullptr == client_record || 0 == client_record->client_server_id ||
+      orbit::EN_CLIENT_STATE_RUNNING != client_record->state) {
     FWLOGWARNING("orbit agent forward_to_client ignored for {}: client_server_id={:#x}, state={}", client_id,
                  nullptr != client_record ? client_record->client_server_id : 0,
                  nullptr != client_record ? static_cast<int>(client_record->state)
                                           : static_cast<int>(orbit::EN_CLIENT_STATE_UNSPECIFIED));
-    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
+    response.set_error_code(nullptr != client_record ? PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_STATE_INVALID
+                                                     : PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
@@ -732,8 +765,21 @@ rpc::result_code_type orbit_agent_manager::handle_client_exit(rpc::context& ctx,
   }
 
   if (client_record->state != orbit::EN_CLIENT_STATE_RUNNING) {
+    if (client_record->state != orbit::EN_CLIENT_STATE_EXITING) {
+      FWLOGERROR("orbit agent client_start ignored for {}: invalid state {}, expected RUNNING or EXITING", client_id,
+                 static_cast<int>(client_record->state));
+    }
+  }
+
+  client_record->force_cleanup_timepoint = 0;
+  client_record->force_exit_reason = orbit::EN_CLIENT_EXIT_REASON_UNSPECIFIED;
+  client_record->force_exit_code = 0;
+
+  if (client_record->state != orbit::EN_CLIENT_STATE_RUNNING && client_record->state != orbit::EN_CLIENT_STATE_EXITING) {
     FWLOGERROR("orbit agent client_start ignored for {}: invalid state {}, expected RUNNING", client_id,
                static_cast<int>(client_record->state));
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_STATE_INVALID);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
   client_record->state = orbit::EN_CLIENT_STATE_EXITING;
 
@@ -916,6 +962,35 @@ int orbit_agent_manager::spawn_client_process(orbit_agent_client_record_ptr reco
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
+int orbit_agent_manager::kill_client_process(orbit_agent_client_record_ptr client_record, int signal_number) {
+  if (!client_record) {
+    return UV_EINVAL;
+  }
+
+  int uv_result = UV_ESRCH;
+  if (nullptr != client_record->process_handle) {
+    uv_result = uv_process_kill(client_record->process_handle, signal_number);
+  } else if (client_record->process_id > 0) {
+    uv_result = uv_kill(static_cast<int>(client_record->process_id), signal_number);
+  }
+
+  if (UV_ESRCH == uv_result) {
+    FWLOGWARNING("orbit agent kill client {} skipped: process already exited, pid={}, signal={}",
+                 client_record->client_id, client_record->process_id, signal_number);
+    return uv_result;
+  }
+
+  if (uv_result < 0) {
+    FWLOGERROR("orbit agent kill client {} failed: pid={}, signal={}, error={}", client_record->client_id,
+               client_record->process_id, signal_number, uv_strerror(uv_result));
+    return uv_result;
+  }
+
+  FWLOGWARNING("orbit agent sent signal {} to client {}, pid={}", signal_number, client_record->client_id,
+               client_record->process_id);
+  return uv_result;
+}
+
 void orbit_agent_manager::on_client_process_exit(const std::string& client_id, int64_t exit_status, int term_signal) {
   auto record = find_client(client_id);
   if (!record) {
@@ -923,11 +998,20 @@ void orbit_agent_manager::on_client_process_exit(const std::string& client_id, i
     return;
   }
 
+  record->process_handle = nullptr;  // 句柄正在被 libuv 回调关闭
+  record->process_id = 0;
+
+  if (record->force_cleanup_timepoint > 0 && is_timeout_exit_reason(record->force_exit_reason)) {
+    FWLOGWARNING(
+        "orbit agent client {} exited after timeout kill: exit_status={}, term_signal={}, state={}, wait_cleanup_until={}",
+        client_id, exit_status, term_signal, static_cast<int>(record->state), record->force_cleanup_timepoint);
+    return;
+  }
+
   // Client 未通过 STAClientExitReq 告知退出，视为异常退出
   FWLOGWARNING("orbit agent client {} exited unexpectedly: exit_status={}, term_signal={}, state={}", client_id,
                exit_status, term_signal, static_cast<int>(record->state));
 
-  record->process_handle = nullptr;  // 句柄正在被 libuv 回调关闭
   record->state = orbit::EN_CLIENT_STATE_EXITING;
   delete_client(record);
 
@@ -949,25 +1033,8 @@ void orbit_agent_manager::on_client_process_exit(const std::string& client_id, i
   const orbit::EnClientExitReason reason = orbit::EN_CLIENT_EXIT_REASON_CRASH;
   const int32_t exit_code = static_cast<int32_t>(exit_status);
 
-  rpc::context ctx{rpc::context::create_without_task()};
-
-  auto invoke_result =
-      rpc::async_invoke(ctx, "orbit_agent_manager.notify_crash_exit",
-                        [controller_server_id, identity = std::move(identity), server_identity = *server_identity_ptr,
-                         reason, exit_code](rpc::context& ctx) mutable -> rpc::result_code_type {
-                          auto notify_request = rpc::make_shared_message<orbit::ATCNotifyClientExitReq>(ctx);
-                          auto rsp = rpc::make_shared_message<orbit::CTANotifyClientExitRsp>(ctx);
-                          *notify_request->mutable_client_identity() = std::move(identity);
-                          *notify_request->mutable_server_identity() = std::move(server_identity);
-                          notify_request->set_exit_reason(reason);
-                          notify_request->set_exit_code(exit_code);
-                          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::agenttocontrollerservice::notify_client_exit(
-                              ctx, controller_server_id, *notify_request, *rsp)));
-                        });
-  if (!invoke_result.is_success()) {
-    FWLOGERROR("orbit agent failed to spawn notify_crash_exit task for {}, res: {}({})", client_id,
-               *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
-  }
+  async_notify_client_exit("orbit_agent_manager.notify_crash_exit", client_id, controller_server_id,
+                           std::move(identity), *server_identity_ptr, reason, exit_code);
 }
 
 void orbit_agent_manager::check_client_timeouts(time_t now) {
@@ -1007,45 +1074,67 @@ void orbit_agent_manager::check_client_timeouts(time_t now) {
                  static_cast<int>(record->state));
 
     record->state = orbit::EN_CLIENT_STATE_EXITING;
+    record->force_cleanup_timepoint = now + kDefaultClientForceCleanupDelaySec;
+    record->force_exit_reason = entry.reason;
+    record->force_exit_code = PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_TIMEOUT;
+
+    int kill_result = kill_client_process(record, SIGTERM);
+    if (kill_result < 0 && UV_ESRCH != kill_result) {
+      FWLOGWARNING("orbit agent client {} timeout kill returned {}, keep waiting for cleanup", entry.client_id,
+                   kill_result);
+    }
+  }
+}
+
+void orbit_agent_manager::check_client_force_cleanup(time_t now) {
+  std::vector<std::string> expired;
+  expired.reserve(clients_.size());
+
+  for (const auto& kv : clients_) {
+    const auto& record = kv.second;
+    if (!record || record->force_cleanup_timepoint <= 0 || now < record->force_cleanup_timepoint) {
+      continue;
+    }
+
+    expired.emplace_back(kv.first);
+  }
+
+  for (const auto& client_id : expired) {
+    auto record = find_client(client_id);
+    if (!record || record->force_cleanup_timepoint <= 0 || now < record->force_cleanup_timepoint) {
+      continue;
+    }
+
+    const orbit::EnClientExitReason reason = record->force_exit_reason;
+    const int32_t exit_code = record->force_exit_code;
+    record->force_cleanup_timepoint = 0;
+    record->force_exit_reason = orbit::EN_CLIENT_EXIT_REASON_UNSPECIFIED;
+    record->force_exit_code = 0;
+
+    int kill_result = kill_client_process(record, SIGKILL);
+    if (kill_result < 0 && UV_ESRCH != kill_result) {
+      FWLOGWARNING("orbit agent client {} cleanup kill returned {}, continue cleanup", client_id, kill_result);
+    }
+
     delete_client(record);
 
     auto controller_server_id = record->get_controller_server_id();
     if (0 == controller_server_id) {
-      FWLOGWARNING("orbit agent process timeout for {} but no controller connected, skip notify", entry.client_id);
+      FWLOGWARNING("orbit agent process timeout for {} but no controller connected, skip notify", client_id);
       continue;
     }
 
     auto server_identity_ptr = find_server_identity(record->server_unique_id);
     if (server_identity_ptr == nullptr) {
       FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
-                 entry.client_id, record->server_unique_id);
-      return;
+                 client_id, record->server_unique_id);
+      continue;
     }
 
     orbit::DClientIdentity identity;
     fill_client_identity(identity, record);
-    const orbit::EnClientExitReason reason = entry.reason;
-    const int32_t exit_code = PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_TIMEOUT;
-
-    rpc::context ctx{rpc::context::create_without_task()};
-
-    auto invoke_result =
-        rpc::async_invoke(ctx, "orbit_agent_manager.notify_timeout_exit",
-                          [controller_server_id, identity = std::move(identity), server_identity = *server_identity_ptr,
-                           reason, exit_code](rpc::context& ctx) mutable -> rpc::result_code_type {
-                            auto notify_request = rpc::make_shared_message<orbit::ATCNotifyClientExitReq>(ctx);
-                            auto rsp = rpc::make_shared_message<orbit::CTANotifyClientExitRsp>(ctx);
-                            *notify_request->mutable_client_identity() = std::move(identity);
-                            *notify_request->mutable_server_identity() = std::move(server_identity);
-                            notify_request->set_exit_reason(reason);
-                            notify_request->set_exit_code(exit_code);
-                            RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::agenttocontrollerservice::notify_client_exit(
-                                ctx, controller_server_id, *notify_request, *rsp)));
-                          });
-    if (!invoke_result.is_success()) {
-      FWLOGERROR("orbit agent failed to spawn notify_timeout_exit task for {}, res: {}({})", entry.client_id,
-                 *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
-    }
+    async_notify_client_exit("orbit_agent_manager.notify_timeout_exit", client_id, controller_server_id,
+                             std::move(identity), *server_identity_ptr, reason, exit_code);
   }
 }
 

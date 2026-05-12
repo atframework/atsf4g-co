@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstdint>
 #include <deque>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -59,6 +60,9 @@ struct orbit_agent_client_record {
   time_t start_timepoint = 0;              ///< 启动时间点 (unix sec)
   uint64_t startup_timeout_sec = 0;        ///< STARTING/SEED 状态最大等待时间 (秒)
   uint64_t heartbeat_timeout_sec = 0;      ///< RUNNING 状态心跳最大间隔 (秒)
+  time_t force_cleanup_timepoint = 0;      ///< 超时后等待 Client 主动上报下线的宽限截止时间
+  orbit::EnClientExitReason force_exit_reason = orbit::EN_CLIENT_EXIT_REASON_UNSPECIFIED;
+  int32_t force_exit_code = 0;
 
   // Server路由信息
   uint64_t server_unique_id;
@@ -123,7 +127,9 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   void fill_client_identity(orbit::DClientIdentity& output, orbit_agent_client_record_ptr client) const;
 
   void check_client_timeouts(time_t now);
+  void check_client_force_cleanup(time_t now);
   void check_server_identity_timeouts(time_t now);
+  int kill_client_process(orbit_agent_client_record_ptr client_record, int signal_number);
 
   void server_heartbeat(const orbit::DServerIdentity& server_identity);
   rpc::result_code_type agent_heartbeat(rpc::context& ctx, uint64_t controller_server_id,
