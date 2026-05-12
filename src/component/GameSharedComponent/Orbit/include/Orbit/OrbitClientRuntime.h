@@ -7,6 +7,7 @@
 #define UI UI_ST
 #include <atframe/atapp.h>
 #undef UI
+
 #include <design_pattern/singleton.h>
 
 #include <chrono>
@@ -69,6 +70,7 @@ class OrbitClientRuntime {
   ORBIT_CLIENT_SDK_API void log(OrbitClientLogLevel level, const std::string& message) const;
   ORBIT_CLIENT_SDK_API static std::string protobuf_mini_dumper_get_readable(const ::google::protobuf::Message& msg);
 
+  using client_request_raw_callback_t = std::function<void(int32_t, const ::atframework::SSMsg&)>;
  private:
   int extract_launch_options(int argc, char* argv[], uint64_t& app_id, OrbitClientOptions& options) const;
   void build_client_launch_arguments(uint64_t app_id, std::vector<std::string>& output) const;
@@ -93,8 +95,6 @@ class OrbitClientRuntime {
   void on_received_message(const std::string& message);
 
  private:
-  using client_request_raw_callback_t = std::function<void(int32_t, const ::atframework::SSMsg&)>;
-
   struct pending_client_request_t {
     std::string packed_message;
     const ::google::protobuf::MethodDescriptor* method = nullptr;

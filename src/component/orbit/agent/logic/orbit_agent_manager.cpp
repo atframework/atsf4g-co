@@ -947,13 +947,6 @@ int orbit_agent_manager::spawn_client_process(orbit_agent_client_record_ptr reco
     if (!command_line_str.empty()) {
       command_line_str += " ";
     }
-
-    if (arg == kOrbitArgsConfigEnvPrefix && index + 1 < launch_arguments.size()) {
-      command_line_str += std::string{kOrbitArgsConfigEnvPrefix} + " <redacted>";
-      ++index;
-      continue;
-    }
-
     command_line_str += arg;
   }
 
