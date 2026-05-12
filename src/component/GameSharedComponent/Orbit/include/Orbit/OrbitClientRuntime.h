@@ -4,7 +4,9 @@
 
 #include <Orbit/OrbitClientSdkTypes.h>
 
+#define UI UI_ST
 #include <atframe/atapp.h>
+#undef UI
 #include <design_pattern/singleton.h>
 
 #include <chrono>
