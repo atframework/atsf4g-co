@@ -59,6 +59,12 @@ proc_desc:
     instance_count: 1
     start_instance_id: 1
 
+  - chart_name: "orbit-server"
+    instance_type_id: 18
+    world_instance: false
+    instance_count: 1
+    start_instance_id: 1
+
   - chart_name: "orbit-agent"
     instance_type_id: 101
     world_instance: false

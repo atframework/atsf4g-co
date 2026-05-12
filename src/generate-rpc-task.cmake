@@ -1,4 +1,5 @@
 include("${CMAKE_CURRENT_LIST_DIR}/generate_for_pb_utility.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/component/orbit/sdk/server/generate_for_pb_utility.cmake")
 
 # -----------------------------------------------------------------------------
 file(MAKE_DIRECTORY "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/extension")
@@ -116,6 +117,9 @@ include("${CMAKE_CURRENT_LIST_DIR}/component/rank/generate-rpc-task.cmake")
 
 # add tool to binding orbit rpcs
 include("${CMAKE_CURRENT_LIST_DIR}/component/orbit/generate-rpc-task.cmake")
+
+# add tool to binding orbitsvr rpcs
+include("${CMAKE_CURRENT_LIST_DIR}/orbitsvr/generate-rpc-task.cmake")
 
 # add tool to generate simulator rpcs
 generate_for_pb_add_simulator_cs_api(

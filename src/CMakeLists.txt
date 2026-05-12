@@ -25,6 +25,7 @@ add_subdirectory(cachesvr)
 add_subdirectory(authsvr)
 add_subdirectory(lobbysvr)
 add_subdirectory(rank_settlement_svr)
+add_subdirectory(orbitsvr)
 
 add_subdirectory(tools)
 

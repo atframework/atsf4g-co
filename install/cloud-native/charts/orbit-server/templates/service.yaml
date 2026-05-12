@@ -1,0 +1,3 @@
+{{- template "libapp.service" (list . "orbit-server.service") -}}
+{{- define "orbit-server.service" -}}
+{{- end -}}

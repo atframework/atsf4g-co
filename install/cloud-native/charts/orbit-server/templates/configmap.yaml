@@ -1,0 +1,6 @@
+{{- template "libapp.configmap" (list . "orbit-server.configmap") -}}
+{{- define "orbit-server.configmap" -}}
+data:
+  {{ include "orbit-server.name" . }}.yaml: {{ tpl (.Files.Get "cfg/orbit-server.yaml.tpl") . | quote }}
+  vector.yaml: {{ tpl (.Files.Get "cfg/vector.yaml.tpl") . | quote }}
+{{- end -}}

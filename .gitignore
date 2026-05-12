@@ -106,3 +106,7 @@
 /src/cachesvr/sdk/rpc/cache/cachesvrservice.cpp
 /src/cachesvr/service/app/handle_ss_rpc_cachesvrservice.h
 /src/cachesvr/service/app/handle_ss_rpc_cachesvrservice.cpp
+/src/orbitsvr/service/rpc/orbit_client_rpc/orbitclientrpcservice.h
+/src/orbitsvr/service/rpc/orbit_client_rpc/orbitclientrpcservice.cpp
+/src/orbitsvr/service/app/handle_orbit_rpc_orbitserverrpcservice.h
+/src/orbitsvr/service/app/handle_orbit_rpc_orbitserverrpcservice.cpp
