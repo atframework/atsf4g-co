@@ -22,16 +22,27 @@ ORBIT_CLIENT_SDK_NAMESPACE_BEGIN
 
 namespace orbit_client_sdk {
 
-OrbitRPCDispatcher::OrbitRPCDispatcher() : sequence_allocator_(0) {}
+#if defined(ORBIT_CLIENT_SDK_DLL) && ORBIT_CLIENT_SDK_DLL
+#  if defined(ORBIT_CLIENT_SDK_NATIVE) && ORBIT_CLIENT_SDK_NATIVE
+ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(OrbitRPCDispatcher);
+#  else
+ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(OrbitRPCDispatcher);
+#  endif
+#else
+ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(OrbitRPCDispatcher);
+#endif
 
-void OrbitRPCDispatcher::init() {
+ORBIT_CLIENT_SDK_API OrbitRPCDispatcher::OrbitRPCDispatcher() {}
+ORBIT_CLIENT_SDK_API OrbitRPCDispatcher::~OrbitRPCDispatcher() {}
+
+ORBIT_CLIENT_SDK_API void OrbitRPCDispatcher::init() {
   sequence_allocator_ = static_cast<uint64_t>((::util::time::time_utility::get_sys_now() - 1577836800) << 23) +
                         static_cast<uint64_t>(::util::time::time_utility::get_now_usec() << 3);
 }
 
-void OrbitRPCDispatcher::tick() { rsp_callback_execute(); }
+ORBIT_CLIENT_SDK_API void OrbitRPCDispatcher::tick() { rsp_callback_execute(); }
 
-bool OrbitRPCDispatcher::check_rpc_success() {
+ORBIT_CLIENT_SDK_API bool OrbitRPCDispatcher::check_rpc_success() {
   rsp_callback_execute();
   for (const auto& iter : timeout_callback_map_) {
     if (iter.second.second.lock() != nullptr) {
@@ -41,7 +52,7 @@ bool OrbitRPCDispatcher::check_rpc_success() {
   return true;
 }
 
-const std::string& OrbitRPCDispatcher::pick_rpc_name(const orbit::OrbitRpcMessage& raw_msg) {
+ORBIT_CLIENT_SDK_API const std::string& OrbitRPCDispatcher::pick_rpc_name(const orbit::OrbitRpcMessage& raw_msg) {
   if (!raw_msg.has_head()) {
     return get_empty_string();
   }
@@ -54,7 +65,7 @@ const std::string& OrbitRPCDispatcher::pick_rpc_name(const orbit::OrbitRpcMessag
   return get_empty_string();
 }
 
-int32_t OrbitRPCDispatcher::dispatch(const std::string& message) {
+ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::dispatch(const std::string& message) {
   orbit::OrbitRpcMessage orbit_msg;
   if (!orbit_msg.ParseFromString(message)) {
     OrbitClientRuntime::me()->log(OrbitClientLogLevel::kError,
@@ -79,7 +90,7 @@ int32_t OrbitRPCDispatcher::dispatch(const std::string& message) {
   }
 }
 
-int32_t OrbitRPCDispatcher::on_rpc_req_message(orbit::OrbitRpcMessage& orbit_msg) {
+ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::on_rpc_req_message(orbit::OrbitRpcMessage& orbit_msg) {
   int32_t ret = 0;
   do {
     OrbitClientRuntime::me()->log(
@@ -105,7 +116,7 @@ int32_t OrbitRPCDispatcher::on_rpc_req_message(orbit::OrbitRpcMessage& orbit_msg
   return ret;
 }
 
-int32_t OrbitRPCDispatcher::on_rpc_rsp_message(orbit::OrbitRpcMessage& orbit_msg) {
+ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::on_rpc_rsp_message(orbit::OrbitRpcMessage& orbit_msg) {
   OrbitClientRuntime::me()->log(
       OrbitClientLogLevel::kInfo,
       LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] recv rsp msg.\n{}",
@@ -126,9 +137,9 @@ int32_t OrbitRPCDispatcher::on_rpc_rsp_message(orbit::OrbitRpcMessage& orbit_msg
   return 0;
 }
 
-uint64_t OrbitRPCDispatcher::allocate_sequence() { return ++sequence_allocator_; }
+ORBIT_CLIENT_SDK_API uint64_t OrbitRPCDispatcher::allocate_sequence() { return ++sequence_allocator_; }
 
-int32_t OrbitRPCDispatcher::send_rsp_to_proc(orbit::OrbitRpcMessage& orbit_msg) {
+ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::send_rsp_to_proc(orbit::OrbitRpcMessage& orbit_msg) {
   if (0 == orbit_msg.head().sequence()) {
     orbit_msg.mutable_head()->set_sequence(allocate_sequence());
   }
@@ -143,8 +154,8 @@ int32_t OrbitRPCDispatcher::send_rsp_to_proc(orbit::OrbitRpcMessage& orbit_msg) 
   return OrbitClientRuntime::me()->send_to_server(orbit_msg.SerializeAsString(), nullptr, request_options);
 }
 
-int32_t OrbitRPCDispatcher::send_req_to_proc(orbit::OrbitRpcMessage& orbit_msg, uint64_t& sequence,
-                                             const OrbitClientRequestOptions& request_options) {
+ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::send_req_to_proc(orbit::OrbitRpcMessage& orbit_msg, uint64_t& sequence,
+                                                                  const OrbitClientRequestOptions& request_options) {
   if (0 == orbit_msg.head().sequence()) {
     orbit_msg.mutable_head()->set_sequence(allocate_sequence());
   }
@@ -159,7 +170,7 @@ int32_t OrbitRPCDispatcher::send_req_to_proc(orbit::OrbitRpcMessage& orbit_msg, 
   return OrbitClientRuntime::me()->send_to_server(orbit_msg.SerializeAsString(), nullptr, request_options);
 }
 
-int OrbitRPCDispatcher::_register_action(const std::string& rpc_full_name, task_action_creator_t action) {
+ORBIT_CLIENT_SDK_API int OrbitRPCDispatcher::_register_action(const std::string& rpc_full_name, task_action_creator_t action) {
   rpc_task_action_set_t::iterator iter = task_action_map_by_name_.find(rpc_full_name);
   if (task_action_map_by_name_.end() != iter) {
     return orbit::EN_ORBIT_ERROR_CODE_ALREADY_REGISTER_ACTION;
@@ -191,7 +202,8 @@ void OrbitRPCDispatcher::on_create_task_failed(orbit::OrbitRpcMessage& orbit_msg
   send_rsp_to_proc(rsp);
 }
 
-int32_t OrbitRPCDispatcher::init_rpc_req_callback(uint64_t sequence, time_t timeout, rsp_callback_t callback) {
+ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::init_rpc_req_callback(uint64_t sequence, time_t timeout,
+                                                                       rsp_callback_t callback) {
   if (sequence == 0) {
     return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }

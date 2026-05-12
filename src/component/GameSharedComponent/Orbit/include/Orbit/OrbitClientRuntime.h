@@ -5,7 +5,6 @@
 #include <Orbit/OrbitClientSdkTypes.h>
 
 #include <atframe/atapp.h>
-
 #include <design_pattern/singleton.h>
 
 #include <chrono>
@@ -29,30 +28,44 @@ ORBIT_CLIENT_SDK_NAMESPACE_BEGIN
 
 namespace orbit_client_sdk {
 
-class ORBIT_CLIENT_SDK_API OrbitClientRuntime : public util::design_pattern::singleton<OrbitClientRuntime> {
+class OrbitClientRuntime {
  public:
   using clock_type = std::chrono::steady_clock;
 
- public:
-  OrbitClientRuntime();
-  ~OrbitClientRuntime();
+#if defined(ORBIT_CLIENT_SDK_DLL) && ORBIT_CLIENT_SDK_DLL
+#  if defined(ORBIT_CLIENT_SDK_NATIVE) && ORBIT_CLIENT_SDK_NATIVE
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(OrbitClientRuntime)
+#  else
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(OrbitClientRuntime)
+#  endif
+#else
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(OrbitClientRuntime)
+#endif
 
-  int init(int argc, char* argv[], const std::string& client_addr, const OrbitClientCallbacks& callbacks);
-  int init(uint64_t app_id, const OrbitClientOptions& options, const OrbitClientCallbacks& callbacks);
-  void tick();
+ private:
+  ORBIT_CLIENT_SDK_API OrbitClientRuntime();
+
+ public:
+  ORBIT_CLIENT_SDK_API virtual ~OrbitClientRuntime();
+
+  ORBIT_CLIENT_SDK_API int init(int argc, char* argv[], const std::string& client_addr,
+                                const OrbitClientCallbacks& callbacks);
+  ORBIT_CLIENT_SDK_API int init(uint64_t app_id, const OrbitClientOptions& options,
+                                const OrbitClientCallbacks& callbacks);
+  ORBIT_CLIENT_SDK_API void tick();
 
   // 进程已准备成功 可以通知Agent了
-  int32_t notify_process_ready(const std::string& custom_data = std::string{});
+  ORBIT_CLIENT_SDK_API int32_t notify_process_ready(const std::string& custom_data = std::string{});
   // 发送消息给Server
-  int32_t send_to_server(const std::string& payload,
-                         OrbitClientRpcCallback<orbit::ATDSendToServerRsp> callback = nullptr,
-                         const OrbitClientRequestOptions& request_options = OrbitClientRequestOptions{});
+  ORBIT_CLIENT_SDK_API int32_t
+  send_to_server(const std::string& payload, OrbitClientRpcCallback<orbit::ATDSendToServerRsp> callback = nullptr,
+                 const OrbitClientRequestOptions& request_options = OrbitClientRequestOptions{});
   // 请求停止服务
-  int32_t request_end(orbit::EnClientExitReason reason, int32_t exit_code,
-                      const std::string& custom_data = std::string{});
+  ORBIT_CLIENT_SDK_API int32_t request_end(orbit::EnClientExitReason reason, int32_t exit_code,
+                                           const std::string& custom_data = std::string{});
 
-  void log(OrbitClientLogLevel level, const std::string& message) const;
-  static std::string protobuf_mini_dumper_get_readable(const ::google::protobuf::Message& msg);
+  ORBIT_CLIENT_SDK_API void log(OrbitClientLogLevel level, const std::string& message) const;
+  ORBIT_CLIENT_SDK_API static std::string protobuf_mini_dumper_get_readable(const ::google::protobuf::Message& msg);
 
  private:
   int extract_launch_options(int argc, char* argv[], uint64_t& app_id, OrbitClientOptions& options) const;

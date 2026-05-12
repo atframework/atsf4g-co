@@ -2,8 +2,6 @@
 
 #pragma once
 
-#include <design_pattern/singleton.h>
-
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -27,6 +25,7 @@
 
 #include <memory/rc_ptr.h>
 #include <rpc/rpc_common_types.h>
+#include <design_pattern/singleton.h>
 
 #ifndef ORBIT_SERVER_SERVICE_API
 #  define ORBIT_SERVER_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
@@ -68,8 +67,24 @@ using on_client_end_notify_fn =
     std::function<rpc::result_code_type(rpc::context& ctx, std::string client_id, orbit::EnClientExitReason exit_reason,
                                         const std::string& exit_data, int32_t exit_code)>;
 
-class orbit_server_manager : public util::design_pattern::singleton<orbit_server_manager> {
+class orbit_server_manager {
  public:
+#if defined(ORBIT_SERVER_SDK_DLL) && ORBIT_SERVER_SDK_DLL
+#  if defined(ORBIT_SERVER_SDK_NATIVE) && ORBIT_SERVER_SDK_NATIVE
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(orbit_server_manager)
+#  else
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(orbit_server_manager)
+#  endif
+#else
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(orbit_server_manager)
+#endif
+
+ private:
+  ORBIT_SERVER_SERVICE_API orbit_server_manager();
+
+ public:
+  ORBIT_SERVER_SERVICE_API virtual ~orbit_server_manager();
+
   ORBIT_SERVER_SERVICE_API int init(uint64_t unique_id, uint64_t heartbeat_interval_sec);
   ORBIT_SERVER_SERVICE_API void stop();
   ORBIT_SERVER_SERVICE_API void tick();
@@ -118,7 +133,7 @@ class orbit_server_manager : public util::design_pattern::singleton<orbit_server
   void server_heartbeat();
   void check_client_timeout();
 
-  client_info_ptr get_client_info(std::string client_id);
+  client_info_ptr get_client_info(const std::string& client_id);
   void add_client_timeout(client_info_ptr client);
   void erase_client_info(const std::string& client_id);
 

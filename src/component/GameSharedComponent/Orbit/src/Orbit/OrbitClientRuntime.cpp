@@ -146,7 +146,17 @@ uint64_t make_initial_sequence_allocator() {
 
 }  // namespace
 
-OrbitClientRuntime::OrbitClientRuntime()
+#if defined(ORBIT_CLIENT_SDK_DLL) && ORBIT_CLIENT_SDK_DLL
+#  if defined(ORBIT_CLIENT_SDK_NATIVE) && ORBIT_CLIENT_SDK_NATIVE
+ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(OrbitClientRuntime);
+#  else
+ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(OrbitClientRuntime);
+#  endif
+#else
+ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(OrbitClientRuntime);
+#endif
+
+ORBIT_CLIENT_SDK_API OrbitClientRuntime::OrbitClientRuntime()
     : app_(),
       callbacks_(),
       options_(),
@@ -157,10 +167,10 @@ OrbitClientRuntime::OrbitClientRuntime()
       sequence_allocator_(0),
       last_heartbeat_timepoint_(0) {}
 
-OrbitClientRuntime::~OrbitClientRuntime() { restore_app_callbacks(); }
+ORBIT_CLIENT_SDK_API OrbitClientRuntime::~OrbitClientRuntime() { restore_app_callbacks(); }
 
-int OrbitClientRuntime::init(int argc, char* argv[], const std::string& client_addr,
-                             const OrbitClientCallbacks& callbacks) {
+ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(int argc, char* argv[], const std::string& client_addr,
+                                                  const OrbitClientCallbacks& callbacks) {
   OrbitClientOptions options;
   uint64_t app_id = 0;
   options.client_addr = client_addr;
@@ -239,8 +249,8 @@ int OrbitClientRuntime::extract_launch_options(int argc, char* argv[], uint64_t&
   return 0;
 }
 
-int OrbitClientRuntime::init(uint64_t app_id, const OrbitClientOptions& options,
-                             const OrbitClientCallbacks& callbacks) {
+ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitClientOptions& options,
+                                                  const OrbitClientCallbacks& callbacks) {
   if (state_ == OrbitClientRuntimeState::kConnecting || state_ == OrbitClientRuntimeState::kRunning ||
       state_ == OrbitClientRuntimeState::kStopping) {
     log(OrbitClientLogLevel::kWarning, "init rejected: runtime is busy");
@@ -375,7 +385,7 @@ bool OrbitClientRuntime::connect() {
   return true;
 }
 
-int32_t OrbitClientRuntime::notify_process_ready(const std::string& custom_data) {
+ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::notify_process_ready(const std::string& custom_data) {
   if (state_ != OrbitClientRuntimeState::kConnected) {
     log(OrbitClientLogLevel::kWarning, "notify_process_ready rejected: runtime is not connected");
     return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
@@ -408,7 +418,7 @@ int32_t OrbitClientRuntime::notify_process_ready(const std::string& custom_data)
   return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
-void OrbitClientRuntime::tick() {
+ORBIT_CLIENT_SDK_API void OrbitClientRuntime::tick() {
   if (nullptr != app_ && app_->is_inited() && !app_->check_flag(::atframework::atapp::app::flag_t::kInTick)) {
     app_->run_once(0, std::chrono::seconds{0});
   }
@@ -454,9 +464,9 @@ int32_t OrbitClientRuntime::send_heartbeat(const OrbitClientLoadSnapshot& snapsh
   return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
-int32_t OrbitClientRuntime::send_to_server(const std::string& payload,
-                                           OrbitClientRpcCallback<orbit::ATDSendToServerRsp> callback,
-                                           const OrbitClientRequestOptions& request_options) {
+ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::send_to_server(
+    const std::string& payload, OrbitClientRpcCallback<orbit::ATDSendToServerRsp> callback,
+    const OrbitClientRequestOptions& request_options) {
   if (state_ != OrbitClientRuntimeState::kRunning) {
     log(OrbitClientLogLevel::kWarning, "send_to_server rejected: runtime is not running");
     return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
@@ -476,8 +486,8 @@ int32_t OrbitClientRuntime::send_to_server(const std::string& payload,
   return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
-int32_t OrbitClientRuntime::request_end(orbit::EnClientExitReason reason, int32_t exit_code,
-                                        const std::string& custom_data) {
+ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::request_end(orbit::EnClientExitReason reason, int32_t exit_code,
+                                                             const std::string& custom_data) {
   OrbitClientRuntimeState previous_state = state_;
   set_state(OrbitClientRuntimeState::kStopping);
   OrbitClientRequestOptions request_options;
@@ -634,7 +644,7 @@ uint64_t OrbitClientRuntime::allocate_sequence() { return ++sequence_allocator_;
 
 void OrbitClientRuntime::set_state(OrbitClientRuntimeState next_state) { state_ = next_state; }
 
-void OrbitClientRuntime::log(OrbitClientLogLevel level, const std::string& message) const {
+ORBIT_CLIENT_SDK_API void OrbitClientRuntime::log(OrbitClientLogLevel level, const std::string& message) const {
   if (!callbacks_.on_log) {
     return;
   }
@@ -646,7 +656,8 @@ void OrbitClientRuntime::log(OrbitClientLogLevel level, const std::string& messa
   callbacks_.on_log(record);
 }
 
-std::string OrbitClientRuntime::protobuf_mini_dumper_get_readable(const ::google::protobuf::Message& msg) {
+ORBIT_CLIENT_SDK_API std::string OrbitClientRuntime::protobuf_mini_dumper_get_readable(
+    const ::google::protobuf::Message& msg) {
   std::string debug_string;
   // 16K is in bin of tcache in jemalloc, and MEDIUM_PAGE in mimalloc
   debug_string.reserve(16 * 1024);

@@ -22,6 +22,19 @@
 #include <rpc/rpc_utils.h>
 #include <rpc/servertocontrollerservice/servertocontrollerservice.h>
 
+#if defined(ORBIT_SERVER_SDK_DLL) && ORBIT_SERVER_SDK_DLL
+#  if defined(ORBIT_SERVER_SDK_NATIVE) && ORBIT_SERVER_SDK_NATIVE
+ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(orbit_server_manager);
+#  else
+ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(orbit_server_manager);
+#  endif
+#else
+ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(orbit_server_manager);
+#endif
+
+ORBIT_SERVER_SERVICE_API orbit_server_manager::orbit_server_manager() {}
+ORBIT_SERVER_SERVICE_API orbit_server_manager::~orbit_server_manager() {}
+
 ORBIT_SERVER_SERVICE_API int orbit_server_manager::init(uint64_t unique_id, uint64_t heartbeat_interval_sec) {
   server_identity_.set_unique_id(unique_id);
   server_identity_.set_server_node_id(logic_config::me()->get_local_server_id());
@@ -260,7 +273,7 @@ void orbit_server_manager::check_client_timeout() {
   }
 }
 
-client_info_ptr orbit_server_manager::get_client_info(std::string client_id) {
+client_info_ptr orbit_server_manager::get_client_info(const std::string& client_id) {
   auto iter = client_info_map_.find(client_id);
   if (iter == client_info_map_.end()) {
     return nullptr;

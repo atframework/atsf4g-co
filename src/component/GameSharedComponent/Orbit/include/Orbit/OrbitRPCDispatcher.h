@@ -2,11 +2,7 @@
 
 #include <Orbit/OrbitClientSdkTypes.h>
 
-#include <functional>
-#include <map>
-#include <memory>
-#include <string>
-#include <unordered_map>
+#include <design_pattern/singleton.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -17,6 +13,12 @@
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
+
+#include <functional>
+#include <map>
+#include <memory>
+#include <string>
+#include <unordered_map>
 
 namespace orbit {
 class OrbitRpcMessage;
@@ -39,38 +41,51 @@ struct task_action_maker_t : public task_action_maker_base_t {
   };
 };
 
-class ORBIT_CLIENT_SDK_API OrbitRPCDispatcher : public util::design_pattern::singleton<OrbitRPCDispatcher> {
+class OrbitRPCDispatcher {
   using msg_type_t = uint32_t;
   using task_action_creator_t = std::shared_ptr<task_action_maker_base_t>;
   using rpc_task_action_set_t = std::unordered_map<std::string, task_action_creator_t>;
 
   using rsp_callback_t = std::function<void(const orbit::OrbitRpcMessage &)>;
 
+#if defined(ORBIT_CLIENT_SDK_DLL) && ORBIT_CLIENT_SDK_DLL
+#  if defined(ORBIT_CLIENT_SDK_NATIVE) && ORBIT_CLIENT_SDK_NATIVE
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(OrbitRPCDispatcher)
+#  else
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(OrbitRPCDispatcher)
+#  endif
+#else
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(OrbitRPCDispatcher)
+#endif
+
+ private:
+  ORBIT_CLIENT_SDK_API OrbitRPCDispatcher();
+
  public:
-  OrbitRPCDispatcher();
+  ORBIT_CLIENT_SDK_API virtual ~OrbitRPCDispatcher();
 
-  void init();
-  void tick();
+  ORBIT_CLIENT_SDK_API void init();
+  ORBIT_CLIENT_SDK_API void tick();
 
-  bool check_rpc_success();
+  ORBIT_CLIENT_SDK_API bool check_rpc_success();
 
-  const std::string &pick_rpc_name(const orbit::OrbitRpcMessage &raw_msg);
+  ORBIT_CLIENT_SDK_API const std::string &pick_rpc_name(const orbit::OrbitRpcMessage &raw_msg);
 
-  int32_t dispatch(const std::string &message);
-  int32_t on_rpc_req_message(orbit::OrbitRpcMessage &orbit_msg);
-  int32_t on_rpc_rsp_message(orbit::OrbitRpcMessage &orbit_msg);
+  ORBIT_CLIENT_SDK_API int32_t dispatch(const std::string &message);
+  ORBIT_CLIENT_SDK_API int32_t on_rpc_req_message(orbit::OrbitRpcMessage &orbit_msg);
+  ORBIT_CLIENT_SDK_API int32_t on_rpc_rsp_message(orbit::OrbitRpcMessage &orbit_msg);
 
-  uint64_t allocate_sequence();
+  ORBIT_CLIENT_SDK_API uint64_t allocate_sequence();
 
   template <typename TAction>
-  inline task_action_creator_t make_task_creator() {
+  ATFW_UTIL_FORCEINLINE task_action_creator_t make_task_creator() {
     return std::make_shared<task_action_maker_t<TAction>>();
   }
 
-  int32_t init_rpc_req_callback(uint64_t sequence, time_t timeout, rsp_callback_t callback);
+  ORBIT_CLIENT_SDK_API int32_t init_rpc_req_callback(uint64_t sequence, time_t timeout, rsp_callback_t callback);
 
   template <typename TAction>
-  int register_action(const ::google::protobuf::ServiceDescriptor *service_desc, const std::string &rpc_name) {
+  ATFW_UTIL_SYMBOL_VISIBLE int register_action(const ::google::protobuf::ServiceDescriptor *service_desc, const std::string &rpc_name) {
     if (nullptr == service_desc) {
       return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
     }
@@ -92,17 +107,17 @@ class ORBIT_CLIENT_SDK_API OrbitRPCDispatcher : public util::design_pattern::sin
   }
 
  public:
-  int32_t send_rsp_to_proc(orbit::OrbitRpcMessage &orbit_msg);
-  int32_t send_req_to_proc(orbit::OrbitRpcMessage &orbit_msg, uint64_t &sequence,
+  ORBIT_CLIENT_SDK_API int32_t send_rsp_to_proc(orbit::OrbitRpcMessage &orbit_msg);
+  ORBIT_CLIENT_SDK_API int32_t send_req_to_proc(orbit::OrbitRpcMessage &orbit_msg, uint64_t &sequence,
                            const OrbitClientRequestOptions &request_options = OrbitClientRequestOptions{});
 
-  const std::string &get_empty_string() {
+  ATFW_UTIL_FORCEINLINE const std::string &get_empty_string() {
     static std::string ret;
     return ret;
   }
 
  private:
-  int _register_action(const std::string &rpc_full_name, task_action_creator_t action);
+  ORBIT_CLIENT_SDK_API int _register_action(const std::string &rpc_full_name, task_action_creator_t action);
   void on_create_task_failed(orbit::OrbitRpcMessage &orbit_msg, int32_t ret_code);
   void rsp_callback_execute();
 

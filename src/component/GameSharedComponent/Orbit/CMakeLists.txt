@@ -7,6 +7,10 @@ project_game_shared_component_declare_sdk(
   "${CMAKE_CURRENT_LIST_DIR}/include"
   DLLEXPORT_DECL
   ORBIT_CLIENT_SDK_API
+  SHARED_LIBRARY_DECL
+  ORBIT_CLIENT_SDK_DLL
+  NATIVE_CODE_DECL
+  ORBIT_CLIENT_SDK_NATIVE
   USE_COMPONENTS
   "orbit-client-protocol"
   HEADERS
