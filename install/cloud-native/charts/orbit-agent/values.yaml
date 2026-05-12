@@ -26,7 +26,7 @@ orbit_agent:
   tags:
     - "PVP"
     - "PVE"
-  configured_client_command_line: 'echo "hello world"'
+  configured_client_command_line: ..\..\orbit-auto-client\bin\orbit-auto-client.exe
   cpu_capacity: 1
   memory_capacity_mb: 1024
   server_identity_timeout_sec: 30

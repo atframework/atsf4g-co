@@ -433,13 +433,14 @@ void orbit_controller_manager::update_agent_load(const orbit::DAgentEtcdLoadReco
 
 // ===================== Agent 侧 handlers =====================
 rpc::result_code_type orbit_controller_manager::handle_notify_client_started(
-    rpc::context& ctx, const orbit::ATCNotifyClientStartedReq& request) {
+    rpc::context& ctx, const orbit::ATCNotifyClientStartedReq& request, orbit::CTANotifyClientStartedRsp& response) {
   const auto& identity = request.client_identity();
   const std::string& client_id_str = identity.client_id().client_id();
 
   if (client_id_str.empty()) {
     FWLOGERROR("orbit controller notify_client_started rejected: missing client_id");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   FWLOGINFO("orbit controller client {} started, addr={}", client_id_str, request.client_addr());
@@ -464,12 +465,13 @@ rpc::result_code_type orbit_controller_manager::handle_notify_client_started(
                request.server_identity().server_node_id(), rpc_result);
     RPC_RETURN_CODE(rpc_result);
   }
-
+  response.set_error_code(rsp->error_code());
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type orbit_controller_manager::handle_notify_client_exit(
-    rpc::context& ctx, const orbit::ATCNotifyClientExitReq& request) {
+rpc::result_code_type orbit_controller_manager::handle_notify_client_exit(rpc::context& ctx,
+                                                                          const orbit::ATCNotifyClientExitReq& request,
+                                                                          orbit::CTANotifyClientExitRsp& response) {
   const auto& identity = request.client_identity();
   const std::string& client_id_str = identity.client_id().client_id();
 
@@ -480,14 +482,16 @@ rpc::result_code_type orbit_controller_manager::handle_notify_client_exit(
   const uint64_t target_server_unique_id = request.server_identity().unique_id();
   if (0 == target_server_unique_id) {
     FWLOGWARNING("orbit controller forward_to_server for {}: no server_identity in request, dropped", client_id_str);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   auto server_node_id = request.server_identity().server_node_id();
   if (server_node_id == 0) {
     FWLOGWARNING("orbit controller forward_to_server for {}: server session {} not found, dropped", client_id_str,
                  target_server_unique_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   auto notify = rpc::make_shared_message<orbit::CTSClientEndReq>(ctx);
@@ -504,7 +508,7 @@ rpc::result_code_type orbit_controller_manager::handle_notify_client_exit(
                rpc_result);
     RPC_RETURN_CODE(rpc_result);
   }
-
+  response.set_error_code(rsp->error_code());
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
@@ -538,7 +542,8 @@ rpc::result_code_type orbit_controller_manager::handle_agent_heartbeat(rpc::cont
 }
 
 rpc::result_code_type orbit_controller_manager::handle_forward_to_server(rpc::context& ctx,
-                                                                         const orbit::ATCForwardToServerReq& request) {
+                                                                         const orbit::ATCForwardToServerReq& request,
+                                                                         orbit::CTAForwardToServerRsp& response) {
   const auto& identity = request.client_message().client_identity();
   const std::string& client_id_str = identity.client_id().client_id();
 
@@ -546,14 +551,16 @@ rpc::result_code_type orbit_controller_manager::handle_forward_to_server(rpc::co
   const uint64_t target_server_unique_id = request.server_identity().unique_id();
   if (0 == target_server_unique_id) {
     FWLOGWARNING("orbit controller forward_to_server for {}: no server_identity in request, dropped", client_id_str);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   auto server_node_id = request.server_identity().server_node_id();
   if (server_node_id == 0) {
     FWLOGWARNING("orbit controller forward_to_server for {}: server session {} not found, dropped", client_id_str,
                  target_server_unique_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   auto notify = rpc::make_shared_message<orbit::CTSForwardToServerReq>(ctx);
@@ -568,6 +575,7 @@ rpc::result_code_type orbit_controller_manager::handle_forward_to_server(rpc::co
     RPC_RETURN_CODE(rpc_result);
   }
 
+  response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
@@ -578,19 +586,22 @@ rpc::result_code_type orbit_controller_manager::handle_launch_client(
   const uint64_t server_unique_id = request.server_identity().unique_id();
   if (0 == server_unique_id) {
     FWLOGERROR("orbit controller launch_client rejected: server unique_id is 0");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   const std::string& client_id_str = request.args().client_start_args().client_id().client_id();
   if (client_id_str.empty()) {
     FWLOGERROR("orbit controller launch_client rejected: client_id is empty");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   uint64_t server_node_id = request.server_identity().server_node_id();
   if (server_node_id == 0) {
     FWLOGWARNING("orbit controller launch_client: server unique_id={} not connected", server_unique_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   const double expected_cpu = request.args().expected_cpu();
@@ -626,6 +637,7 @@ rpc::result_code_type orbit_controller_manager::handle_launch_client(
       } else {
         FWLOGERROR("orbit controller CTAStartClientReq failed for {} to agent {:#x}, res: {}", client_id_str,
                    agent.agent_server_id(), rpc_result);
+        response.set_error_code(rpc_result);
         RPC_RETURN_CODE(rpc_result);
       }
     } else {
@@ -635,11 +647,13 @@ rpc::result_code_type orbit_controller_manager::handle_launch_client(
     --retry_count;
   }
   FWLOGERROR("orbit controller launch_client: all candidate agents are overloaded for client_id={}", client_id_str);
-  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD);
+  response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD);
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 rpc::result_code_type orbit_controller_manager::handle_send_to_client(rpc::context& ctx,
-                                                                      const orbit::STCSendToClientReq& request) {
+                                                                      const orbit::STCSendToClientReq& request,
+                                                                      orbit::CTSSendToClientRsp& response) {
   const auto& identity = request.client_identity();
   const std::string& client_id_str = identity.client_id().client_id();
   const uint64_t agent_server_id = identity.agent_identity().agent_server_id();
@@ -657,7 +671,7 @@ rpc::result_code_type orbit_controller_manager::handle_send_to_client(rpc::conte
                agent_server_id, rpc_result);
     RPC_RETURN_CODE(rpc_result);
   }
-
+  response.set_error_code(rpc_result);
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 

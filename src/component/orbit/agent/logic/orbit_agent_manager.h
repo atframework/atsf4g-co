@@ -95,16 +95,17 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   // 来自Client
   // Client 启动
   EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_client_start(
-      rpc::context& ctx, uint64_t client_server_id, const orbit::DTAClientStartReq& request);
+      rpc::context& ctx, uint64_t client_server_id, const orbit::DTAClientStartReq& request,
+      orbit::ATDClientStartRsp& response);
   // Client 心跳
   EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_client_heartbeat(
       rpc::context& ctx, const orbit::DTAClientHeartbeatNotify& request);
   // 转发至 Server
   EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_send_to_server(
-      rpc::context& ctx, const orbit::DTASendToServerReq& request);
+      rpc::context& ctx, const orbit::DTASendToServerReq& request, orbit::ATDSendToServerRsp& response);
   // Client 退出
   EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_client_exit(
-      rpc::context& ctx, const orbit::DTAClientExitReq& request);
+      rpc::context& ctx, const orbit::DTAClientExitReq& request, orbit::ATDClientExitRsp& response);
 
   void on_client_process_exit(const std::string& client_id, int64_t exit_status, int term_signal);
   uint64_t select_controller_server_id(const std::string& client_id) const;

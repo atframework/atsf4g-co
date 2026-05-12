@@ -472,7 +472,8 @@ rpc::result_code_type orbit_agent_manager::handle_forward_to_client(
   const std::string& client_id = request.client_id().client_id();
   if (client_id.empty()) {
     FWLOGERROR("orbit agent forward_to_client rejected: missing client_id");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   auto client_record = find_client(client_id);
@@ -481,7 +482,8 @@ rpc::result_code_type orbit_agent_manager::handle_forward_to_client(
                  nullptr != client_record ? client_record->client_server_id : 0,
                  nullptr != client_record ? static_cast<int>(client_record->state)
                                           : static_cast<int>(orbit::EN_CLIENT_STATE_UNSPECIFIED));
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   auto notify_request = rpc::make_shared_message<orbit::ATDForwardToClientReq>(ctx);
@@ -495,7 +497,7 @@ rpc::result_code_type orbit_agent_manager::handle_forward_to_client(
                client_record->client_server_id, rpc_result);
     RPC_RETURN_CODE(rpc_result);
   }
-
+  response.set_error_code(rsp->error_code());
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
@@ -582,23 +584,27 @@ void orbit_agent_manager::check_server_identity_timeouts(time_t now) {
 }
 
 rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx, uint64_t client_server_id,
-                                                               const orbit::DTAClientStartReq& request) {
+                                                               const orbit::DTAClientStartReq& request,
+                                                               orbit::ATDClientStartRsp& response) {
   const std::string& client_id = request.client_id().client_id();
   if (client_id.empty()) {
     FWLOGERROR("orbit agent client_start rejected: missing client_id");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   auto client_record = find_client(client_id);
   if (nullptr == client_record) {
     FWLOGERROR("orbit agent client_start rejected: client_id {} not found in records", client_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   if (client_record->state != orbit::EN_CLIENT_STATE_STARTING) {
     FWLOGWARNING("orbit agent client_start ignored for {}: invalid state {}, expected STARTING", client_id,
                  static_cast<int>(client_record->state));
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_STATE_INVALID);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_STATE_INVALID);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   client_record->state = orbit::EN_CLIENT_STATE_RUNNING;
@@ -610,7 +616,8 @@ rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx
   if (identity == nullptr) {
     FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
                client_id, client_record->server_unique_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_SERVER_NOT_FOUND);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_SERVER_NOT_FOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   auto notify_request = rpc::make_shared_message<orbit::ATCNotifyClientStartedReq>(ctx);
@@ -629,7 +636,7 @@ rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx
                controller_server_id, rpc_result);
     RPC_RETURN_CODE(rpc_result);
   }
-
+  response.set_error_code(rsp->error_code());
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
@@ -654,23 +661,27 @@ rpc::result_code_type orbit_agent_manager::handle_client_heartbeat(ATFW_EXPLICIT
 }
 
 rpc::result_code_type orbit_agent_manager::handle_send_to_server(rpc::context& ctx,
-                                                                 const orbit::DTASendToServerReq& request) {
+                                                                 const orbit::DTASendToServerReq& request,
+                                                                 orbit::ATDSendToServerRsp& response) {
   const std::string& client_id = request.client_id().client_id();
   if (client_id.empty()) {
     FWLOGERROR("orbit agent send_to_server rejected: missing client_id");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   auto client_record = find_client(client_id);
   if (nullptr == client_record) {
     FWLOGERROR("orbit agent send_to_server rejected: client_id {} not found in records", client_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   if (client_record->state != orbit::EN_CLIENT_STATE_RUNNING) {
     FWLOGWARNING("orbit agent client_start ignored for {}: invalid state {}, expected RUNNING", client_id,
                  static_cast<int>(client_record->state));
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_STATE_INVALID);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_STATE_INVALID);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   client_record->last_heartbeat_timepoint = util::time::time_utility::get_sys_now();
@@ -679,7 +690,8 @@ rpc::result_code_type orbit_agent_manager::handle_send_to_server(rpc::context& c
   if (identity == nullptr) {
     FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
                client_id, client_record->server_unique_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_SERVER_NOT_FOUND);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_SERVER_NOT_FOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   auto forward_request = rpc::make_shared_message<orbit::ATCForwardToServerReq>(ctx);
@@ -699,22 +711,24 @@ rpc::result_code_type orbit_agent_manager::handle_send_to_server(rpc::context& c
                controller_server_id, rpc_result);
     RPC_RETURN_CODE(rpc_result);
   }
-
+  response.set_error_code(rsp->error_code());
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type orbit_agent_manager::handle_client_exit(rpc::context& ctx,
-                                                              const orbit::DTAClientExitReq& request) {
+rpc::result_code_type orbit_agent_manager::handle_client_exit(rpc::context& ctx, const orbit::DTAClientExitReq& request,
+                                                              orbit::ATDClientExitRsp& response) {
   const std::string& client_id = request.client_id().client_id();
   if (client_id.empty()) {
     FWLOGERROR("orbit agent client_exit rejected: missing client_id");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   auto client_record = find_client(client_id);
   if (nullptr == client_record) {
     FWLOGERROR("orbit agent handle_client_exit rejected: client_id {} not found in records", client_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   if (client_record->state != orbit::EN_CLIENT_STATE_RUNNING) {
@@ -729,7 +743,8 @@ rpc::result_code_type orbit_agent_manager::handle_client_exit(rpc::context& ctx,
   if (identity == nullptr) {
     FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
                client_id, client_record->server_unique_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_SERVER_NOT_FOUND);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_SERVER_NOT_FOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   auto notify_request = rpc::make_shared_message<orbit::ATCNotifyClientExitReq>(ctx);
@@ -749,7 +764,7 @@ rpc::result_code_type orbit_agent_manager::handle_client_exit(rpc::context& ctx,
                controller_server_id, rpc_result);
     RPC_RETURN_CODE(rpc_result);
   }
-
+  response.set_error_code(rsp->error_code());
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 

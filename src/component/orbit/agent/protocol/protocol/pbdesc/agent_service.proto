@@ -48,7 +48,9 @@ message CTAForwardToClientReq {
   DClientId client_id = 2;
   bytes payload = 3;
 }
-message ATCForwardToClientRsp {}
+message ATCForwardToClientRsp {
+  int32 error_code = 1;
+}
 
 message CTAServerHeartbeatReq {
   DServerIdentity server_identity = 1;

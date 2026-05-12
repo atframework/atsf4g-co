@@ -31,12 +31,16 @@ service AgentToClientService {
 message ATDForwardToClientReq {
   bytes payload = 1;
 }
-message DTAForwardToClientRsp {}
+message DTAForwardToClientRsp {
+  int32 error_code = 1;
+}
 
 message ATDForkSeedClientReq {
   DClientStartArgs start_args = 1;
 }
-message DTAForkSeedClientRsp {}
+message DTAForkSeedClientRsp {
+  int32 error_code = 1;
+}
 
 /////////////// Client -> Agent ///////////////
 service ClientToAgentService {
@@ -75,14 +79,18 @@ message DTASendToServerReq {
   DClientId client_id = 1;
   bytes payload = 2;
 }
-message ATDSendToServerRsp {}
+message ATDSendToServerRsp {
+  int32 error_code = 1;
+}
 
 message DTAClientStartReq {
   DClientId client_id = 1;
   string client_addr = 2;
   bytes custom_data = 3;
 }
-message ATDClientStartRsp {}
+message ATDClientStartRsp {
+  int32 error_code = 1;
+}
 
 message DTAClientExitReq {
   DClientId client_id = 1;
@@ -91,4 +99,6 @@ message DTAClientExitReq {
   bytes custom_data = 12;
   int32 exit_code = 13;
 }
-message ATDClientExitRsp {}
+message ATDClientExitRsp {
+  int32 error_code = 1;
+}

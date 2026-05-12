@@ -37,10 +37,10 @@ ORBIT_CONTROLLER_SERVICE_API const char* task_action_forward_to_server::name() c
 
 ORBIT_CONTROLLER_SERVICE_API task_action_forward_to_server::result_type task_action_forward_to_server::operator()() {
   const rpc_request_type& req_body = get_request_body();
-  // rpc_response_type& rsp_body = get_response_body();
+  rpc_response_type& rsp_body = get_response_body();
 
   TASK_ACTION_RETURN_CODE(
-      RPC_AWAIT_CODE_RESULT(orbit_controller_manager::me()->handle_forward_to_server(get_shared_context(), req_body)));
+      RPC_AWAIT_CODE_RESULT(orbit_controller_manager::me()->handle_forward_to_server(get_shared_context(), req_body, rsp_body)));
 }
 
 ORBIT_CONTROLLER_SERVICE_API int task_action_forward_to_server::on_success() { return get_result(); }

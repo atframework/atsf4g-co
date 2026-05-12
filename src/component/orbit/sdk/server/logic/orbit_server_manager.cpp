@@ -22,27 +22,27 @@
 #include <rpc/rpc_utils.h>
 #include <rpc/servertocontrollerservice/servertocontrollerservice.h>
 
-int orbit_server_manager::init(uint64_t unique_id, uint64_t heartbeat_interval_sec) {
+ORBIT_SERVER_SERVICE_API int orbit_server_manager::init(uint64_t unique_id, uint64_t heartbeat_interval_sec) {
   server_identity_.set_unique_id(unique_id);
   server_identity_.set_server_node_id(logic_config::me()->get_local_server_id());
   heartbeat_interval_sec_ = heartbeat_interval_sec;
   if (heartbeat_interval_sec_ <= 0) {
     heartbeat_interval_sec_ = 5;
   }
-  client_timeout_sec_ = 60; // 保底时间
+  client_timeout_sec_ = 60;  // 保底时间
 
   INIT_CALL_FN(handle::controllertoserverservice::register_handles_for_controllertoserverservice);
   return 0;
 }
 
-void orbit_server_manager::stop() {}
+ORBIT_SERVER_SERVICE_API void orbit_server_manager::stop() {}
 
-void orbit_server_manager::tick() {
+ORBIT_SERVER_SERVICE_API void orbit_server_manager::tick() {
   server_heartbeat();
   check_client_timeout();
 }
 
-rpc::result_code_type orbit_server_manager::start_client(
+ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::start_client(
     rpc::context& ctx, const std::string& region, const orbit::DAgentClientStartArgs& args,
     const google::protobuf::RepeatedPtrField<std::string>& match_tags) {
   const std::string& client_id = args.client_start_args().client_id().client_id();
@@ -74,7 +74,10 @@ rpc::result_code_type orbit_server_manager::start_client(
 
   int32_t rpc_result =
       RPC_AWAIT_CODE_RESULT(rpc::servertocontrollerservice::launch_client(ctx, controller_server_id, *req, *rsp));
-  if (rpc_result < 0) {
+  if (rpc_result == 0) {
+    rpc_result = rsp->error_code();
+  }
+  if (rpc_result != 0) {
     FWLOGERROR("orbit launch_client failed for {} to controller {:#x}, res: {}", client_id, controller_server_id,
                rpc_result);
     client_info_ptr_->status = EnClientStatus::EN_CLIENT_STATUS_EXITED;
@@ -86,8 +89,9 @@ rpc::result_code_type orbit_server_manager::start_client(
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-int32_t orbit_server_manager::send_to_client_no_wait(rpc::context& ctx, const std::string& client_id,
-                                                     const void* msg_data, size_t msg_size) {
+ORBIT_SERVER_SERVICE_API int32_t orbit_server_manager::send_to_client_no_wait(rpc::context& ctx,
+                                                                              const std::string& client_id,
+                                                                              const void* msg_data, size_t msg_size) {
   auto client_info_ptr_ = get_client_info(client_id);
   if (client_info_ptr_ == nullptr) {
     FWLOGERROR("failed to find client info for client identity {}", client_id);
@@ -147,8 +151,10 @@ int32_t orbit_server_manager::send_to_client_no_wait(rpc::context& ctx, const st
   return res;
 }
 
-rpc::result_code_type orbit_server_manager::send_to_client(rpc::context& ctx, const std::string& client_id,
-                                                           const void* msg_data, size_t msg_size) {
+ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::send_to_client(rpc::context& ctx,
+                                                                                    const std::string& client_id,
+                                                                                    const void* msg_data,
+                                                                                    size_t msg_size) {
   auto client_info_ptr_ = get_client_info(client_id);
   if (client_info_ptr_ == nullptr) {
     FWLOGERROR("failed to find client info for client identity {}", client_id);
@@ -174,8 +180,12 @@ rpc::result_code_type orbit_server_manager::send_to_client(rpc::context& ctx, co
   *req->mutable_client_identity() = client_info_ptr_->client_identity;
   *req->mutable_payload() = std::string(static_cast<const char*>(msg_data), msg_size);
 
-  RPC_RETURN_CODE(
-      RPC_AWAIT_CODE_RESULT(rpc::servertocontrollerservice::send_to_client(ctx, controller_server_id, *req, *rsp)));
+  int32_t rpc_result =
+      RPC_AWAIT_CODE_RESULT(rpc::servertocontrollerservice::send_to_client(ctx, controller_server_id, *req, *rsp));
+  if (rpc_result == 0) {
+    rpc_result = rsp->error_code();
+  }
+  RPC_RETURN_CODE(rpc_result);
 }
 
 void orbit_server_manager::server_heartbeat() {
@@ -326,8 +336,8 @@ uint64_t orbit_server_manager::select_controller_server_id(const std::string& re
   return selected->get_discovery_info().id();
 }
 
-rpc::result_code_type orbit_server_manager::handle_forward_to_server(rpc::context& ctx,
-                                                                     const orbit::CTSForwardToServerReq& req) {
+ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::handle_forward_to_server(
+    rpc::context& ctx, const orbit::CTSForwardToServerReq& req) {
   const std::string& client_id = req.client_message().client_identity().client_id().client_id();
   auto client_info_ptr_ = get_client_info(client_id);
   if (client_info_ptr_ == nullptr) {
@@ -345,8 +355,8 @@ rpc::result_code_type orbit_server_manager::handle_forward_to_server(rpc::contex
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type orbit_server_manager::handle_client_start_notify(rpc::context& ctx,
-                                                                       const orbit::CTSClientStartReq& req) {
+ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::handle_client_start_notify(
+    rpc::context& ctx, const orbit::CTSClientStartReq& req) {
   const std::string& client_id = req.client_identity().client_id().client_id();
   auto client_info_ptr_ = get_client_info(client_id);
   if (client_info_ptr_ == nullptr) {
@@ -366,8 +376,8 @@ rpc::result_code_type orbit_server_manager::handle_client_start_notify(rpc::cont
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type orbit_server_manager::handle_client_end_notify(rpc::context& ctx,
-                                                                     const orbit::CTSClientEndReq& req) {
+ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::handle_client_end_notify(
+    rpc::context& ctx, const orbit::CTSClientEndReq& req) {
   const std::string& client_id = req.client_identity().client_id().client_id();
   auto client_info_ptr_ = get_client_info(client_id);
   if (client_info_ptr_ == nullptr) {
@@ -383,7 +393,7 @@ rpc::result_code_type orbit_server_manager::handle_client_end_notify(rpc::contex
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type orbit_server_manager::handle_client_agent_heartbeat_notify(
+ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::handle_client_agent_heartbeat_notify(
     ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx, const orbit::CTSClientAgentHeartbeatNotify& req) {
   for (const auto& client_id : req.client_ids()) {
     const std::string& id = client_id.client_id();

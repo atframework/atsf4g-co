@@ -35,10 +35,10 @@ ORBIT_AGENT_SERVICE_API const char* task_action_client_start::name() const { ret
 
 ORBIT_AGENT_SERVICE_API task_action_client_start::result_type task_action_client_start::operator()() {
   const rpc_request_type& req_body = get_request_body();
-  // rpc_response_type& rsp_body = get_response_body();
+  rpc_response_type& rsp_body = get_response_body();
 
   TASK_ACTION_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-      orbit_agent_manager::me()->handle_client_start(get_shared_context(), get_request_node_id(), req_body)));
+      orbit_agent_manager::me()->handle_client_start(get_shared_context(), get_request_node_id(), req_body, rsp_body)));
 }
 
 ORBIT_AGENT_SERVICE_API int task_action_client_start::on_success() { return get_result(); }

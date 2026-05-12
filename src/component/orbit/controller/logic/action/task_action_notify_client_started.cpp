@@ -38,10 +38,10 @@ ORBIT_CONTROLLER_SERVICE_API const char* task_action_notify_client_started::name
 ORBIT_CONTROLLER_SERVICE_API task_action_notify_client_started::result_type
 task_action_notify_client_started::operator()() {
   const rpc_request_type& req_body = get_request_body();
-  // rpc_response_type& rsp_body = get_response_body();
+  rpc_response_type& rsp_body = get_response_body();
 
   TASK_ACTION_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-      orbit_controller_manager::me()->handle_notify_client_started(get_shared_context(), req_body)));
+      orbit_controller_manager::me()->handle_notify_client_started(get_shared_context(), req_body, rsp_body)));
 }
 
 ORBIT_CONTROLLER_SERVICE_API int task_action_notify_client_started::on_success() { return get_result(); }

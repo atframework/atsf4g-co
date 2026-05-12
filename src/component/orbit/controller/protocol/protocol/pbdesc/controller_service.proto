@@ -45,7 +45,9 @@ message ATCNotifyClientStartedReq {
   string client_addr = 3;
   bytes custom_data = 4;
 }
-message CTANotifyClientStartedRsp {}
+message CTANotifyClientStartedRsp {
+  int32 error_code = 1;
+}
 
 message ATCNotifyClientExitReq {
   DServerIdentity server_identity = 1;
@@ -56,14 +58,18 @@ message ATCNotifyClientExitReq {
   bytes custom_data = 12;
   int32 exit_code = 13;
 }
-message CTANotifyClientExitRsp {}
+message CTANotifyClientExitRsp {
+  int32 error_code = 1;
+}
 
 message ATCForwardToServerReq {
   DServerIdentity server_identity = 1;
 
   DClientMessage client_message = 2;
 }
-message CTAForwardToServerRsp {}
+message CTAForwardToServerRsp {
+  int32 error_code = 1;
+}
 
 message ATCAgentHeartbeatReq {
   DServerIdentity server_identity = 1;

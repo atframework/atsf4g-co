@@ -114,7 +114,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_orbit_rpc_base : public task_action_o
         request_body_(nullptr),
         response_body_(nullptr) {}
 
-  rpc_request_type &get_request_body() {
+  ATFW_UTIL_SYMBOL_VISIBLE rpc_request_type &get_request_body() {
     if (!has_unpack_request_) {
       unpack_request();
     }
@@ -128,7 +128,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_orbit_rpc_base : public task_action_o
     return *request_body_;
   }
 
-  rpc_response_type &get_response_body() {
+  ATFW_UTIL_SYMBOL_VISIBLE rpc_response_type &get_response_body() {
     if (nullptr == response_body_) {
       response_body_ = create_message_at_task_arena<rpc_response_type>();
     }
@@ -142,18 +142,18 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_orbit_rpc_base : public task_action_o
     return *response_body_;
   }
 
-  ORBIT_SERVER_SERVICE_API atfw::util::nostd::string_view get_request_type_url() const noexcept override {
+  ATFW_UTIL_FORCEINLINE atfw::util::nostd::string_view get_request_type_url() const noexcept override {
     decltype(auto) full_name = rpc_request_type::descriptor()->full_name();
     return {atfw::util::nostd::data(full_name), atfw::util::nostd::size(full_name)};
   }
 
-  ORBIT_SERVER_SERVICE_API atfw::util::nostd::string_view get_response_type_url() const noexcept override {
+  ATFW_UTIL_FORCEINLINE atfw::util::nostd::string_view get_response_type_url() const noexcept override {
     decltype(auto) full_name = rpc_response_type::descriptor()->full_name();
     return {atfw::util::nostd::data(full_name), atfw::util::nostd::size(full_name)};
   }
 
  protected:
-  void send_response() override {
+  ATFW_UTIL_SYMBOL_VISIBLE void send_response() override {
     if (!is_stream_rpc() && !has_response_message() && is_response_message_enabled()) {
       pack_response();
     }

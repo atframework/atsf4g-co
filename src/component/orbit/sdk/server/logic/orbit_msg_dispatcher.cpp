@@ -25,8 +25,8 @@ rpc::result_code_type on_receive_orbit_message(rpc::context &ctx, std::string cl
 }
 }  // namespace
 
-#if defined(ORBIT_MASTER_SDK_DLL) && ORBIT_MASTER_SDK_DLL
-#  if defined(ORBIT_MASTER_SDK_NATIVE) && ORBIT_MASTER_SDK_NATIVE
+#if defined(ORBIT_SERVER_SDK_DLL) && ORBIT_SERVER_SDK_DLL
+#  if defined(ORBIT_SERVER_SDK_NATIVE) && ORBIT_SERVER_SDK_NATIVE
 ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(orbit_msg_dispatcher);
 #  else
 ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(orbit_msg_dispatcher);
@@ -244,8 +244,9 @@ ORBIT_SERVER_SERVICE_API int32_t orbit_msg_dispatcher::send_to_client_no_wait(rp
   return res;
 }
 
-rpc::result_code_type orbit_msg_dispatcher::send_to_client(rpc::context &ctx, const std::string &client_id,
-                                                           orbit::OrbitRpcMessage &orbit_msg) {
+ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_msg_dispatcher::send_to_client(rpc::context &ctx,
+                                                                                    const std::string &client_id,
+                                                                                    orbit::OrbitRpcMessage &orbit_msg) {
   atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("module not attached to a atapp, maybe not initialized or already closed");

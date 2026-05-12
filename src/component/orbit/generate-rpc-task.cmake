@@ -80,7 +80,7 @@ generate_for_pb_add_ss_service(
   SERVICE_DLLEXPORT_DECL
   ORBIT_SERVER_SERVICE_API
   RPC_DLLEXPORT_DECL
-  ORBIT_MASTER_SDK_API
+  ORBIT_SERVER_SDK_API
   INCLUDE_HEADERS
   "protocol/pbdesc/server_service.pb.h")
 

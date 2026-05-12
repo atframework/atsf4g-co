@@ -44,7 +44,9 @@ service ControllerToServerService {
 message CTSForwardToServerReq {
   DClientMessage client_message = 1;
 }
-message STCForwardToServerRsp {}
+message STCForwardToServerRsp {
+  int32 error_code = 1;
+}
 
 message CTSClientStartReq {
   DClientIdentity client_identity = 1;
@@ -52,7 +54,9 @@ message CTSClientStartReq {
   string client_addr = 2;
   bytes data = 3;
 }
-message STCClientStartRsp {}
+message STCClientStartRsp {
+  int32 error_code = 1;
+}
 
 message CTSClientEndReq {
   DClientIdentity client_identity = 1;
@@ -61,7 +65,9 @@ message CTSClientEndReq {
   bytes exit_data = 12;
   int32 exit_code = 13;
 }
-message STCClientEndRsp {}
+message STCClientEndRsp {
+  int32 error_code = 1;
+}
 
 message CTSClientAgentHeartbeatNotify {
   DAgentIdentity agent_identity = 1;
@@ -94,7 +100,9 @@ message STCLaunchClientReq {
   DAgentClientStartArgs args = 2;
   repeated string match_tags = 3;
 }
-message CTSLaunchClientRsp {}
+message CTSLaunchClientRsp {
+  int32 error_code = 1;
+}
 
 message STCSendToClientReq {
   DServerIdentity server_identity = 1;
@@ -102,7 +110,9 @@ message STCSendToClientReq {
   DClientIdentity client_identity = 2;
   bytes payload = 3;
 }
-message CTSSendToClientRsp {}
+message CTSSendToClientRsp {
+  int32 error_code = 1;
+}
 
 message STCServerHeartbeatNotify {
   DServerIdentity server_identity = 1;

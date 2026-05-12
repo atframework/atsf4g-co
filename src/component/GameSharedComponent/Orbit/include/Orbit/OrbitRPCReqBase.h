@@ -63,17 +63,21 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_orbit_rpc_base : public task_action_o
   explicit task_action_orbit_rpc_base(msg_type&& msg)
       : base_type(std::move(msg)), has_unpack_request_(false), has_pack_response_(false) {}
 
-  rpc_request_type& get_request_body() {
+  ATFW_UTIL_FORCEINLINE rpc_request_type& get_request_body() {
     if (!has_unpack_request_) {
       unpack_request();
     }
     return request_body_;
   }
 
-  rpc_response_type& get_response_body() { return response_body_; }
+  ATFW_UTIL_FORCEINLINE rpc_response_type& get_response_body() { return response_body_; }
 
-  static gsl::string_view get_request_type_url() { return rpc_request_type::descriptor()->full_name(); }
-  static gsl::string_view get_response_type_url() { return rpc_response_type::descriptor()->full_name(); }
+  ATFW_UTIL_FORCEINLINE static gsl::string_view get_request_type_url() {
+    return rpc_request_type::descriptor()->full_name();
+  }
+  ATFW_UTIL_FORCEINLINE static gsl::string_view get_response_type_url() {
+    return rpc_response_type::descriptor()->full_name();
+  }
 
   virtual bool is_stream_rpc() const { return get_request().head().has_rpc_stream(); }
 

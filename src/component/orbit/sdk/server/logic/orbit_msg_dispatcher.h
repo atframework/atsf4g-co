@@ -26,8 +26,8 @@ class orbit_msg_dispatcher : public dispatcher_implement {
  public:
   using msg_raw_t = dispatcher_implement::msg_raw_t;
 
-#if defined(ORBIT_MASTER_SDK_DLL) && ORBIT_MASTER_SDK_DLL
-#  if defined(ORBIT_MASTER_SDK_NATIVE) && ORBIT_MASTER_SDK_NATIVE
+#if defined(ORBIT_SERVER_SDK_DLL) && ORBIT_SERVER_SDK_DLL
+#  if defined(ORBIT_SERVER_SDK_NATIVE) && ORBIT_SERVER_SDK_NATIVE
   ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(orbit_msg_dispatcher)
 #  else
   ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(orbit_msg_dispatcher)

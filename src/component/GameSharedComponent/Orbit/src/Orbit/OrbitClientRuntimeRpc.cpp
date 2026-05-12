@@ -490,6 +490,7 @@ int32_t OrbitClientRuntime::dispatch_request_response(const atframework::SSMsg& 
   }
 
   int32_t error_code = message.head().error_code();
+  // Head内的错误都认为RPC调用失败 非逻辑失败 需要重试
   if (error_code != orbit::EN_ORBIT_ERROR_CODE_SUCCESS &&
       retry_pending_request(task_id, pending_iter->second, error_code, "rpc response error")) {
     return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;

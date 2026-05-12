@@ -55,11 +55,11 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
   // ---- 来自 Agent ----
   // Client 已启动（Agent 上报）
   EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_notify_client_started(
-      rpc::context& ctx, const orbit::ATCNotifyClientStartedReq& request);
+      rpc::context& ctx, const orbit::ATCNotifyClientStartedReq& request, orbit::CTANotifyClientStartedRsp& response);
 
   // Client 已退出（Agent 上报）
   EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_notify_client_exit(
-      rpc::context& ctx, const orbit::ATCNotifyClientExitReq& request);
+      rpc::context& ctx, const orbit::ATCNotifyClientExitReq& request, orbit::CTANotifyClientExitRsp& response);
 
   // Agent 心跳（Agent 上报）
   EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_agent_heartbeat(
@@ -67,7 +67,7 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
 
   // Client 发送消息至 Server（Agent 转发）
   EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_forward_to_server(
-      rpc::context& ctx, const orbit::ATCForwardToServerReq& request);
+      rpc::context& ctx, const orbit::ATCForwardToServerReq& request, orbit::CTAForwardToServerRsp& response);
 
   // ---- 来自 Server ----
   // Server 请求启动 Client
@@ -76,7 +76,7 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
 
   // Server 发送消息至 Client（下行转发）
   EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_send_to_client(
-      rpc::context& ctx, const orbit::STCSendToClientReq& request);
+      rpc::context& ctx, const orbit::STCSendToClientReq& request, orbit::CTSSendToClientRsp& response);
 
   // Server 心跳
   EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_server_heartbeat(

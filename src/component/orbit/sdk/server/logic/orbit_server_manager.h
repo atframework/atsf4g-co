@@ -70,9 +70,9 @@ using on_client_end_notify_fn =
 
 class orbit_server_manager : public util::design_pattern::singleton<orbit_server_manager> {
  public:
-  int init(uint64_t unique_id, uint64_t heartbeat_interval_sec);
-  void stop();
-  void tick();
+  ORBIT_SERVER_SERVICE_API int init(uint64_t unique_id, uint64_t heartbeat_interval_sec);
+  ORBIT_SERVER_SERVICE_API void stop();
+  ORBIT_SERVER_SERVICE_API void tick();
 
  public:
   // 启动Client
@@ -89,9 +89,15 @@ class orbit_server_manager : public util::design_pattern::singleton<orbit_server
                                                                                         const void* msg_data,
                                                                                         size_t msg_size);
   // 存在默认RPC实现
-  void set_on_forward_to_server(on_forward_to_server_fn fn) { on_forward_to_server_ = std::move(fn); }
-  void set_on_client_start_notify(on_client_start_notify_fn fn) { on_client_start_notify_ = std::move(fn); }
-  void set_on_client_end_notify(on_client_end_notify_fn fn) { on_client_end_notify_ = std::move(fn); }
+  ATFW_UTIL_FORCEINLINE void set_on_forward_to_server(on_forward_to_server_fn fn) {
+    on_forward_to_server_ = std::move(fn);
+  }
+  ATFW_UTIL_FORCEINLINE void set_on_client_start_notify(on_client_start_notify_fn fn) {
+    on_client_start_notify_ = std::move(fn);
+  }
+  ATFW_UTIL_FORCEINLINE void set_on_client_end_notify(on_client_end_notify_fn fn) {
+    on_client_end_notify_ = std::move(fn);
+  }
 
  public:
   // SDK 内部使用
