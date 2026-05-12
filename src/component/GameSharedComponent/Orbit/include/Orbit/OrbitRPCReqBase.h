@@ -10,6 +10,10 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <Orbit/OrbitClientRuntime.h>
+#include <Orbit/OrbitConfig.h>
+
+
 #include <list>
 #include <memory>
 #include <string>

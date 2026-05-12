@@ -14,6 +14,8 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <Orbit/OrbitConfig.h>
+
 #include <functional>
 #include <map>
 #include <memory>
@@ -85,7 +87,8 @@ class OrbitRPCDispatcher {
   ORBIT_CLIENT_SDK_API int32_t init_rpc_req_callback(uint64_t sequence, time_t timeout, rsp_callback_t callback);
 
   template <typename TAction>
-  ATFW_UTIL_SYMBOL_VISIBLE int register_action(const ::google::protobuf::ServiceDescriptor *service_desc, const std::string &rpc_name) {
+  ATFW_UTIL_SYMBOL_VISIBLE int register_action(const ::google::protobuf::ServiceDescriptor *service_desc,
+                                               const std::string &rpc_name) {
     if (nullptr == service_desc) {
       return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
     }
@@ -108,8 +111,9 @@ class OrbitRPCDispatcher {
 
  public:
   ORBIT_CLIENT_SDK_API int32_t send_rsp_to_proc(orbit::OrbitRpcMessage &orbit_msg);
-  ORBIT_CLIENT_SDK_API int32_t send_req_to_proc(orbit::OrbitRpcMessage &orbit_msg, uint64_t &sequence,
-                           const OrbitClientRequestOptions &request_options = OrbitClientRequestOptions{});
+  ORBIT_CLIENT_SDK_API int32_t
+  send_req_to_proc(orbit::OrbitRpcMessage &orbit_msg, uint64_t &sequence,
+                   const OrbitClientRequestOptions &request_options = OrbitClientRequestOptions{});
 
   ATFW_UTIL_FORCEINLINE const std::string &get_empty_string() {
     static std::string ret;

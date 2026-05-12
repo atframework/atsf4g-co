@@ -9,7 +9,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
-#include <protocol/pbdesc/svr.const.pb.h>
+#include <google/protobuf/text_format.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
@@ -143,9 +143,7 @@ int apply_config_env_overrides(const OrbitClientOptions& options) {
 }
 
 uint64_t make_initial_sequence_allocator() {
-  return static_cast<uint64_t>(
-             (::util::time::time_utility::get_sys_now() - PROJECT_NAMESPACE_ID::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET)
-             << 23) +
+  return static_cast<uint64_t>((::util::time::time_utility::get_sys_now() - 1577836800) << 23) +
          static_cast<uint64_t>(::util::time::time_utility::get_now_usec() << 3);
 }
 

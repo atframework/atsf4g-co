@@ -1,16 +1,7 @@
 #include <Orbit/OrbitRPCReqBase.h>
 
 #include <Orbit/OrbitClientRuntime.h>
-
-// clang-format off
-#include <config/compiler/protobuf_prefix.h>
-// clang-format on
-
-#include <protocol/pbdesc/com.const.pb.h>
-
-// clang-format off
-#include <config/compiler/protobuf_suffix.h>
-// clang-format on
+#include <Orbit/OrbitRPCDispatcher.h>
 
 #include <sstream>
 

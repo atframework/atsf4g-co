@@ -1,5 +1,6 @@
 // Copyright 2026 atframework
 #include <Orbit/OrbitClientRuntime.h>
+#include <Orbit/OrbitRPCDispatcher.h>
 
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/message_lite.h>
@@ -383,7 +384,7 @@ int32_t OrbitClientRuntime::pack_response_message(const ::atframework::SSMsgHead
   }
 
   if (req_head.has_rpc_trace()) {
-    protobuf_copy_message(*head->mutable_rpc_trace(), req_head.rpc_trace());
+    *head->mutable_rpc_trace() = req_head.rpc_trace();
   }
   head->set_timestamp(get_now_seconds());
   head->set_sequence(req_head.sequence());
