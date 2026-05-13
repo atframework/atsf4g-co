@@ -104,19 +104,21 @@ static inline time_t __get_rpc_wait_timeout(const OrbitClientRequestOptions& req
 
 }  // namespace
 
-template <class req_type, class rsp_type>
+template <class orbit_rpc_req_type, class orbit_rpc_rsp_type>
 int ATFW_UTIL_SYMBOL_VISIBLE orbit_rpc_handle(const std::string& rpc_name, const std::string& service_name,
-                                              const req_type& req_body,
-                                              std::function<void(int32_t, const rsp_type&)> callback,
+                                              const orbit_rpc_req_type& req_body,
+                                              std::function<void(int32_t, const orbit_rpc_rsp_type&)> callback,
                                               int32_t retry_time) {
   orbit::OrbitRpcMessage req_msg;
   std::string rpc_full_name = service_name + "." + rpc_name;
   OrbitClientRequestOptions request_options = __make_rpc_request_options(retry_time);
-  int32_t res = __setup_rpc_request_header(*req_msg.mutable_head(), rpc_full_name, req_type::descriptor()->full_name());
+  int32_t res =
+      __setup_rpc_request_header(*req_msg.mutable_head(), rpc_full_name, orbit_rpc_req_type::descriptor()->full_name());
   if (res < 0) {
     return res;
   }
-  res = __pack_rpc_body(req_body, req_msg.mutable_body_bin(), rpc_full_name, req_type::descriptor()->full_name());
+  res = __pack_rpc_body(req_body, req_msg.mutable_body_bin(), rpc_full_name,
+                        orbit_rpc_req_type::descriptor()->full_name());
   if (res < 0) {
     return res;
   }
@@ -129,10 +131,11 @@ int ATFW_UTIL_SYMBOL_VISIBLE orbit_rpc_handle(const std::string& rpc_name, const
       sequence, __get_rpc_wait_timeout(request_options),
       [rpc_full_name, callback](const orbit::OrbitRpcMessage& rsp_msg) {
         int32_t res = 0;
-        rsp_type rsp_body;
-        if (rsp_msg.head().rpc_response().type_url() == rsp_type::descriptor()->full_name() &&
+        orbit_rpc_rsp_type rsp_body;
+        if (rsp_msg.head().rpc_response().type_url() == orbit_rpc_rsp_type::descriptor()->full_name() &&
             !rsp_msg.body_bin().empty()) {
-          res = __unpack_rpc_body(rsp_body, rsp_msg.body_bin(), rpc_full_name, rsp_type::descriptor()->full_name());
+          res = __unpack_rpc_body(rsp_body, rsp_msg.body_bin(), rpc_full_name,
+                                  orbit_rpc_rsp_type::descriptor()->full_name());
         }
         if (res == 0) {
           res = rsp_msg.head().error_code();
@@ -147,30 +150,33 @@ int ATFW_UTIL_SYMBOL_VISIBLE orbit_rpc_handle(const std::string& rpc_name, const
 
 ORBIT_CLIENT_SDK_NAMESPACE_END
 
-#define ORBIT_RPC_HANDLE(name, service, req_type, rsp_type)                                                        \
-  int name(const req_type& req_body, std::function<void(int32_t, const rsp_type&)> callback, int32_t retry_time) { \
-    return ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::orbit_rpc_handle(#name, #service, req_body, callback,  \
-                                                                             retry_time);                          \
+#define ORBIT_RPC_HANDLE(orbit_rpc_name, orbit_service_name, orbit_rpc_req_type, orbit_rpc_rsp_type)               \
+  int orbit_rpc_name(const orbit_rpc_req_type& req_body,                                                           \
+                     std::function<void(int32_t, const orbit_rpc_rsp_type&)> callback, int32_t retry_time) {       \
+    return ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::orbit_rpc_handle(#orbit_rpc_name, #orbit_service_name, \
+                                                                             req_body, callback, retry_time);      \
   }
 
-#define ORBIT_REGISTER_ACTION_CODE(name, service, rpc_name)                                                           \
-  int ret =                                                                                                           \
-      ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitRPCDispatcher::me()->register_action<task_action_##name>( \
-          service::descriptor(), #rpc_name);                                                                          \
-  if (ret != 0) {                                                                                                     \
-    ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientRuntime::me()->log(                                   \
-        ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientLogLevel::kError,                                 \
-        LOG_WRAPPER_FWAPI_FORMAT("register_orbit_rpc_action register action {} failed, ret: [{}]", #name, ret));      \
+#define ORBIT_REGISTER_ACTION_CODE(orbit_rpc_name, orbit_service_name, rpc_name)                                    \
+  int ret = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitRPCDispatcher::me()                               \
+                ->register_action<task_action_##orbit_rpc_name>(orbit_service_name::descriptor(), #rpc_name);       \
+  if (ret != 0) {                                                                                                   \
+    ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientRuntime::me()->log(                                 \
+        ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientLogLevel::kError,                               \
+        LOG_WRAPPER_FWAPI_FORMAT("register_orbit_rpc_action register action {} failed, ret: [{}]", #orbit_rpc_name, \
+                                 ret));                                                                             \
   }
 
-#define ORBIT_TASK_ACTION(name, req_type, rsp_type)                                                                    \
-  class task_action_##name                                                                                             \
-      : public ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::task_action_orbit_rpc_base<req_type, rsp_type>,        \
-        public std::enable_shared_from_this<task_action_##name> {                                                      \
-    using base_type = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::task_action_orbit_rpc_base<req_type, rsp_type>; \
+#define ORBIT_TASK_ACTION(orbit_rpc_name, orbit_rpc_req_type, orbit_rpc_rsp_type)                                      \
+  class task_action_##orbit_rpc_name                                                                                   \
+      : public ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::task_action_orbit_rpc_base<orbit_rpc_req_type,         \
+                                                                                           orbit_rpc_rsp_type>,        \
+        public std::enable_shared_from_this<task_action_##orbit_rpc_name> {                                            \
+    using base_type = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::task_action_orbit_rpc_base<orbit_rpc_req_type,  \
+                                                                                                  orbit_rpc_rsp_type>; \
                                                                                                                        \
    public:                                                                                                             \
-    explicit task_action_##name(orbit::OrbitRpcMessage&& ds_msg) : base_type(std::move(ds_msg)) {}                     \
+    explicit task_action_##orbit_rpc_name(orbit::OrbitRpcMessage&& ds_msg) : base_type(std::move(ds_msg)) {}           \
     int operator()() {                                                                                                 \
       set_rsp_code(hook_run(get_request_body(), get_response_body()));                                                 \
       send_response();                                                                                                 \

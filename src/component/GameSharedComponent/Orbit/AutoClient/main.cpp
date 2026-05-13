@@ -130,8 +130,8 @@ int main(int argc, char* argv[]) {
         stream << '[' << to_string(record.level) << "] " << record.category << ": " << record.message;
         write_log_line(stream.str());
       };
-  bool exit = false;
-  callbacks.on_request_stop = [&exit]() { exit = true; };
+  bool stopped = false;
+  callbacks.on_request_stop = [&stopped]() { stopped = true; };
 
   int init_result = runtime_t::me()->init(argc, argv, callbacks);
   if (init_result != 0) {
@@ -144,7 +144,7 @@ int main(int argc, char* argv[]) {
   auto begin_timepoint = std::chrono::steady_clock::now();
   auto ready_timepoint = begin_timepoint;
 
-  while (!exit) {
+  while (!stopped) {
     write_log_line("Tick");
     runtime_t::me()->tick();
 
