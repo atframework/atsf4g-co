@@ -161,7 +161,7 @@ ORBIT_SERVER_SERVICE_API int32_t orbit_server_manager::send_to_client_no_wait(rp
                protobuf_mini_dumper_get_error_msg(res));
   }
 
-  return res;
+  return __tracer.finish({res, __trace_attributes});
 }
 
 ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::send_to_client(rpc::context& ctx,
