@@ -114,6 +114,8 @@ project_third_party_include_port("ngtcp2/ngtcp2.cmake")
 project_third_party_include_port("nghttp2/nghttp2.cmake")
 project_third_party_include_port("libcurl/libcurl.cmake")
 
+project_third_party_include_lock("${CMAKE_CURRENT_LIST_DIR}" "redis/redis.cmake")
+
 # Set stack size to 512KB, the default value is 100K and will overflow with asan
 set(ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_CIVETWEB_THREAD_STACK_SIZE "524288")
 project_third_party_include_port("web/civetweb.cmake")

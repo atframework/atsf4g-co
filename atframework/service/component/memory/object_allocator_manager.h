@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <type_traits>
 #include <utility>
 
 #include "memory/object_allocator_def.h"
@@ -99,7 +100,8 @@ class object_allocator_manager {
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor& operator=(const deletor&) = default;
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor& operator=(deletor&&) = default;
 
-    template <class D>
+    template <class D, class = std::enable_if<
+                           !std::is_same<atfw::util::nostd::remove_cvref_t<D>, deletor<T, BackendDelete>>::value>::type>
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR deletor(D&& d) noexcept(
         std::is_nothrow_constructible<BackendDelete, D>::value) {
       new (backend_deletor_buffer()) BackendDelete(::std::forward<D>(d));
@@ -386,9 +388,19 @@ class object_allocator_manager {
  public:
   template <class T, class... Args>
   ATFW_UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<T> make_shared(Args&&... args) {
+#if defined(__GNUC__) && !defined(__clang__) && !defined(__apple_build_version__)
+#  if (__GNUC__ * 100 + __GNUC_MINOR__ * 10) >= 460
+#    pragma GCC diagnostic push
+#  endif
+#  pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
     allocator<T, typename object_allocator_backend<T>::allocator> alloc{};
     ::std::shared_ptr<T> ret = ::std::allocate_shared<T>(alloc, std::forward<Args>(args)...);
-
+#if defined(__GNUC__) && !defined(__clang__) && !defined(__apple_build_version__)
+#  if (__GNUC__ * 100 + __GNUC_MINOR__ * 10) >= 460
+#    pragma GCC diagnostic pop
+#  endif
+#endif
     if (ret) {
       object_allocator_metrics_controller::add_constructor_counter(
           object_allocator_metrics_controller::helper<T>::get_instance(), to_mutable_address(ret.get()));
@@ -491,10 +503,20 @@ class object_allocator_manager {
 
   template <class T, class... Args>
   ATFW_UTIL_SYMBOL_VISIBLE inline static atfw::util::memory::strong_rc_ptr<T> make_strong_rc(Args&&... args) {
+#if defined(__GNUC__) && !defined(__clang__) && !defined(__apple_build_version__)
+#  if (__GNUC__ * 100 + __GNUC_MINOR__ * 10) >= 460
+#    pragma GCC diagnostic push
+#  endif
+#  pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
     allocator<T, typename object_allocator_backend<T>::allocator> alloc{};
     atfw::util::memory::strong_rc_ptr<T> ret =
         atfw::util::memory::allocate_strong_rc<T>(alloc, std::forward<Args>(args)...);
-
+#if defined(__GNUC__) && !defined(__clang__) && !defined(__apple_build_version__)
+#  if (__GNUC__ * 100 + __GNUC_MINOR__ * 10) >= 460
+#    pragma GCC diagnostic pop
+#  endif
+#endif
     if (ret) {
       object_allocator_metrics_controller::add_constructor_counter(
           object_allocator_metrics_controller::helper<T>::get_instance(), to_mutable_address(ret.get()));
