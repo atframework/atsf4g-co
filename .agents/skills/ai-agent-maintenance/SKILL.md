@@ -14,6 +14,8 @@ Use this skill when updating AI-agent guidance for this repository or subproject
 - Keep engineering style, lint, and project coding conventions in `../engineering-guidelines/SKILL.md`; bridge files and
   this maintenance skill should only route to that skill.
 - Keep `.agents/skills/README.md` as a compact index; do not turn it into a second copy of skill bodies.
+- Keep temporary-artifact guidance consistent: AI-created scratch files and script/log output should go in ignored build
+  subdirectories, not repository roots.
 - Preserve compatibility across AGENTS-aware tools, VS Code Copilot, Codex, Claude Code, Kilo Code/CLI, Roo Code, and
   OpenCode where the repository intentionally supports them.
 - Merge improvements into existing prompt and skill content; do not leave old versions, migration notes, changelog notes,
@@ -35,6 +37,8 @@ Use this skill when updating AI-agent guidance for this repository or subproject
 
 - Read the nearest `AGENTS.md`, `.github/copilot-instructions.md`, `CLAUDE.md`, `.agents/skills/README.md`, and any
   relevant `SKILL.md` files before editing.
+- Check the nearest `.gitignore` and existing build-directory names before changing temp-file guidance so examples point
+  to ignored build subdirectories that already exist or are safe to create.
 - For code style or engineering-convention changes, also read `../engineering-guidelines/SKILL.md` and merge updates
   there instead of duplicating rules in `AGENTS.md` or specialized skills.
 - If compatibility behavior may change, check current official docs or maintained references for the affected tools.
@@ -43,6 +47,8 @@ Use this skill when updating AI-agent guidance for this repository or subproject
 ### Choose the right surface
 
 - Put facts that apply to nearly every task in `AGENTS.md`.
+- Repository-wide temporary-artifact placement rules belong in `AGENTS.md`; skills should explain how to preserve the
+  rule, not replace it.
 - Put shared coding/review conventions in `engineering-guidelines`; keep specialized skills focused on detailed workflows
   and edge cases.
 - Put only names, one-line descriptions, and maintenance rules in `.agents/skills/README.md`.
@@ -56,6 +62,13 @@ Use this skill when updating AI-agent guidance for this repository or subproject
 - Quote descriptions that contain colons and start them with `Use when:` plus concrete trigger words.
 - Front-load the most important trigger phrases; some tools truncate skill descriptions in listings.
 - Keep each `SKILL.md` focused. Move bulky examples, scripts, or reference material into sibling files when needed.
+
+### Example policy pattern
+
+- Prefer examples like `build/_agent_tmp/<task>/notes.txt`, `build/_agent_tmp/<task>/script.log`, or an existing ignored
+  build tree such as `build_jobs_cmake_tools/_agent_tmp/`.
+- If no build tree exists yet, tell the agent to create `build/_agent_tmp/` (or the nearest repo's ignored `build/`
+  subdirectory) instead of root-level `tmp/`, `log/`, or ad-hoc debug files.
 
 ### Validate before finishing
 

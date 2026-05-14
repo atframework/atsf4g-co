@@ -84,12 +84,15 @@ if(NOT ANDROID AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
   # There is a BUG in gcc 4.6-4.8 and finxed in gcc 4.9
   #   @see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=58016
   #   @see https://gcc.gnu.org/gcc-4.9/changes.html
-  #]]
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux"
      AND NOT PROJECT_COMPILER_OPTIONS_TARGET_USE_SANITIZER
      AND (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "4.9"))
     project_third_party_include_port("libunwind/libunwind.cmake")
   endif()
+  #]]
+  set(ATFRAMEWORK_UTILS_LIBUNWIND_ENABLED
+      OFF
+      CACHE BOOL "Disable libunwind")
 endif()
 project_third_party_include_port("algorithm/xxhash.cmake")
 project_third_party_include_port("algorithm/tbb.cmake")
@@ -191,6 +194,7 @@ set(PROJECT_THIRD_PARTY_PUBLIC_LINK_NAMES
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_FMTLIB_LINK_NAME}
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_LIBCURL_LINK_NAME}
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_RE2_LINK_NAME}
+    ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_HIREDIS_HAPP_LINK_NAME}
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_HIREDIS_LINK_NAME}
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_LIBUV_LINK_NAME}
     ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_CRYPT_LINK_NAME}

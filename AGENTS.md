@@ -25,6 +25,9 @@ high-performance game server architectures.
 ## Always-On Rules
 
 - Respect the user's dirty workspace: inspect current file contents before editing and avoid unrelated reformatting.
+- When creating AI scratch files or asking scripts to emit temporary data/logs, use a subdirectory inside an ignored
+  build tree (for example `build/_agent_tmp/` or `build_jobs_cmake_tools/_agent_tmp/`) so `.gitignore` already covers
+  it; never drop temporary artifacts in the repository root.
 - For paths under vendored subprojects, read the nearest subproject `AGENTS.md` before changing code.
 - When a task matches a skill below, read that `SKILL.md` first; skills contain the long commands and edge cases.
 - For coding or code review in `src/**`, first read `engineering-guidelines`; it owns shared style, lint, and project

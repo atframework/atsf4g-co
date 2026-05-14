@@ -1,4 +1,3 @@
-#!/bin/bash
 #!/usr/bin/env bash
 
 SYS_NAME="$(uname -s)"
@@ -123,15 +122,17 @@ while getopts "ab:c:d:e:hln:tur:s-" OPTION; do
       echo "usage: $0 [options] [-- [cmake options...] ]"
       echo "options:"
       echo "-a                            using clang-analyzer."
+      echo "-b <build type>               build type(Debug, Release, RelWithDebInfo, MinSizeRel)."
       echo "-c <compiler>                 compiler toolchains(gcc, clang or others)."
       echo "-d <distcc path>              try to use specify distcc to speed up building."
       echo "-e <ccache path>              try to use specify ccache to speed up building."
       echo "-h                            help message."
+      echo "-l                            enable tools."
       echo "-n <sanitizer>                using sanitizer(address, thread, leak, hwaddress or undefined)."
+      echo "-r <build dir>                build directory."
       echo "-t                            enable clang-tidy."
       echo "-u                            enable unit test."
       echo "-s                            enable sample."
-      echo "-l                            enable tools."
       exit 0
       ;;
     n)

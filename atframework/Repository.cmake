@@ -14,8 +14,6 @@ else()
   if(NOT EXISTS "${ATFRAMEWORK_ATFRAME_UTILS_REPO_DIR}/CMakeLists.txt")
     message(FATAL_ERROR "git submodule update --init -- atframework/atframe_utils failed")
   endif()
-  add_subdirectory("${ATFRAMEWORK_ATFRAME_UTILS_REPO_DIR}"
-                   "${CMAKE_CURRENT_BINARY_DIR}/_deps/${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME}")
 endif()
 
 if(TARGET atbus)
@@ -34,8 +32,6 @@ else()
   if(NOT EXISTS "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/CMakeLists.txt")
     message(FATAL_ERROR "git submodule update --init -- atframework/libatbus failed")
   endif()
-  add_subdirectory("${ATFRAMEWORK_LIBATBUS_REPO_DIR}"
-                   "${CMAKE_CURRENT_BINARY_DIR}/_deps/${ATFRAMEWORK_LIBATBUS_LINK_NAME}")
 endif()
 
 if(TARGET atapp)
@@ -54,12 +50,6 @@ else()
   if(NOT EXISTS "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/CMakeLists.txt")
     message(FATAL_ERROR "git submodule update --init -- atframework/libatapp failed")
   endif()
-  add_subdirectory("${ATFRAMEWORK_LIBATAPP_REPO_DIR}"
-                   "${CMAKE_CURRENT_BINARY_DIR}/_deps/${ATFRAMEWORK_LIBATAPP_LINK_NAME}")
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/atframework.macro.cmake")
-
-# =========== third_party - hiredis-happ ===========
-include("${CMAKE_CURRENT_LIST_DIR}/../third_party/redis/redis.cmake")
-list(PREPEND PROJECT_THIRD_PARTY_PUBLIC_LINK_NAMES ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_HIREDIS_HAPP_LINK_NAME})

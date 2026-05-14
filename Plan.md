@@ -1,5 +1,13 @@
 # 执行计划 - 单元测试补全
 
+## AI Agent 临时产物约束
+
+- Prompt/skill 需要统一约束：AI agent 创建的临时文件、脚本输出的临时数据和日志文件，必须放在当前仓库或子项目
+  已被 `.gitignore` 覆盖的构建目录子目录中。
+- 优先使用 `build/_agent_tmp/`；若已有构建目录（如 `build_*` 或 `build_jobs_*`），可在其下创建
+  `_agent_tmp/` 或 `_agent_logs/` 子目录。
+- 不要把临时产物放到工程根目录，也不要新增未忽略的根级 `tmp/`、`log/`、`debug*.txt` 等路径。
+
 ## 通用说明
 
 ### 测试框架
