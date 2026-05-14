@@ -1,5 +1,7 @@
 include_guard(GLOBAL)
 
+include(CMakePackageConfigHelpers)
+
 # Package
 file(MAKE_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${ATFRAMEWORK_EXPORT_PACKAGE_NAME}")
 
