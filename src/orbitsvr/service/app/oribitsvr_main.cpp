@@ -57,17 +57,6 @@ uint64_t make_orbit_server_unique_id() {
          static_cast<uint64_t>(logic_config::me()->get_local_server_id());
 }
 
- std::string join_command_params(atfw::util::cli::callback_param params, size_t start_index) {
-  std::ostringstream stream;
-  for (size_t index = start_index; index < params.get_params_number(); ++index) {
-    if (index > start_index) {
-      stream << ' ';
-    }
-    stream << params[index]->to_cpp_string();
-  }
-
-  return stream.str();
-}
 
 void add_command_response(atfw::util::cli::callback_param params, const std::string &message) {
   ::atframework::atapp::app::add_custom_command_rsp(params, message);
