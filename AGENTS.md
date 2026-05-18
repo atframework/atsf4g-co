@@ -1,7 +1,9 @@
 # atsf4g-co Agent Guide
 
-This is the canonical, cross-agent guide for this repository. Keep it short: put repeatable workflows in
-`.agents/skills/*/SKILL.md`, and keep `.github/copilot-instructions.md` / `CLAUDE.md` as lightweight bridges.
+This is the canonical, self-contained cross-agent guide for this repository. Keep it short: put repeatable workflows in
+`.agents/skills/*/SKILL.md`, keep `CLAUDE.md` as a lightweight bridge, and avoid redundant tool-specific prompt copies.
+Subprojects under `atframework/` maintain their own independent agent guides and skills; use the nearest subproject
+`AGENTS.md` when working inside those repositories.
 
 **atsf4g-co** (AT Service Framework for Game - Coroutine) is a service framework for building game servers with
 libatbus, libatapp, libcopp, and other atframework components. It provides a complete solution for scalable,
@@ -45,14 +47,15 @@ Read the matching `.agents/skills/*/SKILL.md` before doing specialized work:
 | `deployment-config`       | Generating/editing deployment configs or Helm values                                    |
 | `configure-expression`    | Editing env-expression-enabled config fields                                            |
 | `atgateway-protocol`      | Working on atgateway v2 protocol, crypto, compression, reconnection, or tests           |
-| `orbit`                   | Drafting or reviewing orbit protocol notes, pseudocode, and flow design                 |
 | `ai-agent-maintenance`    | Auditing or optimizing AI agent prompts, bridge files, and skills                       |
 
 ## Agent File Compatibility
 
 - `AGENTS.md` is canonical for tools that support hierarchical agent instructions.
-- `.github/copilot-instructions.md` exists only to point VS Code Copilot at this guide and `.agents/skills/`.
+- `.agents/skills/` is the portable project skill location; keep each `SKILL.md` focused and self-contained.
+- Do not maintain `.github/copilot-instructions.md` copies when `AGENTS.md` and `.agents/skills/` cover the same rules.
 - `CLAUDE.md` exists only to point Claude-compatible tools at this guide and `.agents/skills/`.
+- Do not make this root guide depend on subproject prompt files, and do not make subprojects depend on this file.
 - Keep skill folder names and frontmatter `name` values identical; descriptions are the discovery surface.
 
 ## Subprojects
@@ -62,3 +65,4 @@ Each subproject has its own `AGENTS.md`:
 - [atframe_utils/AGENTS.md](atframework/atframe_utils/AGENTS.md)
 - [libatbus/AGENTS.md](atframework/libatbus/AGENTS.md)
 - [libatapp/AGENTS.md](atframework/libatapp/AGENTS.md)
+- [cmake-toolset/AGENTS.md](atframework/cmake-toolset/AGENTS.md)

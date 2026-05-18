@@ -13,7 +13,6 @@ small; put task-specific steps, commands, caveats, and examples in each `SKILL.m
 | `deployment-config/`      | Generate and manage deployment configs/scripts                                           |
 | `configure-expression/`   | Environment-variable expression expansion in configuration fields                        |
 | `atgateway-protocol/`     | atgateway v2 protocol SDK — ECDH handshake, encryption, testing                          |
-| `orbit/`                  | Orbit protocol notes, pseudocode, and flow design                                        |
 | `ai-agent-maintenance/`   | Audit and optimize AI agent prompts, bridge files, and skills                            |
 
 ## Maintenance rules
@@ -22,3 +21,4 @@ small; put task-specific steps, commands, caveats, and examples in each `SKILL.m
 - `description` is the discovery surface: start with `Use when:` and include concrete trigger words.
 - Keep each `SKILL.md` focused; move bulky examples or reference material into sibling files when needed.
 - Keep shared engineering style and review conventions in `engineering-guidelines/SKILL.md`, not in this index.
+- This index is root-scoped; subprojects maintain independent `.agents/skills/README.md` files.
