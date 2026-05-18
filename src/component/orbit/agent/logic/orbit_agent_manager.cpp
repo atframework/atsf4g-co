@@ -223,15 +223,15 @@ static void async_notify_client_exit(const char* task_name, const std::string& c
   auto invoke_result = rpc::async_invoke(
       ctx, task_name,
       [controller_server_id, identity = std::move(identity), server_identity = std::move(server_identity), reason,
-       exit_code](rpc::context& ctx) mutable -> rpc::result_code_type {
-        auto notify_request = rpc::make_shared_message<orbit::ATCNotifyClientExitReq>(ctx);
-        auto rsp = rpc::make_shared_message<orbit::CTANotifyClientExitRsp>(ctx);
+       exit_code](rpc::context& sub_ctx) mutable -> rpc::result_code_type {
+        auto notify_request = rpc::make_shared_message<orbit::ATCNotifyClientExitReq>(sub_ctx);
+        auto rsp = rpc::make_shared_message<orbit::CTANotifyClientExitRsp>(sub_ctx);
         *notify_request->mutable_client_identity() = std::move(identity);
         *notify_request->mutable_server_identity() = std::move(server_identity);
         notify_request->set_exit_reason(reason);
         notify_request->set_exit_code(exit_code);
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-            rpc::agenttocontrollerservice::notify_client_exit(ctx, controller_server_id, *notify_request, *rsp)));
+            rpc::agenttocontrollerservice::notify_client_exit(sub_ctx, controller_server_id, *notify_request, *rsp)));
       });
   if (!invoke_result.is_success()) {
     FWLOGERROR("orbit agent failed to spawn {} task for {}, res: {}({})", task_name, client_id,

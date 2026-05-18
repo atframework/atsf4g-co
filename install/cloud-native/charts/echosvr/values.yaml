@@ -8,17 +8,18 @@ type_id: 10
 type_name: "echosvr"
 
 image:
-  repository: harbor.atframe.work/atsf4g-co/server
+  repository: harbor.m-oa.com:6023/project-x/echosvr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest
+  secrets: harbor-regcred
 
 volumeMounts:
-  configMountPath: /data/atframework/publish/echosvr/cfg
+  configMountPath: /etc/atframework/publish/echosvr/cfg
   logMountPath: /data/atframework/publish/echosvr/log
 
 vector:
-  enabled: true
+  enabled: false
   log_path: /data/atframework/publish/echosvr/log
 
 

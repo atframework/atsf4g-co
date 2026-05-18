@@ -8,17 +8,18 @@ type_id: 14
 type_name: "rank-settlement-svr"
 
 image:
-  repository: harbor.atframe.work/atsf4g-co/server/rank-settlement-svr
+  repository: harbor.m-oa.com:6023/project-x/rank-settlement-svr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest
+  secrets: harbor-regcred
 
 volumeMounts:
-  configMountPath: /data/atframework/publish/rank-settlement-svr/cfg
+  configMountPath: /etc/atframework/publish/rank-settlement-svr/cfg
   logMountPath: /data/atframework/publish/rank-settlement-svr/log
 
 vector:
-  enabled: true
+  enabled: false
   log_path: /data/atframework/publish/rank-settlement-svr/log
 
 service:

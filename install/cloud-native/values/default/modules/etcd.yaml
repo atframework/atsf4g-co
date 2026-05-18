@@ -9,7 +9,7 @@ log:
   level: info
 path: /atapp/services/atsf4g-co
 client_urls:
-  - http://127.0.0.1:12379
+  - https://etcd-project-x.m-oa.com:2379
 init:
   timeout: "15s"
   tick_interval: "64ms"

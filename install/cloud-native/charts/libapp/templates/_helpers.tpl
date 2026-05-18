@@ -27,6 +27,27 @@ If release name contains chart name it will be used as a full name.
   {{- default (include "libapp.name" .) .Values.discovery_name | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
+{{- define "libapp.atproxyServiceName" -}}
+  {{- if and (hasKey .Values "atproxy") (hasKey .Values.atproxy "service_name") (not (empty .Values.atproxy.service_name)) -}}
+    {{- .Values.atproxy.service_name | trunc 63 | trimSuffix "-" -}}
+  {{- else -}}
+    {{- $projectName := .Release.Namespace -}}
+    {{- if and (hasKey .Values "atapp") (hasKey .Values.atapp "deployment") (hasKey .Values.atapp.deployment "project_name") (not (empty .Values.atapp.deployment.project_name)) -}}
+      {{- $projectName = .Values.atapp.deployment.project_name -}}
+    {{- end -}}
+    {{- $baseName := printf "%s-atproxy-%v-%v" $projectName (default 1 .Values.world_id) (default 1 .Values.zone_id) -}}
+    {{- if .Values.partition -}}
+      {{- printf "%s-%s" $baseName .Values.partition | trunc 63 | trimSuffix "-" -}}
+    {{- else -}}
+      {{- $baseName | trunc 63 | trimSuffix "-" -}}
+    {{- end -}}
+  {{- end -}}
+{{- end }}
+
+{{- define "libapp.atproxyServiceHost" -}}
+  {{- printf "%s.%s.svc" (include "libapp.atproxyServiceName" .) .Release.Namespace -}}
+{{- end }}
+
 {{- define "libapp.hpa_target_name" -}}
   {{- if not .Values.tcm_mode }}
     {{- include "libapp.fullname" . -}}
@@ -187,4 +208,12 @@ If .Values.logic_id is set, use it directly
     {{- $basePort = (dig "policy" "port" "base" 7200 .Values.atapp.atbus | int) -}}
     {{- add $basePort (mul $machineIndex $machineIndexMultiply) (mul $typeID $typeMultiply) $insID -}}
   {{- end }}
+{{- end }}
+
+{{- define "libapp.atappExternalIP" -}}
+  {{- if .Values.atapp_external_ip -}}
+    {{- .Values.atapp_external_ip -}}
+  {{- else -}}
+    ${ATAPP_EXTERNAL_IP}
+  {{- end -}}
 {{- end }}

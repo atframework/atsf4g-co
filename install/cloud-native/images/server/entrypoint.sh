@@ -5,10 +5,11 @@ TIMEOUT=180
 RUNCMD_PARAM=""
 
 ENVS=()
-PROJECT_ROOT_DIR="/data/projecty"
+PROJECT_ROOT_DIR="/data/atframework/publish"
 WORKDIR="${PROJECT_ROOT_DIR}/${SERVER_TYPE_NAME}/bin"
-PID_FILE="${SERVER_TYPE_NAME}.pid"
-INSTANCE_ENV_FILE="/opt/projecty/${SERVER_TYPE_NAME}/instance_env"
+PID_FILE="${WORKDIR}/${SERVER_TYPE_NAME}.pid"
+INSTANCE_ENV_FILE="/opt/atframework/publish/${SERVER_TYPE_NAME}/instance_env"
+ATDTOOL_BIN="${PROJECT_ROOT_DIR}/tools/atdtool/atdtool"
 
 function usage() {
   cat <<EOF
@@ -57,10 +58,67 @@ function add_env() {
   ENVS=("${ENVS[@]}" "$1=\"$2\"")
 }
 
+function write_env_file() {
+  local ENV_FILE="$1"
+  local TMP_ENV_FILE="${ENV_FILE}.tmp"
+  local ENV_ENTRY=""
+  local RET=0
+
+  : > "${TMP_ENV_FILE}"
+  RET=$?
+  if [[ ${RET} -ne 0 ]]; then
+    return ${RET}
+  fi
+
+  for ENV_ENTRY in "${ENVS[@]}"; do
+    printf 'export %s\n' "${ENV_ENTRY}" >> "${TMP_ENV_FILE}"
+    RET=$?
+    if [[ ${RET} -ne 0 ]]; then
+      rm -f "${TMP_ENV_FILE}"
+      return ${RET}
+    fi
+  done
+
+  mv -f "${TMP_ENV_FILE}" "${ENV_FILE}"
+  return $?
+}
+
+function normalize_env_file() {
+  local ENV_FILE="$1"
+  local TMP_ENV_FILE="${ENV_FILE}.tmp"
+
+  awk '
+    /^[[:space:]]*$/ {
+      next
+    }
+    /^[[:space:]]*export[[:space:]]+[A-Za-z_][A-Za-z0-9_]*=.*/ {
+      sub(/^[[:space:]]*/, "", $0)
+      print
+      next
+    }
+    /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=.*/ {
+      sub(/^[[:space:]]*/, "", $0)
+      print "export " $0
+      next
+    }
+    {
+      exit 1
+    }
+  ' "${ENV_FILE}" > "${TMP_ENV_FILE}"
+  if [[ $? -ne 0 ]]; then
+    rm -f "${TMP_ENV_FILE}"
+    echo "$(date \"+%Y/%m/%d %H:%M:%S\") [ERROR] instance env file(${ENV_FILE}) only supports export KEY=value lines"
+    return 1
+  fi
+
+  mv -f "${TMP_ENV_FILE}" "${ENV_FILE}"
+  return $?
+}
+
 # if server running, it will return 0
 function check_server_running() {
   local SEVER_PID_FILE=$1
-  local SEVER_PIDS=($(ps -efH|grep "${SERVER_TYPE_NAME}"|grep "start"|grep -v grep|awk '{print $2}'))
+  SEVER_PIDS=($(ps -efH|grep "${SERVER_TYPE_NAME}"|grep "start"|grep -v grep|awk '{print $2}'))
 
   if [[ ! -f ${SEVER_PID_FILE} ]]; then
     return 1
@@ -82,7 +140,7 @@ function check_server_running() {
 # force stop server
 function kill_server() {
   local SEVER_PID_FILE=$1
-  local SEVER_PIDS=($(ps -efH|grep "${SERVER_TYPE_NAME}"|grep "start"|grep -v grep|awk '{print $2}'))
+  SEVER_PIDS=($(ps -efH|grep "${SERVER_TYPE_NAME}"|grep "start"|grep -v grep|awk '{print $2}'))
 
   if [[ ! -f ${SEVER_PID_FILE} ]]; then
     return 1
@@ -125,53 +183,117 @@ function stop_prepare_server() {
 function init_env_from_file() {
   local ENV_FILE="$1"
   local ENV_FILE_PATH="${ENV_FILE%/*}"
+  local RET=0
   if [[ ! -d ${ENV_FILE_PATH} ]]; then
     echo "$(date "+%Y/%m/%d %H:%M:%S") [ERROR] instance env file path(${ENV_FILE_PATH}) not exist!!!"
     return 1
   fi
 
-  if [ -f ${ENV_FILE} ]; then
-    source ${ENV_FILE}
+  if [[ -f ${ENV_FILE} ]]; then
+    normalize_env_file "${ENV_FILE}"
+    RET=$?
+    if [[ ${RET} -ne 0 ]]; then
+      return ${RET}
+    fi
+
+    source "${ENV_FILE}"
     return $?
   fi
 
   # specify instance id
   if [[ -z "${SERVER_INSTANCE_ID}" ]]; then
-    add_env SERVER_INSTANCE_ID "$(/data/projecty/atdtool/atdtool guid gen)"
+    ordinal=${HOSTNAME##*-}
+    echo $ordinal
+    add_env SERVER_INSTANCE_ID $ordinal
+    add_env ATAPP_INSTANCE_ID ${WORLD_ID}.${ZONE_ID}.${TYPE_ID}.${ordinal}
   fi
 
   #  add dsa instance env
   if [[ ${#ENVS[@]} -ne 0 ]]; then
-    echo "export ${ENVS[@]}" > ${ENV_FILE}
+    write_env_file "${ENV_FILE}"
+    RET=$?
+    if [[ ${RET} -ne 0 ]]; then
+      return ${RET}
+    fi
   fi
 
-  source ${ENV_FILE}
+  normalize_env_file "${ENV_FILE}"
+  RET=$?
+  if [[ ${RET} -ne 0 ]]; then
+    return ${RET}
+  fi
+
+  source "${ENV_FILE}"
   return $?
 }
 
-function init_server_config() {
-  # init_env_from_file "${INSTANCE_ENV_FILE}"
-  # if [[ $? -ne 0 ]]; then
-  #   return $?
-  # fi
-  mkdir -p ${WORKDIR}/../cfg/
-  cp -f /etc/projecty/${SERVER_TYPE_NAME}/cfg/${SERVER_TYPE_NAME}.yaml ${WORKDIR}/../cfg/${SERVER_TYPE_NAME}.yaml
-  if [[ $? -ne 0 ]]; then
-    return $?
+function init_external_ip() {
+  if [[ -n "${ATAPP_EXTERNAL_IP}" ]]; then
+    export ATAPP_EXTERNAL_IP
+    return 0
   fi
 
-  cp -f /etc/projecty/${SERVER_TYPE_NAME}/cfg/vector.yaml ${WORKDIR}/../cfg/vector.yaml
-  if [[ $? -ne 0 ]]; then
-    return $?
+  if [[ "${SERVER_TYPE_NAME}" == "atproxy" ]]; then
+    if [[ -z "${ATAPP_RUNTIME_STATUS_POD_IP}" ]]; then
+      echo "$(date "+%Y/%m/%d %H:%M:%S") [ERROR] ATAPP_RUNTIME_STATUS_POD_IP is empty for atproxy"
+      return 1
+    fi
+
+    export ATAPP_EXTERNAL_IP="${ATAPP_RUNTIME_STATUS_POD_IP}"
+    return 0
   fi
-  # init server config
-  # envsubst < /etc/projecty/${SERVER_TYPE_NAME}/cfg/${SERVER_TYPE_NAME}.yaml > ${WORKDIR}/../cfg/${SERVER_TYPE_NAME}.yaml
+
+  if [[ -z "${ATAPP_ATPROXY_SERVICE}" ]]; then
+    return 0
+  fi
+
+  local ATAPP_ATPROXY_SERVICE_IP=""
+  ATAPP_ATPROXY_SERVICE_IP="$(getent ahosts "${ATAPP_ATPROXY_SERVICE}" 2>/dev/null | awk '{print $1}' | awk '!seen[$0]++ {print; exit}')"
+  if [[ -z "${ATAPP_ATPROXY_SERVICE_IP}" ]]; then
+    echo "$(date "+%Y/%m/%d %H:%M:%S") [ERROR] resolve atproxy service(${ATAPP_ATPROXY_SERVICE}) failed"
+    return 1
+  fi
+
+  export ATAPP_EXTERNAL_IP="${ATAPP_ATPROXY_SERVICE_IP}"
+  export ATAPP_PROXY_EXTERNAL_IP="${ATAPP_ATPROXY_SERVICE_IP}"
+  return 0
+}
+
+function init_server_config() {
+  local RET=0
+
+  init_env_from_file "${INSTANCE_ENV_FILE}"
+  RET=$?
+  if [[ ${RET} -ne 0 ]]; then
+    return ${RET}
+  fi
+
+  init_external_ip
+  RET=$?
+  if [[ ${RET} -ne 0 ]]; then
+    return ${RET}
+  fi
+
+  mkdir -p ${WORKDIR}/../cfg/
+  # cp -f /etc/atframework/publish/${SERVER_TYPE_NAME}/cfg/*.yaml ${WORKDIR}/../cfg/
   # if [[ $? -ne 0 ]]; then
-  #   return $?
+  #   return 1
   # fi
+
+  cp -f /etc/atframework/publish/${SERVER_TYPE_NAME}/cfg/vector.yaml ${WORKDIR}/../cfg/vector.yaml
+  RET=$?
+  if [[ ${RET} -ne 0 ]]; then
+    return ${RET}
+  fi
+
+  envsubst < /etc/atframework/publish/${SERVER_TYPE_NAME}/cfg/${SERVER_TYPE_NAME}.yaml > ${WORKDIR}/../cfg/${SERVER_TYPE_NAME}.yaml
+  RET=$?
+  if [[ ${RET} -ne 0 ]]; then
+    return ${RET}
+  fi
 
   # # init server config
-  # envsubst < /etc/projecty/${SERVER_TYPE_NAME}/cfg/vector.yaml > ${WORKDIR}/../cfg/vector.yaml
+  # envsubst < /etc/atframework/publish/${SERVER_TYPE_NAME}/cfg/vector.yaml > ${WORKDIR}/../cfg/vector.yaml
   # if [[ $? -ne 0 ]]; then
   #   return $?
   # fi
@@ -189,14 +311,13 @@ fi
 # enter workspace
 cd ${WORKDIR}
 
-# prepare dynamic libary
-if [[ -e "${PROJECT_ROOT_DIR}/tools/script/prepare-dependency-dll.sh" ]] && [[ -e "${WORKDIR}/package-version.txt" ]]; then
-  CURRENT_PREPARE_PACKAGE_SHOR_SHA="$(cat "${WORKDIR}/package-version.txt" | grep vcs_short_sha | awk '{print $NF}')"
-  find "${PROJECT_ROOT_DIR}/tools/script" -mindepth 1 -maxdepth 1 -name "prepare-package.*.lock" | grep -v -F "${CURRENT_PREPARE_PACKAGE_SHOR_SHA}" | xargs -r rm -f
-  flock -x -w 20 "${PROJECT_ROOT_DIR}/tools/script/prepare-package.${CURRENT_PREPARE_PACKAGE_SHOR_SHA}.lock" bash "${PROJECT_ROOT_DIR}/tools/script/prepare-dependency-dll.sh" "${PROJECT_ROOT_DIR}" "${CURRENT_PREPARE_PACKAGE_SHOR_SHA}"
-fi
-
 if [[ "${COMMAND}" == "start" ]]; then
+  # prepare dynamic libary (only needed on start, not health_check/stop/reload)
+  if [[ -e "${PROJECT_ROOT_DIR}/tools/script/prepare-dependency-dll.sh" ]] && [[ -e "${WORKDIR}/package-version.txt" ]]; then
+    CURRENT_PREPARE_PACKAGE_SHOR_SHA="$(cat "${WORKDIR}/package-version.txt" | grep vcs_short_sha | awk '{print $NF}')"
+    find "${PROJECT_ROOT_DIR}/tools/script" -mindepth 1 -maxdepth 1 -name "prepare-package.*.lock" | grep -v -F "${CURRENT_PREPARE_PACKAGE_SHOR_SHA}" | xargs -r rm -f
+    flock -x -w 20 "${PROJECT_ROOT_DIR}/tools/script/prepare-package.${CURRENT_PREPARE_PACKAGE_SHOR_SHA}.lock" bash "${PROJECT_ROOT_DIR}/tools/script/prepare-dependency-dll.sh" "${PROJECT_ROOT_DIR}" "${CURRENT_PREPARE_PACKAGE_SHOR_SHA}"
+  fi
   check_server_running ${PID_FILE}
   if [[ $? -eq 0 ]]; then
     echo "$(date "+%Y/%m/%d %H:%M:%S") [ERROR] server already started!!!"
@@ -213,7 +334,7 @@ if [[ "${COMMAND}" == "start" ]]; then
   END_TIME=$(($BEGIN_TIME+$TIMEOUT))
 
   # start server
-  ${WORKDIR}/${SERVER_TYPE_NAME}d -pid "${PID_FILE}" -config ../cfg/${SERVER_TYPE_NAME}.yaml -crash-output-file "../log/${SERVER_TYPE_NAME}_${ATAPP_INSTANCE_ID}.crash.log" start &
+  ${WORKDIR}/${SERVER_TYPE_NAME}d --pid "${PID_FILE}" --config ../cfg/${SERVER_TYPE_NAME}.yaml --crash-output-file "../log/${SERVER_TYPE_NAME}_${ATAPP_INSTANCE_ID}.crash.log" -id "${ATAPP_INSTANCE_ID}" start &
   if [[ $? -ne 0 ]]; then
     echo "$(date "+%Y/%m/%d %H:%M:%S") [ERROR] server start failed!!!"
     exit 1
@@ -234,9 +355,9 @@ if [[ "${COMMAND}" == "start" ]]; then
     exit 1
   fi
 
-  chmod 755 /data/projecty/atdtool/atdtool
+  chmod 755 ${ATDTOOL_BIN}
   # continuously observe configuration changes
-  /data/projecty/atdtool/atdtool watch configmap "/etc/projecty/${SERVER_TYPE_NAME}" --command "/entrypoint.sh" --args "reload"
+  ${ATDTOOL_BIN} watch configmap "/etc/atframework/publish/${SERVER_TYPE_NAME}" --command "/entrypoint.sh" --args "reload"
 elif [[ "${COMMAND}" == "stop" ]]; then
   check_server_running ${PID_FILE}
   if [ $? -ne 0 ]; then
@@ -248,24 +369,11 @@ elif [[ "${COMMAND}" == "stop" ]]; then
   END_TIME=$(($BEGIN_TIME+$TIMEOUT))
   echo "$(date "+%Y/%m/%d %H:%M:%S") [INFO] received stop command, timeout seconds(${TIMEOUT})"
 
-  # prestop
-  ${WORKDIR}/${SERVER_TYPE_NAME}d -p "${PID_FILE}" -c ../cfg/${SERVER_TYPE_NAME}.yaml run prestop
-  if [[ $? -eq 0 ]]; then
-    echo "$(date "+%Y/%m/%d %H:%M:%S") [INFO] run server prestop command success"
-    while [[ $(date '+%s') -lt $END_TIME ]]; do
-        sleep 1
-        PRESTOP_STATUS=$(${WORKDIR}/${SERVER_TYPE_NAME}d -p "${PID_FILE}" -c ../cfg/${SERVER_TYPE_NAME}.yaml run prestop_check | grep "server prestop success" | wc -l)
-        if [[ "${PRESTOP_STATUS}" -ge 1 ]]; then
-            echo "$(date "+%Y/%m/%d %H:%M:%S") [INFO] prestop server done"
-            break
-        fi
-    done
-  else
-    echo "$(date "+%Y/%m/%d %H:%M:%S") [ERROR] run prestop command failed!!!"
-  fi
+
+  SEVER_PIDS=($(ps -efH|grep "${SERVER_TYPE_NAME}"|grep "start"|grep -v grep|awk '{print $2}'))
 
   # stop server
-  ${WORKDIR}/${SERVER_TYPE_NAME}d -p "${PID_FILE}" -c ../cfg/${SERVER_TYPE_NAME}.yaml stop
+  kill ${SEVER_PIDS}
 
   # wait server stop finished
   check_server_running ${PID_FILE}
@@ -283,7 +391,9 @@ elif [[ "${COMMAND}" == "reload" ]]; then
   fi
   
   # reload server
-  ${WORKDIR}/${SERVER_TYPE_NAME}d -p "${PID_FILE}" -c ../cfg/${SERVER_TYPE_NAME}.yaml reload
+  SEVER_PIDS=($(ps -efH|grep "${SERVER_TYPE_NAME}"|grep "start"|grep -v grep|awk '{print $2}'))
+  kill -SIGHUP ${SEVER_PIDS}
+
   echo "$(date "+%Y/%m/%d %H:%M:%S") [INFO] server reload done, ret[$?]"
 elif [[ "${COMMAND}" == "kill" ]]; then
   echo "$(date "+%Y/%m/%d %H:%M:%S") [WARN] try force stop server"
@@ -317,7 +427,7 @@ elif [[ "${COMMAND}" == "kill" ]]; then
 
   stop_watch_configmap
 elif [[ "${COMMAND}" == "runcmd" ]]; then
-  ${WORKDIR}/${SERVER_TYPE_NAME}d -p "${PID_FILE}" -c ../cfg/${SERVER_TYPE_NAME}.yaml run ${RUNCMD_PARAM}
+  ${WORKDIR}/${SERVER_TYPE_NAME}d --pid "${PID_FILE}" --config ../cfg/${SERVER_TYPE_NAME}.yaml -id "${ATAPP_INSTANCE_ID}" run ${RUNCMD_PARAM}
   echo "$(date "+%Y/%m/%d %H:%M:%S") [INFO] server runcmd done, ret[$?]"
 elif [[ "${COMMAND}" == "health_check" ]]; then
   check_server_running ${PID_FILE}

@@ -8,17 +8,18 @@ type_id: 13
 type_name: "dtcoordsvr"
 
 image:
-  repository: harbor.atframe.work/atsf4g-co/server
+  repository: harbor.m-oa.com:6023/project-x/dtcoordsvr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest
+  secrets: harbor-regcred
 
 volumeMounts:
-  configMountPath: /data/atframework/publish/dtcoordsvr/cfg
+  configMountPath: /etc/atframework/publish/dtcoordsvr/cfg
   logMountPath: /data/atframework/publish/dtcoordsvr/log
 
 vector:
-  enabled: true
+  enabled: false
   log_path: /data/atframework/publish/dtcoordsvr/log
 
 redis:

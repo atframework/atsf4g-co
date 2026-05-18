@@ -1,0 +1,6 @@
+{{- template "libapp.configmap" (list . "atgateway.configmap") -}}
+{{- define "atgateway.configmap" -}}
+data:
+  {{ include "atgateway.name" . }}.yaml: {{ tpl (.Files.Get "cfg/atgateway.yaml.tpl") . | quote }}
+  vector.yaml: {{ tpl (.Files.Get "cfg/vector.yaml.tpl") . | quote }}
+{{- end -}}

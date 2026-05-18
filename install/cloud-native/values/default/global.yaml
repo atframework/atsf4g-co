@@ -10,7 +10,7 @@ id_mask: 24.12.12.16
 
 atapp:
   deployment:
-    project_name: ""
+    project_name: "project-x"
     deployment_environment: "production"
   atbus:
     policy:
@@ -139,17 +139,10 @@ imagePullSecrets:
   - name: harbor-regcred
 
 persistence:
-cbs:
-  enabled: true
-  storageClass: openebs-hostpath
-  volumes:
-    - name: log
-      storage: 5Gi
-      accessMode: ReadWriteOnce
-
-
-service:
-  type: ClusterIP
-  port: 7001
-  targetPort: 7001
-  protocol: TCP
+  cbs:
+    enabled: true
+    storageClass: openebs-hostpath
+    volumes:
+      - name: log
+        storage: 5Gi
+        accessMode: ReadWriteOnce

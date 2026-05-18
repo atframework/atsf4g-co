@@ -15,6 +15,7 @@ livenessProbe:
         set -x
         /entrypoint.sh health_check
   periodSeconds: 3
+  timeoutSeconds: 5
 startupProbe:
   exec:
     command:
@@ -24,6 +25,7 @@ startupProbe:
         set -ex
         /entrypoint.sh health_check
   failureThreshold: 18
+  timeoutSeconds: 5
 lifecycle:
   preStop:
     exec:
@@ -43,6 +45,22 @@ volumeMounts:
   readOnly: true
 - name: log
   mountPath: {{ .Values.volumeMounts.logMountPath | quote }}
+{{- /* extra volumes */}}
+{{- range .Values.extraVolumes }}
+- name: {{ .name }}
+  mountPath: {{ .mountPath }}
+  {{- if .readOnly }}
+  readOnly: true
+  {{- end }}
+  {{- if .subPath }}
+  subPath: {{ .subPath }}
+  {{- end }}
+{{- end }}
+{{- if .Values.resources }}
+{{- $resources := unset .Values.resources "enabled" }}
+resources:
+  {{- toYaml $resources | nindent 2 }}
+{{- end }}
 env:
 - name: ATAPP_NAME
   valueFrom:
@@ -80,6 +98,8 @@ env:
   valueFrom:
     fieldRef:
       fieldPath: status.podIP
+- name: ATAPP_ATPROXY_SERVICE
+  value: {{ include "libapp.atproxyServiceHost" . | quote }}
 - name: ATAPP_RESOURCE_LIMITS_CPU
   valueFrom:
     resourceFieldRef:
@@ -102,12 +122,16 @@ env:
     resourceFieldRef:
       containerName: {{ include "libapp.name" . }}
       resource: requests.memory
-- name: ATAPP_INSTANCE_ID
-  value: {{ include "libapp.busAddr" . }}
+- name: WORLD_ID
+  value: "{{ .Values.world_id }}"
+- name: ZONE_ID
+  value: "{{ .Values.zone_id }}"
+- name: TYPE_ID
+  value: "{{ .Values.type_id }}"
 {{- end -}}
 
 {{- define "libapp.vector.container.tpl" -}}
-{{- if and .Values.vector (default true .Values.vector.enabled) }}
+{{- if and .Values.vector (default false .Values.vector.enabled) }}
 name: vector
 image: "{{ .Values.vector.image.repository }}"
 imagePullPolicy: {{ .Values.vector.image.pullPolicy }}
@@ -119,5 +143,16 @@ volumeMounts:
   readOnly: true
 - name: log
   mountPath: {{ .Values.volumeMounts.logMountPath | quote }}
+{{- /* extra volumes */}}
+{{- range .Values.extraVolumes }}
+- name: {{ .name }}
+  mountPath: {{ .mountPath }}
+  {{- if .readOnly }}
+  readOnly: true
+  {{- end }}
+  {{- if .subPath }}
+  subPath: {{ .subPath }}
+  {{- end }}
+{{- end }}
 {{- end }}
 {{- end -}}

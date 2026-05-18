@@ -9,17 +9,18 @@ type_id: 15
 type_name: "rank-board-svr"
 
 image:
-  repository: harbor.atframe.work/atsf4g-co/server/rank-board-svr
+  repository: harbor.m-oa.com:6023/project-x/rank-board-svr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest
+  secrets: harbor-regcred
 
 volumeMounts:
-  configMountPath: /data/atframework/publish/rank-board-svr/cfg
+  configMountPath: /etc/atframework/publish/rank-board-svr/cfg
   logMountPath: /data/atframework/publish/rank-board-svr/log
 
 vector:
-  enabled: true
+  enabled: false
   log_path: /data/atframework/publish/rank-board-svr/log
 
 service:

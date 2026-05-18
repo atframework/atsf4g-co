@@ -1,17 +1,19 @@
+
 {{- define "atapp.atbus.service.settings.yaml" -}}
   {{- $bus_addr := include "libapp.busAddr" . -}}
   {{- $proxy_port := include "libapp.atbus.calculateAtproxyPort" . -}}
   {{- $service_port := include "libapp.atbus.calculateServicePort" . -}}
+  {{- $atapp_external_ip := include "libapp.atappExternalIP" . -}}
 listen:
   {{- if or (dig "configure" "topology" "rule" "allow_direct_connection" false .Values.atapp.atbus ) ( eq .Values.type_name "atproxy" ) }}
-  - "atcp://${ATAPP_EXTERNAL_IP:-::}:{{ $service_port }}"
+  - "atcp://{{ $atapp_external_ip }}:{{ $service_port }}"
   {{- else if (eq .Values.atdtool_running_platform "windows") }}
   - "pipe://\\\\.\\pipe\\{{ .Values.atapp.deployment.project_name }}\\{{ include "libapp.name" . }}_{{ $bus_addr }}.sock"
   {{- else }}
-  - "unix:///run/atapp/{{ .Values.atapp.deployment.project_name }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.sock"
+  - "unix:///tmp/atapp/{{ .Values.atapp.deployment.project_name }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.sock"
   {{- end }}
   {{- if and (dig "policy" "enable_local_proxy" false .Values.atapp.atbus ) ( ne .Values.type_name "atproxy" ) }}
-proxy: "atcp://${ATAPP_EXTERNAL_IP:-127.0.0.1}:{{ $proxy_port }}"
+proxy: "atcp://{{ $atapp_external_ip }}:{{ $proxy_port }}"
   {{- else if (dig "policy" "remote_proxy" false .Values.atapp.atbus ) }}
 proxy: "{{ .Values.atapp.atbus.policy.remote_proxy }}" # address of upstream node
   {{- else }}

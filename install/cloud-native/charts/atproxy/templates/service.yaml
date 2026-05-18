@@ -1,3 +1,5 @@
 {{- template "libapp.service" (list . "atproxy.service") -}}
 {{- define "atproxy.service" -}}
+metadata:
+  name: {{ include "libapp.atproxyServiceName" . }}
 {{- end -}}

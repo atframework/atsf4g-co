@@ -1,0 +1,3 @@
+{{- template "libapp.service" (list . "atgateway.service") -}}
+{{- define "atgateway.service" -}}
+{{- end -}}

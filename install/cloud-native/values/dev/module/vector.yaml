@@ -1,0 +1,7 @@
+sliks:
+  opensearch:
+    enable: true
+    data_stream_type: hello
+    username: username
+    password: password
+    endpoint: endpoint

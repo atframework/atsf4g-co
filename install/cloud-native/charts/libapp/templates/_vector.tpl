@@ -1,49 +1,73 @@
-{{- define "atapp.logic.yaml" -}}
-# =========== vector configure ===========
-logic:
-  world_id: {{ .Values.world_id }} # world_id
-  zone_id: {{ .Values.zone_id }} # zone_id
-  logic_id: {{ include "libapp.logicID" . }} # svr_zone_id
-  server:
-    log_path: "{{ .Values.server_log_dir }}"
-  excel:
-    enable: true
-    bindir: "../../resource/excel"
-  user:
-    enable_session_actor_log: {{ .Values.enable_session_actor_log }}
-  operation_support_system:
-    oss_cfg:
-      enable: {{ .Values.enable_oss_log }}
-      file: {{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ include "libapp.busAddr" . }}.oss.%N.log
-      writing_alias: {{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ include "libapp.busAddr" . }}.oss.log
-      rotate:
-        number: 10
-        size: 20MB
-      flush_interval: 1s
-    mon_cfg:
-      enable: {{ .Values.enable_mon_log }}
-      file: {{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ include "libapp.busAddr" . }}.mon.%N.log
-      writing_alias: {{ .Values.server_log_dir }}/{{ include "libapp.name" . }}_{{ include "libapp.busAddr" . }}.mon.log
-      rotate:
-        number: 3
-        size: 20MB
-      flush_interval: 1s
-  {{- if and .Values.redis .Values.redis.enable }}
-  db:
-    cluster:
-      host:
-    {{- range $_, $addr := .Values.redis.addrs }}
-        - {{ $addr }}
-    {{- end }}
-    password: {{ .Values.redis.password }}
-    record_prefix: {{ .Values.redis.record_prefix }}
-  {{- end -}}
-  {{- if and .Values.cachesvr_shared .Values.cachesvr_shared.enable }}
-  cache:
-    {{- toYaml .Values.cachesvr_shared | trim | nindent 4 }}
-  {{- end -}}
-  {{- if and .Values.cs_session .Values.cs_session.enable }}
-  session:
-    {{- toYaml .Values.cs_session | trim | nindent 4 }}
-  {{- end -}}
+{{- define "libapp.vector.server_log_normal" -}}
+.file_path = string!(.file)
+.file_name = basename!(.file_path)
+. |= parse_regex!(.file_name, r'^(?P<svrname>[A-Za-z0-9_-]+)_(?P<inst_id>\d+.\d+.\d+.\d+)')
+del(.file)
+del(.file_path)
+del(.file_name)
+del(.host)
+del(.source_type)
+del(.timestamp)
+.log_type = "{{ . }}"
+. |= parse_regex!(.message, r'^\[(?P<log_ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\]\[\s*(?P<log_level>[A-Z]+)\s*\]\((?P<caller>[^():]+:\d+)\)')
+parsed_ts = parse_timestamp!(.log_ts, "%Y-%m-%d %H:%M:%S%.f", timezone: "Asia/Shanghai")
+.log_ts = format_timestamp!(parsed_ts, format: "%FT%T.%3fZ", timezone: "UTC")
+._timestamp = to_unix_timestamp(parsed_ts)
+{{- end -}}
+
+{{- define "libapp.vector.server_log_index" -}}
+{{- with .index }}
+index = [{{range $index, $element := .}}{{if $index}}, {{end}}"{{$element}}"{{end}}]
+kv_matches = parse_regex_all!(.message, r'\u001F(?P<key>[^=\u001F\s]+)=(?P<value>[^\u001F]+)\u001F')
+if kv_matches != null && length(kv_matches) > 0 {
+  for_each(kv_matches) -> |_index, value| {
+    if includes(index, value.key) {
+      key, _ = "$" + value.key
+      . = set!(., [key], value.value)
+    }
+  }
+}
 {{- end }}
+{{- end -}}
+
+{{- define "libapp.vector.server_log_actor" -}}
+.file_path = string!(.file)
+. |= parse_regex!(.file_path, r'(?:^|[\\/])lobbysvr[\\/]log[\\/][^\\/]+[\\/](?P<zone_id>\d+)-(?P<user_id>\d+)')
+del(.timestamp)
+del(.log)
+del(.file)
+del(.file_path)
+del(.host)
+del(.source_type)
+. |= parse_regex!(.message, r'(?P<log_ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})')
+parsed_ts = parse_timestamp!(.log_ts, "%Y-%m-%d %H:%M:%S%.f", timezone: "Asia/Shanghai")
+.log_ts = format_timestamp!(parsed_ts, format: "%FT%T.%3fZ", timezone: "UTC")
+._timestamp = to_unix_timestamp(parsed_ts)
+{{- end -}}
+
+{{- define "libapp.vector.server_log_oss" -}}
+del(.host)
+del(.source_type)
+del(.timestamp)
+del(.file)
+parse_data = parse_regex!(.message, r'^(?P<log_ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(?P<message>\{.*\})$')
+parsed_ts = parse_timestamp!(parse_data.log_ts, "%Y-%m-%d %H:%M:%S", timezone: "Asia/Shanghai")
+parse_data.log_ts = format_timestamp!(parsed_ts, format: "%FT%T.000Z", timezone: "UTC")
+. = parse_json!(parse_data.message)
+.log_ts = parse_data.log_ts
+._timestamp = to_unix_timestamp(parsed_ts)
+{{- end -}}
+
+{{- define "libapp.vector.server_log_crash" -}}
+.file_path = string!(.file)
+.file_name = basename!(.file_path)
+. |= parse_regex!(.file_name, r'^(?P<svrname>[A-Za-z0-9_-]+)_(?P<inst_id>\d+.\d+.\d+.\d+)')
+del(.file)
+del(.file_path)
+del(.file_name)
+del(.host)
+del(.source_type)
+del(.timestamp)
+.log_ts = now()
+._timestamp = to_unix_timestamp(.log_ts)
+{{- end -}}

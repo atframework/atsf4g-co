@@ -1,4 +1,5 @@
 {{- define "libapp.service.tpl" -}}
+{{- if .Values.service }}
 # libapp.service.tpl - 用于生成 Service 资源的可复用 helper
 # 说明：
 # - 优先从 `.Values.service` 读取配置（推荐的新结构），并兼容旧的 `.Values.port` 字段。
@@ -24,6 +25,7 @@ spec:
   selector:
     # selector 推荐使用 values 配置化，这里保留向后兼容的默认值
     app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
 {{- end -}}
 {{- define "libapp.service" -}}
 {{- /* 将当前 dot 传递给 util.merge，以便模板内的 .Values/.Release 可用 */ -}}

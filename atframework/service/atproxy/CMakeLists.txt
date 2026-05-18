@@ -49,3 +49,5 @@ atframework_add_executable(
   ${ATSF4G_APP_SOURCE_LIST})
 
 target_link_libraries(${ATSF4G_APP_NAME} PRIVATE "${ATSF4G_APP_NAME}-protocol" opentelemetry-cpp::api)
+
+set_target_properties(${ATSF4G_APP_NAME} PROPERTIES OUTPUT_NAME "atproxyd")

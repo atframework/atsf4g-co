@@ -33,15 +33,15 @@ spec:
       {{- if .Values.terminationGracePeriodSeconds }}
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       {{- end }}
-      {{- with .Values.imagePullSecrets }}
+      {{- with .Values.image.secrets }}
       imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
+        - name: {{ . }}
       {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - {{ include "libapp.container.tpl" . | nindent 10 }}
-      {{- if and .Values.vector (default true .Values.vector.enabled) }}
+      {{- if and .Values.vector (default false .Values.vector.enabled) }}
       initContainers:
         - {{ include "libapp.vector.container.tpl" . | nindent 10 }}
       {{- end }}

@@ -1,18 +1,14 @@
 image:
-  repository: harbor.atframe.work/vector/vector:latest
+  repository: harbor.m-oa.com:6023/vector/vector:latest
   pullPolicy: Always
+  secrets: harbor-regcred
+
 sliks:
   console:
     enable: false
   test_file:
     enable: false
   opensearch:
-    enable: true
-    username: project-Y-log-writer
-    password: 11bo1B{OE,gjzZ4D
-    endpoint: https://opensearch-cluster-master.devops.svc.cluster.local:9200/
-index:
-  - "user_id"
-  - "task_name"
-  - "zone_id"
-  - "response_code"
+    enable: false
+  kafka:
+    enable: false

@@ -8,19 +8,24 @@ type_id: 12
 type_name: "lobbysvr"
 
 image:
-  repository: harbor.atframe.work/atsf4g-co/server
+  repository: harbor.m-oa.com:6023/project-x/lobbysvr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest
+  secrets: harbor-regcred
 
 volumeMounts:
-  configMountPath: /data/atframework/publish/lobbysvr/cfg
+  configMountPath: /etc/atframework/publish/lobbysvr/cfg
   logMountPath: /data/atframework/publish/lobbysvr/log
 
-vector:
-  enabled: true
-  log_path: /data/atframework/publish/lobbysvr/log
+# vector:
+#   enabled: true
+#   log_path: /data/atframework/publish/lobbysvr/log
 
+
+vector:
+  enabled: false
+  log_path: /data/atframework/publish/lobbysvr/log
 
 redis:
   enable: true

@@ -25,3 +25,5 @@ atframework_add_executable(
   ${ATSF4G_APP_HEADER_LIST}
   SOURCES
   ${ATSF4G_APP_SOURCE_LIST})
+
+set_target_properties(${ATSF4G_APP_NAME} PROPERTIES OUTPUT_NAME "atgatewayd")

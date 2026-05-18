@@ -8,7 +8,7 @@ SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )";
 SCRIPT_DIR="$( readlink -f $SCRIPT_DIR )";
 cd "$SCRIPT_DIR";
 
-./{{ $proc_name }} --config ../cfg/{{ $type_name }}_{{ $bus_addr }}.yaml -pid ./{{ $type_name }}_{{ $bus_addr }}.pid start
+./{{ $proc_name }} --config ../cfg/{{ $type_name }}_{{ $bus_addr }}.yaml --pid ./{{ $type_name }}_{{ $bus_addr }}.pid start
 {{- end }}
 
 {{- define "atapp.start.bat" -}}
@@ -27,7 +27,7 @@ set "PATH=%DLL_DIR%;%PATH%"
 set "DLL_DIR=%~dp0..\..\bin\RelWithDebInfo"
 set "PATH=%DLL_DIR%;%PATH%"
 
-.\{{ $proc_name }}.exe --config ..\cfg\{{ $type_name }}_{{ $bus_addr }}.yaml -pid .\{{ $type_name }}_{{ $bus_addr }}.pid start
+.\{{ $proc_name }}.exe --config ..\cfg\{{ $type_name }}_{{ $bus_addr }}.yaml --pid .\{{ $type_name }}_{{ $bus_addr }}.pid start
 
 endlocal
 {{- end }}
