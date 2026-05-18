@@ -21,7 +21,8 @@
 #define GTCLI2PLAYER(ctx) (*reinterpret_cast<client_player *>(libatgateway_v2_c_get_private_data(ctx)))
 
 // ======================== 以下为协议处理回调 ========================
-static int32_t proto_inner_callback_on_write(libatgateway_v2_c_context ctx, void *buffer, uint64_t sz, int32_t *is_done) {
+static int32_t proto_inner_callback_on_write(libatgateway_v2_c_context ctx, void *buffer, uint64_t sz,
+                                             int32_t *is_done) {
   client_player::libuv_ptr_t net = GTCLI2PLAYER(ctx).find_network(ctx);
   if (!net || nullptr == buffer) {
     if (nullptr != is_done) {
@@ -124,13 +125,13 @@ client_player::client_player()
       sequence_(0),
       gamesvr_index_(0),
       is_connecting_(false) {
-  account_.set_account_type(PROJECT_NAMESPACE_ID::EN_ATI_ACCOUNT_INNER);
+  account_.set_account_type(PROJECT_NAMESPACE_ID::EN_ATI_ACCOUNT_INTERNAL);
   account_.set_channel_id(PROJECT_NAMESPACE_ID::EN_PCI_NONE);
 }
 
 client_player::~client_player() {
-  for (std::map<uint32_t, libatgateway_v2_c_context>::iterator iter = proto_handles_.begin(); iter != proto_handles_.end();
-       ++iter) {
+  for (std::map<uint32_t, libatgateway_v2_c_context>::iterator iter = proto_handles_.begin();
+       iter != proto_handles_.end(); ++iter) {
     libatgateway_v2_c_destroy(iter->second);
   }
   proto_handles_.clear();
@@ -165,7 +166,8 @@ int client_player::on_connected(libuv_ptr_t net, int status) {
     all_avail_types += libatgateway_v2_c_global_get_crypto_name(i);
   }
 
-  int32_t res = libatgateway_v2_c_start_session(proto_handle, reinterpret_cast<const unsigned char*>(all_avail_types.data()), all_avail_types.size());
+  int32_t res = libatgateway_v2_c_start_session(
+      proto_handle, reinterpret_cast<const unsigned char *>(all_avail_types.data()), all_avail_types.size());
   if (res < 0) {
     atfw::util::cli::shell_stream ss(std::cerr);
     ss() << atfw::util::cli::shell_font_style::SHELL_FONT_COLOR_RED << "start session failed, res" << res << std::endl;
@@ -267,8 +269,8 @@ void client_player::destroy_proto_context(libuv_ptr_t net) {
 
 client_player::libuv_ptr_t client_player::find_network(libatgateway_v2_c_context ctx) {
   uint32_t id = 0;
-  for (std::map<uint32_t, libatgateway_v2_c_context>::iterator iter = proto_handles_.begin(); iter != proto_handles_.end();
-       ++iter) {
+  for (std::map<uint32_t, libatgateway_v2_c_context>::iterator iter = proto_handles_.begin();
+       iter != proto_handles_.end(); ++iter) {
     if (iter->second == ctx) {
       id = iter->first;
       break;

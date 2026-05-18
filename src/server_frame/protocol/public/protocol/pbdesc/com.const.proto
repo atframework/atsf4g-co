@@ -29,7 +29,7 @@ enum EnConstLimits {
 
 // account type
 enum EnAccountTypeID {
-  EN_ATI_ACCOUNT_INNER = 0; // inner: username/password
+  EN_ATI_ACCOUNT_INTERNAL = 0;  // internal: username/password
   EN_ATI_ACCOUNT_IOS_GUEST = 1; // ios guest
 }
 
@@ -259,21 +259,21 @@ enum EnErrorCode {
   EN_ERR_RANK_SERVICE_NOT_AVAILABLE = -606
                                                         [(error_code.description) = "没有可用的排行榜服务"];
   EN_ERR_RANK_SERVICE_SYSTEM_BUSY = -607
-                                                        [(error_code.description) = "排行榜服务繁忙"];                                                                                                              
+                                                        [(error_code.description) = "排行榜服务繁忙"];
   EN_ERR_RANK_SCORE_INVALID = -608
-                                                        [(error_code.description) = "排行榜成绩非法, 不能小于0"];    
+                                                        [(error_code.description) = "排行榜成绩非法, 不能小于0"];
   EN_ERR_RANK_CONFIG_NOT_FOUND = -609
-                                                        [(error_code.description) = "排行榜配置没有找到"]; 
-  EN_ERR_RANK_IS_NOT_SLAVE = -710  
+                                                        [(error_code.description) = "排行榜配置没有找到"];
+  EN_ERR_RANK_IS_NOT_SLAVE = -710
                                                         [(error_code.description) = "不是从节点"];
   EN_ERR_RANK_IS_NOT_MAIN = -711
                                                         [(error_code.description) = "不是主节点"];
   EN_ERR_RANK_SLAVE_SERVER_EMPTY = -712
-                                                        [(error_code.description) = "没有可用的从节点"];        
+                                                        [(error_code.description) = "没有可用的从节点"];
   EN_ERR_RANK_MIRROR_ALLOC_FAILED = -713
-                                                        [(error_code.description) = "排行榜镜像分配失败"];  
+                                                        [(error_code.description) = "排行榜镜像分配失败"];
   EN_ERR_RANK_MIRROR_NOT_FOUND = -714
-                                                        [(error_code.description) = "排行榜镜像不存在"];  
+                                                        [(error_code.description) = "排行榜镜像不存在"];
   EN_ERR_RANK_INVALID_TYPE = -715
                              [(error_code.description) = "排行榜类型错误"];
   EN_ERR_RANK_USER_NOT_EXISTS = -716
