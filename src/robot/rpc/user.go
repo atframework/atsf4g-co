@@ -27,7 +27,7 @@ func LoginAuthRpc(action base.TaskActionImpl, user user_data.User) (int32, *pu.L
 	csBody := &public_protocol_pbdesc.CSLoginAuthReq{
 		OpenId: user.GetOpenId(),
 		Account: &public_protocol_pbdesc.DAccountData{
-			AccountType: uint32(public_protocol_pbdesc.EnAccountTypeID_EN_ATI_ACCOUNT_INNER),
+			AccountType: uint32(public_protocol_pbdesc.EnAccountTypeID_EN_ATI_ACCOUNT_INTERNAL),
 			Access:      user.GetAccessToken(),
 			ChannelId:   uint32(public_protocol_pbdesc.EnPlatformChannelID_EN_PCI_NONE),
 		},
@@ -56,7 +56,7 @@ func LoginRpc(action base.TaskActionImpl, user user_data.User) (int32, *pu.LazyU
 		OpenId:          user.GetOpenId(),
 		UserId:          user.GetUserId(),
 		Account: &public_protocol_pbdesc.DAccountData{
-			AccountType: uint32(public_protocol_pbdesc.EnAccountTypeID_EN_ATI_ACCOUNT_INNER),
+			AccountType: uint32(public_protocol_pbdesc.EnAccountTypeID_EN_ATI_ACCOUNT_INTERNAL),
 			Access:      user.GetAccessToken(),
 			ChannelId:   uint32(public_protocol_pbdesc.EnPlatformChannelID_EN_PCI_NONE),
 		},
