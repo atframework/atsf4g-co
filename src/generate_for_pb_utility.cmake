@@ -342,67 +342,6 @@ function(generate_for_pb_add_cs_service SERVICE_NAME SERVICE_ROOT_DIR)
 ")
 endfunction(generate_for_pb_add_cs_service)
 
-function(generate_for_pb_add_simulator_cs_api SERVICE_NAME SERVICE_ROOT_DIR)
-  set(GENERATE_FOR_PB_ARGS_OPTIONS RPC_IGNORE_EMPTY_REQUEST)
-  set(GENERATE_FOR_PB_ARGS_ONE_VALUE PROJECT_NAMESPACE SERVICE_DLLEXPORT_DECL RPC_DLLEXPORT_DECL)
-  set(GENERATE_FOR_PB_ARGS_MULTI_VALUE INCLUDE_HEADERS)
-  cmake_parse_arguments(GENERATE_FOR_PB_ARGS "${GENERATE_FOR_PB_ARGS_OPTIONS}" "${GENERATE_FOR_PB_ARGS_ONE_VALUE}"
-                        "${GENERATE_FOR_PB_ARGS_MULTI_VALUE}" ${ARGN})
-  if(NOT GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE)
-    set(GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE "")
-  endif()
-  if(GENERATE_FOR_PB_ARGS_RPC_IGNORE_EMPTY_REQUEST)
-    set(GENERATE_FOR_PB_RPC_IGNORE_EMPTY_REQUEST "rpc_exclude_request: [ 'google.protobuf.Empty' ]")
-  else()
-    set(GENERATE_FOR_PB_RPC_IGNORE_EMPTY_REQUEST "rpc_exclude_request: [ ]")
-  endif()
-  if(NOT GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL)
-    string(REGEX REPLACE "[-\\.]" "_" GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL "${TARGET_NAME}")
-    string(REGEX REPLACE "[\\\$\\\\/]" "" GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL
-                         "${GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL}")
-    string(REPLACE "::" "_" GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL
-                   "${GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL}_API")
-    string(TOUPPER "${GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL}" GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL)
-  endif()
-  if(NOT GENERATE_FOR_PB_ARGS_RPC_DLLEXPORT_DECL)
-    string(REGEX REPLACE "_API\\$" "" GENERATE_FOR_PB_ARGS_RPC_DLLEXPORT_DECL
-                         "${GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL}")
-    string(TOUPPER "${GENERATE_FOR_PB_ARGS_RPC_DLLEXPORT_DECL}_RPC_API" GENERATE_FOR_PB_ARGS_RPC_DLLEXPORT_DECL)
-  endif()
-  if(GENERATE_FOR_PB_ARGS_INCLUDE_HEADERS)
-    set(CUSTOM_INCLUDE_HEADERS "include_headers:")
-    foreach(INCLUDE_HEADERS ${GENERATE_FOR_PB_ARGS_INCLUDE_HEADERS})
-      set(CUSTOM_INCLUDE_HEADERS "${CUSTOM_INCLUDE_HEADERS}
-          - '${INCLUDE_HEADERS}'")
-    endforeach()
-  else()
-    set(CUSTOM_INCLUDE_HEADERS "include_headers: [ ]")
-  endif()
-
-  file(
-    APPEND "${GENERATE_FOR_PB_OUT_CONF}"
-    "  # ${SERVICE_NAME}
-  - service:
-      name: '${SERVICE_NAME}'
-      overwrite: false
-      output_directory: '${SERVICE_ROOT_DIR}'
-      service_dllexport_decl: '${GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL}'
-      rpc_dllexport_decl: '${GENERATE_FOR_PB_ARGS_RPC_DLLEXPORT_DECL}'
-      custom_variables:
-        project_namespace: '${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE}'
-        rpc_include_prefix: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}'
-        ${CUSTOM_INCLUDE_HEADERS}
-      service_template:
-        - overwrite: true
-          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/package_request_api_for_simulator.h.mako'
-          output: 'rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.h'
-        - overwrite: true
-          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/package_request_api_for_simulator.cpp.mako'
-          output: 'rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.cpp'
-      ${GENERATE_FOR_PB_RPC_IGNORE_EMPTY_REQUEST}
-")
-endfunction(generate_for_pb_add_simulator_cs_api)
-
 function(generate_for_pb_initialize_sh SCRIPT_PATH)
   set(optionArgs COMMAND_ECHO STOP_ON_ERROR)
   set(oneValueArgs SET_LOCATION)

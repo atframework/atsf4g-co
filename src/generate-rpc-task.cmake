@@ -121,32 +121,5 @@ include("${CMAKE_CURRENT_LIST_DIR}/component/orbit/generate-rpc-task.cmake")
 # add tool to binding orbitsvr rpcs
 include("${CMAKE_CURRENT_LIST_DIR}/orbitsvr/generate-rpc-task.cmake")
 
-# add tool to generate simulator rpcs
-generate_for_pb_add_simulator_cs_api(
-  "${PROJECT_NAMESPACE}.AuthsvrClientService"
-  "${CMAKE_CURRENT_LIST_DIR}/tools/simulator"
-  RPC_IGNORE_EMPTY_REQUEST
-  SERVICE_DLLEXPORT_DECL
-  GAMECLIENT_SERVICE_API
-  RPC_DLLEXPORT_DECL
-  GAMECLIENT_RPC_API
-  PROJECT_NAMESPACE
-  "${PROJECT_NAMESPACE}"
-  SERVICE_DLLEXPORT_DECL
-  GAMECLIENT_SERVICE_API
-  RPC_DLLEXPORT_DECL
-  GAMECLIENT_RPC_API)
-
-generate_for_pb_add_simulator_cs_api(
-  "${PROJECT_NAMESPACE}.LobbysvrClientService"
-  "${CMAKE_CURRENT_LIST_DIR}/tools/simulator"
-  RPC_IGNORE_EMPTY_REQUEST
-  PROJECT_NAMESPACE
-  "${PROJECT_NAMESPACE}"
-  SERVICE_DLLEXPORT_DECL
-  GAMECLIENT_SERVICE_API
-  RPC_DLLEXPORT_DECL
-  GAMECLIENT_RPC_API)
-
 # Run generator finally
 generate_for_pb_run_generator()
