@@ -211,8 +211,8 @@ If .Values.logic_id is set, use it directly
 {{- end }}
 
 {{- define "libapp.atappExternalIP" -}}
-  {{- if .Values.atapp_external_ip -}}
-    {{- .Values.atapp_external_ip -}}
+  {{- if .Values.atappExternalIP -}}
+    {{- .Values.atappExternalIP -}}
   {{- else -}}
     ${ATAPP_EXTERNAL_IP}
   {{- end -}}
