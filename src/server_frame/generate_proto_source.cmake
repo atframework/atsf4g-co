@@ -240,6 +240,7 @@ add_custom_target(protocol)
 foreach(PROJECT_SERVER_FRAME_PROTO_SUB_TARGET protocol-extension protocol-common protocol-config protocol-net)
   add_dependencies(protocol ${PROJECT_SERVER_FRAME_PROTO_SUB_TARGET})
 endforeach()
+generate_for_pb_register_protocol_codegen_target(protocol)
 
 set_property(TARGET protocol PROPERTY FOLDER "${PROJECT_NAME}/protocol")
 

@@ -15,4 +15,6 @@ project_component_declare_service(
   "${SERVICE_TARGET_NAME}/log"
   USE_COMPONENTS
   "distributed-transaction-protocol"
-  "dtcoordsvr-config")
+  "dtcoordsvr-config"
+  GENERATED_OUTPUT_FILES
+  "atframework.distributed_system.DtcoordsvrService")

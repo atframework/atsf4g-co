@@ -17,4 +17,7 @@ project_component_declare_service(
   SOURCES
   ${SERVICE_SOURCES}
   RESOURCE_DIRECTORIES
-  "${SERVICE_TARGET_NAME}/log")
+  "${SERVICE_TARGET_NAME}/log"
+  GENERATED_OUTPUT_FILES
+  "orbit.ClientToAgentService"
+  "orbit.ControllerToAgentService")

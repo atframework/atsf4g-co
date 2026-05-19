@@ -9,6 +9,25 @@ project_component_declare_protocol("dtcoordsvr-config" "${CMAKE_CURRENT_LIST_DIR
 target_include_directories(${PROJECT_COMPONENT_DISTRIBUTED_TRANSACTION_PROTOCOL}
                            PUBLIC "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 
-add_subdirectory(sdk)
+generate_for_pb_add_ss_service(
+  "atframework.distributed_system.DtcoordsvrService"
+  "${CMAKE_CURRENT_LIST_DIR}/dtcoordsvr"
+  TASK_PATH_PREFIX
+  "logic"
+  HANDLE_PATH_PREFIX
+  "app"
+  PROJECT_NAMESPACE
+  "${PROJECT_NAMESPACE}"
+  RPC_ROOT_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/sdk"
+  SERVICE_DLLEXPORT_DECL
+  DISTRIBUTED_TRANSACTION_SERVICE_API
+  RPC_DLLEXPORT_DECL
+  DISTRIBUTED_TRANSACTION_SDK_API
+  EXTERNAL_COMPONENT_PROTOCOLS
+  "distributed-transaction-protocol"
+  INCLUDE_HEADERS
+  "protocol/pbdesc/distributed_transaction.pb.h")
 
+add_subdirectory(sdk)
 add_subdirectory(dtcoordsvr)

@@ -15,4 +15,7 @@ project_service_declare_instance(
   SOURCES
   ${SERVICE_SOURCES}
   RESOURCE_DIRECTORIES
-  "${SERVICE_TARGET_NAME}/log")
+  "${SERVICE_TARGET_NAME}/log"
+  GENERATED_OUTPUT_FILES
+  "${PROJECT_NAMESPACE}.OrbitServerRpcService"
+  "${PROJECT_NAMESPACE}.OrbitClientRpcService")

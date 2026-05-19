@@ -3,7 +3,7 @@ set(GENERATE_FOR_ORBIT_PB_WORK_DIR "${CMAKE_CURRENT_LIST_DIR}")
 function(generate_for_pb_add_orbit_service SERVICE_NAME SERVICE_ROOT_DIR)
   set(GENERATE_FOR_PB_ARGS_OPTIONS RPC_IGNORE_EMPTY_REQUEST)
   set(GENERATE_FOR_PB_ARGS_ONE_VALUE TASK_PATH_PREFIX HANDLE_PATH_PREFIX PROJECT_NAMESPACE SERVICE_DLLEXPORT_DECL
-                                     RPC_DLLEXPORT_DECL)
+                                     RPC_DLLEXPORT_DECL GENERATED_OUTPUT_FILES)
   set(GENERATE_FOR_PB_ARGS_MULTI_VALUE INCLUDE_HEADERS)
   cmake_parse_arguments(GENERATE_FOR_PB_ARGS "${GENERATE_FOR_PB_ARGS_OPTIONS}" "${GENERATE_FOR_PB_ARGS_ONE_VALUE}"
                         "${GENERATE_FOR_PB_ARGS_MULTI_VALUE}" ${ARGN})
@@ -29,7 +29,7 @@ function(generate_for_pb_add_orbit_service SERVICE_NAME SERVICE_ROOT_DIR)
   endif()
 
   if(NOT GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL)
-    string(REGEX REPLACE "[-\\.]" "_" GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL "${TARGET_NAME}")
+    string(REGEX REPLACE "[-\\.]" "_" GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL "${SERVICE_NAME}")
     string(REGEX REPLACE "[\\\$\\\\/]" "" GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL
                          "${GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL}")
     string(REPLACE "::" "_" GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL
@@ -53,9 +53,8 @@ function(generate_for_pb_add_orbit_service SERVICE_NAME SERVICE_ROOT_DIR)
     set(CUSTOM_INCLUDE_HEADERS "include_headers: [ ]")
   endif()
 
-  file(
-    APPEND "${GENERATE_FOR_PB_OUT_CONF}"
-    "  # ${SERVICE_NAME}
+  set(GENERATE_FOR_PB_RULE_BODY
+      "  # ${SERVICE_NAME}
   - service:
       name: '${SERVICE_NAME}'
       overwrite: false
@@ -81,16 +80,35 @@ function(generate_for_pb_add_orbit_service SERVICE_NAME SERVICE_ROOT_DIR)
         - overwrite: false
           input: '${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/task_action_orbit_rpc.cpp.mako'
           output: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"orbit_action\")}/task_action_\${rpc.get_name()}.cpp'
-")
+" )
+  generate_for_pb_register_flow(
+    "${SERVICE_NAME}"
+    OUTPUT_VAR_BASE
+    "${GENERATE_FOR_PB_ARGS_GENERATED_OUTPUT_FILES}"
+    RULE_BODY
+    "${GENERATE_FOR_PB_RULE_BODY}"
+    TEMPLATE_DEPENDS
+    "${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/handle_orbit_rpc.h.mako"
+    "${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/handle_orbit_rpc.cpp.mako"
+    "${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/task_action_orbit_rpc.h.mako"
+    "${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/task_action_orbit_rpc.cpp.mako")
+  if(GENERATE_FOR_PB_ARGS_GENERATED_OUTPUT_FILES)
+    set(GENERATE_FOR_PB_OUTPUT_VAR_BASE "${GENERATE_FOR_PB_ARGS_GENERATED_OUTPUT_FILES}")
+  else()
+    set(GENERATE_FOR_PB_OUTPUT_VAR_BASE "${SERVICE_NAME}")
+  endif()
+  set(${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_SOURCE_FILES "${${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_SOURCE_FILES}" PARENT_SCOPE)
+  set(${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_HEADER_FILES "${${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_HEADER_FILES}" PARENT_SCOPE)
 endfunction(generate_for_pb_add_orbit_service)
 
 function(generate_for_pb_add_orbit_client SERVICE_NAME SERVICE_ROOT_DIR)
   set(GENERATE_FOR_PB_ARGS_OPTIONS)
-  set(GENERATE_FOR_PB_ARGS_ONE_VALUE PROJECT_NAMESPACE RPC_ROOT_DIR SERVICE_DLLEXPORT_DECL RPC_DLLEXPORT_DECL)
+  set(GENERATE_FOR_PB_ARGS_ONE_VALUE PROJECT_NAMESPACE RPC_ROOT_DIR SERVICE_DLLEXPORT_DECL RPC_DLLEXPORT_DECL GENERATED_OUTPUT_FILES)
   set(GENERATE_FOR_PB_ARGS_MULTI_VALUE INCLUDE_HEADERS)
   cmake_parse_arguments(GENERATE_FOR_PB_ARGS "${GENERATE_FOR_PB_ARGS_OPTIONS}" "${GENERATE_FOR_PB_ARGS_ONE_VALUE}"
                         "${GENERATE_FOR_PB_ARGS_MULTI_VALUE}" ${ARGN})
-
+  # TODO 生成代码写入 GENERATED_OUTPUT_FILES 列表 统一添加变量后缀
+  # TODO 生成PB文件 generate_for_pb_add_proto_pb_file
   if(NOT GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE)
     set(GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE "")
   endif()
@@ -100,7 +118,7 @@ function(generate_for_pb_add_orbit_client SERVICE_NAME SERVICE_ROOT_DIR)
   endif()
 
   if(NOT GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL)
-    string(REGEX REPLACE "[-\\.]" "_" GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL "${TARGET_NAME}")
+    string(REGEX REPLACE "[-\\.]" "_" GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL "${SERVICE_NAME}")
     string(REGEX REPLACE "[\\\$\\\\/]" "" GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL
                          "${GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL}")
     string(REPLACE "::" "_" GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL
@@ -124,9 +142,8 @@ function(generate_for_pb_add_orbit_client SERVICE_NAME SERVICE_ROOT_DIR)
     set(CUSTOM_INCLUDE_HEADERS "include_headers: [ ]")
   endif()
 
-  file(
-    APPEND "${GENERATE_FOR_PB_OUT_CONF}"
-    "  # ${SERVICE_NAME}
+  set(GENERATE_FOR_PB_RULE_BODY
+      "  # ${SERVICE_NAME}
   - service:
       name: '${SERVICE_NAME}'
       overwrite: true
@@ -143,5 +160,21 @@ function(generate_for_pb_add_orbit_client SERVICE_NAME SERVICE_ROOT_DIR)
         - overwrite: true
           input: '${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/rpc_call_api_for_orbit.cpp.mako'
           output: 'rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.cpp'
-")
+" )
+  generate_for_pb_register_flow(
+    "${SERVICE_NAME}"
+    OUTPUT_VAR_BASE
+    "${GENERATE_FOR_PB_ARGS_GENERATED_OUTPUT_FILES}"
+    RULE_BODY
+    "${GENERATE_FOR_PB_RULE_BODY}"
+    TEMPLATE_DEPENDS
+    "${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/rpc_call_api_for_orbit.h.mako"
+    "${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/rpc_call_api_for_orbit.cpp.mako")
+  if(GENERATE_FOR_PB_ARGS_GENERATED_OUTPUT_FILES)
+    set(GENERATE_FOR_PB_OUTPUT_VAR_BASE "${GENERATE_FOR_PB_ARGS_GENERATED_OUTPUT_FILES}")
+  else()
+    set(GENERATE_FOR_PB_OUTPUT_VAR_BASE "${SERVICE_NAME}")
+  endif()
+  set(${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_SOURCE_FILES "${${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_SOURCE_FILES}" PARENT_SCOPE)
+  set(${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_HEADER_FILES "${${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_HEADER_FILES}" PARENT_SCOPE)
 endfunction(generate_for_pb_add_orbit_client)

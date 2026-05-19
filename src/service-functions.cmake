@@ -273,6 +273,17 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
       "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include"
       --proto_path
       "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include")
+  if(PROJECT_SERVER_FRAME_PROTO_SANDBOX_EXTENSION_DIR)
+    list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_EXTENSION_DIR}")
+  elseif(EXISTS "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb")
+    list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb")
+  endif()
+  if(PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR)
+    list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}")
+  endif()
+  if(PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR)
+    list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension")
+  endif()
   if(PROJECT_COMPONENT_PUBLIC_PROTO_PATH)
     foreach(PROTO_PATH ${PROJECT_COMPONENT_PUBLIC_PROTO_PATH})
       list(APPEND PROTOBUF_PROTO_PATHS "--proto_path" "${PROTO_PATH}")
@@ -319,7 +330,8 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
         "${PROJECT_GENERATED_PBD_DIR}/service-${TARGET_NAME}.pb"
         PARENT_SCOPE)
   endif()
-
+  generate_for_pb_register_protocol_inputs("${PROTOCOL_DIR}" ${project_service_declare_protocol_PROTOCOLS})
+  generate_for_pb_register_protocol_pb_file("${TARGET_NAME}" "${PROJECT_GENERATED_PBD_DIR}/service-${TARGET_NAME}.pb")
   add_custom_command(
     OUTPUT ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES}
            "${PROJECT_GENERATED_PBD_DIR}/service-${TARGET_NAME}.pb"
@@ -341,6 +353,14 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
   else()
     set(TARGET_FULL_NAME "${PROJECT_NAME}-protocol-${TARGET_NAME}")
   endif()
+  set(TARGET_CODEGEN_NAME "${TARGET_FULL_NAME}-codegen")
+  add_custom_target(
+    ${TARGET_CODEGEN_NAME}
+    DEPENDS ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES}
+            "${PROJECT_GENERATED_PBD_DIR}/service-${TARGET_NAME}.pb"
+    SOURCES ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES})
+  set_property(TARGET ${TARGET_CODEGEN_NAME} PROPERTY FOLDER "${PROJECT_NAME}/service/protocol")
+  generate_for_pb_register_protocol_codegen_target(${TARGET_CODEGEN_NAME})
   source_group(TREE ${project_service_declare_protocol_OUTPUT_DIR} FILES ${__FINAL_GENERATED_SOURCE_FILES}
                                                                          ${__FINAL_GENERATED_HEADER_FILES})
   if(BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY)
@@ -360,6 +380,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
     project_setup_runtime_post_build_bash(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_BASH)
     project_setup_runtime_post_build_pwsh(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_PWSH)
   endif()
+  add_dependencies(${TARGET_FULL_NAME} ${TARGET_CODEGEN_NAME})
 
   if(COMMAND project_build_tools_patch_protobuf_targets)
     project_build_tools_patch_protobuf_targets(${TARGET_FULL_NAME})
@@ -459,8 +480,29 @@ function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
       USE_COMPONENTS
       USE_SERVICE_SDK
       USE_SERVICE_PROTOCOL
-      PRECOMPILE_HEADERS)
+      PRECOMPILE_HEADERS
+      GENERATED_OUTPUT_FILES)
   cmake_parse_arguments(project_service_declare_instance "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+  generate_for_pb_collect_filtered_output_files(
+    "${SERVICE_ROOT_DIR}"
+    "${project_service_declare_instance_GENERATED_OUTPUT_FILES}"
+    _PROJECT_SERVICE_GENERATED_SOURCE_FILES
+    _PROJECT_SERVICE_GENERATED_HEADER_FILES)
+  if(_PROJECT_SERVICE_GENERATED_SOURCE_FILES)
+    list(APPEND project_service_declare_instance_SOURCES ${_PROJECT_SERVICE_GENERATED_SOURCE_FILES})
+    list(REMOVE_DUPLICATES project_service_declare_instance_SOURCES)
+  endif()
+  if(_PROJECT_SERVICE_GENERATED_HEADER_FILES)
+    list(APPEND project_service_declare_instance_HEADERS ${_PROJECT_SERVICE_GENERATED_HEADER_FILES})
+    list(REMOVE_DUPLICATES project_service_declare_instance_HEADERS)
+  endif()
+  set(_PROJECT_SERVICE_GENERATED_FILES ${_PROJECT_SERVICE_GENERATED_SOURCE_FILES}
+                                       ${_PROJECT_SERVICE_GENERATED_HEADER_FILES})
+  if(_PROJECT_SERVICE_GENERATED_FILES)
+    list(REMOVE_DUPLICATES _PROJECT_SERVICE_GENERATED_FILES)
+    set_source_files_properties(${_PROJECT_SERVICE_GENERATED_FILES} PROPERTIES GENERATED TRUE)
+  endif()
 
   echowithcolor(COLOR GREEN "-- Configure service ${TARGET_NAME} on ${SERVICE_ROOT_DIR}")
 
@@ -469,6 +511,9 @@ function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
   add_executable(${TARGET_NAME} ${project_service_declare_instance_HEADERS} ${project_service_declare_instance_SOURCES})
 
   project_tool_split_target_debug_sybmol(${TARGET_NAME})
+  if(project_service_declare_instance_GENERATED_OUTPUT_FILES AND TARGET ${GENERATE_FOR_PB_TARGET})
+    add_dependencies(${TARGET_NAME} ${GENERATE_FOR_PB_TARGET})
+  endif()
 
   target_compile_options(${TARGET_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
   if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)

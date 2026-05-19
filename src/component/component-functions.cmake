@@ -11,8 +11,47 @@ endfunction()
 function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   set(optionArgs "STATIC;SHARED")
   set(oneValueArgs INCLUDE_DIR OUTPUT_NAME OUTPUT_TARGET_NAME DLLEXPORT_DECL SHARED_LIBRARY_DECL NATIVE_CODE_DECL)
-  set(multiValueArgs HEADERS SOURCES USE_COMPONENTS)
+  set(multiValueArgs HEADERS SOURCES USE_COMPONENTS GENERATED_OUTPUT_FILES)
   cmake_parse_arguments(project_component_declare_sdk "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+  set(_PROJECT_COMPONENT_GENERATED_SOURCE_FILES)
+  set(_PROJECT_COMPONENT_GENERATED_HEADER_FILES)
+  foreach(PROJECT_COMPONENT_GENERATED_OUTPUT_BASE ${project_component_declare_sdk_GENERATED_OUTPUT_FILES})
+    set(_PROJECT_COMPONENT_GENERATED_SOURCE_VAR "${PROJECT_COMPONENT_GENERATED_OUTPUT_BASE}_SOURCE_FILES")
+    set(_PROJECT_COMPONENT_GENERATED_HEADER_VAR "${PROJECT_COMPONENT_GENERATED_OUTPUT_BASE}_HEADER_FILES")
+    if(DEFINED ${_PROJECT_COMPONENT_GENERATED_SOURCE_VAR})
+      foreach(_PROJECT_COMPONENT_GENERATED_FILE IN LISTS ${_PROJECT_COMPONENT_GENERATED_SOURCE_VAR})
+        file(RELATIVE_PATH _PROJECT_COMPONENT_GENERATED_RELATIVE_PATH "${SDK_ROOT_DIR}"
+             "${_PROJECT_COMPONENT_GENERATED_FILE}")
+        if(NOT _PROJECT_COMPONENT_GENERATED_RELATIVE_PATH MATCHES "^\\.\\.")
+          list(APPEND _PROJECT_COMPONENT_GENERATED_SOURCE_FILES "${_PROJECT_COMPONENT_GENERATED_FILE}")
+        endif()
+      endforeach()
+    endif()
+    if(DEFINED ${_PROJECT_COMPONENT_GENERATED_HEADER_VAR})
+      foreach(_PROJECT_COMPONENT_GENERATED_FILE IN LISTS ${_PROJECT_COMPONENT_GENERATED_HEADER_VAR})
+        file(RELATIVE_PATH _PROJECT_COMPONENT_GENERATED_RELATIVE_PATH "${SDK_ROOT_DIR}"
+             "${_PROJECT_COMPONENT_GENERATED_FILE}")
+        if(NOT _PROJECT_COMPONENT_GENERATED_RELATIVE_PATH MATCHES "^\\.\\.")
+          list(APPEND _PROJECT_COMPONENT_GENERATED_HEADER_FILES "${_PROJECT_COMPONENT_GENERATED_FILE}")
+        endif()
+      endforeach()
+    endif()
+  endforeach()
+  if(_PROJECT_COMPONENT_GENERATED_SOURCE_FILES)
+    list(APPEND project_component_declare_sdk_SOURCES ${_PROJECT_COMPONENT_GENERATED_SOURCE_FILES})
+    list(REMOVE_DUPLICATES project_component_declare_sdk_SOURCES)
+  endif()
+  if(_PROJECT_COMPONENT_GENERATED_HEADER_FILES)
+    list(APPEND project_component_declare_sdk_HEADERS ${_PROJECT_COMPONENT_GENERATED_HEADER_FILES})
+    list(REMOVE_DUPLICATES project_component_declare_sdk_HEADERS)
+  endif()
+  set(_PROJECT_COMPONENT_GENERATED_FILES ${_PROJECT_COMPONENT_GENERATED_SOURCE_FILES}
+                                         ${_PROJECT_COMPONENT_GENERATED_HEADER_FILES})
+  if(_PROJECT_COMPONENT_GENERATED_FILES)
+    list(REMOVE_DUPLICATES _PROJECT_COMPONENT_GENERATED_FILES)
+    set_source_files_properties(${_PROJECT_COMPONENT_GENERATED_FILES} PROPERTIES GENERATED TRUE)
+  endif()
 
   if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
     set(TARGET_FULL_NAME "pc-${TARGET_NAME}")
@@ -68,6 +107,9 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
     endif()
   else()
     add_library(${TARGET_FULL_NAME} INTERFACE)
+  endif()
+  if(TARGET ${GENERATE_FOR_PB_TARGET})
+    add_dependencies(${TARGET_FULL_NAME} ${GENERATE_FOR_PB_TARGET})
   endif()
   if(project_component_declare_sdk_SOURCES)
     set(TARGET_INSTALL_RPATH
@@ -266,8 +308,12 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
       "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include"
       --proto_path
       "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include")
-  # Allow resolving imports from the generated sandbox (e.g., protocol/extension/v3/xresloader.proto)
-  list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb")
+  # Resolve server_frame external extension imports (e.g., protocol/extension/v3/xresloader.proto).
+  if(PROJECT_SERVER_FRAME_PROTO_SANDBOX_EXTENSION_DIR)
+    list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_EXTENSION_DIR}")
+  elseif(EXISTS "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb")
+    list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${CMAKE_BINARY_DIR}/_sandbox/generate-for-pb")
+  endif()
   if(PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR)
     list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}")
   endif()
@@ -301,7 +347,8 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
         "${PROJECT_GENERATED_PBD_DIR}/component-${TARGET_NAME}.pb"
         PARENT_SCOPE)
   endif()
-
+  generate_for_pb_register_protocol_inputs("${PROTOCOL_DIR}" ${project_component_declare_protocol_PROTOCOLS})
+  generate_for_pb_register_protocol_pb_file("${TARGET_NAME}" "${PROJECT_GENERATED_PBD_DIR}/component-${TARGET_NAME}.pb")
   add_custom_command(
     OUTPUT ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES}
            "${PROJECT_INSTALL_RES_PBD_DIR}/component-${TARGET_NAME}.pb"
@@ -324,6 +371,13 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   else()
     set(TARGET_FULL_NAME "${PROJECT_NAME}-component-${TARGET_NAME}")
   endif()
+  set(TARGET_CODEGEN_NAME "${TARGET_FULL_NAME}-codegen")
+  add_custom_target(
+    ${TARGET_CODEGEN_NAME}
+    DEPENDS ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES}
+            "${PROJECT_GENERATED_PBD_DIR}/component-${TARGET_NAME}.pb"
+    SOURCES ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES})
+  generate_for_pb_register_protocol_codegen_target(${TARGET_CODEGEN_NAME})
   source_group(TREE ${project_component_declare_protocol_OUTPUT_DIR} FILES ${__FINAL_GENERATED_SOURCE_FILES}
                                                                            ${__FINAL_GENERATED_HEADER_FILES})
   if(BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY)
@@ -343,6 +397,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
     project_setup_runtime_post_build_bash(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_BASH)
     project_setup_runtime_post_build_pwsh(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_PWSH)
   endif()
+  add_dependencies(${TARGET_FULL_NAME} ${TARGET_CODEGEN_NAME})
 
   if(COMMAND project_build_tools_patch_protobuf_targets)
     project_build_tools_patch_protobuf_targets(${TARGET_FULL_NAME})
@@ -435,8 +490,35 @@ endfunction()
 function(project_component_declare_service TARGET_NAME SERVICE_ROOT_DIR)
   set(optionArgs "")
   set(oneValueArgs INCLUDE_DIR OUTPUT_NAME OUTPUT_TARGET_NAME RUNTIME_OUTPUT_DIRECTORY)
-  set(multiValueArgs HEADERS SOURCES RESOURCE_DIRECTORIES RESOURCE_FILES USE_COMPONENTS PRECOMPILE_HEADERS)
+  set(multiValueArgs
+      HEADERS
+      SOURCES
+      RESOURCE_DIRECTORIES
+      RESOURCE_FILES
+      USE_COMPONENTS
+      PRECOMPILE_HEADERS
+      GENERATED_OUTPUT_FILES)
   cmake_parse_arguments(project_component_declare_service "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+  generate_for_pb_collect_filtered_output_files(
+    "${SERVICE_ROOT_DIR}"
+    "${project_component_declare_service_GENERATED_OUTPUT_FILES}"
+    _PROJECT_COMPONENT_GENERATED_SOURCE_FILES
+    _PROJECT_COMPONENT_GENERATED_HEADER_FILES)
+  if(_PROJECT_COMPONENT_GENERATED_SOURCE_FILES)
+    list(APPEND project_component_declare_service_SOURCES ${_PROJECT_COMPONENT_GENERATED_SOURCE_FILES})
+    list(REMOVE_DUPLICATES project_component_declare_service_SOURCES)
+  endif()
+  if(_PROJECT_COMPONENT_GENERATED_HEADER_FILES)
+    list(APPEND project_component_declare_service_HEADERS ${_PROJECT_COMPONENT_GENERATED_HEADER_FILES})
+    list(REMOVE_DUPLICATES project_component_declare_service_HEADERS)
+  endif()
+  set(_PROJECT_COMPONENT_GENERATED_FILES ${_PROJECT_COMPONENT_GENERATED_SOURCE_FILES}
+                                         ${_PROJECT_COMPONENT_GENERATED_HEADER_FILES})
+  if(_PROJECT_COMPONENT_GENERATED_FILES)
+    list(REMOVE_DUPLICATES _PROJECT_COMPONENT_GENERATED_FILES)
+    set_source_files_properties(${_PROJECT_COMPONENT_GENERATED_FILES} PROPERTIES GENERATED TRUE)
+  endif()
 
   if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
     set(TARGET_FULL_NAME "pc-${TARGET_NAME}")
@@ -451,6 +533,9 @@ function(project_component_declare_service TARGET_NAME SERVICE_ROOT_DIR)
                                      ${project_component_declare_service_SOURCES})
 
   project_tool_split_target_debug_sybmol(${TARGET_FULL_NAME})
+  if(project_component_declare_service_GENERATED_OUTPUT_FILES AND TARGET ${GENERATE_FOR_PB_TARGET})
+    add_dependencies(${TARGET_FULL_NAME} ${GENERATE_FOR_PB_TARGET})
+  endif()
 
   target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
   if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)

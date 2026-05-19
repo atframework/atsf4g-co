@@ -25,4 +25,7 @@ project_service_declare_instance(
   "lobbysvr-sdk"
   "cachesvr-sdk"
   USE_SERVICE_PROTOCOL
-  "lobbysvr-config")
+  "lobbysvr-config"
+  GENERATED_OUTPUT_FILES
+  "${PROJECT_NAMESPACE}.LobbysvrClientService"
+  "${PROJECT_NAMESPACE}.LobbysvrService")

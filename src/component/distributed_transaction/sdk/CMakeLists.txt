@@ -1,3 +1,6 @@
+file(GLOB_RECURSE SERVICE_SOURCES *.cpp *.cc *.c *.cxx)
+file(GLOB_RECURSE SERVICE_HEADERS *.h *.hpp)
+
 project_component_declare_sdk(
   "distributed-transaction-sdk"
   "${CMAKE_CURRENT_LIST_DIR}"
@@ -10,14 +13,8 @@ project_component_declare_sdk(
   USE_COMPONENTS
   distributed-transaction-protocol
   HEADERS
-  "${CMAKE_CURRENT_LIST_DIR}/rpc/transaction/dtcoordsvrservice.h"
-  "${CMAKE_CURRENT_LIST_DIR}/rpc/transaction/transaction_api.h"
-  "${CMAKE_CURRENT_LIST_DIR}/transaction_participator_handle.h"
-  "${CMAKE_CURRENT_LIST_DIR}/transaction_client_handle.h"
-  "${CMAKE_CURRENT_LIST_DIR}/logic/action/task_action_participator_resolve_transaction.h"
+  ${SERVICE_HEADERS}
   SOURCES
-  "${CMAKE_CURRENT_LIST_DIR}/rpc/transaction/dtcoordsvrservice.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/rpc/transaction/transaction_api.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/transaction_participator_handle.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/transaction_client_handle.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/logic/action/task_action_participator_resolve_transaction.cpp")
+  ${SERVICE_SOURCES}
+  GENERATED_OUTPUT_FILES
+  "atframework.distributed_system.DtcoordsvrService")

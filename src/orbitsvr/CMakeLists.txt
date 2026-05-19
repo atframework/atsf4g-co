@@ -1,1 +1,31 @@
+generate_for_pb_add_orbit_service(
+  "${PROJECT_NAMESPACE}.OrbitServerRpcService"
+  "${CMAKE_CURRENT_LIST_DIR}/service"
+  TASK_PATH_PREFIX
+  "logic"
+  HANDLE_PATH_PREFIX
+  "app"
+  PROJECT_NAMESPACE
+  "${PROJECT_NAMESPACE}"
+  SERVICE_DLLEXPORT_DECL
+  GAME_SERVICE_API
+  RPC_DLLEXPORT_DECL
+  GAME_RPC_API
+  INCLUDE_HEADERS
+  "protocol/pbdesc/com.orbit.protocol.pb.h")
+
+generate_for_pb_add_orbit_client(
+  "${PROJECT_NAMESPACE}.OrbitClientRpcService"
+  "${CMAKE_CURRENT_LIST_DIR}/service"
+  PROJECT_NAMESPACE
+  "${PROJECT_NAMESPACE}"
+  RPC_ROOT_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/service"
+  SERVICE_DLLEXPORT_DECL
+  GAME_SERVICE_API
+  RPC_DLLEXPORT_DECL
+  GAME_RPC_API
+  INCLUDE_HEADERS
+  "protocol/pbdesc/com.orbit.protocol.pb.h")
+
 add_subdirectory(service)

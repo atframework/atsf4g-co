@@ -19,6 +19,82 @@ file(
   ${PROJECT_SERVER_FRAME_SRC_DIR}/*.cpp
   ${PROJECT_SERVER_FRAME_SRC_DIR}/*.cc)
 
+# add generated files
+include("${PROJECT_SERVER_FRAME_BAS_DIR}/generate_proto_source.cmake")
+include("${PROJECT_SERVER_FRAME_BAS_DIR}/generate_config_codes.cmake")
+generate_for_pb_register_protocol_inputs("${PROJECT_SERVER_FRAME_PROTO_SANDBOX_EXTENSION_DIR}"
+                                         ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_EXTENSION})
+generate_for_pb_register_protocol_inputs("${PROJECT_SERVER_FRAME_PROTO_SANDBOX_COMMON_DIR}"
+                                         ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_COMMON})
+generate_for_pb_register_protocol_inputs("${PROJECT_SERVER_FRAME_PROTO_SANDBOX_CONFIG_DIR}"
+                                         ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_CONFIG})
+generate_for_pb_register_protocol_inputs("${PROJECT_SERVER_FRAME_PROTO_SANDBOX_PBDESC_DIR}"
+                                         ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_PBDESC})
+
+generate_for_pb_add_ss_service(
+  "${PROJECT_NAMESPACE}.RouterService"
+  "${CMAKE_CURRENT_LIST_DIR}"
+  TASK_PATH_PREFIX
+  "router"
+  HANDLE_PATH_PREFIX
+  "router"
+  PROJECT_NAMESPACE
+  "${PROJECT_NAMESPACE}"
+  SERVICE_DLLEXPORT_DECL
+  SERVER_FRAME_API
+  RPC_DLLEXPORT_DECL
+  SERVER_FRAME_API)
+
+generate_for_pb_add_ss_service(
+  "${PROJECT_NAMESPACE}.LogicCommonService"
+  "${CMAKE_CURRENT_LIST_DIR}"
+  TASK_PATH_PREFIX
+  "logic"
+  HANDLE_PATH_PREFIX
+  "logic"
+  PROJECT_NAMESPACE
+  "${PROJECT_NAMESPACE}"
+  SERVICE_DLLEXPORT_DECL
+  SERVER_FRAME_API
+  RPC_DLLEXPORT_DECL
+  SERVER_FRAME_API)
+
+generate_for_pb_add_custom_configure("
+- global:
+    overwrite: true
+    input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.cpp.mako'
+    output: 'local_db_interface.cpp'
+    output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
+    custom_variables:
+      generate_proto_file: 'protocol/pbdesc/svr.local.table.proto'
+      include_cpp: 'local_db_interface.h'
+- global:
+    overwrite: true
+    input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.h.mako'
+    output: 'local_db_interface.h'
+    output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
+    custom_variables:
+      generate_proto_file: 'protocol/pbdesc/svr.local.table.proto'
+- global:
+    overwrite: true
+    input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.cpp.mako'
+    output: 'global_db_interface.cpp'
+    output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
+    custom_variables:
+      generate_proto_file: 'protocol/pbdesc/svr.global.table.proto'
+      include_cpp: 'global_db_interface.h'
+- global:
+    overwrite: true
+    input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.h.mako'
+    output: 'global_db_interface.h'
+    output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
+    custom_variables:
+      generate_proto_file: 'protocol/pbdesc/svr.global.table.proto'
+")
+generate_output_file_add_to_list(SRC_LIST "generate_for_pb.custom_configure")
+generate_output_file_add_to_list(SRC_LIST "${PROJECT_NAMESPACE}.RouterService")
+generate_output_file_add_to_list(SRC_LIST "${PROJECT_NAMESPACE}.LogicCommonService")
+
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/skip-glob-sources.txt" "")
 foreach(SRC_FILE_REALPATH IN LISTS SRC_LIST_ORIGIN)
   get_filename_component(SRC_DIRPATH_REALPATH ${SRC_FILE_REALPATH} DIRECTORY)
@@ -35,10 +111,6 @@ foreach(SRC_FILE_REALPATH IN LISTS SRC_LIST_ORIGIN)
 endforeach()
 unset(SRC_FILE_REALPATH)
 unset(SRC_DIRPATH_REALPATH)
-
-# add generated files
-include("${PROJECT_SERVER_FRAME_BAS_DIR}/generate_proto_source.cmake")
-include("${PROJECT_SERVER_FRAME_BAS_DIR}/generate_config_codes.cmake")
 list(REMOVE_DUPLICATES SRC_LIST)
 
 source_group(TREE ${PROJECT_SERVER_FRAME_SRC_DIR} FILES ${SRC_LIST})
@@ -82,7 +154,7 @@ target_compile_definitions(${PROJECT_SERVER_FRAME_LIB_LINK} PRIVATE "SERVER_FRAM
 set_target_properties(${PROJECT_SERVER_FRAME_LIB_LINK} PROPERTIES C_VISIBILITY_PRESET "hidden" CXX_VISIBILITY_PRESET
                                                                                                "hidden")
 
-add_dependencies(${PROJECT_SERVER_FRAME_LIB_LINK} protocol config-loader)
+add_dependencies(${PROJECT_SERVER_FRAME_LIB_LINK} ${GENERATE_FOR_PB_TARGET} protocol config-loader)
 target_link_libraries(${PROJECT_SERVER_FRAME_LIB_LINK} PUBLIC ${PROJECT_SERVER_FRAME_LIB_LINK}-config
                                                               ${PROJECT_SERVER_FRAME_PUBLIC_LINK_NAMES})
 
