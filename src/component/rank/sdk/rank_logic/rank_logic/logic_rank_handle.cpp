@@ -563,6 +563,7 @@ RANK_LOGIC_SDK_API bool logic_rank_handle_self_impl::is_current(const PROJECT_NA
 RANK_LOGIC_SDK_API logic_rank_handle_variant::logic_rank_handle_variant(
     uint32_t world_id, uint32_t zone_id, const PROJECT_NAMESPACE_ID::config::ExcelRankRule& rule)
     : delegate_(reinterpret_cast<logic_rank_handle_decl*>(object_data_)) {
+  variant_type_ = static_cast<variant_type>(rule.rank_impl_type());
   init_delegate(world_id, zone_id);
   enable_image_ = rule.content().settlement_type() == PROJECT_NAMESPACE_ID::EN_RANK_SETTLEMENT_TYPE_IMAGE;
 }
