@@ -34,7 +34,7 @@ transforms:
 {{- end }}
 
 sinks:
-{{- if .Values.vector.sliks.console.enable }}
+{{- if dig "sliks" "console" "enable" false .Values.vector }}
   console:
     type: console
     inputs:
@@ -44,7 +44,7 @@ sinks:
     encoding:
       codec: json
 {{- end }}
-{{- if .Values.vector.sliks.test_file.enable }}
+{{- if dig "sliks" "test_file" "enable" false .Values.vector }}
   file:
     type: file
     inputs:
@@ -55,7 +55,7 @@ sinks:
     encoding:
       codec: json
 {{- end }}
-{{- if and .Values.vector.sliks.opensearch .Values.vector.sliks.opensearch.enable }}
+{{- if dig "sliks" "opensearch" "enable" false .Values.vector }}
 {{- $seenSinks := dict }}
 {{- range $src := .Values.vector.source }}
 {{- if and $src.sinks $src.sinks.opensearch }}
@@ -90,7 +90,7 @@ sinks:
 {{- end }}
 {{- end }}
 {{- end -}}
-{{- if and .Values.vector.sliks.kafka .Values.vector.sliks.kafka.enable }}
+{{- if dig "sliks" "kafka" "enable" false .Values.vector }}
 {{- $seenSinks := dict }}
 {{- range $src := .Values.vector.source }}
 {{- if and $src.sinks $src.sinks.kafka }}
