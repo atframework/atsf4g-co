@@ -107,8 +107,6 @@ function(generate_for_pb_add_orbit_client SERVICE_NAME SERVICE_ROOT_DIR)
   set(GENERATE_FOR_PB_ARGS_MULTI_VALUE INCLUDE_HEADERS)
   cmake_parse_arguments(GENERATE_FOR_PB_ARGS "${GENERATE_FOR_PB_ARGS_OPTIONS}" "${GENERATE_FOR_PB_ARGS_ONE_VALUE}"
                         "${GENERATE_FOR_PB_ARGS_MULTI_VALUE}" ${ARGN})
-  # TODO 生成代码写入 GENERATED_OUTPUT_FILES 列表 统一添加变量后缀
-  # TODO 生成PB文件 generate_for_pb_add_proto_pb_file
   if(NOT GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE)
     set(GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE "")
   endif()
