@@ -6,6 +6,8 @@ from pb_loader import PbMsgPbFieldisSigned,PbMsgGetPbFieldFn
 
 %><%
 cpp_include_prefix = pb_set.get_custom_variable("cpp_include_prefix", "config/excel/")
+spin_lock_namespace = pb_set.get_custom_variable("spin_lock_namespace", "::excel")
+spin_lock_include_prefix = pb_set.get_custom_variable("spin_lock_include_prefix", cpp_include_prefix)
 pb_msg_class_name = loader.get_cpp_class_name()
 %><%namespace name="pb_loader" module="pb_loader"/>
 // Copyright ${time.strftime("%Y")} xresloader. All rights reserved.
@@ -34,28 +36,127 @@ pb_msg_class_name = loader.get_cpp_class_name()
 
 #endif
 
-// clang-format off
-#include "config/compiler/protobuf_prefix.h"
-// clang-format on
+#if defined(_MSC_VER)
+#  pragma warning(push)
 
-#include "google/protobuf/arena.h"
-#include "google/protobuf/arenastring.h"
-#include "google/protobuf/extension_set.h"  // IWYU pragma: export
-#include "google/protobuf/generated_message_util.h"
-#include "google/protobuf/io/coded_stream.h"
-#include "google/protobuf/message_lite.h"
-#include "google/protobuf/metadata_lite.h"
-#include "google/protobuf/repeated_field.h"  // IWYU pragma: export
-#include "google/protobuf/stubs/common.h"
+#  if ((defined(__cplusplus) && __cplusplus >= 201703L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L))
+#    pragma warning(disable : 4996)
+#    pragma warning(disable : 4309)
+#    if _MSC_VER >= 1922
+#      pragma warning(disable : 5054)
+#    endif
+#  endif
 
-// clang-format off
-#include "config/compiler/protobuf_suffix.h"
-// clang-format on
+#  pragma warning(disable : 4100)
+#  pragma warning(disable : 4244)
+#  pragma warning(disable : 4251)
+#  pragma warning(disable : 4267)
+#  pragma warning(disable : 4668)
+#  pragma warning(disable : 4702)
+#  pragma warning(disable : 4715)
+#  pragma warning(disable : 4800)
+#  pragma warning(disable : 4946)
+#  pragma warning(disable : 6001)
+#  pragma warning(disable : 6244)
+#  pragma warning(disable : 6246)
 
-#include "lock/lock_holder.h"
+#endif
 
+#if defined(__GNUC__) && !defined(__clang__) && !defined(__apple_build_version__)
+#  if (__GNUC__ * 100 + __GNUC_MINOR__ * 10) >= 460
+#    pragma GCC diagnostic push
+#  endif
+#  pragma GCC diagnostic ignored "-Wunused-parameter"
+#  pragma GCC diagnostic ignored "-Wtype-limits"
+#  pragma GCC diagnostic ignored "-Wsign-compare"
+#  pragma GCC diagnostic ignored "-Wsign-conversion"
+#  pragma GCC diagnostic ignored "-Wshadow"
+#  pragma GCC diagnostic ignored "-Wuninitialized"
+#  pragma GCC diagnostic ignored "-Wconversion"
+#  if (__GNUC__ * 100 + __GNUC_MINOR__) >= 409
+#    pragma GCC diagnostic ignored "-Wfloat-conversion"
+#  endif
+#  if (__GNUC__ * 100 + __GNUC_MINOR__) >= 501
+#    pragma GCC diagnostic ignored "-Wsuggest-override"
+#  endif
+#elif defined(__clang__) || defined(__apple_build_version__)
+#  pragma clang diagnostic push
+#  pragma clang diagnostic ignored "-Wunused-parameter"
+#  pragma clang diagnostic ignored "-Wtype-limits"
+#  pragma clang diagnostic ignored "-Wsign-compare"
+#  pragma clang diagnostic ignored "-Wsign-conversion"
+#  pragma clang diagnostic ignored "-Wshadow"
+#  pragma clang diagnostic ignored "-Wuninitialized"
+#  pragma clang diagnostic ignored "-Wconversion"
+#  if ((__clang_major__ * 100) + __clang_minor__) >= 305
+#    pragma clang diagnostic ignored "-Wfloat-conversion"
+#  endif
+#  if ((__clang_major__ * 100) + __clang_minor__) >= 306
+#    pragma clang diagnostic ignored "-Winconsistent-missing-override"
+#  endif
+#  if ((__clang_major__ * 100) + __clang_minor__) >= 1100
+#    pragma clang diagnostic ignored "-Wsuggest-override"
+#  endif
+#endif
+
+#pragma push_macro("GetObject")
+#ifdef GetObject
+#  undef GetObject
+#endif
+#pragma push_macro("max")
+#ifdef max
+#  undef max
+#endif
+#pragma push_macro("min")
+#ifdef min
+#  undef min
+#endif
+// Unreal Engine will define these macros
+#pragma push_macro("check")
+#ifdef check
+#  undef check
+#endif
+#pragma push_macro("verify")
+#ifdef verify
+#  undef verify
+#endif
+#pragma push_macro("cast")
+#ifdef cast
+#  undef cast
+#endif
+
+#include <google/protobuf/arena.h>
+#include <google/protobuf/arenastring.h>
+#include <google/protobuf/extension_set.h>  // IWYU pragma: export
+#include <google/protobuf/generated_message_util.h>
+#include <google/protobuf/io/coded_stream.h>
+#include <google/protobuf/message_lite.h>
+#include <google/protobuf/metadata_lite.h>
+#include <google/protobuf/repeated_field.h>  // IWYU pragma: export
+#include <google/protobuf/stubs/common.h>
+
+#pragma pop_macro("cast")
+#pragma pop_macro("verify")
+#pragma pop_macro("check")
+#pragma pop_macro("min")
+#pragma pop_macro("max")
+#pragma pop_macro("GetObject")
+
+#if defined(__GNUC__) && !defined(__clang__) && !defined(__apple_build_version__)
+#  if (__GNUC__ * 100 + __GNUC_MINOR__ * 10) >= 460
+#    pragma GCC diagnostic pop
+#  endif
+#elif defined(__clang__) || defined(__apple_build_version__)
+#  pragma clang diagnostic pop
+#endif
+
+#if defined(_MSC_VER)
+#  pragma warning(pop)
+#endif
+
+#include "${spin_lock_include_prefix}lock/spin_rw_lock.h"
+#include "${spin_lock_include_prefix}lock/lock_holder.h"
 #include "${cpp_include_prefix}config_manager.h"
-#include "common/string_oprs.h"
 
 #ifndef UTIL_STRFUNC_SNPRINTF
 // @see https://github.com/atframework/atframe_utils/blob/master/include/common/string_oprs.h
@@ -76,6 +177,49 @@ pb_msg_class_name = loader.get_cpp_class_name()
 ${pb_loader.CppNamespaceBegin(global_package)}
 ${loader.get_cpp_namespace_decl_begin()}
 
+namespace details {
+  template <typename TCH>
+  static inline bool is_space(const TCH &c) {
+    return ' ' == c || '\t' == c || '\r' == c || '\n' == c;
+  }
+
+  template <typename TCH>
+  static std::pair<const TCH *, size_t> trim(const TCH *str_begin, size_t sz) {
+    if (0 == sz) {
+      const TCH *str_end = str_begin;
+      while (str_end && *str_end) {
+        ++str_end;
+      }
+
+      sz = static_cast<size_t>(str_end - str_begin);
+    }
+
+    if (str_begin) {
+      while (*str_begin && sz > 0) {
+        if (!is_space(*str_begin)) {
+          break;
+        }
+
+        --sz;
+        ++str_begin;
+      }
+    }
+
+    size_t sub_str_sz = sz;
+    if (str_begin) {
+      while (sub_str_sz > 0) {
+        if (is_space(str_begin[sub_str_sz - 1])) {
+          --sub_str_sz;
+        } else {
+          break;
+        }
+      }
+    }
+
+    return std::make_pair(str_begin, sub_str_sz);
+  }
+}
+
 EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::${pb_msg_class_name}(): all_loaded_(false), enable_multithread_lock_(true), hash_code_verison_(0) {
 }
 
@@ -85,9 +229,9 @@ EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::~${pb_msg_class_name}(){
 EXCEL_CONFIG_LOADER_API int ${pb_msg_class_name}::on_inited(bool enable_multithread_lock) {
   enable_multithread_lock_ = enable_multithread_lock;
 
-  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
+  ${spin_lock_namespace}::lock::write_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock> wlh;
   if (enable_multithread_lock_) {
-    wlh = atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock>{load_file_lock_};
+    wlh = ${spin_lock_namespace}::lock::write_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock>{load_file_lock_};
   }
 
   file_status_.clear();
@@ -101,9 +245,9 @@ EXCEL_CONFIG_LOADER_API int ${pb_msg_class_name}::load_all() {
     return ret;
   }
 
-  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
+  ${spin_lock_namespace}::lock::write_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock> wlh;
   if (enable_multithread_lock_) {
-    wlh = atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock>{load_file_lock_};
+    wlh = ${spin_lock_namespace}::lock::write_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock>{load_file_lock_};
   }
 
   for (std::unordered_map<std::string, bool>::iterator iter = file_status_.begin(); iter != file_status_.end(); ++ iter) {
@@ -123,9 +267,9 @@ EXCEL_CONFIG_LOADER_API int ${pb_msg_class_name}::load_all() {
 }
 
 EXCEL_CONFIG_LOADER_API void ${pb_msg_class_name}::clear() {
-  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
+  ${spin_lock_namespace}::lock::write_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock> wlh;
   if (enable_multithread_lock_) {
-    wlh = atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock>{load_file_lock_};
+    wlh = ${spin_lock_namespace}::lock::write_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock>{load_file_lock_};
   }
 
 % for code_index in loader.code.indexes:
@@ -249,7 +393,7 @@ int ${pb_msg_class_name}::load_list(const char* file_list_path) {
       ++ line_end;
     }
 
-    std::pair<const char*, size_t> file_path_trimed = atframework::util::string::trim(line_start, static_cast<size_t>(line_end - line_start));
+    std::pair<const char*, size_t> file_path_trimed = details::trim(line_start, static_cast<size_t>(line_end - line_start));
     if (file_path_trimed.second == 0) {
       continue;
     }
@@ -454,9 +598,9 @@ EXCEL_CONFIG_LOADER_API std::size_t ${pb_msg_class_name}::get_sizeof_${code_inde
 
 ${pb_msg_class_name}::${code_index.name}_value_type
   ${pb_msg_class_name}::_get_list_by_${code_index.name}(${code_index.get_key_decl()}, bool ${ignore_not_found_var}) {
-  atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> rlh;
+  ${spin_lock_namespace}::lock::read_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock> rlh;
   if (enable_multithread_lock_) {
-    rlh = atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock>{load_file_lock_};
+    rlh = ${spin_lock_namespace}::lock::read_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock>{load_file_lock_};
   }
 
 % if code_index.is_vector():
@@ -485,9 +629,9 @@ ${pb_msg_class_name}::${code_index.name}_value_type
   int res;
   {
     rlh.reset();
-    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
+    ${spin_lock_namespace}::lock::write_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock> wlh;
     if (enable_multithread_lock_) {
-      wlh = atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock>{load_file_lock_};
+      wlh = ${spin_lock_namespace}::lock::write_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock>{load_file_lock_};
     }
 %   if loader.code.file_list and code_index.file_mapping:
 %       for code_line in code_index.get_load_file_code("file_path"):
@@ -509,7 +653,7 @@ ${pb_msg_class_name}::${code_index.name}_value_type
 %   endif
     wlh.reset();
     if (enable_multithread_lock_) {
-      rlh = atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock>{load_file_lock_};
+      rlh = ${spin_lock_namespace}::lock::read_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock>{load_file_lock_};
     }
   }
 
@@ -628,9 +772,9 @@ ${pb_msg_class_name}::${code_index.name}_value_type
     return ${code_index.name}_data_[idx];
   }
 % else:
-  atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> rlh;
+  ${spin_lock_namespace}::lock::read_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock> rlh;
   if (enable_multithread_lock_) {
-    rlh = atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock>{load_file_lock_};
+    rlh = ${spin_lock_namespace}::lock::read_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock>{load_file_lock_};
   }
   ${code_index.name}_container_type::iterator iter = ${code_index.name}_data_.find(std::make_tuple(${code_index.get_key_params()}));
   if (iter != ${code_index.name}_data_.end()) {
@@ -641,9 +785,9 @@ ${pb_msg_class_name}::${code_index.name}_value_type
   int res;
   {
     rlh.reset();
-    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> wlh;
+    ${spin_lock_namespace}::lock::write_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock> wlh;
     if (enable_multithread_lock_) {
-      wlh = atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock>{load_file_lock_};
+      wlh = ${spin_lock_namespace}::lock::write_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock>{load_file_lock_};
     }
 %   if loader.code.file_list and code_index.file_mapping:
 %       for code_line in code_index.get_load_file_code("file_path"):
@@ -666,7 +810,7 @@ ${pb_msg_class_name}::${code_index.name}_value_type
 %   endif
     wlh.reset();
     if (enable_multithread_lock_) {
-      rlh = atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock>{load_file_lock_};
+      rlh = ${spin_lock_namespace}::lock::read_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock>{load_file_lock_};
     }
   }
 

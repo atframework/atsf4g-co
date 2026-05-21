@@ -3,6 +3,8 @@
 import time
 %><%
 cpp_include_prefix = pb_set.get_custom_variable("cpp_include_prefix", "config/excel/")
+spin_lock_namespace = pb_set.get_custom_variable("spin_lock_namespace", "::excel")
+spin_lock_include_prefix = pb_set.get_custom_variable("spin_lock_include_prefix", cpp_include_prefix)
 xresloader_include_prefix = pb_set.get_custom_variable("xresloader_include_prefix", pb_set.pb_include_prefix)
 %><%namespace name="pb_loader" module="pb_loader"/>
 // Copyright ${time.strftime("%Y")} xresloader. All rights reserved.
@@ -23,74 +25,128 @@ xresloader_include_prefix = pb_set.get_custom_variable("xresloader_include_prefi
 #include <cstring>
 
 // clang-format off
-#include "config/compiler/protobuf_prefix.h"
-// clang-format on
-
-#pragma push_macro("InterlockedAdd")
-#ifdef InterlockedAdd
-#  undef InterlockedAdd
-#endif
-#pragma push_macro("InterlockedIncrement")
-#ifdef InterlockedIncrement
-#  undef InterlockedIncrement
-#endif
-#pragma push_macro("InterlockedDecrement")
-#ifdef InterlockedDecrement
-#  undef InterlockedDecrement
-#endif
-#pragma push_macro("InterlockedExchange")
-#ifdef InterlockedExchange
-#  undef InterlockedExchange
-#endif
-#pragma push_macro("InterlockedExchangeAdd")
-#ifdef InterlockedExchangeAdd
-#  undef InterlockedExchangeAdd
-#endif
-#pragma push_macro("InterlockedCompareExchange")
-#ifdef InterlockedCompareExchange
-#  undef InterlockedCompareExchange
-#endif
-#pragma push_macro("InterlockedAnd")
-#ifdef InterlockedAnd
-#  undef InterlockedAnd
-#endif
-#pragma push_macro("InterlockedOr")
-#ifdef InterlockedOr
-#  undef InterlockedOr
-#endif
-#pragma push_macro("InterlockedXor")
-#ifdef InterlockedXor
-#  undef InterlockedXor
-#endif
-
-#include "lock/spin_rw_lock.h"
-
-#  pragma pop_macro("InterlockedXor")
-#  pragma pop_macro("InterlockedOr")
-#  pragma pop_macro("InterlockedAnd")
-#  pragma pop_macro("InterlockedCompareExchange")
-#  pragma pop_macro("InterlockedExchangeAdd")
-#  pragma pop_macro("InterlockedExchange")
-#  pragma pop_macro("InterlockedDecrement")
-#  pragma pop_macro("InterlockedIncrement")
-#  pragma pop_macro("InterlockedAdd")
-
-#include "${pb_set.pb_include_prefix}${loader.get_pb_header_path()}"
-#include "${xresloader_include_prefix}pb_header_v3.pb.h"
-
 % for block_file in pb_set.get_custom_blocks("custom_config_set_include"):
 // include custom_config_set_include: ${block_file}
 <%include file="${block_file}" />
 % endfor
-
-// clang-format off
-#include "config/compiler/protobuf_suffix.h"
 // clang-format on
 
 #include "${cpp_include_prefix}config_traits.h"
+#include "${spin_lock_include_prefix}lock/spin_rw_lock.h"
 
 #ifndef EXCEL_CONFIG_LOADER_API
 #  define EXCEL_CONFIG_LOADER_API
+#endif
+
+#if defined(_MSC_VER)
+#  pragma warning(push)
+
+#  if ((defined(__cplusplus) && __cplusplus >= 201703L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L))
+#    pragma warning(disable : 4996)
+#    pragma warning(disable : 4309)
+#    if _MSC_VER >= 1922
+#      pragma warning(disable : 5054)
+#    endif
+#  endif
+
+#  pragma warning(disable : 4100)
+#  pragma warning(disable : 4244)
+#  pragma warning(disable : 4251)
+#  pragma warning(disable : 4267)
+#  pragma warning(disable : 4668)
+#  pragma warning(disable : 4702)
+#  pragma warning(disable : 4715)
+#  pragma warning(disable : 4800)
+#  pragma warning(disable : 4946)
+#  pragma warning(disable : 6001)
+#  pragma warning(disable : 6244)
+#  pragma warning(disable : 6246)
+
+#endif
+
+#if defined(__GNUC__) && !defined(__clang__) && !defined(__apple_build_version__)
+#  if (__GNUC__ * 100 + __GNUC_MINOR__ * 10) >= 460
+#    pragma GCC diagnostic push
+#  endif
+#  pragma GCC diagnostic ignored "-Wunused-parameter"
+#  pragma GCC diagnostic ignored "-Wtype-limits"
+#  pragma GCC diagnostic ignored "-Wsign-compare"
+#  pragma GCC diagnostic ignored "-Wsign-conversion"
+#  pragma GCC diagnostic ignored "-Wshadow"
+#  pragma GCC diagnostic ignored "-Wuninitialized"
+#  pragma GCC diagnostic ignored "-Wconversion"
+#  if (__GNUC__ * 100 + __GNUC_MINOR__) >= 409
+#    pragma GCC diagnostic ignored "-Wfloat-conversion"
+#  endif
+#  if (__GNUC__ * 100 + __GNUC_MINOR__) >= 501
+#    pragma GCC diagnostic ignored "-Wsuggest-override"
+#  endif
+#elif defined(__clang__) || defined(__apple_build_version__)
+#  pragma clang diagnostic push
+#  pragma clang diagnostic ignored "-Wunused-parameter"
+#  pragma clang diagnostic ignored "-Wtype-limits"
+#  pragma clang diagnostic ignored "-Wsign-compare"
+#  pragma clang diagnostic ignored "-Wsign-conversion"
+#  pragma clang diagnostic ignored "-Wshadow"
+#  pragma clang diagnostic ignored "-Wuninitialized"
+#  pragma clang diagnostic ignored "-Wconversion"
+#  if ((__clang_major__ * 100) + __clang_minor__) >= 305
+#    pragma clang diagnostic ignored "-Wfloat-conversion"
+#  endif
+#  if ((__clang_major__ * 100) + __clang_minor__) >= 306
+#    pragma clang diagnostic ignored "-Winconsistent-missing-override"
+#  endif
+#  if ((__clang_major__ * 100) + __clang_minor__) >= 1100
+#    pragma clang diagnostic ignored "-Wsuggest-override"
+#  endif
+#endif
+
+#pragma push_macro("GetObject")
+#ifdef GetObject
+#  undef GetObject
+#endif
+#pragma push_macro("max")
+#ifdef max
+#  undef max
+#endif
+#pragma push_macro("min")
+#ifdef min
+#  undef min
+#endif
+// Unreal Engine will define these macros
+#pragma push_macro("check")
+#ifdef check
+#  undef check
+#endif
+#pragma push_macro("verify")
+#ifdef verify
+#  undef verify
+#endif
+#pragma push_macro("cast")
+#ifdef cast
+#  undef cast
+#endif
+
+#include <${pb_set.pb_include_prefix}${loader.get_pb_header_path()}>
+#include <${xresloader_include_prefix}pb_header_v3.pb.h>
+
+#pragma pop_macro("cast")
+#pragma pop_macro("verify")
+#pragma pop_macro("check")
+#pragma pop_macro("min")
+#pragma pop_macro("max")
+#pragma pop_macro("GetObject")
+
+#if defined(__GNUC__) && !defined(__clang__) && !defined(__apple_build_version__)
+#  if (__GNUC__ * 100 + __GNUC_MINOR__ * 10) >= 460
+#    pragma GCC diagnostic pop
+#  endif
+#elif defined(__clang__) || defined(__apple_build_version__)
+#  pragma clang diagnostic pop
+#endif
+
+#if defined(_MSC_VER)
+#  pragma warning(pop)
 #endif
 
 ${pb_loader.CppNamespaceBegin(global_package)}
@@ -131,7 +187,7 @@ class ${loader.get_cpp_class_name()} {
   void merge_data(item_ptr_type);
 
  private:
-  atfw::util::lock::spin_rw_lock           load_file_lock_;
+  ${spin_lock_namespace}::lock::spin_rw_lock           load_file_lock_;
   std::unordered_map<std::string, bool> file_status_; // true: already loaded
   std::list<org::xresloader::pb::xresloader_data_source> datasource_;
 
