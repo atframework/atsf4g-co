@@ -18,5 +18,5 @@ volumeMounts:
   logMountPath: /data/atframework/publish/orbit-server/log
 
 vector:
-  enabled: true
+  enabled: false
   log_path: /data/atframework/publish/orbit-server/log
