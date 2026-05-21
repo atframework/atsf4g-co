@@ -5,4 +5,4 @@ SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )";
 SCRIPT_DIR="$( readlink -f $SCRIPT_DIR )";
 cd "$SCRIPT_DIR";
 
-./robotd -mode agent -config ../cfg/robot_{{ $bus_addr }}.yaml "$@"
+./robot -mode agent -config ../cfg/robot_{{ $bus_addr }}.yaml "$@"

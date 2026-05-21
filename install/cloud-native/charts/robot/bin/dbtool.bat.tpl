@@ -3,4 +3,4 @@
 
 cd %cd%
 
-.\robotd.exe -mode dbtool -config ../cfg/robot_{{ $bus_addr }}.yaml %*
+.\robot.exe -mode dbtool -config ../cfg/robot_{{ $bus_addr }}.yaml %*
