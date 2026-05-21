@@ -35,13 +35,13 @@ xresloader_include_prefix = pb_set.get_custom_variable("xresloader_include_prefi
 
 #include <${xresloader_include_prefix}pb_header_v3.pb.h>
 
+// clang-format off
 % for pb_msg in pb_set.generate_message:
 %   for loader in pb_msg.loaders:
 #include "${loader.get_cpp_header_path()}"
 %   endfor
 % endfor
 
-// clang-format off
 % for block_file in pb_set.get_custom_blocks("custom_config_manager_include"):
 // include custom_config_manager_include: ${block_file}
 <%include file="${block_file}" />

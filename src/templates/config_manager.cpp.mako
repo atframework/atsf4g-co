@@ -107,7 +107,6 @@ int e = errno
 #define EXCEL_CONFIG_VSNPRINTF(buffer, bufsz, fmt, arg) vsnprintf(buffer, static_cast<size_t>(bufsz), fmt, arg)
 #endif
 
-
 #if defined(_REENTRANT)
 #  define EXCEL_CONFIG_TLS_USE_PTHREAD 1
 #elif defined(THREAD_TLS_ENABLED) && THREAD_TLS_ENABLED
@@ -535,7 +534,7 @@ EXCEL_CONFIG_LOADER_API int config_manager::reload_all(bool del_when_failed) {
       ret = res;
     }
   }
-  
+
   if (del_when_failed && ret < 0) {
     ${spin_lock_namespace}::lock::write_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock> wlh;
     if (enable_multithread_lock_) {
