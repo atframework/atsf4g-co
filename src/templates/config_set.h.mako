@@ -38,116 +38,16 @@ xresloader_include_prefix = pb_set.get_custom_variable("xresloader_include_prefi
 #  define EXCEL_CONFIG_LOADER_API
 #endif
 
-#if defined(_MSC_VER)
-#  pragma warning(push)
-
-#  if ((defined(__cplusplus) && __cplusplus >= 201703L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L))
-#    pragma warning(disable : 4996)
-#    pragma warning(disable : 4309)
-#    if _MSC_VER >= 1922
-#      pragma warning(disable : 5054)
-#    endif
-#  endif
-
-#  pragma warning(disable : 4100)
-#  pragma warning(disable : 4244)
-#  pragma warning(disable : 4251)
-#  pragma warning(disable : 4267)
-#  pragma warning(disable : 4668)
-#  pragma warning(disable : 4702)
-#  pragma warning(disable : 4715)
-#  pragma warning(disable : 4800)
-#  pragma warning(disable : 4946)
-#  pragma warning(disable : 6001)
-#  pragma warning(disable : 6244)
-#  pragma warning(disable : 6246)
-
-#endif
-
-#if defined(__GNUC__) && !defined(__clang__) && !defined(__apple_build_version__)
-#  if (__GNUC__ * 100 + __GNUC_MINOR__ * 10) >= 460
-#    pragma GCC diagnostic push
-#  endif
-#  pragma GCC diagnostic ignored "-Wunused-parameter"
-#  pragma GCC diagnostic ignored "-Wtype-limits"
-#  pragma GCC diagnostic ignored "-Wsign-compare"
-#  pragma GCC diagnostic ignored "-Wsign-conversion"
-#  pragma GCC diagnostic ignored "-Wshadow"
-#  pragma GCC diagnostic ignored "-Wuninitialized"
-#  pragma GCC diagnostic ignored "-Wconversion"
-#  if (__GNUC__ * 100 + __GNUC_MINOR__) >= 409
-#    pragma GCC diagnostic ignored "-Wfloat-conversion"
-#  endif
-#  if (__GNUC__ * 100 + __GNUC_MINOR__) >= 501
-#    pragma GCC diagnostic ignored "-Wsuggest-override"
-#  endif
-#elif defined(__clang__) || defined(__apple_build_version__)
-#  pragma clang diagnostic push
-#  pragma clang diagnostic ignored "-Wunused-parameter"
-#  pragma clang diagnostic ignored "-Wtype-limits"
-#  pragma clang diagnostic ignored "-Wsign-compare"
-#  pragma clang diagnostic ignored "-Wsign-conversion"
-#  pragma clang diagnostic ignored "-Wshadow"
-#  pragma clang diagnostic ignored "-Wuninitialized"
-#  pragma clang diagnostic ignored "-Wconversion"
-#  if ((__clang_major__ * 100) + __clang_minor__) >= 305
-#    pragma clang diagnostic ignored "-Wfloat-conversion"
-#  endif
-#  if ((__clang_major__ * 100) + __clang_minor__) >= 306
-#    pragma clang diagnostic ignored "-Winconsistent-missing-override"
-#  endif
-#  if ((__clang_major__ * 100) + __clang_minor__) >= 1100
-#    pragma clang diagnostic ignored "-Wsuggest-override"
-#  endif
-#endif
-
-#pragma push_macro("GetObject")
-#ifdef GetObject
-#  undef GetObject
-#endif
-#pragma push_macro("max")
-#ifdef max
-#  undef max
-#endif
-#pragma push_macro("min")
-#ifdef min
-#  undef min
-#endif
-// Unreal Engine will define these macros
-#pragma push_macro("check")
-#ifdef check
-#  undef check
-#endif
-#pragma push_macro("verify")
-#ifdef verify
-#  undef verify
-#endif
-#pragma push_macro("cast")
-#ifdef cast
-#  undef cast
-#endif
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <${pb_set.pb_include_prefix}${loader.get_pb_header_path()}>
 #include <${xresloader_include_prefix}pb_header_v3.pb.h>
 
-#pragma pop_macro("cast")
-#pragma pop_macro("verify")
-#pragma pop_macro("check")
-#pragma pop_macro("min")
-#pragma pop_macro("max")
-#pragma pop_macro("GetObject")
-
-#if defined(__GNUC__) && !defined(__clang__) && !defined(__apple_build_version__)
-#  if (__GNUC__ * 100 + __GNUC_MINOR__ * 10) >= 460
-#    pragma GCC diagnostic pop
-#  endif
-#elif defined(__clang__) || defined(__apple_build_version__)
-#  pragma clang diagnostic pop
-#endif
-
-#if defined(_MSC_VER)
-#  pragma warning(pop)
-#endif
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 ${pb_loader.CppNamespaceBegin(global_package)}
 
