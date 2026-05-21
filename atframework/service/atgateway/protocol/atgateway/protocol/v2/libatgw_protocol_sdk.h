@@ -18,17 +18,27 @@
 #include "nostd/string_view.h"
 
 // undef some maros by UE
-#pragma push_macro("GetObject")
-#ifdef GetObject
-#  undef GetObject
-#endif
-#pragma push_macro("max")
-#ifdef max
-#  undef max
-#endif
-#pragma push_macro("min")
-#ifdef min
-#  undef min
+#if defined(_WIN32) || defined(_WIN64)
+#  pragma push_macro("GetObject")
+#  ifdef GetObject
+#    undef GetObject
+#  endif
+#  pragma push_macro("DeleteFile")
+#  ifdef DeleteFile
+#    undef DeleteFile
+#  endif
+#  pragma push_macro("CreateFile")
+#  ifdef CreateFile
+#    undef CreateFile
+#  endif
+#  pragma push_macro("max")
+#  ifdef max
+#    undef max
+#  endif
+#  pragma push_macro("min")
+#  ifdef min
+#    undef min
+#  endif
 #endif
 // Unreal Engine will define these macros
 #pragma push_macro("check")
@@ -504,6 +514,10 @@ using libatgw_protocol_sdk = v2::libatgw_protocol_sdk;
 #pragma pop_macro("cast")
 #pragma pop_macro("verify")
 #pragma pop_macro("check")
-#pragma pop_macro("min")
-#pragma pop_macro("max")
-#pragma pop_macro("GetObject")
+#if defined(_WIN32) || defined(_WIN64)
+#  pragma pop_macro("min")
+#  pragma pop_macro("max")
+#  pragma pop_macro("CreateFile")
+#  pragma pop_macro("DeleteFile")
+#  pragma pop_macro("GetObject")
+#endif
