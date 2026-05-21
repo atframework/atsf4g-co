@@ -108,9 +108,7 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   else()
     add_library(${TARGET_FULL_NAME} INTERFACE)
   endif()
-  if(TARGET ${GENERATE_FOR_PB_TARGET})
-    add_dependencies(${TARGET_FULL_NAME} ${GENERATE_FOR_PB_TARGET})
-  endif()
+  add_dependencies(${TARGET_FULL_NAME} ${GENERATE_FOR_PB_TARGET})
   if(project_component_declare_sdk_SOURCES)
     set(TARGET_INSTALL_RPATH
         "${PROJECT_RPATH_ORIGIN}"
@@ -351,7 +349,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   generate_for_pb_register_protocol_pb_file("${TARGET_NAME}" "${PROJECT_GENERATED_PBD_DIR}/component-${TARGET_NAME}.pb")
   add_custom_command(
     OUTPUT ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES}
-           "${PROJECT_INSTALL_RES_PBD_DIR}/component-${TARGET_NAME}.pb"
+           "${PROJECT_GENERATED_PBD_DIR}/component-${TARGET_NAME}.pb"
     COMMAND
       "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" ${PROTOBUF_PROTO_PATHS} --cpp_out
       "dllexport_decl=${project_component_declare_protocol_DLLEXPORT_DECL}:${CMAKE_CURRENT_BINARY_DIR}" -o
@@ -533,9 +531,7 @@ function(project_component_declare_service TARGET_NAME SERVICE_ROOT_DIR)
                                      ${project_component_declare_service_SOURCES})
 
   project_tool_split_target_debug_sybmol(${TARGET_FULL_NAME})
-  if(project_component_declare_service_GENERATED_OUTPUT_FILES AND TARGET ${GENERATE_FOR_PB_TARGET})
-    add_dependencies(${TARGET_FULL_NAME} ${GENERATE_FOR_PB_TARGET})
-  endif()
+  add_dependencies(${TARGET_FULL_NAME} ${GENERATE_FOR_PB_TARGET})
 
   target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
   if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)

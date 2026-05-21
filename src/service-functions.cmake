@@ -511,9 +511,7 @@ function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
   add_executable(${TARGET_NAME} ${project_service_declare_instance_HEADERS} ${project_service_declare_instance_SOURCES})
 
   project_tool_split_target_debug_sybmol(${TARGET_NAME})
-  if(project_service_declare_instance_GENERATED_OUTPUT_FILES AND TARGET ${GENERATE_FOR_PB_TARGET})
-    add_dependencies(${TARGET_NAME} ${GENERATE_FOR_PB_TARGET})
-  endif()
+  add_dependencies(${TARGET_NAME} ${GENERATE_FOR_PB_TARGET})
 
   target_compile_options(${TARGET_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
   if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
