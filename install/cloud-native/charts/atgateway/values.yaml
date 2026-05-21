@@ -24,7 +24,7 @@ vector:
 
 
 service:
-  type: ClusterIP
+  type: LoadBalancer
   port: 7001
   targetPort: 7001
   protocol: TCP
