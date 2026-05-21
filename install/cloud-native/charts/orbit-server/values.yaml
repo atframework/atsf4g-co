@@ -15,7 +15,7 @@ image:
   secrets: harbor-regcred
 
 volumeMounts:
-  configMountPath: /data/atframework/publish/orbit-server/cfg
+  configMountPath: /etc/atframework/publish/orbit-server/cfg
   logMountPath: /data/atframework/publish/orbit-server/log
 
 vector:
