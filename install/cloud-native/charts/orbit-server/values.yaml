@@ -12,6 +12,7 @@ image:
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest
+  secrets: harbor-regcred
 
 volumeMounts:
   configMountPath: /data/atframework/publish/orbit-server/cfg
