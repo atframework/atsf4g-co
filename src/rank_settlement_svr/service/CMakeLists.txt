@@ -21,5 +21,3 @@ project_service_declare_instance(
   "${SERVICE_TARGET_NAME}/log"
   USE_SERVICE_PROTOCOL
   "rank-settlement-config")
-
-set_target_properties(${SERVICE_TARGET_NAME} PROPERTIES OUTPUT_NAME "atranksettlementd")
