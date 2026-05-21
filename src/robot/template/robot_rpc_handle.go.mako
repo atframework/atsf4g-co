@@ -68,7 +68,7 @@ func Send${rpc_name}(task base.TaskActionImpl, user data.User, reqBody *public_p
 		}
 	}
 	csMsg := &public_protocol_extension.CSMsg{
-		Head: MakeMessageHead(user, "${rpc.descriptor.full_name}", "${rpc.get_request_descriptor().full_name}"),
+		Head: MakeMessageHead(user, "${rpc.get_service().get_full_name()}/${rpc.get_name()}", "${rpc.get_request_descriptor().full_name}"),
 	}
 	csMsg.BodyBin, _ = proto.Marshal(reqBody)
 	code, bodyRaw, err := user.SendReq(task, csMsg, csMsg.Head, reqBody,
@@ -77,7 +77,7 @@ func Send${rpc_name}(task base.TaskActionImpl, user data.User, reqBody *public_p
 		return code, nil, fmt.Errorf("SendReq failed: %v", err)
 	}
 	if code != 0 {
-		user.Log("${rpc.get_name()} failed, code: %d, err: %v", code, err)
+		user.Log("${rpc.get_service().get_full_name()}/${rpc.get_name()} failed, code: %d, err: %v", code, err)
 	}
 	return code, pu.CreateLazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.${rpc.get_response().get_name()}](bodyRaw), err
 }

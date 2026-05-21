@@ -19,8 +19,8 @@ import (
 )
 
 func LoginAuthRpc(action base.TaskActionImpl, user user_data.User) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCLoginAuthRsp], error) {
-	accessTokenCode := user.GetExtralData("AccessTokenCode").(string)
-	if accessTokenCode != "" {
+	accessTokenCode, ok := user.GetExtralData("AccessTokenCode").(string)
+	if ok && accessTokenCode != "" {
 		return 0, nil, fmt.Errorf("already login auth")
 	}
 
@@ -39,8 +39,8 @@ func LoginAuthRpc(action base.TaskActionImpl, user user_data.User) (int32, *pu.L
 }
 
 func LoginRpc(action base.TaskActionImpl, user user_data.User) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCLoginRsp], error) {
-	accessTokenCode := user.GetExtralData("AccessTokenCode").(string)
-	if accessTokenCode == "" {
+	accessTokenCode, ok := user.GetExtralData("AccessTokenCode").(string)
+	if !ok || accessTokenCode == "" {
 		return 0, nil, fmt.Errorf("need login auth")
 	}
 
