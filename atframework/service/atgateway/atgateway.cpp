@@ -34,7 +34,7 @@ static int app_handle_on_forward_response(atfw::atapp::app &app, const atfw::ata
     return 0;
   }
 
-  FWLOGERROR("send data from {:#x} to {:#x} failed, msg sequence: {}, code: {}", app.get_id(), source.id,
+  FWLOGERROR("send data from {:#x} to {:#x} failed, message sequence: {}, code: {}", app.get_id(), source.id,
              m.message_sequence, error_code);
   return 0;
 }
@@ -621,9 +621,9 @@ class gateway_module : public ::atfw::atapp::module_impl {
     if (atfw::util::log::log_wrapper::check_level(WDTLOGGETCAT(atfw::util::log::log_wrapper::categorize_t::DEFAULT),
                                                   atfw::util::log::log_level::kError)) {
       WDTLOGGETCAT(atfw::util::log::log_wrapper::categorize_t::DEFAULT)
-          ->log(atfw::util::log::log_wrapper::caller_info_t(atfw::util::log::log_level::kError, "Error", filename, line,
-                                                            "anonymous"),
-                "error code %d, msg: %s", errcode, errmsg);
+          ->format_log(atfw::util::log::log_wrapper::caller_info_t(atfw::util::log::log_level::kError, "Error",
+                                                                   filename, line, "anonymous"),
+                       "error code: {}, message: {}", errcode, errmsg);
     }
     return 0;
   }
