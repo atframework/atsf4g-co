@@ -49,6 +49,7 @@ xresloader_include_prefix = pb_set.get_custom_variable("xresloader_include_prefi
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+
 ${pb_loader.CppNamespaceBegin(global_package)}
 
 #ifndef EXCEL_CONFIG_LOADER_TRAITS

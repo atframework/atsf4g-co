@@ -349,7 +349,6 @@ EXCEL_CONFIG_LOADER_API int config_manager::init_new_group() {
     if (enable_multithread_lock_) {
       rlh = ${spin_lock_namespace}::lock::read_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock>{handle_lock_};
     }
-
     if (!read_version_handle_) {
       EXCEL_CONFIG_MANAGER_LOGERROR("[EXCEL] config_manager version handle not set");
       return -1;
@@ -444,7 +443,6 @@ EXCEL_CONFIG_LOADER_API void config_manager::reset() {
     if (enable_multithread_lock_) {
       wlh = ${spin_lock_namespace}::lock::write_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock>{evt_lock_};
     }
-
     on_evt_reset_.swap(on_evt_reset);
   }
   for (auto &fn : on_evt_reset) {
@@ -452,7 +450,6 @@ EXCEL_CONFIG_LOADER_API void config_manager::reset() {
       fn.second();
     }
   }
-
   {
     ${spin_lock_namespace}::lock::write_lock_holder<${spin_lock_namespace}::lock::spin_rw_lock> wlh;
     if (enable_multithread_lock_) {

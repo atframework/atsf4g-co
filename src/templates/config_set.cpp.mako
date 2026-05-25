@@ -37,21 +37,21 @@ pb_msg_class_name = loader.get_cpp_class_name()
 #endif
 
 // clang-format off
-#include <config/compiler/protobuf_prefix.h>
+#include "config/compiler/protobuf_prefix.h"
 // clang-format on
 
-#include <google/protobuf/arena.h>
-#include <google/protobuf/arenastring.h>
-#include <google/protobuf/extension_set.h>  // IWYU pragma: export
-#include <google/protobuf/generated_message_util.h>
-#include <google/protobuf/io/coded_stream.h>
-#include <google/protobuf/message_lite.h>
-#include <google/protobuf/metadata_lite.h>
-#include <google/protobuf/repeated_field.h>  // IWYU pragma: export
-#include <google/protobuf/stubs/common.h>
+#include "google/protobuf/arena.h"
+#include "google/protobuf/arenastring.h"
+#include "google/protobuf/extension_set.h"  // IWYU pragma: export
+#include "google/protobuf/generated_message_util.h"
+#include "google/protobuf/io/coded_stream.h"
+#include "google/protobuf/message_lite.h"
+#include "google/protobuf/metadata_lite.h"
+#include "google/protobuf/repeated_field.h"  // IWYU pragma: export
+#include "google/protobuf/stubs/common.h"
 
 // clang-format off
-#include <config/compiler/protobuf_suffix.h>
+#include "config/compiler/protobuf_suffix.h"
 // clang-format on
 
 #include "${spin_lock_include_prefix}lock/spin_rw_lock.h"
@@ -77,7 +77,7 @@ pb_msg_class_name = loader.get_cpp_class_name()
 ${pb_loader.CppNamespaceBegin(global_package)}
 ${loader.get_cpp_namespace_decl_begin()}
 
-namespace details {
+namespace {
   template <typename TCH>
   static inline bool is_space(const TCH &c) {
     return ' ' == c || '\t' == c || '\r' == c || '\n' == c;
@@ -293,7 +293,7 @@ int ${pb_msg_class_name}::load_list(const char* file_list_path) {
       ++ line_end;
     }
 
-    std::pair<const char*, size_t> file_path_trimed = details::trim(line_start, static_cast<size_t>(line_end - line_start));
+    std::pair<const char*, size_t> file_path_trimed = trim(line_start, static_cast<size_t>(line_end - line_start));
     if (file_path_trimed.second == 0) {
       continue;
     }
