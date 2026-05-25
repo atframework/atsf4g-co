@@ -941,6 +941,7 @@ int32_t unpack_list_message(
       return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
     } else {
       if (value->len <= 1) {
+        modify_result.message = ptr;
         continue;
       }
       if (value->str[0] != '&') {
@@ -993,6 +994,7 @@ int32_t unpack_list_message_with_index(
       return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
     } else {
       if (value->len <= 1) {
+        modify_result.message = ptr;
         continue;
       }
       if (value->str[0] != '&') {
