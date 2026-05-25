@@ -1,0 +1,7 @@
+# etcd.yaml
+# vim: set sw=2 sts=2 et:
+# encoding: utf-8
+
+enabled: true
+client_urls:
+  - http://127.0.0.1:12379

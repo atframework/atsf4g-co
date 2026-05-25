@@ -2,6 +2,7 @@ package atsf4g_go_robot_cmd
 
 import (
 	"fmt"
+	"time"
 
 	protocol "github.com/atframework/atsf4g-co-robot/rpc"
 	task "github.com/atframework/atsf4g-co-robot/task"
@@ -11,12 +12,14 @@ import (
 	utils "github.com/atframework/robot-go/utils"
 )
 
+var cmdDefaultTimeout = time.Second * 12
+
 // ========================= 注册指令 =========================
 func init() {
-	utils.RegisterCommandDefaultTimeout(robot_cmd.MutableCommandRoot(), []string{"user", "login"}, LoginCmd, "<openid>", "登录协议", nil)
-	robot_cmd.RegisterUserCommand([]string{"user", "logout"}, LogoutCmd, "", "登出协议", nil)
-	robot_cmd.RegisterUserCommand([]string{"user", "getInfo"}, GetInfoCmd, "", "拉取用户信息", nil)
-	robot_cmd.RegisterUserCommand([]string{"user", "ping"}, PingCmd, "", "Ping包", nil)
+	utils.RegisterCommand(robot_cmd.MutableCommandRoot(), []string{"user", "login"}, LoginCmd, "<openid>", "登录协议", nil, cmdDefaultTimeout)
+	robot_cmd.RegisterUserCommand([]string{"user", "logout"}, LogoutCmd, "", "登出协议", nil, cmdDefaultTimeout)
+	robot_cmd.RegisterUserCommand([]string{"user", "getInfo"}, GetInfoCmd, "", "拉取用户信息", nil, cmdDefaultTimeout)
+	robot_cmd.RegisterUserCommand([]string{"user", "ping"}, PingCmd, "", "Ping包", nil, cmdDefaultTimeout)
 }
 
 func LogoutCmd(action base.TaskActionImpl, user user_data.User, cmd []string) error {

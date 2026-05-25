@@ -450,7 +450,7 @@ int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, ui
       if (value->len == 0) {                                                                                     \
         break;                                                                                                   \
       }                                                                                                          \
-      atfw::util::string::str2int(v, value->str);                                                            \
+      atfw::util::string::str2int(v, value->str);                                                                \
       reflect->func(&msg, fd, v);                                                                                \
     } else {                                                                                                     \
       FWLOGERROR(                                                                                                \
@@ -474,7 +474,7 @@ int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, ui
               msg.GetDescriptor()->full_name(), key->str, value->type);
           has_failed = true;
         } else {
-          if (value->len <= 1) {
+          if (value->len == 0) {
             FWLOGERROR("unpack message {} failed, type of {} in pb is a string, but the redis reply len error(len{}).",
                        msg.GetDescriptor()->full_name(), key->str, value->type);
             has_failed = true;
@@ -496,7 +496,7 @@ int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, ui
               msg.GetDescriptor()->full_name(), key->str, value->type);
           has_failed = true;
         } else {
-          if (value->len <= 1) {
+          if (value->len == 0) {
             FWLOGERROR("unpack message {} failed, type of {} in pb is a string, but the redis reply len error(len{}).",
                        msg.GetDescriptor()->full_name(), key->str, value->type);
             has_failed = true;
@@ -610,7 +610,7 @@ int unpack_message_with_field(::google::protobuf::Message &msg, const redisReply
       if (value->len == 0) {                                                                                     \
         break;                                                                                                   \
       }                                                                                                          \
-      atfw::util::string::str2int(v, value->str);                                                            \
+      atfw::util::string::str2int(v, value->str);                                                                \
       reflect->func(&msg, fd, v);                                                                                \
     } else {                                                                                                     \
       FWLOGERROR(                                                                                                \
@@ -634,7 +634,7 @@ int unpack_message_with_field(::google::protobuf::Message &msg, const redisReply
               msg.GetDescriptor()->full_name(), key, value->type);
           has_failed = true;
         } else {
-          if (value->len <= 1) {
+          if (value->len == 0) {
             FWLOGERROR("unpack message {} failed, type of {} in pb is a string, but the redis reply len error(len{}).",
                        msg.GetDescriptor()->full_name(), key, value->len);
             has_failed = true;
@@ -656,7 +656,7 @@ int unpack_message_with_field(::google::protobuf::Message &msg, const redisReply
               msg.GetDescriptor()->full_name(), key, value->type);
           has_failed = true;
         } else {
-          if (value->len <= 1) {
+          if (value->len == 0) {
             FWLOGERROR("unpack message {} failed, type of {} in pb is a string, but the redis reply len error(len{}).",
                        msg.GetDescriptor()->full_name(), key, value->type);
             has_failed = true;
@@ -916,7 +916,7 @@ int32_t unpack_list_message(
           value->type);
       return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
     } else {
-      if (value->len <= 1) {
+      if (value->len == 0) {
         FWLOGERROR("unpack failed, type in pb is a string, but the redis reply len error(len{}).", value->len);
         return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
       }
@@ -962,7 +962,7 @@ int32_t unpack_list_message_with_index(
           value->type);
       return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
     } else {
-      if (value->len <= 1) {
+      if (value->len == 0) {
         FWLOGERROR("unpack failed, type in pb is a string, but the redis reply len error(len{}).", value->len);
         return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
       }
