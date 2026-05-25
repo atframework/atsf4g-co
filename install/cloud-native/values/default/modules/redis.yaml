@@ -16,3 +16,6 @@ pool_size: 50
 record_prefix:
 random_prefix: true
 cluster_mode: true
+retry_duration: 100ms
+timeout_duration: 75s
+proc_duration: 128ms

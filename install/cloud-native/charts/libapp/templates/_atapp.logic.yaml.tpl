@@ -37,6 +37,10 @@ logic:
     {{- end }}
     password: {{ .Values.redis.password }}
     record_prefix: {{ .Values.redis.record_prefix }}
+    timer:
+      retry: {{ .Values.redis.retry_duration }}
+      timeout: {{ .Values.redis.timeout_duration }}
+      proc: {{ .Values.redis.proc_duration }}
   {{- end -}}
   {{- if and .Values.cachesvr_shared .Values.cachesvr_shared.enable }}
   cache:
