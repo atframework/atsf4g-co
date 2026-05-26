@@ -114,3 +114,11 @@ enum EnItemRarity {
   EN_ITEM_RARITY_LEGENDARY = 100 [(ue_enum_alias) = "Legendary", (org.xresloader.enum_alias) = "Legendary"];
   EN_ITEM_RARITY_UNIQUE = 120 [(ue_enum_alias) = "Unique", (org.xresloader.enum_alias) = "Unique"];
 }
+
+enum EnItemFlowReasonMajorType {
+  EN_ITEM_FLOW_REASON_MAJOR_INVALID = 0;
+}
+
+enum EnItemFlowReasonMinorType {
+  EN_ITEM_FLOW_REASON_MINOR_INVALID = 0;
+}

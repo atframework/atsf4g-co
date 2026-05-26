@@ -61,17 +61,23 @@ func LoginRpc(action base.TaskActionImpl, user user_data.User) (int32, *pu.LazyU
 			ChannelId:   uint32(public_protocol_pbdesc.EnPlatformChannelID_EN_PCI_NONE),
 		},
 		ClientInfo: &public_protocol_pbdesc.DClientDeviceInfo{
-			SystemId:       uint32(public_protocol_pbdesc.EnSystemID_EN_OS_WINDOWS),
-			ClientVersion:  "0.0.0.1",
-			SystemSoftware: runtime.GOOS,
-			SystemHardware: runtime.GOARCH,
-			CpuInfo: func() string {
+			SystemId:        public_protocol_pbdesc.EnSystemID_EN_OS_WINDOWS,
+			ClientVersion:   "0.0.0.1",
+			OperatingSystem: runtime.GOOS,
+			ProcessorInfo: func() string {
 				if len(cpuInfo) > 0 {
-					return fmt.Sprintf("%s - %gMHz", strings.TrimSpace(cpuInfo[0].ModelName), cpuInfo[0].Mhz)
+					return cpuInfo[0].ModelName
 				}
 				return "unknown"
 			}(),
-			Memory: uint32(vmem.Total / (1024 * 1024)),
+			ProcessorCount: int32(len(cpuInfo)),
+			ProcessorFrequency: func() int32 {
+				if len(cpuInfo) > 0 {
+					return int32(cpuInfo[0].Mhz)
+				}
+				return 0
+			}(),
+			SystemMemorySize: int32(vmem.Total / (1024 * 1024)),
 		},
 	}
 

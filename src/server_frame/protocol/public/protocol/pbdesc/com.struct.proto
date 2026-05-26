@@ -9,6 +9,7 @@ option cc_enable_arenas = true;
 package hello;
 
 import "google/protobuf/timestamp.proto";
+import "protocol/pbdesc/com.const.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
@@ -20,24 +21,28 @@ enum EnGenderType {
 
 // 登录用户终端信息
 message DClientDeviceInfo {
-  uint32 system_id = 1;                // EnSystemID
-  string client_version = 2;           // 客户端版本号
-  string system_software = 3;          // 移动终端操作系统版本
-  string system_hardware = 4;          // 移动终端机型
-  string telecom_operator = 5;         // 运营商
-  string network = 6;                  // WIFI/3G/2G
-  uint32 reg_channel = 7;              // 注册渠道
-  uint32 screen_width = 8;             // 显示屏宽度
-  uint32 screen_hight = 9;             // ScreenHight
-  float density = 10;                  // 像素密度
-  string cpu_info = 11;                // 类型#核数#频率
-  uint32 memory = 12;                  // 内存信息单位M
-  string glrender = 13;                // opengl render信息
-  string glversion = 14;               // opengl版本信息
-  string channel = 15;                 // 登录渠道
-  string device_id = 16;               // 设备ID
-  uint32 version = 17;                 // 客户端数字版本号
-  int32 well_known_simulator_id = 18;  // 模拟器ID
+  EnSystemID system_id = 1;   // EnSystemID
+  string client_version = 2;  // 客户端版本号
+  string bundle_id = 3;       // BundleId
+
+  string operating_system = 11;  // 操作系统版本
+  string device_model = 12;      // 设备机型
+  string device_id = 13;         // 设备ID
+  string device_name = 14;       // 设备名称
+
+  string processor_info = 21;          // 处理器信息
+  int32 processor_count = 22;          // 处理器数量
+  int32 processor_frequency = 23;      // 处理器频率
+  EnArchitecture processor_arch = 24;  // 处理器构架
+  int32 system_memory_size = 25;       // 系统内存大小
+  string graphics_info = 31;           // 显卡信息
+  string graphics_vendor = 32;         // 显卡厂商
+  int32 graphics_memory_size = 33;     // 显卡内存大小
+  int32 graphics_shading_level = 34;   // 显卡着色器等级
+
+  int32 screen_width = 41;   // 屏幕宽度
+  int32 screen_height = 42;  // 屏幕高度
+  float screen_dpi = 43;     // DPI
 }
 
 message DAppleGameCenter {

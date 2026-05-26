@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+option go_package = "github.com/atframework/atsf4g-go/component-protocol-private/log/protocol/log";
+
+import "protocol/common/com.struct.item.common.proto";
+import "protocol/pbdesc/com.struct.proto";
+
+package hello;
+
+message OperationSupportSystemLogServiceInfo {
+  uint64 service_instance_id = 11;
+  string service_instance_name = 12;
+  string service_type_name = 13;
+  uint32 world_id = 14;
+  uint32 zone_id = 15;
+  int32 process_id = 16;
+  string deployment_environment_name = 17;
+
+  // 业务发生时间，单位秒
+  int64 business_time_unix = 21;
+  // 业务发生时间，本地时间
+  string business_time_local = 22;
+}
+
+message OperationSupportSystemLogBasicInfo {
+  uint64 user_id = 1;
+  uint32 zone_id = 2;
+  string open_id = 3;
+
+  // 注册地区: ISO 3166-1 alpha-2 code
+  string register_locale = 11;
+  // 登入地区: ISO 3166-1 alpha-2 code
+  string login_locale = 12;
+
+  // Client version
+  string client_version = 21;
+}
+
+message OperationSupportSystemLog {
+  string log_type = 1;
+  OperationSupportSystemLogServiceInfo service = 2;
+  OperationSupportSystemLogBasicInfo basic = 3;
+  OperationSupportSystemLogDetail log = 4;
+}
+
+message OperationSupportSystemLogDetail {
+  oneof log {
+    OSSItemFlow item_flow = 10;
+    OSSLoginClientBeginFlow login_client_begin_flow = 11;
+    OSSLoginServerBeginFlow login_server_begin_flow = 12;
+    OSSLoginFlow login_flow = 13;
+    OSSLogoutFlow logout_flow = 14;
+    OSSOnlineFlow online_flow = 15;
+    OSSUserRegisterFlow user_register_flow = 16;
+  }
+}
+
+message OSSItemFlow {
+  int32 item_id = 1;
+  enum EnOSSItemFlowOperationType {
+    EN_OSS_ITEM_FLOW_OPERATION_TYPE_INVALID = 0;
+    EN_OSS_ITEM_FLOW_OPERATION_TYPE_ADD = 1;
+    EN_OSS_ITEM_FLOW_OPERATION_TYPE_SUB = 2;
+    EN_OSS_ITEM_FLOW_OPERATION_TYPE_USE = 3;
+  }
+  EnOSSItemFlowOperationType operation_type = 2;
+  int64 operation_count = 3;
+  int64 after_count = 4;
+  int32 result = 5;
+
+  EnItemFlowReasonMajorType major_reason = 11;
+  EnItemFlowReasonMinorType minor_reason = 12;
+  int64 parameter = 13;
+}
+
+message OSSLoginClientBeginFlow {
+  // 客户端尝试开始登录
+}
+
+message OSSLoginServerBeginFlow {
+  // 服务器尝试开始登录
+}
+
+message OSSLoginFlow {
+  // 登录成功
+  DClientDeviceInfo device_info = 1;
+  bool is_new_user = 2;  // 是否新用户
+  string user_name = 3;
+  uint32 user_level = 4;
+  int64 last_login_time = 11;   // 登录时间，单位秒
+  int64 last_logout_time = 12;  // 登出时间，单位秒
+  int64 register_time = 13;     // 注册时间，单位秒
+}
+
+message OSSLogoutFlow {
+  // 登出
+  int64 login_time = 1;               // 登录时间，单位秒
+  int64 logout_time = 2;              // 登出时间，单位秒
+  int64 current_online_duration = 3;  // 当次登入在线时长，单位秒
+  int64 total_online_duration = 4;    // 总在线时长，单位秒
+  uint32 user_level = 5;
+}
+
+message OSSOnlineFlow {
+  int32 online_count = 1;
+}
+
+message OSSUserRegisterFlow {
+  // 用户注册
+}

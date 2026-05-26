@@ -41,23 +41,26 @@ enum EnPlatformChannelID {
 
 // system type
 enum EnSystemID {
-  EN_OS_WINDOWS = 0;
-  EN_OS_LINUX = 1;
-  EN_OS_MAC = 2;
-  EN_OS_ANDROID = 3;
-  EN_OS_IPHONE = 4;
-  EN_OS_IPAD = 5;
-  EN_OS_BLACKBERRY = 6;
-  EN_OS_NACL = 7;
-  EN_OS_EMSCRIPTEN = 8;
-  EN_OS_TIZEN = 9;
-  EN_OS_WINRT = 10;
-  EN_OS_WP8 = 11;
+  EN_OS_UNKNOWN = 0;
+  EN_OS_WINDOWS = 1;
+  EN_OS_LINUX = 2;
+  EN_OS_MACOS = 3;
+  EN_OS_IOS = 4;
+  EN_OS_TVOS = 5;
+  EN_OS_ANDROID = 6;
+  EN_OS_WEBGL = 7;
+  EN_OS_UWP = 8;
+  EN_OS_XBOX = 9;
+  EN_OS_PS = 10;
+  EN_OS_SWITCH = 11;
+}
 
-  /*EN_SYS_UNKNOWN  = 0;*/
-  /*EN_SYS_IOS      = 1;*/
-  /*EN_SYS_ANDROID  = 2;*/
-  /*EN_SYS_WINDOWS  = 3;*/
+enum EnArchitecture {
+  EN_ARCH_UNKNOWN = 0;
+  EN_ARCH_X64 = 1;
+  EN_ARCH_ARM64 = 2;
+  EN_ARCH_X86 = 3;
+  EN_ARCH_ARM32 = 4;
 }
 
 // 模拟器ID
