@@ -450,7 +450,9 @@ class gateway_module : public ::atfw::atapp::module_impl {
       return gw_mgr_.post_data(sess_holder->get_router_name(), post_message);
     }
 
-    FWLOGERROR("{} send {} bytes data failed, not router", *sess_holder, buffer.size());
+    FWLOGERROR("{} send {} bytes data failed, no available router", *sess_holder, buffer.size());
+    gw_mgr_.close(sess_holder->get_id(), static_cast<int32_t>(::atframework::gateway::error_code_t::kInvalidRouter), 0,
+                  "no available router", false);
     return -1;
   }
 
