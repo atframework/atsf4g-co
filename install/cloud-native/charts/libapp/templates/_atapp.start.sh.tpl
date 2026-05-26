@@ -24,8 +24,6 @@ set "DLL_DIR=%~dp0..\..\lib"
 set "PATH=%DLL_DIR%;%PATH%"
 set "DLL_DIR=%~dp0..\..\bin"
 set "PATH=%DLL_DIR%;%PATH%"
-set "DLL_DIR=%~dp0..\..\bin\RelWithDebInfo"
-set "PATH=%DLL_DIR%;%PATH%"
 
 .\{{ $proc_name }}.exe --config ..\cfg\{{ $type_name }}_{{ $bus_addr }}.yaml --pid .\{{ $type_name }}_{{ $bus_addr }}.pid start
 

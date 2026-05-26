@@ -419,6 +419,21 @@ function(project_tool_set_target_runtime_output_directory OUTPUT_DIR)
   endif()
 
   set_property(TARGET ${TARGET_NAME} PROPERTY RUNTIME_OUTPUT_DIRECTORY "${OUTPUT_DIR}")
+  set(project_tool_set_target_runtime_output_directory_CONFIG_TYPES Debug Release RelWithDebInfo MinSizeRel)
+  if(CMAKE_CONFIGURATION_TYPES)
+    set(project_tool_set_target_runtime_output_directory_CONFIG_TYPES ${CMAKE_CONFIGURATION_TYPES})
+  endif()
+  foreach(PROJECT_OUTPUT_CONFIG IN LISTS project_tool_set_target_runtime_output_directory_CONFIG_TYPES)
+    string(TOUPPER "${PROJECT_OUTPUT_CONFIG}" PROJECT_OUTPUT_CONFIG_UPPER)
+    set_property(TARGET ${TARGET_NAME} PROPERTY "RUNTIME_OUTPUT_DIRECTORY_${PROJECT_OUTPUT_CONFIG_UPPER}" "${OUTPUT_DIR}")
+  endforeach()
+  if(MSVC)
+    set_property(TARGET ${TARGET_NAME} PROPERTY PDB_OUTPUT_DIRECTORY "${OUTPUT_DIR}")
+    foreach(PROJECT_OUTPUT_CONFIG IN LISTS project_tool_set_target_runtime_output_directory_CONFIG_TYPES)
+      string(TOUPPER "${PROJECT_OUTPUT_CONFIG}" PROJECT_OUTPUT_CONFIG_UPPER)
+      set_property(TARGET ${TARGET_NAME} PROPERTY "PDB_OUTPUT_DIRECTORY_${PROJECT_OUTPUT_CONFIG_UPPER}" "${OUTPUT_DIR}")
+    endforeach()
+  endif()
   set_property(
     TARGET ${TARGET_NAME}
     APPEND
