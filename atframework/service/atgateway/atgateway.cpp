@@ -28,17 +28,6 @@
 #include "session_manager.h"  // NOLINT: build/include_subdir
 
 namespace {
-static int app_handle_on_forward_response(atfw::atapp::app &app, const atfw::atapp::app::message_sender_t &source,
-                                          const atfw::atapp::app::message_t &m, int32_t error_code) {
-  if (error_code >= 0) {
-    return 0;
-  }
-
-  FWLOGERROR("send data from {:#x} to {:#x} failed, message sequence: {}, code: {}", app.get_id(), source.id,
-             m.message_sequence, error_code);
-  return 0;
-}
-
 class gateway_module : public ::atfw::atapp::module_impl {
  public:
   gateway_module() {}
@@ -832,6 +821,90 @@ struct app_handle_on_recv {
     return 0;
   }
 };
+
+class app_handle_on_forward_response {
+ public:
+  std::reference_wrapper<gateway_module> mod_;
+  app_handle_on_forward_response(gateway_module &mod) : mod_(mod) {}
+
+  int operator()(atfw::atapp::app &app, const atfw::atapp::app::message_sender_t &source,
+                 const atfw::atapp::app::message_t &m, int32_t error_code) {
+    if (error_code >= 0) {
+      return 0;
+    }
+
+    FWLOGERROR("send data from {:#x} to {:#x} failed, message sequence: {}, code: {}", app.get_id(), source.id,
+               m.message_sequence, error_code);
+
+    if (m.data.empty()) {
+      return 0;
+    }
+
+    ::google::protobuf::ArenaOptions arena_options;
+    arena_options.initial_block_size = atfw::util::bit::bit_ceil(m.data.size() + 256);
+    ::google::protobuf::Arena arena(arena_options);
+#if defined(PROTOBUF_VERSION) && PROTOBUF_VERSION >= 5027000
+    ::atframework::gateway::server_message *server_msg =
+        ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::Arena::Create<::atframework::gateway::server_message>(&arena);
+#else
+    ::atframework::gateway::server_message *server_msg =
+        ::ATBUS_MACRO_PROTOBUF_NAMESPACE_ID::Arena::CreateMessage<::atframework::gateway::server_message>(&arena);
+#endif
+    if (server_msg == nullptr) {
+      return 0;
+    }
+
+    if (!server_msg->ParseFromArray(m.data.data(), static_cast<int>(m.data.size()))) {
+      return 0;
+    }
+
+    ::atframework::gateway::session_manager &mgr = mod_.get().get_session_manager();
+    uint64_t session_id = server_msg->head().session_id();
+    if (0 == session_id) {
+      return 0;
+    }
+
+    switch (server_msg->body().cmd_case()) {
+      case ::atframework::gateway::server_message_body::kPost: {
+        ::atframework::gateway::session::ptr_t sess = mgr.find_session(session_id);
+        if (!sess || sess->get_router_id() != source.id) {
+          break;
+        }
+
+        FWLOGWARNING("forward post data for session {} to server {:#x} failed (code: {}), closing session", session_id,
+                     source.id, error_code);
+        mgr.close(session_id, static_cast<int32_t>(::atframework::gateway::close_reason_t::kReset), error_code,
+                  "forward post failed", false);
+        break;
+      }
+      case ::atframework::gateway::server_message_body::kAddSession: {
+        ::atframework::gateway::session::ptr_t sess = mgr.find_session(session_id);
+        if (!sess || sess->get_router_id() != source.id) {
+          break;
+        }
+
+        FWLOGWARNING("forward add_session for session {} to server {:#x} failed (code: {}), closing session",
+                     session_id, source.id, error_code);
+        mgr.close(session_id, static_cast<int32_t>(::atframework::gateway::close_reason_t::kServerBusy), error_code,
+                  "register session failed", false);
+        break;
+      }
+      case ::atframework::gateway::server_message_body::kRemoveSession: {
+        FWLOGWARNING(
+            "forward remove_session for session {} to server {:#x} failed (code: {}), backend may have stale "
+            "session entry",
+            session_id, source.id, error_code);
+        break;
+      }
+      default: {
+        break;
+      }
+    }
+
+    return 0;
+  }
+};
+
 }  // namespace
 
 int main(int argc, char *argv[]) {
@@ -890,7 +963,7 @@ int main(int argc, char *argv[]) {
       ->set_help_msg("disconnect <session id> [reason]       disconnect a session, session can be reconnected later.");
 
   // setup message handle
-  app.set_evt_on_forward_response(app_handle_on_forward_response);
+  app.set_evt_on_forward_response(app_handle_on_forward_response(*gw_mod));
   app.set_evt_on_forward_request(app_handle_on_recv(*gw_mod));
 
   // run

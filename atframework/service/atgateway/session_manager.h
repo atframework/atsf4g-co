@@ -78,6 +78,8 @@ class session_manager {
 
   int set_session_router(session::id_t sess_id, ::atbus::bus_id_t router_node_id, const std::string &router_node_name);
 
+  session::ptr_t find_session(session::id_t sess_id) const;
+
   inline conf_t &get_conf() { return conf_; }
   inline const conf_t &get_conf() const { return conf_; }
 

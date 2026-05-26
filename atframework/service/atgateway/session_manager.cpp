@@ -512,6 +512,14 @@ int session_manager::set_session_router(session::id_t sess_id, ::atbus::bus_id_t
   return 0;
 }
 
+session::ptr_t session_manager::find_session(session::id_t sess_id) const {
+  session_map_t::const_iterator iter = actived_sessions_.find(sess_id);
+  if (iter == actived_sessions_.end()) {
+    return nullptr;
+  }
+  return iter->second;
+}
+
 int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
   // find old session
   bool has_reconnect_checked = false;
