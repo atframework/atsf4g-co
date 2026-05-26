@@ -1,0 +1,57 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Deploy-Update Dependencies",
+      "type": "shell",
+      "command": "./update_dependency.sh",
+      "args": [],
+      "options": {
+        "cwd": "${workspaceFolder}/build/publish/tools/script"
+      },
+      "windows": {
+        "command": "./update_dependency.bat"
+      },
+      "group": "none"
+    },
+    {
+      "label": "Deploy-GenerateServiceConfig",
+      "type": "shell",
+      "command": "generate_config.sh",
+      "args": [],
+      "options": {
+        "cwd": "${workspaceFolder}/build/publish/tools/script"
+      },
+      "windows": {
+        "command": "./generate_config.bat"
+      },
+      "group": "none"
+    },
+    {
+      "label": "Start All",
+      "type": "shell",
+      "command": "start_all.bat",
+      "args": [],
+      "options": {
+        "cwd": "${workspaceFolder}/build/publish"
+      },
+      "windows": {
+        "command": "./start_all.bat"
+      },
+      "group": "none"
+    },
+    {
+      "label": "Stop All",
+      "type": "shell",
+      "command": "stop_all.bat",
+      "args": [],
+      "options": {
+        "cwd": "${workspaceFolder}/build/publish"
+      },
+      "windows": {
+        "command": "./stop_all.bat"
+      },
+      "group": "none"
+    }
+  ]
+}
