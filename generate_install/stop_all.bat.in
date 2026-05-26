@@ -1,0 +1,173 @@
+@echo off
+setlocal EnableExtensions EnableDelayedExpansion
+
+for %%I in ("%~dp0.") do set "DEPLOY_BASE_DIR=%%~fI"
+set "CONFIG_FILE=start_all.conf"
+
+:parse_args
+if "%~1"=="" goto args_done
+if /I "%~1"=="-h" goto show_help
+if /I "%~1"=="--help" goto show_help
+if /I "%~1"=="-d" (
+  if "%~2"=="" goto show_help_error
+  for %%I in ("%~2") do set "DEPLOY_BASE_DIR=%%~fI"
+  shift
+  shift
+  goto parse_args
+)
+if /I "%~1"=="-c" (
+  if "%~2"=="" goto show_help_error
+  set "CONFIG_FILE=%~f2"
+  shift
+  shift
+  goto parse_args
+)
+
+echo [ERROR] Unknown argument: %~1
+goto show_help_error
+
+:args_done
+if not exist "%DEPLOY_BASE_DIR%\" (
+  echo [ERROR] Deploy base directory does not exist: "%DEPLOY_BASE_DIR%"
+  exit /b 1
+)
+
+if not defined CONFIG_FILE set "CONFIG_FILE=%DEPLOY_BASE_DIR%\start_all.conf"
+if not exist "%CONFIG_FILE%" (
+  echo [ERROR] Config file does not exist: "%CONFIG_FILE%"
+  exit /b 1
+)
+
+call :run_all_batches
+exit /b %ERRORLEVEL%
+
+:show_help
+echo usage: %~nx0 [-d deploy_base_dir] [-c config_file]
+echo Each non-empty config line is one batch; batches stop in reverse order and entries in the same line stop in parallel.
+exit /b 0
+
+:show_help_error
+call :show_help
+exit /b 1
+
+:run_all_batches
+setlocal EnableDelayedExpansion
+set /a CONFIGURED_BATCH_COUNT=0
+
+for /f "usebackq delims=" %%L in ("%CONFIG_FILE%") do (
+  set "GROUP_LINE=%%L"
+  call :normalize_group_line GROUP_LINE
+  if defined GROUP_LINE (
+    set /a CONFIGURED_BATCH_COUNT+=1
+    set "BATCH_!CONFIGURED_BATCH_COUNT!=!GROUP_LINE!"
+  )
+)
+
+if !CONFIGURED_BATCH_COUNT! EQU 0 (
+  echo [ERROR] No stop batches configured in "%CONFIG_FILE%".
+  exit /b 1
+)
+
+for /l %%I in (!CONFIGURED_BATCH_COUNT!,-1,1) do (
+  call set "GROUP_LINE=%%BATCH_%%I%%"
+  call :run_batch "!GROUP_LINE!" "%%I"
+  if errorlevel 1 exit /b 1
+)
+
+echo [INFO] All batches completed successfully.
+endlocal & exit /b 0
+
+:normalize_group_line
+setlocal EnableDelayedExpansion
+set "CURRENT_VALUE=!%~1!"
+for /f "tokens=1 delims=#" %%A in ("!CURRENT_VALUE!") do set "CURRENT_VALUE=%%~A"
+set "CURRENT_VALUE=!CURRENT_VALUE:,= !"
+for /f "tokens=* delims= " %%A in ("!CURRENT_VALUE!") do set "CURRENT_VALUE=%%A"
+
+:normalize_group_line_trim_tail
+if defined CURRENT_VALUE if "!CURRENT_VALUE:~-1!"==" " (
+  set "CURRENT_VALUE=!CURRENT_VALUE:~0,-1!"
+  goto normalize_group_line_trim_tail
+)
+
+endlocal & set "%~1=%CURRENT_VALUE%"
+exit /b 0
+
+:run_batch
+setlocal EnableDelayedExpansion
+set "GROUP_LINE=%~1"
+set "BATCH_INDEX=%~2"
+set /a SCRIPT_COUNT=0
+
+for %%S in (!GROUP_LINE!) do (
+  set "SERVICE_NAME=%%~S"
+  set "BIN_DIR=!DEPLOY_BASE_DIR!\!SERVICE_NAME!\bin"
+
+  if not exist "!BIN_DIR!\" (
+    echo [ERROR] Missing bin directory: "!BIN_DIR!"
+    exit /b 1
+  )
+
+  set "FOUND_SCRIPT=0"
+  for %%F in ("!BIN_DIR!\stop_*.bat") do (
+    if exist "%%~fF" (
+      set /a SCRIPT_COUNT+=1
+      set "SCRIPT_!SCRIPT_COUNT!=%%~fF"
+      set "FOUND_SCRIPT=1"
+    )
+  )
+
+  if "!FOUND_SCRIPT!"=="0" (
+    echo [ERROR] No stop_*.bat found in "!BIN_DIR!"
+    exit /b 1
+  )
+)
+
+if !SCRIPT_COUNT! EQU 0 (
+  echo [ERROR] Batch !BATCH_INDEX! does not contain any stop script.
+  exit /b 1
+)
+
+echo [INFO] Batch !BATCH_INDEX!: !GROUP_LINE!
+call :run_scripts_in_parallel !SCRIPT_COUNT! Stopping
+if errorlevel 1 exit /b 1
+endlocal & exit /b 0
+
+:run_scripts_in_parallel
+setlocal DisableDelayedExpansion
+set "SCRIPT_COUNT=%~1"
+set "ACTION_LABEL=%~2"
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$ErrorActionPreference = 'Stop';" ^
+  "$scriptCount = [int]$env:SCRIPT_COUNT;" ^
+  "$jobs = @();" ^
+  "for($i = 1; $i -le $scriptCount; ++$i) {" ^
+  "  $scriptPath = [Environment]::GetEnvironmentVariable(('SCRIPT_{0}' -f $i), 'Process');" ^
+  "  if([string]::IsNullOrWhiteSpace($scriptPath)) { throw ('Missing script path for index {0}.' -f $i) }" ^
+  "  Write-Host ('[INFO] %ACTION_LABEL% {0}' -f $scriptPath);" ^
+  "  $startInfo = New-Object System.Diagnostics.ProcessStartInfo;" ^
+  "  $startInfo.FileName = $env:ComSpec;" ^
+  "  $startInfo.Arguments = ('/D /C call \"{0}\"' -f $scriptPath);" ^
+  "  $startInfo.WorkingDirectory = [System.IO.Path]::GetDirectoryName($scriptPath);" ^
+  "  $startInfo.UseShellExecute = $false;" ^
+  "  $startInfo.CreateNoWindow = $true;" ^
+  "  $process = New-Object System.Diagnostics.Process;" ^
+  "  $process.StartInfo = $startInfo;" ^
+  "  if(-not $process.Start()) { throw ('Failed to start {0}.' -f $scriptPath) }" ^
+  "  $jobs += [pscustomobject]@{ Script = $scriptPath; Process = $process };" ^
+  "}" ^
+  "$failed = $false;" ^
+  "foreach($job in $jobs) {" ^
+  "  $job.Process.WaitForExit();" ^
+  "  if($job.Process.ExitCode -ne 0) {" ^
+  "    Write-Host ('[ERROR] Failed: {0} (exit {1})' -f $job.Script, $job.Process.ExitCode);" ^
+  "    $failed = $true;" ^
+  "  } else {" ^
+  "    Write-Host ('[INFO] Completed: {0}' -f $job.Script);" ^
+  "  }" ^
+  "}" ^
+  "if($failed) { exit 1 }"
+
+set "BATCH_EXIT_CODE=%ERRORLEVEL%"
+endlocal & exit /b %BATCH_EXIT_CODE%

@@ -1,31 +1,47 @@
 {{- define "atapp.reload.sh" -}}
 {{- $bus_addr := include "libapp.busAddr" . -}}
-{{- $proc_name := .Values.proc_name -}}
-{{- $type_name := (.Values.type_name | default (include "libapp.name" .)) -}}
-
 #!/bin/bash
 SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )";
 SCRIPT_DIR="$( readlink -f $SCRIPT_DIR )";
 cd "$SCRIPT_DIR";
 
-./{{ $proc_name }} --config ../cfg/{{ $type_name }}_{{ $bus_addr }}.yaml -pid ./{{ $type_name }}_{{ $bus_addr }}.pid reload
-{{- end }}
+export PROJECT_INSTALL_DIR=$(cd ../.. && pwd);
 
-{{- define "atapp.reload.bat" -}}
-{{- $bus_addr := include "libapp.busAddr" . -}}
-{{- $proc_name := .Values.proc_name -}}
-{{- $type_name := (.Values.type_name | default (include "libapp.name" .)) -}}
-@echo off
-setlocal
+source "$PROJECT_INSTALL_DIR/tools/script/common/common.sh";
 
-cd %cd%
+if [[ -e "$PROJECT_INSTALL_DIR/tools/script/prepare-dependency-dll.sh" ]] && [[ -e "$SCRIPT_DIR/package-version.txt" ]]; then
+  CURRENT_PREPARE_PACKAGE_SHOR_SHA="$(cat "$SCRIPT_DIR/package-version.txt" | grep vcs_short_sha | awk '{print $NF}')"
+  flock -x -w 20 "$PROJECT_INSTALL_DIR/tools/script/prepare-package.$CURRENT_PREPARE_PACKAGE_SHOR_SHA.lock" bash "$PROJECT_INSTALL_DIR/tools/script/prepare-dependency-dll.sh" "$PROJECT_INSTALL_DIR" "$CURRENT_PREPARE_PACKAGE_SHOR_SHA"
+fi
 
-set "DLL_DIR=%~dp0..\..\lib"
-set "PATH=%DLL_DIR%;%PATH%"
-set "DLL_DIR=%~dp0..\..\bin"
-set "PATH=%DLL_DIR%;%PATH%"
+SERVER_PID_FILE_NAME="{{ .Values.type_name }}_{{ $bus_addr }}.pid";
 
-.\{{ $proc_name }}.exe --config ..\cfg\{{ $type_name }}_{{ $bus_addr }}.yaml -pid .\{{ $type_name }}_{{ $bus_addr }}.pid reload
+CheckProcessRunning "$SERVER_PID_FILE_NAME";
+if [[ 0 -eq $? ]]; then
+  NoticeMsg "send reload command to {{ .Values.proc_name }} - {{ $bus_addr }} failed, not running";
+  exit 1;
+fi
 
-endlocal
+PROC_PID=$(cat "$SERVER_PID_FILE_NAME" 2>/dev/null);
+
+SERVER_STARTUP_ERROR_FILE_NAME="${SERVER_PID_FILE_NAME/.pid/}.startup-error"
+if [ -e "$SERVER_STARTUP_ERROR_FILE_NAME" ]; then
+  rm -f "$SERVER_STARTUP_ERROR_FILE_NAME"
+fi
+
+{{ include "libapp.run.wrapper.sh" . }}
+
+if [[ 0 -eq $(CheckPidAndExePath "$SCRIPT_DIR/{{ .Values.proc_name }}" $PROC_PID) ]] ; then
+
+    atapp_run_wrapper "$SCRIPT_DIR/{{ .Values.proc_name }}" -id {{ $bus_addr }} -p $SERVER_PID_FILE_NAME --startup-error-file "$SERVER_STARTUP_ERROR_FILE_NAME" -c ../cfg/{{ include "libapp.name" . }}_{{ $bus_addr }}.yaml reload
+
+    if [ $? -ne 0 ]; then
+        ErrorMsg "send reload command to {{ .Values.proc_name }} - {{ $bus_addr }} failed.";
+        exit 1;
+    fi
+
+    NoticeMsg "reload {{ .Values.proc_name }} - {{ $bus_addr }} done." ;
+else
+    NoticeMsg "send reload command to {{ .Values.proc_name }} - {{ $bus_addr }} failed, not running";
+fi
 {{- end }}

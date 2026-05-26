@@ -1,4 +1,4 @@
-{{- define "atapp.runcmd.sh" -}}
+{{- define "atapp.kill.sh" -}}
 {{- $bus_addr := include "libapp.busAddr" . -}}
 #!/bin/bash
 SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )";
@@ -18,26 +18,25 @@ SERVER_PID_FILE_NAME="{{ .Values.type_name }}_{{ $bus_addr }}.pid";
 
 CheckProcessRunning "$SERVER_PID_FILE_NAME";
 if [[ 0 -eq $? ]]; then
-  NoticeMsg "send run $* command to {{ .Values.proc_name }} - {{ $bus_addr }} failed, not running";
-  exit 0;
+    NoticeMsg "{{ .Values.proc_name }} - {{ $bus_addr }} already stopped";
+    exit 0;
 fi
 
 PROC_PID=$(cat "$SERVER_PID_FILE_NAME" 2>/dev/null);
 
-SERVER_STARTUP_ERROR_FILE_NAME="${SERVER_PID_FILE_NAME/.pid/}.startup-error"
-if [ -e "$SERVER_STARTUP_ERROR_FILE_NAME" ]; then
-  rm -f "$SERVER_STARTUP_ERROR_FILE_NAME"
-fi
-
-{{ include "libapp.run.wrapper.sh" . }}
-
 if [[ 0 -eq $(CheckPidAndExePath "$SCRIPT_DIR/{{ .Values.proc_name }}" $PROC_PID) ]] ; then
-    if [[ "$1" == "prestop" ]] ; then
-        bash "$SCRIPT_DIR/prestop.sh_{{ $bus_addr }}"
-        exit $?
+    proc_pid=$(ps aux | grep "$SCRIPT_DIR/{{ .Values.proc_name }}" | grep -w "{{ .Values.type_name }}_{{ $bus_addr }}.pid" | grep -v grep | awk '{print $2}')
+    if [ "x${proc_pid}" != "x" ]; then
+        kill -9 $proc_pid
     fi
-    atapp_run_wrapper "$SCRIPT_DIR/{{ .Values.proc_name }}" -id {{ $bus_addr }} -p $SERVER_PID_FILE_NAME --startup-error-file "$SERVER_STARTUP_ERROR_FILE_NAME" -c ../cfg/{{ include "libapp.name" . }}_{{ $bus_addr }}.yaml run "$@"
+
+    CheckProcessRunning "$SERVER_PID_FILE_NAME";
+    if [[ 0 -ne $? ]]; then
+        ErrorMsg "kill -9 {{ .Values.proc_name }} - {{ $bus_addr }} failed." ;
+    else
+        NoticeMsg "kill -9 {{ .Values.proc_name }} - {{ $bus_addr }} done." ;
+    fi
 else
-    NoticeMsg "send run $* command to {{ .Values.proc_name }} - {{ $bus_addr }} failed, not running";
+    NoticeMsg "{{ .Values.proc_name }} - {{ $bus_addr }} not running, skipped.";
 fi
 {{- end }}

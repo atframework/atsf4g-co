@@ -1,9 +1,15 @@
 {{- define "atapp.restart.sh" -}}
-{{ include "atapp.stop.sh" . }}
-{{ include "atapp.start.sh" . }}
-{{- end }}
+{{- $bus_addr := include "libapp.busAddr" . -}}
+#!/bin/bash
+cd "$( dirname "$0" )"
 
-{{- define "atapp.restart.bat" -}}
-{{ include "atapp.stop.bat" . }}
-{{ include "atapp.start.bat" . }}
+if [ ! -x ./stop.sh_{{ $bus_addr }} ]; then
+    chmod +x ./stop.sh_{{ $bus_addr }};
+fi
+bash ./stop.sh_{{ $bus_addr }} --upgrade
+
+if [ ! -x ./stop.sh_{{ $bus_addr }} ]; then
+    chmod +x ./start.sh_{{ $bus_addr }};
+fi
+bash ./start.sh_{{ $bus_addr }}
 {{- end }}
