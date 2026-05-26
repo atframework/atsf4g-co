@@ -751,7 +751,7 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   }
 
   // first idle timeout
-  mgr->first_idle_.push_back(session_timeout_t());
+  mgr->first_idle_.emplace_back();
   session_timeout_t &sess_timeout = mgr->first_idle_.back();
   sess_timeout.s = sess;
   if (mgr->conf_.origin_conf.client().first_idle_timeout().seconds() > 0) {
@@ -825,7 +825,7 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
   }
 
   // first idle timeout
-  mgr->first_idle_.push_back(session_timeout_t());
+  mgr->first_idle_.emplace_back();
   session_timeout_t &sess_timeout = mgr->first_idle_.back();
   sess_timeout.s = sess;
   if (mgr->conf_.origin_conf.client().first_idle_timeout().seconds() > 0) {

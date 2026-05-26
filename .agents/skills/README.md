@@ -5,15 +5,15 @@ small; put task-specific steps, commands, caveats, and examples in each `SKILL.m
 
 ## Contents
 
-| Skill                     | Description                                                                              |
-| ------------------------- | ---------------------------------------------------------------------------------------- |
-| `engineering-guidelines/` | Code style, lint, RPC/Arena, code generation, service/component CMake, review/validation |
-| `build/`                  | Configure and build the project (Windows / Unix)                                         |
-| `testing/`                | Run unit tests (including Windows DLL/PATH notes)                                        |
-| `deployment-config/`      | Generate and manage deployment configs/scripts                                           |
-| `configure-expression/`   | Environment-variable expression expansion in configuration fields                        |
-| `atgateway-protocol/`     | atgateway v2 protocol SDK — ECDH handshake, encryption, testing                          |
-| `ai-agent-maintenance/`   | Audit and optimize AI agent prompts, bridge files, and skills                            |
+| Skill                     | Description                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------- |
+| `engineering-guidelines/` | Code style, lint, RPC/Arena, code generation, service/component CMake, review/validation  |
+| `build/`                  | Configure and build the project (Windows / Unix)                                          |
+| `testing/`                | Run unit tests (including Windows DLL/PATH notes)                                         |
+| `deployment-config/`      | Generate deployment configs/scripts and analyze `install/**/*.tpl` Go templates           |
+| `configure-expression/`   | Environment-variable expression expansion in configuration fields                         |
+| `atgateway-protocol/`     | atgateway v2 protocol SDK — ECDH handshake, encryption, testing                           |
+| `ai-agent-maintenance/`   | Audit and optimize AI agent prompts, bridge files, and skills                             |
 
 ## Maintenance rules
 

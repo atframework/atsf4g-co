@@ -19,6 +19,9 @@ high-performance game server architectures.
 - `src/*svr/` and `src/component/`: service implementations and shared service components.
 - `src/templates/`: Mako templates for generated RPC/task code.
 - `project/`, `third_party/`, `install/`, `resource/`: build tooling, dependency setup, deployment assets, resources.
+- `install/**/*.tpl`: Go `text/template` deployment templates. When a second suffix exists before `.tpl`, use it as
+  the rendered target syntax (`.yaml.tpl` -> YAML, `.sh.tpl` -> shell, `.bat.tpl` -> Windows batch); bare `.tpl` files
+  are usually shared helper/partial templates.
 - Main flow: `Client → atgateway → atproxy → service → dispatcher → logic → data/DB`.
 - `atgateway` handles client connections, ECDH/DH handshakes, encryption, compression, and routing handoff.
 - `atproxy` handles cross-service communication, discovery, and online detection.
@@ -32,6 +35,8 @@ high-performance game server architectures.
   it; never drop temporary artifacts in the repository root.
 - For paths under vendored subprojects, read the nearest subproject `AGENTS.md` before changing code.
 - When a task matches a skill below, read that `SKILL.md` first; skills contain the long commands and edge cases.
+- For code analysis or edits under `install/**/*.tpl`, read `deployment-config` first; analyze both Go-template actions
+  and the rendered target language, and validate target syntax only after rendering representative output.
 - For coding or code review in `src/**`, first read `engineering-guidelines`; it owns shared style, lint, and project
   engineering conventions.
 
@@ -44,7 +49,7 @@ Read the matching `.agents/skills/*/SKILL.md` before doing specialized work:
 | `engineering-guidelines`  | Writing or reviewing C++/CMake/Markdown code, RPC/Arena, generated code, service CMake  |
 | `build`                   | Configuring or building with CMake                                                      |
 | `testing`                 | Running or writing unit tests                                                           |
-| `deployment-config`       | Generating/editing deployment configs or Helm values                                    |
+| `deployment-config`       | Generating/editing deployment configs, Go `.tpl` chart templates, or Helm values        |
 | `configure-expression`    | Editing env-expression-enabled config fields                                            |
 | `atgateway-protocol`      | Working on atgateway v2 protocol, crypto, compression, reconnection, or tests           |
 | `ai-agent-maintenance`    | Auditing or optimizing AI agent prompts, bridge files, and skills                       |

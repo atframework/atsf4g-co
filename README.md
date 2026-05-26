@@ -188,7 +188,8 @@ Diagnostics:
     2. atproxy: proxy server, used to connect difference service group to each other
     3. atgateway: gateway server, used to manage client connections
 + doc: documents
-+ install: all resources and configure templates
++ install: deployment resources and Go-template configure templates (`*.yaml.tpl` -> YAML, `*.sh.tpl` -> shell,
+  `*.bat.tpl` -> Windows batch)
 + project: project script, used to detect build environment and generate build scripts
 + sample: sample codes to show usage of some libraries
 + src: all real projects

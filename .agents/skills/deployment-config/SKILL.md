@@ -1,6 +1,6 @@
 ---
 name: deployment-config
-description: "Use when: generating deployment configs, rendering per-instance scripts, editing Helm values, or using atdtool deployment workflows."
+description: "Use when: generating deployment configs, rendering per-instance scripts, editing Helm values, analyzing install/**/*.tpl Go templates, yaml.tpl/sh.tpl/bat.tpl files, or using atdtool deployment workflows."
 ---
 
 # Deployment configuration (atsf4g-co)
@@ -8,6 +8,24 @@ description: "Use when: generating deployment configs, rendering per-instance sc
 This repo now uses `atdtool` to render **deployment configs + per-instance scripts** from the charts under `cloud-native/charts`.
 
 All paths below assume you are working inside the build output: `<BUILD_DIR>/publish` (referred to as `<PUBLISH_DIR>`).
+
+## Template source recognition
+
+- Files under `install/**` ending in `.tpl` are Go `text/template` templates rendered by the atdtool/Helm-compatible
+  chart flow.
+- Parse `{{ ... }}` actions with Go-template semantics: dot context, pipelines, variables, `define`/`template`,
+  `if`/`with`/`range`, comments, and whitespace trim markers such as `{{-` and `-}}`.
+- The renderer provides project/Helm-style helper functions used by existing templates, such as `include`, `required`,
+  `toYaml`, `nindent`, and `dig`; verify function behavior from generator code or nearby templates before changing it.
+- When a second suffix exists before `.tpl`, it is the rendered target syntax: `.yaml.tpl` -> YAML, `.sh.tpl` -> POSIX
+  shell, `.bat.tpl` -> Windows batch. Analyze both layers: template logic inside `{{ ... }}` and target-language text
+  outside actions or in rendered output.
+- Bare `.tpl` files such as `_helpers.tpl` and `_util.tpl` are usually helper/partial templates and may not render as
+  standalone files; inspect their `define`, `template`, and `include` callers before editing.
+- Do not run target-language formatters or linters directly on `*.tpl` sources. Render representative output with
+  `atdtool` and the relevant values first, then validate the generated YAML/script.
+- If rendered YAML contains `${VAR}`-style runtime expressions in annotated atapp config fields, also load
+  `../configure-expression/SKILL.md`.
 
 ## Prerequisites
 
