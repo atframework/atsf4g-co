@@ -48,6 +48,8 @@ atapp:
   worker_pool:
     {{- toYaml .Values.atapp.worker_pool | trim | nindent 4  }}
   # =========== upper configures can not be reload ===========
+  debug:
+    windows_minidump_path: {{ .Values.server_log_dir }}
   # =========== log configure ===========
   log:
     level: {{ .Values.log_level }}            # log active level(disable/disabled, fatal, error, warn/warning, info, notice, debug)
