@@ -35,7 +35,7 @@ import sys
         all_fields.append(field.get_name())
 
     prefix_fmt_key = "{}-"
-    prefix_fmt_value_from_args = "\"prefix\""
+    prefix_fmt_value_from_args = "db_msg_dispatcher::me()->get_record_prefix()"
     prefix_fmt_key += "{}"
     prefix_fmt_value_from_args += ", \""
     prefix_fmt_value_from_args += index.name

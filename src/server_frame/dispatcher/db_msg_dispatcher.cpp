@@ -19,6 +19,7 @@
 #  pragma warning(pop)
 #endif
 
+#include <algorithm/sha.h>
 #include <common/file_system.h>
 #include <common/string_oprs.h>
 #include <config/compiler_features.h>
@@ -70,6 +71,60 @@ ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(db_msg_dispatcher);
 ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(db_msg_dispatcher);
 #endif
 
+namespace {
+#define REDIS_DATA_VERSOIN 2
+std::string get_first_mac_address() {
+  std::string mac;
+  uv_interface_address_t *interface_addrs = nullptr;
+  int interface_sz = 0;
+  if (0 != uv_interface_addresses(&interface_addrs, &interface_sz)) {
+    return mac;
+  }
+
+  for (int i = 0; i < interface_sz; ++i) {
+    uv_interface_address_t *inter_addr = interface_addrs + i;
+
+    size_t dump_index = 0;
+    while (dump_index < sizeof(inter_addr->phys_addr) && 0 == inter_addr->phys_addr[dump_index]) {
+      ++dump_index;
+    }
+    if (dump_index >= sizeof(inter_addr->phys_addr)) {
+      continue;
+    }
+
+    mac.resize((sizeof(inter_addr->phys_addr) - dump_index) * 2);
+    atfw::util::string::dumphex(inter_addr->phys_addr + dump_index, sizeof(inter_addr->phys_addr) - dump_index,
+                                mac.data());
+    break;
+  }
+
+  if (nullptr != interface_addrs) {
+    uv_free_interface_addresses(interface_addrs, interface_sz);
+  }
+
+  return mac;
+}
+
+std::string get_stable_host_id(int32_t version) {
+  std::string base;
+  std::string mac = get_first_mac_address();
+  if (!mac.empty()) {
+    base += mac;
+  }
+
+  base += "_";
+  base += std::to_string(version);
+
+  std::string hash = atfw::util::hash::sha::hash_to_hex(atfw::util::hash::sha::EN_ALGORITHM_SHA256,
+                                                        reinterpret_cast<const void *>(base.data()), base.size());
+  if (hash.size() > 8) {
+    hash.resize(8);
+  }
+
+  return hash;
+}
+}  // namespace
+
 SERVER_FRAME_API db_msg_dispatcher::db_msg_dispatcher()
     : sequence_allocator_(0), tick_timer_(nullptr), tick_msg_count_(0) {}
 
@@ -114,13 +169,33 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::init() {
     if (0 != res) {
       delete tick_timer_;
       tick_timer_ = nullptr;
+      return -1;
     }
   }
 
   // init
-  cluster_init(logic_config::me()->get_cfg_db().cluster(), logic_config::me()->get_cfg_db().password(),
+  int res = cluster_init(logic_config::me()->get_cfg_db().cluster(), logic_config::me()->get_cfg_db().password(),
                channel_t::CLUSTER_DEFAULT);
-  raw_init(logic_config::me()->get_cfg_db().raw(), channel_t::RAW_DEFAULT);
+  if (0 != res) {
+    FWLOGERROR("init db cluster failed, res: {}", res);
+    return res;
+  }
+  res = raw_init(logic_config::me()->get_cfg_db().raw(), channel_t::RAW_DEFAULT);
+  if (0 != res) {
+    FWLOGERROR("init db raw failed, res: {}", res);
+    return res;
+  }
+
+  if (!logic_config::me()->get_cfg_db().record_prefix().empty()) {
+    record_prefix_ = logic_config::me()->get_cfg_db().record_prefix();
+  } else if (logic_config::me()->get_cfg_db().random_prefix()) {
+    record_prefix_ = get_stable_host_id(REDIS_DATA_VERSOIN);
+  } else {
+    record_prefix_ = "default";
+  }
+
+  FWLOGINFO("db record prefix: {}", record_prefix_);
+
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
@@ -711,3 +786,5 @@ int db_msg_dispatcher::raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_
 }
 
 SERVER_FRAME_API uint64_t db_msg_dispatcher::allocate_sequence() { return ++sequence_allocator_; }
+
+SERVER_FRAME_API const std::string& db_msg_dispatcher::get_record_prefix() { return record_prefix_; }

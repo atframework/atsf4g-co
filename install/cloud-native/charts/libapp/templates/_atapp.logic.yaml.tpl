@@ -37,6 +37,7 @@ logic:
     {{- end }}
     password: {{ .Values.redis.password }}
     record_prefix: {{ .Values.redis.record_prefix }}
+    random_prefix: {{ .Values.redis.random_prefix }}
     timer:
       retry: {{ .Values.redis.retry_duration }}
       timeout: {{ .Values.redis.timeout_duration }}

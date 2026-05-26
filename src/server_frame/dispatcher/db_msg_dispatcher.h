@@ -193,6 +193,8 @@ class db_msg_dispatcher : public dispatcher_implement {
    */
   SERVER_FRAME_API uint64_t allocate_sequence();
 
+  SERVER_FRAME_API const std::string& get_record_prefix();
+
  private:
   static void log_debug_fn(const char *content);
   static void log_info_fn(const char *content);
@@ -251,6 +253,7 @@ class db_msg_dispatcher : public dispatcher_implement {
   uv_timer_t *tick_timer_;
   int tick_msg_count_;
   std::vector<char> pack_cache_;
+  std::string record_prefix_;
 
   // user callbacks
   std::list<user_callback_t> user_callback_onconnected_[channel_t::MAX];

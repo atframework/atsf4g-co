@@ -266,5 +266,6 @@ message logic_db_cfg {
   db_timer_cfg timer = 103;
   string password = 104;
   string record_prefix = 105;
+  bool random_prefix = 106;
   bool cluster_mode = 6 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "true" }];
 }
