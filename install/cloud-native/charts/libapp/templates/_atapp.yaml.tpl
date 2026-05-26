@@ -8,7 +8,7 @@ listen:
   {{- if or (dig "configure" "topology" "rule" "allow_direct_connection" false .Values.atapp.atbus ) ( eq .Values.type_name "atproxy" ) }}
   - "atcp://{{ $atapp_external_ip }}:{{ $service_port }}"
   {{- else if (eq .Values.atdtool_running_platform "windows") }}
-  - "pipe://\\\\.\\pipe\\{{ .Values.atapp.deployment.project_name }}\\{{ include "libapp.name" . }}_{{ $bus_addr }}.sock"
+  - "atcp://{{ $atapp_external_ip }}:{{ $service_port }}"
   {{- else }}
   - "unix:///tmp/atapp/{{ .Values.atapp.deployment.project_name }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.sock"
   {{- end }}
