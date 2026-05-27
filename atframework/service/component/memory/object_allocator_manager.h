@@ -50,6 +50,47 @@ struct object_allocator_backend;
 template <class T>
 struct object_allocator_backend : public object_allocator_default_backend<T> {};
 
+template <class BackendAllocator>
+class object_allocator_backend_is_always_equal {
+  template <class BackendAllocatorOther>
+  static typename BackendAllocatorOther::is_always_equal _S_test(int);
+
+  template <class>
+  static typename ::std::is_empty<BackendAllocator>::type _S_test(...);
+
+ public:
+  using type = decltype(_S_test<BackendAllocator>(0));
+};
+
+template <class LeftBackendAllocator, class RightBackendAllocator>
+class object_allocator_backend_equal {
+  template <class LeftAllocator, class RightAllocator>
+  static auto _S_check(int)
+      -> decltype(::std::declval<const LeftAllocator&>() == ::std::declval<const RightAllocator&>(),
+                  ::std::true_type());
+
+  template <class, class>
+  static ::std::false_type _S_check(...);
+
+  using has_equal = decltype(_S_check<LeftBackendAllocator, RightBackendAllocator>(0));
+
+  static bool _S_equal(const LeftBackendAllocator& left, const RightBackendAllocator& right,
+                       ::std::true_type) noexcept(noexcept(left == right)) {
+    return left == right;
+  }
+
+  static bool _S_equal(const LeftBackendAllocator&, const RightBackendAllocator&, ::std::false_type) noexcept {
+    return object_allocator_backend_is_always_equal<LeftBackendAllocator>::type::value &&
+           object_allocator_backend_is_always_equal<RightBackendAllocator>::type::value;
+  }
+
+ public:
+  static bool equal(const LeftBackendAllocator& left,
+                    const RightBackendAllocator& right) noexcept(noexcept(_S_equal(left, right, has_equal()))) {
+    return _S_equal(left, right, has_equal());
+  }
+};
+
 class object_allocator_manager {
  private:
   template <class T, class = atfw::util::nostd::enable_if_t<!std::is_const<T>::value>>
@@ -175,10 +216,20 @@ class object_allocator_manager {
   template <class T, class BackendAllocator = ::std::allocator<T>>
   struct ATFW_UTIL_SYMBOL_VISIBLE allocator {
     using background_allocator_type = BackendAllocator;
+    using background_allocator_traits = ::std::allocator_traits<background_allocator_type>;
     using value_type = T;
+    using pointer = T*;
+    using const_pointer = const T*;
+    using void_pointer = void*;
+    using const_void_pointer = const void*;
     using size_type = std::size_t;
     using difference_type = std::ptrdiff_t;
+    using reference = T&;
+    using const_reference = const T&;
+    using propagate_on_container_copy_assignment = std::false_type;
     using propagate_on_container_move_assignment = std::true_type;
+    using propagate_on_container_swap = std::false_type;
+    using is_always_equal = typename object_allocator_backend_is_always_equal<background_allocator_type>::type;
 
     // constructors
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator() noexcept(
@@ -204,11 +255,13 @@ class object_allocator_manager {
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator& operator=(const allocator& other) noexcept(
         std::is_nothrow_copy_assignable<background_allocator_type>::value) {
       *backend_allocator() = *other.backend_allocator();
+      return *this;
     }
 
     inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR allocator& operator=(allocator&& other) noexcept(
         std::is_nothrow_move_assignable<background_allocator_type>::value) {
       *backend_allocator() = std::move(*other.backend_allocator());
+      return *this;
     }
 
     template <class U, class UBackendAllocator>
@@ -253,13 +306,6 @@ class object_allocator_manager {
       using other = allocator<U, __rebind_backend_type_other>;
     };
 
-#if (!defined(__cplusplus) && !defined(_MSVC_LANG)) || \
-    !((defined(__cplusplus) && __cplusplus >= 202002L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L))
-    using pointer = T*;
-    using const_pointer = const T*;
-    using reference = T&;
-    using const_reference = const T&;
-
     inline pointer address(reference x) const noexcept { return &x; }
 
     template <class = atfw::util::nostd::enable_if_t<!std::is_const<pointer>::value>>
@@ -267,44 +313,38 @@ class object_allocator_manager {
       return &x;
     }
 
-#  if ((defined(__cplusplus) && __cplusplus <= 201103L) || (defined(_MSVC_LANG) && _MSVC_LANG <= 201103L))
-    inline size_type max_size() const { return backend_allocator()->max_size(); }
-#  else
-    inline size_type max_size() const noexcept { return backend_allocator()->max_size(); }
-#  endif
+    inline size_type max_size() const noexcept(noexcept(background_allocator_traits::max_size(*backend_allocator()))) {
+      return background_allocator_traits::max_size(*backend_allocator());
+    }
 
     template <class U, class... Args>
-    inline void construct(U* p, Args&&... args) {
-      backend_allocator()->construct(p, std::forward<Args>(args)...);
+    inline void construct(U* p, Args&&... args) noexcept(
+        noexcept(background_allocator_traits::construct(*backend_allocator(), p, std::forward<Args>(args)...))) {
+      background_allocator_traits::construct(*backend_allocator(), p, std::forward<Args>(args)...);
       object_allocator_metrics_controller::add_constructor_counter_template<T>(to_mutable_address(p));
     }
 
-    template <class U, class... Args>
-    inline void destroy(U* p) {
+    template <class U>
+    inline void destroy(U* p) noexcept(noexcept(background_allocator_traits::destroy(*backend_allocator(), p))) {
       object_allocator_metrics_controller::add_destructor_counter_template<T>(to_mutable_address(p));
-      backend_allocator()->destroy(p);
+      background_allocator_traits::destroy(*backend_allocator(), p);
     }
-#endif
+
+    inline allocator select_on_container_copy_construction() const {
+      return allocator(background_allocator_traits::select_on_container_copy_construction(*backend_allocator()));
+    }
 
 #if ((defined(__cplusplus) && __cplusplus >= 202302L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 202302L)) && \
     defined(__cpp_lib_allocate_at_least) && __cpp_lib_allocate_at_least >= 202302L
-    EXPLICIT_NODISCARD_ATTR UTIL_CONFIG_CONSTEXPR std::allocation_result<T*, size_type> allocate_at_least(size_type n) {
-      auto ret = backend_allocator()->allocate_at_least(n);
+    ATFW_EXPLICIT_NODISCARD_ATTR UTIL_CONFIG_CONSTEXPR
+        std::allocation_result<T*, size_type> allocate_at_least(size_type n) {
+      auto ret = background_allocator_traits::allocate_at_least(*backend_allocator(), n);
       object_allocator_metrics_controller::add_allocate_counter_template<T>(ret.count);
       return ret;
     }
 #endif
 
-#if ((defined(__cplusplus) && __cplusplus >= 202002L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L))
-    EXPLICIT_NODISCARD_ATTR inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR T* allocate(size_type n) {
-      auto ret = backend_allocator()->allocate(n);
-      if (nullptr != ret) {
-        object_allocator_metrics_controller::add_allocate_counter_template<T>(n);
-      }
-      return ret;
-    }
-#elif ((defined(__cplusplus) && __cplusplus >= 201703L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L))
-    inline T* allocate(size_type n) {
+    ATFW_EXPLICIT_NODISCARD_ATTR inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR pointer allocate(size_type n) {
       auto ret = backend_allocator()->allocate(n);
       if (nullptr != ret) {
         object_allocator_metrics_controller::add_allocate_counter_template<T>(n);
@@ -312,25 +352,16 @@ class object_allocator_manager {
       return ret;
     }
 
-    inline T* allocate(size_type n, const void* hint) {
-      auto ret = backend_allocator()->allocate(n, hint);
+    ATFW_EXPLICIT_NODISCARD_ATTR inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR pointer
+    allocate(size_type n, const_void_pointer hint) {
+      auto ret = allocate_with_hint(*backend_allocator(), n, hint, 0);
       if (nullptr != ret) {
         object_allocator_metrics_controller::add_allocate_counter_template<T>(n);
       }
       return ret;
     }
 
-#else
-    inline T* allocate(size_type n, const void* hint = nullptr) {
-      auto ret = backend_allocator()->allocate(n, hint);
-      if (nullptr != ret) {
-        object_allocator_metrics_controller::add_allocate_counter_template<T>(n);
-      }
-      return ret;
-    }
-#endif
-
-    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR void deallocate(T* p, size_type n) {
+    inline ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR void deallocate(pointer p, size_type n) {
       if (nullptr == p) {
         return;
       }
@@ -339,33 +370,48 @@ class object_allocator_manager {
       backend_allocator()->deallocate(p, n);
     }
 
-    friend inline bool operator==(const allocator& self,
-                                  const allocator& other) noexcept(noexcept(*self.backend_allocator() ==
-                                                                            *other.backend_allocator())) {
-      return *self.backend_allocator() == *other.backend_allocator();
+    friend inline bool operator==(const allocator& self, const allocator& other) noexcept(
+        noexcept(object_allocator_backend_equal<background_allocator_type, background_allocator_type>::equal(
+            *self.backend_allocator(), *other.backend_allocator()))) {
+      return object_allocator_backend_equal<background_allocator_type, background_allocator_type>::equal(
+          *self.backend_allocator(), *other.backend_allocator());
     }
 
     template <class U, class UBackendAllocator>
     friend inline bool operator==(const allocator& self, const allocator<U, UBackendAllocator>& other) noexcept(
-        noexcept(*self.backend_allocator() == *other.backend_allocator())) {
-      return *self.backend_allocator() == *other.backend_allocator();
+        noexcept(object_allocator_backend_equal<background_allocator_type, UBackendAllocator>::equal(
+            *self.backend_allocator(), *other.backend_allocator()))) {
+      return object_allocator_backend_equal<background_allocator_type, UBackendAllocator>::equal(
+          *self.backend_allocator(), *other.backend_allocator());
     }
 
-    friend inline bool operator!=(const allocator& self,
-                                  const allocator& other) noexcept(noexcept(*self.backend_allocator() !=
-                                                                            *other.backend_allocator())) {
-      return *self.backend_allocator() != *other.backend_allocator();
+    friend inline bool operator!=(const allocator& self, const allocator& other) noexcept(noexcept(!(self == other))) {
+      return !(self == other);
     }
 
     template <class U, class UBackendAllocator>
-    friend inline bool operator!=(const allocator& self, const allocator<U, UBackendAllocator>& other) noexcept(
-        noexcept(*self.backend_allocator() != *other.backend_allocator())) {
-      return *self.backend_allocator() != *other.backend_allocator();
+    friend inline bool operator!=(const allocator& self,
+                                  const allocator<U, UBackendAllocator>& other) noexcept(noexcept(!(self == other))) {
+      return !(self == other);
     }
 
    private:
     template <class, class>
     friend struct ATFW_UTIL_SYMBOL_VISIBLE allocator;
+
+    template <typename AllocatorOther>
+    inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR auto allocate_with_hint(AllocatorOther& allocator, size_type n,
+                                                                                 const_void_pointer hint, int)
+        -> decltype(allocator.allocate(n, hint)) {
+      return allocator.allocate(n, hint);
+    }
+
+    template <typename AllocatorOther>
+    inline static ATFRAMEWORK_OBJECT_ALLOCATOR_CONSTEXPR pointer allocate_with_hint(AllocatorOther& allocator,
+                                                                                    size_type n, const_void_pointer,
+                                                                                    ...) {
+      return ::std::allocator_traits<AllocatorOther>::allocate(allocator, n);
+    }
 
     inline void* backend_allocator_buffer() noexcept { return reinterpret_cast<void*>(&backend_allocator_buffer_); }
 
@@ -429,7 +475,7 @@ class object_allocator_manager {
 
 #if ((defined(__cplusplus) && __cplusplus >= 202002L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L))
   template <class T, class Alloc>
-  ATFW_UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<type_traits::unbounded_array<T>> allocate_shared(
+  ATFW_UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<atfw::util::nostd::unbounded_array<T>> allocate_shared(
       const Alloc& backend_alloc, ::std::size_t N) {
     allocator<T, Alloc> alloc{backend_alloc};
     ::std::shared_ptr<T> ret = ::std::allocate_shared<T>(alloc, N);
@@ -447,7 +493,7 @@ class object_allocator_manager {
   }
 
   template <class T, class Alloc>
-  ATFW_UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<type_traits::bounded_array<T>> allocate_shared(
+  ATFW_UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<atfw::util::nostd::bounded_array<T>> allocate_shared(
       const Alloc& backend_alloc) {
     allocator<T, Alloc> alloc{backend_alloc};
     ::std::shared_ptr<T> ret = ::std::allocate_shared<T>(alloc);
@@ -465,7 +511,7 @@ class object_allocator_manager {
   }
 
   template <class T, class Alloc>
-  ATFW_UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<type_traits::unbounded_array<T>> allocate_shared(
+  ATFW_UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<atfw::util::nostd::unbounded_array<T>> allocate_shared(
       const Alloc& backend_alloc, ::std::size_t N, const std::remove_extent_t<T>& u) {
     allocator<T, Alloc> alloc{backend_alloc};
     ::std::shared_ptr<T> ret = ::std::allocate_shared<T>(alloc, N, u);
@@ -483,7 +529,7 @@ class object_allocator_manager {
   }
 
   template <class T, class Alloc>
-  ATFW_UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<type_traits::bounded_array<T>> allocate_shared(
+  ATFW_UTIL_SYMBOL_VISIBLE inline static ::std::shared_ptr<atfw::util::nostd::bounded_array<T>> allocate_shared(
       const Alloc& backend_alloc, const std::remove_extent_t<T>& u) {
     allocator<T, Alloc> alloc{backend_alloc};
     ::std::shared_ptr<T> ret = ::std::allocate_shared<T>(alloc, u);

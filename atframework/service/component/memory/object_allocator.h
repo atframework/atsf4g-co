@@ -17,7 +17,6 @@
 #include <utility>
 
 #include "memory/object_allocator_manager.h"
-#include "memory/object_allocator_type_traits.h"
 
 // ============= Patch for some Compilers's mistake =============
 #if defined(__GNUC__) && !defined(__clang__) && !defined(__apple_build_version__)

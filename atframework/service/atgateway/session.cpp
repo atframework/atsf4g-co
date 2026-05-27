@@ -213,6 +213,12 @@ int session::send_new_session() {
     sess->set_client_port(peer_port_);
   }
 
+  // send to router_
+  if (0 == router_node_id_ && router_node_name_.empty()) {
+    FWLOGWARNING("{} has not configure router, ignore new session notification", *this);
+    return static_cast<int>(error_code_t::kInvalidRouter);
+  }
+
   int ret = send_to_server(message);
   if (0 == ret) {
     set_flag(flag_t::kRegistered, true);
@@ -233,6 +239,7 @@ int session::send_remove_session(session_manager *mgr) {
 
   // echo server模式不需要路由通知
   if (mgr != nullptr && mgr->get_conf().origin_conf.echo_server()) {
+    FWLOGWARNING("{} ignore remove notify for echo server", *this);
     return 0;
   }
 
@@ -273,10 +280,10 @@ void session::on_read(int ssz, gsl::span<const unsigned char> buffer) {
     proto_->read(ssz, buffer, errcode);
 
     if (errcode < 0) {
-      FWLOGERROR("{} read data length={} failed and will be closed, res: {}", *this, buffer.size(), errcode);
+      FWLOGERROR("{} read data length {} failed and will be closed, res: {}", *this, buffer.size(), errcode);
       close(static_cast<int>(close_reason_t::kInvalidData), errcode, "network error");
     } else {
-      FWLOGDEBUG("{} read data length={} success", *this, buffer.size());
+      FWLOGDEBUG("{} read data length {} success", *this, buffer.size());
     }
   }
 }
@@ -314,6 +321,8 @@ int session::close_with_manager(int32_t reason, int32_t sub_reason, atfw::util::
   }
 
   set_flag(flag_t::kClosing, true);
+
+  FWLOGINFO("{} close with reason: {}, {}, {}", *this, reason, sub_reason, message);
   return close_fd(reason, sub_reason, message);
 }
 
@@ -342,7 +351,7 @@ int session::close_fd(int32_t reason, int32_t sub_reason, atfw::util::nostd::str
 
     FWLOGINFO("{} lost fd", *this);
   }
-  FWLOGWARNING("{} close reason: {}, {}, {}", *this, reason, sub_reason, message);
+  FWLOGWARNING("{} close fd with reason: {}, {}, {}", *this, reason, sub_reason, message);
 
   return 0;
 }
@@ -447,6 +456,10 @@ void session::on_evt_shutdown(uv_shutdown_t *req, int /*status*/) {
   session *self = reinterpret_cast<session *>(req->handle->data);
   assert(self);
 
+  uv_os_fd_t fd{};
+  uv_fileno(reinterpret_cast<uv_handle_t *>(req->handle), &fd);
+  FWLOGINFO("system fd {} shutdown", fd);
+
   uv_close(&self->raw_handle_, on_evt_closed);
 }
 
@@ -456,9 +469,14 @@ void session::on_evt_closed(uv_handle_t *handle) {
     return;
   }
 
+  uv_os_fd_t fd{};
+  uv_fileno(handle, &fd);
+
   session *self = reinterpret_cast<session *>(handle->data);
   assert(self);
   self->set_flag(flag_t::kClosingFd, false);
+
+  FWLOGINFO("{} system fd {} closed", *self, fd);
 
   // free session object
   ptr_t *holder = reinterpret_cast<ptr_t *>(self->shutdown_req_.data);

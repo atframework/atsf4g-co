@@ -327,23 +327,29 @@ int session_manager::close(session::id_t sess_id, int32_t reason, int32_t sub_re
     }
 
     if (allow_reconnect) {
+      FWLOGDEBUG("session {} is not a active session, allow reconnect and ignore closing", sess_id);
       return static_cast<int>(error_code_t::kSessionNotFound);
     }
 
     iter = reconnect_cache_.find(sess_id);
     if (reconnect_cache_.end() == iter) {
+      FWLOGDEBUG("session {} is not found and ignore closing", sess_id);
       return static_cast<int>(error_code_t::kSessionNotFound);
     }
     session_ptr = iter->second;
     reconnect_cache_.erase(iter);
-    // 重入时直接忽略
+
     if (!session_ptr) {
+      FWLOGERROR("session {} should not be nullptr", sess_id);
+      return static_cast<int>(error_code_t::kSessionNotFound);
     }
 
     if (session_ptr->check_flag(session::flag_t::kManagerClosing)) {
+      FWLOGDEBUG("{} is closing, ignore closing again", *session_ptr);
       return 0;
     }
 
+    FWLOGINFO("{} close reconnect cache", *session_ptr);
     session_ptr->close(reason, sub_reason, message);
     session_ptr->set_flag(session::flag_t::kWaitReconnect, false);
     return 0;
@@ -352,6 +358,7 @@ int session_manager::close(session::id_t sess_id, int32_t reason, int32_t sub_re
   // 防止重入
   if (session_ptr) {
     if (session_ptr->check_flag(session::flag_t::kManagerClosing)) {
+      FWLOGDEBUG("{} is closing, ignore closing again", *session_ptr);
       return 0;
     }
     session_ptr->set_flag(session::flag_t::kManagerClosing, true);
@@ -498,6 +505,7 @@ int session_manager::set_session_router(session::id_t sess_id, ::atbus::bus_id_t
                                         const std::string &router_node_name) {
   session_map_t::iterator iter = actived_sessions_.find(sess_id);
   if (actived_sessions_.end() == iter) {
+    FWLOGWARNING("session {} set router to {}:{}, but session not found", sess_id, router_node_id, router_node_name);
     return static_cast<int>(error_code_t::kSessionNotFound);
   }
 
@@ -742,6 +750,7 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   // create proto object and session object
   int res = sess->accept_tcp(server);
   if (0 != res) {
+    FWLOGWARNING("{} accept tcp socket failed, {}", *sess, "server busy");
     sess->close(static_cast<int>(close_reason_t::kServerBusy), 0, "server busy");
     return;
   }
@@ -749,7 +758,7 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   // check session number limit
   if (mgr->conf_.origin_conf.listen().max_client() > 0 &&
       mgr->reconnect_cache_.size() + mgr->actived_sessions_.size() >= mgr->conf_.origin_conf.listen().max_client()) {
-    FWLOGWARNING("accept tcp socket failed, gateway have too many sessions now");
+    FWLOGWARNING("{} accept tcp socket failed, {}", *sess, "gateway have too many sessions now");
     sess->close(static_cast<int>(close_reason_t::kServerBusy), 0, "server busy");
     return;
   }
@@ -817,6 +826,7 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
 
   int res = sess->accept_pipe(server);
   if (0 != res) {
+    FWLOGWARNING("{} accept pipe socket failed, {}", *sess, "server busy");
     sess->close(static_cast<int>(close_reason_t::kServerBusy), 0, "server busy");
     return;
   }
@@ -824,6 +834,7 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
   // check session number limit
   if (mgr->conf_.origin_conf.listen().max_client() > 0 &&
       mgr->reconnect_cache_.size() + mgr->actived_sessions_.size() >= mgr->conf_.origin_conf.listen().max_client()) {
+    FWLOGWARNING("{} accept pipe socket failed, {}", *sess, "gateway have too many sessions now");
     sess->close(static_cast<int>(close_reason_t::kServerBusy), 0, "server busy");
     return;
   }
@@ -845,8 +856,17 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
 }
 
 void session_manager::on_evt_listen_closed(uv_handle_t *handle) {
+  if (handle == nullptr) {
+    return;
+  }
+
   // delete shared ptr
   listen_handle_ptr_t *ptr = reinterpret_cast<listen_handle_ptr_t *>(handle->data);
+
+  uv_os_fd_t fd{};
+  uv_fileno(handle, &fd);
+  FWLOGINFO("system fd {} closed", fd);
+
   delete ptr;
 }
 }  // namespace gateway
