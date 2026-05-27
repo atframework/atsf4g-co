@@ -355,19 +355,19 @@ int session_manager::close(session::id_t sess_id, int32_t reason, int32_t sub_re
     return 0;
   } while (false);
 
-  // 防止重入
-  if (session_ptr) {
-    if (session_ptr->check_flag(session::flag_t::kManagerClosing)) {
-      FWLOGDEBUG("{} is closing, ignore closing again", *session_ptr);
-      return 0;
-    }
-    session_ptr->set_flag(session::flag_t::kManagerClosing, true);
+  if (!session_ptr) {
+    FWLOGDEBUG("session {} is not found and ignore closing", sess_id);
+    return static_cast<int>(error_code_t::kSessionNotFound);
   }
-  auto flag_guard = gsl::finally([session_ptr] {
-    if (session_ptr) {
-      session_ptr->set_flag(session::flag_t::kManagerClosing, false);
-    }
-  });
+
+  // 防止重入
+  if (session_ptr->check_flag(session::flag_t::kManagerClosing)) {
+    FWLOGDEBUG("{} is closing, ignore closing again", *session_ptr);
+    return 0;
+  }
+  session_ptr->set_flag(session::flag_t::kManagerClosing, true);
+
+  auto flag_guard = gsl::finally([session_ptr] { session_ptr->set_flag(session::flag_t::kManagerClosing, false); });
 
   if (conf_.origin_conf.client().reconnect_timeout().seconds() > 0 && allow_reconnect) {
     reconnect_timeout_.emplace_back();
@@ -385,7 +385,7 @@ int session_manager::close(session::id_t sess_id, int32_t reason, int32_t sub_re
 
     // just close fd
     sess_timer.s->close_fd(reason, sub_reason, message);
-  } else if (session_ptr) {
+  } else {
     FWLOGINFO("{} closed and disable reconnect", *session_ptr);
     session_ptr->close(reason, sub_reason, message);
   }
@@ -604,6 +604,7 @@ int session_manager::active_session(session::ptr_t sess) {
   if (!get_conf().origin_conf.echo_server()) {
     int ret = sess->send_new_session();
     if (ret < 0) {
+      sess->close(static_cast<int>(close_reason_t::kMaintenance), ret, "send new session failed");
       return ret;
     }
   }
