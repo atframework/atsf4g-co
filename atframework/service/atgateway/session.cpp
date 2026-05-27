@@ -348,6 +348,8 @@ int session::close_fd(int32_t reason, int32_t sub_reason, atfw::util::nostd::str
     if (!proto_ || proto_->check_flag(atframework::gateway::libatgw_protocol_api::flag_t::kClosed)) {
       uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
     }
+    // TODO: else 设置超时强制 uv_close (uv_shutdown会等待未写出数据全部写完，超时不应该等待) , 注意多个 uv_close
+    // 调用不要冲突
 
     FWLOGINFO("{} lost fd", *this);
   }

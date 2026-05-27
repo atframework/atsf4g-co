@@ -2431,15 +2431,6 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::try_write() {
     return 0;
   }
 
-  if (check_flag(flag_t::kClosing)) {
-    while (!write_buffers_.empty()) {
-      ::atbus::detail::buffer_block *bb = write_buffers_.front();
-      size_t nwrite = bb->raw_size();
-      write_buffers_.pop_front(nwrite, true);
-    }
-    return static_cast<int>(::atfw::gateway::error_code_t::kClosing);
-  }
-
   int ret = 0;
   bool is_done = false;
 
@@ -2516,6 +2507,11 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::write_message(flatbuffers::FlatBu
 
   const void *buf = reinterpret_cast<const void *>(builder.GetBufferPointer());
   size_t len = static_cast<size_t>(builder.GetSize());
+
+  if (check_flag(flag_t::kClosing)) {
+    // If we're closing, reject new messages
+    return try_write();
+  }
 
   if (nullptr != buf && len > 0) {
     if (len >= std::numeric_limits<uint32_t>::max()) {
