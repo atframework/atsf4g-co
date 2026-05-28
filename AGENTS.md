@@ -30,6 +30,8 @@ high-performance game server architectures.
 ## Always-On Rules
 
 - Respect the user's dirty workspace: inspect current file contents before editing and avoid unrelated reformatting.
+- Apply Karpathy-style coding-agent discipline: surface assumptions/tradeoffs, prefer the simplest sufficient fix, make
+  surgical request-traceable edits, and define verification/success criteria before looping.
 - When creating AI scratch files or asking scripts to emit temporary data/logs, use a subdirectory inside an ignored
   build tree (for example `build/_agent_tmp/` or `build_jobs_cmake_tools/_agent_tmp/`) so `.gitignore` already covers
   it; never drop temporary artifacts in the repository root.

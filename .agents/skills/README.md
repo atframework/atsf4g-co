@@ -20,5 +20,6 @@ small; put task-specific steps, commands, caveats, and examples in each `SKILL.m
 - Folder name and frontmatter `name` must match.
 - `description` is the discovery surface: start with `Use when:` and include concrete trigger words.
 - Keep each `SKILL.md` focused; move bulky examples or reference material into sibling files when needed.
+- Keep compact behavioral guardrails in `AGENTS.md`; do not duplicate the full generic guideline body in every skill.
 - Keep shared engineering style and review conventions in `engineering-guidelines/SKILL.md`, not in this index.
 - This index is root-scoped; subprojects maintain independent `.agents/skills/README.md` files.

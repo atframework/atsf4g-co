@@ -11,6 +11,8 @@ Use this skill when updating AI-agent guidance for this repository or subproject
 
 - Deeply research the current prompt/skill layout and current AI-agent customization practices before editing.
 - Keep always-on guidance compact, actionable, and non-redundant.
+- Preserve compact Karpathy-style guardrails: surface assumptions/tradeoffs, prefer simple solutions, make surgical
+  request-traceable edits, and require verifiable success criteria.
 - Keep engineering style, lint, and project coding conventions in `../engineering-guidelines/SKILL.md`; bridge files and
   this maintenance skill should only route to that skill.
 - Keep `.agents/skills/README.md` as a compact index; do not turn it into a second copy of skill bodies.
@@ -60,6 +62,8 @@ Use this skill when updating AI-agent guidance for this repository or subproject
 ### Choose the right surface
 
 - Put facts that apply to nearly every task in `AGENTS.md`.
+- Put concise behavioral guardrails in `AGENTS.md`; do not duplicate the full generic guideline body in bridge files or
+  every skill.
 - Repository-wide temporary-artifact placement rules belong in `AGENTS.md`; skills should explain how to preserve the
   rule, not replace it.
 - Put shared coding/review conventions in `engineering-guidelines`; keep specialized skills focused on detailed workflows
@@ -98,6 +102,7 @@ Use this skill when updating AI-agent guidance for this repository or subproject
 ## Source Links to Re-check
 
 - AGENTS.md guidance: <https://agents.md/>
+- Karpathy-inspired coding-agent guardrails: <https://github.com/multica-ai/andrej-karpathy-skills>
 - Agent Skills specification and best practices: <https://agentskills.io/specification>
 - VS Code Copilot custom instructions and skills: <https://code.visualstudio.com/docs/copilot/customization/overview>
 - Claude Code memory and skills: <https://docs.anthropic.com/claude-code/>
