@@ -895,9 +895,10 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   // first idle timeout
   auto &sess_timer_data = mgr->first_idle_[sess->get_id()];
   sess_timer_data.sess = sess;
-  sess_timer_data.timeout = atfw::util::time::time_utility::now();
-  atfw::atapp::protobuf_to_chrono_convert_duration_with_default<std::chrono::system_clock::duration>(
-      mgr->conf_.origin_conf.client().first_idle_timeout(), std::chrono::seconds(10));
+  sess_timer_data.timeout =
+      atfw::util::time::time_utility::now() +
+      atfw::atapp::protobuf_to_chrono_convert_duration_with_default<std::chrono::system_clock::duration>(
+          mgr->conf_.origin_conf.client().first_idle_timeout(), std::chrono::seconds(10));
   FWLOGINFO("accept a tcp socket({}:{}), create sesson {} and to wait for handshake now, expired time is {}(+{})",
             sess->get_peer_host(), sess->get_peer_port(), reinterpret_cast<const void *>(sess.get()),
             std::chrono::system_clock::to_time_t(sess_timer_data.timeout),

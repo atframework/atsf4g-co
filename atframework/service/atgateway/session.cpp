@@ -218,7 +218,7 @@ int session::send_new_session() {
   if (0 == router_node_id_ && router_node_name_.empty()) {
     if (owner_ != nullptr && owner_->get_conf().origin_conf.echo_server()) {
       set_flag(flag_t::kRegistered, true);
-      FWLOGWARNING("{} ignore new session notification for echo server", *this);
+      FWLOGINFO("{} ignore new session notification for echo server", *this);
 
       if (owner_ != nullptr) {
         owner_->remove_session_first_idle(get_id(), this);
@@ -256,7 +256,7 @@ int session::send_remove_session(session_manager *mgr) {
   if (0 == router_node_id_ && router_node_name_.empty()) {
     // echo server模式不需要路由通知
     if (owner_ != nullptr && owner_->get_conf().origin_conf.echo_server()) {
-      FWLOGWARNING("{} ignore remove notify for echo server", *this);
+      FWLOGINFO("{} ignore remove notify for echo server", *this);
       set_flag(flag_t::kRegistered, false);
       return 0;
     }
@@ -319,6 +319,7 @@ int session::on_write_done(int status) {
     if (check_flag(flag_t::kShouldShutdownFd) && !check_flag(flag_t::kShutdownFd) &&
         proto_->check_flag(atframework::gateway::libatgw_protocol_api::flag_t::kClosed)) {
       FWLOGINFO("{} start to shutdown system fd", *this);
+      set_flag(flag_t::kShutdownFd, true);
       uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
     }
 
@@ -368,6 +369,9 @@ int session::shutdown_fd(int32_t reason, int32_t sub_reason, atfw::util::nostd::
       shutdown_req_.data = new ptr_t(shared_from_this());
     }
 
+    if (owner_ != nullptr) {
+      owner_->update_force_closed_session(shared_from_this());
+    }
     // if writing, wait all data written an then shutdown it
     set_flag(flag_t::kShouldShutdownFd, true);
     if (!proto_ || proto_->check_flag(atframework::gateway::libatgw_protocol_api::flag_t::kClosed)) {
@@ -376,8 +380,6 @@ int session::shutdown_fd(int32_t reason, int32_t sub_reason, atfw::util::nostd::
       set_flag(flag_t::kShutdownFd, true);
       uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
     }
-    // TODO: else 设置超时强制 uv_close (uv_shutdown会等待未写出数据全部写完，超时不应该等待) , 注意多个 uv_close
-    // 调用不要冲突
 
     FWLOGWARNING("{} shutdown fd with reason: {}, {}, {}", *this, reason, sub_reason, message);
   } else {
