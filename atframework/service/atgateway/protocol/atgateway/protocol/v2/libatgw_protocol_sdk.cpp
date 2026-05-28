@@ -2510,7 +2510,8 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::write_message(flatbuffers::FlatBu
 
   if (check_flag(flag_t::kClosing)) {
     // If we're closing, reject new messages
-    return try_write();
+    try_write();
+    return static_cast<int>(::atfw::gateway::error_code_t::kClosing);
   }
 
   if (nullptr != buf && len > 0) {

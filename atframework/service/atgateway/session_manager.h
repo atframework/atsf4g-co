@@ -17,11 +17,13 @@
 #include <atframe/atapp.h>
 #include <gsl/select-gsl.h>
 
+#include <memory/lru_map.h>
+
 #include <service_discovery_index/discovery_index.h>
 
+#include <chrono>
 #include <functional>
 #include <list>
-#include <unordered_map>
 
 #include "session.h"
 
@@ -39,7 +41,12 @@ class session_manager {
     crypto_conf_t crypto;
   };
 
-  using session_map_t = std::unordered_map<session::id_t, session::ptr_t>;
+  struct session_with_timeout_t {
+    session::ptr_t sess;
+    std::chrono::system_clock::time_point timeout;
+  };
+  using session_map_t = atfw::util::memory::lru_map<session::id_t, session>;
+  using session_timeout_map_t = atfw::util::memory::lru_map<session::id_t, session_with_timeout_t>;
   using create_proto_fn_t = std::function<std::unique_ptr< ::atframework::gateway::libatgw_protocol_api>()>;
   using on_create_session_fn_t = std::function<int(session *, uv_stream_t *)>;
 
@@ -78,7 +85,7 @@ class session_manager {
 
   int set_session_router(session::id_t sess_id, ::atbus::bus_id_t router_node_id, const std::string &router_node_name);
 
-  session::ptr_t find_session(session::id_t sess_id) const;
+  session::ptr_t find_session(session::id_t sess_id);
 
   inline conf_t &get_conf() { return conf_; }
   inline const conf_t &get_conf() const { return conf_; }
@@ -91,6 +98,12 @@ class session_manager {
   int active_session(session::ptr_t sess);
 
   void assign_default_router(session &sess) const;
+
+  void remove_session_first_idle(session::id_t sess_id, const session *check_ptr);
+
+  void remove_force_closed_session(const session *check_ptr);
+
+  void update_force_closed_session(const session::ptr_t &sess_ptr);
 
  private:
   static void on_evt_accept_tcp(uv_stream_t *server, int status);
@@ -114,9 +127,10 @@ class session_manager {
   using listen_handle_ptr_t = std::shared_ptr<uv_stream_t>;
   std::list<listen_handle_ptr_t> listen_handles_;
   session_map_t actived_sessions_;
-  std::list<session_timeout_t> first_idle_;
   session_map_t reconnect_cache_;
-  std::list<session_timeout_t> reconnect_timeout_;
+  atfw::util::memory::lru_map<const session *, session_with_timeout_t> force_closed_sessions_;
+  session_timeout_map_t first_idle_;
+  session_timeout_map_t reconnect_timeout_;
   time_t last_tick_time_;
 
   component::service_discovery_index::ptr_t discovery_index_;

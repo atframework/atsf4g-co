@@ -10,8 +10,10 @@
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
+#include <atframe/atapp_conf.h>
 #include <atframe/modules/etcd_module.h>
 
+#include <chrono>
 #include <gsl/util>
 #include <new>
 
@@ -219,34 +221,55 @@ int session_manager::reset() {
   }
   actived_sessions_.clear();
 
-  for (std::list<session_timeout_t>::iterator iter = first_idle_.begin(); iter != first_idle_.end(); ++iter) {
-    if (iter->s) {
-      iter->s->close(static_cast<int>(close_reason_t::kServerClosed), 0, "server closed");
+  {
+    session_timeout_map_t first_idles = first_idle_;
+    for (session_timeout_map_t::iterator iter = first_idles.begin(); iter != first_idles.end(); ++iter) {
+      if (iter->second && iter->second->sess) {
+        iter->second->sess->close(static_cast<int>(close_reason_t::kServerClosed), 0, "server closed");
+      }
     }
   }
   first_idle_.clear();
 
-  for (session_map_t::iterator iter = reconnect_cache_.begin(); iter != reconnect_cache_.end(); ++iter) {
-    if (iter->second) {
-      iter->second->close(static_cast<int>(close_reason_t::kServerClosed), 0, "server closed");
+  {
+    session_map_t reconnect_caches = reconnect_cache_;
+    for (session_map_t::iterator iter = reconnect_caches.begin(); iter != reconnect_caches.end(); ++iter) {
+      if (iter->second) {
+        iter->second->close(static_cast<int>(close_reason_t::kServerClosed), 0, "server closed");
+      }
     }
   }
   reconnect_cache_.clear();
 
-  for (std::list<session_timeout_t>::iterator iter = reconnect_timeout_.begin(); iter != reconnect_timeout_.end();
-       ++iter) {
-    if (iter->s) {
-      iter->s->close(static_cast<int>(close_reason_t::kServerClosed), 0, "server closed");
+  {
+    session_timeout_map_t reconnect_timeouts = reconnect_timeout_;
+    for (session_timeout_map_t::iterator iter = reconnect_timeouts.begin(); iter != reconnect_timeouts.end(); ++iter) {
+      if (iter->second && iter->second->sess) {
+        iter->second->sess->close(static_cast<int>(close_reason_t::kServerClosed), 0, "server closed");
+      }
     }
   }
   reconnect_timeout_.clear();
 
-  // close all listen socks
-  for (std::list<listen_handle_ptr_t>::iterator iter = listen_handles_.begin(); iter != listen_handles_.end(); ++iter) {
-    if (*iter) {
-      // ref count + 1
-      (*iter)->data = new listen_handle_ptr_t(*iter);
-      uv_close(reinterpret_cast<uv_handle_t *>((*iter).get()), on_evt_listen_closed);
+  {
+    auto force_closed = force_closed_sessions_;
+    for (auto iter = force_closed.begin(); iter != force_closed.end(); ++iter) {
+      if (iter->second && iter->second->sess) {
+        iter->second->sess->close(static_cast<int>(close_reason_t::kServerClosed), 0, "server closed");
+      }
+    }
+  }
+  force_closed_sessions_.clear();
+
+  {
+    std::list<listen_handle_ptr_t> listen_handles = listen_handles_;
+    // close all listen socks
+    for (std::list<listen_handle_ptr_t>::iterator iter = listen_handles.begin(); iter != listen_handles.end(); ++iter) {
+      if (*iter) {
+        // ref count + 1
+        (*iter)->data = new listen_handle_ptr_t(*iter);
+        uv_close(reinterpret_cast<uv_handle_t *>((*iter).get()), on_evt_listen_closed);
+      }
     }
   }
   listen_handles_.clear();
@@ -266,19 +289,26 @@ int session_manager::tick() {
     // std::list 在C++11以前可能是O(n)复杂度
     FWLOGINFO(
         "[STAT] session manager: actived session {}, reconnect session {}, idle timer count {}, reconnect timer "
-        "count {}",
-        actived_sessions_.size(), reconnect_cache_.size(), first_idle_.size(), reconnect_timeout_.size());
+        "count {}, force closed timer count {}",
+        actived_sessions_.size(), reconnect_cache_.size(), first_idle_.size(), reconnect_timeout_.size(),
+        force_closed_sessions_.size());
   }
   last_tick_time_ = now;
+  auto now_timepoint = atfw::util::time::time_utility::now();
 
   // reconnect timeout
   while (!reconnect_timeout_.empty()) {
-    if (reconnect_timeout_.front().timeout > now) {
+    if (!reconnect_timeout_.front().second) {
+      reconnect_timeout_.pop_front();
+      continue;
+    }
+
+    if (reconnect_timeout_.front().second->timeout > now_timepoint) {
       break;
     }
 
-    if (reconnect_timeout_.front().s) {
-      session::ptr_t s = reconnect_timeout_.front().s;
+    session::ptr_t s = reconnect_timeout_.front().second->sess;
+    if (reconnect_timeout_.front().second->sess) {
       if (s->check_flag(session::flag_t::kReconnected)) {
         FWLOGINFO("{} reconnected, cleanup", *s);
       } else {
@@ -290,24 +320,60 @@ int session_manager::tick() {
       s->set_flag(session::flag_t::kWaitReconnect, false);
       s->close_with_manager(static_cast<int>(close_reason_t::kLogout), 0, "logout", this);
     }
-    reconnect_timeout_.pop_front();
+    if (!reconnect_timeout_.empty() && reconnect_timeout_.front().second->sess == s) {
+      reconnect_timeout_.pop_front();
+    }
   }
 
   // first idle timeout
   while (!first_idle_.empty()) {
-    if (first_idle_.front().timeout > now) {
+    if (!first_idle_.front().second) {
+      first_idle_.pop_front();
+      continue;
+    }
+
+    if (first_idle_.front().second->timeout > now_timepoint) {
       break;
     }
 
-    if (first_idle_.front().s) {
-      session::ptr_t s = first_idle_.front().s;
-
+    session::ptr_t s = first_idle_.front().second->sess;
+    if (first_idle_.front().second->sess) {
       if (!s->check_flag(session::flag_t::kRegistered) && !s->check_flag(session::flag_t::kClosing)) {
         FWLOGINFO("{} register timeout", *s);
         s->close(static_cast<int>(close_reason_t::kFirstIdle), 0, "idle timeout");
       }
     }
-    first_idle_.pop_front();
+    if (!first_idle_.empty() && first_idle_.front().second->sess == s) {
+      first_idle_.pop_front();
+    }
+  }
+
+  // force close timeout
+  while (!force_closed_sessions_.empty()) {
+    if (!force_closed_sessions_.front().second) {
+      force_closed_sessions_.pop_front();
+      continue;
+    }
+
+    if (force_closed_sessions_.front().second->timeout > now_timepoint) {
+      break;
+    }
+
+    session::ptr_t s = force_closed_sessions_.front().second->sess;
+    if (s) {
+      if (!s->check_flag(session::flag_t::kRegistered) && !s->check_flag(session::flag_t::kClosing)) {
+        FWLOGINFO("{} force close timeout", *s);
+        if (!s->has_close_reason()) {
+          s->set_close_reason(static_cast<int>(close_reason_t::kReset), static_cast<int>(error_code_t::kClosing),
+                              "shutdown timeout");
+        }
+        s->force_close_fd();
+      }
+    }
+
+    if (!force_closed_sessions_.empty() && force_closed_sessions_.front().second->sess == s) {
+      force_closed_sessions_.pop_front();
+    }
   }
 
   return 0;
@@ -315,11 +381,11 @@ int session_manager::tick() {
 
 int session_manager::close(session::id_t sess_id, int32_t reason, int32_t sub_reason,
                            atfw::util::nostd::string_view message, bool allow_reconnect) {
-  session_map_t::mapped_type session_ptr;
+  session::ptr_t session_ptr;
 
   // not found
   do {
-    session_map_t::iterator iter = actived_sessions_.find(sess_id);
+    session_map_t::iterator iter = actived_sessions_.find(sess_id, false);
     if (actived_sessions_.end() != iter) {
       session_ptr = iter->second;
       actived_sessions_.erase(iter);
@@ -350,8 +416,8 @@ int session_manager::close(session::id_t sess_id, int32_t reason, int32_t sub_re
     }
 
     FWLOGINFO("{} close reconnect cache", *session_ptr);
-    session_ptr->close(reason, sub_reason, message);
     session_ptr->set_flag(session::flag_t::kWaitReconnect, false);
+    session_ptr->close(reason, sub_reason, message);
     return 0;
   } while (false);
 
@@ -370,21 +436,26 @@ int session_manager::close(session::id_t sess_id, int32_t reason, int32_t sub_re
   auto flag_guard = gsl::finally([session_ptr] { session_ptr->set_flag(session::flag_t::kManagerClosing, false); });
 
   if (conf_.origin_conf.client().reconnect_timeout().seconds() > 0 && allow_reconnect) {
-    reconnect_timeout_.emplace_back();
-    session_timeout_t &sess_timer = reconnect_timeout_.back();
-    sess_timer.s = session_ptr;
-    sess_timer.timeout =
-        atfw::util::time::time_utility::get_now() + conf_.origin_conf.client().reconnect_timeout().seconds();
+    auto &sess_timer_data = reconnect_timeout_[session_ptr->get_id()];
+    sess_timer_data.sess = session_ptr;
+    sess_timer_data.timeout =
+        atfw::util::time::time_utility::now() +
+        atfw::atapp::protobuf_to_chrono_convert_duration_with_default<std::chrono::system_clock::duration>(
+            conf_.origin_conf.client().reconnect_timeout(), std::chrono::seconds(180));
 
-    reconnect_cache_[sess_timer.s->get_id()] = sess_timer.s;
-    FWLOGINFO("{} closed and setup reconnect timeout {}(+{})", *sess_timer.s, sess_timer.timeout,
+    auto iter = reconnect_cache_.find(sess_timer_data.sess->get_id(), false);
+    if (iter != reconnect_cache_.end()) {
+      reconnect_cache_.erase(iter);
+    }
+    reconnect_cache_.insert_key_value(sess_timer_data.sess->get_id(), sess_timer_data.sess);
+    FWLOGINFO("{} closed and setup reconnect timeout {}(+{})", *sess_timer_data.sess, sess_timer_data.timeout,
               conf_.origin_conf.client().reconnect_timeout().seconds());
 
     // maybe transfer reconnecting session, old session still keeps kWaitReconnect flag
-    sess_timer.s->set_flag(session::flag_t::kWaitReconnect, true);
+    sess_timer_data.sess->set_flag(session::flag_t::kWaitReconnect, true);
 
     // just close fd
-    sess_timer.s->close_fd(reason, sub_reason, message);
+    sess_timer_data.sess->shutdown_fd(reason, sub_reason, message);
   } else {
     FWLOGINFO("{} closed and disable reconnect", *session_ptr);
     session_ptr->close(reason, sub_reason, message);
@@ -475,7 +546,7 @@ int session_manager::post_data(const std::string &tname, int32_t type, gsl::span
 }
 
 int session_manager::push_data(session::id_t sess_id, gsl::span<const unsigned char> data) {
-  session_map_t::iterator iter = actived_sessions_.find(sess_id);
+  session_map_t::iterator iter = actived_sessions_.find(sess_id, false);
   if (actived_sessions_.end() == iter) {
     return static_cast<int>(error_code_t::kSessionNotFound);
   }
@@ -503,7 +574,7 @@ int session_manager::broadcast_data(gsl::span<const unsigned char> data) {
 
 int session_manager::set_session_router(session::id_t sess_id, ::atbus::bus_id_t router_node_id,
                                         const std::string &router_node_name) {
-  session_map_t::iterator iter = actived_sessions_.find(sess_id);
+  session_map_t::iterator iter = actived_sessions_.find(sess_id, false);
   if (actived_sessions_.end() == iter) {
     FWLOGWARNING("session {} set router to {}:{}, but session not found", sess_id, router_node_id, router_node_name);
     return static_cast<int>(error_code_t::kSessionNotFound);
@@ -520,8 +591,8 @@ int session_manager::set_session_router(session::id_t sess_id, ::atbus::bus_id_t
   return 0;
 }
 
-session::ptr_t session_manager::find_session(session::id_t sess_id) const {
-  session_map_t::const_iterator iter = actived_sessions_.find(sess_id);
+session::ptr_t session_manager::find_session(session::id_t sess_id) {
+  auto iter = actived_sessions_.find(sess_id, false);
   if (iter == actived_sessions_.end()) {
     return nullptr;
   }
@@ -534,7 +605,7 @@ int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
   session_map_t::iterator iter = reconnect_cache_.find(old_sess_id);
   // replace the existed session, in case of the lost connection has not be detected
   if (iter == reconnect_cache_.end()) {
-    iter = actived_sessions_.find(old_sess_id);
+    iter = actived_sessions_.find(old_sess_id, false);
     if (iter != actived_sessions_.end() && nullptr != new_sess.get_protocol_handle() &&
         nullptr != iter->second->get_protocol_handle()) {
       has_reconnect_checked = true;
@@ -595,13 +666,13 @@ int session_manager::active_session(session::ptr_t sess) {
     return static_cast<int>(error_code_t::kSessionNotFound);
   }
 
-  session_map_t::iterator iter = actived_sessions_.find(sess->get_id());
+  session_map_t::iterator iter = actived_sessions_.find(sess->get_id(), false);
   if (iter != actived_sessions_.end()) {
     close(sess->get_id(), static_cast<int>(close_reason_t::kKickoff), 0, "kickoff");
   }
 
   // echo server 模式不需要路由通知
-  if (!get_conf().origin_conf.echo_server()) {
+  {
     int ret = sess->send_new_session();
     if (ret < 0) {
       sess->close(static_cast<int>(close_reason_t::kMaintenance), ret, "send new session failed");
@@ -609,7 +680,12 @@ int session_manager::active_session(session::ptr_t sess) {
     }
   }
 
-  actived_sessions_[sess->get_id()] = sess;
+  iter = actived_sessions_.find(sess->get_id(), false);
+  if (iter != actived_sessions_.end()) {
+    actived_sessions_.erase(iter);
+  }
+  actived_sessions_.insert_key_value(sess->get_id(), sess);
+  remove_force_closed_session(sess.get());
 
   // setup default router
   assign_default_router(*sess);
@@ -703,6 +779,54 @@ void session_manager::assign_default_router(session &sess) const {
   }
 }
 
+void session_manager::remove_session_first_idle(session::id_t sess_id, const session *check_ptr) {
+  session_timeout_map_t::iterator iter = first_idle_.find(sess_id, false);
+  if (iter == first_idle_.end()) {
+    return;
+  }
+
+  if (check_ptr != nullptr && iter->second && iter->second->sess.get() != check_ptr) {
+    FWLOGDEBUG("session {} remove first idle timeout, but session ptr not match, maybe old timeout data, ignore",
+               sess_id);
+    return;
+  }
+  first_idle_.erase(iter);
+}
+
+void session_manager::remove_force_closed_session(const session *check_ptr) {
+  if (check_ptr == nullptr) {
+    return;
+  }
+  auto iter = force_closed_sessions_.find(check_ptr, false);
+  if (iter == force_closed_sessions_.end()) {
+    return;
+  }
+
+  if (check_ptr != nullptr && iter->second && iter->second->sess.get() != check_ptr) {
+    FWLOGDEBUG("remove force closed timeout, but session ptr not match, maybe old timeout data, ignore", *check_ptr);
+    return;
+  }
+  force_closed_sessions_.erase(iter);
+}
+
+void session_manager::update_force_closed_session(const session::ptr_t &sess_ptr) {
+  if (!sess_ptr) {
+    return;
+  }
+
+  auto iter = force_closed_sessions_.find(sess_ptr.get(), false);
+  if (iter != force_closed_sessions_.end()) {
+    return;
+  }
+
+  auto &sess_timer_data = force_closed_sessions_[sess_ptr.get()];
+  sess_timer_data.sess = sess_ptr;
+  sess_timer_data.timeout =
+      atfw::util::time::time_utility::now() +
+      atfw::atapp::protobuf_to_chrono_convert_duration_with_default<std::chrono::system_clock::duration>(
+          conf_.origin_conf.client().shutdown_timeout(), std::chrono::seconds(5));
+}
+
 void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   if (0 != status) {
     FWLOGERROR("accept tcp socket failed, status: {}", status);
@@ -769,18 +893,15 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   }
 
   // first idle timeout
-  mgr->first_idle_.emplace_back();
-  session_timeout_t &sess_timeout = mgr->first_idle_.back();
-  sess_timeout.s = sess;
-  if (mgr->conf_.origin_conf.client().first_idle_timeout().seconds() > 0) {
-    sess_timeout.timeout =
-        atfw::util::time::time_utility::get_now() + mgr->conf_.origin_conf.client().first_idle_timeout().seconds();
-  } else {
-    sess_timeout.timeout = atfw::util::time::time_utility::get_now() + 1;
-  }
+  auto &sess_timer_data = mgr->first_idle_[sess->get_id()];
+  sess_timer_data.sess = sess;
+  sess_timer_data.timeout = atfw::util::time::time_utility::now();
+  atfw::atapp::protobuf_to_chrono_convert_duration_with_default<std::chrono::system_clock::duration>(
+      mgr->conf_.origin_conf.client().first_idle_timeout(), std::chrono::seconds(10));
   FWLOGINFO("accept a tcp socket({}:{}), create sesson {} and to wait for handshake now, expired time is {}(+{})",
             sess->get_peer_host(), sess->get_peer_port(), reinterpret_cast<const void *>(sess.get()),
-            sess_timeout.timeout, sess_timeout.timeout - atfw::util::time::time_utility::get_now());
+            std::chrono::system_clock::to_time_t(sess_timer_data.timeout),
+            mgr->conf_.origin_conf.client().first_idle_timeout().seconds());
 }
 
 void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
@@ -845,15 +966,15 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
   }
 
   // first idle timeout
-  mgr->first_idle_.emplace_back();
-  session_timeout_t &sess_timeout = mgr->first_idle_.back();
-  sess_timeout.s = sess;
-  if (mgr->conf_.origin_conf.client().first_idle_timeout().seconds() > 0) {
-    sess_timeout.timeout =
-        atfw::util::time::time_utility::get_now() + mgr->conf_.origin_conf.client().first_idle_timeout().seconds();
-  } else {
-    sess_timeout.timeout = atfw::util::time::time_utility::get_now() + 1;
-  }
+  auto &sess_timer_data = mgr->first_idle_[sess->get_id()];
+  sess_timer_data.sess = sess;
+  sess_timer_data.timeout = atfw::util::time::time_utility::now();
+  atfw::atapp::protobuf_to_chrono_convert_duration_with_default<std::chrono::system_clock::duration>(
+      mgr->conf_.origin_conf.client().first_idle_timeout(), std::chrono::seconds(10));
+  FWLOGINFO("accept a pipe socket({}:{}), create sesson {} and to wait for handshake now, expired time is {}(+{})",
+            sess->get_peer_host(), sess->get_peer_port(), reinterpret_cast<const void *>(sess.get()),
+            std::chrono::system_clock::to_time_t(sess_timer_data.timeout),
+            mgr->conf_.origin_conf.client().first_idle_timeout().seconds());
 }
 
 void session_manager::on_evt_listen_closed(uv_handle_t *handle) {

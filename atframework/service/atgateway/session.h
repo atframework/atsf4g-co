@@ -52,8 +52,10 @@ class session : public std::enable_shared_from_this<session> {
     kWaitReconnect = 0x0010,
     kClosing = 0x0020,
     kClosingFd = 0x0040,
-    kWritingFd = 0x0080,
-    kManagerClosing = 0x0100,
+    kShouldShutdownFd = 0x0080,
+    kShutdownFd = 0x0100,
+    kWritingFd = 0x0200,
+    kManagerClosing = 0x0400,
   };
 
   using ptr_t = std::shared_ptr<session>;
@@ -86,7 +88,11 @@ class session : public std::enable_shared_from_this<session> {
   int close_with_manager(int32_t reason, int32_t sub_reason, atfw::util::nostd::string_view message,
                          session_manager *mgr);
 
-  int close_fd(int32_t reason, int32_t sub_reason, atfw::util::nostd::string_view message);
+  int shutdown_fd(int32_t reason, int32_t sub_reason, atfw::util::nostd::string_view message);
+
+  void set_close_reason(int32_t reason, int32_t sub_reason, atfw::util::nostd::string_view message);
+
+  int force_close_fd();
 
   int send_to_client(gsl::span<const unsigned char>);
 
@@ -131,6 +137,10 @@ class session : public std::enable_shared_from_this<session> {
   inline int32_t get_peer_port() const noexcept { return peer_port_; }
   inline session_manager *get_manager() const noexcept { return owner_; }
 
+  inline bool has_close_reason() const noexcept {
+    return close_info_.reason != 0 || close_info_.sub_reason != 0 || !close_info_.message.empty();
+  }
+
  private:
   id_t id_;
   ::atbus::bus_id_t router_node_id_;
@@ -149,6 +159,13 @@ class session : public std::enable_shared_from_this<session> {
   uv_shutdown_t shutdown_req_;
   std::string peer_ip_;
   int32_t peer_port_;
+
+  struct close_info_t {
+    int32_t reason;
+    int32_t sub_reason;
+    std::string message;
+  };
+  close_info_t close_info_;
 
   std::unique_ptr<atframework::gateway::libatgw_protocol_api> proto_;
   void *private_data_;

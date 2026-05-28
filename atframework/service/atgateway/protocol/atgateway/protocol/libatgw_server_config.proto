@@ -148,16 +148,21 @@ message atgateway_client_cfg {
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "180s" min_value: "1s" }];
   google.protobuf.Duration first_idle_timeout = 2
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
-  uint64 recv_buffer_size = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "2MB" size_mode: true }];
-  uint64 send_buffer_size = 4 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "4MB" size_mode: true }];
-  atgateway_router_cfg default_router = 5;
-  atgateway_client_limit_cfg limit = 11;
-  atgateway_client_crypto_cfg crypto = 12;
+  // Shutdown shutdown timeout for client sessions (graceful shutdown period to allow cleanup before forcefully closing)
+  google.protobuf.Duration shutdown_timeout = 3
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
+
+  uint64 recv_buffer_size = 11 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "2MB" size_mode: true }];
+  uint64 send_buffer_size = 12 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "4MB" size_mode: true }];
+  atgateway_router_cfg default_router = 21;
+  atgateway_client_limit_cfg limit = 31;
+  atgateway_client_crypto_cfg crypto = 32;
 }
 
 message atgateway_cfg {
   atgateway_listen_cfg listen = 1;
   atgateway_client_cfg client = 2;
 
-  bool echo_server = 3;  // Let atgateway act as an echo server for testing (echoes back any received message)
+  // Let atgateway act as an echo server for testing (echoes back any received message)
+  bool echo_server = 3;
 }

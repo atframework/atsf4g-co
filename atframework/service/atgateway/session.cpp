@@ -40,9 +40,10 @@ session::session()
       owner_(nullptr),
       limit_{},
       flags_(0),
-      raw_handle_(),
-      shutdown_req_(),
+      raw_handle_{},
+      shutdown_req_{},
       peer_port_(0),
+      close_info_{},
       private_data_(nullptr) {
   raw_handle_.data = this;
 }
@@ -215,7 +216,17 @@ int session::send_new_session() {
 
   // send to router_
   if (0 == router_node_id_ && router_node_name_.empty()) {
-    FWLOGWARNING("{} has not configure router, ignore new session notification", *this);
+    if (owner_ != nullptr && owner_->get_conf().origin_conf.echo_server()) {
+      set_flag(flag_t::kRegistered, true);
+      FWLOGWARNING("{} ignore new session notification for echo server", *this);
+
+      if (owner_ != nullptr) {
+        owner_->remove_session_first_idle(get_id(), this);
+      }
+      return 0;
+    }
+
+    FWLOGERROR("{} has not configure router, ignore new session notification", *this);
     return static_cast<int>(error_code_t::kInvalidRouter);
   }
 
@@ -223,6 +234,10 @@ int session::send_new_session() {
   if (0 == ret) {
     set_flag(flag_t::kRegistered, true);
     FWLOGWARNING("{} send register notify to {}({}) success", *this, router_node_id_, router_node_name_);
+
+    if (owner_ != nullptr) {
+      owner_->remove_session_first_idle(get_id(), this);
+    }
   } else {
     FWLOGERROR("{} send register notify to {}({}) failed, res: {}", *this, router_node_id_, router_node_name_, ret);
   }
@@ -237,10 +252,17 @@ int session::send_remove_session(session_manager *mgr) {
     return 0;
   }
 
-  // echo server模式不需要路由通知
-  if (mgr != nullptr && mgr->get_conf().origin_conf.echo_server()) {
-    FWLOGWARNING("{} ignore remove notify for echo server", *this);
-    return 0;
+  // send to router_
+  if (0 == router_node_id_ && router_node_name_.empty()) {
+    // echo server模式不需要路由通知
+    if (owner_ != nullptr && owner_->get_conf().origin_conf.echo_server()) {
+      FWLOGWARNING("{} ignore remove notify for echo server", *this);
+      set_flag(flag_t::kRegistered, false);
+      return 0;
+    }
+
+    FWLOGERROR("{} ignore remove notify because no router", *this);
+    return static_cast<int>(error_code_t::kInvalidRouter);
   }
 
   // send remove msg
@@ -269,7 +291,8 @@ void session::on_alloc_read(size_t suggested_size, char *&out_buf, size_t &out_l
     proto_->alloc_receive_buffer(suggested_size, out_buf, out_len);
 
     if (nullptr == out_buf && 0 == out_len) {
-      close_fd(static_cast<int>(::atframework::gateway::close_reason_t::kInvalidData), 0, "alloc read memory failed");
+      shutdown_fd(static_cast<int>(::atframework::gateway::close_reason_t::kInvalidData), 0,
+                  "alloc read memory failed");
     }
   }
 }
@@ -293,8 +316,9 @@ int session::on_write_done(int status) {
     int ret = proto_->write_done(status);
 
     // if about to closing and all data transferred, shutdown the socket
-    if (check_flag(flag_t::kClosingFd) &&
+    if (check_flag(flag_t::kShouldShutdownFd) && !check_flag(flag_t::kShutdownFd) &&
         proto_->check_flag(atframework::gateway::libatgw_protocol_api::flag_t::kClosed)) {
+      FWLOGINFO("{} start to shutdown system fd", *this);
       uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
     }
 
@@ -323,38 +347,79 @@ int session::close_with_manager(int32_t reason, int32_t sub_reason, atfw::util::
   set_flag(flag_t::kClosing, true);
 
   FWLOGINFO("{} close with reason: {}, {}, {}", *this, reason, sub_reason, message);
-  return close_fd(reason, sub_reason, message);
+  return shutdown_fd(reason, sub_reason, message);
 }
 
-int session::close_fd(int32_t reason, int32_t sub_reason, atfw::util::nostd::string_view message) {
-  if (check_flag(flag_t::kClosingFd)) {
+int session::shutdown_fd(int32_t reason, int32_t sub_reason, atfw::util::nostd::string_view message) {
+  if (check_flag(flag_t::kShouldShutdownFd) || check_flag(flag_t::kShutdownFd)) {
     return 0;
   }
 
+  set_close_reason(reason, sub_reason, message);
+  if (proto_ && !proto_->check_flag(atframework::gateway::libatgw_protocol_api::flag_t::kClosing)) {
+    proto_->close(reason, sub_reason, message);
+  }
+
   if (check_flag(flag_t::kHasFd)) {
-    set_flag(flag_t::kHasFd, false);
-
-    if (proto_) {
-      proto_->close(reason, sub_reason, message);
-    }
-
     // shutdown and close uv_stream_t
     // manager can not be used any more
     owner_ = nullptr;
-    shutdown_req_.data = new ptr_t(shared_from_this());
+    if (shutdown_req_.data == nullptr) {
+      shutdown_req_.data = new ptr_t(shared_from_this());
+    }
 
     // if writing, wait all data written an then shutdown it
-    set_flag(flag_t::kClosingFd, true);
+    set_flag(flag_t::kShouldShutdownFd, true);
     if (!proto_ || proto_->check_flag(atframework::gateway::libatgw_protocol_api::flag_t::kClosed)) {
+      FWLOGINFO("{} start to shutdown system fd", *this);
+
+      set_flag(flag_t::kShutdownFd, true);
       uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
     }
     // TODO: else 设置超时强制 uv_close (uv_shutdown会等待未写出数据全部写完，超时不应该等待) , 注意多个 uv_close
     // 调用不要冲突
 
-    FWLOGINFO("{} lost fd", *this);
+    FWLOGWARNING("{} shutdown fd with reason: {}, {}, {}", *this, reason, sub_reason, message);
+  } else {
+    FWLOGWARNING("{} shutdown fd with reason: {}, {}, {}", *this, reason, sub_reason, message);
+    return force_close_fd();
   }
-  FWLOGWARNING("{} close fd with reason: {}, {}, {}", *this, reason, sub_reason, message);
 
+  return 0;
+}
+
+void session::set_close_reason(int32_t reason, int32_t sub_reason, atfw::util::nostd::string_view message) {
+  close_info_.reason = reason;
+  close_info_.sub_reason = sub_reason;
+  close_info_.message = static_cast<std::string>(message);
+}
+
+int session::force_close_fd() {
+  if (check_flag(flag_t::kClosingFd)) {
+    return 0;
+  }
+
+  if (proto_ && !proto_->check_flag(atframework::gateway::libatgw_protocol_api::flag_t::kClosing)) {
+    proto_->close(close_info_.reason, close_info_.sub_reason, close_info_.message);
+  }
+
+  if (check_flag(flag_t::kHasFd)) {
+    FWLOGINFO("{} start to close system fd", *this);
+    set_flag(flag_t::kClosingFd, true);
+    uv_close(&raw_handle_, on_evt_closed);
+  } else {
+    set_flag(flag_t::kShouldShutdownFd, false);
+    // free session object
+    ptr_t *holder = reinterpret_cast<ptr_t *>(shutdown_req_.data);
+    shutdown_req_.data = nullptr;
+    delete holder;
+
+    FWLOGINFO("{} close system fd done", *this);
+  }
+
+  if (owner_ != nullptr) {
+    owner_->remove_force_closed_session(this);
+  }
   return 0;
 }
 
@@ -462,7 +527,7 @@ void session::on_evt_shutdown(uv_shutdown_t *req, int /*status*/) {
   uv_fileno(reinterpret_cast<uv_handle_t *>(req->handle), &fd);
   FWLOGINFO("system fd {} shutdown", fd);
 
-  uv_close(&self->raw_handle_, on_evt_closed);
+  self->force_close_fd();
 }
 
 void session::on_evt_closed(uv_handle_t *handle) {
@@ -476,13 +541,14 @@ void session::on_evt_closed(uv_handle_t *handle) {
 
   session *self = reinterpret_cast<session *>(handle->data);
   assert(self);
+  self->set_flag(flag_t::kShouldShutdownFd, false);
   self->set_flag(flag_t::kClosingFd, false);
 
   FWLOGINFO("{} system fd {} closed", *self, fd);
 
   // free session object
   ptr_t *holder = reinterpret_cast<ptr_t *>(self->shutdown_req_.data);
-  assert(holder);
+  self->shutdown_req_.data = nullptr;
   delete holder;
 }
 
