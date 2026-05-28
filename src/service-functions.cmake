@@ -360,7 +360,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
             "${PROJECT_GENERATED_PBD_DIR}/service-${TARGET_NAME}.pb"
     SOURCES ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES})
   set_property(TARGET ${TARGET_CODEGEN_NAME} PROPERTY FOLDER "${PROJECT_NAME}/service/protocol")
-  generate_for_pb_register_protocol_codegen_target(${TARGET_CODEGEN_NAME})
+  generate_for_pb_register_protocol_codegen_target(${TARGET_CODEGEN_NAME} PROTOCOL_NAMES "${TARGET_NAME}")
   source_group(TREE ${project_service_declare_protocol_OUTPUT_DIR} FILES ${__FINAL_GENERATED_SOURCE_FILES}
                                                                          ${__FINAL_GENERATED_HEADER_FILES})
   if(BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY)
@@ -496,12 +496,6 @@ function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
   if(_PROJECT_SERVICE_GENERATED_HEADER_FILES)
     list(APPEND project_service_declare_instance_HEADERS ${_PROJECT_SERVICE_GENERATED_HEADER_FILES})
     list(REMOVE_DUPLICATES project_service_declare_instance_HEADERS)
-  endif()
-  set(_PROJECT_SERVICE_GENERATED_FILES ${_PROJECT_SERVICE_GENERATED_SOURCE_FILES}
-                                       ${_PROJECT_SERVICE_GENERATED_HEADER_FILES})
-  if(_PROJECT_SERVICE_GENERATED_FILES)
-    list(REMOVE_DUPLICATES _PROJECT_SERVICE_GENERATED_FILES)
-    set_source_files_properties(${_PROJECT_SERVICE_GENERATED_FILES} PROPERTIES GENERATED TRUE)
   endif()
 
   echowithcolor(COLOR GREEN "-- Configure service ${TARGET_NAME} on ${SERVICE_ROOT_DIR}")

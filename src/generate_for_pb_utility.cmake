@@ -111,9 +111,71 @@ function(generate_for_pb_register_protocol_pb_file TARGET_NAME PB_FILE)
 endfunction()
 
 function(generate_for_pb_register_protocol_codegen_target TARGET_NAME)
-  if(TARGET_NAME)
-    generate_for_pb_append_global_list("GENERATE_FOR_PB_PROTOCOL_CODEGEN_TARGETS" "${TARGET_NAME}")
+  set(options DEFAULT)
+  set(oneValueArgs "")
+  set(multiValueArgs PROTOCOL_NAMES)
+  cmake_parse_arguments(GENERATE_FOR_PB_PROTOCOL_TARGET "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+  if(NOT TARGET_NAME)
+    return()
   endif()
+
+  if(GENERATE_FOR_PB_PROTOCOL_TARGET_DEFAULT OR NOT GENERATE_FOR_PB_PROTOCOL_TARGET_PROTOCOL_NAMES)
+    generate_for_pb_append_global_list("GENERATE_FOR_PB_DEFAULT_PROTOCOL_CODEGEN_TARGETS" "${TARGET_NAME}")
+  endif()
+
+  foreach(_generate_for_pb_protocol_name IN LISTS GENERATE_FOR_PB_PROTOCOL_TARGET_PROTOCOL_NAMES)
+    if(NOT _generate_for_pb_protocol_name)
+      continue()
+    endif()
+
+    generate_for_pb_make_property_name("GENERATE_FOR_PB_PROTOCOL_CODEGEN_TARGET" "${_generate_for_pb_protocol_name}"
+                                       _generate_for_pb_property_name)
+    set_property(GLOBAL PROPERTY "${_generate_for_pb_property_name}" "${TARGET_NAME}")
+  endforeach()
+endfunction()
+
+function(generate_for_pb_resolve_protocol_codegen_target TARGET_NAME OUTPUT_VAR)
+  generate_for_pb_make_property_name("GENERATE_FOR_PB_PROTOCOL_CODEGEN_TARGET" "${TARGET_NAME}"
+                                     _generate_for_pb_property_name)
+  get_property(_generate_for_pb_codegen_target GLOBAL PROPERTY "${_generate_for_pb_property_name}")
+  set(${OUTPUT_VAR} "${_generate_for_pb_codegen_target}" PARENT_SCOPE)
+endfunction()
+
+function(generate_for_pb_resolve_protocol_codegen_targets OUTPUT_VAR)
+  set(options INCLUDE_DEFAULT)
+  set(oneValueArgs "")
+  set(multiValueArgs COMPONENT_PROTOCOLS SERVICE_PROTOCOLS)
+  cmake_parse_arguments(GENERATE_FOR_PB_PROTOCOL_TARGETS "${options}" "${oneValueArgs}" "${multiValueArgs}"
+                        ${ARGN})
+
+  set(_generate_for_pb_codegen_targets)
+  if(GENERATE_FOR_PB_PROTOCOL_TARGETS_INCLUDE_DEFAULT)
+    generate_for_pb_get_global_list("GENERATE_FOR_PB_DEFAULT_PROTOCOL_CODEGEN_TARGETS"
+                                    _generate_for_pb_default_codegen_targets)
+    list(APPEND _generate_for_pb_codegen_targets ${_generate_for_pb_default_codegen_targets})
+  endif()
+
+  foreach(_generate_for_pb_protocol_name IN LISTS GENERATE_FOR_PB_PROTOCOL_TARGETS_COMPONENT_PROTOCOLS
+                                                  GENERATE_FOR_PB_PROTOCOL_TARGETS_SERVICE_PROTOCOLS)
+    if(NOT _generate_for_pb_protocol_name)
+      continue()
+    endif()
+
+    unset(_generate_for_pb_codegen_target)
+    generate_for_pb_resolve_protocol_codegen_target("${_generate_for_pb_protocol_name}" _generate_for_pb_codegen_target)
+    if(NOT _generate_for_pb_codegen_target)
+      message(FATAL_ERROR
+              "Can not resolve codegen target for protocol ${_generate_for_pb_protocol_name} in generate-for-pb.")
+    endif()
+    list(APPEND _generate_for_pb_codegen_targets "${_generate_for_pb_codegen_target}")
+  endforeach()
+
+  if(_generate_for_pb_codegen_targets)
+    list(REMOVE_DUPLICATES _generate_for_pb_codegen_targets)
+  endif()
+
+  set(${OUTPUT_VAR} "${_generate_for_pb_codegen_targets}" PARENT_SCOPE)
 endfunction()
 
 function(generate_for_pb_resolve_protocol_pb_file TARGET_NAME OUTPUT_VAR)
@@ -183,14 +245,26 @@ endfunction()
 
 function(generate_for_pb_build_conf_header OUTPUT_VAR)
   set(options WITHOUT_EXTERNAL_PB_FILES)
-  cmake_parse_arguments(GENERATE_FOR_PB_HEADER "${options}" "" "" ${ARGN})
+  set(oneValueArgs INPUT_PB_FILE OVERWRITE_DEFAULT)
+  set(multiValueArgs EXTERNAL_PB_FILES)
+  cmake_parse_arguments(GENERATE_FOR_PB_HEADER "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+  set(_generate_for_pb_configure_overwrite false)
+  if(GENERATE_FOR_PB_HEADER_OVERWRITE_DEFAULT)
+    set(_generate_for_pb_configure_overwrite true)
+  endif()
+  set(_generate_for_pb_input_pb_file "${GENERATE_FOR_PB_OUT_PB}")
+  if(GENERATE_FOR_PB_HEADER_INPUT_PB_FILE)
+    set(_generate_for_pb_input_pb_file "${GENERATE_FOR_PB_HEADER_INPUT_PB_FILE}")
+  endif()
+  unset(_generate_for_pb_external_pb_files)
 
   set(
     _generate_for_pb_header
     "configure:
   encoding: 'UTF-8'
   output_directory: 'output directory'
-  overwrite: false
+  overwrite: ${_generate_for_pb_configure_overwrite}
   paths:
     - \"${ATFRAMEWORK_CMAKE_TOOLSET_DIR}/modules\"")
   foreach(GENERATE_FOR_PB_ARGS_ADD_PATH GENERATE_FOR_PB_MODULE_PROTOBUF_PYTHON_PATH
@@ -207,10 +281,10 @@ function(generate_for_pb_build_conf_header OUTPUT_VAR)
   package_prefix:
     - \"${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}\"
   protocol_project_directory: '${PROJECT_SOURCE_DIR}'
-  protocol_input_pb_file: '${GENERATE_FOR_PB_OUT_PB}'")
+  protocol_input_pb_file: '${_generate_for_pb_input_pb_file}'")
 
   if(NOT GENERATE_FOR_PB_HEADER_WITHOUT_EXTERNAL_PB_FILES)
-    generate_for_pb_get_global_list("GENERATE_FOR_PB_EXTERNAL_PB_FILES" _generate_for_pb_external_pb_files)
+    set(_generate_for_pb_external_pb_files ${GENERATE_FOR_PB_HEADER_EXTERNAL_PB_FILES})
   endif()
   if(_generate_for_pb_external_pb_files)
     string(APPEND _generate_for_pb_header "
@@ -233,14 +307,24 @@ rules:
 endfunction()
 
 function(generate_for_pb_refresh_conf_files)
-  generate_for_pb_build_conf_header(_generate_for_pb_header)
   generate_for_pb_get_global_list("GENERATE_FOR_PB_FLOW_IDS" _generate_for_pb_flow_ids)
   foreach(_generate_for_pb_flow_id IN LISTS _generate_for_pb_flow_ids)
     get_property(_generate_for_pb_rule_file GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_RULE_FILE_${_generate_for_pb_flow_id}")
     get_property(_generate_for_pb_conf_file GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_CONF_FILE_${_generate_for_pb_flow_id}")
+    get_property(_generate_for_pb_external_pb_files GLOBAL PROPERTY
+                 "GENERATE_FOR_PB_FLOW_EXTERNAL_PB_FILES_${_generate_for_pb_flow_id}")
+    get_property(_generate_for_pb_flow_overwrite_default GLOBAL PROPERTY
+                 "GENERATE_FOR_PB_FLOW_OVERWRITE_DEFAULT_${_generate_for_pb_flow_id}")
     if(NOT _generate_for_pb_rule_file OR NOT _generate_for_pb_conf_file)
       continue()
     endif()
+
+    generate_for_pb_build_conf_header(
+      _generate_for_pb_header
+      EXTERNAL_PB_FILES
+      ${_generate_for_pb_external_pb_files}
+      OVERWRITE_DEFAULT
+      ${_generate_for_pb_flow_overwrite_default})
 
     file(READ "${_generate_for_pb_rule_file}" _generate_for_pb_rule_body)
     file(WRITE "${_generate_for_pb_conf_file}" "${_generate_for_pb_header}${_generate_for_pb_rule_body}")
@@ -295,13 +379,27 @@ function(generate_for_pb_collect_proto_inputs OUTPUT_PATHS OUTPUT_FILES)
 endfunction()
 
 function(generate_for_pb_prepare_input_pb)
+  set(options "")
+  set(oneValueArgs OUTPUT_PB_FILE OUTPUT_LOG_FILE)
+  set(multiValueArgs "")
+  cmake_parse_arguments(GENERATE_FOR_PB_PREPARE "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+  set(_generate_for_pb_output_pb_file "${GENERATE_FOR_PB_OUT_PB}")
+  if(GENERATE_FOR_PB_PREPARE_OUTPUT_PB_FILE)
+    set(_generate_for_pb_output_pb_file "${GENERATE_FOR_PB_PREPARE_OUTPUT_PB_FILE}")
+  endif()
+  set(_generate_for_pb_output_log_file "${GENERATE_FOR_PB_OUT_LOG}")
+  if(GENERATE_FOR_PB_PREPARE_OUTPUT_LOG_FILE)
+    set(_generate_for_pb_output_log_file "${GENERATE_FOR_PB_PREPARE_OUTPUT_LOG_FILE}")
+  endif()
+
   generate_for_pb_collect_proto_inputs(_generate_for_pb_proto_paths _generate_for_pb_proto_files)
   if(NOT _generate_for_pb_proto_files)
     message(FATAL_ERROR "No protocol files were registered for generate-for-pb.")
   endif()
 
   generate_for_pb_get_builtin_proto_files(_generate_for_pb_builtin_proto_files)
-  set(_generate_for_pb_protoc_args "${GENERATE_FOR_PB_PROROC_BIN}" -o "${GENERATE_FOR_PB_OUT_PB}" --proto_path
+  set(_generate_for_pb_protoc_args "${GENERATE_FOR_PB_PROROC_BIN}" -o "${_generate_for_pb_output_pb_file}" --proto_path
                                    "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}" --proto_path
                                    "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include" --proto_path
                                    "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include")
@@ -310,35 +408,46 @@ function(generate_for_pb_prepare_input_pb)
   endforeach()
   list(APPEND _generate_for_pb_protoc_args ${_generate_for_pb_proto_files} ${_generate_for_pb_builtin_proto_files})
 
-  file(MAKE_DIRECTORY "${PROJECT_GENERATED_PBD_DIR}")
+  get_filename_component(_generate_for_pb_output_pb_dir "${_generate_for_pb_output_pb_file}" DIRECTORY)
+  if(_generate_for_pb_output_pb_dir)
+    file(MAKE_DIRECTORY "${_generate_for_pb_output_pb_dir}")
+  endif()
   execute_process(
     COMMAND ${_generate_for_pb_protoc_args}
     RESULT_VARIABLE _generate_for_pb_protoc_result
     WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
-    OUTPUT_FILE "${GENERATE_FOR_PB_OUT_LOG}"
-    ERROR_FILE "${GENERATE_FOR_PB_OUT_LOG}" COMMAND_ECHO STDOUT ${GENERATE_FOR_PB_PY_ENCODING})
+    OUTPUT_FILE "${_generate_for_pb_output_log_file}"
+    ERROR_FILE "${_generate_for_pb_output_log_file}" COMMAND_ECHO STDOUT ${GENERATE_FOR_PB_PY_ENCODING})
   if(NOT _generate_for_pb_protoc_result EQUAL 0)
-    message(FATAL_ERROR "Generate ${GENERATE_FOR_PB_OUT_PB} failed. See ${GENERATE_FOR_PB_OUT_LOG} for details.")
+    message(FATAL_ERROR
+            "Generate ${_generate_for_pb_output_pb_file} failed. See ${_generate_for_pb_output_log_file} for details.")
   endif()
 endfunction()
 
-function(generate_for_pb_print_output_files FLOW_ID OUTPUT_VAR)
-  get_property(_generate_for_pb_rule_file GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_RULE_FILE_${FLOW_ID}")
-  if(NOT _generate_for_pb_rule_file)
-    set(${OUTPUT_VAR} "" PARENT_SCOPE)
-    return()
+function(generate_for_pb_parse_output_files PRINT_STDOUT OUTPUT_VAR)
+  string(REGEX MATCHALL "[^\r\n]+" _generate_for_pb_print_lines "${PRINT_STDOUT}")
+
+  set(_generate_for_pb_all_outputs)
+  foreach(_generate_for_pb_print_line IN LISTS _generate_for_pb_print_lines)
+    if(NOT _generate_for_pb_print_line)
+      continue()
+    endif()
+
+    list(APPEND _generate_for_pb_all_outputs "${_generate_for_pb_print_line}")
+  endforeach()
+
+  if(_generate_for_pb_all_outputs)
+    list(REMOVE_DUPLICATES _generate_for_pb_all_outputs)
   endif()
 
-  generate_for_pb_build_conf_header(_generate_for_pb_header WITHOUT_EXTERNAL_PB_FILES)
-  file(READ "${_generate_for_pb_rule_file}" _generate_for_pb_rule_body)
-  set(_generate_for_pb_print_conf_file "${GENERATE_FOR_PB_CONF_DIR}/${FLOW_ID}.print.yaml")
-  file(WRITE "${_generate_for_pb_print_conf_file}" "${_generate_for_pb_header}${_generate_for_pb_rule_body}")
+  set(${OUTPUT_VAR} "${_generate_for_pb_all_outputs}" PARENT_SCOPE)
+endfunction()
 
-  generate_for_pb_prepare_input_pb()
+function(generate_for_pb_run_print_output_files FLOW_ID CONF_FILE OUTPUT_VAR)
   execute_process(
     COMMAND "${Python3_EXECUTABLE}" "${GENERATE_FOR_PB_PY}" --add-package-prefix
             "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" --clang-format-path "${PROJECT_TOOL_CLANG_FORMAT}"
-            --print-output-files --quiet -c "${_generate_for_pb_print_conf_file}"
+            --print-output-files --quiet -c "${CONF_FILE}"
     RESULT_VARIABLE _generate_for_pb_print_result
     WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
     OUTPUT_VARIABLE _generate_for_pb_print_stdout
@@ -349,14 +458,121 @@ function(generate_for_pb_print_output_files FLOW_ID OUTPUT_VAR)
         "Print output files for ${FLOW_ID} failed: ${_generate_for_pb_print_stderr}${_generate_for_pb_print_stdout}")
   endif()
 
-  string(REGEX MATCHALL "[^\r\n]+" _generate_for_pb_print_files "${_generate_for_pb_print_stdout}")
+  generate_for_pb_parse_output_files("${_generate_for_pb_print_stdout}" _generate_for_pb_print_files)
   set(${OUTPUT_VAR} "${_generate_for_pb_print_files}" PARENT_SCOPE)
+endfunction()
+
+function(generate_for_pb_collect_source_and_header_outputs SOURCE_OUTPUT_VAR HEADER_OUTPUT_VAR)
+  set(_generate_for_pb_source_outputs)
+  set(_generate_for_pb_header_outputs)
+  foreach(_generate_for_pb_output_file IN LISTS ARGN)
+    if(_generate_for_pb_output_file MATCHES "\\.(c|cc|cpp|cxx)$")
+      list(APPEND _generate_for_pb_source_outputs "${_generate_for_pb_output_file}")
+    elseif(_generate_for_pb_output_file MATCHES "\\.(h|hh|hpp|hxx)$")
+      list(APPEND _generate_for_pb_header_outputs "${_generate_for_pb_output_file}")
+    endif()
+  endforeach()
+
+  if(_generate_for_pb_source_outputs)
+    list(REMOVE_DUPLICATES _generate_for_pb_source_outputs)
+  endif()
+  if(_generate_for_pb_header_outputs)
+    list(REMOVE_DUPLICATES _generate_for_pb_header_outputs)
+  endif()
+
+  set(${SOURCE_OUTPUT_VAR} "${_generate_for_pb_source_outputs}" PARENT_SCOPE)
+  set(${HEADER_OUTPUT_VAR} "${_generate_for_pb_header_outputs}" PARENT_SCOPE)
+endfunction()
+
+function(generate_for_pb_accumulate_output_var_base_list OUTPUT_VAR_BASE OUTPUT_SUFFIX OUTPUT_VAR)
+  if(NOT OUTPUT_VAR_BASE)
+    set(${OUTPUT_VAR} "" PARENT_SCOPE)
+    return()
+  endif()
+
+  generate_for_pb_make_property_name("GENERATE_FOR_PB_OUTPUT_VAR_BASE_${OUTPUT_SUFFIX}" "${OUTPUT_VAR_BASE}"
+                                     _generate_for_pb_property_name)
+  get_property(_generate_for_pb_output_list GLOBAL PROPERTY "${_generate_for_pb_property_name}")
+  if(NOT _generate_for_pb_output_list)
+    set(_generate_for_pb_output_list)
+  endif()
+
+  foreach(_generate_for_pb_output_item IN LISTS ARGN)
+    if(_generate_for_pb_output_item)
+      list(APPEND _generate_for_pb_output_list "${_generate_for_pb_output_item}")
+    endif()
+  endforeach()
+
+  if(_generate_for_pb_output_list)
+    list(REMOVE_DUPLICATES _generate_for_pb_output_list)
+  endif()
+
+  set_property(GLOBAL PROPERTY "${_generate_for_pb_property_name}" "${_generate_for_pb_output_list}")
+  set(${OUTPUT_VAR} "${_generate_for_pb_output_list}" PARENT_SCOPE)
+endfunction()
+
+function(generate_for_pb_print_output_files FLOW_ID OUTPUT_VAR OVERWRITE_OUTPUT_VAR NON_OVERWRITE_OUTPUT_VAR)
+  get_property(_generate_for_pb_rule_file GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_RULE_FILE_${FLOW_ID}")
+  if(NOT _generate_for_pb_rule_file)
+    set(${OUTPUT_VAR} "" PARENT_SCOPE)
+    set(${OVERWRITE_OUTPUT_VAR} "" PARENT_SCOPE)
+    set(${NON_OVERWRITE_OUTPUT_VAR} "" PARENT_SCOPE)
+    return()
+  endif()
+
+  get_property(_generate_for_pb_overwrite_print_rule_file GLOBAL PROPERTY
+               "GENERATE_FOR_PB_FLOW_OVERWRITE_PRINT_RULE_FILE_${FLOW_ID}")
+  get_property(_generate_for_pb_non_overwrite_print_rule_file GLOBAL PROPERTY
+               "GENERATE_FOR_PB_FLOW_NON_OVERWRITE_PRINT_RULE_FILE_${FLOW_ID}")
+  if(NOT _generate_for_pb_overwrite_print_rule_file AND NOT _generate_for_pb_non_overwrite_print_rule_file)
+    set(${OUTPUT_VAR} "" PARENT_SCOPE)
+    set(${OVERWRITE_OUTPUT_VAR} "" PARENT_SCOPE)
+    set(${NON_OVERWRITE_OUTPUT_VAR} "" PARENT_SCOPE)
+    return()
+  endif()
+
+  set(_generate_for_pb_print_input_pb_file "${GENERATE_FOR_PB_CONF_DIR}/${FLOW_ID}.print.pb")
+  set(_generate_for_pb_print_log_file "${GENERATE_FOR_PB_CONF_DIR}/${FLOW_ID}.print.log")
+
+  generate_for_pb_prepare_input_pb(OUTPUT_PB_FILE "${_generate_for_pb_print_input_pb_file}" OUTPUT_LOG_FILE
+                                   "${_generate_for_pb_print_log_file}")
+
+  set(_generate_for_pb_overwrite_outputs)
+  if(_generate_for_pb_overwrite_print_rule_file)
+    generate_for_pb_build_conf_header(_generate_for_pb_header WITHOUT_EXTERNAL_PB_FILES OVERWRITE_DEFAULT TRUE
+                                      INPUT_PB_FILE "${_generate_for_pb_print_input_pb_file}")
+    file(READ "${_generate_for_pb_overwrite_print_rule_file}" _generate_for_pb_rule_body)
+    set(_generate_for_pb_print_conf_file "${GENERATE_FOR_PB_CONF_DIR}/${FLOW_ID}.print.overwrite.yaml")
+    file(WRITE "${_generate_for_pb_print_conf_file}" "${_generate_for_pb_header}${_generate_for_pb_rule_body}")
+    generate_for_pb_run_print_output_files("${FLOW_ID} (overwrite)" "${_generate_for_pb_print_conf_file}"
+                                           _generate_for_pb_overwrite_outputs)
+  endif()
+
+  set(_generate_for_pb_non_overwrite_outputs)
+  if(_generate_for_pb_non_overwrite_print_rule_file)
+    generate_for_pb_build_conf_header(_generate_for_pb_header WITHOUT_EXTERNAL_PB_FILES OVERWRITE_DEFAULT FALSE
+                                      INPUT_PB_FILE "${_generate_for_pb_print_input_pb_file}")
+    file(READ "${_generate_for_pb_non_overwrite_print_rule_file}" _generate_for_pb_rule_body)
+    set(_generate_for_pb_print_conf_file "${GENERATE_FOR_PB_CONF_DIR}/${FLOW_ID}.print.non-overwrite.yaml")
+    file(WRITE "${_generate_for_pb_print_conf_file}" "${_generate_for_pb_header}${_generate_for_pb_rule_body}")
+    generate_for_pb_run_print_output_files("${FLOW_ID} (non-overwrite)" "${_generate_for_pb_print_conf_file}"
+                                           _generate_for_pb_non_overwrite_outputs)
+  endif()
+
+  set(_generate_for_pb_print_files ${_generate_for_pb_overwrite_outputs} ${_generate_for_pb_non_overwrite_outputs})
+  if(_generate_for_pb_print_files)
+    list(REMOVE_DUPLICATES _generate_for_pb_print_files)
+  endif()
+
+  set(${OUTPUT_VAR} "${_generate_for_pb_print_files}" PARENT_SCOPE)
+  set(${OVERWRITE_OUTPUT_VAR} "${_generate_for_pb_overwrite_outputs}" PARENT_SCOPE)
+  set(${NON_OVERWRITE_OUTPUT_VAR} "${_generate_for_pb_non_overwrite_outputs}" PARENT_SCOPE)
 endfunction()
 
 function(generate_for_pb_register_flow FLOW_NAME)
   set(options "")
-  set(oneValueArgs OUTPUT_VAR_BASE RULE_BODY)
-  set(multiValueArgs TEMPLATE_DEPENDS EXTERNAL_PB_FILES)
+  set(oneValueArgs OUTPUT_VAR_BASE RULE_BODY OVERWRITE_DEFAULT PRINT_OVERWRITE_RULE_BODY PRINT_NON_OVERWRITE_RULE_BODY)
+  set(multiValueArgs TEMPLATE_DEPENDS EXTERNAL_PB_FILES PROTOCOL_CODEGEN_TARGETS)
   cmake_parse_arguments(GENERATE_FOR_PB_FLOW "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
   if(NOT GENERATE_FOR_PB_FLOW_RULE_BODY)
@@ -366,8 +582,20 @@ function(generate_for_pb_register_flow FLOW_NAME)
     set(GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE "${FLOW_NAME}")
   endif()
 
+  set(_generate_for_pb_external_pb_files)
   if(GENERATE_FOR_PB_FLOW_EXTERNAL_PB_FILES)
-    generate_for_pb_add_proto_pb_file(${GENERATE_FOR_PB_FLOW_EXTERNAL_PB_FILES})
+    generate_for_pb_add_proto_pb_file(_generate_for_pb_external_pb_files ${GENERATE_FOR_PB_FLOW_EXTERNAL_PB_FILES})
+  endif()
+
+  if(DEFINED GENERATE_FOR_PB_FLOW_OVERWRITE_DEFAULT AND NOT "${GENERATE_FOR_PB_FLOW_OVERWRITE_DEFAULT}" STREQUAL "")
+    set(_generate_for_pb_flow_overwrite_default "${GENERATE_FOR_PB_FLOW_OVERWRITE_DEFAULT}")
+  else()
+    set(_generate_for_pb_flow_overwrite_default FALSE)
+  endif()
+
+  set(_generate_for_pb_protocol_codegen_targets ${GENERATE_FOR_PB_FLOW_PROTOCOL_CODEGEN_TARGETS})
+  if(_generate_for_pb_protocol_codegen_targets)
+    list(REMOVE_DUPLICATES _generate_for_pb_protocol_codegen_targets)
   endif()
 
   get_property(_generate_for_pb_flow_index GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_INDEX")
@@ -380,9 +608,36 @@ function(generate_for_pb_register_flow FLOW_NAME)
   string(MAKE_C_IDENTIFIER "${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}_${_generate_for_pb_flow_index}"
          _generate_for_pb_flow_id)
   set(_generate_for_pb_rule_file "${GENERATE_FOR_PB_CONF_DIR}/${_generate_for_pb_flow_id}.rule.yaml")
+  set(_generate_for_pb_overwrite_print_rule_file)
+  set(_generate_for_pb_non_overwrite_print_rule_file)
   set(_generate_for_pb_conf_file "${GENERATE_FOR_PB_CONF_DIR}/${_generate_for_pb_flow_id}.yaml")
+    set(_generate_for_pb_stamp_file "${GENERATE_FOR_PB_CONF_DIR}/${_generate_for_pb_flow_id}.stamp")
   set(_generate_for_pb_target_name "${GENERATE_FOR_PB_TARGET}-${_generate_for_pb_flow_id}")
   file(WRITE "${_generate_for_pb_rule_file}" "${GENERATE_FOR_PB_FLOW_RULE_BODY}")
+
+  if(DEFINED GENERATE_FOR_PB_FLOW_PRINT_OVERWRITE_RULE_BODY
+     AND NOT "${GENERATE_FOR_PB_FLOW_PRINT_OVERWRITE_RULE_BODY}" STREQUAL "")
+    set(_generate_for_pb_overwrite_print_rule_file
+        "${GENERATE_FOR_PB_CONF_DIR}/${_generate_for_pb_flow_id}.print.overwrite.rule.yaml")
+    file(WRITE "${_generate_for_pb_overwrite_print_rule_file}" "${GENERATE_FOR_PB_FLOW_PRINT_OVERWRITE_RULE_BODY}")
+  elseif(_generate_for_pb_flow_overwrite_default)
+    set(_generate_for_pb_overwrite_print_rule_file
+        "${GENERATE_FOR_PB_CONF_DIR}/${_generate_for_pb_flow_id}.print.overwrite.rule.yaml")
+    file(WRITE "${_generate_for_pb_overwrite_print_rule_file}" "${GENERATE_FOR_PB_FLOW_RULE_BODY}")
+  endif()
+
+  if(DEFINED GENERATE_FOR_PB_FLOW_PRINT_NON_OVERWRITE_RULE_BODY
+     AND NOT "${GENERATE_FOR_PB_FLOW_PRINT_NON_OVERWRITE_RULE_BODY}" STREQUAL "")
+    set(_generate_for_pb_non_overwrite_print_rule_file
+        "${GENERATE_FOR_PB_CONF_DIR}/${_generate_for_pb_flow_id}.print.non-overwrite.rule.yaml")
+    file(WRITE "${_generate_for_pb_non_overwrite_print_rule_file}" "${GENERATE_FOR_PB_FLOW_PRINT_NON_OVERWRITE_RULE_BODY}")
+  elseif(NOT _generate_for_pb_flow_overwrite_default)
+    set(_generate_for_pb_non_overwrite_print_rule_file
+        "${GENERATE_FOR_PB_CONF_DIR}/${_generate_for_pb_flow_id}.print.non-overwrite.rule.yaml")
+    file(WRITE "${_generate_for_pb_non_overwrite_print_rule_file}" "${GENERATE_FOR_PB_FLOW_RULE_BODY}")
+  endif()
+
+    file(REMOVE "${_generate_for_pb_stamp_file}")
 
   generate_for_pb_append_global_list("GENERATE_FOR_PB_FLOW_IDS" "${_generate_for_pb_flow_id}")
   set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_NAME_${_generate_for_pb_flow_id}" "${FLOW_NAME}")
@@ -390,61 +645,123 @@ function(generate_for_pb_register_flow FLOW_NAME)
                "${_generate_for_pb_rule_file}")
   set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_CONF_FILE_${_generate_for_pb_flow_id}"
                "${_generate_for_pb_conf_file}")
+  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_OVERWRITE_PRINT_RULE_FILE_${_generate_for_pb_flow_id}"
+               "${_generate_for_pb_overwrite_print_rule_file}")
+  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_NON_OVERWRITE_PRINT_RULE_FILE_${_generate_for_pb_flow_id}"
+               "${_generate_for_pb_non_overwrite_print_rule_file}")
   set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_TARGET_${_generate_for_pb_flow_id}"
                "${_generate_for_pb_target_name}")
   set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_TEMPLATE_DEPENDS_${_generate_for_pb_flow_id}"
                "${GENERATE_FOR_PB_FLOW_TEMPLATE_DEPENDS}")
+  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_EXTERNAL_PB_FILES_${_generate_for_pb_flow_id}"
+               "${_generate_for_pb_external_pb_files}")
+  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_PROTOCOL_CODEGEN_TARGETS_${_generate_for_pb_flow_id}"
+               "${_generate_for_pb_protocol_codegen_targets}")
+  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_OVERWRITE_DEFAULT_${_generate_for_pb_flow_id}"
+               "${_generate_for_pb_flow_overwrite_default}")
+  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_STAMP_FILE_${_generate_for_pb_flow_id}"
+               "${_generate_for_pb_stamp_file}")
 
   generate_for_pb_refresh_conf_files()
-  generate_for_pb_print_output_files("${_generate_for_pb_flow_id}" _generate_for_pb_all_outputs)
+  generate_for_pb_print_output_files("${_generate_for_pb_flow_id}" _generate_for_pb_all_outputs
+                                     _generate_for_pb_overwrite_outputs _generate_for_pb_non_overwrite_outputs)
   if(_generate_for_pb_all_outputs)
     list(REMOVE_DUPLICATES _generate_for_pb_all_outputs)
-    set_source_files_properties(${_generate_for_pb_all_outputs} PROPERTIES GENERATED TRUE)
   endif()
   set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_OUTPUTS_${_generate_for_pb_flow_id}"
                "${_generate_for_pb_all_outputs}")
+  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_OVERWRITE_OUTPUTS_${_generate_for_pb_flow_id}"
+               "${_generate_for_pb_overwrite_outputs}")
+  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_NON_OVERWRITE_OUTPUTS_${_generate_for_pb_flow_id}"
+               "${_generate_for_pb_non_overwrite_outputs}")
 
-  set(_generate_for_pb_source_outputs)
-  set(_generate_for_pb_header_outputs)
-  foreach(_generate_for_pb_output_file IN LISTS _generate_for_pb_all_outputs)
-    if(_generate_for_pb_output_file MATCHES "\\.(c|cc|cpp|cxx)$")
-      list(APPEND _generate_for_pb_source_outputs "${_generate_for_pb_output_file}")
-    elseif(_generate_for_pb_output_file MATCHES "\\.(h|hh|hpp|hxx)$")
-      list(APPEND _generate_for_pb_header_outputs "${_generate_for_pb_output_file}")
-    endif()
-  endforeach()
-  if(_generate_for_pb_source_outputs)
-    list(REMOVE_DUPLICATES _generate_for_pb_source_outputs)
-  endif()
-  if(_generate_for_pb_header_outputs)
-    list(REMOVE_DUPLICATES _generate_for_pb_header_outputs)
-  endif()
+  generate_for_pb_collect_source_and_header_outputs(_generate_for_pb_source_outputs _generate_for_pb_header_outputs
+                                                    ${_generate_for_pb_all_outputs})
+  generate_for_pb_collect_source_and_header_outputs(_generate_for_pb_overwrite_source_outputs
+                                                    _generate_for_pb_overwrite_header_outputs
+                                                    ${_generate_for_pb_overwrite_outputs})
+  generate_for_pb_collect_source_and_header_outputs(_generate_for_pb_non_overwrite_source_outputs
+                                                    _generate_for_pb_non_overwrite_header_outputs
+                                                    ${_generate_for_pb_non_overwrite_outputs})
 
   if(GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE)
-    set(${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}_SOURCE_FILES "${_generate_for_pb_source_outputs}" PARENT_SCOPE)
-    set(${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}_HEADER_FILES "${_generate_for_pb_header_outputs}" PARENT_SCOPE)
+    generate_for_pb_accumulate_output_var_base_list("${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}" "OUTPUTS"
+                                                    _generate_for_pb_accumulated_outputs
+                                                    ${_generate_for_pb_all_outputs})
+    generate_for_pb_accumulate_output_var_base_list("${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}" "OVERWRITE_OUTPUTS"
+                                                    _generate_for_pb_accumulated_overwrite_outputs
+                                                    ${_generate_for_pb_overwrite_outputs})
+    generate_for_pb_accumulate_output_var_base_list("${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}"
+                                                    "NON_OVERWRITE_OUTPUTS"
+                                                    _generate_for_pb_accumulated_non_overwrite_outputs
+                                                    ${_generate_for_pb_non_overwrite_outputs})
+    generate_for_pb_accumulate_output_var_base_list("${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}" "SOURCE_FILES"
+                                                    _generate_for_pb_accumulated_source_outputs
+                                                    ${_generate_for_pb_source_outputs})
+    generate_for_pb_accumulate_output_var_base_list("${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}" "HEADER_FILES"
+                                                    _generate_for_pb_accumulated_header_outputs
+                                                    ${_generate_for_pb_header_outputs})
+    generate_for_pb_accumulate_output_var_base_list("${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}"
+                                                    "OVERWRITE_SOURCE_FILES"
+                                                    _generate_for_pb_accumulated_overwrite_source_outputs
+                                                    ${_generate_for_pb_overwrite_source_outputs})
+    generate_for_pb_accumulate_output_var_base_list("${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}"
+                                                    "OVERWRITE_HEADER_FILES"
+                                                    _generate_for_pb_accumulated_overwrite_header_outputs
+                                                    ${_generate_for_pb_overwrite_header_outputs})
+    generate_for_pb_accumulate_output_var_base_list("${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}"
+                                                    "NON_OVERWRITE_SOURCE_FILES"
+                                                    _generate_for_pb_accumulated_non_overwrite_source_outputs
+                                                    ${_generate_for_pb_non_overwrite_source_outputs})
+    generate_for_pb_accumulate_output_var_base_list("${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}"
+                                                    "NON_OVERWRITE_HEADER_FILES"
+                                                    _generate_for_pb_accumulated_non_overwrite_header_outputs
+                                                    ${_generate_for_pb_non_overwrite_header_outputs})
+
+    set(${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}_OUTPUTS "${_generate_for_pb_accumulated_outputs}")
+    set(${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}_OVERWRITE_OUTPUTS "${_generate_for_pb_accumulated_overwrite_outputs}")
+    set(${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}_NON_OVERWRITE_OUTPUTS
+        "${_generate_for_pb_accumulated_non_overwrite_outputs}")
+    set(${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}_SOURCE_FILES "${_generate_for_pb_accumulated_source_outputs}")
+    set(${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}_HEADER_FILES "${_generate_for_pb_accumulated_header_outputs}")
+    set(${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}_OVERWRITE_SOURCE_FILES
+        "${_generate_for_pb_accumulated_overwrite_source_outputs}")
+    set(${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}_OVERWRITE_HEADER_FILES
+        "${_generate_for_pb_accumulated_overwrite_header_outputs}")
+    set(${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}_NON_OVERWRITE_SOURCE_FILES
+        "${_generate_for_pb_accumulated_non_overwrite_source_outputs}")
+    set(${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}_NON_OVERWRITE_HEADER_FILES
+        "${_generate_for_pb_accumulated_non_overwrite_header_outputs}")
+    generate_for_pb_export_output_var_base("${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}")
   endif()
 endfunction()
 
-macro(generate_output_file_add_to_source_list DEST GENERATED_OUTPUT_FILES)
-  set(_generate_for_pb_source_var "${GENERATED_OUTPUT_FILES}_SOURCE_FILES")
-  if(DEFINED ${_generate_for_pb_source_var} AND ${_generate_for_pb_source_var})
-    list(APPEND ${DEST} ${${_generate_for_pb_source_var}})
-    set_source_files_properties(${${_generate_for_pb_source_var}} PROPERTIES GENERATED TRUE)
-  endif()
-endmacro()
-
-macro(generate_output_file_add_to_header_list DEST GENERATED_OUTPUT_FILES)
-  set(_generate_for_pb_header_var "${GENERATED_OUTPUT_FILES}_HEADER_FILES")
-  if(DEFINED ${_generate_for_pb_header_var} AND ${_generate_for_pb_header_var})
-    list(APPEND ${DEST} ${${_generate_for_pb_header_var}})
-    set_source_files_properties(${${_generate_for_pb_header_var}} PROPERTIES GENERATED TRUE)
-  endif()
-endmacro()
-
 macro(generate_output_file_add_to_list DEST GENERATED_OUTPUT_FILES)
-  generate_output_file_add_to_source_list(${DEST} ${GENERATED_OUTPUT_FILES})
-  generate_output_file_add_to_header_list(${DEST} ${GENERATED_OUTPUT_FILES})
+    generate_for_pb_collect_filtered_output_files(
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        "${GENERATED_OUTPUT_FILES}"
+        _generate_for_pb_filtered_source_files
+        _generate_for_pb_filtered_header_files
+    )
+    if(_generate_for_pb_filtered_source_files)
+        list(APPEND ${DEST} ${_generate_for_pb_filtered_source_files})
+    endif()
+    if(_generate_for_pb_filtered_header_files)
+        list(APPEND ${DEST} ${_generate_for_pb_filtered_header_files})
+    endif()
+    if(${DEST})
+        list(REMOVE_DUPLICATES ${DEST})
+    endif()
+endmacro()
+
+macro(generate_for_pb_export_output_var_base OUTPUT_VAR_BASE)
+  foreach(_generate_for_pb_output_suffix OUTPUTS OVERWRITE_OUTPUTS NON_OVERWRITE_OUTPUTS SOURCE_FILES HEADER_FILES
+                                          OVERWRITE_SOURCE_FILES OVERWRITE_HEADER_FILES
+                                          NON_OVERWRITE_SOURCE_FILES NON_OVERWRITE_HEADER_FILES)
+    set(${OUTPUT_VAR_BASE}_${_generate_for_pb_output_suffix}
+        "${${OUTPUT_VAR_BASE}_${_generate_for_pb_output_suffix}}"
+        PARENT_SCOPE)
+  endforeach()
 endmacro()
 
 function(generate_for_pb_collect_filtered_output_files ROOT_DIR OUTPUT_BASES SOURCE_OUTPUT_VAR HEADER_OUTPUT_VAR)
@@ -501,20 +818,83 @@ function(generate_for_pb_collect_filtered_output_files ROOT_DIR OUTPUT_BASES SOU
   set(${HEADER_OUTPUT_VAR} "${_generate_for_pb_filtered_header_files}" PARENT_SCOPE)
 endfunction()
 
-function(generate_for_pb_add_proto_pb_file)
-  foreach(PROTO_PB_FILE ${ARGN})
+function(generate_for_pb_add_proto_pb_file OUTPUT_VAR)
+  set(_generate_for_pb_proto_pb_files)
+  foreach(PROTO_PB_FILE IN LISTS ARGN)
     if(NOT PROTO_PB_FILE)
       continue()
     endif()
     if(NOT IS_ABSOLUTE "${PROTO_PB_FILE}")
       get_filename_component(PROTO_PB_FILE "${PROTO_PB_FILE}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
     endif()
-    generate_for_pb_append_global_list("GENERATE_FOR_PB_EXTERNAL_PB_FILES" "${PROTO_PB_FILE}")
+    list(APPEND _generate_for_pb_proto_pb_files "${PROTO_PB_FILE}")
   endforeach()
-  generate_for_pb_refresh_conf_files()
+  if(_generate_for_pb_proto_pb_files)
+    list(REMOVE_DUPLICATES _generate_for_pb_proto_pb_files)
+  endif()
+
+  set(${OUTPUT_VAR} "${_generate_for_pb_proto_pb_files}" PARENT_SCOPE)
 endfunction()
 
-function(generate_for_pb_add_custom_configure YAML_INPUT)
+function(generate_for_pb_split_custom_configure_rule_body RULE_BODY DEFAULT_OVERWRITE OVERWRITE_OUTPUT_VAR
+                                                         NON_OVERWRITE_OUTPUT_VAR)
+  string(REGEX MATCHALL "[^\r\n]+" _generate_for_pb_rule_lines "${RULE_BODY}")
+
+  set(_generate_for_pb_overwrite_rule_body)
+  set(_generate_for_pb_non_overwrite_rule_body)
+  set(_generate_for_pb_current_rule_block)
+  unset(_generate_for_pb_current_rule_overwrite)
+
+  foreach(_generate_for_pb_rule_line IN LISTS _generate_for_pb_rule_lines)
+    if(_generate_for_pb_rule_line MATCHES "^  - ")
+      if(_generate_for_pb_current_rule_block)
+        if(NOT DEFINED _generate_for_pb_current_rule_overwrite)
+          set(_generate_for_pb_current_rule_overwrite "${DEFAULT_OVERWRITE}")
+        endif()
+
+        if(_generate_for_pb_current_rule_overwrite)
+          string(APPEND _generate_for_pb_overwrite_rule_body "${_generate_for_pb_current_rule_block}")
+        else()
+          string(APPEND _generate_for_pb_non_overwrite_rule_body "${_generate_for_pb_current_rule_block}")
+        endif()
+      endif()
+
+      set(_generate_for_pb_current_rule_block "${_generate_for_pb_rule_line}\n")
+      unset(_generate_for_pb_current_rule_overwrite)
+      continue()
+    endif()
+
+    if(NOT _generate_for_pb_current_rule_block)
+      continue()
+    endif()
+
+    string(APPEND _generate_for_pb_current_rule_block "${_generate_for_pb_rule_line}\n")
+    if(NOT DEFINED _generate_for_pb_current_rule_overwrite)
+      if(_generate_for_pb_rule_line MATCHES "^    overwrite:[ \t]*(true|TRUE|True|ON|On|on|YES|Yes|yes|1)$")
+        set(_generate_for_pb_current_rule_overwrite TRUE)
+      elseif(_generate_for_pb_rule_line MATCHES "^    overwrite:[ \t]*(false|FALSE|False|OFF|Off|off|NO|No|no|0)$")
+        set(_generate_for_pb_current_rule_overwrite FALSE)
+      endif()
+    endif()
+  endforeach()
+
+  if(_generate_for_pb_current_rule_block)
+    if(NOT DEFINED _generate_for_pb_current_rule_overwrite)
+      set(_generate_for_pb_current_rule_overwrite "${DEFAULT_OVERWRITE}")
+    endif()
+
+    if(_generate_for_pb_current_rule_overwrite)
+      string(APPEND _generate_for_pb_overwrite_rule_body "${_generate_for_pb_current_rule_block}")
+    else()
+      string(APPEND _generate_for_pb_non_overwrite_rule_body "${_generate_for_pb_current_rule_block}")
+    endif()
+  endif()
+
+  set(${OVERWRITE_OUTPUT_VAR} "${_generate_for_pb_overwrite_rule_body}" PARENT_SCOPE)
+  set(${NON_OVERWRITE_OUTPUT_VAR} "${_generate_for_pb_non_overwrite_rule_body}" PARENT_SCOPE)
+endfunction()
+
+function(generate_for_pb_add_custom_configure FLOW_NAME YAML_INPUT)
   string(REGEX MATCHALL "[^\r\n]+" YAML_LINES "${YAML_INPUT}")
   if(NOT YAML_LINES)
     return()
@@ -581,11 +961,22 @@ function(generate_for_pb_add_custom_configure YAML_INPUT)
     unset(YAML_OUTPUT_CACHE)
   endif()
 
-  generate_for_pb_register_flow("custom-configure" OUTPUT_VAR_BASE "generate_for_pb.custom_configure" RULE_BODY
-                                "${YAML_OUTPUT}")
-  set(_generate_for_pb_output_var_base "generate_for_pb.custom_configure")
-  set(${_generate_for_pb_output_var_base}_SOURCE_FILES "${${_generate_for_pb_output_var_base}_SOURCE_FILES}" PARENT_SCOPE)
-  set(${_generate_for_pb_output_var_base}_HEADER_FILES "${${_generate_for_pb_output_var_base}_HEADER_FILES}" PARENT_SCOPE)
+  generate_for_pb_split_custom_configure_rule_body("${YAML_OUTPUT}" FALSE
+                                                   _generate_for_pb_print_overwrite_rule_body
+                                                   _generate_for_pb_print_non_overwrite_rule_body)
+
+  generate_for_pb_register_flow(
+    "${FLOW_NAME}"
+    OUTPUT_VAR_BASE
+    "${FLOW_NAME}"
+    RULE_BODY
+    "${YAML_OUTPUT}"
+    PRINT_OVERWRITE_RULE_BODY
+    "${_generate_for_pb_print_overwrite_rule_body}"
+    PRINT_NON_OVERWRITE_RULE_BODY
+    "${_generate_for_pb_print_non_overwrite_rule_body}")
+  set(_generate_for_pb_output_var_base "${FLOW_NAME}")
+  generate_for_pb_export_output_var_base("${_generate_for_pb_output_var_base}")
 endfunction()
 
 function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
@@ -639,10 +1030,12 @@ function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
   endif()
 
   set(GENERATE_FOR_PB_RULE_BODY)
+  set(GENERATE_FOR_PB_PRINT_OVERWRITE_RULE_BODY)
+  set(GENERATE_FOR_PB_PRINT_NON_OVERWRITE_RULE_BODY)
   set(GENERATE_FOR_PB_TEMPLATE_DEPENDS)
   if(NOT GENERATE_FOR_PB_ARGS_NO_RPC)
-    string(
-      APPEND GENERATE_FOR_PB_RULE_BODY
+    set(
+      _generate_for_pb_rpc_rule_body
       "  # ${SERVICE_NAME} - rpc
   - service:
       name: '${SERVICE_NAME}'
@@ -662,12 +1055,14 @@ function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
           input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/rpc_call_api_for_ss.cpp.mako'
           output: 'rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.cpp'
 ")
+    string(APPEND GENERATE_FOR_PB_RULE_BODY "${_generate_for_pb_rpc_rule_body}")
+    string(APPEND GENERATE_FOR_PB_PRINT_OVERWRITE_RULE_BODY "${_generate_for_pb_rpc_rule_body}")
     list(APPEND GENERATE_FOR_PB_TEMPLATE_DEPENDS "${GENERATE_FOR_PB_SOURCE_DIR}/templates/rpc_call_api_for_ss.h.mako"
                 "${GENERATE_FOR_PB_SOURCE_DIR}/templates/rpc_call_api_for_ss.cpp.mako")
   endif()
   if(NOT GENERATE_FOR_PB_ARGS_NO_SERVICE_TASK)
-    string(
-      APPEND GENERATE_FOR_PB_RULE_BODY
+    set(
+      _generate_for_pb_task_rule_body
       "  # ${SERVICE_NAME} - task
   - service:
       name: '${SERVICE_NAME}'
@@ -695,6 +1090,52 @@ function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
           input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/task_action_ss_rpc.cpp.mako'
           output: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.cpp'
 ")
+    set(
+      _generate_for_pb_task_service_print_rule_body
+      "  # ${SERVICE_NAME} - task service
+  - service:
+      name: '${SERVICE_NAME}'
+      overwrite: false
+      output_directory: '${SERVICE_ROOT_DIR}'
+      service_dllexport_decl: '${GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL}'
+      rpc_dllexport_decl: '${GENERATE_FOR_PB_ARGS_RPC_DLLEXPORT_DECL}'
+      custom_variables:
+        project_namespace: '${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE}'
+        rpc_include_prefix: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}'
+        ${CUSTOM_INCLUDE_HEADERS}
+      service_template:
+        - overwrite: true
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/handle_ss_rpc.h.mako'
+          output: '${HANDLE_PATH_PREFIX}handle_ss_rpc_\${service.get_name_lower_rule()}.h'
+        - overwrite: true
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/handle_ss_rpc.cpp.mako'
+          output: '${HANDLE_PATH_PREFIX}handle_ss_rpc_\${service.get_name_lower_rule()}.cpp'
+")
+    set(
+      _generate_for_pb_task_rpc_print_rule_body
+      "  # ${SERVICE_NAME} - task rpc
+  - service:
+      name: '${SERVICE_NAME}'
+      overwrite: false
+      output_directory: '${SERVICE_ROOT_DIR}'
+      service_dllexport_decl: '${GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL}'
+      rpc_dllexport_decl: '${GENERATE_FOR_PB_ARGS_RPC_DLLEXPORT_DECL}'
+      custom_variables:
+        project_namespace: '${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE}'
+        rpc_include_prefix: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}'
+        ${CUSTOM_INCLUDE_HEADERS}
+      ${GENERATE_FOR_PB_RPC_IGNORE_EMPTY_REQUEST}
+      rpc_template:
+        - overwrite: false
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/task_action_ss_rpc.h.mako'
+          output: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.h'
+        - overwrite: false
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/task_action_ss_rpc.cpp.mako'
+          output: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.cpp'
+")
+    string(APPEND GENERATE_FOR_PB_RULE_BODY "${_generate_for_pb_task_rule_body}")
+    string(APPEND GENERATE_FOR_PB_PRINT_OVERWRITE_RULE_BODY "${_generate_for_pb_task_service_print_rule_body}")
+    string(APPEND GENERATE_FOR_PB_PRINT_NON_OVERWRITE_RULE_BODY "${_generate_for_pb_task_rpc_print_rule_body}")
     list(APPEND GENERATE_FOR_PB_TEMPLATE_DEPENDS "${GENERATE_FOR_PB_SOURCE_DIR}/templates/handle_ss_rpc.h.mako"
                 "${GENERATE_FOR_PB_SOURCE_DIR}/templates/handle_ss_rpc.cpp.mako"
                 "${GENERATE_FOR_PB_SOURCE_DIR}/templates/task_action_ss_rpc.h.mako"
@@ -709,14 +1150,27 @@ function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
     ${GENERATE_FOR_PB_ARGS_EXTERNAL_COMPONENT_PROTOCOLS}
     SERVICE_PROTOCOLS
     ${GENERATE_FOR_PB_ARGS_EXTERNAL_SERVICE_PROTOCOLS})
+  generate_for_pb_resolve_protocol_codegen_targets(
+    GENERATE_FOR_PB_PROTOCOL_CODEGEN_TARGETS
+    INCLUDE_DEFAULT
+    COMPONENT_PROTOCOLS
+    ${GENERATE_FOR_PB_ARGS_EXTERNAL_COMPONENT_PROTOCOLS}
+    SERVICE_PROTOCOLS
+    ${GENERATE_FOR_PB_ARGS_EXTERNAL_SERVICE_PROTOCOLS})
   generate_for_pb_register_flow(
     "${SERVICE_NAME}"
     OUTPUT_VAR_BASE
     "${GENERATE_FOR_PB_ARGS_GENERATED_OUTPUT_FILES}"
     RULE_BODY
     "${GENERATE_FOR_PB_RULE_BODY}"
+    PRINT_OVERWRITE_RULE_BODY
+    "${GENERATE_FOR_PB_PRINT_OVERWRITE_RULE_BODY}"
+    PRINT_NON_OVERWRITE_RULE_BODY
+    "${GENERATE_FOR_PB_PRINT_NON_OVERWRITE_RULE_BODY}"
     TEMPLATE_DEPENDS
     ${GENERATE_FOR_PB_TEMPLATE_DEPENDS}
+    PROTOCOL_CODEGEN_TARGETS
+    ${GENERATE_FOR_PB_PROTOCOL_CODEGEN_TARGETS}
     EXTERNAL_PB_FILES
     ${GENERATE_FOR_PB_EXTERNAL_PB_FILES})
   if(GENERATE_FOR_PB_ARGS_GENERATED_OUTPUT_FILES)
@@ -724,8 +1178,7 @@ function(generate_for_pb_add_ss_service SERVICE_NAME SERVICE_ROOT_DIR)
   else()
     set(GENERATE_FOR_PB_OUTPUT_VAR_BASE "${SERVICE_NAME}")
   endif()
-  set(${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_SOURCE_FILES "${${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_SOURCE_FILES}" PARENT_SCOPE)
-  set(${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_HEADER_FILES "${${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_HEADER_FILES}" PARENT_SCOPE)
+  generate_for_pb_export_output_var_base("${GENERATE_FOR_PB_OUTPUT_VAR_BASE}")
 endfunction(generate_for_pb_add_ss_service)
 
 function(generate_for_pb_add_cs_service SERVICE_NAME SERVICE_ROOT_DIR)
@@ -774,7 +1227,8 @@ function(generate_for_pb_add_cs_service SERVICE_NAME SERVICE_ROOT_DIR)
     set(CUSTOM_INCLUDE_HEADERS "include_headers: [ ]")
   endif()
 
-  set(GENERATE_FOR_PB_RULE_BODY
+  set(
+    _generate_for_pb_service_print_rule_body
       "  # ${SERVICE_NAME}
   - service:
       name: '${SERVICE_NAME}'
@@ -799,6 +1253,30 @@ function(generate_for_pb_add_cs_service SERVICE_NAME SERVICE_ROOT_DIR)
         - overwrite: true
           input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/handle_cs_rpc.cpp.mako'
           output: '${HANDLE_PATH_PREFIX}handle_cs_rpc_\${service.get_name_lower_rule()}.cpp'
+")
+  set(
+    _generate_for_pb_rpc_print_rule_body
+      "  - service:
+      name: '${SERVICE_NAME}'
+      overwrite: false
+      output_directory: '${SERVICE_ROOT_DIR}'
+      service_dllexport_decl: '${GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL}'
+      rpc_dllexport_decl: '${GENERATE_FOR_PB_ARGS_RPC_DLLEXPORT_DECL}'
+      custom_variables:
+        project_namespace: '${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE}'
+        rpc_include_prefix: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}'
+        ${CUSTOM_INCLUDE_HEADERS}
+      ${GENERATE_FOR_PB_RPC_IGNORE_EMPTY_REQUEST}
+      rpc_template:
+        - overwrite: false
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/task_action_cs_rpc.h.mako'
+          output: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.h'
+        - overwrite: false
+          input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/task_action_cs_rpc.cpp.mako'
+          output: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.cpp'
+")
+  set(GENERATE_FOR_PB_RULE_BODY
+      "${_generate_for_pb_service_print_rule_body}
   - service:
       name: '${SERVICE_NAME}'
       overwrite: false
@@ -818,12 +1296,21 @@ function(generate_for_pb_add_cs_service SERVICE_NAME SERVICE_ROOT_DIR)
           input: '${GENERATE_FOR_PB_SOURCE_DIR}/templates/task_action_cs_rpc.cpp.mako'
           output: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"action\")}/task_action_\${rpc.get_name()}.cpp'
 " )
+  set(GENERATE_FOR_PB_PRINT_OVERWRITE_RULE_BODY "${_generate_for_pb_service_print_rule_body}")
+  set(GENERATE_FOR_PB_PRINT_NON_OVERWRITE_RULE_BODY "${_generate_for_pb_rpc_print_rule_body}")
+  generate_for_pb_resolve_protocol_codegen_targets(GENERATE_FOR_PB_PROTOCOL_CODEGEN_TARGETS INCLUDE_DEFAULT)
   generate_for_pb_register_flow(
     "${SERVICE_NAME}"
     OUTPUT_VAR_BASE
     "${GENERATE_FOR_PB_ARGS_GENERATED_OUTPUT_FILES}"
     RULE_BODY
     "${GENERATE_FOR_PB_RULE_BODY}"
+    PRINT_OVERWRITE_RULE_BODY
+    "${GENERATE_FOR_PB_PRINT_OVERWRITE_RULE_BODY}"
+    PRINT_NON_OVERWRITE_RULE_BODY
+    "${GENERATE_FOR_PB_PRINT_NON_OVERWRITE_RULE_BODY}"
+    PROTOCOL_CODEGEN_TARGETS
+    ${GENERATE_FOR_PB_PROTOCOL_CODEGEN_TARGETS}
     TEMPLATE_DEPENDS
     "${GENERATE_FOR_PB_SOURCE_DIR}/templates/session_downstream_api_for_cs.h.mako"
     "${GENERATE_FOR_PB_SOURCE_DIR}/templates/session_downstream_api_for_cs.cpp.mako"
@@ -836,8 +1323,7 @@ function(generate_for_pb_add_cs_service SERVICE_NAME SERVICE_ROOT_DIR)
   else()
     set(GENERATE_FOR_PB_OUTPUT_VAR_BASE "${SERVICE_NAME}")
   endif()
-  set(${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_SOURCE_FILES "${${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_SOURCE_FILES}" PARENT_SCOPE)
-  set(${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_HEADER_FILES "${${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_HEADER_FILES}" PARENT_SCOPE)
+  generate_for_pb_export_output_var_base("${GENERATE_FOR_PB_OUTPUT_VAR_BASE}")
 endfunction(generate_for_pb_add_cs_service)
 
 function(generate_for_pb_initialize_sh SCRIPT_PATH)
@@ -934,21 +1420,36 @@ function(generate_for_pb_run_generator)
     add_dependencies(${GENERATE_FOR_PB_TARGET} ${_generate_for_pb_proto_target})
   endif()
 
-  generate_for_pb_get_global_list("GENERATE_FOR_PB_EXTERNAL_PB_FILES" _generate_for_pb_external_pb_files)
-  generate_for_pb_get_global_list("GENERATE_FOR_PB_PROTOCOL_CODEGEN_TARGETS" _generate_for_pb_protocol_codegen_targets)
   foreach(_generate_for_pb_flow_id IN LISTS _generate_for_pb_flow_ids)
     get_property(_generate_for_pb_outputs GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_OUTPUTS_${_generate_for_pb_flow_id}")
     if(NOT _generate_for_pb_outputs)
       continue()
     endif()
 
+    get_property(_generate_for_pb_non_overwrite_outputs GLOBAL PROPERTY
+                 "GENERATE_FOR_PB_FLOW_NON_OVERWRITE_OUTPUTS_${_generate_for_pb_flow_id}")
+    get_property(_generate_for_pb_overwrite_outputs GLOBAL PROPERTY
+                 "GENERATE_FOR_PB_FLOW_OVERWRITE_OUTPUTS_${_generate_for_pb_flow_id}")
     get_property(_generate_for_pb_conf_file GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_CONF_FILE_${_generate_for_pb_flow_id}")
     get_property(_generate_for_pb_flow_name GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_NAME_${_generate_for_pb_flow_id}")
     get_property(_generate_for_pb_template_depends GLOBAL PROPERTY
                  "GENERATE_FOR_PB_FLOW_TEMPLATE_DEPENDS_${_generate_for_pb_flow_id}")
     get_property(_generate_for_pb_target_name GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_TARGET_${_generate_for_pb_flow_id}")
+    get_property(_generate_for_pb_external_pb_files GLOBAL PROPERTY
+                 "GENERATE_FOR_PB_FLOW_EXTERNAL_PB_FILES_${_generate_for_pb_flow_id}")
+    get_property(_generate_for_pb_protocol_codegen_targets GLOBAL PROPERTY
+                 "GENERATE_FOR_PB_FLOW_PROTOCOL_CODEGEN_TARGETS_${_generate_for_pb_flow_id}")
+    get_property(_generate_for_pb_stamp_file GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_STAMP_FILE_${_generate_for_pb_flow_id}")
     if(NOT _generate_for_pb_target_name)
       set(_generate_for_pb_target_name "${GENERATE_FOR_PB_TARGET}-${_generate_for_pb_flow_id}")
+    endif()
+    if(NOT _generate_for_pb_stamp_file)
+      set(_generate_for_pb_stamp_file "${GENERATE_FOR_PB_CONF_DIR}/${_generate_for_pb_flow_id}.stamp")
+    endif()
+
+    set(_generate_for_pb_command_outputs ${_generate_for_pb_overwrite_outputs} "${_generate_for_pb_stamp_file}")
+    if(_generate_for_pb_command_outputs)
+      list(REMOVE_DUPLICATES _generate_for_pb_command_outputs)
     endif()
 
     if(TARGET ${_generate_for_pb_target_name})
@@ -961,17 +1462,23 @@ function(generate_for_pb_run_generator)
       continue()
     endif()
 
+    foreach(_generate_for_pb_non_overwrite_output IN LISTS _generate_for_pb_non_overwrite_outputs)
+      set_source_files_properties(${_generate_for_pb_non_overwrite_output} PROPERTIES GENERATED TRUE)
+    endforeach()
+
     add_custom_command(
-      OUTPUT ${_generate_for_pb_outputs}
+      OUTPUT ${_generate_for_pb_command_outputs}
       COMMAND
         "${Python3_EXECUTABLE}" "${GENERATE_FOR_PB_PY}" --add-package-prefix
         "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" --clang-format-path "${PROJECT_TOOL_CLANG_FORMAT}" -c
         "${_generate_for_pb_conf_file}"
+      COMMAND "${CMAKE_COMMAND}" -E touch "${_generate_for_pb_stamp_file}"
       WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
       DEPENDS "${GENERATE_FOR_PB_OUT_PB}" "${_generate_for_pb_conf_file}" "${GENERATE_FOR_PB_PY}"
               ${_generate_for_pb_template_depends} ${_generate_for_pb_external_pb_files}
       COMMENT "Generate [@${GENERATE_FOR_PB_WORK_DIR}] ${_generate_for_pb_flow_name}")
-    add_custom_target(${_generate_for_pb_target_name} DEPENDS ${_generate_for_pb_outputs})
+    add_custom_target(${_generate_for_pb_target_name} DEPENDS ${_generate_for_pb_command_outputs}
+                      SOURCES ${_generate_for_pb_outputs})
     add_dependencies(${_generate_for_pb_target_name} ${_generate_for_pb_proto_target})
     foreach(_generate_for_pb_protocol_codegen_target IN LISTS _generate_for_pb_protocol_codegen_targets)
       if(TARGET ${_generate_for_pb_protocol_codegen_target})

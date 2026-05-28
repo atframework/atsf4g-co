@@ -59,7 +59,9 @@ generate_for_pb_add_ss_service(
   RPC_DLLEXPORT_DECL
   SERVER_FRAME_API)
 
-generate_for_pb_add_custom_configure("
+generate_for_pb_add_custom_configure(
+  "db_code_generate"
+  "
 - global:
     overwrite: true
     input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.cpp.mako'
@@ -91,10 +93,9 @@ generate_for_pb_add_custom_configure("
     custom_variables:
       generate_proto_file: 'protocol/pbdesc/svr.global.table.proto'
 ")
-generate_output_file_add_to_list(SRC_LIST "generate_for_pb.custom_configure")
+generate_output_file_add_to_list(SRC_LIST "db_code_generate")
 generate_output_file_add_to_list(SRC_LIST "${PROJECT_NAMESPACE}.RouterService")
 generate_output_file_add_to_list(SRC_LIST "${PROJECT_NAMESPACE}.LogicCommonService")
-
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/skip-glob-sources.txt" "")
 foreach(SRC_FILE_REALPATH IN LISTS SRC_LIST_ORIGIN)
   get_filename_component(SRC_DIRPATH_REALPATH ${SRC_FILE_REALPATH} DIRECTORY)

@@ -53,6 +53,49 @@ function(generate_for_pb_add_orbit_service SERVICE_NAME SERVICE_ROOT_DIR)
     set(CUSTOM_INCLUDE_HEADERS "include_headers: [ ]")
   endif()
 
+  set(
+    GENERATE_FOR_PB_PRINT_OVERWRITE_RULE_BODY
+      "  # ${SERVICE_NAME}
+  - service:
+      name: '${SERVICE_NAME}'
+      overwrite: false
+      output_directory: '${SERVICE_ROOT_DIR}'
+      service_dllexport_decl: '${GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL}'
+      rpc_dllexport_decl: '${GENERATE_FOR_PB_ARGS_RPC_DLLEXPORT_DECL}'
+      custom_variables:
+        project_namespace: '${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE}'
+        rpc_include_prefix: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}'
+        ${CUSTOM_INCLUDE_HEADERS}
+      service_template:
+        - overwrite: true
+          input: '${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/handle_orbit_rpc.h.mako'
+          output: '${HANDLE_PATH_PREFIX}handle_orbit_rpc_\${service.get_name_lower_rule()}.h'
+        - overwrite: true
+          input: '${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/handle_orbit_rpc.cpp.mako'
+          output: '${HANDLE_PATH_PREFIX}handle_orbit_rpc_\${service.get_name_lower_rule()}.cpp'
+")
+  set(
+    GENERATE_FOR_PB_PRINT_NON_OVERWRITE_RULE_BODY
+      "  # ${SERVICE_NAME} rpc
+  - service:
+      name: '${SERVICE_NAME}'
+      overwrite: false
+      output_directory: '${SERVICE_ROOT_DIR}'
+      service_dllexport_decl: '${GENERATE_FOR_PB_ARGS_SERVICE_DLLEXPORT_DECL}'
+      rpc_dllexport_decl: '${GENERATE_FOR_PB_ARGS_RPC_DLLEXPORT_DECL}'
+      custom_variables:
+        project_namespace: '${GENERATE_FOR_PB_ARGS_PROJECT_NAMESPACE}'
+        rpc_include_prefix: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}'
+        ${CUSTOM_INCLUDE_HEADERS}
+      ${GENERATE_FOR_PB_RPC_IGNORE_EMPTY_REQUEST}
+      rpc_template:
+        - overwrite: false
+          input: '${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/task_action_orbit_rpc.h.mako'
+          output: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"orbit_action\")}/task_action_\${rpc.get_name()}.h'
+        - overwrite: false
+          input: '${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/task_action_orbit_rpc.cpp.mako'
+          output: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"orbit_action\")}/task_action_\${rpc.get_name()}.cpp'
+")
   set(GENERATE_FOR_PB_RULE_BODY
       "  # ${SERVICE_NAME}
   - service:
@@ -81,12 +124,19 @@ function(generate_for_pb_add_orbit_service SERVICE_NAME SERVICE_ROOT_DIR)
           input: '${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/task_action_orbit_rpc.cpp.mako'
           output: '${GENERATE_FOR_PB_ARGS_TASK_PATH_PREFIX}/\${rpc.get_extension_field(\"rpc_options\", lambda x: x.module_name, \"orbit_action\")}/task_action_\${rpc.get_name()}.cpp'
 " )
+  generate_for_pb_resolve_protocol_codegen_targets(GENERATE_FOR_PB_PROTOCOL_CODEGEN_TARGETS INCLUDE_DEFAULT)
   generate_for_pb_register_flow(
     "${SERVICE_NAME}"
     OUTPUT_VAR_BASE
     "${GENERATE_FOR_PB_ARGS_GENERATED_OUTPUT_FILES}"
     RULE_BODY
     "${GENERATE_FOR_PB_RULE_BODY}"
+    PRINT_OVERWRITE_RULE_BODY
+    "${GENERATE_FOR_PB_PRINT_OVERWRITE_RULE_BODY}"
+    PRINT_NON_OVERWRITE_RULE_BODY
+    "${GENERATE_FOR_PB_PRINT_NON_OVERWRITE_RULE_BODY}"
+    PROTOCOL_CODEGEN_TARGETS
+    ${GENERATE_FOR_PB_PROTOCOL_CODEGEN_TARGETS}
     TEMPLATE_DEPENDS
     "${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/handle_orbit_rpc.h.mako"
     "${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/handle_orbit_rpc.cpp.mako"
@@ -97,8 +147,7 @@ function(generate_for_pb_add_orbit_service SERVICE_NAME SERVICE_ROOT_DIR)
   else()
     set(GENERATE_FOR_PB_OUTPUT_VAR_BASE "${SERVICE_NAME}")
   endif()
-  set(${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_SOURCE_FILES "${${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_SOURCE_FILES}" PARENT_SCOPE)
-  set(${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_HEADER_FILES "${${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_HEADER_FILES}" PARENT_SCOPE)
+  generate_for_pb_export_output_var_base("${GENERATE_FOR_PB_OUTPUT_VAR_BASE}")
 endfunction(generate_for_pb_add_orbit_service)
 
 function(generate_for_pb_add_orbit_client SERVICE_NAME SERVICE_ROOT_DIR)
@@ -159,12 +208,18 @@ function(generate_for_pb_add_orbit_client SERVICE_NAME SERVICE_ROOT_DIR)
           input: '${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/rpc_call_api_for_orbit.cpp.mako'
           output: 'rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.cpp'
 " )
+  set(GENERATE_FOR_PB_PRINT_OVERWRITE_RULE_BODY "${GENERATE_FOR_PB_RULE_BODY}")
+  generate_for_pb_resolve_protocol_codegen_targets(GENERATE_FOR_PB_PROTOCOL_CODEGEN_TARGETS INCLUDE_DEFAULT)
   generate_for_pb_register_flow(
     "${SERVICE_NAME}"
     OUTPUT_VAR_BASE
     "${GENERATE_FOR_PB_ARGS_GENERATED_OUTPUT_FILES}"
     RULE_BODY
     "${GENERATE_FOR_PB_RULE_BODY}"
+    PRINT_OVERWRITE_RULE_BODY
+    "${GENERATE_FOR_PB_PRINT_OVERWRITE_RULE_BODY}"
+    PROTOCOL_CODEGEN_TARGETS
+    ${GENERATE_FOR_PB_PROTOCOL_CODEGEN_TARGETS}
     TEMPLATE_DEPENDS
     "${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/rpc_call_api_for_orbit.h.mako"
     "${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/rpc_call_api_for_orbit.cpp.mako")
@@ -173,6 +228,5 @@ function(generate_for_pb_add_orbit_client SERVICE_NAME SERVICE_ROOT_DIR)
   else()
     set(GENERATE_FOR_PB_OUTPUT_VAR_BASE "${SERVICE_NAME}")
   endif()
-  set(${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_SOURCE_FILES "${${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_SOURCE_FILES}" PARENT_SCOPE)
-  set(${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_HEADER_FILES "${${GENERATE_FOR_PB_OUTPUT_VAR_BASE}_HEADER_FILES}" PARENT_SCOPE)
+  generate_for_pb_export_output_var_base("${GENERATE_FOR_PB_OUTPUT_VAR_BASE}")
 endfunction(generate_for_pb_add_orbit_client)
