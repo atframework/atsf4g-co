@@ -369,6 +369,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
     DEPENDS ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES}
             "${PROJECT_GENERATED_PBD_DIR}/component-${TARGET_NAME}.pb"
     SOURCES ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES})
+  set_property(TARGET ${TARGET_CODEGEN_NAME} PROPERTY FOLDER "${PROJECT_NAME}/component/protocol")
   generate_for_pb_register_protocol_codegen_target(${TARGET_CODEGEN_NAME} PROTOCOL_NAMES "${TARGET_NAME}")
   source_group(TREE ${project_component_declare_protocol_OUTPUT_DIR} FILES ${__FINAL_GENERATED_SOURCE_FILES}
                                                                            ${__FINAL_GENERATED_HEADER_FILES})

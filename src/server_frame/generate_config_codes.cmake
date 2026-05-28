@@ -235,7 +235,7 @@ function(project_server_frame_add_config_target)
     SOURCES ${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_HEADER_LIST}
             ${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SOURCE_LIST})
 
-  set_property(TARGET "config-loader" PROPERTY FOLDER "${PROJECT_NAME}")
+  set_property(TARGET "config-loader" PROPERTY FOLDER "${PROJECT_NAME}/config")
 
   source_group(
     TREE "${PROJECT_GENERATED_DIR}/${PROJECT_SERVER_FRAME_LIB_LINK}-config"
@@ -310,7 +310,7 @@ function(project_server_frame_add_config_target)
                CXX_VISIBILITY_PRESET "hidden"
                BUILD_RPATH_USE_ORIGIN YES)
 
-  set_property(TARGET "${PROJECT_SERVER_FRAME_LIB_LINK}-config" PROPERTY FOLDER "${PROJECT_NAME}")
+  set_property(TARGET "${PROJECT_SERVER_FRAME_LIB_LINK}-config" PROPERTY FOLDER "${PROJECT_NAME}/config")
 
   target_include_directories(
     ${PROJECT_SERVER_FRAME_LIB_LINK}-config

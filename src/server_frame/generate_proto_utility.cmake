@@ -254,8 +254,8 @@ function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OU
     target_link_options(${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
   endif()
 
-  set_property(TARGET ${TARGET_NAME} PROPERTY FOLDER "${PROJECT_NAME}")
-  set_property(TARGET ${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME} PROPERTY FOLDER "${PROJECT_NAME}")
+  set_property(TARGET ${TARGET_NAME} PROPERTY FOLDER "${PROJECT_NAME}/protocol")
+  set_property(TARGET ${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME} PROPERTY FOLDER "${PROJECT_NAME}/framework/protocol")
 
   project_install_and_export_targets(${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME})
 
