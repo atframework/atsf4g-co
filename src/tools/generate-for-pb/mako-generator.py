@@ -9,6 +9,7 @@ Copyright (c) 2022 atframework
 import glob
 import os
 import sys
+import argparse
 import codecs
 import re
 import shutil
@@ -16,6 +17,7 @@ import sysconfig
 import tempfile
 import threading
 import concurrent.futures
+import generator_ipc
 from subprocess import PIPE, Popen, TimeoutExpired
 
 
@@ -77,6 +79,7 @@ LOCAL_PB_DB_CACHE = dict()
 LOCAL_PROJECT_VCS_CACHE = dict()
 LOCAL_WOKER_POOL: concurrent.futures.ThreadPoolExecutor = None
 LOCAL_WOKER_FUTURES = dict()
+DEFAULT_GENERATOR_SERVER_ADDRESS = "127.0.0.1:3701"
 
 def print_exception_with_traceback(e: Exception, fmt: str = None, *args):
     import traceback
@@ -1007,8 +1010,8 @@ if sys.version_info[0] == 2:
     def CmdArgsAddOption(parser, *args, **kwargs):
         parser.add_option(*args, **kwargs)
 
-    def CmdArgsParse(parser):
-        return parser.parse_args()
+    def CmdArgsParse(parser, args=None):
+        return parser.parse_args(args=args)
 
 else:
 
@@ -1024,8 +1027,8 @@ else:
     def CmdArgsAddOption(parser, *args, **kwargs):
         parser.add_argument(*args, **kwargs)
 
-    def CmdArgsParse(parser):
-        ret = parser.parse_args()
+    def CmdArgsParse(parser, args=None):
+        ret = parser.parse_args(args=args)
         return (ret, ret.REMAINDER)
 
 
@@ -1054,15 +1057,30 @@ def try_read_vcs_username(project_dir):
     return local_vcs_user_name
 
 
+def get_file_cache_signature(file_path):
+    real_path = os.path.realpath(file_path)
+    file_stat = os.stat(real_path)
+    mtime_ns = getattr(file_stat, "st_mtime_ns",
+                       int(file_stat.st_mtime * 1000000000))
+    return (real_path, file_stat.st_size, mtime_ns)
+
+
 def get_pb_db_with_cache(pb_file, external_pb_files):
     global LOCAL_PB_DB_CACHE
     pb_file = os.path.realpath(pb_file)
-    if pb_file in LOCAL_PB_DB_CACHE:
-        ret = LOCAL_PB_DB_CACHE[pb_file]
+    cache_key = (
+        get_file_cache_signature(pb_file),
+        tuple([
+            get_file_cache_signature(external_pb_file)
+            for external_pb_file in external_pb_files
+        ]),
+    )
+    if cache_key in LOCAL_PB_DB_CACHE:
+        ret = LOCAL_PB_DB_CACHE[cache_key]
         return ret
     ret = PbDatabase()
     ret.load(pb_file, external_pb_files)
-    LOCAL_PB_DB_CACHE[pb_file] = ret
+    LOCAL_PB_DB_CACHE[cache_key] = ret
     return ret
 
 
@@ -2132,10 +2150,23 @@ def generate_file_group(pb_db, options, yaml_conf, project_dir, custom_vars):
         )
 
 
-def main():
+def main(argv=None, display_argv=None, allow_ipc=True):
     # lizard forgives
     global LOCAL_WOKER_POOL
     global LOCAL_WOKER_FUTURES
+
+    if argv is None:
+        argv = sys.argv[1:]
+    else:
+        argv = list(argv)
+    if display_argv is None:
+        display_argv = [sys.argv[0]]
+        display_argv.extend(argv)
+
+    if LOCAL_WOKER_POOL is not None:
+        LOCAL_WOKER_POOL.shutdown(wait=True)
+        LOCAL_WOKER_POOL = None
+    LOCAL_WOKER_FUTURES = dict()
 
     script_dir = os.path.dirname(os.path.realpath(__file__))
     work_dir = os.getcwd()
@@ -2621,8 +2652,10 @@ def main():
         dest="yaml_configure",
         default=None,
     )
+    generator_ipc.add_generator_ipc_options(
+        CmdArgsAddOption, parser, DEFAULT_GENERATOR_SERVER_ADDRESS)
 
-    (options, left_args) = CmdArgsParse(parser)
+    (options, left_args) = CmdArgsParse(parser, argv)
 
     if options.version:
         print("1.2.0")
@@ -2632,6 +2665,25 @@ def main():
         prepend_paths.extend(sys.path)
         sys.path = prepend_paths
     add_package_prefix_paths(options.add_package_prefix)
+
+    if allow_ipc:
+        if options.server_mode:
+            return generator_ipc.run_generator_server(
+                options.server_address, options.server_idle_timeout,
+                lambda request: generator_ipc.run_generation_request(
+                    request, main), options.server_pid_file)
+        if options.client_mode or options.server_shutdown:
+            request_args = generator_ipc.strip_generator_ipc_args(argv)
+            return generator_ipc.run_generator_client(
+                options.server_address, options.server_timeout, request_args,
+                work_dir, display_argv[0], options.server_shutdown,
+                options.server_auto_start, options.server_idle_timeout,
+                os.path.realpath(__file__), options.server_pid_file)
+    elif options.server_mode or options.client_mode or options.server_shutdown:
+        sys.stderr.write(
+            "[ERROR]: generator IPC options are not allowed in server requests.\n"
+        )
+        return 1
 
     if options.console_encoding:
         console_encoding = options.console_encoding
@@ -2650,7 +2702,10 @@ def main():
                 pass
 
         # console_encoding = sys.getfilesystemencoding()
-        fd.buffer.write(buffer)
+        if hasattr(fd, "buffer"):
+            fd.buffer.write(buffer)
+        else:
+            fd.write(buffer.decode(console_encoding[0], errors="replace"))
 
     def print_stdout_func(pexec):
         for output_line in pexec.stdout.readlines():
@@ -2754,7 +2809,7 @@ def main():
             "-P/--proto-files <*.proto> or --pb-file <something.pb> is required.\n"
         )
         print("[RUNNING]: {0} '{1}'".format(sys.executable,
-                                            "' '".join(sys.argv)))
+                                            "' '".join(display_argv)))
         parser.print_help()
         return 1
 
@@ -2776,14 +2831,14 @@ def main():
             sys.stderr.write(
                 "Can not find project directory please add --project-dir <project directory> with .git in it.\n"
             )
-            print("[RUNNING]: {0} '{1}'".format(sys.executable,
-                                                "' '".join(sys.argv)))
+            print("[RUNNING]: {0} '{1}'".format(
+                sys.executable, "' '".join(display_argv)))
             parser.print_help()
             return 1
 
     if not options.quiet and not options.print_output_files:
         print("[RUNNING]: {0} '{1}'".format(sys.executable,
-                                            "' '".join(sys.argv)))
+                                            "' '".join(display_argv)))
     if options.pb_file:
         if not os.path.exists(options.pb_file):
             sys.stderr.write("Can not find --pb-file {0}.\n".format(
@@ -2826,10 +2881,10 @@ def main():
         if not options.quiet and not options.print_output_files:
             print("[DEBUG]: '" + "' '".join(protoc_run_args) + "'")
         pexec = Popen(protoc_run_args,
-                      stdin=None,
-                      stdout=None,
-                      stderr=None,
-                      shell=False)
+                  stdin=None,
+                  stdout=PIPE,
+                  stderr=PIPE,
+                  shell=False)
         wait_print_pexec(pexec)
 
     try:
@@ -2859,6 +2914,7 @@ def main():
 
     if LOCAL_WOKER_POOL is not None:
         LOCAL_WOKER_POOL.shutdown(wait=True)
+        LOCAL_WOKER_POOL = None
     for future in concurrent.futures.as_completed(LOCAL_WOKER_FUTURES):
         future_data = LOCAL_WOKER_FUTURES[future]
         try:
@@ -2869,6 +2925,7 @@ def main():
             print_exception_with_traceback(e, "generate file {0} failed.",
                                            future_data["output_file"])
             ret = 1
+    LOCAL_WOKER_FUTURES.clear()
     return ret
 
 
