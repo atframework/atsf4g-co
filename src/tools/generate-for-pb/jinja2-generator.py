@@ -104,45 +104,61 @@ def split_segments_for_protobuf_field_name(input_name):
     return ret
 
 
-def add_package_prefix_paths(packag_paths):
+def _collect_package_prefix_python_paths(packag_paths):
     """See https://docs.python.org/3/install/#how-installation-works"""
     append_paths = []
+    appended_path_set = set()
+
+    if not packag_paths:
+        return append_paths
+
+    python_version_path = "python{0}".format(sysconfig.get_python_version())
+    path_env_sep = ";" if sys.platform.lower() == "win32" else ":"
     for path in packag_paths:
+        if not path:
+            continue
+
+        normalized_path = os.path.normpath(path)
         for add_package_bin_path in [
-                os.path.join(path, "bin"),
-                os.path.join(path, "local", "bin"),
+                os.path.join(normalized_path, "Scripts"),
+                os.path.join(normalized_path, "bin"),
+                os.path.join(normalized_path, "local", "bin"),
         ]:
             if os.path.exists(add_package_bin_path):
-                if sys.platform.lower() == "win32":
-                    os.environ[
-                        "PATH"] = add_package_bin_path + ";" + os.environ[
-                            "PATH"]
-                else:
-                    os.environ[
-                        "PATH"] = add_package_bin_path + ":" + os.environ[
-                            "PATH"]
+                os.environ["PATH"] = add_package_bin_path + path_env_sep + os.environ.get("PATH", "")
 
-        python_version_path = "python{0}".format(
-            sysconfig.get_python_version())
         for add_package_lib_path in [
-                os.path.join(path, "lib", python_version_path,
+                normalized_path,
+                os.path.join(normalized_path, "lib", python_version_path,
                              "site-packages"),
-                os.path.join(path, "local", "lib", python_version_path,
+                os.path.join(normalized_path, "local", "lib", python_version_path,
                              "site-packages"),
-                os.path.join(path, "lib64", python_version_path,
+                os.path.join(normalized_path, "lib64", python_version_path,
                              "site-packages"),
-                os.path.join(path, "local", "lib64", python_version_path,
+                os.path.join(normalized_path, "local", "lib64", python_version_path,
                              "site-packages"),
+                os.path.join(normalized_path, "Lib", "site-packages"),
         ]:
             if os.path.exists(add_package_lib_path):
-                append_paths.append(add_package_lib_path)
+                resolved_add_package_lib_path = os.path.realpath(
+                    add_package_lib_path)
+                if resolved_add_package_lib_path not in appended_path_set:
+                    append_paths.append(resolved_add_package_lib_path)
+                    appended_path_set.add(resolved_add_package_lib_path)
 
-        add_package_lib_path_for_win = os.path.join(path, "Lib",
-                                                    "site-packages")
-        if os.path.exists(add_package_lib_path_for_win):
-            append_paths.append(add_package_lib_path_for_win)
-    append_paths.extend(sys.path)
-    sys.path = append_paths
+    return append_paths
+
+
+def _prepend_package_prefix_paths(packag_paths):
+    append_paths = _collect_package_prefix_python_paths(packag_paths)
+    if append_paths:
+        append_paths.extend(sys.path)
+        sys.path = append_paths
+
+
+def add_package_prefix_paths(packag_paths):
+    """See https://docs.python.org/3/install/#how-installation-works"""
+    _prepend_package_prefix_paths(packag_paths)
 
 
 class PbConvertRule:

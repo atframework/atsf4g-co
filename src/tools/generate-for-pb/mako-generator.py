@@ -17,7 +17,58 @@ import tempfile
 import threading
 import concurrent.futures
 from subprocess import PIPE, Popen, TimeoutExpired
-from google.protobuf import descriptor_pb2 as pb2
+
+
+def _collect_package_prefix_python_paths(packag_paths):
+    """See https://docs.python.org/3/install/#how-installation-works"""
+    append_paths = []
+    appended_path_set = set()
+
+    if not packag_paths:
+        return append_paths
+
+    python_version_path = "python{0}".format(sysconfig.get_python_version())
+    path_env_sep = ";" if sys.platform.lower() == "win32" else ":"
+    for path in packag_paths:
+        if not path:
+            continue
+
+        normalized_path = os.path.normpath(path)
+        for add_package_bin_path in [
+                os.path.join(normalized_path, "Scripts"),
+                os.path.join(normalized_path, "bin"),
+                os.path.join(normalized_path, "local", "bin"),
+        ]:
+            if os.path.exists(add_package_bin_path):
+                os.environ["PATH"] = add_package_bin_path + path_env_sep + os.environ.get("PATH", "")
+
+        for add_package_lib_path in [
+                normalized_path,
+                os.path.join(normalized_path, "lib", python_version_path,
+                             "site-packages"),
+                os.path.join(normalized_path, "local", "lib", python_version_path,
+                             "site-packages"),
+                os.path.join(normalized_path, "lib64", python_version_path,
+                             "site-packages"),
+                os.path.join(normalized_path, "local", "lib64", python_version_path,
+                             "site-packages"),
+                os.path.join(normalized_path, "Lib", "site-packages"),
+        ]:
+            if os.path.exists(add_package_lib_path):
+                resolved_add_package_lib_path = os.path.realpath(
+                    add_package_lib_path)
+                if resolved_add_package_lib_path not in appended_path_set:
+                    append_paths.append(resolved_add_package_lib_path)
+                    appended_path_set.add(resolved_add_package_lib_path)
+
+    return append_paths
+
+
+def _prepend_package_prefix_paths(packag_paths):
+    append_paths = _collect_package_prefix_python_paths(packag_paths)
+    if append_paths:
+        append_paths.extend(sys.path)
+        sys.path = append_paths
 
 HANDLE_SPLIT_PBFIELD_RULE = re.compile("\\d+|_+|\\s+|\\-")
 HANDLE_SPLIT_MODULE_RULE = re.compile("\\.|\\/|\\\\")
@@ -26,79 +77,6 @@ LOCAL_PB_DB_CACHE = dict()
 LOCAL_PROJECT_VCS_CACHE = dict()
 LOCAL_WOKER_POOL: concurrent.futures.ThreadPoolExecutor = None
 LOCAL_WOKER_FUTURES = dict()
-
-pb_msg_go_db_vaild_type_map = {
-    pb2.FieldDescriptorProto.TYPE_BOOL: True,
-    pb2.FieldDescriptorProto.TYPE_BYTES: True,
-    pb2.FieldDescriptorProto.TYPE_DOUBLE: True,
-    pb2.FieldDescriptorProto.TYPE_FLOAT: True,
-    pb2.FieldDescriptorProto.TYPE_INT32: True,
-    pb2.FieldDescriptorProto.TYPE_INT64: True,
-    pb2.FieldDescriptorProto.TYPE_SINT32: True,
-    pb2.FieldDescriptorProto.TYPE_SINT64: True,
-    pb2.FieldDescriptorProto.TYPE_STRING: True,
-    pb2.FieldDescriptorProto.TYPE_UINT32: True,
-    pb2.FieldDescriptorProto.TYPE_UINT64: True,
-    pb2.FieldDescriptorProto.TYPE_MESSAGE: True,
-}
-
-pb_msg_go_type_map = {
-    pb2.FieldDescriptorProto.TYPE_BOOL: "bool",
-    pb2.FieldDescriptorProto.TYPE_BYTES: "[]byte",
-    pb2.FieldDescriptorProto.TYPE_DOUBLE: "double",
-    pb2.FieldDescriptorProto.TYPE_ENUM: "int32",
-    pb2.FieldDescriptorProto.TYPE_FIXED32: "int32",
-    pb2.FieldDescriptorProto.TYPE_FIXED64: "int64",
-    pb2.FieldDescriptorProto.TYPE_FLOAT: "float",
-    pb2.FieldDescriptorProto.TYPE_INT32: "int32",
-    pb2.FieldDescriptorProto.TYPE_INT64: "int64",
-    pb2.FieldDescriptorProto.TYPE_SFIXED32: "int32",
-    pb2.FieldDescriptorProto.TYPE_SFIXED64: "int64",
-    pb2.FieldDescriptorProto.TYPE_SINT32: "int32",
-    pb2.FieldDescriptorProto.TYPE_SINT64: "int64",
-    pb2.FieldDescriptorProto.TYPE_STRING: "string",
-    pb2.FieldDescriptorProto.TYPE_UINT32: "uint32",
-    pb2.FieldDescriptorProto.TYPE_UINT64: "uint64",
-}
-
-pb_msg_cpp_type_map = {
-    pb2.FieldDescriptorProto.TYPE_BOOL: "bool",
-    pb2.FieldDescriptorProto.TYPE_BYTES: "string_view",
-    pb2.FieldDescriptorProto.TYPE_DOUBLE: "double",
-    pb2.FieldDescriptorProto.TYPE_ENUM: "int32_t",
-    pb2.FieldDescriptorProto.TYPE_FIXED32: "int32_t",
-    pb2.FieldDescriptorProto.TYPE_FIXED64: "int64_t",
-    pb2.FieldDescriptorProto.TYPE_FLOAT: "float",
-    pb2.FieldDescriptorProto.TYPE_INT32: "int32_t",
-    pb2.FieldDescriptorProto.TYPE_INT64: "int64_t",
-    pb2.FieldDescriptorProto.TYPE_SFIXED32: "int32_t",
-    pb2.FieldDescriptorProto.TYPE_SFIXED64: "int64_t",
-    pb2.FieldDescriptorProto.TYPE_SINT32: "int32_t",
-    pb2.FieldDescriptorProto.TYPE_SINT64: "int64_t",
-    pb2.FieldDescriptorProto.TYPE_STRING: "string_view",
-    pb2.FieldDescriptorProto.TYPE_UINT32: "uint32_t",
-    pb2.FieldDescriptorProto.TYPE_UINT64: "uint64_t",
-}
-
-pb_msg_go_fmt_map = {
-    pb2.FieldDescriptorProto.TYPE_BOOL: "%d",
-    pb2.FieldDescriptorProto.TYPE_BYTES: "%s",
-    pb2.FieldDescriptorProto.TYPE_DOUBLE: "%f",
-    pb2.FieldDescriptorProto.TYPE_ENUM: "%d",
-    pb2.FieldDescriptorProto.TYPE_FIXED32: "%d",
-    pb2.FieldDescriptorProto.TYPE_FIXED64: "%d",
-    pb2.FieldDescriptorProto.TYPE_FLOAT: "%f",
-    pb2.FieldDescriptorProto.TYPE_INT32: "%d",
-    pb2.FieldDescriptorProto.TYPE_INT64: "%d",
-    pb2.FieldDescriptorProto.TYPE_SFIXED32: "%d",
-    pb2.FieldDescriptorProto.TYPE_SFIXED64: "%d",
-    pb2.FieldDescriptorProto.TYPE_SINT32: "%d",
-    pb2.FieldDescriptorProto.TYPE_SINT64: "%d",
-    pb2.FieldDescriptorProto.TYPE_STRING: "%s",
-    pb2.FieldDescriptorProto.TYPE_UINT32: "%d",
-    pb2.FieldDescriptorProto.TYPE_UINT64: "%d",
-    pb2.FieldDescriptorProto.TYPE_MESSAGE: "%s",
-}
 
 def print_exception_with_traceback(e: Exception, fmt: str = None, *args):
     import traceback
@@ -178,43 +156,120 @@ def split_segments_for_protobuf_field_name(input_name):
 
 def add_package_prefix_paths(packag_paths):
     """See https://docs.python.org/3/install/#how-installation-works"""
-    append_paths = []
-    for path in packag_paths:
-        for add_package_bin_path in [
-                os.path.join(path, "bin"),
-                os.path.join(path, "local", "bin"),
-        ]:
-            if os.path.exists(add_package_bin_path):
-                if sys.platform.lower() == "win32":
-                    os.environ[
-                        "PATH"] = add_package_bin_path + ";" + os.environ[
-                            "PATH"]
-                else:
-                    os.environ[
-                        "PATH"] = add_package_bin_path + ":" + os.environ[
-                            "PATH"]
+    _prepend_package_prefix_paths(packag_paths)
 
-        python_version_path = "python{0}".format(
-            sysconfig.get_python_version())
-        for add_package_lib_path in [
-                os.path.join(path, "lib", python_version_path,
-                             "site-packages"),
-                os.path.join(path, "local", "lib", python_version_path,
-                             "site-packages"),
-                os.path.join(path, "lib64", python_version_path,
-                             "site-packages"),
-                os.path.join(path, "local", "lib64", python_version_path,
-                             "site-packages"),
-        ]:
-            if os.path.exists(add_package_lib_path):
-                append_paths.append(add_package_lib_path)
 
-        add_package_lib_path_for_win = os.path.join(path, "Lib",
-                                                    "site-packages")
-        if os.path.exists(add_package_lib_path_for_win):
-            append_paths.append(add_package_lib_path_for_win)
-    append_paths.extend(sys.path)
-    sys.path = append_paths
+LOCAL_PB2_MODULE = None
+LOCAL_PB_MSG_GO_DB_VAILD_TYPE_MAP = None
+LOCAL_PB_MSG_GO_TYPE_MAP = None
+LOCAL_PB_MSG_CPP_TYPE_MAP = None
+LOCAL_PB_MSG_GO_FMT_MAP = None
+
+
+def _get_pb2_module():
+    global LOCAL_PB2_MODULE
+    if LOCAL_PB2_MODULE is None:
+        from google.protobuf import descriptor_pb2 as pb2
+
+        LOCAL_PB2_MODULE = pb2
+    return LOCAL_PB2_MODULE
+
+
+def _get_pb_msg_go_db_vaild_type_map():
+    global LOCAL_PB_MSG_GO_DB_VAILD_TYPE_MAP
+    if LOCAL_PB_MSG_GO_DB_VAILD_TYPE_MAP is None:
+        pb2 = _get_pb2_module()
+        LOCAL_PB_MSG_GO_DB_VAILD_TYPE_MAP = {
+            pb2.FieldDescriptorProto.TYPE_BOOL: True,
+            pb2.FieldDescriptorProto.TYPE_BYTES: True,
+            pb2.FieldDescriptorProto.TYPE_DOUBLE: True,
+            pb2.FieldDescriptorProto.TYPE_FLOAT: True,
+            pb2.FieldDescriptorProto.TYPE_INT32: True,
+            pb2.FieldDescriptorProto.TYPE_INT64: True,
+            pb2.FieldDescriptorProto.TYPE_SINT32: True,
+            pb2.FieldDescriptorProto.TYPE_SINT64: True,
+            pb2.FieldDescriptorProto.TYPE_STRING: True,
+            pb2.FieldDescriptorProto.TYPE_UINT32: True,
+            pb2.FieldDescriptorProto.TYPE_UINT64: True,
+            pb2.FieldDescriptorProto.TYPE_MESSAGE: True,
+        }
+    return LOCAL_PB_MSG_GO_DB_VAILD_TYPE_MAP
+
+
+def _get_pb_msg_go_type_map():
+    global LOCAL_PB_MSG_GO_TYPE_MAP
+    if LOCAL_PB_MSG_GO_TYPE_MAP is None:
+        pb2 = _get_pb2_module()
+        LOCAL_PB_MSG_GO_TYPE_MAP = {
+            pb2.FieldDescriptorProto.TYPE_BOOL: "bool",
+            pb2.FieldDescriptorProto.TYPE_BYTES: "[]byte",
+            pb2.FieldDescriptorProto.TYPE_DOUBLE: "double",
+            pb2.FieldDescriptorProto.TYPE_ENUM: "int32",
+            pb2.FieldDescriptorProto.TYPE_FIXED32: "int32",
+            pb2.FieldDescriptorProto.TYPE_FIXED64: "int64",
+            pb2.FieldDescriptorProto.TYPE_FLOAT: "float",
+            pb2.FieldDescriptorProto.TYPE_INT32: "int32",
+            pb2.FieldDescriptorProto.TYPE_INT64: "int64",
+            pb2.FieldDescriptorProto.TYPE_SFIXED32: "int32",
+            pb2.FieldDescriptorProto.TYPE_SFIXED64: "int64",
+            pb2.FieldDescriptorProto.TYPE_SINT32: "int32",
+            pb2.FieldDescriptorProto.TYPE_SINT64: "int64",
+            pb2.FieldDescriptorProto.TYPE_STRING: "string",
+            pb2.FieldDescriptorProto.TYPE_UINT32: "uint32",
+            pb2.FieldDescriptorProto.TYPE_UINT64: "uint64",
+        }
+    return LOCAL_PB_MSG_GO_TYPE_MAP
+
+
+def _get_pb_msg_cpp_type_map():
+    global LOCAL_PB_MSG_CPP_TYPE_MAP
+    if LOCAL_PB_MSG_CPP_TYPE_MAP is None:
+        pb2 = _get_pb2_module()
+        LOCAL_PB_MSG_CPP_TYPE_MAP = {
+            pb2.FieldDescriptorProto.TYPE_BOOL: "bool",
+            pb2.FieldDescriptorProto.TYPE_BYTES: "string_view",
+            pb2.FieldDescriptorProto.TYPE_DOUBLE: "double",
+            pb2.FieldDescriptorProto.TYPE_ENUM: "int32_t",
+            pb2.FieldDescriptorProto.TYPE_FIXED32: "int32_t",
+            pb2.FieldDescriptorProto.TYPE_FIXED64: "int64_t",
+            pb2.FieldDescriptorProto.TYPE_FLOAT: "float",
+            pb2.FieldDescriptorProto.TYPE_INT32: "int32_t",
+            pb2.FieldDescriptorProto.TYPE_INT64: "int64_t",
+            pb2.FieldDescriptorProto.TYPE_SFIXED32: "int32_t",
+            pb2.FieldDescriptorProto.TYPE_SFIXED64: "int64_t",
+            pb2.FieldDescriptorProto.TYPE_SINT32: "int32_t",
+            pb2.FieldDescriptorProto.TYPE_SINT64: "int64_t",
+            pb2.FieldDescriptorProto.TYPE_STRING: "string_view",
+            pb2.FieldDescriptorProto.TYPE_UINT32: "uint32_t",
+            pb2.FieldDescriptorProto.TYPE_UINT64: "uint64_t",
+        }
+    return LOCAL_PB_MSG_CPP_TYPE_MAP
+
+
+def _get_pb_msg_go_fmt_map():
+    global LOCAL_PB_MSG_GO_FMT_MAP
+    if LOCAL_PB_MSG_GO_FMT_MAP is None:
+        pb2 = _get_pb2_module()
+        LOCAL_PB_MSG_GO_FMT_MAP = {
+            pb2.FieldDescriptorProto.TYPE_BOOL: "%d",
+            pb2.FieldDescriptorProto.TYPE_BYTES: "%s",
+            pb2.FieldDescriptorProto.TYPE_DOUBLE: "%f",
+            pb2.FieldDescriptorProto.TYPE_ENUM: "%d",
+            pb2.FieldDescriptorProto.TYPE_FIXED32: "%d",
+            pb2.FieldDescriptorProto.TYPE_FIXED64: "%d",
+            pb2.FieldDescriptorProto.TYPE_FLOAT: "%f",
+            pb2.FieldDescriptorProto.TYPE_INT32: "%d",
+            pb2.FieldDescriptorProto.TYPE_INT64: "%d",
+            pb2.FieldDescriptorProto.TYPE_SFIXED32: "%d",
+            pb2.FieldDescriptorProto.TYPE_SFIXED64: "%d",
+            pb2.FieldDescriptorProto.TYPE_SINT32: "%d",
+            pb2.FieldDescriptorProto.TYPE_SINT64: "%d",
+            pb2.FieldDescriptorProto.TYPE_STRING: "%s",
+            pb2.FieldDescriptorProto.TYPE_UINT32: "%d",
+            pb2.FieldDescriptorProto.TYPE_UINT64: "%d",
+            pb2.FieldDescriptorProto.TYPE_MESSAGE: "%s",
+        }
+    return LOCAL_PB_MSG_GO_FMT_MAP
 
 
 class PbConvertRule:
@@ -405,27 +460,28 @@ class PbField(PbObjectBase):
         return self.descriptor.full_name in checked_names
 
     def get_go_type(self):
-        global pb_msg_go_type_map
+        pb_msg_go_type_map = _get_pb_msg_go_type_map()
         if self.descriptor.type in pb_msg_go_type_map:
             return pb_msg_go_type_map[self.descriptor.type]
         return self.descriptor.type
 
     def get_cpp_type(self):
-        global pb_msg_cpp_type_map
+        pb_msg_cpp_type_map = _get_pb_msg_cpp_type_map()
         if self.descriptor.type in pb_msg_cpp_type_map:
             return pb_msg_cpp_type_map[self.descriptor.type]
         return self.descriptor.type
 
     def is_db_vaild_type(self):
+        pb2 = _get_pb2_module()
         if self.descriptor.label == pb2.FieldDescriptorProto.LABEL_REPEATED:
             return False
-        global pb_msg_go_db_vaild_type_map
+        pb_msg_go_db_vaild_type_map = _get_pb_msg_go_db_vaild_type_map()
         if self.descriptor.type in pb_msg_go_db_vaild_type_map:
             return True
         return False
 
     def get_go_fmt_type(self):
-        global pb_msg_go_fmt_map
+        pb_msg_go_fmt_map = _get_pb_msg_go_fmt_map()
         if self.descriptor.type in pb_msg_go_fmt_map:
             return pb_msg_go_fmt_map[self.descriptor.type]
         return self.descriptor.type

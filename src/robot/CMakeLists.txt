@@ -121,6 +121,12 @@ set(ROBOT_INSTALL_PATH "${PROJECT_INSTALL_BAS_DIR}/robot")
 message(STATUS "Robot source dir: ${ROBOT_SOURCE_DIR}")
 message(STATUS "Robot install path: ${ROBOT_INSTALL_PATH}")
 
+maybe_populate_submodule(ROBOT_DEPENDENCY_ROBOT_GO "src/robot/atframework/atframe-utils-go"
+                         "${PROJECT_SOURCE_DIR}/src/robot/atframework/atframe-utils-go")
+
+maybe_populate_submodule(ROBOT_DEPENDENCY_ROBOT_GO "src/robot/atframework/robot-go"
+                         "${PROJECT_SOURCE_DIR}/src/robot/atframework/robot-go")
+
 # ============================================================================
 # 1. Custom target: run task all
 # ============================================================================
