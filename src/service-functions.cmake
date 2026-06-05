@@ -484,10 +484,8 @@ function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
   cmake_parse_arguments(project_service_declare_instance "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
   generate_for_pb_collect_filtered_output_files(
-    "${SERVICE_ROOT_DIR}"
-    "${project_service_declare_instance_GENERATED_OUTPUT_FILES}"
-    _PROJECT_SERVICE_GENERATED_SOURCE_FILES
-    _PROJECT_SERVICE_GENERATED_HEADER_FILES)
+    "${SERVICE_ROOT_DIR}" "${project_service_declare_instance_GENERATED_OUTPUT_FILES}"
+    _PROJECT_SERVICE_GENERATED_SOURCE_FILES _PROJECT_SERVICE_GENERATED_HEADER_FILES)
   if(_PROJECT_SERVICE_GENERATED_SOURCE_FILES)
     list(APPEND project_service_declare_instance_SOURCES ${_PROJECT_SERVICE_GENERATED_SOURCE_FILES})
     list(REMOVE_DUPLICATES project_service_declare_instance_SOURCES)
