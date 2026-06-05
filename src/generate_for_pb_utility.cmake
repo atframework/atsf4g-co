@@ -1,7 +1,8 @@
 set(GENERATE_FOR_PB_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}")
+set(GENERATE_FOR_PB_SERVER_PID_FILE "${CMAKE_BINARY_DIR}/generate-for-pb-run.server/pid")
+set(GENERATE_FOR_PB_IPC_PY "${GENERATE_FOR_PB_SOURCE_DIR}/tools/generate-for-pb/generator_ipc.py")
 set(GENERATE_FOR_PB_MAKO_PY "${GENERATE_FOR_PB_SOURCE_DIR}/tools/generate-for-pb/mako-generator.py")
 set(GENERATE_FOR_PB_JINJA2_PY "${GENERATE_FOR_PB_SOURCE_DIR}/tools/generate-for-pb/jinja2-generator.py")
-set(GENERATE_FOR_PB_PY "${GENERATE_FOR_PB_MAKO_PY}")
 set(GENERATE_FOR_PB_WORK_DIR "${CMAKE_BINARY_DIR}")
 set(GENERATE_FOR_PB_OUT_SH "${CMAKE_BINARY_DIR}/generate-for-pb-run.sh")
 set(GENERATE_FOR_PB_OUT_PWSH "${CMAKE_BINARY_DIR}/generate-for-pb-run.ps1")
@@ -29,6 +30,39 @@ if(NOT Python3_EXECUTABLE)
     message(FATAL_ERROR "python3/python is required.")
   endif()
 endif()
+
+function(generate_for_pb_cleanup_server_process)
+  execute_process(
+    COMMAND
+      "${Python3_EXECUTABLE}" "${GENERATE_FOR_PB_MAKO_PY}" "--server-pid-file" "${GENERATE_FOR_PB_SERVER_PID_FILE}"
+      "--server-timeout" "1" "--no-server-auto-start" "--server-shutdown" "--add-package-prefix"
+      "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}"
+    RESULT_VARIABLE _generate_for_pb_shutdown_result
+    WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
+    OUTPUT_VARIABLE _generate_for_pb_shutdown_stdout
+    ERROR_VARIABLE _generate_for_pb_shutdown_stderr ${GENERATE_FOR_PB_PY_ENCODING})
+  if(NOT _generate_for_pb_shutdown_result EQUAL 0)
+    message(
+      FATAL_ERROR
+        "Cleanup old generate-for-pb server failed: ${_generate_for_pb_shutdown_stderr}${_generate_for_pb_shutdown_stdout}")
+  endif()
+
+  set(_generate_for_pb_shutdown_wait_count 0)
+  while(EXISTS "${GENERATE_FOR_PB_SERVER_PID_FILE}" AND _generate_for_pb_shutdown_wait_count LESS 5)
+    math(EXPR _generate_for_pb_shutdown_wait_count "${_generate_for_pb_shutdown_wait_count} + 1")
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E sleep 1)
+  endwhile()
+
+  if(EXISTS "${GENERATE_FOR_PB_SERVER_PID_FILE}")
+    file(READ "${GENERATE_FOR_PB_SERVER_PID_FILE}" _generate_for_pb_shutdown_pid)
+    string(STRIP "${_generate_for_pb_shutdown_pid}" _generate_for_pb_shutdown_pid)
+    message(
+      FATAL_ERROR
+        "Old generate-for-pb server did not exit after shutdown request. pid file: ${GENERATE_FOR_PB_SERVER_PID_FILE}, pid: ${_generate_for_pb_shutdown_pid}")
+  endif()
+endfunction()
+
+generate_for_pb_cleanup_server_process()
 
 set(GENERATE_FOR_PB_PROROC_BIN ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC})
 if(NOT GENERATE_FOR_PB_PROROC_BIN)
@@ -417,7 +451,8 @@ function(generate_for_pb_prepare_input_pb)
     RESULT_VARIABLE _generate_for_pb_protoc_result
     WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
     OUTPUT_FILE "${_generate_for_pb_output_log_file}"
-    ERROR_FILE "${_generate_for_pb_output_log_file}" COMMAND_ECHO STDOUT ${GENERATE_FOR_PB_PY_ENCODING})
+    ERROR_FILE "${_generate_for_pb_output_log_file}"
+    ${GENERATE_FOR_PB_PY_ENCODING})
   if(NOT _generate_for_pb_protoc_result EQUAL 0)
     message(FATAL_ERROR
             "Generate ${_generate_for_pb_output_pb_file} failed. See ${_generate_for_pb_output_log_file} for details.")
@@ -444,25 +479,16 @@ function(generate_for_pb_parse_output_files PRINT_STDOUT OUTPUT_VAR)
 endfunction()
 
 function(generate_for_pb_run_print_output_files FLOW_ID CONF_FILE OUTPUT_VAR)
-  if(PROJECT_TOOL_CLANG_FORMAT)
-    execute_process(
-      COMMAND "${Python3_EXECUTABLE}" "${GENERATE_FOR_PB_PY}" --add-package-prefix
-              "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" --clang-format-path "${PROJECT_TOOL_CLANG_FORMAT}"
-              --print-output-files --quiet -c "${CONF_FILE}"
-      RESULT_VARIABLE _generate_for_pb_print_result
-      WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
-      OUTPUT_VARIABLE _generate_for_pb_print_stdout
-      ERROR_VARIABLE _generate_for_pb_print_stderr ${GENERATE_FOR_PB_PY_ENCODING})
-  else()
-    execute_process(
-      COMMAND "${Python3_EXECUTABLE}" "${GENERATE_FOR_PB_PY}" --add-package-prefix
-              "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}"
-              --print-output-files --quiet -c "${CONF_FILE}"
-      RESULT_VARIABLE _generate_for_pb_print_result
-      WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
-      OUTPUT_VARIABLE _generate_for_pb_print_stdout
-      ERROR_VARIABLE _generate_for_pb_print_stderr ${GENERATE_FOR_PB_PY_ENCODING})
-  endif()
+  execute_process(
+    COMMAND "${Python3_EXECUTABLE}" "${GENERATE_FOR_PB_MAKO_PY}"
+            "--server-pid-file" "${GENERATE_FOR_PB_SERVER_PID_FILE}" "--server-auto-start" "--client-mode"
+            "--add-package-prefix" "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}"
+            "--clang-format-path" "${PROJECT_TOOL_CLANG_FORMAT}"
+            "--print-output-files" "--quiet" "-c" "${CONF_FILE}"
+    RESULT_VARIABLE _generate_for_pb_print_result
+    WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
+    OUTPUT_VARIABLE _generate_for_pb_print_stdout
+    ERROR_VARIABLE _generate_for_pb_print_stderr ${GENERATE_FOR_PB_PY_ENCODING})
   if(NOT _generate_for_pb_print_result EQUAL 0)
     message(
       FATAL_ERROR
@@ -1477,31 +1503,20 @@ function(generate_for_pb_run_generator)
       set_source_files_properties(${_generate_for_pb_non_overwrite_output} PROPERTIES GENERATED TRUE)
     endforeach()
 
-    if(PROJECT_TOOL_CLANG_FORMAT)
-      add_custom_command(
-        OUTPUT ${_generate_for_pb_command_outputs}
-        COMMAND
-          "${Python3_EXECUTABLE}" "${GENERATE_FOR_PB_PY}" --add-package-prefix
-          "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" --clang-format-path "${PROJECT_TOOL_CLANG_FORMAT}" -c
-          "${_generate_for_pb_conf_file}"
-        COMMAND "${CMAKE_COMMAND}" -E touch "${_generate_for_pb_stamp_file}"
-        WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
-        DEPENDS "${GENERATE_FOR_PB_OUT_PB}" "${_generate_for_pb_conf_file}" "${GENERATE_FOR_PB_PY}"
-                ${_generate_for_pb_template_depends} ${_generate_for_pb_external_pb_files}
-        COMMENT "Generate [@${GENERATE_FOR_PB_WORK_DIR}] ${_generate_for_pb_flow_name}")
-    else()
-      add_custom_command(
-        OUTPUT ${_generate_for_pb_command_outputs}
-        COMMAND
-          "${Python3_EXECUTABLE}" "${GENERATE_FOR_PB_PY}" --add-package-prefix
-          "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" -c
-          "${_generate_for_pb_conf_file}"
-        COMMAND "${CMAKE_COMMAND}" -E touch "${_generate_for_pb_stamp_file}"
-        WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
-        DEPENDS "${GENERATE_FOR_PB_OUT_PB}" "${_generate_for_pb_conf_file}" "${GENERATE_FOR_PB_PY}"
-                ${_generate_for_pb_template_depends} ${_generate_for_pb_external_pb_files}
-        COMMENT "Generate [@${GENERATE_FOR_PB_WORK_DIR}] ${_generate_for_pb_flow_name}")
-    endif()
+    add_custom_command(
+      OUTPUT ${_generate_for_pb_command_outputs}
+      COMMAND
+        "${Python3_EXECUTABLE}" "${GENERATE_FOR_PB_MAKO_PY}"
+        "--server-pid-file" "${GENERATE_FOR_PB_SERVER_PID_FILE}" "--server-auto-start" "--client-mode"
+        "--add-package-prefix" "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}"
+        "--clang-format-path" "${PROJECT_TOOL_CLANG_FORMAT}"
+        "-c" "${_generate_for_pb_conf_file}"
+      COMMAND "${CMAKE_COMMAND}" -E touch "${_generate_for_pb_stamp_file}"
+      WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
+      DEPENDS "${GENERATE_FOR_PB_OUT_PB}" "${_generate_for_pb_conf_file}"
+              "${GENERATE_FOR_PB_MAKO_PY}" "${GENERATE_FOR_PB_IPC_PY}"
+              ${_generate_for_pb_template_depends} ${_generate_for_pb_external_pb_files}
+      COMMENT "Generate [@${GENERATE_FOR_PB_WORK_DIR}] ${_generate_for_pb_flow_name}")
     add_custom_target(${_generate_for_pb_target_name} DEPENDS ${_generate_for_pb_command_outputs}
                       SOURCES ${_generate_for_pb_outputs})
     add_dependencies(${_generate_for_pb_target_name} ${_generate_for_pb_proto_target})

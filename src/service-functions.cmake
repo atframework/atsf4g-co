@@ -345,8 +345,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
             "${project_service_declare_protocol_OUTPUT_DIR}/"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     DEPENDS ${project_service_declare_protocol_PROTOCOLS} "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}"
-    COMMENT
-      "Generate [@${CMAKE_CURRENT_BINARY_DIR}] ${__FINAL_GENERATED_SOURCE_FILES};${__FINAL_GENERATED_HEADER_FILES}")
+    COMMENT "Generate protocol::${TARGET_NAME}")
 
   if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
     set(TARGET_FULL_NAME "pp-${TARGET_NAME}")

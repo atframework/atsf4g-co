@@ -10,7 +10,6 @@ import glob
 import argparse
 import os
 import sys
-import codecs
 import re
 import time
 import shutil
@@ -20,6 +19,58 @@ import threading
 import concurrent.futures
 import generator_ipc
 from subprocess import PIPE, Popen, TimeoutExpired
+
+
+def _normalize_path_for_compare(path):
+    if path is None:
+        return None
+    if path == "":
+        return ""
+    return os.path.normcase(os.path.realpath(os.path.normpath(path)))
+
+
+def _prepend_unique_paths(prepend_paths, original_paths):
+    ret = []
+    appended_path_set = set()
+
+    for current_path in prepend_paths:
+        if current_path is None:
+            continue
+        current_key = _normalize_path_for_compare(current_path)
+        if current_key in appended_path_set:
+            continue
+        ret.append(current_path)
+        appended_path_set.add(current_key)
+
+    for current_path in original_paths:
+        if current_path is None:
+            continue
+        current_key = _normalize_path_for_compare(current_path)
+        if current_key in appended_path_set:
+            continue
+        ret.append(current_path)
+        appended_path_set.add(current_key)
+
+    return ret
+
+
+def _prepend_unique_sys_paths(prepend_paths):
+    if prepend_paths:
+        sys.path = _prepend_unique_paths(prepend_paths, sys.path)
+
+
+def _prepend_unique_env_paths(env_name, prepend_paths):
+    if not prepend_paths:
+        return
+
+    current_paths = os.environ.get(env_name, "")
+    if current_paths:
+        current_paths = current_paths.split(os.pathsep)
+    else:
+        current_paths = []
+
+    os.environ[env_name] = os.pathsep.join(
+        _prepend_unique_paths(prepend_paths, current_paths))
 
 HANDLE_SPLIT_PBFIELD_RULE = re.compile("\\d+|_+|\\s+|\\-")
 HANDLE_SPLIT_MODULE_RULE = re.compile("\\.|\\/|\\\\")
@@ -110,13 +161,14 @@ def split_segments_for_protobuf_field_name(input_name):
 def _collect_package_prefix_python_paths(packag_paths):
     """See https://docs.python.org/3/install/#how-installation-works"""
     append_paths = []
+    append_bin_paths = []
     appended_path_set = set()
+    appended_bin_path_set = set()
 
     if not packag_paths:
-        return append_paths
+        return (append_bin_paths, append_paths)
 
     python_version_path = "python{0}".format(sysconfig.get_python_version())
-    path_env_sep = ";" if sys.platform.lower() == "win32" else ":"
     for path in packag_paths:
         if not path:
             continue
@@ -128,7 +180,12 @@ def _collect_package_prefix_python_paths(packag_paths):
                 os.path.join(normalized_path, "local", "bin"),
         ]:
             if os.path.exists(add_package_bin_path):
-                os.environ["PATH"] = add_package_bin_path + path_env_sep + os.environ.get("PATH", "")
+                resolved_add_package_bin_path = os.path.realpath(
+                    add_package_bin_path)
+                if resolved_add_package_bin_path not in appended_bin_path_set:
+                    append_bin_paths.append(resolved_add_package_bin_path)
+                    appended_bin_path_set.add(
+                        resolved_add_package_bin_path)
 
         for add_package_lib_path in [
                 normalized_path,
@@ -149,14 +206,16 @@ def _collect_package_prefix_python_paths(packag_paths):
                     append_paths.append(resolved_add_package_lib_path)
                     appended_path_set.add(resolved_add_package_lib_path)
 
-    return append_paths
+    return (append_bin_paths, append_paths)
 
 
 def _prepend_package_prefix_paths(packag_paths):
-    append_paths = _collect_package_prefix_python_paths(packag_paths)
+    append_bin_paths, append_paths = _collect_package_prefix_python_paths(
+        packag_paths)
+    if append_bin_paths:
+        _prepend_unique_env_paths("PATH", append_bin_paths)
     if append_paths:
-        append_paths.extend(sys.path)
-        sys.path = append_paths
+        _prepend_unique_sys_paths(append_paths)
 
 
 def add_package_prefix_paths(packag_paths):
@@ -905,6 +964,7 @@ def try_read_vcs_username(project_dir):
             stderr=None,
             cwd=project_dir,
             shell=False,
+            **generator_ipc.get_subprocess_no_window_kwargs(),
         )
         local_vcs_user_name = pexec.stdout.read().decode("utf-8").strip()
         pexec.stdout.close()
@@ -926,6 +986,25 @@ def get_file_cache_signature(file_path):
     return (real_path, file_stat.st_size, mtime_ns)
 
 
+def get_protobuf_runtime_cache_signature():
+    ret = []
+    for module_name in [
+            "google",
+            "google.protobuf",
+            "google.protobuf.descriptor",
+            "google.protobuf.descriptor_pb2",
+            "google.protobuf.message",
+            "google.protobuf.message_factory",
+            "google.protobuf.descriptor_pool",
+    ]:
+        module_obj = sys.modules.get(module_name)
+        module_path = getattr(module_obj, "__file__", None)
+        if module_path:
+            module_path = os.path.realpath(module_path)
+        ret.append((module_name, id(module_obj), module_path))
+    return tuple(ret)
+
+
 def get_pb_db_with_cache(pb_file, external_pb_files):
     global LOCAL_PB_DB_CACHE
     pb_file = os.path.realpath(pb_file)
@@ -935,6 +1014,7 @@ def get_pb_db_with_cache(pb_file, external_pb_files):
             get_file_cache_signature(external_pb_file)
             for external_pb_file in external_pb_files
         ]),
+        get_protobuf_runtime_cache_signature(),
     )
     if cache_key in LOCAL_PB_DB_CACHE:
         ret = LOCAL_PB_DB_CACHE[cache_key]
@@ -1051,6 +1131,7 @@ def __format_codes(project_dir, output_file, data, clang_format_path,
             stderr=None,
             cwd=project_dir,
             shell=False,
+            **generator_ipc.get_subprocess_no_window_kwargs(),
         )
         (stdout, _stderr) = pexec.communicate(data)
         if pexec.returncode == 0:
@@ -1141,6 +1222,7 @@ def generate_group(options, group):
                 os.path.relpath(os.getcwd(), group.project_dir)),
         )
     os.makedirs(make_module_cache_dir, mode=0o777, exist_ok=True)
+    generator_ipc.register_generator_cache_dir(make_module_cache_dir)
 
     inner_include_rule = None
     try:
@@ -1470,6 +1552,7 @@ def generate_global(options, global_generator):
                 os.path.relpath(os.getcwd(), global_generator.project_dir)),
         )
     os.makedirs(make_module_cache_dir, mode=0o777, exist_ok=True)
+    generator_ipc.register_generator_cache_dir(make_module_cache_dir)
 
     # generate global templates
     for global_rule in global_generator.global_templates:
@@ -2553,14 +2636,11 @@ def main(argv=None, display_argv=None, allow_ipc=True):
     if options.version:
         print("1.2.0")
         return 0
-    if options.add_path:
-        prepend_paths = [x for x in options.add_path]
-        prepend_paths.extend(sys.path)
-        sys.path = prepend_paths
-    add_package_prefix_paths(options.add_package_prefix)
 
     if allow_ipc:
         if options.server_mode:
+            _prepend_unique_sys_paths(options.add_path)
+            add_package_prefix_paths(options.add_package_prefix)
             return generator_ipc.run_generator_server(
                 options.server_address, options.server_idle_timeout,
                 lambda request: generator_ipc.run_generation_request(
@@ -2577,6 +2657,9 @@ def main(argv=None, display_argv=None, allow_ipc=True):
             "[ERROR]: generator IPC options are not allowed in server requests.\n"
         )
         return 1
+
+    _prepend_unique_sys_paths(options.add_path)
+    add_package_prefix_paths(options.add_package_prefix)
 
     if options.console_encoding:
         console_encoding = options.console_encoding
@@ -2651,10 +2734,19 @@ def main(argv=None, display_argv=None, allow_ipc=True):
     if options.yaml_configure is not None:
         import yaml
 
+        if sys.version_info[0] * 1000 + sys.version_info[1] >= 3014:
+            import codecs
+            with codecs.open(options.yaml_configure,
+                    mode="r",
+                    encoding=options.encoding) as yaml_file_obj:
+                yaml_content = yaml_file_obj.read()
+        else:
+            with open(options.yaml_configure,
+                    mode="r",
+                    encoding=options.encoding) as yaml_file_obj:
+                yaml_content = yaml_file_obj.read()
         yaml_conf = yaml.load(
-            codecs.open(options.yaml_configure,
-                        mode="r",
-                        encoding=options.encoding).read(),
+            yaml_content,
             Loader=yaml.SafeLoader,
         )
         if "configure" in yaml_conf:
@@ -2666,10 +2758,7 @@ def main(argv=None, display_argv=None, allow_ipc=True):
             if "overwrite" in globla_setting:
                 options.no_overwrite = not globla_setting["overwrite"]
             if "paths" in globla_setting:
-                prepend_paths = [x for x in globla_setting["paths"]]
-                if prepend_paths:
-                    prepend_paths.extend(sys.path)
-                    sys.path = prepend_paths
+                _prepend_unique_sys_paths(globla_setting["paths"])
             if "package_prefix" in globla_setting:
                 add_package_prefix_paths(globla_setting["package_prefix"])
             if "protoc" in globla_setting:
@@ -2777,7 +2866,8 @@ def main(argv=None, display_argv=None, allow_ipc=True):
                   stdin=None,
                   stdout=PIPE,
                   stderr=PIPE,
-                  shell=False)
+                  shell=False,
+                  **generator_ipc.get_subprocess_no_window_kwargs())
         wait_print_pexec(pexec)
 
     try:

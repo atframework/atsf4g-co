@@ -40,6 +40,7 @@
 /third_party/xresloader/xresconv-cli
 /third_party/xresloader/package
 
+__pycache__
 .cache
 .mako_modules-*
 .mako_modules

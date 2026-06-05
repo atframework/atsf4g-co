@@ -355,8 +355,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     DEPENDS ${project_component_declare_protocol_PROTOCOLS}
             "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}"
-    COMMENT
-      "Generate [@${CMAKE_CURRENT_BINARY_DIR}] ${__FINAL_GENERATED_SOURCE_FILES};${__FINAL_GENERATED_HEADER_FILES}")
+        COMMENT "Generate components::${TARGET_NAME}")
 
   if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
     set(TARGET_FULL_NAME "pc-${TARGET_NAME}")
