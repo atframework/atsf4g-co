@@ -150,6 +150,12 @@ include("${CMAKE_CURRENT_LIST_DIR}/cfssl/cfssl.cmake")
 # =========== third_party - atdtool ===========
 include("${CMAKE_CURRENT_LIST_DIR}/atdtool/atdtool.cmake")
 
+# =========== third_party - helm ===========
+include("${CMAKE_CURRENT_LIST_DIR}/helm/helm.cmake")
+
+# =========== third_party - go-task ===========
+include("${CMAKE_CURRENT_LIST_DIR}/go-task/go-task.cmake")
+
 # =========== third_party - otel ===========
 include("${CMAKE_CURRENT_LIST_DIR}/otel/otelcol-contrib.cmake")
 

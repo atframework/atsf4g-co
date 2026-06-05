@@ -64,22 +64,14 @@ else()
   message(FATAL_ERROR "Java found at ${JAVA_EXECUTABLE} but failed to get version")
 endif()
 
-find_program(
-  JAVAC_EXECUTABLE
-  NAMES javac javac.exe
-  DOC "Java compiler (JDK)")
-if(NOT JAVAC_EXECUTABLE)
-  message(FATAL_ERROR "javac not found. A full JDK is required, not just JRE.")
-endif()
-message(STATUS "Found JDK compiler: ${JAVAC_EXECUTABLE}")
-
 # --- Helm ---
 find_program(
   HELM_EXECUTABLE
   NAMES helm helm.exe
+  HINTS "${PROJECT_INSTALL_TOOLS_DIR}/helm"
   DOC "Helm package manager")
 if(NOT HELM_EXECUTABLE)
-  message(FATAL_ERROR "Helm not found. Please install Helm from https://helm.sh/docs/intro/install/")
+  message(FATAL_ERROR "Helm not found in install tools directory.")
 endif()
 execute_process(
   COMMAND "${HELM_EXECUTABLE}" version --short
@@ -96,9 +88,10 @@ endif()
 find_program(
   TASK_EXECUTABLE
   NAMES task task.exe
+  HINTS "${PROJECT_INSTALL_TOOLS_DIR}/go-task"
   DOC "go-task runner")
 if(NOT TASK_EXECUTABLE)
-  message(FATAL_ERROR "go-task not found. Please install from https://taskfile.dev/installation/")
+  message(FATAL_ERROR "go-task not found in install tools directory.")
 endif()
 execute_process(
   COMMAND "${TASK_EXECUTABLE}" --version

@@ -444,14 +444,25 @@ function(generate_for_pb_parse_output_files PRINT_STDOUT OUTPUT_VAR)
 endfunction()
 
 function(generate_for_pb_run_print_output_files FLOW_ID CONF_FILE OUTPUT_VAR)
-  execute_process(
-    COMMAND "${Python3_EXECUTABLE}" "${GENERATE_FOR_PB_PY}" --add-package-prefix
-            "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" --clang-format-path "${PROJECT_TOOL_CLANG_FORMAT}"
-            --print-output-files --quiet -c "${CONF_FILE}"
-    RESULT_VARIABLE _generate_for_pb_print_result
-    WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
-    OUTPUT_VARIABLE _generate_for_pb_print_stdout
-    ERROR_VARIABLE _generate_for_pb_print_stderr ${GENERATE_FOR_PB_PY_ENCODING})
+  if(PROJECT_TOOL_CLANG_FORMAT)
+    execute_process(
+      COMMAND "${Python3_EXECUTABLE}" "${GENERATE_FOR_PB_PY}" --add-package-prefix
+              "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" --clang-format-path "${PROJECT_TOOL_CLANG_FORMAT}"
+              --print-output-files --quiet -c "${CONF_FILE}"
+      RESULT_VARIABLE _generate_for_pb_print_result
+      WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
+      OUTPUT_VARIABLE _generate_for_pb_print_stdout
+      ERROR_VARIABLE _generate_for_pb_print_stderr ${GENERATE_FOR_PB_PY_ENCODING})
+  else()
+    execute_process(
+      COMMAND "${Python3_EXECUTABLE}" "${GENERATE_FOR_PB_PY}" --add-package-prefix
+              "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}"
+              --print-output-files --quiet -c "${CONF_FILE}"
+      RESULT_VARIABLE _generate_for_pb_print_result
+      WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
+      OUTPUT_VARIABLE _generate_for_pb_print_stdout
+      ERROR_VARIABLE _generate_for_pb_print_stderr ${GENERATE_FOR_PB_PY_ENCODING})
+  endif()
   if(NOT _generate_for_pb_print_result EQUAL 0)
     message(
       FATAL_ERROR
@@ -1466,17 +1477,31 @@ function(generate_for_pb_run_generator)
       set_source_files_properties(${_generate_for_pb_non_overwrite_output} PROPERTIES GENERATED TRUE)
     endforeach()
 
-    add_custom_command(
-      OUTPUT ${_generate_for_pb_command_outputs}
-      COMMAND
-        "${Python3_EXECUTABLE}" "${GENERATE_FOR_PB_PY}" --add-package-prefix
-        "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" --clang-format-path "${PROJECT_TOOL_CLANG_FORMAT}" -c
-        "${_generate_for_pb_conf_file}"
-      COMMAND "${CMAKE_COMMAND}" -E touch "${_generate_for_pb_stamp_file}"
-      WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
-      DEPENDS "${GENERATE_FOR_PB_OUT_PB}" "${_generate_for_pb_conf_file}" "${GENERATE_FOR_PB_PY}"
-              ${_generate_for_pb_template_depends} ${_generate_for_pb_external_pb_files}
-      COMMENT "Generate [@${GENERATE_FOR_PB_WORK_DIR}] ${_generate_for_pb_flow_name}")
+    if(PROJECT_TOOL_CLANG_FORMAT)
+      add_custom_command(
+        OUTPUT ${_generate_for_pb_command_outputs}
+        COMMAND
+          "${Python3_EXECUTABLE}" "${GENERATE_FOR_PB_PY}" --add-package-prefix
+          "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" --clang-format-path "${PROJECT_TOOL_CLANG_FORMAT}" -c
+          "${_generate_for_pb_conf_file}"
+        COMMAND "${CMAKE_COMMAND}" -E touch "${_generate_for_pb_stamp_file}"
+        WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
+        DEPENDS "${GENERATE_FOR_PB_OUT_PB}" "${_generate_for_pb_conf_file}" "${GENERATE_FOR_PB_PY}"
+                ${_generate_for_pb_template_depends} ${_generate_for_pb_external_pb_files}
+        COMMENT "Generate [@${GENERATE_FOR_PB_WORK_DIR}] ${_generate_for_pb_flow_name}")
+    else()
+      add_custom_command(
+        OUTPUT ${_generate_for_pb_command_outputs}
+        COMMAND
+          "${Python3_EXECUTABLE}" "${GENERATE_FOR_PB_PY}" --add-package-prefix
+          "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" -c
+          "${_generate_for_pb_conf_file}"
+        COMMAND "${CMAKE_COMMAND}" -E touch "${_generate_for_pb_stamp_file}"
+        WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
+        DEPENDS "${GENERATE_FOR_PB_OUT_PB}" "${_generate_for_pb_conf_file}" "${GENERATE_FOR_PB_PY}"
+                ${_generate_for_pb_template_depends} ${_generate_for_pb_external_pb_files}
+        COMMENT "Generate [@${GENERATE_FOR_PB_WORK_DIR}] ${_generate_for_pb_flow_name}")
+    endif()
     add_custom_target(${_generate_for_pb_target_name} DEPENDS ${_generate_for_pb_command_outputs}
                       SOURCES ${_generate_for_pb_outputs})
     add_dependencies(${_generate_for_pb_target_name} ${_generate_for_pb_proto_target})

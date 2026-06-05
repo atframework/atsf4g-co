@@ -1,6 +1,8 @@
 #!/bin/bash
 cd "$(dirname $0)"
 
+export PATH="$PATH:$(dirname $0)/../../tools/helm"
+
 if [[ "x$HELM_BIN" == "x" ]]; then
   HELM_BIN="$(which helm)"
 fi
