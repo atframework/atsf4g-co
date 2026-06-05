@@ -2,8 +2,10 @@ import contextlib
 import importlib
 import io
 import os
+import socket
 import sys
 import tempfile
+import threading
 import types
 import unittest
 import uuid
@@ -21,11 +23,46 @@ TEST_SERVER_ADDRESS = "127.0.0.1:39171"
 
 class GeneratorIpcArgsTest(unittest.TestCase):
 
+    def test_parse_server_address_host_only(self):
+        self.assertEqual(("127.0.0.1", 0),
+                         generator_ipc.parse_server_address("127.0.0.1"))
+        self.assertEqual(("localhost", 0),
+                         generator_ipc.parse_server_address("localhost"))
+
+    def test_parse_server_address_with_port(self):
+        self.assertEqual(("127.0.0.1", 39171),
+                         generator_ipc.parse_server_address(
+                             "127.0.0.1:39171"))
+
+    def test_parse_server_address_bare_port_is_legacy(self):
+        self.assertEqual(("127.0.0.1", 3701),
+                         generator_ipc.parse_server_address("3701"))
+
+    def test_parse_server_address_ipv6(self):
+        self.assertEqual(("::1", 3701),
+                         generator_ipc.parse_server_address("[::1]:3701"))
+        self.assertEqual(("::1", 0),
+                         generator_ipc.parse_server_address("[::1]"))
+
+    def test_add_generator_ipc_options_uses_default_port_range(self):
+        captured = {}
+
+        def fake_add_option(parser, *args, **kwargs):
+            if kwargs.get("dest") == "server_port_range":
+                captured["default"] = kwargs.get("default")
+
+        generator_ipc.add_generator_ipc_options(fake_add_option, object(),
+                                                "127.0.0.1", "3701-3710")
+        self.assertEqual("3701-3710", captured.get("default"))
+
     def test_strip_generator_ipc_args_preserves_generation_args(self):
         argv = [
             "--client-mode",
             "--server-address",
             TEST_SERVER_ADDRESS,
+            "--server-port-range",
+            "39171-39175",
+            "--server-port-file=server.port",
             "--server-timeout=60",
             "--server-auto-start",
             "--server-pid-file",
@@ -209,6 +246,8 @@ class GeneratorIpcClientTest(unittest.TestCase):
                 os.getcwd(),
                 [],
                 None,
+                None,
+                None,
             )
 
         self.assertIs(popen_result, result)
@@ -254,6 +293,139 @@ class GeneratorIpcClientTest(unittest.TestCase):
         with mock.patch.object(generator_ipc.os, "name", "posix"):
             self.assertEqual({},
                              generator_ipc.get_subprocess_no_window_kwargs())
+
+    def test_run_generator_client_reads_port_file_for_requests(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            port_file = Path(temp_dir) / "server.port"
+            port_file.write_text("39179\n", encoding="utf-8")
+
+            with mock.patch.object(generator_ipc,
+                                   "_connect_and_request",
+                                   return_value={
+                                       "returncode": 0,
+                                       "stdout": "",
+                                       "stderr": "",
+                                   }) as connect_request:
+                result = generator_ipc.run_generator_client(
+                    TEST_SERVER_ADDRESS,
+                    1,
+                    ["--demo"],
+                    temp_dir,
+                    "generator.py",
+                    False,
+                    auto_start=False,
+                    idle_timeout=1,
+                    server_program=None,
+                    pid_file=None,
+                    port_file=str(port_file),
+                )
+
+        self.assertEqual(0, result)
+        self.assertEqual("127.0.0.1:39179",
+                         connect_request.call_args.args[0])
+
+    def test_run_generator_client_reads_port_file_for_shutdown(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            port_file = Path(temp_dir) / "server.port"
+            port_file.write_text("39183\n", encoding="utf-8")
+
+            with mock.patch.object(generator_ipc,
+                                   "_connect_and_request",
+                                   return_value={
+                                       "returncode": 0,
+                                       "stdout": "",
+                                       "stderr": "",
+                                   }) as connect_request:
+                result = generator_ipc.run_generator_client(
+                    TEST_SERVER_ADDRESS,
+                    1,
+                    [],
+                    temp_dir,
+                    "generator.py",
+                    True,
+                    auto_start=False,
+                    idle_timeout=1,
+                    server_program=None,
+                    pid_file=None,
+                    port_file=str(port_file),
+                )
+
+        self.assertEqual(0, result)
+        self.assertEqual("127.0.0.1:39183",
+                         connect_request.call_args.args[0])
+
+    def test_run_generator_server_tries_port_range_and_writes_port_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            pid_file = Path(temp_dir) / "server.pid"
+            port_file = Path(temp_dir) / "server.port"
+            occupied_socket = socket.socket(socket.AF_INET,
+                                            socket.SOCK_STREAM)
+            occupied_socket.bind(("127.0.0.1", 0))
+            occupied_socket.listen(1)
+            occupied_port = occupied_socket.getsockname()[1]
+
+            free_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            free_socket.bind(("127.0.0.1", 0))
+            free_port = free_socket.getsockname()[1]
+            free_socket.close()
+
+            server_result = {}
+
+            def request_callback(request):
+                return generator_ipc.run_generation_request(
+                    request,
+                    lambda argv=None, display_argv=None, allow_ipc=False: 0,
+                )
+
+            try:
+                server_thread = threading.Thread(
+                    target=lambda: server_result.update({
+                        "returncode": generator_ipc.run_generator_server(
+                            "127.0.0.1:{0}".format(occupied_port),
+                            30,
+                            request_callback,
+                            pid_file=str(pid_file),
+                            port_file=str(port_file),
+                            port_range="{0},{1}".format(occupied_port,
+                                                          free_port),
+                        )
+                    }),
+                    daemon=True,
+                )
+                server_thread.start()
+                generator_ipc._wait_generator_server_ready(
+                    "127.0.0.1:{0}".format(occupied_port),
+                    5,
+                    str(pid_file),
+                    os.path.realpath(sys.executable),
+                    str(port_file),
+                    True,
+                )
+
+                self.assertEqual(free_port,
+                                 generator_ipc._read_server_port_file(
+                                     str(port_file)))
+
+                shutdown_result = generator_ipc.run_generator_client(
+                    "127.0.0.1:{0}".format(occupied_port),
+                    5,
+                    [],
+                    temp_dir,
+                    "generator.py",
+                    True,
+                    auto_start=False,
+                    idle_timeout=1,
+                    server_program=None,
+                    pid_file=str(pid_file),
+                    port_file=str(port_file),
+                    port_range="{0},{1}".format(occupied_port, free_port),
+                )
+                self.assertEqual(0, shutdown_result)
+                server_thread.join(5)
+                self.assertFalse(server_thread.is_alive())
+                self.assertEqual(0, server_result.get("returncode"))
+            finally:
+                occupied_socket.close()
 
 
 class GeneratorIpcRuntimeIsolationTest(unittest.TestCase):

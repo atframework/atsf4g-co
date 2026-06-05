@@ -8,6 +8,7 @@ Copyright (c) 2022 atframework
 
 import glob
 import argparse
+import io
 import os
 import sys
 import re
@@ -75,11 +76,13 @@ def _prepend_unique_env_paths(env_name, prepend_paths):
 HANDLE_SPLIT_PBFIELD_RULE = re.compile("\\d+|_+|\\s+|\\-")
 HANDLE_SPLIT_MODULE_RULE = re.compile("\\.|\\/|\\\\")
 HANDLE_NUMBER_RULE = re.compile("^\\d+$")
+DEFAULT_PB_DB_NAME = "global"
 LOCAL_PB_DB_CACHE = dict()
 LOCAL_PROJECT_VCS_CACHE = dict()
 LOCAL_WOKER_POOL: concurrent.futures.ThreadPoolExecutor = None
 LOCAL_WOKER_FUTURES = dict()
-DEFAULT_GENERATOR_SERVER_ADDRESS = "127.0.0.1:3702"
+DEFAULT_GENERATOR_SERVER_ADDRESS = "127.0.0.1"
+DEFAULT_GENERATOR_SERVER_PORT_RANGE = "3711-3720"
 
 
 def print_exception_with_traceback(e: Exception, fmt: str = None, *args):
@@ -669,8 +672,7 @@ class PbDatabase(object):
         for service in file_proto.service:
             self._extended_raw_service(file_proto.package, service)
 
-    def load(self, pb_file_path, external_pb_files):
-        pb_file_buffer = open(pb_file_path, "rb").read()
+    def load(self, pb_files):
         from google.protobuf import (
             descriptor_pb2,
             any_pb2,
@@ -686,23 +688,23 @@ class PbDatabase(object):
         )
         from google.protobuf import message_factory as _message_factory
 
-        pb_fds = descriptor_pb2.FileDescriptorSet.FromString(pb_file_buffer)
-        pb_fds_patched = [x for x in pb_fds.file]
+        if not pb_files:
+            return
 
-        # Load external pb files
-        external_pb_file_buffers = []
-        if external_pb_files:
-            pb_fds_loaded = set([x.name for x in pb_fds_patched])
-            for external_pb_file in external_pb_files:
-                external_pb_file_buffer = open(external_pb_file, "rb").read()
-                external_pb_file_buffers.append(external_pb_file_buffer)
-                external_pb_fds = descriptor_pb2.FileDescriptorSet.FromString(
-                    external_pb_file_buffer)
-                for x in external_pb_fds.file:
-                    if x.name in pb_fds_loaded:
-                        continue
-                    pb_fds_patched.append(x)
-                    pb_fds_loaded.add(x.name)
+        # All pb files are peers. Parse every input file into one descriptor set.
+        pb_file_buffers = []
+        pb_fds_patched = []
+        pb_fds_loaded = set()
+        for pb_file in pb_files:
+            pb_file_buffer = open(pb_file, "rb").read()
+            pb_file_buffers.append(pb_file_buffer)
+            pb_fds = descriptor_pb2.FileDescriptorSet.FromString(
+                pb_file_buffer)
+            for x in pb_fds.file:
+                if x.name in pb_fds_loaded:
+                    continue
+                pb_fds_patched.append(x)
+                pb_fds_loaded.add(x.name)
 
         pb_fds_inner = []
         protobuf_inner_descriptors = dict({
@@ -744,9 +746,6 @@ class PbDatabase(object):
             msg_set = self._register_by_pb_fds(self.default_factory,
                                                pb_fds_patched)
         except Exception as e:
-            pb_files = [pb_file_path]
-            if external_pb_files:
-                pb_files.extend(external_pb_files)
             print_exception_with_traceback(
                 e,
                 "register proto files for extensions failed:\n- proto files:\n{0}\n- pb files:\n{1}"
@@ -764,31 +763,23 @@ class PbDatabase(object):
             )
             return
 
-        # from google.protobuf.text_format import MessageToString
-        pb_fds = pb_fds_clazz.FromString(pb_file_buffer)
-        for file_proto in pb_fds.file:
-            self.raw_files[file_proto.name] = file_proto
-            self._extended_raw_file(file_proto)
-        pb_fds_patched = [x for x in pb_fds.file]
-        # Load external pb files to extended_factory
-        if external_pb_file_buffers:
-            pb_fds_loaded = set([x.name for x in pb_fds_patched])
-            for external_pb_file_buffer in external_pb_file_buffers:
-                external_pb_fds = pb_fds_clazz.FromString(
-                    external_pb_file_buffer)
-                for x in external_pb_fds.file:
-                    if x.name in pb_fds_loaded:
-                        continue
-                    pb_fds_patched.append(x)
-                    pb_fds_loaded.add(x.name)
+        # Re-parse every input file with extension support and extract symbols.
+        pb_fds_patched = []
+        pb_fds_loaded = set()
+        for pb_file_buffer in pb_file_buffers:
+            pb_fds = pb_fds_clazz.FromString(pb_file_buffer)
+            for file_proto in pb_fds.file:
+                if file_proto.name in pb_fds_loaded:
+                    continue
+                self.raw_files[file_proto.name] = file_proto
+                self._extended_raw_file(file_proto)
+                pb_fds_patched.append(file_proto)
+                pb_fds_loaded.add(file_proto.name)
 
         pb_fds_patched.extend(pb_fds_inner)
         try:
             self._register_by_pb_fds(self.extended_factory, pb_fds_patched)
         except Exception as e:
-            pb_files = [pb_file_path]
-            if external_pb_files:
-                pb_files.extend(external_pb_files)
             print_exception_with_traceback(
                 e,
                 "register final proto files failed:\n- proto files:\n{0}\n- pb files:\n{1}"
@@ -1005,24 +996,62 @@ def get_protobuf_runtime_cache_signature():
     return tuple(ret)
 
 
-def get_pb_db_with_cache(pb_file, external_pb_files):
-    global LOCAL_PB_DB_CACHE
-    pb_file = os.path.realpath(pb_file)
-    cache_key = (
-        get_file_cache_signature(pb_file),
-        tuple([
-            get_file_cache_signature(external_pb_file)
-            for external_pb_file in external_pb_files
-        ]),
-        get_protobuf_runtime_cache_signature(),
-    )
-    if cache_key in LOCAL_PB_DB_CACHE:
-        ret = LOCAL_PB_DB_CACHE[cache_key]
-        return ret
-    ret = PbDatabase()
-    ret.load(pb_file, external_pb_files)
-    LOCAL_PB_DB_CACHE[cache_key] = ret
+def _get_pb_file_signature_map(pb_files):
+    ret = dict()
+    for pb_file in pb_files:
+        if not pb_file:
+            continue
+        pb_file_signature = get_file_cache_signature(pb_file)
+        ret[pb_file_signature[0]] = pb_file_signature
     return ret
+
+
+def get_pb_db_with_cache(pb_files, pb_db_name=None):
+    global LOCAL_PB_DB_CACHE
+
+    if not pb_db_name:
+        pb_db_name = DEFAULT_PB_DB_NAME
+
+    protobuf_runtime_cache_signature = get_protobuf_runtime_cache_signature()
+    request_pb_file_signatures = _get_pb_file_signature_map(pb_files)
+
+    cache_entry = LOCAL_PB_DB_CACHE.get(pb_db_name)
+
+    rebuild_cache = False
+    if cache_entry is None:
+        rebuild_cache = True
+    elif cache_entry["runtime_signature"] != protobuf_runtime_cache_signature:
+        rebuild_cache = True
+    else:
+        for pb_file, pb_file_signature in request_pb_file_signatures.items():
+            loaded_signature = cache_entry["loaded_file_signatures"].get(
+                pb_file)
+            if (loaded_signature is not None
+                    and loaded_signature != pb_file_signature):
+                rebuild_cache = True
+                break
+
+    if rebuild_cache:
+        cache_entry = {
+            "database": PbDatabase(),
+            "runtime_signature": protobuf_runtime_cache_signature,
+            "loaded_file_signatures": dict(),
+        }
+        LOCAL_PB_DB_CACHE[pb_db_name] = cache_entry
+        pb_files_to_load = list(request_pb_file_signatures.keys())
+    else:
+        pb_files_to_load = [
+            pb_file for pb_file in request_pb_file_signatures
+            if pb_file not in cache_entry["loaded_file_signatures"]
+        ]
+
+    if pb_files_to_load:
+        cache_entry["database"].load(pb_files_to_load)
+        for pb_file in pb_files_to_load:
+            cache_entry["loaded_file_signatures"][
+                pb_file] = request_pb_file_signatures[pb_file]
+
+    return cache_entry["database"]
 
 
 def get_real_output_directory_and_custom_variables(options, yaml_conf_item,
@@ -2248,6 +2277,15 @@ def main(argv=None, display_argv=None, allow_ipc=True):
     )
     CmdArgsAddOption(
         parser,
+        "--pb-database-name",
+        action="store",
+        help=
+        "set cached protobuf database name to isolate loaded symbols between template request groups, default: global",
+        dest="pb_database_name",
+        default=DEFAULT_PB_DB_NAME,
+    )
+    CmdArgsAddOption(
+        parser,
         "--encoding",
         action="store",
         help="set encoding of output files",
@@ -2629,7 +2667,8 @@ def main(argv=None, display_argv=None, allow_ipc=True):
         default=None,
     )
     generator_ipc.add_generator_ipc_options(
-        CmdArgsAddOption, parser, DEFAULT_GENERATOR_SERVER_ADDRESS)
+        CmdArgsAddOption, parser, DEFAULT_GENERATOR_SERVER_ADDRESS,
+        DEFAULT_GENERATOR_SERVER_PORT_RANGE)
 
     (options, left_args) = CmdArgsParse(parser, argv)
 
@@ -2644,14 +2683,16 @@ def main(argv=None, display_argv=None, allow_ipc=True):
             return generator_ipc.run_generator_server(
                 options.server_address, options.server_idle_timeout,
                 lambda request: generator_ipc.run_generation_request(
-                    request, main), options.server_pid_file)
+                    request, main), options.server_pid_file,
+                options.server_port_file, options.server_port_range)
         if options.client_mode or options.server_shutdown:
             request_args = generator_ipc.strip_generator_ipc_args(argv)
             return generator_ipc.run_generator_client(
                 options.server_address, options.server_timeout, request_args,
                 work_dir, display_argv[0], options.server_shutdown,
                 options.server_auto_start, options.server_idle_timeout,
-                os.path.realpath(__file__), options.server_pid_file)
+                os.path.realpath(__file__), options.server_pid_file,
+                options.server_port_file, options.server_port_range)
     elif options.server_mode or options.client_mode or options.server_shutdown:
         sys.stderr.write(
             "[ERROR]: generator IPC options are not allowed in server requests.\n"
@@ -2775,6 +2816,8 @@ def main(argv=None, display_argv=None, allow_ipc=True):
             if "protocol_external_pb_files" in globla_setting:
                 options.external_pb_files.extend(
                     globla_setting["protocol_external_pb_files"])
+            if "pb_database_name" in globla_setting:
+                options.pb_database_name = globla_setting["pb_database_name"]
             if "protocol_output_pb_file" in globla_setting:
                 options.output_pb_file = globla_setting[
                     "protocol_output_pb_file"]
@@ -2871,7 +2914,8 @@ def main(argv=None, display_argv=None, allow_ipc=True):
         wait_print_pexec(pexec)
 
     try:
-        pb_db = get_pb_db_with_cache(tmp_pb_file, options.external_pb_files)
+        pb_db = get_pb_db_with_cache([tmp_pb_file] + options.external_pb_files,
+                                     options.pb_database_name)
         generate_service_group(pb_db, options, yaml_conf, project_dir,
                                custom_vars)
         generate_message_group(pb_db, options, yaml_conf, project_dir,

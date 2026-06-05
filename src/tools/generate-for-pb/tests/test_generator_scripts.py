@@ -256,9 +256,8 @@ class GeneratorScriptRuntimeTest(unittest.TestCase):
 
                 class DummyPbDatabase(object):
 
-                    def load(self, pb_file_path, external_pb_files):
-                        load_calls.append((pb_file_path,
-                                           tuple(external_pb_files)))
+                    def load(self, pb_files):
+                        load_calls.append(tuple(pb_files))
 
                 with self.subTest(generator=key):
                     with mock.patch.object(module, "LOCAL_PB_DB_CACHE", {}), \
@@ -271,28 +270,142 @@ class GeneratorScriptRuntimeTest(unittest.TestCase):
                                              ("sig-2",)],
                             ):
                         first = module.get_pb_db_with_cache(
-                            str(pb_file),
-                            [str(external_pb_file)],
-                        )
+                            [str(pb_file), str(external_pb_file)])
                         second = module.get_pb_db_with_cache(
-                            str(pb_file),
-                            [str(external_pb_file)],
-                        )
+                            [str(pb_file), str(external_pb_file)])
                         third = module.get_pb_db_with_cache(
-                            str(pb_file),
-                            [str(external_pb_file)],
-                        )
+                            [str(pb_file), str(external_pb_file)])
 
                     self.assertIs(first, second)
                     self.assertIsNot(first, third)
                     self.assertEqual(2, len(load_calls))
-                    for loaded_pb_path, loaded_external_pb_files in load_calls:
-                        self.assertEqual(os.path.realpath(pb_file),
-                                         loaded_pb_path)
-                        self.assertEqual(1, len(loaded_external_pb_files))
-                        self.assertTrue(
-                            os.path.samefile(external_pb_file,
-                                             loaded_external_pb_files[0]))
+                    for loaded_pb_files in load_calls:
+                        self.assertEqual(
+                            (
+                                os.path.realpath(pb_file),
+                                os.path.realpath(external_pb_file),
+                            ),
+                            loaded_pb_files,
+                        )
+
+    def test_pb_db_cache_reuses_superset_and_supplements_missing_files(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            pb_file = Path(temp_dir) / "demo.pb"
+            external_pb_file_a = Path(temp_dir) / "external-a.pb"
+            external_pb_file_b = Path(temp_dir) / "external-b.pb"
+            external_pb_file_c = Path(temp_dir) / "external-c.pb"
+            pb_file.write_bytes(b"demo-pb")
+            external_pb_file_a.write_bytes(b"external-a")
+            external_pb_file_b.write_bytes(b"external-b")
+            external_pb_file_c.write_bytes(b"external-c")
+
+            for key in GENERATOR_SCRIPTS:
+                module = self._load_module(key)
+                load_calls = []
+
+                class DummyPbDatabase(object):
+
+                    def load(self, pb_files):
+                        load_calls.append(tuple(pb_files))
+
+                with self.subTest(generator=key):
+                    with mock.patch.object(module, "LOCAL_PB_DB_CACHE", {}), \
+                            mock.patch.object(module, "PbDatabase",
+                                              DummyPbDatabase), \
+                            mock.patch.object(
+                                module,
+                                "get_protobuf_runtime_cache_signature",
+                                return_value=("sig-1",),
+                            ):
+                        first = module.get_pb_db_with_cache(
+                            [
+                                str(pb_file),
+                                str(external_pb_file_a),
+                                str(external_pb_file_b),
+                            ])
+                        second = module.get_pb_db_with_cache(
+                            [
+                                str(pb_file),
+                                str(external_pb_file_b),
+                                str(external_pb_file_a),
+                            ])
+                        third = module.get_pb_db_with_cache(
+                            [str(pb_file), str(external_pb_file_a)])
+                        fourth = module.get_pb_db_with_cache(
+                            [
+                                str(pb_file),
+                                str(external_pb_file_a),
+                                str(external_pb_file_c),
+                                str(external_pb_file_b),
+                            ])
+
+                    self.assertIs(first, second)
+                    self.assertIs(first, third)
+                    self.assertIs(first, fourth)
+                    self.assertEqual(2, len(load_calls))
+                    self.assertEqual(
+                        (
+                            os.path.realpath(pb_file),
+                            os.path.realpath(external_pb_file_a),
+                            os.path.realpath(external_pb_file_b),
+                        ),
+                        load_calls[0],
+                    )
+                    self.assertEqual(
+                        (os.path.realpath(external_pb_file_c),),
+                        load_calls[1],
+                    )
+
+    def test_pb_db_cache_isolates_by_name(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            pb_file = Path(temp_dir) / "demo.pb"
+            pb_file.write_bytes(b"demo-pb")
+
+            for key in GENERATOR_SCRIPTS:
+                module = self._load_module(key)
+                load_calls = []
+
+                class DummyPbDatabase(object):
+
+                    def load(self, pb_files):
+                        load_calls.append(tuple(pb_files))
+
+                with self.subTest(generator=key):
+                    with mock.patch.object(module, "LOCAL_PB_DB_CACHE", {}), \
+                            mock.patch.object(module, "PbDatabase",
+                                              DummyPbDatabase), \
+                            mock.patch.object(
+                                module,
+                                "get_protobuf_runtime_cache_signature",
+                                return_value=("sig-1",),
+                            ):
+                        global_db = module.get_pb_db_with_cache(
+                            [str(pb_file)])
+                        global_db_again = module.get_pb_db_with_cache(
+                            [str(pb_file)])
+                        default_named_db = module.get_pb_db_with_cache(
+                            [str(pb_file)], None)
+                        explicit_global_db = module.get_pb_db_with_cache(
+                            [str(pb_file)], "global")
+                        named_db = module.get_pb_db_with_cache(
+                            [str(pb_file)], "custom")
+                        named_db_again = module.get_pb_db_with_cache(
+                            [str(pb_file)], "custom")
+
+                    # Same name (including default mapping) reuses one database.
+                    self.assertIs(global_db, global_db_again)
+                    self.assertIs(global_db, default_named_db)
+                    self.assertIs(global_db, explicit_global_db)
+                    self.assertIs(named_db, named_db_again)
+                    # Different names stay isolated.
+                    self.assertIsNot(global_db, named_db)
+                    # Each distinct name loads its files exactly once.
+                    self.assertEqual(2, len(load_calls))
+                    for loaded_pb_files in load_calls:
+                        self.assertEqual(
+                            (os.path.realpath(pb_file),),
+                            loaded_pb_files,
+                        )
 
     def test_client_mode_does_not_mutate_runtime_paths(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -309,7 +422,9 @@ class GeneratorScriptRuntimeTest(unittest.TestCase):
                 def fake_run_generator_client(address, timeout, argv, cwd,
                                               display_argv0, shutdown,
                                               auto_start, idle_timeout,
-                                              server_program, pid_file):
+                                              server_program, pid_file,
+                                              port_file=None,
+                                              port_range=None):
                     captured["address"] = address
                     captured["argv"] = list(argv)
                     captured["cwd"] = cwd
@@ -319,6 +434,8 @@ class GeneratorScriptRuntimeTest(unittest.TestCase):
                     captured["idle_timeout"] = idle_timeout
                     captured["server_program"] = server_program
                     captured["pid_file"] = pid_file
+                    captured["port_file"] = port_file
+                    captured["port_range"] = port_range
                     return 321
 
                 with self.subTest(generator=key):
@@ -377,10 +494,14 @@ class GeneratorScriptRuntimeTest(unittest.TestCase):
                 captured = {}
 
                 def fake_run_generator_server(address, idle_timeout,
-                                              request_callback, pid_file=None):
+                                              request_callback, pid_file=None,
+                                              port_file=None,
+                                              port_range=None):
                     captured["address"] = address
                     captured["idle_timeout"] = idle_timeout
                     captured["pid_file"] = pid_file
+                    captured["port_file"] = port_file
+                    captured["port_range"] = port_range
                     captured["sys_path"] = list(sys.path)
                     captured["path_env"] = os.environ.get("PATH", "")
                     captured["request_callback"] = request_callback
@@ -508,10 +629,11 @@ class GeneratorScriptRuntimeTest(unittest.TestCase):
 
                 class DummyPbDatabase(object):
 
-                    def load(self, pb_file_path, external_pb_files):
+                    def load(self, pb_files):
                         pb_load_counter["count"] += 1
 
                 server_address = self._make_server_address()
+                server_port = server_address.rsplit(":", 1)[1]
                 pid_file = temp_dir_path / "generator.server.pid"
                 server_result = {}
 
@@ -529,9 +651,7 @@ class GeneratorScriptRuntimeTest(unittest.TestCase):
                         mock.patch.object(module,
                                           "check_has_module",
                                           return_value=True), \
-                        mock.patch.object(module,
-                                          "LOCAL_PB_DB_CACHE",
-                                          {}), \
+                        mock.patch.object(module, "LOCAL_PB_DB_CACHE", {}), \
                         mock.patch.object(module,
                                           "PbDatabase",
                                           DummyPbDatabase), \
@@ -552,6 +672,8 @@ class GeneratorScriptRuntimeTest(unittest.TestCase):
                                         "--server-mode",
                                         "--server-address",
                                         server_address,
+                                        "--server-port-range",
+                                        server_port,
                                         "--server-pid-file",
                                         str(pid_file),
                                         "--server-idle-timeout",

@@ -62,7 +62,8 @@ def get_subprocess_no_window_kwargs():
     return kwargs
 
 
-def add_generator_ipc_options(add_option, parser, default_address):
+def add_generator_ipc_options(add_option, parser, default_address,
+                              default_port_range=None):
     add_option(
         parser,
         "--server-mode",
@@ -83,10 +84,27 @@ def add_generator_ipc_options(add_option, parser, default_address):
         parser,
         "--server-address",
         action="store",
-        help="generator server address, default: {0}".format(
-            default_address),
+        help="generator server host without port (the port comes from "
+        "--server-port-range), default: {0}".format(default_address),
         dest="server_address",
         default=default_address,
+    )
+    add_option(
+        parser,
+        "--server-port-range",
+        action="store",
+        help="generator server ports to try, e.g. 3701-3710 or 3701,3703, "
+        "default: {0}".format(default_port_range),
+        dest="server_port_range",
+        default=default_port_range,
+    )
+    add_option(
+        parser,
+        "--server-port-file",
+        action="store",
+        help="generator server actual port file path",
+        dest="server_port_file",
+        default=None,
     )
     add_option(
         parser,
@@ -147,14 +165,22 @@ def parse_server_address(address):
             port = address[(end_pos + 1):]
             if port.startswith(":"):
                 port = port[1:]
+            if not port:
+                port = "0"
             return (host, int(port))
 
     if ":" in address:
         host, port = address.rsplit(":", 1)
-    else:
+    elif address.isdigit():
+        # A bare number is treated as a port for backward compatibility.
         host, port = "127.0.0.1", address
+    else:
+        # A bare host without a port; the actual port comes from the port range.
+        host, port = address, "0"
     if not host:
         host = "127.0.0.1"
+    if not port:
+        port = "0"
     return (host, int(port))
 
 
@@ -182,6 +208,67 @@ def normalize_pid_file_path(pid_file, cwd):
     if not cwd:
         cwd = os.getcwd()
     return os.path.realpath(os.path.join(cwd, pid_file))
+
+
+def _format_server_address(host, port):
+    if ":" in host and not host.startswith("["):
+        return "[{0}]:{1}".format(host, port)
+    return "{0}:{1}".format(host, port)
+
+
+def normalize_port_file_path(port_file, pid_file, address, cwd):
+    if not port_file:
+        if pid_file:
+            port_file = pid_file + ".port"
+        else:
+            port_file = os.path.join(
+                tempfile.gettempdir(),
+                "generate-for-pb-{0}.port".format(
+                    _sanitize_server_address_for_path(address)),
+            )
+    if os.path.isabs(port_file):
+        return os.path.realpath(port_file)
+    if not cwd:
+        cwd = os.getcwd()
+    return os.path.realpath(os.path.join(cwd, port_file))
+
+
+def parse_server_port_range(port_range, default_port):
+    default_port = int(default_port)
+    if not port_range:
+        return [default_port]
+
+    ret = []
+    appended_ports = set()
+    for token in str(port_range).split(","):
+        token = token.strip()
+        if not token:
+            continue
+        if ":" in token:
+            token = token.rsplit(":", 1)[1].strip()
+        if not token:
+            continue
+
+        if "-" in token:
+            start_port_str, end_port_str = token.split("-", 1)
+            start_port = int(start_port_str.strip())
+            end_port = int(end_port_str.strip())
+            step = 1 if end_port >= start_port else -1
+            current_ports = range(start_port, end_port + step, step)
+        else:
+            current_ports = [int(token)]
+
+        for current_port in current_ports:
+            if current_port < 0 or current_port > 65535:
+                raise ValueError("invalid port: {0}".format(current_port))
+            if current_port in appended_ports:
+                continue
+            appended_ports.add(current_port)
+            ret.append(current_port)
+
+    if not ret:
+        return [default_port]
+    return ret
 
 
 def _normalize_module_search_path(path, cwd=None):
@@ -341,6 +428,59 @@ def _replace_file(source_path, target_path):
     if os.path.exists(target_path):
         os.remove(target_path)
     os.rename(source_path, target_path)
+
+
+def _read_server_port_file(port_file):
+    try:
+        with open(port_file, "r") as file_obj:
+            content = file_obj.read().strip()
+    except EnvironmentError:
+        return None
+    if not content:
+        return None
+    try:
+        port = int(content.split()[0])
+    except Exception:
+        return None
+    if port <= 0 or port > 65535:
+        return None
+    return port
+
+
+def _write_server_port_file(port_file, port):
+    if not port_file:
+        return
+    port_file_dir = os.path.dirname(os.path.abspath(port_file))
+    if port_file_dir and not os.path.exists(port_file_dir):
+        try:
+            os.makedirs(port_file_dir)
+        except EnvironmentError:
+            if not os.path.isdir(port_file_dir):
+                raise
+    tmp_port_file = "{0}.tmp.{1}".format(port_file, os.getpid())
+    with open(tmp_port_file, "w") as file_obj:
+        file_obj.write("{0}\n".format(int(port)))
+    _replace_file(tmp_port_file, port_file)
+
+
+def _remove_server_port_file_if_match(port_file, port):
+    if not port_file or port is None:
+        return
+    if _read_server_port_file(port_file) != int(port):
+        return
+    try:
+        os.remove(port_file)
+    except EnvironmentError:
+        pass
+
+
+def _resolve_generator_server_address(address, port_file=None):
+    host, port = parse_server_address(address)
+    if port_file:
+        port_from_file = _read_server_port_file(port_file)
+        if port_from_file is not None:
+            port = port_from_file
+    return _format_server_address(host, port)
 
 
 def _write_pid_file(pid_file, pid):
@@ -585,6 +725,8 @@ def strip_generator_ipc_args(argv):
     value_options = set(
         [
             "--server-address",
+            "--server-port-range",
+            "--server-port-file",
             "--server-timeout",
             "--server-idle-timeout",
             "--server-pid-file",
@@ -899,21 +1041,54 @@ def _run_idle_monitor(server):
         return
 
 
-def run_generator_server(address, idle_timeout, request_callback, pid_file=None):
+def run_generator_server(address,
+                         idle_timeout,
+                         request_callback,
+                         pid_file=None,
+                         port_file=None,
+                         port_range=None):
     idle_timeout = normalize_timeout(idle_timeout,
                                      GENERATOR_IPC_DEFAULT_IDLE_TIMEOUT)
-    pid_file = normalize_pid_file_path(pid_file, os.getcwd())
-    server_address = parse_server_address(address)
-    server = _GeneratorServer(server_address, _GeneratorServerHandler,
-                              request_callback, idle_timeout)
+    current_cwd = os.getcwd()
+    pid_file = normalize_pid_file_path(pid_file, current_cwd)
+    port_file = normalize_port_file_path(port_file, pid_file, address,
+                                         current_cwd)
+    bind_host, bind_port = parse_server_address(address)
+    try:
+        bind_ports = parse_server_port_range(port_range, bind_port)
+    except Exception as e:
+        sys.stderr.write(
+            "[ERROR]: invalid generator server port range {0}: {1}\n".
+            format(port_range, e))
+        return 1
+
+    server = None
+    last_bind_error = None
+    for current_bind_port in bind_ports:
+        try:
+            server = _GeneratorServer((bind_host, current_bind_port),
+                                      _GeneratorServerHandler,
+                                      request_callback, idle_timeout)
+            break
+        except OSError as e:
+            last_bind_error = e
+
+    if server is None:
+        sys.stderr.write(
+            "[ERROR]: generator server bind on {0} failed: {1}\n".format(
+                address, last_bind_error))
+        return 1
+
     host, port = server.server_address
     try:
+        _write_server_port_file(port_file, port)
         _write_pid_file(pid_file, os.getpid())
     except BaseException as e:
         server.server_close()
+        _remove_server_port_file_if_match(port_file, port)
         sys.stderr.write(
-            "[ERROR]: write generator server pid file {0} failed: {1}\n".
-            format(pid_file, e))
+            "[ERROR]: write generator server state files failed: {0}\n".
+            format(e))
         return 1
     sys.stdout.write(
         "[INFO]: generator server listening on {0}:{1}\n".format(host, port))
@@ -929,6 +1104,7 @@ def run_generator_server(address, idle_timeout, request_callback, pid_file=None)
         server.stop_idle_monitor()
         server.server_close()
         _remove_pid_file_if_match(pid_file, os.getpid())
+        _remove_server_port_file_if_match(port_file, port)
     return 0
 
 
@@ -944,7 +1120,8 @@ def _connect_and_request(address, connect_timeout, read_timeout, request):
 
 
 def _start_generator_server(server_program, address, idle_timeout, cwd,
-                            bootstrap_args, pid_file):
+                            bootstrap_args, pid_file, port_file,
+                            port_range):
     if not server_program:
         raise RuntimeError("can not auto start generator server without script path")
 
@@ -959,6 +1136,10 @@ def _start_generator_server(server_program, address, idle_timeout, cwd,
     ]
     if pid_file:
         server_args.extend(["--server-pid-file", pid_file])
+    if port_file:
+        server_args.extend(["--server-port-file", port_file])
+    if port_range:
+        server_args.extend(["--server-port-range", str(port_range)])
     server_args.extend(bootstrap_args)
     creationflags = 0
     start_new_session = False
@@ -987,8 +1168,12 @@ def _start_generator_server(server_program, address, idle_timeout, cwd,
     )
 
 
-def _wait_generator_server_ready(address, timeout, pid_file=None,
-                                 expected_process_path=None):
+def _wait_generator_server_ready(address,
+                                 timeout,
+                                 pid_file=None,
+                                 expected_process_path=None,
+                                 port_file=None,
+                                 require_port_file=False):
     deadline = time.monotonic() + max(timeout, 0.1)
     last_error = None
     while time.monotonic() < deadline:
@@ -1000,7 +1185,16 @@ def _wait_generator_server_ready(address, timeout, pid_file=None,
                     last_error = RuntimeError(pid_file_error)
                     time.sleep(0.05)
                     continue
-            _ping_generator_server(address, 0.2, 0.2, pid_file,
+            if require_port_file and port_file and _read_server_port_file(
+                    port_file) is None:
+                last_error = RuntimeError(
+                    "generator server port file {0} is missing or invalid".
+                    format(port_file))
+                time.sleep(0.05)
+                continue
+            resolved_address = _resolve_generator_server_address(address,
+                                                                port_file)
+            _ping_generator_server(resolved_address, 0.2, 0.2, pid_file,
                                    expected_process_path)
             return True
         except BaseException as e:
@@ -1020,11 +1214,14 @@ def run_generator_client(address,
                          auto_start=True,
                          idle_timeout=GENERATOR_IPC_DEFAULT_IDLE_TIMEOUT,
                          server_program=None,
-                         pid_file=None):
+                         pid_file=None,
+                         port_file=None,
+                         port_range=None):
     timeout = normalize_timeout(timeout, GENERATOR_IPC_DEFAULT_TIMEOUT)
     idle_timeout = normalize_timeout(idle_timeout,
                                      GENERATOR_IPC_DEFAULT_IDLE_TIMEOUT)
     pid_file = normalize_pid_file_path(pid_file, cwd)
+    port_file = normalize_port_file_path(port_file, pid_file, address, cwd)
     expected_process_path = _get_process_image_path(os.getpid())
     request_argv = [] if shutdown else list(argv)
     request = {
@@ -1042,14 +1239,17 @@ def run_generator_client(address,
 
     connect_timeout = min(max(timeout, 0.1), 1.0)
     try:
+        resolved_address = _resolve_generator_server_address(address,
+                                                            port_file)
         if pid_file:
             pid_file_ready, pid_file_error = _check_pid_file_process(
                 pid_file, expected_process_path)
             if not pid_file_ready:
                 raise RuntimeError(pid_file_error)
-            _ping_generator_server(address, connect_timeout, timeout, pid_file,
-                                   expected_process_path)
-        response = _connect_and_request(address, connect_timeout, timeout,
+            _ping_generator_server(resolved_address, connect_timeout, timeout,
+                                   pid_file, expected_process_path)
+        response = _connect_and_request(resolved_address, connect_timeout,
+                                        timeout,
                                         request)
     except BaseException as e:
         if shutdown:
@@ -1059,6 +1259,11 @@ def run_generator_client(address,
                     pid_file, expected_process_path)
                 if not pid_file_ready:
                     _remove_pid_file(pid_file)
+                    _remove_server_port_file_if_match(
+                        port_file, _read_server_port_file(port_file))
+            else:
+                _remove_server_port_file_if_match(
+                    port_file, _read_server_port_file(port_file))
             return 0
         if not auto_start:
             sys.stderr.write(
@@ -1078,23 +1283,41 @@ def run_generator_client(address,
                     if not startup_lock_acquired:
                         _wait_generator_server_ready(address, startup_timeout,
                                                      pid_file,
-                                                     expected_process_path)
+                                                     expected_process_path,
+                                                     port_file,
+                                                     bool(port_range))
                         server_ready = True
                     else:
                         if pid_file:
                             pid_file_ready, _pid_file_error = _check_pid_file_process(
                                 pid_file, expected_process_path)
-                            if pid_file_ready:
-                                _ping_generator_server(address,
+                            if pid_file_ready and (not port_range or
+                                                   _read_server_port_file(
+                                                       port_file) is not None):
+                                _ping_generator_server(
+                                                       _resolve_generator_server_address(
+                                                           address,
+                                                           port_file),
                                                        connect_timeout,
-                                                       timeout, pid_file,
+                                                       timeout,
+                                                       pid_file,
                                                        expected_process_path)
                                 server_ready = True
                         else:
                             try:
-                                _ping_generator_server(address,
+                                if port_range and _read_server_port_file(
+                                        port_file) is None:
+                                    raise RuntimeError(
+                                        "generator server port file {0} is missing or invalid"
+                                        .format(port_file))
+                                _ping_generator_server(
+                                                       _resolve_generator_server_address(
+                                                           address,
+                                                           port_file),
                                                        connect_timeout,
-                                                       timeout, None, None)
+                                                       timeout,
+                                                       None,
+                                                       None)
                                 server_ready = True
                             except BaseException:
                                 pass
@@ -1102,18 +1325,23 @@ def run_generator_client(address,
                 if not server_ready:
                     bootstrap_args = collect_generator_server_bootstrap_args(
                         argv)
-                    server_process = _start_generator_server(
+                    _start_generator_server(
                         server_program, address, idle_timeout, cwd,
-                        bootstrap_args, pid_file)
-                    _write_pid_file(pid_file, server_process.pid)
+                        bootstrap_args, pid_file, port_file, port_range)
                     _wait_generator_server_ready(address, startup_timeout,
                                                  pid_file,
-                                                 expected_process_path)
+                                                 expected_process_path,
+                                                 port_file,
+                                                 bool(port_range))
             finally:
                 if startup_lock_acquired and startup_lock_file:
                     _release_generator_server_startup_lock(startup_lock_file)
 
-            response = _connect_and_request(address, connect_timeout, timeout,
+            response = _connect_and_request(
+                                            _resolve_generator_server_address(
+                                                address, port_file),
+                                            connect_timeout,
+                                            timeout,
                                             request)
         except BaseException as start_error:
             sys.stderr.write(
