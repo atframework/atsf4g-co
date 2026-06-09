@@ -1352,6 +1352,7 @@ def generate_group(options, group):
             elif options.output_dir:
                 output_file = os.path.join(options.output_dir, output_file)
 
+            output_file = os.path.normpath(output_file)
             if options.print_output_files:
                 print(output_file)
             else:
@@ -1459,6 +1460,7 @@ def generate_group(options, group):
                 elif options.output_dir:
                     output_file = os.path.join(options.output_dir, output_file)
 
+                output_file = os.path.normpath(output_file)
                 if options.print_output_files:
                     print(output_file)
                 else:
@@ -1637,6 +1639,7 @@ def generate_global(options, global_generator):
             elif options.output_dir:
                 output_file = os.path.join(options.output_dir, output_file)
 
+            output_file = os.path.normpath(output_file)
             if options.print_output_files:
                 print(output_file)
             else:
