@@ -1,0 +1,5 @@
+include_guard(GLOBAL)
+
+project_third_party_include_lock("${CMAKE_CURRENT_LIST_DIR}" "redis/redis.cmake")
+
+list(PREPEND PROJECT_THIRD_PARTY_PUBLIC_LINK_NAMES ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_HIREDIS_HAPP_LINK_NAME})

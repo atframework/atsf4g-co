@@ -18,9 +18,6 @@ project(
 
 include("${CMAKE_CURRENT_LIST_DIR}/project/cmake/ProjectBuildOption.cmake")
 
-if(NOT DEFINED BUILD_TESTING)
-  set(BUILD_TESTING ${PROJECT_ENABLE_UNITTEST})
-endif()
 if(BUILD_TESTING OR PROJECT_ENABLE_UNITTEST)
   include(CTest)
 endif()
@@ -28,6 +25,7 @@ endif()
 include(MaybePopulateSubmodule)
 include("${CMAKE_CURRENT_LIST_DIR}/third_party/Repository.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/atframework/Repository.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/third_party/AfterFramework.cmake")
 
 # installer directory
 if(NOT PROJECT_INSTALL_BAS_DIR)
