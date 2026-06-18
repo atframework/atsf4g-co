@@ -21,3 +21,11 @@ volumeMounts:
 vector:
   enabled: false
   log_path: /data/atframework/publish/orbit-server/log
+
+external_discovery:
+  - enabled: true
+    cluster_name: atsf4g-co-orbit-controller
+    watcher:
+      enabled: true
+    keepalive:
+      enabled: false

@@ -10,23 +10,23 @@
 ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_BEGIN
 
 struct service_discovery_index::ctor_guard_t {
-  std::shared_ptr<::atfw::atapp::etcd_module> etcd_module;
+  std::shared_ptr<::atfw::atapp::service_discovery_module> service_discovery_module;
 };
 
 ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API service_discovery_index::ptr_t service_discovery_index::create(
-    const std::shared_ptr<::atfw::atapp::etcd_module>& etcd_module) {
-  if (!etcd_module) {
+    const std::shared_ptr<::atfw::atapp::service_discovery_module>& service_discovery_module) {
+  if (!service_discovery_module) {
     return {};
   }
 
   ctor_guard_t guard;
-  guard.etcd_module = etcd_module;
+  guard.service_discovery_module = service_discovery_module;
   return std::make_shared<service_discovery_index>(guard);
 }
 
 service_discovery_index::service_discovery_index(ctor_guard_t& ctor_guard)
     : initialized_(false),
-      etcd_module_(std::move(ctor_guard.etcd_module)),
+      service_discovery_module_(std::move(ctor_guard.service_discovery_module)),
       all_nodes_(atfw::util::memory::make_strong_rc<atfw::atapp::etcd_discovery_set>()) {}
 
 ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API service_discovery_index::~service_discovery_index() { cleanup(); }
@@ -49,7 +49,7 @@ ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API void service_discovery_index::cleanup() 
   initialized_ = false;
 
   if (service_index_handle_) {
-    etcd_module_->remove_on_node_event(*service_index_handle_);
+    service_discovery_module_->remove_on_node_event(*service_index_handle_);
     service_index_handle_.reset();
   }
 
@@ -164,7 +164,7 @@ service_discovery_index::add_keepalive(const std::string& path, std::string& val
     return nullptr;
   }
 
-  etcd_keepalive_ptr_t ret = etcd_module_->add_keepalive_actor(value, path);
+  etcd_keepalive_ptr_t ret = service_discovery_module_->add_keepalive_actor(value, path);
   if (!ret) {
     FWLOGERROR("add keepalive {}={} failed", path, value);
   }
@@ -316,7 +316,8 @@ void service_discovery_index::bump_service_discovery_version(const std::string& 
 }
 
 void service_discovery_index::apply_node_event(
-    atfw::atapp::etcd_module::node_action_t action_type, const atfw::atapp::etcd_discovery_node::ptr_t& node,
+    atfw::atapp::service_discovery_module::node_action_t action_type,
+    const atfw::atapp::etcd_discovery_node::ptr_t& node,
     std::unordered_set<uint64_t>& bump_service_discovery_version_by_type_id,
     std::unordered_set<std::string>& bump_service_discovery_version_by_type_name) {
   if (!node) {
@@ -324,7 +325,7 @@ void service_discovery_index::apply_node_event(
   }
 
   switch (action_type) {
-    case atfw::atapp::etcd_module::node_action_t::kPut: {
+    case atfw::atapp::service_discovery_module::node_action_t::kPut: {
       service_discovery_node_snapshot_t old_snapshot;
       bool has_old_snapshot =
           get_node_snapshot(node->get_discovery_info().id(), node->get_discovery_info().name(), old_snapshot);
@@ -388,7 +389,7 @@ void service_discovery_index::apply_node_event(
       }
       break;
     }
-    case atfw::atapp::etcd_module::node_action_t::kDelete: {
+    case atfw::atapp::service_discovery_module::node_action_t::kDelete: {
       service_discovery_node_snapshot_t old_snapshot;
       bool has_old_snapshot =
           get_node_snapshot(node->get_discovery_info().id(), node->get_discovery_info().name(), old_snapshot);
@@ -430,28 +431,28 @@ void service_discovery_index::apply_node_event(
 
 void service_discovery_index::setup_etcd_event_handle() {
   if (service_index_handle_) {
-    etcd_module_->remove_on_node_event(*service_index_handle_);
+    service_discovery_module_->remove_on_node_event(*service_index_handle_);
   } else {
-    service_index_handle_ = gsl::make_unique<atfw::atapp::etcd_module::node_event_callback_handle_t>();
+    service_index_handle_ = gsl::make_unique<atfw::atapp::service_discovery_module::node_event_callback_handle_t>();
   }
   reset_local_cache(false);
   if (service_index_handle_) {
-    auto event_handle = [this](atfw::atapp::etcd_module::node_action_t action_type,
+    auto event_handle = [this](atfw::atapp::service_discovery_module::node_action_t action_type,
                                const atfw::atapp::etcd_discovery_node::ptr_t& node) {
       apply_node_event(action_type, node, service_discovery_dirty_by_type_id_, service_discovery_dirty_by_type_name_);
     };
-    *service_index_handle_ = etcd_module_->add_on_node_discovery_event(event_handle);
+    *service_index_handle_ = service_discovery_module_->add_on_node_discovery_event(event_handle);
 
     // Initialize existing nodes
-    for (const auto& node : etcd_module_->get_global_discovery().get_sorted_nodes()) {
+    for (const auto& node : service_discovery_module_->get_global_discovery().get_sorted_nodes()) {
       if (!node) {
         continue;
       }
 
       std::unordered_set<uint64_t> bump_service_discovery_version_by_type_id;
       std::unordered_set<std::string> bump_service_discovery_version_by_type_name;
-      apply_node_event(atfw::atapp::etcd_module::node_action_t::kPut, node, bump_service_discovery_version_by_type_id,
-                       bump_service_discovery_version_by_type_name);
+      apply_node_event(atfw::atapp::service_discovery_module::node_action_t::kPut, node,
+                       bump_service_discovery_version_by_type_id, bump_service_discovery_version_by_type_name);
 
       for (auto type_id : bump_service_discovery_version_by_type_id) {
         bump_service_discovery_version(type_id, false);

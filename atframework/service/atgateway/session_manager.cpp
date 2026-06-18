@@ -11,7 +11,6 @@
 #include <time/time_utility.h>
 
 #include <atframe/atapp_conf.h>
-#include <atframe/modules/etcd_module.h>
 
 #include <chrono>
 #include <gsl/util>
@@ -64,7 +63,7 @@ int session_manager::init(::atfw::atapp::app *app_inst, create_proto_fn_t fn) {
   }
 
   if (!discovery_index_) {
-    discovery_index_ = component::service_discovery_index::create(app_inst->get_etcd_module());
+    discovery_index_ = component::service_discovery_index::create(app_inst->get_service_discovery_module());
     if (!discovery_index_) {
       FWLOGERROR("create service discovery index failed");
       return -1;

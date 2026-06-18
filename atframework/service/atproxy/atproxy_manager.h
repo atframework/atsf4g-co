@@ -10,7 +10,7 @@
 #include <atframe/atapp_module_impl.h>
 
 #include <atframe/atapp_common_types.h>
-#include <atframe/modules/etcd_module.h>
+#include <atframe/modules/service_discovery_module.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -29,7 +29,7 @@ namespace atframework {
 namespace proxy {
 class atproxy_manager : public ::atfw::atapp::module_impl {
  public:
-  using node_action_t = atapp::etcd_module::node_action_t;
+  using node_action_t = atapp::service_discovery_module::node_action_t;
   struct node_info_t {
     bool has_topology_info;
     bool has_discovery_info;

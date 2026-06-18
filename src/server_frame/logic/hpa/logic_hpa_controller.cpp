@@ -44,7 +44,7 @@
 
 #include <atframe/atapp.h>
 #include <atframe/etcdcli/etcd_discovery.h>
-#include <atframe/modules/etcd_module.h>
+#include <atframe/modules/service_discovery_module.h>
 
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
@@ -249,7 +249,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data {
 
   atfw::atapp::etcd_discovery_set::ptr_t discovery_set;
   atfw::atapp::protocol::atapp_metadata discovery_filter;
-  atfw::atapp::etcd_module::node_event_callback_handle_t node_event_handle;
+  atfw::atapp::service_discovery_module::node_event_callback_handle_t node_event_handle;
   bool node_event_has_handle;
 
   int64_t current_setting_data_version;
@@ -3568,11 +3568,11 @@ void logic_hpa_controller::setup_hpa_controller() {
   // Setup/cleanup etcd watcher
   // 注册监听节点变化事件以便更新节点分布缓存
   if (!hpa_discovery_data_->node_event_has_handle && nullptr != owner_app_) {
-    auto etcd_mod = owner_app_->get_etcd_module();
-    if (etcd_mod) {
+    auto service_discovery_module = owner_app_->get_service_discovery_module();
+    if (service_discovery_module) {
       std::weak_ptr<hpa_discovery_data> hpa_discovery_data_weak = hpa_discovery_data_;
-      hpa_discovery_data_->node_event_handle = etcd_mod->add_on_node_discovery_event(
-          [hpa_discovery_data_weak](atfw::atapp::etcd_module::node_action_t action,
+      hpa_discovery_data_->node_event_handle = service_discovery_module->add_on_node_discovery_event(
+          [hpa_discovery_data_weak](atfw::atapp::service_discovery_module::node_action_t action,
                                     const atfw::atapp::etcd_discovery_node::ptr_t& node) {
             std::shared_ptr<hpa_discovery_data> hpa_discovery_data_ptr = hpa_discovery_data_weak.lock();
             if (!hpa_discovery_data_ptr || !hpa_discovery_data_ptr->discovery_set || !node) {
@@ -3597,7 +3597,7 @@ void logic_hpa_controller::setup_hpa_controller() {
             }
 
             // 新增要开绿筛选标签，移除不需要
-            if (action == atfw::atapp::etcd_module::node_action_t::kPut) {
+            if (action == atfw::atapp::service_discovery_module::node_action_t::kPut) {
               if (atfw::atapp::etcd_discovery_set::metadata_equal_type::filter(hpa_discovery_data_ptr->discovery_filter,
                                                                                node->get_discovery_info().metadata())) {
                 hpa_discovery_data_ptr->discovery_set->add_node(node);
@@ -3618,9 +3618,9 @@ void logic_hpa_controller::cleanup_hpa_controller() {
   }
 
   if (hpa_discovery_data_->node_event_has_handle && nullptr != owner_app_) {
-    auto etcd_mod = owner_app_->get_etcd_module();
-    if (etcd_mod) {
-      etcd_mod->remove_on_node_event(hpa_discovery_data_->node_event_handle);
+    auto service_discovery_module = owner_app_->get_service_discovery_module();
+    if (service_discovery_module) {
+      service_discovery_module->remove_on_node_event(hpa_discovery_data_->node_event_handle);
       hpa_discovery_data_->node_event_has_handle = false;
     }
   }

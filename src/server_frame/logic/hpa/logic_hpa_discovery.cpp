@@ -11,7 +11,7 @@
 #include <atframe/atapp.h>
 #include <atframe/etcdcli/etcd_cluster.h>
 #include <atframe/etcdcli/etcd_watcher.h>
-#include <atframe/modules/etcd_module.h>
+#include <atframe/modules/service_discovery_module.h>
 
 #include <memory/object_allocator.h>
 
@@ -407,8 +407,8 @@ SERVER_FRAME_API bool logic_hpa_discovery::watch(logic_hpa_discovery_watch_mode 
     return false;
   }
 
-  auto etcd_mod = controller_->get_app()->get_etcd_module();
-  if (!etcd_mod) {
+  auto service_discovery_module = controller_->get_app()->get_service_discovery_module();
+  if (!service_discovery_module) {
     FWLOGERROR("[HPA]: Discovery {} can not create watcher without etcd module", etcd_path_);
     return false;
   }
@@ -417,9 +417,9 @@ SERVER_FRAME_API bool logic_hpa_discovery::watch(logic_hpa_discovery_watch_mode 
 
   if (mode == logic_hpa_discovery_watch_mode::kDirectory) {
     // @see https://etcd.io/docs/v3.5/learning/api/#key-ranges
-    etcd_watcher_ = atfw::atapp::etcd_watcher::create(etcd_mod->get_raw_etcd_ctx(), etcd_path_, "+1");
+    etcd_watcher_ = atfw::atapp::etcd_watcher::create(service_discovery_module->get_raw_etcd_ctx(), etcd_path_, "+1");
   } else {
-    etcd_watcher_ = atfw::atapp::etcd_watcher::create(etcd_mod->get_raw_etcd_ctx(), etcd_path_, "");
+    etcd_watcher_ = atfw::atapp::etcd_watcher::create(service_discovery_module->get_raw_etcd_ctx(), etcd_path_, "");
   }
   if (!etcd_watcher_) {
     FWLOGERROR("[HPA]: Discovery {} can create watcher failed", etcd_path_);
@@ -427,7 +427,7 @@ SERVER_FRAME_API bool logic_hpa_discovery::watch(logic_hpa_discovery_watch_mode 
   }
 
   // Watch走long polling，所以这里设置的超时时间应该比较长
-  etcd_watcher_->set_conf_from_protobuf(etcd_mod->get_configure().watcher());
+  etcd_watcher_->set_conf_from_protobuf(service_discovery_module->get_configure().watcher());
 
   // setup callback
   etcd_watcher_->set_evt_handle(
@@ -474,7 +474,7 @@ SERVER_FRAME_API bool logic_hpa_discovery::watch(logic_hpa_discovery_watch_mode 
         }
       });
 
-  etcd_mod->get_raw_etcd_ctx().add_watcher(etcd_watcher_);
+  service_discovery_module->get_raw_etcd_ctx().add_watcher(etcd_watcher_);
   return true;
 }
 
@@ -497,18 +497,18 @@ SERVER_FRAME_API bool logic_hpa_discovery::set_value(std::string&& value, gsl::s
     return false;
   }
 
-  auto etcd_mod = controller_->get_app()->get_etcd_module();
-  if (!etcd_mod) {
-    FWLOGERROR("[HPA]: Discovery {} can not set value(subkey={}) without etcd module", etcd_path_, subkey);
+  auto service_discovery_module = controller_->get_app()->get_service_discovery_module();
+  if (!service_discovery_module) {
+    FWLOGERROR("[HPA]: Discovery {} can not set value(subkey={}) without service discovery module", etcd_path_, subkey);
     return false;
   }
 
   clear_etcd_set_value_rpc();
   if (subkey.empty()) {
-    etcd_set_value_ = etcd_mod->get_raw_etcd_ctx().create_request_kv_set(etcd_path_, value, false);
+    etcd_set_value_ = service_discovery_module->get_raw_etcd_ctx().create_request_kv_set(etcd_path_, value, false);
   } else {
-    etcd_set_value_ =
-        etcd_mod->get_raw_etcd_ctx().create_request_kv_set(util::log::format("{}/{}", etcd_path_, subkey), value);
+    etcd_set_value_ = service_discovery_module->get_raw_etcd_ctx().create_request_kv_set(
+        util::log::format("{}/{}", etcd_path_, subkey), value);
   }
 
   if (!etcd_set_value_) {
@@ -830,13 +830,13 @@ void logic_hpa_discovery::clear_etcd_watcher() {
       break;
     }
 
-    auto etcd_mod = controller_->get_app()->get_etcd_module();
-    if (!etcd_mod) {
-      FWLOGERROR("[HPA]: Discovery {} can not remove watcher without etcd module", etcd_path_);
+    auto service_discovery_module = controller_->get_app()->get_service_discovery_module();
+    if (!service_discovery_module) {
+      FWLOGERROR("[HPA]: Discovery {} can not remove watcher without service discovery module", etcd_path_);
       break;
     }
 
-    etcd_mod->get_raw_etcd_ctx().remove_watcher(etcd_watcher_);
+    service_discovery_module->get_raw_etcd_ctx().remove_watcher(etcd_watcher_);
   } while (false);
 
   etcd_watcher_->set_evt_handle(atfw::atapp::etcd_watcher::watch_event_fn_t());

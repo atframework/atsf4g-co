@@ -49,8 +49,7 @@ class main_service_module : public atapp::module_impl, public std::enable_shared
   }
 
   int stop() override {
-    orbit_controller_manager::me()->stop();
-    return 0;
+    return orbit_controller_manager::me()->stop();
   }
 
   const char *name() const override { return "main_service_module"; }

@@ -66,14 +66,14 @@ static bool unpack_agent_load_record(orbit::DAgentEtcdLoadRecord& out, const std
 }
 
 struct orbit_load_watcher_state_t {
-  using node_action_t = atfw::atapp::etcd_module::node_action_t;
+  using node_action_t = atfw::atapp::service_discovery_module::node_action_t;
 
   std::unordered_set<uint64_t> known_agent_ids;
   std::function<void(node_action_t, const orbit::DAgentEtcdLoadRecord&)> on_event;
 };
 
 struct orbit_load_watcher_callback_list_wrapper_t {
-  using node_action_t = atfw::atapp::etcd_module::node_action_t;
+  using node_action_t = atfw::atapp::service_discovery_module::node_action_t;
 
   std::shared_ptr<orbit_load_watcher_state_t> state;
 
@@ -140,168 +140,69 @@ int orbit_controller_manager::init(atfw::atapp::app* app) {
   region_ = logic_config::me()->get_server_instance_config<orbit::config::orbit_controller_cfg>().region();
   app->set_metadata_label("orbit.region", region_);
 
-  auto etcd_mod = app->get_etcd_module();
-  if (!etcd_mod) {
+  auto service_discovery_module = app->get_service_discovery_module();
+  if (!service_discovery_module) {
     return -1;
   }
 
-  std::string path = etcd_mod->generate_etcd_path(
-      logic_config::me()->get_server_instance_config<orbit::config::orbit_controller_cfg>().agent_discovery_path());
-
-  // 初始化另一个discovery通道
-  if (init_discovery(etcd_mod, path) != 0) {
-    return -2;
-  }
+  // 拿出配置 并更换Path
+  std::string path =
+      logic_config::me()->get_server_instance_config<orbit::config::orbit_controller_cfg>().agent_discovery_path();
+  auto service_discovery_etcd_config = app->get_origin_configure().etcd();
+  service_discovery_etcd_config.set_path(path);
 
   // Load数据通道
   {
-    auto& etcd_ctx = etcd_mod->get_raw_etcd_ctx();
-    std::string watch_path = LOG_WRAPPER_FWAPI_FORMAT("{}{}", path, kEtcdOrbitLoadDir);
+    if (etcd_mod_.init(*app_, service_discovery_etcd_config, nullptr) != 0) {
+      FWLOGERROR("orbit agent failed to initialize etcd module");
+      return -3;
+    }
 
-    auto discovery_watcher_load = atapp::etcd_watcher::create(etcd_ctx, watch_path, "+1");
+    std::string watch_path = LOG_WRAPPER_FWAPI_FORMAT("{}{}", etcd_mod_.get_configure_path(), kEtcdOrbitLoadDir);
+
+    auto discovery_watcher_load = atapp::etcd_watcher::create(etcd_mod_.get_etcd_cluster(), watch_path, "+1");
     if (!discovery_watcher_load) {
-      LIBATAPP_MACRO_ETCD_CLUSTER_LOG_ERROR(etcd_ctx, "create etcd_watcher load failed.");
+      LIBATAPP_MACRO_ETCD_CLUSTER_LOG_ERROR(etcd_mod_.get_etcd_cluster(), "create etcd_watcher load failed.");
       return EN_ATBUS_ERR_MALLOC;
     }
 
-    discovery_watcher_load->set_conf_from_protobuf(etcd_mod->get_configure().watcher());
-    if (!etcd_ctx.add_watcher(discovery_watcher_load)) {
-      LIBATAPP_MACRO_ETCD_CLUSTER_LOG_ERROR(etcd_ctx, "add etcd_watcher load failed.");
+    discovery_watcher_load->set_conf_from_protobuf(etcd_mod_.get_configure().watcher());
+    if (!etcd_mod_.get_etcd_cluster().add_watcher(discovery_watcher_load)) {
+      LIBATAPP_MACRO_ETCD_CLUSTER_LOG_ERROR(etcd_mod_.get_etcd_cluster(), "add etcd_watcher load failed.");
       return EN_ATBUS_ERR_MALLOC;
     }
-    LIBATAPP_MACRO_ETCD_CLUSTER_LOG_INFO(etcd_ctx, "create etcd_watcher for load index {} success", watch_path);
-
+    LIBATAPP_MACRO_ETCD_CLUSTER_LOG_INFO(etcd_mod_.get_etcd_cluster(), "create etcd_watcher for load index {} success",
+                                         watch_path);
+    watcher_ = discovery_watcher_load;
     discovery_watcher_load->set_evt_handle(orbit_load_watcher_callback_list_wrapper_t(
-        [this](atfw::atapp::etcd_module::node_action_t action_type, const orbit::DAgentEtcdLoadRecord& record) {
-          on_agent_load_event(action_type, record);
-        }));
+        [this](atfw::atapp::service_discovery_module::node_action_t action_type,
+               const orbit::DAgentEtcdLoadRecord& record) { on_agent_load_event(action_type, record); }));
   }
 
   return 0;
 }
 
-void orbit_controller_manager::stop() {
+int orbit_controller_manager::stop() {
+  bool not_stop_yet = false;
+  not_stop_yet |= service_discovery_context_.stop() != 0;
+  not_stop_yet |= etcd_mod_.stop() != 0;
   stopped_ = true;
-
-  auto& etcd_mod = app_->get_etcd_module();
-  auto& etcd_ctx = etcd_mod->get_raw_etcd_ctx();
-  for (const auto& watcher : watchers_) {
-    etcd_ctx.remove_watcher(watcher);
+  if (watcher_) {
+    etcd_mod_.get_etcd_cluster().remove_watcher(watcher_);
+    watcher_ = nullptr;
   }
-  for (const auto& keepalive_actor : keepalive_actors_) {
-    etcd_mod->remove_keepalive_actor(keepalive_actor);
-  }
-  keepalive_actors_.clear();
-  watchers_.clear();
+  return not_stop_yet ? -1 : 0;
 }
 
 void orbit_controller_manager::tick() {
+  etcd_mod_.tick();
+  service_discovery_context_.tick();
   if (stopped_) {
     return;
   }
 }
 
 // ===================== private helpers =====================
-int32_t orbit_controller_manager::init_discovery(std::shared_ptr<atfw::atapp::etcd_module> etcd_mod,
-                                                 const std::string& path) {
-  {
-    auto& etcd_ctx = etcd_mod->get_raw_etcd_ctx();
-    std::string watch_path = LOG_WRAPPER_FWAPI_FORMAT("{}{}", path, kEtcdByIdDir);
-
-    auto discovery_watcher_by_id = atapp::etcd_watcher::create(etcd_ctx, watch_path, "+1");
-    if (!discovery_watcher_by_id) {
-      LIBATAPP_MACRO_ETCD_CLUSTER_LOG_ERROR(etcd_ctx, "create etcd_watcher by_id failed.");
-      return EN_ATBUS_ERR_MALLOC;
-    }
-
-    discovery_watcher_by_id->set_conf_from_protobuf(etcd_mod->get_configure().watcher());
-    if (!etcd_ctx.add_watcher(discovery_watcher_by_id)) {
-      LIBATAPP_MACRO_ETCD_CLUSTER_LOG_ERROR(etcd_ctx, "add etcd_watcher by_id failed.");
-      return EN_ATBUS_ERR_MALLOC;
-    }
-    LIBATAPP_MACRO_ETCD_CLUSTER_LOG_INFO(etcd_ctx, "create etcd_watcher for by_id index {} success", watch_path);
-
-    discovery_watcher_by_id->set_evt_handle(etcd_mod->create_discovery_watcher_callback_list_wrapper());
-    watchers_.push_back(discovery_watcher_by_id);
-    std::string keepalive_path = LOG_WRAPPER_FWAPI_FORMAT("{}/{}-{}", watch_path, app_->get_app_name(), app_->get_id());
-    std::string empty;
-    auto keepalive_actor_ = etcd_mod->add_keepalive_actor(empty, keepalive_path);
-    if (!keepalive_actor_) {
-      FWLOGERROR("orbit agent failed to create etcd keepalive actor for path {}", keepalive_path);
-      return -6;
-    }
-    LIBATAPP_MACRO_ETCD_CLUSTER_LOG_INFO(etcd_ctx, "create etcd_keepalive {} for by_id index {} success",
-                                         reinterpret_cast<const void*>(keepalive_actor_.get()), keepalive_path);
-    keepalive_actors_.push_back(keepalive_actor_);
-  }
-  {
-    auto& etcd_ctx = etcd_mod->get_raw_etcd_ctx();
-    std::string watch_path = LOG_WRAPPER_FWAPI_FORMAT("{}{}", path, kEtcdByNameDir);
-
-    auto discovery_watcher_by_name = atapp::etcd_watcher::create(etcd_ctx, watch_path, "+1");
-    if (!discovery_watcher_by_name) {
-      LIBATAPP_MACRO_ETCD_CLUSTER_LOG_ERROR(etcd_ctx, "create etcd_watcher by_name failed.");
-      return EN_ATBUS_ERR_MALLOC;
-    }
-
-    discovery_watcher_by_name->set_conf_from_protobuf(etcd_mod->get_configure().watcher());
-    if (!etcd_ctx.add_watcher(discovery_watcher_by_name)) {
-      LIBATAPP_MACRO_ETCD_CLUSTER_LOG_ERROR(etcd_ctx, "add etcd_watcher by_name failed.");
-      return EN_ATBUS_ERR_MALLOC;
-    }
-    LIBATAPP_MACRO_ETCD_CLUSTER_LOG_INFO(etcd_ctx, "create etcd_watcher for by_name index {} success", watch_path);
-
-    discovery_watcher_by_name->set_evt_handle(etcd_mod->create_discovery_watcher_callback_list_wrapper());
-    watchers_.push_back(discovery_watcher_by_name);
-    std::string keepalive_path = LOG_WRAPPER_FWAPI_FORMAT("{}/{}-{}", watch_path, app_->get_app_name(), app_->get_id());
-    std::string empty;
-    auto keepalive_actor_ = etcd_mod->add_keepalive_actor(empty, keepalive_path);
-    if (!keepalive_actor_) {
-      FWLOGERROR("orbit agent failed to create etcd keepalive actor for path {}", keepalive_path);
-      return -6;
-    }
-    LIBATAPP_MACRO_ETCD_CLUSTER_LOG_INFO(etcd_ctx, "create etcd_keepalive {} for by_name index {} success",
-                                         reinterpret_cast<const void*>(keepalive_actor_.get()), keepalive_path);
-    keepalive_actors_.push_back(keepalive_actor_);
-  }
-  {
-    auto& etcd_ctx = etcd_mod->get_raw_etcd_ctx();
-    std::string watch_path = LOG_WRAPPER_FWAPI_FORMAT("{}{}", path, kEtcdTopologyDir);
-
-    auto topology_watcher = atapp::etcd_watcher::create(etcd_ctx, watch_path, "+1");
-    if (!topology_watcher) {
-      LIBATAPP_MACRO_ETCD_CLUSTER_LOG_ERROR(etcd_ctx, "create etcd_watcher topology failed.");
-      return EN_ATBUS_ERR_MALLOC;
-    }
-
-    topology_watcher->set_conf_from_protobuf(etcd_mod->get_configure().watcher());
-    if (!etcd_ctx.add_watcher(topology_watcher)) {
-      LIBATAPP_MACRO_ETCD_CLUSTER_LOG_ERROR(etcd_ctx, "add etcd_watcher topology failed.");
-      return EN_ATBUS_ERR_MALLOC;
-    }
-    LIBATAPP_MACRO_ETCD_CLUSTER_LOG_INFO(etcd_ctx, "create etcd_watcher for topology index {} success", watch_path);
-
-    topology_watcher->set_evt_handle(etcd_mod->create_topology_watcher_callback_list_wrapper());
-    watchers_.push_back(topology_watcher);
-    std::string keepalive_path = LOG_WRAPPER_FWAPI_FORMAT("{}/{}-{}", watch_path, app_->get_app_name(), app_->get_id());
-    std::string empty;
-    auto keepalive_actor_ = etcd_mod->add_keepalive_actor(empty, keepalive_path);
-    if (!keepalive_actor_) {
-      FWLOGERROR("orbit agent failed to create etcd keepalive actor for path {}", keepalive_path);
-      return -6;
-    }
-    LIBATAPP_MACRO_ETCD_CLUSTER_LOG_INFO(etcd_ctx, "create etcd_keepalive {} for topology index {} success",
-                                         reinterpret_cast<const void*>(keepalive_actor_.get()), keepalive_path);
-    keepalive_actors_.push_back(keepalive_actor_);
-  }
-
-  const std::list<atapp::etcd_keepalive::ptr_t>* keepalive_actors[] = {&keepalive_actors_};
-  if (!etcd_mod->check_keepalive_actor_start_success(app_, gsl::make_span(keepalive_actors))) {
-    FWLOGERROR("orbit agent etcd keepalive actor start failed");
-    return -7;
-  }
-  return 0;
-}
 
 orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(
     double expected_cpu, double expected_memory_mb,
@@ -386,14 +287,14 @@ orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(
   return result;
 }
 
-void orbit_controller_manager::on_agent_load_event(atfw::atapp::etcd_module::node_action_t action_type,
+void orbit_controller_manager::on_agent_load_event(atfw::atapp::service_discovery_module::node_action_t action_type,
                                                    const orbit::DAgentEtcdLoadRecord& record) {
   switch (action_type) {
-    case atfw::atapp::etcd_module::node_action_t::kPut: {
+    case atfw::atapp::service_discovery_module::node_action_t::kPut: {
       update_agent_load(record);
       break;
     }
-    case atfw::atapp::etcd_module::node_action_t::kDelete: {
+    case atfw::atapp::service_discovery_module::node_action_t::kDelete: {
       const uint64_t agent_server_id = record.server_id();
       agents_.erase(agent_server_id);
       FWLOGINFO("orbit controller agent {:#x} removed from registry", agent_server_id);

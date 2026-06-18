@@ -14,6 +14,7 @@
 
 #include <atframe/atapp.h>
 #include <atframe/etcdcli/etcd_keepalive.h>
+#include <atframe/modules/etcd_module.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -82,7 +83,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   orbit_agent_manager();
 
   int init(atfw::atapp::app* app);
-  void stop();
+  int stop();
   void tick();
 
   // 来自Controller
@@ -174,7 +175,8 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   // 负载快照更新
   time_t last_auto_load_etcd_update_timepoint_ = 0;
   time_t last_server_identity_timeout_check_timepoint_ = 0;
-  atapp::etcd_keepalive::ptr_t keepalive_actor_;
+  atapp::etcd_module etcd_mod_;
+  atapp::etcd_keepalive::ptr_t keepalive_actor_ = nullptr;
 
   orbit::DAgentEtcdLoadRecord load_record_;
   bool dirty_load_record_ = true;      // 负载记录是否有未同步的变更

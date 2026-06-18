@@ -20,6 +20,7 @@
 #include <atframe/atapp_module_impl.h>
 #include <atframe/etcdcli/etcd_discovery.h>
 #include <atframe/modules/etcd_module.h>
+#include <atframe/modules/service_discovery_module.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -139,7 +140,7 @@ class logic_server_common_module : public atfw::atapp::module_impl {
 
   SERVER_FRAME_API atfw::atapp::etcd_cluster* get_etcd_cluster();
 
-  SERVER_FRAME_API std::shared_ptr<::atfw::atapp::etcd_module> get_etcd_module();
+  SERVER_FRAME_API std::shared_ptr<::atfw::atapp::service_discovery_module> get_service_discovery_module();
 
   /**
    * @brief 添加自定义的etcd keepalive 数据

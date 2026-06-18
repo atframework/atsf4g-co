@@ -57,7 +57,7 @@ class main_service_module : public atfw::atapp::module_impl {
     // register handles
     INIT_CALL_FN(handle::authsvrclientservice::register_handles_for_authsvrclientservice);
 
-    discovery_index_ = atfw::component::service_discovery_index::create(get_app()->get_etcd_module());
+    discovery_index_ = atfw::component::service_discovery_index::create(get_app()->get_service_discovery_module());
     discovery_index_->initialize();
 
     return 0;

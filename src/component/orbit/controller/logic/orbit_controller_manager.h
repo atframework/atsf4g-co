@@ -6,7 +6,7 @@
 
 #include <atframe/atapp.h>
 #include <atframe/etcdcli/etcd_discovery.h>
-#include <atframe/modules/etcd_module.h>
+#include <atframe/modules/service_discovery_module.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -49,7 +49,7 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
   orbit_controller_manager();
 
   int init(atfw::atapp::app* app);
-  void stop();
+  int stop();
   void tick();
 
   // ---- 来自 Agent ----
@@ -85,21 +85,19 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
  private:
   orbit::DAgentIdentity select_agent_for_launch(double expected_cpu, double expected_memory_mb,
                                                 const google::protobuf::RepeatedPtrField<std::string>& tags) noexcept;
-
-  void on_agent_load_event(atfw::atapp::etcd_module::node_action_t action_type,
+  void on_agent_load_event(atfw::atapp::service_discovery_module::node_action_t action_type,
                            const orbit::DAgentEtcdLoadRecord& record);
   void update_agent_load(const orbit::DAgentEtcdLoadRecord& record);
 
-  int32_t init_discovery(std::shared_ptr<atfw::atapp::etcd_module> etcd_mod, const std::string& path);
-
  private:
   bool stopped_ = false;
-  atfw::atapp::app* app_;
+  atfw::atapp::app* app_ = nullptr;
   std::string region_;
 
   // Agent节点信息: agent_server_id → orbit_controller_agent_info
   std::unordered_map<uint64_t, orbit_controller_agent_info> agents_;
 
-  std::list<atapp::etcd_keepalive::ptr_t> keepalive_actors_;
-  std::list<atapp::etcd_watcher::ptr_t> watchers_;
+  atapp::etcd_module etcd_mod_;
+  atapp::service_discovery_module::service_discovery_cluster_context service_discovery_context_;
+  atapp::etcd_watcher::ptr_t watcher_ = nullptr;
 };

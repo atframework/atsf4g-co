@@ -24,4 +24,25 @@ vector:
 
 orbit_controller:
   region: default
-  agent_discovery_path: /atapp/services/atsf4g-co-orbit
+  agent_discovery_path: /atapp/services/atsf4g-co-orbit-agent
+
+etcd:
+  cluster_name: atsf4g-co-orbit-controller
+  watcher:
+    enabled: true
+  keepalive:
+    enabled: true
+
+external_discovery:
+  - enabled: true
+    cluster_name: atsf4g-co-orbit-agent
+    watcher:
+      enabled: true
+    keepalive:
+      enabled: false
+  - enabled: true
+    cluster_name: atsf4g-co
+    watcher:
+      enabled: true
+    keepalive:
+      enabled: false

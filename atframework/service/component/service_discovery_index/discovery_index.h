@@ -7,7 +7,7 @@
 #include <nostd/nullability.h>
 
 #include <atframe/etcdcli/etcd_discovery.h>
-#include <atframe/modules/etcd_module.h>
+#include <atframe/modules/service_discovery_module.h>
 
 #include <cstdint>
 #include <memory>
@@ -62,7 +62,7 @@ class service_discovery_index {
   service_discovery_index(ctor_guard_t&);
 
   ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API static ptr_t create(
-      const std::shared_ptr<::atfw::atapp::etcd_module>& etcd_module);
+      const std::shared_ptr<::atfw::atapp::service_discovery_module>& service_discovery_module);
 
   ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API ~service_discovery_index();
 
@@ -128,7 +128,7 @@ class service_discovery_index {
  private:
   void setup_etcd_event_handle();
   void reset_local_cache(bool reset_version) noexcept;
-  void apply_node_event(atfw::atapp::etcd_module::node_action_t action_type,
+  void apply_node_event(atfw::atapp::service_discovery_module::node_action_t action_type,
                         const atfw::atapp::etcd_discovery_node::ptr_t& node,
                         std::unordered_set<uint64_t>& bump_service_discovery_version_by_type_id,
                         std::unordered_set<std::string>& bump_service_discovery_version_by_type_name);
@@ -165,7 +165,7 @@ class service_discovery_index {
 
  private:
   bool initialized_;
-  atfw::util::nostd::nonnull<std::shared_ptr<::atfw::atapp::etcd_module>> etcd_module_;
+  atfw::util::nostd::nonnull<std::shared_ptr<::atfw::atapp::service_discovery_module>> service_discovery_module_;
 
   mutable std::unordered_map<uint64_t, int64_t> service_discovery_version_by_type_id_;
   mutable std::unordered_map<std::string, int64_t> service_discovery_version_by_type_name_;
@@ -178,7 +178,7 @@ class service_discovery_index {
   service_discovery_index_set_t index_all_;
   service_discovery_index_by_realm_t index_by_realm_;
 
-  atfw::util::nostd::nullable<std::unique_ptr<atfw::atapp::etcd_module::node_event_callback_handle_t>>
+  atfw::util::nostd::nullable<std::unique_ptr<atfw::atapp::service_discovery_module::node_event_callback_handle_t>>
       service_index_handle_;
 };
 

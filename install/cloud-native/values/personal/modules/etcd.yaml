@@ -3,5 +3,14 @@
 # encoding: utf-8
 
 enabled: true
-client_urls:
-  - http://127.0.0.1:12379
+
+etcd_clusters:
+  atsf4g-co:
+    client_urls:
+      - http://127.0.0.1:12379
+  atsf4g-co-orbit-agent:
+    client_urls:
+      - http://127.0.0.1:12379
+  atsf4g-co-orbit-controller:
+    client_urls:
+      - http://127.0.0.1:12379

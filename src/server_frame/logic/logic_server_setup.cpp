@@ -423,7 +423,7 @@ SERVER_FRAME_API int logic_server_common_module::init() {
     FWLOGERROR("Setup LogicCommonService failed, result: {}({})", ret, protobuf_mini_dumper_get_error_msg(ret));
   }
 
-  discovery_index_ = atfw::component::service_discovery_index::create(get_etcd_module());
+  discovery_index_ = atfw::component::service_discovery_index::create(get_service_discovery_module());
   discovery_index_->initialize();
 
   setup_hpa_controller();
@@ -623,17 +623,17 @@ SERVER_FRAME_API logic_server_common_module::etcd_keepalive_ptr_t logic_server_c
     return discovery_index_->add_keepalive(path, value);
   }
 
-  std::shared_ptr<atfw::atapp::etcd_module> etcd_mod;
+  std::shared_ptr<atfw::atapp::service_discovery_module> service_discovery_module;
 
   if (NULL != get_app()) {
-    etcd_mod = get_app()->get_etcd_module();
+    service_discovery_module = get_app()->get_service_discovery_module();
   }
 
-  if (!etcd_mod || path.empty()) {
+  if (!service_discovery_module || path.empty()) {
     return nullptr;
   }
 
-  etcd_keepalive_ptr_t ret = etcd_mod->add_keepalive_actor(value, path);
+  etcd_keepalive_ptr_t ret = service_discovery_module->add_keepalive_actor(value, path);
   if (!ret) {
     FWLOGERROR("add keepalive {}={} failed", path, value);
   }
@@ -656,21 +656,22 @@ void logic_server_common_module::setup_hpa_controller() {
 }
 
 SERVER_FRAME_API atfw::atapp::etcd_cluster *logic_server_common_module::get_etcd_cluster() {
-  std::shared_ptr<::atfw::atapp::etcd_module> etcd_mod = get_etcd_module();
-  if (!etcd_mod) {
+  std::shared_ptr<::atfw::atapp::service_discovery_module> service_discovery_module = get_service_discovery_module();
+  if (!service_discovery_module) {
     return nullptr;
   }
 
-  return &etcd_mod->get_raw_etcd_ctx();
+  return &service_discovery_module->get_raw_etcd_ctx();
 }
 
-SERVER_FRAME_API std::shared_ptr<::atfw::atapp::etcd_module> logic_server_common_module::get_etcd_module() {
+SERVER_FRAME_API std::shared_ptr<::atfw::atapp::service_discovery_module>
+logic_server_common_module::get_service_discovery_module() {
   atfw::atapp::app *app = get_app();
   if (nullptr == app) {
     return nullptr;
   }
 
-  return app->get_etcd_module();
+  return app->get_service_discovery_module();
 }
 
 SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type(

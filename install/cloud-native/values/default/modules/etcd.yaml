@@ -7,20 +7,64 @@ log:
   enable: true
   startup_level: debug
   level: info
-path: /atapp/services/atsf4g-co
-client_urls:
-  - https://etcd-project-x.m-oa.com:2379
-init:
-  timeout: "15s"
-  tick_interval: "64ms"
-keepalive:
-  timeout: "16s"
-  ttl: "5s"
-  retry_interval: "3s"
-request:
-  timeout: "5s"
-  initialization_timeout: "3s"
-watcher:
-  retry_interval: "3s"
-  request_timeout: "3600s"
-  get_request_timeout: "180s"
+
+etcd_clusters:
+  atsf4g-co:
+    path: /atapp/services/atsf4g-co
+    client_urls:
+      - https://etcd-project-x.m-oa.com:2379
+    init:
+      timeout: "15s"
+      tick_interval: "64ms"
+    keepalive:
+      timeout: "16s"
+      ttl: "5s"
+      retry_interval: "3s"
+    request:
+      timeout: "5s"
+      initialization_timeout: "3s"
+    watcher:
+      retry_interval: "3s"
+      request_timeout: "3600s"
+      get_request_timeout: "180s"
+
+  atsf4g-co-orbit-agent:
+    path: /atapp/services/atsf4g-co-orbit-agent
+    client_urls:
+      - https://etcd-project-x.m-oa.com:2379
+    init:
+      timeout: "15s"
+      tick_interval: "64ms"
+    keepalive:
+      timeout: "16s"
+      ttl: "5s"
+      retry_interval: "3s"
+    request:
+      timeout: "5s"
+      initialization_timeout: "3s"
+    watcher:
+      retry_interval: "3s"
+      request_timeout: "3600s"
+      get_request_timeout: "180s"
+
+  atsf4g-co-orbit-controller:
+    path: /atapp/services/atsf4g-co-orbit-controller
+    client_urls:
+      - https://etcd-project-x.m-oa.com:2379
+    init:
+      timeout: "15s"
+      tick_interval: "64ms"
+    keepalive:
+      timeout: "16s"
+      ttl: "5s"
+      retry_interval: "3s"
+    request:
+      timeout: "5s"
+      initialization_timeout: "3s"
+    watcher:
+      retry_interval: "3s"
+      request_timeout: "3600s"
+      get_request_timeout: "180s"
+
+# default cluster for services that don't specify cluster_name
+etcd_default_cluster: atsf4g-co

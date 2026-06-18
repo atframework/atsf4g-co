@@ -94,9 +94,10 @@ int atproxy_manager::reload() {
 }
 
 int atproxy_manager::init() {
-  std::shared_ptr<::atfw::atapp::etcd_module> etcd_mod = get_app()->get_etcd_module();
-  if (!etcd_mod) {
-    FWLOGERROR("etcd mod not found");
+  std::shared_ptr<::atfw::atapp::service_discovery_module> service_discovery_module =
+      get_app()->get_service_discovery_module();
+  if (!service_discovery_module) {
+    FWLOGERROR("service discovery mod not found");
     return -1;
   }
 
@@ -106,25 +107,25 @@ int atproxy_manager::init() {
     return -1;
   }
 
-  etcd_mod->add_on_topology_info_event([this](atapp::etcd_module::topology_action_t action,
-                                              const atapp::etcd_module::atapp_topology_info_ptr_t &info,
-                                              const atapp::etcd_data_version &) {
-    if (!info) {
-      return;
-    }
-    if (info->id() == 0) {
-      return;
-    }
+  service_discovery_module->add_on_topology_info_event(
+      [this](atapp::service_discovery_module::topology_action_t action,
+             const atapp::service_discovery_module::atapp_topology_info_ptr_t &info, const atapp::etcd_data_version &) {
+        if (!info) {
+          return;
+        }
+        if (info->id() == 0) {
+          return;
+        }
 
-    if (action == atapp::etcd_module::topology_action_t::kDelete) {
-      this->remove_topology_info_ready(info->id());
-    } else {
-      this->set_topology_info_ready(info->id());
-    }
-  });
+        if (action == atapp::service_discovery_module::topology_action_t::kDelete) {
+          this->remove_topology_info_ready(info->id());
+        } else {
+          this->set_topology_info_ready(info->id());
+        }
+      });
 
-  etcd_mod->add_on_node_discovery_event(
-      [this](atapp::etcd_module::node_action_t action, const atapp::etcd_discovery_node::ptr_t &node) {
+  service_discovery_module->add_on_node_discovery_event(
+      [this](atapp::service_discovery_module::node_action_t action, const atapp::etcd_discovery_node::ptr_t &node) {
         if (!node) {
           return;
         }
@@ -133,9 +134,9 @@ int atproxy_manager::init() {
           return;
         }
 
-        if (action == atapp::etcd_module::node_action_t::kDelete) {
+        if (action == atapp::service_discovery_module::node_action_t::kDelete) {
           this->remove_discovery_info_ready(node->get_discovery_info().id());
-        } else if (action == atapp::etcd_module::node_action_t::kPut) {
+        } else if (action == atapp::service_discovery_module::node_action_t::kPut) {
           this->set_discovery_info_ready(node->get_discovery_info().id());
         }
       });

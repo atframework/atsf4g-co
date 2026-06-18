@@ -346,7 +346,7 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
   }
   if (agent_endpoint_.empty()) {
     FWLOGERROR("orbit agent failed to resolve listen address from atapp bus.listen");
-    return -8;
+    return -5;
   }
   FWLOGINFO("orbit agent launch client endpoint: {}", agent_endpoint_);
 
@@ -365,46 +365,53 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
 
   // 初始化负载同步通道
   {
-    auto etcd_mod = owner_app_->get_etcd_module();
-    if (!etcd_mod) {
-      FWLOGERROR("orbit agent failed to get etcd module from app");
-      return -5;
-    }
-    auto& etcd_ctx = etcd_mod->get_raw_etcd_ctx();
-
-    std::string keepalive_path = LOG_WRAPPER_FWAPI_FORMAT("{}{}/{}-{}", etcd_mod->get_configure_path(), "orbit_load",
-                                                          owner_app_->get_app_name(), owner_app_->get_id());
-
-    keepalive_actor_ = etcd_mod->add_keepalive_actor(load_json_, keepalive_path);
-    if (!keepalive_actor_) {
-      FWLOGERROR("orbit agent failed to create etcd keepalive actor for path {}", keepalive_path);
+    if (etcd_mod_.init(*owner_app_, owner_app_->get_origin_configure().etcd(), nullptr) != 0) {
+      FWLOGERROR("orbit agent failed to initialize etcd module");
       return -6;
     }
-    keepalive_actor_->set_checker(make_orbit_load_checker(local_server_id));
-    LIBATAPP_MACRO_ETCD_CLUSTER_LOG_INFO(etcd_ctx, "create etcd_keepalive {} for orbit_load index {} success",
-                                         reinterpret_cast<const void*>(keepalive_actor_.get()), keepalive_path);
-    std::list<atapp::etcd_keepalive::ptr_t> keepalive_list{keepalive_actor_};
-    const std::list<atapp::etcd_keepalive::ptr_t>* keepalive_actors[] = {&keepalive_list};
 
-    if (!etcd_mod->check_keepalive_actor_start_success(app, gsl::make_span(keepalive_actors))) {
-      FWLOGERROR("orbit agent etcd keepalive actor start failed for path {}", keepalive_path);
+    std::string keepalive_path = LOG_WRAPPER_FWAPI_FORMAT("{}{}/{}-{}", etcd_mod_.get_configure_path(), "orbit_load",
+                                                          owner_app_->get_app_name(), owner_app_->get_id());
+
+    keepalive_actor_ = atapp::etcd_keepalive::create(etcd_mod_.get_etcd_cluster(), keepalive_path);
+    if (!keepalive_actor_) {
+      FWLOGERROR("orbit agent failed to create etcd keepalive actor for path {}", keepalive_path);
       return -7;
     }
-  }
 
+    keepalive_actor_->set_checker(make_orbit_load_checker(local_server_id));
+    keepalive_actor_->set_value(load_json_);
+
+    if (!etcd_mod_.get_etcd_cluster().add_keepalive(keepalive_actor_)) {
+      keepalive_actor_.reset();
+    }
+
+    LIBATAPP_MACRO_ETCD_CLUSTER_LOG_INFO(etcd_mod_.get_etcd_cluster(),
+                                         "create etcd_keepalive {} for orbit_load index {} success",
+                                         reinterpret_cast<const void*>(keepalive_actor_.get()), keepalive_path);
+
+    std::list<atapp::etcd_keepalive::ptr_t> keepalive_list{keepalive_actor_};
+    const std::list<atapp::etcd_keepalive::ptr_t>* keepalive_actors[] = {&keepalive_list};
+    if (!etcd_mod_.check_keepalive_actor_start_success(gsl::make_span(keepalive_actors))) {
+      FWLOGERROR("orbit agent etcd keepalive actor start failed for path {}", keepalive_path);
+      return -8;
+    }
+  }
   return 0;
 }
 
-void orbit_agent_manager::stop() {
+int orbit_agent_manager::stop() {
+  int ret = etcd_mod_.stop();
   stoped_ = true;
-  auto etcd_mod = owner_app_->get_etcd_module();
-  if (etcd_mod) {
-    etcd_mod->remove_keepalive_actor(keepalive_actor_);
+  if (keepalive_actor_) {
+    etcd_mod_.get_etcd_cluster().remove_keepalive(keepalive_actor_);
+    keepalive_actor_ = nullptr;
   }
-  keepalive_actor_.reset();
+  return ret;
 }
 
 void orbit_agent_manager::tick() {
+  etcd_mod_.tick();
   if (stoped_) {
     return;
   }
@@ -775,7 +782,8 @@ rpc::result_code_type orbit_agent_manager::handle_client_exit(rpc::context& ctx,
   client_record->force_exit_reason = orbit::EN_CLIENT_EXIT_REASON_UNSPECIFIED;
   client_record->force_exit_code = 0;
 
-  if (client_record->state != orbit::EN_CLIENT_STATE_RUNNING && client_record->state != orbit::EN_CLIENT_STATE_EXITING) {
+  if (client_record->state != orbit::EN_CLIENT_STATE_RUNNING &&
+      client_record->state != orbit::EN_CLIENT_STATE_EXITING) {
     FWLOGERROR("orbit agent client_start ignored for {}: invalid state {}, expected RUNNING", client_id,
                static_cast<int>(client_record->state));
     response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_STATE_INVALID);
@@ -996,7 +1004,8 @@ void orbit_agent_manager::on_client_process_exit(const std::string& client_id, i
 
   if (record->force_cleanup_timepoint > 0 && is_timeout_exit_reason(record->force_exit_reason)) {
     FWLOGWARNING(
-        "orbit agent client {} exited after timeout kill: exit_status={}, term_signal={}, state={}, wait_cleanup_until={}",
+        "orbit agent client {} exited after timeout kill: exit_status={}, term_signal={}, state={}, "
+        "wait_cleanup_until={}",
         client_id, exit_status, term_signal, static_cast<int>(record->state), record->force_cleanup_timepoint);
     return;
   }
@@ -1234,7 +1243,9 @@ void orbit_agent_manager::try_sync_load_to_etcd() {
     return;
   }
   dirty_load_json_ = false;
-  keepalive_actor_->set_value(load_json_);
+  if (keepalive_actor_ != nullptr) {
+    keepalive_actor_->set_value(load_json_);
+  }
 }
 
 void orbit_agent_manager::delete_client(orbit_agent_client_record_ptr client_record) {

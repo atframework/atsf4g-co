@@ -34,4 +34,16 @@ orbit_agent:
   server_identity_check_interval_sec: 5
 
 etcd:
-  path: /atapp/services/atsf4g-co-orbit
+  cluster_name: atsf4g-co-orbit-agent
+  watcher:
+    enabled: false
+  keepalive:
+    enabled: true
+
+external_discovery:
+  - enabled: true
+    cluster_name: atsf4g-co-orbit-controller
+    watcher:
+      enabled: true
+    keepalive:
+      enabled: false
