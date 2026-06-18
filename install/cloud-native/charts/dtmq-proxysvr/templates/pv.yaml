@@ -1,0 +1,3 @@
+{{- template "libapp.pv" (list . "dtmq-proxysvr.pv") -}}
+{{- define "dtmq-proxysvr.pv" -}}
+{{- end -}}

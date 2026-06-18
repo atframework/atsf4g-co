@@ -1,0 +1,3 @@
+{{- template "libapp.service" (list . "dtmq-proxysvr.service") -}}
+{{- define "dtmq-proxysvr.service" -}}
+{{- end -}}

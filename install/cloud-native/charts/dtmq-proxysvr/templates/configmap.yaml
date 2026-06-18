@@ -1,0 +1,6 @@
+{{- template "libapp.configmap" (list . "dtmq-proxysvr.configmap") -}}
+{{- define "dtmq-proxysvr.configmap" -}}
+data:
+  {{ include "dtmq-proxysvr.name" . }}.yaml: {{ tpl (.Files.Get "cfg/dtmq-proxysvr.yaml.tpl") . | quote }}
+  vector.yaml: {{ tpl (.Files.Get "cfg/vector.yaml.tpl") . | quote }}
+{{- end -}}

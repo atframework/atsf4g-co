@@ -10,8 +10,8 @@ Detail companion to `SKILL.md`. Load when reviewing a change or finalizing edits
 
 ## While writing or reviewing
 
-- Check naming, ownership/lifetime, return-code handling, logging, include wrappers, generated-code boundaries, and
-  helper usage in the same pass.
+- Check naming, ownership/lifetime, return-code handling, logging, include wrappers, generated-code boundaries,
+  header inline/API ABI rules, and helper usage in the same pass.
 - Prefer existing helper APIs, project error codes, and local patterns over ad hoc alternatives.
 - Keep comments useful and current; remove placeholder `TODO` text when implementing the placeholder.
 
@@ -25,6 +25,8 @@ Detail companion to `SKILL.md`. Load when reviewing a change or finalizing edits
 - Run `clang-format -i` on modified C/C++ files, then `clang-format --dry-run --Werror` on the same files.
 - Run configured `cpplint` and `clang-tidy` for touched files when practical; use the current build directory and
   compile database for `clang-tidy`.
+- For touched headers, verify every in-header function body uses `ATFW_UTIL_FORCEINLINE` and no `*_API` exported
+  interface is implemented in the header.
 - Expected result: no warnings and no required formatting changes.
 
 ## CMake format and lint

@@ -1,0 +1,3 @@
+{{- template "libapp.statefulset" (list . "dtmq-proxysvr.statefulset") -}}
+{{- define "dtmq-proxysvr.statefulset" -}}
+{{- end -}}

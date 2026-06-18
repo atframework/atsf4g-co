@@ -32,15 +32,20 @@ high-performance game server architectures.
 - Respect the user's dirty workspace: inspect current file contents before editing and avoid unrelated reformatting.
 - Apply Karpathy-style coding-agent discipline: surface assumptions/tradeoffs, prefer the simplest sufficient fix, make
   surgical request-traceable edits, and define verification/success criteria before looping.
-- When creating AI scratch files or asking scripts to emit temporary data/logs, use a subdirectory inside an ignored
-  build tree (for example `build/_agent_tmp/` or `build_jobs_cmake_tools/_agent_tmp/`) so `.gitignore` already covers
-  it; never drop temporary artifacts in the repository root.
+- Resolve `<BUILD_DIR>` before creating build trees or temporary files: read `.vscode/settings.json` for
+  `cmake.buildDirectory`; if it is absent, infer from `clangd.arguments` `--compile-commands-dir=...` or an existing
+  configured build tree; if no user setting is readable, use `build`.
+- Put all CMake build trees, AI scratch files, script output/logs, and temporary data under `<BUILD_DIR>/...`; for agent
+  scratch use `<BUILD_DIR>/_agent_tmp/...`. Never create ad-hoc `tmp/`, `log/`, `startup*.log`, generated scripts, or
+  diagnostic dumps in the repository root.
+- Before running CMake configure/build/test commands, align with the resolved `<BUILD_DIR>`, generator, configure
+  settings, and parallel-job settings from `.vscode/settings.json` when present.
 - For paths under vendored subprojects, read the nearest subproject `AGENTS.md` before changing code.
 - When a task matches a skill below, read that `SKILL.md` first; skills contain the long commands and edge cases.
 - For code analysis or edits under `install/**/*.tpl`, read `deployment-config` first; analyze both Go-template actions
   and the rendered target language, and validate target syntax only after rendering representative output.
-- For coding or code review in `src/**`, first read `engineering-guidelines`; it owns shared style, lint, and project
-  engineering conventions.
+- For coding or code review in `src/**`, first read `engineering-guidelines`; it owns shared style, lint,
+  header/ABI boundaries, and project engineering conventions.
 
 ## Skill Routing
 
@@ -48,7 +53,7 @@ Read the matching `.agents/skills/*/SKILL.md` before doing specialized work:
 
 | Skill                     | Use when                                                                                |
 | ------------------------- | --------------------------------------------------------------------------------------- |
-| `engineering-guidelines`  | Writing or reviewing C++/CMake/Markdown code, RPC/Arena, generated code, service CMake  |
+| `engineering-guidelines`  | Writing/reviewing C++/CMake/Markdown, header inline/API ABI rules, RPC/Arena, generated code |
 | `build`                   | Configuring or building with CMake                                                      |
 | `testing`                 | Running or writing unit tests                                                           |
 | `deployment-config`       | Generating/editing deployment configs, Go `.tpl` chart templates, or Helm values        |

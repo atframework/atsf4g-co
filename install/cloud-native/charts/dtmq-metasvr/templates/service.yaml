@@ -1,3 +1,0 @@
-{{- template "libapp.service" (list . "dtmq-metasvr.service") -}}
-{{- define "dtmq-metasvr.service" -}}
-{{- end -}}

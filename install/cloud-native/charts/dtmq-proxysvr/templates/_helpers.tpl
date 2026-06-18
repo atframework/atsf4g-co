@@ -1,7 +1,7 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "dtmq-metasvr.name" -}}
+{{- define "dtmq-proxysvr.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
@@ -10,7 +10,7 @@ Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
 If release name contains chart name it will be used as a full name.
 */}}
-{{- define "dtmq-metasvr.fullname" -}}
+{{- define "dtmq-proxysvr.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -26,16 +26,16 @@ If release name contains chart name it will be used as a full name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "dtmq-metasvr.chart" -}}
+{{- define "dtmq-proxysvr.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Common labels
 */}}
-{{- define "dtmq-metasvr.labels" -}}
-helm.sh/chart: {{ include "dtmq-metasvr.chart" . }}
-{{ include "dtmq-metasvr.selectorLabels" . }}
+{{- define "dtmq-proxysvr.labels" -}}
+helm.sh/chart: {{ include "dtmq-proxysvr.chart" . }}
+{{ include "dtmq-proxysvr.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -45,8 +45,8 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/*
 Selector labels
 */}}
-{{- define "dtmq-metasvr.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "dtmq-metasvr.name" . }}
+{{- define "dtmq-proxysvr.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "dtmq-proxysvr.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 

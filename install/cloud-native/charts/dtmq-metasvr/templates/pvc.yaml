@@ -1,3 +1,0 @@
-{{- template "libapp.pvc" (list . "dtmq-metasvr.pvc") -}}
-{{- define "dtmq-metasvr.pvc" -}}
-{{- end -}}

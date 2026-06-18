@@ -2,25 +2,25 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-proc_name: dtmq-metasvrd
+proc_name: dtmq-proxysvrd
 
 type_id: 21
-type_name: "dtmq-metasvr"
+type_name: "dtmq-proxysvr"
 
 image:
-  repository: harbor.m-oa.com:6023/project-x/dtmq-metasvr
+  repository: harbor.m-oa.com:6023/project-x/dtmq-proxysvr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest
   secrets: harbor-regcred
 
 volumeMounts:
-  configMountPath: /etc/atframework/publish/dtmq-metasvr/cfg
-  logMountPath: /data/atframework/publish/dtmq-metasvr/log
+  configMountPath: /etc/atframework/publish/dtmq-proxysvr/cfg
+  logMountPath: /data/atframework/publish/dtmq-proxysvr/log
 
 vector:
   enabled: false
-  log_path: /data/atframework/publish/dtmq-metasvr/log
+  log_path: /data/atframework/publish/dtmq-proxysvr/log
 
 redis:
   enable: true

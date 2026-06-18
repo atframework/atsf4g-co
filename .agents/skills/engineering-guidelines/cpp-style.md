@@ -19,6 +19,16 @@ Detail companion to `SKILL.md`. Load when writing or reviewing C++ or protobuf c
 - Keep `.editorconfig` rules: LF by default, 120-column default, final newline, trimmed trailing whitespace; Markdown
   and Windows scripts intentionally use CRLF.
 
+## Header and ABI boundaries
+
+- Any function, method, friend, or operator body written in a header must be marked `ATFW_UTIL_FORCEINLINE`; avoid plain
+  `inline` for project code unless matching generated or third-party code.
+- Do not implement interfaces declared with `*_API`/`XXX_API` export macros in headers. Keep exported function, method,
+  constructor, destructor, and static-data implementations in `.cpp` files so ABI stays stable across compilers and
+  build options.
+- Header-only helpers should be non-exported and `ATFW_UTIL_FORCEINLINE`. If surrounding code already uses a dedicated
+  header-only visibility marker, keep that marker but still use `ATFW_UTIL_FORCEINLINE` for the function body.
+
 ## Includes and protobuf wrappers
 
 - Wrap every upstream protobuf header and generated `*.pb.h` include between `config/compiler/protobuf_prefix.h` and

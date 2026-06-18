@@ -7,7 +7,13 @@ description: "Use when: generating deployment configs, rendering per-instance sc
 
 This repo now uses `atdtool` to render **deployment configs + per-instance scripts** from the charts under `cloud-native/charts`.
 
+Resolve `<BUILD_DIR>` the same way as `../build/SKILL.md`: read `.vscode/settings.json` for `cmake.buildDirectory`;
+if absent, infer from clangd `--compile-commands-dir=...` or an existing configured build tree; if no user setting is
+readable, use `build`.
+
 All paths below assume you are working inside the build output: `<BUILD_DIR>/publish` (referred to as `<PUBLISH_DIR>`).
+AI-generated scratch files, rendered diagnostics, temporary merged values, and script/log output must stay under
+`<BUILD_DIR>/_agent_tmp/...`, not the repository root.
 
 ## Template source recognition
 
@@ -88,7 +94,7 @@ Example:
 Generate a single merged values file (useful for debugging precedence):
 
 ```bash
-atdtool merge-values <PUBLISH_DIR>/cloud-native/charts -o merged.values.yaml \
+atdtool merge-values <PUBLISH_DIR>/cloud-native/charts -o <BUILD_DIR>/_agent_tmp/merged.values.yaml \
   --values <PUBLISH_DIR>/cloud-native/values/default \
   --set global.world_id=1
 ```

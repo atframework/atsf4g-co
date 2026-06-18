@@ -1,6 +1,0 @@
-{{- template "libapp.configmap" (list . "dtmq-metasvr.configmap") -}}
-{{- define "dtmq-metasvr.configmap" -}}
-data:
-  {{ include "dtmq-metasvr.name" . }}.yaml: {{ tpl (.Files.Get "cfg/dtmq-metasvr.yaml.tpl") . | quote }}
-  vector.yaml: {{ tpl (.Files.Get "cfg/vector.yaml.tpl") . | quote }}
-{{- end -}}

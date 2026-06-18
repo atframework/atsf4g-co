@@ -7,22 +7,38 @@ description: "Use when: configuring or building atsf4g-co with CMake, resolving 
 
 This project uses **CMake (>= 3.24)** and requires a C++17 toolchain.
 
+## Workspace CMake Settings
+
+Before running `cmake` configure/build/test commands, resolve `<BUILD_DIR>` and reuse workspace settings instead of
+guessing:
+
+1. Read `.vscode/settings.json` when it exists.
+2. Use `cmake.buildDirectory` when present.
+3. If absent, infer from `clangd.arguments` `--compile-commands-dir=...` or an existing configured build tree.
+4. If no user setting is readable, use `build`.
+
+In this checkout `.vscode/settings.json` defines `cmake.generator: Ninja`, `CMAKE_BUILD_TYPE: Debug`,
+`PROJECT_ENABLE_UNITTEST: ON`, shared-library/dynamic-library options, `CMAKE_CXX_STANDARD: 20`, and
+`cmake.parallelJobs: 12`; clangd points at `build_jobs_cmake_tools` for compile commands, so use
+`<BUILD_DIR>=build_jobs_cmake_tools` unless the user asks for a different one.
+
+All build trees, AI scratch files, script output/logs, and temporary data must stay under `<BUILD_DIR>/...`; use
+`<BUILD_DIR>/_agent_tmp/...` for agent-generated notes, scripts, and logs. Do not create temporary files in the
+repository root.
+
 ## Windows (MSVC + vcpkg example)
 
 ```bash
-mkdir build_jobs_msvc
-cd build_jobs_msvc
-
 # Configure with vcpkg
-cmake [SOURCE_PATH] -G "Visual Studio 17 2022" -A x64 \
+cmake -S . -B <BUILD_DIR> -G "Visual Studio 17 2022" -A x64 \
   "-DCMAKE_TOOLCHAIN_FILE=<VCPKG_INSTALL_DIR>/scripts/buildsystems/vcpkg.cmake" \
   -DPROJECT_ENABLE_UNITTEST=YES \
   -DPROJECT_ENABLE_SAMPLE=YES \
   -DPROJECT_ENABLE_TOOLS=YES
 
 # Build
-cmake --build . --config Debug
-cmake --build . --config RelWithDebInfo  # For production
+cmake --build <BUILD_DIR> --config Debug
+cmake --build <BUILD_DIR> --config RelWithDebInfo  # For production
 ```
 
 Notes:
@@ -39,8 +55,7 @@ bash cmake_dev.sh [options] ...
 bash ./cmake_dev.sh -lus -- -DCRYPTO_USE_OPENSSL=YES
 
 # Build
-cd build_jobs_*
-cmake --build . -- -j4
+cmake --build <BUILD_DIR> -- -j4
 ```
 
 ## Key CMake Options
@@ -54,4 +69,4 @@ cmake --build . -- -j4
 | `CRYPTO_USE_OPENSSL`      | NO      | Use OpenSSL for crypto     |
 | `CRYPTO_USE_MBEDTLS`      | NO      | Use MbedTLS for crypto     |
 
-If you are unsure what was configured, inspect `CMakeCache.txt` in the build folder.
+If you are unsure what was configured, inspect `<BUILD_DIR>/CMakeCache.txt`.

@@ -1,6 +1,6 @@
 ---
 name: engineering-guidelines
-description: "Use when: writing or reviewing C++/CMake/Markdown code, applying project engineering conventions, checking cpplint, clang-format, cmake-format, cmake-lint, markdownlint, clang-tidy, protobuf, RPC, generated-code, service/component CMake rules."
+description: "Use when: writing or reviewing C++/CMake/Markdown code, applying project engineering conventions, checking header inline and exported API ABI rules, cpplint, clang-format, cmake-format, cmake-lint, markdownlint, clang-tidy, protobuf, RPC, generated-code, service/component CMake rules."
 ---
 
 # Engineering guidelines
@@ -12,7 +12,7 @@ sibling section you need so unrelated rules do not bloat your context.
 
 | File                                                     | Load when                                                  |
 | -------------------------------------------------------- | ---------------------------------------------------------- |
-| [cpp-style.md](cpp-style.md)                             | Writing or reviewing C++ or protobuf code under `src/**`   |
+| [cpp-style.md](cpp-style.md)                             | Writing/reviewing C++, protobuf, header inline, or API ABI  |
 | [cmake-and-generated.md](cmake-and-generated.md)         | Editing CMake, `.proto`, templates, or generated code      |
 | [service-functions-cmake.md](service-functions-cmake.md) | Service/component/protocol/SDK CMake helpers               |
 | [code-generation.md](code-generation.md)                 | `.proto`, Mako templates, generated task/RPC code          |
