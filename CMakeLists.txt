@@ -152,25 +152,25 @@ file(
   "${CMAKE_CURRENT_LIST_DIR}/install/*")
 project_link_or_copy_files(${PROJECT_INSTALL_DST_LIST} "${PROJECT_INSTALL_BAS_DIR}")
 
-configure_file("${CMAKE_CURRENT_LIST_DIR}/generate_install/cleanup-dll.sh.in"
+configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/cleanup-dll.sh.in"
                "${PROJECT_GENERATED_TOOLS_DIR}/cleanup-dll.sh" ESCAPE_QUOTES @ONLY)
 
-configure_file("${CMAKE_CURRENT_LIST_DIR}/generate_install/cleanup-dll.ps1.in"
+configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/cleanup-dll.ps1.in"
                "${PROJECT_GENERATED_TOOLS_DIR}/cleanup-dll.ps1" ESCAPE_QUOTES @ONLY)
 
-configure_file("${CMAKE_CURRENT_LIST_DIR}/generate_install/start_all.sh.in"
+configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/start_all.sh.in"
                "${PROJECT_GENERATED_TOOLS_DIR}/start_all.sh" ESCAPE_QUOTES @ONLY)
 
-configure_file("${CMAKE_CURRENT_LIST_DIR}/generate_install/start_all.bat.in"
+configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/start_all.bat.in"
                "${PROJECT_GENERATED_TOOLS_DIR}/start_all.bat" ESCAPE_QUOTES @ONLY)
 
-configure_file("${CMAKE_CURRENT_LIST_DIR}/generate_install/stop_all.sh.in" "${PROJECT_GENERATED_TOOLS_DIR}/stop_all.sh"
+configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/stop_all.sh.in" "${PROJECT_GENERATED_TOOLS_DIR}/stop_all.sh"
                ESCAPE_QUOTES @ONLY)
 
-configure_file("${CMAKE_CURRENT_LIST_DIR}/generate_install/stop_all.bat.in"
+configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/stop_all.bat.in"
                "${PROJECT_GENERATED_TOOLS_DIR}/stop_all.bat" ESCAPE_QUOTES @ONLY)
 
-configure_file("${CMAKE_CURRENT_LIST_DIR}/generate_install/start_all.conf.in"
+configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/start_all.conf.in"
                "${PROJECT_GENERATED_TOOLS_DIR}/start_all.conf" ESCAPE_QUOTES @ONLY)
 
 add_custom_target(
