@@ -60,19 +60,19 @@ proc_desc:
     start_instance_id: 1
 
   - chart_name: "orbit-server"
-    instance_type_id: 18
+    instance_type_id: 25
     world_instance: false
     instance_count: 1
     start_instance_id: 1
 
   - chart_name: "orbit-agent"
-    instance_type_id: 101
+    instance_type_id: 26
     world_instance: false
     instance_count: 1
     start_instance_id: 1
 
   - chart_name: "orbit-controller"
-    instance_type_id: 102
+    instance_type_id: 27
     world_instance: false
     instance_count: 1
     start_instance_id: 1

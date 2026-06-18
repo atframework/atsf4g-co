@@ -4,7 +4,7 @@
 
 proc_name: orbit-controllerd
 
-type_id: 102
+type_id: 27
 type_name: "orbit-controller"
 
 image:

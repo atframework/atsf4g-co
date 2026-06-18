@@ -4,7 +4,7 @@
 
 proc_name: orbit-agentd
 
-type_id: 101
+type_id: 26
 type_name: "orbit-agent"
 
 image:

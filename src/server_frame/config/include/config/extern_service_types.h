@@ -21,15 +21,15 @@ enum class logic_service_type : uint32_t {
   kDtCoordSvr = 13,         // 用于分布式事务的协调者服务
   kCacheSvr = 15,           // 缓存服务器
   kRankSettlementSvr = 16,  // 排行榜结算服务器
-  kRankBoardSvr = 17,       // 排行榜展示服务器
-  kOrbitSvr = 18,           // Orbit 服务
+  kRankBoardSvr = 17,       // 排行榜展示服务器、
 
   // === 保留一部分21-25，以后消息队列服务精细化服务角色 ===
   kDtMqProxySvr = 21,  // 分布式消息队列(接入)服务
 
-  // Orbit 相关服务 === 保留一部分101-105
-  kOrbitAgentSvr = 101,       // Orbit Agent 服务
-  kOrbitControllerSvr = 102,  // Orbit Controller 服务
+  // Orbit 相关服务 === 保留一部分25-30
+  kOrbitSvr = 25,           // Orbit 服务
+  kOrbitAgentSvr = 26,       // Orbit Agent 服务
+  kOrbitControllerSvr = 27,  // Orbit Controller 服务
 };
 }  // namespace component
 }  // namespace atframework

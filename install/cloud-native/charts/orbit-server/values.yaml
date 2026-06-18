@@ -4,7 +4,7 @@
 
 proc_name: orbit-serverd
 
-type_id: 18
+type_id: 25
 type_name: "orbit-server"
 
 image:
