@@ -1,5 +1,10 @@
-set(SERVICE_SOURCES rpc/dtmq/dtmqproxysvrservice.atfw.gen.cpp rpc/dtmq/dtmqproxysvrnotifyservice.atfw.gen.cpp)
-set(SERVICE_HEADERS rpc/dtmq/dtmqproxysvrservice.atfw.gen.h rpc/dtmq/dtmqproxysvrnotifyservice.atfw.gen.h)
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
+set(DTMQ_PROXY_SERVICE_SOURCES rpc/dtmq/dtmqproxysvrservice.atfw.gen.cpp
+                               rpc/dtmq/dtmqproxysvrnotifyservice.atfw.gen.cpp rpc/dtmq/dtmq_client_api.cpp)
+set(DTMQ_PROXY_SERVICE_HEADERS rpc/dtmq/dtmqproxysvrservice.atfw.gen.h rpc/dtmq/dtmqproxysvrnotifyservice.atfw.gen.h
+                               rpc/dtmq/dtmq_client_api.h)
 
 project_component_declare_sdk(
   "dtmq-proxy-sdk"
@@ -10,10 +15,11 @@ project_component_declare_sdk(
   DTMQ_PROXY_SDK_API
   USE_COMPONENTS
   "dtmq-protocol-proxy-pbdesc"
+  "dtmq-common-sdk"
   HEADERS
-  ${SERVICE_HEADERS}
+  ${DTMQ_PROXY_SERVICE_HEADERS}
   SOURCES
-  ${SERVICE_SOURCES}
+  ${DTMQ_PROXY_SERVICE_SOURCES}
   GENERATED_OUTPUT_FILES
   "atframework.dtmq.DtmqProxysvrService"
   "atframework.dtmq.DtmqProxysvrNotifyService")

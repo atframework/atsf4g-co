@@ -48,7 +48,6 @@
 #include <memory>
 #include <queue>
 #include <string>
-#include <unordered_map>
 
 class logic_server_common_module;
 class logic_hpa_controller;

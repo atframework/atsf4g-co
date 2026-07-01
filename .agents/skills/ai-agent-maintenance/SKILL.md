@@ -118,6 +118,7 @@ Use this skill when updating AI-agent guidance for this repository or subproject
 - Agent Skills specification and best practices: <https://agentskills.io/specification>
 - Agent Skills creator practices: <https://agentskills.io/skill-creation/best-practices>
 - Agent Skills description tuning: <https://agentskills.io/skill-creation/optimizing-descriptions>
+- AGENTS configuration-smell research: <https://arxiv.org/abs/2606.15828>
 - VS Code Copilot custom instructions and skills: <https://code.visualstudio.com/docs/copilot/customization/overview>
 - Claude Code memory and skills: <https://docs.anthropic.com/claude-code/>
 - MCP security and tool design: <https://modelcontextprotocol.io/docs/>

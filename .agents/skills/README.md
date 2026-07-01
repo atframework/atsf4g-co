@@ -7,7 +7,7 @@ small; put task-specific steps, commands, caveats, and examples in each `SKILL.m
 
 | Skill                     | Description                                                                               |
 | ------------------------- | ----------------------------------------------------------------------------------------- |
-| `engineering-guidelines/` | Code style, lint, RPC/Arena, code generation, service/component CMake, review/validation  |
+| `engineering-guidelines/` | Code style, configured cpplint/clang-tidy review, RPC/Arena, generated code, CMake        |
 | `build/`                  | Configure and build the project (Windows / Unix)                                          |
 | `testing/`                | Run unit tests (including Windows DLL/PATH notes)                                         |
 | `deployment-config/`      | Generate deployment configs/scripts and analyze `install/**/*.tpl` Go templates           |

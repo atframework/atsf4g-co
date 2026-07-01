@@ -32,6 +32,9 @@ high-performance game server architectures.
 - Respect the user's dirty workspace: inspect current file contents before editing and avoid unrelated reformatting.
 - Apply Karpathy-style coding-agent discipline: surface assumptions/tradeoffs, prefer the simplest sufficient fix, make
   surgical request-traceable edits, and define verification/success criteria before looping.
+- Before planning or editing, run the appropriate source-of-truth pass for the task: inspect relevant code, configs,
+  docs, generated sources, and current official docs when external tool or product behavior may have changed. State a
+  short plan and verification path after that pass, mark assumptions explicitly, and do not invent behavior from memory.
 - Resolve `<BUILD_DIR>` before creating build trees or temporary files: read `.vscode/settings.json` for
   `cmake.buildDirectory`; if it is absent, infer from `clangd.arguments` `--compile-commands-dir=...` or an existing
   configured build tree; if no user setting is readable, use `build`.
@@ -44,8 +47,8 @@ high-performance game server architectures.
 - When a task matches a skill below, read that `SKILL.md` first; skills contain the long commands and edge cases.
 - For code analysis or edits under `install/**/*.tpl`, read `deployment-config` first; analyze both Go-template actions
   and the rendered target language, and validate target syntax only after rendering representative output.
-- For coding or code review in `src/**`, first read `engineering-guidelines`; it owns shared style, lint,
-  header/ABI boundaries, and project engineering conventions.
+- For coding or code review in `src/**`, first read `engineering-guidelines`; it owns shared style, configured
+  `.clang-tidy`/`CPPLINT.cfg` review checks, header/ABI boundaries, and project engineering conventions.
 
 ## Skill Routing
 

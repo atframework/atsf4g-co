@@ -24,3 +24,14 @@ message channel_subscriber {
   int64 last_heartbeat_sequence = 11;
   uint64 last_heartbeat_hash_code = 12;
 }
+
+message channel_page_info {
+  // 页码
+  int32 page_number = 1;
+  // 每页数量
+  int32 page_size = 2;
+  // 页数
+  int32 page_count = 3;
+  // 总数量
+  int32 total_count = 4;
+}

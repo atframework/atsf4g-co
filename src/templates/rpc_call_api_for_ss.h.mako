@@ -33,7 +33,7 @@ service_header_file_path = service_proto_file_prefix + ".pb.h"
 
 #include <atframe/atapp_config.h>
 
-#include <stdint.h>
+#include <cstdint>
 #include <cstddef>
 #include <cstring>
 #include <memory>

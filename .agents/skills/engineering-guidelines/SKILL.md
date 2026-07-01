@@ -1,6 +1,6 @@
 ---
 name: engineering-guidelines
-description: "Use when: writing or reviewing C++/CMake/Markdown code, applying project engineering conventions, checking header inline and exported API ABI rules, cpplint, clang-format, cmake-format, cmake-lint, markdownlint, clang-tidy, protobuf, RPC, generated-code, service/component CMake rules."
+description: "Use when: writing or reviewing C++/CMake/Markdown code, code review, applying project engineering conventions, checking .clang-tidy/CPPLINT.cfg-backed lint issues, copyright headers, include hygiene, header inline and exported API ABI rules, cpplint, clang-format, cmake-format, cmake-lint, markdownlint, protobuf, RPC, generated-code, service/component CMake rules."
 ---
 
 # Engineering guidelines
@@ -17,12 +17,14 @@ sibling section you need so unrelated rules do not bloat your context.
 | [service-functions-cmake.md](service-functions-cmake.md) | Service/component/protocol/SDK CMake helpers               |
 | [code-generation.md](code-generation.md)                 | `.proto`, Mako templates, generated task/RPC code          |
 | [rpc-protobuf-arena.md](rpc-protobuf-arena.md)           | Task/RPC temporary protobuf allocation                     |
-| [review-and-validation.md](review-and-validation.md)     | Reviewing a change or running format/lint before reporting |
+| [review-and-validation.md](review-and-validation.md)     | Reviewing changes, checking configured lint issues, or final validation |
 
 ## Scope and source of truth
 
 - Root project (`src/**`): use repository configs `.clang-format`, `.clang-tidy`, `.editorconfig`, `CPPLINT.cfg`,
   `.cmake-format.yaml`. Prefer small, focused changes; avoid unrelated cleanup or broad reformatting.
+- Code review findings must be backed by the current nearest config or observable project convention. If a clang-tidy
+  or cpplint rule is disabled by config, report it only as a clearly labeled design suggestion, not as a lint violation.
 - Vendored subprojects (`atframework/**`): read the nearest subproject `AGENTS.md` first and use its own configs when
   they differ from the root.
 - Protobuf definitions, Mako templates, and CMake generation rules are sources of truth; regenerate rather than

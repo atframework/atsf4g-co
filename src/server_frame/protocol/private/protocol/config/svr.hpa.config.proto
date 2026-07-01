@@ -20,7 +20,6 @@ message logic_discovery_selector_cfg {
   atframework.atapp.protocol.atapp_metadata dtcoordsvr = 270;
   atframework.atapp.protocol.atapp_metadata ranksvr = 271;
   atframework.atapp.protocol.atapp_metadata cachesvr = 272;
-  atframework.atapp.protocol.atapp_metadata mqsvr = 273;
   atframework.atapp.protocol.atapp_metadata friendsvr = 274;
   atframework.atapp.protocol.atapp_metadata guildsvr = 275;
 
@@ -32,6 +31,9 @@ message logic_discovery_selector_cfg {
       [(atframework.logic_discovery) = { alias_name: "tradesvr-index" }];
   atframework.atapp.protocol.atapp_metadata tradesvr_search = 294
       [(atframework.logic_discovery) = { alias_name: "tradesvr-search" }];
+
+  atframework.atapp.protocol.atapp_metadata dtmq_proxysvr = 301
+      [(atframework.logic_discovery) = { alias_name: "dtmq-proxysvr" }];
 }
 
 // @see

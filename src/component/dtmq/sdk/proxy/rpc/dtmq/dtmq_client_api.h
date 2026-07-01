@@ -1,0 +1,168 @@
+// Copyright 2026 atframework
+
+#pragma once
+
+#include <std/explicit_declare.h>
+
+#include <logic/hpa/logic_hpa_easy_api.h>
+
+#include <cstddef>
+#include <memory>
+#include <string>
+
+#include "rpc/dtmq/dtmq_algorithm.h"
+
+namespace atframework {
+namespace dtmq {
+class DChannelIdKey;
+class DChannelMessage;
+class DChannelMessageDetail;
+class channel_lock_checker;
+class channel_subscriber;
+class channel_page_info;
+}  // namespace dtmq
+}  // namespace atframework
+
+namespace rpc {
+namespace dtmq {
+
+/**
+ * @brief 获取目标服务器ID
+ *
+ * @param channel_key 频道键
+ * @param status 状态模式
+ * @param replicate_index 副本下标
+ * @param mode 选择模式
+ * @return uint64_t 服务器ID
+ */
+DTMQ_PROXY_SDK_API uint64_t
+get_target_server_id(const atfw::dtmq::DChannelIdKey& channel_key, replicate_type status, size_t replicate_index = 0,
+                     logic_hpa_discovery_select_mode mode = logic_hpa_discovery_select_mode::kReady);
+
+/**
+ * @brief 获取世界频道的聊天服务器ID
+ *
+ * @param channel_id 频道ID
+ * @param status 状态模式
+ * @param replicate_index 副本下标
+ * @param mode 选择模式
+ * @return uint64_t 服务器ID
+ */
+DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_world_channel(
+    const std::string& channel_id, replicate_type status, size_t replicate_index = 0,
+    logic_hpa_discovery_select_mode mode = logic_hpa_discovery_select_mode::kReady);
+
+/**
+ * @brief 获取区域频道的聊天服务器ID
+ *
+ * @param zone_id 区域ID
+ * @param channel_id 频道ID
+ * @param status 状态模式
+ * @param replicate_index 副本下标
+ * @param mode 选择模式
+ * @return uint64_t 服务器ID
+ */
+DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_zone_channel(
+    uint64_t zone_id, const std::string& channel_id, replicate_type status, size_t replicate_index = 0,
+    logic_hpa_discovery_select_mode mode = logic_hpa_discovery_select_mode::kReady);
+
+/**
+ * @brief 获取区域广播的聊天服务器ID
+ *
+ * @param type_id 类型ID
+ * @param zone_id 区域ID
+ * @param status 状态模式
+ * @param replicate_index 副本下标
+ * @param mode 选择模式
+ * @return uint64_t 服务器ID
+ */
+DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_zone_broadcast(
+    uint32_t type_id, uint64_t zone_id, replicate_type status, size_t replicate_index = 0,
+    logic_hpa_discovery_select_mode mode = logic_hpa_discovery_select_mode::kReady);
+
+/**
+ * @brief 获取世界广播的聊天服务器ID
+ *
+ * @param type_id 类型ID
+ * @param world_id 世界ID
+ * @param status 状态模式
+ * @param replicate_index 副本下标
+ * @param mode 选择模式
+ * @return uint64_t 服务器ID
+ */
+DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_world_broadcast(
+    uint32_t type_id, uint64_t world_id, replicate_type status, size_t replicate_index = 0,
+    logic_hpa_discovery_select_mode mode = logic_hpa_discovery_select_mode::kReady);
+
+/**
+ * @brief 获取单播的聊天服务器ID
+ *
+ * @param type_id 类型ID
+ * @param zone_id 区域ID
+ * @param instance_id 实例ID
+ * @param status 状态模式
+ * @param replicate_index 副本下标
+ * @param mode 选择模式
+ * @return uint64_t 服务器ID
+ */
+DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_unicast(
+    uint32_t type_id, uint64_t zone_id, uint64_t instance_id, replicate_type status, size_t replicate_index = 0,
+    logic_hpa_discovery_select_mode mode = logic_hpa_discovery_select_mode::kReady);
+
+/**
+ * @brief 检查是否有聊天服务器
+ *
+ * @return true 有聊天服务器
+ * @return false 无聊天服务器
+ */
+DTMQ_PROXY_SDK_API bool has_dtmq_proxysvr();
+
+/**
+ * @brief 发送消息
+ *
+ * @param ctx RPC上下文
+ * @param sender_info 发送者信息
+ * @param channel_key 频道键
+ * @param detail 消息详情
+ * @param compare_and_maybe_reset_lock_ptr 锁检查器指针
+ * @param compare_and_maybe_reset_lock_rsp_ptr 锁检查器响应指针
+ * @param auto_create_channel 是否自动创建频道
+ * @param no_wait 是否不等待
+ * @return rpc::result_code_type 发送结果
+ */
+EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
+    rpc::context& ctx, atfw::dtmq::channel_subscriber&& sender_info, atfw::dtmq::DChannelIdKey& channel_key,
+    atfw::dtmq::DChannelMessageDetail&& detail,
+    std::shared_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
+    std::shared_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr = nullptr,
+    bool auto_create_channel = false, bool no_wait = false);
+
+/**
+ * @brief 查找消息
+ *
+ * @param ctx RPC上下文
+ * @param channel_key 频道键
+ * @param sequence 消息序列号
+ * @param msg 消息对象
+ * @return rpc::result_code_type 查找结果
+ */
+EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type find_message(rpc::context& ctx,
+                                                                              atfw::dtmq::DChannelIdKey& channel_key,
+                                                                              int64_t sequence,
+                                                                              atfw::dtmq::DChannelMessage& msg);
+
+/**
+ * @brief 分页查询消息
+ *
+ * @param ctx RPC上下文
+ * @param channel_key 频道键
+ * @param page_info 分页信息
+ * @param msgs 消息列表
+ * @return rpc::result_code_type 查询结果
+ */
+EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type page_query_message(
+    rpc::context& ctx, atfw::dtmq::DChannelIdKey& channel_key, atfw::dtmq::channel_page_info& page_info,
+    google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessage>& msgs);
+
+}  // namespace dtmq
+}  // namespace rpc

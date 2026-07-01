@@ -291,5 +291,11 @@ enum EnErrorCode {
                                      [(error_code.description) = "排行榜实例键无效"];
   EN_ERR_RANK_DEFINE_CFG_NOT_FOUND = -721
                                      [(error_code.description) = "排行榜未定义"];
+
+  // 消息队列通用[701-800]
+  EN_ERR_DTMQ_INVALID_CHANNEL = -701
+                                [(error_code.description) = "无效的频道"];
+  EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE = -702 [(error_code.description) = "消息队列服务不可用"];
+
   // 注意错误码不能小于 -999999，便于区分服务器错误码和客户端错误码
 }

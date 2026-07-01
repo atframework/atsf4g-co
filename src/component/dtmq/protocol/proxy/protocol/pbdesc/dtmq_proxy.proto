@@ -170,26 +170,17 @@ message SSChannelFindMessageRsp {
   DChannelMessage channel_message = 11;
 }
 
-message ChannelPageInfo {
-  // 页码
-  int32 page_number = 1;
-  // 每页数量
-  int32 page_size = 2;
-  // 页数
-  int32 page_count = 3;
-  // 总数量
-  int32 total_count = 4;
-}
+
 
 message SSChannelQueryMessageReq {
   DChannelIdKey channel_key = 1;
-  ChannelPageInfo page_info = 2;
+  channel_page_info page_info = 2;
 }
 
 message SSChannelQueryMessageRsp {
   int32 client_result = 1;
 
-  ChannelPageInfo page_info = 11;
+  channel_page_info page_info = 11;
 
   repeated DChannelMessage channel_message = 21;
 }

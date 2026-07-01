@@ -25,7 +25,7 @@ message DChannelOptimisticLock {
 
 
 message DChannelConfigure {
-  // uint32 channel_type = 1;  // EnChannelType
+  uint32 channel_type = 1;  // EnChannelType
   uint32 max_log_count = 2;
   uint32 gc_log_count = 3;
 
@@ -43,8 +43,8 @@ message DChannelConfigure {
 
 message DChannelIdKey {
   string channel_id = 1;
-  // uint32 channel_type = 2;  // EnChannelType
-  uint32 channel_zone_id = 3;
+  uint32 channel_type = 2;  // EnChannelType
+  uint64 channel_zone_id = 3;
 
   oneof cast_type {
     bool broadcast_world = 4;                 // 系统通知使用
@@ -126,7 +126,7 @@ message DChannelMessage {
 
   int64 sequence = 4;
 
-  // uint32 channel_type = 5;  // EnChannelType
+  uint32 channel_type = 5;  // EnChannelType
 
   DChannelMessageDetail detail = 11;
   uint64 hash_code = 12;

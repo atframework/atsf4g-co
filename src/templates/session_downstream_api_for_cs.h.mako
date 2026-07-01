@@ -36,7 +36,7 @@ service_header_file_path = service_proto_file_prefix + ".pb.h"
 
 #include "rpc/rpc_common_types.h"
 
-#include <stdint.h>
+#include <cstdint>
 #include <cstddef>
 #include <cstring>
 #include <string>
