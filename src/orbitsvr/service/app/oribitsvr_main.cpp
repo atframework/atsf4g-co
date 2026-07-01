@@ -23,7 +23,7 @@
 #include <logic/logic_server_setup.h>
 #include <logic/orbit_msg_dispatcher.h>
 #include <logic/orbit_server_manager.h>
-#include <rpc/orbit_client_rpc/orbitclientrpcservice.h>
+#include <rpc/orbit_client_rpc/orbitclientrpcservice.atfw.gen.h>
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_context.h>
 
@@ -38,7 +38,7 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include "app/handle_orbit_rpc_orbitserverrpcservice.h"
+#include "app/handle_orbit_rpc_orbitserverrpcservice.atfw.gen.h"
 
 namespace {
 

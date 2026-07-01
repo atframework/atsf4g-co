@@ -69,10 +69,10 @@ function(generate_for_pb_add_orbit_service SERVICE_NAME SERVICE_ROOT_DIR)
       service_template:
         - overwrite: true
           input: '${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/handle_orbit_rpc.h.mako'
-          output: '${HANDLE_PATH_PREFIX}handle_orbit_rpc_\${service.get_name_lower_rule()}.h'
+          output: '${HANDLE_PATH_PREFIX}handle_orbit_rpc_\${service.get_name_lower_rule()}.atfw.gen.h'
         - overwrite: true
           input: '${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/handle_orbit_rpc.cpp.mako'
-          output: '${HANDLE_PATH_PREFIX}handle_orbit_rpc_\${service.get_name_lower_rule()}.cpp'
+          output: '${HANDLE_PATH_PREFIX}handle_orbit_rpc_\${service.get_name_lower_rule()}.atfw.gen.cpp'
 ")
   set(
     GENERATE_FOR_PB_PRINT_NON_OVERWRITE_RULE_BODY
@@ -111,10 +111,10 @@ function(generate_for_pb_add_orbit_service SERVICE_NAME SERVICE_ROOT_DIR)
       service_template:
         - overwrite: true
           input: '${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/handle_orbit_rpc.h.mako'
-          output: '${HANDLE_PATH_PREFIX}handle_orbit_rpc_\${service.get_name_lower_rule()}.h'
+          output: '${HANDLE_PATH_PREFIX}handle_orbit_rpc_\${service.get_name_lower_rule()}.atfw.gen.h'
         - overwrite: true
           input: '${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/handle_orbit_rpc.cpp.mako'
-          output: '${HANDLE_PATH_PREFIX}handle_orbit_rpc_\${service.get_name_lower_rule()}.cpp'
+          output: '${HANDLE_PATH_PREFIX}handle_orbit_rpc_\${service.get_name_lower_rule()}.atfw.gen.cpp'
       ${GENERATE_FOR_PB_RPC_IGNORE_EMPTY_REQUEST}
       rpc_template:
         - overwrite: false
@@ -203,10 +203,10 @@ function(generate_for_pb_add_orbit_client SERVICE_NAME SERVICE_ROOT_DIR)
       service_template:
         - overwrite: true
           input: '${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/rpc_call_api_for_orbit.h.mako'
-          output: 'rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.h'
+          output: 'rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.atfw.gen.h'
         - overwrite: true
           input: '${GENERATE_FOR_ORBIT_PB_WORK_DIR}/template/rpc_call_api_for_orbit.cpp.mako'
-          output: 'rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.cpp'
+          output: 'rpc/\${service.get_extension_field(\"service_options\", lambda x: x.module_name, service.get_name_lower_rule())}/\${service.get_name_lower_rule()}.atfw.gen.cpp'
 " )
   set(GENERATE_FOR_PB_PRINT_OVERWRITE_RULE_BODY "${GENERATE_FOR_PB_RULE_BODY}")
   generate_for_pb_resolve_protocol_codegen_targets(GENERATE_FOR_PB_PROTOCOL_CODEGEN_TARGETS INCLUDE_DEFAULT)

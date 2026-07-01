@@ -143,7 +143,7 @@ if(NOT TARGET ${GENERATE_FOR_PB_TARGET})
 endif()
 
 function(generate_for_pb_append_global_list PROPERTY_NAME)
-  get_property(_generate_for_pb_current_list GLOBAL PROPERTY "${PROPERTY_NAME}")
+  get_target_property(_generate_for_pb_current_list ${GENERATE_FOR_PB_TARGET} "${PROPERTY_NAME}")
   if(NOT _generate_for_pb_current_list)
     set(_generate_for_pb_current_list)
   endif()
@@ -158,11 +158,11 @@ function(generate_for_pb_append_global_list PROPERTY_NAME)
     list(REMOVE_DUPLICATES _generate_for_pb_current_list)
   endif()
 
-  set_property(GLOBAL PROPERTY "${PROPERTY_NAME}" "${_generate_for_pb_current_list}")
+  set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "${PROPERTY_NAME}" "${_generate_for_pb_current_list}")
 endfunction()
 
 function(generate_for_pb_get_global_list PROPERTY_NAME OUTPUT_VAR)
-  get_property(_generate_for_pb_current_list GLOBAL PROPERTY "${PROPERTY_NAME}")
+  get_target_property(_generate_for_pb_current_list ${GENERATE_FOR_PB_TARGET} "${PROPERTY_NAME}")
   if(NOT _generate_for_pb_current_list)
     set(_generate_for_pb_current_list)
   endif()
@@ -181,7 +181,7 @@ endfunction()
 
 function(generate_for_pb_register_protocol_pb_file TARGET_NAME PB_FILE)
   generate_for_pb_make_property_name("GENERATE_FOR_PB_PROTOCOL_FILE" "${TARGET_NAME}" _generate_for_pb_property_name)
-  set_property(GLOBAL PROPERTY "${_generate_for_pb_property_name}" "${PB_FILE}")
+  set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "${_generate_for_pb_property_name}" "${PB_FILE}")
 endfunction()
 
 function(generate_for_pb_register_protocol_codegen_target TARGET_NAME)
@@ -205,14 +205,14 @@ function(generate_for_pb_register_protocol_codegen_target TARGET_NAME)
 
     generate_for_pb_make_property_name("GENERATE_FOR_PB_PROTOCOL_CODEGEN_TARGET" "${_generate_for_pb_protocol_name}"
                                        _generate_for_pb_property_name)
-    set_property(GLOBAL PROPERTY "${_generate_for_pb_property_name}" "${TARGET_NAME}")
+    set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "${_generate_for_pb_property_name}" "${TARGET_NAME}")
   endforeach()
 endfunction()
 
 function(generate_for_pb_resolve_protocol_codegen_target TARGET_NAME OUTPUT_VAR)
   generate_for_pb_make_property_name("GENERATE_FOR_PB_PROTOCOL_CODEGEN_TARGET" "${TARGET_NAME}"
                                      _generate_for_pb_property_name)
-  get_property(_generate_for_pb_codegen_target GLOBAL PROPERTY "${_generate_for_pb_property_name}")
+  get_target_property(_generate_for_pb_codegen_target ${GENERATE_FOR_PB_TARGET} "${_generate_for_pb_property_name}")
   set(${OUTPUT_VAR}
       "${_generate_for_pb_codegen_target}"
       PARENT_SCOPE)
@@ -257,7 +257,7 @@ endfunction()
 
 function(generate_for_pb_resolve_protocol_pb_file TARGET_NAME OUTPUT_VAR)
   generate_for_pb_make_property_name("GENERATE_FOR_PB_PROTOCOL_FILE" "${TARGET_NAME}" _generate_for_pb_property_name)
-  get_property(_generate_for_pb_pb_file GLOBAL PROPERTY "${_generate_for_pb_property_name}")
+  get_target_property(_generate_for_pb_pb_file ${GENERATE_FOR_PB_TARGET} "${_generate_for_pb_property_name}")
   set(${OUTPUT_VAR}
       "${_generate_for_pb_pb_file}"
       PARENT_SCOPE)
@@ -396,14 +396,10 @@ endfunction()
 function(generate_for_pb_refresh_conf_files)
   generate_for_pb_get_global_list("GENERATE_FOR_PB_FLOW_IDS" _generate_for_pb_flow_ids)
   foreach(_generate_for_pb_flow_id IN LISTS _generate_for_pb_flow_ids)
-    get_property(_generate_for_pb_rule_file GLOBAL
-                 PROPERTY "GENERATE_FOR_PB_FLOW_RULE_FILE_${_generate_for_pb_flow_id}")
-    get_property(_generate_for_pb_conf_file GLOBAL
-                 PROPERTY "GENERATE_FOR_PB_FLOW_CONF_FILE_${_generate_for_pb_flow_id}")
-    get_property(_generate_for_pb_external_pb_files GLOBAL
-                 PROPERTY "GENERATE_FOR_PB_FLOW_EXTERNAL_PB_FILES_${_generate_for_pb_flow_id}")
-    get_property(_generate_for_pb_flow_overwrite_default GLOBAL
-                 PROPERTY "GENERATE_FOR_PB_FLOW_OVERWRITE_DEFAULT_${_generate_for_pb_flow_id}")
+    get_target_property(_generate_for_pb_rule_file ${GENERATE_FOR_PB_TARGET} "GENERATE_FOR_PB_FLOW_RULE_FILE_${_generate_for_pb_flow_id}")
+    get_target_property(_generate_for_pb_conf_file ${GENERATE_FOR_PB_TARGET} "GENERATE_FOR_PB_FLOW_CONF_FILE_${_generate_for_pb_flow_id}")
+    get_target_property(_generate_for_pb_external_pb_files ${GENERATE_FOR_PB_TARGET} "GENERATE_FOR_PB_FLOW_EXTERNAL_PB_FILES_${_generate_for_pb_flow_id}")
+    get_target_property(_generate_for_pb_flow_overwrite_default ${GENERATE_FOR_PB_TARGET} "GENERATE_FOR_PB_FLOW_OVERWRITE_DEFAULT_${_generate_for_pb_flow_id}")
     if(NOT _generate_for_pb_rule_file OR NOT _generate_for_pb_conf_file)
       continue()
     endif()
@@ -618,7 +614,7 @@ function(generate_for_pb_accumulate_output_var_base_list OUTPUT_VAR_BASE OUTPUT_
 
   generate_for_pb_make_property_name("GENERATE_FOR_PB_OUTPUT_VAR_BASE_${OUTPUT_SUFFIX}" "${OUTPUT_VAR_BASE}"
                                      _generate_for_pb_property_name)
-  get_property(_generate_for_pb_output_list GLOBAL PROPERTY "${_generate_for_pb_property_name}")
+  get_target_property(_generate_for_pb_output_list ${GENERATE_FOR_PB_TARGET} "${_generate_for_pb_property_name}")
   if(NOT _generate_for_pb_output_list)
     set(_generate_for_pb_output_list)
   endif()
@@ -633,14 +629,14 @@ function(generate_for_pb_accumulate_output_var_base_list OUTPUT_VAR_BASE OUTPUT_
     list(REMOVE_DUPLICATES _generate_for_pb_output_list)
   endif()
 
-  set_property(GLOBAL PROPERTY "${_generate_for_pb_property_name}" "${_generate_for_pb_output_list}")
+  set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "${_generate_for_pb_property_name}" "${_generate_for_pb_output_list}")
   set(${OUTPUT_VAR}
       "${_generate_for_pb_output_list}"
       PARENT_SCOPE)
 endfunction()
 
 function(generate_for_pb_print_output_files FLOW_ID OUTPUT_VAR OVERWRITE_OUTPUT_VAR NON_OVERWRITE_OUTPUT_VAR)
-  get_property(_generate_for_pb_rule_file GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_RULE_FILE_${FLOW_ID}")
+  get_target_property(_generate_for_pb_rule_file ${GENERATE_FOR_PB_TARGET} "GENERATE_FOR_PB_FLOW_RULE_FILE_${FLOW_ID}")
   if(NOT _generate_for_pb_rule_file)
     set(${OUTPUT_VAR}
         ""
@@ -654,10 +650,8 @@ function(generate_for_pb_print_output_files FLOW_ID OUTPUT_VAR OVERWRITE_OUTPUT_
     return()
   endif()
 
-  get_property(_generate_for_pb_overwrite_print_rule_file GLOBAL
-               PROPERTY "GENERATE_FOR_PB_FLOW_OVERWRITE_PRINT_RULE_FILE_${FLOW_ID}")
-  get_property(_generate_for_pb_non_overwrite_print_rule_file GLOBAL
-               PROPERTY "GENERATE_FOR_PB_FLOW_NON_OVERWRITE_PRINT_RULE_FILE_${FLOW_ID}")
+  get_target_property(_generate_for_pb_overwrite_print_rule_file ${GENERATE_FOR_PB_TARGET} "GENERATE_FOR_PB_FLOW_OVERWRITE_PRINT_RULE_FILE_${FLOW_ID}")
+  get_target_property(_generate_for_pb_non_overwrite_print_rule_file ${GENERATE_FOR_PB_TARGET} "GENERATE_FOR_PB_FLOW_NON_OVERWRITE_PRINT_RULE_FILE_${FLOW_ID}")
   if(NOT _generate_for_pb_overwrite_print_rule_file AND NOT _generate_for_pb_non_overwrite_print_rule_file)
     set(${OUTPUT_VAR}
         ""
@@ -744,12 +738,12 @@ function(generate_for_pb_register_flow FLOW_NAME)
     list(REMOVE_DUPLICATES _generate_for_pb_protocol_codegen_targets)
   endif()
 
-  get_property(_generate_for_pb_flow_index GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_INDEX")
+  get_target_property(_generate_for_pb_flow_index ${GENERATE_FOR_PB_TARGET} "GENERATE_FOR_PB_FLOW_INDEX")
   if(NOT _generate_for_pb_flow_index)
     set(_generate_for_pb_flow_index 0)
   endif()
   math(EXPR _generate_for_pb_flow_index "${_generate_for_pb_flow_index} + 1")
-  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_INDEX" "${_generate_for_pb_flow_index}")
+  set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "GENERATE_FOR_PB_FLOW_INDEX" "${_generate_for_pb_flow_index}")
 
   string(MAKE_C_IDENTIFIER "${GENERATE_FOR_PB_FLOW_OUTPUT_VAR_BASE}_${_generate_for_pb_flow_index}"
                            _generate_for_pb_flow_id)
@@ -787,26 +781,26 @@ function(generate_for_pb_register_flow FLOW_NAME)
   file(REMOVE "${_generate_for_pb_stamp_file}")
 
   generate_for_pb_append_global_list("GENERATE_FOR_PB_FLOW_IDS" "${_generate_for_pb_flow_id}")
-  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_NAME_${_generate_for_pb_flow_id}" "${FLOW_NAME}")
-  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_RULE_FILE_${_generate_for_pb_flow_id}"
+  set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "GENERATE_FOR_PB_FLOW_NAME_${_generate_for_pb_flow_id}" "${FLOW_NAME}")
+  set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "GENERATE_FOR_PB_FLOW_RULE_FILE_${_generate_for_pb_flow_id}"
                                "${_generate_for_pb_rule_file}")
-  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_CONF_FILE_${_generate_for_pb_flow_id}"
+  set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "GENERATE_FOR_PB_FLOW_CONF_FILE_${_generate_for_pb_flow_id}"
                                "${_generate_for_pb_conf_file}")
-  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_OVERWRITE_PRINT_RULE_FILE_${_generate_for_pb_flow_id}"
+  set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "GENERATE_FOR_PB_FLOW_OVERWRITE_PRINT_RULE_FILE_${_generate_for_pb_flow_id}"
                                "${_generate_for_pb_overwrite_print_rule_file}")
-  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_NON_OVERWRITE_PRINT_RULE_FILE_${_generate_for_pb_flow_id}"
+  set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "GENERATE_FOR_PB_FLOW_NON_OVERWRITE_PRINT_RULE_FILE_${_generate_for_pb_flow_id}"
                                "${_generate_for_pb_non_overwrite_print_rule_file}")
-  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_TARGET_${_generate_for_pb_flow_id}"
+  set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "GENERATE_FOR_PB_FLOW_TARGET_${_generate_for_pb_flow_id}"
                                "${_generate_for_pb_target_name}")
-  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_TEMPLATE_DEPENDS_${_generate_for_pb_flow_id}"
+  set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "GENERATE_FOR_PB_FLOW_TEMPLATE_DEPENDS_${_generate_for_pb_flow_id}"
                                "${GENERATE_FOR_PB_FLOW_TEMPLATE_DEPENDS}")
-  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_EXTERNAL_PB_FILES_${_generate_for_pb_flow_id}"
+  set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "GENERATE_FOR_PB_FLOW_EXTERNAL_PB_FILES_${_generate_for_pb_flow_id}"
                                "${_generate_for_pb_external_pb_files}")
-  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_PROTOCOL_CODEGEN_TARGETS_${_generate_for_pb_flow_id}"
+  set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "GENERATE_FOR_PB_FLOW_PROTOCOL_CODEGEN_TARGETS_${_generate_for_pb_flow_id}"
                                "${_generate_for_pb_protocol_codegen_targets}")
-  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_OVERWRITE_DEFAULT_${_generate_for_pb_flow_id}"
+  set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "GENERATE_FOR_PB_FLOW_OVERWRITE_DEFAULT_${_generate_for_pb_flow_id}"
                                "${_generate_for_pb_flow_overwrite_default}")
-  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_STAMP_FILE_${_generate_for_pb_flow_id}"
+  set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "GENERATE_FOR_PB_FLOW_STAMP_FILE_${_generate_for_pb_flow_id}"
                                "${_generate_for_pb_stamp_file}")
 
   generate_for_pb_refresh_conf_files()
@@ -815,11 +809,11 @@ function(generate_for_pb_register_flow FLOW_NAME)
   if(_generate_for_pb_all_outputs)
     list(REMOVE_DUPLICATES _generate_for_pb_all_outputs)
   endif()
-  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_OUTPUTS_${_generate_for_pb_flow_id}"
+  set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "GENERATE_FOR_PB_FLOW_OUTPUTS_${_generate_for_pb_flow_id}"
                                "${_generate_for_pb_all_outputs}")
-  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_OVERWRITE_OUTPUTS_${_generate_for_pb_flow_id}"
+  set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "GENERATE_FOR_PB_FLOW_OVERWRITE_OUTPUTS_${_generate_for_pb_flow_id}"
                                "${_generate_for_pb_overwrite_outputs}")
-  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_NON_OVERWRITE_OUTPUTS_${_generate_for_pb_flow_id}"
+  set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "GENERATE_FOR_PB_FLOW_NON_OVERWRITE_OUTPUTS_${_generate_for_pb_flow_id}"
                                "${_generate_for_pb_non_overwrite_outputs}")
 
   generate_for_pb_collect_source_and_header_outputs(_generate_for_pb_source_outputs _generate_for_pb_header_outputs
@@ -1533,14 +1527,14 @@ function(generate_for_pb_initialize_pwsh SCRIPT_PATH)
 endfunction()
 
 function(generate_for_pb_run_generator)
-  get_property(_generate_for_pb_finalized GLOBAL PROPERTY "GENERATE_FOR_PB_FINALIZED")
+  get_target_property(_generate_for_pb_finalized ${GENERATE_FOR_PB_TARGET} "GENERATE_FOR_PB_FINALIZED")
   if(_generate_for_pb_finalized)
     return()
   endif()
 
   generate_for_pb_get_global_list("GENERATE_FOR_PB_FLOW_IDS" _generate_for_pb_flow_ids)
   if(NOT _generate_for_pb_flow_ids)
-    set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FINALIZED" TRUE)
+    set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "GENERATE_FOR_PB_FINALIZED" TRUE)
     return()
   endif()
 
@@ -1578,27 +1572,20 @@ function(generate_for_pb_run_generator)
   endif()
 
   foreach(_generate_for_pb_flow_id IN LISTS _generate_for_pb_flow_ids)
-    get_property(_generate_for_pb_outputs GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_OUTPUTS_${_generate_for_pb_flow_id}")
+    get_target_property(_generate_for_pb_outputs ${GENERATE_FOR_PB_TARGET} "GENERATE_FOR_PB_FLOW_OUTPUTS_${_generate_for_pb_flow_id}")
     if(NOT _generate_for_pb_outputs)
       continue()
     endif()
 
-    get_property(_generate_for_pb_non_overwrite_outputs GLOBAL
-                 PROPERTY "GENERATE_FOR_PB_FLOW_NON_OVERWRITE_OUTPUTS_${_generate_for_pb_flow_id}")
-    get_property(_generate_for_pb_overwrite_outputs GLOBAL
-                 PROPERTY "GENERATE_FOR_PB_FLOW_OVERWRITE_OUTPUTS_${_generate_for_pb_flow_id}")
-    get_property(_generate_for_pb_conf_file GLOBAL
-                 PROPERTY "GENERATE_FOR_PB_FLOW_CONF_FILE_${_generate_for_pb_flow_id}")
-    get_property(_generate_for_pb_flow_name GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_NAME_${_generate_for_pb_flow_id}")
-    get_property(_generate_for_pb_template_depends GLOBAL
-                 PROPERTY "GENERATE_FOR_PB_FLOW_TEMPLATE_DEPENDS_${_generate_for_pb_flow_id}")
-    get_property(_generate_for_pb_target_name GLOBAL PROPERTY "GENERATE_FOR_PB_FLOW_TARGET_${_generate_for_pb_flow_id}")
-    get_property(_generate_for_pb_external_pb_files GLOBAL
-                 PROPERTY "GENERATE_FOR_PB_FLOW_EXTERNAL_PB_FILES_${_generate_for_pb_flow_id}")
-    get_property(_generate_for_pb_protocol_codegen_targets GLOBAL
-                 PROPERTY "GENERATE_FOR_PB_FLOW_PROTOCOL_CODEGEN_TARGETS_${_generate_for_pb_flow_id}")
-    get_property(_generate_for_pb_stamp_file GLOBAL
-                 PROPERTY "GENERATE_FOR_PB_FLOW_STAMP_FILE_${_generate_for_pb_flow_id}")
+    get_target_property(_generate_for_pb_non_overwrite_outputs ${GENERATE_FOR_PB_TARGET} "GENERATE_FOR_PB_FLOW_NON_OVERWRITE_OUTPUTS_${_generate_for_pb_flow_id}")
+    get_target_property(_generate_for_pb_overwrite_outputs ${GENERATE_FOR_PB_TARGET} "GENERATE_FOR_PB_FLOW_OVERWRITE_OUTPUTS_${_generate_for_pb_flow_id}")
+    get_target_property(_generate_for_pb_conf_file ${GENERATE_FOR_PB_TARGET} "GENERATE_FOR_PB_FLOW_CONF_FILE_${_generate_for_pb_flow_id}")
+    get_target_property(_generate_for_pb_flow_name ${GENERATE_FOR_PB_TARGET} "GENERATE_FOR_PB_FLOW_NAME_${_generate_for_pb_flow_id}")
+    get_target_property(_generate_for_pb_template_depends ${GENERATE_FOR_PB_TARGET} "GENERATE_FOR_PB_FLOW_TEMPLATE_DEPENDS_${_generate_for_pb_flow_id}")
+    get_target_property(_generate_for_pb_target_name ${GENERATE_FOR_PB_TARGET} "GENERATE_FOR_PB_FLOW_TARGET_${_generate_for_pb_flow_id}")
+    get_target_property(_generate_for_pb_external_pb_files ${GENERATE_FOR_PB_TARGET} "GENERATE_FOR_PB_FLOW_EXTERNAL_PB_FILES_${_generate_for_pb_flow_id}")
+    get_target_property(_generate_for_pb_protocol_codegen_targets ${GENERATE_FOR_PB_TARGET} "GENERATE_FOR_PB_FLOW_PROTOCOL_CODEGEN_TARGETS_${_generate_for_pb_flow_id}")
+    get_target_property(_generate_for_pb_stamp_file ${GENERATE_FOR_PB_TARGET} "GENERATE_FOR_PB_FLOW_STAMP_FILE_${_generate_for_pb_flow_id}")
     if(NOT _generate_for_pb_target_name)
       set(_generate_for_pb_target_name "${GENERATE_FOR_PB_TARGET}-${_generate_for_pb_flow_id}")
     endif()
@@ -1668,5 +1655,5 @@ function(generate_for_pb_run_generator)
   set(GENERATE_FOR_PB_PROTO_COMMAND
       "${GENERATE_FOR_PB_TARGET}"
       PARENT_SCOPE)
-  set_property(GLOBAL PROPERTY "GENERATE_FOR_PB_FINALIZED" TRUE)
+  set_property(TARGET ${GENERATE_FOR_PB_TARGET} PROPERTY "GENERATE_FOR_PB_FINALIZED" TRUE)
 endfunction()
