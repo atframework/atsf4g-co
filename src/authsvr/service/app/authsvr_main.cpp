@@ -30,7 +30,7 @@
 
 #include <memory>
 
-#include "app/handle_cs_rpc_authsvrclientservice.h"
+#include "app/handle_cs_rpc_authsvrclientservice.atfw.gen.h"
 #include "authsvr_helper.h"
 
 namespace {

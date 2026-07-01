@@ -1,6 +1,6 @@
 #include "orbit_server_manager.h"
 
-#include "handle/handle_ss_rpc_controllertoserverservice.h"
+#include "handle/handle_ss_rpc_controllertoserverservice.atfw.gen.h"
 
 #include <logic/logic_server_macro.h>
 #include <logic/logic_server_setup.h>
@@ -20,7 +20,7 @@
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_context.h>
 #include <rpc/rpc_utils.h>
-#include <rpc/servertocontrollerservice/servertocontrollerservice.h>
+#include <rpc/servertocontrollerservice/servertocontrollerservice.atfw.gen.h>
 
 #if defined(ORBIT_SERVER_SDK_DLL) && ORBIT_SERVER_SDK_DLL
 #  if defined(ORBIT_SERVER_SDK_NATIVE) && ORBIT_SERVER_SDK_NATIVE
@@ -129,7 +129,7 @@ ORBIT_SERVER_SERVICE_API int32_t orbit_server_manager::send_to_client_no_wait(rp
   *req->mutable_client_identity() = client_info_ptr_->client_identity;
   *req->mutable_payload() = std::string(static_cast<const char*>(msg_data), msg_size);
 
-  rpc::result_code_type::value_type res;
+  rpc::result_code_type::value_type res{};
   atframework::SSMsg* req_msg_ptr = ctx.create<atframework::SSMsg>();
   atframework::SSMsg& req_msg = *req_msg_ptr;
   task_action_ss_req_base::init_msg(req_msg, logic_config::me()->get_local_server_id(),
@@ -139,12 +139,11 @@ ORBIT_SERVER_SERVICE_API int32_t orbit_server_manager::send_to_client_no_wait(rp
                                      {atfw::util::nostd::data(orbit::STCSendToClientReq::descriptor()->full_name()),
                                       atfw::util::nostd::size(orbit::STCSendToClientReq::descriptor()->full_name())});
   if (res < 0) {
-    return {static_cast<rpc::always_ready_code_type::value_type>(res)};
+    return static_cast<int32_t>(res);
   }
 
-  res = rpc::servertocontrollerservice::packer::pack_send_to_client(*req_msg.mutable_body_bin(), *req);
-  if (res < 0) {
-    return {static_cast<rpc::always_ready_code_type::value_type>(res)};
+  if (!rpc::servertocontrollerservice::packer::pack_send_to_client(*req_msg.mutable_body_bin(), *req)) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
   }
 
   rpc::context __child_ctx(ctx);
@@ -309,7 +308,7 @@ uint64_t orbit_server_manager::select_controller_server_id(const std::string& cl
   atfw::atapp::protocol::atapp_metadata controller_policy_selector_;
   (*controller_policy_selector_.mutable_labels())["orbit.region"] = region;
 
-  auto common_mod = logic_server_last_common_module();
+  auto* common_mod = logic_server_last_common_module();
   if (nullptr == common_mod) {
     return 0;
   }
@@ -331,7 +330,7 @@ uint64_t orbit_server_manager::select_controller_server_id(const std::string& re
   atfw::atapp::protocol::atapp_metadata controller_policy_selector_;
   (*controller_policy_selector_.mutable_labels())["orbit.region"] = region;
 
-  auto common_mod = logic_server_last_common_module();
+  auto* common_mod = logic_server_last_common_module();
   if (nullptr == common_mod) {
     return 0;
   }

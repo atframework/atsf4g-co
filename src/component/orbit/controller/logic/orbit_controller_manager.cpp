@@ -38,8 +38,8 @@
 #include <memory/rc_ptr.h>
 #include <utility/random_engine.h>
 
-#include <rpc/controllertoagentservice/controllertoagentservice.h>
-#include <rpc/controllertoserverservice/controllertoserverservice.h>
+#include <rpc/controllertoagentservice/controllertoagentservice.atfw.gen.h>
+#include <rpc/controllertoserverservice/controllertoserverservice.atfw.gen.h>
 
 namespace {
 constexpr const char* kEtcdByIdDir = "by_id";

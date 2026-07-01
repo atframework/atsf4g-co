@@ -13,7 +13,7 @@
 #include <utility/protobuf_mini_dumper.h>
 #include <utility/rank_util.h>
 #include "config/server_frame_build_feature.h"
-#include "rankboardservice.h"
+#include "rankboardservice.atfw.gen.h"
 #include "rpc/rank_board/sharding.h"
 
 #include <config/compiler/protobuf_prefix.h>

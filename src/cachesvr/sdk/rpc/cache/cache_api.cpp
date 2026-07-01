@@ -43,7 +43,7 @@
 #include <unordered_set>
 #include <utility>
 
-#include "rpc/cache/cachesvrservice.h"
+#include "rpc/cache/cachesvrservice.atfw.gen.h"
 #include "rpc/rpc_shared_message.h"
 
 namespace rpc {

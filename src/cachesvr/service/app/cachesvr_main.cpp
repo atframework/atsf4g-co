@@ -21,7 +21,7 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "app/handle_ss_rpc_cachesvrservice.h"
+#include "app/handle_ss_rpc_cachesvrservice.atfw.gen.h"
 
 #include "atframe/atapp_common_types.h"
 #include "logic/cache_group_manager.h"

@@ -21,7 +21,7 @@
 #include <router/router_object_base.h>
 
 #include <rpc/db/uuid.h>
-#include <rpc/router/routerservice.h>
+#include <rpc/router/routerservice.atfw.gen.h>
 #include <rpc/rpc_common_types.h>
 #include <rpc/rpc_utils.h>
 #include <rpc/telemetry/semantic_conventions.h>

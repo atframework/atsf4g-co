@@ -23,7 +23,7 @@
 #include <config/logic_config.h>
 #include <log/log_wrapper.h>
 
-#include <rpc/router/routerservice.h>
+#include <rpc/router/routerservice.atfw.gen.h>
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_shared_message.h>
 #include <rpc/rpc_utils.h>

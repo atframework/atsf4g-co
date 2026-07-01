@@ -18,7 +18,7 @@
 
 #include <logic/logic_server_setup.h>
 
-#include <rpc/lobby/lobbysvrservice.h>
+#include <rpc/lobby/lobbysvrservice.atfw.gen.h>
 
 #include <cstddef>
 #include <utility>

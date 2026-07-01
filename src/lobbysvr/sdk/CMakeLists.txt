@@ -8,8 +8,8 @@ project_service_declare_sdk(
   USE_SERVICE_PROTOCOL
   lobbysvr-protocol
   HEADERS
-  "${CMAKE_CURRENT_LIST_DIR}/rpc/lobby/lobbysvrservice.h"
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/lobby/lobbysvrservice.atfw.gen.h"
   "${CMAKE_CURRENT_LIST_DIR}/rpc/async_jobs/async_jobs.h"
   SOURCES
-  "${CMAKE_CURRENT_LIST_DIR}/rpc/lobby/lobbysvrservice.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/lobby/lobbysvrservice.atfw.gen.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/rpc/async_jobs/async_jobs.cpp")

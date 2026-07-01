@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "google/protobuf/duration.proto";
+
+import "atframe/atapp_conf.proto";
+
+package atframework.dtmq.config;
+
+message dtmq_proxysvr_cfg {
+  uint32 max_events_per_tick = 1 [(atapp.protocol.CONFIGURE) = { default_value: "2048" min_value: "1" }];
+  uint32 concurrency_io_task_count = 2 [(atapp.protocol.CONFIGURE) = { default_value: "2048" min_value: "128" }];
+  uint32 forward_request_max_ttl = 3 [(atapp.protocol.CONFIGURE) = { default_value: "16" min_value: "1" }];
+  google.protobuf.Duration subscriber_timeout = 4
+      [(atapp.protocol.CONFIGURE) = { default_value: "900s" min_value: "1s" }];
+  google.protobuf.Duration save_interval = 5 [(atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "1s" }];
+  google.protobuf.Duration cache_expire_timeout = 6
+      [(atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "1s" }];
+  google.protobuf.Duration remove_ttl = 7 [(atapp.protocol.CONFIGURE) = { default_value: "720h" min_value: "24h" }];
+  google.protobuf.Duration report_channel_qty_tick = 8
+      [(atapp.protocol.CONFIGURE) = { default_value: "30s" min_value: "5s" }];
+  google.protobuf.Duration chat_heartbeat_interval = 9
+      [(atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "1s" }];
+  google.protobuf.Duration chat_heartbeat_retry_interval = 10
+      [(atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "1s" }];
+  google.protobuf.Duration chat_notify_readonly_subscribe_interval = 11
+      [(atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "30s" }];
+  int32 chatsvr_readonly_count = 12 [(atapp.protocol.CONFIGURE) = { default_value: "2" min_value: "0" }];
+  int32 chat_wal_hash_mismatch_need_snapshot_times = 13
+      [(atapp.protocol.CONFIGURE) = { default_value: "5" min_value: "3" }];
+  google.protobuf.Duration chat_wal_hash_mismatch_need_snapshot_interval = 14
+      [(atapp.protocol.CONFIGURE) = { default_value: "30s" min_value: "30s" }];
+  google.protobuf.Duration chat_init_subscribe_timepoint = 15
+      [(atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "5s" }];
+  google.protobuf.Duration channel_transfer_stabilization_window = 16
+      [(atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
+}

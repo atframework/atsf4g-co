@@ -8,7 +8,7 @@
 #include "config/extern_service_types.h"
 #include "config/server_frame_build_feature.h"
 #include "log/log_wrapper.h"
-#include "rpc/rank_board/rankboardservice.h"
+#include "rpc/rank_board/rankboardservice.atfw.gen.h"
 #include "rpc/rpc_async_invoke.h"
 #include "rpc/rpc_common_types.h"
 #include "rpc/rpc_context.h"

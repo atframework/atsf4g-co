@@ -36,7 +36,7 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include "handle_ss_rpc_dtcoordsvrservice.h"
+#include "handle_ss_rpc_dtcoordsvrservice.atfw.gen.h"
 
 #include <logic/transaction_manager.h>
 

@@ -15,7 +15,7 @@
 
 #include <dispatcher/ss_msg_dispatcher.h>
 
-#include <rpc/lobby/lobbysvrservice.h>
+#include <rpc/lobby/lobbysvrservice.atfw.gen.h>
 
 #include <utility>
 

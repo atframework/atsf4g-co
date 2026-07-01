@@ -11,6 +11,7 @@ add_subdirectory(GameSharedComponent)
 add_subdirectory(test)
 add_subdirectory(distributed_transaction)
 add_subdirectory(rank)
+add_subdirectory(dtmq)
 # ============ Export and install components ============
 install(
   EXPORT ${PROJECT_INSTALL_COMPONENT_EXPORT_NAME}

@@ -21,7 +21,7 @@
 // clang-format on
 
 #include <config/logic_config.h>
-#include <rpc/agenttoclientservice/agenttoclientservice.h>
+#include <rpc/agenttoclientservice/agenttoclientservice.atfw.gen.h>
 #include <utility/protobuf_mini_dumper.h>
 
 #include <config/extern_service_types.h>

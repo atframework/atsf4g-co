@@ -1,0 +1,333 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/any.proto";
+
+import "protocol/extension/atframework.proto";
+import "protocol/common/svr.struct.dtmq.common.proto";
+import "protocol/pbdesc/com.struct.dtmq.proto";
+
+package atframework.dtmq;
+
+// 仅用于DB落地，依赖反转。
+message channel_subscriber_cache {
+  repeated channel_subscriber subscriber = 1;
+}
+
+message channel_snapshot {
+  DChannelSnapshot channel_data = 1;
+  repeated channel_subscriber subscriber = 2;
+}
+
+message channel_lock_checker {
+  bool ignore_expect_value = 1;          // 是否忽略检查
+  bool allow_empty_real_value = 2;       // 是否允许实际锁持有者未空
+  DChannelOptimisticLock expect_value = 3;  // 期望的锁持有信息
+  DChannelOptimisticLock real_value = 4;    // 实际的锁持有信息，如果检查失败会回带
+
+  DChannelOptimisticLock reset_value = 9;  // 如果需要更新锁信息，这个复制新值
+}
+
+message channel_lock_failed_data {
+  DChannelIdKey channel_key = 1;
+  channel_lock_checker checker = 2;
+}
+
+// ====== Chat订阅/更新订阅/创建通道请求 ======
+message SSChannelSubscribeReq {
+  channel_subscriber subscriber = 1;
+  uint32 forward_ttl = 2;
+
+  repeated DChannelSyncPoint heartbeat = 11;
+}
+
+message SSChannelSubscribeRsp {
+  repeated bytes not_found_channel_ids = 1;
+  repeated DChannelSubscribeNode subscribe_node = 2;
+}
+
+message SSChannelUnsubscribeReq {
+  channel_subscriber subscriber = 1;
+  uint32 forward_ttl = 2;
+
+  repeated bytes channel_id = 11;
+}
+
+message SSChannelSendMessageReq {
+  uint32 forward_ttl = 2;
+  bool auto_create_channel = 3;
+  channel_lock_checker compare_and_maybe_reset_lock = 4;
+
+  DChannelIdKey channel_key = 11;
+  DChannelMessage message_content = 12;
+
+  channel_subscriber subscriber = 21;
+  int64 subscriber_last_sequence = 22;
+  uint64 subscriber_last_hash_code = 23;
+}
+
+message SSChannelNotifySlaveSubscribeReq {
+  repeated DChannelSyncPoint sync_data = 1;
+  uint32 forward_ttl = 2;
+}
+
+message SSChannelNotifySlaveSubscribeRsp {}
+
+message SSChannelSendMessageRsp {
+  int32 client_result = 1;
+  channel_lock_checker compare_and_maybe_reset_lock = 2;
+
+  int64 message_sequence = 3;
+  int64 last_sequence = 4;
+  uint64 last_hash_code = 5;
+}
+
+message SSChannelTransferChannelReq {
+  repeated channel_snapshot snapshot = 1;
+  uint32 forward_ttl = 2;
+}
+
+message SSChannelTransferChannelRsp {}
+
+message SSChannelDestroyChannelReq {
+  uint32 forward_ttl = 2;
+  channel_lock_checker compare_and_maybe_reset_lock = 3;
+
+  DChannelIdKey channel_key = 11;
+}
+
+message SSChannelUpdateReq {
+  channel_subscriber subscriber = 1;
+  uint32 forward_ttl = 2;
+  bool auto_create_channel = 3;
+  channel_lock_checker compare_and_maybe_reset_lock = 4;
+
+  // 是否触发保存
+  bool save = 5;
+
+  // 主动压缩日志，小于这个sequence的记录会被直接删除
+  int64 compact_sequence = 6;
+
+  // 状态日志sequence，下发snapshot时会跳过低于这个sequence的stateful日志
+  int64 stateful_sequence = 7;
+
+  // 更新其他订阅者信息，走Merge策略
+  repeated channel_subscriber update_others = 8;
+
+  uint64 stateful_hash_code = 9;
+
+  DChannelIdKey channel_key = 11;
+
+  oneof custom_data_operation {
+    google.protobuf.Any custom_data = 12;
+    bool clear_custom_data_action = 13;
+  }
+  // 控制变更Custom data时跳过通知的Event Log
+  bool custom_data_skip_notify = 14;
+
+  oneof private_data_operation {
+    google.protobuf.Any private_data = 15;
+    bool clear_private_data_action = 16;
+  }
+}
+
+message SSChannelUpdateRsp {
+  int32 client_result = 1;
+  channel_lock_checker compare_and_maybe_reset_lock = 2;
+
+  int64 last_sequence = 3;
+  uint64 last_hash_code = 4;
+}
+
+message SSChannelResetLockReq {
+  uint32 forward_ttl = 2;
+  bool auto_create_channel = 3;
+  channel_lock_checker compare_and_maybe_reset_lock = 4;
+
+  DChannelIdKey channel_key = 11;
+}
+
+message SSChannelResetLockRsp {
+  int32 client_result = 1;
+  channel_lock_checker compare_and_maybe_reset_lock = 2;
+}
+
+message SSChannelFindMessageReq {
+  DChannelIdKey channel_key = 1;
+  int64 sequence = 2;
+}
+
+message SSChannelFindMessageRsp {
+  int32 client_result = 1;
+
+  DChannelMessage channel_message = 11;
+}
+
+message ChannelPageInfo {
+  // 页码
+  int32 page_number = 1;
+  // 每页数量
+  int32 page_size = 2;
+  // 页数
+  int32 page_count = 3;
+  // 总数量
+  int32 total_count = 4;
+}
+
+message SSChannelQueryMessageReq {
+  DChannelIdKey channel_key = 1;
+  ChannelPageInfo page_info = 2;
+}
+
+message SSChannelQueryMessageRsp {
+  int32 client_result = 1;
+
+  ChannelPageInfo page_info = 11;
+
+  repeated DChannelMessage channel_message = 21;
+}
+
+message SSChannelPullReq {
+  uint32 forward_ttl = 1;
+  DChannelIdKey channel_key = 2;
+
+  bool need_snapshot = 11;
+  bool need_configure = 12;
+  bool need_custom_data = 13;
+  bool need_private_data = 14;
+  bool need_lock = 15;
+
+  // 拉取message，不需要snapshot时可以通过这个指定要拉取的message范围
+  int64 need_message_sequence_begin = 21;
+  // 拉取message，不需要snapshot时可以通过这个指定要拉取的message范围
+  // 0表示不拉取message，-1表示拉到最后一个
+  sint64 need_message_sequence_end = 22;
+}
+
+message SSChannelPullRsp {
+  int32 client_result = 1;
+
+  DChannelSnapshot channel_data = 2;
+}
+
+service DtmqProxysvrService {
+  option (atframework.service_options) = {
+    module_name: "dtmq"
+  };
+
+  rpc subscribe(SSChannelSubscribeReq) returns (SSChannelSubscribeRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "订阅/创建消息通道"
+      allow_no_wait: true
+    };
+  };
+
+  rpc unsubscribe(SSChannelUnsubscribeReq) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "反订阅消息通道"
+      allow_no_wait: true
+    };
+  };
+
+  rpc send_message(SSChannelSendMessageReq) returns (SSChannelSendMessageRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "发送消息"
+      allow_no_wait: true
+    };
+  };
+
+  rpc notify_readonly(SSChannelNotifySlaveSubscribeReq) returns (SSChannelNotifySlaveSubscribeRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "主节点通知从节点订阅"
+      allow_no_wait: true
+    };
+  };
+
+  rpc transfer_channel(SSChannelTransferChannelReq) returns (SSChannelTransferChannelRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "转移频道"
+      allow_no_wait: true
+    };
+  };
+
+  rpc destroy_channel(SSChannelDestroyChannelReq) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "移除频道"
+      allow_no_wait: true
+    };
+  };
+
+  rpc update(SSChannelUpdateReq) returns (SSChannelUpdateRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "更新频道的私有数据(可用于创建带私有数据的频道)"
+      allow_no_wait: true
+    };
+  };
+
+  rpc reset_lock(SSChannelResetLockReq) returns (SSChannelResetLockRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "更新频道的乐观锁"
+      allow_no_wait: true
+    };
+  };
+
+  rpc find_message(SSChannelFindMessageReq) returns (SSChannelFindMessageRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "查询消息内容"
+      allow_no_wait: true
+    };
+  };
+
+  rpc page_query_message(SSChannelQueryMessageReq) returns (SSChannelQueryMessageRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "分页查询消息内容"
+      allow_no_wait: true
+    };
+  };
+
+  rpc pull(SSChannelPullReq) returns (SSChannelPullRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "拉取数据"
+      allow_no_wait: true
+    };
+  };
+}
+
+// 消息通知
+message SSChannelEventSync {
+  // 基础信息
+  DChannelMetadata channel_metadata = 1;
+
+  // 运行时数据(主从同步使用)
+  DChannelRuntime channel_runtime = 2;
+
+  // 增量消息
+  repeated DChannelMessage channel_message = 11;
+
+  // 全量消息
+  DChannelSnapshot channel_snapshot = 12;
+
+  // 通知给哪些订阅者
+  repeated string subscriber_keys = 13;
+}
+
+service DtmqProxysvrNotifyService {
+  option (atframework.service_options) = {
+    module_name: "dtmq"
+  };
+
+  rpc channel_event_sync(stream SSChannelEventSync) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      module_name: "dtmq"
+      api_name: "分布式消息队列事件通知"
+      descriptions: "Notify another server instance to sync channel messages"
+    };
+  };
+}

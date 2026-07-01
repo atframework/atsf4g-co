@@ -30,8 +30,8 @@
 
 #include <rpc/cache/cache_algorithm.h>
 #include <rpc/cache/cache_api.h>
-#include <rpc/cache/cachesvrservice.h>
-#include <rpc/lobbysvrclientservice/lobbysvrclientservice.h>
+#include <rpc/cache/cachesvrservice.atfw.gen.h>
+#include <rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h>
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_utils.h>
 

@@ -4,11 +4,15 @@
 
 #include "router/router_manager_set.h"
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <config/logic_config.h>
 #include <log/log_wrapper.h>
@@ -28,7 +32,7 @@
 #include "router/action/task_action_auto_save_objects.h"
 #include "router/action/task_action_router_close_manager_set.h"
 
-#include "router/handle_ss_rpc_routerservice.h"
+#include "router/handle_ss_rpc_routerservice.atfw.gen.h"
 #include "router/router_manager_base.h"
 #include "router/router_object_base.h"
 

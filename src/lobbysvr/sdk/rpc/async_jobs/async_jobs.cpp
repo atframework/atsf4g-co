@@ -27,11 +27,10 @@
 #include <unordered_map>
 
 #include "rpc/db/db_utils.h"
-#include "rpc/lobby/lobbysvrservice.h"
+#include "rpc/lobby/lobbysvrservice.atfw.gen.h"
 #include "rpc/rpc_macros.h"
 #include "rpc/rpc_utils.h"
 #include "rpc/user/user_basic.h"
-
 
 #include "rpc/db/uuid.h"
 

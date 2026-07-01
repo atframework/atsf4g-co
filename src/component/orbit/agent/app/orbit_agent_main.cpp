@@ -1,10 +1,8 @@
+// Copyright 2026 atframework
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
-#include <map>
-#include <sstream>
-#include <vector>
 
 #include <common/file_system.h>
 #include <time/time_utility.h>
@@ -23,8 +21,8 @@
 
 #include "logic/orbit_agent_manager.h"
 
-#include "app/handle_ss_rpc_clienttoagentservice.h"
-#include "app/handle_ss_rpc_controllertoagentservice.h"
+#include "app/handle_ss_rpc_clienttoagentservice.atfw.gen.h"
+#include "app/handle_ss_rpc_controllertoagentservice.atfw.gen.h"
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -49,9 +47,7 @@ class main_service_module : public atapp::module_impl, public std::enable_shared
     return 0;
   }
 
-  int stop() override {
-    return orbit_agent_manager::me()->stop();
-  }
+  int stop() override { return orbit_agent_manager::me()->stop(); }
 
   const char *name() const override { return "main_service_module"; }
 

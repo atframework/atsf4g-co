@@ -24,7 +24,7 @@
 #include <dispatcher/task_action_ss_req_base.h>
 
 #include <rpc/cache/cache_api.h>
-#include <rpc/cache/cachesvrservice.h>
+#include <rpc/cache/cachesvrservice.atfw.gen.h>
 
 #include <utility/protobuf_mini_dumper.h>
 #include "protocol/common/com.struct.cache.common.pb.h"

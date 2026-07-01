@@ -33,8 +33,8 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include "app/handle_cs_rpc_lobbysvrclientservice.h"
-#include "app/handle_ss_rpc_lobbysvrservice.h"
+#include "app/handle_cs_rpc_lobbysvrclientservice.atfw.gen.h"
+#include "app/handle_ss_rpc_lobbysvrservice.atfw.gen.h"
 
 #include "data/player.h"
 
@@ -129,7 +129,7 @@ int main(int argc, char *argv[]) {
   }
 
   logic_config::me()->set_server_instance_config_loader(
-      [](atfw::atapp::app &app_, logic_config & /*cfg*/, logic_config::server_instance_config_ptr &to_  ) {
+      [](atfw::atapp::app &app_, logic_config & /*cfg*/, logic_config::server_instance_config_ptr &to_) {
         auto config_ptr = atfw::util::memory::make_strong_rc<PROJECT_NAMESPACE_ID::config::lobbysvr_cfg>();
         app_.parse_configures_into(*config_ptr, "lobbysvr", "ATAPP_LOBBYSVR");
         to_ = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);

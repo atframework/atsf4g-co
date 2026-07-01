@@ -25,7 +25,7 @@
 #include <logic/rank_manager.h>
 #include <logic/rank_mirror_global.h>
 
-#include "app/handle_ss_rpc_rankboardservice.h"
+#include "app/handle_ss_rpc_rankboardservice.atfw.gen.h"
 
 class main_service_module : public atapp::module_impl, public std::enable_shared_from_this<main_service_module> {
  public:

@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "google/protobuf/timestamp.proto";
+
+package atframework.dtmq;
+
+message channel_subscriber {
+  uint64 subscriber_server_id = 1;
+  // Suggestion: type:...
+  // - User: "U:{zone_id}:{user_id}"
+  // - Team: "T:{team_id}"
+  // - Guild: "G:{guild_id}"
+  // - Role: "R:{zone_id}:{user_id}:{role_id}"
+  string subscriber_key = 2;
+
+  google.protobuf.Timestamp last_heartbeat_timepoint = 10;
+  int64 last_heartbeat_sequence = 11;
+  uint64 last_heartbeat_hash_code = 12;
+}

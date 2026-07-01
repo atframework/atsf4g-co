@@ -1,0 +1,146 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+package atframework.dtmq;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+import "protocol/pbdesc/com.struct.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
+
+message DChannelOptimisticLock {
+  bytes lock_holder = 1;
+
+  // 设为空或者0表示永不超时
+  google.protobuf.Timestamp timeout = 2;
+}
+
+
+message DChannelConfigure {
+  // uint32 channel_type = 1;  // EnChannelType
+  uint32 max_log_count = 2;
+  uint32 gc_log_count = 3;
+
+  // 设为空或者0表示永不超时
+  google.protobuf.Duration message_timeout = 4;
+
+  // 移除消息保留一段时间，以保障数据同步
+  google.protobuf.Duration gc_expire_duration = 5;
+  bool memory_only = 6;
+
+  int32 word_count_limit = 8;                // 字数限制
+  google.protobuf.Duration heartbeat_interval = 9;         // 心跳间隔
+  google.protobuf.Duration heartbeat_retry_interval = 10;  // 心跳重试间隔
+}
+
+message DChannelIdKey {
+  string channel_id = 1;
+  // uint32 channel_type = 2;  // EnChannelType
+  uint32 channel_zone_id = 3;
+
+  oneof cast_type {
+    bool broadcast_world = 4;                 // 系统通知使用
+    bool broadcast_zone = 5;                  // 分区不分服，broadcast_zone 暂不处理
+    uint64 unicast_instance_id = 6;           // 私聊频道需要填目标role_guid
+    uint64 broadcast_world_partition_id = 7;  // 世界频道的分片
+  }
+}
+
+message DChannelMetadata {
+  DChannelIdKey channel_key = 1;
+  DChannelConfigure channel_configure = 2;  // Create channel if not
+  int64 last_sequence = 3;
+  google.protobuf.Any custom_data = 4;
+
+  // 指示custom data在哪个sequence之后
+  int64 custom_data_sequence = 6;
+  uint64 last_hash_code = 7;
+
+  // 销毁时间（Unix timestamp）
+  google.protobuf.Timestamp destroy_timepoint = 12;
+}
+
+message DChannelRuntime {
+  // 最后一次触发无订阅的时间点
+  google.protobuf.Timestamp lost_last_subscriber_timepoint = 1;
+
+  // 已经GC的日志sequence
+  int64 last_removed_sequence = 2;
+
+  // 主动压缩状态日志的sequence
+  // 和last_removed_sequence的区别是，新的订阅者下发快照时直接裁剪日志。
+  // 老的订阅者仍然能走增量同步
+  int64 compact_stateful_sequence = 3;
+
+  // 指示private data在哪个sequence之后
+  int64 private_data_sequence = 11;
+  google.protobuf.Any private_data = 12;
+}
+
+message DChannelSyncPoint {
+  DChannelIdKey channel_key = 1;
+  int64 last_sequence = 2;
+  bool auto_create_channel = 3;
+  uint64 last_hash_code = 4;
+  uint64 readonly_index = 5;  // 选择的是第几个节点
+}
+
+message DChannelSubscribeNode {
+  DChannelIdKey channel_key = 1;
+  uint64 server_id = 2;
+  uint64 readonly_index = 3;
+}
+
+message DChannelDestroy {
+  int64 removed_timepoint = 1;  // 频道销毁时间，主从同步通知用
+}
+
+message DChannelMessageDetail {
+  oneof command {
+    bool update_custom_data = 1;
+    string text = 2;
+    google.protobuf.Any event = 3;
+    DChannelOptimisticLock reset_lock = 4;
+    DChannelDestroy destroy = 5;
+  }
+}
+
+message DChannelMessage {
+  google.protobuf.Timestamp create_timepoint = 1;
+  google.protobuf.Timestamp expired_timepoint = 2;
+
+  // Suggestion: type:...
+  // - User: "U:{zone_id}:{user_id}"
+  // - Team: "T:{team_id}"
+  // - Guild: "G:{guild_id}"
+  // - Role: "R:{zone_id}:{user_id}:{role_id}"
+  string sender_key = 3;
+
+  int64 sequence = 4;
+
+  // uint32 channel_type = 5;  // EnChannelType
+
+  DChannelMessageDetail detail = 11;
+  uint64 hash_code = 12;
+}
+
+message DChannelSnapshot {
+  DChannelMetadata channel_metadata = 1;
+  repeated DChannelMessage messages = 2;
+
+  DChannelOptimisticLock lock = 12;
+  DChannelRuntime channel_runtime = 13;
+}
+
+message DChannelMessageNotify {
+  string channel_id = 1;
+  repeated DChannelMessage messages = 2;
+}

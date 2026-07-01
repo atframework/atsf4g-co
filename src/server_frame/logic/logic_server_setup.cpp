@@ -65,7 +65,7 @@
 #include <sstream>
 
 #include "logic/action/task_action_reload_remote_server_configure.h"
-#include "logic/handle_ss_rpc_logiccommonservice.h"
+#include "logic/handle_ss_rpc_logiccommonservice.atfw.gen.h"
 #include "logic/logic_server_macro.h"
 #include "rpc/rpc_utils.h"
 #include "rpc/telemetry/opentelemetry_utility.h"

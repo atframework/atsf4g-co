@@ -29,7 +29,7 @@
 
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_context.h>
-#include "rpc/rank_board/rankboardservice.h"
+#include "rpc/rank_board/rankboardservice.atfw.gen.h"
 #include "utility/protobuf_mini_dumper.h"
 
 #include <atframe/etcdcli/etcd_discovery.h>

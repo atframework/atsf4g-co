@@ -15,8 +15,8 @@
 #include <config/logic_config.h>
 #include <log/log_wrapper.h>
 #include <logic/logic_server_setup.h>
-#include <rpc/agenttoclientservice/agenttoclientservice.h>
-#include <rpc/agenttocontrollerservice/agenttocontrollerservice.h>
+#include <rpc/agenttoclientservice/agenttoclientservice.atfw.gen.h>
+#include <rpc/agenttocontrollerservice/agenttocontrollerservice.atfw.gen.h>
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_context.h>
 #include <rpc/rpc_shared_message.h>

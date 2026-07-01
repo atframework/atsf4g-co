@@ -12,6 +12,7 @@
 #include <protocol/pbdesc/com.struct.rank.pb.h>
 #include <protocol/pbdesc/rank_board_service.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
+
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
@@ -35,7 +36,7 @@
 #include "memory/rc_ptr.h"
 
 #include "rpc/db/local_db_interface.h"
-#include "rpc/rank_board/rankboardservice.h"
+#include "rpc/rank_board/rankboardservice.atfw.gen.h"
 #include "rpc/rpc_async_invoke.h"
 
 #include <rank_logic/logic_rank_algorithm.h>

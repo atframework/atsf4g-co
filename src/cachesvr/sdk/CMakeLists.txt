@@ -10,8 +10,8 @@ project_service_declare_sdk(
   HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cache_algorithm.h"
   "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cache_api.h"
-  "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cachesvrservice.h"
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cachesvrservice.atfw.gen.h"
   SOURCES
   "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cache_algorithm.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cache_api.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cachesvrservice.cpp")
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cachesvrservice.atfw.gen.cpp")

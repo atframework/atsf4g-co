@@ -7,7 +7,7 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 %>// Copyright ${time.strftime("%Y", time.localtime()) } atframework
 // @brief Created by ${generator} for ${service.get_full_name()}, please don't edit it
 
-#include "handle_ss_rpc_${service.get_name_lower_rule()}.h"
+#include "handle_ss_rpc_${service.get_name_lower_rule()}.atfw.gen.h"
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>

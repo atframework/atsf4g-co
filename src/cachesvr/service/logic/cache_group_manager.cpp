@@ -38,7 +38,7 @@
 
 #include <rpc/cache/cache_algorithm.h>
 
-#include <rpc/lobby/lobbysvrservice.h>
+#include <rpc/lobby/lobbysvrservice.atfw.gen.h>
 
 #include <cstdint>
 #include <unordered_map>

@@ -13,7 +13,7 @@ def rpc_return_always_ready_code_sentense(input):
 %>// Copyright ${time.strftime("%Y", time.localtime()) } atframework
 // @brief Created by ${generator} for ${service.get_full_name()}, please don't edit it
 
-#include "${service.get_name_lower_rule()}.h"
+#include "${service.get_name_lower_rule()}.atfw.gen.h"
 
 #include <nostd/string_view.h>
 #include <nostd/utility_data_size.h>

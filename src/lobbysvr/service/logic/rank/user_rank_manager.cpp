@@ -25,7 +25,7 @@
 #include <rank_logic/logic_rank_algorithm.h>
 #include <rank_logic/logic_rank_handle.h>
 
-#include <rpc/lobbysvrclientservice/lobbysvrclientservice.h>
+#include <rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h>
 #include <rpc/rpc_async_invoke.h>
 
 #include <utility/protobuf_mini_dumper.h>
@@ -861,13 +861,11 @@ void user_rank_manager::reset_io_task_protect() {
   }
 }
 
-rpc::result_code_type user_rank_manager::add_settle_reward(ATFW_EXPLICIT_UNUSED_ATTR rpc::context &ctx,
-                                                           const PROJECT_NAMESPACE_ID::DRankBoardBasicData &rank_basic,
-                                                           int32_t pool_id,
-                                                           PROJECT_NAMESPACE_ID::EnRankPeriodRewardType pool_type,
-                                                           ATFW_EXPLICIT_UNUSED_ATTR bool save_history, time_t cycle_no,
-                                                           bool is_custom, ATFW_EXPLICIT_UNUSED_ATTR time_t deliver_time, 
-                                                           ATFW_EXPLICIT_UNUSED_ATTR int32_t season_id) {
+rpc::result_code_type user_rank_manager::add_settle_reward(
+    ATFW_EXPLICIT_UNUSED_ATTR rpc::context &ctx, const PROJECT_NAMESPACE_ID::DRankBoardBasicData &rank_basic,
+    int32_t pool_id, PROJECT_NAMESPACE_ID::EnRankPeriodRewardType pool_type,
+    ATFW_EXPLICIT_UNUSED_ATTR bool save_history, time_t cycle_no, bool is_custom,
+    ATFW_EXPLICIT_UNUSED_ATTR time_t deliver_time, ATFW_EXPLICIT_UNUSED_ATTR int32_t season_id) {
   auto rule_cfg = excel::get_ExcelRankRule_by_rank_type_rank_instance_id(rank_basic.rank_key().rank_type(),
                                                                          rank_basic.rank_key().rank_instance_id());
   if (!rule_cfg) {

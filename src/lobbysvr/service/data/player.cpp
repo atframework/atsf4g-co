@@ -25,7 +25,7 @@
 #include <logic/player_manager.h>
 
 #include <data/session.h>
-#include <rpc/lobbysvrclientservice/lobbysvrclientservice.h>
+#include <rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h>
 #include <rpc/rpc_utils.h>
 #include "rpc/rpc_common_types.h"
 

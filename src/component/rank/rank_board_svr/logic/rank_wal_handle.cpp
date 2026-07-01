@@ -21,7 +21,7 @@
 
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_utils.h>
-#include "rpc/rank_board/rankboardservice.h"
+#include "rpc/rank_board/rankboardservice.atfw.gen.h"
 
 #include "logic/rank.h"
 
@@ -203,13 +203,13 @@ static rank_wal_publisher_type::configure_pointer create_rank_publisher_congigur
                                .pushlisher_congihure()
                                .gc_expire_duration()};
   ret->gc_log_size = static_cast<size_t>(logic_config::me()
-                         ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
-                         .pushlisher_congihure()
-                         .gc_log_size());
+                                             ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
+                                             .pushlisher_congihure()
+                                             .gc_log_size());
   ret->max_log_size = static_cast<size_t>(logic_config::me()
-                          ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
-                          .pushlisher_congihure()
-                          .max_log_size());
+                                              ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
+                                              .pushlisher_congihure()
+                                              .max_log_size());
 
   // ret->subscriber_timeout = std::chrono::seconds{10};
 

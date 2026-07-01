@@ -41,7 +41,7 @@
 #include <string>
 #include <utility>
 
-#include "rpc/transaction/dtcoordsvrservice.h"
+#include "rpc/transaction/dtcoordsvrservice.atfw.gen.h"
 
 #define TRANSACTION_API_RETRY_TIMES 5
 

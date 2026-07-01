@@ -25,7 +25,6 @@
 #include "rpc/db/local_db_interface.h"
 #include "rpc/rpc_shared_message.h"
 
-
 namespace rpc {
 class context;
 
@@ -82,7 +81,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type del_jobs(::rpc:
  * @param zone_id 用户的zone_id
  * @param in 待添加的数据
  * @param notify_player 是否立即通知在线玩家
- * @note 最大异步任务数量配置在tcaplus的list表中。采用tcaplus的自动覆盖老记录的策略
+ * @note 最大异步任务数量如果要配置数据库表限制最大数量，请采用自动覆盖老记录的策略
  * @return 0或错误码
  */
 ATFW_EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type add_jobs(
@@ -96,7 +95,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type add_jobs(
  * @param zone_id 用户的zone_id
  * @param inout 待添加的数据
  * @param notify_player 是否立即通知在线玩家
- * @note 最大异步任务数量配置在tcaplus的list表中。采用tcaplus的自动覆盖老记录的策略
+ * @note 最大异步任务数量如果要配置数据库表限制最大数量，请采用自动覆盖老记录的策略
  * @return 0或错误码
  */
 ATFW_EXPLICIT_NODISCARD_ATTR GAME_RPC_API result_code_type add_jobs_with_retry(

@@ -19,7 +19,7 @@
 // clang-format on
 
 #include <config/logic_config.h>
-#include <rpc/agenttocontrollerservice/agenttocontrollerservice.h>
+#include <rpc/agenttocontrollerservice/agenttocontrollerservice.atfw.gen.h>
 #include <utility/protobuf_mini_dumper.h>
 
 #include <config/extern_service_types.h>

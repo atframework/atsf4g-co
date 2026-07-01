@@ -67,49 +67,17 @@ __pycache__
 /src/tools/generate-for-pb/__pycache__/*
 
 # protocol
-/src/**/protocol/**/*.h
-/src/**/protocol/**/*.cc
+/src/**/protocol/**/*.pb.h
+/src/**/protocol/**/*.pb.cc
 
 # generated
+/src/**/*.atfw.gen.*
 /src/generate-nomsg-task.sh
-/src/loginsvr/service/app/handle_cs_rpc_loginsvrclientservice.cpp
-/src/loginsvr/service/app/handle_cs_rpc_loginsvrclientservice.h
-/src/loginsvr/service/rpc/loginsvrclientservice/loginsvrclientservice.h
-/src/loginsvr/service/rpc/loginsvrclientservice/loginsvrclientservice.cpp
 /src/server_frame/config/include/config/server_frame_build_feature.h
 /src/server_frame/config/src/server_frame_build_feature.cpp
 /src/server_frame/config/include/config/excel/*
 /src/server_frame/config/src/excel/*
-/src/server_frame/router/handle_ss_rpc_routerservice.cpp
-/src/server_frame/router/handle_ss_rpc_routerservice.h
-/src/server_frame/rpc/router/routerservice.cpp
-/src/server_frame/rpc/router/routerservice.h
-/src/server_frame/logic/handle_ss_rpc_logiccommonservice.h
-/src/server_frame/logic/handle_ss_rpc_logiccommonservice.cpp
-/src/server_frame/rpc/logic/logiccommonservice.h
-/src/server_frame/rpc/logic/logiccommonservice.cpp
 /src/server_frame/rpc/db/global_db_interface.cpp
 /src/server_frame/rpc/db/global_db_interface.h
 /src/server_frame/rpc/db/local_db_interface.cpp
 /src/server_frame/rpc/db/local_db_interface.h
-/src/tools/simulator/rpc
-/src/authsvr/service/app/handle_cs_rpc_authsvrclientservice.cpp
-/src/authsvr/service/app/handle_cs_rpc_authsvrclientservice.h
-/src/authsvr/service/rpc/authsvrclientservice/authsvrclientservice.cpp
-/src/authsvr/service/rpc/authsvrclientservice/authsvrclientservice.h
-/src/lobbysvr/sdk/rpc/lobby/lobbysvrservice.cpp
-/src/lobbysvr/sdk/rpc/lobby/lobbysvrservice.h
-/src/lobbysvr/service/app/handle_cs_rpc_lobbysvrclientservice.cpp
-/src/lobbysvr/service/app/handle_cs_rpc_lobbysvrclientservice.h
-/src/lobbysvr/service/app/handle_ss_rpc_lobbysvrservice.cpp
-/src/lobbysvr/service/app/handle_ss_rpc_lobbysvrservice.h
-/src/lobbysvr/service/rpc/lobbysvrclientservice/lobbysvrclientservice.cpp
-/src/lobbysvr/service/rpc/lobbysvrclientservice/lobbysvrclientservice.h
-/src/cachesvr/sdk/rpc/cache/cachesvrservice.h
-/src/cachesvr/sdk/rpc/cache/cachesvrservice.cpp
-/src/cachesvr/service/app/handle_ss_rpc_cachesvrservice.h
-/src/cachesvr/service/app/handle_ss_rpc_cachesvrservice.cpp
-/src/orbitsvr/service/rpc/orbit_client_rpc/orbitclientrpcservice.h
-/src/orbitsvr/service/rpc/orbit_client_rpc/orbitclientrpcservice.cpp
-/src/orbitsvr/service/app/handle_orbit_rpc_orbitserverrpcservice.h
-/src/orbitsvr/service/app/handle_orbit_rpc_orbitserverrpcservice.cpp
