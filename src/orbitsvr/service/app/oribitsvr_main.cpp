@@ -81,9 +81,9 @@ class main_service_module : public atfw::atapp::module_impl {
                                                               const std::string &payload) -> rpc::result_code_type {
       FWLOGINFO("orbit client {} is ready from {}, startup payload size: {}", client_id, client_addr, payload.size());
 
-      hello::OrbitClientEchoReq req;
+      PROJECT_NAMESPACE_ID::OrbitClientEchoReq req;
       req.set_text("Lobby Test Start Payload:" + payload);
-      hello::OrbitClientEchoRsp rsp;
+      PROJECT_NAMESPACE_ID::OrbitClientEchoRsp rsp;
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::orbit_client_rpc::echo(ctx, client_id, req, rsp)));
     });
     orbit_server_manager::me()->set_on_client_end_notify(

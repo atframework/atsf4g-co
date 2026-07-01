@@ -20,9 +20,11 @@
 #  define GAME_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
-class task_action_echo : public task_action_orbit_rpc_base<hello::OrbitServerEchoReq, hello::OrbitServerEchoRsp> {
+class task_action_echo : public task_action_orbit_rpc_base<PROJECT_NAMESPACE_ID::OrbitServerEchoReq,
+                                                           PROJECT_NAMESPACE_ID::OrbitServerEchoRsp> {
  public:
-  using base_type = task_action_orbit_rpc_base<hello::OrbitServerEchoReq, hello::OrbitServerEchoRsp>;
+  using base_type =
+      task_action_orbit_rpc_base<PROJECT_NAMESPACE_ID::OrbitServerEchoReq, PROJECT_NAMESPACE_ID::OrbitServerEchoRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;
