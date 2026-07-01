@@ -28,6 +28,32 @@
       "group": "none"
     },
     {
+      "label": "Start Local Etcd",
+      "type": "shell",
+      "command": "setup-etcd.ps1",
+      "args": ["start"],
+      "options": {
+        "cwd": "${workspaceFolder}/atframework/libatapp/ci/etcd"
+      },
+      "windows": {
+        "command": "./setup-etcd.ps1"
+      },
+      "group": "none"
+    },
+    {
+      "label": "Start Local Redis",
+      "type": "shell",
+      "command": "redis.ps1",
+      "args": ["start"],
+      "options": {
+        "cwd": "${workspaceFolder}/project/tools"
+      },
+      "windows": {
+        "command": "./redis.ps1"
+      },
+      "group": "none"
+    },
+    {
       "label": "Start All",
       "type": "shell",
       "command": "start_all.bat",

@@ -30,11 +30,19 @@ logic:
       flush_interval: 1s
   {{- if and .Values.redis .Values.redis.enable }}
   db:
+  {{- if and .Values.redis.cluster_mode }}
     cluster:
       host:
     {{- range $_, $addr := .Values.redis.addrs }}
         - {{ $addr }}
     {{- end }}
+  {{- else }}
+    raw:
+      host:
+    {{- range $_, $addr := .Values.redis.addrs }}
+        - {{ $addr }}
+    {{- end }}
+  {{- end }}
     password: {{ .Values.redis.password }}
     record_prefix: {{ .Values.redis.record_prefix }}
     random_prefix: {{ .Values.redis.random_prefix }}

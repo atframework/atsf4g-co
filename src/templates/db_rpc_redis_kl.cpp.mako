@@ -41,7 +41,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_all(rpc::context &
     keylen = static_cast<size_t>(index.size);
   }
   std::vector<db_key_list_message_result_t> results;
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::get_all(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::get_all(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen},
                                                                 results,
                                                                 &detail::unpack_${message_name}));
@@ -82,7 +82,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_by_indexs(rpc::con
     keylen = static_cast<size_t>(index.size);
   }
   std::vector<db_key_list_message_result_t> results;
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::get_by_indexs(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::get_by_indexs(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen}, list_index,
                                                                 results,
                                                                 &detail::unpack_${message_name}_indexs));
@@ -118,7 +118,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type add(rpc::context &ctx
   if (result.size < static_cast<int64_t>(keylen)) {
     keylen = static_cast<size_t>(result.size);
   }
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen},
                                                                 ${index.max_list_length},
                                                                 std::move(store)));
@@ -138,7 +138,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type update(rpc::context &c
   if (result.size < static_cast<int64_t>(keylen)) {
     keylen = static_cast<size_t>(result.size);
   }
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::update_by_index(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::update_by_index(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen}, list_index,
                                                                 std::move(store)));
   if (res < 0) {
@@ -158,7 +158,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::c
   if (result.size < static_cast<int64_t>(keylen)) {
     keylen = static_cast<size_t>(result.size);
   }
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::remove_by_index(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::remove_by_index(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen}, list_index));
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
@@ -177,7 +177,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::c
   if (result.size < static_cast<int64_t>(keylen)) {
     keylen = static_cast<size_t>(result.size);
   }
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::remove_by_index(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::remove_by_index(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen}, list_index));
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);

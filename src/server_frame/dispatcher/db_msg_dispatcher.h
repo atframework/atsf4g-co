@@ -32,8 +32,8 @@
 #endif
 
 #include <config/logic_config.h>
-#include <rpc/rpc_shared_message.h>
 #include <memory/rc_ptr.h>
+#include <rpc/rpc_shared_message.h>
 
 #include "dispatcher_implement.h"
 
@@ -193,7 +193,9 @@ class db_msg_dispatcher : public dispatcher_implement {
    */
   SERVER_FRAME_API uint64_t allocate_sequence();
 
-  SERVER_FRAME_API const std::string& get_record_prefix();
+  SERVER_FRAME_API const std::string &get_record_prefix();
+
+  ATFW_UTIL_FORCEINLINE db_msg_dispatcher::channel_t::type get_db_channel_type() const { return db_channel_type_; }
 
  private:
   static void log_debug_fn(const char *content);
@@ -264,6 +266,7 @@ class db_msg_dispatcher : public dispatcher_implement {
   // channels
   std::shared_ptr<hiredis::happ::cluster> db_cluster_conns_[channel_t::SENTINEL_BOUND];
   std::shared_ptr<hiredis::happ::raw> db_raw_conns_[channel_t::RAW_BOUND - channel_t::SENTINEL_BOUND];
+  db_msg_dispatcher::channel_t::type db_channel_type_;
 };
 
 #endif  // ATF4G_CO_DB_MSG_DISPATCHER_H

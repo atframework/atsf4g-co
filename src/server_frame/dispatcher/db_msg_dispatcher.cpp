@@ -126,7 +126,7 @@ std::string get_stable_host_id(int32_t version) {
 }  // namespace
 
 SERVER_FRAME_API db_msg_dispatcher::db_msg_dispatcher()
-    : sequence_allocator_(0), tick_timer_(nullptr), tick_msg_count_(0) {}
+    : sequence_allocator_(0), tick_timer_(nullptr), tick_msg_count_(0), db_channel_type_(channel_t::MAX) {}
 
 SERVER_FRAME_API db_msg_dispatcher::~db_msg_dispatcher() {
   if (nullptr != tick_timer_) {
@@ -175,7 +175,7 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::init() {
 
   // init
   int res = cluster_init(logic_config::me()->get_cfg_db().cluster(), logic_config::me()->get_cfg_db().password(),
-               channel_t::CLUSTER_DEFAULT);
+                         channel_t::CLUSTER_DEFAULT);
   if (0 != res) {
     FWLOGERROR("init db cluster failed, res: {}", res);
     return res;
@@ -486,6 +486,11 @@ void db_msg_dispatcher::script_callback(redisAsyncContext *c, void *r, void *pri
 // cluster
 int db_msg_dispatcher::cluster_init(const PROJECT_NAMESPACE_ID::config::db_group_cfg &conns,
                                     const std::string &password, int index) {
+  if (db_channel_type_ != channel_t::MAX) {
+    FWLOGINFO("db already inited, init type: {}, new init type: {}", static_cast<int>(db_channel_type_), index);
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  }
+
   if (index >= channel_t::SENTINEL_BOUND || index < 0) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
@@ -536,6 +541,7 @@ int db_msg_dispatcher::cluster_init(const PROJECT_NAMESPACE_ID::config::db_group
 
   // 启动cluster
   if (conn->start() >= 0) {
+    db_channel_type_ = static_cast<channel_t::type>(index);
     return 0;
   }
 
@@ -640,6 +646,11 @@ int db_msg_dispatcher::cluster_send_msg(hiredis::happ::cluster &clu, const char 
 
 // raw
 int db_msg_dispatcher::raw_init(const PROJECT_NAMESPACE_ID::config::db_group_cfg &conns, int index) {
+  if (db_channel_type_ != channel_t::MAX) {
+    FWLOGINFO("db already inited, init type: {}, new init type: {}", static_cast<int>(db_channel_type_), index);
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  }
+
   if (index >= channel_t::RAW_BOUND || index < channel_t::RAW_DEFAULT) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
@@ -688,6 +699,7 @@ int db_msg_dispatcher::raw_init(const PROJECT_NAMESPACE_ID::config::db_group_cfg
 
   // 启动raw
   if (conn->start() >= 0) {
+    db_channel_type_ = static_cast<channel_t::type>(index);
     return 0;
   }
 
@@ -740,6 +752,9 @@ void db_msg_dispatcher::raw_on_connected(hiredis::happ::raw *raw_conn, hiredis::
   }
 
   FWLOGINFO("connect to db host {} success", conn->get_key().name);
+  // 注入redis的lua脚本
+  me()->script_load(conn->get_context(), script_type::kCompareAndSetHashTable);
+  me()->script_load(conn->get_context(), script_type::kAddListIndexHashTable);
 
   for (int i = channel_t::RAW_DEFAULT; i < channel_t::RAW_BOUND; ++i) {
     std::shared_ptr<hiredis::happ::raw> &raw_ptr = me()->db_raw_conns_[i - channel_t::RAW_DEFAULT];
@@ -787,4 +802,4 @@ int db_msg_dispatcher::raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_
 
 SERVER_FRAME_API uint64_t db_msg_dispatcher::allocate_sequence() { return ++sequence_allocator_; }
 
-SERVER_FRAME_API const std::string& db_msg_dispatcher::get_record_prefix() { return record_prefix_; }
+SERVER_FRAME_API const std::string &db_msg_dispatcher::get_record_prefix() { return record_prefix_; }

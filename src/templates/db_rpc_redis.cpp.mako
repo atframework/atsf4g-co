@@ -83,7 +83,7 @@ SERVER_FRAME_API result_type remove_all(rpc::context &ctx
   if (result.size < static_cast<int64_t>(keylen)) {
     keylen = static_cast<size_t>(result.size);
   }
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::remove_all(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::remove_all(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen}));
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);

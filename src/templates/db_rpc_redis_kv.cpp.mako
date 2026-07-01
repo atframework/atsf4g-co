@@ -36,7 +36,7 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx
     keylen = static_cast<size_t>(result.size);
   }
   auto output = atfw::util::memory::make_strong_rc<db_key_value_message_result_t>();
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::get_all(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::get_all(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen},
                                                                 output,
                                                                 &detail::unpack_${message_name}));
@@ -74,7 +74,7 @@ SERVER_FRAME_API result_type batch_get_all(rpc::context &ctx, gsl::span<table_ke
   std::vector<atfw::util::memory::strong_rc_ptr<db_key_value_message_result_t>> outputs;
   outputs.resize(keys.size());
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::batch_get_all(
-      ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, gsl::span<std::string>{db_keys}, outputs,
+      ctx, db_msg_dispatcher::me()->get_db_channel_type(), gsl::span<std::string>{db_keys}, outputs,
       &detail::unpack_${message_name}));
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
@@ -124,7 +124,7 @@ SERVER_FRAME_API result_type replace(rpc::context &ctx,
   if (result.size < static_cast<int64_t>(keylen)) {
     keylen = size_t(result.size);
   }
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::set(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::set(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen},
                                                                 shared_abstract_message<google::protobuf::Message>{std::move(store)},
 % if index.enable_cas:
@@ -174,7 +174,7 @@ SERVER_FRAME_API result_type inc_field_${inc_field["raw_name"]}(rpc::context &ct
   shared_message<PROJECT_NAMESPACE_ID::${message_name}> table_db{ctx};
   table_db->set_${inc_field["raw_name"]}(1);
   shared_abstract_message<google::protobuf::Message> message{table_db};
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::inc_field(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::inc_field(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen},
                                                                 gsl::string_view{"${inc_field["raw_name"]}"},
                                                                 message,
@@ -287,7 +287,7 @@ SERVER_FRAME_API result_type partly_get_${partly_field_name}(rpc::context &ctx
 %>
 %     endfor
   auto output = atfw::util::memory::make_strong_rc<db_key_value_message_result_t>();
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::partly_get(ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT,
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::partly_get(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen},
                                                                 partly_get_field,
                                                                 ${partly_field_len},
@@ -351,7 +351,7 @@ SERVER_FRAME_API result_type batch_partly_get_${partly_field_name}(rpc::context 
 %     endfor
 
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::batch_partly_get(
-      ctx, db_msg_dispatcher::channel_t::CLUSTER_DEFAULT, gsl::span<std::string>{db_keys},
+      ctx, db_msg_dispatcher::me()->get_db_channel_type(), gsl::span<std::string>{db_keys},
       partly_get_field, ${partly_field_len}, outputs,
       &detail::unpack_${message_name}_${partly_field_name}));
   if (res < 0) {

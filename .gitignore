@@ -18,6 +18,7 @@
 *.la
 *.a
 *.lib
+*.rdb
 
 # Executables
 *.exe
