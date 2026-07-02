@@ -14,6 +14,7 @@ import "google/protobuf/timestamp.proto";
 import "protocol/extension/svr.database.extension.proto";
 import "protocol/pbdesc/svr.struct.proto";
 import "protocol/pbdesc/svr.struct.rank.proto";
+import "protocol/pbdesc/com.struct.dtmq.proto";
 import "protocol/pbdesc/com.struct.rank.proto";
 
 package hello;
@@ -310,4 +311,31 @@ message table_rank_history {
   uint32 user_zone_id = 12;
 
   table_rank_history_blob_data blob_data = 101;
+}
+
+message table_dtmq_channel_record {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "dtmq_channel_record"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      key_fields: "channel_id"
+      key_fields: "channel_zone_id"
+    }
+  };
+  // clang-format on
+
+  string channel_id = 1;
+  uint64 channel_zone_id = 2;
+
+  repeated atframework.dtmq.DChannelMessage msg_records = 6;
+  atframework.dtmq.DChannelMetadata channel_metadata = 7;
+
+  // 私有数据仅能通过拉取接口获取，订阅和快照不下发
+  atframework.dtmq.DChannelRuntime runtime_data = 11;
+
+  // 缓存的订阅者列表
+  google.protobuf.Any subscriber_cache = 12;
+
+  atframework.dtmq.DChannelOptimisticLock lock = 13;
 }

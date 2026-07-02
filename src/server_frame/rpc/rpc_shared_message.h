@@ -26,8 +26,10 @@
 #include <config/server_frame_build_feature.h>
 
 #include <memory>
+#include <string>
 #include <utility>
 
+// NOLINTBEGIN(whitespace/indent_namespace)
 namespace rpc {
 class context;
 
@@ -200,6 +202,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE __shared_message_shared_base {
   __shared_message_shared_base() noexcept {}
 
   template <class ArenaCtorParam>
+  // NOLINTNEXTLINE(runtime/explicit, bugprone-forwarding-reference-overload)
   __shared_message_shared_base(ArenaCtorParam &&a) noexcept : arena_(std::forward<ArenaCtorParam>(a)) {}
 
   template <class ArenaCtorParam, class ElementCtorParam>
@@ -207,6 +210,11 @@ class ATFW_UTIL_SYMBOL_VISIBLE __shared_message_shared_base {
       : arena_(std::forward<ArenaCtorParam>(a)), instance_(std::forward<ElementCtorParam>(e)) {}
 
  public:
+  __shared_message_shared_base(const __shared_message_shared_base &) = delete;
+  __shared_message_shared_base(__shared_message_shared_base &&) = delete;
+  __shared_message_shared_base &operator=(const __shared_message_shared_base &) = delete;
+  __shared_message_shared_base &operator=(__shared_message_shared_base &&) = delete;
+
   inline const arena_pointer &share_arena() const noexcept { return arena_; }
 
   inline void mark_moved() noexcept { meta_.flags |= static_cast<uint32_t>(__shared_message_flag::kMoved); }
@@ -225,7 +233,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE __shared_message_shared_base {
     return allocator{alloc};
   }
 
-  ATFW_UTIL_FORCEINLINE static const allocator &__convert_allocator(const allocator &alloc) noexcept { return alloc; }
+  ATFW_UTIL_FORCEINLINE static const allocator &__convert_allocator(const allocator &alloc) noexcept {
+    // NOLINTNEXTLINE(bugprone-return-const-ref-from-parameter)
+    return alloc;
+  }
 
   template <class Alloc>
   inline static void __make_instance(const arena_pointer &arena, element_pointer &instance,
@@ -283,7 +294,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE __shared_message_shared_base {
 
   inline static const std::shared_ptr<::google::protobuf::Arena> &__get_arena_from(
       const std::shared_ptr<::google::protobuf::Arena> &source) {
-    return source;
+    return source;  // NOLINT(bugprone-return-const-ref-from-parameter)
   }
 
   inline static const std::shared_ptr<::google::protobuf::Arena> &__get_arena_from(const context &ctx) {
@@ -296,8 +307,13 @@ class ATFW_UTIL_SYMBOL_VISIBLE __shared_message_shared_base {
     return sm.share_arena();
   }
 
+  // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
   arena_pointer arena_;
+
+  // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
   mutable element_pointer instance_;
+
+  // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
   __shared_message_meta meta_;
 };
 
@@ -330,6 +346,7 @@ __shared_message_base<MessageType, Allocator, true> : public __shared_message_sh
   __shared_message_base() noexcept {}
 
   template <class ArenaCtorParam>
+  // NOLINTNEXTLINE(runtime/explicit, bugprone-forwarding-reference-overload)
   __shared_message_base(ArenaCtorParam &&a) noexcept : base_type(std::forward<ArenaCtorParam>(a)) {}
 
   template <class ArenaCtorParam, class ElementCtorParam>
@@ -375,6 +392,7 @@ __shared_message_base<MessageType, Allocator, false> : public __shared_message_s
   __shared_message_base() noexcept {}
 
   template <class ArenaCtorParam>
+  // NOLINTNEXTLINE(runtime/explicit, bugprone-forwarding-reference-overload)
   __shared_message_base(ArenaCtorParam &&a) noexcept : base_type(std::forward<ArenaCtorParam>(a)) {}
 
   template <class ArenaCtorParam, class ElementCtorParam>
@@ -738,8 +756,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE __shared_message<MessageType, Allocator, true>
   inline __shared_message(const __shared_message<OtherMessageType, OtherAllocatorType, OtherWithDefaultConstructor>
                               &other)  // NOLINT: runtime/explicit
       noexcept(std::is_nothrow_default_constructible<OtherAllocatorType>::value)
-      : base_type(other.arena_,
-         __shared_message_convertor<OtherMessageType, type>::convert(other.share_instance())){}
+      : base_type(other.arena_, __shared_message_convertor<OtherMessageType, type>::convert(other.share_instance())) {}
 
   template <class OtherMessageType, class OtherAllocatorType, bool OtherWithDefaultConstructor,
             class = atfw::util::nostd::enable_if_t<
@@ -1024,3 +1041,4 @@ allocate_clone_shared_message(const Alloc &alloc, ArenaSourceType &&arena_source
 }
 
 }  // namespace rpc
+// NOLINTEND(whitespace/indent_namespace)

@@ -33,11 +33,11 @@ service_header_file_path = service_proto_file_prefix + ".pb.h"
 
 #include <atframe/atapp_config.h>
 
-#include <cstdint>
-#include <cstddef>
-#include <cstring>
-#include <memory>
-#include <string>
+#include <cstdint> // IWYU pragma: keep
+#include <cstddef> // IWYU pragma: keep
+#include <cstring> // IWYU pragma: keep
+#include <memory>  // IWYU pragma: keep
+#include <string>  // IWYU pragma: keep
 
 #include "rpc/rpc_common_types.h"
 #include "dispatcher/dispatcher_type_defines.h"
@@ -60,6 +60,7 @@ class atapp_metadata;
 }  // namespace atapp
 }  // namespace atframework
 
+// NOLINTBEGIN(misc-use-anonymous-namespace, cppcoreguidelines-missing-std-forward)
 namespace rpc {
 class context;
 % for ns in service.get_cpp_namespace_begin(module_name, ''):
@@ -190,5 +191,6 @@ ATFW_EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type}
 ${ns}
 % endfor
 }
+// NOLINTEND(misc-use-anonymous-namespace, cppcoreguidelines-missing-std-forward)
 
 #endif

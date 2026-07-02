@@ -14,8 +14,8 @@ project_component_declare_service(
   RESOURCE_DIRECTORIES
   "${SERVICE_TARGET_NAME}/log"
   USE_COMPONENTS
-  "dtmq-protocol-proxy-pbdesc"
   "dtmq-protocol-proxy-config"
+  "dtmq-proxy-sdk"
   GENERATED_FLOW_NAMES
   "atframework.dtmq.DtmqProxysvrService"
   "atframework.dtmq.DtmqProxysvrNotifyService")

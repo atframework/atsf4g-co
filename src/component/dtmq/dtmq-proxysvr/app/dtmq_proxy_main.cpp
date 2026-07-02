@@ -1,9 +1,5 @@
 // Copyright 2026 atframework
 
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-
 #include <common/file_system.h>
 #include <time/time_utility.h>
 
@@ -18,8 +14,6 @@
 #include <dispatcher/db_msg_dispatcher.h>
 #include <dispatcher/ss_msg_dispatcher.h>
 
-#include <config/server_frame_build_feature.h>
-
 #include <logic/logic_server_macro.h>
 #include <logic/logic_server_setup.h>
 
@@ -33,7 +27,12 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include "handle_ss_rpc_dtmqproxysvrservice.atfw.gen.h"
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <string>
+
+#include "app/handle_ss_rpc_dtmqproxysvrservice.atfw.gen.h"
 
 namespace {
 class main_service_module : public atfw::atapp::module_impl {

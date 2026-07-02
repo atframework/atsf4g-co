@@ -25,18 +25,18 @@ message dtmq_proxysvr_cfg {
   google.protobuf.Duration remove_ttl = 7 [(atapp.protocol.CONFIGURE) = { default_value: "720h" min_value: "24h" }];
   google.protobuf.Duration report_channel_qty_tick = 8
       [(atapp.protocol.CONFIGURE) = { default_value: "30s" min_value: "5s" }];
-  google.protobuf.Duration chat_heartbeat_interval = 9
+  google.protobuf.Duration channel_heartbeat_interval = 9
       [(atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "1s" }];
-  google.protobuf.Duration chat_heartbeat_retry_interval = 10
+  google.protobuf.Duration channel_heartbeat_retry_interval = 10
       [(atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "1s" }];
-  google.protobuf.Duration chat_notify_readonly_subscribe_interval = 11
+  google.protobuf.Duration channel_notify_readonly_subscribe_interval = 11
       [(atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "30s" }];
-  int32 chatsvr_readonly_count = 12 [(atapp.protocol.CONFIGURE) = { default_value: "2" min_value: "0" }];
-  int32 chat_wal_hash_mismatch_need_snapshot_times = 13
+  int32 dtmq_proxysvr_readonly_count = 12 [(atapp.protocol.CONFIGURE) = { default_value: "2" min_value: "0" }];
+  int32 channel_wal_hash_mismatch_need_snapshot_times = 13
       [(atapp.protocol.CONFIGURE) = { default_value: "5" min_value: "3" }];
-  google.protobuf.Duration chat_wal_hash_mismatch_need_snapshot_interval = 14
+  google.protobuf.Duration channel_wal_hash_mismatch_need_snapshot_interval = 14
       [(atapp.protocol.CONFIGURE) = { default_value: "30s" min_value: "30s" }];
-  google.protobuf.Duration chat_init_subscribe_timepoint = 15
+  google.protobuf.Duration channel_initialize_subscribe_timepoint = 15
       [(atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "5s" }];
   google.protobuf.Duration channel_transfer_stabilization_window = 16
       [(atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];

@@ -53,7 +53,6 @@ struct logic_rank_user_extend_data {
 };
 
 static_assert(64 == sizeof(rank_callback_private_data), "64 != sizeof(rank_callback_private_data)");
-#pragma pack(pop)
 
 struct logic_rank_user_extend_span {
   // 参与排序字段，最大不超过5项

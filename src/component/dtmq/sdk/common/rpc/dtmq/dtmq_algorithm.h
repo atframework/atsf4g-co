@@ -77,9 +77,9 @@ UTIL_SYMBOL_VISIBLE void collect_invalid_event(gsl::string_view channel_id, Chan
  * @brief 获取聊天日志的哈希码
  *
  * @param channel_log 聊天日志
- * @return size_t 哈希码
+ * @return uint64_t 哈希码
  */
-DTMQ_COMMON_SDK_API size_t get_hash_code(const atfw::dtmq::DChannelMessage& channel_log) noexcept;
+DTMQ_COMMON_SDK_API uint64_t get_hash_code(const atfw::dtmq::DChannelMessage& channel_log) noexcept;
 
 /**
  * @brief 设置聊天日志的哈希码
@@ -87,17 +87,17 @@ DTMQ_COMMON_SDK_API size_t get_hash_code(const atfw::dtmq::DChannelMessage& chan
  * @param channel_log 聊天日志
  * @param hash_code 哈希码
  */
-DTMQ_COMMON_SDK_API void set_hash_code(atfw::dtmq::DChannelMessage& channel_log, size_t hash_code) noexcept;
+DTMQ_COMMON_SDK_API void set_hash_code(atfw::dtmq::DChannelMessage& channel_log, uint64_t hash_code) noexcept;
 
 /**
  * @brief 计算哈希码
  *
  * @param previous 之前的哈希码
  * @param channel_log 聊天日志
- * @return size_t 新的哈希码
+ * @return uint64_t 新的哈希码
  */
-DTMQ_COMMON_SDK_API size_t calculate_hash_code(size_t previous,
-                                               const atfw::dtmq::DChannelMessage& channel_log) noexcept;
+DTMQ_COMMON_SDK_API uint64_t calculate_hash_code(uint64_t previous,
+                                                 const atfw::dtmq::DChannelMessage& channel_log) noexcept;
 
 /**
  * @brief 设置通用虚表

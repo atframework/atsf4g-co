@@ -23,7 +23,6 @@ message DChannelOptimisticLock {
   google.protobuf.Timestamp timeout = 2;
 }
 
-
 message DChannelConfigure {
   uint32 channel_type = 1;  // EnChannelType
   uint32 max_log_count = 2;
@@ -36,7 +35,7 @@ message DChannelConfigure {
   google.protobuf.Duration gc_expire_duration = 5;
   bool memory_only = 6;
 
-  int32 word_count_limit = 8;                // 字数限制
+  int32 word_count_limit = 8;                              // 字数限制
   google.protobuf.Duration heartbeat_interval = 9;         // 心跳间隔
   google.protobuf.Duration heartbeat_retry_interval = 10;  // 心跳重试间隔
 }
@@ -100,7 +99,7 @@ message DChannelSubscribeNode {
 }
 
 message DChannelDestroy {
-  int64 removed_timepoint = 1;  // 频道销毁时间，主从同步通知用
+  google.protobuf.Timestamp removed_timepoint = 1;  // 频道销毁时间，主从同步通知用
 }
 
 message DChannelMessageDetail {

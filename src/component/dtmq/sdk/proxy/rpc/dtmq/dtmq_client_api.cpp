@@ -4,17 +4,17 @@
 
 #include <atframe/etcdcli/etcd_discovery.h>
 
-//clang-format off
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
-//clang-format on
+// clang-format on
 
 #include <protocol/common/svr.struct.dtmq.common.pb.h>
 #include <protocol/config/svr.protocol.config.pb.h>
 #include <protocol/pbdesc/com.struct.dtmq.pb.h>
 
-//clang-format off
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
-//clang-format on
+// clang-format on
 
 #include <rpc/dtmq/dtmqproxysvrservice.atfw.gen.h>
 #include <rpc/rpc_context.h>
@@ -29,6 +29,8 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace rpc {
 namespace dtmq {
@@ -169,7 +171,10 @@ DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_zone_channel(uint64_t
   node_vector.resize(replicate_index + 1);
   auto span = gsl::make_span(node_vector);
 
-  size_t node_size = discovery_set->lower_bound_node_hash_by_consistent_hash(span, node_hash);
+  size_t node_size = discovery_set->lower_bound_node_hash_by_consistent_hash(
+      span, node_hash,
+      logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxysvrFieldNumber,
+                                 mode));
   if (node_size != 0) {
     return span[replicate_index % node_size].node->get_discovery_info().id();
   }
@@ -188,7 +193,7 @@ DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_world_broadcast(uint3
                                                                            replicate_type status,
                                                                            size_t replicate_index,
                                                                            logic_hpa_discovery_select_mode mode) {
-  std::string channel_id = make_world_broadcast_channel_id(type_id, static_cast<uint32_t>(world_id));
+  std::string channel_id = make_world_broadcast_channel_id(type_id, world_id);
   return get_dtmq_proxysvr_server_id_of_world_channel(channel_id, status, replicate_index, mode);
 }
 

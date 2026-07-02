@@ -19,7 +19,7 @@
 
 #include <data/player_key_hash_helper.h>
 
-#include <stdint.h>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include "config/server_frame_build_feature.h"

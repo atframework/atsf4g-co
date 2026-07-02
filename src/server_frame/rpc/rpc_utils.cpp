@@ -223,7 +223,7 @@ static result_code_type wait(context &ctx, uintptr_t check_type,
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   std::vector<task_manager::generic_resume_generator> generators;
   generators.reserve(waiters.size());
-  for (auto &waiter_option : waiters) {
+  for (const auto &waiter_option : waiters) {
     if (0 == waiter_option.sequence) {
       FCTXLOGERROR(ctx, "can not wait for type {}, sequence {}", check_type, waiter_option.sequence);
       continue;
@@ -242,7 +242,7 @@ static result_code_type wait(context &ctx, uintptr_t check_type,
   }
 #else
   size_t waiter_count = 0;
-  for (auto &waiter_option : waiters) {
+  for (const auto &waiter_option : waiters) {
     if (0 == waiter_option.sequence) {
       FCTXLOGERROR(ctx, "can not wait for type {}, sequence {}", check_type, waiter_option.sequence);
       continue;
@@ -470,9 +470,9 @@ SERVER_FRAME_API rpc::telemetry::tracer::span_ptr_type setup_rpc_tracer(
 }
 
 SERVER_FRAME_API int setup_rpc_stream_header(atframework::RpcStreamMeta &stream_meta,
-                                              atfw::util::nostd::string_view service_name,
-                                              atfw::util::nostd::string_view rpc_full_name,
-                                              atfw::util::nostd::string_view type_full_name) {
+                                             atfw::util::nostd::string_view service_name,
+                                             atfw::util::nostd::string_view rpc_full_name,
+                                             atfw::util::nostd::string_view type_full_name) {
   stream_meta.set_version(logic_config::me()->get_atframework_settings().rpc_version());
   stream_meta.set_caller(static_cast<std::string>(logic_config::me()->get_local_server_name()));
   stream_meta.set_callee(static_cast<std::string>(service_name));

@@ -58,6 +58,9 @@ def rpc_return_always_ready_code_sentense(input):
 
 #include <rpc/rpc_utils.h>
 
+#include <cstdint> // IWYU pragma: keep
+#include <string>  // IWYU pragma: keep
+
 namespace rpc {
 <%
 rpc_common_codes_enable_redirect_info_log = False
@@ -114,11 +117,11 @@ inline static int __pack_rpc_body(TBodyType &&input, std::string *output, atfw::
     FWLOGERROR("rpc {} serialize message {} failed, msg: {}", rpc_full_name, type_full_name,
               input.InitializationErrorString());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
-  } else {
-    FWLOGDEBUG("rpc {} serialize message {} success:\n{}", rpc_full_name, type_full_name,
-              protobuf_mini_dumper_get_readable(input));
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
+
+  FWLOGDEBUG("rpc {} serialize message {} success:\n{}", rpc_full_name, type_full_name,
+            protobuf_mini_dumper_get_readable(input));
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 template<class TBodyType>
@@ -129,11 +132,11 @@ inline static int __unpack_rpc_body(TBodyType &&output, const std::string& input
     FWLOGERROR("rpc {} parse message {} failed, msg: {}", rpc_full_name, type_full_name,
               output.InitializationErrorString());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
-  } else {
-    FWLOGDEBUG("rpc {} parse message {} success:\n{}", rpc_full_name, type_full_name,
-              protobuf_mini_dumper_get_readable(output));
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
+
+  FWLOGDEBUG("rpc {} parse message {} success:\n{}", rpc_full_name, type_full_name,
+            protobuf_mini_dumper_get_readable(output));
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 % endif
@@ -334,7 +337,7 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
     ${rpc_return_always_ready_code_sentense(project_namespace + '::err::EN_SYS_MALLOC')}
   }
 
-  rpc::result_code_type::value_type res;
+  rpc::result_code_type::value_type res{};
   atframework::SSMsg& req_msg = *req_msg_ptr;
   task_action_ss_req_base::init_msg(req_msg, logic_config::me()->get_local_server_id(),
     logic_config::me()->get_local_server_name());
@@ -438,7 +441,7 @@ static ${rpc_return_type} __${rpc.get_name()}(
     ${rpc_return_sentense(project_namespace + '::err::EN_SYS_MALLOC')}
   }
 
-  rpc::result_code_type::value_type res;
+  rpc::result_code_type::value_type res{};
   atframework::SSMsg& req_msg = *req_msg_ptr;
   task_action_ss_req_base::init_msg(req_msg, logic_config::me()->get_local_server_id(),
     logic_config::me()->get_local_server_name());
