@@ -161,8 +161,8 @@ RANK_LOGIC_SDK_API logic_rank_open_period_t logic_rank_get_rank_daily_valid_peri
     // 每日榜开放时间段
     if (cfg.content().lock_time().begin_time().seconds() < cfg.content().lock_time().end_time().seconds()) {
       // 非跨天
-      time_t lock_begin =
-          ret.begin_time + cfg.content().lock_time().begin_time().seconds() % atfw::util::time::time_utility::DAY_SECONDS;
+      time_t lock_begin = ret.begin_time + cfg.content().lock_time().begin_time().seconds() %
+                                               atfw::util::time::time_utility::DAY_SECONDS;
       time_t lock_end =
           ret.begin_time + cfg.content().lock_time().end_time().seconds() % atfw::util::time::time_utility::DAY_SECONDS;
       if (now < lock_begin) {
@@ -176,8 +176,8 @@ RANK_LOGIC_SDK_API logic_rank_open_period_t logic_rank_get_rank_daily_valid_peri
       // 跨天
       ret.writable_begin_time =
           ret.begin_time + cfg.content().lock_time().end_time().seconds() % atfw::util::time::time_utility::DAY_SECONDS;
-      ret.writable_end_time =
-          ret.begin_time + cfg.content().lock_time().begin_time().seconds() % atfw::util::time::time_utility::DAY_SECONDS;
+      ret.writable_end_time = ret.begin_time + cfg.content().lock_time().begin_time().seconds() %
+                                                   atfw::util::time::time_utility::DAY_SECONDS;
     }
   } while (false);
 
@@ -203,7 +203,8 @@ RANK_LOGIC_SDK_API logic_rank_open_period_t logic_rank_get_rank_custom_valid_per
       now = cfg.content().valid_time().begin_time().seconds();
     }
 
-    time_t period_range = cfg.content().custom_settlement().interval_days() * atfw::util::time::time_utility::DAY_SECONDS;
+    time_t period_range =
+        cfg.content().custom_settlement().interval_days() * atfw::util::time::time_utility::DAY_SECONDS;
 
     time_t period_no = (now - cfg.content().valid_time().begin_time().seconds()) / period_range;
     time_t period_start_time = cfg.content().valid_time().begin_time().seconds() + period_no * period_range;
@@ -249,8 +250,8 @@ RANK_LOGIC_SDK_API logic_rank_open_period_t logic_rank_get_rank_custom_valid_per
 
   // 判定可写时间区间
   if (cfg.content().custom_settlement().lock_first_days() > 0 && ret.begin_time > 0) {
-    time_t writable_begin_time =
-        ret.begin_time + cfg.content().custom_settlement().lock_first_days() * atfw::util::time::time_utility::DAY_SECONDS;
+    time_t writable_begin_time = ret.begin_time + cfg.content().custom_settlement().lock_first_days() *
+                                                      atfw::util::time::time_utility::DAY_SECONDS;
     if (writable_begin_time > ret.writable_begin_time) {
       ret.writable_begin_time = writable_begin_time;
     }
@@ -419,7 +420,7 @@ static uint64_t cache_power_10(uint32_t denominator, uint32_t numerator) {
   }
 
   std::vector<uint64_t>* select_set;
-  atfw::util::lock::lock_holder<util::lock::spin_lock> holder(g_elo_rating_point_cache_lock);
+  atfw::util::lock::lock_holder<atfw::util::lock::spin_lock> holder(g_elo_rating_point_cache_lock);
 
   auto iter = g_elo_rating_point_cache.find(denominator);
   if (iter == g_elo_rating_point_cache.end()) {

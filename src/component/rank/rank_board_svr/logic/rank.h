@@ -135,7 +135,7 @@ class rank : public atfw::util::memory::enable_shared_rc_from_this<rank> {
   uint32_t capacity_;
   std::map<PROJECT_NAMESPACE_ID::DRankUserKey, PROJECT_NAMESPACE_ID::rank_storage_data> mp_;
   atfw::util::memory::strong_rc_ptr<rank_tree> btree_;
-  std::deque<util::memory::strong_rc_ptr<btree_node<PROJECT_NAMESPACE_ID::rank_sort_data>>> history_version_;
+  std::deque<atfw::util::memory::strong_rc_ptr<btree_node<PROJECT_NAMESPACE_ID::rank_sort_data>>> history_version_;
   int64_t data_version_;
 
   PROJECT_NAMESPACE_ID::DRankRouterData router_data_;

@@ -108,15 +108,15 @@ int task_action_rank_update_settlement::on_complete() {
 
   atfw::util::random::xoshiro256_starstar rnd;
   uint64_t seed =
-      logic_config::me()->get_local_server_id() ^ static_cast<uint64_t>(util::time::time_utility::get_now());
-  rnd.init_seed(static_cast<util::random::xoshiro256_starstar::result_type>(seed));
+      logic_config::me()->get_local_server_id() ^ static_cast<uint64_t>(atfw::util::time::time_utility::get_now());
+  rnd.init_seed(static_cast<atfw::util::random::xoshiro256_starstar::result_type>(seed));
 
   // 随机下一个启动时间点[update_offset*0.75, update_offset*1.25)
   update_offset = update_offset - (update_offset / 4) +
                   std::chrono::system_clock::duration{
                       rnd.random_between<std::chrono::system_clock::duration::rep>(0, update_offset.count() >> 1)};
 
-  rank_settlement_manager::me()->reset_update_protect(util::time::time_utility::now() + update_offset);
+  rank_settlement_manager::me()->reset_update_protect(atfw::util::time::time_utility::now() + update_offset);
   return get_result();
 }
 

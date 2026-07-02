@@ -295,7 +295,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::modify_score(
   protobuf_copy_message(*storage_data.mutable_sort_data()->mutable_value()->mutable_sort_fields(),
                         custom_data.sort_fields());
   if (storage_data.sort_data().value().submit_timepoint() == 0) {
-    storage_data.mutable_sort_data()->mutable_value()->set_submit_timepoint(util::time::time_utility::get_now());
+    storage_data.mutable_sort_data()->mutable_value()->set_submit_timepoint(atfw::util::time::time_utility::get_now());
   }
   int32_t ret = rank_iter->second->modify_score(storage_data);
 
@@ -400,7 +400,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::upgrade_rank_to
   new_db_router.set_sub_rank_type(rank_key.sub_rank_type());
   new_db_router.set_sub_rank_instance_id(rank_key.sub_rank_instance_id());
   new_db_router.set_zone_id(logic_config::me()->get_local_zone_id());
-  new_db_router.set_router_save_timepoint(util::time::time_utility::get_now());
+  new_db_router.set_router_save_timepoint(atfw::util::time::time_utility::get_now());
   new_db_router.set_router_main_node_id(main_server_node);
   auto slave_nodes = rank_manager::me()->get_slave_nodes(ctx, rank_key, main_server_node);
   if (slave_nodes.empty()) {

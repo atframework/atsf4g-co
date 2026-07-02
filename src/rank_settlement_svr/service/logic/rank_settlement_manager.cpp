@@ -32,8 +32,8 @@ int rank_settlement_manager::init() {
   if (update_offset > std::chrono::system_clock::duration::zero()) {
     atfw::util::random::xoshiro256_starstar rnd;
     uint64_t seed =
-        logic_config::me()->get_local_server_id() ^ static_cast<uint64_t>(util::time::time_utility::get_now());
-    rnd.init_seed(static_cast<util::random::xoshiro256_starstar::result_type>(seed));
+        logic_config::me()->get_local_server_id() ^ static_cast<uint64_t>(atfw::util::time::time_utility::get_now());
+    rnd.init_seed(static_cast<atfw::util::random::xoshiro256_starstar::result_type>(seed));
 
     update_offset = std::chrono::system_clock::duration{
         rnd.random_between<std::chrono::system_clock::duration::rep>(0, update_offset.count())};

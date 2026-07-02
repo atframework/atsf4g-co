@@ -160,7 +160,7 @@ int32_t rank::update_score(const PROJECT_NAMESPACE_ID::DRankEventUpdateUserScore
   protobuf_copy_message(*storage_data.mutable_sort_data()->mutable_value()->mutable_sort_fields(),
                         data.custom_data().sort_fields());
   if (storage_data.sort_data().value().submit_timepoint() == 0) {
-    storage_data.mutable_sort_data()->mutable_value()->set_submit_timepoint(util::time::time_utility::get_now());
+    storage_data.mutable_sort_data()->mutable_value()->set_submit_timepoint(atfw::util::time::time_utility::get_now());
   }
   return update_score(storage_data);
 }
@@ -252,7 +252,7 @@ int32_t rank::query_rank_top(uint32_t from, uint32_t count, PROJECT_NAMESPACE_ID
     count = logic_config::me()->get_logic_cfg().rank().query_max_count();
   }
 
-  std::vector<util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::rank_sort_data>> result;
+  std::vector<atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::rank_sort_data>> result;
   btree_->batch_query(static_cast<size_t>(from), static_cast<size_t>(count), result);
 
   FWRLOGDEBUG(*this, "query_rank_top count {}", result.size());
@@ -304,7 +304,7 @@ int32_t rank::query_rank_user_front_back(const PROJECT_NAMESPACE_ID::DRankUserKe
 }
 
 void rank::fetch_rank_data(google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::rank_data>& output) {
-  std::vector<util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::rank_sort_data>> result;
+  std::vector<atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::rank_sort_data>> result;
   btree_->get_preorder_traversal(result);
   uint32_t rank_no = 0;
   for (const auto& unit : result) {
@@ -588,8 +588,9 @@ void rank::broadcast_events(rpc::context& ctx, PROJECT_NAMESPACE_ID::DRankEventL
 
   int32_t ret = 0;
   rank_wal_publisher_context wal_ctx{ctx, ret};
-  auto new_log = wal_publisher_->allocate_log(
-      atfw::util::time::time_utility::now(), PROJECT_NAMESPACE_ID::DRankEventLog::EVENT_NOT_SET, wal_ctx, std::move(log));
+  auto new_log =
+      wal_publisher_->allocate_log(atfw::util::time::time_utility::now(),
+                                   PROJECT_NAMESPACE_ID::DRankEventLog::EVENT_NOT_SET, wal_ctx, std::move(log));
   auto res = wal_publisher_->emplace_back_log(std::move(new_log), wal_ctx);
   if (res < atfw::util::distributed_system::wal_result_code::kOk) {
     FWRLOGERROR(*this, "emplace_back_log failed version:{} ret {}", get_data_version(), static_cast<int>(res))
@@ -598,7 +599,7 @@ void rank::broadcast_events(rpc::context& ctx, PROJECT_NAMESPACE_ID::DRankEventL
   wal_publisher_->broadcast(wal_ctx);
 
   // Recycle expired logs
-  wal_publisher_->tick(util::time::time_utility::now(), wal_ctx);
+  wal_publisher_->tick(atfw::util::time::time_utility::now(), wal_ctx);
   FWRLOGDEBUG(*this, "emplace_back_log finish version:{}", get_data_version())
 }
 

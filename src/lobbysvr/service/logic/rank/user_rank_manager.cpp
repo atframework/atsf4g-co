@@ -898,7 +898,7 @@ rpc::result_code_type user_rank_manager::add_settle_reward(
 
   if (instance_rank->mode() == PROJECT_NAMESPACE_ID::EN_RANK_CACHE_MODE_KONLINE) {
     append_pending_update_without_action(rank_index, *rule_cfg);
-    patch_next_io_task_timepoint(util::time::time_utility::get_now());
+    patch_next_io_task_timepoint(atfw::util::time::time_utility::get_now());
   }
 
   // if (is_custom && instance_rank->custom_reward_cycle_no() >= cycle_no) {
@@ -1688,15 +1688,15 @@ void user_rank_manager::patch_rank_score_action(
   switch (notify.action_hint_case()) {
     case PROJECT_NAMESPACE_ID::user_async_job_update_rank::kSetScore:
       instance_rank->set_last_score_cache(notify.set_score());
-      instance_rank->set_last_submit_timepoint(util::time::time_utility::get_now());
+      instance_rank->set_last_submit_timepoint(atfw::util::time::time_utility::get_now());
       break;
     case PROJECT_NAMESPACE_ID::user_async_job_update_rank::kAddScore:
       instance_rank->set_last_score_cache(instance_rank->last_score_cache() + notify.set_score());
-      instance_rank->set_last_submit_timepoint(util::time::time_utility::get_now());
+      instance_rank->set_last_submit_timepoint(atfw::util::time::time_utility::get_now());
       break;
     case PROJECT_NAMESPACE_ID::user_async_job_update_rank::kSubScore:
       instance_rank->set_last_score_cache(instance_rank->last_score_cache() - notify.set_score());
-      instance_rank->set_last_submit_timepoint(util::time::time_utility::get_now());
+      instance_rank->set_last_submit_timepoint(atfw::util::time::time_utility::get_now());
       break;
     default:
       break;
@@ -1790,7 +1790,7 @@ void user_rank_manager::append_pending_update(const PROJECT_NAMESPACE_ID::user_a
   } while (false);
 
   pending_update_score_ranks_.push_back(rank_job);
-  patch_next_io_task_timepoint(util::time::time_utility::get_now());
+  patch_next_io_task_timepoint(atfw::util::time::time_utility::get_now());
 }
 
 void user_rank_manager::convert_to(PROJECT_NAMESPACE_ID::DRankUserBasicData &output,
