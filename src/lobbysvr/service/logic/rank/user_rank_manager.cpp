@@ -82,7 +82,7 @@ void user_rank_manager::refresh_feature_limit_second(rpc::context &ctx) {
   //   // 登录后需要执行完异步任务在处理
   //   return;
   // }
-  time_t now = util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
   if (next_auto_update_score_timepoint_ < now) {
     bool need_patch_io_task_timepoint = false;
     for (auto &rank_cfg : excel::get_ExcelRankRule_all_of_rank_type_rank_instance_id()) {
@@ -130,7 +130,7 @@ void user_rank_manager::init_from_table_data(ATFW_EXPLICIT_UNUSED_ATTR rpc::cont
   }
 
   is_dirty_ = false;
-  io_task_next_timepoint_ = util::time::time_utility::get_now();
+  io_task_next_timepoint_ = atfw::util::time::time_utility::get_now();
   next_auto_update_score_timepoint_ = 0;
 
   pending_update_score_ranks_.clear();
@@ -162,7 +162,7 @@ void user_rank_manager::init_from_table_data(ATFW_EXPLICIT_UNUSED_ATTR rpc::cont
 }
 
 int user_rank_manager::dump(ATFW_EXPLICIT_UNUSED_ATTR rpc::context &ctx, PROJECT_NAMESPACE_ID::table_user &user) {
-  time_t now = util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
   PROJECT_NAMESPACE_ID::DRankUserData *rank_data = user.mutable_rank_data();
   if (NULL == rank_data) {
     // FWPLOGERROR(*owner_, "player {}({}) malloc player_rank failed");
@@ -205,8 +205,8 @@ void user_rank_manager::try_start_io_task(rpc::context &ctx) {
     return;
   }
 
-  time_t now = util::time::time_utility::get_now();
-  if (io_task_next_timepoint_ > 0 && io_task_next_timepoint_ > util::time::time_utility::get_now()) {
+  time_t now = atfw::util::time::time_utility::get_now();
+  if (io_task_next_timepoint_ > 0 && io_task_next_timepoint_ > atfw::util::time::time_utility::get_now()) {
     return;
   }
   io_task_next_timepoint_ = 0;
@@ -334,7 +334,7 @@ rpc::rpc_result<user_rank_manager::rank_board_cache> user_rank_manager::get_rank
     RPC_RETURN_TYPE(rank_board_cache{0, 0});
   }
 
-  time_t now = util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
   check_and_settlement_local_rank_data(cfg, res, rank_instance_key, now);
   auto instance_rank = get_instance_rank_data(res, rank_instance_key);
   if (instance_rank == nullptr) {
@@ -367,7 +367,7 @@ rpc::result_code_type user_rank_manager::set_rank_score(rpc::context &ctx, const
     }
   }
 
-  time_t now = util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
 
   PROJECT_NAMESPACE_ID::DRankUnsubmitData *unsubmit =
       mutable_unsubmit_data(rank_data_index(cfg, rank_key), cfg, owner_->get_zone_id(), owner_->get_user_id(),
@@ -430,7 +430,7 @@ rpc::result_code_type user_rank_manager::add_rank_score(rpc::context &ctx, const
     }
   }
 
-  time_t now = util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
 
   PROJECT_NAMESPACE_ID::DRankUnsubmitData *unsubmit = mutable_unsubmit_data(
       rank_data_index(cfg, rank_key), cfg, target_user_zone_id, target_user_id, rank_instance_key, user_extend);
@@ -493,7 +493,7 @@ rpc::result_code_type user_rank_manager::sub_rank_score(rpc::context &ctx, const
     }
   }
 
-  time_t now = util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
 
   PROJECT_NAMESPACE_ID::DRankUnsubmitData *unsubmit = mutable_unsubmit_data(
       rank_data_index(cfg, rank_key), cfg, target_user_zone_id, target_user_id, rank_instance_key, user_extend);
@@ -592,7 +592,7 @@ rpc::result_code_type user_rank_manager::get_top_rank(
     RPC_RETURN_CODE(res.api_result);
   }
 
-  time_t now = util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
   // bool has_self = false;
   uint32_t score_min = std::numeric_limits<uint32_t>::max();
   for (auto cur = rank_handle.get_current_cursor(); cur != nullptr;) {
@@ -660,7 +660,7 @@ rpc::result_code_type user_rank_manager::get_special_top_rank(
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_RANK_SERVERTIME_UNAVAILABLE);
   }
 
-  time_t now = util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
 
   auto rank_define_cfg =
       excel::get_ExcelRankDefine_by_rank_type_rank_instance_id(cfg.rank_type(), cfg.rank_instance_id());
@@ -815,7 +815,7 @@ rpc::result_code_type user_rank_manager::get_special_top_rank(
 }
 
 void user_rank_manager::reset_io_task_protect() {
-  time_t now = util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
   time_t next_io_task_timepoint = 0;
   for (auto &rank_data : db_data_) {
     if (!rank_data.second) {
@@ -986,10 +986,10 @@ rpc::result_code_type user_rank_manager::run_io_task(rpc::context &ctx) {
       if (instance_rank_data->mode() == PROJECT_NAMESPACE_ID::EN_RANK_CACHE_MODE_KLOCAL &&
           !update_rank_info.trigger_by_io_task()) {
         check_and_settlement_local_rank_data(*cfg, rank_data, update_rank_info.rank_instance_key(),
-                                             util::time::time_utility::get_now());
+                                             atfw::util::time::time_utility::get_now());
         patch_rank_score_action(ctx, rank_index, *cfg, *rank_data, update_rank_info);
       }
-      time_t now = util::time::time_utility::get_now();
+      time_t now = atfw::util::time::time_utility::get_now();
 
       check_and_settlement_local_rank_data(*cfg, rank_data, update_rank_info.rank_instance_key(), now);
 
@@ -1021,7 +1021,7 @@ rpc::result_code_type user_rank_manager::run_io_task(rpc::context &ctx) {
 
   int32_t ret = 0;
   bool restore_unsubmit = false;
-  time_t now = util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
   for (auto &unsubmit_type : unsubmit_map) {
     auto cfg = excel::get_ExcelRankRule_by_rank_type_rank_instance_id(unsubmit_type.second.second.rank_type,
                                                                       unsubmit_type.second.second.rank_instance_id);
@@ -1111,7 +1111,7 @@ rpc::result_code_type user_rank_manager::run_io_task(rpc::context &ctx) {
   }
 
   // 不在榜上，强制upload
-  now = util::time::time_utility::get_now();
+  now = atfw::util::time::time_utility::get_now();
   for (auto &rank_index : pending_upload_index_keys) {
     std::shared_ptr<rank_data_type> rank_data = get_rank_data(rank_index);
     if (!rank_data) {
@@ -1150,7 +1150,7 @@ void user_rank_manager::check_and_settlement_local_rank_data(
     if (start_time > now) {
       rank_data->local_mode_next_settlement_timepoint = start_time;
     } else {
-      rank_data->local_mode_next_settlement_timepoint = start_time + util::time::time_utility::DAY_SECONDS;
+      rank_data->local_mode_next_settlement_timepoint = start_time + atfw::util::time::time_utility::DAY_SECONDS;
     }
 
     int64_t daily_season_id = logic_rank_get_current_settlement_daily_id(cfg, now);
@@ -1324,7 +1324,7 @@ PROJECT_NAMESPACE_ID::DRankUnsubmitData *user_rank_manager::mutable_unsubmit_dat
 void user_rank_manager::merge_unsubmit_data(const rank_data_index &rank_index,
                                             const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
                                             const PROJECT_NAMESPACE_ID::DRankUnsubmitData &unsubmit) {
-  auto now = util::time::time_utility::get_now();
+  auto now = atfw::util::time::time_utility::get_now();
   if (unsubmit.expired_timepoint() != 0 && now > unsubmit.expired_timepoint()) {
     return;
   }

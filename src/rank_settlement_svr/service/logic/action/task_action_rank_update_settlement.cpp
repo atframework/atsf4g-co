@@ -44,7 +44,7 @@
 
 task_action_rank_update_settlement::task_action_rank_update_settlement(ctor_param_t&& param)
     : task_action_no_req_base(param), param_(param) {
-  start_timepoint_ = util::time::time_utility::now();
+  start_timepoint_ = atfw::util::time::time_utility::now();
 }
 
 task_action_rank_update_settlement::~task_action_rank_update_settlement() {}
@@ -90,7 +90,7 @@ int task_action_rank_update_settlement::on_complete() {
     task_type_trait::reset_task(rank_settlement_manager::me()->update_task_);
   }
 
-  auto end_timepoint = util::time::time_utility::now();
+  auto end_timepoint = atfw::util::time::time_utility::now();
   FWLOGINFO("[STATISTICS]: task_action_rank_update_settlement run {}ms",
             std::chrono::duration_cast<std::chrono::milliseconds>(end_timepoint - start_timepoint_).count());
 
@@ -106,7 +106,7 @@ int task_action_rank_update_settlement::on_complete() {
     update_offset = task_manager::make_timeout_duration(std::chrono::seconds{180});
   }
 
-  util::random::xoshiro256_starstar rnd;
+  atfw::util::random::xoshiro256_starstar rnd;
   uint64_t seed =
       logic_config::me()->get_local_server_id() ^ static_cast<uint64_t>(util::time::time_utility::get_now());
   rnd.init_seed(static_cast<util::random::xoshiro256_starstar::result_type>(seed));
@@ -139,7 +139,7 @@ rpc::result_code_type task_action_rank_update_settlement::await_all(
 
 void task_action_rank_update_settlement::check_trigger_exit(rpc::context& /*ctx*/, bool& allow_continue,
                                                             task_type_trait::task_status current_status) {
-  auto now = util::time::time_utility::now();
+  auto now = atfw::util::time::time_utility::now();
   // loop - 即将超时，先退出等下一次启动再继续
   if (now + std::chrono::seconds{3} >= param_.timeout) {
     allow_continue = false;
@@ -397,7 +397,7 @@ rpc::result_code_type task_action_rank_update_settlement::cleanup_save(
   PROJECT_NAMESPACE_ID::table_rank_settlement_blob_data& rank_settle_db_data =
       *rank_settlement_dbdata->mutable_blob_data();
 
-  time_t now = util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
   rank_settle_db_data.set_current_settle_server_id(logic_config::me()->get_local_server_id());
 
   bool ready_to_cleanup = false;
@@ -436,7 +436,7 @@ rpc::result_code_type task_action_rank_update_settlement::cleanup_save(
 
   rank_callback_private_data callback_data;
   memset(&callback_data, 0, sizeof(callback_data));
-  callback_data.submit_timepoint = util::time::time_utility::get_now();
+  callback_data.submit_timepoint = atfw::util::time::time_utility::get_now();
 
   ret = PROJECT_NAMESPACE_ID::err::EN_COMMON_BREAK;
   std::unordered_set<PROJECT_NAMESPACE_ID::DUserIDKey, player_key_hash_t, player_key_equal_t> prev_round_user_keys;
@@ -590,7 +590,7 @@ rpc::result_code_type task_action_rank_update_settlement::process_rank(
   bool has_daily_reword = logic_rank_has_rank_daily_reward(cfg);
   bool has_custom_reword = logic_rank_has_rank_custom_reward(cfg);
 
-  time_t now = util::time::time_utility::get_now();
+  time_t now = atfw::util::time::time_utility::get_now();
   // 还未开始
   if (now < cfg.content().valid_time().begin_time().seconds()) {
     RPC_RETURN_CODE(0);
@@ -604,7 +604,7 @@ rpc::result_code_type task_action_rank_update_settlement::process_rank(
         RPC_RETURN_CODE(0);
       }
     } else if (has_daily_reword) {
-      if (now >= cfg.content().valid_time().end_time().seconds() + util::time::time_utility::DAY_SECONDS) {
+      if (now >= cfg.content().valid_time().end_time().seconds() + atfw::util::time::time_utility::DAY_SECONDS) {
         RPC_RETURN_CODE(0);
       }
     }

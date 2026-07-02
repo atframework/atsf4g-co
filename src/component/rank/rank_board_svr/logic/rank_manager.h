@@ -33,7 +33,7 @@ struct rank_sort_type_equal_type {
                          const PROJECT_NAMESPACE_ID::EnRankSortType& rhs) const;
 };
 
-class rank_manager : public util::design_pattern::singleton<rank_manager> {
+class rank_manager : public atfw::util::design_pattern::singleton<rank_manager> {
  public:
   rank_manager();
 

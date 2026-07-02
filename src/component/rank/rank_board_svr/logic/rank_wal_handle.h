@@ -47,7 +47,7 @@ struct rank_wal_publisher_log_action_getter {
   }
 };
 
-using rank_wal_subscriber_private_data = util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::DRankSubscriberData>;
+using rank_wal_subscriber_private_data = atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::DRankSubscriberData>;
 
 struct rank_log_action_hash_t {
   inline size_t operator()(const PROJECT_NAMESPACE_ID::DRankEventLog::EventCase& key) const noexcept {
@@ -63,16 +63,16 @@ struct rank_log_action_equal_t {
 };
 
 struct rank_wal_publisher_log_operator
-    : public util::distributed_system::wal_log_operator<
+    : public atfw::util::distributed_system::wal_log_operator<
           int64_t, PROJECT_NAMESPACE_ID::DRankEventLog, rank_wal_publisher_log_action_getter, std::less<int64_t>,
           rank_log_action_hash_t, rank_log_action_equal_t,
           atfw::memory::stl::allocator<PROJECT_NAMESPACE_ID::DRankEventLog>> {};
 
 struct rank_wal_subscriber_type
-    : public util::distributed_system::wal_subscriber<rank_wal_subscriber_private_data, uint64_t> {};
+    : public atfw::util::distributed_system::wal_subscriber<rank_wal_subscriber_private_data, uint64_t> {};
 
 using rank_wal_publisher_type =
-    util::distributed_system::wal_publisher<rank_storage_type, rank_wal_publisher_log_operator,
+    atfw::util::distributed_system::wal_publisher<rank_storage_type, rank_wal_publisher_log_operator,
                                             rank_wal_publisher_context, rank*, rank_wal_subscriber_type>;
 
 rank_wal_publisher_log_operator::strong_ptr<rank_wal_publisher_type> create_rank_publisher(rank&);

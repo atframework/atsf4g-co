@@ -41,7 +41,7 @@ struct router_rank_info {
   task_type_trait::task_type io_task;
 };
 
-class router_rank_manager : public util::design_pattern::singleton<router_rank_manager> {
+class router_rank_manager : public atfw::util::design_pattern::singleton<router_rank_manager> {
  public:
   uint64_t get_rank_main_server_id(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx,
                                    const PROJECT_NAMESPACE_ID::DRankKey& rank_key) {

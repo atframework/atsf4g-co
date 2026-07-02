@@ -37,9 +37,9 @@
 #include "rpc/rpc_context.h"
 
 class rank;
-using rank_ptr_type = util::memory::strong_rc_ptr<rank>;
+using rank_ptr_type = atfw::util::memory::strong_rc_ptr<rank>;
 
-class rank : public util::memory::enable_shared_rc_from_this<rank> {
+class rank : public atfw::util::memory::enable_shared_rc_from_this<rank> {
  public:
   using compare_fn_t = bool (*)(const PROJECT_NAMESPACE_ID::rank_sort_data& l,
                                 const PROJECT_NAMESPACE_ID::rank_sort_data& r);
@@ -113,7 +113,7 @@ class rank : public util::memory::enable_shared_rc_from_this<rank> {
 
   time_t get_last_save_router_data_time() const { return last_save_router_data_time_; }
 
-  util::memory::strong_rc_ptr<rank_mirror_manager> get_mirror_manager() { return mirror_manager_; }
+  atfw::util::memory::strong_rc_ptr<rank_mirror_manager> get_mirror_manager() { return mirror_manager_; }
 
  private:
   void del_data_from_btree(const PROJECT_NAMESPACE_ID::rank_sort_data& score);
@@ -128,13 +128,13 @@ class rank : public util::memory::enable_shared_rc_from_this<rank> {
 
   /* 内部或者子对象用
    */
-  util::memory::strong_rc_ptr<rank_tree> get_tree() { return btree_; }
+  atfw::util::memory::strong_rc_ptr<rank_tree> get_tree() { return btree_; }
 
  private:
   PROJECT_NAMESPACE_ID::DRankKey key_;
   uint32_t capacity_;
   std::map<PROJECT_NAMESPACE_ID::DRankUserKey, PROJECT_NAMESPACE_ID::rank_storage_data> mp_;
-  util::memory::strong_rc_ptr<rank_tree> btree_;
+  atfw::util::memory::strong_rc_ptr<rank_tree> btree_;
   std::deque<util::memory::strong_rc_ptr<btree_node<PROJECT_NAMESPACE_ID::rank_sort_data>>> history_version_;
   int64_t data_version_;
 
@@ -154,7 +154,7 @@ class rank : public util::memory::enable_shared_rc_from_this<rank> {
   mutable task_type_trait::task_type settlement_task_;
   rank_wal_publisher_log_operator::strong_ptr<rank_wal_publisher_type> wal_publisher_ = nullptr;
 
-  util::memory::strong_rc_ptr<rank_mirror_manager> mirror_manager_ = nullptr;
+  atfw::util::memory::strong_rc_ptr<rank_mirror_manager> mirror_manager_ = nullptr;
   time_t last_save_time_ = 0;
 
   friend class rank_mirror_manager;

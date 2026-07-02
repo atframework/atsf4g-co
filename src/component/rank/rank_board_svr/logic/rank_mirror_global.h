@@ -15,7 +15,7 @@
 #include "logic/rank_mirror_manager.h"
 #include "rpc/rpc_context.h"
 
-class rank_mirror_global : public util::design_pattern::singleton<rank_mirror_global> {
+class rank_mirror_global : public atfw::util::design_pattern::singleton<rank_mirror_global> {
  public:
   int init();
   void tick();

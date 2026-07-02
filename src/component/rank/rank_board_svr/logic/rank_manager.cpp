@@ -67,7 +67,7 @@ rank_manager::rank_manager() : init_(false), closing_(false) {}
 void rank_manager::tick() {
   rpc::context ctx{rpc::context::create_without_task()};
   // 触发保存
-  auto now_tm = util::time::time_utility::get_now();
+  auto now_tm = atfw::util::time::time_utility::get_now();
   if (last_refresh_second_ != now_tm) {
     refresh_limit_second(ctx, now_tm);
     last_refresh_second_ = now_tm;
@@ -173,7 +173,7 @@ rpc::result_code_type rank_manager::mutable_main_rank(rpc::context& ctx, const P
                      ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
                      .rank_server_router_lock_timeout()
                      .seconds();
-  auto now_tm = util::time::time_utility::get_now();
+  auto now_tm = atfw::util::time::time_utility::get_now();
   if (now_tm - rank_ptr->get_last_save_router_data_time() > timeout) {
     FWLOGDEBUG("cur rank router has timeout rank({}:{}:{}:{})", rank_key.rank_type(), rank_key.rank_instance_id(),
                rank_key.sub_rank_type(), rank_key.sub_rank_instance_id());
@@ -335,7 +335,7 @@ std::vector<uint64_t> rank_manager::get_slave_nodes(rpc::context& ctx, const PRO
     return slave_nodes;
   }
 
-  util::memory::strong_rc_ptr<atapp::etcd_discovery_set> index_by_type = mod->get_discovery_index_by_type(
+  atfw::util::memory::strong_rc_ptr<atapp::etcd_discovery_set> index_by_type = mod->get_discovery_index_by_type(
       static_cast<uint64_t>(atframework::component::logic_service_type::kRankBoardSvr));
   if (!index_by_type) {
     FWLOGERROR("select_teamsvr_match get_all_nodes_of_type nullptr");

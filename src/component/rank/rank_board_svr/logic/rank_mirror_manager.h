@@ -37,7 +37,7 @@ struct dump_mirror_task {
   int32_t cur_rank_no_ = 0;
   bool is_normal_save_ = false;
 };
-using dump_mirror_task_ptr = util::memory::strong_rc_ptr<dump_mirror_task>;
+using dump_mirror_task_ptr = atfw::util::memory::strong_rc_ptr<dump_mirror_task>;
 
 class rank_mirror_manager {
  public:

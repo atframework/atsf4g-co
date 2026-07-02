@@ -333,7 +333,7 @@ rpc::result_code_type task_action_rank_send_settlement::update_sub_period_score(
                                                                                 int64_t sub_score, int64_t set_score) {
   rank_callback_private_data callback_data;
   memset(&callback_data, 0, sizeof(callback_data));
-  callback_data.submit_timepoint = util::time::time_utility::get_now();
+  callback_data.submit_timepoint = atfw::util::time::time_utility::get_now();
 
   // 优先执行重置分数
   if (set_score != 0) {

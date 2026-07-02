@@ -31,7 +31,7 @@ rank_wal_publisher_context::rank_wal_publisher_context(rpc::context& ctx, int32_
 static rank_wal_publisher_type::vtable_pointer create_rank_publisher_vtable() {
   using wal_object_type = rank_wal_publisher_type::object_type;
   using wal_publisher_type = rank_wal_publisher_type;
-  using wal_result_code = util::distributed_system::wal_result_code;
+  using wal_result_code = atfw::util::distributed_system::wal_result_code;
 
   static wal_publisher_type::vtable_pointer ret;
   if (ret) {
@@ -179,7 +179,7 @@ static rank_wal_publisher_type::vtable_pointer create_rank_publisher_vtable() {
 
   ret->on_subscriber_removed =
       [](wal_publisher_type& publisher, const wal_publisher_type::subscriber_pointer& subscribe,
-         util::distributed_system::wal_unsubscribe_reason reason, wal_publisher_type::callback_param_type) -> bool {
+         atfw::util::distributed_system::wal_unsubscribe_reason reason, wal_publisher_type::callback_param_type) -> bool {
     FWLOGDEBUG("on_subscriber_removed rank_type: {} cur_server:{} slave_server:{} reason:{}",
                publisher.get_private_data() ? publisher.get_private_data()->get_key().rank_type() : 0,
                logic_config::me()->get_local_server_id(),

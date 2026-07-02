@@ -141,7 +141,7 @@ rpc::result_code_type rank_mirror_manager::create_mirror(rpc::context& ctx, int6
                 total_rank_size, cur_data_version, mirror_id);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_RANK_MIRROR_ALLOC_FAILED);
   }
-  auto mirror_task = util::memory::make_strong_rc<dump_mirror_task>();
+  auto mirror_task = atfw::util::memory::make_strong_rc<dump_mirror_task>();
   mirror_task->mirror_ptr_ = cur_rank_mirror;
   mirror_task->mirror_id_ = mirror_id;
   mirror_task->data_version_ = cur_data_version;

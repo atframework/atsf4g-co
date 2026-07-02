@@ -147,7 +147,7 @@ RANK_LOGIC_SDK_API size_t logic_rank_handle_key_hash::operator()(const logic_ran
 #endif
 
   uint64_t out[2];
-  util::hash::murmur_hash3_x64_128(&key, sizeof(key), 0, out);
+  atfw::util::hash::murmur_hash3_x64_128(&key, sizeof(key), 0, out);
   return static_cast<size_t>(out[0]);
 }
 
@@ -692,11 +692,11 @@ RANK_LOGIC_SDK_API rpc::rpc_result<rank_ret_t> logic_rank_handle_variant::get_sp
 
 
 RANK_LOGIC_SDK_API std::string rank_user_key_to_openid(uint32_t user_zone_id, uint64_t user_id, int32_t instance_type, int64_t instance_id) {
-  return util::log::format("{}:{}:{}:{}", user_zone_id, user_id, instance_type, instance_id);
+  return atfw::util::log::format("{}:{}:{}:{}", user_zone_id, user_id, instance_type, instance_id);
 }
 
 RANK_LOGIC_SDK_API std::string rank_user_key_to_openid(uint32_t user_zone_id, uint64_t user_id, PROJECT_NAMESPACE_ID::DRankInstanceKey instance_key) {
-  return util::log::format("{}:{}:{}:{}", user_zone_id, user_id, instance_key.instance_type(), instance_key.instance_id());
+  return atfw::util::log::format("{}:{}:{}:{}", user_zone_id, user_id, instance_key.instance_type(), instance_key.instance_id());
 }
 
 RANK_LOGIC_SDK_API std::tuple<uint32_t, uint64_t, int32_t, int64_t> rank_openid_to_user_key(gsl::string_view openid) {
@@ -708,25 +708,25 @@ RANK_LOGIC_SDK_API std::tuple<uint32_t, uint64_t, int32_t, int64_t> rank_openid_
   auto second_idx = std::find(colon_idx + 1, openid.end(), ':');
   if (second_idx == openid.end()) {
     return std::tuple<uint32_t, uint64_t, int32_t, int64_t>(
-        util::string::to_int<uint32_t>(openid.substr(0, static_cast<size_t>(colon_idx - openid.begin()))),
-        util::string::to_int<uint64_t>(openid.substr(static_cast<size_t>(colon_idx - openid.begin() + 1))), 0, 0);
+        atfw::util::string::to_int<uint32_t>(openid.substr(0, static_cast<size_t>(colon_idx - openid.begin()))),
+        atfw::util::string::to_int<uint64_t>(openid.substr(static_cast<size_t>(colon_idx - openid.begin() + 1))), 0, 0);
   }
 
   auto finish_idx = std::find(second_idx + 1, openid.end(), ':');
 
   if(finish_idx == openid.end()) {
     return std::tuple<uint32_t, uint64_t, int32_t, int64_t>(
-        util::string::to_int<uint32_t>(openid.substr(0, static_cast<size_t>(colon_idx - openid.begin()))),
-        util::string::to_int<uint64_t>(openid.substr(static_cast<size_t>(colon_idx - openid.begin() + 1),
+        atfw::util::string::to_int<uint32_t>(openid.substr(0, static_cast<size_t>(colon_idx - openid.begin()))),
+        atfw::util::string::to_int<uint64_t>(openid.substr(static_cast<size_t>(colon_idx - openid.begin() + 1),
                                                      static_cast<size_t>(second_idx - openid.begin()))),
-        util::string::to_int<int32_t>(openid.substr(static_cast<size_t>(second_idx - openid.begin() + 1))), 0);
+        atfw::util::string::to_int<int32_t>(openid.substr(static_cast<size_t>(second_idx - openid.begin() + 1))), 0);
   }
 
   return std::tuple<uint32_t, uint64_t, int32_t, int64_t>(
-      util::string::to_int<uint32_t>(openid.substr(0, static_cast<size_t>(colon_idx - openid.begin()))),
-      util::string::to_int<uint64_t>(openid.substr(static_cast<size_t>(colon_idx - openid.begin() + 1),
+      atfw::util::string::to_int<uint32_t>(openid.substr(0, static_cast<size_t>(colon_idx - openid.begin()))),
+      atfw::util::string::to_int<uint64_t>(openid.substr(static_cast<size_t>(colon_idx - openid.begin() + 1),
                                                    static_cast<size_t>(second_idx - openid.begin()))),
-      util::string::to_int<int32_t>(openid.substr(static_cast<size_t>(second_idx - openid.begin() + 1),
+      atfw::util::string::to_int<int32_t>(openid.substr(static_cast<size_t>(second_idx - openid.begin() + 1),
                                                   static_cast<size_t>(finish_idx - openid.begin()))),
-      util::string::to_int<int64_t>(openid.substr(static_cast<size_t>(finish_idx - openid.begin() + 1))));
+      atfw::util::string::to_int<int64_t>(openid.substr(static_cast<size_t>(finish_idx - openid.begin() + 1))));
 }

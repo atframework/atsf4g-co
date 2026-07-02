@@ -66,7 +66,7 @@ rank::rank(const PROJECT_NAMESPACE_ID::DRankKey& rank_key, uint32_t capacity, co
   key_.set_sub_rank_type(rank_key.sub_rank_type());
   key_.set_sub_rank_instance_id(rank_key.sub_rank_instance_id());
   mirror_manager_ = atfw::memory::stl::make_strong_rc<rank_mirror_manager>(this);
-  last_save_time_ = util::time::time_utility::get_now();
+  last_save_time_ = atfw::util::time::time_utility::get_now();
 }
 
 rank::~rank() {}
@@ -133,12 +133,12 @@ void rank::slave_confirm_info(rpc::context& ctx, uint64_t slave_node, int64_t da
     wal_publisher_ = create_rank_publisher(*this);
   }
   int ret = 0;
-  auto now = util::time::time_utility::now();
+  auto now = atfw::util::time::time_utility::now();
   rank_wal_publisher_context wal_ctx{ctx, ret};
   auto subscriber = wal_publisher_->find_subscriber(slave_node, wal_ctx);
   if (!subscriber) {
     rank_wal_subscriber_private_data private_data_ptr =
-        util::memory::make_strong_rc<PROJECT_NAMESPACE_ID::DRankSubscriberData>();
+        atfw::util::memory::make_strong_rc<PROJECT_NAMESPACE_ID::DRankSubscriberData>();
     private_data_ptr->set_server_id(slave_node);
     protobuf_copy_message(*private_data_ptr->mutable_rank_key(), get_key());
 
@@ -397,7 +397,7 @@ rpc::result_code_type rank::init_rank_from_db(rpc::context& ctx) {
 }
 
 bool rank::is_main_node() const {
-  auto now_tm = util::time::time_utility::get_now();
+  auto now_tm = atfw::util::time::time_utility::get_now();
   auto timeout = logic_config::me()
                      ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
                      .rank_server_router_lock_timeout()
@@ -511,7 +511,7 @@ void rank::async_heartbeat(rpc::context& ctx) {
           FWRLOGERROR(*rank_ptr.get(), "heartbeat failed main:{} slave:{} ret {}", main_server_id,
                       logic_config::me()->get_local_server_id(), ret);
         }
-        rank_ptr->last_heartbeat_time_ = util::time::time_utility::get_now();
+        rank_ptr->last_heartbeat_time_ = atfw::util::time::time_utility::get_now();
         RPC_RETURN_CODE(0);
       });
   is_heartbeat_running_ = false;
@@ -525,7 +525,7 @@ void rank::async_router_lock(rpc::context& ctx) {
   auto rank_ptr = this->shared_from_this();
   auto invoke_task =
       rpc::async_invoke(ctx, "rank.router_lock", [rank_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
-        auto now_tm = util::time::time_utility::get_now();
+        auto now_tm = atfw::util::time::time_utility::get_now();
         auto& router_data = rank_ptr->get_router_data();
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_rank_router> new_db_router(child_ctx);
         new_db_router->set_rank_type(rank_ptr->get_key().rank_type());
@@ -589,9 +589,9 @@ void rank::broadcast_events(rpc::context& ctx, PROJECT_NAMESPACE_ID::DRankEventL
   int32_t ret = 0;
   rank_wal_publisher_context wal_ctx{ctx, ret};
   auto new_log = wal_publisher_->allocate_log(
-      util::time::time_utility::now(), PROJECT_NAMESPACE_ID::DRankEventLog::EVENT_NOT_SET, wal_ctx, std::move(log));
+      atfw::util::time::time_utility::now(), PROJECT_NAMESPACE_ID::DRankEventLog::EVENT_NOT_SET, wal_ctx, std::move(log));
   auto res = wal_publisher_->emplace_back_log(std::move(new_log), wal_ctx);
-  if (res < util::distributed_system::wal_result_code::kOk) {
+  if (res < atfw::util::distributed_system::wal_result_code::kOk) {
     FWRLOGERROR(*this, "emplace_back_log failed version:{} ret {}", get_data_version(), static_cast<int>(res))
     return;
   }

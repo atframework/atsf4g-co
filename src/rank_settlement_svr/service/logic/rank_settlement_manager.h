@@ -8,7 +8,7 @@
 #include <cstddef>
 #include <unordered_map>
 
-class rank_settlement_manager : public util::design_pattern::singleton<rank_settlement_manager> {
+class rank_settlement_manager : public atfw::util::design_pattern::singleton<rank_settlement_manager> {
  protected:
   rank_settlement_manager();
 

@@ -30,21 +30,21 @@ int rank_settlement_manager::init() {
   }
 
   if (update_offset > std::chrono::system_clock::duration::zero()) {
-    util::random::xoshiro256_starstar rnd;
+    atfw::util::random::xoshiro256_starstar rnd;
     uint64_t seed =
         logic_config::me()->get_local_server_id() ^ static_cast<uint64_t>(util::time::time_utility::get_now());
     rnd.init_seed(static_cast<util::random::xoshiro256_starstar::result_type>(seed));
 
     update_offset = std::chrono::system_clock::duration{
         rnd.random_between<std::chrono::system_clock::duration::rep>(0, update_offset.count())};
-    next_update_timepoint_ = util::time::time_utility::now() + update_offset;
+    next_update_timepoint_ = atfw::util::time::time_utility::now() + update_offset;
   }
   return 0;
 }
 
 int rank_settlement_manager::tick() {
   int ret = 0;
-  std::chrono::system_clock::time_point now = util::time::time_utility::now();
+  std::chrono::system_clock::time_point now = atfw::util::time::time_utility::now();
   if (now > next_update_timepoint_) {
     if (try_update()) {
       ++ret;
@@ -72,7 +72,7 @@ bool rank_settlement_manager::try_update() {
     return false;
   }
 
-  auto now = util::time::time_utility::now();
+  auto now = atfw::util::time::time_utility::now();
 
   // 保护时间
   if (now <= next_update_timepoint_) {
