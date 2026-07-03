@@ -59,6 +59,12 @@ proc_desc:
     instance_count: 1
     start_instance_id: 1
 
+  - chart_name: "dtmq-proxysvr"
+    instance_type_id: 21
+    world_instance: true
+    instance_count: 1
+    start_instance_id: 1
+
   - chart_name: "orbit-server"
     instance_type_id: 25
     world_instance: false
