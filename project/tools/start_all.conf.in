@@ -1,4 +1,4 @@
 atproxy
-cachesvr dtcoordsvr rank-settlement-svr rank-board-svr orbit-agent orbit-controller orbit-server
+cachesvr dtcoordsvr dtmq-proxysvr rank-settlement-svr rank-board-svr orbit-agent orbit-controller orbit-server
 atgateway
 authsvr lobbysvr
