@@ -316,7 +316,11 @@ function CheckProcessRunning() {
   fi
 
   if [[ "x$PROC_EXPECT_PID" != "x" ]] && [[ "x$PROC_PID" != "x$PROC_EXPECT_PID" ]]; then
-    return 0
+    # Git Bash/MSYS may observe a transient Windows PID that differs from the final PID written by the service.
+    # Fall back to checking the PID file target process directly in this environment.
+    if [[ -z "${MSYSTEM}" ]]; then
+      return 0
+    fi
   fi
 
   # 判断是否在 MSYS2 / Git Bash 环境中
