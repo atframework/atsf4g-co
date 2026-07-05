@@ -2392,7 +2392,9 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::tick() noexcept {
   auto now = ping_data_t::clk_t::now();
 
   if (shared_conf_->conf_.client_mode && now > ping_.last_ping + shared_conf_->conf_.ping_interval) {
-    FWINSTLOGDEBUG(*logger_, "Ping interval exceeded, sending ping");
+    if (logger_) {
+      FWINSTLOGDEBUG(*logger_, "Ping interval exceeded, sending ping");
+    }
     send_ping();
   }
 
