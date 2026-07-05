@@ -979,6 +979,62 @@ SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel, gsl
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 
+SERVER_FRAME_API result_type set_ttl(rpc::context &ctx, uint32_t channel, gsl::string_view key, uint64_t ttl_second) {
+  rpc::context __child_ctx(ctx);
+  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/set_ttl"},
+      {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
+  rpc::telemetry::trace_start_option __trace_option;
+  __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
+  __trace_option.is_remote = true;
+  __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
+  __trace_option.attributes = __trace_attributes;
+
+  rpc::telemetry::tracer __tracer = __child_ctx.make_tracer("rpc.db.hash_table/set_ttl", std::move(__trace_option));
+
+  if (ctx.get_task_context().task_id == 0) {
+    FWLOGERROR("current not in a task");
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
+  }
+
+  redis_args args(3);
+
+  args.push("EXPIRE");
+  args.push(key.data(), key.size());
+  args.push(std::to_string(ttl_second));
+
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] start to set ttl_second: {}", key, ttl_second);
+
+  uint64_t rpc_sequence = 0;
+  result_type::value_type res = db_msg_dispatcher::me()->send_msg(
+      static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
+      logic_config::me()->get_local_server_id(), &detail::unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
+      args.get_args_values(), args.get_args_lengths());
+
+  // args unavailable now
+
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
+  }
+
+  dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+  await_options.sequence = rpc_sequence;
+  await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic_cfg().task().csmsg().timeout(),
+                                                        std::chrono::seconds{6});
+
+  // 协程操作
+  db_message_t db_message;
+  res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, db_message, await_options));
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
+  }
+
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] ttl_second set to {}", key, ttl_second);
+
+  RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
+}
+
 }  // namespace hash_table
 }  // namespace db
 }  // namespace rpc

@@ -84,6 +84,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::c
 }  // namespace key_list
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel,
                                                                      gsl::string_view key);
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type set_ttl(rpc::context &ctx, uint32_t channel,
+                                                                  gsl::string_view key, uint64_t ttl_second);
 
 }  // namespace hash_table
 }  // namespace db
